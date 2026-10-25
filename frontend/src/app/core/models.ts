@@ -84,8 +84,15 @@ export interface Settings {
 export interface Bookmark { name: string; session: string; side: 'local' | 'remote'; path: string; }
 
 export interface UpdateInfo {
-  current: string; latest: string; newer: boolean; notes: string; page: string; published: string;
+  current: string; latest: string; version: string; newer: boolean; notes: string; page: string; published: string;
   assetName: string; assetUrl: string; assetSize: number;
+}
+
+/** Newest stable release and newest nightly build (null when none is published). */
+export interface UpdateStatus {
+  current: string; runningNightly: boolean;
+  stable: UpdateInfo | null; stableErr: string;
+  nightly: UpdateInfo | null; nightlyErr: string;
 }
 
 /** A named username/password pair usable from logon actions (\s, \w). The password lives in the OS keychain. */

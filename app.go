@@ -849,15 +849,13 @@ func (a *App) SetUpdateToken(token string) error {
 // HasUpdateToken reports whether a GitHub token is saved.
 func (a *App) HasUpdateToken() bool { return secrets.Get(tokenKey) != "" }
 
-// CheckForUpdate looks for a newer build on the configured channel.
-func (a *App) CheckForUpdate() (update.Info, error) {
+// CheckForUpdate looks up the newest stable release and the newest nightly
+// build. The channel setting only decides what the start-up check announces.
+func (a *App) CheckForUpdate() update.Status {
 	s := a.cfg.Get()
-	if s.UpdateChannel == "off" {
-		return update.Info{Current: Version}, errors.New("updates are turned off in Options → Updates")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	return update.Check(ctx, s.UpdateRepo, s.UpdateChannel, secrets.Get(tokenKey), Version)
+	return update.CheckAll(ctx, s.UpdateRepo, secrets.Get(tokenKey), Version)
 }
 
 // DownloadUpdate downloads the installer into the downloads folder and returns its path.

@@ -276,25 +276,34 @@ type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'button
               <button type="button" (click)="(s.alerts ??= []).push({ pattern: '', regex: false, caseSensitive: false, enabled: true, sound: true, desktop: true })">Add alert</button>
             }
             @case ('updates') {
+              <p class="hint">Help → <b>Check for Updates…</b> shows the installed version, the latest stable release with its changes, and any newer nightly build. These settings decide when you are told about them.</p>
               <div class="grid">
-                <label>Channel</label>
+                <label>Notify me about</label>
                 <select name="uch" [(ngModel)]="s.updateChannel">
-                  <option value="stable">Stable (tagged releases vX.Y.Z)</option>
-                  <option value="nightly">Nightly (every build of main)</option>
-                  <option value="off">Off</option>
+                  <option value="stable">Stable releases (recommended)</option>
+                  <option value="nightly">Stable releases and nightly builds</option>
+                  <option value="off">Nothing - I check myself</option>
                 </select>
-                <label>GitHub repository</label><input name="urepo" [(ngModel)]="s.updateRepo" placeholder="owner/name" />
                 <label></label>
-                <div class="checks"><label><input type="checkbox" name="uos" [(ngModel)]="s.updateOnStart" /> Check at start-up (once a day)</label></div>
-                <label>GitHub token</label>
-                <div class="row"><input type="password" name="utok" [(ngModel)]="token" [placeholder]="hasToken() ? '(saved in the OS keychain - type to replace)' : 'optional - only for a private fork'" autocomplete="off" />
-                  <button type="button" (click)="saveToken()">Save</button>
-                  @if (hasToken()) { <button type="button" (click)="clearToken()">Remove</button> }</div>
-                <label></label>
-                <div class="hint">Not needed for the public repository. For a private fork create a fine-grained token with read-only <b>Contents</b> access to that
-                  repository only. Termwright downloads the installer for this computer and opens it; it does not replace itself silently.</div>
+                <div class="checks"><label><input type="checkbox" name="uos" [(ngModel)]="s.updateOnStart" [disabled]="s.updateChannel === 'off'" /> Check at start-up (once a day)</label></div>
+                @if (s.updateChannel === 'nightly') {
+                  <label></label>
+                  <div class="warn">Nightly builds are untested builds of the latest code. They can crash or damage your settings and saved sessions - back up first (the update window has a <b>Back Up Now</b> button).</div>
+                }
               </div>
-              <button type="button" (click)="checkNow()">Check Now</button>
+              <button type="button" (click)="checkNow()">Check for Updates…</button>
+              <details class="adv">
+                <summary>Advanced - only for your own fork</summary>
+                <div class="grid">
+                  <label>Repository</label><input name="urepo" [(ngModel)]="s.updateRepo" placeholder="owner/name" />
+                  <label>GitHub token</label>
+                  <div class="row"><input type="password" name="utok" [(ngModel)]="token" [placeholder]="hasToken() ? '(saved in the OS keychain - type to replace)' : 'only for a private fork'" autocomplete="off" />
+                    <button type="button" (click)="saveToken()">Save</button>
+                    @if (hasToken()) { <button type="button" (click)="clearToken()">Remove</button> }</div>
+                  <label></label>
+                  <div class="hint">Leave these alone to get the official Termwright releases. For a private fork use a fine-grained token with read-only <b>Contents</b> access to that repository.</div>
+                </div>
+              </details>
             }
             @case ('buttons') {
               <p class="hint">Text is sent as typed; use \\r for Enter, \\t Tab, \\x03 Ctrl+C, \\e Escape.</p>

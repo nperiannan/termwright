@@ -17,7 +17,7 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 
 * **Session Manager left or right, shown or hidden** - header buttons, View menu or command palette; the choice is remembered.
 * **Colored SFTP browser** - the same folder icons as the Session Manager, and files colored by type (text, archive, image, firmware, script, key), links and hidden files marked.
-* **More reliable updates** - default channel Stable, a stale GitHub token is ignored, and clear messages when a check fails.
+* **Clearer updates** - the update window shows the installed version, the latest stable release with its changes, and a newer nightly build (if any) with a warning and a **Back Up Now** step; an older nightly is no longer offered as an update; old OpenCRT update settings are fixed automatically.
 * **Windows import** - the file picker also offers *All files (\*.\*)*, so an `.XML` export always shows.
 
 ## What's new in 0.11

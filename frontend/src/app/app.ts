@@ -117,8 +117,9 @@ export class App implements OnInit {
       localStorage.setItem('termwright.updateCheck', String(Date.now()));
     } catch { /* storage unavailable: check anyway */ }
     try {
-      const i = await this.backend.checkForUpdate();
-      if (i.newer) this.ui.toast(`Termwright ${i.latest} is available - Help → Check for Updates…`, 'success', 15000);
+      const st = await this.backend.checkForUpdate();
+      if (st.stable?.newer) this.ui.toast(`Termwright ${st.stable.latest} is available - Help → Check for Updates…`, 'success', 15000);
+      else if (s.updateChannel === 'nightly' && st.nightly?.newer) this.ui.toast('A new nightly build is available - Help → Check for Updates…', 'success', 15000);
     } catch { /* offline or no token: stay quiet at start-up */ }
   }
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AppInfo, FileEntry, FileFilter, ImportOptions, ImportResult, PromptReply, Session, SessionNode, Settings, TabInfo, UpdateInfo,
+  AppInfo, FileEntry, FileFilter, ImportOptions, ImportResult, PromptReply, Session, SessionNode, Settings, TabInfo, UpdateStatus,
 } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
@@ -120,7 +120,8 @@ export class Backend {
   setSessionPassword(path: string, pw: string, empty: boolean) { return this.call<void>('SetSessionPassword', path, pw, empty); }
   sessionPasswordState(path: string) { return this.call<string>('SessionPasswordState', path); }
   scpTransferSftp(sftpId: string, dir: 'up' | 'down', src: string, dest: string) { return this.call<string>('SCPTransferSFTP', sftpId, dir, src, dest); }
-  checkForUpdate() { return this.call<UpdateInfo>('CheckForUpdate'); }
+  checkForUpdate() { return this.call<UpdateStatus>('CheckForUpdate'); }
+  backupConfig() { return this.call<string>('BackupConfig'); }
   downloadUpdate(url: string, name: string) { return this.call<string>('DownloadUpdate', url, name); }
   openUpdate(path: string) { return this.call<void>('OpenUpdate', path); }
   sendYmodem(tabId: string, files: string[]) { return this.call<string>('SendYmodem', tabId, files); }

@@ -35,3 +35,18 @@ func TestLoadAfterMove(t *testing.T) {
 		t.Fatal(err, m2.Get().SessionsDir)
 	}
 }
+
+func TestMigrateUpdateRepo(t *testing.T) {
+	for _, c := range []struct{ repo, ch, wantRepo, wantCh string }{
+		{"nperiannan/opencrt", "nightly", PublicRepo, "stable"},
+		{"nperiannan/termwright-private", "stable", PublicRepo, "stable"},
+		{"", "nightly", PublicRepo, "nightly"},
+		{"me/fork", "nightly", "me/fork", "nightly"},
+	} {
+		s := Settings{UpdateRepo: c.repo, UpdateChannel: c.ch}
+		migrateUpdateRepo(&s)
+		if s.UpdateRepo != c.wantRepo || s.UpdateChannel != c.wantCh {
+			t.Errorf("%q/%q -> %q/%q", c.repo, c.ch, s.UpdateRepo, s.UpdateChannel)
+		}
+	}
+}

@@ -523,18 +523,23 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 | **Keyword Highlighting** | Keyword sets and the default set. |
 | **Key Map** | Key bindings. |
 | **Button Bar** | Buttons: label, text, all tabs, action, script; reorder. |
-| **Updates** | Update channel (stable / nightly / off), GitHub repository, check at start-up, optional GitHub token (private forks only). |
+| **Updates** | What to be told about (stable / stable and nightly / nothing), check at start-up; under *Advanced*, repository and token for your own fork. |
 
 ### Updates
 
 ![Software Update](screenshots/update.png)
 
-**Help → Check for Updates…** compares this build with the newest GitHub release and, if newer, downloads the installer for this computer (macOS DMG, Windows setup.exe, Linux .deb) into the Downloads folder and opens it. Options → Global Options → **Updates**:
+**Help → Check for Updates…** (the same window opens from Options → Global Options → Updates → *Check for Updates…*) shows:
 
-- **Channel**: *Stable* (tagged releases `vX.Y.Z`), *Nightly* (every build of `main`, compared by git commit) or *Off*.
-- **GitHub repository** (default `nperiannan/termwright`) and **Check at start-up** (at most once a day; only a notice when something newer exists).
-- The default channel is **Stable**. *Nightly* needs a published `nightly` pre-release in the repository; if there is none, the check says so and suggests Stable.
-- **GitHub token** (optional): not needed for the public repository. A token that has expired or belongs to another (for example a former private) repository is ignored automatically - the check and the download retry without it. Only if you point Termwright at a private fork, create a fine-grained token limited to that repository with read-only *Contents* permission; it is stored in the OS keychain. A token also raises GitHub's rate limit for frequent checks.
+- the **installed** version (and the commit, for a nightly build);
+- the **latest stable release** with its date and *What's new*; if it is newer, **Download** fetches the installer for this computer (macOS DMG, Windows setup.exe, Linux .deb) into the Downloads folder and **Open Installer** starts it. Termwright never replaces itself silently;
+- a **nightly build**, only when one exists that is newer than what you run (Termwright asks GitHub whether the nightly commit is ahead of yours, so an older nightly is never offered). Nightly builds are untested: they may crash or change or lose settings and sessions. **Back Up Now** saves your settings and sessions to `Documents/Termwright Backups/termwright-backup-<date>.zip` (passwords stay in the OS keychain), and the nightly download is enabled only after a backup or after you tick *I have a backup and accept the risk*. To restore, quit Termwright and unzip the backup over the data folder (§16).
+
+Options → Global Options → **Updates** decides when you are told about updates:
+
+- **Notify me about**: *Stable releases* (default), *Stable releases and nightly builds*, or *Nothing*.
+- **Check at start-up** (at most once a day; only a notice when something newer exists).
+- **Advanced - only for your own fork**: repository and GitHub token. Leave them alone for the official releases. Settings from older builds (OpenCRT, or the former private repository) are moved to the public repository and the Stable channel automatically.
 
 ## 14. Migrating from SecureCRT, PuTTY or MobaXterm
 
@@ -614,7 +619,7 @@ Upgrading from OpenCRT: on first start Termwright moves the old `OpenCRT` data f
 | SSH auth fails with keys | Check the identity file path and that the key is not in an unsupported format; try *password* in SSH2 Authentication. |
 | Serial port missing | Click *Scan* in the Serial page; on Linux add yourself to the `dialout` group; on macOS use `/dev/cu.*` devices. |
 | Ctrl+C copies instead of interrupting | It doesn't: copy is Cmd+C on macOS and Ctrl+Shift+C on Windows/Linux. Check Global Options → Key Map for a conflicting binding. |
-| Check for Updates fails | Read the message: *no nightly build published* → choose **Stable** in Global Options → Updates; *limit of 60 checks per hour* → wait an hour; *cannot reach GitHub* → check the network or proxy. Make sure the repository is `nperiannan/termwright`. A stale token is ignored, so you can also clear it. |
+| Check for Updates fails | Read the message: *limit of 60 checks per hour* → wait an hour; *cannot reach GitHub* → check the network or proxy. Make sure the repository is `nperiannan/termwright`. A stale token is ignored, so you can also clear it. |
 | Import: the .xml file is not listed (Windows) | Choose **All files (\*.\*)** in the file-type list of the picker, and check that the source is *XML settings export*. |
 | Pasting into a switch drops characters | Set *Paste line delay* (e.g. 50 ms) in Global Options → Terminal. |
 | ZMODEM does nothing | Install `lrzsz` on the remote host; check the Downloads folder in Global Options. |

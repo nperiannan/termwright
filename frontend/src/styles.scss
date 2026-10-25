@@ -90,3 +90,9 @@ table.list.help { margin-top: 10px; font-size: 12px; td:nth-child(odd) { font-fa
 .tab .logbadge.sel { background: var(--accent); color: #fff; }
 .tab .alertdot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex: none; animation: twpulse 1s ease-in-out 3; }
 @keyframes twpulse { 50% { transform: scale(1.6); } }
+
+/* caution box (nightly updates and similar) */
+.warn { color: var(--text); background: color-mix(in srgb, #f59e0b 14%, transparent); border: 1px solid color-mix(in srgb, #f59e0b 55%, transparent);
+  border-radius: 6px; padding: 8px 10px; font-size: 12px; line-height: 1.45; }
+details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 10px;
+  summary { cursor: pointer; color: var(--muted, #888); font-size: 12px; margin-bottom: 8px; } }

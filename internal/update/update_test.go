@@ -2,6 +2,7 @@ package update
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -53,6 +54,10 @@ func TestCheckAndDownload(t *testing.T) {
 				"assets":[{"name":%q,"url":"%s/repos/o/r/releases/assets/1","size":5}]}`, asset, srv.URL)
 		case "/repos/o/r/releases/tags/nightly":
 			fmt.Fprint(w, `{"tag_name":"nightly","name":"Termwright nightly (abcdef1)","assets":[]}`)
+		case "/repos/o/r/compare/1234567...abcdef1":
+			fmt.Fprint(w, `{"status":"ahead"}`)
+		case "/repos/o/r/compare/7654321...abcdef1":
+			fmt.Fprint(w, `{"status":"behind"}`)
 		case "/repos/o/r/releases/assets/1":
 			if r.Header.Get("Accept") != "application/octet-stream" {
 				w.WriteHeader(415)
@@ -81,6 +86,12 @@ func TestCheckAndDownload(t *testing.T) {
 	}
 	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.6.0~git1234567"); !n.Newer {
 		t.Fatal("different nightly not reported")
+	}
+	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.6.0~git7654321"); n.Newer {
+		t.Fatal("older nightly reported newer")
+	}
+	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.7.0~git9999999"); n.Newer {
+		t.Fatal("unknown commit without a higher version reported newer")
 	}
 	dest := filepath.Join(t.TempDir(), asset)
 	if err := Download(ctx, info.AssetURL, "tok", dest, nil); err != nil {
@@ -129,7 +140,11 @@ func TestPublicRepoWithStaleToken(t *testing.T) {
 			t.Fatalf("download with token %q: %v", tok, err)
 		}
 	}
-	if _, err := Check(ctx, "o/r", "nightly", "", "0.10.6"); err == nil || !strings.Contains(err.Error(), "Stable") {
-		t.Fatalf("missing nightly should suggest Stable: %v", err)
+	if _, err := Check(ctx, "o/r", "nightly", "", "0.10.6"); err == nil || !errors.Is(err, ErrNoNightly) || strings.Contains(err.Error(), "o/r") {
+		t.Fatalf("missing nightly: %v", err)
+	}
+	st := CheckAll(ctx, "o/r", "", "0.10.6")
+	if st.Stable == nil || !st.Stable.Newer || st.Latest != nil || st.NightlyErr != "" || st.Nightly {
+		t.Fatalf("status %+v", st)
 	}
 }

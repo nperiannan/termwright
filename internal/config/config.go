@@ -203,7 +203,7 @@ func Defaults(dataDir string) Settings {
 		DefaultKeywordSet: "Network",
 		Bookmarks:         []Bookmark{},
 		UpdateChannel:     "stable",
-		UpdateRepo:        "nperiannan/termwright",
+		UpdateRepo:        PublicRepo,
 		UpdateOnStart:     true,
 		DeviceTypes:       session.BuiltinDeviceTypes(),
 		Snippets: []Snippet{
@@ -309,6 +309,9 @@ func Load(dataDir string) (*Manager, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
+	if migrateUpdateRepo(&m.cur) {
+		_ = m.Save(m.cur)
+	}
 	if m.cur.SessionsDir == "" {
 		m.cur.SessionsDir = Defaults(dataDir).SessionsDir
 	}
@@ -316,6 +319,24 @@ func Load(dataDir string) (*Manager, error) {
 		m.cur.LogDir = Defaults(dataDir).LogDir
 	}
 	return m, nil
+}
+
+// PublicRepo is the public Termwright repository that releases are published to.
+const PublicRepo = "nperiannan/termwright"
+
+// migrateUpdateRepo points settings saved by older builds (OpenCRT, or the
+// former private repository, both with the nightly channel as default) to the
+// public repository and its stable channel. Forks set by the user are kept.
+func migrateUpdateRepo(s *Settings) bool {
+	switch strings.ToLower(strings.TrimSpace(s.UpdateRepo)) {
+	case "", "nperiannan/opencrt", "nperiannan/termwright-private":
+		if s.UpdateRepo != "" && s.UpdateChannel == "nightly" {
+			s.UpdateChannel = "stable"
+		}
+		s.UpdateRepo = PublicRepo
+		return true
+	}
+	return false
 }
 
 func (m *Manager) file() string { return filepath.Join(m.dataDir, "settings.json") }

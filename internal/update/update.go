@@ -28,6 +28,7 @@ var API = "https://api.github.com"
 type Info struct {
 	Current   string `json:"current"`
 	Latest    string `json:"latest"`
+	Version   string `json:"version"` // release version; for a nightly, the version it was built as
 	Newer     bool   `json:"newer"`
 	Notes     string `json:"notes"`
 	Page      string `json:"page"` // release web page
@@ -67,6 +68,36 @@ func get(ctx context.Context, url, token, accept string) (*http.Response, error)
 	return client.Do(req)
 }
 
+// ErrNoNightly means no nightly build is published.
+var ErrNoNightly = errors.New("no nightly build is available")
+
+// Status is the result of a full check: the newest stable release and, when
+// one is published, the newest nightly build.
+type Status struct {
+	Current    string `json:"current"`
+	Nightly    bool   `json:"runningNightly"` // this build is a nightly / development build
+	Stable     *Info  `json:"stable"`
+	StableErr  string `json:"stableErr"`
+	Latest     *Info  `json:"nightly"`
+	NightlyErr string `json:"nightlyErr"`
+}
+
+// CheckAll looks up both channels.
+func CheckAll(ctx context.Context, repo, token, current string) Status {
+	st := Status{Current: current, Nightly: shaOf(current) != ""}
+	if i, err := Check(ctx, repo, "stable", token, current); err == nil {
+		st.Stable = &i
+	} else {
+		st.StableErr = err.Error()
+	}
+	if i, err := Check(ctx, repo, "nightly", token, current); err == nil {
+		st.Latest = &i
+	} else if !errors.Is(err, ErrNoNightly) {
+		st.NightlyErr = err.Error()
+	}
+	return st
+}
+
 // Check looks up the newest release of repo ("owner/name") on channel.
 func Check(ctx context.Context, repo, channel, token, current string) (Info, error) {
 	info := Info{Current: current}
@@ -79,48 +110,96 @@ func Check(ctx context.Context, repo, channel, token, current string) (Info, err
 	}
 	resp, err := get(ctx, url, token, "application/vnd.github+json")
 	if err != nil {
-		return info, fmt.Errorf("cannot reach GitHub: %w", err)
+		return info, fmt.Errorf("cannot reach the update server (check the network or proxy): %w", err)
 	}
 	if token != "" && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound) {
 		// an expired token, or one limited to other repositories: public repositories need none
 		resp.Body.Close()
 		if resp, err = get(ctx, url, "", "application/vnd.github+json"); err != nil {
-			return info, fmt.Errorf("cannot reach GitHub: %w", err)
+			return info, fmt.Errorf("cannot reach the update server (check the network or proxy): %w", err)
 		}
 	}
 	defer resp.Body.Close()
-	where := "github.com/" + repo
 	switch {
 	case resp.StatusCode == http.StatusNotFound && channel == "nightly":
-		return info, fmt.Errorf("no nightly build published yet on %s - choose the Stable channel in Options → Updates", where)
+		return info, ErrNoNightly
 	case resp.StatusCode == http.StatusNotFound:
-		return info, fmt.Errorf("no release found on %s (check the repository name in Options → Updates; a private fork needs a token)", where)
+		return info, errors.New("no stable release has been published yet")
 	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
-		return info, errors.New("GitHub's limit of 60 checks per hour was reached - try again later")
+		return info, errors.New("GitHub's limit of 60 update checks per hour was reached - try again later")
 	case resp.StatusCode != http.StatusOK:
-		return info, fmt.Errorf("GitHub (%s): %s", where, resp.Status)
+		return info, fmt.Errorf("the update server answered %s - try again later", resp.Status)
 	}
 	var r release
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&r); err != nil {
 		return info, err
 	}
 	info.Notes, info.Page, info.Published = r.Body, r.HTMLURL, r.PublishedAt.Format(time.RFC3339)
-	if channel == "nightly" {
-		sha := shaOf(r.Name)
-		info.Latest = "nightly " + sha
-		info.Newer = sha != "" && sha != shaOf(current)
-	} else {
-		info.Latest = strings.TrimPrefix(r.TagName, "v")
-		info.Newer = Compare(info.Latest, current) > 0
-	}
 	names := make([]string, len(r.Assets))
 	for i, a := range r.Assets {
 		names[i] = a.Name
+	}
+	if channel == "nightly" {
+		sha := shaOf(r.Name)
+		info.Latest = "nightly " + sha
+		if m := verRe.FindStringSubmatch(strings.Join(names, " ")); m != nil {
+			info.Version = m[1]
+		}
+		info.Newer = nightlyNewer(ctx, repo, token, current, sha, info.Version)
+	} else {
+		info.Version = strings.TrimPrefix(r.TagName, "v")
+		info.Latest = strings.TrimPrefix(r.TagName, "v")
+		info.Newer = Compare(info.Latest, current) > 0
 	}
 	if i := PickAsset(names, runtime.GOOS, runtime.GOARCH); i >= 0 {
 		info.AssetName, info.AssetURL, info.AssetSize = r.Assets[i].Name, r.Assets[i].URL, r.Assets[i].Size
 	}
 	return info, nil
+}
+
+var verRe = regexp.MustCompile(`(?i)termwright[-_](\d+\.\d+\.\d+)`)
+
+// nightlyNewer reports whether the nightly commit sha is newer than the
+// running build. GitHub's compare API tells whether the nightly commit is
+// ahead of this build's commit (or of its release tag); when that is unknown
+// (e.g. a local build whose commit was never pushed), only a higher version
+// number counts. A different commit alone is not enough: an older nightly
+// would otherwise be offered as an update.
+func nightlyNewer(ctx context.Context, repo, token, current, sha, version string) bool {
+	cur := shaOf(current)
+	if sha == "" || (cur != "" && strings.HasPrefix(sha, cur[:min(len(cur), 7)])) {
+		return false
+	}
+	ref := cur
+	if ref == "" {
+		ref = "v" + strings.TrimPrefix(current, "v")
+		if i := strings.IndexAny(ref, "-~+ "); i >= 0 {
+			ref = ref[:i]
+		}
+	}
+	url := API + "/repos/" + repo + "/compare/" + ref + "..." + sha
+	resp, err := get(ctx, url, token, "application/vnd.github+json")
+	if err == nil && token != "" && resp.StatusCode != http.StatusOK {
+		resp.Body.Close() // a stale token: try without it
+		resp, err = get(ctx, url, "", "application/vnd.github+json")
+	}
+	if err == nil {
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			var c struct {
+				Status string `json:"status"`
+			}
+			if json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&c) == nil {
+				switch c.Status {
+				case "ahead":
+					return true
+				case "behind", "identical":
+					return false
+				}
+			}
+		}
+	}
+	return version != "" && Compare(version, current) > 0
 }
 
 var shaRe = regexp.MustCompile(`(?:~git|-git|\()([0-9a-f]{7,40})`)

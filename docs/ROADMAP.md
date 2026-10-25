@@ -105,7 +105,7 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 ## 0.11.1 (done)
 - Session Manager on the left or right, hide/show, remembered in settings
 - SFTP browser icons: gradient folders, files colored by type, link and hidden markers
-- Update check: Stable by default, stale tokens ignored, clearer errors
+- Update window: installed / latest stable with changes / newer nightly with backup step; nightly ordered by commit (compare API); OpenCRT repo setting migrated; repo and token under Advanced
 - Windows file picker: "All files" filter and upper-case extensions
 
 ## Next ideas
