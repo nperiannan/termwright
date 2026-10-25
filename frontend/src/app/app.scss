@@ -10,7 +10,13 @@
 }
 .main { flex: 1; display: flex; min-height: 0; }
 .tree { flex: none; min-width: 0; border-right: 1px solid var(--border); }
-.main.tree-right { flex-direction: row-reverse; .tree { border-right: 0; border-left: 1px solid var(--border); } }
+.main.tree-right { flex-direction: row-reverse; .tree { border-right: 0; border-left: 1px solid var(--border); }
+  .tree-rail { border-right: 0; border-left: 1px solid var(--border); } }
+/* shown in place of a hidden Session Manager, on its side */
+.tree-rail { flex: none; width: 26px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0;
+  border: 0; border-right: 1px solid var(--border); border-radius: 0; background: var(--panel, var(--bg)); color: var(--muted); cursor: pointer; height: auto;
+  span { writing-mode: vertical-rl; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+  &:hover { color: var(--text); background: var(--hover); } }
 .vsplit { width: 4px; cursor: col-resize; margin-left: -2px; z-index: 2; &:hover { background: var(--accent); } }
 .hsplit { height: 4px; cursor: row-resize; margin-bottom: -2px; z-index: 2; &:hover { background: var(--accent); } }
 .work { flex: 1; display: flex; flex-direction: column; min-width: 0; }

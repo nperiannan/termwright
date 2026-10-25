@@ -253,3 +253,39 @@ func (m *Manager) SFTPRunAs(id, command string) (string, string, error) {
 	}
 	return home, user, nil
 }
+
+// SFTPLoginShell returns the name of the login shell ("bash", "zsh", …) on the
+// host an SFTP tab browses (the jump station's target when it uses one), or ""
+// when it cannot be told (network devices, restricted accounts). It decides
+// whether folder reporting may be turned on in the terminal automatically.
+func (m *Manager) SFTPLoginShell(id string) string {
+	s, err := m.sftpGet(id)
+	if err != nil {
+		return ""
+	}
+	client := s.client
+	if client == nil {
+		if client, err = m.sshClientOf(s.tabID); err != nil {
+			return ""
+		}
+	}
+	sess, err := client.NewSession()
+	if err != nil {
+		return ""
+	}
+	defer sess.Close()
+	cmd := `printf 'TWSHELL:%s\n' "${SHELL##*/}"`
+	if s.hop != nil {
+		cmd = s.hop.ExecCommand(cmd)
+	}
+	done := make(chan []byte, 1)
+	go func() { out, _ := sess.Output(cmd); done <- out }()
+	select {
+	case out := <-done:
+		if m := regexp.MustCompile(`TWSHELL:([\w.-]*)`).FindSubmatch(out); m != nil {
+			return string(m[1])
+		}
+	case <-time.After(15 * time.Second):
+	}
+	return ""
+}

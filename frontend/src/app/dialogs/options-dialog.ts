@@ -43,6 +43,11 @@ type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'button
                 <div class="row"><input name="ld" [(ngModel)]="s.logDir" /><button type="button" (click)="browse('logDir')">Browse...</button></div>
                 <label>Downloads folder</label>
                 <div class="row"><input name="dd" [(ngModel)]="s.downloadDir" /><button type="button" (click)="browse('downloadDir')">Browse...</button></div>
+                <label>SFTP from a terminal</label>
+                <div class="checks">
+                  <label><input type="checkbox" name="scwd" [(ngModel)]="s.sftpCwdAuto" /> Working directory detection: turn on folder reporting in the shell (bash, zsh) when an SFTP tab is opened from it</label>
+                  <label><input type="checkbox" name="sfol" [(ngModel)]="s.sftpFollowTerminal" /> SFTP tabs follow the terminal folder</label>
+                </div>
                 <label>Python interpreter</label>
                 <input name="py" [(ngModel)]="s.pythonPath" placeholder="(automatic: python3, or py -3 on Windows)" />
                 <label></label>

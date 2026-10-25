@@ -93,8 +93,12 @@ export class Overlays {
             <li><b>Capture</b> - session logging with timestamps, keyword highlighting, themes and color schemes</li>
           </ul>
           <p>Created by <b>Natarajan Periannan</b>.</p>
+          <div class="share">
+            <span>Open source on GitHub - share it with your team:</span>
+            <a class="mono" (click)="backend.openURL(repo)">{{ repo }}</a>
+            <button type="button" (click)="copyRepo()">{{ copied() ? 'Copied' : 'Copy Link' }}</button>
+          </div>
           <p class="links">
-            <a (click)="backend.openURL(repo)">{{ repo.replace('https://', '') }}</a> ·
             <a (click)="backend.openURL(repo + '/blob/main/docs/USER_GUIDE.md')">User Guide</a> ·
             <a (click)="backend.openURL(repo + '/issues')">Report an issue</a> ·
             <a (click)="backend.openURL(repo + '/releases')">Releases</a>
@@ -119,6 +123,11 @@ export class About {
   protected backend = inject(Backend);
   readonly repo = 'https://github.com/nperiannan/termwright';
   readonly info = signal<AppInfo | null>(null);
+  readonly copied = signal(false);
+  async copyRepo() {
+    try { await navigator.clipboard.writeText(this.repo); this.copied.set(true); setTimeout(() => this.copied.set(false), 2000); }
+    catch { this.ui.toast(this.repo, 'info', 8000); }
+  }
   readonly mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+Shift+';
   readonly keys: [string, string][] = [
     [this.mod + 'O', 'Connect (focus Session Manager)'], [this.mod + 'Q', 'Quick Connect'], [this.mod + 'L', 'Local shell'],

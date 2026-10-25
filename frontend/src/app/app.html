@@ -46,6 +46,9 @@
   @if (settings()?.showSessionManager) {
     <aside class="tree" [style.width.px]="treeWidth()"><app-session-tree /></aside>
     <div class="vsplit" (mousedown)="startDrag($event, 'tree')"></div>
+  } @else {
+    <button type="button" class="tree-rail" title="Show the Session Manager" (click)="action('toggle-session-manager')">
+      <app-icon name="tree" /><span>Sessions</span></button>
   }
   <section class="work">
     <nav class="tabbar">

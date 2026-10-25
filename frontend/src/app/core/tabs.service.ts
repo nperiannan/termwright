@@ -50,6 +50,8 @@ export class Tabs {
   readonly activeId = signal<string>('');
   readonly active = computed(() => this.tabs().find(t => t.id === this.activeId()) ?? null);
   readonly handles = new Map<string, TermHandle>();
+  /** Terminal output held back while folder reporting is turned on quietly (until the first OSC 7). */
+  readonly quiet = new Map<string, { held: string }>();
   readonly layout = signal<Layout>(this.loadLayout());
   private lockPw = new Map<string, string>();
   readonly transfers = signal<Transfer[]>([]);
@@ -140,7 +142,29 @@ export class Tabs {
       };
       this.tabs.update(l => [...l, tv]);
       this.activeId.set(tv.id);
+      void this.autoCwd(tv);
     } catch (e) { this.ui.error(e); }
+  }
+
+  /**
+   * Working directory detection (Global Options → General, on by default):
+   * when an SFTP tab opens from a terminal whose shell does not report its
+   * folder yet, turn reporting on in that shell - only for bash or zsh login
+   * shells (checked over a separate channel, through the jump station when
+   * there is one) and only while the terminal sits at a shell prompt.
+   */
+  private async autoCwd(sftp: TabView) {
+    if (this.ui.settings()?.sftpCwdAuto === false) return;
+    const sh = this.shellOf(sftp);
+    if (!sh || sh.cwd || sh.state !== 'connected') return;
+    const name = await this.backend.sftpLoginShell(sftp.id).catch(() => '');
+    if (!/^(bash|zsh)$/.test(name) || this.get(sh.id)?.cwd) return;
+    const term = this.handles.get(sh.id)?.term;
+    if (!term || term.buffer.active.type !== 'normal') return;
+    const b = term.buffer.active;
+    const line = b.getLine(b.baseY + b.cursorY)?.translateToString(true) ?? '';
+    if (!/[$#%>]\s*$/.test(line.trimEnd() + ' ') || line.trimEnd().length !== line.slice(0, b.cursorX).trimEnd().length) return;
+    await this.enableCwdReporting(sh.id, false, true);
   }
 
   /**
@@ -155,7 +179,7 @@ export class Tabs {
   }
 
   /** Types the line that makes bash or zsh report its folder (OSC 7) after every prompt. */
-  enableCwdReporting(termId: string, permanent: boolean) {
+  enableCwdReporting(termId: string, permanent: boolean, silent = false) {
     const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD"; }; ` +
       `if [ -n "\$ZSH_VERSION" ]; then typeset -U precmd_functions; precmd_functions+=(_tw_cwd); ` +
       `else case ";\$PROMPT_COMMAND;" in *_tw_cwd*) ;; *) PROMPT_COMMAND="_tw_cwd\${PROMPT_COMMAND:+;\$PROMPT_COMMAND}";; esac; fi`;
@@ -164,6 +188,16 @@ export class Tabs {
       const q = line.replace(/'/g, `'\\''`);
       cmd = ` f=~/.bashrc; [ -n "\$ZSH_VERSION" ] && f=~/.zshrc; grep -q _tw_cwd "\$f" 2>/dev/null || ` +
         `printf '%s\\n' '# Termwright: report the current folder (SFTP follows the terminal)' '${q}' >> "\$f"; echo "folder reporting added to \$f";` + cmd;
+    }
+    if (silent) {
+      // hide the typed line: hold the output until the shell reports its folder
+      this.quiet.set(termId, { held: '' });
+      setTimeout(() => {
+        const q = this.quiet.get(termId);
+        if (!q) return;
+        this.quiet.delete(termId);
+        this.handles.get(termId)?.term.write(q.held);
+      }, 4000);
     }
     return this.backend.sendInput(termId, cmd);
   }

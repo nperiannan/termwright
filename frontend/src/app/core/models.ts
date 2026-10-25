@@ -70,6 +70,7 @@ export interface Settings {
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
   showButtonBar: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
+  sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   keywordSets: KeywordSet[] | null; defaultKeywordSet: string; showConnectBar: boolean; keyMap: KeyBinding[] | null;
   customSchemes: { name: string; colors: Record<string, string> }[] | null; accentColor: string;

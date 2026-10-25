@@ -109,7 +109,8 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - Windows file picker: "All files" filter and upper-case extensions
 
 ## 0.11.2 (done)
-- Working directory detection (OSC 7 / 1337 CurrentDir / 633 Cwd): SFTP opens in the terminal's folder, Follow Terminal Folder, cd terminal to the SFTP folder, one-click bash/zsh setup (this shell or ~/.bashrc / ~/.zshrc)
+- Working directory detection (OSC 7 / 1337 CurrentDir / 633 Cwd): SFTP opens in the terminal's folder, Follow Terminal Folder, cd terminal to the SFTP folder, one-click bash/zsh setup (this shell or ~/.bashrc / ~/.zshrc); automatic and quiet when the SFTP tab opens (login shell probed over a separate channel, also through a jump station); settings in General
+- Hidden Session Manager leaves a SESSIONS strip; About: GitHub link with Copy Link
 
 ## Next ideas
 - [ ] Shared team sessions (session folder in a Git repo, pull/push from the app)

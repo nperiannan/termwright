@@ -77,6 +77,7 @@ export class Backend {
   answerPrompt(id: string, r: PromptReply) { return this.call<void>('AnswerPrompt', id, r); }
 
   /** mode: '' = as the session says, 'jump' = the host logged in to, 'target' = host of its "ssh … host" remote command. */
+  sftpLoginShell(id: string) { return this.call<string>('SFTPLoginShell', id); }
   sftpOpen(tabId: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; target: string }>('SFTPOpen', tabId, mode); }
   sftpConnect(path: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; info: string; target: string }>('SFTPConnect', path, mode); }
   sftpSetRoot(id: string, root: boolean) { return this.call<string>('SFTPSetRoot', id, root); }

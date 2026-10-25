@@ -89,6 +89,8 @@ type Settings struct {
 	RestoreTabs         bool                 `json:"restoreTabs"`
 	OpenTabs            []string             `json:"openTabs"`
 	Bookmarks           []Bookmark           `json:"bookmarks"`
+	SFTPCwdAuto         bool                 `json:"sftpCwdAuto"`              // turn on folder reporting in the shell when an SFTP tab opens from it
+	SFTPFollowTerminal  bool                 `json:"sftpFollowTerminal"`       // SFTP tabs follow the terminal folder
 	SessionManagerRight bool                 `json:"sessionManagerRight"`      // Session Manager on the right side of the window
 	VaultAddr           string               `json:"vaultAddr,omitempty"`      // HashiCorp Vault URL for vault:// references ("" = $VAULT_ADDR)
 	KeyPassphrases      []string             `json:"keyPassphrases,omitempty"` // key files whose passphrase is in the OS keychain (no secrets here)
@@ -200,12 +202,14 @@ func Defaults(dataDir string) Settings {
 				{Text: `\b\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?\b`, Regex: true, Color: "#1f3f6b"},
 			},
 		}},
-		DefaultKeywordSet: "Network",
-		Bookmarks:         []Bookmark{},
-		UpdateChannel:     "stable",
-		UpdateRepo:        PublicRepo,
-		UpdateOnStart:     true,
-		DeviceTypes:       session.BuiltinDeviceTypes(),
+		DefaultKeywordSet:  "Network",
+		Bookmarks:          []Bookmark{},
+		UpdateChannel:      "stable",
+		SFTPCwdAuto:        true,
+		SFTPFollowTerminal: true,
+		UpdateRepo:         PublicRepo,
+		UpdateOnStart:      true,
+		DeviceTypes:        session.BuiltinDeviceTypes(),
 		Snippets: []Snippet{
 			{Name: "Show VLAN", Folder: "Examples", Text: "show vlan {{vlan_id:10}}", Description: "Asks for the VLAN id"},
 			{Name: "Interface status", Folder: "Examples", Text: "show interfaces gigabitEthernet {{port:1/1}}"},

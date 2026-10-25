@@ -123,9 +123,17 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     term.parser.registerOscHandler(1337, d => d.startsWith('CurrentDir=') ? setCwd(d.slice(11)) : false);
     term.parser.registerOscHandler(633, d => d.startsWith('P;Cwd=') ? setCwd(d.slice(6)) : false);
     const dec = new TextDecoder();
+    const quietDec = new TextDecoder();
     let atLineStart = false;
     this.unsub.push(this.backend.on('term:data:' + id, (b64: string) => {
       const bytes = b64ToBytes(b64);
+      const q = this.tabs.quiet.get(id);
+      if (q) {
+        q.held += quietDec.decode(bytes, { stream: true });
+        const i = q.held.indexOf('\x1b]7;');
+        if (i >= 0) { this.tabs.quiet.delete(id); term.write('\r\x1b[2K' + q.held.slice(i)); }
+        return;
+      }
       if (!this.tabs.get(id)?.timestamps || term.buffer.active.type !== 'normal') { term.write(bytes); return; }
       // Per-line timestamps (display only): after every newline in line-based output.
       const stamp = () => '\x1b[90m[' + new Date().toTimeString().slice(0, 8) + ']\x1b[0m ';

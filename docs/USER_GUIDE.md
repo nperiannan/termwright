@@ -61,13 +61,15 @@ To build from source see the [README](../README.md#build).
 |---|---|
 | **Menu bar** | File, Edit, View, Transfer, Script, Options, Tab, Help. On macOS it is in the top-of-screen menu bar **and** (by default) inside the window; toggle the in-window copy with View → Menu Bar in Window or Global Options → General. |
 | **Toolbar** | Connect · Quick Connect · Local Shell · Reconnect · Disconnect · Copy · Paste · Find · Log · SFTP · Run Script · Record · Session Manager / Command Window / Button Bar toggles · Import · Export · Options · Tabbed / Side-by-side / Stacked / Grid layout · Lock · **Connect Bar**. Hover an icon for its name. |
-| **Session Manager** (left by default) | Folder tree of saved sessions with a filter box. Drag its inner edge to resize. The header buttons move it to the **other side** of the window and **hide** it; the same is in **View → Session Manager Left / Right** and **View → Session Manager** (or the toolbar toggle, or the command palette). Position, visibility and width are remembered. |
+| **Session Manager** (left by default) | Folder tree of saved sessions with a filter box. Drag its inner edge to resize. The header buttons move it to the **other side** of the window and **hide** it; the same is in **View → Session Manager Left / Right** and **View → Session Manager** (or the toolbar toggle, or the command palette). When hidden, a slim **SESSIONS** strip stays on that side of the window - click it to bring the Session Manager back. Position, visibility and width are remembered. |
 | **Tabs** | One tab per connection. The dot shows state: green = connected, amber = connecting, red = error, grey = disconnected. `LOG` / `REC` badges show logging / script recording. |
 | **Button Bar** | Your own buttons that send commands, run actions or scripts. |
 | **Command Window** | Type a command once and send it to the active tab or to every connected tab. |
 | **Status bar** | State, protocol, connection details (user@host, server version, route), active transfer %, terminal size and emulation, number of connected tabs. |
 
 ![Session Manager on the right](screenshots/session-manager-right.png)
+
+![Session Manager hidden - the SESSIONS strip brings it back](screenshots/session-manager-hidden.png)
 
 ## 3. Connecting
 
@@ -302,17 +304,17 @@ Open with the toolbar SFTP button, **Transfer → Open SFTP Tab** or `Cmd/Ctrl+S
 
 ![Working directory detection](screenshots/sftp-cwd-hint.png)
 
-When the shell reports its current folder, the SFTP tab opens in the terminal's folder instead of the home folder. The **>_ Terminal ▾** button in the server pane offers:
+Working directory detection is **on by default**. When you open an SFTP tab from a terminal tab (toolbar SFTP button, Transfer → Open SFTP Tab, or the tab's right-click menu), Termwright checks over a separate channel that the login shell is **bash or zsh**, and if the terminal is sitting at a prompt it turns folder reporting on in that shell for you - the typed line is hidden, the screen stays as it was. From then on the SFTP tab opens in, and follows, the terminal's folder. This also works **through a jump station**, e.g. an AWS host reached through a bastion: open *SFTP Tab on <target> (through this login)* and the check and the folder reporting happen on the target. Network devices are left alone (their CLI is not bash or zsh). Turn either part off in **Options → Global Options → General → SFTP from a terminal**: *Working directory detection* and *SFTP tabs follow the terminal folder*. The **>_ Terminal ▾** button in the server pane offers:
 
 ![Terminal folder menu](screenshots/sftp-terminal-folder.png)
 
 - **Go to Terminal Folder** - jump to the folder the shell is in now.
-- **Follow Terminal Folder** - the SFTP pane changes folder whenever you `cd` in the terminal (the button then reads *Following*; remembered).
+- **Follow Terminal Folder** - the SFTP pane changes folder whenever you `cd` in the terminal (the button then reads *Following*). On by default; switch it off here for this tab, or for all tabs in Global Options.
 - **Open This Folder in the Terminal (cd)** - the reverse: the terminal changes to the folder shown in SFTP. Also on the right-click menu of a remote folder.
 - **Enable Folder Detection in This Shell** - types one line into the terminal (bash or zsh) that makes the shell report its folder after every prompt, until you log out.
 - **Enable Folder Detection Permanently…** - after a confirmation, adds the same line to `~/.bashrc` (or `~/.zshrc`) on that server, once.
 
-If the shell does not report its folder, a blue *Working directory detection* bar offers the same two buttons; close it with ✕ (remembered). Termwright understands the standard escape sequences OSC 7 (`file://host/path`), OSC 1337 `CurrentDir=` and OSC 633 `P;Cwd=`, so shells already set up for iTerm2, VS Code, WezTerm or Tabby work as they are. For **fish**: `function _tw_cwd --on-variable PWD; printf '\e]7;file://%s%s\a' (hostname) $PWD; end` in `~/.config/fish/config.fish`. Network devices (VOSS, EXOS, …) do not report a folder. With a jump station, this works for the target host's SFTP tab (*through this login*).
+If the shell still does not report its folder (detection turned off, another shell, or the terminal was busy), a blue *Working directory detection* bar offers the same two buttons; close it with ✕ (remembered). Termwright understands the standard escape sequences OSC 7 (`file://host/path`), OSC 1337 `CurrentDir=` and OSC 633 `P;Cwd=`, so shells already set up for iTerm2, VS Code, WezTerm or Tabby work as they are. For **fish**: `function _tw_cwd --on-variable PWD; printf '\e]7;file://%s%s\a' (hostname) $PWD; end` in `~/.config/fish/config.fish`. Network devices (VOSS, EXOS, …) do not report a folder. 
 
 Folders use the same colored folder icon as the Session Manager. Files are colored by type so they stand out at a glance: text and configuration files blue, archives amber, images pink, firmware and binaries purple, scripts green, keys and certificates red, everything else gray. Symbolic links carry a small arrow, and hidden (dot) files are dimmed.
 

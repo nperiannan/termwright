@@ -129,7 +129,7 @@ export class SftpView implements OnInit {
   readonly rootBusy = signal(false);
   /** The terminal tab with the same login whose folder this tab can follow. */
   readonly shell = computed(() => this.tabs.shellOf(this.tab()));
-  readonly follow = signal(this.loadFlag('termwright.sftpFollow'));
+  readonly follow = signal(this.ui.settings()?.sftpFollowTerminal !== false);
   readonly cwdHintClosed = signal(this.loadFlag('termwright.cwdHintClosed'));
 
   constructor() {
@@ -161,7 +161,6 @@ export class SftpView implements OnInit {
 
   setFollow(v: boolean) {
     this.follow.set(v);
-    this.saveFlag('termwright.sftpFollow', v);
     if (v && !this.shell()?.cwd) this.ui.toast('The terminal does not report its folder yet - enable folder detection first.', 'info', 6000);
   }
 

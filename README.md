@@ -15,7 +15,9 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 
 ## What's new in 0.11.2
 
-* **Working directory detection** - an SFTP tab opened from a terminal starts in the terminal's folder, can **follow** every `cd`, and can `cd` the terminal to the folder shown in SFTP. One click turns on folder reporting for bash/zsh (this shell or permanently); OSC 7, iTerm2 and VS Code sequences are understood.
+* **Working directory detection** (on by default, configurable) - an SFTP tab opened from a terminal starts in the terminal's folder and **follows** every `cd`, also on a host behind a bastion; it turns folder reporting on in bash/zsh by itself, and can `cd` the terminal to the folder shown in SFTP. OSC 7, iTerm2 and VS Code sequences are understood.
+* **Hidden Session Manager** leaves a slim *SESSIONS* strip on its side to bring it back.
+* **About** shows the GitHub link with a *Copy Link* button to share Termwright.
 
 ## What's new in 0.11.1
 

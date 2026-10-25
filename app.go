@@ -547,6 +547,9 @@ func (a *App) SFTPSetRoot(id string, root bool) (string, error) { return a.terms
 
 // SFTPRunAs switches an SFTP tab to the user a command logs in to (e.g. "sudo su - oracle"),
 // asking for passwords it prompts for; "" returns to the login user. Returns folder and user.
+// SFTPLoginShell returns the login shell name on the host an SFTP tab browses ("" if unknown).
+func (a *App) SFTPLoginShell(id string) string { return a.terms.SFTPLoginShell(id) }
+
 func (a *App) SFTPRunAs(id, command string) (map[string]string, error) {
 	home, user, err := a.terms.SFTPRunAs(id, command)
 	if err != nil {

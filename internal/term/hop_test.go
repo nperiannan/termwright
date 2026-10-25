@@ -101,6 +101,11 @@ func TestSFTPThroughHop(t *testing.T) {
 		!strings.HasPrefix(lines[1], "-T -o BatchMode=yes -i") || !strings.Contains(lines[1], "ec2-user@10.0.0.5 scp -t") {
 		t.Fatalf("ssh calls:\n%s", b)
 	}
+	if want := filepath.Base(os.Getenv("SHELL")); os.Getenv("SHELL") != "" {
+		if got := m.SFTPLoginShell(id); got != want {
+			t.Fatalf("login shell through hop: %q, want %q", got, want)
+		}
+	}
 	// Run As on the target, through the jump station (the target gets the terminal)
 	os.WriteFile(filepath.Join(bin, "sftp-server"), []byte(fmt.Sprintf("#!/bin/sh\nTW_FAKE_SSH=1 TW_FAKE_SSH_LOG=/dev/null exec %q -s x sftp\n", exe)), 0o755)
 	oldPaths := sftpServerPaths
