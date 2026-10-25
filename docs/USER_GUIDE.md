@@ -557,7 +557,7 @@ Options → Global Options → **Updates** decides when you are told about updat
 
 - **Notify me about**: *Stable releases* (default), *Stable releases and nightly builds*, or *Nothing*.
 - **Check at start-up** (at most once a day; only a notice when something newer exists).
-- **Advanced - only for your own fork**: repository and GitHub token. Leave them alone for the official releases. Settings from older builds (OpenCRT, or the former private repository) are moved to the public repository and the Stable channel automatically.
+- **Advanced - only for your own fork**: repository and GitHub token. Leave them alone for the official releases.
 
 ## 14. Migrating from SecureCRT, PuTTY or MobaXterm
 
@@ -623,8 +623,6 @@ Add your own in Global Options → Key Map. Help → Keyboard Shortcuts shows th
 | Saved passwords | OS keychain, service name `Termwright` |
 
 Back up the data folder to back up everything except passwords.
-
-Upgrading from OpenCRT: on first start Termwright moves the old `OpenCRT` data folder to `Termwright` (settings that pointed inside it are updated) and copies saved passwords from the old keychain service, so nothing has to be set up again.
 
 ## 17. Troubleshooting
 

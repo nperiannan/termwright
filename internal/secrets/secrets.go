@@ -11,8 +11,8 @@ import (
 
 const service = "Termwright"
 
-// legacyService is the keychain service used before the app was renamed
-// (OpenCRT). Passwords found there are copied to the new service on first use.
+// legacyService is the keychain service of pre-release builds (before the
+// rename). Passwords found there are copied to the new service on first use.
 const legacyService = "OpenCRT"
 
 // emptyMarker stands for a saved empty password (some keychains refuse "").

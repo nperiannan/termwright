@@ -62,7 +62,6 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - [x] Read PuTTY .ppk keys directly (formats 2 and 3, Argon2id/Argon2i, RSA/Ed25519/ECDSA/DSA)
 - [x] Python scripts with a SecureCRT-style `crt` object (runs with the installed Python 3)
 - [x] Terminal scheme *Auto* (follows the UI theme) and *use this scheme for all sessions*
-- [x] Move the pre-rename OpenCRT data folder automatically
 
 ## 0.10: daily network work (done)
 - [x] Device types (login profiles) in Quick Connect, Connect Bar, sessions and folder defaults
@@ -105,7 +104,7 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 ## 0.11.1 (done)
 - Session Manager on the left or right, hide/show, remembered in settings
 - SFTP browser icons: gradient folders, files colored by type, link and hidden markers
-- Update window: installed / latest stable with changes / newer nightly with backup step; nightly ordered by commit (compare API); OpenCRT repo setting migrated; repo and token under Advanced
+- Update window: installed / latest stable with changes / newer nightly with backup step; nightly ordered by commit (compare API); repo and token under Advanced
 - Windows file picker: "All files" filter and upper-case extensions
 
 ## 0.11.2 (done)

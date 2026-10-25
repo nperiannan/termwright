@@ -624,7 +624,7 @@ func JoinPath(folder, name string) string {
 // legacyPrefix is the key prefix written before the app was renamed.
 const legacyPrefix = "OpenCRT "
 
-// migrateLegacyKeys renames pre-rename extension keys ("OpenCRT Triggers")
+// migrateLegacyKeys renames pre-rename extension keys (e.g. "<old name> Triggers")
 // to the current prefix so older session files keep their settings.
 func migrateLegacyKeys(f *securecrt.File) {
 	for _, e := range f.Entries {

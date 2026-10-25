@@ -27,7 +27,7 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 
 * **Session Manager left or right, shown or hidden** - header buttons, View menu or command palette; the choice is remembered.
 * **Colored SFTP browser** - the same folder icons as the Session Manager, and files colored by type (text, archive, image, firmware, script, key), links and hidden files marked.
-* **Clearer updates** - the update window shows the installed version, the latest stable release with its changes, and a newer nightly build (if any) with a warning and a **Back Up Now** step; an older nightly is no longer offered as an update; old OpenCRT update settings are fixed automatically.
+* **Clearer updates** - the update window shows the installed version, the latest stable release with its changes, and a newer nightly build (if any) with a warning and a **Back Up Now** step; an older nightly is no longer offered as an update.
 * **Windows import** - the file picker also offers *All files (\*.\*)*, so an `.XML` export always shows.
 
 ## What's new in 0.11
@@ -69,7 +69,6 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 * **PuTTY `.ppk` keys** work directly as identity files (formats 2 and 3, encrypted or not) - no PuTTYgen conversion.
 * **SecureCRT-style Python scripts**: `.py` logon scripts, Run Script, buttons and key bindings get the familiar `crt` object (`crt.Screen.WaitForString`, `crt.Dialog.Prompt`, `crt.Arguments`, …) and run with your installed Python 3.
 * **Terminal colors**: *Auto* scheme follows the light/dark UI, and one scheme can be applied to all sessions (imported SecureCRT defaults now follow the global scheme).
-* Upgrading from OpenCRT moves your data folder and saved passwords automatically.
 
 ## Features (v0.10)
 

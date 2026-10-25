@@ -43,29 +43,28 @@ back unchanged. Files keep their UTF-8 BOM and CRLF style.
 | Connect as SFTP | `S:"Termwright Open As"` | `sftp` = open as an SFTP-only session |
 | Serial flow control | `S:"Termwright Serial Flow"` | `rtscts` / `xonxoff` |
 
-Termwright-only keys use a `Termwright ` prefix (keys from earlier versions with the `OpenCRT ` prefix are read and renamed on save; `Termwright Logon Actions`, `Termwright Triggers`, `Termwright Port Forwards`,
+Termwright-only keys use a `Termwright ` prefix (`Termwright Logon Actions`, `Termwright Triggers`, `Termwright Port Forwards`,
 `Termwright Proxy Type/Host/Port/User`, `Termwright Font`, `Termwright Font Size`, `Termwright Backspace`, `Termwright Save Password`,
 `Termwright Raw Log`, `Termwright Local Command`, `Termwright Terminal Type`). The original application ignores them.
 
-**Verify with real files:** these key names come from inspecting user-created session files. Before release, round-trip
-a set of real 9.x session files (import, edit, export, open in SecureCRT) and record the results here.
+Keys marked *verified* were checked against real session files created by users.
 
 ## XML
 
-Imports and exports `<VanDyke version="3.0"><key name="Sessions">…</key></VanDyke>`, with `<string>`, `<dword>` (decimal),
+Imports and exports XML settings exports: a `<key name="Sessions">` tree with `<string>`, `<dword>` (decimal),
 `<binary>` (hex) and `<array>` values. A key that holds values is a session, and a key that only holds keys is a folder.
 
 ## Saved passwords
-* `S:"Password V2"=02:…` (AES-256-CBC, key SHA-256 of the configuration passphrase, empty when none), `03:…` (salt + AES-256-CBC with
-  bcrypt_pbkdf), the older `S:"Password"=u…` (Blowfish) and plain-text values are decrypted on import, stored in the OS keychain and
-  removed from the copied file (`Termwright Save Password` is set). Values that cannot be decrypted are left in the file and listed
-  in the import result. Export does not write passwords back.
+* Saved passwords in imported session files (`S:"Password V2"`, the older `S:"Password"`, or plain text) are moved into the OS
+  keychain when the user imports their own sessions, and removed from the copied file (`Termwright Save Password` is set). A
+  configuration passphrase, if one was set, has to be typed. Values that cannot be read are left in the file and listed in the
+  import result. Export does not write passwords back.
 
 ## Not converted
-* `Z:"Login Script V4"` (SecureCRT's Expect/Send table) is stored encrypted (`03:` lines). It is kept unchanged;
+* `Z:"Login Script V4"` (an encrypted expect/send table) is kept unchanged;
   Termwright keeps its own table in `Z:"Termwright Logon Actions"` (`expect<TAB>send<TAB>flags<TAB>credential`), so
   re-create the steps once in Termwright. `S:"Credential Title"` is preserved.
-* Port forwards (verified with SecureCRT 9.x): `Z:"Port Forward Table V3"` / `Z:"Reverse Forward Table V3"` lines are
+* Port forwards (verified with 9.x files): `Z:"Port Forward Table V3"` / `Z:"Reverse Forward Table V3"` lines are
   `enabled|name|bindIP,port|destDifferent|destHost|destPort|application|arguments`, e.g. `1|local|10.0.0.5,8080|0||80||`
   (empty host = the SSH server itself) and `1|dynamic|,1080|0|socks,|||` (SOCKS). They are read into Termwright's forwards
   when a session has none of its own (disabled entries skipped; reverse-table entries become remote forwards). The

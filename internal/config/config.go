@@ -253,7 +253,7 @@ func DataDir() (string, error) {
 			}
 		}
 	}
-	for _, env := range []string{"TERMWRIGHT_HOME", "OPENCRT_HOME"} {
+	for _, env := range []string{"TERMWRIGHT_HOME"} {
 		if d := os.Getenv(env); d != "" {
 			return d, os.MkdirAll(d, 0o700)
 		}
@@ -328,8 +328,8 @@ func Load(dataDir string) (*Manager, error) {
 // PublicRepo is the public Termwright repository that releases are published to.
 const PublicRepo = "nperiannan/termwright"
 
-// migrateUpdateRepo points settings saved by older builds (OpenCRT, or the
-// former private repository, both with the nightly channel as default) to the
+// migrateUpdateRepo points settings saved by pre-release builds (old name, or
+// the former private repository, both with the nightly channel as default) to the
 // public repository and its stable channel. Forks set by the user are kept.
 func migrateUpdateRepo(s *Settings) bool {
 	switch strings.ToLower(strings.TrimSpace(s.UpdateRepo)) {
