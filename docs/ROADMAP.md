@@ -114,6 +114,10 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - Working directory detection automatic and quiet when the SFTP tab opens (login shell probed over a separate channel, also through a jump station); Follow on by default; settings in General
 - Hidden Session Manager leaves a SESSIONS strip; About: GitHub link with Copy Link
 
+## 0.11.4 (done)
+- Removed upgrade code for pre-release installs (old data folder, keychain service, session key prefix, update repository)
+- Password vault format version 2
+
 ## Next ideas
 - [ ] Shared team sessions (session folder in a Git repo, pull/push from the app)
 - [ ] Code signing + notarization (needs Apple Developer ID / Windows certificate)

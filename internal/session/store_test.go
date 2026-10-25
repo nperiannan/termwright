@@ -249,14 +249,3 @@ func TestSecureCRTLogonKeys(t *testing.T) {
 	}
 }
 
-func TestLegacyKeyPrefix(t *testing.T) {
-	f, _ := securecrt.Parse([]byte("S:\"Hostname\"=h\r\nS:\"Open" + "CRT Open As\"=sftp\r\nZ:\"Open" + "CRT Triggers\"=00000001\r\n --More--\t0\t \r\n"))
-	s := FromFile("x", f)
-	if s.OpenAs != "sftp" || len(s.Triggers) != 1 {
-		t.Fatalf("%+v", s)
-	}
-	s.Apply(f)
-	if out := string(f.Bytes()); strings.Contains(out, "Open"+"CRT") || !strings.Contains(out, "Termwright Open As") {
-		t.Fatal(out)
-	}
-}

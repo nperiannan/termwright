@@ -64,17 +64,23 @@ func Seal(passphrase string, payload any) ([]byte, error) {
 	block, _ := aes.NewCipher(key)
 	gcm, _ := cipher.NewGCM(block)
 	nonce := random(gcm.NonceSize())
-	env := envelope{Version: 1, KDF: "scrypt", N: scryptN, R: scryptR, P: scryptP,
+	env := envelope{Version: 2, KDF: "scrypt", N: scryptN, R: scryptR, P: scryptP,
 		Salt: base64.StdEncoding.EncodeToString(salt), Nonce: base64.StdEncoding.EncodeToString(nonce),
-		Data: base64.StdEncoding.EncodeToString(gcm.Seal(nil, nonce, plain, []byte("opencrt-vault-v1")))}
+		Data: base64.StdEncoding.EncodeToString(gcm.Seal(nil, nonce, plain, []byte(aad)))}
 	return json.MarshalIndent(env, "", "  ")
 }
+
+// aad binds the ciphertext to the vault format version.
+const aad = "termwright-vault-v2"
 
 // Open decrypts a file created by Seal into out.
 func Open(passphrase string, data []byte, out any) error {
 	var env envelope
-	if err := json.Unmarshal(data, &env); err != nil || env.Version != 1 || env.KDF != "scrypt" {
+	if err := json.Unmarshal(data, &env); err != nil || env.KDF != "scrypt" {
 		return errors.New("not a Termwright password vault file")
+	}
+	if env.Version != 2 {
+		return errors.New("this vault file was made by an older Termwright build - export it again from the current version")
 	}
 	if env.N <= 1 || env.N > 1<<20 || env.R <= 0 || env.R > 32 || env.P <= 0 || env.P > 16 {
 		return errors.New("unsupported vault parameters")
@@ -94,7 +100,7 @@ func Open(passphrase string, data []byte, out any) error {
 	if len(nonce) != gcm.NonceSize() {
 		return ErrBadPassphrase
 	}
-	plain, err := gcm.Open(nil, nonce, ct, []byte("opencrt-vault-v1"))
+	plain, err := gcm.Open(nil, nonce, ct, []byte(aad))
 	if err != nil {
 		return ErrBadPassphrase
 	}

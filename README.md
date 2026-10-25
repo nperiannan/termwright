@@ -13,6 +13,11 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.11.4
+
+* Upgrade code for pre-release installs removed.
+* Password vault files use a new format version: export them again after updating (older vault files are not read).
+
 ## What's new in 0.11.3
 
 * **Working directory detection on by default** (configurable in Global Options → General) - Termwright turns folder reporting on in bash/zsh by itself when an SFTP tab opens from a terminal, also on a host behind a bastion; SFTP tabs follow the terminal folder.

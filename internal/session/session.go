@@ -197,7 +197,6 @@ func Defaults() Session {
 
 // FromFile maps a parsed session file into a Session.
 func FromFile(path string, f *securecrt.File) Session {
-	migrateLegacyKeys(f)
 	s := Defaults()
 	s.Path = path
 	s.Name, s.Folder = splitPath(path)
@@ -619,17 +618,4 @@ func JoinPath(folder, name string) string {
 		return name
 	}
 	return folder + "/" + name
-}
-
-// legacyPrefix is the key prefix written before the app was renamed.
-const legacyPrefix = "OpenCRT "
-
-// migrateLegacyKeys renames pre-rename extension keys (e.g. "<old name> Triggers")
-// to the current prefix so older session files keep their settings.
-func migrateLegacyKeys(f *securecrt.File) {
-	for _, e := range f.Entries {
-		if rest, ok := strings.CutPrefix(e.Name, legacyPrefix); ok && f.Get("Termwright "+rest) == nil {
-			e.Name = "Termwright " + rest
-		}
-	}
 }

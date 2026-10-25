@@ -11,10 +11,6 @@ import (
 
 const service = "Termwright"
 
-// legacyService is the keychain service of pre-release builds (before the
-// rename). Passwords found there are copied to the new service on first use.
-const legacyService = "OpenCRT"
-
 // emptyMarker stands for a saved empty password (some keychains refuse "").
 const emptyMarker = "\x00termwright-empty-password"
 
@@ -26,12 +22,7 @@ func Lookup(key string) (string, bool) {
 	}
 	pw, err := keyring.Get(service, key)
 	if err != nil {
-		old, lerr := keyring.Get(legacyService, key)
-		if lerr != nil {
-			return "", false
-		}
-		_ = keyring.Set(service, key, old)
-		pw = old
+		return "", false
 	}
 	if pw == emptyMarker {
 		return "", true
@@ -58,7 +49,6 @@ func Set(sessionPath, password string) error {
 
 // Delete removes a saved password; missing entries are not an error.
 func Delete(sessionPath string) error {
-	_ = keyring.Delete(legacyService, sessionPath)
 	err := keyring.Delete(service, sessionPath)
 	if errors.Is(err, keyring.ErrNotFound) {
 		return nil

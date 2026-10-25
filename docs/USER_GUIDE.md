@@ -492,7 +492,7 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 
 ![Device type with a Vault reference](screenshots/devicetypes-ref.png)
 
-**Password vault export/import** (same dialog → Export / Import): writes all saved session passwords, device type passwords, SSH key passphrases and credentials into one `.twvault` file encrypted with AES-256-GCM (scrypt-derived key). Import it on another computer with the same passphrase.
+**Password vault export/import** (same dialog → Export / Import): writes all saved session passwords, device type passwords, SSH key passphrases and credentials into one `.twvault` file encrypted with AES-256-GCM (scrypt-derived key). Import it on another computer with the same passphrase. Vault files made before 0.11.4 use an older format: export them again from 0.11.4 or later.
 
 ## 11. Tunnels, jump hosts and proxies
 

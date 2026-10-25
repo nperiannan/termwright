@@ -253,44 +253,15 @@ func DataDir() (string, error) {
 			}
 		}
 	}
-	for _, env := range []string{"TERMWRIGHT_HOME"} {
-		if d := os.Getenv(env); d != "" {
-			return d, os.MkdirAll(d, 0o700)
-		}
+	if d := os.Getenv("TERMWRIGHT_HOME"); d != "" {
+		return d, os.MkdirAll(d, 0o700)
 	}
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
 	d := filepath.Join(base, "Termwright")
-	if _, err := os.Stat(d); os.IsNotExist(err) {
-		// Installs from before the rename: move the old folder (settings,
-		// sessions, logs, known_hosts) to the new name. If that is not
-		// possible, keep using the old folder.
-		if old := filepath.Join(base, "OpenCRT"); isDir(old) {
-			if err := os.Rename(old, d); err != nil {
-				return old, nil
-			}
-			movedFrom = old
-		}
-	}
 	return d, os.MkdirAll(d, 0o700)
-}
-
-// movedFrom is the pre-rename data folder when DataDir just moved it; Load
-// then rewrites settings paths that pointed inside it.
-var movedFrom string
-
-// fixMovedPaths updates absolute paths that pointed into the old data folder.
-func fixMovedPaths(s *Settings, oldDir, newDir string) bool {
-	changed := false
-	for _, p := range []*string{&s.SessionsDir, &s.LogDir, &s.DownloadDir} {
-		if *p == oldDir || strings.HasPrefix(*p, oldDir+string(filepath.Separator)) {
-			*p = newDir + strings.TrimPrefix(*p, oldDir)
-			changed = true
-		}
-	}
-	return changed
 }
 
 func isDir(p string) bool {
@@ -306,14 +277,10 @@ func Load(dataDir string) (*Manager, error) {
 		if err := json.Unmarshal(data, &m.cur); err != nil {
 			return nil, err
 		}
-		if movedFrom != "" && fixMovedPaths(&m.cur, movedFrom, dataDir) {
-			movedFrom = ""
-			_ = m.Save(m.cur)
-		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if migrateUpdateRepo(&m.cur) {
+	if defaultUpdateRepo(&m.cur) {
 		_ = m.Save(m.cur)
 	}
 	if m.cur.SessionsDir == "" {
@@ -328,15 +295,9 @@ func Load(dataDir string) (*Manager, error) {
 // PublicRepo is the public Termwright repository that releases are published to.
 const PublicRepo = "nperiannan/termwright"
 
-// migrateUpdateRepo points settings saved by pre-release builds (old name, or
-// the former private repository, both with the nightly channel as default) to the
-// public repository and its stable channel. Forks set by the user are kept.
-func migrateUpdateRepo(s *Settings) bool {
-	switch strings.ToLower(strings.TrimSpace(s.UpdateRepo)) {
-	case "", "nperiannan/opencrt", "nperiannan/termwright-private":
-		if s.UpdateRepo != "" && s.UpdateChannel == "nightly" {
-			s.UpdateChannel = "stable"
-		}
+// defaultUpdateRepo fills in the public repository when none is set.
+func defaultUpdateRepo(s *Settings) bool {
+	if strings.TrimSpace(s.UpdateRepo) == "" {
 		s.UpdateRepo = PublicRepo
 		return true
 	}
