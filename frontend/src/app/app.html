@@ -1,0 +1,167 @@
+@if (settings()?.inWindowMenu) {
+  <nav class="menubar">
+    @for (m of menus; track m.title) { <button (click)="openMenu($event, m.title)">{{ m.title }}</button> }
+  </nav>
+}
+<header class="toolbar">
+  <button class="tb" title="Connect (Session Manager)" (click)="action('connect')"><app-icon name="connect" /></button>
+  <button class="tb" title="Quick Connect" (click)="action('quick-connect')"><app-icon name="quick" /></button>
+  <button class="tb" title="Local Shell" (click)="action('local-shell')"><app-icon name="shell" /></button>
+  <span class="sep"></span>
+  <button class="tb" title="Reconnect" [disabled]="!active()" (click)="action('reconnect')"><app-icon name="reconnect" /></button>
+  <button class="tb" title="Disconnect" [disabled]="active()?.state !== 'connected'" (click)="action('disconnect')"><app-icon name="disconnect" /></button>
+  <span class="sep"></span>
+  <button class="tb" title="Copy" [disabled]="!active()" (click)="action('copy')"><app-icon name="copy" /></button>
+  <button class="tb" title="Paste" [disabled]="!active()" (click)="action('paste')"><app-icon name="paste" /></button>
+  <button class="tb" title="Find" [disabled]="!active()" (click)="action('find')"><app-icon name="find" /></button>
+  <button class="tb" [class.on]="!!active()?.logFile" title="Log Session" [disabled]="!active()" (click)="action('log-toggle')"><app-icon name="log" /></button>
+  <button class="tb" title="Open SFTP tab" [disabled]="active()?.session?.protocol !== 'SSH2' || active()?.state !== 'connected'" (click)="action('sftp-tab')"><app-icon name="sftp" /></button>
+  <button class="tb" [class.on]="tabs.scripts().length > 0" [title]="tabs.scripts().length ? 'Cancel running scripts' : 'Run script'" [disabled]="!active()"
+          (click)="action(tabs.scripts().length ? 'cancel-scripts' : 'run-script')"><app-icon name="script" /></button>
+  <button class="tb" [class.on]="!!active()?.recording" title="Record script" [disabled]="active()?.kind !== 'terminal'" (click)="action('record-toggle')"><app-icon name="record" /></button>
+  <span class="sep"></span>
+  <button class="tb" [class.on]="settings()?.showSessionManager" title="Session Manager" (click)="action('toggle-session-manager')"><app-icon name="tree" /></button>
+  <button class="tb" [class.on]="settings()?.showCommandWindow" title="Command Window" (click)="action('toggle-command-window')"><app-icon name="command" /></button>
+  <button class="tb" [class.on]="settings()?.showButtonBar" title="Button Bar" (click)="action('toggle-button-bar')"><app-icon name="buttons" /></button>
+  <span class="sep"></span>
+  <button class="tb" title="Import Sessions" (click)="action('import')"><app-icon name="import" /></button>
+  <button class="tb" title="Export Sessions" (click)="action('export')"><app-icon name="export" /></button>
+  <button class="tb" title="Global Options" (click)="action('global-options')"><app-icon name="options" /></button>
+  <span class="sep"></span>
+  <button class="tb" [class.on]="tabs.layout() === 'tabs'" title="Tabbed view" (click)="tabs.setLayout('tabs')"><app-icon name="tabs" /></button>
+  <button class="tb" [class.on]="tabs.layout() === 'tile-v'" title="Tile side by side" (click)="tabs.setLayout('tile-v')"><app-icon name="tile-v" /></button>
+  <button class="tb" [class.on]="tabs.layout() === 'tile-h'" title="Tile stacked" (click)="tabs.setLayout('tile-h')"><app-icon name="tile-h" /></button>
+  <button class="tb" [class.on]="tabs.layout() === 'grid'" title="Grid" (click)="tabs.setLayout('grid')"><app-icon name="grid" /></button>
+  <button class="tb" title="Lock session" [disabled]="!active()" (click)="action('lock')"><app-icon name="lock" /></button>
+  @if (settings()?.showConnectBar) {
+    <input class="connectbar" [(ngModel)]="connectText" (keydown.enter)="connectBar()" spellcheck="false"
+           placeholder="voss 10.1.1.1 · ssh user@host:port · telnet host · serial COM1 115200 · session name" title="Connect Bar" />
+  } @else {
+    <span class="grow"></span>
+  }
+  <span class="brand">Termwright</span>
+</header>
+
+<div class="main">
+  @if (settings()?.showSessionManager) {
+    <aside class="tree" [style.width.px]="treeWidth()"><app-session-tree /></aside>
+    <div class="vsplit" (mousedown)="startDrag($event, 'tree')"></div>
+  }
+  <section class="work">
+    <nav class="tabbar">
+      @for (t of tabs.tabs(); track t.id) {
+        <div class="tab" [class.active]="t.id === tabs.activeId()" [title]="t.info || t.title"
+             (click)="tabs.activeId.set(t.id)" (auxclick)="onMiddleClick($event, t)" (contextmenu)="tabMenu($event, t)">
+          <span class="dot" [class]="t.state"></span>
+          <span class="label">{{ t.title }}</span>
+          @if (t.logFile) { <span class="logbadge" title="Logging to {{ t.logFile }}">LOG</span> }
+          @if (t.recording) { <span class="logbadge" title="Recording a script">REC</span> }
+          @if (tabs.selected().has(t.id)) { <span class="logbadge sel" title="In the send group (Command Window → Selected tabs)">SEL</span> }
+          @if (t.alert) { <span class="alertdot" title="An alert matched in this tab"></span> }
+          <button class="x" title="Close" (click)="tabs.close(t.id); $event.stopPropagation()">✕</button>
+        </div>
+      }
+      <button class="newtab" title="Quick Connect" (click)="action('quick-connect')">+</button>
+    </nav>
+    <div class="terminals" [class]="'terminals layout-' + tabs.layout()" [style.--n]="tabs.tabs().length" [style.--cols]="gridCols()">
+      @for (t of tabs.tabs(); track t.id) {
+        <div class="tile" [class.active]="t.id === tabs.activeId()" [class.hidden]="!tiled() && t.id !== tabs.activeId()"
+             (mousedown)="tabs.activeId.set(t.id)">
+          @if (tiled()) {
+            <div class="tile-head"><span class="dot" [class]="t.state"></span>{{ t.title }}
+              <button class="x" title="Close" (click)="tabs.close(t.id); $event.stopPropagation()">✕</button></div>
+          }
+          <div class="tile-body">
+            @if (t.kind === 'sftp') {
+              <app-sftp-view [tab]="t" />
+            } @else {
+              <app-terminal-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" />
+            }
+            @if (t.locked) {
+              <div class="lock-overlay">
+                <div class="lock-box">
+                  <app-icon name="lock" [size]="28" />
+                  <div>Session locked</div>
+                  <input type="password" placeholder="Password, then Enter" (keydown.enter)="tryUnlock(t.id, $event)" />
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+      @if (!tabs.tabs().length) {
+        <div class="welcome">
+          <h1>Termwright</h1>
+          <p>Double-click a session in the Session Manager, or:</p>
+          <div class="actions">
+            <button class="primary" (click)="action('quick-connect')">Quick Connect</button>
+            <button (click)="ui.newSession(ui.currentFolder())">New Session</button>
+            <button (click)="action('local-shell')">Local Shell</button>
+            <button (click)="action('import')">Import SecureCRT Sessions</button>
+          </div>
+          @if (recent().length) {
+            <h3>Recent sessions</h3>
+            <ul class="recent">
+              @for (r of recent(); track r) { <li><a (click)="tabs.openSession(r)">{{ r }}</a></li> }
+            </ul>
+          }
+        </div>
+      }
+      @if (findOpen()) {
+        <div class="findbar">
+          <input id="findInput" [(ngModel)]="findText" placeholder="Find in scrollback"
+                 (keydown.enter)="find($any($event).shiftKey)" (keydown.escape)="closeFind()" />
+          <button (click)="find(true)" title="Previous (Shift+Enter)">↑</button>
+          <button (click)="find(false)" title="Next (Enter)">↓</button>
+          <button (click)="closeFind()" title="Close (Esc)">✕</button>
+        </div>
+      }
+    </div>
+  </section>
+</div>
+
+@if (settings()?.showButtonBar) { <app-button-bar /> }
+@if (settings()?.showCommandWindow) {
+  <div class="hsplit" (mousedown)="startDrag($event, 'cmd')"></div>
+  <app-command-window [style.height.px]="cmdHeight()" />
+}
+
+<footer class="status">
+  <span class="state" [class]="active()?.state ?? ''">{{ stateLabel(active()) }}</span>
+  @if (active(); as t) {
+    <span>{{ t.session.protocol }}</span>
+    <span class="info" [title]="t.info">{{ t.info }}</span>
+    <span class="grow"></span>
+    @if (t.logFile) { <span class="log" [title]="t.logFile">● Logging</span> }
+    @if (t.kind === 'terminal') {
+      <span>{{ t.cols }} × {{ t.rows }}</span>
+      <span>{{ t.session.emulation }}</span>
+    }
+  } @else {
+    <span class="grow"></span>
+  }
+  @if (activeXfer(); as x) {
+    <span class="xfer" [title]="x.file">⇅ {{ x.direction }} {{ pct(x) }}%</span>
+  }
+  <span>{{ tabs.connectedCount() }} connected</span>
+</footer>
+
+@switch (ui.dialog()) {
+  @case ('sessionEditor') { <app-session-editor /> }
+  @case ('quickConnect') { <app-quick-connect /> }
+  @case ('options') { <app-options-dialog /> }
+  @case ('passwords') { <app-passwords-dialog /> }
+  @case ('update') { <app-update-dialog /> }
+  @case ('keySetup') { <app-key-setup-dialog /> }
+  @case ('palette') { <app-palette /> }
+  @case ('commands') { <app-commands /> }
+  @case ('workspaces') { <app-workspaces /> }
+  @case ('folderDefaults') { <app-folder-defaults /> }
+  @case ('compare') { <app-compare /> }
+  @case ('import') { <app-import-dialog /> }
+  @case ('export') { <app-export-dialog /> }
+  @case ('about') { <app-about /> }
+  @case ('shortcuts') { <app-about /> }
+}
+<app-prompt-dialog />
+<app-overlays />

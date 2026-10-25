@@ -1,0 +1,21 @@
+Termwright
+Copyright 2026 The Termwright Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party components (licenses in their respective packages):
+  Wails v2 (MIT)                         https://github.com/wailsapp/wails
+  golang.org/x/crypto (BSD-3-Clause)     https://go.googlesource.com/crypto
+  creack/pty (MIT)                       https://github.com/creack/pty
+  UserExistsError/conpty (MIT)           https://github.com/UserExistsError/conpty
+  go.bug.st/serial (BSD-3-Clause)        https://github.com/bugst/go-serial
+  zalando/go-keyring (MIT)               https://github.com/zalando/go-keyring
+  jcmturner/gokrb5 (Apache-2.0)          https://github.com/jcmturner/gokrb5
+  bcrypt_pbkdf from golang.org/x/crypto (BSD-3-Clause), in internal/securecrt/bcrypt_pbkdf.go
+  Angular (MIT)                          https://angular.dev
+  xterm.js and addons (MIT)              https://xtermjs.org
+
+Terminal color schemes are based on the following openly licensed palettes:
+  Solarized (MIT, Ethan Schoonover), Dracula (MIT), Nord (MIT, Arctic Ice Studio),
+  Gruvbox (MIT, Pavel Pertsev), Tomorrow Night (MIT, Chris Kempson),
+  Catppuccin (MIT), Tango (public domain).

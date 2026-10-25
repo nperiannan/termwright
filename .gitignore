@@ -1,0 +1,12 @@
+build/bin/
+frontend/node_modules
+frontend/.angular/
+frontend/dist/*
+!frontend/dist/.gitkeep
+frontend/wailsjs/
+*.exe
+.DS_Store
+build/darwin/
+build/windows/*
+!build/windows/icon.ico
+frontend/package.json.md5

@@ -1,0 +1,109 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  APP_VERSION: 0.11.0
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.24' }
+      - run: go mod verify
+      - run: go vet ./internal/...
+      - run: go test -race ./internal/...
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14,       platform: darwin/arm64,  tags: '',         name: macos-arm64 }
+          - { os: windows-latest, platform: windows/amd64, tags: '',         name: windows-amd64, nsis: '-nsis' }
+          - { os: ubuntu-24.04,     platform: linux/amd64, tags: webkit2_41, name: linux-amd64 }
+          - { os: ubuntu-24.04-arm, platform: linux/arm64, tags: webkit2_41, name: linux-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.24' }
+      - uses: actions/setup-node@v7
+        with: { node-version: '24', cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: NSIS (Windows installer)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress }
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
+      - name: Version
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then V="${GITHUB_REF_NAME#v}"; else V="${APP_VERSION}~git${GITHUB_SHA::7}"; fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+      - name: Build
+        shell: bash
+        run: |
+          export PATH="$PATH:/c/Program Files (x86)/NSIS"
+          wails build -clean -skipbindings ${{ matrix.nsis }} -platform ${{ matrix.platform }} -tags "${{ matrix.tags }}" -ldflags "-X main.Version=$VERSION"
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir dist && cd build/bin
+          APP=$(ls -d *.app | head -1)
+          # ad-hoc sign so Apple Silicon runs it; not notarized
+          codesign --force --deep --sign - "$APP"
+          ditto -c -k --keepParent "$APP" ../../dist/termwright-${{ matrix.name }}.zip
+          # drag-to-Applications disk image
+          mkdir dmg && cp -R "$APP" dmg/ && ln -s /Applications dmg/Applications
+          hdiutil create -volname Termwright -srcfolder dmg -ov -format UDZO ../../dist/Termwright-${VERSION//\~/-}-macos-arm64.dmg
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Compress-Archive -Path build/bin/termwright.exe -DestinationPath dist/termwright-${{ matrix.name }}.zip
+          Get-ChildItem build/bin/*installer*.exe | ForEach-Object { Copy-Item $_ "dist/Termwright-$($env:VERSION -replace '~','-')-windows-amd64-setup.exe" }
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir dist && tar -C build/bin -czf dist/termwright-${{ matrix.name }}.tar.gz .
+          build/linux/build-deb.sh "$VERSION" dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: termwright-${{ matrix.name }}
+          path: dist/*
+
+  release:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with: { path: dist, merge-multiple: true }
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            gh release create "$GITHUB_REF_NAME" dist/* --title "Termwright $GITHUB_REF_NAME" --generate-notes
+          else
+            gh release delete nightly --yes --cleanup-tag || true
+            gh release create nightly dist/* --prerelease --target "$GITHUB_SHA" \
+              --title "Termwright nightly (${GITHUB_SHA::7})" \
+              --notes "Automatic build of main. macOS build is ad-hoc signed, not notarized: after unzipping run  xattr -dr com.apple.quarantine Termwright.app"
+          fi

@@ -1,0 +1,113 @@
+# Roadmap
+
+## 0.1 (this release)
+SSH2 / Telnet / Serial / Local / Raw, session manager, SecureCRT .ini/XML/zip import-export, ssh-config import, logging,
+scrollback capture, command window (send to all), button bar, logon actions, keychain passwords, known_hosts.
+
+## 0.2: daily-driver parity (done)
+- [x] SSH port forwarding: local (-L), remote (-R), dynamic SOCKS5 (-D), per session
+- [ ] Convert SecureCRT `Port Forward Table V2` (needs a real sample file; the table is preserved meanwhile)
+- [x] Jump host (chainable, any saved SSH2 session, stored as `Firewall Name=Session:<path>`), SOCKS5 and HTTP CONNECT proxies
+- [x] Session fonts, Backspace mode (^? / ^H); SecureCRT color-scheme names mapped to built-in schemes
+- [ ] Full key mapping editor (moved to 0.3)
+- [x] Keyword highlighting (named keyword sets, regex, colors; default "Network" set), triggers (pattern -> send) on any output
+- [x] Tiled split views: side by side, stacked, grid. Detaching tabs into new windows needs multi-window support (Wails v3) and is deferred.
+- [x] Session lock (one or all tabs, password), auto reconnect with back-off
+- [x] X11 forwarding (XQuartz / VcXsrv / X server), SSH agent forwarding
+- [x] Connect Bar (`ssh -p 2222 user@host`, `telnet host 23`, `serial COM3 115200`, `raw host port`, or a saved session name)
+
+## 0.3: file transfer & automation (done)
+- [x] SFTP browser tab (dual pane, reuses the SSH connection - no second login): upload/download files and folders, queue with progress and cancel, mkdir, rename, delete
+- [x] XMODEM-CRC / XMODEM-1K upload (e.g. firmware to a boot loader over serial)
+- [x] JavaScript scripting (term.send / waitFor / waitForAny / readUntil, openSession, prompt...), logon scripts, script recorder
+- [x] Key map editor: key combination -> send text / app action / script
+- [ ] SCP, ZMODEM, XMODEM/YMODEM receive (moved to 0.4)
+- [ ] Folder synchronisation (moved to 0.4)
+
+## 0.4: transfers (done)
+- [x] ZMODEM: automatic download when the remote runs `sz` (saved to the Downloads folder), upload when it runs `rz` (file picker); verified against lrzsz
+- [x] XMODEM-CRC receive (verified against lrzsz `sx`)
+- [x] SCP upload/download of single files for devices without SFTP
+- [x] SFTP folder sync (new/changed files, either direction, never deletes)
+- [x] Button bar buttons that run an action or a script
+- [x] Port Forward Table V2 import (local + dynamic; remote via Reverse Forward Table V2), pending confirmation with real files
+- [ ] Multi-window (detach tab) once on Wails v3
+
+## 0.5: polish (done)
+- [x] Themes: follow-system UI theme, accent color, 12 built-in color schemes, custom scheme editor with import/export
+- [x] Reopen last sessions on startup, Send Break, Send Text File, Save Selection, DTR/RTS options, description tooltips
+- [x] Packaging: macOS DMG, Windows NSIS installer, Linux .deb (amd64/arm64)
+- [x] User Guide (docs/USER_GUIDE.md), Help → User Guide
+
+## 0.6: logon automation & security (done)
+- [x] SecureCRT-style Logon Actions: Automate logon, Send initial CR, Expect/Send table (Hide, trailing CR, credentials), ▲▼ ordering
+- [x] Send escapes `\s` `\w` `\v` `\p` `\e` `\b`; named Credentials; logon script arguments
+- [x] SSH2 Remote command (e.g. jump station → `ssh -t -i key user@target`)
+- [x] Hardware (RTS/CTS) and software (XON/XOFF) serial flow control
+- [x] YMODEM batch send/receive, SCP of folders, resume of interrupted SFTP transfers
+- [x] Master password, encrypted password vault export/import
+
+## 0.7: SecureFX-style & updates (done)
+- [x] Standalone SFTP sessions (own login, no shell) and "Connect as: SFTP" for one-session devices (VOSS)
+- [x] SFTP bookmarks (per session for server folders, shared for local folders)
+- [x] Server-to-server (site-to-site) copy between two SFTP tabs
+- [x] Update check: stable / nightly channels from GitHub releases (token for private repos), installer download
+
+## 0.8: keys & migration (done)
+- [x] Key login setup: generate (Ed25519/RSA/ECDSA) or reuse a key, install on Linux/macOS/Windows OpenSSH, test, switch the session
+- [x] Import PuTTY/KiTTY (.reg, ~/.putty/sessions) and MobaXterm (.mxtsessions) sessions
+- [x] About: features, author, repository links
+
+## 0.9: PuTTY keys & Python scripts (done)
+- [x] Read PuTTY .ppk keys directly (formats 2 and 3, Argon2id/Argon2i, RSA/Ed25519/ECDSA/DSA)
+- [x] Python scripts with a SecureCRT-style `crt` object (runs with the installed Python 3)
+- [x] Terminal scheme *Auto* (follows the UI theme) and *use this scheme for all sessions*
+- [x] Move the pre-rename OpenCRT data folder automatically
+
+## 0.10: daily network work (done)
+- [x] Device types (login profiles) in Quick Connect, Connect Bar, sessions and folder defaults
+- [x] Paste confirmation, send to selected tabs, Quick Open palette, output alerts
+- [x] Command library with variables, workspaces, folder defaults
+- [x] Bulk import: CSV, Ansible (INI/YAML), NetBox, AWS EC2
+- [x] Compare outputs (diff of two tabs or files)
+- [x] Per-line timestamps, copy as HTML, OSC 8 links, window size/position memory, portable mode
+
+
+## 0.10.1 (done)
+
+- [x] Device types have their own username and password (keychain), with *No password* for accounts such as EXOS `admin`
+- [x] Sessions inherit the device type's login or override it (Session Options and Quick Connect)
+- [x] Empty passwords are remembered instead of asked every time
+- [x] SFTP tab can copy with SCP (*Copy via SCP*)
+- [x] Compare With… on the tab menu, *Ignore prompts* option; import sources grouped by app
+
+## 0.10.2 (done)
+
+- [x] Import saved SecureCRT passwords (Password V2 02/03, Password, plain text) into the OS keychain
+- [x] Key passphrases in Passwords & Credentials, remember from the connect prompt, included in the vault export
+- [x] SFTP/SCP through the jump station to a remote command's target
+
+## 0.10.3 / 0.10.4 (done)
+
+- [x] SFTP header shows *user@host via jump host*
+- [x] Browse as root in the SFTP tab (sudo sftp-server, password only when sudo asks)
+- [x] 0.10.6: new app icon, red-on-hover tab close, clearer folder arrows, jump-station data-flow docs
+- [x] 0.10.5: Run as any user with a command (sudo su - user, su - user, …), password prompts answered by the user
+
+## 0.11 (done)
+
+- [x] Kerberos / GSSAPI login (kinit ticket or built-in Kerberos login), tested against MIT Kerberos + OpenSSH
+- [x] SSH certificates (`-cert.pub` / certificate file) and FIDO2 security keys through ssh-agent
+- [x] Password managers: 1Password (`op://`), Bitwarden (`bw://`), HashiCorp Vault (`vault://`), commands (`cmd://`)
+- [x] VBScript (.vbs) logon scripts via Windows Script Host
+- [x] `crt.Screen.Get` / `CurrentRow` read the rendered terminal screen
+
+## Next ideas
+- [ ] Shared team sessions (session folder in a Git repo, pull/push from the app)
+- [ ] Code signing + notarization (needs Apple Developer ID / Windows certificate)
+
+## Release engineering
+- [ ] Code signing: Windows Authenticode, macOS Developer ID + notarization
+- [ ] Installers: NSIS/MSIX (Windows), DMG (macOS), AppImage/deb/rpm (Linux)
+- [x] Auto-update channel (check + download installer; silent self-replace needs code signing)
+- [ ] Round-trip compatibility test suite with real SecureCRT 9.x files

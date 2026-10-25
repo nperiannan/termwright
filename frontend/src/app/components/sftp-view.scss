@@ -1,0 +1,41 @@
+:host { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+.panes { flex: 1; display: flex; min-height: 0; }
+.pane { flex: 1; display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); margin: 6px; border-radius: 6px; background: var(--panel);
+  &.focus { border-color: var(--accent); }
+  header { display: flex; align-items: center; gap: 4px; padding: 6px; border-bottom: 1px solid var(--border);
+    .label { font-weight: 600; font-size: 12px; color: var(--muted); padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 60px; max-width: 35%; flex-shrink: 1; }
+    .path { flex: 1; min-width: 120px; font-size: 12px; } }
+  footer { padding: 4px 10px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); }
+}
+.list { flex: 1; overflow: auto; outline: none; user-select: none; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 80px 130px 100px; gap: 8px; align-items: center; height: 24px; padding: 0 10px; white-space: nowrap;
+  > span { overflow: hidden; text-overflow: ellipsis; }
+  .n { display: flex; align-items: center; gap: 6px; app-icon { color: var(--muted); flex: none; } }
+  .s { text-align: right; } .d, .m, .s { color: var(--muted); font-size: 12px; }
+  &.head { position: sticky; top: 0; background: var(--chrome); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; z-index: 1; }
+  &:not(.head):hover { background: var(--hover); }
+  &.sel { background: var(--selected); }
+}
+.pad { padding: 10px; }
+.mid { display: flex; flex-direction: column; justify-content: center; gap: 10px;
+  button { width: 40px; height: 40px; font-size: 18px; padding: 0; }
+  .sync-label { margin-top: 14px; font-size: 10px; color: var(--muted); text-align: center; text-transform: uppercase; }
+  .via { display: flex; flex-direction: column; align-items: stretch; margin-bottom: 8px;
+    .via-label { font-size: 10px; color: var(--muted); text-align: center; text-transform: uppercase; margin-bottom: 4px; line-height: 1.2; }
+    button { width: 52px; height: 26px; font-size: 11px; font-weight: 600; border-radius: 0; }
+    button:first-of-type { border-radius: 5px 5px 0 0; }
+    button:last-of-type { border-radius: 0 0 5px 5px; border-top: none; }
+    button.on { background: var(--accent); border-color: var(--accent); color: #fff; } } }
+.queue { max-height: 170px; overflow: auto; border-top: 1px solid var(--border); background: var(--panel); padding: 4px 8px;
+  .clear { margin: 4px 0; height: 22px; font-size: 11px; } }
+.xfer { display: grid; grid-template-columns: 44px minmax(0, 1fr) 160px 170px 90px 24px; gap: 8px; align-items: center; height: 24px; font-size: 12px; .dir { white-space: nowrap; }
+  .file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .num, .st { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  progress { width: 100%; accent-color: var(--accent); }
+  &.done .st { color: var(--ok); } &.error .st { color: var(--danger); } }
+
+.bm { font-size: 15px; width: 26px; &.on { color: var(--accent); } }
+
+.via-jump { color: var(--muted); font-weight: normal; }
+.root-btn { height: 22px; padding: 0 8px; font-size: 11px; font-weight: 600; white-space: nowrap;
+  &.on { background: var(--danger, #d9534f); border-color: var(--danger, #d9534f); color: #fff; } }

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Termwright
+GenericName=Terminal Emulator
+Comment=SSH, Telnet and serial terminal with session manager
+Exec=termwright
+Icon=termwright
+Terminal=false
+Categories=Network;System;TerminalEmulator;
+Keywords=ssh;telnet;serial;terminal;sftp;
+StartupWMClass=termwright

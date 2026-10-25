@@ -1,0 +1,17 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Termwright",
+  "outputfilename": "termwright",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm start",
+  "frontend:dev:serverUrl": "http://localhost:4200",
+  "author": { "name": "Natarajan Periannan" },
+  "info": {
+    "companyName": "Termwright",
+    "productName": "Termwright",
+    "productVersion": "0.11.0",
+    "copyright": "Copyright 2026 The Termwright Authors",
+    "comments": "Open-source terminal emulator and session manager (Apache-2.0)"
+  }
+}

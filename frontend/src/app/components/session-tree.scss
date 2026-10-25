@@ -1,0 +1,21 @@
+:host { display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--panel); }
+.sm-head { display: flex; align-items: center; gap: 2px; padding: 6px 6px 4px 10px; border-bottom: 1px solid var(--border);
+  .title { flex: 1; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); } }
+.sm-search { padding: 6px 8px; input { width: 100%; } }
+.sm-body { flex: 1; overflow: auto; padding-bottom: 12px; user-select: none; }
+.row { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; cursor: default; white-space: nowrap;
+  border-left: 2px solid transparent;
+  &:hover { background: var(--hover); }
+  &.sel { background: var(--selected); border-left-color: var(--accent); }
+  &.drop { outline: 1px dashed var(--accent); outline-offset: -1px; }
+  .name { overflow: hidden; text-overflow: ellipsis; }
+  .host { margin-left: auto; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+  app-icon { color: var(--muted); }
+  &.folder app-icon { color: var(--folder); }
+}
+.twisty { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none;
+  color: var(--text); opacity: .75; cursor: pointer; border-radius: 3px;
+  svg { width: 12px; height: 12px; transition: transform .12s; }
+  &.open svg { transform: rotate(90deg); }
+  &:hover { opacity: 1; background: var(--hover); } }
+.empty { padding: 16px 12px; color: var(--muted); line-height: 1.6; a { color: var(--accent); cursor: pointer; } }
