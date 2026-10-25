@@ -42,7 +42,7 @@
   <span class="brand">Termwright</span>
 </header>
 
-<div class="main">
+<div class="main" [class.tree-right]="settings()?.sessionManagerRight">
   @if (settings()?.showSessionManager) {
     <aside class="tree" [style.width.px]="treeWidth()"><app-session-tree /></aside>
     <div class="vsplit" (mousedown)="startDrag($event, 'tree')"></div>

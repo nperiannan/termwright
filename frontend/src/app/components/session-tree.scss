@@ -1,6 +1,6 @@
 :host { display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--panel); }
 .sm-head { display: flex; align-items: center; gap: 2px; padding: 6px 6px 4px 10px; border-bottom: 1px solid var(--border);
-  .title { flex: 1; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); } }
+  .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); } }
 .sm-search { padding: 6px 8px; input { width: 100%; } }
 .sm-body { flex: 1; overflow: auto; padding-bottom: 12px; user-select: none; }
 .row { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; cursor: default; white-space: nowrap;

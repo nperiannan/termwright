@@ -157,6 +157,7 @@ export class App implements OnInit {
       case 'clear-screen': h?.term.write('\x1b[H\x1b[2J'); break;
       case 'reset': h?.term.reset(); break;
       case 'toggle-session-manager': this.ui.patchSettings({ showSessionManager: !s?.showSessionManager }); break;
+      case 'toggle-session-manager-side': this.ui.patchSettings({ sessionManagerRight: !s?.sessionManagerRight, showSessionManager: true }); break;
       case 'toggle-command-window':
         this.ui.patchSettings({ showCommandWindow: !s?.showCommandWindow });
         if (!s?.showCommandWindow) setTimeout(() => this.cmdWin()?.focus(), 50);
@@ -399,7 +400,8 @@ export class App implements OnInit {
     const startX = ev.clientX, startY = ev.clientY;
     const w0 = this.treeWidth(), h0 = this.cmdHeight();
     const move = (e: MouseEvent) => {
-      if (kind === 'tree') this.treeWidth.set(Math.max(160, Math.min(600, w0 + e.clientX - startX)));
+      const dx = this.settings()?.sessionManagerRight ? startX - e.clientX : e.clientX - startX; // dragging towards the work area widens it
+      if (kind === 'tree') this.treeWidth.set(Math.max(160, Math.min(600, w0 + dx)));
       else this.cmdHeight.set(Math.max(60, Math.min(500, h0 - (e.clientY - startY))));
     };
     const up = () => {

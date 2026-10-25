@@ -57,51 +57,52 @@ type KeywordSet struct {
 
 // Settings are the global options.
 type Settings struct {
-	SessionsDir       string               `json:"sessionsDir"`
-	LogDir            string               `json:"logDir"`
-	DownloadDir       string               `json:"downloadDir"`
-	FontFamily        string               `json:"fontFamily"`
-	FontSize          int                  `json:"fontSize"`
-	Theme             string               `json:"theme"`               // ui theme: dark | light | system
-	TerminalScheme    string               `json:"terminalScheme"`      // scheme name or "Auto" (follow the UI theme)
-	ForceTermScheme   bool                 `json:"forceTerminalScheme"` // global scheme wins over session schemes
-	CursorStyle       string               `json:"cursorStyle"`         // block | underline | bar
-	CursorBlink       bool                 `json:"cursorBlink"`
-	Scrollback        int                  `json:"scrollback"`
-	CopyOnSelect      bool                 `json:"copyOnSelect"`
-	RightClickPaste   bool                 `json:"rightClickPaste"`
-	ConfirmClose      bool                 `json:"confirmClose"`
-	ShowButtonBar     bool                 `json:"showButtonBar"`
-	ShowCommandWin    bool                 `json:"showCommandWindow"`
-	ShowSessionTree   bool                 `json:"showSessionManager"`
-	PasteLineDelayMs  int                  `json:"pasteLineDelayMs"`
-	Buttons           []Button             `json:"buttons"`
-	RecentSessions    []string             `json:"recentSessions"`
-	KeywordSets       []KeywordSet         `json:"keywordSets"`
-	DefaultKeywordSet string               `json:"defaultKeywordSet"`
-	ShowConnectBar    bool                 `json:"showConnectBar"`
-	InWindowMenu      bool                 `json:"inWindowMenu"` // menu bar inside the window (default on macOS)
-	Credentials       []Credential         `json:"credentials"`
-	MasterHash        string               `json:"masterHash"` // scrypt verifier; empty = no master password
-	KeyMap            []KeyBinding         `json:"keyMap"`
-	CustomSchemes     []ColorScheme        `json:"customSchemes"`
-	AccentColor       string               `json:"accentColor"`
-	RestoreTabs       bool                 `json:"restoreTabs"`
-	OpenTabs          []string             `json:"openTabs"`
-	Bookmarks         []Bookmark           `json:"bookmarks"`
-	VaultAddr         string               `json:"vaultAddr,omitempty"`      // HashiCorp Vault URL for vault:// references ("" = $VAULT_ADDR)
-	KeyPassphrases    []string             `json:"keyPassphrases,omitempty"` // key files whose passphrase is in the OS keychain (no secrets here)
-	UpdateChannel     string               `json:"updateChannel"`            // stable | nightly | off
-	UpdateRepo        string               `json:"updateRepo"`               // GitHub owner/name
-	UpdateOnStart     bool                 `json:"updateOnStart"`
-	PythonPath        string               `json:"pythonPath"` // interpreter for .py scripts ("" = find python3)
-	DeviceTypes       []session.DeviceType `json:"deviceTypes"`
-	Alerts            []Alert              `json:"alerts"`
-	ConfirmPaste      bool                 `json:"confirmPaste"` // ask before pasting several lines
-	Snippets          []Snippet            `json:"snippets"`
-	Workspaces        []Workspace          `json:"workspaces"`
-	FolderDefaults    []FolderDefault      `json:"folderDefaults"`
-	Window            WindowState          `json:"window"`
+	SessionsDir         string               `json:"sessionsDir"`
+	LogDir              string               `json:"logDir"`
+	DownloadDir         string               `json:"downloadDir"`
+	FontFamily          string               `json:"fontFamily"`
+	FontSize            int                  `json:"fontSize"`
+	Theme               string               `json:"theme"`               // ui theme: dark | light | system
+	TerminalScheme      string               `json:"terminalScheme"`      // scheme name or "Auto" (follow the UI theme)
+	ForceTermScheme     bool                 `json:"forceTerminalScheme"` // global scheme wins over session schemes
+	CursorStyle         string               `json:"cursorStyle"`         // block | underline | bar
+	CursorBlink         bool                 `json:"cursorBlink"`
+	Scrollback          int                  `json:"scrollback"`
+	CopyOnSelect        bool                 `json:"copyOnSelect"`
+	RightClickPaste     bool                 `json:"rightClickPaste"`
+	ConfirmClose        bool                 `json:"confirmClose"`
+	ShowButtonBar       bool                 `json:"showButtonBar"`
+	ShowCommandWin      bool                 `json:"showCommandWindow"`
+	ShowSessionTree     bool                 `json:"showSessionManager"`
+	PasteLineDelayMs    int                  `json:"pasteLineDelayMs"`
+	Buttons             []Button             `json:"buttons"`
+	RecentSessions      []string             `json:"recentSessions"`
+	KeywordSets         []KeywordSet         `json:"keywordSets"`
+	DefaultKeywordSet   string               `json:"defaultKeywordSet"`
+	ShowConnectBar      bool                 `json:"showConnectBar"`
+	InWindowMenu        bool                 `json:"inWindowMenu"` // menu bar inside the window (default on macOS)
+	Credentials         []Credential         `json:"credentials"`
+	MasterHash          string               `json:"masterHash"` // scrypt verifier; empty = no master password
+	KeyMap              []KeyBinding         `json:"keyMap"`
+	CustomSchemes       []ColorScheme        `json:"customSchemes"`
+	AccentColor         string               `json:"accentColor"`
+	RestoreTabs         bool                 `json:"restoreTabs"`
+	OpenTabs            []string             `json:"openTabs"`
+	Bookmarks           []Bookmark           `json:"bookmarks"`
+	SessionManagerRight bool                 `json:"sessionManagerRight"`      // Session Manager on the right side of the window
+	VaultAddr           string               `json:"vaultAddr,omitempty"`      // HashiCorp Vault URL for vault:// references ("" = $VAULT_ADDR)
+	KeyPassphrases      []string             `json:"keyPassphrases,omitempty"` // key files whose passphrase is in the OS keychain (no secrets here)
+	UpdateChannel       string               `json:"updateChannel"`            // stable | nightly | off
+	UpdateRepo          string               `json:"updateRepo"`               // GitHub owner/name
+	UpdateOnStart       bool                 `json:"updateOnStart"`
+	PythonPath          string               `json:"pythonPath"` // interpreter for .py scripts ("" = find python3)
+	DeviceTypes         []session.DeviceType `json:"deviceTypes"`
+	Alerts              []Alert              `json:"alerts"`
+	ConfirmPaste        bool                 `json:"confirmPaste"` // ask before pasting several lines
+	Snippets            []Snippet            `json:"snippets"`
+	Workspaces          []Workspace          `json:"workspaces"`
+	FolderDefaults      []FolderDefault      `json:"folderDefaults"`
+	Window              WindowState          `json:"window"`
 }
 
 // WindowState remembers the main window size and position.
@@ -201,7 +202,7 @@ func Defaults(dataDir string) Settings {
 		}},
 		DefaultKeywordSet: "Network",
 		Bookmarks:         []Bookmark{},
-		UpdateChannel:     "nightly",
+		UpdateChannel:     "stable",
 		UpdateRepo:        "nperiannan/termwright",
 		UpdateOnStart:     true,
 		DeviceTypes:       session.BuiltinDeviceTypes(),

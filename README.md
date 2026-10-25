@@ -13,6 +13,13 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.11.1
+
+* **Session Manager left or right, shown or hidden** - header buttons, View menu or command palette; the choice is remembered.
+* **Colored SFTP browser** - the same folder icons as the Session Manager, and files colored by type (text, archive, image, firmware, script, key), links and hidden files marked.
+* **More reliable updates** - default channel Stable, a stale GitHub token is ignored, and clear messages when a check fails.
+* **Windows import** - the file picker also offers *All files (\*.\*)*, so an `.XML` export always shows.
+
 ## What's new in 0.11
 
 * **Kerberos (GSSAPI) login** - uses your `kinit` ticket, or logs in to Kerberos itself (principal + password); works with OpenSSH's `gssapi-with-mic`.

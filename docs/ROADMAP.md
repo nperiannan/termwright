@@ -102,6 +102,12 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - [x] VBScript (.vbs) logon scripts via Windows Script Host
 - [x] `crt.Screen.Get` / `CurrentRow` read the rendered terminal screen
 
+## 0.11.1 (done)
+- Session Manager on the left or right, hide/show, remembered in settings
+- SFTP browser icons: gradient folders, files colored by type, link and hidden markers
+- Update check: Stable by default, stale tokens ignored, clearer errors
+- Windows file picker: "All files" filter and upper-case extensions
+
 ## Next ideas
 - [ ] Shared team sessions (session folder in a Git repo, pull/push from the app)
 - [ ] Code signing + notarization (needs Apple Developer ID / Windows certificate)

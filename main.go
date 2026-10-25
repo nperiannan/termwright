@@ -138,6 +138,7 @@ func buildMenu(app *App) *menu.Menu {
 	view.AddText("Quick Open...", acc("g"), emit("quick-open"))
 	view.AddSeparator()
 	view.AddText("Session Manager", acc("m"), emit("toggle-session-manager"))
+	view.AddText("Session Manager Left / Right", nil, emit("toggle-session-manager-side"))
 	view.AddText("Command Window", acc("k"), emit("toggle-command-window"))
 	view.AddText("Button Bar", acc("b"), emit("toggle-button-bar"))
 	view.AddText("Connect Bar", nil, emit("toggle-connect-bar"))

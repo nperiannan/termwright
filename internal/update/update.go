@@ -79,18 +79,26 @@ func Check(ctx context.Context, repo, channel, token, current string) (Info, err
 	}
 	resp, err := get(ctx, url, token, "application/vnd.github+json")
 	if err != nil {
-		return info, err
+		return info, fmt.Errorf("cannot reach GitHub: %w", err)
+	}
+	if token != "" && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound) {
+		// an expired token, or one limited to other repositories: public repositories need none
+		resp.Body.Close()
+		if resp, err = get(ctx, url, "", "application/vnd.github+json"); err != nil {
+			return info, fmt.Errorf("cannot reach GitHub: %w", err)
+		}
 	}
 	defer resp.Body.Close()
+	where := "github.com/" + repo
 	switch {
-	case resp.StatusCode == http.StatusNotFound && token == "":
-		return info, errors.New("no release found - for a private repository add a GitHub token in Options → Updates")
+	case resp.StatusCode == http.StatusNotFound && channel == "nightly":
+		return info, fmt.Errorf("no nightly build published yet on %s - choose the Stable channel in Options → Updates", where)
 	case resp.StatusCode == http.StatusNotFound:
-		return info, errors.New("no release found on this channel")
-	case resp.StatusCode == http.StatusUnauthorized:
-		return info, errors.New("GitHub rejected the token (401)")
+		return info, fmt.Errorf("no release found on %s (check the repository name in Options → Updates; a private fork needs a token)", where)
+	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
+		return info, errors.New("GitHub's limit of 60 checks per hour was reached - try again later")
 	case resp.StatusCode != http.StatusOK:
-		return info, fmt.Errorf("GitHub: %s", resp.Status)
+		return info, fmt.Errorf("GitHub (%s): %s", where, resp.Status)
 	}
 	var r release
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&r); err != nil {
@@ -200,6 +208,13 @@ func Download(ctx context.Context, assetURL, token, dest string, progress func(d
 	resp, err := dl.Do(req)
 	if err != nil {
 		return err
+	}
+	if token != "" && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound) {
+		resp.Body.Close() // public repository: try without the token
+		req.Header.Del("Authorization")
+		if resp, err = dl.Do(req); err != nil {
+			return err
+		}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

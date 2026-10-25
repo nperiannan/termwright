@@ -165,8 +165,8 @@ export class ImportDialog {
 
   async browse() {
     const filters: Record<Source, { displayName: string; pattern: string }[]> = {
-      folder: [], zip: [{ displayName: 'Zip', pattern: '*.zip' }], xml: [{ displayName: 'XML', pattern: '*.xml' }],
-      ini: [{ displayName: 'Session', pattern: '*.ini' }], ssh: [],
+      folder: [], zip: [{ displayName: 'Zip archive (*.zip)', pattern: '*.zip' }], xml: [{ displayName: 'SecureCRT XML export (*.xml)', pattern: '*.xml' }],
+      ini: [{ displayName: 'Session file (*.ini)', pattern: '*.ini' }], ssh: [],
       putty: [{ displayName: 'Registry export', pattern: '*.reg' }],
       csv: [{ displayName: 'CSV', pattern: '*.csv;*.tsv;*.txt' }], ansible: [], netbox: [], aws: [],
       moba: [{ displayName: 'MobaXterm sessions', pattern: '*.mxtsessions;*.ini' }],

@@ -5,7 +5,9 @@ import { Backend } from '../core/backend';
 import { FileEntry, formatBytes } from '../core/models';
 import { Tabs, TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { FileIcon } from './file-icon';
 import { Icon } from './icon';
+import { SessionIcon } from './session-icon';
 
 interface Pane {
   side: 'local' | 'remote';
@@ -19,7 +21,7 @@ interface Pane {
 /** Dual-pane SFTP file browser (local | remote) with transfer queue. */
 @Component({
   selector: 'app-sftp-view',
-  imports: [FormsModule, DatePipe, Icon],
+  imports: [FormsModule, DatePipe, Icon, SessionIcon, FileIcon],
   template: `
     <div class="panes">
       @for (p of [local(), remote()]; track p.side) {
@@ -43,7 +45,7 @@ interface Pane {
             @for (e of p.entries; track e.name) {
               <div class="row" [class.sel]="p.selected.has(e.name)" (click)="select(p, e, $event)" (dblclick)="open(p, e)"
                    (contextmenu)="menu($event, p, e)">
-                <span class="n"><app-icon [name]="e.isDir ? 'folder' : 'file'" />{{ e.name }}</span>
+                <span class="n">@if (e.isDir) { <app-session-icon kind="folder" /> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" /> }{{ e.name }}</span>
                 <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
                 <span class="d">{{ e.modTime | date: 'yyyy-MM-dd HH:mm' }}</span>
                 <span class="m mono">{{ e.mode }}</span>

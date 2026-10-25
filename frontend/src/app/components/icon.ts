@@ -38,6 +38,9 @@ const PATHS: Record<string, string> = {
   grid: 'M3 4h18v16H3zM12 4v16M3 12h18',
   lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
+  'dock-left': 'M3 4h18v16H3zM9 4v16M16 9l-3 3 3 3',
+  'dock-right': 'M3 4h18v16H3zM15 4v16M8 9l3 3-3 3',
+  'hide-panel': 'M3 4h18v16H3zM9 4v16M5.5 9l1.5 3-1.5 3',
 };
 
 @Component({

@@ -69,7 +69,7 @@ export interface Settings {
   sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; theme: string;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
-  showButtonBar: boolean; showCommandWindow: boolean; showSessionManager: boolean;
+  showButtonBar: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   keywordSets: KeywordSet[] | null; defaultKeywordSet: string; showConnectBar: boolean; keyMap: KeyBinding[] | null;
   customSchemes: { name: string; colors: Record<string, string> }[] | null; accentColor: string;
@@ -147,7 +147,7 @@ export const ACTIONS: Record<string, string> = {
   'clone-tab': 'Clone Session', 'close-tab': 'Close Tab', 'next-tab': 'Next Tab', 'prev-tab': 'Previous Tab',
   copy: 'Copy', paste: 'Paste', 'copy-paste': 'Copy and Paste', find: 'Find', 'clear-scrollback': 'Clear Scrollback',
   'clear-screen': 'Clear Screen', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback',
-  'toggle-session-manager': 'Toggle Session Manager', 'toggle-command-window': 'Toggle Command Window',
+  'toggle-session-manager': 'Toggle Session Manager', 'toggle-session-manager-side': 'Move Session Manager Left / Right', 'toggle-command-window': 'Toggle Command Window',
   'toggle-button-bar': 'Toggle Button Bar', 'sftp-tab': 'Open SFTP Tab', 'run-script': 'Run Script...',
   'record-toggle': 'Start/Stop Recording', 'cancel-scripts': 'Cancel Scripts', lock: 'Lock Session',
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',

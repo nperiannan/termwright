@@ -61,11 +61,13 @@ To build from source see the [README](../README.md#build).
 |---|---|
 | **Menu bar** | File, Edit, View, Transfer, Script, Options, Tab, Help. On macOS it is in the top-of-screen menu bar **and** (by default) inside the window; toggle the in-window copy with View → Menu Bar in Window or Global Options → General. |
 | **Toolbar** | Connect · Quick Connect · Local Shell · Reconnect · Disconnect · Copy · Paste · Find · Log · SFTP · Run Script · Record · Session Manager / Command Window / Button Bar toggles · Import · Export · Options · Tabbed / Side-by-side / Stacked / Grid layout · Lock · **Connect Bar**. Hover an icon for its name. |
-| **Session Manager** (left) | Folder tree of saved sessions with a filter box. Drag its right edge to resize. |
+| **Session Manager** (left by default) | Folder tree of saved sessions with a filter box. Drag its inner edge to resize. The header buttons move it to the **other side** of the window and **hide** it; the same is in **View → Session Manager Left / Right** and **View → Session Manager** (or the toolbar toggle, or the command palette). Position, visibility and width are remembered. |
 | **Tabs** | One tab per connection. The dot shows state: green = connected, amber = connecting, red = error, grey = disconnected. `LOG` / `REC` badges show logging / script recording. |
 | **Button Bar** | Your own buttons that send commands, run actions or scripts. |
 | **Command Window** | Type a command once and send it to the active tab or to every connected tab. |
 | **Status bar** | State, protocol, connection details (user@host, server version, route), active transfer %, terminal size and emulation, number of connected tabs. |
+
+![Session Manager on the right](screenshots/session-manager-right.png)
 
 ## 3. Connecting
 
@@ -295,6 +297,8 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
 ![SFTP tab](screenshots/sftp.png)
 
 Open with the toolbar SFTP button, **Transfer → Open SFTP Tab** or `Cmd/Ctrl+Shift+P` while an SSH2 tab is connected. It reuses that login (no second password).
+
+Folders use the same colored folder icon as the Session Manager. Files are colored by type so they stand out at a glance: text and configuration files blue, archives amber, images pink, firmware and binaries purple, scripts green, keys and certificates red, everything else gray. Symbolic links carry a small arrow, and hidden (dot) files are dimmed.
 
 **Standalone SFTP session** (its own login, no terminal): right-click an SSH2 session in the Session Manager → **Connect SFTP Session**, or right-click a terminal tab → **Connect SFTP Session (new login)**. Use this for devices such as VOSS that refuse a second channel on an existing SSH connection. To make a session always open this way, set Session Options → Connection → **Connect as: SFTP file browser only**; right-click → **Connect Terminal** still opens a shell. The tab right-click menu also offers **Open SFTP Tab (same login)**.
 
@@ -529,7 +533,8 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 
 - **Channel**: *Stable* (tagged releases `vX.Y.Z`), *Nightly* (every build of `main`, compared by git commit) or *Off*.
 - **GitHub repository** (default `nperiannan/termwright`) and **Check at start-up** (at most once a day; only a notice when something newer exists).
-- **GitHub token** (optional): not needed for the public repository. Only if you point Termwright at a private fork, create a fine-grained token limited to that repository with read-only *Contents* permission; it is stored in the OS keychain. A token also raises GitHub's rate limit for frequent checks.
+- The default channel is **Stable**. *Nightly* needs a published `nightly` pre-release in the repository; if there is none, the check says so and suggests Stable.
+- **GitHub token** (optional): not needed for the public repository. A token that has expired or belongs to another (for example a former private) repository is ignored automatically - the check and the download retry without it. Only if you point Termwright at a private fork, create a fine-grained token limited to that repository with read-only *Contents* permission; it is stored in the OS keychain. A token also raises GitHub's rate limit for frequent checks.
 
 ## 14. Migrating from SecureCRT, PuTTY or MobaXterm
 
@@ -539,7 +544,7 @@ Device types can use a reference too, so a whole fleet logs in with a password t
    - **SecureCRT** (four ways to bring the same sessions):
      - *Configuration folder*: Windows `%APPDATA%\VanDyke\Config`, macOS `~/Library/Application Support/VanDyke/SecureCRT/Config`, Linux `~/.vandyke/SecureCRT/Config`
      - a *.zip* of that Sessions folder (e.g. a backup)
-     - an *XML settings export* (SecureCRT: Tools → Export Settings…)
+     - an *XML settings export* (SecureCRT: Tools → Export Settings…). On Windows, if the file picker shows no files, pick **All files (\*.\*)** in its file-type list; make sure the source is *XML settings export*, not *Configuration folder* (that one opens a folder picker).
      - a *single session .ini* file
    - your *OpenSSH* `~/.ssh/config`
    - **PuTTY / KiTTY**: a registry export (`reg export HKCU\Software\SimonTatham\PuTTY\Sessions putty.reg`) or the `~/.putty/sessions` folder. PuTTY Session Manager folders are kept; host, user, port, protocol, serial settings, port forwards, proxy, keepalive, remote command and logging are converted. PuTTY `.ppk` keys (formats 2 and 3, encrypted or not) are used directly - no conversion needed.
@@ -553,7 +558,7 @@ Device types can use a reference too, so a whole fleet logs in with a password t
    - **Saved passwords**: SecureCRT session passwords (`Password V2` with the `02:` or `03:` format, the older `Password`, or plain text from an export without password encryption) are decrypted and moved into the OS keychain; the copied session files no longer contain them, and *Save password* is ticked. If you set a **configuration passphrase** in SecureCRT, type it in *Config passphrase* (shown for the SecureCRT sources). The result lists how many passwords were imported and which could not be decrypted - import those again with the passphrase and *If name exists: Overwrite*, or type them once when connecting.
 2. Choose a target folder and what to do when names clash (keep both / overwrite / skip).
 3. Files are copied unchanged; Termwright reads host, port, user, protocol, serial settings, emulation, logging, description, jump host and more. Settings it doesn't use are preserved, so exporting back loses nothing.
-4. Saved SecureCRT passwords are encrypted per installation and are **not** imported. Connect once and tick *Save password*.
+4. Passwords that cannot be decrypted (for example with a wrong or missing configuration passphrase) are left out; connect once and tick *Save password*.
 5. **File → Export Sessions…** writes a folder (copy its `Sessions` into SecureCRT's Config), a zip, or XML (SecureCRT *Import Settings*).
 
 Details: [SECURECRT_COMPAT.md](SECURECRT_COMPAT.md).
@@ -609,6 +614,8 @@ Upgrading from OpenCRT: on first start Termwright moves the old `OpenCRT` data f
 | SSH auth fails with keys | Check the identity file path and that the key is not in an unsupported format; try *password* in SSH2 Authentication. |
 | Serial port missing | Click *Scan* in the Serial page; on Linux add yourself to the `dialout` group; on macOS use `/dev/cu.*` devices. |
 | Ctrl+C copies instead of interrupting | It doesn't: copy is Cmd+C on macOS and Ctrl+Shift+C on Windows/Linux. Check Global Options → Key Map for a conflicting binding. |
+| Check for Updates fails | Read the message: *no nightly build published* → choose **Stable** in Global Options → Updates; *limit of 60 checks per hour* → wait an hour; *cannot reach GitHub* → check the network or proxy. Make sure the repository is `nperiannan/termwright`. A stale token is ignored, so you can also clear it. |
+| Import: the .xml file is not listed (Windows) | Choose **All files (\*.\*)** in the file-type list of the picker, and check that the source is *XML settings export*. |
 | Pasting into a switch drops characters | Set *Paste line delay* (e.g. 50 ms) in Global Options → Terminal. |
 | ZMODEM does nothing | Install `lrzsz` on the remote host; check the Downloads folder in Global Options. |
 | Highlighting is missing | Check the session's keyword set (Terminal page) and the default set; it is off in full-screen apps. |

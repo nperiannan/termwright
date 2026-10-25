@@ -16,10 +16,14 @@ const EXPANDED_KEY = 'termwright.expanded';
   imports: [NgTemplateOutlet, FormsModule, Icon, SessionIcon],
   template: `
     <div class="sm-head">
-      <span class="title">Session Manager</span>
+      <span class="title" title="Session Manager">Sessions</span>
       <button class="icon-btn" title="New session" (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" /></button>
       <button class="icon-btn" title="New folder" (click)="newFolder(ui.currentFolder())"><app-icon name="folder-plus" /></button>
       <button class="icon-btn" title="Refresh" (click)="ui.refreshTree()"><app-icon name="refresh" /></button>
+      <button class="icon-btn" [title]="ui.settings()?.sessionManagerRight ? 'Move the Session Manager to the left' : 'Move the Session Manager to the right'"
+        (click)="ui.actionHandler('toggle-session-manager-side')"><app-icon [name]="ui.settings()?.sessionManagerRight ? 'dock-left' : 'dock-right'" /></button>
+      <button class="icon-btn" title="Hide the Session Manager (View → Session Manager or the toolbar shows it again)"
+        (click)="ui.actionHandler('toggle-session-manager')"><app-icon name="hide-panel" /></button>
     </div>
     <div class="sm-search">
       <input type="search" placeholder="Filter sessions" [(ngModel)]="filterText" (ngModelChange)="filter.set($event)" />

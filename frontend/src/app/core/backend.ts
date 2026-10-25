@@ -143,7 +143,14 @@ export class Backend {
   startRecording(tabId: string) { return this.call<void>('StartRecording', tabId); }
   stopRecording(tabId: string) { return this.call<string>('StopRecording', tabId); }
 
-  chooseOpenFile(title: string, filters: FileFilter[] = []) { return this.call<string>('ChooseOpenFile', title, filters); }
+  chooseOpenFile(title: string, filters: FileFilter[] = []) {
+    // Windows shows only the first filter's files: always offer "All files" too, and match upper-case extensions
+    if (filters.length && /win/i.test(navigator.platform)) {
+      filters = [...filters.map(f => ({ ...f, pattern: f.pattern.split(';').flatMap(p => [p, p.toUpperCase()]).filter((v, i, a) => a.indexOf(v) === i).join(';') })),
+        { displayName: 'All files (*.*)', pattern: '*.*' }];
+    }
+    return this.call<string>('ChooseOpenFile', title, filters);
+  }
   chooseDirectory(title: string) { return this.call<string>('ChooseDirectory', title); }
   chooseSaveFile(title: string, name: string, filters: FileFilter[] = []) { return this.call<string>('ChooseSaveFile', title, name, filters); }
   saveTextFile(path: string, content: string) { return this.call<void>('SaveTextFile', path, content); }
