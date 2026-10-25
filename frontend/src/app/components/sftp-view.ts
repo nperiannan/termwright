@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, input, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Backend } from '../core/backend';
@@ -23,6 +23,15 @@ interface Pane {
   selector: 'app-sftp-view',
   imports: [FormsModule, DatePipe, Icon, SessionIcon, FileIcon],
   template: `
+    @if (shell() && !shell()!.cwd && !cwdHintClosed()) {
+      <div class="cwd-hint">
+        <div><b>Working directory detection</b> - the shell on {{ tab().hopTarget || tab().session.hostname }} does not report its folder,
+          so this tab cannot open or follow the terminal's folder. Turn it on for bash or zsh:</div>
+        <button type="button" (click)="enableCwd(false)">Enable in this shell</button>
+        <button type="button" (click)="enableCwd(true)">Enable permanently…</button>
+        <button type="button" class="icon-btn" title="Hide" (click)="closeCwdHint()">✕</button>
+      </div>
+    }
     <div class="panes">
       @for (p of [local(), remote()]; track p.side) {
         <section class="pane" [class.focus]="focus() === p.side" (mousedown)="focus.set(p.side)">
@@ -36,6 +45,11 @@ interface Pane {
               <button class="root-btn" [class.on]="tab().root" [disabled]="rootBusy()" (click)="runAsMenu($event)"
                 [title]="tab().root ? 'Browsing as ' + tab().runAsUser + '. Click to switch back or to another user.' : 'Browse as root or another user (sudo, su, …)'">
                 {{ rootBusy() ? '…' : tab().root ? 'as ' + tab().runAsUser + ' ▾' : 'Run as ▾' }}</button>
+            }
+            @if (p.side === 'remote' && shell()) {
+              <button class="root-btn" [class.on]="follow()" (click)="terminalMenu($event)"
+                [title]="shell()!.cwd ? 'Terminal folder: ' + shell()!.cwd + (follow() ? ' (following)' : '') : 'The terminal does not report its folder yet'">
+                &gt;_ {{ follow() ? 'Following' : 'Terminal' }} ▾</button>
             }
             <button class="icon-btn bm" [class.on]="isBookmarked(p)" title="Bookmarks" (click)="bookmarkMenu($event, p)">{{ isBookmarked(p) ? '★' : '☆' }}</button>
           </header>
@@ -113,6 +127,65 @@ export class SftpView implements OnInit {
   }
 
   readonly rootBusy = signal(false);
+  /** The terminal tab with the same login whose folder this tab can follow. */
+  readonly shell = computed(() => this.tabs.shellOf(this.tab()));
+  readonly follow = signal(this.loadFlag('termwright.sftpFollow'));
+  readonly cwdHintClosed = signal(this.loadFlag('termwright.cwdHintClosed'));
+
+  constructor() {
+    // Follow the terminal: open the folder the shell reports after each command.
+    effect(() => {
+      const dir = this.shell()?.cwd;
+      if (!this.follow() || !dir) return;
+      untracked(() => { if (this.remote().dir !== dir) void this.go(this.remote(), dir); });
+    });
+  }
+
+  private loadFlag(k: string) { try { return localStorage.getItem(k) === '1'; } catch { return false; } }
+  private saveFlag(k: string, v: boolean) { try { localStorage.setItem(k, v ? '1' : '0'); } catch { /* ignore */ } }
+
+  terminalMenu(ev: MouseEvent) {
+    const sh = this.shell();
+    if (!sh) return;
+    const dir = this.remote().dir;
+    this.ui.showMenu(ev, [
+      { label: sh.cwd ? 'Go to Terminal Folder (' + sh.cwd + ')' : 'Go to Terminal Folder (not reported yet)', disabled: !sh.cwd,
+        action: () => this.go(this.remote(), sh.cwd!) },
+      { label: (this.follow() ? '✓ ' : '') + 'Follow Terminal Folder', action: () => this.setFollow(!this.follow()) },
+      { label: 'Open This Folder in the Terminal (cd)', action: () => this.cdInTerminal(dir) },
+      { separator: true },
+      { label: 'Enable Folder Detection in This Shell', action: () => this.enableCwd(false) },
+      { label: 'Enable Folder Detection Permanently…', action: () => this.enableCwd(true) },
+    ]);
+  }
+
+  setFollow(v: boolean) {
+    this.follow.set(v);
+    this.saveFlag('termwright.sftpFollow', v);
+    if (v && !this.shell()?.cwd) this.ui.toast('The terminal does not report its folder yet - enable folder detection first.', 'info', 6000);
+  }
+
+  closeCwdHint() { this.cwdHintClosed.set(true); this.saveFlag('termwright.cwdHintClosed', true); }
+
+  /** cd in the terminal to a remote folder. */
+  cdInTerminal(dir: string) {
+    const sh = this.shell();
+    if (!sh || sh.state !== 'connected') { this.ui.toast('The terminal tab is not connected.', 'error'); return; }
+    void this.backend.sendInput(sh.id, ` cd '${dir.replace(/'/g, `'\\''`)}'\r`);
+    this.tabs.activeId.set(sh.id);
+  }
+
+  async enableCwd(permanent: boolean) {
+    const sh = this.shell();
+    if (!sh || sh.state !== 'connected') { this.ui.toast('The terminal tab is not connected.', 'error'); return; }
+    if (permanent && !await this.ui.confirm('Enable folder detection permanently',
+      'Termwright types a command in the terminal that adds two lines to ~/.bashrc (or ~/.zshrc for zsh) on ' +
+      (this.tab().hopTarget || this.tab().session.hostname) + ', so every new shell reports its folder. ' +
+      'It is skipped if the lines are already there. Remove them from that file to turn it off.', 'Add')) return;
+    await this.tabs.enableCwdReporting(sh.id, permanent).catch(e => this.ui.error(e));
+    this.ui.toast(permanent ? 'Added to the shell start-up file - also active in this shell now.' : 'Folder detection is on for this shell.', 'success');
+  }
+
   hostOnly() { const h = this.tab().hopTarget || this.tab().session.hostname; return h.slice(h.lastIndexOf('@') + 1); }
   loginUser() { return this.tab().hopTarget || (this.tab().session.username ? this.tab().session.username + '@' : '') + this.tab().session.hostname; }
 
@@ -159,8 +232,10 @@ export class SftpView implements OnInit {
     try { if (localStorage.getItem(this.viaKey()) === 'scp') this.via.set('scp'); } catch { /* ignore */ }
     const home = await this.backend.localHome().catch(() => '/');
     this.local.update(p => ({ ...p, dir: home }));
-    this.remote.update(p => ({ ...p, dir: this.tab().home || '/' }));
+    const start = this.tab().startDir;
+    this.remote.update(p => ({ ...p, dir: start || this.tab().home || '/' }));
     await Promise.all([this.load(this.local()), this.load(this.remote())]);
+    if (start && this.remote().error) await this.go(this.remote(), this.tab().home || '/'); // not readable over SFTP
   }
 
   private sig(p: Pane) { return p.side === 'local' ? this.local : this.remote; }
@@ -313,6 +388,7 @@ export class SftpView implements OnInit {
             label: `Copy to ${o.title.replace(/^SFTP: /, '')}: ${this.tabs.sftpDirs.get(o.id) || o.home}`,
             action: () => this.copyToServer(o),
           })),
+          ...(this.shell() ? [{ label: 'Open in Terminal (cd)', action: () => this.cdInTerminal(e.isDir ? this.join(cur, e.name) : cur.dir) }] : []),
           { label: 'Rename...', action: () => this.rename(cur, e) },
           { label: 'Delete', action: () => this.remove(cur) },
           { separator: true },

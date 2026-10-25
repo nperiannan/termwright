@@ -29,6 +29,10 @@ export interface TabView {
   /** SFTP tab browsing as another user: root (sudo) or via a Run As command. */
   root?: boolean;
   runAsUser?: string;
+  /** Terminal tab: folder the shell reports (OSC 7 / OSC 1337 CurrentDir / OSC 633 Cwd). */
+  cwd?: string;
+  /** SFTP tab: folder to open first (the terminal's folder), falls back to home. */
+  startDir?: string;
 }
 
 export type Layout = 'tabs' | 'tile-v' | 'tile-h' | 'grid';
@@ -127,15 +131,41 @@ export class Tabs {
     }
     try {
       const r = await this.backend.sftpOpen(p.id, mode);
+      const cwd = p.cwd && (!p.hopTarget || r.target) ? p.cwd : '';
       const tv: TabView = {
         id: r.id, title: 'SFTP: ' + (r.target || p.title), state: 'connected', message: '',
         info: r.target ? `SFTP to ${r.target} through ${p.session.hostname}` : 'SFTP over ' + p.info,
         session: p.session, logFile: '', cols: 0, rows: 0, locked: false, kind: 'sftp', parentId: p.id, home: r.home, recording: false,
-        hopTarget: r.target, sftpMode: mode,
+        hopTarget: r.target, sftpMode: mode, startDir: cwd,
       };
       this.tabs.update(l => [...l, tv]);
       this.activeId.set(tv.id);
     } catch (e) { this.ui.error(e); }
+  }
+
+  /**
+   * The terminal tab whose shell runs on the host an SFTP tab browses (same
+   * login), or undefined. With a jump station, only the target tab's shell
+   * qualifies (the terminal shows the target, not the jump station).
+   */
+  shellOf(sftp: TabView): TabView | undefined {
+    const p = this.get(sftp.parentId);
+    if (!p || p.kind !== 'terminal' || (p.hopTarget && !sftp.hopTarget)) return undefined;
+    return p;
+  }
+
+  /** Types the line that makes bash or zsh report its folder (OSC 7) after every prompt. */
+  enableCwdReporting(termId: string, permanent: boolean) {
+    const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD"; }; ` +
+      `if [ -n "\$ZSH_VERSION" ]; then typeset -U precmd_functions; precmd_functions+=(_tw_cwd); ` +
+      `else case ";\$PROMPT_COMMAND;" in *_tw_cwd*) ;; *) PROMPT_COMMAND="_tw_cwd\${PROMPT_COMMAND:+;\$PROMPT_COMMAND}";; esac; fi`;
+    let cmd = ' ' + line + '; _tw_cwd\r'; // leading space: kept out of the shell history
+    if (permanent) {
+      const q = line.replace(/'/g, `'\\''`);
+      cmd = ` f=~/.bashrc; [ -n "\$ZSH_VERSION" ] && f=~/.zshrc; grep -q _tw_cwd "\$f" 2>/dev/null || ` +
+        `printf '%s\\n' '# Termwright: report the current folder (SFTP follows the terminal)' '${q}' >> "\$f"; echo "folder reporting added to \$f";` + cmd;
+    }
+    return this.backend.sendInput(termId, cmd);
   }
 
   async runScript(id = this.activeId()) {

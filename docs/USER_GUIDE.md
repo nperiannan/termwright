@@ -298,6 +298,22 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
 
 Open with the toolbar SFTP button, **Transfer → Open SFTP Tab** or `Cmd/Ctrl+Shift+P` while an SSH2 tab is connected. It reuses that login (no second password).
 
+**Working directory detection** (SFTP tab opened from a terminal tab):
+
+![Working directory detection](screenshots/sftp-cwd-hint.png)
+
+When the shell reports its current folder, the SFTP tab opens in the terminal's folder instead of the home folder. The **>_ Terminal ▾** button in the server pane offers:
+
+![Terminal folder menu](screenshots/sftp-terminal-folder.png)
+
+- **Go to Terminal Folder** - jump to the folder the shell is in now.
+- **Follow Terminal Folder** - the SFTP pane changes folder whenever you `cd` in the terminal (the button then reads *Following*; remembered).
+- **Open This Folder in the Terminal (cd)** - the reverse: the terminal changes to the folder shown in SFTP. Also on the right-click menu of a remote folder.
+- **Enable Folder Detection in This Shell** - types one line into the terminal (bash or zsh) that makes the shell report its folder after every prompt, until you log out.
+- **Enable Folder Detection Permanently…** - after a confirmation, adds the same line to `~/.bashrc` (or `~/.zshrc`) on that server, once.
+
+If the shell does not report its folder, a blue *Working directory detection* bar offers the same two buttons; close it with ✕ (remembered). Termwright understands the standard escape sequences OSC 7 (`file://host/path`), OSC 1337 `CurrentDir=` and OSC 633 `P;Cwd=`, so shells already set up for iTerm2, VS Code, WezTerm or Tabby work as they are. For **fish**: `function _tw_cwd --on-variable PWD; printf '\e]7;file://%s%s\a' (hostname) $PWD; end` in `~/.config/fish/config.fish`. Network devices (VOSS, EXOS, …) do not report a folder. With a jump station, this works for the target host's SFTP tab (*through this login*).
+
 Folders use the same colored folder icon as the Session Manager. Files are colored by type so they stand out at a glance: text and configuration files blue, archives amber, images pink, firmware and binaries purple, scripts green, keys and certificates red, everything else gray. Symbolic links carry a small arrow, and hidden (dot) files are dimmed.
 
 **Standalone SFTP session** (its own login, no terminal): right-click an SSH2 session in the Session Manager → **Connect SFTP Session**, or right-click a terminal tab → **Connect SFTP Session (new login)**. Use this for devices such as VOSS that refuse a second channel on an existing SSH connection. To make a session always open this way, set Session Options → Connection → **Connect as: SFTP file browser only**; right-click → **Connect Terminal** still opens a shell. The tab right-click menu also offers **Open SFTP Tab (same login)**.

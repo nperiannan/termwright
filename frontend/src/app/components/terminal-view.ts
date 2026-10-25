@@ -108,6 +108,20 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     this.tabs.handles.set(tab.id, { term, fit, search });
 
     const id = tab.id;
+    // Working directory reported by the shell: OSC 7 (file://host/path),
+    // iTerm2's OSC 1337 CurrentDir=, VS Code's OSC 633 P;Cwd=.
+    const setCwd = (dir: string) => {
+      dir = dir.trim();
+      if (dir.startsWith('/') && this.tabs.get(id)?.cwd !== dir) this.tabs.patch(id, { cwd: dir });
+      return true;
+    };
+    term.parser.registerOscHandler(7, d => {
+      const m = /^file:\/\/[^/]*(\/.*)$/.exec(d.trim());
+      if (m) { try { setCwd(decodeURIComponent(m[1])); } catch { setCwd(m[1]); } }
+      return true;
+    });
+    term.parser.registerOscHandler(1337, d => d.startsWith('CurrentDir=') ? setCwd(d.slice(11)) : false);
+    term.parser.registerOscHandler(633, d => d.startsWith('P;Cwd=') ? setCwd(d.slice(6)) : false);
     const dec = new TextDecoder();
     let atLineStart = false;
     this.unsub.push(this.backend.on('term:data:' + id, (b64: string) => {
