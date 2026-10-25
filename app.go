@@ -32,7 +32,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.11.2-dev"
+var Version = "0.11.3-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
