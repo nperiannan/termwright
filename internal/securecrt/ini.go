@@ -2,7 +2,7 @@
 // SecureCRT(R) so that Termwright can interoperate with existing session libraries.
 //
 // The format was implemented from scratch by inspecting user-owned session
-// files; no VanDyke Software code is used.
+// files; no third-party code is used.
 //
 // File layout (one entry per line, continuation lines start with a space):
 //

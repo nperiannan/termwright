@@ -1,42 +1,19 @@
-# Legal guardrails
+# Legal notes
 
-*This is engineering guidance, not legal advice. Have a lawyer review it before a 1.0 release or any commercial use.*
+*Engineering guidance, not legal advice.*
 
-Termwright is a **clean-room, independent implementation**. The following rules keep it that way.
+Termwright is an independent, open-source project written from scratch.
 
-## What we do
-* **Write all code from scratch**, using only open-source libraries with permissive licenses (MIT, BSD, Apache-2.0). See NOTICE.
-* **Interoperate with data formats.** We read and write the plain-text session `.ini` files and XML exports that users create
-  with their own licensed copy. File-format compatibility for interoperability is widely accepted practice. Many tools import
-  PuTTY, SecureCRT or MobaXterm sessions in the same way.
-* **Use generic UI conventions**: a session tree, tabs, a toolbar, a command window and a button bar. These are common to most terminal
-  emulators (PuTTY, MobaXterm, Termius, Windows Terminal, iTerm2).
-* **Use other product names only descriptively**: "imports SecureCRT sessions". Termwright is not affiliated with or endorsed by
-  VanDyke Software; SecureCRT and SecureFX are their trademarks.
+## Principles
+* **Own code only.** All code is original; third-party libraries are open source with permissive licenses (MIT, BSD, Apache-2.0). See NOTICE.
+* **Interoperability.** Termwright reads and writes the session files and exports of other terminal programs so that users can move
+  their own sessions, as many tools do. Saved passwords in those files are moved into the operating system's keychain only on the
+  user's computer, from files the user selects, when the user starts the import.
+* **Common conventions.** The interface uses conventions shared by most terminal programs: a session tree, tabs, a toolbar, a command
+  window and a button bar.
+* **No third-party material.** No code, binaries, documentation text, icons, logos, screenshots or sample files from other products,
+  and nothing that bypasses another product's licensing. Contributions must be the contributor's own work.
 
-## Saved passwords on import
-When a user imports **their own** SecureCRT sessions, Termwright can move the passwords saved in those files into the operating
-system's keychain, so the user does not have to type them again:
-
-* It runs only on the user's computer, only on files the user selects, and only when the user starts the import.
-* The encrypted fields (`Password V2` and the older `Password`) are decoded using the file format that independent security
-  researchers have publicly documented, including its published default keys. The code is written from that description, not from
-  VanDyke code, and it does not touch SecureCRT itself, its binaries or its licensing.
-* If the user protected the configuration with a passphrase, the user has to type it; nothing is guessed or brute-forced.
-* After the import the passwords are removed from the copied session files and kept only in the keychain. Export never writes them back.
-
-This is the part of Termwright closest to another vendor's product. It is worth a specific look in any legal review.
-
-## What we never do
-* Never copy, decompile, disassemble or reverse-engineer VanDyke binaries, scripts or documentation text.
-* Never use VanDyke icons, logos, screenshots, splash screens, color schemes, help text or the names *SecureCRT*/*SecureFX* in the
-  product name, binary name, icons or marketing.
-* Never include VanDyke sample session files in the repo. Test fixtures are hand-written with documentation IP ranges (RFC 5737).
-* Never implement license-key checks or anything that bypasses VanDyke licensing.
-* Never accept contributions that contain VanDyke code or text. Add a DCO/CLA check in CI before accepting outside PRs.
-
-## Naming
-"Termwright" is an original name: "term" (terminal) + "wright" (a maker, as in playwright or shipwright). It does not contain or
-imitate any other product's name. Before a 1.0 release, run a trademark search in the markets where it will be offered. If the
-name ever has to change, it appears only in `wails.json`, `main.go`, `README.md`, `NOTICE`, the UI brand text and the keychain
-service name.
+## Names
+"Termwright" is an original name. Other product names appear only to describe compatibility (for example "imports sessions from …").
+They are trademarks of their respective owners; Termwright is not affiliated with or endorsed by them.
