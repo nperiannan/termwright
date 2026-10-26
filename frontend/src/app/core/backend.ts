@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AppInfo, BackupFile, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus,
+  AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus,
 } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
@@ -60,6 +60,7 @@ export class Backend {
   importNetBox(url: string, token: string, filter: string, opt: ImportOptions) { return this.call<ImportResult>('ImportNetBox', url, token, filter, opt); }
   importAWS(profile: string, region: string, usePublic: boolean, opt: ImportOptions) { return this.call<ImportResult>('ImportAWS', profile, region, usePublic, opt); }
   exportSessions(paths: string[], dest: string, format: string) { return this.call<number>('ExportSessions', paths, dest, format); }
+  exportSessionsFor(paths: string[], dest: string, format: string) { return this.call<ExportReport>('ExportSessionsFor', paths, dest, format); }
   listSerialPorts() { return this.call<string[]>('ListSerialPorts'); }
   defaultSSHConfigPath() { return this.call<string>('DefaultSSHConfigPath'); }
 

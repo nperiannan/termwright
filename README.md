@@ -13,6 +13,10 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [All features](docs/FEATURES.md) · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.19.0
+
+* **Export to other programs**: PuTTY, KiTTY, MobaXterm, Tabby, OpenSSH config and CSV - next to the SecureCRT formats - with a summary of what each format cannot hold. Your sessions are never locked in.
+
 ## What's new in 0.18.0
 
 * **Devices with a new address (DHCP)**: sessions remember the device's MAC address. Discover Devices finds saved devices at new addresses and updates the sessions, a connection stops when another device answers at the saved address, and *Find by MAC Address* finds the device again - checked with its SSH host key.
@@ -21,12 +25,6 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 * **Session recording and playback**: record a tab (or every connection) with its timing, add markers, replay it in a player tab with speed, seek, markers and text search; asciinema `.cast` files.
 * **Smart cards**: SSH keys on PIV / CAC cards, YubiKey and other PKCS#11 tokens; the PIN is asked once and kept in memory only.
-
-## What's new in 0.16.0
-
-* **Run and Collect**: run commands on many devices and get one table (model, version, serial number, uptime or your own patterns), with CSV export.
-* **Console servers**: sessions for the ports of a console server, created in one go, that connect to the right port and log in to the device.
-* *Change Checklist…* on the Session Manager menu.
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 
@@ -41,7 +39,7 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 | Device types | Login profiles (EXOS, VOSS, Cisco IOS, Linux, custom): login steps for Telnet/Serial, after-login steps for every protocol (`enable`, paging off), own username/password (or none) inherited or overridden per session; used by Quick Connect, the Connect Bar (`voss 10.1.1.1`), sessions and folder defaults |
 | Session Manager | Folder defaults (user, device type, jump host …), workspaces, Quick Open palette, folder tree, filter/search, drag & drop, new/edit/duplicate/rename/delete, connect-all-in-folder, Connect Terminal / Connect SFTP Session, recent sessions |
 | Discovery | Scan a network or range (up to a /22): ports, SSH/Telnet banners, web page/server/certificate, SIP (phones), SNMP v2c name and model, DNS, MAC address and maker; icons per kind (switch, router, firewall, AP, server, NAS, computer, phone, printer) with the evidence; add selected devices as sessions with a suggested device type. Never logs in. |
-| Import / export | Native storage is the SecureCRT `Config/Sessions/*.ini` layout (unknown keys preserved byte-for-byte): import a Config folder, `.zip`, XML export or `.ini` (saved passwords go to the OS keychain); export to folder, `.zip` or XML. Also imports **CSV**, **Ansible** inventories, **NetBox**, **AWS EC2**, **PuTTY / KiTTY** (`.reg`, `~/.putty/sessions`), **MobaXterm** (`.mxtsessions`) and OpenSSH `~/.ssh/config` |
+| Import / export | Native storage is the SecureCRT `Config/Sessions/*.ini` layout (unknown keys preserved byte-for-byte): import a Config folder, `.zip`, XML export or `.ini` (saved passwords go to the OS keychain); export to folder, `.zip` or XML, and **export to PuTTY / KiTTY, MobaXterm, Tabby, OpenSSH config and CSV**. Also imports **CSV**, **Ansible** inventories, **NetBox**, **AWS EC2**, **PuTTY / KiTTY** (`.reg`, `~/.putty/sessions`), **MobaXterm** (`.mxtsessions`) and OpenSSH `~/.ssh/config` |
 | Logon automation | Automate logon with an Expect/Send table (hide, trailing CR, named credentials, `\s \w \v \p` escapes), send initial CR, logon scripts with arguments, output triggers |
 | Terminal | Tabs and tiled views (side by side / stacked / grid), xterm-256color/truecolor, Unicode, scrollback search, keyword highlighting, per-session font, Backspace mode, copy-on-select, right-click paste, zoom, clickable links, session lock, Connect Bar |
 | Appearance | Dark / Light / follow-system UI with accent color; terminal scheme *Auto* (follows the UI) or one scheme for all sessions; 12 built-in color schemes (Solarized, Dracula, Nord, Gruvbox, Catppuccin, …), custom scheme editor with import/export, per-session scheme and font |
@@ -71,6 +69,7 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 | ![Kerberos and certificates](docs/screenshots/auth.png) <br/>*Kerberos, certificates and security keys* | ![Password managers](docs/screenshots/passwords-managers.png) <br/>*1Password, Bitwarden, HashiCorp Vault* |
 | ![Workspaces](docs/screenshots/workspaces.png) <br/>*Workspaces* | ![Alerts](docs/screenshots/alerts.png) <br/>*Output alerts* |
 | ![Discover Devices](docs/screenshots/discover.png) <br/>*Discover devices with the evidence behind each result* | ![Discovered sessions](docs/screenshots/discover-added.png) <br/>*Selected devices added as sessions* |
+| ![Export for other programs](docs/screenshots/export-formats.png) <br/>*Export to PuTTY, KiTTY, MobaXterm, Tabby, OpenSSH or CSV* | ![Export summary](docs/screenshots/export-report.png) <br/>*What each format could not hold* |
 | ![Devices at new addresses](docs/screenshots/discover-moved.png) <br/>*Saved devices found at new addresses by their MAC address* | ![Another device at the address](docs/screenshots/mac-warning.png) <br/>*Stops before logging in to a different device* |
 | ![Session playback](docs/screenshots/player.png) <br/>*Replaying a recorded session with its markers* | ![Smart cards](docs/screenshots/smartcards.png) <br/>*Smart card (PIV / PKCS#11) keys* |
 | ![Run and Collect](docs/screenshots/collect.png) <br/>*Run and Collect: one table from many devices, CSV export* | ![Console Server Ports](docs/screenshots/console-ports.png) <br/>*Sessions for the ports of a console server* |

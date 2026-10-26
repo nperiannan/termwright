@@ -10,3 +10,5 @@ build/darwin/
 build/windows/*
 !build/windows/icon.ico
 frontend/package.json.md5
+/termwright
+/termwright.exe

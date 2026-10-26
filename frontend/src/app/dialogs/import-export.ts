@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
-import { ImportResult } from '../core/models';
+import { ExportReport, ImportResult } from '../core/models';
 import { Ui } from '../core/ui.service';
 
 type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv' | 'ansible' | 'netbox' | 'aws';
@@ -200,15 +200,39 @@ export class ImportDialog {
   }
 }
 
-/** Export sessions as a SecureCRT-compatible folder, zip or XML. */
+type ExportFormat = 'dir' | 'zip' | 'xml' | 'putty-reg' | 'kitty-reg' | 'putty-dir' | 'moba' | 'tabby' | 'ssh-config' | 'csv';
+
+const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string }[] = [
+  { v: 'putty-reg', label: 'PuTTY (.reg, Windows)', ext: 'reg', hint: 'Double-click the .reg file on Windows (or File → Import in Registry Editor); the sessions appear in PuTTY. The jump host becomes an SSH proxy (PuTTY 0.77 or newer).' },
+  { v: 'kitty-reg', label: 'KiTTY (.reg, Windows)', ext: 'reg', hint: 'Double-click the .reg file on Windows; the sessions appear in KiTTY with their folders.' },
+  { v: 'putty-dir', label: 'PuTTY sessions folder (Linux / macOS)', ext: '', hint: 'Choose ~/.putty/sessions (or copy the files there).' },
+  { v: 'moba', label: 'MobaXterm (.mxtsessions)', ext: 'mxtsessions', hint: 'In MobaXterm: right-click "User sessions" → Import sessions from file. The jump host becomes the SSH gateway.' },
+  { v: 'tabby', label: 'Tabby profiles (.yaml)', ext: 'yaml', hint: "Add the profiles to Tabby's config.yaml (Settings → Config file → Show config file) and restart Tabby." },
+  { v: 'ssh-config', label: 'OpenSSH config (ssh, VS Code, any SSH tool)', ext: 'conf', hint: 'Add it to ~/.ssh/config, or save it as ~/.ssh/termwright.conf and put "Include termwright.conf" at the top of ~/.ssh/config.' },
+  { v: 'csv', label: 'CSV (spreadsheet, inventory)', ext: 'csv', hint: 'Opens in Excel / Numbers / LibreOffice; Termwright and many tools import it again.' },
+];
+
+/** Export sessions: SecureCRT format (folder, zip, XML) or for other programs. */
 @Component({
   selector: 'app-export-dialog',
   imports: [FormsModule],
   template: `
   <div class="modal-backdrop">
-    <form class="modal" (ngSubmit)="run()">
+    <form class="modal exp" (ngSubmit)="run()">
       <div class="modal-head">Export Sessions</div>
       <div class="modal-body">
+        @if (report(); as r) {
+          <p><b>Exported {{ r.count }} session{{ r.count === 1 ? '' : 's' }}</b> to <span class="mono">{{ dest }}</span>.</p>
+          <p class="hint">{{ hint() }}</p>
+          @if (r.skipped.length) {
+            <p><b>Not exported</b> ({{ r.skipped.length }}): the format has no such sessions.</p>
+            <ul class="lst">@for (s of r.skipped.slice(0, 12); track s) { <li>{{ s }}</li> }@if (r.skipped.length > 12) { <li>…</li> }</ul>
+          }
+          @if (r.notes.length) {
+            <p><b>Notes</b> - what stays in Termwright and how some settings were written:</p>
+            <ul class="lst">@for (n of r.notes; track n) { <li>{{ n }}</li> }</ul>
+          }
+        } @else {
         <div class="grid">
           <label>Sessions</label>
           <div class="checks">
@@ -218,48 +242,81 @@ export class ImportDialog {
           </div>
           <label>Format</label>
           <div class="checks">
+            <div class="grp">Termwright / SecureCRT (everything is kept)</div>
             <label><input type="radio" name="fmt" value="dir" [(ngModel)]="format" (ngModelChange)="dest = ''" /> Folder (Sessions/*.ini, copy into SecureCRT's Config folder)</label>
             <label><input type="radio" name="fmt" value="zip" [(ngModel)]="format" (ngModelChange)="dest = ''" /> Zip archive</label>
-            <label><input type="radio" name="fmt" value="xml" [(ngModel)]="format" (ngModelChange)="dest = ''" /> XML (for Import Settings)</label>
+            <label><input type="radio" name="fmt" value="xml" [(ngModel)]="format" (ngModelChange)="dest = ''" /> XML (for SecureCRT's Import Settings)</label>
+            <div class="grp">Other programs (name, folder, address, login, key, jump host, forwards, serial settings)</div>
+            @for (f of others; track f.v) {
+              <label><input type="radio" name="fmt" [value]="f.v" [(ngModel)]="format" (ngModelChange)="dest = ''" /> {{ f.label }}</label>
+            }
           </div>
           <label>Destination</label>
           <div class="row"><input name="dest" [(ngModel)]="dest" required /><button type="button" (click)="browse()">Browse...</button></div>
+          @if (hint()) { <label></label><div class="hint">{{ hint() }} Passwords are never exported.</div> }
         </div>
+        }
         @if (error()) { <div class="err">{{ error() }}</div> }
       </div>
       <div class="modal-foot">
         <span class="spacer"></span>
-        <button type="button" (click)="ui.close()">Cancel</button>
-        <button type="submit" class="primary">Export</button>
+        @if (report()) {
+          <button type="button" (click)="reveal()">Show File</button>
+          <button type="button" class="primary" (click)="ui.close()">Done</button>
+        } @else {
+          <button type="button" (click)="ui.close()">Cancel</button>
+          <button type="submit" class="primary">Export</button>
+        }
       </div>
     </form>
   </div>`,
+  styles: [`
+    .exp { width: min(720px, 95vw); }
+    .grp { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 6px 0 2px; }
+    .grp:first-child { margin-top: 0; }
+    .lst { margin: 4px 0 10px; padding-left: 18px; font-size: 12.5px; max-height: 180px; overflow: auto; }
+    .mono { font-family: var(--mono); font-size: 12px; }
+  `],
 })
 export class ExportDialog {
   protected ui = inject(Ui);
   private backend = inject(Backend);
   private cdr = inject(ChangeDetectorRef);
   readonly error = signal('');
+  readonly report = signal<ExportReport | null>(null);
+  readonly others = OTHER_FORMATS;
   readonly selected = this.ui.selectedPath();
   scope: 'all' | 'sel' = this.selected ? 'sel' : 'all';
-  format: 'dir' | 'zip' | 'xml' = 'zip';
+  format: ExportFormat = 'zip';
   dest = '';
 
+  hint() { return OTHER_FORMATS.find(f => f.v === this.format)?.hint ?? ''; }
+
   async browse() {
-    const p = this.format === 'dir'
+    const other = OTHER_FORMATS.find(f => f.v === this.format);
+    const ext = other ? other.ext : this.format;
+    const name = this.format === 'ssh-config' ? 'termwright.conf' : this.format === 'tabby' ? 'tabby-profiles.yaml' : 'termwright-sessions.' + ext;
+    const p = this.format === 'dir' || this.format === 'putty-dir'
       ? await this.backend.chooseDirectory('Export To Folder').catch(() => '')
-      : await this.backend.chooseSaveFile('Export As', 'termwright-sessions.' + this.format,
-          [{ displayName: this.format.toUpperCase(), pattern: '*.' + this.format }]).catch(() => '');
+      : await this.backend.chooseSaveFile('Export As', name, [{ displayName: ext.toUpperCase(), pattern: '*.' + ext }]).catch(() => '');
     if (p) this.dest = p;
     this.cdr.markForCheck();
   }
 
   async run() {
     if (!this.dest) return;
+    this.error.set('');
+    const paths = this.scope === 'sel' ? [this.selected] : [];
     try {
-      const n = await this.backend.exportSessions(this.scope === 'sel' ? [this.selected] : [], this.dest, this.format);
-      this.ui.toast(`Exported ${n} session(s) to ${this.dest}`, 'success');
-      this.ui.close();
+      if (OTHER_FORMATS.some(f => f.v === this.format)) {
+        this.report.set(await this.backend.exportSessionsFor(paths, this.dest, this.format));
+      } else {
+        const n = await this.backend.exportSessions(paths, this.dest, this.format);
+        this.ui.toast(`Exported ${n} session(s) to ${this.dest}`, 'success');
+        this.ui.close();
+      }
     } catch (e) { this.error.set(errText(e)); }
   }
+
+  async reveal() { await this.backend.showInFolder(this.dest).catch(e => this.ui.error(e)); }
 }

@@ -173,6 +173,15 @@ func puttySession(name string, v map[string]string) (Session, bool) {
 		folder = v["Folder"] // KiTTY
 	}
 	n.Folder = cleanFolder(folder)
+	// names exported as "Folder/Sub/name" next to their folder value
+	if n.Folder != "" {
+		for _, sep := range []string{"/", `\`} {
+			if pre := strings.ReplaceAll(n.Folder, "/", sep) + sep; strings.HasPrefix(name, pre) {
+				name = name[len(pre):]
+				break
+			}
+		}
+	}
 	n.Name = strings.ReplaceAll(name, "/", "-")
 	if i := strings.LastIndexAny(name, `\/`); i > 0 && n.Folder == "" {
 		n.Folder, n.Name = cleanFolder(name[:i]), name[i+1:]
@@ -358,7 +367,7 @@ func ParseMobaXterm(text string) (sessions []Session, skipped []string) {
 		case "ImgNum":
 			continue
 		}
-		parts := strings.Split(val, "#")
+		parts := strings.Split(strings.TrimSpace(val), "#")
 		if len(parts) < 3 || parts[0] != "" {
 			continue
 		}
@@ -372,9 +381,15 @@ func ParseMobaXterm(text string) (sessions []Session, skipped []string) {
 		}
 		n := Defaults()
 		n.Name, n.Folder = strings.ReplaceAll(name, "/", "-"), folder
-		if len(parts) > 4 {
-			if c := strings.TrimSpace(mobaEscapes.Replace(parts[4])); c != "" {
-				n.Description = []string{c}
+		// …#<terminal settings>#0#<comment>#-1: the comment is the description
+		for _, i := range []int{5, 4} {
+			if len(parts) > i {
+				if c := strings.TrimSpace(mobaEscapes.Replace(parts[i])); c != "" {
+					if _, err := strconv.Atoi(c); err != nil {
+						n.Description = []string{c}
+						break
+					}
+				}
 			}
 		}
 		switch parts[1] {

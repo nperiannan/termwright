@@ -844,6 +844,30 @@ Options → Global Options → **Updates** decides when you are told about updat
 
 Details: [SECURECRT_COMPAT.md](SECURECRT_COMPAT.md).
 
+### Exporting to other programs
+
+Your sessions are never locked in. **File → Export Sessions…** also writes them for other programs - all sessions or the selected folder or session:
+
+![Export formats](screenshots/export-formats.png)
+
+| Format | Use it in the other program |
+|---|---|
+| **PuTTY (.reg, Windows)** | Double-click the `.reg` file (or Registry Editor → File → Import); the sessions appear in PuTTY |
+| **KiTTY (.reg, Windows)** | Double-click the `.reg` file; the sessions appear in KiTTY with their folders |
+| **PuTTY sessions folder** (Linux / macOS) | Export into `~/.putty/sessions` |
+| **MobaXterm (.mxtsessions)** | Right-click *User sessions* → *Import sessions from file* |
+| **Tabby profiles (.yaml)** | Add the profiles to Tabby's `config.yaml` (Settings → Config file → Show config file) and restart Tabby |
+| **OpenSSH config** | Add to `~/.ssh/config`, or save as `~/.ssh/termwright.conf` and put `Include termwright.conf` at its top - works with `ssh`, VS Code Remote-SSH and any SSH tool |
+| **CSV** | Excel, Numbers, LibreOffice or an inventory; Termwright imports it again |
+
+What is carried over: name, folder, protocol, address, port, username (also the device type's), key file, jump host (PuTTY 0.77+ SSH proxy, MobaXterm SSH gateway, Tabby jump host, OpenSSH `ProxyJump`), SOCKS / HTTP proxy, port forwards, keep-alive, agent and X11 forwarding, remote command, serial settings and logging (PuTTY). The CSV also has device type, environment, jump host and MAC address.
+
+After the export a summary lists the sessions the format cannot hold (e.g. RDP, VNC and console sessions in PuTTY) and what stays in Termwright: device type login steps, logon actions, triggers, smart card choice, backups, checklists and recordings. **Passwords are never exported**; to move them between Termwright installations use the password vault export (Passwords & Credentials).
+
+![Export summary](screenshots/export-report.png)
+
+Tips: PuTTY needs `.ppk` keys (PuTTYgen converts OpenSSH keys) and OpenSSH cannot read `.ppk` keys; the summary says when this applies. The SecureCRT formats above keep everything.
+
 **About** (Help → About Termwright) shows the version, platform, data folder, main features and links to the repository, this guide, issues and releases.
 
 ![About](screenshots/about.png)

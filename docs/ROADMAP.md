@@ -174,11 +174,15 @@ Features alone do not make a tool people rely on every day. These come first:
 ## 0.18 (done)
 - [x] **Devices with a new address (DHCP)**: MAC address saved in sessions, new addresses found by Discover Devices and on connect, MAC check before logging in, SSH host key check, *Find by MAC Address*
 
-## 0.19 (planned)
+## 0.19 (done)
+- [x] **Export to other programs**: PuTTY / KiTTY, MobaXterm, Tabby, OpenSSH config, CSV, with a summary of what each format cannot hold
+
+## 0.20 (planned)
 - [ ] MAC addresses of devices behind routers: read the router's ARP table over SNMP
 - [ ] Smart cards on Windows without a PKCS#11 library: keys of the Windows certificate store (CNG)
 - [ ] Import the smart card settings of SecureCRT sessions (needs sample exports)
 - [ ] Optional recording of typed input in session recordings (off by default)
+- [ ] Export to Royal TS, Remote Desktop Manager and Termius (if users ask)
 
 ## Later
 - [ ] **Team sharing and sync** (see Real-world readiness): shared session library (Git repository or shared folder), passwords stay per user or in a password manager

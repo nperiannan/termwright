@@ -34,7 +34,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.18.0-dev"
+var Version = "0.19.0-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -407,6 +407,26 @@ func (a *App) ExportSessions(paths []string, dest, format string) (int, error) {
 		return 0, err
 	}
 	return a.store.Export(paths, dest, format)
+}
+
+// ExportSessionsFor exports sessions for another program (PuTTY, KiTTY,
+// MobaXterm, Tabby, OpenSSH config, CSV) and reports what was left out.
+// Folder defaults and the device type's username are filled in first.
+func (a *App) ExportSessionsFor(paths []string, dest, format string) (*session.ExportReport, error) {
+	if err := a.ready(); err != nil {
+		return nil, err
+	}
+	return a.store.ExportOther(paths, dest, format, func(s session.Session) session.Session {
+		s = a.withFolderDefaults(s)
+		if s.DeviceType != "" && (!s.OwnLogin || s.Username == "") {
+			for _, d := range a.cfg.Get().DeviceTypes {
+				if strings.EqualFold(d.Name, s.DeviceType) && d.Username != "" {
+					s.Username = d.Username
+				}
+			}
+		}
+		return s
+	})
 }
 
 // ListSerialPorts lists serial devices.

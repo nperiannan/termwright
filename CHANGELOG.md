@@ -4,6 +4,13 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.19.0 (2026-10-27)
+
+* **Export to other programs** (File → Export Sessions…): **PuTTY** and **KiTTY** (.reg for Windows), a **PuTTY sessions folder** (Linux / macOS), **MobaXterm** (.mxtsessions), **Tabby** profiles (YAML), **OpenSSH config** (ssh, VS Code and other SSH tools) and **CSV**, next to the SecureCRT folder / zip / XML.
+  * Carried over: name, folder, protocol, address, port, username (also from the device type and folder defaults), key file, jump host (PuTTY 0.77+ SSH proxy, MobaXterm SSH gateway, Tabby jump host, `ProxyJump`), SOCKS / HTTP proxy, port forwards, keep-alive, agent / X11 forwarding, remote command, serial settings.
+  * A summary lists the sessions a format cannot hold and the settings that stay in Termwright (device type logins, logon actions, triggers…). Passwords are never exported.
+* Import: MobaXterm bookmarks with a space after `=` and their comments are read correctly; PuTTY / KiTTY session names that include their folder keep the plain name.
+
 ## 0.18.0 (2026-10-27)
 
 * **Devices that get a new address from DHCP**: sessions remember the device's **MAC address** (saved by Discover Devices; Session Options → Connection → *MAC address*; *Remember MAC Addresses* for older sessions found by a scan).

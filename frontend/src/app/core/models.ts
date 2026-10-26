@@ -261,3 +261,6 @@ export interface SmartCardInfo { available: boolean; found: string[] | null; rep
 
 /** A session whose device (same MAC address) answers at another IP address. */
 export interface MovedDevice { path: string; old: string; new: string; mac: string; hostKey?: 'same' | 'different' | 'unknown' | 'none' | ''; scanned?: string; }
+
+/** What an export for another program wrote and left out. */
+export interface ExportReport { count: number; skipped: string[]; notes: string[]; }
