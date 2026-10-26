@@ -10,7 +10,7 @@
   "info": {
     "companyName": "Termwright",
     "productName": "Termwright",
-    "productVersion": "0.11.4",
+    "productVersion": "0.11.5",
     "copyright": "Copyright 2026 The Termwright Authors",
     "comments": "Open-source terminal emulator and session manager (Apache-2.0)"
   }

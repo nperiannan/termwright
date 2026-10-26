@@ -91,6 +91,7 @@ type Settings struct {
 	Bookmarks           []Bookmark           `json:"bookmarks"`
 	SFTPCwdAuto         bool                 `json:"sftpCwdAuto"`              // turn on folder reporting in the shell when an SFTP tab opens from it
 	SFTPFollowTerminal  bool                 `json:"sftpFollowTerminal"`       // SFTP tabs follow the terminal folder
+	SFTPFollowUser      bool                 `json:"sftpFollowUser"`           // SFTP tabs browse as the terminal's user (root via sudo)
 	SessionManagerRight bool                 `json:"sessionManagerRight"`      // Session Manager on the right side of the window
 	VaultAddr           string               `json:"vaultAddr,omitempty"`      // HashiCorp Vault URL for vault:// references ("" = $VAULT_ADDR)
 	KeyPassphrases      []string             `json:"keyPassphrases,omitempty"` // key files whose passphrase is in the OS keychain (no secrets here)
@@ -207,6 +208,7 @@ func Defaults(dataDir string) Settings {
 		UpdateChannel:      "stable",
 		SFTPCwdAuto:        true,
 		SFTPFollowTerminal: true,
+		SFTPFollowUser:     true,
 		UpdateRepo:         PublicRepo,
 		UpdateOnStart:      true,
 		DeviceTypes:        session.BuiltinDeviceTypes(),

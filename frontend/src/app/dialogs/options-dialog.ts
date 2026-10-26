@@ -47,6 +47,7 @@ type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'button
                 <div class="checks">
                   <label><input type="checkbox" name="scwd" [(ngModel)]="s.sftpCwdAuto" /> Working directory detection: turn on folder reporting in the shell (bash, zsh) when an SFTP tab is opened from it</label>
                   <label><input type="checkbox" name="sfol" [(ngModel)]="s.sftpFollowTerminal" /> SFTP tabs follow the terminal folder</label>
+                  <label><input type="checkbox" name="sfus" [(ngModel)]="s.sftpFollowUser" /> SFTP tabs browse as the terminal's user (root via sudo after "sudo su -")</label>
                 </div>
                 <label>Python interpreter</label>
                 <input name="py" [(ngModel)]="s.pythonPath" placeholder="(automatic: python3, or py -3 on Windows)" />

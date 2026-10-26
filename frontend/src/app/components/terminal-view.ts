@@ -120,7 +120,15 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       if (m) { try { setCwd(decodeURIComponent(m[1])); } catch { setCwd(m[1]); } }
       return true;
     });
-    term.parser.registerOscHandler(1337, d => d.startsWith('CurrentDir=') ? setCwd(d.slice(11)) : false);
+    term.parser.registerOscHandler(1337, d => {
+      if (d.startsWith('CurrentDir=')) return setCwd(d.slice(11));
+      if (d.startsWith('RemoteHost=')) {
+        const user = d.slice(11).split('@')[0].trim();
+        if (user && this.tabs.get(id)?.shellUser !== user) this.tabs.patch(id, { shellUser: user });
+        return true;
+      }
+      return false;
+    });
     term.parser.registerOscHandler(633, d => d.startsWith('P;Cwd=') ? setCwd(d.slice(6)) : false);
     const dec = new TextDecoder();
     const quietDec = new TextDecoder();

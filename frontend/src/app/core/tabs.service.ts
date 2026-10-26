@@ -31,6 +31,8 @@ export interface TabView {
   runAsUser?: string;
   /** Terminal tab: folder the shell reports (OSC 7 / OSC 1337 CurrentDir / OSC 633 Cwd). */
   cwd?: string;
+  /** Terminal tab: user the shell runs as (OSC 1337 RemoteHost=user@host), e.g. root after "sudo su -". */
+  shellUser?: string;
   /** SFTP tab: folder to open first (the terminal's folder), falls back to home. */
   startDir?: string;
 }
@@ -156,9 +158,11 @@ export class Tabs {
   private async autoCwd(sftp: TabView) {
     if (this.ui.settings()?.sftpCwdAuto === false) return;
     const sh = this.shellOf(sftp);
-    if (!sh || sh.cwd || sh.state !== 'connected') return;
+    if (!sh || sh.state !== 'connected') return;
+    // Also when a folder is already known: after "sudo su -" the new shell
+    // does not report yet, so the line is typed again (it is harmless twice).
     const name = await this.backend.sftpLoginShell(sftp.id).catch(() => '');
-    if (!/^(bash|zsh)$/.test(name) || this.get(sh.id)?.cwd) return;
+    if (!/^(bash|zsh)$/.test(name)) return;
     const term = this.handles.get(sh.id)?.term;
     if (!term || term.buffer.active.type !== 'normal') return;
     const b = term.buffer.active;
@@ -180,7 +184,7 @@ export class Tabs {
 
   /** Types the line that makes bash or zsh report its folder (OSC 7) after every prompt. */
   enableCwdReporting(termId: string, permanent: boolean, silent = false) {
-    const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD"; }; ` +
+    const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007\\033]1337;RemoteHost=%s@%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD" "\${USER:-\$(id -un)}" "\${HOSTNAME:-\$HOST}"; }; ` +
       `if [ -n "\$ZSH_VERSION" ]; then typeset -U precmd_functions; precmd_functions+=(_tw_cwd); ` +
       `else case ";\$PROMPT_COMMAND;" in *_tw_cwd*) ;; *) PROMPT_COMMAND="_tw_cwd\${PROMPT_COMMAND:+;\$PROMPT_COMMAND}";; esac; fi`;
     let cmd = ' ' + line + '; _tw_cwd\r'; // leading space: kept out of the shell history

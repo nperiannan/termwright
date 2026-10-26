@@ -118,6 +118,9 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - Removed upgrade code for pre-release installs (old data folder, keychain service, session key prefix, update repository)
 - Password vault format version 2
 
+## 0.11.5 (done)
+- Folder reporting also reports the shell user (OSC 1337 RemoteHost); SFTP tabs switch to root (sudo) or `sudo su - <user>` to match the terminal; folder reporting is re-sent on every SFTP open so a new `sudo su -` shell reports too; setting `sftpFollowUser`
+
 ## Next ideas
 - [ ] Shared team sessions (session folder in a Git repo, pull/push from the app)
 - [ ] Code signing + notarization (needs Apple Developer ID / Windows certificate)

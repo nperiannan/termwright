@@ -130,6 +130,9 @@ export class SftpView implements OnInit {
   /** The terminal tab with the same login whose folder this tab can follow. */
   readonly shell = computed(() => this.tabs.shellOf(this.tab()));
   readonly follow = signal(this.ui.settings()?.sftpFollowTerminal !== false);
+  /** Browse as the user the terminal runs as (root via sudo, others via "sudo su -"). */
+  private readonly followUser = this.ui.settings()?.sftpFollowUser !== false;
+  private triedUser = '';
   readonly cwdHintClosed = signal(this.loadFlag('termwright.cwdHintClosed'));
 
   constructor() {
@@ -137,7 +140,19 @@ export class SftpView implements OnInit {
     effect(() => {
       const dir = this.shell()?.cwd;
       if (!this.follow() || !dir) return;
-      untracked(() => { if (this.remote().dir !== dir) void this.go(this.remote(), dir); });
+      untracked(() => { if (this.remote().dir !== dir && !this.rootBusy()) void this.go(this.remote(), dir); });
+    });
+    // Follow the terminal's user: "sudo su -" in the terminal → this tab browses as root too.
+    effect(() => {
+      const u = this.shell()?.shellUser;
+      if (!this.followUser || !u) return;
+      untracked(() => {
+        const login = this.loginName();
+        const cur = this.tab().root ? this.tab().runAsUser : login;
+        if (u === cur || u === this.triedUser || this.rootBusy() || (!login && u !== 'root')) return;
+        this.triedUser = u;
+        void this.switchUser(u === login ? '' : u === 'root' ? 'sudo' : 'sudo su - ' + u);
+      });
     });
   }
 
@@ -186,6 +201,8 @@ export class SftpView implements OnInit {
   }
 
   hostOnly() { const h = this.tab().hopTarget || this.tab().session.hostname; return h.slice(h.lastIndexOf('@') + 1); }
+  /** Login user name of this tab ("" when the session has none). */
+  loginName() { const l = this.loginUser(); return l.includes('@') ? l.slice(0, l.lastIndexOf('@')) : ''; }
   loginUser() { return this.tab().hopTarget || (this.tab().session.username ? this.tab().session.username + '@' : '') + this.tab().session.hostname; }
 
   private recentKey() { return 'termwright.runAs:' + (this.tab().session.path || this.tab().session.hostname) + (this.tab().hopTarget ? '>' + this.tab().hopTarget : ''); }
@@ -222,7 +239,9 @@ export class SftpView implements OnInit {
       }
       this.tabs.patch(this.sid(), { root: !!user, runAsUser: user });
       if (user) this.via.set('sftp');
-      await this.go(this.remote(), home);
+      const cwd = this.follow() ? this.shell()?.cwd : '';
+      await this.go(this.remote(), cwd || home);
+      if (cwd && this.remote().error) await this.go(this.remote(), home);
     } catch (e) { this.ui.error(e); }
     this.rootBusy.set(false);
   }
