@@ -143,7 +143,7 @@ export const isRemoteDesktop = (p: string | undefined) => p === 'RDP' || p === '
 
 /** Configuration backup job: sessions or folders ("Folder/") backed up on demand or on a schedule. */
 export interface BackupJob { name: string; targets: string[]; schedule: '' | 'daily' | 'weekdays'; at: string; keep: number; saveAll: boolean; commands: string; }
-export interface BackupStatus { time: string; ok: boolean; error?: string; changed: boolean; file?: string; copies: number; }
+export interface BackupStatus { time: string; ok: boolean; error?: string; changed: boolean; file?: string; copies: number; log?: string; }
 export interface BackupFile { name: string; path: string; time: string; size: number; }
 export interface BackupResult { runId: string; path: string; ok: boolean; error?: string; changed: boolean; file?: string; done: number; total: number; }
 

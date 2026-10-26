@@ -17,6 +17,15 @@ import (
 // backups) when the device asks for something only a person can answer.
 var ErrNeedsInput = errors.New("needs an answer")
 
+// CaptureError is a failed capture with what the device sent until then.
+type CaptureError struct {
+	Err        error
+	Transcript string
+}
+
+func (e *CaptureError) Error() string { return e.Err.Error() }
+func (e *CaptureError) Unwrap() error { return e.Err }
+
 // DefaultPrompt matches the command prompt of most devices and shells.
 const DefaultPrompt = `[>#$%\]] ?$`
 
@@ -28,6 +37,15 @@ var reMore = regexp.MustCompile(`(?i)(--+ ?more ?--+|<--- more --->|press any ke
 // echo and the prompts. Nothing is asked: when the device needs a password
 // or a host key decision that is not saved, it fails with ErrNeedsInput.
 func (m *Manager) Capture(ctx context.Context, s session.Session, commands []string, prompt string) (string, error) {
+	var transcript func() string
+	out, err := m.capture(ctx, s, commands, prompt, &transcript)
+	if err != nil && transcript != nil {
+		return "", &CaptureError{Err: err, Transcript: transcript()}
+	}
+	return out, err
+}
+
+func (m *Manager) capture(ctx context.Context, s session.Session, commands []string, prompt string, transcript *func() string) (string, error) {
 	if prompt == "" {
 		prompt = DefaultPrompt
 	}
@@ -64,6 +82,7 @@ func (m *Manager) Capture(ctx context.Context, s session.Session, commands []str
 		defer mu.Unlock()
 		return out.String(), time.Since(last)
 	}
+	*transcript = func() string { s, _ := snapshot(); return s }
 	if err := m.Start(id, 400, 50); err != nil {
 		return "", err
 	}
@@ -112,7 +131,7 @@ func (m *Manager) Capture(ctx context.Context, s session.Session, commands []str
 				if lastLine == "" {
 					return "", fmt.Errorf("no prompt after %s (nothing received)", what)
 				}
-				return "", fmt.Errorf("no prompt after %s (last line: %q) - check the device type's prompt pattern", what, clip(lastLine, 80))
+				return "", fmt.Errorf("no prompt after %s (last line: %q does not match the prompt pattern %s)", what, clip(lastLine, 120), prompt)
 			}
 			time.Sleep(150 * time.Millisecond)
 		}
@@ -120,6 +139,27 @@ func (m *Manager) Capture(ctx context.Context, s session.Session, commands []str
 	promptLine, err := wait(0, 60*time.Second, "logging in")
 	if err != nil {
 		return "", err
+	}
+	// After-login steps one at a time, each only when its expected text is in
+	// the prompt: "enable" is skipped when the account starts at "#", and
+	// nothing is typed before the device is ready for it.
+	if dt, ok := m.deviceOf(t.sess); ok {
+		for _, a := range dt.After() {
+			if exp := Unescape(a.Expect); exp != "" && !strings.Contains(promptLine, exp) {
+				continue
+			}
+			before, _ := snapshot()
+			t.mu.Lock()
+			conn := t.conn
+			t.mu.Unlock()
+			if conn == nil {
+				return "", errors.New("the connection was closed")
+			}
+			m.runLogon(t, conn, []session.LogonAction{a})
+			if promptLine, err = wait(len(before), 45*time.Second, `after-login step "`+a.Send+`"`); err != nil {
+				return "", err
+			}
+		}
 	}
 	var res strings.Builder
 	for _, c := range commands {

@@ -23,6 +23,7 @@ type Status struct {
 	Changed bool   `json:"changed"` // differs from the previous copy
 	File    string `json:"file,omitempty"`
 	Copies  int    `json:"copies"`
+	Log     string `json:"log,omitempty"` // what the device sent before a failure
 }
 
 // File is one saved copy.
@@ -90,6 +91,22 @@ func (s *Store) Save(path, content string, onlyChanged bool, keep int, now time.
 		}
 	}
 	return file, changed, nil
+}
+
+// SaveLog keeps what a device sent before a backup failed, as last-error.txt
+// in the session's folder, and returns the file.
+func (s *Store) SaveLog(path, text string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	dir, err := s.folder(path)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	f := filepath.Join(dir, "last-error.txt")
+	return f, os.WriteFile(f, []byte(text), 0o600)
 }
 
 // Files lists a session's copies, newest first.

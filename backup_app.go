@@ -16,6 +16,7 @@ import (
 	"github.com/termwright/termwright/internal/backup"
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/session"
+	"github.com/termwright/termwright/internal/term"
 )
 
 // BackupResult is the outcome of one session in a backup run.
@@ -180,6 +181,12 @@ func (a *App) backupOne(ctx context.Context, st *backup.Store, p string, job con
 		s := backup.Status{Time: time.Now().Format(time.RFC3339), OK: err == nil, Changed: changed, File: file, Copies: len(files)}
 		if err != nil {
 			s.Error = err.Error()
+			var ce *term.CaptureError
+			if errors.As(err, &ce) && ce.Transcript != "" {
+				if f, lerr := st.SaveLog(p, "Termwright backup of "+p+" failed: "+err.Error()+"\n\nWhat the device sent:\n\n"+ce.Transcript); lerr == nil {
+					s.Log = f
+				}
+			}
 			if prev, ok := st.Status()[p]; ok && prev.File != "" {
 				s.File = prev.File // keep pointing at the last good copy
 			}

@@ -3,6 +3,7 @@ package term
 import (
 	"bufio"
 	"context"
+	"errors"
 	"net"
 	"strconv"
 	"strings"
@@ -17,7 +18,10 @@ type nopEmitter struct{}
 func (nopEmitter) Emit(string, any) {}
 
 // fakeSwitch answers like a VOSS switch over raw TCP.
-func fakeSwitch(t *testing.T, password string) string {
+func fakeSwitch(t *testing.T, password string) string { return fakeSwitchOpt(t, password, false, nil) }
+
+// fakeSwitchOpt: privileged accounts start at "#"; got receives every command.
+func fakeSwitchOpt(t *testing.T, password string, privileged bool, got chan<- string) string {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -42,13 +46,20 @@ func fakeSwitch(t *testing.T, password string) string {
 					_, _ = c.Write([]byte("\r\nLogin incorrect\r\n"))
 					return
 				}
-				_, _ = c.Write([]byte("\r\nsw1:1>"))
+				if privileged {
+					_, _ = c.Write([]byte("\r\nsw1:1#"))
+				} else {
+					_, _ = c.Write([]byte("\r\nsw1:1>"))
+				}
 				for {
 					cmd := line()
 					if cmd == "" && r.Buffered() == 0 {
 						if _, err := r.Peek(1); err != nil {
 							return
 						}
+					}
+					if got != nil && cmd != "" {
+						got <- cmd
 					}
 					_, _ = c.Write([]byte(cmd + "\r\n"))
 					switch cmd {
@@ -128,5 +139,51 @@ func TestCleanOutput(t *testing.T) {
 	got := cleanOutput("show version\r\nVersion 9.1\r\n\r\nsw1:1#", "show version", "sw1:1#")
 	if got != "Version 9.1\n" {
 		t.Fatalf("%q", got)
+	}
+}
+
+// An account that starts privileged ("#"): "enable" is not sent.
+func TestCapturePrivilegedSkipsEnable(t *testing.T) {
+	got := make(chan string, 20)
+	addr := fakeSwitchOpt(t, "secret", true, got)
+	host, port, _ := net.SplitHostPort(addr)
+	p, _ := strconv.Atoi(port)
+	m := captureManager()
+	m.DevicePassword = func(string) (string, bool) { return "secret", true }
+	s := session.Defaults()
+	s.Name, s.Protocol, s.Hostname, s.Port, s.DeviceType = "sw1", session.ProtoRaw, host, p, "VOSS"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := m.Capture(ctx, s, []string{"show running-config"}, `:\d+[>#] ?$`)
+	if err != nil || !strings.Contains(out, "vlan members add 10 1/1") {
+		t.Fatalf("%q %v", out, err)
+	}
+	close(got)
+	var cmds []string
+	for c := range got {
+		if c != "rwa" && c != "secret" {
+			cmds = append(cmds, c)
+		}
+	}
+	if strings.Join(cmds, "|") != "terminal more disable|show running-config" {
+		t.Fatalf("commands %v", cmds)
+	}
+}
+
+// A failed capture carries what the device sent.
+func TestCaptureErrorTranscript(t *testing.T) {
+	addr := fakeSwitch(t, "secret")
+	host, port, _ := net.SplitHostPort(addr)
+	p, _ := strconv.Atoi(port)
+	m := captureManager()
+	m.DevicePassword = func(string) (string, bool) { return "secret", true }
+	s := session.Defaults()
+	s.Name, s.Protocol, s.Hostname, s.Port, s.DeviceType = "sw1", session.ProtoRaw, host, p, "VOSS"
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	_, err := m.Capture(ctx, s, []string{"show running-config"}, `NEVER-MATCHES$`)
+	var ce *CaptureError
+	if err == nil || !errors.As(err, &ce) || !strings.Contains(ce.Transcript, "Login:") {
+		t.Fatalf("%v", err)
 	}
 }

@@ -85,7 +85,8 @@ const NOW = '\u0000now';
                       <td>
                         @if (busy().has(p)) { <span class="hint">backing up…</span> }
                         @else if (status()[p]; as st) {
-                          @if (!st.ok) { <span class="bad" [title]="st.error || ''">✕ {{ st.error }}</span> }
+                          @if (!st.ok) { <span class="bad">✕ {{ st.error }}</span>
+                            @if (st.log) { <a class="log" (click)="openLog(st.log)" title="What the device sent before the backup failed">device output</a> } }
                           @else if (st.changed) { <span class="chg">● changed</span> } @else { <span class="ok">✓ no change</span> }
                         }
                       </td>
@@ -137,7 +138,8 @@ const NOW = '\u0000now';
     table { width: 100%; } th { position: sticky; top: 35px; background: var(--panel); z-index: 1; }
     td { vertical-align: middle; } .r { text-align: right; } .nw { white-space: nowrap; }
     .acts { white-space: nowrap; text-align: right; button { height: 22px; font-size: 11.5px; padding: 0 7px; margin-left: 4px; } }
-    .bad { color: var(--danger); display: inline-block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+    .bad { color: var(--danger); display: inline-block; max-width: 380px; white-space: normal; word-break: break-word; font-size: 12px; }
+    .log { display: block; font-size: 11.5px; color: var(--accent); cursor: pointer; }
     .chg { color: #f59e0b; } .ok { color: var(--ok); }
     .dir { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .err { color: var(--danger); }
@@ -313,6 +315,8 @@ export class Backups implements OnDestroy {
     this.ui.compareWith.set(['path:' + files[1].path, 'path:' + files[0].path]);
     this.ui.open('compare');
   }
+
+  async openLog(f: string) { await this.backend.openPath(f).catch(e => this.ui.error(e)); }
 
   async open(p: string) {
     const f = this.status()[p]?.file;

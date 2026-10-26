@@ -4,6 +4,11 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.14.1 (2026-10-26)
+
+* **Configuration backups of VOSS switches**: the device type's after-login steps (`enable`, `terminal more disable`) now run one at a time, each only when the device shows the prompt it expects - `enable` is skipped for accounts that start at `#`, and nothing is typed before the switch is ready. Before, a backup could wait for a `#` that never came and fail with *no prompt after logging in*.
+* A failed backup keeps **what the device sent** (*device output* link next to the error, `last-error.txt` in the device's backup folder), and the error shows the last line and the prompt pattern it was checked against.
+
 ## 0.14.0 (2026-10-26)
 
 * **Configuration backups** (File → Configuration Backups…): back up the configuration of sessions and folders on demand or every day / on weekdays at a set time, four devices at a time in the background, with the session's login (device type, saved passwords, keys, jump hosts) and without asking anything. Copies are kept per device (newest N), saved only when the configuration changed (timestamps and similar lines ignored), and **What Changed** opens the last two in Compare Outputs. Device types have **Backup commands** (EXOS `show configuration`, VOSS / Cisco IOS `show running-config`). Right-click a session, folder or selection → *Back Up Configuration(s)*.

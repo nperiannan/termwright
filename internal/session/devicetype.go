@@ -49,11 +49,24 @@ func (d DeviceType) Backup() []string {
 
 // Steps returns the logon actions for a connection over protocol.
 func (d DeviceType) Steps(protocol string) []LogonAction {
-	res := make([]LogonAction, 0, len(d.LoginSteps)+len(d.AfterLogin))
-	all := d.AfterLogin
-	if protocol != ProtoSSH2 {
-		all = append(append([]LogonAction{}, d.LoginSteps...), d.AfterLogin...)
+	return append(d.LoginOnly(protocol), d.fill(d.AfterLogin)...)
+}
+
+// LoginOnly returns the login steps for protocol (none for SSH2), without
+// the after-login steps.
+func (d DeviceType) LoginOnly(protocol string) []LogonAction {
+	if protocol == ProtoSSH2 {
+		return []LogonAction{}
 	}
+	return d.fill(d.LoginSteps)
+}
+
+// After returns the after-login steps.
+func (d DeviceType) After() []LogonAction { return d.fill(d.AfterLogin) }
+
+// fill sets the device type's credential on steps that send \s or \w.
+func (d DeviceType) fill(all []LogonAction) []LogonAction {
+	res := make([]LogonAction, 0, len(all))
 	for _, a := range all {
 		if a.Credential == "" && d.Credential != "" && (strings.Contains(a.Send, `\s`) || strings.Contains(a.Send, `\w`)) {
 			a.Credential = d.Credential

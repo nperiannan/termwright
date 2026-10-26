@@ -354,7 +354,12 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 	actions := s.LogonActions
 	initialCR := s.InitialCR
 	if dt, ok := m.deviceOf(s); ok {
-		actions = append(dt.Steps(s.Protocol), actions...)
+		if _, bg := m.quiet.Load(t.id); bg {
+			// background capture: it runs the after-login steps itself, one at a prompt
+			actions = append(dt.LoginOnly(s.Protocol), actions...)
+		} else {
+			actions = append(dt.Steps(s.Protocol), actions...)
+		}
 		initialCR = initialCR || dt.InitialCR
 	}
 	if len(actions) > 0 && (s.AutomateLogon || s.DeviceType != "") {

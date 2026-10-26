@@ -13,6 +13,10 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.14.1
+
+* Configuration backups of VOSS switches log in reliably; a failed backup shows what the device sent.
+
 ## What's new in 0.14.0
 
 * **Configuration backups**: scheduled or on demand, saved only when changed, *What Changed* compares the last two copies.
@@ -21,13 +25,6 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 ## What's new in 0.13.1
 
 * The session filter lists the exact match first: typing `10.127.34.2` shows that device, not every address starting with it.
-
-## What's new in 0.13.0
-
-* **Edit many sessions at once**, **Favourites and Recent**, a **hover card** per session and optional **reachability dots** in the Session Manager.
-* **Environments** (Production, Staging, Lab, Development): coloured tags and tabs; production asks before multi-line pastes and sends to several tabs.
-* **Search in Global Options**, **errors that offer the fix** (Reconnect, Edit Session, Device Type Login …) and **device-type-aware commands** in the Command Library and Command Window.
-* Discover Devices: **connect without saving** (double-click) and **IoT / embedded boards** (ESP32, Arduino, STM32, Shelly, RTOS) via mDNS services, CoAP, ESPHome, MQTT and Modbus.
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 
