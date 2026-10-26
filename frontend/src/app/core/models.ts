@@ -114,7 +114,7 @@ export interface TabInfo {
 export interface PromptField { label: string; secret: boolean; value: string; }
 export interface Prompt {
   id: string; tabId: string; kind: 'credentials' | 'hostkey' | 'confirm'; title: string; message: string;
-  fields: PromptField[] | null; choices: string[] | null; allowRemember: boolean; danger: boolean;
+  fields: PromptField[] | null; choices: string[] | null; allowRemember: boolean; rememberLabel?: string; danger: boolean;
 }
 export interface PromptReply { ok: boolean; values: string[]; choice: string; remember: boolean; }
 

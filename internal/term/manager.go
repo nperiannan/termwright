@@ -52,6 +52,7 @@ type Prompt struct {
 	Fields        []PromptField `json:"fields"`
 	Choices       []string      `json:"choices"`
 	AllowRemember bool          `json:"allowRemember"`
+	RememberLabel string        `json:"rememberLabel,omitempty"` // text of the remember box (default "Save password (OS keychain)")
 	Danger        bool          `json:"danger"`
 }
 
@@ -155,6 +156,9 @@ type Manager struct {
 	SavedPassword func(sessionPath string) (string, bool)
 	// DevicePassword returns the password saved for a device type.
 	DevicePassword func(name string) (string, bool)
+	// OnDevicePasswordTyped saves a password typed at a logon prompt for a
+	// device type ("" = the device has no password).
+	OnDevicePasswordTyped func(name, password string)
 	// DownloadDir returns where received files (ZMODEM) are saved.
 	DownloadDir func() string
 	// Credential returns the user name and password of a named credential.
@@ -436,12 +440,12 @@ func (m *Manager) runLogon(t *Tab, conn Conn, actions []session.LogonAction) {
 			}
 		}
 		if user == "" && strings.Contains(a.Send, `\s`) {
-			user = m.askLogon(t, "Username", false)
+			user = m.askLogon(t, "Username", false, "")
 			sess.Username = user
 		}
 		if !havePass && strings.Contains(a.Send, `\w`) {
 			if t.logonPass == "" {
-				t.logonPass = m.askLogon(t, "Password", true)
+				t.logonPass = m.askLogon(t, "Password", true, user)
 			}
 			pass = t.logonPass
 		}
@@ -755,15 +759,38 @@ func (m *Manager) deviceOf(s session.Session) (session.DeviceType, bool) {
 	return m.DeviceType(s.DeviceType)
 }
 
-// askLogon asks for a username or password that a logon step needs.
-func (m *Manager) askLogon(t *Tab, label string, secret bool) string {
+// askLogon asks for a username or password that a logon step needs. A
+// password can be remembered: for the device type when the session uses the
+// device type's login (an empty answer then means "no password"), otherwise
+// for the session.
+func (m *Manager) askLogon(t *Tab, label string, secret bool, user string) string {
 	t.mu.Lock()
 	s := t.sess
 	t.mu.Unlock()
-	r, err := m.prompts.Ask(context.Background(), Prompt{TabID: t.id, Kind: "credentials", Title: "Login - " + title(s),
-		Message: label + " for " + s.Hostname + s.ComPort, Fields: []PromptField{{Label: label, Secret: secret}}})
+	target := s.Hostname + s.ComPort
+	if user != "" {
+		target = user + "@" + target
+	}
+	p := Prompt{TabID: t.id, Kind: "credentials", Title: "Login - " + title(s),
+		Message: label + " for " + target, Fields: []PromptField{{Label: label, Secret: secret}}}
+	forDevice := secret && s.DeviceType != "" && !s.OwnLogin && m.OnDevicePasswordTyped != nil
+	switch {
+	case forDevice:
+		p.AllowRemember = true
+		p.RememberLabel = "Remember for device type " + s.DeviceType + " (leave the password empty if the device has none)"
+	case secret && s.Path != "" && m.OnPasswordUsed != nil:
+		p.AllowRemember = true
+	}
+	r, err := m.prompts.Ask(context.Background(), p)
 	if err != nil {
 		return ""
+	}
+	if r.Remember {
+		if forDevice {
+			m.OnDevicePasswordTyped(s.DeviceType, r.Values[0])
+		} else if r.Values[0] != "" {
+			m.OnPasswordUsed(s.Path, r.Values[0])
+		}
 	}
 	return r.Values[0]
 }

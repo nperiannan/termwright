@@ -25,6 +25,8 @@ type WebInfo struct {
 var (
 	reTitle = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
 	reRealm = regexp.MustCompile(`(?i)realm="([^"]*)"`)
+	// unrendered template placeholders in a title: {{x}}, ${x}, <%= x %>, [[x]]
+	reTemplate = regexp.MustCompile(`\{\{.*\}\}|\$\{.*\}|<%.*%>|\[\[.*\]\]`)
 	// product and vendor names worth noting when they appear in a start page
 	reHints = regexp.MustCompile(`(?i)\b(ExtremeXOS|Switch Engine|Fabric Engine|VOSS|Extreme Networks|ExtremeCloud|ExtremeWireless|Enterasys|Avaya|` +
 		`Cisco|Meraki|Juniper|Arista|Aruba|HPE|ProCurve|Ruckus|Ubiquiti|UniFi|MikroTik|RouterOS|Fortinet|FortiGate|pfSense|OPNsense|SonicWall|Palo Alto|` +
@@ -88,6 +90,9 @@ func webInfo(ctx context.Context, a netip.Addr, port int, useTLS bool, timeout t
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 96<<10))
 	if m := reTitle.FindSubmatch(body); m != nil {
 		w.Title = strings.Join(strings.Fields(printable(htmlText(string(m[1])))), " ")
+		if reTemplate.MatchString(w.Title) {
+			w.Title = "" // filled in by the page's script ("{{pageTitle}}"): says nothing
+		}
 		if len(w.Title) > 100 {
 			w.Title = w.Title[:100]
 		}

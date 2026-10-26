@@ -40,7 +40,7 @@ import { Ui } from '../core/ui.service';
             <label>Login</label>
             <div class="checks">
               <label><input type="checkbox" name="inherit" [(ngModel)]="inherit" />
-                Use the device type's username and password{{ devUser() ? ' (' + devUser() + ')' : '' }}</label>
+                Use the device type's username and password{{ loginNote(devType()?.name, devUser()) }}</label>
             </div>
           }
           @if (protocol !== 'Raw' && protocol !== 'Local Shell' && (!device || !inherit)) {
@@ -90,6 +90,22 @@ export class QuickConnect {
   noPw = false;
 
   private devType() { return (this.ui.settings()?.deviceTypes ?? []).find(x => x.name === this.device); }
+
+  /** Saved-password state of each device type: "set", "empty", "" (asked), looked up once per dialog. */
+  readonly pwStates = signal<Record<string, string>>({});
+  /** " (admin, no password)" etc. for the "Use the device type's username and password" box. */
+  loginNote(name: string | undefined, user: string): string {
+    if (!name) return '';
+    const st = this.pwStates()[name];
+    if (st === undefined) {
+      this.pwStates.update(m => ({ ...m, [name]: '?' }));
+      this.backend.deviceTypePasswordState(name).then(v => this.pwStates.update(m => ({ ...m, [name]: v }))).catch(() => {});
+    }
+    const pw = st === 'set' ? 'password saved' : st === 'empty' ? 'no password' : st === '' ? 'password asked when connecting' : '';
+    const parts = [user, pw].filter(Boolean);
+    return parts.length ? ' (' + parts.join(', ') + ')' : '';
+  }
+
   devUser() { return this.devType()?.username ?? ''; }
 
   onDevice() {

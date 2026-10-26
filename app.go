@@ -32,7 +32,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.12.4-dev"
+var Version = "0.12.5-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -119,6 +119,17 @@ func (a *App) init() error {
 			return "", false
 		}
 		return a.secret("devicetype:" + strings.ToLower(name))
+	}
+	a.terms.OnDevicePasswordTyped = func(name, pw string) {
+		if err := a.SetDeviceTypePassword(name, pw, pw == ""); err != nil {
+			emitter{a}.Emit("toast", map[string]string{"level": "error", "message": "Could not save the password: " + err.Error()})
+			return
+		}
+		msg := "Saved for device type " + name
+		if pw == "" {
+			msg = "Device type " + name + ": no password - you will not be asked again"
+		}
+		emitter{a}.Emit("toast", map[string]string{"level": "success", "message": msg})
 	}
 	a.terms.ScreenSnapshot = a.screenSnapshot
 	a.terms.OnKeyPassphraseUsed = func(path, pw string) {

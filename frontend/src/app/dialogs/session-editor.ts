@@ -75,7 +75,7 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
                   <label>Login</label>
                   <div class="checks">
                     <label><input type="checkbox" name="inherit" [ngModel]="!s.ownLogin" (ngModelChange)="s.ownLogin = !$event" />
-                      Use the device type's username and password{{ deviceUser() ? ' (' + deviceUser() + ')' : '' }}</label>
+                      Use the device type's username and password{{ loginNote(s.deviceType, deviceUser()) }}</label>
                   </div>
                 }
                 @if (!s.deviceType || s.ownLogin) {
@@ -424,6 +424,22 @@ export class SessionEditor implements OnInit {
     }
     return 'the target';
   }
+
+  /** Saved-password state of each device type: "set", "empty", "" (asked), looked up once per dialog. */
+  readonly pwStates = signal<Record<string, string>>({});
+  /** " (admin, no password)" etc. for the "Use the device type's username and password" box. */
+  loginNote(name: string | undefined, user: string): string {
+    if (!name) return '';
+    const st = this.pwStates()[name];
+    if (st === undefined) {
+      this.pwStates.update(m => ({ ...m, [name]: '?' }));
+      this.backend.deviceTypePasswordState(name).then(v => this.pwStates.update(m => ({ ...m, [name]: v }))).catch(() => {});
+    }
+    const pw = st === 'set' ? 'password saved' : st === 'empty' ? 'no password' : st === '' ? 'password asked when connecting' : '';
+    const parts = [user, pw].filter(Boolean);
+    return parts.length ? ' (' + parts.join(', ') + ')' : '';
+  }
+
   deviceUser() { return (this.ui.settings()?.deviceTypes ?? []).find(d => d.name === this.s?.deviceType)?.username ?? ''; }
   pw = '';
   noPw = false;

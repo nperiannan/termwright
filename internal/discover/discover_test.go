@@ -340,3 +340,14 @@ func TestMDNSName(t *testing.T) {
 		t.Fatalf("mdns name %q", name)
 	}
 }
+
+func TestTemplateTitleIgnored(t *testing.T) {
+	for _, s := range []string{"{{pageTitle}}", "${title}", "<%= title %>", "[[title]]"} {
+		if !reTemplate.MatchString(s) {
+			t.Errorf("%q not recognised", s)
+		}
+	}
+	if reTemplate.MatchString("ExtremeXOS ScreenPlay") {
+		t.Error("real title ignored")
+	}
+}

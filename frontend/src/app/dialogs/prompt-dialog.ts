@@ -24,7 +24,7 @@ import { Tabs } from '../core/tabs.service';
             </label>
           }
           @if (p.allowRemember) {
-            <label class="inline-check"><input type="checkbox" name="rem" [(ngModel)]="remember" /> Save {{ p.title === 'Key Passphrase' ? 'passphrase' : 'password' }} (OS keychain)</label>
+            <label class="inline-check"><input type="checkbox" name="rem" [(ngModel)]="remember" /> {{ p.rememberLabel || 'Save ' + (p.title === 'Key Passphrase' ? 'passphrase' : 'password') + ' (OS keychain)' }}</label>
           }
         </div>
         <div class="modal-foot">

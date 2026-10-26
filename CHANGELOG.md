@@ -4,6 +4,12 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.12.5 (2026-10-26)
+
+* **Device type passwords**: the password prompt during a Telnet/Serial login offers *Remember for device type …*; an empty password with the box ticked records that the device has none, so it logs in by itself from then on. The prompt names the user (`Password for admin@10.0.0.5`).
+* Session Options and Quick Connect show the device type's password state next to *Use the device type's username and password*: *no password*, *password saved* or *password asked when connecting*.
+* Discover Devices ignores web page titles that are unfilled templates (e.g. `{{pageTitle}}`) instead of using them as the system description.
+
 ## 0.12.4 (2026-10-26)
 
 * Neutral wording: the start page says **Import Sessions** (sessions can come from several terminal programs and inventories); README, About and Options no longer single out one product.

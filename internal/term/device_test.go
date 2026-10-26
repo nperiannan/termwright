@@ -94,3 +94,33 @@ func TestDeviceTypeLoginPassword(t *testing.T) {
 	default:
 	}
 }
+
+// A password typed at a logon prompt can be remembered for the device type;
+// an empty one means the device has no password.
+func TestAskLogonRememberDeviceType(t *testing.T) {
+	em := &recEmitter{}
+	m := NewManager(em, t.TempDir(), func() string { return t.TempDir() })
+	defer m.CloseAll()
+	var savedName, savedPw string
+	calls := 0
+	m.OnDevicePasswordTyped = func(name, pw string) { savedName, savedPw, calls = name, pw, calls+1 }
+	var label string
+	em.onPrompt = func(p Prompt) {
+		label = p.RememberLabel
+		m.Prompts().Answer(p.ID, PromptReply{OK: true, Values: []string{""}, Remember: true})
+	}
+	s := session.Defaults()
+	s.Hostname, s.DeviceType = "192.0.2.10", "EXOS"
+	if pw := m.askLogon(&Tab{id: "x", sess: s}, "Password", true, "admin"); pw != "" {
+		t.Fatalf("password %q", pw)
+	}
+	if calls != 1 || savedName != "EXOS" || savedPw != "" || !strings.Contains(label, "EXOS") {
+		t.Fatalf("saved %q %q (%d), label %q", savedName, savedPw, calls, label)
+	}
+	// own login: not saved for the device type
+	s.OwnLogin = true
+	m.askLogon(&Tab{id: "y", sess: s}, "Password", true, "admin")
+	if calls != 1 {
+		t.Fatal("own login saved for the device type")
+	}
+}

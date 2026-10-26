@@ -13,6 +13,11 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.12.5
+
+* **Remember for device type** on the logon password prompt - leave it empty for devices without a password (EXOS `admin`), and they log in by themselves from then on.
+* The session's Login box shows whether the device type has a saved password, no password, or asks.
+
 ## What's new in 0.12.4
 
 * **Mobile phones and tablets** recognised in Discover Devices (mDNS/DNS names, private Wi-Fi MAC addresses).
@@ -23,12 +28,6 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 * **Text is kept exactly as typed**: macOS no longer capitalises the first letter of user names (`rwa` → `Rwa`), corrects spelling or replaces quotes in any field.
 * **Release notes** for every release and nightly build ([changelog](CHANGELOG.md)).
-
-## What's new in 0.12.1
-
-* **Much better device identification** in Discover Devices: web page title, server and certificate; Telnet banner and login prompt (with proper option negotiation); SIP over UDP for phones; MAC address and maker (IEEE vendor list) from the ARP table; this computer listed; product names win over generic words (a TerraMaster NAS is a NAS, not Windows; EXOS with OpenSSH is a switch, Mocana SSH is network gear).
-* **ⓘ evidence** per device: everything the result is based on.
-* **NAS / storage** kind; device type suggested from the Telnet login prompt; **Show / Hide** for the SNMP community; a note when no device answers SNMP.
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 
