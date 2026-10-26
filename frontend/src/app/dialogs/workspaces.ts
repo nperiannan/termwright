@@ -118,6 +118,13 @@ export class Workspaces {
             <option value="">(not set)</option>
             @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
           </select>
+          <label>Smart card</label>
+          <select name="card" [(ngModel)]="d.smartCard">
+            <option value="">(not set)</option>
+            <option value="any">Any key on the inserted cards</option>
+          </select>
+          <label>Recording</label>
+          <label class="inline"><input type="checkbox" name="rec" [(ngModel)]="d.record" /> Record every connection of the sessions in this folder</label>
         </div>
       </div>
       <div class="modal-foot">

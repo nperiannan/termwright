@@ -25,6 +25,7 @@ import (
 	"github.com/termwright/termwright/internal/secretref"
 	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/session"
+	"github.com/termwright/termwright/internal/smartcard"
 	"github.com/termwright/termwright/internal/sshkey"
 	"github.com/termwright/termwright/internal/term"
 	"github.com/termwright/termwright/internal/update"
@@ -32,7 +33,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.16.0-dev"
+var Version = "0.17.0-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -42,6 +43,7 @@ type App struct {
 	cfg      *config.Manager
 	store    *session.Store
 	terms    *term.Manager
+	cards    *smartcard.Manager
 	quitting bool
 	initErr  error
 	locked   bool // saved passwords unavailable until the master password is entered
@@ -66,6 +68,7 @@ func (a *App) startup(ctx context.Context) {
 		a.initErr = err
 	}
 	go a.backupScheduler(ctx)
+	go a.pruneRecordings(ctx)
 }
 
 func (a *App) init() error {
@@ -86,6 +89,12 @@ func (a *App) init() error {
 	a.terms = term.NewManager(emitter{a}, dir, func() string { return a.cfg.Get().LogDir })
 	a.terms.LoadSession = func(p string) (session.Session, error) { return a.store.Get(p) }
 	a.terms.DownloadDir = func() string { return a.cfg.Get().DownloadDir }
+	a.terms.RecordDir = a.RecordingDir
+	a.cards = smartcard.NewManager()
+	a.cards.EachTime = func() bool { return a.cfg.Get().SmartCardPinEachTime }
+	a.terms.SmartCards = a.cards
+	a.terms.SmartCardLibraries = a.smartCardLibraries
+	a.terms.RecordAll = func(session.Session) bool { return a.cfg.Get().RecordSessions }
 	a.terms.Clipboard = func() string {
 		t, _ := wruntime.ClipboardGetText(a.ctx)
 		return t
@@ -1098,6 +1107,10 @@ func (a *App) withFolderDefaults(s session.Session) session.Session {
 			set(&s.KeywordSet, d.KeywordSet)
 			set(&s.ColorScheme, d.ColorScheme)
 			set(&s.Environment, d.Environment)
+			set(&s.SmartCard, d.SmartCard)
+			if d.Record {
+				s.RecordSession = true
+			}
 		}
 		if f == "" {
 			break

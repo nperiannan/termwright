@@ -8,7 +8,7 @@ export interface Session {
   emulation: string; termType: string; description: string[];
   rows: number; cols: number; scrollback: number; keepalive: boolean; keepaliveSec: number;
   comPort: string; baudRate: number; dataBits: number; stopBits: number; parity: number;
-  logFile: string; logOnConnect: boolean; logAppend: boolean; logEachLine: string; logRaw: boolean;
+  logFile: string; logOnConnect: boolean; logAppend: boolean; logEachLine: string; logRaw: boolean; recordSession?: boolean; smartCard?: string;
   savePassword: boolean; localCommand: string; localDir: string; colorScheme: string;
   logonActions: LogonAction[];
   triggers: Trigger[]; portForwards: PortForward[];
@@ -31,7 +31,7 @@ export interface Snippet { name: string; folder: string; text: string; descripti
 export interface Workspace { name: string; layout: string; tabs: { session: string; kind: string }[]; }
 export interface FolderDefault {
   folder: string; username: string; deviceType: string; jumpSession: string; identityFile: string; keywordSet: string; colorScheme: string;
-  environment?: string;
+  environment?: string; record?: boolean; smartCard?: string;
 }
 /** Variables used in a snippet, in order: [{name, def}]. */
 export function snippetVars(text: string): { name: string; def: string }[] {
@@ -85,6 +85,8 @@ export interface Settings {
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;
   backupDir?: string; backupJobs?: BackupJob[] | null;
   checklists?: Checklist[] | null; checklistDir?: string; recordHistory?: boolean | null;
+  recordSessions?: boolean; recordDir?: string; recordKeepDays?: number;
+  smartCardLibraries?: string[] | null; smartCardPinEachTime?: boolean;
   collections?: Collection[] | null; collectDir?: string;
   keywordSets: KeywordSet[] | null; defaultKeywordSet: string; showConnectBar: boolean; keyMap: KeyBinding[] | null;
   customSchemes: { name: string; colors: Record<string, string> }[] | null; accentColor: string;
@@ -210,7 +212,7 @@ export const ACTIONS: Record<string, string> = {
   'clear-screen': 'Clear Screen', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback',
   'toggle-session-manager': 'Toggle Session Manager', 'toggle-session-manager-side': 'Move Session Manager Left / Right', 'toggle-command-window': 'Toggle Command Window',
   'toggle-button-bar': 'Toggle Button Bar', 'sftp-tab': 'Open SFTP Tab', 'run-script': 'Run Script...',
-  'record-toggle': 'Start/Stop Recording', 'cancel-scripts': 'Cancel Scripts', lock: 'Lock Session',
+  'record-toggle': 'Start/Stop Script Recording', 'cast-toggle': 'Start/Stop Session Recording', 'cast-marker': 'Add Marker to Recording', recordings: 'Recordings...', 'cancel-scripts': 'Cancel Scripts', lock: 'Lock Session',
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',
   'xmodem': 'Send XMODEM...', 'xmodem-receive': 'Receive XMODEM...', 'scp-upload': 'SCP Upload File...', 'scp-upload-folder': 'SCP Upload Folder...', 'scp-download': 'SCP Download...',
@@ -243,3 +245,16 @@ export function formatBytes(n: number): string {
   do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
   return n.toFixed(n < 10 ? 1 : 0) + ' ' + u[i];
 }
+
+/** A session recording (asciinema v2 .cast). */
+export interface RecordingInfo { path: string; session: string; title: string; host: string; started: string; duration: number; markers: number; size: number; }
+export interface RecordingData {
+  header: { version: number; width: number; height: number; timestamp: number; title?: string; termwright_session?: string; termwright_host?: string; termwright_user?: string };
+  /** [seconds, code, data]: "o" output, "r" resize ("COLSxROWS"), "m" marker, "i" input */
+  events: [number, string, string][];
+}
+
+/** A key on a smart card (PKCS#11). */
+export interface SmartCardKey { library: string; token: string; serial: string; slot: number; id: string; label: string; type: string; bits: number; fingerprint: string; authorizedKey: string; subject?: string; }
+export interface SmartCardReport { library: string; error?: string; tokens: string[]; keys: SmartCardKey[]; }
+export interface SmartCardInfo { available: boolean; found: string[] | null; reports: SmartCardReport[] | null; loggedIn: number; }

@@ -16,6 +16,7 @@ Third-party components (licenses in their respective packages):
   xterm.js and addons (MIT)              https://xtermjs.org
   noVNC (MPL-2.0), unmodified, in the VNC viewer   https://github.com/novnc/noVNC
   gorilla/websocket (BSD-2-Clause)       https://github.com/gorilla/websocket
+  miekg/pkcs11 (BSD-3-Clause)            https://github.com/miekg/pkcs11
   danieljoos/wincred (MIT)               https://github.com/danieljoos/wincred
 
 Terminal color schemes are based on the following openly licensed palettes:

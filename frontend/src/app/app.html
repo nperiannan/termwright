@@ -60,7 +60,8 @@
           <span class="label">{{ t.title }}</span>
           @if (tabEnv(t)?.id === 'production') { <span class="logbadge" [style.background]="tabEnv(t)!.color" title="Production">PROD</span> }
           @if (t.logFile) { <span class="logbadge" title="Logging to {{ t.logFile }}">LOG</span> }
-          @if (t.recording) { <span class="logbadge" title="Recording a script">REC</span> }
+          @if (t.castFile) { <span class="logbadge rec" title="Recording this session to {{ t.castFile }}">● REC</span> }
+          @if (t.recording) { <span class="logbadge" title="Recording a script">SCRIPT</span> }
           @if (tabs.selected().has(t.id)) { <span class="logbadge sel" title="In the send group (Command Window → Selected tabs)">SEL</span> }
           @if (t.alert) { <span class="alertdot" title="An alert matched in this tab"></span> }
           <button class="x" title="Close" (click)="tabs.close(t.id); $event.stopPropagation()">✕</button>
@@ -81,6 +82,8 @@
               <app-sftp-view [tab]="t" />
             } @else if (t.kind === 'rdp' || t.kind === 'vnc') {
               <app-remote-view [tab]="t" />
+            } @else if (t.kind === 'player') {
+              <app-player-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" />
             } @else {
               <app-terminal-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" />
             }
@@ -172,6 +175,7 @@
   @case ('checklists') { <app-checklists /> }
   @case ('collect') { <app-collect /> }
   @case ('consolePorts') { <app-console-ports /> }
+  @case ('recordings') { <app-recordings /> }
   @case ('history') { <app-history /> }
   @case ('export') { <app-export-dialog /> }
   @case ('about') { <app-about /> }

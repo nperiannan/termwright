@@ -49,6 +49,7 @@ const (
 	kLogEachLine  = "Custom Log Message Each Line"
 	kLogTimestamp = "Log Timestamp Each Line"
 	kLogRaw       = "Termwright Raw Log"
+	kRecord       = "Termwright Record Session"
 	kSavePassword = "Termwright Save Password"
 	kLocalCommand = "Termwright Local Command"
 	kLocalDir     = "Initial Local Directory V2"
@@ -98,6 +99,7 @@ const (
 	kKrbPrinc    = "Termwright Kerberos Principal"
 	kKrbSPN      = "Termwright Kerberos SPN"
 	kCertFile    = "Termwright Certificate File"
+	kSmartCard   = "Termwright Smart Card"
 	kSerialNoDTR = "Termwright Serial No DTR"
 	kSerialNoRTS = "Termwright Serial No RTS"
 	kSerialFlow  = "Termwright Serial Flow"
@@ -160,6 +162,7 @@ type Session struct {
 	LogAppend        bool          `json:"logAppend"`
 	LogEachLine      string        `json:"logEachLine"`
 	LogRaw           bool          `json:"logRaw"`
+	RecordSession    bool          `json:"recordSession"` // record every connection (asciinema .cast)
 	SavePassword     bool          `json:"savePassword"`
 	LocalCommand     string        `json:"localCommand"`
 	LocalDir         string        `json:"localDir"`
@@ -208,6 +211,7 @@ type Session struct {
 	KerberosPrincipal string `json:"kerberosPrincipal"` // GSSAPI: user@REALM when no kinit ticket ("" = login user)
 	KerberosSPN       string `json:"kerberosSpn"`       // GSSAPI target, "" = host@<hostname>; %H = hostname
 	CertificateFile   string `json:"certificateFile"`   // OpenSSH user certificate, "" = <identity>-cert.pub
+	SmartCard         string `json:"smartCard"`         // "" = no, "any" = any key on a smart card, else the key's SHA256 fingerprint
 	SFTPToTarget      bool   `json:"sftpToTarget"`      // remote command "ssh … host": SFTP opens on that host, through this connection
 	SerialDTR         bool   `json:"serialDtr"`         // assert DTR when opening the port
 	SerialRTS         bool   `json:"serialRts"`         // assert RTS when opening the port
@@ -275,6 +279,7 @@ func FromFile(path string, f *securecrt.File) Session {
 		}
 	}
 	s.LogRaw = f.Bool(kLogRaw, false)
+	s.RecordSession = f.Bool(kRecord, false)
 	s.SavePassword = f.Bool(kSavePassword, false)
 	s.LocalCommand = f.Str(kLocalCommand, "")
 	s.LocalDir = f.Str(kLocalDir, "")
@@ -318,6 +323,7 @@ func FromFile(path string, f *securecrt.File) Session {
 	s.KerberosPrincipal = f.Str(kKrbPrinc, "")
 	s.KerberosSPN = f.Str(kKrbSPN, "")
 	s.CertificateFile = f.Str(kCertFile, "")
+	s.SmartCard = f.Str(kSmartCard, "")
 	for _, l := range f.List(kTriggers) {
 		parts := strings.SplitN(l, "\t", 3)
 		if len(parts) == 3 {
@@ -519,6 +525,7 @@ func (s Session) Apply(f *securecrt.File) {
 		f.SetBool(kLogTimestamp, s.LogEachLine != "")
 	}
 	setOptBool(f, kLogRaw, s.LogRaw)
+	setOptBool(f, kRecord, s.RecordSession)
 	setOptBool(f, kSavePassword, s.SavePassword)
 	setOptStr(f, kLocalCommand, s.LocalCommand)
 	if s.LocalDir != "" || f.Get(kLocalDir) != nil {
@@ -628,6 +635,7 @@ func (s Session) Apply(f *securecrt.File) {
 	setOptStr(f, kKrbPrinc, s.KerberosPrincipal)
 	setOptStr(f, kKrbSPN, s.KerberosSPN)
 	setOptStr(f, kCertFile, s.CertificateFile)
+	setOptStr(f, kSmartCard, s.SmartCard)
 	setOptBool(f, kSerialNoDTR, !s.SerialDTR)
 	setOptBool(f, kSerialNoRTS, !s.SerialRTS)
 	setOptStr(f, kSerialFlow, s.SerialFlow)

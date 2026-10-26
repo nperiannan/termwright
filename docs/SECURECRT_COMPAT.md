@@ -45,7 +45,7 @@ back unchanged. Files keep their UTF-8 BOM and CRLF style.
 
 Termwright-only keys use a `Termwright ` prefix (`Termwright Logon Actions`, `Termwright Triggers`, `Termwright Port Forwards`,
 `Termwright Proxy Type/Host/Port/User`, `Termwright Font`, `Termwright Font Size`, `Termwright Backspace`, `Termwright Save Password`,
-`Termwright Raw Log`, `Termwright Local Command`, `Termwright Terminal Type`, `Termwright Console Server/Port/Access/User/Base Port/Protocol`). The original application ignores them.
+`Termwright Raw Log`, `Termwright Local Command`, `Termwright Terminal Type`, `Termwright Console Server/Port/Access/User/Base Port/Protocol`, `Termwright Record Session`, `Termwright Smart Card`). The original application ignores them.
 
 Keys marked *verified* were checked against real session files created by users.
 

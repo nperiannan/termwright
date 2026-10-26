@@ -141,6 +141,24 @@ For hosts joined to Active Directory / MIT Kerberos (OpenSSH `GSSAPIAuthenticati
 - **OpenSSH certificates** (keys signed by your organisation's SSH CA): put `<key>-cert.pub` next to the identity file - Termwright offers the certificate first, then the plain key. A certificate stored elsewhere goes in **Certificate** (SSH2 Authentication page). Certificates loaded in your ssh-agent are used too.
 - **FIDO2 / U2F hardware keys** (`sk-ssh-ed25519@openssh.com`, `sk-ecdsa-sha2-nistp256@openssh.com`, e.g. YubiKey): the private key never leaves the device, so Termwright signs through **ssh-agent**. Set the `id_ed25519_sk` file as identity file and load it once with `ssh-add ~/.ssh/id_ed25519_sk` (touch the key / enter its PIN). If it is not loaded, Termwright tells you and offers **Retry** after you ran `ssh-add`. Each login may ask you to touch the key. On macOS use an OpenSSH with security-key support (e.g. Homebrew `openssh`) for `ssh-add`.
 
+### Smart cards: PIV, CAC and PKCS#11 keys
+
+SSH keys on smart cards and tokens - PIV and CAC cards, YubiKey (PIV), SafeNet eToken, HSMs - are used through the card's **PKCS#11 library**. The private key never leaves the card; the card signs after you enter its PIN.
+
+1. Install the card's middleware. For most cards that is **OpenSC** (free; macOS, Windows, Linux); YubiKey also offers `libykcs11`. Termwright finds both in their usual places.
+2. **Global Options → Smart Cards**: *Test / Read Cards* lists the cards and their keys. Add other libraries with *Add Library…* (e.g. your organisation's middleware). **Copy Public Key** gives the line for the server's `~/.ssh/authorized_keys` (or for your SSH CA).
+
+   ![Smart Cards in Global Options](screenshots/smartcards.png)
+3. **Session Options → SSH2 Authentication → Smart card**: *Any key on the inserted cards*, or one key. Folder Defaults can set it for a whole folder.
+
+   ![Smart card in Session Options](screenshots/smartcard-session.png)
+
+- The **PIN** is asked at the first login - only when the server accepts the card's key - and kept in memory until Termwright quits (never saved). *Ask the PIN for every login* changes that; *Forget Entered PINs* asks again. Keys that need the PIN for every signature (e.g. PIV slot 9c) are handled.
+- Works with **OpenSSH certificates** (the session's *Certificate* file is used when it belongs to the card key), **jump hosts** (set the smart card on the jump session too), SFTP, and **agent forwarding**: the card's keys are offered to the server next to your local agent's keys.
+- RSA (with `rsa-sha2-256` / `rsa-sha2-512`) and ECDSA P-256 / P-384 / P-521 keys.
+- Background runs (backups, checklists, Run and Collect) use the card only once its PIN was entered in a tab; otherwise they fail with *smart card PIN needed*.
+- After removing and re-inserting the card the PIN is asked again.
+
 ### SSH keys: generate, install and store
 
 Termwright can create SSH keys, put the public key on a server for you and switch a session from password to key login. Everything is in one dialog:
@@ -429,6 +447,31 @@ Scanning connects to many addresses and can be noticed by security monitoring: s
 
 ![Log File page](screenshots/log-file.png)
 
+### Session recording and playback
+
+A recording keeps everything a device showed **with its timing**, so a session can be replayed later - for audits, change records, training or "what exactly happened at 02:14".
+
+- **Record a tab**: right-click the tab → **Record Session** (or File → Record Session). The tab shows a blinking `● REC` badge; *Stop Recording* ends it. One recording is made per connection.
+- **Record automatically**: Session Options → Log File → *Record every connection*, Folder Defaults → *Recording*, or **Record every session** (File → Recordings… or Global Options → General).
+- **Markers**: **Add Marker…** (`Mod+J`, or the tab menu) puts a note at this point of the recording, e.g. *CHG-1234 start*.
+- What you **type is not recorded**, only what the device shows (passwords you type are not echoed by devices).
+- Background runs (backups, checklists, Run and Collect) are never recorded.
+
+![Recording a tab](screenshots/recording-menu.png)
+
+File → **Recordings…** lists them by session and date with length, markers and size. **Play** opens a player tab:
+
+- play / pause (`Space`), speed 0.5× to 8×, the seek bar, `←` / `→` 5 seconds, `Home` / `End`
+- **Skip idle** shortens pauses longer than 1.5 seconds
+- **Markers** jump to a marker; **Find text** jumps to the next point where a text appeared
+- **Export Text…** saves everything the device showed as plain text; **Show** opens the file's folder
+
+![Recordings](screenshots/recordings.png)
+
+![Player tab](screenshots/player.png)
+
+Recordings are saved in *Documents/Termwright Recordings/<session>/<date>_<time>.cast* (Global Options → General → *Recordings folder*), in the open **asciinema** format: they also play with the asciinema player and tools. *Delete recordings after N days* removes old ones (0 = keep them). *Play File…* opens a `.cast` file from anywhere.
+
 ### Configuration backups
 
 File → **Configuration Backups…** keeps dated copies of the configuration of switches, routers and firewalls, and shows what changed.
@@ -643,7 +686,7 @@ var out = term.readUntil(/# $/m, 10000);
 log(out && out.indexOf("not found") < 0 ? "VLAN 10 present" : "VLAN 10 missing");
 ```
 
-**Record a script**: Script → Start / Stop Recording (toolbar ●). Type your commands; when you stop, Termwright saves a `.js` that waits for each prompt and replays the commands.
+**Record a script**: Script → Start / Stop Script Recording (toolbar ●; the tab shows `SCRIPT`). Type your commands; when you stop, Termwright saves a `.js` that waits for each prompt and replays the commands.
 
 **Key Map** (Global Options → Key Map): click the *Keys* box, press a combination (e.g. `Ctrl+Shift+F2`), then choose text to send, an action and/or a script. Key bindings take priority over the remote program while a terminal has focus.
 
@@ -798,6 +841,7 @@ Details: [SECURECRT_COMPAT.md](SECURECRT_COMPAT.md).
 | Mod+S | Save scrollback | Mod+M | Toggle Session Manager |
 | Mod+K | Toggle Command Window | Mod+B | Toggle Button Bar |
 | Mod+E | Command Library | Mod+Y | Command History |
+| Mod+J | Add marker to the recording | | |
 | Ctrl+Tab | Next tab | Cmd/Ctrl + / − / 0 | Zoom in / out / reset |
 | F11 | Full screen | Enter (disconnected tab) | Reconnect |
 
@@ -815,6 +859,7 @@ Add your own in Global Options → Key Map. Help → Keyboard Shortcuts shows th
 | Global options | `<data>/settings.json` |
 | Trusted host keys | `<data>/known_hosts` (plus read-only `~/.ssh/known_hosts`) |
 | Logs | `<data>/Logs` unless set otherwise |
+| Session recordings | `Documents/Termwright Recordings` unless set otherwise (asciinema `.cast`) |
 | Saved passwords | OS keychain, service name `Termwright` |
 
 Back up the data folder to back up everything except passwords.

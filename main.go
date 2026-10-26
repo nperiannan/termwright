@@ -109,6 +109,9 @@ func buildMenu(app *App) *menu.Menu {
 	file.AddText("Save Workspace...", nil, emit("save-workspace"))
 	file.AddSeparator()
 	file.AddText("Log Session...", nil, emit("log-toggle"))
+	file.AddText("Record Session", nil, emit("cast-toggle"))
+	file.AddText("Add Marker to Recording...", acc("j"), emit("cast-marker"))
+	file.AddText("Recordings...", nil, emit("recordings"))
 	file.AddText("Save Scrollback As...", acc("s"), emit("save-scrollback"))
 	file.AddText("Save Selection As...", nil, emit("save-selection"))
 	file.AddSeparator()
@@ -184,7 +187,7 @@ func buildMenu(app *App) *menu.Menu {
 	script.AddText("Run Script...", nil, emit("run-script"))
 	script.AddText("Cancel Running Scripts", nil, emit("cancel-scripts"))
 	script.AddSeparator()
-	script.AddText("Start / Stop Recording", nil, emit("record-toggle"))
+	script.AddText("Start / Stop Script Recording", nil, emit("record-toggle"))
 
 	opts := m.AddSubmenu("Options")
 	opts.AddText("Session Options...", nil, emit("session-options"))

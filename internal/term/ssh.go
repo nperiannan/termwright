@@ -98,7 +98,7 @@ func (m *Manager) dialSSH(ctx context.Context, t *Tab, s session.Session, cols, 
 		return fail(err)
 	}
 	if s.AgentForward {
-		if err := forwardAgent(client, sess); err != nil {
+		if err := forwardAgent(client, sess, m.cardSigners(ctx, t, s)); err != nil {
 			m.emit.Emit("toast", map[string]string{"level": "error", "message": "Agent forwarding: " + err.Error()})
 		}
 	}
@@ -286,7 +286,7 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 // signers loads keys from the session identity file, the SSH agent and the
 // default ~/.ssh keys.
 func (m *Manager) signers(ctx context.Context, t *Tab, s session.Session) ([]ssh.Signer, error) {
-	var out []ssh.Signer
+	out := m.cardSigners(ctx, t, s) // smart card keys first
 	agentKeys := agentSigners()
 	out = append(out, agentKeys...)
 	certPath := expandHome(strings.TrimSpace(s.CertificateFile))

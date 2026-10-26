@@ -17,7 +17,9 @@ import (
 	"time"
 
 	"github.com/termwright/termwright/internal/logging"
+	"github.com/termwright/termwright/internal/recording"
 	"github.com/termwright/termwright/internal/session"
+	"github.com/termwright/termwright/internal/smartcard"
 )
 
 // Conn is an open terminal connection.
@@ -108,11 +110,12 @@ type Tab struct {
 	subSeq    int
 	capture   func([]byte) // when set, output goes only here (file transfers)
 	recorder  *recorder
-	zwin      []byte // tail of recent output for ZMODEM auto-detection
-	zpending  bool   // waiting for the user to pick files for "rz"
-	seq       int64  // creation order (scripts address tabs by index)
-	alertBuf  string // partial output line for alert matching
-	logonPass string // password typed for \w during this connection
+	cast      *recording.Writer // session recording (.cast)
+	zwin      []byte            // tail of recent output for ZMODEM auto-detection
+	zpending  bool              // waiting for the user to pick files for "rz"
+	seq       int64             // creation order (scripts address tabs by index)
+	alertBuf  string            // partial output line for alert matching
+	logonPass string            // password typed for \w during this connection
 	alertAt   map[int]time.Time
 	lastMsg   string // last status message (errors of background connections)
 }
@@ -179,6 +182,15 @@ type Manager struct {
 	// OnKeyPassphraseUsed is called after a key was unlocked with a typed
 	// passphrase the user asked to remember.
 	OnKeyPassphraseUsed func(path, passphrase string)
+	// SmartCards signs with keys on smart cards (PKCS#11).
+	SmartCards *smartcard.Manager
+	// SmartCardLibraries are the PKCS#11 libraries to use ("" = the usual places).
+	SmartCardLibraries func() []string
+	// RecordDir is the folder session recordings are saved in.
+	RecordDir func() string
+	// RecordAll reports whether every connection of a session is recorded
+	// (global or folder setting); the session's own setting is checked too.
+	RecordAll func(s session.Session) bool
 	// LoadSession loads a saved session (used for jump hosts).
 	LoadSession func(path string) (session.Session, error)
 }
@@ -385,6 +397,11 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 			m.emit.Emit("toast", map[string]string{"level": "error", "message": "Log: " + err.Error()})
 		}
 	}
+	if s.RecordSession || (m.RecordAll != nil && m.RecordAll(s)) {
+		if _, err := m.StartSessionRecording(t.id); err != nil {
+			m.emit.Emit("toast", map[string]string{"level": "error", "message": "Recording: " + err.Error()})
+		}
+	}
 	m.status(t, StateConnected, "Connected")
 	if initialCR {
 		_, _ = conn.Write([]byte("\r"))
@@ -400,6 +417,7 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 		m.runLogon(t, conn, t.logon.feed(nil))
 	}
 	m.pump(t, conn)
+	_ = m.StopSessionRecording(t.id) // one recording per connection
 	t.mu.Lock()
 	same := t.conn == conn
 	if same {
@@ -536,7 +554,7 @@ func (m *Manager) pump(t *Tab, conn Conn) {
 			}
 		}
 		t.mu.Lock()
-		lg, lr, tr, capFn, rec := t.logger, t.logon, t.triggers, t.capture, t.recorder
+		lg, lr, tr, capFn, rec, cw := t.logger, t.logon, t.triggers, t.capture, t.recorder, t.cast
 		subs := make([]func([]byte), 0, len(t.subs))
 		for _, f := range t.subs {
 			subs = append(subs, f)
@@ -563,6 +581,9 @@ func (m *Manager) pump(t *Tab, conn Conn) {
 		}
 		if rec != nil {
 			rec.output(batch)
+		}
+		if cw != nil {
+			cw.Output(batch)
 		}
 		if tr != nil {
 			if out := tr.feed(batch); out != nil {
@@ -648,11 +669,15 @@ func (m *Manager) Resize(id string, cols, rows int) error {
 		return nil
 	}
 	t.mu.Lock()
+	changed := t.cols != cols || t.rows != rows
 	t.cols, t.rows = cols, rows
-	c := t.conn
+	c, cw := t.conn, t.cast
 	t.mu.Unlock()
 	if c == nil {
 		return nil
+	}
+	if cw != nil && changed {
+		cw.Resize(cols, rows)
 	}
 	return c.Resize(cols, rows)
 }
@@ -673,6 +698,7 @@ func (m *Manager) Disconnect(id string) error {
 	}
 	m.prompts.CancelTab(id)
 	m.closeTabExtras(id)
+	_ = m.StopSessionRecording(id)
 	if c != nil {
 		_ = c.Close()
 	}

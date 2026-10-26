@@ -24,6 +24,8 @@ import { RemoteView } from './components/remote-view';
 import { Backups } from './dialogs/backups';
 import { Checklists } from './dialogs/checklists';
 import { Collect } from './dialogs/collect';
+import { Recordings } from './dialogs/recordings';
+import { PlayerView } from './components/player-view';
 import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
@@ -37,7 +39,7 @@ import { About, Overlays } from './dialogs/overlays';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, HistoryDialog, Overlays, About],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, HistoryDialog, Overlays, About],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -198,6 +200,9 @@ export class App implements OnInit {
       case 'run-script': await this.tabs.runScript(); break;
       case 'cancel-scripts': this.tabs.cancelScripts(); break;
       case 'record-toggle': await this.tabs.toggleRecording(); break;
+      case 'cast-toggle': await this.tabs.toggleCast(); break;
+      case 'cast-marker': await this.tabs.addMarker(); break;
+      case 'recordings': this.ui.open('recordings'); break;
       case 'xmodem': await this.tabs.sendXmodem(); break;
       case 'send-break': await this.tabs.sendBreak(); break;
       case 'send-file': await this.tabs.sendTextFile(); break;
@@ -374,6 +379,10 @@ export class App implements OnInit {
       ] : []),
       { separator: true },
       { label: t.logFile ? 'Stop Logging' : 'Log Session...', action: () => this.tabs.toggleLog(t.id) },
+      ...(t.kind === 'terminal' ? [
+        { label: t.castFile ? 'Stop Recording' : 'Record Session', action: () => this.tabs.toggleCast(t.id), disabled: !t.castFile && t.state !== 'connected' },
+        ...(t.castFile ? [{ label: 'Add Marker...', hint: this.isMac ? '⌘J' : 'Ctrl+Shift+J', action: () => this.tabs.addMarker(t.id) }] : []),
+      ] : []),
       { label: 'Save Scrollback As...', action: () => this.tabs.saveScrollback(t.id) },
       ...(t.kind === 'terminal' ? [{ label: 'Compare With...', action: () => this.compareMenu(ev, t) }] : []),
       ...(t.kind === 'terminal' ? [{ label: t.timestamps ? 'Hide Timestamps' : 'Show Timestamps', action: () => this.tabs.patch(t.id, { timestamps: !t.timestamps }) }] : []),

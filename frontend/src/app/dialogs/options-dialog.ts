@@ -2,16 +2,18 @@ import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '
 import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { Backend } from '../core/backend';
-import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, comboOf } from '../core/models';
+import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, comboOf } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
 
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
-type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts';
+type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards';
 
 /** What Global Options can find: page, the text shown on the page, extra words people search for. */
 const SEARCH: [Page, string, string][] = [
   ['general', 'Sessions folder', 'storage location ini path'], ['general', 'Logs folder', 'log directory'],
+  ['general', 'Recordings folder', 'session recording cast replay playback audit'], ['general', 'Session recording', 'record every connection replay playback audit delete keep days'],
+  ['cards', 'PKCS#11 libraries', 'smart card piv cac yubikey opensc token hsm ssh key'], ['cards', 'Ask the PIN for every login', 'smart card pin'],
   ['general', 'Downloads folder', 'zmodem download save'], ['general', 'SFTP from a terminal', 'working directory detection folder cwd follow'],
   ['general', 'SFTP tabs follow the terminal folder', 'cwd'], ['general', "SFTP tabs browse as the terminal's user", 'root sudo'],
   ['general', 'Python interpreter', 'script python3'], ['general', 'UI theme', 'dark light mode appearance'],
@@ -30,7 +32,7 @@ const SEARCH: [Page, string, string][] = [
   ['updates', 'Notify me about', 'update stable nightly'], ['updates', 'Check at start-up', 'update automatic'], ['updates', 'Repository', 'github'],
 ];
 const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', keywords: 'Keyword Highlighting',
-  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', updates: 'Updates' };
+  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates' };
 
 /** Global Options dialog. */
 @Component({
@@ -57,6 +59,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
           <a [class.on]="page() === 'buttons'" (click)="page.set('buttons')">Button Bar</a>
           <a [class.on]="page() === 'devices'" (click)="page.set('devices')">Device Types</a>
           <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')">Alerts</a>
+          <a [class.on]="page() === 'cards'" (click)="page.set('cards'); loadCards()">Smart Cards</a>
           <a [class.on]="page() === 'updates'" (click)="page.set('updates')">Updates</a>
         }
         </nav>
@@ -71,6 +74,13 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   You can point this at an existing "Config/Sessions" folder to share sessions (back it up first).</div>
                 <label>Logs folder</label>
                 <div class="row"><input name="ld" [(ngModel)]="s.logDir" /><button type="button" (click)="browse('logDir')">Browse...</button></div>
+                <label>Recordings folder</label>
+                <div class="row"><input name="rd" [(ngModel)]="s.recordDir" placeholder="Documents/Termwright Recordings" /><button type="button" (click)="browse('recordDir')">Browse...</button></div>
+                <label>Session recording</label>
+                <div class="checks">
+                  <label><input type="checkbox" name="recall" [(ngModel)]="s.recordSessions" /> Record every connection of every session</label>
+                  <label>Delete recordings after <input name="rkeep" type="number" min="0" style="width: 70px" [(ngModel)]="s.recordKeepDays" /> days (0 = keep them)</label>
+                </div>
                 <label>Downloads folder</label>
                 <div class="row"><input name="dd" [(ngModel)]="s.downloadDir" /><button type="button" (click)="browse('downloadDir')">Browse...</button></div>
                 <label>SFTP from a terminal</label>
@@ -315,6 +325,49 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 </tbody>
               </table>
               <button type="button" (click)="(s.alerts ??= []).push({ pattern: '', regex: false, caseSensitive: false, enabled: true, sound: true, desktop: true })">Add alert</button>
+            }
+            @case ('cards') {
+              <p class="hint">SSH keys on smart cards and tokens - PIV and CAC cards, YubiKey (PIV), SafeNet eToken, HSMs - through the card's PKCS#11 library.
+                The private key never leaves the card. Choose the key in Session Options → SSH2 Authentication → Smart card.</p>
+              @if (cards() && !cards()!.available) { <p class="err">Smart cards are not supported by this build of Termwright.</p> }
+              <div class="grid">
+                <label>PKCS#11 libraries</label>
+                <div>
+                  <textarea name="cardlibs" rows="3" spellcheck="false" style="width: 100%" [ngModel]="(s.smartCardLibraries ?? []).join('\n')" (ngModelChange)="s.smartCardLibraries = splitLines($event)"
+                    placeholder="One per line. Empty = the usual places, e.g. OpenSC opensc-pkcs11 or YubiKey libykcs11"></textarea>
+                  <div class="row">
+                    <button type="button" (click)="browseCardLib()">Add Library…</button>
+                    @for (f of cards()?.found ?? []; track f) {
+                      @if (!(s.smartCardLibraries ?? []).includes(f)) { <button type="button" (click)="s.smartCardLibraries = [...(s.smartCardLibraries ?? []), f]" [title]="f">+ {{ libName(f) }}</button> }
+                    }
+                  </div>
+                </div>
+                <label>PIN</label>
+                <div class="checks">
+                  <label><input type="checkbox" name="pinEach" [(ngModel)]="s.smartCardPinEachTime" /> Ask the PIN for every login (otherwise once per card until Termwright quits)</label>
+                  <div class="row"><button type="button" (click)="forgetPins()" [disabled]="!cards()?.loggedIn">Forget Entered PINs</button>
+                    <span class="hint">{{ cards()?.loggedIn ? cards()!.loggedIn + ' card(s) with the PIN entered' : 'No PIN entered' }}</span></div>
+                </div>
+                <label>Cards</label>
+                <div>
+                  <button type="button" (click)="loadCards(true)">{{ cardsBusy() ? 'Reading…' : 'Test / Read Cards' }}</button>
+                  @for (r of cards()?.reports ?? []; track r.library) {
+                    <div class="card-lib"><b>{{ libName(r.library) }}</b><span class="hint"> · {{ r.library }}</span>
+                      @if (r.error) { <div class="err">{{ r.error }}</div> }
+                      @else if (!r.tokens.length) { <div class="hint">No card inserted.</div> }
+                      @for (k of r.keys; track k.fingerprint) {
+                        <div class="card-key">
+                          <div><b>{{ k.token }}</b> · {{ k.label || 'key ' + k.id }} · {{ k.type }} {{ k.bits }}{{ k.subject ? ' · ' + k.subject : '' }}</div>
+                          <div class="mono hint">{{ k.fingerprint }}</div>
+                          <button type="button" (click)="copyKey(k)">Copy Public Key</button>
+                        </div>
+                      }
+                      @if (!r.error && r.tokens.length && !r.keys.length) { <div class="hint">{{ r.tokens.join(', ') }}: no key for SSH (RSA or ECDSA) found.</div> }
+                    </div>
+                  } @empty { @if (cards()) { <div class="hint">No PKCS#11 library found. Install your card's middleware (for most cards: OpenSC) or add its library above.</div> } }
+                  <div class="hint">Copy Public Key gives the line for the server's <code>~/.ssh/authorized_keys</code>.</div>
+                </div>
+              </div>
             }
             @case ('updates') {
               <p class="hint">Help → <b>Check for Updates…</b> shows the installed version, the latest stable release with its changes, and any newer nightly build. These settings decide when you are told about them.</p>
@@ -600,7 +653,25 @@ export class OptionsDialog implements OnInit {
     this.backend.hasUpdateToken().then(v => this.hasToken.set(v)).catch(() => {});
   }
 
-  async browse(field: 'sessionsDir' | 'logDir' | 'downloadDir') {
+  readonly cards = signal<SmartCardInfo | null>(null);
+  readonly cardsBusy = signal(false);
+  async loadCards(again = false) {
+    if (this.cards() && !again) return;
+    this.cardsBusy.set(true);
+    try { this.cards.set(await this.backend.smartCards(this.s?.smartCardLibraries ?? [])); } catch (e) { this.ui.error(e); }
+    this.cardsBusy.set(false);
+    this.cdr.markForCheck();
+  }
+  splitLines(v: string) { return v.split('\n').map(x => x.trim()).filter(Boolean); }
+  libName(p: string) { return p.split(/[\\/]/).pop() ?? p; }
+  async browseCardLib() {
+    const f = await this.backend.chooseOpenFile('PKCS#11 Library', []).catch(() => '');
+    if (f && this.s) { this.s.smartCardLibraries = [...(this.s.smartCardLibraries ?? []), f]; this.cdr.markForCheck(); }
+  }
+  async forgetPins() { await this.backend.forgetSmartCardPins(); this.ui.toast('The PINs will be asked again'); await this.loadCards(true); }
+  async copyKey(k: SmartCardKey) { await this.backend.clipboardSet(k.authorizedKey); this.ui.toast('Public key copied', 'success'); }
+
+  async browse(field: 'sessionsDir' | 'logDir' | 'downloadDir' | 'recordDir') {
     const d = await this.backend.chooseDirectory('Choose Folder').catch(() => '');
     if (d && this.s) this.s[field] = d;
     this.cdr.markForCheck();

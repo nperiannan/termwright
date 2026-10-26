@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
 env:
-  APP_VERSION: 0.16.0
+  APP_VERSION: 0.17.0
 
 jobs:
   test:
@@ -27,6 +27,8 @@ jobs:
       - uses: actions/setup-go@v7
         with: { go-version: '1.24' }
       - run: go mod verify
+      - name: Software smart card for the PKCS#11 tests
+        run: sudo apt-get install -y --no-install-recommends softhsm2 opensc || echo "::warning::SoftHSM2 not installed - smart card tests are skipped"
       - run: go vet ./internal/...
       - run: go test -race ./internal/...
 
@@ -102,6 +104,11 @@ jobs:
         shell: bash
         run: |
           export PATH="$PATH:/c/Program Files (x86)/NSIS"
+          if [ "$RUNNER_OS" = Windows ]; then
+            # smart cards (PKCS#11) need cgo: the runner's MinGW gcc
+            if command -v gcc >/dev/null; then export CGO_ENABLED=1; gcc --version | head -1
+            else echo "::warning::gcc not found - smart cards are disabled in the Windows build"; fi
+          fi
           wails build -clean -skipbindings ${{ matrix.nsis }} -platform ${{ matrix.platform }} -tags "${{ matrix.tags }}" -ldflags "-X main.Version=$VERSION"
       - name: Package (macOS)
         if: runner.os == 'macOS'

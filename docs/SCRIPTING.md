@@ -4,7 +4,7 @@ Termwright runs **JavaScript** (ES5.1+ with most ES6 syntax, via [goja](https://
 Scripts run synchronously: `waitFor` blocks until the text arrives, so there's no need for callbacks or `await`.
 
 Run a script from **Script → Run Script…**, from a **key binding** (Options → Key Map), or after connecting with a session's
-**Logon script** (Session Options → Logon Actions & Triggers). **Script → Start / Stop Recording** turns typed commands into a script.
+**Logon script** (Session Options → Logon Actions & Triggers). **Script → Start / Stop Script Recording** turns typed commands into a script.
 
 ## API
 

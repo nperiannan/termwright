@@ -9,6 +9,7 @@ require (
 	github.com/dop251/goja v0.0.0-20260603125802-cfe4039cb6d7
 	github.com/gorilla/websocket v1.5.3
 	github.com/jcmturner/gokrb5/v8 v8.4.4
+	github.com/miekg/pkcs11 v1.1.2
 	github.com/pkg/sftp v1.13.10
 	github.com/wailsapp/wails/v2 v2.10.2
 	github.com/zalando/go-keyring v0.2.8

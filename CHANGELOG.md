@@ -4,6 +4,12 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.17.0 (2026-10-28)
+
+* **Session recording and playback**: right-click a tab → **Record Session** (or record every connection of a session, a folder or all sessions). Recordings keep what the device showed with its timing and window size changes - not what you type - one file per connection in the open asciinema format (`.cast`). **Add Marker…** (`Mod+J`) adds a note at that point. File → **Recordings…** lists them; the **player tab** has play / pause, speed 0.5×-8×, seek, *Skip idle*, markers, text search and *Export Text…*. Old recordings can be deleted after N days. Background runs are never recorded.
+* **Smart cards (PIV, CAC, PKCS#11)**: Global Options → **Smart Cards** reads the cards through their PKCS#11 library (OpenSC, YubiKey `libykcs11` and others; usual places found automatically) and copies a key's public key for `authorized_keys`. Session Options → SSH2 Authentication → **Smart card** uses any key on the card or a chosen one, also with OpenSSH certificates, jump hosts, SFTP and agent forwarding (card keys offered through the forwarded agent). RSA (rsa-sha2-256/512) and ECDSA keys. The PIN is asked at the first login and kept in memory only until Termwright quits (or asked every time); keys that need the PIN for each signature are supported. Folder Defaults can set the smart card for a folder.
+* The script recorder is now *Start / Stop Script Recording* (Script menu) and its tab badge *SCRIPT*, so it is not confused with session recordings.
+
 ## 0.16.0 (2026-10-27)
 
 * **Run and Collect** (File → Run and Collect…, or right-click a session, folder or selection): run commands on many devices in the background (four at a time, saved logins, nothing asked) and see values from their output in one table - columns are a name, a device type and a pattern; inventory columns (model, version, serial number, uptime) are suggested for the built-in device types. **Copy Table**, **Export CSV…**, the full output per device and earlier runs are kept.

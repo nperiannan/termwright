@@ -2,8 +2,8 @@ import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '
 import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
 import { askRef, isRef, refOf } from '../core/secret-ref';
-import { Backend } from '../core/backend';
-import { BAUD_RATES, CONSOLE_METHODS, EMULATIONS, LogonAction, PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
+import { Backend, errText } from '../core/backend';
+import { BAUD_RATES, CONSOLE_METHODS, EMULATIONS, LogonAction, PROTOCOLS, Session, SessionNode, SmartCardKey, defaultPort } from '../core/models';
 import { SCHEME_NAMES } from '../core/themes';
 import { Tabs } from '../core/tabs.service';
 import { ENVIRONMENTS, envInfo, envOf } from '../core/env';
@@ -175,6 +175,21 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
                   <label></label>
                   <div class="hint">Uses your ticket from <code>kinit</code> (file cache). Without one, Termwright logs in to Kerberos itself and asks
                     for the principal's password once per run. The realm comes from krb5.conf, or from DNS when the principal includes it.</div>
+                }
+                <label>Smart card</label>
+                <div class="row">
+                  <select name="card" [(ngModel)]="s.smartCard" (focus)="loadCards()">
+                    <option value="">(not used)</option>
+                    <option value="any">Any key on the inserted cards</option>
+                    @for (k of cardKeys(); track k.fingerprint) { <option [value]="k.fingerprint">{{ k.token }} · {{ k.label || k.id }} ({{ k.type }})</option> }
+                    @if (s.smartCard && s.smartCard !== 'any' && !hasCardKey(s.smartCard)) { <option [value]="s.smartCard">{{ s.smartCard }} (card not inserted)</option> }
+                  </select>
+                  <button type="button" (click)="loadCards(true)" title="Read the inserted cards again">Refresh</button>
+                </div>
+                @if (s.smartCard) {
+                  <label></label>
+                  <div class="hint">PIV, CAC and other PKCS#11 cards (libraries: Global Options → Smart Cards). The PIN is asked at the first login and kept
+                    in memory only until Termwright quits. Needs the Public Key method above.{{ cardNote() }}</div>
                 }
                 <label>Identity file</label>
                 <div class="row"><input name="identity" [(ngModel)]="s.identityFile" placeholder="(default keys / agent)" />
@@ -403,6 +418,10 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
                   <label><input type="checkbox" name="lap" [(ngModel)]="s.logAppend" /> Append to file</label>
                   <label><input type="checkbox" name="lraw" [(ngModel)]="s.logRaw" /> Raw log (keep escape sequences)</label>
                 </div>
+                <label>Recording</label>
+                <div class="checks">
+                  <label><input type="checkbox" name="lrec" [(ngModel)]="s.recordSession" /> Record every connection (replay it later with its timing: File → Recordings…)</label>
+                </div>
                 <label>Each line prefix</label><input name="lpre" [(ngModel)]="s.logEachLine" placeholder="e.g. [%h:%m:%s] " />
               </div>
             }
@@ -550,6 +569,7 @@ export class SessionEditor implements OnInit {
     this.s.logonActions ??= [];
     this.s.triggers ??= [];
     this.s.portForwards ??= [];
+    if (this.s.smartCard) void this.loadCards();
     this.oldPath = e.oldPath;
     if (e.oldPath) {
       this.backend.sessionPasswordState(e.oldPath).then(st => { this.pwState.set(st); this.noPw = st === 'empty'; this.cdr.markForCheck(); }).catch(() => {});
@@ -570,6 +590,24 @@ export class SessionEditor implements OnInit {
     if (r) walk(r);
     return out;
   });
+  readonly cardKeys = signal<SmartCardKey[]>([]);
+  readonly cardNote = signal('');
+  private cardsLoaded = false;
+  async loadCards(again = false) {
+    if (this.cardsLoaded && !again) return;
+    this.cardsLoaded = true;
+    try {
+      const r = await this.backend.smartCards([]);
+      if (!r.available) { this.cardNote.set(' Smart cards are not supported by this build.'); return; }
+      const reps = r.reports ?? [];
+      this.cardKeys.set(reps.flatMap(x => x.keys));
+      const errs = reps.filter(x => x.error).map(x => x.error);
+      this.cardNote.set(!reps.length ? ' No PKCS#11 library found: add it in Global Options → Smart Cards.' :
+        !this.cardKeys().length ? ' No card with a key is inserted.' + (errs.length ? ' ' + errs.join('; ') : '') : '');
+    } catch (e) { this.cardNote.set(' ' + errText(e)); }
+  }
+  hasCardKey(f: string) { return this.cardKeys().some(k => k.fingerprint === f); }
+
   consoleHint() {
     const s = this.s;
     if (!s?.consoleServer) return '';

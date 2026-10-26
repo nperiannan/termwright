@@ -27,13 +27,24 @@ func agentSigners() []ssh.Signer {
 	return signers
 }
 
-// forwardAgent enables SSH agent forwarding for a session.
-func forwardAgent(client *ssh.Client, sess *ssh.Session) error {
+// forwardAgent enables SSH agent forwarding for a session; smart card keys
+// (cards) are offered next to the local agent's keys.
+func forwardAgent(client *ssh.Client, sess *ssh.Session, cards []ssh.Signer) error {
 	conn := agentConn()
-	if conn == nil {
+	if conn == nil && len(cards) == 0 {
 		return errors.New("no SSH agent is running")
 	}
-	if err := agent.ForwardToAgent(client, agent.NewClient(conn)); err != nil {
+	var a agent.Agent
+	if len(cards) > 0 {
+		ca := &cardAgent{cards: cards}
+		if conn != nil {
+			ca.local = agent.NewClient(conn)
+		}
+		a = ca
+	} else {
+		a = agent.NewClient(conn)
+	}
+	if err := agent.ForwardToAgent(client, a); err != nil {
 		return err
 	}
 	return agent.RequestAgentForwarding(sess)

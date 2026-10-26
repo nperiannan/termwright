@@ -1,6 +1,6 @@
 # Termwright build helpers. The Wails CLI is the normal way to build:
 #   go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
-VERSION ?= 0.16.0~git$(shell git rev-parse --short=7 HEAD 2>/dev/null)
+VERSION ?= 0.17.0~git$(shell git rev-parse --short=7 HEAD 2>/dev/null)
 LDFLAGS := -X main.Version=$(VERSION)
 # The Wails 2.10 CLI cannot load packages compiled by Go 1.27+, so builds use a
 # pinned Go toolchain (downloaded automatically by the go command).

@@ -18,7 +18,11 @@ export interface TabView {
   cols: number;
   rows: number;
   locked: boolean;
-  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc';
+  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player';
+  /** Terminal tab: the session recording (.cast) being written. */
+  castFile?: string;
+  /** Player tab: the recording it plays. */
+  playFile?: string;
   /** RDP / VNC tab: the open remote desktop. */
   remote?: RemoteInfo;
   parentId: string;
@@ -389,6 +393,7 @@ export class Tabs {
         }
       }),
       this.backend.on('term:log:' + ti.id, (path: string) => this.patch(ti.id, { logFile: path })),
+      this.backend.on('term:rec:' + ti.id, (path: string) => this.patch(ti.id, { castFile: path })),
     ]);
     this.tabs.update(l => [...l, tv]);
     this.activeId.set(ti.id);
@@ -455,6 +460,45 @@ export class Tabs {
     this.tabs.update(l => [...l, tv]);
     this.activeId.set(tv.id);
     if (path) setTimeout(() => void this.ui.loadSettings(), 300);
+  }
+
+  private playerSeq = 0;
+  /** Player tab for a session recording (.cast). */
+  async openPlayer(path: string, title = '') {
+    const open = this.tabs().find(t => t.kind === 'player' && t.playFile === path);
+    if (open) { this.activeId.set(open.id); return; }
+    const s = await this.backend.newSessionDefaults();
+    const name = title || path.split(/[\\/]/).slice(-2).join(' ').replace(/\.cast$/i, '');
+    const tv: TabView = {
+      id: 'player-' + ++this.playerSeq, title: '▶ ' + name, state: 'connected', message: '', info: 'Recording ' + path,
+      session: { ...s, name, path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'player', parentId: '', home: '', recording: false, playFile: path,
+    };
+    this.tabs.update(l => [...l, tv]);
+    this.activeId.set(tv.id);
+  }
+
+  /** Starts or stops the session recording of a terminal tab. */
+  async toggleCast(id = this.activeId()) {
+    const t = this.get(id);
+    if (!t || t.kind !== 'terminal') { this.ui.toast('Select a terminal tab first.', 'error'); return; }
+    try {
+      if (t.castFile) { await this.backend.stopSessionRecording(id); this.patch(id, { castFile: '' }); this.ui.toast('Recording saved', 'success', 5000, [{ label: 'Play', run: () => void this.openPlayer(t.castFile!, t.title) }]); }
+      else {
+        if (t.state !== 'connected') { this.ui.toast('Connect the tab first - recordings start with the connection.', 'error'); return; }
+        const p = await this.backend.startSessionRecording(id);
+        this.patch(id, { castFile: p });
+      }
+    } catch (e) { this.ui.error(e); }
+  }
+
+  /** Adds a marker with a note to the active tab's recording. */
+  async addMarker(id = this.activeId()) {
+    const t = this.get(id);
+    if (!t || t.kind !== 'terminal' || !t.castFile) { this.ui.toast('Markers go into a recording: start recording the tab first.', 'error'); return; }
+    const note = await this.ui.input('Add Marker', 'Note for this point of the recording', '');
+    if (note === null) return;
+    try { await this.backend.addRecordingMarker(id, note.trim() || 'Marker'); this.ui.toast('Marker added'); } catch (e) { this.ui.error(e); }
+    setTimeout(() => this.handles.get(id)?.term.focus());
   }
 
   async openLocalShell() {
