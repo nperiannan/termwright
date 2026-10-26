@@ -4,7 +4,16 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-## 0.17.0 (2026-10-28)
+## 0.18.0 (2026-10-27)
+
+* **Devices that get a new address from DHCP**: sessions remember the device's **MAC address** (saved by Discover Devices; Session Options → Connection → *MAC address*; *Remember MAC Addresses* for older sessions found by a scan).
+  * After a scan, Discover Devices lists saved sessions whose device answers at a **new address** (same MAC) and addresses that now belong to **another device**; **Review…** updates the ticked sessions.
+  * **On connect** the MAC address of the device that answers is compared with the saved one before anything is sent; if another device answers, Termwright asks: *Find the Device by MAC* or *Connect Anyway*. Background runs never log in to a different device.
+  * **Find by MAC Address** (connection error bar) searches the session's network for the device and offers its new address.
+  * The SSH host key at the new address is compared with the saved one (*same* / *different*); when it is the same it is trusted at the new address too.
+  * Works on this computer's own network (MAC addresses are not visible through routers, VPNs, jump hosts or proxies).
+
+## 0.17.0 (2026-10-27)
 
 * **Session recording and playback**: right-click a tab → **Record Session** (or record every connection of a session, a folder or all sessions). Recordings keep what the device showed with its timing and window size changes - not what you type - one file per connection in the open asciinema format (`.cast`). **Add Marker…** (`Mod+J`) adds a note at that point. File → **Recordings…** lists them; the **player tab** has play / pause, speed 0.5×-8×, seek, *Skip idle*, markers, text search and *Export Text…*. Old recordings can be deleted after N days. Background runs are never recorded.
 * **Smart cards (PIV, CAC, PKCS#11)**: Global Options → **Smart Cards** reads the cards through their PKCS#11 library (OpenSC, YubiKey `libykcs11` and others; usual places found automatically) and copies a key's public key for `authorized_keys`. Session Options → SSH2 Authentication → **Smart card** uses any key on the card or a chosen one, also with OpenSSH certificates, jump hosts, SFTP and agent forwarding (card keys offered through the forwarded agent). RSA (rsa-sha2-256/512) and ECDSA keys. The PIN is asked at the first login and kept in memory only until Termwright quits (or asked every time); keys that need the PIN for each signature are supported. Folder Defaults can set the smart card for a folder.

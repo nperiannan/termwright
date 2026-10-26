@@ -348,6 +348,27 @@ Scanning connects to many addresses and can be noticed by security monitoring: s
 
 ![Workspaces](screenshots/workspaces.png)
 
+### Devices that get a new address (DHCP)
+
+Switches that take their management address from DHCP, lab equipment, access points and IoT boards can get **another IP address** when their lease runs out - and their old address can be given to **another device**. Termwright recognises devices by their **MAC address** so that you neither lose them nor log in to the wrong one.
+
+- **Discover Devices saves the MAC address** in the sessions it adds (Session Options → Connection → *MAC address*; the Session Manager's hover card shows it). For sessions you made earlier, a scan offers **Remember MAC Addresses** for the sessions it found at their address.
+- **After a scan**, Discover Devices tells you which saved sessions answer at a **new address** (same MAC address) and which addresses now belong to **another device**. **Review…** lists the moves; tick the sessions and **Update Sessions**.
+
+  ![Discover Devices finds saved devices at new addresses](screenshots/discover-moved.png)
+
+  ![Reviewing the new addresses](screenshots/moved.png)
+- **When you connect**, Termwright compares the MAC address of the device that answers with the saved one - before anything is sent. If it differs, it stops and asks: **Find the Device by MAC** or *Connect Anyway*. Background runs (backups, checklists, Run and Collect) never log in to a different device.
+
+  ![Another device answers at the saved address](screenshots/mac-warning.png)
+- **Find by MAC Address** (also on the connection error bar when a device does not answer) searches the session's network for the MAC address and offers the new address; **Reconnect Tab** connects to it.
+
+  ![Found by its MAC address](screenshots/find-mac.png)
+
+**The SSH host key is checked too**: *same SSH host key* means the device at the new address is the one you logged in to before, and its key is trusted at the new address as well. *Different SSH host key* (same MAC) is not ticked: the device was reinstalled or it is not yours. Nothing changes until you update the sessions.
+
+Limits: MAC addresses are only visible on **this computer's own network** (the same subnet / VLAN). Devices behind a router, VPN, jump host or proxy cannot be checked this way. Where you can, a **DHCP reservation** or a **DNS name** in the session is the cleaner fix; the MAC address check is the safety net for networks where you do not control DHCP.
+
 ## 5. Session Options reference
 
 ![Session Options](screenshots/session.png)

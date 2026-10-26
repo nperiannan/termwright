@@ -138,3 +138,58 @@ func LoadOUI(r io.Reader) (OUI, error) {
 	}
 	return out, nil
 }
+
+// NormalizeMAC returns a MAC address as aa:bb:cc:dd:ee:ff; it accepts the
+// usual spellings (aa-bb-…, aabb.ccdd.eeff, aabbccddeeff). "" if it is none.
+func NormalizeMAC(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	bare := strings.NewReplacer(":", "", "-", "", ".", "", " ", "").Replace(s)
+	if len(bare) == 12 {
+		var b strings.Builder
+		for i := 0; i < 12; i += 2 {
+			if i > 0 {
+				b.WriteByte(':')
+			}
+			b.WriteString(bare[i : i+2])
+		}
+		return normMAC(b.String())
+	}
+	return normMAC(s)
+}
+
+// MACOf returns the MAC address this computer knows for ip (ARP cache), ""
+// when it is not on a local network or not cached.
+func MACOf(ip netip.Addr) string { return neighbours()[ip.Unmap()] }
+
+// LocalPrefix returns the network of this computer's interface that contains ip.
+func LocalPrefix(ip netip.Addr) (netip.Prefix, bool) {
+	ifs, err := net.Interfaces()
+	if err != nil {
+		return netip.Prefix{}, false
+	}
+	ip = ip.Unmap()
+	for _, in := range ifs {
+		if in.Flags&net.FlagUp == 0 || in.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, _ := in.Addrs()
+		for _, a := range addrs {
+			n, ok := a.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			p, err := netip.ParsePrefix(n.String())
+			if err != nil {
+				continue
+			}
+			p = p.Masked()
+			if p.Addr().Is4() && p.Contains(ip) {
+				return p, true
+			}
+		}
+	}
+	return netip.Prefix{}, false
+}

@@ -66,6 +66,12 @@ func (m *Manager) dialNet(ctx context.Context, t *Tab, s session.Session, addr s
 	switch s.ProxyType {
 	case "":
 		c, err := d.DialContext(ctx, "tcp", addr)
+		if err == nil {
+			if merr := m.checkMAC(ctx, t, s, c); merr != nil {
+				_ = c.Close()
+				return nil, "", merr
+			}
+		}
 		return c, "", err
 	case "socks5", "http":
 		if s.ProxyHost == "" {

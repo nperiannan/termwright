@@ -1,11 +1,11 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Backend, errText } from './backend';
-import { Session, SessionNode, Settings, Snippet } from './models';
+import { MovedDevice, Session, SessionNode, Settings, Snippet } from './models';
 
 export interface ToastAction { label: string; run: () => void; }
 export interface Toast { id: number; level: 'info' | 'error' | 'success'; message: string; actions?: ToastAction[]; }
 export interface MenuItem { label?: string; action?: () => void; separator?: boolean; disabled?: boolean; hint?: string; }
-export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings';
+export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings' | 'moved';
 
 interface ConfirmReq { title: string; message: string; ok: string; danger: boolean; resolve: (v: boolean) => void; }
 interface InputReq { title: string; label: string; value: string; secret?: boolean; resolve: (v: string | null) => void; }
@@ -41,6 +41,8 @@ export class Ui {
   readonly collectTargets = signal<string[] | null>(null);
   /** Console server session the Console Server Ports dialog creates sessions for. */
   readonly consoleServerFor = signal('');
+  /** Moved Devices dialog: a list from Discover Devices, or one session to find by its MAC address (from a tab). */
+  readonly movedInput = signal<{ items: MovedDevice[] } | { find: string; tab?: string } | null>(null);
   /** Text the Command Window should take (from Command History). */
   readonly cwInsert = signal<string | null>(null);
   /** Page Global Options opens on (set before opening it). */

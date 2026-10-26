@@ -116,6 +116,9 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
                 @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw' || remote()) {
                   <label>Hostname</label><input name="hostname" [(ngModel)]="s.hostname" required placeholder="host name or IP address" />
                   <label>Port</label><input name="port" type="number" min="1" max="65535" [(ngModel)]="s.port" class="short" />
+                  <label>MAC address</label>
+                  <div class="row"><input name="mac" [(ngModel)]="s.mac" placeholder="(not saved)" spellcheck="false" style="max-width: 220px" />
+                    <span class="hint">saved by Discover Devices: finds the device again when DHCP gives it a new address, and warns when another device answers at this address</span></div>
                 }
                 @if (s.deviceType) {
                   <label>Login</label>

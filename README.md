@@ -13,6 +13,10 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.18.0
+
+* **Devices with a new address (DHCP)**: sessions remember the device's MAC address. Discover Devices finds saved devices at new addresses and updates the sessions, a connection stops when another device answers at the saved address, and *Find by MAC Address* finds the device again - checked with its SSH host key.
+
 ## What's new in 0.17.0
 
 * **Session recording and playback**: record a tab (or every connection) with its timing, add markers, replay it in a player tab with speed, seek, markers and text search; asciinema `.cast` files.
@@ -23,12 +27,6 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 * **Run and Collect**: run commands on many devices and get one table (model, version, serial number, uptime or your own patterns), with CSV export.
 * **Console servers**: sessions for the ports of a console server, created in one go, that connect to the right port and log in to the device.
 * *Change Checklist…* on the Session Manager menu.
-
-## What's new in 0.15.0
-
-* **Change checklists**: run show commands before and after a change, see which devices changed and compare them.
-* **Command History** search (`Mod+Y`) and **suggestions in the Command Window** from history and the Command Library.
-* Backups of devices whose after-login steps enter `config terminal` work.
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 
@@ -73,6 +71,7 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 | ![Kerberos and certificates](docs/screenshots/auth.png) <br/>*Kerberos, certificates and security keys* | ![Password managers](docs/screenshots/passwords-managers.png) <br/>*1Password, Bitwarden, HashiCorp Vault* |
 | ![Workspaces](docs/screenshots/workspaces.png) <br/>*Workspaces* | ![Alerts](docs/screenshots/alerts.png) <br/>*Output alerts* |
 | ![Discover Devices](docs/screenshots/discover.png) <br/>*Discover devices with the evidence behind each result* | ![Discovered sessions](docs/screenshots/discover-added.png) <br/>*Selected devices added as sessions* |
+| ![Devices at new addresses](docs/screenshots/discover-moved.png) <br/>*Saved devices found at new addresses by their MAC address* | ![Another device at the address](docs/screenshots/mac-warning.png) <br/>*Stops before logging in to a different device* |
 | ![Session playback](docs/screenshots/player.png) <br/>*Replaying a recorded session with its markers* | ![Smart cards](docs/screenshots/smartcards.png) <br/>*Smart card (PIV / PKCS#11) keys* |
 | ![Run and Collect](docs/screenshots/collect.png) <br/>*Run and Collect: one table from many devices, CSV export* | ![Console Server Ports](docs/screenshots/console-ports.png) <br/>*Sessions for the ports of a console server* |
 | ![Change checklist](docs/screenshots/checklist.png) <br/>*Change checklist: same / changed per device after a change* | ![Command History](docs/screenshots/history.png) <br/>*Command History search* |

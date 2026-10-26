@@ -100,6 +100,7 @@ const (
 	kKrbSPN      = "Termwright Kerberos SPN"
 	kCertFile    = "Termwright Certificate File"
 	kSmartCard   = "Termwright Smart Card"
+	kMAC         = "Termwright MAC Address"
 	kSerialNoDTR = "Termwright Serial No DTR"
 	kSerialNoRTS = "Termwright Serial No RTS"
 	kSerialFlow  = "Termwright Serial Flow"
@@ -211,6 +212,7 @@ type Session struct {
 	KerberosPrincipal string `json:"kerberosPrincipal"` // GSSAPI: user@REALM when no kinit ticket ("" = login user)
 	KerberosSPN       string `json:"kerberosSpn"`       // GSSAPI target, "" = host@<hostname>; %H = hostname
 	CertificateFile   string `json:"certificateFile"`   // OpenSSH user certificate, "" = <identity>-cert.pub
+	MAC               string `json:"mac"`               // the device's MAC address (Discover Devices): finds it again when its IP changes
 	SmartCard         string `json:"smartCard"`         // "" = no, "any" = any key on a smart card, else the key's SHA256 fingerprint
 	SFTPToTarget      bool   `json:"sftpToTarget"`      // remote command "ssh … host": SFTP opens on that host, through this connection
 	SerialDTR         bool   `json:"serialDtr"`         // assert DTR when opening the port
@@ -324,6 +326,7 @@ func FromFile(path string, f *securecrt.File) Session {
 	s.KerberosSPN = f.Str(kKrbSPN, "")
 	s.CertificateFile = f.Str(kCertFile, "")
 	s.SmartCard = f.Str(kSmartCard, "")
+	s.MAC = f.Str(kMAC, "")
 	for _, l := range f.List(kTriggers) {
 		parts := strings.SplitN(l, "\t", 3)
 		if len(parts) == 3 {
@@ -636,6 +639,7 @@ func (s Session) Apply(f *securecrt.File) {
 	setOptStr(f, kKrbSPN, s.KerberosSPN)
 	setOptStr(f, kCertFile, s.CertificateFile)
 	setOptStr(f, kSmartCard, s.SmartCard)
+	setOptStr(f, kMAC, s.MAC)
 	setOptBool(f, kSerialNoDTR, !s.SerialDTR)
 	setOptBool(f, kSerialNoRTS, !s.SerialRTS)
 	setOptStr(f, kSerialFlow, s.SerialFlow)

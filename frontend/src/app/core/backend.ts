@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AppInfo, BackupFile, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus,
+  AppInfo, BackupFile, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus,
 } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
@@ -100,6 +100,10 @@ export class Backend {
   showRecordingFolder() { return this.call<void>('ShowRecordingFolder'); }
   smartCards(libs: string[]) { return this.call<SmartCardInfo>('SmartCards', libs); }
   forgetSmartCardPins() { return this.call<void>('ForgetSmartCardPins'); }
+  checkMovedDevices(moves: MovedDevice[]) { return this.call<MovedDevice[]>('CheckMovedDevices', moves); }
+  findByMac(path: string) { return this.call<MovedDevice>('FindByMAC', path); }
+  moveSession(path: string, host: string) { return this.call<Session>('MoveSession', path, host); }
+  rememberMacs(macs: Record<string, string>) { return this.call<number>('RememberMACs', macs); }
   saveTextAs(title: string, name: string, text: string) { return this.call<string>('SaveTextAs', title, name, text); }
   historyAdd(e: Partial<HistoryEntry>) { return this.call<void>('HistoryAdd', e); }
   historyList() { return this.call<HistoryEntry[]>('HistoryList'); }

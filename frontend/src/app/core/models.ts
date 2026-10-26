@@ -8,7 +8,7 @@ export interface Session {
   emulation: string; termType: string; description: string[];
   rows: number; cols: number; scrollback: number; keepalive: boolean; keepaliveSec: number;
   comPort: string; baudRate: number; dataBits: number; stopBits: number; parity: number;
-  logFile: string; logOnConnect: boolean; logAppend: boolean; logEachLine: string; logRaw: boolean; recordSession?: boolean; smartCard?: string;
+  logFile: string; logOnConnect: boolean; logAppend: boolean; logEachLine: string; logRaw: boolean; recordSession?: boolean; smartCard?: string; mac?: string;
   savePassword: boolean; localCommand: string; localDir: string; colorScheme: string;
   logonActions: LogonAction[];
   triggers: Trigger[]; portForwards: PortForward[];
@@ -69,7 +69,7 @@ export interface KeywordSet { name: string; keywords: Keyword[]; }
 export interface SessionNode {
   name: string; path: string; isFolder: boolean; protocol?: string; hostname?: string;
   username?: string; port?: number; description?: string; hopTarget?: string; openAs?: string; children?: SessionNode[];
-  deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string;
+  deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string; mac?: string;
 }
 
 export interface Button { label: string; send: string; toAll: boolean; action: string; script: string; }
@@ -258,3 +258,6 @@ export interface RecordingData {
 export interface SmartCardKey { library: string; token: string; serial: string; slot: number; id: string; label: string; type: string; bits: number; fingerprint: string; authorizedKey: string; subject?: string; }
 export interface SmartCardReport { library: string; error?: string; tokens: string[]; keys: SmartCardKey[]; }
 export interface SmartCardInfo { available: boolean; found: string[] | null; reports: SmartCardReport[] | null; loggedIn: number; }
+
+/** A session whose device (same MAC address) answers at another IP address. */
+export interface MovedDevice { path: string; old: string; new: string; mac: string; hostKey?: 'same' | 'different' | 'unknown' | 'none' | ''; scanned?: string; }

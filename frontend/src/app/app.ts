@@ -25,6 +25,7 @@ import { Backups } from './dialogs/backups';
 import { Checklists } from './dialogs/checklists';
 import { Collect } from './dialogs/collect';
 import { Recordings } from './dialogs/recordings';
+import { Moved } from './dialogs/moved';
 import { PlayerView } from './components/player-view';
 import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
@@ -39,7 +40,7 @@ import { About, Overlays } from './dialogs/overlays';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, HistoryDialog, Overlays, About],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -108,6 +109,7 @@ export class App implements OnInit {
     await this.tabs.restoreTabs();
     void this.startupUpdateCheck();
     this.backend.on('menu', (a: string) => void this.action(a));
+    this.backend.on('device:find', (d: { path: string; tab: string }) => { this.ui.movedInput.set({ find: d.path, tab: d.tab }); this.ui.open('moved'); });
     this.ui.actionHandler = a => void this.action(a);
     this.ui.runSnippet = s => void sendSnippet(this.ui, this.tabs, s);
     this.backend.on('toast', (t: { level: 'info' | 'error'; message: string }) => this.ui.toast(t.message, t.level));

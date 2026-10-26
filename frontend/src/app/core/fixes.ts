@@ -2,7 +2,7 @@ import { Session } from './models';
 
 /** A suggested fix for a connection error: a short explanation and buttons. */
 export interface Fix { hint: string; actions: FixAction[]; }
-export type FixAction = 'reconnect' | 'edit' | 'edit-jump' | 'device-types' | 'forget-password' | 'copy';
+export type FixAction = 'reconnect' | 'edit' | 'edit-jump' | 'device-types' | 'forget-password' | 'copy' | 'find-mac';
 
 const AUTH = /unable to authenticate|authentication fail|permission denied|no supported methods|login incorrect|access denied|auth fail/i;
 const HOSTKEY = /host key/i;
@@ -11,19 +11,26 @@ const DNS = /no such host|lookup .* (failed|no such)|name resolution|unknown hos
 const JUMP = /jump host/i;
 const KRB = /kerberos|gssapi/i;
 const PROXY = /proxy/i;
+const MOVED = /another device answers/i;
 
 /** Explains a connection error and picks the buttons that can fix it. */
 export function fixFor(message: string, s: Session | null | undefined): Fix {
   const saved = !!s?.path;
   const edit: FixAction[] = saved ? ['edit'] : [];
   const usesType = !!s?.deviceType && !s?.ownLogin;
+  const byMac: FixAction[] = saved && s?.mac && !s.jumpSession && !s.proxyType ? ['find-mac'] : [];
+  if (MOVED.test(message)) {
+    return { hint: 'Another device answers at this address (its MAC address is not the saved one): the device probably got a new address from DHCP.',
+      actions: [...(byMac.length ? byMac : []), ...edit, 'reconnect'] };
+  }
   if (JUMP.test(message)) {
     return { hint: `The jump host ${s?.jumpSession ? '"' + s.jumpSession + '" ' : ''}could not be reached or refused the login.`,
       actions: ['reconnect', ...(s?.jumpSession ? ['edit-jump' as FixAction] : []), ...edit] };
   }
   if (HOSTKEY.test(message)) {
-    return { hint: 'The server\'s host key is not the saved one. Reconnect to see the new key and replace it if the change is expected (new server, reinstall).',
-      actions: ['reconnect', ...edit] };
+    return { hint: 'The server\'s host key is not the saved one. Reconnect to see the new key and replace it if the change is expected (new server, reinstall).' +
+        (byMac.length ? ' If the device got a new address from DHCP, find it by its MAC address.' : ''),
+      actions: ['reconnect', ...byMac, ...edit] };
   }
   if (AUTH.test(message)) {
     return { hint: usesType
@@ -36,15 +43,16 @@ export function fixFor(message: string, s: Session | null | undefined): Fix {
   if (DNS.test(message)) return { hint: 'The host name could not be found: check its spelling, or use the IP address.', actions: [...edit, 'reconnect'] };
   if (NET.test(message)) {
     return { hint: s?.jumpSession ? 'No answer through the jump host: check the host name and port, and that the jump host can reach it.'
-        : 'The device did not answer: check the host name, the port and that the device is up (a VPN may be needed).',
-      actions: ['reconnect', ...edit, ...(s?.jumpSession ? ['edit-jump' as FixAction] : [])] };
+        : 'The device did not answer: check the host name, the port and that the device is up (a VPN may be needed).' +
+          (byMac.length ? ' It may have a new address from DHCP: find it by its MAC address.' : ''),
+      actions: ['reconnect', ...byMac, ...edit, ...(s?.jumpSession ? ['edit-jump' as FixAction] : [])] };
   }
   return { hint: '', actions: ['reconnect', ...edit] };
 }
 
 export const FIX_LABELS: Record<FixAction, string> = {
   reconnect: 'Reconnect', edit: 'Edit Session', 'edit-jump': 'Edit Jump Host', 'device-types': 'Device Type Login',
-  'forget-password': 'Forget Saved Password', copy: 'Copy Error',
+  'forget-password': 'Forget Saved Password', copy: 'Copy Error', 'find-mac': 'Find by MAC Address',
 };
 
 /** SFTP "browse as" errors from sudo/su. */

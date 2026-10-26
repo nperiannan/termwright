@@ -22,6 +22,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/termwright/termwright/internal/config"
+	"github.com/termwright/termwright/internal/discover"
 	"github.com/termwright/termwright/internal/secretref"
 	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/session"
@@ -33,7 +34,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.17.0-dev"
+var Version = "0.18.0-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -297,6 +298,11 @@ func (a *App) NewSessionDefaults() (session.Session, error) {
 func (a *App) SaveSession(s session.Session, oldPath string) (session.Session, error) {
 	if err := a.ready(); err != nil {
 		return s, err
+	}
+	if m := strings.TrimSpace(s.MAC); m != "" {
+		if s.MAC = discover.NormalizeMAC(m); s.MAC == "" {
+			return s, fmt.Errorf("%q is not a MAC address (e.g. 00:04:96:12:34:56)", m)
+		}
 	}
 	saved, err := a.store.Save(s, oldPath)
 	if err != nil {

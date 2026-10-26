@@ -135,6 +135,7 @@ interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string
         @if (h.n.jump) { <div class="hrow">through jump host <b>{{ h.n.jump }}</b></div> }
         @if (h.n.proxy) { <div class="hrow">through a proxy</div> }
         @if (h.n.deviceType) { <div class="hrow">Device type <b>{{ h.n.deviceType }}</b></div> }
+        @if (h.n.mac) { <div class="hrow">MAC address <span class="mono">{{ h.n.mac }}</span></div> }
         <div class="hrow">{{ loginText(h) }}</div>
         @if (reach() && reachable().has(h.n.path)) { <div class="hrow">{{ reachable().get(h.n.path) ? 'Answers on port ' + portOf(h.n) : 'Does not answer on port ' + portOf(h.n) }}</div> }
         <div class="hrow muted">{{ lastAgo(h.n.path) ? 'Last connected ' + lastAgo(h.n.path) : 'Not connected yet from this computer' }}</div>

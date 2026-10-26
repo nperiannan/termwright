@@ -2,9 +2,10 @@ import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DEVICE_KINDS, DeviceIcon, DeviceKind } from '../components/device-icon';
 import { Backend, errText } from '../core/backend';
-import { DeviceType, DiscoverResult, SessionNode } from '../core/models';
+import { DeviceType, DiscoverResult, MovedDevice, SessionNode } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { Moved } from './moved';
 
 interface Row extends DiscoverResult { selected: boolean; exists: boolean; deviceType: string; open?: boolean; touched?: boolean; }
 
@@ -18,7 +19,7 @@ const ACK_KEY = 'termwright.discoverAck';
  */
 @Component({
   selector: 'app-discover-dialog',
-  imports: [FormsModule, DeviceIcon],
+  imports: [FormsModule, DeviceIcon, Moved],
   template: `
   <div class="modal-backdrop">
     <div class="modal disc">
@@ -66,6 +67,21 @@ const ACK_KEY = 'termwright.discoverAck';
         @if (!ouiDate() && total() && !running()) {
           <p class="note">MAC addresses are shown for devices on your own subnet. <a (click)="downloadOui()">{{ ouiBusy() ? 'Downloading…' : 'Download the MAC vendor list' }}</a>
             (IEEE registry, about 3 MB, saved in the data folder) to name their makers - this also identifies phones and printers with no open ports.</p>
+        }
+        @if (!running() && (moved().length || noMac().length || reused().length)) {
+          <div class="movedbar">
+            @if (moved().length) {
+              <span>⚠ <b>{{ moved().length }} saved session{{ moved().length === 1 ? '' : 's' }}</b> answer{{ moved().length === 1 ? 's' : '' }} at a new address (same MAC address).</span>
+              <button type="button" class="primary" (click)="reviewMoved()">Review…</button>
+            }
+            @if (reused().length) {
+              <span class="bad">{{ reused().length }} saved session{{ reused().length === 1 ? '' : 's' }}: the address now belongs to <b>another device</b> and the device itself was not found ({{ reused().slice(0, 3).join(', ') }}{{ reused().length > 3 ? '…' : '' }}).</span>
+            }
+            @if (noMac().length) {
+              <span class="hint">{{ noMac().length }} saved session{{ noMac().length === 1 ? '' : 's' }} found at {{ noMac().length === 1 ? 'its' : 'their' }} address without a saved MAC address.</span>
+              <button type="button" (click)="rememberMacs()" title="Save the MAC addresses so Termwright finds these devices again when their IP address changes">Remember MAC Addresses</button>
+            }
+          </div>
         }
         @if (rows().length) {
           <div class="tbl">
@@ -123,6 +139,7 @@ const ACK_KEY = 'termwright.discoverAck';
           </div>
         }
       </div>
+      @if (reviewing()) { <app-moved [embedded]="true" (closed)="reviewing.set(false)" /> }
       <div class="modal-foot">
         @if (rows().length) {
           <label class="inline">Add to folder</label>
@@ -172,6 +189,8 @@ const ACK_KEY = 'termwright.discoverAck';
     .chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
     .chip .n { color: var(--muted); font-size: 11px; }
     .err { color: var(--danger); }
+    .movedbar .bad { color: var(--danger); }
+    .movedbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 10px; margin-bottom: 8px; border: 1px solid color-mix(in srgb, #f59e0b 55%, var(--border)); border-radius: 6px; background: color-mix(in srgb, #f59e0b 9%, transparent); font-size: 12.5px; }
     select { max-width: 150px; }
   `],
 })
@@ -219,6 +238,59 @@ export class DiscoverDialog implements OnDestroy {
     walk(this.ui.tree());
     return s;
   });
+
+  /** Saved sessions (by MAC address) whose device answers at another address now. */
+  readonly moved = computed<MovedDevice[]>(() => {
+    const byMac = new Map<string, string>();
+    for (const r of this.rows()) if (r.mac) byMac.set(r.mac.toLowerCase(), r.ip);
+    const out: MovedDevice[] = [];
+    for (const n of this.sessionNodes()) {
+      const mac = normMac(n.mac);
+      const now = mac ? byMac.get(mac) : undefined;
+      if (now && n.hostname && now !== n.hostname) out.push({ path: n.path, old: n.hostname, new: now, mac });
+    }
+    return out;
+  });
+  private readonly knownMacs = computed(() => new Set(this.sessionNodes().map(n => normMac(n.mac)).filter(Boolean)));
+  /** Saved sessions found at their address whose MAC address is not saved yet. */
+  readonly noMac = computed(() => {
+    const byIp = new Map(this.rows().filter(r => r.mac && !r.self).map(r => [r.ip, r.mac]));
+    return this.sessionNodes().filter(n => !n.mac && n.hostname && byIp.has(n.hostname) && !n.jump && !n.proxy)
+      .map(n => ({ path: n.path, mac: byIp.get(n.hostname!)! }));
+  });
+  private sessionNodes() {
+    const out: SessionNode[] = [];
+    const walk = (n: SessionNode | null | undefined) => n?.children?.forEach(c => { if (c.isFolder) walk(c); else out.push(c); });
+    walk(this.ui.tree());
+    return out;
+  }
+
+  readonly reviewing = signal(false);
+  reviewMoved() { this.ui.movedInput.set({ items: this.moved() }); this.reviewing.set(true); }
+
+  /** Saved sessions whose address now answers with another MAC, and whose own MAC was not seen. */
+  readonly reused = computed(() => {
+    const byIp = new Map(this.rows().filter(r => r.mac).map(r => [r.ip, r.mac]));
+    const seen = new Set(this.rows().filter(r => r.mac).map(r => r.mac.toLowerCase()));
+    return this.sessionNodes().filter(n => {
+      const mac = normMac(n.mac);
+      const now = n.hostname ? byIp.get(n.hostname) : '';
+      return !!mac && !!now && normMac(now) !== mac && !seen.has(mac);
+    }).map(n => n.path);
+  });
+
+  async rememberMacs() {
+    const list = this.noMac();
+    if (!(await this.ui.confirm('Remember MAC Addresses', `Save the MAC address seen at the address of ${list.length === 1 ? 'this session' : 'these ' + list.length + ' sessions'}?\n\n` +
+      list.slice(0, 12).map(x => `${x.path}  ${x.mac}`).join('\n') + (list.length > 12 ? '\n…' : '') +
+      '\n\nDo this only when these addresses still belong to the right devices.', 'Save'))) return;
+    const macs = Object.fromEntries(this.noMac().map(x => [x.path, x.mac]));
+    try {
+      const n = await this.backend.rememberMacs(macs);
+      await this.ui.refreshTree();
+      this.ui.toast(`MAC address saved in ${n} session${n === 1 ? '' : 's'}`, 'success');
+    } catch (e) { this.ui.error(e); }
+  }
 
   constructor() { this.backend.discoverOuiStatus().then(d => this.ouiDate.set(d)).catch(() => {}); }
 
@@ -299,7 +371,8 @@ export class DiscoverDialog implements OnDestroy {
 
   private found(d: DiscoverResult) {
     const k = this.known();
-    const exists = [d.ip, d.dns, d.name].some(x => !!x && k.has(x.toLowerCase()));
+    // a saved session of this device - also when it moved to this address (same MAC)
+    const exists = [d.ip, d.dns, d.name].some(x => !!x && k.has(x.toLowerCase())) || (!!d.mac && this.knownMacs().has(normMac(d.mac)));
     const prev = this.rows().find(r => r.ip === d.ip);
     // a device can be reported again at the end of the scan with its MAC address
     const row: Row = { ...d, services: d.services ?? [], exists, open: prev?.open, touched: prev?.touched,
@@ -347,7 +420,7 @@ export class DiscoverDialog implements OnDestroy {
   private async sessionFor(r: Row, folder = '') {
     const s = await this.backend.newSessionDefaults();
     Object.assign(s, {
-      name: (r.name || r.ip).replace(/[\\/:*?"<>|]+/g, '-').trim() || r.ip, folder, path: '', protocol: r.protocol, hostname: r.ip, port: r.port,
+      name: (r.name || r.ip).replace(/[\\/:*?"<>|]+/g, '-').trim() || r.ip, folder, path: '', protocol: r.protocol, hostname: r.ip, port: r.port, mac: r.mac || '',
       deviceType: r.deviceType, description: [r.vendor, r.os].filter(Boolean).length ? [[r.vendor, r.os].filter(Boolean).join(' · ')] : [],
     });
     return s;
@@ -404,7 +477,7 @@ export class DiscoverDialog implements OnDestroy {
         const s = await this.backend.newSessionDefaults();
         const base = (r.name || r.ip).replace(/[\\/:*?"<>|]+/g, '-').trim() || r.ip;
         Object.assign(s, {
-          name: base, folder: dest, path: '', protocol: r.protocol, hostname: r.ip, port: r.port,
+          name: base, folder: dest, path: '', protocol: r.protocol, hostname: r.ip, port: r.port, mac: r.mac || '',
           deviceType: r.deviceType, description: [r.vendor, r.os].filter(Boolean).length ? [[r.vendor, r.os].filter(Boolean).join(' · ')] : [],
         });
         try {
@@ -439,3 +512,8 @@ function loadPrefs(): { mode?: string; types?: string[]; byType?: boolean } {
 }
 
 function ipNum(ip: string) { return ip.split('.').reduce((n, p) => n * 256 + Number(p), 0); }
+
+function normMac(s: string | undefined) {
+  const bare = (s ?? '').toLowerCase().replace(/[^0-9a-f]/g, '');
+  return bare.length === 12 ? bare.match(/../g)!.join(':') : '';
+}

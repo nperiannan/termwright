@@ -98,6 +98,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
         await this.tabs.reconnect(t.id);
         break;
       case 'copy': await this.backend.clipboardSet(t.message); break;
+      case 'find-mac': this.ui.movedInput.set({ find: s.path, tab: t.id }); this.ui.open('moved'); break;
     }
   }
 
