@@ -212,7 +212,8 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
    - **SSH greeting** (e.g. `OpenSSH_8.1`, `Mocana SSH`) and the **Telnet banner and login prompt** (Termwright answers the Telnet option negotiation, so devices show their banner, e.g. `ExtremeXOS (X440G2…) version 31.7 / login:`).
    - **Web interface**: title of the start page, `Server` header, login realm, certificate owner, and product names on the page (ExtremeXOS, TerraMaster, Yealink, LaserJet, …).
    - **SIP** (UDP 5060): phones answer with their model and firmware, e.g. `Yealink SIP-T46S 66.86.0.15`.
-   - **SNMP** system name, description and vendor number; **DNS** name.
+   - **SNMP** system name, description and vendor number; **DNS** name (home routers often register phone names such as `Galaxy-S22`).
+   - **mDNS (Bonjour) name**: many devices answer with the name they give themselves, e.g. `Natarajans-iPhone`, a printer or NAS name.
    - **MAC address** of devices on your own subnet (from your computer's ARP table) - this also finds live devices with no open port. With the **MAC vendor list** (*Download the MAC vendor list*: the IEEE registry, about 3 MB, saved in the data folder) the maker is shown too.
    - **This computer** is listed and marked *this computer*.
 
@@ -232,6 +233,7 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
    | <img src="assets/device-server.svg" width="16"> | Server (Linux/Unix) | Linux/BSD in SNMP or the SSH greeting, ESXi/Proxmox, iDRAC/iLO; SSH with file sharing |
    | <img src="assets/device-nas.svg" width="16"> | NAS / storage | TerraMaster, Synology, QNAP, TrueNAS, ReadyNAS, ASUSTOR, WD My Cloud (web page, SNMP or MAC) |
    | <img src="assets/device-computer.svg" width="16"> | Computer | Windows (SNMP, RDP, SMB without SSH), Apple MAC addresses, this computer |
+   | <img src="assets/device-mobile.svg" width="16"> | Mobile phone / tablet | names such as iPhone, iPad, Galaxy, Pixel, Redmi, OnePlus (mDNS or DNS); a phone maker's MAC address with no open ports; a **private (random) MAC address** with no open ports - Android and iOS use one per Wi-Fi network, so the maker cannot be read from it (no vendor list can name it) |
    | <img src="assets/device-phone.svg" width="16"> | IP phone | SIP answer, phone models (Yealink, Poly/Polycom, Grandstream, Snom, Mitel, Cisco, Avaya …), phone vendor MAC |
    | <img src="assets/device-printer.svg" width="16"> | Printer | printer models in SNMP or the web page (LaserJet, Brother, Canon, Epson …), printing ports |
    | <img src="assets/device-unknown.svg" width="16"> | Unknown device | nothing named it - open **ⓘ** to see what answered |

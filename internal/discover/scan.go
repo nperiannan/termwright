@@ -32,6 +32,7 @@ type Options struct {
 	Community string        // SNMP v2c community; "" = no SNMP
 	SNMPPort  int           // default 161
 	SIPPort   int           // UDP SIP OPTIONS; default 5060, -1 = off
+	MDNSPort  int           // unicast mDNS name query; default 5353, -1 = off
 	NoDNS     bool
 	NoWeb     bool // skip reading web pages
 	NoARP     bool // skip the neighbour (ARP) table
@@ -50,7 +51,8 @@ type Result struct {
 	Banner      string   `json:"banner"`   // SSH greeting
 	Telnet      string   `json:"telnet"`   // Telnet banner / login prompt
 	Web         WebInfo  `json:"web"`
-	SIP         string   `json:"sip"` // SIP User-Agent / Server
+	SIP         string   `json:"sip"`  // SIP User-Agent / Server
+	MDNS        string   `json:"mdns"` // the name the device gives itself (mDNS / Bonjour)
 	MAC         string   `json:"mac"`
 	MACVendor   string   `json:"macVendor"`
 	Self        bool     `json:"self"` // this computer
@@ -80,6 +82,9 @@ func Scan(ctx context.Context, addrs []netip.Addr, opt Options, found func(Resul
 	}
 	if opt.SIPPort == 0 {
 		opt.SIPPort = 5060
+	}
+	if opt.MDNSPort == 0 {
+		opt.MDNSPort = 5353
 	}
 	self := localAddrs()
 	jobs := make(chan netip.Addr)
@@ -150,8 +155,12 @@ feed:
 
 // finish names and classifies a result.
 func finish(r *Result, opt Options) {
-	if r.MAC != "" && opt.OUI != nil {
-		r.MACVendor = opt.OUI.Vendor(r.MAC)
+	if r.MAC != "" {
+		// private (random) addresses are told by the address itself, without the vendor list
+		r.MACVendor = OUI(nil).Vendor(r.MAC)
+		if opt.OUI != nil {
+			r.MACVendor = opt.OUI.Vendor(r.MAC)
+		}
 	}
 	if r.Self {
 		if h, err := os.Hostname(); err == nil && r.SysName == "" {
@@ -161,6 +170,8 @@ func finish(r *Result, opt Options) {
 	switch {
 	case r.SysName != "":
 		r.Name = r.SysName
+	case r.MDNS != "":
+		r.Name = r.MDNS
 	case r.DNS != "":
 		r.Name = r.DNS
 	default:
@@ -258,6 +269,18 @@ func scanHost(ctx context.Context, a netip.Addr, opt Options) (Result, bool) {
 			}
 		}()
 	}
+	if opt.MDNSPort > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if name := mdnsName(ctx, a, opt.MDNSPort, opt.Timeout+400*time.Millisecond); name != "" {
+				mu.Lock()
+				open["mdns"] = true
+				r.MDNS = name
+				mu.Unlock()
+			}
+		}()
+	}
 	wg.Wait()
 	if !opt.NoWeb && len(webPorts) > 0 && ctx.Err() == nil {
 		// one page is enough: HTTPS first (it also has a certificate), then HTTP
@@ -286,7 +309,7 @@ func scanHost(ctx context.Context, a netip.Addr, opt Options) (Result, bool) {
 	if len(open) == 0 {
 		return r, false
 	}
-	for _, s := range append(serviceOrder(opt.Probes), "snmp", "sip-udp") {
+	for _, s := range append(serviceOrder(opt.Probes), "snmp", "sip-udp", "mdns") {
 		if open[s] {
 			r.Services = append(r.Services, s)
 			delete(open, s)

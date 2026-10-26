@@ -218,7 +218,7 @@ export class DiscoverDialog implements OnDestroy {
   allSelected() { const a = this.shown().filter(r => r.protocol); return a.length > 0 && a.every(r => r.selected); }
   kindLabel(k: string) { return DEVICE_KINDS[k as DeviceKind]?.label ?? 'Unknown device'; }
   svcLabel(s: string) {
-    return ({ ssh: 'SSH', telnet: 'Telnet', http: 'HTTP', https: 'HTTPS', smb: 'SMB', rdp: 'RDP', printer: 'Print', ipp: 'IPP', sip: 'SIP', 'sip-udp': 'SIP', snmp: 'SNMP' } as Record<string, string>)[s] ?? s;
+    return ({ ssh: 'SSH', telnet: 'Telnet', http: 'HTTP', https: 'HTTPS', smb: 'SMB', rdp: 'RDP', printer: 'Print', ipp: 'IPP', sip: 'SIP', 'sip-udp': 'SIP', mdns: 'mDNS', snmp: 'SNMP' } as Record<string, string>)[s] ?? s;
   }
 
   private loadAck() { try { return localStorage.getItem(ACK_KEY) === '1'; } catch { return false; } }

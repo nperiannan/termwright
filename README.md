@@ -15,6 +15,7 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 ## What's new in 0.12.4
 
+* **Mobile phones and tablets** recognised in Discover Devices (mDNS/DNS names, private Wi-Fi MAC addresses).
 * **Import Sessions** on the start page: sessions come from several terminal programs and inventories.
 * `scripts/watch-build.sh` follows a GitHub build from the terminal.
 

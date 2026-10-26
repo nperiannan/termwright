@@ -7,6 +7,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 ## 0.12.4 (2026-10-26)
 
 * Neutral wording: the start page says **Import Sessions** (sessions can come from several terminal programs and inventories); README, About and Options no longer single out one product.
+* **Mobile phones and tablets** in Discover Devices: recognised from their mDNS (Bonjour) or DNS name (iPhone, Galaxy, Pixel …), a phone maker's MAC address, or a private (random) MAC address with no open ports - which Android and iOS use on Wi-Fi, so no vendor list can name them. New mobile icon; devices are also named from mDNS.
 * `scripts/watch-build.sh [tag]` follows a GitHub build from the terminal: every job, its current step and time (GitHub CLI if installed, otherwise the public API).
 
 ## 0.12.3 (2026-10-26)

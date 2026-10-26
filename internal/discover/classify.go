@@ -11,6 +11,7 @@ const (
 	KindServer   = "server"
 	KindNAS      = "nas"
 	KindPhone    = "phone"
+	KindMobile   = "mobile"
 	KindPrinter  = "printer"
 	KindSwitch   = "switch"
 	KindRouter   = "router"
@@ -45,7 +46,12 @@ var rules = []rule{
 	r(`\bvoss\b|vsp-?\d{3,4}|fabric ?engine|virtual services platform|ethernet routing switch|\bers[- ]?\d{4}`, KindSwitch, "Extreme Networks"),
 	r(`extremecloud|extremewireless|\bap\d{3,4}[a-z]*\b.*extreme|extreme.*access point`, KindWireless, "Extreme Networks"),
 	r(`extreme networks|enterasys`, KindSwitch, "Extreme Networks"),
-	// phones
+	// mobile phones and tablets (names they give themselves or get from DHCP)
+	r(`iphone|ipad|ipod`, KindMobile, "Apple"), r(`galaxy|\bsm-[a-z]\d{3}|samsung[- ]?(phone|tab)`, KindMobile, "Samsung"),
+	r(`\bpixel[- ]?\d|google[- ]pixel`, KindMobile, "Google"), r(`oneplus`, KindMobile, "OnePlus"), r(`xiaomi|redmi|\bpoco\b`, KindMobile, "Xiaomi"),
+	r(`\boppo\b|realme|\bvivo\b`, KindMobile, ""), r(`motorola|\bmoto[- ]?[a-z]\d`, KindMobile, "Motorola"), r(`android|\bphone\b|\btablet\b`, KindMobile, ""),
+	r(`macbook|\bimac\b|mac-?mini|mac-?studio|mac-?pro`, KindComputer, "Apple"),
+	// IP desk phones
 	r(`yealink`, KindPhone, "Yealink"), r(`polycom|\bvvx\b|soundpoint|\bpoly (ccx|edge|vvx)`, KindPhone, "Poly"),
 	r(`grandstream`, KindPhone, "Grandstream"), r(`\bsnom\b`, KindPhone, "Snom"), r(`mitel`, KindPhone, "Mitel"),
 	r(`fanvil`, KindPhone, "Fanvil"), r(`gigaset`, KindPhone, "Gigaset"), r(`cisco ip phone|\bcp-\d{4}`, KindPhone, "Cisco"),
@@ -78,6 +84,9 @@ var rules = []rule{
 	r(`ubuntu`, KindServer, "Ubuntu"), r(`debian`, KindServer, "Debian"), r(`red ?hat|rhel`, KindServer, "Red Hat"),
 	r(`centos|rocky|alma|fedora|suse|amazon linux|linux|freebsd|openbsd`, KindServer, ""),
 }
+
+// MAC vendors of phone makers, used only for devices without open ports.
+var macMobile = regexp.MustCompile(`(?i)samsung|xiaomi|oneplus|oppo|vivo mobile|huawei device|honor device|motorola mobility|google|realme|nothing technology`)
 
 // MAC vendors that tell the kind on their own.
 var macKinds = []rule{
@@ -132,7 +141,12 @@ func classify(res *Result) {
 		srcs = append(srcs, src{"Web", web})
 	}
 	add("Telnet", res.Telnet)
+	add("mDNS name", res.MDNS)
 	add("SSH", res.Banner)
+	if res.DNS != "" {
+		srcs = append(srcs, src{"DNS", res.DNS})
+		ev("DNS name: " + res.DNS)
+	}
 	if res.MAC != "" {
 		label := res.MAC
 		if res.MACVendor != "" {
@@ -172,6 +186,16 @@ func classify(res *Result) {
 	}
 	if !decided && res.SIP != "" {
 		res.Kind, decided = KindPhone, true // anything that answers SIP is a phone or a phone adapter
+	}
+	quiet := len(res.Services) == 0 || (len(res.Services) == 1 && res.Services[0] == "mdns")
+	if !decided && quiet && macMobile.MatchString(res.MACVendor) {
+		res.Kind, decided = KindMobile, true
+		res.Evidence = append(res.Evidence, "phone maker's MAC address and no open ports")
+	}
+	if !decided && quiet && strings.HasPrefix(res.MACVendor, "private") {
+		// Android and iOS use a random MAC address per Wi-Fi network by default
+		res.Kind, decided = KindMobile, true
+		res.Evidence = append(res.Evidence, "private (random) MAC address and no open ports: phones and tablets use these on Wi-Fi")
 	}
 	if !decided && res.MACVendor != "" {
 		for _, ru := range macKinds {

@@ -93,7 +93,7 @@ export interface UpdateInfo {
 export interface DiscoverResult {
   ip: string; name: string; dns: string; sysName: string; sysDescr: string; sysObjectId: string; services: string[];
   banner: string; telnet: string; web: { server: string; title: string; realm: string; cert: string; hints: string[] | null };
-  sip: string; mac: string; macVendor: string; self: boolean; kind: string; vendor: string; os: string; evidence: string[] | null;
+  sip: string; mdns: string; mac: string; macVendor: string; self: boolean; kind: string; vendor: string; os: string; evidence: string[] | null;
   protocol: string; port: number;
 }
 

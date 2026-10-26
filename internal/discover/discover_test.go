@@ -277,6 +277,12 @@ func TestClassify(t *testing.T) {
 		{Result{MAC: "00:15:65:12:34:56", MACVendor: "XIAMEN YEALINK NETWORK TECHNOLOGY CO.,LTD."}, KindPhone},
 		{Result{Web: WebInfo{Title: "HP LaserJet MFP M428fdw"}, Services: []string{"http", "https", "printer"}}, KindPrinter},
 		{Result{Self: true, Services: []string{"ssh"}}, KindComputer},
+		{Result{MAC: "6a:1f:22:33:44:55", MACVendor: "private (randomised) address"}, KindMobile},
+		{Result{DNS: "Galaxy-S22.lan"}, KindMobile},
+		{Result{MDNS: "Natarajans-iPhone", Services: []string{"mdns"}}, KindMobile},
+		{Result{MDNS: "Natarajans-MacBook-Pro", Services: []string{"mdns"}}, KindComputer},
+		{Result{MAC: "8c:79:f5:00:00:01", MACVendor: "Samsung Electronics Co.,Ltd"}, KindMobile},
+		{Result{MAC: "8c:79:f5:00:00:01", MACVendor: "Samsung Electronics Co.,Ltd", Services: []string{"http"}}, KindUnknown},
 	} {
 		r := c.r
 		classify(&r)
@@ -301,5 +307,36 @@ func TestSelfListed(t *testing.T) {
 		NoDNS: true, NoARP: true, SIPPort: -1}, func(r Result) { got = append(got, r) }, nil)
 	if len(got) != 1 || !got[0].Self || got[0].Kind != KindComputer || got[0].Name == "" {
 		t.Fatalf("%+v", got)
+	}
+}
+
+// A device answering the unicast mDNS reverse lookup with its own name.
+func TestMDNSName(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	go func() {
+		buf := make([]byte, 1500)
+		n, from, err := pc.ReadFrom(buf)
+		if err != nil || n < 12 {
+			return
+		}
+		q := buf[12:n] // the question, echoed back
+		ans := []byte{0xc0, 12, 0, 12, 0, 1, 0, 0, 0, 120}
+		rd := []byte{}
+		for _, l := range []string{"Natarajans-iPhone", "local"} {
+			rd = append(append(rd, byte(len(l))), l...)
+		}
+		rd = append(rd, 0)
+		ans = append(ans, byte(len(rd)>>8), byte(len(rd)))
+		ans = append(ans, rd...)
+		resp := append([]byte{buf[0], buf[1], 0x84, 0, 0, 1, 0, 1, 0, 0, 0, 0}, q...)
+		_, _ = pc.WriteTo(append(resp, ans...), from)
+	}()
+	name := mdnsName(context.Background(), netip.MustParseAddr("127.0.0.1"), pc.LocalAddr().(*net.UDPAddr).Port, time.Second)
+	if name != "Natarajans-iPhone" {
+		t.Fatalf("mdns name %q", name)
 	}
 }
