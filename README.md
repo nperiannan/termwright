@@ -13,6 +13,11 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.12.2
+
+* **Text is kept exactly as typed**: macOS no longer capitalises the first letter of user names (`rwa` → `Rwa`), corrects spelling or replaces quotes in any field.
+* **Release notes** for every release and nightly build ([changelog](CHANGELOG.md)).
+
 ## What's new in 0.12.1
 
 * **Much better device identification** in Discover Devices: web page title, server and certificate; Telnet banner and login prompt (with proper option negotiation); SIP over UDP for phones; MAC address and maker (IEEE vendor list) from the ARP table; this computer listed; product names win over generic words (a TerraMaster NAS is a NAS, not Windows; EXOS with OpenSSH is a switch, Mocana SSH is network gear).
@@ -24,10 +29,6 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 * **Discover devices** (File → Discover Devices…): scan a network or address range, see each device with an icon for its kind (switch, router, firewall, access point, server, computer, phone, printer), its name, vendor and system (SNMP v2c, DNS, SSH greeting), and add the selected ones - or all - as sessions with a matching device type. It never tries to log in. See the [User Guide](docs/USER_GUIDE.md#discover-devices).
 
   ![Discover Devices](docs/screenshots/discover.png)
-
-## What's new in 0.11.5
-
-* **SFTP follows the terminal's user**: after `sudo su -` in the terminal (also on a host behind a bastion), the SFTP tab opened from it browses as root and opens the terminal's folder (configurable).
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 
