@@ -14,6 +14,7 @@ export interface Session {
   triggers: Trigger[]; portForwards: PortForward[];
   jumpSession: string; proxyType: '' | 'socks5' | 'http'; proxyHost: string; proxyPort: number; proxyUser: string;
   autoReconnect: boolean; x11Forward: boolean; agentForward: boolean;
+  consoleServer?: string; consolePort?: number; consoleMethod?: string; consoleUser?: string; consoleBase?: number; consoleProtocol?: string;
   environment?: string; rdpDomain?: string; rdpFullScreen?: boolean; rdpSize?: string; vncViewOnly?: boolean; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
   logonArgs: string; useLogonScript: boolean; automateLogon: boolean; initialCr: boolean;
   remoteCommand: string; useRemoteCommand: boolean; openAs: '' | 'sftp'; deviceType: string; ownLogin: boolean; sftpToTarget: boolean;
@@ -68,7 +69,7 @@ export interface KeywordSet { name: string; keywords: Keyword[]; }
 export interface SessionNode {
   name: string; path: string; isFolder: boolean; protocol?: string; hostname?: string;
   username?: string; port?: number; description?: string; hopTarget?: string; openAs?: string; children?: SessionNode[];
-  deviceType?: string; environment?: string; jump?: string; proxy?: boolean;
+  deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string;
 }
 
 export interface Button { label: string; send: string; toAll: boolean; action: string; script: string; }
@@ -84,6 +85,7 @@ export interface Settings {
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;
   backupDir?: string; backupJobs?: BackupJob[] | null;
   checklists?: Checklist[] | null; checklistDir?: string; recordHistory?: boolean | null;
+  collections?: Collection[] | null; collectDir?: string;
   keywordSets: KeywordSet[] | null; defaultKeywordSet: string; showConnectBar: boolean; keyMap: KeyBinding[] | null;
   customSchemes: { name: string; colors: Record<string, string> }[] | null; accentColor: string;
   restoreTabs: boolean; openTabs: string[] | null; inWindowMenu: boolean; forceTerminalScheme: boolean; pythonPath: string;
@@ -138,7 +140,16 @@ export interface AppInfo { name: string; version: string; os: string; arch: stri
 
 export interface FileFilter { displayName: string; pattern: string; }
 
-export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'RDP', 'VNC'] as const;
+export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC'] as const;
+/** Console server access methods (Console sessions). */
+export const CONSOLE_METHODS: { id: string; label: string }[] = [
+  { id: 'opengear-ssh', label: 'SSH as user:portNN (Opengear)' },
+  { id: 'avocent-ssh', label: 'SSH as user:ttySN (Avocent ACS)' },
+  { id: 'ssh-3000', label: 'SSH to port 3000 + N (Opengear, Lantronix, Perle)' },
+  { id: 'telnet-2000', label: 'Telnet to port 2000 + N (Opengear, Lantronix, Cisco)' },
+  { id: 'telnet-7000', label: 'Telnet to port 7000 + N (Avocent, Cyclades)' },
+  { id: 'custom', label: 'Custom' },
+];
 /** Protocols shown in their own window or viewer instead of a terminal. */
 export const isRemoteDesktop = (p: string | undefined) => p === 'RDP' || p === 'VNC';
 
@@ -150,6 +161,9 @@ export interface BackupResult { runId: string; path: string; ok: boolean; error?
 
 /** Change checklist: show commands per device type, run before and after a change. */
 export interface Checklist { name: string; targets: string[]; commands: { deviceType: string; commands: string }[]; }
+/** Run and Collect: commands on many devices, values from the output in a table. */
+export interface Collection { name: string; targets: string[]; commands: { deviceType: string; commands: string }[]; columns: CollectColumn[]; }
+export interface CollectColumn { name: string; pattern: string; deviceType: string; }
 export interface CheckPhaseResult { time: string; ok: boolean; error?: string; file?: string; log?: string; }
 export interface CheckRun { id: string; created: string; note?: string; devices: Record<string, { before?: CheckPhaseResult; after?: CheckPhaseResult; changed?: boolean | null }>; }
 export interface CheckResult { list: string; run: string; phase: 'before' | 'after'; path: string; ok: boolean; error?: string; changed?: boolean | null; done: number; total: number; }
@@ -190,7 +204,7 @@ export interface Transfer {
 
 /** Actions that menus, key bindings and buttons can trigger. */
 export const ACTIONS: Record<string, string> = {
-  'quick-connect': 'Quick Connect', discover: 'Discover Devices...', backups: 'Configuration Backups...', checklists: 'Change Checklists...', history: 'Command History...', 'local-shell': 'Local Shell', reconnect: 'Reconnect', disconnect: 'Disconnect',
+  'quick-connect': 'Quick Connect', collect: 'Run and Collect...', discover: 'Discover Devices...', backups: 'Configuration Backups...', checklists: 'Change Checklists...', history: 'Command History...', 'local-shell': 'Local Shell', reconnect: 'Reconnect', disconnect: 'Disconnect',
   'clone-tab': 'Clone Session', 'close-tab': 'Close Tab', 'next-tab': 'Next Tab', 'prev-tab': 'Previous Tab',
   copy: 'Copy', paste: 'Paste', 'copy-paste': 'Copy and Paste', find: 'Find', 'clear-scrollback': 'Clear Scrollback',
   'clear-screen': 'Clear Screen', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback',

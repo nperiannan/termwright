@@ -147,9 +147,9 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - [x] **Change checklists**: run a set of show commands on chosen devices before a change and again after it, then compare each device automatically
 - [x] **Command history search** across all tabs and sessions (filter by device type) and **autocomplete** from history and the Command Library while typing in the Command Window
 
-## 0.16 (planned)
-- [ ] **Run and collect**: run commands on many devices and get one report (file per device, or a table such as versions / serial numbers)
-- [ ] **Console servers**: open the right port of an Opengear / Lantronix / Avocent console server from a session (port maps)
+## 0.16 (done)
+- [x] **Run and collect**: run commands on many devices and get one report (file per device, and a table such as versions / serial numbers with CSV export)
+- [x] **Console servers**: open the right port of a console server from a session, port sessions created in one go
 
 ## Later
 - [ ] **Team sharing and sync**: shared session library (Git repository or shared folder), passwords stay per user or in a password manager

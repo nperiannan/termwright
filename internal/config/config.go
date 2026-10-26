@@ -84,6 +84,8 @@ type Settings struct {
 	BackupDir           string               `json:"backupDir"`        // Configuration Backups folder ("" = Documents/Termwright Config Backups)
 	BackupJobs          []BackupJob          `json:"backupJobs"`
 	Checklists          []Checklist          `json:"checklists"`
+	Collections         []Collection         `json:"collections"`
+	CollectDir          string               `json:"collectDir"`              // "" = Documents/Termwright Collected
 	ChecklistDir        string               `json:"checklistDir"`            // "" = Documents/Termwright Checklists
 	RecordHistory       *bool                `json:"recordHistory,omitempty"` // nil = on
 	KeywordSets         []KeywordSet         `json:"keywordSets"`
@@ -179,6 +181,23 @@ type Checklist struct {
 	Name     string              `json:"name"`
 	Targets  []string            `json:"targets"` // session paths; folders end with "/"
 	Commands []ChecklistCommands `json:"commands"`
+}
+
+// Collection runs commands on many devices and collects values from the
+// output into a table (Run and Collect).
+type Collection struct {
+	Name     string              `json:"name"`
+	Targets  []string            `json:"targets"`
+	Commands []ChecklistCommands `json:"commands"`
+	Columns  []CollectColumn     `json:"columns"`
+}
+
+// CollectColumn is one value taken from each device's output: the first
+// group of Pattern (a regular expression), or the whole match.
+type CollectColumn struct {
+	Name       string `json:"name"`
+	Pattern    string `json:"pattern"`
+	DeviceType string `json:"deviceType"` // "" = any device type
 }
 
 // ChecklistCommands are the commands for one device type ("" = any other).
@@ -420,6 +439,9 @@ func (m *Manager) Save(s Settings) error {
 	}
 	if s.Checklists == nil {
 		s.Checklists = []Checklist{}
+	}
+	if s.Collections == nil {
+		s.Collections = []Collection{}
 	}
 	if s.Alerts == nil {
 		s.Alerts = []Alert{}

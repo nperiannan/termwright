@@ -23,6 +23,8 @@ import { BulkEdit } from './dialogs/bulk-edit';
 import { RemoteView } from './components/remote-view';
 import { Backups } from './dialogs/backups';
 import { Checklists } from './dialogs/checklists';
+import { Collect } from './dialogs/collect';
+import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
 import { Palette } from './dialogs/palette';
@@ -35,7 +37,7 @@ import { About, Overlays } from './dialogs/overlays';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, HistoryDialog, Overlays, About],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, HistoryDialog, Overlays, About],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -158,6 +160,7 @@ export class App implements OnInit {
       case 'discover': this.ui.open('discover'); break;
       case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
       case 'checklists': this.ui.open('checklists'); break;
+      case 'collect': this.ui.open('collect'); break;
       case 'history': this.ui.open('history'); break;
       case 'export': this.ui.open('export'); break;
       case 'copy': if (!this.editInput('copy')) await this.tabs.copy(); break;

@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { Backend } from '../core/backend';
-import { BAUD_RATES, EMULATIONS, LogonAction, PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
+import { BAUD_RATES, CONSOLE_METHODS, EMULATIONS, LogonAction, PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
 import { SCHEME_NAMES } from '../core/themes';
 import { Tabs } from '../core/tabs.service';
 import { ENVIRONMENTS, envInfo, envOf } from '../core/env';
@@ -80,6 +80,31 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
                     <div class="hint">Opening this session logs in with its own SSH connection that only starts SFTP (no shell) -
                       for devices such as VOSS that allow one session per connection. Right-click a session or tab for the other mode.</div>
                   }
+                }
+                @if (s.protocol === 'Console') {
+                  <label>Console server</label>
+                  <select name="cserver" [(ngModel)]="s.consoleServer">
+                    <option value="">(choose the console server's session)</option>
+                    @for (p of consoleServers(); track p) { <option [value]="p">{{ p }}</option> }
+                  </select>
+                  <label>Port</label>
+                  <div class="row"><input name="cport" type="number" min="1" max="9999" class="short" [(ngModel)]="s.consolePort" />
+                    <span class="hint">the console server's port (line) number the device is cabled to</span></div>
+                  <label>Access</label>
+                  <select name="cmethod" [(ngModel)]="s.consoleMethod">
+                    @for (m of consoleMethods; track m.id) { <option [value]="m.id">{{ m.label }}</option> }
+                  </select>
+                  @if (s.consoleMethod === 'custom') {
+                    <label>Custom</label>
+                    <div class="row">
+                      <select name="cproto" [(ngModel)]="s.consoleProtocol"><option value="SSH2">SSH2</option><option value="Telnet">Telnet</option></select>
+                      <span>TCP port</span><input name="cbase" type="number" class="short" [(ngModel)]="s.consoleBase" placeholder="0" title="0 = the console server session's port" /><span>+ port</span>
+                      @if (s.consoleProtocol !== 'Telnet') { <span>user</span><input name="cuser" [(ngModel)]="s.consoleUser" placeholder="{user}:{port}" title="{user} = the console server's user, {port} = port number, {nn} = two digits" /> }
+                    </div>
+                  }
+                  <label></label>
+                  <div class="hint">{{ consoleHint() }} The console server's session gives the address, jump host and SSH login; the device type and the
+                    username / password below log in to the device at the console.</div>
                 }
                 @if (s.protocol === 'RDP') {
                   <label></label><div class="hint">Opens in this computer's Remote Desktop client (Remote Desktop Connection on Windows, Windows App on macOS,
@@ -475,12 +500,13 @@ export class SessionEditor implements OnInit {
 
   /** Saved-password state of each device type: "set", "empty", "" (asked), looked up once per dialog. */
   readonly pwStates = signal<Record<string, string>>({});
+  private pwAsked = new Set<string>();
   /** " (admin, no password)" etc. for the "Use the device type's username and password" box. */
   loginNote(name: string | undefined, user: string): string {
     if (!name) return '';
     const st = this.pwStates()[name];
-    if (st === undefined) {
-      this.pwStates.update(m => ({ ...m, [name]: '?' }));
+    if (st === undefined && !this.pwAsked.has(name)) {
+      this.pwAsked.add(name); // not a signal: no writes while the template renders
       this.backend.deviceTypePasswordState(name).then(v => this.pwStates.update(m => ({ ...m, [name]: v }))).catch(() => {});
     }
     const pw = st === 'set' ? 'password saved' : st === 'empty' ? 'no password' : st === '' ? 'password asked when connecting' : '';
@@ -532,12 +558,41 @@ export class SessionEditor implements OnInit {
   }
 
   remote() { return this.s?.protocol === 'RDP' || this.s?.protocol === 'VNC'; }
+  readonly consoleMethods = CONSOLE_METHODS;
+  /** SSH2 and Telnet sessions that can be console servers. */
+  readonly consoleServers = computed(() => {
+    const out: string[] = [];
+    const walk = (n: SessionNode) => (n.children ?? []).forEach(c => {
+      if (c.isFolder) walk(c);
+      else if ((c.protocol === 'SSH2' || c.protocol === 'Telnet') && c.path !== this.oldPath) out.push(c.path);
+    });
+    const r = this.ui.tree();
+    if (r) walk(r);
+    return out;
+  });
+  consoleHint() {
+    const s = this.s;
+    if (!s?.consoleServer) return '';
+    const cs = this.ui.findNode(s.consoleServer);
+    const n = s.consolePort || 0, nn = String(n).padStart(2, '0');
+    const host = cs?.hostname ?? '?';
+    const user = cs?.username ?? 'user';
+    switch (s.consoleMethod) {
+      case 'opengear-ssh': return `Connects with: ssh ${user}:port${nn}@${host}.`;
+      case 'avocent-ssh': return `Connects with: ssh ${user}:ttyS${n}@${host}.`;
+      case 'ssh-3000': return `Connects with: ssh -p ${3000 + n} ${user}@${host}.`;
+      case 'telnet-2000': return `Connects with: telnet ${host} ${2000 + n}.`;
+      case 'telnet-7000': return `Connects with: telnet ${host} ${7000 + n}.`;
+      default: return '';
+    }
+  }
 
   protocolChanged() {
     if (!this.s) return;
     if (this.remote() && ['logon', 'terminal', 'log', 'forward', 'auth', 'serial', 'local'].includes(this.page())) this.page.set('connection');
     this.s.port = defaultPort(this.s.protocol) || this.s.port;
     if (this.s.protocol === 'Serial') void this.loadPorts();
+    if (this.s.protocol === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }
   }
 
   async loadPorts() {
@@ -615,6 +670,11 @@ export class SessionEditor implements OnInit {
       this.page.set('connection'); this.error.set('Please enter a hostname.'); return;
     }
     if (s.protocol === 'Serial' && !s.comPort.trim()) { this.page.set('serial'); this.error.set('Please choose a serial port.'); return; }
+    if (s.protocol === 'Console') {
+      s.consolePort = Number(s.consolePort) || 0;
+      if (!s.consoleServer || s.consolePort < 1) { this.page.set('connection'); this.error.set('Choose the console server and the port number.'); return; }
+      if (s.consoleServer === this.oldPath) { this.page.set('connection'); this.error.set('A session cannot be its own console server.'); return; }
+    }
     s.port = Number(s.port) || 0;
     s.logonActions = s.logonActions.filter(a => a.expect || a.send);
     s.triggers = s.triggers.filter(t => t.pattern);

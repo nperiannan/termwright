@@ -85,6 +85,12 @@ export class Backend {
   checklistRun(name: string, runId: string, phase: 'before' | 'after', note: string) { return this.call<string>('ChecklistRun', name, runId, phase, note); }
   checklistCancel(name: string, runId: string) { return this.call<void>('ChecklistCancel', name, runId); }
   showChecklistFolder() { return this.call<void>('ShowChecklistFolder'); }
+  collectDir() { return this.call<string>('CollectDir'); }
+  collectRuns(name: string) { return this.call<CheckRun[]>('CollectRuns', name); }
+  collectRun(name: string, note: string) { return this.call<string>('CollectRun', name, note); }
+  collectCancel(name: string, runId: string) { return this.call<void>('CollectCancel', name, runId); }
+  showCollectFolder() { return this.call<void>('ShowCollectFolder'); }
+  saveTextAs(title: string, name: string, text: string) { return this.call<string>('SaveTextAs', title, name, text); }
   historyAdd(e: Partial<HistoryEntry>) { return this.call<void>('HistoryAdd', e); }
   historyList() { return this.call<HistoryEntry[]>('HistoryList'); }
   historyClear() { return this.call<void>('HistoryClear'); }

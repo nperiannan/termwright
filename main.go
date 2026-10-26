@@ -116,6 +116,7 @@ func buildMenu(app *App) *menu.Menu {
 	file.AddText("Discover Devices...", nil, emit("discover"))
 	file.AddText("Configuration Backups...", nil, emit("backups"))
 	file.AddText("Change Checklists...", nil, emit("checklists"))
+	file.AddText("Run and Collect...", nil, emit("collect"))
 	file.AddText("Export Sessions...", nil, emit("export"))
 	file.AddSeparator()
 	file.AddText("Close Tab", acc("w"), emit("close-tab"))

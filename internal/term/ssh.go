@@ -173,6 +173,9 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 	}
 	addr := net.JoinHostPort(s.Hostname, strconv.Itoa(port))
 	user := s.Username
+	if s.TransportUser != "" {
+		user = s.TransportUser // console server login (the device behind the port logs in with s.Username)
+	}
 	if user == "" {
 		r, err := m.prompts.Ask(ctx, Prompt{TabID: t.id, Kind: "credentials", Title: "Login",
 			Message: "Enter user name for " + addr, Fields: []PromptField{{Label: "Username"}}})
@@ -185,14 +188,22 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 	var usedPassword string
 	var typedPassword bool
 	var rememberPassword bool
+	pwPath := s.Path
 	saved, haveSaved := m.loginPassword(s)
+	if s.TransportPath != "" {
+		pwPath = s.TransportPath
+		saved, haveSaved = "", false
+		if m.SavedPassword != nil {
+			saved, haveSaved = m.SavedPassword(s.TransportPath)
+		}
+	}
 	askPassword := func(msg string) (string, error) {
 		if haveSaved {
 			haveSaved = false // only try once
 			return saved, nil
 		}
 		r, err := m.prompts.Ask(ctx, Prompt{TabID: t.id, Kind: "credentials", Title: "Enter Secure Shell Password",
-			Message: msg, Fields: []PromptField{{Label: "Password", Secret: true}}, AllowRemember: s.Path != ""})
+			Message: msg, Fields: []PromptField{{Label: "Password", Secret: true}}, AllowRemember: pwPath != ""})
 		if err != nil {
 			return "", err
 		}
@@ -266,7 +277,7 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 	}
 	client := ssh.NewClient(cc, chans, reqs)
 	if rememberPassword && typedPassword && m.OnPasswordUsed != nil {
-		m.OnPasswordUsed(s.Path, usedPassword)
+		m.OnPasswordUsed(pwPath, usedPassword)
 	}
 	info := fmt.Sprintf("SSH2 %s@%s  %s%s", user, addr, string(cc.ServerVersion()), via)
 	return client, info, func() { _ = raw.Close() }, nil

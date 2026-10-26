@@ -120,7 +120,7 @@ interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string
     </ng-template>
 
     <ng-template #sessTpl let-n>
-      <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget" />
+      <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget || n.protocol === 'Console'" />
       @if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
       <span class="name">{{ n.name }}</span>
       @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
@@ -264,6 +264,7 @@ export class SessionTree implements OnDestroy {
 
   target(n: SessionNode) {
     if (n.protocol === 'Serial') return 'Serial ' + (n.hostname ?? '');
+    if (n.protocol === 'Console') return 'Console ' + (n.console ? n.console.replace(/ port (\d+)$/, ', port $1') : '(no console server)');
     if (n.protocol === 'Local Shell') return 'Local shell';
     const who = n.username ? n.username + '@' : '';
     return `${n.protocol ?? ''} ${who}${n.hostname ?? ''}:${this.portOf(n)}` + (n.hopTarget ? ` → ${n.hopTarget}` : '');
@@ -352,6 +353,7 @@ export class SessionTree implements OnDestroy {
   protoIcon(n: SessionNode): SessionKind {
     switch (n.protocol) {
       case 'Serial': return 'serial';
+      case 'Console': return 'console';
       case 'Local Shell': return 'shell';
       case 'Telnet': return 'telnet';
       case 'Raw': return 'raw';
@@ -394,6 +396,7 @@ export class SessionTree implements OnDestroy {
         { label: `Edit ${g.length} Sessions...`, action: () => this.bulkEdit(g) },
         { label: `Back Up ${g.length} Configurations`, action: () => this.backUp(g) },
         { label: 'Change Checklist...', action: () => this.checklist(g) },
+        { label: 'Run and Collect...', action: () => this.collect(g) },
         { label: allFav ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav(g, !allFav) },
         { separator: true },
         { label: `Delete ${g.length} Sessions`, action: () => this.deleteMany(g) },
@@ -407,6 +410,7 @@ export class SessionTree implements OnDestroy {
           { label: 'Edit All Sessions in Folder...', action: () => this.bulkEdit(this.pathsIn(n)) },
           { label: 'Back Up Configurations', action: () => this.backUp([n.path + '/']) },
           { label: 'Change Checklist...', action: () => this.checklist([n.path + '/']) },
+          { label: 'Run and Collect...', action: () => this.collect([n.path + '/']) },
           { separator: true },
           { label: 'New Session...', action: () => this.ui.newSession(n.path) },
           { label: 'New Folder...', action: () => this.newFolder(n.path) },
@@ -431,6 +435,12 @@ export class SessionTree implements OnDestroy {
             { label: 'Back Up Configuration', action: () => this.backUp([n.path]) },
             { label: 'Change Checklist...', action: () => this.checklist([n.path]) },
           ]),
+          ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'Serial' ? [] : [
+            { label: 'Run and Collect...', action: () => this.collect([n.path]) },
+          ]),
+          ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [
+            { label: 'Console Server Ports...', action: () => { this.ui.consoleServerFor.set(n.path); this.ui.open('consolePorts'); } },
+          ] : []),
           { label: 'Duplicate', action: () => this.duplicate(n) },
           { label: 'Rename...', action: () => this.renameSession(n) },
           { label: 'Forget Saved Password', action: () => this.backend.forgetPassword(n.path).then(() => this.ui.toast('Password removed')) },
@@ -443,6 +453,11 @@ export class SessionTree implements OnDestroy {
   checklist(targets: string[]) {
     this.ui.checklistTargets.set(targets);
     this.ui.open('checklists');
+  }
+
+  collect(targets: string[]) {
+    this.ui.collectTargets.set(targets);
+    this.ui.open('collect');
   }
 
   backUp(targets: string[]) {

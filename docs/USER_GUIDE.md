@@ -210,6 +210,31 @@ Choose **RDP** or **VNC** as the protocol of a session (or type `rdp host` / `vn
 
 Discover Devices finds computers with RDP (3389) or VNC (5900) open and can add them as RDP or VNC sessions.
 
+### Console servers
+
+Devices cabled to a console server (terminal server) get a session of protocol **Console**: Termwright connects to the console server's port for the device and then logs in to the device itself, so the console of a switch in another building opens with a double-click.
+
+1. Make a normal **SSH2** or **Telnet** session for the console server (address, username, key or saved password, jump host if needed).
+2. Right-click it → **Console Server Ports…**: choose how the console server gives access to a port, the ports (`1-16`, `20, 24`, or one `port name` per line, e.g. `5 rack4-dist1`), how sessions are named, the folder and the **device type** of the devices. The preview shows each session and the command it corresponds to; sessions that already exist are skipped.
+
+   ![Console Server Ports](screenshots/console-ports.png)
+3. Or make one by hand: Session Options → Protocol **Console**, then the console server's session, the **port** and the **access**:
+
+| Access | Connects with |
+|---|---|
+| SSH as user:portNN | `ssh admin:port05@console` (Opengear and similar) |
+| SSH as user:ttySN | `ssh admin:ttyS5@console` (Avocent ACS and similar) |
+| SSH to port 3000 + N | `ssh -p 3005 admin@console` |
+| Telnet to port 2000 + N | `telnet console 2005` (Lantronix, Cisco and others) |
+| Telnet to port 7000 + N | `telnet console 7005` (Avocent, Cyclades) |
+| Custom | SSH2 or Telnet, any base TCP port, any user pattern (`{user}`, `{port}`, `{nn}`) |
+
+![Console session](screenshots/console-session.png)
+
+- The **console server's session** gives the address, the jump host or proxy and the SSH login (its key or saved password); change it once and every port follows.
+- The **device type** (or the session's own username / password) logs in to the device at the console - over SSH too - and Enter is sent after connecting to wake the console line up.
+- Console sessions can be backed up, used in change checklists and in Run and Collect like any other device. With the Session Manager's *Show which devices answer*, they are not checked (the console server is).
+
 ## 4. Sessions and the Session Manager
 
 - **New session**: `+` in the Session Manager header (goes into the selected folder) or right-click → *New Session*.
@@ -440,6 +465,22 @@ File → **Change Checklists…** (or right-click a session, folder or selection
 
 - Each change is kept: pick an earlier one in *Change* to look at it again; *Retake Before* repeats the before snapshot of the selected change.
 - The outputs are saved in *Documents/Termwright Checklists/<checklist>/<date>_<time>/before|after/<session path>.txt* (each command under a `### command` line).
+
+### Run and collect
+
+File → **Run and Collect…** (or right-click a session, folder or selection → **Run and Collect…**, or Quick Open → *collect*) runs commands on many devices and puts values from their output in **one table** - an inventory of models, versions, serial numbers and uptimes, or anything a pattern can find.
+
+1. **+ New collection**: the **devices** (folders or sessions), the **commands per device type** and the **columns**. New collections start with inventory commands and columns (*Model*, *Version*, *Serial*, *Uptime*) for the built-in device types; **+ Inventory Columns** adds them later.
+
+   ![Run and Collect setup](screenshots/collect-setup.png)
+2. A column has a **name**, a **device type** (or *Any device*) and a **pattern** (a regular expression, case-insensitive; the first `( )` group is the value, e.g. `Serial#\s*:\s*(\S+)`). Several rows with the same name and different device types fill one column - each device type has its own pattern.
+3. **Run Now**: the commands run in the background on every device, four at a time, with the session's usual login (device type, saved passwords, keys, jump hosts, console servers) - nothing is asked.
+
+   ![Run and Collect results](screenshots/collect.png)
+
+- **Copy Table** copies it for a spreadsheet, **Export CSV…** saves a `.csv` file; *Output* opens a device's full output, *Device Output* what a failed device sent.
+- Editing the columns updates the table at once - there is no need to run again. Earlier runs stay in *Run*.
+- The outputs are saved in *Documents/Termwright Collected/<collection>/<date>_<time>/output/<session path>.txt*.
 
 ## 9. File transfer
 

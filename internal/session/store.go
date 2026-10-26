@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -33,8 +34,9 @@ type Node struct {
 	OpenAs      string  `json:"openAs,omitempty"`    // "sftp" when the session opens as an SFTP browser
 	DeviceType  string  `json:"deviceType,omitempty"`
 	Environment string  `json:"environment,omitempty"`
-	Jump        string  `json:"jump,omitempty"`  // jump session name
-	Proxy       bool    `json:"proxy,omitempty"` // connects through a SOCKS/HTTP proxy
+	Jump        string  `json:"jump,omitempty"`    // jump session name
+	Proxy       bool    `json:"proxy,omitempty"`   // connects through a SOCKS/HTTP proxy
+	Console     string  `json:"console,omitempty"` // console port: "<console server path> port <n>"
 	Children    []*Node `json:"children,omitempty"`
 }
 
@@ -124,6 +126,9 @@ func (s *Store) walk(n *Node, rel string) error {
 			c.Protocol, c.Hostname, c.Username, c.Port = ss.Protocol, ss.Hostname, ss.Username, ss.Port
 			c.Description = strings.Join(ss.Description, "\n")
 			c.DeviceType, c.Environment, c.Jump, c.Proxy = ss.DeviceType, ss.Environment, ss.JumpSession, ss.ProxyType != ""
+			if ss.Protocol == ProtoConsole && ss.ConsoleServer != "" {
+				c.Console = ss.ConsoleServer + " port " + strconv.Itoa(ss.ConsolePort)
+			}
 			if ss.Protocol == ProtoSerial {
 				c.Hostname = ss.ComPort
 			}

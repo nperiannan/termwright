@@ -80,6 +80,13 @@ func (a *App) ChecklistRun(name, runID, phase, note string) (string, error) {
 		}
 		runID = r.ID
 	}
+	return a.runOnDevices(st, c, name, runID, ph, "check")
+}
+
+// runOnDevices runs the checklist's commands on its devices in the
+// background (four at a time), records each device in st and emits
+// "<event>:progress" per device and "<event>:done" at the end.
+func (a *App) runOnDevices(st *checklist.Store, c config.Checklist, name, runID string, ph checklist.Phase, event string) (string, error) {
 	paths, err := a.BackupSessions(c.Targets)
 	if err != nil {
 		return "", err
@@ -87,7 +94,7 @@ func (a *App) ChecklistRun(name, runID, phase, note string) (string, error) {
 	if len(paths) == 0 {
 		return "", errors.New("no sessions in the checklist")
 	}
-	key := name + "\x00" + runID
+	key := event + "\x00" + name + "\x00" + runID
 	ctx, cancel := context.WithCancel(context.Background())
 	checkMu.Lock()
 	if checkRuns[key] != nil {
@@ -118,7 +125,7 @@ func (a *App) ChecklistRun(name, runID, phase, note string) (string, error) {
 				defer func() { <-sem; wg.Done() }()
 				out, log, err := a.checkOne(ctx, p, c)
 				d, rerr := st.Record(name, runID, p, ph, out, err, log, time.Now())
-				res := CheckResult{List: name, Run: runID, Phase: phase, Path: p, OK: err == nil && rerr == nil}
+				res := CheckResult{List: name, Run: runID, Phase: string(ph), Path: p, OK: err == nil && rerr == nil}
 				if err == nil {
 					err = rerr
 				}
@@ -137,11 +144,11 @@ func (a *App) ChecklistRun(name, runID, phase, note string) (string, error) {
 				}
 				res.Done, res.Total = done, len(paths)
 				mu.Unlock()
-				emitter{a}.Emit("check:progress", res)
+				emitter{a}.Emit(event+":progress", res)
 			}(p)
 		}
 		wg.Wait()
-		emitter{a}.Emit("check:done", map[string]any{"list": name, "run": runID, "phase": phase, "total": len(paths), "done": done,
+		emitter{a}.Emit(event+":done", map[string]any{"list": name, "run": runID, "phase": string(ph), "total": len(paths), "done": done,
 			"failed": failed, "changed": changed, "cancelled": ctx.Err() != nil})
 	}()
 	return runID, nil
@@ -150,7 +157,7 @@ func (a *App) ChecklistRun(name, runID, phase, note string) (string, error) {
 // ChecklistCancel stops a running checklist phase.
 func (a *App) ChecklistCancel(name, runID string) {
 	checkMu.Lock()
-	if c := checkRuns[name+"\x00"+runID]; c != nil {
+	if c := checkRuns["check\x00"+name+"\x00"+runID]; c != nil {
 		c()
 	}
 	checkMu.Unlock()
@@ -163,7 +170,9 @@ func (a *App) checkOne(ctx context.Context, p string, c config.Checklist) (strin
 	if err != nil {
 		return "", "", err
 	}
-	s = a.withFolderDefaults(s)
+	if s, err = a.consoleSession(a.withFolderDefaults(s)); err != nil {
+		return "", "", err
+	}
 	prompt := ""
 	if s.DeviceType != "" && a.terms.DeviceType != nil {
 		if dt, ok := a.terms.DeviceType(s.DeviceType); ok {

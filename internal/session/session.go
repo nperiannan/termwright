@@ -11,13 +11,14 @@ import (
 
 // Protocol names as stored in session files.
 const (
-	ProtoSSH2   = "SSH2"
-	ProtoTelnet = "Telnet"
-	ProtoSerial = "Serial"
-	ProtoLocal  = "Local Shell"
-	ProtoRaw    = "Raw"
-	ProtoRDP    = "RDP" // opened in the computer's Remote Desktop client
-	ProtoVNC    = "VNC" // opened in Termwright's VNC viewer
+	ProtoSSH2    = "SSH2"
+	ProtoTelnet  = "Telnet"
+	ProtoSerial  = "Serial"
+	ProtoLocal   = "Local Shell"
+	ProtoRaw     = "Raw"
+	ProtoRDP     = "RDP"     // opened in the computer's Remote Desktop client
+	ProtoVNC     = "VNC"     // opened in Termwright's VNC viewer
+	ProtoConsole = "Console" // a port of a console server (another saved session)
 )
 
 // Keys used in the interoperable session file format. Keys prefixed with
@@ -87,6 +88,12 @@ const (
 	kRDPFull     = "Termwright RDP Full Screen"
 	kRDPSize     = "Termwright RDP Size"
 	kVNCViewOnly = "Termwright VNC View Only"
+	kConServer   = "Termwright Console Server"
+	kConPort     = "Termwright Console Port"
+	kConMethod   = "Termwright Console Access"
+	kConUser     = "Termwright Console User"
+	kConBase     = "Termwright Console Base Port"
+	kConProto    = "Termwright Console Protocol"
 	kSFTPTarget  = "Termwright SFTP To Command Target"
 	kKrbPrinc    = "Termwright Kerberos Principal"
 	kKrbSPN      = "Termwright Kerberos SPN"
@@ -126,74 +133,85 @@ type LogonAction struct {
 
 // Session is the editable view of a session file exposed to the UI.
 type Session struct {
-	Path              string        `json:"path"`   // "Folder/Sub/Name" (no extension)
-	Name              string        `json:"name"`   // last path element
-	Folder            string        `json:"folder"` // parent folder path, "" for root
-	Protocol          string        `json:"protocol"`
-	Hostname          string        `json:"hostname"`
-	Port              int           `json:"port"`
-	Username          string        `json:"username"`
-	IdentityFile      string        `json:"identityFile"`
-	AuthMethods       string        `json:"authMethods"`
-	Emulation         string        `json:"emulation"`
-	TermType          string        `json:"termType"`
-	Description       []string      `json:"description"`
-	Rows              int           `json:"rows"`
-	Cols              int           `json:"cols"`
-	Scrollback        int           `json:"scrollback"`
-	Keepalive         bool          `json:"keepalive"`
-	KeepaliveSec      int           `json:"keepaliveSec"`
-	ComPort           string        `json:"comPort"`
-	BaudRate          int           `json:"baudRate"`
-	DataBits          int           `json:"dataBits"`
-	StopBits          int           `json:"stopBits"` // 0 = 1, 1 = 1.5, 2 = 2
-	Parity            int           `json:"parity"`   // 0 none, 1 odd, 2 even, 3 mark, 4 space
-	LogFile           string        `json:"logFile"`
-	LogOnConnect      bool          `json:"logOnConnect"`
-	LogAppend         bool          `json:"logAppend"`
-	LogEachLine       string        `json:"logEachLine"`
-	LogRaw            bool          `json:"logRaw"`
-	SavePassword      bool          `json:"savePassword"`
-	LocalCommand      string        `json:"localCommand"`
-	LocalDir          string        `json:"localDir"`
-	ColorScheme       string        `json:"colorScheme"`
-	LogonActions      []LogonAction `json:"logonActions"`
-	Triggers          []Trigger     `json:"triggers"`
-	PortForwards      []PortForward `json:"portForwards"`
-	JumpSession       string        `json:"jumpSession"` // path of a session used as jump host
-	ProxyType         string        `json:"proxyType"`   // "" | socks5 | http
-	ProxyHost         string        `json:"proxyHost"`
-	ProxyPort         int           `json:"proxyPort"`
-	ProxyUser         string        `json:"proxyUser"`
-	AutoReconnect     bool          `json:"autoReconnect"`
-	X11Forward        bool          `json:"x11Forward"`
-	AgentForward      bool          `json:"agentForward"`
-	KeywordSet        string        `json:"keywordSet"`
-	FontFamily        string        `json:"fontFamily"`
-	FontSize          int           `json:"fontSize"`
-	Backspace         string        `json:"backspace"`   // "" (DEL, default) | "bs" (Ctrl+H)
-	LogonScript       string        `json:"logonScript"` // JavaScript file run after connecting
-	LogonArgs         string        `json:"logonArgs"`   // arguments for the logon script (scriptArgs)
-	AutomateLogon     bool          `json:"automateLogon"`
-	InitialCR         bool          `json:"initialCr"` // send Enter right after connecting
-	UseLogonScript    bool          `json:"useLogonScript"`
-	RemoteCommand     string        `json:"remoteCommand"` // SSH2: run this instead of a login shell
-	UseRemoteCommand  bool          `json:"useRemoteCommand"`
-	OpenAs            string        `json:"openAs"`            // SSH2: "" = terminal, "sftp" = SFTP browser only
-	DeviceType        string        `json:"deviceType"`        // name of a device type (login profile)
-	OwnLogin          bool          `json:"ownLogin"`          // with a device type: use this session's username/password instead of the device type's
-	RDPDomain         string        `json:"rdpDomain"`         // RDP: Windows domain of the user
-	RDPFullScreen     bool          `json:"rdpFullScreen"`     // RDP: open full screen
-	RDPSize           string        `json:"rdpSize"`           // RDP: window size such as "1600x900" ("" = the client's default)
-	VNCViewOnly       bool          `json:"vncViewOnly"`       // VNC: watch only, no keyboard or mouse
-	Environment       string        `json:"environment"`       // "", production, staging, test, development: colours the tab, production asks before sending to many tabs
-	KerberosPrincipal string        `json:"kerberosPrincipal"` // GSSAPI: user@REALM when no kinit ticket ("" = login user)
-	KerberosSPN       string        `json:"kerberosSpn"`       // GSSAPI target, "" = host@<hostname>; %H = hostname
-	CertificateFile   string        `json:"certificateFile"`   // OpenSSH user certificate, "" = <identity>-cert.pub
-	SFTPToTarget      bool          `json:"sftpToTarget"`      // remote command "ssh … host": SFTP opens on that host, through this connection
-	SerialDTR         bool          `json:"serialDtr"`         // assert DTR when opening the port
-	SerialRTS         bool          `json:"serialRts"`         // assert RTS when opening the port
-	SerialFlow        string        `json:"serialFlow"`        // "" none | rtscts | xonxoff
+	Path             string        `json:"path"`   // "Folder/Sub/Name" (no extension)
+	Name             string        `json:"name"`   // last path element
+	Folder           string        `json:"folder"` // parent folder path, "" for root
+	Protocol         string        `json:"protocol"`
+	Hostname         string        `json:"hostname"`
+	Port             int           `json:"port"`
+	Username         string        `json:"username"`
+	IdentityFile     string        `json:"identityFile"`
+	AuthMethods      string        `json:"authMethods"`
+	Emulation        string        `json:"emulation"`
+	TermType         string        `json:"termType"`
+	Description      []string      `json:"description"`
+	Rows             int           `json:"rows"`
+	Cols             int           `json:"cols"`
+	Scrollback       int           `json:"scrollback"`
+	Keepalive        bool          `json:"keepalive"`
+	KeepaliveSec     int           `json:"keepaliveSec"`
+	ComPort          string        `json:"comPort"`
+	BaudRate         int           `json:"baudRate"`
+	DataBits         int           `json:"dataBits"`
+	StopBits         int           `json:"stopBits"` // 0 = 1, 1 = 1.5, 2 = 2
+	Parity           int           `json:"parity"`   // 0 none, 1 odd, 2 even, 3 mark, 4 space
+	LogFile          string        `json:"logFile"`
+	LogOnConnect     bool          `json:"logOnConnect"`
+	LogAppend        bool          `json:"logAppend"`
+	LogEachLine      string        `json:"logEachLine"`
+	LogRaw           bool          `json:"logRaw"`
+	SavePassword     bool          `json:"savePassword"`
+	LocalCommand     string        `json:"localCommand"`
+	LocalDir         string        `json:"localDir"`
+	ColorScheme      string        `json:"colorScheme"`
+	LogonActions     []LogonAction `json:"logonActions"`
+	Triggers         []Trigger     `json:"triggers"`
+	PortForwards     []PortForward `json:"portForwards"`
+	JumpSession      string        `json:"jumpSession"` // path of a session used as jump host
+	ProxyType        string        `json:"proxyType"`   // "" | socks5 | http
+	ProxyHost        string        `json:"proxyHost"`
+	ProxyPort        int           `json:"proxyPort"`
+	ProxyUser        string        `json:"proxyUser"`
+	AutoReconnect    bool          `json:"autoReconnect"`
+	X11Forward       bool          `json:"x11Forward"`
+	AgentForward     bool          `json:"agentForward"`
+	KeywordSet       string        `json:"keywordSet"`
+	FontFamily       string        `json:"fontFamily"`
+	FontSize         int           `json:"fontSize"`
+	Backspace        string        `json:"backspace"`   // "" (DEL, default) | "bs" (Ctrl+H)
+	LogonScript      string        `json:"logonScript"` // JavaScript file run after connecting
+	LogonArgs        string        `json:"logonArgs"`   // arguments for the logon script (scriptArgs)
+	AutomateLogon    bool          `json:"automateLogon"`
+	InitialCR        bool          `json:"initialCr"` // send Enter right after connecting
+	UseLogonScript   bool          `json:"useLogonScript"`
+	RemoteCommand    string        `json:"remoteCommand"` // SSH2: run this instead of a login shell
+	UseRemoteCommand bool          `json:"useRemoteCommand"`
+	OpenAs           string        `json:"openAs"`          // SSH2: "" = terminal, "sftp" = SFTP browser only
+	DeviceType       string        `json:"deviceType"`      // name of a device type (login profile)
+	OwnLogin         bool          `json:"ownLogin"`        // with a device type: use this session's username/password instead of the device type's
+	RDPDomain        string        `json:"rdpDomain"`       // RDP: Windows domain of the user
+	RDPFullScreen    bool          `json:"rdpFullScreen"`   // RDP: open full screen
+	RDPSize          string        `json:"rdpSize"`         // RDP: window size such as "1600x900" ("" = the client's default)
+	VNCViewOnly      bool          `json:"vncViewOnly"`     // VNC: watch only, no keyboard or mouse
+	ConsoleServer    string        `json:"consoleServer"`   // Console: the console server's session path
+	ConsolePort      int           `json:"consolePort"`     // Console: port (line) number on the console server
+	ConsoleMethod    string        `json:"consoleMethod"`   // Console: how ports are reached (see console.go)
+	ConsoleUser      string        `json:"consoleUser"`     // Console, custom: user name template ({user}, {port}, {nn})
+	ConsoleBase      int           `json:"consoleBase"`     // Console, custom: TCP port = base + port number (0 = the server's port)
+	ConsoleProtocol  string        `json:"consoleProtocol"` // Console, custom: SSH2 or Telnet
+	// Set when connecting (not saved): the SSH login to a console server uses
+	// this user and the saved password of this session path, while Username
+	// and the device type log in to the device behind the port.
+	TransportUser     string `json:"transportUser,omitempty"`
+	TransportPath     string `json:"transportPath,omitempty"`
+	Environment       string `json:"environment"`       // "", production, staging, test, development: colours the tab, production asks before sending to many tabs
+	KerberosPrincipal string `json:"kerberosPrincipal"` // GSSAPI: user@REALM when no kinit ticket ("" = login user)
+	KerberosSPN       string `json:"kerberosSpn"`       // GSSAPI target, "" = host@<hostname>; %H = hostname
+	CertificateFile   string `json:"certificateFile"`   // OpenSSH user certificate, "" = <identity>-cert.pub
+	SFTPToTarget      bool   `json:"sftpToTarget"`      // remote command "ssh … host": SFTP opens on that host, through this connection
+	SerialDTR         bool   `json:"serialDtr"`         // assert DTR when opening the port
+	SerialRTS         bool   `json:"serialRts"`         // assert RTS when opening the port
+	SerialFlow        string `json:"serialFlow"`        // "" none | rtscts | xonxoff
 }
 
 // Defaults returns a new session with sensible default values.
@@ -290,6 +308,12 @@ func FromFile(path string, f *securecrt.File) Session {
 	s.RDPFullScreen = f.Bool(kRDPFull, false)
 	s.RDPSize = f.Str(kRDPSize, "")
 	s.VNCViewOnly = f.Bool(kVNCViewOnly, false)
+	s.ConsoleServer = f.Str(kConServer, "")
+	s.ConsolePort = int(f.DWord(kConPort, 0))
+	s.ConsoleMethod = f.Str(kConMethod, "")
+	s.ConsoleUser = f.Str(kConUser, "")
+	s.ConsoleBase = int(f.DWord(kConBase, 0))
+	s.ConsoleProtocol = f.Str(kConProto, "")
 	s.SFTPToTarget = f.Bool(kSFTPTarget, false)
 	s.KerberosPrincipal = f.Str(kKrbPrinc, "")
 	s.KerberosSPN = f.Str(kKrbSPN, "")
@@ -589,6 +613,17 @@ func (s Session) Apply(f *securecrt.File) {
 	setOptBool(f, kRDPFull, s.RDPFullScreen)
 	setOptStr(f, kRDPSize, s.RDPSize)
 	setOptBool(f, kVNCViewOnly, s.VNCViewOnly)
+	setOptStr(f, kConServer, s.ConsoleServer)
+	setOptStr(f, kConMethod, s.ConsoleMethod)
+	setOptStr(f, kConUser, s.ConsoleUser)
+	setOptStr(f, kConProto, s.ConsoleProtocol)
+	if s.ConsoleServer != "" {
+		f.SetDWord(kConPort, uint32(s.ConsolePort))
+		f.SetDWord(kConBase, uint32(s.ConsoleBase))
+	} else {
+		f.Delete(kConPort)
+		f.Delete(kConBase)
+	}
 	setOptBool(f, kSFTPTarget, s.SFTPToTarget && s.UseRemoteCommand)
 	setOptStr(f, kKrbPrinc, s.KerberosPrincipal)
 	setOptStr(f, kKrbSPN, s.KerberosSPN)

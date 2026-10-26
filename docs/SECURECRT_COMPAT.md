@@ -18,7 +18,7 @@ back unchanged. Files keep their UTF-8 BOM and CRLF style.
 
 | Termwright field | Key | Notes |
 |---|---|---|
-| Protocol | `S:"Protocol Name"` | `SSH2`, `Telnet`, `Serial`, `Local Shell`, `Raw`; `RDP` and `VNC` are Termwright-only (other programs do not open them) |
+| Protocol | `S:"Protocol Name"` | `SSH2`, `Telnet`, `Serial`, `Local Shell`, `Raw`; `RDP`, `VNC` and `Console` (console server port) are Termwright-only (other programs do not open them) |
 | Hostname / Username | `S:"Hostname"`, `S:"Username"` | |
 | SSH port | `D:"[SSH2] Port"` | |
 | Telnet / Raw port | `D:"Port"` | |
@@ -45,7 +45,7 @@ back unchanged. Files keep their UTF-8 BOM and CRLF style.
 
 Termwright-only keys use a `Termwright ` prefix (`Termwright Logon Actions`, `Termwright Triggers`, `Termwright Port Forwards`,
 `Termwright Proxy Type/Host/Port/User`, `Termwright Font`, `Termwright Font Size`, `Termwright Backspace`, `Termwright Save Password`,
-`Termwright Raw Log`, `Termwright Local Command`, `Termwright Terminal Type`). The original application ignores them.
+`Termwright Raw Log`, `Termwright Local Command`, `Termwright Terminal Type`, `Termwright Console Server/Port/Access/User/Base Port/Protocol`). The original application ignores them.
 
 Keys marked *verified* were checked against real session files created by users.
 

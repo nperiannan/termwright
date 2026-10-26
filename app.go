@@ -32,7 +32,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.15.1-dev"
+var Version = "0.16.0-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -415,7 +415,10 @@ func (a *App) OpenTab(path string) (term.TabInfo, error) {
 		return term.TabInfo{}, err
 	}
 	a.cfg.AddRecent(s.Path)
-	return a.terms.Create(a.withFolderDefaults(s)), nil
+	if s, err = a.consoleSession(a.withFolderDefaults(s)); err != nil {
+		return term.TabInfo{}, err
+	}
+	return a.terms.Create(s), nil
 }
 
 // OpenAdHoc creates a tab for an unsaved session (quick connect / local shell).
@@ -472,7 +475,9 @@ func (a *App) RefreshTabSession(id, path string) error {
 	if err != nil {
 		return err
 	}
-	s = a.withFolderDefaults(s)
+	if s, err = a.consoleSession(a.withFolderDefaults(s)); err != nil {
+		return err
+	}
 	return a.terms.UpdateSession(id, s)
 }
 

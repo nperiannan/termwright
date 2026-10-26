@@ -1,13 +1,14 @@
 import { Component, computed, input } from '@angular/core';
 
 /** Kinds of session icons: each has its own color and symbol so sessions are told apart at a glance. */
-export type SessionKind = 'ssh' | 'sftp' | 'telnet' | 'serial' | 'shell' | 'raw' | 'rdp' | 'vnc' | 'folder' | 'folder-open';
+export type SessionKind = 'ssh' | 'sftp' | 'telnet' | 'serial' | 'console' | 'shell' | 'raw' | 'rdp' | 'vnc' | 'folder' | 'folder-open';
 
 const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: string; to: string; title: string }> = {
   ssh: { from: '#10b981', to: '#0d9488', title: 'SSH2 terminal' },
   sftp: { from: '#3b82f6', to: '#6366f1', title: 'SFTP file browser' },
   telnet: { from: '#f59e0b', to: '#ea580c', title: 'Telnet (not encrypted)' },
   serial: { from: '#a855f7', to: '#7c3aed', title: 'Serial console' },
+  console: { from: '#8b5cf6', to: '#4338ca', title: 'Console server port' },
   shell: { from: '#64748b', to: '#334155', title: 'Local shell' },
   raw: { from: '#ec4899', to: '#be185d', title: 'Raw TCP' },
   rdp: { from: '#0ea5e9', to: '#1d4ed8', title: 'Remote Desktop (RDP)' },
@@ -48,6 +49,7 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
               @case ('ssh') { <path d="M4.2 5.6l2.4 2.4-2.4 2.4M8.3 10.6h3.6" /> }
               @case ('sftp') { <path d="M5.6 11.3V4.9M3.8 6.6l1.8-1.8 1.8 1.8M10.4 4.7v6.4M8.6 9.4l1.8 1.8 1.8-1.8" /> }
               @case ('telnet') { <path d="M4.6 4.9h6.8M8 4.9v6.4" /> }
+              @case ('console') { <path d="M3.6 5.6h8.8l-1.2 4.8H4.8z" /><path d="M6 7.8h.01M8 7.8h.01M10 7.8h.01" stroke-width="1.7" /> }
               @case ('serial') { <path d="M3.6 5.6h8.8l-1.2 4.8H4.8z" /><path d="M6 7.8h.01M8 7.8h.01M10 7.8h.01" stroke-width="1.7" /> }
               @case ('shell') { <path d="M9.9 5.2c-.4-.5-1.1-.8-1.9-.8-1.1 0-1.9.6-1.9 1.4 0 1.9 4 1 4 3 0 .8-.9 1.5-2.1 1.5-.8 0-1.6-.4-2-.9M8 3.4v9.2" stroke-width="1.3" /> }
               @case ('raw') { <path d="M6.2 5.2L3.6 8l2.6 2.8M9.8 5.2L12.4 8l-2.6 2.8" /> }

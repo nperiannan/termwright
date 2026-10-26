@@ -4,9 +4,12 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-## 0.15.1 (2026-10-27)
+## 0.16.0 (2026-10-27)
 
+* **Run and Collect** (File → Run and Collect…, or right-click a session, folder or selection): run commands on many devices in the background (four at a time, saved logins, nothing asked) and see values from their output in one table - columns are a name, a device type and a pattern; inventory columns (model, version, serial number, uptime) are suggested for the built-in device types. **Copy Table**, **Export CSV…**, the full output per device and earlier runs are kept.
+* **Console servers**: protocol **Console** opens a device through the port of a console server (SSH as `user:portNN` or `user:ttySN`, SSH to 3000 + N, Telnet to 2000 + N or 7000 + N, or custom), using the console server's session for the address, jump host and SSH login and the device type for the login on the device. Right-click a console server's session → **Console Server Ports…** creates the sessions for a range or list of ports in one go. Console sessions work with backups, checklists and Run and Collect.
 * **Change Checklist…** on the Session Manager menu of a session, a folder or a selection: opens the checklist of exactly those devices, or starts a new one with them (also File → Change Checklists… and Quick Open).
+* Session Options no longer logs an Angular error when it shows the device type's login.
 
 ## 0.15.0 (2026-10-27)
 

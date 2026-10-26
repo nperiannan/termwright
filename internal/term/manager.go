@@ -354,11 +354,15 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 	actions := s.LogonActions
 	initialCR := s.InitialCR
 	if dt, ok := m.deviceOf(s); ok {
+		proto := s.Protocol
+		if s.ConsoleServer != "" {
+			proto = session.ProtoConsole // the device's own login prompts appear at the console, even over SSH
+		}
 		if _, bg := m.quiet.Load(t.id); bg {
 			// background capture: it runs the after-login steps itself, one at a prompt
-			actions = append(dt.LoginOnly(s.Protocol), actions...)
+			actions = append(dt.LoginOnly(proto), actions...)
 		} else {
-			actions = append(dt.Steps(s.Protocol), actions...)
+			actions = append(dt.Steps(proto), actions...)
 		}
 		initialCR = initialCR || dt.InitialCR
 	}

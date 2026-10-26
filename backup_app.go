@@ -85,7 +85,7 @@ func (a *App) BackupSessions(targets []string) ([]string, error) {
 
 func backupable(proto string) bool {
 	switch proto {
-	case session.ProtoSSH2, "SSH", session.ProtoTelnet, session.ProtoRaw, session.ProtoSerial:
+	case session.ProtoSSH2, "SSH", session.ProtoTelnet, session.ProtoRaw, session.ProtoSerial, session.ProtoConsole:
 		return true
 	}
 	return false
@@ -202,7 +202,9 @@ func (a *App) backupOne(ctx context.Context, st *backup.Store, p string, job con
 	if err != nil {
 		return finish(err, "", false)
 	}
-	s = a.withFolderDefaults(s)
+	if s, err = a.consoleSession(a.withFolderDefaults(s)); err != nil {
+		return finish(err, "", false)
+	}
 	var cmds []string
 	prompt := ""
 	if s.DeviceType != "" && a.terms.DeviceType != nil {
