@@ -201,14 +201,18 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
 
 ### Discover devices
 
-![Discover Devices](screenshots/discover.png)
+**File → Discover Devices…** (also in the command palette) finds devices in a network and adds the ones you pick as sessions.
 
-**File → Discover Devices…** finds devices in a network and adds the ones you pick as sessions.
+![Discover Devices - before the first scan](screenshots/discover-start.png)
 
 1. **Addresses**: a network (`10.20.0.0/24`), a range (`10.20.0.10-80` or `10.20.0.10-10.20.1.20`) or single addresses, separated by commas or spaces. Up to 1,024 addresses (a /22) per scan.
 2. **SNMP** (optional, on by default): a read-only SNMP v2c community (`public` is filled in). Devices that answer report their system name, model and software, which gives the session its name, the exact device kind and a device type. The community is used for this scan only and is not saved.
 3. **Scan**. Termwright checks these ports on every address: SSH (22), Telnet (23), HTTP (80), HTTPS (443), SMB (445), RDP (3389), printing (9100, 631) and SIP (5060). It reads the SSH/Telnet greeting and looks up the DNS name. It **never tries to log in**. Devices appear as they answer; **Stop** ends the scan early.
-4. **Results**: each device has an icon for its kind, its name (SNMP name, DNS name or address), vendor and system, and the services that answered:
+4. **Results**: devices appear while the scan runs, sorted by address.
+
+   ![Discover Devices - results](screenshots/discover.png)
+
+   Each device has an icon for its kind, its name (SNMP name, DNS name or address), vendor and system, and the services that answered:
 
    | Icon | Kind | Recognised by |
    |---|---|---|
@@ -223,6 +227,8 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
    | <img src="assets/device-unknown.svg" width="16"> | Unknown device | anything else that answered |
 
 5. **Add**: devices with SSH or Telnet are ticked (those already in the Session Manager are marked *in sessions* and left unticked); devices without a login port are shown but cannot be added. Tick *Only devices with SSH or Telnet* to hide the others. Pick a **device type** per device (guessed from what it reports, e.g. VOSS, EXOS, Linux), type or choose a **folder** (default *Discovered*), and click **Add N Sessions**. Sessions are named after the device and get its vendor and system as description; folder defaults apply as usual.
+
+   ![Discovered devices added as sessions](screenshots/discover-added.png)
 
 Scanning connects to many addresses and can be noticed by security monitoring: scan only networks you are allowed to scan, such as your lab. Termwright asks you to confirm this before the first scan.
 

@@ -15,7 +15,9 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 
 ## What's new in 0.12
 
-* **Discover devices** (File → Discover Devices…): scan a network or address range, see each device with an icon for its kind (switch, router, firewall, access point, server, computer, phone, printer), its name, vendor and system (SNMP v2c, DNS, SSH greeting), and add the selected ones - or all - as sessions with a matching device type. It never tries to log in.
+* **Discover devices** (File → Discover Devices…): scan a network or address range, see each device with an icon for its kind (switch, router, firewall, access point, server, computer, phone, printer), its name, vendor and system (SNMP v2c, DNS, SSH greeting), and add the selected ones - or all - as sessions with a matching device type. It never tries to log in. See the [User Guide](docs/USER_GUIDE.md#discover-devices).
+
+  ![Discover Devices](docs/screenshots/discover.png)
 
 ## What's new in 0.11.5
 
@@ -119,6 +121,7 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 | ![Compare With](docs/screenshots/tab-compare.png) <br/>*Right-click a tab → Compare With… another tab* | ![SFTP Run as](docs/screenshots/sftp-runas-menu.png) <br/>*SFTP as root or another user* |
 | ![Kerberos and certificates](docs/screenshots/auth.png) <br/>*Kerberos, certificates and security keys* | ![Password managers](docs/screenshots/passwords-managers.png) <br/>*1Password, Bitwarden, HashiCorp Vault* |
 | ![Workspaces](docs/screenshots/workspaces.png) <br/>*Workspaces* | ![Alerts](docs/screenshots/alerts.png) <br/>*Output alerts* |
+| ![Discover Devices](docs/screenshots/discover.png) <br/>*Discover devices: switches, routers, firewalls, servers, phones, printers* | ![Discovered sessions](docs/screenshots/discover-added.png) <br/>*Selected devices added as sessions* |
 
 The roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
