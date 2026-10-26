@@ -92,7 +92,9 @@ export interface UpdateInfo {
 /** A device found by File → Discover Devices. */
 export interface DiscoverResult {
   ip: string; name: string; dns: string; sysName: string; sysDescr: string; sysObjectId: string; services: string[];
-  banner: string; kind: string; vendor: string; os: string; protocol: string; port: number;
+  banner: string; telnet: string; web: { server: string; title: string; realm: string; cert: string; hints: string[] | null };
+  sip: string; mac: string; macVendor: string; self: boolean; kind: string; vendor: string; os: string; evidence: string[] | null;
+  protocol: string; port: number;
 }
 
 /** Newest stable release and newest nightly build (null when none is published). */

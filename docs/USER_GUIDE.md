@@ -201,32 +201,43 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
 
 ### Discover devices
 
-**File → Discover Devices…** (also in the command palette) finds devices in a network and adds the ones you pick as sessions.
+**File → Discover Devices…** (also in the command palette) finds the devices in a network, tells what each one is, and adds the ones you pick as sessions. It **never tries to log in**.
 
 ![Discover Devices - before the first scan](screenshots/discover-start.png)
 
 1. **Addresses**: a network (`10.20.0.0/24`), a range (`10.20.0.10-80` or `10.20.0.10-10.20.1.20`) or single addresses, separated by commas or spaces. Up to 1,024 addresses (a /22) per scan.
-2. **SNMP** (optional, on by default): a read-only SNMP v2c community (`public` is filled in). Devices that answer report their system name, model and software, which gives the session its name, the exact device kind and a device type. The community is used for this scan only and is not saved.
-3. **Scan**. Termwright checks these ports on every address: SSH (22), Telnet (23), HTTP (80), HTTPS (443), SMB (445), RDP (3389), printing (9100, 631) and SIP (5060). It reads the SSH/Telnet greeting and looks up the DNS name. It **never tries to log in**. Devices appear as they answer; **Stop** ends the scan early.
-4. **Results**: devices appear while the scan runs, sorted by address.
+2. **SNMP** (on by default): a read-only SNMP v2c community (`public` is filled in). **Show / Hide** next to it reveals what you typed. The community is used for this scan only and is not saved. Devices that answer report their system name, model and software - the most reliable information. If *no* device answers, a note says so: check the community, that SNMP is enabled, and that the devices' SNMP access list allows your computer.
+3. **Scan**. For every address Termwright collects, in parallel:
+   - **Open ports**: SSH (22), Telnet (23), HTTP (80), HTTPS (443), SMB (445), RDP (3389), printing (9100, 631), SIP (5060).
+   - **SSH greeting** (e.g. `OpenSSH_8.1`, `Mocana SSH`) and the **Telnet banner and login prompt** (Termwright answers the Telnet option negotiation, so devices show their banner, e.g. `ExtremeXOS (X440G2…) version 31.7 / login:`).
+   - **Web interface**: title of the start page, `Server` header, login realm, certificate owner, and product names on the page (ExtremeXOS, TerraMaster, Yealink, LaserJet, …).
+   - **SIP** (UDP 5060): phones answer with their model and firmware, e.g. `Yealink SIP-T46S 66.86.0.15`.
+   - **SNMP** system name, description and vendor number; **DNS** name.
+   - **MAC address** of devices on your own subnet (from your computer's ARP table) - this also finds live devices with no open port. With the **MAC vendor list** (*Download the MAC vendor list*: the IEEE registry, about 3 MB, saved in the data folder) the maker is shown too.
+   - **This computer** is listed and marked *this computer*.
 
-   ![Discover Devices - results](screenshots/discover.png)
+   Devices appear while the scan runs, sorted by address; **Stop** ends it early.
+4. **Results**: each device has an icon for its kind, its name (SNMP name, DNS name or address), MAC address, vendor and system, and the services that answered. Click **ⓘ** to see *what the result is based on* - every piece of evidence that was found.
 
-   Each device has an icon for its kind, its name (SNMP name, DNS name or address), vendor and system, and the services that answered:
+   ![Discover Devices - results with evidence](screenshots/discover.png)
+
+   ![More kinds: server, NAS, computers, printer, phones](screenshots/discover-kinds.png)
 
    | Icon | Kind | Recognised by |
    |---|---|---|
-   | <img src="assets/device-switch.svg" width="16"> | Network switch | SNMP description (VOSS, Fabric Engine, EXOS, IOS, NX-OS, Junos, EOS, …), network vendors, Telnet-only devices |
-   | <img src="assets/device-router.svg" width="16"> | Router | "router", ISR/ASR, IOS-XR, RouterOS, VyOS … |
-   | <img src="assets/device-firewall.svg" width="16"> | Firewall | FortiGate, PAN-OS, ASA/Firepower, Check Point, SonicWall, pfSense … |
-   | <img src="assets/device-wireless.svg" width="16"> | Wireless access point | "access point", "wireless", AP models |
-   | <img src="assets/device-server.svg" width="16"> | Server (Linux/Unix) | Linux/BSD/ESXi descriptions, OpenSSH greeting |
-   | <img src="assets/device-computer.svg" width="16"> | Computer (Windows) | Windows description, RDP or SMB ports |
-   | <img src="assets/device-phone.svg" width="16"> | IP phone | phone models (Polycom, Yealink, …), SIP port |
-   | <img src="assets/device-printer.svg" width="16"> | Printer | printer models, JetDirect, printing ports |
-   | <img src="assets/device-unknown.svg" width="16"> | Unknown device | anything else that answered |
+   | <img src="assets/device-switch.svg" width="16"> | Network switch | SNMP, Telnet banner or web page naming VOSS, Fabric Engine, ExtremeXOS/Switch Engine, IOS, NX-OS, Junos, EOS …; network vendor MAC; embedded SSH servers (Mocana); devices with Telnet open |
+   | <img src="assets/device-router.svg" width="16"> | Router | ISR/ASR, IOS-XR, RouterOS, VyOS, FRITZ!Box, OpenWrt … |
+   | <img src="assets/device-firewall.svg" width="16"> | Firewall | FortiGate, PAN-OS, ASA/Firepower, Check Point, SonicWall, pfSense/OPNsense |
+   | <img src="assets/device-wireless.svg" width="16"> | Wireless access point | "access point", AP models, UniFi, Aironet, Ruckus |
+   | <img src="assets/device-server.svg" width="16"> | Server (Linux/Unix) | Linux/BSD in SNMP or the SSH greeting, ESXi/Proxmox, iDRAC/iLO; SSH with file sharing |
+   | <img src="assets/device-nas.svg" width="16"> | NAS / storage | TerraMaster, Synology, QNAP, TrueNAS, ReadyNAS, ASUSTOR, WD My Cloud (web page, SNMP or MAC) |
+   | <img src="assets/device-computer.svg" width="16"> | Computer | Windows (SNMP, RDP, SMB without SSH), Apple MAC addresses, this computer |
+   | <img src="assets/device-phone.svg" width="16"> | IP phone | SIP answer, phone models (Yealink, Poly/Polycom, Grandstream, Snom, Mitel, Cisco, Avaya …), phone vendor MAC |
+   | <img src="assets/device-printer.svg" width="16"> | Printer | printer models in SNMP or the web page (LaserJet, Brother, Canon, Epson …), printing ports |
+   | <img src="assets/device-unknown.svg" width="16"> | Unknown device | nothing named it - open **ⓘ** to see what answered |
 
-5. **Add**: devices with SSH or Telnet are ticked (those already in the Session Manager are marked *in sessions* and left unticked); devices without a login port are shown but cannot be added. Tick *Only devices with SSH or Telnet* to hide the others. Pick a **device type** per device (guessed from what it reports, e.g. VOSS, EXOS, Linux), type or choose a **folder** (default *Discovered*), and click **Add N Sessions**. Sessions are named after the device and get its vendor and system as description; folder defaults apply as usual.
+   Product names win over generic words: a NAS whose SNMP says "Linux" but whose web page says "TerraMaster" is shown as a NAS.
+5. **Add**: devices with SSH or Telnet are ticked (those already in the Session Manager are marked *in sessions* and left unticked; this computer is never ticked). Devices without a login port are shown but cannot be added; tick *Only devices with SSH or Telnet* to hide them. Pick a **device type** per device - Termwright suggests one from what the device reports (VOSS, EXOS, Cisco IOS, Linux …) or, failing that, from the **Telnet login prompt** compared with the first login step of your device types (e.g. EXOS `login:`, VOSS `Login:`). Type or choose a **folder** (default *Discovered*) and click **Add N Sessions**. Sessions are named after the device and get its vendor and system as description; folder defaults apply as usual.
 
    ![Discovered devices added as sessions](screenshots/discover-added.png)
 

@@ -124,8 +124,11 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 ## 0.12 (done)
 - Discover Devices: address ranges up to a /22, TCP probes (SSH, Telnet, HTTP(S), SMB, RDP, printing, SIP), SSH/Telnet greeting, reverse DNS, SNMP v2c system group (own minimal client), device kind classification with icons, device type guess, add selected as sessions
 
+## 0.12.1 (done)
+- Discovery identification: web fingerprint (title, Server, realm, certificate, product names), Telnet negotiation for banners, SIP OPTIONS over UDP, ARP MAC + IEEE vendor list (download), this computer, two-pass rules (product names before generic words), NAS kind, evidence list (ⓘ), device type from the Telnet prompt, SNMP community Show/Hide and "no SNMP answer" note
+
 ## Next ideas
-- [ ] Discovery: SNMP v3, MAC address and vendor for the local subnet (ARP), more ports in an advanced section
+- [ ] Discovery: SNMP v3, more ports in an advanced section, LLDP neighbours via SNMP
 - [ ] Shared team sessions (session folder in a Git repo, pull/push from the app)
 - [ ] Code signing + notarization (needs Apple Developer ID / Windows certificate)
 

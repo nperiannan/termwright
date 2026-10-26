@@ -9,6 +9,7 @@ import (
 const (
 	KindComputer = "computer"
 	KindServer   = "server"
+	KindNAS      = "nas"
 	KindPhone    = "phone"
 	KindPrinter  = "printer"
 	KindSwitch   = "switch"
@@ -25,99 +26,227 @@ var enterprises = map[string]string{
 	"25461": "Palo Alto Networks", "2620": "Check Point", "8741": "SonicWall", "14988": "MikroTik", "41112": "Ubiquiti",
 	"4526": "Netgear", "171": "D-Link", "14823": "Aruba", "8072": "Net-SNMP", "2021": "Net-SNMP", "311": "Microsoft",
 	"6876": "VMware", "2435": "Brother", "1602": "Canon", "367": "Ricoh", "641": "Lexmark", "1248": "Epson", "253": "Xerox",
-	"6889": "Avaya",
+	"6889": "Avaya", "6574": "Synology", "24681": "QNAP",
 }
 
-var (
-	rePrinter  = regexp.MustCompile(`(?i)printer|laserjet|officejet|deskjet|jetdirect|\bmfp\b|lexmark|kyocera|ricoh|xerox|bizhub|imagerunner|\bepson\b|brother (hl|mfc|dcp)`)
-	rePhone    = regexp.MustCompile(`(?i)ip phone|\bsip\b|polycom|yealink|grandstream|snom|softphone|\bata\b|deskphone|vvx|cp-\d{4}`)
-	reFirewall = regexp.MustCompile(`(?i)fortigate|fortios|palo alto|pan-os|adaptive security appliance|\basa\b|firepower|check ?point|gaia|sonicwall|pfsense|opnsense|firewall`)
-	reWireless = regexp.MustCompile(`(?i)access point|aironet|wireless|\bwing\b|unifi ap|instant ap|\bap[0-9]{3}`)
-	reRouter   = regexp.MustCompile(`(?i)router|ios[- ]xr|routeros|mikrotik|vyos|edgeos|\bisr\d*\b|\basr\d*\b|junos.*\b(mx|srx)\d`)
-	reSwitch   = regexp.MustCompile(`(?i)switch|voss|\bvsp\b|vsp-|fabric ?engine|extremexos|\bexos\b|summit|ethernet routing switch|nx-os|catalyst|cisco ios|arista|\beos\b|junos|procurve|aruba|os10|\bslx\b|cumulus|sonic|fastiron|\bicx\b|comware|vrp|ce\d{4}`)
-	reWindows  = regexp.MustCompile(`(?i)windows|microsoft|openssh_for_windows`)
-	reUnix     = regexp.MustCompile(`(?i)linux|ubuntu|debian|centos|red ?hat|rhel|rocky|alma|fedora|suse|freebsd|openbsd|darwin|macos|esxi|vmware|net-snmp|amazon`)
-)
+// rule: a pattern found in some evidence decides the kind (and maybe the vendor).
+type rule struct {
+	re     *regexp.Regexp
+	kind   string
+	vendor string
+}
 
-// classify fills in the kind, vendor and OS of a result.
-func classify(r *Result) {
-	if r.SysObjectID != "" {
-		if rest, ok := strings.CutPrefix(r.SysObjectID, "1.3.6.1.4.1."); ok {
-			n, _, _ := strings.Cut(rest, ".")
-			r.Vendor = enterprises[n]
+func r(p, kind, vendor string) rule { return rule{regexp.MustCompile(`(?i)` + p), kind, vendor} }
+
+// Rules from specific to general; the first match in the strongest evidence wins.
+var rules = []rule{
+	// Extreme Networks
+	r(`extremexos|\bexos\b|switch ?engine|summit ?x?\d`, KindSwitch, "Extreme Networks"),
+	r(`\bvoss\b|vsp-?\d{3,4}|fabric ?engine|virtual services platform|ethernet routing switch|\bers[- ]?\d{4}`, KindSwitch, "Extreme Networks"),
+	r(`extremecloud|extremewireless|\bap\d{3,4}[a-z]*\b.*extreme|extreme.*access point`, KindWireless, "Extreme Networks"),
+	r(`extreme networks|enterasys`, KindSwitch, "Extreme Networks"),
+	// phones
+	r(`yealink`, KindPhone, "Yealink"), r(`polycom|\bvvx\b|soundpoint|\bpoly (ccx|edge|vvx)`, KindPhone, "Poly"),
+	r(`grandstream`, KindPhone, "Grandstream"), r(`\bsnom\b`, KindPhone, "Snom"), r(`mitel`, KindPhone, "Mitel"),
+	r(`fanvil`, KindPhone, "Fanvil"), r(`gigaset`, KindPhone, "Gigaset"), r(`cisco ip phone|\bcp-\d{4}`, KindPhone, "Cisco"),
+	r(`avaya.*(phone|j1\d\d|96\d\d)`, KindPhone, "Avaya"), r(`ip phone|deskphone|sip phone|\bata\b`, KindPhone, ""),
+	// printers
+	r(`laserjet|officejet|deskjet|jetdirect|hp ethernet multi-environment`, KindPrinter, "HP"),
+	r(`brother (hl|mfc|dcp)|brother industries`, KindPrinter, "Brother"), r(`canon (mf|lbp|ir|imagerunner)|imagerunner`, KindPrinter, "Canon"),
+	r(`epson`, KindPrinter, "Epson"), r(`ricoh`, KindPrinter, "Ricoh"), r(`xerox`, KindPrinter, "Xerox"),
+	r(`kyocera`, KindPrinter, "Kyocera"), r(`lexmark`, KindPrinter, "Lexmark"), r(`konica|bizhub`, KindPrinter, "Konica Minolta"),
+	r(`printer|\bmfp\b|\bipp\b`, KindPrinter, ""),
+	// storage
+	r(`terramaster|\btos\b.*nas`, KindNAS, "TerraMaster"), r(`synology|diskstation`, KindNAS, "Synology"), r(`qnap|\bqts\b`, KindNAS, "QNAP"),
+	r(`truenas|freenas`, KindNAS, "TrueNAS"), r(`readynas`, KindNAS, "Netgear"), r(`asustor`, KindNAS, "ASUSTOR"),
+	r(`my ?cloud`, KindNAS, "Western Digital"), r(`\bnas\b|network attached storage`, KindNAS, ""),
+	// security and wireless
+	r(`fortigate|fortios|fortinet`, KindFirewall, "Fortinet"), r(`palo alto|pan-os`, KindFirewall, "Palo Alto Networks"),
+	r(`adaptive security appliance|firepower|\basa\b`, KindFirewall, "Cisco"), r(`check ?point|gaia`, KindFirewall, "Check Point"),
+	r(`sonicwall`, KindFirewall, "SonicWall"), r(`pfsense|opnsense`, KindFirewall, ""), r(`firewall`, KindFirewall, ""),
+	r(`aironet|meraki mr|cisco.*access point`, KindWireless, "Cisco"), r(`unifi ap|\buap\b`, KindWireless, "Ubiquiti"),
+	r(`ruckus`, KindWireless, "Ruckus"), r(`access point|wireless lan|\bwlan\b`, KindWireless, ""),
+	// routers and switches of other vendors
+	r(`ios[- ]xr|\bisr\d*\b|\basr\d*\b`, KindRouter, "Cisco"), r(`routeros|mikrotik`, KindRouter, "MikroTik"),
+	r(`vyos|edgeos|edgerouter`, KindRouter, ""), r(`fritz!?box`, KindRouter, "AVM"), r(`openwrt`, KindRouter, ""), r(`\brouter\b`, KindRouter, ""),
+	r(`nx-os|catalyst|cisco ios|cisco`, KindSwitch, "Cisco"), r(`junos|juniper`, KindSwitch, "Juniper"), r(`arista|\beos\b`, KindSwitch, "Arista"),
+	r(`procurve|aruba|hpe? ?(comware|officeconnect)`, KindSwitch, "HPE Aruba"), r(`huawei|\bvrp\b`, KindSwitch, "Huawei"),
+	r(`dell networking|\bos10\b|force10`, KindSwitch, "Dell"), r(`cumulus|sonic`, KindSwitch, ""), r(`\bswitch\b`, KindSwitch, ""),
+	// servers and computers
+	r(`idrac|ilo\b|ipmi|supermicro`, KindServer, ""), r(`vmware esxi|vsphere|proxmox`, KindServer, ""),
+	r(`windows|microsoft|openssh_for_windows`, KindComputer, "Microsoft"),
+	r(`ubuntu`, KindServer, "Ubuntu"), r(`debian`, KindServer, "Debian"), r(`red ?hat|rhel`, KindServer, "Red Hat"),
+	r(`centos|rocky|alma|fedora|suse|amazon linux|linux|freebsd|openbsd`, KindServer, ""),
+}
+
+// MAC vendors that tell the kind on their own.
+var macKinds = []rule{
+	r(`yealink|polycom|grandstream|snom|mitel|fanvil|gigaset`, KindPhone, ""),
+	r(`brother|canon|seiko epson|lexmark|kyocera|ricoh|xerox|konica`, KindPrinter, ""),
+	r(`synology|qnap|terramaster|asustor`, KindNAS, ""),
+	r(`extreme networks|enterasys|avaya`, KindSwitch, "Extreme Networks"),
+	r(`cisco|juniper|arista|aruba|ubiquiti|mikrotik|ruckus|fortinet|palo alto`, KindSwitch, ""),
+	r(`apple`, KindComputer, "Apple"),
+}
+
+// classify sets the kind, vendor and OS of a result and lists the evidence.
+func classify(res *Result) {
+	res.Kind, res.Vendor, res.OS, res.Evidence = KindUnknown, "", "", nil
+	has := map[string]bool{}
+	for _, s := range res.Services {
+		has[s] = true
+	}
+	ev := func(s string) { res.Evidence = append(res.Evidence, s) }
+	if res.Self {
+		res.Kind, res.OS = KindComputer, hostOS()
+		ev("this computer")
+	}
+	// Evidence from the strongest to the weakest source.
+	type src struct{ label, text string }
+	var srcs []src
+	add := func(label, text string) {
+		if text = strings.TrimSpace(text); text != "" {
+			srcs = append(srcs, src{label, text})
+			ev(label + ": " + text)
 		}
 	}
-	text := r.SysDescr + " " + r.SysName + " " + r.Banner
-	if r.SysDescr != "" {
-		r.OS = firstSentence(r.SysDescr)
-	} else if r.Banner != "" {
-		r.OS = strings.TrimPrefix(strings.TrimPrefix(r.Banner, "SSH-2.0-"), "SSH-1.99-")
+	add("SNMP", res.SysDescr)
+	add("SIP", res.SIP)
+	web := strings.TrimSpace(strings.Join([]string{res.Web.Title, res.Web.Server, res.Web.Realm, res.Web.Cert, strings.Join(res.Web.Hints, " ")}, " "))
+	if res.Web.Title != "" {
+		ev("Web page: " + res.Web.Title)
 	}
-	has := func(s string) bool {
-		for _, x := range r.Services {
-			if x == s {
-				return true
+	if res.Web.Server != "" {
+		ev("Web server: " + res.Web.Server)
+	}
+	if res.Web.Realm != "" {
+		ev("Web login: " + res.Web.Realm)
+	}
+	if res.Web.Cert != "" {
+		ev("Certificate: " + res.Web.Cert)
+	}
+	if len(res.Web.Hints) > 0 {
+		ev("Web page mentions: " + strings.Join(res.Web.Hints, ", "))
+	}
+	if web != "" {
+		srcs = append(srcs, src{"Web", web})
+	}
+	add("Telnet", res.Telnet)
+	add("SSH", res.Banner)
+	if res.MAC != "" {
+		label := res.MAC
+		if res.MACVendor != "" {
+			label += " (" + res.MACVendor + ")"
+		}
+		ev("MAC: " + label)
+	}
+
+	// vendor from the SNMP enterprise number
+	if rest, ok := strings.CutPrefix(res.SysObjectID, "1.3.6.1.4.1."); ok {
+		n, _, _ := strings.Cut(rest, ".")
+		res.Vendor = enterprises[n]
+	}
+	decided := res.Self
+	// Pass 1: product names (any source); pass 2: generic words such as
+	// "Linux" or "switch". A NAS whose SNMP says "Linux" but whose web page
+	// says "TerraMaster" is a NAS.
+	for pass := 1; pass <= 2 && !decided; pass++ {
+		for _, s := range srcs {
+			if decided {
+				break
+			}
+			for _, ru := range rules {
+				if pass == 1 && (ru.vendor == "" || ru.kind == KindServer) {
+					continue
+				}
+				if ru.re.MatchString(s.text) {
+					res.Kind = ru.kind
+					if res.Vendor == "" {
+						res.Vendor = ru.vendor
+					}
+					decided = true
+					break
+				}
 			}
 		}
-		return false
 	}
-	switch {
-	case rePrinter.MatchString(text) || ((has("printer") || has("ipp")) && !has("ssh") && !has("rdp")):
-		r.Kind = KindPrinter
-	case rePhone.MatchString(r.SysDescr) || (has("sip") && !has("ssh") && !has("rdp") && !has("smb")):
-		r.Kind = KindPhone
-	case reFirewall.MatchString(text):
-		r.Kind = KindFirewall
-	case reWireless.MatchString(r.SysDescr):
-		r.Kind = KindWireless
-	case reRouter.MatchString(r.SysDescr):
-		r.Kind = KindRouter
-	case reSwitch.MatchString(r.SysDescr) || isNetworkVendor(r.Vendor):
-		r.Kind = KindSwitch
-	case reWindows.MatchString(text) || has("rdp") || has("smb"):
-		r.Kind = KindComputer
-	case reUnix.MatchString(text) || strings.Contains(r.Banner, "OpenSSH"):
-		r.Kind = KindServer
-	case has("telnet") && !has("http") && !has("https"):
-		r.Kind = KindSwitch // a Telnet-only box is nearly always network gear
-	case reSwitch.MatchString(r.Banner):
-		r.Kind = KindSwitch
-	default:
-		r.Kind = KindUnknown
+	if !decided && res.SIP != "" {
+		res.Kind, decided = KindPhone, true // anything that answers SIP is a phone or a phone adapter
 	}
-	if r.Vendor == "" {
-		r.Vendor = vendorFromText(text)
-	}
-}
-
-func isNetworkVendor(v string) bool {
-	switch v {
-	case "Cisco", "Juniper", "Arista", "Extreme Networks", "Huawei", "H3C", "Aruba", "MikroTik", "Ubiquiti", "Netgear", "D-Link":
-		return true
-	}
-	return false
-}
-
-var vendorWords = []struct {
-	re   *regexp.Regexp
-	name string
-}{
-	{regexp.MustCompile(`(?i)extreme|voss|exos|vsp|fabric ?engine|switch ?engine`), "Extreme Networks"},
-	{regexp.MustCompile(`(?i)cisco`), "Cisco"}, {regexp.MustCompile(`(?i)juniper|junos`), "Juniper"},
-	{regexp.MustCompile(`(?i)arista`), "Arista"}, {regexp.MustCompile(`(?i)huawei|vrp`), "Huawei"},
-	{regexp.MustCompile(`(?i)ubuntu`), "Ubuntu"}, {regexp.MustCompile(`(?i)debian`), "Debian"},
-	{regexp.MustCompile(`(?i)red ?hat|rhel`), "Red Hat"}, {regexp.MustCompile(`(?i)windows|microsoft`), "Microsoft"},
-	{regexp.MustCompile(`(?i)\bhp\b|hewlett|laserjet`), "HP"}, {regexp.MustCompile(`(?i)polycom`), "Polycom"},
-	{regexp.MustCompile(`(?i)yealink`), "Yealink"}, {regexp.MustCompile(`(?i)fortigate|fortinet`), "Fortinet"},
-}
-
-func vendorFromText(s string) string {
-	for _, v := range vendorWords {
-		if v.re.MatchString(s) {
-			return v.name
+	if !decided && res.MACVendor != "" {
+		for _, ru := range macKinds {
+			if ru.re.MatchString(res.MACVendor) {
+				res.Kind, decided = ru.kind, true
+				if res.Vendor == "" {
+					res.Vendor = ru.vendor
+				}
+				break
+			}
 		}
 	}
-	return ""
+	if !decided {
+		res.Kind = byPorts(res, has)
+	}
+	if res.Vendor == "" && res.MACVendor != "" && !strings.HasPrefix(res.MACVendor, "private") {
+		res.Vendor = shortVendor(res.MACVendor)
+	}
+	if res.OS == "" {
+		switch {
+		case res.SysDescr != "":
+			res.OS = firstSentence(res.SysDescr)
+		case res.SIP != "" && res.SIP != "SIP":
+			res.OS = res.SIP
+		case res.Web.Title != "":
+			res.OS = res.Web.Title
+		case res.Telnet != "" && !promptOnly(res.Telnet):
+			res.OS = res.Telnet
+		case res.Banner != "":
+			res.OS = strings.TrimPrefix(strings.TrimPrefix(res.Banner, "SSH-2.0-"), "SSH-1.99-")
+		}
+	}
+}
+
+var reDistro = regexp.MustCompile(`(?i)ubuntu|debian|raspbian|el\d|fedora|freebsd|alpine|suse|amzn|redhat`)
+
+// byPorts guesses the kind from open ports and the SSH server when nothing named the device.
+func byPorts(res *Result, has map[string]bool) string {
+	ssh := strings.ToLower(res.Banner)
+	switch {
+	case strings.Contains(ssh, "mocana") || strings.Contains(ssh, "rosssh") || strings.Contains(ssh, "comware") ||
+		strings.Contains(ssh, "cisco") || strings.Contains(ssh, "huawei") || strings.Contains(ssh, "dropbear") && has["telnet"]:
+		res.Evidence = append(res.Evidence, "embedded SSH server of network devices")
+		return KindSwitch
+	case has["rdp"] || (has["smb"] && !has["ssh"] && !has["telnet"]):
+		return KindComputer
+	case has["printer"] || has["ipp"]:
+		return KindPrinter
+	case has["sip"]:
+		return KindPhone
+	case has["telnet"] && !reDistro.MatchString(ssh):
+		// Telnet is rare on servers today but standard on switches and routers
+		res.Evidence = append(res.Evidence, "Telnet open: typical of network devices")
+		return KindSwitch
+	case has["smb"] && has["ssh"]:
+		res.Evidence = append(res.Evidence, "SSH with file sharing: Linux / NAS")
+		return KindServer
+	case strings.Contains(ssh, "openssh"):
+		return KindServer
+	}
+	return KindUnknown
+}
+
+// promptOnly reports whether a Telnet text is just a login prompt.
+func promptOnly(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(s))
+	return len(s) < 16 && promptEnd(s)
+}
+
+// shortVendor trims company suffixes from an IEEE organisation name.
+func shortVendor(s string) string {
+	for _, suf := range []string{", Inc.", ", Inc", " Inc.", " Inc", " Co., Ltd.", " Co.,Ltd.", " Co., Ltd", " Corporation", " Corp.", " LLC", " Ltd.", " Ltd", " GmbH", " AG", " B.V."} {
+		s = strings.TrimSuffix(s, suf)
+	}
+	return strings.TrimSpace(s)
 }
 
 // firstSentence shortens a system description to its first line or sentence.

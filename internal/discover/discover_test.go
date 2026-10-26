@@ -2,7 +2,10 @@ package discover
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/netip"
 	"strings"
 	"testing"
@@ -137,7 +140,7 @@ func TestScan(t *testing.T) {
 		oidSysObjectID: "1.3.6.1.4.1.1916.2.258", oidSysName: "edge-sw1"})
 	addrs := []netip.Addr{netip.MustParseAddr("127.0.0.1")}
 	opt := Options{Probes: []Probe{{ssh, "ssh"}, {telnet, "telnet"}, {closedPort(t), "http"}}, Timeout: 500 * time.Millisecond,
-		Community: "lab", SNMPPort: snmp, NoDNS: true}
+		Community: "lab", SNMPPort: snmp, NoDNS: true, NoARP: true, NoWeb: true, SIPPort: -1}
 	var got []Result
 	done := 0
 	Scan(context.Background(), addrs, opt, func(r Result) { got = append(got, r) }, func(d, _ int) { done = d })
@@ -158,14 +161,87 @@ func TestScan(t *testing.T) {
 	}
 	// nothing open: no result
 	got = nil
-	Scan(context.Background(), addrs, Options{Probes: []Probe{{closedPort(t), "ssh"}}, Timeout: 300 * time.Millisecond, NoDNS: true},
+	Scan(context.Background(), addrs, Options{Probes: []Probe{{closedPort(t), "ssh"}}, Timeout: 300 * time.Millisecond, NoDNS: true, NoARP: true, SIPPort: -1},
 		func(r Result) { got = append(got, r) }, nil)
 	if len(got) != 0 {
 		t.Fatalf("closed host reported: %+v", got)
 	}
-	// telnet greeting without IAC noise
-	if g := greeting([]byte("\xff\xfd\x18\xff\xfa\x18\x01\xff\xf0\r\nlogin: ")); g != "login:" {
+}
+
+// A Telnet device that only shows its prompt after the option negotiation is answered.
+func TestTelnetNegotiation(t *testing.T) {
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer l.Close()
+	go func() {
+		c, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		_, _ = c.Write([]byte{0xff, 0xfd, 0x18, 0xff, 0xfd, 0x1f, 0xff, 0xfb, 0x01, 0xff, 0xfb, 0x03})
+		buf := make([]byte, 64)
+		_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+		n, _ := c.Read(buf)
+		if n < 6 || buf[0] != 0xff {
+			return // no answer: a real device would stay silent
+		}
+		_, _ = c.Write([]byte("\r\n\r\nExtremeXOS (X440G2-48p-10G4) version 31.7.1.4\r\nCopyright (C) 1996-2023 Extreme Networks.\r\n\r\nlogin: "))
+		time.Sleep(300 * time.Millisecond)
+	}()
+	c, err := net.Dial("tcp", l.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	g := telnetGreeting(c, 2*time.Second)
+	if !strings.Contains(g, "ExtremeXOS") || !strings.HasSuffix(g, "login:") {
 		t.Fatalf("greeting %q", g)
+	}
+}
+
+func TestWebAndSIP(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/tos/index.php", http.StatusFound)
+			return
+		}
+		w.Header().Set("Server", "nginx")
+		fmt.Fprint(w, `<html><head><title>TOS &amp; Apps</title></head><body>TerraMaster F4-423</body></html>`)
+	}))
+	defer srv.Close()
+	port := srv.Listener.Addr().(*net.TCPAddr).Port
+	w := webInfo(context.Background(), netip.MustParseAddr("127.0.0.1"), port, false, 2*time.Second)
+	if w.Title != "TOS & Apps" || w.Server != "nginx" || len(w.Hints) == 0 || w.Hints[0] != "TerraMaster" {
+		t.Fatalf("%+v", w)
+	}
+	// SIP over UDP
+	pc, _ := net.ListenPacket("udp", "127.0.0.1:0")
+	defer pc.Close()
+	go func() {
+		buf := make([]byte, 2048)
+		n, from, err := pc.ReadFrom(buf)
+		if err != nil || !strings.HasPrefix(string(buf[:n]), "OPTIONS sip:") {
+			return
+		}
+		_, _ = pc.WriteTo([]byte("SIP/2.0 200 OK\r\nUser-Agent: Yealink SIP-T46S 66.86.0.15\r\nContent-Length: 0\r\n\r\n"), from)
+	}()
+	ua := sipOptions(context.Background(), netip.MustParseAddr("127.0.0.1"), pc.LocalAddr().(*net.UDPAddr).Port, time.Second)
+	if ua != "Yealink SIP-T46S 66.86.0.15" {
+		t.Fatalf("sip %q", ua)
+	}
+}
+
+func TestNeighbourTables(t *testing.T) {
+	out := map[netip.Addr]string{}
+	parseARP("? (10.0.0.1) at 0:4:96:a1:b2:c3 on en0 ifscope [ethernet]\n? (10.0.0.9) at (incomplete) on en0\n"+
+		"  10.0.0.20          00-15-65-12-34-56     dynamic\n", out)
+	parseProcARP(strings.NewReader("IP address HW type Flags HW address Mask Device\n10.0.0.30 0x1 0x2 00:11:32:aa:bb:cc * eth0\n10.0.0.31 0x1 0x0 00:00:00:00:00:00 * eth0\n"), out)
+	if len(out) != 3 || out[netip.MustParseAddr("10.0.0.1")] != "00:04:96:a1:b2:c3" || out[netip.MustParseAddr("10.0.0.20")] != "00:15:65:12:34:56" {
+		t.Fatalf("%v", out)
+	}
+	o, err := LoadOUI(strings.NewReader("Registry,Assignment,Organization Name,Organization Address\nMA-L,000496,\"Extreme Networks, Inc.\",x\nMA-L,001565,\"XIAMEN YEALINK NETWORK TECHNOLOGY CO.,LTD.\",y\n"))
+	if err != nil || o.Vendor("00:04:96:a1:b2:c3") != "Extreme Networks, Inc." || o.Vendor("02:11:22:33:44:55") != "private (randomised) address" {
+		t.Fatalf("%v %v", o, err)
 	}
 }
 
@@ -191,11 +267,39 @@ func TestClassify(t *testing.T) {
 		{Result{SysDescr: "Cisco NX-OS(tm) n9000"}, KindSwitch},
 		{Result{Services: []string{"telnet"}}, KindSwitch},
 		{Result{Services: []string{"https"}}, KindUnknown},
+		{Result{Banner: "SSH-2.0-OpenSSH_8.1", Services: []string{"ssh", "telnet", "http", "https"}}, KindSwitch},
+		{Result{Banner: "SSH-2.0-Mocana SSH 6.3", Services: []string{"ssh"}}, KindSwitch},
+		{Result{Banner: "SSH-2.0-OpenSSH_8.1", Telnet: "ExtremeXOS (X440G2-48p) version 31.7 / login:", Services: []string{"ssh", "telnet"}}, KindSwitch},
+		{Result{Banner: "SSH-2.0-OpenSSH_8.4", Services: []string{"ssh", "smb", "http"}}, KindServer},
+		{Result{SysDescr: "Linux TNAS-F4 4.4.302+", Web: WebInfo{Title: "TOS", Hints: []string{"TerraMaster"}}, Services: []string{"ssh", "smb", "snmp"}}, KindNAS},
+		{Result{SIP: "Yealink SIP-T46S 66.86.0.15", Services: []string{"http", "sip-udp"}}, KindPhone},
+		{Result{SIP: "SIP", Services: []string{"sip-udp"}}, KindPhone},
+		{Result{MAC: "00:15:65:12:34:56", MACVendor: "XIAMEN YEALINK NETWORK TECHNOLOGY CO.,LTD."}, KindPhone},
+		{Result{Web: WebInfo{Title: "HP LaserJet MFP M428fdw"}, Services: []string{"http", "https", "printer"}}, KindPrinter},
+		{Result{Self: true, Services: []string{"ssh"}}, KindComputer},
 	} {
 		r := c.r
 		classify(&r)
 		if r.Kind != c.kind {
 			t.Errorf("%q %v -> %s, want %s", c.r.SysDescr+c.r.Banner, c.r.Services, r.Kind, c.kind)
 		}
+	}
+}
+
+// This computer is listed even when none of its ports is open.
+func TestSelfListed(t *testing.T) {
+	var me netip.Addr
+	for a := range localAddrs() {
+		me = a
+		break
+	}
+	if !me.IsValid() {
+		t.Skip("no IPv4 interface")
+	}
+	var got []Result
+	Scan(context.Background(), []netip.Addr{me}, Options{Probes: []Probe{{closedPort(t), "ssh"}}, Timeout: 300 * time.Millisecond,
+		NoDNS: true, NoARP: true, SIPPort: -1}, func(r Result) { got = append(got, r) }, nil)
+	if len(got) != 1 || !got[0].Self || got[0].Kind != KindComputer || got[0].Name == "" {
+		t.Fatalf("%+v", got)
 	}
 }
