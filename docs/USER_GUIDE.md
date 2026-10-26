@@ -109,7 +109,7 @@ Devices log in differently: EXOS is ready at `#` after username and password, VO
 - **Username and Password**: the device type's own login, with the password stored in the OS keychain (never in `settings.json`). Leave the password empty to be asked at connect time - the session's Login box then says *password asked when connecting*, and the password prompt offers **Remember for device type …**: tick it to save what you type, or leave the password empty and tick it to record that the device has none. Tick **No password** for devices whose account has an empty password (e.g. EXOS `admin` out of the box) - Termwright then sends an empty password and never asks. *Forget* removes a saved password.
 - Sessions with a device type **inherit** its username and password; the box shows what will happen, e.g. *(admin, no password)*, *(admin, password saved)* or *(admin, password asked when connecting)*. In Session Options → Connection (or Quick Connect) untick **Use the device type's username and password** to give that session its own username and password (or *No password*); the device type's login and after-login steps still run.
 - In *Send*, `\s` is the username and `\w` the password: from the device type (or the session's own login when it overrides it), or asked once when needed.
-- Optional defaults: protocol, port, initial carriage return and a prompt pattern.
+- Optional defaults: protocol, port, initial carriage return and a prompt pattern. Background runs (backups, checklists) also recognise the prompt the device shows after the after-login steps, e.g. `sw:1(config)#` after `config terminal`.
 - **Backup commands**: what prints the configuration for [Configuration Backups](#configuration-backups). Built-in: EXOS `show configuration`, VOSS and Cisco IOS `show running-config`; add your own for other device types (one command per line).
 - A session's own Logon Actions still run, after the device type's steps.
 
@@ -359,6 +359,18 @@ Scanning connects to many addresses and can be noticed by security monitoring: s
 
 **Connect Bar**: see [§3](#3-connecting). Hide it in Global Options → General.
 
+**Command History** (Script → Command History…, `Cmd+Y` / `Ctrl+Shift+Y`, or *History…* in the Command Window): every command you type in a terminal or send from the Command Window is remembered with the session, device type and time (up to 5000).
+- Type words to search (`isis adj`); *Only VOSS* (the active tab's device type) narrows it down.
+- **Enter** types the command in the active tab so you can check or edit it before pressing Enter; **Shift+Enter** / *Run* runs it; *To Command Window* puts it in the Command Window.
+- The command is taken from the terminal line without the prompt, so commands completed with Tab or recalled with ↑ are remembered as the device shows them.
+- Commands that may contain a secret - `password`, `secret`, `community`, `key-string`, `pre-shared`, tokens - are **never** remembered, nor anything typed at a password prompt. Global Options → General → *Remember typed commands* turns history off; *Clear History* forgets everything. History stays on this computer (`history.json` in the data folder).
+
+![Command History](screenshots/history.png)
+
+**Suggestions in the Command Window**: after two characters the Command Window suggests commands from your history and the Command Library - those of the active tab's device type first, never another device type's. ↑/↓ chooses, **Tab** (or Enter on a chosen one) takes it, Esc closes; library commands with `{{values}}` ask for them.
+
+![Command Window suggestions](screenshots/autocomplete.png)
+
 **Command Library** (Script → Command Library…, `Cmd+E` / `Ctrl+Shift+E`)
 
 ![Command Library](screenshots/commands.png)
@@ -410,6 +422,24 @@ File → **Configuration Backups…** keeps dated copies of the configuration of
 ![Backing up from the Session Manager](screenshots/backups-menu.png)
 
 ![What changed between two backups](screenshots/backups-diff.png)
+
+### Change checklists
+
+File → **Change Checklists…** runs the same show commands on a set of devices **before and after a change** and tells you which devices changed.
+
+1. **+ New checklist**: a name, the **devices** (folders or sessions, *Add Selected* takes the Session Manager selection) and the **commands per device type** - e.g. VOSS `show isis adjacency`, `show vlan basic`, EXOS `show vlan`, `show ports no-refresh`; *Any other device* covers the rest. New checklists start with suggestions for the built-in device types.
+
+   ![Checklist setup](screenshots/checklist-setup.png)
+2. Before the change: **New Change: Take Before** (optionally with a ticket number or note). The commands run on every device in the background, four at a time, with the session's usual login - nothing is asked; a device whose password is not saved is reported as failed with its *device output*.
+3. Make the change.
+4. **Take After**: the same commands again. Each device is marked **same** or **changed** - times of day, dates and uptime counters are ignored - and **Compare** shows before and after side by side (*Before* / *After* open the files).
+
+   ![Checklist after a change](screenshots/checklist.png)
+
+   ![Before and after of one device](screenshots/checklist-compare.png)
+
+- Each change is kept: pick an earlier one in *Change* to look at it again; *Retake Before* repeats the before snapshot of the selected change.
+- The outputs are saved in *Documents/Termwright Checklists/<checklist>/<date>_<time>/before|after/<session path>.txt* (each command under a `### command` line).
 
 ## 9. File transfer
 
@@ -726,6 +756,7 @@ Details: [SECURECRT_COMPAT.md](SECURECRT_COMPAT.md).
 | Mod+A | Select all | Mod+F | Find |
 | Mod+S | Save scrollback | Mod+M | Toggle Session Manager |
 | Mod+K | Toggle Command Window | Mod+B | Toggle Button Bar |
+| Mod+E | Command Library | Mod+Y | Command History |
 | Ctrl+Tab | Next tab | Cmd/Ctrl + / − / 0 | Zoom in / out / reset |
 | F11 | Full screen | Enter (disconnected tab) | Reconnect |
 

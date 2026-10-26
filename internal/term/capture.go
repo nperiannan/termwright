@@ -37,21 +37,28 @@ var reMore = regexp.MustCompile(`(?i)(--+ ?more ?--+|<--- more --->|press any ke
 // echo and the prompts. Nothing is asked: when the device needs a password
 // or a host key decision that is not saved, it fails with ErrNeedsInput.
 func (m *Manager) Capture(ctx context.Context, s session.Session, commands []string, prompt string) (string, error) {
-	var transcript func() string
-	out, err := m.capture(ctx, s, commands, prompt, &transcript)
-	if err != nil && transcript != nil {
-		return "", &CaptureError{Err: err, Transcript: transcript()}
-	}
-	return out, err
+	outs, err := m.CaptureEach(ctx, s, commands, prompt)
+	return strings.Join(outs, ""), err
 }
 
-func (m *Manager) capture(ctx context.Context, s session.Session, commands []string, prompt string, transcript *func() string) (string, error) {
+// CaptureEach is Capture with the output of each command separately (empty
+// commands are skipped and have no entry).
+func (m *Manager) CaptureEach(ctx context.Context, s session.Session, commands []string, prompt string) ([]string, error) {
+	var transcript func() string
+	outs, err := m.capture(ctx, s, commands, prompt, &transcript)
+	if err != nil && transcript != nil {
+		return nil, &CaptureError{Err: err, Transcript: transcript()}
+	}
+	return outs, err
+}
+
+func (m *Manager) capture(ctx context.Context, s session.Session, commands []string, prompt string, transcript *func() string) ([]string, error) {
 	if prompt == "" {
 		prompt = DefaultPrompt
 	}
 	re, err := regexp.Compile(`(?m)` + prompt)
 	if err != nil {
-		return "", fmt.Errorf("prompt pattern: %w", err)
+		return nil, fmt.Errorf("prompt pattern: %w", err)
 	}
 	s.LogOnConnect, s.AutoReconnect, s.Triggers = false, false, nil
 	s.Cols, s.Rows = 400, 50
@@ -64,7 +71,7 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 	}()
 	t, err := m.get(id)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	var mu sync.Mutex
 	var out strings.Builder
@@ -84,8 +91,13 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 	}
 	*transcript = func() string { s, _ := snapshot(); return s }
 	if err := m.Start(id, 400, 50); err != nil {
-		return "", err
+		return nil, err
 	}
+	// loose: also accept any common prompt (after-login steps such as
+	// "config terminal" change the prompt to "sw:1(config)#"); exact: the
+	// prompt the device showed after the after-login steps.
+	defRe := regexp.MustCompile(DefaultPrompt)
+	loose, exact := false, ""
 	// atPrompt: the output ends with the prompt and has been quiet for a moment
 	atPrompt := func(from int, quiet time.Duration) (bool, string) {
 		txt, idle := snapshot()
@@ -102,7 +114,8 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 			_ = m.Write(id, []byte(" "))
 			return false, ""
 		}
-		return re.MatchString(lastLine), lastLine
+		ok := re.MatchString(lastLine) || (loose && defRe.MatchString(lastLine)) || (exact != "" && strings.TrimSpace(lastLine) == exact)
+		return ok, lastLine
 	}
 	wait := func(from int, limit time.Duration, what string) (string, error) {
 		deadline := time.Now().Add(limit)
@@ -138,11 +151,12 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 	}
 	promptLine, err := wait(0, 60*time.Second, "logging in")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	// After-login steps one at a time, each only when its expected text is in
 	// the prompt: "enable" is skipped when the account starts at "#", and
 	// nothing is typed before the device is ready for it.
+	loose = true
 	if dt, ok := m.deviceOf(t.sess); ok {
 		for _, a := range dt.After() {
 			if exp := Unescape(a.Expect); exp != "" && !strings.Contains(promptLine, exp) {
@@ -153,15 +167,16 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 			conn := t.conn
 			t.mu.Unlock()
 			if conn == nil {
-				return "", errors.New("the connection was closed")
+				return nil, errors.New("the connection was closed")
 			}
 			m.runLogon(t, conn, []session.LogonAction{a})
 			if promptLine, err = wait(len(before), 45*time.Second, `after-login step "`+a.Send+`"`); err != nil {
-				return "", err
+				return nil, err
 			}
 		}
 	}
-	var res strings.Builder
+	loose, exact = false, strings.TrimSpace(promptLine)
+	var res []string
 	for _, c := range commands {
 		c = strings.TrimSpace(c)
 		if c == "" {
@@ -169,15 +184,15 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 		}
 		before, _ := snapshot()
 		if err := m.Write(id, []byte(c+"\r")); err != nil {
-			return "", err
+			return nil, err
 		}
 		if promptLine, err = wait(len(before), 3*time.Minute, `"`+c+`"`); err != nil {
-			return "", err
+			return nil, err
 		}
 		txt, _ := snapshot()
-		res.WriteString(cleanOutput(txt[len(before):], c, promptLine))
+		res = append(res, cleanOutput(txt[len(before):], c, promptLine))
 	}
-	return res.String(), nil
+	return res, nil
 }
 
 // cleanOutput removes the echoed command (first line) and the prompt (last

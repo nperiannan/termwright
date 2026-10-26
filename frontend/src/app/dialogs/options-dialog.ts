@@ -16,7 +16,7 @@ const SEARCH: [Page, string, string][] = [
   ['general', 'SFTP tabs follow the terminal folder', 'cwd'], ['general', "SFTP tabs browse as the terminal's user", 'root sudo'],
   ['general', 'Python interpreter', 'script python3'], ['general', 'UI theme', 'dark light mode appearance'],
   ['general', 'Accent color', 'colour highlight'], ['general', 'Confirm before closing connected tabs', 'quit exit'],
-  ['general', 'Confirm before pasting more than one line', 'paste multi-line'], ['general', 'Reopen the sessions', 'restore tabs start'],
+  ['general', 'Confirm before pasting more than one line', 'paste multi-line'], ['general', 'Remember typed commands', 'history autocomplete suggestions'], ['general', 'Reopen the sessions', 'restore tabs start'],
   ['general', 'Show Session Manager', 'tree sidebar'], ['general', 'Show Command Window', 'broadcast'], ['general', 'Show Button Bar', 'buttons'],
   ['general', 'Show Connect Bar', 'toolbar quick connect'], ['general', 'Show the menu bar inside the window', 'menu'],
   ['terminal', 'Font', 'typeface monospace'], ['terminal', 'Font size', 'zoom text size'], ['terminal', 'Color scheme', 'colours theme terminal'],
@@ -95,6 +95,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="checks">
                   <label><input type="checkbox" name="cc" [(ngModel)]="s.confirmClose" /> Confirm before closing connected tabs / quitting</label>
                   <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" /> Confirm before pasting more than one line</label>
+                  <label><input type="checkbox" name="rhist" [ngModel]="s.recordHistory !== false" (ngModelChange)="s.recordHistory = $event" />
+                    Remember typed commands for Command History and suggestions (never commands with passwords, secrets or keys)</label>
                   <label><input type="checkbox" name="rt" [(ngModel)]="s.restoreTabs" /> Reopen the sessions that were open when Termwright was closed</label>
                   <label><input type="checkbox" name="sm" [(ngModel)]="s.showSessionManager" /> Show Session Manager</label>
                   <label><input type="checkbox" name="bb" [(ngModel)]="s.showButtonBar" /> Show Button Bar</label>

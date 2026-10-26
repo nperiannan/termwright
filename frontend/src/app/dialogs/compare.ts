@@ -144,7 +144,11 @@ export class Compare {
     return out;
   }
 
-  pathName(v: string) { const p = v.slice(5).split(/[\\/]/); return p.slice(-2).join('/'); }
+  pathName(v: string) {
+    const parts = v.slice(5).split(/[\\/]/);
+    const phase = parts.lastIndexOf('before') >= 0 ? 'Before: ' : parts.lastIndexOf('after') >= 0 ? 'After: ' : '';
+    return phase + parts.slice(-2).join('/');
+  }
 
   async setSrc(side: number, v: string) {
     let lines: string[] | null = null, label = '';

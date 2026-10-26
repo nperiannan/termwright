@@ -87,7 +87,7 @@ func BuiltinDeviceTypes() []DeviceType {
 		{Name: "EXOS", Protocol: ProtoSSH2, Prompt: `[#>] ?$`, BackupCommands: "show configuration",
 			LoginSteps: []LogonAction{step("login:", `\s`, false), step("password:", `\w`, true)},
 			AfterLogin: []LogonAction{step("#", "disable clipaging", false)}},
-		{Name: "VOSS", Protocol: ProtoSSH2, Prompt: `:\d+[>#] ?$`, BackupCommands: "show running-config",
+		{Name: "VOSS", Protocol: ProtoSSH2, Prompt: `:\d+(\([^)]*\))?[>#] ?$`, BackupCommands: "show running-config",
 			LoginSteps: []LogonAction{step("Login:", `\s`, false), step("Password:", `\w`, true)},
 			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal more disable", false)}},
 		{Name: "Cisco IOS", Protocol: ProtoSSH2, Prompt: `[>#] ?$`, BackupCommands: "show running-config",

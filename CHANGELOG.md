@@ -4,6 +4,14 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.15.0 (2026-10-27)
+
+* **Change checklists** (File → Change Checklists…): show commands per device type, run on a set of devices before and after a change in the background; each device is marked *same* or *changed* (times, dates and uptime counters ignored) and **Compare** shows before and after. Every change is kept with its date and an optional ticket / note.
+* **Command History** (Script → Command History…, `Mod+Y`): search every command typed in terminals and the Command Window (session, device type, time, how often); type it in the tab, run it or put it in the Command Window. The command is read from the terminal line without the prompt. Commands that may carry a secret (password, secret, community, key-string, pre-shared, tokens) are never remembered; history can be turned off and cleared.
+* **Suggestions in the Command Window** from history and the Command Library, the active tab's device type first (never another device type's commands); Tab takes one.
+* **Backups and checklists with `config terminal`** in a device type's after-login steps: the prompt the device shows afterwards (`sw:1(config)#`) is learned, so the run no longer fails with *no prompt after after-login step*. The built-in VOSS prompt pattern also accepts configuration modes.
+* Compare Outputs names checklist files *Before:* / *After:*.
+
 ## 0.14.1 (2026-10-26)
 
 * **Configuration backups of VOSS switches**: the device type's after-login steps (`enable`, `terminal more disable`) now run one at a time, each only when the device shows the prompt it expects - `enable` is skipped for accounts that start at `#`, and nothing is typed before the switch is ready. Before, a backup could wait for a `#` that never came and fail with *no prompt after logging in*.

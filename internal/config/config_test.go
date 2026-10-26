@@ -34,3 +34,13 @@ func TestMovePaths(t *testing.T) {
 		t.Fatalf("%+v %+v %+v", g.Favorites, g.RecentSessions, g.LastConnected)
 	}
 }
+
+func TestChecklistFor(t *testing.T) {
+	c := Checklist{Commands: []ChecklistCommands{{DeviceType: "VOSS", Commands: "show isis adjacency\n\nshow vlan basic"}, {DeviceType: "", Commands: "show version"}}}
+	if got := strings.Join(c.For("voss"), "|"); got != "show isis adjacency|show vlan basic" {
+		t.Fatalf("voss %q", got)
+	}
+	if got := strings.Join(c.For("EXOS"), "|"); got != "show version" {
+		t.Fatalf("other %q", got)
+	}
+}

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AppInfo, BackupFile, BackupStatus, FileEntry, FileFilter, ImportOptions, ImportResult, PromptReply, RemoteInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus,
+  AppInfo, BackupFile, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, PromptReply, RemoteInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus,
 } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
@@ -80,6 +80,14 @@ export class Backend {
   backupJobRuns() { return this.call<Record<string, string>>('BackupJobRuns'); }
   showInFolder(path: string) { return this.call<void>('ShowInFolder', path); }
   openPath(path: string) { return this.call<void>('OpenUpdate', path); }
+  checklistDir() { return this.call<string>('ChecklistDir'); }
+  checklistRuns(name: string) { return this.call<CheckRun[]>('ChecklistRuns', name); }
+  checklistRun(name: string, runId: string, phase: 'before' | 'after', note: string) { return this.call<string>('ChecklistRun', name, runId, phase, note); }
+  checklistCancel(name: string, runId: string) { return this.call<void>('ChecklistCancel', name, runId); }
+  showChecklistFolder() { return this.call<void>('ShowChecklistFolder'); }
+  historyAdd(e: Partial<HistoryEntry>) { return this.call<void>('HistoryAdd', e); }
+  historyList() { return this.call<HistoryEntry[]>('HistoryList'); }
+  historyClear() { return this.call<void>('HistoryClear'); }
   startTab(id: string, cols: number, rows: number) { return this.call<void>('StartTab', id, cols, rows); }
   sendInput(id: string, data: string) { return this.call<void>('SendInput', id, data); }
   sendBinary(id: string, b64: string) { return this.call<void>('SendBinary', id, b64); }

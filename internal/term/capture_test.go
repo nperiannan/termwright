@@ -67,6 +67,8 @@ func fakeSwitchOpt(t *testing.T, password string, privileged bool, got chan<- st
 						_, _ = c.Write([]byte("sw1:1#"))
 					case "terminal more disable":
 						_, _ = c.Write([]byte("sw1:1#"))
+					case "config terminal":
+						_, _ = c.Write([]byte("Enter configuration commands, one per line.  End with CNTL/Z.\r\nsw1:1(config)#"))
 					case "show running-config":
 						_, _ = c.Write([]byte("#\r\n# Mon Oct 26 10:22:01 2026 UTC\r\n#\r\nvlan create 10 type port-mstprstp 0\r\n"))
 						time.Sleep(300 * time.Millisecond)
@@ -185,5 +187,27 @@ func TestCaptureErrorTranscript(t *testing.T) {
 	var ce *CaptureError
 	if err == nil || !errors.As(err, &ce) || !strings.Contains(ce.Transcript, "Login:") {
 		t.Fatalf("%v", err)
+	}
+}
+
+// An after-login "config terminal" changes the prompt to "sw1:1(config)#",
+// which the device type's pattern does not know: the prompt is learned.
+func TestCaptureConfigModePrompt(t *testing.T) {
+	addr := fakeSwitch(t, "secret")
+	host, port, _ := net.SplitHostPort(addr)
+	p, _ := strconv.Atoi(port)
+	m := NewManager(nopEmitter{}, "", func() string { return "" })
+	dt := session.BuiltinDeviceTypes()[1]
+	dt.Username = "rwa"
+	dt.AfterLogin = append(dt.AfterLogin, session.LogonAction{Expect: "#", Send: "config terminal", TrailingCR: true})
+	m.DeviceType = func(name string) (session.DeviceType, bool) { return dt, true }
+	m.DevicePassword = func(string) (string, bool) { return "secret", true }
+	s := session.Defaults()
+	s.Name, s.Protocol, s.Hostname, s.Port, s.DeviceType = "sw1", session.ProtoRaw, host, p, "VOSS"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := m.Capture(ctx, s, []string{"show running-config"}, `:\d+[>#] ?$`) // the old pattern
+	if err != nil || !strings.Contains(out, "vlan members add 10 1/1") || strings.Contains(out, "(config)#") {
+		t.Fatalf("%q %v", out, err)
 	}
 }

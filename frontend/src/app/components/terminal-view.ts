@@ -13,6 +13,7 @@ import { Ui } from '../core/ui.service';
 import { terminalTheme } from '../core/themes';
 import { comboOf } from '../core/models';
 import { FIX_LABELS, FixAction, fixFor } from '../core/fixes';
+import { History, commandOfLine } from '../core/history.service';
 
 /** Black or white, whichever is more readable on the given background. */
 function contrastText(hex: string): string {
@@ -63,6 +64,17 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
   private unsub: (() => void)[] = [];
   private fitTimer?: ReturnType<typeof setTimeout>;
+  private history = inject(History);
+
+  /** Remembers the command on the cursor line (prompt removed) for history search. */
+  private remember(term: Terminal, t: TabView) {
+    const b = term.buffer.active;
+    let row = b.baseY + b.cursorY;
+    let text = b.getLine(row)?.translateToString(true) ?? '';
+    while (row > 0 && b.getLine(row)?.isWrapped) { row--; text = (b.getLine(row)?.translateToString(true) ?? '') + text; }
+    const cmd = commandOfLine(text);
+    if (cmd) this.history.add(cmd, { session: t.session.path, title: t.title, deviceType: t.session.deviceType });
+  }
   readonly labels = FIX_LABELS;
   /** The error message the user closed the fix bar for. */
   readonly dismissed = signal('');
@@ -197,6 +209,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
         if (d === '\r') void this.tabs.reconnect(id);
         return;
       }
+      if (d === '\r' && t?.state === 'connected' && term.buffer.active.type === 'normal') this.remember(term, t);
       void this.backend.sendInput(id, d);
     });
     term.onBinary(d => void this.backend.sendBinary(id, btoa(d)));

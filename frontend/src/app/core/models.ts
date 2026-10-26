@@ -83,6 +83,7 @@ export interface Settings {
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;
   backupDir?: string; backupJobs?: BackupJob[] | null;
+  checklists?: Checklist[] | null; checklistDir?: string; recordHistory?: boolean | null;
   keywordSets: KeywordSet[] | null; defaultKeywordSet: string; showConnectBar: boolean; keyMap: KeyBinding[] | null;
   customSchemes: { name: string; colors: Record<string, string> }[] | null; accentColor: string;
   restoreTabs: boolean; openTabs: string[] | null; inWindowMenu: boolean; forceTerminalScheme: boolean; pythonPath: string;
@@ -147,6 +148,14 @@ export interface BackupStatus { time: string; ok: boolean; error?: string; chang
 export interface BackupFile { name: string; path: string; time: string; size: number; }
 export interface BackupResult { runId: string; path: string; ok: boolean; error?: string; changed: boolean; file?: string; done: number; total: number; }
 
+/** Change checklist: show commands per device type, run before and after a change. */
+export interface Checklist { name: string; targets: string[]; commands: { deviceType: string; commands: string }[]; }
+export interface CheckPhaseResult { time: string; ok: boolean; error?: string; file?: string; log?: string; }
+export interface CheckRun { id: string; created: string; note?: string; devices: Record<string, { before?: CheckPhaseResult; after?: CheckPhaseResult; changed?: boolean | null }>; }
+export interface CheckResult { list: string; run: string; phase: 'before' | 'after'; path: string; ok: boolean; error?: string; changed?: boolean | null; done: number; total: number; }
+/** A remembered command (history search, autocomplete). */
+export interface HistoryEntry { cmd: string; session?: string; title?: string; deviceType?: string; time: string; count: number; }
+
 /** An open RDP or VNC tab (backend RemoteInfo). */
 export interface RemoteInfo { id: string; kind: 'rdp' | 'vnc'; title: string; addr: string; via: string; client: string; wsUrl: string; hasPass: boolean; note: string; session: Session; }
 export const EMULATIONS = ['Xterm', 'VT100', 'VT102', 'VT220', 'ANSI', 'Linux'] as const;
@@ -181,7 +190,7 @@ export interface Transfer {
 
 /** Actions that menus, key bindings and buttons can trigger. */
 export const ACTIONS: Record<string, string> = {
-  'quick-connect': 'Quick Connect', discover: 'Discover Devices...', backups: 'Configuration Backups...', 'local-shell': 'Local Shell', reconnect: 'Reconnect', disconnect: 'Disconnect',
+  'quick-connect': 'Quick Connect', discover: 'Discover Devices...', backups: 'Configuration Backups...', checklists: 'Change Checklists...', history: 'Command History...', 'local-shell': 'Local Shell', reconnect: 'Reconnect', disconnect: 'Disconnect',
   'clone-tab': 'Clone Session', 'close-tab': 'Close Tab', 'next-tab': 'Next Tab', 'prev-tab': 'Previous Tab',
   copy: 'Copy', paste: 'Paste', 'copy-paste': 'Copy and Paste', find: 'Find', 'clear-scrollback': 'Clear Scrollback',
   'clear-screen': 'Clear Screen', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback',

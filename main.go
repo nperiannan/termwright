@@ -115,6 +115,7 @@ func buildMenu(app *App) *menu.Menu {
 	file.AddText("Import Sessions...", nil, emit("import"))
 	file.AddText("Discover Devices...", nil, emit("discover"))
 	file.AddText("Configuration Backups...", nil, emit("backups"))
+	file.AddText("Change Checklists...", nil, emit("checklists"))
 	file.AddText("Export Sessions...", nil, emit("export"))
 	file.AddSeparator()
 	file.AddText("Close Tab", acc("w"), emit("close-tab"))
@@ -177,6 +178,7 @@ func buildMenu(app *App) *menu.Menu {
 
 	script := m.AddSubmenu("Script")
 	script.AddText("Command Library...", acc("e"), emit("command-library"))
+	script.AddText("Command History...", acc("y"), emit("history"))
 	script.AddSeparator()
 	script.AddText("Run Script...", nil, emit("run-script"))
 	script.AddText("Cancel Running Scripts", nil, emit("cancel-scripts"))

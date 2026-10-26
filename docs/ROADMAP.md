@@ -143,9 +143,9 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - [x] **VNC**: built-in VNC viewer tab (noVNC), through jump hosts and proxies; VNC and macOS Screen Sharing logins
 - [x] Discovery: RDP and VNC devices can be added as sessions
 
-## 0.15 (planned)
-- [ ] **Change checklists**: run a set of show commands on chosen devices before a change and again after it, then compare each device automatically
-- [ ] **Command history search** across all tabs and sessions (filter by device type) and **autocomplete** from history and the Command Library while typing in the Command Window
+## 0.15 (done)
+- [x] **Change checklists**: run a set of show commands on chosen devices before a change and again after it, then compare each device automatically
+- [x] **Command history search** across all tabs and sessions (filter by device type) and **autocomplete** from history and the Command Library while typing in the Command Window
 
 ## 0.16 (planned)
 - [ ] **Run and collect**: run commands on many devices and get one report (file per device, or a table such as versions / serial numbers)

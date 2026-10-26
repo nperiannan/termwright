@@ -13,6 +13,12 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.15.0
+
+* **Change checklists**: run show commands before and after a change, see which devices changed and compare them.
+* **Command History** search (`Mod+Y`) and **suggestions in the Command Window** from history and the Command Library.
+* Backups of devices whose after-login steps enter `config terminal` work.
+
 ## What's new in 0.14.1
 
 * Configuration backups of VOSS switches log in reliably; a failed backup shows what the device sent.
@@ -21,10 +27,6 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 * **Configuration backups**: scheduled or on demand, saved only when changed, *What Changed* compares the last two copies.
 * **RDP** sessions open in the computer's Remote Desktop client and **VNC** sessions in a built-in viewer - both through jump hosts and proxies.
-
-## What's new in 0.13.1
-
-* The session filter lists the exact match first: typing `10.127.34.2` shows that device, not every address starting with it.
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 
@@ -49,6 +51,8 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 | Automation | Command window and **command library** with `{{variables}}` (send to the active tab, **selected tabs** or **all tabs**), button bar (text, actions, scripts), **output alerts** (notice, sound, desktop notification), paste confirmation and line delay, **compare outputs** (diff two tabs or files, ignore prompts; *Compare With…* on the tab menu) |
 | Security | Passwords and key passphrases in the OS keychain (never in session files), **password managers** (1Password, Bitwarden, HashiCorp Vault, command), named credentials, **master password**, encrypted password-vault export/import (AES-256-GCM + scrypt) |
 | Remote desktop | **RDP** sessions in the computer's Remote Desktop client (Windows, macOS Windows App, FreeRDP/Remmina) and **VNC** in a built-in viewer, both through jump hosts and proxies |
+| Change checklists | Show commands before and after a change on many devices, *same* / *changed* per device with side-by-side compare |
+| Command history | Search every typed command (secrets never kept) and suggestions in the Command Window |
 | Config backups | Scheduled or on-demand backups of device configurations per device type, kept only when changed, with *What Changed* |
 | Updates | Help → Check for Updates: stable or nightly channel from GitHub releases, downloads and opens the installer |
 

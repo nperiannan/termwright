@@ -83,6 +83,9 @@ type Settings struct {
 	ShowReachability    bool                 `json:"showReachability"` // Session Manager: dot per session from a quick TCP check
 	BackupDir           string               `json:"backupDir"`        // Configuration Backups folder ("" = Documents/Termwright Config Backups)
 	BackupJobs          []BackupJob          `json:"backupJobs"`
+	Checklists          []Checklist          `json:"checklists"`
+	ChecklistDir        string               `json:"checklistDir"`            // "" = Documents/Termwright Checklists
+	RecordHistory       *bool                `json:"recordHistory,omitempty"` // nil = on
 	KeywordSets         []KeywordSet         `json:"keywordSets"`
 	DefaultKeywordSet   string               `json:"defaultKeywordSet"`
 	ShowConnectBar      bool                 `json:"showConnectBar"`
@@ -169,6 +172,44 @@ type BackupJob struct {
 	Keep     int    `json:"keep"`     // copies per device (0 = 30)
 	SaveAll  bool   `json:"saveAll"`  // save a copy every run, also when nothing changed
 	Commands string `json:"commands"` // for sessions without a device type with backup commands
+}
+
+// Checklist is a set of show commands run on devices before and after a change.
+type Checklist struct {
+	Name     string              `json:"name"`
+	Targets  []string            `json:"targets"` // session paths; folders end with "/"
+	Commands []ChecklistCommands `json:"commands"`
+}
+
+// ChecklistCommands are the commands for one device type ("" = any other).
+type ChecklistCommands struct {
+	DeviceType string `json:"deviceType"`
+	Commands   string `json:"commands"` // one per line
+}
+
+// For returns the commands for a device type.
+func (c Checklist) For(deviceType string) []string {
+	pick := ""
+	found := false
+	for _, x := range c.Commands {
+		if x.DeviceType != "" && strings.EqualFold(x.DeviceType, deviceType) {
+			pick, found = x.Commands, true
+		}
+	}
+	if !found {
+		for _, x := range c.Commands {
+			if x.DeviceType == "" {
+				pick = x.Commands
+			}
+		}
+	}
+	var out []string
+	for _, l := range strings.Split(pick, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // Alert notifies when output in any tab matches a pattern.
@@ -376,6 +417,9 @@ func (m *Manager) Save(s Settings) error {
 	}
 	if s.BackupJobs == nil {
 		s.BackupJobs = []BackupJob{}
+	}
+	if s.Checklists == nil {
+		s.Checklists = []Checklist{}
 	}
 	if s.Alerts == nil {
 		s.Alerts = []Alert{}
