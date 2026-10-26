@@ -155,13 +155,29 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - [x] **Session recording and playback**: asciinema v2 `.cast` per connection (output, timing, window size, markers), per session / folder / all sessions, player tab (speed, seek, skip idle, markers, text search, export text), Recordings list, keep N days
 - [x] **Smart cards: PIV / CAC / PKCS#11 SSH keys**: Smart Cards options (libraries, test, copy public key), per session / folder, PIN in memory only, certificates, jump hosts, SFTP, agent forwarding; tested with SoftHSM2
 
+## Real-world readiness (next, before more features)
+Features alone do not make a tool people rely on every day. These come first:
+- [ ] **Field testing**: features verified so far only with test servers or software tokens, on real equipment
+  - RDP on Windows (Remote Desktop Connection)
+  - smart cards with a real PIV / CAC card and a YubiKey, on macOS, Windows and Linux
+  - the Windows build with smart card support (first release built with cgo)
+  - console servers and Run and Collect on real devices
+- [ ] **Beta users**: 5-10 network engineers using Termwright daily for a few weeks; fix what they report
+- [ ] **Device test pass**: VOSS, EXOS, Cisco IOS / NX-OS, Junos, Linux and serial consoles - logins, prompts, paging, full-screen tools, long outputs, slow links
+- [ ] **Terminal accuracy**: vttest and full-screen apps (vi, top, menus of devices) compared with other terminals
+- [ ] **Code signing and notarization**: Windows (Authenticode) and macOS (Developer ID), so installers run without warnings and pass company policies
+- [ ] **Packages**: winget, Homebrew cask, MSI for company deployment, Linux packages (deb / rpm / Flatpak)
+- [ ] **Security review**: an outside look at password storage, secret handling, host key checks and the update path
+- [ ] **Team sharing and sync** (from *Later*): shared session libraries for teams
+- [ ] **Community**: issue templates, a short contributing guide, release announcements in network engineering communities
+
 ## 0.18 (planned)
 - [ ] Smart cards on Windows without a PKCS#11 library: keys of the Windows certificate store (CNG)
 - [ ] Import the smart card settings of SecureCRT sessions (needs sample exports)
 - [ ] Optional recording of typed input in session recordings (off by default)
 
 ## Later
-- [ ] **Team sharing and sync**: shared session library (Git repository or shared folder), passwords stay per user or in a password manager
+- [ ] **Team sharing and sync** (see Real-world readiness): shared session library (Git repository or shared folder), passwords stay per user or in a password manager
 - [ ] Split panes inside a tab (nested splits, keyboard driven)
 - [ ] Cloud inventory imports: Azure, Google Cloud
 - [ ] Plugin / extension API
