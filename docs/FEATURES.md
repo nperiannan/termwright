@@ -22,7 +22,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Tab badges**: `LOG` (logging), `● REC` (session recording), `SCRIPT` (script recording), `SEL` (in the send group), `PROD` (production).
 - **Layouts**: tabbed, tile side by side, tile stacked, tile grid.
 - **Status bar**: state, protocol, user@host, server version, route (jump host), transfer progress, terminal size, emulation, connected tabs.
-- **Start page**: recent sessions and quick actions when no tab is open.
+- **Start page**: the Termwright wordmark, quick actions (Quick Connect, New Session, Local Shell, Import Sessions, Discover Devices) and recent sessions when no tab is open.
 - **Restore tabs**: the open sessions come back at the next start (optional).
 - **Window size and position** are remembered.
 - **Themes**: dark, light or follow the system, with an accent color.

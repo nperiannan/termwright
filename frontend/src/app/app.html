@@ -101,13 +101,15 @@
       }
       @if (!tabs.tabs().length) {
         <div class="welcome">
-          <h1>Termwright</h1>
+          <h1 class="brand" aria-label="Termwright"><span class="pr" aria-hidden="true">&gt;_</span><span class="wm">Termwright<span class="cur" aria-hidden="true"></span></span></h1>
+          <div class="protos"><b>ssh</b> · telnet · serial · sftp · rdp · vnc</div>
           <p>Double-click a session in the Session Manager, or:</p>
           <div class="actions">
             <button class="primary" (click)="action('quick-connect')">Quick Connect</button>
             <button (click)="ui.newSession(ui.currentFolder())">New Session</button>
             <button (click)="action('local-shell')">Local Shell</button>
             <button (click)="action('import')">Import Sessions</button>
+            <button (click)="action('discover')">Discover Devices</button>
           </div>
           @if (recent().length) {
             <h3>Recent sessions</h3>
