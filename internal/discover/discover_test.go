@@ -374,3 +374,57 @@ func TestExosWithOpenSSH(t *testing.T) {
 		t.Fatalf("voss: platform %q os %q", r.Platform, r.OS)
 	}
 }
+
+func TestIoTBoards(t *testing.T) {
+	esp := "Espressif Inc."
+	for _, c := range []struct {
+		r          Result
+		vendor, os string
+	}{
+		{Result{MDNSServices: []string{"esphomelib", "http"}, MACVendor: esp, Services: []string{"http", "esphome", "mdns"}}, "Espressif", "ESPHome"},
+		{Result{Web: WebInfo{Title: "Tasmota", Server: "Tasmota/13.2.0 (ESP32)"}, Services: []string{"http"}}, "Espressif", "Tasmota"},
+		{Result{MDNSServices: []string{"arduino"}, MACVendor: esp, Services: []string{"mdns"}}, "Espressif", "Arduino"},
+		{Result{Web: WebInfo{Server: "lwIP/2.1.3"}, MACVendor: "STMicroelectronics", Services: []string{"http"}}, "STMicroelectronics", "lwIP (embedded / RTOS)"},
+		{Result{MACVendor: esp}, "Espressif", "ESP32 / ESP8266"},
+		{Result{CoAP: "</sensors/temp>;rt=\"temperature\"", Services: []string{"coap"}}, "", ""},
+		{Result{Services: []string{"esphome"}}, "", ""},
+		{Result{Web: WebInfo{Title: "WLED"}, Services: []string{"http"}}, "Espressif", "WLED"},
+		{Result{DNS: "esp32-1a2b3c.lan", Services: []string{"http"}}, "Espressif", "ESP32"},
+	} {
+		r := c.r
+		classify(&r)
+		if r.Kind != KindIoT || (c.vendor != "" && r.Vendor != c.vendor) || (c.os != "" && r.OS != c.os) {
+			t.Errorf("%+v -> kind %s vendor %q os %q", c.r, r.Kind, r.Vendor, r.OS)
+		}
+	}
+	// a Raspberry Pi running Linux stays a server; an iPhone found by its mDNS services stays a phone
+	r := Result{Banner: "SSH-2.0-OpenSSH_9.2p1 Debian-2", MACVendor: "Raspberry Pi Trading Ltd", Services: []string{"ssh"}}
+	classify(&r)
+	if r.Kind != KindServer {
+		t.Errorf("raspberry pi with ssh: %s", r.Kind)
+	}
+	r = Result{MDNSServices: []string{"apple-mobdev2", "companion-link"}, Services: []string{"mdns"}}
+	classify(&r)
+	if r.Kind != KindMobile {
+		t.Errorf("iphone services: %s", r.Kind)
+	}
+}
+
+func TestCoAPPayload(t *testing.T) {
+	// ACK 2.05 Content, token length 0, Content-Format option (12) = 40, payload
+	m := append([]byte{0x60, 0x45, 0x7a, 0x31, 0xc1, 40, 0xff}, `</light>;rt="lamp"`...)
+	if p := coapPayload(m); p != `</light>;rt="lamp"` {
+		t.Fatalf("payload %q", p)
+	}
+	if p := coapPayload([]byte{0x60, 0x45, 0, 1}); p != "CoAP" {
+		t.Fatalf("empty %q", p)
+	}
+}
+
+func TestShellyKeepsVendor(t *testing.T) {
+	r := Result{Web: WebInfo{Title: "Shelly Plus 1PM"}, MACVendor: "Espressif Inc.", Services: []string{"http"}}
+	classify(&r)
+	if r.Kind != KindIoT || r.Vendor != "Shelly" {
+		t.Fatalf("kind %s vendor %q", r.Kind, r.Vendor)
+	}
+}

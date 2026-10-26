@@ -80,6 +80,7 @@ const (
 	kOpenAs      = "Termwright Open As"
 	kDevice      = "Termwright Device Type"
 	kOwnLogin    = "Termwright Own Login"
+	kEnv         = "Termwright Environment"
 	kSFTPTarget  = "Termwright SFTP To Command Target"
 	kKrbPrinc    = "Termwright Kerberos Principal"
 	kKrbSPN      = "Termwright Kerberos SPN"
@@ -175,6 +176,7 @@ type Session struct {
 	OpenAs            string        `json:"openAs"`            // SSH2: "" = terminal, "sftp" = SFTP browser only
 	DeviceType        string        `json:"deviceType"`        // name of a device type (login profile)
 	OwnLogin          bool          `json:"ownLogin"`          // with a device type: use this session's username/password instead of the device type's
+	Environment       string        `json:"environment"`       // "", production, staging, test, development: colours the tab, production asks before sending to many tabs
 	KerberosPrincipal string        `json:"kerberosPrincipal"` // GSSAPI: user@REALM when no kinit ticket ("" = login user)
 	KerberosSPN       string        `json:"kerberosSpn"`       // GSSAPI target, "" = host@<hostname>; %H = hostname
 	CertificateFile   string        `json:"certificateFile"`   // OpenSSH user certificate, "" = <identity>-cert.pub
@@ -269,6 +271,7 @@ func FromFile(path string, f *securecrt.File) Session {
 	s.OpenAs = f.Str(kOpenAs, "")
 	s.DeviceType = f.Str(kDevice, "")
 	s.OwnLogin = f.Bool(kOwnLogin, false)
+	s.Environment = f.Str(kEnv, "")
 	s.SFTPToTarget = f.Bool(kSFTPTarget, false)
 	s.KerberosPrincipal = f.Str(kKrbPrinc, "")
 	s.KerberosSPN = f.Str(kKrbSPN, "")
@@ -563,6 +566,7 @@ func (s Session) Apply(f *securecrt.File) {
 	setOptStr(f, kOpenAs, s.OpenAs)
 	setOptStr(f, kDevice, s.DeviceType)
 	setOptBool(f, kOwnLogin, s.OwnLogin && s.DeviceType != "")
+	setOptStr(f, kEnv, s.Environment)
 	setOptBool(f, kSFTPTarget, s.SFTPToTarget && s.UseRemoteCommand)
 	setOptStr(f, kKrbPrinc, s.KerberosPrincipal)
 	setOptStr(f, kKrbSPN, s.KerberosSPN)

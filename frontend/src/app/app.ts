@@ -4,6 +4,7 @@ import { Backend } from './core/backend';
 import { Tabs, TabView } from './core/tabs.service';
 import { SessionNode, findDeviceType } from './core/models';
 import { menuBar } from './core/menu';
+import { envInfo, envOf } from './core/env';
 import { Ui } from './core/ui.service';
 import { Icon } from './components/icon';
 import { SessionTree } from './components/session-tree';
@@ -18,6 +19,7 @@ import { OptionsDialog } from './dialogs/options-dialog';
 import { PasswordsDialog } from './dialogs/passwords-dialog';
 import { UpdateDialog } from './dialogs/update-dialog';
 import { DiscoverDialog } from './dialogs/discover-dialog';
+import { BulkEdit } from './dialogs/bulk-edit';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
 import { Palette } from './dialogs/palette';
 import { Commands, sendSnippet } from './dialogs/commands';
@@ -29,7 +31,7 @@ import { About, Overlays } from './dialogs/overlays';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, Overlays, About],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, Overlays, About],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -47,6 +49,7 @@ export class App implements OnInit {
   readonly settings = this.ui.settings;
   readonly active = this.tabs.active;
   readonly recent = computed(() => this.settings()?.recentSessions ?? []);
+  tabEnv(t: TabView) { return envInfo(envOf(t.session?.path ?? '', t.session?.environment, this.settings()?.folderDefaults)); }
   readonly tiled = computed(() => this.tabs.layout() !== 'tabs');
   readonly gridCols = computed(() => {
     const n = this.tabs.tabs().length;

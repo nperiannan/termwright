@@ -2,6 +2,7 @@ import { Component, ElementRef, inject, signal, viewChild } from '@angular/core'
 import { FormsModule } from '@angular/forms';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models';
 
 /** Command window: compose a command (or several lines) and send it to the
  *  active tab or broadcast it to every connected tab. */
@@ -17,6 +18,8 @@ import { Ui } from '../core/ui.service';
       <button class="pick" title="Choose the tabs to send to" (click)="pick($event)">Choose…</button>
       <label title="Send characters immediately as you type"><input type="checkbox" [(ngModel)]="charMode" /> Send characters immediately</label>
       <span class="spacer"></span>
+      <button class="pick" (click)="library($event)" [title]="tabs.activeDeviceType() ? 'Commands from the library, those for ' + tabs.activeDeviceType() + ' first' : 'Commands from the library'">
+        Commands{{ tabs.activeDeviceType() ? ' (' + tabs.activeDeviceType() + ')' : '' }} ▾</button>
       <button (click)="send()" [disabled]="!text().length && !charMode">Send ⏎</button>
       <button class="icon-btn" title="Close" (click)="ui.patchSettings({ showCommandWindow: false })">✕</button>
     </div>
@@ -79,6 +82,33 @@ export class CommandWindow {
   }
 
   focus() { this.box().nativeElement.focus(); }
+
+  /** Library commands, those for the active tab's device type first; the chosen one goes into the box to check before sending. */
+  library(ev: MouseEvent) {
+    const all = this.ui.settings()?.snippets ?? [];
+    const dt = this.tabs.activeDeviceType().toLowerCase();
+    const known = (this.ui.settings()?.deviceTypes ?? []).map(d => d.name);
+    const mine = dt ? all.filter(s => snippetTypes(s, known).some(t => t.toLowerCase() === dt)) : [];
+    const other = all.filter(s => !mine.includes(s) && !(dt && snippetTypes(s, known).length));
+    const item = (s: Snippet) => ({ label: s.name, hint: s.folder, action: () => void this.insert(s) });
+    this.ui.showMenu(ev, [
+      ...(mine.length ? [{ label: 'For ' + this.tabs.activeDeviceType(), disabled: true }, ...mine.slice(0, 20).map(item), { separator: true }] : []),
+      ...other.slice(0, 20).map(item),
+      ...(all.length ? [{ separator: true }] : [{ label: 'No saved commands yet', disabled: true }]),
+      { label: 'Command Library...', action: () => this.ui.open('commands') },
+    ]);
+  }
+
+  private async insert(s: Snippet) {
+    const values: Record<string, string> = {};
+    for (const v of snippetVars(s.text)) {
+      const val = await this.ui.input(s.name, v.name, v.def);
+      if (val === null) return;
+      values[v.name] = val;
+    }
+    this.text.set(fillSnippet(s.text, values).replace(/\r?\n$/, ''));
+    this.box().nativeElement.focus();
+  }
 
   /** Menu of connected tabs to tick for "Selected tabs". */
   pick(ev: MouseEvent) {

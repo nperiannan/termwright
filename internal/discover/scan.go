@@ -19,10 +19,10 @@ type Probe struct {
 }
 
 // DefaultProbes are the TCP ports checked by default: logins, web interfaces,
-// and the ports that tell computers, printers and phones apart. SIP is also
-// asked over UDP.
+// and the ports that tell computers, printers, phones and IoT boards apart
+// (ESPHome API, MQTT, Modbus). SIP and CoAP are also asked over UDP.
 var DefaultProbes = []Probe{{22, "ssh"}, {23, "telnet"}, {80, "http"}, {443, "https"}, {445, "smb"},
-	{3389, "rdp"}, {9100, "printer"}, {631, "ipp"}, {5060, "sip"}}
+	{3389, "rdp"}, {9100, "printer"}, {631, "ipp"}, {5060, "sip"}, {6053, "esphome"}, {1883, "mqtt"}, {502, "modbus"}}
 
 // Options control a scan.
 type Options struct {
@@ -33,6 +33,7 @@ type Options struct {
 	SNMPPort  int           // default 161
 	SIPPort   int           // UDP SIP OPTIONS; default 5060, -1 = off
 	MDNSPort  int           // unicast mDNS name query; default 5353, -1 = off
+	CoAPPort  int           // CoAP GET /.well-known/core over UDP; default 5683, -1 = off
 	NoDNS     bool
 	NoWeb     bool // skip reading web pages
 	NoARP     bool // skip the neighbour (ARP) table
@@ -41,28 +42,30 @@ type Options struct {
 
 // Result describes one device that answered.
 type Result struct {
-	IP          string   `json:"ip"`
-	Name        string   `json:"name"` // best name: SNMP sysName, DNS name, or the address
-	DNS         string   `json:"dns"`
-	SysName     string   `json:"sysName"`
-	SysDescr    string   `json:"sysDescr"`
-	SysObjectID string   `json:"sysObjectId"`
-	Services    []string `json:"services"` // open probes, "snmp", "sip-udp"
-	Banner      string   `json:"banner"`   // SSH greeting
-	Telnet      string   `json:"telnet"`   // Telnet banner / login prompt
-	Web         WebInfo  `json:"web"`
-	SIP         string   `json:"sip"`  // SIP User-Agent / Server
-	MDNS        string   `json:"mdns"` // the name the device gives itself (mDNS / Bonjour)
-	MAC         string   `json:"mac"`
-	MACVendor   string   `json:"macVendor"`
-	Self        bool     `json:"self"` // this computer
-	Kind        string   `json:"kind"` // computer, server, nas, phone, printer, switch, router, firewall, wireless, unknown
-	Vendor      string   `json:"vendor"`
-	OS          string   `json:"os"`
-	Platform    string   `json:"platform"` // network OS named by any evidence: EXOS, VOSS, NX-OS, …
-	Evidence   []string `json:"evidence"` // what the kind and vendor are based on
-	Protocol    string   `json:"protocol"` // SSH2, Telnet or "" when no login port is open
-	Port        int      `json:"port"`
+	IP           string   `json:"ip"`
+	Name         string   `json:"name"` // best name: SNMP sysName, DNS name, or the address
+	DNS          string   `json:"dns"`
+	SysName      string   `json:"sysName"`
+	SysDescr     string   `json:"sysDescr"`
+	SysObjectID  string   `json:"sysObjectId"`
+	Services     []string `json:"services"` // open probes, "snmp", "sip-udp"
+	Banner       string   `json:"banner"`   // SSH greeting
+	Telnet       string   `json:"telnet"`   // Telnet banner / login prompt
+	Web          WebInfo  `json:"web"`
+	SIP          string   `json:"sip"`          // SIP User-Agent / Server
+	MDNS         string   `json:"mdns"`         // the name the device gives itself (mDNS / Bonjour)
+	MDNSServices []string `json:"mdnsServices"` // DNS-SD service types the device offers (esphomelib, hap, …)
+	CoAP         string   `json:"coap"`         // CoAP /.well-known/core answer
+	MAC          string   `json:"mac"`
+	MACVendor    string   `json:"macVendor"`
+	Self         bool     `json:"self"` // this computer
+	Kind         string   `json:"kind"` // computer, server, nas, phone, printer, switch, router, firewall, wireless, unknown
+	Vendor       string   `json:"vendor"`
+	OS           string   `json:"os"`
+	Platform     string   `json:"platform"` // network OS named by any evidence: EXOS, VOSS, NX-OS, …
+	Evidence     []string `json:"evidence"` // what the kind and vendor are based on
+	Protocol     string   `json:"protocol"` // SSH2, Telnet or "" when no login port is open
+	Port         int      `json:"port"`
 }
 
 // Scan checks addrs and calls found for every device that answers and
@@ -86,6 +89,9 @@ func Scan(ctx context.Context, addrs []netip.Addr, opt Options, found func(Resul
 	}
 	if opt.MDNSPort == 0 {
 		opt.MDNSPort = 5353
+	}
+	if opt.CoAPPort == 0 {
+		opt.CoAPPort = 5683
 	}
 	self := localAddrs()
 	jobs := make(chan netip.Addr)
@@ -281,6 +287,28 @@ func scanHost(ctx context.Context, a netip.Addr, opt Options) (Result, bool) {
 				mu.Unlock()
 			}
 		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if svcs := mdnsServices(ctx, a, opt.MDNSPort, opt.Timeout+400*time.Millisecond); len(svcs) > 0 {
+				mu.Lock()
+				open["mdns"] = true
+				r.MDNSServices = svcs
+				mu.Unlock()
+			}
+		}()
+	}
+	if opt.CoAPPort > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if v := coapCore(ctx, a, opt.CoAPPort, opt.Timeout+400*time.Millisecond); v != "" {
+				mu.Lock()
+				open["coap"] = true
+				r.CoAP = v
+				mu.Unlock()
+			}
+		}()
 	}
 	wg.Wait()
 	if !opt.NoWeb && len(webPorts) > 0 && ctx.Err() == nil {
@@ -310,7 +338,7 @@ func scanHost(ctx context.Context, a netip.Addr, opt Options) (Result, bool) {
 	if len(open) == 0 {
 		return r, false
 	}
-	for _, s := range append(serviceOrder(opt.Probes), "snmp", "sip-udp", "mdns") {
+	for _, s := range append(serviceOrder(opt.Probes), "snmp", "sip-udp", "mdns", "coap") {
 		if open[s] {
 			r.Services = append(r.Services, s)
 			delete(open, s)

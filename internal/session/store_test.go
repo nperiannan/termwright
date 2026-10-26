@@ -248,3 +248,20 @@ func TestSecureCRTLogonKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestEnvironmentAndTreeFields(t *testing.T) {
+	st, _ := NewStore(t.TempDir())
+	s := Session{Name: "sw1", Folder: "Prod", Protocol: ProtoSSH2, Hostname: "10.0.0.1", Port: 22, DeviceType: "VOSS",
+		Environment: "production", JumpSession: "Cloud/jump"}
+	if _, err := st.Save(s, ""); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := st.Get("Prod/sw1"); g.Environment != "production" {
+		t.Fatalf("environment %q", g.Environment)
+	}
+	root, _ := st.Tree()
+	n := root.Children[0].Children[0]
+	if n.DeviceType != "VOSS" || n.Environment != "production" || n.Jump != "Cloud/jump" {
+		t.Fatalf("%+v", n)
+	}
+}

@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, Component, ElementRef, OnDestroy, effect, inject, input, viewChild,
+  AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, input, signal, viewChild,
 } from '@angular/core';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -12,6 +12,7 @@ import { Tabs, TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { terminalTheme } from '../core/themes';
 import { comboOf } from '../core/models';
+import { FIX_LABELS, FixAction, fixFor } from '../core/fixes';
 
 /** Black or white, whichever is more readable on the given background. */
 function contrastText(hex: string): string {
@@ -30,10 +31,24 @@ function b64ToBytes(b64: string): Uint8Array {
 /** One xterm.js terminal bound to a backend tab. */
 @Component({
   selector: 'app-terminal-view',
-  template: `<div class="term-host" #host (contextmenu)="onContextMenu($event)"></div>`,
+  template: `<div class="term-host" #host (contextmenu)="onContextMenu($event)"></div>
+    @if (fix(); as f) {
+      <div class="fixbar" role="alert">
+        <button type="button" class="fx" title="Dismiss" (click)="dismissed.set(tab().message)">✕</button>
+        <div class="fmsg">{{ tab().message }}</div>
+        @if (f.hint) { <div class="fhint">{{ f.hint }}</div> }
+        <div class="facts">@for (a of f.actions; track a) { <button type="button" [class.primary]="$first" (click)="runFix(a)">{{ labels[a] }}</button> }</div>
+      </div>
+    }`,
   styles: [`
     :host { display: block; position: absolute; inset: 0; padding: 4px 0 0 6px; background: var(--term-bg); }
     .term-host { width: 100%; height: 100%; }
+    .fixbar { position: absolute; top: 10px; right: 14px; z-index: 5; max-width: min(520px, 80%); padding: 10px 12px; border-radius: 8px;
+      background: var(--panel); color: var(--text); border: 1px solid var(--border); border-left: 4px solid var(--danger); box-shadow: var(--shadow); font-size: 12.5px; }
+    .fmsg { font-weight: 600; margin-right: 18px; word-break: break-word; }
+    .fhint { color: var(--muted); margin-top: 4px; }
+    .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; button { height: 24px; font-size: 12px; } }
+    .fx { position: absolute; top: 6px; right: 6px; border: 0; background: none; height: auto; padding: 0 2px; color: var(--muted); cursor: pointer; }
   `],
 })
 export class TerminalView implements AfterViewInit, OnDestroy {
@@ -48,6 +63,31 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
   private unsub: (() => void)[] = [];
   private fitTimer?: ReturnType<typeof setTimeout>;
+  readonly labels = FIX_LABELS;
+  /** The error message the user closed the fix bar for. */
+  readonly dismissed = signal('');
+  readonly fix = computed(() => {
+    const t = this.tab();
+    if (t.state !== 'error' || !t.message || this.dismissed() === t.message) return null;
+    return fixFor(t.message, t.session);
+  });
+
+  async runFix(a: FixAction) {
+    const t = this.tab();
+    const s = t.session;
+    switch (a) {
+      case 'reconnect': await this.tabs.reconnect(t.id); break;
+      case 'edit': if (s.path) await this.ui.editSession(s.path, t.id); break;
+      case 'edit-jump': if (s.jumpSession) await this.ui.editSession(s.jumpSession); break;
+      case 'device-types': this.ui.openOptions('devices'); break;
+      case 'forget-password':
+        await this.backend.forgetPassword(s.path).catch(e => this.ui.error(e));
+        this.ui.toast('Saved password removed - you will be asked for it', 'info');
+        await this.tabs.reconnect(t.id);
+        break;
+      case 'copy': await this.backend.clipboardSet(t.message); break;
+    }
+  }
 
   constructor() {
     // Apply settings changes (font, scheme, cursor) live.

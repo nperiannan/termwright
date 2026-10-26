@@ -1,10 +1,10 @@
 import { Component, ElementRef, computed, inject, signal, viewChild, AfterViewInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ACTIONS, SessionNode } from '../core/models';
+import { ACTIONS, SessionNode, snippetTypes } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 
-interface Item { kind: 'session' | 'tab' | 'action' | 'command'; label: string; detail: string; run: (alt: boolean) => void; }
+interface Item { kind: 'session' | 'tab' | 'action' | 'command'; label: string; detail: string; run: (alt: boolean) => void; boost?: number; }
 
 /** Quick Open (Cmd+K / Ctrl+Shift+K): sessions, open tabs, menu actions and saved commands. */
 @Component({
@@ -60,8 +60,13 @@ export class Palette implements AfterViewInit {
     });
     const root = this.ui.tree();
     if (root) walk(root);
+    const dt = this.tabs.activeDeviceType().toLowerCase();
+    const known = (this.ui.settings()?.deviceTypes ?? []).map(d => d.name);
     for (const c of this.ui.settings()?.snippets ?? []) {
-      out.push({ kind: 'command', label: c.name, detail: c.folder || c.text.split('\n')[0], run: () => this.ui.runSnippet?.(c) });
+      const types = snippetTypes(c, known);
+      const mine = !!dt && types.some(t => t.toLowerCase() === dt);
+      out.push({ kind: 'command', label: c.name, detail: (mine ? 'for ' + this.tabs.activeDeviceType() + ' · ' : '') + (c.folder || c.text.split('\n')[0]),
+        run: () => this.ui.runSnippet?.(c), boost: mine ? -0.6 : types.length && dt ? 0.4 : 0 });
     }
     for (const [a, label] of Object.entries(ACTIONS)) {
       out.push({ kind: 'action', label: label.replace(/\.\.\.$/, '…'), detail: '', run: () => this.ui.actionHandler(a) });
@@ -78,7 +83,7 @@ export class Palette implements AfterViewInit {
       const hay = (it.label + ' ' + it.detail).toLowerCase();
       if (!words.every(w => hay.includes(w))) continue;
       const l = it.label.toLowerCase();
-      const score = (l.startsWith(q) ? 0 : l.includes(q) ? 1 : 2) + (it.kind === 'action' ? 0.5 : 0);
+      const score = (l.startsWith(q) ? 0 : l.includes(q) ? 1 : 2) + (it.kind === 'action' ? 0.5 : 0) + (it.boost ?? 0);
       scored.push({ it, score });
     }
     return scored.sort((a, b) => a.score - b.score).slice(0, 60).map(s => s.it);

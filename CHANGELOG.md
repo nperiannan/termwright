@@ -4,6 +4,20 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.13.0 (2026-10-26)
+
+* **Edit many sessions at once**: select sessions with Cmd/Ctrl-click or Shift-click (or right-click a folder → *Edit All Sessions in Folder…*) and change folder, device type, username, password, protocol, port, jump host, environment, color scheme, keyword set or auto reconnect in one go. Selections can also be connected, deleted, added to Favourites or dragged to a folder together.
+* **Favourites and Recent** at the top of the Session Manager, with when each session was last connected (kept when sessions or folders are renamed or moved).
+* **Hover card** on sessions: target, jump host, device type, password state (saved / asked / no password / from the device type), last connected, description.
+* **Environments**: Production, Staging, Test / Lab, Development per session or folder (Folder Defaults). Coloured tags in the Session Manager and a coloured line on tabs; production sessions ask before a multi-line paste and before a send to several tabs.
+* **Which devices answer**: optional dot per session from a quick TCP check of its port every minute (pulse button in the Session Manager header).
+* **Search in Global Options**: find an option by name and jump to it, highlighted.
+* **Errors that offer the fix**: a failed connection shows what went wrong with *Reconnect*, *Edit Session*, *Edit Jump Host*, *Device Type Login* or *Forget Saved Password*; a failed SFTP "browse as root" offers *Run As Command…*; a failed open offers *Try Again* / *Edit Session*.
+* **Device-type-aware commands**: Command Library commands can be marked for device types (or take it from their folder name); the active tab's commands are listed first, can be filtered, rank first in Quick Open, and the new **Commands ▾** menu in the Command Window puts them in the box to check before sending.
+* **Discover Devices**:
+  * **Connect without saving**: double-click a device or right-click → *Connect*.
+  * **IoT and embedded boards** get their own kind and icon: ESP32/ESP8266 (ESPHome, Tasmota, WLED), Arduino, STM32, RP2040, nRF, Shelly, Sonoff, Tuya, RTOS firmware (FreeRTOS, Zephyr, ThreadX, NuttX, Mbed, MicroPython, lwIP). New checks: unicast mDNS service list (DNS-SD), CoAP (UDP 5683), ESPHome API (6053), MQTT (1883), Modbus/TCP (502); iPhones and Android phones are also recognised by their mDNS services.
+
 ## 0.12.6 (2026-10-26)
 
 * **Discover Devices recognises the network OS** (EXOS, VOSS, BOSS, IOS/IOS XE/IOS XR, NX-OS, Junos, EOS, FortiOS, PAN-OS, RouterOS, Comware, ArubaOS) from any evidence - SNMP, web certificate, Telnet greeting - and picks that device type. An EXOS switch that runs OpenSSH and answers no SNMP (certificate *Extreme Networks, Inc., EXOS*, Telnet *telnet session telnet0 on /dev/ptyb0*) is now EXOS, not Linux, and its system column says *EXOS*.

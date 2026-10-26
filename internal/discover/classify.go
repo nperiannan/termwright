@@ -17,6 +17,7 @@ const (
 	KindRouter   = "router"
 	KindFirewall = "firewall"
 	KindWireless = "wireless"
+	KindIoT      = "iot" // microcontroller boards and smart devices: ESP32, Arduino, STM32, RTOS firmware
 	KindUnknown  = "unknown"
 )
 
@@ -50,6 +51,14 @@ var rules = []rule{
 	r(`iphone|ipad|ipod`, KindMobile, "Apple"), r(`galaxy|\bsm-[a-z]\d{3}|samsung[- ]?(phone|tab)`, KindMobile, "Samsung"),
 	r(`\bpixel[- ]?\d|google[- ]pixel`, KindMobile, "Google"), r(`oneplus`, KindMobile, "OnePlus"), r(`xiaomi|redmi|\bpoco\b`, KindMobile, "Xiaomi"),
 	r(`\boppo\b|realme|\bvivo\b`, KindMobile, ""), r(`motorola|\bmoto[- ]?[a-z]\d`, KindMobile, "Motorola"), r(`android|\bphone\b|\btablet\b`, KindMobile, ""),
+	// IoT boards, their firmware and RTOS network stacks
+	r(`esphome|tasmota|\bwled\b|esp32|esp8266|esp-idf|espressif|nodemcu|wemos|\besp[_-][0-9a-f]{6}\b|esp-link|ai-thinker`, KindIoT, "Espressif"),
+	r(`shelly`, KindIoT, "Shelly"), r(`sonoff|itead`, KindIoT, "Sonoff"), r(`\btuya\b`, KindIoT, "Tuya"),
+	r(`arduino`, KindIoT, "Arduino"), r(`stm32|stmicroelectronics`, KindIoT, "STMicroelectronics"),
+	r(`raspberry ?pi ?pico|\brp2040\b|\brp2350\b`, KindIoT, "Raspberry Pi"), r(`\bnrf(52|53|91)\d*|nordic semi`, KindIoT, "Nordic Semiconductor"),
+	r(`particle (photon|argon|boron)|\bseeed|xiao`, KindIoT, ""), r(`wiznet|\bw5[1-5]00\b`, KindIoT, ""),
+	r(`micropython|circuitpython|zephyr|freertos|threadx|azure rtos|\bnuttx\b|riot ?os|contiki|mbed ?os|\blwip\b|\buip\b`, KindIoT, ""),
+	r(`homekit accessory|chromecast|smart ?plug|smart ?bulb|\biot\b`, KindIoT, ""),
 	r(`macbook|\bimac\b|mac-?mini|mac-?studio|mac-?pro`, KindComputer, "Apple"),
 	// IP desk phones
 	r(`yealink`, KindPhone, "Yealink"), r(`polycom|\bvvx\b|soundpoint|\bpoly (ccx|edge|vvx)`, KindPhone, "Poly"),
@@ -106,6 +115,23 @@ var platforms = []struct {
 	{regexp.MustCompile(`(?i)routeros|mikrotik`), "RouterOS"},
 	{regexp.MustCompile(`(?i)comware`), "Comware"},
 	{regexp.MustCompile(`(?i)aos-cx|arubaos`), "ArubaOS"},
+	{regexp.MustCompile(`(?i)esphome`), "ESPHome"},
+	{regexp.MustCompile(`(?i)tasmota`), "Tasmota"},
+	{regexp.MustCompile(`(?i)\bwled\b`), "WLED"},
+	{regexp.MustCompile(`(?i)esp32`), "ESP32"},
+	{regexp.MustCompile(`(?i)esp8266|nodemcu|wemos`), "ESP8266"},
+	{regexp.MustCompile(`(?i)esp-idf`), "ESP-IDF"},
+	{regexp.MustCompile(`(?i)micropython`), "MicroPython"},
+	{regexp.MustCompile(`(?i)circuitpython`), "CircuitPython"},
+	{regexp.MustCompile(`(?i)arduino`), "Arduino"},
+	{regexp.MustCompile(`(?i)stm32`), "STM32"},
+	{regexp.MustCompile(`(?i)\brp2040\b|\brp2350\b|raspberry ?pi ?pico`), "Raspberry Pi Pico"},
+	{regexp.MustCompile(`(?i)zephyr`), "Zephyr RTOS"},
+	{regexp.MustCompile(`(?i)freertos`), "FreeRTOS"},
+	{regexp.MustCompile(`(?i)threadx|azure rtos`), "ThreadX"},
+	{regexp.MustCompile(`(?i)\bnuttx\b`), "NuttX"},
+	{regexp.MustCompile(`(?i)mbed ?os`), "Mbed OS"},
+	{regexp.MustCompile(`(?i)\blwip\b`), "lwIP (embedded / RTOS)"},
 }
 
 // MAC vendors of phone makers, used only for devices without open ports.
@@ -118,7 +144,21 @@ var macKinds = []rule{
 	r(`synology|qnap|terramaster|asustor`, KindNAS, ""),
 	r(`extreme networks|enterasys|avaya`, KindSwitch, "Extreme Networks"),
 	r(`cisco|juniper|arista|aruba|ubiquiti|mikrotik|ruckus|fortinet|palo alto`, KindSwitch, ""),
+	r(`espressif`, KindIoT, "Espressif"), r(`arduino`, KindIoT, "Arduino"), r(`stmicroelectronics`, KindIoT, "STMicroelectronics"),
+	r(`nordic semiconductor`, KindIoT, "Nordic Semiconductor"), r(`raspberry pi`, KindIoT, "Raspberry Pi"),
+	r(`shelly|allterco`, KindIoT, "Shelly"), r(`tuya`, KindIoT, "Tuya"), r(`itead`, KindIoT, "Sonoff"),
+	r(`particle industries|seeed|wiznet|silicon lab|microchip technology|texas instruments|u-blox|nuvoton`, KindIoT, ""),
 	r(`apple`, KindComputer, "Apple"),
+}
+
+// mDNS service types and the words the rules know them by.
+var mdnsWords = map[string]string{
+	"esphomelib": "esphome", "arduino": "arduino board", "hap": "homekit accessory", "googlecast": "chromecast",
+	"shelly": "shelly", "wled": "wled", "apple-mobdev2": "iphone", "adb-tls-connect": "android", "adb-tls-pairing": "android",
+	"ipp": "printer", "ipps": "printer", "printer": "printer", "pdl-datastream": "printer", "scanner": "printer",
+	"companion-link": "apple device", "device-info": "", "http": "", "https": "", "ssh": "", "sftp-ssh": "", "smb": "",
+	"workstation": "", "raop": "", "airplay": "", "spotify-connect": "", "matter": "matter iot", "matterc": "matter iot",
+	"coap": "iot", "mqtt": "iot",
 }
 
 // classify sets the kind, vendor and OS of a result and lists the evidence.
@@ -165,6 +205,21 @@ func classify(res *Result) {
 	}
 	add("Telnet", res.Telnet)
 	add("mDNS name", res.MDNS)
+	if len(res.MDNSServices) > 0 {
+		ev("mDNS services: " + strings.Join(res.MDNSServices, ", "))
+		var words []string
+		for _, t := range res.MDNSServices {
+			if w, ok := mdnsWords[t]; ok && w != "" {
+				words = append(words, w)
+			} else if !ok {
+				words = append(words, t)
+			}
+		}
+		if len(words) > 0 {
+			srcs = append(srcs, src{"mDNS services", strings.Join(words, " ")})
+		}
+	}
+	add("CoAP", res.CoAP)
 	add("SSH", res.Banner)
 	if res.DNS != "" {
 		srcs = append(srcs, src{"DNS", res.DNS})
@@ -246,6 +301,9 @@ func classify(res *Result) {
 	if !decided {
 		res.Kind = byPorts(res, has)
 	}
+	if res.Kind == KindIoT && (res.Vendor == "" || res.Vendor == "Arduino") && res.MACVendor != "" && !strings.HasPrefix(res.MACVendor, "private") {
+		res.Vendor = shortVendor(res.MACVendor) // the chip maker (Espressif for an ESP32 running Arduino)
+	}
 	if res.Vendor == "" && res.MACVendor != "" && !strings.HasPrefix(res.MACVendor, "private") {
 		res.Vendor = shortVendor(res.MACVendor)
 	}
@@ -263,6 +321,8 @@ func classify(res *Result) {
 			res.OS = res.Telnet
 		case res.Banner != "":
 			res.OS = strings.TrimPrefix(strings.TrimPrefix(res.Banner, "SSH-2.0-"), "SSH-1.99-")
+		case res.Kind == KindIoT && strings.Contains(strings.ToLower(res.MACVendor), "espressif"):
+			res.OS = "ESP32 / ESP8266"
 		}
 	}
 }
@@ -277,6 +337,12 @@ func byPorts(res *Result, has map[string]bool) string {
 		strings.Contains(ssh, "cisco") || strings.Contains(ssh, "huawei") || strings.Contains(ssh, "dropbear") && has["telnet"]:
 		res.Evidence = append(res.Evidence, "embedded SSH server of network devices")
 		return KindSwitch
+	case has["esphome"]:
+		res.Evidence = append(res.Evidence, "ESPHome API port (6053) open")
+		return KindIoT
+	case has["coap"] || (has["modbus"] && !has["ssh"] && !has["smb"]) || (has["mqtt"] && !has["ssh"] && !has["smb"] && !has["rdp"]):
+		res.Evidence = append(res.Evidence, "CoAP, Modbus or MQTT without a computer's services: embedded / IoT device")
+		return KindIoT
 	case has["rdp"] || (has["smb"] && !has["ssh"] && !has["telnet"]):
 		return KindComputer
 	case has["printer"] || has["ipp"]:

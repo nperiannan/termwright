@@ -5,6 +5,7 @@ import type { SearchAddon } from '@xterm/addon-search';
 import { Backend, SftpMode } from './backend';
 import { AlertEvent, Session, TabInfo, Transfer, unescape } from './models';
 import { Ui } from './ui.service';
+import { envOf } from './env';
 
 export interface TabView {
   id: string;
@@ -51,6 +52,8 @@ export class Tabs {
   readonly tabs = signal<TabView[]>([]);
   readonly activeId = signal<string>('');
   readonly active = computed(() => this.tabs().find(t => t.id === this.activeId()) ?? null);
+  /** Device type of the active terminal tab ('' = none). */
+  readonly activeDeviceType = computed(() => this.active()?.session?.deviceType ?? '');
   readonly handles = new Map<string, TermHandle>();
   /** Terminal output held back while folder reporting is turned on quietly (until the first OSC 7). */
   readonly quiet = new Map<string, { held: string }>();
@@ -387,6 +390,7 @@ export class Tabs {
     ]);
     this.tabs.update(l => [...l, tv]);
     this.activeId.set(ti.id);
+    if (ti.session.path) setTimeout(() => void this.ui.loadSettings(), 300); // recent sessions and last-connected times
   }
 
   patch(id: string, p: Partial<TabView>) {
@@ -407,7 +411,12 @@ export class Tabs {
         }
       }
       this.add(await this.backend.openTab(path));
-    } catch (e) { this.ui.error(e); }
+    } catch (e) {
+      this.ui.error(e, [
+        { label: 'Try Again', run: () => void this.openSession(path, as, mode) },
+        { label: 'Edit Session', run: () => void this.ui.editSession(path) },
+      ]);
+    }
   }
 
   /** Standalone SFTP tab: its own SSH login that only starts SFTP (no terminal). */
@@ -524,10 +533,30 @@ export class Tabs {
     return live.filter(t => t.id === this.activeId());
   }
 
+  /** True for tabs of production sessions (own setting or folder default). */
+  isProduction(t: TabView) {
+    return envOf(t.session?.path ?? '', t.session?.environment, this.ui.settings()?.folderDefaults) === 'production';
+  }
+
+  private prodOk = { key: '', until: 0 };
+
+  /** Asks before text goes to several tabs when one of them is a production session (remembered for a minute). */
+  async confirmProduction(list: TabView[], what: string): Promise<boolean> {
+    const prod = list.filter(t => this.isProduction(t));
+    if (!prod.length) return true;
+    const key = list.map(t => t.id).sort().join(',');
+    if (this.prodOk.key === key && Date.now() < this.prodOk.until) return true;
+    const ok = await this.ui.confirm('Production sessions', `${what}\n\nProduction: ${prod.map(t => t.title).join(', ')}`, 'Send', true);
+    if (ok) this.prodOk = { key, until: Date.now() + 60000 };
+    return ok;
+  }
+
   /** Sends text to the target tabs. Supports a per-line delay. */
   async send(text: string, target: SendTarget = 'active', raw = false) {
     const data = raw ? text : unescape(text);
-    const targets = this.targets(target).map(t => t.id);
+    const list = this.targets(target);
+    if (list.length > 1 && !(await this.confirmProduction(list, `Send to ${list.length} tabs?\n\n${data.replace(/\r/g, '\n').trim().slice(0, 400)}`))) return;
+    const targets = list.map(t => t.id);
     const delay = this.ui.settings()?.pasteLineDelayMs ?? 0;
     for (const id of targets.filter(Boolean)) {
       if (delay > 0 && data.includes('\r')) {
@@ -554,7 +583,11 @@ export class Tabs {
     const text = given ?? await this.backend.clipboardGet();
     if (!text) return;
     const lines = text.replace(/\r?\n$/, '').split(/\r?\n/);
-    if (lines.length > 1 && this.ui.settings()?.confirmPaste) {
+    const tv = this.get(id);
+    if (lines.length > 1 && tv && this.isProduction(tv) && !this.ui.settings()?.confirmPaste) {
+      const preview = lines.slice(0, 8).join('\n') + (lines.length > 8 ? `\n… (${lines.length - 8} more)` : '');
+      if (!(await this.ui.confirm('Paste into production?', `Paste ${lines.length} lines into the production session "${tv.title}"?\n\n${preview}`, 'Paste', true))) { h.term.focus(); return; }
+    } else if (lines.length > 1 && this.ui.settings()?.confirmPaste) {
       const t = this.get(id);
       const preview = lines.slice(0, 8).join('\n') + (lines.length > 8 ? `\n… (${lines.length - 8} more)` : '');
       const ok = await this.ui.confirm('Paste ' + lines.length + ' lines?',

@@ -2,9 +2,10 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Backend, errText } from './backend';
 import { Session, SessionNode, Settings, Snippet } from './models';
 
-export interface Toast { id: number; level: 'info' | 'error' | 'success'; message: string; }
+export interface ToastAction { label: string; run: () => void; }
+export interface Toast { id: number; level: 'info' | 'error' | 'success'; message: string; actions?: ToastAction[]; }
 export interface MenuItem { label?: string; action?: () => void; separator?: boolean; disabled?: boolean; hint?: string; }
-export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover';
+export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit';
 
 interface ConfirmReq { title: string; message: string; ok: string; danger: boolean; resolve: (v: boolean) => void; }
 interface InputReq { title: string; label: string; value: string; secret?: boolean; resolve: (v: string | null) => void; }
@@ -28,6 +29,12 @@ export class Ui {
   readonly tree = signal<SessionNode | null>(null);
   readonly selectedPath = signal<string>('');
   readonly selectedIsFolder = signal<boolean>(false);
+  /** Sessions selected together in the Session Manager (Cmd/Ctrl- or Shift-click). */
+  readonly selectedPaths = signal<Set<string>>(new Set());
+  /** Sessions the Edit Sessions dialog changes. */
+  readonly bulkPaths = signal<string[]>([]);
+  /** Page Global Options opens on (set before opening it). */
+  readonly optionsPage = signal('');
   readonly toasts = signal<Toast[]>([]);
   readonly confirmReq = signal<ConfirmReq | null>(null);
   readonly inputReq = signal<InputReq | null>(null);
@@ -60,16 +67,25 @@ export class Ui {
   }
 
   async refreshTree() {
-    try { this.tree.set(await this.backend.getSessionTree()); } catch (e) { this.error(e); }
+    try {
+      this.tree.set(await this.backend.getSessionTree());
+      // favourites and recent sessions follow renamed, moved and deleted sessions in the backend
+      if (this.settings()) this.settings.set(await this.backend.getSettings());
+    } catch (e) { this.error(e); }
   }
 
-  toast(message: string, level: Toast['level'] = 'info', ms = 4000) {
-    const t: Toast = { id: ++this.toastSeq, level, message };
+  toast(message: string, level: Toast['level'] = 'info', ms = 4000, actions?: ToastAction[]) {
+    const t: Toast = { id: ++this.toastSeq, level, message, actions };
     this.toasts.update(l => [...l, t]);
-    setTimeout(() => this.toasts.update(l => l.filter(x => x.id !== t.id)), ms);
+    setTimeout(() => this.dismissToast(t.id), actions?.length ? Math.max(ms, 12000) : ms);
   }
 
-  error(e: unknown) { this.toast(errText(e), 'error', 7000); }
+  dismissToast(id: number) { this.toasts.update(l => l.filter(x => x.id !== id)); }
+
+  /** Shows an error; actions are buttons that fix it (e.g. Edit Session). */
+  error(e: unknown, actions?: ToastAction[]) { this.toast(errText(e), 'error', 7000, actions); }
+
+  openOptions(page = '') { this.optionsPage.set(page); this.open('options'); }
 
   confirm(title: string, message: string, ok = 'OK', danger = false): Promise<boolean> {
     return new Promise(resolve => this.confirmReq.set({ title, message, ok, danger, resolve }));

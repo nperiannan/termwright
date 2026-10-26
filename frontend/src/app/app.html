@@ -53,10 +53,12 @@
   <section class="work">
     <nav class="tabbar">
       @for (t of tabs.tabs(); track t.id) {
-        <div class="tab" [class.active]="t.id === tabs.activeId()" [title]="t.info || t.title"
+        <div class="tab" [class.active]="t.id === tabs.activeId()" [title]="(tabEnv(t) ? tabEnv(t)!.label + ' - ' : '') + (t.info || t.title)"
+             [style.box-shadow]="tabEnv(t) ? 'inset 0 3px 0 ' + tabEnv(t)!.color : null"
              (click)="tabs.activeId.set(t.id)" (auxclick)="onMiddleClick($event, t)" (contextmenu)="tabMenu($event, t)">
           <span class="dot" [class]="t.state"></span>
           <span class="label">{{ t.title }}</span>
+          @if (tabEnv(t)?.id === 'production') { <span class="logbadge" [style.background]="tabEnv(t)!.color" title="Production">PROD</span> }
           @if (t.logFile) { <span class="logbadge" title="Logging to {{ t.logFile }}">LOG</span> }
           @if (t.recording) { <span class="logbadge" title="Recording a script">REC</span> }
           @if (tabs.selected().has(t.id)) { <span class="logbadge sel" title="In the send group (Command Window → Selected tabs)">SEL</span> }
@@ -163,6 +165,7 @@
   @case ('compare') { <app-compare /> }
   @case ('import') { <app-import-dialog /> }
   @case ('discover') { <app-discover-dialog /> }
+  @case ('bulkEdit') { <app-bulk-edit /> }
   @case ('export') { <app-export-dialog /> }
   @case ('about') { <app-about /> }
   @case ('shortcuts') { <app-about /> }

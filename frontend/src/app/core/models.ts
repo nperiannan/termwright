@@ -14,7 +14,7 @@ export interface Session {
   triggers: Trigger[]; portForwards: PortForward[];
   jumpSession: string; proxyType: '' | 'socks5' | 'http'; proxyHost: string; proxyPort: number; proxyUser: string;
   autoReconnect: boolean; x11Forward: boolean; agentForward: boolean;
-  keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
+  environment?: string; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
   logonArgs: string; useLogonScript: boolean; automateLogon: boolean; initialCr: boolean;
   remoteCommand: string; useRemoteCommand: boolean; openAs: '' | 'sftp'; deviceType: string; ownLogin: boolean; sftpToTarget: boolean;
   kerberosPrincipal: string; kerberosSpn: string; certificateFile: string; serialFlow: '' | 'rtscts' | 'xonxoff';
@@ -26,16 +26,24 @@ export interface DeviceType {
   loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string;
 }
 /** A saved command; {{name}} / {{name:default}} are asked for when sending. */
-export interface Snippet { name: string; folder: string; text: string; description: string; }
+export interface Snippet { name: string; folder: string; text: string; description: string; deviceTypes?: string[] | null; }
 export interface Workspace { name: string; layout: string; tabs: { session: string; kind: string }[]; }
 export interface FolderDefault {
   folder: string; username: string; deviceType: string; jumpSession: string; identityFile: string; keywordSet: string; colorScheme: string;
+  environment?: string;
 }
 /** Variables used in a snippet, in order: [{name, def}]. */
 export function snippetVars(text: string): { name: string; def: string }[] {
   const seen = new Map<string, string>();
   for (const m of text.matchAll(/\{\{\s*([\w.-]+)\s*(?::([^}]*))?\}\}/g)) if (!seen.has(m[1])) seen.set(m[1], m[2] ?? '');
   return [...seen].map(([name, def]) => ({ name, def }));
+}
+/** Device types a command is meant for: its own list, or a folder named after a device type ("VOSS / Troubleshooting"). */
+export function snippetTypes(s: Snippet, known: string[]): string[] {
+  if (s.deviceTypes?.length) return s.deviceTypes;
+  const top = s.folder.split('/')[0].trim().toLowerCase();
+  const t = known.find(k => k.toLowerCase() === top);
+  return t ? [t] : [];
 }
 export function fillSnippet(text: string, values: Record<string, string>): string {
   return text.replace(/\{\{\s*([\w.-]+)\s*(?::[^}]*)?\}\}/g, (_m, n: string) => values[n] ?? '');
@@ -60,6 +68,7 @@ export interface KeywordSet { name: string; keywords: Keyword[]; }
 export interface SessionNode {
   name: string; path: string; isFolder: boolean; protocol?: string; hostname?: string;
   username?: string; port?: number; description?: string; hopTarget?: string; openAs?: string; children?: SessionNode[];
+  deviceType?: string; environment?: string; jump?: string; proxy?: boolean;
 }
 
 export interface Button { label: string; send: string; toAll: boolean; action: string; script: string; }
@@ -72,6 +81,7 @@ export interface Settings {
   showButtonBar: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
+  favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;
   keywordSets: KeywordSet[] | null; defaultKeywordSet: string; showConnectBar: boolean; keyMap: KeyBinding[] | null;
   customSchemes: { name: string; colors: Record<string, string> }[] | null; accentColor: string;
   restoreTabs: boolean; openTabs: string[] | null; inWindowMenu: boolean; forceTerminalScheme: boolean; pythonPath: string;
@@ -93,7 +103,7 @@ export interface UpdateInfo {
 export interface DiscoverResult {
   ip: string; name: string; dns: string; sysName: string; sysDescr: string; sysObjectId: string; services: string[];
   banner: string; telnet: string; web: { server: string; title: string; realm: string; cert: string; hints: string[] | null };
-  sip: string; mdns: string; mac: string; macVendor: string; self: boolean; kind: string; vendor: string; os: string; platform?: string; evidence: string[] | null;
+  sip: string; mdns: string; mdnsServices?: string[] | null; coap?: string; mac: string; macVendor: string; self: boolean; kind: string; vendor: string; os: string; platform?: string; evidence: string[] | null;
   protocol: string; port: number;
 }
 

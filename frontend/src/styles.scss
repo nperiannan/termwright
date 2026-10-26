@@ -68,7 +68,9 @@ table.keys td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
   .sep { height: 1px; margin: 4px 0; background: var(--border); } }
 .toasts { position: fixed; right: 16px; bottom: 34px; display: flex; flex-direction: column; gap: 8px; z-index: 300; max-width: 460px; }
 .toast { padding: 10px 14px; border-radius: 6px; background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); box-shadow: var(--shadow); word-break: break-word;
-  &.error { border-left-color: var(--danger); } &.success { border-left-color: var(--ok); } }
+  &.error { border-left-color: var(--danger); } &.success { border-left-color: var(--ok); }
+  .tacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; button { height: 24px; font-size: 12px; } }
+  .tx { float: right; margin: -4px -6px 0 8px; border: 0; background: none; height: auto; padding: 0 2px; color: var(--muted); cursor: pointer; } }
 .xterm .xterm-viewport { background-color: transparent !important; }
 
 .scheme-preview { margin: 14px 0; padding: 10px 14px; border-radius: 6px; font-family: var(--mono); font-size: 13px; line-height: 1.8; border: 1px solid var(--border);
@@ -98,3 +100,9 @@ table.list.help { margin-top: 10px; font-size: 12px; td:nth-child(odd) { font-fa
   border-radius: 6px; padding: 8px 10px; font-size: 12px; line-height: 1.45; }
 details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 10px;
   summary { cursor: pointer; color: var(--muted, #888); font-size: 12px; margin-bottom: 8px; } }
+
+.cat .osearch { width: calc(100% - 16px); margin: 0 8px 6px; }
+.cat .hit { display: flex; flex-direction: column; line-height: 1.3; padding-top: 5px; padding-bottom: 5px; span { font-size: 11px; color: var(--muted); } }
+.cat .nohit { display: block; padding: 6px 14px; color: var(--muted); font-size: 12px; }
+.flash { animation: tw-flash 1.8s ease-out; border-radius: 4px; }
+@keyframes tw-flash { 0%, 40% { background: color-mix(in srgb, var(--accent) 35%, transparent); } 100% { background: transparent; } }

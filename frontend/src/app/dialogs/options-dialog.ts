@@ -9,6 +9,29 @@ import { Ui } from '../core/ui.service';
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
 type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts';
 
+/** What Global Options can find: page, the text shown on the page, extra words people search for. */
+const SEARCH: [Page, string, string][] = [
+  ['general', 'Sessions folder', 'storage location ini path'], ['general', 'Logs folder', 'log directory'],
+  ['general', 'Downloads folder', 'zmodem download save'], ['general', 'SFTP from a terminal', 'working directory detection folder cwd follow'],
+  ['general', 'SFTP tabs follow the terminal folder', 'cwd'], ['general', "SFTP tabs browse as the terminal's user", 'root sudo'],
+  ['general', 'Python interpreter', 'script python3'], ['general', 'UI theme', 'dark light mode appearance'],
+  ['general', 'Accent color', 'colour highlight'], ['general', 'Confirm before closing connected tabs', 'quit exit'],
+  ['general', 'Confirm before pasting more than one line', 'paste multi-line'], ['general', 'Reopen the sessions', 'restore tabs start'],
+  ['general', 'Show Session Manager', 'tree sidebar'], ['general', 'Show Command Window', 'broadcast'], ['general', 'Show Button Bar', 'buttons'],
+  ['general', 'Show Connect Bar', 'toolbar quick connect'], ['general', 'Show the menu bar inside the window', 'menu'],
+  ['terminal', 'Font', 'typeface monospace'], ['terminal', 'Font size', 'zoom text size'], ['terminal', 'Color scheme', 'colours theme terminal'],
+  ['terminal', 'Use this scheme for all sessions', 'force override'], ['terminal', 'Cursor', 'block underline bar'], ['terminal', 'Blink', 'cursor'],
+  ['terminal', 'Scrollback lines', 'history buffer'], ['terminal', 'Copy on select', 'clipboard mouse'], ['terminal', 'Paste on right-click', 'mouse clipboard'],
+  ['terminal', 'Paste line delay', 'slow paste milliseconds'],
+  ['schemes', 'Scheme', 'colour scheme custom colors palette'], ['keywords', 'Default set', 'keyword highlighting highlight words colour'],
+  ['keymap', 'Key Map', 'shortcut keyboard binding hotkey'], ['buttons', 'Button Bar', 'buttons send command'],
+  ['devices', 'Device Types', 'login profile exos voss cisco linux username password prompt'], ['devices', 'No password', 'device type'],
+  ['devices', 'Send initial carriage return', 'enter'], ['alerts', 'Alerts', 'notify pattern sound desktop notification'],
+  ['updates', 'Notify me about', 'update stable nightly'], ['updates', 'Check at start-up', 'update automatic'], ['updates', 'Repository', 'github'],
+];
+const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', keywords: 'Keyword Highlighting',
+  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', updates: 'Updates' };
+
 /** Global Options dialog. */
 @Component({
   selector: 'app-options-dialog',
@@ -20,6 +43,12 @@ type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'button
       <div class="modal-head">Global Options</div>
       <div class="modal-split">
         <nav class="cat">
+          <input type="search" class="osearch" placeholder="Search options" [ngModel]="q()" (ngModelChange)="q.set($event)" name="osearch" autocomplete="off" />
+          @if (q().trim()) {
+            @for (h of hits(); track $index) {
+              <a class="hit" (click)="goTo(h[0], h[1])">{{ h[1] }}<span>{{ pageName(h[0]) }}</span></a>
+            } @empty { <span class="nohit">Nothing found</span> }
+          } @else {
           <a [class.on]="page() === 'general'" (click)="page.set('general')">General</a>
           <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')">Terminal &amp; Appearance</a>
           <a class="sub" [class.on]="page() === 'schemes'" (click)="page.set('schemes')">Color Schemes</a>
@@ -29,6 +58,7 @@ type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'button
           <a [class.on]="page() === 'devices'" (click)="page.set('devices')">Device Types</a>
           <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')">Alerts</a>
           <a [class.on]="page() === 'updates'" (click)="page.set('updates')">Updates</a>
+        }
         </nav>
         <div class="modal-body">
           @switch (page()) {
@@ -351,7 +381,28 @@ export class OptionsDialog implements OnInit {
   protected ui = inject(Ui);
   private backend = inject(Backend);
   private cdr = inject(ChangeDetectorRef);
-  readonly page = signal<Page>('general');
+  readonly page = signal<Page>((this.ui.optionsPage() || 'general') as Page);
+  readonly q = signal('');
+  readonly hits = computed(() => {
+    const w = this.q().toLowerCase().split(/\s+/).filter(Boolean);
+    return SEARCH.filter(([p, label, extra]) => { const t = (label + ' ' + extra + ' ' + PAGE_NAMES[p]).toLowerCase(); return w.every(x => t.includes(x)); });
+  });
+  pageName(p: Page) { return PAGE_NAMES[p]; }
+
+  /** Opens the page and highlights the option. */
+  goTo(p: Page, label: string) {
+    this.page.set(p);
+    this.q.set('');
+    setTimeout(() => {
+      const body = document.querySelector('.modal.wide .modal-body');
+      const has = (e: Element) => (e.textContent ?? '').replace(/\s+/g, ' ').includes(label);
+      const el = [...(body?.querySelectorAll('label, h3, h4') ?? [])].find(has) ?? [...(body?.querySelectorAll('.grid > *') ?? [])].find(has);
+      if (!el) return;
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 1800);
+    }, 50);
+  }
   readonly dataDir = signal('');
   s: Settings | null = null;
   readonly kwIndex = signal(0);
@@ -529,6 +580,7 @@ export class OptionsDialog implements OnInit {
   }
 
   ngOnInit() {
+    this.ui.optionsPage.set('');
     const cur = this.ui.settings();
     if (cur) this.s = structuredClone(cur);
     if (this.s) this.schemeName.set(!this.s.terminalScheme || this.s.terminalScheme === 'Auto' ? 'Default' : this.s.terminalScheme);

@@ -13,6 +13,13 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.13.0
+
+* **Edit many sessions at once**, **Favourites and Recent**, a **hover card** per session and optional **reachability dots** in the Session Manager.
+* **Environments** (Production, Staging, Lab, Development): coloured tags and tabs; production asks before multi-line pastes and sends to several tabs.
+* **Search in Global Options**, **errors that offer the fix** (Reconnect, Edit Session, Device Type Login …) and **device-type-aware commands** in the Command Library and Command Window.
+* Discover Devices: **connect without saving** (double-click) and **IoT / embedded boards** (ESP32, Arduino, STM32, Shelly, RTOS) via mDNS services, CoAP, ESPHome, MQTT and Modbus.
+
 ## What's new in 0.12.6
 
 * Discover Devices names the **network OS** from any evidence (certificate, Telnet greeting, SNMP), so EXOS switches with OpenSSH get the EXOS device type instead of Linux.
@@ -22,12 +29,6 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 * **Remember for device type** on the logon password prompt - leave it empty for devices without a password (EXOS `admin`), and they log in by themselves from then on.
 * The session's Login box shows whether the device type has a saved password, no password, or asks.
-
-## What's new in 0.12.4
-
-* **Mobile phones and tablets** recognised in Discover Devices (mDNS/DNS names, private Wi-Fi MAC addresses).
-* **Import Sessions** on the start page: sessions come from several terminal programs and inventories.
-* `scripts/watch-build.sh` follows a GitHub build from the terminal.
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 
@@ -68,6 +69,7 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 | ![Kerberos and certificates](docs/screenshots/auth.png) <br/>*Kerberos, certificates and security keys* | ![Password managers](docs/screenshots/passwords-managers.png) <br/>*1Password, Bitwarden, HashiCorp Vault* |
 | ![Workspaces](docs/screenshots/workspaces.png) <br/>*Workspaces* | ![Alerts](docs/screenshots/alerts.png) <br/>*Output alerts* |
 | ![Discover Devices](docs/screenshots/discover.png) <br/>*Discover devices with the evidence behind each result* | ![Discovered sessions](docs/screenshots/discover-added.png) <br/>*Selected devices added as sessions* |
+| ![Session Manager](docs/screenshots/session-manager.png) <br/>*Favourites, recent sessions, environments, reachability and the hover card* | ![Edit Sessions](docs/screenshots/bulk-edit.png) <br/>*Edit many sessions at once* |
 
 The roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md).
 

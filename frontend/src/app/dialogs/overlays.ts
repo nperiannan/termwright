@@ -45,7 +45,15 @@ import { Ui } from '../core/ui.service';
       </div>
     }
     <div class="toasts">
-      @for (t of ui.toasts(); track t.id) { <div class="toast" [class]="t.level">{{ t.message }}</div> }
+      @for (t of ui.toasts(); track t.id) {
+        <div class="toast" [class]="t.level">
+          @if (t.actions?.length) { <button type="button" class="tx" title="Close" (click)="ui.dismissToast(t.id)">✕</button> }
+          {{ t.message }}
+          @if (t.actions?.length) {
+            <div class="tacts">@for (a of t.actions; track a.label) { <button type="button" (click)="ui.dismissToast(t.id); a.run()">{{ a.label }}</button> }</div>
+          }
+        </div>
+      }
     </div>
   `,
   styles: [`.field { display: flex; flex-direction: column; gap: 6px; } .pre { white-space: pre-wrap; margin: 0; }`],

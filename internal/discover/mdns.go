@@ -18,64 +18,105 @@ import (
 func mdnsName(ctx context.Context, a netip.Addr, port int, timeout time.Duration) string {
 	v := a.As4()
 	q := strconv.Itoa(int(v[3])) + "." + strconv.Itoa(int(v[2])) + "." + strconv.Itoa(int(v[1])) + "." + strconv.Itoa(int(v[0])) + ".in-addr.arpa"
+	names := mdnsPTR(ctx, a, port, timeout, q)
+	if len(names) == 0 {
+		return ""
+	}
+	return strings.TrimSuffix(strings.TrimSuffix(names[0], "."), ".local")
+}
+
+// mdnsServices asks a device which services it offers (DNS-SD service
+// enumeration, "_services._dns-sd._udp.local" PTR, unicast). It returns
+// service types without "_" and the protocol, e.g. "esphomelib", "arduino",
+// "http", "hap", "apple-mobdev2".
+func mdnsServices(ctx context.Context, a netip.Addr, port int, timeout time.Duration) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, n := range mdnsPTR(ctx, a, port, timeout, "_services._dns-sd._udp.local") {
+		t, _, _ := strings.Cut(strings.TrimPrefix(n, "_"), "._")
+		if t = strings.ToLower(t); t != "" && !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// mdnsPTR sends one unicast mDNS PTR question for name and returns the PTR
+// targets of the answer.
+func mdnsPTR(ctx context.Context, a netip.Addr, port int, timeout time.Duration, name string) []string {
 	msg := []byte{0x12, 0x34, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0} // id, flags, 1 question
-	for _, l := range strings.Split(q, ".") {
+	for _, l := range strings.Split(name, ".") {
 		msg = append(append(msg, byte(len(l))), l...)
 	}
 	msg = append(msg, 0, 0, 12, 0x80, 1) // PTR, class IN with the "unicast response" bit
 	var d net.Dialer
 	c, err := d.DialContext(ctx, "udp", netip.AddrPortFrom(a, uint16(port)).String())
 	if err != nil {
-		return ""
+		return nil
 	}
 	defer c.Close()
 	_ = c.SetDeadline(time.Now().Add(timeout))
 	if _, err := c.Write(msg); err != nil {
-		return ""
+		return nil
 	}
-	buf := make([]byte, 1500)
+	buf := make([]byte, 4096)
 	n, err := c.Read(buf)
 	if err != nil {
-		return ""
+		return nil
 	}
-	name, err := firstPTR(buf[:n])
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSuffix(strings.TrimSuffix(name, "."), ".local")
+	names, _ := allPTR(buf[:n])
+	return names
 }
 
 // firstPTR returns the target of the first PTR record in a DNS answer.
 func firstPTR(m []byte) (string, error) {
-	if len(m) < 12 || m[2]&0x80 == 0 {
-		return "", errors.New("not a DNS response")
+	l, err := allPTR(m)
+	if err != nil {
+		return "", err
 	}
-	qd, an := int(binary.BigEndian.Uint16(m[4:])), int(binary.BigEndian.Uint16(m[6:]))
+	return l[0], nil
+}
+
+// allPTR returns the targets of the PTR records in a DNS answer.
+func allPTR(m []byte) ([]string, error) {
+	if len(m) < 12 || m[2]&0x80 == 0 {
+		return nil, errors.New("not a DNS response")
+	}
+	qd := int(binary.BigEndian.Uint16(m[4:]))
+	// answers, then authority and additional records (some responders put
+	// the PTR records there)
+	rr := int(binary.BigEndian.Uint16(m[6:])) + int(binary.BigEndian.Uint16(m[8:])) + int(binary.BigEndian.Uint16(m[10:]))
 	off := 12
 	for i := 0; i < qd; i++ {
 		_, n, err := dnsName(m, off)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		off = n + 4
 	}
-	for i := 0; i < an; i++ {
+	var out []string
+	for i := 0; i < rr; i++ {
 		_, n, err := dnsName(m, off)
 		if err != nil || n+10 > len(m) {
-			return "", errors.New("bad DNS answer")
+			break
 		}
 		typ, rdlen := binary.BigEndian.Uint16(m[n:]), int(binary.BigEndian.Uint16(m[n+8:]))
 		rd := n + 10
 		if rd+rdlen > len(m) {
-			return "", errors.New("bad DNS answer")
+			break
 		}
 		if typ == 12 {
-			name, _, err := dnsName(m, rd)
-			return name, err
+			if name, _, err := dnsName(m, rd); err == nil {
+				out = append(out, name)
+			}
 		}
 		off = rd + rdlen
 	}
-	return "", errors.New("no PTR record")
+	if len(out) == 0 {
+		return nil, errors.New("no PTR record")
+	}
+	return out, nil
 }
 
 // dnsName reads a (possibly compressed) name at off and returns it with the

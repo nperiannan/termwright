@@ -6,6 +6,7 @@ import { Backend } from '../core/backend';
 import { BAUD_RATES, EMULATIONS, LogonAction, PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
 import { SCHEME_NAMES } from '../core/themes';
 import { Tabs } from '../core/tabs.service';
+import { ENVIRONMENTS, envInfo, envOf } from '../core/env';
 import { Ui } from '../core/ui.service';
 
 type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log';
@@ -45,6 +46,14 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
                 <select name="protocol" [(ngModel)]="s.protocol" (ngModelChange)="protocolChanged()">
                   @for (p of protocols; track p) { <option [value]="p">{{ p }}</option> }
                 </select>
+                <label>Environment</label>
+                <div class="row">
+                  <select name="env" [(ngModel)]="s.environment" class="envsel">
+                    <option value="">(none{{ folderEnv() ? ' - folder: ' + folderEnv() : '' }})</option>
+                    @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
+                  </select>
+                  <span class="hint">Colours the tab; production asks before a paste or a send to several tabs.</span>
+                </div>
                 <label>Device type</label>
                 <select name="devtype" [(ngModel)]="s.deviceType">
                   <option value="">(none)</option>
@@ -403,6 +412,13 @@ export class SessionEditor implements OnInit {
   readonly protocols = PROTOCOLS;
   readonly emulations = EMULATIONS;
   readonly bauds = BAUD_RATES;
+  readonly envs = ENVIRONMENTS;
+  readonly folderEnv = computed(() => {
+    const e = this.ui.editing();
+    const s = e?.session;
+    if (!s) return '';
+    return envInfo(envOf((s.folder ? s.folder + '/' : '') + 'x', '', this.ui.settings()?.folderDefaults))?.label ?? '';
+  });
   readonly schemeChoices = computed(() => [...SCHEME_NAMES, ...(this.ui.settings()?.customSchemes ?? []).map(c => c.name)]);
   readonly parities = ['None', 'Odd', 'Even', 'Mark', 'Space'];
   readonly authAll = ['gssapi', 'publickey', 'keyboard-interactive', 'password'];

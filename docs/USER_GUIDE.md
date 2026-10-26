@@ -175,6 +175,12 @@ Network devices without a Unix/Windows shell (switches, routers) can't be set up
 
 ### Reconnecting
 
+When a connection fails, a box at the top of the terminal explains the error and offers the buttons that fix it: **Reconnect**, **Edit Session**, **Edit Jump Host** (the jump host could not be reached), **Device Type Login** (the login of a device type was refused) or **Forget Saved Password** (a saved password was refused - you are asked for it again). ✕ closes the box.
+
+![Connection error with fixes](screenshots/fix-bar.png)
+
+If a "browse as root" in an SFTP tab fails (*not in the sudoers file*, *a terminal is required* …), the message offers *Run As Command…* to switch user another way.
+
 When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`. Press **Enter**, use **Reconnect** (`Cmd/Ctrl+Shift+R`), or enable **Auto reconnect** in the session (retries after 2, 5, 10, 20, 30 s…, up to 20 times; never after you disconnect yourself or after a login failure).
 
 ## 4. Sessions and the Session Manager
@@ -185,7 +191,18 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
 - **Duplicate / Rename / Delete**: right-click a session. Deleting a folder deletes the sessions inside it (you are asked first).
 - **Move**: drag a session or folder onto another folder (or onto a session to drop into its folder; onto empty space for the top level).
 - **Filter**: type in *Filter sessions* to search names, hosts, users and paths.
-- **Tooltip**: hover a session to see protocol, user@host:port and its description.
+- **Favourites and Recent**: right-click a session → *Add to Favourites*; favourites (★) and the five most recent sessions are listed at the top of the Session Manager, with when you last connected. Click *Favourites* or *Recent* to fold a section.
+- **Hover card**: rest the pointer on a session to see protocol, user@host:port, jump host, device type, whether the password is saved, asked or comes from the device type, when you last connected and the description.
+- **Select several sessions**: `Cmd`-click (macOS) or `Ctrl`-click adds or removes one, `Shift`-click selects a range. Right-click the selection to **Connect**, **Edit**, add to Favourites or **Delete** them all; drag them onto a folder to move them together.
+- **Edit Sessions** (right-click a selection → *Edit N Sessions…*, or a folder → *Edit All Sessions in Folder…*): tick what to change - folder, device type, username, password (or *No password*), protocol, port, jump host, environment, color scheme, keyword set, auto reconnect - and click *Apply*. Everything else stays as it is in each session. Handy after Discover Devices added many switches.
+
+  ![Several sessions selected](screenshots/multi-menu.png)
+
+  ![Edit Sessions](screenshots/bulk-edit.png)
+- **Environments**: mark a session (Session Options → Connection → *Environment*) or a whole folder (Folder Defaults) as **Production**, Staging, Test / Lab or Development. A coloured tag shows in the Session Manager and a coloured line on the tab. **Production** sessions ask before a multi-line paste and before the Command Window, Button Bar or Command Library sends to several tabs including them (once a minute for the same tabs).
+- **Which devices answer**: the pulse button in the header checks every minute whether each session's host answers on its port (a TCP connection that is closed at once - nothing is sent). Green = answers, red = no answer, grey = not checked (serial, local shell, or through a jump host or proxy).
+
+  ![Session Manager with favourites, recent sessions, environments and the hover card](screenshots/session-manager.png)
 - **Icons** tell the session type at a glance:
 
   | Icon | Session |
@@ -222,7 +239,7 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
 
    ![Discover Devices - results with evidence](screenshots/discover.png)
 
-   ![More kinds: server, NAS, computers, printer, phones](screenshots/discover-kinds.png)
+   ![More kinds: phones, mobiles and IoT boards (ESP32, Shelly, STM32)](screenshots/discover-kinds.png)
 
    | Icon | Kind | Recognised by |
    |---|---|---|
@@ -234,9 +251,14 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
    | <img src="assets/device-nas.svg" width="16"> | NAS / storage | TerraMaster, Synology, QNAP, TrueNAS, ReadyNAS, ASUSTOR, WD My Cloud (web page, SNMP or MAC) |
    | <img src="assets/device-computer.svg" width="16"> | Computer | Windows (SNMP, RDP, SMB without SSH), Apple MAC addresses, this computer |
    | <img src="assets/device-mobile.svg" width="16"> | Mobile phone / tablet | names such as iPhone, iPad, Galaxy, Pixel, Redmi, OnePlus (mDNS or DNS); a phone maker's MAC address with no open ports; a **private (random) MAC address** with no open ports - Android and iOS use one per Wi-Fi network, so the maker cannot be read from it (no vendor list can name it) |
+   | <img src="assets/device-iot.svg" width="16"> | IoT / embedded board | ESP32/ESP8266 (Espressif MAC, ESPHome, Tasmota, WLED, `esp32-…` names), Arduino, STM32, Raspberry Pi Pico/RP2040, Nordic nRF, Shelly, Sonoff, Tuya; RTOS and embedded network stacks (FreeRTOS, Zephyr, ThreadX, NuttX, Mbed OS, MicroPython, **lwIP** web servers); the **ESPHome API** port (6053), **CoAP** (UDP 5683), Modbus/TCP or MQTT without a computer's services; mDNS services such as `_esphomelib`, `_arduino`, `_hap` (HomeKit) |
    | <img src="assets/device-phone.svg" width="16"> | IP phone | SIP answer, phone models (Yealink, Poly/Polycom, Grandstream, Snom, Mitel, Cisco, Avaya …), phone vendor MAC |
    | <img src="assets/device-printer.svg" width="16"> | Printer | printer models in SNMP or the web page (LaserJet, Brother, Canon, Epson …), printing ports |
    | <img src="assets/device-unknown.svg" width="16"> | Unknown device | nothing named it - open **ⓘ** to see what answered |
+
+   Besides the login and web ports, the scan asks each address over unicast mDNS which services it offers (DNS-SD) and tries CoAP, the ESPHome API, MQTT and Modbus/TCP, so microcontroller boards without SSH or a web page are found too. An iPhone offering `_apple-mobdev2` or an Android phone offering wireless debugging (`_adb-tls-connect`) is recognised the same way.
+
+   **Connect without saving**: double-click a device (or right-click → *Connect*) to open a tab to it straight away with the suggested device type; the window stays open.
 
    Product names win over generic words: a NAS whose SNMP says "Linux" but whose web page says "TerraMaster" is shown as a NAS.
 5. **Add**: devices with SSH or Telnet are ticked (those already in the Session Manager are marked *in sessions* and left unticked; this computer is never ticked). Devices without a login port are shown but cannot be added; tick *Only devices with SSH or Telnet* to hide them. Pick a **device type** per device - Termwright suggests one from the network OS that any evidence names (an SNMP description, the web certificate *Extreme Networks, Inc., EXOS* or the EXOS Telnet greeting *telnet session telnet0 on /dev/pty…* all mean EXOS, even when the switch runs OpenSSH), then from what the device reports (VOSS, Cisco IOS, Linux …) or, failing that, from the **Telnet login prompt** compared with the first login step of your device types (e.g. EXOS `login:`, VOSS `Login:`). Type or choose a **folder** (default *Discovered*) and click **Add N Sessions**.
@@ -248,7 +270,7 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
 
 Scanning connects to many addresses and can be noticed by security monitoring: scan only networks you are allowed to scan, such as your lab. Termwright asks you to confirm this before the first scan.
 
-**Folder Defaults** (right-click a folder → *Folder Defaults…*): username, device type, jump session, identity file, keyword set and color scheme that every session in the folder (and sub-folders) uses when its own field is empty. The nearest folder wins.
+**Folder Defaults** (right-click a folder → *Folder Defaults…*): username, device type, jump session, identity file, keyword set, color scheme and environment that every session in the folder (and sub-folders) uses when its own field is empty. The nearest folder wins.
 
 ![Folder Defaults](screenshots/folder-defaults.png)
 
@@ -317,6 +339,8 @@ Scanning connects to many addresses and can be noticed by security monitoring: s
 - Save commands in folders (per device type, troubleshooting, config snippets); several lines are sent one after another.
 - `{{name}}` or `{{name:default}}` placeholders are asked for when sending, e.g. `show vlan {{vlan_id:10}}`.
 - Send to the active tab, the selected tabs or all connected tabs; double-click sends. Library commands also appear in Quick Open.
+- **For device types**: tick the device types a command is for (or name its folder after one, e.g. *VOSS / Troubleshooting*). In a tab of that device type its commands are listed first (*For VOSS (this tab)*), *Only commands for VOSS* hides those meant for other device types, and Quick Open ranks them first.
+- **Commands ▾** in the Command Window lists the library, those for the active tab's device type first; the chosen command (with its `{{values}}` filled in) goes into the box so you can check it before pressing Enter.
 
 **Paste safety**: pasting more than one line asks first and shows a preview (Global Options → General → *Confirm before pasting more than one line*). The paste line delay (Terminal & Appearance) paces slow devices.
 
@@ -581,6 +605,10 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 ## 13. Global Options reference
 
 ![Global Options - Updates](screenshots/options.png)
+
+**Search options**: type in *Search options* at the top of the page list (e.g. `paste`, `font`, `sudo`); click a result to open its page with the option highlighted.
+
+![Searching Global Options](screenshots/options-search.png)
 
 | Page | Settings |
 |---|---|

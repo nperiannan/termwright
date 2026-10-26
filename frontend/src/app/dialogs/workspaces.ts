@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { FolderDefault, SessionNode, Workspace } from '../core/models';
 import { Layout, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { ENVIRONMENTS } from '../core/env';
 
 /** Saves the open tabs and layout under a name. */
 export async function saveWorkspace(ui: Ui, tabs: Tabs) {
@@ -112,6 +113,11 @@ export class Workspaces {
           <select name="k" [(ngModel)]="d.keywordSet"><option value="">(not set)</option>
             @for (k of keywordSets(); track k) { <option [value]="k">{{ k }}</option> }</select>
           <label>Color scheme</label><input name="c" [(ngModel)]="d.colorScheme" placeholder="(not set)" />
+          <label>Environment</label>
+          <select name="env" [(ngModel)]="d.environment">
+            <option value="">(not set)</option>
+            @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
+          </select>
         </div>
       </div>
       <div class="modal-foot">
@@ -126,8 +132,9 @@ export class Workspaces {
 export class FolderDefaults {
   protected ui = inject(Ui);
   readonly folder = this.ui.folderDefaultsFor();
+  readonly envs = ENVIRONMENTS;
   d: FolderDefault = structuredClone((this.ui.settings()?.folderDefaults ?? []).find(x => x.folder === this.folder)
-    ?? { folder: this.folder, username: '', deviceType: '', jumpSession: '', identityFile: '', keywordSet: '', colorScheme: '' });
+    ?? { folder: this.folder, username: '', deviceType: '', jumpSession: '', identityFile: '', keywordSet: '', colorScheme: '', environment: '' });
   readonly deviceTypes = computed(() => (this.ui.settings()?.deviceTypes ?? []).map(d => d.name));
   readonly keywordSets = computed(() => (this.ui.settings()?.keywordSets ?? []).map(k => k.name));
   readonly jumpChoices = computed(() => {

@@ -123,6 +123,7 @@ export class Backend {
   setKeyPassphrase(path: string, pw: string) { return this.call<void>('SetKeyPassphrase', path, pw); }
   forgetKeyPassphrase(path: string) { return this.call<void>('ForgetKeyPassphrase', path); }
   setSessionPassword(path: string, pw: string, empty: boolean) { return this.call<void>('SetSessionPassword', path, pw, empty); }
+  checkReachable(targets: { key: string; host: string; port: number }[]) { return this.call<Record<string, boolean>>('CheckReachable', targets); }
   sessionPasswordState(path: string) { return this.call<string>('SessionPasswordState', path); }
   scpTransferSftp(sftpId: string, dir: 'up' | 'down', src: string, dest: string) { return this.call<string>('SCPTransferSFTP', sftpId, dir, src, dest); }
   checkForUpdate() { return this.call<UpdateStatus>('CheckForUpdate'); }

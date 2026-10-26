@@ -41,6 +41,8 @@ const PATHS: Record<string, string> = {
   'dock-left': 'M3 4h18v16H3zM9 4v16M16 9l-3 3 3 3',
   'dock-right': 'M3 4h18v16H3zM15 4v16M8 9l3 3-3 3',
   'hide-panel': 'M3 4h18v16H3zM9 4v16M5.5 9l1.5 3-1.5 3',
+  pulse: 'M3 12h4l3-7 4 14 3-7h4',
+  star: 'M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z',
 };
 
 @Component({

@@ -1,7 +1,8 @@
 import { Component, OnInit, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Backend } from '../core/backend';
+import { Backend, errText } from '../core/backend';
+import { SUDO_ERR } from '../core/fixes';
 import { FileEntry, formatBytes } from '../core/models';
 import { Tabs, TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
@@ -242,7 +243,16 @@ export class SftpView implements OnInit {
       const cwd = this.follow() ? this.shell()?.cwd : '';
       await this.go(this.remote(), cwd || home);
       if (cwd && this.remote().error) await this.go(this.remote(), home);
-    } catch (e) { this.ui.error(e); }
+    } catch (e) {
+      const msg = errText(e);
+      if (SUDO_ERR.test(msg)) {
+        this.ui.toast(msg + (cmd === 'sudo' ? '\n\nThis user may not use sudo here. Try a Run As command that works for it (su - root, sudo su - user) or browse as the login user.' : ''), 'error', 12000, [
+          { label: 'Run As Command...', run: () => void this.askCommand() },
+          ...(cmd !== 'sudo' ? [{ label: 'root (sudo)', run: () => void this.switchUser('sudo') }] : []),
+          ...(this.tab().root ? [{ label: 'Back to ' + this.loginUser(), run: () => void this.switchUser('') }] : []),
+        ]);
+      } else this.ui.error(e);
+    }
     this.rootBusy.set(false);
   }
 

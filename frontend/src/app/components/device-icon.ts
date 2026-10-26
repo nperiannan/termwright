@@ -1,7 +1,7 @@
 import { Component, computed, input } from '@angular/core';
 
 /** Kinds of discovered devices. */
-export type DeviceKind = 'computer' | 'server' | 'nas' | 'phone' | 'mobile' | 'printer' | 'switch' | 'router' | 'firewall' | 'wireless' | 'unknown';
+export type DeviceKind = 'computer' | 'server' | 'nas' | 'phone' | 'mobile' | 'iot' | 'printer' | 'switch' | 'router' | 'firewall' | 'wireless' | 'unknown';
 
 export const DEVICE_KINDS: Record<DeviceKind, { from: string; to: string; label: string }> = {
   switch: { from: '#14b8a6', to: '#0f766e', label: 'Network switch' },
@@ -13,6 +13,7 @@ export const DEVICE_KINDS: Record<DeviceKind, { from: string; to: string; label:
   nas: { from: '#eab308', to: '#a16207', label: 'NAS / storage' },
   phone: { from: '#22c55e', to: '#15803d', label: 'IP phone' },
   mobile: { from: '#06b6d4', to: '#0e7490', label: 'Mobile phone / tablet' },
+  iot: { from: '#84cc16', to: '#4d7c0f', label: 'IoT / embedded board' },
   printer: { from: '#f97316', to: '#c2410c', label: 'Printer' },
   unknown: { from: '#94a3b8', to: '#64748b', label: 'Unknown device' },
 };
@@ -37,6 +38,7 @@ export const DEVICE_KINDS: Record<DeviceKind, { from: string; to: string; label:
           @case ('nas') { <rect x="3.6" y="3.2" width="8.8" height="9.6" rx="1" /><path d="M5.4 5.8h5.2M5.4 8h5.2M5.4 10.2h2.4" /><path d="M10.4 10.2h.01" stroke-width="1.6" /> }
           @case ('phone') { <path d="M3.6 6.4c0-1.4 2-2.4 4.4-2.4s4.4 1 4.4 2.4" /><rect x="4.6" y="7.4" width="6.8" height="4.8" rx="1" /><path d="M6.6 9.2h.01M8 9.2h.01M9.4 9.2h.01M6.6 10.6h.01M8 10.6h.01M9.4 10.6h.01" stroke-width="1.3" /> }
           @case ('mobile') { <rect x="5" y="2.6" width="6" height="10.8" rx="1.3" /><path d="M7.2 4.4h1.6" /><path d="M8 11.6h.01" stroke-width="1.6" /> }
+          @case ('iot') { <rect x="5" y="5" width="6" height="6" rx=".8" /><path d="M6.6 3v2M9.4 3v2M6.6 11v2M9.4 11v2M3 6.6h2M3 9.4h2M11 6.6h2M11 9.4h2" /><path d="M8 8h.01" stroke-width="1.6" /> }
           @case ('printer') { <path d="M5 6V3.6h6V6" /><rect x="3.2" y="6" width="9.6" height="4.6" rx=".9" /><path d="M5.2 9.2h5.6v3.4H5.2z" /> }
           @case ('switch') { <path d="M4 4.2h7.4M9.6 2.7l1.8 1.5-1.8 1.5M12 7H4.6M6.4 5.5L4.6 7l1.8 1.5" stroke-width="1.1" /><rect x="2.2" y="9.4" width="11.6" height="4" rx=".8" /><g fill="#fff" stroke="none"><rect x="3.6" y="10.7" width="1.4" height="1.3" rx=".2" /><rect x="5.6" y="10.7" width="1.4" height="1.3" rx=".2" /><rect x="7.6" y="10.7" width="1.4" height="1.3" rx=".2" /><rect x="9.6" y="10.7" width="1.4" height="1.3" rx=".2" /><circle cx="12" cy="11.35" r=".5" /></g> }
           @case ('router') { <circle cx="8" cy="8" r="4.8" /><path d="M5.6 6.7h4.6l-1.3-1.3M10.4 9.3H5.8l1.3 1.3" /> }

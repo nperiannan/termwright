@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Button is a button-bar entry that sends text to the active (or all) tabs.
@@ -77,6 +78,9 @@ type Settings struct {
 	PasteLineDelayMs    int                  `json:"pasteLineDelayMs"`
 	Buttons             []Button             `json:"buttons"`
 	RecentSessions      []string             `json:"recentSessions"`
+	Favorites           []string             `json:"favorites"`        // session paths shown at the top of the Session Manager
+	LastConnected       map[string]string    `json:"lastConnected"`    // session path → RFC 3339 time of the last connect
+	ShowReachability    bool                 `json:"showReachability"` // Session Manager: dot per session from a quick TCP check
 	KeywordSets         []KeywordSet         `json:"keywordSets"`
 	DefaultKeywordSet   string               `json:"defaultKeywordSet"`
 	ShowConnectBar      bool                 `json:"showConnectBar"`
@@ -122,6 +126,9 @@ type Snippet struct {
 	Folder      string `json:"folder"`
 	Text        string `json:"text"`
 	Description string `json:"description"`
+	// DeviceTypes the command is meant for; empty = any. A folder named
+	// after a device type ("VOSS / Troubleshooting") counts too.
+	DeviceTypes []string `json:"deviceTypes"`
 }
 
 // Workspace is a saved set of tabs and the layout they were shown in.
@@ -147,6 +154,7 @@ type FolderDefault struct {
 	IdentityFile string `json:"identityFile"`
 	KeywordSet   string `json:"keywordSet"`
 	ColorScheme  string `json:"colorScheme"`
+	Environment  string `json:"environment"`
 }
 
 // Alert notifies when output in any tab matches a pattern.
@@ -328,6 +336,12 @@ func (m *Manager) Save(s Settings) error {
 	if s.RecentSessions == nil {
 		s.RecentSessions = []string{}
 	}
+	if s.Favorites == nil {
+		s.Favorites = []string{}
+	}
+	if s.LastConnected == nil {
+		s.LastConnected = map[string]string{}
+	}
 	if s.Credentials == nil {
 		s.Credentials = []Credential{}
 	}
@@ -385,5 +399,58 @@ func (m *Manager) AddRecent(p string) {
 		}
 	}
 	s.RecentSessions = out
+	lc := make(map[string]string, len(s.LastConnected)+1) // a copy: Get shares the map
+	for k, v := range s.LastConnected {
+		lc[k] = v
+	}
+	lc[p] = time.Now().UTC().Format(time.RFC3339)
+	s.LastConnected = lc
 	_ = m.Save(s)
+}
+
+// MovePaths keeps favourites, recent sessions and last-connected times when a
+// session (or, with folder, every session under a folder) is renamed or moved.
+// An empty newPath forgets them (deleted).
+func (m *Manager) MovePaths(oldPath, newPath string, folder bool) {
+	s := m.Get()
+	conv := func(p string) (string, bool) {
+		switch {
+		case p == oldPath && !folder:
+		case folder && strings.HasPrefix(p, oldPath+"/"):
+			if newPath == "" {
+				return "", true
+			}
+			return newPath + p[len(oldPath):], true
+		default:
+			return p, false
+		}
+		return newPath, true
+	}
+	changed := false
+	list := func(l []string) []string {
+		out := make([]string, 0, len(l))
+		seen := map[string]bool{}
+		for _, p := range l {
+			q, ok := conv(p)
+			changed = changed || ok
+			if q != "" && !seen[q] {
+				seen[q] = true
+				out = append(out, q)
+			}
+		}
+		return out
+	}
+	s.Favorites, s.RecentSessions, s.OpenTabs = list(s.Favorites), list(s.RecentSessions), list(s.OpenTabs)
+	lc := map[string]string{}
+	for p, t := range s.LastConnected {
+		q, ok := conv(p)
+		changed = changed || ok
+		if q != "" {
+			lc[q] = t
+		}
+	}
+	s.LastConnected = lc
+	if changed {
+		_ = m.Save(s)
+	}
 }

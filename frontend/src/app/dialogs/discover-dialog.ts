@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { DEVICE_KINDS, DeviceIcon, DeviceKind } from '../components/device-icon';
 import { Backend, errText } from '../core/backend';
 import { DeviceType, DiscoverResult, SessionNode } from '../core/models';
+import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 
 interface Row extends DiscoverResult { selected: boolean; exists: boolean; deviceType: string; open?: boolean; touched?: boolean; }
@@ -51,7 +52,7 @@ const ACK_KEY = 'termwright.discoverAck';
           }
           @if (total()) {
             <progress [max]="total()" [value]="done()"></progress>
-            <span class="hint">{{ done() }} / {{ total() }} addresses · {{ rows().length }} found{{ running() ? '' : stopped() ? ' · stopped' : ' · done' }}</span>
+            <span class="hint">{{ done() }} / {{ total() }} addresses · {{ rows().length }} found{{ running() ? '' : stopped() ? ' · stopped' : ' · done' }}{{ rows().length ? ' · double-click a device to connect' : '' }}</span>
           }
           <span class="spacer"></span>
           @if (rows().length) {
@@ -76,7 +77,8 @@ const ACK_KEY = 'termwright.discoverAck';
               </tr></thead>
               <tbody>
                 @for (r of shown(); track r.ip) {
-                  <tr [class.dim]="!r.protocol" [class.opened]="r.open" (click)="toggle(r, $event)">
+                  <tr [class.dim]="!r.protocol" [class.opened]="r.open" (click)="toggle(r, $event)" (dblclick)="connect(r, $event)" (contextmenu)="rowMenu($event, r)"
+                    [title]="r.protocol ? 'Double-click to connect now (' + r.protocol + ') without saving' : ''">
                     <td class="c"><input type="checkbox" [checked]="r.selected" [disabled]="!r.protocol"
                       [title]="r.protocol ? '' : 'No SSH or Telnet port answered - cannot be added as a session'" /></td>
                     <td><app-device-icon [kind]="r.kind" /></td>
@@ -176,6 +178,7 @@ const ACK_KEY = 'termwright.discoverAck';
 export class DiscoverDialog implements OnDestroy {
   protected ui = inject(Ui);
   private backend = inject(Backend);
+  private tabs = inject(Tabs);
   spec = '';
   useSnmp = true;
   community = 'public';
@@ -262,7 +265,7 @@ export class DiscoverDialog implements OnDestroy {
   allSelected() { const a = this.shown().filter(r => r.protocol); return a.length > 0 && a.every(r => r.selected); }
   kindLabel(k: string) { return DEVICE_KINDS[k as DeviceKind]?.label ?? 'Unknown device'; }
   svcLabel(s: string) {
-    return ({ ssh: 'SSH', telnet: 'Telnet', http: 'HTTP', https: 'HTTPS', smb: 'SMB', rdp: 'RDP', printer: 'Print', ipp: 'IPP', sip: 'SIP', 'sip-udp': 'SIP', mdns: 'mDNS', snmp: 'SNMP' } as Record<string, string>)[s] ?? s;
+    return ({ ssh: 'SSH', telnet: 'Telnet', http: 'HTTP', https: 'HTTPS', smb: 'SMB', rdp: 'RDP', printer: 'Print', ipp: 'IPP', sip: 'SIP', 'sip-udp': 'SIP', mdns: 'mDNS', snmp: 'SNMP', esphome: 'ESPHome', mqtt: 'MQTT', modbus: 'Modbus', coap: 'CoAP' } as Record<string, string>)[s] ?? s;
   }
 
   private loadAck() { try { return localStorage.getItem(ACK_KEY) === '1'; } catch { return false; } }
@@ -338,6 +341,35 @@ export class DiscoverDialog implements OnDestroy {
       if (pick ?? fits.length === 1) return (pick ?? fits[0]).name;
     }
     return '';
+  }
+
+  /** A session for a device, as Add saves it. */
+  private async sessionFor(r: Row, folder = '') {
+    const s = await this.backend.newSessionDefaults();
+    Object.assign(s, {
+      name: (r.name || r.ip).replace(/[\\/:*?"<>|]+/g, '-').trim() || r.ip, folder, path: '', protocol: r.protocol, hostname: r.ip, port: r.port,
+      deviceType: r.deviceType, description: [r.vendor, r.os].filter(Boolean).length ? [[r.vendor, r.os].filter(Boolean).join(' · ')] : [],
+    });
+    return s;
+  }
+
+  /** Opens a tab to the device without saving a session; the dialog stays open. */
+  async connect(r: Row, ev?: Event) {
+    if ((ev?.target as HTMLElement | undefined)?.closest('select, button, input')) return;
+    if (!r.protocol) return;
+    try {
+      await this.tabs.openAdHoc(await this.sessionFor(r));
+      this.ui.toast(`Connecting to ${r.name || r.ip} - the tab opens behind this window`, 'info');
+    } catch (e) { this.ui.error(e); }
+  }
+
+  rowMenu(ev: MouseEvent, r: Row) {
+    this.ui.showMenu(ev, [
+      { label: r.protocol ? `Connect (${r.protocol})` : 'No SSH or Telnet port answered', disabled: !r.protocol, action: () => void this.connect(r) },
+      { label: 'Copy Address', action: () => void this.backend.clipboardSet(r.ip) },
+      { separator: true },
+      { label: r.selected ? 'Do Not Add' : 'Add as a Session', disabled: !r.protocol, action: () => { r.selected = !r.selected; r.touched = true; this.rows.update(l => [...l]); } },
+    ]);
   }
 
   toggle(r: Row, ev: Event) {

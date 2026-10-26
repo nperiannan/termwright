@@ -32,7 +32,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.12.6-dev"
+var Version = "0.13.0-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -244,7 +244,10 @@ func (a *App) SaveSettings(s config.Settings) error {
 		}
 		a.store = st
 	}
-	s.MasterHash = a.cfg.Get().MasterHash // changed only through SetMasterPassword
+	cur := a.cfg.Get()
+	s.MasterHash = cur.MasterHash // changed only through SetMasterPassword
+	// kept by the backend when sessions open; the window's copy may be older
+	s.RecentSessions, s.LastConnected = cur.RecentSessions, cur.LastConnected
 	if err := a.cfg.Save(s); err != nil {
 		return err
 	}
@@ -294,6 +297,7 @@ func (a *App) SaveSession(s session.Session, oldPath string) (session.Session, e
 			_ = secrets.Set(saved.Path, pw)
 			_ = secrets.Delete(oldPath)
 		}
+		a.cfg.MovePaths(oldPath, saved.Path, false)
 	}
 	if !saved.SavePassword {
 		_ = secrets.Delete(saved.Path)
@@ -307,7 +311,11 @@ func (a *App) DeleteSession(path string) error {
 		return err
 	}
 	_ = secrets.Delete(path)
-	return a.store.Delete(path)
+	if err := a.store.Delete(path); err != nil {
+		return err
+	}
+	a.cfg.MovePaths(path, "", false)
+	return nil
 }
 
 // DuplicateSession copies a session and returns the new path.
@@ -331,7 +339,11 @@ func (a *App) RenameFolder(oldPath, newPath string) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	return a.store.RenameFolder(oldPath, newPath)
+	if err := a.store.RenameFolder(oldPath, newPath); err != nil {
+		return err
+	}
+	a.cfg.MovePaths(oldPath, newPath, true)
+	return nil
 }
 
 // DeleteFolder removes a folder with all its sessions.
@@ -339,7 +351,11 @@ func (a *App) DeleteFolder(path string) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	return a.store.DeleteFolder(path)
+	if err := a.store.DeleteFolder(path); err != nil {
+		return err
+	}
+	a.cfg.MovePaths(path, "", true)
+	return nil
 }
 
 // ForgetPassword removes a saved password.
@@ -1075,6 +1091,7 @@ func (a *App) withFolderDefaults(s session.Session) session.Session {
 			set(&s.IdentityFile, d.IdentityFile)
 			set(&s.KeywordSet, d.KeywordSet)
 			set(&s.ColorScheme, d.ColorScheme)
+			set(&s.Environment, d.Environment)
 		}
 		if f == "" {
 			break
