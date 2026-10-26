@@ -37,7 +37,7 @@ type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'button
                 <label>Sessions folder</label>
                 <div class="row"><input name="sd" [(ngModel)]="s.sessionsDir" /><button type="button" (click)="browse('sessionsDir')">Browse...</button></div>
                 <label></label>
-                <div class="hint">Sessions are stored as one .ini file per session in the SecureCRT-compatible layout.
+                <div class="hint">Sessions are stored as one .ini file per session, in the layout other terminal programs use too.
                   You can point this at an existing "Config/Sessions" folder to share sessions (back it up first).</div>
                 <label>Logs folder</label>
                 <div class="row"><input name="ld" [(ngModel)]="s.logDir" /><button type="button" (click)="browse('logDir')">Browse...</button></div>
@@ -52,7 +52,7 @@ type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'button
                 <label>Python interpreter</label>
                 <input name="py" [(ngModel)]="s.pythonPath" placeholder="(automatic: python3, or py -3 on Windows)" />
                 <label></label>
-                <div class="hint">Used to run SecureCRT-style Python (.py) scripts. Python 3 must be installed.</div>
+                <div class="hint">Used to run Python (.py) scripts with the <code>crt</code> object. Python 3 must be installed.</div>
                 <label></label><div class="hint">Files received with ZMODEM (remote "sz") are saved here.</div>
                 <label>UI theme</label>
                 <select name="theme" [(ngModel)]="s.theme">

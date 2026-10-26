@@ -49,7 +49,7 @@ const EXPANDED_KEY = 'termwright.expanded';
             <div class="empty">
               No sessions yet.<br />
               <a (click)="ui.newSession('')">Create a session</a> or
-              <a (click)="ui.open('import')">import from SecureCRT</a>.
+              <a (click)="ui.open('import')">import sessions from another terminal program</a>.
             </div>
           }
         }

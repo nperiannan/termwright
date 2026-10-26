@@ -87,7 +87,7 @@ export class Overlays {
           <ul class="features">
             <li><b>Connect</b> - SSH2, Telnet, Serial (RTS/CTS, XON/XOFF), local shell and raw TCP; jump hosts, SOCKS/HTTP proxies, port forwarding, X11 and agent forwarding</li>
             <li><b>Organise</b> - device types (login profiles), session manager with folders and folder defaults, workspaces, Quick Open, tabs and tiled layouts; imports sessions from other terminal programs, PuTTY, MobaXterm and OpenSSH config</li>
-            <li><b>Automate</b> - logon actions (expect/send), triggers, Python and VBScript (SecureCRT-style) and JavaScript scripting, recorder, command window and command library, output alerts, compare outputs, button bar, key map</li>
+            <li><b>Automate</b> - logon actions (expect/send), triggers, Python, VBScript and JavaScript scripting (with the common <code>crt</code> object), recorder, command window and command library, output alerts, compare outputs, button bar, key map</li>
             <li><b>Transfer</b> - SFTP browser with bookmarks, sync, resume and server-to-server copy, through jump stations and as root or another user; SCP, ZMODEM, YMODEM, XMODEM</li>
             <li><b>Secure</b> - OS keychain passwords, password managers (1Password, Bitwarden, HashiCorp Vault), Kerberos, SSH certificates and FIDO2 keys, master password, encrypted vault export, key login setup, known-hosts checking</li>
             <li><b>Capture</b> - session logging with timestamps, keyword highlighting, themes and color schemes</li>

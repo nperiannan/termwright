@@ -6,8 +6,8 @@
 It's a desktop app (not a web app), built from scratch in **Go** (backend) and **Angular + xterm.js** (UI) and packaged into a
 **single native binary** with [Wails](https://wails.io).
 
-It reads and writes the **SecureCRT® session file format**, so you can import an existing session library
-(SecureCRT 9.x and older) and export back to it.
+It **imports your existing sessions** from other terminal programs (SecureCRT, PuTTY/KiTTY, MobaXterm, OpenSSH config) and
+from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the same session file and XML formats.
 
 ![Termwright](docs/screenshots/main.png)
 
