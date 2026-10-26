@@ -79,6 +79,8 @@
           <div class="tile-body">
             @if (t.kind === 'sftp') {
               <app-sftp-view [tab]="t" />
+            } @else if (t.kind === 'rdp' || t.kind === 'vnc') {
+              <app-remote-view [tab]="t" />
             } @else {
               <app-terminal-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" />
             }
@@ -166,6 +168,7 @@
   @case ('import') { <app-import-dialog /> }
   @case ('discover') { <app-discover-dialog /> }
   @case ('bulkEdit') { <app-bulk-edit /> }
+  @case ('backups') { <app-backups /> }
   @case ('export') { <app-export-dialog /> }
   @case ('about') { <app-about /> }
   @case ('shortcuts') { <app-about /> }

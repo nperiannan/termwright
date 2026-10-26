@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>VNC</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
+  #screen { position: absolute; inset: 0; }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<script type="module">
+// Termwright's VNC viewer: noVNC in a frame of the app. The tab (parent page)
+// tells it where to connect and answers credential requests.
+import RFB from './novnc/core/rfb.js';
+
+let rfb = null;
+const post = (m) => window.parent.postMessage({ source: 'tw-vnc', ...m }, location.origin === 'null' ? '*' : location.origin);
+
+function connect(opt) {
+  if (rfb) { try { rfb.disconnect(); } catch { /* ignore */ } }
+  rfb = new RFB(document.getElementById('screen'), opt.url, { wsProtocols: ['binary'], shared: true });
+  rfb.scaleViewport = opt.scale !== false;
+  rfb.resizeSession = !!opt.resize;
+  rfb.viewOnly = !!opt.viewOnly;
+  rfb.focusOnClick = true;
+  rfb.qualityLevel = opt.quality ?? 6;
+  rfb.compressionLevel = 2;
+  rfb.addEventListener('connect', () => post({ type: 'status', state: 'connected' }));
+  rfb.addEventListener('disconnect', (e) => post({ type: 'status', state: e.detail.clean ? 'disconnected' : 'error',
+    message: e.detail.clean ? 'Disconnected' : 'The connection was closed' }));
+  rfb.addEventListener('credentialsrequired', (e) => post({ type: 'credentials', types: e.detail.types }));
+  rfb.addEventListener('securityfailure', (e) => post({ type: 'status', state: 'error',
+    message: 'Login failed' + (e.detail.reason ? ': ' + e.detail.reason : '') }));
+  rfb.addEventListener('clipboard', (e) => post({ type: 'clipboard', text: e.detail.text }));
+  rfb.addEventListener('desktopname', (e) => post({ type: 'name', name: e.detail.name }));
+  post({ type: 'status', state: 'connecting' });
+}
+
+window.addEventListener('message', (e) => {
+  if (e.source !== window.parent || !e.data || e.data.target !== 'tw-vnc') return;
+  const m = e.data;
+  switch (m.type) {
+    case 'connect': connect(m); break;
+    case 'credentials': rfb?.sendCredentials({ username: m.username ?? '', password: m.password ?? '', target: '' }); break;
+    case 'ctrlaltdel': rfb?.sendCtrlAltDel(); break;
+    case 'clipboard': rfb?.clipboardPasteFrom(m.text ?? ''); break;
+    case 'viewOnly': if (rfb) rfb.viewOnly = !!m.value; break;
+    case 'scale': if (rfb) rfb.scaleViewport = !!m.value; break;
+    case 'disconnect': rfb?.disconnect(); rfb = null; break;
+    case 'focus': rfb?.focus(); break;
+  }
+});
+post({ type: 'ready' });
+</script>
+</body>
+</html>

@@ -12,7 +12,7 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Workspaces...', action: 'workspaces' }, { label: 'Save Workspace...', action: 'save-workspace' }, { sep: true },
       { label: 'Log Session...', action: 'log-toggle' }, { label: 'Save Scrollback As...', action: 'save-scrollback', keys: k('S') },
       { label: 'Save Selection As...', action: 'save-selection' }, { sep: true },
-      { label: 'Import Sessions...', action: 'import' }, { label: 'Discover Devices...', action: 'discover' }, { label: 'Export Sessions...', action: 'export' }, { sep: true },
+      { label: 'Import Sessions...', action: 'import' }, { label: 'Discover Devices...', action: 'discover' }, { label: 'Configuration Backups...', action: 'backups' }, { label: 'Export Sessions...', action: 'export' }, { sep: true },
       { label: 'Close Tab', action: 'close-tab', keys: k('W') },
     ] },
     { title: 'Edit', items: [

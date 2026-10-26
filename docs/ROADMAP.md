@@ -127,9 +127,41 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 ## 0.12.1 (done)
 - Discovery identification: web fingerprint (title, Server, realm, certificate, product names), Telnet negotiation for banners, SIP OPTIONS over UDP, ARP MAC + IEEE vendor list (download), this computer, two-pass rules (product names before generic words), NAS kind, evidence list (ⓘ), device type from the Telnet prompt, SNMP community Show/Hide and "no SNMP answer" note
 
-## Next ideas
+## 0.12.2 – 0.12.6 (done)
+- Discovery: NAS and mobile kinds, mDNS names, private MAC addresses, OUI download, network OS from any evidence (EXOS with OpenSSH), add only chosen device types, a subfolder per device type, new switch icon
+- Device type passwords remembered at the logon prompt (empty = no password); text fields keep what is typed; CI caches and retries
+
+## 0.13 (done)
+- Edit many sessions at once, Favourites and Recent, hover card, environments (production confirmations), reachability dots
+- Search in Global Options, errors that offer the fix, device-type-aware commands (library, Command Window, Quick Open)
+- Discovery: connect without saving, IoT / embedded boards (ESP32, Arduino, STM32, RTOS) via mDNS services, CoAP, ESPHome, MQTT, Modbus
+- 0.13.1: the session filter lists the exact match first
+
+## 0.14 (done)
+- [x] **Configuration backups**: back up the running configuration of chosen sessions or folders on demand or on a schedule (daily / weekdays), using each device type's backup command; keep N copies, save only when changed, see what changed (Compare), from the Session Manager too
+- [x] **RDP**: Remote Desktop sessions opened in the computer's RDP client (Windows Remote Desktop, Windows App on macOS, FreeRDP on Linux), through jump hosts and proxies via a local tunnel
+- [x] **VNC**: built-in VNC viewer tab (noVNC), through jump hosts and proxies; VNC and macOS Screen Sharing logins
+- [x] Discovery: RDP and VNC devices can be added as sessions
+
+## 0.15 (planned)
+- [ ] **Change checklists**: run a set of show commands on chosen devices before a change and again after it, then compare each device automatically
+- [ ] **Command history search** across all tabs and sessions (filter by device type) and **autocomplete** from history and the Command Library while typing in the Command Window
+
+## 0.16 (planned)
+- [ ] **Run and collect**: run commands on many devices and get one report (file per device, or a table such as versions / serial numbers)
+- [ ] **Console servers**: open the right port of an Opengear / Lantronix / Avocent console server from a session (port maps)
+
+## Later
+- [ ] **Team sharing and sync**: shared session library (Git repository or shared folder), passwords stay per user or in a password manager
+- [ ] **Smart cards**: PIV / CAC / PKCS#11 keys for SSH
+- [ ] **Session recording and playback** with timing (asciinema-style) for audits and training
+- [ ] Split panes inside a tab (nested splits, keyboard driven)
+- [ ] Cloud inventory imports: Azure, Google Cloud
+- [ ] Plugin / extension API
+- [ ] Mosh for unreliable links; inline images (sixel, iTerm2) in the terminal
+- [ ] Mobile apps (iOS, Android)
+- [ ] *Test Login* button in sessions and device types; first-run welcome that finds other terminal programs' sessions; rescan shows new / gone / changed devices
 - [ ] Discovery: SNMP v3, more ports in an advanced section, LLDP neighbours via SNMP
-- [ ] Shared team sessions (session folder in a Git repo, pull/push from the app)
 - [ ] Code signing + notarization (needs Apple Developer ID / Windows certificate)
 
 ## Release engineering

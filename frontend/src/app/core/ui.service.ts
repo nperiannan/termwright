@@ -5,7 +5,7 @@ import { Session, SessionNode, Settings, Snippet } from './models';
 export interface ToastAction { label: string; run: () => void; }
 export interface Toast { id: number; level: 'info' | 'error' | 'success'; message: string; actions?: ToastAction[]; }
 export interface MenuItem { label?: string; action?: () => void; separator?: boolean; disabled?: boolean; hint?: string; }
-export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit';
+export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups';
 
 interface ConfirmReq { title: string; message: string; ok: string; danger: boolean; resolve: (v: boolean) => void; }
 interface InputReq { title: string; label: string; value: string; secret?: boolean; resolve: (v: string | null) => void; }
@@ -33,6 +33,8 @@ export class Ui {
   readonly selectedPaths = signal<Set<string>>(new Set());
   /** Sessions the Edit Sessions dialog changes. */
   readonly bulkPaths = signal<string[]>([]);
+  /** Sessions the Configuration Backups window backs up right away (from the Session Manager); null = just open it. */
+  readonly backupTargets = signal<string[] | null>(null);
   /** Page Global Options opens on (set before opening it). */
   readonly optionsPage = signal('');
   readonly toasts = signal<Toast[]>([]);
@@ -128,6 +130,14 @@ export class Ui {
       this.editing.set({ session: s, oldPath: path, tabId });
       this.dialog.set('sessionEditor');
     } catch (e) { this.error(e); }
+  }
+
+  /** A session or folder node of the tree by path. */
+  findNode(path: string): SessionNode | null {
+    let found: SessionNode | null = null;
+    const walk = (n: SessionNode | null | undefined) => n?.children?.forEach(c => { if (c.path === path) found = c; else if (c.isFolder && !found) walk(c); });
+    walk(this.tree());
+    return found;
   }
 
   /** Folder that new items should go into, based on the tree selection. */

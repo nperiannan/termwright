@@ -81,6 +81,8 @@ type Settings struct {
 	Favorites           []string             `json:"favorites"`        // session paths shown at the top of the Session Manager
 	LastConnected       map[string]string    `json:"lastConnected"`    // session path → RFC 3339 time of the last connect
 	ShowReachability    bool                 `json:"showReachability"` // Session Manager: dot per session from a quick TCP check
+	BackupDir           string               `json:"backupDir"`        // Configuration Backups folder ("" = Documents/Termwright Config Backups)
+	BackupJobs          []BackupJob          `json:"backupJobs"`
 	KeywordSets         []KeywordSet         `json:"keywordSets"`
 	DefaultKeywordSet   string               `json:"defaultKeywordSet"`
 	ShowConnectBar      bool                 `json:"showConnectBar"`
@@ -155,6 +157,18 @@ type FolderDefault struct {
 	KeywordSet   string `json:"keywordSet"`
 	ColorScheme  string `json:"colorScheme"`
 	Environment  string `json:"environment"`
+}
+
+// BackupJob backs up the configuration of sessions, on demand or on a schedule.
+type BackupJob struct {
+	Name    string   `json:"name"`
+	Targets []string `json:"targets"` // session paths; folders end with "/"
+	// Schedule: "" (on demand), "daily" or "weekdays", at At ("HH:MM", local time).
+	Schedule string `json:"schedule"`
+	At       string `json:"at"`
+	Keep     int    `json:"keep"`     // copies per device (0 = 30)
+	SaveAll  bool   `json:"saveAll"`  // save a copy every run, also when nothing changed
+	Commands string `json:"commands"` // for sessions without a device type with backup commands
 }
 
 // Alert notifies when output in any tab matches a pattern.
@@ -359,6 +373,9 @@ func (m *Manager) Save(s Settings) error {
 	}
 	if s.DeviceTypes == nil {
 		s.DeviceTypes = []session.DeviceType{}
+	}
+	if s.BackupJobs == nil {
+		s.BackupJobs = []BackupJob{}
 	}
 	if s.Alerts == nil {
 		s.Alerts = []Alert{}

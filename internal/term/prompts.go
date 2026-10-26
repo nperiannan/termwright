@@ -19,6 +19,7 @@ type Prompts struct {
 	mu      sync.Mutex
 	emit    Emitter
 	pending map[string]*pending
+	quiet   func(tabID string) bool // background connections that must not ask
 }
 
 type pending struct {
@@ -33,6 +34,10 @@ func NewPrompts(emit Emitter) *Prompts {
 
 // Ask shows a prompt and blocks until it is answered or ctx is done.
 func (p *Prompts) Ask(ctx context.Context, pr Prompt) (PromptReply, error) {
+	if p.quiet != nil && p.quiet(pr.TabID) {
+		what := strings.TrimSpace(pr.Title + ": " + pr.Message)
+		return PromptReply{}, fmt.Errorf("%w (%s): connect once yourself to save the password or accept the host key", ErrNeedsInput, strings.Trim(what, ": "))
+	}
 	pr.ID = newID()
 	ch := make(chan PromptReply, 1)
 	p.mu.Lock()

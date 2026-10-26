@@ -114,6 +114,7 @@ type Tab struct {
 	alertBuf  string // partial output line for alert matching
 	logonPass string // password typed for \w during this connection
 	alertAt   map[int]time.Time
+	lastMsg   string // last status message (errors of background connections)
 }
 
 // subscribe registers fn to receive raw output of a tab; call the returned
@@ -147,6 +148,7 @@ type Manager struct {
 	scripts map[string]*scriptRun
 	emit    Emitter
 	prompts *Prompts
+	quiet   sync.Map // background tabs (Capture): nothing may be asked
 	dataDir string
 	logDir  func() string
 	// OnPasswordUsed is called after a successful login with a password the
@@ -183,11 +185,24 @@ type Manager struct {
 
 // NewManager creates a manager.
 func NewManager(emit Emitter, dataDir string, logDir func() string) *Manager {
-	return &Manager{
+	m := &Manager{
 		tabs: map[string]*Tab{}, emit: emit, dataDir: dataDir, logDir: logDir,
 		sftps: map[string]*sftpSess{}, xfers: map[string]context.CancelFunc{}, jobs: map[string]xferJob{}, scripts: map[string]*scriptRun{},
 		prompts: NewPrompts(emit),
 	}
+	m.prompts.quiet = func(tabID string) bool { _, ok := m.quiet.Load(tabID); return ok }
+	return m
+}
+
+// lastStatus returns the last status message of a tab.
+func (m *Manager) lastStatus(id string) string {
+	t, err := m.get(id)
+	if err != nil {
+		return ""
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.lastMsg
 }
 
 // Prompts returns the prompt broker.
@@ -258,6 +273,7 @@ func (m *Manager) Info(id string) (TabInfo, error) {
 func (m *Manager) status(t *Tab, state, msg string) {
 	t.mu.Lock()
 	t.state = state
+	t.lastMsg = msg
 	info := t.info
 	t.mu.Unlock()
 	m.emit.Emit("term:status:"+t.id, map[string]string{"state": state, "message": msg, "info": info})
@@ -783,6 +799,11 @@ func (m *Manager) askLogon(t *Tab, label string, secret bool, user string) strin
 	}
 	r, err := m.prompts.Ask(context.Background(), p)
 	if err != nil {
+		if errors.Is(err, ErrNeedsInput) {
+			// background connection: give up instead of sending an empty answer
+			_ = m.Disconnect(t.id)
+			m.status(t, StateError, "no saved "+strings.ToLower(label)+" for "+target)
+		}
 		return ""
 	}
 	if r.Remember {

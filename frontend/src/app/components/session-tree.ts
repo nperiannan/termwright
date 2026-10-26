@@ -355,6 +355,8 @@ export class SessionTree implements OnDestroy {
       case 'Local Shell': return 'shell';
       case 'Telnet': return 'telnet';
       case 'Raw': return 'raw';
+      case 'RDP': return 'rdp';
+      case 'VNC': return 'vnc';
       default: return n.openAs === 'sftp' ? 'sftp' : 'ssh';
     }
   }
@@ -390,6 +392,7 @@ export class SessionTree implements OnDestroy {
         { label: `Connect ${g.length} Sessions`, action: () => g.forEach(p => void this.tabs.openSession(p)) },
         { separator: true },
         { label: `Edit ${g.length} Sessions...`, action: () => this.bulkEdit(g) },
+        { label: `Back Up ${g.length} Configurations`, action: () => this.backUp(g) },
         { label: allFav ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav(g, !allFav) },
         { separator: true },
         { label: `Delete ${g.length} Sessions`, action: () => this.deleteMany(g) },
@@ -401,6 +404,7 @@ export class SessionTree implements OnDestroy {
       ? [
           { label: 'Connect All in Folder', action: () => this.connectAll(n) },
           { label: 'Edit All Sessions in Folder...', action: () => this.bulkEdit(this.pathsIn(n)) },
+          { label: 'Back Up Configurations', action: () => this.backUp([n.path + '/']) },
           { separator: true },
           { label: 'New Session...', action: () => this.ui.newSession(n.path) },
           { label: 'New Folder...', action: () => this.newFolder(n.path) },
@@ -421,6 +425,7 @@ export class SessionTree implements OnDestroy {
           { separator: true },
           { label: 'Properties...', action: () => this.ui.editSession(n.path) },
           { label: this.isFav(n.path) ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav([n.path], !this.isFav(n.path)) },
+          ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' ? [] : [{ label: 'Back Up Configuration', action: () => this.backUp([n.path]) }]),
           { label: 'Duplicate', action: () => this.duplicate(n) },
           { label: 'Rename...', action: () => this.renameSession(n) },
           { label: 'Forget Saved Password', action: () => this.backend.forgetPassword(n.path).then(() => this.ui.toast('Password removed')) },
@@ -428,6 +433,11 @@ export class SessionTree implements OnDestroy {
           { label: 'Delete', action: () => this.deleteSession(n) },
         ];
     this.ui.showMenu(ev, items);
+  }
+
+  backUp(targets: string[]) {
+    this.ui.backupTargets.set(targets);
+    this.ui.open('backups');
   }
 
   bulkEdit(paths: string[]) {

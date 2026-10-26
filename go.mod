@@ -5,7 +5,9 @@ go 1.24.0
 require (
 	github.com/UserExistsError/conpty v0.1.4
 	github.com/creack/pty v1.1.24
+	github.com/danieljoos/wincred v1.2.3
 	github.com/dop251/goja v0.0.0-20260603125802-cfe4039cb6d7
+	github.com/gorilla/websocket v1.5.3
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/pkg/sftp v1.13.10
 	github.com/wailsapp/wails/v2 v2.10.2
@@ -20,14 +22,12 @@ require (
 require (
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/creack/goselect v0.1.2 // indirect
-	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect

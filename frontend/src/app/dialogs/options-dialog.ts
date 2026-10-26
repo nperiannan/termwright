@@ -26,7 +26,7 @@ const SEARCH: [Page, string, string][] = [
   ['schemes', 'Scheme', 'colour scheme custom colors palette'], ['keywords', 'Default set', 'keyword highlighting highlight words colour'],
   ['keymap', 'Key Map', 'shortcut keyboard binding hotkey'], ['buttons', 'Button Bar', 'buttons send command'],
   ['devices', 'Device Types', 'login profile exos voss cisco linux username password prompt'], ['devices', 'No password', 'device type'],
-  ['devices', 'Send initial carriage return', 'enter'], ['alerts', 'Alerts', 'notify pattern sound desktop notification'],
+  ['devices', 'Send initial carriage return', 'enter'], ['devices', 'Backup commands', 'configuration backup running-config show configuration'], ['alerts', 'Alerts', 'notify pattern sound desktop notification'],
   ['updates', 'Notify me about', 'update stable nightly'], ['updates', 'Check at start-up', 'update automatic'], ['updates', 'Repository', 'github'],
 ];
 const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', keywords: 'Keyword Highlighting',
@@ -264,6 +264,9 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                       @for (c of s.credentials ?? []; track c.name) { <option [value]="c.name">{{ c.name }}</option> }</select>
                   }
                   <label>Prompt (regex)</label><input name="dtpr" class="mono" [(ngModel)]="d.prompt" placeholder="e.g. :\\d+[>#] ?$" />
+                  <label>Backup commands</label>
+                  <textarea name="dtbk" class="mono" rows="2" [(ngModel)]="d.backupCommands"
+                    [placeholder]="backupDefault(d.name) || 'Commands that print the configuration, one per line, e.g. show running-config'"></textarea>
                   <label></label>
                   <div class="checks"><label><input type="checkbox" name="dticr" [(ngModel)]="d.initialCr" /> Send initial carriage return</label></div>
                 </div>
@@ -382,6 +385,12 @@ export class OptionsDialog implements OnInit {
   private backend = inject(Backend);
   private cdr = inject(ChangeDetectorRef);
   readonly page = signal<Page>((this.ui.optionsPage() || 'general') as Page);
+  /** Built-in backup command shown when a device type has none of its own. */
+  backupDefault(name: string) {
+    const d: Record<string, string> = { exos: 'show configuration', voss: 'show running-config', 'cisco ios': 'show running-config' };
+    const c = d[name.toLowerCase()];
+    return c ? c + '  (built-in default)' : '';
+  }
   readonly q = signal('');
   readonly hits = computed(() => {
     const w = this.q().toLowerCase().split(/\s+/).filter(Boolean);

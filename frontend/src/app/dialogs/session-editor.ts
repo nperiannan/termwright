@@ -9,7 +9,7 @@ import { Tabs } from '../core/tabs.service';
 import { ENVIRONMENTS, envInfo, envOf } from '../core/env';
 import { Ui } from '../core/ui.service';
 
-type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log';
+type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote';
 
 /** Session Options dialog (create / edit a saved session). */
 @Component({
@@ -26,15 +26,18 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
           @if (s.protocol === 'SSH2') {
             <a class="sub" [class.on]="page() === 'auth'" (click)="page.set('auth')">SSH2 Authentication</a>
           }
-          <a class="sub" [class.on]="page() === 'forward'" [class.dim]="s.protocol !== 'SSH2'" (click)="page.set('forward')">Port Forwarding</a>
-          @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw') {
+          @if (!remote()) { <a class="sub" [class.on]="page() === 'forward'" [class.dim]="s.protocol !== 'SSH2'" (click)="page.set('forward')">Port Forwarding</a> }
+          @if (remote()) { <a class="sub" [class.on]="page() === 'remote'" (click)="page.set('remote')">{{ s.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' }}</a> }
+          @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw' || remote()) {
             <a class="sub" [class.on]="page() === 'firewall'" (click)="page.set('firewall')">Jump Host / Proxy</a>
           }
           @if (s.protocol === 'Serial') { <a class="sub" [class.on]="page() === 'serial'" (click)="page.set('serial')">Serial</a> }
           @if (s.protocol === 'Local Shell') { <a class="sub" [class.on]="page() === 'local'" (click)="page.set('local')">Local Shell</a> }
-          <a class="sub" [class.on]="page() === 'logon'" (click)="page.set('logon')">Logon Actions &amp; Triggers</a>
-          <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')">Terminal</a>
-          <a class="sub" [class.on]="page() === 'log'" (click)="page.set('log')">Log File</a>
+          @if (!remote()) {
+            <a class="sub" [class.on]="page() === 'logon'" (click)="page.set('logon')">Logon Actions &amp; Triggers</a>
+            <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')">Terminal</a>
+            <a class="sub" [class.on]="page() === 'log'" (click)="page.set('log')">Log File</a>
+          }
         </nav>
         <div class="modal-body">
           @switch (page()) {
@@ -54,12 +57,14 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
                   </select>
                   <span class="hint">Colours the tab; production asks before a paste or a send to several tabs.</span>
                 </div>
+                @if (!remote()) {
                 <label>Device type</label>
                 <select name="devtype" [(ngModel)]="s.deviceType">
                   <option value="">(none)</option>
                   @for (d of deviceTypes(); track d) { <option [value]="d">{{ d }}</option> }
                 </select>
-                @if (s.deviceType) {
+                }
+                @if (s.deviceType && !remote()) {
                   <label></label>
                   <div class="hint">Login and after-login steps come from the device type (Global Options → Device Types) and run before
                     this session's own Logon Actions.</div>
@@ -76,7 +81,14 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
                       for devices such as VOSS that allow one session per connection. Right-click a session or tab for the other mode.</div>
                   }
                 }
-                @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw') {
+                @if (s.protocol === 'RDP') {
+                  <label></label><div class="hint">Opens in this computer's Remote Desktop client (Remote Desktop Connection on Windows, Windows App on macOS,
+                    FreeRDP or Remmina on Linux). With a jump host or proxy, Termwright opens a local tunnel for it.</div>
+                }
+                @if (s.protocol === 'VNC') {
+                  <label></label><div class="hint">Opens in Termwright's VNC viewer tab (VNC servers, macOS Screen Sharing, Raspberry Pi, Linux desktops), also through a jump host or proxy.</div>
+                }
+                @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw' || remote()) {
                   <label>Hostname</label><input name="hostname" [(ngModel)]="s.hostname" required placeholder="host name or IP address" />
                   <label>Port</label><input name="port" type="number" min="1" max="65535" [(ngModel)]="s.port" class="short" />
                 }
@@ -99,6 +111,26 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
                 }
                 <label>Description</label>
                 <textarea name="description" rows="4" [ngModel]="s.description.join('\\n')" (ngModelChange)="s.description = $event ? $event.split('\\n') : []"></textarea>
+              </div>
+            }
+            @case ('remote') {
+              <div class="grid">
+                @if (s.protocol === 'RDP') {
+                  <label>Domain</label><input name="rdpdom" [(ngModel)]="s.rdpDomain" placeholder="(none) e.g. CORP" />
+                  <label>Window</label>
+                  <div class="checks"><label><input type="checkbox" name="rdpfull" [(ngModel)]="s.rdpFullScreen" /> Full screen</label></div>
+                  @if (!s.rdpFullScreen) {
+                    <label>Size</label><div class="row"><input name="rdpsize" [(ngModel)]="s.rdpSize" class="short" placeholder="1600x900" /><span class="hint">blank = the client's default</span></div>
+                  }
+                  <label></label>
+                  <div class="hint">On Windows the saved password is handed to Remote Desktop Connection; Windows App on macOS asks for it
+                    (the tab has <i>Copy Password</i>); FreeRDP receives it on its input.</div>
+                } @else {
+                  <label>Control</label>
+                  <div class="checks"><label><input type="checkbox" name="vncview" [(ngModel)]="s.vncViewOnly" /> View only (do not send keyboard and mouse)</label></div>
+                  <label></label>
+                  <div class="hint">Username is needed for macOS Screen Sharing (your Mac account) and VeNCrypt servers; classic VNC uses the password only.</div>
+                }
               </div>
             }
             @case ('auth') {
@@ -499,8 +531,11 @@ export class SessionEditor implements OnInit {
     this.tabId = e.tabId;
   }
 
+  remote() { return this.s?.protocol === 'RDP' || this.s?.protocol === 'VNC'; }
+
   protocolChanged() {
     if (!this.s) return;
+    if (this.remote() && ['logon', 'terminal', 'log', 'forward', 'auth', 'serial', 'local'].includes(this.page())) this.page.set('connection');
     this.s.port = defaultPort(this.s.protocol) || this.s.port;
     if (this.s.protocol === 'Serial') void this.loadPorts();
   }

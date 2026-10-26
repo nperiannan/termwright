@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AppInfo, FileEntry, FileFilter, ImportOptions, ImportResult, PromptReply, Session, SessionNode, Settings, TabInfo, UpdateStatus,
+  AppInfo, BackupFile, BackupStatus, FileEntry, FileFilter, ImportOptions, ImportResult, PromptReply, RemoteInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus,
 } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
@@ -65,6 +65,21 @@ export class Backend {
 
   openTab(path: string) { return this.call<TabInfo>('OpenTab', path); }
   openAdHoc(s: Session) { return this.call<TabInfo>('OpenAdHoc', s); }
+  openRemote(path: string, s: Session | null) { return this.call<RemoteInfo>('OpenRemote', path, s ?? {}); }
+  reopenRemote(id: string) { return this.call<void>('ReopenRemote', id); }
+  remoteCredentials(id: string) { return this.call<{ username: string; password: string }>('RemoteCredentials', id); }
+  copyRemotePassword(id: string) { return this.call<void>('CopyRemotePassword', id); }
+  remoteStatus(id: string) { return this.call<number>('RemoteStatus', id); }
+  closeRemote(id: string) { return this.call<void>('CloseRemote', id); }
+  backupDir() { return this.call<string>('BackupDir'); }
+  backupSessions(targets: string[]) { return this.call<string[]>('BackupSessions', targets); }
+  backupRun(job: string, targets: string[]) { return this.call<string>('BackupRun', job, targets); }
+  backupCancel(runId: string) { return this.call<void>('BackupCancel', runId); }
+  backupStatus() { return this.call<Record<string, BackupStatus>>('BackupStatus'); }
+  backupFiles(path: string) { return this.call<BackupFile[]>('BackupFiles', path); }
+  backupJobRuns() { return this.call<Record<string, string>>('BackupJobRuns'); }
+  showInFolder(path: string) { return this.call<void>('ShowInFolder', path); }
+  openPath(path: string) { return this.call<void>('OpenUpdate', path); }
   startTab(id: string, cols: number, rows: number) { return this.call<void>('StartTab', id, cols, rows); }
   sendInput(id: string, data: string) { return this.call<void>('SendInput', id, data); }
   sendBinary(id: string, b64: string) { return this.call<void>('SendBinary', id, b64); }

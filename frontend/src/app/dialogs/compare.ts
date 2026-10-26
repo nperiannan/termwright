@@ -61,6 +61,7 @@ export function diffLines(a: string[], b: string[], norm: (s: string) => string)
               <select [ngModel]="srcs()[side]" (ngModelChange)="setSrc(side, $event)">
                 <option value="">Choose…</option>
                 @for (t of termTabs(); track t.id) { <option [value]="'tab:' + t.id">Tab: {{ t.title }}</option> }
+                @if (srcs()[side].startsWith('path:')) { <option [value]="srcs()[side]">{{ pathName(srcs()[side]) }}</option> }
                 <option value="file">File…</option>
               </select>
               <span class="hint">{{ labels()[side] }}</span>
@@ -143,12 +144,16 @@ export class Compare {
     return out;
   }
 
+  pathName(v: string) { const p = v.slice(5).split(/[\\/]/); return p.slice(-2).join('/'); }
+
   async setSrc(side: number, v: string) {
     let lines: string[] | null = null, label = '';
     if (v.startsWith('tab:')) {
       const id = v.slice(4);
       lines = this.tabText(id);
       label = `${lines.length} lines of scrollback`;
+    } else if (v.startsWith('path:')) {
+      try { lines = (await this.backend.readTextFile(v.slice(5))).split(/\r?\n/); label = v.slice(5); } catch (e) { this.ui.error(e); return; }
     } else if (v === 'file') {
       const p = await this.backend.chooseOpenFile('Choose File to Compare').catch(() => '');
       if (!p) return;
@@ -167,7 +172,8 @@ export class Compare {
     if (this.ignorePrompt()) { try { pr = new RegExp(this.promptRe()); } catch { pr = null; } }
     const norm = (s: string) => {
       let x = pr ? s.replace(pr, '') : s;
-      if (tm) x = x.replace(/\b\d{1,2}:\d{2}:\d{2}(\.\d+)?\b/g, 'T').replace(/\b\d+ days?,?/g, 'D').replace(/\b\d{4}-\d{2}-\d{2}\b/g, 'DATE');
+      if (tm) x = x.replace(/\b\d{1,2}:\d{2}:\d{2}(\.\d+)?\b/g, 'T').replace(/\b\d+ days?,?/g, 'D').replace(/\b\d{4}-\d{2}-\d{2}\b/g, 'DATE')
+        .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\b/g, 'DAY').replace(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.? +\d{1,2}\b/g, 'DATE');
       if (ws) x = x.replace(/\s+/g, ' ').trim();
       return x;
     };

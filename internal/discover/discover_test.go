@@ -428,3 +428,35 @@ func TestShellyKeepsVendor(t *testing.T) {
 		t.Fatalf("kind %s vendor %q", r.Kind, r.Vendor)
 	}
 }
+
+// A device with only VNC can be added as a VNC session; a port that is not VNC is ignored.
+func TestVNCOnly(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = c.Write([]byte("RFB 003.008\n"))
+			c.Close()
+		}
+	}()
+	port := ln.Addr().(*net.TCPAddr).Port
+	var got []Result
+	Scan(context.Background(), []netip.Addr{netip.MustParseAddr("127.0.0.1")}, Options{Probes: []Probe{{port, "vnc"}}, Timeout: 500 * time.Millisecond,
+		NoDNS: true, NoARP: true, NoWeb: true, SIPPort: -1, MDNSPort: -1, CoAPPort: -1}, func(r Result) { got = append(got, r) }, nil)
+	var r *Result
+	for i := range got {
+		if got[i].IP == "127.0.0.1" {
+			r = &got[i]
+		}
+	}
+	if r == nil || r.Protocol != "VNC" || r.Port != port {
+		t.Fatalf("%+v", got)
+	}
+}

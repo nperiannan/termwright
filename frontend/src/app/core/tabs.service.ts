@@ -3,7 +3,7 @@ import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
 import { Backend, SftpMode } from './backend';
-import { AlertEvent, Session, TabInfo, Transfer, unescape } from './models';
+import { AlertEvent, RemoteInfo, Session, TabInfo, Transfer, isRemoteDesktop, unescape } from './models';
 import { Ui } from './ui.service';
 import { envOf } from './env';
 
@@ -18,7 +18,9 @@ export interface TabView {
   cols: number;
   rows: number;
   locked: boolean;
-  kind: 'terminal' | 'sftp';
+  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc';
+  /** RDP / VNC tab: the open remote desktop. */
+  remote?: RemoteInfo;
   parentId: string;
   home: string;
   recording: boolean;
@@ -402,6 +404,8 @@ export class Tabs {
   /** Opens a saved session as configured (terminal, or SFTP-only when "Connect as" is SFTP). */
   async openSession(path: string, as: 'auto' | 'terminal' | 'sftp' = 'auto', mode: SftpMode = '') {
     try {
+      const node = this.ui.findNode(path);
+      if (isRemoteDesktop(node?.protocol)) { await this.openRemote(path, null); return; }
       if (as !== 'terminal') {
         const s = await this.backend.getSession(path);
         if (as === 'sftp' || (s.protocol === 'SSH2' && s.openAs === 'sftp')) {
@@ -434,7 +438,23 @@ export class Tabs {
   }
 
   async openAdHoc(s: Session) {
+    if (isRemoteDesktop(s.protocol)) { await this.openRemote('', s).catch(e => this.ui.error(e)); return; }
     try { this.add(await this.backend.openAdHoc(s)); } catch (e) { this.ui.error(e); }
+  }
+
+  /** RDP (opened in the computer's Remote Desktop client) or VNC (built-in viewer) tab. */
+  async openRemote(path: string, s: Session | null) {
+    const name = s?.name || s?.hostname || path.split('/').pop();
+    this.ui.toast(`Opening ${name}...`);
+    const r = await this.backend.openRemote(path, s);
+    const tv: TabView = {
+      id: r.id, title: r.title, state: r.kind === 'rdp' ? 'connected' : 'connecting', message: '', info: [r.kind.toUpperCase(), r.addr, r.via].filter(Boolean).join(' '),
+      session: r.session, logFile: '', cols: 0, rows: 0, locked: false, kind: r.kind, parentId: '', home: '', recording: false, remote: r,
+    };
+    this.unsubs.set(r.id, [this.backend.on('remote:closed:' + r.id, (msg: string) => this.patch(r.id, { state: 'disconnected', message: msg }))]);
+    this.tabs.update(l => [...l, tv]);
+    this.activeId.set(tv.id);
+    if (path) setTimeout(() => void this.ui.loadSettings(), 300);
   }
 
   async openLocalShell() {
@@ -459,6 +479,9 @@ export class Tabs {
   }
 
   async reconnect(id = this.activeId()) {
+    const rt = this.get(id);
+    if (rt?.kind === 'rdp') { await this.backend.reopenRemote(id).catch(e => this.ui.error(e)); this.patch(id, { state: 'connected', message: '' }); return; }
+    if (rt?.kind === 'vnc') { this.patch(id, { state: 'connecting', message: '', remote: { ...rt.remote! } }); return; }
     const t = this.get(id);
     if (!t) return;
     if (t.kind === 'sftp') {
@@ -478,6 +501,8 @@ export class Tabs {
   }
 
   async clone(id = this.activeId()) {
+    const ct = this.get(id);
+    if (ct?.remote) { await this.openRemote(ct.session.path, ct.session.path ? null : ct.session).catch(e => this.ui.error(e)); return; }
     const t = this.get(id);
     if (!t) return;
     if (t.session.path) await this.openSession(t.session.path, t.kind === 'sftp' ? 'sftp' : 'terminal');
@@ -488,7 +513,9 @@ export class Tabs {
     const t = this.get(id);
     if (!t) return;
     const s = this.ui.settings();
-    if (t.kind === 'sftp') {
+    if (t.kind === 'rdp' || t.kind === 'vnc') {
+      await this.backend.closeRemote(id).catch(() => {});
+    } else if (t.kind === 'sftp') {
       await this.backend.sftpClose(id).catch(() => {});
     } else if (t.state === 'connected' && s?.confirmClose) {
       const ok = await this.ui.confirm('Close Tab', `Disconnect from "${t.title}"?`, 'Disconnect');

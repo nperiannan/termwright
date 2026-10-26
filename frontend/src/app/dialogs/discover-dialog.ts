@@ -56,7 +56,7 @@ const ACK_KEY = 'termwright.discoverAck';
           }
           <span class="spacer"></span>
           @if (rows().length) {
-            <label class="inline hint"><input type="checkbox" [(ngModel)]="loginOnly" /> Only devices with SSH or Telnet</label>
+            <label class="inline hint"><input type="checkbox" [(ngModel)]="loginOnly" /> Only devices you can connect to</label>
           }
         </div>
         @if (err()) { <p class="err">{{ err() }}</p> }
@@ -80,7 +80,7 @@ const ACK_KEY = 'termwright.discoverAck';
                   <tr [class.dim]="!r.protocol" [class.opened]="r.open" (click)="toggle(r, $event)" (dblclick)="connect(r, $event)" (contextmenu)="rowMenu($event, r)"
                     [title]="r.protocol ? 'Double-click to connect now (' + r.protocol + ') without saving' : ''">
                     <td class="c"><input type="checkbox" [checked]="r.selected" [disabled]="!r.protocol"
-                      [title]="r.protocol ? '' : 'No SSH or Telnet port answered - cannot be added as a session'" /></td>
+                      [title]="r.protocol ? '' : 'No SSH, Telnet, RDP or VNC port answered - cannot be added as a session'" /></td>
                     <td><app-device-icon [kind]="r.kind" /></td>
                     <td><b>{{ r.name }}</b>@if (r.self) { <span class="tag me">this computer</span> }@if (r.exists) { <span class="tag">in sessions</span> }
                       @if (r.dns && r.dns !== r.name) { <div class="hint">{{ r.dns }}</div> }</td>
@@ -91,7 +91,7 @@ const ACK_KEY = 'termwright.discoverAck';
                       @if (r.vendor) { <b>{{ r.vendor }}</b> }{{ r.vendor && r.os ? ' · ' : '' }}{{ r.os }}
                       @if (r.open) { <ul class="ev">@for (e of r.evidence ?? []; track $index) { <li>{{ e }}</li> } @empty { <li>Only open ports were seen.</li> }</ul> }
                     </td>
-                    <td>@for (s of r.services; track s) { <span class="svc" [class.login]="s === 'ssh' || s === 'telnet'">{{ svcLabel(s) }}</span> }</td>
+                    <td>@for (s of r.services; track s) { <span class="svc" [class.login]="s === 'ssh' || s === 'telnet' || s === 'rdp' || s === 'vnc'">{{ svcLabel(s) }}</span> }</td>
                     @if (deviceTypes().length) {
                       <td (click)="$event.stopPropagation()">
                         <select [(ngModel)]="r.deviceType" (ngModelChange)="r.touched = true" [disabled]="!r.protocol">
@@ -265,7 +265,7 @@ export class DiscoverDialog implements OnDestroy {
   allSelected() { const a = this.shown().filter(r => r.protocol); return a.length > 0 && a.every(r => r.selected); }
   kindLabel(k: string) { return DEVICE_KINDS[k as DeviceKind]?.label ?? 'Unknown device'; }
   svcLabel(s: string) {
-    return ({ ssh: 'SSH', telnet: 'Telnet', http: 'HTTP', https: 'HTTPS', smb: 'SMB', rdp: 'RDP', printer: 'Print', ipp: 'IPP', sip: 'SIP', 'sip-udp': 'SIP', mdns: 'mDNS', snmp: 'SNMP', esphome: 'ESPHome', mqtt: 'MQTT', modbus: 'Modbus', coap: 'CoAP' } as Record<string, string>)[s] ?? s;
+    return ({ ssh: 'SSH', telnet: 'Telnet', http: 'HTTP', https: 'HTTPS', smb: 'SMB', rdp: 'RDP', printer: 'Print', ipp: 'IPP', sip: 'SIP', 'sip-udp': 'SIP', mdns: 'mDNS', snmp: 'SNMP', esphome: 'ESPHome', mqtt: 'MQTT', modbus: 'Modbus', coap: 'CoAP', vnc: 'VNC' } as Record<string, string>)[s] ?? s;
   }
 
   private loadAck() { try { return localStorage.getItem(ACK_KEY) === '1'; } catch { return false; } }
@@ -311,7 +311,7 @@ export class DiscoverDialog implements OnDestroy {
   /** Picks a device type whose name matches what the device reports (VOSS, EXOS, Linux, …). */
   private guessType(d: DiscoverResult): string {
     const types = this.deviceTypes();
-    if (!types.length || !d.protocol) return '';
+    if (!types.length || !d.protocol || d.protocol === 'RDP' || d.protocol === 'VNC') return '';
     const named = (words: string[]) => types.find(t => words.some(w => t.name.toLowerCase().includes(w)));
     // the network OS any evidence named wins over a generic "Linux" from OpenSSH
     if (d.platform) {
@@ -365,7 +365,7 @@ export class DiscoverDialog implements OnDestroy {
 
   rowMenu(ev: MouseEvent, r: Row) {
     this.ui.showMenu(ev, [
-      { label: r.protocol ? `Connect (${r.protocol})` : 'No SSH or Telnet port answered', disabled: !r.protocol, action: () => void this.connect(r) },
+      { label: r.protocol ? `Connect (${r.protocol})` : 'No SSH, Telnet, RDP or VNC port answered', disabled: !r.protocol, action: () => void this.connect(r) },
       { label: 'Copy Address', action: () => void this.backend.clipboardSet(r.ip) },
       { separator: true },
       { label: r.selected ? 'Do Not Add' : 'Add as a Session', disabled: !r.protocol, action: () => { r.selected = !r.selected; r.touched = true; this.rows.update(l => [...l]); } },

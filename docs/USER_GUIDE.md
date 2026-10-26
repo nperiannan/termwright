@@ -87,6 +87,7 @@ There are five ways to open a connection:
    - `telnet 10.1.1.20` or `telnet console-server 2003`
    - `serial COM3 115200` or `serial /dev/ttyUSB0 9600`
    - `raw 10.0.0.5 4001`
+   - `rdp admin@10.0.0.10` (Remote Desktop) or `vnc 192.168.1.40` / `vnc host:5901`
    - a **device type and an address**: `voss 10.20.1.11`, `exos 10.1.1.5`, `telnet cisco-ios 10.0.0.1 2003`
    - a saved session name or path, e.g. `Lab/lab-sw01`
 4. **Local Shell** (toolbar `>_`): your login shell (zsh/bash on macOS/Linux, PowerShell on Windows).
@@ -109,6 +110,7 @@ Devices log in differently: EXOS is ready at `#` after username and password, VO
 - Sessions with a device type **inherit** its username and password; the box shows what will happen, e.g. *(admin, no password)*, *(admin, password saved)* or *(admin, password asked when connecting)*. In Session Options → Connection (or Quick Connect) untick **Use the device type's username and password** to give that session its own username and password (or *No password*); the device type's login and after-login steps still run.
 - In *Send*, `\s` is the username and `\w` the password: from the device type (or the session's own login when it overrides it), or asked once when needed.
 - Optional defaults: protocol, port, initial carriage return and a prompt pattern.
+- **Backup commands**: what prints the configuration for [Configuration Backups](#configuration-backups). Built-in: EXOS `show configuration`, VOSS and Cisco IOS `show running-config`; add your own for other device types (one command per line).
 - A session's own Logon Actions still run, after the device type's steps.
 
 ![Session with a device type](screenshots/session-device.png)
@@ -182,6 +184,31 @@ When a connection fails, a box at the top of the terminal explains the error and
 If a "browse as root" in an SFTP tab fails (*not in the sudoers file*, *a terminal is required* …), the message offers *Run As Command…* to switch user another way.
 
 When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`. Press **Enter**, use **Reconnect** (`Cmd/Ctrl+Shift+R`), or enable **Auto reconnect** in the session (retries after 2, 5, 10, 20, 30 s…, up to 20 times; never after you disconnect yourself or after a login failure).
+
+### Remote desktops: RDP and VNC
+
+Choose **RDP** or **VNC** as the protocol of a session (or type `rdp host` / `vnc host` in the Connect Bar). Both work through the session's **jump host or proxy** (Session Options → Jump Host / Proxy), so a Windows server or a lab desktop behind a jump station opens with a double-click like any switch.
+
+**RDP** opens in this computer's Remote Desktop client and the tab shows what was opened:
+
+| | Client | Password |
+|---|---|---|
+| Windows | Remote Desktop Connection (`mstsc`) | the session's saved password is handed over (for that connection only) |
+| macOS | **Windows App** (formerly Microsoft Remote Desktop, free in the Mac App Store) | the client asks; **Copy Password** in the tab puts it on the clipboard for 60 seconds |
+| Linux | FreeRDP (`xfreerdp`, `xfreerdp3`, `sdl-freerdp`), otherwise Remmina | given to FreeRDP on its input (never on the command line) |
+
+- Session Options → **Remote Desktop**: Windows **domain**, **full screen** or a window **size** (e.g. `1600x900`).
+- Through a jump host or proxy Termwright opens a **local tunnel** (`127.0.0.1:<port>` on this computer) and points the client at it. The tab shows the route and the open connections; keep it open while you work - closing it closes the tunnel. *Open Remote Desktop Again* restarts the client.
+
+![RDP tab](screenshots/rdp.png)
+
+![Remote Desktop options](screenshots/rdp-options.png)
+
+**VNC** opens in Termwright's own viewer tab (noVNC): VNC servers (TightVNC, TigerVNC, RealVNC, x11vnc), Raspberry Pi, Linux desktops and **macOS Screen Sharing** (enter your Mac account's user name and password). The saved password is used, otherwise you are asked. The toolbar has **Ctrl+Alt+Del**, **Send Clipboard** (this computer's clipboard to the remote one; copying on the remote computer comes back automatically), **View Only**, **Fit** (scale the remote screen to the tab) and **Reconnect**. Session Options → VNC → *View only* starts every connection in view-only mode.
+
+![VNC viewer tab](screenshots/vnc.png)
+
+Discover Devices finds computers with RDP (3389) or VNC (5900) open and can add them as RDP or VNC sessions.
 
 ## 4. Sessions and the Session Manager
 
@@ -364,6 +391,25 @@ Scanning connects to many addresses and can be noticed by security monitoring: s
 - **Save Scrollback As…** (`Cmd/Ctrl+Shift+S`) writes the whole scrollback to a text file; **Save Selection As…** saves only the selected text.
 
 ![Log File page](screenshots/log-file.png)
+
+### Configuration backups
+
+File → **Configuration Backups…** keeps dated copies of the configuration of switches, routers and firewalls, and shows what changed.
+
+![Configuration Backups](screenshots/backups.png)
+
+- **Backup jobs** (left): *+ New backup job*, a name, the **sessions** - folders (e.g. *Datacenter*, every session inside) or single sessions; *Add Selected* takes what is selected in the Session Manager.
+- **Schedule**: *On demand* (Run Now), *Every day* or *Monday to Friday* at a time. Scheduled jobs run while Termwright is open; a run that was missed (Termwright closed at that time) starts when it opens.
+- **Keep** N copies per device (default 30, oldest removed). By default a copy is saved **only when the configuration changed** - lines that change on every run (timestamps in comments, *Last configuration change at …*, *ntp clock-period* …) are ignored; tick *Save a copy every run* to keep one each time.
+- **Commands**: each device type's **Backup commands** (Global Options → Device Types; EXOS `show configuration`, VOSS and Cisco IOS `show running-config`). Sessions without a device type use the job's *Commands*.
+- **Run Now** backs up four devices at a time, in the background - no tabs open. The login is the one the session uses (device type, saved passwords, keys, jump hosts), but **nothing is asked**: a device whose password is not saved, or whose host key was never accepted, is reported as failed (*no saved password for admin@10.10.7.7*) - connect to it once and save the password.
+- The table shows each device's **last backup**, the **result** (*no change*, *changed*, or the error) and the number of copies. **What Changed** compares the newest copy with the one before in Compare Outputs; **Open** opens the copy, **Show** shows it in Finder / Explorer.
+- Copies are saved in *Documents/Termwright Config Backups/<session path>/<date>_<time>.txt* (*Change…* picks another folder, e.g. a shared drive or a Git repository).
+- **From the Session Manager**: right-click a session, a folder or a selection → **Back Up Configuration(s)** runs a one-off backup.
+
+![Backing up from the Session Manager](screenshots/backups-menu.png)
+
+![What changed between two backups](screenshots/backups-diff.png)
 
 ## 9. File transfer
 

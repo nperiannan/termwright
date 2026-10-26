@@ -22,7 +22,7 @@ type Probe struct {
 // and the ports that tell computers, printers, phones and IoT boards apart
 // (ESPHome API, MQTT, Modbus). SIP and CoAP are also asked over UDP.
 var DefaultProbes = []Probe{{22, "ssh"}, {23, "telnet"}, {80, "http"}, {443, "https"}, {445, "smb"},
-	{3389, "rdp"}, {9100, "printer"}, {631, "ipp"}, {5060, "sip"}, {6053, "esphome"}, {1883, "mqtt"}, {502, "modbus"}}
+	{3389, "rdp"}, {9100, "printer"}, {631, "ipp"}, {5060, "sip"}, {6053, "esphome"}, {1883, "mqtt"}, {502, "modbus"}, {5900, "vnc"}}
 
 // Options control a scan.
 type Options struct {
@@ -311,6 +311,22 @@ func scanHost(ctx context.Context, a netip.Addr, opt Options) (Result, bool) {
 		}()
 	}
 	wg.Wait()
+	if r.Protocol == "" {
+		// no SSH or Telnet: a remote desktop session can still be added
+		portOf := func(svc string) int {
+			for _, p := range opt.Probes {
+				if p.Service == svc {
+					return p.Port
+				}
+			}
+			return 0
+		}
+		if open["rdp"] {
+			r.Protocol, r.Port = "RDP", portOf("rdp")
+		} else if open["vnc"] {
+			r.Protocol, r.Port = "VNC", portOf("vnc")
+		}
+	}
 	if !opt.NoWeb && len(webPorts) > 0 && ctx.Err() == nil {
 		// one page is enough: HTTPS first (it also has a certificate), then HTTP
 		ports := make([]int, 0, len(webPorts))
@@ -374,6 +390,14 @@ func probe(ctx context.Context, a netip.Addr, p Probe, timeout time.Duration) (s
 		return firstLine(string(buf[:n])), true
 	case "telnet":
 		return telnetGreeting(c, timeout+2*time.Second), true
+	case "vnc":
+		_ = c.SetReadDeadline(time.Now().Add(timeout + 800*time.Millisecond))
+		buf := make([]byte, 12)
+		n, _ := c.Read(buf)
+		if !strings.HasPrefix(string(buf[:n]), "RFB ") {
+			return "", false // something else listens on 5900
+		}
+		return strings.TrimSpace(string(buf[:n])), true
 	}
 	return "", true
 }

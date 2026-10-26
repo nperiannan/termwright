@@ -1,7 +1,7 @@
 import { Component, computed, input } from '@angular/core';
 
 /** Kinds of session icons: each has its own color and symbol so sessions are told apart at a glance. */
-export type SessionKind = 'ssh' | 'sftp' | 'telnet' | 'serial' | 'shell' | 'raw' | 'folder' | 'folder-open';
+export type SessionKind = 'ssh' | 'sftp' | 'telnet' | 'serial' | 'shell' | 'raw' | 'rdp' | 'vnc' | 'folder' | 'folder-open';
 
 const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: string; to: string; title: string }> = {
   ssh: { from: '#10b981', to: '#0d9488', title: 'SSH2 terminal' },
@@ -10,6 +10,8 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
   serial: { from: '#a855f7', to: '#7c3aed', title: 'Serial console' },
   shell: { from: '#64748b', to: '#334155', title: 'Local shell' },
   raw: { from: '#ec4899', to: '#be185d', title: 'Raw TCP' },
+  rdp: { from: '#0ea5e9', to: '#1d4ed8', title: 'Remote Desktop (RDP)' },
+  vnc: { from: '#14b8a6', to: '#0369a1', title: 'VNC remote screen' },
 };
 
 /**
@@ -20,7 +22,7 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
 @Component({
   selector: 'app-session-icon',
   template: `
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+    <svg viewBox="0 0 16 16" [attr.width]="size()" [attr.height]="size()" aria-hidden="true">
       <defs>
         <linearGradient [attr.id]="gid()" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" [style.stop-color]="from()" />
@@ -49,6 +51,8 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
               @case ('serial') { <path d="M3.6 5.6h8.8l-1.2 4.8H4.8z" /><path d="M6 7.8h.01M8 7.8h.01M10 7.8h.01" stroke-width="1.7" /> }
               @case ('shell') { <path d="M9.9 5.2c-.4-.5-1.1-.8-1.9-.8-1.1 0-1.9.6-1.9 1.4 0 1.9 4 1 4 3 0 .8-.9 1.5-2.1 1.5-.8 0-1.6-.4-2-.9M8 3.4v9.2" stroke-width="1.3" /> }
               @case ('raw') { <path d="M6.2 5.2L3.6 8l2.6 2.8M9.8 5.2L12.4 8l-2.6 2.8" /> }
+              @case ('rdp') { <rect x="3.3" y="4" width="9.4" height="6.2" rx=".9" stroke-width="1.3" /><path d="M6.4 12.3h3.2M8 10.2v2.1" stroke-width="1.3" /><path d="M5.4 6.4l1.4 1-1.4 1" stroke-width="1.1" /> }
+              @case ('vnc') { <rect x="3.3" y="4" width="9.4" height="6.2" rx=".9" stroke-width="1.3" /><path d="M6.4 12.3h3.2M8 10.2v2.1" stroke-width="1.3" /><path d="M6.6 6.2l.9 2.3 1.6-.7 1 .9" stroke-width="1" /> }
             }
           </g>
           @if (via()) { <circle cx="13.2" cy="12.7" r="2.4" fill="#f8fafc" stroke="#0f172a" stroke-width=".6" /><path d="M12 12.7h2.3M13.4 11.7l1 1-1 1" fill="none" stroke="#0f172a" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round" /> }
@@ -62,6 +66,7 @@ export class SessionIcon {
   readonly kind = input.required<SessionKind>();
   /** Reached through a jump station (remote command "ssh … host"): small arrow badge. */
   readonly via = input(false);
+  readonly size = input(16);
   private static seq = 0;
   readonly gid = computed(() => 'tw-si-' + this.kind() + '-' + (SessionIcon.seq++));
   readonly url = computed(() => `url(#${this.gid()})`);

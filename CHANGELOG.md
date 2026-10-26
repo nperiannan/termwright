@@ -4,6 +4,15 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.14.0 (2026-10-26)
+
+* **Configuration backups** (File → Configuration Backups…): back up the configuration of sessions and folders on demand or every day / on weekdays at a set time, four devices at a time in the background, with the session's login (device type, saved passwords, keys, jump hosts) and without asking anything. Copies are kept per device (newest N), saved only when the configuration changed (timestamps and similar lines ignored), and **What Changed** opens the last two in Compare Outputs. Device types have **Backup commands** (EXOS `show configuration`, VOSS / Cisco IOS `show running-config`). Right-click a session, folder or selection → *Back Up Configuration(s)*.
+* **RDP sessions**: open in the computer's Remote Desktop client - Remote Desktop Connection on Windows (saved password handed over), Windows App on macOS (*Copy Password*), FreeRDP or Remmina on Linux - with domain, full screen and window size options. Through a jump host or proxy Termwright opens a local tunnel for the client.
+* **VNC sessions** in a built-in viewer tab (noVNC): VNC servers, Raspberry Pi, Linux desktops and macOS Screen Sharing; Ctrl+Alt+Del, clipboard both ways, view only, fit to tab; also through jump hosts and proxies.
+* Connect Bar: `rdp [user@]host[:port]`, `vnc host[:port]`. Discover Devices adds computers with only RDP or VNC as RDP / VNC sessions (VNC recognised by its `RFB` greeting).
+* Compare Outputs: *Ignore timestamps* also ignores day and month names (`Mon Oct 26`).
+* Roadmap updated with the planned change checklists, command history search, run-and-collect, console servers and more.
+
 ## 0.13.1 (2026-10-26)
 
 * **Session filter finds the exact device**: when a host name, address or session name equals the filter text (e.g. `10.127.34.2`), only those sessions are listed; *N more sessions containing …* shows the others (`10.127.34.231`, `10.127.34.28` …). Other results are sorted: starting with the text first.

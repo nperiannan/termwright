@@ -2,7 +2,7 @@ import { Component, OnInit, computed, effect, inject, signal, viewChild } from '
 import { FormsModule } from '@angular/forms';
 import { Backend } from './core/backend';
 import { Tabs, TabView } from './core/tabs.service';
-import { SessionNode, findDeviceType } from './core/models';
+import { SessionNode, defaultPort, findDeviceType } from './core/models';
 import { menuBar } from './core/menu';
 import { envInfo, envOf } from './core/env';
 import { Ui } from './core/ui.service';
@@ -20,6 +20,8 @@ import { PasswordsDialog } from './dialogs/passwords-dialog';
 import { UpdateDialog } from './dialogs/update-dialog';
 import { DiscoverDialog } from './dialogs/discover-dialog';
 import { BulkEdit } from './dialogs/bulk-edit';
+import { RemoteView } from './components/remote-view';
+import { Backups } from './dialogs/backups';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
 import { Palette } from './dialogs/palette';
 import { Commands, sendSnippet } from './dialogs/commands';
@@ -31,7 +33,7 @@ import { About, Overlays } from './dialogs/overlays';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, Overlays, About],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Overlays, About],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -152,6 +154,7 @@ export class App implements OnInit {
       case 'save-scrollback': await this.tabs.saveScrollback(); break;
       case 'import': this.ui.open('import'); break;
       case 'discover': this.ui.open('discover'); break;
+      case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
       case 'export': this.ui.open('export'); break;
       case 'copy': if (!this.editInput('copy')) await this.tabs.copy(); break;
       case 'cut': this.editInput('cut'); break;
@@ -264,14 +267,14 @@ export class App implements OnInit {
   }
 
   /** Connect Bar: "ssh [-p port] [-l user] user@host[:port]", "telnet host [port]",
-   *  "serial PORT [baud]", "raw host port", a saved session name, or a bare host (SSH2). */
+   *  "serial PORT [baud]", "raw host port", "rdp [user@]host[:port]", "vnc host[:port]", a saved session name, or a bare host (SSH2). */
   async connectBar() {
     const text = this.connectText.trim();
     if (!text) return;
     const words = text.split(/\s+/);
     const cmd = words[0].toLowerCase();
     const saved = this.findSession(text);
-    if (saved && !['ssh', 'ssh2', 'telnet', 'serial', 'raw'].includes(cmd)) {
+    if (saved && !['ssh', 'ssh2', 'telnet', 'serial', 'raw', 'rdp', 'vnc'].includes(cmd)) {
       this.connectText = '';
       await this.tabs.openSession(saved);
       return;
@@ -279,7 +282,7 @@ export class App implements OnInit {
     try {
       const s = await this.backend.newSessionDefaults();
       Object.assign(s, { name: '', logonActions: [], triggers: [], portForwards: [], description: [] });
-      let args = ['ssh', 'ssh2', 'telnet', 'serial', 'raw'].includes(cmd) ? words.slice(1) : words;
+      let args = ['ssh', 'ssh2', 'telnet', 'serial', 'raw', 'rdp', 'vnc'].includes(cmd) ? words.slice(1) : words;
       // A device type name anywhere in the line: "voss 10.1.1.1", "telnet exos 10.0.0.5 2001"
       const dev = args.map(w => findDeviceType(this.ui.settings()?.deviceTypes, w)).find(Boolean);
       if (dev) {
@@ -287,10 +290,10 @@ export class App implements OnInit {
         s.deviceType = dev.name;
         if (dev.username) s.username = dev.username;
       }
-      const explicit = ['ssh', 'ssh2', 'telnet', 'serial', 'raw'].includes(cmd);
-      const proto = cmd === 'telnet' ? 'Telnet' : cmd === 'serial' ? 'Serial' : cmd === 'raw' ? 'Raw' : !explicit && dev?.protocol ? dev.protocol : 'SSH2';
+      const explicit = ['ssh', 'ssh2', 'telnet', 'serial', 'raw', 'rdp', 'vnc'].includes(cmd);
+      const proto = cmd === 'telnet' ? 'Telnet' : cmd === 'serial' ? 'Serial' : cmd === 'raw' ? 'Raw' : cmd === 'rdp' ? 'RDP' : cmd === 'vnc' ? 'VNC' : !explicit && dev?.protocol ? dev.protocol : 'SSH2';
       s.protocol = proto;
-      s.port = proto === 'Telnet' ? 23 : 22;
+      s.port = defaultPort(proto) || 22;
       if (dev?.port && !explicit) s.port = dev.port;
       const pos: string[] = [];
       for (let i = 0; i < args.length; i++) {

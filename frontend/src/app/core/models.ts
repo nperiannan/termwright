@@ -14,7 +14,7 @@ export interface Session {
   triggers: Trigger[]; portForwards: PortForward[];
   jumpSession: string; proxyType: '' | 'socks5' | 'http'; proxyHost: string; proxyPort: number; proxyUser: string;
   autoReconnect: boolean; x11Forward: boolean; agentForward: boolean;
-  environment?: string; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
+  environment?: string; rdpDomain?: string; rdpFullScreen?: boolean; rdpSize?: string; vncViewOnly?: boolean; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
   logonArgs: string; useLogonScript: boolean; automateLogon: boolean; initialCr: boolean;
   remoteCommand: string; useRemoteCommand: boolean; openAs: '' | 'sftp'; deviceType: string; ownLogin: boolean; sftpToTarget: boolean;
   kerberosPrincipal: string; kerberosSpn: string; certificateFile: string; serialFlow: '' | 'rtscts' | 'xonxoff';
@@ -23,7 +23,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string;
 }
 /** A saved command; {{name}} / {{name:default}} are asked for when sending. */
 export interface Snippet { name: string; folder: string; text: string; description: string; deviceTypes?: string[] | null; }
@@ -82,6 +82,7 @@ export interface Settings {
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;
+  backupDir?: string; backupJobs?: BackupJob[] | null;
   keywordSets: KeywordSet[] | null; defaultKeywordSet: string; showConnectBar: boolean; keyMap: KeyBinding[] | null;
   customSchemes: { name: string; colors: Record<string, string> }[] | null; accentColor: string;
   restoreTabs: boolean; openTabs: string[] | null; inWindowMenu: boolean; forceTerminalScheme: boolean; pythonPath: string;
@@ -136,12 +137,23 @@ export interface AppInfo { name: string; version: string; os: string; arch: stri
 
 export interface FileFilter { displayName: string; pattern: string; }
 
-export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw'] as const;
+export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'RDP', 'VNC'] as const;
+/** Protocols shown in their own window or viewer instead of a terminal. */
+export const isRemoteDesktop = (p: string | undefined) => p === 'RDP' || p === 'VNC';
+
+/** Configuration backup job: sessions or folders ("Folder/") backed up on demand or on a schedule. */
+export interface BackupJob { name: string; targets: string[]; schedule: '' | 'daily' | 'weekdays'; at: string; keep: number; saveAll: boolean; commands: string; }
+export interface BackupStatus { time: string; ok: boolean; error?: string; changed: boolean; file?: string; copies: number; }
+export interface BackupFile { name: string; path: string; time: string; size: number; }
+export interface BackupResult { runId: string; path: string; ok: boolean; error?: string; changed: boolean; file?: string; done: number; total: number; }
+
+/** An open RDP or VNC tab (backend RemoteInfo). */
+export interface RemoteInfo { id: string; kind: 'rdp' | 'vnc'; title: string; addr: string; via: string; client: string; wsUrl: string; hasPass: boolean; note: string; session: Session; }
 export const EMULATIONS = ['Xterm', 'VT100', 'VT102', 'VT220', 'ANSI', 'Linux'] as const;
 export const BAUD_RATES = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 
 export function defaultPort(protocol: string): number {
-  return protocol === 'Telnet' ? 23 : protocol === 'SSH2' ? 22 : 0;
+  return protocol === 'Telnet' ? 23 : protocol === 'SSH2' ? 22 : protocol === 'RDP' ? 3389 : protocol === 'VNC' ? 5900 : 0;
 }
 
 /** Expands \r \n \t \e \b \\ and \xHH escapes, matching the Go backend. */
@@ -169,7 +181,7 @@ export interface Transfer {
 
 /** Actions that menus, key bindings and buttons can trigger. */
 export const ACTIONS: Record<string, string> = {
-  'quick-connect': 'Quick Connect', discover: 'Discover Devices...', 'local-shell': 'Local Shell', reconnect: 'Reconnect', disconnect: 'Disconnect',
+  'quick-connect': 'Quick Connect', discover: 'Discover Devices...', backups: 'Configuration Backups...', 'local-shell': 'Local Shell', reconnect: 'Reconnect', disconnect: 'Disconnect',
   'clone-tab': 'Clone Session', 'close-tab': 'Close Tab', 'next-tab': 'Next Tab', 'prev-tab': 'Previous Tab',
   copy: 'Copy', paste: 'Paste', 'copy-paste': 'Copy and Paste', find: 'Find', 'clear-scrollback': 'Clear Scrollback',
   'clear-screen': 'Clear Screen', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback',

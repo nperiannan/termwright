@@ -14,6 +14,9 @@ Third-party components (licenses in their respective packages):
   bcrypt_pbkdf from golang.org/x/crypto (BSD-3-Clause), in internal/securecrt/bcrypt_pbkdf.go
   Angular (MIT)                          https://angular.dev
   xterm.js and addons (MIT)              https://xtermjs.org
+  noVNC (MPL-2.0), unmodified, in the VNC viewer   https://github.com/novnc/noVNC
+  gorilla/websocket (BSD-2-Clause)       https://github.com/gorilla/websocket
+  danieljoos/wincred (MIT)               https://github.com/danieljoos/wincred
 
 Terminal color schemes are based on the following openly licensed palettes:
   Solarized (MIT, Ethan Schoonover), Dracula (MIT), Nord (MIT, Arctic Ice Studio),

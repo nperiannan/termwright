@@ -18,7 +18,7 @@ back unchanged. Files keep their UTF-8 BOM and CRLF style.
 
 | Termwright field | Key | Notes |
 |---|---|---|
-| Protocol | `S:"Protocol Name"` | `SSH2`, `Telnet`, `Serial`, `Local Shell`, `Raw` |
+| Protocol | `S:"Protocol Name"` | `SSH2`, `Telnet`, `Serial`, `Local Shell`, `Raw`; `RDP` and `VNC` are Termwright-only (other programs do not open them) |
 | Hostname / Username | `S:"Hostname"`, `S:"Username"` | |
 | SSH port | `D:"[SSH2] Port"` | |
 | Telnet / Raw port | `D:"Port"` | |

@@ -114,6 +114,7 @@ func buildMenu(app *App) *menu.Menu {
 	file.AddSeparator()
 	file.AddText("Import Sessions...", nil, emit("import"))
 	file.AddText("Discover Devices...", nil, emit("discover"))
+	file.AddText("Configuration Backups...", nil, emit("backups"))
 	file.AddText("Export Sessions...", nil, emit("export"))
 	file.AddSeparator()
 	file.AddText("Close Tab", acc("w"), emit("close-tab"))

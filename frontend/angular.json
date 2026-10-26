@@ -49,6 +49,21 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "**/*.js",
+                "input": "node_modules/@novnc/novnc/core",
+                "output": "novnc/core"
+              },
+              {
+                "glob": "**/*.js",
+                "input": "node_modules/@novnc/novnc/vendor",
+                "output": "novnc/vendor"
+              },
+              {
+                "glob": "LICENSE.txt",
+                "input": "node_modules/@novnc/novnc",
+                "output": "novnc"
               }
             ],
             "styles": [

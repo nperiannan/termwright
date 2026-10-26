@@ -22,6 +22,29 @@ type DeviceType struct {
 	// Prompt is a regular expression for the device's command prompt (used to
 	// pace multi-line sends); optional.
 	Prompt string `json:"prompt"`
+	// BackupCommands print the configuration for Configuration Backups, one
+	// command per line (e.g. "show running-config"); empty = the built-in
+	// default for the device type's name, if any.
+	BackupCommands string `json:"backupCommands"`
+}
+
+// Backup returns the commands that print the configuration.
+func (d DeviceType) Backup() []string {
+	src := d.BackupCommands
+	if strings.TrimSpace(src) == "" {
+		for _, b := range BuiltinDeviceTypes() {
+			if strings.EqualFold(b.Name, d.Name) {
+				src = b.BackupCommands
+			}
+		}
+	}
+	var out []string
+	for _, l := range strings.Split(src, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // Steps returns the logon actions for a connection over protocol.
@@ -48,13 +71,13 @@ func step(expect, send string, hide bool) LogonAction {
 // users can edit, remove or add their own in Global Options → Device Types.
 func BuiltinDeviceTypes() []DeviceType {
 	return []DeviceType{
-		{Name: "EXOS", Protocol: ProtoSSH2, Prompt: `[#>] ?$`,
+		{Name: "EXOS", Protocol: ProtoSSH2, Prompt: `[#>] ?$`, BackupCommands: "show configuration",
 			LoginSteps: []LogonAction{step("login:", `\s`, false), step("password:", `\w`, true)},
 			AfterLogin: []LogonAction{step("#", "disable clipaging", false)}},
-		{Name: "VOSS", Protocol: ProtoSSH2, Prompt: `:\d+[>#] ?$`,
+		{Name: "VOSS", Protocol: ProtoSSH2, Prompt: `:\d+[>#] ?$`, BackupCommands: "show running-config",
 			LoginSteps: []LogonAction{step("Login:", `\s`, false), step("Password:", `\w`, true)},
 			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal more disable", false)}},
-		{Name: "Cisco IOS", Protocol: ProtoSSH2, Prompt: `[>#] ?$`,
+		{Name: "Cisco IOS", Protocol: ProtoSSH2, Prompt: `[>#] ?$`, BackupCommands: "show running-config",
 			LoginSteps: []LogonAction{step("Username:", `\s`, false), step("Password:", `\w`, true)},
 			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal length 0", false)}},
 		{Name: "Linux", Protocol: ProtoSSH2, Prompt: `[$#] ?$`,

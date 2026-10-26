@@ -16,6 +16,8 @@ const (
 	ProtoSerial = "Serial"
 	ProtoLocal  = "Local Shell"
 	ProtoRaw    = "Raw"
+	ProtoRDP    = "RDP" // opened in the computer's Remote Desktop client
+	ProtoVNC    = "VNC" // opened in Termwright's VNC viewer
 )
 
 // Keys used in the interoperable session file format. Keys prefixed with
@@ -81,6 +83,10 @@ const (
 	kDevice      = "Termwright Device Type"
 	kOwnLogin    = "Termwright Own Login"
 	kEnv         = "Termwright Environment"
+	kRDPDomain   = "Termwright RDP Domain"
+	kRDPFull     = "Termwright RDP Full Screen"
+	kRDPSize     = "Termwright RDP Size"
+	kVNCViewOnly = "Termwright VNC View Only"
 	kSFTPTarget  = "Termwright SFTP To Command Target"
 	kKrbPrinc    = "Termwright Kerberos Principal"
 	kKrbSPN      = "Termwright Kerberos SPN"
@@ -176,6 +182,10 @@ type Session struct {
 	OpenAs            string        `json:"openAs"`            // SSH2: "" = terminal, "sftp" = SFTP browser only
 	DeviceType        string        `json:"deviceType"`        // name of a device type (login profile)
 	OwnLogin          bool          `json:"ownLogin"`          // with a device type: use this session's username/password instead of the device type's
+	RDPDomain         string        `json:"rdpDomain"`         // RDP: Windows domain of the user
+	RDPFullScreen     bool          `json:"rdpFullScreen"`     // RDP: open full screen
+	RDPSize           string        `json:"rdpSize"`           // RDP: window size such as "1600x900" ("" = the client's default)
+	VNCViewOnly       bool          `json:"vncViewOnly"`       // VNC: watch only, no keyboard or mouse
 	Environment       string        `json:"environment"`       // "", production, staging, test, development: colours the tab, production asks before sending to many tabs
 	KerberosPrincipal string        `json:"kerberosPrincipal"` // GSSAPI: user@REALM when no kinit ticket ("" = login user)
 	KerberosSPN       string        `json:"kerberosSpn"`       // GSSAPI target, "" = host@<hostname>; %H = hostname
@@ -210,6 +220,10 @@ func FromFile(path string, f *securecrt.File) Session {
 		s.Port = int(f.DWord(kPort, 23))
 	case ProtoRaw:
 		s.Port = int(f.DWord(kPort, 0))
+	case ProtoRDP:
+		s.Port = int(f.DWord(kPort, 3389))
+	case ProtoVNC:
+		s.Port = int(f.DWord(kPort, 5900))
 	default:
 		s.Port = int(f.DWord(kSSH2Port, 22))
 	}
@@ -272,6 +286,10 @@ func FromFile(path string, f *securecrt.File) Session {
 	s.DeviceType = f.Str(kDevice, "")
 	s.OwnLogin = f.Bool(kOwnLogin, false)
 	s.Environment = f.Str(kEnv, "")
+	s.RDPDomain = f.Str(kRDPDomain, "")
+	s.RDPFullScreen = f.Bool(kRDPFull, false)
+	s.RDPSize = f.Str(kRDPSize, "")
+	s.VNCViewOnly = f.Bool(kVNCViewOnly, false)
 	s.SFTPToTarget = f.Bool(kSFTPTarget, false)
 	s.KerberosPrincipal = f.Str(kKrbPrinc, "")
 	s.KerberosSPN = f.Str(kKrbSPN, "")
@@ -443,7 +461,7 @@ func (s Session) Apply(f *securecrt.File) {
 	f.SetStr(kHostname, s.Hostname)
 	f.SetStr(kUsername, s.Username)
 	switch s.Protocol {
-	case ProtoTelnet, ProtoRaw:
+	case ProtoTelnet, ProtoRaw, ProtoRDP, ProtoVNC:
 		f.SetDWord(kPort, uint32(s.Port))
 	case ProtoSSH2:
 		f.SetDWord(kSSH2Port, uint32(s.Port))
@@ -567,6 +585,10 @@ func (s Session) Apply(f *securecrt.File) {
 	setOptStr(f, kDevice, s.DeviceType)
 	setOptBool(f, kOwnLogin, s.OwnLogin && s.DeviceType != "")
 	setOptStr(f, kEnv, s.Environment)
+	setOptStr(f, kRDPDomain, s.RDPDomain)
+	setOptBool(f, kRDPFull, s.RDPFullScreen)
+	setOptStr(f, kRDPSize, s.RDPSize)
+	setOptBool(f, kVNCViewOnly, s.VNCViewOnly)
 	setOptBool(f, kSFTPTarget, s.SFTPToTarget && s.UseRemoteCommand)
 	setOptStr(f, kKrbPrinc, s.KerberosPrincipal)
 	setOptStr(f, kKrbSPN, s.KerberosSPN)
