@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
 env:
-  APP_VERSION: 0.12.2
+  APP_VERSION: 0.12.3
 
 jobs:
   test:
@@ -41,25 +41,37 @@ jobs:
           - { os: ubuntu-24.04,     platform: linux/amd64, tags: webkit2_41, name: linux-amd64 }
           - { os: ubuntu-24.04-arm, platform: linux/arm64, tags: webkit2_41, name: linux-arm64 }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with: { go-version: '1.24' }
       - uses: actions/setup-node@v7
         with: { node-version: '24', cache: npm, cache-dependency-path: frontend/package-lock.json }
+      # The packages are kept in the Actions cache, so builds do not depend on
+      # how fast the Ubuntu mirror is that day (it once took over 15 minutes).
+      - name: Linux package cache
+        if: runner.os == 'Linux'
+        uses: actions/cache@v6
+        with:
+          path: ~/apt-cache
+          key: apt-${{ matrix.os }}-gtk3-webkit41-v1
       - name: Linux dependencies
         if: runner.os == 'Linux'
-        timeout-minutes: 15
+        timeout-minutes: 25
         run: |
           # skip the slow man-page index rebuild after installing packages
           echo 'set man-db/auto-update false' | sudo debconf-communicate >/dev/null 2>&1 || true
           sudo rm -f /var/lib/man-db/auto-update
+          mkdir -p ~/apt-cache/partial
           PKGS="libgtk-3-dev libwebkit2gtk-4.1-dev"
-          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=120"
-          # the runner image usually has fresh package lists: try without "apt-get update" first
-          sudo apt-get install -y --no-install-recommends $APT $PKGS || \
-            { sudo apt-get update $APT && sudo apt-get install -y --no-install-recommends $APT $PKGS; }
+          APT="-o Dir::Cache::Archives=$HOME/apt-cache -o APT::Keep-Downloaded-Packages=true -o Acquire::Retries=5 -o Acquire::http::Timeout=20 -o DPkg::Lock::Timeout=120"
+          # fresh package lists (the runner image's lists can point at removed versions: 404)
+          sudo apt-get update $APT
+          sudo apt-get install -y --no-install-recommends $APT $PKGS
+          # let the cache step read the downloaded packages
+          sudo rm -rf ~/apt-cache/partial ~/apt-cache/lock
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-cache
       - name: NSIS (Windows installer)
         if: runner.os == 'Windows'
         shell: pwsh

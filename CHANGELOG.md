@@ -4,11 +4,13 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-## 0.12.2 (2026-10-26)
+## 0.12.3 (2026-10-26)
+
+(0.12.2 was not published: its Linux build timed out on a slow Ubuntu mirror. Its changes are in 0.12.3.)
 
 * **Text is kept exactly as typed**: macOS no longer capitalises the first letter (e.g. user name `rwa` became `Rwa`), corrects spelling or replaces quotes and dashes in any field - user names, passwords, prompts, commands.
 * Release notes: every release and nightly build now lists its changes and commits ([CHANGELOG.md](CHANGELOG.md)).
-* Build: more reliable nightly publishing and faster Linux package installation.
+* Build: more reliable nightly publishing; Linux build packages are kept in the build cache, so a slow Ubuntu mirror no longer breaks the Linux build.
 
 ## 0.12.1 (2026-10-26)
 

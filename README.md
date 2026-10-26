@@ -13,7 +13,7 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
-## What's new in 0.12.2
+## What's new in 0.12.3
 
 * **Text is kept exactly as typed**: macOS no longer capitalises the first letter of user names (`rwa` → `Rwa`), corrects spelling or replaces quotes in any field.
 * **Release notes** for every release and nightly build ([changelog](CHANGELOG.md)).
