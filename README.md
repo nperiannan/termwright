@@ -13,6 +13,11 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.12.4
+
+* **Import Sessions** on the start page: sessions come from several terminal programs and inventories.
+* `scripts/watch-build.sh` follows a GitHub build from the terminal.
+
 ## What's new in 0.12.3
 
 * **Text is kept exactly as typed**: macOS no longer capitalises the first letter of user names (`rwa` → `Rwa`), corrects spelling or replaces quotes in any field.
@@ -23,12 +28,6 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 * **Much better device identification** in Discover Devices: web page title, server and certificate; Telnet banner and login prompt (with proper option negotiation); SIP over UDP for phones; MAC address and maker (IEEE vendor list) from the ARP table; this computer listed; product names win over generic words (a TerraMaster NAS is a NAS, not Windows; EXOS with OpenSSH is a switch, Mocana SSH is network gear).
 * **ⓘ evidence** per device: everything the result is based on.
 * **NAS / storage** kind; device type suggested from the Telnet login prompt; **Show / Hide** for the SNMP community; a note when no device answers SNMP.
-
-## What's new in 0.12
-
-* **Discover devices** (File → Discover Devices…): scan a network or address range, see each device with an icon for its kind (switch, router, firewall, access point, server, computer, phone, printer), its name, vendor and system (SNMP v2c, DNS, SSH greeting), and add the selected ones - or all - as sessions with a matching device type. It never tries to log in. See the [User Guide](docs/USER_GUIDE.md#discover-devices).
-
-  ![Discover Devices](docs/screenshots/discover.png)
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 
