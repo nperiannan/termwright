@@ -136,4 +136,5 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - [ ] Code signing: Windows Authenticode, macOS Developer ID + notarization
 - [ ] Installers: NSIS/MSIX (Windows), DMG (macOS), AppImage/deb/rpm (Linux)
 - [x] Auto-update channel (check + download installer; silent self-replace needs code signing)
+- [x] Release notes from CHANGELOG.md + commit list for every release and nightly (`scripts/release-notes.sh`); before tagging, rename the *Unreleased* section to the version; *Actions → release notes* rewrites notes of published releases
 - [ ] Round-trip compatibility test suite with real SecureCRT 9.x files

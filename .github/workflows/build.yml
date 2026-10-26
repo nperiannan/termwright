@@ -112,6 +112,8 @@ jobs:
       group: release-${{ github.ref }}
       cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }  # all tags and commits, for the release notes
       - uses: actions/download-artifact@v8
         with: { path: dist, merge-multiple: true }
       - name: Publish release
@@ -120,22 +122,23 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           if [ "$GITHUB_REF_TYPE" = tag ]; then
-            gh release create "$GITHUB_REF_NAME" dist/* --title "Termwright $GITHUB_REF_NAME" --generate-notes
+            scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
+            gh release create "$GITHUB_REF_NAME" dist/* --title "Termwright $GITHUB_REF_NAME" --notes-file notes.md
           else
+            scripts/release-notes.sh nightly > notes.md
             # Keep one "nightly" pre-release: move its tag to this commit and
             # replace the files (deleting and re-creating it races with
             # GitHub's tag clean-up and fails now and then).
             TITLE="Termwright nightly (${GITHUB_SHA::7})"
-            NOTES="Automatic build of main (${GITHUB_SHA::7}). Untested - back up first. macOS build is ad-hoc signed, not notarized: after unzipping run  xattr -dr com.apple.quarantine Termwright.app"
             if gh release view nightly >/dev/null 2>&1; then
               gh api -X PATCH "repos/$GH_REPO/git/refs/tags/nightly" -f sha="$GITHUB_SHA" -F force=true >/dev/null \
                 || gh api -X POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/nightly -f sha="$GITHUB_SHA" >/dev/null
               for a in $(gh release view nightly --json assets -q '.assets[].name'); do gh release delete-asset nightly "$a" --yes; done
               gh release upload nightly dist/* --clobber
-              gh release edit nightly --prerelease --title "$TITLE" --notes "$NOTES"
+              gh release edit nightly --prerelease --title "$TITLE" --notes-file notes.md
             else
               for i in 1 2 3; do
-                gh release create nightly dist/* --prerelease --target "$GITHUB_SHA" --title "$TITLE" --notes "$NOTES" && break
+                gh release create nightly dist/* --prerelease --target "$GITHUB_SHA" --title "$TITLE" --notes-file notes.md && break
                 echo "retrying in 20 s"; sleep 20
                 [ "$i" = 3 ] && exit 1
               done
