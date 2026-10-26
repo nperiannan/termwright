@@ -76,7 +76,23 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress }
-      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
+      - name: Install Wails
+        shell: bash
+        # retried: the Go module and checksum servers sometimes drop a connection
+        run: |
+          for i in 1 2 3 4; do
+            go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2 && exit 0
+            echo "attempt $i failed, retrying in $((i * 15)) s"; sleep $((i * 15))
+          done
+          exit 1
+      - name: Go modules
+        shell: bash
+        run: |
+          for i in 1 2 3 4; do
+            go mod download && exit 0
+            echo "attempt $i failed, retrying in $((i * 15)) s"; sleep $((i * 15))
+          done
+          exit 1
       - name: Version
         shell: bash
         run: |
