@@ -11,7 +11,7 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 ![Termwright](docs/screenshots/main.png)
 
-📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
+📖 **[User Guide](docs/USER_GUIDE.md)** · [All features](docs/FEATURES.md) · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
 ## What's new in 0.18.0
 
