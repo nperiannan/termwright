@@ -151,10 +151,26 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - [x] **Run and collect**: run commands on many devices and get one report (file per device, and a table such as versions / serial numbers with CSV export)
 - [x] **Console servers**: open the right port of a console server from a session, port sessions created in one go
 
+## 0.17 (planned)
+- [ ] **Session recording and playback** (first: no new dependencies)
+  - Recordings in the open asciinema v2 format (`.cast`: output with its timing, window size changes, markers), one file per connection in *Documents/Termwright Recordings/<session>/<date>_<time>.cast*; also playable with asciinema tools
+  - Record per session, per folder (folder defaults) or every session (Global Options); **Start / Stop Recording** on the tab menu, a red dot on recording tabs; keystrokes are not recorded by default (passwords), only what the device shows
+  - **Add Marker** (`Mod+M`) with a note, e.g. "start of change CHG-1234"
+  - Player tab: play / pause, speed 0.5×-8×, seek bar, skip idle time, markers, search the text and jump to it, copy text, export as plain text
+  - File → **Recordings…**: by session and date with duration and size, play, show in folder; keep N days (optional)
+  - Background runs (backups, checklists, Run and Collect) are not recorded
+- [ ] **Smart cards: PIV / CAC / PKCS#11 SSH keys**
+  - Global Options → **Smart Cards**: PKCS#11 libraries (OpenSC, YubiKey `ykcs11`, vendor middleware; common paths found automatically), *Test* lists the cards and their keys and copies a public key in OpenSSH format for `authorized_keys`
+  - Session (and device type / folder default) authentication **Smart card**: any key on the card or a chosen one; works with OpenSSH certificates, jump hosts, SFTP and agent forwarding (card keys offered to the server through the forwarded agent)
+  - PIN asked once per card and kept in memory only until Termwright quits or the card is removed (option to ask every time); never saved
+  - Windows: also the keys of the Windows certificate store (CAC / PIV through the Windows smart card driver, no PKCS#11 library needed)
+  - RSA (rsa-sha2-256/512) and ECDSA P-256 / P-384 keys
+  - Background runs use the card only when its PIN is already entered; otherwise they fail with *smart card PIN needed*
+  - SecureCRT import: map its PKCS#11 / smart card settings where present
+  - Tests with SoftHSM2 (software token); real cards tested by users
+
 ## Later
 - [ ] **Team sharing and sync**: shared session library (Git repository or shared folder), passwords stay per user or in a password manager
-- [ ] **Smart cards**: PIV / CAC / PKCS#11 keys for SSH
-- [ ] **Session recording and playback** with timing (asciinema-style) for audits and training
 - [ ] Split panes inside a tab (nested splits, keyboard driven)
 - [ ] Cloud inventory imports: Azure, Google Cloud
 - [ ] Plugin / extension API
