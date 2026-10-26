@@ -71,6 +71,8 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 | ![Kerberos and certificates](docs/screenshots/auth.png) <br/>*Kerberos, certificates and security keys* | ![Password managers](docs/screenshots/passwords-managers.png) <br/>*1Password, Bitwarden, HashiCorp Vault* |
 | ![Workspaces](docs/screenshots/workspaces.png) <br/>*Workspaces* | ![Alerts](docs/screenshots/alerts.png) <br/>*Output alerts* |
 | ![Discover Devices](docs/screenshots/discover.png) <br/>*Discover devices with the evidence behind each result* | ![Discovered sessions](docs/screenshots/discover-added.png) <br/>*Selected devices added as sessions* |
+| ![Change checklist](docs/screenshots/checklist.png) <br/>*Change checklist: same / changed per device after a change* | ![Command History](docs/screenshots/history.png) <br/>*Command History search* |
+| ![Command Window suggestions](docs/screenshots/autocomplete.png) <br/>*Suggestions from history and the Command Library* | ![RDP tab](docs/screenshots/rdp.png) <br/>*RDP session through a jump host* |
 | ![Configuration backups](docs/screenshots/backups.png) <br/>*Configuration backups with results per device* | ![VNC viewer](docs/screenshots/vnc.png) <br/>*VNC viewer tab* |
 | ![Session Manager](docs/screenshots/session-manager.png) <br/>*Favourites, recent sessions, environments, reachability and the hover card* | ![Edit Sessions](docs/screenshots/bulk-edit.png) <br/>*Edit many sessions at once* |
 
