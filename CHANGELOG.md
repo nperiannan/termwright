@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.19.1 (2026-10-27)
+
 * Start page: the Termwright title is semi-bold, and a **Discover Devices** button sits next to Import Sessions.
 
 ## 0.19.0 (2026-10-27)
