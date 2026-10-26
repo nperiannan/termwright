@@ -42,7 +42,7 @@ func r(p, kind, vendor string) rule { return rule{regexp.MustCompile(`(?i)` + p)
 // Rules from specific to general; the first match in the strongest evidence wins.
 var rules = []rule{
 	// Extreme Networks
-	r(`extremexos|\bexos\b|switch ?engine|summit ?x?\d`, KindSwitch, "Extreme Networks"),
+	r(`extremexos|\bexos\b|switch ?engine|summit ?x?\d|telnet session telnet\d+ on /dev/pty`, KindSwitch, "Extreme Networks"),
 	r(`\bvoss\b|vsp-?\d{3,4}|fabric ?engine|virtual services platform|ethernet routing switch|\bers[- ]?\d{4}`, KindSwitch, "Extreme Networks"),
 	r(`extremecloud|extremewireless|\bap\d{3,4}[a-z]*\b.*extreme|extreme.*access point`, KindWireless, "Extreme Networks"),
 	r(`extreme networks|enterasys`, KindSwitch, "Extreme Networks"),
@@ -85,6 +85,29 @@ var rules = []rule{
 	r(`centos|rocky|alma|fedora|suse|amazon linux|linux|freebsd|openbsd`, KindServer, ""),
 }
 
+// Network operating systems, matched against every piece of evidence; the
+// result picks the device type ("EXOS" before "Linux" when an EXOS switch
+// also runs OpenSSH).
+var platforms = []struct {
+	re   *regexp.Regexp
+	name string
+}{
+	{regexp.MustCompile(`(?i)extremexos|\bexos\b|switch ?engine|summit ?x?\d|telnet session telnet\d+ on /dev/pty`), "EXOS"},
+	{regexp.MustCompile(`(?i)\bvoss\b|vsp-?\d{3,4}|fabric ?engine|virtual services platform`), "VOSS"},
+	{regexp.MustCompile(`(?i)\bboss\b|ethernet routing switch|\bers[- ]?\d{4}`), "BOSS"},
+	{regexp.MustCompile(`(?i)nx-os`), "NX-OS"},
+	{regexp.MustCompile(`(?i)ios[- ]xr`), "IOS XR"},
+	{regexp.MustCompile(`(?i)ios[- ]xe`), "IOS XE"},
+	{regexp.MustCompile(`(?i)cisco ios`), "IOS"},
+	{regexp.MustCompile(`(?i)junos`), "Junos"},
+	{regexp.MustCompile(`(?i)arista|\beos\b`), "EOS"},
+	{regexp.MustCompile(`(?i)fortios|fortigate`), "FortiOS"},
+	{regexp.MustCompile(`(?i)pan-os`), "PAN-OS"},
+	{regexp.MustCompile(`(?i)routeros|mikrotik`), "RouterOS"},
+	{regexp.MustCompile(`(?i)comware`), "Comware"},
+	{regexp.MustCompile(`(?i)aos-cx|arubaos`), "ArubaOS"},
+}
+
 // MAC vendors of phone makers, used only for devices without open ports.
 var macMobile = regexp.MustCompile(`(?i)samsung|xiaomi|oneplus|oppo|vivo mobile|huawei device|honor device|motorola mobility|google|realme|nothing technology`)
 
@@ -100,7 +123,7 @@ var macKinds = []rule{
 
 // classify sets the kind, vendor and OS of a result and lists the evidence.
 func classify(res *Result) {
-	res.Kind, res.Vendor, res.OS, res.Evidence = KindUnknown, "", "", nil
+	res.Kind, res.Vendor, res.OS, res.Platform, res.Evidence = KindUnknown, "", "", "", nil
 	has := map[string]bool{}
 	for _, s := range res.Services {
 		has[s] = true
@@ -155,6 +178,18 @@ func classify(res *Result) {
 		ev("MAC: " + label)
 	}
 
+	// the network OS from the strongest source that names one
+	for _, s := range srcs {
+		for _, p := range platforms {
+			if p.re.MatchString(s.text) {
+				res.Platform = p.name
+				break
+			}
+		}
+		if res.Platform != "" {
+			break
+		}
+	}
 	// vendor from the SNMP enterprise number
 	if rest, ok := strings.CutPrefix(res.SysObjectID, "1.3.6.1.4.1."); ok {
 		n, _, _ := strings.Cut(rest, ".")
@@ -218,6 +253,8 @@ func classify(res *Result) {
 		switch {
 		case res.SysDescr != "":
 			res.OS = firstSentence(res.SysDescr)
+		case res.Platform != "":
+			res.OS = res.Platform
 		case res.SIP != "" && res.SIP != "SIP":
 			res.OS = res.SIP
 		case res.Web.Title != "":

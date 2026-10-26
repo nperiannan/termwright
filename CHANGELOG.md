@@ -4,6 +4,12 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.12.6 (2026-10-26)
+
+* **Discover Devices recognises the network OS** (EXOS, VOSS, BOSS, IOS/IOS XE/IOS XR, NX-OS, Junos, EOS, FortiOS, PAN-OS, RouterOS, Comware, ArubaOS) from any evidence - SNMP, web certificate, Telnet greeting - and picks that device type. An EXOS switch that runs OpenSSH and answers no SNMP (certificate *Extreme Networks, Inc., EXOS*, Telnet *telnet session telnet0 on /dev/ptyb0*) is now EXOS, not Linux, and its system column says *EXOS*.
+* **Choose what Add saves**: *all selected devices* (as before) or *only the selected devices of these device types* - tick one or more device types; each shows how many devices it has. **A subfolder per device type** puts them in e.g. *Discovered/EXOS* and *Discovered/VOSS*. The choices are remembered.
+* New network switch icon (switch arrows over a row of ports).
+
 ## 0.12.5 (2026-10-26)
 
 * **Device type passwords**: the password prompt during a Telnet/Serial login offers *Remember for device type …*; an empty password with the box ticked records that the device has none, so it logs in by itself from then on. The prompt names the user (`Password for admin@10.0.0.5`).

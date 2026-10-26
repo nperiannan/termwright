@@ -351,3 +351,26 @@ func TestTemplateTitleIgnored(t *testing.T) {
 		t.Error("real title ignored")
 	}
 }
+
+func TestExosWithOpenSSH(t *testing.T) {
+	// an EXOS switch that runs OpenSSH: the certificate and the Telnet greeting name EXOS
+	r := Result{Services: []string{"ssh", "telnet", "http", "https"}, Banner: "SSH-2.0-OpenSSH_8.1",
+		Telnet: "telnet session telnet0 on /dev/ptyb0 / login:",
+		Web:    WebInfo{Server: "::", Cert: "Extreme Networks, Inc., EXOS, *.extremenetworks.com", Hints: []string{"Extreme Networks"}}}
+	classify(&r)
+	if r.Kind != KindSwitch || r.Vendor != "Extreme Networks" || r.Platform != "EXOS" || r.OS != "EXOS" {
+		t.Fatalf("got kind %q vendor %q platform %q os %q", r.Kind, r.Vendor, r.Platform, r.OS)
+	}
+	// the Telnet greeting alone is enough
+	r = Result{Services: []string{"telnet"}, Telnet: "telnet session telnet0 on /dev/ptyb0 / login:"}
+	classify(&r)
+	if r.Platform != "EXOS" || r.Kind != KindSwitch {
+		t.Fatalf("telnet only: platform %q kind %q", r.Platform, r.Kind)
+	}
+	// SNMP keeps the full description
+	r = Result{SysDescr: "VSP-8404C (8.10.0.0)", Banner: "SSH-2.0-OpenSSH_8.1"}
+	classify(&r)
+	if r.Platform != "VOSS" || r.OS != "VSP-8404C (8.10.0.0)" {
+		t.Fatalf("voss: platform %q os %q", r.Platform, r.OS)
+	}
+}

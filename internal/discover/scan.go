@@ -59,7 +59,8 @@ type Result struct {
 	Kind        string   `json:"kind"` // computer, server, nas, phone, printer, switch, router, firewall, wireless, unknown
 	Vendor      string   `json:"vendor"`
 	OS          string   `json:"os"`
-	Evidence    []string `json:"evidence"` // what the kind and vendor are based on
+	Platform    string   `json:"platform"` // network OS named by any evidence: EXOS, VOSS, NX-OS, …
+	Evidence   []string `json:"evidence"` // what the kind and vendor are based on
 	Protocol    string   `json:"protocol"` // SSH2, Telnet or "" when no login port is open
 	Port        int      `json:"port"`
 }

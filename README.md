@@ -13,6 +13,11 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.12.6
+
+* Discover Devices names the **network OS** from any evidence (certificate, Telnet greeting, SNMP), so EXOS switches with OpenSSH get the EXOS device type instead of Linux.
+* **Add only chosen device types** (one or more) and optionally **a subfolder per device type**; new network switch icon.
+
 ## What's new in 0.12.5
 
 * **Remember for device type** on the logon password prompt - leave it empty for devices without a password (EXOS `admin`), and they log in by themselves from then on.
@@ -23,11 +28,6 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 * **Mobile phones and tablets** recognised in Discover Devices (mDNS/DNS names, private Wi-Fi MAC addresses).
 * **Import Sessions** on the start page: sessions come from several terminal programs and inventories.
 * `scripts/watch-build.sh` follows a GitHub build from the terminal.
-
-## What's new in 0.12.3
-
-* **Text is kept exactly as typed**: macOS no longer capitalises the first letter of user names (`rwa` → `Rwa`), corrects spelling or replaces quotes in any field.
-* **Release notes** for every release and nightly build ([changelog](CHANGELOG.md)).
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 

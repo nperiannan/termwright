@@ -103,6 +103,22 @@ const ACK_KEY = 'termwright.discoverAck';
               </tbody>
             </table>
           </div>
+          <div class="save">
+            <label class="inline">Add
+              <select [ngModel]="saveMode()" (ngModelChange)="saveMode.set($event); savePrefs()">
+                <option value="all">all selected devices</option>
+                <option value="types">only the selected devices of these device types</option>
+              </select></label>
+            @if (saveMode() === 'types') {
+              @for (t of foundTypes(); track t) {
+                <label class="chip" [class.on]="picked().includes(t)"><input type="checkbox" [checked]="picked().includes(t)" (change)="toggleType(t)" />
+                  {{ t || '(no device type)' }} <span class="n">{{ countOf(t) }}</span></label>
+              } @empty { <span class="hint">No device can be added.</span> }
+            }
+            <span class="spacer"></span>
+            <label class="inline" title="For example Discovered/EXOS and Discovered/VOSS">
+              <input type="checkbox" [ngModel]="byType()" (ngModelChange)="byType.set($event); savePrefs()" /> A subfolder per device type</label>
+          </div>
         }
       </div>
       <div class="modal-foot">
@@ -148,6 +164,11 @@ const ACK_KEY = 'termwright.discoverAck';
     .svc.login { color: #fff; background: #0d9488; border-color: transparent; }
     .tag { white-space: nowrap; font-size: 10.5px; margin-left: 6px; padding: 0 6px; border-radius: 8px; background: var(--hover); color: var(--muted); font-weight: 400; }
     .folder { width: 220px; }
+    .save { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 10px; font-size: 12.5px; }
+    .save select { max-width: 330px; }
+    .chip { display: inline-flex; gap: 5px; align-items: center; padding: 2px 8px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+    .chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+    .chip .n { color: var(--muted); font-size: 11px; }
     .err { color: var(--danger); }
     select { max-width: 150px; }
   `],
@@ -163,6 +184,11 @@ export class DiscoverDialog implements OnDestroy {
   ackNow = false;
   loginOnly = false;
   folder = 'Discovered';
+  private readonly prefs = loadPrefs();
+  /** Which selected devices "Add" saves: all, or only those of the picked device types. */
+  readonly saveMode = signal<'all' | 'types'>(this.prefs.mode === 'types' ? 'types' : 'all');
+  readonly picked = signal<string[]>(Array.isArray(this.prefs.types) ? this.prefs.types : []);
+  readonly byType = signal(!!this.prefs.byType);
   readonly running = signal(false);
   readonly stopped = signal(false);
   readonly total = signal(0);
@@ -214,7 +240,25 @@ export class DiscoverDialog implements OnDestroy {
   }
 
   shown() { return this.loginOnly ? this.rows().filter(r => r.protocol) : this.rows(); }
-  selectedCount() { return this.rows().filter(r => r.selected).length; }
+  /** The devices "Add" saves. */
+  toAdd() {
+    const types = this.saveMode() === 'types' ? new Set(this.picked()) : null;
+    return this.rows().filter(r => r.selected && r.protocol && (!types || types.has(r.deviceType)));
+  }
+  selectedCount() { return this.toAdd().length; }
+  /** Device types of the devices that can be added ("" = none), named ones first. */
+  foundTypes() {
+    const set = new Set(this.rows().filter(r => r.protocol).map(r => r.deviceType ?? ''));
+    return [...set].sort((a, b) => (a === '') !== (b === '') ? (a === '' ? 1 : -1) : a.localeCompare(b));
+  }
+  countOf(t: string) { return this.rows().filter(r => r.selected && r.protocol && (r.deviceType ?? '') === t).length; }
+  toggleType(t: string) {
+    this.picked.update(l => l.includes(t) ? l.filter(x => x !== t) : [...l, t]);
+    this.savePrefs();
+  }
+  savePrefs() {
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ mode: this.saveMode(), types: this.picked(), byType: this.byType() })); } catch { /* ignore */ }
+  }
   allSelected() { const a = this.shown().filter(r => r.protocol); return a.length > 0 && a.every(r => r.selected); }
   kindLabel(k: string) { return DEVICE_KINDS[k as DeviceKind]?.label ?? 'Unknown device'; }
   svcLabel(s: string) {
@@ -265,7 +309,13 @@ export class DiscoverDialog implements OnDestroy {
   private guessType(d: DiscoverResult): string {
     const types = this.deviceTypes();
     if (!types.length || !d.protocol) return '';
-    const text = `${d.sysDescr} ${d.os} ${d.vendor} ${d.banner} ${d.telnet} ${d.web?.title ?? ''} ${(d.web?.hints ?? []).join(' ')} ${d.sip}`.toLowerCase();
+    const named = (words: string[]) => types.find(t => words.some(w => t.name.toLowerCase().includes(w)));
+    // the network OS any evidence named wins over a generic "Linux" from OpenSSH
+    if (d.platform) {
+      const t = named(PLATFORM_WORDS[d.platform] ?? [d.platform.toLowerCase()]);
+      if (t) return t.name;
+    }
+    const text = `${d.sysDescr} ${d.os} ${d.vendor} ${d.web?.cert ?? ''} ${d.telnet} ${d.web?.title ?? ''} ${(d.web?.hints ?? []).join(' ')} ${d.sip} ${d.banner}`.toLowerCase();
     const direct = types.find(t => t.name.length > 2 && text.includes(t.name.toLowerCase()));
     if (direct) return direct.name;
     const aliases: [RegExp, string[]][] = [
@@ -276,7 +326,7 @@ export class DiscoverDialog implements OnDestroy {
     ];
     for (const [re, words] of aliases) {
       if (!re.test(text)) continue;
-      const t = types.find(t => words.some(w => t.name.toLowerCase().includes(w)));
+      const t = named(words);
       if (t) return t.name;
     }
     // The Telnet login prompt against each device type's first login step
@@ -303,19 +353,26 @@ export class DiscoverDialog implements OnDestroy {
   }
 
   async add() {
-    const pick = this.rows().filter(r => r.selected && r.protocol);
+    const pick = this.toAdd();
     if (!pick.length) return;
     this.adding.set(true);
     const folder = this.folder.trim().replace(/^\/+|\/+$/g, '');
     let added = 0;
     const failed: string[] = [];
     try {
-      if (folder && !this.folders().includes(folder)) await this.backend.createFolder(folder).catch(() => {});
+      const made = new Set(this.folders());
+      const ensure = async (f: string) => {
+        if (f && !made.has(f)) { made.add(f); await this.backend.createFolder(f).catch(() => {}); }
+      };
+      await ensure(folder);
       for (const r of pick) {
+        const sub = this.byType() ? (r.deviceType || 'Other').replace(/[\\/:*?"<>|]+/g, '-') : '';
+        const dest = [folder, sub].filter(Boolean).join('/');
+        await ensure(dest);
         const s = await this.backend.newSessionDefaults();
         const base = (r.name || r.ip).replace(/[\\/:*?"<>|]+/g, '-').trim() || r.ip;
         Object.assign(s, {
-          name: base, folder, path: '', protocol: r.protocol, hostname: r.ip, port: r.port,
+          name: base, folder: dest, path: '', protocol: r.protocol, hostname: r.ip, port: r.port,
           deviceType: r.deviceType, description: [r.vendor, r.os].filter(Boolean).length ? [[r.vendor, r.os].filter(Boolean).join(' · ')] : [],
         });
         try {
@@ -335,6 +392,18 @@ export class DiscoverDialog implements OnDestroy {
     if (failed.length) this.err.set('Not added: ' + failed.join('; '));
     this.ui.toast(`Added ${added} session${added === 1 ? '' : 's'}${folder ? ' to ' + folder : ''}`, 'success');
   }
+}
+
+/** Words in device type names for each network OS the scan recognises. */
+const PLATFORM_WORDS: Record<string, string[]> = {
+  EXOS: ['exos', 'switch engine'], VOSS: ['voss', 'fabric'], BOSS: ['boss'], 'NX-OS': ['nx-os', 'nxos'], 'IOS XR': ['ios xr', 'ios-xr', 'xr'],
+  'IOS XE': ['ios xe', 'ios-xe', 'ios'], IOS: ['ios', 'cisco'], Junos: ['junos', 'juniper'], EOS: ['eos', 'arista'], FortiOS: ['forti'],
+  'PAN-OS': ['pan-os', 'palo'], RouterOS: ['routeros', 'mikrotik'], Comware: ['comware', 'h3c'], ArubaOS: ['aruba', 'aos'],
+};
+
+const PREFS_KEY = 'termwright.discover.save';
+function loadPrefs(): { mode?: string; types?: string[]; byType?: boolean } {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') ?? {}; } catch { return {}; }
 }
 
 function ipNum(ip: string) { return ip.split('.').reduce((n, p) => n * 256 + Number(p), 0); }
