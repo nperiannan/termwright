@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.13.1 (2026-10-26)
+
+* **Session filter finds the exact device**: when a host name, address or session name equals the filter text (e.g. `10.127.34.2`), only those sessions are listed; *N more sessions containing …* shows the others (`10.127.34.231`, `10.127.34.28` …). Other results are sorted: starting with the text first.
+
 ## 0.13.0 (2026-10-26)
 
 * **Edit many sessions at once**: select sessions with Cmd/Ctrl-click or Shift-click (or right-click a folder → *Edit All Sessions in Folder…*) and change folder, device type, username, password, protocol, port, jump host, environment, color scheme, keyword set or auto reconnect in one go. Selections can also be connected, deleted, added to Favourites or dragged to a folder together.

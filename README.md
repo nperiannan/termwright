@@ -13,22 +13,16 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.13.1
+
+* The session filter lists the exact match first: typing `10.127.34.2` shows that device, not every address starting with it.
+
 ## What's new in 0.13.0
 
 * **Edit many sessions at once**, **Favourites and Recent**, a **hover card** per session and optional **reachability dots** in the Session Manager.
 * **Environments** (Production, Staging, Lab, Development): coloured tags and tabs; production asks before multi-line pastes and sends to several tabs.
 * **Search in Global Options**, **errors that offer the fix** (Reconnect, Edit Session, Device Type Login …) and **device-type-aware commands** in the Command Library and Command Window.
 * Discover Devices: **connect without saving** (double-click) and **IoT / embedded boards** (ESP32, Arduino, STM32, Shelly, RTOS) via mDNS services, CoAP, ESPHome, MQTT and Modbus.
-
-## What's new in 0.12.6
-
-* Discover Devices names the **network OS** from any evidence (certificate, Telnet greeting, SNMP), so EXOS switches with OpenSSH get the EXOS device type instead of Linux.
-* **Add only chosen device types** (one or more) and optionally **a subfolder per device type**; new network switch icon.
-
-## What's new in 0.12.5
-
-* **Remember for device type** on the logon password prompt - leave it empty for devices without a password (EXOS `admin`), and they log in by themselves from then on.
-* The session's Login box shows whether the device type has a saved password, no password, or asks.
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 

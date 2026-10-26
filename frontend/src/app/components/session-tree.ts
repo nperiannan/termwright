@@ -32,7 +32,7 @@ interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string
         (click)="ui.actionHandler('toggle-session-manager')"><app-icon name="hide-panel" /></button>
     </div>
     <div class="sm-search">
-      <input type="search" placeholder="Filter sessions" [(ngModel)]="filterText" (ngModelChange)="filter.set($event)" />
+      <input type="search" placeholder="Filter sessions" [(ngModel)]="filterText" (ngModelChange)="filter.set($event); showAll.set(false)" />
     </div>
     <div class="sm-body" (contextmenu)="rootMenu($event)"
          (dragover)="allowDrop($event)" (drop)="dropOn($event, '')">
@@ -46,6 +46,9 @@ interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string
           </div>
         } @empty {
           <div class="empty">No matching sessions</div>
+        }
+        @if (hiddenMatches() > 0) {
+          <div class="more"><a (click)="showAll.set(true)">{{ hiddenMatches() }} more session{{ hiddenMatches() === 1 ? '' : 's' }} containing "{{ filter().trim() }}"</a></div>
         }
       } @else {
         @if (favorites().length) {
@@ -273,19 +276,31 @@ export class SessionTree implements OnDestroy {
     return 'Password ' + st(h.pw);
   }
 
-  readonly matches = computed(() => {
+  /** Sessions containing the filter text, best first: exact host or name, then starting with it, then the rest. */
+  readonly partial = computed(() => {
     const q = this.filter().toLowerCase().trim();
-    const out: SessionNode[] = [];
+    const out: { n: SessionNode; rank: number }[] = [];
     const walk = (n: SessionNode) => {
       for (const c of n.children ?? []) {
-        if (c.isFolder) walk(c);
-        else if ([c.name, c.hostname, c.username, c.path].some(v => v?.toLowerCase().includes(q))) out.push(c);
+        if (c.isFolder) { walk(c); continue; }
+        const host = c.hostname?.toLowerCase() ?? '', name = c.name.toLowerCase();
+        if (host === q || name === q) out.push({ n: c, rank: 0 });
+        else if (host.startsWith(q) || name.startsWith(q)) out.push({ n: c, rank: 1 });
+        else if ([c.name, c.hostname, c.username, c.path].some(v => v?.toLowerCase().includes(q))) out.push({ n: c, rank: 2 });
       }
     };
     const root = this.ui.tree();
     if (root) walk(root);
-    return out;
+    return out.sort((a, b) => a.rank - b.rank);
   });
+  /** Shown matches: only the exact ones when a host or name equals the filter, unless "show all" was clicked. */
+  readonly matches = computed(() => {
+    const all = this.partial();
+    const exact = all.filter(m => m.rank === 0);
+    return (exact.length && !this.showAll() ? exact : all).map(m => m.n);
+  });
+  readonly hiddenMatches = computed(() => this.partial().length - this.matches().length);
+  readonly showAll = signal(false);
 
   private loadExpanded(): Set<string> {
     try { return new Set(JSON.parse(localStorage.getItem(EXPANDED_KEY) ?? '[]')); } catch { return new Set(); }

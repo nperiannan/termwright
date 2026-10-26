@@ -38,3 +38,4 @@
 .sm-head { gap: 0; .icon-btn { width: 26px; min-width: 26px; padding: 0; } .title { min-width: 58px; } }
 .row .name { flex: 0 1 auto; min-width: 0; }
 .row .host { flex: 1 1 0; min-width: 0; text-align: right; white-space: nowrap; }
+.more { padding: 6px 12px; font-size: 12px; a { color: var(--accent); cursor: pointer; } }

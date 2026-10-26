@@ -190,7 +190,7 @@ When a connection drops the tab shows `[Disconnected] Press Enter to reconnect`.
 - **Edit**: right-click → *Properties…* (or *Options → Session Options* for the active tab).
 - **Duplicate / Rename / Delete**: right-click a session. Deleting a folder deletes the sessions inside it (you are asked first).
 - **Move**: drag a session or folder onto another folder (or onto a session to drop into its folder; onto empty space for the top level).
-- **Filter**: type in *Filter sessions* to search names, hosts, users and paths.
+- **Filter**: type in *Filter sessions* to search names, hosts, users and paths. When a host, address or name equals what you typed (e.g. `10.127.34.2`), only that session is listed; *N more sessions containing …* shows the partial matches too.
 - **Favourites and Recent**: right-click a session → *Add to Favourites*; favourites (★) and the five most recent sessions are listed at the top of the Session Manager, with when you last connected. Click *Favourites* or *Recent* to fold a section.
 - **Hover card**: rest the pointer on a session to see protocol, user@host:port, jump host, device type, whether the password is saved, asked or comes from the device type, when you last connected and the description.
 - **Select several sessions**: `Cmd`-click (macOS) or `Ctrl`-click adds or removes one, `Shift`-click selects a range. Right-click the selection to **Connect**, **Edit**, add to Favourites or **Delete** them all; drag them onto a folder to move them together.
