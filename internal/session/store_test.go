@@ -248,4 +248,3 @@ func TestSecureCRTLogonKeys(t *testing.T) {
 		}
 	}
 }
-

@@ -13,6 +13,10 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.12
+
+* **Discover devices** (File → Discover Devices…): scan a network or address range, see each device with an icon for its kind (switch, router, firewall, access point, server, computer, phone, printer), its name, vendor and system (SNMP v2c, DNS, SSH greeting), and add the selected ones - or all - as sessions with a matching device type. It never tries to log in.
+
 ## What's new in 0.11.5
 
 * **SFTP follows the terminal's user**: after `sudo su -` in the terminal (also on a host behind a bastion), the SFTP tab opened from it browses as root and opens the terminal's folder (configurable).
@@ -79,7 +83,7 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 * **SecureCRT-style Python scripts**: `.py` logon scripts, Run Script, buttons and key bindings get the familiar `crt` object (`crt.Screen.WaitForString`, `crt.Dialog.Prompt`, `crt.Arguments`, …) and run with your installed Python 3.
 * **Terminal colors**: *Auto* scheme follows the light/dark UI, and one scheme can be applied to all sessions (imported SecureCRT defaults now follow the global scheme).
 
-## Features (v0.10)
+## Features (v0.12)
 
 | Area | What works |
 |---|---|
@@ -89,6 +93,7 @@ It reads and writes the **SecureCRT® session file format**, so you can import a
 | Tunnels & routing | Local / remote / dynamic (SOCKS5) port forwarding, chainable jump hosts, SOCKS5 and HTTP CONNECT proxies, X11 and agent forwarding, auto reconnect |
 | Device types | Login profiles (EXOS, VOSS, Cisco IOS, Linux, custom): login steps for Telnet/Serial, after-login steps for every protocol (`enable`, paging off), own username/password (or none) inherited or overridden per session; used by Quick Connect, the Connect Bar (`voss 10.1.1.1`), sessions and folder defaults |
 | Session Manager | Folder defaults (user, device type, jump host …), workspaces, Quick Open palette, folder tree, filter/search, drag & drop, new/edit/duplicate/rename/delete, connect-all-in-folder, Connect Terminal / Connect SFTP Session, recent sessions |
+| Discovery | Scan a network or range (up to a /22) for SSH/Telnet/web/printer/phone/Windows ports, SNMP v2c name and model, DNS name; icons per device kind; add selected devices as sessions with a guessed device type. Never logs in. |
 | Import / export | Native storage is the SecureCRT `Config/Sessions/*.ini` layout (unknown keys preserved byte-for-byte): import a Config folder, `.zip`, XML export or `.ini` (saved passwords go to the OS keychain); export to folder, `.zip` or XML. Also imports **CSV**, **Ansible** inventories, **NetBox**, **AWS EC2**, **PuTTY / KiTTY** (`.reg`, `~/.putty/sessions`), **MobaXterm** (`.mxtsessions`) and OpenSSH `~/.ssh/config` |
 | Logon automation | Automate logon with an Expect/Send table (hide, trailing CR, named credentials, `\s \w \v \p` escapes), send initial CR, logon scripts with arguments, output triggers |
 | Terminal | Tabs and tiled views (side by side / stacked / grid), xterm-256color/truecolor, Unicode, scrollback search, keyword highlighting, per-session font, Backspace mode, copy-on-select, right-click paste, zoom, clickable links, session lock, Connect Bar |

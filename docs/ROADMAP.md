@@ -121,7 +121,11 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 ## 0.11.5 (done)
 - Folder reporting also reports the shell user (OSC 1337 RemoteHost); SFTP tabs switch to root (sudo) or `sudo su - <user>` to match the terminal; folder reporting is re-sent on every SFTP open so a new `sudo su -` shell reports too; setting `sftpFollowUser`
 
+## 0.12 (done)
+- Discover Devices: address ranges up to a /22, TCP probes (SSH, Telnet, HTTP(S), SMB, RDP, printing, SIP), SSH/Telnet greeting, reverse DNS, SNMP v2c system group (own minimal client), device kind classification with icons, device type guess, add selected as sessions
+
 ## Next ideas
+- [ ] Discovery: SNMP v3, MAC address and vendor for the local subnet (ARP), more ports in an advanced section
 - [ ] Shared team sessions (session folder in a Git repo, pull/push from the app)
 - [ ] Code signing + notarization (needs Apple Developer ID / Windows certificate)
 

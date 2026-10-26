@@ -89,6 +89,12 @@ export interface UpdateInfo {
   assetName: string; assetUrl: string; assetSize: number;
 }
 
+/** A device found by File → Discover Devices. */
+export interface DiscoverResult {
+  ip: string; name: string; dns: string; sysName: string; sysDescr: string; sysObjectId: string; services: string[];
+  banner: string; kind: string; vendor: string; os: string; protocol: string; port: number;
+}
+
 /** Newest stable release and newest nightly build (null when none is published). */
 export interface UpdateStatus {
   current: string; runningNightly: boolean;
@@ -151,7 +157,7 @@ export interface Transfer {
 
 /** Actions that menus, key bindings and buttons can trigger. */
 export const ACTIONS: Record<string, string> = {
-  'quick-connect': 'Quick Connect', 'local-shell': 'Local Shell', reconnect: 'Reconnect', disconnect: 'Disconnect',
+  'quick-connect': 'Quick Connect', discover: 'Discover Devices...', 'local-shell': 'Local Shell', reconnect: 'Reconnect', disconnect: 'Disconnect',
   'clone-tab': 'Clone Session', 'close-tab': 'Close Tab', 'next-tab': 'Next Tab', 'prev-tab': 'Previous Tab',
   copy: 'Copy', paste: 'Paste', 'copy-paste': 'Copy and Paste', find: 'Find', 'clear-scrollback': 'Clear Scrollback',
   'clear-screen': 'Clear Screen', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback',

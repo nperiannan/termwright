@@ -17,6 +17,7 @@ import { PromptDialog } from './dialogs/prompt-dialog';
 import { OptionsDialog } from './dialogs/options-dialog';
 import { PasswordsDialog } from './dialogs/passwords-dialog';
 import { UpdateDialog } from './dialogs/update-dialog';
+import { DiscoverDialog } from './dialogs/discover-dialog';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
 import { Palette } from './dialogs/palette';
 import { Commands, sendSnippet } from './dialogs/commands';
@@ -28,7 +29,7 @@ import { About, Overlays } from './dialogs/overlays';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, Overlays, About],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, Overlays, About],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -147,6 +148,7 @@ export class App implements OnInit {
       case 'log-toggle': await this.tabs.toggleLog(); break;
       case 'save-scrollback': await this.tabs.saveScrollback(); break;
       case 'import': this.ui.open('import'); break;
+      case 'discover': this.ui.open('discover'); break;
       case 'export': this.ui.open('export'); break;
       case 'copy': if (!this.editInput('copy')) await this.tabs.copy(); break;
       case 'cut': this.editInput('cut'); break;
