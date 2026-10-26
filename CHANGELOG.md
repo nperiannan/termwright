@@ -4,7 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-* New start page: the Termwright wordmark with a `>_` prompt and the protocols it speaks, and a **Discover Devices** button next to Import Sessions.
+* Start page: the Termwright title is semi-bold, and a **Discover Devices** button sits next to Import Sessions.
 
 ## 0.19.0 (2026-10-27)
 
