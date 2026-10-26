@@ -35,6 +35,8 @@ export class Ui {
   readonly bulkPaths = signal<string[]>([]);
   /** Sessions the Configuration Backups window backs up right away (from the Session Manager); null = just open it. */
   readonly backupTargets = signal<string[] | null>(null);
+  /** Sessions or folders the Change Checklists window starts with (from the Session Manager). */
+  readonly checklistTargets = signal<string[] | null>(null);
   /** Text the Command Window should take (from Command History). */
   readonly cwInsert = signal<string | null>(null);
   /** Page Global Options opens on (set before opening it). */

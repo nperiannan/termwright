@@ -194,6 +194,14 @@ export class Checklists implements OnDestroy {
   });
 
   constructor() {
+    // opened from the Session Manager: the checklist of exactly these devices, or a new one
+    const want = this.ui.checklistTargets();
+    this.ui.checklistTargets.set(null);
+    if (want?.length) {
+      const key = JSON.stringify([...want].sort());
+      const same = this.lists().find(c => JSON.stringify([...c.targets].sort()) === key);
+      if (same) this.sel.set(same.name); else this.addList(want);
+    }
     this.backend.checklistDir().then(d => this.dir.set(d)).catch(() => {});
     void this.loadRuns();
     this.unsub.push(
@@ -254,7 +262,7 @@ export class Checklists implements OnDestroy {
     return `${ch} changed · ${same} the same` + (failed ? ` · ${failed} failed` : '');
   }
 
-  addList() {
+  addList(targets?: string[]) {
     let name = 'Checklist', i = 1;
     while (this.lists().some(c => c.name === name)) name = 'Checklist ' + ++i;
     const dts = this.deviceTypes();
@@ -264,7 +272,7 @@ export class Checklists implements OnDestroy {
       'cisco ios': 'show ip interface brief\nshow vlan brief\nshow ip route summary',
     };
     const commands = dts.filter(d => defaults[d.toLowerCase()]).map(d => ({ deviceType: d, commands: defaults[d.toLowerCase()] }));
-    this.lists.update(l => [...l, { name, targets: this.treeSelection(), commands: commands.length ? commands : [{ deviceType: '', commands: '' }] }]);
+    this.lists.update(l => [...l, { name, targets: targets ?? this.treeSelection(), commands: commands.length ? commands : [{ deviceType: '', commands: '' }] }]);
     this.sel.set(name);
     this.runs.set([]);
     this.runId.set('');

@@ -425,7 +425,7 @@ File → **Configuration Backups…** keeps dated copies of the configuration of
 
 ### Change checklists
 
-File → **Change Checklists…** runs the same show commands on a set of devices **before and after a change** and tells you which devices changed.
+File → **Change Checklists…** (or right-click a session, folder or selection in the Session Manager → **Change Checklist…**, or Quick Open → *checklist*) runs the same show commands on a set of devices **before and after a change** and tells you which devices changed.
 
 1. **+ New checklist**: a name, the **devices** (folders or sessions, *Add Selected* takes the Session Manager selection) and the **commands per device type** - e.g. VOSS `show isis adjacency`, `show vlan basic`, EXOS `show vlan`, `show ports no-refresh`; *Any other device* covers the rest. New checklists start with suggestions for the built-in device types.
 
