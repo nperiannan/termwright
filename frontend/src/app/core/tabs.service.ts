@@ -2,10 +2,12 @@ import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
+import type { SerializeAddon } from '@xterm/addon-serialize';
 import { Backend, SftpMode } from './backend';
 import { AlertEvent, RemoteInfo, Session, TabInfo, Transfer, isRemoteDesktop, unescape } from './models';
 import { Ui } from './ui.service';
 import { envOf } from './env';
+import { HtmlKeyword, bufferHtml } from './buffer-html';
 
 export interface TabView {
   id: string;
@@ -51,7 +53,7 @@ export interface TabView {
 export type Layout = 'tabs' | 'tile-v' | 'tile-h' | 'grid';
 export type SendTarget = 'active' | 'all' | 'selected' | boolean;
 
-export interface TermHandle { term: Terminal; fit: FitAddon; search: SearchAddon; }
+export interface TermHandle { term: Terminal; fit: FitAddon; search: SearchAddon; serialize?: SerializeAddon; keywords?: () => HtmlKeyword[]; }
 
 /** Owns the list of open terminal tabs and routes actions to them. */
 @Injectable({ providedIn: 'root' })
@@ -700,22 +702,32 @@ export class Tabs {
   }
 
   /** Writes the full scrollback buffer of the active tab to a text file. */
-  async saveScrollback(id = this.activeId()) {
+  /** Saves the scrollback as plain text, or as an HTML page with the colors as shown. */
+  async saveScrollback(id = this.activeId(), format: 'text' | 'html' = 'text') {
     const h = this.handles.get(id);
     const t = this.get(id);
     if (!h || !t) return;
-    const buf = h.term.buffer.active;
-    const lines: string[] = [];
-    for (let i = 0; i < buf.length; i++) lines.push(buf.getLine(i)?.translateToString(true) ?? '');
-    while (lines.length && lines[lines.length - 1] === '') lines.pop();
+    const base = (t.title || 'scrollback').replace(/[\\/:*?"<>|]/g, '_');
     try {
-      const name = (t.title || 'scrollback').replace(/[\\/:*?"<>|]/g, '_') + '.txt';
-      const path = await this.backend.chooseSaveFile('Save Scrollback As', name, [{ displayName: 'Text', pattern: '*.txt;*.log' }]);
+      if (format === 'html') {
+        const path = await this.backend.chooseSaveFile('Save Scrollback As HTML', base + '.html', [{ displayName: 'HTML', pattern: '*.html;*.htm' }]);
+        if (!path) return;
+        const icon = await fetch('icon.svg').then(r => r.ok ? r.text() : '').catch(() => '');
+        await this.backend.saveTextFile(path, scrollbackHtml(h, t, icon));
+        this.ui.toast(`Saved ${path}`, 'success');
+        return;
+      }
+      const buf = h.term.buffer.active;
+      const lines: string[] = [];
+      for (let i = 0; i < buf.length; i++) lines.push(buf.getLine(i)?.translateToString(true) ?? '');
+      while (lines.length && lines[lines.length - 1] === '') lines.pop();
+      const path = await this.backend.chooseSaveFile('Save Scrollback As', base + '.txt', [{ displayName: 'Text', pattern: '*.txt;*.log' }]);
       if (!path) return;
       await this.backend.saveTextFile(path, lines.join('\n') + '\n');
       this.ui.toast(`Saved ${lines.length} lines to ${path}`, 'success');
     } catch (e) { this.ui.error(e); }
   }
+
 
   private beepCtx?: AudioContext;
 
@@ -735,4 +747,66 @@ export class Tabs {
     }
     if (a.desktop && !visible) void this.backend.notify('Termwright - ' + a.title, a.line).catch(() => {});
   }
+}
+
+/** UTF-8 text as base64 (for data: URLs). */
+function toBase64(text: string): string {
+  let bin = '';
+  for (const b of new TextEncoder().encode(text)) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+const esc = (v: string) => v.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+
+/** A self-contained HTML page of a tab's scrollback: a Termwright header with
+ *  the logo, the device (name, address, protocol, device type, user, folder)
+ *  and when it was saved, then the output with its colors and highlighting. */
+export function scrollbackHtml(h: TermHandle, t: TabView, iconSvg = ''): string {
+  const term = h.term;
+  const bg = String(term.options.theme?.background ?? '#1e1f22');
+  const fg = String(term.options.theme?.foreground ?? '#d4d4d4');
+  const font = String(term.options.fontFamily ?? 'monospace');
+  const { html: body, lines } = bufferHtml(term, h.keywords?.() ?? []);
+  const s = t.session;
+  const proto = s.protocol ?? '';
+  const address = proto === 'Serial' ? `${s.comPort || '-'} at ${s.baudRate || 9600} baud`
+    : proto === 'Local Shell' ? 'this computer'
+    : `${s.hostname || '-'}${s.port ? ':' + s.port : ''}${t.hopTarget ? ' → ' + t.hopTarget : ''}`;
+  const now = new Date();
+  const date = now.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+  const time = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' });
+  const rows: [string, string][] = [
+    ['Session', s.path || t.title], ['Address', address], ['Protocol', proto],
+    ['Device type', s.deviceType || ''], ['User', t.shellUser || s.username || ''],
+    ['Connection', t.info || ''], ['Saved', `${date}, ${time}`], ['Lines', String(lines)],
+  ];
+  const logo = iconSvg ? `<img class="logo" alt="" src="data:image/svg+xml;base64,${toBase64(iconSvg)}">` : '';
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Termwright">
+<title>${esc(t.title)} - ${esc(date)} ${esc(time)} - Termwright</title>
+<style>
+  body { margin: 0; background: ${esc(bg)}; color: ${esc(fg)}; }
+  header { padding: 14px 20px 12px; background: #f6f7f9; color: #1f2328; border-bottom: 1px solid #d0d7de;
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .brand .logo { width: 34px; height: 34px; }
+  .brand .name { font-size: 19px; font-weight: 600; letter-spacing: .06em; }
+  .brand .what { margin-left: auto; color: #59636e; font-size: 12px; }
+  dl { display: grid; grid-template-columns: max-content 1fr max-content 1fr; gap: 3px 14px; margin: 0; }
+  dt { color: #59636e; } dd { margin: 0; font-weight: 500; word-break: break-word; }
+  dd.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
+  main { padding: 10px 20px 16px; overflow-x: auto; }
+  main pre { margin: 0; font-family: ${esc(font)}; font-size: 13px; line-height: 1.35; }
+  @media (max-width: 700px) { dl { grid-template-columns: max-content 1fr; } }
+  @media print { main { white-space: pre-wrap; } }
+</style></head>
+<body>
+<header>
+  <div class="brand">${logo}<span class="name">Termwright</span><span class="what">Terminal output</span></div>
+  <dl>${rows.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd${k === 'Address' || k === 'Connection' ? ' class="mono"' : ''}>${esc(v)}</dd>`).join('')}</dl>
+</header>
+<main>${body}</main>
+</body></html>
+`;
 }

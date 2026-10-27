@@ -171,6 +171,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 - **Session logs**: plain text or raw, append, start on connect, file name tokens (`%H %S %Y%M%D…`), per-line timestamp prefix.
 - **Save Scrollback / Save Selection** to a file.
+- **Save Scrollback As HTML**: a report page with the Termwright logo, session, address, protocol, device type, user, date and time, and the output with colors and keyword highlighting.
 - **Session recording**: what the device showed with its timing, per tab, session, folder or all sessions; asciinema `.cast` files.
 - **Markers** (`Mod+J`) with a note at any point of a recording.
 - **Player tab**: play / pause, speed 0.5×-8×, seek, skip idle time, markers, find text, export as plain text.

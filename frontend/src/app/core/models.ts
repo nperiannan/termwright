@@ -210,7 +210,7 @@ export const ACTIONS: Record<string, string> = {
   'quick-connect': 'Quick Connect', collect: 'Run and Collect...', discover: 'Discover Devices...', backups: 'Configuration Backups...', checklists: 'Change Checklists...', history: 'Command History...', 'local-shell': 'Local Shell', reconnect: 'Reconnect', disconnect: 'Disconnect',
   'clone-tab': 'Clone Session', 'close-tab': 'Close Tab', 'next-tab': 'Next Tab', 'prev-tab': 'Previous Tab',
   copy: 'Copy', paste: 'Paste', 'copy-paste': 'Copy and Paste', find: 'Find', 'clear-scrollback': 'Clear Scrollback',
-  'clear-screen': 'Clear Screen', 'toggle-autoscroll': 'Auto Scroll On / Off', 'toggle-timestamps': 'Timestamps On / Off', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback',
+  'clear-screen': 'Clear Screen', 'toggle-autoscroll': 'Auto Scroll On / Off', 'toggle-timestamps': 'Timestamps On / Off', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback', 'save-scrollback-html': 'Save Scrollback As HTML',
   'toggle-session-manager': 'Toggle Session Manager', 'toggle-session-manager-side': 'Move Session Manager Left / Right', 'toggle-command-window': 'Toggle Command Window',
   'toggle-button-bar': 'Toggle Button Bar', 'sftp-tab': 'Open SFTP Tab', 'run-script': 'Run Script...',
   'record-toggle': 'Start/Stop Script Recording', 'cast-toggle': 'Start/Stop Session Recording', 'cast-marker': 'Add Marker to Recording', recordings: 'Recordings...', 'cancel-scripts': 'Cancel Scripts', lock: 'Lock Session',

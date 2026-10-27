@@ -242,7 +242,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     (this.host().nativeElement.parentElement as HTMLElement).style.setProperty('--term-bg', String(theme.background));
     this.term = term;
     this.fit = fit;
-    this.tabs.handles.set(tab.id, { term, fit, search });
+    this.tabs.handles.set(tab.id, { term, fit, search, serialize: this.serialize, keywords: () => this.keywords });
 
     const id = tab.id;
     // Working directory reported by the shell: OSC 7 (file://host/path),
@@ -428,6 +428,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       { label: 'Paste', action: () => void this.tabs.paste(id) },
       { label: 'Select All', action: () => t?.selectAll() },
       { label: 'Copy as HTML (with colors)', action: () => void this.copyHtml(), disabled: !t?.hasSelection() },
+      { label: 'Save Scrollback As HTML...', action: () => void this.tabs.saveScrollback(id, 'html') },
       { separator: true },
       { label: (this.tabs.get(id)?.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.setTimestamps(!this.tabs.get(id)?.timestamps) },
       { label: (this.tabs.get(id)?.autoScroll !== false ? '✓ ' : '') + 'Auto Scroll', action: () => this.setAutoScroll(this.tabs.get(id)?.autoScroll === false) },

@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.20.2 (2026-10-27)
+
+* **Save Scrollback As HTML** (File menu, right-click the terminal or a tab): the scrollback as a web page with the Termwright logo, the session, address, protocol, device type, user, connection and the date and time it was saved, then the output with its colors and keyword highlighting as shown in the tab - to open in a browser, attach to a ticket or print to PDF.
+
 ## 0.20.1 (2026-10-27)
 
 * **Discover Devices finds the same devices every time**: on macOS a scan could run out of sockets (apps start with a limit of 256) and then miss the ports, SNMP and names of many devices; the limit is raised and the scan stays within it. Devices are woken before the checks (their MAC address is looked up first), devices that are there but showed no login port are checked a second time more slowly, and checks wait and retry when the computer is short of sockets. "stopped" was shown after every scan; it now shows only when Stop was pressed.

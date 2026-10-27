@@ -10,7 +10,7 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Reconnect', action: 'reconnect', keys: k('R') }, { label: 'Disconnect', action: 'disconnect' },
       { label: 'Clone Session', action: 'clone-tab' }, { sep: true },
       { label: 'Workspaces...', action: 'workspaces' }, { label: 'Save Workspace...', action: 'save-workspace' }, { sep: true },
-      { label: 'Log Session...', action: 'log-toggle' }, { label: 'Record Session', action: 'cast-toggle' }, { label: 'Add Marker to Recording...', action: 'cast-marker', keys: k('J') }, { label: 'Recordings...', action: 'recordings' }, { label: 'Save Scrollback As...', action: 'save-scrollback', keys: k('S') },
+      { label: 'Log Session...', action: 'log-toggle' }, { label: 'Record Session', action: 'cast-toggle' }, { label: 'Add Marker to Recording...', action: 'cast-marker', keys: k('J') }, { label: 'Recordings...', action: 'recordings' }, { label: 'Save Scrollback As...', action: 'save-scrollback', keys: k('S') }, { label: 'Save Scrollback As HTML...', action: 'save-scrollback-html' },
       { label: 'Save Selection As...', action: 'save-selection' }, { sep: true },
       { label: 'Import Sessions...', action: 'import' }, { label: 'Discover Devices...', action: 'discover' }, { label: 'Configuration Backups...', action: 'backups' }, { label: 'Change Checklists...', action: 'checklists' }, { label: 'Run and Collect...', action: 'collect' }, { label: 'Export Sessions...', action: 'export' }, { sep: true },
       { label: 'Close Tab', action: 'close-tab', keys: k('W') },

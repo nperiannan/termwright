@@ -468,6 +468,10 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 
 ![Terminal menu with Copy as HTML](screenshots/term-menu.png)
 
+**HTML report of a session**: File → **Save Scrollback As HTML…** (also right-click the terminal or a tab) saves the whole scrollback as one web page: a header with the Termwright logo, the session, its address, protocol, device type, user, the connection details, the date and time it was saved and the number of lines, then the output with its colors, bold text and **keyword highlighting** exactly as in the tab. Open it in any browser, attach it to a ticket or e-mail, or print it to PDF. *Save Scrollback As…* still saves plain text. For a long session turn on a session log as well: the scrollback keeps the last 10,000 lines (Session Options → Terminal → *Scrollback lines*).
+
+![HTML report saved from a tab](screenshots/scrollback-html.png)
+
 ## 8. Logging and capturing output
 
 - **Start/stop a log**: toolbar *Log*, File → Log Session…, or the tab menu. The tab shows a `LOG` badge.

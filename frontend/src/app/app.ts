@@ -160,6 +160,7 @@ export class App implements OnInit {
       case 'close-tab': await this.tabs.close(); break;
       case 'log-toggle': await this.tabs.toggleLog(); break;
       case 'save-scrollback': await this.tabs.saveScrollback(); break;
+      case 'save-scrollback-html': await this.tabs.saveScrollback(undefined, 'html'); break;
       case 'import': this.ui.open('import'); break;
       case 'discover': this.ui.open('discover'); break;
       case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
@@ -392,6 +393,7 @@ export class App implements OnInit {
         ...(t.castFile ? [{ label: 'Add Marker...', hint: this.isMac ? '⌘J' : 'Ctrl+Shift+J', action: () => this.tabs.addMarker(t.id) }] : []),
       ] : []),
       { label: 'Save Scrollback As...', action: () => this.tabs.saveScrollback(t.id) },
+      ...(t.kind === 'terminal' ? [{ label: 'Save Scrollback As HTML...', action: () => this.tabs.saveScrollback(t.id, 'html') }] : []),
       ...(t.kind === 'terminal' ? [{ label: 'Compare With...', action: () => this.compareMenu(ev, t) }] : []),
       ...(t.kind === 'terminal' ? [
         { label: (t.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.tabs.patch(t.id, { timestamps: !t.timestamps }) },

@@ -115,6 +115,7 @@ func buildMenu(app *App) *menu.Menu {
 	file.AddText("Add Marker to Recording...", acc("j"), emit("cast-marker"))
 	file.AddText("Recordings...", nil, emit("recordings"))
 	file.AddText("Save Scrollback As...", acc("s"), emit("save-scrollback"))
+	file.AddText("Save Scrollback As HTML...", nil, emit("save-scrollback-html"))
 	file.AddText("Save Selection As...", nil, emit("save-selection"))
 	file.AddSeparator()
 	file.AddText("Import Sessions...", nil, emit("import"))
