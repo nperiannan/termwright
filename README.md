@@ -13,6 +13,11 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [All features](docs/FEATURES.md) · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.20.0
+
+* **Serial consoles**: ports listed in order with the adapter's name and updated when a cable is plugged in, **Detect Speed**, and a send bar with line ending, timestamps, auto scroll and clear.
+* **Clear Screen, Timestamps and Auto scroll** for every connection; Discover Devices takes `192.168.1.0` for its /24.
+
 ## What's new in 0.19.0
 
 * **Export to other programs**: PuTTY, KiTTY, MobaXterm, Tabby, OpenSSH config and CSV - next to the SecureCRT formats - with a summary of what each format cannot hold. Your sessions are never locked in.
@@ -21,18 +26,13 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 * **Devices with a new address (DHCP)**: sessions remember the device's MAC address. Discover Devices finds saved devices at new addresses and updates the sessions, a connection stops when another device answers at the saved address, and *Find by MAC Address* finds the device again - checked with its SSH host key.
 
-## What's new in 0.17.0
-
-* **Session recording and playback**: record a tab (or every connection) with its timing, add markers, replay it in a player tab with speed, seek, markers and text search; asciinema `.cast` files.
-* **Smart cards**: SSH keys on PIV / CAC cards, YubiKey and other PKCS#11 tokens; the PIN is asked once and kept in memory only.
-
 Older releases: see the **[changelog](CHANGELOG.md)**.
 
 ## Features (v0.12)
 
 | Area | What works |
 |---|---|
-| Protocols | SSH2, Telnet (NAWS/TTYPE/ECHO/SGA negotiation), Serial (COM / tty, RTS/CTS and XON/XOFF flow control, DTR/RTS, break), Local shell (PTY on macOS/Linux, ConPTY on Windows), Raw TCP |
+| Protocols | SSH2, Telnet (NAWS/TTYPE/ECHO/SGA negotiation), Serial (ports listed with the adapter name and updated on plug-in, Detect Speed, send bar, RTS/CTS and XON/XOFF flow control, DTR/RTS, break), Local shell (PTY on macOS/Linux, ConPTY on Windows), Raw TCP |
 | SSH2 | Password, keyboard-interactive, public key (identity file, encrypted keys, **PuTTY `.ppk`** keys, `~/.ssh/id_*`), **SSH certificates**, **FIDO2 security keys**, **Kerberos / GSSAPI**, SSH agent, known_hosts verification with new/changed-key prompts, keep-alive, **remote command** (e.g. `ssh -t` from a jump station to a cloud host) |
 | Key login setup | Generate (Ed25519 / RSA 4096 / ECDSA) or reuse a key, install it on Linux, macOS, BSD or **Windows OpenSSH** servers (incl. `administrators_authorized_keys`), test a key-only login and switch the session to it |
 | Tunnels & routing | Local / remote / dynamic (SOCKS5) port forwarding, chainable jump hosts, SOCKS5 and HTTP CONNECT proxies, X11 and agent forwarding, auto reconnect |
@@ -77,6 +77,7 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 | ![Command Window suggestions](docs/screenshots/autocomplete.png) <br/>*Suggestions from history and the Command Library* | ![RDP tab](docs/screenshots/rdp.png) <br/>*RDP session through a jump host* |
 | ![Configuration backups](docs/screenshots/backups.png) <br/>*Configuration backups with results per device* | ![VNC viewer](docs/screenshots/vnc.png) <br/>*VNC viewer tab* |
 | ![Session Manager](docs/screenshots/session-manager.png) <br/>*Favourites, recent sessions, environments, reachability and the hover card* | ![Edit Sessions](docs/screenshots/bulk-edit.png) <br/>*Edit many sessions at once* |
+| ![Serial console](docs/screenshots/serial-tab.png) <br/>*Serial console: send bar, timestamps, auto scroll off* | ![Serial port and speed](docs/screenshots/serial.png) <br/>*Serial ports with the adapter name, Detect Speed* |
 
 The roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md).
 

@@ -1,14 +1,15 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
-import { Backend } from '../core/backend';
+import { Backend, errText } from '../core/backend';
 import { BAUD_RATES, PROTOCOLS, defaultPort } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { SerialPortPicker } from '../components/serial-port-picker';
 
 @Component({
   selector: 'app-quick-connect',
-  imports: [FormsModule, Autofocus],
+  imports: [FormsModule, Autofocus, SerialPortPicker],
   template: `
   <div class="modal-backdrop">
     <form class="modal" (ngSubmit)="connect()" autocomplete="off">
@@ -26,12 +27,16 @@ import { Ui } from '../core/ui.service';
           </select>
           @if (protocol === 'Serial') {
             <label>Port</label>
-            <div class="row">
-              <input name="com" [(ngModel)]="comPort" list="qcPorts" required placeholder="COM1 or /dev/ttyUSB0" />
-              <datalist id="qcPorts">@for (p of ports(); track p) { <option [value]="p"></option> }</datalist>
-            </div>
+            <app-serial-port-picker [(value)]="comPort" />
             <label>Baud rate</label>
-            <select name="baud" [(ngModel)]="baud">@for (b of bauds; track b) { <option [ngValue]="b">{{ b }}</option> }</select>
+            <div>
+              <div class="row">
+                <select name="baud" [(ngModel)]="baud" [disabled]="autoBaud">@for (b of bauds; track b) { <option [ngValue]="b">{{ b }}</option> }</select>
+                <button type="button" (click)="detectBaud()" [disabled]="!comPort || detecting()">{{ detecting() ? 'Detecting…' : 'Detect Speed' }}</button>
+              </div>
+              <div class="checks" style="margin-top: 6px"><label><input type="checkbox" name="autobaud" [(ngModel)]="autoBaud" /> Detect the speed when connecting</label></div>
+              @if (baudMsg()) { <div class="hint">{{ baudMsg() }}</div> }
+            </div>
           } @else if (protocol !== 'Local Shell') {
             <label>Hostname</label><input name="host" [(ngModel)]="host" required appAutofocus placeholder="host, user@host or host:port" />
             <label>Port</label><input name="port" type="number" class="short" [(ngModel)]="port" />
@@ -74,7 +79,9 @@ export class QuickConnect {
   private tabs = inject(Tabs);
   readonly protocols = PROTOCOLS;
   readonly bauds = BAUD_RATES;
-  readonly ports = signal<string[]>([]);
+  readonly detecting = signal(false);
+  readonly baudMsg = signal('');
+  autoBaud = false;
   protocol = 'SSH2';
   host = '';
   port = 22;
@@ -118,7 +125,19 @@ export class QuickConnect {
 
   onProto() {
     this.port = defaultPort(this.protocol) || this.port;
-    if (this.protocol === 'Serial') this.backend.listSerialPorts().then(p => this.ports.set(p)).catch(() => {});
+  }
+
+  async detectBaud() {
+    if (!this.comPort) return;
+    this.detecting.set(true); this.baudMsg.set('');
+    try {
+      const s = await this.backend.newSessionDefaults();
+      Object.assign(s, { protocol: 'Serial', comPort: this.comPort, baudRate: this.baud });
+      const r = await this.backend.detectSerialBaud(s);
+      if (r.baud) { this.baud = r.baud; this.baudMsg.set(`The device answers at ${r.baud} baud.`); }
+      else this.baudMsg.set('No readable answer at ' + r.tried.map(t => t.baud).join(', ') + ' baud. Check the cable and that the port is not open in a tab.');
+    } catch (e) { this.baudMsg.set(errText(e)); }
+    finally { this.detecting.set(false); }
   }
 
   async connect() {
@@ -133,7 +152,7 @@ export class QuickConnect {
     try {
       const s = await this.backend.newSessionDefaults();
       Object.assign(s, {
-        protocol: this.protocol, hostname: host, port, username: user, comPort: this.comPort, baudRate: this.baud,
+        protocol: this.protocol, hostname: host, port, username: user, comPort: this.comPort, baudRate: this.baud, serialAutoBaud: this.autoBaud,
         logonActions: [], description: [], deviceType: this.device,
         ownLogin: !!this.device && (!this.inherit || at > 0),
       });

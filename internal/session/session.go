@@ -74,36 +74,39 @@ const (
 	// SecureCRT 9.x logon keys (verified against a real 9.x session file).
 	// "Login Script V4" (the Expect/Send table) is stored encrypted by SecureCRT
 	// and is kept untouched; Termwright keeps its own table in kLogon.
-	kUseLogin    = "Use Login Script"
-	kInitialCR   = "Send Initial Carriage Return"
-	kUseScript   = "Use Script File"
-	kScriptFile  = "Script Filename V2"
-	kLogonArgs   = "Script Arguments"
-	kUseShellCmd = "Use Shell Command"
-	kShellCmd    = "Shell Command"
-	kOpenAs      = "Termwright Open As"
-	kDevice      = "Termwright Device Type"
-	kOwnLogin    = "Termwright Own Login"
-	kEnv         = "Termwright Environment"
-	kRDPDomain   = "Termwright RDP Domain"
-	kRDPFull     = "Termwright RDP Full Screen"
-	kRDPSize     = "Termwright RDP Size"
-	kVNCViewOnly = "Termwright VNC View Only"
-	kConServer   = "Termwright Console Server"
-	kConPort     = "Termwright Console Port"
-	kConMethod   = "Termwright Console Access"
-	kConUser     = "Termwright Console User"
-	kConBase     = "Termwright Console Base Port"
-	kConProto    = "Termwright Console Protocol"
-	kSFTPTarget  = "Termwright SFTP To Command Target"
-	kKrbPrinc    = "Termwright Kerberos Principal"
-	kKrbSPN      = "Termwright Kerberos SPN"
-	kCertFile    = "Termwright Certificate File"
-	kSmartCard   = "Termwright Smart Card"
-	kMAC         = "Termwright MAC Address"
-	kSerialNoDTR = "Termwright Serial No DTR"
-	kSerialNoRTS = "Termwright Serial No RTS"
-	kSerialFlow  = "Termwright Serial Flow"
+	kUseLogin     = "Use Login Script"
+	kInitialCR    = "Send Initial Carriage Return"
+	kUseScript    = "Use Script File"
+	kScriptFile   = "Script Filename V2"
+	kLogonArgs    = "Script Arguments"
+	kUseShellCmd  = "Use Shell Command"
+	kShellCmd     = "Shell Command"
+	kOpenAs       = "Termwright Open As"
+	kDevice       = "Termwright Device Type"
+	kOwnLogin     = "Termwright Own Login"
+	kEnv          = "Termwright Environment"
+	kRDPDomain    = "Termwright RDP Domain"
+	kRDPFull      = "Termwright RDP Full Screen"
+	kRDPSize      = "Termwright RDP Size"
+	kVNCViewOnly  = "Termwright VNC View Only"
+	kConServer    = "Termwright Console Server"
+	kConPort      = "Termwright Console Port"
+	kConMethod    = "Termwright Console Access"
+	kConUser      = "Termwright Console User"
+	kConBase      = "Termwright Console Base Port"
+	kConProto     = "Termwright Console Protocol"
+	kSFTPTarget   = "Termwright SFTP To Command Target"
+	kKrbPrinc     = "Termwright Kerberos Principal"
+	kKrbSPN       = "Termwright Kerberos SPN"
+	kCertFile     = "Termwright Certificate File"
+	kSmartCard    = "Termwright Smart Card"
+	kMAC          = "Termwright MAC Address"
+	kSerialNoDTR  = "Termwright Serial No DTR"
+	kSerialNoRTS  = "Termwright Serial No RTS"
+	kSerialFlow   = "Termwright Serial Flow"
+	kSerialAuto   = "Termwright Serial Detect Speed"
+	kTimestamps   = "Termwright Show Timestamps"
+	kNoAutoScroll = "Termwright No Auto Scroll"
 )
 
 // PortForward is an SSH tunnel definition.
@@ -218,6 +221,9 @@ type Session struct {
 	SerialDTR         bool   `json:"serialDtr"`         // assert DTR when opening the port
 	SerialRTS         bool   `json:"serialRts"`         // assert RTS when opening the port
 	SerialFlow        string `json:"serialFlow"`        // "" none | rtscts | xonxoff
+	SerialAutoBaud    bool   `json:"serialAutoBaud"`    // detect the speed when connecting
+	Timestamps        bool   `json:"timestamps"`        // local time at the start of each line (display only)
+	NoAutoScroll      bool   `json:"noAutoScroll"`      // keep the view still while output arrives
 }
 
 // Defaults returns a new session with sensible default values.
@@ -379,6 +385,9 @@ func FromFile(path string, f *securecrt.File) Session {
 	s.SerialDTR = !f.Bool(kSerialNoDTR, false)
 	s.SerialRTS = !f.Bool(kSerialNoRTS, false)
 	s.SerialFlow = f.Str(kSerialFlow, "")
+	s.SerialAutoBaud = f.Bool(kSerialAuto, false)
+	s.Timestamps = f.Bool(kTimestamps, false)
+	s.NoAutoScroll = f.Bool(kNoAutoScroll, false)
 	return s
 }
 
@@ -643,6 +652,9 @@ func (s Session) Apply(f *securecrt.File) {
 	setOptBool(f, kSerialNoDTR, !s.SerialDTR)
 	setOptBool(f, kSerialNoRTS, !s.SerialRTS)
 	setOptStr(f, kSerialFlow, s.SerialFlow)
+	setOptBool(f, kSerialAuto, s.SerialAutoBaud)
+	setOptBool(f, kTimestamps, s.Timestamps)
+	setOptBool(f, kNoAutoScroll, s.NoAutoScroll)
 }
 
 func setOptStr(f *securecrt.File, k, v string) {

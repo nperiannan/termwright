@@ -1,4 +1,4 @@
-import { Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Backend } from '../core/backend';
@@ -144,6 +144,9 @@ interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string
     }
   `,
   styleUrl: './session-tree.scss',
+  // Only re-rendered when its signals change: typing elsewhere (Command Window,
+  // dialogs) does not walk a large tree on every key.
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SessionTree implements OnDestroy {
   protected ui = inject(Ui);
@@ -196,7 +199,10 @@ export class SessionTree implements OnDestroy {
     });
   }
 
-  ngOnDestroy() { clearInterval(this.reachTimer); clearTimeout(this.hoverTimer); }
+  /** Ticks every minute so "12 minutes ago" stays current. */
+  private readonly minute = signal(0);
+  private minuteTimer = setInterval(() => this.minute.update(n => n + 1), 60000);
+  ngOnDestroy() { clearInterval(this.reachTimer); clearInterval(this.minuteTimer); clearTimeout(this.hoverTimer); }
 
   /** TCP check of every session that connects directly (not through a jump host or proxy). */
   async checkNow() {
@@ -233,7 +239,7 @@ export class SessionTree implements OnDestroy {
     this.ui.patchSettings({ favorites: next });
   }
 
-  lastAgo(p: string) { return ago(this.ui.settings()?.lastConnected?.[p]); }
+  lastAgo(p: string) { this.minute(); return ago(this.ui.settings()?.lastConnected?.[p]); }
 
   private loadSections(): Set<string> {
     try { return new Set(JSON.parse(localStorage.getItem(SECTIONS_KEY) ?? '[]')); } catch { return new Set(); }

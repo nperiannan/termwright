@@ -140,6 +140,9 @@ func buildMenu(app *App) *menu.Menu {
 	edit.AddText("Clear Scrollback", nil, emit("clear-scrollback"))
 	edit.AddText("Clear Screen", nil, emit("clear-screen"))
 	edit.AddText("Reset Terminal", nil, emit("reset"))
+	edit.AddSeparator()
+	edit.AddText("Timestamps On / Off", nil, emit("toggle-timestamps"))
+	edit.AddText("Auto Scroll On / Off", nil, emit("toggle-autoscroll"))
 
 	view := m.AddSubmenu("View")
 	view.AddText("Quick Open...", acc("g"), emit("quick-open"))

@@ -4,6 +4,19 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.20.0 (2026-10-27)
+
+* **Serial consoles**
+  * **Port list** in Session Options and Quick Connect: the ports of this computer in order (`COM2` before `COM10`, `/dev/ttyUSB2` before `/dev/ttyUSB10`, `/dev/cu.*` on macOS) with the USB adapter's name and ID. It updates by itself: a cable plugged in appears as *(new)* and is picked when no port was chosen; *Other port…* types a name.
+  * **Detect Speed**: tries the common baud rates and keeps the one where the device answers with readable text; *Detect the speed each time it connects* does it on every connect.
+  * **Send bar** under serial tabs: message box (Enter sends, ↑/↓ recall) with CR / LF / CR+LF / no line ending, **Timestamps**, **Auto scroll** and **Clear**. Right-click → *Send Bar* shows it on any tab.
+* **Every connection**
+  * **Clear Screen** (new eraser button, right-click the terminal or a tab, Edit menu) empties the screen and the scrollback. *Clear Scrollback* now keeps what is on the screen.
+  * **Timestamps**: local time with milliseconds at the start of each line; per tab, or on by default for a session (Session Options → Terminal → Display). Off by default.
+  * **Auto scroll** on by default; turned off (new arrow button, right-click, Edit menu, or per session) the view stays still while output arrives, with *Turn On* in the corner.
+* **Discover Devices**: an address without a mask such as `192.168.1.0` (or `192.168.1`) scans its /24; the address field is shorter with **Scan** next to it.
+* **Faster typing** in the Command Window (and other text fields) when the Session Manager shows many sessions: deleting with Backspace no longer lags.
+
 ## 0.19.2 (2026-10-27)
 
 * **New app icon**: four tiles for the main features - terminal, remote desktop, device discovery and backups - with file transfer in the middle; on the start page, the About window, the window and taskbar icon and the installers.

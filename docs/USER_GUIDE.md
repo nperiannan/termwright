@@ -292,7 +292,7 @@ Devices cabled to a console server (terminal server) get a session of protocol *
 
 ![Discover Devices - before the first scan](screenshots/discover-start.png)
 
-1. **Addresses**: a network (`10.20.0.0/24`), a range (`10.20.0.10-80` or `10.20.0.10-10.20.1.20`) or single addresses, separated by commas or spaces. Up to 1,024 addresses (a /22) per scan.
+1. **Addresses**: a network (`10.20.0.0/24`, or just `10.20.0.0` for its /24), a range (`10.20.0.10-80` or `10.20.0.10-10.20.1.20`) or single addresses, separated by commas or spaces, then **Scan** next to it (or Enter). Up to 1,024 addresses (a /22) per scan.
 2. **SNMP** (on by default): a read-only SNMP v2c community (`public` is filled in). **Show / Hide** next to it reveals what you typed. The community is used for this scan only and is not saved. Devices that answer report their system name, model and software - the most reliable information. If *no* device answers, a note says so: check the community, that SNMP is enabled, and that the devices' SNMP access list allows your computer.
 3. **Scan**. For every address Termwright collects, in parallel:
    - **Open ports**: SSH (22), Telnet (23), HTTP (80), HTTPS (443), SMB (445), RDP (3389), printing (9100, 631), SIP (5060).
@@ -379,10 +379,10 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 | **SSH2 Authentication** | Auth methods to try (**gssapi / Kerberos**, public key, keyboard-interactive, password), Kerberos principal and service name, identity file, **certificate**, *save password in OS keychain*, **agent forwarding**, **X11 forwarding**, keep-alive interval. |
 | **Port Forwarding** (SSH2) | Local (`-L`), Remote (`-R`) and Dynamic SOCKS5 (`-D`) forwards; see [§11](#11-tunnels-jump-hosts-and-proxies). |
 | **Jump Host / Proxy** | Connect via another saved SSH2 session (chainable) or through a SOCKS5 / HTTP CONNECT proxy. |
-| **Serial** | Port (Scan lists detected ports), baud, data bits, parity, stop bits, **flow control** (none, RTS/CTS, XON/XOFF), assert DTR/RTS on open. |
+| **Serial** | Port (picked from the ports of this computer, see [Serial consoles](#serial-consoles)), baud with **Detect Speed**, data bits, parity, stop bits, **flow control** (none, RTS/CTS, XON/XOFF), assert DTR/RTS on open. |
 | **Local Shell** | Command to run (blank = login shell) and start directory. |
 | **Logon Actions & Triggers** | Automate logon (Expect/Send table with hide, trailing CR and credentials), send initial CR, logon **script** with arguments, SSH2 **remote command**, and triggers that answer prompts at any time; see [§10](#10-automation-logon-actions-triggers-scripts). |
-| **Terminal** | Emulation (Xterm, VT100/102/220, ANSI, Linux), TERM override, scrollback lines, color scheme, font and size, Backspace sends DEL (^?) or BS (^H), keyword set, auto reconnect. |
+| **Terminal** | Emulation (Xterm, VT100/102/220, ANSI, Linux), TERM override, scrollback lines, color scheme, font and size, Backspace sends DEL (^?) or BS (^H), keyword set, auto reconnect, **timestamps** at the start of each line (off by default) and **auto scroll** (on by default). |
 | **Log File** | File name with tokens, start on connect, append, raw log, per-line prefix; see [§8](#8-logging-and-capturing-output). |
 
 *Save & Connect* saves and opens a tab. Changes to an open session apply on the next (re)connect.
@@ -391,12 +391,22 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 |---|---|
 | ![Serial page](screenshots/serial.png) | ![Terminal page](screenshots/session-terminal.png) |
 
+### Serial consoles
+
+- **Port**: the list shows the serial ports of this computer in order - `COM1, COM2 … COM10` on Windows, `/dev/ttyACM0, /dev/ttyUSB0, /dev/ttyUSB1 …` on Linux, `/dev/cu.*` on macOS - with the adapter's name and USB ID when the system reports them (e.g. *FT232R USB UART (0403:6001)*). The list **updates by itself** about every second and a half: plug in a console cable and its port appears, marked *(new)*, and is picked when no port was chosen yet. A saved port that is not plugged in shows as *(not connected)*. *Other port…* types a name by hand. Quick Connect has the same list.
+- **Detect Speed**: sends Enter at each common speed (9600, 115200, 19200, 38400, 57600, 4800, 2400, 230400, 1200) and keeps the one where the device answers with readable text. Close a tab that has the port open first. *Detect the speed each time it connects* does this on every connect; the status bar then shows the speed with *(detected)*.
+- **Send bar** (under serial tabs): type a message and press **Enter** or **Send**; ↑/↓ recall earlier messages. The line ending is added after each message: **CR** (default, what consoles expect), **LF**, **CR+LF** or none. **Timestamps** puts the local time (`[10:41:07.512]`) at the start of every line, **Auto scroll** follows new output, **Clear** empties the screen and the scrollback. ✕ hides the bar; right-click the terminal → *Send Bar* shows it again, on any tab.
+
+![Serial tab with the send bar, timestamps and auto scroll off](screenshots/serial-tab.png)
+
 ## 6. Working in the terminal
 
 - **Copy / Paste**: select text (copied automatically when *Copy on select* is on). Paste with right-click (when *Paste on right-click* is on; Shift+right-click opens the menu), `Cmd+V` on macOS, `Ctrl+Shift+V` on Windows/Linux, or `Shift+Insert`. Copy also with `Ctrl+Insert`.
 - **Find**: `Cmd/Ctrl+Shift+F` searches the scrollback; Enter = next, Shift+Enter = previous, Esc closes.
 - **Zoom**: `Cmd/Ctrl +`, `Cmd/Ctrl -`, `Cmd/Ctrl 0`.
-- **Clear / Reset**: Edit → Clear Scrollback, Clear Screen, Reset Terminal.
+- **Clear Screen** (the eraser button, right-click the terminal or a tab, Edit menu) empties the screen and the scrollback; the line with the cursor stays. *Clear Scrollback* keeps what is on the screen; *Reset Terminal* resets the emulator.
+- **Timestamps**: right-click the terminal → *Timestamps* (or Edit → Timestamps On / Off) puts the local time with milliseconds at the start of each line, on any connection. It is display only: logs have their own per-line prefix. Session Options → Terminal → *Display* turns it on for every connection of a session (off by default).
+- **Auto scroll** (on by default): the arrow button, right-click → *Auto Scroll* or Edit → Auto Scroll On / Off. When it is off the view stays where it is while output arrives, so you can read; *Auto scroll is off · Turn On* in the corner brings it back. Session Options → Terminal → *Display* can keep it off for a session.
 - **Links**: URLs in the output open in your browser when clicked.
 - **Send Break**: Tab → Send Break (serial break, telnet BREAK or SSH break request, e.g. to reach a boot loader / ROMMON).
 - **Send Text File**: Transfer → Send Text File… pastes a file line by line (respects *Paste line delay*).
@@ -405,7 +415,7 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 ![Tiled view with keyword highlighting](screenshots/grid.png)
 
 - **Lock**: Tab → Lock Session (or the lock button) blocks keyboard input to a tab until you enter the password you chose; *Lock All Sessions* locks every tab.
-- **Tab menu** (right-click a tab): Reconnect, Disconnect, Clone, Log, Save Scrollback, Session Options, Rename Tab, Close, Close Other Tabs. Middle-click closes a tab.
+- **Tab menu** (right-click a tab): Reconnect, Disconnect, Clone, Log, Save Scrollback, Timestamps, Auto Scroll, Send Bar, Clear Screen, Session Options, Rename Tab, Close, Close Other Tabs. Middle-click closes a tab.
 
 ## 7. Command Window, Button Bar and Connect Bar
 
@@ -453,7 +463,7 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 
 ![Compare Outputs](screenshots/compare.png)
 
-**Timestamps and copying**: right-click a tab (or the terminal) → *Show Timestamps* prefixes each new output line with the time (display only; logs have their own setting). **Copy as HTML (with colors)** (right-click in the terminal; Shift+right-click when right-click paste is on) copies the selected text with its colors and bold text, so you can paste colored output into e-mail, Word, Teams or a ticket; plain-text editors receive the plain text. Links printed by devices (including OSC 8 hyperlinks) are clickable.
+**Timestamps and copying**: right-click a tab (or the terminal) → *Timestamps* prefixes each new output line with the local time (display only; logs have their own setting). **Copy as HTML (with colors)** (right-click in the terminal; Shift+right-click when right-click paste is on) copies the selected text with its colors and bold text, so you can paste colored output into e-mail, Word, Teams or a ticket; plain-text editors receive the plain text. Links printed by devices (including OSC 8 hyperlinks) are clickable.
 
 ![Terminal menu with Copy as HTML](screenshots/term-menu.png)
 

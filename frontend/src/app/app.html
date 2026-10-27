@@ -14,6 +14,9 @@
   <button class="tb" title="Copy" [disabled]="!active()" (click)="action('copy')"><app-icon name="copy" /></button>
   <button class="tb" title="Paste" [disabled]="!active()" (click)="action('paste')"><app-icon name="paste" /></button>
   <button class="tb" title="Find" [disabled]="!active()" (click)="action('find')"><app-icon name="find" /></button>
+  <button class="tb" title="Clear Screen (screen and scrollback)" [disabled]="active()?.kind !== 'terminal'" (click)="action('clear-screen')"><app-icon name="clear" /></button>
+  <button class="tb" [class.on]="active()?.kind === 'terminal' && active()?.autoScroll !== false" [title]="active()?.autoScroll === false ? 'Auto scroll is off - click to follow new output' : 'Auto scroll is on - click to keep the view still'"
+          [disabled]="active()?.kind !== 'terminal'" (click)="action('toggle-autoscroll')"><app-icon name="autoscroll" /></button>
   <button class="tb" [class.on]="!!active()?.logFile" title="Log Session" [disabled]="!active()" (click)="action('log-toggle')"><app-icon name="log" /></button>
   <button class="tb" title="Open SFTP tab" [disabled]="active()?.session?.protocol !== 'SSH2' || active()?.state !== 'connected'" (click)="action('sftp-tab')"><app-icon name="sftp" /></button>
   <button class="tb" [class.on]="tabs.scripts().length > 0" [title]="tabs.scripts().length ? 'Cancel running scripts' : 'Run script'" [disabled]="!active()"

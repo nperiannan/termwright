@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus,
+  SerialPortInfo, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus,
 } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
@@ -62,6 +62,8 @@ export class Backend {
   exportSessions(paths: string[], dest: string, format: string) { return this.call<number>('ExportSessions', paths, dest, format); }
   exportSessionsFor(paths: string[], dest: string, format: string) { return this.call<ExportReport>('ExportSessionsFor', paths, dest, format); }
   listSerialPorts() { return this.call<string[]>('ListSerialPorts'); }
+  serialPortList() { return this.call<SerialPortInfo[]>('SerialPortList'); }
+  detectSerialBaud(s: Session) { return this.call<{ baud: number; tried: { baud: number; bytes: number; score: number }[] }>('DetectSerialBaud', s); }
   defaultSSHConfigPath() { return this.call<string>('DefaultSSHConfigPath'); }
 
   openTab(path: string) { return this.call<TabInfo>('OpenTab', path); }

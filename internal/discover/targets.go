@@ -16,7 +16,8 @@ import (
 const MaxTargets = 1024
 
 // ParseTargets expands "10.0.0.0/24", "10.0.0.10-10.0.0.80", "10.0.0.10-80"
-// and single addresses, separated by commas, spaces or new lines.
+// and single addresses, separated by commas, spaces or new lines. A network
+// address without a mask ("192.168.1.0" or "192.168.1") is its /24.
 func ParseTargets(spec string) ([]netip.Addr, error) {
 	var out []netip.Addr
 	seen := map[netip.Addr]bool{}
@@ -32,6 +33,7 @@ func ParseTargets(spec string) ([]netip.Addr, error) {
 		return nil
 	}
 	for _, f := range strings.FieldsFunc(spec, func(r rune) bool { return r == ',' || r == ';' || r == ' ' || r == '\n' || r == '\r' || r == '\t' }) {
+		f = bareNetwork(f)
 		switch {
 		case strings.Contains(f, "/"):
 			p, err := netip.ParsePrefix(f)
@@ -95,6 +97,25 @@ func ParseTargets(spec string) ([]netip.Addr, error) {
 		return nil, errors.New("enter a network (10.0.0.0/24), a range (10.0.0.10-80) or addresses")
 	}
 	return out, nil
+}
+
+// bareNetwork turns "192.168.1.0" and "192.168.1" into "192.168.1.0/24";
+// anything else is returned as it is.
+func bareNetwork(f string) string {
+	if strings.ContainsAny(f, "/-") {
+		return f
+	}
+	parts := strings.Split(strings.TrimSuffix(f, "."), ".")
+	if len(parts) == 3 {
+		parts = append(parts, "0")
+	}
+	if len(parts) != 4 || parts[3] != "0" {
+		return f
+	}
+	if a, err := netip.ParseAddr(strings.Join(parts, ".")); err == nil && a.Is4() {
+		return a.String() + "/24"
+	}
+	return f
 }
 
 func lastOf(p netip.Prefix) netip.Addr {

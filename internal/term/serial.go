@@ -22,11 +22,9 @@ func (s *serialConn) Close() error                { return s.p.Close() }
 func (s *serialConn) Info() string                { return s.info }
 func (s *serialConn) SendBreak() error            { return s.p.Break(300 * time.Millisecond) }
 
-func openSerial(s session.Session) (Conn, error) {
-	if s.ComPort == "" {
-		return nil, errors.New("no serial port selected")
-	}
-	mode := &serial.Mode{BaudRate: s.BaudRate, DataBits: s.DataBits,
+// serialMode is the port setup of a session (9600 8N1 when not set).
+func serialMode(s session.Session) serial.Mode {
+	mode := serial.Mode{BaudRate: s.BaudRate, DataBits: s.DataBits,
 		InitialStatusBits: &serial.ModemOutputBits{DTR: s.SerialDTR, RTS: s.SerialRTS}}
 	if mode.BaudRate == 0 {
 		mode.BaudRate = 9600
@@ -42,7 +40,6 @@ func openSerial(s session.Session) (Conn, error) {
 	default:
 		mode.StopBits = serial.OneStopBit
 	}
-	parity := []string{"N", "O", "E", "M", "S"}
 	switch s.Parity {
 	case 1:
 		mode.Parity = serial.OddParity
@@ -55,7 +52,25 @@ func openSerial(s session.Session) (Conn, error) {
 	default:
 		mode.Parity = serial.NoParity
 	}
-	p, err := serial.Open(s.ComPort, mode)
+	return mode
+}
+
+func openSerial(s session.Session) (Conn, error) {
+	if s.ComPort == "" {
+		return nil, errors.New("no serial port selected")
+	}
+	mode := serialMode(s)
+	detected := ""
+	if s.SerialAutoBaud {
+		if b, _, err := DetectBaud(s.ComPort, mode, nil, 0); err != nil {
+			return nil, err
+		} else if b > 0 {
+			mode.BaudRate, detected = b, " (detected)"
+		} else {
+			detected = " (could not detect the speed)"
+		}
+	}
+	p, err := serial.Open(s.ComPort, &mode)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", s.ComPort, err)
 	}
@@ -65,11 +80,12 @@ func openSerial(s session.Session) (Conn, error) {
 			return nil, fmt.Errorf("flow control: %w", err)
 		}
 	}
+	parity := []string{"N", "O", "E", "M", "S"}
 	pi := "N"
 	if s.Parity >= 0 && s.Parity < len(parity) {
 		pi = parity[s.Parity]
 	}
-	return &serialConn{p: p, info: fmt.Sprintf("Serial %s %d %d%s%d", s.ComPort, mode.BaudRate, mode.DataBits, pi, map[int]int{0: 1, 1: 1, 2: 2}[s.StopBits])}, nil
+	return &serialConn{p: p, info: fmt.Sprintf("Serial %s %d %d%s%d%s", s.ComPort, mode.BaudRate, mode.DataBits, pi, map[int]int{0: 1, 1: 1, 2: 2}[s.StopBits], detected)}, nil
 }
 
 // SerialPorts lists available serial ports.

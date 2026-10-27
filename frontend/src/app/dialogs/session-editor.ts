@@ -8,13 +8,14 @@ import { SCHEME_NAMES } from '../core/themes';
 import { Tabs } from '../core/tabs.service';
 import { ENVIRONMENTS, envInfo, envOf } from '../core/env';
 import { Ui } from '../core/ui.service';
+import { SerialPortPicker } from '../components/serial-port-picker';
 
 type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote';
 
 /** Session Options dialog (create / edit a saved session). */
 @Component({
   selector: 'app-session-editor',
-  imports: [FormsModule, Autofocus],
+  imports: [FormsModule, Autofocus, SerialPortPicker],
   template: `
   @if (s) {
   <div class="modal-backdrop">
@@ -271,13 +272,16 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
             @case ('serial') {
               <div class="grid">
                 <label>Port</label>
-                <div class="row">
-                  <input name="comPort" [(ngModel)]="s.comPort" list="serialPorts" placeholder="COM1, /dev/ttyUSB0, /dev/cu.usbserial..." />
-                  <datalist id="serialPorts">@for (p of ports(); track p) { <option [value]="p"></option> }</datalist>
-                  <button type="button" (click)="loadPorts()">Scan</button>
-                </div>
+                <app-serial-port-picker [(value)]="s.comPort" />
                 <label>Baud rate</label>
-                <select name="baud" [(ngModel)]="s.baudRate">@for (b of bauds; track b) { <option [ngValue]="b">{{ b }}</option> }</select>
+                <div>
+                  <div class="row">
+                    <select name="baud" class="baud" [(ngModel)]="s.baudRate" [disabled]="!!s.serialAutoBaud">@for (b of bauds; track b) { <option [ngValue]="b">{{ b }}</option> }</select>
+                    <button type="button" (click)="detectBaud()" [disabled]="!s.comPort || detecting()" title="Send Enter at each common speed and keep the one where the device answers with readable text">{{ detecting() ? 'Detecting…' : 'Detect Speed' }}</button>
+                  </div>
+                  <div class="checks" style="margin-top: 6px"><label><input type="checkbox" name="autobaud" [(ngModel)]="s.serialAutoBaud" /> Detect the speed each time it connects</label></div>
+                  @if (baudMsg()) { <div class="hint">{{ baudMsg() }}</div> }
+                </div>
                 <label>Data bits</label>
                 <select name="databits" [(ngModel)]="s.dataBits">@for (b of [5, 6, 7, 8]; track b) { <option [ngValue]="b">{{ b }}</option> }</select>
                 <label>Parity</label>
@@ -401,6 +405,11 @@ type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' 
                 </select>
                 <label>Connection</label>
                 <div class="checks"><label><input type="checkbox" name="arc" [(ngModel)]="s.autoReconnect" /> Auto reconnect when the connection drops</label></div>
+                <label>Display</label>
+                <div class="checks">
+                  <label><input type="checkbox" name="tstamps" [(ngModel)]="s.timestamps" /> Show the local time at the start of each line (display only)</label>
+                  <label><input type="checkbox" name="noscroll" [ngModel]="!s.noAutoScroll" (ngModelChange)="s.noAutoScroll = !$event" /> Auto scroll to new output</label>
+                </div>
                 <label>Color scheme</label>
                 <select name="scheme" [(ngModel)]="s.colorScheme">
                   <option value="">(global default)</option>
@@ -503,7 +512,6 @@ export class SessionEditor implements OnInit {
   readonly authAll = ['gssapi', 'publickey', 'keyboard-interactive', 'password'];
   readonly authLabel: Record<string, string> = { gssapi: 'gssapi (Kerberos)' };
   readonly page = signal<Page>('connection');
-  readonly ports = signal<string[]>([]);
   readonly error = signal('');
   readonly keywordSets = computed(() => (this.ui.settings()?.keywordSets ?? []).map(k => k.name));
   readonly deviceTypes = computed(() => (this.ui.settings()?.deviceTypes ?? []).map(d => d.name));
@@ -632,12 +640,22 @@ export class SessionEditor implements OnInit {
     if (!this.s) return;
     if (this.remote() && ['logon', 'terminal', 'log', 'forward', 'auth', 'serial', 'local'].includes(this.page())) this.page.set('connection');
     this.s.port = defaultPort(this.s.protocol) || this.s.port;
-    if (this.s.protocol === 'Serial') void this.loadPorts();
     if (this.s.protocol === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }
   }
 
-  async loadPorts() {
-    try { this.ports.set(await this.backend.listSerialPorts()); } catch (e) { this.ui.error(e); }
+  readonly detecting = signal(false);
+  readonly baudMsg = signal('');
+
+  /** Tries the common speeds on the port and takes the one the device answers at. */
+  async detectBaud() {
+    if (!this.s?.comPort) return;
+    this.detecting.set(true); this.baudMsg.set('');
+    try {
+      const r = await this.backend.detectSerialBaud(this.s);
+      if (r.baud) { this.s.baudRate = r.baud; this.baudMsg.set(`The device answers at ${r.baud} baud.`); }
+      else this.baudMsg.set('No readable answer at ' + r.tried.map(t => t.baud).join(', ') + ' baud. Check the cable and that the port is not open in a tab, then try again.');
+    } catch (e) { this.baudMsg.set(errText(e)); }
+    finally { this.detecting.set(false); this.cdr.markForCheck(); }
   }
 
   hasAuth(m: string) { return (this.s?.authMethods ?? '').split(',').includes(m); }

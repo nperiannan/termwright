@@ -460,3 +460,15 @@ func TestVNCOnly(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestParseTargetsBareNetwork(t *testing.T) {
+	for _, spec := range []string{"192.168.1.0", "192.168.1", "192.168.1.0/24"} {
+		got, err := ParseTargets(spec)
+		if err != nil || len(got) != 254 || got[0].String() != "192.168.1.1" || got[253].String() != "192.168.1.254" {
+			t.Fatalf("%s: %d addresses, err %v", spec, len(got), err)
+		}
+	}
+	if got, err := ParseTargets("192.168.1.15"); err != nil || len(got) != 1 {
+		t.Fatalf("single address: %v %v", got, err)
+	}
+}

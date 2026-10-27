@@ -173,8 +173,14 @@ export class App implements OnInit {
       case 'copy-paste': await this.tabs.copy(); await this.tabs.paste(); break;
       case 'select-all': if (!this.editInput('select-all')) h?.term.selectAll(); break;
       case 'find': this.findOpen.set(true); setTimeout(() => document.getElementById('findInput')?.focus(), 20); break;
-      case 'clear-scrollback': h?.term.clear(); break;
-      case 'clear-screen': h?.term.write('\x1b[H\x1b[2J'); break;
+      case 'clear-scrollback': h?.term.write('\x1b[3J'); break;
+      case 'clear-screen': h?.term.clear(); h?.term.focus(); break;
+      case 'toggle-autoscroll': {
+        const t = this.tabs.active();
+        if (t?.kind === 'terminal') { this.tabs.patch(t.id, { autoScroll: t.autoScroll === false }); if (t.autoScroll === false) h?.term.scrollToBottom(); }
+        break;
+      }
+      case 'toggle-timestamps': { const t = this.tabs.active(); if (t?.kind === 'terminal') this.tabs.patch(t.id, { timestamps: !t.timestamps }); break; }
       case 'reset': h?.term.reset(); break;
       case 'toggle-session-manager': this.ui.patchSettings({ showSessionManager: !s?.showSessionManager }); break;
       case 'toggle-session-manager-side': this.ui.patchSettings({ sessionManagerRight: !s?.sessionManagerRight, showSessionManager: true }); break;
@@ -387,7 +393,12 @@ export class App implements OnInit {
       ] : []),
       { label: 'Save Scrollback As...', action: () => this.tabs.saveScrollback(t.id) },
       ...(t.kind === 'terminal' ? [{ label: 'Compare With...', action: () => this.compareMenu(ev, t) }] : []),
-      ...(t.kind === 'terminal' ? [{ label: t.timestamps ? 'Hide Timestamps' : 'Show Timestamps', action: () => this.tabs.patch(t.id, { timestamps: !t.timestamps }) }] : []),
+      ...(t.kind === 'terminal' ? [
+        { label: (t.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.tabs.patch(t.id, { timestamps: !t.timestamps }) },
+        { label: (t.autoScroll !== false ? '✓ ' : '') + 'Auto Scroll', action: () => { this.tabs.patch(t.id, { autoScroll: t.autoScroll === false }); if (t.autoScroll === false) this.tabs.handles.get(t.id)?.term.scrollToBottom(); } },
+        { label: (t.sendBar ? '✓ ' : '') + 'Send Bar', action: () => this.tabs.patch(t.id, { sendBar: !t.sendBar }) },
+        { label: 'Clear Screen', action: () => this.tabs.handles.get(t.id)?.term.clear() },
+      ] : []),
       { label: 'Session Options...', action: () => this.ui.editSession(t.session.path, t.id), disabled: !t.session.path },
       { label: 'Rename Tab...', action: async () => {
         const n = await this.ui.input('Rename Tab', 'Tab title', t.title);

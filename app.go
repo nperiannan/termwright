@@ -34,7 +34,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.19.2-dev"
+var Version = "0.20.0-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -431,6 +431,21 @@ func (a *App) ExportSessionsFor(paths []string, dest, format string) (*session.E
 
 // ListSerialPorts lists serial devices.
 func (a *App) ListSerialPorts() []string { return term.SerialPorts() }
+
+// SerialPortList lists the serial ports in natural order with what they are
+// (USB adapter product name and VID:PID when the system reports them).
+func (a *App) SerialPortList() []term.SerialPort { return term.SerialPortList() }
+
+// DetectSerialBaud finds the speed of the console on the session's port
+// (its data bits, parity and stop bits are kept). Returns 0 and the speeds
+// tried when nothing readable came back.
+func (a *App) DetectSerialBaud(s session.Session) (map[string]any, error) {
+	b, res, err := term.DetectSerialBaud(s)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"baud": b, "tried": res}, nil
+}
 
 // DefaultSSHConfigPath returns ~/.ssh/config.
 func (a *App) DefaultSSHConfigPath() string {

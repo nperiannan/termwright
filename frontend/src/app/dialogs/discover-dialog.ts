@@ -27,8 +27,18 @@ const ACK_KEY = 'termwright.discoverAck';
       <div class="modal-body">
         <div class="grid">
           <label>Addresses</label>
-          <input name="spec" [(ngModel)]="spec" [disabled]="running()" placeholder="10.20.0.0/24, 10.20.1.10-80 or single addresses (up to a /22)"
-            (keydown.enter)="start()" spellcheck="false" />
+          <div>
+            <div class="row specrow">
+              <input name="spec" class="spec" [(ngModel)]="spec" [disabled]="running()" placeholder="192.168.1.0/24"
+                (keydown.enter)="start()" spellcheck="false" />
+              @if (running()) {
+                <button type="button" (click)="stop()">Stop</button>
+              } @else {
+                <button type="button" class="primary" [disabled]="!spec.trim() || (!acked && !ackNow)" (click)="start()">Scan</button>
+              }
+            </div>
+            <div class="hint">A network (192.168.1.0/24, or 192.168.1.0 for its /24), a range (192.168.1.10-80) or addresses, up to a /22</div>
+          </div>
           <label>SNMP</label>
           <div class="row">
             <label class="inline"><input type="checkbox" [(ngModel)]="useSnmp" [disabled]="running()" /> Look up name and model (SNMP v2c)</label>
@@ -46,11 +56,6 @@ const ACK_KEY = 'termwright.discoverAck';
           }
         </div>
         <div class="bar">
-          @if (running()) {
-            <button type="button" (click)="stop()">Stop</button>
-          } @else {
-            <button type="button" class="primary" [disabled]="!spec.trim() || (!acked && !ackNow)" (click)="start()">Scan</button>
-          }
           @if (total()) {
             <progress [max]="total()" [value]="done()"></progress>
             <span class="hint">{{ done() }} / {{ total() }} addresses · {{ rows().length }} found{{ running() ? '' : stopped() ? ' · stopped' : ' · done' }}{{ rows().length ? ' · double-click a device to connect' : '' }}</span>
@@ -160,6 +165,7 @@ const ACK_KEY = 'termwright.discoverAck';
     .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .inline { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
     .comm { flex: 0 0 220px; width: 220px !important; max-width: 220px; }
+    .disc .specrow > input.spec { flex: 0 1 340px; width: 340px; min-width: 160px; }
     .eye { font-size: 11px; width: auto; padding: 0 6px; }
     .ack { display: flex; gap: 6px; align-items: center; margin-top: 6px; font-weight: 600; }
     .bar { display: flex; gap: 10px; align-items: center; margin: 12px 0 8px; }

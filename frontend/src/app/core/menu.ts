@@ -20,7 +20,8 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Copy and Paste', action: 'copy-paste' }, { label: 'Select All', action: 'select-all', keys: k('A') },
       { label: 'Find...', action: 'find', keys: k('F') }, { sep: true },
       { label: 'Clear Scrollback', action: 'clear-scrollback' }, { label: 'Clear Screen', action: 'clear-screen' },
-      { label: 'Reset Terminal', action: 'reset' },
+      { label: 'Reset Terminal', action: 'reset' }, { sep: true },
+      { label: 'Timestamps On / Off', action: 'toggle-timestamps' }, { label: 'Auto Scroll On / Off', action: 'toggle-autoscroll' },
     ] },
     { title: 'View', items: [
       { label: 'Quick Open...', action: 'quick-open', keys: k('G') }, { sep: true },

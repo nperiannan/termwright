@@ -177,7 +177,13 @@ Features alone do not make a tool people rely on every day. These come first:
 ## 0.19 (done)
 - [x] **Export to other programs**: PuTTY / KiTTY, MobaXterm, Tabby, OpenSSH config, CSV, with a summary of what each format cannot hold
 
-## 0.20 (planned)
+## 0.20 (done)
+- [x] **Serial consoles**: port list in order with the adapter's name, updated when a cable is plugged in; Detect Speed (also on every connect); send bar with line ending, Timestamps, Auto scroll and Clear
+- [x] **Clear Screen, Timestamps and Auto scroll** for every connection (toolbar, right-click, tab menu, Edit menu, per session)
+- [x] Discover Devices: `192.168.1.0` without a mask scans its /24; shorter address field with Scan next to it
+- [x] Faster typing in the Command Window with a large Session Manager tree
+
+## 0.21 (planned)
 - [ ] MAC addresses of devices behind routers: read the router's ARP table over SNMP
 - [ ] Smart cards on Windows without a PKCS#11 library: keys of the Windows certificate store (CNG)
 - [ ] Import the smart card settings of SecureCRT sessions (needs sample exports)

@@ -14,6 +14,7 @@ import { terminalTheme } from '../core/themes';
 import { comboOf } from '../core/models';
 import { FIX_LABELS, FixAction, fixFor } from '../core/fixes';
 import { History, commandOfLine } from '../core/history.service';
+import { FormsModule } from '@angular/forms';
 
 /** Black or white, whichever is more readable on the given background. */
 function contrastText(hex: string): string {
@@ -32,7 +33,26 @@ function b64ToBytes(b64: string): Uint8Array {
 /** One xterm.js terminal bound to a backend tab. */
 @Component({
   selector: 'app-terminal-view',
+  imports: [FormsModule],
   template: `<div class="term-host" #host (contextmenu)="onContextMenu($event)"></div>
+    @if (tab().autoScroll === false) {
+      <div class="paused" title="New output does not move the view">Auto scroll is off <button type="button" (click)="setAutoScroll(true)">Turn On</button></div>
+    }
+    @if (tab().sendBar) {
+      <div class="sendbar">
+        <input class="msg" #msg [ngModel]="sendText()" (ngModelChange)="sendText.set($event)" (keydown)="sendKey($event)"
+          [placeholder]="tab().state === 'connected' ? 'Message to send - Enter sends, ↑/↓ earlier messages' : 'Not connected'" />
+        <select [ngModel]="eol()" (ngModelChange)="setEol($event)" title="Added after each message">
+          @for (e of eols; track e.l) { <option [ngValue]="e.v">{{ e.l }}</option> }
+        </select>
+        <button type="button" class="primary" (click)="sendLine()" [disabled]="tab().state !== 'connected'">Send</button>
+        <span class="sep"></span>
+        <label title="Local time at the start of each line (display only)"><input type="checkbox" [ngModel]="!!tab().timestamps" (ngModelChange)="setTimestamps($event)" /> Timestamps</label>
+        <label title="Follow new output"><input type="checkbox" [ngModel]="tab().autoScroll !== false" (ngModelChange)="setAutoScroll($event)" /> Auto scroll</label>
+        <button type="button" (click)="clearAll()" title="Clear the screen and the scrollback">Clear</button>
+        <button type="button" class="x" title="Hide the send bar (right-click the terminal to show it again)" (click)="tabs.patch(tab().id, { sendBar: false })">✕</button>
+      </div>
+    }
     @if (fix(); as f) {
       <div class="fixbar" role="alert">
         <button type="button" class="fx" title="Dismiss" (click)="dismissed.set(tab().message)">✕</button>
@@ -42,8 +62,17 @@ function b64ToBytes(b64: string): Uint8Array {
       </div>
     }`,
   styles: [`
-    :host { display: block; position: absolute; inset: 0; padding: 4px 0 0 6px; background: var(--term-bg); }
-    .term-host { width: 100%; height: 100%; }
+    :host { display: flex; flex-direction: column; position: absolute; inset: 0; padding: 4px 0 0 6px; background: var(--term-bg); }
+    .term-host { width: 100%; flex: 1; min-height: 0; }
+    .paused { position: absolute; right: 18px; bottom: 44px; z-index: 4; display: flex; gap: 8px; align-items: center; padding: 4px 6px 4px 10px; border-radius: 6px;
+      background: var(--panel); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 12px;
+      button { height: 22px; font-size: 11.5px; padding: 0 8px; } }
+    .sendbar { flex: none; display: flex; gap: 8px; align-items: center; margin: 4px 0 0 -6px; padding: 5px 8px; background: var(--panel); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted);
+      .msg { flex: 1; min-width: 120px; font-family: var(--mono); }
+      select { flex: none; width: 140px; }
+      label { display: flex; gap: 4px; align-items: center; white-space: nowrap; cursor: pointer; }
+      .sep { width: 1px; align-self: stretch; background: var(--border); }
+      button { height: 24px; } .x { border: 0; background: none; color: var(--muted); padding: 0 4px; } }
     .fixbar { position: absolute; top: 10px; right: 14px; z-index: 5; max-width: min(520px, 80%); padding: 10px 12px; border-radius: 8px;
       background: var(--panel); color: var(--text); border: 1px solid var(--border); border-left: 4px solid var(--danger); box-shadow: var(--shadow); font-size: 12.5px; }
     .fmsg { font-weight: 600; margin-right: 18px; word-break: break-word; }
@@ -57,7 +86,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   readonly visible = input<boolean>(false);
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private backend = inject(Backend);
-  private tabs = inject(Tabs);
+  protected tabs = inject(Tabs);
   private ui = inject(Ui);
   private term?: Terminal;
   private fit?: FitAddon;
@@ -65,6 +94,50 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   private unsub: (() => void)[] = [];
   private fitTimer?: ReturnType<typeof setTimeout>;
   private history = inject(History);
+
+  // ---- send bar (serial tabs; any tab from the right-click menu) ----
+  readonly eols = [{ v: '\r', l: 'CR' }, { v: '\n', l: 'LF' }, { v: '\r\n', l: 'CR+LF' }, { v: '', l: 'No line ending' }];
+  readonly sendText = signal('');
+  readonly eol = signal<string>((() => { try { const v = JSON.parse(localStorage.getItem('termwright.sendEol') ?? '"\\r"'); return typeof v === 'string' ? v : '\r'; } catch { return '\r'; } })());
+  private sent: string[] = [];
+  private sentIdx = -1;
+
+  setEol(v: string) {
+    this.eol.set(v);
+    try { localStorage.setItem('termwright.sendEol', JSON.stringify(v)); } catch { /* storage unavailable */ }
+  }
+
+  sendLine() {
+    const t = this.tab();
+    if (t.state !== 'connected' || t.locked) return;
+    const text = this.sendText();
+    void this.backend.sendInput(t.id, text + this.eol());
+    if (text.trim()) {
+      this.sent = [text, ...this.sent.filter(x => x !== text)].slice(0, 100);
+      this.history.add(text, { session: t.session.path, title: t.title, deviceType: t.session.deviceType });
+    }
+    this.sentIdx = -1;
+    this.sendText.set('');
+  }
+
+  sendKey(ev: KeyboardEvent) {
+    if (ev.key === 'Enter') { ev.preventDefault(); this.sendLine(); return; }
+    if ((ev.key === 'ArrowUp' || ev.key === 'ArrowDown') && this.sent.length) {
+      ev.preventDefault();
+      this.sentIdx = ev.key === 'ArrowUp' ? Math.min(this.sentIdx + 1, this.sent.length - 1) : Math.max(this.sentIdx - 1, -1);
+      this.sendText.set(this.sentIdx < 0 ? '' : this.sent[this.sentIdx]);
+    }
+  }
+
+  setTimestamps(on: boolean) { this.tabs.patch(this.tab().id, { timestamps: on }); }
+
+  setAutoScroll(on: boolean) {
+    this.tabs.patch(this.tab().id, { autoScroll: on });
+    if (on) this.term?.scrollToBottom();
+  }
+
+  /** Clears the screen and the scrollback (the line with the cursor stays). */
+  clearAll() { this.term?.clear(); this.scannedTo = 0; this.term?.focus(); }
 
   /** Remembers the command on the cursor line (prompt removed) for history search. */
   private remember(term: Terminal, t: TabView) {
@@ -195,13 +268,23 @@ export class TerminalView implements AfterViewInit, OnDestroy {
         if (i >= 0) { this.tabs.quiet.delete(id); term.write('\r\x1b[2K' + q.held.slice(i)); }
         return;
       }
-      if (!this.tabs.get(id)?.timestamps || term.buffer.active.type !== 'normal') { term.write(bytes); return; }
-      // Per-line timestamps (display only): after every newline in line-based output.
-      const stamp = () => '\x1b[90m[' + new Date().toTimeString().slice(0, 8) + ']\x1b[0m ';
+      const tv = this.tabs.get(id);
+      // Auto scroll off: the view stays where it is while output arrives.
+      const write = (d: string | Uint8Array) => {
+        if (tv?.autoScroll !== false || term.buffer.active.type !== 'normal') { term.write(d); return; }
+        const y = term.buffer.active.viewportY;
+        term.write(d, () => { if (term.buffer.active.viewportY !== y) term.scrollToLine(y); });
+      };
+      if (!tv?.timestamps || term.buffer.active.type !== 'normal') { write(bytes); return; }
+      // Per-line timestamps (display only): local time after every newline in line-based output.
+      const stamp = () => {
+        const d = new Date();
+        return '\x1b[90m[' + d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0') + ']\x1b[0m ';
+      };
       let text = dec.decode(bytes, { stream: true });
       if (atLineStart && text.length) text = stamp() + text;
       atLineStart = text.endsWith('\n');
-      term.write(text.replace(/\n(?=.)/gs, () => '\n' + stamp()));
+      write(text.replace(/\n(?=.)/gs, () => '\n' + stamp()));
     }));
     term.onData(d => {
       const t = this.tabs.get(id);
@@ -334,8 +417,12 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       { label: 'Paste', action: () => void this.tabs.paste(id) },
       { label: 'Select All', action: () => t?.selectAll() },
       { label: 'Copy as HTML (with colors)', action: () => void this.copyHtml(), disabled: !t?.hasSelection() },
-      { label: this.tabs.get(id)?.timestamps ? 'Hide Timestamps' : 'Show Timestamps', action: () => this.tabs.patch(id, { timestamps: !this.tabs.get(id)?.timestamps }) },
       { separator: true },
+      { label: (this.tabs.get(id)?.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.setTimestamps(!this.tabs.get(id)?.timestamps) },
+      { label: (this.tabs.get(id)?.autoScroll !== false ? '✓ ' : '') + 'Auto Scroll', action: () => this.setAutoScroll(this.tabs.get(id)?.autoScroll === false) },
+      { label: (this.tabs.get(id)?.sendBar ? '✓ ' : '') + 'Send Bar', action: () => this.tabs.patch(id, { sendBar: !this.tabs.get(id)?.sendBar }) },
+      { separator: true },
+      { label: 'Clear Screen', action: () => this.clearAll() },
       { label: 'Clear Scrollback', action: () => t?.clear() },
       { label: 'Reset Terminal', action: () => t?.reset() },
     ]);
