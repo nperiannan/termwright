@@ -453,6 +453,13 @@ func isBaud(b int) bool {
 // importThirdParty imports a PuTTY or MobaXterm file; ok is false when the
 // content is not one of those formats.
 func (s *Store) importThirdParty(src string, data []byte, opt ImportOptions) (*ImportResult, bool) {
+	if isSuperPuTTY(data) {
+		res, err := s.importSuperPuTTY(data, opt)
+		if err != nil {
+			return &ImportResult{Errors: []string{err.Error()}}, true
+		}
+		return res, true
+	}
 	text := decodeText(data)
 	res := &ImportResult{}
 	switch sniffFormat(text) {

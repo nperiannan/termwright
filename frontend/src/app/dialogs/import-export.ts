@@ -69,7 +69,8 @@ type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv
             } @else if (source === 'putty') {
               <div class="hint">On Windows export the sessions with: <code>reg export HKCU\\Software\\SimonTatham\\PuTTY\\Sessions putty.reg</code>
                 (KiTTY: HKCU\\Software\\9bis.com\\KiTTY\\Sessions). PuTTY Session Manager folders (PsmPath) are kept. PuTTY .ppk keys are
-                used as they are.</div>
+                used as they are.<br />SuperPuTTY: choose its <code>Sessions.xml</code> (File → Export Sessions, or the file in SuperPuTTY's data folder).
+                Its folders are kept; a password given with <code>-pw</code> in the extra arguments is saved in the OS keychain, not in the session file.</div>
             } @else if (source === 'moba') {
               <div class="hint">In MobaXterm: right-click "User sessions" → Export all sessions to file (.mxtsessions). SSH, Telnet and Serial
                 sessions are imported with their folders; RDP, VNC, FTP etc. are skipped.</div>
@@ -141,7 +142,7 @@ export class ImportDialog {
       { v: 'ini', label: 'SecureCRT single session file (.ini)' },
     ] },
     { title: 'Other terminal apps', items: [
-      { v: 'putty', label: 'PuTTY / KiTTY sessions (.reg export, or the ~/.putty/sessions folder)' },
+      { v: 'putty', label: 'PuTTY / KiTTY / SuperPuTTY sessions (.reg export, SuperPuTTY Sessions.xml, or the ~/.putty/sessions folder)' },
       { v: 'moba', label: 'MobaXterm sessions (.mxtsessions export or MobaXterm.ini)' },
       { v: 'ssh', label: 'OpenSSH client config (~/.ssh/config)' },
     ] },
@@ -167,11 +168,11 @@ export class ImportDialog {
     const filters: Record<Source, { displayName: string; pattern: string }[]> = {
       folder: [], zip: [{ displayName: 'Zip archive (*.zip)', pattern: '*.zip' }], xml: [{ displayName: 'SecureCRT XML export (*.xml)', pattern: '*.xml' }],
       ini: [{ displayName: 'Session file (*.ini)', pattern: '*.ini' }], ssh: [],
-      putty: [{ displayName: 'Registry export', pattern: '*.reg' }],
+      putty: [{ displayName: 'PuTTY / KiTTY registry export or SuperPuTTY Sessions.xml', pattern: '*.reg;*.xml' }],
       csv: [{ displayName: 'CSV', pattern: '*.csv;*.tsv;*.txt' }], ansible: [], netbox: [], aws: [],
       moba: [{ displayName: 'MobaXterm sessions', pattern: '*.mxtsessions;*.ini' }],
     };
-    if (this.source === 'putty' && !(await this.ui.confirm('PuTTY Sessions', 'Choose a .reg export file? (Cancel = choose a ~/.putty/sessions folder)', 'File'))) {
+    if (this.source === 'putty' && !(await this.ui.confirm('PuTTY Sessions', 'Choose a file - a .reg export or SuperPuTTY Sessions.xml? (Cancel = choose a ~/.putty/sessions folder)', 'File'))) {
       const d = await this.backend.chooseDirectory('Select ~/.putty/sessions Folder').catch(() => '');
       if (d) this.path = d;
       this.cdr.markForCheck();

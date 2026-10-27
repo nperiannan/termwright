@@ -6,7 +6,7 @@
 It's a desktop app (not a web app), built from scratch in **Go** (backend) and **Angular + xterm.js** (UI) and packaged into a
 **single native binary** with [Wails](https://wails.io).
 
-It **imports your existing sessions** from other terminal programs (SecureCRT, PuTTY/KiTTY, MobaXterm, OpenSSH config) and
+It **imports your existing sessions** from other terminal programs (SecureCRT, PuTTY/KiTTY, SuperPuTTY, MobaXterm, OpenSSH config) and
 from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the same session file and XML formats.
 
 ![Termwright](docs/screenshots/main.png)
@@ -40,7 +40,7 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 | Device types | Login profiles (EXOS, VOSS, Cisco IOS, Linux, custom): login steps for Telnet/Serial, after-login steps for every protocol (`enable`, paging off), own username/password (or none) inherited or overridden per session; used by Quick Connect, the Connect Bar (`voss 10.1.1.1`), sessions and folder defaults |
 | Session Manager | Folder defaults (user, device type, jump host …), workspaces, Quick Open palette, folder tree, filter/search, drag & drop, new/edit/duplicate/rename/delete, connect-all-in-folder, Connect Terminal / Connect SFTP Session, recent sessions |
 | Discovery | Scan a network or range (up to a /22): ports, SSH/Telnet banners, web page/server/certificate, SIP (phones), SNMP v2c name and model, DNS, MAC address and maker; icons per kind (switch, router, firewall, AP, server, NAS, computer, phone, printer) with the evidence; add selected devices as sessions with a suggested device type. Never logs in. |
-| Import / export | Native storage is the SecureCRT `Config/Sessions/*.ini` layout (unknown keys preserved byte-for-byte): import a Config folder, `.zip`, XML export or `.ini` (saved passwords go to the OS keychain); export to folder, `.zip` or XML, and **export to PuTTY / KiTTY, MobaXterm, Tabby, OpenSSH config and CSV**. Also imports **CSV**, **Ansible** inventories, **NetBox**, **AWS EC2**, **PuTTY / KiTTY** (`.reg`, `~/.putty/sessions`), **MobaXterm** (`.mxtsessions`) and OpenSSH `~/.ssh/config` |
+| Import / export | Native storage is the SecureCRT `Config/Sessions/*.ini` layout (unknown keys preserved byte-for-byte): import a Config folder, `.zip`, XML export or `.ini` (saved passwords go to the OS keychain); export to folder, `.zip` or XML, and **export to PuTTY / KiTTY, MobaXterm, Tabby, OpenSSH config and CSV**. Also imports **CSV**, **Ansible** inventories, **NetBox**, **AWS EC2**, **PuTTY / KiTTY** (`.reg`, `~/.putty/sessions`), **SuperPuTTY** (`Sessions.xml`), **MobaXterm** (`.mxtsessions`) and OpenSSH `~/.ssh/config` |
 | Logon automation | Automate logon with an Expect/Send table (hide, trailing CR, named credentials, `\s \w \v \p` escapes), send initial CR, logon scripts with arguments, output triggers |
 | Terminal | Tabs and tiled views (side by side / stacked / grid), xterm-256color/truecolor, Unicode, scrollback search, keyword highlighting, per-session font, Backspace mode, copy-on-select, right-click paste, zoom, clickable links, session lock, Connect Bar |
 | Appearance | Dark / Light / follow-system UI with accent color; terminal scheme *Auto* (follows the UI) or one scheme for all sessions; 12 built-in color schemes (Solarized, Dracula, Nord, Gruvbox, Catppuccin, …), custom scheme editor with import/export, per-session scheme and font |
@@ -117,7 +117,7 @@ macOS builds are unsigned. After downloading one, run `xattr -dr com.apple.quara
 
 ## Migrating from SecureCRT, PuTTY or MobaXterm
 
-**PuTTY / KiTTY**: export with `reg export HKCU\Software\SimonTatham\PuTTY\Sessions putty.reg` (or use `~/.putty/sessions`) and choose *PuTTY / KiTTY sessions* in File → Import Sessions. **MobaXterm**: right-click *User sessions* → *Export all sessions to file* and choose *MobaXterm sessions*. Details in the [User Guide](docs/USER_GUIDE.md#14-migrating-from-securecrt-putty-or-mobaxterm).
+**PuTTY / KiTTY**: export with `reg export HKCU\Software\SimonTatham\PuTTY\Sessions putty.reg` (or use `~/.putty/sessions`) and choose *PuTTY / KiTTY / SuperPuTTY sessions* in File → Import Sessions (for SuperPuTTY choose its `Sessions.xml`). **MobaXterm**: right-click *User sessions* → *Export all sessions to file* and choose *MobaXterm sessions*. Details in the [User Guide](docs/USER_GUIDE.md#14-migrating-from-securecrt-putty-or-mobaxterm).
 
 **SecureCRT**:
 

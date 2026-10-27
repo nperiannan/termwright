@@ -72,6 +72,9 @@ func (s *Store) Import(src string, opt ImportOptions) (*ImportResult, error) {
 		defer zr.Close()
 		return s.importFS(zr, opt)
 	case strings.HasSuffix(lower, ".xml"):
+		if data, err := os.ReadFile(src); err == nil && isSuperPuTTY(data) {
+			return s.importSuperPuTTY(data, opt)
+		}
 		fh, err := os.Open(src)
 		if err != nil {
 			return nil, err
@@ -155,26 +158,28 @@ func (s *Store) importFS(fsys fs.FS, opt ImportOptions) (*ImportResult, error) {
 	return res, err
 }
 
-func (s *Store) importOne(rel string, f *securecrt.File, opt ImportOptions, res *ImportResult) {
+// importOne writes one imported session and returns its path ("" when it was
+// skipped or failed).
+func (s *Store) importOne(rel string, f *securecrt.File, opt ImportOptions, res *ImportResult) string {
 	if strings.EqualFold(rel, defaultFile) {
 		if !opt.IncludeDefault {
 			res.Skipped = append(res.Skipped, rel)
-			return
+			return ""
 		}
 		s.mu.Lock()
 		err := s.writeFile(defaultFile, f)
 		s.mu.Unlock()
 		if err != nil {
 			res.Errors = append(res.Errors, err.Error())
-		} else {
-			res.Imported = append(res.Imported, rel)
+			return ""
 		}
-		return
+		res.Imported = append(res.Imported, rel)
+		return rel
 	}
 	dest, err := cleanPath(JoinPath(opt.TargetFolder, rel))
 	if err != nil || dest == "" {
 		res.Errors = append(res.Errors, fmt.Sprintf("%s: invalid name", rel))
-		return
+		return ""
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -182,7 +187,7 @@ func (s *Store) importOne(rel string, f *securecrt.File, opt ImportOptions, res 
 		switch opt.Conflict {
 		case "skip":
 			res.Skipped = append(res.Skipped, dest)
-			return
+			return ""
 		case "overwrite":
 		default:
 			dest = s.uniquePath(dest)
@@ -193,7 +198,7 @@ func (s *Store) importOne(rel string, f *securecrt.File, opt ImportOptions, res 
 		s.updateFolderData(parentOf(dir), "Folder List", baseOf(dir), true)
 		if err := os.MkdirAll(s.fsPath(dir), 0o700); err != nil {
 			res.Errors = append(res.Errors, err.Error())
-			return
+			return ""
 		}
 	}
 	pw, hasPw, pwErr := securecrt.SavedPassword(f, opt.ConfigPassphrase)
@@ -205,7 +210,7 @@ func (s *Store) importOne(rel string, f *securecrt.File, opt ImportOptions, res 
 	}
 	if err := s.writeFile(dest, f); err != nil {
 		res.Errors = append(res.Errors, fmt.Sprintf("%s: %v", dest, err))
-		return
+		return ""
 	}
 	res.Imported = append(res.Imported, dest)
 	switch {
@@ -217,6 +222,7 @@ func (s *Store) importOne(rel string, f *securecrt.File, opt ImportOptions, res 
 	case pwErr != nil:
 		res.PasswordErrors = append(res.PasswordErrors, fmt.Sprintf("%s: %v", dest, pwErr))
 	}
+	return dest
 }
 
 // ImportSSHConfig imports Host entries from an OpenSSH client config file.

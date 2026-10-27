@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.20.4 (2026-10-27)
+
+* **SuperPuTTY import**: File → Import Sessions → *PuTTY / KiTTY / SuperPuTTY sessions* takes SuperPuTTY's `Sessions.xml` with its folders, host, port, protocol (SSH, Telnet, Raw, Serial), username and the `-i`, `-l`, `-P`, `-A`, `-X` extra arguments. Passwords given with `-pw` go to the OS keychain, not into the session files. Before, a `Sessions.xml` was read as a SecureCRT XML export and nothing was imported.
+
 ## 0.20.3 (2026-10-27)
 
 * **Typing and Backspace no longer lag in long sessions**: keyword highlighting marked every match in the whole scrollback, and the terminal redrew all of those marks on every key - after a few thousand lines of output with addresses and up/down (over 10,000 marks) each key cost several times more, and holding Backspace kept deleting after the key was released. Only the rows in view are highlighted now (about a hundred marks, whatever the length of the session); scrolling up highlights the rows as they come into view.
