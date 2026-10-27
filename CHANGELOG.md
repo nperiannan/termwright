@@ -4,6 +4,11 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.19.2 (2026-10-27)
+
+* **New app icon**: four tiles for the main features - terminal, remote desktop, device discovery and backups - with file transfer in the middle; on the start page, the About window, the window and taskbar icon and the installers.
+* Global Options → Device Types: more space between the device type buttons and the Name field.
+
 ## 0.19.1 (2026-10-27)
 
 * Start page: the Termwright title is semi-bold, and a **Discover Devices** button sits next to Import Sessions.

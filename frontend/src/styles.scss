@@ -51,6 +51,7 @@ h4 { margin: 18px 0 6px; }
 .grid { display: grid; grid-template-columns: 140px 1fr; gap: 10px 12px; align-items: center;
   > label { color: var(--muted); text-align: right; } textarea { resize: vertical; font-family: var(--mono); } }
 .row { display: flex; gap: 8px; align-items: center; > button { white-space: nowrap; } > input:not(.short) { flex: 1; } label { display: flex; gap: 6px; align-items: center; } }
+.row.dt-pick { margin-bottom: 14px; }
 .checks { display: flex; flex-direction: column; gap: 6px; label { display: flex; gap: 8px; align-items: center; cursor: pointer; &.disabled { opacity: .5; } } }
 table.list { width: 100%; border-collapse: collapse; margin-bottom: 10px;
   th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px; }
