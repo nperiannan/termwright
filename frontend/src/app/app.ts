@@ -67,6 +67,29 @@ export class App implements OnInit {
   });
   connectText = '';
   readonly isMac = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac OS');
+
+  // ---- theme switch (top right) ----
+  readonly systemLight = signal(false);
+  readonly themes = [
+    { v: 'light', icon: 'sun', name: 'Light' },
+    { v: 'dark', icon: 'moon', name: 'Dark' },
+    { v: 'system', icon: 'theme-system', name: 'System' },
+  ] as const;
+  readonly themeMode = computed(() => {
+    const t = this.settings()?.theme;
+    return t === 'light' || t === 'dark' ? t : 'system';
+  });
+  themeTip(v: 'light' | 'dark' | 'system') {
+    const now = this.themeMode() === v;
+    if (v === 'system') {
+      const looks = this.systemLight() ? 'light' : 'dark';
+      return now ? `Theme: follows the system (now ${looks})` : `Follow the system theme (now ${looks})`;
+    }
+    return now ? `Theme: ${v === 'light' ? 'Light' : 'Dark'}` : `Switch to the ${v === 'light' ? 'Light' : 'Dark'} theme`;
+  }
+  setTheme(v: 'light' | 'dark' | 'system') {
+    if (this.themeMode() !== v) this.ui.patchSettings({ theme: v });
+  }
   readonly menus = menuBar(this.isMac);
 
   openMenu(ev: MouseEvent, title: string) {
@@ -79,11 +102,11 @@ export class App implements OnInit {
   constructor() {
     // UI theme: dark, light or follow the operating system.
     const media = window.matchMedia('(prefers-color-scheme: light)');
-    const systemLight = signal(media.matches);
-    media.addEventListener('change', e => systemLight.set(e.matches));
+    this.systemLight.set(media.matches);
+    media.addEventListener('change', e => this.systemLight.set(e.matches));
     effect(() => {
       const t = this.settings()?.theme ?? 'system';
-      const light = t === 'light' || (t === 'system' && systemLight());
+      const light = t === 'light' || (t === 'system' && this.systemLight());
       document.documentElement.classList.toggle('light', light);
       this.ui.lightUi.set(light);
       const accent = this.settings()?.accentColor;

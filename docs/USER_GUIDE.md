@@ -787,7 +787,10 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 
 ![Light theme with Solarized Light](screenshots/light.png)
 
-- **UI theme**: Global Options → General → *Follow system* (the default: light or dark with your computer, switching when it does), *Dark* or *Light*, plus an **accent color**. The app icon on the start page and in About follows the theme.
+- **UI theme**: the **theme switch** at the top right - sun = Light, moon = Dark, screen = follow the system (the default: light or dark with your computer, switching when it does). Hover it to see the current theme, click an icon to change it. The same choice is in Global Options → General, with an **accent color**.
+
+  ![Theme switch in the dark and light theme](screenshots/theme-switch.png)
+ The app icon on the start page and in About follows the theme.
 - **Terminal color scheme**: Global Options → Terminal & Appearance (default for all sessions) or Session Options → Terminal (per session). Built in: Default, Classic, Green Screen, Light, Solarized Dark/Light, Dracula, Nord, Gruvbox Dark, Tomorrow Night, Catppuccin Mocha, Tango. Common SecureCRT scheme names map to these automatically.
 - **Custom schemes**: Global Options → Color Schemes → pick a scheme → *Copy as new…*, then edit any of the 20 colors with live preview. *Export…/Import…* share schemes as JSON.
 
@@ -844,7 +847,7 @@ Options → Global Options → **Updates** decides when you are told about updat
      - a *single session .ini* file
    - your *OpenSSH* `~/.ssh/config`
    - **PuTTY / KiTTY**: a registry export (`reg export HKCU\Software\SimonTatham\PuTTY\Sessions putty.reg`) or the `~/.putty/sessions` folder. PuTTY Session Manager folders are kept; host, user, port, protocol, serial settings, port forwards, proxy, keepalive, remote command and logging are converted. PuTTY `.ppk` keys (formats 2 and 3, encrypted or not) are used directly - no conversion needed.
-   - **SuperPuTTY**: choose its `Sessions.xml` (same *PuTTY / KiTTY / SuperPuTTY* entry). Folders (`SessionId`), host, port, protocol (SSH, Telnet, Raw, Serial with COM port and speed), username and the `-i` key file and `-l` / `-P` / `-A` / `-X` options from the extra arguments are converted. A password given with `-pw` is saved in the OS keychain, never in the session file - consider deleting `Sessions.xml` afterwards, since it holds those passwords in plain text. RLogin, Cygterm and Mintty sessions are listed as skipped.
+   - **SuperPuTTY**: choose its `Sessions.xml` (same *PuTTY / KiTTY / SuperPuTTY* entry). Folders (`SessionId`), host, port, protocol (SSH, Telnet, Raw, Serial with COM port and speed), username and the `-i` key file and `-l` / `-P` / `-A` / `-X` options from the extra arguments are converted. A password given with `-pw` is saved in the OS keychain, never in the session file - consider deleting `Sessions.xml` afterwards, since it holds those passwords in plain text. Cygterm and Mintty sessions (local Cygwin shells) become **Local Shell** sessions: their own command when they have one, else Cygwin's login bash on Windows when Cygwin is installed, else your normal shell. RLogin sessions are listed as skipped (RLogin sends passwords unencrypted and needs administrator rights - use SSH or Telnet).
    - **CSV** (from a spreadsheet): header row with `name, host, protocol, port, username, folder, device_type, description, identity_file`.
 
      ![Import from CSV](screenshots/import-csv.png)

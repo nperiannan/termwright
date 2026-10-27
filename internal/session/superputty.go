@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -84,11 +86,22 @@ func ParseSuperPuTTY(data []byte) (list []SuperPuTTYSession, skipped []string, e
 			if port > 0 {
 				n.BaudRate = port
 			}
+		case "cygterm", "mintty":
+			// a local Cygwin shell on Windows: a Local Shell session (Cygwin's
+			// bash when it is installed, else the computer's own shell)
+			n.Protocol = ProtoLocal
+			n.Port = 0
+			n.LocalCommand = cygwinShell(strings.TrimSpace(d.Host))
+			n.Description = append(n.Description, "SuperPuTTY "+d.Proto+" session (local Cygwin shell)")
 		default:
-			skipped = append(skipped, JoinPath(n.Folder, n.Name)+" ("+d.Proto+" sessions are not supported)")
+			why := d.Proto + " sessions are not supported"
+			if strings.EqualFold(d.Proto, "rlogin") {
+				why = "RLogin is not supported: it sends passwords unencrypted and needs administrator rights; use SSH or Telnet"
+			}
+			skipped = append(skipped, JoinPath(n.Folder, n.Name)+" ("+why+")")
 			continue
 		}
-		if n.Protocol != ProtoSerial {
+		if n.Protocol != ProtoSerial && n.Protocol != ProtoLocal {
 			host := strings.TrimSpace(d.Host)
 			if u, h, ok := strings.Cut(host, "@"); ok {
 				n.Username, host = u, h
@@ -191,4 +204,22 @@ func (s *Store) importSuperPuTTY(data []byte, opt ImportOptions) (*ImportResult,
 		}
 	}
 	return res, nil
+}
+
+// cygwinShell is the command of an imported Cygterm / Mintty session: the
+// session's own command when it names one, else Cygwin's login bash on
+// Windows when Cygwin is installed, else "" (the computer's default shell).
+func cygwinShell(host string) string {
+	if h := strings.ToLower(host); host != "" && h != "localhost" && h != "-" && h != "127.0.0.1" {
+		return host
+	}
+	if runtime.GOOS != "windows" {
+		return ""
+	}
+	for _, d := range []string{`C:\cygwin64`, `C:\cygwin`} {
+		if _, err := os.Stat(d + `\bin\bash.exe`); err == nil {
+			return `"` + d + `\bin\bash.exe" --login -i`
+		}
+	}
+	return ""
 }

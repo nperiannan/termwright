@@ -25,7 +25,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Start page**: quick actions (Quick Connect, New Session, Local Shell, Import Sessions, Discover Devices) and recent sessions when no tab is open.
 - **Restore tabs**: the open sessions come back at the next start (optional).
 - **Window size and position** are remembered.
-- **Themes**: dark, light or follow the system, with an accent color.
+- **Themes**: dark, light or follow the system (the default), switched with the sun / moon / screen icons at the top right, with an accent color.
 - **Text kept as typed**: no auto-capitalisation, spelling or quote correction in fields (macOS).
 - **About**: version and a Copy Link button to share Termwright.
 
@@ -233,7 +233,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 - **Native storage** is the SecureCRT session layout (`Config/Sessions/*.ini`); unknown keys are kept.
 - **Import from SecureCRT**: Config folder, zip, XML export or single `.ini`, with saved passwords moved to the keychain.
-- **Import from other programs**: PuTTY / KiTTY (`.reg`, `~/.putty/sessions`), SuperPuTTY (`Sessions.xml`, `-pw` passwords to the keychain), MobaXterm (`.mxtsessions`, `MobaXterm.ini`), OpenSSH `~/.ssh/config`.
+- **Import from other programs**: PuTTY / KiTTY (`.reg`, `~/.putty/sessions`), SuperPuTTY (`Sessions.xml`, `-pw` passwords to the keychain, Cygterm / Mintty as Local Shell), MobaXterm (`.mxtsessions`, `MobaXterm.ini`), OpenSSH `~/.ssh/config`.
 - **Import from inventories**: CSV, Ansible (INI / YAML), NetBox, AWS EC2.
 - **Export**: SecureCRT folder, zip or XML (everything kept).
 - **Export to other programs**: PuTTY and KiTTY (.reg), PuTTY sessions folder, MobaXterm (.mxtsessions), Tabby profiles, OpenSSH config and CSV.

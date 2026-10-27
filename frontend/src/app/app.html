@@ -42,6 +42,12 @@
   } @else {
     <span class="grow"></span>
   }
+  <div class="theme-sw" role="radiogroup" aria-label="Theme">
+    @for (o of themes; track o.v) {
+      <button type="button" role="radio" [attr.aria-checked]="themeMode() === o.v" [class.on]="themeMode() === o.v"
+              [title]="themeTip(o.v)" (click)="setTheme(o.v)"><app-icon [name]="o.icon" [size]="15" /></button>
+    }
+  </div>
   <span class="brand">Termwright</span>
 </header>
 

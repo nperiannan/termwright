@@ -12,12 +12,14 @@ const superPuTTYSample = `<?xml version="1.0" encoding="utf-8"?>
   <SessionData SessionId="Lab/Rack 1/sw1" SessionName="sw1" ImageKey="computer" Host="192.0.2.10" Port="23" Proto="Telnet" PuttySession="Default Settings" Username="" ExtraArgs="" SPSLFileName="" RemotePath="" LocalPath="" />
   <SessionData SessionId="Lab/Rack 1/sw2" SessionName="sw2" ImageKey="computer" Host="192.0.2.11" Port="2222" Proto="SSH" PuttySession="Default Settings" Username="admin" ExtraArgs="-pw &quot;s3cret x&quot; -i C:\keys\lab.ppk" />
   <SessionData SessionId="Lab/con" SessionName="con" ImageKey="computer" Host="COM3" Port="115200" Proto="Serial" PuttySession="Lab" Username="" ExtraArgs="" />
+  <SessionData SessionId="Local/cyg" SessionName="cyg" ImageKey="computer" Host="localhost" Port="0" Proto="Cygterm" PuttySession="Default Settings" Username="" ExtraArgs="" />
+  <SessionData SessionId="Local/mt" SessionName="mt" ImageKey="computer" Host="/usr/bin/zsh -l" Port="0" Proto="Mintty" PuttySession="Default Settings" Username="" ExtraArgs="" />
   <SessionData SessionId="old/rl" SessionName="rl" ImageKey="computer" Host="192.0.2.12" Port="513" Proto="Rlogin" PuttySession="Default Settings" Username="" ExtraArgs="" />
 </ArrayOfSessionData>`
 
 func TestParseSuperPuTTY(t *testing.T) {
 	list, skipped, err := ParseSuperPuTTY([]byte(superPuTTYSample))
-	if err != nil || len(list) != 3 || len(skipped) != 1 {
+	if err != nil || len(list) != 5 || len(skipped) != 1 {
 		t.Fatalf("%d sessions, skipped %v, err %v", len(list), skipped, err)
 	}
 	a, b, c := list[0].Session, list[1], list[2].Session
@@ -30,6 +32,13 @@ func TestParseSuperPuTTY(t *testing.T) {
 	}
 	if c.Protocol != ProtoSerial || c.ComPort != "COM3" || c.BaudRate != 115200 || len(c.Description) != 1 {
 		t.Fatalf("serial: %+v", c)
+	}
+	cy, mt := list[3].Session, list[4].Session
+	if cy.Protocol != ProtoLocal || cy.Folder != "Local" || cy.Hostname != "" || mt.Protocol != ProtoLocal || mt.LocalCommand != "/usr/bin/zsh -l" {
+		t.Fatalf("local: %+v / %+v", cy, mt)
+	}
+	if !strings.Contains(skipped[0], "RLogin is not supported") {
+		t.Fatalf("skipped: %v", skipped)
 	}
 }
 
@@ -44,7 +53,7 @@ func TestImportSuperPuTTYPasswordsStayOutOfFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	res, err := s.Import(src, ImportOptions{TargetFolder: "SuperPuTTY"})
-	if err != nil || len(res.Imported) != 3 || res.Passwords["SuperPuTTY/Lab/Rack 1/sw2"] != "s3cret x" || len(res.Passwords) != 1 {
+	if err != nil || len(res.Imported) != 5 || res.Passwords["SuperPuTTY/Lab/Rack 1/sw2"] != "s3cret x" || len(res.Passwords) != 1 {
 		t.Fatalf("res %+v err %v", res, err)
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, "Sessions", "SuperPuTTY", "Lab", "Rack 1", "sw2.ini"))

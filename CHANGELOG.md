@@ -4,6 +4,11 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.20.5 (2026-10-27)
+
+* **Theme switch** at the top right: sun (Light), moon (Dark) and screen (follow the system); the tooltip tells the current theme (and what the system shows), a click changes it.
+* SuperPuTTY import: **Cygterm and Mintty** sessions become Local Shell sessions (their own command, else Cygwin's bash on Windows, else the normal shell). RLogin stays out (unencrypted, needs administrator rights) and the import says why.
+
 ## 0.20.4 (2026-10-27)
 
 * **SuperPuTTY import**: File → Import Sessions → *PuTTY / KiTTY / SuperPuTTY sessions* takes SuperPuTTY's `Sessions.xml` with its folders, host, port, protocol (SSH, Telnet, Raw, Serial), username and the `-i`, `-l`, `-P`, `-A`, `-X` extra arguments. Passwords given with `-pw` go to the OS keychain, not into the session files. Before, a `Sessions.xml` was read as a SecureCRT XML export and nothing was imported.
