@@ -863,6 +863,10 @@ Options → Global Options → **Updates** decides when you are told about updat
 
 Details: [SECURECRT_COMPAT.md](SECURECRT_COMPAT.md).
 
+### Moving sessions to another Termwright
+
+**File → Export Sessions…** → *folder*, *zip* or *XML* keeps **everything**: device type, MAC address, environment, jump host, port forwards, logon actions, triggers, recording, smart card, timestamps and auto-scroll settings. Import the file on the other computer (File → Import Sessions → SecureCRT folder, zip or XML). The **CSV** keeps the basics plus device type, environment, jump host and MAC address. Passwords are not in any export: move them with the password vault export (Passwords & Credentials), which is encrypted.
+
 ### Exporting to other programs
 
 Your sessions are never locked in. **File → Export Sessions…** also writes them for other programs - all sessions or the selected folder or session:
@@ -879,7 +883,7 @@ Your sessions are never locked in. **File → Export Sessions…** also writes t
 | **OpenSSH config** | Add to `~/.ssh/config`, or save as `~/.ssh/termwright.conf` and put `Include termwright.conf` at its top - works with `ssh`, VS Code Remote-SSH and any SSH tool |
 | **CSV** | Excel, Numbers, LibreOffice or an inventory; Termwright imports it again |
 
-What is carried over: name, folder, protocol, address, port, username (also the device type's), key file, jump host (PuTTY 0.77+ SSH proxy, MobaXterm SSH gateway, Tabby jump host, OpenSSH `ProxyJump`), SOCKS / HTTP proxy, port forwards, keep-alive, agent and X11 forwarding, remote command, serial settings and logging (PuTTY). The CSV also has device type, environment, jump host and MAC address.
+What is carried over: name, folder, protocol, address, port, username (also the device type's), key file, jump host (PuTTY 0.77+ SSH proxy, MobaXterm SSH gateway, Tabby jump host, OpenSSH `ProxyJump`), SOCKS / HTTP proxy, port forwards, keep-alive, agent and X11 forwarding, remote command, serial settings and logging (PuTTY). The CSV also has device type, environment, jump host and MAC address, and Termwright reads them back when it imports the CSV.
 
 After the export a summary lists the sessions the format cannot hold (e.g. RDP, VNC and console sessions in PuTTY) and what stays in Termwright: device type login steps, logon actions, triggers, smart card choice, backups, checklists and recordings. **Passwords are never exported**; to move them between Termwright installations use the password vault export (Passwords & Credentials).
 

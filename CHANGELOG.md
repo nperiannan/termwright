@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.20.6 (2026-10-27)
+
+* CSV import reads back the **MAC address, environment and jump host** that Termwright's CSV export writes (they were lost on a round trip). The folder, zip and XML exports already keep everything, device type and MAC included - now covered by a test.
+
 ## 0.20.5 (2026-10-27)
 
 * **Theme switch** at the top right: sun (Light), moon (Dark) and screen (follow the system); the tooltip tells the current theme (and what the system shows), a click changes it.

@@ -90,7 +90,8 @@ func ParseCSV(data []byte) ([]Session, error) {
 	col := map[string]int{}
 	alias := map[string]string{"hostname": "host", "ip": "host", "address": "host", "ip_address": "host", "user": "username",
 		"group": "folder", "type": "device_type", "devicetype": "device_type", "device type": "device_type", "os": "device_type",
-		"platform": "device_type", "key": "identity_file", "identity": "identity_file", "comport": "com_port", "baudrate": "baud", "session": "name"}
+		"platform": "device_type", "key": "identity_file", "identity": "identity_file", "comport": "com_port", "baudrate": "baud", "session": "name",
+		"mac_address": "mac", "mac address": "mac", "env": "environment", "jump": "jump_host", "jump_session": "jump_host", "jumphost": "jump_host"}
 	for i, h := range rows[0] {
 		k := strings.ToLower(strings.TrimSpace(h))
 		if a, ok := alias[k]; ok {
@@ -138,6 +139,13 @@ func ParseCSV(data []byte) ([]Session, error) {
 			n.Description = []string{d}
 		}
 		n.IdentityFile = get(row, "identity_file")
+		// written by Termwright's own CSV export, so a round trip keeps them
+		n.MAC = strings.ToLower(get(row, "mac"))
+		switch e := strings.ToLower(get(row, "environment")); e {
+		case "production", "staging", "test", "development":
+			n.Environment = e
+		}
+		n.JumpSession = get(row, "jump_host")
 		if n.Protocol == ProtoSerial {
 			n.ComPort, n.Hostname, n.Port = com, "", 0
 			if n.Name == "" {

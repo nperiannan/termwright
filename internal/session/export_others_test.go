@@ -203,7 +203,8 @@ func TestExportCSVRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := find(list, "core-sw1")
-	if c == nil || c.Folder != "Datacenter/Core" || c.DeviceType != "VOSS" || c.Hostname != "10.10.0.1" {
+	if c == nil || c.Folder != "Datacenter/Core" || c.DeviceType != "VOSS" || c.Hostname != "10.10.0.1" ||
+		c.MAC != "00:04:96:12:34:56" || c.JumpSession != "Cloud/jump station" {
 		t.Fatalf("%+v", c)
 	}
 	if s := find(list, "console"); s == nil || s.ComPort != "COM3" || s.BaudRate != 115200 {
@@ -218,6 +219,35 @@ func TestPuttyEscape(t *testing.T) {
 	for _, n := range []string{"Lab/legacy router", "a%b*c?", ".hidden", "Ümlaut"} {
 		if got := puttyUnescape(puttyEscape(n)); got != n {
 			t.Fatalf("%q -> %q", n, got)
+		}
+	}
+}
+
+// Termwright's own formats (folder, .zip, XML) keep everything, Termwright
+// keys included: device type, MAC address, environment, recording, smart card…
+func TestNativeExportRoundTrip(t *testing.T) {
+	st := exportFixture(t)
+	c, _ := st.Get("Datacenter/Core/core-sw1")
+	c.Environment, c.RecordSession, c.Timestamps = "production", true, true
+	if _, err := st.Save(c, "Datacenter/Core/core-sw1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []string{"xml", "zip", "folder"} {
+		dest := filepath.Join(t.TempDir(), "out")
+		if format != "folder" {
+			dest += "." + format
+		}
+		if _, err := st.Export(nil, dest, format); err != nil {
+			t.Fatal(format, err)
+		}
+		other, _ := NewStore(t.TempDir())
+		if _, err := other.Import(dest, ImportOptions{}); err != nil {
+			t.Fatal(format, err)
+		}
+		got, err := other.Get("Datacenter/Core/core-sw1")
+		if err != nil || got.DeviceType != "VOSS" || got.MAC != "00:04:96:12:34:56" || got.Environment != "production" ||
+			!got.RecordSession || !got.Timestamps || got.JumpSession != "Cloud/jump station" || len(got.PortForwards) != 2 {
+			t.Fatalf("%s: %+v %v", format, got, err)
 		}
 	}
 }
