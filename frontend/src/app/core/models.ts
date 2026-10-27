@@ -268,3 +268,6 @@ export interface ExportReport { count: number; skipped: string[]; notes: string[
 
 /** A serial port found on this computer. */
 export interface SerialPortInfo { name: string; label: string; usb: boolean; serial?: string; }
+
+/** Model, OS version, serial number and base MAC address of a device (empty when unknown). */
+export interface DeviceFacts { model: string; version: string; serial: string; mac: string; }

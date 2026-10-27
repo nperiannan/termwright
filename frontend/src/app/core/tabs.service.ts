@@ -4,7 +4,7 @@ import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
 import type { SerializeAddon } from '@xterm/addon-serialize';
 import { Backend, SftpMode } from './backend';
-import { AlertEvent, RemoteInfo, Session, TabInfo, Transfer, isRemoteDesktop, unescape } from './models';
+import { AlertEvent, DeviceFacts, RemoteInfo, Session, TabInfo, Transfer, isRemoteDesktop, unescape } from './models';
 import { Ui } from './ui.service';
 import { envOf } from './env';
 import { HtmlKeyword, bufferHtml } from './buffer-html';
@@ -713,7 +713,14 @@ export class Tabs {
         const path = await this.backend.chooseSaveFile('Save Scrollback As HTML', base + '.html', [{ displayName: 'HTML', pattern: '*.html;*.htm' }]);
         if (!path) return;
         const icon = await fetch('icon.svg').then(r => r.ok ? r.text() : '').catch(() => '');
-        await this.backend.saveTextFile(path, scrollbackHtml(h, t, icon));
+        // model, OS version, serial and MAC: from the output on screen, else read from the device in the background
+        const buf = h.term.buffer.active;
+        const text: string[] = [];
+        for (let i = 0; i < buf.length; i++) text.push(buf.getLine(i)?.translateToString(true) ?? '');
+        const remote = ['SSH2', 'Telnet'].includes(t.session.protocol ?? '') && !!t.session.path;
+        if (remote) this.ui.toast('Reading the model, OS version and serial number…', 'info');
+        const facts = await this.backend.deviceFacts(t.session.path ?? '', t.session.deviceType ?? '', text.join('\n'), remote).catch(() => null);
+        await this.backend.saveTextFile(path, scrollbackHtml(h, t, icon, facts));
         this.ui.toast(`Saved ${path}`, 'success');
         return;
       }
@@ -761,7 +768,7 @@ const esc = (v: string) => v.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 /** A self-contained HTML page of a tab's scrollback: a Termwright header with
  *  the logo, the device (name, address, protocol, device type, user, folder)
  *  and when it was saved, then the output with its colors and highlighting. */
-export function scrollbackHtml(h: TermHandle, t: TabView, iconSvg = ''): string {
+export function scrollbackHtml(h: TermHandle, t: TabView, iconSvg = '', facts: DeviceFacts | null = null): string {
   const term = h.term;
   const bg = String(term.options.theme?.background ?? '#1e1f22');
   const fg = String(term.options.theme?.foreground ?? '#d4d4d4');
@@ -776,9 +783,12 @@ export function scrollbackHtml(h: TermHandle, t: TabView, iconSvg = ''): string 
   const date = now.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
   const time = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' });
   const rows: [string, string][] = [
-    ['Session', s.path || t.title], ['Address', address], ['Protocol', proto],
-    ['Device type', s.deviceType || ''], ['User', t.shellUser || s.username || ''],
-    ['Connection', t.info || ''], ['Saved', `${date}, ${time}`], ['Lines', String(lines)],
+    ['Session', s.path || t.title], ['Address', address],
+    ['Model', facts?.model ?? ''], ['OS version', facts?.version ?? ''],
+    ['Serial number', facts?.serial ?? ''], ['MAC address', facts?.mac || (s as { mac?: string }).mac || ''],
+    ['Device type', s.deviceType || ''], ['Protocol', proto],
+    ['User', t.shellUser || s.username || ''], ['Connection', t.info || ''],
+    ['Saved', `${date}, ${time}`], ['Lines', String(lines)],
   ];
   const logo = iconSvg ? `<img class="logo" alt="" src="data:image/svg+xml;base64,${toBase64(iconSvg)}">` : '';
   return `<!doctype html>
@@ -804,7 +814,7 @@ export function scrollbackHtml(h: TermHandle, t: TabView, iconSvg = ''): string 
 <body>
 <header>
   <div class="brand">${logo}<span class="name">Termwright</span><span class="what">Terminal output</span></div>
-  <dl>${rows.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd${k === 'Address' || k === 'Connection' ? ' class="mono"' : ''}>${esc(v)}</dd>`).join('')}</dl>
+  <dl>${rows.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd${['Address', 'Connection', 'Serial number', 'MAC address'].includes(k) ? ' class="mono"' : ''}>${esc(v)}</dd>`).join('')}</dl>
 </header>
 <main>${body}</main>
 </body></html>

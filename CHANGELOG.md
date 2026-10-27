@@ -6,7 +6,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## 0.20.2 (2026-10-27)
 
-* **Save Scrollback As HTML** (File menu, right-click the terminal or a tab): the scrollback as a web page with the Termwright logo, the session, address, protocol, device type, user, connection and the date and time it was saved, then the output with its colors and keyword highlighting as shown in the tab - to open in a browser, attach to a ticket or print to PDF.
+* **Save Scrollback As HTML** (File menu, right-click the terminal or a tab): the scrollback as a web page with the Termwright logo, the session, address, the device's model, OS version, serial number and MAC address (from the output on screen, or read in a background connection for VOSS, EXOS, Cisco and Linux device types), device type, protocol, user, connection and the date and time it was saved, then the output with its colors and keyword highlighting as shown in the tab - to open in a browser, attach to a ticket or print to PDF.
 
 ## 0.20.1 (2026-10-27)
 
