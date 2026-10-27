@@ -52,7 +52,10 @@ func (a *App) DiscoverStart(spec, community string) (map[string]any, error) {
 			cancel()
 			wruntime.EventsEmit(a.ctx, "discover:done:"+id, stopped)
 		}()
-		discover.Scan(ctx, addrs, discover.Options{Community: community, OUI: a.ouiTable()},
+		discover.Scan(ctx, addrs, discover.Options{Community: community, OUI: a.ouiTable(),
+			Again: func(done, total int) {
+				wruntime.EventsEmit(a.ctx, "discover:again:"+id, map[string]int{"done": done, "total": total})
+			}},
 			func(r discover.Result) { wruntime.EventsEmit(a.ctx, "discover:found:"+id, r) },
 			func(done, total int) {
 				wruntime.EventsEmit(a.ctx, "discover:progress:"+id, map[string]int{"done": done, "total": total})

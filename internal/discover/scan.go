@@ -38,6 +38,9 @@ type Options struct {
 	NoWeb     bool // skip reading web pages
 	NoARP     bool // skip the neighbour (ARP) table
 	OUI       OUI  // MAC vendor table (nil = none)
+	// Again is told the progress of the second, slower look at devices that
+	// answered ARP but showed no login port (after the main pass).
+	Again func(done, total int)
 }
 
 // Result describes one device that answered.
@@ -105,6 +108,7 @@ func Scan(ctx context.Context, addrs []netip.Addr, opt Options, found func(Resul
 	self := localAddrs()
 	var mu sync.Mutex
 	done, total := 0, len(addrs)
+	report := progress // the second look reports to opt.Again instead
 	results := map[netip.Addr]*Result{}
 	inRange := map[netip.Addr]bool{}
 	for _, a := range addrs {
@@ -144,8 +148,8 @@ func Scan(ctx context.Context, addrs []netip.Addr, opt Options, found func(Resul
 						found(r)
 					}
 					done++
-					if progress != nil {
-						progress(done, total)
+					if report != nil {
+						report(done, total)
 					}
 					mu.Unlock()
 				}
@@ -193,7 +197,7 @@ func Scan(ctx context.Context, addrs []netip.Addr, opt Options, found func(Resul
 			slow.Parallel = 16
 		}
 		mu.Lock()
-		total += len(again)
+		done, total, report = 0, len(again), opt.Again
 		mu.Unlock()
 		wake(ctx, again, 800*time.Millisecond)
 		run(again, slow)

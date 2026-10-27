@@ -65,6 +65,7 @@ type Settings struct {
 	FontSize             int                  `json:"fontSize"`
 	Theme                string               `json:"theme"`               // ui theme: dark | light | system
 	ThemeFollowsSystem   bool                 `json:"themeFollowsSystem"`  // set once when the default became "system" (0.20.1)
+	HighlightOptIn       bool                 `json:"highlightOptIn"`      // set once when keyword highlighting became off by default (0.20.3)
 	HideTerminalBar      bool                 `json:"hideTerminalBar"`     // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
 	TerminalScheme       string               `json:"terminalScheme"`      // scheme name or "Auto" (follow the UI theme)
 	ForceTermScheme      bool                 `json:"forceTerminalScheme"` // global scheme wins over session schemes
@@ -294,7 +295,7 @@ func Defaults(dataDir string) Settings {
 				{Text: `\b\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?\b`, Regex: true, Color: "#1f3f6b"},
 			},
 		}},
-		DefaultKeywordSet:  "Network",
+		DefaultKeywordSet:  "", // off; the Network set is there to pick
 		Bookmarks:          []Bookmark{},
 		UpdateChannel:      "stable",
 		SFTPCwdAuto:        true,
@@ -378,6 +379,11 @@ func Load(dataDir string) (*Manager, error) {
 	// system (once - a theme chosen afterwards stays).
 	if !m.cur.ThemeFollowsSystem {
 		m.cur.Theme, m.cur.ThemeFollowsSystem, changed = "system", true, true
+	}
+	// Keyword highlighting is off by default since 0.20.3 (once - a default
+	// set picked afterwards stays).
+	if !m.cur.HighlightOptIn {
+		m.cur.DefaultKeywordSet, m.cur.HighlightOptIn, changed = "", true, true
 	}
 	if changed {
 		_ = m.Save(m.cur)

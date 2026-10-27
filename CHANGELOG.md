@@ -7,6 +7,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 ## 0.20.3 (2026-10-27)
 
 * **Typing and Backspace no longer lag in long sessions**: keyword highlighting marked every match in the whole scrollback, and the terminal redrew all of those marks on every key - after a few thousand lines of output with addresses and up/down (over 10,000 marks) each key cost several times more, and holding Backspace kept deleting after the key was released. Only the rows in view are highlighted now (about a hundred marks, whatever the length of the session); scrolling up highlights the rows as they come into view.
+* **Keyword highlighting is off by default** (existing settings switch once; pick a default set such as *Network* in Global Options → Keyword Highlighting, or a set per session).
+* Discover Devices: the address count no longer goes past the total (260 / 254); devices checked a second time are counted separately ("6 checked again").
 
 ## 0.20.2 (2026-10-27)
 

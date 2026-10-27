@@ -794,7 +794,7 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 ![Color scheme editor](screenshots/schemes.png)
 
 - **Font / cursor**: Global Options → Terminal & Appearance (font family, size, cursor style, blink, scrollback); per-session font in Session Options → Terminal.
-- **Keyword highlighting**: Global Options → Keyword Highlighting. Create sets of words or regular expressions with colors; choose the default set, or a set per session (Session Options → Terminal). The built-in *Network* set marks errors/down (red), warnings (amber), up/ok (green) and IPv4 addresses (blue). Highlighting is skipped in full-screen programs such as `vi` or `less`.
+- **Keyword highlighting** (off by default): Global Options → Keyword Highlighting. Create sets of words or regular expressions with colors; choose the default set (*None* = off), or a set per session (Session Options → Terminal). Only the rows on screen are highlighted, so long sessions stay fast. The built-in *Network* set marks errors/down (red), warnings (amber), up/ok (green) and IPv4 addresses (blue). Highlighting is skipped in full-screen programs such as `vi` or `less`.
 
 ![Keyword Highlighting](screenshots/keywords.png)
 
@@ -939,4 +939,4 @@ Back up the data folder to back up everything except passwords.
 | Import: the .xml file is not listed (Windows) | Choose **All files (\*.\*)** in the file-type list of the picker, and check that the source is *XML settings export*. |
 | Pasting into a switch drops characters | Set *Paste line delay* (e.g. 50 ms) in Global Options → Terminal. |
 | ZMODEM does nothing | Install `lrzsz` on the remote host; check the Downloads folder in Global Options. |
-| Highlighting is missing | Check the session's keyword set (Terminal page) and the default set; it is off in full-screen apps. |
+| Highlighting is missing | It is off by default: pick a default set in Global Options → Keyword Highlighting (e.g. *Network*) or a set in the session's Terminal page; it is also off in full-screen apps. |

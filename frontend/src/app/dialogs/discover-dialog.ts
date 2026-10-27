@@ -58,7 +58,7 @@ const ACK_KEY = 'termwright.discoverAck';
         <div class="bar">
           @if (total()) {
             <progress [max]="total()" [value]="done()"></progress>
-            <span class="hint">{{ done() }} / {{ total() }} addresses · {{ rows().length }} found{{ running() ? '' : stopped() ? ' · stopped' : ' · done' }}{{ rows().length ? ' · double-click a device to connect' : '' }}</span>
+            <span class="hint">{{ done() }} / {{ total() }} addresses{{ again().total ? (running() ? ' · checking ' + again().total + ' device' + (again().total === 1 ? '' : 's') + ' again, more slowly (' + again().done + ' / ' + again().total + ')' : ' · ' + again().total + ' checked again') : '' }} · {{ rows().length }} found{{ running() ? '' : stopped() ? ' · stopped' : ' · done' }}{{ rows().length ? ' · double-click a device to connect' : '' }}</span>
           }
           <span class="spacer"></span>
           @if (rows().length) {
@@ -219,6 +219,8 @@ export class DiscoverDialog implements OnDestroy {
   readonly byType = signal(!!this.prefs.byType);
   readonly running = signal(false);
   readonly stopped = signal(false);
+  /** The second, slower look at devices that showed no login port. */
+  readonly again = signal({ done: 0, total: 0 });
   readonly total = signal(0);
   readonly done = signal(0);
   readonly rows = signal<Row[]>([]);
@@ -354,6 +356,7 @@ export class DiscoverDialog implements OnDestroy {
     this.err.set('');
     this.rows.set([]);
     this.stopped.set(false);
+    this.again.set({ done: 0, total: 0 });
     this.unsub.forEach(u => u());
     this.unsub = [];
     try {
@@ -366,6 +369,7 @@ export class DiscoverDialog implements OnDestroy {
       this.unsub.push(
         this.backend.on('discover:found:' + r.id, (d: DiscoverResult) => this.found(d)),
         this.backend.on('discover:progress:' + r.id, (p: { done: number }) => this.done.set(p.done)),
+        this.backend.on('discover:again:' + r.id, (p: { done: number; total: number }) => this.again.set(p)),
         this.backend.on('discover:done:' + r.id, (stopped: boolean) => { this.running.set(false); this.stopped.set(!!stopped); }),
       );
     } catch (e) { this.err.set(errText(e)); }

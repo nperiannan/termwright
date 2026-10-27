@@ -146,7 +146,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Auto scroll** on by default; turn it off (toolbar, right-click, Edit menu or per session) to keep the view still while output arrives.
 - **Copy / paste**: copy on select, paste on right-click, Shift+Insert / Ctrl+Insert, copy as HTML with colors.
 - **Paste safety**: preview and confirm multi-line pastes; paste line delay for slow devices.
-- **Keyword highlighting**: sets of words or regular expressions with colors, per session or default (built-in network set: up/down, errors…).
+- **Keyword highlighting** (off by default): sets of words or regular expressions with colors, per session or default (built-in network set: up/down, errors…); only the rows on screen are marked, so long sessions stay fast.
 - **Clickable links** and OSC 8 hyperlinks.
 - **Timestamps**: local time with milliseconds in front of each output line (display only), per tab or on by default for a session.
 - **Zoom** (`Mod +`, `Mod -`, `Mod 0`), per-session font and size, cursor style and blink.
