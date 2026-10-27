@@ -7,6 +7,7 @@ package main
 import (
 	"embed"
 	"github.com/termwright/termwright/internal/config"
+	"github.com/termwright/termwright/internal/discover"
 	"log"
 	"runtime"
 
@@ -25,6 +26,7 @@ import (
 var assets embed.FS
 
 func main() {
+	discover.RaiseFileLimit()
 	app := NewApp()
 	width, height, start := 1280, 820, options.Normal
 	if dir, err := config.DataDir(); err == nil {

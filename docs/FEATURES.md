@@ -69,7 +69,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Telnet** with option negotiation (window size, terminal type, echo, suppress go-ahead).
 - **Serial**: COM ports / tty devices listed in order with the USB adapter's name, updated by itself when a cable is plugged in; baud rate, data bits, parity, stop bits.
 - **Detect Speed**: finds the baud rate of a console (Enter at each common speed, the readable answer wins); optionally on every connect.
-- **Send bar** on serial tabs: message box with CR / LF / CR+LF / no line ending, ↑/↓ recall, Timestamps, Auto scroll and Clear; available on any tab from the right-click menu.
+- **Send bar** on serial tabs: port and speed of the connection, message box with CR / LF / CR+LF / no line ending, ↑/↓ recall, Timestamps, Auto scroll and Clear; available on any tab from the right-click menu.
 - **Serial flow control**: none, RTS/CTS or XON/XOFF; DTR/RTS on open; break.
 - **Raw TCP** for terminal servers and devices with a plain TCP console.
 - **Send initial carriage return** to wake up consoles.
@@ -116,7 +116,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## Discover devices
 
-- **Scan a network or range** (up to a /22) without ever logging in; `192.168.1.0` without a mask scans its /24.
+- **Scan a network or range** (up to a /22) without ever logging in; `192.168.1.0` without a mask scans its /24. Dependable on busy networks: devices are woken (ARP) before the checks, live devices are checked a second time more slowly, and checks wait when the computer runs short of sockets.
 - **What it checks**: login and service ports, SSH and Telnet greetings, web page title / server / certificate, SIP (phones), SNMP v2c name and model, DNS, mDNS, CoAP, ESPHome, MQTT, Modbus.
 - **MAC address and maker** from the ARP table, with the downloadable IEEE vendor list.
 - **Kinds with icons**: switch, router, firewall, access point, server, NAS, computer, phone, mobile, printer, IoT board.
@@ -141,7 +141,8 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 - **Emulation**: xterm-256color with true color, VT100/102/220, ANSI, Linux; Unicode.
 - **Scrollback** with search (`Mod+F`), clear scrollback, reset terminal.
-- **Clear Screen** (toolbar eraser, right-click, tab menu, Edit menu): empties the screen and the scrollback on any connection.
+- **Terminal bar** under SSH, Telnet, Raw and local tabs: Timestamps, Auto scroll and Clear (can be hidden per tab or everywhere).
+- **Clear Screen** (toolbar eraser, terminal bar, right-click, tab menu, Edit menu): empties the screen and the scrollback on any connection.
 - **Auto scroll** on by default; turn it off (toolbar, right-click, Edit menu or per session) to keep the view still while output arrives.
 - **Copy / paste**: copy on select, paste on right-click, Shift+Insert / Ctrl+Insert, copy as HTML with colors.
 - **Paste safety**: preview and confirm multi-line pastes; paste line delay for slow devices.

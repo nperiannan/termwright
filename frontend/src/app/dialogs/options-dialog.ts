@@ -23,7 +23,7 @@ const SEARCH: [Page, string, string][] = [
   ['general', 'Show Connect Bar', 'toolbar quick connect'], ['general', 'Show the menu bar inside the window', 'menu'],
   ['terminal', 'Font', 'typeface monospace'], ['terminal', 'Font size', 'zoom text size'], ['terminal', 'Color scheme', 'colours theme terminal'],
   ['terminal', 'Use this scheme for all sessions', 'force override'], ['terminal', 'Cursor', 'block underline bar'], ['terminal', 'Blink', 'cursor'],
-  ['terminal', 'Scrollback lines', 'history buffer'], ['terminal', 'Copy on select', 'clipboard mouse'], ['terminal', 'Paste on right-click', 'mouse clipboard'],
+  ['terminal', 'Scrollback lines', 'history buffer'], ['terminal', 'Terminal bar', 'timestamps auto scroll clear screen'], ['terminal', 'Copy on select', 'clipboard mouse'], ['terminal', 'Paste on right-click', 'mouse clipboard'],
   ['terminal', 'Paste line delay', 'slow paste milliseconds'],
   ['schemes', 'Scheme', 'colour scheme custom colors palette'], ['keywords', 'Default set', 'keyword highlighting highlight words colour'],
   ['keymap', 'Key Map', 'shortcut keyboard binding hotkey'], ['buttons', 'Button Bar', 'buttons send command'],
@@ -136,6 +136,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label><input type="checkbox" name="cb" [(ngModel)]="s.cursorBlink" /> Blink</label>
                 </div>
                 <label>Scrollback lines</label><input name="sb" type="number" min="100" class="short" [(ngModel)]="s.scrollback" />
+                <label>Terminal bar</label>
+                <div class="checks"><label><input type="checkbox" name="tbar" [ngModel]="!s.hideTerminalBar" (ngModelChange)="s.hideTerminalBar = !$event" /> Show Timestamps, Auto scroll and Clear under SSH, Telnet and local tabs (serial tabs always have their send bar)</label></div>
                 <label>Mouse</label>
                 <div class="checks">
                   <label><input type="checkbox" name="cos" [(ngModel)]="s.copyOnSelect" /> Copy on select</label>

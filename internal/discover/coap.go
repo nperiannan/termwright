@@ -19,7 +19,7 @@ func coapCore(ctx context.Context, a netip.Addr, port int, timeout time.Duration
 	msg = append(msg, 0x04)
 	msg = append(msg, "core"...)
 	var d net.Dialer
-	c, err := d.DialContext(ctx, "udp", netip.AddrPortFrom(a, uint16(port)).String())
+	c, err := dialBusy(ctx, &d, "udp", netip.AddrPortFrom(a, uint16(port)).String())
 	if err != nil {
 		return ""
 	}

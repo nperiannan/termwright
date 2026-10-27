@@ -88,7 +88,7 @@ export class Overlays {
       @if (ui.dialog() === 'about') {
         <div class="modal-head">About Termwright</div>
         <div class="modal-body about">
-          <div class="about-head"><img src="icon.svg" alt="" width="64" height="64" />
+          <div class="about-head"><img [src]="ui.lightUi() ? 'icon.svg' : 'icon-dark.svg'" alt="" width="64" height="64" />
             <h2>Termwright <small>{{ info()?.version }}</small></h2></div>
           <p>A free, open-source terminal emulator, session manager and file-transfer client for network and
             system engineers - one app for Windows, Linux and macOS.</p>

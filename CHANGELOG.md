@@ -4,6 +4,15 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.20.1 (2026-10-27)
+
+* **Discover Devices finds the same devices every time**: on macOS a scan could run out of sockets (apps start with a limit of 256) and then miss the ports, SNMP and names of many devices; the limit is raised and the scan stays within it. Devices are woken before the checks (their MAC address is looked up first), devices that are there but showed no login port are checked a second time more slowly, and checks wait and retry when the computer is short of sockets. "stopped" was shown after every scan; it now shows only when Stop was pressed.
+* **Terminal bar** under SSH, Telnet, Raw and local shell tabs: Timestamps, Auto scroll and Clear. ✕ hides it for a tab; Global Options → Terminal → *Terminal bar* hides it everywhere.
+* Serial tabs show the **port and speed** of the connection at the start of the send bar; the bar wraps in narrow panes.
+* **Faster typing** with many sessions: the Session Manager only puts the rows in view on the page (a tree of 1,500 sessions went from about 20,000 page elements to 650), and Command Window suggestions are worked out when the keys pause.
+* The UI theme **follows the system** by default (light or dark with the computer); existing settings switch to it once and a theme chosen later stays.
+* Start page: a smaller icon in front of the Termwright title; the icon on the start page and in About has a dark version for the dark theme.
+
 ## 0.20.0 (2026-10-27)
 
 * **Serial consoles**

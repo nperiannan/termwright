@@ -39,26 +39,23 @@ function b64ToBytes(b64: string): Uint8Array {
       <div class="paused" title="New output does not move the view">Auto scroll is off <button type="button" (click)="setAutoScroll(true)">Turn On</button></div>
     }
     @if (tab().sendBar) {
-      <div class="sendbar">
-        <input class="msg" #msg [ngModel]="sendText()" (ngModelChange)="sendText.set($event)" (keydown)="sendKey($event)"
-          [placeholder]="tab().state === 'connected' ? 'Message to send - Enter sends, ↑/↓ earlier messages' : 'Not connected'" />
-        <select [ngModel]="eol()" (ngModelChange)="setEol($event)" title="Added after each message">
-          @for (e of eols; track e.l) { <option [ngValue]="e.v">{{ e.l }}</option> }
-        </select>
-        <button type="button" class="primary" (click)="sendLine()" [disabled]="tab().state !== 'connected'">Send</button>
-        <span class="sep"></span>
+      <div class="sendbar" [class.compact]="!serial()">
+        @if (serial()) {
+          <span class="port" [class.on]="tab().state === 'connected'" [title]="tab().info || 'Serial port and speed'"><span class="dot"></span>{{ portLabel() }}</span>
+          <input class="msg" #msg [ngModel]="sendText()" (ngModelChange)="sendText.set($event)" (keydown)="sendKey($event)"
+            [placeholder]="tab().state === 'connected' ? 'Message to send - Enter sends, ↑/↓ earlier messages' : 'Not connected'" />
+          <select [ngModel]="eol()" (ngModelChange)="setEol($event)" title="Added after each message">
+            @for (e of eols; track e.l) { <option [ngValue]="e.v">{{ e.l }}</option> }
+          </select>
+          <button type="button" class="primary" (click)="sendLine()" [disabled]="tab().state !== 'connected'">Send</button>
+          <span class="sep"></span>
+        } @else {
+          <span class="spacer"></span>
+        }
         <label title="Local time at the start of each line (display only)"><input type="checkbox" [ngModel]="!!tab().timestamps" (ngModelChange)="setTimestamps($event)" /> Timestamps</label>
         <label title="Follow new output"><input type="checkbox" [ngModel]="tab().autoScroll !== false" (ngModelChange)="setAutoScroll($event)" /> Auto scroll</label>
         <button type="button" (click)="clearAll()" title="Clear the screen and the scrollback">Clear</button>
-        <button type="button" class="x" title="Hide the send bar (right-click the terminal to show it again)" (click)="tabs.patch(tab().id, { sendBar: false })">✕</button>
-      </div>
-    }
-    @if (fix(); as f) {
-      <div class="fixbar" role="alert">
-        <button type="button" class="fx" title="Dismiss" (click)="dismissed.set(tab().message)">✕</button>
-        <div class="fmsg">{{ tab().message }}</div>
-        @if (f.hint) { <div class="fhint">{{ f.hint }}</div> }
-        <div class="facts">@for (a of f.actions; track a) { <button type="button" [class.primary]="$first" (click)="runFix(a)">{{ labels[a] }}</button> }</div>
+        <button type="button" class="x" [title]="serial() ? 'Hide the send bar (right-click the terminal → Send Bar shows it again)' : 'Hide this bar (right-click the terminal → Terminal Bar shows it again; Global Options → Terminal hides it for every tab)'" (click)="tabs.patch(tab().id, { sendBar: false })">✕</button>
       </div>
     }`,
   styles: [`
@@ -67,12 +64,17 @@ function b64ToBytes(b64: string): Uint8Array {
     .paused { position: absolute; right: 18px; bottom: 44px; z-index: 4; display: flex; gap: 8px; align-items: center; padding: 4px 6px 4px 10px; border-radius: 6px;
       background: var(--panel); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 12px;
       button { height: 22px; font-size: 11.5px; padding: 0 8px; } }
-    .sendbar { flex: none; display: flex; gap: 8px; align-items: center; margin: 4px 0 0 -6px; padding: 5px 8px; background: var(--panel); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted);
-      .msg { flex: 1; min-width: 120px; font-family: var(--mono); }
-      select { flex: none; width: 140px; }
+    .sendbar { flex: none; display: flex; flex-wrap: wrap; row-gap: 4px; gap: 8px; align-items: center; margin: 4px 0 0 -6px; padding: 5px 8px; background: var(--panel); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted);
+      .msg { flex: 1 1 160px; min-width: 160px; font-family: var(--mono); }
+      select { flex: none; width: 104px; }
       label { display: flex; gap: 4px; align-items: center; white-space: nowrap; cursor: pointer; }
       .sep { width: 1px; align-self: stretch; background: var(--border); }
-      button { height: 24px; } .x { border: 0; background: none; color: var(--muted); padding: 0 4px; } }
+      button { height: 24px; } .x { border: 0; background: none; color: var(--muted); padding: 0 4px; }
+      .spacer { flex: 1; }
+      .port { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-family: var(--mono); font-size: 11.5px; color: var(--text); padding: 2px 8px; border: 1px solid var(--border); border-radius: 12px;
+        .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; } &.on .dot { background: var(--ok, #22c55e); } } }
+    .sendbar.compact { padding: 2px 8px; button { height: 20px; font-size: 11.5px; padding: 0 8px; } }
     .fixbar { position: absolute; top: 10px; right: 14px; z-index: 5; max-width: min(520px, 80%); padding: 10px 12px; border-radius: 8px;
       background: var(--panel); color: var(--text); border: 1px solid var(--border); border-left: 4px solid var(--danger); box-shadow: var(--shadow); font-size: 12.5px; }
     .fmsg { font-weight: 600; margin-right: 18px; word-break: break-word; }
@@ -96,6 +98,15 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   private history = inject(History);
 
   // ---- send bar (serial tabs; any tab from the right-click menu) ----
+  readonly serial = computed(() => this.tab().session.protocol === 'Serial');
+  /** "/dev/cu.usbserial-A10K · 115200 8N1": what the connection reports, else the session's settings. */
+  readonly portLabel = computed(() => {
+    const t = this.tab();
+    const m = /^Serial (\S+) (\d+) (\d[NOEMS][\d.]+)(.*)$/.exec(t.info || '');
+    if (m) return `${m[1]} · ${m[2]} ${m[3]}${m[4]}`;
+    const s = t.session;
+    return `${s.comPort || 'no port'} · ${s.serialAutoBaud ? 'speed detected on connect' : (s.baudRate || 9600)}`;
+  });
   readonly eols = [{ v: '\r', l: 'CR' }, { v: '\n', l: 'LF' }, { v: '\r\n', l: 'CR+LF' }, { v: '', l: 'No line ending' }];
   readonly sendText = signal('');
   readonly eol = signal<string>((() => { try { const v = JSON.parse(localStorage.getItem('termwright.sendEol') ?? '"\\r"'); return typeof v === 'string' ? v : '\r'; } catch { return '\r'; } })());
@@ -420,7 +431,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       { separator: true },
       { label: (this.tabs.get(id)?.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.setTimestamps(!this.tabs.get(id)?.timestamps) },
       { label: (this.tabs.get(id)?.autoScroll !== false ? '✓ ' : '') + 'Auto Scroll', action: () => this.setAutoScroll(this.tabs.get(id)?.autoScroll === false) },
-      { label: (this.tabs.get(id)?.sendBar ? '✓ ' : '') + 'Send Bar', action: () => this.tabs.patch(id, { sendBar: !this.tabs.get(id)?.sendBar }) },
+      { label: (this.tabs.get(id)?.sendBar ? '✓ ' : '') + (this.serial() ? 'Send Bar' : 'Terminal Bar'), action: () => this.tabs.patch(id, { sendBar: !this.tabs.get(id)?.sendBar }) },
       { separator: true },
       { label: 'Clear Screen', action: () => this.clearAll() },
       { label: 'Clear Scrollback', action: () => t?.clear() },

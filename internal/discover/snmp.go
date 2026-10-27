@@ -218,7 +218,7 @@ func snmpGet(ctx context.Context, addr, community string, oids []string, timeout
 		return nil, err
 	}
 	var d net.Dialer
-	c, err := d.DialContext(ctx, "udp", addr)
+	c, err := dialBusy(ctx, &d, "udp", addr)
 	if err != nil {
 		return nil, err
 	}

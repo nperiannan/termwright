@@ -395,7 +395,7 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 
 - **Port**: the list shows the serial ports of this computer in order - `COM1, COM2 … COM10` on Windows, `/dev/ttyACM0, /dev/ttyUSB0, /dev/ttyUSB1 …` on Linux, `/dev/cu.*` on macOS - with the adapter's name and USB ID when the system reports them (e.g. *FT232R USB UART (0403:6001)*). The list **updates by itself** about every second and a half: plug in a console cable and its port appears, marked *(new)*, and is picked when no port was chosen yet. A saved port that is not plugged in shows as *(not connected)*. *Other port…* types a name by hand. Quick Connect has the same list.
 - **Detect Speed**: sends Enter at each common speed (9600, 115200, 19200, 38400, 57600, 4800, 2400, 230400, 1200) and keeps the one where the device answers with readable text. Close a tab that has the port open first. *Detect the speed each time it connects* does this on every connect; the status bar then shows the speed with *(detected)*.
-- **Send bar** (under serial tabs): type a message and press **Enter** or **Send**; ↑/↓ recall earlier messages. The line ending is added after each message: **CR** (default, what consoles expect), **LF**, **CR+LF** or none. **Timestamps** puts the local time (`[10:41:07.512]`) at the start of every line, **Auto scroll** follows new output, **Clear** empties the screen and the scrollback. ✕ hides the bar; right-click the terminal → *Send Bar* shows it again, on any tab.
+- **Send bar** (under serial tabs): it starts with the **port and speed** of the connection (`/dev/cu.usbserial-A10K · 115200 8N1`, green while connected; *(detected)* when the speed was detected). Type a message and press **Enter** or **Send**; ↑/↓ recall earlier messages. The line ending is added after each message: **CR** (default, what consoles expect), **LF**, **CR+LF** or none. **Timestamps** puts the local time (`[10:41:07.512]`) at the start of every line, **Auto scroll** follows new output, **Clear** empties the screen and the scrollback. ✕ hides the bar; right-click the terminal → *Send Bar* shows it again, on any tab.
 
 ![Serial tab with the send bar, timestamps and auto scroll off](screenshots/serial-tab.png)
 
@@ -404,7 +404,8 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 - **Copy / Paste**: select text (copied automatically when *Copy on select* is on). Paste with right-click (when *Paste on right-click* is on; Shift+right-click opens the menu), `Cmd+V` on macOS, `Ctrl+Shift+V` on Windows/Linux, or `Shift+Insert`. Copy also with `Ctrl+Insert`.
 - **Find**: `Cmd/Ctrl+Shift+F` searches the scrollback; Enter = next, Shift+Enter = previous, Esc closes.
 - **Zoom**: `Cmd/Ctrl +`, `Cmd/Ctrl -`, `Cmd/Ctrl 0`.
-- **Clear Screen** (the eraser button, right-click the terminal or a tab, Edit menu) empties the screen and the scrollback; the line with the cursor stays. *Clear Scrollback* keeps what is on the screen; *Reset Terminal* resets the emulator.
+- **Terminal bar** (under every SSH, Telnet, Raw and local shell tab): **Timestamps**, **Auto scroll** and **Clear** one click away. ✕ hides it for that tab (right-click → *Terminal Bar* shows it again); Global Options → Terminal → *Terminal bar* hides it for every tab.
+- **Clear Screen** (the eraser button, the terminal bar, right-click the terminal or a tab, Edit menu) empties the screen and the scrollback; the line with the cursor stays. *Clear Scrollback* keeps what is on the screen; *Reset Terminal* resets the emulator.
 - **Timestamps**: right-click the terminal → *Timestamps* (or Edit → Timestamps On / Off) puts the local time with milliseconds at the start of each line, on any connection. It is display only: logs have their own per-line prefix. Session Options → Terminal → *Display* turns it on for every connection of a session (off by default).
 - **Auto scroll** (on by default): the arrow button, right-click → *Auto Scroll* or Edit → Auto Scroll On / Off. When it is off the view stays where it is while output arrives, so you can read; *Auto scroll is off · Turn On* in the corner brings it back. Session Options → Terminal → *Display* can keep it off for a session.
 - **Links**: URLs in the output open in your browser when clicked.
@@ -782,7 +783,7 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 
 ![Light theme with Solarized Light](screenshots/light.png)
 
-- **UI theme**: Global Options → General → *Follow system*, *Dark* or *Light*, plus an **accent color**.
+- **UI theme**: Global Options → General → *Follow system* (the default: light or dark with your computer, switching when it does), *Dark* or *Light*, plus an **accent color**. The app icon on the start page and in About follows the theme.
 - **Terminal color scheme**: Global Options → Terminal & Appearance (default for all sessions) or Session Options → Terminal (per session). Built in: Default, Classic, Green Screen, Light, Solarized Dark/Light, Dracula, Nord, Gruvbox Dark, Tomorrow Night, Catppuccin Mocha, Tango. Common SecureCRT scheme names map to these automatically.
 - **Custom schemes**: Global Options → Color Schemes → pick a scheme → *Copy as new…*, then edit any of the 20 colors with live preview. *Export…/Import…* share schemes as JSON.
 

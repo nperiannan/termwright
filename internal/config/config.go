@@ -64,6 +64,8 @@ type Settings struct {
 	FontFamily           string               `json:"fontFamily"`
 	FontSize             int                  `json:"fontSize"`
 	Theme                string               `json:"theme"`               // ui theme: dark | light | system
+	ThemeFollowsSystem   bool                 `json:"themeFollowsSystem"`  // set once when the default became "system" (0.20.1)
+	HideTerminalBar      bool                 `json:"hideTerminalBar"`     // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
 	TerminalScheme       string               `json:"terminalScheme"`      // scheme name or "Auto" (follow the UI theme)
 	ForceTermScheme      bool                 `json:"forceTerminalScheme"` // global scheme wins over session schemes
 	CursorStyle          string               `json:"cursorStyle"`         // block | underline | bar
@@ -265,7 +267,7 @@ func Defaults(dataDir string) Settings {
 		DownloadDir:     defaultDownloads(),
 		FontFamily:      "Menlo, Consolas, 'DejaVu Sans Mono', 'Courier New', monospace",
 		FontSize:        14,
-		Theme:           "dark",
+		Theme:           "system",
 		TerminalScheme:  "Auto",
 		CursorStyle:     "block",
 		CursorBlink:     true,
@@ -371,7 +373,13 @@ func Load(dataDir string) (*Manager, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if defaultUpdateRepo(&m.cur) {
+	changed := defaultUpdateRepo(&m.cur)
+	// Until 0.20.0 the theme was dark unless changed; it now follows the
+	// system (once - a theme chosen afterwards stays).
+	if !m.cur.ThemeFollowsSystem {
+		m.cur.Theme, m.cur.ThemeFollowsSystem, changed = "system", true, true
+	}
+	if changed {
 		_ = m.Save(m.cur)
 	}
 	if m.cur.SessionsDir == "" {

@@ -80,7 +80,7 @@ export interface Settings {
   sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; theme: string;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
-  showButtonBar: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
+  showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;

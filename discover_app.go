@@ -48,8 +48,9 @@ func (a *App) DiscoverStart(spec, community string) (map[string]any, error) {
 			discoverMu.Lock()
 			delete(discoverRuns, id)
 			discoverMu.Unlock()
+			stopped := ctx.Err() != nil // read before cancel(): Stop pressed or the app closing
 			cancel()
-			wruntime.EventsEmit(a.ctx, "discover:done:"+id, ctx.Err() != nil)
+			wruntime.EventsEmit(a.ctx, "discover:done:"+id, stopped)
 		}()
 		discover.Scan(ctx, addrs, discover.Options{Community: community, OUI: a.ouiTable()},
 			func(r discover.Result) { wruntime.EventsEmit(a.ctx, "discover:found:"+id, r) },

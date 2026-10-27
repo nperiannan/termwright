@@ -51,7 +51,7 @@ func mdnsPTR(ctx context.Context, a netip.Addr, port int, timeout time.Duration,
 	}
 	msg = append(msg, 0, 0, 12, 0x80, 1) // PTR, class IN with the "unicast response" bit
 	var d net.Dialer
-	c, err := d.DialContext(ctx, "udp", netip.AddrPortFrom(a, uint16(port)).String())
+	c, err := dialBusy(ctx, &d, "udp", netip.AddrPortFrom(a, uint16(port)).String())
 	if err != nil {
 		return nil
 	}

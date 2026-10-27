@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Backend } from '../core/backend';
@@ -12,6 +12,9 @@ import { SessionIcon, SessionKind } from './session-icon';
 const EXPANDED_KEY = 'termwright.expanded';
 const SECTIONS_KEY = 'termwright.treeSections';
 
+/** Row heights in px (must match session-tree.scss). */
+const ROW = 24, SEC = 28, ALL = 30;
+interface TreeRow { kind: 'sec' | 'all' | 'item' | 'node'; key: string; h: number; n?: SessionNode; depth?: number; sec?: string; label?: string; }
 interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string; }
 
 /** Session Manager: folder tree with search, context menu and drag & drop. */
@@ -34,91 +37,62 @@ interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string
     <div class="sm-search">
       <input type="search" placeholder="Filter sessions" [(ngModel)]="filterText" (ngModelChange)="filter.set($event); showAll.set(false)" />
     </div>
-    <div class="sm-body" (contextmenu)="rootMenu($event)"
+    <div class="sm-body" #body (scroll)="scrollTop.set(body.scrollTop)" (contextmenu)="rootMenu($event)"
          (dragover)="allowDrop($event)" (drop)="dropOn($event, '')">
-      @if (filter()) {
-        @for (n of matches(); track n.path) {
-          <div class="row session" [class.sel]="isSel(n)"
-               (click)="select(n, $event)" (dblclick)="connect(n)" (contextmenu)="nodeMenu($event, n)"
-               (mouseenter)="hoverIn($event, n)" (mouseleave)="hoverOut()">
-            <ng-container [ngTemplateOutlet]="sessTpl" [ngTemplateOutletContext]="{ $implicit: n }" />
-            <span class="host">{{ n.path }}</span>
-          </div>
-        } @empty {
-          <div class="empty">No matching sessions</div>
-        }
-        @if (hiddenMatches() > 0) {
-          <div class="more"><a (click)="showAll.set(true)">{{ hiddenMatches() }} more session{{ hiddenMatches() === 1 ? '' : 's' }} containing "{{ filter().trim() }}"</a></div>
-        }
-      } @else {
-        @if (favorites().length) {
-          <div class="sec" (click)="toggleSection('fav')"><span class="twisty" [class.open]="!closedSec().has('fav')"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Favourites</div>
-          @if (!closedSec().has('fav')) {
-            @for (n of favorites(); track n.path) {
-              <div class="row session" [class.sel]="isSel(n)" style="padding-left: 22px"
-                   (click)="select(n, $event)" (dblclick)="connect(n)" (contextmenu)="nodeMenu($event, n)"
-                   (mouseenter)="hoverIn($event, n)" (mouseleave)="hoverOut()">
-                <ng-container [ngTemplateOutlet]="sessTpl" [ngTemplateOutletContext]="{ $implicit: n }" />
-                <span class="host">{{ parentOf(n.path) }}</span>
-              </div>
-            }
+      <!-- only the rows in view (and a margin) are in the page: large trees stay fast -->
+      @if (win().top) { <div [style.height.px]="win().top"></div> }
+      @for (r of win().rows; track r.key) {
+        @switch (r.kind) {
+          @case ('sec') {
+            <div class="sec" (click)="toggleSection(r.sec!)"><span class="twisty" [class.open]="!closedSec().has(r.sec!)"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>{{ r.label }}</div>
           }
-        }
-        @if (recents().length) {
-          <div class="sec" (click)="toggleSection('recent')"><span class="twisty" [class.open]="!closedSec().has('recent')"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Recent</div>
-          @if (!closedSec().has('recent')) {
-            @for (n of recents(); track n.path) {
-              <div class="row session" [class.sel]="isSel(n)" style="padding-left: 22px"
-                   (click)="select(n, $event)" (dblclick)="connect(n)" (contextmenu)="nodeMenu($event, n)"
-                   (mouseenter)="hoverIn($event, n)" (mouseleave)="hoverOut()">
-                <ng-container [ngTemplateOutlet]="sessTpl" [ngTemplateOutletContext]="{ $implicit: n }" />
-                <span class="host">{{ lastAgo(n.path) }}</span>
-              </div>
-            }
+          @case ('all') { <div class="sec all">All sessions</div> }
+          @case ('item') {
+            <div class="row session" [class.sel]="isSel(r.n!)" [style.padding-left.px]="r.sec ? 22 : 8"
+                 (click)="select(r.n!, $event)" (dblclick)="connect(r.n!)" (contextmenu)="nodeMenu($event, r.n!)"
+                 (mouseenter)="hoverIn($event, r.n!)" (mouseleave)="hoverOut()">
+              <ng-container [ngTemplateOutlet]="sessTpl" [ngTemplateOutletContext]="{ $implicit: r.n }" />
+              <span class="host">{{ r.sec === 'fav' ? parentOf(r.n!.path) : r.sec === 'recent' ? lastAgo(r.n!.path) : r.n!.path }}</span>
+            </div>
           }
-        }
-        @if (favorites().length || recents().length) { <div class="sec all">All sessions</div> }
-        @if (ui.tree(); as root) {
-          @for (n of root.children ?? []; track n.path) {
-            <ng-container [ngTemplateOutlet]="nodeTpl" [ngTemplateOutletContext]="{ $implicit: n, depth: 0 }" />
-          } @empty {
-            <div class="empty">
-              No sessions yet.<br />
-              <a (click)="ui.newSession('')">Create a session</a> or
-              <a (click)="ui.open('import')">import sessions from another terminal program</a>.
+          @case ('node') {
+            @let n = r.n!;
+            <div class="row" [class.folder]="n.isFolder" [class.session]="!n.isFolder"
+                 [class.sel]="n.isFolder ? ui.selectedPath() === n.path : isSel(n)" [class.drop]="dropTarget() === n.path"
+                 [style.padding-left.px]="8 + r.depth! * 14" [title]="n.isFolder ? n.path : ''"
+                 (mouseenter)="n.isFolder || hoverIn($event, n)" (mouseleave)="hoverOut()"
+                 draggable="true" (dragstart)="dragStart($event, n)" (dragend)="dropTarget.set('')"
+                 (dragover)="allowDrop($event, n.isFolder ? n.path : parentOf(n.path))" (dragleave)="dropTarget.set('')"
+                 (drop)="dropOn($event, n.isFolder ? n.path : parentOf(n.path))"
+                 (click)="select(n, $event)" (dblclick)="n.isFolder ? toggle(n.path) : connect(n)"
+                 (contextmenu)="nodeMenu($event, n)">
+              @if (n.isFolder) {
+                <span class="twisty" [class.open]="expanded().has(n.path)" (click)="toggle(n.path); $event.stopPropagation()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <app-session-icon [kind]="expanded().has(n.path) ? 'folder-open' : 'folder'" />
+                <span class="name">{{ n.name }}</span>
+                @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
+              } @else {
+                <span class="twisty"></span>
+                <ng-container [ngTemplateOutlet]="sessTpl" [ngTemplateOutletContext]="{ $implicit: n }" />
+              }
             </div>
           }
         }
       }
-    </div>
-
-    <ng-template #nodeTpl let-n let-depth="depth">
-      <div class="row" [class.folder]="n.isFolder" [class.session]="!n.isFolder"
-           [class.sel]="n.isFolder ? ui.selectedPath() === n.path : isSel(n)" [class.drop]="dropTarget() === n.path"
-           [style.padding-left.px]="8 + depth * 14" [title]="n.isFolder ? n.path : ''"
-           (mouseenter)="n.isFolder || hoverIn($event, n)" (mouseleave)="hoverOut()"
-           draggable="true" (dragstart)="dragStart($event, n)" (dragend)="dropTarget.set('')"
-           (dragover)="allowDrop($event, n.isFolder ? n.path : parentOf(n.path))" (dragleave)="dropTarget.set('')"
-           (drop)="dropOn($event, n.isFolder ? n.path : parentOf(n.path))"
-           (click)="select(n, $event)" (dblclick)="n.isFolder ? toggle(n.path) : connect(n)"
-           (contextmenu)="nodeMenu($event, n)">
-        @if (n.isFolder) {
-          <span class="twisty" [class.open]="expanded().has(n.path)" (click)="toggle(n.path); $event.stopPropagation()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <app-session-icon [kind]="expanded().has(n.path) ? 'folder-open' : 'folder'" />
-          <span class="name">{{ n.name }}</span>
-          @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
-        } @else {
-          <span class="twisty"></span>
-          <ng-container [ngTemplateOutlet]="sessTpl" [ngTemplateOutletContext]="{ $implicit: n }" />
+      @if (win().bottom) { <div [style.height.px]="win().bottom"></div> }
+      @if (filter()) {
+        @if (!matches().length) { <div class="empty">No matching sessions</div> }
+        @if (hiddenMatches() > 0) {
+          <div class="more"><a (click)="showAll.set(true)">{{ hiddenMatches() }} more session{{ hiddenMatches() === 1 ? '' : 's' }} containing "{{ filter().trim() }}"</a></div>
         }
-      </div>
-      @if (n.isFolder && expanded().has(n.path)) {
-        @for (c of n.children ?? []; track c.path) {
-          <ng-container [ngTemplateOutlet]="nodeTpl" [ngTemplateOutletContext]="{ $implicit: c, depth: depth + 1 }" />
-        }
+      } @else if (ui.tree() && !(ui.tree()!.children ?? []).length) {
+        <div class="empty">
+          No sessions yet.<br />
+          <a (click)="ui.newSession('')">Create a session</a> or
+          <a (click)="ui.open('import')">import sessions from another terminal program</a>.
+        </div>
       }
-    </ng-template>
-
+    </div>
     <ng-template #sessTpl let-n>
       <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget || n.protocol === 'Console'" />
       @if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
@@ -148,7 +122,7 @@ interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string
   // dialogs) does not walk a large tree on every key.
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class SessionTree implements OnDestroy {
+export class SessionTree implements AfterViewInit, OnDestroy {
   protected ui = inject(Ui);
   private tabs = inject(Tabs);
   private backend = inject(Backend);
@@ -188,6 +162,69 @@ export class SessionTree implements OnDestroy {
   });
   private anchor = '';
 
+  // ---- rows in view ----
+  readonly scrollTop = signal(0);
+  readonly viewH = signal(800);
+  private body = viewChild<ElementRef<HTMLDivElement>>('body');
+  private ro?: ResizeObserver;
+
+  /** Everything the body shows, as flat rows (sections, sessions, tree nodes). */
+  private readonly rows = computed<TreeRow[]>(() => {
+    const out: TreeRow[] = [];
+    if (this.filter()) {
+      for (const n of this.matches()) out.push({ kind: 'item', key: 'm:' + n.path, n, h: ROW });
+      return out;
+    }
+    const closed = this.closedSec();
+    const fav = this.favorites(), rec = this.recents();
+    if (fav.length) {
+      out.push({ kind: 'sec', key: 's:fav', sec: 'fav', label: 'Favourites', h: SEC });
+      if (!closed.has('fav')) for (const n of fav) out.push({ kind: 'item', key: 'f:' + n.path, n, sec: 'fav', h: ROW });
+    }
+    if (rec.length) {
+      out.push({ kind: 'sec', key: 's:recent', sec: 'recent', label: 'Recent', h: SEC });
+      if (!closed.has('recent')) for (const n of rec) out.push({ kind: 'item', key: 'r:' + n.path, n, sec: 'recent', h: ROW });
+    }
+    if (fav.length || rec.length) out.push({ kind: 'all', key: 'all', h: ALL });
+    const ex = this.expanded();
+    const walk = (n: SessionNode, depth: number) => {
+      for (const c of n.children ?? []) {
+        out.push({ kind: 'node', key: 'n:' + c.path, n: c, depth, h: ROW });
+        if (c.isFolder && ex.has(c.path)) walk(c, depth + 1);
+      }
+    };
+    const root = this.ui.tree();
+    if (root) walk(root, 0);
+    return out;
+  });
+  private readonly offsets = computed(() => {
+    const rows = this.rows();
+    const off = new Array<number>(rows.length + 1);
+    off[0] = 0;
+    for (let i = 0; i < rows.length; i++) off[i + 1] = off[i] + rows[i].h;
+    return off;
+  });
+  /** The rows to render with the space above and below them. */
+  readonly win = computed(() => {
+    const rows = this.rows();
+    if (rows.length <= 250) return { rows, top: 0, bottom: 0 };
+    const off = this.offsets();
+    const from = Math.max(0, this.scrollTop() - 600), to = this.scrollTop() + this.viewH() + 600;
+    let lo = 0, hi = rows.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (off[m + 1] <= from) lo = m + 1; else hi = m; }
+    let end = lo;
+    while (end < rows.length && off[end] < to) end++;
+    return { rows: rows.slice(lo, end), top: off[lo], bottom: off[rows.length] - off[end] };
+  });
+
+  ngAfterViewInit() {
+    const el = this.body()?.nativeElement;
+    if (!el) return;
+    this.viewH.set(el.clientHeight || 800);
+    this.ro = new ResizeObserver(() => this.viewH.set(el.clientHeight || 800));
+    this.ro.observe(el);
+  }
+
   constructor() {
     effect(() => {
       const on = this.reach();
@@ -202,7 +239,7 @@ export class SessionTree implements OnDestroy {
   /** Ticks every minute so "12 minutes ago" stays current. */
   private readonly minute = signal(0);
   private minuteTimer = setInterval(() => this.minute.update(n => n + 1), 60000);
-  ngOnDestroy() { clearInterval(this.reachTimer); clearInterval(this.minuteTimer); clearTimeout(this.hoverTimer); }
+  ngOnDestroy() { this.ro?.disconnect(); clearInterval(this.reachTimer); clearInterval(this.minuteTimer); clearTimeout(this.hoverTimer); }
 
   /** TCP check of every session that connects directly (not through a jump host or proxy). */
   async checkNow() {

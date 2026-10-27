@@ -32,7 +32,7 @@ export interface TabView {
   timestamps?: boolean;
   /** Terminal tab: follow new output (default); false keeps the view still. */
   autoScroll?: boolean;
-  /** Terminal tab: the send bar under the terminal (shown for serial by default). */
+  /** Terminal tab: the bar under the terminal (message box on serial tabs; timestamps, auto scroll, clear on all). */
   sendBar?: boolean;
   /** Terminal tab: user@host of its "ssh … host" remote command. SFTP tab: the host it browses through the jump station. */
   hopTarget?: string;
@@ -384,7 +384,7 @@ export class Tabs {
       id: ti.id, title: ti.title, state: ti.state, message: '', info: ti.info,
       session: ti.session, logFile: ti.logFile, cols: 0, rows: 0, locked: false,
       kind: 'terminal', parentId: '', home: '', recording: false,
-      timestamps: !!ti.session.timestamps, autoScroll: !ti.session.noAutoScroll, sendBar: ti.session.protocol === 'Serial',
+      timestamps: !!ti.session.timestamps, autoScroll: !ti.session.noAutoScroll, sendBar: ti.session.protocol === 'Serial' || !this.ui.settings()?.hideTerminalBar,
     };
     this.backend.sftpHopTarget(ti.session).then(h => { if (h) this.patch(ti.id, { hopTarget: h }); }).catch(() => {});
     this.unsubs.set(ti.id, [

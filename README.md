@@ -16,7 +16,7 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 ## What's new in 0.20.0
 
 * **Serial consoles**: ports listed in order with the adapter's name and updated when a cable is plugged in, **Detect Speed**, and a send bar with line ending, timestamps, auto scroll and clear.
-* **Clear Screen, Timestamps and Auto scroll** for every connection; Discover Devices takes `192.168.1.0` for its /24.
+* **Clear Screen, Timestamps and Auto scroll** for every connection (terminal bar); Discover Devices takes `192.168.1.0` for its /24 and finds the same devices every time (0.20.1).
 
 ## What's new in 0.19.0
 

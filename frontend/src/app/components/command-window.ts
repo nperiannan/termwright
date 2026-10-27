@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { History } from '../core/history.service';
 import { FormsModule } from '@angular/forms';
 import { Tabs } from '../core/tabs.service';
@@ -40,8 +40,11 @@ import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models'
         [ngModel]="text()" (ngModelChange)="onChange($event)" (keydown)="onKey($event)" (blur)="closeSugg()"></textarea>
     </div>
   `,
+  // Typing only re-renders this component; the suggestion list is worked out
+  // once the keys pause (holding Backspace does not rebuild it on every key).
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
-    :host { display: flex; flex-direction: column; height: 100%; background: var(--panel); border-top: 1px solid var(--border); }
+    :host { display: flex; flex-direction: column; height: 100%; background: var(--panel); border-top: 1px solid var(--border); contain: layout style; }
     .cw-bar { display: flex; align-items: center; gap: 14px; padding: 3px 8px; font-size: 12px; color: var(--muted);
       .title { font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
       label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
@@ -58,7 +61,7 @@ import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models'
       font-family: var(--mono); font-size: 13px; background: var(--input-bg); color: var(--text); outline: none; }
   `],
 })
-export class CommandWindow {
+export class CommandWindow implements OnDestroy {
   protected tabs = inject(Tabs);
   protected ui = inject(Ui);
   private box = viewChild.required<ElementRef<HTMLTextAreaElement>>('box');
@@ -71,8 +74,13 @@ export class CommandWindow {
   /** Suggestions are shown after typing (not after recall or accepting one). */
   private readonly typed = signal(false);
   readonly sel = signal(-1);
-  readonly sugg = computed(() => {
-    const t = this.text();
+  /** The text the suggestions are for: follows the box 120 ms after the last key. */
+  private readonly query = signal('');
+  private qTimer?: ReturnType<typeof setTimeout>;
+  /** While keys are pressed the last list stays (no rebuilding on every key). */
+  readonly sugg = computed(() => this.text().trim().length < 2 ? [] : this.listFor());
+  private readonly listFor = computed(() => {
+    const t = this.query();
     if (!this.typed() || this.charMode || t.includes('\n') || t.trim().length < 2) return [];
     const q = t.trim().toLowerCase();
     const dt = this.tabs.activeDeviceType();
@@ -111,7 +119,9 @@ export class CommandWindow {
     });
   }
 
-  closeSugg() { this.typed.set(false); this.sel.set(-1); }
+  closeSugg() { this.typed.set(false); this.sel.set(-1); clearTimeout(this.qTimer); }
+
+  ngOnDestroy() { clearTimeout(this.qTimer); }
 
   accept(s: { text: string; snippet?: Snippet }) {
     this.closeSugg();
@@ -128,6 +138,8 @@ export class CommandWindow {
     this.text.set(v);
     this.typed.set(true);
     this.sel.set(-1);
+    clearTimeout(this.qTimer);
+    this.qTimer = setTimeout(() => this.query.set(this.text()), 120);
   }
 
   onKey(ev: KeyboardEvent) {

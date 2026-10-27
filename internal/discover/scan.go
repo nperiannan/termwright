@@ -27,7 +27,7 @@ var DefaultProbes = []Probe{{22, "ssh"}, {23, "telnet"}, {80, "http"}, {443, "ht
 // Options control a scan.
 type Options struct {
 	Probes    []Probe
-	Timeout   time.Duration // per connection (default 800 ms)
+	Timeout   time.Duration // per connection (default 1.5 s)
 	Parallel  int           // addresses scanned at the same time (default 32)
 	Community string        // SNMP v2c community; "" = no SNMP
 	SNMPPort  int           // default 161
@@ -76,10 +76,19 @@ func Scan(ctx context.Context, addrs []netip.Addr, opt Options, found func(Resul
 		opt.Probes = DefaultProbes
 	}
 	if opt.Timeout <= 0 {
-		opt.Timeout = 800 * time.Millisecond
+		opt.Timeout = 1500 * time.Millisecond
 	}
 	if opt.Parallel <= 0 {
 		opt.Parallel = 32
+		// each address uses about 20 sockets at once; stay well inside the
+		// open-files limit (macOS starts apps with 256) so no check fails
+		// for lack of a socket
+		RaiseFileLimit()
+		if lim := fileLimit(); lim > 0 {
+			if n := (lim - 200) / 24; n < opt.Parallel {
+				opt.Parallel = max(n, 4)
+			}
+		}
 	}
 	if opt.SNMPPort == 0 {
 		opt.SNMPPort = 161
@@ -94,57 +103,108 @@ func Scan(ctx context.Context, addrs []netip.Addr, opt Options, found func(Resul
 		opt.CoAPPort = 5683
 	}
 	self := localAddrs()
-	jobs := make(chan netip.Addr)
 	var mu sync.Mutex
-	done := 0
+	done, total := 0, len(addrs)
 	results := map[netip.Addr]*Result{}
-	var wg sync.WaitGroup
-	for i := 0; i < opt.Parallel; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for a := range jobs {
-				r, ok := scanHost(ctx, a, opt)
-				if self[a] {
-					r.Self, ok = true, true
-				}
-				mu.Lock()
-				if ok && ctx.Err() == nil {
-					finish(&r, opt)
-					results[a] = &r
-					found(r)
-				}
-				done++
-				if progress != nil {
-					progress(done, len(addrs))
-				}
-				mu.Unlock()
-			}
-		}()
-	}
-feed:
-	for _, a := range addrs {
-		select {
-		case jobs <- a:
-		case <-ctx.Done():
-			break feed
-		}
-	}
-	close(jobs)
-	wg.Wait()
-	if opt.NoARP || ctx.Err() != nil {
-		return
-	}
-	// The scan has just talked to every address, so the neighbour table now
-	// lists the live devices of the local subnets - also those with no open port.
 	inRange := map[netip.Addr]bool{}
 	for _, a := range addrs {
 		inRange[a] = true
 	}
-	for a, mac := range neighbours() {
-		if !inRange[a] {
+	// MAC addresses of the live devices of the local subnets, collected
+	// during the scan (entries can expire before the scan ends).
+	alive := map[netip.Addr]string{}
+	readNeighbours := func() {
+		if opt.NoARP {
+			return
+		}
+		for a, mac := range neighbours() {
+			if inRange[a] {
+				mu.Lock()
+				alive[a] = mac
+				mu.Unlock()
+			}
+		}
+	}
+	run := func(list []netip.Addr, o Options) {
+		jobs := make(chan netip.Addr)
+		var wg sync.WaitGroup
+		for i := 0; i < o.Parallel; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for a := range jobs {
+					r, ok := scanHost(ctx, a, o)
+					if self[a] {
+						r.Self, ok = true, true
+					}
+					mu.Lock()
+					if old := results[a]; ok && ctx.Err() == nil && (old == nil || len(r.Services) > len(old.Services)) {
+						finish(&r, o)
+						results[a] = &r
+						found(r)
+					}
+					done++
+					if progress != nil {
+						progress(done, total)
+					}
+					mu.Unlock()
+				}
+			}()
+		}
+	feed:
+		for _, a := range list {
+			select {
+			case jobs <- a:
+			case <-ctx.Done():
+				break feed
+			}
+		}
+		close(jobs)
+		wg.Wait()
+	}
+	// Wake every address first: the first packet to a device makes the
+	// computer look up its MAC address (ARP), which can take a second and
+	// is limited to a few lookups at a time - port checks sent before that
+	// are lost, and sleeping phones and IoT boards answer late.
+	if !opt.NoARP {
+		wake(ctx, addrs, 1200*time.Millisecond)
+		readNeighbours()
+	}
+	run(addrs, opt)
+	if opt.NoARP || ctx.Err() != nil {
+		return
+	}
+	readNeighbours()
+	// Second look, slower, at devices that are there (they answered ARP) but
+	// showed fewer services than expected: nothing at all, or no login port.
+	var again []netip.Addr
+	for _, a := range addrs {
+		if _, ok := alive[a]; !ok || self[a] {
 			continue
 		}
+		if r := results[a]; r == nil || r.Protocol == "" {
+			again = append(again, a)
+		}
+	}
+	if len(again) > 0 {
+		slow := opt
+		slow.Timeout = opt.Timeout * 2
+		if slow.Parallel > 16 {
+			slow.Parallel = 16
+		}
+		mu.Lock()
+		total += len(again)
+		mu.Unlock()
+		wake(ctx, again, 800*time.Millisecond)
+		run(again, slow)
+		readNeighbours()
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	// The scan has talked to every address, so the neighbour table lists the
+	// live devices of the local subnets - also those with no open port.
+	for a, mac := range alive {
 		r := results[a]
 		if r == nil {
 			r = &Result{IP: a.String(), Name: a.String()}
@@ -378,6 +438,12 @@ func serviceOrder(ps []Probe) []string {
 func probe(ctx context.Context, a netip.Addr, p Probe, timeout time.Duration) (string, bool) {
 	d := net.Dialer{Timeout: timeout}
 	c, err := d.DialContext(ctx, "tcp", net.JoinHostPort(a.String(), strconv.Itoa(p.Port)))
+	// out of sockets or buffers for a moment: wait and try again rather than
+	// report the port as closed
+	for try := 0; err != nil && try < 4 && busy(err) && ctx.Err() == nil; try++ {
+		time.Sleep(time.Duration(150*(try+1)) * time.Millisecond)
+		c, err = d.DialContext(ctx, "tcp", net.JoinHostPort(a.String(), strconv.Itoa(p.Port)))
+	}
 	if err != nil {
 		return "", false
 	}
@@ -519,7 +585,7 @@ func firstLine(s string) string {
 // User-Agent or Server of the answer ("" when nothing answers).
 func sipOptions(ctx context.Context, a netip.Addr, port int, timeout time.Duration) string {
 	var d net.Dialer
-	c, err := d.DialContext(ctx, "udp", netip.AddrPortFrom(a, uint16(port)).String())
+	c, err := dialBusy(ctx, &d, "udp", netip.AddrPortFrom(a, uint16(port)).String())
 	if err != nil {
 		return ""
 	}
@@ -567,4 +633,42 @@ func hostOS() string {
 		return "Linux"
 	}
 	return runtime.GOOS
+}
+
+// wake sends one small UDP packet to every address (the discard port), so
+// the computer resolves their MAC addresses before the port checks start,
+// then waits for the answers.
+func wake(ctx context.Context, addrs []netip.Addr, wait time.Duration) {
+	for _, a := range addrs {
+		if ctx.Err() != nil {
+			return
+		}
+		c, err := net.DialTimeout("udp", netip.AddrPortFrom(a, 9).String(), 200*time.Millisecond)
+		if err != nil {
+			continue
+		}
+		_, _ = c.Write([]byte{0})
+		_ = c.Close()
+	}
+	select {
+	case <-time.After(wait):
+	case <-ctx.Done():
+	}
+}
+
+// busy reports errors that mean "no socket right now" rather than "closed".
+func busy(err error) bool {
+	m := strings.ToLower(err.Error())
+	return strings.Contains(m, "too many open files") || strings.Contains(m, "no buffer space") ||
+		strings.Contains(m, "can't assign requested address") || strings.Contains(m, "address already in use")
+}
+
+// dialBusy dials, waiting and trying again while the system is out of sockets.
+func dialBusy(ctx context.Context, d *net.Dialer, network, addr string) (net.Conn, error) {
+	c, err := d.DialContext(ctx, network, addr)
+	for try := 0; err != nil && try < 4 && busy(err) && ctx.Err() == nil; try++ {
+		time.Sleep(time.Duration(150*(try+1)) * time.Millisecond)
+		c, err = d.DialContext(ctx, network, addr)
+	}
+	return c, err
 }
