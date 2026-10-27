@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.20.3 (2026-10-27)
+
+* **Typing and Backspace no longer lag in long sessions**: keyword highlighting marked every match in the whole scrollback, and the terminal redrew all of those marks on every key - after a few thousand lines of output with addresses and up/down (over 10,000 marks) each key cost several times more, and holding Backspace kept deleting after the key was released. Only the rows in view are highlighted now (about a hundred marks, whatever the length of the session); scrolling up highlights the rows as they come into view.
+
 ## 0.20.2 (2026-10-27)
 
 * **Save Scrollback As HTML** (File menu, right-click the terminal or a tab): the scrollback as a web page with the Termwright logo, the session, address, the device's model, OS version, serial number and MAC address (from the output on screen, or read in a background connection for VOSS, EXOS, Cisco and Linux device types), device type, protocol, user, connection and the date and time it was saved, then the output with its colors and keyword highlighting as shown in the tab - to open in a browser, attach to a ticket or print to PDF.

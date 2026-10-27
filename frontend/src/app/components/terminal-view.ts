@@ -1,7 +1,7 @@
 import {
   AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, input, signal, viewChild,
 } from '@angular/core';
-import { Terminal } from '@xterm/xterm';
+import { IDecoration, IMarker, Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -148,7 +148,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   }
 
   /** Clears the screen and the scrollback (the line with the cursor stays). */
-  clearAll() { this.term?.clear(); this.scannedTo = 0; this.term?.focus(); }
+  clearAll() { this.term?.clear(); this.clearHighlights(); this.term?.focus(); }
 
   /** Remembers the command on the cursor line (prompt removed) for history search. */
   private remember(term: Terminal, t: TabView) {
@@ -345,7 +345,9 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       return true;
     });
 
-    term.onWriteParsed(() => this.highlight());
+    // keyword highlighting of the rows in view, at most once per frame
+    term.onWriteParsed(() => this.scheduleHighlight());
+    term.onRender(() => this.scheduleHighlight());
     this.compileKeywords();
 
     this.ro = new ResizeObserver(() => this.scheduleFit());
@@ -357,7 +359,9 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   }
 
   private keywords: { re: RegExp; color: string; fg: string }[] = [];
-  private scannedTo = 0;
+  /** Highlighted rows: one marker per row, its text when highlighted, its decorations. */
+  private hl: { marker: IMarker; text: string; decos: IDecoration[] }[] = [];
+  private hlFrame = 0;
 
   /** Builds the regexes for the session's keyword set (or the default set). */
   private compileKeywords() {
@@ -373,35 +377,63 @@ export class TerminalView implements AfterViewInit, OnDestroy {
         this.keywords.push({ re: new RegExp(src, k.caseSensitive ? 'g' : 'gi'), color, fg: contrastText(color) });
       } catch { /* invalid regex: skip */ }
     }
+    this.clearHighlights();
+    this.scheduleHighlight();
   }
 
-  /** Highlights keywords in newly completed lines using xterm decorations. */
+  private scheduleHighlight() {
+    if (!this.hlFrame) this.hlFrame = requestAnimationFrame(() => { this.hlFrame = 0; this.highlight(); });
+  }
+
+  private clearHighlights() {
+    for (const e of this.hl) { e.decos.forEach(d => d.dispose()); e.marker.dispose(); }
+    this.hl = [];
+  }
+
+  /** Highlights keywords in the completed rows in view (and a few around
+   *  them). Only those rows carry decorations: every decoration is redrawn on
+   *  each frame, so highlighting the whole scrollback made typing slower the
+   *  longer a session ran. Rows whose text did not change keep theirs. */
   private highlight() {
     const term = this.term;
-    if (!term || !this.keywords.length) return;
+    if (!term) return;
     const buf = term.buffer.active;
-    if (buf.type === 'alternate') return; // full-screen apps (vi, less)
+    if (!this.keywords.length || buf.type === 'alternate') { this.clearHighlights(); return; } // full-screen apps (vi, less)
     const cursorAbs = buf.baseY + buf.cursorY;
-    if (this.scannedTo > cursorAbs) this.scannedTo = Math.max(0, cursorAbs - term.rows);
-    const start = Math.max(this.scannedTo, cursorAbs - 500);
-    for (let y = start; y < cursorAbs; y++) {
-      const line = buf.getLine(y);
-      if (!line) continue;
-      const text = line.translateToString(true);
+    const from = Math.max(0, buf.viewportY - 10), to = Math.min(cursorAbs, buf.viewportY + term.rows + 10); // the cursor row is still being typed
+    const kept = new Map<number, (typeof this.hl)[number]>();
+    for (const e of this.hl) {
+      const y = e.marker.line;
+      if (e.marker.isDisposed || y < from || y >= to || kept.has(y)) { e.decos.forEach(d => d.dispose()); e.marker.dispose(); continue; }
+      kept.set(y, e);
+    }
+    for (let y = from; y < to; y++) {
+      const text = buf.getLine(y)?.translateToString(true) ?? '';
+      const old = kept.get(y);
+      if (old && old.text === text) continue;
+      if (old) { old.decos.forEach(d => d.dispose()); old.marker.dispose(); kept.delete(y); }
       if (!text) continue;
+      const hits: { x: number; w: number; color: string; fg: string }[] = [];
       for (const k of this.keywords) {
         k.re.lastIndex = 0;
         let m: RegExpExecArray | null;
         let guard = 0;
         while ((m = k.re.exec(text)) && guard++ < 50) {
           if (!m[0].length) { k.re.lastIndex++; continue; }
-          const marker = term.registerMarker(y - cursorAbs);
-          if (!marker) continue;
-          term.registerDecoration({ marker, x: m.index, width: m[0].length, backgroundColor: k.color, foregroundColor: k.fg, layer: 'top' });
+          hits.push({ x: m.index, w: m[0].length, color: k.color, fg: k.fg });
         }
       }
+      if (!hits.length) continue;
+      const marker = term.registerMarker(y - cursorAbs);
+      if (!marker) continue;
+      const decos: IDecoration[] = [];
+      for (const h of hits) {
+        const d = term.registerDecoration({ marker, x: h.x, width: h.w, backgroundColor: h.color, foregroundColor: h.fg, layer: 'top' });
+        if (d) decos.push(d);
+      }
+      kept.set(y, { marker, text, decos });
     }
-    this.scannedTo = cursorAbs;
+    this.hl = [...kept.values()];
   }
 
   private scheduleFit() {
@@ -459,6 +491,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    cancelAnimationFrame(this.hlFrame);
     this.unsub.forEach(u => u());
     this.ro?.disconnect();
     this.tabs.handles.delete(this.tab().id);
