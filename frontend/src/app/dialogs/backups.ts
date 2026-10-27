@@ -124,9 +124,9 @@ const NOW = '\u0000now';
   styles: [`
     .bk { width: min(1100px, 96vw); }
     .jobs { display: flex; flex-direction: column; overflow: auto; a { display: flex; flex-direction: column; line-height: 1.3; padding-top: 6px; padding-bottom: 6px; }
-      a span { font-size: 11px; color: var(--muted); } .add { margin: 8px; } }
+      a span { font-size: calc(11px * var(--ui-scale, 1)); color: var(--muted); } .add { margin: 8px; } }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-    .chip { display: inline-flex; gap: 4px; align-items: center; padding: 1px 4px 1px 8px; border: 1px solid var(--border); border-radius: 12px; font-size: 12px;
+    .chip { display: inline-flex; gap: 4px; align-items: center; padding: 1px 4px 1px 8px; border: 1px solid var(--border); border-radius: 12px; font-size: calc(12px * var(--ui-scale, 1));
       button { border: 0; background: none; height: auto; padding: 0 3px; color: var(--muted); cursor: pointer; } }
     .addrow input { max-width: 320px; }
     .time { width: 110px; } .num { width: 80px; }
@@ -137,9 +137,9 @@ const NOW = '\u0000now';
       .spacer { flex: 1; } progress { width: 160px; accent-color: var(--accent); } }
     table { width: 100%; } th { position: sticky; top: 35px; background: var(--panel); z-index: 1; }
     td { vertical-align: middle; } .r { text-align: right; } .nw { white-space: nowrap; }
-    .acts { white-space: nowrap; text-align: right; button { height: 22px; font-size: 11.5px; padding: 0 7px; margin-left: 4px; } }
-    .bad { color: var(--danger); display: inline-block; max-width: 380px; white-space: normal; word-break: break-word; font-size: 12px; }
-    .log { display: block; font-size: 11.5px; color: var(--accent); cursor: pointer; }
+    .acts { white-space: nowrap; text-align: right; button { height: 22px; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 0 7px; margin-left: 4px; } }
+    .bad { color: var(--danger); display: inline-block; max-width: 380px; white-space: normal; word-break: break-word; font-size: calc(12px * var(--ui-scale, 1)); }
+    .log { display: block; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--accent); cursor: pointer; }
     .chg { color: #f59e0b; } .ok { color: var(--ok); }
     .dir { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .err { color: var(--danger); }

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/termwright/termwright/internal/securecrt"
+	"github.com/termwright/termwright/internal/sessionfile"
 )
 
 const (
@@ -153,20 +153,20 @@ func (s *Store) walk(n *Node, rel string) error {
 	return nil
 }
 
-func (s *Store) readFile(p string) (*securecrt.File, error) {
+func (s *Store) readFile(p string) (*sessionfile.File, error) {
 	data, err := os.ReadFile(s.fsPath(p) + ext)
 	if err != nil {
 		return nil, err
 	}
-	return securecrt.Parse(data)
+	return sessionfile.Parse(data)
 }
 
 // template returns the Default session file if present, otherwise an empty file.
-func (s *Store) template() *securecrt.File {
+func (s *Store) template() *sessionfile.File {
 	if f, err := s.readFile(defaultFile); err == nil {
 		return f.Clone()
 	}
-	return securecrt.NewFile()
+	return sessionfile.NewFile()
 }
 
 // Get loads a session.
@@ -218,7 +218,7 @@ func (s *Store) Save(ss Session, oldPath string) (Session, error) {
 	if folder == "" && strings.EqualFold(ss.Name, defaultFile) {
 		return ss, errors.New(`"Default" is reserved for the default session template`)
 	}
-	var f *securecrt.File
+	var f *sessionfile.File
 	if oldPath != "" {
 		if f, err = s.readFile(oldPath); err != nil {
 			return ss, err
@@ -247,7 +247,7 @@ func (s *Store) Save(ss Session, oldPath string) (Session, error) {
 	return ss, nil
 }
 
-func (s *Store) writeFile(p string, f *securecrt.File) error {
+func (s *Store) writeFile(p string, f *sessionfile.File) error {
 	full := s.fsPath(p) + ext
 	if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
 		return err
@@ -264,7 +264,7 @@ func (s *Store) writeFile(p string, f *securecrt.File) error {
 }
 
 // WriteRaw stores an already-parsed file at path (used by import).
-func (s *Store) WriteRaw(p string, f *securecrt.File) error {
+func (s *Store) WriteRaw(p string, f *sessionfile.File) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, err := cleanPath(p)
@@ -275,7 +275,7 @@ func (s *Store) WriteRaw(p string, f *securecrt.File) error {
 }
 
 // ReadRaw returns the parsed file for a session path.
-func (s *Store) ReadRaw(p string) (*securecrt.File, error) {
+func (s *Store) ReadRaw(p string) (*sessionfile.File, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.readFile(p)
@@ -381,13 +381,13 @@ func (s *Store) DeleteFolder(p string) error {
 // application lists items created by Termwright.
 func (s *Store) updateFolderData(folder, key, item string, add bool) {
 	fp := filepath.Join(s.fsPath(folder), folderDataFile)
-	var f *securecrt.File
+	var f *sessionfile.File
 	if data, err := os.ReadFile(fp); err == nil {
-		if f, err = securecrt.Parse(data); err != nil {
+		if f, err = sessionfile.Parse(data); err != nil {
 			return
 		}
 	} else if add {
-		f = securecrt.NewFile()
+		f = sessionfile.NewFile()
 		f.SetList("Folder List", []string{})
 		f.SetList("Session List", []string{})
 	} else {

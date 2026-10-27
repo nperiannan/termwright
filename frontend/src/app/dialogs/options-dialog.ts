@@ -5,6 +5,7 @@ import { Backend } from '../core/backend';
 import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, comboOf } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
+import { UI_FONTS, UI_SIZES, uiFontStack } from '../core/ui-fonts';
 
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
 type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards';
@@ -16,7 +17,7 @@ const SEARCH: [Page, string, string][] = [
   ['cards', 'PKCS#11 libraries', 'smart card piv cac yubikey opensc token hsm ssh key'], ['cards', 'Ask the PIN for every login', 'smart card pin'],
   ['general', 'Downloads folder', 'zmodem download save'], ['general', 'SFTP from a terminal', 'working directory detection folder cwd follow'],
   ['general', 'SFTP tabs follow the terminal folder', 'cwd'], ['general', "SFTP tabs browse as the terminal's user", 'root sudo'],
-  ['general', 'Python interpreter', 'script python3'], ['general', 'UI theme', 'dark light mode appearance'],
+  ['general', 'Python interpreter', 'script python3'], ['general', 'UI theme', 'dark light mode appearance'], ['general', 'Interface font', 'font typeface vscode inter plex readable'], ['general', 'Text size', 'font size bigger larger zoom readable'],
   ['general', 'Accent color', 'colour highlight'], ['general', 'Confirm before closing connected tabs', 'quit exit'],
   ['general', 'Confirm before pasting more than one line', 'paste multi-line'], ['general', 'Remember typed commands', 'history autocomplete suggestions'], ['general', 'Reopen the sessions', 'restore tabs start'],
   ['general', 'Show Session Manager', 'tree sidebar'], ['general', 'Show Command Window', 'broadcast'], ['general', 'Show Button Bar', 'buttons'],
@@ -98,6 +99,13 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <select name="theme" [(ngModel)]="s.theme">
                   <option value="system">Follow system</option><option value="dark">Dark</option><option value="light">Light</option>
                 </select>
+                <label>Interface font</label>
+                <select name="uifont" [(ngModel)]="s.uiFont">@for (f of uiFonts; track f.v) { <option [value]="f.v">{{ f.label }}</option> }</select>
+                <label>Text size</label>
+                <select name="uisize" [ngModel]="s.uiFontSize || 13" (ngModelChange)="s.uiFontSize = +$event">@for (z of uiSizes; track z.v) { <option [ngValue]="z.v">{{ z.label }}</option> }</select>
+                <label></label>
+                <div class="ui-sample" [style.font-family]="fontStack(s.uiFont)" [style.font-size.px]="s.uiFontSize || 13">
+                  Session Manager · Quick Connect · core-sw1 10.10.0.1 · 0123456789<br /><span class="hint">Applies to menus, dialogs and the Session Manager; the terminal font is under Terminal &amp; Appearance.</span></div>
                 <label>Accent color</label>
                 <div class="row"><input type="color" name="acc" class="swatch" [ngModel]="s.accentColor || '#4f9cf7'" (ngModelChange)="s.accentColor = $event" />
                   <button type="button" (click)="s.accentColor = ''">Default</button></div>
@@ -440,6 +448,9 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
 })
 export class OptionsDialog implements OnInit {
   protected ui = inject(Ui);
+  readonly uiFonts = UI_FONTS;
+  readonly uiSizes = UI_SIZES;
+  fontStack(v: string | undefined) { return uiFontStack(v); }
   private backend = inject(Backend);
   private cdr = inject(ChangeDetectorRef);
   readonly page = signal<Page>((this.ui.optionsPage() || 'general') as Page);

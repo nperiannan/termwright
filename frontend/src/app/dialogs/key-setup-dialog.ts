@@ -86,9 +86,9 @@ interface Step { text: string; state: 'run' | 'ok' | 'err' | 'info'; }
     </form>
   </div>`,
   styles: [`
-    .steps { list-style: none; padding: 8px; margin: 10px 0 0; background: var(--input-bg); border-radius: 4px; font-size: 12px; user-select: text;
+    .steps { list-style: none; padding: 8px; margin: 10px 0 0; background: var(--input-bg); border-radius: 4px; font-size: calc(12px * var(--ui-scale, 1)); user-select: text;
       li { padding: 2px 0; white-space: pre-wrap; } .ok { color: var(--ok); } .err { color: var(--danger); } .run { color: var(--muted); } }
-    .pub { width: 100%; font-size: 11px; resize: vertical; }
+    .pub { width: 100%; font-size: calc(11px * var(--ui-scale, 1)); resize: vertical; }
     .publabel { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
     .link { background: none; border: none; color: var(--accent); padding: 0; height: auto; cursor: pointer; }
   `],

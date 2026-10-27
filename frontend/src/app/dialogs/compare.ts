@@ -96,15 +96,15 @@ export function diffLines(a: string[], b: string[], norm: (s: string) => string)
     .modal-body { display: flex; flex-direction: column; min-height: 0; flex: 1; }
     .pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .src { display: flex; flex-direction: column; gap: 2px; }
-    .opts { display: flex; gap: 16px; align-items: center; margin: 8px 0; font-size: 12px; label { display: flex; gap: 4px; align-items: center; } .stat { margin-left: auto; color: var(--muted); } }
-    .diff { flex: 1; overflow: auto; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; background: var(--input-bg); }
+    .opts { display: flex; gap: 16px; align-items: center; margin: 8px 0; font-size: calc(12px * var(--ui-scale, 1)); label { display: flex; gap: 4px; align-items: center; } .stat { margin-left: auto; color: var(--muted); } }
+    .diff { flex: 1; overflow: auto; border: 1px solid var(--border); border-radius: 4px; font-size: calc(12px * var(--ui-scale, 1)); background: var(--input-bg); }
     .dr { display: grid; grid-template-columns: 44px 1fr 44px 1fr; white-space: pre; line-height: 18px;
       .n { color: var(--muted); text-align: right; padding-right: 6px; user-select: none; }
       .t { overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
       &.del .t:nth-child(2), &.chg .t:nth-child(2) { background: rgba(224, 108, 117, .22); }
       &.add .t:nth-child(4), &.chg .t:nth-child(4) { background: rgba(152, 195, 121, .22); } }
     .pad { padding: 12px; }
-    .prompt-re { width: 220px; font-size: 11px; padding: 2px 6px; }
+    .prompt-re { width: 220px; font-size: calc(11px * var(--ui-scale, 1)); padding: 2px 6px; }
   `],
 })
 export class Compare {

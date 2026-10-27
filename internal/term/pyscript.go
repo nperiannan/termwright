@@ -24,7 +24,7 @@ import (
 	"github.com/termwright/termwright/internal/session"
 )
 
-// Python scripts (SecureCRT style): .py files run with the user's Python 3.
+// Python scripts with the crt object: .py files run with the user's Python 3.
 // A small module provides the `crt` object; its calls come back to Termwright
 // as JSON lines over a localhost socket protected by a random token.
 
@@ -416,7 +416,7 @@ func (h *pyHandler) handle(req pyReq) (any, error) {
 	return nil, fmt.Errorf("crt: %s is not supported", req.Op)
 }
 
-// connect opens a tab from SecureCRT command-line arguments ("/S <session>",
+// connect opens a tab from crt-style command-line arguments ("/S <session>",
 // "/SSH2 /L user /P port host", "/TELNET host [port]", "/SERIAL COM1 /BAUD 9600")
 // and waits until it is connected.
 func (h *pyHandler) connect(cmdline string) (string, error) {

@@ -1,6 +1,6 @@
-# Session file compatibility
+# Session files
 
-Termwright stores every session as a SecureCRT-style `.ini` file under `Config/Sessions/<folder>/<name>.ini`. Folder order lives
+Termwright stores every session as a plain-text `.ini` file under `Config/Sessions/<folder>/<name>.ini`. Folder order lives
 in `__FolderData__.ini` (`Z:"Folder List"`, `Z:"Session List"`), and the root `Default.ini` is the template for new
 sessions. When a file is edited, only the keys below are changed. Every other line, including unknown types, is written
 back unchanged. Files keep their UTF-8 BOM and CRLF style.
@@ -31,7 +31,7 @@ back unchanged. Files keep their UTF-8 BOM and CRLF style.
 | Serial | `S:"[Serial] Com Port"`, `D:"[Serial] Baud Rate"`, `D:"[Serial] Data Bits"`, `D:"[Serial] Stop Bits"`, `D:"[Serial] Parity"` | stop bits 0/1/2 = 1/1.5/2; parity 0-4 = N/O/E/M/S |
 | Log | `S:"Log Filename V2"`, `D:"Start Log Upon Connect"`, `D:"Append to Log File"`, `S:"Custom Log Message Each Line"` + `D:"Log Timestamp Each Line"` | the prefix is only used when the timestamp flag is on (verified 9.x keys) |
 | Local directory | `S:"Initial Local Directory V2"` | |
-| Color scheme | `S:"Color Scheme"` | name; common SecureCRT scheme names are mapped to built-in schemes |
+| Color scheme | `S:"Color Scheme"` | name; common scheme names of imported sessions are mapped to built-in schemes |
 | Jump host | `S:"Firewall Name"` | `Session:<path>` = jump through that saved session, `None` = direct |
 | Auto reconnect | `D:"Auto Reconnect"` | |
 | X11 / agent forwarding | `D:"Forward X11"`, `D:"Enable Agent Forwarding"` | |
@@ -70,3 +70,11 @@ Imports and exports XML settings exports: a `<key name="Sessions">` tree with `<
   when a session has none of its own (disabled entries skipped; reverse-table entries become remote forwards). The
   original tables are kept unchanged.
 * Keyword sets, fonts (binary LOGFONT), key maps and scripts are preserved but not interpreted.
+
+## Import and export
+
+The same layout is used by SecureCRT®, so a SecureCRT `Config/Sessions` folder, a zip of it or an XML settings export can be imported, and Termwright's export writes files that SecureCRT can read (File → Export Sessions → folder, zip or XML). Keys that Termwright does not know are kept as they are.
+
+---
+
+*SecureCRT® is a registered trademark of VanDyke Software, Inc. Termwright is an independent open-source project, not affiliated with or endorsed by VanDyke Software; the name is used only to say which files Termwright can import and export.*

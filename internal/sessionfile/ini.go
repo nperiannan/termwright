@@ -1,5 +1,6 @@
-// Package securecrt reads and writes the plain-text session file format used by
-// SecureCRT(R) so that Termwright can interoperate with existing session libraries.
+// Package sessionfile reads and writes Termwright's plain-text session files
+// (one .ini file per session, S:/D:/B:/Z: typed keys). The same layout is used
+// to import and export session libraries of other terminal programs.
 //
 // The format was implemented from scratch by inspecting user-owned session
 // files; no third-party code is used.
@@ -16,7 +17,7 @@
 //
 // Unknown entry types and keys are preserved verbatim so that a file read and
 // written by Termwright stays loadable by the original application.
-package securecrt
+package sessionfile
 
 import (
 	"bufio"
@@ -188,7 +189,7 @@ func (f *File) Bytes() []byte {
 	return b.Bytes()
 }
 
-// NewFile returns an empty file using SecureCRT's usual Windows style.
+// NewFile returns an empty file (Windows line ends and a UTF-8 BOM, the usual style).
 func NewFile() *File { return &File{BOM: true, CRLF: true} }
 
 // Get returns the entry with the given name, or nil.

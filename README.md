@@ -11,17 +11,18 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 ![Termwright](docs/screenshots/main.png)
 
-📖 **[User Guide](docs/USER_GUIDE.md)** · [All features](docs/FEATURES.md) · [Scripting](docs/SCRIPTING.md) · [SecureCRT compatibility](docs/SECURECRT_COMPAT.md) · [Roadmap](docs/ROADMAP.md)
+📖 **[User Guide](docs/USER_GUIDE.md)** · [All features](docs/FEATURES.md) · [Scripting](docs/SCRIPTING.md) · [Session files](docs/SESSION_FILES.md) · [Roadmap](docs/ROADMAP.md)
 
 ## What's new in 0.20.0
 
-* **Serial consoles**: ports listed in order with the adapter's name and updated when a cable is plugged in, **Detect Speed**, and a send bar with line ending, timestamps, auto scroll and clear.
+* **Serial consoles**: ports listed in order with the adapter's name and updated when a cable is plugged in, **Detect Speed**, and a send bar with line ending, **hex send and hex view** (0.20.7), timestamps, auto scroll and clear.
+* **Readable interface**: choose the interface font (System, VS Code, Inter, IBM Plex Sans) and text size (13-17 px) in Global Options → General (0.20.7).
 * **HTML reports**: *Save Scrollback As HTML* saves a tab's output with colors and keyword highlighting under a header with the session, address, model, OS version, serial number, MAC and time (0.20.2).
 * **Clear Screen, Timestamps and Auto scroll** for every connection (terminal bar); Discover Devices takes `192.168.1.0` for its /24 and finds the same devices every time (0.20.1).
 
 ## What's new in 0.19.0
 
-* **Export to other programs**: PuTTY, KiTTY, MobaXterm, Tabby, OpenSSH config and CSV - next to the SecureCRT formats - with a summary of what each format cannot hold. Your sessions are never locked in.
+* **Export to other programs**: PuTTY, KiTTY, MobaXterm, Tabby, OpenSSH config and CSV - next to Termwright's own folder, zip and XML - with a summary of what each format cannot hold. Your sessions are never locked in.
 
 ## What's new in 0.18.0
 
@@ -40,13 +41,13 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 | Device types | Login profiles (EXOS, VOSS, Cisco IOS, Linux, custom): login steps for Telnet/Serial, after-login steps for every protocol (`enable`, paging off), own username/password (or none) inherited or overridden per session; used by Quick Connect, the Connect Bar (`voss 10.1.1.1`), sessions and folder defaults |
 | Session Manager | Folder defaults (user, device type, jump host …), workspaces, Quick Open palette, folder tree, filter/search, drag & drop, new/edit/duplicate/rename/delete, connect-all-in-folder, Connect Terminal / Connect SFTP Session, recent sessions |
 | Discovery | Scan a network or range (up to a /22): ports, SSH/Telnet banners, web page/server/certificate, SIP (phones), SNMP v2c name and model, DNS, MAC address and maker; icons per kind (switch, router, firewall, AP, server, NAS, computer, phone, printer) with the evidence; add selected devices as sessions with a suggested device type. Never logs in. |
-| Import / export | Native storage is the SecureCRT `Config/Sessions/*.ini` layout (unknown keys preserved byte-for-byte): import a Config folder, `.zip`, XML export or `.ini` (saved passwords go to the OS keychain); export to folder, `.zip` or XML, and **export to PuTTY / KiTTY, MobaXterm, Tabby, OpenSSH config and CSV**. Also imports **CSV**, **Ansible** inventories, **NetBox**, **AWS EC2**, **PuTTY / KiTTY** (`.reg`, `~/.putty/sessions`), **SuperPuTTY** (`Sessions.xml`), **MobaXterm** (`.mxtsessions`) and OpenSSH `~/.ssh/config` |
+| Import / export | Sessions are plain-text `.ini` files (unknown keys preserved byte-for-byte). Import a SecureCRT Config folder, `.zip`, XML export or `.ini` (saved passwords go to the OS keychain); export to folder, `.zip` or XML, and **export to PuTTY / KiTTY, MobaXterm, Tabby, OpenSSH config and CSV**. Also imports **CSV**, **Ansible** inventories, **NetBox**, **AWS EC2**, **PuTTY / KiTTY** (`.reg`, `~/.putty/sessions`), **SuperPuTTY** (`Sessions.xml`), **MobaXterm** (`.mxtsessions`) and OpenSSH `~/.ssh/config` |
 | Logon automation | Automate logon with an Expect/Send table (hide, trailing CR, named credentials, `\s \w \v \p` escapes), send initial CR, logon scripts with arguments, output triggers |
 | Terminal | Tabs and tiled views (side by side / stacked / grid), xterm-256color/truecolor, Unicode, scrollback search, keyword highlighting, per-session font, Backspace mode, copy-on-select, right-click paste, zoom, clickable links, session lock, Connect Bar |
 | Appearance | Dark / Light / follow-system UI with accent color; terminal scheme *Auto* (follows the UI) or one scheme for all sessions; 12 built-in color schemes (Solarized, Dracula, Nord, Gruvbox, Catppuccin, …), custom scheme editor with import/export, per-session scheme and font |
 | Capture | Session logging (raw or plain text, append, per-line timestamp prefix, filename tokens, start on connect), save scrollback / selection to file |
 | File transfer | SFTP browser (dual pane) over the terminal's login or as a **standalone SFTP session** for one-session devices (e.g. VOSS); folder transfers, sync, **resume**, **bookmarks**, **server-to-server copy**, **SCP transfers from the SFTP browser**, **SFTP on a remote command's target through the jump station**, **Run as root or any user (sudo / su)**; SCP (files and folders), ZMODEM (auto `sz`/`rz`), YMODEM batch, XMODEM |
-| Scripting | SecureCRT-style **Python** and **VBScript** (Windows) scripts (`crt.Screen.WaitForString`, `crt.Screen.Get` on the rendered screen, `crt.Dialog.Prompt`, …) and JavaScript scripts (`term.waitFor`, `readUntil`, `openSession`, …), logon scripts, script recorder, key map (keys → text / action / script). See [docs/SCRIPTING.md](docs/SCRIPTING.md) |
+| Scripting | **Python** and **VBScript** (Windows) scripts with the `crt` object (`crt.Screen.WaitForString`, `crt.Screen.Get` on the rendered screen, `crt.Dialog.Prompt`, …) and JavaScript scripts (`term.waitFor`, `readUntil`, `openSession`, …), logon scripts, script recorder, key map (keys → text / action / script). See [docs/SCRIPTING.md](docs/SCRIPTING.md) |
 | Automation | Command window and **command library** with `{{variables}}` (send to the active tab, **selected tabs** or **all tabs**), button bar (text, actions, scripts), **output alerts** (notice, sound, desktop notification), paste confirmation and line delay, **compare outputs** (diff two tabs or files, ignore prompts; *Compare With…* on the tab menu) |
 | Security | Passwords and key passphrases in the OS keychain (never in session files), **password managers** (1Password, Bitwarden, HashiCorp Vault, command), named credentials, **master password**, encrypted password-vault export/import (AES-256-GCM + scrypt) |
 | Remote desktop | **RDP** sessions in the computer's Remote Desktop client (Windows, macOS Windows App, FreeRDP/Remmina) and **VNC** in a built-in viewer, both through jump hosts and proxies |
@@ -128,13 +129,13 @@ macOS builds are unsigned. After downloading one, run `xattr -dr com.apple.quara
 2. The session files are copied unchanged. Saved SecureCRT passwords are encrypted per-installation, so Termwright asks for each password once and can save it in your OS keychain.
 3. To go back, use **File → Export Sessions…** → *Folder* and copy the `Sessions` folder into SecureCRT's Config folder, or use *XML*.
 
-The key-by-key mapping is documented in [docs/SECURECRT_COMPAT.md](docs/SECURECRT_COMPAT.md).
+The key-by-key mapping is documented in [docs/SESSION_FILES.md](docs/SESSION_FILES.md).
 
 ## Project layout
 
 ```
 main.go, app.go            Wails entry point, native menu, methods bound to the UI
-internal/securecrt         .ini / XML session format reader & writer (lossless)
+internal/sessionfile       .ini / XML session file reader & writer (lossless)
 internal/session           session model, folder store, import/export
 internal/term              SSH2 (incl. Kerberos, certificates, FIDO2), Telnet, Serial, local PTY, SFTP/SCP, scripts (JS, Python, VBScript)
 internal/logging           session logs, filename tokens, ANSI stripping
@@ -149,3 +150,7 @@ The data directory is `%APPDATA%\Termwright`, `~/Library/Application Support/Ter
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+---
+
+*SecureCRT® is a registered trademark of VanDyke Software, Inc. Termwright is an independent open-source project, not affiliated with or endorsed by VanDyke Software; the name is used only to say which files Termwright can import and export.*

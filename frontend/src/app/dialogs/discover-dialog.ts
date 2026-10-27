@@ -166,7 +166,7 @@ const ACK_KEY = 'termwright.discoverAck';
     .inline { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
     .comm { flex: 0 0 220px; width: 220px !important; max-width: 220px; }
     .disc .specrow > input.spec { flex: 0 1 340px; width: 340px; min-width: 160px; }
-    .eye { font-size: 11px; width: auto; padding: 0 6px; }
+    .eye { font-size: calc(11px * var(--ui-scale, 1)); width: auto; padding: 0 6px; }
     .ack { display: flex; gap: 6px; align-items: center; margin-top: 6px; font-weight: 600; }
     .bar { display: flex; gap: 10px; align-items: center; margin: 12px 0 8px; }
     .bar progress { width: 220px; accent-color: var(--accent); }
@@ -180,23 +180,23 @@ const ACK_KEY = 'termwright.discoverAck';
     .c { width: 28px; text-align: center; }
     .sys { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     tr.opened .sys { white-space: normal; }
-    .info { border: 0; background: none; padding: 0 4px 0 0; height: auto; color: var(--muted); cursor: pointer; font-size: 13px; }
+    .info { border: 0; background: none; padding: 0 4px 0 0; height: auto; color: var(--muted); cursor: pointer; font-size: calc(13px * var(--ui-scale, 1)); }
     .info.on, .info:hover { color: var(--accent); }
-    .ev { margin: 4px 0 2px; padding-left: 16px; font-size: 11.5px; color: var(--muted); white-space: normal; user-select: text; }
+    .ev { margin: 4px 0 2px; padding-left: 16px; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); white-space: normal; user-select: text; }
     .tag.me { background: color-mix(in srgb, var(--accent) 25%, transparent); color: var(--text); }
-    .note { font-size: 12px; color: var(--muted); margin: 0 0 8px; a { color: var(--accent); cursor: pointer; } }
-    .svc { display: inline-block; font-size: 10.5px; padding: 0 5px; margin: 1px 3px 1px 0; border-radius: 8px; border: 1px solid var(--border); color: var(--muted); }
+    .note { font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); margin: 0 0 8px; a { color: var(--accent); cursor: pointer; } }
+    .svc { display: inline-block; font-size: calc(10.5px * var(--ui-scale, 1)); padding: 0 5px; margin: 1px 3px 1px 0; border-radius: 8px; border: 1px solid var(--border); color: var(--muted); }
     .svc.login { color: #fff; background: #0d9488; border-color: transparent; }
-    .tag { white-space: nowrap; font-size: 10.5px; margin-left: 6px; padding: 0 6px; border-radius: 8px; background: var(--hover); color: var(--muted); font-weight: 400; }
+    .tag { white-space: nowrap; font-size: calc(10.5px * var(--ui-scale, 1)); margin-left: 6px; padding: 0 6px; border-radius: 8px; background: var(--hover); color: var(--muted); font-weight: 400; }
     .folder { width: 220px; }
-    .save { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 10px; font-size: 12.5px; }
+    .save { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 10px; font-size: calc(12.5px * var(--ui-scale, 1)); }
     .save select { max-width: 330px; }
     .chip { display: inline-flex; gap: 5px; align-items: center; padding: 2px 8px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
     .chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
-    .chip .n { color: var(--muted); font-size: 11px; }
+    .chip .n { color: var(--muted); font-size: calc(11px * var(--ui-scale, 1)); }
     .err { color: var(--danger); }
     .movedbar .bad { color: var(--danger); }
-    .movedbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 10px; margin-bottom: 8px; border: 1px solid color-mix(in srgb, #f59e0b 55%, var(--border)); border-radius: 6px; background: color-mix(in srgb, #f59e0b 9%, transparent); font-size: 12.5px; }
+    .movedbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 10px; margin-bottom: 8px; border: 1px solid color-mix(in srgb, #f59e0b 55%, var(--border)); border-radius: 6px; background: color-mix(in srgb, #f59e0b 9%, transparent); font-size: calc(12.5px * var(--ui-scale, 1)); }
     select { max-width: 150px; }
   `],
 })

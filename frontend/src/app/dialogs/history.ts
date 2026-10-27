@@ -49,10 +49,10 @@ import { Ui } from '../core/ui.service';
   styles: [`
     .hist { width: min(820px, 94vw); }
     .top { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; .q { flex: 1; } }
-    .inline { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; font-size: 12.5px; }
+    .inline { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; font-size: calc(12.5px * var(--ui-scale, 1)); }
     .list { height: 46vh; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
     .it { display: flex; flex-direction: column; padding: 5px 10px; cursor: default; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-      .c { font-family: var(--mono); font-size: 13px; white-space: pre-wrap; word-break: break-all; } .m { color: var(--muted); font-size: 11px; } }
+      .c { font-family: var(--mono); font-size: calc(13px * var(--ui-scale, 1)); white-space: pre-wrap; word-break: break-all; } .m { color: var(--muted); font-size: calc(11px * var(--ui-scale, 1)); } }
     .it.on { background: var(--selected); }
     .empty { padding: 16px; color: var(--muted); }
     .danger-text { color: var(--danger); } .spacer { flex: 1; }

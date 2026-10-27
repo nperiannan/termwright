@@ -30,13 +30,13 @@ interface Item { kind: 'session' | 'tab' | 'action' | 'command'; label: string; 
     .pal-back { align-items: flex-start; padding-top: 12vh; }
     .pal { width: 640px; max-width: calc(100vw - 32px); background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
       box-shadow: 0 12px 40px rgba(0,0,0,.45); overflow: hidden; }
-    .pal-q { width: 100%; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 12px 14px; font-size: 15px; outline: none; }
+    .pal-q { width: 100%; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 12px 14px; font-size: calc(15px * var(--ui-scale, 1)); outline: none; }
     .pal-list { max-height: 50vh; overflow: auto; padding: 4px 0; }
     .pal-row { display: flex; align-items: center; gap: 10px; padding: 6px 14px; cursor: pointer;
       &.on { background: var(--selected); }
-      .kind { font-size: 10px; text-transform: uppercase; color: var(--muted); width: 58px; flex: none; }
+      .kind { font-size: calc(10px * var(--ui-scale, 1)); text-transform: uppercase; color: var(--muted); width: 58px; flex: none; }
       .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .det { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; } }
+      .det { margin-left: auto; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; } }
     .pal-empty { padding: 12px 14px; color: var(--muted); }
   `],
 })

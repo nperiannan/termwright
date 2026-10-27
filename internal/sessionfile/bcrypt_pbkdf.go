@@ -7,7 +7,7 @@
 //
 // See https://flak.tedunangst.com/post/bcrypt-pbkdf and
 // https://cvsweb.openbsd.org/cgi-bin/cvsweb/src/lib/libutil/bcrypt_pbkdf.c.
-package securecrt
+package sessionfile
 
 import (
 	"crypto/sha512"
@@ -23,7 +23,7 @@ func bcryptPBKDF(password, salt []byte, rounds, keyLen int) ([]byte, error) {
 	if rounds < 1 {
 		return nil, errors.New("bcrypt_pbkdf: number of rounds is too small")
 	}
-	// An empty password is allowed here (SecureCRT without a configuration passphrase).
+	// An empty password is allowed here (imported files without a configuration passphrase).
 	if len(salt) == 0 || len(salt) > 1<<20 {
 		return nil, errors.New("bcrypt_pbkdf: bad salt length")
 	}

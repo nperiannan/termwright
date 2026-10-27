@@ -1,4 +1,4 @@
-package securecrt
+package sessionfile
 
 import (
 	"bytes"

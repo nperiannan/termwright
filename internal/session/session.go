@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/termwright/termwright/internal/securecrt"
+	"github.com/termwright/termwright/internal/sessionfile"
 )
 
 // Protocol names as stored in session files.
@@ -71,8 +71,8 @@ const (
 	kBackspace    = "Termwright Backspace"
 	kTriggers     = "Termwright Triggers"
 	kLogonScript  = "Termwright Logon Script"
-	// SecureCRT 9.x logon keys (verified against a real 9.x session file).
-	// "Login Script V4" (the Expect/Send table) is stored encrypted by SecureCRT
+	// Logon keys of imported session files (verified against real files).
+	// "Login Script V4" (the Expect/Send table) is stored encrypted by the program that wrote it
 	// and is kept untouched; Termwright keeps its own table in kLogon.
 	kUseLogin     = "Use Login Script"
 	kInitialCR    = "Send Initial Carriage Return"
@@ -238,7 +238,7 @@ func Defaults() Session {
 }
 
 // FromFile maps a parsed session file into a Session.
-func FromFile(path string, f *securecrt.File) Session {
+func FromFile(path string, f *sessionfile.File) Session {
 	s := Defaults()
 	s.Path = path
 	s.Name, s.Folder = splitPath(path)
@@ -349,7 +349,7 @@ func FromFile(path string, f *securecrt.File) Session {
 		// (read-only; it is preserved unchanged when the session is saved).
 		for _, key := range []string{"Port Forward Table V3", "Port Forward Table V2", "Port Forward TableV2", "Port Forward Table"} {
 			for _, l := range f.List(key) {
-				if pf, ok := parseSecureCRTForward(l); ok {
+				if pf, ok := parseForwardLine(l); ok {
 					s.PortForwards = append(s.PortForwards, pf)
 				}
 			}
@@ -359,7 +359,7 @@ func FromFile(path string, f *securecrt.File) Session {
 		}
 		for _, key := range []string{"Reverse Forward Table V3", "Reverse Forward Table V2", "Reverse Forward TableV2"} {
 			for _, l := range f.List(key) {
-				if pf, ok := parseSecureCRTForward(l); ok && pf.Type != "dynamic" {
+				if pf, ok := parseForwardLine(l); ok && pf.Type != "dynamic" {
 					pf.Type = "remote"
 					s.PortForwards = append(s.PortForwards, pf)
 				}
@@ -391,13 +391,13 @@ func FromFile(path string, f *securecrt.File) Session {
 	return s
 }
 
-// parseSecureCRTForward decodes one line of a SecureCRT port forward table:
+// parseForwardLine decodes one line of an imported port forward table:
 //
 //	localhost:8080:webserver.internal.net:80::0:0::   local forward
 //	D1080::::0:0::                                     dynamic (SOCKS) forward
 //
 // Fields after the destination port are application flags and ignored.
-func parseSecureCRTForward(l string) (PortForward, bool) {
+func parseForwardLine(l string) (PortForward, bool) {
 	l = strings.TrimSpace(l)
 	if l == "" {
 		return PortForward{}, false
@@ -430,7 +430,7 @@ func parseSecureCRTForward(l string) (PortForward, bool) {
 }
 
 // parseForwardV3 decodes the 9.x "Port Forward Table V3" / "Reverse Forward
-// Table V3" line format (verified against SecureCRT 9.x files):
+// Table V3" line format (verified against real session files):
 //
 //	enabled|name|bindIP,port|destDifferent|destHost|destPort|application|arguments
 //	1|web|10.0.0.5,8080|0||80||          -> port 80 on the SSH server itself
@@ -498,7 +498,7 @@ func (pf PortForward) encode() string {
 }
 
 // Apply writes the Session fields into f, keeping every other key untouched.
-func (s Session) Apply(f *securecrt.File) {
+func (s Session) Apply(f *sessionfile.File) {
 	f.SetStr(kProtocol, s.Protocol)
 	f.SetStr(kHostname, s.Hostname)
 	f.SetStr(kUsername, s.Username)
@@ -657,7 +657,7 @@ func (s Session) Apply(f *securecrt.File) {
 	setOptBool(f, kNoAutoScroll, s.NoAutoScroll)
 }
 
-func setOptStr(f *securecrt.File, k, v string) {
+func setOptStr(f *sessionfile.File, k, v string) {
 	if v == "" {
 		f.Delete(k)
 	} else {
@@ -665,7 +665,7 @@ func setOptStr(f *securecrt.File, k, v string) {
 	}
 }
 
-func setOptBool(f *securecrt.File, k string, v bool) {
+func setOptBool(f *sessionfile.File, k string, v bool) {
 	if !v {
 		f.Delete(k)
 	} else {

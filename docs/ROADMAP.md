@@ -8,7 +8,7 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - [x] SSH port forwarding: local (-L), remote (-R), dynamic SOCKS5 (-D), per session
 - [ ] Convert SecureCRT `Port Forward Table V2` (needs a real sample file; the table is preserved meanwhile)
 - [x] Jump host (chainable, any saved SSH2 session, stored as `Firewall Name=Session:<path>`), SOCKS5 and HTTP CONNECT proxies
-- [x] Session fonts, Backspace mode (^? / ^H); SecureCRT color-scheme names mapped to built-in schemes
+- [x] Session fonts, Backspace mode (^? / ^H); imported color-scheme names mapped to built-in schemes
 - [ ] Full key mapping editor (moved to 0.3)
 - [x] Keyword highlighting (named keyword sets, regex, colors; default "Network" set), triggers (pattern -> send) on any output
 - [x] Tiled split views: side by side, stacked, grid. Detaching tabs into new windows needs multi-window support (Wails v3) and is deferred.
@@ -40,7 +40,7 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 - [x] User Guide (docs/USER_GUIDE.md), Help → User Guide
 
 ## 0.6: logon automation & security (done)
-- [x] SecureCRT-style Logon Actions: Automate logon, Send initial CR, Expect/Send table (Hide, trailing CR, credentials), ▲▼ ordering
+- [x] Logon Actions: Automate logon, Send initial CR, Expect/Send table (Hide, trailing CR, credentials), ▲▼ ordering
 - [x] Send escapes `\s` `\w` `\v` `\p` `\e` `\b`; named Credentials; logon script arguments
 - [x] SSH2 Remote command (e.g. jump station → `ssh -t -i key user@target`)
 - [x] Hardware (RTS/CTS) and software (XON/XOFF) serial flow control
@@ -60,7 +60,7 @@ scrollback capture, command window (send to all), button bar, logon actions, key
 
 ## 0.9: PuTTY keys & Python scripts (done)
 - [x] Read PuTTY .ppk keys directly (formats 2 and 3, Argon2id/Argon2i, RSA/Ed25519/ECDSA/DSA)
-- [x] Python scripts with a SecureCRT-style `crt` object (runs with the installed Python 3)
+- [x] Python scripts with the `crt` object (runs with the installed Python 3)
 - [x] Terminal scheme *Auto* (follows the UI theme) and *use this scheme for all sessions*
 
 ## 0.10: daily network work (done)

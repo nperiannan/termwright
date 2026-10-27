@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/termwright/termwright/internal/securecrt"
+	"github.com/termwright/termwright/internal/sessionfile"
 )
 
 // SuperPuTTY keeps its sessions in Sessions.xml:
@@ -193,7 +193,7 @@ func (s *Store) importSuperPuTTY(data []byte, opt ImportOptions) (*ImportResult,
 	}
 	res := &ImportResult{Skipped: skipped}
 	for _, it := range list {
-		f := securecrt.NewFile()
+		f := sessionfile.NewFile()
 		it.Session.Apply(f)
 		dest := s.importOne(JoinPath(it.Session.Folder, it.Session.Name), f, opt, res)
 		if dest != "" && it.Password != "" {

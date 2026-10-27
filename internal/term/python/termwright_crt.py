@@ -1,7 +1,7 @@
-# termwright_crt.py - the SecureCRT-style "crt" object for Termwright Python scripts.
+# termwright_crt.py - the "crt" script object for Termwright Python scripts.
 #
 # Termwright runs .py scripts with your own Python 3 and makes `crt` (plus the
-# usual BUTTON_*/ICON_*/ID* constants) available as globals, so most SecureCRT
+# usual BUTTON_*/ICON_*/ID* constants) available as globals, so most existing crt
 # Python scripts run unchanged. Calls are forwarded to Termwright over a local
 # socket.
 import json
@@ -45,7 +45,7 @@ _bridge = _Bridge()
 
 
 def _split(args, kwargs):
-    """SecureCRT's WaitForStrings/ReadString accept a list or several strings,
+    """WaitForStrings/ReadString accept a list or several strings,
     then an optional timeout (seconds) and an optional case-insensitive flag."""
     args = list(args)
     if args and isinstance(args[0], (list, tuple)):
@@ -181,7 +181,7 @@ class Session:
         return self._info()["port"]
 
     def Connect(self, cmd="", *_):
-        """Connect with SecureCRT command-line arguments, e.g. "/S Lab/sw1" or
+        """Connect with crt-style command-line arguments, e.g. "/S Lab/sw1" or
         "/SSH2 /L admin /P 22 10.0.0.1". The script then works with the new tab."""
         tid = _bridge.call("connect", cmd=str(cmd))
         self._tab._rebind(tid)

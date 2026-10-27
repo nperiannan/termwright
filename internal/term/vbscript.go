@@ -19,7 +19,7 @@ import (
 	"unicode/utf8"
 )
 
-// VBScript logon scripts (SecureCRT's original language) run with Windows
+// VBScript logon scripts run with Windows
 // Script Host: the script is wrapped in a .wsf job whose JScript part provides
 // the `crt` object (see vbs/termwright_crt.js) and calls back to Termwright
 // over HTTP on a local port.

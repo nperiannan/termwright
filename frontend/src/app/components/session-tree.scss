@@ -1,6 +1,6 @@
 :host { display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--panel); }
 .sm-head { display: flex; align-items: center; gap: 2px; padding: 6px 6px 4px 10px; border-bottom: 1px solid var(--border);
-  .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); } }
+  .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: calc(12px * var(--ui-scale, 1)); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); } }
 .sm-search { padding: 6px 8px; input { width: 100%; } }
 .sm-body { flex: 1; overflow: auto; padding-bottom: 12px; user-select: none; contain: strict; }
 .row { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; cursor: default; white-space: nowrap;
@@ -9,7 +9,7 @@
   &.sel { background: var(--selected); border-left-color: var(--accent); }
   &.drop { outline: 1px dashed var(--accent); outline-offset: -1px; }
   .name { overflow: hidden; text-overflow: ellipsis; }
-  .host { margin-left: auto; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+  .host { margin-left: auto; color: var(--muted); font-size: calc(11px * var(--ui-scale, 1)); overflow: hidden; text-overflow: ellipsis; }
   app-icon { color: var(--muted); }
   &.folder app-icon { color: var(--folder); }
 }
@@ -21,16 +21,16 @@
 .empty { padding: 16px 12px; color: var(--muted); line-height: 1.6; a { color: var(--accent); cursor: pointer; } }
 
 .sm-head .icon-btn.on { color: var(--accent); }
-.sec { display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; margin-top: 4px; font-size: 11px; font-weight: 600;
+.sec { display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; margin-top: 4px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600;
   text-transform: uppercase; letter-spacing: .04em; color: var(--muted); cursor: pointer; user-select: none;
   &.all { cursor: default; padding-left: 10px; border-top: 1px solid var(--border); margin-top: 6px; padding-top: 4px; } }
 .row .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; margin-left: -2px;
   &.up { background: var(--ok, #22c55e); } &.down { background: var(--danger, #e5484d); } &.unk { background: var(--border); } }
-.row .star { color: #f5b301; font-size: 11px; flex: none; }
-.env { flex: none; font-size: 9px; font-weight: 700; letter-spacing: .03em; color: #fff; padding: 0 4px; border-radius: 3px; line-height: 14px; }
+.row .star { color: #f5b301; font-size: calc(11px * var(--ui-scale, 1)); flex: none; }
+.env { flex: none; font-size: calc(9px * var(--ui-scale, 1)); font-weight: 700; letter-spacing: .03em; color: #fff; padding: 0 4px; border-radius: 3px; line-height: 14px; }
 .hcard { position: fixed; z-index: 250; width: 290px; padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--border);
-  box-shadow: var(--shadow); font-size: 12px; pointer-events: none; line-height: 1.5;
-  .hname { font-weight: 600; font-size: 13px; display: flex; gap: 6px; align-items: center; margin-bottom: 2px; }
+  box-shadow: var(--shadow); font-size: calc(12px * var(--ui-scale, 1)); pointer-events: none; line-height: 1.5;
+  .hname { font-weight: 600; font-size: calc(13px * var(--ui-scale, 1)); display: flex; gap: 6px; align-items: center; margin-bottom: 2px; }
   .hrow { color: var(--text); overflow: hidden; text-overflow: ellipsis; }
   .mono { font-family: var(--mono); }
   .muted { color: var(--muted); }
@@ -38,4 +38,4 @@
 .sm-head { gap: 0; .icon-btn { width: 26px; min-width: 26px; padding: 0; } .title { min-width: 58px; } }
 .row .name { flex: 0 1 auto; min-width: 0; }
 .row .host { flex: 1 1 0; min-width: 0; text-align: right; white-space: nowrap; }
-.more { padding: 6px 12px; font-size: 12px; a { color: var(--accent); cursor: pointer; } }
+.more { padding: 6px 12px; font-size: calc(12px * var(--ui-scale, 1)); a { color: var(--accent); cursor: pointer; } }

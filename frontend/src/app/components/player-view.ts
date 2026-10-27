@@ -47,11 +47,11 @@ const IDLE = 1.5;
   `,
   styles: [`
     :host { display: flex; flex-direction: column; position: absolute; inset: 0; background: var(--bg); }
-    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-bottom: 1px solid var(--border); font-size: 12px; flex-wrap: wrap;
-      button, select { height: 24px; font-size: 12px; } .play { width: 34px; } .seek { flex: 1; min-width: 100px; accent-color: var(--accent); }
+    .bar { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-bottom: 1px solid var(--border); font-size: calc(12px * var(--ui-scale, 1)); flex-wrap: wrap;
+      button, select { height: 24px; font-size: calc(12px * var(--ui-scale, 1)); } .play { width: 34px; } .seek { flex: 1; min-width: 100px; accent-color: var(--accent); }
       .time { font-family: var(--mono); color: var(--muted); white-space: nowrap; } .q { width: 110px; height: 24px; } .mk { max-width: 190px; }
       .chk { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); } .spacer { flex: 1; } }
-    .info { padding: 3px 10px; font-size: 11.5px; color: var(--muted); border-bottom: 1px solid var(--border); .flash { margin-left: 12px; color: #f59e0b; } }
+    .info { padding: 3px 10px; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); border-bottom: 1px solid var(--border); .flash { margin-left: 12px; color: #f59e0b; } }
     .err { padding: 6px 10px; color: var(--danger); }
     .stage { flex: 1; overflow: hidden; position: relative; outline: none; padding: 8px; }
     .scaler { transform-origin: 0 0; display: inline-block; }

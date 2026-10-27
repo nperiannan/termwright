@@ -22,7 +22,7 @@ Recommends: lrzsz
 Homepage: https://github.com/nperiannan/termwright
 Description: Terminal emulator and session manager (SSH2, Telnet, Serial, SFTP)
  Termwright is an open-source terminal emulator with a session manager that
- reads and writes SecureCRT-compatible session files.
+ imports and exports the session libraries of other terminal programs.
 CTRL
 mkdir -p "$OUT"
 dpkg-deb --build --root-owner-group "$ROOT" "$OUT/termwright_${VERSION}_${ARCH}.deb"

@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/termwright/termwright/internal/securecrt"
+	"github.com/termwright/termwright/internal/sessionfile"
 )
 
 // ImportResult summarises an import.
@@ -80,7 +80,7 @@ func (s *Store) Import(src string, opt ImportOptions) (*ImportResult, error) {
 			return nil, err
 		}
 		defer fh.Close()
-		sessions, err := securecrt.ParseXML(fh)
+		sessions, err := sessionfile.ParseXML(fh)
 		if err != nil {
 			return nil, err
 		}
@@ -94,7 +94,7 @@ func (s *Store) Import(src string, opt ImportOptions) (*ImportResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		f, err := securecrt.Parse(data)
+		f, err := sessionfile.Parse(data)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +147,7 @@ func (s *Store) importFS(fsys fs.FS, opt ImportOptions) (*ImportResult, error) {
 			res.Errors = append(res.Errors, fmt.Sprintf("%s: %v", rel, err))
 			return nil
 		}
-		f, err := securecrt.Parse(data)
+		f, err := sessionfile.Parse(data)
 		if err != nil {
 			res.Errors = append(res.Errors, fmt.Sprintf("%s: %v", rel, err))
 			return nil
@@ -160,7 +160,7 @@ func (s *Store) importFS(fsys fs.FS, opt ImportOptions) (*ImportResult, error) {
 
 // importOne writes one imported session and returns its path ("" when it was
 // skipped or failed).
-func (s *Store) importOne(rel string, f *securecrt.File, opt ImportOptions, res *ImportResult) string {
+func (s *Store) importOne(rel string, f *sessionfile.File, opt ImportOptions, res *ImportResult) string {
 	if strings.EqualFold(rel, defaultFile) {
 		if !opt.IncludeDefault {
 			res.Skipped = append(res.Skipped, rel)
@@ -201,11 +201,11 @@ func (s *Store) importOne(rel string, f *securecrt.File, opt ImportOptions, res 
 			return ""
 		}
 	}
-	pw, hasPw, pwErr := securecrt.SavedPassword(f, opt.ConfigPassphrase)
+	pw, hasPw, pwErr := sessionfile.SavedPassword(f, opt.ConfigPassphrase)
 	if hasPw {
 		// the password goes to the OS keychain, not into the session file
-		f.Delete(securecrt.PasswordV2Key)
-		f.Delete(securecrt.PasswordV1Key)
+		f.Delete(sessionfile.PasswordV2Key)
+		f.Delete(sessionfile.PasswordV1Key)
 		setOptBool(f, kSavePassword, true)
 	}
 	if err := s.writeFile(dest, f); err != nil {
@@ -236,7 +236,7 @@ func (s *Store) ImportSSHConfig(file string, opt ImportOptions) (*ImportResult, 
 	var cur *Session
 	flush := func() {
 		if cur != nil && cur.Hostname != "" {
-			f := securecrt.NewFile()
+			f := sessionfile.NewFile()
 			cur.Apply(f)
 			s.importOne(cur.Name, f, opt, res)
 		}
@@ -300,7 +300,7 @@ func (s *Store) Export(paths []string, dest, format string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	files := map[string]*securecrt.File{}
+	files := map[string]*sessionfile.File{}
 	for _, p := range list {
 		f, err := s.ReadRaw(p)
 		if err != nil {
@@ -311,7 +311,7 @@ func (s *Store) Export(paths []string, dest, format string) (int, error) {
 	switch format {
 	case "xml":
 		var buf bytes.Buffer
-		if err := securecrt.WriteXML(&buf, securecrt.XMLSessions(files)); err != nil {
+		if err := sessionfile.WriteXML(&buf, sessionfile.XMLSessions(files)); err != nil {
 			return 0, err
 		}
 		return len(files), os.WriteFile(dest, buf.Bytes(), 0o600)
@@ -347,7 +347,7 @@ func (s *Store) Export(paths []string, dest, format string) (int, error) {
 }
 
 // writeTree emits session files plus a folder index for every folder.
-func writeTree(files map[string]*securecrt.File, put func(name string, data []byte) error) error {
+func writeTree(files map[string]*sessionfile.File, put func(name string, data []byte) error) error {
 	type idx struct{ folders, sessions []string }
 	folders := map[string]*idx{"": {}}
 	get := func(p string) *idx {
@@ -370,7 +370,7 @@ func writeTree(files map[string]*securecrt.File, put func(name string, data []by
 		}
 	}
 	for dir, ix := range folders {
-		f := securecrt.NewFile()
+		f := sessionfile.NewFile()
 		f.SetList("Folder List", nonNil(ix.folders))
 		f.SetList("Session List", nonNil(ix.sessions))
 		name := folderDataFile

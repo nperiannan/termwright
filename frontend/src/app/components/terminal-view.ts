@@ -23,6 +23,21 @@ function contrastText(hex: string): string {
   return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#000000' : '#ffffff';
 }
 
+/** Bytes of a hex message: "48 65 6C", "0x48,0x65", "48:65" or "4865"; an error text when it is not hex. */
+export function parseHex(s: string): number[] | string {
+  const t = s.trim();
+  if (!t) return [];
+  const parts = /[\s,;:]/.test(t) ? t.split(/[\s,;:]+/).filter(Boolean) : (t.replace(/^0x/i, '').match(/.{1,2}/g) ?? []);
+  const out: number[] = [];
+  for (let p of parts) {
+    p = p.replace(/^0x/i, '');
+    if (!/^[0-9a-f]{1,2}$/i.test(p)) return `"${p}" is not a hex byte - use pairs of 0-9 / A-F, e.g. 48 65 0D 0A`;
+    out.push(parseInt(p, 16));
+  }
+  if (!/[\s,;:]/.test(t) && t.replace(/^0x/i, '').length % 2) return 'An odd number of hex digits - each byte has two (e.g. 0D, not D)';
+  return out;
+}
+
 function b64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
@@ -42,19 +57,27 @@ function b64ToBytes(b64: string): Uint8Array {
       <div class="sendbar" [class.compact]="!serial()">
         @if (serial()) {
           <span class="port" [class.on]="tab().state === 'connected'" [title]="tab().info || 'Serial port and speed'"><span class="dot"></span>{{ portLabel() }}</span>
-          <input class="msg" #msg [ngModel]="sendText()" (ngModelChange)="sendText.set($event)" (keydown)="sendKey($event)"
-            [placeholder]="tab().state === 'connected' ? 'Message to send - Enter sends, ↑/↓ earlier messages' : 'Not connected'" />
-          <select [ngModel]="eol()" (ngModelChange)="setEol($event)" title="Added after each message">
+          <select class="mode" [ngModel]="sendMode()" (ngModelChange)="setSendMode($event)" title="Send the message as text, or as hex bytes (48 65 6C 6C 6F, 0x0D 0x0A or 48656C6C6F)">
+            <option value="text">Text</option><option value="hex">Hex</option>
+          </select>
+          <input class="msg" #msg [class.bad]="hexError()" [ngModel]="sendText()" (ngModelChange)="sendText.set($event); hexError.set('')" (keydown)="sendKey($event)"
+            [title]="hexError()"
+            [placeholder]="tab().state !== 'connected' ? 'Not connected' : sendMode() === 'hex' ? 'Hex bytes, e.g. 48 65 6C 6C 6F 0D 0A - Enter sends' : 'Message to send - Enter sends, ↑/↓ earlier messages'" />
+          <select [ngModel]="eol()" (ngModelChange)="setEol($event)" [disabled]="sendMode() === 'hex'" [title]="sendMode() === 'hex' ? 'Hex messages are sent exactly as typed (add 0D 0A yourself)' : 'Added after each message'">
             @for (e of eols; track e.l) { <option [ngValue]="e.v">{{ e.l }}</option> }
           </select>
           <button type="button" class="primary" (click)="sendLine()" [disabled]="tab().state !== 'connected'">Send</button>
           <span class="sep"></span>
+          <select class="mode" [ngModel]="tab().hexView ? 'hex' : 'text'" (ngModelChange)="setHexView($event === 'hex')" title="Show what the device sends as text or as hex bytes">
+            <option value="text">View: Text</option><option value="hex">View: Hex</option>
+          </select>
         } @else {
           <span class="spacer"></span>
         }
         <label title="Local time at the start of each line (display only)"><input type="checkbox" [ngModel]="!!tab().timestamps" (ngModelChange)="setTimestamps($event)" /> Timestamps</label>
         <label title="Follow new output"><input type="checkbox" [ngModel]="tab().autoScroll !== false" (ngModelChange)="setAutoScroll($event)" /> Auto scroll</label>
         <button type="button" (click)="clearAll()" title="Clear the screen and the scrollback">Clear</button>
+        @if (serial()) { <button type="button" (click)="tabs.saveScrollback(tab().id)" title="Save the output to a text file">Save…</button> }
         <button type="button" class="x" [title]="serial() ? 'Hide the send bar (right-click the terminal → Send Bar shows it again)' : 'Hide this bar (right-click the terminal → Terminal Bar shows it again; Global Options → Terminal hides it for every tab)'" (click)="tabs.patch(tab().id, { sendBar: false })">✕</button>
       </div>
     }`,
@@ -62,24 +85,25 @@ function b64ToBytes(b64: string): Uint8Array {
     :host { display: flex; flex-direction: column; position: absolute; inset: 0; padding: 4px 0 0 6px; background: var(--term-bg); }
     .term-host { width: 100%; flex: 1; min-height: 0; }
     .paused { position: absolute; right: 18px; bottom: 44px; z-index: 4; display: flex; gap: 8px; align-items: center; padding: 4px 6px 4px 10px; border-radius: 6px;
-      background: var(--panel); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 12px;
-      button { height: 22px; font-size: 11.5px; padding: 0 8px; } }
-    .sendbar { flex: none; display: flex; flex-wrap: wrap; row-gap: 4px; gap: 8px; align-items: center; margin: 4px 0 0 -6px; padding: 5px 8px; background: var(--panel); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted);
-      .msg { flex: 1 1 160px; min-width: 160px; font-family: var(--mono); }
+      background: var(--panel); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: calc(12px * var(--ui-scale, 1));
+      button { height: 22px; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 0 8px; } }
+    .sendbar { flex: none; display: flex; flex-wrap: wrap; row-gap: 4px; gap: 8px; align-items: center; margin: 4px 0 0 -6px; padding: 5px 8px; background: var(--panel); border-top: 1px solid var(--border); font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted);
+      .msg { flex: 1 1 160px; min-width: 160px; font-family: var(--mono); &.bad { border-color: var(--danger); } }
+      select.mode { width: auto; }
       select { flex: none; width: 104px; }
       label { display: flex; gap: 4px; align-items: center; white-space: nowrap; cursor: pointer; }
       .sep { width: 1px; align-self: stretch; background: var(--border); }
       button { height: 24px; } .x { border: 0; background: none; color: var(--muted); padding: 0 4px; }
       .spacer { flex: 1; }
       .port { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        font-family: var(--mono); font-size: 11.5px; color: var(--text); padding: 2px 8px; border: 1px solid var(--border); border-radius: 12px;
+        font-family: var(--mono); font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--text); padding: 2px 8px; border: 1px solid var(--border); border-radius: 12px;
         .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; } &.on .dot { background: var(--ok, #22c55e); } } }
-    .sendbar.compact { padding: 2px 8px; button { height: 20px; font-size: 11.5px; padding: 0 8px; } }
+    .sendbar.compact { padding: 2px 8px; button { height: 20px; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 0 8px; } }
     .fixbar { position: absolute; top: 10px; right: 14px; z-index: 5; max-width: min(520px, 80%); padding: 10px 12px; border-radius: 8px;
-      background: var(--panel); color: var(--text); border: 1px solid var(--border); border-left: 4px solid var(--danger); box-shadow: var(--shadow); font-size: 12.5px; }
+      background: var(--panel); color: var(--text); border: 1px solid var(--border); border-left: 4px solid var(--danger); box-shadow: var(--shadow); font-size: calc(12.5px * var(--ui-scale, 1)); }
     .fmsg { font-weight: 600; margin-right: 18px; word-break: break-word; }
     .fhint { color: var(--muted); margin-top: 4px; }
-    .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; button { height: 24px; font-size: 12px; } }
+    .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; button { height: 24px; font-size: calc(12px * var(--ui-scale, 1)); } }
     .fx { position: absolute; top: 6px; right: 6px; border: 0; background: none; height: auto; padding: 0 2px; color: var(--muted); cursor: pointer; }
   `],
 })
@@ -118,10 +142,38 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     try { localStorage.setItem('termwright.sendEol', JSON.stringify(v)); } catch { /* storage unavailable */ }
   }
 
+  readonly sendMode = signal<'text' | 'hex'>((() => { try { return localStorage.getItem('termwright.sendMode') === 'hex' ? 'hex' : 'text'; } catch { return 'text'; } })());
+  readonly hexError = signal('');
+
+  /** Text or hex view of what the device sends; the next output starts on a new line. */
+  setHexView(on: boolean) {
+    this.tabs.patch(this.tab().id, { hexView: on });
+    const t = this.term;
+    if (t && t.buffer.active.cursorX > 0) t.write('\r\n');
+  }
+
+  setSendMode(v: 'text' | 'hex') {
+    this.sendMode.set(v);
+    this.hexError.set('');
+    try { localStorage.setItem('termwright.sendMode', v); } catch { /* storage unavailable */ }
+  }
+
   sendLine() {
     const t = this.tab();
     if (t.state !== 'connected' || t.locked) return;
     const text = this.sendText();
+    if (this.sendMode() === 'hex') {
+      const bytes = parseHex(text);
+      if (typeof bytes === 'string') { this.hexError.set(bytes); return; }
+      if (!bytes.length) return;
+      let bin = '';
+      for (const b of bytes) bin += String.fromCharCode(b);
+      void this.backend.sendBinary(t.id, btoa(bin));
+      this.sent = [text, ...this.sent.filter(x => x !== text)].slice(0, 100);
+      this.sentIdx = -1;
+      this.sendText.set('');
+      return;
+    }
     void this.backend.sendInput(t.id, text + this.eol());
     if (text.trim()) {
       this.sent = [text, ...this.sent.filter(x => x !== text)].slice(0, 100);
@@ -270,8 +322,9 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     const dec = new TextDecoder();
     const quietDec = new TextDecoder();
     let atLineStart = false;
+    let hexCol = 0;
     this.unsub.push(this.backend.on('term:data:' + id, (b64: string) => {
-      const bytes = b64ToBytes(b64);
+      let bytes = b64ToBytes(b64);
       const q = this.tabs.quiet.get(id);
       if (q) {
         q.held += quietDec.decode(bytes, { stream: true });
@@ -286,6 +339,15 @@ export class TerminalView implements AfterViewInit, OnDestroy {
         const y = term.buffer.active.viewportY;
         term.write(d, () => { if (term.buffer.active.viewportY !== y) term.scrollToLine(y); });
       };
+      // Hex view: every byte as two hex digits, a new line after a line feed or 16 bytes.
+      if (tv?.hexView) {
+        let out = '';
+        for (const b of bytes) {
+          out += b.toString(16).toUpperCase().padStart(2, '0') + ' ';
+          if (++hexCol >= 16 || b === 0x0a) { out += '\r\n'; hexCol = 0; }
+        }
+        bytes = new TextEncoder().encode(out);
+      } else if (hexCol) { hexCol = 0; write('\r\n'); }
       if (!tv?.timestamps || term.buffer.active.type !== 'normal') { write(bytes); return; }
       // Per-line timestamps (display only): local time after every newline in line-based output.
       const stamp = () => {

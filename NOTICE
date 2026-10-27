@@ -11,7 +11,7 @@ Third-party components (licenses in their respective packages):
   go.bug.st/serial (BSD-3-Clause)        https://github.com/bugst/go-serial
   zalando/go-keyring (MIT)               https://github.com/zalando/go-keyring
   jcmturner/gokrb5 (Apache-2.0)          https://github.com/jcmturner/gokrb5
-  bcrypt_pbkdf from golang.org/x/crypto (BSD-3-Clause), in internal/securecrt/bcrypt_pbkdf.go
+  bcrypt_pbkdf from golang.org/x/crypto (BSD-3-Clause), in internal/sessionfile/bcrypt_pbkdf.go
   Angular (MIT)                          https://angular.dev
   xterm.js and addons (MIT)              https://xtermjs.org
   noVNC (MPL-2.0), unmodified, in the VNC viewer   https://github.com/novnc/noVNC
@@ -23,3 +23,7 @@ Terminal color schemes are based on the following openly licensed palettes:
   Solarized (MIT, Ethan Schoonover), Dracula (MIT), Nord (MIT, Arctic Ice Studio),
   Gruvbox (MIT, Pavel Pertsev), Tomorrow Night (MIT, Chris Kempson),
   Catppuccin (MIT), Tango (public domain).
+
+Fonts included in the application (SIL Open Font License 1.1):
+  Inter (c) The Inter Project Authors - https://github.com/rsms/inter (via @fontsource-variable/inter)
+  IBM Plex Sans (c) IBM Corp. - https://github.com/IBM/plex (via @fontsource/ibm-plex-sans)

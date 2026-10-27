@@ -135,22 +135,22 @@ import { Ui } from '../core/ui.service';
   styles: [`
     .ck { width: min(1100px, 96vw); }
     .lists { display: flex; flex-direction: column; overflow: auto; a { display: flex; flex-direction: column; line-height: 1.3; padding-top: 6px; padding-bottom: 6px; }
-      a span { font-size: 11px; color: var(--muted); } .add { margin: 8px; } }
+      a span { font-size: calc(11px * var(--ui-scale, 1)); color: var(--muted); } .add { margin: 8px; } }
     .setup { border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin-bottom: 10px;
       summary { cursor: pointer; font-weight: 600; padding: 2px 0; } .grid { margin-top: 8px; } }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-    .chip { display: inline-flex; gap: 4px; align-items: center; padding: 1px 4px 1px 8px; border: 1px solid var(--border); border-radius: 12px; font-size: 12px;
+    .chip { display: inline-flex; gap: 4px; align-items: center; padding: 1px 4px 1px 8px; border: 1px solid var(--border); border-radius: 12px; font-size: calc(12px * var(--ui-scale, 1));
       button { border: 0; background: none; height: auto; padding: 0 3px; color: var(--muted); cursor: pointer; } }
     .addrow input { max-width: 320px; }
     .cmds { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; .cg { width: 100%; } textarea { width: 100%; resize: vertical; margin-top: 4px; } }
     .row { display: flex; gap: 8px; align-items: center; } .spacer { flex: 1; }
     .runbar { display: flex; gap: 8px; align-items: center; margin: 4px 0 6px; select { max-width: 360px; } progress { width: 140px; accent-color: var(--accent); } }
-    .sum { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+    .sum { font-size: calc(12.5px * var(--ui-scale, 1)); color: var(--muted); margin-bottom: 6px; }
     .devs { border: 1px solid var(--border); border-radius: 6px; max-height: 44vh; overflow: auto; }
-    table { width: 100%; } th { position: sticky; top: 0; background: var(--panel); z-index: 1; } td { vertical-align: middle; font-size: 12.5px; }
-    .acts { white-space: nowrap; text-align: right; button { height: 22px; font-size: 11.5px; padding: 0 7px; margin-left: 4px; } }
+    table { width: 100%; } th { position: sticky; top: 0; background: var(--panel); z-index: 1; } td { vertical-align: middle; font-size: calc(12.5px * var(--ui-scale, 1)); }
+    .acts { white-space: nowrap; text-align: right; button { height: 22px; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 0 7px; margin-left: 4px; } }
     .bad { color: var(--danger); } .chg { color: #f59e0b; } .ok { color: var(--ok); }
-    .log { display: block; font-size: 11px; color: var(--accent); cursor: pointer; }
+    .log { display: block; font-size: calc(11px * var(--ui-scale, 1)); color: var(--accent); cursor: pointer; }
     .dir { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .intro { max-width: 640px; line-height: 1.55; }
     .err { color: var(--danger); } .danger-text { color: var(--danger); }

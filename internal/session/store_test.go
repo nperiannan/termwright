@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/termwright/termwright/internal/securecrt"
+	"github.com/termwright/termwright/internal/sessionfile"
 )
 
 func newStore(t *testing.T) *Store {
@@ -21,7 +21,7 @@ func newStore(t *testing.T) *Store {
 }
 
 func TestSaveRenamePreservesUnknownKeys(t *testing.T) {
-	src, _ := os.ReadFile("../securecrt/testdata/switch.ini")
+	src, _ := os.ReadFile("../sessionfile/testdata/switch.ini")
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "Config", "Sessions", "Lab"), 0o700)
 	os.WriteFile(filepath.Join(dir, "Config", "Sessions", "Lab", "switch.ini"), src, 0o600)
@@ -170,7 +170,7 @@ func TestV2FieldsRoundTrip(t *testing.T) {
 
 func TestSecureCRTPortForwardTable(t *testing.T) {
 	data := "S:\"Protocol Name\"=SSH2\r\nS:\"Hostname\"=gw\r\nZ:\"Port Forward Table V2\"=00000003\r\n localhost:8080:webserver.internal.net:80::0:0::\r\n localhost:3306:10.0.0.15:3306::0:0::\r\n D1080::::0:0::\r\n"
-	f, err := securecrt.Parse([]byte(data))
+	f, err := sessionfile.Parse([]byte(data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestSecureCRTPortForwardTable(t *testing.T) {
 func TestSecureCRTForwardTableV3(t *testing.T) {
 	// first two lines are exactly what SecureCRT 9.x wrote for forwards named "dynamic" and "local"
 	data := "S:\"Protocol Name\"=SSH2\r\nZ:\"Port Forward Table V3\"=00000004\r\n 1|dynamic|192.0.2.180,1080|0|socks,|||\r\n 1|local|192.0.2.18,8080|0||80||\r\n 1|web|,8443|1|web.lab|443||\r\n 0|old|,9000|0||22||\r\nZ:\"Reverse Forward Table V3\"=00000001\r\n 1|back|,2222|1|10.0.0.9|22||\r\nD:\"Log Timestamp Each Line\"=00000000\r\nS:\"Custom Log Message Each Line\"=[%h]\r\n"
-	f, err := securecrt.Parse([]byte(data))
+	f, err := sessionfile.Parse([]byte(data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestSecureCRTLogonKeys(t *testing.T) {
 	src := "D:\"Use Script File\"=00000001\r\nS:\"Shell Command\"=ssh -i ~/.ssh/aws_key ec2-user@10.0.0.5\r\nD:\"Use Shell Command\"=00000001\r\n" +
 		"D:\"Send Initial Carriage Return\"=00000001\r\nD:\"Use Login Script\"=00000000\r\nS:\"Script Arguments\"=DUT1, DUT2\r\n" +
 		"Z:\"Login Script V4\"=00000001\r\n 03:abcdef\r\nS:\"Script Filename V2\"=login.js\r\n"
-	f, err := securecrt.Parse([]byte(src))
+	f, err := sessionfile.Parse([]byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}

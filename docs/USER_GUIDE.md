@@ -1,6 +1,6 @@
 # Termwright User Guide
 
-Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial, Raw TCP and local shells**, with SFTP/SCP/ZMODEM/YMODEM/XMODEM file transfer, logon automation, key-login setup (including PuTTY `.ppk` keys) Kerberos, SSH certificates and FIDO2 keys, password-manager integration, and SecureCRT-style Python, VBScript or JavaScript scripting. It runs on macOS (Apple Silicon), Windows and Linux, reads/writes SecureCRT®-compatible session files and imports PuTTY, MobaXterm and OpenSSH sessions.
+Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial, Raw TCP and local shells**, with SFTP/SCP/ZMODEM/YMODEM/XMODEM file transfer, logon automation, key-login setup (including PuTTY `.ppk` keys) Kerberos, SSH certificates and FIDO2 keys, password-manager integration, and Python, VBScript or JavaScript scripting. It runs on macOS (Apple Silicon), Windows and Linux, and imports and exports the sessions of other terminal programs (SecureCRT®, PuTTY, KiTTY, SuperPuTTY, MobaXterm, OpenSSH).
 
 ![Main window](screenshots/main.png)
 
@@ -16,7 +16,7 @@ Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial
 >
 > **New in 0.10:** device types (login profiles) for EXOS/VOSS/Cisco/Linux with `voss 10.1.1.1` quick connects, command library with variables, send to selected tabs, Quick Open, output alerts, workspaces, folder defaults, paste confirmation, compare outputs, CSV/Ansible/NetBox/AWS import, timestamps, copy as HTML, window size memory and portable mode.
 >
-> **New in 0.9:** PuTTY `.ppk` keys work directly ([§3](#first-ssh-connection)), SecureCRT-style **Python** scripts with the `crt` object ([§10](#10-automation-logon-actions-triggers-scripts), [SCRIPTING.md](SCRIPTING.md#python-scripts-securecrt-style)), terminal scheme *Auto* and *use for all sessions* ([§13](#13-global-options-reference)).
+> **New in 0.9:** PuTTY `.ppk` keys work directly ([§3](#first-ssh-connection)), **Python** scripts with the `crt` object ([§10](#10-automation-logon-actions-triggers-scripts), [SCRIPTING.md](SCRIPTING.md#python-scripts-with-the-crt-object)), terminal scheme *Auto* and *use for all sessions* ([§13](#13-global-options-reference)).
 
 **Contents**
 
@@ -284,7 +284,7 @@ Devices cabled to a console server (terminal server) get a session of protocol *
   | <img src="assets/icon-shell.svg" width="16"> slate `$` | Local shell |
   | <img src="assets/icon-raw.svg" width="16"> pink `<>` | Raw TCP |
   | small arrow badge | reached through a jump station (remote command `ssh … host`) |
-- **Default session**: a session file named `Default` at the top level (e.g. imported from SecureCRT) is used as the template for new sessions.
+- **Default session**: a session file named `Default` at the top level (e.g. an imported one) is used as the template for new sessions.
 
 ### Discover devices
 
@@ -395,7 +395,10 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 
 - **Port**: the list shows the serial ports of this computer in order - `COM1, COM2 … COM10` on Windows, `/dev/ttyACM0, /dev/ttyUSB0, /dev/ttyUSB1 …` on Linux, `/dev/cu.*` on macOS - with the adapter's name and USB ID when the system reports them (e.g. *FT232R USB UART (0403:6001)*). The list **updates by itself** about every second and a half: plug in a console cable and its port appears, marked *(new)*, and is picked when no port was chosen yet. A saved port that is not plugged in shows as *(not connected)*. *Other port…* types a name by hand. Quick Connect has the same list.
 - **Detect Speed**: sends Enter at each common speed (9600, 115200, 19200, 38400, 57600, 4800, 2400, 230400, 1200) and keeps the one where the device answers with readable text. Close a tab that has the port open first. *Detect the speed each time it connects* does this on every connect; the status bar then shows the speed with *(detected)*.
-- **Send bar** (under serial tabs): it starts with the **port and speed** of the connection (`/dev/cu.usbserial-A10K · 115200 8N1`, green while connected; *(detected)* when the speed was detected). Type a message and press **Enter** or **Send**; ↑/↓ recall earlier messages. The line ending is added after each message: **CR** (default, what consoles expect), **LF**, **CR+LF** or none. **Timestamps** puts the local time (`[10:41:07.512]`) at the start of every line, **Auto scroll** follows new output, **Clear** empties the screen and the scrollback. ✕ hides the bar; right-click the terminal → *Send Bar* shows it again, on any tab.
+- **Send bar** (under serial tabs): it starts with the **port and speed** of the connection (`/dev/cu.usbserial-A10K · 115200 8N1`, green while connected; *(detected)* when the speed was detected). Type a message and press **Enter** or **Send**; ↑/↓ recall earlier messages. The line ending is added after each message: **CR** (default, what consoles expect), **LF**, **CR+LF** or none. **Timestamps** puts the local time (`[10:41:07.512]`) at the start of every line, **Auto scroll** follows new output, **Clear** empties the screen and the scrollback, **Save…** writes the output to a text file. ✕ hides the bar; right-click the terminal → *Send Bar* shows it again, on any tab.
+- **Hex**: the first list switches the message box between **Text** and **Hex**. In Hex mode type bytes as `48 65 6C 6C 6F 0D 0A`, `0x02,0x10,0x03` or `48656C6C6F`; they are sent exactly as typed (no line ending is added - put `0D 0A` in yourself). A typo such as `1G` is marked in red and nothing is sent. **View: Hex** shows what the device sends as hex bytes - a new line after each line feed (`0A`) or 16 bytes - with timestamps if they are on; **View: Text** goes back to normal output.
+
+![Serial tab sending and showing hex bytes](screenshots/serial-hex.png)
 
 ![Serial tab with the send bar, timestamps and auto scroll off](screenshots/serial-tab.png)
 
@@ -660,7 +663,7 @@ To copy with SCP while browsing with SFTP, set **Via: SCP** in the SFTP tab (abo
 - In the **Expect/Send Properties** dialog (Add… / Edit… or double-click a row): **Hide** masks the Send text in the table, **Send trailing carriage return** adds Enter (on by default), and **Credentials** picks a named credential.
 - Send escapes: `\r` CR, `\n` LF, `\b` backspace, `\t` tab, `\e` Escape, `\v` paste clipboard, `\p` pause 1 s, `\s` username and `\w` password (from the chosen credential, otherwise the session's username and saved password), `\\` backslash, `\xHH` any byte.
 - Example (Cisco): `Username:` → `\s`, `Password:` → `\w` (Hide), `>` → `enable`, `Password:` → `\w`, `#` → `terminal length 0`.
-- **Logon script**: tick it, choose a JavaScript (`.js`) or **SecureCRT-style Python (`.py`)** script, and optionally give **Arguments** (`scriptArgs` in JavaScript, `crt.Arguments` in Python). SecureCRT `.vbs` scripts are kept in the session but skipped with a notice.
+- **Logon script**: tick it, choose a JavaScript (`.js`) or **Python (`.py`)** script, and optionally give **Arguments** (`scriptArgs` in JavaScript, `crt.Arguments` in Python). `.vbs` scripts run on Windows (see below).
 
 **Remote command** (SSH2 section of the same page): runs a command instead of a login shell; a terminal is still allocated and the tab ends when the command exits. Jump-station example — log in to the jump host and go straight on to an AWS instance with the key that is stored *on the jump host*:
 
@@ -694,7 +697,7 @@ The server pane's header then reads **user@host via &lt;jump host&gt;**, and the
 
 **Triggers**: whenever output contains a pattern (text or regular expression), send a response, e.g. `--More--` → space, `\[y/n\]` (regex) → `y\r`. Limited to 20 per 10 seconds to avoid loops.
 
-**Python scripts (SecureCRT style)**: `.py` files run with your installed Python 3 and get SecureCRT's `crt` object, so existing SecureCRT logon and automation scripts usually work unchanged. Use them as a session's *Logon script*, from Script → Run Script…, a button or a key binding. Set a different interpreter in Global Options → General → *Python interpreter*. Example:
+**Python scripts with the `crt` object**: `.py` files run with your installed Python 3 and get the `crt` script object (`crt.Screen`, `crt.Session`, `crt.Dialog`…), so existing logon and automation scripts written for it usually work unchanged. Use them as a session's *Logon script*, from Script → Run Script…, a button or a key binding. Set a different interpreter in Global Options → General → *Python interpreter*. Example:
 
 ```python
 # $language = "Python3"
@@ -708,9 +711,9 @@ for dut in crt.Arguments:            # the Arguments field, e.g. DUT1 DUT2
         crt.Dialog.MessageBox(dut + " is unreachable", "Ping", ICON_WARN)
 ```
 
-Supported `crt` members, timeouts and limits are listed in [SCRIPTING.md](SCRIPTING.md#python-scripts-securecrt-style).
+Supported `crt` members, timeouts and limits are listed in [SCRIPTING.md](SCRIPTING.md#python-scripts-with-the-crt-object).
 
-**VBScript scripts** (Windows): SecureCRT `.vbs` logon scripts run unchanged with Windows Script Host - the `# $language = "VBScript"` header is accepted, `Sub Main` is called, and `crt.Screen`, `crt.Session`, `crt.Dialog`, `crt.Arguments`, `crt.Sleep` work with their optional arguments. See [SCRIPTING.md](SCRIPTING.md#vbscript-scripts-securecrt-style-windows).
+**VBScript scripts** (Windows): `.vbs` logon scripts with the `crt` object run unchanged with Windows Script Host - the `# $language = "VBScript"` header is accepted, `Sub Main` is called, and `crt.Screen`, `crt.Session`, `crt.Dialog`, `crt.Arguments`, `crt.Sleep` work with their optional arguments. See [SCRIPTING.md](SCRIPTING.md#vbscript-scripts-windows).
 
 **Reading the screen**: in Python and VBScript, `crt.Screen.Get(row1, col1, row2, col2)`, `Get2`, `CurrentRow` and `CurrentColumn` read the screen exactly as it is rendered in the tab, so `crt.Screen.Get(row, 1, row, crt.Screen.CurrentColumn - 1)` returns the current prompt (e.g. `core-sw1:1#`).
 
@@ -788,10 +791,13 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 ![Light theme with Solarized Light](screenshots/light.png)
 
 - **UI theme**: the **theme switch** at the top right - sun = Light, moon = Dark, screen = follow the system (the default: light or dark with your computer, switching when it does). Hover it to see the current theme, click an icon to change it. The same choice is in Global Options → General, with an **accent color**.
+- **Interface font and text size** (Global Options → General): *System* (the default), *VS Code* (the font VS Code uses on each system - on macOS the same as System), *Inter* or *IBM Plex Sans* (both included with Termwright), and the text size from *Default (13)* to *Largest (17)*. The sample under the lists shows the choice before you press OK. It changes menus, dialogs and the Session Manager; the terminal font and size are under Terminal & Appearance (and View → Zoom).
+
+  ![Interface font and text size](screenshots/options-font.png)
 
   ![Theme switch in the dark and light theme](screenshots/theme-switch.png)
  The app icon on the start page and in About follows the theme.
-- **Terminal color scheme**: Global Options → Terminal & Appearance (default for all sessions) or Session Options → Terminal (per session). Built in: Default, Classic, Green Screen, Light, Solarized Dark/Light, Dracula, Nord, Gruvbox Dark, Tomorrow Night, Catppuccin Mocha, Tango. Common SecureCRT scheme names map to these automatically.
+- **Terminal color scheme**: Global Options → Terminal & Appearance (default for all sessions) or Session Options → Terminal (per session). Built in: Default, Classic, Green Screen, Light, Solarized Dark/Light, Dracula, Nord, Gruvbox Dark, Tomorrow Night, Catppuccin Mocha, Tango. Common scheme names found in imported sessions map to these automatically.
 - **Custom schemes**: Global Options → Color Schemes → pick a scheme → *Copy as new…*, then edit any of the 20 colors with live preview. *Export…/Import…* share schemes as JSON.
 
 ![Color scheme editor](screenshots/schemes.png)
@@ -811,8 +817,8 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 
 | Page | Settings |
 |---|---|
-| **General** | Python interpreter for `.py` scripts (blank = automatic), sessions folder (point it at an existing SecureCRT `Config/Sessions` folder to share sessions; back it up first), Logs folder, Downloads folder (ZMODEM), UI theme, accent color, confirm on close, **reopen last sessions on startup**, show Session Manager / Button Bar / Command Window / Connect Bar / menu bar inside the window. |
-| **Terminal & Appearance** | Font, size, color scheme (*Auto* follows the UI theme; *Use this scheme for all sessions* overrides schemes set per session or imported from SecureCRT), cursor, scrollback, copy on select, paste on right-click, paste line delay (ms between lines when pasting, for slow devices). |
+| **General** | Python interpreter for `.py` scripts (blank = automatic), sessions folder (it can point at a `Config/Sessions` folder shared with another program that uses the same files; back it up first), Logs folder, Downloads folder (ZMODEM), UI theme, accent color, confirm on close, **reopen last sessions on startup**, show Session Manager / Button Bar / Command Window / Connect Bar / menu bar inside the window. |
+| **Terminal & Appearance** | Font, size, color scheme (*Auto* follows the UI theme; *Use this scheme for all sessions* overrides schemes set per session or imported), cursor, scrollback, copy on select, paste on right-click, paste line delay (ms between lines when pasting, for slow devices). |
 | **Color Schemes** | Custom scheme editor, import/export. |
 | **Keyword Highlighting** | Keyword sets and the default set. |
 | **Key Map** | Key bindings. |
@@ -861,7 +867,7 @@ Options → Global Options → **Updates** decides when you are told about updat
 4. Passwords that cannot be decrypted (for example with a wrong or missing configuration passphrase) are left out; connect once and tick *Save password*.
 5. **File → Export Sessions…** writes a folder (copy its `Sessions` into SecureCRT's Config), a zip, or XML (SecureCRT *Import Settings*).
 
-Details: [SECURECRT_COMPAT.md](SECURECRT_COMPAT.md).
+Details: [SESSION_FILES.md](SESSION_FILES.md).
 
 ### Moving sessions to another Termwright
 
@@ -889,7 +895,7 @@ After the export a summary lists the sessions the format cannot hold (e.g. RDP, 
 
 ![Export summary](screenshots/export-report.png)
 
-Tips: PuTTY needs `.ppk` keys (PuTTYgen converts OpenSSH keys) and OpenSSH cannot read `.ppk` keys; the summary says when this applies. The SecureCRT formats above keep everything.
+Tips: PuTTY needs `.ppk` keys (PuTTYgen converts OpenSSH keys) and OpenSSH cannot read `.ppk` keys; the summary says when this applies. Termwright's own folder, zip and XML keep everything.
 
 **About** (Help → About Termwright) shows the version, platform, data folder, main features and links to the repository, this guide, issues and releases.
 
@@ -948,3 +954,7 @@ Back up the data folder to back up everything except passwords.
 | Pasting into a switch drops characters | Set *Paste line delay* (e.g. 50 ms) in Global Options → Terminal. |
 | ZMODEM does nothing | Install `lrzsz` on the remote host; check the Downloads folder in Global Options. |
 | Highlighting is missing | It is off by default: pick a default set in Global Options → Keyword Highlighting (e.g. *Network*) or a set in the session's Terminal page; it is also off in full-screen apps. |
+
+---
+
+*SecureCRT® is a registered trademark of VanDyke Software, Inc. Termwright is an independent open-source project, not affiliated with or endorsed by VanDyke Software; the name is used only to say which files Termwright can import and export.*

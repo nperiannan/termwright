@@ -41,7 +41,7 @@ import { Tabs } from '../core/tabs.service';
     </div>
   }`,
   styles: [`
-    .msg { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; background: var(--input-bg); padding: 8px; border-radius: 4px; margin: 0 0 10px; user-select: text; }
+    .msg { white-space: pre-wrap; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); background: var(--input-bg); padding: 8px; border-radius: 4px; margin: 0 0 10px; user-select: text; }
     .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
     .modal-head.danger { background: var(--danger); color: #fff; }
   `],

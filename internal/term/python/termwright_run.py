@@ -1,4 +1,4 @@
-# termwright_run.py - starts a SecureCRT-style Python script inside Termwright.
+# termwright_run.py - starts a Python script that uses the crt object inside Termwright.
 # Usage: python3 termwright_run.py <script.py> [args...]
 import builtins
 import os

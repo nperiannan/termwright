@@ -116,8 +116,8 @@ type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv
   styles: [`
     .src-groups { display: flex; flex-direction: column; gap: 10px; }
     .src-group { display: flex; flex-direction: column; gap: 5px; label { display: flex; gap: 8px; align-items: center; cursor: pointer; } }
-    .src-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-    .log { max-height: 160px; overflow: auto; font-size: 11px; background: var(--input-bg); padding: 6px; }`],
+    .src-title { font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .log { max-height: 160px; overflow: auto; font-size: calc(11px * var(--ui-scale, 1)); background: var(--input-bg); padding: 6px; }`],
 })
 export class ImportDialog {
   protected ui = inject(Ui);
@@ -243,10 +243,10 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
           </div>
           <label>Format</label>
           <div class="checks">
-            <div class="grp">Termwright / SecureCRT (everything is kept)</div>
-            <label><input type="radio" name="fmt" value="dir" [(ngModel)]="format" (ngModelChange)="dest = ''" /> Folder (Sessions/*.ini, copy into SecureCRT's Config folder)</label>
+            <div class="grp">Termwright (everything is kept)</div>
+            <label><input type="radio" name="fmt" value="dir" [(ngModel)]="format" (ngModelChange)="dest = ''" /> Folder (Sessions/*.ini; also works as a SecureCRT Config/Sessions folder)</label>
             <label><input type="radio" name="fmt" value="zip" [(ngModel)]="format" (ngModelChange)="dest = ''" /> Zip archive</label>
-            <label><input type="radio" name="fmt" value="xml" [(ngModel)]="format" (ngModelChange)="dest = ''" /> XML (for SecureCRT's Import Settings)</label>
+            <label><input type="radio" name="fmt" value="xml" [(ngModel)]="format" (ngModelChange)="dest = ''" /> XML (also for SecureCRT's Import Settings)</label>
             <div class="grp">Other programs (name, folder, address, login, key, jump host, forwards, serial settings)</div>
             @for (f of others; track f.v) {
               <label><input type="radio" name="fmt" [value]="f.v" [(ngModel)]="format" (ngModelChange)="dest = ''" /> {{ f.label }}</label>
@@ -273,10 +273,10 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
   </div>`,
   styles: [`
     .exp { width: min(720px, 95vw); }
-    .grp { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 6px 0 2px; }
+    .grp { font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 6px 0 2px; }
     .grp:first-child { margin-top: 0; }
-    .lst { margin: 4px 0 10px; padding-left: 18px; font-size: 12.5px; max-height: 180px; overflow: auto; }
-    .mono { font-family: var(--mono); font-size: 12px; }
+    .lst { margin: 4px 0 10px; padding-left: 18px; font-size: calc(12.5px * var(--ui-scale, 1)); max-height: 180px; overflow: auto; }
+    .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); }
   `],
 })
 export class ExportDialog {

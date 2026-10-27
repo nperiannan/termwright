@@ -51,15 +51,15 @@ import { SessionIcon } from './session-icon';
     :host { display: block; position: absolute; inset: 0; background: var(--bg); }
     .rdp { height: 100%; display: flex; align-items: center; justify-content: center; padding: 20px; }
     .card { width: min(560px, 100%); padding: 20px 22px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
-    .head { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; .t { font-weight: 600; font-size: 15px; } .sub { color: var(--muted); font-size: 12.5px; } }
-    .rows { display: grid; gap: 6px; font-size: 13px; > div { display: grid; grid-template-columns: 90px 1fr; gap: 10px; } span { color: var(--muted); } b { font-weight: 500; } }
+    .head { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; .t { font-weight: 600; font-size: calc(15px * var(--ui-scale, 1)); } .sub { color: var(--muted); font-size: calc(12.5px * var(--ui-scale, 1)); } }
+    .rows { display: grid; gap: 6px; font-size: calc(13px * var(--ui-scale, 1)); > div { display: grid; grid-template-columns: 90px 1fr; gap: 10px; } span { color: var(--muted); } b { font-weight: 500; } }
     .mono { font-family: var(--mono); }
-    .note { margin: 12px 0 0; padding: 8px 10px; border-radius: 6px; background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: 12.5px; }
-    .hint { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+    .note { margin: 12px 0 0; padding: 8px 10px; border-radius: 6px; background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: calc(12.5px * var(--ui-scale, 1)); }
+    .hint { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); margin: 10px 0 0; }
     .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
     .vnc { height: 100%; display: flex; flex-direction: column; }
-    .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--panel); font-size: 12px;
-      button { height: 24px; font-size: 12px; padding: 0 8px; } button.on { border-color: var(--accent); color: var(--accent); } .spacer { flex: 1; } .st { color: var(--muted); } }
+    .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--panel); font-size: calc(12px * var(--ui-scale, 1));
+      button { height: 24px; font-size: calc(12px * var(--ui-scale, 1)); padding: 0 8px; } button.on { border-color: var(--accent); color: var(--accent); } .spacer { flex: 1; } .st { color: var(--muted); } }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); &.connected { background: var(--ok); } &.error { background: var(--danger); } &.connecting { background: #f59e0b; } }
     iframe { flex: 1; border: 0; width: 100%; background: #111; }
   `],

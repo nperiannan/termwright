@@ -11,7 +11,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/termwright/termwright/internal/securecrt"
+	"github.com/termwright/termwright/internal/sessionfile"
 )
 
 // Importers for other terminal programs:
@@ -63,7 +63,7 @@ func sniffFormat(text string) string {
 
 func (s *Store) importSessions(list []Session, opt ImportOptions, res *ImportResult) {
 	for _, n := range list {
-		f := securecrt.NewFile()
+		f := sessionfile.NewFile()
 		n.Apply(f)
 		s.importOne(JoinPath(n.Folder, n.Name), f, opt, res)
 	}

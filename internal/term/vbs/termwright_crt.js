@@ -1,4 +1,4 @@
-// termwright_crt.js - the SecureCRT-style "crt" object for VBScript logon scripts.
+// termwright_crt.js - the "crt" script object for VBScript logon scripts.
 //
 // Termwright runs a .vbs script with Windows Script Host (cscript) inside a
 // .wsf job: this JScript part defines `crt` (JScript functions accept optional

@@ -100,7 +100,7 @@ type Key = 'folder' | 'deviceType' | 'username' | 'password' | 'protocol' | 'por
     .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .inline { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
     .port { width: 110px; }
-    .list { max-height: 120px; overflow: auto; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; margin-bottom: 10px; }
+    .list { max-height: 120px; overflow: auto; font-size: calc(12px * var(--ui-scale, 1)); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; margin-bottom: 10px; }
     .hint a { color: var(--accent); cursor: pointer; }
     .err { color: var(--danger); white-space: pre-wrap; }
     .spacer { flex: 1; }

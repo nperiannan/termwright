@@ -71,8 +71,8 @@ interface Item extends MovedDevice { selected: boolean; done?: boolean; error?: 
   </div>`,
   styles: [`
     .moved { width: min(940px, 95vw); }
-    table { width: 100%; } td { vertical-align: middle; font-size: 12.5px; } .c { width: 28px; text-align: center; }
-    .mono { font-family: var(--mono); font-size: 12px; } .new { color: var(--accent); font-weight: 600; }
+    table { width: 100%; } td { vertical-align: middle; font-size: calc(12.5px * var(--ui-scale, 1)); } .c { width: 28px; text-align: center; }
+    .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); } .new { color: var(--accent); font-weight: 600; }
     .ok { color: var(--ok); } .bad { color: var(--danger); } tr.dim td { opacity: .65; }
     progress { width: 100%; accent-color: var(--accent); }
     .err { color: var(--danger); white-space: pre-wrap; } .spacer { flex: 1; }

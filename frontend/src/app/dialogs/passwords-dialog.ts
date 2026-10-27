@@ -134,9 +134,9 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
     .ok { color: var(--accent); margin-top: 8px; }
     .err { color: var(--danger); margin-top: 8px; }
     .missing { color: var(--muted); text-decoration: line-through; }
-    .refs { margin-bottom: 12px; td { font-size: 12px; vertical-align: top; } .mono { white-space: nowrap; } }
+    .refs { margin-bottom: 12px; td { font-size: calc(12px * var(--ui-scale, 1)); vertical-align: top; } .mono { white-space: nowrap; } }
     .nowrap { white-space: nowrap; }
-    td.mono { font-size: 11px; word-break: break-all; }
+    td.mono { font-size: calc(11px * var(--ui-scale, 1)); word-break: break-all; }
   `],
 })
 export class PasswordsDialog implements OnInit {

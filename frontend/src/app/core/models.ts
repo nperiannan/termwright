@@ -77,7 +77,7 @@ export interface Button { label: string; send: string; toAll: boolean; action: s
 
 export interface Settings {
   vaultAddr?: string; keyPassphrases?: string[];
-  sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; theme: string;
+  sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; theme: string; uiFont?: string; uiFontSize?: number;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
   showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;

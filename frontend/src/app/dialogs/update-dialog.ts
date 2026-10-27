@@ -101,16 +101,16 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
     .installed { margin: 0 0 10px; }
     .card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
     .title { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-    .tag { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; color: #fff; }
+    .tag { font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; padding: 1px 7px; border-radius: 10px; color: #fff; }
     .tag.stable { background: #16a34a; }
     .tag.nightly { background: #d97706; }
     .ok { margin: 0; color: var(--muted); }
-    .notes { align-self: stretch; max-height: 220px; overflow: auto; font-size: 12px; background: var(--input-bg); padding: 8px 10px; border-radius: 6px; user-select: text; line-height: 1.5; }
+    .notes { align-self: stretch; max-height: 220px; overflow: auto; font-size: calc(12px * var(--ui-scale, 1)); background: var(--input-bg); padding: 8px 10px; border-radius: 6px; user-select: text; line-height: 1.5; }
     .nh { font-weight: 600; margin: 4px 0 2px; }
     .li { padding-left: 14px; position: relative; }
     .li::before { content: '•'; position: absolute; left: 3px; color: var(--muted); }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .ack { font-size: 12px; display: flex; gap: 6px; align-items: center; }
+    .ack { font-size: calc(12px * var(--ui-scale, 1)); display: flex; gap: 6px; align-items: center; }
     progress { width: 100%; accent-color: var(--accent); }
     .err { color: var(--danger); white-space: pre-wrap; }
     .mono { font-family: var(--mono, monospace); word-break: break-all; }

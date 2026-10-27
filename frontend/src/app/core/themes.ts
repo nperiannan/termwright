@@ -88,7 +88,7 @@ export function fullScheme(name: string, customs: CustomScheme[] = []): Record<s
   return out;
 }
 
-/** Maps color scheme names found in imported SecureCRT sessions to ours. */
+/** Maps color scheme names found in imported sessions to ours. */
 const ALIASES: Record<string, string> = {
   'traditional': 'Classic', 'windows': 'Classic', 'white / black': 'Classic', 'black / white': 'Light',
   'monochrome': 'Classic', 'green / black': 'Green Screen', 'black / green': 'Green Screen',
@@ -96,7 +96,7 @@ const ALIASES: Record<string, string> = {
   'solarized light': 'Solarized Light', 'default': 'Default',
 };
 
-/** SecureCRT's stock scheme names: imported sessions with these follow the global scheme. */
+/** Stock scheme names of imported sessions: sessions with these follow the global scheme. */
 const INHERIT = new Set(['traditional', 'windows', 'monochrome']);
 
 /**

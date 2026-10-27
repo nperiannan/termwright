@@ -72,9 +72,9 @@ interface Port { port: number; name: string; exists: boolean; }
     .grid { display: grid; grid-template-columns: 100px 1fr; gap: 8px 10px; align-items: center; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .short { width: 80px; }
-    textarea { width: 100%; font-family: var(--mono); font-size: 12.5px; }
+    textarea { width: 100%; font-family: var(--mono); font-size: calc(12.5px * var(--ui-scale, 1)); }
     .prev { margin-top: 12px; max-height: 30vh; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    table { width: 100%; border-collapse: collapse; font-size: calc(12.5px * var(--ui-scale, 1)); }
     th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); }
     th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600; }
     tr.dim td { color: var(--muted); }

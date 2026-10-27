@@ -25,6 +25,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Start page**: quick actions (Quick Connect, New Session, Local Shell, Import Sessions, Discover Devices) and recent sessions when no tab is open.
 - **Restore tabs**: the open sessions come back at the next start (optional).
 - **Window size and position** are remembered.
+- **Interface font and text size**: System (default), VS Code, Inter or IBM Plex Sans; text from 13 to 17 px.
 - **Themes**: dark, light or follow the system (the default), switched with the sun / moon / screen icons at the top right, with an accent color.
 - **Text kept as typed**: no auto-capitalisation, spelling or quote correction in fields (macOS).
 - **About**: version and a Copy Link button to share Termwright.
@@ -69,7 +70,8 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Telnet** with option negotiation (window size, terminal type, echo, suppress go-ahead).
 - **Serial**: COM ports / tty devices listed in order with the USB adapter's name, updated by itself when a cable is plugged in; baud rate, data bits, parity, stop bits.
 - **Detect Speed**: finds the baud rate of a console (Enter at each common speed, the readable answer wins); optionally on every connect.
-- **Send bar** on serial tabs: port and speed of the connection, message box with CR / LF / CR+LF / no line ending, ↑/↓ recall, Timestamps, Auto scroll and Clear; available on any tab from the right-click menu.
+- **Send bar** on serial tabs: port and speed of the connection, message box with CR / LF / CR+LF / no line ending, ↑/↓ recall, Timestamps, Auto scroll, Clear and Save; available on any tab from the right-click menu.
+- **Hex on serial**: send bytes typed in hex (`48 65 0D 0A`, `0x02,0x03`, `4865`) and view what the device sends as hex bytes.
 - **Serial flow control**: none, RTS/CTS or XON/XOFF; DTR/RTS on open; break.
 - **Raw TCP** for terminal servers and devices with a plain TCP console.
 - **Send initial carriage return** to wake up consoles.
@@ -213,8 +215,8 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Logon actions**: Expect/Send table with hide, trailing CR, named credentials and escapes (`\s` user, `\w` password, `\v` clipboard, `\p` pause…).
 - **Triggers**: answer output patterns automatically (e.g. `--More--` → space), loop-protected.
 - **Alerts**: a pattern in any tab gives a notice, a tab badge, a sound and a desktop notification.
-- **Python scripts** (SecureCRT style, `crt` object) with your installed Python 3.
-- **VBScript scripts** (SecureCRT style, Windows).
+- **Python scripts** with the `crt` script object, run with your installed Python 3.
+- **VBScript scripts** with the `crt` object (Windows).
 - **JavaScript scripts** (built in): `term.waitFor`, `readUntil`, `openSession` and more.
 - **Logon scripts** with arguments; Run Script; scripts on buttons and keys.
 - **Reading the screen** as rendered (`crt.Screen.Get`, `CurrentRow`).
@@ -231,11 +233,11 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## Import and export
 
-- **Native storage** is the SecureCRT session layout (`Config/Sessions/*.ini`); unknown keys are kept.
+- **Native storage**: plain-text `.ini` files (`Config/Sessions/*.ini`); unknown keys are kept.
 - **Import from SecureCRT**: Config folder, zip, XML export or single `.ini`, with saved passwords moved to the keychain.
 - **Import from other programs**: PuTTY / KiTTY (`.reg`, `~/.putty/sessions`), SuperPuTTY (`Sessions.xml`, `-pw` passwords to the keychain, Cygterm / Mintty as Local Shell), MobaXterm (`.mxtsessions`, `MobaXterm.ini`), OpenSSH `~/.ssh/config`.
 - **Import from inventories**: CSV, Ansible (INI / YAML), NetBox, AWS EC2.
-- **Export**: SecureCRT folder, zip or XML (everything kept).
+- **Export**: Termwright folder, zip or XML (everything kept; SecureCRT can read them).
 - **Export to other programs**: PuTTY and KiTTY (.reg), PuTTY sessions folder, MobaXterm (.mxtsessions), Tabby profiles, OpenSSH config and CSV.
 - **Export summary**: which sessions a format cannot hold and which settings stay in Termwright; passwords are never exported.
 - **Color schemes**: import and export as JSON.

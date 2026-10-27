@@ -6,6 +6,7 @@ import { SessionNode, defaultPort, findDeviceType } from './core/models';
 import { menuBar } from './core/menu';
 import { envInfo, envOf } from './core/env';
 import { Ui } from './core/ui.service';
+import { uiFontSize, uiFontStack } from './core/ui-fonts';
 import { Icon } from './components/icon';
 import { SessionTree } from './components/session-tree';
 import { TerminalView } from './components/terminal-view';
@@ -109,6 +110,9 @@ export class App implements OnInit {
       const light = t === 'light' || (t === 'system' && this.systemLight());
       document.documentElement.classList.toggle('light', light);
       this.ui.lightUi.set(light);
+      const root = document.documentElement.style;
+      root.setProperty('--ui-font', uiFontStack(this.settings()?.uiFont));
+      root.setProperty('--ui-scale', String(uiFontSize(this.settings()?.uiFontSize) / 13));
       const accent = this.settings()?.accentColor;
       if (accent) document.documentElement.style.setProperty('--accent', accent);
       else document.documentElement.style.removeProperty('--accent');

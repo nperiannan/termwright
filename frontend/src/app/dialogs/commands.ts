@@ -85,12 +85,12 @@ export async function sendSnippet(ui: Ui, tabs: Tabs, s: Snippet, target: SendTa
   styles: [`
     .lib { display: flex; flex-direction: column; overflow: auto; }
     .lib .filter { margin: 6px 8px; }
-    .lib .folder { font-size: 11px; text-transform: uppercase; color: var(--muted); padding: 8px 12px 2px; }
+    .lib .folder { font-size: calc(11px * var(--ui-scale, 1)); text-transform: uppercase; color: var(--muted); padding: 8px 12px 2px; }
     .lib a { padding-left: 20px; }
-    .lib .only { display: flex; gap: 6px; align-items: center; font-size: 12px; padding: 0 12px 4px; color: var(--muted); }
+    .lib .only { display: flex; gap: 6px; align-items: center; font-size: calc(12px * var(--ui-scale, 1)); padding: 0 12px 4px; color: var(--muted); }
     .lib .folder.mine { color: var(--accent); }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .chip { display: inline-flex; gap: 5px; align-items: center; padding: 1px 8px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; font-size: 12px; }
+    .chip { display: inline-flex; gap: 5px; align-items: center; padding: 1px 8px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; font-size: calc(12px * var(--ui-scale, 1)); }
     .chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
     .lib .add { margin: 8px; }
     textarea { width: 100%; resize: vertical; }

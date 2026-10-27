@@ -4,6 +4,13 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.20.7 (2026-10-27)
+
+* **Interface font and text size** (Global Options → General): System (the default, as before), VS Code (the font VS Code uses on each system), Inter or IBM Plex Sans (both included), and text from 13 px (default) to 17 px for menus, dialogs and the Session Manager.
+* **Serial hex**: the send bar sends **hex bytes** (`48 65 6C 0D 0A`, `0x02,0x03`, `4865`; mistakes are marked and not sent) and **View: Hex** shows what the device sends as hex bytes; **Save…** writes the output to a file.
+* Start page and About in the dark theme: the icon is the four tiles without the dark tile and its light shade.
+* Other programs' names now appear only where sessions are imported or exported; the session file document is `docs/SESSION_FILES.md` with a trademark note, and scripting is described by its `crt` object.
+
 ## 0.20.6 (2026-10-27)
 
 * CSV import reads back the **MAC address, environment and jump host** that Termwright's CSV export writes (they were lost on a round trip). The folder, zip and XML exports already keep everything, device type and MAC included - now covered by a test.
@@ -197,7 +204,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Kerberos (GSSAPI) login** - uses your `kinit` ticket, or logs in to Kerberos itself (principal + password); works with OpenSSH's `gssapi-with-mic`.
 * **SSH certificates** (`key-cert.pub` or any certificate file) and **FIDO2 / U2F security keys** (`sk-ed25519`, `sk-ecdsa`, through ssh-agent).
 * **Password managers** - any password field can point to **1Password** (`op://…`), **Bitwarden** (`bw://…`), **HashiCorp Vault** (`vault://…`) or a command (`cmd://…`); the secret is read when connecting and never stored.
-* **VBScript** logon scripts (SecureCRT `.vbs`, Windows) with the `crt` object, and `crt.Screen.Get` / `CurrentRow` now read the **rendered screen** (Python and VBScript).
+* **VBScript** logon scripts (`.vbs`, Windows) with the `crt` object, and `crt.Screen.Get` / `CurrentRow` now read the **rendered screen** (Python and VBScript).
 
 ## 0.10.6
 
@@ -229,5 +236,5 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 ## 0.9.0
 
 * **PuTTY `.ppk` keys** work directly as identity files (formats 2 and 3, encrypted or not) - no PuTTYgen conversion.
-* **SecureCRT-style Python scripts**: `.py` logon scripts, Run Script, buttons and key bindings get the familiar `crt` object (`crt.Screen.WaitForString`, `crt.Dialog.Prompt`, `crt.Arguments`, …) and run with your installed Python 3.
-* **Terminal colors**: *Auto* scheme follows the light/dark UI, and one scheme can be applied to all sessions (imported SecureCRT defaults now follow the global scheme).
+* **Python scripts with the `crt` object**: `.py` logon scripts, Run Script, buttons and key bindings get the familiar `crt` object (`crt.Screen.WaitForString`, `crt.Dialog.Prompt`, `crt.Arguments`, …) and run with your installed Python 3.
+* **Terminal colors**: *Auto* scheme follows the light/dark UI, and one scheme can be applied to all sessions (imported default schemes now follow the global scheme).

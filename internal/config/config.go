@@ -64,6 +64,8 @@ type Settings struct {
 	FontFamily           string               `json:"fontFamily"`
 	FontSize             int                  `json:"fontSize"`
 	Theme                string               `json:"theme"`               // ui theme: dark | light | system
+	UIFont               string               `json:"uiFont"`              // interface font: "" (system), vscode, inter, plex
+	UIFontSize           int                  `json:"uiFontSize"`          // interface text size in px (13-17; 0 = 13)
 	ThemeFollowsSystem   bool                 `json:"themeFollowsSystem"`  // set once when the default became "system" (0.20.1)
 	HighlightOptIn       bool                 `json:"highlightOptIn"`      // set once when keyword highlighting became off by default (0.20.3)
 	HideTerminalBar      bool                 `json:"hideTerminalBar"`     // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs

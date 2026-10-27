@@ -57,7 +57,7 @@ export async function openWorkspace(tabs: Tabs, ws: Workspace) {
       </div>
     </div>
   </div>`,
-  styles: [`td .hint { font-size: 11px; } .nowrap { white-space: nowrap; text-align: right; } td { padding: 6px 4px; }`],
+  styles: [`td .hint { font-size: calc(11px * var(--ui-scale, 1)); } .nowrap { white-space: nowrap; text-align: right; } td { padding: 6px 4px; }`],
 })
 export class Workspaces {
   protected ui = inject(Ui);

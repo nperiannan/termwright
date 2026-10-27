@@ -175,24 +175,24 @@ interface Row { path: string; deviceType: string; ok: boolean | null; error: str
   styles: [`
     .co { width: min(1180px, 96vw); }
     .lists { display: flex; flex-direction: column; overflow: auto; a { display: flex; flex-direction: column; line-height: 1.3; padding-top: 6px; padding-bottom: 6px; }
-      a span { font-size: 11px; color: var(--muted); } .add { margin: 8px; } }
+      a span { font-size: calc(11px * var(--ui-scale, 1)); color: var(--muted); } .add { margin: 8px; } }
     .setup { border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin-bottom: 10px;
       summary { cursor: pointer; font-weight: 600; padding: 2px 0; } .grid { margin-top: 8px; } }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-    .chip { display: inline-flex; gap: 4px; align-items: center; padding: 1px 4px 1px 8px; border: 1px solid var(--border); border-radius: 12px; font-size: 12px;
+    .chip { display: inline-flex; gap: 4px; align-items: center; padding: 1px 4px 1px 8px; border: 1px solid var(--border); border-radius: 12px; font-size: calc(12px * var(--ui-scale, 1));
       button { border: 0; background: none; height: auto; padding: 0 3px; color: var(--muted); cursor: pointer; } }
     .addrow input { max-width: 320px; }
     .cmds { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; .cg { width: 100%; } textarea { width: 100%; resize: vertical; margin-top: 4px; } }
     .cols { display: flex; flex-direction: column; gap: 6px; table { width: 100%; } td { padding: 2px 4px; } td input, td select { width: 100%; }
-      th { font-size: 11.5px; color: var(--muted); text-align: left; font-weight: 500; } input.bad { border-color: var(--danger); } }
+      th { font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); text-align: left; font-weight: 500; } input.bad { border-color: var(--danger); } }
     .row { display: flex; gap: 8px; align-items: center; } .spacer { flex: 1; }
     .runbar { display: flex; gap: 8px; align-items: center; margin: 4px 0 6px; select { max-width: 360px; } progress { width: 140px; accent-color: var(--accent); } }
-    .sum { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .sum { font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); margin-top: 6px; }
     .res { border: 1px solid var(--border); border-radius: 6px; max-height: 46vh; overflow: auto; }
     .res table { width: 100%; } .res th { position: sticky; top: 0; background: var(--panel); z-index: 1; white-space: nowrap; }
-    .res td { vertical-align: middle; font-size: 12.5px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .res td { vertical-align: middle; font-size: calc(12.5px * var(--ui-scale, 1)); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     td.miss { color: var(--muted); }
-    .acts { white-space: nowrap; text-align: right; button { height: 22px; font-size: 11.5px; padding: 0 7px; margin-left: 4px; } }
+    .acts { white-space: nowrap; text-align: right; button { height: 22px; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 0 7px; margin-left: 4px; } }
     .bad { color: var(--danger); }
     .dir { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .intro { max-width: 640px; line-height: 1.55; }

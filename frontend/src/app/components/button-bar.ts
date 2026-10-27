@@ -15,8 +15,8 @@ import { Ui } from '../core/ui.service';
   `,
   styles: [`
     :host { display: flex; gap: 4px; padding: 3px 6px; overflow-x: auto; background: var(--panel); border-top: 1px solid var(--border); }
-    .bb { white-space: nowrap; padding: 2px 10px; font-size: 12px; height: 24px; }
-    .bb sup { color: var(--accent); margin-left: 3px; font-size: 9px; }
+    .bb { white-space: nowrap; padding: 2px 10px; font-size: calc(12px * var(--ui-scale, 1)); height: 24px; }
+    .bb sup { color: var(--accent); margin-left: 3px; font-size: calc(9px * var(--ui-scale, 1)); }
     .add { color: var(--muted); }
   `],
 })

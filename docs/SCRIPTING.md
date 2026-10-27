@@ -1,6 +1,6 @@
 # Scripting
 
-Termwright runs **JavaScript** (ES5.1+ with most ES6 syntax, via [goja](https://github.com/dop251/goja)) and SecureCRT-style **Python** ([see below](#python-scripts-securecrt-style)) against a terminal tab.
+Termwright runs **JavaScript** (ES5.1+ with most ES6 syntax, via [goja](https://github.com/dop251/goja)) and **Python** with the `crt` object ([see below](#python-scripts-with-the-crt-object)) against a terminal tab.
 Scripts run synchronously: `waitFor` blocks until the text arrives, so there's no need for callbacks or `await`.
 
 Run a script from **Script → Run Script…**, from a **key binding** (Options → Key Map), or after connecting with a session's
@@ -46,11 +46,11 @@ for (var i = 0; i < switches.length; i++) {
 
 See `docs/examples/` for more.
 
-## Python scripts (SecureCRT style)
+## Python scripts with the crt object
 
 Files ending in `.py` run with your installed **Python 3** (found automatically as `python3`, or `py -3` on Windows; set another
-interpreter in Global Options → General → *Python interpreter*). Termwright provides SecureCRT's `crt` object and the
-`BUTTON_*`, `ICON_*` and `ID*` constants as globals, so most SecureCRT Python scripts run unchanged — including logon scripts
+interpreter in Global Options → General → *Python interpreter*). Termwright provides the `crt` script object and the
+`BUTTON_*`, `ICON_*` and `ID*` constants as globals, so most existing Python scripts written for the `crt` object run unchanged — including logon scripts
 (Session Options → Logon Actions → *Logon script*), Script → Run Script…, buttons and key bindings. Any Python module can be imported.
 
 ```python
@@ -93,7 +93,7 @@ prompt = crt.Screen.Get(row, 1, row, crt.Screen.CurrentColumn - 1).strip()   # e
 
 (When a tab has no terminal view - for example a hidden script-only tab - the last received text is used instead.)
 
-## VBScript scripts (SecureCRT style, Windows)
+## VBScript scripts (Windows)
 
 Files ending in `.vbs` run with **Windows Script Host** (`cscript`, part of Windows) - as logon scripts (Session Options → Logon
 Actions → *Logon script*), with Script → Run Script…, from buttons and key bindings. The `# $language = "VBScript"` header is
@@ -116,7 +116,7 @@ Sub Main
 End Sub
 ```
 
-How it works: the script is wrapped in a Windows Script Host job whose JScript part provides `crt` (JScript accepts SecureCRT's
+How it works: the script is wrapped in a Windows Script Host job whose JScript part provides `crt` (JScript accepts the
 optional arguments) and talks to Termwright over HTTP on a random local port with a one-time token. Property-style values
 (`CurrentRow`, `CurrentColumn`, `Rows`, `Columns`, `Session.Connected`, `Session.Path`) are refreshed with every call, so read them
 after a `Send`, `WaitFor…` or `Sleep`. `WScript.Echo` output appears as a notification; a script error shows Windows Script Host's

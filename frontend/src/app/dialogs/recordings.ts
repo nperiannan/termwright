@@ -52,12 +52,12 @@ import { Ui } from '../core/ui.service';
   styles: [`
     .recs { width: min(900px, 95vw); }
     .top { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; .q { flex: 1; min-width: 200px; } }
-    .inline { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; font-size: 12.5px; }
+    .inline { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; font-size: calc(12.5px * var(--ui-scale, 1)); }
     .days { width: 64px; }
     .list { height: 48vh; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
     table { width: 100%; } th { position: sticky; top: 0; background: var(--panel); z-index: 1; text-align: left; }
-    td { font-size: 12.5px; vertical-align: middle; } .sub { color: var(--muted); font-size: 11px; }
-    .acts { text-align: right; white-space: nowrap; button { height: 22px; font-size: 11.5px; padding: 0 8px; margin-left: 4px; } }
+    td { font-size: calc(12.5px * var(--ui-scale, 1)); vertical-align: middle; } .sub { color: var(--muted); font-size: calc(11px * var(--ui-scale, 1)); }
+    .acts { text-align: right; white-space: nowrap; button { height: 22px; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 0 8px; margin-left: 4px; } }
     .empty { padding: 16px; color: var(--muted); white-space: normal; }
     .spacer { flex: 1; }
   `],

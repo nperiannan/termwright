@@ -45,20 +45,20 @@ import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models'
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     :host { display: flex; flex-direction: column; height: 100%; background: var(--panel); border-top: 1px solid var(--border); contain: layout style; }
-    .cw-bar { display: flex; align-items: center; gap: 14px; padding: 3px 8px; font-size: 12px; color: var(--muted);
+    .cw-bar { display: flex; align-items: center; gap: 14px; padding: 3px 8px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted);
       .title { font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
       label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-      .pick { height: 20px; font-size: 11px; padding: 0 8px; }
+      .pick { height: 20px; font-size: calc(11px * var(--ui-scale, 1)); padding: 0 8px; }
       .spacer { flex: 1; } }
     .boxwrap { flex: 1; display: flex; position: relative; min-height: 0; }
     .sugg { position: absolute; left: 8px; bottom: calc(100% - 4px); z-index: 20; min-width: 360px; max-width: 80%; background: var(--panel);
-      border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow); padding: 4px 0; font-size: 12.5px;
+      border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow); padding: 4px 0; font-size: calc(12.5px * var(--ui-scale, 1));
       .si { display: flex; gap: 16px; padding: 3px 10px; cursor: pointer; .c { font-family: var(--mono); white-space: pre; overflow: hidden; text-overflow: ellipsis; }
-        .h { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; } }
+        .h { margin-left: auto; color: var(--muted); font-size: calc(11px * var(--ui-scale, 1)); white-space: nowrap; } }
       .si.on, .si:hover { background: var(--selected); }
-      .sh { color: var(--muted); font-size: 10.5px; padding: 3px 10px 1px; border-top: 1px solid var(--border); margin-top: 3px; } }
+      .sh { color: var(--muted); font-size: calc(10.5px * var(--ui-scale, 1)); padding: 3px 10px 1px; border-top: 1px solid var(--border); margin-top: 3px; } }
     textarea { flex: 1; resize: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 6px 10px;
-      font-family: var(--mono); font-size: 13px; background: var(--input-bg); color: var(--text); outline: none; }
+      font-family: var(--mono); font-size: calc(13px * var(--ui-scale, 1)); background: var(--input-bg); color: var(--text); outline: none; }
   `],
 })
 export class CommandWindow implements OnDestroy {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/termwright/termwright/internal/securecrt"
+	"github.com/termwright/termwright/internal/sessionfile"
 )
 
 // Saved SecureCRT passwords are decrypted on import, handed to the caller for
@@ -16,9 +16,9 @@ func TestImportSecureCRTPasswords(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "Config", "Sessions", "Lab")
 	os.MkdirAll(cfg, 0o755)
 	write := func(name, body string) { os.WriteFile(filepath.Join(cfg, name+".ini"), []byte(body), 0o644) }
-	write("sw1", "S:\"Hostname\"=10.0.0.1\r\nS:\"Protocol Name\"=SSH2\r\nS:\"Password V2\"="+securecrt.EncryptV2("pw-one", "")+"\r\n")
-	write("sw2", "S:\"Hostname\"=10.0.0.2\r\nS:\"Password\"="+securecrt.EncryptV1("pw-two")+"\r\n")
-	write("sw3", "S:\"Hostname\"=10.0.0.3\r\nS:\"Password V2\"="+securecrt.EncryptV2("pw-three", "cfg")+"\r\n")
+	write("sw1", "S:\"Hostname\"=10.0.0.1\r\nS:\"Protocol Name\"=SSH2\r\nS:\"Password V2\"="+sessionfile.EncryptV2("pw-one", "")+"\r\n")
+	write("sw2", "S:\"Hostname\"=10.0.0.2\r\nS:\"Password\"="+sessionfile.EncryptV1("pw-two")+"\r\n")
+	write("sw3", "S:\"Hostname\"=10.0.0.3\r\nS:\"Password V2\"="+sessionfile.EncryptV2("pw-three", "cfg")+"\r\n")
 	write("sw4", "S:\"Hostname\"=10.0.0.4\r\n")
 	res, err := st.Import(filepath.Dir(filepath.Dir(cfg)), ImportOptions{})
 	if err != nil || len(res.Imported) != 4 {

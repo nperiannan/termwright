@@ -34,6 +34,8 @@ export interface TabView {
   timestamps?: boolean;
   /** Terminal tab: follow new output (default); false keeps the view still. */
   autoScroll?: boolean;
+  /** Terminal tab: show what the device sends as hex bytes. */
+  hexView?: boolean;
   /** Terminal tab: the bar under the terminal (message box on serial tabs; timestamps, auto scroll, clear on all). */
   sendBar?: boolean;
   /** Terminal tab: user@host of its "ssh … host" remote command. SFTP tab: the host it browses through the jump station. */
