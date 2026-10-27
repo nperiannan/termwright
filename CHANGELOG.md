@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.20.8 (2026-10-27)
+
+* Start page and About in the **light theme**: the same icon as in the dark theme - the four tiles on the page, without the white tile - so both themes match. The app's icon in the Dock / taskbar is unchanged.
+
 ## 0.20.7 (2026-10-27)
 
 * **Interface font and text size** (Global Options → General): System (the default, as before), VS Code (the font VS Code uses on each system), Inter or IBM Plex Sans (both included), and text from 13 px (default) to 17 px for menus, dialogs and the Session Manager.
