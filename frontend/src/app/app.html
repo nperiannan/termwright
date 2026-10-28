@@ -17,7 +17,7 @@
           <button class="x" title="Close" (click)="tabs.close(t.id); $event.stopPropagation()"><app-icon name="x" [size]="12" /></button>
         </div>
       }
-      <button class="addtab" title="New connection (Quick Connect)" (click)="action('quick-connect')"><app-icon name="plus" [size]="15" /></button>
+      <button class="addtab" [title]="'New Session (' + scLabel('new-session') + ') - Quick Connect is the lightning button'" (click)="action('new-session')"><app-icon name="plus" [size]="15" /></button>
     </nav>
     @if (tabs.scripts().length; as n) {
       <button class="scriptpill" [title]="'Running: ' + scriptNames() + ' - click to stop'" (click)="action('cancel-scripts')">
@@ -118,7 +118,7 @@
           <button class="x" title="Close" (click)="tabs.close(t.id); $event.stopPropagation()">✕</button>
         </div>
       }
-      <button class="newtab" title="Quick Connect" (click)="action('quick-connect')">+</button>
+      <button class="newtab" [title]="'New Session (' + scLabel('new-session') + ')'" (click)="action('new-session')">+</button>
     </nav>
     }
     <div class="terminals" [class]="'terminals layout-' + tabs.layout()" [style.--n]="tabs.tabs().length" [style.--cols]="gridCols()">

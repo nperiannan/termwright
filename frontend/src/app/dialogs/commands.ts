@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models';
 import { SendTarget, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 /** Asks for snippet variables one by one, then sends the snippet. */
 export async function sendSnippet(ui: Ui, tabs: Tabs, s: Snippet, target: SendTarget = 'active') {
@@ -20,30 +21,33 @@ export async function sendSnippet(ui: Ui, tabs: Tabs, s: Snippet, target: SendTa
 /** Command Library: saved commands in folders, with {{variables}}, sent to one, selected or all tabs. */
 @Component({
   selector: 'app-commands',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon],
   template: `
   <div class="modal-backdrop">
     <div class="modal wide">
-      <div class="modal-head">Command Library</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="command" [size]="17" /></span>
+        <span class="mh-t">Command Library<span class="mh-s">Commands you use often - per device type. Also in Quick Open ({{ mod }}G)</span></span></div>
       <div class="modal-split">
         <nav class="cat lib">
-          <input class="filter" [ngModel]="filter()" (ngModelChange)="filter.set($event)" placeholder="Filter commands" />
+          <input class="filter" type="search" [ngModel]="filter()" (ngModelChange)="filter.set($event)" placeholder="Filter commands" />
           @if (dt()) {
             <label class="only"><input type="checkbox" [ngModel]="onlyDt()" (ngModelChange)="onlyDt.set($event)" /> Only commands for {{ dt() }}</label>
           }
           @for (g of groups(); track g.folder) {
             <div class="folder" [class.mine]="g.mine">{{ g.folder || 'General' }}</div>
             @for (c of g.items; track c.i) {
-              <a [class.on]="sel() === c.i" (click)="select(c.i)" (dblclick)="send()" [title]="c.s.text">{{ c.s.name }}</a>
+              <a [class.on]="sel() === c.i" (click)="select(c.i)" (dblclick)="send()" [title]="c.s.text"><span class="nm">{{ c.s.name }}</span><span class="tx md-only">{{ firstLine(c.s.text) }}</span></a>
             }
           }
-          <button type="button" class="add" (click)="add()">+ New command</button>
+          <button type="button" class="add" (click)="add()"><app-icon name="plus" [size]="14" class="md-only" /> {{ modern() ? 'New command' : '+ New command' }}</button>
         </nav>
         <div class="modal-body">
           @if (cur(); as c) {
             <div class="grid">
-              <label>Name</label><input [(ngModel)]="c.name" (ngModelChange)="dirty = true" />
-              <label>Folder</label><input [(ngModel)]="c.folder" (ngModelChange)="dirty = true" placeholder="e.g. VOSS / Troubleshooting" />
+              <div class="pair">
+                <div class="f"><label>Name</label><input [(ngModel)]="c.name" (ngModelChange)="dirty = true" /></div>
+                <div class="f"><label>Folder in the menu</label><input [(ngModel)]="c.folder" (ngModelChange)="dirty = true" placeholder="e.g. VOSS / Troubleshooting" /></div>
+              </div>
               <label>Description</label><input [(ngModel)]="c.description" (ngModelChange)="dirty = true" />
               <label>For device types</label>
               <div class="chips">
@@ -59,11 +63,19 @@ export async function sendSnippet(ui: Ui, tabs: Tabs, s: Snippet, target: SendTa
                 <label>Asks for</label><div class="hint">{{ v }}</div>
               }
               <label>Send to</label>
+              @if (modern()) {
+                <div class="seg sendto">
+                  <button type="button" [class.on]="target === 'active'" (click)="target = 'active'">Active tab</button>
+                  <button type="button" [class.on]="target === 'selected'" (click)="target = 'selected'">Selected tabs ({{ tabs.targets('selected').length }})</button>
+                  <button type="button" [class.on]="target === 'all'" (click)="target = 'all'">All connected ({{ tabs.connectedCount() }})</button>
+                </div>
+              } @else {
               <div class="checks row">
                 <label><input type="radio" name="tgt" value="active" [(ngModel)]="target" /> Active tab</label>
                 <label><input type="radio" name="tgt" value="selected" [(ngModel)]="target" /> Selected tabs ({{ tabs.targets('selected').length }})</label>
                 <label><input type="radio" name="tgt" value="all" [(ngModel)]="target" /> All connected ({{ tabs.connectedCount() }})</label>
               </div>
+              }
             </div>
           } @else {
             <p class="hint">Save commands you use often - per device type, troubleshooting steps, config snippets. Double-click a command
@@ -72,12 +84,13 @@ export async function sendSnippet(ui: Ui, tabs: Tabs, s: Snippet, target: SendTa
         </div>
       </div>
       <div class="modal-foot">
-        @if (cur()) { <button type="button" class="danger-text" (click)="remove()">Delete</button> }
+        @if (cur()) { <button type="button" class="danger-text" [class.danger-link]="modern()" (click)="remove()">Delete</button> }
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Close</button>
         @if (cur()) {
           <button type="button" (click)="save()" [disabled]="!dirty">Save</button>
-          <button type="button" class="primary" (click)="send()">Send</button>
+          <button type="button" class="md-only" (click)="toWindow()">To Command Window</button>
+          <button type="button" class="primary" (click)="send()">{{ modern() ? (target === 'active' ? 'Send to tab' : 'Send') : 'Send' }}</button>
         }
       </div>
     </div>
@@ -96,6 +109,22 @@ export async function sendSnippet(ui: Ui, tabs: Tabs, s: Snippet, target: SendTa
     textarea { width: 100%; resize: vertical; }
     .row label { margin-right: 12px; }
     .danger-text { color: var(--danger); }
+    :host-context(.modern) {
+      .lib { width: 240px; padding: 10px 8px; }
+      .lib .filter { margin: 0 0 8px; height: 30px; padding-left: 28px; background: var(--input-bg) no-repeat 9px 50% / 14px 14px
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d9099' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
+      .lib .folder { padding: 10px 10px 4px; font-weight: 600; letter-spacing: .06em; color: var(--faint); }
+      .lib .folder.mine { color: var(--accent); }
+      .lib a { flex-direction: column; align-items: flex-start !important; gap: 0 !important; margin: 1px 0 !important; padding: 6px 10px !important;
+        .nm { font-weight: 500; } .tx { color: var(--muted); font: calc(11px * var(--ui-scale, 1)) var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+        &.on .nm { font-weight: 600; } }
+      .lib .add { margin: auto 0 0; display: inline-flex; justify-content: center; align-items: center; gap: 6px; }
+      .lib .only { padding: 0 2px 6px; }
+      .chip { height: 27px; padding: 0 11px; border-radius: var(--r); background: var(--surface-2); border-color: var(--line); font-weight: 500;
+        input { display: none; } &.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); } }
+      textarea.mono { background: var(--term-bg, var(--bg)); border-color: var(--line); border-radius: var(--r-lg); padding: 10px 12px; line-height: 1.6; }
+      .sendto { max-width: 520px; }
+    }
   `],
 })
 export class Commands {
@@ -107,6 +136,17 @@ export class Commands {
   readonly filter = signal('');
   readonly ph = 'One command per line. Use {{name}} or {{name:default}} for values asked when sending.';
   target: 'active' | 'selected' | 'all' = 'active';
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  firstLine(t: string) { return (t || '').split('\n')[0]; }
+  /** Puts the command in the Command Window to change it before sending. */
+  async toWindow() {
+    const c = this.cur();
+    if (!c) return;
+    if (this.dirty) await this.save();
+    this.ui.close();
+    if (!this.ui.settings()?.showCommandWindow) this.ui.patchSettings({ showCommandWindow: true });
+    this.ui.cwInsert.set(c.text);
+  }
   dirty = false;
 
   readonly cur = computed(() => this.list()[this.sel()] ?? null);

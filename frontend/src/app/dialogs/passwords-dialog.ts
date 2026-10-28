@@ -5,26 +5,29 @@ import { Backend, errText } from '../core/backend';
 import { Credential } from '../core/models';
 import { askRef, isRef } from '../core/secret-ref';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
 
 /** Options → Passwords & Credentials: named credentials, master password, encrypted vault export/import. */
 @Component({
   selector: 'app-passwords-dialog',
-  imports: [FormsModule, Autofocus],
+  imports: [FormsModule, Autofocus, Icon],
   template: `
   <div class="modal-backdrop">
     <div class="modal wide">
-      <div class="modal-head">Passwords &amp; Credentials</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="lock" [size]="17" /></span>
+        <span class="mh-t">Passwords &amp; Credentials<span class="mh-s">Stored in the OS keychain - never in the session files</span></span></div>
       <div class="modal-split">
         <nav class="cat">
-          <a [class.on]="page() === 'credentials'" (click)="page.set('credentials')">Credentials</a>
-          <a [class.on]="page() === 'keys'" (click)="page.set('keys'); loadKeys()">Key Passphrases</a>
-          <a [class.on]="page() === 'managers'" (click)="page.set('managers'); loadManagers()">Password Managers</a>
-          <a [class.on]="page() === 'master'" (click)="page.set('master')">Master Password</a>
-          <a [class.on]="page() === 'vault'" (click)="page.set('vault')">Export / Import</a>
+          <a [class.on]="page() === 'credentials'" (click)="page.set('credentials')"><app-icon name="key" [size]="15" />Credentials</a>
+          <a [class.on]="page() === 'keys'" (click)="page.set('keys'); loadKeys()"><app-icon name="lock" [size]="15" />Key Passphrases</a>
+          <a [class.on]="page() === 'managers'" (click)="page.set('managers'); loadManagers()"><app-icon name="shield" [size]="15" />Password Managers</a>
+          <a [class.on]="page() === 'master'" (click)="page.set('master')"><app-icon name="lock" [size]="15" />Master Password</a>
+          <a [class.on]="page() === 'vault'" (click)="page.set('vault')"><app-icon name="export" [size]="15" />Export / Import</a>
         </nav>
         <div class="modal-body">
+          <h2 class="page-title">{{ pageNames[page()] }}</h2>
           @if (ui.locked()) {
             <div class="locked">Saved passwords are locked.
               <input type="password" [(ngModel)]="unlockPw" placeholder="Master password" (keydown.enter)="unlock()" appAutofocus />
@@ -34,21 +37,22 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
             @case ('credentials') {
               <p class="hint">Named username/password pairs for Logon Actions (Session Options → Logon Actions → Credentials).
                 In a Send string, <b>\\s</b> sends the username and <b>\\w</b> the password. Passwords are stored in the OS keychain.</p>
-              <table class="list">
-                <thead><tr><th>Name</th><th>Username</th><th>Password</th><th></th></tr></thead>
+              <table class="list creds">
+                <thead><tr><th class="md-only"></th><th>Name</th><th>Username</th><th>Password</th><th></th></tr></thead>
                 <tbody>
                   @for (c of creds; track $index) {
                     <tr>
+                      <td class="md-only kt"><span class="k"><app-icon name="key" [size]="14" /></span></td>
                       <td><input [(ngModel)]="c.name" placeholder="e.g. lab-admin" [disabled]="!!c.saved" /></td>
                       <td><input [(ngModel)]="c.username" /></td>
                       <td><input [type]="isRef(c.password) ? 'text' : 'password'" [(ngModel)]="c.password" [placeholder]="c.hasPw ? '(saved - type to change)' : '(none)'" /></td>
-                      <td class="nowrap"><button type="button" title="From a password manager (1Password, Bitwarden, Vault, command)" (click)="credRef(c)">🔑</button>
-                        <button type="button" class="icon-btn" (click)="remove($index)">✕</button></td>
+                      <td class="nowrap"><button type="button" class="pm" title="From a password manager (1Password, Bitwarden, Vault, command)" (click)="credRef(c)"><span class="cl-only">🔑</span><app-icon name="shield" [size]="15" class="md-only" /></button>
+                        <button type="button" class="icon-btn" title="Remove" (click)="remove($index)"><span class="cl-only">✕</span><app-icon name="trash" [size]="15" class="md-only" /></button></td>
                     </tr>
                   }
                 </tbody>
               </table>
-              <div class="row"><button type="button" (click)="add()">Add</button><span class="spacer"></span>
+              <div class="row"><button type="button" (click)="add()"><app-icon name="plus" [size]="14" class="md-only" />{{ modern() ? ' Add credential' : 'Add' }}</button><span class="spacer"></span>
                 <button type="button" class="primary" (click)="saveCreds()">Save Credentials</button></div>
             }
             @case ('keys') {
@@ -125,7 +129,7 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
           @if (err()) { <div class="err">{{ err() }}</div> }
         </div>
       </div>
-      <div class="modal-foot"><span class="spacer"></span><button type="button" (click)="ui.close()">Close</button></div>
+      <div class="modal-foot"><span class="spacer"></span><button type="button" [class.primary]="modern()" (click)="ui.close()">{{ modern() ? 'Done' : 'Close' }}</button></div>
     </div>
   </div>`,
   styles: [`
@@ -137,6 +141,20 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
     .refs { margin-bottom: 12px; td { font-size: calc(12px * var(--ui-scale, 1)); vertical-align: top; } .mono { white-space: nowrap; } }
     .nowrap { white-space: nowrap; }
     td.mono { font-size: calc(11px * var(--ui-scale, 1)); word-break: break-all; }
+    :host-context(.modern) {
+      table.list { width: 100%; border: 1px solid var(--line); border-radius: var(--r-lg); border-collapse: separate; border-spacing: 0; overflow: hidden; margin-bottom: 12px;
+        th { height: 30px; padding: 0 10px; text-align: left; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+          color: var(--faint); background: var(--surface-2); border-bottom: 1px solid var(--line); }
+        td { padding: 5px 10px; border-top: 1px solid var(--line); vertical-align: middle; }
+        tbody tr:first-child td { border-top: 0; }
+        td input { width: 100%; border-color: transparent; background: transparent; &:hover { border-color: var(--line); } &:focus { border-color: var(--accent); background: var(--input-bg); } } }
+      .creds td:nth-child(2) input { font-weight: 600; }
+      .kt { width: 36px; padding-right: 0 !important; }
+      .k { width: 28px; height: 28px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
+      .pm, .icon-btn { width: 28px; height: 28px; padding: 0; border: 0 !important; background: transparent !important; color: var(--muted); display: inline-grid; place-items: center;
+        &:hover { color: var(--text); } }
+      .locked { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px 12px; background: var(--surface-2); }
+    }
   `],
 })
 export class PasswordsDialog implements OnInit {
@@ -144,6 +162,8 @@ export class PasswordsDialog implements OnInit {
   private backend = inject(Backend);
   private cdr = inject(ChangeDetectorRef);
   readonly page = signal<Page>('credentials');
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  readonly pageNames: Record<Page, string> = { credentials: 'Credentials', keys: 'Key Passphrases', managers: 'Password Managers', master: 'Master Password', vault: 'Export / Import' };
   readonly hasMaster = signal(false);
   readonly msg = signal('');
   readonly err = signal('');

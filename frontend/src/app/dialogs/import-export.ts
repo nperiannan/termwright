@@ -1,7 +1,9 @@
 import { ChangeDetectorRef, Component, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
-import { ExportReport, ImportResult } from '../core/models';
+import { ExportReport, ImportResult, ImportSource } from '../core/models';
+import { Icon } from '../components/icon';
+import { FolderPicker } from '../components/folder-picker';
 import { Ui } from '../core/ui.service';
 
 type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv' | 'ansible' | 'netbox' | 'aws';
@@ -9,16 +11,36 @@ type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv
 /** Import sessions from SecureCRT (config folder, .zip, .xml, .ini), PuTTY/KiTTY, MobaXterm or OpenSSH config. */
 @Component({
   selector: 'app-import-dialog',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon, FolderPicker],
   template: `
   <div class="modal-backdrop">
     <form class="modal" (ngSubmit)="run()">
-      <div class="modal-head">Import Sessions</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="import" [size]="17" /></span>
+        <span class="mh-t">Import Sessions<span class="mh-s">Bring sessions in from another program or an inventory</span></span></div>
       <div class="modal-body">
         @if (!result()) {
+          @if (modern()) {
+            @if (found().length) {
+              <div class="found">
+                <div class="fh"><span class="g"></span><b>Found on this computer</b></div>
+                @for (f of found(); track f.path) {
+                  <div class="fr"><span class="app">{{ f.app }}</span><span class="fp" [title]="f.path">{{ f.what }} · {{ f.path }}</span>
+                    <button type="button" [class.primary]="path === f.path" (click)="useFound(f)">{{ path === f.path ? 'Chosen' : 'Use' }}</button></div>
+                }
+              </div>
+            }
+            @for (g of groups; track g.title) {
+              <div class="sec">{{ $first && found().length ? 'Or choose a source - ' : '' }}{{ g.title }}</div>
+              <div class="cards">
+                @for (o of g.items; track o.v) {
+                  <button type="button" class="sc" [class.on]="source === o.v" (click)="source = o.v; pick(o.v)"><b>{{ cardOf(o.v).t }}</b><span>{{ cardOf(o.v).s }}</span></button>
+                }
+              </div>
+            }
+          }
           <div class="grid">
-            <label style="align-self: start; padding-top: 1px">Source</label>
-            <div class="src-groups">
+            <label class="cl-only" style="align-self: start; padding-top: 1px">Source</label>
+            <div class="src-groups cl-only">
               @for (g of groups; track g.title) {
                 <div class="src-group">
                   <div class="src-title">{{ g.title }}</div>
@@ -38,21 +60,30 @@ type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv
               <label></label>
               <div class="checks"><label><input type="checkbox" name="awspub" [(ngModel)]="awsPublic" /> Use public IP addresses (default: private, e.g. via a jump host)</label></div>
             } @else {
-            <label>Path</label>
-            <div class="row"><input name="path" [(ngModel)]="path" required /><button type="button" (click)="browse()">Browse...</button></div>
+            <label>{{ modern() ? pathLabel() : 'Path' }}</label>
+            <div class="row"><input name="path" class="pathin" [(ngModel)]="path" required /><button type="button" (click)="browse()">Browse...</button></div>
             }
             @if (isSecureCRT()) {
               <label>Config passphrase</label>
               <input name="ccp" type="password" [(ngModel)]="configPass" autocomplete="off"
                 placeholder="only if you set a configuration passphrase in SecureCRT" />
             }
-            <label>Into folder</label><input name="tf" [(ngModel)]="target" placeholder="(top level)" />
-            <label>If name exists</label>
-            <select name="conf" [(ngModel)]="conflict">
-              <option value="rename">Keep both (rename)</option>
-              <option value="overwrite">Overwrite</option>
-              <option value="skip">Skip</option>
-            </select>
+            <div class="pair">
+              <div class="f"><label>Into folder</label>
+                @if (modern()) { <app-folder-picker [(value)]="target" /> } @else { <input name="tf" [(ngModel)]="target" placeholder="(top level)" /> }</div>
+              <div class="f"><label>If a name exists</label>
+                @if (modern()) {
+                  <div class="seg"><button type="button" [class.on]="conflict === 'rename'" (click)="conflict = 'rename'">Keep both</button>
+                    <button type="button" [class.on]="conflict === 'overwrite'" (click)="conflict = 'overwrite'">Replace</button>
+                    <button type="button" [class.on]="conflict === 'skip'" (click)="conflict = 'skip'">Skip</button></div>
+                } @else {
+                <select name="conf" [(ngModel)]="conflict">
+                  <option value="rename">Keep both (rename)</option>
+                  <option value="overwrite">Overwrite</option>
+                  <option value="skip">Skip</option>
+                </select>
+                }</div>
+            </div>
             <label></label>
             @if (source === 'csv') {
               <div class="hint">First row = column names. Recognised: <code>name, host</code> (or ip/address), <code>protocol, port, username,
@@ -117,12 +148,48 @@ type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv
     .src-groups { display: flex; flex-direction: column; gap: 10px; }
     .src-group { display: flex; flex-direction: column; gap: 5px; label { display: flex; gap: 8px; align-items: center; cursor: pointer; } }
     .src-title { font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-    .log { max-height: 160px; overflow: auto; font-size: calc(11px * var(--ui-scale, 1)); background: var(--input-bg); padding: 6px; }`],
+    .log { max-height: 160px; overflow: auto; font-size: calc(11px * var(--ui-scale, 1)); background: var(--input-bg); padding: 6px; }
+    :host-context(.modern) {
+      .modal { width: min(640px, 95vw); }
+      .found { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 8px 12px; margin-bottom: 12px; background: var(--surface);
+        .fh { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; } .g { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+        .fr { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-top: 1px solid var(--line); }
+        .fh + .fr { border-top: 0; }
+        .app { font-weight: 600; min-width: 84px; } .fp { flex: 1; min-width: 0; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        button { height: 26px; } }
+      .sec { font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin: 10px 0 6px; }
+      .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .sc { height: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 9px 10px; text-align: left; border: 1px solid var(--line);
+        border-radius: var(--r-lg); background: var(--surface-2); min-width: 0;
+        b { font-weight: 600; } span { color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+        &.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); } }
+      .grid { margin-top: 14px; }
+      .pathin { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); }
+    }`],
 })
 export class ImportDialog {
   protected ui = inject(Ui);
   private backend = inject(Backend);
   private cdr = inject(ChangeDetectorRef);
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  /** Sessions of other programs found in their usual places on this computer. */
+  readonly found = signal<ImportSource[]>([]);
+  constructor() { this.backend.findImportSources().then(l => this.found.set(l ?? [])).catch(() => {}); }
+  useFound(f: ImportSource) {
+    const m: Record<string, Source> = { SecureCRT: 'folder', PuTTY: 'putty', SuperPuTTY: 'putty', MobaXterm: 'moba', OpenSSH: 'ssh' };
+    this.source = m[f.app] ?? this.source;
+    this.path = f.path;
+  }
+  cardOf(v: Source): { t: string; s: string } {
+    const c: Record<Source, { t: string; s: string }> = {
+      folder: { t: 'SecureCRT', s: 'Config folder' }, zip: { t: 'SecureCRT .zip', s: 'Sessions folder archive' }, xml: { t: 'SecureCRT .xml', s: 'Export Settings file' },
+      ini: { t: 'SecureCRT .ini', s: 'one session file' }, putty: { t: 'PuTTY / KiTTY', s: '.reg, folder, SuperPuTTY' }, moba: { t: 'MobaXterm', s: '.mxtsessions, .ini' },
+      ssh: { t: 'OpenSSH', s: '~/.ssh/config' }, csv: { t: 'CSV', s: 'spreadsheet export' }, ansible: { t: 'Ansible', s: 'INI or YAML inventory' },
+      netbox: { t: 'NetBox', s: 'devices with a primary IP' }, aws: { t: 'AWS EC2', s: 'via the AWS CLI' },
+    };
+    return c[v];
+  }
+  pathLabel() { return this.source === 'folder' ? 'Config folder' : this.source === 'putty' ? 'File or folder' : 'File'; }
   readonly result = signal<ImportResult | null>(null);
   readonly busy = signal(false);
   readonly error = signal('');
@@ -216,11 +283,12 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
 /** Export sessions: SecureCRT format (folder, zip, XML) or for other programs. */
 @Component({
   selector: 'app-export-dialog',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon],
   template: `
   <div class="modal-backdrop">
     <form class="modal exp" (ngSubmit)="run()">
-      <div class="modal-head">Export Sessions</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="export" [size]="17" /></span>
+        <span class="mh-t">Export Sessions<span class="mh-s">Save sessions for a backup, a colleague or another program</span></span></div>
       <div class="modal-body">
         @if (report(); as r) {
           <p><b>Exported {{ r.count }} session{{ r.count === 1 ? '' : 's' }}</b> to <span class="mono">{{ dest }}</span>.</p>
@@ -233,6 +301,24 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
             <p><b>Notes</b> - what stays in Termwright and how some settings were written:</p>
             <ul class="lst">@for (n of r.notes; track n) { <li>{{ n }}</li> }</ul>
           }
+        } @else {
+        @if (modern()) {
+          <div class="xs">
+            <div class="lbl">Sessions</div>
+            <div class="seg scope"><button type="button" [class.on]="scope === 'all'" (click)="scope = 'all'">All sessions</button>
+              <button type="button" [class.on]="scope === 'sel'" [disabled]="!selected" (click)="scope = 'sel'">{{ selected ? 'Selected: ' + selected : 'Selected (nothing selected)' }}</button></div>
+            <div class="sec">Termwright - everything is kept</div>
+            <div class="cards">
+              @for (f of own; track f.v) { <button type="button" class="sc" [class.on]="format === f.v" (click)="format = f.v; dest = ''"><b>{{ f.t }}</b><span>{{ f.s }}</span></button> }
+            </div>
+            <div class="sec">Other programs - name, folder, address, login, key, jump host</div>
+            <div class="chipset">
+              @for (f of others; track f.v) { <button type="button" [class.on]="format === f.v" (click)="format = f.v; dest = ''" [title]="f.label">{{ chipOf(f.v) }}</button> }
+            </div>
+            <div class="lbl" style="margin-top: 14px">Save to</div>
+            <div class="row"><input name="dest2" class="pathin" [(ngModel)]="dest" required /><button type="button" (click)="browse()">Browse...</button></div>
+            <div class="hint">@if (hint()) { {{ hint() }} } Passwords are not written into the export - Passwords &amp; Credentials → Export / Import moves them.</div>
+          </div>
         } @else {
         <div class="grid">
           <label>Sessions</label>
@@ -257,6 +343,7 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
           @if (hint()) { <label></label><div class="hint">{{ hint() }} Passwords are never exported.</div> }
         </div>
         }
+        }
         @if (error()) { <div class="err">{{ error() }}</div> }
       </div>
       <div class="modal-foot">
@@ -277,6 +364,20 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
     .grp:first-child { margin-top: 0; }
     .lst { margin: 4px 0 10px; padding-left: 18px; font-size: calc(12.5px * var(--ui-scale, 1)); max-height: 180px; overflow: auto; }
     .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); }
+    :host-context(.modern) {
+      .exp { width: min(640px, 95vw); }
+      .lbl { font-size: calc(12px * var(--ui-scale, 1)); font-weight: 500; color: var(--muted); margin-bottom: 5px; }
+      .scope { max-width: 100%; button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+      .sec { font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin: 14px 0 6px; }
+      .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .sc { height: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 9px 10px; text-align: left; border: 1px solid var(--line);
+        border-radius: var(--r-lg); background: var(--surface-2);
+        b { font-weight: 600; } span { color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); }
+        &.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); } }
+      .row { display: flex; gap: 8px; input { flex: 1; } }
+      .pathin { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); }
+      .hint { margin-top: 8px; }
+    }
   `],
 })
 export class ExportDialog {
@@ -286,6 +387,12 @@ export class ExportDialog {
   readonly error = signal('');
   readonly report = signal<ExportReport | null>(null);
   readonly others = OTHER_FORMATS;
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  readonly own: { v: ExportFormat; t: string; s: string }[] = [
+    { v: 'zip', t: 'Zip archive', s: 'one file, easy to send' }, { v: 'dir', t: 'Folder', s: 'Sessions/*.ini' }, { v: 'xml', t: 'XML', s: 'also for SecureCRT' }];
+  chipOf(v: ExportFormat) {
+    return ({ 'putty-reg': 'PuTTY .reg', 'kitty-reg': 'KiTTY .reg', 'putty-dir': 'PuTTY folder', moba: 'MobaXterm', tabby: 'Tabby', 'ssh-config': 'OpenSSH config', csv: 'CSV' } as Record<string, string>)[v] ?? v;
+  }
   readonly selected = this.ui.selectedPath();
   scope: 'all' | 'sel' = this.selected ? 'sel' : 'all';
   format: ExportFormat = 'zip';

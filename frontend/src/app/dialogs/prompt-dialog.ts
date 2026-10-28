@@ -4,18 +4,20 @@ import { Autofocus } from '../core/autofocus';
 import { Backend } from '../core/backend';
 import { Prompt } from '../core/models';
 import { Tabs } from '../core/tabs.service';
+import { Icon } from '../components/icon';
 
 /** Shows backend prompts (passwords, host keys, keyboard-interactive) one at a time. */
 @Component({
   selector: 'app-prompt-dialog',
-  imports: [FormsModule, Autofocus],
+  imports: [FormsModule, Autofocus, Icon],
   template: `
   @if (current(); as p) {
     <div class="modal-backdrop">
       <form class="modal" (ngSubmit)="answer(true, p.choices?.[0] ?? '')" autocomplete="off">
-        <div class="modal-head" [class.danger]="p.danger">{{ p.title }}</div>
+        <div class="modal-head" [class.danger]="p.danger"><span class="mh-ic" [class.dz]="p.danger"><app-icon [name]="promptIcon(p)" [size]="17" /></span>
+          <span class="mh-t">{{ p.title }}@if (tabTitle(); as t) {<span class="mh-s">{{ t }}</span>}</span></div>
         <div class="modal-body">
-          @if (tabTitle(); as t) { <div class="hint">Session: {{ t }}</div> }
+          @if (tabTitle(); as t) { <div class="hint sess">Session: {{ t }}</div> }
           @if (p.message) { <pre class="msg">{{ p.message }}</pre> }
           @for (f of p.fields ?? []; track $index) {
             <label class="field">{{ f.label }}
@@ -44,6 +46,11 @@ import { Tabs } from '../core/tabs.service';
     .msg { white-space: pre-wrap; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); background: var(--input-bg); padding: 8px; border-radius: 4px; margin: 0 0 10px; user-select: text; }
     .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
     .modal-head.danger { background: var(--danger); color: #fff; }
+    :host-context(.modern) .modal-head.danger { background: var(--surface); color: var(--text); }
+    .mh-ic.dz { background: rgba(229, 72, 77, .14) !important; color: var(--danger) !important; }
+    :host-context(.modern) .sess { display: none; }
+    :host-context(.modern) .field { font-size: calc(12px * var(--ui-scale, 1)); font-weight: 500; color: var(--muted); input { font-size: calc(13px * var(--ui-scale, 1)); color: var(--text); min-height: 32px; } }
+    :host-context(.modern) .msg { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); padding: 9px 11px; }
   `],
 })
 export class PromptDialog {
@@ -56,6 +63,7 @@ export class PromptDialog {
     return p ? this.tabs.get(p.tabId)?.title ?? '' : '';
   });
   values: string[] = [];
+  promptIcon(p: Prompt) { return p.danger ? 'alert' : (p.fields ?? []).some(f => f.secret) ? 'key' : 'lock'; }
   remember = false;
 
   constructor() {

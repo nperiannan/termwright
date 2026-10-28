@@ -92,6 +92,8 @@ export class App implements OnInit {
   });
   connectText = '';
   readonly isMac = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac OS');
+  /** The shortcut of a menu action, for tooltips ("⌘N"). */
+  scLabel(action: string) { return shortcutOf(action, this.isMac); }
 
   // ---- theme switch (top right) ----
   readonly systemLight = signal(false);

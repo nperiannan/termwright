@@ -153,6 +153,13 @@ details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top
 /* ---- modern dialogs (0.21): header with an icon and a subtitle, labels above
    the fields, switches instead of check boxes, navigation with icons ---- */
 .mh-ic, .mh-s { display: none; }
+/* shown in one layout only */
+.md-only { display: none !important; }
+:root.modern .cl-only { display: none !important; }
+:root.modern .md-only { display: revert !important; }
+:root.modern app-icon.md-only { display: inline-flex !important; vertical-align: -2px; }
+:root.modern button:has(> app-icon.md-only) { display: inline-flex; align-items: center; gap: 6px; }
+:root.modern .modal-foot .danger-link { border: 0 !important; background: transparent !important; color: var(--danger); padding-left: 0; font-weight: 500; }
 .cat a > app-icon { display: none; }
 /* field pairs (Name | Folder, Address | Port): in the classic layout they flow in the label | field grid as before */
 .grid .pair, .grid .f { display: contents; }

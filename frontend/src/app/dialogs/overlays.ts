@@ -5,16 +5,17 @@ import { Autofocus } from '../core/autofocus';
 import { Backend } from '../core/backend';
 import { AppInfo } from '../core/models';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 /** Confirm / input dialogs, context menu and toasts. */
 @Component({
   selector: 'app-overlays',
-  imports: [FormsModule, Autofocus],
+  imports: [FormsModule, Autofocus, Icon],
   template: `
     @if (ui.confirmReq(); as c) {
       <div class="modal-backdrop">
         <form class="modal small" (ngSubmit)="closeConfirm(true)">
-          <div class="modal-head">{{ c.title }}</div>
+          <div class="modal-head"><span class="mh-ic" [class.dz]="c.danger"><app-icon [name]="c.danger ? 'alert' : 'check'" [size]="17" /></span><span class="mh-t">{{ c.title }}</span></div>
           <div class="modal-body"><p class="pre">{{ c.message }}</p></div>
           <div class="modal-foot"><span class="spacer"></span>
             <button type="button" (click)="closeConfirm(false)">Cancel</button>
@@ -26,12 +27,12 @@ import { Ui } from '../core/ui.service';
     @if (ui.inputReq(); as r) {
       <div class="modal-backdrop">
         <form class="modal small" (ngSubmit)="closeInput(true)">
-          <div class="modal-head">{{ r.title }}</div>
+          <div class="modal-head"><span class="mh-ic"><app-icon [name]="inputIcon(r.title, r.secret)" [size]="17" /></span><span class="mh-t">{{ r.title }}</span></div>
           <div class="modal-body"><label class="field">{{ r.label }}
             <input name="v" [(ngModel)]="r.value" [type]="r.secret ? 'password' : 'text'" [attr.autocomplete]="r.secret ? 'off' : null" appAutofocus /></label></div>
           <div class="modal-foot"><span class="spacer"></span>
             <button type="button" (click)="closeInput(false)">Cancel</button>
-            <button type="submit" class="primary">OK</button>
+            <button type="submit" class="primary">{{ modern() ? okFor(r.title) : 'OK' }}</button>
           </div>
         </form>
       </div>
@@ -57,10 +58,22 @@ import { Ui } from '../core/ui.service';
       }
     </div>
   `,
-  styles: [`.field { display: flex; flex-direction: column; gap: 6px; } .pre { white-space: pre-wrap; margin: 0; }`],
+  styles: [`.field { display: flex; flex-direction: column; gap: 6px; } .pre { white-space: pre-wrap; margin: 0; }
+    .mh-ic.dz { background: rgba(229, 72, 77, .14) !important; color: var(--danger) !important; }
+    :host-context(.modern) .field { font-size: calc(12px * var(--ui-scale, 1)); font-weight: 500; color: var(--muted); input { font-size: calc(13px * var(--ui-scale, 1)); color: var(--text); min-height: 32px; } }`],
 })
 export class Overlays {
   protected ui = inject(Ui);
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  /** The button names what it does: Create, Rename, Save… */
+  okFor(title: string) {
+    const t = title.toLowerCase();
+    return /^(new|create)\b/.test(t) ? 'Create' : /^rename\b/.test(t) ? 'Rename' : /^add\b/.test(t) ? 'Add' : /bookmark|save/.test(t) ? 'Save' : 'OK';
+  }
+  inputIcon(title: string, secret?: boolean) {
+    const t = title.toLowerCase();
+    return secret ? 'key' : /folder/.test(t) ? 'folder' : /bookmark/.test(t) ? 'star' : /rename|edit/.test(t) ? 'edit' : /new|add/.test(t) ? 'plus' : 'edit';
+  }
   closeConfirm(v: boolean) {
     const c = this.ui.confirmReq();
     this.ui.confirmReq.set(null);
