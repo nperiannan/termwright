@@ -2,7 +2,12 @@ import { Component, OnInit, computed, effect, inject, signal, viewChild } from '
 import { FormsModule } from '@angular/forms';
 import { Backend } from './core/backend';
 import { Tabs, TabView } from './core/tabs.service';
-import { connectString } from './core/connect-string';
+import { connectString, findSessionByName, looksLikeConnect } from './core/connect-string';
+import { SessionNode } from './core/models';
+import { ago } from './core/env';
+import { SessionIcon } from './components/session-icon';
+import { DeviceIcon, deviceKindOf } from './components/device-icon';
+import { sessionAddr } from './components/session-tree';
 import { menuBar } from './core/menu';
 import { envInfo, envOf } from './core/env';
 import { Ui } from './core/ui.service';
@@ -40,7 +45,7 @@ import { About, Overlays } from './dialogs/overlays';
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, Icon, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
+  imports: [FormsModule, Icon, SessionIcon, DeviceIcon, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
     PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -99,6 +104,41 @@ export class App implements OnInit {
   readonly insetTitle = signal(false);
   readonly quickOpenKeys = this.isMac ? '⌘G' : 'Ctrl+Shift+G';
   readonly layoutIcon = computed(() => ({ tabs: 'tabs', 'tile-v': 'tile-v', 'tile-h': 'tile-h', grid: 'grid' } as Record<string, string>)[this.tabs.layout()] ?? 'tabs');
+
+  // ---- start page (modern layout) ----
+  homeText = '';
+  private readonly byPath = computed(() => {
+    const m = new Map<string, SessionNode>();
+    const walk = (n: SessionNode | null | undefined) => n?.children?.forEach(c => (c.isFolder ? walk(c) : m.set(c.path, c)));
+    walk(this.ui.tree());
+    return m;
+  });
+  readonly homeFavs = computed(() => (this.settings()?.favorites ?? []).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n).slice(0, 8));
+  readonly homeRecent = computed(() => {
+    const fav = new Set(this.settings()?.favorites ?? []);
+    return (this.settings()?.recentSessions ?? []).filter(p => !fav.has(p)).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n).slice(0, 8);
+  });
+  devKind(n: SessionNode) { return deviceKindOf(n.deviceType); }
+  addr(n: SessionNode) { return sessionAddr(n); }
+  cardEnv(n: SessionNode) { return envInfo(envOf(n.path, n.environment, this.settings()?.folderDefaults)); }
+  lastAgo(n: SessionNode) { return ago(this.settings()?.lastConnected?.[n.path]); }
+  protoKind(n: SessionNode) {
+    const m: Record<string, string> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc' };
+    return (m[n.protocol ?? ''] ?? (n.openAs === 'sftp' ? 'sftp' : 'ssh')) as never;
+  }
+
+  /** Start page search box: connect to an address or a session, or search in Quick Open. */
+  async homeGo() {
+    const t = this.homeText.trim();
+    if (!t) { this.action('quick-open'); return; }
+    if (findSessionByName(this.ui, t) || looksLikeConnect(t, this.ui)) {
+      if (await connectString(t, this.ui, this.tabs, this.backend)) this.homeText = '';
+      return;
+    }
+    this.ui.paletteSeed.set(t);
+    this.homeText = '';
+    this.ui.open('palette');
+  }
 
   layoutMenu(ev: MouseEvent) {
     const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();

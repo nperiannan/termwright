@@ -42,6 +42,8 @@ export class Ui {
   /** Console server session the Console Server Ports dialog creates sessions for. */
   readonly consoleServerFor = signal('');
   /** Moved Devices dialog: a list from Discover Devices, or one session to find by its MAC address (from a tab). */
+  /** Text Quick Open starts with (the start page's search box). */
+  readonly paletteSeed = signal('');
   readonly movedInput = signal<{ items: MovedDevice[] } | { find: string; tab?: string } | null>(null);
   /** Text the Command Window should take (from Command History). */
   readonly cwInsert = signal<string | null>(null);

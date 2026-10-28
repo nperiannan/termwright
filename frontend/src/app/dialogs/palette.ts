@@ -110,6 +110,11 @@ export class Palette implements AfterViewInit {
 
   ngAfterViewInit() { setTimeout(() => this.q().nativeElement.focus(), 0); }
 
+  constructor() {
+    const seed = this.ui.paletteSeed();
+    if (seed) { this.query.set(seed); this.ui.paletteSeed.set(''); }
+  }
+
   key(ev: KeyboardEvent) {
     const n = this.results().length;
     if (ev.key === 'ArrowDown') { ev.preventDefault(); this.sel.set(n ? (this.sel() + 1) % n : 0); }

@@ -8,19 +8,34 @@ import { MenuItem, Ui } from '../core/ui.service';
 import { Icon } from './icon';
 import { ago, envInfo, envOf } from '../core/env';
 import { SessionIcon, SessionKind } from './session-icon';
+import { DeviceIcon, deviceKindOf } from './device-icon';
 
 const EXPANDED_KEY = 'termwright.expanded';
 const SECTIONS_KEY = 'termwright.treeSections';
 
 /** Row heights in px (must match session-tree.scss). */
-const ROW = 24, SEC = 28, ALL = 30;
+const ROW_C = 24, SEC_C = 28, ALL_C = 30;
 interface TreeRow { kind: 'sec' | 'all' | 'item' | 'node'; key: string; h: number; n?: SessionNode; depth?: number; sec?: string; label?: string; }
 interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string; }
+
+/** One line about where a session goes: user@host[:port] · device type. */
+export function sessionAddr(n: SessionNode): string {
+  let a: string;
+  if (n.protocol === 'Serial') a = n.hostname || 'Serial';
+  else if (n.protocol === 'Console') a = n.console || 'Console';
+  else if (n.protocol === 'Local Shell') a = 'Local shell';
+  else {
+    const def = n.protocol === 'Telnet' ? 23 : n.protocol === 'RDP' ? 3389 : n.protocol === 'VNC' ? 5900 : 22;
+    a = (n.username ? n.username + '@' : '') + (n.hostname ?? '') + (n.port && n.port !== def ? ':' + n.port : '');
+  }
+  return a + (n.deviceType ? ' · ' + n.deviceType : n.protocol && n.protocol !== 'SSH2' && n.protocol !== 'Local Shell' ? ' · ' + n.protocol : '');
+}
 
 /** Session Manager: folder tree with search, context menu and drag & drop. */
 @Component({
   selector: 'app-session-tree',
-  imports: [NgTemplateOutlet, FormsModule, Icon, SessionIcon],
+  imports: [NgTemplateOutlet, FormsModule, Icon, SessionIcon, DeviceIcon],
+  host: { '[class.roomy]': 'roomy()' },
   template: `
     <div class="sm-head">
       <span class="title" title="Session Manager">Sessions</span>
@@ -71,6 +86,7 @@ interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string
                 <app-session-icon [kind]="expanded().has(n.path) ? 'folder-open' : 'folder'" />
                 <span class="name">{{ n.name }}</span>
                 @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
+                @if (roomy()) { <span class="count">{{ counts().get(n.path) ?? 0 }}</span> }
               } @else {
                 <span class="twisty"></span>
                 <ng-container [ngTemplateOutlet]="sessTpl" [ngTemplateOutletContext]="{ $implicit: n }" />
@@ -94,12 +110,30 @@ interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string
       }
     </div>
     <ng-template #sessTpl let-n>
-      <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget || n.protocol === 'Console'" />
-      @if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
-      <span class="name">{{ n.name }}</span>
-      @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
-      @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }
+      @if (roomy()) {
+        @if (devKind(n); as k) { <app-device-icon [kind]="k" [size]="24" /> } @else { <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget || n.protocol === 'Console'" [size]="24" /> }
+        <span class="txt">
+          <span class="line"><span class="name">{{ n.name }}</span>
+            @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
+            @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }</span>
+          <span class="addr">{{ addr(n) }}</span>
+        </span>
+        @if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
+      } @else {
+        <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget || n.protocol === 'Console'" />
+        @if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
+        <span class="name">{{ n.name }}</span>
+        @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
+        @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }
+      }
     </ng-template>
+    @if (roomy()) {
+      <div class="sm-foot">
+        <button class="primary" title="New session in the selected folder" (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" [size]="14" /> New</button>
+        <button title="Import sessions from another terminal program or a file" (click)="ui.open('import')"><app-icon name="import" [size]="14" /> Import</button>
+        <button title="Discover devices on a network" (click)="ui.open('discover')"><app-icon name="pulse" [size]="14" /> Scan</button>
+      </div>
+    }
 
     @if (hover(); as h) {
       <div class="hcard" [style.left.px]="h.x" [style.top.px]="h.y">
@@ -169,8 +203,28 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
 
   /** Everything the body shows, as flat rows (sections, sessions, tree nodes). */
+  /** Modern layout: two-line session rows with device icons, folder counts and a footer. */
+  readonly roomy = computed(() => this.ui.settings()?.layout !== 'classic');
+  /** Sessions under each folder (all levels). */
+  readonly counts = computed(() => {
+    const m = new Map<string, number>();
+    const walk = (n: SessionNode): number => {
+      let c = 0;
+      for (const x of n.children ?? []) c += x.isFolder ? walk(x) : 1;
+      if (n.path) m.set(n.path, c);
+      return c;
+    };
+    const root = this.ui.tree();
+    if (root) walk(root);
+    return m;
+  });
+  devKind(n: SessionNode) { return deviceKindOf(n.deviceType); }
+  addr(n: SessionNode) { return sessionAddr(n); }
+
   private readonly rows = computed<TreeRow[]>(() => {
     const out: TreeRow[] = [];
+    const roomy = this.roomy();
+    const ROW = roomy ? 40 : ROW_C, SEC = roomy ? 30 : SEC_C, ALL = roomy ? 32 : ALL_C, FOLD = roomy ? 30 : ROW_C;
     if (this.filter()) {
       for (const n of this.matches()) out.push({ kind: 'item', key: 'm:' + n.path, n, h: ROW });
       return out;
@@ -189,7 +243,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     const ex = this.expanded();
     const walk = (n: SessionNode, depth: number) => {
       for (const c of n.children ?? []) {
-        out.push({ kind: 'node', key: 'n:' + c.path, n: c, depth, h: ROW });
+        out.push({ kind: 'node', key: 'n:' + c.path, n: c, depth, h: c.isFolder ? FOLD : ROW });
         if (c.isFolder && ex.has(c.path)) walk(c, depth + 1);
       }
     };

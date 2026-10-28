@@ -148,26 +148,71 @@
         </div>
       }
       @if (!tabs.tabs().length) {
-        <div class="welcome">
-          <div class="brand">
-            <img class="logo" [src]="ui.lightUi() ? 'icon.svg' : 'icon-dark.svg'" alt="" width="46" height="46" />
-            <h1>Termwright</h1>
+        @if (modern()) {
+        <div class="home">
+          <div class="home-in">
+            <div class="home-brand">
+              <img class="logo" [src]="ui.lightUi() ? 'icon.svg' : 'icon-dark.svg'" alt="" width="40" height="40" />
+              <h1>Termwright</h1>
+            </div>
+            <label class="bigsearch">
+              <app-icon name="find" [size]="18" />
+              <input [(ngModel)]="homeText" (keydown.enter)="homeGo()" spellcheck="false" autocomplete="off"
+                     placeholder="Search sessions or connect - ssh admin@10.1.1.1 · voss 10.1.1.1 · serial COM3 115200" />
+              <kbd>↵</kbd>
+            </label>
+            <div class="qa">
+              <button (click)="action('quick-connect')"><app-icon name="quick" [size]="18" /><span>Quick Connect</span></button>
+              <button (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" [size]="18" /><span>New Session</span></button>
+              <button (click)="action('local-shell')"><app-icon name="shell" [size]="18" /><span>Local Shell</span></button>
+              <button (click)="action('import')"><app-icon name="import" [size]="18" /><span>Import</span></button>
+              <button (click)="action('discover')"><app-icon name="pulse" [size]="18" /><span>Discover</span></button>
+            </div>
+            @for (sec of [{ t: 'Favourites', l: homeFavs() }, { t: 'Recent', l: homeRecent() }]; track sec.t) {
+              @if (sec.l.length) {
+                <h3>{{ sec.t }}</h3>
+                <div class="cards">
+                  @for (n of sec.l; track n.path) {
+                    <button class="card" [title]="n.path + ' - click to connect'" (click)="tabs.openSession(n.path)" (contextmenu)="$event.preventDefault()">
+                      @if (devKind(n); as k) { <app-device-icon [kind]="k" [size]="32" /> } @else { <app-session-icon [kind]="protoKind(n)" [size]="32" /> }
+                      <span class="ct">
+                        <span class="cn"><span class="nm">{{ n.name }}</span>
+                          @if (cardEnv(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }
+                          @if (lastAgo(n); as a) { <span class="cago">{{ a }}</span> }</span>
+                        <span class="ca">{{ addr(n) }}</span>
+                      </span>
+                    </button>
+                  }
+                </div>
+              }
+            }
+            @if (!homeFavs().length && !homeRecent().length) {
+              <p class="home-hint">Sessions you connect to show up here. Star a session in the Session Manager to keep it at the top.</p>
+            }
           </div>
-          <p>Double-click a session in the Session Manager, or:</p>
-          <div class="actions">
-            <button class="primary" (click)="action('quick-connect')">Quick Connect</button>
-            <button (click)="ui.newSession(ui.currentFolder())">New Session</button>
-            <button (click)="action('local-shell')">Local Shell</button>
-            <button (click)="action('import')">Import Sessions</button>
-            <button (click)="action('discover')">Discover Devices</button>
-          </div>
-          @if (recent().length) {
-            <h3>Recent sessions</h3>
-            <ul class="recent">
-              @for (r of recent(); track r) { <li><a (click)="tabs.openSession(r)">{{ r }}</a></li> }
-            </ul>
-          }
         </div>
+        } @else {
+        <div class="welcome">
+            <div class="brand">
+              <img class="logo" [src]="ui.lightUi() ? 'icon.svg' : 'icon-dark.svg'" alt="" width="46" height="46" />
+              <h1>Termwright</h1>
+            </div>
+            <p>Double-click a session in the Session Manager, or:</p>
+            <div class="actions">
+              <button class="primary" (click)="action('quick-connect')">Quick Connect</button>
+              <button (click)="ui.newSession(ui.currentFolder())">New Session</button>
+              <button (click)="action('local-shell')">Local Shell</button>
+              <button (click)="action('import')">Import Sessions</button>
+              <button (click)="action('discover')">Discover Devices</button>
+            </div>
+            @if (recent().length) {
+              <h3>Recent sessions</h3>
+              <ul class="recent">
+                @for (r of recent(); track r) { <li><a (click)="tabs.openSession(r)">{{ r }}</a></li> }
+              </ul>
+            }
+          </div>
+        }
       }
       @if (findOpen()) {
         <div class="findbar">

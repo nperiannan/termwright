@@ -18,6 +18,24 @@ export const DEVICE_KINDS: Record<DeviceKind, { from: string; to: string; label:
   unknown: { from: '#94a3b8', to: '#64748b', label: 'Unknown device' },
 };
 
+/** The kind of device a session's device type names ("VOSS" → switch,
+ *  "Linux" → server); '' when the name says nothing about it. */
+export function deviceKindOf(deviceType: string | undefined): DeviceKind | '' {
+  const t = (deviceType ?? '').toLowerCase();
+  if (!t) return '';
+  if (/firewall|fortigate|fortios|palo|pan-?os|asa\b|pfsense|opnsense|srx|checkpoint|sonicwall/.test(t)) return 'firewall';
+  if (/wireless|wi-?fi|\bap\b|access point|wing|aruba ?os|unifi/.test(t)) return 'wireless';
+  if (/router|ios-?xr|junos|mikrotik|routeros|vyos|edgeos|isr|asr/.test(t)) return 'router';
+  if (/voss|exos|boss|switch|nx-?os|\bios\b|eos|cumulus|sonic|fabric|extreme|cisco|arista|aruba|procurve|comware|dell ?os|icx|fastiron|slx|netiron/.test(t)) return 'switch';
+  if (/linux|ubuntu|debian|centos|rhel|red hat|fedora|alpine|unix|bsd|solaris|aix|server|esxi/.test(t)) return 'server';
+  if (/windows|macos|mac os|desktop|laptop/.test(t)) return 'computer';
+  if (/nas|synology|qnap|truenas|storage/.test(t)) return 'nas';
+  if (/printer/.test(t)) return 'printer';
+  if (/phone|voip/.test(t)) return 'phone';
+  if (/iot|raspberry|embedded|esp32|arduino/.test(t)) return 'iot';
+  return '';
+}
+
 /** Device icons for discovery results: a gradient tile with a white symbol per kind. */
 @Component({
   selector: 'app-device-icon',
