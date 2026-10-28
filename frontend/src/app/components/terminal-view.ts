@@ -130,6 +130,7 @@ function b64ToBytes(b64: string): Uint8Array {
           @if (errBullets(f.hint); as bl) { @if (bl.length) { <ul class="ebul">@for (b of bl; track b) { <li>{{ b }}</li> }</ul> } }
           <details class="edet"><summary>Details</summary><code>{{ tab().message }}</code></details>
           <div class="eacts">
+            <button type="button" class="eclose" title="Close this tab" (click)="tabs.close(tab().id)">Close Tab</button>
             @for (a of cardActions(f.actions); track a) { <button type="button" (click)="runFix(a)">{{ labels[a] }}</button> }
             <button type="button" class="primary" (click)="runFix('reconnect')">Try Again</button>
           </div>
@@ -168,7 +169,7 @@ function b64ToBytes(b64: string): Uint8Array {
       .ebul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.5; font-size: calc(12.5px * var(--ui-scale, 1)); }
       .edet { margin-top: 8px; color: var(--faint, var(--muted)); font-size: calc(12px * var(--ui-scale, 1));
         summary { cursor: pointer; } code { display: block; margin-top: 6px; padding: 6px 8px; border-radius: var(--r-sm, 6px); background: var(--surface-2, var(--bg)); font-family: var(--mono); word-break: break-word; color: var(--muted); } }
-      .eacts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 14px; } }
+      .eacts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 14px; .eclose { margin-right: auto; } } }
     :host { display: flex; flex-direction: column; position: absolute; inset: 0; padding: 4px 0 0 6px; background: var(--term-bg); }
     .term-host { width: 100%; flex: 1; min-height: 0; }
     .paused { position: absolute; right: 18px; bottom: 44px; z-index: 4; display: flex; gap: 8px; align-items: center; padding: 4px 6px 4px 10px; border-radius: 6px;
