@@ -1,15 +1,16 @@
 import { Component, computed, input } from '@angular/core';
 
-/** Folder colours: picked from the folder's name, so a folder keeps its colour. */
-const PALETTE = ['#4f9cf7', '#22b07d', '#e5a93b', '#a970ff', '#ef6b62', '#14b8c6', '#e66bb0'];
+/** Folder colours by level: top-level folders amber, their subfolders purple,
+ *  deeper folders blue, then teal; production folders (and everything in
+ *  them) light red. */
+export const FOLDER_COLORS = { top: '#e5a93b', sub: '#a970ff', nested: '#4f9cf7', deeper: '#14b8c6', production: '#ef6b62' };
 
-export function folderColor(name: string): string {
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return PALETTE[h % PALETTE.length];
+export function folderColor(depth: number, env = ''): string {
+  if (env === 'production') return FOLDER_COLORS.production;
+  return depth <= 0 ? FOLDER_COLORS.top : depth === 1 ? FOLDER_COLORS.sub : depth === 2 ? FOLDER_COLORS.nested : FOLDER_COLORS.deeper;
 }
 
-/** Modern Session Manager folder: a solid folder shape in the folder's colour. */
+/** Modern Session Manager folder: a solid folder shape in its level's colour. */
 @Component({
   selector: 'app-folder-icon',
   template: `
@@ -19,8 +20,11 @@ export function folderColor(name: string): string {
   styles: [`:host { display: inline-flex; line-height: 0; flex: none; } svg { display: block; }`],
 })
 export class FolderIcon {
-  readonly name = input('');
+  /** Level: 0 = top-level folder. */
+  readonly depth = input(0);
+  /** Environment of the folder ("production" makes it red). */
+  readonly env = input('');
   readonly open = input(false);
   readonly size = input(20);
-  readonly color = computed(() => folderColor(this.name()));
+  readonly color = computed(() => folderColor(this.depth(), this.env()));
 }

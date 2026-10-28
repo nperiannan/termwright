@@ -90,7 +90,7 @@ export function sessionAddr(n: SessionNode): string {
                  (contextmenu)="nodeMenu($event, n)">
               @if (n.isFolder) {
                 <span class="twisty" [class.open]="expanded().has(n.path)" (click)="toggle(n.path); $event.stopPropagation()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                @if (roomy()) { <app-folder-icon [name]="n.name" [open]="expanded().has(n.path)" [size]="22" /> }
+                @if (roomy()) { <app-folder-icon [depth]="r.depth ?? 0" [env]="folderEnv(n.path)" [open]="expanded().has(n.path)" [size]="22" /> }
                 @else { <app-session-icon [kind]="expanded().has(n.path) ? 'folder-open' : 'folder'" /> }
                 <span class="name">{{ n.name }}</span>
                 @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
@@ -351,6 +351,18 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     return 'dot ' + (v === true ? 'up' : v === false ? 'down' : 'unk');
   }
 
+  /** Environment of a folder, set on it or on a folder above it. */
+  folderEnv(path: string) { return envOf(path + '/x', '', this.ui.settings()?.folderDefaults); }
+
+  /** Marks a folder (and everything in it) as production, or takes the mark off. */
+  setProduction(path: string, on: boolean) {
+    const list = [...(this.ui.settings()?.folderDefaults ?? [])];
+    const i = list.findIndex(d => d.folder === path);
+    if (i >= 0) list[i] = { ...list[i], environment: on ? 'production' : '' };
+    else if (on) list.push({ folder: path, username: '', deviceType: '', jumpSession: '', identityFile: '', keywordSet: '', colorScheme: '', environment: 'production' });
+    this.ui.patchSettings({ folderDefaults: list });
+  }
+
   env(n: SessionNode) {
     const s = this.ui.settings();
     return envInfo(n.isFolder ? (s?.folderDefaults ?? []).find(d => d.folder === n.path)?.environment : envOf(n.path, n.environment, s?.folderDefaults));
@@ -548,6 +560,9 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'New Folder...', action: () => this.newFolder(n.path) },
           { label: 'Rename...', action: () => this.renameFolder(n) },
           { label: 'Folder Defaults...', action: () => { this.ui.folderDefaultsFor.set(n.path); this.ui.open('folderDefaults'); } },
+          ...((this.ui.settings()?.folderDefaults ?? []).find(d => d.folder === n.path)?.environment === 'production'
+            ? [{ label: 'Unmark Production', action: () => this.setProduction(n.path, false) }]
+            : this.folderEnv(n.path) === 'production' ? [] : [{ label: 'Mark as Production', action: () => this.setProduction(n.path, true) }]),
           { label: 'Export Folder...', action: () => this.ui.open('export') },
           { separator: true },
           { label: 'Delete Folder', action: () => this.deleteFolder(n) },

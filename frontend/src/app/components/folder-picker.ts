@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { SessionNode } from '../core/models';
 import { Ui } from '../core/ui.service';
 import { FolderIcon } from './folder-icon';
+import { envOf } from '../core/env';
 
 /** Folder field: type a folder (new folders and subfolders are made when
  *  saving, e.g. "Discovered/Lab 4"), or pick any existing folder or subfolder
@@ -12,7 +13,7 @@ import { FolderIcon } from './folder-icon';
   imports: [FormsModule, FolderIcon],
   template: `
     <div class="fp">
-      <app-folder-icon [name]="leaf()" [size]="18" />
+      <app-folder-icon [depth]="depth()" [env]="env()" [size]="18" />
       <input [ngModel]="value()" (ngModelChange)="value.set($event)" [placeholder]="placeholder" spellcheck="false" />
       <button type="button" class="pick" title="Choose an existing folder or subfolder" (click)="open($event)">
         <svg viewBox="0 0 24 24" width="14" height="14"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -32,7 +33,8 @@ export class FolderPicker {
   private ui = inject(Ui);
   readonly value = model<string>('');
   placeholder = 'Top level';
-  readonly leaf = computed(() => (this.value() || '').split('/').filter(Boolean).pop() ?? '');
+  readonly depth = computed(() => Math.max(0, (this.value() || '').split('/').filter(Boolean).length - 1));
+  readonly env = computed(() => envOf((this.value() || '') + '/x', '', this.ui.settings()?.folderDefaults));
 
   private folders(): { path: string; depth: number; name: string }[] {
     const out: { path: string; depth: number; name: string }[] = [];
