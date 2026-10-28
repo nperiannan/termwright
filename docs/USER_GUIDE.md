@@ -897,7 +897,7 @@ After the export a summary lists the sessions the format cannot hold (e.g. RDP, 
 
 Tips: PuTTY needs `.ppk` keys (PuTTYgen converts OpenSSH keys) and OpenSSH cannot read `.ppk` keys; the summary says when this applies. Termwright's own folder, zip and XML keep everything.
 
-**About** (Help → About Termwright) shows the version, platform, data folder, main features and links to the repository, this guide, issues and releases.
+**About** (Help → About Termwright) shows the version, how many times Termwright was downloaded from GitHub (all files of all releases; it is looked up when About opens, at most every six hours, and left out when GitHub cannot be reached), the platform, data folder, main features and links to the repository, this guide, issues and releases.
 
 ![About](screenshots/about.png)
 

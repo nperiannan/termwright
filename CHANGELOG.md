@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.20.9 (2026-10-28)
+
+* **About** shows how many times Termwright was downloaded from GitHub (all files of all releases, as GitHub counts them; looked up when About opens and remembered for six hours, nothing is shown when GitHub cannot be reached).
+
 ## 0.20.8 (2026-10-27)
 
 * Start page and About in the **light theme**: the same icon as in the dark theme - the four tiles on the page, without the white tile - so both themes match. The app's icon in the Dock / taskbar is unchanged.

@@ -42,6 +42,7 @@ export class Backend {
   openURL(url: string) { window.runtime?.BrowserOpenURL(url); }
 
   getAppInfo() { return this.call<AppInfo>('GetAppInfo'); }
+  downloadCount() { return this.call<number>('DownloadCount'); }
   quit() { return this.call<void>('Quit'); }
   getSettings() { return this.call<Settings>('GetSettings'); }
   saveSettings(s: Settings) { return this.call<void>('SaveSettings', s); }

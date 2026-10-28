@@ -60,7 +60,8 @@ table.list { width: 100%; border-collapse: collapse; margin-bottom: 10px;
   th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px; }
   td { padding: 3px 4px; input:not([type=checkbox]) { width: 100%; } &.c { text-align: center; } } }
 table.keys td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
-.about-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; img { flex: none; } h2 { margin: 0; } }
+.about-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; img { flex: none; } h2 { margin: 0; }
+  .dl { margin-top: 3px; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); } }
 .about h2 { margin: 0 0 8px; font-weight: 400; small { color: var(--muted); font-size: calc(13px * var(--ui-scale, 1)); } }
 
 /* context menu & toasts */

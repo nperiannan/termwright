@@ -34,7 +34,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.20.8-dev"
+var Version = "0.20.9-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -943,6 +943,33 @@ func (a *App) CheckForUpdate() update.Status {
 	defer cancel()
 	return update.CheckAll(ctx, s.UpdateRepo, secrets.Get(tokenKey), Version)
 }
+
+// DownloadCount is how many times the releases of the update repository
+// were downloaded (all files of all releases, as GitHub counts them),
+// remembered for six hours; -1 when GitHub cannot be reached.
+func (a *App) DownloadCount() int {
+	dlMu.Lock()
+	defer dlMu.Unlock()
+	repo := a.cfg.Get().UpdateRepo
+	if dlRepo == repo && time.Since(dlAt) < 6*time.Hour {
+		return dlCount
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	n, err := update.Downloads(ctx, repo, secrets.Get(tokenKey))
+	if err != nil {
+		return -1
+	}
+	dlRepo, dlAt, dlCount = repo, time.Now(), n
+	return n
+}
+
+var (
+	dlMu    sync.Mutex
+	dlRepo  string
+	dlAt    time.Time
+	dlCount int
+)
 
 // DownloadUpdate downloads the installer into the downloads folder and returns its path.
 // Progress is reported with "update:progress" events.

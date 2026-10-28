@@ -89,7 +89,12 @@ export class Overlays {
         <div class="modal-head">About Termwright</div>
         <div class="modal-body about">
           <div class="about-head"><img [src]="ui.lightUi() ? 'icon.svg' : 'icon-dark.svg'" alt="" width="64" height="64" />
-            <h2>Termwright <small>{{ info()?.version }}</small></h2></div>
+            <div><h2>Termwright <small>{{ info()?.version }}</small></h2>
+              @if (downloads() > 0) {
+                <div class="dl" title="All files of all releases on GitHub, as GitHub counts them (the releases page and the in-app updater)">
+                  ⬇ Downloaded {{ downloads().toLocaleString() }} time{{ downloads() === 1 ? '' : 's' }} from GitHub</div>
+              }
+            </div></div>
           <p>A free, open-source terminal emulator, session manager and file-transfer client for network and
             system engineers - one app for Windows, Linux and macOS.</p>
           <ul class="features">
@@ -144,5 +149,10 @@ export class About {
     [this.mod + 'M', 'Toggle Session Manager'], [this.mod + 'K', 'Toggle Command Window'], [this.mod + 'B', 'Toggle Button Bar'],
     ['Ctrl+Tab', 'Next tab'], ['Ctrl+= / Ctrl+- / Ctrl+0', 'Zoom in / out / reset'], ['Enter (disconnected tab)', 'Reconnect'],
   ];
-  constructor() { this.backend.getAppInfo().then(i => this.info.set(i)).catch(() => {}); }
+  /** Download count of all releases (GitHub API; -1 / 0 = not shown). */
+  readonly downloads = signal(0);
+  constructor() {
+    this.backend.getAppInfo().then(i => this.info.set(i)).catch(() => {});
+    this.backend.downloadCount().then(n => this.downloads.set(n)).catch(() => {});
+  }
 }
