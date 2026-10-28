@@ -99,6 +99,13 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <select name="theme" [(ngModel)]="s.theme">
                   <option value="system">Follow system</option><option value="dark">Dark</option><option value="light">Light</option>
                 </select>
+                <label>Layout</label>
+                <div>
+                  <select name="layout" [ngModel]="s.layout || ''" (ngModelChange)="s.layout = $event">
+                    <option value="">Modern - tabs and search in the title bar</option><option value="classic">Classic - toolbar, tab strip and menu bar</option>
+                  </select>
+                  @if (isMac) { <div class="hint">On macOS the window's own title bar changes the next time Termwright starts.</div> }
+                </div>
                 <label>Interface font</label>
                 <select name="uifont" [(ngModel)]="s.uiFont">@for (f of uiFonts; track f.v) { <option [value]="f.v">{{ f.label }}</option> }</select>
                 <label>Text size</label>
@@ -119,8 +126,10 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label><input type="checkbox" name="sm" [(ngModel)]="s.showSessionManager" /> Show Session Manager</label>
                   <label><input type="checkbox" name="bb" [(ngModel)]="s.showButtonBar" /> Show Button Bar</label>
                   <label><input type="checkbox" name="cw" [(ngModel)]="s.showCommandWindow" /> Show Command Window</label>
-                  <label><input type="checkbox" name="cbar" [(ngModel)]="s.showConnectBar" /> Show Connect Bar in the toolbar</label>
-                  <label><input type="checkbox" name="iwm" [(ngModel)]="s.inWindowMenu" /> Show the menu bar inside the window (macOS also keeps the top-of-screen menu)</label>
+                  @if (s.layout === 'classic') {
+                    <label><input type="checkbox" name="cbar" [(ngModel)]="s.showConnectBar" /> Show Connect Bar in the toolbar</label>
+                    <label><input type="checkbox" name="iwm" [(ngModel)]="s.inWindowMenu" /> Show the menu bar inside the window (macOS also keeps the top-of-screen menu)</label>
+                  }
                 </div>
                 <label>Data folder</label><div class="hint mono">{{ dataDir() }}</div>
               </div>
@@ -450,6 +459,7 @@ export class OptionsDialog implements OnInit {
   protected ui = inject(Ui);
   readonly uiFonts = UI_FONTS;
   readonly uiSizes = UI_SIZES;
+  readonly isMac = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac OS');
   fontStack(v: string | undefined) { return uiFontStack(v); }
   private backend = inject(Backend);
   private cdr = inject(ChangeDetectorRef);

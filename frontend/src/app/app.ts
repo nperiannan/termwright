@@ -2,7 +2,7 @@ import { Component, OnInit, computed, effect, inject, signal, viewChild } from '
 import { FormsModule } from '@angular/forms';
 import { Backend } from './core/backend';
 import { Tabs, TabView } from './core/tabs.service';
-import { SessionNode, defaultPort, findDeviceType } from './core/models';
+import { connectString } from './core/connect-string';
 import { menuBar } from './core/menu';
 import { envInfo, envOf } from './core/env';
 import { Ui } from './core/ui.service';
@@ -93,6 +93,41 @@ export class App implements OnInit {
   }
   readonly menus = menuBar(this.isMac);
 
+  // ---- layout: modern (tabs in the title bar) or classic (toolbar, tab strip, menus) ----
+  readonly modern = computed(() => this.settings()?.layout !== 'classic');
+  /** macOS without a title bar (started in the modern layout): room for the window buttons. */
+  readonly insetTitle = signal(false);
+  readonly quickOpenKeys = this.isMac ? '⌘G' : 'Ctrl+Shift+G';
+  readonly layoutIcon = computed(() => ({ tabs: 'tabs', 'tile-v': 'tile-v', 'tile-h': 'tile-h', grid: 'grid' } as Record<string, string>)[this.tabs.layout()] ?? 'tabs');
+
+  layoutMenu(ev: MouseEvent) {
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const l = this.tabs.layout();
+    const it = (v: 'tabs' | 'tile-v' | 'tile-h' | 'grid', label: string) => ({ label: (l === v ? '✓ ' : '   ') + label, action: () => this.tabs.setLayout(v) });
+    this.ui.showMenuAt(r.left, r.bottom + 4, [
+      it('tabs', 'Tabbed'), it('tile-v', 'Side by Side'), it('tile-h', 'Stacked'), it('grid', 'Grid'),
+    ]);
+  }
+
+  /** The "⋯" button: the menus of the classic menu bar, one level deep. */
+  moreMenu(ev: MouseEvent) {
+    const el = ev.currentTarget as HTMLElement;
+    const r = el.getBoundingClientRect();
+    const s = this.settings();
+    this.ui.showMenuAt(r.right - 220, r.bottom + 4, [
+      ...this.menus.map(m => ({ label: m.title + '  ›', action: () => setTimeout(() => {
+        const items = m.items.map(i => (i.sep ? { separator: true } : { label: i.label, hint: i.keys, action: () => void this.action(i.action!) }));
+        this.ui.showMenuAt(r.right - 260, r.bottom + 4, items);
+      }, 0) })),
+      { separator: true },
+      { label: (s?.showSessionManager ? '✓ ' : '') + 'Session Manager', action: () => void this.action('toggle-session-manager') },
+      { label: (s?.showCommandWindow ? '✓ ' : '') + 'Command Window', action: () => void this.action('toggle-command-window') },
+      { label: (s?.showButtonBar ? '✓ ' : '') + 'Button Bar', action: () => void this.action('toggle-button-bar') },
+      { separator: true },
+      { label: 'Classic Layout (toolbar and menus)', action: () => this.ui.patchSettings({ layout: 'classic' }) },
+    ]);
+  }
+
   openMenu(ev: MouseEvent, title: string) {
     const m = this.menus.find(x => x.title === title);
     const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
@@ -129,6 +164,7 @@ export class App implements OnInit {
       return;
     }
     const info = await this.backend.getAppInfo();
+    this.insetTitle.set(!!info.insetTitle);
     if (info.initError) this.ui.toast('Startup error: ' + info.initError, 'error', 20000);
     await this.ui.loadSettings();
     if (info.locked) { this.ui.locked.set(true); this.ui.open('passwords'); }
@@ -314,71 +350,11 @@ export class App implements OnInit {
     }
   }
 
-  /** Connect Bar: "ssh [-p port] [-l user] user@host[:port]", "telnet host [port]",
-   *  "serial PORT [baud]", "raw host port", "rdp [user@]host[:port]", "vnc host[:port]", a saved session name, or a bare host (SSH2). */
+  /** Connect Bar: see connectString. */
   async connectBar() {
     const text = this.connectText.trim();
     if (!text) return;
-    const words = text.split(/\s+/);
-    const cmd = words[0].toLowerCase();
-    const saved = this.findSession(text);
-    if (saved && !['ssh', 'ssh2', 'telnet', 'serial', 'raw', 'rdp', 'vnc'].includes(cmd)) {
-      this.connectText = '';
-      await this.tabs.openSession(saved);
-      return;
-    }
-    try {
-      const s = await this.backend.newSessionDefaults();
-      Object.assign(s, { name: '', logonActions: [], triggers: [], portForwards: [], description: [] });
-      let args = ['ssh', 'ssh2', 'telnet', 'serial', 'raw', 'rdp', 'vnc'].includes(cmd) ? words.slice(1) : words;
-      // A device type name anywhere in the line: "voss 10.1.1.1", "telnet exos 10.0.0.5 2001"
-      const dev = args.map(w => findDeviceType(this.ui.settings()?.deviceTypes, w)).find(Boolean);
-      if (dev) {
-        args = args.filter(w => !findDeviceType([dev], w));
-        s.deviceType = dev.name;
-        if (dev.username) s.username = dev.username;
-      }
-      const explicit = ['ssh', 'ssh2', 'telnet', 'serial', 'raw', 'rdp', 'vnc'].includes(cmd);
-      const proto = cmd === 'telnet' ? 'Telnet' : cmd === 'serial' ? 'Serial' : cmd === 'raw' ? 'Raw' : cmd === 'rdp' ? 'RDP' : cmd === 'vnc' ? 'VNC' : !explicit && dev?.protocol ? dev.protocol : 'SSH2';
-      s.protocol = proto;
-      s.port = defaultPort(proto) || 22;
-      if (dev?.port && !explicit) s.port = dev.port;
-      const pos: string[] = [];
-      for (let i = 0; i < args.length; i++) {
-        if (args[i] === '-p' && args[i + 1]) s.port = Number(args[++i]);
-        else if (args[i] === '-l' && args[i + 1]) s.username = args[++i];
-        else pos.push(args[i]);
-      }
-      if (proto === 'Serial') {
-        if (!pos[0]) throw new Error('usage: serial PORT [baud]');
-        s.comPort = pos[0];
-        s.baudRate = Number(pos[1]) || 9600;
-      } else {
-        let host = pos[0] ?? '';
-        const at = host.lastIndexOf('@');
-        if (at > 0) { s.username = host.slice(0, at); host = host.slice(at + 1); }
-        const m = /^([^:\[\]]+):(\d+)$/.exec(host) ?? /^\[(.+)\]:(\d+)$/.exec(host);
-        if (m) { host = m[1]; s.port = Number(m[2]); }
-        if (pos[1] && /^\d+$/.test(pos[1])) s.port = Number(pos[1]);
-        if (!host) throw new Error('no host given');
-        s.hostname = host;
-      }
-      this.connectText = '';
-      await this.tabs.openAdHoc(s);
-    } catch (e) { this.ui.error(e); }
-  }
-
-  private findSession(q: string): string | null {
-    const ql = q.toLowerCase();
-    let found: string | null = null;
-    const walk = (n: SessionNode) => (n.children ?? []).forEach(c => {
-      if (found) return;
-      if (c.isFolder) walk(c);
-      else if (c.path.toLowerCase() === ql || c.name.toLowerCase() === ql) found = c.path;
-    });
-    const root = this.ui.tree();
-    if (root) walk(root);
-    return found;
+    if (await connectString(text, this.ui, this.tabs, this.backend)) this.connectText = '';
   }
 
   find(back = false) {

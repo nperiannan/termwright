@@ -1,9 +1,45 @@
+@if (modern()) {
+  <header class="titlebar" [class.inset]="insetTitle()">
+    <button class="ab side-toggle" [class.on]="settings()?.showSessionManager" [title]="settings()?.showSessionManager ? 'Hide the Session Manager' : 'Show the Session Manager'"
+            (click)="action('toggle-session-manager')"><app-icon name="sidebar" /></button>
+    <nav class="ptabs">
+      @for (t of tabs.tabs(); track t.id) {
+        <div class="ptab" [class.on]="t.id === tabs.activeId()" [title]="(tabEnv(t) ? tabEnv(t)!.label + ' - ' : '') + (t.info || t.title)"
+             (click)="tabs.activeId.set(t.id)" (auxclick)="onMiddleClick($event, t)" (contextmenu)="tabMenu($event, t)">
+          <span class="dot" [class]="t.state" [style.box-shadow]="tabEnv(t) ? '0 0 0 2px ' + tabEnv(t)!.color : null"></span>
+          <span class="label">{{ t.title }}</span>
+          @if (tabEnv(t)?.id === 'production') { <span class="badge" [style.background]="tabEnv(t)!.color" title="Production">PROD</span> }
+          @if (t.logFile) { <span class="badge" title="Logging to {{ t.logFile }}">LOG</span> }
+          @if (t.castFile) { <span class="badge rec" title="Recording this session to {{ t.castFile }}">REC</span> }
+          @if (t.recording) { <span class="badge" title="Recording a script">SCRIPT</span> }
+          @if (tabs.selected().has(t.id)) { <span class="badge sel" title="In the send group (Command Window → Selected tabs)">SEL</span> }
+          @if (t.alert) { <span class="alertdot" title="An alert matched in this tab"></span> }
+          <button class="x" title="Close" (click)="tabs.close(t.id); $event.stopPropagation()"><app-icon name="x" [size]="12" /></button>
+        </div>
+      }
+      <button class="addtab" title="New connection (Quick Connect)" (click)="action('quick-connect')"><app-icon name="plus" [size]="15" /></button>
+    </nav>
+    <button class="kbar" title="Quick Open: sessions, tabs, commands, actions - or type an address to connect" (click)="action('quick-open')">
+      <app-icon name="find" [size]="14" /><span>Search or connect…</span><kbd>{{ quickOpenKeys }}</kbd></button>
+    <button class="ab" title="Quick Connect" (click)="action('quick-connect')"><app-icon name="quick" /></button>
+    <button class="ab" title="Open SFTP tab" [disabled]="active()?.session?.protocol !== 'SSH2' || active()?.state !== 'connected'" (click)="action('sftp-tab')"><app-icon name="sftp" /></button>
+    <button class="ab" [class.on]="tabs.layout() !== 'tabs'" title="Layout: tabbed, side by side, stacked or grid" (click)="layoutMenu($event)"><app-icon [name]="layoutIcon()" /></button>
+    <div class="theme-sw" role="radiogroup" aria-label="Theme">
+      @for (o of themes; track o.v) {
+        <button type="button" role="radio" [attr.aria-checked]="themeMode() === o.v" [class.on]="themeMode() === o.v"
+                [title]="themeTip(o.v)" (click)="setTheme(o.v)"><app-icon [name]="o.icon" [size]="14" /></button>
+      }
+    </div>
+    <button class="ab" title="Global Options" (click)="action('global-options')"><app-icon name="options" /></button>
+    <button class="ab" title="Menus: File, Edit, View, Transfer, Tools, Help" (click)="moreMenu($event)"><app-icon name="more" /></button>
+  </header>
+} @else {
 @if (settings()?.inWindowMenu) {
-  <nav class="menubar">
+  <nav class="menubar" [class.inset]="insetTitle()">
     @for (m of menus; track m.title) { <button (click)="openMenu($event, m.title)">{{ m.title }}</button> }
   </nav>
 }
-<header class="toolbar">
+<header class="toolbar" [class.inset]="insetTitle() && !settings()?.inWindowMenu">
   <button class="tb" title="Connect (Session Manager)" (click)="action('connect')"><app-icon name="connect" /></button>
   <button class="tb" title="Quick Connect" (click)="action('quick-connect')"><app-icon name="quick" /></button>
   <button class="tb" title="Local Shell" (click)="action('local-shell')"><app-icon name="shell" /></button>
@@ -50,6 +86,7 @@
   </div>
   <span class="brand">Termwright</span>
 </header>
+}
 
 <div class="main" [class.tree-right]="settings()?.sessionManagerRight">
   @if (settings()?.showSessionManager) {
@@ -60,6 +97,7 @@
       <app-icon name="tree" /><span>Sessions</span></button>
   }
   <section class="work">
+    @if (!modern()) {
     <nav class="tabbar">
       @for (t of tabs.tabs(); track t.id) {
         <div class="tab" [class.active]="t.id === tabs.activeId()" [title]="(tabEnv(t) ? tabEnv(t)!.label + ' - ' : '') + (t.info || t.title)"
@@ -78,6 +116,7 @@
       }
       <button class="newtab" title="Quick Connect" (click)="action('quick-connect')">+</button>
     </nav>
+    }
     <div class="terminals" [class]="'terminals layout-' + tabs.layout()" [style.--n]="tabs.tabs().length" [style.--cols]="gridCols()">
       @for (t of tabs.tabs(); track t.id) {
         <div class="tile" [class.active]="t.id === tabs.activeId()" [class.hidden]="!tiled() && t.id !== tabs.activeId()"

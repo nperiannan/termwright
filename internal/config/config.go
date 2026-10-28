@@ -68,6 +68,8 @@ type Settings struct {
 	UIFontSize           int                  `json:"uiFontSize"`          // interface text size in px (13-17; 0 = 13)
 	ThemeFollowsSystem   bool                 `json:"themeFollowsSystem"`  // set once when the default became "system" (0.20.1)
 	HighlightOptIn       bool                 `json:"highlightOptIn"`      // set once when keyword highlighting became off by default (0.20.3)
+	Layout               string               `json:"layout"`              // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
+	ModernLayout         bool                 `json:"modernLayout"`        // set once when the modern layout became the default (0.21.0)
 	HideTerminalBar      bool                 `json:"hideTerminalBar"`     // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
 	TerminalScheme       string               `json:"terminalScheme"`      // scheme name or "Auto" (follow the UI theme)
 	ForceTermScheme      bool                 `json:"forceTerminalScheme"` // global scheme wins over session schemes
@@ -386,6 +388,11 @@ func Load(dataDir string) (*Manager, error) {
 	// set picked afterwards stays).
 	if !m.cur.HighlightOptIn {
 		m.cur.DefaultKeywordSet, m.cur.HighlightOptIn, changed = "", true, true
+	}
+	// The modern layout (0.21.0) keeps the Button Bar out of the way (once -
+	// it can be shown again from View).
+	if !m.cur.ModernLayout {
+		m.cur.ShowButtonBar, m.cur.ModernLayout, changed = false, true, true
 	}
 	if changed {
 		_ = m.Save(m.cur)

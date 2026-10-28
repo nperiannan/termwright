@@ -80,7 +80,7 @@ export interface Settings {
   sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; theme: string; uiFont?: string; uiFontSize?: number;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
-  showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
+  layout?: string; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;
@@ -139,7 +139,7 @@ export interface ImportOptions { targetFolder: string; conflict: 'rename' | 'ove
 export interface ImportResult { imported: string[] | null; renamed: string[] | null; skipped: string[] | null; errors: string[] | null;
   passwordsImported?: number; passwordErrors?: string[] | null; }
 
-export interface AppInfo { name: string; version: string; os: string; arch: string; dataDir: string; sessionsDir: string; initError: string; locked: boolean; hasMaster: boolean; }
+export interface AppInfo { name: string; version: string; os: string; arch: string; dataDir: string; sessionsDir: string; initError: string; locked: boolean; hasMaster: boolean; insetTitle?: boolean; }
 
 export interface FileFilter { displayName: string; pattern: string; }
 

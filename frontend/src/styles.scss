@@ -7,12 +7,21 @@
   --mono: Menlo, Consolas, 'DejaVu Sans Mono', 'Courier New', monospace;
   // interface font and text size (Global Options → General); 13 px system font by default
   --ui-font: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, sans-serif; --ui-scale: 1;
+  // design tokens (0.21): one spacing scale, three radii, raised surfaces
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px;
+  --r-sm: 6px; --r: 8px; --r-lg: 12px;
+  --surface: #222327; --surface-2: #2a2b30; --line: #34353b; --faint: #63666f;
+  --accent-soft: rgba(79, 156, 247, .14);
   color-scheme: dark;
+}
+@supports (color: color-mix(in srgb, red 10%, transparent)) {
+  :root { --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent); }
 }
 :root.light {
   --bg: #f4f5f7; --chrome: #e9eaee; --panel: #fbfbfc; --tab: #e1e3e8; --border: #cfd2d8;
   --text: #22252b; --muted: #6a6f78; --hover: #e2e5eb; --selected: #d6e5fb; --accent: #1f6fd6;
   --folder: #b88a1b; --folder-from: #0ea5e9; --folder-to: #6366f1; --input-bg: #ffffff; --shadow: 0 8px 30px rgba(0, 0, 0, .18);
+  --surface: #ffffff; --surface-2: #f3f4f7; --line: #e1e3e8; --faint: #9a9fa8;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
@@ -97,7 +106,7 @@ table.list.help { margin-top: 10px; font-size: calc(12px * var(--ui-scale, 1)); 
   .share { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px; margin: 0 0 10px; border: 1px solid var(--border); border-radius: 6px; font-size: calc(12.5px * var(--ui-scale, 1));
     a { color: var(--accent); cursor: pointer; font-weight: 600; } } }
 .tab .logbadge.sel { background: var(--accent); color: #fff; }
-.tab .alertdot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex: none; animation: twpulse 1s ease-in-out 3; }
+.tab .alertdot, .ptab .alertdot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex: none; animation: twpulse 1s ease-in-out 3; }
 @keyframes twpulse { 50% { transform: scale(1.6); } }
 
 /* caution box (nightly updates and similar) */

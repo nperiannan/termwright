@@ -3,10 +3,14 @@ import { FormsModule } from '@angular/forms';
 import { ACTIONS, SessionNode, snippetTypes } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { Backend } from '../core/backend';
+import { connectString, looksLikeConnect } from '../core/connect-string';
 
-interface Item { kind: 'session' | 'tab' | 'action' | 'command'; label: string; detail: string; run: (alt: boolean) => void; boost?: number; }
+interface Item { kind: 'connect' | 'session' | 'tab' | 'action' | 'command'; label: string; detail: string; run: (alt: boolean) => void; boost?: number; }
 
-/** Quick Open (Cmd+K / Ctrl+Shift+K): sessions, open tabs, menu actions and saved commands. */
+/** Quick Open (Cmd+G / Ctrl+Shift+G, or the search box in the title bar):
+ *  sessions, open tabs, menu actions and saved commands; an address or a
+ *  connect line ("ssh admin@10.1.1.1", "voss 10.1.1.1") connects. */
 @Component({
   selector: 'app-palette',
   imports: [FormsModule],
@@ -14,7 +18,7 @@ interface Item { kind: 'session' | 'tab' | 'action' | 'command'; label: string; 
   <div class="modal-backdrop pal-back" (mousedown)="ui.close()">
     <div class="pal" (mousedown)="$event.stopPropagation()">
       <input #q class="pal-q" [ngModel]="query()" (ngModelChange)="query.set($event); sel.set(0)" (keydown)="key($event)"
-        placeholder="Type a session, tab, command or action…  (Enter open · Alt+Enter SFTP · Esc close)" spellcheck="false" />
+        placeholder="Search sessions, tabs, commands - or type an address to connect" spellcheck="false" />
       <div class="pal-list">
         @for (it of results(); track $index) {
           <div class="pal-row" [class.on]="$index === sel()" (mouseenter)="sel.set($index)" (click)="choose(it, $event.altKey)">
@@ -24,6 +28,8 @@ interface Item { kind: 'session' | 'tab' | 'action' | 'command'; label: string; 
           </div>
         } @empty { <div class="pal-empty">Nothing matches</div> }
       </div>
+      <div class="pal-foot"><span><kbd>↵</kbd> open</span><span><kbd>Alt</kbd>+<kbd>↵</kbd> SFTP</span><span><kbd>Esc</kbd> close</span>
+        <span class="grow"></span><span>ssh user&#64;host · telnet host 23 · serial COM3 115200</span></div>
     </div>
   </div>`,
   styles: [`
@@ -38,11 +44,16 @@ interface Item { kind: 'session' | 'tab' | 'action' | 'command'; label: string; 
       .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .det { margin-left: auto; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; } }
     .pal-empty { padding: 12px 14px; color: var(--muted); }
+    .kind.connect { color: var(--accent); font-weight: 600; }
+    .pal-foot { display: flex; gap: 14px; align-items: center; padding: 7px 14px; border-top: 1px solid var(--border); color: var(--muted);
+      font-size: calc(11px * var(--ui-scale, 1)); white-space: nowrap; overflow: hidden; .grow { flex: 1; }
+      kbd { font: inherit; padding: 0 4px; border: 1px solid var(--border); border-radius: 4px; } }
   `],
 })
 export class Palette implements AfterViewInit {
   protected ui = inject(Ui);
   private tabs = inject(Tabs);
+  private backend = inject(Backend);
   private q = viewChild.required<ElementRef<HTMLInputElement>>('q');
   readonly query = signal('');
   readonly sel = signal(0);
@@ -86,7 +97,15 @@ export class Palette implements AfterViewInit {
       const score = (l.startsWith(q) ? 0 : l.includes(q) ? 1 : 2) + (it.kind === 'action' ? 0.5 : 0) + (it.boost ?? 0);
       scored.push({ it, score });
     }
-    return scored.sort((a, b) => a.score - b.score).slice(0, 60).map(s => s.it);
+    const list = scored.sort((a, b) => a.score - b.score).slice(0, 60).map(s => s.it);
+    const text = this.query().trim();
+    if (looksLikeConnect(text, this.ui)) {
+      const conn: Item = { kind: 'connect', label: 'Connect to ' + text, detail: 'new connection', run: () => void connectString(text, this.ui, this.tabs, this.backend) };
+      // a session with this very name opens first; otherwise the connection does
+      const exact = list[0]?.kind === 'session' && list[0].label.toLowerCase() === q;
+      list.splice(exact ? 1 : 0, 0, conn);
+    }
+    return list;
   });
 
   ngAfterViewInit() { setTimeout(() => this.q().nativeElement.focus(), 0); }

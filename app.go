@@ -34,7 +34,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.20.9-dev"
+var Version = "0.21.0-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -212,6 +212,7 @@ type AppInfo struct {
 	InitError   string `json:"initError"`
 	Locked      bool   `json:"locked"`
 	HasMaster   bool   `json:"hasMaster"`
+	InsetTitle  bool   `json:"insetTitle"` // macOS without a title bar (modern layout): leave room for the window buttons
 }
 
 // GetAppInfo returns version and platform details.
@@ -227,6 +228,7 @@ func (a *App) GetAppInfo() AppInfo {
 		ai.InitError = a.initErr.Error()
 	}
 	ai.Locked = a.isLocked()
+	ai.InsetTitle = insetTitle
 	if a.cfg != nil {
 		ai.HasMaster = a.cfg.Get().MasterHash != ""
 	}

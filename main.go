@@ -29,15 +29,23 @@ func main() {
 	discover.RaiseFileLimit()
 	app := NewApp()
 	width, height, start := 1280, 820, options.Normal
+	modern := true
 	if dir, err := config.DataDir(); err == nil {
 		if c, err := config.Load(dir); err == nil {
 			if w := c.Get().Window; w.Width >= 760 && w.Height >= 480 && w.Width < 20000 && w.Height < 20000 {
 				width, height = w.Width, w.Height
 			}
+			modern = c.Get().Layout != "classic"
 			if c.Get().Window.Maximised {
 				start = options.Maximised
 			}
 		}
+	}
+	// macOS, modern layout: the tabs share the title bar with the window buttons.
+	var titleBar *mac.TitleBar
+	if modern && runtime.GOOS == "darwin" {
+		titleBar = mac.TitleBarHiddenInset()
+		insetTitle = true
 	}
 	err := wails.Run(&options.App{
 		Title:                    "Termwright",
@@ -60,6 +68,7 @@ func main() {
 			WindowIsTranslucent:  false,
 		},
 		Mac: &mac.Options{
+			TitleBar: titleBar,
 			About: &mac.AboutInfo{
 				Title:   "Termwright " + Version,
 				Message: "Open-source terminal emulator and session manager.\nApache License 2.0",
@@ -71,6 +80,10 @@ func main() {
 		log.Fatal(err)
 	}
 }
+
+// insetTitle is true when the window has no title bar of its own (macOS,
+// modern layout); the UI then leaves room for the window buttons.
+var insetTitle bool
 
 // buildMenu creates the native application menu. Items emit "menu" events
 // that the Angular UI handles, so the same actions work from the toolbar,

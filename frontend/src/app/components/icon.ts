@@ -50,6 +50,15 @@ const PATHS: Record<string, string> = {
   'dock-right': 'M3 4h18v16H3zM15 4v16M8 9l3 3-3 3',
   'hide-panel': 'M3 4h18v16H3zM9 4v16M5.5 9l1.5 3-1.5 3',
   pulse: 'M3 12h4l3-7 4 14 3-7h4',
+  // three dots (overflow menu) and a window with a side bar (show / hide the sessions)
+  more: 'M6.2 12a1.2 1.2 0 1 1-2.4 0 1.2 1.2 0 1 1 2.4 0zM13.2 12a1.2 1.2 0 1 1-2.4 0 1.2 1.2 0 1 1 2.4 0zM20.2 12a1.2 1.2 0 1 1-2.4 0 1.2 1.2 0 1 1 2.4 0z',
+  sidebar: 'M3 5h18v14H3zM9 5v14',
+  x: 'M6 6l12 12M18 6L6 18',
+  'chevron-down': 'M7 10l5 5 5-5',
+  alert: 'M12 3l10 18H2zM12 10v5M12 18h.01',
+  check: 'M5 12.5l4.5 4.5L19 7.5',
+  key: 'M14.5 4a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM10.6 13.4L3 21M6 18l2.5 2.5M8.5 15.5L11 18',
+  edit: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   star: 'M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z',
 };
 
