@@ -30,6 +30,7 @@ A cleaner, more modern look, now the default. The **Classic** layout (toolbar, t
 * **Save Screen As Image** (File menu, tab menu): the visible terminal screen as a PNG, with its colours and highlighting.
 * **Folder picker**: Discover Devices (Add to folder) and the session side panel choose any existing folder or subfolder from a list, or take a new name.
 * **Discover Devices** in the modern layout: a cleaner scan bar, progress and results table.
+* Corners are less rounded (dialogs, cards, buttons); on macOS the title bar is as tall as the window buttons need, so the sidebar button and the tabs line up with them.
 * Dialogs, menus, notices, the Command Window and the Button Bar use the same design (surfaces, rounded corners, spacing) in the modern layout.
 * The Button Bar is hidden once when updating (View → Button Bar shows it again).
 * Fixed: the bar with the error and its fixes (Edit Session, Forget Saved Password, …) was missing on a failed connection since 0.20.1.

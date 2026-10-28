@@ -89,14 +89,16 @@ app-command-window { flex: none; }
 /* ---- modern layout: tabs, search and a few actions in one title bar ---- */
 .titlebar { flex: none; display: flex; align-items: center; gap: 2px; height: 44px; padding: 0 var(--sp-2) 0 var(--sp-2);
   background: var(--surface); border-bottom: 1px solid var(--line); --wails-draggable: drag; user-select: none;
-  &.inset { padding-left: 80px; }
+  /* macOS window without its own title bar: the window buttons sit centred in a
+     52 px bar, so the bar is that tall and the controls line up with them */
+  &.inset { padding-left: 84px; height: 52px; }
   button, .ptab, .kbar { --wails-draggable: no-drag; }
   .ab { width: 32px; height: 32px; padding: 0; flex: none; display: inline-flex; align-items: center; justify-content: center;
     border: 0; border-radius: var(--r); background: transparent; color: var(--muted);
     &:hover:not(:disabled) { background: var(--hover); color: var(--text); }
     &.on { color: var(--accent); }
     &:disabled { opacity: .35; } }
-  .side-toggle { margin-right: var(--sp-1); }
+  .side-toggle { margin-right: var(--sp-1); color: var(--muted); &.on { color: var(--muted); } &:hover { color: var(--text); } }
   .ptabs { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-1); overflow-x: auto; overflow-y: hidden; height: 100%;
     scrollbar-width: none; &::-webkit-scrollbar { height: 0; }
     &:hover { scrollbar-width: thin; &::-webkit-scrollbar { height: 3px; } } }
