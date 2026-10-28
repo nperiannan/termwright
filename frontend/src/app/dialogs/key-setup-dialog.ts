@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 interface Step { text: string; state: 'run' | 'ok' | 'err' | 'info'; }
 
@@ -13,11 +14,12 @@ interface Step { text: string; state: 'run' | 'ok' | 'err' | 'info'; }
  */
 @Component({
   selector: 'app-key-setup-dialog',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon],
   template: `
   <div class="modal-backdrop">
     <form class="modal" (ngSubmit)="run()" autocomplete="off">
-      <div class="modal-head">Key Login Setup{{ tab() ? ' - ' + tab()!.title : '' }}</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="key" [size]="17" /></span>
+        <span class="mh-t">Key Login Setup<span class="cl-only">{{ tab() ? ' - ' + tab()!.title : '' }}</span><span class="mh-s">{{ tab() ? 'Log in to ' + tab()!.title + ' with a key instead of a password' : 'Log in with a key instead of a password' }}</span></span></div>
       <div class="modal-body">
         @if (tab()) {
           <p class="hint">Creates or reuses a key on <b>this computer</b>, adds its public key to
@@ -26,18 +28,29 @@ interface Step { text: string; state: 'run' | 'ok' | 'err' | 'info'; }
           <p class="hint">Creates a key pair on this computer. To install it on a server, open an SSH2 tab and use
             right-click → Set Up Key Login…</p>
         }
-        <div class="checks">
+        <div class="opts md-only">
+          <button type="button" class="opt" [class.on]="mode === 'new'" (click)="mode = 'new'"><span class="rad"></span><span><b>Generate a new key</b><small>on this computer</small></span></button>
+          <button type="button" class="opt" [class.on]="mode === 'existing'" [disabled]="!tab()" (click)="mode = 'existing'"><span class="rad"></span><span><b>Use an existing key</b><small>{{ tab() ? 'already on this computer' : 'open an SSH tab first' }}</small></span></button>
+        </div>
+        <div class="checks cl-only">
           <label><input type="radio" name="mode" value="new" [(ngModel)]="mode" /> Generate a new key</label>
           <label><input type="radio" name="mode" value="existing" [(ngModel)]="mode" [disabled]="!tab()" /> Use an existing key on this computer</label>
         </div>
         <div class="grid">
           @if (mode === 'new') {
             <label>Key type</label>
+            @if (modern()) {
+              <div class="seg"><button type="button" [class.on]="kind === 'ed25519'" (click)="kind = 'ed25519'; kindChanged()" title="Recommended">Ed25519</button>
+                <button type="button" [class.on]="kind === 'ecdsa'" (click)="kind = 'ecdsa'; kindChanged()">ECDSA</button>
+                <button type="button" [class.on]="kind === 'rsa'" (click)="kind = 'rsa'; kindChanged()">RSA 4096</button></div>
+              <div class="hint">Ed25519 is recommended; RSA 4096 for older servers and devices.</div>
+            } @else {
             <select name="kind" [(ngModel)]="kind" (ngModelChange)="kindChanged()">
               <option value="ed25519">Ed25519 (recommended)</option>
               <option value="rsa">RSA 4096 (older servers/devices)</option>
               <option value="ecdsa">ECDSA P-256</option>
             </select>
+            }
             <label>Save as</label><input name="path" [(ngModel)]="path" class="mono" />
             <label>Comment</label><input name="comment" [(ngModel)]="comment" />
           } @else {
@@ -50,11 +63,13 @@ interface Step { text: string; state: 'run' | 'ok' | 'err' | 'info'; }
               <button type="button" (click)="browse()">Browse…</button>
             </div>
           }
-          <label>Passphrase</label>
-          <input type="password" name="pass" [(ngModel)]="pass" [placeholder]="mode === 'new' ? 'optional (recommended)' : 'if the key has one'" />
-          @if (mode === 'new') {
-            <label>Confirm</label><input type="password" name="pass2" [(ngModel)]="pass2" />
-          }
+          <div class="pair">
+            <div class="f"><label>Passphrase</label>
+              <input type="password" name="pass" [(ngModel)]="pass" [placeholder]="mode === 'new' ? 'optional (recommended)' : 'if the key has one'" /></div>
+            @if (mode === 'new') {
+              <div class="f"><label>Confirm</label><input type="password" name="pass2" [(ngModel)]="pass2" /></div>
+            }
+          </div>
           @if (tab()) {
             <label>Then</label>
             <div class="checks">
@@ -86,6 +101,14 @@ interface Step { text: string; state: 'run' | 'ok' | 'err' | 'info'; }
     </form>
   </div>`,
   styles: [`
+    :host-context(.modern) .opts.md-only { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+    .opt { height: auto; display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; text-align: left; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-2);
+      b { display: block; font-weight: 600; } small { color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); }
+      &.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+      &:disabled { opacity: .55; } }
+    .rad { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border); flex: none; margin-top: 2px; }
+    .opt.on .rad { border: 5px solid var(--accent); }
+
     .steps { list-style: none; padding: 8px; margin: 10px 0 0; background: var(--input-bg); border-radius: 4px; font-size: calc(12px * var(--ui-scale, 1)); user-select: text;
       li { padding: 2px 0; white-space: pre-wrap; } .ok { color: var(--ok); } .err { color: var(--danger); } .run { color: var(--muted); } }
     .pub { width: 100%; font-size: calc(11px * var(--ui-scale, 1)); resize: vertical; }
@@ -95,6 +118,7 @@ interface Step { text: string; state: 'run' | 'ok' | 'err' | 'info'; }
 })
 export class KeySetupDialog implements OnInit {
   protected ui = inject(Ui);
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   private backend = inject(Backend);
   private tabs = inject(Tabs);
   private cdr = inject(ChangeDetectorRef);

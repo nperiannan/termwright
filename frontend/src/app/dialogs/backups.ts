@@ -4,17 +4,19 @@ import { Backend, errText } from '../core/backend';
 import { ago } from '../core/env';
 import { BackupJob, BackupResult, BackupStatus, SessionNode } from '../core/models';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 const NOW = '\u0000now';
 
 /** Configuration Backups: jobs (sessions and folders, on demand or scheduled), results and what changed. */
 @Component({
   selector: 'app-backups',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon],
   template: `
   <div class="modal-backdrop">
     <div class="modal huge bk">
-      <div class="modal-head">Configuration Backups</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="backup" [size]="17" /></span>
+        <span class="mh-t">Configuration Backups<span class="mh-s">Saved copies of each device's configuration, on a schedule or on demand</span></span></div>
       <div class="modal-split">
         <nav class="cat jobs">
           @if (adhoc().length) { <a [class.on]="sel() === NOW" (click)="sel.set(NOW)">Back up now<span>{{ adhoc().length }} selected</span></a> }

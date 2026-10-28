@@ -100,7 +100,7 @@ export class Overlays {
   <div class="modal-backdrop" (click)="ui.close()">
     <div class="modal" (click)="$event.stopPropagation()">
       @if (ui.dialog() === 'about') {
-        <div class="modal-head">About Termwright</div>
+        <div class="modal-head cl-only">About Termwright</div>
         <div class="modal-body about">
           <div class="about-head"><img [src]="ui.lightUi() ? 'icon.svg' : 'icon-dark.svg'" alt="" width="64" height="64" />
             <div><h2>Termwright <small>{{ info()?.version }}</small></h2>
@@ -111,7 +111,19 @@ export class Overlays {
             </div></div>
           <p>A free, open-source terminal emulator, session manager and file-transfer client for network and
             system engineers - one app for Windows, Linux and macOS.</p>
-          <ul class="features">
+          @if (modern()) {
+            <div class="tiles">
+              @for (f of tiles; track f[0]) { <div class="tile"><b>{{ f[0] }}</b><span>{{ f[1] }}</span></div> }
+            </div>
+            <div class="btns">
+              <button type="button" (click)="backend.openURL(repo + '/blob/main/docs/USER_GUIDE.md')">User Guide</button>
+              <button type="button" (click)="backend.openURL(repo + '/issues')">Report an Issue</button>
+              <button type="button" (click)="backend.openURL(repo + '/releases')">Releases</button>
+              <button type="button" (click)="copyRepo()"><app-icon name="copy" [size]="13" />{{ copied() ? 'Copied' : 'Copy Link' }}</button>
+            </div>
+            <p class="hint">Created by <b>Natarajan Periannan</b> · <a class="mono" (click)="backend.openURL(repo)">{{ repo.replace('https://', '') }}</a></p>
+          }
+          <ul class="features cl-only">
             <li><b>Connect</b> - SSH2, Telnet, Serial (RTS/CTS, XON/XOFF), local shell and raw TCP; jump hosts, SOCKS/HTTP proxies, port forwarding, X11 and agent forwarding</li>
             <li><b>Organise</b> - device types (login profiles), session manager with folders and folder defaults, workspaces, Quick Open, tabs and tiled layouts; imports sessions from other terminal programs, PuTTY, MobaXterm and OpenSSH config</li>
             <li><b>Automate</b> - logon actions (expect/send), triggers, Python, VBScript and JavaScript scripting (with the common <code>crt</code> object), recorder, command window and command library, output alerts, compare outputs, button bar, key map</li>
@@ -119,13 +131,13 @@ export class Overlays {
             <li><b>Secure</b> - OS keychain passwords, password managers (1Password, Bitwarden, HashiCorp Vault), Kerberos, SSH certificates and FIDO2 keys, master password, encrypted vault export, key login setup, known-hosts checking</li>
             <li><b>Capture</b> - session logging with timestamps, keyword highlighting, themes and color schemes</li>
           </ul>
-          <p>Created by <b>Natarajan Periannan</b>.</p>
-          <div class="share">
+          <p class="cl-only">Created by <b>Natarajan Periannan</b>.</p>
+          <div class="share cl-only">
             <span>Open source on GitHub - share it with your team:</span>
             <a class="mono" (click)="backend.openURL(repo)">{{ repo }}</a>
             <button type="button" (click)="copyRepo()">{{ copied() ? 'Copied' : 'Copy Link' }}</button>
           </div>
-          <p class="links">
+          <p class="links cl-only">
             <a (click)="backend.openURL(repo + '/blob/main/docs/USER_GUIDE.md')">User Guide</a> ·
             <a (click)="backend.openURL(repo + '/issues')">Report an issue</a> ·
             <a (click)="backend.openURL(repo + '/releases')">Releases</a>
@@ -134,16 +146,48 @@ export class Overlays {
             Licensed under the Apache License 2.0 · built with Go, Wails, Angular and xterm.js.</p>
         </div>
       } @else {
-        <div class="modal-head">Keyboard Shortcuts</div>
+        <div class="modal-head"><span class="mh-ic"><app-icon name="keyboard" [size]="17" /></span>
+          <span class="mh-t">Keyboard Shortcuts<span class="mh-s">Every menu command{{ isMacOS ? ' - shown for macOS' : '' }}</span></span></div>
         <div class="modal-body">
-          <table class="list keys">
+          @if (modern()) {
+            <input type="search" class="kq" [value]="kq()" (input)="kq.set($any($event.target).value)" placeholder="Find a command or a key" />
+            <div class="kgroups">
+              @for (g of keyGroups(); track g.title) {
+                <div class="kg"><div class="kt">{{ g.title }}</div>
+                  <div class="kc">@for (k of g.items; track k[1]) { <div class="kr"><span>{{ k[1] }}</span><span class="caps">@for (c of caps(k[0]); track $index) { <kbd>{{ c }}</kbd> }</span></div> }</div></div>
+              } @empty { <div class="hint">Nothing matches.</div> }
+            </div>
+          }
+          <table class="list keys cl-only">
             @for (k of keys; track k[0]) { <tr><td class="mono">{{ k[0] }}</td><td>{{ k[1] }}</td></tr> }
           </table>
         </div>
       }
-      <div class="modal-foot"><span class="spacer"></span><button class="primary" (click)="ui.close()">Close</button></div>
+      <div class="modal-foot">@if (modern() && ui.dialog() !== 'about') { <span class="hint">Add your own keys in Settings → Key Map</span> }<span class="spacer"></span><button class="primary" (click)="ui.close()">Close</button></div>
     </div>
   </div>`,
+  imports: [Icon],
+  styles: [`
+    :host-context(.modern) {
+      .about-head { margin-top: 4px; }
+      .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 12px; }
+      .tile { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 9px 11px; background: var(--surface-2); display: flex; flex-direction: column; gap: 2px;
+        b { font-size: calc(12.5px * var(--ui-scale, 1)); } span { color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); line-height: 1.4; } }
+      .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; button { display: inline-flex; align-items: center; gap: 6px; } }
+      .hint a { color: var(--accent); cursor: pointer; }
+      .kq { width: 100%; height: 34px; padding-left: 32px; margin-bottom: 12px; border-radius: var(--r-lg); background: var(--input-bg) no-repeat 11px 50% / 15px 15px
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d9099' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
+      .kgroups { columns: 2; column-gap: 14px; max-height: 58vh; overflow: auto; }
+      .kg { break-inside: avoid; margin-bottom: 12px; }
+      .kt { font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+      .kc { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 2px 10px; background: var(--surface); }
+      .kr { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; border-top: 1px solid var(--line); font-size: calc(12.5px * var(--ui-scale, 1)); }
+      .kr:first-child { border-top: 0; }
+      .caps { display: inline-flex; gap: 3px; flex: none; }
+      kbd { min-width: 22px; height: 22px; padding: 0 5px; border-radius: 5px; border: 1px solid var(--border); border-bottom-width: 2px; background: var(--surface-2);
+        display: inline-grid; place-items: center; font: calc(11.5px * var(--ui-scale, 1)) var(--ui-font); color: var(--muted); }
+    }
+  `],
 })
 export class About {
   protected ui = inject(Ui);
@@ -156,6 +200,26 @@ export class About {
     catch { this.ui.toast(this.repo, 'info', 8000); }
   }
   readonly mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+Shift+';
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  readonly tiles: [string, string][] = [
+    ['Connect', 'SSH2, Telnet, Serial, RDP, VNC, local shell; jump hosts and proxies'], ['Organise', 'folders, device types, workspaces, import from other programs'],
+    ['Automate', 'logon actions, triggers, scripts, command library, alerts'], ['Transfer', 'SFTP with bookmarks and sync, SCP, ZMODEM, YMODEM, XMODEM'],
+    ['Secure', 'OS keychain, password managers, Kerberos, FIDO2, master password'], ['Capture', 'logs, recordings, highlighting, device facts, screenshots'],
+  ];
+  readonly kq = signal('');
+  /** The shortcuts by menu, filtered by the search box (command or key). */
+  keyGroups() {
+    const q = this.kq().trim().toLowerCase();
+    const groups = menuBar(this.isMacOS).map(m => ({ title: m.title, items: m.items.filter(i => i.label && i.keys).map(i => [i.keys!, i.label!.replace(/\.\.\.$/, '')] as [string, string]) }));
+    groups.push({ title: 'Also', items: [[this.mod + 'C / Ctrl+Insert', 'Copy'], [this.mod + 'V / Shift+Insert', 'Paste'], ['Enter', 'Reconnect (disconnected tab)']] });
+    return groups.map(g => ({ ...g, items: g.items.filter(k => !q || k[1].toLowerCase().includes(q) || k[0].toLowerCase().includes(q)) })).filter(g => g.items.length);
+  }
+  /** "⌘⇧P" → ⌘ ⇧ P; "Ctrl+Shift+P" → Ctrl Shift P. */
+  caps(k: string) {
+    if (k.includes(' / ')) return [k];
+    if (/[A-Za-z]{2,}\+/.test(k)) return k.split('+').filter(Boolean);
+    return Array.from(k);
+  }
   readonly isMacOS = navigator.platform.toLowerCase().includes('mac');
   /** Every menu item with a shortcut, by menu, then a few that are not in the menus. */
   readonly keys: [string, string][] = [

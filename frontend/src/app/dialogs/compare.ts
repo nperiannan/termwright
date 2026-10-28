@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Backend } from '../core/backend';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 interface Row { a: string | null; b: string | null; kind: 'same' | 'del' | 'add' | 'chg'; na: number; nb: number; }
 
@@ -49,11 +50,12 @@ export function diffLines(a: string[], b: string[], norm: (s: string) => string)
 /** Compare Outputs: side-by-side diff of two tabs' scrollback or two files. */
 @Component({
   selector: 'app-compare',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon],
   template: `
   <div class="modal-backdrop">
     <div class="modal huge">
-      <div class="modal-head">Compare Outputs</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="compare" [size]="17" /></span>
+        <span class="mh-t">Compare Outputs<span class="mh-s">What changed between two outputs, side by side</span></span></div>
       <div class="modal-body">
         <div class="pick">
           @for (side of [0, 1]; track side) {

@@ -4,15 +4,17 @@ import { Backend, errText } from '../core/backend';
 import { ago } from '../core/env';
 import { CheckResult, CheckRun, Checklist, SessionNode } from '../core/models';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 /** Change Checklists: the same show commands before and after a change, compared per device. */
 @Component({
   selector: 'app-checklists',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon],
   template: `
   <div class="modal-backdrop">
     <div class="modal huge ck">
-      <div class="modal-head">Change Checklists</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="checklist" [size]="17" /></span>
+        <span class="mh-t">Change Checklists<span class="mh-s">Run the same show commands before and after a change, then compare</span></span></div>
       <div class="modal-split">
         <nav class="cat lists">
           @for (c of lists(); track $index) {
@@ -81,7 +83,16 @@ import { Ui } from '../core/ui.service';
               }
             </div>
             @if (run(); as r) {
+              @if (modern()) {
+                <div class="steps">
+                  <span class="stp" [class.d]="stepOf(r).before">{{ stepOf(r).before ? '✓' : '1' }} Before{{ stepOf(r).before ? ' · ' + stepOf(r).before : '' }}</span><span class="arw">→</span>
+                  <span class="stp" [class.d]="stepOf(r).after" [class.a]="!stepOf(r).after">{{ stepOf(r).after ? '✓' : '2' }} After{{ stepOf(r).after ? ' · ' + stepOf(r).after : '' }}</span><span class="arw">→</span>
+                  <span class="stp" [class.a]="!!stepOf(r).after">3 Compare</span>
+                  <span class="sum2">{{ summary(r) }}</span>
+                </div>
+              } @else {
               <div class="sum">{{ summary(r) }}</div>
+              }
             }
             <div class="devs">
               <table class="list">
@@ -133,6 +144,10 @@ import { Ui } from '../core/ui.service';
     </div>
   </div>`,
   styles: [`
+    .steps { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+    .stp { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); font-weight: 500; white-space: nowrap;
+      &.d { border-color: color-mix(in srgb, var(--ok) 50%, transparent); color: var(--ok); } &.a { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); } }
+    .arw { color: var(--faint); } .sum2 { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); margin-left: 6px; }
     .ck { width: min(1100px, 96vw); }
     .lists { display: flex; flex-direction: column; overflow: auto; a { display: flex; flex-direction: column; line-height: 1.3; padding-top: 6px; padding-bottom: 6px; }
       a span { font-size: calc(11px * var(--ui-scale, 1)); color: var(--muted); } .add { margin: 8px; } }
@@ -253,6 +268,13 @@ export class Checklists implements OnDestroy {
     return d + (r.note ? ' - ' + r.note : '');
   }
 
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  /** Which steps of a change are done (and how many devices). */
+  stepOf(r: CheckRun) {
+    const ds = Object.values(r.devices);
+    const b = ds.filter(d => d.before?.ok).length, a = ds.filter(d => d.after?.ok).length;
+    return { before: b ? b + ' device' + (b === 1 ? '' : 's') : '', after: a ? a + ' device' + (a === 1 ? '' : 's') : '' };
+  }
   summary(r: CheckRun) {
     const ds = Object.values(r.devices);
     const n = (f: (x: typeof ds[number]) => boolean) => ds.filter(f).length;

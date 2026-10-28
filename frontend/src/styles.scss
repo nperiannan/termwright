@@ -196,6 +196,33 @@ details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top
   .checks .tx { display: flex; flex-direction: column; min-width: 0;
     small { display: block; margin-top: 1px; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.35; } }
   .modal-body .grid > label.cl { display: none; }
+  /* tables, status pills, chips and job lists in the tool dialogs (backups, checklists, collect, recordings, …) */
+  .modal-body table.list { width: 100%; border: 1px solid var(--line); border-radius: var(--r-lg); border-collapse: separate; border-spacing: 0; overflow: hidden;
+    th { height: 30px; padding: 0 10px; text-align: left; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+      color: var(--faint); background: var(--surface-2); border-bottom: 1px solid var(--line); }
+    th.r { text-align: right; }
+    td { padding: 7px 10px; border-top: 1px solid var(--line); vertical-align: middle; }
+    tbody tr:first-child td { border-top: 0; }
+    tbody tr:hover td { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
+    td > span:is(.ok, .chg, .bad) { display: inline-block; padding: 1px 9px; border-radius: 11px; font-size: calc(11.5px * var(--ui-scale, 1)); font-weight: 600; line-height: 1.6; }
+    td > span.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+    td > span.chg { color: #e5a93b; background: rgba(229, 169, 59, .15); }
+    td > span.bad { color: var(--danger); background: color-mix(in srgb, var(--danger) 13%, transparent); white-space: normal; }
+    .acts button { border-color: var(--line); background: transparent; border-radius: var(--r-sm); }
+    .acts button.primary { background: var(--accent); border-color: var(--accent); } }
+  .modal-body .chip:has(> button) { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 4px 0 9px; border-radius: var(--r); border: 1px solid var(--line);
+    background: var(--surface-2); font-size: calc(12px * var(--ui-scale, 1)); button { color: var(--faint); } }
+  .modal-split .cat.jobs { padding: 10px 8px;
+    a { flex-direction: column; align-items: flex-start !important; gap: 1px !important; margin: 1px 0 !important; padding: 7px 10px !important; font-weight: 500;
+      span { font-weight: 400; } }
+    .add { margin: auto 0 0 !important; } }
+  .modal-body :is(.devs, .results) { border: 0; border-radius: 0; }
+  .modal-body .devhead { background: transparent; border: 0; padding: 4px 2px 8px; position: static; }
+  .modal-body .devs th { top: 0 !important; }
+  .modal-body progress { -webkit-appearance: none; appearance: none; height: 6px; border: 0; border-radius: 3px; overflow: hidden; background: var(--line);
+    &::-webkit-progress-bar { background: var(--line); border-radius: 3px; } &::-webkit-progress-value { background: var(--accent); border-radius: 3px; }
+    &::-moz-progress-bar { background: var(--accent); } }
+  .modal-foot .danger-text { border: 0 !important; background: transparent !important; color: var(--danger); font-weight: 500; }
   /* lists of switches sit in a card */
   .modal-body .checks { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 2px 14px; background: var(--surface);
     > label:first-child { padding-top: 8px; } }

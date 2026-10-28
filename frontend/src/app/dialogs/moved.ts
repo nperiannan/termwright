@@ -4,6 +4,7 @@ import { Backend, errText } from '../core/backend';
 import { MovedDevice } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 interface Item extends MovedDevice { selected: boolean; done?: boolean; error?: string; }
 
@@ -14,11 +15,12 @@ interface Item extends MovedDevice { selected: boolean; done?: boolean; error?: 
  */
 @Component({
   selector: 'app-moved',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon],
   template: `
   <div class="modal-backdrop">
     <div class="modal moved">
-      <div class="modal-head">Devices With a New Address</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="route" [size]="17" /></span>
+        <span class="mh-t">Devices With a New Address<span class="mh-s">Recognised by their MAC address - now answering at another IP address</span></span></div>
       <div class="modal-body">
         @if (searching()) {
           <p>Looking for <b>{{ findPath() }}</b> by its MAC address on this computer's network…</p>
@@ -26,19 +28,20 @@ interface Item extends MovedDevice { selected: boolean; done?: boolean; error?: 
         } @else {
           @if (err()) { <p class="err">{{ err() }}</p> }
           @if (items().length) {
-            <p class="hint">These sessions' devices - recognised by their MAC address - now answer at another IP address (for example a new DHCP lease).
+            <p class="hint cl-only">These sessions' devices - recognised by their MAC address - now answer at another IP address (for example a new DHCP lease).
               Tick the sessions to update. The SSH host key is checked so a different device is not taken for yours.</p>
             <table class="list">
               <thead><tr><th class="c"><input type="checkbox" [checked]="allOn()" (change)="setAll(!allOn())" /></th>
-                <th>Session</th><th>Saved address</th><th>Now at</th><th>MAC address</th><th>Check</th></tr></thead>
+                <th>Session</th><th class="cl-only">Saved address</th><th class="cl-only">Now at</th><th class="cl-only">MAC address</th><th class="md-only">Address</th><th>Check</th></tr></thead>
               <tbody>
                 @for (it of items(); track it.path) {
                   <tr [class.dim]="it.done">
                     <td class="c"><input type="checkbox" [(ngModel)]="it.selected" (ngModelChange)="rev.update(x => x + 1)" [disabled]="it.done || !it.hostKey" /></td>
-                    <td><b>{{ it.path }}</b></td>
-                    <td class="mono">{{ it.old }}</td>
-                    <td class="mono new">{{ it.new }}</td>
-                    <td class="mono">{{ it.mac }}</td>
+                    <td><b>{{ it.path }}</b><div class="md-only mac mono">{{ it.mac }}</div></td>
+                    <td class="mono cl-only">{{ it.old }}</td>
+                    <td class="mono new cl-only">{{ it.new }}</td>
+                    <td class="mono cl-only">{{ it.mac }}</td>
+                    <td class="mono md-only nw">{{ it.old }} <span class="arr">→</span> <b class="new">{{ it.new }}</b></td>
                     <td>
                       @if (it.done) { <span class="ok">✓ updated</span> }
                       @else if (it.error) { <span class="bad">{{ it.error }}</span> }
@@ -65,11 +68,12 @@ interface Item extends MovedDevice { selected: boolean; done?: boolean; error?: 
         <span class="spacer"></span>
         <button type="button" (click)="close()">{{ anyDone() ? 'Close' : 'Cancel' }}</button>
         @if (tab && anyDone()) { <button type="button" (click)="reconnect()">Reconnect Tab</button> }
-        <button type="button" class="primary" [disabled]="!selected().length || busy()" (click)="apply()">{{ busy() ? 'Updating…' : 'Update Sessions' }}</button>
+        <button type="button" class="primary" [disabled]="!selected().length || busy()" (click)="apply()">{{ busy() ? 'Updating…' : modern() && selected().length ? 'Update ' + selected().length + ' Session' + (selected().length === 1 ? '' : 's') : 'Update Sessions' }}</button>
       </div>
     </div>
   </div>`,
   styles: [`
+    .mac { font-size: calc(11px * var(--ui-scale, 1)); color: var(--muted); } .arr { color: var(--accent); font-weight: 700; } .nw { white-space: nowrap; }
     .moved { width: min(940px, 95vw); }
     table { width: 100%; } td { vertical-align: middle; font-size: calc(12.5px * var(--ui-scale, 1)); } .c { width: 28px; text-align: center; }
     .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); } .new { color: var(--accent); font-weight: 600; }
@@ -80,6 +84,7 @@ interface Item extends MovedDevice { selected: boolean; done?: boolean; error?: 
 })
 export class Moved {
   protected ui = inject(Ui);
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   private backend = inject(Backend);
   private tabs = inject(Tabs);
   readonly items = signal<Item[]>([]);

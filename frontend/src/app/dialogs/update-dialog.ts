@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject, signal } from 
 import { Backend, errText } from '../core/backend';
 import { UpdateInfo, UpdateStatus, formatBytes } from '../core/models';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 /** One line of release notes (light Markdown: headings, bullets, text). */
 interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
@@ -13,15 +14,17 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
  */
 @Component({
   selector: 'app-update-dialog',
+  imports: [Icon],
   template: `
   <div class="modal-backdrop">
     <div class="modal upd">
-      <div class="modal-head">Software Update</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="down" [size]="17" /></span>
+        <span class="mh-t">Software Update<span class="mh-s">{{ st() ? 'Termwright ' + base(st()!.current) + (st()!.runningNightly ? ' (nightly ' + sha(st()!.current) + ')' : '') + ' is installed' : 'Checking for updates…' }}</span></span></div>
       <div class="modal-body">
         @if (checking()) {
           <p>Checking for updates…</p>
         } @else if (st(); as s) {
-          <p class="installed">Installed: <b>Termwright {{ base(s.current) }}</b>
+          <p class="installed cl-only">Installed: <b>Termwright {{ base(s.current) }}</b>
             @if (s.runningNightly) { <span class="tag nightly">nightly {{ sha(s.current) }}</span> }</p>
 
           <section class="card">
@@ -53,7 +56,11 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
           @if (s.nightly; as n) {
             @if (n.newer) {
               <section class="card">
-                <div class="title"><span class="tag nightly">Nightly</span> <b>Build {{ sha(n.latest) }}</b>@if (n.version) { <span class="hint">based on {{ n.version }}</span> } <span class="hint">{{ date(n.published) }}</span></div>
+                <div class="title"><span class="tag nightly">Nightly</span> <b>Build {{ sha(n.latest) }}</b>@if (n.version) { <span class="hint">based on {{ n.version }}</span> } <span class="hint">{{ date(n.published) }}</span>
+                  @if (modern()) { <button type="button" class="fold" (click)="nightlyOpen.set(!nightlyOpen())">{{ nightlyOpen() ? '▾ Hide' : '▸ Show' }}</button> }</div>
+                @if (modern() && !nightlyOpen()) {
+                  <div class="hint">Newest code, not released yet - back up before installing.</div>
+                } @else {
                 <div class="warn">
                   <b>Untested build.</b> Nightly builds contain the newest code before it is released. They may crash, and they may change or
                   lose your settings and saved sessions. <b>Back up before you install one</b>; passwords stay in the OS keychain and are not affected.
@@ -65,6 +72,7 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
                 <label class="ack"><input type="checkbox" [checked]="ack()" (change)="ack.set(!ack())" /> I have a backup and accept the risk</label>
                 @if (n.assetName) {
                   <button type="button" [disabled]="busy() || !ack()" (click)="download(n)">Download nightly ({{ size(n.assetSize) }})</button>
+                }
                 }
               </section>
             } @else if (s.runningNightly) {
@@ -91,7 +99,7 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
       <div class="modal-foot">
         @if (st()?.stable?.page) { <button type="button" (click)="backend.openURL(st()!.stable!.page)">Release Notes</button> }
         <span class="spacer"></span>
-        <button type="button" (click)="ui.close()">Close</button>
+        <button type="button" [class.primary]="modern() && !saved()" (click)="ui.close()">{{ modern() && !saved() ? 'Done' : 'Close' }}</button>
         @if (saved()) { <button type="button" class="primary" (click)="openInstaller()">Open Installer</button> }
       </div>
     </div>
@@ -114,11 +122,26 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
     progress { width: 100%; accent-color: var(--accent); }
     .err { color: var(--danger); white-space: pre-wrap; }
     .mono { font-family: var(--mono, monospace); word-break: break-all; }
+    .fold { margin-left: auto; height: 22px; padding: 0 6px; border: 0 !important; background: transparent !important; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); }
+    :host-context(.modern) {
+      .upd { width: min(560px, 92vw); }
+      .card { border-color: var(--line); border-radius: var(--r-lg); padding: 12px 14px; background: var(--surface); }
+      .card + .card { background: var(--surface-2); }
+      .title { align-items: center; width: 100%; }
+      .tag { border-radius: 5px; padding: 2px 7px; font-weight: 700; }
+      .tag.stable { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+      .tag.nightly { background: rgba(229, 169, 59, .18); color: #e5a93b; }
+      .notes { background: transparent; padding: 0; font-size: calc(12.5px * var(--ui-scale, 1)); }
+      .notes > .nh:first-child { display: none; }
+      .warn { border-radius: var(--r); }
+    }
   `],
 })
 export class UpdateDialog implements OnInit, OnDestroy {
   protected ui = inject(Ui);
   protected backend = inject(Backend);
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  readonly nightlyOpen = signal(false);
   private cdr = inject(ChangeDetectorRef);
   readonly checking = signal(true);
   readonly st = signal<UpdateStatus | null>(null);

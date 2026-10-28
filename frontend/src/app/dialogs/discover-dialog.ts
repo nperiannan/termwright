@@ -200,6 +200,7 @@ const ACK_KEY = 'termwright.discoverAck';
       .dh-ic { display: inline-flex; width: 34px; height: 34px; border-radius: 9px; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); }
       .dh-t { display: flex; flex-direction: column; } .dh-s { display: block; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 400; color: var(--muted); }
       .grid { grid-template-columns: 90px 1fr; }
+      .grid > label:empty { display: block !important; }
       .disc .specrow > input.spec { height: 36px; font-family: var(--mono); flex-basis: 380px; width: 380px; border-radius: var(--r); }
       .specrow button { height: 36px; padding: 0 20px; border-radius: var(--r); }
       .bar { margin: 16px 0 10px; }

@@ -3,19 +3,22 @@ import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
 import { CONSOLE_METHODS, SessionNode } from '../core/models';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
+import { FolderPicker } from '../components/folder-picker';
 
 interface Port { port: number; name: string; exists: boolean; }
 
 /** Console Server Ports: creates one Console session per port (line) of a console server. */
 @Component({
   selector: 'app-console-ports',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon, FolderPicker],
   template: `
   <div class="modal-backdrop">
     <div class="modal cp">
-      <div class="modal-head">Console Server Ports</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="serial" [size]="17" /></span>
+        <span class="mh-t">Console Server Ports<span class="mh-s">One session per port of {{ server() }} - each logs in through it</span></span></div>
       <div class="modal-body">
-        <p class="hint">Creates a session for each port of <b>{{ server() }}</b>{{ host() ? ' (' + host() + ')' : '' }}. Each one connects through
+        <p class="hint cl-only">Creates a session for each port of <b>{{ server() }}</b>{{ host() ? ' (' + host() + ')' : '' }}. Each one connects through
           the console server's session (address, jump host, SSH login) and then logs in to the device cabled to that port.</p>
         <div class="grid">
           <label>Access</label>
@@ -36,19 +39,24 @@ interface Port { port: number; name: string; exists: boolean; }
               placeholder="1-16&#10;or one port per line with the device's name:&#10;5 core-sw1&#10;6 core-sw2"></textarea>
             <div class="hint">Ranges and lists (1-16, 20, 24) or "port name" per line.</div>
           </div>
-          <label>Names</label>
-          <input [ngModel]="pattern()" (ngModelChange)="pattern.set($event)" title="{n} = port number, {nn} = two digits, {server} = the console server's name" />
+          <div class="pair">
+            <div class="f"><label>Names</label>
+              <input [ngModel]="pattern()" (ngModelChange)="pattern.set($event)" title="{n} = port number, {nn} = two digits, {server} = the console server's name" /></div>
+            <div class="f"><label>Device type</label>
+              <select [ngModel]="deviceType()" (ngModelChange)="deviceType.set($event)">
+                <option value="">(none)</option>
+                @for (d of deviceTypes(); track d) { <option [value]="d">{{ d }}</option> }
+              </select></div>
+          </div>
           <label>Folder</label>
+          @if (modern()) { <app-folder-picker [value]="folder()" (valueChange)="folder.set($event)" /> }
+          @else {
           <input [ngModel]="folder()" (ngModelChange)="folder.set($event)" list="cp-folders" placeholder="(top level)" />
           <datalist id="cp-folders">@for (f of folders(); track f) { <option [value]="f"></option> }</datalist>
-          <label>Device type</label>
-          <select [ngModel]="deviceType()" (ngModelChange)="deviceType.set($event)">
-            <option value="">(none)</option>
-            @for (d of deviceTypes(); track d) { <option [value]="d">{{ d }}</option> }
-          </select>
+          }
         </div>
         <div class="prev">
-          <table>
+          <table class="list">
             <thead><tr><th>Port</th><th>Session</th><th>Connects with</th></tr></thead>
             <tbody>
               @for (p of ports(); track p.port) {
@@ -68,6 +76,7 @@ interface Port { port: number; name: string; exists: boolean; }
     </div>
   </div>`,
   styles: [`
+    :host-context(.modern) { .prev { border: 0 !important; margin-top: 14px; } textarea { font-family: var(--mono); } }
     .cp { width: min(720px, 95vw); }
     .grid { display: grid; grid-template-columns: 100px 1fr; gap: 8px 10px; align-items: center; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -88,6 +97,7 @@ export class ConsolePorts {
   private backend = inject(Backend);
   readonly methods = CONSOLE_METHODS;
   readonly server = this.ui.consoleServerFor;
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly node = computed<SessionNode | null>(() => this.ui.findNode(this.server()));
   readonly host = computed(() => this.node()?.hostname ?? '');
   readonly method = signal('opengear-ssh');

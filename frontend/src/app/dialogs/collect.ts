@@ -4,6 +4,7 @@ import { Backend, errText } from '../core/backend';
 import { ago } from '../core/env';
 import { CheckRun, CollectColumn, Collection, SessionNode } from '../core/models';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 /** Commands and columns offered for well-known device types (matched by device type name). */
 const PRESETS: Record<string, { commands: string; columns: { name: string; pattern: string }[] }> = {
@@ -32,11 +33,12 @@ interface Row { path: string; deviceType: string; ok: boolean | null; error: str
 /** Run and Collect: the same commands on many devices, values from the output in a table (CSV export). */
 @Component({
   selector: 'app-collect',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon],
   template: `
   <div class="modal-backdrop">
     <div class="modal huge co">
-      <div class="modal-head">Run and Collect</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="table" [size]="17" /></span>
+        <span class="mh-t">Run and Collect<span class="mh-s">Run commands on many devices in the background and keep each device's output</span></span></div>
       <div class="modal-split">
         <nav class="cat lists">
           @for (c of lists(); track $index) {

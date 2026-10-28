@@ -179,7 +179,7 @@
                   @for (n of sec.l; track n.path) {
                     <button class="card" [title]="n.path + ' - click to connect'" (click)="$event.detail < 2 && tabs.openSession(n.path)" (contextmenu)="cardMenu($event, n, sec.more)">
                       <span class="ctop">
-                        @if (devKind(n); as k) { <app-device-icon [kind]="k" [size]="32" /> } @else { <app-session-icon [kind]="protoKind(n)" [size]="32" /> }
+                        @if (devKind(n); as k) { <app-device-icon [kind]="k" [size]="40" /> } @else { <app-session-icon [kind]="protoKind(n)" [size]="40" /> }
                         <span class="ct">
                           <span class="cn"><span class="nm">{{ n.name }}</span>
                             @if (cardEnv(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }</span>
@@ -194,7 +194,10 @@
               }
             }
             @if (!homeFavs().length && !homeRecent().length) {
-              <p class="home-hint">Sessions you connect to show up here. Star a session in the Session Manager to keep it at the top.</p>
+              <h3>Recent</h3>
+              <div class="home-empty"><span class="ei"><app-icon name="history" [size]="20" /></span>
+                <div><b>No sessions yet</b><span>Sessions you connect to show up here. Star a session in the Session Manager to keep it at the top.</span></div>
+                <button (click)="action('quick-connect')"><app-icon name="quick" [size]="14" />Connect</button></div>
             }
           </div>
         </div>

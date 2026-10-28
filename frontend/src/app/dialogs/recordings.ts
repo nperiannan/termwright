@@ -4,23 +4,25 @@ import { Backend } from '../core/backend';
 import { RecordingInfo } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 
 /** Recordings: the session recordings by session and date; play, show in folder, settings. */
 @Component({
   selector: 'app-recordings',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon],
   template: `
   <div class="modal-backdrop" (click)="ui.close()">
     <div class="modal recs" (click)="$event.stopPropagation()">
-      <div class="modal-head">Recordings</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="record" [size]="17" /></span>
+        <span class="mh-t">Recordings<span class="mh-s">What the devices showed, with its timing - play it back like a video</span></span></div>
       <div class="modal-body">
         <div class="top">
           <input class="q" [ngModel]="query()" (ngModelChange)="query.set($event)" placeholder="Filter by session, host or date" spellcheck="false" />
-          <label class="inline"><input type="checkbox" [ngModel]="all()" (ngModelChange)="setAll($event)" /> Record every session</label>
+          <label class="inline inline-check"><input type="checkbox" [ngModel]="all()" (ngModelChange)="setAll($event)" /> Record every session</label>
           <label class="inline">Keep <input type="number" class="days" min="0" [ngModel]="keep()" (ngModelChange)="setKeep(+$event)" /> days (0 = always)</label>
         </div>
         <div class="list">
-          <table>
+          <table class="list">
             <thead><tr><th>Session</th><th>Started</th><th>Length</th><th>Markers</th><th>Size</th><th></th></tr></thead>
             <tbody>
               @for (r of shown(); track r.path) {
@@ -30,7 +32,7 @@ import { Ui } from '../core/ui.service';
                   <td>{{ len(r.duration) }}</td>
                   <td>{{ r.markers || '' }}</td>
                   <td>{{ size(r.size) }}</td>
-                  <td class="acts"><button type="button" class="primary" (click)="play(r)">Play</button><button type="button" (click)="reveal(r)">Show</button></td>
+                  <td class="acts"><button type="button" class="primary" (click)="play(r)"><app-icon name="play" [size]="12" class="md-only" />Play</button><button type="button" (click)="reveal(r)">Show</button></td>
                 </tr>
               } @empty {
                 <tr><td colspan="6" class="empty">{{ loading() ? 'Loading…' : list().length ? 'No recording matches.' :
@@ -39,7 +41,7 @@ import { Ui } from '../core/ui.service';
             </tbody>
           </table>
         </div>
-        <p class="hint">Recordings keep what the devices showed with its timing (asciinema format, .cast) - not what you typed. Saved in {{ dir() }}.</p>
+        <p class="hint rh">Recordings keep what the devices showed with its timing (asciinema format, .cast) - not what you typed. Saved in {{ dir() }}.</p>
       </div>
       <div class="modal-foot">
         <button type="button" (click)="folder()">Open Folder</button>
@@ -51,6 +53,13 @@ import { Ui } from '../core/ui.service';
   </div>`,
   styles: [`
     .recs { width: min(900px, 95vw); }
+    :host-context(.modern) {
+      .q { height: 34px; padding-left: 32px; border-radius: var(--r-lg); background: var(--input-bg) no-repeat 11px 50% / 15px 15px
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d9099' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
+      .list { border: 0; border-radius: 0; }
+      th { background: var(--surface-2) !important; }
+      .rh { margin-top: 10px; }
+    }
     .top { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; .q { flex: 1; min-width: 200px; } }
     .inline { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; font-size: calc(12.5px * var(--ui-scale, 1)); }
     .days { width: 64px; }
