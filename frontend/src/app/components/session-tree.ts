@@ -89,7 +89,8 @@ export function sessionAddr(n: SessionNode): string {
                  (contextmenu)="nodeMenu($event, n)">
               @if (n.isFolder) {
                 <span class="twisty" [class.open]="expanded().has(n.path)" (click)="toggle(n.path); $event.stopPropagation()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                <app-session-icon [kind]="expanded().has(n.path) ? 'folder-open' : 'folder'" />
+                @if (roomy()) { <app-icon class="fic" [name]="expanded().has(n.path) ? 'folder-open' : 'folder'" [size]="16" /> }
+                @else { <app-session-icon [kind]="expanded().has(n.path) ? 'folder-open' : 'folder'" /> }
                 <span class="name">{{ n.name }}</span>
                 @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
                 @if (roomy()) { <span class="count">{{ counts().get(n.path) ?? 0 }}</span> }
