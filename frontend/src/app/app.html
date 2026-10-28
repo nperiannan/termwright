@@ -2,9 +2,9 @@
   <header class="titlebar" [class.inset]="insetTitle()">
     <button class="ab side-toggle" [class.on]="settings()?.showSessionManager" [title]="settings()?.showSessionManager ? 'Hide the Session Manager' : 'Show the Session Manager'"
             (click)="action('toggle-session-manager')"><app-icon name="sidebar" /></button>
-    <nav class="ptabs">
+    <nav class="ptabs" #ptabs (wheel)="tabsWheel($event)">
       @for (t of tabs.tabs(); track t.id) {
-        <div class="ptab" [class.on]="t.id === tabs.activeId()" [title]="(tabEnv(t) ? tabEnv(t)!.label + ' - ' : '') + (t.info || t.title)"
+        <div class="ptab" [attr.data-tab]="t.id" [class.on]="t.id === tabs.activeId()" [title]="(tabEnv(t) ? tabEnv(t)!.label + ' - ' : '') + (t.info || t.title)"
              (click)="tabs.activeId.set(t.id)" (auxclick)="onMiddleClick($event, t)" (contextmenu)="tabMenu($event, t)">
           <span class="dot" [class]="t.state" [style.box-shadow]="tabEnv(t) ? '0 0 0 2px ' + tabEnv(t)!.color : null"></span>
           <span class="label">{{ t.title }}</span>
@@ -19,6 +19,10 @@
       }
       <button class="addtab" title="New connection (Quick Connect)" (click)="action('quick-connect')"><app-icon name="plus" [size]="15" /></button>
     </nav>
+    @if (tabs.scripts().length; as n) {
+      <button class="scriptpill" [title]="'Running: ' + scriptNames() + ' - click to stop'" (click)="action('cancel-scripts')">
+        <span class="pulse"></span>{{ n === 1 ? '1 script' : n + ' scripts' }}<span class="stop">Stop</span></button>
+    }
     <button class="kbar" title="Quick Open: sessions, tabs, commands, actions - or type an address to connect" (click)="action('quick-open')">
       <app-icon name="find" [size]="14" /><span>Search or connect…</span><kbd>{{ quickOpenKeys }}</kbd></button>
     <button class="ab" title="Quick Connect" (click)="action('quick-connect')"><app-icon name="quick" /></button>

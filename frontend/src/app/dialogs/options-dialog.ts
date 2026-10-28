@@ -105,6 +105,10 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                     <option value="">Modern - tabs and search in the title bar</option><option value="classic">Classic - toolbar, tab strip and menu bar</option>
                   </select>
                   @if (isMac) { <div class="hint">On macOS the window's own title bar changes the next time Termwright starts.</div> }
+                  @if (s.layout !== 'classic') {
+                    <label class="inline-check" style="margin-top: 6px"><input type="checkbox" name="compact" [ngModel]="!!s.compactRows" (ngModelChange)="s.compactRows = $event" />
+                      Compact Session Manager (one line per session - more sessions in view)</label>
+                  }
                 </div>
                 <label>Interface font</label>
                 <select name="uifont" [(ngModel)]="s.uiFont">@for (f of uiFonts; track f.v) { <option [value]="f.v">{{ f.label }}</option> }</select>

@@ -204,7 +204,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
 
   /** Everything the body shows, as flat rows (sections, sessions, tree nodes). */
   /** Modern layout: two-line session rows with device icons, folder counts and a footer. */
-  readonly roomy = computed(() => this.ui.settings()?.layout !== 'classic');
+  readonly roomy = computed(() => this.ui.settings()?.layout !== 'classic' && !this.ui.settings()?.compactRows);
   /** Sessions under each folder (all levels). */
   readonly counts = computed(() => {
     const m = new Map<string, number>();

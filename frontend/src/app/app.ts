@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend } from './core/backend';
 import { Tabs, TabView } from './core/tabs.service';
@@ -142,6 +142,23 @@ export class App implements OnInit {
     this.ui.open('palette');
   }
 
+  scriptNames() { return this.tabs.scripts().map(x => x.name).join(', '); }
+
+  /** Title bar tabs: the mouse wheel scrolls them sideways when they do not fit. */
+  tabsWheel(ev: WheelEvent) {
+    const el = ev.currentTarget as HTMLElement;
+    if (el.scrollWidth <= el.clientWidth) return;
+    el.scrollLeft += Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.deltaY;
+    ev.preventDefault();
+  }
+
+  private ptabs = viewChild<ElementRef<HTMLElement>>('ptabs');
+  private readonly followActive = effect(() => {
+    const id = this.tabs.activeId();
+    this.tabs.tabs().length;
+    setTimeout(() => this.ptabs()?.nativeElement.querySelector<HTMLElement>(`[data-tab="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }), 0);
+  });
+
   layoutMenu(ev: MouseEvent) {
     const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
     const l = this.tabs.layout();
@@ -165,6 +182,7 @@ export class App implements OnInit {
       { label: (s?.showSessionManager ? '✓ ' : '') + 'Session Manager', action: () => void this.action('toggle-session-manager') },
       { label: (s?.showCommandWindow ? '✓ ' : '') + 'Command Window', action: () => void this.action('toggle-command-window') },
       { label: (s?.showButtonBar ? '✓ ' : '') + 'Button Bar', action: () => void this.action('toggle-button-bar') },
+      { label: (s?.compactRows ? '✓ ' : '') + 'Compact Session Manager', action: () => this.ui.patchSettings({ compactRows: !s?.compactRows }) },
       { separator: true },
       { label: 'Classic Layout (toolbar and menus)', action: () => this.ui.patchSettings({ layout: 'classic' }) },
     ]);

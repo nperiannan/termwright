@@ -1,7 +1,7 @@
 import { Component, HostListener, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
-import { BAUD_RATES, PROTOCOLS, Session, defaultPort } from '../core/models';
+import { BAUD_RATES, PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
 import { ENVIRONMENTS } from '../core/env';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
@@ -28,6 +28,8 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
       </header>
       <div class="body">
         <label class="f"><span>Name</span><input name="name" [(ngModel)]="s.name" placeholder="e.g. core-sw1" /></label>
+        <label class="f"><span>Folder</span><input name="folder" [(ngModel)]="s.folder" list="tw-sp-folders" placeholder="top level" spellcheck="false" />
+          <datalist id="tw-sp-folders">@for (f of folders(); track f) { <option [value]="f"></option> }</datalist></label>
         <div class="f"><span>Protocol</span>
           <div class="seg">
             @for (p of main; track p) { <button type="button" [class.on]="s.protocol === p" (click)="setProto(p)">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
@@ -51,6 +53,12 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
               <label class="f port"><span>Port</span><input name="port" type="number" min="1" max="65535" [(ngModel)]="s.port" /></label>
             </div>
           }
+        }
+        @if (s.protocol === 'SSH2') {
+          <label class="f"><span>Open as</span>
+            <select name="openAs" [(ngModel)]="s.openAs">
+              <option value="">Terminal</option><option value="sftp">SFTP file browser only</option>
+            </select></label>
         }
         @if (s.protocol !== 'RDP' && s.protocol !== 'VNC' && s.protocol !== 'Local Shell') {
           <label class="f"><span>Device type</span>
@@ -142,6 +150,14 @@ export class SessionPanel {
   readonly others = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial'].includes(p));
   readonly bauds = BAUD_RATES;
   readonly envs = ENVIRONMENTS;
+  /** Every folder of the Session Manager, for the Folder field. */
+  readonly folders = computed(() => {
+    const out: string[] = [];
+    const walk = (n: SessionNode) => (n.children ?? []).forEach(c => { if (c.isFolder) { out.push(c.path); walk(c); } });
+    const r = this.ui.tree();
+    if (r) walk(r);
+    return out;
+  });
   readonly deviceTypes = computed(() => (this.ui.settings()?.deviceTypes ?? []).map(d => d.name));
   readonly error = signal('');
   readonly pwOpen = signal(false);
