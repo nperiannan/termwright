@@ -66,12 +66,12 @@ export function sessionAddr(n: SessionNode): string {
       @for (r of win().rows; track r.key) {
         @switch (r.kind) {
           @case ('sec') {
-            <div class="sec" (click)="toggleSection(r.sec!)"><span class="twisty" [class.open]="!closedSec().has(r.sec!)"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>{{ r.label }}</div>
+            <div class="sec" (click)="toggleSection(r.sec!)" (contextmenu)="secMenu($event, r.sec!)"><span class="twisty" [class.open]="!closedSec().has(r.sec!)"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>{{ r.label }}</div>
           }
           @case ('all') { <div class="sec all">All sessions @if (roomy()) { <span class="total">{{ counts().get('') ?? 0 }}</span> }</div> }
           @case ('item') {
             <div class="row session" [class.sel]="isSel(r.n!)" [style.padding-left.px]="r.sec ? 22 : 8"
-                 (click)="select(r.n!, $event)" (dblclick)="connect(r.n!)" (contextmenu)="nodeMenu($event, r.n!)"
+                 (click)="select(r.n!, $event)" (dblclick)="connect(r.n!)" (contextmenu)="nodeMenu($event, r.n!, r.sec)"
                  (mouseenter)="hoverIn($event, r.n!)" (mouseleave)="hoverOut()">
               <ng-container [ngTemplateOutlet]="sessTpl" [ngTemplateOutletContext]="{ $implicit: r.n }" />
               <span class="host">{{ r.sec === 'fav' ? parentOf(r.n!.path) : r.sec === 'recent' ? lastAgo(r.n!.path) : r.n!.path }}</span>
@@ -244,6 +244,9 @@ export class SessionTree implements AfterViewInit, OnDestroy {
       { label: 'New Session...', action: () => void this.ui.newSession(this.ui.currentFolder()) },
       { label: 'New Folder...', action: () => void this.newFolder(this.ui.currentFolder()) },
       { label: 'Refresh', action: () => { void this.ui.refreshTree(); void this.checkNow(); } },
+      { separator: true },
+      { label: 'Clear Recent', action: () => void this.ui.clearRecent(), disabled: !(s?.recentSessions ?? []).length },
+      { label: 'Clear Favourites', action: () => void this.ui.clearFavourites(), disabled: !(s?.favorites ?? []).length },
       { separator: true },
       { label: (this.reach() ? '✓ ' : '') + 'Show Which Devices Answer', action: () => this.ui.patchSettings({ showReachability: !this.reach() }) },
       { label: (s?.compactRows ? '✓ ' : '') + 'Compact Rows', action: () => this.ui.patchSettings({ compactRows: !s?.compactRows }) },
@@ -529,7 +532,15 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     ]);
   }
 
-  nodeMenu(ev: MouseEvent, n: SessionNode) {
+  /** Right-click on the Favourites or Recent heading. */
+  secMenu(ev: MouseEvent, sec: string) {
+    ev.stopPropagation();
+    this.ui.showMenu(ev, sec === 'recent'
+      ? [{ label: 'Clear Recent', action: () => void this.ui.clearRecent() }]
+      : [{ label: 'Clear Favourites', action: () => void this.ui.clearFavourites() }]);
+  }
+
+  nodeMenu(ev: MouseEvent, n: SessionNode, sec?: string) {
     this.hoverOut();
     const g = this.group(n);
     if (g.length) {
@@ -578,6 +589,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { separator: true },
           { label: 'Properties...', action: () => this.ui.editSession(n.path) },
           { label: this.isFav(n.path) ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav([n.path], !this.isFav(n.path)) },
+          ...(sec === 'recent' ? [{ label: 'Remove from Recent', action: () => this.ui.removeRecent(n.path) }] : []),
           ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' ? [] : [
             { label: 'Back Up Configuration', action: () => this.backUp([n.path]) },
             { label: 'Change Checklist...', action: () => this.checklist([n.path]) },
@@ -589,6 +601,9 @@ export class SessionTree implements AfterViewInit, OnDestroy {
             { label: 'Console Server Ports...', action: () => { this.ui.consoleServerFor.set(n.path); this.ui.open('consolePorts'); } },
           ] : []),
           { label: 'Duplicate', action: () => this.duplicate(n) },
+          ...(n.protocol === 'SSH2' ? [n.openAs === 'sftp'
+            ? { label: 'Create SSH Session (terminal)', action: () => void this.ui.copySessionAs(n.path, '') }
+            : { label: 'Create SFTP Session', action: () => void this.ui.copySessionAs(n.path, 'sftp') }] : []),
           { label: 'Rename...', action: () => this.renameSession(n) },
           { label: 'Forget Saved Password', action: () => this.backend.forgetPassword(n.path).then(() => this.ui.toast('Password removed')) },
           { separator: true },

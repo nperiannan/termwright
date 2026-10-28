@@ -149,6 +149,22 @@ export class App implements OnInit {
     return (m[n.protocol ?? ''] ?? (n.openAs === 'sftp' ? 'sftp' : 'ssh')) as never;
   }
 
+  /** Right-click on a start page card. */
+  cardMenu(ev: MouseEvent, n: SessionNode, recent: boolean) {
+    const fav = (this.settings()?.favorites ?? []).includes(n.path);
+    this.ui.showMenu(ev, [
+      { label: 'Connect', action: () => void this.tabs.openSession(n.path) },
+      ...(n.protocol === 'SSH2' && n.openAs !== 'sftp' ? [{ label: 'Connect SFTP Session', action: () => void this.tabs.openSession(n.path, 'sftp') }] : []),
+      { label: 'Session Options...', action: () => void this.ui.editSession(n.path) },
+      { separator: true },
+      { label: fav ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.ui.patchSettings({ favorites: fav ? (this.settings()?.favorites ?? []).filter(p => p !== n.path) : [...(this.settings()?.favorites ?? []), n.path] }) },
+      ...(recent ? [{ label: 'Remove from Recent', action: () => this.ui.removeRecent(n.path) }] : []),
+      ...(n.protocol === 'SSH2' ? [{ separator: true }, n.openAs === 'sftp'
+        ? { label: 'Create SSH Session (terminal)', action: () => void this.ui.copySessionAs(n.path, '') }
+        : { label: 'Create SFTP Session', action: () => void this.ui.copySessionAs(n.path, 'sftp') }] : []),
+    ]);
+  }
+
   /** Start page search box: connect to an address or a session, or search in Quick Open. */
   async homeGo() {
     const t = this.homeText.trim();
@@ -510,6 +526,9 @@ export class App implements OnInit {
         { label: 'Clear Screen', action: () => this.tabs.handles.get(t.id)?.term.clear() },
       ] : []),
       { label: 'Session Options...', action: () => this.ui.editSession(t.session.path, t.id), disabled: !t.session.path },
+      ...(t.session.protocol === 'SSH2' && t.session.path ? [t.session.openAs === 'sftp'
+        ? { label: 'Create SSH Session (terminal)', action: () => void this.ui.copySessionAs(t.session.path, '') }
+        : { label: 'Create SFTP Session', action: () => void this.ui.copySessionAs(t.session.path, 'sftp') }] : []),
       { label: 'Rename Tab...', action: async () => {
         const n = await this.ui.input('Rename Tab', 'Tab title', t.title);
         if (n) this.tabs.patch(t.id, { title: n });

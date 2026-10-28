@@ -154,7 +154,9 @@ app-command-window { flex: none; }
     app-icon { color: var(--accent); }
     &:hover { background: var(--surface-2); border-color: var(--border); } } }
 .home h3 { display: flex; align-items: center; margin: 0 0 10px; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint);
-  a { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--accent); cursor: pointer; } }
+  .hlinks { margin-left: auto; display: flex; gap: 14px; }
+  a { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--accent); cursor: pointer; }
+  a.clr { color: var(--muted); &:hover { color: var(--danger); } } }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 30px; }
 .card { height: auto; display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px; text-align: left; border: 1px solid var(--line);
   border-radius: var(--r-lg); background: var(--surface); color: var(--text); min-width: 0; box-shadow: 0 1px 2px rgba(0, 0, 0, .06);

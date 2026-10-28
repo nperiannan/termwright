@@ -156,6 +156,37 @@ export class Ui {
     } catch (e) { this.error(e); }
   }
 
+  /** Empties the Recent list (and when each session was last connected). */
+  async clearRecent() {
+    if (!(this.settings()?.recentSessions ?? []).length) return;
+    if (await this.confirm('Clear Recent', 'Remove all sessions from the Recent list? The sessions themselves are kept.', 'Clear')) {
+      this.patchSettings({ recentSessions: [], lastConnected: {} });
+    }
+  }
+
+  /** Removes every session from Favourites. */
+  async clearFavourites() {
+    if (!(this.settings()?.favorites ?? []).length) return;
+    if (await this.confirm('Clear Favourites', 'Remove all sessions from Favourites? The sessions themselves are kept.', 'Clear')) {
+      this.patchSettings({ favorites: [] });
+    }
+  }
+
+  removeRecent(path: string) {
+    this.patchSettings({ recentSessions: (this.settings()?.recentSessions ?? []).filter(p => p !== path) });
+  }
+
+  /** Saves a copy of an SSH2 session that opens as SFTP (sftp) or as a terminal. */
+  async copySessionAs(path: string, openAs: '' | 'sftp') {
+    try {
+      const c = await this.backend.copySessionAs(path, openAs);
+      await this.refreshTree();
+      this.selectedPath.set(c.path);
+      this.selectedIsFolder.set(false);
+      this.toast(`Created ${c.path} - ${openAs === 'sftp' ? 'opens the SFTP file browser' : 'opens a terminal'}`, 'success');
+    } catch (e) { this.error(e); }
+  }
+
   /** The full Session Options dialog for a session (from the side panel), at a page. */
   openSessionDialog(session: Session, oldPath: string, tabId?: string, page = '', pw = '') {
     this.panel.set(null);

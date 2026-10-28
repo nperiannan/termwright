@@ -344,6 +344,55 @@ func (a *App) DuplicateSession(path string) (string, error) {
 	return a.store.Duplicate(path)
 }
 
+// CopySessionAs saves a copy of an SSH2 session next to it that opens as an
+// SFTP file browser (openAs "sftp", named "… (SFTP)") or as a terminal
+// (openAs "", named "… (SSH)"), with the saved password. Returns the copy.
+func (a *App) CopySessionAs(path, openAs string) (session.Session, error) {
+	if err := a.ready(); err != nil {
+		return session.Session{}, err
+	}
+	orig, err := a.store.Get(path)
+	if err != nil {
+		return orig, err
+	}
+	if orig.Protocol != session.ProtoSSH2 {
+		return orig, errors.New("only SSH2 sessions can be copied as SFTP / SSH")
+	}
+	base := strings.TrimSuffix(strings.TrimSuffix(orig.Name, " (SFTP)"), " (SSH)")
+	suffix := " (SSH)"
+	if openAs == "sftp" {
+		suffix = " (SFTP)"
+	} else {
+		openAs = ""
+	}
+	name := base + suffix
+	for i := 2; ; i++ {
+		if _, err := a.store.Get(session.JoinPath(orig.Folder, name)); err != nil {
+			break
+		}
+		name = fmt.Sprintf("%s%s %d", base, suffix, i)
+	}
+	// copy the file (keeps every setting), then rename it and set how it opens
+	np, err := a.store.Duplicate(path)
+	if err != nil {
+		return orig, err
+	}
+	c, err := a.store.Get(np)
+	if err != nil {
+		return orig, err
+	}
+	c.Name, c.OpenAs = name, openAs
+	saved, err := a.store.Save(c, np)
+	if err != nil {
+		_ = a.store.Delete(np)
+		return saved, err
+	}
+	if pw, ok := secrets.Lookup(path); ok {
+		_ = secrets.Set(saved.Path, pw)
+	}
+	return saved, nil
+}
+
 // CreateFolder creates a session folder.
 func (a *App) CreateFolder(path string) error {
 	if err := a.ready(); err != nil {

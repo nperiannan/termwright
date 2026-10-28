@@ -173,10 +173,11 @@
             </div>
             @for (sec of [{ t: 'Favourites', l: homeFavs(), more: false }, { t: 'Recent', l: homeRecent(), more: true }]; track sec.t) {
               @if (sec.l.length) {
-                <h3>{{ sec.t }} @if (sec.more && recentMore()) { <a (click)="showAllRecent.set(!showAllRecent())">{{ showAllRecent() ? 'Show less' : 'Show all' }}</a> }</h3>
+                <h3>{{ sec.t }} <span class="hlinks">@if (sec.more && recentMore()) { <a (click)="showAllRecent.set(!showAllRecent())">{{ showAllRecent() ? 'Show less' : 'Show all' }}</a> }
+                  <a class="clr" (click)="sec.more ? ui.clearRecent() : ui.clearFavourites()">Clear</a></span></h3>
                 <div class="cards">
                   @for (n of sec.l; track n.path) {
-                    <button class="card" [title]="n.path + ' - click to connect'" (click)="$event.detail < 2 && tabs.openSession(n.path)" (contextmenu)="$event.preventDefault()">
+                    <button class="card" [title]="n.path + ' - click to connect'" (click)="$event.detail < 2 && tabs.openSession(n.path)" (contextmenu)="cardMenu($event, n, sec.more)">
                       <span class="ctop">
                         @if (devKind(n); as k) { <app-device-icon [kind]="k" [size]="32" /> } @else { <app-session-icon [kind]="protoKind(n)" [size]="32" /> }
                         <span class="ct">
