@@ -9,6 +9,7 @@ import { Icon } from './icon';
 import { ago, envInfo, envOf } from '../core/env';
 import { SessionIcon, SessionKind } from './session-icon';
 import { DeviceIcon, deviceKindOf } from './device-icon';
+import { FolderIcon } from './folder-icon';
 
 const EXPANDED_KEY = 'termwright.expanded';
 const SECTIONS_KEY = 'termwright.treeSections';
@@ -34,7 +35,7 @@ export function sessionAddr(n: SessionNode): string {
 /** Session Manager: folder tree with search, context menu and drag & drop. */
 @Component({
   selector: 'app-session-tree',
-  imports: [NgTemplateOutlet, FormsModule, Icon, SessionIcon, DeviceIcon],
+  imports: [NgTemplateOutlet, FormsModule, Icon, SessionIcon, DeviceIcon, FolderIcon],
   host: { '[class.roomy]': 'roomy()' },
   template: `
     @if (!roomy()) {
@@ -89,7 +90,7 @@ export function sessionAddr(n: SessionNode): string {
                  (contextmenu)="nodeMenu($event, n)">
               @if (n.isFolder) {
                 <span class="twisty" [class.open]="expanded().has(n.path)" (click)="toggle(n.path); $event.stopPropagation()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                @if (roomy()) { <app-icon class="fic" [name]="expanded().has(n.path) ? 'folder-open' : 'folder'" [size]="16" /> }
+                @if (roomy()) { <app-folder-icon [name]="n.name" [open]="expanded().has(n.path)" [size]="20" /> }
                 @else { <app-session-icon [kind]="expanded().has(n.path) ? 'folder-open' : 'folder'" /> }
                 <span class="name">{{ n.name }}</span>
                 @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
