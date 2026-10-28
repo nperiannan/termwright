@@ -1,3 +1,4 @@
+import { menuBar } from '../core/menu';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
@@ -79,7 +80,7 @@ export class Overlays {
   }
 }
 
-/** About and keyboard shortcuts. */
+/** About and keyboard shortcuts (from the menus: core/shortcuts.json). */
 @Component({
   selector: 'app-about',
   template: `
@@ -142,12 +143,11 @@ export class About {
     catch { this.ui.toast(this.repo, 'info', 8000); }
   }
   readonly mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+Shift+';
+  readonly isMacOS = navigator.platform.toLowerCase().includes('mac');
+  /** Every menu item with a shortcut, by menu, then a few that are not in the menus. */
   readonly keys: [string, string][] = [
-    [this.mod + 'O', 'Connect (focus Session Manager)'], [this.mod + 'Q', 'Quick Connect'], [this.mod + 'L', 'Local shell'],
-    [this.mod + 'R', 'Reconnect'], [this.mod + 'W', 'Close tab'], [this.mod + 'C / Ctrl+Insert', 'Copy'],
-    [this.mod + 'V / Shift+Insert', 'Paste'], [this.mod + 'F', 'Find in scrollback'], [this.mod + 'S', 'Save scrollback to file'],
-    [this.mod + 'M', 'Toggle Session Manager'], [this.mod + 'K', 'Toggle Command Window'], [this.mod + 'B', 'Toggle Button Bar'],
-    ['Ctrl+Tab', 'Next tab'], ['Ctrl+= / Ctrl+- / Ctrl+0', 'Zoom in / out / reset'], ['Enter (disconnected tab)', 'Reconnect'],
+    ...menuBar(this.isMacOS).flatMap(m => m.items.filter(i => i.label && i.keys).map(i => [i.keys!, m.title + ' → ' + i.label!.replace(/\.\.\.$/, '')] as [string, string])),
+    [this.mod + 'C / Ctrl+Insert', 'Copy (also)'], [this.mod + 'V / Shift+Insert', 'Paste (also)'], ['Enter (disconnected tab)', 'Reconnect'],
   ];
   /** Download count of all releases (GitHub API; -1 / 0 = not shown). */
   readonly downloads = signal(0);

@@ -1,17 +1,27 @@
+import SHORTCUTS from './shortcuts.json';
+
 /** In-window menu bar definition; mirrors the native menu built in main.go. */
 export interface MenuDef { label?: string; action?: string; keys?: string; sep?: boolean; }
 
+/** The shortcut of a menu action as shown in menus ("⌘D", "⌘⇧K", "Ctrl+Shift+D", "Alt+Shift+K"). */
+export function shortcutOf(action: string, isMac: boolean): string {
+  const v = (SHORTCUTS as Record<string, string>)[action];
+  if (!v || action.startsWith('_')) return '';
+  if (v.startsWith('+')) return isMac ? '⌘⇧' + v.slice(1) : 'Alt+Shift+' + v.slice(1);
+  return isMac ? '⌘' + v : 'Ctrl+Shift+' + v;
+}
+
 export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
   const k = (c: string) => (isMac ? '⌘' + c : 'Ctrl+Shift+' + c);
-  return [
+  const menus = [
     { title: 'File', items: [
       { label: 'Connect...', action: 'connect', keys: k('O') }, { label: 'Quick Connect...', action: 'quick-connect', keys: k('Q') },
-      { label: 'Connect Local Shell', action: 'local-shell', keys: k('L') }, { sep: true },
+      { label: 'Connect Local Shell', action: 'local-shell', keys: k('L') }, { label: 'New Session...', action: 'new-session' }, { sep: true },
       { label: 'Reconnect', action: 'reconnect', keys: k('R') }, { label: 'Disconnect', action: 'disconnect' },
       { label: 'Clone Session', action: 'clone-tab' }, { sep: true },
       { label: 'Workspaces...', action: 'workspaces' }, { label: 'Save Workspace...', action: 'save-workspace' }, { sep: true },
       { label: 'Log Session...', action: 'log-toggle' }, { label: 'Record Session', action: 'cast-toggle' }, { label: 'Add Marker to Recording...', action: 'cast-marker', keys: k('J') }, { label: 'Recordings...', action: 'recordings' }, { label: 'Save Scrollback As...', action: 'save-scrollback', keys: k('S') }, { label: 'Save Scrollback As HTML...', action: 'save-scrollback-html' },
-      { label: 'Save Selection As...', action: 'save-selection' }, { sep: true },
+      { label: 'Save Selection As...', action: 'save-selection' }, { label: 'Save Screen As Image...', action: 'capture-screen' }, { sep: true },
       { label: 'Import Sessions...', action: 'import' }, { label: 'Discover Devices...', action: 'discover' }, { label: 'Configuration Backups...', action: 'backups' }, { label: 'Change Checklists...', action: 'checklists' }, { label: 'Run and Collect...', action: 'collect' }, { label: 'Export Sessions...', action: 'export' }, { sep: true },
       { label: 'Close Tab', action: 'close-tab', keys: k('W') },
     ] },
@@ -53,7 +63,7 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
     ] },
     { title: 'Tab', items: [
       { label: 'Compare Outputs...', action: 'compare' }, { sep: true },
-      { label: 'Next Tab', action: 'next-tab', keys: 'Ctrl+Tab' }, { label: 'Previous Tab', action: 'prev-tab' },
+      { label: 'Next Tab', action: 'next-tab', keys: 'Ctrl+Tab' }, { label: 'Previous Tab', action: 'prev-tab', keys: 'Ctrl+Shift+Tab' },
       { label: 'Send Command to All Tabs...', action: 'send-all' }, { label: 'Send Break', action: 'send-break' }, { sep: true },
       { label: 'Lock Session', action: 'lock' }, { label: 'Lock All Sessions', action: 'lock-all' },
     ] },
@@ -62,4 +72,6 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'About Termwright', action: 'about' },
     ] },
   ];
+  for (const m of menus) for (const i of m.items as MenuDef[]) if (i.action) i.keys = shortcutOf(i.action, isMac) || i.keys;
+  return menus;
 }

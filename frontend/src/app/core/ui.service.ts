@@ -114,8 +114,11 @@ export class Ui {
   }
 
   /** Opens a menu at a fixed position (used by the in-window menu bar). */
+  /** Height a menu of these items takes (as limited by the stylesheet). */
+  menuHeight(items: MenuItem[]) { return Math.min(items.reduce((a, i) => a + (i.separator ? 9 : 32), 12), window.innerHeight * 0.7); }
+
   showMenuAt(x: number, y: number, items: MenuItem[]) {
-    const h = items.reduce((a, i) => a + (i.separator ? 9 : 28), 12);
+    const h = Math.min(items.reduce((a, i) => a + (i.separator ? 9 : 32), 12), window.innerHeight * 0.7);
     this.menu.set({ x: Math.min(x, window.innerWidth - 260), y: Math.max(0, Math.min(y, window.innerHeight - h)), items });
   }
 

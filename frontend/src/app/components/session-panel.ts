@@ -8,6 +8,7 @@ import { Ui } from '../core/ui.service';
 import { Icon } from './icon';
 import { SerialPortPicker } from './serial-port-picker';
 import { DeviceIcon, deviceKindOf } from './device-icon';
+import { FolderPicker } from './folder-picker';
 import { SessionIcon, SessionKind } from './session-icon';
 import { storeSession } from '../dialogs/session-editor';
 
@@ -17,7 +18,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
  *  day, the rest one click away in the full Session Options dialog. */
 @Component({
   selector: 'app-session-panel',
-  imports: [FormsModule, Icon, SerialPortPicker, DeviceIcon, SessionIcon],
+  imports: [FormsModule, Icon, SerialPortPicker, DeviceIcon, SessionIcon, FolderPicker],
   template: `
     @if (s) {
     <form class="sp" (ngSubmit)="save(false)">
@@ -31,8 +32,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
       </header>
       <div class="body">
         <label class="f"><span>Name</span><input name="name" [(ngModel)]="s.name" placeholder="e.g. core-sw1" /></label>
-        <label class="f"><span>Folder</span><input name="folder" [(ngModel)]="s.folder" list="tw-sp-folders" placeholder="top level" spellcheck="false" />
-          <datalist id="tw-sp-folders">@for (f of folders(); track f) { <option [value]="f"></option> }</datalist></label>
+        <div class="f"><span>Folder</span><app-folder-picker [(value)]="s.folder" /></div>
         <div class="f"><span>Protocol</span>
           <div class="seg">
             @for (p of main; track p) { <button type="button" [class.on]="s.protocol === p" (click)="setProto(p)">{{ p === 'SSH2' ? 'SSH' : p }}</button> }

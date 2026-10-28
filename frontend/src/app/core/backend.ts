@@ -208,6 +208,7 @@ export class Backend {
   }
   chooseDirectory(title: string) { return this.call<string>('ChooseDirectory', title); }
   chooseSaveFile(title: string, name: string, filters: FileFilter[] = []) { return this.call<string>('ChooseSaveFile', title, name, filters); }
+  saveBase64File(path: string, b64: string) { return this.call<void>('SaveBase64File', path, b64); }
   saveTextFile(path: string, content: string) { return this.call<void>('SaveTextFile', path, content); }
   readTextFile(path: string) { return this.call<string>('ReadTextFile', path); }
 }

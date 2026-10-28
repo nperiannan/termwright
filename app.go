@@ -591,6 +591,18 @@ func (a *App) SaveTextFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o600)
 }
 
+// SaveBase64File writes base64-encoded data (e.g. a PNG image) to path.
+func (a *App) SaveBase64File(path, b64 string) error {
+	if path == "" {
+		return errors.New("no file selected")
+	}
+	data, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
 // ReadTextFile reads a small text file (e.g. a script to send).
 func (a *App) ReadTextFile(path string) (string, error) {
 	st, err := os.Stat(path)

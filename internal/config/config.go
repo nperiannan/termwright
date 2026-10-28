@@ -2,7 +2,6 @@
 package config
 
 import (
-	"bytes"
 	"encoding/json"
 	"github.com/termwright/termwright/internal/session"
 	"os"
@@ -73,7 +72,7 @@ type Settings struct {
 	ModernLayout         bool                 `json:"modernLayout"`        // set once when the modern layout became the default (0.21.0)
 	HighlightStyle       string               `json:"highlightStyle"`      // keyword highlighting: "" = colour the text, "background" = colour the background
 	CompactRows          bool                 `json:"compactRows"`         // modern layout: one-line Session Manager rows
-	Onboarded            bool                 `json:"onboarded"`           // the welcome flow was finished or skipped (0.21.0)
+	WelcomeSeen          string               `json:"welcomeSeen"`         // version whose welcome flow was finished or skipped ("0.21")
 	HideTerminalBar      bool                 `json:"hideTerminalBar"`     // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
 	TerminalScheme       string               `json:"terminalScheme"`      // scheme name or "Auto" (follow the UI theme)
 	ForceTermScheme      bool                 `json:"forceTerminalScheme"` // global scheme wins over session schemes
@@ -375,12 +374,10 @@ func isDir(p string) bool {
 func Load(dataDir string) (*Manager, error) {
 	m := &Manager{dataDir: dataDir, cur: Defaults(dataDir)}
 	data, err := os.ReadFile(m.file())
-	upgraded := false // settings from a version before the welcome flow
 	if err == nil {
 		if err := json.Unmarshal(data, &m.cur); err != nil {
 			return nil, err
 		}
-		upgraded = !bytes.Contains(data, []byte(`"onboarded"`))
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -399,10 +396,6 @@ func Load(dataDir string) (*Manager, error) {
 	// it can be shown again from View).
 	if !m.cur.ModernLayout {
 		m.cur.ShowButtonBar, m.cur.ModernLayout, changed = false, true, true
-	}
-	// The welcome flow (0.21.0) is for new installs only.
-	if upgraded && !m.cur.Onboarded {
-		m.cur.Onboarded, changed = true, true
 	}
 	if changed {
 		_ = m.Save(m.cur)

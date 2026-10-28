@@ -6,10 +6,12 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/discover"
 	"log"
 	"runtime"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -24,6 +26,16 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+//go:embed frontend/src/app/core/shortcuts.json
+var shortcutsJSON []byte
+
+// shortcuts maps menu actions to keys (see shortcuts.json).
+var shortcuts = func() map[string]string {
+	m := map[string]string{}
+	_ = json.Unmarshal(shortcutsJSON, &m)
+	return m
+}()
 
 func main() {
 	discover.RaiseFileLimit()
@@ -106,75 +118,94 @@ func buildMenu(app *App) *menu.Menu {
 		return keys.Combo(k, keys.CmdOrCtrlKey, keys.ShiftKey)
 	}
 
+	// shortcuts shared with the in-window menus (frontend/src/app/core/shortcuts.json)
+	sc := func(action string) *keys.Accelerator {
+		k, ok := shortcuts[action]
+		if !ok || k == "" {
+			return nil
+		}
+		if strings.HasPrefix(k, "+") {
+			k = strings.ToLower(k[1:])
+			if isMac {
+				return keys.Combo(k, keys.CmdOrCtrlKey, keys.ShiftKey)
+			}
+			return keys.Combo(k, keys.OptionOrAltKey, keys.ShiftKey)
+		}
+		return acc(strings.ToLower(k))
+	}
+	add := func(m *menu.Menu, label, action string) { m.AddText(label, sc(action), emit(action)) }
+
 	m := menu.NewMenu()
 	if isMac {
 		m.Append(menu.AppMenu())
 	}
 
 	file := m.AddSubmenu("File")
-	file.AddText("Connect...", acc("o"), emit("connect"))
-	file.AddText("Quick Connect...", acc("q"), emit("quick-connect"))
-	file.AddText("Connect Local Shell", acc("l"), emit("local-shell"))
+	add(file, "Connect...", "connect")
+	add(file, "Quick Connect...", "quick-connect")
+	add(file, "Connect Local Shell", "local-shell")
+	add(file, "New Session...", "new-session")
 	file.AddSeparator()
-	file.AddText("Reconnect", acc("r"), emit("reconnect"))
-	file.AddText("Disconnect", nil, emit("disconnect"))
-	file.AddText("Clone Session", nil, emit("clone-tab"))
+	add(file, "Reconnect", "reconnect")
+	add(file, "Disconnect", "disconnect")
+	add(file, "Clone Session", "clone-tab")
 	file.AddSeparator()
-	file.AddText("Workspaces...", nil, emit("workspaces"))
-	file.AddText("Save Workspace...", nil, emit("save-workspace"))
+	add(file, "Workspaces...", "workspaces")
+	add(file, "Save Workspace...", "save-workspace")
 	file.AddSeparator()
-	file.AddText("Log Session...", nil, emit("log-toggle"))
-	file.AddText("Record Session", nil, emit("cast-toggle"))
-	file.AddText("Add Marker to Recording...", acc("j"), emit("cast-marker"))
-	file.AddText("Recordings...", nil, emit("recordings"))
-	file.AddText("Save Scrollback As...", acc("s"), emit("save-scrollback"))
-	file.AddText("Save Scrollback As HTML...", nil, emit("save-scrollback-html"))
-	file.AddText("Save Selection As...", nil, emit("save-selection"))
+	add(file, "Log Session...", "log-toggle")
+	add(file, "Record Session", "cast-toggle")
+	add(file, "Add Marker to Recording...", "cast-marker")
+	add(file, "Recordings...", "recordings")
+	add(file, "Save Scrollback As...", "save-scrollback")
+	add(file, "Save Scrollback As HTML...", "save-scrollback-html")
+	add(file, "Save Selection As...", "save-selection")
+	add(file, "Save Screen As Image...", "capture-screen")
 	file.AddSeparator()
-	file.AddText("Import Sessions...", nil, emit("import"))
-	file.AddText("Discover Devices...", nil, emit("discover"))
-	file.AddText("Configuration Backups...", nil, emit("backups"))
-	file.AddText("Change Checklists...", nil, emit("checklists"))
-	file.AddText("Run and Collect...", nil, emit("collect"))
-	file.AddText("Export Sessions...", nil, emit("export"))
+	add(file, "Import Sessions...", "import")
+	add(file, "Discover Devices...", "discover")
+	add(file, "Configuration Backups...", "backups")
+	add(file, "Change Checklists...", "checklists")
+	add(file, "Run and Collect...", "collect")
+	add(file, "Export Sessions...", "export")
 	file.AddSeparator()
-	file.AddText("Close Tab", acc("w"), emit("close-tab"))
+	add(file, "Close Tab", "close-tab")
 	if !isMac {
 		file.AddText("Exit", nil, func(*menu.CallbackData) { wruntime.Quit(app.ctx) })
 	}
 
 	edit := m.AddSubmenu("Edit")
-	edit.AddText("Copy", acc("c"), emit("copy"))
-	edit.AddText("Paste", acc("v"), emit("paste"))
+	add(edit, "Copy", "copy")
+	add(edit, "Paste", "paste")
 	if isMac {
 		edit.AddText("Cut", keys.CmdOrCtrl("x"), emit("cut"))
 	}
-	edit.AddText("Copy and Paste", nil, emit("copy-paste"))
-	edit.AddText("Select All", acc("a"), emit("select-all"))
-	edit.AddText("Find...", acc("f"), emit("find"))
+	add(edit, "Copy and Paste", "copy-paste")
+	add(edit, "Select All", "select-all")
+	add(edit, "Find...", "find")
 	edit.AddSeparator()
-	edit.AddText("Clear Scrollback", nil, emit("clear-scrollback"))
-	edit.AddText("Clear Screen", nil, emit("clear-screen"))
-	edit.AddText("Reset Terminal", nil, emit("reset"))
+	add(edit, "Clear Scrollback", "clear-scrollback")
+	add(edit, "Clear Screen", "clear-screen")
+	add(edit, "Reset Terminal", "reset")
 	edit.AddSeparator()
-	edit.AddText("Timestamps On / Off", nil, emit("toggle-timestamps"))
-	edit.AddText("Auto Scroll On / Off", nil, emit("toggle-autoscroll"))
+	add(edit, "Timestamps On / Off", "toggle-timestamps")
+	add(edit, "Auto Scroll On / Off", "toggle-autoscroll")
 
 	view := m.AddSubmenu("View")
-	view.AddText("Quick Open...", acc("g"), emit("quick-open"))
+	add(view, "Quick Open...", "quick-open")
 	view.AddSeparator()
-	view.AddText("Session Manager", acc("m"), emit("toggle-session-manager"))
-	view.AddText("Session Manager Left / Right", nil, emit("toggle-session-manager-side"))
-	view.AddText("Command Window", acc("k"), emit("toggle-command-window"))
-	view.AddText("Button Bar", acc("b"), emit("toggle-button-bar"))
-	view.AddText("Connect Bar", nil, emit("toggle-connect-bar"))
-	view.AddText("Menu Bar in Window", nil, emit("toggle-window-menu"))
-	view.AddText("Modern / Classic Layout", nil, emit("toggle-layout"))
+	add(view, "Session Manager", "toggle-session-manager")
+	add(view, "Session Manager Left / Right", "toggle-session-manager-side")
+	add(view, "Command Window", "toggle-command-window")
+	add(view, "Button Bar", "toggle-button-bar")
+	add(view, "Connect Bar", "toggle-connect-bar")
+	add(view, "Menu Bar in Window", "toggle-window-menu")
+	add(view, "Modern / Classic Layout", "toggle-layout")
 	view.AddSeparator()
-	view.AddText("Tabbed", nil, emit("layout-tabs"))
-	view.AddText("Tile Side by Side", nil, emit("layout-tile-v"))
-	view.AddText("Tile Stacked", nil, emit("layout-tile-h"))
-	view.AddText("Tile Grid", nil, emit("layout-grid"))
+	add(view, "Tabbed", "layout-tabs")
+	add(view, "Tile Side by Side", "layout-tile-v")
+	add(view, "Tile Stacked", "layout-tile-h")
+	add(view, "Tile Grid", "layout-grid")
 	view.AddSeparator()
 	view.AddText("Zoom In", keys.CmdOrCtrl("="), emit("zoom-in"))
 	view.AddText("Zoom Out", keys.CmdOrCtrl("-"), emit("zoom-out"))
@@ -189,48 +220,49 @@ func buildMenu(app *App) *menu.Menu {
 	})
 
 	xfer := m.AddSubmenu("Transfer")
-	xfer.AddText("Open SFTP Tab", acc("p"), emit("sftp-tab"))
-	xfer.AddText("Send File with XMODEM...", nil, emit("xmodem"))
-	xfer.AddText("Receive File with XMODEM...", nil, emit("xmodem-receive"))
-	xfer.AddText("Send Files with YMODEM...", nil, emit("ymodem-send"))
-	xfer.AddText("Receive Files with YMODEM", nil, emit("ymodem-receive"))
-	xfer.AddText("Send Text File...", nil, emit("send-file"))
+	add(xfer, "Open SFTP Tab", "sftp-tab")
+	add(xfer, "Send File with XMODEM...", "xmodem")
+	add(xfer, "Receive File with XMODEM...", "xmodem-receive")
+	add(xfer, "Send Files with YMODEM...", "ymodem-send")
+	add(xfer, "Receive Files with YMODEM", "ymodem-receive")
+	add(xfer, "Send Text File...", "send-file")
 	xfer.AddSeparator()
-	xfer.AddText("SCP Upload File...", nil, emit("scp-upload"))
-	xfer.AddText("SCP Upload Folder...", nil, emit("scp-upload-folder"))
-	xfer.AddText("SCP Download...", nil, emit("scp-download"))
+	add(xfer, "SCP Upload File...", "scp-upload")
+	add(xfer, "SCP Upload Folder...", "scp-upload-folder")
+	add(xfer, "SCP Download...", "scp-download")
 
 	script := m.AddSubmenu("Script")
-	script.AddText("Command Library...", acc("e"), emit("command-library"))
-	script.AddText("Command History...", acc("y"), emit("history"))
+	add(script, "Command Library...", "command-library")
+	add(script, "Command History...", "history")
 	script.AddSeparator()
-	script.AddText("Run Script...", nil, emit("run-script"))
-	script.AddText("Cancel Running Scripts", nil, emit("cancel-scripts"))
+	add(script, "Run Script...", "run-script")
+	add(script, "Cancel Running Scripts", "cancel-scripts")
 	script.AddSeparator()
-	script.AddText("Start / Stop Script Recording", nil, emit("record-toggle"))
+	add(script, "Start / Stop Script Recording", "record-toggle")
 
 	opts := m.AddSubmenu("Options")
-	opts.AddText("Session Options...", nil, emit("session-options"))
+	add(opts, "Session Options...", "session-options")
 	opts.AddText("Global Options...", keys.CmdOrCtrl(","), emit("global-options"))
 	opts.AddSeparator()
-	opts.AddText("Passwords & Credentials...", nil, emit("passwords"))
-	opts.AddText("Set Up Key Login / Generate Key...", nil, emit("key-setup"))
+	add(opts, "Passwords & Credentials...", "passwords")
+	add(opts, "Set Up Key Login / Generate Key...", "key-setup")
 
 	tabs := m.AddSubmenu("Tab")
-	tabs.AddText("Compare Outputs...", nil, emit("compare"))
+	add(tabs, "Compare Outputs...", "compare")
 	tabs.AddSeparator()
 	tabs.AddText("Next Tab", keys.Control("tab"), emit("next-tab"))
-	tabs.AddText("Send Command to All Tabs...", nil, emit("send-all"))
-	tabs.AddText("Send Break", nil, emit("send-break"))
+	tabs.AddText("Previous Tab", keys.Combo("tab", keys.ControlKey, keys.ShiftKey), emit("prev-tab"))
+	add(tabs, "Send Command to All Tabs...", "send-all")
+	add(tabs, "Send Break", "send-break")
 	tabs.AddSeparator()
-	tabs.AddText("Lock Session", nil, emit("lock"))
-	tabs.AddText("Lock All Sessions", nil, emit("lock-all"))
+	add(tabs, "Lock Session", "lock")
+	add(tabs, "Lock All Sessions", "lock-all")
 
 	help := m.AddSubmenu("Help")
-	help.AddText("Welcome...", nil, emit("welcome"))
-	help.AddText("User Guide", nil, emit("user-guide"))
-	help.AddText("Check for Updates...", nil, emit("check-updates"))
-	help.AddText("Keyboard Shortcuts", nil, emit("shortcuts"))
-	help.AddText("About Termwright", nil, emit("about"))
+	add(help, "Welcome...", "welcome")
+	add(help, "User Guide", "user-guide")
+	add(help, "Check for Updates...", "check-updates")
+	add(help, "Keyboard Shortcuts", "shortcuts")
+	add(help, "About Termwright", "about")
 	return m
 }

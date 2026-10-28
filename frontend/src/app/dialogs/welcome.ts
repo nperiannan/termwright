@@ -5,6 +5,9 @@ import { Ui } from '../core/ui.service';
 import { UI_SIZES, uiFontSize } from '../core/ui-fonts';
 import { Icon } from '../components/icon';
 
+/** The welcome flow shows once per version that changes it (new installs and updates). */
+export const WELCOME_VERSION = '0.21';
+
 interface FileKind { label: string; title: string; filters: FileFilter[]; folder?: boolean; }
 
 /** First run: theme and text size, import sessions from another terminal
@@ -46,7 +49,8 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
         }
         @case (1) {
           <h2>Bring your sessions</h2>
-          <p class="sub">Import the sessions, folders and saved passwords of the terminal program you use today.</p>
+          <p class="sub">Import the sessions, folders and saved passwords of the terminal program you use today.
+            @if (have()) { You already have {{ have() }} sessions - import more, or continue. }</p>
           @if (sources() === null) {
             <p class="muted">Looking for other terminal programs on this computer…</p>
           } @else if (sources()!.length) {
@@ -149,6 +153,14 @@ export class Welcome {
   /** Source path → "148 sessions imported". */
   readonly done = signal<Record<string, string>>({});
   readonly imported = signal(0);
+  /** Sessions already in the Session Manager. */
+  readonly have = computed(() => {
+    let n = 0;
+    const walk = (x: { isFolder: boolean; children?: unknown[] | null }) => (x.children as typeof x[] ?? []).forEach(c => (c.isFolder ? walk(c) : n++));
+    const r = this.ui.tree();
+    if (r) walk(r);
+    return n;
+  });
   readonly keys = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac OS') ? '⌘G' : 'Ctrl+Shift+G';
 
   readonly themes = [
@@ -208,7 +220,7 @@ export class Welcome {
   moreImport() { this.finish('import'); }
 
   finish(then?: 'discover' | 'import') {
-    this.ui.patchSettings({ onboarded: true });
+    this.ui.patchSettings({ welcomeSeen: WELCOME_VERSION });
     this.ui.close();
     if (then) this.ui.open(then);
   }

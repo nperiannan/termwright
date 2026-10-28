@@ -6,6 +6,8 @@ import { DeviceType, DiscoverResult, MovedDevice, SessionNode } from '../core/mo
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { Moved } from './moved';
+import { FolderPicker } from '../components/folder-picker';
+import { Icon } from '../components/icon';
 
 interface Row extends DiscoverResult { selected: boolean; exists: boolean; deviceType: string; open?: boolean; touched?: boolean; }
 
@@ -19,11 +21,12 @@ const ACK_KEY = 'termwright.discoverAck';
  */
 @Component({
   selector: 'app-discover-dialog',
-  imports: [FormsModule, DeviceIcon, Moved],
+  imports: [FormsModule, DeviceIcon, Moved, FolderPicker, Icon],
   template: `
   <div class="modal-backdrop">
     <div class="modal disc">
-      <div class="modal-head">Discover Devices</div>
+      <div class="modal-head"><span class="dh-ic"><app-icon name="pulse" [size]="18" /></span>
+        <span class="dh-t">Discover Devices<span class="dh-s">Find the devices on a network and add them as sessions - nothing logs in</span></span></div>
       <div class="modal-body">
         <div class="grid">
           <label>Addresses</label>
@@ -148,8 +151,7 @@ const ACK_KEY = 'termwright.discoverAck';
       <div class="modal-foot">
         @if (rows().length) {
           <label class="inline">Add to folder</label>
-          <input class="folder" [(ngModel)]="folder" list="disc-folders" placeholder="(top level)" />
-          <datalist id="disc-folders">@for (f of folders(); track f) { <option [value]="f"></option> }</datalist>
+          <app-folder-picker class="folder" [(value)]="folder" />
         }
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Close</button>
@@ -188,7 +190,40 @@ const ACK_KEY = 'termwright.discoverAck';
     .svc { display: inline-block; font-size: calc(10.5px * var(--ui-scale, 1)); padding: 0 5px; margin: 1px 3px 1px 0; border-radius: 8px; border: 1px solid var(--border); color: var(--muted); }
     .svc.login { color: #fff; background: #0d9488; border-color: transparent; }
     .tag { white-space: nowrap; font-size: calc(10.5px * var(--ui-scale, 1)); margin-left: 6px; padding: 0 6px; border-radius: 8px; background: var(--hover); color: var(--muted); font-weight: 400; }
-    .folder { width: 220px; }
+    .folder { width: 280px; }
+    .dh-ic { display: none; }
+    .dh-s { display: none; }
+    /* ---- modern layout ---- */
+    :host-context(.modern) {
+      .disc { width: min(1160px, 95vw); }
+      .modal-head { display: flex; align-items: center; gap: 12px; }
+      .dh-ic { display: inline-flex; width: 34px; height: 34px; border-radius: 9px; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); }
+      .dh-t { display: flex; flex-direction: column; } .dh-s { display: block; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 400; color: var(--muted); }
+      .grid { grid-template-columns: 90px 1fr; }
+      .disc .specrow > input.spec { height: 36px; font-family: var(--mono); flex-basis: 380px; width: 380px; border-radius: var(--r); }
+      .specrow button { height: 36px; padding: 0 20px; border-radius: var(--r); }
+      .bar { margin: 16px 0 10px; }
+      .bar progress { appearance: none; -webkit-appearance: none; height: 6px; width: 260px; border: 0; border-radius: 3px; overflow: hidden; background: var(--surface-2); }
+      .bar progress::-webkit-progress-bar { background: var(--surface-2); border-radius: 3px; }
+      .bar progress::-webkit-progress-value { background: var(--accent); border-radius: 3px; }
+      .tbl { border-color: var(--line); border-radius: var(--r-lg); background: var(--surface); }
+      table.list { margin: 0; border-collapse: separate; border-spacing: 0; }
+      th { background: var(--surface-2); color: var(--faint); font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+        padding: 8px 8px; border-bottom: 1px solid var(--line); }
+      td { padding: 7px 8px; border-bottom: 1px solid var(--line); }
+      tbody tr:last-child td { border-bottom: 0; }
+      tbody tr:hover td { background: var(--hover); }
+      app-device-icon { transform: scale(1.35); transform-origin: center; display: inline-flex; margin: 0 4px; }
+      td .hint { font-size: calc(11px * var(--ui-scale, 1)); }
+      .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); }
+      .svc { border-radius: 99px; padding: 1px 7px; font-weight: 600; }
+      .svc.login { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+      .tag { border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); }
+      td select { height: 28px; border-radius: var(--r-sm); }
+      .save { margin-top: 12px; }
+      .chip { border-radius: 99px; padding: 3px 10px; }
+      .movedbar { border-radius: var(--r); }
+    }
     .save { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 10px; font-size: calc(12.5px * var(--ui-scale, 1)); }
     .save select { max-width: 330px; }
     .chip { display: inline-flex; gap: 5px; align-items: center; padding: 2px 8px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }

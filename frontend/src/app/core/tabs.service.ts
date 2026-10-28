@@ -8,6 +8,7 @@ import { AlertEvent, DeviceFacts, RemoteInfo, Session, TabInfo, Transfer, isRemo
 import { Ui } from './ui.service';
 import { envOf } from './env';
 import { HtmlKeyword, bufferHtml } from './buffer-html';
+import { screenPng } from './screen-image';
 
 export interface TabView {
   id: string;
@@ -712,6 +713,22 @@ export class Tabs {
 
   /** Writes the full scrollback buffer of the active tab to a text file. */
   /** Saves the scrollback as plain text, or as an HTML page with the colors as shown. */
+  /** Saves the visible screen of a terminal tab as a PNG image. */
+  async captureScreen(id = this.activeId()) {
+    const t = this.get(id);
+    const h = this.handles.get(id);
+    if (!t || !h || t.kind !== 'terminal') { this.ui.toast('Open a terminal tab first.', 'info'); return; }
+    try {
+      const png = screenPng(h.term, h.keywords?.() ?? []);
+      const d = new Date(), z = (n: number) => String(n).padStart(2, '0');
+      const name = `${(t.title || 'screen').replace(/[\\/:*?"<>|]+/g, '_')}-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}.png`;
+      const path = await this.backend.chooseSaveFile('Save Screen As Image', name, [{ displayName: 'PNG image', pattern: '*.png' }]);
+      if (!path) return;
+      await this.backend.saveBase64File(path, png);
+      this.ui.toast('Screen saved: ' + path, 'success');
+    } catch (e) { this.ui.error(e); }
+  }
+
   async saveScrollback(id = this.activeId(), format: 'text' | 'html' = 'text') {
     const h = this.handles.get(id);
     const t = this.get(id);

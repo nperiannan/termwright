@@ -9,7 +9,7 @@ import { SessionIcon } from './components/session-icon';
 import { DeviceIcon, deviceKindOf } from './components/device-icon';
 import { sessionAddr } from './components/session-tree';
 import { SessionPanel } from './components/session-panel';
-import { menuBar } from './core/menu';
+import { menuBar, shortcutOf } from './core/menu';
 import { envInfo, envOf } from './core/env';
 import { Ui } from './core/ui.service';
 import { uiFontSize, uiFontStack } from './core/ui-fonts';
@@ -43,7 +43,7 @@ import { FolderDefaults, Workspaces, saveWorkspace } from './dialogs/workspaces'
 import { Compare } from './dialogs/compare';
 import { ExportDialog, ImportDialog } from './dialogs/import-export';
 import { About, Overlays } from './dialogs/overlays';
-import { Welcome } from './dialogs/welcome';
+import { WELCOME_VERSION, Welcome } from './dialogs/welcome';
 
 @Component({
   selector: 'app-root',
@@ -259,7 +259,7 @@ export class App implements OnInit {
     if (info.initError) this.ui.toast('Startup error: ' + info.initError, 'error', 20000);
     await this.ui.loadSettings();
     if (info.locked) { this.ui.locked.set(true); this.ui.open('passwords'); }
-    else if (this.ui.settings() && !this.ui.settings()!.onboarded) this.ui.open('welcome');
+    else if (this.ui.settings() && this.ui.settings()!.welcomeSeen !== WELCOME_VERSION) this.ui.open('welcome');
     await this.ui.refreshTree();
     await this.tabs.restoreTabs();
     void this.startupUpdateCheck();
@@ -409,6 +409,8 @@ export class App implements OnInit {
       case 'shortcuts': this.ui.open('shortcuts'); break;
       case 'about': this.ui.open('about'); break;
       case 'welcome': this.ui.open('welcome'); break;
+      case 'new-session': await this.ui.newSession(this.ui.currentFolder()); break;
+      case 'capture-screen': await this.tabs.captureScreen(); break;
     }
   }
 
@@ -496,7 +498,8 @@ export class App implements OnInit {
         ...(t.castFile ? [{ label: 'Add Marker...', hint: this.isMac ? '⌘J' : 'Ctrl+Shift+J', action: () => this.tabs.addMarker(t.id) }] : []),
       ] : []),
       { label: 'Save Scrollback As...', action: () => this.tabs.saveScrollback(t.id) },
-      ...(t.kind === 'terminal' ? [{ label: 'Save Scrollback As HTML...', action: () => this.tabs.saveScrollback(t.id, 'html') }] : []),
+      ...(t.kind === 'terminal' ? [{ label: 'Save Scrollback As HTML...', action: () => this.tabs.saveScrollback(t.id, 'html') },
+        { label: 'Save Screen As Image...', hint: shortcutOf('capture-screen', this.isMac), action: () => this.tabs.captureScreen(t.id) }] : []),
       ...(t.kind === 'terminal' ? [{ label: 'Compare With...', action: () => this.compareMenu(ev, t) }] : []),
       ...(t.kind === 'terminal' ? [
         { label: (t.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.tabs.patch(t.id, { timestamps: !t.timestamps }) },
