@@ -208,6 +208,11 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   @for (k of s.keywordSets ?? []; track $index) { <option [value]="k.name">{{ k.name }}</option> }
                 </select>
                 <label></label><div class="hint">Off (None) by default. Pick a set, e.g. <b>Network</b>, to highlight errors, up / down and addresses in every session; Session Options → Terminal → <i>Keyword highlighting</i> picks one for a single session.</div>
+                <label>Style</label>
+                <select name="hls" [ngModel]="s.highlightStyle || ''" (ngModelChange)="s.highlightStyle = $event">
+                  <option value="">Colour the text (up in green, down in red)</option>
+                  <option value="background">Colour the background behind the text</option>
+                </select>
                 <label>Edit set</label>
                 <div class="row">
                   <select name="kse" [ngModel]="kwIndex()" (ngModelChange)="kwIndex.set(+$event)">

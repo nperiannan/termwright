@@ -27,7 +27,7 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Quick Open...', action: 'quick-open', keys: k('G') }, { sep: true },
       { label: 'Session Manager', action: 'toggle-session-manager', keys: k('M') }, { label: 'Session Manager Left / Right', action: 'toggle-session-manager-side' }, { label: 'Command Window', action: 'toggle-command-window', keys: k('K') },
       { label: 'Button Bar', action: 'toggle-button-bar', keys: k('B') }, { label: 'Connect Bar', action: 'toggle-connect-bar' },
-      { label: 'Menu Bar in Window', action: 'toggle-window-menu' }, { sep: true },
+      { label: 'Menu Bar in Window', action: 'toggle-window-menu' }, { label: 'Modern / Classic Layout', action: 'toggle-layout' }, { sep: true },
       { label: 'Tabbed', action: 'layout-tabs' }, { label: 'Tile Side by Side', action: 'layout-tile-v' },
       { label: 'Tile Stacked', action: 'layout-tile-h' }, { label: 'Tile Grid', action: 'layout-grid' }, { sep: true },
       { label: 'Zoom In', action: 'zoom-in', keys: isMac ? '⌘=' : 'Ctrl+=' }, { label: 'Zoom Out', action: 'zoom-out', keys: isMac ? '⌘-' : 'Ctrl+-' },

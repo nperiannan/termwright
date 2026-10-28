@@ -71,6 +71,7 @@ type Settings struct {
 	HighlightOptIn       bool                 `json:"highlightOptIn"`      // set once when keyword highlighting became off by default (0.20.3)
 	Layout               string               `json:"layout"`              // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
 	ModernLayout         bool                 `json:"modernLayout"`        // set once when the modern layout became the default (0.21.0)
+	HighlightStyle       string               `json:"highlightStyle"`      // keyword highlighting: "" = colour the text, "background" = colour the background
 	CompactRows          bool                 `json:"compactRows"`         // modern layout: one-line Session Manager rows
 	Onboarded            bool                 `json:"onboarded"`           // the welcome flow was finished or skipped (0.21.0)
 	HideTerminalBar      bool                 `json:"hideTerminalBar"`     // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs

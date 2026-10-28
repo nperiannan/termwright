@@ -75,7 +75,7 @@ export function bufferHtml(term: Terminal, keywords: HtmlKeyword[] = []): { html
       while ((m = k.re.exec(text)) && guard++ < 200) {
         if (!m[0].length) { k.re.lastIndex++; continue; }
         const a = cellAt(m.index), b = cellAt(m.index + m[0].length - 1);
-        for (let i = a; i <= b; i++) cells[i].style = (cells[i].style ? cells[i].style + ';' : '') + `background:${k.color};color:${k.fg}`;
+        for (let i = a; i <= b; i++) cells[i].style = (cells[i].style ? cells[i].style + ";" : "") + (k.color ? `background:${k.color};` : "") + `color:${k.fg}`;
       }
     }
     // trailing blanks without a background are dropped

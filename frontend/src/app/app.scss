@@ -163,3 +163,12 @@ app-command-window { flex: none; }
   .cago { margin-left: auto; padding-left: var(--sp-2); flex: none; white-space: nowrap; font-size: calc(11px * var(--ui-scale, 1)); color: var(--faint); }
   .env { flex: none; font-size: calc(9px * var(--ui-scale, 1)); font-weight: 700; letter-spacing: .03em; color: #fff; padding: 0 4px; border-radius: 3px; line-height: 14px; } }
 .home-hint { color: var(--muted); text-align: center; margin-top: var(--sp-5); }
+
+/* status bar (modern) */
+.status.modern { height: 26px; background: var(--surface); border-top-color: var(--line); font-size: calc(11.5px * var(--ui-scale, 1));
+  .state { display: inline-flex; align-items: center; gap: 6px; color: var(--muted);
+    .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+    &.connected { color: var(--ok); .sdot { background: var(--ok); } }
+    &.connecting { color: var(--warn); .sdot { background: var(--warn); } }
+    &.error { color: var(--danger); .sdot { background: var(--danger); } }
+    &::first-letter { text-transform: none; } } }

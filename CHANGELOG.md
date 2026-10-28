@@ -6,7 +6,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## 0.21.0 (unreleased)
 
-A cleaner, more modern look. Global Options → General → Layout switches back to the **Classic** layout (toolbar, tab strip and menu bar) at any time.
+A cleaner, more modern look, now the default. The **Classic** layout (toolbar, tab strip and menu bar) stays: switch at any time with View → Modern / Classic Layout, the ⋯ menu, Quick Open or Global Options → General → Layout.
 
 * **Title bar**: the tabs (with a status dot and badges), a **Search or connect** box (Quick Open), Quick Connect, SFTP, the layout menu, the theme switch, Global Options and a **⋯** menu with File, Edit, View, Transfer, Tools and Help. On macOS the tabs share the title bar with the window buttons (after a restart when the layout is changed).
 * **Quick Open connects**: type an address or a connect line (`ssh admin@10.1.1.1`, `voss 10.1.1.1`, `telnet host 2001`, `serial COM3 115200`) and Enter connects.
@@ -16,6 +16,8 @@ A cleaner, more modern look. Global Options → General → Layout switches back
 * **Running scripts** show as a pill in the title bar with a Stop button.
 * **Many tabs**: tabs keep their names and scroll sideways (mouse wheel or trackpad); the active tab is always scrolled into view.
 * **Compact Session Manager** (Global Options → General, or ⋯ → Compact Session Manager): one line per session, as in the classic layout, for long lists.
+* **Terminal** (modern layout): more room around the text, the cursor in the accent colour, a lighter terminal bar and a tidier status bar (state, protocol · user@host:port, device type, size).
+* **Keyword highlighting colours the text** (up in green, down in red, addresses in blue) instead of the background; Global Options → Keyword Highlighting → Style brings the coloured background back.
 * **Connecting card**: while a session connects for the first time, a card shows each step (opening the connection or the jump host, checking the host key, logging in, starting the shell).
 * **Error card**: when a session cannot connect, a card shows the reason, a hint and Try Again, Edit Session, Find by MAC Address and the other fixes.
 * **Welcome flow** on a new install (Help → Welcome… shows it again): pick the theme, text size and layout; import sessions - SecureCRT, PuTTY, SuperPuTTY, MobaXterm and OpenSSH sessions found in their usual places are listed with an Import button, export files (SecureCRT .xml/.zip or Config folder, PuTTY/KiTTY .reg, SuperPuTTY Sessions.xml, MobaXterm, CSV) are one click away; then a few tips to get started.

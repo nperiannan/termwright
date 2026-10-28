@@ -142,6 +142,16 @@ export class App implements OnInit {
     this.ui.open('palette');
   }
 
+  /** Status bar (modern): "SSH2 · admin@10.1.1.1:22", "Serial · COM3 115200". */
+  statusTarget(t: TabView) {
+    const s = t.session;
+    if (t.kind === 'sftp') return 'SFTP · ' + (t.info || s.hostname);
+    if (s.protocol === 'Serial') return `Serial · ${s.comPort} ${s.baudRate || ''}`.trim();
+    if (s.protocol === 'Local Shell') return 'Local shell';
+    if (!s.hostname) return t.info;
+    return `${s.protocol} · ${s.username ? s.username + '@' : ''}${s.hostname}${s.port ? ':' + s.port : ''}` + (s.jumpSession ? ' · via ' + s.jumpSession.split('/').pop() : '');
+  }
+
   scriptNames() { return this.tabs.scripts().map(x => x.name).join(', '); }
 
   /** Title bar tabs: the mouse wheel scrolls them sideways when they do not fit. */
@@ -184,7 +194,7 @@ export class App implements OnInit {
       { label: (s?.showButtonBar ? '✓ ' : '') + 'Button Bar', action: () => void this.action('toggle-button-bar') },
       { label: (s?.compactRows ? '✓ ' : '') + 'Compact Session Manager', action: () => this.ui.patchSettings({ compactRows: !s?.compactRows }) },
       { separator: true },
-      { label: 'Classic Layout (toolbar and menus)', action: () => this.ui.patchSettings({ layout: 'classic' }) },
+      { label: 'Switch to the Classic Layout (toolbar and menus)', action: () => void this.action('toggle-layout') },
     ]);
   }
 
@@ -367,6 +377,13 @@ export class App implements OnInit {
       case 'lock': await this.tabs.lock(false); break;
       case 'lock-all': await this.tabs.lock(true); break;
       case 'toggle-window-menu': this.ui.patchSettings({ inWindowMenu: !s?.inWindowMenu }); break;
+      case 'toggle-layout': {
+        const toClassic = s?.layout !== 'classic';
+        this.ui.patchSettings({ layout: toClassic ? 'classic' : '' });
+        this.ui.toast((toClassic ? 'Classic layout' : 'Modern layout') + ' - View → Modern / Classic Layout switches back'
+          + (this.isMac ? '. The window title bar follows when Termwright restarts.' : ''), 'info', 6000);
+        break;
+      }
       case 'toggle-connect-bar': this.ui.patchSettings({ showConnectBar: !s?.showConnectBar }); break;
       case 'shortcuts': this.ui.open('shortcuts'); break;
       case 'about': this.ui.open('about'); break;

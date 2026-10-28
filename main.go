@@ -169,6 +169,7 @@ func buildMenu(app *App) *menu.Menu {
 	view.AddText("Button Bar", acc("b"), emit("toggle-button-bar"))
 	view.AddText("Connect Bar", nil, emit("toggle-connect-bar"))
 	view.AddText("Menu Bar in Window", nil, emit("toggle-window-menu"))
+	view.AddText("Modern / Classic Layout", nil, emit("toggle-layout"))
 	view.AddSeparator()
 	view.AddText("Tabbed", nil, emit("layout-tabs"))
 	view.AddText("Tile Side by Side", nil, emit("layout-tile-v"))

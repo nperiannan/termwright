@@ -17,6 +17,23 @@ import { History, commandOfLine } from '../core/history.service';
 import { FormsModule } from '@angular/forms';
 
 /** Black or white, whichever is more readable on the given background. */
+/** The keyword colour as text on the terminal: the same hue, light enough
+ *  on a dark terminal and dark enough on a light one. */
+function textTone(hex: string, lightTerm: boolean): string {
+  const n = parseInt(hex.slice(1), 16);
+  let [r, g, b] = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  const sat = d ? Math.max(0.6, d / (1 - Math.abs(mx + mn - 1))) : 0;
+  const l = lightTerm ? 0.38 : 0.64;
+  const c = (1 - Math.abs(2 * l - 1)) * Math.min(sat, 0.85), x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  const to = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+  return '#' + to(r) + to(g) + to(b);
+}
+
 function contrastText(hex: string): string {
   const n = parseInt(hex.slice(1), 16);
   const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -49,6 +66,7 @@ function b64ToBytes(b64: string): Uint8Array {
 @Component({
   selector: 'app-terminal-view',
   imports: [FormsModule],
+  host: { '[class.modern]': "ui.settings()?.layout !== 'classic'" },
   template: `<div class="term-host" #host (contextmenu)="onContextMenu($event)"></div>
     @if (tab().autoScroll === false) {
       <div class="paused" title="New output does not move the view">Auto scroll is off <button type="button" (click)="setAutoScroll(true)">Turn On</button></div>
@@ -156,6 +174,9 @@ function b64ToBytes(b64: string): Uint8Array {
       .port { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         font-family: var(--mono); font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--text); padding: 2px 8px; border: 1px solid var(--border); border-radius: 12px;
         .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; } &.on .dot { background: var(--ok, #22c55e); } } }
+    :host(.modern) { padding: 12px 0 0 16px;
+      .sendbar { margin: 8px 0 0 -16px; min-height: 34px; padding: 4px 12px; background: var(--surface); border-top-color: var(--line);
+        button { border-radius: var(--r-sm); background: var(--surface-2); border-color: var(--line); } } }
     .sendbar.compact { padding: 2px 8px; button { height: 20px; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 0 8px; } }
     .fixbar { position: absolute; top: 10px; right: 14px; z-index: 5; max-width: min(520px, 80%); padding: 10px 12px; border-radius: 8px;
       background: var(--panel); color: var(--text); border: 1px solid var(--border); border-left: 4px solid var(--danger); box-shadow: var(--shadow); font-size: calc(12.5px * var(--ui-scale, 1)); }
@@ -330,10 +351,16 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       const sess = this.tab().session;
       t.options.fontFamily = sess.fontFamily || s.fontFamily;
       t.options.fontSize = sess.fontSize > 0 ? sess.fontSize + (s.fontSize - 14) : s.fontSize;
-      this.compileKeywords();
       t.options.cursorStyle = s.cursorStyle;
       t.options.cursorBlink = s.cursorBlink;
-      t.options.theme = terminalTheme(this.tab().session.colorScheme, s, this.ui.lightUi());
+      const theme = terminalTheme(this.tab().session.colorScheme, s, this.ui.lightUi());
+      // modern layout with the automatic scheme: the cursor takes the accent colour
+      if (s.layout !== 'classic' && !sess.colorScheme && (s.terminalScheme || 'Auto') === 'Auto') {
+        theme.cursor = s.accentColor || (this.ui.lightUi() ? '#1f6fd6' : '#4f9cf7');
+        theme.cursorAccent = String(theme.background);
+      }
+      t.options.theme = theme;
+      this.compileKeywords();
       this.host().nativeElement.parentElement?.style.setProperty('--term-bg', String(t.options.theme.background));
       this.scheduleFit();
     });
@@ -514,12 +541,17 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     const want = this.tab().session.keywordSet || s?.defaultKeywordSet || '';
     const set = want === 'None' ? undefined : (s?.keywordSets ?? []).find(k => k.name === want);
     this.keywords = [];
+    const textStyle = s?.highlightStyle !== 'background';
+    const bg = String(this.term?.options.theme?.background ?? '#1b1c1f');
+    const lightTerm = /^#[0-9a-f]{6}$/i.test(bg) && contrastText(bg) === '#000000';
     for (const k of set?.keywords ?? []) {
       if (!k.text) continue;
       try {
         const src = k.regex ? k.text : k.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const color = /^#[0-9a-f]{6}$/i.test(k.color) ? k.color : '#6b5310';
-        this.keywords.push({ re: new RegExp(src, k.caseSensitive ? 'g' : 'gi'), color, fg: contrastText(color) });
+        this.keywords.push(textStyle
+          ? { re: new RegExp(src, k.caseSensitive ? 'g' : 'gi'), color: '', fg: textTone(color, lightTerm) }
+          : { re: new RegExp(src, k.caseSensitive ? 'g' : 'gi'), color, fg: contrastText(color) });
       } catch { /* invalid regex: skip */ }
     }
     this.clearHighlights();
@@ -573,7 +605,9 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       if (!marker) continue;
       const decos: IDecoration[] = [];
       for (const h of hits) {
-        const d = term.registerDecoration({ marker, x: h.x, width: h.w, backgroundColor: h.color, foregroundColor: h.fg, layer: 'top' });
+        const d = term.registerDecoration(h.color
+          ? { marker, x: h.x, width: h.w, backgroundColor: h.color, foregroundColor: h.fg, layer: 'top' }
+          : { marker, x: h.x, width: h.w, foregroundColor: h.fg });
         if (d) decos.push(d);
       }
       kept.set(y, { marker, text, decos });

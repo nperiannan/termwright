@@ -238,6 +238,22 @@
   <app-command-window [style.height.px]="cmdHeight()" />
 }
 
+@if (modern()) {
+<footer class="status modern">
+  <span class="state" [class]="'state ' + (active()?.state ?? '')"><span class="sdot"></span>{{ stateLabel(active()) }}</span>
+  @if (active(); as t) {
+    <span class="info" [title]="t.info">{{ statusTarget(t) }}</span>
+    @if (t.session.deviceType) { <span>{{ t.session.deviceType }}</span> }
+    <span class="grow"></span>
+    @if (t.logFile) { <span class="log" [title]="t.logFile">● Logging</span> }
+    @if (t.kind === 'terminal') { <span>{{ t.cols }} × {{ t.rows }}</span> }
+  } @else {
+    <span class="grow"></span>
+  }
+  @if (activeXfer(); as x) { <span class="xfer" [title]="x.file">⇅ {{ x.direction }} {{ pct(x) }}%</span> }
+  @if (tabs.connectedCount() > 1) { <span>{{ tabs.connectedCount() }} connected</span> }
+</footer>
+} @else {
 <footer class="status">
   <span class="state" [class]="active()?.state ?? ''">{{ stateLabel(active()) }}</span>
   @if (active(); as t) {
@@ -257,6 +273,7 @@
   }
   <span>{{ tabs.connectedCount() }} connected</span>
 </footer>
+}
 
 @switch (ui.dialog()) {
   @case ('sessionEditor') { <app-session-editor /> }
