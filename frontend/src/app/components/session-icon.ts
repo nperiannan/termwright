@@ -1,18 +1,19 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
+import { Ui } from '../core/ui.service';
 
 /** Kinds of session icons: each has its own color and symbol so sessions are told apart at a glance. */
 export type SessionKind = 'ssh' | 'sftp' | 'telnet' | 'serial' | 'console' | 'shell' | 'raw' | 'rdp' | 'vnc' | 'folder' | 'folder-open';
 
 const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: string; to: string; title: string }> = {
-  ssh: { from: '#10b981', to: '#0d9488', title: 'SSH2 terminal' },
-  sftp: { from: '#3b82f6', to: '#6366f1', title: 'SFTP file browser' },
-  telnet: { from: '#f59e0b', to: '#ea580c', title: 'Telnet (not encrypted)' },
-  serial: { from: '#a855f7', to: '#7c3aed', title: 'Serial console' },
-  console: { from: '#8b5cf6', to: '#4338ca', title: 'Console server port' },
-  shell: { from: '#64748b', to: '#334155', title: 'Local shell' },
-  raw: { from: '#ec4899', to: '#be185d', title: 'Raw TCP' },
-  rdp: { from: '#0ea5e9', to: '#1d4ed8', title: 'Remote Desktop (RDP)' },
-  vnc: { from: '#14b8a6', to: '#0369a1', title: 'VNC remote screen' },
+  ssh: { from: '#34d399', to: '#059669', title: 'SSH2 terminal' },
+  sftp: { from: '#60a5fa', to: '#4f46e5', title: 'SFTP file browser' },
+  telnet: { from: '#fbbf24', to: '#ea580c', title: 'Telnet (not encrypted)' },
+  serial: { from: '#c084fc', to: '#7c3aed', title: 'Serial console' },
+  console: { from: '#a78bfa', to: '#4338ca', title: 'Console server port' },
+  shell: { from: '#94a3b8', to: '#334155', title: 'Local shell' },
+  raw: { from: '#f472b6', to: '#be185d', title: 'Raw TCP' },
+  rdp: { from: '#38bdf8', to: '#1d4ed8', title: 'Remote Desktop (RDP)' },
+  vnc: { from: '#2dd4bf', to: '#0369a1', title: 'VNC remote screen' },
 };
 
 /**
@@ -25,7 +26,7 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
   template: `
     <svg viewBox="0 0 16 16" [attr.width]="size()" [attr.height]="size()" aria-hidden="true">
       <defs>
-        <linearGradient [attr.id]="gid()" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient [attr.id]="gid()" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" [style.stop-color]="from()" />
           <stop offset="1" [style.stop-color]="to()" />
         </linearGradient>
@@ -42,9 +43,9 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
           <path d="M5 10.6h4.6" stroke="#fff" stroke-opacity=".85" stroke-width="1.1" stroke-linecap="round" />
         }
         @default {
-          <rect x="1" y="1.5" width="14" height="13" rx="3.4" [attr.fill]="url()" />
-          <rect x="1" y="1.5" width="14" height="6" rx="3.4" fill="#fff" fill-opacity=".14" />
-          <g fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          @if (!glyph()) { <path d="M8 .4C2 .4.4 2 .4 8s1.6 7.6 7.6 7.6 7.6-1.6 7.6-7.6S14 .4 8 .4z" [attr.fill]="url()" /> }
+          <g fill="none" [attr.stroke]="glyph() ? tone() : '#fff'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+             [attr.transform]="glyph() ? 'translate(-1.6 -1.6) scale(1.2)' : null">
             @switch (kind()) {
               @case ('ssh') { <path d="M4.2 5.6l2.4 2.4-2.4 2.4M8.3 10.6h3.6" /> }
               @case ('sftp') { <path d="M5.6 11.3V4.9M3.8 6.6l1.8-1.8 1.8 1.8M10.4 4.7v6.4M8.6 9.4l1.8 1.8 1.8-1.8" /> }
@@ -80,4 +81,8 @@ export class SessionIcon {
   readonly from = computed(() => this.spec().from);
   readonly to = computed(() => this.spec().to);
   readonly title = computed(() => this.spec().title || null);
+  private ui = inject(Ui);
+  /** View → Glyph Icons: the symbol in its colour, no tile. */
+  readonly glyph = computed(() => this.ui.settings()?.iconStyle === 'glyph');
+  readonly tone = computed(() => (this.ui.lightUi() ? this.to() : this.from()));
 }

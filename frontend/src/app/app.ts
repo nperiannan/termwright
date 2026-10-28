@@ -213,6 +213,7 @@ export class App implements OnInit {
       { label: (s?.showCommandWindow ? '✓ ' : '') + 'Command Window', action: () => void this.action('toggle-command-window') },
       { label: (s?.showButtonBar ? '✓ ' : '') + 'Button Bar', action: () => void this.action('toggle-button-bar') },
       { label: (s?.compactRows ? '✓ ' : '') + 'Compact Session Manager', action: () => this.ui.patchSettings({ compactRows: !s?.compactRows }) },
+      { label: (s?.iconStyle === 'glyph' ? '✓ ' : '') + 'Glyph Icons (no tiles)', action: () => void this.action('toggle-icon-style') },
       { separator: true },
       { label: 'Switch to the Classic Layout (toolbar and menus)', action: () => void this.action('toggle-layout') },
     ]);
@@ -398,6 +399,7 @@ export class App implements OnInit {
       case 'lock': await this.tabs.lock(false); break;
       case 'lock-all': await this.tabs.lock(true); break;
       case 'toggle-window-menu': this.ui.patchSettings({ inWindowMenu: !s?.inWindowMenu }); break;
+      case 'toggle-icon-style': this.ui.patchSettings({ iconStyle: s?.iconStyle === 'glyph' ? '' : 'glyph' }); break;
       case 'toggle-layout': {
         const toClassic = s?.layout !== 'classic';
         this.ui.patchSettings({ layout: toClassic ? 'classic' : '' });

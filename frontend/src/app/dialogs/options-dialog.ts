@@ -105,6 +105,12 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                     <option value="">Modern - tabs and search in the title bar</option><option value="classic">Classic - toolbar, tab strip and menu bar</option>
                   </select>
                   @if (isMac) { <div class="hint">On macOS the window's own title bar changes the next time Termwright starts.</div> }
+                </div>
+                <label>Icons</label>
+                <div>
+                  <select name="icons" [ngModel]="s.iconStyle || ''" (ngModelChange)="s.iconStyle = $event">
+                    <option value="">Coloured tiles - the device in white on its colour</option><option value="glyph">Glyphs - the device in its colour, no tile</option>
+                  </select>
                   @if (s.layout !== 'classic') {
                     <label class="inline-check" style="margin-top: 6px"><input type="checkbox" name="compact" [ngModel]="!!s.compactRows" (ngModelChange)="s.compactRows = $event" />
                       Compact Session Manager (one line per session - more sessions in view)</label>

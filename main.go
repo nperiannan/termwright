@@ -201,6 +201,7 @@ func buildMenu(app *App) *menu.Menu {
 	add(view, "Connect Bar", "toggle-connect-bar")
 	add(view, "Menu Bar in Window", "toggle-window-menu")
 	add(view, "Modern / Classic Layout", "toggle-layout")
+	add(view, "Tile / Glyph Icons", "toggle-icon-style")
 	view.AddSeparator()
 	add(view, "Tabbed", "layout-tabs")
 	add(view, "Tile Side by Side", "layout-tile-v")

@@ -1,21 +1,51 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
+import { Ui } from '../core/ui.service';
 
 /** Kinds of discovered devices. */
 export type DeviceKind = 'computer' | 'server' | 'nas' | 'phone' | 'mobile' | 'iot' | 'printer' | 'switch' | 'router' | 'firewall' | 'wireless' | 'unknown';
 
 export const DEVICE_KINDS: Record<DeviceKind, { from: string; to: string; label: string }> = {
-  switch: { from: '#14b8a6', to: '#0f766e', label: 'Network switch' },
-  router: { from: '#8b5cf6', to: '#6d28d9', label: 'Router' },
-  firewall: { from: '#ef4444', to: '#b91c1c', label: 'Firewall' },
-  wireless: { from: '#ec4899', to: '#be185d', label: 'Wireless access point' },
-  server: { from: '#64748b', to: '#334155', label: 'Server (Linux/Unix)' },
-  computer: { from: '#0ea5e9', to: '#2563eb', label: 'Computer' },
-  nas: { from: '#eab308', to: '#a16207', label: 'NAS / storage' },
-  phone: { from: '#22c55e', to: '#15803d', label: 'IP phone' },
-  mobile: { from: '#06b6d4', to: '#0e7490', label: 'Mobile phone / tablet' },
-  iot: { from: '#84cc16', to: '#4d7c0f', label: 'IoT / embedded board' },
-  printer: { from: '#f97316', to: '#c2410c', label: 'Printer' },
-  unknown: { from: '#94a3b8', to: '#64748b', label: 'Unknown device' },
+  switch: { from: '#2dd4bf', to: '#0d9488', label: 'Network switch' },
+  router: { from: '#a78bfa', to: '#7c3aed', label: 'Router' },
+  firewall: { from: '#fb7185', to: '#e11d48', label: 'Firewall' },
+  wireless: { from: '#f472b6', to: '#db2777', label: 'Wireless access point' },
+  server: { from: '#94a3b8', to: '#475569', label: 'Server (Linux/Unix)' },
+  computer: { from: '#60a5fa', to: '#2563eb', label: 'Computer' },
+  nas: { from: '#fcd34d', to: '#d97706', label: 'NAS / storage' },
+  phone: { from: '#4ade80', to: '#16a34a', label: 'IP phone' },
+  mobile: { from: '#22d3ee', to: '#0891b2', label: 'Mobile phone / tablet' },
+  iot: { from: '#a3e635', to: '#65a30d', label: 'IoT / embedded board' },
+  printer: { from: '#fdba74', to: '#ea580c', label: 'Printer' },
+  unknown: { from: '#cbd5e1', to: '#64748b', label: 'Unknown device' },
+};
+
+/** Device shapes on a 24 grid: a solid body, cut-outs (filled), lines, status lights. */
+interface Glyph { body: string; cut?: string; cutLine?: string; line?: string; leds?: [number, number][]; }
+const GLYPHS: Record<DeviceKind, Glyph> = {
+  switch: { body: 'M3 8.5A2.5 2.5 0 0 1 5.5 6h13A2.5 2.5 0 0 1 21 8.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 15.5z',
+    cut: 'M5.8 12.6h1.8v2H5.8zM8.9 12.6h1.8v2H8.9zM12 12.6h1.8v2H12zM15.1 12.6h1.8v2h-1.8z', cutLine: 'M15 9.2h3', leds: [[6.4, 9.2], [8.4, 9.2]] },
+  router: { body: 'M3 13.5A2.5 2.5 0 0 1 5.5 11h13a2.5 2.5 0 0 1 2.5 2.5v3a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5zM6 4.6a1 1 0 1 1 2 0V11H6zM16 4.6a1 1 0 1 1 2 0V11h-2z',
+    cutLine: 'M15.5 15h2', leds: [[7, 15], [9.6, 15], [12.2, 15]] },
+  firewall: { body: 'M12 2.8 19.5 5.6v5.6c0 4.4-3 7.8-7.5 9.6-4.5-1.8-7.5-5.2-7.5-9.6V5.6z',
+    cutLine: 'M6.6 9.6h10.8M7.2 13.4h9.6M12 9.6v3.8M9.4 6.4v3.2M14.6 6.4v3.2M9.6 13.4v3.4M14.4 13.4v3.4' },
+  wireless: { body: 'M4 16.2c0-1.5 3.6-2.7 8-2.7s8 1.2 8 2.7-3.6 2.8-8 2.8-8-1.3-8-2.8z',
+    line: 'M8.2 10.2a5.4 5.4 0 0 1 7.6 0M5.6 7.6a9 9 0 0 1 12.8 0', leds: [[12, 16.2]] },
+  server: { body: 'M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v2A2.5 2.5 0 0 1 17.5 11h-11A2.5 2.5 0 0 1 4 8.5zM4 15.5A2.5 2.5 0 0 1 6.5 13h11a2.5 2.5 0 0 1 2.5 2.5v2a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z',
+    cutLine: 'M11 7.5h5.6M11 16.5h5.6', leds: [[7.4, 7.5], [7.4, 16.5]] },
+  computer: { body: 'M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 13.5z',
+    cut: 'M5.4 6.4h13.2v7.2H5.4z', line: 'M9 20h6M12 16v4' },
+  nas: { body: 'M5 5.5A2.5 2.5 0 0 1 7.5 3h9A2.5 2.5 0 0 1 19 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 18.5z',
+    cut: 'M8 6h8v2.6H8zM8 10.4h8V13H8z', leds: [[12, 17]] },
+  phone: { body: 'M4 11.5A2.5 2.5 0 0 1 6.5 9h11a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5zM5 7.4C5 5 8 3.6 12 3.6s7 1.4 7 3.8V8h-3.2V6.8c-1-.5-2.3-.7-3.8-.7s-2.8.2-3.8.7V8H5z',
+    cut: 'M7.4 12.4h2v1.6h-2zM11 12.4h2v1.6h-2zM14.6 12.4h2v1.6h-2zM7.4 15.6h2v1.6h-2zM11 15.6h2v1.6h-2zM14.6 15.6h2v1.6h-2z' },
+  mobile: { body: 'M8 2h8a2.5 2.5 0 0 1 2.5 2.5v15A2.5 2.5 0 0 1 16 22H8a2.5 2.5 0 0 1-2.5-2.5v-15A2.5 2.5 0 0 1 8 2z',
+    cut: 'M7.6 4.6h8.8v12.6H7.6z', leds: [[12, 19.5]] },
+  iot: { body: 'M7.5 5h9A2.5 2.5 0 0 1 19 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 16.5v-9A2.5 2.5 0 0 1 7.5 5z',
+    cut: 'M9.5 9.5h5v5h-5z', line: 'M9 2v3M12 2v3M15 2v3M9 19v3M12 19v3M15 19v3M2 9h3M2 12h3M2 15h3M19 9h3M19 12h3M19 15h3' },
+  printer: { body: 'M7 3h10v4.6H7zM3 11.5A2.5 2.5 0 0 1 5.5 9h13a2.5 2.5 0 0 1 2.5 2.5v4a2.5 2.5 0 0 1-2.5 2.5H18v-3H6v3h-.5A2.5 2.5 0 0 1 3 15.5zM7.4 16.4h9.2V21H7.4z',
+    leds: [[17.6, 11.8]] },
+  unknown: { body: 'M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z',
+    cutLine: 'M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4', leds: [[12, 16.8]] },
 };
 
 /** The kind of device a session's device type names ("VOSS" → switch,
@@ -36,44 +66,51 @@ export function deviceKindOf(deviceType: string | undefined): DeviceKind | '' {
   return '';
 }
 
-/** Device icons for discovery results: a gradient tile with a white symbol per kind. */
+/** Device icons: a vivid squircle with the device in white (default), or
+ *  just the device in its colour (View → Glyph Icons). */
 @Component({
   selector: 'app-device-icon',
   template: `
-    <svg viewBox="0 0 16 16" [attr.width]="size()" [attr.height]="size()" aria-hidden="true">
-      <defs>
-        <linearGradient [attr.id]="gid()" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" [style.stop-color]="spec().from" />
-          <stop offset="1" [style.stop-color]="spec().to" />
-        </linearGradient>
-      </defs>
-      <rect x=".8" y=".8" width="14.4" height="14.4" rx="3.6" [attr.fill]="url()" />
-      <rect x=".8" y=".8" width="14.4" height="6.4" rx="3.6" fill="#fff" fill-opacity=".14" />
-      <g fill="none" stroke="#fff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
-        @switch (kind()) {
-          @case ('computer') { <rect x="3.4" y="3.8" width="9.2" height="6.2" rx=".8" /><path d="M6.4 12.3h3.2M8 10v2.3" /> }
-          @case ('server') { <rect x="3.8" y="3.4" width="8.4" height="3.8" rx=".8" /><rect x="3.8" y="8.8" width="8.4" height="3.8" rx=".8" /><path d="M5.7 5.3h.01M5.7 10.7h.01M8 5.3h2.4M8 10.7h2.4" /> }
-          @case ('nas') { <rect x="3.6" y="3.2" width="8.8" height="9.6" rx="1" /><path d="M5.4 5.8h5.2M5.4 8h5.2M5.4 10.2h2.4" /><path d="M10.4 10.2h.01" stroke-width="1.6" /> }
-          @case ('phone') { <path d="M3.6 6.4c0-1.4 2-2.4 4.4-2.4s4.4 1 4.4 2.4" /><rect x="4.6" y="7.4" width="6.8" height="4.8" rx="1" /><path d="M6.6 9.2h.01M8 9.2h.01M9.4 9.2h.01M6.6 10.6h.01M8 10.6h.01M9.4 10.6h.01" stroke-width="1.3" /> }
-          @case ('mobile') { <rect x="5" y="2.6" width="6" height="10.8" rx="1.3" /><path d="M7.2 4.4h1.6" /><path d="M8 11.6h.01" stroke-width="1.6" /> }
-          @case ('iot') { <rect x="5" y="5" width="6" height="6" rx=".8" /><path d="M6.6 3v2M9.4 3v2M6.6 11v2M9.4 11v2M3 6.6h2M3 9.4h2M11 6.6h2M11 9.4h2" /><path d="M8 8h.01" stroke-width="1.6" /> }
-          @case ('printer') { <path d="M5 6V3.6h6V6" /><rect x="3.2" y="6" width="9.6" height="4.6" rx=".9" /><path d="M5.2 9.2h5.6v3.4H5.2z" /> }
-          @case ('switch') { <path d="M4 4.2h7.4M9.6 2.7l1.8 1.5-1.8 1.5M12 7H4.6M6.4 5.5L4.6 7l1.8 1.5" stroke-width="1.1" /><rect x="2.2" y="9.4" width="11.6" height="4" rx=".8" /><g fill="#fff" stroke="none"><rect x="3.6" y="10.7" width="1.4" height="1.3" rx=".2" /><rect x="5.6" y="10.7" width="1.4" height="1.3" rx=".2" /><rect x="7.6" y="10.7" width="1.4" height="1.3" rx=".2" /><rect x="9.6" y="10.7" width="1.4" height="1.3" rx=".2" /><circle cx="12" cy="11.35" r=".5" /></g> }
-          @case ('router') { <circle cx="8" cy="8" r="4.8" /><path d="M5.6 6.7h4.6l-1.3-1.3M10.4 9.3H5.8l1.3 1.3" /> }
-          @case ('firewall') { <rect x="3.2" y="4" width="9.6" height="8" rx=".6" /><path d="M3.2 6.7h9.6M3.2 9.3h9.6M6.4 4v2.7M9.6 6.7v2.6M6.4 9.3V12" /> }
-          @case ('wireless') { <path d="M3.9 7a5.8 5.8 0 0 1 8.2 0M5.6 8.9a3.3 3.3 0 0 1 4.8 0" /><path d="M8 11.3h.01" stroke-width="2" /> }
-          @default { <path d="M6.3 6.2a1.75 1.75 0 1 1 2.5 1.6c-.5.3-.8.6-.8 1.2v.4" /><path d="M8 11.6h.01" stroke-width="1.8" /> }
-        }
-      </g>
+    <svg viewBox="0 0 24 24" [attr.width]="size()" [attr.height]="size()" aria-hidden="true">
+      @if (!glyph()) {
+        <defs>
+          <linearGradient [attr.id]="gid()" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" [style.stop-color]="spec().from" />
+            <stop offset="1" [style.stop-color]="spec().to" />
+          </linearGradient>
+        </defs>
+        <path d="M12 .4C3 .4.4 3 .4 12S3 23.6 12 23.6 23.6 21 23.6 12 21 .4 12 .4z" [attr.fill]="url()" />
+        <g transform="translate(3.6 3.6) scale(.7)">
+          <path [attr.d]="g().body" fill="#fff" />
+          @if (g().cut) { <path [attr.d]="g().cut" [attr.fill]="spec().to" fill-opacity=".85" /> }
+          @if (g().cutLine) { <path [attr.d]="g().cutLine" fill="none" [attr.stroke]="spec().to" stroke-width="1.6" stroke-linecap="round" /> }
+          @if (g().line) { <path [attr.d]="g().line" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" /> }
+          @for (l of g().leds ?? []; track $index) { <circle [attr.cx]="l[0]" [attr.cy]="l[1]" r="1.05" fill="#22c55e" /> }
+        </g>
+      } @else {
+        <g transform="translate(1 1) scale(.917)">
+          <path [attr.d]="g().body" [attr.fill]="tone()" fill-opacity=".26" [attr.stroke]="tone()" stroke-width="1.6" stroke-linejoin="round" />
+          @if (g().cut) { <path [attr.d]="g().cut" [attr.fill]="tone()" /> }
+          @if (g().cutLine) { <path [attr.d]="g().cutLine" fill="none" [attr.stroke]="tone()" stroke-width="1.6" stroke-linecap="round" /> }
+          @if (g().line) { <path [attr.d]="g().line" fill="none" [attr.stroke]="tone()" stroke-width="1.9" stroke-linecap="round" /> }
+          @for (l of g().leds ?? []; track $index) { <circle [attr.cx]="l[0]" [attr.cy]="l[1]" r="1.05" fill="#22c55e" /> }
+        </g>
+      }
     </svg>`,
   styles: [`:host { display: inline-flex; line-height: 0; flex: none; } svg { display: block; }`],
   host: { '[attr.title]': 'spec().label' },
 })
 export class DeviceIcon {
+  private ui = inject(Ui);
   readonly kind = input<string>('unknown');
   readonly size = input(18);
   private static seq = 0;
   readonly gid = computed(() => 'tw-di-' + this.kind() + '-' + DeviceIcon.seq++);
   readonly url = computed(() => `url(#${this.gid()})`);
   readonly spec = computed(() => DEVICE_KINDS[this.kind() as DeviceKind] ?? DEVICE_KINDS.unknown);
+  readonly g = computed(() => GLYPHS[this.kind() as DeviceKind] ?? GLYPHS.unknown);
+  /** View → Glyph Icons: no tile. */
+  readonly glyph = computed(() => this.ui.settings()?.iconStyle === 'glyph');
+  /** Glyph colour: the lighter end on a dark theme, the darker on a light one. */
+  readonly tone = computed(() => (this.ui.lightUi() ? this.spec().to : this.spec().from));
 }

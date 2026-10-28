@@ -71,6 +71,7 @@ type Settings struct {
 	Layout               string               `json:"layout"`              // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
 	ModernLayout         bool                 `json:"modernLayout"`        // set once when the modern layout became the default (0.21.0)
 	HighlightStyle       string               `json:"highlightStyle"`      // keyword highlighting: "" = colour the text, "background" = colour the background
+	IconStyle            string               `json:"iconStyle"`           // device and session icons: "" = coloured tiles, "glyph" = the symbol only
 	CompactRows          bool                 `json:"compactRows"`         // modern layout: one-line Session Manager rows
 	WelcomeSeen          string               `json:"welcomeSeen"`         // version whose welcome flow was finished or skipped ("0.21")
 	HideTerminalBar      bool                 `json:"hideTerminalBar"`     // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
