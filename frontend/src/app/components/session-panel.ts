@@ -230,6 +230,7 @@ export class SessionPanel {
       out.push({ page: 'terminal', icon: 'shell', label: 'Terminal & appearance', value: [s.keywordSet ? s.keywordSet + ' keywords' : '', s.colorScheme].filter(Boolean).join(' · ') || s.emulation || 'default' });
       out.push({ page: 'log', icon: 'log', label: 'Logging & recording', value: s.logFile ? 'on' : 'off' });
     }
+    if (['SSH2', 'Telnet'].includes(s.protocol)) out.push({ page: 'connection', icon: 'find', label: 'MAC address (find it when its IP changes)', value: s.mac || 'not saved' });
     if (s.protocol === 'SSH2') out.push({ page: 'auth', icon: 'key', label: 'Keys, certificates & smart cards', value: s.identityFile ? s.identityFile.split(/[\\/]/).pop()! : s.smartCard ? 'smart card' : 'none' });
     return out;
   };

@@ -380,6 +380,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
         'Check the address and the port of the session.',
         'The device may be off, or its address changed (DHCP)' + (s.mac ? ` - it was last seen with MAC ${s.mac}.` : '.'),
         `A firewall may block ${proto} from this computer, or a VPN may be needed.`,
+        ...(!s.mac && s.path && !s.jumpSession ? ['No MAC address is saved for this session, so it cannot be found by MAC. Save it in Session Options (MAC address), or run Discover Devices → Remember MAC Addresses while the device is reachable.'] : []),
       ];
     }
     const sum = this.errSummary(hint);
