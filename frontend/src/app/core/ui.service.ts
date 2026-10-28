@@ -57,7 +57,11 @@ export class Ui {
   /** Sources the Compare Outputs dialog starts with ('tab:<id>' or 'file'). */
   readonly compareWith = signal<[string, string] | null>(null);
   /** Session being edited and its original path ('' for new). */
-  readonly editing = signal<{ session: Session; oldPath: string; tabId?: string } | null>(null);
+  readonly editing = signal<{ session: Session; oldPath: string; tabId?: string; pw?: string } | null>(null);
+  /** Modern layout: the session being edited in the side panel. */
+  readonly panel = signal<{ session: Session; oldPath: string; tabId?: string } | null>(null);
+  /** Page the Session Options dialog opens at ('' = Connection). */
+  readonly editorPage = signal('');
 
   private toastSeq = 0;
   /** Set by the root component: runs a named action (menus, key map, buttons). */
@@ -126,22 +130,35 @@ export class Ui {
   open(d: DialogName) { this.dialog.set(d); }
   close() { this.dialog.set(null); this.editing.set(null); }
 
-  async newSession(folder = '') {
+  /** In the modern layout sessions are edited in a side panel (with a link to the full dialog). */
+  private usePanel(full: boolean) { return !full && this.settings()?.layout !== 'classic'; }
+
+  async newSession(folder = '', full = false) {
     try {
       const s = await this.backend.newSessionDefaults();
       s.folder = folder;
       s.name = '';
+      if (this.usePanel(full)) { this.panel.set({ session: s, oldPath: '' }); return; }
       this.editing.set({ session: s, oldPath: '' });
       this.dialog.set('sessionEditor');
     } catch (e) { this.error(e); }
   }
 
-  async editSession(path: string, tabId?: string) {
+  async editSession(path: string, tabId?: string, full = false) {
     try {
       const s = await this.backend.getSession(path);
+      if (this.usePanel(full)) { this.panel.set({ session: s, oldPath: path, tabId }); return; }
       this.editing.set({ session: s, oldPath: path, tabId });
       this.dialog.set('sessionEditor');
     } catch (e) { this.error(e); }
+  }
+
+  /** The full Session Options dialog for a session (from the side panel), at a page. */
+  openSessionDialog(session: Session, oldPath: string, tabId?: string, page = '', pw = '') {
+    this.panel.set(null);
+    this.editing.set({ session, oldPath, tabId, pw });
+    this.editorPage.set(page);
+    this.dialog.set('sessionEditor');
   }
 
   /** A session or folder node of the tree by path. */

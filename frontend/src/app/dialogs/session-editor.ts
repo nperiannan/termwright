@@ -12,6 +12,26 @@ import { SerialPortPicker } from '../components/serial-port-picker';
 
 type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote';
 
+/** Saves a session (and its password when one was typed or cleared),
+ *  refreshes the Session Manager, selects it and updates its open tabs. */
+export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Session, oldPath: string, tabId: string | undefined,
+  pw: { pw: string; noPw: boolean; wasEmpty: boolean }): Promise<Session> {
+  const setPw = (!s.deviceType || s.ownLogin) && (pw.pw !== '' || pw.noPw !== pw.wasEmpty);
+  if (setPw) s.savePassword = true;
+  const saved = await backend.saveSession(s, oldPath);
+  if (setPw) await backend.setSessionPassword(saved.path, pw.noPw ? '' : pw.pw, pw.noPw);
+  await ui.refreshTree();
+  ui.selectedPath.set(saved.path);
+  ui.selectedIsFolder.set(false);
+  for (const t of tabs.tabs()) {
+    if (t.session.path === oldPath || t.id === tabId) {
+      await backend.refreshTabSession(t.id, saved.path).catch(() => {});
+      tabs.patch(t.id, { session: saved, title: saved.name });
+    }
+  }
+  return saved;
+}
+
 /** Session Options dialog (create / edit a saved session). */
 @Component({
   selector: 'app-session-editor',
@@ -586,6 +606,9 @@ export class SessionEditor implements OnInit {
       this.backend.sessionPasswordState(e.oldPath).then(st => { this.pwState.set(st); this.noPw = st === 'empty'; this.cdr.markForCheck(); }).catch(() => {});
     }
     this.tabId = e.tabId;
+    const pg = this.ui.editorPage();
+    if (pg) { this.page.set(pg as Page); this.ui.editorPage.set(''); }
+    if (e.pw) { this.pw = e.pw; }
   }
 
   remote() { return this.s?.protocol === 'RDP' || this.s?.protocol === 'VNC'; }
@@ -742,19 +765,8 @@ export class SessionEditor implements OnInit {
     s.fontSize = Number(s.fontSize) || 0;
     if (s.jumpSession && s.jumpSession === this.oldPath) { this.page.set('firewall'); this.error.set('A session cannot be its own jump host.'); return; }
     try {
-      const setPw = (!s.deviceType || s.ownLogin) && (this.pw !== '' || this.noPw !== (this.pwState() === 'empty'));
-      if (setPw) s.savePassword = true;
-      const saved = await this.backend.saveSession(s, this.oldPath);
-      if (setPw) await this.backend.setSessionPassword(saved.path, this.noPw ? '' : this.pw, this.noPw);
-      await this.ui.refreshTree();
-      this.ui.selectedPath.set(saved.path);
-      this.ui.selectedIsFolder.set(false);
-      for (const t of this.tabs.tabs()) {
-        if (t.session.path === this.oldPath || t.id === this.tabId) {
-          await this.backend.refreshTabSession(t.id, saved.path).catch(() => {});
-          this.tabs.patch(t.id, { session: saved, title: saved.name });
-        }
-      }
+      const saved = await storeSession(this.ui, this.backend, this.tabs, s, this.oldPath, this.tabId,
+        { pw: this.pw, noPw: this.noPw, wasEmpty: this.pwState() === 'empty' });
       this.ui.close();
       if (connect) await this.tabs.openSession(saved.path);
     } catch (e) {

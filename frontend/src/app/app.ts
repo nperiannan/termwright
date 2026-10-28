@@ -8,6 +8,7 @@ import { ago } from './core/env';
 import { SessionIcon } from './components/session-icon';
 import { DeviceIcon, deviceKindOf } from './components/device-icon';
 import { sessionAddr } from './components/session-tree';
+import { SessionPanel } from './components/session-panel';
 import { menuBar } from './core/menu';
 import { envInfo, envOf } from './core/env';
 import { Ui } from './core/ui.service';
@@ -45,7 +46,7 @@ import { About, Overlays } from './dialogs/overlays';
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, Icon, SessionIcon, DeviceIcon, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
+  imports: [FormsModule, Icon, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
     PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About],
   templateUrl: './app.html',
   styleUrl: './app.scss',

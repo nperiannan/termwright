@@ -225,6 +225,7 @@
       }
     </div>
   </section>
+  @if (modern() && ui.panel(); as p) { <app-session-panel [edit]="p" /> }
 </div>
 
 @if (settings()?.showButtonBar) { <app-button-bar /> }
