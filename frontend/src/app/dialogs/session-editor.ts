@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { Backend, errText } from '../core/backend';
-import { BAUD_RATES, CONSOLE_METHODS, EMULATIONS, LogonAction, PROTOCOLS, Session, SessionNode, SmartCardKey, defaultPort } from '../core/models';
+import { BAUD_RATES, CONSOLE_METHODS, EMULATIONS, FACT_EVERY, FactRule, LogonAction, PROTOCOLS, Session, SessionNode, SmartCardKey, defaultPort } from '../core/models';
 import { SCHEME_NAMES } from '../core/themes';
 import { Tabs } from '../core/tabs.service';
 import { ENVIRONMENTS, envInfo, envOf } from '../core/env';
@@ -15,6 +15,7 @@ import { SessionIcon, SessionKind } from '../components/session-icon';
 import { FolderPicker } from '../components/folder-picker';
 import { FactTeach } from './fact-teach';
 import { factList, factsAge } from '../core/facts';
+import { testFactRegex } from '../core/fact-regex';
 
 type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote' | 'facts';
 
@@ -80,10 +81,35 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="hint">Save the session first - device facts are kept for saved sessions.</div>
                 } @else {
                   <div class="fnow">
-                    @for (f of factRows(); track f[0]) { <div class="fr"><span class="fk">{{ f[0] }}</span><span class="fv">{{ f[1] }}</span></div> }
-                    @empty { <div class="hint">Nothing read yet.</div> }
+                    @for (r of factTable(); track r.name) {
+                      @if (factEdit()?.orig === r.name) {
+                        <div class="fed">
+                          <div class="pair2"><label>Name<input name="fen" [(ngModel)]="factEdit()!.name" /></label>
+                            <label>Value for this session<input name="fev" class="mono" [(ngModel)]="factEdit()!.value" placeholder="(not read yet)" /></label></div>
+                          @if (s.deviceType) {
+                            <div class="pair2"><label>Command<input name="fec" class="mono" [(ngModel)]="factEdit()!.command" placeholder="e.g. show sys-info" spellcheck="false" /></label>
+                              <label>Read it<div class="seg"><button type="button" [class.on]="factEdit()!.every" (click)="factEdit()!.every = true">Every connect</button><button type="button" [class.on]="!factEdit()!.every" (click)="factEdit()!.every = false">Once</button></div></label></div>
+                            <label>Pattern (regular expression - the first ( ) group is the value)<input name="fer" class="mono" [(ngModel)]="factEdit()!.regex" spellcheck="false" /></label>
+                            @if (factOut() && factEdit()!.regex) {
+                              <div class="hint">In the output above: {{ testFact(factEdit()!.regex) ?? 'not found' }}</div>
+                            }
+                          }
+                          <div class="row"><span class="hint">{{ s.deviceType ? 'Name, command and pattern are kept with ' + s.deviceType + ' (all its sessions); the value only for this session.' : 'Without a device type only the value is kept.' }}</span><span class="spacer"></span>
+                            <button type="button" (click)="cancelFactEdit()">Cancel</button><button type="button" class="primary" (click)="saveFactEdit()">Save</button></div>
+                        </div>
+                      } @else {
+                        <div class="fr">
+                          <span class="fk">{{ r.name }}</span>
+                          <span class="fv">{{ r.value || '-' }}</span>
+                          <span class="fc" [title]="r.rule ? r.rule.regex : 'No rule: the value was saved by hand or the rule was removed'">{{ r.rule ? r.rule.command + (r.rule.every ? ' · every connect' : ' · once') : 'no rule' }}</span>
+                          <span class="fx"><button type="button" class="icon-btn" title="Edit" (click)="editFact(r)"><app-icon name="edit" [size]="14" /></button>
+                            <button type="button" class="icon-btn" title="Remove" (click)="removeFact(r)"><app-icon name="trash" [size]="14" /></button></span>
+                        </div>
+                      }
+                    } @empty { <div class="hint">Nothing read yet{{ s.deviceType ? '' : ' - choose the device type on the Connection page first' }}.</div> }
                     <div class="row fa"><span class="hint">{{ factAge() }}</span><span class="spacer"></span>
-                      <button type="button" (click)="refreshFacts()" [disabled]="factBusy() || !s.deviceType">{{ factBusy() === 'refresh' ? 'Reading…' : 'Read Now' }}</button></div>
+                      <button type="button" (click)="newFact()">Add by Hand…</button>
+                      <button type="button" (click)="refreshFacts()" [disabled]="!!factBusy() || !s.deviceType">{{ factBusy() === 'refresh' ? 'Reading…' : 'Read Now' }}</button></div>
                   </div>
                   <h4>Teach a new fact</h4>
                   @if (!s.deviceType) {
@@ -97,11 +123,6 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                       <div class="row"><span class="hint">{{ factPick() ? 'Selected: ' + factPick()!.value : 'Select the value in the output' }}</span><span class="spacer"></span>
                         <button type="button" class="primary" [disabled]="!factPick()" (click)="teachFromOutput()">Save Selection as Fact…</button></div>
                     }
-                  }
-                  @if (deviceRules().length) {
-                    <h4>Read for {{ s.deviceType }}</h4>
-                    <div class="hint">@for (r of deviceRules(); track r.name) { <b>{{ r.name }}</b> ({{ r.command }}, {{ r.every ? 'every connect' : 'once' }}){{ $last ? '' : ' · ' }} }
-                      <br />Change or remove them in Settings → Device Types.</div>
                   }
                 }
               </div>
@@ -582,8 +603,15 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
     .facts { display: flex; flex-direction: column; gap: 10px; max-width: 680px;
       h4 { margin: 10px 0 0; } .spacer { flex: 1; } }
     .fnow { border: 1px solid var(--line, var(--border)); border-radius: var(--r-lg, 8px); padding: 6px 12px; }
-    .fr { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line, var(--border));
-      .fk { color: var(--muted); } .fv { font-family: var(--mono); overflow-wrap: anywhere; } }
+    .fr { display: grid; grid-template-columns: 100px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 34px; border-bottom: 1px solid var(--line, var(--border));
+      .fk { color: var(--muted); } .fv { font-family: var(--mono); overflow-wrap: anywhere; }
+      .fc { color: var(--faint); font-family: var(--mono); font-size: calc(11.5px * var(--ui-scale, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .fx { display: flex; gap: 2px; } .icon-btn { width: 26px; height: 26px; color: var(--muted); } }
+    .fed { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line, var(--border));
+      label { display: flex; flex-direction: column; gap: 4px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); min-width: 0; }
+      input { min-height: 30px; } input.mono { font-family: var(--mono); }
+      .seg button { white-space: nowrap; } .spacer { flex: 1; } }
+    .pair2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .fa { padding: 6px 0 2px; }
     .row input.mono { flex: 1; font-family: var(--mono); }
     .fout { margin: 0; max-height: 260px; overflow: auto; padding: 9px 12px; border: 1px solid var(--line, var(--border)); border-radius: var(--r, 6px);
@@ -687,6 +715,74 @@ export class SessionEditor implements OnInit {
     this.teaching.set(true);
   }
   teachDone() { this.teaching.set(false); this.factPick.set(null); }
+  /** One row per fact: the device type's rules, then values without a rule. */
+  factTable(): { name: string; value: string; rule: FactRule | null }[] {
+    const vals = this.ui.factsOf(this.oldPath) ?? {};
+    const rules = this.deviceRules();
+    const rows: { name: string; value: string; rule: FactRule | null }[] = rules.map(r => ({ name: r.name, value: vals[r.name] ?? '', rule: r }));
+    for (const [k, v] of factList(vals)) if (!rules.some(r => r.name === k)) rows.push({ name: k, value: v, rule: null });
+    const add = this.adding();
+    if (add && !rows.some(r => r.name === add)) rows.push({ name: add, value: '', rule: null });
+    return rows;
+  }
+  /** A fact being added by hand (shown as a row until saved or cancelled). */
+  readonly adding = signal('');
+  readonly factEdit = signal<{ orig: string; name: string; value: string; command: string; regex: string; every: boolean } | null>(null);
+  testFact(re: string) { return testFactRegex(re, this.factOut()); }
+  editFact(r: { name: string; value: string; rule: FactRule | null }) {
+    this.factEdit.set({ orig: r.name, name: r.name, value: r.value, command: r.rule?.command ?? this.factCmd, regex: r.rule?.regex ?? '', every: r.rule?.every ?? FACT_EVERY.includes(r.name) });
+  }
+  async newFact() {
+    if (!this.oldPath) return;
+    const name = await this.ui.input('Add Device Fact', 'Name (e.g. Location, Boot ROM)');
+    if (!name?.trim()) return;
+    this.adding.set(name.trim());
+    this.factEdit.set({ orig: name.trim(), name: name.trim(), value: '', command: this.factCmd, regex: '', every: false });
+  }
+  private async saveRules(update: (facts: FactRule[]) => FactRule[]) {
+    const cur = this.ui.settings();
+    if (!cur || !this.s?.deviceType) return;
+    const types = structuredClone(cur.deviceTypes ?? []);
+    const d = types.find(t => t.name === this.s!.deviceType);
+    if (!d) return;
+    d.facts = update(d.facts ?? []);
+    await this.ui.saveSettings({ ...cur, deviceTypes: types });
+  }
+  async saveFactEdit() {
+    const e = this.factEdit();
+    if (!e || !this.oldPath) return;
+    const name = e.name.trim();
+    if (!name) { this.ui.toast('Give the fact a name.', 'info'); return; }
+    if (e.regex && !this.reOk(e.regex)) { this.ui.toast('The pattern is not a valid regular expression.', 'error'); return; }
+    try {
+      if (this.s?.deviceType && e.command.trim() && e.regex) {
+        const rule: FactRule = { name, command: e.command.trim(), regex: e.regex, every: e.every };
+        await this.saveRules(f => { const i = f.findIndex(x => x.name === e.orig); const out = f.filter(x => x.name !== e.orig && x.name !== name); out.splice(i < 0 ? out.length : Math.min(i, out.length), 0, rule); return out; });
+      } else if (this.s?.deviceType && e.orig !== name) {
+        await this.saveRules(f => f.map(x => x.name === e.orig ? { ...x, name } : x));
+      }
+      const v: Record<string, string> = { [name]: e.value.trim() };
+      if (e.orig !== name) v[e.orig] = '';
+      const f = await this.backend.setSessionFacts(this.oldPath, v);
+      if (f) this.ui.setFactsLocal(this.oldPath, f);
+      this.factEdit.set(null); this.adding.set('');
+    } catch (err) { this.ui.error(err); }
+  }
+  cancelFactEdit() { this.factEdit.set(null); this.adding.set(''); }
+  async removeFact(r: { name: string; rule: FactRule | null }) {
+    if (!this.oldPath) return;
+    const dt = this.s?.deviceType;
+    const msg = r.rule && dt
+      ? `Stop reading ${r.name} for every ${dt} session, and remove the value saved for this session?`
+      : `Remove ${r.name} from this session?`;
+    if (!(await this.ui.confirm('Remove Device Fact', msg, 'Remove', true))) return;
+    try {
+      if (r.rule && dt) await this.saveRules(f => f.filter(x => x.name !== r.name));
+      const f = await this.backend.setSessionFacts(this.oldPath, { [r.name]: '' });
+      if (f) this.ui.setFactsLocal(this.oldPath, f);
+    } catch (err) { this.ui.error(err); }
+  }
+  reOk(re: string) { try { new RegExp(re, 'm'); return true; } catch { return false; } }
 
   /** Under "Use the VOSS login": "admin, password saved". */
   loginSub() {

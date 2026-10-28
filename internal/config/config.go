@@ -575,7 +575,11 @@ func (m *Manager) SetFacts(path string, f map[string]string) map[string]string {
 		cur[k] = v
 	}
 	for k, v := range f {
-		cur[k] = v
+		if v == "" {
+			delete(cur, k) // an empty value removes the fact
+		} else {
+			cur[k] = v
+		}
 	}
 	s.DeviceFacts[path] = cur
 	_ = m.Save(s)

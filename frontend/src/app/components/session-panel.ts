@@ -101,7 +101,8 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
         @if (edit().oldPath && (s.protocol === 'SSH2' || s.protocol === 'Telnet')) {
           <div class="facts">
             <div class="fh"><span>Device facts</span><span class="age">{{ factsAge(ui.factsOf(edit().oldPath)) }}</span>
-              <button type="button" class="link" (click)="ui.refreshFacts(edit().oldPath, true)" title="Log in in the background and read the facts now">Refresh</button></div>
+              <button type="button" class="link" (click)="ui.refreshFacts(edit().oldPath, true)" title="Log in in the background and read the facts now">Refresh</button>
+              <button type="button" class="link" (click)="more('facts')" title="Change, remove or add device facts">Edit</button></div>
             @for (f of facts(); track f[0]) { <div class="fr"><span>{{ f[0] }}</span><b [class.mono]="f[0] === 'MAC'">{{ f[1] }}</b></div> }
             @empty { <div class="fr none">{{ s.deviceType ? 'Not read yet - they are read after connecting.' : 'Pick a device type to read model, version, MAC and uptime.' }}</div> }
           </div>
@@ -149,7 +150,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
       app-icon { color: var(--ok); } .chg { margin-left: auto; color: var(--accent); font-size: calc(12px * var(--ui-scale, 1)); } }
     .envf { width: 150px; flex: none; }
     .facts { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 8px 12px; display: flex; flex-direction: column; gap: 5px;
-      .fh { display: flex; align-items: center; gap: 8px; font-weight: 600; .age { color: var(--faint); font-weight: 400; font-size: calc(11.5px * var(--ui-scale, 1)); } .link { margin-left: auto; } }
+      .fh { display: flex; align-items: center; gap: 8px; font-weight: 600; .age { color: var(--faint); font-weight: 400; font-size: calc(11.5px * var(--ui-scale, 1)); } .link:first-of-type { margin-left: auto; } }
       .fr { display: flex; gap: 10px; font-size: calc(12.5px * var(--ui-scale, 1)); span { width: 64px; flex: none; color: var(--muted); } b { font-weight: 500; overflow-wrap: anywhere; } }
       .fr.none { color: var(--muted); }
       .mono { font-family: var(--mono); } }
