@@ -186,6 +186,9 @@ details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top
   .cat.so { display: flex; flex-direction: column; }
   .cat .osearch { height: 30px; padding-left: 28px; background: var(--input-bg) no-repeat 9px 50% / 14px 14px
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d9099' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
+  .checks .tx { display: flex; flex-direction: column; min-width: 0;
+    small { display: block; margin-top: 1px; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.35; } }
+  .modal-body .grid > label.cl { display: none; }
   /* lists of switches sit in a card */
   .modal-body .checks { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 2px 14px; background: var(--surface);
     > label:first-child { padding-top: 8px; } }

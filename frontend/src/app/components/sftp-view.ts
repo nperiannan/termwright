@@ -158,12 +158,13 @@ interface Pane {
           @if (t.resumable && (t.state === 'error' || t.state === 'cancelled')) { <button class="sbtn" title="Resume: continue partial files, skip completed ones" (click)="resume(t.id)">Resume</button> }
           @if (t.state === 'running') { <button class="sbtn" (click)="cancel(t.id)">Cancel</button> }
           @else { <button class="sbtn" (click)="clearDone()">Clear</button> }
+          <button class="icon-btn xclose" title="Close - transfers that are running go on in the background" (click)="closeTransfers()"><app-icon name="x" /></button>
         </div>
       }
-      @if (showQueue() && tabs.transfers().length > 1) {
-      @if (tabs.transfers().length) {
+      @if (showQueue() && shown().length > 1) {
+      @if (shown().length) {
         <div class="queue">
-          @for (t of tabs.transfers(); track t.id) {
+          @for (t of shown(); track t.id) {
             <div class="xfer" [class]="t.state">
               <span class="dir">{{ dirGlyph(t.direction) }}</span>
               <span class="file mono" [title]="t.file">{{ t.file }}</span>
@@ -177,13 +178,14 @@ interface Pane {
             </div>
           }
           <button class="clear" (click)="clearDone()">Clear finished</button>
+          <button class="clear" title="Close - transfers that are running go on in the background" (click)="closeTransfers()">Close</button>
         </div>
       }
       }
     } @else {
-      @if (tabs.transfers().length) {
+      @if (shown().length) {
         <div class="queue">
-          @for (t of tabs.transfers(); track t.id) {
+          @for (t of shown(); track t.id) {
             <div class="xfer" [class]="t.state">
               <span class="dir">{{ dirGlyph(t.direction) }}</span>
               <span class="file mono" [title]="t.file">{{ t.file }}</span>
@@ -197,6 +199,7 @@ interface Pane {
             </div>
           }
           <button class="clear" (click)="clearDone()">Clear finished</button>
+          <button class="clear" title="Close - transfers that are running go on in the background" (click)="closeTransfers()">Close</button>
         </div>
       }
     }
@@ -219,8 +222,17 @@ export class SftpView implements OnInit {
   /** The pane whose path is being typed (modern layout shows clickable folders otherwise). */
   readonly editing = signal<'' | 'local' | 'remote'>('');
   /** The transfer the bar shows: the first running one, else the latest. */
-  readonly current = computed(() => { const l = this.tabs.transfers(); return l.find(t => t.state === 'running') ?? l[l.length - 1] ?? null; });
-  readonly others = computed(() => Math.max(0, this.tabs.transfers().length - 1));
+  /** Transfers closed with ✕ (they go on; the bar shows again for a new one). */
+  private readonly closed = signal<Set<string>>(new Set());
+  readonly shown = computed(() => { const c = this.closed(); return this.tabs.transfers().filter(t => !c.has(t.id)); });
+  /** ✕ on the transfer status: finished transfers are cleared, running ones keep going in the background. */
+  closeTransfers() {
+    this.clearDone();
+    this.closed.update(c => new Set([...c, ...this.tabs.transfers().map(t => t.id)]));
+    this.showQueue.set(false);
+  }
+  readonly current = computed(() => { const l = this.shown(); return l.find(t => t.state === 'running') ?? l[l.length - 1] ?? null; });
+  readonly others = computed(() => Math.max(0, this.shown().length - 1));
   readonly showQueue = signal(false);
   private rates = new Map<string, { b: number; at: number; r: number }>();
   /** Bytes per second of a running transfer (smoothed). */

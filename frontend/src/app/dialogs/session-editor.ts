@@ -165,11 +165,17 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="row"><input name="mac" [(ngModel)]="s.mac" placeholder="(not saved)" spellcheck="false" style="max-width: 220px" />
                     <span class="hint">saved by Discover Devices: finds the device again when DHCP gives it a new address, and warns when another device answers at this address</span></div>
                 }
-                @if (s.deviceType) {
-                  <label class="o5">Login</label>
+                @if (s.deviceType || (modern() && !remote() && s.protocol !== 'Local Shell')) {
+                  <label class="o5">{{ modern() ? '' : 'Login' }}</label>
                   <div class="checks o5">
+                    @if (s.deviceType) {
                     <label><input type="checkbox" name="inherit" [ngModel]="!s.ownLogin" (ngModelChange)="s.ownLogin = !$event" />
-                      Use the device type's username and password{{ loginNote(s.deviceType, deviceUser()) }}</label>
+                      @if (modern()) { <span class="tx">Use the {{ s.deviceType }} login<small>{{ loginSub() }}</small></span> }
+                      @else { Use the device type's username and password{{ loginNote(s.deviceType, deviceUser()) }} }</label>
+                    }
+                    @if (modern() && !remote() && s.protocol !== 'Local Shell') {
+                      <label><input type="checkbox" name="arc2" [(ngModel)]="s.autoReconnect" /><span class="tx">Reconnect automatically<small>when the connection drops</small></span></label>
+                    }
                   </div>
                 }
                 @if (!s.deviceType || s.ownLogin) {
@@ -588,6 +594,11 @@ export class SessionEditor implements OnInit {
     return parts.length ? ' (' + parts.join(', ') + ')' : '';
   }
 
+  /** Under "Use the VOSS login": "admin, password saved". */
+  loginSub() {
+    const n = this.loginNote(this.s?.deviceType, this.deviceUser()).trim();
+    return n ? n.slice(1, -1) : 'the device type\'s username and password';
+  }
   deviceUser() { return (this.ui.settings()?.deviceTypes ?? []).find(d => d.name === this.s?.deviceType)?.username ?? ''; }
   pw = '';
   noPw = false;

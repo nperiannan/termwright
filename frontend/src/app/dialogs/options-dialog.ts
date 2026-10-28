@@ -124,16 +124,17 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="row"><input type="color" name="acc" class="swatch" [ngModel]="s.accentColor || '#4f9cf7'" (ngModelChange)="s.accentColor = $event" />
                   <button type="button" (click)="s.accentColor = ''">Default</button></div>
                 <h4 class="gsec">Behaviour</h4>
-                <label>Behavior</label>
+                <label class="cl">Behavior</label>
                 <div class="checks">
-                  <label><input type="checkbox" name="cc" [(ngModel)]="s.confirmClose" /> Confirm before closing connected tabs / quitting</label>
-                  <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" /> Confirm before pasting more than one line</label>
+                  <label><input type="checkbox" name="cc" [(ngModel)]="s.confirmClose" /> @if (modern()) { <span class="tx">Confirm before closing connected tabs<small>and before quitting</small></span> } @else { Confirm before closing connected tabs / quitting }</label>
+                  <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" /> @if (modern()) { <span class="tx">Confirm pasting more than one line<small>shows the lines first - production tabs always ask</small></span> } @else { Confirm before pasting more than one line }</label>
                   <label><input type="checkbox" name="rhist" [ngModel]="s.recordHistory !== false" (ngModelChange)="s.recordHistory = $event" />
-                    Remember typed commands for Command History and suggestions (never commands with passwords, secrets or keys)</label>
-                  <label><input type="checkbox" name="rt" [(ngModel)]="s.restoreTabs" /> Reopen the sessions that were open when Termwright was closed</label>
-                  <label><input type="checkbox" name="sm" [(ngModel)]="s.showSessionManager" /> Show Session Manager</label>
-                  <label><input type="checkbox" name="bb" [(ngModel)]="s.showButtonBar" /> Show Button Bar</label>
-                  <label><input type="checkbox" name="cw" [(ngModel)]="s.showCommandWindow" /> Show Command Window</label>
+                    @if (modern()) { <span class="tx">Remember typed commands<small>for Command History and suggestions - never commands with passwords, secrets or keys</small></span> }
+                    @else { Remember typed commands for Command History and suggestions (never commands with passwords, secrets or keys) }</label>
+                  <label><input type="checkbox" name="rt" [(ngModel)]="s.restoreTabs" /> @if (modern()) { <span class="tx">Reopen the tabs that were open<small>when Termwright starts</small></span> } @else { Reopen the sessions that were open when Termwright was closed }</label>
+                  <label><input type="checkbox" name="sm" [(ngModel)]="s.showSessionManager" /> @if (modern()) { <span class="tx">Show Session Manager<small>the session list on the left (or right)</small></span> } @else { Show Session Manager }</label>
+                  <label><input type="checkbox" name="bb" [(ngModel)]="s.showButtonBar" /> @if (modern()) { <span class="tx">Show Button Bar<small>buttons that send commands, under the terminal</small></span> } @else { Show Button Bar }</label>
+                  <label><input type="checkbox" name="cw" [(ngModel)]="s.showCommandWindow" /> @if (modern()) { <span class="tx">Show Command Window<small>type a command and send it to one or more tabs</small></span> } @else { Show Command Window }</label>
                   @if (s.layout === 'classic') {
                     <label><input type="checkbox" name="cbar" [(ngModel)]="s.showConnectBar" /> Show Connect Bar in the toolbar</label>
                     <label><input type="checkbox" name="iwm" [(ngModel)]="s.inWindowMenu" /> Show the menu bar inside the window (macOS also keeps the top-of-screen menu)</label>
