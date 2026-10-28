@@ -28,7 +28,7 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
     { title: 'Edit', items: [
       { label: 'Copy', action: 'copy', keys: k('C') }, { label: 'Paste', action: 'paste', keys: k('V') },
       { label: 'Copy and Paste', action: 'copy-paste' }, { label: 'Select All', action: 'select-all', keys: k('A') },
-      { label: 'Find...', action: 'find', keys: k('F') }, { sep: true },
+      { label: 'Find...', action: 'find', keys: k('F') }, { label: 'Save Selection as Device Fact...', action: 'teach-fact' }, { sep: true },
       { label: 'Clear Scrollback', action: 'clear-scrollback' }, { label: 'Clear Screen', action: 'clear-screen' },
       { label: 'Reset Terminal', action: 'reset' }, { sep: true },
       { label: 'Timestamps On / Off', action: 'toggle-timestamps' }, { label: 'Auto Scroll On / Off', action: 'toggle-autoscroll' },

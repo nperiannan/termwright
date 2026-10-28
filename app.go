@@ -26,6 +26,7 @@ import (
 	"github.com/termwright/termwright/internal/secretref"
 	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/session"
+	"github.com/termwright/termwright/internal/trash"
 	"github.com/termwright/termwright/internal/smartcard"
 	"github.com/termwright/termwright/internal/sshkey"
 	"github.com/termwright/termwright/internal/term"
@@ -789,6 +790,17 @@ func (a *App) LocalJoin(dir, name string) string { return filepath.Join(dir, nam
 
 // LocalMkdir creates a local folder.
 func (a *App) LocalMkdir(p string) error { return os.MkdirAll(p, 0o755) }
+
+// LocalTrash moves files or folders on this computer to the Trash (Recycle
+// Bin on Windows) - the SFTP browser's Delete in the local pane.
+func (a *App) LocalTrash(paths []string) error {
+	for _, p := range paths {
+		if err := trash.Move(p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // StartTransfer uploads ("up") or downloads ("down") files and folders.
 func (a *App) StartTransfer(sftpID, direction string, sources []string, destDir string) (string, error) {

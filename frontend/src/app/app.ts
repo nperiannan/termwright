@@ -449,6 +449,7 @@ export class App implements OnInit {
       case 'welcome': this.ui.open('welcome'); break;
       case 'new-session': await this.ui.newSession(this.ui.currentFolder()); break;
       case 'capture-screen': await this.tabs.captureScreen(); break;
+      case 'teach-fact': this.tabs.teachFact(); break;
     }
   }
 

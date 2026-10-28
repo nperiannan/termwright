@@ -34,6 +34,13 @@
   progress { width: 100%; accent-color: var(--accent); }
   &.done .st { color: var(--ok); } &.error .st { color: var(--danger); } }
 
+.bmbar { flex: none; display: flex; gap: 4px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; } }
+.bmc { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: calc(11.5px * var(--ui-scale, 1)); white-space: nowrap;
+  app-icon { color: #e5a93b; }
+  &.on { border-color: var(--accent); color: var(--accent); }
+  &.add { border-style: dashed; color: var(--muted); background: transparent; } }
+.del:not(:disabled):hover { color: var(--danger) !important; }
 .bm { font-size: calc(15px * var(--ui-scale, 1)); width: 26px; &.on { color: var(--accent); } }
 
 .via-jump { color: var(--muted); font-weight: normal; }
@@ -65,6 +72,8 @@
     header { height: 42px; gap: 4px; padding: 0 8px 0 10px; border-bottom: 1px solid var(--line);
       .label { padding: 0 4px 0 0; color: var(--muted); max-width: 30%; } }
     footer { border-top-color: var(--line); padding: 5px 12px; color: var(--faint); } }
+  .bmbar { border-bottom-color: var(--line); padding: 5px 10px; background: var(--surface); }
+  .bmc { background: var(--surface-2); border-color: var(--line); &.on { background: var(--accent-soft); border-color: var(--accent); } &.add { background: transparent; } }
   .icon-btn { width: 28px; height: 28px; border-radius: var(--r); color: var(--muted); &:hover { color: var(--text); } }
   .bm.on { color: var(--accent); }
   .crumb, .path { flex: 1; min-width: 100px; height: 28px; border: 1px solid var(--line); border-radius: var(--r); background: var(--input-bg); }

@@ -76,12 +76,14 @@ interface Pane {
               <button class="icon-btn" title="Up" (click)="up(p)"><app-icon name="up" /></button>
               <button class="icon-btn" title="Refresh" (click)="load(p)"><app-icon name="refresh" /></button>
               <button class="icon-btn" title="New folder" (click)="mkdir(p)"><app-icon name="folder-plus" /></button>
+              <button class="icon-btn del" [disabled]="!p.selected.size" [title]="delTitle(p)" (click)="remove(p)"><app-icon name="trash" /></button>
               <button class="icon-btn bm" [class.on]="isBookmarked(p)" title="Bookmarks" (click)="bookmarkMenu($event, p)"><app-icon name="star" /></button>
             } @else {
               <button class="icon-btn" title="Up" (click)="up(p)"><app-icon name="up" /></button>
               <input class="path mono" [ngModel]="p.dir" (keydown.enter)="go(p, $any($event.target).value)" spellcheck="false" />
               <button class="icon-btn" title="Refresh" (click)="load(p)"><app-icon name="refresh" /></button>
               <button class="icon-btn" title="New folder" (click)="mkdir(p)"><app-icon name="folder-plus" /></button>
+              <button class="icon-btn del" [disabled]="!p.selected.size" [title]="delTitle(p)" (click)="remove(p)"><app-icon name="trash" /></button>
               @if (p.side === 'remote') {
                 <button class="root-btn" [class.on]="tab().root" [disabled]="rootBusy()" (click)="runAsMenu($event)"
                   [title]="tab().root ? 'Browsing as ' + tab().runAsUser + '. Click to switch back or to another user.' : 'Browse as root or another user (sudo, su, …)'">
@@ -95,6 +97,13 @@ interface Pane {
               <button class="icon-btn bm" [class.on]="isBookmarked(p)" title="Bookmarks" (click)="bookmarkMenu($event, p)">{{ isBookmarked(p) ? '★' : '☆' }}</button>
             }
           </header>
+          <div class="bmbar">
+            @for (b of bookmarkList(p); track b.name + b.path) {
+              <button type="button" class="bmc" [class.on]="b.path === p.dir" [title]="b.path + ' - right-click to remove'"
+                (click)="go(p, b.path)" (contextmenu)="bookmarkChipMenu($event, p, b)"><app-icon name="star" [size]="12" />{{ b.name }}</button>
+            }
+            @if (!isBookmarked(p)) { <button type="button" class="bmc add" title="Bookmark this folder" (click)="addBookmark(p)">+ Bookmark</button> }
+          </div>
           <div class="list" tabindex="0" (keydown)="key($event, p)">
             <div class="row head"><span class="n">Name</span><span class="s">Size</span><span class="d">Modified</span><span class="m">Mode</span></div>
             @if (p.error) { <div class="err pad">{{ p.error }}</div> }
@@ -547,8 +556,16 @@ export class SftpView implements OnInit {
 
   async remove(p: Pane) {
     const sel = [...p.selected];
-    if (p.side !== 'remote' || !sel.length) return; // local deletion is intentionally not offered
-    if (!(await this.ui.confirm('Delete', `Delete ${sel.length} item(s) on the server? Folders are deleted with their contents.`, 'Delete', true))) return;
+    if (!sel.length) return;
+    const what = sel.length === 1 ? `"${sel[0]}"` : `${sel.length} items`;
+    if (p.side === 'local') {
+      // on this computer: to the Trash / Recycle Bin, so it can be put back
+      if (!(await this.ui.confirm('Move to Trash', `Move ${what} on this computer to the ${this.isWin ? 'Recycle Bin' : 'Trash'}?`, 'Move to Trash', true))) return;
+      try { await this.backend.localTrash(sel.map(n => this.join(p, n))); } catch (e) { this.ui.error(e); }
+      await this.load(p);
+      return;
+    }
+    if (!(await this.ui.confirm('Delete', `Delete ${what} on the server? This cannot be undone; folders are deleted with their contents.`, 'Delete', true))) return;
     try {
       for (const n of sel) await this.backend.sftpRemove(this.sid(), this.join(p, n));
     } catch (e) { this.ui.error(e); }
@@ -583,6 +600,7 @@ export class SftpView implements OnInit {
         ]
       : [
           { label: this.via() === 'scp' ? 'Upload (SCP)' : 'Upload', action: () => this.transfer('up') },
+          { label: 'Move to Trash', action: () => this.remove(cur) },
           { separator: true },
           { label: 'New Folder...', action: () => this.mkdir(cur) },
           { label: 'Refresh', action: () => this.load(cur) },
@@ -615,6 +633,19 @@ export class SftpView implements OnInit {
     return (this.ui.settings()?.bookmarks ?? []).filter(b => b.side === p.side && (p.side === 'local' || b.session === this.bmSession()));
   }
 
+  bookmarkList(p: Pane) { return this.bookmarks(p); }
+  bookmarkChipMenu(ev: MouseEvent, p: Pane, b: { name: string; path: string }) {
+    ev.preventDefault();
+    this.ui.showMenu(ev, [
+      { label: 'Open', action: () => this.go(this.sig(p)(), b.path) },
+      { label: `Remove Bookmark "${b.name}"`, action: () => this.saveBookmarks((this.ui.settings()?.bookmarks ?? []).filter(x => x !== b)) },
+    ]);
+  }
+  readonly isWin = navigator.userAgent.includes('Windows');
+  delTitle(p: Pane) {
+    if (!p.selected.size) return 'Delete - select files or folders first';
+    return p.side === 'local' ? `Move the selected item(s) to the ${this.isWin ? 'Recycle Bin' : 'Trash'} (Delete key)` : 'Delete the selected item(s) on the server (Delete key)';
+  }
   isBookmarked(p: Pane) { return this.bookmarks(p).some(b => b.path === p.dir); }
 
   bookmarkMenu(ev: MouseEvent, p: Pane) {

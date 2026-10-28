@@ -183,6 +183,7 @@ func buildMenu(app *App) *menu.Menu {
 	add(edit, "Copy and Paste", "copy-paste")
 	add(edit, "Select All", "select-all")
 	add(edit, "Find...", "find")
+	add(edit, "Save Selection as Device Fact...", "teach-fact")
 	edit.AddSeparator()
 	add(edit, "Clear Scrollback", "clear-scrollback")
 	add(edit, "Clear Screen", "clear-screen")

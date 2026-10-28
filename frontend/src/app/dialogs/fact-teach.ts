@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend } from '../core/backend';
 import { FACT_EVERY, FACT_NAMES, FactRule } from '../core/models';
@@ -13,14 +13,14 @@ import { Ui } from '../core/ui.service';
   selector: 'app-fact-teach',
   imports: [FormsModule],
   template: `
-  <div class="modal-backdrop">
-    <form class="ft" (ngSubmit)="save()" (keydown.escape)="ui.close()">
+  <div class="modal-backdrop" [class.nested]="embedded()">
+    <form class="ft" (ngSubmit)="save()" (keydown.escape)="close()">
       @if (input(); as i) {
         <div class="hd">
           <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M4 12h7M4 18h5"/><circle cx="17" cy="15" r="3.5"/><path d="M19.6 17.6 22 20"/></svg></div>
           <div class="tt"><div class="t">Save as Device Fact</div>
             <div class="s">Read for every <b>{{ dtName() || 'device type' }}</b> session after it connects - in the background, nothing is typed in your tab</div></div>
-          <button type="button" class="x" title="Close (Esc)" (click)="ui.close()">✕</button>
+          <button type="button" class="x" title="Close (Esc)" (click)="close()">✕</button>
         </div>
         <div class="bd">
           <div>
@@ -61,7 +61,7 @@ import { Ui } from '../core/ui.service';
         </div>
         <div class="foot">
           <span class="spacer"></span>
-          <button type="button" (click)="ui.close()">Cancel</button>
+          <button type="button" (click)="close()">Cancel</button>
           <button type="submit" class="primary" [disabled]="!canSave()">Save Fact</button>
         </div>
       }
@@ -93,7 +93,7 @@ import { Ui } from '../core/ui.service';
       .k { font-size: calc(11px * var(--ui-scale, 1)); color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
       input { flex: 1; min-width: 0; border: 0; background: transparent; height: 100%; padding: 0 8px 0 0; font-family: var(--mono); &:focus { border: 0; } } }
     .seg { display: inline-flex; padding: 2px; border: 1px solid var(--line, var(--border)); border-radius: var(--r, 6px); background: var(--surface-2, var(--tab));
-      button { height: 26px; padding: 0 12px; border: 0; border-radius: var(--r-sm, 5px); background: transparent !important; color: var(--muted); font-weight: 500; }
+      button { height: 26px; padding: 0 12px; border: 0; border-radius: var(--r-sm, 5px); background: transparent !important; color: var(--muted); font-weight: 500; white-space: nowrap; flex: none; }
       button.on { background: var(--surface, var(--panel)) !important; color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, .18), 0 0 0 1px var(--line, var(--border)); } }
     .res { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .ok, .bad { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: var(--r, 6px); font-weight: 600; }
@@ -107,6 +107,10 @@ import { Ui } from '../core/ui.service';
 export class FactTeach {
   protected ui = inject(Ui);
   private backend = inject(Backend);
+  /** Opened from Session Options (over it) instead of on its own. */
+  readonly embedded = input(false);
+  readonly done = output<boolean>();
+  close() { if (this.embedded()) this.done.emit(false); else this.ui.close(); }
   readonly names = FACT_NAMES;
   readonly input = this.ui.factTeach;
   readonly selected = computed(() => { const i = this.input(); return i ? i.line.substr(i.start, i.length).trim() : ''; });
@@ -169,6 +173,6 @@ export class FactTeach {
     const f = await this.backend.setSessionFacts(i.path, { [rule.name]: this.found() ?? '', _at: new Date().toISOString() }).catch(() => null);
     if (f) this.ui.setFactsLocal(i.path, f);
     this.ui.toast(`${rule.name} is now read for ${d.name} sessions`, 'success');
-    this.ui.close();
+    if (this.embedded()) this.done.emit(true); else this.ui.close();
   }
 }

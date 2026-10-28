@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -133,6 +134,51 @@ func (a *App) RefreshFacts(path string, all bool) (map[string]string, error) {
 		}
 	}
 	return a.cfg.SetFacts(path, got), nil
+}
+
+// RunFactCommand runs one command on a saved session in a background login
+// (nothing is typed in a tab) and returns what it printed, so a device fact
+// can be taught from Session Options. deviceType is the device type chosen in
+// the dialog (it may not be saved yet); its prompt ends the output.
+func (a *App) RunFactCommand(path, deviceType, command string) (string, error) {
+	if err := a.ready(); err != nil {
+		return "", err
+	}
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return "", fmt.Errorf("type a command first, e.g. show sys-info")
+	}
+	s, err := a.store.Get(path)
+	if err != nil {
+		return "", err
+	}
+	if deviceType != "" {
+		s.DeviceType = deviceType
+	}
+	s = a.withFolderDefaults(s)
+	if s.Protocol != session.ProtoSSH2 && s.Protocol != session.ProtoTelnet {
+		return "", fmt.Errorf("device facts are read over SSH2 or Telnet")
+	}
+	prompt := ""
+	if a.terms.DeviceType != nil && s.DeviceType != "" {
+		if dt, ok := a.terms.DeviceType(s.DeviceType); ok {
+			prompt = dt.Prompt
+		}
+	}
+	s2, err := a.consoleSession(s)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	outs, err := a.terms.CaptureEach(ctx, s2, []string{command}, prompt)
+	if err != nil {
+		return "", err
+	}
+	if len(outs) == 0 {
+		return "", nil
+	}
+	return outs[0], nil
 }
 
 // ApplyFactRules reads each rule's value from the output of its command

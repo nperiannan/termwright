@@ -52,6 +52,7 @@ export class Backend {
   saveSession(s: Session, oldPath: string) { return this.call<Session>('SaveSession', s, oldPath); }
   deleteSession(path: string) { return this.call<void>('DeleteSession', path); }
   refreshFacts(path: string, all: boolean) { return this.call<Record<string, string> | null>('RefreshFacts', path, all); }
+  runFactCommand(path: string, deviceType: string, command: string) { return this.call<string>('RunFactCommand', path, deviceType, command); }
   setSessionFacts(path: string, f: Record<string, string>) { return this.call<Record<string, string> | null>('SetSessionFacts', path, f); }
   clearRecent(path: string) { return this.call<Settings>('ClearRecent', path); }
   copySessionAs(path: string, openAs: string) { return this.call<Session>('CopySessionAs', path, openAs); }
@@ -155,6 +156,7 @@ export class Backend {
   localParent(p: string) { return this.call<string>('LocalParent', p); }
   localJoin(dir: string, name: string) { return this.call<string>('LocalJoin', dir, name); }
   localMkdir(p: string) { return this.call<void>('LocalMkdir', p); }
+  localTrash(paths: string[]) { return this.call<void>('LocalTrash', paths); }
   startTransfer(sftpId: string, dir: 'up' | 'down', sources: string[], dest: string) { return this.call<string>('StartTransfer', sftpId, dir, sources, dest); }
   cancelTransfer(id: string) { return this.call<void>('CancelTransfer', id); }
   resumeTransfer(id: string) { return this.call<string>('ResumeTransfer', id); }

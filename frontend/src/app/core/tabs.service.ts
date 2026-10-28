@@ -9,6 +9,7 @@ import { Ui } from './ui.service';
 import { envOf } from './env';
 import { HtmlKeyword, bufferHtml } from './buffer-html';
 import { screenPng } from './screen-image';
+import { commandOfLine } from './history.service';
 
 export interface TabView {
   id: string;
@@ -726,6 +727,38 @@ export class Tabs {
   }
 
   /** Saves the visible screen of a terminal tab as a PNG image. */
+  /** Save Selection as Device Fact: the selected value, its line and the
+   *  command above it in the scrollback go to the fact dialog. */
+  teachFact(id = this.activeId()) {
+    const t = this.get(id);
+    const term = this.handles.get(id)?.term;
+    if (!t || t.kind !== 'terminal') { this.ui.toast('Open a terminal tab first.', 'info'); return; }
+    if (!t.session.path) { this.ui.toast('Device facts are kept for saved sessions - save this session first.', 'info'); return; }
+    if (!term?.hasSelection()) { this.ui.toast('Select the value first (for example the version in the output of show sys-info), then choose Save Selection as Device Fact.', 'info'); return; }
+    const pos = term?.getSelectionPosition();
+    if (!term || !pos) return;
+    const sel = term.getSelection().split('\n')[0].replace(/\s+$/, '');
+    if (!sel.trim()) return;
+    const buf = term.buffer.active;
+    let row = -1, col = -1, line = '';
+    for (const y of [pos.start.y, pos.start.y - 1, pos.start.y + 1]) {
+      const l = buf.getLine(y)?.translateToString(true) ?? '';
+      const i = l.indexOf(sel, Math.max(0, pos.start.x - 2));
+      const j = i >= 0 ? i : l.indexOf(sel);
+      if (j >= 0) { row = y; col = j; line = l; break; }
+    }
+    if (row < 0) { this.ui.toast('Select the value on one line of the output.', 'info'); return; }
+    let cmdRow = -1, command = '';
+    for (let y = row - 1; y >= Math.max(0, row - 400); y--) {
+      const c = commandOfLine(buf.getLine(y)?.translateToString(true) ?? '');
+      if (c) { cmdRow = y; command = c; break; }
+    }
+    const out: string[] = [];
+    for (let y = cmdRow + 1; y <= Math.min(buf.length - 1, row + 40); y++) out.push(buf.getLine(y)?.translateToString(true) ?? '');
+    this.ui.factTeach.set({ path: t.session.path, deviceType: t.session.deviceType, line, start: col, length: sel.length, command, output: out.join('\n') });
+    this.ui.open('factTeach');
+  }
+
   async captureScreen(id = this.activeId()) {
     const t = this.get(id);
     const h = this.handles.get(id);

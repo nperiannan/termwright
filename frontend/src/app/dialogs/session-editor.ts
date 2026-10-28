@@ -13,8 +13,10 @@ import { Icon } from '../components/icon';
 import { DeviceIcon, deviceKindOf } from '../components/device-icon';
 import { SessionIcon, SessionKind } from '../components/session-icon';
 import { FolderPicker } from '../components/folder-picker';
+import { FactTeach } from './fact-teach';
+import { factList, factsAge } from '../core/facts';
 
-type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote';
+type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote' | 'facts';
 
 /** Saves a session (and its password when one was typed or cleared),
  *  refreshes the Session Manager, selects it and updates its open tabs. */
@@ -39,7 +41,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
 /** Session Options dialog (create / edit a saved session). */
 @Component({
   selector: 'app-session-editor',
-  imports: [FormsModule, Autofocus, SerialPortPicker, Icon, DeviceIcon, SessionIcon, FolderPicker],
+  imports: [FormsModule, Autofocus, SerialPortPicker, Icon, DeviceIcon, SessionIcon, FolderPicker, FactTeach],
   template: `
   @if (s) {
   <div class="modal-backdrop">
@@ -57,6 +59,9 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
           @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw' || remote()) {
             <a class="sub" [class.on]="page() === 'firewall'" (click)="page.set('firewall')" style="order: 4"><app-icon name="route" [size]="15" />Jump Host / Proxy</a>
           }
+          @if (s.protocol === 'SSH2' || s.protocol === 'Telnet') {
+            <a class="sub" [class.on]="page() === 'facts'" (click)="page.set('facts')" style="order: 7"><app-icon name="device" [size]="15" />Device Facts</a>
+          }
           @if (s.protocol === 'Serial') { <a class="sub" [class.on]="page() === 'serial'" (click)="page.set('serial')" style="order: 6"><app-icon name="serial" [size]="15" />Serial</a> }
           @if (s.protocol === 'Local Shell') { <a class="sub" [class.on]="page() === 'local'" (click)="page.set('local')" style="order: 7"><app-icon name="shell" [size]="15" />Local Shell</a> }
           @if (!remote()) {
@@ -69,6 +74,38 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
         <div class="modal-body">
           <h2 class="page-title">{{ pageName() }}</h2>
           @switch (page()) {
+            @case ('facts') {
+              <div class="facts">
+                @if (!oldPath) {
+                  <div class="hint">Save the session first - device facts are kept for saved sessions.</div>
+                } @else {
+                  <div class="fnow">
+                    @for (f of factRows(); track f[0]) { <div class="fr"><span class="fk">{{ f[0] }}</span><span class="fv">{{ f[1] }}</span></div> }
+                    @empty { <div class="hint">Nothing read yet.</div> }
+                    <div class="row fa"><span class="hint">{{ factAge() }}</span><span class="spacer"></span>
+                      <button type="button" (click)="refreshFacts()" [disabled]="factBusy() || !s.deviceType">{{ factBusy() === 'refresh' ? 'Reading…' : 'Read Now' }}</button></div>
+                  </div>
+                  <h4>Teach a new fact</h4>
+                  @if (!s.deviceType) {
+                    <div class="hint">Choose the device type on the Connection page first - a fact is read for every session of that type.</div>
+                  } @else {
+                    <div class="hint">Run a command (in a background login - nothing is typed in your tabs), then select the value in its output with the mouse, for example the version, and press Save Selection as Fact.</div>
+                    <div class="row"><input name="fcmd" class="mono" [(ngModel)]="factCmd" placeholder="e.g. show sys-info" spellcheck="false" (keydown.enter)="$event.preventDefault(); runFact()" />
+                      <button type="button" (click)="runFact()" [disabled]="!!factBusy() || !factCmd.trim()">{{ factBusy() === 'run' ? 'Running…' : 'Run' }}</button></div>
+                    @if (factOut(); as out) {
+                      <pre class="fout" (mouseup)="pickFact($event)">{{ out }}</pre>
+                      <div class="row"><span class="hint">{{ factPick() ? 'Selected: ' + factPick()!.value : 'Select the value in the output' }}</span><span class="spacer"></span>
+                        <button type="button" class="primary" [disabled]="!factPick()" (click)="teachFromOutput()">Save Selection as Fact…</button></div>
+                    }
+                  }
+                  @if (deviceRules().length) {
+                    <h4>Read for {{ s.deviceType }}</h4>
+                    <div class="hint">@for (r of deviceRules(); track r.name) { <b>{{ r.name }}</b> ({{ r.command }}, {{ r.every ? 'every connect' : 'once' }}){{ $last ? '' : ' · ' }} }
+                      <br />Change or remove them in Settings → Device Types.</div>
+                  }
+                }
+              </div>
+            }
             @case ('connection') {
               <div class="grid ord">
                 <div class="pair o1">
@@ -498,6 +535,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
         <button type="submit" class="primary">Save</button>
       </div>
     </form>
+    @if (teaching()) { <app-fact-teach [embedded]="true" (done)="teachDone()" /> }
     @if (logonEdit; as e) {
       <div class="modal-backdrop nested">
         <form class="modal small" (ngSubmit)="saveLogon()">
@@ -540,6 +578,18 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
   </div>
   }
   `,
+  styles: [`
+    .facts { display: flex; flex-direction: column; gap: 10px; max-width: 680px;
+      h4 { margin: 10px 0 0; } .spacer { flex: 1; } }
+    .fnow { border: 1px solid var(--line, var(--border)); border-radius: var(--r-lg, 8px); padding: 6px 12px; }
+    .fr { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line, var(--border));
+      .fk { color: var(--muted); } .fv { font-family: var(--mono); overflow-wrap: anywhere; } }
+    .fa { padding: 6px 0 2px; }
+    .row input.mono { flex: 1; font-family: var(--mono); }
+    .fout { margin: 0; max-height: 260px; overflow: auto; padding: 9px 12px; border: 1px solid var(--line, var(--border)); border-radius: var(--r, 6px);
+      background: var(--term-bg, var(--bg)); font: calc(12px * var(--ui-scale, 1))/1.55 var(--mono); white-space: pre; user-select: text; cursor: text;
+      &::selection, & ::selection { background: var(--accent); color: #fff; } }
+  `],
 })
 export class SessionEditor implements OnInit {
   protected ui = inject(Ui);
@@ -593,6 +643,50 @@ export class SessionEditor implements OnInit {
     const parts = [user, pw].filter(Boolean);
     return parts.length ? ' (' + parts.join(', ') + ')' : '';
   }
+
+  // ---- Device Facts page ----
+  factCmd = '';
+  readonly factOut = signal('');
+  readonly factBusy = signal<'' | 'run' | 'refresh'>('');
+  readonly factPick = signal<{ line: string; start: number; length: number; value: string } | null>(null);
+  readonly teaching = signal(false);
+  factRows() { return factList(this.ui.factsOf(this.oldPath)); }
+  factAge() { return factsAge(this.ui.factsOf(this.oldPath)); }
+  deviceRules() { return (this.ui.settings()?.deviceTypes ?? []).find(d => d.name === this.s?.deviceType)?.facts ?? []; }
+  async refreshFacts() {
+    this.factBusy.set('refresh');
+    try { await this.ui.refreshFacts(this.oldPath, true); } finally { this.factBusy.set(''); }
+  }
+  async runFact() {
+    if (!this.s || !this.factCmd.trim() || this.factBusy()) return;
+    this.factBusy.set('run'); this.factPick.set(null);
+    try { this.factOut.set((await this.backend.runFactCommand(this.oldPath, this.s.deviceType, this.factCmd)).replace(/\r/g, '') || '(no output)'); }
+    catch (e) { this.ui.error(e); }
+    finally { this.factBusy.set(''); }
+  }
+  /** The value selected in the output: its line and where it is on the line. */
+  pickFact(ev: MouseEvent) {
+    const pre = ev.currentTarget as HTMLElement;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount || !pre.contains(sel.anchorNode)) { this.factPick.set(null); return; }
+    const r = sel.getRangeAt(0);
+    const before = document.createRange();
+    before.setStart(pre, 0); before.setEnd(r.startContainer, r.startOffset);
+    const out = this.factOut();
+    const at = before.toString().length;
+    const value = sel.toString().split('\n')[0].replace(/\s+$/, '');
+    if (!value.trim()) { this.factPick.set(null); return; }
+    const ls = out.lastIndexOf('\n', at - 1) + 1;
+    const le = out.indexOf('\n', at);
+    this.factPick.set({ line: out.slice(ls, le < 0 ? undefined : le), start: at - ls, length: value.length, value: value.trim() });
+  }
+  teachFromOutput() {
+    const p = this.factPick();
+    if (!p || !this.s) return;
+    this.ui.factTeach.set({ path: this.oldPath, deviceType: this.s.deviceType, line: p.line, start: p.start, length: p.length, command: this.factCmd.trim(), output: this.factOut() });
+    this.teaching.set(true);
+  }
+  teachDone() { this.teaching.set(false); this.factPick.set(null); }
 
   /** Under "Use the VOSS login": "admin, password saved". */
   loginSub() {
@@ -664,7 +758,7 @@ export class SessionEditor implements OnInit {
   }
   pageName() {
     const p = this.page();
-    const m: Record<string, string> = { connection: 'Connection', auth: 'Authentication', firewall: 'Jump Host / Proxy', forward: 'Port Forwarding', serial: 'Serial', local: 'Local Shell', logon: 'Logon Actions & Triggers', terminal: 'Terminal', log: 'Log File', remote: this.s?.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' };
+    const m: Record<string, string> = { connection: 'Connection', auth: 'Authentication', firewall: 'Jump Host / Proxy', forward: 'Port Forwarding', serial: 'Serial', local: 'Local Shell', logon: 'Logon Actions & Triggers', terminal: 'Terminal', log: 'Log File', facts: 'Device Facts', remote: this.s?.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' };
     return m[p] ?? '';
   }
   readonly consoleMethods = CONSOLE_METHODS;

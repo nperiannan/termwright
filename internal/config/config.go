@@ -73,6 +73,7 @@ type Settings struct {
 	HighlightStyle       string                       `json:"highlightStyle"`      // keyword highlighting: "" = colour the text, "background" = colour the background
 	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`         // session path → fact name → value ("_at" = when read)
 	FactRulesAdded       bool                         `json:"factRulesAdded"`      // set once when the built-in device types got their fact rules (0.21.0)
+	KeywordsOn           bool                         `json:"keywordsOn"`          // set once when keyword highlighting became on by default (0.21.0)
 	IconStyle            string                       `json:"iconStyle"`           // device and session icons: "" = coloured tiles, "glyph" = the symbol only
 	CompactRows          bool                         `json:"compactRows"`         // modern layout: one-line Session Manager rows
 	WelcomeSeen          string                       `json:"welcomeSeen"`         // version whose welcome flow was finished or skipped ("0.21")
@@ -300,12 +301,12 @@ func Defaults(dataDir string) Settings {
 			Name: "Network",
 			Keywords: []Keyword{
 				{Text: `\b(error|failed|failure|down|denied|critical|invalid)\b`, Regex: true, Color: "#7a1f1f"},
-				{Text: `\b(warning|warn|disabled|blocked)\b`, Regex: true, Color: "#6b5310"},
-				{Text: `\b(up|ok|success|enabled|active|forwarding)\b`, Regex: true, Color: "#1f5a2c"},
+				{Text: `\b(warning|warn|disabled?|blocked)\b`, Regex: true, Color: "#6b5310"},
+				{Text: `\b(up|ok|success|enabled?|active|forwarding)\b`, Regex: true, Color: "#1f5a2c"},
 				{Text: `\b\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?\b`, Regex: true, Color: "#1f3f6b"},
 			},
 		}},
-		DefaultKeywordSet:  "", // off; the Network set is there to pick
+		DefaultKeywordSet:  "Network", // up / down, enable / disable, errors and addresses in colour; "None" turns it off
 		Bookmarks:          []Bookmark{},
 		UpdateChannel:      "stable",
 		SFTPCwdAuto:        true,
@@ -404,6 +405,28 @@ func Load(dataDir string) (*Manager, error) {
 			}
 		}
 		m.cur.FactRulesAdded, changed = true, true
+	}
+	// Keyword highlighting is on by default (0.21.0): once, the Network set
+	// becomes the default when none was chosen, and its built-in words also
+	// match "enable" and "disable" (sets edited by the user stay as they are).
+	if !m.cur.KeywordsOn {
+		for i, k := range m.cur.KeywordSets {
+			if k.Name != "Network" {
+				continue
+			}
+			for j, w := range k.Keywords {
+				switch w.Text {
+				case `\b(warning|warn|disabled|blocked)\b`:
+					m.cur.KeywordSets[i].Keywords[j].Text = `\b(warning|warn|disabled?|blocked)\b`
+				case `\b(up|ok|success|enabled|active|forwarding)\b`:
+					m.cur.KeywordSets[i].Keywords[j].Text = `\b(up|ok|success|enabled?|active|forwarding)\b`
+				}
+			}
+			if m.cur.DefaultKeywordSet == "" {
+				m.cur.DefaultKeywordSet = "Network"
+			}
+		}
+		m.cur.KeywordsOn, changed = true, true
 	}
 	// The modern layout (0.21.0) keeps the Button Bar out of the way (once -
 	// it can be shown again from View).
