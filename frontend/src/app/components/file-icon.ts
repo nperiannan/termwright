@@ -14,6 +14,9 @@ const GROUPS: { re: RegExp; from: string; to: string; mark: string; title: strin
 @Component({
   selector: 'app-file-icon',
   template: `
+    @if (badge()) {
+      <span class="fb" [style.background]="b().bg" [style.opacity]="hidden() ? .7 : 1">{{ b().label }}</span>
+    } @else {
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" [style.opacity]="hidden() ? .6 : 1">
       <defs>
         <linearGradient [attr.id]="gid" x1="0" y1="0" x2="1" y2="1">
@@ -35,15 +38,36 @@ const GROUPS: { re: RegExp; from: string; to: string; mark: string; title: strin
         }
       </g>
       @if (link()) { <path d="M2.2 14.6c0-1.6 1.1-2.6 2.8-2.6h1M5 10.9l1.1 1.1L5 13.1" fill="none" stroke="var(--text)" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" /> }
-    </svg>`,
-  styles: [`:host { display: inline-flex; line-height: 0; flex: none; } svg { display: block; overflow: visible; }`],
+    </svg>
+    }`,
+  styles: [`:host { display: inline-flex; line-height: 0; flex: none; } svg { display: block; overflow: visible; }
+    .fb { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; color: #fff; font: 700 7.5px/1 var(--ui-font, system-ui), sans-serif; letter-spacing: .02em; }`],
   host: { '[attr.title]': 'g().title' },
 })
 export class FileIcon {
   readonly name = input.required<string>();
   readonly link = input(false);
+  /** A small coloured square with the file type (CFG, LOG, IMG…), as in the modern layout. */
+  readonly badge = input(false);
+  readonly b = computed(() => badgeOf(this.name()));
   private static seq = 0;
   readonly gid = 'tw-fi-' + FileIcon.seq++;
   readonly hidden = computed(() => this.name().startsWith('.'));
   readonly g = computed(() => GROUPS.find(x => x.re.test(this.name())) ?? { from: '#94a3b8', to: '#64748b', mark: '', title: 'File' });
+}
+
+/** Badge colour and label for a file name: the extension (up to three
+ *  letters), or IMG / KEY / PIC for firmware, keys and pictures. */
+export function badgeOf(name: string): { bg: string; label: string } {
+  const ext = (/\.([a-z0-9]+)$/i.exec(name)?.[1] ?? '').toLowerCase();
+  const up = (ext || 'file').slice(0, 3).toUpperCase();
+  if (/^(log|out)$/.test(ext)) return { bg: '#64748b', label: 'LOG' };
+  if (/^(txt|md|csv|rtf)$/.test(ext)) return { bg: '#2563eb', label: up };
+  if (/^(cfg|conf|config|ini|xml|json|ya?ml|toml|properties|bak)$/.test(ext)) return { bg: '#0d9488', label: up };
+  if (/^(voss|img|bin|iso|exe|msi|deb|rpm|dmg|pkg|apk|xos|lst|tgz)$/.test(ext) && !/^(tgz)$/.test(ext)) return { bg: '#7c3aed', label: 'IMG' };
+  if (/^(zip|tar|gz|tgz|bz2|xz|7z|rar|zst)$/.test(ext)) return /voss|exos|xos|fw|firmware|image/i.test(name) ? { bg: '#7c3aed', label: 'IMG' } : { bg: '#d97706', label: up };
+  if (/^(png|jpe?g|gif|svg|bmp|webp|ico)$/.test(ext)) return { bg: '#db2777', label: 'PIC' };
+  if (/^(sh|bash|zsh|py|js|ts|go|pl|rb|ps1|bat|cmd|vbs|lua|tcl|exp)$/.test(ext)) return { bg: '#059669', label: up };
+  if (/^(pub|pem|key|crt|cer|ppk|p12|pfx|csr)$/.test(ext) || /(^|\/)(id_\w+|authorized_keys|known_hosts)$/i.test(name)) return { bg: '#dc2626', label: 'KEY' };
+  return { bg: '#6b7280', label: ext ? up : '' };
 }

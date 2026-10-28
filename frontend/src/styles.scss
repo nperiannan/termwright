@@ -154,6 +154,9 @@ details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top
    the fields, switches instead of check boxes, navigation with icons ---- */
 .mh-ic, .mh-s { display: none; }
 .cat a > app-icon { display: none; }
+/* field pairs (Name | Folder, Address | Port): in the classic layout they flow in the label | field grid as before */
+.grid .pair, .grid .f { display: contents; }
+.grid > .pair > .f > label, .grid > .f > label { color: var(--muted); text-align: right; }
 .mh-t { display: flex; flex-direction: column; min-width: 0; }
 :root.modern {
   .modal-head { display: flex; align-items: center; gap: 12px; }
@@ -168,6 +171,24 @@ details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top
     input:not([type=checkbox]):not([type=radio]):not(.short), select { min-height: 32px; }
     select { max-width: 100%; } }
   .modal-body .grid + .grid { margin-top: 12px; }
+  .modal-body .grid > .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .modal-body .grid > .pair.hp { grid-template-columns: minmax(0, 1fr) 110px; }
+  .modal-body .grid > .pair > .f, .modal-body .grid > .f { display: flex; flex-direction: column; min-width: 0; }
+  .modal-body .grid > .pair > .f > label, .modal-body .grid > .f > label { text-align: left; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 500; color: var(--muted); margin: 12px 0 5px; }
+  .modal-body .grid > .pair:first-child > .f > label { margin-top: 0; }
+  .modal-body .grid > .pair input.short { width: 100%; min-height: 32px; }
+  .modal-body .grid .envhint { display: none; }
+  .modal-body .grid .envsel { width: 100%; }
+  /* the connection page in the order of the mock: name, protocol, address, device type, login */
+  .modal-body .grid.ord > * { order: 10; }
+  .modal-body .grid.ord > .o1 { order: 1; } .modal-body .grid.ord > .o2 { order: 2; } .modal-body .grid.ord > .o3 { order: 3; }
+  .modal-body .grid.ord > .o4 { order: 4; } .modal-body .grid.ord > .o5 { order: 5; } .modal-body .grid.ord > .o6 { order: 6; }
+  .cat.so { display: flex; flex-direction: column; }
+  .cat .osearch { height: 30px; padding-left: 28px; background: var(--input-bg) no-repeat 9px 50% / 14px 14px
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d9099' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
+  /* lists of switches sit in a card */
+  .modal-body .checks { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 2px 14px; background: var(--surface);
+    > label:first-child { padding-top: 8px; } }
   /* fields in the wide dialogs stop at a readable width */
   .modal.wide .modal-body .grid { max-width: 640px; }
   /* check boxes in lists of options become switches */

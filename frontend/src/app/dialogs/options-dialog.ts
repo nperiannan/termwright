@@ -54,17 +54,17 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
               <a class="hit" (click)="goTo(h[0], h[1])">{{ h[1] }}<span>{{ pageName(h[0]) }}</span></a>
             } @empty { <span class="nohit">Nothing found</span> }
           } @else {
-          <a [class.on]="page() === 'general'" (click)="page.set('general')"><app-icon name="options" [size]="15" />General</a>
-          <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')"><app-icon name="shell" [size]="15" />Terminal &amp; Appearance</a>
-          <a class="sub" [class.on]="page() === 'schemes'" (click)="page.set('schemes')"><app-icon name="styles" [size]="15" />Color Schemes</a>
-          <a [class.on]="page() === 'keywords'" (click)="page.set('keywords')"><app-icon name="edit" [size]="15" />Keyword Highlighting</a>
+          <a [class.on]="page() === 'general'" (click)="page.set('general')"><app-icon name="eye" [size]="15" />General</a>
+          <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')"><app-icon name="shell" [size]="15" />{{ modern() ? 'Terminal' : 'Terminal & Appearance' }}</a>
+          <a class="sub" [class.on]="page() === 'schemes'" (click)="page.set('schemes')"><app-icon name="palette" [size]="15" />Color Schemes</a>
+          <a [class.on]="page() === 'keywords'" (click)="page.set('keywords')"><app-icon name="highlight" [size]="15" />Keyword Highlighting</a>
           <div class="cat-g">Automation</div>
-          <a [class.on]="page() === 'keymap'" (click)="page.set('keymap')"><app-icon name="command" [size]="15" />Key Map</a>
+          <a [class.on]="page() === 'keymap'" (click)="page.set('keymap')"><app-icon name="keyboard" [size]="15" />Key Map</a>
           <a [class.on]="page() === 'buttons'" (click)="page.set('buttons')"><app-icon name="buttons" [size]="15" />Button Bar</a>
-          <a [class.on]="page() === 'devices'" (click)="page.set('devices')"><app-icon name="serial" [size]="15" />Device Types</a>
-          <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')"><app-icon name="alert" [size]="15" />Alerts</a>
+          <a [class.on]="page() === 'devices'" (click)="page.set('devices')"><app-icon name="device" [size]="15" />Device Types</a>
+          <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')"><app-icon name="bell" [size]="15" />Alerts</a>
           <div class="cat-g">System</div>
-          <a [class.on]="page() === 'cards'" (click)="page.set('cards'); loadCards()"><app-icon name="key" [size]="15" />Smart Cards</a>
+          <a [class.on]="page() === 'cards'" (click)="page.set('cards'); loadCards()"><app-icon name="card" [size]="15" />Smart Cards</a>
           <a [class.on]="page() === 'updates'" (click)="page.set('updates')"><app-icon name="down" [size]="15" />Updates</a>
         }
         </nav>
@@ -86,7 +86,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <option value="system">Follow system</option><option value="dark">Dark</option><option value="light">Light</option>
                 </select>
                 }
-                <label>Layout</label>
+                <div class="pair">
+                <div class="f"><label>Layout</label>
                 <div>
                   @if (modern()) {
                     <div class="seg w2"><button type="button" [class.on]="!s.layout" (click)="s.layout = ''">Modern</button><button type="button" [class.on]="s.layout === 'classic'" (click)="s.layout = 'classic'">Classic</button></div>
@@ -96,8 +97,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   </select>
                   }
                   @if (isMac) { <div class="hint">On macOS the window's own title bar changes the next time Termwright starts.</div> }
-                </div>
-                <label>Icons</label>
+                </div></div>
+                <div class="f"><label>Icons</label>
                 <div>
                   @if (modern()) {
                     <div class="seg w2"><button type="button" [class.on]="!s.iconStyle" (click)="s.iconStyle = ''">Tiles</button><button type="button" [class.on]="s.iconStyle === 'glyph'" (click)="s.iconStyle = 'glyph'">Glyphs</button></div>
@@ -110,9 +111,10 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                     <label class="inline-check" style="margin-top: 6px"><input type="checkbox" name="compact" [ngModel]="!!s.compactRows" (ngModelChange)="s.compactRows = $event" />
                       Compact Session Manager (one line per session - more sessions in view)</label>
                   }
+                </div></div>
                 </div>
                 <label>Interface font</label>
-                <select name="uifont" [(ngModel)]="s.uiFont">@for (f of uiFonts; track f.v) { <option [value]="f.v">{{ f.label }}</option> }</select>
+                <select name="uifont" [ngModel]="s.uiFont || ''" (ngModelChange)="s.uiFont = $event">@for (f of uiFonts; track f.v) { <option [value]="f.v">{{ f.label }}</option> }</select>
                 <label>Text size</label>
                 <select name="uisize" [ngModel]="s.uiFontSize || 13" (ngModelChange)="s.uiFontSize = +$event">@for (z of uiSizes; track z.v) { <option [ngValue]="z.v">{{ z.label }}</option> }</select>
                 <label></label>
@@ -508,9 +510,10 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
         </div>
       </div>
       <div class="modal-foot">
+        @if (modern()) { <span class="hint">Changes apply when you press Save</span> }
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Cancel</button>
-        <button type="submit" class="primary">OK</button>
+        <button type="submit" class="primary">{{ modern() ? 'Save' : 'OK' }}</button>
       </div>
     </form>
   </div>
@@ -529,7 +532,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
     .pv.light { background: #f6f7f9; color: #c9ced6; &::before { background: #e9ecf0; } &::after { background: #9aa3af; } }
     .pv.dark { background: #16181d; color: #3a3f48; &::before { background: #1e2127; } &::after { background: #6b7280; } }
     .pv.system { background: linear-gradient(110deg, #f6f7f9 50%, #16181d 50%); color: #8a919c; &::before { background: transparent; } &::after { background: #8a919c; } }
-    .seg.w2 { max-width: 260px; }
+    .seg.w2 { max-width: 300px; }
+    .pair .seg.w2 { max-width: none; }
   `],
 })
 export class OptionsDialog implements OnInit {

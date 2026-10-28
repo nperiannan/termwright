@@ -3,7 +3,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
 import { SUDO_ERR } from '../core/fixes';
-import { FileEntry, formatBytes } from '../core/models';
+import { FileEntry, Transfer, formatBytes } from '../core/models';
 import { Tabs, TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { FileIcon } from './file-icon';
@@ -35,46 +35,84 @@ interface Pane {
         <button type="button" class="icon-btn" title="Hide" (click)="closeCwdHint()">✕</button>
       </div>
     }
+    @if (modern()) {
+      <div class="stb">
+        <span class="stic"><app-icon name="sftp" [size]="16" /></span>
+        <b class="stt">SFTP · {{ tab().session.name || hostOnly() }}</b>
+        <span class="sth">{{ (tab().session.username ? tab().session.username + '@' : '') + (tab().session.hostname || '') }}@if (tab().hopTarget) { → {{ tab().hopTarget }}}</span>
+        <span class="grow"></span>
+        <button class="root-btn" [class.on]="tab().root" [disabled]="rootBusy()" (click)="runAsMenu($event)"
+          [title]="tab().root ? 'Browsing as ' + tab().runAsUser + '. Click to switch back or to another user.' : 'Browse as root or another user (sudo, su, …)'">
+          {{ rootBusy() ? '…' : tab().root ? 'as ' + tab().runAsUser + ' ▾' : 'Run as ▾' }}</button>
+        @if (shell()) {
+          <button class="root-btn" [class.on]="follow()" (click)="terminalMenu($event)"
+            [title]="shell()!.cwd ? 'Terminal folder: ' + shell()!.cwd + (follow() ? ' (following)' : '') : 'The terminal does not report its folder yet'">
+            &gt;_ {{ follow() ? 'Following' : 'Terminal' }} ▾</button>
+        }
+        <select class="pill" [ngModel]="via()" (ngModelChange)="setVia($event)" [disabled]="!!tab().root"
+          title="Protocol used by → and ← (browsing always uses SFTP). SCP helps with devices whose SFTP server is slow or limited.">
+          <option value="sftp">SFTP</option><option value="scp">SCP</option></select>
+        <button class="sbtn" title="Sync folder contents up: copy new and changed files from this computer to the server (nothing is deleted)" (click)="sync('up')">Sync ↑</button>
+        <button class="sbtn" title="Sync folder contents down: copy new and changed files from the server to this computer (nothing is deleted)" (click)="sync('down')">Sync ↓</button>
+      </div>
+    }
     <div class="panes">
       @for (p of [local(), remote()]; track p.side) {
         <section class="pane" [class.focus]="focus() === p.side" (mousedown)="focus.set(p.side)">
           <header>
             <span class="label" [title]="p.side === 'remote' && tab().hopTarget ? 'Files on ' + tab().hopTarget + ', reached through the jump station ' + tab().session.hostname : ''">{{ p.side === 'local' ? 'This computer' : (tab().root ? tab().runAsUser + ' @ ' + hostOnly() : tab().hopTarget || tab().session.hostname || 'Server') }}@if (p.side === 'remote' && tab().hopTarget) {<span class="via-jump"> via {{ tab().session.hostname }}</span>}</span>
-            <button class="icon-btn" title="Up" (click)="up(p)"><app-icon name="up" /></button>
-            @if (modern() && editing() !== p.side) {
-              <div class="crumb" title="Click to type a path" (click)="editing.set(p.side)">
-                @for (c of crumbs(p); track $index) {
-                  @if (!$first && crumbs(p)[$index - 1].label !== '/') { <span class="cs">/</span> }
-                  <button type="button" class="cb" [class.last]="$last" [title]="c.path" (click)="$event.stopPropagation(); go(p, c.path)">{{ c.label }}</button>
-                }
-              </div>
+            @if (modern()) {
+              @if (editing() !== p.side) {
+                <div class="crumb" title="Click to type a path" (click)="editing.set(p.side)">
+                  @for (c of crumbs(p); track $index) {
+                    @if (!$first && crumbs(p)[$index - 1].label !== '/') { <span class="cs">/</span> }
+                    <button type="button" class="cb" [class.last]="$last" [title]="c.path" (click)="$event.stopPropagation(); go(p, c.path)">{{ c.label }}</button>
+                  }
+                </div>
+              } @else {
+                <input class="path mono" [ngModel]="p.dir" appAutofocus (keydown.enter)="editing.set(''); go(p, $any($event.target).value)"
+                  (keydown.escape)="editing.set('')" (blur)="editing.set('')" spellcheck="false" />
+              }
+              <button class="icon-btn" title="Up" (click)="up(p)"><app-icon name="up" /></button>
+              <button class="icon-btn" title="Refresh" (click)="load(p)"><app-icon name="refresh" /></button>
+              <button class="icon-btn" title="New folder" (click)="mkdir(p)"><app-icon name="folder-plus" /></button>
+              <button class="icon-btn bm" [class.on]="isBookmarked(p)" title="Bookmarks" (click)="bookmarkMenu($event, p)"><app-icon name="star" /></button>
             } @else {
-            <input class="path mono" [ngModel]="p.dir" appAutofocus (keydown.enter)="editing.set(''); go(p, $any($event.target).value)"
-              (keydown.escape)="editing.set('')" (blur)="editing.set('')" spellcheck="false" />
+              <button class="icon-btn" title="Up" (click)="up(p)"><app-icon name="up" /></button>
+              <input class="path mono" [ngModel]="p.dir" (keydown.enter)="go(p, $any($event.target).value)" spellcheck="false" />
+              <button class="icon-btn" title="Refresh" (click)="load(p)"><app-icon name="refresh" /></button>
+              <button class="icon-btn" title="New folder" (click)="mkdir(p)"><app-icon name="folder-plus" /></button>
+              @if (p.side === 'remote') {
+                <button class="root-btn" [class.on]="tab().root" [disabled]="rootBusy()" (click)="runAsMenu($event)"
+                  [title]="tab().root ? 'Browsing as ' + tab().runAsUser + '. Click to switch back or to another user.' : 'Browse as root or another user (sudo, su, …)'">
+                  {{ rootBusy() ? '…' : tab().root ? 'as ' + tab().runAsUser + ' ▾' : 'Run as ▾' }}</button>
+              }
+              @if (p.side === 'remote' && shell()) {
+                <button class="root-btn" [class.on]="follow()" (click)="terminalMenu($event)"
+                  [title]="shell()!.cwd ? 'Terminal folder: ' + shell()!.cwd + (follow() ? ' (following)' : '') : 'The terminal does not report its folder yet'">
+                  &gt;_ {{ follow() ? 'Following' : 'Terminal' }} ▾</button>
+              }
+              <button class="icon-btn bm" [class.on]="isBookmarked(p)" title="Bookmarks" (click)="bookmarkMenu($event, p)">{{ isBookmarked(p) ? '★' : '☆' }}</button>
             }
-            <button class="icon-btn" title="Refresh" (click)="load(p)"><app-icon name="refresh" /></button>
-            <button class="icon-btn" title="New folder" (click)="mkdir(p)"><app-icon name="folder-plus" /></button>
-            @if (p.side === 'remote') {
-              <button class="root-btn" [class.on]="tab().root" [disabled]="rootBusy()" (click)="runAsMenu($event)"
-                [title]="tab().root ? 'Browsing as ' + tab().runAsUser + '. Click to switch back or to another user.' : 'Browse as root or another user (sudo, su, …)'">
-                {{ rootBusy() ? '…' : tab().root ? 'as ' + tab().runAsUser + ' ▾' : 'Run as ▾' }}</button>
-            }
-            @if (p.side === 'remote' && shell()) {
-              <button class="root-btn" [class.on]="follow()" (click)="terminalMenu($event)"
-                [title]="shell()!.cwd ? 'Terminal folder: ' + shell()!.cwd + (follow() ? ' (following)' : '') : 'The terminal does not report its folder yet'">
-                &gt;_ {{ follow() ? 'Following' : 'Terminal' }} ▾</button>
-            }
-            <button class="icon-btn bm" [class.on]="isBookmarked(p)" title="Bookmarks" (click)="bookmarkMenu($event, p)">{{ isBookmarked(p) ? '★' : '☆' }}</button>
           </header>
           <div class="list" tabindex="0" (keydown)="key($event, p)">
             <div class="row head"><span class="n">Name</span><span class="s">Size</span><span class="d">Modified</span><span class="m">Mode</span></div>
             @if (p.error) { <div class="err pad">{{ p.error }}</div> }
+            @if (modern() && crumbs(p).length > 1) {
+              <div class="row" title="Up one folder" (dblclick)="up(p)"><span class="n"><span class="fold"></span>..</span><span class="s"></span><span class="d"></span><span class="m"></span></div>
+            }
             @for (e of p.entries; track e.name) {
               <div class="row" [class.sel]="p.selected.has(e.name)" (click)="select(p, e, $event)" (dblclick)="open(p, e)"
                    (contextmenu)="menu($event, p, e)">
+                @if (modern()) {
+                  <span class="n">@if (e.isDir) { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }{{ e.name }}</span>
+                  <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
+                  <span class="d" [title]="(e.modTime | date: 'yyyy-MM-dd HH:mm') + '  ' + e.mode">{{ when(e.modTime) }}</span>
+                } @else {
                 <span class="n">@if (e.isDir) { <app-session-icon kind="folder" /> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" /> }{{ e.name }}</span>
                 <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
                 <span class="d">{{ e.modTime | date: 'yyyy-MM-dd HH:mm' }}</span>
+                }
                 <span class="m mono">{{ e.mode }}</span>
               </div>
             }
@@ -82,39 +120,85 @@ interface Pane {
           <footer>{{ p.entries.length }} items @if (p.selected.size) { · {{ p.selected.size }} selected }</footer>
         </section>
         @if (p.side === 'local') {
-          <div class="mid">
-            <div class="via" role="radiogroup" title="Protocol used by → and ← (browsing always uses SFTP). SCP helps with devices whose SFTP server is slow or limited.">
-              <span class="via-label">Copy via</span>
-              <button type="button" role="radio" [class.on]="via() === 'sftp'" [attr.aria-checked]="via() === 'sftp'" (click)="setVia('sftp')">SFTP</button>
-              <button type="button" role="radio" [class.on]="via() === 'scp'" [attr.aria-checked]="via() === 'scp'" (click)="setVia('scp')"
-                [disabled]="tab().root" [attr.title]="tab().root ? 'SCP cannot copy as another user; SFTP is used' : null">SCP</button>
+          @if (modern()) {
+            <div class="mid">
+              <button class="ar" [title]="'Upload selected to server via ' + via().toUpperCase()" [disabled]="!local().selected.size" (click)="transfer('up')">→</button>
+              <button class="ar" [title]="'Download selected to this computer via ' + via().toUpperCase()" [disabled]="!remote().selected.size" (click)="transfer('down')">←</button>
             </div>
-            <button [title]="'Upload selected to server via ' + via().toUpperCase()" [disabled]="!local().selected.size" (click)="transfer('up')">→</button>
-            <button [title]="'Download selected to this computer via ' + via().toUpperCase()" [disabled]="!remote().selected.size" (click)="transfer('down')">←</button>
-            <span class="sync-label">Sync</span>
-            <button class="sync" title="Sync folder contents up: copy new and changed files from this computer to the server (nothing is deleted)" (click)="sync('up')">⇉</button>
-            <button class="sync" title="Sync folder contents down: copy new and changed files from the server to this computer (nothing is deleted)" (click)="sync('down')">⇇</button>
-          </div>
+          } @else {
+            <div class="mid">
+              <div class="via" role="radiogroup" title="Protocol used by → and ← (browsing always uses SFTP). SCP helps with devices whose SFTP server is slow or limited.">
+                <span class="via-label">Copy via</span>
+                <button type="button" role="radio" [class.on]="via() === 'sftp'" [attr.aria-checked]="via() === 'sftp'" (click)="setVia('sftp')">SFTP</button>
+                <button type="button" role="radio" [class.on]="via() === 'scp'" [attr.aria-checked]="via() === 'scp'" (click)="setVia('scp')"
+                  [disabled]="tab().root" [attr.title]="tab().root ? 'SCP cannot copy as another user; SFTP is used' : null">SCP</button>
+              </div>
+              <button [title]="'Upload selected to server via ' + via().toUpperCase()" [disabled]="!local().selected.size" (click)="transfer('up')">→</button>
+              <button [title]="'Download selected to this computer via ' + via().toUpperCase()" [disabled]="!remote().selected.size" (click)="transfer('down')">←</button>
+              <span class="sync-label">Sync</span>
+              <button class="sync" title="Sync folder contents up: copy new and changed files from this computer to the server (nothing is deleted)" (click)="sync('up')">⇉</button>
+              <button class="sync" title="Sync folder contents down: copy new and changed files from the server to this computer (nothing is deleted)" (click)="sync('down')">⇇</button>
+            </div>
+          }
         }
       }
     </div>
-    @if (tabs.transfers().length) {
-      <div class="queue">
-        @for (t of tabs.transfers(); track t.id) {
-          <div class="xfer" [class]="t.state">
-            <span class="dir">{{ dirGlyph(t.direction) }}</span>
-            <span class="file mono" [title]="t.file">{{ t.file }}</span>
-            <progress [max]="t.total || 1" [value]="t.bytes"></progress>
-            <span class="num">{{ size(t.bytes) }} / {{ size(t.total) }} · {{ t.filesDone }}/{{ t.filesTotal }}</span>
-            <span class="st">{{ t.state === 'error' ? t.error : t.state }}</span>
-            @if (t.state === 'running') { <button class="icon-btn" (click)="cancel(t.id)">✕</button> }
-            @if (t.resumable && (t.state === 'error' || t.state === 'cancelled')) {
-              <button class="icon-btn" title="Resume: continue partial files, skip completed ones" (click)="resume(t.id)">⟳</button>
-            }
-          </div>
-        }
-        <button class="clear" (click)="clearDone()">Clear finished</button>
-      </div>
+    @if (modern()) {
+      @if (current(); as t) {
+        <div class="xbar" [class]="'xbar ' + t.state">
+          <span class="xf" [title]="t.file">{{ dirGlyph(t.direction) }} {{ t.file }}</span>
+          @if (t.state === 'running') {
+            <span class="bar"><i [style.width.%]="t.total ? t.bytes * 100 / t.total : 0"></i></span>
+            <span class="hint">{{ size(t.bytes) }} / {{ size(t.total) }}@if (rate(t) > 0) { · {{ size(rate(t)) }}/s · {{ left(t) }}}@if (t.filesTotal > 1) { · file {{ t.filesDone + 1 }} of {{ t.filesTotal }}}</span>
+          } @else {
+            <span class="hint st">{{ t.state === 'done' ? '✓ Done' + (t.filesTotal > 1 ? ' - ' + t.filesTotal + ' files' : '') + ' · ' + size(t.total) : t.state === 'error' ? '✗ ' + t.error : 'Cancelled' }}</span>
+          }
+          <span class="grow"></span>
+          @if (others() > 0) { <button type="button" class="pill" (click)="showQueue.set(!showQueue())" title="Show all transfers">{{ others() }} more {{ showQueue() ? '▾' : '▴' }}</button> }
+          @if (t.resumable && (t.state === 'error' || t.state === 'cancelled')) { <button class="sbtn" title="Resume: continue partial files, skip completed ones" (click)="resume(t.id)">Resume</button> }
+          @if (t.state === 'running') { <button class="sbtn" (click)="cancel(t.id)">Cancel</button> }
+          @else { <button class="sbtn" (click)="clearDone()">Clear</button> }
+        </div>
+      }
+      @if (showQueue() && tabs.transfers().length > 1) {
+      @if (tabs.transfers().length) {
+        <div class="queue">
+          @for (t of tabs.transfers(); track t.id) {
+            <div class="xfer" [class]="t.state">
+              <span class="dir">{{ dirGlyph(t.direction) }}</span>
+              <span class="file mono" [title]="t.file">{{ t.file }}</span>
+              <progress [max]="t.total || 1" [value]="t.bytes"></progress>
+              <span class="num">{{ size(t.bytes) }} / {{ size(t.total) }} · {{ t.filesDone }}/{{ t.filesTotal }}</span>
+              <span class="st">{{ t.state === 'error' ? t.error : t.state }}</span>
+              @if (t.state === 'running') { <button class="icon-btn" (click)="cancel(t.id)">✕</button> }
+              @if (t.resumable && (t.state === 'error' || t.state === 'cancelled')) {
+                <button class="icon-btn" title="Resume: continue partial files, skip completed ones" (click)="resume(t.id)">⟳</button>
+              }
+            </div>
+          }
+          <button class="clear" (click)="clearDone()">Clear finished</button>
+        </div>
+      }
+      }
+    } @else {
+      @if (tabs.transfers().length) {
+        <div class="queue">
+          @for (t of tabs.transfers(); track t.id) {
+            <div class="xfer" [class]="t.state">
+              <span class="dir">{{ dirGlyph(t.direction) }}</span>
+              <span class="file mono" [title]="t.file">{{ t.file }}</span>
+              <progress [max]="t.total || 1" [value]="t.bytes"></progress>
+              <span class="num">{{ size(t.bytes) }} / {{ size(t.total) }} · {{ t.filesDone }}/{{ t.filesTotal }}</span>
+              <span class="st">{{ t.state === 'error' ? t.error : t.state }}</span>
+              @if (t.state === 'running') { <button class="icon-btn" (click)="cancel(t.id)">✕</button> }
+              @if (t.resumable && (t.state === 'error' || t.state === 'cancelled')) {
+                <button class="icon-btn" title="Resume: continue partial files, skip completed ones" (click)="resume(t.id)">⟳</button>
+              }
+            </div>
+          }
+          <button class="clear" (click)="clearDone()">Clear finished</button>
+        </div>
+      }
     }
   `,
   styleUrl: './sftp-view.scss',
@@ -134,6 +218,41 @@ export class SftpView implements OnInit {
   readonly modern = () => this.ui.settings()?.layout !== 'classic';
   /** The pane whose path is being typed (modern layout shows clickable folders otherwise). */
   readonly editing = signal<'' | 'local' | 'remote'>('');
+  /** The transfer the bar shows: the first running one, else the latest. */
+  readonly current = computed(() => { const l = this.tabs.transfers(); return l.find(t => t.state === 'running') ?? l[l.length - 1] ?? null; });
+  readonly others = computed(() => Math.max(0, this.tabs.transfers().length - 1));
+  readonly showQueue = signal(false);
+  private rates = new Map<string, { b: number; at: number; r: number }>();
+  /** Bytes per second of a running transfer (smoothed). */
+  rate(t: Transfer): number {
+    const now = performance.now();
+    const m = this.rates.get(t.id);
+    if (!m) { this.rates.set(t.id, { b: t.bytes, at: now, r: 0 }); return 0; }
+    if (t.bytes !== m.b && now - m.at > 250) {
+      const r = (t.bytes - m.b) / ((now - m.at) / 1000);
+      m.r = m.r ? m.r * .6 + r * .4 : r; m.b = t.bytes; m.at = now;
+    }
+    return m.r;
+  }
+  left(t: Transfer) {
+    const r = this.rate(t);
+    if (!r || !t.total) return '';
+    const s = Math.max(0, Math.round((t.total - t.bytes) / r));
+    return s < 60 ? s + ' s left' : s < 3600 ? Math.round(s / 60) + ' min left' : (s / 3600).toFixed(1) + ' h left';
+  }
+  /** "Today 09:41", "Yesterday 18:02", "12 Oct", "3 Mar 2025". */
+  when(iso: string) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const hm = d.toTimeString().slice(0, 5);
+    const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diff = Math.round((day(now) - day(d)) / 86400000);
+    if (diff === 0) return 'Today ' + hm;
+    if (diff === 1) return 'Yesterday ' + hm;
+    const m = d.toLocaleString('en-GB', { day: 'numeric', month: 'short' });
+    return d.getFullYear() === now.getFullYear() ? m : m + ' ' + d.getFullYear();
+  }
   /** The folders of the pane's path, each with the path to open it. */
   crumbs(p: Pane): { label: string; path: string }[] {
     const d = p.dir;

@@ -12,6 +12,7 @@ import { SerialPortPicker } from '../components/serial-port-picker';
 import { Icon } from '../components/icon';
 import { DeviceIcon, deviceKindOf } from '../components/device-icon';
 import { SessionIcon, SessionKind } from '../components/session-icon';
+import { FolderPicker } from '../components/folder-picker';
 
 type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote';
 
@@ -38,7 +39,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
 /** Session Options dialog (create / edit a saved session). */
 @Component({
   selector: 'app-session-editor',
-  imports: [FormsModule, Autofocus, SerialPortPicker, Icon, DeviceIcon, SessionIcon],
+  imports: [FormsModule, Autofocus, SerialPortPicker, Icon, DeviceIcon, SessionIcon, FolderPicker],
   template: `
   @if (s) {
   <div class="modal-backdrop">
@@ -46,33 +47,37 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
       <div class="modal-head"><span class="mh-ic dev">@if (devKind(); as k) { <app-device-icon [kind]="k" [size]="34" /> } @else { <app-session-icon [kind]="protoKind()" [size]="34" /> }</span>
         <span class="mh-t">{{ modern() ? (s.name || 'New Session') : (oldPath ? 'Session Options - ' + oldPath : 'New Session') }}<span class="mh-s">{{ subtitle() }}</span></span></div>
       <div class="modal-split">
-        <nav class="cat">
-          <a [class.on]="page() === 'connection'" (click)="page.set('connection')"><app-icon name="connect" [size]="15" />Connection</a>
+        <nav class="cat so">
+          <a [class.on]="page() === 'connection'" (click)="page.set('connection')" style="order: 1"><app-icon name="connect" [size]="15" />Connection</a>
           @if (s.protocol === 'SSH2') {
-            <a class="sub" [class.on]="page() === 'auth'" (click)="page.set('auth')"><app-icon name="key" [size]="15" />{{ modern() ? 'Authentication' : 'SSH2 Authentication' }}</a>
+            <a class="sub" [class.on]="page() === 'auth'" (click)="page.set('auth')" style="order: 2"><app-icon name="key" [size]="15" />{{ modern() ? 'Authentication' : 'SSH2 Authentication' }}</a>
           }
-          @if (!remote()) { <a class="sub" [class.on]="page() === 'forward'" [class.dim]="s.protocol !== 'SSH2'" (click)="page.set('forward')"><app-icon name="forward" [size]="15" />Port Forwarding</a> }
-          @if (remote()) { <a class="sub" [class.on]="page() === 'remote'" (click)="page.set('remote')"><app-icon name="monitor" [size]="15" />{{ s.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' }}</a> }
+          @if (!remote()) { <a class="sub" [class.on]="page() === 'forward'" [class.dim]="s.protocol !== 'SSH2'" (click)="page.set('forward')" style="order: 5"><app-icon name="forward" [size]="15" />Port Forwarding</a> }
+          @if (remote()) { <a class="sub" [class.on]="page() === 'remote'" (click)="page.set('remote')" style="order: 3"><app-icon name="monitor" [size]="15" />{{ s.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' }}</a> }
           @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw' || remote()) {
-            <a class="sub" [class.on]="page() === 'firewall'" (click)="page.set('firewall')"><app-icon name="route" [size]="15" />Jump Host / Proxy</a>
+            <a class="sub" [class.on]="page() === 'firewall'" (click)="page.set('firewall')" style="order: 4"><app-icon name="route" [size]="15" />Jump Host / Proxy</a>
           }
-          @if (s.protocol === 'Serial') { <a class="sub" [class.on]="page() === 'serial'" (click)="page.set('serial')"><app-icon name="serial" [size]="15" />Serial</a> }
-          @if (s.protocol === 'Local Shell') { <a class="sub" [class.on]="page() === 'local'" (click)="page.set('local')"><app-icon name="shell" [size]="15" />Local Shell</a> }
+          @if (s.protocol === 'Serial') { <a class="sub" [class.on]="page() === 'serial'" (click)="page.set('serial')" style="order: 6"><app-icon name="serial" [size]="15" />Serial</a> }
+          @if (s.protocol === 'Local Shell') { <a class="sub" [class.on]="page() === 'local'" (click)="page.set('local')" style="order: 7"><app-icon name="shell" [size]="15" />Local Shell</a> }
           @if (!remote()) {
-            <div class="cat-g">Terminal</div>
-            <a class="sub" [class.on]="page() === 'logon'" (click)="page.set('logon')"><app-icon name="script" [size]="15" />{{ modern() ? 'Logon Actions' : 'Logon Actions & Triggers' }}</a>
-            <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')"><app-icon name="shell" [size]="15" />Terminal</a>
-            <a class="sub" [class.on]="page() === 'log'" (click)="page.set('log')"><app-icon name="log" [size]="15" />Log File</a>
+            <div class="cat-g" style="order: 8">Terminal</div>
+            <a class="sub" [class.on]="page() === 'logon'" (click)="page.set('logon')" style="order: 10"><app-icon name="script" [size]="15" />{{ modern() ? 'Logon Actions' : 'Logon Actions & Triggers' }}</a>
+            <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')" style="order: 9"><app-icon name="shell" [size]="15" />{{ modern() ? 'Appearance' : 'Terminal' }}</a>
+            <a class="sub" [class.on]="page() === 'log'" (click)="page.set('log')" style="order: 11"><app-icon name="log" [size]="15" />{{ modern() ? 'Logging' : 'Log File' }}</a>
           }
         </nav>
         <div class="modal-body">
           <h2 class="page-title">{{ pageName() }}</h2>
           @switch (page()) {
             @case ('connection') {
-              <div class="grid">
-                <label>Name</label><input name="name" [(ngModel)]="s.name" required placeholder="e.g. core-switch-01" />
-                <label>Folder</label><input name="folder" [(ngModel)]="s.folder" placeholder="e.g. Datacenter/Rack 4 (blank = top level)" />
-                <label>Protocol</label>
+              <div class="grid ord">
+                <div class="pair o1">
+                  <div class="f"><label>Name</label><input name="name" [(ngModel)]="s.name" required placeholder="e.g. core-switch-01" /></div>
+                  <div class="f"><label>Folder</label>
+                    @if (modern()) { <app-folder-picker [(value)]="s.folder" /> }
+                    @else { <input name="folder" [(ngModel)]="s.folder" placeholder="e.g. Datacenter/Rack 4 (blank = top level)" /> }</div>
+                </div>
+                <div class="f o2"><label>Protocol</label>
                 @if (modern()) {
                   <div class="seg">
                     @for (p of mainProtos; track p) { <button type="button" [class.on]="s.protocol === p" (click)="s.protocol = p; protocolChanged()">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
@@ -84,24 +89,27 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   @for (p of protocols; track p) { <option [value]="p">{{ p }}</option> }
                 </select>
                 }
-                <label>Environment</label>
-                <div class="row">
-                  <select name="env" [(ngModel)]="s.environment" class="envsel">
-                    <option value="">(none{{ folderEnv() ? ' - folder: ' + folderEnv() : '' }})</option>
-                    @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
-                  </select>
-                  <span class="hint">Colours the tab; production asks before a paste or a send to several tabs.</span>
                 </div>
+                <div class="pair o4">
                 @if (!remote()) {
-                <label>Device type</label>
+                <div class="f"><label>Device type</label>
                 <select name="devtype" [(ngModel)]="s.deviceType">
                   <option value="">(none)</option>
                   @for (d of deviceTypes(); track d) { <option [value]="d">{{ d }}</option> }
-                </select>
+                </select></div>
                 }
+                <div class="f"><label>Environment</label>
+                <div class="row">
+                  <select name="env" [(ngModel)]="s.environment" class="envsel" title="Colours the tab; production asks before a paste or a send to several tabs.">
+                    <option value="">(none{{ folderEnv() ? ' - folder: ' + folderEnv() : '' }})</option>
+                    @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
+                  </select>
+                  <span class="hint envhint">Colours the tab; production asks before a paste or a send to several tabs.</span>
+                </div></div>
+                </div>
                 @if (s.deviceType && !remote()) {
                   <label></label>
-                  <div class="hint">Login and after-login steps come from the device type (Global Options → Device Types) and run before
+                  <div class="hint o4">Login and after-login steps come from the device type (Global Options → Device Types) and run before
                     this session's own Logon Actions.</div>
                 }
                 @if (s.protocol === 'SSH2') {
@@ -149,23 +157,25 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <label></label><div class="hint">Opens in Termwright's VNC viewer tab (VNC servers, macOS Screen Sharing, Raspberry Pi, Linux desktops), also through a jump host or proxy.</div>
                 }
                 @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw' || remote()) {
-                  <label>Hostname</label><input name="hostname" [(ngModel)]="s.hostname" required placeholder="host name or IP address" />
-                  <label>Port</label><input name="port" type="number" min="1" max="65535" [(ngModel)]="s.port" class="short" />
+                  <div class="pair hp o3">
+                    <div class="f"><label>{{ modern() ? 'Address' : 'Hostname' }}</label><input name="hostname" [(ngModel)]="s.hostname" required placeholder="host name or IP address" /></div>
+                    <div class="f"><label>Port</label><input name="port" type="number" min="1" max="65535" [(ngModel)]="s.port" class="short" /></div>
+                  </div>
                   <label>MAC address</label>
                   <div class="row"><input name="mac" [(ngModel)]="s.mac" placeholder="(not saved)" spellcheck="false" style="max-width: 220px" />
                     <span class="hint">saved by Discover Devices: finds the device again when DHCP gives it a new address, and warns when another device answers at this address</span></div>
                 }
                 @if (s.deviceType) {
-                  <label>Login</label>
-                  <div class="checks">
+                  <label class="o5">Login</label>
+                  <div class="checks o5">
                     <label><input type="checkbox" name="inherit" [ngModel]="!s.ownLogin" (ngModelChange)="s.ownLogin = !$event" />
                       Use the device type's username and password{{ loginNote(s.deviceType, deviceUser()) }}</label>
                   </div>
                 }
                 @if (!s.deviceType || s.ownLogin) {
-                  <label>Username</label><input name="username" [(ngModel)]="s.username" placeholder="(prompt when connecting)" />
-                  <label>Password</label>
-                  <div class="row">
+                  <label class="o6">Username</label><input class="o6" name="username" [(ngModel)]="s.username" placeholder="(prompt when connecting)" />
+                  <label class="o6">Password</label>
+                  <div class="row o6">
                     <input name="sesspw" [type]="isRef(pw) ? 'text' : 'password'" [(ngModel)]="pw" [disabled]="noPw" autocomplete="new-password"
                       [placeholder]="refOf(pwState()) ? 'from ' + refOf(pwState()) : pwState() === 'set' ? '(saved - type to change)' : pwState() === 'empty' ? '(saved: no password)' : '(ask when connecting)'" />
                     <label class="nowrap"><input type="checkbox" name="nopw" [(ngModel)]="noPw" /> No password</label>
