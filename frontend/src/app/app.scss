@@ -148,7 +148,8 @@ app-command-window { flex: none; }
   background: var(--surface); color: var(--muted); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); cursor: text;
   &:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 0; height: 100%; font-size: calc(15px * var(--ui-scale, 1)); &:focus { border: 0; } }
-  .eg { flex: none; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); color: var(--faint); white-space: nowrap; }
+  .eg { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); color: var(--faint); white-space: nowrap; }
+  input { min-width: 150px !important; }
   &:focus-within .eg { display: none; } }
 .qa { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: 14px 0 34px;
   button { height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: var(--r);

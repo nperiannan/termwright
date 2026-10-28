@@ -82,7 +82,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
           <label class="f" [class.grow]="!hasLogin()" [class.envf]="hasLogin()"><span>Environment</span>
             <select name="env" [ngModel]="s.environment || ''" (ngModelChange)="s.environment = $event" [style.color]="envColor()">
               <option value="">(none)</option>
-              @for (v of envs; track v.id) { <option [value]="v.id">{{ hasLogin() ? v.short : v.label }}</option> }
+              @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
             </select></label>
         </div>
         @if (hasLogin()) {
@@ -127,7 +127,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
     }
   `,
   styles: [`
-    :host { flex: none; width: 340px; display: flex; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); }
+    :host { flex: none; width: min(510px, 48vw); min-width: 340px; display: flex; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); }
     .sp { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     header { display: flex; align-items: center; gap: 10px; padding: 16px 14px 12px 18px; border-bottom: 1px solid var(--line); margin-bottom: 10px;
       .t { flex: 1; min-width: 0; } .h { font-weight: 600; font-size: calc(15px * var(--ui-scale, 1)); }
@@ -147,7 +147,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
     .chip { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r);
       background: var(--surface-2); color: var(--text); text-align: left;
       app-icon { color: var(--ok); } .chg { margin-left: auto; color: var(--accent); font-size: calc(12px * var(--ui-scale, 1)); } }
-    .envf { width: 92px; flex: none; }
+    .envf { width: 150px; flex: none; }
     .facts { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 8px 12px; display: flex; flex-direction: column; gap: 5px;
       .fh { display: flex; align-items: center; gap: 8px; font-weight: 600; .age { color: var(--faint); font-weight: 400; font-size: calc(11.5px * var(--ui-scale, 1)); } .link { margin-left: auto; } }
       .fr { display: flex; gap: 10px; font-size: calc(12.5px * var(--ui-scale, 1)); span { width: 64px; flex: none; color: var(--muted); } b { font-weight: 500; overflow-wrap: anywhere; } }
