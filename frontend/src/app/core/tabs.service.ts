@@ -14,6 +14,10 @@ export interface TabView {
   title: string;
   state: string;
   message: string;
+  /** How far the connection got while connecting: route, tcp, hostkey, auth, shell. */
+  step?: string;
+  /** Has been connected at least once (the connecting and error cards only show before that). */
+  wasConnected?: boolean;
   info: string;
   session: Session;
   logFile: string;
@@ -392,8 +396,10 @@ export class Tabs {
     };
     this.backend.sftpHopTarget(ti.session).then(h => { if (h) this.patch(ti.id, { hopTarget: h }); }).catch(() => {});
     this.unsubs.set(ti.id, [
+      this.backend.on('term:step:' + ti.id, (step: string) => this.patch(ti.id, { step })),
       this.backend.on('term:status:' + ti.id, (st: { state: string; message: string; info: string }) => {
-        this.patch(ti.id, { state: st.state, message: st.message, info: st.info });
+        this.patch(ti.id, { state: st.state, message: st.message, info: st.info,
+          ...(st.state === 'connected' ? { wasConnected: true, step: '' } : {}) });
         const h = this.handles.get(ti.id);
         if (!h) return;
         if (st.state === 'disconnected' || st.state === 'error') {
@@ -543,6 +549,7 @@ export class Tabs {
       else if (t.parentId) await this.openSftp(t.parentId, t.sftpMode);
       return;
     }
+    this.patch(id, { step: '' });
     if (t.state === 'connected' || t.state === 'connecting') await this.backend.disconnectTab(id);
     await this.backend.refreshTabSession(id).catch(() => {});
     this.handles.get(id)?.term.write('\r\n');

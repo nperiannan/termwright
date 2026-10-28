@@ -4,6 +4,20 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.21.0 (unreleased)
+
+A cleaner, more modern look. Global Options → General → Layout switches back to the **Classic** layout (toolbar, tab strip and menu bar) at any time.
+
+* **Title bar**: the tabs (with a status dot and badges), a **Search or connect** box (Quick Open), Quick Connect, SFTP, the layout menu, the theme switch, Global Options and a **⋯** menu with File, Edit, View, Transfer, Tools and Help. On macOS the tabs share the title bar with the window buttons (after a restart when the layout is changed).
+* **Quick Open connects**: type an address or a connect line (`ssh admin@10.1.1.1`, `voss 10.1.1.1`, `telnet host 2001`, `serial COM3 115200`) and Enter connects.
+* **Start page**: a large search-or-connect box, quick actions (Quick Connect, New Session, Local Shell, Import, Discover) and cards for Favourites and Recent sessions with device icons, address and when they were last used.
+* **Session Manager**: roomier two-line rows with a device icon (switch, router, firewall, server… from the device type) and the address, session counts on folders and New / Import / Scan buttons at the bottom.
+* **Session options in a side panel**: New Session and Session Options open beside the terminal with the everyday fields (name, protocol, address and port or serial port and speed, device type, user name, password, environment); the Advanced rows and **More options…** open the full dialog at that page.
+* **Connecting card**: while a session connects for the first time, a card shows each step (opening the connection or the jump host, checking the host key, logging in, starting the shell).
+* **Error card**: when a session cannot connect, a card shows the reason, a hint and Try Again, Edit Session, Find by MAC Address and the other fixes.
+* The Button Bar is hidden once when updating (View → Button Bar shows it again).
+* Fixed: the bar with the error and its fixes (Edit Session, Forget Saved Password, …) was missing on a failed connection since 0.20.1.
+
 ## 0.20.9 (2026-10-28)
 
 * **About** shows how many times Termwright was downloaded from GitHub (all files of all releases, as GitHub counts them; looked up when About opens and remembered for six hours, nothing is shown when GitHub cannot be reached).

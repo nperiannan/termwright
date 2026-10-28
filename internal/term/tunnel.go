@@ -50,6 +50,7 @@ func (m *Manager) OpenTunnel(ctx context.Context, s session.Session, tabID, addr
 			return nil, fmt.Errorf("jump host %q must be an SSH2 session", s.JumpSession)
 		}
 		m.status(t, StateConnecting, "Connecting via jump host "+js.Name+"...")
+		m.step(t, "route")
 		jc, _, cleanup, err := m.sshClient(ctx, t, js, 1)
 		if err != nil {
 			return nil, fmt.Errorf("jump host %s: %w", js.Name, err)

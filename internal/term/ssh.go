@@ -88,6 +88,7 @@ func (m *Manager) dialSSH(ctx context.Context, t *Tab, s session.Session, cols, 
 	if err != nil {
 		return nil, err
 	}
+	m.step(t, "shell")
 	fail := func(e error) (Conn, error) {
 		_ = client.Close()
 		cleanup()
@@ -259,14 +260,20 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 	cfg := &ssh.ClientConfig{
 		User:              user,
 		Auth:              auths,
-		HostKeyCallback:   m.hostKeyCallback(ctx, t),
+		HostKeyCallback:   m.stepAfterHostKey(t, depth, m.hostKeyCallback(ctx, t)),
 		HostKeyAlgorithms: m.knownHostAlgorithms(addr),
 		Timeout:           20 * time.Second,
 		ClientVersion:     "SSH-2.0-Termwright",
 	}
+	if depth == 0 && s.JumpSession == "" {
+		m.step(t, "tcp")
+	}
 	raw, via, err := m.dialNet(ctx, t, s, addr, depth)
 	if err != nil {
 		return nil, "", nil, err
+	}
+	if depth == 0 {
+		m.step(t, "hostkey")
 	}
 	stop := context.AfterFunc(ctx, func() { _ = raw.Close() })
 	cc, chans, reqs, err := ssh.NewClientConn(raw, addr, cfg)
@@ -430,6 +437,24 @@ func (m *Manager) knownHostAlgorithms(addr string) []string {
 		}
 	}
 	return algos
+}
+
+// step reports how far a connection got ("route", "tcp", "hostkey", "auth",
+// "shell") for the connecting card.
+func (m *Manager) step(t *Tab, name string) {
+	m.emit.Emit("term:step:"+t.id, name)
+}
+
+// stepAfterHostKey reports the login step once the target's host key is
+// accepted (key exchange done, authentication next).
+func (m *Manager) stepAfterHostKey(t *Tab, depth int, cb ssh.HostKeyCallback) ssh.HostKeyCallback {
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := cb(hostname, remote, key)
+		if err == nil && depth == 0 {
+			m.step(t, "auth")
+		}
+		return err
+	}
 }
 
 func (m *Manager) hostKeyCallback(ctx context.Context, t *Tab) ssh.HostKeyCallback {

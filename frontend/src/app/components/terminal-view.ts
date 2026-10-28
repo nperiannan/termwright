@@ -80,8 +80,66 @@ function b64ToBytes(b64: string): Uint8Array {
         @if (serial()) { <button type="button" (click)="tabs.saveScrollback(tab().id)" title="Save the output to a text file">Save…</button> }
         <button type="button" class="x" [title]="serial() ? 'Hide the send bar (right-click the terminal → Send Bar shows it again)' : 'Hide this bar (right-click the terminal → Terminal Bar shows it again; Global Options → Terminal hides it for every tab)'" (click)="tabs.patch(tab().id, { sendBar: false })">✕</button>
       </div>
+    }
+    @if (card() === 'connecting') {
+      <div class="ccard-wrap">
+        <div class="ccard" role="status">
+          <div class="spin"></div>
+          <div class="ct">Connecting to {{ tab().title }}</div>
+          <div class="cs">{{ target() }}</div>
+          <ol class="steps">
+            @for (st of steps(); track st.id; let i = $index) {
+              <li [class.done]="i < stepIndex()" [class.now]="i === stepIndex()">
+                <span class="mk">@if (i < stepIndex()) { <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg> }</span>{{ st.label }}</li>
+            }
+          </ol>
+          <button type="button" (click)="tabs.close(tab().id)">Cancel</button>
+        </div>
+      </div>
+    } @else if (card() === 'error' && fix(); as f) {
+      <div class="ccard-wrap">
+        <div class="ccard err" role="alert">
+          <div class="eic"><svg viewBox="0 0 24 24"><path d="M12 3l10 18H2zM12 10v5M12 18h.01" /></svg></div>
+          <div class="ct">Couldn't connect to {{ tab().title }}</div>
+          <div class="cs">{{ target() }}</div>
+          <div class="emsg">{{ tab().message }}</div>
+          @if (f.hint) { <div class="ehint">{{ f.hint }}</div> }
+          <div class="eacts">
+            <button type="button" class="primary" (click)="runFix('reconnect')">Try Again</button>
+            @for (a of cardActions(f.actions); track a) { <button type="button" (click)="runFix(a)">{{ labels[a] }}</button> }
+          </div>
+        </div>
+      </div>
+    } @else if (fix(); as f) {
+      <div class="fixbar" role="alert">
+        <button type="button" class="fx" title="Dismiss" (click)="dismissed.set(tab().message)">✕</button>
+        <div class="fmsg">{{ tab().message }}</div>
+        @if (f.hint) { <div class="fhint">{{ f.hint }}</div> }
+        <div class="facts">@for (a of f.actions; track a) { <button type="button" [class.primary]="$first" (click)="runFix(a)">{{ labels[a] }}</button> }</div>
+      </div>
     }`,
   styles: [`
+    .ccard-wrap { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: var(--term-bg, var(--bg)); }
+    .ccard { width: min(420px, calc(100% - 32px)); padding: 26px 28px 22px; border-radius: var(--r-lg, 12px); background: var(--surface, var(--panel)); border: 1px solid var(--line, var(--border));
+      box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; color: var(--text);
+      .ct { font-weight: 600; font-size: calc(16px * var(--ui-scale, 1)); margin-top: 6px; }
+      .cs { color: var(--muted); font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); word-break: break-all; }
+      > button { margin-top: 10px; } }
+    .spin { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--line, var(--border)); border-top-color: var(--accent); animation: twspin .8s linear infinite; }
+    @keyframes twspin { to { transform: rotate(360deg); } }
+    .steps { list-style: none; margin: 12px 0 0; padding: 0; align-self: stretch; text-align: left; display: flex; flex-direction: column; gap: 7px;
+      li { display: flex; align-items: center; gap: 10px; color: var(--faint, var(--muted)); }
+      li.done { color: var(--muted); } li.now { color: var(--text); font-weight: 500; }
+      .mk { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 1.5px solid var(--line, var(--border)); display: inline-flex; align-items: center; justify-content: center;
+        svg { width: 12px; height: 12px; fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; } }
+      li.done .mk { background: var(--ok); border-color: var(--ok); }
+      li.now .mk { border-color: var(--accent); border-top-color: transparent; animation: twspin .9s linear infinite; } }
+    .ccard.err { .eic { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(229, 72, 77, .14); color: var(--danger);
+        svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } }
+      .emsg { margin-top: 8px; padding: 8px 10px; align-self: stretch; border-radius: var(--r, 8px); background: var(--surface-2, var(--bg)); font-family: var(--mono);
+        font-size: calc(12px * var(--ui-scale, 1)); word-break: break-word; text-align: left; }
+      .ehint { color: var(--muted); line-height: 1.5; margin-top: 2px; }
+      .eacts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; } }
     :host { display: flex; flex-direction: column; position: absolute; inset: 0; padding: 4px 0 0 6px; background: var(--term-bg); }
     .term-host { width: 100%; flex: 1; min-height: 0; }
     .paused { position: absolute; right: 18px; bottom: 44px; z-index: 4; display: flex; gap: 8px; align-items: center; padding: 4px 6px 4px 10px; border-radius: 6px;
@@ -212,6 +270,31 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     if (cmd) this.history.add(cmd, { session: t.session.path, title: t.title, deviceType: t.session.deviceType });
   }
   readonly labels = FIX_LABELS;
+  /** Modern layout, before the first successful connect: a card instead of an empty terminal. */
+  readonly card = computed(() => {
+    const t = this.tab();
+    if (t.wasConnected || this.ui.settings()?.layout === 'classic') return '';
+    return t.state === 'connecting' ? 'connecting' : t.state === 'error' ? 'error' : '';
+  });
+  readonly steps = computed(() => {
+    const s = this.tab().session;
+    if (s.protocol === 'Serial') return [{ id: 'tcp', label: 'Opening ' + (s.comPort || 'the serial port') }];
+    if (s.protocol === 'Local Shell') return [{ id: 'tcp', label: 'Starting the shell' }];
+    const out: { id: string; label: string }[] = [];
+    if (s.jumpSession) out.push({ id: 'route', label: 'Through jump host ' + s.jumpSession.split('/').pop() });
+    else out.push({ id: 'tcp', label: 'Opening the connection' });
+    if (s.protocol === 'SSH2') out.push({ id: 'hostkey', label: 'Checking the host key' }, { id: 'auth', label: 'Logging in' }, { id: 'shell', label: 'Starting the shell' });
+    return out;
+  });
+  readonly stepIndex = computed(() => Math.max(0, this.steps().findIndex(x => x.id === this.tab().step)));
+  target() {
+    const s = this.tab().session;
+    if (s.protocol === 'Serial') return `${s.comPort} · ${s.baudRate || 9600} baud`;
+    if (s.protocol === 'Local Shell') return 'Local shell';
+    return `${s.protocol} ${s.username ? s.username + '@' : ''}${s.hostname}${s.port ? ':' + s.port : ''}`;
+  }
+  /** The error card's buttons after Try Again (Edit Session, Find by MAC, …). */
+  cardActions(a: FixAction[]) { return a.filter(x => x !== 'reconnect'); }
   /** The error message the user closed the fix bar for. */
   readonly dismissed = signal('');
   readonly fix = computed(() => {
