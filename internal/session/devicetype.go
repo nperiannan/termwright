@@ -26,6 +26,61 @@ type DeviceType struct {
 	// command per line (e.g. "show running-config"); empty = the built-in
 	// default for the device type's name, if any.
 	BackupCommands string `json:"backupCommands"`
+	// Facts are values read from command output after connecting (model,
+	// version, serial, MAC, uptime, or any the user adds).
+	Facts []FactRule `json:"facts"`
+}
+
+// FactRule reads one value (a device fact) from the output of a command:
+// the first group of Regex. Every = read at each connect (version, uptime);
+// otherwise once per session (model, serial, MAC).
+type FactRule struct {
+	Name    string `json:"name"`
+	Command string `json:"command"`
+	Regex   string `json:"regex"`
+	Every   bool   `json:"every"`
+}
+
+func fact(name, cmd, re string, every bool) FactRule {
+	return FactRule{Name: name, Command: cmd, Regex: re, Every: every}
+}
+
+// BuiltinFacts are the fact rules of the built-in device types (by name).
+func BuiltinFacts(name string) []FactRule {
+	mac := `([0-9a-fA-F]{2}(?:[:.-]?[0-9a-fA-F]{2}){5})`
+	switch strings.ToUpper(name) {
+	case "VOSS":
+		return []FactRule{
+			fact("Model", "show sys-info", `ModelName\s*:\s*(\S+)`, false),
+			fact("Version", "show sys-info", `SysDescr\s*:\s*\S+\s*\(([^)]+)\)`, true),
+			fact("Serial", "show sys-info", `Serial#\s*:\s*(\S+)`, false),
+			fact("MAC", "show sys-info", `BaseMacAddr\s*:\s*`+mac, false),
+			fact("Uptime", "show sys-info", `SysUpTime\s*:\s*(.+?)\s*$`, true),
+		}
+	case "EXOS":
+		return []FactRule{
+			fact("Model", "show switch", `System Type:\s*(.+?)\s*$`, false),
+			fact("Version", "show switch", `Primary ver:\s*(\S+)`, true),
+			fact("Serial", "show version", `^Switch\s*:\s*\S+\s+(\S+)`, false),
+			fact("MAC", "show switch", `System MAC:\s*`+mac, false),
+			fact("Uptime", "show switch", `System UpTime:\s*(.+?)\s*$`, true),
+		}
+	case "CISCO IOS":
+		return []FactRule{
+			fact("Model", "show version", `^[Cc]isco (\S+) \(`, false),
+			fact("Version", "show version", `Cisco IOS.*Version ([^,\s]+)`, true),
+			fact("Serial", "show version", `Processor board ID (\S+)`, false),
+			fact("MAC", "show version", `Base [Ee]thernet MAC [Aa]ddress\s*:\s*`+mac, false),
+			fact("Uptime", "show version", `uptime is (.+?)\s*$`, true),
+		}
+	case "LINUX":
+		return []FactRule{
+			fact("Version", "cat /etc/os-release", `PRETTY_NAME="?([^"\n]+?)"?\s*$`, true),
+			fact("Kernel", "uname -r", `^(\d+\.\d+\S*)\s*$`, true),
+			fact("Uptime", "uptime -p", `^up (.+?)\s*$`, true),
+		}
+	}
+	return nil
 }
 
 // Backup returns the commands that print the configuration.
@@ -83,7 +138,7 @@ func step(expect, send string, hide bool) LogonAction {
 // BuiltinDeviceTypes are the device types a new installation starts with;
 // users can edit, remove or add their own in Global Options → Device Types.
 func BuiltinDeviceTypes() []DeviceType {
-	return []DeviceType{
+	list := []DeviceType{
 		{Name: "EXOS", Protocol: ProtoSSH2, Prompt: `[#>] ?$`, BackupCommands: "show configuration",
 			LoginSteps: []LogonAction{step("login:", `\s`, false), step("password:", `\w`, true)},
 			AfterLogin: []LogonAction{step("#", "disable clipaging", false)}},
@@ -96,4 +151,8 @@ func BuiltinDeviceTypes() []DeviceType {
 		{Name: "Linux", Protocol: ProtoSSH2, Prompt: `[$#] ?$`,
 			LoginSteps: []LogonAction{step("login:", `\s`, false), step("Password:", `\w`, true)}},
 	}
+	for i := range list {
+		list[i].Facts = BuiltinFacts(list[i].Name)
+	}
+	return list
 }

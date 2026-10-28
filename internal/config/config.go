@@ -58,81 +58,83 @@ type KeywordSet struct {
 
 // Settings are the global options.
 type Settings struct {
-	SessionsDir          string               `json:"sessionsDir"`
-	LogDir               string               `json:"logDir"`
-	DownloadDir          string               `json:"downloadDir"`
-	FontFamily           string               `json:"fontFamily"`
-	FontSize             int                  `json:"fontSize"`
-	Theme                string               `json:"theme"`               // ui theme: dark | light | system
-	UIFont               string               `json:"uiFont"`              // interface font: "" (system), vscode, inter, plex
-	UIFontSize           int                  `json:"uiFontSize"`          // interface text size in px (13-17; 0 = 13)
-	ThemeFollowsSystem   bool                 `json:"themeFollowsSystem"`  // set once when the default became "system" (0.20.1)
-	HighlightOptIn       bool                 `json:"highlightOptIn"`      // set once when keyword highlighting became off by default (0.20.3)
-	Layout               string               `json:"layout"`              // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
-	ModernLayout         bool                 `json:"modernLayout"`        // set once when the modern layout became the default (0.21.0)
-	HighlightStyle       string               `json:"highlightStyle"`      // keyword highlighting: "" = colour the text, "background" = colour the background
-	IconStyle            string               `json:"iconStyle"`           // device and session icons: "" = coloured tiles, "glyph" = the symbol only
-	CompactRows          bool                 `json:"compactRows"`         // modern layout: one-line Session Manager rows
-	WelcomeSeen          string               `json:"welcomeSeen"`         // version whose welcome flow was finished or skipped ("0.21")
-	HideTerminalBar      bool                 `json:"hideTerminalBar"`     // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
-	TerminalScheme       string               `json:"terminalScheme"`      // scheme name or "Auto" (follow the UI theme)
-	ForceTermScheme      bool                 `json:"forceTerminalScheme"` // global scheme wins over session schemes
-	CursorStyle          string               `json:"cursorStyle"`         // block | underline | bar
-	CursorBlink          bool                 `json:"cursorBlink"`
-	Scrollback           int                  `json:"scrollback"`
-	CopyOnSelect         bool                 `json:"copyOnSelect"`
-	RightClickPaste      bool                 `json:"rightClickPaste"`
-	ConfirmClose         bool                 `json:"confirmClose"`
-	ShowButtonBar        bool                 `json:"showButtonBar"`
-	ShowCommandWin       bool                 `json:"showCommandWindow"`
-	ShowSessionTree      bool                 `json:"showSessionManager"`
-	PasteLineDelayMs     int                  `json:"pasteLineDelayMs"`
-	Buttons              []Button             `json:"buttons"`
-	RecentSessions       []string             `json:"recentSessions"`
-	Favorites            []string             `json:"favorites"`        // session paths shown at the top of the Session Manager
-	LastConnected        map[string]string    `json:"lastConnected"`    // session path → RFC 3339 time of the last connect
-	ShowReachability     bool                 `json:"showReachability"` // Session Manager: dot per session from a quick TCP check
-	BackupDir            string               `json:"backupDir"`        // Configuration Backups folder ("" = Documents/Termwright Config Backups)
-	BackupJobs           []BackupJob          `json:"backupJobs"`
-	Checklists           []Checklist          `json:"checklists"`
-	Collections          []Collection         `json:"collections"`
-	CollectDir           string               `json:"collectDir"`              // "" = Documents/Termwright Collected
-	ChecklistDir         string               `json:"checklistDir"`            // "" = Documents/Termwright Checklists
-	RecordHistory        *bool                `json:"recordHistory,omitempty"` // nil = on
-	RecordSessions       bool                 `json:"recordSessions"`          // record every connection (.cast)
-	RecordDir            string               `json:"recordDir"`               // "" = Documents/Termwright Recordings
-	RecordKeepDays       int                  `json:"recordKeepDays"`          // 0 = keep
-	SmartCardLibraries   []string             `json:"smartCardLibraries"`      // PKCS#11 libraries; empty = the usual places
-	SmartCardPinEachTime bool                 `json:"smartCardPinEachTime"`    // ask the PIN for every login
-	KeywordSets          []KeywordSet         `json:"keywordSets"`
-	DefaultKeywordSet    string               `json:"defaultKeywordSet"`
-	ShowConnectBar       bool                 `json:"showConnectBar"`
-	InWindowMenu         bool                 `json:"inWindowMenu"` // menu bar inside the window (default on macOS)
-	Credentials          []Credential         `json:"credentials"`
-	MasterHash           string               `json:"masterHash"` // scrypt verifier; empty = no master password
-	KeyMap               []KeyBinding         `json:"keyMap"`
-	CustomSchemes        []ColorScheme        `json:"customSchemes"`
-	AccentColor          string               `json:"accentColor"`
-	RestoreTabs          bool                 `json:"restoreTabs"`
-	OpenTabs             []string             `json:"openTabs"`
-	Bookmarks            []Bookmark           `json:"bookmarks"`
-	SFTPCwdAuto          bool                 `json:"sftpCwdAuto"`              // turn on folder reporting in the shell when an SFTP tab opens from it
-	SFTPFollowTerminal   bool                 `json:"sftpFollowTerminal"`       // SFTP tabs follow the terminal folder
-	SFTPFollowUser       bool                 `json:"sftpFollowUser"`           // SFTP tabs browse as the terminal's user (root via sudo)
-	SessionManagerRight  bool                 `json:"sessionManagerRight"`      // Session Manager on the right side of the window
-	VaultAddr            string               `json:"vaultAddr,omitempty"`      // HashiCorp Vault URL for vault:// references ("" = $VAULT_ADDR)
-	KeyPassphrases       []string             `json:"keyPassphrases,omitempty"` // key files whose passphrase is in the OS keychain (no secrets here)
-	UpdateChannel        string               `json:"updateChannel"`            // stable | nightly | off
-	UpdateRepo           string               `json:"updateRepo"`               // GitHub owner/name
-	UpdateOnStart        bool                 `json:"updateOnStart"`
-	PythonPath           string               `json:"pythonPath"` // interpreter for .py scripts ("" = find python3)
-	DeviceTypes          []session.DeviceType `json:"deviceTypes"`
-	Alerts               []Alert              `json:"alerts"`
-	ConfirmPaste         bool                 `json:"confirmPaste"` // ask before pasting several lines
-	Snippets             []Snippet            `json:"snippets"`
-	Workspaces           []Workspace          `json:"workspaces"`
-	FolderDefaults       []FolderDefault      `json:"folderDefaults"`
-	Window               WindowState          `json:"window"`
+	SessionsDir          string                       `json:"sessionsDir"`
+	LogDir               string                       `json:"logDir"`
+	DownloadDir          string                       `json:"downloadDir"`
+	FontFamily           string                       `json:"fontFamily"`
+	FontSize             int                          `json:"fontSize"`
+	Theme                string                       `json:"theme"`               // ui theme: dark | light | system
+	UIFont               string                       `json:"uiFont"`              // interface font: "" (system), vscode, inter, plex
+	UIFontSize           int                          `json:"uiFontSize"`          // interface text size in px (13-17; 0 = 13)
+	ThemeFollowsSystem   bool                         `json:"themeFollowsSystem"`  // set once when the default became "system" (0.20.1)
+	HighlightOptIn       bool                         `json:"highlightOptIn"`      // set once when keyword highlighting became off by default (0.20.3)
+	Layout               string                       `json:"layout"`              // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
+	ModernLayout         bool                         `json:"modernLayout"`        // set once when the modern layout became the default (0.21.0)
+	HighlightStyle       string                       `json:"highlightStyle"`      // keyword highlighting: "" = colour the text, "background" = colour the background
+	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`         // session path → fact name → value ("_at" = when read)
+	FactRulesAdded       bool                         `json:"factRulesAdded"`      // set once when the built-in device types got their fact rules (0.21.0)
+	IconStyle            string                       `json:"iconStyle"`           // device and session icons: "" = coloured tiles, "glyph" = the symbol only
+	CompactRows          bool                         `json:"compactRows"`         // modern layout: one-line Session Manager rows
+	WelcomeSeen          string                       `json:"welcomeSeen"`         // version whose welcome flow was finished or skipped ("0.21")
+	HideTerminalBar      bool                         `json:"hideTerminalBar"`     // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
+	TerminalScheme       string                       `json:"terminalScheme"`      // scheme name or "Auto" (follow the UI theme)
+	ForceTermScheme      bool                         `json:"forceTerminalScheme"` // global scheme wins over session schemes
+	CursorStyle          string                       `json:"cursorStyle"`         // block | underline | bar
+	CursorBlink          bool                         `json:"cursorBlink"`
+	Scrollback           int                          `json:"scrollback"`
+	CopyOnSelect         bool                         `json:"copyOnSelect"`
+	RightClickPaste      bool                         `json:"rightClickPaste"`
+	ConfirmClose         bool                         `json:"confirmClose"`
+	ShowButtonBar        bool                         `json:"showButtonBar"`
+	ShowCommandWin       bool                         `json:"showCommandWindow"`
+	ShowSessionTree      bool                         `json:"showSessionManager"`
+	PasteLineDelayMs     int                          `json:"pasteLineDelayMs"`
+	Buttons              []Button                     `json:"buttons"`
+	RecentSessions       []string                     `json:"recentSessions"`
+	Favorites            []string                     `json:"favorites"`        // session paths shown at the top of the Session Manager
+	LastConnected        map[string]string            `json:"lastConnected"`    // session path → RFC 3339 time of the last connect
+	ShowReachability     bool                         `json:"showReachability"` // Session Manager: dot per session from a quick TCP check
+	BackupDir            string                       `json:"backupDir"`        // Configuration Backups folder ("" = Documents/Termwright Config Backups)
+	BackupJobs           []BackupJob                  `json:"backupJobs"`
+	Checklists           []Checklist                  `json:"checklists"`
+	Collections          []Collection                 `json:"collections"`
+	CollectDir           string                       `json:"collectDir"`              // "" = Documents/Termwright Collected
+	ChecklistDir         string                       `json:"checklistDir"`            // "" = Documents/Termwright Checklists
+	RecordHistory        *bool                        `json:"recordHistory,omitempty"` // nil = on
+	RecordSessions       bool                         `json:"recordSessions"`          // record every connection (.cast)
+	RecordDir            string                       `json:"recordDir"`               // "" = Documents/Termwright Recordings
+	RecordKeepDays       int                          `json:"recordKeepDays"`          // 0 = keep
+	SmartCardLibraries   []string                     `json:"smartCardLibraries"`      // PKCS#11 libraries; empty = the usual places
+	SmartCardPinEachTime bool                         `json:"smartCardPinEachTime"`    // ask the PIN for every login
+	KeywordSets          []KeywordSet                 `json:"keywordSets"`
+	DefaultKeywordSet    string                       `json:"defaultKeywordSet"`
+	ShowConnectBar       bool                         `json:"showConnectBar"`
+	InWindowMenu         bool                         `json:"inWindowMenu"` // menu bar inside the window (default on macOS)
+	Credentials          []Credential                 `json:"credentials"`
+	MasterHash           string                       `json:"masterHash"` // scrypt verifier; empty = no master password
+	KeyMap               []KeyBinding                 `json:"keyMap"`
+	CustomSchemes        []ColorScheme                `json:"customSchemes"`
+	AccentColor          string                       `json:"accentColor"`
+	RestoreTabs          bool                         `json:"restoreTabs"`
+	OpenTabs             []string                     `json:"openTabs"`
+	Bookmarks            []Bookmark                   `json:"bookmarks"`
+	SFTPCwdAuto          bool                         `json:"sftpCwdAuto"`              // turn on folder reporting in the shell when an SFTP tab opens from it
+	SFTPFollowTerminal   bool                         `json:"sftpFollowTerminal"`       // SFTP tabs follow the terminal folder
+	SFTPFollowUser       bool                         `json:"sftpFollowUser"`           // SFTP tabs browse as the terminal's user (root via sudo)
+	SessionManagerRight  bool                         `json:"sessionManagerRight"`      // Session Manager on the right side of the window
+	VaultAddr            string                       `json:"vaultAddr,omitempty"`      // HashiCorp Vault URL for vault:// references ("" = $VAULT_ADDR)
+	KeyPassphrases       []string                     `json:"keyPassphrases,omitempty"` // key files whose passphrase is in the OS keychain (no secrets here)
+	UpdateChannel        string                       `json:"updateChannel"`            // stable | nightly | off
+	UpdateRepo           string                       `json:"updateRepo"`               // GitHub owner/name
+	UpdateOnStart        bool                         `json:"updateOnStart"`
+	PythonPath           string                       `json:"pythonPath"` // interpreter for .py scripts ("" = find python3)
+	DeviceTypes          []session.DeviceType         `json:"deviceTypes"`
+	Alerts               []Alert                      `json:"alerts"`
+	ConfirmPaste         bool                         `json:"confirmPaste"` // ask before pasting several lines
+	Snippets             []Snippet                    `json:"snippets"`
+	Workspaces           []Workspace                  `json:"workspaces"`
+	FolderDefaults       []FolderDefault              `json:"folderDefaults"`
+	Window               WindowState                  `json:"window"`
 }
 
 // WindowState remembers the main window size and position.
@@ -393,6 +395,16 @@ func Load(dataDir string) (*Manager, error) {
 	if !m.cur.HighlightOptIn {
 		m.cur.DefaultKeywordSet, m.cur.HighlightOptIn, changed = "", true, true
 	}
+	// Device facts (0.21.0): the built-in device types get their fact rules
+	// (once; rules edited afterwards stay).
+	if !m.cur.FactRulesAdded {
+		for i, d := range m.cur.DeviceTypes {
+			if len(d.Facts) == 0 {
+				m.cur.DeviceTypes[i].Facts = session.BuiltinFacts(d.Name)
+			}
+		}
+		m.cur.FactRulesAdded, changed = true, true
+	}
 	// The modern layout (0.21.0) keeps the Button Bar out of the way (once -
 	// it can be shown again from View).
 	if !m.cur.ModernLayout {
@@ -528,6 +540,25 @@ func (m *Manager) AddRecent(p string) {
 	_ = m.Save(s)
 }
 
+// SetFacts stores facts read for a session (merged with those it has);
+// returns all of them.
+func (m *Manager) SetFacts(path string, f map[string]string) map[string]string {
+	s := m.Get()
+	if s.DeviceFacts == nil {
+		s.DeviceFacts = map[string]map[string]string{}
+	}
+	cur := map[string]string{}
+	for k, v := range s.DeviceFacts[path] {
+		cur[k] = v
+	}
+	for k, v := range f {
+		cur[k] = v
+	}
+	s.DeviceFacts[path] = cur
+	_ = m.Save(s)
+	return cur
+}
+
 // MovePaths keeps favourites, recent sessions and last-connected times when a
 // session (or, with folder, every session under a folder) is renamed or moved.
 // An empty newPath forgets them (deleted).
@@ -570,6 +601,17 @@ func (m *Manager) MovePaths(oldPath, newPath string, folder bool) {
 		}
 	}
 	s.LastConnected = lc
+	if len(s.DeviceFacts) > 0 {
+		df := map[string]map[string]string{}
+		for p, f := range s.DeviceFacts {
+			q, ok := conv(p)
+			changed = changed || ok
+			if q != "" {
+				df[q] = f
+			}
+		}
+		s.DeviceFacts = df
+	}
 	if changed {
 		_ = m.Save(s)
 	}

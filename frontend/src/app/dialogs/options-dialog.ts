@@ -2,7 +2,7 @@ import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '
 import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { Backend } from '../core/backend';
-import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, comboOf } from '../core/models';
+import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, comboOf, FACT_NAMES } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
 import { UI_FONTS, UI_SIZES, uiFontStack } from '../core/ui-fonts';
@@ -317,6 +317,28 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label></label>
                   <div class="checks"><label><input type="checkbox" name="dticr" [(ngModel)]="d.initialCr" /> Send initial carriage return</label></div>
                 </div>
+                <h4>Device facts</h4>
+                <p class="hint">Values read after connecting, in a background login (nothing is typed in your tab): shown on the tab, the status bar,
+                  the session and HTML reports. The first ( ) group of the pattern is the value. Easiest: run the command in a tab, select the value,
+                  right-click → <b>Save Selection as Device Fact</b> - the pattern is made for you.</p>
+                <table class="list facts">
+                  <thead><tr><th>Name</th><th>Command</th><th>Pattern (regex)</th><th class="c" title="Read at every connect; otherwise once per session">Every connect</th><th></th></tr></thead>
+                  <tbody>
+                    @for (f of d.facts ?? []; track $index) {
+                      <tr>
+                        <td><input [name]="'fn' + $index" [(ngModel)]="f.name" list="tw-fact-names" style="width: 100px" /></td>
+                        <td><input class="mono" [name]="'fc' + $index" [(ngModel)]="f.command" /></td>
+                        <td><input class="mono" [name]="'fr' + $index" [(ngModel)]="f.regex" [class.err]="!reOk(f.regex)" [title]="reOk(f.regex) ? '' : 'Not a valid regular expression'" /></td>
+                        <td class="c"><input type="checkbox" [name]="'fe' + $index" [(ngModel)]="f.every" /></td>
+                        <td><button type="button" class="icon-btn" (click)="d.facts!.splice($index, 1)">✕</button></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+                <datalist id="tw-fact-names">@for (n of factNames; track n) { <option [value]="n"></option> }</datalist>
+                <div class="row">
+                  <button type="button" (click)="(d.facts = d.facts ?? []).push({ name: '', command: '', regex: '', every: false })">Add fact</button>
+                </div>
                 @for (part of stepParts; track part.key) {
                   <h4>{{ part.title }}</h4>
                   <table class="list">
@@ -474,6 +496,8 @@ export class OptionsDialog implements OnInit {
   protected ui = inject(Ui);
   readonly uiFonts = UI_FONTS;
   readonly uiSizes = UI_SIZES;
+  readonly factNames = FACT_NAMES;
+  reOk(re: string) { if (!re) return true; try { new RegExp(re); return true; } catch { return false; } }
   readonly isMac = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac OS');
   fontStack(v: string | undefined) { return uiFontStack(v); }
   private backend = inject(Backend);

@@ -10,6 +10,7 @@ import { ago, envInfo, envOf } from '../core/env';
 import { SessionIcon, SessionKind } from './session-icon';
 import { DeviceIcon, deviceKindOf } from './device-icon';
 import { FolderIcon } from './folder-icon';
+import { factList, factsAge } from '../core/facts';
 
 const EXPANDED_KEY = 'termwright.expanded';
 const SECTIONS_KEY = 'termwright.treeSections';
@@ -152,7 +153,9 @@ export function sessionAddr(n: SessionNode): string {
         @if (h.n.jump) { <div class="hrow">through jump host <b>{{ h.n.jump }}</b></div> }
         @if (h.n.proxy) { <div class="hrow">through a proxy</div> }
         @if (h.n.deviceType) { <div class="hrow">Device type <b>{{ h.n.deviceType }}</b></div> }
-        @if (h.n.mac) { <div class="hrow">MAC address <span class="mono">{{ h.n.mac }}</span></div> }
+        @if (h.n.mac && !ui.factsOf(h.n.path)?.['MAC']) { <div class="hrow">MAC address <span class="mono">{{ h.n.mac }}</span></div> }
+        @for (f of facts(h.n.path); track f[0]) { <div class="hrow">{{ f[0] }} <b [class.mono]="f[0] === 'MAC'">{{ f[1] }}</b></div> }
+        @if (factsAge(ui.factsOf(h.n.path)); as fa) { <div class="hrow muted">Device facts {{ fa }}</div> }
         <div class="hrow">{{ loginText(h) }}</div>
         @if (reach() && reachable().has(h.n.path)) { <div class="hrow">{{ reachable().get(h.n.path) ? 'Answers on port ' + portOf(h.n) : 'Does not answer on port ' + portOf(h.n) }}</div> }
         <div class="hrow muted">{{ lastAgo(h.n.path) ? 'Last connected ' + lastAgo(h.n.path) : 'Not connected yet from this computer' }}</div>
@@ -254,6 +257,9 @@ export class SessionTree implements AfterViewInit, OnDestroy {
       { label: 'Hide Session Manager', action: () => this.ui.actionHandler('toggle-session-manager') },
     ]);
   }
+
+  facts(path: string) { return factList(this.ui.factsOf(path)); }
+  readonly factsAge = factsAge;
 
   devKind(n: SessionNode) { return deviceKindOf(n.deviceType); }
   addr(n: SessionNode) { return sessionAddr(n); }
@@ -588,6 +594,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ] : [{ label: 'Connect', action: () => this.connect(n) }]),
           { separator: true },
           { label: 'Properties...', action: () => this.ui.editSession(n.path) },
+          ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }] : []),
           { label: this.isFav(n.path) ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav([n.path], !this.isFav(n.path)) },
           ...(sec === 'recent' ? [{ label: 'Remove from Recent', action: () => this.ui.removeRecent(n.path) }] : []),
           ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' ? [] : [

@@ -853,6 +853,15 @@ func (m *Manager) askLogon(t *Tab, label string, secret bool, user string) strin
 
 // loginPassword returns the password for a session: the device type's when
 // the session inherits its login, otherwise the session's saved password.
+// CanLogInUnattended reports whether a connection to s can log in without
+// asking: a saved password (session or device type) or a key file.
+func (m *Manager) CanLogInUnattended(s session.Session) bool {
+	if _, ok := m.loginPassword(s); ok {
+		return true
+	}
+	return s.IdentityFile != "" || s.SmartCard != ""
+}
+
 func (m *Manager) loginPassword(s session.Session) (string, bool) {
 	if s.DeviceType != "" && !s.OwnLogin && m.DevicePassword != nil {
 		if pw, ok := m.DevicePassword(s.DeviceType); ok {

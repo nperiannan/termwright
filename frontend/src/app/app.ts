@@ -5,6 +5,7 @@ import { Tabs, TabView } from './core/tabs.service';
 import { connectString, findSessionByName, looksLikeConnect } from './core/connect-string';
 import { SessionNode } from './core/models';
 import { ago } from './core/env';
+import { factList } from './core/facts';
 import { SessionIcon } from './components/session-icon';
 import { DeviceIcon, deviceKindOf } from './components/device-icon';
 import { sessionAddr } from './components/session-tree';
@@ -44,11 +45,12 @@ import { Compare } from './dialogs/compare';
 import { ExportDialog, ImportDialog } from './dialogs/import-export';
 import { About, Overlays } from './dialogs/overlays';
 import { WELCOME_VERSION, Welcome } from './dialogs/welcome';
+import { FactTeach } from './dialogs/fact-teach';
 
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -66,6 +68,21 @@ export class App implements OnInit {
   readonly settings = this.ui.settings;
   readonly active = this.tabs.active;
   readonly recent = computed(() => this.settings()?.recentSessions ?? []);
+  /** Tab hover: name, environment, device type, the device's facts and the connection. */
+  tabTip(t: TabView) {
+    const e = this.tabEnv(t);
+    const f = factList(this.ui.factsOf(t.session?.path));
+    return [t.title + (e ? '  (' + e.label + ')' : ''),
+      ...(t.session?.deviceType ? ['Type: ' + t.session.deviceType] : []),
+      ...f.map(([k, v]) => k + ': ' + v),
+      ...(t.info && t.info !== t.title ? [t.info] : [])].join('\n');
+  }
+  /** Status bar: "VOSS 8.10.0.0 · up 41 day(s)". */
+  statusFacts(t: TabView) {
+    const f = this.ui.factsOf(t.session?.path);
+    const parts = [[t.session?.deviceType, f?.['Version']].filter(Boolean).join(' '), f?.['Uptime'] ? 'up ' + f['Uptime'] : ''].filter(Boolean);
+    return parts.join(' · ');
+  }
   tabEnv(t: TabView) { return envInfo(envOf(t.session?.path ?? '', t.session?.environment, this.settings()?.folderDefaults)); }
   readonly tiled = computed(() => this.tabs.layout() !== 'tabs');
   readonly gridCols = computed(() => {
@@ -132,11 +149,14 @@ export class App implements OnInit {
     }
     return m;
   });
-  /** Card second line: user@host[:port], or the serial port and speed. */
-  cardAddr(n: SessionNode) { return sessionAddr({ ...n, deviceType: '', protocol: n.protocol === 'SSH2' ? 'SSH2' : n.protocol }).replace(/ · (Telnet|Raw|RDP|VNC|Serial|Console)$/, ''); }
+  /** Card second line: the model when known, else user@host[:port]. */
+  cardAddr(n: SessionNode) {
+    const m = this.ui.factsOf(n.path)?.['Model'];
+    if (m) return m + ' · ' + (n.hostname ?? ''); return sessionAddr({ ...n, deviceType: '', protocol: n.protocol === 'SSH2' ? 'SSH2' : n.protocol }).replace(/ · (Telnet|Raw|RDP|VNC|Serial|Console)$/, ''); }
   /** Card chip: "VOSS · SSH2", "Linux · 3 h ago". */
   cardMeta(n: SessionNode, recent: boolean) {
-    const kind = n.deviceType || ({ Serial: 'Serial', 'Local Shell': 'Local', Console: 'Console' } as Record<string, string>)[n.protocol ?? ''] || '';
+    const ver = this.ui.factsOf(n.path)?.['Version'] ?? '';
+    const kind = [n.deviceType || ({ Serial: 'Serial', 'Local Shell': 'Local', Console: 'Console' } as Record<string, string>)[n.protocol ?? ''] || '', ver].filter(Boolean).join(' ');
     const tail = recent ? this.lastAgo(n) : (n.protocol === 'Serial' ? '' : n.protocol ?? '');
     return [kind, tail].filter(Boolean).join(' · ') || n.protocol || '';
   }

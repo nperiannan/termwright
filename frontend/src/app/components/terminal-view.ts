@@ -386,6 +386,35 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     const sum = this.errSummary(hint);
     return hint.split(/(?<=\.)\s+/).map(x => x.trim()).filter(x => x && x !== sum);
   }
+  /** Terminal right-click → Save Selection as Device Fact: the highlighted
+   *  value, its line, the command that printed it and that command's output. */
+  teachFact() {
+    const term = this.term;
+    const pos = term?.getSelectionPosition();
+    if (!term || !pos) return;
+    const sel = term.getSelection().split('\n')[0].replace(/\s+$/, '');
+    if (!sel.trim()) return;
+    const buf = term.buffer.active;
+    let row = -1, col = -1, line = '';
+    for (const y of [pos.start.y, pos.start.y - 1, pos.start.y + 1]) {
+      const l = buf.getLine(y)?.translateToString(true) ?? '';
+      const i = l.indexOf(sel, Math.max(0, pos.start.x - 2));
+      const j = i >= 0 ? i : l.indexOf(sel);
+      if (j >= 0) { row = y; col = j; line = l; break; }
+    }
+    if (row < 0) { this.ui.toast('Select the value on one line of the output.', 'info'); return; }
+    let cmdRow = -1, command = '';
+    for (let y = row - 1; y >= Math.max(0, row - 400); y--) {
+      const c = commandOfLine(buf.getLine(y)?.translateToString(true) ?? '');
+      if (c) { cmdRow = y; command = c; break; }
+    }
+    const out: string[] = [];
+    for (let y = cmdRow + 1; y <= Math.min(buf.length - 1, row + 40); y++) out.push(buf.getLine(y)?.translateToString(true) ?? '');
+    const t = this.tab();
+    this.ui.factTeach.set({ path: t.session.path, deviceType: t.session.deviceType, line, start: col, length: sel.length, command, output: out.join('\n') });
+    this.ui.open('factTeach');
+  }
+
   /** The error card's buttons after Try Again (Edit Session, Find by MAC, …). */
   cardActions(a: FixAction[]) { return a.filter(x => x !== 'reconnect'); }
   /** The error message the user closed the fix bar for. */
@@ -711,6 +740,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       { label: 'Paste', action: () => void this.tabs.paste(id) },
       { label: 'Select All', action: () => t?.selectAll() },
       { label: 'Copy as HTML (with colors)', action: () => void this.copyHtml(), disabled: !t?.hasSelection() },
+      ...(this.tab().session.path && this.tab().kind === 'terminal' ? [{ label: 'Save Selection as Device Fact...', action: () => this.teachFact(), disabled: !t?.hasSelection() }] : []),
       { label: 'Save Scrollback As HTML...', action: () => void this.tabs.saveScrollback(id, 'html') },
       { separator: true },
       { label: (this.tabs.get(id)?.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.setTimestamps(!this.tabs.get(id)?.timestamps) },

@@ -4,7 +4,7 @@
             (click)="action('toggle-session-manager')"><app-icon name="sidebar" /></button>
     <nav class="ptabs" #ptabs (wheel)="tabsWheel($event)">
       @for (t of tabs.tabs(); track t.id) {
-        <div class="ptab" [attr.data-tab]="t.id" [class.on]="t.id === tabs.activeId()" [title]="(tabEnv(t) ? tabEnv(t)!.label + ' - ' : '') + (t.info || t.title)"
+        <div class="ptab" [attr.data-tab]="t.id" [class.on]="t.id === tabs.activeId()" [title]="tabTip(t)"
              (click)="tabs.activeId.set(t.id)" (auxclick)="onMiddleClick($event, t)" (contextmenu)="tabMenu($event, t)">
           <span class="dot" [class]="t.state" [style.box-shadow]="tabEnv(t) ? '0 0 0 2px ' + tabEnv(t)!.color : null"></span>
           <span class="label">{{ t.title }}</span>
@@ -104,7 +104,7 @@
     @if (!modern()) {
     <nav class="tabbar">
       @for (t of tabs.tabs(); track t.id) {
-        <div class="tab" [class.active]="t.id === tabs.activeId()" [title]="(tabEnv(t) ? tabEnv(t)!.label + ' - ' : '') + (t.info || t.title)"
+        <div class="tab" [class.active]="t.id === tabs.activeId()" [title]="tabTip(t)"
              [style.box-shadow]="tabEnv(t) ? 'inset 0 3px 0 ' + tabEnv(t)!.color : null"
              (click)="tabs.activeId.set(t.id)" (auxclick)="onMiddleClick($event, t)" (contextmenu)="tabMenu($event, t)">
           <span class="dot" [class]="t.state"></span>
@@ -246,7 +246,7 @@
   <span class="state" [class]="'state ' + (active()?.state ?? '')"><span class="sdot"></span>{{ stateLabel(active()) }}</span>
   @if (active(); as t) {
     <span class="info" [title]="t.info">{{ statusTarget(t) }}</span>
-    @if (t.session.deviceType) { <span>{{ t.session.deviceType }}</span> }
+    @if (statusFacts(t); as sf) { <span [title]="tabTip(t)">{{ sf }}</span> }
     <span class="grow"></span>
     @if (t.logFile) { <span class="log" [title]="t.logFile">● Logging</span> }
     @if (t.kind === 'terminal') { <span>{{ t.cols }} × {{ t.rows }}</span> }
@@ -303,6 +303,7 @@
   @case ('export') { <app-export-dialog /> }
   @case ('about') { <app-about /> }
   @case ('welcome') { <app-welcome /> }
+  @case ('factTeach') { <app-fact-teach /> }
   @case ('shortcuts') { <app-about /> }
 }
 <app-prompt-dialog />

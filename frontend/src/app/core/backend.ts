@@ -51,6 +51,9 @@ export class Backend {
   newSessionDefaults() { return this.call<Session>('NewSessionDefaults'); }
   saveSession(s: Session, oldPath: string) { return this.call<Session>('SaveSession', s, oldPath); }
   deleteSession(path: string) { return this.call<void>('DeleteSession', path); }
+  refreshFacts(path: string, all: boolean) { return this.call<Record<string, string> | null>('RefreshFacts', path, all); }
+  setSessionFacts(path: string, f: Record<string, string>) { return this.call<Record<string, string> | null>('SetSessionFacts', path, f); }
+  clearRecent(path: string) { return this.call<Settings>('ClearRecent', path); }
   copySessionAs(path: string, openAs: string) { return this.call<Session>('CopySessionAs', path, openAs); }
   duplicateSession(path: string) { return this.call<string>('DuplicateSession', path); }
   createFolder(path: string) { return this.call<void>('CreateFolder', path); }

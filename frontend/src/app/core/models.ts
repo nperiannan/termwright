@@ -26,7 +26,14 @@ export interface Session {
 export interface DeviceType {
   name: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
   loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string;
+  facts?: FactRule[] | null;
 }
+/** A value read from command output after connecting: the first group of regex. every = at each connect. */
+export interface FactRule { name: string; command: string; regex: string; every: boolean; }
+/** Names offered for facts (users can type others). */
+export const FACT_NAMES = ['Model', 'Version', 'Serial', 'MAC', 'Uptime'];
+/** Facts read at each connect by default (the others once per session). */
+export const FACT_EVERY = ['Version', 'Uptime'];
 /** A saved command; {{name}} / {{name:default}} are asked for when sending. */
 export interface Snippet { name: string; folder: string; text: string; description: string; deviceTypes?: string[] | null; }
 export interface Workspace { name: string; layout: string; tabs: { session: string; kind: string }[]; }
@@ -80,7 +87,7 @@ export interface Settings {
   sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; theme: string; uiFont?: string; uiFontSize?: number;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
-  layout?: string; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
+  layout?: string; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;

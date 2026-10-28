@@ -399,6 +399,8 @@ export class Tabs {
     this.unsubs.set(ti.id, [
       this.backend.on('term:step:' + ti.id, (step: string) => this.patch(ti.id, { step })),
       this.backend.on('term:status:' + ti.id, (st: { state: string; message: string; info: string }) => {
+        const before = this.get(ti.id)?.state;
+        if (st.state === 'connected' && before !== 'connected') this.factsAfterConnect(ti.id);
         this.patch(ti.id, { state: st.state, message: st.message, info: st.info,
           ...(st.state === 'connected' ? { wasConnected: true, step: '' } : {}) });
         const h = this.handles.get(ti.id);
@@ -713,6 +715,16 @@ export class Tabs {
 
   /** Writes the full scrollback buffer of the active tab to a text file. */
   /** Saves the scrollback as plain text, or as an HTML page with the colors as shown. */
+  /** After connecting: read the device facts in the background (version and
+   *  uptime each time, model / serial / MAC once) when the device type has
+   *  fact rules. */
+  private factsAfterConnect(id: string) {
+    const t = this.get(id);
+    const p = t?.session?.path;
+    if (!p || t.kind !== 'terminal' || (t.session.protocol !== 'SSH2' && t.session.protocol !== 'Telnet')) return;
+    setTimeout(() => void this.ui.refreshFacts(p), 4000);
+  }
+
   /** Saves the visible screen of a terminal tab as a PNG image. */
   async captureScreen(id = this.activeId()) {
     const t = this.get(id);

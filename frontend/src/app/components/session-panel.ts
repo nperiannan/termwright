@@ -9,6 +9,7 @@ import { Icon } from './icon';
 import { SerialPortPicker } from './serial-port-picker';
 import { DeviceIcon, deviceKindOf } from './device-icon';
 import { FolderPicker } from './folder-picker';
+import { factList, factsAge } from '../core/facts';
 import { SessionIcon, SessionKind } from './session-icon';
 import { storeSession } from '../dialogs/session-editor';
 
@@ -97,6 +98,14 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
           </div>
         }
 
+        @if (edit().oldPath && (s.protocol === 'SSH2' || s.protocol === 'Telnet')) {
+          <div class="facts">
+            <div class="fh"><span>Device facts</span><span class="age">{{ factsAge(ui.factsOf(edit().oldPath)) }}</span>
+              <button type="button" class="link" (click)="ui.refreshFacts(edit().oldPath, true)" title="Log in in the background and read the facts now">Refresh</button></div>
+            @for (f of facts(); track f[0]) { <div class="fr"><span>{{ f[0] }}</span><b [class.mono]="f[0] === 'MAC'">{{ f[1] }}</b></div> }
+            @empty { <div class="fr none">{{ s.deviceType ? 'Not read yet - they are read after connecting.' : 'Pick a device type to read model, version, MAC and uptime.' }}</div> }
+          </div>
+        }
         <div class="adv" [class.open]="advOpen()">
           <button type="button" class="advh" (click)="advOpen.set(!advOpen())"><span class="tw">›</span> Advanced</button>
           @if (advOpen()) {
@@ -139,6 +148,11 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
       background: var(--surface-2); color: var(--text); text-align: left;
       app-icon { color: var(--ok); } .chg { margin-left: auto; color: var(--accent); font-size: calc(12px * var(--ui-scale, 1)); } }
     .envf { width: 92px; flex: none; }
+    .facts { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 8px 12px; display: flex; flex-direction: column; gap: 5px;
+      .fh { display: flex; align-items: center; gap: 8px; font-weight: 600; .age { color: var(--faint); font-weight: 400; font-size: calc(11.5px * var(--ui-scale, 1)); } .link { margin-left: auto; } }
+      .fr { display: flex; gap: 10px; font-size: calc(12.5px * var(--ui-scale, 1)); span { width: 64px; flex: none; color: var(--muted); } b { font-weight: 500; overflow-wrap: anywhere; } }
+      .fr.none { color: var(--muted); }
+      .mono { font-family: var(--mono); } }
     .pwbox { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r);
       background: var(--input-bg); text-align: left; .dots { flex: 1; color: var(--muted); letter-spacing: .05em; }
       .kc { display: inline-flex; align-items: center; gap: 4px; color: var(--ok); font-size: calc(11.5px * var(--ui-scale, 1)); } }
@@ -234,6 +248,9 @@ export class SessionPanel {
     if (s.protocol === 'SSH2') out.push({ page: 'auth', icon: 'key', label: 'Keys, certificates & smart cards', value: s.identityFile ? s.identityFile.split(/[\\/]/).pop()! : s.smartCard ? 'smart card' : 'none' });
     return out;
   };
+
+  facts() { return factList(this.ui.factsOf(this.edit().oldPath)); }
+  readonly factsAge = factsAge;
 
   devKind() { return deviceKindOf(this.s?.deviceType); }
   protoKind(): SessionKind {

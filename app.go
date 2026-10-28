@@ -261,6 +261,7 @@ func (a *App) SaveSettings(s config.Settings) error {
 	s.MasterHash = cur.MasterHash // changed only through SetMasterPassword
 	// kept by the backend when sessions open; the window's copy may be older
 	s.RecentSessions, s.LastConnected = cur.RecentSessions, cur.LastConnected
+	s.DeviceFacts = cur.DeviceFacts // read by RefreshFacts
 	if err := a.cfg.Save(s); err != nil {
 		return err
 	}
@@ -278,6 +279,39 @@ func (a *App) GetSessionTree() (*session.Node, error) {
 		return nil, err
 	}
 	return a.store.Tree()
+}
+
+// ClearRecent empties the Recent list and the last-connected times; with a
+// path, removes only that session from Recent.
+func (a *App) ClearRecent(path string) (config.Settings, error) {
+	if err := a.ready(); err != nil {
+		return config.Settings{}, err
+	}
+	s := a.cfg.Get()
+	if path == "" {
+		s.RecentSessions, s.LastConnected = []string{}, map[string]string{}
+	} else {
+		out := []string{}
+		for _, p := range s.RecentSessions {
+			if p != path {
+				out = append(out, p)
+			}
+		}
+		s.RecentSessions = out
+	}
+	if err := a.cfg.Save(s); err != nil {
+		return s, err
+	}
+	return a.cfg.Get(), nil
+}
+
+// SetSessionFacts stores facts for a session (e.g. a value read while
+// teaching a device type); returns all its facts.
+func (a *App) SetSessionFacts(path string, f map[string]string) map[string]string {
+	if a.cfg == nil || path == "" {
+		return nil
+	}
+	return a.cfg.SetFacts(path, f)
 }
 
 // GetSession loads one session.

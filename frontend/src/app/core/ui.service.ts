@@ -5,7 +5,7 @@ import { MovedDevice, Session, SessionNode, Settings, Snippet } from './models';
 export interface ToastAction { label: string; run: () => void; }
 export interface Toast { id: number; level: 'info' | 'error' | 'success'; message: string; actions?: ToastAction[]; }
 export interface MenuItem { label?: string; action?: () => void; separator?: boolean; disabled?: boolean; hint?: string; }
-export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings' | 'moved' | 'welcome';
+export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings' | 'moved' | 'welcome' | 'factTeach';
 
 interface ConfirmReq { title: string; message: string; ok: string; danger: boolean; resolve: (v: boolean) => void; }
 interface InputReq { title: string; label: string; value: string; secret?: boolean; resolve: (v: string | null) => void; }
@@ -42,6 +42,8 @@ export class Ui {
   /** Console server session the Console Server Ports dialog creates sessions for. */
   readonly consoleServerFor = signal('');
   /** Moved Devices dialog: a list from Discover Devices, or one session to find by its MAC address (from a tab). */
+  /** Save Selection as Device Fact: what was highlighted and where. */
+  readonly factTeach = signal<{ path: string; deviceType: string; line: string; start: number; length: number; command: string; output: string } | null>(null);
   /** Text Quick Open starts with (the start page's search box). */
   readonly paletteSeed = signal('');
   readonly movedInput = signal<{ items: MovedDevice[] } | { find: string; tab?: string } | null>(null);
@@ -160,7 +162,7 @@ export class Ui {
   async clearRecent() {
     if (!(this.settings()?.recentSessions ?? []).length) return;
     if (await this.confirm('Clear Recent', 'Remove all sessions from the Recent list? The sessions themselves are kept.', 'Clear')) {
-      this.patchSettings({ recentSessions: [], lastConnected: {} });
+      try { this.settings.set(await this.backend.clearRecent('')); } catch (e) { this.error(e); }
     }
   }
 
@@ -172,8 +174,28 @@ export class Ui {
     }
   }
 
-  removeRecent(path: string) {
-    this.patchSettings({ recentSessions: (this.settings()?.recentSessions ?? []).filter(p => p !== path) });
+  async removeRecent(path: string) {
+    try { this.settings.set(await this.backend.clearRecent(path)); } catch (e) { this.error(e); }
+  }
+
+  /** Facts read for a session (model, version, MAC, uptime, …; "_at" = when). */
+  factsOf(path: string | undefined): Record<string, string> | null {
+    return (path && this.settings()?.deviceFacts?.[path]) || null;
+  }
+
+  /** Reads a session's device facts in the background (all = every rule, asked from a menu). */
+  async refreshFacts(path: string, all = false) {
+    try {
+      const f = await this.backend.refreshFacts(path, all);
+      if (f) this.setFactsLocal(path, f);
+      if (all) this.toast(f && Object.keys(f).some(k => k !== '_at') ? 'Device facts updated' : 'No device facts found - add fact rules to the device type', f ? 'success' : 'info');
+    } catch (e) { if (all) this.error(e); }
+  }
+
+  /** Keeps the window's copy of the facts current (the backend stores them). */
+  setFactsLocal(path: string, f: Record<string, string>) {
+    const s = this.settings();
+    if (s) this.settings.set({ ...s, deviceFacts: { ...(s.deviceFacts ?? {}), [path]: f } });
   }
 
   /** Saves a copy of an SSH2 session that opens as SFTP (sftp) or as a terminal. */
