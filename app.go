@@ -449,6 +449,14 @@ func (a *App) DetectSerialBaud(s session.Session) (map[string]any, error) {
 	return map[string]any{"baud": b, "tried": res}, nil
 }
 
+// FindImportSources lists the sessions of other terminal programs found on
+// this computer (SecureCRT, PuTTY, SuperPuTTY, MobaXterm, OpenSSH), for the
+// welcome flow.
+func (a *App) FindImportSources() []session.ImportSource {
+	h, _ := os.UserHomeDir()
+	return session.FindImportSources(h, os.Getenv("APPDATA"), runtime.GOOS)
+}
+
 // DefaultSSHConfigPath returns ~/.ssh/config.
 func (a *App) DefaultSSHConfigPath() string {
 	h, _ := os.UserHomeDir()

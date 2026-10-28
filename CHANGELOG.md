@@ -15,6 +15,7 @@ A cleaner, more modern look. Global Options → General → Layout switches back
 * **Session options in a side panel**: New Session and Session Options open beside the terminal with the everyday fields (name, protocol, address and port or serial port and speed, device type, user name, password, environment); the Advanced rows and **More options…** open the full dialog at that page.
 * **Connecting card**: while a session connects for the first time, a card shows each step (opening the connection or the jump host, checking the host key, logging in, starting the shell).
 * **Error card**: when a session cannot connect, a card shows the reason, a hint and Try Again, Edit Session, Find by MAC Address and the other fixes.
+* **Welcome flow** on a new install (Help → Welcome… shows it again): pick the theme, text size and layout; import sessions - SecureCRT, PuTTY, SuperPuTTY, MobaXterm and OpenSSH sessions found in their usual places are listed with an Import button, export files (SecureCRT .xml/.zip or Config folder, PuTTY/KiTTY .reg, SuperPuTTY Sessions.xml, MobaXterm, CSV) are one click away; then a few tips to get started.
 * The Button Bar is hidden once when updating (View → Button Bar shows it again).
 * Fixed: the bar with the error and its fixes (Edit Session, Forget Saved Password, …) was missing on a failed connection since 0.20.1.
 

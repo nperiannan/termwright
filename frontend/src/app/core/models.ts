@@ -80,7 +80,7 @@ export interface Settings {
   sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; theme: string; uiFont?: string; uiFontSize?: number;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
-  layout?: string; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
+  layout?: string; onboarded?: boolean; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;
@@ -140,6 +140,9 @@ export interface ImportResult { imported: string[] | null; renamed: string[] | n
   passwordsImported?: number; passwordErrors?: string[] | null; }
 
 export interface AppInfo { name: string; version: string; os: string; arch: string; dataDir: string; sessionsDir: string; initError: string; locked: boolean; hasMaster: boolean; insetTitle?: boolean; }
+
+/** Sessions of another terminal program found on this computer. */
+export interface ImportSource { app: string; path: string; what: string; }
 
 export interface FileFilter { displayName: string; pattern: string; }
 
@@ -217,7 +220,7 @@ export const ACTIONS: Record<string, string> = {
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',
   'xmodem': 'Send XMODEM...', 'xmodem-receive': 'Receive XMODEM...', 'scp-upload': 'SCP Upload File...', 'scp-upload-folder': 'SCP Upload Folder...', 'scp-download': 'SCP Download...',
-  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Credentials...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'quick-open': 'Quick Open...', 'command-library': 'Command Library...', 'workspaces': 'Workspaces...',
+  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Credentials...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'command-library': 'Command Library...', 'workspaces': 'Workspaces...',
   'save-workspace': 'Save Workspace...', 'compare': 'Compare Outputs...',
   'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out', 'global-options': 'Global Options', 'session-options': 'Session Options',
 };

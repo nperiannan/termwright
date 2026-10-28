@@ -43,11 +43,12 @@ import { FolderDefaults, Workspaces, saveWorkspace } from './dialogs/workspaces'
 import { Compare } from './dialogs/compare';
 import { ExportDialog, ImportDialog } from './dialogs/import-export';
 import { About, Overlays } from './dialogs/overlays';
+import { Welcome } from './dialogs/welcome';
 
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -209,6 +210,7 @@ export class App implements OnInit {
     if (info.initError) this.ui.toast('Startup error: ' + info.initError, 'error', 20000);
     await this.ui.loadSettings();
     if (info.locked) { this.ui.locked.set(true); this.ui.open('passwords'); }
+    else if (this.ui.settings() && !this.ui.settings()!.onboarded) this.ui.open('welcome');
     await this.ui.refreshTree();
     await this.tabs.restoreTabs();
     void this.startupUpdateCheck();
@@ -350,6 +352,7 @@ export class App implements OnInit {
       case 'toggle-connect-bar': this.ui.patchSettings({ showConnectBar: !s?.showConnectBar }); break;
       case 'shortcuts': this.ui.open('shortcuts'); break;
       case 'about': this.ui.open('about'); break;
+      case 'welcome': this.ui.open('welcome'); break;
     }
   }
 

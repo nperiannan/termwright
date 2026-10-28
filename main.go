@@ -226,6 +226,7 @@ func buildMenu(app *App) *menu.Menu {
 	tabs.AddText("Lock All Sessions", nil, emit("lock-all"))
 
 	help := m.AddSubmenu("Help")
+	help.AddText("Welcome...", nil, emit("welcome"))
 	help.AddText("User Guide", nil, emit("user-guide"))
 	help.AddText("Check for Updates...", nil, emit("check-updates"))
 	help.AddText("Keyboard Shortcuts", nil, emit("shortcuts"))
