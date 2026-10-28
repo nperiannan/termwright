@@ -7,6 +7,8 @@ import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { Icon } from './icon';
 import { SerialPortPicker } from './serial-port-picker';
+import { DeviceIcon, deviceKindOf } from './device-icon';
+import { SessionIcon, SessionKind } from './session-icon';
 import { storeSession } from '../dialogs/session-editor';
 
 type Edit = { session: Session; oldPath: string; tabId?: string };
@@ -15,14 +17,15 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
  *  day, the rest one click away in the full Session Options dialog. */
 @Component({
   selector: 'app-session-panel',
-  imports: [FormsModule, Icon, SerialPortPicker],
+  imports: [FormsModule, Icon, SerialPortPicker, DeviceIcon, SessionIcon],
   template: `
     @if (s) {
     <form class="sp" (ngSubmit)="save(false)">
       <header>
+        @if (devKind(); as k) { <app-device-icon [kind]="k" [size]="34" /> } @else { <app-session-icon [kind]="protoKind()" [size]="34" /> }
         <div class="t">
-          <div class="h">{{ edit().oldPath ? 'Session options' : 'New session' }}</div>
-          <div class="p">{{ edit().oldPath || (s.folder ? 'in ' + s.folder : 'top level') }}</div>
+          <div class="h">{{ s.name || (edit().oldPath ? 'Session options' : 'New session') }}</div>
+          <div class="p">{{ s.folder ? s.folder.split('/').join(' / ') : 'Top level' }}</div>
         </div>
         <button type="button" class="ic" title="Close (Esc)" (click)="close()"><app-icon name="x" /></button>
       </header>
@@ -71,36 +74,45 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
           <div class="note">Logs in as <b>{{ deviceUser() }}</b> with the {{ s.deviceType }} device type's login.
             <button type="button" class="link" (click)="s.ownLogin = true">Use its own login</button></div>
         }
+        <div class="two">
+          @if (hasLogin()) {
+            <label class="f grow"><span>Username</span><input name="user" [(ngModel)]="s.username" [placeholder]="deviceUser() || 'asked when connecting'" spellcheck="false" autocomplete="off" /></label>
+          }
+          <label class="f" [class.grow]="!hasLogin()" [class.envf]="hasLogin()"><span>Environment</span>
+            <select name="env" [ngModel]="s.environment || ''" (ngModelChange)="s.environment = $event" [style.color]="envColor()">
+              <option value="">(none)</option>
+              @for (v of envs; track v.id) { <option [value]="v.id">{{ hasLogin() ? v.short : v.label }}</option> }
+            </select></label>
+        </div>
         @if (hasLogin()) {
-          <label class="f"><span>Username</span><input name="user" [(ngModel)]="s.username" [placeholder]="deviceUser() || 'asked when connecting'" spellcheck="false" autocomplete="off" /></label>
           <div class="f"><span>Password</span>
             @if (pwOpen()) {
               <input name="pw" type="password" [(ngModel)]="pw" placeholder="saved in the system keychain" autocomplete="new-password" />
             } @else {
-              <button type="button" class="chip" (click)="pwOpen.set(true)" title="Change the saved password">
-                <app-icon name="key" [size]="14" />{{ pwText() }}<span class="chg">Change</span></button>
+              <button type="button" class="pwbox" (click)="pwOpen.set(true)" title="Change the saved password">
+                <span class="dots">{{ pwState() === 'set' ? '••••••••••' : 'asked when connecting' }}</span>
+                @if (pwState() === 'set') { <span class="kc"><app-icon name="lock" [size]="12" /> In keychain</span> }
+              </button>
             }
           </div>
         }
-        <label class="f"><span>Environment</span>
-          <select name="env" [ngModel]="s.environment || ''" (ngModelChange)="s.environment = $event">
-            <option value="">(none)</option>
-            @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
-          </select></label>
 
-        <div class="adv">
-          <div class="advh">Advanced</div>
-          @for (a of advanced(); track a.page) {
-            <button type="button" class="arow" (click)="more(a.page)"><span>{{ a.label }}</span><span class="v">{{ a.value }}</span><span class="chev">›</span></button>
+        <div class="adv" [class.open]="advOpen()">
+          <button type="button" class="advh" (click)="advOpen.set(!advOpen())"><span class="tw">›</span> Advanced</button>
+          @if (advOpen()) {
+            @for (a of advanced(); track a.page) {
+              <button type="button" class="arow" (click)="more(a.page)"><app-icon [name]="a.icon" [size]="14" /><span>{{ a.label }}</span><span class="v">{{ a.value }}</span><span class="chev">›</span></button>
+            }
+            <button type="button" class="arow all" (click)="more('')"><app-icon name="options" [size]="14" /><span>All session options…</span><span class="chev">›</span></button>
           }
         </div>
         @if (error()) { <div class="err">{{ error() }}</div> }
       </div>
       <footer>
-        <button type="button" class="link" (click)="more('')">More options…</button>
+        <button type="button" (click)="close()">Cancel</button>
         <span class="grow"></span>
         <button type="submit">Save</button>
-        <button type="button" class="primary" (click)="save(true)">Save &amp; Connect</button>
+        <button type="button" class="primary sc" (click)="save(true)"><app-icon name="quick" [size]="14" /> Save &amp; Connect</button>
       </footer>
     </form>
     }
@@ -108,7 +120,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
   styles: [`
     :host { flex: none; width: 340px; display: flex; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); }
     .sp { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-    header { display: flex; align-items: flex-start; gap: 8px; padding: 14px 14px 10px 18px;
+    header { display: flex; align-items: center; gap: 10px; padding: 16px 14px 12px 18px; border-bottom: 1px solid var(--line); margin-bottom: 10px;
       .t { flex: 1; min-width: 0; } .h { font-weight: 600; font-size: calc(15px * var(--ui-scale, 1)); }
       .p { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
     .ic { width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--r); background: transparent; color: var(--muted);
@@ -120,16 +132,24 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
     .two { display: flex; gap: 8px; .grow { flex: 1; } .port { width: 84px; flex: none; } }
     .seg { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2);
       button, select { flex: 1; min-width: 0; height: 28px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); padding: 0 6px; font-weight: 500; }
-      select { min-height: 0; cursor: pointer; }
+      select { flex: 0 0 76px; min-height: 0; cursor: pointer; padding: 0 4px; }
       button:hover:not(.on) { color: var(--text); background: transparent; }
       .on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, .18), 0 0 0 1px var(--line); } }
     .chip { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r);
       background: var(--surface-2); color: var(--text); text-align: left;
       app-icon { color: var(--ok); } .chg { margin-left: auto; color: var(--accent); font-size: calc(12px * var(--ui-scale, 1)); } }
+    .envf { width: 92px; flex: none; }
+    .pwbox { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r);
+      background: var(--input-bg); text-align: left; .dots { flex: 1; color: var(--muted); letter-spacing: .05em; }
+      .kc { display: inline-flex; align-items: center; gap: 4px; color: var(--ok); font-size: calc(11.5px * var(--ui-scale, 1)); } }
     .note { margin: 0; color: var(--muted); line-height: 1.5; b { color: var(--text); font-weight: 600; } }
     .link { border: 0; background: transparent; padding: 0; color: var(--accent); height: auto; &:hover { background: transparent; text-decoration: underline; } }
     .adv { margin-top: 4px; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
-    .advh { padding: 8px 12px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); background: var(--surface-2); }
+    .advh { width: 100%; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-radius: 0; background: var(--surface-2); font-weight: 600; text-align: left;
+      .tw { display: inline-block; transition: transform .12s; color: var(--muted); } }
+    .adv.open .advh .tw { transform: rotate(90deg); }
+    .arow app-icon { color: var(--muted); }
+    .arow.all span { color: var(--accent); }
     .arow { width: 100%; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-top: 1px solid var(--line); border-radius: 0;
       background: transparent; text-align: left;
       &:hover { background: var(--hover); }
@@ -137,6 +157,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
       .chev { color: var(--faint); } }
     .err { color: var(--danger); }
     footer { display: flex; align-items: center; gap: 8px; padding: 12px 14px 12px 18px; border-top: 1px solid var(--line);
+      .sc { display: inline-flex; align-items: center; gap: 6px; }
       .grow { flex: 1; } .link { border: 0; background: transparent; padding: 0; color: var(--accent); height: auto; &:hover { background: transparent; text-decoration: underline; } } }
   `],
 })
@@ -146,8 +167,8 @@ export class SessionPanel {
   private tabs = inject(Tabs);
   readonly edit = input.required<Edit>();
 
-  readonly main = ['SSH2', 'Telnet', 'Serial'];
-  readonly others = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial'].includes(p));
+  readonly main = ['SSH2', 'Telnet', 'Serial', 'RDP'];
+  readonly others = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP'].includes(p));
   readonly bauds = BAUD_RATES;
   readonly envs = ENVIRONMENTS;
   /** Every folder of the Session Manager, for the Folder field. */
@@ -161,7 +182,7 @@ export class SessionPanel {
   readonly deviceTypes = computed(() => (this.ui.settings()?.deviceTypes ?? []).map(d => d.name));
   readonly error = signal('');
   readonly pwOpen = signal(false);
-  private readonly pwState = signal('');
+  readonly pwState = signal('');
   s: Session | null = null;
   pw = '';
 
@@ -194,21 +215,31 @@ export class SessionPanel {
   }
 
   /** The settings kept in the full dialog, with what they are set to now. */
+  readonly advOpen = signal(true);
   readonly advanced = () => {
     const s = this.s;
     if (!s) return [];
-    const out: { page: string; label: string; value: string }[] = [];
-    if (s.protocol === 'SSH2') out.push({ page: 'auth', label: 'Authentication', value: s.identityFile ? 'key file' : s.agentForward ? 'agent' : 'password / key' });
-    if (['SSH2', 'Telnet', 'Raw'].includes(s.protocol)) out.push({ page: 'firewall', label: 'Jump host / proxy', value: s.jumpSession || (s.proxyHost ? s.proxyHost : 'none') });
-    if (s.protocol === 'SSH2') out.push({ page: 'forward', label: 'Port forwarding', value: (s.portForwards?.length ?? 0) ? String(s.portForwards.length) : 'none' });
-    if (s.protocol === 'Serial') out.push({ page: 'serial', label: 'Serial settings', value: `${s.dataBits || 8}-${['N', 'O', 'E', 'M', 'S'][s.parity] ?? 'N'}-${s.stopBits || 1}` });
-    if (!['RDP', 'VNC'].includes(s.protocol)) {
-      out.push({ page: 'logon', label: 'Logon actions & triggers', value: String((s.logonActions?.length ?? 0) + (s.triggers?.length ?? 0) || 'none') });
-      out.push({ page: 'terminal', label: 'Terminal', value: [s.emulation, s.colorScheme].filter(Boolean).join(' · ') || 'default' });
-      out.push({ page: 'log', label: 'Log file', value: s.logFile ? 'on' : 'off' });
+    const out: { page: string; label: string; value: string; icon: string }[] = [];
+    const term = !['RDP', 'VNC'].includes(s.protocol);
+    if (['SSH2', 'Telnet', 'Raw'].includes(s.protocol)) out.push({ page: 'firewall', icon: 'connect', label: 'Jump host / proxy', value: s.jumpSession ? s.jumpSession.split('/').pop()! : s.proxyHost || 'none' });
+    if (s.protocol === 'SSH2') out.push({ page: 'forward', icon: 'tile-v', label: 'Port forwarding', value: s.portForwards?.length ? s.portForwards.length + ' rule' + (s.portForwards.length === 1 ? '' : 's') : 'none' });
+    if (s.protocol === 'Serial') out.push({ page: 'serial', icon: 'serial', label: 'Serial settings', value: `${s.dataBits || 8}-${['N', 'O', 'E', 'M', 'S'][s.parity] ?? 'N'}-${s.stopBits || 1}` });
+    if (term) {
+      const n = (s.logonActions?.length ?? 0) + (s.triggers?.length ?? 0);
+      out.push({ page: 'logon', icon: 'script', label: 'Logon actions & triggers', value: n ? String(n) : s.deviceType && !s.ownLogin ? 'from device type' : 'none' });
+      out.push({ page: 'terminal', icon: 'shell', label: 'Terminal & appearance', value: [s.keywordSet ? s.keywordSet + ' keywords' : '', s.colorScheme].filter(Boolean).join(' · ') || s.emulation || 'default' });
+      out.push({ page: 'log', icon: 'log', label: 'Logging & recording', value: s.logFile ? 'on' : 'off' });
     }
+    if (s.protocol === 'SSH2') out.push({ page: 'auth', icon: 'key', label: 'Keys, certificates & smart cards', value: s.identityFile ? s.identityFile.split(/[\\/]/).pop()! : s.smartCard ? 'smart card' : 'none' });
     return out;
   };
+
+  devKind() { return deviceKindOf(this.s?.deviceType); }
+  protoKind(): SessionKind {
+    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc' };
+    return m[this.s?.protocol ?? ''] ?? (this.s?.openAs === 'sftp' ? 'sftp' : 'ssh');
+  }
+  envColor() { return this.envs.find(e => e.id === this.s?.environment)?.color ?? null; }
 
   more(page: string) {
     if (!this.s) return;

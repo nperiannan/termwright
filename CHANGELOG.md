@@ -21,6 +21,7 @@ A cleaner, more modern look, now the default. The **Classic** layout (toolbar, t
 * **Connecting card**: while a session connects for the first time, a card shows each step (opening the connection or the jump host, checking the host key, logging in, starting the shell).
 * **Error card**: when a session cannot connect, a card shows the reason, a hint and Try Again, Edit Session, Find by MAC Address and the other fixes.
 * **Welcome flow** on a new install (Help → Welcome… shows it again): pick the theme, text size and layout; import sessions - SecureCRT, PuTTY, SuperPuTTY, MobaXterm and OpenSSH sessions found in their usual places are listed with an Import button, export files (SecureCRT .xml/.zip or Config folder, PuTTY/KiTTY .reg, SuperPuTTY Sessions.xml, MobaXterm, CSV) are one click away; then a few tips to get started.
+* Dialogs, menus, notices, the Command Window and the Button Bar use the same design (surfaces, rounded corners, spacing) in the modern layout.
 * The Button Bar is hidden once when updating (View → Button Bar shows it again).
 * Fixed: the bar with the error and its fixes (Edit Session, Forget Saved Password, …) was missing on a failed connection since 0.20.1.
 

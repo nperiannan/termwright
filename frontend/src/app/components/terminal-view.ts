@@ -13,6 +13,7 @@ import { Ui } from '../core/ui.service';
 import { terminalTheme } from '../core/themes';
 import { comboOf } from '../core/models';
 import { FIX_LABELS, FixAction, fixFor } from '../core/fixes';
+import { DeviceIcon, deviceKindOf } from './device-icon';
 import { History, commandOfLine } from '../core/history.service';
 import { FormsModule } from '@angular/forms';
 
@@ -65,7 +66,7 @@ function b64ToBytes(b64: string): Uint8Array {
 /** One xterm.js terminal bound to a backend tab. */
 @Component({
   selector: 'app-terminal-view',
-  imports: [FormsModule],
+  imports: [FormsModule, DeviceIcon],
   host: { '[class.modern]': "ui.settings()?.layout !== 'classic'" },
   template: `<div class="term-host" #host (contextmenu)="onContextMenu($event)"></div>
     @if (tab().autoScroll === false) {
@@ -102,29 +103,35 @@ function b64ToBytes(b64: string): Uint8Array {
     @if (card() === 'connecting') {
       <div class="ccard-wrap">
         <div class="ccard" role="status">
-          <div class="spin"></div>
-          <div class="ct">Connecting to {{ tab().title }}</div>
-          <div class="cs">{{ target() }}</div>
+          <div class="chd">
+            <app-device-icon [kind]="cardIcon()" [size]="34" />
+            <div><div class="ct">Connecting to {{ tab().title }}</div><div class="cs">{{ cardTarget() }}</div></div>
+          </div>
           <ol class="steps">
             @for (st of steps(); track st.id; let i = $index) {
               <li [class.done]="i < stepIndex()" [class.now]="i === stepIndex()">
-                <span class="mk">@if (i < stepIndex()) { <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg> }</span>{{ st.label }}</li>
+                <span class="mk">@if (i < stepIndex()) { <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg> }</span>
+                <span class="sl">{{ i < stepIndex() ? st.done : i === stepIndex() ? st.now : st.todo }}</span>
+                @if (i < stepIndex() && stepMs()[st.id] != null) { <span class="ms">{{ stepMs()[st.id] }} ms</span> }
+              </li>
             }
           </ol>
-          <button type="button" (click)="tabs.close(tab().id)">Cancel</button>
+          <div class="cfoot"><button type="button" (click)="tabs.close(tab().id)">Cancel</button></div>
         </div>
       </div>
     } @else if (card() === 'error' && fix(); as f) {
       <div class="ccard-wrap">
         <div class="ccard err" role="alert">
-          <div class="eic"><svg viewBox="0 0 24 24"><path d="M12 3l10 18H2zM12 10v5M12 18h.01" /></svg></div>
-          <div class="ct">Couldn't connect to {{ tab().title }}</div>
-          <div class="cs">{{ target() }}</div>
-          <div class="emsg">{{ tab().message }}</div>
-          @if (f.hint) { <div class="ehint">{{ f.hint }}</div> }
+          <div class="chd">
+            <div class="eic"><svg viewBox="0 0 24 24"><path d="M12 3l10 18H2zM12 10v5M12 18h.01" /></svg></div>
+            <div><div class="ct">Could not connect to {{ tab().title }}</div><div class="cs">{{ errTarget() }}</div></div>
+          </div>
+          <p class="esum">{{ errSummary(f.hint) }}</p>
+          @if (errBullets(f.hint); as bl) { @if (bl.length) { <ul class="ebul">@for (b of bl; track b) { <li>{{ b }}</li> }</ul> } }
+          <details class="edet"><summary>Details</summary><code>{{ tab().message }}</code></details>
           <div class="eacts">
-            <button type="button" class="primary" (click)="runFix('reconnect')">Try Again</button>
             @for (a of cardActions(f.actions); track a) { <button type="button" (click)="runFix(a)">{{ labels[a] }}</button> }
+            <button type="button" class="primary" (click)="runFix('reconnect')">Try Again</button>
           </div>
         </div>
       </div>
@@ -138,26 +145,30 @@ function b64ToBytes(b64: string): Uint8Array {
     }`,
   styles: [`
     .ccard-wrap { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: var(--term-bg, var(--bg)); }
-    .ccard { width: min(420px, calc(100% - 32px)); padding: 26px 28px 22px; border-radius: var(--r-lg, 12px); background: var(--surface, var(--panel)); border: 1px solid var(--line, var(--border));
-      box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; color: var(--text);
-      .ct { font-weight: 600; font-size: calc(16px * var(--ui-scale, 1)); margin-top: 6px; }
-      .cs { color: var(--muted); font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); word-break: break-all; }
-      > button { margin-top: 10px; } }
-    .spin { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--line, var(--border)); border-top-color: var(--accent); animation: twspin .8s linear infinite; }
+    .ccard { width: min(440px, calc(100% - 32px)); padding: 20px 22px 16px; border-radius: var(--r-lg, 12px); background: var(--surface, var(--panel)); border: 1px solid var(--line, var(--border));
+      box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px; color: var(--text);
+      .chd { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+      .ct { font-weight: 600; font-size: calc(15px * var(--ui-scale, 1)); }
+      .cs { color: var(--muted); font-family: var(--mono); font-size: calc(11.5px * var(--ui-scale, 1)); word-break: break-all; }
+      .cfoot { display: flex; justify-content: flex-end; margin-top: 12px; } }
     @keyframes twspin { to { transform: rotate(360deg); } }
-    .steps { list-style: none; margin: 12px 0 0; padding: 0; align-self: stretch; text-align: left; display: flex; flex-direction: column; gap: 7px;
+    .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px;
       li { display: flex; align-items: center; gap: 10px; color: var(--faint, var(--muted)); }
-      li.done { color: var(--muted); } li.now { color: var(--text); font-weight: 500; }
-      .mk { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 1.5px solid var(--line, var(--border)); display: inline-flex; align-items: center; justify-content: center;
-        svg { width: 12px; height: 12px; fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; } }
+      li.done { color: var(--text); } li.now { color: var(--text); }
+      .sl { flex: 1; min-width: 0; }
+      .ms { color: var(--faint, var(--muted)); font-family: var(--mono); font-size: calc(11px * var(--ui-scale, 1)); }
+      .mk { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 1.5px solid var(--line, var(--border)); display: inline-flex; align-items: center; justify-content: center;
+        svg { width: 11px; height: 11px; fill: none; stroke: #fff; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; } }
       li.done .mk { background: var(--ok); border-color: var(--ok); }
       li.now .mk { border-color: var(--accent); border-top-color: transparent; animation: twspin .9s linear infinite; } }
-    .ccard.err { .eic { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(229, 72, 77, .14); color: var(--danger);
-        svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } }
-      .emsg { margin-top: 8px; padding: 8px 10px; align-self: stretch; border-radius: var(--r, 8px); background: var(--surface-2, var(--bg)); font-family: var(--mono);
-        font-size: calc(12px * var(--ui-scale, 1)); word-break: break-word; text-align: left; }
-      .ehint { color: var(--muted); line-height: 1.5; margin-top: 2px; }
-      .eacts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; } }
+    .ccard.err {
+      .eic { width: 34px; height: 34px; flex: none; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: rgba(229, 72, 77, .14); color: var(--danger);
+        svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } }
+      .esum { margin: 0; line-height: 1.5; }
+      .ebul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.5; font-size: calc(12.5px * var(--ui-scale, 1)); }
+      .edet { margin-top: 8px; color: var(--faint, var(--muted)); font-size: calc(12px * var(--ui-scale, 1));
+        summary { cursor: pointer; } code { display: block; margin-top: 6px; padding: 6px 8px; border-radius: var(--r-sm, 6px); background: var(--surface-2, var(--bg)); font-family: var(--mono); word-break: break-word; color: var(--muted); } }
+      .eacts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 14px; } }
     :host { display: flex; flex-direction: column; position: absolute; inset: 0; padding: 4px 0 0 6px; background: var(--term-bg); }
     .term-host { width: 100%; flex: 1; min-height: 0; }
     .paused { position: absolute; right: 18px; bottom: 44px; z-index: 4; display: flex; gap: 8px; align-items: center; padding: 4px 6px 4px 10px; border-radius: 6px;
@@ -299,20 +310,79 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   });
   readonly steps = computed(() => {
     const s = this.tab().session;
-    if (s.protocol === 'Serial') return [{ id: 'tcp', label: 'Opening ' + (s.comPort || 'the serial port') }];
-    if (s.protocol === 'Local Shell') return [{ id: 'tcp', label: 'Starting the shell' }];
-    const out: { id: string; label: string }[] = [];
-    if (s.jumpSession) out.push({ id: 'route', label: 'Through jump host ' + s.jumpSession.split('/').pop() });
-    else out.push({ id: 'tcp', label: 'Opening the connection' });
-    if (s.protocol === 'SSH2') out.push({ id: 'hostkey', label: 'Checking the host key' }, { id: 'auth', label: 'Logging in' }, { id: 'shell', label: 'Starting the shell' });
+    const host = s.hostname || 'the device';
+    if (s.protocol === 'Serial') { const p = s.comPort || 'the serial port'; return [{ id: 'tcp', todo: 'Open ' + p, now: 'Opening ' + p + '…', done: 'Opened ' + p }]; }
+    if (s.protocol === 'Local Shell') return [{ id: 'tcp', todo: 'Start the shell', now: 'Starting the shell…', done: 'Shell started' }];
+    const out: { id: string; todo: string; now: string; done: string }[] = [];
+    if (s.jumpSession) {
+      const j = s.jumpSession.split('/').pop();
+      out.push({ id: 'route', todo: 'Reach ' + j, now: 'Reaching ' + j + '…', done: 'Reached ' + j });
+    } else out.push({ id: 'tcp', todo: 'Connect to ' + host, now: 'Connecting to ' + host + '…', done: 'Connected to ' + host });
+    if (s.protocol === 'SSH2') {
+      const who = s.username ? ' as ' + s.username : '';
+      out.push({ id: 'hostkey', todo: 'Check the host key', now: 'Checking the host key…', done: 'Host key matches the saved one' },
+        { id: 'auth', todo: 'Log in' + who, now: 'Logging in' + who + '…', done: 'Logged in' + who },
+        { id: 'shell', todo: 'Start the shell', now: 'Starting the shell…', done: 'Shell started' });
+    }
     return out;
   });
   readonly stepIndex = computed(() => Math.max(0, this.steps().findIndex(x => x.id === this.tab().step)));
-  target() {
+  /** Milliseconds each finished step took. */
+  readonly stepMs = signal<Record<string, number>>({});
+  private stepAt = 0;
+  private stepNow = '';
+  private readonly trackSteps = effect(() => {
+    const t = this.tab();
+    const ids = this.steps().map(x => x.id);
+    const cur = t.state === 'connecting' ? (t.step || ids[0]) : '';
+    if (cur === this.stepNow) return;
+    const now = performance.now();
+    if (this.stepNow && this.stepAt) {
+      const done = this.stepNow, ms = Math.round(now - this.stepAt);
+      queueMicrotask(() => this.stepMs.update(m => ({ ...m, [done]: ms })));
+    } else if (cur) queueMicrotask(() => this.stepMs.set({}));
+    this.stepNow = cur;
+    this.stepAt = cur ? now : 0;
+  });
+  /** Icon of the device type or protocol for the cards (public/device-*.svg). */
+  cardIcon() {
+    const s = this.tab().session;
+    return deviceKindOf(s.deviceType) || (s.protocol === 'Serial' || s.protocol === 'Console' ? 'iot' : 'server');
+  }
+  cardTarget() {
     const s = this.tab().session;
     if (s.protocol === 'Serial') return `${s.comPort} · ${s.baudRate || 9600} baud`;
     if (s.protocol === 'Local Shell') return 'Local shell';
-    return `${s.protocol} ${s.username ? s.username + '@' : ''}${s.hostname}${s.port ? ':' + s.port : ''}`;
+    return `${s.username ? s.username + '@' : ''}${s.hostname}${s.port ? ':' + s.port : ''}` + (s.jumpSession ? ' · through ' + s.jumpSession.split('/').pop() : '');
+  }
+  errTarget() {
+    const s = this.tab().session;
+    if (s.protocol === 'Serial') return `${s.comPort} · Serial`;
+    return `${s.hostname}${s.port ? ':' + s.port : ''} · ${s.protocol}`;
+  }
+  /** One plain sentence for the error card. */
+  errSummary(hint: string) {
+    const m = this.tab().message, s = this.tab().session;
+    const where = `${s.hostname}`, port = s.port || 22;
+    if (/i\/o timeout|timed out|timeout/i.test(m)) return `No answer from ${where} on port ${port}.`;
+    if (/connection refused/i.test(m)) return `${where} refused the connection on port ${port} - nothing is listening there, or a firewall rejects it.`;
+    if (/no route to host|network is unreachable|host is down/i.test(m)) return `${where} cannot be reached from this computer (no route to it).`;
+    const first = hint.split(/(?<=\.)\s+/)[0];
+    return first || m;
+  }
+  /** What to check, one point each. */
+  errBullets(hint: string) {
+    const m = this.tab().message, s = this.tab().session;
+    if (/i\/o timeout|timed out|timeout|connection refused|no route to host|network is unreachable|host is down/i.test(m) && !/jump host/i.test(m)) {
+      const proto = s.protocol === 'SSH2' ? 'SSH' : s.protocol;
+      return [
+        'Check the address and the port of the session.',
+        'The device may be off, or its address changed (DHCP)' + (s.mac ? ` - it was last seen with MAC ${s.mac}.` : '.'),
+        `A firewall may block ${proto} from this computer, or a VPN may be needed.`,
+      ];
+    }
+    const sum = this.errSummary(hint);
+    return hint.split(/(?<=\.)\s+/).map(x => x.trim()).filter(x => x && x !== sum);
   }
   /** The error card's buttons after Try Again (Edit Session, Find by MAC, …). */
   cardActions(a: FixAction[]) { return a.filter(x => x !== 'reconnect'); }

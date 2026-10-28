@@ -116,10 +116,30 @@ export class App implements OnInit {
     return m;
   });
   readonly homeFavs = computed(() => (this.settings()?.favorites ?? []).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n).slice(0, 8));
-  readonly homeRecent = computed(() => {
+  readonly showAllRecent = signal(false);
+  private readonly recentAll = computed(() => {
     const fav = new Set(this.settings()?.favorites ?? []);
-    return (this.settings()?.recentSessions ?? []).filter(p => !fav.has(p)).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n).slice(0, 8);
+    return (this.settings()?.recentSessions ?? []).filter(p => !fav.has(p)).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n);
   });
+  readonly homeRecent = computed(() => this.showAllRecent() ? this.recentAll() : this.recentAll().slice(0, 8));
+  readonly recentMore = computed(() => this.recentAll().length > 8 || this.showAllRecent());
+  /** Session path → state of its open tab (connected wins). */
+  readonly liveState = computed(() => {
+    const m = new Map<string, string>();
+    for (const t of this.tabs.tabs()) {
+      const p = t.session?.path;
+      if (p && m.get(p) !== 'connected') m.set(p, t.state);
+    }
+    return m;
+  });
+  /** Card second line: user@host[:port], or the serial port and speed. */
+  cardAddr(n: SessionNode) { return sessionAddr({ ...n, deviceType: '', protocol: n.protocol === 'SSH2' ? 'SSH2' : n.protocol }).replace(/ · (Telnet|Raw|RDP|VNC|Serial|Console)$/, ''); }
+  /** Card chip: "VOSS · SSH2", "Linux · 3 h ago". */
+  cardMeta(n: SessionNode, recent: boolean) {
+    const kind = n.deviceType || ({ Serial: 'Serial', 'Local Shell': 'Local', Console: 'Console' } as Record<string, string>)[n.protocol ?? ''] || '';
+    const tail = recent ? this.lastAgo(n) : (n.protocol === 'Serial' ? '' : n.protocol ?? '');
+    return [kind, tail].filter(Boolean).join(' · ') || n.protocol || '';
+  }
   devKind(n: SessionNode) { return deviceKindOf(n.deviceType); }
   addr(n: SessionNode) { return sessionAddr(n); }
   cardEnv(n: SessionNode) { return envInfo(envOf(n.path, n.environment, this.settings()?.folderDefaults)); }
@@ -214,6 +234,7 @@ export class App implements OnInit {
       const t = this.settings()?.theme ?? 'system';
       const light = t === 'light' || (t === 'system' && this.systemLight());
       document.documentElement.classList.toggle('light', light);
+      document.documentElement.classList.toggle('modern', this.settings()?.layout !== 'classic');
       this.ui.lightUi.set(light);
       const root = document.documentElement.style;
       root.setProperty('--ui-font', uiFontStack(this.settings()?.uiFont));

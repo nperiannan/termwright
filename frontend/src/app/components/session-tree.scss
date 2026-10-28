@@ -45,7 +45,11 @@
 :host(.roomy) {
   background: var(--surface);
   .sm-head { border-bottom: 0; padding: 8px 6px 2px 14px; }
-  .sm-search { padding: 4px 10px 6px; input { height: 32px; border-radius: var(--r); background: var(--surface-2); border-color: var(--line); } }
+  .sm-search { position: relative; display: flex; align-items: center; gap: 4px; padding: 12px 8px 6px 10px;
+    > app-icon { position: absolute; left: 21px; color: var(--faint); pointer-events: none; }
+    input { flex: 1; min-width: 0; height: 32px; padding-left: 30px; border-radius: var(--r); background: var(--surface-2); border-color: var(--line); }
+    .more { width: 28px; height: 28px; padding: 0; justify-content: center; border-radius: var(--r); &:hover { background: var(--hover); } } }
+  .sec .total { margin-left: auto; font-weight: 500; letter-spacing: 0; color: var(--faint); }
   .row { margin: 0 6px; padding-right: 8px; border-left: 0; border-radius: var(--r); gap: 8px;
     &.sel { background: var(--accent-soft); } }
   .row.session { height: 40px; }

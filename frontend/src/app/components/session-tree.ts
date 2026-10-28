@@ -37,6 +37,7 @@ export function sessionAddr(n: SessionNode): string {
   imports: [NgTemplateOutlet, FormsModule, Icon, SessionIcon, DeviceIcon],
   host: { '[class.roomy]': 'roomy()' },
   template: `
+    @if (!roomy()) {
     <div class="sm-head">
       <span class="title" title="Session Manager">Sessions</span>
       <button class="icon-btn" title="New session" (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" /></button>
@@ -49,8 +50,13 @@ export function sessionAddr(n: SessionNode): string {
       <button class="icon-btn" title="Hide the Session Manager (View → Session Manager or the toolbar shows it again)"
         (click)="ui.actionHandler('toggle-session-manager')"><app-icon name="hide-panel" /></button>
     </div>
+    }
     <div class="sm-search">
+      @if (roomy()) { <app-icon name="find" [size]="14" /> }
       <input type="search" placeholder="Filter sessions" [(ngModel)]="filterText" (ngModelChange)="filter.set($event); showAll.set(false)" />
+      @if (roomy()) {
+        <button class="icon-btn more" title="New folder, refresh, reachability, dock side, hide" (click)="headMenu($event)"><app-icon name="more" /></button>
+      }
     </div>
     <div class="sm-body" #body (scroll)="scrollTop.set(body.scrollTop)" (contextmenu)="rootMenu($event)"
          (dragover)="allowDrop($event)" (drop)="dropOn($event, '')">
@@ -61,7 +67,7 @@ export function sessionAddr(n: SessionNode): string {
           @case ('sec') {
             <div class="sec" (click)="toggleSection(r.sec!)"><span class="twisty" [class.open]="!closedSec().has(r.sec!)"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>{{ r.label }}</div>
           }
-          @case ('all') { <div class="sec all">All sessions</div> }
+          @case ('all') { <div class="sec all">All sessions @if (roomy()) { <span class="total">{{ counts().get('') ?? 0 }}</span> }</div> }
           @case ('item') {
             <div class="row session" [class.sel]="isSel(r.n!)" [style.padding-left.px]="r.sec ? 22 : 8"
                  (click)="select(r.n!, $event)" (dblclick)="connect(r.n!)" (contextmenu)="nodeMenu($event, r.n!)"
@@ -119,6 +125,7 @@ export function sessionAddr(n: SessionNode): string {
           <span class="addr">{{ addr(n) }}</span>
         </span>
         @if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
+        @else if (liveState().get(n.path); as st) { <span class="dot" [class]="'dot ' + (st === 'connected' ? 'up' : st === 'error' ? 'down' : 'unk')" [title]="'Open in a tab - ' + st"></span> }
       } @else {
         <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget || n.protocol === 'Console'" />
         @if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
@@ -211,13 +218,38 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     const walk = (n: SessionNode): number => {
       let c = 0;
       for (const x of n.children ?? []) c += x.isFolder ? walk(x) : 1;
-      if (n.path) m.set(n.path, c);
+      m.set(n.path, c);
       return c;
     };
     const root = this.ui.tree();
     if (root) walk(root);
     return m;
   });
+  /** Session path → state of its open tab (connected wins). */
+  readonly liveState = computed(() => {
+    const m = new Map<string, string>();
+    for (const t of this.tabs.tabs()) {
+      const p = t.session?.path;
+      if (p && m.get(p) !== 'connected') m.set(p, t.state);
+    }
+    return m;
+  });
+
+  headMenu(ev: MouseEvent) {
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const s = this.ui.settings();
+    this.ui.showMenuAt(r.left, r.bottom + 4, [
+      { label: 'New Session...', action: () => void this.ui.newSession(this.ui.currentFolder()) },
+      { label: 'New Folder...', action: () => void this.newFolder(this.ui.currentFolder()) },
+      { label: 'Refresh', action: () => { void this.ui.refreshTree(); void this.checkNow(); } },
+      { separator: true },
+      { label: (this.reach() ? '✓ ' : '') + 'Show Which Devices Answer', action: () => this.ui.patchSettings({ showReachability: !this.reach() }) },
+      { label: (s?.compactRows ? '✓ ' : '') + 'Compact Rows', action: () => this.ui.patchSettings({ compactRows: !s?.compactRows }) },
+      { label: s?.sessionManagerRight ? 'Move to the Left' : 'Move to the Right', action: () => this.ui.actionHandler('toggle-session-manager-side') },
+      { label: 'Hide Session Manager', action: () => this.ui.actionHandler('toggle-session-manager') },
+    ]);
+  }
+
   devKind(n: SessionNode) { return deviceKindOf(n.deviceType); }
   addr(n: SessionNode) { return sessionAddr(n); }
 

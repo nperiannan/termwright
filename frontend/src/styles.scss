@@ -125,3 +125,27 @@ details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top
 .card-lib { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: calc(12.5px * var(--ui-scale, 1)); }
 .card-key { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 6px 0 0; border-top: 1px solid var(--border); margin-top: 6px;
   .mono { font-family: var(--mono); font-size: calc(11px * var(--ui-scale, 1)); } button { grid-row: 1 / span 2; grid-column: 2; height: 22px; font-size: calc(11.5px * var(--ui-scale, 1)); } }
+
+/* ---- modern layout: the same design for dialogs, menus and panels (0.21) ---- */
+:where(:root.modern) button { border-radius: var(--r-sm); border-color: var(--line); background: var(--surface-2); }
+:where(:root.modern) button:where(:hover:not(:disabled)) { background: var(--hover); }
+:where(:root.modern) button:where(.primary) { background: var(--accent); border-color: var(--accent); }
+:where(:root.modern) button:where(.primary:hover:not(:disabled)) { background: var(--accent); filter: brightness(1.1); }
+:where(:root.modern) button:where(.danger) { background: var(--danger); border-color: var(--danger); }
+:where(:root.modern) button:where(.icon-btn) { background: transparent; border-color: transparent; }
+:where(:root.modern) :where(input, select, textarea) { border-radius: var(--r-sm); }
+:root.modern {
+  .modal { border-radius: var(--r-lg); background: var(--surface); border-color: var(--line); }
+  .modal-head { padding: 14px 18px; font-size: calc(15px * var(--ui-scale, 1)); background: var(--surface); border-bottom-color: var(--line); }
+  .modal-foot { padding: 12px 18px; background: var(--surface); border-top-color: var(--line); }
+  .modal-body { padding: 18px; }
+  .cat { background: var(--surface-2); border-right-color: var(--line); padding: 8px 0;
+    a { margin: 1px 8px; padding: 6px 10px; border-radius: var(--r-sm); &.sub { padding-left: 22px; }
+      &.on { background: var(--accent-soft); box-shadow: none; color: var(--text); } } }
+  .ctx-menu { padding: 4px; border-radius: var(--r); background: var(--surface); border-color: var(--line);
+    .item { border-radius: var(--r-sm); padding: 6px 12px; } }
+  .toast { border-radius: var(--r); background: var(--surface); border-color: var(--line); }
+  app-command-window, app-button-bar { background: var(--surface); border-top-color: var(--line); }
+  .main > .tree { border-right-color: var(--line); }
+  .main.tree-right > .tree { border-left-color: var(--line); }
+}
