@@ -6,12 +6,69 @@ import { BAUD_RATES, PROTOCOLS, defaultPort } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { SerialPortPicker } from '../components/serial-port-picker';
+import { Icon } from '../components/icon';
+import { parseConnectLine } from '../core/connect-string';
 
 @Component({
   selector: 'app-quick-connect',
-  imports: [FormsModule, Autofocus, SerialPortPicker],
+  imports: [FormsModule, Autofocus, SerialPortPicker, Icon],
   template: `
   <div class="modal-backdrop">
+    @if (modern()) {
+    <form class="modal qc" (ngSubmit)="connect()" autocomplete="off">
+      <div class="modal-head"><span class="mh-ic"><app-icon name="quick" [size]="18" /></span>
+        <span class="mh-t">Quick Connect<span class="mh-s">Connect without saving - or save it as a session</span></span></div>
+      <div class="modal-body">
+        <label class="line"><input name="line" class="mono" [ngModel]="line" (ngModelChange)="fromLine($event)" appAutofocus spellcheck="false"
+            placeholder="voss admin@10.10.0.7 · ssh user@host:2222 · telnet host 23 · serial COM3 115200" /><span>↵ Connect</span></label>
+        <div class="hint lh">Type a connect line, or fill in the fields - they follow each other.</div>
+        <div class="f"><span>Protocol</span>
+          <div class="seg">
+            @for (p of mainProtos; track p) { <button type="button" [class.on]="protocol === p" (click)="protocol = p; onProto()">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
+            <select name="otherp" [ngModel]="mainProtos.includes(protocol) ? '' : protocol" (ngModelChange)="$event && (protocol = $event) && onProto()">
+              <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p }}</option> }</select>
+          </div></div>
+        @if (protocol === 'Serial') {
+          <div class="f"><span>Serial port</span><app-serial-port-picker [(value)]="comPort" /></div>
+          <div class="f"><span>Speed</span>
+            <div class="row"><select name="baud2" [(ngModel)]="baud" [disabled]="autoBaud">@for (b of bauds; track b) { <option [ngValue]="b">{{ b }}</option> }</select>
+              <button type="button" (click)="detectBaud()" [disabled]="!comPort || detecting()">{{ detecting() ? 'Detecting…' : 'Detect Speed' }}</button></div>
+            @if (baudMsg()) { <div class="hint">{{ baudMsg() }}</div> }</div>
+        } @else if (protocol !== 'Local Shell') {
+          <div class="two"><div class="f grow"><span>Address</span><input name="host2" class="mono" [(ngModel)]="host" placeholder="10.1.1.1 or host.example.com" /></div>
+            <div class="f port"><span>Port</span><input name="port2" type="number" class="mono" [(ngModel)]="port" /></div></div>
+        }
+        @if (protocol !== 'RDP' && protocol !== 'VNC' && protocol !== 'Local Shell') {
+          <div class="f"><span>Device type</span>
+            <div class="chipset">
+              @for (d of ui.settings()?.deviceTypes ?? []; track d.name) { <button type="button" [class.on]="device === d.name" (click)="device = d.name; onDevice()">{{ d.name }}</button> }
+              <button type="button" [class.on]="!device" (click)="device = ''; onDevice()">None</button>
+            </div></div>
+        }
+        @if (protocol !== 'Raw' && protocol !== 'Local Shell') {
+          <div class="two">
+            <div class="f grow"><span>Username</span>
+              @if (device && inherit) { <div class="fake"><span>{{ devUser() || 'asked when connecting' }}</span><em>from {{ device }}</em><button type="button" class="link" (click)="inherit = false">change</button></div> }
+              @else { <input name="user2" [(ngModel)]="user" placeholder="asked when connecting" /> }</div>
+            @if (!device || !inherit) {
+              <div class="f grow"><span>Password</span><input name="pw2" type="password" autocomplete="new-password" [(ngModel)]="pw" [disabled]="noPw" placeholder="asked when connecting" /></div>
+            }
+          </div>
+        }
+        <div class="checks savebox">
+          <label><input type="checkbox" name="save2" [(ngModel)]="save" />
+            <span class="tx"><span>Save as a session</span><span class="hint">{{ save ? (name || host || comPort || 'new session') + ' · in ' + (ui.currentFolder() || 'the top level') : 'connect once, without saving' }}</span></span></label>
+        </div>
+        @if (save) { <div class="f"><span>Session name</span><input name="sname2" [(ngModel)]="name" [placeholder]="host || comPort" /></div> }
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="link" (click)="moreOptions()">More options…</button>
+        <span class="spacer"></span>
+        <button type="button" (click)="ui.close()">Cancel</button>
+        <button type="submit" class="primary"><app-icon name="quick" [size]="14" /> Connect</button>
+      </div>
+    </form>
+    } @else {
     <form class="modal" (ngSubmit)="connect()" autocomplete="off">
       <div class="modal-head">Quick Connect</div>
       <div class="modal-body">
@@ -71,7 +128,25 @@ import { SerialPortPicker } from '../components/serial-port-picker';
         <button type="submit" class="primary">Connect</button>
       </div>
     </form>
+    }
   </div>`,
+  styles: [`
+    .qc { width: 500px; }
+    .qc .modal-body { display: flex; flex-direction: column; gap: 12px; }
+    .line { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border: 1px solid var(--accent); border-radius: var(--r-lg);
+      background: var(--input-bg); box-shadow: 0 0 0 3px var(--accent-soft);
+      input { flex: 1; min-width: 0; border: 0; background: transparent; height: 100%; padding: 0; font-size: calc(14px * var(--ui-scale, 1)); &:focus { border: 0; } }
+      span { color: var(--faint); font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; } }
+    .lh { margin-top: -6px; }
+    .f { display: flex; flex-direction: column; gap: 5px; min-width: 0; > span { font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); font-weight: 500; }
+      input, select { height: 32px; } }
+    .two { display: flex; gap: 10px; .grow { flex: 1; } .port { width: 90px; flex: none; } }
+    .fake { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--input-bg);
+      span { flex: 1; } em { font-style: normal; color: var(--faint); font-size: calc(11px * var(--ui-scale, 1)); } }
+    .link { border: 0 !important; background: transparent !important; padding: 0; height: auto; color: var(--accent); &:hover { text-decoration: underline; } }
+    .savebox { border-top: 1px solid var(--line); padding-top: 6px; .tx { display: flex; flex-direction: column; } }
+    .mono { font-family: var(--mono); }
+  `],
 })
 export class QuickConnect {
   protected ui = inject(Ui);
@@ -95,6 +170,33 @@ export class QuickConnect {
   inherit = true;
   pw = '';
   noPw = false;
+
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP'];
+  readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP'].includes(p));
+  line = '';
+
+  /** The connect line fills the fields. */
+  fromLine(text: string) {
+    this.line = text;
+    const p = parseConnectLine(text, this.ui);
+    if (!p) return;
+    this.protocol = p.protocol;
+    this.port = p.port;
+    if (p.deviceType !== this.device) { this.device = p.deviceType; this.inherit = true; }
+    if (p.protocol === 'Serial') { if (p.comPort) this.comPort = p.comPort; this.baud = p.baud; return; }
+    this.host = p.host;
+    const typed = /@/.test(text) || /\s-l\s/.test(text);
+    if (typed) { this.user = p.user; if (this.device) this.inherit = false; }
+  }
+
+  /** The full Session Options dialog with what was filled in. */
+  async moreOptions() {
+    const s = await this.backend.newSessionDefaults();
+    Object.assign(s, { protocol: this.protocol, hostname: this.host.trim(), port: Number(this.port) || defaultPort(this.protocol), username: this.user,
+      comPort: this.comPort, baudRate: this.baud, deviceType: this.device, ownLogin: !!this.device && !this.inherit, name: this.name || this.host.trim(), folder: this.ui.currentFolder() });
+    this.ui.openSessionDialog(s, '', undefined, '', this.pw);
+  }
 
   private devType() { return (this.ui.settings()?.deviceTypes ?? []).find(x => x.name === this.device); }
 

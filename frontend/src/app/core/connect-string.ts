@@ -33,6 +33,40 @@ export function findSessionByName(ui: Ui, q: string): string | null {
   return found;
 }
 
+/** What a connect line asks for (see connectString); null when it names no host or port. */
+export interface ConnectParts { protocol: string; host: string; port: number; user: string; deviceType: string; comPort: string; baud: number; explicitPort: boolean; }
+
+export function parseConnectLine(text: string, ui: Ui): ConnectParts | null {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  const cmd = words[0].toLowerCase();
+  const explicit = VERBS.includes(cmd);
+  let args = explicit ? words.slice(1) : words;
+  const dev = args.map(w => findDeviceType(ui.settings()?.deviceTypes, w)).find(Boolean);
+  if (dev) args = args.filter(w => !findDeviceType([dev], w));
+  const proto = cmd === 'telnet' ? 'Telnet' : cmd === 'serial' ? 'Serial' : cmd === 'raw' ? 'Raw' : cmd === 'rdp' ? 'RDP' : cmd === 'vnc' ? 'VNC' : !explicit && dev?.protocol ? dev.protocol : 'SSH2';
+  const out: ConnectParts = { protocol: proto, host: '', port: (dev?.port && !explicit ? dev.port : defaultPort(proto)) || 22, user: dev?.username ?? '', deviceType: dev?.name ?? '', comPort: '', baud: 9600, explicitPort: false };
+  const pos: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '-p' && args[i + 1]) { out.port = Number(args[++i]); out.explicitPort = true; }
+    else if (args[i] === '-l' && args[i + 1]) out.user = args[++i];
+    else pos.push(args[i]);
+  }
+  if (proto === 'Serial') {
+    out.comPort = pos[0] ?? '';
+    out.baud = Number(pos[1]) || 9600;
+    return out;
+  }
+  let host = pos[0] ?? '';
+  const at = host.lastIndexOf('@');
+  if (at > 0) { out.user = host.slice(0, at); host = host.slice(at + 1); }
+  const m = /^([^:\[\]]+):(\d+)$/.exec(host) ?? /^\[(.+)\]:(\d+)$/.exec(host);
+  if (m) { host = m[1]; out.port = Number(m[2]); out.explicitPort = true; }
+  if (pos[1] && /^\d+$/.test(pos[1])) { out.port = Number(pos[1]); out.explicitPort = true; }
+  out.host = host;
+  return out;
+}
+
 /** Connects from one line of text: "ssh [-p port] [-l user] user@host[:port]",
  *  "telnet host [port]", "serial PORT [baud]", "raw host port",
  *  "rdp [user@]host[:port]", "vnc host[:port]", a saved session name, or a bare

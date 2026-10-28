@@ -76,6 +76,10 @@
 }
 .findbar { position: absolute; top: 8px; right: 20px; display: flex; gap: 4px; padding: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow); z-index: 5;
   input { width: 220px; } button { padding: 0 8px; } }
+:root.modern .findbar { top: 10px; right: 18px; gap: 2px; padding: 4px; align-items: center; background: var(--surface); border-color: var(--line); border-radius: var(--r-lg);
+  input { width: 240px; height: 28px; border-color: transparent; background: var(--surface-2); border-radius: var(--r); &:focus { border-color: var(--accent); } }
+  button { width: 28px; height: 28px; padding: 0; border: 0 !important; background: transparent !important; color: var(--muted); border-radius: var(--r);
+    &:hover { color: var(--text); background: var(--hover) !important; } } }
 .status { display: flex; gap: 14px; align-items: center; height: 24px; padding: 0 10px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); background: var(--chrome); border-top: 1px solid var(--border); white-space: nowrap;
   .grow { flex: 1; } .info { overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
   .state { &::first-letter { text-transform: uppercase; } display: inline-block; &.connected { color: var(--ok); } &.error { color: var(--danger); } &.connecting { color: var(--warn); } }

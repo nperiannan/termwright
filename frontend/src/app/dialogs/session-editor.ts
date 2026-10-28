@@ -9,6 +9,9 @@ import { Tabs } from '../core/tabs.service';
 import { ENVIRONMENTS, envInfo, envOf } from '../core/env';
 import { Ui } from '../core/ui.service';
 import { SerialPortPicker } from '../components/serial-port-picker';
+import { Icon } from '../components/icon';
+import { DeviceIcon, deviceKindOf } from '../components/device-icon';
+import { SessionIcon, SessionKind } from '../components/session-icon';
 
 type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote';
 
@@ -35,41 +38,52 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
 /** Session Options dialog (create / edit a saved session). */
 @Component({
   selector: 'app-session-editor',
-  imports: [FormsModule, Autofocus, SerialPortPicker],
+  imports: [FormsModule, Autofocus, SerialPortPicker, Icon, DeviceIcon, SessionIcon],
   template: `
   @if (s) {
   <div class="modal-backdrop">
     <form class="modal wide" (ngSubmit)="save(false)" autocomplete="off">
-      <div class="modal-head">{{ oldPath ? 'Session Options - ' + oldPath : 'New Session' }}</div>
+      <div class="modal-head"><span class="mh-ic dev">@if (devKind(); as k) { <app-device-icon [kind]="k" [size]="34" /> } @else { <app-session-icon [kind]="protoKind()" [size]="34" /> }</span>
+        <span class="mh-t">{{ modern() ? (s.name || 'New Session') : (oldPath ? 'Session Options - ' + oldPath : 'New Session') }}<span class="mh-s">{{ subtitle() }}</span></span></div>
       <div class="modal-split">
         <nav class="cat">
-          <a [class.on]="page() === 'connection'" (click)="page.set('connection')">Connection</a>
+          <a [class.on]="page() === 'connection'" (click)="page.set('connection')"><app-icon name="connect" [size]="15" />Connection</a>
           @if (s.protocol === 'SSH2') {
-            <a class="sub" [class.on]="page() === 'auth'" (click)="page.set('auth')">SSH2 Authentication</a>
+            <a class="sub" [class.on]="page() === 'auth'" (click)="page.set('auth')"><app-icon name="key" [size]="15" />{{ modern() ? 'Authentication' : 'SSH2 Authentication' }}</a>
           }
-          @if (!remote()) { <a class="sub" [class.on]="page() === 'forward'" [class.dim]="s.protocol !== 'SSH2'" (click)="page.set('forward')">Port Forwarding</a> }
-          @if (remote()) { <a class="sub" [class.on]="page() === 'remote'" (click)="page.set('remote')">{{ s.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' }}</a> }
+          @if (!remote()) { <a class="sub" [class.on]="page() === 'forward'" [class.dim]="s.protocol !== 'SSH2'" (click)="page.set('forward')"><app-icon name="forward" [size]="15" />Port Forwarding</a> }
+          @if (remote()) { <a class="sub" [class.on]="page() === 'remote'" (click)="page.set('remote')"><app-icon name="monitor" [size]="15" />{{ s.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' }}</a> }
           @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw' || remote()) {
-            <a class="sub" [class.on]="page() === 'firewall'" (click)="page.set('firewall')">Jump Host / Proxy</a>
+            <a class="sub" [class.on]="page() === 'firewall'" (click)="page.set('firewall')"><app-icon name="route" [size]="15" />Jump Host / Proxy</a>
           }
-          @if (s.protocol === 'Serial') { <a class="sub" [class.on]="page() === 'serial'" (click)="page.set('serial')">Serial</a> }
-          @if (s.protocol === 'Local Shell') { <a class="sub" [class.on]="page() === 'local'" (click)="page.set('local')">Local Shell</a> }
+          @if (s.protocol === 'Serial') { <a class="sub" [class.on]="page() === 'serial'" (click)="page.set('serial')"><app-icon name="serial" [size]="15" />Serial</a> }
+          @if (s.protocol === 'Local Shell') { <a class="sub" [class.on]="page() === 'local'" (click)="page.set('local')"><app-icon name="shell" [size]="15" />Local Shell</a> }
           @if (!remote()) {
-            <a class="sub" [class.on]="page() === 'logon'" (click)="page.set('logon')">Logon Actions &amp; Triggers</a>
-            <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')">Terminal</a>
-            <a class="sub" [class.on]="page() === 'log'" (click)="page.set('log')">Log File</a>
+            <div class="cat-g">Terminal</div>
+            <a class="sub" [class.on]="page() === 'logon'" (click)="page.set('logon')"><app-icon name="script" [size]="15" />{{ modern() ? 'Logon Actions' : 'Logon Actions & Triggers' }}</a>
+            <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')"><app-icon name="shell" [size]="15" />Terminal</a>
+            <a class="sub" [class.on]="page() === 'log'" (click)="page.set('log')"><app-icon name="log" [size]="15" />Log File</a>
           }
         </nav>
         <div class="modal-body">
+          <h2 class="page-title">{{ pageName() }}</h2>
           @switch (page()) {
             @case ('connection') {
               <div class="grid">
                 <label>Name</label><input name="name" [(ngModel)]="s.name" required placeholder="e.g. core-switch-01" />
                 <label>Folder</label><input name="folder" [(ngModel)]="s.folder" placeholder="e.g. Datacenter/Rack 4 (blank = top level)" />
                 <label>Protocol</label>
+                @if (modern()) {
+                  <div class="seg">
+                    @for (p of mainProtos; track p) { <button type="button" [class.on]="s.protocol === p" (click)="s.protocol = p; protocolChanged()">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
+                    <select name="otherp" [ngModel]="mainProtos.includes(s.protocol) ? '' : s.protocol" (ngModelChange)="$event && (s.protocol = $event) && protocolChanged()">
+                      <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p }}</option> }</select>
+                  </div>
+                } @else {
                 <select name="protocol" [(ngModel)]="s.protocol" (ngModelChange)="protocolChanged()">
                   @for (p of protocols; track p) { <option [value]="p">{{ p }}</option> }
                 </select>
+                }
                 <label>Environment</label>
                 <div class="row">
                   <select name="env" [(ngModel)]="s.environment" class="envsel">
@@ -612,6 +626,26 @@ export class SessionEditor implements OnInit {
   }
 
   remote() { return this.s?.protocol === 'RDP' || this.s?.protocol === 'VNC'; }
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'];
+  readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'].includes(p));
+  devKind() { return deviceKindOf(this.s?.deviceType); }
+  protoKind(): SessionKind {
+    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc' };
+    return m[this.s?.protocol ?? ''] ?? (this.s?.openAs === 'sftp' ? 'sftp' : 'ssh');
+  }
+  /** Under the title (modern layout): folder, protocol and where it connects. */
+  subtitle() {
+    const s = this.s;
+    if (!s) return '';
+    const where = s.protocol === 'Serial' ? [s.comPort, s.baudRate].filter(Boolean).join(' ') : s.protocol === 'Local Shell' ? '' : (s.username ? s.username + '@' : '') + (s.hostname || '');
+    return [s.folder ? s.folder.split('/').join(' / ') : (this.oldPath ? 'Top level' : 'New session'), s.protocol, where].filter(Boolean).join(' · ');
+  }
+  pageName() {
+    const p = this.page();
+    const m: Record<string, string> = { connection: 'Connection', auth: 'Authentication', firewall: 'Jump Host / Proxy', forward: 'Port Forwarding', serial: 'Serial', local: 'Local Shell', logon: 'Logon Actions & Triggers', terminal: 'Terminal', log: 'Log File', remote: this.s?.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' };
+    return m[p] ?? '';
+  }
   readonly consoleMethods = CONSOLE_METHODS;
   /** SSH2 and Telnet sessions that can be console servers. */
   readonly consoleServers = computed(() => {

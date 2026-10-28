@@ -13,16 +13,24 @@ import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models'
   template: `
     <div class="cw-bar">
       <span class="title">Command Window</span>
+      @if (modern()) {
+        <div class="seg tg" title="Where Send goes">
+          <button type="button" [class.on]="target === 'active'" (click)="target = 'active'">Active tab</button>
+          <button type="button" [class.on]="target === 'all'" (click)="target = 'all'">All connected ({{ tabs.connectedCount() }})</button>
+          <button type="button" [class.on]="target === 'selected'" (click)="target = 'selected'">Selected ({{ tabs.targets('selected').length }})</button>
+        </div>
+      } @else {
       <label><input type="radio" name="cwTarget" value="active" [(ngModel)]="target" /> Active tab</label>
       <label><input type="radio" name="cwTarget" value="all" [(ngModel)]="target" /> All connected tabs ({{ tabs.connectedCount() }})</label>
       <label><input type="radio" name="cwTarget" value="selected" [(ngModel)]="target" /> Selected tabs ({{ tabs.targets('selected').length }})</label>
+      }
       <button class="pick" title="Choose the tabs to send to" (click)="pick($event)">Choose…</button>
-      <label title="Send characters immediately as you type"><input type="checkbox" [(ngModel)]="charMode" /> Send characters immediately</label>
+      <label class="sw" title="Send characters immediately as you type"><input type="checkbox" [(ngModel)]="charMode" /> Send characters immediately</label>
       <span class="spacer"></span>
       <button class="pick" (click)="ui.open('history')" title="Search the commands you typed (Mod+Y)">History…</button>
       <button class="pick" (click)="library($event)" [title]="tabs.activeDeviceType() ? 'Commands from the library, those for ' + tabs.activeDeviceType() + ' first' : 'Commands from the library'">
         Commands{{ tabs.activeDeviceType() ? ' (' + tabs.activeDeviceType() + ')' : '' }} ▾</button>
-      <button (click)="send()" [disabled]="!text().length && !charMode">Send ⏎</button>
+      <button class="send" (click)="send()" [disabled]="!text().length && !charMode">Send ⏎</button>
       <button class="icon-btn" title="Close" (click)="ui.patchSettings({ showCommandWindow: false })">✕</button>
     </div>
     <div class="boxwrap">
@@ -43,7 +51,16 @@ import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models'
   // Typing only re-renders this component; the suggestion list is worked out
   // once the keys pause (holding Backspace does not rebuild it on every key).
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[class.modern]': 'modern()' },
   styles: [`
+    :host(.modern) { background: var(--surface); border-top-color: var(--line);
+      .cw-bar { gap: 10px; padding: 6px 10px; .title { text-transform: none; letter-spacing: 0; color: var(--text); font-size: calc(12.5px * var(--ui-scale, 1)); }
+        .tg { flex: none; button { flex: none; white-space: nowrap; height: 22px; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 0 9px; } }
+        .pick { height: 24px; border-radius: var(--r); }
+        .send { height: 24px; background: var(--accent); border-color: var(--accent); color: #fff; border-radius: var(--r); padding: 0 12px; font-weight: 600;
+          &:disabled { opacity: .5; } } }
+      textarea { border-top-color: var(--line); padding: 8px 12px; background: var(--surface-2, var(--input-bg)); }
+      .sugg { background: var(--surface); border-color: var(--line); border-radius: var(--r-lg); padding: 4px; .si { border-radius: var(--r-sm); padding: 4px 10px; } .si.on, .si:hover { background: var(--accent-soft); } } }
     :host { display: flex; flex-direction: column; height: 100%; background: var(--panel); border-top: 1px solid var(--border); contain: layout style; }
     .cw-bar { display: flex; align-items: center; gap: 14px; padding: 3px 8px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted);
       .title { font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
@@ -64,6 +81,7 @@ import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models'
 export class CommandWindow implements OnDestroy {
   protected tabs = inject(Tabs);
   protected ui = inject(Ui);
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   private box = viewChild.required<ElementRef<HTMLTextAreaElement>>('box');
   readonly text = signal('');
   target: 'active' | 'all' | 'selected' = 'active';

@@ -30,6 +30,11 @@ A cleaner, more modern look, now the default. The **Classic** layout (toolbar, t
 * **Save Screen As Image** (File menu, tab menu): the visible terminal screen as a PNG, with its colours and highlighting.
 * **Folder picker**: Discover Devices (Add to folder) and the session side panel choose any existing folder or subfolder from a list, or take a new name.
 * **Discover Devices** in the modern layout: a cleaner scan bar, progress and results table.
+* **Quick Connect** (modern layout): one box takes a connect line (`voss admin@10.10.0.7`, `ssh user@host:2222`, `serial COM3 115200`) and fills the fields below it - protocol, address and port, device type, user name - or fill the fields yourself; a switch saves it as a session, More options… opens the full Session Options.
+* **Session Options** (modern layout): the device icon, name, folder, protocol and address at the top, navigation with icons, page titles, a protocol switch and labels above the fields.
+* **Settings** (Global Options in the modern layout): Appearance first with theme previews and Layout / Icons switches, then Behaviour and Folders and files; the navigation has icons and Automation and System groups.
+* **SFTP**: the folder path is clickable - each folder opens with one click, a click beside the path types one; roomier rows and slim transfer bars.
+* **Command Window**: Active tab / All connected / Selected as one switch and Send as the main button; the find bar has icon buttons.
 * Corners are less rounded (dialogs, cards, buttons); on macOS the title bar is as tall as the window buttons need, so the sidebar button and the tabs line up with them.
 * Dialogs, menus, notices, the Command Window and the Button Bar use the same design (surfaces, rounded corners, spacing) in the modern layout.
 * The Button Bar is hidden once when updating (View → Button Bar shows it again).

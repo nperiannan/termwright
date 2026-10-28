@@ -9,6 +9,7 @@ import { Ui } from '../core/ui.service';
 import { FileIcon } from './file-icon';
 import { Icon } from './icon';
 import { SessionIcon } from './session-icon';
+import { Autofocus } from '../core/autofocus';
 
 interface Pane {
   side: 'local' | 'remote';
@@ -22,7 +23,8 @@ interface Pane {
 /** Dual-pane SFTP file browser (local | remote) with transfer queue. */
 @Component({
   selector: 'app-sftp-view',
-  imports: [FormsModule, DatePipe, Icon, SessionIcon, FileIcon],
+  imports: [FormsModule, DatePipe, Icon, SessionIcon, FileIcon, Autofocus],
+  host: { '[class.modern]': 'modern()' },
   template: `
     @if (shell() && !shell()!.cwd && !cwdHintClosed()) {
       <div class="cwd-hint">
@@ -39,7 +41,17 @@ interface Pane {
           <header>
             <span class="label" [title]="p.side === 'remote' && tab().hopTarget ? 'Files on ' + tab().hopTarget + ', reached through the jump station ' + tab().session.hostname : ''">{{ p.side === 'local' ? 'This computer' : (tab().root ? tab().runAsUser + ' @ ' + hostOnly() : tab().hopTarget || tab().session.hostname || 'Server') }}@if (p.side === 'remote' && tab().hopTarget) {<span class="via-jump"> via {{ tab().session.hostname }}</span>}</span>
             <button class="icon-btn" title="Up" (click)="up(p)"><app-icon name="up" /></button>
-            <input class="path mono" [ngModel]="p.dir" (keydown.enter)="go(p, $any($event.target).value)" spellcheck="false" />
+            @if (modern() && editing() !== p.side) {
+              <div class="crumb" title="Click to type a path" (click)="editing.set(p.side)">
+                @for (c of crumbs(p); track $index) {
+                  @if (!$first && crumbs(p)[$index - 1].label !== '/') { <span class="cs">/</span> }
+                  <button type="button" class="cb" [class.last]="$last" [title]="c.path" (click)="$event.stopPropagation(); go(p, c.path)">{{ c.label }}</button>
+                }
+              </div>
+            } @else {
+            <input class="path mono" [ngModel]="p.dir" appAutofocus (keydown.enter)="editing.set(''); go(p, $any($event.target).value)"
+              (keydown.escape)="editing.set('')" (blur)="editing.set('')" spellcheck="false" />
+            }
             <button class="icon-btn" title="Refresh" (click)="load(p)"><app-icon name="refresh" /></button>
             <button class="icon-btn" title="New folder" (click)="mkdir(p)"><app-icon name="folder-plus" /></button>
             @if (p.side === 'remote') {
@@ -119,6 +131,21 @@ export class SftpView implements OnInit {
   /** Protocol used by → / ← (browsing always uses SFTP). */
   readonly via = signal<'sftp' | 'scp'>('sftp');
   readonly size = formatBytes;
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  /** The pane whose path is being typed (modern layout shows clickable folders otherwise). */
+  readonly editing = signal<'' | 'local' | 'remote'>('');
+  /** The folders of the pane's path, each with the path to open it. */
+  crumbs(p: Pane): { label: string; path: string }[] {
+    const d = p.dir;
+    if (!d) return [];
+    const win = /^[a-zA-Z]:([\\/]|$)/.test(d) || (d.includes('\\') && !d.includes('/'));
+    const parts = d.split(/[\\/]+/).filter(Boolean);
+    const out: { label: string; path: string }[] = [];
+    if (!win && d.startsWith('/')) out.push({ label: '/', path: '/' });
+    parts.forEach((x, i) => out.push({ label: x, path: win ? parts.slice(0, i + 1).join('\\') + (i === 0 ? '\\' : '') : (d.startsWith('/') ? '/' : '') + parts.slice(0, i + 1).join('/') }));
+    // long paths: the first and the last three
+    return out.length > 6 ? [out[0], { label: '…', path: out[out.length - 4].path }, ...out.slice(-3)] : out;
+  }
 
   private viaKey() { return 'termwright.sftpVia:' + (this.tab().session.path || this.tab().session.hostname) + (this.tab().hopTarget ? '>' + this.tab().hopTarget : ''); }
   /** Remembers SFTP/SCP per session on this computer. */

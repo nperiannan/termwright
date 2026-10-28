@@ -5,6 +5,7 @@ import { Backend } from '../core/backend';
 import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, comboOf, FACT_NAMES } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
+import { Icon } from '../components/icon';
 import { UI_FONTS, UI_SIZES, uiFontStack } from '../core/ui-fonts';
 
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
@@ -38,12 +39,13 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
 /** Global Options dialog. */
 @Component({
   selector: 'app-options-dialog',
-  imports: [FormsModule],
+  imports: [FormsModule, Icon],
   template: `
   @if (s) {
   <div class="modal-backdrop">
     <form class="modal wide" (ngSubmit)="save()">
-      <div class="modal-head">Global Options</div>
+      <div class="modal-head"><span class="mh-ic"><app-icon name="options" [size]="18" /></span>
+        <span class="mh-t">{{ modern() ? 'Settings' : 'Global Options' }}<span class="mh-s">Global Options for every session</span></span></div>
       <div class="modal-split">
         <nav class="cat">
           <input type="search" class="osearch" placeholder="Search options" [ngModel]="q()" (ngModelChange)="q.set($event)" name="osearch" autocomplete="off" />
@@ -52,22 +54,90 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
               <a class="hit" (click)="goTo(h[0], h[1])">{{ h[1] }}<span>{{ pageName(h[0]) }}</span></a>
             } @empty { <span class="nohit">Nothing found</span> }
           } @else {
-          <a [class.on]="page() === 'general'" (click)="page.set('general')">General</a>
-          <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')">Terminal &amp; Appearance</a>
-          <a class="sub" [class.on]="page() === 'schemes'" (click)="page.set('schemes')">Color Schemes</a>
-          <a [class.on]="page() === 'keywords'" (click)="page.set('keywords')">Keyword Highlighting</a>
-          <a [class.on]="page() === 'keymap'" (click)="page.set('keymap')">Key Map</a>
-          <a [class.on]="page() === 'buttons'" (click)="page.set('buttons')">Button Bar</a>
-          <a [class.on]="page() === 'devices'" (click)="page.set('devices')">Device Types</a>
-          <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')">Alerts</a>
-          <a [class.on]="page() === 'cards'" (click)="page.set('cards'); loadCards()">Smart Cards</a>
-          <a [class.on]="page() === 'updates'" (click)="page.set('updates')">Updates</a>
+          <a [class.on]="page() === 'general'" (click)="page.set('general')"><app-icon name="options" [size]="15" />General</a>
+          <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')"><app-icon name="shell" [size]="15" />Terminal &amp; Appearance</a>
+          <a class="sub" [class.on]="page() === 'schemes'" (click)="page.set('schemes')"><app-icon name="styles" [size]="15" />Color Schemes</a>
+          <a [class.on]="page() === 'keywords'" (click)="page.set('keywords')"><app-icon name="edit" [size]="15" />Keyword Highlighting</a>
+          <div class="cat-g">Automation</div>
+          <a [class.on]="page() === 'keymap'" (click)="page.set('keymap')"><app-icon name="command" [size]="15" />Key Map</a>
+          <a [class.on]="page() === 'buttons'" (click)="page.set('buttons')"><app-icon name="buttons" [size]="15" />Button Bar</a>
+          <a [class.on]="page() === 'devices'" (click)="page.set('devices')"><app-icon name="serial" [size]="15" />Device Types</a>
+          <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')"><app-icon name="alert" [size]="15" />Alerts</a>
+          <div class="cat-g">System</div>
+          <a [class.on]="page() === 'cards'" (click)="page.set('cards'); loadCards()"><app-icon name="key" [size]="15" />Smart Cards</a>
+          <a [class.on]="page() === 'updates'" (click)="page.set('updates')"><app-icon name="down" [size]="15" />Updates</a>
         }
         </nav>
         <div class="modal-body">
+          <h2 class="page-title">{{ pageName(page()) }}</h2>
           @switch (page()) {
             @case ('general') {
               <div class="grid">
+                <h4 class="gsec">Appearance</h4>
+                <label>UI theme</label>
+                @if (modern()) {
+                  <div class="themes">
+                    @for (t of themeTiles; track t.v) {
+                      <button type="button" class="tht" [class.on]="(s.theme || 'system') === t.v" (click)="s.theme = t.v"><span class="pv {{ t.v }}"></span>{{ t.label }}</button>
+                    }
+                  </div>
+                } @else {
+                <select name="theme" [(ngModel)]="s.theme">
+                  <option value="system">Follow system</option><option value="dark">Dark</option><option value="light">Light</option>
+                </select>
+                }
+                <label>Layout</label>
+                <div>
+                  @if (modern()) {
+                    <div class="seg w2"><button type="button" [class.on]="!s.layout" (click)="s.layout = ''">Modern</button><button type="button" [class.on]="s.layout === 'classic'" (click)="s.layout = 'classic'">Classic</button></div>
+                  } @else {
+                  <select name="layout" [ngModel]="s.layout || ''" (ngModelChange)="s.layout = $event">
+                    <option value="">Modern - tabs and search in the title bar</option><option value="classic">Classic - toolbar, tab strip and menu bar</option>
+                  </select>
+                  }
+                  @if (isMac) { <div class="hint">On macOS the window's own title bar changes the next time Termwright starts.</div> }
+                </div>
+                <label>Icons</label>
+                <div>
+                  @if (modern()) {
+                    <div class="seg w2"><button type="button" [class.on]="!s.iconStyle" (click)="s.iconStyle = ''">Tiles</button><button type="button" [class.on]="s.iconStyle === 'glyph'" (click)="s.iconStyle = 'glyph'">Glyphs</button></div>
+                  } @else {
+                  <select name="icons" [ngModel]="s.iconStyle || ''" (ngModelChange)="s.iconStyle = $event">
+                    <option value="">Coloured tiles - the device in white on its colour</option><option value="glyph">Glyphs - the device in its colour, no tile</option>
+                  </select>
+                  }
+                  @if (s.layout !== 'classic') {
+                    <label class="inline-check" style="margin-top: 6px"><input type="checkbox" name="compact" [ngModel]="!!s.compactRows" (ngModelChange)="s.compactRows = $event" />
+                      Compact Session Manager (one line per session - more sessions in view)</label>
+                  }
+                </div>
+                <label>Interface font</label>
+                <select name="uifont" [(ngModel)]="s.uiFont">@for (f of uiFonts; track f.v) { <option [value]="f.v">{{ f.label }}</option> }</select>
+                <label>Text size</label>
+                <select name="uisize" [ngModel]="s.uiFontSize || 13" (ngModelChange)="s.uiFontSize = +$event">@for (z of uiSizes; track z.v) { <option [ngValue]="z.v">{{ z.label }}</option> }</select>
+                <label></label>
+                <div class="ui-sample" [style.font-family]="fontStack(s.uiFont)" [style.font-size.px]="s.uiFontSize || 13">
+                  Session Manager · Quick Connect · core-sw1 10.10.0.1 · 0123456789<br /><span class="hint">Applies to menus, dialogs and the Session Manager; the terminal font is under Terminal &amp; Appearance.</span></div>
+                <label>Accent color</label>
+                <div class="row"><input type="color" name="acc" class="swatch" [ngModel]="s.accentColor || '#4f9cf7'" (ngModelChange)="s.accentColor = $event" />
+                  <button type="button" (click)="s.accentColor = ''">Default</button></div>
+                <h4 class="gsec">Behaviour</h4>
+                <label>Behavior</label>
+                <div class="checks">
+                  <label><input type="checkbox" name="cc" [(ngModel)]="s.confirmClose" /> Confirm before closing connected tabs / quitting</label>
+                  <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" /> Confirm before pasting more than one line</label>
+                  <label><input type="checkbox" name="rhist" [ngModel]="s.recordHistory !== false" (ngModelChange)="s.recordHistory = $event" />
+                    Remember typed commands for Command History and suggestions (never commands with passwords, secrets or keys)</label>
+                  <label><input type="checkbox" name="rt" [(ngModel)]="s.restoreTabs" /> Reopen the sessions that were open when Termwright was closed</label>
+                  <label><input type="checkbox" name="sm" [(ngModel)]="s.showSessionManager" /> Show Session Manager</label>
+                  <label><input type="checkbox" name="bb" [(ngModel)]="s.showButtonBar" /> Show Button Bar</label>
+                  <label><input type="checkbox" name="cw" [(ngModel)]="s.showCommandWindow" /> Show Command Window</label>
+                  @if (s.layout === 'classic') {
+                    <label><input type="checkbox" name="cbar" [(ngModel)]="s.showConnectBar" /> Show Connect Bar in the toolbar</label>
+                    <label><input type="checkbox" name="iwm" [(ngModel)]="s.inWindowMenu" /> Show the menu bar inside the window (macOS also keeps the top-of-screen menu)</label>
+                  }
+                </div>
+                <h4 class="gsec">Folders and files</h4>
                 <label>Sessions folder</label>
                 <div class="row"><input name="sd" [(ngModel)]="s.sessionsDir" /><button type="button" (click)="browse('sessionsDir')">Browse...</button></div>
                 <label></label>
@@ -95,52 +165,6 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <label></label>
                 <div class="hint">Used to run Python (.py) scripts with the <code>crt</code> object. Python 3 must be installed.</div>
                 <label></label><div class="hint">Files received with ZMODEM (remote "sz") are saved here.</div>
-                <label>UI theme</label>
-                <select name="theme" [(ngModel)]="s.theme">
-                  <option value="system">Follow system</option><option value="dark">Dark</option><option value="light">Light</option>
-                </select>
-                <label>Layout</label>
-                <div>
-                  <select name="layout" [ngModel]="s.layout || ''" (ngModelChange)="s.layout = $event">
-                    <option value="">Modern - tabs and search in the title bar</option><option value="classic">Classic - toolbar, tab strip and menu bar</option>
-                  </select>
-                  @if (isMac) { <div class="hint">On macOS the window's own title bar changes the next time Termwright starts.</div> }
-                </div>
-                <label>Icons</label>
-                <div>
-                  <select name="icons" [ngModel]="s.iconStyle || ''" (ngModelChange)="s.iconStyle = $event">
-                    <option value="">Coloured tiles - the device in white on its colour</option><option value="glyph">Glyphs - the device in its colour, no tile</option>
-                  </select>
-                  @if (s.layout !== 'classic') {
-                    <label class="inline-check" style="margin-top: 6px"><input type="checkbox" name="compact" [ngModel]="!!s.compactRows" (ngModelChange)="s.compactRows = $event" />
-                      Compact Session Manager (one line per session - more sessions in view)</label>
-                  }
-                </div>
-                <label>Interface font</label>
-                <select name="uifont" [(ngModel)]="s.uiFont">@for (f of uiFonts; track f.v) { <option [value]="f.v">{{ f.label }}</option> }</select>
-                <label>Text size</label>
-                <select name="uisize" [ngModel]="s.uiFontSize || 13" (ngModelChange)="s.uiFontSize = +$event">@for (z of uiSizes; track z.v) { <option [ngValue]="z.v">{{ z.label }}</option> }</select>
-                <label></label>
-                <div class="ui-sample" [style.font-family]="fontStack(s.uiFont)" [style.font-size.px]="s.uiFontSize || 13">
-                  Session Manager · Quick Connect · core-sw1 10.10.0.1 · 0123456789<br /><span class="hint">Applies to menus, dialogs and the Session Manager; the terminal font is under Terminal &amp; Appearance.</span></div>
-                <label>Accent color</label>
-                <div class="row"><input type="color" name="acc" class="swatch" [ngModel]="s.accentColor || '#4f9cf7'" (ngModelChange)="s.accentColor = $event" />
-                  <button type="button" (click)="s.accentColor = ''">Default</button></div>
-                <label>Behavior</label>
-                <div class="checks">
-                  <label><input type="checkbox" name="cc" [(ngModel)]="s.confirmClose" /> Confirm before closing connected tabs / quitting</label>
-                  <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" /> Confirm before pasting more than one line</label>
-                  <label><input type="checkbox" name="rhist" [ngModel]="s.recordHistory !== false" (ngModelChange)="s.recordHistory = $event" />
-                    Remember typed commands for Command History and suggestions (never commands with passwords, secrets or keys)</label>
-                  <label><input type="checkbox" name="rt" [(ngModel)]="s.restoreTabs" /> Reopen the sessions that were open when Termwright was closed</label>
-                  <label><input type="checkbox" name="sm" [(ngModel)]="s.showSessionManager" /> Show Session Manager</label>
-                  <label><input type="checkbox" name="bb" [(ngModel)]="s.showButtonBar" /> Show Button Bar</label>
-                  <label><input type="checkbox" name="cw" [(ngModel)]="s.showCommandWindow" /> Show Command Window</label>
-                  @if (s.layout === 'classic') {
-                    <label><input type="checkbox" name="cbar" [(ngModel)]="s.showConnectBar" /> Show Connect Bar in the toolbar</label>
-                    <label><input type="checkbox" name="iwm" [(ngModel)]="s.inWindowMenu" /> Show the menu bar inside the window (macOS also keeps the top-of-screen menu)</label>
-                  }
-                </div>
                 <label>Data folder</label><div class="hint mono">{{ dataDir() }}</div>
               </div>
             }
@@ -491,12 +515,30 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
     </form>
   </div>
   }`,
+  styles: [`
+    .gsec { display: none; }
+    :host-context(.modern) .gsec { display: block; grid-column: 1 / -1; margin: 14px 0 2px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase; color: var(--faint); &:first-child { margin-top: 0; } }
+    .themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 420px; }
+    .tht { height: auto; display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 6px 6px 7px; border: 1px solid var(--line, var(--border));
+      border-radius: var(--r, 6px); background: var(--surface-2, var(--tab)); font-weight: 500; color: var(--muted);
+      &.on { border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 1px var(--accent); } }
+    .pv { display: block; height: 44px; border-radius: var(--r-sm, 5px); border: 1px solid rgba(127, 127, 127, .25); position: relative; overflow: hidden;
+      &::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 30%; }
+      &::after { content: ''; position: absolute; left: 38%; right: 10%; top: 10px; height: 5px; border-radius: 3px; box-shadow: 0 10px 0 -1px currentColor; } }
+    .pv.light { background: #f6f7f9; color: #c9ced6; &::before { background: #e9ecf0; } &::after { background: #9aa3af; } }
+    .pv.dark { background: #16181d; color: #3a3f48; &::before { background: #1e2127; } &::after { background: #6b7280; } }
+    .pv.system { background: linear-gradient(110deg, #f6f7f9 50%, #16181d 50%); color: #8a919c; &::before { background: transparent; } &::after { background: #8a919c; } }
+    .seg.w2 { max-width: 260px; }
+  `],
 })
 export class OptionsDialog implements OnInit {
   protected ui = inject(Ui);
   readonly uiFonts = UI_FONTS;
   readonly uiSizes = UI_SIZES;
   readonly factNames = FACT_NAMES;
+  readonly modern = () => this.ui.settings()?.layout !== 'classic';
+  readonly themeTiles = [{ v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }, { v: 'system', label: 'System' }];
   reOk(re: string) { if (!re) return true; try { new RegExp(re); return true; } catch { return false; } }
   readonly isMac = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac OS');
   fontStack(v: string | undefined) { return uiFontStack(v); }

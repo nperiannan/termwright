@@ -57,6 +57,10 @@ const PATHS: Record<string, string> = {
   'chevron-down': 'M7 10l5 5 5-5',
   alert: 'M12 3l10 18H2zM12 10v5M12 18h.01',
   check: 'M5 12.5l4.5 4.5L19 7.5',
+  // jump host: two points joined by a bent path; port forward: arrow through a port; remote screen
+  route: 'M6 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM18 15a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM6 9v3a3 3 0 0 0 3 3h7',
+  forward: 'M3 12h13M12 7l5 5-5 5M20 5v14',
+  monitor: 'M3 4.5h18v12H3zM8.5 20.5h7M12 16.5v4',
   key: 'M14.5 4a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM10.6 13.4L3 21M6 18l2.5 2.5M8.5 15.5L11 18',
   edit: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   star: 'M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z',
