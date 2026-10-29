@@ -11,6 +11,7 @@ import { Ui } from '../core/ui.service';
 import { SerialPortPicker } from '../components/serial-port-picker';
 import { Icon } from '../components/icon';
 import { DeviceIcon, deviceKindOf } from '../components/device-icon';
+import { accountChoice, defaultLogin, defaultText, setAccountChoice, userOf } from '../core/accounts';
 import { SessionIcon, SessionKind } from '../components/session-icon';
 import { FolderPicker } from '../components/folder-picker';
 import { FactTeach } from './fact-teach';
@@ -274,14 +275,25 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                     </div>
                   }
                 }
-                @if (s.protocol !== 'WOL' && (s.deviceType || s.protocol === 'SSH2' || (modern() && !remote() && s.protocol !== 'Local Shell'))) {
-                  <label class="o5">{{ modern() ? '' : 'Login' }}</label>
+                @if (canLogin()) {
+                  <label class="o5">Account</label>
+                  <select class="o5" name="acct" [ngModel]="acctChoice()" (ngModelChange)="setAcct($event)"
+                    title="Who logs in: Default = the folder's account, else the device type's account or login; or a saved account; or this session's own username and password">
+                    <option value="">Default · {{ defText() }}</option>
+                    @for (a of accounts(); track a.name) { <option [value]="a.name">{{ a.name }}{{ a.username ? ' · ' + a.username : '' }}</option> }
+                    <option value="-">Own username and password</option>
+                    <option value="+">+ New Account…</option>
+                  </select>
+                  @if (acctUser(); as au) {
+                    <label class="o5"></label>
+                    <div class="acct-card o5"><span class="av">{{ initials(au.account || s.deviceType || '?') }}</span>
+                      <span class="tx"><span>Logs in as <b class="mono">{{ au.user || '(asked when connecting)' }}</b> {{ au.how }}</span><small>Device type = how it logs in · Account = who logs in. Also used for SFTP, jump hosts and background logins.</small></span>
+                      <button type="button" (click)="ui.open('passwords')">{{ au.account ? 'Edit Account…' : 'Accounts…' }}</button></div>
+                  }
+                }
+                @if (s.protocol !== 'WOL' && (s.protocol === 'SSH2' || (modern() && !remote() && s.protocol !== 'Local Shell'))) {
+                  <label class="o5">{{ modern() ? '' : 'Options' }}</label>
                   <div class="checks o5">
-                    @if (s.deviceType) {
-                    <label><input type="checkbox" name="inherit" [ngModel]="!s.ownLogin" (ngModelChange)="s.ownLogin = !$event" />
-                      @if (modern()) { <span class="tx">Use the {{ s.deviceType }} login<small>{{ loginSub() }}</small></span> }
-                      @else { Use the device type's username and password{{ loginNote(s.deviceType, deviceUser()) }} }</label>
-                    }
                     @if (modern() && !remote() && s.protocol !== 'Local Shell') {
                       <label><input type="checkbox" name="arc2" [(ngModel)]="s.autoReconnect" /><span class="tx">Reconnect automatically<small>when the connection drops</small></span></label>
                     }
@@ -292,7 +304,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                     }
                   </div>
                 }
-                @if ((!s.deviceType || s.ownLogin) && s.protocol !== 'WOL') {
+                @if (ownFields()) {
                   <label class="o6">Username</label><input class="o6" name="username" [(ngModel)]="s.username" placeholder="(prompt when connecting)" />
                   <label class="o6">Password</label>
                   <div class="row o6">
@@ -657,6 +669,10 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
   }
   `,
   styles: [`
+    .acct-card { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--line, var(--border)); border-radius: 10px; background: var(--surface-2, var(--input-bg));
+      .av { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; font-size: calc(11px * var(--ui-scale, 1)); background: var(--accent-soft, #23314a); color: var(--accent); }
+      .tx { flex: 1; display: flex; flex-direction: column; line-height: 1.4; small { color: var(--muted); } }
+      button { white-space: nowrap; } }
     .facts { display: flex; flex-direction: column; gap: 10px; max-width: 680px;
       h4 { margin: 10px 0 0; } .spacer { flex: 1; } }
     .fnow { border: 1px solid var(--line, var(--border)); border-radius: var(--r-lg, 8px); padding: 6px 12px; }
@@ -704,6 +720,34 @@ export class SessionEditor implements OnInit {
   isHop(cmd: string) { return /^\s*(exec\s+)?\S*\bssh\s+\S/.test(cmd ?? ''); }
   /** Sends Wake-on-LAN with the values in the dialog (saved or not). */
   wakeNow() { if (this.s) void this.tabs.wake(structuredClone(this.s), '', 'none'); }
+  /** Who logs in (Account). */
+  canLogin() { return !!this.s && !['Local Shell', 'VNC', 'WOL'].includes(this.s.protocol); }
+  ownFields() {
+    if (!this.s || this.s.protocol === 'WOL') return false;
+    if (!this.canLogin()) return true;
+    const c = accountChoice(this.s);
+    return c === '-' || (c === '' && defaultLogin(this.ui.settings(), this.s).kind === 'own');
+  }
+  accounts() { return this.ui.settings()?.credentials ?? []; }
+  acctChoice() { return this.s ? accountChoice(this.s) : ''; }
+  setAcct(v: string) {
+    if (!this.s) return;
+    if (v === '+') { const keep = accountChoice(this.s); setAccountChoice(this.s, keep + ' '); setTimeout(() => setAccountChoice(this.s!, keep)); this.ui.open('passwords'); return; }
+    setAccountChoice(this.s, v);
+  }
+  defText() { return this.s ? defaultText(defaultLogin(this.ui.settings(), this.s)) : ''; }
+  acctUser(): { user: string; how: string; account?: string } | null {
+    if (!this.s || !this.canLogin()) return null;
+    const c = accountChoice(this.s);
+    if (c && c !== '-') return { user: userOf(this.ui.settings(), c), how: 'with the account ' + c, account: c };
+    if (c === '-') return null;
+    const d = defaultLogin(this.ui.settings(), this.s);
+    if (d.kind === 'account') return { user: d.user ?? '', how: `with the account ${d.name} (from the ${d.from})`, account: d.name };
+    if (d.kind === 'device') return { user: d.user ?? '', how: `with the ${d.from}'s login` };
+    return null;
+  }
+  initials(n: string) { return n.split(/[-_ .]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('') || '?'; }
+
   /** SFTP opens on: '' where the terminal is, 'jump' or 'target' (older sessions: the target flag). */
   sftpOn(s: Session) { return s.sftpOn || (s.sftpToTarget ? 'target' : ''); }
   setSftpOn(s: Session, v: '' | 'jump' | 'target') { s.sftpOn = v; s.sftpToTarget = v === 'target'; }

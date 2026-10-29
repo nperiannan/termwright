@@ -36,7 +36,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 ## Highlights
 
 - **Connections**: SSH2, Telnet, serial consoles, raw TCP and local shells in tabs or tiles; RDP and VNC alongside them.
-- **Authentication**: passwords, keys (including PuTTY `.ppk`), certificates, FIDO2 security keys, smart cards, Kerberos and password managers.
+- **Authentication**: passwords, keys (including PuTTY `.ppk`), certificates, FIDO2 security keys, smart cards, Kerberos and password managers. **Accounts** let many sessions, folders and device types share one login, so a password is changed in one place.
 - **Device types**: one login profile per platform (EXOS, VOSS, Cisco IOS, Linux, or your own). It holds the login steps, after-login commands and credentials, so a new device needs only an address.
 - **Device facts**: model, version, serial number, MAC address and uptime are read in a background login and shown wherever the session appears.
 - **Session Manager**: folders with defaults, favourites, recents, environments (production is marked and guarded), reachability, bulk edit, a search-or-connect box and network discovery.

@@ -41,6 +41,8 @@ type KeyBinding struct {
 type Credential struct {
 	Name     string `json:"name"`
 	Username string `json:"username"`
+	Note     string `json:"note,omitempty"`
+	Changed  string `json:"changed,omitempty"` // when its password was last set (RFC 3339)
 }
 
 // ColorScheme is a user-defined terminal color scheme (CSS colors keyed by
@@ -184,6 +186,7 @@ type FolderDefault struct {
 	KeywordSet   string `json:"keywordSet"`
 	ColorScheme  string `json:"colorScheme"`
 	Environment  string `json:"environment"`
+	Account      string `json:"account,omitempty"`   // the account the folder's sessions log in with
 	Record       bool   `json:"record,omitempty"`    // record the sessions of the folder
 	SmartCard    string `json:"smartCard,omitempty"` // "any" or a key fingerprint
 }

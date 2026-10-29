@@ -2,7 +2,9 @@ import { ChangeDetectorRef, Component, OnInit, inject, signal } from '@angular/c
 import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
 import { Backend, errText } from '../core/backend';
-import { Credential } from '../core/models';
+import { AccountInfo, Credential } from '../core/models';
+
+type Acct = Credential & { password: string; hasPw: boolean; saved: string };
 import { askRef, isRef } from '../core/secret-ref';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
@@ -11,7 +13,7 @@ import { MIN_MASTER, pwStrength } from '../core/pw-strength';
 
 type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
 
-/** Options → Passwords & Credentials: named credentials, master password, encrypted vault export/import. */
+/** Options → Passwords & Accounts: accounts (named credentials), master password, encrypted vault export/import. */
 @Component({
   selector: 'app-passwords-dialog',
   imports: [FormsModule, Autofocus, Icon, PwMeter],
@@ -19,10 +21,10 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
   <div class="modal-backdrop">
     <div class="modal wide">
       <div class="modal-head"><span class="mh-ic"><app-icon name="lock" [size]="17" /></span>
-        <span class="mh-t">Passwords &amp; Credentials<span class="mh-s">Stored in the OS keychain - never in the session files</span></span></div>
+        <span class="mh-t">Passwords &amp; Accounts<span class="mh-s">Accounts that sessions log in with, saved passwords and password managers - passwords never go into session files</span></span></div>
       <div class="modal-split">
         <nav class="cat">
-          <a [class.on]="page() === 'credentials'" (click)="page.set('credentials')"><app-icon name="key" [size]="15" />Credentials</a>
+          <a [class.on]="page() === 'credentials'" (click)="page.set('credentials')"><app-icon name="key" [size]="15" />Accounts</a>
           <a [class.on]="page() === 'keys'" (click)="page.set('keys'); loadKeys()"><app-icon name="lock" [size]="15" />Key Passphrases</a>
           <a [class.on]="page() === 'managers'" (click)="page.set('managers'); loadManagers()"><app-icon name="shield" [size]="15" />Password Managers</a>
           <a [class.on]="page() === 'master'" (click)="page.set('master')"><app-icon name="lock" [size]="15" />Master Password</a>
@@ -37,25 +39,51 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
           }
           @switch (page()) {
             @case ('credentials') {
-              <p class="hint">Named username/password pairs for Logon Actions (Session Options → Logon Actions → Credentials).
-                In a Send string, <b>\\s</b> sends the username and <b>\\w</b> the password. Passwords are stored in the OS keychain.</p>
-              <table class="list creds">
-                <thead><tr><th class="md-only"></th><th>Name</th><th>Username</th><th>Password</th><th></th></tr></thead>
+              <p class="hint">An account is a username and password that sessions, folders (Folder Defaults) and device types log in with -
+                change its password here once and every session that uses it follows. In Logon Actions, <b>\\s</b> sends its username and <b>\\w</b> its password.</p>
+              <div class="row acc-bar"><input class="acc-q" [(ngModel)]="accQ" placeholder="Search accounts" />
+                <button type="button" (click)="add()"><app-icon name="plus" [size]="14" class="md-only" /> New Account</button>
+                <button type="button" (click)="loadCandidates()" title="Sessions that share the same username and saved password">Convert Sessions…</button></div>
+              <table class="list creds accts">
+                <thead><tr><th>Account</th><th>Username</th><th>Password</th><th>Used by</th><th>Changed</th></tr></thead>
                 <tbody>
-                  @for (c of creds; track $index) {
-                    <tr>
-                      <td class="md-only kt"><span class="k"><app-icon name="key" [size]="14" /></span></td>
-                      <td><input [(ngModel)]="c.name" placeholder="e.g. lab-admin" [disabled]="!!c.saved" /></td>
-                      <td><input [(ngModel)]="c.username" /></td>
-                      <td><input [type]="isRef(c.password) ? 'text' : 'password'" [(ngModel)]="c.password" [placeholder]="c.hasPw ? '(saved - type to change)' : '(none)'" /></td>
-                      <td class="nowrap"><button type="button" class="pm" title="From a password manager (1Password, Bitwarden, Vault, command)" (click)="credRef(c)"><span class="cl-only">🔑</span><app-icon name="shield" [size]="15" class="md-only" /></button>
-                        <button type="button" class="icon-btn" title="Remove" (click)="remove($index)"><span class="cl-only">✕</span><app-icon name="trash" [size]="15" class="md-only" /></button></td>
+                  @for (c of shownCreds(); track c) {
+                    <tr [class.sel]="c === cur" (click)="cur = c">
+                      <td><b>{{ c.name || '(new account)' }}</b></td>
+                      <td class="mono">{{ c.username }}</td>
+                      <td>@if (c.password) { <span class="pill pm2">{{ isRef(c.password) ? '◆ Password manager' : '● Changed' }}</span> }
+                        @else if (pwKind(c) === 'manager') { <span class="pill pm2">◆ Password manager</span> }
+                        @else if (pwKind(c) === 'keychain') { <span class="pill kc">● Keychain</span> }
+                        @else { <span class="pill ask">○ Asked when connecting</span> }</td>
+                      <td [class.unused]="!usedText(c)" class="used">{{ usedText(c) || 'not used' }}</td>
+                      <td class="muted">{{ changedText(c) }}</td>
                     </tr>
-                  }
+                  } @empty { <tr><td colspan="5" class="muted">No accounts yet - New Account, or Convert Sessions… to make one from sessions that share a login.</td></tr> }
                 </tbody>
               </table>
-              <div class="row"><button type="button" (click)="add()"><app-icon name="plus" [size]="14" class="md-only" />{{ modern() ? ' Add credential' : 'Add' }}</button><span class="spacer"></span>
-                <button type="button" class="primary" (click)="saveCreds()">Save Credentials</button></div>
+              @if (cur; as c) {
+                <div class="acc-detail">
+                  <label>Name</label><input [(ngModel)]="c.name" placeholder="e.g. lab-admin" appAutofocus />
+                  <label>Username</label><input class="mono" [(ngModel)]="c.username" placeholder="login name" />
+                  <label>Password</label>
+                  <div class="row nowrap"><input [type]="isRef(c.password) ? 'text' : 'password'" [(ngModel)]="c.password" [placeholder]="c.hasPw ? '(saved - type to change)' : '(none - asked when connecting)'" />
+                    <button type="button" class="pm" title="From a password manager (1Password, Bitwarden, Vault, command)" (click)="credRef(c)"><span class="cl-only">🔑</span><app-icon name="shield" [size]="15" class="md-only" /></button></div>
+                  <label>Note</label><input [(ngModel)]="c.note" placeholder="optional" />
+                  <span></span>
+                  <div class="hint">@if (info(c); as i) { @if (i.sessions) { Changing the password updates the {{ i.sessions }} session{{ i.sessions === 1 ? '' : 's' }} that use{{ i.sessions === 1 ? 's' : '' }} this account. <a (click)="showSessions(c)">Show the sessions</a> } @else { Not used yet: choose it in a session's Account list, Folder Defaults or a device type. } }</div>
+                </div>
+              }
+              @if (candidates(); as cs) {
+                <div class="cands">
+                  <b>Sessions with the same username and saved password</b>
+                  @for (g of cs; track g.username + g.paths[0]) {
+                    <div class="cand"><span class="mono">{{ g.username }}</span><span class="muted">{{ g.paths.length }} sessions - {{ g.paths.slice(0, 3).join(', ') }}{{ g.paths.length > 3 ? ', …' : '' }}</span>
+                      <button type="button" (click)="convert(g)">Convert to Account…</button></div>
+                  } @empty { <div class="muted">No sessions share a username and saved password.</div> }
+                </div>
+              }
+              <div class="row"><button type="button" class="danger-text" [disabled]="!cur" (click)="removeCur()">Remove Account…</button><span class="spacer"></span>
+                <button type="button" class="primary" (click)="saveCreds()">Save Accounts</button></div>
             }
             @case ('keys') {
               <p class="hint">Passphrases of encrypted SSH private keys (OpenSSH, PEM or PuTTY .ppk), saved in the OS keychain so the
@@ -146,6 +174,18 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
     .missing { color: var(--muted); text-decoration: line-through; }
     .refs { margin-bottom: 12px; td { font-size: calc(12px * var(--ui-scale, 1)); vertical-align: top; } .mono { white-space: nowrap; } }
     .nowrap { white-space: nowrap; }
+    .muted { color: var(--muted); }
+    .acc-bar { margin-bottom: 10px; gap: 8px; .acc-q { flex: 1; } button { white-space: nowrap; } }
+    .accts { tr { cursor: default; } tr.sel td { background: var(--selected); } .used { color: var(--accent); } .used.unused { color: var(--faint); } }
+    .pill { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; white-space: nowrap;
+      &.kc { color: var(--ok, #22c55e); background: color-mix(in srgb, var(--ok, #22c55e) 14%, transparent); }
+      &.pm2 { color: #a78bfa; background: color-mix(in srgb, #a78bfa 16%, transparent); }
+      &.ask { color: #e5a93b; background: color-mix(in srgb, #e5a93b 15%, transparent); } }
+    .acc-detail { display: grid; grid-template-columns: 90px 1fr 90px 1fr; gap: 8px 12px; align-items: center; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 10px;
+      > label { color: var(--muted); text-align: right; } > .hint { grid-column: 2 / span 3; margin: 0; a { color: var(--accent); cursor: pointer; } }
+      > input, .row input { width: 100%; min-width: 0; } .row { gap: 4px; min-width: 0; input { flex: 1; } } }
+    .cands { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; margin-bottom: 12px; border: 1px dashed var(--border); border-radius: 10px;
+      .cand { display: flex; gap: 10px; align-items: center; > .muted { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } button { white-space: nowrap; } } }
     td.mono { font-size: calc(11px * var(--ui-scale, 1)); word-break: break-all; }
     :host-context(.modern) {
       table.list { width: 100%; border: 1px solid var(--line); border-radius: var(--r-lg); border-collapse: separate; border-spacing: 0; overflow: hidden; margin-bottom: 12px;
@@ -169,20 +209,75 @@ export class PasswordsDialog implements OnInit {
   private cdr = inject(ChangeDetectorRef);
   readonly page = signal<Page>('credentials');
   readonly modern = () => this.ui.settings()?.layout !== 'classic';
-  readonly pageNames: Record<Page, string> = { credentials: 'Credentials', keys: 'Key Passphrases', managers: 'Password Managers', master: 'Master Password', vault: 'Export / Import' };
+  readonly pageNames: Record<Page, string> = { credentials: 'Accounts', keys: 'Key Passphrases', managers: 'Password Managers', master: 'Master Password', vault: 'Export / Import' };
   readonly hasMaster = signal(false);
   readonly msg = signal('');
   readonly err = signal('');
-  creds: (Credential & { password: string; hasPw: boolean; saved: string })[] = [];
+  creds: Acct[] = [];
+  cur: Acct | null = null;
+  accQ = '';
+  readonly accInfo = signal<AccountInfo[]>([]);
+  readonly candidates = signal<{ username: string; paths: string[] }[] | null>(null);
   private removed: string[] = [];
   unlockPw = ''; curPw = ''; newPw = ''; newPw2 = ''; vaultPw = ''; vaultPw2 = '';
 
   async ngOnInit() {
     this.hasMaster.set(!!this.ui.settings()?.masterHash);
+    await this.loadAccounts();
+  }
+
+  private async loadAccounts() {
     this.creds = await Promise.all((this.ui.settings()?.credentials ?? []).map(async c => ({
-      ...c, password: '', saved: c.name, hasPw: await this.backend.hasCredentialPassword(c.name).catch(() => false),
+      ...c, note: c.note ?? '', password: '', saved: c.name, hasPw: await this.backend.hasCredentialPassword(c.name).catch(() => false),
     })));
+    this.cur = this.creds[0] ?? null;
+    this.accInfo.set((await this.backend.accountsInfo().catch(() => null)) ?? []);
     this.cdr.markForCheck();
+  }
+
+  shownCreds() { const q = this.accQ.trim().toLowerCase(); return q ? this.creds.filter(c => (c.name + ' ' + c.username + ' ' + (c.note ?? '')).toLowerCase().includes(q)) : this.creds; }
+  info(c: Acct) { return this.accInfo().find(i => i.name === c.saved) ?? null; }
+  pwKind(c: Acct) { return this.info(c)?.password ?? (c.hasPw ? 'keychain' : ''); }
+  usedText(c: Acct) {
+    const i = this.info(c);
+    if (!i) return '';
+    const parts = [i.sessions ? i.sessions + ' session' + (i.sessions === 1 ? '' : 's') : '', ...i.folders.map(f => 'folder "' + f + '"'), ...i.deviceTypes.map(d => 'device type ' + d)].filter(Boolean);
+    return parts.join(' · ');
+  }
+  changedText(c: Acct) {
+    if (!c.changed) return '-';
+    const d = new Date(c.changed), now = new Date();
+    if (d.toDateString() === now.toDateString()) return 'Today';
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) });
+  }
+  async showSessions(c: Acct) {
+    const l = (await this.backend.accountSessions(c.saved).catch(() => null)) ?? [];
+    await this.ui.confirm('Sessions Using ' + c.saved, l.length ? l.slice(0, 40).join('\n') + (l.length > 40 ? '\n… and ' + (l.length - 40) + ' more' : '') : 'No session uses this account.', 'OK');
+  }
+  async loadCandidates() {
+    this.candidates.set((await this.backend.accountCandidates().catch(() => null)) ?? []);
+    this.cdr.markForCheck();
+  }
+  async convert(g: { username: string; paths: string[] }) {
+    const name = await this.ui.input('Convert to Account', `Account name for the ${g.paths.length} sessions that log in as ${g.username} (their username and saved password move into the account)`, g.username);
+    if (!name?.trim()) return;
+    try {
+      await this.backend.convertToAccount(name.trim(), g.paths);
+      await this.ui.loadSettings();
+      await this.ui.refreshTree();
+      await this.loadAccounts();
+      this.cur = this.creds.find(c => c.name === name.trim()) ?? this.cur;
+      await this.loadCandidates();
+      this.status(`${g.paths.length} sessions now log in with the account ${name.trim()}.`);
+    } catch (e) { this.status('', errText(e)); }
+  }
+  async removeCur() {
+    const c = this.cur;
+    if (!c) return;
+    const used = this.usedText(c);
+    if (used && !(await this.ui.confirm('Remove Account', `${c.saved} is used by ${used}. They will log in with their own username and password (or be asked) after it is removed.`, 'Remove', true))) return;
+    this.remove(this.creds.indexOf(c));
+    this.cur = this.creds[0] ?? null;
   }
 
   private status(m: string, e = '') { this.msg.set(m); this.err.set(e); }
@@ -237,7 +332,7 @@ export class PasswordsDialog implements OnInit {
     this.unlockPw = '';
   }
 
-  add() { this.creds.push({ name: '', username: '', password: '', hasPw: false, saved: '' }); }
+  add() { const c: Acct = { name: '', username: '', note: '', password: '', hasPw: false, saved: '' }; this.creds.push(c); this.cur = c; }
 
   remove(i: number) {
     const [c] = this.creds.splice(i, 1);
@@ -247,19 +342,28 @@ export class PasswordsDialog implements OnInit {
   async saveCreds() {
     const list = this.creds.filter(c => c.name.trim());
     const names = list.map(c => c.name.trim());
-    if (new Set(names).size !== names.length) { this.status('', 'Credential names must be unique.'); return; }
+    if (new Set(names).size !== names.length) { this.status('', 'Account names must be unique.'); return; }
     try {
       for (const n of this.removed) await this.backend.setCredentialPassword(n, '');
       this.removed = [];
+      // renamed accounts: sessions, folders, device types and the saved password follow
+      let renamed = false;
+      for (const c of list) {
+        if (c.saved && c.name.trim() !== c.saved) { await this.backend.renameAccount(c.saved, c.name.trim()); c.saved = c.name.trim(); renamed = true; }
+      }
+      if (renamed) await this.ui.loadSettings();
       for (const c of list) {
         c.name = c.name.trim();
-        if (c.password) { await this.backend.setCredentialPassword(c.name, c.password); c.hasPw = true; c.password = ''; }
+        if (c.password) { await this.backend.setCredentialPassword(c.name, c.password); c.hasPw = true; c.password = ''; c.changed = new Date().toISOString(); }
         c.saved = c.name;
       }
       const s = this.ui.settings();
-      if (s) await this.ui.saveSettings({ ...s, credentials: list.map(c => ({ name: c.name, username: c.username })) });
+      const prev = new Map((s?.credentials ?? []).map(c => [c.name, c.changed]));
+      if (s) await this.ui.saveSettings({ ...s, credentials: list.map(c => ({ name: c.name, username: c.username, note: c.note?.trim() || undefined, changed: c.changed || prev.get(c.name) })) });
+      await this.ui.loadSettings();
       this.creds = list;
-      this.status(`Saved ${list.length} credential(s).`);
+      this.accInfo.set((await this.backend.accountsInfo().catch(() => null)) ?? []);
+      this.status(`Saved ${list.length} account${list.length === 1 ? '' : 's'}.`);
     } catch (e) { this.status('', errText(e)); }
     this.cdr.markForCheck();
   }

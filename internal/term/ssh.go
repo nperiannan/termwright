@@ -174,6 +174,13 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 	}
 	addr := net.JoinHostPort(s.Hostname, strconv.Itoa(port))
 	user := s.Username
+	account := ""
+	if name, u, _, ok := m.accountLogin(s); ok {
+		account = name
+		if u != "" {
+			user = u
+		}
+	}
 	if s.TransportUser != "" {
 		user = s.TransportUser // console server login (the device behind the port logs in with s.Username)
 	}
@@ -203,8 +210,12 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 			haveSaved = false // only try once
 			return saved, nil
 		}
-		r, err := m.prompts.Ask(ctx, Prompt{TabID: t.id, Kind: "credentials", Title: "Enter Secure Shell Password",
-			Message: msg, Fields: []PromptField{{Label: "Password", Secret: true}}, AllowRemember: pwPath != ""})
+		pr := Prompt{TabID: t.id, Kind: "credentials", Title: "Enter Secure Shell Password",
+			Message: msg, Fields: []PromptField{{Label: "Password", Secret: true}}, AllowRemember: pwPath != ""}
+		if account != "" && s.TransportPath == "" && m.OnAccountPasswordTyped != nil {
+			pr.AllowRemember, pr.RememberLabel = true, "Save for the account "+account+" (every session that uses it)"
+		}
+		r, err := m.prompts.Ask(ctx, pr)
 		if err != nil {
 			return "", err
 		}
@@ -283,8 +294,12 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 		return nil, "", nil, err
 	}
 	client := ssh.NewClient(cc, chans, reqs)
-	if rememberPassword && typedPassword && m.OnPasswordUsed != nil {
-		m.OnPasswordUsed(pwPath, usedPassword)
+	if rememberPassword && typedPassword {
+		if account != "" && s.TransportPath == "" && m.OnAccountPasswordTyped != nil {
+			m.OnAccountPasswordTyped(account, usedPassword)
+		} else if m.OnPasswordUsed != nil {
+			m.OnPasswordUsed(pwPath, usedPassword)
+		}
 	}
 	info := fmt.Sprintf("SSH2 %s@%s  %s%s", user, addr, string(cc.ServerVersion()), via)
 	return client, info, func() { _ = raw.Close() }, nil

@@ -11,6 +11,7 @@ import { SessionIcon, SessionKind } from './session-icon';
 import { DeviceIcon, deviceKindOf } from './device-icon';
 import { Wol } from '../core/wol.service';
 import { SessionOps } from '../core/session-ops.service';
+import { defaultLogin, userOf } from '../core/accounts';
 import { FolderIcon } from './folder-icon';
 import { factList, factsAge } from '../core/facts';
 
@@ -523,7 +524,9 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   loginText(h: Hover) {
     const st = (s: string) => s === '' ? 'asked when connecting' : s === 'empty' ? 'no password' : s.startsWith('ref:') ? 'from a password manager' : 'saved';
     if (h.pw === '…') return '…';
-    if (h.n.deviceType && h.pw === '') return `from ${h.n.deviceType} - password ${st(h.dtPw)}`;
+    const acct = h.n.account === '-' ? '' : h.n.account || (() => { const d = defaultLogin(this.ui.settings(), { folder: '', path: h.n.path, deviceType: h.n.deviceType } as unknown as Parameters<typeof defaultLogin>[1]); return d.kind === 'account' ? d.name! : ''; })();
+    if (acct) return `account ${acct}` + (userOf(this.ui.settings(), acct) ? ` (${userOf(this.ui.settings(), acct)})` : '');
+    if (h.n.deviceType && h.pw === '' && h.n.account !== '-') return `from ${h.n.deviceType} - password ${st(h.dtPw)}`;
     return 'password ' + st(h.pw);
   }
 

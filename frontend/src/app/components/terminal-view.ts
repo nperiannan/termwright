@@ -13,6 +13,7 @@ import { Ui } from '../core/ui.service';
 import { terminalTheme } from '../core/themes';
 import { comboOf } from '../core/models';
 import { FIX_LABELS, FixAction, fixFor } from '../core/fixes';
+import { accountChoice, defaultLogin } from '../core/accounts';
 import { DeviceIcon, deviceKindOf } from './device-icon';
 import { History, commandOfLine } from '../core/history.service';
 import { FormsModule } from '@angular/forms';
@@ -401,7 +402,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   readonly fix = computed(() => {
     const t = this.tab();
     if (t.state !== 'error' || !t.message || this.dismissed() === t.message) return null;
-    return fixFor(t.message, t.session);
+    return fixFor(t.message, t.session, this.accountName(t.session));
   });
 
   async runFix(a: FixAction) {
@@ -412,6 +413,16 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       case 'edit': if (s.path) await this.ui.editSession(s.path, t.id); break;
       case 'edit-jump': if (s.jumpSession) await this.ui.editSession(s.jumpSession); break;
       case 'device-types': this.ui.openOptions('devices'); break;
+      case 'account-password': {
+        const name = this.accountName(s);
+        if (!name) break;
+        const pw = await this.ui.input('Account Password', `New password of the account "${name}" - every session that uses it logs in with it`, '', true);
+        if (pw === null) break;
+        await this.backend.setCredentialPassword(name, pw).catch(e => this.ui.error(e));
+        this.ui.toast(`Password of the account ${name} updated`, 'success');
+        await this.tabs.reconnect(t.id);
+        break;
+      }
       case 'forget-password':
         await this.backend.forgetPassword(s.path).catch(e => this.ui.error(e));
         this.ui.toast('Saved password removed - you will be asked for it', 'info');
@@ -422,6 +433,15 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       case 'find-mac': this.ui.movedInput.set({ find: s.path, tab: t.id }); this.ui.open('moved'); break;
     }
   }
+  /** The account a session logs in with ('' = its own login or the device type's). */
+  private accountName(s: TabView['session']): string {
+    const c = accountChoice(s);
+    if (c === '-') return '';
+    if (c) return c;
+    const d = defaultLogin(this.ui.settings(), s);
+    return d.kind === 'account' ? d.name ?? '' : '';
+  }
+
 
   constructor() {
     // Apply settings changes (font, scheme, cursor) live.

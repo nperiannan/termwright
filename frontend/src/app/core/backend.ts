@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource } from './models';
+  AccountInfo,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -44,6 +44,11 @@ export class Backend {
   downloadCount() { return this.call<number>('DownloadCount'); }
   quit() { return this.call<void>('Quit'); }
   getSettings() { return this.call<Settings>('GetSettings'); }
+  accountsInfo() { return this.call<AccountInfo[] | null>('AccountsInfo'); }
+  accountSessions(name: string) { return this.call<string[] | null>('AccountSessions', name); }
+  renameAccount(oldName: string, newName: string) { return this.call<void>('RenameAccount', oldName, newName); }
+  accountCandidates() { return this.call<{ username: string; paths: string[] }[] | null>('AccountCandidates'); }
+  convertToAccount(name: string, paths: string[]) { return this.call<void>('ConvertToAccount', name, paths); }
   saveSettings(s: Settings) { return this.call<void>('SaveSettings', s); }
 
   getSessionTree() { return this.call<SessionNode>('GetSessionTree'); }

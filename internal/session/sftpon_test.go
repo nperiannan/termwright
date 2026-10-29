@@ -57,3 +57,14 @@ func TestWOLSessionRoundTrip(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestAccountRoundTrip(t *testing.T) {
+	st, _ := NewStore(t.TempDir())
+	saved, err := st.Save(Session{Name: "sw", Protocol: ProtoSSH2, Hostname: "10.0.0.1", Account: "lab-admin"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.Get(saved.Path); got.Account != "lab-admin" {
+		t.Fatalf("account %q", got.Account)
+	}
+}

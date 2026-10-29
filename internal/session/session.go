@@ -85,6 +85,7 @@ const (
 	kOpenAs       = "Termwright Open As"
 	kDevice       = "Termwright Device Type"
 	kOwnLogin     = "Termwright Own Login"
+	kAccount      = "Termwright Account"
 	kEnv          = "Termwright Environment"
 	kRDPDomain    = "Termwright RDP Domain"
 	kRDPFull      = "Termwright RDP Full Screen"
@@ -206,6 +207,7 @@ type Session struct {
 	OpenAs           string        `json:"openAs"`          // SSH2: "" = terminal, "sftp" = SFTP browser only
 	DeviceType       string        `json:"deviceType"`      // name of a device type (login profile)
 	OwnLogin         bool          `json:"ownLogin"`        // with a device type: use this session's username/password instead of the device type's
+	Account          string        `json:"account"`         // who logs in: "" = default (folder, then device type), "-" = this session's own username and password, else a saved account
 	RDPDomain        string        `json:"rdpDomain"`       // RDP: Windows domain of the user
 	RDPFullScreen    bool          `json:"rdpFullScreen"`   // RDP: open full screen
 	RDPSize          string        `json:"rdpSize"`         // RDP: window size such as "1600x900" ("" = the client's default)
@@ -335,6 +337,7 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.OpenAs = f.Str(kOpenAs, "")
 	s.DeviceType = f.Str(kDevice, "")
 	s.OwnLogin = f.Bool(kOwnLogin, false)
+	s.Account = f.Str(kAccount, "")
 	s.Environment = f.Str(kEnv, "")
 	s.RDPDomain = f.Str(kRDPDomain, "")
 	s.RDPFullScreen = f.Bool(kRDPFull, false)
@@ -658,6 +661,7 @@ func (s Session) Apply(f *sessionfile.File) {
 	setOptStr(f, kOpenAs, s.OpenAs)
 	setOptStr(f, kDevice, s.DeviceType)
 	setOptBool(f, kOwnLogin, s.OwnLogin && s.DeviceType != "")
+	setOptStr(f, kAccount, s.Account)
 	setOptStr(f, kEnv, s.Environment)
 	setOptStr(f, kRDPDomain, s.RDPDomain)
 	setOptBool(f, kRDPFull, s.RDPFullScreen)

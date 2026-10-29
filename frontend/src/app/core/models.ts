@@ -17,7 +17,7 @@ export interface Session {
   consoleServer?: string; consolePort?: number; consoleMethod?: string; consoleUser?: string; consoleBase?: number; consoleProtocol?: string;
   environment?: string; rdpDomain?: string; rdpFullScreen?: boolean; rdpSize?: string; vncViewOnly?: boolean; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
   logonArgs: string; useLogonScript: boolean; automateLogon: boolean; initialCr: boolean;
-  remoteCommand: string; useRemoteCommand: boolean; openAs: '' | 'sftp'; deviceType: string; ownLogin: boolean; sftpToTarget: boolean; sftpOn?: '' | 'jump' | 'target'; filesPanel?: boolean;
+  remoteCommand: string; useRemoteCommand: boolean; openAs: '' | 'sftp'; deviceType: string; ownLogin: boolean; account?: string; sftpToTarget: boolean; sftpOn?: '' | 'jump' | 'target'; filesPanel?: boolean;
   kerberosPrincipal: string; kerberosSpn: string; certificateFile: string; serialFlow: '' | 'rtscts' | 'xonxoff';
   serialAutoBaud?: boolean; timestamps?: boolean; noAutoScroll?: boolean;
 }
@@ -39,7 +39,7 @@ export interface Snippet { name: string; folder: string; text: string; descripti
 export interface Workspace { name: string; layout: string; tabs: { session: string; kind: string }[]; }
 export interface FolderDefault {
   folder: string; username: string; deviceType: string; jumpSession: string; identityFile: string; keywordSet: string; colorScheme: string;
-  environment?: string; record?: boolean; smartCard?: string;
+  environment?: string; record?: boolean; smartCard?: string; account?: string;
 }
 /** Variables used in a snippet, in order: [{name, def}]. */
 export function snippetVars(text: string): { name: string; def: string }[] {
@@ -77,7 +77,7 @@ export interface KeywordSet { name: string; keywords: Keyword[]; }
 export interface SessionNode {
   name: string; path: string; isFolder: boolean; protocol?: string; hostname?: string;
   username?: string; port?: number; description?: string; hopTarget?: string; openAs?: string; children?: SessionNode[];
-  deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string; mac?: string; wolPing?: number; wolNetwork?: string;
+  deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string; mac?: string; wolPing?: number; wolNetwork?: string; account?: string;
 }
 
 export interface Button { label: string; send: string; toAll: boolean; action: string; script: string; }
@@ -129,7 +129,9 @@ export interface UpdateStatus {
 }
 
 /** A named username/password pair usable from logon actions (\s, \w). The password lives in the OS keychain. */
-export interface Credential { name: string; username: string; }
+export interface Credential { name: string; username: string; note?: string; changed?: string; }
+/** Where an account is used (AccountsInfo). */
+export interface AccountInfo { name: string; sessions: number; folders: string[]; deviceTypes: string[]; password: '' | 'keychain' | 'manager'; }
 
 export interface TabInfo {
   id: string; title: string; state: string; info: string; session: Session; logFile: string;
@@ -227,7 +229,7 @@ export const ACTIONS: Record<string, string> = {
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',
   'xmodem': 'Send XMODEM...', 'xmodem-receive': 'Receive XMODEM...', 'scp-upload': 'SCP Upload File...', 'scp-upload-folder': 'SCP Upload Folder...', 'scp-download': 'SCP Download...',
-  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Credentials...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'toggle-layout': 'Modern / Classic Layout', 'command-library': 'Command Library...', 'workspaces': 'Workspaces...',
+  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'toggle-layout': 'Modern / Classic Layout', 'command-library': 'Command Library...', 'workspaces': 'Workspaces...',
   'save-workspace': 'Save Workspace...', 'compare': 'Compare Outputs...',
   'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out', 'global-options': 'Global Options', 'session-options': 'Session Options',
 };

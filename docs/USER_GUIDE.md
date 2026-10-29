@@ -53,14 +53,14 @@ The first time Termwright starts (and once after updating to a new version; **He
 
 1. **Look** - theme (Light, Dark or System), text size and layout (Modern or Classic).
 2. **Sessions** - sessions of SecureCRT, PuTTY, SuperPuTTY, MobaXterm and OpenSSH found in their usual places are listed with an **Import** button; export files (SecureCRT `.xml`/`.zip` or Config folder, PuTTY/KiTTY `.reg`, SuperPuTTY `Sessions.xml`, MobaXterm, CSV) are one click away.
-3. **Security** - an optional **master password**. Type one (any 4 or more characters; a meter shows how strong it is - capitals, numbers and symbols help but are never required) and confirm it, or press **Skip**. It can be set, changed or removed later in Options → Passwords & Credentials → Master Password.
+3. **Security** - an optional **master password**. Type one (any 4 or more characters; a meter shows how strong it is - capitals, numbers and symbols help but are never required) and confirm it, or press **Skip**. It can be set, changed or removed later in Options → Passwords & Accounts → Master Password.
 4. **Done** - a few tips, then *Start Using Termwright* or *Discover Devices*.
 
 | Welcome | Master password (optional) |
 |---|---|
 | ![Welcome](screenshots/welcome.png) | ![Welcome: master password](screenshots/welcome-security.png) |
 
-With a master password set, Termwright starts with an **unlock window**: type the master password and press **Unlock** to use your saved passwords. **Not now** closes it; saved passwords stay locked and are asked when connecting (unlock later in Passwords & Credentials). The passwords themselves stay in the OS keychain - the master password only lets Termwright use them. **Lock Now** (Passwords & Credentials → Master Password) locks them again and shows the unlock window.
+With a master password set, Termwright starts with an **unlock window**: type the master password and press **Unlock** to use your saved passwords. **Not now** closes it; saved passwords stay locked and are asked when connecting (unlock later in Passwords & Accounts). The passwords themselves stay in the OS keychain - the master password only lets Termwright use them. **Lock Now** (Passwords & Accounts → Master Password) locks them again and shows the unlock window.
 
 ![Unlock window](screenshots/unlock.png)
 
@@ -205,7 +205,7 @@ Termwright can create SSH keys, put the public key on a server for you and switc
 | Passphrase | OS keychain, only if you tick *Save the passphrase in the OS keychain*; otherwise asked when connecting |
 | Which key a session uses | the session file (*Identity file*), never the key itself |
 
-Saved passphrases are listed in **Options → Passwords & Credentials → Key Passphrases**: see which sessions use each key, *Change…* (the new passphrase is checked against the key file), *Forget*, or *Add…* one for any key file. When Termwright asks for a key's passphrase while connecting, tick *Save passphrase (OS keychain)* to remember it. Passphrases are included in the password-vault export; back up the key files themselves separately.
+Saved passphrases are listed in **Options → Passwords & Accounts → Key Passphrases**: see which sessions use each key, *Change…* (the new passphrase is checked against the key file), *Forget*, or *Add…* one for any key file. When Termwright asks for a key's passphrase while connecting, tick *Save passphrase (OS keychain)* to remember it. Passphrases are included in the password-vault export; back up the key files themselves separately.
 
 ![Key Login Setup](screenshots/keysetup.png)
 
@@ -812,7 +812,7 @@ The server pane's header then reads **user@host via &lt;jump host&gt;**, and the
 
 ![Expect/Send Properties](screenshots/expect-send.png)
 
-**Credentials** (Options → Passwords & Credentials → Credentials): named username/password pairs shared by many sessions; passwords are stored in the OS keychain.
+**Accounts** in Send strings: `\s` and `\w` send the username and password of the account chosen in the step - see [Accounts](#accounts).
 
 **Alerts** (Global Options → **Alerts**): when output in *any* tab matches a pattern (text or regular expression), Termwright shows a notice, marks the tab with a red dot, can beep and - while it is in the background - shows an operating-system notification. Each pattern fires at most once every 5 seconds per tab. Two disabled examples (syslog severity 0-2 messages, `CRITICAL` / `link down`) are included.
 
@@ -856,9 +856,38 @@ log(out && out.indexOf("not found") < 0 ? "VLAN 10 present" : "VLAN 10 missing")
 |---|---|
 | ![Key Map](screenshots/keymap.png) | ![Button Bar](screenshots/buttons.png) |
 
-![Passwords & Credentials](screenshots/passwords.png)
+### Accounts
 
-**Master password** (Options → Passwords & Credentials → Master Password, or the welcome flow): when set, Termwright starts with an **unlock window** and asks for it before it uses any saved session, credential or device type password or key passphrase. Any 4 or more characters work - a meter shows how strong it is, and capitals, numbers or symbols are never required. **Not now** keeps the passwords locked (they are asked when connecting); **Lock Now** locks them again. The passwords stay in the OS keychain; the master password only gates their use by Termwright.
+An **account** is a username and a password that sessions log in with - for example `lab-admin`, your RADIUS / TACACS login, or `ec2-user` for cloud hosts. Many sessions, whole folders and device types can use the same account, so when its password changes you change it **once** and every session follows.
+
+**Options → Passwords & Accounts → Accounts** lists them: the account, its username, where its password is (*Keychain*, *Password manager* or *Asked when connecting*), what uses it (sessions, folders, device types) and when its password was last changed. Click an account to change its name, username, password (or *Password manager…* for 1Password, Bitwarden, HashiCorp Vault or a command) and a note; *Show the sessions* lists the sessions that use it. **New Account**, **Remove Account…** (it says first what uses the account - those sessions then use their own login) and **Save Accounts**. Renaming an account renames it everywhere: sessions, folders, device types and logon actions.
+
+![Accounts](screenshots/accounts.png)
+
+**Who logs in** - every session has an **Account** list (Session Options → Connection, and the side panel):
+
+| Choice | Who logs in |
+|---|---|
+| **Default** (the usual choice) | the account of the session's **folder** (Folder Defaults, the nearest folder first), else the **device type's** account or login, else the session's own username and password. The list says what Default means for this session, e.g. *Default · lab-admin (folder "Datacenter")*. |
+| an account | that account, whatever the folder or device type says |
+| **Own username and password** | the username and password saved in this session only |
+| **+ New Account…** | opens Passwords & Accounts to make one |
+
+Below the list a card says exactly who will log in - *Logs in as admin with the account lab-admin (from the folder "Datacenter")*. **Device type = how it logs in** (prompts, `enable`, paging off), **Account = who logs in**: the two are chosen separately. The account is used for SSH, Telnet, SFTP sessions and tabs, RDP, jump hosts and background logins (device facts, backups, Run and Collect).
+
+![Session Options - Account](screenshots/session-account.png)
+
+- **Folder Defaults** (right-click a folder) has an **Account**, used by every session in the folder that keeps *Default*.
+- **Device types** (Global Options → Device Types) have an **Account** too: sessions of that type with *Default* (and no folder account) log in with it, instead of the device type's own username and password.
+- **Edit Sessions** (select sessions → *Edit N Sessions…*) can set the Account of many sessions at once.
+- **A refused login** with an account shows **Update the Account Password** on the error card: type the new password once and every session that uses the account logs in with it. When a password is asked for, *Save for the account …* saves it for the account rather than for one session.
+- **Convert Sessions…** (Accounts page) finds sessions that log in with the **same username and the same saved password** and turns each group into an account in one click: the account takes the username and password, and the sessions' own copies are removed.
+
+![Convert sessions to an account](screenshots/accounts-convert.png)
+
+![Passwords & Accounts](screenshots/passwords.png)
+
+**Master password** (Options → Passwords & Accounts → Master Password, or the welcome flow): when set, Termwright starts with an **unlock window** and asks for it before it uses any saved session, credential or device type password or key passphrase. Any 4 or more characters work - a meter shows how strong it is, and capitals, numbers or symbols are never required. **Not now** keeps the passwords locked (they are asked when connecting); **Lock Now** locks them again. The passwords stay in the OS keychain; the master password only gates their use by Termwright.
 
 ![Master password](screenshots/passwords-master.png)
 
@@ -881,7 +910,7 @@ log(out && out.indexOf("not found") < 0 ? "VLAN 10 present" : "VLAN 10 missing")
 |---|---|
 | ![Password manager reference](screenshots/password-ref.png) | ![Session with a reference](screenshots/session-ref.png) |
 
-**Password Managers** (Options → Passwords & Credentials → Password Managers): the reference formats, the Vault address and token (saved in the OS keychain), a *Test* box and *Forget fetched secrets*. If a password manager is unavailable when connecting, Termwright shows why and asks for the password as usual (typing it does not replace the reference). CLIs installed with Homebrew, winget or Scoop are found even when the app was started from the Dock / Start menu.
+**Password Managers** (Options → Passwords & Accounts → Password Managers): the reference formats, the Vault address and token (saved in the OS keychain), a *Test* box and *Forget fetched secrets*. If a password manager is unavailable when connecting, Termwright shows why and asks for the password as usual (typing it does not replace the reference). CLIs installed with Homebrew, winget or Scoop are found even when the app was started from the Dock / Start menu.
 
 ![Password Managers](screenshots/passwords-managers.png)
 
@@ -1026,7 +1055,7 @@ Details: [SESSION_FILES.md](SESSION_FILES.md).
 
 ### Moving sessions to another Termwright
 
-**File → Export Sessions…** → *folder*, *zip* or *XML* keeps **everything**: device type, MAC address, environment, jump host, port forwards, logon actions, triggers, recording, smart card, timestamps and auto-scroll settings. Import the file on the other computer (File → Import Sessions → SecureCRT folder, zip or XML). The **CSV** keeps the basics plus device type, environment, jump host and MAC address. Passwords are not in any export: move them with the password vault export (Passwords & Credentials), which is encrypted.
+**File → Export Sessions…** → *folder*, *zip* or *XML* keeps **everything**: device type, MAC address, environment, jump host, port forwards, logon actions, triggers, recording, smart card, timestamps and auto-scroll settings. Import the file on the other computer (File → Import Sessions → SecureCRT folder, zip or XML). The **CSV** keeps the basics plus device type, environment, jump host and MAC address. Passwords are not in any export: move them with the password vault export (Passwords & Accounts), which is encrypted.
 
 ### Exporting to other programs
 
@@ -1046,7 +1075,7 @@ Your sessions are never locked in. **File → Export Sessions…** also writes t
 
 What is carried over: name, folder, protocol, address, port, username (also the device type's), key file, jump host (PuTTY 0.77+ SSH proxy, MobaXterm SSH gateway, Tabby jump host, OpenSSH `ProxyJump`), SOCKS / HTTP proxy, port forwards, keep-alive, agent and X11 forwarding, remote command, serial settings and logging (PuTTY). The CSV also has device type, environment, jump host and MAC address, and Termwright reads them back when it imports the CSV.
 
-After the export a summary lists the sessions the format cannot hold (e.g. RDP, VNC and console sessions in PuTTY) and what stays in Termwright: device type login steps, logon actions, triggers, smart card choice, backups, checklists and recordings. **Passwords are never exported**; to move them between Termwright installations use the password vault export (Passwords & Credentials).
+After the export a summary lists the sessions the format cannot hold (e.g. RDP, VNC and console sessions in PuTTY) and what stays in Termwright: device type login steps, logon actions, triggers, smart card choice, backups, checklists and recordings. **Passwords are never exported**; to move them between Termwright installations use the password vault export (Passwords & Accounts).
 
 ![Export summary](screenshots/export-report.png)
 

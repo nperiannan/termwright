@@ -250,7 +250,7 @@ func buildMenu(app *App) *menu.Menu {
 	add(opts, "Session Options...", "session-options")
 	opts.AddText("Global Options...", keys.CmdOrCtrl(","), emit("global-options"))
 	opts.AddSeparator()
-	add(opts, "Passwords & Credentials...", "passwords")
+	add(opts, "Passwords & Accounts...", "passwords")
 	add(opts, "Set Up Key Login / Generate Key...", "key-setup")
 
 	tabs := m.AddSubmenu("Tab")

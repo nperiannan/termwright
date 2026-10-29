@@ -144,7 +144,14 @@ export class Workspaces {
           folder wins. Handy for a lab where every device uses the same user, device type or jump host.</p>
         <div class="grid">
           <div class="pair">
-            <div class="f"><label>Username</label><input name="u" [(ngModel)]="d.username" placeholder="(not set)" /></div>
+            <div class="f"><label>Account</label>
+              <select name="acct" [ngModel]="d.account || ''" (ngModelChange)="d.account = $event || undefined"
+                title="Sessions in the folder that keep the Default account log in with it (before the device type's)">
+                <option value="">(not set)</option>
+                @for (c of ui.settings()?.credentials ?? []; track c.name) { <option [value]="c.name">{{ c.name }}{{ c.username ? ' · ' + c.username : '' }}</option> }</select></div>
+            <div class="f"><label>Username</label><input name="u" [(ngModel)]="d.username" [disabled]="!!d.account" [placeholder]="d.account ? '(from the account)' : '(not set)'" /></div>
+          </div>
+          <div class="pair">
             <div class="f"><label>Device type</label>
               <select name="dt" [(ngModel)]="d.deviceType"><option value="">(not set)</option>
                 @for (t of deviceTypes(); track t) { <option [value]="t">{{ t }}</option> }</select></div>

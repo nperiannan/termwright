@@ -102,6 +102,7 @@ func (a *App) init() error {
 		return t
 	}
 	a.terms.Credential = a.credential
+	a.terms.OnAccountPasswordTyped = func(name, pw string) { _ = a.SetCredentialPassword(name, pw) }
 	a.terms.PythonPath = func() string { return a.cfg.Get().PythonPath }
 	a.terms.DeviceType = func(name string) (session.DeviceType, bool) {
 		for _, d := range a.cfg.Get().DeviceTypes {
@@ -512,6 +513,12 @@ func (a *App) ExportSessionsFor(paths []string, dest, format string) (*session.E
 	}
 	return a.store.ExportOther(paths, dest, format, func(s session.Session) session.Session {
 		s = a.withFolderDefaults(s)
+		if name := a.terms.AccountOf(s); name != "" { // the account's username (never its password)
+			if u, _, ok := a.credential(name); ok && u != "" {
+				s.Username = u
+				return s
+			}
+		}
 		if s.DeviceType != "" && (!s.OwnLogin || s.Username == "") {
 			for _, d := range a.cfg.Get().DeviceTypes {
 				if strings.EqualFold(d.Name, s.DeviceType) && d.Username != "" {
@@ -924,10 +931,23 @@ func (a *App) credential(name string) (string, string, bool) {
 
 // SetCredentialPassword stores (or with "" removes) a credential's password.
 func (a *App) SetCredentialPassword(name, password string) error {
+	var err error
 	if password == "" {
-		return secrets.Delete("credential:" + name)
+		err = secrets.Delete("credential:" + name)
+	} else {
+		err = secrets.Set("credential:"+name, password)
 	}
-	return secrets.Set("credential:"+name, password)
+	if err == nil {
+		st := a.cfg.Get()
+		for i := range st.Credentials {
+			if st.Credentials[i].Name == name {
+				st.Credentials[i].Changed = time.Now().UTC().Format(time.RFC3339)
+				_ = a.cfg.Save(st)
+				break
+			}
+		}
+	}
+	return err
 }
 
 // HasCredentialPassword reports whether a credential has a saved password.
@@ -1327,6 +1347,9 @@ func (a *App) withFolderDefaults(s session.Session) session.Session {
 	for f := strings.Trim(folder, "/"); ; {
 		if d, ok := defs[f]; ok {
 			set(&s.Username, d.Username)
+			if s.Account == "" && !s.OwnLogin {
+				set(&s.Account, d.Account)
+			}
 			set(&s.DeviceType, d.DeviceType)
 			set(&s.JumpSession, d.JumpSession)
 			set(&s.IdentityFile, d.IdentityFile)

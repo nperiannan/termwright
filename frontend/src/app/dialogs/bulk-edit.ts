@@ -9,10 +9,10 @@ import { Icon } from '../components/icon';
 
 /** Fields the dialog can change; a field is applied only when its box is ticked. */
 interface Edit {
-  folder: string; deviceType: string; ownLogin: boolean; username: string; password: string; noPassword: boolean;
+  folder: string; deviceType: string; ownLogin: boolean; account: string; username: string; password: string; noPassword: boolean;
   protocol: string; port: number; jumpSession: string; environment: string; colorScheme: string; keywordSet: string; autoReconnect: boolean;
 }
-type Key = 'folder' | 'deviceType' | 'username' | 'password' | 'protocol' | 'port' | 'jumpSession' | 'environment' | 'colorScheme' | 'keywordSet' | 'autoReconnect';
+type Key = 'folder' | 'deviceType' | 'account' | 'username' | 'password' | 'protocol' | 'port' | 'jumpSession' | 'environment' | 'colorScheme' | 'keywordSet' | 'autoReconnect';
 
 /** Edit Sessions: changes the same settings in many sessions at once. */
 @Component({
@@ -38,8 +38,14 @@ type Key = 'folder' | 'deviceType' | 'username' | 'password' | 'protocol' | 'por
               <option value="">(none)</option>
               @for (d of deviceTypes(); track d) { <option [value]="d">{{ d }}</option> }
             </select>
-            @if (e.deviceType) { <label class="inline"><input type="checkbox" [ngModel]="!e.ownLogin" (ngModelChange)="e.ownLogin = !$event" /> Use the device type's username and password</label> }
           </div>
+
+          <input type="checkbox" [(ngModel)]="on.account" /><label>Account</label>
+          <select [(ngModel)]="e.account" (focus)="on.account = true">
+            <option value="">Default (the folder's account, else the device type's)</option>
+            @for (c of ui.settings()?.credentials ?? []; track c.name) { <option [value]="c.name">{{ c.name }}{{ c.username ? ' · ' + c.username : '' }}</option> }
+            <option value="-">Own username and password</option>
+          </select>
 
           <input type="checkbox" [(ngModel)]="on.username" /><label>Username</label>
           <input [(ngModel)]="e.username" (focus)="on.username = true" autocomplete="off" />
@@ -128,9 +134,9 @@ export class BulkEdit {
   showList = false;
   readonly busy = signal(false);
   readonly err = signal('');
-  e: Edit = { folder: '', deviceType: '', ownLogin: false, username: '', password: '', noPassword: false, protocol: 'SSH2', port: 22,
+  e: Edit = { folder: '', deviceType: '', ownLogin: false, account: '', username: '', password: '', noPassword: false, protocol: 'SSH2', port: 22,
     jumpSession: '', environment: '', colorScheme: '', keywordSet: '', autoReconnect: false };
-  on: Record<Key, boolean> = { folder: false, deviceType: false, username: false, password: false, protocol: false, port: false,
+  on: Record<Key, boolean> = { folder: false, deviceType: false, account: false, username: false, password: false, protocol: false, port: false,
     jumpSession: false, environment: false, colorScheme: false, keywordSet: false, autoReconnect: false };
 
   readonly deviceTypes = computed(() => (this.ui.settings()?.deviceTypes ?? []).map(d => d.name));
@@ -154,7 +160,7 @@ export class BulkEdit {
     // start from the first session's values so the fields show something sensible
     const first = this.paths()[0];
     if (first) this.backend.getSession(first).then(s => {
-      this.e = { ...this.e, folder: s.folder, deviceType: s.deviceType, ownLogin: s.ownLogin, username: s.username, protocol: s.protocol,
+      this.e = { ...this.e, folder: s.folder, deviceType: s.deviceType, ownLogin: s.ownLogin, account: s.account || (s.ownLogin ? '-' : ''), username: s.username, protocol: s.protocol,
         port: s.port || defaultPort(s.protocol), jumpSession: s.jumpSession, environment: s.environment ?? '', colorScheme: s.colorScheme,
         keywordSet: s.keywordSet, autoReconnect: s.autoReconnect };
     }).catch(() => {});
@@ -167,7 +173,8 @@ export class BulkEdit {
   private change(s: Session) {
     const e = this.e, on = this.on;
     if (on.folder) s.folder = e.folder.trim().replace(/^\/+|\/+$/g, '');
-    if (on.deviceType) { s.deviceType = e.deviceType; s.ownLogin = !!e.deviceType && e.ownLogin; }
+    if (on.deviceType) s.deviceType = e.deviceType;
+    if (on.account) { s.account = e.account; s.ownLogin = e.account === '-'; }
     if (on.username) s.username = e.username.trim();
     if (on.protocol) s.protocol = e.protocol;
     if (on.port) s.port = Number(e.port) || defaultPort(s.protocol);

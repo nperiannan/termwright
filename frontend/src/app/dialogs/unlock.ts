@@ -7,7 +7,7 @@ import { Icon } from '../components/icon';
 
 /** Shown at start-up when a master password is set: saved passwords stay
  *  locked until it is typed. "Not now" keeps them locked (passwords are then
- *  asked when connecting); Passwords & Credentials can unlock later. */
+ *  asked when connecting); Passwords & Accounts can unlock later. */
 @Component({
   selector: 'app-unlock',
   imports: [FormsModule, Autofocus, Icon],

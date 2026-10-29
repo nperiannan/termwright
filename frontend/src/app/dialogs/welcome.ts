@@ -85,7 +85,7 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
           <div class="secic"><app-icon name="lock" [size]="22" /></div>
           <h2>Protect your saved passwords</h2>
           <p class="sub">Optional. With a master password, Termwright asks for it when it starts, before it uses any saved password.
-            The passwords stay in the OS keychain either way. You can set or change it later in Passwords &amp; Credentials.</p>
+            The passwords stay in the OS keychain either way. You can set or change it later in Passwords &amp; Accounts.</p>
           @if (hasMaster()) {
             <div class="mpok"><app-icon name="check" [size]="16" /> A master password is set.</div>
           } @else {

@@ -325,8 +325,16 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                     <select name="dtp" [(ngModel)]="d.protocol">@for (p of protocols; track p) { <option [value]="p">{{ p }}</option> }</select>
                     Port <input name="dtport" type="number" class="short" [(ngModel)]="d.port" placeholder="default" />
                   </div>
+                  <label>Account</label>
+                  <select name="dtc" [(ngModel)]="d.credential" title="Sessions of this device type that keep the Default account log in with it (a folder's account comes first)">
+                    <option value="">(none - the username and password below)</option>
+                    @for (c of s.credentials ?? []; track c.name) { <option [value]="c.name">{{ c.name }}{{ c.username ? ' · ' + c.username : '' }}</option> }</select>
+                  @if (d.credential) {
+                    <label></label><div class="hint">Sessions of this device type with the <b>Default</b> account log in with the account <b>{{ d.credential }}</b> (a folder's account comes first). Passwords &amp; Accounts changes its password.</div>
+                  } @else {
                   <label>Username</label><input name="dtu" [(ngModel)]="d.username" placeholder="e.g. admin (blank = session's, or asked)" />
-                  @if (pwOf(d); as p) {
+                  }
+                  @if (!d.credential && pwOf(d); as p) {
                     <label>Password</label>
                     <div class="row wrap">
                       <input name="dtpw" [type]="isRef(p.pw) ? 'text' : 'password'" autocomplete="new-password" [(ngModel)]="p.pw" [disabled]="p.empty" [placeholder]="pwPh(p)" />
@@ -335,13 +343,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                       @if ((p.state === 'set' || refOf(p.state)) && !p.forget && !p.pw) { <button type="button" (click)="p.forget = true">Forget</button> }
                     </div>
                     <label></label><div class="hint">Saved in the OS keychain. Sessions with this device type use this username and password
-                      unless they untick "Use the device type's username and password". Tick <b>No password</b> for devices like EXOS where
+                      unless they choose another Account (or their own username and password). Tick <b>No password</b> for devices like EXOS where
                       <code>admin</code> has an empty password - you will not be asked again.</div>
-                  }
-                  @if (d.credential) {
-                    <label>Credential</label>
-                    <select name="dtc" [(ngModel)]="d.credential"><option value="">(device type / session password)</option>
-                      @for (c of s.credentials ?? []; track c.name) { <option [value]="c.name">{{ c.name }}</option> }</select>
                   }
                   <label>Prompt (regex)</label><input name="dtpr" class="mono" [(ngModel)]="d.prompt" placeholder="e.g. :\\d+[>#] ?$" />
                   <label>Backup commands</label>

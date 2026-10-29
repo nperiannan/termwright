@@ -37,6 +37,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 ## Connecting
 
 - **Protocols**: SSH2, Telnet, Serial, Local Shell, Raw TCP, RDP, VNC and Console (a port of a console server).
+- **Accounts**: a username and password (keychain or password manager) shared by sessions, folders and device types; each session chooses *Default* (folder → device type), an account, or its own login; one password change updates every session; Convert Sessions turns sessions with the same login into an account; *Update the Account Password* on a refused login.
 - **Copy, Cut, Paste and Undo** in the Session Manager: copy or move sessions and whole folders (Cmd/Ctrl+C / X / V), confirmation before a move (on by default), and Undo of the last three moves, pastes or deletes, each saying first what it will do.
 - **Saved sessions**: double-click, Connect Terminal, Connect SFTP Session, or Connect All in Folder.
 - **Quick Connect**: one connect line (`voss admin@10.1.1.1`, `ssh user@host:2222`, `serial COM3 115200`) fills protocol, address, port, device type and user; or fill the fields; save it as a session (the switch is remembered; Settings → Save Quick Connect sessions makes it the default).
@@ -68,7 +69,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Generate keys**: Ed25519, RSA 4096 or ECDSA, or reuse an existing key.
 - **Install the key** on Linux, macOS, BSD or Windows OpenSSH servers (incl. `administrators_authorized_keys`).
 - **Test and switch**: tries a key-only login, then switches the session to the key.
-- **Key passphrases** remembered in the keychain, listed, changed or forgotten in Passwords & Credentials.
+- **Key passphrases** remembered in the keychain, listed, changed or forgotten in Passwords & Accounts.
 
 ## Telnet, Serial and Raw
 

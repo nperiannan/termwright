@@ -59,7 +59,7 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
     ] },
     { title: 'Options', items: [
       { label: 'Session Options...', action: 'session-options' }, { label: 'Global Options...', action: 'global-options', keys: isMac ? '⌘,' : 'Ctrl+,' },
-      { sep: true }, { label: 'Passwords & Credentials...', action: 'passwords' },
+      { sep: true }, { label: 'Passwords & Accounts...', action: 'passwords' },
       { label: 'Set Up Key Login / Generate Key...', action: 'key-setup' },
     ] },
     { title: 'Tab', items: [

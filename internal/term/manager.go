@@ -168,6 +168,9 @@ type Manager struct {
 	DownloadDir func() string
 	// Credential returns the user name and password of a named credential.
 	Credential func(name string) (user, password string, ok bool)
+	// OnAccountPasswordTyped saves a password typed for a session that logs
+	// in with an account (Remember), for the account.
+	OnAccountPasswordTyped func(account, password string)
 	// Clipboard returns the clipboard text (logon action \v).
 	Clipboard func() string
 	// DeviceType looks up a device type (login profile) by name.
@@ -317,7 +320,9 @@ func (m *Manager) Start(id string, cols, rows int) error {
 
 func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 	t.mu.Lock()
-	if dt, ok := m.deviceOf(t.sess); ok && dt.Username != "" && (!t.sess.OwnLogin || t.sess.Username == "") {
+	if _, u, _, ok := m.accountLogin(t.sess); ok && u != "" {
+		t.sess.Username = u // the account's username
+	} else if dt, ok := m.deviceOf(t.sess); ok && dt.Username != "" && (!t.sess.OwnLogin || t.sess.Username == "") {
 		t.sess.Username = dt.Username // the device type's login unless the session has its own
 	}
 	s, cols, rows, retrying := t.sess, t.cols, t.rows, t.retries > 0
@@ -803,6 +808,33 @@ func (m *Manager) UpdateSession(id string, s session.Session) error {
 }
 
 // deviceOf returns the session's device type, if it has one.
+// AccountOf is the account a session logs in with ("" = none): its own
+// choice, else (folder defaults are already merged) the device type's
+// account. "-" or "own login" means the session's own username / password.
+func (m *Manager) AccountOf(s session.Session) string {
+	if s.Account == "-" || (s.Account == "" && s.OwnLogin) {
+		return ""
+	}
+	if s.Account != "" {
+		return s.Account
+	}
+	if dt, ok := m.deviceOf(s); ok {
+		return dt.Credential
+	}
+	return ""
+}
+
+// accountLogin returns the account's username and password, when the
+// session logs in with one that exists.
+func (m *Manager) accountLogin(s session.Session) (name, user, pw string, ok bool) {
+	name = m.AccountOf(s)
+	if name == "" || m.Credential == nil {
+		return "", "", "", false
+	}
+	user, pw, ok = m.Credential(name)
+	return name, user, pw, ok
+}
+
 func (m *Manager) deviceOf(s session.Session) (session.DeviceType, bool) {
 	if s.DeviceType == "" || m.DeviceType == nil {
 		return session.DeviceType{}, false
@@ -824,8 +856,13 @@ func (m *Manager) askLogon(t *Tab, label string, secret bool, user string) strin
 	}
 	p := Prompt{TabID: t.id, Kind: "credentials", Title: "Login - " + title(s),
 		Message: label + " for " + target, Fields: []PromptField{{Label: label, Secret: secret}}}
-	forDevice := secret && s.DeviceType != "" && !s.OwnLogin && m.OnDevicePasswordTyped != nil
+	account := m.AccountOf(s)
+	forAccount := secret && account != "" && m.OnAccountPasswordTyped != nil
+	forDevice := !forAccount && secret && s.DeviceType != "" && !s.OwnLogin && m.OnDevicePasswordTyped != nil
 	switch {
+	case forAccount:
+		p.AllowRemember = true
+		p.RememberLabel = "Save for the account " + account + " (every session that uses it)"
 	case forDevice:
 		p.AllowRemember = true
 		p.RememberLabel = "Remember for device type " + s.DeviceType + " (leave the password empty if the device has none)"
@@ -842,7 +879,9 @@ func (m *Manager) askLogon(t *Tab, label string, secret bool, user string) strin
 		return ""
 	}
 	if r.Remember {
-		if forDevice {
+		if forAccount {
+			m.OnAccountPasswordTyped(account, r.Values[0])
+		} else if forDevice {
 			m.OnDevicePasswordTyped(s.DeviceType, r.Values[0])
 		} else if r.Values[0] != "" {
 			m.OnPasswordUsed(s.Path, r.Values[0])
@@ -863,6 +902,9 @@ func (m *Manager) CanLogInUnattended(s session.Session) bool {
 }
 
 func (m *Manager) loginPassword(s session.Session) (string, bool) {
+	if name, _, pw, ok := m.accountLogin(s); ok || name != "" {
+		return pw, pw != "" // an account without a saved password is asked for
+	}
 	if s.DeviceType != "" && !s.OwnLogin && m.DevicePassword != nil {
 		if pw, ok := m.DevicePassword(s.DeviceType); ok {
 			return pw, true

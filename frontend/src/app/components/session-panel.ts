@@ -2,6 +2,7 @@ import { Component, HostListener, computed, effect, inject, input, signal } from
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
 import { BAUD_RATES, PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
+import { accountChoice, defaultLogin, defaultText, setAccountChoice, userOf } from '../core/accounts';
 import { ENVIRONMENTS } from '../core/env';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
@@ -84,13 +85,21 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
             </select></label>
           }
         }
-        @if (!hasLogin() && s.deviceType && deviceUser()) {
-          <div class="note">Logs in as <b>{{ deviceUser() }}</b> with the {{ s.deviceType }} device type's login.
-            <button type="button" class="link" (click)="s.ownLogin = true">Use its own login</button></div>
+        @if (canLogin()) {
+          <label class="f"><span>Account</span>
+            <select name="acct" [ngModel]="acctChoice()" (ngModelChange)="setAcct($event)">
+              <option value="">Default · {{ defText() }}</option>
+              @for (a of accounts(); track a.name) { <option [value]="a.name">{{ a.name }}{{ a.username ? ' · ' + a.username : '' }}</option> }
+              <option value="-">Own username and password</option>
+              <option value="+">+ New Account…</option>
+            </select></label>
+          @if (!hasLogin()) {
+            <div class="note">@if (acctUser(); as au) { Logs in as <b>{{ au.user || '(asked)' }}</b> {{ au.how }} } <button type="button" class="link" (click)="ui.open('passwords')">{{ au()?.account ? 'Edit account' : 'Accounts' }}</button></div>
+          }
         }
         <div class="two">
           @if (hasLogin()) {
-            <label class="f grow"><span>Username</span><input name="user" [(ngModel)]="s.username" [placeholder]="deviceUser() || 'asked when connecting'" spellcheck="false" autocomplete="off" /></label>
+            <label class="f grow"><span>Username</span><input name="user" [(ngModel)]="s.username" [placeholder]="'asked when connecting'" spellcheck="false" autocomplete="off" /></label>
           }
           <label class="f" [class.grow]="!hasLogin()" [class.envf]="hasLogin()"><span>Environment</span>
             <select name="env" [ngModel]="s.environment || ''" (ngModelChange)="s.environment = $event" [style.color]="envColor()">
@@ -242,7 +251,32 @@ export class SessionPanel {
     });
   }
 
-  hasLogin() { return !!this.s && !['Serial', 'Local Shell', 'VNC', 'WOL'].includes(this.s.protocol) && (!this.s.deviceType || this.s.ownLogin || !this.deviceUser()); }
+  canLogin() { return !!this.s && !['Serial', 'Local Shell', 'VNC', 'WOL'].includes(this.s.protocol); }
+  /** The session's own username / password fields are used: "Own", or a Default that resolves to its own login. */
+  hasLogin() {
+    if (!this.canLogin()) return false;
+    const c = accountChoice(this.s!);
+    return c === '-' || (c === '' && defaultLogin(this.ui.settings(), this.s!).kind === 'own');
+  }
+  accounts() { return this.ui.settings()?.credentials ?? []; }
+  acctChoice() { return this.s ? accountChoice(this.s) : ''; }
+  setAcct(v: string) {
+    if (!this.s) return;
+    if (v === '+') { const keep = accountChoice(this.s); setAccountChoice(this.s, keep + ' '); setTimeout(() => setAccountChoice(this.s!, keep)); this.ui.open('passwords'); return; }
+    setAccountChoice(this.s, v);
+  }
+  defText() { return this.s ? defaultText(defaultLogin(this.ui.settings(), this.s)) : ''; }
+  au() { return this.acctUser(); }
+  /** Who logs in when it is not the session's own login. */
+  acctUser(): { user: string; how: string; account?: string } | null {
+    if (!this.s) return null;
+    const c = accountChoice(this.s);
+    if (c && c !== '-') return { user: userOf(this.ui.settings(), c), how: 'with the account ' + c, account: c };
+    const d = defaultLogin(this.ui.settings(), this.s);
+    if (d.kind === 'account') return { user: d.user ?? '', how: `with the account ${d.name} (from the ${d.from})`, account: d.name };
+    if (d.kind === 'device') return { user: d.user ?? '', how: `with the ${d.from}'s login` };
+    return null;
+  }
   deviceUser() { return (this.ui.settings()?.deviceTypes ?? []).find(d => d.name === this.s?.deviceType)?.username ?? ''; }
   pwText() { return this.pwState() === 'set' ? 'Saved in the system keychain' : 'Asked when connecting'; }
 

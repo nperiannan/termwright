@@ -2,7 +2,7 @@ import { Session } from './models';
 
 /** A suggested fix for a connection error: a short explanation and buttons. */
 export interface Fix { hint: string; actions: FixAction[]; }
-export type FixAction = 'reconnect' | 'edit' | 'edit-jump' | 'device-types' | 'forget-password' | 'copy' | 'find-mac' | 'wake';
+export type FixAction = 'reconnect' | 'edit' | 'edit-jump' | 'device-types' | 'forget-password' | 'copy' | 'find-mac' | 'wake' | 'account-password';
 
 const AUTH = /unable to authenticate|authentication fail|permission denied|no supported methods|login incorrect|access denied|auth fail/i;
 const HOSTKEY = /host key/i;
@@ -14,7 +14,7 @@ const PROXY = /proxy/i;
 const MOVED = /another device answers/i;
 
 /** Explains a connection error and picks the buttons that can fix it. */
-export function fixFor(message: string, s: Session | null | undefined): Fix {
+export function fixFor(message: string, s: Session | null | undefined, account = ''): Fix {
   const saved = !!s?.path;
   const edit: FixAction[] = saved ? ['edit'] : [];
   const usesType = !!s?.deviceType && !s?.ownLogin;
@@ -32,6 +32,10 @@ export function fixFor(message: string, s: Session | null | undefined): Fix {
     return { hint: 'The server\'s host key is not the saved one. Reconnect to see the new key and replace it if the change is expected (new server, reinstall).' +
         (byMac.length ? ' If the device got a new address from DHCP, find it by its MAC address.' : ''),
       actions: ['reconnect', ...wake, ...byMac, ...edit] };
+  }
+  if (AUTH.test(message) && account) {
+    return { hint: `The login was refused. The username and password come from the account "${account}" - if its password changed, update it once for every session that uses it.`,
+      actions: ['account-password', 'reconnect', ...edit] };
   }
   if (AUTH.test(message)) {
     return { hint: usesType
@@ -53,7 +57,7 @@ export function fixFor(message: string, s: Session | null | undefined): Fix {
 
 export const FIX_LABELS: Record<FixAction, string> = {
   reconnect: 'Reconnect', edit: 'Edit Session', 'edit-jump': 'Edit Jump Host', 'device-types': 'Device Type Login',
-  'forget-password': 'Forget Saved Password', copy: 'Copy Error', 'find-mac': 'Find by MAC Address', wake: 'Wake Up (Wake-on-LAN)',
+  'forget-password': 'Forget Saved Password', copy: 'Copy Error', 'find-mac': 'Find by MAC Address', wake: 'Wake Up (Wake-on-LAN)', 'account-password': 'Update the Account Password',
 };
 
 /** SFTP "browse as" errors from sudo/su. */

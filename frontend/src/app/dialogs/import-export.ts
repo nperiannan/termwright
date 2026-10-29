@@ -317,7 +317,7 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
             </div>
             <div class="lbl" style="margin-top: 14px">Save to</div>
             <div class="row"><input name="dest2" class="pathin" [(ngModel)]="dest" required /><button type="button" (click)="browse()">Browse...</button></div>
-            <div class="hint">@if (hint()) { {{ hint() }} } Passwords are not written into the export - Passwords &amp; Credentials → Export / Import moves them.</div>
+            <div class="hint">@if (hint()) { {{ hint() }} } Passwords are not written into the export - Passwords &amp; Accounts → Export / Import moves them.</div>
           </div>
         } @else {
         <div class="grid">
