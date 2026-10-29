@@ -432,8 +432,6 @@ func Load(dataDir string) (*Manager, error) {
 		}
 		m.cur.KeywordsOn, changed = true, true
 	}
-	// macOS terminal text (0.21.0): the old default Menlo 14 becomes Menlo 12
-	// (once; a size the user chose stays).
 	// The modern layout (0.21.0) keeps the Button Bar out of the way (once -
 	// it can be shown again from View).
 	if !m.cur.ModernLayout {

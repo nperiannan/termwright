@@ -4,7 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-## 0.21.0 (unreleased)
+## 0.21.0 (2026-10-29)
 
 A cleaner, more modern look, now the default. The **Classic** layout (toolbar, tab strip and menu bar) stays: switch at any time with View → Modern / Classic Layout, the ⋯ menu, Quick Open or Global Options → General → Layout.
 
