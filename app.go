@@ -166,6 +166,7 @@ func (a *App) init() error {
 }
 
 func (a *App) shutdown(context.Context) {
+	closeWebPages()
 	if a.terms != nil {
 		a.terms.CloseAll()
 	}

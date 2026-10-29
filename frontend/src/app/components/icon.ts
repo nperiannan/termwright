@@ -70,6 +70,7 @@ const PATHS: Record<string, string> = {
   compare: 'M4 4h7v16H4zM13 4h7v16h-7zM6.5 9h2M15.5 9h2M6.5 13h2M15.5 13h2',
   play: 'M7 5v14l11-7z',
   'file-plus': 'M14 3H6v18h12V7zM14 3v4h4M12 11v6M9 14h6',
+  globe: 'M12 3a9 9 0 100 18 9 9 0 000-18zM3.5 9h17M3.5 15h17M12 3c2.4 2.6 3.6 5.6 3.6 9s-1.2 6.4-3.6 9M12 3C9.6 5.6 8.4 8.6 8.4 12s1.2 6.4 3.6 9',
   upload: 'M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v4h16v-4',
   download: 'M12 4v11M7.5 10.5L12 15l4.5-4.5M4 15v4h16v-4',
   'files-panel': 'M3 5h18v14H3zM15 5v14M17.5 9h1.5M17.5 12h1.5M17.5 15h1.5',

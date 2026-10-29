@@ -49,7 +49,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - Python, VBScript and JavaScript scripts;
   - a command window that sends to many tabs, a command library with variables, and searchable command history;
   - configuration backups with change detection, change checklists, and Run and Collect.
-- **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key.
+- **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
 ## What's new in 0.21.0
 
@@ -59,6 +59,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - it follows the terminal's folder;
   - opening a folder in the panel `cd`s the terminal there;
   - a double-clicked file opens in its usual program on your computer, and saved changes are offered for upload.
+- **Web pages through a session.** Open a device's web interface (firewall, IPMI, NAS, switch) behind a jump host, or any page as seen from an SSH server. A separate browser window with a temporary profile sends all its traffic and name lookups through the SSH connection, and the profile is deleted when the window closes.
 - **SFTP.**
   - Clickable paths and a bookmark bar.
   - Multi-select with check boxes and the keyboard.
@@ -104,7 +105,7 @@ Earlier releases are described in the [changelog](CHANGELOG.md).
 | Network operations | Command Window that sends to the active, selected or all tabs; command library with `{{variables}}`; command history; scheduled configuration backups kept only when changed; change checklists; Run and Collect to CSV; Compare. |
 | Logging and recording | Raw or plain-text session logs with per-line timestamps and filename tokens; scrollback to text or HTML; session recordings with markers and playback. |
 | Security | OS keychain for passwords and passphrases; 1Password, Bitwarden, HashiCorp Vault and command-based password managers; master password with unlock at start-up; encrypted password export (AES-256-GCM, scrypt). |
-| Networking | Local, remote and dynamic (SOCKS5) port forwarding; chainable jump hosts; SOCKS5 and HTTP CONNECT proxies; X11 and agent forwarding; automatic reconnect. |
+| Networking | Web pages and device web interfaces through a session (browser window with a temporary profile); local, remote and dynamic (SOCKS5) port forwarding; chainable jump hosts; SOCKS5 and HTTP CONNECT proxies; X11 and agent forwarding; automatic reconnect. |
 | Updates | Stable and nightly channels from GitHub Releases, with the installer downloaded and opened from Help → Check for Updates. |
 
 The complete list is in [docs/FEATURES.md](docs/FEATURES.md).
@@ -120,7 +121,8 @@ The complete list is in [docs/FEATURES.md](docs/FEATURES.md).
 | ![Quick Connect](docs/screenshots/quickconnect.png) <br/>*Quick Connect with a device type* | ![Settings](docs/screenshots/options.png) <br/>*Settings* |
 | ![Discover Devices](docs/screenshots/discover.png) <br/>*Network discovery with evidence per device* | ![Configuration backups](docs/screenshots/backups.png) <br/>*Configuration backups* |
 | ![Change checklist](docs/screenshots/checklist.png) <br/>*Change checklist: same or changed per device* | ![Run and Collect](docs/screenshots/collect.png) <br/>*Run and Collect into one table* |
-| ![Command History](docs/screenshots/history.png) <br/>*Command History* | ![Light theme](docs/screenshots/light.png) <br/>*Light theme* |
+| ![Open Web Interface](docs/screenshots/web-open.png) <br/>*A device's web interface through its jump station* | ![Command History](docs/screenshots/history.png) <br/>*Command History* |
+| ![Light theme](docs/screenshots/light.png) <br/>*Light theme* | ![Files panel on the left](docs/screenshots/files-panel-right.png) <br/>*Files panel on the left when the Session Manager is on the right* |
 
 <details>
 <summary>More screenshots</summary>

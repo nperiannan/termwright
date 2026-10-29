@@ -230,6 +230,8 @@ func buildMenu(app *App) *menu.Menu {
 	add(xfer, "Receive Files with YMODEM", "ymodem-receive")
 	add(xfer, "Send Text File...", "send-file")
 	xfer.AddSeparator()
+	add(xfer, "Open Web Page Through This Session...", "web-page")
+	xfer.AddSeparator()
 	add(xfer, "SCP Upload File...", "scp-upload")
 	add(xfer, "SCP Upload Folder...", "scp-upload-folder")
 	add(xfer, "SCP Download...", "scp-download")

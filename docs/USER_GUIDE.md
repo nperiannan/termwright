@@ -22,7 +22,7 @@ Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial
 8. [Logging and capturing output](#8-logging-and-capturing-output)
 9. [File transfer](#9-file-transfer)
 10. [Automation: logon actions, triggers, scripts](#10-automation-logon-actions-triggers-scripts)
-11. [Tunnels, jump hosts and proxies](#11-tunnels-jump-hosts-and-proxies)
+11. [Tunnels, jump hosts and proxies](#11-tunnels-jump-hosts-and-proxies) - [web pages through a session](#web-pages-through-a-session)
 12. [Appearance: themes, color schemes, highlighting](#12-appearance-themes-color-schemes-highlighting)
 13. [Global Options reference](#13-global-options-reference)
 14. [Migrating from SecureCRT, PuTTY or MobaXterm](#14-migrating-from-securecrt-putty-or-mobaxterm)
@@ -841,6 +841,34 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 **Password vault export/import** (same dialog → Export / Import): writes all saved session passwords, device type passwords, SSH key passphrases and credentials into one `.twvault` file encrypted with AES-256-GCM (scrypt-derived key). Import it on another computer with the same passphrase. Vault files made before 0.11.4 use an older format: export them again from 0.11.4 or later.
 
 ## 11. Tunnels, jump hosts and proxies
+
+### Web pages through a session
+
+Many devices have a web interface - a firewall or router UI, an IPMI / iLO / iDRAC console, a NAS, a switch's web manager - that your computer cannot reach because it sits behind a jump host or in a cloud network. Termwright opens such pages in a **browser window of their own whose traffic goes through an SSH connection**, so the page loads as if it were opened on that server.
+
+| Command | Where | What it opens |
+|---|---|---|
+| **Open Web Page Through This Session…** | right-click an SSH2 session or tab, Transfer menu | any address, out through that session's SSH server - e.g. `http://nas.lan:5000`, `https://10.20.0.1`, or `http://localhost:9090` for a service that listens only on the server itself |
+| **Open Web Interface…** | right-click a session (SSH2, Telnet, Raw) or its tab | the device's own address (`https://<address>`, change it as needed), through its route: its **jump host**, the **jump station** of an `ssh … host` remote command, or its proxy. A device without a jump host opens directly in your default browser. |
+
+![Open Web Interface](screenshots/web-open.png)
+
+How it works:
+
+1. Termwright starts a private **SOCKS5 tunnel** on `127.0.0.1` (a random port, only reachable from your computer) whose connections leave from the SSH server - the open tab's connection when there is one, otherwise a login of its own (saved password, key or the usual prompt).
+2. It starts **Chrome, Edge, Chromium, Brave or Firefox** (choose in the dialog; the choice is remembered) as a **separate window with a temporary profile** that sends every request - and every name lookup - through the tunnel. Internal names such as `nas.lan` or `fritz.box` are resolved by the server. Your normal browser windows are not affected.
+3. The web server sees a connection from the SSH server, not from your computer.
+4. **Closing the window** ends the tunnel and its login and **deletes the profile** - no cookies, logins or cache are kept. Quitting Termwright closes the tunnels too.
+
+![Open Web Page Through This Session](screenshots/web-open-session.png)
+
+Notes:
+
+- Safari cannot send one window through a tunnel, so it is not offered; on macOS install Chrome, Edge, Brave or Firefox.
+- Devices with a self-signed certificate show the browser's certificate warning; continue there if you trust the device. Termwright never turns certificate checks off.
+- Downloads, uploads, audio and typing in any language work as in your normal browser.
+- The SSH server must allow TCP forwarding (`AllowTcpForwarding yes`, the OpenSSH default). Network devices usually do not, so for a device use **Open Web Interface**, which goes through its jump host instead.
+
 
 **Port forwarding** (Session Options → Port Forwarding, SSH2 only); active while the session is connected:
 

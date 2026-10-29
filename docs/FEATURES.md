@@ -221,6 +221,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## Tunnels and routing
 
+- **Web pages through a session**: *Open Web Page Through This Session* and *Open Web Interface* open Chrome, Edge, Chromium, Brave or Firefox in a window with a temporary profile whose traffic and name lookups go through the session's SSH server or the device's jump host; closing the window ends the tunnel and deletes the profile.
 - **Port forwarding**: local, remote and dynamic (SOCKS5).
 - **Jump hosts**: through another saved SSH2 session, chainable, for SSH2, Telnet, Raw, SFTP, RDP and VNC.
 - **Proxies**: SOCKS5 and HTTP CONNECT with optional login.

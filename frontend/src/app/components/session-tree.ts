@@ -186,6 +186,14 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   protected ui = inject(Ui);
   private tabs = inject(Tabs);
   private backend = inject(Backend);
+  /** Open Web Page / Web Interface for a saved session (through its open tab's connection when there is one). */
+  private async openWeb(path: string, through: 'session' | 'device') {
+    try {
+      const s = await this.backend.getSession(path);
+      const t = this.tabs.tabs().find(x => x.kind === 'terminal' && x.session.path === path && x.state === 'connected');
+      this.ui.openWeb(s, t?.id ?? '', through);
+    } catch (e) { this.ui.error(e); }
+  }
 
   filterText = '';
   readonly filter = signal('');
@@ -607,6 +615,10 @@ export class SessionTree implements AfterViewInit, OnDestroy {
               { label: `Connect SFTP Session to ${n.hopTarget} (through ${n.hostname})`, action: () => void this.tabs.openSession(n.path, 'sftp', 'target') },
             ] : [{ label: 'Connect SFTP Session', action: () => void this.tabs.openSession(n.path, 'sftp') }]),
           ] : [{ label: 'Connect', action: () => this.connect(n) }]),
+          ...(n.hostname && n.protocol !== 'RDP' && n.protocol !== 'VNC' ? [
+            ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', action: () => void this.openWeb(n.path, 'session') }] : []),
+            { label: 'Open Web Interface...', action: () => void this.openWeb(n.path, 'device') },
+          ] : []),
           { separator: true },
           { label: 'Properties...', action: () => this.ui.editSession(n.path) },
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }] : []),

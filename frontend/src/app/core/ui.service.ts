@@ -5,7 +5,7 @@ import { MovedDevice, Session, SessionNode, Settings, Snippet } from './models';
 export interface ToastAction { label: string; run: () => void; }
 export interface Toast { id: number; level: 'info' | 'error' | 'success'; message: string; actions?: ToastAction[]; }
 export interface MenuItem { label?: string; action?: () => void; separator?: boolean; disabled?: boolean; hint?: string; }
-export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings' | 'moved' | 'welcome' | 'factTeach';
+export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings' | 'moved' | 'welcome' | 'factTeach' | 'webOpen';
 
 interface ConfirmReq { title: string; message: string; ok: string; danger: boolean; resolve: (v: boolean) => void; }
 interface InputReq { title: string; label: string; value: string; secret?: boolean; resolve: (v: string | null) => void; }
@@ -58,6 +58,9 @@ export class Ui {
   readonly inputReq = signal<InputReq | null>(null);
   readonly menu = signal<{ x: number; y: number; items: MenuItem[] } | null>(null);
   readonly dialog = signal<DialogName | null>(null);
+  /** Open Web Page / Open Web Interface: the session, the tab whose connection to use ('' = none) and the route. */
+  readonly webOpen = signal<{ session: Session; tabId: string; through: 'session' | 'device' } | null>(null);
+  openWeb(session: Session, tabId: string, through: 'session' | 'device') { this.webOpen.set({ session, tabId, through }); this.open('webOpen'); }
   /** Sources the Compare Outputs dialog starts with ('tab:<id>' or 'file'). */
   readonly compareWith = signal<[string, string] | null>(null);
   /** Two texts for Compare (e.g. a local and a remote file from the SFTP browser). */
