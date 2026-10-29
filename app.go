@@ -764,6 +764,9 @@ func (a *App) SFTPRealPath(id, p string) (string, error) { return a.terms.SFTPRe
 // SFTPMkdir creates a remote folder.
 func (a *App) SFTPMkdir(id, p string) error { return a.terms.SFTPMkdir(id, p) }
 
+// SFTPReadText reads a remote text file (up to 5 MB) for Compare.
+func (a *App) SFTPReadText(id, p string) (string, error) { return a.terms.SFTPReadText(id, p, 5<<20) }
+
 // SFTPCreateFile makes a new empty file on the server.
 func (a *App) SFTPCreateFile(id, p string) error { return a.terms.SFTPCreateFile(id, p) }
 

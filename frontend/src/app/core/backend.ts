@@ -149,6 +149,7 @@ export class Backend {
   sftpRealPath(id: string, p: string) { return this.call<string>('SFTPRealPath', id, p); }
   sftpMkdir(id: string, p: string) { return this.call<void>('SFTPMkdir', id, p); }
   sftpRename(id: string, from: string, to: string) { return this.call<void>('SFTPRename', id, from, to); }
+  sftpReadText(id: string, p: string) { return this.call<string>('SFTPReadText', id, p); }
   sftpCreateFile(id: string, p: string) { return this.call<void>('SFTPCreateFile', id, p); }
   sftpRemove(id: string, p: string) { return this.call<void>('SFTPRemove', id, p); }
   sftpClose(id: string) { return this.call<void>('SFTPClose', id); }

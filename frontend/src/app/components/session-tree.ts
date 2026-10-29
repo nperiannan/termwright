@@ -21,6 +21,14 @@ interface TreeRow { kind: 'sec' | 'all' | 'item' | 'node'; key: string; h: numbe
 interface Hover { n: SessionNode; x: number; y: number; pw: string; dtPw: string; }
 
 /** One line about where a session goes: user@host[:port] · device type. */
+/** The address and the kind (device type or protocol) of a session, apart:
+ *  the Session Manager lines the kinds up in one column. */
+export function sessionAddrParts(n: SessionNode): { a: string; t: string } {
+  const full = sessionAddr(n);
+  const i = full.lastIndexOf(' · ');
+  return i < 0 ? { a: full, t: '' } : { a: full.slice(0, i), t: full.slice(i + 3) };
+}
+
 export function sessionAddr(n: SessionNode): string {
   let a: string;
   if (n.protocol === 'Serial') a = n.hostname || 'Serial';
@@ -125,7 +133,7 @@ export function sessionAddr(n: SessionNode): string {
           <span class="line"><span class="name">{{ n.name }}</span>
             @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
             @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }</span>
-          <span class="addr">{{ addr(n) }}</span>
+          <span class="addr">@if (addrParts(n); as ap) {<span class="a">{{ ap.a }}</span>@if (ap.t) {<span class="t">· {{ ap.t }}</span>}}</span>
         </span>
         @if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
         @else if (liveState().get(n.path); as st) { <span class="dot" [class]="'dot ' + (st === 'connected' ? 'up' : st === 'error' ? 'down' : 'unk')" [title]="'Open in a tab - ' + st"></span> }
@@ -146,19 +154,25 @@ export function sessionAddr(n: SessionNode): string {
     }
 
     @if (hover(); as h) {
-      <div class="hcard" [style.left.px]="h.x" [style.top.px]="h.y">
-        <div class="hname">{{ h.n.name }}
-          @if (env(h.n); as e) { <span class="env" [style.background]="e.color">{{ e.label }}</span> }</div>
-        <div class="hrow mono">{{ target(h.n) }}</div>
-        @if (h.n.jump) { <div class="hrow">through jump host <b>{{ h.n.jump }}</b></div> }
-        @if (h.n.proxy) { <div class="hrow">through a proxy</div> }
-        @if (h.n.deviceType) { <div class="hrow">Device type <b>{{ h.n.deviceType }}</b></div> }
-        @if (h.n.mac && !ui.factsOf(h.n.path)?.['MAC']) { <div class="hrow">MAC address <span class="mono">{{ h.n.mac }}</span></div> }
-        @for (f of facts(h.n.path); track f[0]) { <div class="hrow">{{ f[0] }} <b [class.mono]="f[0] === 'MAC'">{{ f[1] }}</b></div> }
-        @if (factsAge(ui.factsOf(h.n.path)); as fa) { <div class="hrow muted">Device facts {{ fa }}</div> }
-        <div class="hrow">{{ loginText(h) }}</div>
-        @if (reach() && reachable().has(h.n.path)) { <div class="hrow">{{ reachable().get(h.n.path) ? 'Answers on port ' + portOf(h.n) : 'Does not answer on port ' + portOf(h.n) }}</div> }
-        <div class="hrow muted">{{ lastAgo(h.n.path) ? 'Last connected ' + lastAgo(h.n.path) : 'Not connected yet from this computer' }}</div>
+      <div class="hcard" [class.mod]="roomy()" [style.left.px]="h.x" [style.top.px]="h.y">
+        <div class="hh">
+          @if (roomy()) { @if (devKind(h.n); as k) { <app-device-icon [kind]="k" [size]="32" /> } @else { <app-session-icon [kind]="protoIcon(h.n)" [size]="32" /> } }
+          <div class="hht">
+            <div class="hname">{{ h.n.name }}
+              @if (env(h.n); as e) { <span class="env" [style.background]="e.color">{{ e.label }}</span> }</div>
+            <div class="hsub mono">{{ target(h.n) }}</div>
+          </div>
+        </div>
+        <div class="kv">
+          @if (h.n.jump) { <span>Via</span><b>{{ h.n.jump }}</b> }
+          @if (h.n.proxy) { <span>Via</span><b>a proxy</b> }
+          @if (h.n.deviceType) { <span>Device type</span><b>{{ h.n.deviceType }}</b> }
+          @for (f of facts(h.n.path); track f[0]) { <span>{{ f[0] }}</span><b [class.mono]="f[0] === 'MAC'">{{ f[1] }}</b> }
+          @if (h.n.mac && !ui.factsOf(h.n.path)?.['MAC']) { <span>MAC</span><b class="mono">{{ h.n.mac }}</b> }
+          <span>Login</span><b class="lt">{{ loginText(h) }}</b>
+          @if (reach() && reachable().has(h.n.path)) { <span>Port {{ portOf(h.n) }}</span><b [class.ok]="reachable().get(h.n.path)" [class.bad]="!reachable().get(h.n.path)">{{ reachable().get(h.n.path) ? 'answers' : 'no answer' }}</b> }
+        </div>
+        <div class="hfoot">{{ lastAgo(h.n.path) ? 'Connected ' + lastAgo(h.n.path) : 'Not connected yet' }}@if (factsAge(ui.factsOf(h.n.path)); as fa) { · facts {{ fa }} }</div>
         @if (h.n.description) { <div class="hdesc">{{ h.n.description }}</div> }
       </div>
     }
@@ -263,6 +277,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
 
   devKind(n: SessionNode) { return deviceKindOf(n.deviceType); }
   addr(n: SessionNode) { return sessionAddr(n); }
+  addrParts(n: SessionNode) { return sessionAddrParts(n); }
 
   private readonly rows = computed<TreeRow[]>(() => {
     const out: TreeRow[] = [];
@@ -410,7 +425,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
       const pw = await this.backend.sessionPasswordState(n.path).catch(() => '');
       const dtPw = n.deviceType ? await this.backend.deviceTypePasswordState(n.deviceType).catch(() => '') : '';
       if (this.hover()?.n === n) this.hover.set({ ...h, pw, dtPw });
-    }, 650);
+    }, 300);
   }
 
   hoverOut() { clearTimeout(this.hoverTimer); this.hover.set(null); }
@@ -425,9 +440,9 @@ export class SessionTree implements AfterViewInit, OnDestroy {
 
   loginText(h: Hover) {
     const st = (s: string) => s === '' ? 'asked when connecting' : s === 'empty' ? 'no password' : s.startsWith('ref:') ? 'from a password manager' : 'saved';
-    if (h.pw === '…') return 'Login: …';
-    if (h.n.deviceType && h.pw === '') return `Login from the device type: password ${st(h.dtPw)}`;
-    return 'Password ' + st(h.pw);
+    if (h.pw === '…') return '…';
+    if (h.n.deviceType && h.pw === '') return `from ${h.n.deviceType} - password ${st(h.dtPw)}`;
+    return 'password ' + st(h.pw);
   }
 
   /** Sessions containing the filter text, best first: exact host or name, then starting with it, then the rest. */

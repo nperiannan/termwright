@@ -228,6 +228,10 @@ details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top
     > label:first-child { padding-top: 8px; } }
   /* fields in the wide dialogs stop at a readable width */
   .modal.wide .modal-body .grid { max-width: 640px; }
+  /* a row of buttons under the fields: space above it, and as wide as the fields */
+  .modal-body .grid ~ .row { margin-top: 14px; }
+  .modal.wide .modal-body .grid ~ :is(.row, p.hint) { max-width: 640px; }
+  .modal-body .grid + p.hint { margin-top: 10px; }
   /* check boxes in lists of options become switches */
   .checks input[type=checkbox], .inline-check input[type=checkbox], .sw input[type=checkbox] {
     appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 30px; height: 18px; margin: 0; border-radius: 9px;

@@ -52,8 +52,6 @@ interface Pane {
         <select class="pill" [ngModel]="via()" (ngModelChange)="setVia($event)" [disabled]="!!tab().root"
           title="Protocol used by → and ← (browsing always uses SFTP). SCP helps with devices whose SFTP server is slow or limited.">
           <option value="sftp">SFTP</option><option value="scp">SCP</option></select>
-        <button class="sbtn" title="Sync folder contents up: copy new and changed files from this computer to the server (nothing is deleted)" (click)="sync('up')">Sync ↑</button>
-        <button class="sbtn" title="Sync folder contents down: copy new and changed files from the server to this computer (nothing is deleted)" (click)="sync('down')">Sync ↓</button>
       </div>
     }
     <div class="panes">
@@ -133,8 +131,14 @@ interface Pane {
         @if (p.side === 'local') {
           @if (modern()) {
             <div class="mid">
-              <button class="ar" [title]="'Upload selected to server via ' + via().toUpperCase()" [disabled]="!local().selected.size" (click)="transfer('up')">→</button>
-              <button class="ar" [title]="'Download selected to this computer via ' + via().toUpperCase()" [disabled]="!remote().selected.size" (click)="transfer('down')">←</button>
+              <span class="ml">Copy</span>
+              <button class="ar" [title]="'Upload the selected files to the server via ' + via().toUpperCase()" [disabled]="!local().selected.size" (click)="transfer('up')">→</button>
+              <button class="ar" [title]="'Download the selected files to this computer via ' + via().toUpperCase()" [disabled]="!remote().selected.size" (click)="transfer('down')">←</button>
+              <span class="ml">Sync</span>
+              <button class="ar sy" title="Sync this computer → server: copy new and changed files of the left folder into the right folder (nothing is deleted)" (click)="sync('up')"><app-icon name="sync-right" [size]="16" /></button>
+              <button class="ar sy" title="Sync server → this computer: copy new and changed files of the right folder into the left folder (nothing is deleted)" (click)="sync('down')"><app-icon name="sync-left" [size]="16" /></button>
+              <span class="ml">Diff</span>
+              <button class="ar sy" [disabled]="!canCompare()" [title]="canCompare() ? 'Compare ' + one(local()) + ' with ' + one(remote()) : 'Compare: select one file on each side'" (click)="compare()"><app-icon name="compare" [size]="16" /></button>
             </div>
           } @else {
             <div class="mid">
@@ -160,9 +164,9 @@ interface Pane {
           <span class="xf" [title]="t.file">{{ dirGlyph(t.direction) }} {{ t.file }}</span>
           @if (t.state === 'running') {
             <span class="bar"><i [style.width.%]="t.total ? t.bytes * 100 / t.total : 0"></i></span>
-            <span class="hint">{{ size(t.bytes) }} / {{ size(t.total) }}@if (rate(t) > 0) { · {{ size(rate(t)) }}/s · {{ left(t) }}}@if (t.filesTotal > 1) { · file {{ t.filesDone + 1 }} of {{ t.filesTotal }}}</span>
+            <span class="hint">{{ size(t.bytes) }} / {{ size(t.total) }}@if (rate(t) > 0) { · {{ size(rate(t)) }}/s@if (left(t); as l) { · {{ l }}}}@if (t.filesTotal > 1) { · file {{ t.filesDone + 1 }} of {{ t.filesTotal }}}</span>
           } @else {
-            <span class="hint st">{{ t.state === 'done' ? '✓ Done' + (t.filesTotal > 1 ? ' - ' + t.filesTotal + ' files' : '') + ' · ' + size(t.total) : t.state === 'error' ? '✗ ' + t.error : 'Cancelled' }}</span>
+            <span class="hint st">{{ t.state === 'done' ? '✓ Done' + (t.filesTotal > 1 ? ' - ' + t.filesTotal + ' files' : '') + ' · ' + size(t.total) + avgText(t) : t.state === 'error' ? '✗ ' + t.error : 'Cancelled' }}</span>
           }
           <span class="grow"></span>
           @if (others() > 0) { <button type="button" class="pill" (click)="showQueue.set(!showQueue())" title="Show all transfers">{{ others() }} more {{ showQueue() ? '▾' : '▴' }}</button> }
@@ -245,17 +249,46 @@ export class SftpView implements OnInit {
   readonly current = computed(() => { const l = this.shown(); return l.find(t => t.state === 'running') ?? l[l.length - 1] ?? null; });
   readonly others = computed(() => Math.max(0, this.shown().length - 1));
   readonly showQueue = signal(false);
-  private rates = new Map<string, { b: number; at: number; r: number }>();
-  /** Bytes per second of a running transfer (smoothed). */
+  private rates = new Map<string, { b: number; at: number; r: number; t0: number; b0: number; end?: number }>();
+  /** Bytes per second of a running transfer (smoothed; the average since it
+   *  started until two updates were seen). */
   rate(t: Transfer): number {
     const now = performance.now();
-    const m = this.rates.get(t.id);
-    if (!m) { this.rates.set(t.id, { b: t.bytes, at: now, r: 0 }); return 0; }
+    let m = this.rates.get(t.id);
+    if (!m) { m = { b: t.bytes, at: now, r: 0, t0: now, b0: t.bytes }; this.rates.set(t.id, m); return 0; }
     if (t.bytes !== m.b && now - m.at > 250) {
       const r = (t.bytes - m.b) / ((now - m.at) / 1000);
       m.r = m.r ? m.r * .6 + r * .4 : r; m.b = t.bytes; m.at = now;
     }
-    return m.r;
+    if (m.r) return m.r;
+    const dt = (now - m.t0) / 1000;
+    return dt > .3 && t.bytes > m.b0 ? (t.bytes - m.b0) / dt : 0;
+  }
+  /** "· 11.4 MB/s" for a finished transfer: its average speed. */
+  avgText(t: Transfer) {
+    const m = this.rates.get(t.id);
+    if (!m) return '';
+    m.end ??= performance.now();
+    const dt = (m.end - m.t0) / 1000;
+    return dt > .2 && t.total ? ' · ' + this.size((t.total - m.b0) / dt) + '/s' : '';
+  }
+  /** One file selected on each side: they can be compared. */
+  canCompare() {
+    const one = (p: Pane) => p.selected.size === 1 && !p.entries.find(e => e.name === [...p.selected][0])?.isDir;
+    return one(this.local()) && one(this.remote());
+  }
+  one(p: Pane) { return [...p.selected][0] ?? ''; }
+  /** Opens Compare with the selected local and remote file (text, up to 5 MB). */
+  async compare() {
+    if (!this.canCompare()) return;
+    const l = this.local(), r = this.remote();
+    const ln = this.one(l), rn = this.one(r);
+    try {
+      const [a, b] = await Promise.all([this.backend.readTextFile(this.join(l, ln)), this.backend.sftpReadText(this.sid(), this.join(r, rn))]);
+      const host = this.tab().hopTarget || this.hostOnly();
+      this.ui.compareTexts.set([{ label: 'This computer: ' + ln, text: a }, { label: host + ': ' + rn, text: b }]);
+      this.ui.open('compare');
+    } catch (e) { this.ui.error(e); }
   }
   left(t: Transfer) {
     const r = this.rate(t);

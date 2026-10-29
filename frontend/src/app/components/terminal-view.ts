@@ -20,6 +20,9 @@ import { FormsModule } from '@angular/forms';
 /** Black or white, whichever is more readable on the given background. */
 /** The keyword colour as text on the terminal: the same hue, light enough
  *  on a dark terminal and dark enough on a light one. */
+/** The default terminal text size (Settings → Terminal): Menlo 12 on macOS, 14 px elsewhere. */
+const BASE_FONT = /mac/i.test(navigator.platform) || navigator.userAgent.includes('Mac OS') ? 12 : 14;
+
 function textTone(hex: string, lightTerm: boolean): string {
   const n = parseInt(hex.slice(1), 16);
   let [r, g, b] = [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
@@ -301,6 +304,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     while (row > 0 && b.getLine(row)?.isWrapped) { row--; text = (b.getLine(row)?.translateToString(true) ?? '') + text; }
     const cmd = commandOfLine(text);
     if (cmd) this.history.add(cmd, { session: t.session.path, title: t.title, deviceType: t.session.deviceType });
+    if (cmd) this.tabs.afterCommand(t.id, cmd);
   }
   readonly labels = FIX_LABELS;
   /** Modern layout, before the first successful connect: a card instead of an empty terminal. */
@@ -426,7 +430,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       if (!s || !t) return;
       const sess = this.tab().session;
       t.options.fontFamily = sess.fontFamily || s.fontFamily;
-      t.options.fontSize = sess.fontSize > 0 ? sess.fontSize + (s.fontSize - 14) : s.fontSize;
+      t.options.fontSize = sess.fontSize > 0 ? sess.fontSize + (s.fontSize - BASE_FONT) : s.fontSize;
+      t.options.lineHeight = s.lineHeight && s.lineHeight >= 1 ? s.lineHeight : 1;
       t.options.cursorStyle = s.cursorStyle;
       t.options.cursorBlink = s.cursorBlink;
       const theme = terminalTheme(this.tab().session.colorScheme, s, this.ui.lightUi());
@@ -454,7 +459,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     const theme = terminalTheme(tab.session.colorScheme, s, this.ui.lightUi());
     const term = new Terminal({
       fontFamily: tab.session.fontFamily || s?.fontFamily || 'monospace',
-      fontSize: tab.session.fontSize || s?.fontSize || 14,
+      fontSize: tab.session.fontSize || s?.fontSize || BASE_FONT,
+      lineHeight: s?.lineHeight && s.lineHeight >= 1 ? s.lineHeight : 1,
       cursorStyle: s?.cursorStyle ?? 'block',
       cursorBlink: s?.cursorBlink ?? true,
       scrollback: tab.session.scrollback || s?.scrollback || 10000,
@@ -507,7 +513,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     term.parser.registerOscHandler(633, d => d.startsWith('P;Cwd=') ? setCwd(d.slice(6)) : false);
     const dec = new TextDecoder();
     const quietDec = new TextDecoder();
-    let atLineStart = false;
+    let atLineStart = true;
     let hexCol = 0;
     this.unsub.push(this.backend.on('term:data:' + id, (b64: string) => {
       let bytes = b64ToBytes(b64);
@@ -534,16 +540,28 @@ export class TerminalView implements AfterViewInit, OnDestroy {
         }
         bytes = new TextEncoder().encode(out);
       } else if (hexCol) { hexCol = 0; write('\r\n'); }
-      if (!tv?.timestamps || term.buffer.active.type !== 'normal') { write(bytes); return; }
-      // Per-line timestamps (display only): local time after every newline in line-based output.
+      if (!tv?.timestamps || term.buffer.active.type !== 'normal') {
+        // keep track of line starts, so the first line after timestamps are switched on gets one
+        for (let i = bytes.length - 1; i >= 0; i--) { if (bytes[i] === 0x0d) continue; atLineStart = bytes[i] === 0x0a; break; }
+        write(bytes);
+        return;
+      }
+      // Per-line timestamps (display only): the local time before the first character of every
+      // line. Carriage returns after a line feed ("\n\r", as some devices send) are skipped, so
+      // the stamp is not overwritten when the cursor goes back to the start of the line.
       const stamp = () => {
         const d = new Date();
         return '\x1b[90m[' + d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0') + ']\x1b[0m ';
       };
-      let text = dec.decode(bytes, { stream: true });
-      if (atLineStart && text.length) text = stamp() + text;
-      atLineStart = text.endsWith('\n');
-      write(text.replace(/\n(?=.)/gs, () => '\n' + stamp()));
+      const text = dec.decode(bytes, { stream: true });
+      let out = '';
+      for (const ch of text) {
+        if (ch === '\n') { atLineStart = true; out += ch; continue; }
+        if (ch === '\r') { out += ch; continue; }
+        if (atLineStart) { out += stamp(); atLineStart = false; }
+        out += ch;
+      }
+      write(out);
     }));
     term.onData(d => {
       const t = this.tabs.get(id);

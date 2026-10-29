@@ -60,6 +60,8 @@ export class Ui {
   readonly dialog = signal<DialogName | null>(null);
   /** Sources the Compare Outputs dialog starts with ('tab:<id>' or 'file'). */
   readonly compareWith = signal<[string, string] | null>(null);
+  /** Two texts for Compare (e.g. a local and a remote file from the SFTP browser). */
+  readonly compareTexts = signal<{ label: string; text: string }[] | null>(null);
   /** Session being edited and its original path ('' for new). */
   readonly editing = signal<{ session: Session; oldPath: string; tabId?: string; pw?: string } | null>(null);
   /** Modern layout: the session being edited in the side panel. */

@@ -67,7 +67,7 @@
   select.pill { padding-right: 22px; }
   .sbtn { height: 30px; padding: 0 14px; border-radius: var(--r); font-weight: 500; white-space: nowrap; }
   .root-btn { height: 24px; border-radius: var(--r); }
-  .panes { display: grid; grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr); }
+  .panes { display: grid; grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr); }
   .pane { margin: 0; border: 0; border-radius: 0; background: var(--surface);
     &.focus { border: 0; header .label { color: var(--accent); } }
     header { height: 42px; gap: 4px; padding: 0 8px 0 10px; border-bottom: 1px solid var(--line);
@@ -101,7 +101,10 @@
   /* a flat amber folder, as in the Session Manager */
   .fold { width: 20px; height: 16px; flex: none; margin: 0 0 1px; background: #e5a93b; border-radius: 3px 3px 4px 4px;
     clip-path: polygon(0 18%, 38% 18%, 48% 0, 100% 0, 100% 100%, 0 100%); &.dot { opacity: .65; } }
-  .mid { gap: 10px; align-items: center; background: var(--bg); border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+  .mid { gap: 8px; align-items: center; background: var(--bg); border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+    .ml { font-size: calc(9.5px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin-top: 8px; }
+    .ml:first-child { margin-top: 0; }
+    .ar.sy { color: var(--muted); &:not(:disabled):hover { color: var(--accent); } }
     .ar { width: 32px; height: 32px; padding: 0; border-radius: 8px; color: var(--accent); font-weight: 700; font-size: calc(15px * var(--ui-scale, 1));
       &:disabled { color: var(--faint); } } }
   .xbar { flex: none; height: 46px; display: flex; align-items: center; gap: 12px; padding: 0 14px; border-top: 1px solid var(--line); background: var(--surface); white-space: nowrap;

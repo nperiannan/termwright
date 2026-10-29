@@ -64,6 +64,7 @@ export function diffLines(a: string[], b: string[], norm: (s: string) => string)
                 <option value="">Choose…</option>
                 @for (t of termTabs(); track t.id) { <option [value]="'tab:' + t.id">Tab: {{ t.title }}</option> }
                 @if (srcs()[side].startsWith('path:')) { <option [value]="srcs()[side]">{{ pathName(srcs()[side]) }}</option> }
+                @for (g of givenOpts; track g.v) { <option [value]="g.v">{{ g.label }}</option> }
                 <option value="file">File…</option>
               </select>
               <span class="hint">{{ labels()[side] }}</span>
@@ -125,6 +126,13 @@ export class Compare {
   readonly promptRe = signal(String.raw`^\*?\s?[\w.@~/:()\[\]-]+(\s[\w.()-]+)?\s?[#>$%]\s?`);
 
   constructor() {
+    const given = this.ui.compareTexts();
+    this.ui.compareTexts.set(null);
+    if (given) {
+      given.forEach((g, i) => { const v = 'given:' + i; this.given[v] = { label: g.label, lines: g.text.split(/\r?\n/) }; this.givenOpts.push({ v, label: g.label }); });
+      void this.setSrc(0, 'given:0'); void this.setSrc(1, 'given:1');
+      return;
+    }
     const pre = this.ui.compareWith();
     this.ui.compareWith.set(null);
     if (pre) { void this.setSrc(0, pre[0]); void this.setSrc(1, pre[1]); return; }
@@ -152,9 +160,16 @@ export class Compare {
     return phase + parts.slice(-2).join('/');
   }
 
+  /** Texts handed over by another window (SFTP: a local and a remote file). */
+  private given: Record<string, { label: string; lines: string[] }> = {};
+  readonly givenOpts: { v: string; label: string }[] = [];
+
   async setSrc(side: number, v: string) {
     let lines: string[] | null = null, label = '';
-    if (v.startsWith('tab:')) {
+    if (v.startsWith('given:')) {
+      lines = this.given[v]?.lines ?? null;
+      label = (this.given[v]?.label ?? '') + ' · ' + (lines?.length ?? 0) + ' lines';
+    } else if (v.startsWith('tab:')) {
       const id = v.slice(4);
       lines = this.tabText(id);
       label = `${lines.length} lines of scrollback`;

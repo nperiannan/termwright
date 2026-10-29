@@ -276,6 +276,34 @@ func (m *Manager) SFTPMkdir(id, p string) error {
 	return s.c.MkdirAll(p)
 }
 
+// SFTPReadText reads a remote text file for Compare (at most max bytes).
+func (m *Manager) SFTPReadText(id, p string, max int64) (string, error) {
+	s, err := m.sftpGet(id)
+	if err != nil {
+		return "", err
+	}
+	st, err := s.c.Stat(p)
+	if err != nil {
+		return "", err
+	}
+	if st.IsDir() {
+		return "", fmt.Errorf("%s is a folder", path.Base(p))
+	}
+	if st.Size() > max {
+		return "", fmt.Errorf("%s is %d KB - Compare reads files up to %d KB", path.Base(p), st.Size()/1024, max/1024)
+	}
+	f, err := s.c.Open(p)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, max))
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 // SFTPCreateFile makes a new empty remote file; an existing file is left
 // alone (an error says it exists).
 func (m *Manager) SFTPCreateFile(id, p string) error {

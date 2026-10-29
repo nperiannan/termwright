@@ -45,7 +45,7 @@ import { Icon } from '../components/icon';
         <button type="button" class="danger-text" [class.danger-link]="modern()" (click)="clear()" [disabled]="!hist.entries().length">{{ modern() ? 'Clear history…' : 'Clear History' }}</button>
         <span class="spacer"></span>
         <span class="keys md-only"><kbd>↵</kbd> type in tab <kbd>⇧↵</kbd> run <kbd>esc</kbd> close</span>
-        <button type="button" class="cl-only" (click)="ui.close()">Close</button>
+        <button type="button" (click)="ui.close()">Close</button>
         <button type="button" [disabled]="!current()" (click)="toWindow(current()!)">To Command Window</button>
         <button type="button" class="cl-only" [disabled]="!current() || !tabs.active()" (click)="type(current()!)">Type in Tab</button>
         <button type="button" class="primary" [disabled]="!current() || !tabs.active()" (click)="run(current()!)">Run</button>

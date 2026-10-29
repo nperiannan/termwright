@@ -205,6 +205,33 @@ export class Tabs {
     return p;
   }
 
+  /**
+   * After a command that starts a new shell as another user - "sudo su -",
+   * "sudo -i", "su - oracle", "sudo su - oracle", "bash" - the new shell does
+   * not report its folder and user yet, so an SFTP tab that follows this
+   * terminal would stay where it was (also on a host behind a jump station).
+   * Once the new shell's prompt shows, reporting is turned on in it again
+   * (silently); the SFTP tab then follows the folder and switches user.
+   */
+  afterCommand(id: string, cmd: string) {
+    if (this.ui.settings()?.sftpCwdAuto === false) return;
+    const c = cmd.trim();
+    if (!/^(sudo\s+(-\S+\s+)*(su\b|-i\b|-s\b|bash\b|zsh\b|-iu\s|-u\s+\S+\s+(-i|-s|bash|zsh)\b)|su\b|exec\s+(bash|zsh)\b|(bash|zsh)(\s+-l)?$)/.test(c)) return;
+    if (!this.tabs().some(t => t.kind === 'sftp' && t.parentId === id)) return;
+    let tries = 0;
+    const tick = () => {
+      const term = this.handles.get(id)?.term;
+      const t = this.get(id);
+      if (!term || !t || t.state !== 'connected') return;
+      const b = term.buffer.active;
+      const line = b.getLine(b.baseY + b.cursorY)?.translateToString(true) ?? '';
+      const atPrompt = /[$#%>]\s*$/.test(line.trimEnd() + ' ') && !/password|passphrase|verification|code/i.test(line) && b.type === 'normal';
+      if (atPrompt && tries > 0) { void this.enableCwdReporting(id, false, true); return; }
+      if (++tries < 90) setTimeout(tick, 500); // up to 45 s, e.g. while sudo asks for a password
+    };
+    setTimeout(tick, 600);
+  }
+
   /** Types the line that makes bash or zsh report its folder (OSC 7) after every prompt. */
   enableCwdReporting(termId: string, permanent: boolean, silent = false) {
     const line = `_tw_cwd(){ printf '\\033]7;file://%s%s\\007\\033]1337;RemoteHost=%s@%s\\007' "\${HOSTNAME:-\$HOST}" "\$PWD" "\${USER:-\$(id -un)}" "\${HOSTNAME:-\$HOST}"; }; ` +
@@ -723,7 +750,7 @@ export class Tabs {
     const t = this.get(id);
     const p = t?.session?.path;
     if (!p || t.kind !== 'terminal' || (t.session.protocol !== 'SSH2' && t.session.protocol !== 'Telnet')) return;
-    setTimeout(() => void this.ui.refreshFacts(p), 4000);
+    setTimeout(() => void this.ui.refreshFacts(p), 1500);
   }
 
   /** Saves the visible screen of a terminal tab as a PNG image. */

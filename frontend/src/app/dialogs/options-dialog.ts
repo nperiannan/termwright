@@ -176,6 +176,10 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
               <div class="grid">
                 <label>Font</label><input name="ff" [(ngModel)]="s.fontFamily" />
                 <label>Font size</label><input name="fs" type="number" min="6" max="48" class="short" [(ngModel)]="s.fontSize" />
+                <label>Line spacing</label>
+                <select name="lh" [ngModel]="s.lineHeight || 1" (ngModelChange)="s.lineHeight = +$event">
+                  <option [ngValue]="1">Normal - the font's own (as most terminal programs)</option><option [ngValue]="1.1">A little more (1.1)</option>
+                  <option [ngValue]="1.2">More (1.2)</option><option [ngValue]="1.35">Roomy (1.35)</option></select>
                 <label>Color scheme</label>
                 <select name="sch" [(ngModel)]="s.terminalScheme">
                   <option value="Auto">Auto (match the UI theme: Default / Light)</option>
@@ -810,7 +814,7 @@ export class OptionsDialog implements OnInit {
 
   async save() {
     if (!this.s) return;
-    this.s.fontSize = Number(this.s.fontSize) || 14;
+    this.s.fontSize = Number(this.s.fontSize) || (this.isMac ? 12 : 14);
     this.s.scrollback = Number(this.s.scrollback) || 10000;
     this.s.pasteLineDelayMs = Number(this.s.pasteLineDelayMs) || 0;
     this.s.keyMap = (this.s.keyMap ?? []).filter(k => k.keys && (k.send || k.action || k.script));
