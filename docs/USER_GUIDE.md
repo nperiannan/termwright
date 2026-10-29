@@ -742,7 +742,7 @@ ssh -t -i ~/.ssh/aws_key ec2-user@10.0.0.5
 
 - right-click the terminal tab → **Open SFTP Tab on &lt;jump host&gt; (same login)** or **Open SFTP Tab on &lt;user@host&gt; (through this login)**;
 - right-click the session in the Session Manager → **Connect SFTP Session to &lt;jump host&gt;** or **… to &lt;user@host&gt; (through &lt;jump host&gt;)**;
-- Session Options → Logon Actions → **SFTP opens on**: choose which one the SFTP toolbar button, *Connect SFTP Session* and *Connect as: SFTP* use.
+- Session Options → Logon Actions → **SFTP opens on**: *Where the terminal is* (the default - the target, or the jump station after `exit`), *Always <jump station>* or *Always <target>*. The SFTP button (Open SFTP Tab), *Connect SFTP Session* and *Connect as: SFTP* use it; without a terminal, *Where the terminal is* opens on the jump station.
 
 ![SFTP choices on the tab menu](screenshots/sftp-hop-menu.png)
 

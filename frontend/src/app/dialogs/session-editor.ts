@@ -473,12 +473,13 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   @if (s.useRemoteCommand && isHop(s.remoteCommand)) {
                     <label>SFTP opens on</label>
                     <div class="checks">
-                      <label><input type="radio" name="sftpt" [value]="false" [ngModel]="!!s.sftpToTarget" (ngModelChange)="s.sftpToTarget = $event" /> {{ s.hostname || 'the jump station' }} (the host Termwright logs in to)</label>
-                      <label><input type="radio" name="sftpt" [value]="true" [ngModel]="!!s.sftpToTarget" (ngModelChange)="s.sftpToTarget = $event" /> {{ hopTarget(s.remoteCommand) }} (the command's target, through the jump station, using its key)</label>
+                      <label><input type="radio" name="sftpt" value="" [ngModel]="sftpOn(s)" (ngModelChange)="setSftpOn(s, $event)" /> Where the terminal is (the target; the jump station after <code>exit</code>)</label>
+                      <label><input type="radio" name="sftpt" value="jump" [ngModel]="sftpOn(s)" (ngModelChange)="setSftpOn(s, $event)" /> Always {{ s.hostname || 'the jump station' }} (the host Termwright logs in to)</label>
+                      <label><input type="radio" name="sftpt" value="target" [ngModel]="sftpOn(s)" (ngModelChange)="setSftpOn(s, $event)" /> Always {{ hopTarget(s.remoteCommand) }} (the command's target, through the jump station, using its key)</label>
                     </div>
                     <label></label>
-                    <div class="hint">Applies to the SFTP toolbar button, Connect SFTP Session and "Connect as SFTP". The tab and Session Manager
-                      menus always offer both. SCP from the SFTP tab goes to the same host.</div>
+                    <div class="hint">Applies to the SFTP button (Open SFTP Tab), Connect SFTP Session and "Connect as SFTP" (without a terminal,
+                      "where the terminal is" opens on the jump station). The tab and Session Manager menus always offer both. SCP from the SFTP tab goes to the same host.</div>
                   }
                 </div>
               }
@@ -650,6 +651,9 @@ export class SessionEditor implements OnInit {
   readonly deviceTypes = computed(() => (this.ui.settings()?.deviceTypes ?? []).map(d => d.name));
   /** Light check for "ssh … host" (the backend parses it fully). */
   isHop(cmd: string) { return /^\s*(exec\s+)?\S*\bssh\s+\S/.test(cmd ?? ''); }
+  /** SFTP opens on: '' where the terminal is, 'jump' or 'target' (older sessions: the target flag). */
+  sftpOn(s: Session) { return s.sftpOn || (s.sftpToTarget ? 'target' : ''); }
+  setSftpOn(s: Session, v: '' | 'jump' | 'target') { s.sftpOn = v; s.sftpToTarget = v === 'target'; }
   hopTarget(cmd: string) {
     const w = (cmd ?? '').trim().split(/\s+/).filter(x => x !== 'exec');
     for (let i = 1; i < w.length; i++) {
