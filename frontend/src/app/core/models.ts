@@ -8,7 +8,7 @@ export interface Session {
   emulation: string; termType: string; description: string[];
   rows: number; cols: number; scrollback: number; keepalive: boolean; keepaliveSec: number;
   comPort: string; baudRate: number; dataBits: number; stopBits: number; parity: number;
-  logFile: string; logOnConnect: boolean; logAppend: boolean; logEachLine: string; logRaw: boolean; recordSession?: boolean; smartCard?: string; mac?: string; wolBroadcast?: string; wolPort?: number; wolFrom?: '' | 'local';
+  logFile: string; logOnConnect: boolean; logAppend: boolean; logEachLine: string; logRaw: boolean; recordSession?: boolean; smartCard?: string; mac?: string; wolBroadcast?: string; wolPort?: number; wolFrom?: '' | 'local'; wolNetwork?: string; wolScans?: number; wolScanSecs?: number; wolPingSecs?: number;
   savePassword: boolean; localCommand: string; localDir: string; colorScheme: string;
   logonActions: LogonAction[];
   triggers: Trigger[]; portForwards: PortForward[];
@@ -77,7 +77,7 @@ export interface KeywordSet { name: string; keywords: Keyword[]; }
 export interface SessionNode {
   name: string; path: string; isFolder: boolean; protocol?: string; hostname?: string;
   username?: string; port?: number; description?: string; hopTarget?: string; openAs?: string; children?: SessionNode[];
-  deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string; mac?: string;
+  deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string; mac?: string; wolPing?: number; wolNetwork?: string;
 }
 
 export interface Button { label: string; send: string; toAll: boolean; action: string; script: string; }
@@ -153,7 +153,7 @@ export interface ImportSource { app: string; path: string; what: string; }
 
 export interface FileFilter { displayName: string; pattern: string; }
 
-export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC'] as const;
+export const PROTOCOLS = ['SSH2', 'Telnet', 'Serial', 'Local Shell', 'Raw', 'Console', 'RDP', 'VNC', 'WOL'] as const;
 /** Console server access methods (Console sessions). */
 export const CONSOLE_METHODS: { id: string; label: string }[] = [
   { id: 'opengear-ssh', label: 'SSH as user:portNN (Opengear)' },

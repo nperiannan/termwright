@@ -200,6 +200,14 @@ func (a *App) OpenWebPage(tabID string, s session.Session, through, rawURL, brow
 		time.Sleep(time.Second) // let the browser release its files
 		_ = os.RemoveAll(profile)
 	}()
+	// A browser whose proxy is set by an organisation's policy ignores ours
+	// and goes straight out: say so when nothing has come through the tunnel.
+	go func(name string) {
+		time.Sleep(12 * time.Second)
+		if wp.Used() == 0 && !webStopped(id) {
+			emitter{a}.Emit("web:bypassed", map[string]string{"browser": name, "url": u.String()})
+		}
+	}(br.Name)
 	return WebOpened{Browser: br.Name, Via: wp.Via}, nil
 }
 
@@ -232,4 +240,11 @@ func openWithSystem(target string) error {
 	}
 	go func() { _ = cmd.Wait() }()
 	return nil
+}
+
+func webStopped(id string) bool {
+	webMu.Lock()
+	defer webMu.Unlock()
+	_, ok := webRuns[id]
+	return !ok
 }

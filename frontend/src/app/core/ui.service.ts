@@ -60,6 +60,15 @@ export class Ui {
   readonly dialog = signal<DialogName | null>(null);
   /** Open Web Page / Open Web Interface: the session, the tab whose connection to use ('' = none) and the route. */
   readonly webOpen = signal<{ session: Session; tabId: string; through: 'session' | 'device' } | null>(null);
+  private webWatch = false;
+  /** Warns when a browser opened through a session sent nothing through the tunnel (its proxy is set by a policy). */
+  watchWebBypass() {
+    if (this.webWatch) return;
+    this.webWatch = true;
+    this.backend.on('web:bypassed', (e: { browser: string; url: string }) => this.toast(
+      `${e.browser} has not sent anything through the tunnel, so ${e.url} is not reached through the session (it would show this computer's address). ` +
+      `Its proxy is probably set by your organisation's policy (in ${e.browser.includes('Firefox') ? 'about:policies' : 'chrome://policy, ProxyMode'}). Open it again with another browser - Firefox is usually not managed.`, 'error', 20000));
+  }
   openWeb(session: Session, tabId: string, through: 'session' | 'device') { this.webOpen.set({ session, tabId, through }); this.open('webOpen'); }
   /** Sources the Compare Outputs dialog starts with ('tab:<id>' or 'file'). */
   readonly compareWith = signal<[string, string] | null>(null);

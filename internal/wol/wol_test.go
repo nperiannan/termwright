@@ -48,3 +48,22 @@ func TestRemoteCommandIsValidated(t *testing.T) {
 		t.Fatalf("%s %v", c, err)
 	}
 }
+
+func TestParseNBSTAT(t *testing.T) {
+	b := make([]byte, 57)
+	b[7] = 1 // one answer
+	b[56] = 2
+	n1 := append([]byte("WORKGROUP      "), 0x00, 0x84, 0x00) // group name
+	n2 := append([]byte("NAS01          "), 0x00, 0x04, 0x00)
+	b = append(b, n1...)
+	b = append(b, n2...)
+	if got := parseNBSTAT(b); got != "NAS01" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestPingRejectsOptions(t *testing.T) {
+	if Ping(t.Context(), "-f", time.Second) || Ping(t.Context(), "a;b", time.Second) {
+		t.Fatal("unsafe host accepted")
+	}
+}

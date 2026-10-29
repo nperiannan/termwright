@@ -38,6 +38,8 @@ type Node struct {
 	Proxy       bool    `json:"proxy,omitempty"` // connects through a SOCKS/HTTP proxy
 	MAC         string  `json:"mac,omitempty"`
 	Console     string  `json:"console,omitempty"` // console port: "<console server path> port <n>"
+	WOLPing     int     `json:"wolPing,omitempty"` // Wake-on-LAN session: ping every … seconds (-1 = never)
+	WOLNetwork  string  `json:"wolNetwork,omitempty"`
 	Children    []*Node `json:"children,omitempty"`
 }
 
@@ -128,6 +130,12 @@ func (s *Store) walk(n *Node, rel string) error {
 			c.Description = strings.Join(ss.Description, "\n")
 			c.DeviceType, c.Environment, c.Jump, c.Proxy = ss.DeviceType, ss.Environment, ss.JumpSession, ss.ProxyType != ""
 			c.MAC = ss.MAC
+			if ss.Protocol == ProtoWOL {
+				c.WOLPing, c.WOLNetwork = ss.WOLPingSecs, ss.WOLNetwork
+				if c.WOLPing == 0 {
+					c.WOLPing = 120
+				}
+			}
 			if ss.Protocol == ProtoConsole && ss.ConsoleServer != "" {
 				c.Console = ss.ConsoleServer + " port " + strconv.Itoa(ss.ConsolePort)
 			}

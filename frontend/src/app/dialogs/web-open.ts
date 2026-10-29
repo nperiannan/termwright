@@ -113,6 +113,7 @@ export class WebOpenDialog {
 
   constructor() {
     const r = this.req();
+    this.ui.watchWebBypass();
     if (!r) return;
     const key = this.urlKey();
     void this.backend.webBrowsers().then(l => {

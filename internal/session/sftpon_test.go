@@ -44,3 +44,16 @@ func TestWOLRoundTrip(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestWOLSessionRoundTrip(t *testing.T) {
+	st, _ := NewStore(t.TempDir())
+	s := Session{Name: "pc2", Protocol: ProtoWOL, MAC: "00:11:22:33:44:55", WOLNetwork: "192.168.1.0/24", WOLScans: 6, WOLScanSecs: 20, WOLPingSecs: -1}
+	saved, err := st.Save(s, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := st.Get(saved.Path)
+	if got.Protocol != ProtoWOL || got.WOLNetwork != "192.168.1.0/24" || got.WOLScans != 6 || got.WOLScanSecs != 20 || got.WOLPingSecs != -1 {
+		t.Fatalf("%+v", got)
+	}
+}

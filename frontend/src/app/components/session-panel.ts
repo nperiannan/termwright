@@ -39,7 +39,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
             @for (p of main; track p) { <button type="button" [class.on]="s.protocol === p" (click)="setProto(p)">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
             <select name="other" [class.on]="!main.includes(s.protocol)" [ngModel]="main.includes(s.protocol) ? '' : s.protocol" (ngModelChange)="$event && setProto($event)">
               <option value="">More…</option>
-              @for (p of others; track p) { <option [value]="p">{{ p }}</option> }
+              @for (p of others; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p }}</option> }
             </select>
           </div>
         </div>
@@ -51,6 +51,17 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
           }
           @case ('Local Shell') { <p class="note">The shell and folder are set in More options.</p> }
           @case ('Console') { <p class="note">The console server and port are set in More options.</p> }
+          @case ('WOL') {
+            <div class="two">
+              <label class="f grow"><span>MAC address</span><input name="mac" class="mono" [(ngModel)]="s.mac" placeholder="00:11:22:33:44:55" spellcheck="false" /></label>
+              <label class="f port"><span>UDP port</span><input name="wolp" type="number" min="1" max="65535" [ngModel]="s.wolPort || 9" (ngModelChange)="s.wolPort = +$event === 9 ? 0 : +$event" /></label>
+            </div>
+            <div class="two">
+              <label class="f grow"><span>Network</span><input name="wolnet" class="mono" [(ngModel)]="s.wolNetwork" placeholder="192.168.1.0/24" spellcheck="false" /></label>
+              <label class="f grow"><span>IP address <small>(optional)</small></span><input name="host" class="mono" [(ngModel)]="s.hostname" placeholder="found by its MAC" spellcheck="false" /></label>
+            </div>
+            <p class="note">Double-click sends the magic packet to the broadcast address of its network only (from the network, or the IP address's network). With an IP address the device is pinged until it answers, and every {{ pingMins(s) }} afterwards (green = up, orange = down); without one the network is searched for the MAC address and the address found is saved. More options: searches, interval, ping, jump host.</p>
+          }
           @default {
             <div class="two">
               <label class="f grow"><span>Address</span><input name="host" [(ngModel)]="s.hostname" placeholder="10.1.1.1 or host.example.com" spellcheck="false" /></label>
@@ -65,11 +76,13 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
             </select></label>
         }
         @if (s.protocol !== 'RDP' && s.protocol !== 'VNC' && s.protocol !== 'Local Shell') {
+          @if (s.protocol !== 'WOL') {
           <label class="f"><span>Device type</span>
             <select name="dt" [(ngModel)]="s.deviceType">
               <option value="">(none)</option>
               @for (d of deviceTypes(); track d) { <option [value]="d">{{ d }}</option> }
             </select></label>
+          }
         }
         @if (!hasLogin() && s.deviceType && deviceUser()) {
           <div class="note">Logs in as <b>{{ deviceUser() }}</b> with the {{ s.deviceType }} device type's login.
@@ -130,7 +143,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
         <button type="button" (click)="close()">Cancel</button>
         <span class="grow"></span>
         <button type="submit">Save</button>
-        <button type="button" class="primary sc" (click)="save(true)"><app-icon name="quick" [size]="14" /> Save &amp; Connect</button>
+        <button type="button" class="primary sc" (click)="save(true)"><app-icon name="quick" [size]="14" /> {{ s.protocol === 'WOL' ? 'Save &amp; Wake' : 'Save &amp; Connect' }}</button>
       </footer>
     </form>
     }
@@ -227,9 +240,11 @@ export class SessionPanel {
     });
   }
 
-  hasLogin() { return !!this.s && !['Serial', 'Local Shell', 'VNC'].includes(this.s.protocol) && (!this.s.deviceType || this.s.ownLogin || !this.deviceUser()); }
+  hasLogin() { return !!this.s && !['Serial', 'Local Shell', 'VNC', 'WOL'].includes(this.s.protocol) && (!this.s.deviceType || this.s.ownLogin || !this.deviceUser()); }
   deviceUser() { return (this.ui.settings()?.deviceTypes ?? []).find(d => d.name === this.s?.deviceType)?.username ?? ''; }
   pwText() { return this.pwState() === 'set' ? 'Saved in the system keychain' : 'Asked when connecting'; }
+
+  pingMins(s: Session) { const v = s.wolPingSecs || 120; return v < 0 ? 'never' : v >= 120 ? Math.round(v / 60) + ' minutes' : v + ' seconds'; }
 
   setProto(p: string) {
     if (!this.s) return;
@@ -244,8 +259,8 @@ export class SessionPanel {
     const s = this.s;
     if (!s) return [];
     const out: { page: string; label: string; value: string; icon: string }[] = [];
-    const term = !['RDP', 'VNC'].includes(s.protocol);
-    if (['SSH2', 'Telnet', 'Raw'].includes(s.protocol)) out.push({ page: 'firewall', icon: 'connect', label: 'Jump host / proxy', value: s.jumpSession ? s.jumpSession.split('/').pop()! : s.proxyHost || 'none' });
+    const term = !['RDP', 'VNC', 'WOL'].includes(s.protocol);
+    if (['SSH2', 'Telnet', 'Raw', 'WOL'].includes(s.protocol)) out.push({ page: 'firewall', icon: 'connect', label: 'Jump host / proxy', value: s.jumpSession ? s.jumpSession.split('/').pop()! : s.proxyHost || 'none' });
     if (s.protocol === 'SSH2') out.push({ page: 'forward', icon: 'tile-v', label: 'Port forwarding', value: s.portForwards?.length ? s.portForwards.length + ' rule' + (s.portForwards.length === 1 ? '' : 's') : 'none' });
     if (s.protocol === 'Serial') out.push({ page: 'serial', icon: 'serial', label: 'Serial settings', value: `${s.dataBits || 8}-${['N', 'O', 'E', 'M', 'S'][s.parity] ?? 'N'}-${s.stopBits || 1}` });
     if (term) {
@@ -264,7 +279,7 @@ export class SessionPanel {
 
   devKind() { return deviceKindOf(this.s?.deviceType); }
   protoKind(): SessionKind {
-    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc' };
+    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol' };
     return m[this.s?.protocol ?? ''] ?? (this.s?.openAs === 'sftp' ? 'sftp' : 'ssh');
   }
   envColor() { return this.envs.find(e => e.id === this.s?.environment)?.color ?? null; }
@@ -286,6 +301,7 @@ export class SessionPanel {
     if (!s.name.trim()) { this.error.set('Please enter a session name.'); return; }
     if (['SSH2', 'Telnet', 'Raw', 'RDP', 'VNC'].includes(s.protocol) && !s.hostname.trim()) { this.error.set('Please enter an address.'); return; }
     if (s.protocol === 'Serial' && !s.comPort.trim()) { this.error.set('Please choose a serial port.'); return; }
+    if (s.protocol === 'WOL' && !s.mac?.trim()) { this.error.set('Please enter the MAC address of the device to wake.'); return; }
     if (s.protocol === 'Console' && (!s.consoleServer || !s.consolePort)) { this.more('connection'); return; }
     s.port = Number(s.port) || 0;
     try {

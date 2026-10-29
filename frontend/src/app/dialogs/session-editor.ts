@@ -55,9 +55,9 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
           @if (s.protocol === 'SSH2') {
             <a class="sub" [class.on]="page() === 'auth'" (click)="page.set('auth')" style="order: 2"><app-icon name="key" [size]="15" />{{ modern() ? 'Authentication' : 'SSH2 Authentication' }}</a>
           }
-          @if (!remote()) { <a class="sub" [class.on]="page() === 'forward'" [class.dim]="s.protocol !== 'SSH2'" (click)="page.set('forward')" style="order: 5"><app-icon name="forward" [size]="15" />Port Forwarding</a> }
+          @if (!noTerm()) { <a class="sub" [class.on]="page() === 'forward'" [class.dim]="s.protocol !== 'SSH2'" (click)="page.set('forward')" style="order: 5"><app-icon name="forward" [size]="15" />Port Forwarding</a> }
           @if (remote()) { <a class="sub" [class.on]="page() === 'remote'" (click)="page.set('remote')" style="order: 3"><app-icon name="monitor" [size]="15" />{{ s.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' }}</a> }
-          @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw' || remote()) {
+          @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw' || remote() || s.protocol === 'WOL') {
             <a class="sub" [class.on]="page() === 'firewall'" (click)="page.set('firewall')" style="order: 4"><app-icon name="route" [size]="15" />Jump Host / Proxy</a>
           }
           @if (s.protocol === 'SSH2' || s.protocol === 'Telnet') {
@@ -65,7 +65,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
           }
           @if (s.protocol === 'Serial') { <a class="sub" [class.on]="page() === 'serial'" (click)="page.set('serial')" style="order: 6"><app-icon name="serial" [size]="15" />Serial</a> }
           @if (s.protocol === 'Local Shell') { <a class="sub" [class.on]="page() === 'local'" (click)="page.set('local')" style="order: 7"><app-icon name="shell" [size]="15" />Local Shell</a> }
-          @if (!remote()) {
+          @if (!noTerm()) {
             <div class="cat-g" style="order: 8">Terminal</div>
             <a class="sub" [class.on]="page() === 'logon'" (click)="page.set('logon')" style="order: 10"><app-icon name="script" [size]="15" />{{ modern() ? 'Logon Actions' : 'Logon Actions & Triggers' }}</a>
             <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')" style="order: 9"><app-icon name="shell" [size]="15" />{{ modern() ? 'Appearance' : 'Terminal' }}</a>
@@ -140,16 +140,16 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="seg">
                     @for (p of mainProtos; track p) { <button type="button" [class.on]="s.protocol === p" (click)="s.protocol = p; protocolChanged()">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
                     <select name="otherp" [ngModel]="mainProtos.includes(s.protocol) ? '' : s.protocol" (ngModelChange)="$event && (s.protocol = $event) && protocolChanged()">
-                      <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p }}</option> }</select>
+                      <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p }}</option> }</select>
                   </div>
                 } @else {
                 <select name="protocol" [(ngModel)]="s.protocol" (ngModelChange)="protocolChanged()">
-                  @for (p of protocols; track p) { <option [value]="p">{{ p }}</option> }
+                  @for (p of protocols; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p }}</option> }
                 </select>
                 }
                 </div>
                 <div class="pair o4">
-                @if (!remote()) {
+                @if (!remote() && s.protocol !== 'WOL') {
                 <div class="f"><label>Device type</label>
                 <select name="devtype" [(ngModel)]="s.deviceType">
                   <option value="">(none)</option>
@@ -207,6 +207,42 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="hint">{{ consoleHint() }} The console server's session gives the address, jump host and SSH login; the device type and the
                     username / password below log in to the device at the console.</div>
                 }
+                @if (s.protocol === 'WOL') {
+                  <label>MAC address</label>
+                  <div class="row"><input name="wmac" class="mono" [(ngModel)]="s.mac" placeholder="00:11:22:33:44:55" spellcheck="false" style="max-width: 200px" required />
+                    <span class="hint">of the wired port that is set to wake (BIOS / UEFI and the network card)</span></div>
+                  <label>Network</label>
+                  <div class="row"><input name="wnet" class="mono" [(ngModel)]="s.wolNetwork" placeholder="192.168.1.0/24" spellcheck="false" style="max-width: 200px" />
+                    <span class="hint">the magic packet goes to its broadcast address; without an IP address it is searched for the MAC address</span></div>
+                  <label>IP address</label>
+                  <div class="row"><input name="hostname" class="mono" [(ngModel)]="s.hostname" placeholder="optional" spellcheck="false" style="max-width: 200px" />
+                    <span class="hint">pinged to show up (green) or down (orange)</span></div>
+                  <label>UDP port</label>
+                  <div class="row"><input name="wport" type="number" min="1" max="65535" class="short" [ngModel]="s.wolPort || 9" (ngModelChange)="s.wolPort = +$event === 9 ? 0 : +$event" />
+                    <label>Broadcast</label><input name="wbc" class="mono" [(ngModel)]="s.wolBroadcast" placeholder="(the network's)" spellcheck="false" style="max-width: 160px"
+                      title="Only when it differs from the network's broadcast address, e.g. 255.255.255.255" /></div>
+                  <label>After waking</label>
+                  <div class="row">
+                    <span>search</span><input name="wscans" type="number" min="1" max="20" class="short" [ngModel]="s.wolScans || 4" (ngModelChange)="s.wolScans = +$event === 4 ? 0 : +$event" />
+                    <span>times, every</span><input name="wsecs" type="number" min="5" max="600" class="short" [ngModel]="s.wolScanSecs || 30" (ngModelChange)="s.wolScanSecs = +$event === 30 ? 0 : +$event" />
+                    <span>seconds, then mark it not present / down</span></div>
+                  <label>Ping</label>
+                  <div class="row">
+                    <select name="wping" [ngModel]="s.wolPingSecs || 120" (ngModelChange)="s.wolPingSecs = +$event === 120 ? 0 : +$event" style="width: auto">
+                      <option [ngValue]="-1">never</option><option [ngValue]="30">every 30 seconds</option><option [ngValue]="60">every minute</option>
+                      <option [ngValue]="120">every 2 minutes</option><option [ngValue]="300">every 5 minutes</option><option [ngValue]="600">every 10 minutes</option><option [ngValue]="1800">every 30 minutes</option>
+                    </select>
+                    <span class="hint">when it has an IP address: the dot in the Session Manager is green (answers) or orange (no answer); its NetBIOS name is read too</span></div>
+                  @if (s.jumpSession) {
+                    <label>Send from</label>
+                    <select name="wfrom" [ngModel]="s.wolFrom || ''" (ngModelChange)="s.wolFrom = $event" style="width: auto">
+                      <option value="">the jump host ({{ s.jumpSession }})</option><option value="local">this computer</option>
+                    </select>
+                  }
+                  <label></label>
+                  <div class="row"><button type="button" (click)="wakeNow()" [disabled]="!s.mac">Wake Now</button>
+                    <span class="hint">Double-click the session (or Connect) sends the magic packet and then pings the device, or searches the network for its MAC address and saves the address it finds.</span></div>
+                }
                 @if (s.protocol === 'RDP') {
                   <label></label><div class="hint">Opens in this computer's Remote Desktop client (Remote Desktop Connection on Windows, Windows App on macOS,
                     FreeRDP or Remmina on Linux). With a jump host or proxy, Termwright opens a local tunnel for it.</div>
@@ -225,8 +261,8 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   @if (s.mac) {
                     <label>Wake-on-LAN</label>
                     <div class="row wol">
-                      <input name="wolb" [(ngModel)]="s.wolBroadcast" placeholder="broadcast: every network" spellcheck="false" style="max-width: 190px"
-                        title="Leave empty for 255.255.255.255 and every network of this computer; for a device on another subnet enter its broadcast address, e.g. 192.168.20.255" />
+                      <input name="wolb" [(ngModel)]="s.wolBroadcast" placeholder="broadcast: its network" spellcheck="false" style="max-width: 190px"
+                        title="Leave empty for the broadcast address of the network the device's address is on; enter another one only if needed, e.g. 192.168.20.255" />
                       <input name="wolp" type="number" min="1" max="65535" [ngModel]="s.wolPort || null" (ngModelChange)="s.wolPort = $event || 0" placeholder="port 9" class="short" title="UDP port (9 by default, sometimes 7)" />
                       @if (s.jumpSession || (s.useRemoteCommand && isHop(s.remoteCommand))) {
                         <select name="wolf" [ngModel]="s.wolFrom || ''" (ngModelChange)="s.wolFrom = $event" style="width: auto">
@@ -238,7 +274,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                     </div>
                   }
                 }
-                @if (s.deviceType || s.protocol === 'SSH2' || (modern() && !remote() && s.protocol !== 'Local Shell')) {
+                @if (s.protocol !== 'WOL' && (s.deviceType || s.protocol === 'SSH2' || (modern() && !remote() && s.protocol !== 'Local Shell'))) {
                   <label class="o5">{{ modern() ? '' : 'Login' }}</label>
                   <div class="checks o5">
                     @if (s.deviceType) {
@@ -256,7 +292,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                     }
                   </div>
                 }
-                @if (!s.deviceType || s.ownLogin) {
+                @if ((!s.deviceType || s.ownLogin) && s.protocol !== 'WOL') {
                   <label class="o6">Username</label><input class="o6" name="username" [(ngModel)]="s.username" placeholder="(prompt when connecting)" />
                   <label class="o6">Password</label>
                   <div class="row o6">
@@ -573,7 +609,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
         @if (error()) { <span class="err">{{ error() }}</span> }
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Cancel</button>
-        <button type="button" (click)="save(true)">Save &amp; Connect</button>
+        <button type="button" (click)="save(true)">{{ s.protocol === 'WOL' ? 'Save &amp; Wake' : 'Save &amp; Connect' }}</button>
         <button type="submit" class="primary">Save</button>
       </div>
     </form>
@@ -863,12 +899,14 @@ export class SessionEditor implements OnInit {
   }
 
   remote() { return this.s?.protocol === 'RDP' || this.s?.protocol === 'VNC'; }
+  /** Sessions without a terminal (remote desktops, Wake-on-LAN). */
+  noTerm() { return this.remote() || this.s?.protocol === 'WOL'; }
   readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'];
   readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'].includes(p));
   devKind() { return deviceKindOf(this.s?.deviceType); }
   protoKind(): SessionKind {
-    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc' };
+    const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol' };
     return m[this.s?.protocol ?? ''] ?? (this.s?.openAs === 'sftp' ? 'sftp' : 'ssh');
   }
   /** Under the title (modern layout): folder, protocol and where it connects. */

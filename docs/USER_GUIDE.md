@@ -392,12 +392,43 @@ Scanning connects to many addresses and can be noticed by security monitoring: s
 
 ### Wake-on-LAN
 
-Termwright can wake a sleeping or powered-off computer, server or lab device by sending a Wake-on-LAN *magic packet* to its MAC address.
+Termwright can wake a sleeping or powered-off computer, server or lab device by sending a Wake-on-LAN *magic packet* to its MAC address - either as a **Wake-on-LAN session** of its own, or from any saved session that has a MAC address.
+
+#### Wake-on-LAN sessions
+
+New Session → Protocol → *More…* → **Wake-on-LAN** makes a session whose only job is to wake a device and show whether it is up. It has its own power icon in the Session Manager.
+
+| Field | What it does |
+|---|---|
+| **MAC address** (required) | the device's wired network port that is set to wake (`00:11:22:33:44:55`, `00-11-…`, `0011.2233.4455` or `001122334455`) |
+| **Network** | the device's network, e.g. `192.168.1.0/24` (a bare `192.168.1.0` means /24). The magic packet is sent to **this network's broadcast address only**. |
+| **IP address** (optional) | the device's address: it is pinged to show whether it is up. Without a network, the packet goes to the broadcast address of the network this address is on. |
+| **UDP port** | 9 by default (some devices use 7) |
+| **Broadcast** | only when the right broadcast address differs from the network's (e.g. a router that forwards a directed broadcast) |
+| **After waking** | how many times to search the network for the MAC address, and how many seconds apart (4 searches, 30 s apart by default) |
+| **Ping** | how often the device is pinged to show up or down - every 2 minutes by default, or 30 s, 1, 5, 10 or 30 minutes, or never |
+| **Send from** | with a jump host (Jump Host / Proxy page): send from the jump host - for a device on the jump host's network - or from this computer |
+
+**Double-click** the session (or *Save & Wake*, *Wake Now*) to wake it:
+
+1. The magic packet is sent (three times) to the network's broadcast address.
+2. **With an IP address**, the device is pinged every 5 seconds until it answers (at least 2 minutes, or as long as the searches would take). When it answers, its **NetBIOS name** is read too (Windows and Samba answer), and the dot turns **green**. If it does not answer in time, the dot turns **orange** and a notice says it is down, not woken or not present.
+3. **With only a network**, Termwright waits 30 seconds, then searches the network for the MAC address (it makes this computer look up every address of the network, as Discover Devices does, and reads the answers' MAC addresses). It repeats this up to 4 times (both are settings). When the MAC address is found, its **IP address is saved in the session** and the device is pinged; if it is not found after the last search, the device is marked **not present / down** and the searches stop. Only a network this computer is directly on can be searched.
+
+Afterwards every Wake-on-LAN session with an IP address is **pinged every 2 minutes** (its *Ping* setting): the dot in the Session Manager is **green** when it answers and **orange** when it does not; while it is being woken the dot blinks. The hover card shows the MAC address, network, state, when it was checked and the NetBIOS name. Right-click → *Check Now (ping)* checks at once.
+
+| Session Manager | Wake-on-LAN session options |
+|---|---|
+| ![Wake-on-LAN sessions with their state](screenshots/wol-tree.png) | ![Wake-on-LAN session options](screenshots/wol-session-options.png) |
+
+![New Wake-on-LAN session in the side panel](screenshots/wol-new.png)
+
+#### Waking the device of any session
 
 - **The MAC address** is saved with the session: Discover Devices and device facts fill it in, or type it in Session Options → Connection → *MAC address* (`00:11:22:33:44:55`, `00-11-…`, `0011.2233.4455` or `001122334455`). Use the MAC address of the wired port that is set to wake.
 - **Wake up**: right-click the session → **Wake Up (Wake-on-LAN)**, or **Wake Up and Connect** to connect as soon as it answers. Also on the tab menu, Transfer → Wake Up, and - when a connection times out - the error card's **Wake Up** button, which reconnects the tab when the device answers. Right-click a folder → *Wake Up All in Folder*, or a selection → *Wake Up N Sessions*, sends to every session with a MAC address.
-- **Where the packet is sent from**: Wake-on-LAN packets are broadcasts that do not cross routers, so they must start on the device's network. A device behind a **jump host** - or the target of a jump station's `ssh … host` command - is woken **from that server** (Termwright logs in and sends the packet with `python3`, or the `wakeonlan` tool if it is installed). Other devices are woken from this computer, on every network it is connected to.
-- **Options** (Session Options → Connection, below the MAC address): the **broadcast address** (empty = `255.255.255.255` and every network of this computer; for a device on another subnet enter that subnet's broadcast address, e.g. `192.168.20.255` - the router must forward directed broadcasts), the **UDP port** (9 by default, sometimes 7), **from the jump host / from this computer**, and **Wake Now** to try the settings before saving.
+- **Where the packet is sent from**: Wake-on-LAN packets are broadcasts that do not cross routers, so they must start on the device's network. A device behind a **jump host** - or the target of a jump station's `ssh … host` command - is woken **from that server** (Termwright logs in and sends the packet with `python3`, or the `wakeonlan` tool if it is installed). Other devices are woken from this computer, to the broadcast address of the network their address is on.
+- **Options** (Session Options → Connection, below the MAC address): the **broadcast address** (empty = the broadcast address of the network the session's address is on - the packet goes to that network only; enter another one only when needed, e.g. `192.168.20.255` for a router that forwards directed broadcasts), the **UDP port** (9 by default, sometimes 7), **from the jump host / from this computer**, and **Wake Now** to try the settings before saving.
 - **Did it wake?** After sending, Termwright watches the session's port (through the jump host when there is one) for up to three minutes and tells you when the device answers - with a *Connect* button - or that it did not, with what to check: Wake-on-LAN enabled in the BIOS/UEFI and the network card's settings, the right MAC address, and the broadcast address for other subnets.
 
 | Session menu | Settings | It answered |

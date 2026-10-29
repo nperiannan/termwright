@@ -24,6 +24,7 @@ type WebProxy struct {
 
 	mu     sync.Mutex
 	conns  map[net.Conn]bool
+	used   int // connections the browser made
 	closed bool
 }
 
@@ -168,6 +169,7 @@ func (wp *WebProxy) track(c net.Conn, add bool) bool {
 			return false
 		}
 		wp.conns[c] = true
+		wp.used++
 	} else {
 		delete(wp.conns, c)
 	}
@@ -192,4 +194,12 @@ func (wp *WebProxy) Close() {
 	if wp.release != nil {
 		wp.release()
 	}
+}
+
+// Used tells how many connections went through the proxy so far (the
+// browser's own and the pages').
+func (wp *WebProxy) Used() int {
+	wp.mu.Lock()
+	defer wp.mu.Unlock()
+	return wp.used
 }

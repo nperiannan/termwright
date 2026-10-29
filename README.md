@@ -59,7 +59,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - it follows the terminal's folder;
   - opening a folder in the panel `cd`s the terminal there;
   - a double-clicked file opens in its usual program on your computer, and saved changes are offered for upload.
-- **Wake-on-LAN.** Wake a device by its saved MAC address, from this computer or from its jump host when it sits behind one, and connect as soon as it answers.
+- **Wake-on-LAN.** Wake-on-LAN sessions with their own icon: the magic packet goes to the device's network only. If its IP address is unknown, the network is searched for its MAC address. A green or orange dot shows from a regular ping whether it is up. Any session with a MAC address can be woken too, from its jump host when it sits behind one.
 - **Web pages through a session.** Open a device's web interface (firewall, IPMI, NAS, switch) behind a jump host, or any page as seen from an SSH server. A separate browser window with a temporary profile sends all its traffic and name lookups through the SSH connection, and the profile is deleted when the window closes.
 - **SFTP.**
   - Clickable paths and a bookmark bar.
@@ -92,7 +92,7 @@ Earlier releases are described in the [changelog](CHANGELOG.md).
 
 | Area | Summary |
 |---|---|
-| Protocols | SSH2; Telnet (NAWS, TTYPE, ECHO, SGA); serial (flow control, DTR/RTS, break, speed detection); raw TCP; local shell (PTY on macOS and Linux, ConPTY on Windows); RDP through the system's client; VNC in a built-in viewer. |
+| Protocols | SSH2; Telnet (NAWS, TTYPE, ECHO, SGA); serial (flow control, DTR/RTS, break, speed detection); raw TCP; local shell (PTY on macOS and Linux, ConPTY on Windows); RDP through the system's client; VNC in a built-in viewer; Wake-on-LAN sessions. |
 | SSH authentication | Password and keyboard-interactive. Public keys: OpenSSH, encrypted, and PuTTY `.ppk`. SSH certificates, FIDO2 security keys, PIV / PKCS#11 smart cards, Kerberos (GSSAPI), the SSH agent. `known_hosts` verification with prompts for new and changed keys. |
 | Key management | Generate Ed25519, RSA 4096 or ECDSA keys. Install them on Linux, macOS, BSD and Windows OpenSSH servers, test the key-only login, then switch the session to it. |
 | Device types | Per-platform login profiles: login steps for Telnet and serial, after-login steps for every protocol (for example `enable`, paging off), and credentials inherited or overridden per session. |

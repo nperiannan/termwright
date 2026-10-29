@@ -6,6 +6,7 @@ import type { SerializeAddon } from '@xterm/addon-serialize';
 import { Backend, SftpMode, errText } from './backend';
 import { AlertEvent, DeviceFacts, RemoteInfo, Session, TabInfo, Transfer, isRemoteDesktop, unescape } from './models';
 import { Ui } from './ui.service';
+import { Wol } from './wol.service';
 import { envOf } from './env';
 import { HtmlKeyword, bufferHtml } from './buffer-html';
 import { screenPng } from './screen-image';
@@ -72,6 +73,7 @@ export interface TermHandle { term: Terminal; fit: FitAddon; search: SearchAddon
 export class Tabs {
   private backend = inject(Backend);
   private ui = inject(Ui);
+  private wol = inject(Wol);
 
   readonly tabs = signal<TabView[]>([]);
   readonly activeId = signal<string>('');
@@ -222,6 +224,7 @@ export class Tabs {
   }
 
   async wake(s: Session, tabId = '', then: 'reconnect' | 'connect' | 'none' = 'none') {
+    if (s.protocol === 'WOL') { await this.wol.wake(s); return; }
     if (!s.mac) { this.ui.toast(`No MAC address saved for ${s.name} - add it in Session Options → Connection.`, 'error', 8000); return; }
     this.ui.toast(`Waking ${s.name} (${s.mac}) - waiting up to 3 minutes for it to answer…`, 'info', 8000);
     try {
@@ -563,6 +566,7 @@ export class Tabs {
     try {
       const node = this.ui.findNode(path);
       if (isRemoteDesktop(node?.protocol)) { await this.openRemote(path, null); return; }
+      if (node?.protocol === 'WOL') { await this.wol.wake(await this.backend.getSession(path)); return; }
       if (as !== 'terminal') {
         const s = await this.backend.getSession(path);
         if (as === 'sftp' || (s.protocol === 'SSH2' && s.openAs === 'sftp')) {

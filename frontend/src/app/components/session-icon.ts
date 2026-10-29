@@ -2,7 +2,7 @@ import { Component, computed, inject, input } from '@angular/core';
 import { Ui } from '../core/ui.service';
 
 /** Kinds of session icons: each has its own color and symbol so sessions are told apart at a glance. */
-export type SessionKind = 'ssh' | 'sftp' | 'telnet' | 'serial' | 'console' | 'shell' | 'raw' | 'rdp' | 'vnc' | 'folder' | 'folder-open';
+export type SessionKind = 'ssh' | 'sftp' | 'telnet' | 'serial' | 'console' | 'shell' | 'raw' | 'rdp' | 'vnc' | 'wol' | 'folder' | 'folder-open';
 
 const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: string; to: string; title: string }> = {
   ssh: { from: '#34d399', to: '#059669', title: 'SSH2 terminal' },
@@ -13,6 +13,7 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
   shell: { from: '#94a3b8', to: '#334155', title: 'Local shell' },
   raw: { from: '#f472b6', to: '#be185d', title: 'Raw TCP' },
   rdp: { from: '#38bdf8', to: '#1d4ed8', title: 'Remote Desktop (RDP)' },
+  wol: { from: '#fbbf24', to: '#d97706', title: 'Wake-on-LAN' },
   vnc: { from: '#2dd4bf', to: '#0369a1', title: 'VNC remote screen' },
 };
 
@@ -54,6 +55,7 @@ const KINDS: Record<Exclude<SessionKind, 'folder' | 'folder-open'>, { from: stri
               @case ('serial') { <path d="M3.6 5.6h8.8l-1.2 4.8H4.8z" /><path d="M6 7.8h.01M8 7.8h.01M10 7.8h.01" stroke-width="1.7" /> }
               @case ('shell') { <path d="M9.9 5.2c-.4-.5-1.1-.8-1.9-.8-1.1 0-1.9.6-1.9 1.4 0 1.9 4 1 4 3 0 .8-.9 1.5-2.1 1.5-.8 0-1.6-.4-2-.9M8 3.4v9.2" stroke-width="1.3" /> }
               @case ('raw') { <path d="M6.2 5.2L3.6 8l2.6 2.8M9.8 5.2L12.4 8l-2.6 2.8" /> }
+              @case ('wol') { <path d="M8 3.6v4" stroke-width="1.5" /><path d="M5.4 5.2a3.8 3.8 0 1 0 5.2 0" stroke-width="1.4" /> }
               @case ('rdp') { <rect x="3.3" y="4" width="9.4" height="6.2" rx=".9" stroke-width="1.3" /><path d="M6.4 12.3h3.2M8 10.2v2.1" stroke-width="1.3" /><path d="M5.4 6.4l1.4 1-1.4 1" stroke-width="1.1" /> }
               @case ('vnc') { <rect x="3.3" y="4" width="9.4" height="6.2" rx=".9" stroke-width="1.3" /><path d="M6.4 12.3h3.2M8 10.2v2.1" stroke-width="1.3" /><path d="M6.6 6.2l.9 2.3 1.6-.7 1 .9" stroke-width="1" /> }
             }

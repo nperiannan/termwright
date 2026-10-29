@@ -9,6 +9,7 @@ import { Icon } from './icon';
 import { ago, envInfo, envOf } from '../core/env';
 import { SessionIcon, SessionKind } from './session-icon';
 import { DeviceIcon, deviceKindOf } from './device-icon';
+import { Wol } from '../core/wol.service';
 import { FolderIcon } from './folder-icon';
 import { factList, factsAge } from '../core/facts';
 
@@ -31,6 +32,7 @@ export function sessionAddrParts(n: SessionNode): { a: string; t: string } {
 
 export function sessionAddr(n: SessionNode): string {
   let a: string;
+  if (n.protocol === 'WOL') return (n.hostname || n.wolNetwork || n.mac || '') + ' · WOL';
   if (n.protocol === 'Serial') a = n.hostname || 'Serial';
   else if (n.protocol === 'Console') a = n.console || 'Console';
   else if (n.protocol === 'Local Shell') a = 'Local shell';
@@ -135,11 +137,13 @@ export function sessionAddr(n: SessionNode): string {
             @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }</span>
           <span class="addr">@if (addrParts(n); as ap) {<span class="a">{{ ap.a }}</span>@if (ap.t) {<span class="t">· {{ ap.t }}</span>}}</span>
         </span>
-        @if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
+        @if (n.protocol === 'WOL') { <span [class]="wolDot(n)" [title]="wolTitle(n)"></span> }
+        @else if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
         @else if (liveState().get(n.path); as st) { <span class="dot" [class]="'dot ' + (st === 'connected' ? 'up' : st === 'error' ? 'down' : 'unk')" [title]="'Open in a tab - ' + st"></span> }
       } @else {
         <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget || n.protocol === 'Console'" />
-        @if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
+        @if (n.protocol === 'WOL') { <span [class]="wolDot(n)" [title]="wolTitle(n)"></span> }
+        @else if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
         <span class="name">{{ n.name }}</span>
         @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
         @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }
@@ -169,10 +173,18 @@ export function sessionAddr(n: SessionNode): string {
           @if (h.n.deviceType) { <span>Device type</span><b>{{ h.n.deviceType }}</b> }
           @for (f of facts(h.n.path); track f[0]) { <span>{{ f[0] }}</span><b [class.mono]="f[0] === 'MAC'">{{ f[1] }}</b> }
           @if (h.n.mac && !ui.factsOf(h.n.path)?.['MAC']) { <span>MAC</span><b class="mono">{{ h.n.mac }}</b> }
+          @if (h.n.protocol === 'WOL') {
+            @if (h.n.wolNetwork) { <span>Network</span><b class="mono">{{ h.n.wolNetwork }}</b> }
+            @if (wol.get(h.n.path); as w) {
+              <span>State</span><b [class.ok]="w.state === 'up'" [class.warn]="w.state === 'down'">{{ wolTitle(h.n) }}</b>
+              @if (w.name) { <span>NetBIOS</span><b>{{ w.name }}</b> }
+            }
+          } @else {
           <span>Login</span><b class="lt">{{ loginText(h) }}</b>
+          }
           @if (reach() && reachable().has(h.n.path)) { <span>Port {{ portOf(h.n) }}</span><b [class.ok]="reachable().get(h.n.path)" [class.bad]="!reachable().get(h.n.path)">{{ reachable().get(h.n.path) ? 'answers' : 'no answer' }}</b> }
         </div>
-        <div class="hfoot">{{ lastAgo(h.n.path) ? 'Connected ' + lastAgo(h.n.path) : 'Not connected yet' }}@if (factsAge(ui.factsOf(h.n.path)); as fa) { · facts {{ fa }} }</div>
+        <div class="hfoot">{{ h.n.protocol === 'WOL' ? (h.n.hostname ? ((h.n.wolPing ?? 120) < 0 ? 'Not pinged' : 'Pinged every ' + pingEvery(h.n)) : 'Double-click wakes it and searches ' + (h.n.wolNetwork || 'its network')) : lastAgo(h.n.path) ? 'Connected ' + lastAgo(h.n.path) : 'Not connected yet' }}@if (factsAge(ui.factsOf(h.n.path)); as fa) { · facts {{ fa }} }</div>
         @if (h.n.description) { <div class="hdesc">{{ h.n.description }}</div> }
       </div>
     }
@@ -185,6 +197,7 @@ export function sessionAddr(n: SessionNode): string {
 export class SessionTree implements AfterViewInit, OnDestroy {
   protected ui = inject(Ui);
   private tabs = inject(Tabs);
+  protected wol = inject(Wol);
   private backend = inject(Backend);
   private async wake(path: string, then: 'none' | 'connect') {
     try { await this.tabs.wake(await this.backend.getSession(path), '', then); } catch (e) { this.ui.error(e); }
@@ -382,6 +395,22 @@ export class SessionTree implements AfterViewInit, OnDestroy {
 
   portOf(n: SessionNode) { return n.port || (n.protocol === 'Telnet' ? 23 : 22); }
 
+  pingEvery(n: SessionNode) { const v = n.wolPing ?? 120; return v < 0 ? 'never' : v >= 120 ? Math.round(v / 60) + ' minutes' : v + ' seconds'; }
+  wolDot(n: SessionNode) {
+    const st = this.wol.get(n.path)?.state;
+    return 'dot wol ' + (st === 'up' ? 'up' : st === 'down' ? 'wdown' : st === 'waking' ? 'waking' : 'unk');
+  }
+  wolTitle(n: SessionNode) {
+    const w = this.wol.get(n.path);
+    if (!n.hostname && !w) return 'Wake-on-LAN - no IP address: double-click wakes it and searches the network';
+    switch (w?.state) {
+      case 'up': return 'Up - answers ping' + (w.at ? ' (checked ' + new Date(w.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ')' : '');
+      case 'down': return w.message && !w.message.startsWith('Magic') ? w.message : 'Down - no answer to ping';
+      case 'waking': return w.message || 'Waking…';
+      default: return n.hostname ? 'Not checked yet' : 'Unknown';
+    }
+  }
+
   dotClass(n: SessionNode) {
     const v = this.reachable().get(n.path);
     return 'dot ' + (v === true ? 'up' : v === false ? 'down' : 'unk');
@@ -446,6 +475,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     if (n.protocol === 'Serial') return 'Serial ' + (n.hostname ?? '');
     if (n.protocol === 'Console') return 'Console ' + (n.console ? n.console.replace(/ port (\d+)$/, ', port $1') : '(no console server)');
     if (n.protocol === 'Local Shell') return 'Local shell';
+    if (n.protocol === 'WOL') return 'Wake-on-LAN · ' + (n.mac ?? '') + (n.hostname ? ' · ' + n.hostname : '');
     const who = n.username ? n.username + '@' : '';
     return `${n.protocol ?? ''} ${who}${n.hostname ?? ''}:${this.portOf(n)}` + (n.hopTarget ? ` → ${n.hopTarget}` : '');
   }
@@ -539,6 +569,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
       case 'Raw': return 'raw';
       case 'RDP': return 'rdp';
       case 'VNC': return 'vnc';
+      case 'WOL': return 'wol';
       default: return n.openAs === 'sftp' ? 'sftp' : 'ssh';
     }
   }
@@ -620,13 +651,14 @@ export class SessionTree implements AfterViewInit, OnDestroy {
               { label: `Connect SFTP Session to ${n.hostname}`, action: () => void this.tabs.openSession(n.path, 'sftp', 'jump') },
               { label: `Connect SFTP Session to ${n.hopTarget} (through ${n.hostname})`, action: () => void this.tabs.openSession(n.path, 'sftp', 'target') },
             ] : [{ label: 'Connect SFTP Session', action: () => void this.tabs.openSession(n.path, 'sftp') }]),
-          ] : [{ label: 'Connect', action: () => this.connect(n) }]),
+          ] : n.protocol === 'WOL' ? [] : [{ label: 'Connect', action: () => this.connect(n) }]),
           ...(n.hostname && n.protocol !== 'RDP' && n.protocol !== 'VNC' ? [
             ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', action: () => void this.openWeb(n.path, 'session') }] : []),
             { label: 'Open Web Interface...', action: () => void this.openWeb(n.path, 'device') },
           ] : []),
           { label: 'Wake Up (Wake-on-LAN)', disabled: !n.mac, hint: n.mac ? '' : 'no MAC address', action: () => void this.wake(n.path, 'none') },
-          ...(n.mac ? [{ label: 'Wake Up and Connect', action: () => void this.wake(n.path, 'connect') }] : []),
+          ...(n.mac && n.protocol !== 'WOL' ? [{ label: 'Wake Up and Connect', action: () => void this.wake(n.path, 'connect') }] : []),
+          ...(n.protocol === 'WOL' && n.hostname ? [{ label: 'Check Now (ping)', action: () => this.wol.checkNow(n.path) }] : []),
           { separator: true },
           { label: 'Properties...', action: () => this.ui.editSession(n.path) },
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }] : []),
