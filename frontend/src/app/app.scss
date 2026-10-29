@@ -95,9 +95,10 @@ app-command-window { flex: none; }
 /* ---- modern layout: tabs, search and a few actions in one title bar ---- */
 .titlebar { flex: none; display: flex; align-items: center; gap: 2px; height: 44px; padding: 0 var(--sp-2) 0 var(--sp-2);
   background: var(--surface); border-bottom: 1px solid var(--line); --wails-draggable: drag; user-select: none;
-  /* macOS window without its own title bar: the window buttons sit centred in a
-     52 px bar, so the bar is that tall and the controls line up with them */
-  &.inset { padding-left: 84px; height: 52px; }
+  /* macOS window without its own title bar: the bar is twice as tall as the
+     window buttons' centre (read from macOS at start, --inset-h), so the
+     controls sit on the same line as the window buttons */
+  &.inset { padding-left: var(--inset-left, 84px); height: var(--inset-h, 38px); }
   button, .ptab, .kbar { --wails-draggable: no-drag; }
   .ab { width: 32px; height: 32px; padding: 0; flex: none; display: inline-flex; align-items: center; justify-content: center;
     border: 0; border-radius: var(--r); background: transparent; color: var(--muted);

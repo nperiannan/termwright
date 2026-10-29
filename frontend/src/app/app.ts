@@ -291,6 +291,16 @@ export class App implements OnInit {
     });
   }
 
+  /** macOS: size the title bar so its buttons and tabs sit on the same line
+   *  as the window buttons, wherever this macOS version draws them. */
+  private async alignWithWindowButtons(tries = 10) {
+    const b = await this.backend.windowButtons().catch(() => null);
+    if (!b) { if (tries > 0) setTimeout(() => void this.alignWithWindowButtons(tries - 1), 300); return; }
+    const root = document.documentElement.style;
+    root.setProperty('--inset-h', Math.round(Math.min(64, Math.max(36, b.centerY * 2))) + 'px');
+    root.setProperty('--inset-left', Math.round(Math.min(130, Math.max(70, b.right + 14))) + 'px');
+  }
+
   async ngOnInit() {
     if (this.backendMissing) {
       this.ui.toast('Backend not available: run the app with "wails dev" or a built binary.', 'error', 15000);
@@ -298,6 +308,7 @@ export class App implements OnInit {
     }
     const info = await this.backend.getAppInfo();
     this.insetTitle.set(!!info.insetTitle);
+    if (info.insetTitle) void this.alignWithWindowButtons();
     if (info.initError) this.ui.toast('Startup error: ' + info.initError, 'error', 20000);
     await this.ui.loadSettings();
     if (info.locked) { this.ui.locked.set(true); this.ui.lockScreen.set(true); }

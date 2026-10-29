@@ -2,6 +2,10 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+* **macOS title bar**: the tabs and buttons of the modern title bar now sit on the same line as the window buttons (close, minimise, zoom). Termwright reads where macOS draws them, so this holds on every macOS version.
+
 ## 0.22.0 (2026-10-29)
 
 Accounts, and sessions and settings that move together between computers.

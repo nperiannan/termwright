@@ -23,6 +23,7 @@ import (
 
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/discover"
+	"github.com/termwright/termwright/internal/macwin"
 	"github.com/termwright/termwright/internal/secretref"
 	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/session"
@@ -236,6 +237,20 @@ func (a *App) GetAppInfo() AppInfo {
 		ai.HasMaster = a.cfg.Get().MasterHash != ""
 	}
 	return ai
+}
+
+// WindowButtons says where macOS draws the window buttons (their vertical
+// centre from the top of the window and the right edge of the last one), so
+// the modern title bar lines up with them on every macOS version.
+func (a *App) WindowButtons() map[string]float64 {
+	if !insetTitle {
+		return nil
+	}
+	cy, right, ok := macwin.WindowButtons()
+	if !ok {
+		return nil
+	}
+	return map[string]float64{"centerY": cy, "right": right}
 }
 
 // ---- settings ----
