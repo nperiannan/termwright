@@ -2,11 +2,14 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.22.0 (2026-10-29)
+
+Accounts, and sessions and settings that move together between computers.
 
 * **Accounts** ([#1](https://github.com/nperiannan/termwright/issues/1)): Passwords & Credentials is now **Passwords & Accounts**. An account (username and password, from the keychain or a password manager) can be chosen in Session Options and the side panel (**Account**: *Default* - the folder's account, else the device type's - an account, or *Own username and password*), in Folder Defaults, in device types and in Edit Sessions. A card says who will log in. Changing an account's password updates every session that uses it; a refused login offers **Update the Account Password**; *Convert Sessions…* turns sessions that share a username and saved password into one account. Renaming an account renames it everywhere. Exports to other programs take the account's username (never its password).
 * **Import / export**: Termwright's own folder, zip and XML exports keep accounts, the Files panel, *SFTP opens on*, the Wake-on-LAN options and Wake-on-LAN sessions (tested); the CSV gains *account*, *network* and *files_panel* columns and reads back RDP, VNC and Wake-on-LAN sessions with their protocol (they came back as SSH before); exports to PuTTY, KiTTY, MobaXterm, Tabby and OpenSSH leave Wake-on-LAN sessions out and list them in the summary. The password vault carries the accounts with their notes.
 * **Settings in exports**: Export Sessions → Zip or Folder now includes the settings (*Include settings*, on by default): device types, accounts (without passwords), Folder Defaults, the command library, checklists, Run and Collect, backup jobs, alerts, buttons, shortcuts, workspaces, bookmarks and the Global Options. Folders on disk, the master password, open tabs and the window position are left out. Import Sessions has **Termwright .zip** and **Termwright folder** sources; when the file has settings, it shows what is in it and imports the parts you tick (Global Options only when chosen). Same-named items are replaced, the others kept; Folder Defaults, checklists, jobs and workspaces follow the *Into folder* choice and renamed sessions. Copying `settings.json` by hand is no longer needed.
+* **Changed**: a device type with an account chosen in Global Options → Device Types now logs in with that account (the choice had no effect before). Sessions with their own username and password are not affected.
 
 ## 0.21.0 (2026-10-29)
 

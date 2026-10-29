@@ -51,6 +51,12 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.22.0
+
+- **Accounts** ([#1](https://github.com/nperiannan/termwright/issues/1)). A username and password kept once (in the OS keychain or a password manager) and chosen in a session, a folder's defaults or a device type. Changing an account's password updates every session that uses it; *Convert Sessions…* turns sessions that share a login into one account.
+- **Settings travel with the export.** A zip or folder export carries device types, accounts (without passwords), Folder Defaults, the command library, checklists, jobs and the Global Options. Import Sessions shows what is in the file and imports the parts you choose, following the target folder.
+- **Exports keep everything new.** Accounts, the Files panel, *SFTP opens on* and Wake-on-LAN sessions survive Termwright's own exports; the CSV gains account, network and Files panel columns and reads RDP, VNC and Wake-on-LAN sessions back with their protocol.
+
 ## What's new in 0.21.0
 
 - **Modern interface, now the default.** Tabs and a search-or-connect box share the title bar. A start page shows favourite and recent sessions, New Session and Properties open in a side panel, and sessions have device icons and colour-coded folders. Every dialog has been redesigned. The classic layout (menu bar, toolbar and tab strip) remains one click away.
@@ -81,10 +87,6 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 - **Serial consoles.** Ports are listed with the adapter's name and refreshed when a cable is plugged in. Detect Speed finds the baud rate, and a send bar offers line endings, hex send and hex view.
 - **Readable interface.** Choice of interface font (System, VS Code, Inter, IBM Plex Sans) and text size.
 - **HTML reports.** Save Scrollback As HTML keeps colours and highlighting, under a header with the device's model, version, serial number and MAC address.
-
-## What's new in 0.19.0
-
-- **Export to other programs.** PuTTY, KiTTY, MobaXterm, Tabby, OpenSSH config and CSV, next to Termwright's own folder, zip and XML formats, with a report of anything a format cannot hold.
 
 Earlier releases are described in the [changelog](CHANGELOG.md).
 
