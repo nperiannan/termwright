@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -27,6 +28,11 @@ type ImportResult struct {
 	// Passwords maps imported session paths to their decrypted passwords; the
 	// caller stores them in the OS keychain (never written to session files).
 	Passwords map[string]string `json:"-"`
+	// Paths maps each session path of the source to the path it has now
+	// (renamed, or the existing one when skipped).
+	Paths map[string]string `json:"-"`
+	// Settings lists what was taken from the export's settings file.
+	Settings []string `json:"settings"`
 }
 
 // ImportOptions control conflict handling.
@@ -39,6 +45,9 @@ type ImportOptions struct {
 	// ConfigPassphrase is SecureCRT's configuration passphrase, needed when
 	// the saved passwords were protected by one ("" = none).
 	ConfigPassphrase string `json:"configPassphrase"`
+	// Settings are the parts of a Termwright export's settings to import
+	// ("logins", "library", "options"); empty = sessions only.
+	Settings []string `json:"settings"`
 }
 
 // Import detects the source type (SecureCRT directory, .zip, .xml or .ini; PuTTY .reg or
@@ -181,12 +190,16 @@ func (s *Store) importOne(rel string, f *sessionfile.File, opt ImportOptions, re
 		res.Errors = append(res.Errors, fmt.Sprintf("%s: invalid name", rel))
 		return ""
 	}
+	if res.Paths == nil {
+		res.Paths = map[string]string{}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, err := os.Stat(s.fsPath(dest) + ext); err == nil {
 		switch opt.Conflict {
 		case "skip":
 			res.Skipped = append(res.Skipped, dest)
+			res.Paths[rel] = dest
 			return ""
 		case "overwrite":
 		default:
@@ -194,6 +207,7 @@ func (s *Store) importOne(rel string, f *sessionfile.File, opt ImportOptions, re
 			res.Renamed = append(res.Renamed, dest)
 		}
 	}
+	res.Paths[rel] = dest
 	for dir := parentOf(dest); dir != ""; dir = parentOf(dir) {
 		s.updateFolderData(parentOf(dir), "Folder List", baseOf(dir), true)
 		if err := os.MkdirAll(s.fsPath(dir), 0o700); err != nil {
@@ -296,6 +310,12 @@ func (s *Store) ImportSSHConfig(file string, opt ImportOptions) (*ImportResult, 
 // format is "dir", "zip" or "xml". For "dir" dest is a directory and the
 // files are written to dest/Sessions/...
 func (s *Store) Export(paths []string, dest, format string) (int, error) {
+	return s.ExportWith(paths, dest, format, nil)
+}
+
+// ExportWith exports like Export and adds files next to the Sessions folder
+// (zip and folder only), e.g. Termwright's settings.
+func (s *Store) ExportWith(paths []string, dest, format string, extra map[string][]byte) (int, error) {
 	list, err := s.AllSessions(paths)
 	if err != nil {
 		return 0, err
@@ -333,17 +353,75 @@ func (s *Store) Export(paths []string, dest, format string) (int, error) {
 		if err != nil {
 			return 0, err
 		}
+		for name, data := range extra {
+			w, err := zw.Create(name)
+			if err != nil {
+				return 0, err
+			}
+			if _, err := w.Write(data); err != nil {
+				return 0, err
+			}
+		}
 		return len(files), zw.Close()
 	default:
 		base := filepath.Join(dest, "Sessions")
-		return len(files), writeTree(files, func(name string, data []byte) error {
+		err := writeTree(files, func(name string, data []byte) error {
 			fp := filepath.Join(base, filepath.FromSlash(name))
 			if err := os.MkdirAll(filepath.Dir(fp), 0o700); err != nil {
 				return err
 			}
 			return os.WriteFile(fp, data, 0o600)
 		})
+		if err != nil {
+			return 0, err
+		}
+		for name, data := range extra {
+			if err := os.WriteFile(filepath.Join(dest, filepath.FromSlash(name)), data, 0o600); err != nil {
+				return 0, err
+			}
+		}
+		return len(files), nil
 	}
+}
+
+// ReadExportFile returns a file stored next to the Sessions folder of a
+// Termwright export (a .zip, the export folder or its Sessions folder).
+func ReadExportFile(src, name string) ([]byte, bool) {
+	st, err := os.Stat(src)
+	if err != nil {
+		return nil, false
+	}
+	if st.IsDir() {
+		for _, p := range []string{filepath.Join(src, name), filepath.Join(filepath.Dir(src), name)} {
+			if data, err := os.ReadFile(p); err == nil {
+				return data, true
+			}
+		}
+		return nil, false
+	}
+	if !strings.HasSuffix(strings.ToLower(src), ".zip") {
+		return nil, false
+	}
+	zr, err := zip.OpenReader(src)
+	if err != nil {
+		return nil, false
+	}
+	defer zr.Close()
+	for _, f := range zr.File {
+		if f.Name == name || (strings.HasSuffix(f.Name, "/"+name) && strings.Count(f.Name, "/") == 1) {
+			rc, err := f.Open()
+			if err != nil {
+				return nil, false
+			}
+			defer rc.Close()
+			var b bytes.Buffer
+			if _, err := b.ReadFrom(io.LimitReader(rc, 16<<20)); err != nil {
+				return nil, false
+			}
+			return b.Bytes(), true
+		}
+	}
+	return nil, false
 }
 
 // writeTree emits session files plus a folder index for every folder.

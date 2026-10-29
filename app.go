@@ -480,8 +480,56 @@ func (a *App) ImportSessions(src string, opt session.ImportOptions) (*session.Im
 	res, err := a.store.Import(src, opt)
 	if res != nil {
 		a.storeImportedPasswords(res)
+		if err == nil && len(opt.Settings) > 0 {
+			if e := a.importExportSettings(src, opt, res); e != nil {
+				res.Errors = append(res.Errors, "Settings: "+e.Error())
+			}
+		}
 	}
 	return res, err
+}
+
+// ExportSettingsIn says what settings a Termwright export holds (nil when it
+// has none), for the Import dialog.
+func (a *App) ExportSettingsIn(src string) *config.SettingsSummary {
+	data, ok := session.ReadExportFile(src, config.SettingsFileName)
+	if !ok {
+		return nil
+	}
+	sum, err := config.SummarizeSettings(data)
+	if err != nil {
+		return nil
+	}
+	return &sum
+}
+
+// importExportSettings merges the chosen parts of an export's settings.
+func (a *App) importExportSettings(src string, opt session.ImportOptions, res *session.ImportResult) error {
+	data, ok := session.ReadExportFile(src, config.SettingsFileName)
+	if !ok {
+		return nil
+	}
+	mapPath := func(p string) string {
+		if np, ok := res.Paths[p]; ok {
+			return np
+		}
+		return session.JoinPath(opt.TargetFolder, p)
+	}
+	next, notes, err := config.ImportSettings(a.cfg.Get(), data, opt.Settings, opt.TargetFolder, mapPath)
+	if err != nil {
+		return err
+	}
+	if err := a.cfg.Save(next); err != nil {
+		return err
+	}
+	if a.terms != nil {
+		a.applyAlerts()
+	}
+	res.Settings = notes
+	if len(notes) == 0 {
+		res.Settings = []string{"Settings: nothing new"}
+	}
+	return nil
 }
 
 // storeImportedPasswords moves passwords decrypted during an import into the OS keychain.
@@ -496,12 +544,22 @@ func (a *App) storeImportedPasswords(res *session.ImportResult) {
 	res.Passwords = nil
 }
 
-// ExportSessions exports sessions ("dir", "zip" or "xml").
-func (a *App) ExportSessions(paths []string, dest, format string) (int, error) {
+// ExportSessions exports sessions ("dir", "zip" or "xml"). With settings,
+// a zip or folder also carries device types, accounts (no passwords),
+// Folder Defaults, the command library and the Global Options.
+func (a *App) ExportSessions(paths []string, dest, format string, settings bool) (int, error) {
 	if err := a.ready(); err != nil {
 		return 0, err
 	}
-	return a.store.Export(paths, dest, format)
+	var extra map[string][]byte
+	if settings && format != "xml" {
+		data, err := config.ExportSettings(a.cfg.Get(), Version)
+		if err != nil {
+			return 0, err
+		}
+		extra = map[string][]byte{config.SettingsFileName: data}
+	}
+	return a.store.ExportWith(paths, dest, format, extra)
 }
 
 // ExportSessionsFor exports sessions for another program (PuTTY, KiTTY,

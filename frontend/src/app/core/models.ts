@@ -144,9 +144,13 @@ export interface Prompt {
 }
 export interface PromptReply { ok: boolean; values: string[]; choice: string; remember: boolean; }
 
-export interface ImportOptions { targetFolder: string; conflict: 'rename' | 'overwrite' | 'skip'; includeDefault: boolean; configPassphrase?: string; }
+export interface ImportOptions { targetFolder: string; conflict: 'rename' | 'overwrite' | 'skip'; includeDefault: boolean; configPassphrase?: string;
+  /** Parts of a Termwright export's settings to import: logins, library, options. */
+  settings?: string[]; }
 export interface ImportResult { imported: string[] | null; renamed: string[] | null; skipped: string[] | null; errors: string[] | null;
-  passwordsImported?: number; passwordErrors?: string[] | null; }
+  passwordsImported?: number; passwordErrors?: string[] | null; settings?: string[] | null; }
+/** What the settings file of a Termwright export holds. */
+export interface SettingsSummary { app: string; deviceTypes: number; accounts: number; folderDefaults: number; library: number; options: number; }
 
 export interface AppInfo { name: string; version: string; os: string; arch: string; dataDir: string; sessionsDir: string; initError: string; locked: boolean; hasMaster: boolean; insetTitle?: boolean; }
 

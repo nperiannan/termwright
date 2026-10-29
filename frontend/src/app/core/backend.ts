@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource } from './models';
+  AccountInfo,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -70,7 +70,8 @@ export class Backend {
   importSessions(src: string, opt: ImportOptions) { return this.call<ImportResult>('ImportSessions', src, opt); }
   importNetBox(url: string, token: string, filter: string, opt: ImportOptions) { return this.call<ImportResult>('ImportNetBox', url, token, filter, opt); }
   importAWS(profile: string, region: string, usePublic: boolean, opt: ImportOptions) { return this.call<ImportResult>('ImportAWS', profile, region, usePublic, opt); }
-  exportSessions(paths: string[], dest: string, format: string) { return this.call<number>('ExportSessions', paths, dest, format); }
+  exportSessions(paths: string[], dest: string, format: string, settings: boolean) { return this.call<number>('ExportSessions', paths, dest, format, settings); }
+  exportSettingsIn(src: string) { return this.call<SettingsSummary | null>('ExportSettingsIn', src); }
   exportSessionsFor(paths: string[], dest: string, format: string) { return this.call<ExportReport>('ExportSessionsFor', paths, dest, format); }
   listSerialPorts() { return this.call<string[]>('ListSerialPorts'); }
   deviceFacts(path: string, deviceType: string, text: string, fetch: boolean) { return this.call<DeviceFacts>('DeviceFacts', path, deviceType, text, fetch); }

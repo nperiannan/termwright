@@ -341,3 +341,39 @@ func TestOtherFormatsSkipWOL(t *testing.T) {
 		}
 	}
 }
+
+// A zip or folder export carries extra files (Termwright's settings) that
+// ReadExportFile finds again; the sessions still import as before and the
+// import reports where each session went.
+func TestExportCarriesSettingsFile(t *testing.T) {
+	st := exportFixture(t)
+	for _, format := range []string{"zip", "folder"} {
+		dest := filepath.Join(t.TempDir(), "out")
+		if format != "folder" {
+			dest += "." + format
+		}
+		if _, err := st.ExportWith(nil, dest, format, map[string][]byte{"termwright-settings.json": []byte(`{"format":"x"}`)}); err != nil {
+			t.Fatal(format, err)
+		}
+		srcs := []string{dest}
+		if format == "folder" {
+			srcs = append(srcs, filepath.Join(dest, "Sessions"))
+		}
+		for _, src := range srcs {
+			if data, ok := ReadExportFile(src, "termwright-settings.json"); !ok || string(data) != `{"format":"x"}` {
+				t.Fatalf("%s: settings file not found from %s", format, src)
+			}
+		}
+		other, _ := NewStore(t.TempDir())
+		res, err := other.Import(dest, ImportOptions{TargetFolder: "In"})
+		if err != nil || len(res.Errors) > 0 {
+			t.Fatal(format, err, res.Errors)
+		}
+		if res.Paths["Datacenter/Core/core-sw1"] != "In/Datacenter/Core/core-sw1" {
+			t.Fatalf("%s paths %v", format, res.Paths)
+		}
+	}
+	if _, ok := ReadExportFile(filepath.Join(t.TempDir(), "none.zip"), "termwright-settings.json"); ok {
+		t.Fatal("found a file in a missing export")
+	}
+}

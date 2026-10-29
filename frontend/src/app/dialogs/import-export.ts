@@ -1,12 +1,12 @@
 import { ChangeDetectorRef, Component, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
-import { ExportReport, ImportResult, ImportSource } from '../core/models';
+import { ExportReport, ImportResult, ImportSource, SettingsSummary } from '../core/models';
 import { Icon } from '../components/icon';
 import { FolderPicker } from '../components/folder-picker';
 import { Ui } from '../core/ui.service';
 
-type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv' | 'ansible' | 'netbox' | 'aws';
+type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv' | 'ansible' | 'netbox' | 'aws';
 
 /** Import sessions from SecureCRT (config folder, .zip, .xml, .ini), PuTTY/KiTTY, MobaXterm or OpenSSH config. */
 @Component({
@@ -61,7 +61,7 @@ type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv
               <div class="checks"><label><input type="checkbox" name="awspub" [(ngModel)]="awsPublic" /> Use public IP addresses (default: private, e.g. via a jump host)</label></div>
             } @else {
             <label>{{ modern() ? pathLabel() : 'Path' }}</label>
-            <div class="row"><input name="path" class="pathin" [(ngModel)]="path" required /><button type="button" (click)="browse()">Browse...</button></div>
+            <div class="row"><input name="path" class="pathin" [(ngModel)]="path" (change)="checkSettings()" required /><button type="button" (click)="browse()">Browse...</button></div>
             }
             @if (isSecureCRT()) {
               <label>Config passphrase</label>
@@ -84,6 +84,20 @@ type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv
                 </select>
                 }</div>
             </div>
+            @if (sum(); as m) {
+              <label class="cl-only" style="align-self: start">Settings</label>
+              <div class="setbox">
+                <div class="st"><b>Settings in this export</b>{{ m.app ? ' (Termwright ' + m.app + ')' : '' }}</div>
+                <label><input type="checkbox" name="sl" [(ngModel)]="partLogins" /><span>Device types, accounts and Folder Defaults
+                  <span class="n">{{ m.deviceTypes }} device types · {{ m.accounts }} account{{ m.accounts === 1 ? '' : 's' }} · {{ m.folderDefaults }} folder default{{ m.folderDefaults === 1 ? '' : 's' }}</span></span></label>
+                <label><input type="checkbox" name="sb" [(ngModel)]="partLibrary" /><span>Command library, checklists, Run and Collect, backup jobs, alerts, buttons, shortcuts, workspaces
+                  <span class="n">{{ m.library }} item{{ m.library === 1 ? '' : 's' }}</span></span></label>
+                <label><input type="checkbox" name="so" [(ngModel)]="partOptions" /><span>Global Options - appearance, terminal and behaviour
+                  <span class="n">replaces yours</span></span></label>
+                <div class="hint">Items with the same name are replaced, the others are kept. Folders on this computer, the master password and
+                  open tabs stay as they are. Passwords come with Passwords &amp; Accounts → Import.</div>
+              </div>
+            }
             <label></label>
             @if (source === 'csv') {
               <div class="hint">First row = column names. Recognised: <code>name, host</code> (or ip/address), <code>protocol, port, username,
@@ -110,18 +124,21 @@ type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv
             } @else {
             <div class="hint">
               @switch (source) {
+                @case ('twzip') { A .zip written by Export Sessions in Termwright. Its sessions keep everything; the settings in it can be imported too. }
+                @case ('twdir') { A folder written by Export Sessions in Termwright (it holds a Sessions folder). }
                 @case ('zip') { A .zip of a SecureCRT Config or Config/Sessions folder (e.g. a backup). }
                 @case ('xml') { In SecureCRT: Tools → Export Settings… writes an .xml file with all sessions. }
                 @case ('ini') { One SecureCRT session file from Config/Sessions. }
               }
-              Typical locations: Windows %APPDATA%\\VanDyke\\Config, macOS ~/Library/Application Support/VanDyke/SecureCRT/Config,
-              Linux ~/.vandyke/SecureCRT/Config. Saved passwords (encrypted or plain text) are moved into the OS keychain and removed from the copied session files; everything else is copied unchanged.</div>
+              @if (isSecureCRT()) { Typical locations: Windows %APPDATA%\\VanDyke\\Config, macOS ~/Library/Application Support/VanDyke/SecureCRT/Config,
+              Linux ~/.vandyke/SecureCRT/Config. Saved passwords (encrypted or plain text) are moved into the OS keychain and removed from the copied session files; everything else is copied unchanged. }</div>
             }
           </div>
         } @else {
           @let r = result()!;
           <p><b>{{ r.imported?.length ?? 0 }}</b> imported, <b>{{ r.renamed?.length ?? 0 }}</b> renamed,
              <b>{{ r.skipped?.length ?? 0 }}</b> skipped, <b>{{ r.errors?.length ?? 0 }}</b> errors.</p>
+          @if (r.settings?.length) { <p><b>Settings</b></p><ul class="lst">@for (n of r.settings!; track n) { <li>{{ n }}</li> }</ul> }
           @if (r.passwordsImported) { <p><b>{{ r.passwordsImported }}</b> saved password(s) moved to the OS keychain.</p> }
           @if (r.errors?.length) { <pre class="log">{{ r.errors!.join('\\n') }}</pre> }
           @if (r.passwordErrors?.length) {
@@ -148,6 +165,12 @@ type Source = 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv
     .src-groups { display: flex; flex-direction: column; gap: 10px; }
     .src-group { display: flex; flex-direction: column; gap: 5px; label { display: flex; gap: 8px; align-items: center; cursor: pointer; } }
     .src-title { font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .setbox { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); border-radius: var(--r-lg, 6px); padding: 8px 12px; background: var(--surface, transparent);
+      label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; input { margin-top: 3px; flex: none; } }
+      .n { margin-left: 6px; color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); }
+      .hint { margin: 2px 0 0; } }
+    :host-context(.modern) .setbox { grid-column: 1 / -1; margin-top: 4px; }
+    .lst { margin: 4px 0 10px; padding-left: 18px; font-size: calc(12.5px * var(--ui-scale, 1)); }
     .log { max-height: 160px; overflow: auto; font-size: calc(11px * var(--ui-scale, 1)); background: var(--input-bg); padding: 6px; }
     :host-context(.modern) {
       .modal { width: min(640px, 95vw); }
@@ -179,9 +202,11 @@ export class ImportDialog {
     const m: Record<string, Source> = { SecureCRT: 'folder', PuTTY: 'putty', SuperPuTTY: 'putty', MobaXterm: 'moba', OpenSSH: 'ssh' };
     this.source = m[f.app] ?? this.source;
     this.path = f.path;
+    void this.checkSettings();
   }
   cardOf(v: Source): { t: string; s: string } {
     const c: Record<Source, { t: string; s: string }> = {
+      twzip: { t: 'Termwright .zip', s: 'sessions and settings' }, twdir: { t: 'Termwright folder', s: 'export folder' },
       folder: { t: 'SecureCRT', s: 'Config folder' }, zip: { t: 'SecureCRT .zip', s: 'Sessions folder archive' }, xml: { t: 'SecureCRT .xml', s: 'Export Settings file' },
       ini: { t: 'SecureCRT .ini', s: 'one session file' }, putty: { t: 'PuTTY / KiTTY', s: '.reg, folder, SuperPuTTY' }, moba: { t: 'MobaXterm', s: '.mxtsessions, .ini' },
       ssh: { t: 'OpenSSH', s: '~/.ssh/config' }, csv: { t: 'CSV', s: 'spreadsheet export' }, ansible: { t: 'Ansible', s: 'INI or YAML inventory' },
@@ -189,11 +214,19 @@ export class ImportDialog {
     };
     return c[v];
   }
-  pathLabel() { return this.source === 'folder' ? 'Config folder' : this.source === 'putty' ? 'File or folder' : 'File'; }
+  pathLabel() { return this.source === 'folder' ? 'Config folder' : this.source === 'twdir' ? 'Export folder' : this.source === 'putty' ? 'File or folder' : 'File'; }
   readonly result = signal<ImportResult | null>(null);
   readonly busy = signal(false);
   readonly error = signal('');
-  source: Source = 'folder';
+  source: Source = 'twzip';
+  /** Settings in a Termwright export, when the chosen file has them. */
+  readonly sum = signal<SettingsSummary | null>(null);
+  partLogins = true; partLibrary = true; partOptions = false;
+  async checkSettings() {
+    const p = this.path;
+    const s = p && !['netbox', 'aws'].includes(this.source) ? await this.backend.exportSettingsIn(p).catch(() => null) : null;
+    if (p === this.path) this.sum.set(s);
+  }
   path = '';
   target = '';
   conflict: 'rename' | 'overwrite' | 'skip' = 'rename';
@@ -202,6 +235,10 @@ export class ImportDialog {
   nbUrl = ''; nbToken = ''; nbFilter = ''; awsProfile = ''; awsRegion = ''; awsPublic = false;
 
   readonly groups: { title: string; items: { v: Source; label: string }[] }[] = [
+    { title: 'Termwright', items: [
+      { v: 'twzip', label: 'Termwright export (.zip) - sessions and settings' },
+      { v: 'twdir', label: 'Termwright export folder' },
+    ] },
     { title: 'SecureCRT', items: [
       { v: 'folder', label: 'SecureCRT configuration folder (Config or Config/Sessions)' },
       { v: 'zip', label: 'SecureCRT Sessions folder as a .zip archive' },
@@ -223,6 +260,7 @@ export class ImportDialog {
 
   pick(v: Source) {
     this.path = v === 'netbox' || v === 'aws' ? v : '';
+    this.sum.set(null);
     if (v === 'ssh') void this.sshDefault();
   }
 
@@ -233,6 +271,7 @@ export class ImportDialog {
 
   async browse() {
     const filters: Record<Source, { displayName: string; pattern: string }[]> = {
+      twzip: [{ displayName: 'Termwright export (*.zip)', pattern: '*.zip' }], twdir: [],
       folder: [], zip: [{ displayName: 'Zip archive (*.zip)', pattern: '*.zip' }], xml: [{ displayName: 'SecureCRT XML export (*.xml)', pattern: '*.xml' }],
       ini: [{ displayName: 'Session file (*.ini)', pattern: '*.ini' }], ssh: [],
       putty: [{ displayName: 'PuTTY / KiTTY registry export or SuperPuTTY Sessions.xml', pattern: '*.reg;*.xml' }],
@@ -245,10 +284,10 @@ export class ImportDialog {
       this.cdr.markForCheck();
       return;
     }
-    const p = this.source === 'folder'
-      ? await this.backend.chooseDirectory('Select SecureCRT Config Folder').catch(() => '')
+    const p = this.source === 'folder' || this.source === 'twdir'
+      ? await this.backend.chooseDirectory(this.source === 'twdir' ? 'Select Export Folder' : 'Select SecureCRT Config Folder').catch(() => '')
       : await this.backend.chooseOpenFile('Select File', filters[this.source]).catch(() => '');
-    if (p) this.path = p;
+    if (p) { this.path = p; await this.checkSettings(); }
     this.cdr.markForCheck();
   }
 
@@ -257,12 +296,14 @@ export class ImportDialog {
     this.busy.set(true);
     this.error.set('');
     try {
-      const opt = { targetFolder: this.target, conflict: this.conflict, includeDefault: false, configPassphrase: this.isSecureCRT() ? this.configPass : '' };
+      const settings = this.sum() ? [this.partLogins && 'logins', this.partLibrary && 'library', this.partOptions && 'options'].filter((x): x is string => !!x) : [];
+      const opt = { targetFolder: this.target, conflict: this.conflict, includeDefault: false, configPassphrase: this.isSecureCRT() ? this.configPass : '', settings };
       const r = this.source === 'netbox' ? await this.backend.importNetBox(this.nbUrl, this.nbToken, this.nbFilter, opt)
         : this.source === 'aws' ? await this.backend.importAWS(this.awsProfile, this.awsRegion, this.awsPublic, opt)
         : await this.backend.importSessions(this.path, opt);
       this.result.set(r);
       await this.ui.refreshTree();
+      if (settings.length) await this.ui.loadSettings();
     } catch (e) { this.error.set(errText(e)); }
     this.busy.set(false);
   }
@@ -311,6 +352,11 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
             <div class="cards">
               @for (f of own; track f.v) { <button type="button" class="sc" [class.on]="format === f.v" (click)="format = f.v; dest = ''"><b>{{ f.t }}</b><span>{{ f.s }}</span></button> }
             </div>
+            @if (own.some(o => o.v === format)) {
+              <label class="withset" [class.disabled]="format === 'xml'"><input type="checkbox" name="ws" [(ngModel)]="withSettings" [disabled]="format === 'xml'" />
+                <span><b>Include settings</b> - device types, accounts (without passwords), Folder Defaults, command library, checklists, jobs and Global Options.
+                  @if (format === 'xml') { XML holds sessions only; choose Zip or Folder to take the settings along. }</span></label>
+            }
             <div class="sec">Other programs - name, folder, address, login, key, jump host</div>
             <div class="chipset">
               @for (f of others; track f.v) { <button type="button" [class.on]="format === f.v" (click)="format = f.v; dest = ''" [title]="f.label">{{ chipOf(f.v) }}</button> }
@@ -333,6 +379,10 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
             <label><input type="radio" name="fmt" value="dir" [(ngModel)]="format" (ngModelChange)="dest = ''" /> Folder (Sessions/*.ini; also works as a SecureCRT Config/Sessions folder)</label>
             <label><input type="radio" name="fmt" value="zip" [(ngModel)]="format" (ngModelChange)="dest = ''" /> Zip archive</label>
             <label><input type="radio" name="fmt" value="xml" [(ngModel)]="format" (ngModelChange)="dest = ''" /> XML (also for SecureCRT's Import Settings)</label>
+            @if (own.some(o => o.v === format)) {
+              <label [class.disabled]="format === 'xml'"><input type="checkbox" name="ws1" [(ngModel)]="withSettings" [disabled]="format === 'xml'" />
+                Include settings (device types, accounts, Folder Defaults, command library, Global Options){{ format === 'xml' ? ' - Zip or Folder only' : '' }}</label>
+            }
             <div class="grp">Other programs (name, folder, address, login, key, jump host, forwards, serial settings)</div>
             @for (f of others; track f.v) {
               <label><input type="radio" name="fmt" [value]="f.v" [(ngModel)]="format" (ngModelChange)="dest = ''" /> {{ f.label }}</label>
@@ -364,8 +414,11 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
     .grp:first-child { margin-top: 0; }
     .lst { margin: 4px 0 10px; padding-left: 18px; font-size: calc(12.5px * var(--ui-scale, 1)); max-height: 180px; overflow: auto; }
     .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); }
+    .disabled { opacity: .6; }
     :host-context(.modern) {
       .exp { width: min(640px, 95vw); }
+      .withset { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; cursor: pointer; font-size: calc(12.5px * var(--ui-scale, 1)); color: var(--muted);
+        input { margin-top: 2px; } b { color: var(--text, inherit); font-weight: 600; } }
       .lbl { font-size: calc(12px * var(--ui-scale, 1)); font-weight: 500; color: var(--muted); margin-bottom: 5px; }
       .scope { max-width: 100%; button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
       .sec { font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin: 14px 0 6px; }
@@ -397,6 +450,8 @@ export class ExportDialog {
   scope: 'all' | 'sel' = this.selected ? 'sel' : 'all';
   format: ExportFormat = 'zip';
   dest = '';
+  /** Zip and folder exports also carry the settings (on by default). */
+  withSettings = true;
 
   hint() { return OTHER_FORMATS.find(f => f.v === this.format)?.hint ?? ''; }
 
@@ -419,8 +474,9 @@ export class ExportDialog {
       if (OTHER_FORMATS.some(f => f.v === this.format)) {
         this.report.set(await this.backend.exportSessionsFor(paths, this.dest, this.format));
       } else {
-        const n = await this.backend.exportSessions(paths, this.dest, this.format);
-        this.ui.toast(`Exported ${n} session(s) to ${this.dest}`, 'success');
+        const set = this.withSettings && this.format !== 'xml';
+        const n = await this.backend.exportSessions(paths, this.dest, this.format, set);
+        this.ui.toast(`Exported ${n} session(s)${set ? ' and the settings' : ''} to ${this.dest}`, 'success');
         this.ui.close();
       }
     } catch (e) { this.error.set(errText(e)); }
