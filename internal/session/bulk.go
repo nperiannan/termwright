@@ -52,6 +52,12 @@ func normProto(p string) string {
 		return ProtoSerial
 	case "raw", "tcp":
 		return ProtoRaw
+	case "rdp":
+		return ProtoRDP
+	case "vnc":
+		return ProtoVNC
+	case "wol", "wake-on-lan", "wakeonlan":
+		return ProtoWOL
 	}
 	return ProtoSSH2
 }
@@ -102,7 +108,8 @@ func ParseCSV(data []byte) ([]Session, error) {
 		}
 	}
 	if _, ok := col["host"]; !ok {
-		if _, ok := col["com_port"]; !ok {
+		_, hasMAC := col["mac"]
+		if _, ok := col["com_port"]; !ok && !hasMAC {
 			return nil, errors.New("csv: no host column (expected one of host, hostname, ip, address)")
 		}
 	}
@@ -115,7 +122,8 @@ func ParseCSV(data []byte) ([]Session, error) {
 	var out []Session
 	for _, row := range rows[1:] {
 		host, com := get(row, "host"), get(row, "com_port")
-		if host == "" && com == "" {
+		wol := normProto(get(row, "protocol")) == ProtoWOL
+		if host == "" && com == "" && !(wol && get(row, "mac") != "") {
 			continue
 		}
 		n := newBulk(get(row, "name"), host)
@@ -146,6 +154,14 @@ func ParseCSV(data []byte) ([]Session, error) {
 			n.Environment = e
 		}
 		n.JumpSession = get(row, "jump_host")
+		n.Account = get(row, "account")
+		n.FilesPanel = strings.EqualFold(get(row, "files_panel"), "yes") || get(row, "files_panel") == "1" || strings.EqualFold(get(row, "files_panel"), "true")
+		if wol {
+			n.WOLNetwork, n.Port = get(row, "network"), 0
+			if n.Name == "" {
+				n.Name = n.MAC
+			}
+		}
 		if n.Protocol == ProtoSerial {
 			n.ComPort, n.Hostname, n.Port = com, "", 0
 			if n.Name == "" {

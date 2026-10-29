@@ -668,20 +668,20 @@ func exportCSV(list []Session, rep *ExportReport, notes *exportNotes) ([]byte, e
 	buf.WriteString("\xef\xbb\xbf") // BOM: spreadsheets open it as UTF-8
 	w := csv.NewWriter(&buf)
 	_ = w.Write([]string{"name", "folder", "protocol", "host", "port", "username", "device_type", "environment", "jump_host",
-		"identity_file", "com_port", "baud", "mac", "description"})
+		"identity_file", "com_port", "baud", "mac", "description", "account", "network", "files_panel"})
 	for _, s := range list {
 		host, port, com, baud := s.Hostname, strconv.Itoa(portOr(s)), "", ""
 		if s.Protocol == ProtoSerial {
 			host, port, com, baud = "", "", s.ComPort, strconv.Itoa(s.BaudRate)
 		}
-		if s.Protocol == ProtoLocal || s.Protocol == ProtoConsole {
+		if s.Protocol == ProtoLocal || s.Protocol == ProtoConsole || s.Protocol == ProtoWOL {
 			port = ""
 		}
 		if s.Protocol == ProtoConsole {
 			host = fmt.Sprintf("%s port %d", s.ConsoleServer, s.ConsolePort)
 		}
 		_ = w.Write([]string{s.Name, s.Folder, s.Protocol, host, port, s.Username, s.DeviceType, s.Environment, s.JumpSession,
-			s.IdentityFile, com, baud, s.MAC, strings.Join(s.Description, " ")})
+			s.IdentityFile, com, baud, s.MAC, strings.Join(s.Description, " "), s.Account, s.WOLNetwork, map[bool]string{true: "yes"}[s.FilesPanel]})
 		rep.Count++
 	}
 	w.Flush()

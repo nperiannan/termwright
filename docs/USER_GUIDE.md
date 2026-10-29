@@ -1055,7 +1055,9 @@ Details: [SESSION_FILES.md](SESSION_FILES.md).
 
 ### Moving sessions to another Termwright
 
-**File → Export Sessions…** → *folder*, *zip* or *XML* keeps **everything**: device type, MAC address, environment, jump host, port forwards, logon actions, triggers, recording, smart card, timestamps and auto-scroll settings. Import the file on the other computer (File → Import Sessions → SecureCRT folder, zip or XML). The **CSV** keeps the basics plus device type, environment, jump host and MAC address. Passwords are not in any export: move them with the password vault export (Passwords & Accounts), which is encrypted.
+**File → Export Sessions…** → *folder*, *zip* or *XML* keeps **everything** in the sessions: device type, **account**, MAC address, environment, jump host, port forwards, logon actions, triggers, recording, smart card, timestamps and auto-scroll, the **Files panel** switch, *SFTP opens on*, the **Wake-on-LAN** options and **Wake-on-LAN sessions**. Import the file on the other computer (File → Import Sessions → folder, zip or XML). The **CSV** keeps the basics plus device type, environment, jump host, MAC address, account, Files panel and the network of Wake-on-LAN sessions; RDP, VNC and Wake-on-LAN sessions keep their protocol.
+
+Passwords are never in a session export. **Passwords & Accounts → Export / Import** (the password vault, encrypted with a passphrase) moves the saved passwords **and the accounts** (name, username, note, password) - import it too, so sessions that log in with an account find it. Settings that are not part of any session - Folder Defaults (including a folder's account), device types, Global Options - stay in `settings.json` in the data folder ([Files and folders](#16-files-and-folders-termwright-uses)); copy that file to move them as well.
 
 ### Exporting to other programs
 

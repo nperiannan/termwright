@@ -251,3 +251,93 @@ func TestNativeExportRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// Everything added in 0.21 (accounts, Files panel, SFTP opens on, Wake-on-LAN
+// options and Wake-on-LAN sessions) survives Termwright's own export formats.
+func TestNativeExportKeeps021Fields(t *testing.T) {
+	st := exportFixture(t)
+	c, _ := st.Get("Datacenter/Core/core-sw1")
+	c.Account, c.FilesPanel, c.WOLBroadcast, c.WOLPort, c.WOLFrom = "lab-admin", true, "10.10.0.255", 7, "local"
+	if _, err := st.Save(c, "Datacenter/Core/core-sw1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Save(Session{Name: "office-pc", Folder: "Office", Protocol: ProtoWOL, MAC: "3c:7c:3f:1a:22:90",
+		WOLNetwork: "192.168.50.0/24", WOLScans: 6, WOLScanSecs: 20, WOLPingSecs: -1}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Save(Session{Name: "dl2", Protocol: ProtoSSH2, Hostname: "gw", UseRemoteCommand: true, RemoteCommand: "ssh -t dl2", SFTPOn: "jump", Account: "-"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []string{"xml", "zip", "folder"} {
+		dest := filepath.Join(t.TempDir(), "out")
+		if format != "folder" {
+			dest += "." + format
+		}
+		if _, err := st.Export(nil, dest, format); err != nil {
+			t.Fatal(format, err)
+		}
+		other, _ := NewStore(t.TempDir())
+		if _, err := other.Import(dest, ImportOptions{}); err != nil {
+			t.Fatal(format, err)
+		}
+		got, _ := other.Get("Datacenter/Core/core-sw1")
+		if got.Account != "lab-admin" || !got.FilesPanel || got.WOLBroadcast != "10.10.0.255" || got.WOLPort != 7 || got.WOLFrom != "local" {
+			t.Errorf("%s core-sw1: %+v", format, got)
+		}
+		w, err := other.Get("Office/office-pc")
+		if err != nil || w.Protocol != ProtoWOL || w.MAC != "3c:7c:3f:1a:22:90" || w.WOLNetwork != "192.168.50.0/24" || w.WOLScans != 6 || w.WOLScanSecs != 20 || w.WOLPingSecs != -1 {
+			t.Errorf("%s office-pc: %+v %v", format, w, err)
+		}
+		d, _ := other.Get("dl2")
+		if d.SFTPOn != "jump" || d.Account != "-" {
+			t.Errorf("%s dl2: sftpOn %q account %q", format, d.SFTPOn, d.Account)
+		}
+	}
+}
+
+func TestCSVKeeps021Fields(t *testing.T) {
+	st := exportFixture(t)
+	c, _ := st.Get("Datacenter/Core/core-sw1")
+	c.Account, c.FilesPanel = "lab-admin", true
+	_, _ = st.Save(c, "Datacenter/Core/core-sw1")
+	_, _ = st.Save(Session{Name: "office-pc", Folder: "Office", Protocol: ProtoWOL, MAC: "3c:7c:3f:1a:22:90", WOLNetwork: "192.168.50.0/24"}, "")
+	_, _ = st.Save(Session{Name: "dc01", Protocol: ProtoRDP, Hostname: "10.30.0.10", Port: 3389}, "")
+	dest := filepath.Join(t.TempDir(), "s.csv")
+	if _, err := st.ExportOther(nil, dest, "csv", nil); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(dest)
+	list, err := ParseCSV(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]Session{}
+	for _, s := range list {
+		by[s.Name] = s
+	}
+	if s := by["core-sw1"]; s.Account != "lab-admin" || !s.FilesPanel {
+		t.Errorf("core-sw1: %+v", s)
+	}
+	if s := by["office-pc"]; s.Protocol != ProtoWOL || s.MAC != "3c:7c:3f:1a:22:90" || s.WOLNetwork != "192.168.50.0/24" {
+		t.Errorf("office-pc: %+v", s)
+	}
+	if s := by["dc01"]; s.Protocol != ProtoRDP {
+		t.Errorf("dc01 protocol %q", s.Protocol)
+	}
+}
+
+func TestOtherFormatsSkipWOL(t *testing.T) {
+	st, _ := NewStore(t.TempDir())
+	_, _ = st.Save(Session{Name: "office-pc", Protocol: ProtoWOL, MAC: "3c:7c:3f:1a:22:90", WOLNetwork: "192.168.50.0/24"}, "")
+	_, _ = st.Save(Session{Name: "sw", Protocol: ProtoSSH2, Hostname: "10.0.0.1", Port: 22, Account: "lab"}, "")
+	for _, f := range []string{"putty-reg", "kitty-reg", "putty-dir", "moba", "tabby", "ssh-config"} {
+		dest := filepath.Join(t.TempDir(), "out")
+		rep, err := st.ExportOther(nil, dest, f, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		if rep.Count != 1 || len(rep.Skipped) != 1 || !strings.Contains(rep.Skipped[0], "office-pc") {
+			t.Errorf("%s: count %d skipped %v", f, rep.Count, rep.Skipped)
+		}
+	}
+}

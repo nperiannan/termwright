@@ -5,6 +5,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 ## Unreleased
 
 * **Accounts** ([#1](https://github.com/nperiannan/termwright/issues/1)): Passwords & Credentials is now **Passwords & Accounts**. An account (username and password, from the keychain or a password manager) can be chosen in Session Options and the side panel (**Account**: *Default* - the folder's account, else the device type's - an account, or *Own username and password*), in Folder Defaults, in device types and in Edit Sessions. A card says who will log in. Changing an account's password updates every session that uses it; a refused login offers **Update the Account Password**; *Convert Sessions…* turns sessions that share a username and saved password into one account. Renaming an account renames it everywhere. Exports to other programs take the account's username (never its password).
+* **Import / export**: Termwright's own folder, zip and XML exports keep accounts, the Files panel, *SFTP opens on*, the Wake-on-LAN options and Wake-on-LAN sessions (tested); the CSV gains *account*, *network* and *files_panel* columns and reads back RDP, VNC and Wake-on-LAN sessions with their protocol (they came back as SSH before); exports to PuTTY, KiTTY, MobaXterm, Tabby and OpenSSH leave Wake-on-LAN sessions out and list them in the summary. The password vault carries the accounts with their notes.
 
 ## 0.21.0 (2026-10-29)
 
