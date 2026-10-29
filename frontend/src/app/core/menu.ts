@@ -48,7 +48,7 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Receive File with XMODEM...', action: 'xmodem-receive' },
       { label: 'Send Files with YMODEM...', action: 'ymodem-send' }, { label: 'Receive Files with YMODEM', action: 'ymodem-receive' },
       { label: 'Send Text File...', action: 'send-file' }, { sep: true },
-      { label: 'Open Web Page Through This Session...', action: 'web-page' }, { sep: true },
+      { label: 'Open Web Page Through This Session...', action: 'web-page' }, { label: 'Wake Up (Wake-on-LAN)', action: 'wake' }, { sep: true },
       { label: 'SCP Upload File...', action: 'scp-upload' }, { label: 'SCP Upload Folder...', action: 'scp-upload-folder' },
       { label: 'SCP Download...', action: 'scp-download' },
     ] },

@@ -59,6 +59,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - it follows the terminal's folder;
   - opening a folder in the panel `cd`s the terminal there;
   - a double-clicked file opens in its usual program on your computer, and saved changes are offered for upload.
+- **Wake-on-LAN.** Wake a device by its saved MAC address, from this computer or from its jump host when it sits behind one, and connect as soon as it answers.
 - **Web pages through a session.** Open a device's web interface (firewall, IPMI, NAS, switch) behind a jump host, or any page as seen from an SSH server. A separate browser window with a temporary profile sends all its traffic and name lookups through the SSH connection, and the profile is deleted when the window closes.
 - **SFTP.**
   - Clickable paths and a bookmark bar.
@@ -96,7 +97,7 @@ Earlier releases are described in the [changelog](CHANGELOG.md).
 | Key management | Generate Ed25519, RSA 4096 or ECDSA keys. Install them on Linux, macOS, BSD and Windows OpenSSH servers, test the key-only login, then switch the session to it. |
 | Device types | Per-platform login profiles: login steps for Telnet and serial, after-login steps for every protocol (for example `enable`, paging off), and credentials inherited or overridden per session. |
 | Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and Linux. |
-| Session management | Folders with defaults; favourites and recents; environments, with confirmation before multi-tab sends to production; reachability checks; bulk edit; workspaces; Quick Open; drag and drop. |
+| Session management | Wake-on-LAN (also through a jump host); folders with defaults; favourites and recents; environments, with confirmation before multi-tab sends to production; reachability checks; bulk edit; workspaces; Quick Open; drag and drop. |
 | Discovery | Scans a network or range (up to /22): open ports, SSH and Telnet banners, web servers and certificates, SIP, SNMP v2c, DNS, MAC vendor. Each result shows its evidence; selected devices are added as sessions. Discovery never logs in. |
 | Import and export | Sessions are plain-text `.ini` files, and unknown keys are preserved byte for byte. Import from SecureCRT (Config folder, zip, XML), PuTTY / KiTTY, SuperPuTTY, MobaXterm, OpenSSH config, CSV, Ansible, NetBox and AWS EC2. Export to the same formats plus Tabby. |
 | Terminal | Tabs and tiled layouts; xterm-256color and true colour; Unicode; scrollback search; keyword highlighting; timestamps; auto-scroll control; clickable links; session lock; zoom; per-session fonts and colour schemes. |

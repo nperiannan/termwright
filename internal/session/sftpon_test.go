@@ -31,3 +31,16 @@ func TestSFTPOnRoundTrip(t *testing.T) {
 		t.Fatalf("old flag: got %q", got.SFTPOn)
 	}
 }
+
+func TestWOLRoundTrip(t *testing.T) {
+	st, _ := NewStore(t.TempDir())
+	s := Session{Name: "pc", Protocol: ProtoSSH2, Hostname: "10.0.0.5", MAC: "00:11:22:33:44:55", WOLBroadcast: "10.0.0.255", WOLPort: 7, WOLFrom: "local"}
+	saved, err := st.Save(s, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := st.Get(saved.Path)
+	if got.WOLBroadcast != "10.0.0.255" || got.WOLPort != 7 || got.WOLFrom != "local" {
+		t.Fatalf("%+v", got)
+	}
+}

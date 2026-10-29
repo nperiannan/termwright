@@ -98,6 +98,9 @@ const (
 	kSFTPTarget   = "Termwright SFTP To Command Target"
 	kFilesPanel   = "Termwright Files Panel"
 	kSFTPOn       = "Termwright SFTP On"
+	kWOLBcast     = "Termwright WOL Broadcast"
+	kWOLPort      = "Termwright WOL Port"
+	kWOLFrom      = "Termwright WOL From"
 	kKrbPrinc     = "Termwright Kerberos Principal"
 	kKrbSPN       = "Termwright Kerberos SPN"
 	kCertFile     = "Termwright Certificate File"
@@ -221,13 +224,16 @@ type Session struct {
 	SmartCard         string `json:"smartCard"`         // "" = no, "any" = any key on a smart card, else the key's SHA256 fingerprint
 	SFTPToTarget      bool   `json:"sftpToTarget"`      // remote command "ssh … host": SFTP opens on that host, through this connection
 	SFTPOn            string `json:"sftpOn"`            // remote command "ssh … host": where SFTP opens - "" where the terminal is, "jump" or "target"
-	FilesPanel        bool   `json:"filesPanel"`        // SSH2: a file browser beside the terminal that follows its folder
-	SerialDTR         bool   `json:"serialDtr"`         // assert DTR when opening the port
-	SerialRTS         bool   `json:"serialRts"`         // assert RTS when opening the port
-	SerialFlow        string `json:"serialFlow"`        // "" none | rtscts | xonxoff
-	SerialAutoBaud    bool   `json:"serialAutoBaud"`    // detect the speed when connecting
-	Timestamps        bool   `json:"timestamps"`        // local time at the start of each line (display only)
-	NoAutoScroll      bool   `json:"noAutoScroll"`      // keep the view still while output arrives
+	FilesPanel        bool   `json:"filesPanel"`
+	WOLBroadcast      string `json:"wolBroadcast"`   // Wake-on-LAN: "" = every network (or 255.255.255.255 from a server), else e.g. 192.168.20.255
+	WOLPort           int    `json:"wolPort"`        // Wake-on-LAN UDP port, 0 = 9
+	WOLFrom           string `json:"wolFrom"`        // "" = from the jump host / jump station when there is one, "local" = from this computer        // SSH2: a file browser beside the terminal that follows its folder
+	SerialDTR         bool   `json:"serialDtr"`      // assert DTR when opening the port
+	SerialRTS         bool   `json:"serialRts"`      // assert RTS when opening the port
+	SerialFlow        string `json:"serialFlow"`     // "" none | rtscts | xonxoff
+	SerialAutoBaud    bool   `json:"serialAutoBaud"` // detect the speed when connecting
+	Timestamps        bool   `json:"timestamps"`     // local time at the start of each line (display only)
+	NoAutoScroll      bool   `json:"noAutoScroll"`   // keep the view still while output arrives
 }
 
 // Defaults returns a new session with sensible default values.
@@ -334,6 +340,9 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.SFTPToTarget = f.Bool(kSFTPTarget, false)
 	s.FilesPanel = f.Bool(kFilesPanel, false)
 	s.SFTPOn = f.Str(kSFTPOn, "")
+	s.WOLBroadcast = f.Str(kWOLBcast, "")
+	s.WOLPort = int(f.DWord(kWOLPort, 0))
+	s.WOLFrom = f.Str(kWOLFrom, "")
 	if s.SFTPOn == "" && s.SFTPToTarget {
 		s.SFTPOn = "target"
 	}
@@ -669,6 +678,13 @@ func (s Session) Apply(f *sessionfile.File) {
 	setOptStr(f, kCertFile, s.CertificateFile)
 	setOptStr(f, kSmartCard, s.SmartCard)
 	setOptStr(f, kMAC, s.MAC)
+	setOptStr(f, kWOLBcast, s.WOLBroadcast)
+	setOptStr(f, kWOLFrom, s.WOLFrom)
+	if s.WOLPort > 0 && s.WOLPort != 9 {
+		f.SetDWord(kWOLPort, uint32(s.WOLPort))
+	} else {
+		f.Delete(kWOLPort)
+	}
 	setOptBool(f, kSerialNoDTR, !s.SerialDTR)
 	setOptBool(f, kSerialNoRTS, !s.SerialRTS)
 	setOptStr(f, kSerialFlow, s.SerialFlow)

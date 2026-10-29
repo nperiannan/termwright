@@ -3,7 +3,7 @@ import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
 import type { SerializeAddon } from '@xterm/addon-serialize';
-import { Backend, SftpMode } from './backend';
+import { Backend, SftpMode, errText } from './backend';
 import { AlertEvent, DeviceFacts, RemoteInfo, Session, TabInfo, Transfer, isRemoteDesktop, unescape } from './models';
 import { Ui } from './ui.service';
 import { envOf } from './env';
@@ -199,6 +199,45 @@ export class Tabs {
   private async autoCwd(sftp: TabView) {
     const sh = this.shellOf(sftp);
     if (sh) await this.detectCwd(sh, sftp.id);
+  }
+
+  /**
+   * Wake-on-LAN: sends the magic packet (from this computer, or from the jump
+   * host / jump station so it reaches the device's network) and watches the
+   * session's port; when the device answers, then: reconnect tab tabId,
+   * connect the session, or just say so.
+   */
+  /** Wake-on-LAN to several sessions (those with a MAC address), without waiting. */
+  async wakeMany(paths: string[]) {
+    let sent = 0, none = 0;
+    const errs: string[] = [];
+    for (const p of paths) {
+      const s = await this.backend.getSession(p).catch(() => null);
+      if (!s) continue;
+      if (!s.mac) { none++; continue; }
+      try { await this.backend.wakeSession('', s, false); sent++; } catch (e) { errs.push(s.name + ': ' + errText(e)); }
+    }
+    this.ui.toast(`Wake-on-LAN sent to ${sent} session${sent === 1 ? '' : 's'}` + (none ? ` (${none} without a MAC address skipped)` : '') +
+      (errs.length ? '. Failed: ' + errs.join('; ') : '.'), errs.length ? 'error' : 'success', errs.length ? 15000 : 6000);
+  }
+
+  async wake(s: Session, tabId = '', then: 'reconnect' | 'connect' | 'none' = 'none') {
+    if (!s.mac) { this.ui.toast(`No MAC address saved for ${s.name} - add it in Session Options → Connection.`, 'error', 8000); return; }
+    this.ui.toast(`Waking ${s.name} (${s.mac}) - waiting up to 3 minutes for it to answer…`, 'info', 8000);
+    try {
+      const r = await this.backend.wakeSession(tabId, s, true);
+      const from = r.via ? ` from ${r.via}` : '';
+      if (!r.target) { this.ui.toast(`Wake-on-LAN sent to ${s.name}${from}.`, 'success'); return; }
+      if (r.awake) {
+        if (then === 'reconnect' && tabId && this.get(tabId)) { this.ui.toast(`${s.name} is awake (after ${r.waited} s) - reconnecting.`, 'success'); void this.reconnect(tabId); }
+        else if (then === 'connect' && s.path) { this.ui.toast(`${s.name} is awake (after ${r.waited} s) - connecting.`, 'success'); void this.openSession(s.path); }
+        else this.ui.toast(`${s.name} is awake (answered on ${r.target} after ${r.waited} s).`, 'success', 8000,
+          s.path ? [{ label: 'Connect', run: () => void this.openSession(s.path) }] : undefined);
+      } else {
+        this.ui.toast(`Wake-on-LAN was sent to ${s.name}${from} (${r.sent.join(', ')}), but ${r.target} has not answered in ${Math.round(r.waited / 60)} minutes. ` +
+          'Check that Wake-on-LAN is on in its BIOS/UEFI and network card, the MAC address is the wired port\'s, and - on another subnet - set its broadcast address in Session Options.', 'error', 15000);
+      }
+    } catch (e) { this.ui.error(e); }
   }
 
   /** The terminal's cursor sits after a shell prompt ($ # % >), nothing typed after it. */

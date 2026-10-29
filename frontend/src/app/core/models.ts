@@ -8,7 +8,7 @@ export interface Session {
   emulation: string; termType: string; description: string[];
   rows: number; cols: number; scrollback: number; keepalive: boolean; keepaliveSec: number;
   comPort: string; baudRate: number; dataBits: number; stopBits: number; parity: number;
-  logFile: string; logOnConnect: boolean; logAppend: boolean; logEachLine: string; logRaw: boolean; recordSession?: boolean; smartCard?: string; mac?: string;
+  logFile: string; logOnConnect: boolean; logAppend: boolean; logEachLine: string; logRaw: boolean; recordSession?: boolean; smartCard?: string; mac?: string; wolBroadcast?: string; wolPort?: number; wolFrom?: '' | 'local';
   savePassword: boolean; localCommand: string; localDir: string; colorScheme: string;
   logonActions: LogonAction[];
   triggers: Trigger[]; portForwards: PortForward[];
@@ -222,7 +222,7 @@ export const ACTIONS: Record<string, string> = {
   copy: 'Copy', paste: 'Paste', 'copy-paste': 'Copy and Paste', find: 'Find', 'clear-scrollback': 'Clear Scrollback',
   'clear-screen': 'Clear Screen', 'toggle-autoscroll': 'Auto Scroll On / Off', 'toggle-timestamps': 'Timestamps On / Off', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback', 'save-scrollback-html': 'Save Scrollback As HTML',
   'toggle-session-manager': 'Toggle Session Manager', 'toggle-session-manager-side': 'Move Session Manager Left / Right', 'toggle-command-window': 'Toggle Command Window',
-  'toggle-button-bar': 'Toggle Button Bar', 'files-panel': 'Files Panel Beside the Terminal', 'web-page': 'Open Web Page Through This Session', 'sftp-tab': 'Open SFTP Tab', 'run-script': 'Run Script...',
+  'toggle-button-bar': 'Toggle Button Bar', 'files-panel': 'Files Panel Beside the Terminal', 'web-page': 'Open Web Page Through This Session', wake: 'Wake Up (Wake-on-LAN)', 'sftp-tab': 'Open SFTP Tab', 'run-script': 'Run Script...',
   'record-toggle': 'Start/Stop Script Recording', 'cast-toggle': 'Start/Stop Session Recording', 'cast-marker': 'Add Marker to Recording', recordings: 'Recordings...', 'cancel-scripts': 'Cancel Scripts', lock: 'Lock Session',
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',

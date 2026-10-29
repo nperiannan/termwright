@@ -15,7 +15,7 @@ Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial
 1. [Install](#1-install)
 2. [The main window](#2-the-main-window)
 3. [Connecting](#3-connecting) - device types, first SSH connection, [SSH keys: generate, install and store](#ssh-keys-generate-install-and-store)
-4. [Sessions and the Session Manager](#4-sessions-and-the-session-manager)
+4. [Sessions and the Session Manager](#4-sessions-and-the-session-manager) - [device facts](#device-facts), [Wake-on-LAN](#wake-on-lan)
 5. [Session Options reference](#5-session-options-reference)
 6. [Working in the terminal](#6-working-in-the-terminal)
 7. [Command Window, Button Bar and Connect Bar](#7-command-window-button-bar-and-connect-bar)
@@ -389,6 +389,20 @@ Scanning connects to many addresses and can be noticed by security monitoring: s
 **Workspaces** (File → Workspaces…, File → Save Workspace…): a named set of sessions with their layout (tabs, side by side, stacked, grid). *Open* reconnects them all; *Rename* and ✕ manage the list.
 
 ![Workspaces](screenshots/workspaces.png)
+
+### Wake-on-LAN
+
+Termwright can wake a sleeping or powered-off computer, server or lab device by sending a Wake-on-LAN *magic packet* to its MAC address.
+
+- **The MAC address** is saved with the session: Discover Devices and device facts fill it in, or type it in Session Options → Connection → *MAC address* (`00:11:22:33:44:55`, `00-11-…`, `0011.2233.4455` or `001122334455`). Use the MAC address of the wired port that is set to wake.
+- **Wake up**: right-click the session → **Wake Up (Wake-on-LAN)**, or **Wake Up and Connect** to connect as soon as it answers. Also on the tab menu, Transfer → Wake Up, and - when a connection times out - the error card's **Wake Up** button, which reconnects the tab when the device answers. Right-click a folder → *Wake Up All in Folder*, or a selection → *Wake Up N Sessions*, sends to every session with a MAC address.
+- **Where the packet is sent from**: Wake-on-LAN packets are broadcasts that do not cross routers, so they must start on the device's network. A device behind a **jump host** - or the target of a jump station's `ssh … host` command - is woken **from that server** (Termwright logs in and sends the packet with `python3`, or the `wakeonlan` tool if it is installed). Other devices are woken from this computer, on every network it is connected to.
+- **Options** (Session Options → Connection, below the MAC address): the **broadcast address** (empty = `255.255.255.255` and every network of this computer; for a device on another subnet enter that subnet's broadcast address, e.g. `192.168.20.255` - the router must forward directed broadcasts), the **UDP port** (9 by default, sometimes 7), **from the jump host / from this computer**, and **Wake Now** to try the settings before saving.
+- **Did it wake?** After sending, Termwright watches the session's port (through the jump host when there is one) for up to three minutes and tells you when the device answers - with a *Connect* button - or that it did not, with what to check: Wake-on-LAN enabled in the BIOS/UEFI and the network card's settings, the right MAC address, and the broadcast address for other subnets.
+
+| Session menu | Settings | It answered |
+|---|---|---|
+| ![Wake Up menu](screenshots/wol-menu.png) | ![Wake-on-LAN settings](screenshots/wol-options.png) | ![Device awake](screenshots/wol-awake.png) |
 
 ### Devices that get a new address (DHCP)
 

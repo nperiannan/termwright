@@ -156,6 +156,10 @@ export class Backend {
   sftpRemove(id: string, p: string) { return this.call<void>('SFTPRemove', id, p); }
   sftpClose(id: string) { return this.call<void>('SFTPClose', id); }
   /** Browsers a web page can be opened in through a session (Chrome, Edge, Chromium, Brave, Firefox). */
+  /** Wake-on-LAN to the session's MAC address; with wait, watches its port for up to 3 minutes. */
+  wakeSession(tabId: string, s: Session, wait: boolean) {
+    return this.call<{ sent: string[]; via: string; target: string; awake: boolean; waited: number }>('WakeSession', tabId, s, wait);
+  }
   webBrowsers() { return this.call<{ id: string; name: string }[] | null>('WebBrowsers'); }
   openWebPage(tabId: string, s: Session, through: 'session' | 'device', url: string, browser: string) {
     return this.call<{ browser: string; via: string }>('OpenWebPage', tabId, s, through, url, browser);

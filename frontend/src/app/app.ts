@@ -391,6 +391,12 @@ export class App implements OnInit {
         setTimeout(() => this.cmdWin()?.focus(), 50);
         break;
       case 'toggle-button-bar': this.ui.patchSettings({ showButtonBar: !s?.showButtonBar }); break;
+      case 'wake': {
+        const t = this.tabs.active();
+        if (t?.session?.mac) void this.tabs.wake(t.session, t.id, t.state === 'connected' ? 'none' : 'reconnect');
+        else this.ui.toast('Right-click a session with a MAC address → Wake Up, or add the MAC address in Session Options → Connection.', 'info', 7000);
+        break;
+      }
       case 'web-page': {
         const t = this.tabs.active();
         if (t?.kind === 'terminal' && t.session.protocol === 'SSH2') this.ui.openWeb(t.session, t.id, 'session');
@@ -551,6 +557,7 @@ export class App implements OnInit {
       ] : []),
       ...(t.kind === 'terminal' && t.session.hostname && (t.session.protocol === 'Telnet' || t.session.protocol === 'SSH2' || t.session.protocol === 'Raw')
         ? [{ label: 'Open Web Interface...', action: () => this.ui.openWeb(t.session, t.id, 'device') }] : []),
+      ...(t.kind === 'terminal' && t.session.mac ? [{ label: 'Wake Up (Wake-on-LAN)', action: () => void this.tabs.wake(t.session, t.id, t.state === 'connected' ? 'none' : 'reconnect') }] : []),
       { separator: true },
       { label: t.logFile ? 'Stop Logging' : 'Log Session...', action: () => this.tabs.toggleLog(t.id) },
       ...(t.kind === 'terminal' ? [

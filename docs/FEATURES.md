@@ -110,6 +110,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 - **Device icons**: switch, router, firewall, access point, server, computer, storage, phone, IoT, printer - as coloured tiles or plain glyphs (View → Tile / Glyph Icons).
 - **Folders coloured by level**: top level amber, sub-folders purple, deeper blue; production folders light red (right-click → Mark as Production).
+- **Wake-on-LAN**: wake a session's device by its MAC address - from this computer or, for devices behind a jump host or jump station, from that server; broadcast address and port per session; *Wake Up and Connect*; folders and selections; waits until the device answers.
 - **Device facts**: model, version, serial, MAC and uptime read after connecting in a background login, shown on the tab, status bar, cards and side panel; teach a fact by selecting the value (Edit → Save Selection as Device Fact, or Session Options → Device Facts → Run); edit, remove or add by hand.
 - **Clear Recent / Clear Favourites**, **Create SFTP Session / Create SSH Session** copies.
 - **Folder tree** with filter: an exact match on address or name shows only that device, the rest on request.

@@ -231,6 +231,7 @@ func buildMenu(app *App) *menu.Menu {
 	add(xfer, "Send Text File...", "send-file")
 	xfer.AddSeparator()
 	add(xfer, "Open Web Page Through This Session...", "web-page")
+	add(xfer, "Wake Up (Wake-on-LAN)", "wake")
 	xfer.AddSeparator()
 	add(xfer, "SCP Upload File...", "scp-upload")
 	add(xfer, "SCP Upload Folder...", "scp-upload-folder")

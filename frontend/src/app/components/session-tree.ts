@@ -186,6 +186,10 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   protected ui = inject(Ui);
   private tabs = inject(Tabs);
   private backend = inject(Backend);
+  private async wake(path: string, then: 'none' | 'connect') {
+    try { await this.tabs.wake(await this.backend.getSession(path), '', then); } catch (e) { this.ui.error(e); }
+  }
+
   /** Open Web Page / Web Interface for a saved session (through its open tab's connection when there is one). */
   private async openWeb(path: string, through: 'session' | 'device') {
     try {
@@ -576,6 +580,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
       const allFav = g.every(p => this.isFav(p));
       this.ui.showMenu(ev, [
         { label: `Connect ${g.length} Sessions`, action: () => g.forEach(p => void this.tabs.openSession(p)) },
+        { label: `Wake Up ${g.length} Sessions (Wake-on-LAN)`, action: () => void this.tabs.wakeMany(g) },
         { separator: true },
         { label: `Edit ${g.length} Sessions...`, action: () => this.bulkEdit(g) },
         { label: `Back Up ${g.length} Configurations`, action: () => this.backUp(g) },
@@ -591,6 +596,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     const items: MenuItem[] = n.isFolder
       ? [
           { label: 'Connect All in Folder', action: () => this.connectAll(n) },
+          { label: 'Wake Up All in Folder (Wake-on-LAN)', action: () => void this.tabs.wakeMany(this.pathsIn(n)) },
           { label: 'Edit All Sessions in Folder...', action: () => this.bulkEdit(this.pathsIn(n)) },
           { label: 'Back Up Configurations', action: () => this.backUp([n.path + '/']) },
           { label: 'Change Checklist...', action: () => this.checklist([n.path + '/']) },
@@ -619,6 +625,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
             ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', action: () => void this.openWeb(n.path, 'session') }] : []),
             { label: 'Open Web Interface...', action: () => void this.openWeb(n.path, 'device') },
           ] : []),
+          { label: 'Wake Up (Wake-on-LAN)', disabled: !n.mac, hint: n.mac ? '' : 'no MAC address', action: () => void this.wake(n.path, 'none') },
+          ...(n.mac ? [{ label: 'Wake Up and Connect', action: () => void this.wake(n.path, 'connect') }] : []),
           { separator: true },
           { label: 'Properties...', action: () => this.ui.editSession(n.path) },
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }] : []),

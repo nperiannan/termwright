@@ -222,6 +222,21 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <label>MAC address</label>
                   <div class="row"><input name="mac" [(ngModel)]="s.mac" placeholder="(not saved)" spellcheck="false" style="max-width: 220px" />
                     <span class="hint">saved by Discover Devices: finds the device again when DHCP gives it a new address, and warns when another device answers at this address</span></div>
+                  @if (s.mac) {
+                    <label>Wake-on-LAN</label>
+                    <div class="row wol">
+                      <input name="wolb" [(ngModel)]="s.wolBroadcast" placeholder="broadcast: every network" spellcheck="false" style="max-width: 190px"
+                        title="Leave empty for 255.255.255.255 and every network of this computer; for a device on another subnet enter its broadcast address, e.g. 192.168.20.255" />
+                      <input name="wolp" type="number" min="1" max="65535" [ngModel]="s.wolPort || null" (ngModelChange)="s.wolPort = $event || 0" placeholder="port 9" class="short" title="UDP port (9 by default, sometimes 7)" />
+                      @if (s.jumpSession || (s.useRemoteCommand && isHop(s.remoteCommand))) {
+                        <select name="wolf" [ngModel]="s.wolFrom || ''" (ngModelChange)="s.wolFrom = $event" style="width: auto">
+                          <option value="">from {{ s.jumpSession ? 'the jump host' : 'the jump station' }}</option>
+                          <option value="local">from this computer</option>
+                        </select>
+                      }
+                      <button type="button" (click)="wakeNow()" [disabled]="!s.mac">Wake Now</button>
+                    </div>
+                  }
                 }
                 @if (s.deviceType || s.protocol === 'SSH2' || (modern() && !remote() && s.protocol !== 'Local Shell')) {
                   <label class="o5">{{ modern() ? '' : 'Login' }}</label>
@@ -651,6 +666,8 @@ export class SessionEditor implements OnInit {
   readonly deviceTypes = computed(() => (this.ui.settings()?.deviceTypes ?? []).map(d => d.name));
   /** Light check for "ssh … host" (the backend parses it fully). */
   isHop(cmd: string) { return /^\s*(exec\s+)?\S*\bssh\s+\S/.test(cmd ?? ''); }
+  /** Sends Wake-on-LAN with the values in the dialog (saved or not). */
+  wakeNow() { if (this.s) void this.tabs.wake(structuredClone(this.s), '', 'none'); }
   /** SFTP opens on: '' where the terminal is, 'jump' or 'target' (older sessions: the target flag). */
   sftpOn(s: Session) { return s.sftpOn || (s.sftpToTarget ? 'target' : ''); }
   setSftpOn(s: Session, v: '' | 'jump' | 'target') { s.sftpOn = v; s.sftpToTarget = v === 'target'; }
