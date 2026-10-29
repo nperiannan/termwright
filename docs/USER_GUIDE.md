@@ -531,7 +531,7 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 - `+` adds a button. Right-click a button to edit, move, delete or toggle *Send to All Tabs*.
 - In *Options → Global Options → Button Bar* each button can **send text** (escapes: `\r` Enter, `\n`, `\t`, `\e` Esc, `\x03` Ctrl+C), run an **action** (e.g. *Open SFTP Tab*) and/or run a **script**.
 
-**Connect Bar**: see [§3](#3-connecting). Hide it in Global Options → General.
+**Connect Bar** (classic layout): see [§3](#3-connecting). Hide it in Global Options → General. The modern layout has no toolbar: the **Search or connect** box in the title bar does the same (View → Connect Bar opens it).
 
 **Command History** (Script → Command History…, `Cmd+Y` / `Ctrl+Shift+Y`, or *History…* in the Command Window): every command you type in a terminal or send from the Command Window is remembered with the session, device type and time (up to 5000).
 - Type words to search (`isis adj`); *Only VOSS* (the active tab's device type) narrows it down.

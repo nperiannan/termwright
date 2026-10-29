@@ -477,7 +477,11 @@ export class App implements OnInit {
           + (this.isMac ? '. The window title bar follows when Termwright restarts.' : ''), 'info', 6000);
         break;
       }
-      case 'toggle-connect-bar': this.ui.patchSettings({ showConnectBar: !s?.showConnectBar }); break;
+      case 'toggle-connect-bar':
+        // the modern layout has no toolbar: its Search or connect box does what the Connect Bar does
+        if (this.modern()) { this.action('quick-open'); this.ui.toast('In the modern layout the Search or connect box in the title bar is the Connect Bar: type an address, "ssh user@host", "voss 10.1.1.1" or a session name and press Enter.', 'info', 8000); }
+        else this.ui.patchSettings({ showConnectBar: !s?.showConnectBar });
+        break;
       case 'shortcuts': this.ui.open('shortcuts'); break;
       case 'about': this.ui.open('about'); break;
       case 'welcome': this.ui.open('welcome'); break;
