@@ -1,6 +1,7 @@
 import { Component, OnDestroy, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
+import { SUDO_ERR } from '../core/fixes';
 import { FileEntry, formatBytes } from '../core/models';
 import { Tabs, TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
@@ -29,7 +30,7 @@ const store = {
   template: `
     <div class="grip" title="Drag to resize" (mousedown)="startResize($event)"></div>
     <div class="dh">
-      <span class="t">Files</span><span class="h" [title]="hostTitle()">{{ hostShort() }}</span>
+      <span class="t">Files</span><span class="h" [title]="hostTitle()">{{ hostShort() }}</span>@if (asUser()) { <b class="as" [title]="'Browsing as ' + asUser() + ', like the terminal'">{{ asUser() }}</b> }
       <button type="button" class="fol" [class.on]="follow() && followable()" [disabled]="!followable()"
         [title]="!followable() ? 'The terminal is on another host' : follow() ? 'Following the terminal folder - click to stop' : 'Follow the terminal folder'"
         (click)="setFollow(!follow())"><app-icon name="sync-right" [size]="12" />{{ follow() && followable() ? 'Following' : 'Follow' }}</button>
@@ -101,7 +102,8 @@ const store = {
     :host-context(.tdock.left) { border-left: 0; border-right: 1px solid var(--border); .grip { left: auto; right: -3px; } }
     .grip { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 3; }
     .dh { flex: none; height: 38px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--border);
-      .t { font-weight: 650; } .h { flex: 1; min-width: 0; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+      .t { font-weight: 650; } .as { flex: none; margin-left: -2px; padding: 0 6px; border-radius: 8px; background: var(--danger); color: #fff; font-weight: 600; font-size: calc(10.5px * var(--ui-scale, 1)); }
+      .h { flex: 1; min-width: 0; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
     .fol { height: 22px; padding: 0 8px; border-radius: 11px; display: inline-flex; align-items: center; gap: 4px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; white-space: nowrap; color: var(--muted);
       &.on { color: var(--ok, #22c55e); border-color: color-mix(in srgb, var(--ok, #22c55e) 45%, transparent); background: color-mix(in srgb, var(--ok, #22c55e) 13%, transparent); } }
     .ib { width: 26px; height: 26px; padding: 0; display: inline-grid; place-items: center; border: 0 !important; background: transparent !important; color: var(--muted); border-radius: 6px; flex: none;
@@ -161,7 +163,11 @@ export class FilesPanel implements OnDestroy {
   /** Opening failed while connected: not retried until the terminal reconnects (Refresh retries). */
   private failed = false;
   private poll?: ReturnType<typeof setInterval>;
-  private offClosed = this.backend.on('sftp:closed', (id: string) => { if (id === this.sid()) { this.sid.set(''); this.entries.set([]); } });
+  private offClosed = this.backend.on('sftp:closed', (id: string) => { if (id === this.sid()) { this.sid.set(''); this.entries.set([]); this.asUser.set(''); this.triedUser = ''; } });
+  /** The user this panel browses as when not the login user (root after "sudo su -" in the terminal). */
+  readonly asUser = signal('');
+  private userBusy = false;
+  private triedUser = '';
 
   readonly shown = computed(() => (this.hidden() ? this.entries() : this.entries().filter(e => !e.name.startsWith('.'))));
   /** The live terminal tab. */
@@ -187,7 +193,19 @@ export class FilesPanel implements OnDestroy {
     effect(() => {
       const cwd = this.live().cwd;
       if (!cwd || !this.follow() || !this.followable() || !this.sid()) return;
-      untracked(() => { if (cwd !== this.dir()) void this.load(cwd); });
+      untracked(() => { if (cwd !== this.dir() && !this.userBusy && (this.userChange() === null || this.triedUser === (this.live().shellUser ?? ''))) void this.load(cwd); });
+    });
+    // Follow the terminal's user: after "sudo su -" the panel browses as root
+    // too (sudo sftp-server), after "exit" as the login user again.
+    effect(() => {
+      const u = this.live().shellUser;
+      if (!u || !this.sid() || !this.followable() || this.ui.settings()?.sftpFollowUser === false) return;
+      untracked(() => {
+        const c = this.userChange();
+        if (c === null || u === this.triedUser || this.userBusy) return;
+        this.triedUser = u;
+        void this.switchUser(c);
+      });
     });
   }
 
@@ -217,12 +235,53 @@ export class FilesPanel implements OnDestroy {
       }
       this.target.set(r.target || '');
       this.home = r.home;
+      this.asUser.set('');
+      this.triedUser = '';
       this.sid.set(r.id);
       const cwd = this.follow() && this.followable() ? this.live().cwd : '';
-      await this.load(cwd || this.dir() || r.home);
+      const c = this.userChange();
+      if (c !== null) { this.triedUser = this.live().shellUser ?? ''; await this.switchUser(c); }
+      else await this.load(cwd || this.dir() || r.home);
       void this.tabs.detectCwd(this.live(), r.id);
     } catch (e) { this.failed = true; this.error.set('Files: ' + errText(e)); }
     finally { this.opening = false; }
+  }
+
+  /** The login name on the host this panel browses ('' when not known). */
+  private loginName() {
+    const t = this.target();
+    if (t) return t.includes('@') ? t.slice(0, t.lastIndexOf('@')) : '';
+    return this.live().session.username || '';
+  }
+
+  /** How to switch to the terminal's user: '' = back to the login user,
+   *  'sudo' = root, a Run As command; null = nothing to change. */
+  private userChange(): string | null {
+    const u = this.live().shellUser;
+    if (!u || this.ui.settings()?.sftpFollowUser === false) return null;
+    const login = this.loginName();
+    if (u === (this.asUser() || login) || (!login && u !== 'root')) return null;
+    return u === login ? '' : u === 'root' ? 'sudo' : 'sudo su - ' + u;
+  }
+
+  /** Browses as another user: '' = the login user, 'sudo' = root, otherwise a Run As command. */
+  async switchUser(cmd: string) {
+    const id = this.sid();
+    if (!id) return;
+    this.userBusy = true;
+    try {
+      let home: string, user: string;
+      if (cmd === 'sudo') { home = await this.backend.sftpSetRoot(id, true); user = 'root'; }
+      else { const r = await this.backend.sftpRunAs(id, cmd); home = r.home; user = r.user; }
+      this.asUser.set(user);
+      const cwd = this.follow() && this.followable() ? this.live().cwd : '';
+      await this.load(cwd || home);
+      if (cwd && this.error()) await this.load(home);
+    } catch (e) {
+      const msg = errText(e);
+      this.error.set(SUDO_ERR.test(msg) ? 'Cannot browse as ' + (cmd === 'sudo' ? 'root' : cmd.replace(/^sudo su - /, '')) + ': ' + msg : msg);
+    }
+    this.userBusy = false;
   }
 
   /** Reopens the panel on the host the terminal is on now. */
@@ -405,6 +464,8 @@ export class FilesPanel implements OnDestroy {
       { label: (this.hidden() ? '✓ ' : '') + 'Show Hidden Files', action: () => { this.hidden.set(!this.hidden()); store.set('termwright.filesHidden', this.hidden() ? '1' : '0'); } },
       { separator: true },
       { label: 'Go to Home Folder', action: () => void this.go(this.home || '~') },
+      ...(this.asUser() ? [{ label: 'Browse as ' + (this.loginName() || 'the Login User'), action: () => { this.triedUser = this.live().shellUser ?? ''; void this.switchUser(''); } }]
+        : [{ label: 'Browse as root (sudo)', action: () => { this.triedUser = this.live().shellUser ?? ''; void this.switchUser('sudo'); } }]),
       { label: 'Turn On Folder Detection in the Terminal', action: () => void this.tabs.enableCwdReporting(this.live().id, false, true) },
       { label: 'Open a Full SFTP Tab', action: () => this.openTab() },
       { separator: true },

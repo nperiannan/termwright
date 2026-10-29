@@ -70,7 +70,7 @@ export class PromptDialog {
     this.backend.on('prompt', (p: Prompt) => {
       if (!this.queue().length) this.reset(p);
       this.queue.update(q => [...q, p]);
-      if (p.tabId) this.tabs.activeId.set(p.tabId);
+      if (p.tabId && this.tabs.get(p.tabId)) this.tabs.activeId.set(p.tabId); // not for a Files panel's own SFTP session
     });
     this.backend.on('prompt:done', (id: string) => this.drop(id));
   }

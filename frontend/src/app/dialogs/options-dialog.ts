@@ -17,7 +17,7 @@ const SEARCH: [Page, string, string][] = [
   ['general', 'Recordings folder', 'session recording cast replay playback audit'], ['general', 'Session recording', 'record every connection replay playback audit delete keep days'],
   ['cards', 'PKCS#11 libraries', 'smart card piv cac yubikey opensc token hsm ssh key'], ['cards', 'Ask the PIN for every login', 'smart card pin'],
   ['general', 'Downloads folder', 'zmodem download save'], ['general', 'SFTP from a terminal', 'working directory detection folder cwd follow'],
-  ['general', 'SFTP tabs follow the terminal folder', 'cwd'], ['general', "SFTP tabs browse as the terminal's user", 'root sudo'],
+  ['general', 'SFTP tabs follow the terminal folder', 'cwd'], ['general', "SFTP tabs and the Files panel browse as the terminal's user", 'root sudo files panel'],
   ['general', 'Python interpreter', 'script python3'], ['general', 'UI theme', 'dark light mode appearance'], ['general', 'Interface font', 'font typeface vscode inter plex readable'], ['general', 'Text size', 'font size bigger larger zoom readable'],
   ['general', 'Accent color', 'colour highlight'], ['general', 'Confirm before closing connected tabs', 'quit exit'],
   ['general', 'Confirm before pasting more than one line', 'paste multi-line'], ['general', 'Remember typed commands', 'history autocomplete suggestions'], ['general', 'Reopen the sessions', 'restore tabs start'],
@@ -163,7 +163,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="checks">
                   <label><input type="checkbox" name="scwd" [(ngModel)]="s.sftpCwdAuto" /> Working directory detection: turn on folder reporting in the shell (bash, zsh) when an SFTP tab is opened from it</label>
                   <label><input type="checkbox" name="sfol" [(ngModel)]="s.sftpFollowTerminal" /> SFTP tabs follow the terminal folder</label>
-                  <label><input type="checkbox" name="sfus" [(ngModel)]="s.sftpFollowUser" /> SFTP tabs browse as the terminal's user (root via sudo after "sudo su -")</label>
+                  <label><input type="checkbox" name="sfus" [(ngModel)]="s.sftpFollowUser" /> SFTP tabs and the Files panel browse as the terminal's user (root via sudo after "sudo su -")</label>
                 </div>
                 <label>Python interpreter</label>
                 <input name="py" [(ngModel)]="s.pythonPath" placeholder="(automatic: python3, or py -3 on Windows)" />
