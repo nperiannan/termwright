@@ -276,6 +276,23 @@ func (m *Manager) SFTPMkdir(id, p string) error {
 	return s.c.MkdirAll(p)
 }
 
+// SFTPCreateFile makes a new empty remote file; an existing file is left
+// alone (an error says it exists).
+func (m *Manager) SFTPCreateFile(id, p string) error {
+	s, err := m.sftpGet(id)
+	if err != nil {
+		return err
+	}
+	f, err := s.c.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+	if err != nil {
+		if _, e := s.c.Lstat(p); e == nil {
+			return fmt.Errorf("%s already exists", path.Base(p))
+		}
+		return err
+	}
+	return f.Close()
+}
+
 // SFTPRename renames or moves a remote file.
 func (m *Manager) SFTPRename(id, from, to string) error {
 	s, err := m.sftpGet(id)

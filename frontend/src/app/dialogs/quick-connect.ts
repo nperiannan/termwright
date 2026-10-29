@@ -56,7 +56,7 @@ import { parseConnectLine } from '../core/connect-string';
           </div>
         }
         <div class="checks savebox">
-          <label><input type="checkbox" name="save2" [(ngModel)]="save" />
+          <label><input type="checkbox" name="save2" [ngModel]="save" (ngModelChange)="setSave($event)" />
             <span class="tx"><span>Save as a session</span><span class="hint">{{ save ? (name || host || comPort || 'new session') + ' · in ' + (ui.currentFolder() || 'the top level') : 'connect once, without saving' }}</span></span></label>
         </div>
         @if (save) { <div class="f"><span>Session name</span><input name="sname2" [(ngModel)]="name" [placeholder]="host || comPort" /></div> }
@@ -117,7 +117,7 @@ import { parseConnectLine } from '../core/connect-string';
           }
           <label></label>
           <div class="checks">
-            <label><input type="checkbox" name="save" [(ngModel)]="save" /> Save session</label>
+            <label><input type="checkbox" name="save" [ngModel]="save" (ngModelChange)="setSave($event)" /> Save session</label>
           </div>
           @if (save) { <label>Session name</label><input name="sname" [(ngModel)]="name" [placeholder]="host || comPort" /> }
         </div>
@@ -163,7 +163,12 @@ export class QuickConnect {
   user = '';
   comPort = '';
   baud = 9600;
-  save = false;
+  /** Save as a session: on when Settings say so; the last choice is remembered. */
+  save = !!this.ui.settings()?.quickConnectSave;
+  setSave(v: boolean) {
+    this.save = v;
+    if (v !== !!this.ui.settings()?.quickConnectSave) this.ui.patchSettings({ quickConnectSave: v });
+  }
   name = '';
 
   device = '';

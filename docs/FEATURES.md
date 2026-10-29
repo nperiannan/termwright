@@ -1,6 +1,6 @@
 # Termwright features
 
-Everything Termwright does, one line each. Details and screenshots are in the [User Guide](USER_GUIDE.md); scripting is in [SCRIPTING.md](SCRIPTING.md). This list is for version 0.19.
+Everything Termwright does, one line each. Details and screenshots are in the [User Guide](USER_GUIDE.md); scripting is in [SCRIPTING.md](SCRIPTING.md). This list is for version 0.21.
 
 ## Platforms and installation
 
@@ -15,6 +15,11 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## Main window
 
+- **Modern layout** (default): tabs, a Search or connect box, Quick Connect, SFTP, the theme switch, Settings and a ⋯ menu in one title bar; the **Classic layout** (menu bar, toolbar, Connect Bar, tab strip) is one click away (View → Modern / Classic Layout).
+- **Start page**: a search-or-connect box, quick actions spread under it and cards for favourite and recent sessions (device icon, address, device facts, last used, live state).
+- **Session side panel**: New Session and Properties open beside the terminal; All session options… opens the full dialog.
+- **Connecting and error cards**: each connection step while it connects; on failure the reason, a hint and Try Again, Edit Session, Find by MAC Address, Close Tab.
+- **Welcome flow**: theme, text size and layout; import found sessions; optional master password; tips (Help → Welcome…).
 - **Menu bar**: File, Edit, View, Transfer, Script, Options, Tab, Help; on macOS also inside the window (can be turned off).
 - **Toolbar**: connect, quick connect, local shell, reconnect, disconnect, copy, paste, find, log, SFTP, scripts, layouts, lock and more.
 - **Connect Bar**: type `ssh admin@host`, `telnet host 2003`, `serial COM3 115200`, `raw host 4001`, `rdp host`, `vnc host`, `voss 10.1.1.1` or a session name and press Enter.
@@ -22,7 +27,6 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Tab badges**: `LOG` (logging), `● REC` (session recording), `SCRIPT` (script recording), `SEL` (in the send group), `PROD` (production).
 - **Layouts**: tabbed, tile side by side, tile stacked, tile grid.
 - **Status bar**: state, protocol, user@host, server version, route (jump host), transfer progress, terminal size, emulation, connected tabs.
-- **Start page**: quick actions (Quick Connect, New Session, Local Shell, Import Sessions, Discover Devices) and recent sessions when no tab is open.
 - **Restore tabs**: the open sessions come back at the next start (optional).
 - **Window size and position** are remembered.
 - **Interface font and text size**: System (default), VS Code, Inter or IBM Plex Sans; text from 13 to 17 px.
@@ -34,7 +38,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 - **Protocols**: SSH2, Telnet, Serial, Local Shell, Raw TCP, RDP, VNC and Console (a port of a console server).
 - **Saved sessions**: double-click, Connect Terminal, Connect SFTP Session, or Connect All in Folder.
-- **Quick Connect**: host (`user@host:port`), protocol and optional device type, without saving.
+- **Quick Connect**: one connect line (`voss admin@10.1.1.1`, `ssh user@host:2222`, `serial COM3 115200`) fills protocol, address, port, device type and user; or fill the fields; save it as a session (the switch is remembered; Settings → Save Quick Connect sessions makes it the default).
 - **Quick Open** (`Mod+G`): find a session, folder, host, open tab, library command or menu action by typing.
 - **Workspaces**: save the open tabs with their layout and reopen them with one click.
 - **Local Shell**: zsh/bash on macOS and Linux, PowerShell on Windows; custom command and start folder.
@@ -104,6 +108,10 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## Session Manager
 
+- **Device icons**: switch, router, firewall, access point, server, computer, storage, phone, IoT, printer - as coloured tiles or plain glyphs (View → Tile / Glyph Icons).
+- **Folders coloured by level**: top level amber, sub-folders purple, deeper blue; production folders light red (right-click → Mark as Production).
+- **Device facts**: model, version, serial, MAC and uptime read after connecting in a background login, shown on the tab, status bar, cards and side panel; teach a fact by selecting the value (Edit → Save Selection as Device Fact, or Session Options → Device Facts → Run); edit, remove or add by hand.
+- **Clear Recent / Clear Favourites**, **Create SFTP Session / Create SSH Session** copies.
 - **Folder tree** with filter: an exact match on address or name shows only that device, the rest on request.
 - **Favourites and Recent** sections, with when each session was last connected.
 - **Hover card**: target, jump host, device type, MAC address, password state, last connected, description.
@@ -191,6 +199,10 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## File transfer
 
+- **SFTP browser (modern)**: a top bar with Run as, the terminal folder, SFTP / SCP and Sync ↑ / ↓; clickable folder paths, a bookmark bar, `..` row, file-type badges, Today / date times.
+- **Several files**: check boxes (and a select-all box), Cmd/Ctrl-click, Shift-click, Cmd/Ctrl+A.
+- **New File / New Folder / Delete on both sides**: deleting on this computer moves to the Trash / Recycle Bin.
+- **Transfer bar**: progress, speed, time left, Cancel, the other transfers; ✕ closes it while copies go on.
 - **SFTP browser**: dual pane (this computer / server), over the terminal's login or as its own SFTP session.
 - **Transfers**: files and whole folders, queue with progress, cancel, **resume** of failed copies.
 - **Sync** new or changed files in either direction (nothing is deleted).
@@ -224,6 +236,8 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## Passwords and security
 
+- **Unlock window**: with a master password, Termwright starts locked until it is typed (Not now asks for passwords when connecting); Lock Now locks again.
+- **Master password strength**: any 4 or more characters, with a strength meter - no forced capitals, numbers or symbols; optional step in the welcome flow.
 - **OS keychain** for passwords and passphrases; never in session files.
 - **Password managers**: 1Password (`op://`), Bitwarden (`bw://`), HashiCorp Vault (`vault://`) or any command (`cmd://`); read when connecting, never stored.
 - **Named credentials** shared by many sessions.
@@ -244,6 +258,8 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## Appearance
 
+- **Keyword highlighting on by default** (Network set): up / enable green, down / error red, warning / disable amber, addresses blue; the text is coloured (or the background, as an option).
+- **Save Screen As Image**: the visible terminal as a PNG with its colours and highlighting.
 - **12 built-in color schemes** (Solarized, Dracula, Nord, Gruvbox, Catppuccin…), *Auto* follows the UI theme.
 - **Custom scheme editor** with live preview.
 - **One scheme for all sessions** or per session.
@@ -251,4 +267,5 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## Keyboard shortcuts
 
+- **A shortcut for nearly every menu command** (e.g. Disconnect, Clear Screen, Auto Scroll, Timestamps, Log Session, Open SFTP Tab, Save Screen As Image, Save Selection as Device Fact); Help → Keyboard Shortcuts lists them with a search box.
 - `Mod` = Cmd on macOS, Ctrl+Shift on Windows/Linux: `O` sessions, `Q` quick connect, `L` local shell, `R` reconnect, `W` close tab, `P` SFTP tab, `F` find, `S` save scrollback, `M` session manager, `K` command window, `B` button bar, `E` command library, `Y` command history, `J` recording marker, `G` Quick Open.

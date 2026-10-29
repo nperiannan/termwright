@@ -13,6 +13,13 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 
 📖 **[User Guide](docs/USER_GUIDE.md)** · [All features](docs/FEATURES.md) · [Scripting](docs/SCRIPTING.md) · [Session files](docs/SESSION_FILES.md) · [Roadmap](docs/ROADMAP.md)
 
+## What's new in 0.21.0
+
+* **A modern look, now the default** (the classic layout is one click away): tabs and search in the title bar, a **start page** with your favourite and recent sessions, a **session side panel**, real-world **device icons**, folders coloured by level, and every dialog and page redone - Quick Connect with one connect line, Settings, Session Options, SFTP, Import / Export, Passwords, Backups, Checklists, Shortcuts and the rest.
+* **Device facts**: model, version, serial, MAC and uptime are read after connecting (in the background) and shown on the tab, status bar, cards and side panel; **teach a new fact in two clicks** - select the value in the output - and edit or remove facts in Session Options.
+* **Security and files**: a **welcome flow** with an optional **master password** (any 4+ characters, with a strength meter) and an **unlock window** at start-up; SFTP with clickable paths, a **bookmark bar**, check boxes for **several files**, **New File** and **Delete** on both sides (this computer: to the Trash), and a transfer bar you can close.
+* Also: keyword highlighting on by default (up/enable green, down red, disable amber), **Save Screen As Image**, a shortcut for nearly every menu command, Quick Connect that can always save, Clear Recent / Favourites, Create SFTP / SSH Session copies.
+
 ## What's new in 0.20.0
 
 * **Serial consoles**: ports listed in order with the adapter's name and updated when a cable is plugged in, **Detect Speed**, and a send bar with line ending, **hex send and hex view** (0.20.7), timestamps, auto scroll and clear.
@@ -23,10 +30,6 @@ from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the s
 ## What's new in 0.19.0
 
 * **Export to other programs**: PuTTY, KiTTY, MobaXterm, Tabby, OpenSSH config and CSV - next to Termwright's own folder, zip and XML - with a summary of what each format cannot hold. Your sessions are never locked in.
-
-## What's new in 0.18.0
-
-* **Devices with a new address (DHCP)**: sessions remember the device's MAC address. Discover Devices finds saved devices at new addresses and updates the sessions, a connection stops when another device answers at the saved address, and *Find by MAC Address* finds the device again - checked with its SSH host key.
 
 Older releases: see the **[changelog](CHANGELOG.md)**.
 
@@ -39,17 +42,18 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 | Key login setup | Generate (Ed25519 / RSA 4096 / ECDSA) or reuse a key, install it on Linux, macOS, BSD or **Windows OpenSSH** servers (incl. `administrators_authorized_keys`), test a key-only login and switch the session to it |
 | Tunnels & routing | Local / remote / dynamic (SOCKS5) port forwarding, chainable jump hosts, SOCKS5 and HTTP CONNECT proxies, X11 and agent forwarding, auto reconnect |
 | Device types | Login profiles (EXOS, VOSS, Cisco IOS, Linux, custom): login steps for Telnet/Serial, after-login steps for every protocol (`enable`, paging off), own username/password (or none) inherited or overridden per session; used by Quick Connect, the Connect Bar (`voss 10.1.1.1`), sessions and folder defaults |
-| Session Manager | Folder defaults (user, device type, jump host …), workspaces, Quick Open palette, folder tree, filter/search, drag & drop, new/edit/duplicate/rename/delete, connect-all-in-folder, Connect Terminal / Connect SFTP Session, recent sessions |
+| Device facts | Model, version, serial, MAC and uptime read after connecting in a background login; shown on tabs, status bar, start page and side panel; teach a new fact by selecting the value; edit / remove / add by hand in Session Options |
+| Session Manager | Start page with favourites and recent sessions, session side panel, device icons, folders coloured by level, folder defaults (user, device type, jump host …), workspaces, Quick Open palette, folder tree, filter/search, drag & drop, new/edit/duplicate/rename/delete, connect-all-in-folder, Connect Terminal / Connect SFTP Session, recent sessions |
 | Discovery | Scan a network or range (up to a /22): ports, SSH/Telnet banners, web page/server/certificate, SIP (phones), SNMP v2c name and model, DNS, MAC address and maker; icons per kind (switch, router, firewall, AP, server, NAS, computer, phone, printer) with the evidence; add selected devices as sessions with a suggested device type. Never logs in. |
 | Import / export | Sessions are plain-text `.ini` files (unknown keys preserved byte-for-byte). Import a SecureCRT Config folder, `.zip`, XML export or `.ini` (saved passwords go to the OS keychain); export to folder, `.zip` or XML, and **export to PuTTY / KiTTY, MobaXterm, Tabby, OpenSSH config and CSV**. Also imports **CSV**, **Ansible** inventories, **NetBox**, **AWS EC2**, **PuTTY / KiTTY** (`.reg`, `~/.putty/sessions`), **SuperPuTTY** (`Sessions.xml`), **MobaXterm** (`.mxtsessions`) and OpenSSH `~/.ssh/config` |
 | Logon automation | Automate logon with an Expect/Send table (hide, trailing CR, named credentials, `\s \w \v \p` escapes), send initial CR, logon scripts with arguments, output triggers |
 | Terminal | Tabs and tiled views (side by side / stacked / grid), xterm-256color/truecolor, Unicode, scrollback search, keyword highlighting, per-session font, Backspace mode, copy-on-select, right-click paste, zoom, clickable links, session lock, Connect Bar |
-| Appearance | Dark / Light / follow-system UI with accent color; terminal scheme *Auto* (follows the UI) or one scheme for all sessions; 12 built-in color schemes (Solarized, Dracula, Nord, Gruvbox, Catppuccin, …), custom scheme editor with import/export, per-session scheme and font |
+| Appearance | **Modern** (default) or **Classic** layout; Dark / Light / follow-system UI with accent color; device icons as tiles or glyphs; terminal scheme *Auto* (follows the UI) or one scheme for all sessions; 12 built-in color schemes (Solarized, Dracula, Nord, Gruvbox, Catppuccin, …), custom scheme editor with import/export, per-session scheme and font |
 | Capture | Session logging (raw or plain text, append, per-line timestamp prefix, filename tokens, start on connect), save scrollback / selection to file |
-| File transfer | SFTP browser (dual pane) over the terminal's login or as a **standalone SFTP session** for one-session devices (e.g. VOSS); folder transfers, sync, **resume**, **bookmarks**, **server-to-server copy**, **SCP transfers from the SFTP browser**, **SFTP on a remote command's target through the jump station**, **Run as root or any user (sudo / su)**; SCP (files and folders), ZMODEM (auto `sz`/`rz`), YMODEM batch, XMODEM |
+| File transfer | SFTP browser (dual pane) over the terminal's login or as a **standalone SFTP session** for one-session devices (e.g. VOSS); folder transfers, sync, **resume**, **bookmarks**, **server-to-server copy**, **SCP transfers from the SFTP browser**, **SFTP on a remote command's target through the jump station**, **Run as root or any user (sudo / su)**, clickable paths, a bookmark bar, several files at once, **New File** and **Delete** on both sides (local files go to the Trash); SCP (files and folders), ZMODEM (auto `sz`/`rz`), YMODEM batch, XMODEM |
 | Scripting | **Python** and **VBScript** (Windows) scripts with the `crt` object (`crt.Screen.WaitForString`, `crt.Screen.Get` on the rendered screen, `crt.Dialog.Prompt`, …) and JavaScript scripts (`term.waitFor`, `readUntil`, `openSession`, …), logon scripts, script recorder, key map (keys → text / action / script). See [docs/SCRIPTING.md](docs/SCRIPTING.md) |
 | Automation | Command window and **command library** with `{{variables}}` (send to the active tab, **selected tabs** or **all tabs**), button bar (text, actions, scripts), **output alerts** (notice, sound, desktop notification), paste confirmation and line delay, **compare outputs** (diff two tabs or files, ignore prompts; *Compare With…* on the tab menu) |
-| Security | Passwords and key passphrases in the OS keychain (never in session files), **password managers** (1Password, Bitwarden, HashiCorp Vault, command), named credentials, **master password**, encrypted password-vault export/import (AES-256-GCM + scrypt) |
+| Security | Passwords and key passphrases in the OS keychain (never in session files), **password managers** (1Password, Bitwarden, HashiCorp Vault, command), named credentials, **master password** with an unlock window at start-up (any 4+ characters, strength meter, optional in the welcome flow), encrypted password-vault export/import (AES-256-GCM + scrypt) |
 | Remote desktop | **RDP** sessions in the computer's Remote Desktop client (Windows, macOS Windows App, FreeRDP/Remmina) and **VNC** in a built-in viewer, both through jump hosts and proxies |
 | Change checklists | Show commands before and after a change on many devices, *same* / *changed* per device with side-by-side compare |
 | Command history | Search every typed command (secrets never kept) and suggestions in the Command Window |
@@ -60,7 +64,11 @@ Older releases: see the **[changelog](CHANGELOG.md)**.
 
 | | |
 |---|---|
-| ![Tiled sessions](docs/screenshots/grid.png) <br/>*Tiled sessions with keyword highlighting* | ![SFTP](docs/screenshots/sftp.png) <br/>*SFTP with bookmarks, resume and server-to-server copy* |
+| ![Start page](docs/screenshots/home.png) <br/>*Start page: search or connect, favourites and recent sessions* | ![Session side panel](docs/screenshots/session-panel.png) <br/>*Session options beside the terminal, with device facts* |
+| ![Device facts](docs/screenshots/device-facts.png) <br/>*Device facts: edit, remove, read now* | ![Teach a device fact](docs/screenshots/fact-teach.png) <br/>*Teach a fact: select the value in the output* |
+| ![Welcome](docs/screenshots/welcome-security.png) <br/>*Welcome flow with an optional master password* | ![Unlock window](docs/screenshots/unlock.png) <br/>*Unlock window at start-up* |
+| ![Connection error](docs/screenshots/fix-bar.png) <br/>*A failed connection explains why and offers the fixes* | ![Settings](docs/screenshots/options.png) <br/>*Settings: theme previews, layout and icons* |
+| ![Tiled sessions](docs/screenshots/grid.png) <br/>*Tiled sessions with keyword highlighting* | ![SFTP](docs/screenshots/sftp.png) <br/>*SFTP: clickable paths, bookmark bar, several files, transfer bar* |
 | ![Logon actions](docs/screenshots/logon.png) <br/>*Logon actions (expect/send) and remote command* | ![Key login setup](docs/screenshots/keysetup.png) <br/>*Key login setup* |
 | ![Import](docs/screenshots/import.png) <br/>*Import from SecureCRT, PuTTY, MobaXterm or OpenSSH* | ![Light theme](docs/screenshots/light.png) <br/>*Light theme* |
 | ![Device types](docs/screenshots/devicetypes.png) <br/>*Device types with their own login* | ![Quick Connect](docs/screenshots/quickconnect.png) <br/>*Quick Connect: device type + address* |

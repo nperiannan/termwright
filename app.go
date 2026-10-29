@@ -764,6 +764,21 @@ func (a *App) SFTPRealPath(id, p string) (string, error) { return a.terms.SFTPRe
 // SFTPMkdir creates a remote folder.
 func (a *App) SFTPMkdir(id, p string) error { return a.terms.SFTPMkdir(id, p) }
 
+// SFTPCreateFile makes a new empty file on the server.
+func (a *App) SFTPCreateFile(id, p string) error { return a.terms.SFTPCreateFile(id, p) }
+
+// LocalCreateFile makes a new empty file on this computer (never overwrites).
+func (a *App) LocalCreateFile(p string) error {
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		if os.IsExist(err) {
+			return fmt.Errorf("%s already exists", filepath.Base(p))
+		}
+		return err
+	}
+	return f.Close()
+}
+
 // SFTPRename renames a remote file.
 func (a *App) SFTPRename(id, from, to string) error { return a.terms.SFTPRename(id, from, to) }
 
@@ -908,6 +923,18 @@ func (a *App) SetCredentialPassword(name, password string) error {
 func (a *App) HasCredentialPassword(name string) bool { return secrets.Get("credential:"+name) != "" }
 
 // UnlockPasswords checks the master password and unlocks saved passwords.
+// LockPasswords locks the saved passwords again until the master password is
+// typed (false when no master password is set).
+func (a *App) LockPasswords() bool {
+	if a.cfg.Get().MasterHash == "" {
+		return false
+	}
+	a.mu.Lock()
+	a.locked = true
+	a.mu.Unlock()
+	return true
+}
+
 func (a *App) UnlockPasswords(password string) bool {
 	if !vault.CheckPassword(password, a.cfg.Get().MasterHash) {
 		return false
@@ -924,6 +951,9 @@ func (a *App) SetMasterPassword(current, newPassword string) error {
 	s := a.cfg.Get()
 	if s.MasterHash != "" && !vault.CheckPassword(current, s.MasterHash) {
 		return errors.New("the current master password is wrong")
+	}
+	if newPassword != "" && len([]rune(newPassword)) < 4 {
+		return errors.New("use at least 4 characters for the master password")
 	}
 	s.MasterHash = ""
 	if newPassword != "" {

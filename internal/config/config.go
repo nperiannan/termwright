@@ -132,6 +132,7 @@ type Settings struct {
 	DeviceTypes          []session.DeviceType         `json:"deviceTypes"`
 	Alerts               []Alert                      `json:"alerts"`
 	ConfirmPaste         bool                         `json:"confirmPaste"` // ask before pasting several lines
+	QuickConnectSave     bool                         `json:"quickConnectSave"` // Quick Connect saves the session (switch on by default; remembered)
 	Snippets             []Snippet                    `json:"snippets"`
 	Workspaces           []Workspace                  `json:"workspaces"`
 	FolderDefaults       []FolderDefault              `json:"folderDefaults"`

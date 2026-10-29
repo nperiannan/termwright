@@ -4,19 +4,11 @@ Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial
 
 ![Main window](screenshots/main.png)
 
+> **New in 0.21:** a **modern layout** (now the default - the classic one is a click away): tabs and search in the title bar, a [start page](#2-the-main-window) with your favourite and recent sessions, a [session side panel](#4-sessions-and-the-session-manager), new device icons and folders coloured by level, and every dialog redone. Also: [device facts](#device-facts) (model, version, MAC, uptime read after connecting - taught in two clicks), a [welcome flow](#first-start-welcome-and-master-password) with an optional **master password** and an **unlock window**, [SFTP](#sftp-browser) with clickable paths, a bookmark bar, check boxes for several files, **New File** and **Delete** on both sides, keyword highlighting on by default, **Save Screen As Image** and a shortcut for nearly every menu command.
+>
 > **New in 0.11:** [Kerberos (GSSAPI) login](#kerberos-gssapi-login), [SSH certificates and FIDO2 security keys](#ssh-certificates-and-fido2-security-keys), [password managers](#password-managers) (1Password, Bitwarden, HashiCorp Vault, any command), **VBScript** logon scripts, and `crt.Screen.Get` / `CurrentRow` read the rendered screen.
 >
-> **New in 0.10.6:** new application icon, clearer tab close buttons (red on hover) and folder arrows; [how SFTP through a jump station works](#sftp-through-a-jump-station-bastion---how-the-files-travel).
->
-> **New in 0.10.5:** SFTP **Run as** any user with your own command (`sudo su - oracle`, `su - admin`, …), answering its password prompts. **0.10.4:** browse as root in the SFTP tab (sudo), also through a jump station. 0.10.3: the SFTP header shows *user@host via jump host*.
->
-> **New in 0.10.2:** saved **SecureCRT passwords are imported** (encrypted `Password V2` 02/03, old `Password`, or plain text) into the OS keychain; **key passphrases** in Passwords & Credentials and in the password-vault export.
->
-> **New in 0.10.1:** SFTP (and SCP) on the target of an `ssh … host` remote command, through the jump station ([§10](#10-automation-logon-actions-triggers-scripts)); device types with their own username and password (or *No password*), inherited or overridden per session; empty passwords remembered; SCP copies from the SFTP tab; Compare With… on the tab menu with *Ignore prompts*; import sources grouped by app.
->
-> **New in 0.10:** device types (login profiles) for EXOS/VOSS/Cisco/Linux with `voss 10.1.1.1` quick connects, command library with variables, send to selected tabs, Quick Open, output alerts, workspaces, folder defaults, paste confirmation, compare outputs, CSV/Ansible/NetBox/AWS import, timestamps, copy as HTML, window size memory and portable mode.
->
-> **New in 0.9:** PuTTY `.ppk` keys work directly ([§3](#first-ssh-connection)), **Python** scripts with the `crt` object ([§10](#10-automation-logon-actions-triggers-scripts), [SCRIPTING.md](SCRIPTING.md#python-scripts-with-the-crt-object)), terminal scheme *Auto* and *use for all sessions* ([§13](#13-global-options-reference)).
+> Older changes are in the [changelog](../CHANGELOG.md).
 
 **Contents**
 
@@ -55,17 +47,43 @@ Optional: install `lrzsz` on the *remote* hosts to use ZMODEM (`sz`/`rz`).
 
 To build from source see the [README](../README.md#build).
 
+### First start: welcome and master password
+
+The first time Termwright starts (and once after updating to a new version; **Help → Welcome…** shows it again) a short welcome flow opens:
+
+1. **Look** - theme (Light, Dark or System), text size and layout (Modern or Classic).
+2. **Sessions** - sessions of SecureCRT, PuTTY, SuperPuTTY, MobaXterm and OpenSSH found in their usual places are listed with an **Import** button; export files (SecureCRT `.xml`/`.zip` or Config folder, PuTTY/KiTTY `.reg`, SuperPuTTY `Sessions.xml`, MobaXterm, CSV) are one click away.
+3. **Security** - an optional **master password**. Type one (any 4 or more characters; a meter shows how strong it is - capitals, numbers and symbols help but are never required) and confirm it, or press **Skip**. It can be set, changed or removed later in Options → Passwords & Credentials → Master Password.
+4. **Done** - a few tips, then *Start Using Termwright* or *Discover Devices*.
+
+| Welcome | Master password (optional) |
+|---|---|
+| ![Welcome](screenshots/welcome.png) | ![Welcome: master password](screenshots/welcome-security.png) |
+
+With a master password set, Termwright starts with an **unlock window**: type the master password and press **Unlock** to use your saved passwords. **Not now** closes it; saved passwords stay locked and are asked when connecting (unlock later in Passwords & Credentials). The passwords themselves stay in the OS keychain - the master password only lets Termwright use them. **Lock Now** (Passwords & Credentials → Master Password) locks them again and shows the unlock window.
+
+![Unlock window](screenshots/unlock.png)
+
 ## 2. The main window
 
-| Area | What it does |
+Termwright has two layouts: **Modern** (the default) and **Classic** (toolbar, tab strip and menu bar). Switch at any time with **View → Modern / Classic Layout**, the **⋯** menu, Quick Open or Options → Settings → General → Layout; on macOS the window's title bar follows after a restart.
+
+| Area (modern layout) | What it does |
 |---|---|
-| **Menu bar** | File, Edit, View, Transfer, Script, Options, Tab, Help. On macOS it is in the top-of-screen menu bar **and** (by default) inside the window; toggle the in-window copy with View → Menu Bar in Window or Global Options → General. |
-| **Toolbar** | Connect · Quick Connect · Local Shell · Reconnect · Disconnect · Copy · Paste · Find · Log · SFTP · Run Script · Record · Session Manager / Command Window / Button Bar toggles · Import · Export · Options · Tabbed / Side-by-side / Stacked / Grid layout · Lock · **Connect Bar**. Hover an icon for its name. |
-| **Session Manager** (left by default) | Folder tree of saved sessions with a filter box. Drag its inner edge to resize. The header buttons move it to the **other side** of the window and **hide** it; the same is in **View → Session Manager Left / Right** and **View → Session Manager** (or the toolbar toggle, or the command palette). When hidden, a slim **SESSIONS** strip stays on that side of the window - click it to bring the Session Manager back. Position, visibility and width are remembered. |
-| **Tabs** | One tab per connection. The dot shows state: green = connected, amber = connecting, red = error, grey = disconnected. `LOG` / `REC` badges show logging / script recording. |
-| **Button Bar** | Your own buttons that send commands, run actions or scripts. |
-| **Command Window** | Type a command once and send it to the active tab or to every connected tab. |
-| **Status bar** | State, protocol, connection details (user@host, server version, route), active transfer %, terminal size and emulation, number of connected tabs. |
+| **Title bar** | The **tabs** (a dot shows the state: green connected, amber connecting, red error, grey disconnected; badges for logging and recording; a running script shows as a pill with Stop), **+** for a new session, the **Search or connect…** box (Quick Open, `Cmd+G` / `Ctrl+Shift+G`), Quick Connect (⚡), SFTP, the layout menu, the theme switch (Light / Dark / System), Settings (⚙) and the **⋯** menu with File, Edit, View, Transfer, Tools and Help. On macOS the tabs share the title bar with the window buttons. Many tabs scroll sideways (mouse wheel or trackpad). |
+| **Start page** | Shown when no tab is open: a large search-or-connect box (type `voss 10.1.1.1`, `ssh admin@host`, a session name …), quick actions (Quick Connect, New Session, Local Shell, Import, Discover Devices) and cards for your **Favourites** and **Recent** sessions with their device icon, address, device facts and when you last used them. Click a card to connect; right-click for more; *Clear* empties the list. |
+| **Session Manager** (left by default) | Folders and sessions with a filter box. Folders are coloured by level (top level amber, sub-folders purple, deeper blue, production light red), sessions show a **device icon** (switch, router, firewall, access point, server …) - View → Tile / Glyph Icons switches between coloured tiles and plain glyphs. New / Import / Scan buttons at the bottom; the **⋯** menu has Clear Recent / Favourites, Compact rows and the side. |
+| **Session side panel** | New Session and right-click → Properties… open beside the terminal with the everyday fields and the device facts; *Advanced* and **All session options…** open the full dialog. |
+| **Command Window / Button Bar** | View → Command Window / Button Bar (or `Mod+K` / `Mod+B`). |
+| **Status bar** | State, protocol · user@host:port, device type and facts (e.g. *VOSS 8.10.0.0 · up 41 days*), transfers, terminal size. |
+
+| Start page | Session side panel |
+|---|---|
+| ![Start page](screenshots/home.png) | ![Session side panel](screenshots/session-panel.png) |
+
+In the **classic layout** the menu bar (on macOS also the top-of-screen menu), the toolbar with Connect, Quick Connect, Local Shell, Reconnect, Disconnect, Copy, Paste, Find, Log, SFTP and the layout buttons, the **Connect Bar** and the tab strip are back; everything else works the same.
+
+The Session Manager can move to the **other side** or be **hidden** (View → Session Manager Left / Right, View → Session Manager, `Mod+M`); position, visibility and width are remembered.
 
 ![Session Manager on the right](screenshots/session-manager-right.png)
 
@@ -75,8 +93,8 @@ To build from source see the [README](../README.md#build).
 
 There are five ways to open a connection:
 
-1. **Double-click a saved session** in the Session Manager (or right-click → *Connect Terminal* / *Connect SFTP Session*, or select a folder → right-click → *Connect All in Folder*).
-2. **Quick Connect** (toolbar ⚡, `File → Quick Connect`): optionally pick a **device type** (default *(none)*; it fills protocol, port and the login steps), then the host (`host`, `user@host` or `host:port`). With a device type, **Use the device type's username and password** is ticked: the login comes from the device type. Untick it to type a different username (and, with *Save session*, a password or *No password*) for this device only. Tick *Save session* to keep it.
+1. **Double-click a saved session** in the Session Manager (or right-click → *Connect Terminal* / *Connect SFTP Session*, or select a folder → right-click → *Connect All in Folder*), or click a card on the start page.
+2. **Quick Connect** (⚡ in the title bar, `File → Quick Connect`, `Mod+Q`): type a connect line in the top box - `voss admin@10.20.1.11`, `ssh user@host:2222`, `telnet host 23`, `serial COM3 115200` - and the fields below fill in (protocol, address and port, device type, user name), or fill in the fields yourself. A device type's chip fills the protocol, port and login steps; its username is used unless you type another. Switch on **Save as a session** to keep it in the Session Manager (in the selected folder); the switch remembers your last choice, and Settings → General → *Save Quick Connect sessions* turns it on for every Quick Connect. **More options…** opens the full Session Options.
 
    | Inherit the device type's login | Override it for this session |
    |---|---|
@@ -255,7 +273,7 @@ Devices cabled to a console server (terminal server) get a session of protocol *
 
 ## 4. Sessions and the Session Manager
 
-- **New session**: `+` in the Session Manager header (goes into the selected folder) or right-click → *New Session*.
+- **New session**: **+** after the tabs, *New* at the bottom of the Session Manager, `Mod+N`, or right-click a folder → *New Session* (goes into the selected folder). It opens in the **session side panel** with the everyday fields; **All session options…** opens the full dialog.
 - **New folder**: folder-plus icon or right-click → *New Folder*. Folders can be nested.
 - **Edit**: right-click → *Properties…* (or *Options → Session Options* for the active tab).
 - **Duplicate / Rename / Delete**: right-click a session. Deleting a folder deletes the sessions inside it (you are asked first).
@@ -285,6 +303,26 @@ Devices cabled to a console server (terminal server) get a session of protocol *
   | <img src="assets/icon-raw.svg" width="16"> pink `<>` | Raw TCP |
   | small arrow badge | reached through a jump station (remote command `ssh … host`) |
 - **Default session**: a session file named `Default` at the top level (e.g. an imported one) is used as the template for new sessions.
+- **Create SFTP Session / Create SSH Session**: right-click an SSH2 session (Session Manager, start page card or tab) to save a copy that opens the SFTP browser - or, for an SFTP session, a terminal - with the same address, login and saved password.
+- **Clear Recent / Clear Favourites**: right-click the Recent or Favourites heading, the Session Manager's ⋯ menu, or *Clear* on the start page; right-click a recent session → *Remove from Recent*.
+
+### Device facts
+
+Termwright reads a device's **model, OS version, serial number, MAC address and uptime** (and any value you add) after connecting, in a **background login** - nothing is typed in your tab. Version and uptime are read at every connect, the others once. They show when you hover over a tab, in the status bar (*VOSS 8.10.0.0 · up 41 days*), on the start page cards, in the Session Manager hover card, in the session side panel and in the HTML scrollback report. A MAC address found is saved with the session, so *Find by MAC Address* works. VOSS, EXOS, Cisco IOS and Linux come with the rules; right-click a session → **Refresh Device Facts** reads them now.
+
+**Session Options → Device Facts** lists every fact - its value for this session, the command it comes from and whether it is read at every connect or once - with:
+
+- **Edit** (✎): name, the value for this session, the command, *Every connect* / *Once* and the pattern (a regular expression whose first `( )` group is the value). Name, command and pattern belong to the device type (all its sessions); the value only to this session.
+- **Remove** (🗑): stops reading the fact for the device type and removes the value saved for this session.
+- **Add by Hand…**: a value without a command, e.g. the rack location.
+- **Read Now**: reads all facts again.
+- **Teach a new fact**: type a command (e.g. `show sys-info`) and press **Run** - it runs in a background login - then select the value in the output with the mouse and press **Save Selection as Fact…**. Termwright works out the pattern from the output, shows what it finds, and saves it with the device type.
+
+You can also teach from the terminal: select the value in a tab, then **Edit → Save Selection as Device Fact…** (`Cmd+Shift+6` / `Alt+Shift+6`) - or Shift+right-click (right-click pastes by default) → *Save Selection as Device Fact…*. The session side panel's *Device facts* box has **Refresh** and **Edit** (opens this page).
+
+| Device facts | Teach a fact from the output |
+|---|---|
+| ![Device facts](screenshots/device-facts.png) | ![Save as Device Fact](screenshots/fact-teach.png) |
 
 ### Discover devices
 
@@ -570,7 +608,9 @@ File → **Run and Collect…** (or right-click a session, folder or selection �
 
 ![SFTP tab](screenshots/sftp.png)
 
-Open with the toolbar SFTP button, **Transfer → Open SFTP Tab** or `Cmd/Ctrl+Shift+P` while an SSH2 tab is connected. It reuses that login (no second password).
+Open with the SFTP button in the title bar, **Transfer → Open SFTP Tab** or `Mod+P` while an SSH2 tab is connected. It reuses that login (no second password).
+
+In the modern layout the bar at the top shows the session, **Run as ▾**, the terminal-folder button, the copy protocol (**SFTP / SCP**) and **Sync ↑ / Sync ↓**. Each pane has a **path you can click** (each folder opens with one click; click beside the path to type one), ↑, Refresh, **New Folder**, **New File**, **Delete** and the bookmark star, a **bookmark bar** below it, and a `..` row. Files show a coloured type badge (CFG, LOG, IMG, TXT, KEY …), folders are amber, and *Modified* reads *Today 09:41* or *12 Oct* (hover for the full date and permissions).
 
 **Working directory detection** (SFTP tab opened from a terminal tab):
 
@@ -593,13 +633,17 @@ Folders use the same colored folder icon as the Session Manager. Files are color
 **Standalone SFTP session** (its own login, no terminal): right-click an SSH2 session in the Session Manager → **Connect SFTP Session**, or right-click a terminal tab → **Connect SFTP Session (new login)**. Use this for devices such as VOSS that refuse a second channel on an existing SSH connection. To make a session always open this way, set Session Options → Connection → **Connect as: SFTP file browser only**; right-click → **Connect Terminal** still opens a shell. The tab right-click menu also offers **Open SFTP Tab (same login)**.
 
 - Left pane = this computer, right pane = the server. Type a path and press Enter, use ↑ (parent), Backspace, or double-click folders.
-- Select with click, Ctrl/Cmd+click, Shift+click, Ctrl/Cmd+A. **→** uploads, **←** downloads, double-clicking a file transfers it to the other side. Whole folders are copied recursively.
-- Right-click (server side): Download, Rename, Delete (asks first; folders are deleted with contents), New Folder, Refresh. Local files are never deleted by Termwright.
+- **Select several files**: tick the **check boxes** (they appear when you point at a row, and on every row once something is selected; the box in the header selects all or none), or Ctrl/Cmd+click, Shift+click for a range, Ctrl/Cmd+A. The footer shows how many are selected with *Clear*. **→** uploads, **←** downloads, double-clicking a file transfers it to the other side. Whole folders are copied recursively.
+- **New File** (page-plus icon) makes an empty file in the pane's folder - on this computer or the server; it never replaces an existing file. **New Folder** next to it.
+- **Delete** (bin icon, the Delete key, or right-click): on the **server** the selected files and folders are deleted after you confirm (folders with their contents). On **this computer** they are moved to the **Trash** (Recycle Bin on Windows), so they can be put back.
+
+  ![New File](screenshots/sftp-newfile.png)
+- Right-click (server side): Download, Rename, Delete, New Folder, Refresh. Right-click (this computer): Upload, Move to Trash, New Folder, Refresh.
 - **Sync ⇉ / ⇇** copies only new or changed files (size or newer time) from the current local folder to the current remote folder or back. Nothing is deleted.
-- The transfer queue shows progress; ✕ cancels, *Clear finished* tidies the list.
-- **Bookmarks** (☆ in each pane's header): *Bookmark This Folder…* saves the current folder; the ☆ menu lists bookmarks to jump to and removes the current one. Server bookmarks belong to their session; local bookmarks are shared by all sessions. The star turns solid (★) in a bookmarked folder.
+- The **transfer bar** at the bottom shows the current copy with progress, speed and time left, *Cancel*, and *N more* for the other transfers (Resume and Clear for finished ones). **✕ closes it** - copies that are running go on in the background (the status bar still shows them) and the bar comes back for the next transfer. The classic layout's queue has *Close* too.
+- **Bookmarks**: the **bookmark bar** under each path lists the bookmarks of that side - click one to open it, right-click to remove it, **+ Bookmark** saves the current folder (the ☆ in the header does the same and lists them). Server bookmarks belong to their session; local bookmarks are shared by all sessions.
 - **Server-to-server copy**: with two SFTP tabs open (e.g. two switches), right-click files or folders on one server → **Copy to <other server>: <its current folder>**. The data streams through this computer; nothing is stored locally. The ⇄ entry in the queue shows progress.
-- **Copy via SFTP / SCP** (the two buttons between the panes; the choice is remembered per session): browsing always uses SFTP, but → / ← (and double-click, Upload/Download in the right-click menu) can copy with **SCP** over the same login - useful when a device's SFTP server is slow or limited. Folders are copied recursively; the queue shows `↑ SCP` / `↓ SCP`. Sync, resume and server-to-server copy stay SFTP.
+- **Copy via SFTP / SCP** (the SFTP / SCP selector in the top bar - between the panes in the classic layout; the choice is remembered per session): browsing always uses SFTP, but → / ← (and double-click, Upload/Download in the right-click menu) can copy with **SCP** over the same login - useful when a device's SFTP server is slow or limited. Folders are copied recursively; the queue shows `↑ SCP` / `↓ SCP`. Sync, resume and server-to-server copy stay SFTP.
 
   ![SFTP tab copying with SCP](screenshots/sftp-scp.png)
 - **Run as another user** (*Run as ▾* in the server pane header): browse the server as root or any other user, like switching user in the terminal.
@@ -735,7 +779,9 @@ log(out && out.indexOf("not found") < 0 ? "VLAN 10 present" : "VLAN 10 missing")
 
 ![Passwords & Credentials](screenshots/passwords.png)
 
-**Master password** (Options → Passwords & Credentials → Master Password): when set, Termwright asks for it at start-up before it uses any saved session, credential or device type password or key passphrase. The passwords stay in the OS keychain; the master password only gates their use by Termwright.
+**Master password** (Options → Passwords & Credentials → Master Password, or the welcome flow): when set, Termwright starts with an **unlock window** and asks for it before it uses any saved session, credential or device type password or key passphrase. Any 4 or more characters work - a meter shows how strong it is, and capitals, numbers or symbols are never required. **Not now** keeps the passwords locked (they are asked when connecting); **Lock Now** locks them again. The passwords stay in the OS keychain; the master password only gates their use by Termwright.
+
+![Master password](screenshots/passwords-master.png)
 
 **Key Passphrases** (same dialog): passphrases of encrypted SSH keys saved in the OS keychain - change, forget or add them; see [SSH keys](#ssh-keys-generate-install-and-store).
 
@@ -803,13 +849,15 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 ![Color scheme editor](screenshots/schemes.png)
 
 - **Font / cursor**: Global Options → Terminal & Appearance (font family, size, cursor style, blink, scrollback); per-session font in Session Options → Terminal.
-- **Keyword highlighting** (off by default): Global Options → Keyword Highlighting. Create sets of words or regular expressions with colors; choose the default set (*None* = off), or a set per session (Session Options → Terminal). Only the rows on screen are highlighted, so long sessions stay fast. The built-in *Network* set marks errors/down (red), warnings (amber), up/ok (green) and IPv4 addresses (blue). Highlighting is skipped in full-screen programs such as `vi` or `less`.
+- **Keyword highlighting** (on by default with the *Network* set): Settings → Keyword Highlighting. The *Network* set colours **up / ok / enable(d) / active / forwarding** green, **down / error / failed / denied** red, **warning / disable(d) / blocked** amber and IPv4 addresses blue - the text itself is coloured (*Style → Colour the background* brings the coloured background back). Create your own sets of words or regular expressions with colors; choose the default set (*None* turns highlighting off), or a set per session (Session Options → Terminal → Appearance). Only the rows on screen are highlighted, so long sessions stay fast; it is skipped in full-screen programs such as `vi` or `less`.
 
 ![Keyword Highlighting](screenshots/keywords.png)
 
 ## 13. Global Options reference
 
-![Global Options - Updates](screenshots/options.png)
+In the modern layout Global Options is called **Settings** (⚙ in the title bar). The General page starts with **Appearance** - theme previews, Layout (Modern / Classic) and Icons (Tiles / Glyphs) side by side, interface font and text size - then **Behaviour** (each switch with a short explanation: confirm before closing, confirm multi-line paste, remember typed commands, **save Quick Connect sessions**, reopen the tabs that were open, show the Session Manager, Button Bar and Command Window) and **Folders and files**. Changes apply when you press *Save*.
+
+![Settings - General](screenshots/options.png)
 
 **Search options**: type in *Search options* at the top of the page list (e.g. `paste`, `font`, `sudo`); click a result to open its page with the option highlighted.
 
@@ -903,7 +951,9 @@ Tips: PuTTY needs `.ppk` keys (PuTTYgen converts OpenSSH keys) and OpenSSH canno
 
 ## 15. Keyboard shortcuts
 
-`Mod` = **Cmd** on macOS and **Ctrl+Shift** on Windows/Linux (Ctrl alone stays with the terminal).
+`Mod` = **Cmd** on macOS and **Ctrl+Shift** on Windows/Linux (Ctrl alone stays with the terminal). `Mod+Shift` = **Cmd+Shift** on macOS and **Alt+Shift** on Windows/Linux. Nearly every menu command has a shortcut; **Help → Keyboard Shortcuts** lists them all and has a search box.
+
+![Keyboard Shortcuts](screenshots/shortcuts.png)
 
 | Keys | Action | Keys | Action |
 |---|---|---|---|
@@ -915,7 +965,11 @@ Tips: PuTTY needs `.ppk` keys (PuTTYgen converts OpenSSH keys) and OpenSSH canno
 | Mod+S | Save scrollback | Mod+M | Toggle Session Manager |
 | Mod+K | Toggle Command Window | Mod+B | Toggle Button Bar |
 | Mod+E | Command Library | Mod+Y | Command History |
-| Mod+J | Add marker to the recording | | |
+| Mod+J | Add marker to the recording | Mod+N | New session |
+| Mod+D | Disconnect | Mod+Shift+K | Clear screen |
+| Mod+Shift+A | Auto scroll on / off | Mod+Shift+T | Timestamps on / off |
+| Mod+Shift+L | Log session | Mod+Shift+P | Save screen as image |
+| Mod+Shift+6 | Save selection as device fact | Mod+G | Quick Open |
 | Ctrl+Tab | Next tab | Cmd/Ctrl + / − / 0 | Zoom in / out / reset |
 | F11 | Full screen | Enter (disconnected tab) | Reconnect |
 
@@ -953,7 +1007,7 @@ Back up the data folder to back up everything except passwords.
 | Import: the .xml file is not listed (Windows) | Choose **All files (\*.\*)** in the file-type list of the picker, and check that the source is *XML settings export*. |
 | Pasting into a switch drops characters | Set *Paste line delay* (e.g. 50 ms) in Global Options → Terminal. |
 | ZMODEM does nothing | Install `lrzsz` on the remote host; check the Downloads folder in Global Options. |
-| Highlighting is missing | It is off by default: pick a default set in Global Options → Keyword Highlighting (e.g. *Network*) or a set in the session's Terminal page; it is also off in full-screen apps. |
+| Highlighting is missing | Check Settings → Keyword Highlighting → Default set (it is *Network* unless you chose *None*) and the session's own keyword set (Session Options → Appearance); it is off in full-screen apps. |
 
 ---
 

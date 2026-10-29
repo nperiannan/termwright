@@ -45,12 +45,13 @@ import { Compare } from './dialogs/compare';
 import { ExportDialog, ImportDialog } from './dialogs/import-export';
 import { About, Overlays } from './dialogs/overlays';
 import { WELCOME_VERSION, Welcome } from './dialogs/welcome';
+import { Unlock } from './dialogs/unlock';
 import { FactTeach } from './dialogs/fact-teach';
 
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -297,7 +298,7 @@ export class App implements OnInit {
     this.insetTitle.set(!!info.insetTitle);
     if (info.initError) this.ui.toast('Startup error: ' + info.initError, 'error', 20000);
     await this.ui.loadSettings();
-    if (info.locked) { this.ui.locked.set(true); this.ui.open('passwords'); }
+    if (info.locked) { this.ui.locked.set(true); this.ui.lockScreen.set(true); }
     else if (this.ui.settings() && this.ui.settings()!.welcomeSeen !== WELCOME_VERSION) this.ui.open('welcome');
     await this.ui.refreshTree();
     await this.tabs.restoreTabs();

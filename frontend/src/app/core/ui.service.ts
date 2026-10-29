@@ -18,6 +18,8 @@ export class Ui {
   readonly settings = signal<Settings | null>(null);
   /** True while saved passwords wait for the master password. */
   readonly locked = signal(false);
+  /** The start-up unlock screen is showing (closed by Unlock or Not now). */
+  readonly lockScreen = signal(false);
   /** True while the UI uses the light theme (set by the app shell). */
   readonly lightUi = signal(false);
   /** Tab the Key Login Setup dialog works on ('' = generate a key only). */

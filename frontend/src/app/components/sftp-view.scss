@@ -40,6 +40,7 @@
   app-icon { color: #e5a93b; }
   &.on { border-color: var(--accent); color: var(--accent); }
   &.add { border-style: dashed; color: var(--muted); background: transparent; } }
+.ck { display: none; }
 .del:not(:disabled):hover { color: var(--danger) !important; }
 .bm { font-size: calc(15px * var(--ui-scale, 1)); width: 26px; &.on { color: var(--accent); } }
 
@@ -92,6 +93,11 @@
     &.head { height: 28px; background: var(--surface); border-bottom: 1px solid var(--line); font-weight: 600; letter-spacing: .05em; color: var(--faint); }
     &:not(.head):hover { background: var(--surface-2); }
     &.sel, &.sel:hover { background: var(--accent-soft); } }
+  /* check boxes: shown on hover, and on every row once something is selected */
+  .ck { width: 16px; flex: none; display: inline-flex; align-items: center; margin-right: -2px; visibility: hidden;
+    input { margin: 0; width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; } }
+  .row:hover .ck, .list.multi .ck, .row.sel .ck { visibility: visible; }
+  footer .clr { margin-left: 8px; color: var(--accent); cursor: pointer; }
   /* a flat amber folder, as in the Session Manager */
   .fold { width: 20px; height: 16px; flex: none; margin: 0 0 1px; background: #e5a93b; border-radius: 3px 3px 4px 4px;
     clip-path: polygon(0 18%, 38% 18%, 48% 0, 100% 0, 100% 100%, 0 100%); &.dot { opacity: .65; } }

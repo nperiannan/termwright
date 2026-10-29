@@ -4,6 +4,8 @@ import { FileFilter, ImportSource } from '../core/models';
 import { Ui } from '../core/ui.service';
 import { UI_SIZES, uiFontSize } from '../core/ui-fonts';
 import { Icon } from '../components/icon';
+import { PwMeter } from '../components/pw-meter';
+import { MIN_MASTER, pwStrength } from '../core/pw-strength';
 
 /** The welcome flow shows once per version that changes it (new installs and updates). */
 export const WELCOME_VERSION = '0.21';
@@ -14,7 +16,7 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
  *  program, done. Shown once on a new install; Help → Welcome… shows it again. */
 @Component({
   selector: 'app-welcome',
-  imports: [Icon],
+  imports: [Icon, PwMeter],
   template: `
   <div class="modal-backdrop">
     <div class="wel" role="dialog" aria-label="Welcome to Termwright">
@@ -80,6 +82,23 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
           @if (error()) { <p class="err">{{ error() }}</p> }
         }
         @case (2) {
+          <div class="secic"><app-icon name="lock" [size]="22" /></div>
+          <h2>Protect your saved passwords</h2>
+          <p class="sub">Optional. With a master password, Termwright asks for it when it starts, before it uses any saved password.
+            The passwords stay in the OS keychain either way. You can set or change it later in Passwords &amp; Credentials.</p>
+          @if (hasMaster()) {
+            <div class="mpok"><app-icon name="check" [size]="16" /> A master password is set.</div>
+          } @else {
+            <div class="lbl">Master password</div>
+            <input type="password" class="mpin" [value]="mp()" (input)="mp.set($any($event.target).value); mpErr.set('')" placeholder="At least 4 characters" autocomplete="new-password" />
+            <app-pw-meter [pw]="mp()" />
+            <div class="lbl">Confirm</div>
+            <input type="password" class="mpin" [value]="mp2()" (input)="mp2.set($any($event.target).value); mpErr.set('')" (keydown.enter)="next()" autocomplete="new-password" />
+            @if (mpErr()) { <p class="err">{{ mpErr() }}</p> }
+            <p class="muted small">Any 4 or more characters - capitals, numbers and symbols are welcome but not needed. Keep it safe: Termwright cannot show it to you again.</p>
+          }
+        }
+        @case (3) {
           <div class="ready"><app-icon name="check" [size]="26" /></div>
           <h2>You're ready</h2>
           <p class="sub">{{ imported() ? imported() + ' session' + (imported() === 1 ? '' : 's') + ' imported.' : 'Add a session, or just type an address to connect.' }}</p>
@@ -94,11 +113,11 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
       <div class="foot">
         @if (step() > 0) { <button type="button" (click)="step.set(step() - 1)">Back</button> }
         <span class="grow"></span>
-        @if (step() === 2) {
+        @if (step() === 3) {
           <button type="button" (click)="finish('discover')">Discover Devices</button>
           <button type="button" class="primary" (click)="finish()">Start Using Termwright</button>
         } @else {
-          <button type="button" class="primary" (click)="next()">{{ step() === 1 && !imported() ? 'Not Now' : 'Continue' }}</button>
+          <button type="button" class="primary" [disabled]="busy()" (click)="next()">{{ nextLabel() }}</button>
         }
       </div>
     </div>
@@ -140,12 +159,25 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
     .tips { margin: 4px 0 0; padding-left: 18px; line-height: 1.7; color: var(--text);
       kbd { font: 11px var(--ui-font); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); } .mono { font-family: var(--mono); } }
     .foot { display: flex; gap: 8px; margin-top: 22px; .grow { flex: 1; } }
+    .secic { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 8px; }
+    .mpin { width: 100%; height: 36px; }
+    .mpok { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); font-weight: 500; }
+    .small { font-size: calc(12px * var(--ui-scale, 1)); margin: 10px 0 0; line-height: 1.45; }
   `],
 })
 export class Welcome {
   protected ui = inject(Ui);
   private backend = inject(Backend);
-  readonly titles = ['Look', 'Sessions', 'Done'];
+  readonly titles = ['Look', 'Sessions', 'Security', 'Done'];
+  readonly mp = signal('');
+  readonly mp2 = signal('');
+  readonly mpErr = signal('');
+  readonly hasMaster = computed(() => !!this.ui.settings()?.masterHash);
+  nextLabel() {
+    if (this.step() === 1 && !this.imported()) return 'Not Now';
+    if (this.step() === 2 && !this.hasMaster()) return this.mp() ? 'Set Password' : 'Skip';
+    return 'Continue';
+  }
   readonly step = signal(0);
   readonly busy = signal(false);
   readonly error = signal('');
@@ -185,7 +217,16 @@ export class Welcome {
   setTheme(v: string) { this.ui.patchSettings({ theme: v }); }
   setSize(v: number) { this.ui.patchSettings({ uiFontSize: v }); }
 
-  next() {
+  async next() {
+    if (this.step() === 2 && !this.hasMaster() && this.mp()) {
+      if (!pwStrength(this.mp()).ok) { this.mpErr.set(`Use at least ${MIN_MASTER} characters.`); return; }
+      if (this.mp() !== this.mp2()) { this.mpErr.set('The two passwords are not the same.'); return; }
+      this.busy.set(true);
+      try { await this.backend.setMasterPassword('', this.mp()); await this.ui.loadSettings(); this.ui.toast('Master password set', 'success'); }
+      catch (e) { this.mpErr.set(errText(e)); this.busy.set(false); return; }
+      this.busy.set(false);
+      this.mp.set(''); this.mp2.set('');
+    }
     const n = this.step() + 1;
     this.step.set(n);
     if (n === 1 && this.sources() === null) {

@@ -149,6 +149,7 @@ export class Backend {
   sftpRealPath(id: string, p: string) { return this.call<string>('SFTPRealPath', id, p); }
   sftpMkdir(id: string, p: string) { return this.call<void>('SFTPMkdir', id, p); }
   sftpRename(id: string, from: string, to: string) { return this.call<void>('SFTPRename', id, from, to); }
+  sftpCreateFile(id: string, p: string) { return this.call<void>('SFTPCreateFile', id, p); }
   sftpRemove(id: string, p: string) { return this.call<void>('SFTPRemove', id, p); }
   sftpClose(id: string) { return this.call<void>('SFTPClose', id); }
   localList(dir: string) { return this.call<FileEntry[] | null>('LocalList', dir); }
@@ -156,6 +157,7 @@ export class Backend {
   localParent(p: string) { return this.call<string>('LocalParent', p); }
   localJoin(dir: string, name: string) { return this.call<string>('LocalJoin', dir, name); }
   localMkdir(p: string) { return this.call<void>('LocalMkdir', p); }
+  localCreateFile(p: string) { return this.call<void>('LocalCreateFile', p); }
   localTrash(paths: string[]) { return this.call<void>('LocalTrash', paths); }
   startTransfer(sftpId: string, dir: 'up' | 'down', sources: string[], dest: string) { return this.call<string>('StartTransfer', sftpId, dir, sources, dest); }
   cancelTransfer(id: string) { return this.call<void>('CancelTransfer', id); }
@@ -188,6 +190,7 @@ export class Backend {
   receiveYmodem(tabId: string) { return this.call<string>('ReceiveYmodem', tabId); }
   setCredentialPassword(name: string, password: string) { return this.call<void>('SetCredentialPassword', name, password); }
   hasCredentialPassword(name: string) { return this.call<boolean>('HasCredentialPassword', name); }
+  lockPasswords() { return this.call<boolean>('LockPasswords'); }
   unlockPasswords(password: string) { return this.call<boolean>('UnlockPasswords', password); }
   setMasterPassword(current: string, next: string) { return this.call<void>('SetMasterPassword', current, next); }
   exportVault(dest: string, passphrase: string) { return this.call<number>('ExportVault', dest, passphrase); }

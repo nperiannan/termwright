@@ -6,13 +6,15 @@ import { Credential } from '../core/models';
 import { askRef, isRef } from '../core/secret-ref';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
+import { PwMeter } from '../components/pw-meter';
+import { MIN_MASTER, pwStrength } from '../core/pw-strength';
 
 type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
 
 /** Options → Passwords & Credentials: named credentials, master password, encrypted vault export/import. */
 @Component({
   selector: 'app-passwords-dialog',
-  imports: [FormsModule, Autofocus, Icon],
+  imports: [FormsModule, Autofocus, Icon, PwMeter],
   template: `
   <div class="modal-backdrop">
     <div class="modal wide">
@@ -106,10 +108,14 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
                 @if (hasMaster()) {
                   <label>Current</label><input type="password" [(ngModel)]="curPw" autocomplete="off" />
                 }
-                <label>New</label><input type="password" [(ngModel)]="newPw" autocomplete="new-password" />
+                <label>New</label><div><input type="password" [(ngModel)]="newPw" autocomplete="new-password" placeholder="At least 4 characters" style="width: 100%" />
+                  @if (newPw || !hasMaster()) { <app-pw-meter [pw]="newPw" /> }</div>
                 <label>Confirm</label><input type="password" [(ngModel)]="newPw2" autocomplete="new-password" />
               </div>
-              <div class="row"><span class="spacer"></span>
+              <p class="hint">Any 4 or more characters - capitals, numbers and symbols make it stronger but are not needed.</p>
+              <div class="row">
+                @if (hasMaster()) { <button type="button" (click)="lockNow()" title="Lock the saved passwords now and show the unlock window"><app-icon name="lock" [size]="14" /> Lock Now</button> }
+                <span class="spacer"></span>
                 <button type="button" class="primary" (click)="setMaster()">{{ hasMaster() ? (newPw ? 'Change' : 'Remove') : 'Set' }} Master Password</button></div>
             }
             @case ('vault') {
@@ -258,13 +264,21 @@ export class PasswordsDialog implements OnInit {
     this.cdr.markForCheck();
   }
 
+  async lockNow() {
+    if (!(await this.backend.lockPasswords().catch(() => false))) return;
+    this.ui.locked.set(true);
+    this.ui.close();
+    this.ui.lockScreen.set(true);
+  }
+
   async setMaster() {
+    if (this.newPw && !pwStrength(this.newPw).ok) { this.status('', `Use at least ${MIN_MASTER} characters.`); return; }
     if (this.newPw !== this.newPw2) { this.status('', 'The new passwords do not match.'); return; }
     try {
       await this.backend.setMasterPassword(this.curPw, this.newPw);
       await this.ui.loadSettings();
       this.hasMaster.set(!!this.newPw);
-      this.status(this.newPw ? 'Master password set.' : 'Master password removed.');
+      this.status(this.newPw ? 'Master password set. Termwright asks for it when it starts - Lock Now shows the unlock window.' : 'Master password removed.');
       this.curPw = this.newPw = this.newPw2 = '';
     } catch (e) { this.status('', errText(e)); }
     this.cdr.markForCheck();

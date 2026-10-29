@@ -76,6 +76,7 @@ interface Pane {
               <button class="icon-btn" title="Up" (click)="up(p)"><app-icon name="up" /></button>
               <button class="icon-btn" title="Refresh" (click)="load(p)"><app-icon name="refresh" /></button>
               <button class="icon-btn" title="New folder" (click)="mkdir(p)"><app-icon name="folder-plus" /></button>
+              <button class="icon-btn" title="New file" (click)="newFile(p)"><app-icon name="file-plus" /></button>
               <button class="icon-btn del" [disabled]="!p.selected.size" [title]="delTitle(p)" (click)="remove(p)"><app-icon name="trash" /></button>
               <button class="icon-btn bm" [class.on]="isBookmarked(p)" title="Bookmarks" (click)="bookmarkMenu($event, p)"><app-icon name="star" /></button>
             } @else {
@@ -83,6 +84,7 @@ interface Pane {
               <input class="path mono" [ngModel]="p.dir" (keydown.enter)="go(p, $any($event.target).value)" spellcheck="false" />
               <button class="icon-btn" title="Refresh" (click)="load(p)"><app-icon name="refresh" /></button>
               <button class="icon-btn" title="New folder" (click)="mkdir(p)"><app-icon name="folder-plus" /></button>
+              <button class="icon-btn" title="New file" (click)="newFile(p)"><app-icon name="file-plus" /></button>
               <button class="icon-btn del" [disabled]="!p.selected.size" [title]="delTitle(p)" (click)="remove(p)"><app-icon name="trash" /></button>
               @if (p.side === 'remote') {
                 <button class="root-btn" [class.on]="tab().root" [disabled]="rootBusy()" (click)="runAsMenu($event)"
@@ -104,8 +106,8 @@ interface Pane {
             }
             @if (!isBookmarked(p)) { <button type="button" class="bmc add" title="Bookmark this folder" (click)="addBookmark(p)">+ Bookmark</button> }
           </div>
-          <div class="list" tabindex="0" (keydown)="key($event, p)">
-            <div class="row head"><span class="n">Name</span><span class="s">Size</span><span class="d">Modified</span><span class="m">Mode</span></div>
+          <div class="list" tabindex="0" (keydown)="key($event, p)" [class.multi]="p.selected.size > 0">
+            <div class="row head"><span class="n">@if (modern()) { <span class="ck" title="Select all / none" (click)="toggleAll(p)"><input type="checkbox" tabindex="-1" [checked]="p.entries.length > 0 && p.selected.size === p.entries.length" [indeterminate]="p.selected.size > 0 && p.selected.size < p.entries.length" /></span> }Name</span><span class="s">Size</span><span class="d">Modified</span><span class="m">Mode</span></div>
             @if (p.error) { <div class="err pad">{{ p.error }}</div> }
             @if (modern() && crumbs(p).length > 1) {
               <div class="row" title="Up one folder" (dblclick)="up(p)"><span class="n"><span class="fold"></span>..</span><span class="s"></span><span class="d"></span><span class="m"></span></div>
@@ -114,7 +116,7 @@ interface Pane {
               <div class="row" [class.sel]="p.selected.has(e.name)" (click)="select(p, e, $event)" (dblclick)="open(p, e)"
                    (contextmenu)="menu($event, p, e)">
                 @if (modern()) {
-                  <span class="n">@if (e.isDir) { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }{{ e.name }}</span>
+                  <span class="n"><span class="ck" (click)="$event.stopPropagation(); toggle(p, e)" (dblclick)="$event.stopPropagation()" title="Select (also Cmd/Ctrl-click, Shift-click for a range)"><input type="checkbox" tabindex="-1" [checked]="p.selected.has(e.name)" /></span>@if (e.isDir) { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }{{ e.name }}</span>
                   <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
                   <span class="d" [title]="(e.modTime | date: 'yyyy-MM-dd HH:mm') + '  ' + e.mode">{{ when(e.modTime) }}</span>
                 } @else {
@@ -126,7 +128,7 @@ interface Pane {
               </div>
             }
           </div>
-          <footer>{{ p.entries.length }} items @if (p.selected.size) { · {{ p.selected.size }} selected }</footer>
+          <footer>{{ p.entries.length }} items @if (p.selected.size) { · {{ p.selected.size }} selected <a class="clr" (click)="clearSel(p)">Clear</a> }</footer>
         </section>
         @if (p.side === 'local') {
           @if (modern()) {
@@ -469,6 +471,30 @@ export class SftpView implements OnInit {
   open(p: Pane, e: FileEntry) {
     if (e.isDir) void this.go(p, this.join(p, e.name));
     else void this.transfer(p.side === 'local' ? 'up' : 'down', [e.name], p.side);
+  }
+
+  /** The check box of a row: adds it to or takes it out of the selection. */
+  toggle(p: Pane, e: FileEntry) {
+    this.sig(p).update(x => { const sel = new Set(x.selected); if (sel.has(e.name)) sel.delete(e.name); else sel.add(e.name); return { ...x, selected: sel }; });
+    this.lastClicked = e.name;
+  }
+  toggleAll(p: Pane) {
+    this.sig(p).update(x => ({ ...x, selected: x.selected.size === x.entries.length ? new Set<string>() : new Set(x.entries.map(f => f.name)) }));
+  }
+  clearSel(p: Pane) { this.sig(p).update(x => ({ ...x, selected: new Set<string>() })); }
+
+  /** New empty file in the pane's folder (never overwrites). */
+  async newFile(p: Pane) {
+    const name = (await this.ui.input('New File', 'File name', 'new.txt'))?.trim();
+    if (!name) return;
+    if (/[\\/]/.test(name)) { this.ui.toast('Type a name without / or \\', 'error'); return; }
+    const cur = this.sig(p)();
+    try {
+      if (p.side === 'local') await this.backend.localCreateFile(this.join(cur, name));
+      else await this.backend.sftpCreateFile(this.sid(), this.join(cur, name));
+      await this.load(cur);
+      this.sig(p).update(x => ({ ...x, selected: new Set([name]) }));
+    } catch (e) { this.ui.error(e); }
   }
 
   select(p: Pane, e: FileEntry, ev: MouseEvent) {

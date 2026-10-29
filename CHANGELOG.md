@@ -43,6 +43,10 @@ A cleaner, more modern look, now the default. The **Classic** layout (toolbar, t
 * The **+** after the tabs opens New Session (Quick Connect is the lightning button).
 * **Backups, Change Checklists, Run and Collect, Recordings, Key Login Setup, Software Update, About, Keyboard Shortcuts, Console Server Ports, Bulk Edit, Devices With a New Address, Compare** (modern layout): icon headers, tables with coloured status pills (no change / changed / failed), checklist steps Before → After → Compare, choice cards and a key-type switch for key login, the nightly build folded away in Software Update, features as tiles in About, a searchable Keyboard Shortcuts list with keycaps, a switch per field in Bulk Edit, and old → new address for moved devices.
 * **Start page**: the search box, the quick buttons (spread across its width), the card headings and Clear line up on one column; bigger session cards (lift on hover), and a card with Connect when there are no sessions yet.
+* **Master password**: an **unlock window** at start-up when a master password is set (Unlock, or Not now to be asked for passwords when connecting); **Lock Now** in Passwords & Credentials; any 4 or more characters with a strength meter (no forced capitals, numbers or symbols); the welcome flow has an optional master password step.
+* **SFTP**: check boxes to select several files (and a select-all box), **New File** on both sides (never overwrites), Delete on both sides (this computer: to the Trash / Recycle Bin), a bookmark bar.
+* **Quick Connect** remembers *Save as a session*, and Settings → General → *Save Quick Connect sessions* saves every Quick Connect.
+* **Docs**: README, User Guide and FEATURES updated for 0.21, with new screenshots of every page in the modern layout.
 * Corners are less rounded (dialogs, cards, buttons); on macOS the title bar is as tall as the window buttons need, so the sidebar button and the tabs line up with them.
 * Dialogs, menus, notices, the Command Window and the Button Bar use the same design (surfaces, rounded corners, spacing) in the modern layout.
 * The Button Bar is hidden once when updating (View → Button Bar shows it again).
