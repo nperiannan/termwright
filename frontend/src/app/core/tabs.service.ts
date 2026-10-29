@@ -56,6 +56,8 @@ export interface TabView {
   shellUser?: string;
   /** Terminal tab: host the shell reports (OSC 7 file://host/… or RemoteHost=user@host); '' after ssh / exit until it reports again. */
   shellHost?: string;
+  /** Terminal tab (SSH2): the Files panel beside it is shown. */
+  filesPanel?: boolean;
   /** SFTP tab: folder to open first (the terminal's folder), falls back to home. */
   startDir?: string;
 }
@@ -193,9 +195,23 @@ export class Tabs {
    * there is one) and only while the terminal sits at a shell prompt.
    */
   private async autoCwd(sftp: TabView) {
-    if (this.ui.settings()?.sftpCwdAuto === false) return;
     const sh = this.shellOf(sftp);
-    if (!sh || sh.state !== 'connected') return;
+    if (sh) await this.detectCwd(sh, sftp.id);
+  }
+
+  /** The terminal's cursor sits after a shell prompt ($ # % >), nothing typed after it. */
+  atPrompt(id: string) {
+    const term = this.handles.get(id)?.term;
+    if (!term || term.buffer.active.type !== 'normal') return false;
+    const b = term.buffer.active;
+    const line = b.getLine(b.baseY + b.cursorY)?.translateToString(true) ?? '';
+    return /[$#%>]\s*$/.test(line.trimEnd() + ' ') && line.trimEnd().length === line.slice(0, b.cursorX).trimEnd().length;
+  }
+
+  /** Turns folder reporting on in a terminal's shell when it is bash or zsh at a prompt (checked over the SFTP session sftpId). */
+  async detectCwd(sh: TabView, sftpId: string) {
+    if (this.ui.settings()?.sftpCwdAuto === false || sh.state !== 'connected') return;
+    const sftp = { id: sftpId };
     // Also when a folder is already known: after "sudo su -" the new shell
     // does not report yet, so the line is typed again (it is harmless twice).
     const name = await this.backend.sftpLoginShell(sftp.id).catch(() => '');
@@ -264,8 +280,8 @@ export class Tabs {
     // tab can follow it there.
     const t0 = this.get(id);
     const jumpTab = !!t0?.hopTarget && this.tabs().some(t => t.kind === 'sftp' && this.linkedTerm(t)?.id === id && !t.hopTarget);
-    if (!(leave && jumpTab) && !/^(sudo\s+(-\S+\s+)*(su\b|-i\b|-s\b|bash\b|zsh\b|-iu\s|-u\s+\S+\s+(-i|-s|bash|zsh)\b)|su\b|exec\s+(bash|zsh)\b|(bash|zsh)(\s+-l)?$)/.test(c)) return;
-    if (!this.tabs().some(t => t.kind === 'sftp' && this.linkedTerm(t)?.id === id)) return;
+    if (!(leave && (jumpTab || (!!t0?.hopTarget && !!t0.filesPanel))) && !/^(sudo\s+(-\S+\s+)*(su\b|-i\b|-s\b|bash\b|zsh\b|-iu\s|-u\s+\S+\s+(-i|-s|bash|zsh)\b)|su\b|exec\s+(bash|zsh)\b|(bash|zsh)(\s+-l)?$)/.test(c)) return;
+    if (!t0?.filesPanel && !this.tabs().some(t => t.kind === 'sftp' && this.linkedTerm(t)?.id === id)) return;
     let tries = 0;
     const tick = () => {
       const term = this.handles.get(id)?.term;
@@ -470,6 +486,7 @@ export class Tabs {
       session: ti.session, logFile: ti.logFile, cols: 0, rows: 0, locked: false,
       kind: 'terminal', parentId: '', home: '', recording: false,
       timestamps: !!ti.session.timestamps, autoScroll: !ti.session.noAutoScroll, sendBar: ti.session.protocol === 'Serial' || !this.ui.settings()?.hideTerminalBar,
+      filesPanel: ti.session.protocol === 'SSH2' && !!ti.session.filesPanel,
     };
     this.backend.sftpHopTarget(ti.session).then(h => { if (h) this.patch(ti.id, { hopTarget: h }); }).catch(() => {});
     this.unsubs.set(ti.id, [

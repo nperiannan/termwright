@@ -155,6 +155,10 @@ export class Backend {
   sftpCreateFile(id: string, p: string) { return this.call<void>('SFTPCreateFile', id, p); }
   sftpRemove(id: string, p: string) { return this.call<void>('SFTPRemove', id, p); }
   sftpClose(id: string) { return this.call<void>('SFTPClose', id); }
+  /** Files panel: copy a remote file to a temporary folder and open it with the system's program. */
+  sftpOpenFile(id: string, remote: string) { return this.call<{ local: string; mod: number }>('SFTPOpenFile', id, remote); }
+  openedFileMod(local: string) { return this.call<number>('OpenedFileMod', local); }
+  sftpUploadOpened(id: string, local: string, remote: string) { return this.call<void>('SFTPUploadOpened', id, local, remote); }
   localList(dir: string) { return this.call<FileEntry[] | null>('LocalList', dir); }
   localHome() { return this.call<string>('LocalHome'); }
   localParent(p: string) { return this.call<string>('LocalParent', p); }

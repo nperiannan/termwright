@@ -223,7 +223,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="row"><input name="mac" [(ngModel)]="s.mac" placeholder="(not saved)" spellcheck="false" style="max-width: 220px" />
                     <span class="hint">saved by Discover Devices: finds the device again when DHCP gives it a new address, and warns when another device answers at this address</span></div>
                 }
-                @if (s.deviceType || (modern() && !remote() && s.protocol !== 'Local Shell')) {
+                @if (s.deviceType || s.protocol === 'SSH2' || (modern() && !remote() && s.protocol !== 'Local Shell')) {
                   <label class="o5">{{ modern() ? '' : 'Login' }}</label>
                   <div class="checks o5">
                     @if (s.deviceType) {
@@ -233,6 +233,11 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                     }
                     @if (modern() && !remote() && s.protocol !== 'Local Shell') {
                       <label><input type="checkbox" name="arc2" [(ngModel)]="s.autoReconnect" /><span class="tx">Reconnect automatically<small>when the connection drops</small></span></label>
+                    }
+                    @if (s.protocol === 'SSH2') {
+                      <label title="A file browser beside the terminal, opposite the Session Manager: it follows the terminal's folder and opens files on this computer (View → Files Panel shows or hides it for a tab)">
+                        <input type="checkbox" name="filesPanel" [(ngModel)]="s.filesPanel" />
+                        @if (modern()) { <span class="tx">Files panel beside the terminal<small>follows the terminal's folder; double-click opens a file here</small></span> } @else { Show the Files panel beside the terminal }</label>
                     }
                   </div>
                 }

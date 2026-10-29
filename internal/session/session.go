@@ -96,6 +96,7 @@ const (
 	kConBase      = "Termwright Console Base Port"
 	kConProto     = "Termwright Console Protocol"
 	kSFTPTarget   = "Termwright SFTP To Command Target"
+	kFilesPanel   = "Termwright Files Panel"
 	kKrbPrinc     = "Termwright Kerberos Principal"
 	kKrbSPN       = "Termwright Kerberos SPN"
 	kCertFile     = "Termwright Certificate File"
@@ -218,6 +219,7 @@ type Session struct {
 	MAC               string `json:"mac"`               // the device's MAC address (Discover Devices): finds it again when its IP changes
 	SmartCard         string `json:"smartCard"`         // "" = no, "any" = any key on a smart card, else the key's SHA256 fingerprint
 	SFTPToTarget      bool   `json:"sftpToTarget"`      // remote command "ssh … host": SFTP opens on that host, through this connection
+	FilesPanel        bool   `json:"filesPanel"`        // SSH2: a file browser beside the terminal that follows its folder
 	SerialDTR         bool   `json:"serialDtr"`         // assert DTR when opening the port
 	SerialRTS         bool   `json:"serialRts"`         // assert RTS when opening the port
 	SerialFlow        string `json:"serialFlow"`        // "" none | rtscts | xonxoff
@@ -328,6 +330,7 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.ConsoleBase = int(f.DWord(kConBase, 0))
 	s.ConsoleProtocol = f.Str(kConProto, "")
 	s.SFTPToTarget = f.Bool(kSFTPTarget, false)
+	s.FilesPanel = f.Bool(kFilesPanel, false)
 	s.KerberosPrincipal = f.Str(kKrbPrinc, "")
 	s.KerberosSPN = f.Str(kKrbSPN, "")
 	s.CertificateFile = f.Str(kCertFile, "")
@@ -644,6 +647,7 @@ func (s Session) Apply(f *sessionfile.File) {
 		f.Delete(kConBase)
 	}
 	setOptBool(f, kSFTPTarget, s.SFTPToTarget && s.UseRemoteCommand)
+	setOptBool(f, kFilesPanel, s.FilesPanel && s.Protocol == ProtoSSH2)
 	setOptStr(f, kKrbPrinc, s.KerberosPrincipal)
 	setOptStr(f, kKrbSPN, s.KerberosSPN)
 	setOptStr(f, kCertFile, s.CertificateFile)

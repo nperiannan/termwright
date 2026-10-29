@@ -11,6 +11,7 @@ import { DeviceIcon, deviceKindOf } from './components/device-icon';
 import { sessionAddr } from './components/session-tree';
 import { SessionPanel } from './components/session-panel';
 import { menuBar, shortcutOf } from './core/menu';
+import { FilesPanel } from './components/files-panel';
 import { envInfo, envOf } from './core/env';
 import { Ui } from './core/ui.service';
 import { uiFontSize, uiFontStack } from './core/ui-fonts';
@@ -50,7 +51,7 @@ import { FactTeach } from './dialogs/fact-teach';
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, Icon, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
+  imports: [FormsModule, Icon, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
     PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -389,6 +390,12 @@ export class App implements OnInit {
         setTimeout(() => this.cmdWin()?.focus(), 50);
         break;
       case 'toggle-button-bar': this.ui.patchSettings({ showButtonBar: !s?.showButtonBar }); break;
+      case 'files-panel': {
+        const t = this.tabs.active();
+        if (t?.kind === 'terminal' && t.session.protocol === 'SSH2') this.tabs.patch(t.id, { filesPanel: !t.filesPanel });
+        else this.ui.toast('The Files panel is for SSH2 terminal tabs.', 'info');
+        break;
+      }
       case 'zoom-in': if (s) this.ui.patchSettings({ fontSize: Math.min(48, s.fontSize + 1) }); break;
       case 'zoom-out': if (s) this.ui.patchSettings({ fontSize: Math.max(6, s.fontSize - 1) }); break;
       case 'zoom-reset': this.ui.patchSettings({ fontSize: 14 }); break;
@@ -529,6 +536,7 @@ export class App implements OnInit {
           { label: `Open SFTP Tab on ${t.session.hostname} (same login)`, action: () => this.tabs.openSftp(t.id, 'jump'), disabled: t.state !== 'connected' },
           { label: `Open SFTP Tab on ${t.hopTarget} (through this login)`, action: () => this.tabs.openSftp(t.id, 'target'), disabled: t.state !== 'connected' },
         ] : [{ label: 'Open SFTP Tab (same login)', action: () => this.tabs.openSftp(t.id), disabled: t.state !== 'connected' }]),
+        { label: (t.filesPanel ? '✓ ' : '') + 'Files Panel', hint: shortcutOf('files-panel', this.isMac), action: () => this.tabs.patch(t.id, { filesPanel: !t.filesPanel }) },
         { label: 'Set Up Key Login...', action: () => { this.ui.keySetupTab.set(t.id); this.ui.open('keySetup'); }, disabled: t.state !== 'connected' },
         { label: 'Connect SFTP Session (new login)', action: () => this.tabs.openSftpSession(t.session.path).catch(e => this.ui.error(e)),
           disabled: !t.session.path },

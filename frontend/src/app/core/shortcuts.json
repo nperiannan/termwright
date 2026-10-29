@@ -15,5 +15,5 @@
   "layout-tabs": "1", "layout-tile-v": "2", "layout-tile-h": "3", "layout-grid": "4",
   "sftp-tab": "P", "send-file": "+F", "scp-upload": "+U", "scp-download": "+W",
   "command-library": "E", "history": "Y", "run-script": "+E", "record-toggle": "+7",
-  "session-options": "T", "teach-fact": "+6", "lock": "+9", "send-all": "+8"
+  "session-options": "T", "teach-fact": "+6", "lock": "+9", "send-all": "+8", "files-panel": "+1"
 }

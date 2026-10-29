@@ -27,6 +27,7 @@
       <app-icon name="find" [size]="14" /><span>Search or connect…</span><kbd>{{ quickOpenKeys }}</kbd></button>
     <button class="ab" title="Quick Connect" (click)="action('quick-connect')"><app-icon name="quick" /></button>
     <button class="ab" title="Open SFTP tab" [disabled]="active()?.session?.protocol !== 'SSH2' || active()?.state !== 'connected'" (click)="action('sftp-tab')"><app-icon name="sftp" /></button>
+    <button class="ab" [class.on]="!!active()?.filesPanel" [title]="'Files panel beside the terminal (' + scLabel('files-panel') + ')'" [disabled]="active()?.kind !== 'terminal' || active()?.session?.protocol !== 'SSH2'" (click)="action('files-panel')"><app-icon name="files-panel" /></button>
     <button class="ab" [class.on]="tabs.layout() !== 'tabs'" title="Layout: tabbed, side by side, stacked or grid" (click)="layoutMenu($event)"><app-icon [name]="layoutIcon()" /></button>
     <div class="theme-sw" role="radiogroup" aria-label="Theme">
       @for (o of themes; track o.v) {
@@ -136,6 +137,11 @@
               <app-remote-view [tab]="t" />
             } @else if (t.kind === 'player') {
               <app-player-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" />
+            } @else if (t.filesPanel && t.session.protocol === 'SSH2') {
+              <div class="tdock" [class.left]="!!settings()?.sessionManagerRight && settings()?.showSessionManager !== false">
+                <div class="tmain"><app-terminal-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /></div>
+                <app-files-panel [term]="t" />
+              </div>
             } @else {
               <app-terminal-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" />
             }

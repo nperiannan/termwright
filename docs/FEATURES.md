@@ -199,7 +199,8 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## File transfer
 
-- **SFTP browser (modern)**: a top bar with Run as, the terminal folder, SFTP / SCP and Sync ↑ / ↓; clickable folder paths, a bookmark bar, `..` row, file-type badges, Today / date times.
+- **Files panel beside the terminal** (opposite the Session Manager, per session or per tab): follows the terminal's folder, cd's the terminal to a folder opened in it, opens a double-clicked file on this computer and offers to upload saved changes; upload, download, rename, delete.
+- **SFTP browser (modern)**: a top bar with Run as, the terminal folder and SFTP / SCP; Copy, Sync and Diff between the panes; clickable folder paths, a bookmark bar, `..` row, file-type badges, Today / date times.
 - **Several files**: check boxes (and a select-all box), Cmd/Ctrl-click, Shift-click, Cmd/Ctrl+A.
 - **New File / New Folder / Delete on both sides**: deleting on this computer moves to the Trash / Recycle Bin.
 - **Transfer bar**: progress, speed, time left, Cancel, the other transfers; ✕ closes it while copies go on.

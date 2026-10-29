@@ -26,10 +26,10 @@ import (
 	"github.com/termwright/termwright/internal/secretref"
 	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/session"
-	"github.com/termwright/termwright/internal/trash"
 	"github.com/termwright/termwright/internal/smartcard"
 	"github.com/termwright/termwright/internal/sshkey"
 	"github.com/termwright/termwright/internal/term"
+	"github.com/termwright/termwright/internal/trash"
 	"github.com/termwright/termwright/internal/update"
 	"github.com/termwright/termwright/internal/vault"
 )

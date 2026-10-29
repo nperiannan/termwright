@@ -49,6 +49,8 @@
 .terminals { flex: 1; position: relative; min-height: 0; background: var(--term-bg, #1b1c1f);
   .tile { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .tile-body { flex: 1; position: relative; min-height: 0; }
+  .tdock { position: absolute; inset: 0; display: flex; &.left { flex-direction: row-reverse; } }
+  .tmain { flex: 1; position: relative; min-width: 0; }
   &.layout-tabs .tile { position: absolute; inset: 0; }
   .tile.hidden { visibility: hidden; pointer-events: none; }
   &.layout-tile-v, &.layout-tile-h, &.layout-grid { display: grid; gap: 3px; background: var(--border);

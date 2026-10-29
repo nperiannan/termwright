@@ -387,7 +387,7 @@ export class SftpView implements OnInit {
     if (!p) return '';
     return this.tabs.onJump(p) ? p.session.hostname : p.hopTarget!;
   });
-  shortHost(h: string) { h = h.slice(h.lastIndexOf('@') + 1); return h.split('.')[0]; }
+  shortHost(h: string) { h = h.slice(h.lastIndexOf('@') + 1); return /^[\d.]+$|:/.test(h) ? h : h.split('.')[0]; }
 
   elsewhereMenu(ev: MouseEvent) {
     const p = this.hopTerm();

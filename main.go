@@ -198,6 +198,7 @@ func buildMenu(app *App) *menu.Menu {
 	add(view, "Session Manager", "toggle-session-manager")
 	add(view, "Session Manager Left / Right", "toggle-session-manager-side")
 	add(view, "Command Window", "toggle-command-window")
+	add(view, "Files Panel", "files-panel")
 	add(view, "Button Bar", "toggle-button-bar")
 	add(view, "Connect Bar", "toggle-connect-bar")
 	add(view, "Menu Bar in Window", "toggle-window-menu")

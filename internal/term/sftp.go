@@ -806,3 +806,47 @@ func (m *Manager) remoteCopy(ctx context.Context, from, to *sftp.Client, tr *Tra
 	tr.Bytes = done.Load()
 	return nil
 }
+
+// SFTPDownloadFile copies one remote file to a local path.
+func (m *Manager) SFTPDownloadFile(id, remote, local string) error {
+	s, err := m.sftpGet(id)
+	if err != nil {
+		return err
+	}
+	src, err := s.c.Open(remote)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	dst, err := os.OpenFile(local, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		return err
+	}
+	return dst.Close()
+}
+
+// SFTPUploadFile replaces a remote file with a local file's contents.
+func (m *Manager) SFTPUploadFile(id, local, remote string) error {
+	s, err := m.sftpGet(id)
+	if err != nil {
+		return err
+	}
+	src, err := os.Open(local)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	dst, err := s.c.OpenFile(remote, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		return err
+	}
+	return dst.Close()
+}

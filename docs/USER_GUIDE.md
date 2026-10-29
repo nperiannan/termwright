@@ -665,6 +665,19 @@ Folders use the same colored folder icon as the Session Manager. Files are color
   ![Browsing as another user](screenshots/sftp-root.png)
 - **Resume** (⟳ on a failed or cancelled SFTP copy): restarts the same copy; partially copied files continue from where they stopped and files that are already complete are skipped.
 
+### Files panel beside the terminal
+
+![Files panel](screenshots/files-panel.png)
+
+A small file browser beside an SSH terminal, on the side opposite the Session Manager (with the Session Manager on the right it sits on the left). Turn it on for a session in **Session Options → Files panel beside the terminal**, or for one tab with **View → Files Panel**, the title-bar button, the tab's right-click menu or ⌘⇧1 (Alt+Shift+1).
+
+- **Follows the terminal**: the panel shows the folder the shell is in (bash or zsh report it; Termwright turns this on, as for SFTP tabs). *Following* in the header turns it off and on. Through a jump station it opens on the host the terminal is on; when the terminal moves to the other host, the panel says so and *Show … here* reopens it there.
+- **And the other way round**: open a folder in the panel (double-click, the path, ↑ or ..) and the terminal `cd`s there - only when the shell is at a prompt, so nothing is typed into a running program. ⋯ → *cd the Terminal When I Open a Folder Here* turns this off.
+- **Open a file on this computer**: double-click a file (or right-click → Open). It is copied to a private temporary folder and opened with the program your system uses for its type. When you save it, the panel asks **Upload it to …?** - *Upload Now*, *Not Now* or *Stop Watching*. Programs and shortcuts (.exe, .bat, .app, .command …) are never opened from a server; use Download.
+- **Upload** (choose files), **Download…** (choose a folder), **New Folder**, **Rename**, **Delete**, **Copy Path**, **cd Here in the Terminal**, *Show Hidden Files*, and a button that opens a full SFTP tab here. Drag the panel's edge to make it wider.
+
+![Files panel on the left](screenshots/files-panel-right.png)
+
 ### SFTP through a jump station (bastion) - how the files travel
 
 Many cloud hosts can only be reached from a jump station, often with a private key that is stored **on the jump station** (a session whose remote command is `ssh -t -i ~/.ssh/aws_key user@aws-host`, see [§10](#10-automation-logon-actions-triggers-scripts)). For such a session, *Open SFTP Tab on user@aws-host (through this login)* browses the AWS host directly:
