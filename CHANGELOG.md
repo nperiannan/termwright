@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Compact rows keep the modern folders**: in the modern layout, compact Session Manager rows now show the coloured folders (by level, production in red) at a smaller size and the session counts, instead of the classic blue folders.
 * **Files panel follows the terminal's user**: after `sudo su -` in the terminal the panel browses as root (red *root* badge) instead of showing *permission denied* for /root, also on a host behind a jump station; after `exit` it browses as the login user again. ⋯ → *Browse as root (sudo)* switches by hand. A sudo password asked for the panel no longer switches the active tab away.
 * **Session Manager**: the button that shows which devices answer (pulse) is now beside the filter box in the modern layout on every platform - before, it was only in the ⋯ menu unless rows were compact. With compact rows the header has a **two-line rows** button and the ⋯ menu, so compact rows can be turned off where they were turned on.
 * **macOS title bar**: the tabs and buttons of the modern title bar now sit on the same line as the window buttons (close, minimise, zoom). Termwright reads where macOS draws them, so this holds on every macOS version.
