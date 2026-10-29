@@ -158,8 +158,20 @@ export class Tabs {
       this.ui.toast('Select a connected SSH2 tab first.', 'error');
       return;
     }
+    // Through a jump station the terminal shows the target (unless its shell
+    // reports the jump station): open SFTP on the host the terminal is on, so
+    // the tab can follow its folder; the jump station if that fails.
+    const auto = !mode && !!p.hopTarget;
+    if (auto) mode = this.onJump(p) ? 'jump' : 'target';
     try {
-      const r = await this.backend.sftpOpen(p.id, mode);
+      let r: Awaited<ReturnType<Backend['sftpOpen']>>;
+      try { r = await this.backend.sftpOpen(p.id, mode); }
+      catch (e) {
+        if (!auto || mode !== 'target') throw e;
+        this.ui.toast(`SFTP on ${p.hopTarget} did not start (${e instanceof Error ? e.message : e}) - opened on ${p.session.hostname}, where the terminal's folder cannot be followed.`, 'error', 10000);
+        mode = 'jump';
+        r = await this.backend.sftpOpen(p.id, mode);
+      }
       const cwd = p.cwd && (!p.hopTarget || r.target) ? p.cwd : '';
       const tv: TabView = {
         id: r.id, title: 'SFTP: ' + (r.target || p.title), state: 'connected', message: '',
