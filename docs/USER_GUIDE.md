@@ -612,7 +612,7 @@ File → **Run and Collect…** (or right-click a session, folder or selection �
 
 Open with the SFTP button in the title bar, **Transfer → Open SFTP Tab** or `Mod+P` while an SSH2 tab is connected. It reuses that login (no second password).
 
-In the modern layout the bar at the top shows the session, **Run as ▾**, the terminal-folder button, and the copy protocol (**SFTP / SCP**). Between the panes are the copy arrows (→ upload, ← download), **Sync** → / ← (make the other side match) and **Diff**: select one file on each side and Diff opens **Compare** with both files side by side, with line numbers and the options to ignore whitespace and timestamps. Each pane has a **path you can click** (each folder opens with one click; click beside the path to type one), ↑, Refresh, **New Folder**, **New File**, **Delete** and the bookmark star, a **bookmark bar** below it, and a `..` row. Files show a coloured type badge (CFG, LOG, IMG, TXT, KEY …), folders are amber, and *Modified* reads *Today 09:41* or *12 Oct* (hover for the full date and permissions).
+In the modern layout the bar at the top shows the session, **Run as ▾**, the terminal-folder button, and the copy protocol (**SFTP / SCP**). Between the panes are the copy arrows (→ upload, ← download), **Sync** → / ← (make the other side match) and **Diff**: select two files - one on each side, or both on the same side - and Diff opens **Compare** with both files side by side, with line numbers and the options to ignore whitespace and timestamps. The bar at the top says whether the files are identical (green) or how many lines differ. Each pane has a **path you can click** (each folder opens with one click; click beside the path to type one), ↑, Refresh, **New Folder**, **New File**, **Delete** and the bookmark star, a **bookmark bar** below it, and a `..` row. Files show a coloured type badge (CFG, LOG, IMG, TXT, KEY …), folders are amber, and *Modified* reads *Today 09:41* or *12 Oct* (hover for the full date and permissions).
 
 ![SFTP Compare](screenshots/sftp-compare.png)
 
@@ -625,6 +625,8 @@ Working directory detection is **on by default**. When you open an SFTP tab from
 ![Terminal folder menu](screenshots/sftp-terminal-folder.png)
 
 - **Go to Terminal Folder** - jump to the folder the shell is in now.
+- **Jump station sessions**: an SFTP tab browses either the jump station or the target (right-click the terminal tab → Open SFTP Tab on …). It follows the terminal only while the terminal's shell is on that host - Termwright reads the host from the shell's folder report, so after `exit` from the target the jump station's SFTP tab follows again. When the terminal is on the other host, the tab shows **>_ On <host> ▾** with *Switch This Tab to <host>*.
+- **SFTP sessions with their own login** (Connect SFTP Session) follow an open terminal tab of the same session, as a tab opened from the terminal does.
 - **Becoming root on a jump station**: when you run `sudo su -`, `sudo -i`, `su` or start a new shell in the terminal, the SFTP tab that follows it reads the folder and user again once the new prompt appears, so an SFTP tab opened before becoming root follows root.
 - **Follow Terminal Folder** - the SFTP pane changes folder whenever you `cd` in the terminal (the button then reads *Following*). On by default; switch it off here for this tab, or for all tabs in Global Options.
 - **Open This Folder in the Terminal (cd)** - the reverse: the terminal changes to the folder shown in SFTP. Also on the right-click menu of a remote folder.

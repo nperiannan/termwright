@@ -82,6 +82,9 @@ export function diffLines(a: string[], b: string[], norm: (s: string) => string)
           <label><input type="checkbox" [ngModel]="onlyDiff()" (ngModelChange)="onlyDiff.set($event)" /> Only differences</label>
           <span class="stat">{{ stats() }}</span>
         </div>
+        @if (verdict(); as v) {
+          <div class="verdict" [class.same]="v.same"><span class="vi">{{ v.same ? '✓' : '≠' }}</span><b>{{ v.title }}</b><span class="vs">{{ v.sub }}</span></div>
+        }
         <div class="diff mono">
           @for (r of shown(); track $index) {
             <div class="dr {{ r.kind }}">
@@ -100,6 +103,12 @@ export function diffLines(a: string[], b: string[], norm: (s: string) => string)
     .pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .src { display: flex; flex-direction: column; gap: 2px; }
     .opts { display: flex; gap: 16px; align-items: center; margin: 8px 0; font-size: calc(12px * var(--ui-scale, 1)); label { display: flex; gap: 4px; align-items: center; } .stat { margin-left: auto; color: var(--muted); } }
+    .verdict { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 8px; border-radius: 8px; font-size: calc(12.5px * var(--ui-scale, 1));
+      color: var(--warn, #d97706); background: color-mix(in srgb, var(--warn, #d97706) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warn, #d97706) 35%, transparent);
+      .vi { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; flex: none; font-weight: 700; color: #fff; background: var(--warn, #d97706); }
+      .vs { color: var(--muted); }
+      &.same { color: var(--ok, #16a34a); background: color-mix(in srgb, var(--ok, #16a34a) 12%, transparent); border-color: color-mix(in srgb, var(--ok, #16a34a) 35%, transparent);
+        .vi { background: var(--ok, #16a34a); } } }
     .diff { flex: 1; overflow: auto; border: 1px solid var(--border); border-radius: 4px; font-size: calc(12px * var(--ui-scale, 1)); background: var(--input-bg); }
     .dr { display: grid; grid-template-columns: 44px 1fr 44px 1fr; white-space: pre; line-height: 18px;
       .n { color: var(--muted); text-align: right; padding-right: 6px; user-select: none; }
@@ -201,6 +210,20 @@ export class Compare {
     return diffLines(a, b, norm);
   });
   readonly shown = computed(() => (this.onlyDiff() ? this.rows().filter(r => r.kind !== 'same') : this.rows()));
+  /** Identical / different, shown above the lines. */
+  readonly verdict = computed(() => {
+    const r = this.rows();
+    if (!r.length) return null;
+    const what = this.srcs().every(x => !x.startsWith('tab:')) ? 'files' : 'outputs';
+    const diffs = r.filter(x => x.kind !== 'same').length;
+    if (!diffs) {
+      const [a, b] = this.texts();
+      const exact = !!a && !!b && a.length === b.length && a.every((l, i) => l === b[i]);
+      const ign = [this.ignoreWs() && 'whitespace', this.ignoreTime() && 'timestamps', this.ignorePrompt() && 'prompts'].filter(Boolean).join(', ');
+      return { same: true, title: `The ${what} are identical`, sub: exact ? `${r.length} lines, exactly the same` : `${r.length} lines - same when ${ign || 'normalised'} are ignored` };
+    }
+    return { same: false, title: `The ${what} differ`, sub: `${diffs} ${diffs === 1 ? 'line differs' : 'lines differ'}` };
+  });
   readonly stats = computed(() => {
     const r = this.rows();
     if (!r.length) return '';

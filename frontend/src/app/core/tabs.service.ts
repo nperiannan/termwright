@@ -54,6 +54,8 @@ export interface TabView {
   cwd?: string;
   /** Terminal tab: user the shell runs as (OSC 1337 RemoteHost=user@host), e.g. root after "sudo su -". */
   shellUser?: string;
+  /** Terminal tab: host the shell reports (OSC 7 file://host/… or RemoteHost=user@host); '' after ssh / exit until it reports again. */
+  shellHost?: string;
   /** SFTP tab: folder to open first (the terminal's folder), falls back to home. */
   startDir?: string;
 }
@@ -200,9 +202,34 @@ export class Tabs {
    * qualifies (the terminal shows the target, not the jump station).
    */
   shellOf(sftp: TabView): TabView | undefined {
-    const p = this.get(sftp.parentId);
-    if (!p || p.kind !== 'terminal' || (p.hopTarget && !sftp.hopTarget)) return undefined;
+    const p = this.linkedTerm(sftp);
+    if (!p) return undefined;
+    // A session through a jump station: the terminal shows the target, unless
+    // its shell reports the jump station's host (after "exit" from the target).
+    if (p.hopTarget && !!sftp.hopTarget === this.onJump(p)) return undefined;
     return p;
+  }
+
+  /**
+   * The terminal tab an SFTP tab belongs to: the tab it was opened from, or -
+   * for an SFTP session with its own login - an open terminal tab of the same
+   * session (same address and user).
+   */
+  linkedTerm(sftp: TabView): TabView | undefined {
+    if (sftp.kind !== 'sftp') return undefined;
+    const p = this.get(sftp.parentId);
+    if (p) return p.kind === 'terminal' ? p : undefined;
+    const s = sftp.session;
+    const same = (t: TabView) => t.kind === 'terminal' && t.session.protocol === 'SSH2' &&
+      (s.path ? t.session.path === s.path : t.session.hostname === s.hostname && (t.session.username ?? '') === (s.username ?? '') && (t.session.port || 22) === (s.port || 22));
+    const all = this.tabs().filter(same);
+    return all.find(t => t.id === this.activeId()) ?? all.find(t => t.state === 'connected') ?? all[0];
+  }
+
+  /** The terminal of a jump-station session reports the jump station's host. */
+  onJump(p: TabView) {
+    const short = (h: string) => h.slice(h.lastIndexOf('@') + 1).split('.')[0].toLowerCase();
+    return !!p.shellHost && !!p.session.hostname && short(p.shellHost) === short(p.session.hostname);
   }
 
   /**
@@ -214,10 +241,19 @@ export class Tabs {
    * (silently); the SFTP tab then follows the folder and switches user.
    */
   afterCommand(id: string, cmd: string) {
-    if (this.ui.settings()?.sftpCwdAuto === false) return;
     const c = cmd.trim();
-    if (!/^(sudo\s+(-\S+\s+)*(su\b|-i\b|-s\b|bash\b|zsh\b|-iu\s|-u\s+\S+\s+(-i|-s|bash|zsh)\b)|su\b|exec\s+(bash|zsh)\b|(bash|zsh)(\s+-l)?$)/.test(c)) return;
-    if (!this.tabs().some(t => t.kind === 'sftp' && t.parentId === id)) return;
+    // ssh to another host or exit / logout: the host is not known until the
+    // shell reports again.
+    const leave = /^(exit|logout)\b/.test(c);
+    if ((leave || /^ssh\s/.test(c)) && this.get(id)?.shellHost) this.patch(id, { shellHost: '' });
+    if (this.ui.settings()?.sftpCwdAuto === false) return;
+    // Leaving the target of a jump-station session with an SFTP tab on the
+    // jump station open: turn reporting on in the shell it returns to, so that
+    // tab can follow it there.
+    const t0 = this.get(id);
+    const jumpTab = !!t0?.hopTarget && this.tabs().some(t => t.kind === 'sftp' && this.linkedTerm(t)?.id === id && !t.hopTarget);
+    if (!(leave && jumpTab) && !/^(sudo\s+(-\S+\s+)*(su\b|-i\b|-s\b|bash\b|zsh\b|-iu\s|-u\s+\S+\s+(-i|-s|bash|zsh)\b)|su\b|exec\s+(bash|zsh)\b|(bash|zsh)(\s+-l)?$)/.test(c)) return;
+    if (!this.tabs().some(t => t.kind === 'sftp' && this.linkedTerm(t)?.id === id)) return;
     let tries = 0;
     const tick = () => {
       const term = this.handles.get(id)?.term;
@@ -486,6 +522,7 @@ export class Tabs {
     };
     this.tabs.update(l => [...l, tv]);
     this.activeId.set(tv.id);
+    void this.autoCwd(tv); // when a terminal tab of this session is open
   }
 
   async openAdHoc(s: Session) {

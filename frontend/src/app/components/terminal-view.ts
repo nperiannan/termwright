@@ -496,15 +496,17 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       if (dir.startsWith('/') && this.tabs.get(id)?.cwd !== dir) this.tabs.patch(id, { cwd: dir });
       return true;
     };
+    const setHost = (h: string) => { h = h.trim(); if (h && this.tabs.get(id)?.shellHost !== h) this.tabs.patch(id, { shellHost: h }); };
     term.parser.registerOscHandler(7, d => {
-      const m = /^file:\/\/[^/]*(\/.*)$/.exec(d.trim());
-      if (m) { try { setCwd(decodeURIComponent(m[1])); } catch { setCwd(m[1]); } }
+      const m = /^file:\/\/([^/]*)(\/.*)$/.exec(d.trim());
+      if (m) { setHost(m[1]); try { setCwd(decodeURIComponent(m[2])); } catch { setCwd(m[2]); } }
       return true;
     });
     term.parser.registerOscHandler(1337, d => {
       if (d.startsWith('CurrentDir=')) return setCwd(d.slice(11));
       if (d.startsWith('RemoteHost=')) {
         const user = d.slice(11).split('@')[0].trim();
+        setHost(d.slice(11).split('@')[1] ?? '');
         if (user && this.tabs.get(id)?.shellUser !== user) this.tabs.patch(id, { shellUser: user });
         return true;
       }

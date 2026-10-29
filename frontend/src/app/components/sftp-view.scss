@@ -46,7 +46,8 @@
 
 .via-jump { color: var(--muted); font-weight: normal; }
 .root-btn { height: 22px; padding: 0 8px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; white-space: nowrap;
-  &.on { background: var(--danger, #d9534f); border-color: var(--danger, #d9534f); color: #fff; } }
+  &.on { background: var(--danger, #d9534f); border-color: var(--danger, #d9534f); color: #fff; }
+  &.away { color: var(--muted); border-style: dashed; } }
 
 .cwd-hint { flex: none; display: flex; align-items: center; gap: 8px; margin: 6px 8px 0; padding: 8px 10px; font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.4;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 6px;

@@ -47,7 +47,8 @@ interface Pane {
         @if (shell()) {
           <button class="root-btn" [class.on]="follow()" (click)="terminalMenu($event)"
             [title]="shell()!.cwd ? 'Terminal folder: ' + shell()!.cwd + (follow() ? ' (following)' : '') : 'The terminal does not report its folder yet'">
-            &gt;_ {{ follow() ? 'Following' : 'Terminal' }} ▾</button>
+            &gt;_ {{ follow() ? 'Following' : 'Terminal' }} ▾</button>        } @else if (elsewhere()) {
+          <button class="root-btn away" (click)="elsewhereMenu($event)" [title]="'The terminal is on ' + elsewhere() + ', not on the host this tab browses - click to switch this tab there'">&gt;_ On {{ shortHost(elsewhere()) }} ▾</button>
         }
         <select class="pill" [ngModel]="via()" (ngModelChange)="setVia($event)" [disabled]="!!tab().root"
           title="Protocol used by → and ← (browsing always uses SFTP). SCP helps with devices whose SFTP server is slow or limited.">
@@ -92,7 +93,8 @@ interface Pane {
               @if (p.side === 'remote' && shell()) {
                 <button class="root-btn" [class.on]="follow()" (click)="terminalMenu($event)"
                   [title]="shell()!.cwd ? 'Terminal folder: ' + shell()!.cwd + (follow() ? ' (following)' : '') : 'The terminal does not report its folder yet'">
-                  &gt;_ {{ follow() ? 'Following' : 'Terminal' }} ▾</button>
+                  &gt;_ {{ follow() ? 'Following' : 'Terminal' }} ▾</button>              } @else if (p.side === 'remote' && elsewhere()) {
+                <button class="root-btn away" (click)="elsewhereMenu($event)" [title]="'The terminal is on ' + elsewhere() + ', not on the host this tab browses'">&gt;_ On {{ shortHost(elsewhere()) }} ▾</button>
               }
               <button class="icon-btn bm" [class.on]="isBookmarked(p)" title="Bookmarks" (click)="bookmarkMenu($event, p)">{{ isBookmarked(p) ? '★' : '☆' }}</button>
             }
@@ -138,7 +140,7 @@ interface Pane {
               <button class="ar sy" title="Sync this computer → server: copy new and changed files of the left folder into the right folder (nothing is deleted)" (click)="sync('up')"><app-icon name="sync-right" [size]="16" /></button>
               <button class="ar sy" title="Sync server → this computer: copy new and changed files of the right folder into the left folder (nothing is deleted)" (click)="sync('down')"><app-icon name="sync-left" [size]="16" /></button>
               <span class="ml">Diff</span>
-              <button class="ar sy" [disabled]="!canCompare()" [title]="canCompare() ? 'Compare ' + one(local()) + ' with ' + one(remote()) : 'Compare: select one file on each side'" (click)="compare()"><app-icon name="compare" [size]="16" /></button>
+              <button class="ar sy" [disabled]="!canCompare()" [title]="compareTitle()" (click)="compare()"><app-icon name="compare" [size]="16" /></button>
             </div>
           } @else {
             <div class="mid">
@@ -273,20 +275,32 @@ export class SftpView implements OnInit {
     return dt > .2 && t.total ? ' · ' + this.size((t.total - m.b0) / dt) + '/s' : '';
   }
   /** One file selected on each side: they can be compared. */
-  canCompare() {
-    const one = (p: Pane) => p.selected.size === 1 && !p.entries.find(e => e.name === [...p.selected][0])?.isDir;
-    return one(this.local()) && one(this.remote());
+  /** The selected files of both panes (Compare takes exactly two). */
+  private picks() {
+    const out: { p: Pane; name: string }[] = [];
+    for (const p of [this.local(), this.remote()]) for (const n of p.selected) out.push({ p, name: n });
+    return out;
   }
-  one(p: Pane) { return [...p.selected][0] ?? ''; }
-  /** Opens Compare with the selected local and remote file (text, up to 5 MB). */
+  canCompare() {
+    const ps = this.picks();
+    return ps.length === 2 && ps.every(x => !x.p.entries.find(e => e.name === x.name)?.isDir);
+  }
+  compareTitle() {
+    const ps = this.picks();
+    if (this.canCompare()) return 'Compare ' + ps[0].name + ' with ' + ps[1].name;
+    return ps.length > 2 ? 'Compare: select only two files' : 'Compare: select two files - one on each side, or both on the same side';
+  }
+  /** Opens Compare with the two selected files (text, up to 5 MB each), from either side. */
   async compare() {
     if (!this.canCompare()) return;
-    const l = this.local(), r = this.remote();
-    const ln = this.one(l), rn = this.one(r);
+    const host = this.tab().hopTarget || this.hostOnly();
+    const read = (x: { p: Pane; name: string }) => x.p.side === 'local'
+      ? this.backend.readTextFile(this.join(x.p, x.name)) : this.backend.sftpReadText(this.sid(), this.join(x.p, x.name));
+    const ps = this.picks();
+    const label = (x: { p: Pane; name: string }) => (x.p.side === 'local' ? 'This computer' : host) + ': ' + x.name;
     try {
-      const [a, b] = await Promise.all([this.backend.readTextFile(this.join(l, ln)), this.backend.sftpReadText(this.sid(), this.join(r, rn))]);
-      const host = this.tab().hopTarget || this.hostOnly();
-      this.ui.compareTexts.set([{ label: 'This computer: ' + ln, text: a }, { label: host + ': ' + rn, text: b }]);
+      const [a, b] = await Promise.all(ps.map(read));
+      this.ui.compareTexts.set([{ label: label(ps[0]), text: a }, { label: label(ps[1]), text: b }]);
       this.ui.open('compare');
     } catch (e) { this.ui.error(e); }
   }
@@ -361,6 +375,45 @@ export class SftpView implements OnInit {
 
   private loadFlag(k: string) { try { return localStorage.getItem(k) === '1'; } catch { return false; } }
   private saveFlag(k: string, v: boolean) { try { localStorage.setItem(k, v ? '1' : '0'); } catch { /* ignore */ } }
+
+  /** The terminal of a jump-station session, when its shell is on the other host than this tab browses. */
+  private hopTerm = computed(() => {
+    const p = this.tabs.linkedTerm(this.tab());
+    return p?.hopTarget && !this.shell() ? p : undefined;
+  });
+  /** Where the terminal is (the target or the jump station), when this tab cannot follow it. */
+  readonly elsewhere = computed(() => {
+    const p = this.hopTerm();
+    if (!p) return '';
+    return this.tabs.onJump(p) ? p.session.hostname : p.hopTarget!;
+  });
+  shortHost(h: string) { h = h.slice(h.lastIndexOf('@') + 1); return h.split('.')[0]; }
+
+  elsewhereMenu(ev: MouseEvent) {
+    const p = this.hopTerm();
+    if (!p) return;
+    const where = this.elsewhere();
+    this.ui.showMenu(ev, [
+      { label: 'The terminal is on ' + where, disabled: true },
+      { label: 'Switch This Tab to ' + where, action: () => void this.switchHost() },
+      { separator: true },
+      { label: 'Check Where the Terminal Is (folder detection)', action: () => {
+        if (p.state !== 'connected') { this.ui.toast('The terminal tab is not connected.', 'error'); return; }
+        void this.tabs.enableCwdReporting(p.id, false, true);
+      } },
+    ]);
+  }
+
+  /** Reopens this SFTP tab on the host the terminal is on (jump station ↔ target). */
+  async switchHost() {
+    const p = this.hopTerm();
+    if (!p) return;
+    const me = this.tab().id;
+    const mode = this.tab().hopTarget ? 'jump' : 'target';
+    const before = this.tabs.tabs().length;
+    await this.tabs.openSftp(p.id, mode);
+    if (this.tabs.tabs().length > before) void this.tabs.close(me);
+  }
 
   terminalMenu(ev: MouseEvent) {
     const sh = this.shell();
