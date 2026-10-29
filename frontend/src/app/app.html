@@ -23,8 +23,9 @@
       <button class="scriptpill" [title]="'Running: ' + scriptNames() + ' - click to stop'" (click)="action('cancel-scripts')">
         <span class="pulse"></span>{{ n === 1 ? '1 script' : n + ' scripts' }}<span class="stop">Stop</span></button>
     }
-    <button class="kbar" title="Quick Open: sessions, tabs, commands, actions - or type an address to connect" (click)="action('quick-open')">
-      <app-icon name="find" [size]="14" /><span>Search or connect…</span><kbd>{{ quickOpenKeys }}</kbd></button>
+    <button class="ab sessbtn" [class.on]="!!sessMenu()" title="Sessions: every session with its icon - type to filter, or an address to connect. Quick Open (sessions, tabs, commands) is {{ quickOpenKeys }}."
+            (click)="openSessMenu($event)"><app-icon name="sessions" /><app-icon name="chevron-down" [size]="11" /></button>
+    @if (sessMenu(); as m) { <app-sessions-menu [top]="m.top" [right]="m.right" (closed)="sessMenu.set(null)" /> }
     <button class="ab" title="Quick Connect" (click)="action('quick-connect')"><app-icon name="quick" /></button>
     <button class="ab" title="Open SFTP tab" [disabled]="active()?.session?.protocol !== 'SSH2' || active()?.state !== 'connected'" (click)="action('sftp-tab')"><app-icon name="sftp" /></button>
     <button class="ab" [class.on]="!!active()?.filesPanel" [title]="'Files panel beside the terminal (' + scLabel('files-panel') + ')'" [disabled]="active()?.kind !== 'terminal' || active()?.session?.protocol !== 'SSH2'" (click)="action('files-panel')"><app-icon name="files-panel" /></button>

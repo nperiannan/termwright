@@ -15,7 +15,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## Main window
 
-- **Modern layout** (default): tabs, a Search or connect box, Quick Connect, SFTP, the theme switch, Settings and a ⋯ menu in one title bar; the **Classic layout** (menu bar, toolbar, Connect Bar, tab strip) is one click away (View → Modern / Classic Layout).
+- **Modern layout** (default): tabs, a Sessions button (every session with its icon, filter, connect), Quick Connect, SFTP, the theme switch, Settings and a ⋯ menu in one title bar; the **Classic layout** (menu bar, toolbar, Connect Bar, tab strip) is one click away (View → Modern / Classic Layout).
 - **Start page**: a search-or-connect box, quick actions spread under it and cards for favourite and recent sessions (device icon, address, device facts, last used, live state).
 - **Session side panel**: New Session and Properties open beside the terminal with the everyday fields, the Files panel and auto-reconnect switches and the device facts; All session options… opens the full dialog.
 - **Connecting and error cards**: each connection step while it connects; on failure the reason, a hint and Try Again, Edit Session, Find by MAC Address, Close Tab.

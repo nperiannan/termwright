@@ -41,6 +41,7 @@ import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
 import { Palette } from './dialogs/palette';
+import { SessionsMenu } from './components/sessions-menu';
 import { Commands, sendSnippet } from './dialogs/commands';
 import { FolderDefaults, Workspaces, saveWorkspace } from './dialogs/workspaces';
 import { Compare } from './dialogs/compare';
@@ -52,7 +53,7 @@ import { FactTeach } from './dialogs/fact-teach';
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, Icon, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
+  imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
     PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -124,6 +125,13 @@ export class App implements OnInit {
 
   // ---- layout: modern (tabs in the title bar) or classic (toolbar, tab strip, menus) ----
   readonly modern = computed(() => this.settings()?.layout !== 'classic');
+  /** Title-bar session list, under its button. */
+  readonly sessMenu = signal<{ top: number; right: number } | null>(null);
+  openSessMenu(ev: MouseEvent) {
+    if (this.sessMenu()) { this.sessMenu.set(null); return; }
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    this.sessMenu.set({ top: Math.round(r.bottom + 6), right: Math.max(8, Math.round(window.innerWidth - r.right - 8)) });
+  }
   /** macOS without a title bar (started in the modern layout): room for the window buttons. */
   readonly insetTitle = signal(false);
   readonly quickOpenKeys = this.isMac ? '⌘G' : 'Ctrl+Shift+G';
@@ -478,8 +486,8 @@ export class App implements OnInit {
         break;
       }
       case 'toggle-connect-bar':
-        // the modern layout has no toolbar: its Search or connect box does what the Connect Bar does
-        if (this.modern()) { this.action('quick-open'); this.ui.toast('In the modern layout the Search or connect box in the title bar is the Connect Bar: type an address, "ssh user@host", "voss 10.1.1.1" or a session name and press Enter.', 'info', 8000); }
+        // the modern layout has no toolbar: Quick Open does what the Connect Bar does
+        if (this.modern()) { this.action('quick-open'); this.ui.toast('In the modern layout Quick Open (' + this.quickOpenKeys + ') is the Connect Bar: type an address, "ssh user@host", "voss 10.1.1.1" or a session name and press Enter.', 'info', 8000); }
         else this.ui.patchSettings({ showConnectBar: !s?.showConnectBar });
         break;
       case 'shortcuts': this.ui.open('shortcuts'); break;

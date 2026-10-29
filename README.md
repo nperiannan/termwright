@@ -39,7 +39,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 - **Authentication**: passwords, keys (including PuTTY `.ppk`), certificates, FIDO2 security keys, smart cards, Kerberos and password managers. **Accounts** let many sessions, folders and device types share one login, so a password is changed in one place.
 - **Device types**: one login profile per platform (EXOS, VOSS, Cisco IOS, Linux, or your own). It holds the login steps, after-login commands and credentials, so a new device needs only an address.
 - **Device facts**: model, version, serial number, MAC address and uptime are read in a background login and shown wherever the session appears.
-- **Session Manager**: folders with defaults, favourites, recents, environments (production is marked and guarded), reachability, bulk edit, a search-or-connect box and network discovery.
+- **Session Manager**: folders with defaults, favourites, recents, environments (production is marked and guarded), reachability, bulk edit, a session list in the title bar and network discovery.
 - **Files**:
   - a dual-pane SFTP browser with sync, compare, resume, bookmarks, server-to-server copy, SCP and *Run as root*;
   - a **Files panel** beside the terminal that follows the shell's working directory;
@@ -59,7 +59,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## What's new in 0.21.0
 
-- **Modern interface, now the default.** Tabs and a search-or-connect box share the title bar. A start page shows favourite and recent sessions, New Session and Properties open in a side panel, and sessions have device icons and colour-coded folders. Every dialog has been redesigned. The classic layout (menu bar, toolbar and tab strip) remains one click away.
+- **Modern interface, now the default.** Tabs and a session list share the title bar. A start page shows favourite and recent sessions, New Session and Properties open in a side panel, and sessions have device icons and colour-coded folders. Every dialog has been redesigned. The classic layout (menu bar, toolbar and tab strip) remains one click away.
 - **Device facts.** Read after connecting without typing in your tab, and shown on the tab, status bar, cards, hover card and side panel. To teach a new fact, select its value in the output; facts can be edited, removed or added by hand in Session Options.
 - **Files panel.** A file browser beside the SSH terminal, opposite the Session Manager:
   - it follows the terminal's folder;

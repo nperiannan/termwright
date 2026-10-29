@@ -127,6 +127,7 @@ app-command-window { flex: none; }
       background: transparent; color: var(--muted); opacity: 0; transition: opacity .1s, background .1s;
       &:hover { background: #e5484d; color: #fff; } }
     &:hover .x, &.on .x { opacity: 1; } }
+  .sessbtn { width: auto; padding: 0 4px 0 6px; gap: 1px; margin-left: var(--sp-2); }
   .addtab { width: 28px; height: 28px; padding: 0; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--r);
     background: transparent; color: var(--muted); &:hover { background: var(--hover); color: var(--text); } }
   .kbar { flex: 0 1 280px; min-width: 150px; height: 30px; margin: 0 var(--sp-2) 0 var(--sp-3); padding: 0 var(--sp-2) 0 10px; display: flex; align-items: center; gap: var(--sp-2);

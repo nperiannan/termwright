@@ -70,12 +70,14 @@ Termwright has two layouts: **Modern** (the default) and **Classic** (toolbar, t
 
 | Area (modern layout) | What it does |
 |---|---|
-| **Title bar** | The **tabs** (a dot shows the state: green connected, amber connecting, red error, grey disconnected; badges for logging and recording; a running script shows as a pill with Stop), **+** for a new session, the **Search or connect…** box (Quick Open, `Cmd+G` / `Ctrl+Shift+G`), Quick Connect (⚡), SFTP, the layout menu, the theme switch (Light / Dark / System), Settings (⚙) and the **⋯** menu with File, Edit, View, Transfer, Tools and Help. On macOS the tabs share the title bar with the window buttons. Many tabs scroll sideways (mouse wheel or trackpad). |
+| **Title bar** | The **tabs** (a dot shows the state: green connected, amber connecting, red error, grey disconnected; badges for logging and recording; a running script shows as a pill with Stop), **+** for a new session, the **Sessions** button (a list of every session with its small device icon, grouped by folder with favourites first - type to filter, ↵ connects, Alt+↵ opens SFTP, an address that is no session connects to it), Quick Connect (⚡), SFTP, the layout menu, the theme switch (Light / Dark / System), Settings (⚙) and the **⋯** menu with File, Edit, View, Transfer, Tools and Help. On macOS the tabs share the title bar with the window buttons. Many tabs scroll sideways (mouse wheel or trackpad). |
 | **Start page** | Shown when no tab is open: a large search-or-connect box (type `voss 10.1.1.1`, `ssh admin@host`, a session name …), quick actions (Quick Connect, New Session, Local Shell, Import, Discover Devices) and cards for your **Favourites** and **Recent** sessions with their device icon, address, device facts and when you last used them. Click a card to connect; right-click for more; *Clear* empties the list. |
 | **Session Manager** (left by default) | Folders and sessions with a filter box. Folders are coloured by level (top level amber, sub-folders purple, deeper blue, production light red), sessions show a **device icon** (switch, router, firewall, access point, server …) - View → Tile / Glyph Icons switches between coloured tiles and plain glyphs. New / Import / Scan buttons at the bottom; the **pulse** button beside the filter shows **which devices answer** (a green or red dot from a quick TCP check of each session's port, every minute) and the **⋯** menu has Clear Recent / Favourites, Compact rows and the side. |
 | **Session side panel** | New Session and right-click → Properties… open beside the terminal with the everyday fields and the device facts; *Advanced* and **All session options…** open the full dialog. |
 | **Command Window / Button Bar** | View → Command Window / Button Bar (or `Mod+K` / `Mod+B`). |
 | **Status bar** | State, protocol · user@host:port, device type and facts (e.g. *VOSS 8.10.0.0 · up 41 days*), transfers, terminal size. |
+
+![Sessions list in the title bar](screenshots/sessions-menu.png)
 
 | Start page | Session side panel |
 |---|---|
@@ -531,7 +533,7 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 - `+` adds a button. Right-click a button to edit, move, delete or toggle *Send to All Tabs*.
 - In *Options → Global Options → Button Bar* each button can **send text** (escapes: `\r` Enter, `\n`, `\t`, `\e` Esc, `\x03` Ctrl+C), run an **action** (e.g. *Open SFTP Tab*) and/or run a **script**.
 
-**Connect Bar** (classic layout): see [§3](#3-connecting). Hide it in Global Options → General. The modern layout has no toolbar: the **Search or connect** box in the title bar does the same (View → Connect Bar opens it).
+**Connect Bar** (classic layout): see [§3](#3-connecting). Hide it in Global Options → General. The modern layout has no toolbar: **Quick Open** (`Cmd+G` / `Ctrl+Shift+G`), the start page's box and the title bar's **Sessions** list connect the same way (View → Connect Bar opens Quick Open).
 
 **Command History** (Script → Command History…, `Cmd+Y` / `Ctrl+Shift+Y`, or *History…* in the Command Window): every command you type in a terminal or send from the Command Window is remembered with the session, device type and time (up to 5000).
 - Type words to search (`isis adj`); *Only VOSS* (the active tab's device type) narrows it down.
