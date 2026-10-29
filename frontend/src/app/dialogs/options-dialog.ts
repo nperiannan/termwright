@@ -814,7 +814,7 @@ export class OptionsDialog implements OnInit {
 
   async save() {
     if (!this.s) return;
-    this.s.fontSize = Number(this.s.fontSize) || (this.isMac ? 12 : 14);
+    this.s.fontSize = Number(this.s.fontSize) || 14;
     this.s.scrollback = Number(this.s.scrollback) || 10000;
     this.s.pasteLineDelayMs = Number(this.s.pasteLineDelayMs) || 0;
     this.s.keyMap = (this.s.keyMap ?? []).filter(k => k.keys && (k.send || k.action || k.script));

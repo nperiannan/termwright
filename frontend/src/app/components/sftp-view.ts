@@ -111,7 +111,7 @@ interface Pane {
               <div class="row" title="Up one folder" (dblclick)="up(p)"><span class="n"><span class="fold"></span>..</span><span class="s"></span><span class="d"></span><span class="m"></span></div>
             }
             @for (e of p.entries; track e.name) {
-              <div class="row" [class.sel]="p.selected.has(e.name)" (click)="select(p, e, $event)" (dblclick)="open(p, e)"
+              <div class="row" [attr.data-n]="e.name" [class.sel]="p.selected.has(e.name)" (click)="select(p, e, $event)" (dblclick)="open(p, e)"
                    (contextmenu)="menu($event, p, e)">
                 @if (modern()) {
                   <span class="n"><span class="ck" (click)="$event.stopPropagation(); toggle(p, e)" (dblclick)="$event.stopPropagation()" title="Select (also Cmd/Ctrl-click, Shift-click for a range)"><input type="checkbox" tabindex="-1" [checked]="p.selected.has(e.name)" /></span>@if (e.isDir) { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }{{ e.name }}</span>
@@ -510,6 +510,43 @@ export class SftpView implements OnInit {
   toggle(p: Pane, e: FileEntry) {
     this.sig(p).update(x => { const sel = new Set(x.selected); if (sel.has(e.name)) sel.delete(e.name); else sel.add(e.name); return { ...x, selected: sel }; });
     this.lastClicked = e.name;
+    this.cursor[p.side] = e.name;
+  }
+
+  /** The row the arrow keys move from, per side. */
+  private cursor: Record<'local' | 'remote', string> = { local: '', remote: '' };
+
+  /** ↑ / ↓ (Shift extends), Home / End, Page Up / Down and Enter in a file list. */
+  private moveKey(ev: KeyboardEvent, p: Pane): boolean {
+    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageDown', 'PageUp', 'Enter'];
+    if (!keys.includes(ev.key) || !p.entries.length) return false;
+    ev.preventDefault();
+    const names = p.entries.map(e => e.name);
+    let i = names.indexOf(this.cursor[p.side]);
+    if (ev.key === 'Enter') {
+      if (i >= 0) void this.open(p, p.entries[i]);
+      return true;
+    }
+    const list = ev.currentTarget as HTMLElement;
+    const page = Math.max(1, Math.floor(list.clientHeight / 32) - 1);
+    const step: Record<string, number> = { ArrowDown: 1, ArrowUp: -1, PageDown: page, PageUp: -page };
+    if (ev.key === 'Home') i = 0;
+    else if (ev.key === 'End') i = names.length - 1;
+    else i = i < 0 ? (step[ev.key] > 0 ? 0 : names.length - 1) : Math.min(names.length - 1, Math.max(0, i + step[ev.key]));
+    const name = names[i];
+    this.sig(p).update(x => {
+      let sel: Set<string>;
+      const anchor = names.indexOf(this.lastClicked);
+      if (ev.shiftKey && anchor >= 0) {
+        const [a, b] = [anchor, i].sort((m, n) => m - n);
+        sel = new Set(names.slice(a, b + 1));
+      } else sel = new Set([name]);
+      return { ...x, selected: sel };
+    });
+    if (!ev.shiftKey) this.lastClicked = name;
+    this.cursor[p.side] = name;
+    queueMicrotask(() => list.querySelector(`[data-n="${CSS.escape(name)}"]`)?.scrollIntoView({ block: 'nearest' }));
+    return true;
   }
   toggleAll(p: Pane) {
     this.sig(p).update(x => ({ ...x, selected: x.selected.size === x.entries.length ? new Set<string>() : new Set(x.entries.map(f => f.name)) }));
@@ -548,6 +585,7 @@ export class SftpView implements OnInit {
   }
 
   key(ev: KeyboardEvent, p: Pane) {
+    if (this.moveKey(ev, p)) return;
     if (ev.key === 'Delete') void this.remove(p);
     else if (ev.key === 'Backspace') void this.up(p);
     else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'a') {

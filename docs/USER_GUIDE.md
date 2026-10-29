@@ -636,6 +636,7 @@ Folders use the same colored folder icon as the Session Manager. Files are color
 **Standalone SFTP session** (its own login, no terminal): right-click an SSH2 session in the Session Manager → **Connect SFTP Session**, or right-click a terminal tab → **Connect SFTP Session (new login)**. Use this for devices such as VOSS that refuse a second channel on an existing SSH connection. To make a session always open this way, set Session Options → Connection → **Connect as: SFTP file browser only**; right-click → **Connect Terminal** still opens a shell. The tab right-click menu also offers **Open SFTP Tab (same login)**.
 
 - Left pane = this computer, right pane = the server. Type a path and press Enter, use ↑ (parent), Backspace, or double-click folders.
+- **Keyboard**: click in a list, then ↑ / ↓ move (Shift+↑ / ↓ selects a range), Home / End and Page Up / Down jump, Enter opens a folder or file, Backspace goes up, Delete deletes.
 - **Select several files**: tick the **check boxes** (they appear when you point at a row, and on every row once something is selected; the box in the header selects all or none), or Ctrl/Cmd+click, Shift+click for a range, Ctrl/Cmd+A. The footer shows how many are selected with *Clear*. **→** uploads, **←** downloads, double-clicking a file transfers it to the other side. Whole folders are copied recursively.
 - **New File** (page-plus icon) makes an empty file in the pane's folder - on this computer or the server; it never replaces an existing file. **New Folder** next to it.
 - **Delete** (bin icon, the Delete key, or right-click): on the **server** the selected files and folders are deleted after you confirm (folders with their contents). On **this computer** they are moved to the **Trash** (Recycle Bin on Windows), so they can be put back.
@@ -851,7 +852,7 @@ Device types can use a reference too, so a whole fleet logs in with a password t
 
 ![Color scheme editor](screenshots/schemes.png)
 
-- **Font / cursor**: Global Options → Terminal & Appearance (font family, size, **line spacing**, cursor style, blink, scrollback; the default is Menlo 12 on macOS and 14 px elsewhere with normal line spacing); per-session font in Session Options → Terminal.
+- **Font / cursor**: Global Options → Terminal & Appearance (font family, size, **line spacing**, cursor style, blink, scrollback; the default is 14 with normal line spacing); per-session font in Session Options → Terminal.
 - **Keyword highlighting** (on by default with the *Network* set): Settings → Keyword Highlighting. The *Network* set colours **up / ok / enable(d) / active / forwarding** green, **down / error / failed / denied** red, **warning / disable(d) / blocked** amber and IPv4 addresses blue - the text itself is coloured (*Style → Colour the background* brings the coloured background back). Create your own sets of words or regular expressions with colors; choose the default set (*None* turns highlighting off), or a set per session (Session Options → Terminal → Appearance). Only the rows on screen are highlighted, so long sessions stay fast; it is skipped in full-screen programs such as `vi` or `less`.
 
 ![Keyword Highlighting](screenshots/keywords.png)

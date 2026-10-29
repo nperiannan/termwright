@@ -63,19 +63,18 @@ type Settings struct {
 	DownloadDir          string                       `json:"downloadDir"`
 	FontFamily           string                       `json:"fontFamily"`
 	FontSize             int                          `json:"fontSize"`
-	LineHeight           float64                      `json:"lineHeight"` // terminal line spacing (1.0 = the font's own; 0 = 1.0)
-	Theme                string                       `json:"theme"`               // ui theme: dark | light | system
-	UIFont               string                       `json:"uiFont"`              // interface font: "" (system), vscode, inter, plex
-	UIFontSize           int                          `json:"uiFontSize"`          // interface text size in px (13-17; 0 = 13)
-	ThemeFollowsSystem   bool                         `json:"themeFollowsSystem"`  // set once when the default became "system" (0.20.1)
-	HighlightOptIn       bool                         `json:"highlightOptIn"`      // set once when keyword highlighting became off by default (0.20.3)
-	Layout               string                       `json:"layout"`              // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
-	ModernLayout         bool                         `json:"modernLayout"`        // set once when the modern layout became the default (0.21.0)
-	HighlightStyle       string                       `json:"highlightStyle"`      // keyword highlighting: "" = colour the text, "background" = colour the background
-	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`         // session path → fact name → value ("_at" = when read)
-	FactRulesAdded       bool                         `json:"factRulesAdded"`      // set once when the built-in device types got their fact rules (0.21.0)
+	LineHeight           float64                      `json:"lineHeight"`         // terminal line spacing (1.0 = the font's own; 0 = 1.0)
+	Theme                string                       `json:"theme"`              // ui theme: dark | light | system
+	UIFont               string                       `json:"uiFont"`             // interface font: "" (system), vscode, inter, plex
+	UIFontSize           int                          `json:"uiFontSize"`         // interface text size in px (13-17; 0 = 13)
+	ThemeFollowsSystem   bool                         `json:"themeFollowsSystem"` // set once when the default became "system" (0.20.1)
+	HighlightOptIn       bool                         `json:"highlightOptIn"`     // set once when keyword highlighting became off by default (0.20.3)
+	Layout               string                       `json:"layout"`             // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
+	ModernLayout         bool                         `json:"modernLayout"`       // set once when the modern layout became the default (0.21.0)
+	HighlightStyle       string                       `json:"highlightStyle"`     // keyword highlighting: "" = colour the text, "background" = colour the background
+	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`        // session path → fact name → value ("_at" = when read)
+	FactRulesAdded       bool                         `json:"factRulesAdded"`     // set once when the built-in device types got their fact rules (0.21.0)
 	KeywordsOn           bool                         `json:"keywordsOn"`
-	FontTuned            bool                         `json:"fontTuned"`           // set once when the macOS terminal font became Menlo 12 (0.21.0)          // set once when keyword highlighting became on by default (0.21.0)
 	IconStyle            string                       `json:"iconStyle"`           // device and session icons: "" = coloured tiles, "glyph" = the symbol only
 	CompactRows          bool                         `json:"compactRows"`         // modern layout: one-line Session Manager rows
 	WelcomeSeen          string                       `json:"welcomeSeen"`         // version whose welcome flow was finished or skipped ("0.21")
@@ -133,7 +132,7 @@ type Settings struct {
 	PythonPath           string                       `json:"pythonPath"` // interpreter for .py scripts ("" = find python3)
 	DeviceTypes          []session.DeviceType         `json:"deviceTypes"`
 	Alerts               []Alert                      `json:"alerts"`
-	ConfirmPaste         bool                         `json:"confirmPaste"` // ask before pasting several lines
+	ConfirmPaste         bool                         `json:"confirmPaste"`     // ask before pasting several lines
 	QuickConnectSave     bool                         `json:"quickConnectSave"` // Quick Connect saves the session (switch on by default; remembered)
 	Snippets             []Snippet                    `json:"snippets"`
 	Workspaces           []Workspace                  `json:"workspaces"`
@@ -281,7 +280,7 @@ func Defaults(dataDir string) Settings {
 		LogDir:          filepath.Join(dataDir, "Logs"),
 		DownloadDir:     defaultDownloads(),
 		FontFamily:      "Menlo, Consolas, 'DejaVu Sans Mono', 'Courier New', monospace",
-		FontSize:        defaultFontSize(),
+		FontSize:        14,
 		LineHeight:      1,
 		Theme:           "system",
 		TerminalScheme:  "Auto",
@@ -330,15 +329,6 @@ func Defaults(dataDir string) Settings {
 			{Pattern: `\b(CRITICAL|link down|Link Down)\b`, Regex: true, CaseSensitive: true, Sound: true, Desktop: true},
 		},
 	}
-}
-
-// defaultFontSize is the terminal text size: 12 on macOS (Menlo 12, as other
-// macOS terminal programs), 14 px elsewhere (about Consolas 10.5 pt).
-func defaultFontSize() int {
-	if runtime.GOOS == "darwin" {
-		return 12
-	}
-	return 14
 }
 
 func defaultDownloads() string {
@@ -443,12 +433,6 @@ func Load(dataDir string) (*Manager, error) {
 	}
 	// macOS terminal text (0.21.0): the old default Menlo 14 becomes Menlo 12
 	// (once; a size the user chose stays).
-	if !m.cur.FontTuned {
-		if runtime.GOOS == "darwin" && m.cur.FontSize == 14 && strings.HasPrefix(m.cur.FontFamily, "Menlo") {
-			m.cur.FontSize = 12
-		}
-		m.cur.FontTuned, changed = true, true
-	}
 	// The modern layout (0.21.0) keeps the Button Bar out of the way (once -
 	// it can be shown again from View).
 	if !m.cur.ModernLayout {

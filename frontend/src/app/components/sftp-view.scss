@@ -1,13 +1,13 @@
 :host { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
 .panes { flex: 1; display: flex; min-height: 0; }
-.pane { flex: 1; display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); margin: 6px; border-radius: 6px; background: var(--panel);
+.pane { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--border); margin: 6px; border-radius: 6px; background: var(--panel);
   &.focus { border-color: var(--accent); }
   header { display: flex; align-items: center; gap: 4px; padding: 6px; border-bottom: 1px solid var(--border);
     .label { font-weight: 600; font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 60px; max-width: 35%; flex-shrink: 1; }
     .path { flex: 1; min-width: 120px; font-size: calc(12px * var(--ui-scale, 1)); } }
   footer { padding: 4px 10px; font-size: calc(11px * var(--ui-scale, 1)); color: var(--muted); border-top: 1px solid var(--border); }
 }
-.list { flex: 1; overflow: auto; outline: none; user-select: none; }
+.list { flex: 1; min-height: 0; overflow: auto; outline: none; user-select: none; scroll-padding-top: 28px; }
 .row { display: grid; grid-template-columns: minmax(0, 1fr) 80px 130px 100px; gap: 8px; align-items: center; height: 24px; padding: 0 10px; white-space: nowrap;
   > span { overflow: hidden; text-overflow: ellipsis; }
   .n { display: flex; align-items: center; gap: 6px; app-icon { color: var(--muted); flex: none; } }
@@ -67,7 +67,7 @@
   select.pill { padding-right: 22px; }
   .sbtn { height: 30px; padding: 0 14px; border-radius: var(--r); font-weight: 500; white-space: nowrap; }
   .root-btn { height: 24px; border-radius: var(--r); }
-  .panes { display: grid; grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr); }
+  .panes { display: grid; grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .pane { margin: 0; border: 0; border-radius: 0; background: var(--surface);
     &.focus { border: 0; header .label { color: var(--accent); } }
     header { height: 42px; gap: 4px; padding: 0 8px 0 10px; border-bottom: 1px solid var(--line);

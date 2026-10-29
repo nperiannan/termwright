@@ -391,7 +391,7 @@ export class App implements OnInit {
       case 'toggle-button-bar': this.ui.patchSettings({ showButtonBar: !s?.showButtonBar }); break;
       case 'zoom-in': if (s) this.ui.patchSettings({ fontSize: Math.min(48, s.fontSize + 1) }); break;
       case 'zoom-out': if (s) this.ui.patchSettings({ fontSize: Math.max(6, s.fontSize - 1) }); break;
-      case 'zoom-reset': this.ui.patchSettings({ fontSize: this.isMac ? 12 : 14 }); break;
+      case 'zoom-reset': this.ui.patchSettings({ fontSize: 14 }); break;
       case 'session-options':
         if (t?.session.path) await this.ui.editSession(t.session.path, t.id);
         else if (this.ui.selectedPath() && !this.ui.selectedIsFolder()) await this.ui.editSession(this.ui.selectedPath());

@@ -21,7 +21,7 @@ import { FormsModule } from '@angular/forms';
 /** The keyword colour as text on the terminal: the same hue, light enough
  *  on a dark terminal and dark enough on a light one. */
 /** The default terminal text size (Settings → Terminal): Menlo 12 on macOS, 14 px elsewhere. */
-const BASE_FONT = /mac/i.test(navigator.platform) || navigator.userAgent.includes('Mac OS') ? 12 : 14;
+const BASE_FONT = 14;
 
 function textTone(hex: string, lightTerm: boolean): string {
   const n = parseInt(hex.slice(1), 16);
