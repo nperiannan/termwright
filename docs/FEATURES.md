@@ -37,6 +37,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 ## Connecting
 
 - **Protocols**: SSH2, Telnet, Serial, Local Shell, Raw TCP, RDP, VNC and Console (a port of a console server).
+- **Copy, Cut, Paste and Undo** in the Session Manager: copy or move sessions and whole folders (Cmd/Ctrl+C / X / V), confirmation before a move (on by default), and Undo of the last three moves, pastes or deletes, each saying first what it will do.
 - **Saved sessions**: double-click, Connect Terminal, Connect SFTP Session, or Connect All in Folder.
 - **Quick Connect**: one connect line (`voss admin@10.1.1.1`, `ssh user@host:2222`, `serial COM3 115200`) fills protocol, address, port, device type and user; or fill the fields; save it as a session (the switch is remembered; Settings → Save Quick Connect sessions makes it the default).
 - **Quick Open** (`Mod+G`): find a session, folder, host, open tab, library command or menu action by typing.

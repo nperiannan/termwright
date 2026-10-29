@@ -58,7 +58,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
             </div>
             <div class="two">
               <label class="f grow"><span>Network</span><input name="wolnet" class="mono" [(ngModel)]="s.wolNetwork" placeholder="192.168.1.0/24" spellcheck="false" /></label>
-              <label class="f grow"><span>IP address <small>(optional)</small></span><input name="host" class="mono" [(ngModel)]="s.hostname" placeholder="found by its MAC" spellcheck="false" /></label>
+              <label class="f grow"><span>IP address <small>(or network)</small></span><input name="host" class="mono" [(ngModel)]="s.hostname" placeholder="found by its MAC" spellcheck="false" /></label>
             </div>
             <p class="note">Double-click sends the magic packet to the broadcast address of its network only (from the network, or the IP address's network). With an IP address the device is pinged until it answers, and every {{ pingMins(s) }} afterwards (green = up, orange = down); without one the network is searched for the MAC address and the address found is saved. More options: searches, interval, ping, jump host.</p>
           }
@@ -141,6 +141,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
       </div>
       <footer>
         <button type="button" (click)="close()">Cancel</button>
+        <button type="button" class="more" title="Open every option of this session (all pages)" (click)="more('')"><app-icon name="options" [size]="14" /> More Options…</button>
         <span class="grow"></span>
         <button type="submit">Save</button>
         <button type="button" class="primary sc" (click)="save(true)"><app-icon name="quick" [size]="14" /> {{ s.protocol === 'WOL' ? 'Save &amp; Wake' : 'Save &amp; Connect' }}</button>
@@ -193,6 +194,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
       .v { margin-left: auto; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
       .chev { color: var(--faint); } }
     .err { color: var(--danger); }
+    footer .more { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
     footer { display: flex; align-items: center; gap: 8px; padding: 12px 14px 12px 18px; border-top: 1px solid var(--line);
       .sc { display: inline-flex; align-items: center; gap: 6px; }
       .grow { flex: 1; } .link { border: 0; background: transparent; padding: 0; color: var(--accent); height: auto; &:hover { background: transparent; text-decoration: underline; } } }
@@ -249,6 +251,7 @@ export class SessionPanel {
   setProto(p: string) {
     if (!this.s) return;
     this.s.protocol = p;
+    if (p === 'WOL') { this.s.deviceType = ''; if (!this.s.wolNetwork && this.s.hostname) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0'); }
     this.s.port = defaultPort(p) || this.s.port;
     if (p === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }
   }
@@ -277,7 +280,7 @@ export class SessionPanel {
   facts() { return factList(this.ui.factsOf(this.edit().oldPath)); }
   readonly factsAge = factsAge;
 
-  devKind() { return deviceKindOf(this.s?.deviceType); }
+  devKind() { return this.s?.protocol === 'WOL' ? null : deviceKindOf(this.s?.deviceType); }
   protoKind(): SessionKind {
     const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol' };
     return m[this.s?.protocol ?? ''] ?? (this.s?.openAs === 'sftp' ? 'sftp' : 'ssh');
@@ -302,6 +305,7 @@ export class SessionPanel {
     if (['SSH2', 'Telnet', 'Raw', 'RDP', 'VNC'].includes(s.protocol) && !s.hostname.trim()) { this.error.set('Please enter an address.'); return; }
     if (s.protocol === 'Serial' && !s.comPort.trim()) { this.error.set('Please choose a serial port.'); return; }
     if (s.protocol === 'WOL' && !s.mac?.trim()) { this.error.set('Please enter the MAC address of the device to wake.'); return; }
+    if (s.protocol === 'WOL' && !s.hostname?.trim() && !s.wolNetwork?.trim()) { this.error.set('Please enter the network (e.g. 192.168.1.0) or the IP address of the device - the magic packet goes to that network.'); return; }
     if (s.protocol === 'Console' && (!s.consoleServer || !s.consolePort)) { this.more('connection'); return; }
     s.port = Number(s.port) || 0;
     try {

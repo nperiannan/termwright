@@ -10,6 +10,7 @@ import { ago, envInfo, envOf } from '../core/env';
 import { SessionIcon, SessionKind } from './session-icon';
 import { DeviceIcon, deviceKindOf } from './device-icon';
 import { Wol } from '../core/wol.service';
+import { SessionOps } from '../core/session-ops.service';
 import { FolderIcon } from './folder-icon';
 import { factList, factsAge } from '../core/facts';
 
@@ -47,7 +48,7 @@ export function sessionAddr(n: SessionNode): string {
 @Component({
   selector: 'app-session-tree',
   imports: [NgTemplateOutlet, FormsModule, Icon, SessionIcon, DeviceIcon, FolderIcon],
-  host: { '[class.roomy]': 'roomy()' },
+  host: { '[class.roomy]': 'roomy()', '(keydown)': 'treeKey($event)', tabindex: '-1' },
   template: `
     @if (!roomy()) {
     <div class="sm-head">
@@ -198,6 +199,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   protected ui = inject(Ui);
   private tabs = inject(Tabs);
   protected wol = inject(Wol);
+  protected ops = inject(SessionOps);
   private backend = inject(Backend);
   private async wake(path: string, then: 'none' | 'connect') {
     try { await this.tabs.wake(await this.backend.getSession(path), '', then); } catch (e) { this.ui.error(e); }
@@ -286,6 +288,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
       { label: 'New Session...', action: () => void this.ui.newSession(this.ui.currentFolder()) },
       { label: 'New Folder...', action: () => void this.newFolder(this.ui.currentFolder()) },
       { label: 'Refresh', action: () => { void this.ui.refreshTree(); void this.checkNow(); } },
+      ...(this.ops.clip() ? [{ label: 'Paste' + this.clipWhat() + ' at the Top Level', action: () => void this.ops.paste('') }] : []),
+      { label: this.ops.undoSteps()[0] ? 'Undo: ' + this.ops.undoSteps()[0].title : 'Undo', hint: this.keys('Z'), disabled: !this.ops.undoSteps().length, action: () => void this.ops.undo() },
       { separator: true },
       { label: 'Clear Recent', action: () => void this.ui.clearRecent(), disabled: !(s?.recentSessions ?? []).length },
       { label: 'Clear Favourites', action: () => void this.ui.clearFavourites(), disabled: !(s?.favorites ?? []).length },
@@ -300,7 +304,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   facts(path: string) { return factList(this.ui.factsOf(path)); }
   readonly factsAge = factsAge;
 
-  devKind(n: SessionNode) { return deviceKindOf(n.deviceType); }
+  devKind(n: SessionNode) { return n.protocol === 'WOL' ? null : deviceKindOf(n.deviceType); }
   addr(n: SessionNode) { return sessionAddr(n); }
   addrParts(n: SessionNode) { return sessionAddrParts(n); }
 
@@ -396,6 +400,42 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   portOf(n: SessionNode) { return n.port || (n.protocol === 'Telnet' ? 23 : 22); }
 
   pingEvery(n: SessionNode) { const v = n.wolPing ?? 120; return v < 0 ? 'never' : v >= 120 ? Math.round(v / 60) + ' minutes' : v + ' seconds'; }
+  /** Saved sessions for the same device as a Wake-on-LAN session (same MAC or address), to connect to once it is up. */
+  wolPartners(w: SessionNode): SessionNode[] {
+    const out: SessionNode[] = [];
+    const mac = (w.mac ?? '').toLowerCase().replace(/[^0-9a-f]/g, '');
+    const walk = (n: SessionNode | null) => n?.children?.forEach(c => {
+      if (c.isFolder) walk(c);
+      else if (c.protocol !== 'WOL' && ((mac && (c.mac ?? '').toLowerCase().replace(/[^0-9a-f]/g, '') === mac) || (w.hostname && c.hostname === w.hostname))) out.push(c);
+    });
+    walk(this.ui.tree());
+    return out.slice(0, 4);
+  }
+  private async wakeThen(path: string, connect: string) {
+    try { await this.wol.wake(await this.backend.getSession(path), () => void this.tabs.openSession(connect)); } catch (e) { this.ui.error(e); }
+  }
+
+  keys(k: string) { return (/Mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+') + k; }
+  clipWhat() { const c = this.ops.clip(); return c ? (c.items.length === 1 ? ' "' + c.items[0].path.split('/').pop() + '"' : ' ' + c.items.length + ' Items') : ''; }
+
+  /** Cmd/Ctrl+C, X, V and Z in the Session Manager (not while typing in the filter). */
+  treeKey(ev: KeyboardEvent) {
+    if (!(ev.metaKey || ev.ctrlKey) || ev.shiftKey || ev.altKey) return;
+    const t = ev.target as HTMLElement;
+    if (t.closest('input, textarea, select')) return;
+    const k = ev.key.toLowerCase();
+    const sel = this.ui.selectedPaths();
+    const cur = this.ui.selectedPath();
+    const items = sel.size > 1 ? [...sel].map(p => ({ path: p, folder: !!this.ui.findNode(p)?.isFolder })) : cur ? [{ path: cur, folder: !!this.ui.findNode(cur)?.isFolder }] : [];
+    if (k === 'c' && items.length) this.ops.copy(items);
+    else if (k === 'x' && items.length) this.ops.cut(items);
+    else if (k === 'v' && this.ops.clip()) { const n = cur ? this.ui.findNode(cur) : null; void this.ops.paste(n ? (n.isFolder ? n.path : this.parentOf(n.path)) : ''); }
+    else if (k === 'z') void this.ops.undo();
+    else return;
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+
   wolDot(n: SessionNode) {
     const st = this.wol.get(n.path)?.state;
     return 'dot wol ' + (st === 'up' ? 'up' : st === 'down' ? 'wdown' : st === 'waking' ? 'waking' : 'unk');
@@ -619,6 +659,9 @@ export class SessionTree implements AfterViewInit, OnDestroy {
         { label: 'Run and Collect...', action: () => this.collect(g) },
         { label: allFav ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav(g, !allFav) },
         { separator: true },
+        { label: `Copy ${g.length} Sessions`, hint: this.keys('C'), action: () => this.ops.copy(g.map(p => ({ path: p, folder: false }))) },
+        { label: `Cut ${g.length} Sessions`, hint: this.keys('X'), action: () => this.ops.cut(g.map(p => ({ path: p, folder: false }))) },
+        { separator: true },
         { label: `Delete ${g.length} Sessions`, action: () => this.deleteMany(g) },
       ]);
       return;
@@ -636,6 +679,9 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'New Session...', action: () => this.ui.newSession(n.path) },
           { label: 'New Folder...', action: () => this.newFolder(n.path) },
           { label: 'Rename...', action: () => this.renameFolder(n) },
+          { label: 'Copy', hint: this.keys('C'), action: () => this.ops.copy([{ path: n.path, folder: true }]) },
+          { label: 'Cut', hint: this.keys('X'), action: () => this.ops.cut([{ path: n.path, folder: true }]) },
+          ...(this.ops.clip() ? [{ label: 'Paste' + this.clipWhat(), hint: this.keys('V'), action: () => void this.ops.paste(n.path) }] : []),
           { label: 'Folder Defaults...', action: () => { this.ui.folderDefaultsFor.set(n.path); this.ui.open('folderDefaults'); } },
           ...((this.ui.settings()?.folderDefaults ?? []).find(d => d.folder === n.path)?.environment === 'production'
             ? [{ label: 'Unmark Production', action: () => this.setProduction(n.path, false) }]
@@ -656,30 +702,34 @@ export class SessionTree implements AfterViewInit, OnDestroy {
             ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', action: () => void this.openWeb(n.path, 'session') }] : []),
             { label: 'Open Web Interface...', action: () => void this.openWeb(n.path, 'device') },
           ] : []),
-          { label: 'Wake Up (Wake-on-LAN)', disabled: !n.mac, hint: n.mac ? '' : 'no MAC address', action: () => void this.wake(n.path, 'none') },
+          ...(n.mac ? [{ label: 'Wake Up (Wake-on-LAN)', action: () => void this.wake(n.path, 'none') }] : []),
           ...(n.mac && n.protocol !== 'WOL' ? [{ label: 'Wake Up and Connect', action: () => void this.wake(n.path, 'connect') }] : []),
+          ...(n.protocol === 'WOL' ? this.wolPartners(n).map(p => ({ label: `Wake Up and Connect to ${p.name}`, action: () => void this.wakeThen(n.path, p.path) })) : []),
           ...(n.protocol === 'WOL' && n.hostname ? [{ label: 'Check Now (ping)', action: () => this.wol.checkNow(n.path) }] : []),
           { separator: true },
           { label: 'Properties...', action: () => this.ui.editSession(n.path) },
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }] : []),
           { label: this.isFav(n.path) ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav([n.path], !this.isFav(n.path)) },
           ...(sec === 'recent' ? [{ label: 'Remove from Recent', action: () => this.ui.removeRecent(n.path) }] : []),
-          ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' ? [] : [
+          ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'WOL' ? [] : [
             { label: 'Back Up Configuration', action: () => this.backUp([n.path]) },
             { label: 'Change Checklist...', action: () => this.checklist([n.path]) },
           ]),
-          ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'Serial' ? [] : [
+          ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'Serial' || n.protocol === 'WOL' ? [] : [
             { label: 'Run and Collect...', action: () => this.collect([n.path]) },
           ]),
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [
             { label: 'Console Server Ports...', action: () => { this.ui.consoleServerFor.set(n.path); this.ui.open('consolePorts'); } },
           ] : []),
           { label: 'Duplicate', action: () => this.duplicate(n) },
+          { label: 'Copy', hint: this.keys('C'), action: () => this.ops.copy([{ path: n.path, folder: false }]) },
+          { label: 'Cut', hint: this.keys('X'), action: () => this.ops.cut([{ path: n.path, folder: false }]) },
+          ...(this.ops.clip() ? [{ label: 'Paste' + this.clipWhat() + ' Here', hint: this.keys('V'), action: () => void this.ops.paste(this.parentOf(n.path)) }] : []),
           ...(n.protocol === 'SSH2' ? [n.openAs === 'sftp'
             ? { label: 'Create SSH Session (terminal)', action: () => void this.ui.copySessionAs(n.path, '') }
             : { label: 'Create SFTP Session', action: () => void this.ui.copySessionAs(n.path, 'sftp') }] : []),
           { label: 'Rename...', action: () => this.renameSession(n) },
-          { label: 'Forget Saved Password', action: () => this.backend.forgetPassword(n.path).then(() => this.ui.toast('Password removed')) },
+          ...(n.protocol === 'WOL' ? [] : [{ label: 'Forget Saved Password', action: () => this.backend.forgetPassword(n.path).then(() => this.ui.toast('Password removed')) }]),
           { separator: true },
           { label: 'Delete', action: () => this.deleteSession(n) },
         ];
@@ -716,9 +766,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
 
   private async deleteMany(paths: string[]) {
     if (!(await this.ui.confirm('Delete Sessions', `Delete ${paths.length} sessions?\n\n${paths.slice(0, 12).join('\n')}${paths.length > 12 ? '\n…' : ''}`, 'Delete', true))) return;
-    for (const p of paths) await this.backend.deleteSession(p).catch(e => this.ui.error(e));
+    await this.ops.remove(paths.map(p => ({ path: p, folder: false })));
     this.ui.selectedPaths.set(new Set());
-    await this.ui.refreshTree();
   }
 
   private connectAll(n: SessionNode) {
@@ -738,8 +787,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
 
   private async deleteFolder(n: SessionNode) {
     const count = this.countSessions(n);
-    if (!(await this.ui.confirm('Delete Folder', `Delete folder "${n.path}" and ${count} session(s) in it?`, 'Delete', true))) return;
-    try { await this.backend.deleteFolder(n.path); await this.ui.refreshTree(); } catch (e) { this.ui.error(e); }
+    if (!(await this.ui.confirm('Delete Folder', `Delete folder "${n.path}" and ${count} session(s) in it?\n\nUndo (⋯ menu) can re-create them.`, 'Delete', true))) return;
+    await this.ops.remove([{ path: n.path, folder: true }]);
   }
 
   private countSessions(n: SessionNode): number {
@@ -767,7 +816,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
 
   private async deleteSession(n: SessionNode) {
     if (!(await this.ui.confirm('Delete Session', `Delete session "${n.path}"?`, 'Delete', true))) return;
-    try { await this.backend.deleteSession(n.path); await this.ui.refreshTree(); } catch (e) { this.ui.error(e); }
+    await this.ops.remove([{ path: n.path, folder: false }]);
   }
 
   dragStart(ev: DragEvent, n: SessionNode) {
@@ -790,23 +839,12 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     const n = this.dragged;
     this.dragged = null;
     if (!n) return;
-    const parent = n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';
-    if (parent === folder || n.path === folder) return;
+    const sel = this.ui.selectedPaths();
+    const items = !n.isFolder && sel.size > 1 && sel.has(n.path) ? [...sel].map(p => ({ path: p, folder: false })) : [{ path: n.path, folder: n.isFolder }];
     try {
-      if (n.isFolder) {
-        await this.backend.renameFolder(n.path, folder ? folder + '/' + n.name : n.name);
-      } else {
-        const sel = this.ui.selectedPaths();
-        for (const p of sel.size > 1 && sel.has(n.path) ? [...sel] : [n.path]) {
-          if (this.parentOf(p) === folder) continue;
-          const s = await this.backend.getSession(p);
-          s.folder = folder;
-          await this.backend.saveSession(s, p);
-        }
-        this.ui.selectedPaths.set(new Set());
-      }
+      await this.ops.move(items, folder);
+      this.ui.selectedPaths.set(new Set());
       if (folder) this.expanded.update(s => new Set(s).add(folder));
-      await this.ui.refreshTree();
     } catch (e) { this.ui.error(e); }
   }
 }

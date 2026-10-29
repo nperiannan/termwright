@@ -47,6 +47,14 @@ func (a *App) WakeDevice(s session.Session) (WakeResult, error) {
 	if err != nil {
 		return WakeResult{}, err
 	}
+	if strings.TrimSpace(s.Hostname) == "" && strings.TrimSpace(s.WOLNetwork) == "" && s.WOLBroadcast == "" {
+		return WakeResult{}, errors.New("enter the device's network (e.g. 192.168.1.0) or its IP address - the magic packet goes to that network only")
+	}
+	if n := strings.TrimSpace(s.WOLNetwork); n != "" {
+		if _, err := discover.NetworkOf(n); err != nil {
+			return WakeResult{}, err
+		}
+	}
 	key := s.Path
 	if key == "" {
 		key = "mac:" + s.MAC

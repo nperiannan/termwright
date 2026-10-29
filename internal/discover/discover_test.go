@@ -472,3 +472,15 @@ func TestParseTargetsBareNetwork(t *testing.T) {
 		t.Fatalf("single address: %v %v", got, err)
 	}
 }
+
+func TestNetworkOf(t *testing.T) {
+	for in, want := range map[string]string{"192.168.1.0/24": "192.168.1.0/24", "192.168.1.0": "192.168.1.0/24", "192.168.1": "192.168.1.0/24", "192.168.1.41": "192.168.1.0/24", "10.1.2.3/22": "10.1.0.0/22"} {
+		p, err := NetworkOf(in)
+		if err != nil || p.String() != want {
+			t.Errorf("%s: %v %v", in, p, err)
+		}
+	}
+	if _, err := NetworkOf("nas.lan"); err == nil {
+		t.Error("name accepted")
+	}
+}

@@ -99,7 +99,7 @@ export interface Settings {
   keywordSets: KeywordSet[] | null; defaultKeywordSet: string; showConnectBar: boolean; keyMap: KeyBinding[] | null;
   customSchemes: { name: string; colors: Record<string, string> }[] | null; accentColor: string;
   restoreTabs: boolean; openTabs: string[] | null; inWindowMenu: boolean; forceTerminalScheme: boolean; pythonPath: string;
-  deviceTypes: DeviceType[] | null; alerts: AlertRule[] | null; confirmPaste: boolean; quickConnectSave?: boolean;
+  deviceTypes: DeviceType[] | null; alerts: AlertRule[] | null; confirmPaste: boolean; quickConnectSave?: boolean; noMoveConfirm?: boolean;
   snippets: Snippet[] | null; workspaces: Workspace[] | null; folderDefaults: FolderDefault[] | null;
   credentials: Credential[] | null; masterHash: string;
   bookmarks: Bookmark[] | null; updateChannel: 'stable' | 'nightly' | 'off'; updateRepo: string; updateOnStart: boolean;

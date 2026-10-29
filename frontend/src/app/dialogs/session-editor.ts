@@ -215,7 +215,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <div class="row"><input name="wnet" class="mono" [(ngModel)]="s.wolNetwork" placeholder="192.168.1.0/24" spellcheck="false" style="max-width: 200px" />
                     <span class="hint">the magic packet goes to its broadcast address; without an IP address it is searched for the MAC address</span></div>
                   <label>IP address</label>
-                  <div class="row"><input name="hostname" class="mono" [(ngModel)]="s.hostname" placeholder="optional" spellcheck="false" style="max-width: 200px" />
+                  <div class="row"><input name="hostname" class="mono" [(ngModel)]="s.hostname" placeholder="or the network above" spellcheck="false" style="max-width: 200px" />
                     <span class="hint">pinged to show up (green) or down (orange)</span></div>
                   <label>UDP port</label>
                   <div class="row"><input name="wport" type="number" min="1" max="65535" class="short" [ngModel]="s.wolPort || 9" (ngModelChange)="s.wolPort = +$event === 9 ? 0 : +$event" />
@@ -904,7 +904,7 @@ export class SessionEditor implements OnInit {
   readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'];
   readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'].includes(p));
-  devKind() { return deviceKindOf(this.s?.deviceType); }
+  devKind() { return this.s?.protocol === 'WOL' ? null : deviceKindOf(this.s?.deviceType); }
   protoKind(): SessionKind {
     const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol' };
     return m[this.s?.protocol ?? ''] ?? (this.s?.openAs === 'sftp' ? 'sftp' : 'ssh');
@@ -972,6 +972,7 @@ export class SessionEditor implements OnInit {
     if (!this.s) return;
     if (this.remote() && ['logon', 'terminal', 'log', 'forward', 'auth', 'serial', 'local'].includes(this.page())) this.page.set('connection');
     this.s.port = defaultPort(this.s.protocol) || this.s.port;
+    if (this.s.protocol === 'WOL') { this.s.deviceType = ''; if (this.page() !== 'firewall') this.page.set('connection'); if (!this.s.wolNetwork && /^\d+\.\d+\.\d+\.\d+$/.test(this.s.hostname)) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0'); }
     if (this.s.protocol === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }
   }
 
@@ -1061,6 +1062,8 @@ export class SessionEditor implements OnInit {
       this.page.set('connection'); this.error.set('Please enter a hostname.'); return;
     }
     if (s.protocol === 'Serial' && !s.comPort.trim()) { this.page.set('serial'); this.error.set('Please choose a serial port.'); return; }
+    if (s.protocol === 'WOL' && !s.mac?.trim()) { this.page.set('connection'); this.error.set('Please enter the MAC address of the device to wake.'); return; }
+    if (s.protocol === 'WOL' && !s.hostname?.trim() && !s.wolNetwork?.trim()) { this.page.set('connection'); this.error.set('Please enter the network (e.g. 192.168.1.0) or the IP address of the device - the magic packet goes to that network.'); return; }
     if (s.protocol === 'Console') {
       s.consolePort = Number(s.consolePort) || 0;
       if (!s.consoleServer || s.consolePort < 1) { this.page.set('connection'); this.error.set('Choose the console server and the port number.'); return; }

@@ -89,10 +89,7 @@ func wolBroadcast(s session.Session) string {
 		return s.WOLBroadcast
 	}
 	if n := strings.TrimSpace(s.WOLNetwork); n != "" {
-		if !strings.Contains(n, "/") {
-			n += "/24"
-		}
-		if p, err := netip.ParsePrefix(n); err == nil && p.Addr().Is4() {
+		if p, err := discover.NetworkOf(n); err == nil {
 			return lastAddr(p)
 		}
 	}

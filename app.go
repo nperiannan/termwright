@@ -377,7 +377,14 @@ func (a *App) DuplicateSession(path string) (string, error) {
 	if err := a.ready(); err != nil {
 		return "", err
 	}
-	return a.store.Duplicate(path)
+	dup, err := a.store.Duplicate(path)
+	if err != nil {
+		return "", err
+	}
+	if pw, ok := secrets.Lookup(path); ok { // the copy logs in like the original
+		_ = secrets.Set(dup, pw)
+	}
+	return dup, nil
 }
 
 // CopySessionAs saves a copy of an SSH2 session next to it that opens as an

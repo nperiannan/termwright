@@ -165,12 +165,12 @@ export class App implements OnInit {
     const tail = recent ? this.lastAgo(n) : (n.protocol === 'Serial' ? '' : n.protocol ?? '');
     return [kind, tail].filter(Boolean).join(' · ') || n.protocol || '';
   }
-  devKind(n: SessionNode) { return deviceKindOf(n.deviceType); }
+  devKind(n: SessionNode) { return n.protocol === 'WOL' ? null : deviceKindOf(n.deviceType); }
   addr(n: SessionNode) { return sessionAddr(n); }
   cardEnv(n: SessionNode) { return envInfo(envOf(n.path, n.environment, this.settings()?.folderDefaults)); }
   lastAgo(n: SessionNode) { return ago(this.settings()?.lastConnected?.[n.path]); }
   protoKind(n: SessionNode) {
-    const m: Record<string, string> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc' };
+    const m: Record<string, string> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol' };
     return (m[n.protocol ?? ''] ?? (n.openAs === 'sftp' ? 'sftp' : 'ssh')) as never;
   }
 
@@ -365,9 +365,9 @@ export class App implements OnInit {
       case 'collect': this.ui.open('collect'); break;
       case 'history': this.ui.open('history'); break;
       case 'export': this.ui.open('export'); break;
-      case 'copy': if (!this.editInput('copy')) await this.tabs.copy(); break;
+      case 'copy': if (this.treeFocused()) this.treeKey('c'); else if (!this.editInput('copy')) await this.tabs.copy(); break;
       case 'cut': this.editInput('cut'); break;
-      case 'paste': if (!(await this.pasteInput())) await this.tabs.paste(); break;
+      case 'paste': if (this.treeFocused()) this.treeKey('v'); else if (!(await this.pasteInput())) await this.tabs.paste(); break;
       case 'copy-paste': await this.tabs.copy(); await this.tabs.paste(); break;
       case 'select-all': if (!this.editInput('select-all')) h?.term.selectAll(); break;
       case 'find': this.findOpen.set(true); setTimeout(() => document.getElementById('findInput')?.focus(), 20); break;
@@ -482,6 +482,10 @@ export class App implements OnInit {
     if ((el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && !el.classList.contains('xterm-helper-textarea')) return el;
     return null;
   }
+
+  /** The Session Manager has the focus (not its filter box): Copy / Paste act on sessions. */
+  private treeFocused() { const a = document.activeElement; return !!a?.closest('app-session-tree') && !a.closest('input, textarea, select'); }
+  private treeKey(k: string) { document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: k, metaKey: this.isMac, ctrlKey: !this.isMac, bubbles: true })); }
 
   private editInput(op: 'copy' | 'cut' | 'select-all'): boolean {
     const el = this.focusedInput();

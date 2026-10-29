@@ -24,6 +24,8 @@ export class Wol {
   private ui = inject(Ui);
   readonly states = signal<Record<string, WolState>>({});
   private due: Record<string, number> = {};
+  /** What to do when a device being woken answers (e.g. connect to its SSH session). */
+  private onUp = new Map<string, () => void>();
 
   constructor() {
     this.backend.on('wol:status', (st: { path: string; state: string; message: string; ip?: string; name?: string; scan?: number; scans?: number }) => {
@@ -32,6 +34,7 @@ export class Wol {
       this.set(st.path, { state, ip: st.ip, name: st.name, message: st.message, at: Date.now() });
       if (final) this.ui.toast(st.message, st.state === 'up' ? 'success' : st.state === 'sent' ? 'info' : 'error', st.state === 'up' ? 8000 : 15000);
       if (st.state === 'up' && st.ip) void this.ui.refreshTree(); // an address found by the MAC search is saved
+      if (final) { const f = this.onUp.get(st.path); this.onUp.delete(st.path); if (f && st.state === 'up') f(); }
     });
     setInterval(() => void this.tick(), 30_000);
     setTimeout(() => void this.tick(), 4000);
@@ -41,9 +44,10 @@ export class Wol {
   private set(path: string, st: WolState) { this.states.update(m => ({ ...m, [path]: { ...m[path], ...st } })); }
 
   /** Wakes a Wake-on-LAN session's device and watches it. */
-  async wake(s: Session) {
+  async wake(s: Session, then?: () => void) {
     try {
       const r = await this.backend.wakeDevice(s);
+      if (then) this.onUp.set(s.path || 'mac:' + s.mac, then);
       this.set(s.path || 'mac:' + s.mac, { state: 'waking', message: 'Magic packet sent' });
       this.ui.toast(`Magic packet sent to ${s.name || s.mac}${r.via ? ' from ' + r.via : ''} (${r.sent.join(', ')})` +
         (s.hostname ? ` - waiting for ${s.hostname} to answer ping…` : s.wolNetwork ? ` - searching ${s.wolNetwork} for it…` : '.'), 'info', 8000);
