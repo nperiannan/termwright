@@ -1,165 +1,249 @@
-<p align="center"><img src="docs/assets/termwright-icon-256.png" width="128" alt="Termwright icon" /></p>
+<p align="center"><img src="docs/assets/termwright-icon-256.png" width="112" alt="Termwright" /></p>
 
-# Termwright
+<h1 align="center">Termwright</h1>
 
-**Termwright** is a free, open-source terminal emulator and session manager for **Windows, Linux and macOS (Apple Silicon)**.
-It's a desktop app (not a web app), built from scratch in **Go** (backend) and **Angular + xterm.js** (UI) and packaged into a
-**single native binary** with [Wails](https://wails.io).
+<p align="center">
+  <b>A session manager and terminal for network and systems engineers.</b><br/>
+  SSH2 · Telnet · Serial · SFTP · RDP · VNC, on Windows, macOS and Linux.
+</p>
 
-It **imports your existing sessions** from other terminal programs (SecureCRT, PuTTY/KiTTY, SuperPuTTY, MobaXterm, OpenSSH config) and
-from inventories (CSV, Ansible, NetBox, AWS), and can export them again in the same session file and XML formats.
+<p align="center">
+  <a href="https://github.com/nperiannan/termwright/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nperiannan/termwright?include_prereleases&sort=semver&label=release"></a>
+  <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555">
+  <img alt="Go" src="https://img.shields.io/badge/Go-1.24%2B-00ADD8">
+</p>
 
-![Termwright](docs/screenshots/main.png)
+<p align="center">
+  <a href="docs/USER_GUIDE.md">User Guide</a> ·
+  <a href="docs/FEATURES.md">Feature List</a> ·
+  <a href="docs/SCRIPTING.md">Scripting</a> ·
+  <a href="docs/SESSION_FILES.md">Session Files</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="docs/ROADMAP.md">Roadmap</a>
+</p>
 
-📖 **[User Guide](docs/USER_GUIDE.md)** · [All features](docs/FEATURES.md) · [Scripting](docs/SCRIPTING.md) · [Session files](docs/SESSION_FILES.md) · [Roadmap](docs/ROADMAP.md)
+![Termwright main window](docs/screenshots/main.png)
+
+## Overview
+
+Termwright is a free, open-source desktop application for people who spend their day on the command line of switches, routers, firewalls, servers and cloud hosts. It keeps hundreds of sessions organised, logs in the way each kind of device expects, moves files to and from them, and automates the repetitive parts of change windows: backups, checklists, collecting the same values from many devices.
+
+It is a native desktop program, not a web service. It is written in Go, with an Angular and xterm.js interface, and ships as a single binary for each platform. Sessions are plain-text files that you own. Passwords are kept in the operating system's keychain, never in session files. Nothing is sent anywhere except to the hosts you connect to.
+
+Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, MobaXterm and OpenSSH, or from CSV, Ansible, NetBox and AWS inventories. They can be exported back to those formats at any time.
+
+## Highlights
+
+- **Connections**: SSH2, Telnet, serial consoles, raw TCP and local shells in tabs or tiles; RDP and VNC alongside them.
+- **Authentication**: passwords, keys (including PuTTY `.ppk`), certificates, FIDO2 security keys, smart cards, Kerberos and password managers.
+- **Device types**: one login profile per platform (EXOS, VOSS, Cisco IOS, Linux, or your own). It holds the login steps, after-login commands and credentials, so a new device needs only an address.
+- **Device facts**: model, version, serial number, MAC address and uptime are read in a background login and shown wherever the session appears.
+- **Session Manager**: folders with defaults, favourites, recents, environments (production is marked and guarded), reachability, bulk edit, a search-or-connect box and network discovery.
+- **Files**:
+  - a dual-pane SFTP browser with sync, compare, resume, bookmarks, server-to-server copy, SCP and *Run as root*;
+  - a **Files panel** beside the terminal that follows the shell's working directory;
+  - ZMODEM, YMODEM and XMODEM for consoles and boot loaders.
+- **Automation**:
+  - expect/send logon actions and output triggers;
+  - Python, VBScript and JavaScript scripts;
+  - a command window that sends to many tabs, a command library with variables, and searchable command history;
+  - configuration backups with change detection, change checklists, and Run and Collect.
+- **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key.
 
 ## What's new in 0.21.0
 
-* **A modern look, now the default** (the classic layout is one click away): tabs and search in the title bar, a **start page** with your favourite and recent sessions, a **session side panel**, real-world **device icons**, folders coloured by level, and every dialog and page redone - Quick Connect with one connect line, Settings, Session Options, SFTP, Import / Export, Passwords, Backups, Checklists, Shortcuts and the rest.
-* **Device facts**: model, version, serial, MAC and uptime are read after connecting (in the background) and shown on the tab, status bar, cards and side panel; **teach a new fact in two clicks** - select the value in the output - and edit or remove facts in Session Options.
-* **Security and files**: a **welcome flow** with an optional **master password** (any 4+ characters, with a strength meter) and an **unlock window** at start-up; SFTP with clickable paths, a **bookmark bar**, check boxes for **several files**, **New File** and **Delete** on both sides (this computer: to the Trash), and a transfer bar you can close.
-* **Files panel** beside the terminal (opposite the Session Manager): it follows the terminal's folder, a folder opened in it is cd'd to in the terminal, and a double-clicked file opens on this computer - saved changes are offered for upload
-* Also: keyword highlighting on by default (up/enable green, down red, disable amber), **Save Screen As Image**, a shortcut for nearly every menu command, Quick Connect that can always save, Clear Recent / Favourites, Create SFTP / SSH Session copies.
+- **Modern interface, now the default.** Tabs and a search-or-connect box share the title bar. A start page shows favourite and recent sessions, New Session and Properties open in a side panel, and sessions have device icons and colour-coded folders. Every dialog has been redesigned. The classic layout (menu bar, toolbar and tab strip) remains one click away.
+- **Device facts.** Read after connecting without typing in your tab, and shown on the tab, status bar, cards, hover card and side panel. To teach a new fact, select its value in the output; facts can be edited, removed or added by hand in Session Options.
+- **Files panel.** A file browser beside the SSH terminal, opposite the Session Manager:
+  - it follows the terminal's folder;
+  - opening a folder in the panel `cd`s the terminal there;
+  - a double-clicked file opens in its usual program on your computer, and saved changes are offered for upload.
+- **SFTP.**
+  - Clickable paths and a bookmark bar.
+  - Multi-select with check boxes and the keyboard.
+  - New File and Delete on both sides (local files go to the Trash).
+  - Copy, Sync and Diff between the panes; Compare reports when two files are identical.
+  - Transfer speed is shown.
+  - Through a jump station, SFTP opens on the host the terminal is on.
+- **Security.** An optional master password, set during first-run setup with a strength meter (four characters minimum), and an unlock window at start-up.
+- **Everyday details.**
+  - Keyword highlighting on by default.
+  - Command History with per-command removal and clearing by device type.
+  - Save Screen As Image.
+  - Keyboard shortcuts for nearly every menu command.
+  - Timestamps that start on the first line.
 
 ## What's new in 0.20.0
 
-* **Serial consoles**: ports listed in order with the adapter's name and updated when a cable is plugged in, **Detect Speed**, and a send bar with line ending, **hex send and hex view** (0.20.7), timestamps, auto scroll and clear.
-* **Readable interface**: choose the interface font (System, VS Code, Inter, IBM Plex Sans) and text size (13-17 px) in Global Options → General (0.20.7).
-* **HTML reports**: *Save Scrollback As HTML* saves a tab's output with colors and keyword highlighting under a header with the session, address, model, OS version, serial number, MAC and time (0.20.2).
-* **Clear Screen, Timestamps and Auto scroll** for every connection (terminal bar); Discover Devices takes `192.168.1.0` for its /24 and finds the same devices every time (0.20.1).
+- **Serial consoles.** Ports are listed with the adapter's name and refreshed when a cable is plugged in. Detect Speed finds the baud rate, and a send bar offers line endings, hex send and hex view.
+- **Readable interface.** Choice of interface font (System, VS Code, Inter, IBM Plex Sans) and text size.
+- **HTML reports.** Save Scrollback As HTML keeps colours and highlighting, under a header with the device's model, version, serial number and MAC address.
 
 ## What's new in 0.19.0
 
-* **Export to other programs**: PuTTY, KiTTY, MobaXterm, Tabby, OpenSSH config and CSV - next to Termwright's own folder, zip and XML - with a summary of what each format cannot hold. Your sessions are never locked in.
+- **Export to other programs.** PuTTY, KiTTY, MobaXterm, Tabby, OpenSSH config and CSV, next to Termwright's own folder, zip and XML formats, with a report of anything a format cannot hold.
 
-Older releases: see the **[changelog](CHANGELOG.md)**.
+Earlier releases are described in the [changelog](CHANGELOG.md).
 
-## Features (v0.12)
+## Capabilities
 
-| Area | What works |
+| Area | Summary |
 |---|---|
-| Protocols | SSH2, Telnet (NAWS/TTYPE/ECHO/SGA negotiation), Serial (ports listed with the adapter name and updated on plug-in, Detect Speed, send bar, RTS/CTS and XON/XOFF flow control, DTR/RTS, break), Local shell (PTY on macOS/Linux, ConPTY on Windows), Raw TCP |
-| SSH2 | Password, keyboard-interactive, public key (identity file, encrypted keys, **PuTTY `.ppk`** keys, `~/.ssh/id_*`), **SSH certificates**, **FIDO2 security keys**, **Kerberos / GSSAPI**, SSH agent, known_hosts verification with new/changed-key prompts, keep-alive, **remote command** (e.g. `ssh -t` from a jump station to a cloud host) |
-| Key login setup | Generate (Ed25519 / RSA 4096 / ECDSA) or reuse a key, install it on Linux, macOS, BSD or **Windows OpenSSH** servers (incl. `administrators_authorized_keys`), test a key-only login and switch the session to it |
-| Tunnels & routing | Local / remote / dynamic (SOCKS5) port forwarding, chainable jump hosts, SOCKS5 and HTTP CONNECT proxies, X11 and agent forwarding, auto reconnect |
-| Device types | Login profiles (EXOS, VOSS, Cisco IOS, Linux, custom): login steps for Telnet/Serial, after-login steps for every protocol (`enable`, paging off), own username/password (or none) inherited or overridden per session; used by Quick Connect, the Connect Bar (`voss 10.1.1.1`), sessions and folder defaults |
-| Device facts | Model, version, serial, MAC and uptime read after connecting in a background login; shown on tabs, status bar, start page and side panel; teach a new fact by selecting the value; edit / remove / add by hand in Session Options |
-| Session Manager | Start page with favourites and recent sessions, session side panel, device icons, folders coloured by level, folder defaults (user, device type, jump host …), workspaces, Quick Open palette, folder tree, filter/search, drag & drop, new/edit/duplicate/rename/delete, connect-all-in-folder, Connect Terminal / Connect SFTP Session, recent sessions |
-| Discovery | Scan a network or range (up to a /22): ports, SSH/Telnet banners, web page/server/certificate, SIP (phones), SNMP v2c name and model, DNS, MAC address and maker; icons per kind (switch, router, firewall, AP, server, NAS, computer, phone, printer) with the evidence; add selected devices as sessions with a suggested device type. Never logs in. |
-| Import / export | Sessions are plain-text `.ini` files (unknown keys preserved byte-for-byte). Import a SecureCRT Config folder, `.zip`, XML export or `.ini` (saved passwords go to the OS keychain); export to folder, `.zip` or XML, and **export to PuTTY / KiTTY, MobaXterm, Tabby, OpenSSH config and CSV**. Also imports **CSV**, **Ansible** inventories, **NetBox**, **AWS EC2**, **PuTTY / KiTTY** (`.reg`, `~/.putty/sessions`), **SuperPuTTY** (`Sessions.xml`), **MobaXterm** (`.mxtsessions`) and OpenSSH `~/.ssh/config` |
-| Logon automation | Automate logon with an Expect/Send table (hide, trailing CR, named credentials, `\s \w \v \p` escapes), send initial CR, logon scripts with arguments, output triggers |
-| Terminal | Tabs and tiled views (side by side / stacked / grid), xterm-256color/truecolor, Unicode, scrollback search, keyword highlighting, per-session font, Backspace mode, copy-on-select, right-click paste, zoom, clickable links, session lock, Connect Bar |
-| Appearance | **Modern** (default) or **Classic** layout; Dark / Light / follow-system UI with accent color; device icons as tiles or glyphs; terminal scheme *Auto* (follows the UI) or one scheme for all sessions; 12 built-in color schemes (Solarized, Dracula, Nord, Gruvbox, Catppuccin, …), custom scheme editor with import/export, per-session scheme and font |
-| Capture | Session logging (raw or plain text, append, per-line timestamp prefix, filename tokens, start on connect), save scrollback / selection to file |
-| File transfer | SFTP browser (dual pane) over the terminal's login or as a **standalone SFTP session** for one-session devices (e.g. VOSS); folder transfers, sync, **resume**, **bookmarks**, **server-to-server copy**, **SCP transfers from the SFTP browser**, **SFTP on a remote command's target through the jump station**, **Run as root or any user (sudo / su)**, clickable paths, a bookmark bar, several files at once, **New File** and **Delete** on both sides (local files go to the Trash); SCP (files and folders), ZMODEM (auto `sz`/`rz`), YMODEM batch, XMODEM |
-| Scripting | **Python** and **VBScript** (Windows) scripts with the `crt` object (`crt.Screen.WaitForString`, `crt.Screen.Get` on the rendered screen, `crt.Dialog.Prompt`, …) and JavaScript scripts (`term.waitFor`, `readUntil`, `openSession`, …), logon scripts, script recorder, key map (keys → text / action / script). See [docs/SCRIPTING.md](docs/SCRIPTING.md) |
-| Automation | Command window and **command library** with `{{variables}}` (send to the active tab, **selected tabs** or **all tabs**), button bar (text, actions, scripts), **output alerts** (notice, sound, desktop notification), paste confirmation and line delay, **compare outputs** (diff two tabs or files, ignore prompts; *Compare With…* on the tab menu) |
-| Security | Passwords and key passphrases in the OS keychain (never in session files), **password managers** (1Password, Bitwarden, HashiCorp Vault, command), named credentials, **master password** with an unlock window at start-up (any 4+ characters, strength meter, optional in the welcome flow), encrypted password-vault export/import (AES-256-GCM + scrypt) |
-| Remote desktop | **RDP** sessions in the computer's Remote Desktop client (Windows, macOS Windows App, FreeRDP/Remmina) and **VNC** in a built-in viewer, both through jump hosts and proxies |
-| Change checklists | Show commands before and after a change on many devices, *same* / *changed* per device with side-by-side compare |
-| Command history | Search every typed command (secrets never kept) and suggestions in the Command Window |
-| Config backups | Scheduled or on-demand backups of device configurations per device type, kept only when changed, with *What Changed* |
-| Updates | Help → Check for Updates: stable or nightly channel from GitHub releases, downloads and opens the installer |
+| Protocols | SSH2; Telnet (NAWS, TTYPE, ECHO, SGA); serial (flow control, DTR/RTS, break, speed detection); raw TCP; local shell (PTY on macOS and Linux, ConPTY on Windows); RDP through the system's client; VNC in a built-in viewer. |
+| SSH authentication | Password and keyboard-interactive. Public keys: OpenSSH, encrypted, and PuTTY `.ppk`. SSH certificates, FIDO2 security keys, PIV / PKCS#11 smart cards, Kerberos (GSSAPI), the SSH agent. `known_hosts` verification with prompts for new and changed keys. |
+| Key management | Generate Ed25519, RSA 4096 or ECDSA keys. Install them on Linux, macOS, BSD and Windows OpenSSH servers, test the key-only login, then switch the session to it. |
+| Device types | Per-platform login profiles: login steps for Telnet and serial, after-login steps for every protocol (for example `enable`, paging off), and credentials inherited or overridden per session. |
+| Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and Linux. |
+| Session management | Folders with defaults; favourites and recents; environments, with confirmation before multi-tab sends to production; reachability checks; bulk edit; workspaces; Quick Open; drag and drop. |
+| Discovery | Scans a network or range (up to /22): open ports, SSH and Telnet banners, web servers and certificates, SIP, SNMP v2c, DNS, MAC vendor. Each result shows its evidence; selected devices are added as sessions. Discovery never logs in. |
+| Import and export | Sessions are plain-text `.ini` files, and unknown keys are preserved byte for byte. Import from SecureCRT (Config folder, zip, XML), PuTTY / KiTTY, SuperPuTTY, MobaXterm, OpenSSH config, CSV, Ansible, NetBox and AWS EC2. Export to the same formats plus Tabby. |
+| Terminal | Tabs and tiled layouts; xterm-256color and true colour; Unicode; scrollback search; keyword highlighting; timestamps; auto-scroll control; clickable links; session lock; zoom; per-session fonts and colour schemes. |
+| File transfer | SFTP browser with folder transfers, sync, resume, bookmarks, compare, server-to-server copy, SCP, sudo / su and jump-station targets. Files panel beside the terminal. SCP. ZMODEM (automatic `sz` / `rz`), YMODEM batch, XMODEM. |
+| Automation | Expect/send logon actions with named credentials; output triggers; logon scripts; Python, VBScript (Windows) and JavaScript scripting through a `crt`-style object; script recorder; key map; button bar; output alerts. |
+| Network operations | Command Window that sends to the active, selected or all tabs; command library with `{{variables}}`; command history; scheduled configuration backups kept only when changed; change checklists; Run and Collect to CSV; Compare. |
+| Logging and recording | Raw or plain-text session logs with per-line timestamps and filename tokens; scrollback to text or HTML; session recordings with markers and playback. |
+| Security | OS keychain for passwords and passphrases; 1Password, Bitwarden, HashiCorp Vault and command-based password managers; master password with unlock at start-up; encrypted password export (AES-256-GCM, scrypt). |
+| Networking | Local, remote and dynamic (SOCKS5) port forwarding; chainable jump hosts; SOCKS5 and HTTP CONNECT proxies; X11 and agent forwarding; automatic reconnect. |
+| Updates | Stable and nightly channels from GitHub Releases, with the installer downloaded and opened from Help → Check for Updates. |
+
+The complete list is in [docs/FEATURES.md](docs/FEATURES.md).
 
 ## Screenshots
 
 | | |
 |---|---|
-| ![Start page](docs/screenshots/home.png) <br/>*Start page: search or connect, favourites and recent sessions* | ![Session side panel](docs/screenshots/session-panel.png) <br/>*Session options beside the terminal, with device facts* |
-| ![Device facts](docs/screenshots/device-facts.png) <br/>*Device facts: edit, remove, read now* | ![Teach a device fact](docs/screenshots/fact-teach.png) <br/>*Teach a fact: select the value in the output* |
-| ![Welcome](docs/screenshots/welcome-security.png) <br/>*Welcome flow with an optional master password* | ![Unlock window](docs/screenshots/unlock.png) <br/>*Unlock window at start-up* |
-| ![Connection error](docs/screenshots/fix-bar.png) <br/>*A failed connection explains why and offers the fixes* | ![Settings](docs/screenshots/options.png) <br/>*Settings: theme previews, layout and icons* |
-| ![Tiled sessions](docs/screenshots/grid.png) <br/>*Tiled sessions with keyword highlighting* | ![SFTP](docs/screenshots/sftp.png) <br/>*SFTP: clickable paths, bookmark bar, several files, transfer bar* |
-| ![Logon actions](docs/screenshots/logon.png) <br/>*Logon actions (expect/send) and remote command* | ![Key login setup](docs/screenshots/keysetup.png) <br/>*Key login setup* |
-| ![Import](docs/screenshots/import.png) <br/>*Import from SecureCRT, PuTTY, MobaXterm or OpenSSH* | ![Light theme](docs/screenshots/light.png) <br/>*Light theme* |
-| ![Device types](docs/screenshots/devicetypes.png) <br/>*Device types with their own login* | ![Quick Connect](docs/screenshots/quickconnect.png) <br/>*Quick Connect: device type + address* |
-| ![Command library](docs/screenshots/commands.png) <br/>*Command library with variables* | ![Compare outputs](docs/screenshots/compare.png) <br/>*Compare outputs* |
-| ![Send to selected tabs](docs/screenshots/sendgroup.png) <br/>*Send to selected tabs* | ![SFTP via SCP](docs/screenshots/sftp-scp.png) <br/>*SFTP browser copying with SCP* |
-| ![SFTP on the target](docs/screenshots/sftp-hop.png) <br/>*SFTP on an AWS host through the jump station* | ![SFTP choices](docs/screenshots/sftp-hop-menu.png) <br/>*Choose the jump station or the target* |
-| ![Compare With](docs/screenshots/tab-compare.png) <br/>*Right-click a tab → Compare With… another tab* | ![SFTP Run as](docs/screenshots/sftp-runas-menu.png) <br/>*SFTP as root or another user* |
-| ![Kerberos and certificates](docs/screenshots/auth.png) <br/>*Kerberos, certificates and security keys* | ![Password managers](docs/screenshots/passwords-managers.png) <br/>*1Password, Bitwarden, HashiCorp Vault* |
+| ![Start page](docs/screenshots/home.png) <br/>*Start page: search or connect, favourites and recent sessions* | ![Session side panel](docs/screenshots/session-panel.png) <br/>*Session properties beside the terminal, with device facts* |
+| ![Files panel](docs/screenshots/files-panel.png) <br/>*Files panel following the terminal's folder* | ![SFTP](docs/screenshots/sftp.png) <br/>*SFTP browser: bookmarks, multi-select, Copy / Sync / Diff* |
+| ![Compare](docs/screenshots/sftp-compare.png) <br/>*Comparing two files, with the verdict at the top* | ![Device facts](docs/screenshots/device-facts.png) <br/>*Device facts: read, edit, teach* |
+| ![Tiled sessions](docs/screenshots/grid.png) <br/>*Tiled sessions with keyword highlighting* | ![Session Manager](docs/screenshots/session-manager.png) <br/>*Session Manager with the hover card* |
+| ![Quick Connect](docs/screenshots/quickconnect.png) <br/>*Quick Connect with a device type* | ![Settings](docs/screenshots/options.png) <br/>*Settings* |
+| ![Discover Devices](docs/screenshots/discover.png) <br/>*Network discovery with evidence per device* | ![Configuration backups](docs/screenshots/backups.png) <br/>*Configuration backups* |
+| ![Change checklist](docs/screenshots/checklist.png) <br/>*Change checklist: same or changed per device* | ![Run and Collect](docs/screenshots/collect.png) <br/>*Run and Collect into one table* |
+| ![Command History](docs/screenshots/history.png) <br/>*Command History* | ![Light theme](docs/screenshots/light.png) <br/>*Light theme* |
+
+<details>
+<summary>More screenshots</summary>
+
+| | |
+|---|---|
+| ![Unlock window](docs/screenshots/unlock.png) <br/>*Unlock window at start-up* | ![Welcome](docs/screenshots/welcome-security.png) <br/>*First-run setup with an optional master password* |
+| ![Connection error](docs/screenshots/fix-bar.png) <br/>*A failed connection explained, with fixes* | ![Teach a device fact](docs/screenshots/fact-teach.png) <br/>*Teach a fact by selecting its value* |
+| ![Logon actions](docs/screenshots/logon.png) <br/>*Logon actions and remote command* | ![Key login setup](docs/screenshots/keysetup.png) <br/>*Key login setup* |
+| ![Import](docs/screenshots/import.png) <br/>*Import from other programs* | ![Export](docs/screenshots/export-formats.png) <br/>*Export to other programs* |
+| ![Device types](docs/screenshots/devicetypes.png) <br/>*Device types* | ![Command library](docs/screenshots/commands.png) <br/>*Command library with variables* |
+| ![Send to selected tabs](docs/screenshots/sendgroup.png) <br/>*Send to selected tabs* | ![Compare With](docs/screenshots/tab-compare.png) <br/>*Compare a tab with another tab* |
+| ![SFTP on the target](docs/screenshots/sftp-hop.png) <br/>*SFTP on a host behind a jump station* | ![SFTP Run as](docs/screenshots/sftp-runas-menu.png) <br/>*SFTP as root or another user* |
+| ![Authentication](docs/screenshots/auth.png) <br/>*Kerberos, certificates and security keys* | ![Password managers](docs/screenshots/passwords-managers.png) <br/>*Password managers* |
 | ![Workspaces](docs/screenshots/workspaces.png) <br/>*Workspaces* | ![Alerts](docs/screenshots/alerts.png) <br/>*Output alerts* |
-| ![Discover Devices](docs/screenshots/discover.png) <br/>*Discover devices with the evidence behind each result* | ![Discovered sessions](docs/screenshots/discover-added.png) <br/>*Selected devices added as sessions* |
-| ![Export for other programs](docs/screenshots/export-formats.png) <br/>*Export to PuTTY, KiTTY, MobaXterm, Tabby, OpenSSH or CSV* | ![Export summary](docs/screenshots/export-report.png) <br/>*What each format could not hold* |
-| ![Devices at new addresses](docs/screenshots/discover-moved.png) <br/>*Saved devices found at new addresses by their MAC address* | ![Another device at the address](docs/screenshots/mac-warning.png) <br/>*Stops before logging in to a different device* |
-| ![Session playback](docs/screenshots/player.png) <br/>*Replaying a recorded session with its markers* | ![Smart cards](docs/screenshots/smartcards.png) <br/>*Smart card (PIV / PKCS#11) keys* |
-| ![Run and Collect](docs/screenshots/collect.png) <br/>*Run and Collect: one table from many devices, CSV export* | ![Console Server Ports](docs/screenshots/console-ports.png) <br/>*Sessions for the ports of a console server* |
-| ![Change checklist](docs/screenshots/checklist.png) <br/>*Change checklist: same / changed per device after a change* | ![Command History](docs/screenshots/history.png) <br/>*Command History search* |
-| ![Command Window suggestions](docs/screenshots/autocomplete.png) <br/>*Suggestions from history and the Command Library* | ![RDP tab](docs/screenshots/rdp.png) <br/>*RDP session through a jump host* |
-| ![Configuration backups](docs/screenshots/backups.png) <br/>*Configuration backups with results per device* | ![VNC viewer](docs/screenshots/vnc.png) <br/>*VNC viewer tab* |
-| ![Session Manager](docs/screenshots/session-manager.png) <br/>*Favourites, recent sessions, environments, reachability and the hover card* | ![Edit Sessions](docs/screenshots/bulk-edit.png) <br/>*Edit many sessions at once* |
-| ![Serial console](docs/screenshots/serial-tab.png) <br/>*Serial console: send bar, timestamps, auto scroll off* | ![Serial port and speed](docs/screenshots/serial.png) <br/>*Serial ports with the adapter name, Detect Speed* |
-| ![HTML report](docs/screenshots/scrollback-html.png) <br/>*Save Scrollback As HTML: a report with colors and highlighting* | ![Terminal menu](docs/screenshots/term-menu.png) <br/>*Terminal menu: timestamps, auto scroll, clear, HTML* |
+| ![Devices at new addresses](docs/screenshots/discover-moved.png) <br/>*Devices found at new addresses by MAC* | ![Another device at the address](docs/screenshots/mac-warning.png) <br/>*Stops before logging in to a different device* |
+| ![Session playback](docs/screenshots/player.png) <br/>*Session playback with markers* | ![Smart cards](docs/screenshots/smartcards.png) <br/>*Smart card keys* |
+| ![Console Server Ports](docs/screenshots/console-ports.png) <br/>*Console server ports* | ![Edit Sessions](docs/screenshots/bulk-edit.png) <br/>*Edit many sessions at once* |
+| ![Serial console](docs/screenshots/serial-tab.png) <br/>*Serial console with send bar* | ![HTML report](docs/screenshots/scrollback-html.png) <br/>*Scrollback saved as HTML* |
+| ![RDP tab](docs/screenshots/rdp.png) <br/>*RDP through a jump host* | ![VNC viewer](docs/screenshots/vnc.png) <br/>*VNC viewer* |
 
-The roadmap is in [docs/ROADMAP.md](docs/ROADMAP.md).
+</details>
 
-## Download
+## Installation
 
-Every push to `main` publishes a **nightly** pre-release on the repository's Releases page: a macOS **DMG** and zip (Apple Silicon M1–M5), a Windows **installer** and zip, and Linux **.deb** packages and tarballs for amd64 and arm64. See the [User Guide](docs/USER_GUIDE.md#1-install).
-The macOS app is ad-hoc signed but not notarized, so after unzipping it run `xattr -dr com.apple.quarantine Termwright.app` once.
+Pre-built packages are published on the [Releases](https://github.com/nperiannan/termwright/releases) page. Tagged versions are stable; the *nightly* pre-release is rebuilt from every change to `main`.
 
-## Build
+| Platform | Package | Notes |
+|---|---|---|
+| macOS (Apple Silicon) | `.dmg`, `.zip` | Not notarized. After installing, run `xattr -dr com.apple.quarantine /Applications/Termwright.app` once. |
+| Windows 10 / 11 (x64) | installer `.exe`, `.zip` | Requires the WebView2 runtime, which is included in current Windows versions. SmartScreen may warn about an unsigned file. |
+| Debian / Ubuntu (amd64, arm64) | `.deb` | `sudo apt install ./termwright_*.deb` |
+| Other Linux (amd64, arm64) | `.tar.gz` | Requires GTK 3 and WebKitGTK 4.1. |
 
-Prerequisites: **Go 1.24+**, **Node.js 24 LTS** (22.22+ or 26+ also work), and the Wails CLI:
+Installation, first start and every feature are described in the [User Guide](docs/USER_GUIDE.md).
+
+## Migrating existing sessions
+
+**File → Import Sessions…** (or the first-run setup) lists the sessions it finds in the usual places and imports them, including folders, logon actions and colours where the source has them.
+
+- **SecureCRT**: choose the Config folder:
+  - Windows: `%APPDATA%\VanDyke\Config`
+  - macOS: `~/Library/Application Support/VanDyke/SecureCRT/Config`
+  - Linux: `~/.vandyke/SecureCRT/Config`
+
+  An XML or zip export also works. Session files are copied unchanged, and saved passwords are asked for once and stored in the OS keychain.
+- **PuTTY / KiTTY**: a registry export (`reg export HKCU\Software\SimonTatham\PuTTY\Sessions putty.reg`) or `~/.putty/sessions`. **SuperPuTTY**: `Sessions.xml`.
+- **MobaXterm**: *User sessions → Export all sessions to file*.
+- **OpenSSH**: `~/.ssh/config` is read directly.
+
+**File → Export Sessions…** writes the same formats back, so you can always return to another program. The key-by-key mapping is documented in [docs/SESSION_FILES.md](docs/SESSION_FILES.md).
+
+## Building from source
+
+Requirements:
+- Go 1.24 or later
+- Node.js 24 LTS (22.22+ and 26+ also work)
+- the Wails CLI v2.10.2
 
 ```bash
 go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
-wails doctor            # checks platform dependencies
+wails doctor          # verifies platform dependencies
 ```
 
-Platform notes:
-* **Windows**: the WebView2 runtime (preinstalled on Windows 10/11).
-* **Linux**: `sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev` (Ubuntu 24.04+; build with `-tags webkit2_41`).
-* **macOS**: Xcode command-line tools (`xcode-select --install`).
+Platform dependencies:
+- **Windows**: WebView2 runtime.
+- **macOS**: Xcode command-line tools (`xcode-select --install`).
+- **Linux**: `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`; build with `-tags webkit2_41`.
 
 ```bash
-make build       # or: wails build -clean -skipbindings   (Linux: add -tags webkit2_41)
-# result: build/bin/termwright(.exe) or build/bin/Termwright.app
-make dev         # live-reload development
-# -skipbindings: the UI calls the Go methods directly, so generated TS bindings are not needed
-# Go 1.27+: the Makefile sets GOTOOLCHAIN=go1.24.7 because the Wails 2.10 CLI cannot read newer Go packages.
-# Without make:  GOTOOLCHAIN=go1.24.7 wails build -clean -skipbindings -platform darwin/arm64
-make test        # Go unit + integration tests (includes an end-to-end SSH test)
+make build            # build/bin/termwright(.exe) or build/bin/Termwright.app
+make dev              # development build with live reload
+make test             # Go unit and integration tests, including an end-to-end SSH test
 ```
 
-Cross-builds of every platform run in GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)): Windows amd64, Linux amd64/arm64 and macOS arm64.
-macOS builds are unsigned. After downloading one, run `xattr -dr com.apple.quarantine Termwright.app` or sign it with your own Developer ID.
+Without `make`:
 
-## Migrating from SecureCRT, PuTTY or MobaXterm
-
-**PuTTY / KiTTY**: export with `reg export HKCU\Software\SimonTatham\PuTTY\Sessions putty.reg` (or use `~/.putty/sessions`) and choose *PuTTY / KiTTY / SuperPuTTY sessions* in File → Import Sessions (for SuperPuTTY choose its `Sessions.xml`). **MobaXterm**: right-click *User sessions* → *Export all sessions to file* and choose *MobaXterm sessions*. Details in the [User Guide](docs/USER_GUIDE.md#14-migrating-from-securecrt-putty-or-mobaxterm).
-
-**SecureCRT**:
-
-1. **File → Import Sessions…** → *SecureCRT configuration folder*, then select your config folder:
-   * Windows `%APPDATA%\VanDyke\Config`
-   * macOS `~/Library/Application Support/VanDyke/SecureCRT/Config`
-   * Linux `~/.vandyke/SecureCRT/Config`
-2. The session files are copied unchanged. Saved SecureCRT passwords are encrypted per-installation, so Termwright asks for each password once and can save it in your OS keychain.
-3. To go back, use **File → Export Sessions…** → *Folder* and copy the `Sessions` folder into SecureCRT's Config folder, or use *XML*.
-
-The key-by-key mapping is documented in [docs/SESSION_FILES.md](docs/SESSION_FILES.md).
-
-## Project layout
-
-```
-main.go, app.go            Wails entry point, native menu, methods bound to the UI
-internal/sessionfile       .ini / XML session file reader & writer (lossless)
-internal/session           session model, folder store, import/export
-internal/term              SSH2 (incl. Kerberos, certificates, FIDO2), Telnet, Serial, local PTY, SFTP/SCP, scripts (JS, Python, VBScript)
-internal/logging           session logs, filename tokens, ANSI stripping
-internal/config            data directory + global options (settings.json)
-internal/secrets           OS keychain integration
-internal/secretref         password managers (1Password, Bitwarden, HashiCorp Vault, commands)
-frontend/                  Angular 22 app (standalone components, signals, zoneless)
+```bash
+GOTOOLCHAIN=go1.24.7 wails build -clean -skipbindings
 ```
 
-The data directory is `%APPDATA%\Termwright`, `~/Library/Application Support/Termwright` or `~/.config/Termwright`. You can override it with `TERMWRIGHT_HOME`.
+On Linux, add `-tags webkit2_41`. `GOTOOLCHAIN` is pinned because the Wails 2.10 CLI cannot read packages built for newer Go releases.
+
+Release builds for Windows (amd64), Linux (amd64, arm64) and macOS (arm64) are produced by GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)).
+
+## Data and privacy
+
+| Item | Location |
+|---|---|
+| Settings, sessions, logs, backups | `%APPDATA%\Termwright`, `~/Library/Application Support/Termwright` or `~/.config/Termwright` (override with `TERMWRIGHT_HOME`) |
+| Passwords and key passphrases | The operating system's keychain (Keychain, Credential Manager, Secret Service) or your password manager |
+| Command history | `history.json` in the data folder; commands that look like they contain a secret are never recorded |
+
+Termwright has no telemetry. Apart from the hosts you connect to (and the reachability checks and background logins you enable for them), it contacts only GitHub: for the update check and the download count shown in About.
+
+## Project structure
+
+```
+main.go, app.go, *_app.go   application entry point, native menu, methods bound to the UI
+internal/session            session model, folder store, import and export
+internal/sessionfile        lossless .ini / XML session file reader and writer
+internal/term               SSH2, Telnet, serial, local PTY, SFTP/SCP, file transfer protocols, scripting
+internal/config             data directory and global settings
+internal/secrets            OS keychain integration
+internal/secretref          password manager integration
+internal/history            command history
+frontend/                   Angular application (standalone components, signals, zoneless) with xterm.js
+docs/                       user guide, feature list, scripting and session file references
+```
+
+## Contributing
+
+Bug reports and feature requests are welcome in [GitHub Issues](https://github.com/nperiannan/termwright/issues). Please include:
+- the version (Help → About) and operating system;
+- the steps to reproduce the problem;
+- for connection problems, the message shown in the error card.
+
+Pull requests should keep `make test` passing, and should update the User Guide and the feature list for user-visible changes.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Termwright is licensed under the [Apache License 2.0](LICENSE). Third-party notices are listed in [NOTICE](NOTICE).
 
 ---
 
-*SecureCRT® is a registered trademark of VanDyke Software, Inc. Termwright is an independent open-source project, not affiliated with or endorsed by VanDyke Software; the name is used only to say which files Termwright can import and export.*
+<sub>SecureCRT® is a registered trademark of VanDyke Software, Inc. PuTTY, KiTTY, SuperPuTTY, MobaXterm and other product names are the property of their respective owners. Termwright is an independent open-source project, not affiliated with or endorsed by any of them; these names are used only to identify the file formats Termwright can import and export.</sub>

@@ -91,7 +91,7 @@ The Session Manager can move to the **other side** or be **hidden** (View → Se
 
 ## 3. Connecting
 
-There are five ways to open a connection:
+There are several ways to open a connection:
 
 1. **Double-click a saved session** in the Session Manager (or right-click → *Connect Terminal* / *Connect SFTP Session*, or select a folder → right-click → *Connect All in Folder*), or click a card on the start page.
 2. **Quick Connect** (⚡ in the title bar, `File → Quick Connect`, `Mod+Q`): type a connect line in the top box - `voss admin@10.20.1.11`, `ssh user@host:2222`, `telnet host 23`, `serial COM3 115200` - and the fields below fill in (protocol, address and port, device type, user name), or fill in the fields yourself. A device type's chip fills the protocol, port and login steps; its username is used unless you type another. Switch on **Save as a session** to keep it in the Session Manager (in the selected folder); the switch remembers your last choice, and Settings → General → *Save Quick Connect sessions* turns it on for every Quick Connect. **More options…** opens the full Session Options.
@@ -280,7 +280,8 @@ Devices cabled to a console server (terminal server) get a session of protocol *
 - **Move**: drag a session or folder onto another folder (or onto a session to drop into its folder; onto empty space for the top level).
 - **Filter**: type in *Filter sessions* to search names, hosts, users and paths. When a host, address or name equals what you typed (e.g. `10.127.34.2`), only that session is listed; *N more sessions containing …* shows the partial matches too.
 - **Favourites and Recent**: right-click a session → *Add to Favourites*; favourites (★) and the five most recent sessions are listed at the top of the Session Manager, with when you last connected. Click *Favourites* or *Recent* to fold a section.
-- **Hover card**: rest the pointer on a session to see protocol, user@host:port, jump host, device type, whether the password is saved, asked or comes from the device type, when you last connected and the description.
+- **Hover card**: rest the pointer on a session for a moment to see its device icon, name, environment and address, then *Via* (jump host or target), device type, the device facts (model, version, uptime …), MAC address, where the login comes from (saved password, asked, or the device type's login) and the port check, when you last connected and the description.
+- **Aligned rows**: the address column is wide enough for any IPv4 address, so the device types line up under each other.
 - **Select several sessions**: `Cmd`-click (macOS) or `Ctrl`-click adds or removes one, `Shift`-click selects a range. Right-click the selection to **Connect**, **Edit**, add to Favourites or **Delete** them all; drag them onto a folder to move them together.
 - **Edit Sessions** (right-click a selection → *Edit N Sessions…*, or a folder → *Edit All Sessions in Folder…*): tick what to change - folder, device type, username, password (or *No password*), protocol, port, jump host, environment, color scheme, keyword set, auto reconnect - and click *Apply*. Everything else stays as it is in each session. Handy after Discover Devices added many switches.
 
@@ -302,6 +303,9 @@ Devices cabled to a console server (terminal server) get a session of protocol *
   | <img src="assets/icon-shell.svg" width="16"> slate `$` | Local shell |
   | <img src="assets/icon-raw.svg" width="16"> pink `<>` | Raw TCP |
   | small arrow badge | reached through a jump station (remote command `ssh … host`) |
+- **Folder colours and production folders**: folders are coloured by level (top level amber, sub-folders purple, deeper ones blue). Right-click a folder → **Mark as Production** colours it light red and sets the *Production* environment for every session in it (Folder Defaults); *Unmark Production* undoes it.
+- **Compact Session Manager** (Global Options → General, or ⋯ → *Compact Session Manager*): one line per session instead of two, for long lists. View → *Tile / Glyph Icons* chooses coloured tiles or plain device symbols.
+- **Session side panel** (New Session, or right-click → *Properties…*): the everyday fields - name, folder, protocol, address and port, open as terminal or SFTP, device type, username, environment and password - plus two switches for SSH sessions, **Files panel beside the terminal** and **Reconnect automatically**, the session's device facts (*Refresh* reads them now, *Edit* opens the Device Facts page) and an *Advanced* list (jump host, port forwarding, logon actions, terminal and appearance, logging, MAC address, keys) that opens the full Session Options at that page. *Save* keeps it, *Save & Connect* connects too, Esc closes the panel.
 - **Default session**: a session file named `Default` at the top level (e.g. an imported one) is used as the template for new sessions.
 - **Create SFTP Session / Create SSH Session**: right-click an SSH2 session (Session Manager, start page card or tab) to save a copy that opens the SFTP browser - or, for an SFTP session, a terminal - with the same address, login and saved password.
 - **Clear Recent / Clear Favourites**: right-click the Recent or Favourites heading, the Session Manager's ⋯ menu, or *Clear* on the start page; right-click a recent session → *Remove from Recent*.
@@ -444,7 +448,10 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 
 - **Copy / Paste**: select text (copied automatically when *Copy on select* is on). Paste with right-click (when *Paste on right-click* is on; Shift+right-click opens the menu), `Cmd+V` on macOS, `Ctrl+Shift+V` on Windows/Linux, or `Shift+Insert`. Copy also with `Ctrl+Insert`.
 - **Find**: `Cmd/Ctrl+Shift+F` searches the scrollback; Enter = next, Shift+Enter = previous, Esc closes.
-- **Zoom**: `Cmd/Ctrl +`, `Cmd/Ctrl -`, `Cmd/Ctrl 0`.
+- **Zoom**: `Cmd/Ctrl +`, `Cmd/Ctrl -`, `Cmd/Ctrl 0` (back to 14).
+- **Font, size and line spacing**: Global Options → Terminal & Appearance. The default is Menlo / Consolas / DejaVu Sans Mono at 14 with *Normal* line spacing (the font's own, as most terminal programs use); *Line spacing* adds 10, 20 or 35 % between lines. A session can have its own font and size (Session Options → Terminal → Appearance).
+- **Save Screen As Image** (File menu, tab menu, `Mod+⇧P`): the visible screen as a PNG, with its colours and highlighting - handy for tickets and chat.
+- **Files panel**: View → *Files Panel* (`Mod+⇧1`), the title-bar button or the tab's right-click menu shows a file browser beside an SSH terminal that follows its folder - see [Files panel beside the terminal](#files-panel-beside-the-terminal).
 - **Terminal bar** (under every SSH, Telnet, Raw and local shell tab): **Timestamps**, **Auto scroll** and **Clear** one click away. ✕ hides it for that tab (right-click → *Terminal Bar* shows it again); Global Options → Terminal → *Terminal bar* hides it for every tab.
 - **Clear Screen** (the eraser button, the terminal bar, right-click the terminal or a tab, Edit menu) empties the screen and the scrollback; the line with the cursor stays. *Clear Scrollback* keeps what is on the screen; *Reset Terminal* resets the emulator.
 - **Timestamps**: right-click the terminal → *Timestamps* (or Edit → Timestamps On / Off) puts the local time with milliseconds at the start of each line, on any connection. It is display only: logs have their own per-line prefix. Session Options → Terminal → *Display* turns it on for every connection of a session (off by default).
@@ -457,7 +464,7 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 ![Tiled view with keyword highlighting](screenshots/grid.png)
 
 - **Lock**: Tab → Lock Session (or the lock button) blocks keyboard input to a tab until you enter the password you chose; *Lock All Sessions* locks every tab.
-- **Tab menu** (right-click a tab): Reconnect, Disconnect, Clone, Log, Save Scrollback, Timestamps, Auto Scroll, Send Bar, Clear Screen, Session Options, Rename Tab, Close, Close Other Tabs. Middle-click closes a tab.
+- **Tab menu** (right-click a tab): Reconnect, Disconnect, Clone, Add to Send Group, Open SFTP Tab, **Files Panel**, Set Up Key Login, Connect SFTP Session, Log, Save Scrollback, Timestamps, Auto Scroll, Send Bar, Clear Screen, Session Options, Rename Tab, Close, Close Other Tabs. Middle-click closes a tab.
 
 ## 7. Command Window, Button Bar and Connect Bar
 
@@ -669,7 +676,7 @@ Folders use the same colored folder icon as the Session Manager. Files are color
 
 ![Files panel](screenshots/files-panel.png)
 
-A small file browser beside an SSH terminal, on the side opposite the Session Manager (with the Session Manager on the right it sits on the left). Turn it on for a session in **Session Options → Files panel beside the terminal**, or for one tab with **View → Files Panel**, the title-bar button, the tab's right-click menu or ⌘⇧1 (Alt+Shift+1).
+A small file browser beside an SSH terminal, on the side opposite the Session Manager (with the Session Manager on the right it sits on the left). Turn it on for a session with the **Files panel beside the terminal** switch in the session side panel or in Session Options → Connection, or for one tab with **View → Files Panel**, the title-bar button, the tab's right-click menu or ⌘⇧1 (Alt+Shift+1).
 
 - **Follows the terminal**: the panel shows the folder the shell is in (bash or zsh report it; Termwright turns this on, as for SFTP tabs). *Following* in the header turns it off and on. Through a jump station it opens on the host the terminal is on; when the terminal moves to the other host, the panel says so and *Show … here* reopens it there.
 - **And the other way round**: open a folder in the panel (double-click, the path, ↑ or ..) and the terminal `cd`s there - only when the shell is at a prompt, so nothing is typed into a running program. ⋯ → *cd the Terminal When I Open a Folder Here* turns this off.

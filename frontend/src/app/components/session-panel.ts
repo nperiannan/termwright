@@ -98,6 +98,14 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
           </div>
         }
 
+        @if (s.protocol === 'SSH2' && s.openAs !== 'sftp') {
+          <div class="checks swc">
+            <label title="A file browser beside the terminal, opposite the Session Manager (View → Files Panel shows or hides it for one tab)">
+              <input type="checkbox" name="filesPanel" [(ngModel)]="s.filesPanel" />
+              <span class="tx">Files panel beside the terminal<small>follows the terminal's folder; double-click opens a file here</small></span></label>
+            <label><input type="checkbox" name="arcp" [(ngModel)]="s.autoReconnect" /><span class="tx">Reconnect automatically<small>when the connection drops</small></span></label>
+          </div>
+        }
         @if (edit().oldPath && (s.protocol === 'SSH2' || s.protocol === 'Telnet')) {
           <div class="facts">
             <div class="fh"><span>Device facts</span><span class="age">{{ factsAge(ui.factsOf(edit().oldPath)) }}</span>
@@ -149,6 +157,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
       background: var(--surface-2); color: var(--text); text-align: left;
       app-icon { color: var(--ok); } .chg { margin-left: auto; color: var(--accent); font-size: calc(12px * var(--ui-scale, 1)); } }
     .envf { width: 150px; flex: none; }
+    .swc { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 8px 12px 2px; }
     .facts { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 8px 12px; display: flex; flex-direction: column; gap: 5px;
       .fh { display: flex; align-items: center; gap: 8px; font-weight: 600; .age { color: var(--faint); font-weight: 400; font-size: calc(11.5px * var(--ui-scale, 1)); } .link:first-of-type { margin-left: auto; } }
       .fr { display: flex; gap: 10px; font-size: calc(12.5px * var(--ui-scale, 1)); span { width: 64px; flex: none; color: var(--muted); } b { font-weight: 500; overflow-wrap: anywhere; } }

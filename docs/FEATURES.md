@@ -17,7 +17,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 - **Modern layout** (default): tabs, a Search or connect box, Quick Connect, SFTP, the theme switch, Settings and a ⋯ menu in one title bar; the **Classic layout** (menu bar, toolbar, Connect Bar, tab strip) is one click away (View → Modern / Classic Layout).
 - **Start page**: a search-or-connect box, quick actions spread under it and cards for favourite and recent sessions (device icon, address, device facts, last used, live state).
-- **Session side panel**: New Session and Properties open beside the terminal; All session options… opens the full dialog.
+- **Session side panel**: New Session and Properties open beside the terminal with the everyday fields, the Files panel and auto-reconnect switches and the device facts; All session options… opens the full dialog.
 - **Connecting and error cards**: each connection step while it connects; on failure the reason, a hint and Try Again, Edit Session, Find by MAC Address, Close Tab.
 - **Welcome flow**: theme, text size and layout; import found sessions; optional master password; tips (Help → Welcome…).
 - **Menu bar**: File, Edit, View, Transfer, Script, Options, Tab, Help; on macOS also inside the window (can be turned off).
@@ -159,11 +159,11 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Keyword highlighting** (off by default): sets of words or regular expressions with colors, per session or default (built-in network set: up/down, errors…); only the rows on screen are marked, so long sessions stay fast.
 - **Clickable links** and OSC 8 hyperlinks.
 - **Timestamps**: local time with milliseconds in front of each output line (display only), per tab or on by default for a session.
-- **Zoom** (`Mod +`, `Mod -`, `Mod 0`), per-session font and size, cursor style and blink.
+- **Zoom** (`Mod +`, `Mod -`, `Mod 0`), font size 14 and normal line spacing by default, **line spacing** setting, per-session font and size, cursor style and blink.
 - **Backspace** sends DEL or BS per session.
 - **Lock Session / Lock All Sessions** with a password.
 - **Send Text File** line by line.
-- **Compare With…**: diff this tab with another tab or a file.
+- **Compare With…**: diff this tab with another tab or a file; line numbers, ignore whitespace / timestamps / prompts, only differences, and an *identical* / *differ* verdict at the top.
 
 ## Command Window, Button Bar, Command Library and History
 
@@ -202,6 +202,8 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Files panel beside the terminal** (opposite the Session Manager, per session or per tab): follows the terminal's folder, cd's the terminal to a folder opened in it, opens a double-clicked file on this computer and offers to upload saved changes; upload, download, rename, delete.
 - **SFTP browser (modern)**: a top bar with Run as, the terminal folder and SFTP / SCP; Copy, Sync and Diff between the panes; clickable folder paths, a bookmark bar, `..` row, file-type badges, Today / date times.
 - **Several files**: check boxes (and a select-all box), Cmd/Ctrl-click, Shift-click, Cmd/Ctrl+A.
+- **Keyboard**: ↑ / ↓ (Shift selects a range), Home / End, Page Up / Down, Enter opens, Backspace goes up, Delete deletes.
+- **Diff**: any two selected files - one on each side or both on one side - open in Compare, which says whether they are identical.
 - **New File / New Folder / Delete on both sides**: deleting on this computer moves to the Trash / Recycle Bin.
 - **Transfer bar**: progress, speed, time left, Cancel, the other transfers; ✕ closes it while copies go on.
 - **SFTP browser**: dual pane (this computer / server), over the terminal's login or as its own SFTP session.
@@ -212,7 +214,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Copy via SCP** from the SFTP browser for devices with a weak SFTP server.
 - **Run as root or another user** (sudo, su, any command) in the SFTP tab.
 - **Through a jump station**: SFTP / SCP on the target of an `ssh … host` remote command.
-- **Working directory detection**: SFTP opens in the terminal's folder, follows every `cd`, and can `cd` the terminal; also follows `sudo su -`.
+- **Working directory detection**: SFTP opens in the terminal's folder, follows every `cd`, and can `cd` the terminal; also follows `sudo su -`, and knows whether the terminal is on the jump station or the target (*SFTP opens on*: where the terminal is, or always one of them).
 - **Colored files**: folders and files colored by type, links and hidden files marked.
 - **SCP** upload and download of files and folders.
 - **ZMODEM** (`sz` / `rz` detected automatically), **YMODEM** batch and **XMODEM** for serial consoles and boot loaders.
