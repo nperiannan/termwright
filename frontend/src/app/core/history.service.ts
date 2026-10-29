@@ -60,6 +60,31 @@ export class History {
     this.entries.set([]);
   }
 
+  /** Forgets one command (with a device type: only where typed on it). */
+  async remove(cmd: string, deviceType = '') {
+    await this.backend.historyRemove(cmd, deviceType);
+    const dt = deviceType.toLowerCase();
+    this.entries.update(l => l.filter(e => !(e.cmd === cmd && (!dt || (e.deviceType ?? '').toLowerCase() === dt))));
+  }
+
+  /** Forgets the commands typed on these device types ('' = no device type). */
+  async clearTypes(types: string[]) {
+    await this.backend.historyClearTypes(types);
+    const set = new Set(types.map(t => t.toLowerCase()));
+    this.entries.update(l => l.filter(e => !set.has((e.deviceType ?? '').toLowerCase())));
+  }
+
+  /** Device types with how many commands each ('' = none), most first. */
+  typeCounts(): { type: string; n: number }[] {
+    const m = new Map<string, { type: string; n: number }>();
+    for (const e of this.entries()) {
+      const k = (e.deviceType ?? '').toLowerCase();
+      const c = m.get(k) ?? { type: e.deviceType ?? '', n: 0 };
+      c.n++; m.set(k, c);
+    }
+    return [...m.values()].sort((a, b) => b.n - a.n);
+  }
+
   /** Commands containing every word of q, those starting with it first; one per command text. */
   search(q: string, deviceType = '', limit = 200): HistoryEntry[] {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);

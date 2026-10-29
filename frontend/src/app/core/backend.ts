@@ -118,6 +118,8 @@ export class Backend {
   historyAdd(e: Partial<HistoryEntry>) { return this.call<void>('HistoryAdd', e); }
   historyList() { return this.call<HistoryEntry[]>('HistoryList'); }
   historyClear() { return this.call<void>('HistoryClear'); }
+  historyRemove(cmd: string, deviceType: string) { return this.call<void>('HistoryRemove', cmd, deviceType); }
+  historyClearTypes(deviceTypes: string[]) { return this.call<void>('HistoryClearTypes', deviceTypes); }
   startTab(id: string, cols: number, rows: number) { return this.call<void>('StartTab', id, cols, rows); }
   sendInput(id: string, data: string) { return this.call<void>('SendInput', id, data); }
   sendBinary(id: string, b64: string) { return this.call<void>('SendBinary', id, b64); }

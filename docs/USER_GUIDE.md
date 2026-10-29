@@ -479,9 +479,11 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 - Type words to search (`isis adj`); *Only VOSS* (the active tab's device type) narrows it down.
 - **Enter** types the command in the active tab so you can check or edit it before pressing Enter; **Shift+Enter** / *Run* runs it; *To Command Window* puts it in the Command Window.
 - The command is taken from the terminal line without the prompt, so commands completed with Tab or recalled with ↑ are remembered as the device shows them.
-- Commands that may contain a secret - `password`, `secret`, `community`, `key-string`, `pre-shared`, tokens - are **never** remembered, nor anything typed at a password prompt. Global Options → General → *Remember typed commands* turns history off; *Clear History* forgets everything. History stays on this computer (`history.json` in the data folder).
+- Commands that may contain a secret - `password`, `secret`, `community`, `key-string`, `pre-shared`, tokens - are **never** remembered, nor anything typed at a password prompt. Global Options → General → *Remember typed commands* turns history off; the trash button on a command (or Shift+Delete) forgets that one command - for example one that was mistyped or that a device no longer supports; with *Only <device type>* ticked only on that device type. **Clear History…** asks which device types to forget (the active tab's is ticked; *All device types* forgets everything). History stays on this computer (`history.json` in the data folder).
 
 ![Command History](screenshots/history.png)
+
+![Clear Command History](screenshots/history-clear.png)
 
 **Suggestions in the Command Window**: after two characters the Command Window suggests commands from your history and the Command Library - those of the active tab's device type first, never another device type's. ↑/↓ chooses, **Tab** (or Enter on a chosen one) takes it, Esc closes; library commands with `{{values}}` ask for them.
 

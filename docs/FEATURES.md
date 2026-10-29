@@ -173,7 +173,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Button Bar**: buttons that send text (with escapes), run an action and/or a script; to one or all tabs.
 - **Command Library**: saved commands in folders, multi-line, `{{variables}}` with defaults, for chosen device types.
 - **Commands ▾**: library commands for the active tab's device type, put in the box to check before sending.
-- **Command History** (`Mod+Y`): every typed command with session, device type and time; search, type, run or reuse.
+- **Command History** (`Mod+Y`): every typed command with session, device type and time; search, type, run or reuse; remove a single command, or clear the history of chosen device types.
 - **Secrets never remembered**: commands with passwords, secrets, communities or keys, and anything typed at a password prompt.
 - **Key Map**: any key combination sends text, runs an action and/or a script.
 

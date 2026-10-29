@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,3 +43,26 @@ func (a *App) HistoryList() []history.Entry {
 
 // HistoryClear forgets every remembered command.
 func (a *App) HistoryClear() error { return a.history().Clear() }
+
+// HistoryRemove forgets one command (every time it was typed); with a device
+// type only where it was typed on that device type.
+func (a *App) HistoryRemove(cmd, deviceType string) error {
+	_, err := a.history().Remove(func(e history.Entry) bool {
+		return e.Cmd == cmd && (deviceType == "" || strings.EqualFold(e.DeviceType, deviceType))
+	})
+	return err
+}
+
+// HistoryClearTypes forgets the commands typed on these device types; "" stands
+// for commands without a device type.
+func (a *App) HistoryClearTypes(deviceTypes []string) error {
+	_, err := a.history().Remove(func(e history.Entry) bool {
+		for _, t := range deviceTypes {
+			if strings.EqualFold(e.DeviceType, t) {
+				return true
+			}
+		}
+		return false
+	})
+	return err
+}

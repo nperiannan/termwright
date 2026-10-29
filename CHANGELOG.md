@@ -52,6 +52,7 @@ A cleaner, more modern look, now the default. The **Classic** layout (toolbar, t
 * **SFTP through a jump station**: after `sudo su -`, `sudo -i`, `su` or a new shell in the terminal an SFTP tab follows, the folder and user are read again from the new shell, so an SFTP tab opened before becoming root follows root.
 * **SFTP**: the copy arrows, **Sync** (→ / ←) and **Diff** sit between the panes; select one file on each side and Diff opens Compare with both (line numbers, ignore whitespace and timestamps). The transfer bar always shows the speed, and a finished transfer its average speed.
 * **Session Manager**: device types line up in one column (room for any IPv4 address), and a new hover card (device icon, name, address, then Via, device type, facts, MAC and login in two columns) that opens faster.
+* **Command History**: wider, a tidy footer, a trash button on each command (or Shift+Delete) to forget a mistyped or no longer supported command, and **Clear History…** (a red button) asks which device types to forget.
 * Passwords & Credentials: Export / Import no longer overlap the fields above them.
 * **Docs**: README, User Guide and FEATURES updated for 0.21, with new screenshots of every page in the modern layout.
 * Corners are less rounded (dialogs, cards, buttons); on macOS the title bar is as tall as the window buttons need, so the sidebar button and the tabs line up with them.

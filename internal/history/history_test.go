@@ -32,3 +32,17 @@ func TestAddDedupeCap(t *testing.T) {
 		t.Fatal("not cleared")
 	}
 }
+
+func TestRemove(t *testing.T) {
+	s := &Store{File: filepath.Join(t.TempDir(), "h.json")}
+	now := time.Now()
+	_ = s.Add(Entry{Cmd: "show vlan", DeviceType: "EXOS", Session: "a"}, now)
+	_ = s.Add(Entry{Cmd: "show vlan", DeviceType: "VOSS", Session: "b"}, now)
+	_ = s.Add(Entry{Cmd: "ls", Session: "c"}, now)
+	if n, _ := s.Remove(func(e Entry) bool { return e.DeviceType == "EXOS" }); n != 1 {
+		t.Fatalf("removed %d", n)
+	}
+	if l := s.List(); len(l) != 2 || l[1].DeviceType != "VOSS" {
+		t.Fatalf("left %+v", l)
+	}
+}

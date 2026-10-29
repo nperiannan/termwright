@@ -98,3 +98,23 @@ func (s *Store) Clear() error {
 	s.loaded, s.entries = true, nil
 	return s.save()
 }
+
+// Remove forgets the commands for which drop returns true and tells how many
+// were removed.
+func (s *Store) Remove(drop func(Entry) bool) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.load()
+	kept := s.entries[:0:0]
+	for _, e := range s.entries {
+		if !drop(e) {
+			kept = append(kept, e)
+		}
+	}
+	n := len(s.entries) - len(kept)
+	if n == 0 {
+		return 0, nil
+	}
+	s.entries = kept
+	return n, s.save()
+}
