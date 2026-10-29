@@ -3,6 +3,8 @@ import { Component, computed, input } from '@angular/core';
 // Simple stroke icons drawn for Termwright (24x24 viewBox).
 const PATHS: Record<string, string> = {
   plus: 'M12 5v14M5 12h14',
+  // Session Manager rows with two lines each (name and address)
+  rows: 'M4 4.5h16v6.5H4zM4 13h16v6.5H4zM7 7h7M7 9h4M7 15.5h7M7 17.5h4',
   // theme switch: sun (light), moon (dark), screen with a half-lit circle (follow the system)
   sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4',
   moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z',

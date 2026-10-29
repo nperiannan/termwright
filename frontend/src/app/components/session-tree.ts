@@ -59,17 +59,26 @@ export function sessionAddr(n: SessionNode): string {
       <button class="icon-btn" title="Refresh" (click)="ui.refreshTree(); checkNow()"><app-icon name="refresh" /></button>
       <button class="icon-btn" [class.on]="reach()" [title]="reach() ? 'Hide which devices answer' : 'Show which devices answer (a quick TCP check of the port of each session, every minute)'"
         (click)="ui.patchSettings({ showReachability: !reach() })"><app-icon name="pulse" /></button>
+      @if (ui.settings()?.layout !== 'classic') {
+        <!-- modern layout, compact rows: back to two-line rows; the rest is in the ⋯ menu (the title bar hides the panel) -->
+        <button class="icon-btn" title="Two-line rows: name and address, device icon and status (turns Compact Rows off)"
+          (click)="ui.patchSettings({ compactRows: false })"><app-icon name="rows" /></button>
+        <button class="icon-btn" title="New folder, refresh, reachability, compact rows, dock side, hide" (click)="headMenu($event)"><app-icon name="more" /></button>
+      } @else {
       <button class="icon-btn" [title]="ui.settings()?.sessionManagerRight ? 'Move the Session Manager to the left' : 'Move the Session Manager to the right'"
         (click)="ui.actionHandler('toggle-session-manager-side')"><app-icon [name]="ui.settings()?.sessionManagerRight ? 'dock-left' : 'dock-right'" /></button>
       <button class="icon-btn" title="Hide the Session Manager (View → Session Manager or the toolbar shows it again)"
         (click)="ui.actionHandler('toggle-session-manager')"><app-icon name="hide-panel" /></button>
+      }
     </div>
     }
     <div class="sm-search">
       @if (roomy()) { <app-icon name="find" [size]="14" /> }
       <input type="search" placeholder="Filter sessions" [(ngModel)]="filterText" (ngModelChange)="filter.set($event); showAll.set(false)" />
       @if (roomy()) {
-        <button class="icon-btn more" title="New folder, refresh, reachability, dock side, hide" (click)="headMenu($event)"><app-icon name="more" /></button>
+        <button class="icon-btn more" [class.on]="reach()" [title]="reach() ? 'Hide which devices answer' : 'Show which devices answer (a quick TCP check of the port of each session, every minute)'"
+          (click)="ui.patchSettings({ showReachability: !reach() })"><app-icon name="pulse" /></button>
+        <button class="icon-btn more" title="New folder, refresh, reachability, compact rows, dock side, hide" (click)="headMenu($event)"><app-icon name="more" /></button>
       }
     </div>
     <div class="sm-body" #body (scroll)="scrollTop.set(body.scrollTop)" (contextmenu)="rootMenu($event)"
