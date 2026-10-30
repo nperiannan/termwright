@@ -34,6 +34,7 @@ const STEPS: { re: RegExp; say: (m: RegExpExecArray) => string; at: number }[] =
   { re: /^Done/, say: () => 'Done', at: 100 },
 ];
 
+const NO_SUDO = /(^|[ :])sudo: (command )?not found/i;
 const SUDO_BAD = /incorrect password|sorry, try again|a password is required|no password was provided|a terminal is required/i;
 
 /** Applies one line of output to the progress (returns a new object). */
@@ -53,6 +54,7 @@ export function applyLine(p: RdProgress, raw: string): RdProgress {
     return next;
   }
   if (/^ERROR:/i.test(line)) { next.error = line.replace(/^ERROR:\s*/i, ''); return next; }
+  if (NO_SUDO.test(line)) { next.error = 'sudo is not installed on this machine: install it (as root: apt install sudo) or give this login sudo rights.'; return next; }
   if (SUDO_BAD.test(line)) { next.error = 'The sudo password was not accepted.'; return next; }
   if (/^WARNING:/i.test(line)) { next.warnings = [...p.warnings, line.replace(/^WARNING:\s*/i, '')]; return next; }
   // apt and friends: keep the latest line as muted detail

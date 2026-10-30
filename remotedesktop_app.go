@@ -15,7 +15,7 @@ import (
 	"github.com/termwright/termwright/internal/term"
 )
 
-// The script "Set Up Remote Desktop" runs on the Linux machine (Ubuntu 24.04):
+// The script "Set Up Remote Desktop" runs on the Linux machine (Ubuntu 22.04 / 24.04, Debian 12):
 // XFCE with TigerVNC and/or xrdp, each only when it is not already running.
 //
 //go:embed scripts/remote-desktop/setup-remote-desktop.sh

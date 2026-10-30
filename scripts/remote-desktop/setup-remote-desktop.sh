@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# setup-remote-desktop.sh - XFCE desktop with TigerVNC and/or xrdp on Ubuntu 24.04
+# setup-remote-desktop.sh - XFCE desktop with TigerVNC and/or xrdp on Ubuntu 22.04 / 24.04 and Debian 12
 #
 # Each service is set up only when it is NOT already running. A service that is
 # running (or whose port is taken) is reported and left untouched, so running
@@ -45,7 +45,8 @@ usage() {
   cat <<EOF
 Usage: sudo ./$SCRIPT_NAME [options]
 
-Installs and configures XFCE with TigerVNC (VNC) and xrdp (RDP) on Ubuntu 24.04.
+Installs and configures XFCE with TigerVNC (VNC) and xrdp (RDP) on Ubuntu 22.04 and 24.04
+and on Debian 12.
 A service that is already running is left alone; use --force to reconfigure it.
 When a service does not come up, what this run created for it (users, files, units,
 firewall rules) is removed again and the other service is kept; installed packages
@@ -145,9 +146,12 @@ done
 [[ -f /etc/os-release ]] || die "Cannot identify this operating system."
 # shellcheck disable=SC1091
 . /etc/os-release
-[[ ${ID:-} == ubuntu && ${VERSION_ID:-} == 24.04 ]] || \
-  die "This script supports Ubuntu 24.04 only; found ${PRETTY_NAME:-an unknown system}."
+case "${ID:-}:${VERSION_ID:-}" in
+  ubuntu:22.04|ubuntu:24.04|debian:12) ;;
+  *) die "This script supports Ubuntu 22.04 and 24.04 and Debian 12 only; found ${PRETTY_NAME:-an unknown system}." ;;
+esac
 (( CHECK_ONLY )) || [[ $EUID -eq 0 ]] || die "Run with sudo or as root (or use --check)."
+command -v ss >/dev/null 2>&1 || die "The ss command is missing: install iproute2 first (sudo apt install iproute2)."
 
 RDP_USER=${RDP_USER:-$TARGET_USER}
 VNC_USER=${VNC_USER:-$TARGET_USER}
@@ -368,9 +372,30 @@ install_file() {
   (( changed ))
 }
 
+# Polkit 0.106 and later (Ubuntu 24.04, Debian 12) reads JavaScript rules from
+# /etc/polkit-1/rules.d; the 0.105 of Ubuntu 22.04 only knows .pkla files.
+polkit_uses_rules() {
+  local v
+  v=$(pkaction --version 2>/dev/null | awk '{print $NF}')
+  [[ -n $v ]] || return 0
+  if [[ $v == 0.* ]]; then (( ${v#0.} >= 106 )); else return 0; fi
+}
+
 # Remote XFCE sessions otherwise keep asking for a password for colour
 # profiles and package-source refreshes. Only for the desktop users.
 install_polkit() { # user
+  if ! polkit_uses_rules; then
+    cat > "$TMP_DIR/polkit-$1" <<EOF
+[Termwright remote desktop: no authentication pop-ups in the remote session]
+Identity=unix-user:$1
+Action=org.freedesktop.color-manager.*;org.freedesktop.packagekit.system-sources-refresh
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
+EOF
+    install_file "$TMP_DIR/polkit-$1" "/etc/polkit-1/localauthority/50-local.d/45-remote-desktop-$1.pkla" 0644 root root || true
+    return 0
+  fi
   cat > "$TMP_DIR/polkit-$1" <<EOF
 // Termwright remote desktop: no authentication pop-ups in the remote session.
 polkit.addRule(function(action, subject) {

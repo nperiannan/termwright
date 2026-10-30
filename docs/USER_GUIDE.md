@@ -267,7 +267,7 @@ To type the passwords instead, untick the box and open *More options*:
 - **Reconfigure services that already run** rewrites their settings and restarts them, so anyone connected is disconnected. Use it to repair a desktop.
 - **If it fails, it cleans up after itself.** What the setup created for a service that did not come up (its new user, files, service and firewall rule) is removed again, and only for that service: when VNC works and RDP fails, RDP is removed and VNC stays, with a note and only the working session created. Users that already existed and installed packages are never removed. **Copy log** (next to *Show details*) puts the error and the whole output, passwords masked, on the clipboard.
 - **Hide** lets the setup go on while you work; you are told when it ends. **Cancel setup** stops it.
-- Supported: **Ubuntu 24.04**. The dialog shows the machine's version, and the script stops before changing anything on other systems. The script is in `scripts/remote-desktop/` of the source.
+- Supported: **Ubuntu 22.04**, **Ubuntu 24.04** and **Debian 12**. The dialog shows the machine's version, and the script stops before changing anything on other systems. Ubuntu 22.04 uses the older polkit rule format automatically. Debian needs `sudo` installed for the login (or log in as root). More systems (the RHEL family) are planned. The script is in `scripts/remote-desktop/` of the source.
 
 Wrong sudo password? The dialog says *The sudo password was not accepted*; **Back** returns to the form.
 

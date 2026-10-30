@@ -8,6 +8,9 @@ import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
 
+/** Systems the setup script supports (ID and VERSION_ID of /etc/os-release). */
+const SUPPORTED_OS: [string, string][] = [['ubuntu', '22.04'], ['ubuntu', '24.04'], ['debian', '12']];
+
 /**
  * Set Up Remote Desktop: installs XFCE with xrdp (RDP) and/or TigerVNC on the
  * Linux machine of an SSH tab, each for its own new user (name-rdp, name-vnc),
@@ -297,9 +300,9 @@ export class RemoteDesktopDialog implements OnInit {
       this.users.set(list('TWUSERS'));
       const m = /^TWOS\|([^|]*)\|([^|]*)\|(.*)$/m.exec(clean);
       if (!m) return;
-      const ok = m[1] === 'ubuntu' && m[2] === '24.04';
+      const ok = SUPPORTED_OS.some(([id, ver]) => m[1] === id && m[2] === ver);
       this.osOk.set(ok);
-      this.os.set(ok ? `${m[3]} - supported.` : `${m[3] || 'This system'} is not supported yet: the script supports Ubuntu 24.04 only and stops before changing anything.`);
+      this.os.set(ok ? `${m[3]} - supported.` : `${m[3] || 'This system'} is not supported yet: the script supports Ubuntu 22.04 and 24.04 and Debian 12 and stops before changing anything on other systems.`);
     } catch { /* unknown: the script checks again */ }
   }
 
