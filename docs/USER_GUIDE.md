@@ -423,6 +423,10 @@ You can also teach from the terminal: select the value in a tab, then **Edit →
 
 **File → Discover Devices…** (also in the command palette) finds the devices in a network, tells what each one is, and adds the ones you pick as sessions. It **never tries to log in**.
 
+**Wake-on-LAN sessions**: a device that answered no login port but has a MAC address can still be ticked - it is saved as a Wake-on-LAN session (see Wake-on-LAN below) with its address and MAC address. These are not ticked automatically.
+
+**Copying from the results**: right-click a device → *Copy IP Address*, *Copy MAC Address*, *Copy Vendor / System Info* (with everything it is based on) or *Copy All Details*; or select any text in the table and press Cmd/Ctrl+C.
+
 ![Discover Devices - before the first scan](screenshots/discover-start.png)
 
 1. **Addresses**: the page opens with **Networks of this computer** - every network this computer has an address on (wired, Wi-Fi, VPN), one row each with the interface, its address, the network and how many addresses a scan covers. Click a row to fill the box (a network larger than a /22 gives the /24 around this computer; a VPN row is marked because the networks behind a VPN are not known here - type them yourself). *Refresh* reads them again after connecting a VPN. Or type your own: a network (`10.20.0.0/24`, or just `10.20.0.0` for its /24), a range (`10.20.0.10-80` or `10.20.0.10-10.20.1.20`) or single addresses, separated by commas or spaces, then **Scan** next to it (or Enter). Up to 1,024 addresses (a /22) per scan.

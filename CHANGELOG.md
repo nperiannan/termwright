@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Discover Devices can add a device as a Wake-on-LAN session.** A device that showed no SSH, Telnet, RDP or VNC port (a PC that is off, a phone, a printer) but has a MAC address can now be ticked (or right-click → *Add as a Wake-on-LAN Session*) and is saved as a Wake-on-LAN session with its address and MAC address. Such devices are never ticked automatically.
+
+* **Copying from the scan results works.** Cmd/Ctrl+C copies text selected anywhere in the app's own pages (before, it only looked at the terminal, so a selected MAC address was never copied and the clipboard kept the last thing copied - the IP address). Clicking a row no longer ticks it while text is selected. The right-click menu of a result has **Copy IP Address**, **Copy MAC Address** (when the device has one), **Copy Vendor / System Info** (the vendor and system with everything it is based on) and **Copy All Details**.
+
 * **Discover Devices lists this computer's networks.** The scan page shows every network the computer has an address on - wired, Wi-Fi and VPN adapters - with interface, address, network and size; click one to fill the range (the first non-VPN network is filled in when the box is empty), or type any range yourself. *Refresh* picks up a VPN connected later.
 
 * **Wake-on-LAN is sent from the network the device is on.** A session with a jump host was always woken *from the jump host*, so the packet never reached the network this computer (and a phone app) is on. *Send from* is now **automatic** by default: from this computer when it has a network interface on the device's network, otherwise from the jump host (or jump station); a session can still force *this computer* or *the jump host* (Session Options → Connection). The notice after sending says where the packet was sent from and to which addresses.

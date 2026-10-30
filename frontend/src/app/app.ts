@@ -393,7 +393,7 @@ export class App implements OnInit {
       case 'collect': this.ui.open('collect'); break;
       case 'history': this.ui.open('history'); break;
       case 'export': this.ui.open('export'); break;
-      case 'copy': if (this.treeFocused()) this.treeKey('c'); else if (!this.editInput('copy')) await this.tabs.copy(); break;
+      case 'copy': if (this.treeFocused()) this.treeKey('c'); else if (!this.editInput('copy') && !this.copyPageSelection()) await this.tabs.copy(); break;
       case 'cut': this.editInput('cut'); break;
       case 'paste': if (this.treeFocused()) this.treeKey('v'); else if (!(await this.pasteInput())) await this.tabs.paste(); break;
       case 'copy-paste': await this.tabs.copy(); await this.tabs.paste(); break;
@@ -519,6 +519,17 @@ export class App implements OnInit {
   /** The Session Manager has the focus (not its filter box): Copy / Paste act on sessions. */
   private treeFocused() { const a = document.activeElement; return !!a?.closest('app-session-tree') && !a.closest('input, textarea, select'); }
   private treeKey(k: string) { document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: k, metaKey: this.isMac, ctrlKey: !this.isMac, bubbles: true })); }
+
+  /** Text selected on a page of the app itself (a scan result, a report, a dialog) - not in a terminal. */
+  private copyPageSelection(): boolean {
+    const sel = window.getSelection();
+    const text = sel?.toString() ?? '';
+    if (!sel || !text.trim()) return false;
+    const node = sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement;
+    if (!node || node.closest('.xterm, app-terminal-view')) return false;
+    void this.backend.clipboardSet(text);
+    return true;
+  }
 
   private editInput(op: 'copy' | 'cut' | 'select-all'): boolean {
     const el = this.focusedInput();

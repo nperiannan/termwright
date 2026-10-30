@@ -118,14 +118,14 @@ const ACK_KEY = 'termwright.discoverAck';
               </tr></thead>
               <tbody>
                 @for (r of shown(); track r.ip) {
-                  <tr [class.dim]="!r.protocol" [class.opened]="r.open" (click)="toggle(r, $event)" (dblclick)="connect(r, $event)" (contextmenu)="rowMenu($event, r)"
-                    [title]="r.protocol ? 'Double-click to connect now (' + r.protocol + ') without saving' : ''">
-                    <td class="c"><input type="checkbox" [checked]="r.selected" [disabled]="!r.protocol"
-                      [title]="r.protocol ? '' : 'No SSH, Telnet, RDP or VNC port answered - cannot be added as a session'" /></td>
+                  <tr [class.dim]="!addable(r)" [class.opened]="r.open" (click)="toggle(r, $event)" (dblclick)="connect(r, $event)" (contextmenu)="rowMenu($event, r)"
+                    [title]="r.protocol ? 'Double-click to connect now (' + r.protocol + ') without saving' : r.mac ? 'No login port answered - it can be added as a Wake-on-LAN session' : ''">
+                    <td class="c"><input type="checkbox" [checked]="r.selected" [disabled]="!addable(r)"
+                      [title]="r.protocol ? '' : r.mac ? 'No login port answered - added as a Wake-on-LAN session' : 'No SSH, Telnet, RDP or VNC port answered and no MAC address - cannot be added as a session'" /></td>
                     <td><app-device-icon [kind]="r.kind" /></td>
-                    <td><b>{{ r.name }}</b>@if (r.self) { <span class="tag me">this computer</span> }@if (r.exists) { <span class="tag">in sessions</span> }
+                    <td><b>{{ r.name }}</b>@if (r.self) { <span class="tag me">this computer</span> }@if (r.exists) { <span class="tag">in sessions</span> }@if (!r.protocol && r.mac && r.selected) { <span class="tag wol" title="Added as a Wake-on-LAN session">Wake-on-LAN</span> }
                       @if (r.dns && r.dns !== r.name) { <div class="hint">{{ r.dns }}</div> }</td>
-                    <td class="mono">{{ r.ip }}@if (r.mac) { <div class="hint">{{ r.mac }}</div> }</td>
+                    <td class="mono">{{ r.ip }}@if (r.mac) { <div class="hint mac" title="Right-click the row to copy the MAC address">{{ r.mac }}</div> }</td>
                     <td>{{ kindLabel(r.kind) }}</td>
                     <td class="sys">
                       <button type="button" class="info" [class.on]="r.open" (click)="details(r, $event)" title="What this is based on">ⓘ</button>
@@ -404,15 +404,17 @@ export class DiscoverDialog implements OnDestroy {
   /** The devices "Add" saves. */
   toAdd() {
     const types = this.saveMode() === 'types' ? new Set(this.picked()) : null;
-    return this.rows().filter(r => r.selected && r.protocol && (!types || types.has(r.deviceType)));
+    return this.rows().filter(r => r.selected && this.addable(r) && (!types || types.has(r.deviceType ?? '')));
   }
+  /** A device with a login port is added as that kind of session; one with only a MAC address as a Wake-on-LAN session. */
+  addable(r: Row) { return !!r.protocol || !!r.mac; }
   selectedCount() { return this.toAdd().length; }
   /** Device types of the devices that can be added ("" = none), named ones first. */
   foundTypes() {
-    const set = new Set(this.rows().filter(r => r.protocol).map(r => r.deviceType ?? ''));
+    const set = new Set(this.rows().filter(r => this.addable(r)).map(r => r.deviceType ?? ''));
     return [...set].sort((a, b) => (a === '') !== (b === '') ? (a === '' ? 1 : -1) : a.localeCompare(b));
   }
-  countOf(t: string) { return this.rows().filter(r => r.selected && r.protocol && (r.deviceType ?? '') === t).length; }
+  countOf(t: string) { return this.rows().filter(r => r.selected && this.addable(r) && (r.deviceType ?? '') === t).length; }
   toggleType(t: string) {
     this.picked.update(l => l.includes(t) ? l.filter(x => x !== t) : [...l, t]);
     this.savePrefs();
@@ -508,7 +510,7 @@ export class DiscoverDialog implements OnDestroy {
   private async sessionFor(r: Row, folder = '') {
     const s = await this.backend.newSessionDefaults();
     Object.assign(s, {
-      name: (r.name || r.ip).replace(/[\\/:*?"<>|]+/g, '-').trim() || r.ip, folder, path: '', protocol: r.protocol, hostname: r.ip, port: r.port, mac: r.mac || '',
+      name: (r.name || r.ip).replace(/[\\/:*?"<>|]+/g, '-').trim() || r.ip, folder, path: '', protocol: r.protocol || 'WOL', hostname: r.ip, port: r.protocol ? r.port : 0, mac: r.mac || '',
       deviceType: r.deviceType, description: [r.vendor, r.os].filter(Boolean).length ? [[r.vendor, r.os].filter(Boolean).join(' · ')] : [],
     });
     return s;
@@ -527,14 +529,42 @@ export class DiscoverDialog implements OnDestroy {
   rowMenu(ev: MouseEvent, r: Row) {
     this.ui.showMenu(ev, [
       { label: r.protocol ? `Connect (${r.protocol})` : 'No SSH, Telnet, RDP or VNC port answered', disabled: !r.protocol, action: () => void this.connect(r) },
-      { label: 'Copy Address', action: () => void this.backend.clipboardSet(r.ip) },
       { separator: true },
-      { label: r.selected ? 'Do Not Add' : 'Add as a Session', disabled: !r.protocol, action: () => { r.selected = !r.selected; r.touched = true; this.rows.update(l => [...l]); } },
+      { label: 'Copy IP Address', action: () => this.copy(r.ip, 'IP address') },
+      { label: r.mac ? 'Copy MAC Address (' + r.mac + ')' : 'Copy MAC Address', disabled: !r.mac, action: () => this.copy(r.mac, 'MAC address') },
+      { label: 'Copy Vendor / System Info', disabled: !this.sysText(r), action: () => this.copy(this.sysText(r), 'Vendor / system info') },
+      { label: 'Copy All Details', action: () => this.copy(this.allText(r), 'Details') },
+      { separator: true },
+      { label: r.selected ? 'Do Not Add' : r.protocol ? 'Add as a Session' : 'Add as a Wake-on-LAN Session', disabled: !this.addable(r), action: () => { r.selected = !r.selected; r.touched = true; this.rows.update(l => [...l]); } },
     ]);
   }
 
+  /** Vendor and system of a device with everything it is based on, as text. */
+  sysText(r: Row): string {
+    const head = [r.vendor, r.os].filter(Boolean).join(' · ');
+    const ev = (r.evidence ?? []).map(e => '- ' + e);
+    return [head, ...ev].filter(Boolean).join('\n');
+  }
+
+  allText(r: Row): string {
+    return [
+      `Name: ${r.name}${r.dns && r.dns !== r.name ? ' (' + r.dns + ')' : ''}`,
+      `IP address: ${r.ip}`,
+      r.mac ? `MAC address: ${r.mac}` : '',
+      `Type: ${this.kindLabel(r.kind)}`,
+      r.services?.length ? `Services: ${r.services.map(x => this.svcLabel(x)).join(', ')}` : '',
+      this.sysText(r) ? 'Vendor / system: ' + this.sysText(r) : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  private copy(text: string, what: string) {
+    void this.backend.clipboardSet(text).then(() => this.ui.toast(what + ' copied', 'info', 2500)).catch(e => this.ui.error(e));
+  }
+
   toggle(r: Row, ev: Event) {
-    if (!r.protocol || (ev.target as HTMLElement).tagName === 'SELECT') return;
+    // selecting text (to copy a MAC address or the system text) must not tick the row
+    if (window.getSelection()?.toString()) return;
+    if (!this.addable(r) || (ev.target as HTMLElement).tagName === 'SELECT') return;
     r.selected = !r.selected;
     r.touched = true;
     this.rows.update(l => [...l]);
@@ -565,7 +595,7 @@ export class DiscoverDialog implements OnDestroy {
         const s = await this.backend.newSessionDefaults();
         const base = (r.name || r.ip).replace(/[\\/:*?"<>|]+/g, '-').trim() || r.ip;
         Object.assign(s, {
-          name: base, folder: dest, path: '', protocol: r.protocol, hostname: r.ip, port: r.port, mac: r.mac || '',
+          name: base, folder: dest, path: '', protocol: r.protocol || 'WOL', hostname: r.ip, port: r.protocol ? r.port : 0, mac: r.mac || '',
           deviceType: r.deviceType, description: [r.vendor, r.os].filter(Boolean).length ? [[r.vendor, r.os].filter(Boolean).join(' · ')] : [],
         });
         try {
