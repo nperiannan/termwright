@@ -53,6 +53,7 @@ type ImportOptions struct {
 // Import detects the source type (SecureCRT directory, .zip, .xml or .ini; PuTTY .reg or
 // session files; MobaXterm .mxtsessions; OpenSSH config) and imports it.
 func (s *Store) Import(src string, opt ImportOptions) (*ImportResult, error) {
+	defer s.changed()
 	st, err := os.Stat(src)
 	if err != nil {
 		return nil, err
@@ -249,6 +250,7 @@ func (s *Store) importOne(rel string, f *sessionfile.File, opt ImportOptions, re
 
 // ImportSSHConfig imports Host entries from an OpenSSH client config file.
 func (s *Store) ImportSSHConfig(file string, opt ImportOptions) (*ImportResult, error) {
+	defer s.changed()
 	fh, err := os.Open(file)
 	if err != nil {
 		return nil, err

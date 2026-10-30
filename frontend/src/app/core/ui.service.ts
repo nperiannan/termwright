@@ -107,9 +107,13 @@ export class Ui {
     if (s) void this.saveSettings({ ...s, ...p });
   }
 
+  private treeJson = '';
+
   async refreshTree() {
     try {
-      this.tree.set(await this.backend.getSessionTree());
+      const t = await this.backend.getSessionTree();
+      const j = JSON.stringify(t);
+      if (j !== this.treeJson) { this.treeJson = j; this.tree.set(t); } // an unchanged tree keeps the rows (and what is open in them) as they are
       // favourites and recent sessions follow renamed, moved and deleted sessions in the backend
       if (this.settings()) this.settings.set(await this.backend.getSettings());
     } catch (e) { this.error(e); }

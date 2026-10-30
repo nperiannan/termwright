@@ -331,6 +331,9 @@ export class App implements OnInit {
     await this.tabs.restoreTabs();
     void this.startupUpdateCheck();
     this.backend.on('menu', (a: string) => void this.action(a));
+    // the session files changed on disk (sync, git pull, another Termwright): the Session Manager follows by itself
+    let treeTimer: ReturnType<typeof setTimeout> | undefined;
+    this.backend.on('sessions:changed', () => { clearTimeout(treeTimer); treeTimer = setTimeout(() => void this.ui.refreshTree(), 400); });
     this.backend.on('device:find', (d: { path: string; tab: string }) => { this.ui.movedInput.set({ find: d.path, tab: d.tab }); this.ui.open('moved'); });
     this.ui.actionHandler = a => void this.action(a);
     this.ui.runSnippet = s => void sendSnippet(this.ui, this.tabs, s);

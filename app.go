@@ -72,6 +72,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	go a.backupScheduler(ctx)
 	go a.pruneRecordings(ctx)
+	go a.watchSessions(ctx)
 }
 
 func (a *App) init() error {
@@ -88,6 +89,7 @@ func (a *App) init() error {
 	if err != nil {
 		return err
 	}
+	a.hookStore(st)
 	a.store = st
 	a.terms = term.NewManager(emitter{a}, dir, func() string { return a.cfg.Get().LogDir })
 	a.terms.LoadSession = func(p string) (session.Session, error) { return a.store.Get(p) }
@@ -273,6 +275,7 @@ func (a *App) SaveSettings(s config.Settings) error {
 		if err != nil {
 			return err
 		}
+		a.hookStore(st)
 		a.store = st
 	}
 	cur := a.cfg.Get()

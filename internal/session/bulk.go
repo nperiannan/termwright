@@ -20,6 +20,7 @@ import (
 
 // ImportSessions saves sessions (Folder/Name) with the usual conflict rules.
 func (s *Store) ImportSessions(list []Session, opt ImportOptions) *ImportResult {
+	defer s.changed()
 	res := &ImportResult{}
 	s.importSessions(list, opt, res)
 	return res

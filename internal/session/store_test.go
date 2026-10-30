@@ -266,3 +266,29 @@ func TestEnvironmentAndTreeFields(t *testing.T) {
 		t.Fatalf("%+v", n)
 	}
 }
+
+func TestStoreOnChange(t *testing.T) {
+	st, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	st.OnChange = func() { n++ }
+	s := st.NewSession()
+	s.Name, s.Hostname = "sw1", "10.0.0.1"
+	saved, err := st.Save(s, "")
+	if err != nil || n != 1 {
+		t.Fatalf("save: %v, %d calls", err, n)
+	}
+	if err := st.CreateFolder("Lab"); err != nil || n != 2 {
+		t.Fatalf("folder: %v, %d calls", err, n)
+	}
+	if err := st.Delete(saved.Path); err != nil || n != 3 {
+		t.Fatalf("delete: %v, %d calls", err, n)
+	}
+	// the hook may use the store again: it is called after the lock is released
+	st.OnChange = func() { _, _ = st.Tree() }
+	if _, err := st.Save(s, ""); err != nil {
+		t.Fatal(err)
+	}
+}

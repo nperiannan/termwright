@@ -49,6 +49,14 @@ type Node struct {
 type Store struct {
 	mu   sync.Mutex
 	root string
+	// OnChange is called after sessions or folders were added, changed, moved or deleted.
+	OnChange func()
+}
+
+func (s *Store) changed() {
+	if s.OnChange != nil {
+		s.OnChange()
+	}
 }
 
 // NewStore opens (and creates) a session directory.
@@ -219,6 +227,7 @@ func (s *Store) Exists(p string) bool {
 // Save writes a session. If oldPath is set and differs from the new path the
 // session is moved/renamed. Unknown keys of an existing file are preserved.
 func (s *Store) Save(ss Session, oldPath string) (Session, error) {
+	defer s.changed() // runs after the lock is released
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ss.Name = CleanName(ss.Name)
@@ -278,6 +287,7 @@ func (s *Store) writeFile(p string, f *sessionfile.File) error {
 
 // WriteRaw stores an already-parsed file at path (used by import).
 func (s *Store) WriteRaw(p string, f *sessionfile.File) error {
+	defer s.changed() // runs after the lock is released
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, err := cleanPath(p)
@@ -296,6 +306,7 @@ func (s *Store) ReadRaw(p string) (*sessionfile.File, error) {
 
 // Duplicate copies a session to a new unique name in the same folder.
 func (s *Store) Duplicate(p string) (string, error) {
+	defer s.changed() // runs after the lock is released
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	f, err := s.readFile(p)
@@ -321,6 +332,7 @@ func (s *Store) uniquePath(p string) string {
 
 // Delete removes a session.
 func (s *Store) Delete(p string) error {
+	defer s.changed() // runs after the lock is released
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, err := cleanPath(p)
@@ -336,6 +348,7 @@ func (s *Store) Delete(p string) error {
 
 // CreateFolder creates a folder (and parents).
 func (s *Store) CreateFolder(p string) error {
+	defer s.changed() // runs after the lock is released
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, err := cleanPath(p)
@@ -351,6 +364,7 @@ func (s *Store) CreateFolder(p string) error {
 
 // RenameFolder renames or moves a folder.
 func (s *Store) RenameFolder(oldPath, newPath string) error {
+	defer s.changed() // runs after the lock is released
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	o, err1 := cleanPath(oldPath)
@@ -377,6 +391,7 @@ func (s *Store) RenameFolder(oldPath, newPath string) error {
 
 // DeleteFolder removes a folder and everything inside it.
 func (s *Store) DeleteFolder(p string) error {
+	defer s.changed() // runs after the lock is released
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, err := cleanPath(p)
