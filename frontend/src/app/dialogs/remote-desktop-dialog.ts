@@ -32,6 +32,7 @@ import { Icon } from '../components/icon';
           <input name="user" [ngModel]="user()" (ngModelChange)="user.set($event)" class="mono" spellcheck="false" />
         </div>
         @if (userProblem(); as p) { <div class="warn">{{ p }}</div> }
+        @else if (localWarn(); as w) { <div class="warn">{{ w }}</div> }
 
         <div class="sec">Who can connect</div>
         <div class="seg">
@@ -107,6 +108,10 @@ export class RemoteDesktopDialog implements OnInit {
   readonly err = signal('');
   readonly os = signal('');
   readonly osOk = signal(true);
+  /** Users logged in at the machine's own screen. */
+  readonly localUsers = signal<string[]>([]);
+  readonly localWarn = computed(() => this.localUsers().includes(this.user().trim())
+    ? `${this.user().trim()} is logged in at this machine's own screen. A remote desktop for the same user often stays black. Use another user (for example a new one for remote access), or log out of the local desktop first.` : '');
   readonly user = signal('');
   readonly cidr = signal('');
   createSessions = true;
@@ -139,10 +144,13 @@ export class RemoteDesktopDialog implements OnInit {
     if (!path) return;
     try {
       const out = await Promise.race([
-        this.backend.runFactCommand(path, '', `. /etc/os-release 2>/dev/null; echo "TWOS|\${ID}|\${VERSION_ID}|\${PRETTY_NAME}"`),
+        this.backend.runFactCommand(path, '', `. /etc/os-release 2>/dev/null; echo "TWOS|\${ID}|\${VERSION_ID}|\${PRETTY_NAME}"; echo "TWSEAT|$(loginctl list-sessions --no-legend 2>/dev/null | awk '$4=="seat0"{print $3}' | sort -u | tr '\\n' ' ')"`),
         new Promise<string>((_, no) => setTimeout(() => no(new Error('timeout')), 10000)),
       ]);
-      const m = /^TWOS\|([^|]*)\|([^|]*)\|(.*)$/m.exec(out.replace(/\r/g, ''));
+      const clean = out.replace(/\r/g, '');
+      const seat = /^TWSEAT\|(.*)$/m.exec(clean);
+      if (seat) this.localUsers.set(seat[1].trim().split(/\s+/).filter(Boolean));
+      const m = /^TWOS\|([^|]*)\|([^|]*)\|(.*)$/m.exec(clean);
       if (!m) return;
       const ok = m[1] === 'ubuntu' && m[2] === '24.04';
       this.osOk.set(ok);

@@ -147,9 +147,17 @@ if (( DO_VNC )) && ! is_active "$VNC_UNIT"; then
   listening "$VNC_PORT" && die "TCP port $VNC_PORT is used by another program. Choose another --vnc-display."
 fi
 
+local_login() {
+  command -v loginctl >/dev/null 2>&1 && \
+    loginctl list-sessions --no-legend 2>/dev/null | awk -v u="$TARGET_USER" '$3 == u && $4 == "seat0" { f = 1 } END { exit !f }'
+}
+
 report() {
   local what
   printf '\nUser %s on %s\n' "$TARGET_USER" "$(hostname)"
+  if local_login; then
+    warn "$TARGET_USER is logged in at this computer's own screen: a remote desktop for the same user often stays black. Use another user (--user NAME) or log out locally first."
+  fi
   if (( ENABLE_RDP )); then
     if (( RDP_RUNNING )); then note "RDP  : already running (port $RDP_PORT) - $( (( FORCE )) && echo 'will be reconfigured (--force)' || echo 'left untouched')"
     else note "RDP  : not running - will be set up"; fi
@@ -365,8 +373,7 @@ wait_for() { local n=$1 i; shift; for ((i = 0; i < n; i++)); do "$@" && return 0
 (( DO_RDP )) && check_port RDP "$RDP_PORT" "$RDP_NETWORK" xrdp xrdp-sesman
 (( DO_VNC )) && check_port VNC "$VNC_PORT" "$VNC_NETWORK" "$VNC_UNIT"
 
-if command -v loginctl >/dev/null 2>&1 && \
-   loginctl list-sessions --no-legend 2>/dev/null | awk -v u="$TARGET_USER" '$3 == u && $4 == "seat0" { f = 1 } END { exit !f }'; then
+if local_login; then
   warn "$TARGET_USER is logged in at this computer's own screen. A remote desktop for the same user can show a black screen: log out locally first, or use another user."
 fi
 if (( DO_RDP && DO_VNC )); then

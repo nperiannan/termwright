@@ -255,7 +255,9 @@ Right-click an **SSH2** session → **Set Up Remote Desktop…** (or, in an open
 ![Set Up Remote Desktop](screenshots/remote-desktop.png)
 
 - **Install**: RDP, VNC or both. A service that is **already running is left alone**, so running it again never disconnects anyone.
-- **Desktop user**: the Linux user who gets the desktop (not root).
+- **Desktop user**: the Linux user who gets the desktop (not root). Pick a user who is **not logged in at the machine's own screen**: a remote desktop for the same user as a local GNOME or console session often stays black. Termwright checks this and warns (*Check First* does too).
+
+  ![Desktop user logged in locally](screenshots/remote-desktop-local.png)
 - **Who can connect**: *Through this SSH session only* (recommended: both services listen on the machine's own address and Termwright reaches them through the SSH connection) or *From the network* (all interfaces; add the network to open in the firewall).
 - **Create the sessions afterwards**: when the script ends **without errors**, Termwright makes `name (RDP)` and `name (VNC)` next to the SSH session (address `127.0.0.1`, ports 3389 / 5902, the SSH session as the jump host). The toast has **Open RDP** and **Open VNC** buttons.
 - **Check First** runs the script with `--check`: it only reports what is running and changes nothing.
