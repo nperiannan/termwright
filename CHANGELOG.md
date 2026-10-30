@@ -2,7 +2,9 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.23.0 (2026-10-30)
+
+Remote desktop setup, old SSH devices and mRemoteNG import.
 
 * **Old SSH servers** ([#4](https://github.com/nperiannan/termwright/issues/4)): a device that only offers old algorithms (for example `diffie-hellman-group1-sha1`, `aes128-cbc`, `hmac-sha1`) failed with *no common algorithm*. Session Options → Authentication → **Algorithms** now has **Allow legacy algorithms** (the old ones are added at the end of each list, so modern ones are still preferred whenever the server offers them) and lists for **Key exchange**, **Ciphers**, **MACs** and **Host key** in the OpenSSH syntax (`a,b` exactly these, `+a` add, `-a*` remove, `^a` put first). An unknown name is reported by name. When the handshake fails with *no common algorithm*, the error now says to tick *Allow legacy algorithms*. Tested against a server that offers only those old algorithms.
 * **mRemoteNG import** ([#3](https://github.com/nperiannan/termwright/issues/3)): Import Sessions → *mRemoteNG connections (confCons.xml)*. Containers become folders; SSH, Telnet, RAW, RDP and VNC connections come with the user name, domain, port and protocol they inherit from their container, and the description. Saved passwords are decrypted (the default master password, or the one typed in the *Master password* box) and moved into the OS keychain, never written into the session files. HTTP, ICA, Rlogin and SSH1 connections are skipped and listed. A file mRemoteNG encrypts as a whole is refused with what to change in mRemoteNG. The password decryption follows mRemoteNG's documented format and is tested with data built the same way, not yet against a file from a real mRemoteNG.

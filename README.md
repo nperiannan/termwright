@@ -51,6 +51,13 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.23.0
+
+- **Set Up Remote Desktop.** Right-click an SSH session on an Ubuntu 22.04, Ubuntu 24.04 or Debian 12 machine to install the XFCE desktop with RDP (xrdp) and/or VNC (TigerVNC) in the background over the SSH connection. Each service gets a user of its own, a failed service is removed again, and the new RDP and VNC sessions are created next to the SSH one with their user names and passwords stored.
+- **Old SSH devices** ([#4](https://github.com/nperiannan/termwright/issues/4)). *Allow legacy algorithms* in Session Options → Authentication connects to devices that only offer `diffie-hellman-group1-sha1`, `aes128-cbc` or `hmac-sha1`; key exchange, cipher, MAC and host key lists can also be set by hand in the OpenSSH syntax.
+- **mRemoteNG import** ([#3](https://github.com/nperiannan/termwright/issues/3)). Import `confCons.xml` with folders, inherited user names, ports and protocols (SSH, Telnet, RAW, RDP, VNC); saved passwords go to the OS keychain.
+- **Smaller changes.** A Sessions button in the title bar, a Files panel that follows `sudo su -`, and a macOS title bar that lines up with the window buttons.
+
 ## What's new in 0.22.0
 
 - **Accounts** ([#1](https://github.com/nperiannan/termwright/issues/1)). A username and password kept once (in the OS keychain or a password manager) and chosen in a session, a folder's defaults or a device type. Changing an account's password updates every session that uses it; *Convert Sessions…* turns sessions that share a login into one account.
@@ -81,14 +88,6 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - Save Screen As Image.
   - Keyboard shortcuts for nearly every menu command.
   - Timestamps that start on the first line.
-
-## What's new in 0.20.0
-
-- **Serial consoles.** Ports are listed with the adapter's name and refreshed when a cable is plugged in. Detect Speed finds the baud rate, and a send bar offers line endings, hex send and hex view.
-- **Readable interface.** Choice of interface font (System, VS Code, Inter, IBM Plex Sans) and text size.
-- **HTML reports.** Save Scrollback As HTML keeps colours and highlighting, under a header with the device's model, version, serial number and MAC address.
-
-Earlier releases are described in the [changelog](CHANGELOG.md).
 
 ## Capabilities
 
