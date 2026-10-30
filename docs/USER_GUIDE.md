@@ -492,7 +492,7 @@ New Session → Protocol → *More…* → **Wake-on-LAN** makes a session whose
 | Field | What it does |
 |---|---|
 | **MAC address** (required) | the device's wired network port that is set to wake (`00:11:22:33:44:55`, `00-11-…`, `0011.2233.4455` or `001122334455`) |
-| **Network** | the device's network, e.g. `192.168.1.0/24`; `192.168.1.0`, `192.168.1` or an address in it (`192.168.1.41`) mean its /24. The magic packet is sent to **this network's broadcast address only**. |
+| **Network** | the device's network, e.g. `192.168.1.0/24`; `192.168.1.0`, `192.168.1` or an address in it (`192.168.1.41`) mean its /24. The magic packet is **advertised on that network**: to its broadcast address and to `255.255.255.255`, out of this computer's interface on it. |
 | **IP address** | the device's address: it is pinged to show whether it is up. Without a network, the packet goes to the broadcast address of the network this address is on. **The network or the IP address is required** (one of them). |
 | **UDP port** | 9 by default (some devices use 7) |
 | **Broadcast** | only when the right broadcast address differs from the network's (e.g. a router that forwards a directed broadcast) |
@@ -502,7 +502,7 @@ New Session → Protocol → *More…* → **Wake-on-LAN** makes a session whose
 
 **Double-click** the session (or *Save & Wake*, *Wake Now*) to wake it:
 
-1. The magic packet is sent (three times) to the network's broadcast address.
+1. The magic packet is sent (three times) to the network's broadcast address and to the limited broadcast `255.255.255.255`, out of the network interface that is on the device's network (several routers and switches drop a directed broadcast, and macOS and Windows send `255.255.255.255` out of one interface only, so each interface is addressed by its own address). When this computer is on no such network, every interface is used.
 2. **With an IP address**, the device is pinged every 5 seconds until it answers (at least 2 minutes, or as long as the searches would take). When it answers, its **NetBIOS name** is read too (Windows and Samba answer), and the dot turns **green**. If it does not answer in time, the dot turns **orange** and a notice says it is down, not woken or not present.
 3. **With only a network**, Termwright waits 30 seconds, then searches the network for the MAC address (it makes this computer look up every address of the network, as Discover Devices does, and reads the answers' MAC addresses). It repeats this up to 4 times (both are settings). When the MAC address is found, its **IP address is saved in the session** and the device is pinged; if it is not found after the last search, the device is marked **not present / down** and the searches stop. Only a network this computer is directly on can be searched.
 

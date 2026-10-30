@@ -48,15 +48,25 @@ func CheckBroadcast(b string) error {
 	return nil
 }
 
-// Targets returns where to send: the given address, or - for "" -
-// 255.255.255.255 and the broadcast address of each IPv4 network this
-// computer is on (macOS and Windows send 255.255.255.255 out of one
-// interface only).
-func Targets(broadcast string) []string {
-	if broadcast != "" {
-		return []string{broadcast}
-	}
-	out := []string{"255.255.255.255"}
+// Limited is the broadcast address every host of the local network receives.
+const Limited = "255.255.255.255"
+
+// Dest is one place to send the packet to: a broadcast address, and the
+// address of the network interface to send it out of (nil = the system picks).
+type Dest struct {
+	Addr string
+	From net.IP
+}
+
+type localNet struct {
+	ip    net.IP
+	net   *net.IPNet
+	bcast string
+}
+
+// localNets are the IPv4 networks this computer is on (up, with broadcast, not loopback).
+func localNets() []localNet {
+	var out []localNet
 	ifs, _ := net.Interfaces()
 	for _, ifc := range ifs {
 		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagBroadcast == 0 || ifc.Flags&net.FlagLoopback != 0 {
@@ -76,16 +86,77 @@ func Targets(broadcast string) []string {
 			for i := range b {
 				b[i] = ip[i] | ^mask[i]
 			}
-			if s := b.String(); s != "255.255.255.255" {
-				out = append(out, s)
-			}
+			out = append(out, localNet{ip: ip, net: &net.IPNet{IP: ip.Mask(net.IPMask(mask)), Mask: n.Mask}, bcast: b.String()})
 		}
 	}
 	return out
 }
 
-// Send sends the packet from this computer to each target address and
-// returns those it went to.
+// Plan says where to send, so that the packet is advertised on the whole
+// network the way WoL tools do: out of every network interface (macOS and
+// Windows send 255.255.255.255 out of one interface only, so each interface
+// is addressed by its own address), to the broadcast address of that network
+// and to 255.255.255.255. With a broadcast address given (the session's, or
+// the one worked out for the device's network) it is added, and the
+// interface it belongs to is used; when this computer is on no such network
+// every interface is used. Several routers drop directed broadcasts, so the
+// limited broadcast is always sent as well.
+func Plan(broadcast string) []Dest {
+	nets := localNets()
+	var out []Dest
+	seen := map[string]bool{}
+	add := func(addr string, from net.IP) {
+		k := addr + "|" + from.String()
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, Dest{Addr: addr, From: from})
+		}
+	}
+	var match []localNet
+	if broadcast != "" {
+		if ip := net.ParseIP(broadcast).To4(); ip != nil {
+			for _, n := range nets {
+				if n.bcast == broadcast || n.net.Contains(ip) {
+					match = append(match, n)
+				}
+			}
+		}
+		if len(match) == 0 {
+			add(broadcast, nil)
+		}
+		for _, n := range match {
+			add(broadcast, n.ip)
+		}
+	}
+	use := match
+	if len(use) == 0 {
+		use = nets
+	}
+	for _, n := range use {
+		if broadcast == "" {
+			add(n.bcast, n.ip)
+		}
+		add(Limited, n.ip)
+	}
+	add(Limited, nil)
+	return out
+}
+
+// Targets returns the addresses the packet goes to (see Plan).
+func Targets(broadcast string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, d := range Plan(broadcast) {
+		if !seen[d.Addr] {
+			seen[d.Addr] = true
+			out = append(out, d.Addr)
+		}
+	}
+	return out
+}
+
+// Send sends the packet from this computer to every place of Plan and
+// returns the addresses it went to.
 func Send(pkt []byte, broadcast string, port int) ([]string, error) {
 	if port <= 0 {
 		port = DefaultPort
@@ -94,9 +165,14 @@ func Send(pkt []byte, broadcast string, port int) ([]string, error) {
 		return nil, err
 	}
 	var sent []string
+	seen := map[string]bool{}
 	var lastErr error
-	for _, t := range Targets(broadcast) {
-		c, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP(t), Port: port})
+	for _, d := range Plan(broadcast) {
+		var local *net.UDPAddr
+		if d.From != nil {
+			local = &net.UDPAddr{IP: d.From}
+		}
+		c, err := net.DialUDP("udp4", local, &net.UDPAddr{IP: net.ParseIP(d.Addr), Port: port})
 		if err != nil {
 			lastErr = err
 			continue
@@ -110,7 +186,10 @@ func Send(pkt []byte, broadcast string, port int) ([]string, error) {
 			lastErr = err
 			continue
 		}
-		sent = append(sent, t)
+		if !seen[d.Addr] {
+			seen[d.Addr] = true
+			sent = append(sent, d.Addr)
+		}
 	}
 	if len(sent) == 0 {
 		if lastErr == nil {
@@ -136,11 +215,19 @@ func RemoteCommand(pkt []byte, mac, broadcast string, port int) (string, error) 
 		return "", err
 	}
 	if broadcast == "" {
-		broadcast = "255.255.255.255"
+		broadcast = Limited
+	}
+	// the network's broadcast address and the limited broadcast: several routers drop directed broadcasts
+	targets := fmt.Sprintf("%q", broadcast)
+	wake := fmt.Sprintf("wakeonlan -i %s -p %d %s", broadcast, port, hw.String())
+	if broadcast != Limited {
+		targets += fmt.Sprintf(",%q", Limited)
+		wake += fmt.Sprintf("; wakeonlan -i %s -p %d %s", Limited, port, hw.String())
 	}
 	py := fmt.Sprintf(`import socket
 s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 s.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1)
-for i in range(3): s.sendto(bytes.fromhex("%x"),("%s",%d))`, pkt, broadcast, port)
-	return fmt.Sprintf(`python3 -c '%s' 2>/dev/null || wakeonlan -i %s -p %d %s`, py, broadcast, port, hw.String()), nil
+for t in (%s):
+  for i in range(3): s.sendto(bytes.fromhex("%x"),(t,%d))`, targets, pkt, port)
+	return fmt.Sprintf(`python3 -c '%s' 2>/dev/null || { %s; }`, py, wake), nil
 }
