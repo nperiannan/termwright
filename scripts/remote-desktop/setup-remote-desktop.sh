@@ -228,10 +228,18 @@ export XDG_SESSION_DESKTOP=xfce
 export DESKTOP_SESSION=xfce
 export XDG_CONFIG_DIRS=/etc/xdg/xdg-xfce:/etc/xdg
 
-if command -v systemctl >/dev/null 2>&1; then
-    systemctl --user unset-environment WAYLAND_DISPLAY GNOME_SETUP_DISPLAY 2>/dev/null || true
-    systemctl --user import-environment DISPLAY XAUTHORITY XDG_SESSION_TYPE \
-        XDG_CURRENT_DESKTOP DESKTOP_SESSION 2>/dev/null || true
+# Not "systemctl --user import-environment": the user manager is ONE per user,
+# shared by the RDP and the VNC desktop, so one session would hand its DISPLAY
+# to the other (a black screen). Each session has its own D-Bus session below.
+
+# No window compositing unless the user chose it: with it the remote XFCE
+# often shows a black screen over RDP (first start only; later changes stay).
+xf=${XDG_CONFIG_HOME:-$HOME/.config}/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml
+if [ ! -e "$xf" ]; then
+    mkdir -p "${xf%/*}" 2>/dev/null &&
+    printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
+        '<channel name="xfwm4" version="1.0"><property name="general" type="empty"><property name="use_compositing" type="bool" value="false"/></property></channel>' \
+        > "$xf" 2>/dev/null || true
 fi
 
 exec env -u WAYLAND_DISPLAY -u GNOME_SETUP_DISPLAY dbus-run-session -- startxfce4

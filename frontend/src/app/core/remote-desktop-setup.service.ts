@@ -18,6 +18,8 @@ export interface RemoteDesktopOptions {
   createSessions: boolean;
   /** Only report what is running, change nothing. */
   check: boolean;
+  /** Reconfigure and restart services that already run (--force); connected users are disconnected. */
+  force?: boolean;
 }
 
 export const VNC_DISPLAY = 2;
@@ -27,7 +29,7 @@ export const RDP_PORT = 3389;
 const SH = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /** The command typed into the terminal. It ends by telling Termwright (an OSC 1337 line) how the script ended. */
-export function remoteDesktopCommand(remote: string, o: Pick<RemoteDesktopOptions, 'user' | 'rdp' | 'vnc' | 'access' | 'cidr' | 'check'>, token: string): string {
+export function remoteDesktopCommand(remote: string, o: Pick<RemoteDesktopOptions, 'user' | 'rdp' | 'vnc' | 'access' | 'cidr' | 'check' | 'force'>, token: string): string {
   const args = ['--user', SH(o.user), '--vnc-display', String(VNC_DISPLAY)];
   if (!o.rdp) args.push('--no-rdp');
   if (!o.vnc) args.push('--no-vnc');
@@ -37,6 +39,7 @@ export function remoteDesktopCommand(remote: string, o: Pick<RemoteDesktopOption
     if (o.cidr) args.push('--allow-cidr', SH(o.cidr));
   }
   if (o.check) args.push('--check');
+  else if (o.force) args.push('--force');
   const run = o.check ? 'bash' : 'sudo bash';
   // leading space: kept out of the shell history
   return ` ${run} ${SH(remote)} ${args.join(' ')}; _twrc=$?; rm -f ${SH(remote)}; ` +

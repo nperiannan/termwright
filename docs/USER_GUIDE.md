@@ -259,6 +259,7 @@ Right-click an **SSH2** session → **Set Up Remote Desktop…** (or, in an open
 - **Who can connect**: *Through this SSH session only* (recommended: both services listen on the machine's own address and Termwright reaches them through the SSH connection) or *From the network* (all interfaces; add the network to open in the firewall).
 - **Create the sessions afterwards**: when the script ends **without errors**, Termwright makes `name (RDP)` and `name (VNC)` next to the SSH session (address `127.0.0.1`, ports 3389 / 5902, the SSH session as the jump host). The toast has **Open RDP** and **Open VNC** buttons.
 - **Check First** runs the script with `--check`: it only reports what is running and changes nothing.
+- **Reconfigure services that already run** (`--force`) rewrites their settings and restarts them, so anyone connected is disconnected. Use it to repair a desktop, for example a black screen over RDP after an earlier setup.
 - Passwords: you type your **sudo password** and the **VNC password** in the SSH tab. Termwright never sees them. The script is copied over the tab's own SSH connection and removed again afterwards.
 - Supported: **Ubuntu 24.04**. The dialog shows the machine's version, and the script stops before changing anything on other systems. The script is in `scripts/remote-desktop/` of the source.
 

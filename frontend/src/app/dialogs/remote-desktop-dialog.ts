@@ -55,6 +55,12 @@ import { Icon } from '../components/icon';
             <small>{{ names() }} next to this session{{ access() === 'ssh' ? ', using it as the jump host' : '' }}. Only when the script ends without errors.</small></span>
         </label>
 
+        <label class="box">
+          <input type="checkbox" name="force" [(ngModel)]="force" />
+          <span><b>Reconfigure services that already run</b>
+            <small>Rewrites their settings and restarts them, so anyone connected is disconnected. Use it to repair a desktop (for example a black screen).</small></span>
+        </label>
+
         @if (os()) { <div class="os" [class.bad]="!osOk()">{{ os() }}</div> }
         <div class="hint">The script runs in this SSH tab so you see everything. You type your <b>sudo password</b> there, and the <b>VNC password</b> when it asks. Services that already run are left alone.</div>
         @if (err()) { <div class="warn">{{ err() }}</div> }
@@ -78,9 +84,7 @@ import { Icon } from '../components/icon';
     .card.on .cb { background: var(--accent); border-color: var(--accent); }
     .box { margin-top: 12px; cursor: pointer; input { margin-top: 3px; } }
     .grid { margin-top: 10px; }
-    .seg { display: flex; border: 1px solid var(--line, var(--border)); border-radius: var(--r-lg, 8px); overflow: hidden;
-      > button { flex: 1; height: auto; padding: 7px 6px; border: 0; border-radius: 0; background: transparent; color: var(--muted); box-shadow: none; }
-      > button.on { background: var(--accent); color: #fff; font-weight: 600; } }
+    .seg > button { height: auto; padding: 6px 10px; }
     .hint { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.45; margin-top: 6px; }
     .warn { color: var(--danger); font-size: calc(12px * var(--ui-scale, 1)); margin-top: 6px; white-space: pre-wrap; }
     .os { margin-top: 10px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--ok); &.bad { color: var(--danger); } }
@@ -106,6 +110,7 @@ export class RemoteDesktopDialog implements OnInit {
   readonly user = signal('');
   readonly cidr = signal('');
   createSessions = true;
+  force = false;
 
   readonly names = computed(() => {
     const n = this.tab()?.session.name ?? '';
@@ -152,7 +157,7 @@ export class RemoteDesktopDialog implements OnInit {
     try {
       await this.setup.run({
         tabId: this.ui.remoteDesktopTab(), user: this.user().trim(), rdp: this.rdp(), vnc: this.vnc(), access: this.access(),
-        cidr: this.cidr().trim(), createSessions: this.createSessions, check,
+        cidr: this.cidr().trim(), createSessions: this.createSessions, check, force: this.force,
       });
       this.ui.close();
     } catch (e) {
