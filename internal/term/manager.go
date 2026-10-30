@@ -116,6 +116,7 @@ type Tab struct {
 	seq       int64             // creation order (scripts address tabs by index)
 	alertBuf  string            // partial output line for alert matching
 	logonPass string            // password typed for \w during this connection
+	loginPass string            // password the SSH login of this tab used (typed or saved); memory only
 	alertAt   map[int]time.Time
 	lastMsg   string // last status message (errors of background connections)
 }
@@ -274,6 +275,19 @@ func (m *Manager) get(id string) (*Tab, error) {
 		return nil, fmt.Errorf("unknown tab %s", id)
 	}
 	return t, nil
+}
+
+// LoginPassword is the password the SSH login of a tab used (typed at the
+// prompt or saved), for features that act for the same user, such as Set Up
+// Remote Desktop. It is kept in memory only, for as long as the tab lives.
+func (m *Manager) LoginPassword(id string) (string, bool) {
+	t, err := m.get(id)
+	if err != nil {
+		return "", false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.loginPass, t.loginPass != ""
 }
 
 // Info returns a tab snapshot.

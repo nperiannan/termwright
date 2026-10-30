@@ -55,3 +55,14 @@ func TestShellQuote(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestLoginPasswordKept(t *testing.T) {
+	m, _, tab := connectedTab(t) // logs in by typing the password "pw" at the prompt
+	defer m.CloseAll()
+	if pw, ok := m.LoginPassword(tab); !ok || pw != "pw" {
+		t.Fatalf("the typed login password was not kept: %q %v", pw, ok)
+	}
+	if _, ok := m.LoginPassword("nope"); ok {
+		t.Fatal("unknown tab has a password")
+	}
+}

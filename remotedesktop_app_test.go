@@ -129,3 +129,31 @@ func TestRemoteDesktopCommandRuns(t *testing.T) {
 		t.Fatal("the script was not removed")
 	}
 }
+
+func TestRemoteDesktopRunNote(t *testing.T) {
+	r := &rdRun{rdpUser: "lab-rdp", vncUser: "lab-vnc"}
+	for _, l := range []string{
+		"[termwright-rd-ab12.sh] Creating user lab-rdp",
+		"[termwright-rd-ab12.sh] Creating user lab-vnc",
+		"[termwright-rd-ab12.sh] Configuring TigerVNC display :2 (TCP 5902)",
+	} {
+		r.note(l)
+	}
+	if !r.rdpNew || !r.vncNew || !r.vncSet {
+		t.Fatalf("after creating both: %+v", r)
+	}
+	r.note("TWREMOVED vnc")
+	if !r.rdpNew || r.vncNew || r.vncSet {
+		t.Fatalf("a removed VNC must not keep its password: %+v", r)
+	}
+	r.note("TWREMOVED rdp")
+	if r.rdpNew {
+		t.Fatalf("a removed RDP must not keep its password: %+v", r)
+	}
+	// an existing user is not "new": its password is not the one given
+	e := &rdRun{rdpUser: "lab-rdp", vncUser: "lab-vnc"}
+	e.note("[x] Configuring TigerVNC display :2 (TCP 5902)")
+	if e.rdpNew || e.vncNew || !e.vncSet {
+		t.Fatalf("existing users: %+v", e)
+	}
+}

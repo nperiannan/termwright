@@ -70,22 +70,19 @@ import { Icon } from '../components/icon';
         <div class="sec">Install</div>
         <div class="cards">
           <button type="button" class="card" [class.on]="rdp()" (click)="rdp.set(!rdp())">
-            <span class="cb">{{ rdp() ? '✓' : '' }}</span><span><b>RDP</b><small>xrdp, port {{ rdpPort }} - for Windows Remote Desktop and Termwright RDP</small></span></button>
+            <span class="cb">{{ rdp() ? '✓' : '' }}</span><span><b>RDP</b><small>xrdp · port {{ rdpPort }}</small></span></button>
           <button type="button" class="card" [class.on]="vnc()" (click)="vnc.set(!vnc())">
-            <span class="cb">{{ vnc() ? '✓' : '' }}</span><span><b>VNC</b><small>TigerVNC, display :{{ display }}, port {{ vncPort }}</small></span></button>
+            <span class="cb">{{ vnc() ? '✓' : '' }}</span><span><b>VNC</b><small>TigerVNC · :{{ display }} · port {{ vncPort }}</small></span></button>
         </div>
 
-        <div class="sec">Desktop users</div>
-        <div class="hint tight">Each service gets a user of its own, so the two desktops never disturb each other (or anyone logged in at the machine).</div>
-        <div class="rows">
+        <div class="sec">Desktop users <span class="faint">· one for each service, created without administrator rights</span></div>
+        <div class="two">
           @if (rdp()) {
-            <label>RDP user</label>
-            <div><input name="ru" [ngModel]="rdpUser()" (ngModelChange)="rdpUser.set($event)" class="mono" spellcheck="false" />
+            <div><label>RDP user</label><input name="ru" [ngModel]="rdpUser()" (ngModelChange)="rdpUser.set($event)" class="mono" spellcheck="false" />
               <div class="us" [class.new]="!exists(rdpUser())">{{ userNote(rdpUser()) }}</div></div>
           }
           @if (vnc()) {
-            <label>VNC user</label>
-            <div><input name="vu" [ngModel]="vncUser()" (ngModelChange)="vncUser.set($event)" class="mono" spellcheck="false" />
+            <div><label>VNC user</label><input name="vu" [ngModel]="vncUser()" (ngModelChange)="vncUser.set($event)" class="mono" spellcheck="false" />
               <div class="us" [class.new]="!exists(vncUser())">{{ userNote(vncUser()) }}</div></div>
           }
         </div>
@@ -93,64 +90,62 @@ import { Icon } from '../components/icon';
         @else if (localWarn(); as w) { <div class="warn">{{ w }}</div> }
 
         <div class="sec">Passwords <span class="faint">· sent over the SSH connection, never shown</span></div>
-        <div class="rows">
-          @if (needAccount()) {
-            <label>New users</label>
-            <div>
-              <div class="seg"><button type="button" [class.on]="acctMode() === 'same'" [disabled]="!saved()" (click)="acctMode.set('same')" [title]="saved() ? '' : 'The password of this SSH login is not saved'">Same as the SSH login</button>
-                <button type="button" [class.on]="acctMode() === 'own'" (click)="acctMode.set('own')">Choose one</button></div>
-              @if (acctMode() === 'own') {
+        <label class="chk" [class.off]="!known()">
+          <input type="checkbox" name="sp1" [disabled]="!known()" [ngModel]="samePw()" (ngModelChange)="samePw.set($event)" />
+          Use the password of this SSH login for the new users, sudo and VNC</label>
+        @if (!known()) { <div class="hint tight">This SSH login did not use a password (a key, or none), so type the ones you need.</div> }
+        @if (!samePw()) {
+          <div class="rows">
+            @if (needAccount()) {
+              <label>New users</label>
+              <div class="two">
                 <input type="password" name="ap" [ngModel]="acct()" (ngModelChange)="acct.set($event)" placeholder="password" autocomplete="new-password" />
                 <input type="password" name="ap2" [ngModel]="acct2()" (ngModelChange)="acct2.set($event)" placeholder="again" autocomplete="new-password" />
-              }
+              </div>
+            }
+            <label>sudo</label>
+            <div class="two">
+              <input type="password" name="sp" [disabled]="sudoMode() === 'none'" [ngModel]="sudo()" (ngModelChange)="sudo.set($event)" placeholder="sudo password" autocomplete="off" />
+              <label class="chk"><input type="checkbox" name="sn" [ngModel]="sudoMode() === 'none'" (ngModelChange)="sudoMode.set($event ? 'none' : 'own')" /> sudo needs no password</label>
             </div>
-          }
-          <label>sudo</label>
-          <div>
-            <div class="seg"><button type="button" [class.on]="sudoMode() === 'same'" [disabled]="!saved()" (click)="sudoMode.set('same')">Same as the SSH login</button>
-              <button type="button" [class.on]="sudoMode() === 'own'" (click)="sudoMode.set('own')">Different</button>
-              <button type="button" [class.on]="sudoMode() === 'none'" (click)="sudoMode.set('none')">Not needed</button></div>
-            @if (sudoMode() === 'own') { <input type="password" name="sp" [ngModel]="sudo()" (ngModelChange)="sudo.set($event)" placeholder="sudo password" autocomplete="off" /> }
+            @if (vnc()) {
+              <label>VNC</label>
+              <div class="two">
+                <input type="password" name="vp" [disabled]="vncSame() && needAccount()" [ngModel]="vncSame() && needAccount() ? '' : vncPw()" (ngModelChange)="vncPw.set($event)" placeholder="VNC password (6 to 8 characters)" autocomplete="new-password" />
+                @if (needAccount()) { <label class="chk"><input type="checkbox" name="vs" [ngModel]="vncSame()" (ngModelChange)="vncSame.set($event)" /> same as the new users' (first 8 characters)</label> }
+              </div>
+            }
           </div>
-          @if (vnc()) {
-            <label>VNC</label>
-            <div>
-              <label class="chk"><input type="checkbox" name="vs" [ngModel]="vncSame()" (ngModelChange)="vncSame.set($event)" /> Same password (VNC uses only its first 8 characters)</label>
-              @if (!vncSame()) { <input type="password" name="vp" [ngModel]="vncPw()" (ngModelChange)="vncPw.set($event)" placeholder="VNC password (6 to 8 characters)" autocomplete="new-password" /> }
-            </div>
-          }
-        </div>
-        @if (!saved()) { <div class="hint tight">The password of this SSH login is not saved, so type the ones you need.</div> }
-
-        <div class="sec">Who can connect</div>
-        <div class="seg">
-          <button type="button" [class.on]="access() === 'ssh'" (click)="access.set('ssh')">Through this SSH session only (recommended)</button>
-          <button type="button" [class.on]="access() === 'network'" (click)="access.set('network')">From the network</button>
-        </div>
-        @if (access() === 'ssh') {
-          <div class="hint">Both listen on this computer's own address only; nothing is opened to the network. Termwright reaches them through the SSH connection.</div>
-        } @else {
-          <div class="hint">Both listen on every network interface of the machine. Anyone who can reach it can try to log in, so allow only the network you need.</div>
-          <div class="rows">
-            <label>Firewall</label>
-            <input name="cidr" [ngModel]="cidr()" (ngModelChange)="cidr.set($event)" class="mono" placeholder="open for, e.g. 10.234.179.0/24 (optional)" spellcheck="false" />
-          </div>
-          @if (cidrProblem()) { <div class="warn">That is not a network like 10.234.179.0/24.</div> }
         }
 
-        <label class="box">
-          <input type="checkbox" name="mk" [ngModel]="createSessions()" (ngModelChange)="createSessions.set($event)" />
-          <span><b>Create the sessions afterwards</b>
-            <small>{{ names() }} next to this session{{ access() === 'ssh' ? ', using it as the jump host' : '' }}. Only when the setup ends without errors.</small></span>
-        </label>
-        <label class="box">
-          <input type="checkbox" name="force" [ngModel]="force()" (ngModelChange)="force.set($event)" />
-          <span><b>Reconfigure services that already run</b>
-            <small>Rewrites their settings and restarts them, so anyone connected is disconnected. Use it to repair a desktop.</small></span>
-        </label>
+        <details class="more">
+          <summary>More options <span class="faint">· {{ access() === 'ssh' ? 'through the SSH session only' : 'from the network' }}{{ createSessions() ? ', creates the sessions' : '' }}{{ force() ? ', reconfigures' : '' }}</span></summary>
+          <div class="seg">
+            <button type="button" [class.on]="access() === 'ssh'" (click)="access.set('ssh')">Through this SSH session only (recommended)</button>
+            <button type="button" [class.on]="access() === 'network'" (click)="access.set('network')">From the network</button>
+          </div>
+          @if (access() === 'ssh') {
+            <div class="hint">Both listen on this computer's own address only; nothing is opened to the network. Termwright reaches them through the SSH connection.</div>
+          } @else {
+            <div class="hint">Both listen on every network interface of the machine. Anyone who can reach it can try to log in, so allow only the network you need.</div>
+            <div class="rows">
+              <label>Firewall</label>
+              <input name="cidr" [ngModel]="cidr()" (ngModelChange)="cidr.set($event)" class="mono" placeholder="open for, e.g. 10.234.179.0/24 (optional)" spellcheck="false" />
+            </div>
+            @if (cidrProblem()) { <div class="warn">That is not a network like 10.234.179.0/24.</div> }
+          }
+          <label class="chk top">
+            <input type="checkbox" name="mk" [ngModel]="createSessions()" (ngModelChange)="createSessions.set($event)" />
+            <span><b>Create the sessions afterwards</b>, with the user name and password: {{ names() }} next to this session{{ access() === 'ssh' ? ', using it as the jump host' : '' }}. Only when the setup ends without errors.</span>
+          </label>
+          <label class="chk top">
+            <input type="checkbox" name="force" [ngModel]="force()" (ngModelChange)="force.set($event)" />
+            <span><b>Reconfigure services that already run</b>: rewrites their settings and restarts them, so anyone connected is disconnected. Use it to repair a desktop.</span>
+          </label>
+        </details>
 
         @if (os()) { <div class="os" [class.bad]="!osOk()">{{ os() }}</div> }
-        <div class="hint">It runs in the background: nothing is typed in your terminal. Services that already run are left alone.</div>
+        <div class="hint">It runs in the background: nothing is typed in your terminal. Services that already run are left alone, and if one fails, what was created for it is removed again.</div>
         @if (err()) { <div class="warn">{{ err() }}</div> }
       </div>
       <div class="modal-foot">
@@ -175,7 +170,10 @@ import { Icon } from '../components/icon';
     .rows { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; > label { margin-top: 6px; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); } input:not([type=checkbox]) { width: 100%; } input + input { margin-top: 6px; } .seg + input { margin-top: 6px; } }
     .seg > button { height: auto; padding: 6px 10px; }
     .us { font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); margin-top: 3px; } .us.new { color: var(--ok); }
-    .chk { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; font-weight: 400; }
+    .chk { display: flex; gap: 8px; align-items: center; margin: 4px 0; font-weight: 400; color: var(--fg, inherit); } .chk.off { opacity: .6; } .chk.top { align-items: flex-start; margin-top: 10px; input { margin-top: 3px; } }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; > div > label { display: block; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); margin-bottom: 4px; } input:not([type=checkbox]) { width: 100%; } }
+    .rows > .two { margin-top: 0; } .two input + input { margin-top: 0; }
+    .more { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; summary { cursor: pointer; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; } summary .faint { font-weight: 400; } .seg { margin-top: 8px; } }
     .hint { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.45; margin-top: 6px; } .hint.tight { margin-top: 0; }
     .warn { user-select: text; color: var(--danger); font-size: calc(12px * var(--ui-scale, 1)); margin-top: 6px; white-space: pre-wrap; } .warn.soft { color: var(--warn, var(--muted)); }
     .os { margin-top: 10px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--ok); &.bad { color: var(--danger); } }
@@ -208,11 +206,12 @@ export class RemoteDesktopDialog implements OnInit {
   readonly cidr = signal('');
   readonly createSessions = signal(true);
   readonly force = signal(false);
-  readonly saved = signal(false);
-  readonly acctMode = signal<'same' | 'own'>('own');
+  /** The password of the SSH login is known (typed at the login or saved), so it can be reused. */
+  readonly known = signal(false);
+  readonly samePw = signal(false);
   readonly acct = signal('');
   readonly acct2 = signal('');
-  readonly sudoMode = signal<'same' | 'own' | 'none'>('own');
+  readonly sudoMode = signal<'own' | 'none'>('own');
   readonly sudo = signal('');
   readonly vncSame = signal(true);
   readonly vncPw = signal('');
@@ -261,12 +260,13 @@ export class RemoteDesktopDialog implements OnInit {
   readonly cidrProblem = () => this.access() === 'network' && this.cidr().trim() !== '' && !/^[0-9a-fA-F:.]+(\/\d{1,3})?$/.test(this.cidr().trim());
   /** What is still missing before Set Up can start. */
   private readonly missing = computed(() => {
-    if (this.needAccount() && this.acctMode() === 'own') {
+    if (this.samePw()) return '';
+    if (this.needAccount()) {
       if (this.acct().length < 6) return 'The password of the new users needs at least 6 characters.';
       if (this.acct() !== this.acct2()) return 'The two passwords of the new users differ.';
     }
     if (this.sudoMode() === 'own' && !this.sudo()) return 'Type the sudo password.';
-    if (this.vnc() && !this.vncSame() && (this.vncPw().length < 6 || this.vncPw().length > 8)) return 'The VNC password needs 6 to 8 characters.';
+    if (this.vnc() && !(this.vncSame() && this.needAccount()) && (this.vncPw().length < 6 || this.vncPw().length > 8)) return 'The VNC password needs 6 to 8 characters.';
     return '';
   });
   readonly valid = () => !this.problem() && !this.cidrProblem() && !this.missing();
@@ -277,8 +277,8 @@ export class RemoteDesktopDialog implements OnInit {
     const base = (t.shellUser || t.session.username || '').trim().replace(/-(rdp|vnc)$/, '');
     if (base && base !== 'root') { this.rdpUser.set(base + '-rdp'); this.vncUser.set(base + '-vnc'); }
     void this.backend.remoteDesktopInfo(t.id).then(i => {
-      this.saved.set(i.savedPassword);
-      if (i.savedPassword) { this.acctMode.set('same'); this.sudoMode.set('same'); }
+      this.known.set(i.knownPassword);
+      this.samePw.set(i.knownPassword);
     }).catch(() => {});
     void this.detectOs(t.session.path);
   }
@@ -322,10 +322,10 @@ export class RemoteDesktopDialog implements OnInit {
     this.err.set('');
     const run: RemoteDesktopRun = {
       tabId: this.ui.remoteDesktopTab(), rdp: this.rdp(), vnc: this.vnc(),
-      rdpUser: this.rdpUser().trim(), vncUser: this.vncUser().trim(), createUsers: true,
+      rdpUser: this.rdpUser().trim(), vncUser: this.vncUser().trim(), createUsers: this.needAccount(),
       network: this.access() === 'network', cidr: this.cidr().trim(), check, force: this.force(),
-      sudoSame: this.sudoMode() === 'same', sudoNone: this.sudoMode() === 'none', sudoPassword: this.sudo(),
-      accountSame: this.acctMode() === 'same', accountPassword: this.acct(), vncSame: this.vncSame(), vncPassword: this.vncPw(),
+      sudoSame: this.samePw(), sudoNone: !this.samePw() && this.sudoMode() === 'none', sudoPassword: this.sudo(),
+      accountSame: this.samePw(), accountPassword: this.acct(), vncSame: this.samePw() || (this.vncSame() && this.needAccount()), vncPassword: this.vncPw(),
     };
     try {
       await this.setup.start(run, this.createSessions());

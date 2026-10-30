@@ -193,7 +193,7 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 		user = r.Values[0]
 	}
 
-	var usedPassword string
+	var usedPassword, lastPassword string // lastPassword: the one the login tried last (typed or saved)
 	var typedPassword bool
 	var rememberPassword bool
 	pwPath := s.Path
@@ -208,6 +208,7 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 	askPassword := func(msg string) (string, error) {
 		if haveSaved {
 			haveSaved = false // only try once
+			lastPassword = saved
 			return saved, nil
 		}
 		pr := Prompt{TabID: t.id, Kind: "credentials", Title: "Enter Secure Shell Password",
@@ -220,6 +221,7 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 			return "", err
 		}
 		usedPassword, rememberPassword = r.Values[0], r.Remember
+		lastPassword = r.Values[0]
 		typedPassword = true
 		return r.Values[0], nil
 	}
@@ -294,6 +296,11 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 		return nil, "", nil, err
 	}
 	client := ssh.NewClient(cc, chans, reqs)
+	if depth == 0 && lastPassword != "" && t != nil { // the tab's own login (not a jump host's)
+		t.mu.Lock()
+		t.loginPass = lastPassword
+		t.mu.Unlock()
+	}
 	if rememberPassword && typedPassword {
 		if account != "" && s.TransportPath == "" && m.OnAccountPasswordTyped != nil {
 			m.OnAccountPasswordTyped(account, usedPassword)

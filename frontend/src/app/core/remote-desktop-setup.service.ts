@@ -148,9 +148,10 @@ export class RemoteDesktopSetup {
     const tab = this.tabs.get(req?.tabId ?? '');
     if (this.createSessions && req && tab) {
       try {
-        if (req.rdp && !this.removed.has('rdp')) made.rdp = await this.ensureSession(tab.session, 'RDP', req);
-        if (req.vnc && !this.removed.has('vnc')) made.vnc = await this.ensureSession(tab.session, 'VNC', req);
+        if (req.rdp && !this.removed.has('rdp')) made.rdp = await this.ensureSession(r.id, tab.session, 'RDP', req);
+        if (req.vnc && !this.removed.has('vnc')) made.vnc = await this.ensureSession(r.id, tab.session, 'VNC', req);
         await this.ui.refreshTree();
+        void this.backend.forgetRemoteDesktop(r.id).catch(() => {}); // the passwords are stored in the sessions now
       } catch (err) {
         const error = `The remote desktop is ready, but its sessions could not be created: ${errText(err)}`;
         this.run.set({ ...r, phase: 'failed', step: 'Failed', detail: '', error });
@@ -172,7 +173,14 @@ export class RemoteDesktopSetup {
   open(path: string) { void this.tabs.openSession(path, 'auto'); }
 
   /** Creates "<ssh> (RDP|VNC)" in the folder of the SSH session; an existing one that already does the job is reused. */
-  private async ensureSession(ssh: Session, kind: 'RDP' | 'VNC', o: RdRequest): Promise<string> {
+  private async ensureSession(runId: string, ssh: Session, kind: 'RDP' | 'VNC', o: RdRequest): Promise<string> {
+    const path = await this.makeSession(ssh, kind, o);
+    // the user name is in the session; the password too when this run set it (the OS keychain)
+    await this.backend.remoteDesktopSessionPassword(runId, path, kind);
+    return path;
+  }
+
+  private async makeSession(ssh: Session, kind: 'RDP' | 'VNC', o: RdRequest): Promise<string> {
     const viaSsh = !o.network;
     const port = kind === 'RDP' ? RDP_PORT : VNC_PORT;
     const host = viaSsh ? '127.0.0.1' : ssh.hostname;
