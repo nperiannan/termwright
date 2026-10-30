@@ -14,7 +14,7 @@ Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial
 
 1. [Install](#1-install)
 2. [The main window](#2-the-main-window)
-3. [Connecting](#3-connecting) - device types, first SSH connection, [SSH keys: generate, install and store](#ssh-keys-generate-install-and-store)
+3. [Connecting](#3-connecting) - device types, first SSH connection, [SSH keys: generate, install and store](#ssh-keys-generate-install-and-store), [old devices: legacy SSH algorithms](#old-devices-legacy-ssh-algorithms)
 4. [Sessions and the Session Manager](#4-sessions-and-the-session-manager) - [device facts](#device-facts), [Wake-on-LAN](#wake-on-lan)
 5. [Session Options reference](#5-session-options-reference)
 6. [Working in the terminal](#6-working-in-the-terminal)
@@ -178,6 +178,25 @@ SSH keys on smart cards and tokens - PIV and CAC cards, YubiKey (PIV), SafeNet e
 - RSA (with `rsa-sha2-256` / `rsa-sha2-512`) and ECDSA P-256 / P-384 / P-521 keys.
 - Background runs (backups, checklists, Run and Collect) use the card only once its PIN was entered in a tab; otherwise they fail with *smart card PIN needed*.
 - After removing and re-inserting the card the PIN is asked again.
+
+### Old devices: legacy SSH algorithms
+
+A switch or appliance with old firmware may offer only weak algorithms (for example `diffie-hellman-group1-sha1`, `aes128-cbc` or `hmac-sha1`). Termwright does not use them by default, so the connection fails with *ssh: handshake failed … no common algorithm for key exchange*; the error then tells you what to do. In Session Options → **Authentication** → **Algorithms**, tick **Allow legacy algorithms (for old devices)** for that session only.
+
+![Allow legacy algorithms](screenshots/algorithms.png)
+
+The old algorithms are added at the **end** of each list, so a device that also offers modern ones still gets them. To control the lists yourself, fill in **Key exchange**, **Ciphers**, **MACs** and **Host key** with names separated by commas, in the OpenSSH way:
+
+| Write | Meaning |
+|---|---|
+| `a,b` | exactly these, in this order |
+| `+a,b` | add to the end of the usual list |
+| `^a` | put first in the usual list |
+| `-a*` | remove (a name can end in `*`, e.g. `-hmac-sha2-512*`) |
+
+![Custom algorithm lists](screenshots/algorithms-custom.png)
+
+An unknown name is reported by name when you connect. When the host key is already recorded in `known_hosts`, its algorithm is tried first so the saved key still matches. Use these options only on networks you trust: the weak algorithms are weak for a reason.
 
 ### SSH keys: generate, install and store
 
@@ -1089,6 +1108,9 @@ Options → Global Options → **Updates** decides when you are told about updat
    - **NetBox**: URL + API token (+ optional filter such as `site=dc1&role=leaf`); folders are Site/Role, the device type comes from the platform.
    - **AWS EC2**: uses the AWS CLI profile/region; running Linux instances with user `ec2-user` and `~/.ssh/<KeyName>.pem`.
    - **mRemoteNG**: the connections file (in mRemoteNG *File → Save Connection File As…*, by default `%APPDATA%\mRemoteNG\confCons.xml`). Containers become folders. SSH, Telnet, RAW, RDP and VNC connections are imported with the user name, domain, port and protocol they inherit from their container; their saved passwords go to the OS keychain (type the file's master password in the *Master password* box if you set one in mRemoteNG). HTTP, ICA, Rlogin and SSH1 connections are skipped and listed. If mRemoteNG encrypts the complete file, turn that off first (*Tools → Options → Security*).
+
+     ![Import from mRemoteNG](screenshots/import-mremoteng.png)
+
    - **MobaXterm**: an exported `.mxtsessions` file (right-click *User sessions* → *Export*) or `MobaXterm.ini`. SSH, Telnet and Serial sessions are imported with their folders; RDP, VNC, FTP and others are skipped.
    - **Saved passwords**: SecureCRT session passwords (`Password V2` with the `02:` or `03:` format, the older `Password`, or plain text from an export without password encryption) are decrypted and moved into the OS keychain; the copied session files no longer contain them, and *Save password* is ticked. If you set a **configuration passphrase** in SecureCRT, type it in *Config passphrase* (shown for the SecureCRT sources). The result lists how many passwords were imported and which could not be decrypted - import those again with the passphrase and *If name exists: Overwrite*, or type them once when connecting.
 2. Choose a target folder and what to do when names clash (keep both / overwrite / skip).
