@@ -4,9 +4,9 @@ Termwright imports sessions from several tools (SecureCRT, PuTTY, SuperPuTTY, Mo
 `config`). It will not grow a new importer for every tool, because each one has to follow a file format that changes
 without notice. Instead, **this page says what Termwright accepts**: if your sessions are in any other tool, a
 spreadsheet or an inventory, write them in this format (a script of a few lines, or a spreadsheet) and import the
-result with **Import Sessions → CSV**.
+result with **Import Sessions → Termwright template (CSV)**.
 
-The easiest start is the template: **File → Import Sessions → CSV → *Save a template CSV…***, or
+The easiest start is the template: **File → Import Sessions → *Save the Termwright import template…*** (the first thing in the dialog), or
 [`examples/sessions-template.csv`](examples/sessions-template.csv). It has a session of every kind.
 
 ## CSV (the format to write)

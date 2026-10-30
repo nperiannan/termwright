@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **The Termwright import template is easy to find.** *Import Sessions* opens with a box *Your sessions are in another tool?* - *Save the Termwright import template…*, the *Format guide*, and the source **Termwright template (CSV)**, which now sits in the Termwright group instead of under Inventories.
+
 * **Moving, renaming or deleting a jump host asks about the sessions that use it.** A session is the jump host of other sessions (SSH, RDP and VNC) by its path, so moving it to another folder, renaming it or deleting it left them pointing at nothing. Now, after a **move or rename** (drag, cut/paste, *Rename*, *Edit Sessions*, or the session's own options), Termwright lists the sessions - and the folders whose default jump host it is - that use it and asks *Update them* or *Leave them*; for a **delete** it lists them and asks *Delete them too* or *Delete only the jump host* (a folder default is cleared). The questions are always asked, also when *Confirm before moving* is off. Undo of a move updates them back.
 
 * **A Wake-on-LAN session fills in its network from the IP address.** Type the device's IP address and the *Network* box shows where the magic packet will go (the network of this computer's interface on it, else the /24 around the address); change the mask when the network is different. A network you typed yourself is never overwritten. With only a network, the device is found by its MAC address after the wake (the address found is saved in the session).

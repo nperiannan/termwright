@@ -19,6 +19,10 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
         <span class="mh-t">Import Sessions<span class="mh-s">Bring sessions in from another program or an inventory</span></span></div>
       <div class="modal-body">
         @if (!result()) {
+          <div class="tpl"><b>Your sessions are in another tool?</b> Write them in Termwright's own import format (a CSV any spreadsheet or script can make) -
+            <button type="button" class="link" (click)="saveTemplate()">Save the Termwright import template…</button> ·
+            <button type="button" class="link" (click)="backend.openURL(formatGuide)">Format guide</button> · then import the file as
+            <button type="button" class="link" (click)="source = 'csv'; pick('csv')">Termwright template (CSV)</button>.</div>
           @if (modern()) {
             @if (found().length) {
               <div class="found">
@@ -182,6 +186,7 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
     </form>
   </div>`,
   styles: [`
+    .tpl { margin: 0 0 12px; padding: 9px 12px; border-radius: 8px; background: var(--hover, rgba(128,128,128,.12)); font-size: calc(12.5px * var(--ui-scale, 1)); line-height: 1.5; }
     .link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
     .src-groups { display: flex; flex-direction: column; gap: 10px; }
     .src-group { display: flex; flex-direction: column; gap: 5px; label { display: flex; gap: 8px; align-items: center; cursor: pointer; } }
@@ -231,7 +236,7 @@ export class ImportDialog {
       twzip: { t: 'Termwright .zip', s: 'sessions and settings' }, twdir: { t: 'Termwright folder', s: 'export folder' },
       folder: { t: 'SecureCRT', s: 'Config folder' }, zip: { t: 'SecureCRT .zip', s: 'Sessions folder archive' }, xml: { t: 'SecureCRT .xml', s: 'Export Settings file' },
       ini: { t: 'SecureCRT .ini', s: 'one session file' }, putty: { t: 'PuTTY / KiTTY', s: '.reg, folder, SuperPuTTY' }, moba: { t: 'MobaXterm', s: '.mxtsessions, .ini' }, mremoteng: { t: 'mRemoteNG', s: 'confCons.xml' },
-      ssh: { t: 'OpenSSH', s: '~/.ssh/config' }, csv: { t: 'CSV', s: 'spreadsheet export' }, ansible: { t: 'Ansible', s: 'INI or YAML inventory' },
+      ssh: { t: 'OpenSSH', s: '~/.ssh/config' }, csv: { t: 'Termwright template', s: 'CSV for any other tool' }, ansible: { t: 'Ansible', s: 'INI or YAML inventory' },
       netbox: { t: 'NetBox', s: 'devices with a primary IP' }, aws: { t: 'AWS EC2', s: 'via the AWS CLI' },
     };
     return c[v];
@@ -260,6 +265,7 @@ export class ImportDialog {
     { title: 'Termwright', items: [
       { v: 'twzip', label: 'Termwright export (.zip) - sessions and settings' },
       { v: 'twdir', label: 'Termwright export folder' },
+      { v: 'csv', label: 'Termwright import template (.csv) - sessions from any other tool, spreadsheet or inventory' },
     ] },
     { title: 'SecureCRT', items: [
       { v: 'folder', label: 'SecureCRT configuration folder (Config or Config/Sessions)' },
@@ -274,7 +280,6 @@ export class ImportDialog {
       { v: 'ssh', label: 'OpenSSH client config (~/.ssh/config)' },
     ] },
     { title: 'Inventories', items: [
-      { v: 'csv', label: 'CSV / spreadsheet export (.csv)' },
       { v: 'ansible', label: 'Ansible inventory (INI or YAML)' },
       { v: 'netbox', label: 'NetBox (devices with a primary IP)' },
       { v: 'aws', label: 'AWS EC2 instances (uses the AWS CLI)' },
