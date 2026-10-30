@@ -145,6 +145,7 @@ export class Backend {
   discoverDownloadOui() { return this.call<number>('DiscoverDownloadOUI'); }
   sftpLoginShell(id: string) { return this.call<string>('SFTPLoginShell', id); }
   sftpOpen(tabId: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; target: string }>('SFTPOpen', tabId, mode); }
+  collectRemoteDesktopLogs(path: string, sudo: string) { return this.call<string>('CollectRemoteDesktopLogs', path, sudo); }
   remoteDesktopInfo(tabId: string) { return this.call<{ knownPassword: boolean; user: string }>('RemoteDesktopInfo', tabId); }
   startRemoteDesktop(run: RemoteDesktopRun) { return this.call<string>('StartRemoteDesktop', run); }
   remoteDesktopSessionPassword(id: string, path: string, kind: 'RDP' | 'VNC') { return this.call<void>('RemoteDesktopSessionPassword', id, path, kind); }

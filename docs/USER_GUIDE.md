@@ -298,6 +298,17 @@ A user who is logged in at the machine's own screen is flagged before you start:
 
 ![Desktop user logged in locally](screenshots/remote-desktop-local.png)
 
+**When a desktop does not connect: Collect Logs.** Right-click an **RDP** or **VNC** session (*Collect Logs (why it does not connect)…*) or its **SSH** session (*Collect Remote Desktop Logs…*). Termwright then
+
+- tries the connection **from this computer**, through the jump host just as when the session is opened, and shows the first bytes of the handshake: for VNC what the server says (`RFB 003.008`) and which security types it offers (and whether Termwright's viewer can use them); for RDP whether the service confirms the connection and which security it chose (TLS, NLA…). A refused port forward (`AllowTcpForwarding no` on the SSH server), a closed port or a firewall are named in the report;
+- reads **on the machine**, over the SSH session, the state and logs of that service only (an SSH session collects both): the service status and journal, `xrdp.log`, the VNC server log (TigerVNC 1.13+ keeps them in `~/.local/state/tigervnc`), the start-up files and processes of the desktop user, the listening ports, the `sshd` forwarding settings and the firewall.
+
+![Collect logs](screenshots/remote-desktop-logs-start.png)
+
+The logs of the services can only be read with `sudo`: type the sudo password in the dialog when sudo asks for one (it is sent to the command and never shown or stored); without it the report lists the commands to run by hand. **Nothing is changed on the machine and no password is in the report** (the VNC password file is only listed with its permissions). The report can be **copied** or **saved** as a text file to send to someone.
+
+![The report](screenshots/remote-desktop-logs.png)
+
 **One desktop at a time.** RDP and VNC to the same machine **as the same user** are two views of one desktop and one set of settings, so Termwright does not let both stay open (sessions made by *Set Up Remote Desktop* use two different users, so they never meet this):
 
 - Opening RDP while a VNC tab to the same machine is open (or the other way round) asks *"VNC is already open … Shall I close it and open RDP?"*. **Yes** closes that tab and opens the new one; **Cancel** opens nothing.

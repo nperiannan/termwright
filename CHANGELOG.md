@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Collect Remote Desktop Logs**: for an RDP or VNC session that does not connect, right-click it → *Collect Logs (why it does not connect)…* (or the machine's SSH session → *Collect Remote Desktop Logs…*). The report has a connection test from your computer through the jump host (the first bytes of the VNC or RDP handshake, the security types the server offers, and whether Termwright's viewer can use them; a refused port forward, a closed port and a firewall are named) and, read over SSH, the state and logs of that service on the machine: status and journal, `xrdp.log`, the TigerVNC log (also in `~/.local/state/tigervnc`, where TigerVNC 1.13+ on Ubuntu 24.04 writes it), start-up files, processes, listening ports, `sshd` forwarding and firewall. Read-only, no passwords in the report; the sudo password, when sudo asks for one, is sent on standard input and never shown. Copy or Save the report.
+
 * **Interface language** ([#2](https://github.com/nperiannan/termwright/issues/2)): Settings → General → **Language**. The first language is **Русский** (partial): the menus, Session Manager, Quick Connect, Settings, Session Options (page names, Connection and Authentication) and Import Sessions are translated; whatever is not translated yet stays English. Terminal output, session, folder and file names and the program's own error messages are not translated. A language is one plain list of texts (`frontend/src/app/i18n/ru.ts`), with plural forms for counts, so more screens and more languages can be added without touching the screens themselves.
 
 ## 0.23.0 (2026-10-30)

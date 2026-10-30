@@ -14,6 +14,7 @@ import { SessionPanel } from './components/session-panel';
 import { menuBar, shortcutOf } from './core/menu';
 import { FilesPanel } from './components/files-panel';
 import { WebOpenDialog } from './dialogs/web-open';
+import { RemoteDiagDialog } from './dialogs/remote-diag-dialog';
 import { envInfo, envOf } from './core/env';
 import { Ui } from './core/ui.service';
 import { uiFontSize, uiFontStack } from './core/ui-fonts';
@@ -56,7 +57,7 @@ import { FactTeach } from './dialogs/fact-teach';
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
+  imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
     PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',

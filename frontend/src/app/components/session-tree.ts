@@ -717,8 +717,10 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(n.hostname && n.protocol !== 'RDP' && n.protocol !== 'VNC' ? [
             ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', action: () => void this.openWeb(n.path, 'session') }] : []),
             ...(n.protocol === 'SSH2' ? [{ label: 'Set Up Remote Desktop...', action: () => void this.remoteDesktop.openFor(n.path) }] : []),
+            ...(n.protocol === 'SSH2' ? [{ label: 'Collect Remote Desktop Logs...', action: () => this.ui.openRemoteDiag(n.path, n.name, 'SSH2') }] : []),
             { label: 'Open Web Interface...', action: () => void this.openWeb(n.path, 'device') },
           ] : []),
+          ...(n.protocol === 'RDP' || n.protocol === 'VNC' ? [{ label: 'Collect Logs (why it does not connect)...', action: () => this.ui.openRemoteDiag(n.path, n.name, n.protocol!) }] : []),
           ...(n.mac ? [{ label: 'Wake Up (Wake-on-LAN)', action: () => void this.wake(n.path, 'none') }] : []),
           ...(n.mac && n.protocol !== 'WOL' ? [{ label: 'Wake Up and Connect', action: () => void this.wake(n.path, 'connect') }] : []),
           ...(n.protocol === 'WOL' ? this.wolPartners(n).map(p => ({ label: `Wake Up and Connect to ${p.name}`, action: () => void this.wakeThen(n.path, p.path) })) : []),
