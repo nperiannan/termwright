@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '
 import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
 import { askRef, isRef, refOf } from '../core/secret-ref';
+import { followJump } from '../core/jump-refs';
 import { Backend, errText } from '../core/backend';
 import { BAUD_RATES, CONSOLE_METHODS, EMULATIONS, FACT_EVERY, FactRule, LogonAction, PROTOCOLS, Session, SessionNode, SmartCardKey, defaultPort } from '../core/models';
 import { SCHEME_NAMES } from '../core/themes';
@@ -37,6 +38,8 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
       tabs.patch(t.id, { session: saved, title: saved.name });
     }
   }
+  // renamed or moved: the sessions that use it as jump host are asked whether to follow
+  if (oldPath && oldPath !== saved.path) await followJump(ui, backend, [{ from: oldPath, to: saved.path }]);
   return saved;
 }
 

@@ -284,6 +284,8 @@ export interface MovedDevice { path: string; old: string; new: string; mac: stri
 export interface ExportReport { count: number; skipped: string[]; notes: string[]; }
 
 /** A serial port found on this computer. */
+/** Something that uses a session as its jump host: a session, or a folder whose default it is. */
+export interface JumpUse { path: string; name: string; protocol: string; folder: boolean; jump: string; }
 /** A network this computer has an address on (Discover Devices). */
 export interface LocalNet { interface: string; address: string; network: string; scan: string; hosts: number; vpn: boolean; note?: string; }
 export interface SerialPortInfo { name: string; label: string; usb: boolean; serial?: string; }

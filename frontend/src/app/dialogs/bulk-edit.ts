@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { followJump } from '../core/jump-refs';
 import { Backend, errText } from '../core/backend';
 import { ENVIRONMENTS } from '../core/env';
 import { PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
@@ -194,11 +195,13 @@ export class BulkEdit {
     let done = 0;
     const folder = this.e.folder.trim().replace(/^\/+|\/+$/g, '');
     if (this.on.folder && folder && !this.folders().includes(folder)) await this.backend.createFolder(folder).catch(() => {});
+    const pairs: { from: string; to: string }[] = [];
     for (const p of this.paths()) {
       try {
         const s = await this.backend.getSession(p);
         this.change(s);
         const saved = await this.backend.saveSession(s, p);
+        if (saved.path !== p) pairs.push({ from: p, to: saved.path });
         if (this.on.password) await this.backend.setSessionPassword(saved.path, this.e.noPassword ? '' : this.e.password, this.e.noPassword);
         done++;
       } catch (e) { failed.push(`${p}: ${errText(e)}`); }
@@ -206,6 +209,7 @@ export class BulkEdit {
     this.busy.set(false);
     this.ui.selectedPaths.set(new Set());
     await this.ui.refreshTree();
+    await followJump(this.ui, this.backend, pairs); // sessions that use a moved session as jump host
     if (failed.length) { this.err.set('Not changed:\n' + failed.join('\n')); return; }
     this.ui.toast(`Changed ${done} session${done === 1 ? '' : 's'}`, 'success');
     this.ui.close();

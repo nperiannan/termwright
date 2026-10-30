@@ -2,6 +2,7 @@ import { RemoteDesktopSetup } from '../core/remote-desktop-setup.service';
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { followJump } from '../core/jump-refs';
 import { Backend } from '../core/backend';
 import { SessionNode } from '../core/models';
 import { Tabs } from '../core/tabs.service';
@@ -806,8 +807,11 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     if (!name || name === n.name) return;
     const parent = n.path.includes('/') ? n.path.slice(0, n.path.lastIndexOf('/')) : '';
     try {
-      await this.backend.renameFolder(n.path, parent ? parent + '/' + name : name);
+      const np = parent ? parent + '/' + name : name;
+      const inside = this.pathsIn(n);
+      await this.backend.renameFolder(n.path, np);
       await this.ui.refreshTree();
+      await followJump(this.ui, this.backend, inside.map(p => ({ from: p, to: np + p.slice(n.path.length) })));
     } catch (e) { this.ui.error(e); }
   }
 
@@ -835,8 +839,9 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     try {
       const s = await this.backend.getSession(n.path);
       s.name = name;
-      await this.backend.saveSession(s, n.path);
+      const saved = await this.backend.saveSession(s, n.path);
       await this.ui.refreshTree();
+      await followJump(this.ui, this.backend, [{ from: n.path, to: saved.path }]);
     } catch (e) { this.ui.error(e); }
   }
 

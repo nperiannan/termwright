@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Backend } from './backend';
 import { Session, SessionNode } from './models';
+import { askDeleteJump, clearJumpDefaults, followJump } from './jump-refs';
 import { Ui } from './ui.service';
 
 /** One change in the Session Manager that can be undone. */
@@ -43,6 +44,16 @@ export class SessionOps {
     await this.ui.refreshTree();
   }
 
+  /** Paths of the sessions in a folder (all levels), or the session itself. */
+  sessionsUnder(path: string, folder: boolean): string[] {
+    if (!folder) return [path];
+    const out: string[] = [];
+    const walk = (n: SessionNode) => (n.children ?? []).forEach(c => (c.isFolder ? walk(c) : out.push(c.path)));
+    const n = this.ui.findNode(path);
+    if (n) walk(n);
+    return out;
+  }
+
   // ---- move ----
 
   /** Moves sessions and folders into a folder ("" = top level); asks first unless turned off. */
@@ -57,16 +68,20 @@ export class SessionOps {
       if (!(await this.ui.confirm('Move ' + (items.length === 1 ? (items[0].folder ? 'Folder' : 'Session') : items.length + ' Items'), msg, 'Move'))) return;
     }
     const done: { from: string; to: string; folder: boolean }[] = [];
+    const pairs: { from: string; to: string }[] = []; // every session that changed path, for the jump hosts that use them
     try {
       for (const i of items) {
         const np = join(to, nameOf(i.path));
+        if (i.folder) for (const sp of this.sessionsUnder(i.path, true)) pairs.push({ from: sp, to: np + sp.slice(i.path.length) });
         if (i.folder) await this.backend.renameFolder(i.path, np);
-        else { const s = await this.backend.getSession(i.path); s.folder = to; const r = await this.backend.saveSession(s, i.path); done.push({ from: i.path, to: r.path, folder: false }); continue; }
+        else { const s = await this.backend.getSession(i.path); s.folder = to; const r = await this.backend.saveSession(s, i.path); done.push({ from: i.path, to: r.path, folder: false }); pairs.push({ from: i.path, to: r.path }); continue; }
         done.push({ from: i.path, to: np, folder: true });
       }
     } catch (e) { this.ui.error(e); }
     await this.ui.refreshTree();
     if (!done.length) return;
+    // sessions that use a moved session as jump host: asked whatever the move confirmation setting is
+    const back = await followJump(this.ui, this.backend, pairs);
     this.remember({
       title: `Moved ${done.length === 1 ? '"' + nameOf(done[0].from) + '"' : done.length + ' items'} to ${where(to)}`,
       undo: done.map(d => `${d.folder ? 'Folder' : 'Session'} "${nameOf(d.from)}" will be moved from ${where(parentOf(d.to))} back to ${where(parentOf(d.from))}.`),
@@ -75,6 +90,7 @@ export class SessionOps {
           if (d.folder) await this.backend.renameFolder(d.to, d.from);
           else { const s = await this.backend.getSession(d.to); s.folder = parentOf(d.from); await this.backend.saveSession(s, d.to); }
         }
+        if (back) await this.backend.repointJumps(back);
       },
     });
   }
@@ -153,6 +169,10 @@ export class SessionOps {
 
   /** Deletes sessions and folders; Undo re-creates them (saved passwords are not kept). */
   async remove(items: { path: string; folder: boolean }[]) {
+    // sessions that use these as jump host: asked whatever the settings say about confirming a delete
+    const ask = await askDeleteJump(this.ui, this.backend, items.flatMap(i => this.sessionsUnder(i.path, i.folder)));
+    if (!ask) return;
+    items = [...items, ...ask.extra.map(path => ({ path, folder: false }))];
     const keep: { sessions: Session[]; folders: string[] } = { sessions: [], folders: [] };
     const walk = (n: SessionNode) => {
       keep.folders.push(n.path);
@@ -166,6 +186,7 @@ export class SessionOps {
       keep.sessions = await Promise.all(keep.sessions.map(s => this.backend.getSession(s.path)));
       for (const i of items) { if (i.folder) await this.backend.deleteFolder(i.path); else await this.backend.deleteSession(i.path); }
     } catch (e) { this.ui.error(e); }
+    await clearJumpDefaults(this.ui, this.backend, ask.clear);
     await this.ui.refreshTree();
     this.remember({
       title: `Deleted ${this.count(items)}`,

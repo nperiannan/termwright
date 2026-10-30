@@ -8,6 +8,8 @@ export interface MenuItem { label?: string; action?: () => void; separator?: boo
 export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings' | 'moved' | 'welcome' | 'factTeach' | 'webOpen' | 'remoteDesktop' | 'remoteDiag';
 
 interface ConfirmReq { title: string; message: string; ok: string; danger: boolean; resolve: (v: boolean) => void; }
+/** A question with a list and several answers (value = what is returned; null = cancelled). */
+export interface ChoiceReq { title: string; message: string; items: string[]; options: { label: string; value: string; primary?: boolean; danger?: boolean }[]; danger?: boolean; resolve: (v: string | null) => void; }
 interface InputReq { title: string; label: string; value: string; secret?: boolean; resolve: (v: string | null) => void; }
 
 /** Shared UI state: settings, session tree, dialogs, toasts and menus. */
@@ -57,6 +59,7 @@ export class Ui {
   readonly optionsPage = signal('');
   readonly toasts = signal<Toast[]>([]);
   readonly confirmReq = signal<ConfirmReq | null>(null);
+  readonly choiceReq = signal<ChoiceReq | null>(null);
   readonly inputReq = signal<InputReq | null>(null);
   readonly menu = signal<{ x: number; y: number; items: MenuItem[] } | null>(null);
   readonly dialog = signal<DialogName | null>(null);
@@ -134,6 +137,11 @@ export class Ui {
 
   confirm(title: string, message: string, ok = 'OK', danger = false): Promise<boolean> {
     return new Promise(resolve => this.confirmReq.set({ title, message, ok, danger, resolve }));
+  }
+
+  /** Asks with a list of what is affected and one button per answer; null when cancelled. Always shown. */
+  choose(title: string, message: string, items: string[], options: ChoiceReq['options'], danger = false): Promise<string | null> {
+    return new Promise(resolve => this.choiceReq.set({ title, message, items, options, danger, resolve }));
   }
 
   input(title: string, label: string, value = '', secret = false): Promise<string | null> {

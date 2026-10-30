@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary } from './models';
+  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -175,6 +175,9 @@ export class Backend {
   /** Browsers a web page can be opened in through a session (Chrome, Edge, Chromium, Brave, Firefox). */
   /** Wake-on-LAN to the session's MAC address; with wait, watches its port for up to 3 minutes. */
   /** Wake-on-LAN session: sends the packet, then reports "wol:status" while it pings or searches the network. */
+  jumpUsers(paths: string[], deep: boolean, except: string[]) { return this.call<JumpUse[]>('JumpUsers', paths, deep, except); }
+  repointJumps(moves: Record<string, string>) { return this.call<number>('RepointJumps', moves); }
+  clearJumpDefaults(paths: string[]) { return this.call<number>('ClearJumpDefaults', paths); }
   wakeNetworkFor(ip: string) { return this.call<string>('WakeNetworkFor', ip); }
   wakeDevice(s: Session) { return this.call<{ sent: string[]; via: string }>('WakeDevice', s); }
   wakeCancel(path: string) { return this.call<void>('WakeCancel', path); }
