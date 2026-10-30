@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
-import { LANGUAGES } from '../core/i18n';
+import { LANGUAGES, previewLanguages } from '../core/i18n';
 import { Backend } from '../core/backend';
 import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, comboOf, FACT_NAMES } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
@@ -557,7 +557,7 @@ export class OptionsDialog implements OnInit {
   readonly uiSizes = UI_SIZES;
   readonly factNames = FACT_NAMES;
   readonly modern = () => this.ui.settings()?.layout !== 'classic';
-  readonly languages = LANGUAGES;
+  readonly languages = LANGUAGES.filter(l => !l.preview || previewLanguages());
   readonly themeTiles = [{ v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }, { v: 'system', label: 'System' }];
   reOk(re: string) { if (!re) return true; try { new RegExp(re); return true; } catch { return false; } }
   readonly isMac = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac OS');

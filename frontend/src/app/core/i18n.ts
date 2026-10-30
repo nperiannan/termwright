@@ -16,12 +16,19 @@
  *    many), chosen with the language's own plural rules.
  */
 
+import { signal } from '@angular/core';
+
 export type Dict = Record<string, string>;
 
-export const LANGUAGES: { code: string; name: string }[] = [
+/** preview = not finished: offered and applied only in nightly and development builds, not in a release. */
+export const LANGUAGES: { code: string; name: string; preview?: boolean }[] = [
   { code: '', name: 'English' },
-  { code: 'ru', name: 'Русский (частично)' },
+  { code: 'ru', name: 'Русский (частично)', preview: true },
 ];
+
+/** True in nightly ("0.24.0~git1234567") and development builds, where unfinished languages are offered. */
+export const previewLanguages = signal(false);
+export const setPreviewLanguages = (version: string) => previewLanguages.set(/~|-dev|nightly/i.test(version));
 
 const loaders: Record<string, () => Promise<{ default: Dict }>> = {
   ru: () => import('../i18n/ru'),
@@ -46,7 +53,7 @@ class I18n {
 
   /** Switches the interface language ('' = English). */
   async set(code: string) {
-    if (!(code in loaders)) code = '';
+    if (!(code in loaders) || (LANGUAGES.find(l => l.code === code)?.preview && !previewLanguages())) code = '';
     if (code === this.lang && (code === '' || this.obs)) return;
     this.stop();
     this.lang = code;

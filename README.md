@@ -51,6 +51,14 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.24.0
+
+- **Diagnose Remote Desktop.** Right-click an RDP or VNC session that does not connect: one line says what is wrong (red) or that nothing is, with the checks behind it, and *Restart VNC / RDP service* fixes a blocked service. Set Up Remote Desktop now chooses *through the SSH session* or *directly from the network* for RDP and VNC separately.
+- **Wake-on-LAN that reaches the network.** The magic packet goes out of every network interface (limited and directed broadcast) and, by default, from this computer when it is on the device's network - the jump host only when it is not. A Wake-on-LAN session fills in its network from the IP address, and Discover Devices can add devices that show no login port as Wake-on-LAN sessions.
+- **Discover Devices** lists this computer's networks (wired, Wi-Fi, VPN) to start a scan from, and copies the MAC address, vendor and system text of a result.
+- **Jump hosts stay linked.** Moving, renaming or deleting a session that other sessions use as their jump host asks whether to update (or delete) them; imports keep jump hosts working.
+- **A documented import format.** *Import Sessions → Termwright template (CSV)* with a template to save and a format guide, for sessions from any other tool; the Session Manager refreshes by itself.
+
 ## What's new in 0.23.0
 
 - **Set Up Remote Desktop.** Right-click an SSH session on an Ubuntu 22.04, Ubuntu 24.04 or Debian 12 machine to install the XFCE desktop with RDP (xrdp) and/or VNC (TigerVNC) in the background over the SSH connection. Each service gets a user of its own, a failed service is removed again, and the new RDP and VNC sessions are created next to the SSH one with their user names and passwords stored.

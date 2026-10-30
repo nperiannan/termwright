@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.24.0 (2026-10-30)
+
+Remote desktop diagnosis, Wake-on-LAN that reaches the network, a documented import format and better scanning.
+
 * **The Termwright import template is easy to find.** *Import Sessions* opens with a box *Your sessions are in another tool?* - *Save the Termwright import template…*, the *Format guide*, and the source **Termwright template (CSV)**, which now sits in the Termwright group instead of under Inventories.
 
 * **Moving, renaming or deleting a jump host asks about the sessions that use it.** A session is the jump host of other sessions (SSH, RDP and VNC) by its path, so moving it to another folder, renaming it or deleting it left them pointing at nothing. Now, after a **move or rename** (drag, cut/paste, *Rename*, *Edit Sessions*, or the session's own options), Termwright lists the sessions - and the folders whose default jump host it is - that use it and asks *Update them* or *Leave them*; for a **delete** it lists them and asks *Delete them too* or *Delete only the jump host* (a folder default is cleared). The questions are always asked, also when *Confirm before moving* is off. Undo of a move updates them back.
@@ -35,7 +39,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Session Manager shows what 127.0.0.1 means**: a session that reaches `127.0.0.1` through a jump host is listed as `127.0.0.1 (on <jump host>)`, in the list, the hover card and the address bar.
 
 
-* **Interface language** ([#2](https://github.com/nperiannan/termwright/issues/2)): Settings → General → **Language**. The first language is **Русский** (partial): the menus, Session Manager, Quick Connect, Settings, Session Options (page names, Connection and Authentication) and Import Sessions are translated; whatever is not translated yet stays English. Terminal output, session, folder and file names and the program's own error messages are not translated. A language is one plain list of texts (`frontend/src/app/i18n/ru.ts`), with plural forms for counts, so more screens and more languages can be added without touching the screens themselves.
+* **Interface language** ([#2](https://github.com/nperiannan/termwright/issues/2)): Settings → General → **Language**. The first language is **Русский** (a preview, offered only in nightly and development builds until it is reviewed; partial): the menus, Session Manager, Quick Connect, Settings, Session Options (page names, Connection and Authentication) and Import Sessions are translated; whatever is not translated yet stays English. Terminal output, session, folder and file names and the program's own error messages are not translated. A language is one plain list of texts (`frontend/src/app/i18n/ru.ts`), with plural forms for counts, so more screens and more languages can be added without touching the screens themselves.
 
 ## 0.23.0 (2026-10-30)
 
