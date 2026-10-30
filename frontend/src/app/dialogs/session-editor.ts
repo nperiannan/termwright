@@ -237,7 +237,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   @if (s.jumpSession) {
                     <label>Send from</label>
                     <select name="wfrom" [ngModel]="s.wolFrom || ''" (ngModelChange)="s.wolFrom = $event" style="width: auto">
-                      <option value="">the jump host ({{ s.jumpSession }})</option><option value="local">this computer</option>
+                      <option value="">automatic (this computer when it is on the device's network)</option><option value="local">this computer</option><option value="jump">the jump host ({{ s.jumpSession }})</option>
                     </select>
                   }
                   <label></label>
@@ -267,8 +267,9 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                       <input name="wolp" type="number" min="1" max="65535" [ngModel]="s.wolPort || null" (ngModelChange)="s.wolPort = $event || 0" placeholder="port 9" class="short" title="UDP port (9 by default, sometimes 7)" />
                       @if (s.jumpSession || (s.useRemoteCommand && isHop(s.remoteCommand))) {
                         <select name="wolf" [ngModel]="s.wolFrom || ''" (ngModelChange)="s.wolFrom = $event" style="width: auto">
-                          <option value="">from {{ s.jumpSession ? 'the jump host' : 'the jump station' }}</option>
+                          <option value="">automatic</option>
                           <option value="local">from this computer</option>
+                          <option value="jump">from {{ s.jumpSession ? 'the jump host' : 'the jump station' }}</option>
                         </select>
                       }
                       <button type="button" (click)="wakeNow()" [disabled]="!s.mac">Wake Now</button>

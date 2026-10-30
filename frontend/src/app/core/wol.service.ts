@@ -49,7 +49,7 @@ export class Wol {
       const r = await this.backend.wakeDevice(s);
       if (then) this.onUp.set(s.path || 'mac:' + s.mac, then);
       this.set(s.path || 'mac:' + s.mac, { state: 'waking', message: 'Magic packet sent' });
-      this.ui.toast(`Magic packet sent to ${s.name || s.mac}${r.via ? ' from ' + r.via : ''} (${r.sent.join(', ')})` +
+      this.ui.toast(`Magic packet sent to ${s.name || s.mac}${' from ' + (r.via || 'this computer')} (${r.sent.join(', ')})` +
         (s.hostname ? ` - waiting for ${s.hostname} to answer ping…` : s.wolNetwork ? ` - searching ${s.wolNetwork} for it…` : '.'), 'info', 8000);
     } catch (e) { this.ui.toast('Wake-on-LAN: ' + errText(e), 'error', 10000); }
   }

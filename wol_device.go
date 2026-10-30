@@ -150,7 +150,7 @@ func (a *App) watchWake(ctx context.Context, s session.Session, key string) {
 		emit(WakeStatus{State: "sent", Message: "Magic packet sent to " + s.MAC + ". Add the device's IP address or network to see when it is up."})
 		return
 	}
-	if s.JumpSession != "" && s.WOLFrom != "local" {
+	if s.JumpSession != "" && !wakeFromHere(s) {
 		emit(WakeStatus{State: "sent", Message: "Magic packet sent from the jump host. A network behind a jump host cannot be searched - add the device's IP address to see when it is up."})
 		return
 	}

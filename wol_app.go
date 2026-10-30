@@ -117,6 +117,50 @@ func lastAddr(p netip.Prefix) string {
 	return netip.AddrFrom4([4]byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)}).String()
 }
 
+// wakeAddr is an IPv4 address of the device's network: the broadcast address
+// or network saved with the session, else the device's own address.
+func wakeAddr(s session.Session) (netip.Addr, bool) {
+	if b := strings.TrimSpace(s.WOLBroadcast); b != "" {
+		ip, err := netip.ParseAddr(b)
+		return ip, err == nil && ip.Is4()
+	}
+	if n := strings.TrimSpace(s.WOLNetwork); n != "" {
+		if p, err := discover.NetworkOf(n); err == nil && p.Addr().Is4() {
+			return p.Addr(), true
+		}
+	}
+	host, _ := wakeTarget(s)
+	if s.Protocol == session.ProtoWOL {
+		host = strings.TrimSpace(s.Hostname)
+	}
+	ip, err := netip.ParseAddr(host)
+	return ip, err == nil && ip.Is4()
+}
+
+// wakeFromHere says whether the packet is sent from this computer. "local" and
+// "jump" are the session's choice; otherwise (automatic) it is this computer
+// when it has an interface on the device's network - a broadcast from there
+// reaches the device, as a phone on the same Wi-Fi does - and the jump host
+// / jump station when it has not (a broadcast does not cross routers).
+func wakeFromHere(s session.Session) bool {
+	switch s.WOLFrom {
+	case "local":
+		return true
+	case "jump":
+		return false
+	}
+	if s.JumpSession == "" {
+		if _, hop := session.HopOf(s); !hop {
+			return true
+		}
+	}
+	if ip, ok := wakeAddr(s); ok {
+		_, on := discover.LocalPrefix(ip)
+		return on
+	}
+	return false
+}
+
 // sendWake sends the packet from this computer or the route's SSH server and
 // returns that server's connection (nil = this computer) for the checks.
 func (a *App) sendWake(ctx context.Context, tabID string, s session.Session, pkt []byte) (WakeResult, *ssh.Client, func(), error) {
@@ -124,7 +168,7 @@ func (a *App) sendWake(ctx context.Context, tabID string, s session.Session, pkt
 	var client *ssh.Client
 	release := func() {}
 	bc := wolBroadcast(s)
-	if s.WOLFrom != "local" {
+	if !wakeFromHere(s) {
 		c, rel, via, err := a.terms.RouteClient(ctx, tabID, s, tabID)
 		if err != nil {
 			return res, nil, release, err

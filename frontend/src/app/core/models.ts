@@ -9,7 +9,7 @@ export interface Session {
   emulation: string; termType: string; description: string[];
   rows: number; cols: number; scrollback: number; keepalive: boolean; keepaliveSec: number;
   comPort: string; baudRate: number; dataBits: number; stopBits: number; parity: number;
-  logFile: string; logOnConnect: boolean; logAppend: boolean; logEachLine: string; logRaw: boolean; recordSession?: boolean; smartCard?: string; mac?: string; wolBroadcast?: string; wolPort?: number; wolFrom?: '' | 'local'; wolNetwork?: string; wolScans?: number; wolScanSecs?: number; wolPingSecs?: number;
+  logFile: string; logOnConnect: boolean; logAppend: boolean; logEachLine: string; logRaw: boolean; recordSession?: boolean; smartCard?: string; mac?: string; wolBroadcast?: string; wolPort?: number; wolFrom?: '' | 'local' | 'jump'; wolNetwork?: string; wolScans?: number; wolScanSecs?: number; wolPingSecs?: number;
   savePassword: boolean; localCommand: string; localDir: string; colorScheme: string;
   logonActions: LogonAction[];
   triggers: Trigger[]; portForwards: PortForward[];
