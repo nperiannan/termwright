@@ -1,6 +1,7 @@
 import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend } from './core/backend';
+import { i18n } from './core/i18n';
 import { Tabs, TabView } from './core/tabs.service';
 import { connectString, findSessionByName, looksLikeConnect } from './core/connect-string';
 import { SessionNode } from './core/models';
@@ -283,6 +284,7 @@ export class App implements OnInit {
     const media = window.matchMedia('(prefers-color-scheme: light)');
     this.systemLight.set(media.matches);
     media.addEventListener('change', e => this.systemLight.set(e.matches));
+    effect(() => { void i18n.set(this.settings()?.language ?? ''); });
     effect(() => {
       const t = this.settings()?.theme ?? 'system';
       const light = t === 'light' || (t === 'system' && this.systemLight());

@@ -2,6 +2,10 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+* **Interface language** ([#2](https://github.com/nperiannan/termwright/issues/2)): Settings → General → **Language**. The first language is **Русский** (partial): the menus, Session Manager, Quick Connect, Settings, Session Options (page names, Connection and Authentication) and Import Sessions are translated; whatever is not translated yet stays English. Terminal output, session, folder and file names and the program's own error messages are not translated. A language is one plain list of texts (`frontend/src/app/i18n/ru.ts`), with plural forms for counts, so more screens and more languages can be added without touching the screens themselves.
+
 ## 0.23.0 (2026-10-30)
 
 Remote desktop setup, old SSH devices and mRemoteNG import.

@@ -77,6 +77,7 @@ type Settings struct {
 	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`        // session path → fact name → value ("_at" = when read)
 	FactRulesAdded       bool                         `json:"factRulesAdded"`     // set once when the built-in device types got their fact rules (0.21.0)
 	KeywordsOn           bool                         `json:"keywordsOn"`
+	Language             string                       `json:"language"`            // interface language: "" = English, "ru" = Russian (partial)
 	IconStyle            string                       `json:"iconStyle"`           // device and session icons: "" = coloured tiles, "glyph" = the symbol only
 	CompactRows          bool                         `json:"compactRows"`         // modern layout: one-line Session Manager rows
 	WelcomeSeen          string                       `json:"welcomeSeen"`         // version whose welcome flow was finished or skipped ("0.21")

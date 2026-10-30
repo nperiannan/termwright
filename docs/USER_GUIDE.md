@@ -1056,6 +1056,14 @@ Notes:
 
 In the modern layout Global Options is called **Settings** (⚙ in the title bar). The General page starts with **Appearance** - theme previews, Layout (Modern / Classic) and Icons (Tiles / Glyphs) side by side, interface font and text size - then **Behaviour** (each switch with a short explanation: confirm before closing, confirm multi-line paste, remember typed commands, **save Quick Connect sessions**, reopen the tabs that were open, show the Session Manager, Button Bar and Command Window) and **Folders and files**. Changes apply when you press *Save*.
 
+### Interface language
+
+**Settings → General → Language** switches the interface language; the change shows as soon as you press *Save*. English is the default. **Русский (Russian)** is available as a *partial* translation: the menus, the Session Manager, Quick Connect, Settings, Session Options (Connection, Authentication and the page names) and Import Sessions are translated, and everything else stays in English until it is translated too. Terminal output, session and folder names, file names, and error messages from the program's engine are never translated.
+
+![Termwright in Russian](screenshots/language-ru.png)
+
+A translation is a plain text list in the source (`frontend/src/app/i18n/ru.ts`, English text on the left, translation on the right), so improvements and further languages are welcome as pull requests: a text without an entry simply stays English. Numbers in a text use the language's own plural forms (for Russian: 1 минуту, 2 минуты, 5 минут).
+
 ![Settings - General](screenshots/options.png)
 
 **Search options**: type in *Search options* at the top of the page list (e.g. `paste`, `font`, `sudo`); click a result to open its page with the option highlighted.
