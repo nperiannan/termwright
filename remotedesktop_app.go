@@ -29,7 +29,8 @@ type RemoteDesktopRun struct {
 	RDPUser     string `json:"rdpUser"`
 	VNCUser     string `json:"vncUser"`
 	CreateUsers bool   `json:"createUsers"` // create users that do not exist
-	Network     bool   `json:"network"`     // listen on all interfaces (default: the machine's own address only)
+	RDPNetwork  bool   `json:"rdpNetwork"`  // xrdp listens on all interfaces (default: the machine's own address only)
+	VNCNetwork  bool   `json:"vncNetwork"`  // TigerVNC listens on all interfaces (default: the machine's own address only)
 	CIDR        string `json:"cidr"`        // network to open in the firewall
 	Check       bool   `json:"check"`       // only report
 	Force       bool   `json:"force"`       // reconfigure services that already run
@@ -84,13 +85,13 @@ func remoteDesktopArgs(r RemoteDesktopRun) ([]string, error) {
 	if r.CreateUsers {
 		args = append(args, "--create-users")
 	}
-	if r.Network {
-		if r.RDP {
-			args = append(args, "--rdp-network")
-		}
-		if r.VNC {
-			args = append(args, "--vnc-network")
-		}
+	if r.RDP && r.RDPNetwork {
+		args = append(args, "--rdp-network")
+	}
+	if r.VNC && r.VNCNetwork {
+		args = append(args, "--vnc-network")
+	}
+	if (r.RDP && r.RDPNetwork) || (r.VNC && r.VNCNetwork) {
 		if r.CIDR != "" {
 			if !cidrRe.MatchString(r.CIDR) {
 				return nil, fmt.Errorf("%q is not a network like 10.1.2.0/24", r.CIDR)

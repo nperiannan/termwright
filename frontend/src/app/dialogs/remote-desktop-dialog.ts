@@ -47,7 +47,7 @@ const SUPPORTED_OS: [string, string][] = [['ubuntu', '22.04'], ['ubuntu', '24.04
           @if (r.phase === 'done' && !r.check) {
             <div class="hint">
               @if (r.made.rdp || r.made.vnc) { The sessions {{ madeNames(r.made) }} are in the Session Manager next to this one. }
-              @else { Connect to 127.0.0.1 through the SSH session as the jump host: @if (r.ready?.rdp !== false) { port {{ rdpPort }} (RDP) } @if (r.ready?.rdp !== false && r.ready?.vnc !== false) { and } @if (r.ready?.vnc !== false) { port {{ vncPort }} (VNC) }. }
+              @else { {{ connectHint(r.ready) }} }
             </div>
           }
           <div class="logbar">
@@ -122,15 +122,29 @@ const SUPPORTED_OS: [string, string][] = [['ubuntu', '22.04'], ['ubuntu', '24.04
         }
 
         <details class="more">
-          <summary>More options <span class="faint">· {{ access() === 'ssh' ? 'through the SSH session only' : 'from the network' }}{{ createSessions() ? ', creates the sessions' : '' }}{{ force() ? ', reconfigures' : '' }}</span></summary>
-          <div class="seg">
-            <button type="button" [class.on]="access() === 'ssh'" (click)="access.set('ssh')">Through this SSH session only (recommended)</button>
-            <button type="button" [class.on]="access() === 'network'" (click)="access.set('network')">From the network</button>
-          </div>
-          @if (access() === 'ssh') {
-            <div class="hint">Both listen on this computer's own address only; nothing is opened to the network. Termwright reaches them through the SSH connection.</div>
-          } @else {
-            <div class="hint">Both listen on every network interface of the machine. Anyone who can reach it can try to log in, so allow only the network you need.</div>
+          <summary>More options <span class="faint">· {{ accessSummary() }}{{ createSessions() ? ', creates the sessions' : '' }}{{ force() ? ', reconfigures' : '' }}</span></summary>
+          @if (rdp()) {
+            <div class="acc">
+              <label>RDP</label>
+              <div class="seg">
+                <button type="button" [class.on]="!rdpNet()" (click)="rdpNet.set(false)">Through this SSH session (recommended)</button>
+                <button type="button" [class.on]="rdpNet()" (click)="rdpNet.set(true)">Directly from the network</button>
+              </div>
+            </div>
+            <div class="hint">{{ accessHint('RDP') }}</div>
+          }
+          @if (vnc()) {
+            <div class="acc">
+              <label>VNC</label>
+              <div class="seg">
+                <button type="button" [class.on]="!vncNet()" (click)="vncNet.set(false)">Through this SSH session (recommended)</button>
+                <button type="button" [class.on]="vncNet()" (click)="vncNet.set(true)">Directly from the network</button>
+              </div>
+            </div>
+            <div class="hint">{{ accessHint('VNC') }}</div>
+            @if (vncNet()) { <div class="warn soft">VNC is not encrypted and its password has at most 8 characters. Use it directly only on a network you trust; through the SSH session it is encrypted.</div> }
+          }
+          @if (rdpNet() && rdp() || vncNet() && vnc()) {
             <div class="rows">
               <label>Firewall</label>
               <input name="cidr" [ngModel]="cidr()" (ngModelChange)="cidr.set($event)" class="mono" placeholder="open for, e.g. 10.234.179.0/24 (optional)" spellcheck="false" />
@@ -139,7 +153,7 @@ const SUPPORTED_OS: [string, string][] = [['ubuntu', '22.04'], ['ubuntu', '24.04
           }
           <label class="chk top">
             <input type="checkbox" name="mk" [ngModel]="createSessions()" (ngModelChange)="createSessions.set($event)" />
-            <span><b>Create the sessions afterwards</b>, with the user name and password: {{ names() }} next to this session{{ access() === 'ssh' ? ', using it as the jump host' : '' }}. Only when the setup ends without errors.</span>
+            <span><b>Create the sessions afterwards</b>, with the user name and password: {{ names() }} next to this session{{ viaSshAny() ? ', using it as the jump host where the access is through it' : '' }}. Only when the setup ends without errors.</span>
           </label>
           <label class="chk top">
             <input type="checkbox" name="force" [ngModel]="force()" (ngModelChange)="force.set($event)" />
@@ -176,6 +190,7 @@ const SUPPORTED_OS: [string, string][] = [['ubuntu', '22.04'], ['ubuntu', '24.04
     .chk { display: flex; gap: 8px; align-items: center; margin: 4px 0; font-weight: 400; color: var(--fg, inherit); } .chk.off { opacity: .6; } .chk.top { align-items: flex-start; margin-top: 10px; input { margin-top: 3px; } }
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; > div > label { display: block; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); margin-bottom: 4px; } input:not([type=checkbox]) { width: 100%; } }
     .rows > .two { margin-top: 0; } .two input + input { margin-top: 0; }
+    .acc { margin-top: 8px; > label { display: block; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); } .seg { margin-top: 2px; } }
     .more { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; summary { cursor: pointer; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; } summary .faint { font-weight: 400; } .seg { margin-top: 8px; } }
     .hint { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.45; margin-top: 6px; } .hint.tight { margin-top: 0; }
     .warn { user-select: text; color: var(--danger); font-size: calc(12px * var(--ui-scale, 1)); margin-top: 6px; white-space: pre-wrap; } .warn.soft { color: var(--warn, var(--muted)); }
@@ -205,7 +220,9 @@ export class RemoteDesktopDialog implements OnInit {
   readonly vnc = signal(true);
   readonly rdpUser = signal('');
   readonly vncUser = signal('');
-  readonly access = signal<'ssh' | 'network'>('ssh');
+  /** Per service: false = through the SSH session (default), true = directly from the network. */
+  readonly rdpNet = signal(false);
+  readonly vncNet = signal(false);
   readonly cidr = signal('');
   readonly createSessions = signal(true);
   readonly force = signal(false);
@@ -260,7 +277,29 @@ export class RemoteDesktopDialog implements OnInit {
     const bad = [this.rdp() ? this.rdpUser().trim() : '', this.vnc() ? this.vncUser().trim() : ''].filter(u => u && this.localUsers().includes(u));
     return bad.length ? `${bad.join(' and ')} ${bad.length > 1 ? 'are' : 'is'} logged in at this machine's own screen. A remote desktop for the same user often stays black: choose another user.` : '';
   });
-  readonly cidrProblem = () => this.access() === 'network' && this.cidr().trim() !== '' && !/^[0-9a-fA-F:.]+(\/\d{1,3})?$/.test(this.cidr().trim());
+  /** Where to connect when no sessions were made. */
+  readonly connectHint = (ready?: { rdp?: boolean; vnc?: boolean }) => {
+    const one = (name: string, port: number, net: boolean) => net ? `${name}: this machine's own address, port ${port}` : `${name}: 127.0.0.1, port ${port}, with this SSH session as the jump host`;
+    const p: string[] = [];
+    if (ready?.rdp !== false && this.rdp()) p.push(one('RDP', this.rdpPort, this.rdpNet()));
+    if (ready?.vnc !== false && this.vnc()) p.push(one('VNC', this.vncPort, this.vncNet()));
+    return 'Connect to: ' + p.join('; ') + '.';
+  };
+  readonly accessHint = (kind: 'RDP' | 'VNC') => {
+    const direct = kind === 'RDP' ? this.rdpNet() : this.vncNet();
+    const svc = kind === 'RDP' ? 'xrdp' : 'TigerVNC';
+    if (direct) return `${svc} listens on every network interface. The session is saved with the address of this machine and connects straight to it.` + (kind === 'RDP' ? ' The connection is encrypted (TLS), but anyone who can reach the machine can try to log in.' : '');
+    return `${svc} listens on this machine's own address only; nothing is opened to the network. The session is saved as 127.0.0.1 and connects through this SSH session, which is the jump host (127.0.0.1 then means this machine).`;
+  };
+  readonly netAny = () => (this.rdp() && this.rdpNet()) || (this.vnc() && this.vncNet());
+  readonly viaSshAny = () => (this.rdp() && !this.rdpNet()) || (this.vnc() && !this.vncNet());
+  readonly accessSummary = () => {
+    const p: string[] = [];
+    if (this.rdp()) p.push(this.rdpNet() ? 'RDP direct' : 'RDP through SSH');
+    if (this.vnc()) p.push(this.vncNet() ? 'VNC direct' : 'VNC through SSH');
+    return p.join(', ');
+  };
+  readonly cidrProblem = () => this.netAny() && this.cidr().trim() !== '' && !/^[0-9a-fA-F:.]+(\/\d{1,3})?$/.test(this.cidr().trim());
   /** What is still missing before Set Up can start. */
   private readonly missing = computed(() => {
     if (this.samePw()) return '';
@@ -326,7 +365,7 @@ export class RemoteDesktopDialog implements OnInit {
     const run: RemoteDesktopRun = {
       tabId: this.ui.remoteDesktopTab(), rdp: this.rdp(), vnc: this.vnc(),
       rdpUser: this.rdpUser().trim(), vncUser: this.vncUser().trim(), createUsers: this.needAccount(),
-      network: this.access() === 'network', cidr: this.cidr().trim(), check, force: this.force(),
+      rdpNetwork: this.rdp() && this.rdpNet(), vncNetwork: this.vnc() && this.vncNet(), cidr: this.cidr().trim(), check, force: this.force(),
       sudoSame: this.samePw(), sudoNone: !this.samePw() && this.sudoMode() === 'none', sudoPassword: this.sudo(),
       accountSame: this.samePw(), accountPassword: this.acct(), vncSame: this.samePw() || (this.vncSame() && this.needAccount()), vncPassword: this.vncPw(),
     };

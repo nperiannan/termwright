@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestProbeVNC(t *testing.T) {
@@ -33,6 +34,22 @@ func TestProbeVNC(t *testing.T) {
 			}
 		})
 	}
+	t.Run("blocked address", func(t *testing.T) {
+		cl, sv := net.Pipe()
+		go func() {
+			defer sv.Close()
+			// what TigerVNC writes to an address it has blocked: the old version, a 0, the reason
+			msg := "Too many security failures"
+			b := append([]byte("RFB 003.003\n"), 0, 0, 0, 0, 0, 0, 0, byte(len(msg)))
+			go func() { _, _ = sv.Write(append(b, msg...)) }() // a pipe has no buffer, a real connection has
+			_, _ = sv.Read(make([]byte, 12))
+			time.Sleep(200 * time.Millisecond)
+		}()
+		out := strings.Join(probeVNC(cl), "\n")
+		if !strings.Contains(out, "RFB 003.003") || !strings.Contains(out, "Too many security failures") || !strings.Contains(out, "blocked this address") {
+			t.Fatalf("report:\n%s", out)
+		}
+	})
 	t.Run("not vnc", func(t *testing.T) {
 		cl, sv := net.Pipe()
 		go func() { defer sv.Close(); _, _ = sv.Write([]byte("SSH-2.0-Open")) }()

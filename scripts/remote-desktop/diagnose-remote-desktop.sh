@@ -115,7 +115,7 @@ if [ -n "$VNC_PORT" ]; then
   UNIT="tigervnc@${DISP}.service"
   section "VNC (TigerVNC) - port $VNC_PORT (display :$DISP), user ${VNC_USER:-?}"
   echo "this machine to itself: $(local_tcp "$VNC_PORT")"
-  echo "what the server says first: $(local_banner "$VNC_PORT")   (a working VNC server says RFB 003.008)"
+  echo "what the server says first: $(local_banner "$VNC_PORT")   (a working VNC server says RFB 003.008; RFB 003.003 means it has blocked this address after wrong passwords - restart the service or wait)"
   echo "--- packages"; dpkg-query -W -f='${Package} ${Version}\n' tigervnc-standalone-server tigervnc-common 2>&1 | head -n 4
   echo "--- service"; printf '%s: %s, %s\n' "$UNIT" "$(systemctl is-active "$UNIT" 2>&1)" "$(systemctl is-enabled "$UNIT" 2>&1)"
   show "systemctl status $UNIT" systemctl status "$UNIT" --no-pager -n 15

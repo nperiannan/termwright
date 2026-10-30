@@ -33,6 +33,13 @@ export function sessionAddrParts(n: SessionNode): { a: string; t: string } {
   return i < 0 ? { a: full, t: '' } : { a: full.slice(0, i), t: full.slice(i + 3) };
 }
 
+/** The address, and for 127.0.0.1 reached through a jump host the machine it means: "127.0.0.1 (on web-01)". */
+export function hostShown(n: SessionNode): string {
+  const h = n.hostname ?? '';
+  if (n.jump && /^(127\.\d+\.\d+\.\d+|localhost|::1)$/i.test(h)) return `${h} (on ${n.jump.split('/').pop()})`;
+  return h;
+}
+
 export function sessionAddr(n: SessionNode): string {
   let a: string;
   if (n.protocol === 'WOL') return (n.hostname || n.wolNetwork || n.mac || '') + ' · WOL';
@@ -41,7 +48,7 @@ export function sessionAddr(n: SessionNode): string {
   else if (n.protocol === 'Local Shell') a = 'Local shell';
   else {
     const def = n.protocol === 'Telnet' ? 23 : n.protocol === 'RDP' ? 3389 : n.protocol === 'VNC' ? 5900 : 22;
-    a = (n.username ? n.username + '@' : '') + (n.hostname ?? '') + (n.port && n.port !== def ? ':' + n.port : '');
+    a = (n.username ? n.username + '@' : '') + hostShown(n) + (n.port && n.port !== def ? ':' + n.port : '');
   }
   return a + (n.deviceType ? ' · ' + n.deviceType : n.protocol && n.protocol !== 'SSH2' && n.protocol !== 'Local Shell' ? ' · ' + n.protocol : '');
 }
@@ -531,7 +538,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     if (n.protocol === 'Local Shell') return 'Local shell';
     if (n.protocol === 'WOL') return 'Wake-on-LAN · ' + (n.mac ?? '') + (n.hostname ? ' · ' + n.hostname : '');
     const who = n.username ? n.username + '@' : '';
-    return `${n.protocol ?? ''} ${who}${n.hostname ?? ''}:${this.portOf(n)}` + (n.hopTarget ? ` → ${n.hopTarget}` : '');
+    return `${n.protocol ?? ''} ${who}${hostShown(n)}:${this.portOf(n)}` + (n.hopTarget ? ` → ${n.hopTarget}` : '');
   }
 
   loginText(h: Hover) {

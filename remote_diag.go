@@ -283,6 +283,29 @@ func probeRemote(ctx context.Context, tu *term.Tunnel, kind string) []string {
 	return append(out, probeRDP(c)...)
 }
 
+// vncRefusal reads the reason a VNC server gives when it refuses a connection:
+// after a "0 security types" byte (RFB 3.7+), or after a 4-byte "0 = failed" (RFB 3.3).
+func vncRefusal(c net.Conn, old bool) string {
+	if old { // the first byte of the 4-byte security type was read already
+		if _, err := readFull(c, make([]byte, 3)); err != nil {
+			return ""
+		}
+	}
+	l := make([]byte, 4)
+	if _, err := readFull(c, l); err != nil {
+		return ""
+	}
+	n := int(l[0])<<24 | int(l[1])<<16 | int(l[2])<<8 | int(l[3])
+	if n <= 0 || n > 200 {
+		return ""
+	}
+	b := make([]byte, n)
+	if _, err := readFull(c, b); err != nil {
+		return ""
+	}
+	return string(b)
+}
+
 func probeVNC(c net.Conn) []string {
 	_ = c.SetDeadline(time.Now().Add(6 * time.Second))
 	banner := make([]byte, 12)
@@ -301,7 +324,17 @@ func probeVNC(c net.Conn) []string {
 		return append(out, "security:  the server closed the connection after the version ("+err.Error()+")")
 	}
 	if n[0] == 0 {
-		return append(out, "security:  the server refuses the connection")
+		reason := vncRefusal(c, strings.HasPrefix(string(banner), "RFB 003.003"))
+		out = append(out, "security:  the server refuses the connection"+map[bool]string{true: ": " + reason, false: ""}[reason != ""])
+		if strings.Contains(strings.ToLower(reason), "too many") {
+			out = append(out,
+				"=> TigerVNC has blocked this address after several wrong passwords (it answers RFB 003.003 only to a blocked address).",
+				"   Through the SSH session every login comes from 127.0.0.1, so this blocks every login until the time runs out",
+				"   (10 s after the first block, doubling with every further wrong attempt) or the VNC service is restarted:",
+				"   sudo systemctl restart tigervnc@<display>. Then connect once with the right password: the saved password probably differs",
+				"   from the one set on the machine; run Set Up Remote Desktop with \"Reconfigure services that already run\" to set it again.")
+		}
+		return out
 	}
 	types := make([]byte, n[0])
 	if _, err := readFull(c, types); err != nil {

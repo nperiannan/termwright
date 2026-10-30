@@ -42,13 +42,26 @@ func TestRemoteDesktopArgs(t *testing.T) {
 	}
 
 	net := base
-	net.Network, net.CIDR, net.Force = true, "10.1.2.0/24", true
+	net.RDPNetwork, net.VNCNetwork, net.CIDR, net.Force = true, true, "10.1.2.0/24", true
 	args, _ = remoteDesktopArgs(net)
 	got = strings.Join(args, " ")
 	for _, want := range []string{"--rdp-network", "--vnc-network", "--allow-cidr 10.1.2.0/24", "--force"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("%q missing from %q", want, got)
 		}
+	}
+
+	// the access is chosen per service: only the chosen one is opened to the network
+	one := base
+	one.VNCNetwork = true
+	args, _ = remoteDesktopArgs(one)
+	if got = strings.Join(args, " "); !strings.Contains(got, "--vnc-network") || strings.Contains(got, "--rdp-network") {
+		t.Fatalf("vnc only: %q", got)
+	}
+	one.VNCNetwork, one.RDPNetwork = false, true
+	args, _ = remoteDesktopArgs(one)
+	if got = strings.Join(args, " "); !strings.Contains(got, "--rdp-network") || strings.Contains(got, "--vnc-network") {
+		t.Fatalf("rdp only: %q", got)
 	}
 
 	chk := base
@@ -69,7 +82,7 @@ func TestRemoteDesktopArgs(t *testing.T) {
 		{RDP: true, RDPUser: "root"},
 		{RDP: true, RDPUser: "Bad Name"},
 		{RDP: true, VNC: true, RDPUser: "same", VNCUser: "same"},
-		{RDP: true, RDPUser: "ok", Network: true, CIDR: "10.0.0.0/8; rm -rf /"},
+		{RDP: true, RDPUser: "ok", RDPNetwork: true, CIDR: "10.0.0.0/8; rm -rf /"},
 	} {
 		if _, err := remoteDesktopArgs(bad); err == nil {
 			t.Fatalf("accepted %+v", bad)

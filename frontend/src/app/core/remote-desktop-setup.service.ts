@@ -181,7 +181,7 @@ export class RemoteDesktopSetup {
   }
 
   private async makeSession(ssh: Session, kind: 'RDP' | 'VNC', o: RdRequest): Promise<string> {
-    const viaSsh = !o.network;
+    const viaSsh = !(kind === 'RDP' ? o.rdpNetwork : o.vncNetwork);
     const port = kind === 'RDP' ? RDP_PORT : VNC_PORT;
     const host = viaSsh ? '127.0.0.1' : ssh.hostname;
     const user = kind === 'RDP' ? o.rdpUser : o.vncUser;
