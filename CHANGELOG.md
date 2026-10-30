@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Discover Devices lists this computer's networks.** The scan page shows every network the computer has an address on - wired, Wi-Fi and VPN adapters - with interface, address, network and size; click one to fill the range (the first non-VPN network is filled in when the box is empty), or type any range yourself. *Refresh* picks up a VPN connected later.
+
 * **Wake-on-LAN is sent from the network the device is on.** A session with a jump host was always woken *from the jump host*, so the packet never reached the network this computer (and a phone app) is on. *Send from* is now **automatic** by default: from this computer when it has a network interface on the device's network, otherwise from the jump host (or jump station); a session can still force *this computer* or *the jump host* (Session Options → Connection). The notice after sending says where the packet was sent from and to which addresses.
 
 * **Wake-on-LAN advertises the magic packet on the whole network.** Before, a device with an address got the packet only at one worked-out broadcast address (for example `10.234.179.255`), which routers, virtual networks and many Wi-Fi setups drop. Now the packet also goes to `255.255.255.255`, out of **every network interface by its own address** (macOS and Windows send the limited broadcast out of one interface only), and to the broadcast address of each. When the packet is sent from a jump host, it goes to both addresses too. The three repeats stay. On macOS, Termwright needs the **Local Network** permission (System Settings → Privacy & Security → Local Network) to send broadcasts.

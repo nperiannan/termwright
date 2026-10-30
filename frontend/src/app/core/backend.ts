@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary } from './models';
+  AccountInfo, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -140,6 +140,7 @@ export class Backend {
   answerPrompt(id: string, r: PromptReply) { return this.call<void>('AnswerPrompt', id, r); }
 
   /** mode: '' = as the session says, 'jump' = the host logged in to, 'target' = host of its "ssh … host" remote command. */
+  discoverNetworks() { return this.call<LocalNet[]>('DiscoverNetworks'); }
   discoverStart(spec: string, community: string) { return this.call<{ id: string; total: number }>('DiscoverStart', spec, community); }
   discoverStop(id: string) { return this.call<void>('DiscoverStop', id); }
   discoverOuiStatus() { return this.call<string>('DiscoverOUIStatus'); }

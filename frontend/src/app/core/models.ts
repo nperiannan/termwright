@@ -284,6 +284,8 @@ export interface MovedDevice { path: string; old: string; new: string; mac: stri
 export interface ExportReport { count: number; skipped: string[]; notes: string[]; }
 
 /** A serial port found on this computer. */
+/** A network this computer has an address on (Discover Devices). */
+export interface LocalNet { interface: string; address: string; network: string; scan: string; hosts: number; vpn: boolean; note?: string; }
 export interface SerialPortInfo { name: string; label: string; usb: boolean; serial?: string; }
 
 /** Model, OS version, serial number and base MAC address of a device (empty when unknown). */

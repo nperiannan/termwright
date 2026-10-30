@@ -64,6 +64,10 @@ func (a *App) DiscoverStart(spec, community string) (map[string]any, error) {
 	return map[string]any{"id": id, "total": len(addrs)}, nil
 }
 
+// DiscoverNetworks lists the networks of this computer's interfaces (wired,
+// Wi-Fi, VPN) for the scan page to choose from.
+func (a *App) DiscoverNetworks() []discover.LocalNet { return discover.LocalNetworks() }
+
 // DiscoverStop stops a running scan.
 func (a *App) DiscoverStop(id string) {
 	discoverMu.Lock()

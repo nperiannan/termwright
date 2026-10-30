@@ -2,7 +2,7 @@ import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DEVICE_KINDS, DeviceIcon, DeviceKind } from '../components/device-icon';
 import { Backend, errText } from '../core/backend';
-import { DeviceType, DiscoverResult, MovedDevice, SessionNode } from '../core/models';
+import { DeviceType, DiscoverResult, LocalNet, MovedDevice, SessionNode } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { Moved } from './moved';
@@ -41,6 +41,23 @@ const ACK_KEY = 'termwright.discoverAck';
               }
             </div>
             <div class="hint">A network (192.168.1.0/24, or 192.168.1.0 for its /24), a range (192.168.1.10-80) or addresses, up to a /22</div>
+            @if (nets().length) {
+              <div class="nets" role="listbox" aria-label="Networks of this computer">
+                <div class="nets-h"><span>Networks of this computer</span>
+                  <button type="button" class="linkbtn" [disabled]="running()" (click)="loadNets()">Refresh</button></div>
+                @for (n of nets(); track n.interface + n.address) {
+                  <button type="button" class="net" role="option" [class.sel]="isSel(n)" [disabled]="running()" [attr.aria-selected]="isSel(n)"
+                    (click)="pick(n)" [title]="n.note || ''">
+                    <span class="ni">{{ n.interface }}</span>
+                    <span class="na">{{ n.address }}</span>
+                    <span class="nn">{{ n.scan }}</span>
+                    <span class="nh">{{ n.hosts }} addresses</span>
+                    @if (n.vpn) { <span class="nv">VPN</span> }
+                    @if (n.note) { <span class="nt">{{ n.note }}</span> }
+                  </button>
+                }
+              </div>
+            }
           </div>
           <label>SNMP</label>
           <div class="row">
@@ -234,6 +251,19 @@ const ACK_KEY = 'termwright.discoverAck';
     .movedbar .bad { color: var(--danger); }
     .movedbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 10px; margin-bottom: 8px; border: 1px solid color-mix(in srgb, #f59e0b 55%, var(--border)); border-radius: 6px; background: color-mix(in srgb, #f59e0b 9%, transparent); font-size: calc(12.5px * var(--ui-scale, 1)); }
     select { max-width: 150px; }
+    .nets { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; max-width: 640px; }
+    .nets-h { display: flex; align-items: center; justify-content: space-between; height: auto; line-height: 1.2; font-size: 11px; opacity: .7; text-transform: uppercase; letter-spacing: .04em; }
+    .disc .nets .linkbtn { height: auto; min-height: 0; background: none; border: 0; padding: 0; color: var(--accent, #4f8cff); cursor: pointer; font-size: 11px; text-transform: none; }
+    .disc .nets .net { height: auto; min-height: 0; line-height: 1.35; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; text-align: left; width: 100%; padding: 6px 10px; border-radius: 6px;
+      border: 1px solid var(--border, rgba(128,128,128,.3)); background: transparent; color: inherit; cursor: pointer; font: inherit; }
+    .disc .nets .net:hover:not([disabled]) { background: var(--hover, rgba(128,128,128,.12)); }
+    .disc .nets .net.sel { border-color: var(--accent, #4f8cff); background: var(--hover, rgba(79,140,255,.12)); }
+    .net .ni { font-weight: 600; min-width: 64px; }
+    .net .na, .net .nn { font-family: var(--mono, monospace); }
+    .net .nn { min-width: 130px; }
+    .net .nh { opacity: .65; font-size: 11px; }
+    .net .nv { font-size: 10px; padding: 0 6px; border-radius: 8px; background: rgba(240,160,40,.25); }
+    .net .nt { flex-basis: 100%; font-size: 11px; opacity: .65; }
   `],
 })
 export class DiscoverDialog implements OnDestroy {
@@ -336,7 +366,19 @@ export class DiscoverDialog implements OnDestroy {
     } catch (e) { this.ui.error(e); }
   }
 
-  constructor() { this.backend.discoverOuiStatus().then(d => this.ouiDate.set(d)).catch(() => {}); }
+  /** The networks of this computer's interfaces (wired, Wi-Fi, VPN). */
+  readonly nets = signal<LocalNet[]>([]);
+  loadNets() {
+    this.backend.discoverNetworks().then(l => {
+      this.nets.set(l || []);
+      const first = (l || []).find(n => !n.vpn);
+      if (!this.spec.trim() && first) this.spec = first.scan;
+    }).catch(() => {});
+  }
+  pick(n: LocalNet) { this.spec = n.scan; }
+  isSel(n: LocalNet) { return this.spec.trim() === n.scan; }
+
+  constructor() { this.loadNets(); this.backend.discoverOuiStatus().then(d => this.ouiDate.set(d)).catch(() => {}); }
 
   /** SNMP was asked but no device answered (wrong community, ACL, SNMP off). */
   snmpSilent() { return this.usedCommunity && !this.running() && this.rows().length > 0 && !this.rows().some(r => r.services.includes('snmp')); }
