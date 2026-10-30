@@ -106,6 +106,7 @@ func (s *Store) Import(src string, opt ImportOptions) (*ImportResult, error) {
 		for p, f := range sessions {
 			s.importOne(p, f, opt, res)
 		}
+		s.remapJumps(res)
 		return res, nil
 	case strings.HasSuffix(lower, ".ini"):
 		data, err := os.ReadFile(src)
@@ -173,7 +174,43 @@ func (s *Store) importFS(fsys fs.FS, opt ImportOptions) (*ImportResult, error) {
 		s.importOne(rel, f, opt, res)
 		return nil
 	})
+	s.remapJumps(res)
 	return res, err
+}
+
+// remapJumps points the jump host of every imported session at the imported
+// copy of that jump session, wherever it landed (an import into a folder, a
+// renamed copy). A jump host that is not part of the import keeps its path: it
+// is a session of the store the sessions were imported into.
+func (s *Store) remapJumps(res *ImportResult) {
+	if len(res.Paths) == 0 || len(res.Imported) == 0 {
+		return
+	}
+	imported := map[string]bool{}
+	for _, p := range res.Imported {
+		imported[p] = true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, dest := range res.Paths {
+		if !imported[dest] {
+			continue
+		}
+		f, err := s.readFile(dest)
+		if err != nil {
+			continue
+		}
+		fw := f.Str(kFirewall, "")
+		if !strings.HasPrefix(fw, "Session:") {
+			continue
+		}
+		if np, ok := res.Paths[strings.TrimPrefix(fw, "Session:")]; ok && np != "" && "Session:"+np != fw {
+			f.SetStr(kFirewall, "Session:"+np)
+			if err := s.writeFile(dest, f); err != nil {
+				res.Errors = append(res.Errors, fmt.Sprintf("%s: the jump host could not be updated: %v", dest, err))
+			}
+		}
+	}
 }
 
 // importOne writes one imported session and returns its path ("" when it was

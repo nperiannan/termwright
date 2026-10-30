@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Importing keeps the jump host of RDP, VNC and SSH sessions working.** The jump host of a session is a reference to another session by its path. When sessions were imported into a folder (*Import into folder*) or an imported copy was renamed because the name existed, the reference still pointed at the old path and the session could not connect. The import now points each session at the imported copy of its jump host, wherever it landed; a jump host that is not part of the import keeps its path and uses the session of that name in your list. Exports to Termwright's own formats (folder, .zip, .xml) and CSV keep RDP and VNC sessions with their port, user and jump host; PuTTY, MobaXterm, Tabby and ssh config have no RDP or VNC, so those sessions are left out and listed in the export report.
+
 * **A VNC password typed at the login can be saved**: after a VNC login with a typed password works, a toast offers *Save Password*, which keeps it with the session (OS keychain) so it is not asked for again.
 * **Set Up Remote Desktop says when a session has no saved password.** Sessions get the password only when the run set it (a new user, or a VNC service it configured). When the desktop user or the VNC service already existed, the password is not known to Termwright; the dialog now says so instead of leaving a surprise prompt at the first connect, and tells to run the setup again with *Reconfigure services that already run* to set a new one.
 
