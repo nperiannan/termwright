@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **A Wake-on-LAN session fills in its network from the IP address.** Type the device's IP address and the *Network* box shows where the magic packet will go (the network of this computer's interface on it, else the /24 around the address); change the mask when the network is different. A network you typed yourself is never overwritten. With only a network, the device is found by its MAC address after the wake (the address found is saved in the session).
+
 * **Discover Devices can add a device as a Wake-on-LAN session.** A device that showed no SSH, Telnet, RDP or VNC port (a PC that is off, a phone, a printer) but has a MAC address can now be ticked (or right-click → *Add as a Wake-on-LAN Session*) and is saved as a Wake-on-LAN session with its address and MAC address. Such devices are never ticked automatically.
 
 * **Copying from the scan results works.** Cmd/Ctrl+C copies text selected anywhere in the app's own pages (before, it only looked at the terminal, so a selected MAC address was never copied and the clipboard kept the last thing copied - the IP address). Clicking a row no longer ticks it while text is selected. The right-click menu of a result has **Copy IP Address**, **Copy MAC Address** (when the device has one), **Copy Vendor / System Info** (the vendor and system with everything it is based on) and **Copy All Details**.

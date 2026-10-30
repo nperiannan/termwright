@@ -214,10 +214,10 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                     <span class="hint">of the wired port that is set to wake (BIOS / UEFI and the network card)</span></div>
                   <label>Network</label>
                   <div class="row"><input name="wnet" class="mono" [(ngModel)]="s.wolNetwork" placeholder="192.168.1.0/24" spellcheck="false" style="max-width: 200px" />
-                    <span class="hint">the magic packet goes to its broadcast address; without an IP address it is searched for the MAC address</span></div>
+                    <span class="hint">the magic packet goes to its broadcast address - filled in from the IP address, change the mask if needed; without an IP address it is searched for the MAC address</span></div>
                   <label>IP address</label>
-                  <div class="row"><input name="hostname" class="mono" [(ngModel)]="s.hostname" placeholder="or the network above" spellcheck="false" style="max-width: 200px" />
-                    <span class="hint">pinged to show up (green) or down (orange)</span></div>
+                  <div class="row"><input name="hostname" class="mono" [ngModel]="s.hostname" (ngModelChange)="wolIp($event)" placeholder="or the network above" spellcheck="false" style="max-width: 200px" />
+                    <span class="hint">pinged to show up (green) or down (orange); fills in the network above</span></div>
                   <label>UDP port</label>
                   <div class="row"><input name="wport" type="number" min="1" max="65535" class="short" [ngModel]="s.wolPort || 9" (ngModelChange)="s.wolPort = +$event === 9 ? 0 : +$event" />
                     <label>Broadcast</label><input name="wbc" class="mono" [(ngModel)]="s.wolBroadcast" placeholder="(the network's)" spellcheck="false" style="max-width: 160px"
@@ -738,6 +738,19 @@ export class SessionEditor implements OnInit {
   /** Light check for "ssh … host" (the backend parses it fully). */
   isHop(cmd: string) { return /^\s*(exec\s+)?\S*\bssh\s+\S/.test(cmd ?? ''); }
   /** Sends Wake-on-LAN with the values in the dialog (saved or not). */
+  private autoNet = '';
+  /** The IP address of a Wake-on-LAN session: its network is filled in (the mask can still be changed) unless it was typed. */
+  wolIp(v: string) {
+    const s = this.s;
+    if (!s) return;
+    s.hostname = v;
+    const ip = (v || '').trim();
+    if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip) || (s.wolNetwork && s.wolNetwork !== this.autoNet)) return;
+    void this.backend.wakeNetworkFor(ip).then(n => {
+      if (n && (!s.wolNetwork || s.wolNetwork === this.autoNet)) { s.wolNetwork = n; this.autoNet = n; }
+    }).catch(() => {});
+  }
+
   wakeNow() { if (this.s) void this.tabs.wake(structuredClone(this.s), '', 'none'); }
   /** Who logs in (Account). */
   canLogin() { return !!this.s && !['Local Shell', 'VNC', 'WOL'].includes(this.s.protocol); }
@@ -1035,7 +1048,7 @@ export class SessionEditor implements OnInit {
     if (!this.s) return;
     if (this.remote() && ['logon', 'terminal', 'log', 'forward', 'auth', 'serial', 'local'].includes(this.page())) this.page.set('connection');
     this.s.port = defaultPort(this.s.protocol) || this.s.port;
-    if (this.s.protocol === 'WOL') { this.s.deviceType = ''; if (this.page() !== 'firewall') this.page.set('connection'); if (!this.s.wolNetwork && /^\d+\.\d+\.\d+\.\d+$/.test(this.s.hostname)) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0'); }
+    if (this.s.protocol === 'WOL') { this.s.deviceType = ''; if (this.page() !== 'firewall') this.page.set('connection'); if (!this.s.wolNetwork && /^\d+\.\d+\.\d+\.\d+$/.test(this.s.hostname)) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0/24'); }
     if (this.s.protocol === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }
   }
 

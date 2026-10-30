@@ -59,7 +59,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
             </div>
             <div class="two">
               <label class="f grow"><span>Network</span><input name="wolnet" class="mono" [(ngModel)]="s.wolNetwork" placeholder="192.168.1.0/24" spellcheck="false" /></label>
-              <label class="f grow"><span>IP address <small>(or network)</small></span><input name="host" class="mono" [(ngModel)]="s.hostname" placeholder="found by its MAC" spellcheck="false" /></label>
+              <label class="f grow"><span>IP address <small>(or network)</small></span><input name="host" class="mono" [ngModel]="s.hostname" (ngModelChange)="wolIp($event)" placeholder="found by its MAC" spellcheck="false" /></label>
             </div>
             <p class="note">Double-click sends the magic packet to the broadcast address of its network only (from the network, or the IP address's network). With an IP address the device is pinged until it answers, and every {{ pingMins(s) }} afterwards (green = up, orange = down); without one the network is searched for the MAC address and the address found is saved. More options: searches, interval, ping, jump host.</p>
           }
@@ -282,10 +282,23 @@ export class SessionPanel {
 
   pingMins(s: Session) { const v = s.wolPingSecs || 120; return v < 0 ? 'never' : v >= 120 ? Math.round(v / 60) + ' minutes' : v + ' seconds'; }
 
+  private autoNet = '';
+  /** The IP address of a Wake-on-LAN session: its network is filled in (the mask can still be changed) unless it was typed. */
+  wolIp(v: string) {
+    const s = this.s;
+    if (!s) return;
+    s.hostname = v;
+    const ip = (v || '').trim();
+    if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip) || (s.wolNetwork && s.wolNetwork !== this.autoNet)) return;
+    void this.backend.wakeNetworkFor(ip).then(n => {
+      if (n && (!s.wolNetwork || s.wolNetwork === this.autoNet)) { s.wolNetwork = n; this.autoNet = n; }
+    }).catch(() => {});
+  }
+
   setProto(p: string) {
     if (!this.s) return;
     this.s.protocol = p;
-    if (p === 'WOL') { this.s.deviceType = ''; if (!this.s.wolNetwork && this.s.hostname) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0'); }
+    if (p === 'WOL') { this.s.deviceType = ''; if (!this.s.wolNetwork && this.s.hostname) this.s.wolNetwork = this.s.hostname.replace(/\.\d+$/, '.0/24'); }
     this.s.port = defaultPort(p) || this.s.port;
     if (p === 'Console' && !this.s.consoleMethod) { this.s.consoleMethod = 'opengear-ssh'; this.s.initialCr = true; }
   }

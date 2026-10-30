@@ -225,3 +225,19 @@ func wakeTarget(s session.Session) (string, int) {
 	}
 	return s.Hostname, port
 }
+
+// WakeNetworkFor is the network a device's IP address is on, to fill in the
+// Wake-on-LAN session's Network box: the network of this computer's interface
+// on it, else the /24 around the address. "" when it is not an IPv4 address.
+func (a *App) WakeNetworkFor(ip string) string { return networkOfIP(ip) }
+
+func networkOfIP(ip string) string {
+	addr, err := netip.ParseAddr(strings.TrimSpace(ip))
+	if err != nil || !addr.Is4() {
+		return ""
+	}
+	if p, ok := discover.LocalPrefix(addr); ok {
+		return p.String()
+	}
+	return netip.PrefixFrom(addr, 24).Masked().String()
+}

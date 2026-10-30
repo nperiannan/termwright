@@ -62,3 +62,14 @@ func TestWakeFromHere(t *testing.T) {
 		}
 	}
 }
+
+func TestNetworkOfIP(t *testing.T) {
+	if got := networkOfIP("203.0.113.77"); got != "203.0.113.0/24" {
+		t.Errorf("far address: %q", got)
+	}
+	for _, bad := range []string{"", "host.example", "2001:db8::1", "300.1.1.1"} {
+		if got := networkOfIP(bad); got != "" {
+			t.Errorf("%q gave %q", bad, got)
+		}
+	}
+}
