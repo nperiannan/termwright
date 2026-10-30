@@ -188,3 +188,104 @@ func TestRestartScript(t *testing.T) {
 		t.Errorf("systemctl calls: %s", calls)
 	}
 }
+
+func findingTexts(f []DiagFinding) string {
+	var b strings.Builder
+	for _, x := range f {
+		b.WriteString(x.Level + ": " + x.Text + " | " + x.Detail + "\n")
+	}
+	return b.String()
+}
+
+const diagBlocked = `Termwright remote desktop diagnosis
+Session:    testgen-vm (VNC) (VNC)
+
+== From this computer: connection test ==
+connect:  OK in 88 ms
+handshake: server says RFB 003.003
+security:  the server refuses the connection: Too many security failures
+=> TigerVNC has blocked this address after several wrong passwords
+
+== On the machine ==
+== Machine ==
+sudo:   not available (logs that need root are skipped; the commands to run are shown)
+--- sshd forwarding (needed to reach 127.0.0.1 through this SSH session)
+(settings in the files above; none listed = the default, forwarding allowed)
+--- Firewall
+(needs sudo - run on the machine: sudo ufw status)
+== VNC (TigerVNC) - port 5902 (display :2), user nperiannan-vnc ==
+this machine to itself: 127.0.0.1:5902 accepts connections
+what the server says first: RFB 003.003   (a working VNC server says RFB 003.008; RFB 003.003 means it has blocked this address after wrong passwords - restart the service or wait)
+--- service
+tigervnc@2.service: active, enabled
+== End ==
+`
+
+func TestAnalyzeBlockedVNC(t *testing.T) {
+	f, fix := analyze(diagBlocked, "VNC")
+	got := findingTexts(f)
+	if fix != "VNC" || len(f) < 2 || f[0].Level != "error" || !strings.Contains(f[0].Text, "blocked this address") {
+		t.Fatalf("fix %q\n%s", fix, got)
+	}
+	if !strings.Contains(got, "need sudo") {
+		t.Fatalf("the skipped sudo checks are not mentioned:\n%s", got)
+	}
+	r := withResult(diagBlocked, f)
+	i, j := strings.Index(r, "== Result =="), strings.Index(r, "== From this computer")
+	if i < 0 || j < 0 || i > j || !strings.HasPrefix(r, "Termwright remote desktop diagnosis") || !strings.Contains(r, "PROBLEM: The VNC server has blocked") {
+		t.Fatalf("the result is not at the top:\n%s", r)
+	}
+}
+
+func TestAnalyzeOK(t *testing.T) {
+	rep := `Session: x
+
+== From this computer: connection test ==
+connect:  OK in 41 ms
+handshake: server says RFB 003.008
+security:  the server offers VNC Authentication (2)
+=> Termwright's viewer can use one of these
+
+== On the machine ==
+== VNC (TigerVNC) - port 5902 (display :2), user u ==
+this machine to itself: 127.0.0.1:5902 accepts connections
+what the server says first: RFB 003.008   (a working VNC server says RFB 003.008; RFB 003.003 means it has blocked this address after wrong passwords - restart the service or wait)
+tigervnc@2.service: active, enabled
+== End ==
+`
+	f, fix := analyze(rep, "VNC")
+	if fix != "" || len(f) != 1 || f[0].Level != "ok" {
+		t.Fatalf("fix %q\n%s", fix, findingTexts(f))
+	}
+}
+
+func TestAnalyzeProblems(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rep, want, fix string
+	}{
+		"stopped":       {"== VNC (TigerVNC) - port 5902 (display :2), user u ==\nthis machine to itself: 127.0.0.1:5902 refuses connections\ntigervnc@2.service: inactive, enabled\n", "Nothing listens on the VNC port", "VNC"},
+		"unit failed":   {"== RDP (xrdp) - port 3389, user u ==\nxrdp: failed, enabled\nxrdp-sesman: active, enabled\n", "The service xrdp is failed", "RDP"},
+		"no forwarding": {"== From this computer: connection test ==\nconnect:  FAILED after 3 ms: open failed\n=> the SSH server refuses port forwarding\n== On the machine ==\n== Machine ==\n--- sshd forwarding\nallowtcpforwarding no \n", "The machine's RDP port cannot be reached", ""},
+		"bad login":     {"== VNC (TigerVNC) - port 5902 (display :2), user u ==\n SConnection: Authentication failed\n", "failed logins", "VNC"},
+		"user missing":  {"== RDP (xrdp) - port 3389, user ghost ==\nthe user ghost does not exist on this machine\n", "user ghost does not exist", ""},
+	} {
+		f, fix := analyze(tc.rep, "RDP")
+		if got := findingTexts(f); !strings.Contains(got, tc.want) || fix != tc.fix {
+			t.Errorf("%s: fix %q\n%s", name, fix, got)
+		}
+	}
+	// a failed login followed by a good one is no problem
+	if f, _ := analyze("== VNC (TigerVNC) - port 5902 (display :2), user u ==\n SConnection: Authentication failed\n SConnection: Authentication successful\n", "VNC"); strings.Contains(findingTexts(f), "failed logins") {
+		t.Fatal("old failure reported")
+	}
+}
+
+func TestChecksOf(t *testing.T) {
+	c := checksOf(diagBlocked)
+	got := findingTexts(c)
+	for _, want := range []string{"error: The server answers RFB 003.003", "ok: The VNC service listens on the machine", "ok: Service tigervnc@2.service is active", "ok: The SSH server allows port forwarding", "info: sudo is not available", "ok: The port can be reached from this computer (in 88 ms)"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+}

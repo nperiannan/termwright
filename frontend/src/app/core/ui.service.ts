@@ -62,7 +62,7 @@ export class Ui {
   readonly dialog = signal<DialogName | null>(null);
   /** Open Web Page / Open Web Interface: the session, the tab whose connection to use ('' = none) and the route. */
   readonly webOpen = signal<{ session: Session; tabId: string; through: 'session' | 'device' } | null>(null);
-  /** Collect Remote Desktop Logs: the session (RDP, VNC or the machine's SSH session) to collect for. */
+  /** Diagnose Remote Desktop: the session (RDP, VNC or the machine's SSH session) to diagnose. */
   readonly remoteDiag = signal<{ path: string; name: string; protocol: string } | null>(null);
   openRemoteDiag(path: string, name: string, protocol: string) { this.remoteDiag.set({ path, name, protocol }); this.open('remoteDiag'); }
   private webWatch = false;

@@ -300,22 +300,26 @@ A user who is logged in at the machine's own screen is flagged before you start:
 
 ![Desktop user logged in locally](screenshots/remote-desktop-local.png)
 
-**When a desktop does not connect: Collect Logs.** Right-click an **RDP** or **VNC** session (*Collect Logs (why it does not connect)…*) or its **SSH** session (*Collect Remote Desktop Logs…*). Termwright then
+**When a desktop does not connect: Diagnose.** Right-click an **RDP** or **VNC** session (*Diagnose (why it does not connect)…*) or its **SSH** session (*Diagnose Remote Desktop…*). One click runs it, and the dialog **names the problem in a line or two** - red for what is wrong, with what to do about it - or says *No problem found* in green:
 
-- tries the connection **from this computer**, through the jump host just as when the session is opened, and shows the first bytes of the handshake: for VNC what the server says (`RFB 003.008`) and which security types it offers; a server that answers `RFB 003.003` with *Too many security failures* has blocked the address after wrong passwords (through the SSH session every login comes from 127.0.0.1, so it blocks all of them): the report says to restart the service or wait, and to set the password again with *Reconfigure services that already run* (and whether Termwright's viewer can use them); for RDP whether the service confirms the connection and which security it chose (TLS, NLA…). A refused port forward (`AllowTcpForwarding no` on the SSH server), a closed port or a firewall are named in the report;
-- reads **on the machine**, over the SSH session, the state and logs of that service only (an SSH session collects both): the service status and journal, `xrdp.log`, the VNC server log (TigerVNC 1.13+ keeps them in `~/.local/state/tigervnc`), the start-up files and processes of the desktop user, the listening ports, the `sshd` forwarding settings and the firewall.
+![The VNC server has blocked this address](screenshots/remote-desktop-diagnose-problem.png)
 
-![Collect logs](screenshots/remote-desktop-logs-start.png)
+![No problem found](screenshots/remote-desktop-diagnose-ok.png)
 
-The logs of the services can only be read with `sudo`: type the sudo password in the dialog when sudo asks for one (it is sent to the command and never shown or stored); without it the report lists the commands to run by hand. **Nothing is changed on the machine and no password is in the report** (the VNC password file is only listed with its permissions). The report can be **copied** or **saved** as a text file to send to someone.
+What it checks:
 
-![The report](screenshots/remote-desktop-logs.png)
+- the connection **from this computer**, through the jump host just as when the session is opened, with the first bytes of the handshake: for VNC what the server says (`RFB 003.008`) and which security types it offers (and whether Termwright's viewer can use them); for RDP whether the service confirms the connection and which security it chose (TLS, NLA…). A server that answers `RFB 003.003` with *Too many security failures* has blocked the address after wrong passwords (through the SSH session every login comes from 127.0.0.1, so it blocks all of them);
+- **on the machine**, over the SSH session, that service only (an SSH session checks both): whether the port listens and the service runs, the service status and journal, `xrdp.log`, the VNC server log (TigerVNC 1.13+ keeps them in `~/.local/state/tigervnc`; failed logins show up there), the desktop user (exists, home folder, locked), the `sshd` forwarding settings (`AllowTcpForwarding no` is named), the listening ports and the firewall.
 
-**Fix: restart the service.** Under the report, the *Fix* box has **Restart VNC service** / **Restart RDP service** (an SSH session offers both). It asks first, because anyone connected to that desktop is disconnected, then restarts `xrdp` (with `xrdp-sesman`) or `tigervnc@<display>` on the machine over the SSH session, and **collects a new report** so you see the result. Type the sudo password in the box when sudo asks for one (it is sent on standard input and never shown). The usual case is a VNC server that answers *Too many security failures*: TigerVNC blocks an address after several wrong passwords and, through the SSH session, every login comes from 127.0.0.1, so it blocks all of them. The report says so and the Restart button is highlighted; restarting clears the block. Set the password again (*Reconfigure services that already run*, or `sudo -u <vnc user> vncpasswd` on the machine) before connecting, so the block does not return.
+**Show details** opens the green and red list of everything that was checked, and under it the full report, to **copy** or **save** as a text file for someone else:
 
-![The VNC address is blocked: Restart VNC service](screenshots/remote-desktop-fix.png)
+![What was checked](screenshots/remote-desktop-diagnose-details.png)
 
-![After the restart the server answers normally](screenshots/remote-desktop-fixed.png)
+Some checks (the service journal, the VNC and RDP logs) need `sudo`: the result then says so, and you type the sudo password in the box and choose *Diagnose Again* (it is sent to the command and never shown or stored). **Nothing is changed on the machine and no password is in the report.**
+
+**Restart a service.** The box under the result has **Restart VNC service** / **Restart RDP service** (an SSH session offers both); it is highlighted when the diagnosis says a restart should fix the problem. It asks first, because anyone connected to that desktop is disconnected, then restarts `tigervnc@<display>` or `xrdp` (with `xrdp-sesman`) on the machine over the SSH session and **diagnoses again** so you see the result. For a blocked VNC address the restart clears the block; set the password again before connecting (*Reconfigure services that already run* in Set Up Remote Desktop, or `sudo -u <vnc user> vncpasswd` on the machine), so it does not return.
+
+![After the restart the server answers normally](screenshots/remote-desktop-diagnose-fixed.png)
 
 **One desktop at a time.** RDP and VNC to the same machine **as the same user** are two views of one desktop and one set of settings, so Termwright does not let both stay open (sessions made by *Set Up Remote Desktop* use two different users, so they never meet this):
 
