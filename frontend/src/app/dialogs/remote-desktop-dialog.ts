@@ -44,10 +44,13 @@ import { Icon } from '../components/icon';
           @if (r.phase === 'done' && !r.check) {
             <div class="hint">
               @if (r.made.rdp || r.made.vnc) { The sessions {{ madeNames(r.made) }} are in the Session Manager next to this one. }
-              @else { Both services run. Connect to 127.0.0.1 through the SSH session as the jump host, ports {{ rdpPort }} (RDP) and {{ vncPort }} (VNC). }
+              @else { Connect to 127.0.0.1 through the SSH session as the jump host: @if (r.ready?.rdp !== false) { port {{ rdpPort }} (RDP) } @if (r.ready?.rdp !== false && r.ready?.vnc !== false) { and } @if (r.ready?.vnc !== false) { port {{ vncPort }} (VNC) }. }
             </div>
           }
-          <button type="button" class="link" (click)="showLog.set(!showLog())">{{ showLog() ? 'Hide details' : 'Show details' }}</button>
+          <div class="logbar">
+            <button type="button" class="link" (click)="showLog.set(!showLog())">{{ showLog() ? 'Hide details' : 'Show details' }}</button>
+            <button type="button" class="link" (click)="copyLog()" title="Copy the error, the warnings and the whole output to the clipboard">{{ copied() ? 'Copied' : 'Copy log' }}</button>
+          </div>
           @if (showLog()) { <pre class="log" #log>{{ r.log.join('\\n') }}</pre> }
         </div>
         <div class="modal-foot">
@@ -174,7 +177,7 @@ import { Icon } from '../components/icon';
     .us { font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); margin-top: 3px; } .us.new { color: var(--ok); }
     .chk { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; font-weight: 400; }
     .hint { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.45; margin-top: 6px; } .hint.tight { margin-top: 0; }
-    .warn { color: var(--danger); font-size: calc(12px * var(--ui-scale, 1)); margin-top: 6px; white-space: pre-wrap; } .warn.soft { color: var(--warn, var(--muted)); }
+    .warn { user-select: text; color: var(--danger); font-size: calc(12px * var(--ui-scale, 1)); margin-top: 6px; white-space: pre-wrap; } .warn.soft { color: var(--warn, var(--muted)); }
     .os { margin-top: 10px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--ok); &.bad { color: var(--danger); } }
     .prog { display: flex; gap: 12px; align-items: center; padding: 6px 0 10px; .pi { flex: none; display: grid; place-items: center; width: 22px; color: var(--accent); }
       .pt b { display: block; font-size: calc(14px * var(--ui-scale, 1)); font-weight: 600; } .pt small { display: block; color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); margin-top: 2px; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 440px; }
@@ -182,6 +185,7 @@ import { Icon } from '../components/icon';
     .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: rdspin .8s linear infinite; }
     @keyframes rdspin { to { transform: rotate(360deg); } }
     .bar { height: 4px; border-radius: 2px; background: var(--surface-2, var(--input-bg)); overflow: hidden; margin-bottom: 8px; i { display: block; height: 100%; background: var(--accent); transition: width .4s; } }
+    .logbar { display: flex; gap: 14px; } .logbar .link { margin-top: 8px; }
     .link { background: none; border: none; color: var(--accent); padding: 0; height: auto; cursor: pointer; margin-top: 8px; }
     .log, .rep { margin: 8px 0 0; padding: 8px 10px; max-height: 240px; overflow: auto; background: var(--input-bg); border-radius: 6px; font-size: calc(11.5px * var(--ui-scale, 1)); font-family: var(--mono); white-space: pre-wrap; user-select: text; }
   `],
@@ -217,6 +221,7 @@ export class RemoteDesktopDialog implements OnInit {
   readonly os = signal('');
   readonly osOk = signal(true);
   readonly showLog = signal(false);
+  readonly copied = signal(false);
   /** What the machine says: users that exist and who is logged in at its own screen. */
   readonly users = signal<string[]>([]);
   readonly localUsers = signal<string[]>([]);
@@ -298,6 +303,15 @@ export class RemoteDesktopDialog implements OnInit {
     } catch { /* unknown: the script checks again */ }
   }
 
+  /** Copies the error, the warnings and the whole output (the passwords are already masked). */
+  async copyLog() {
+    const r = this.setup.run();
+    if (!r) return;
+    const text = [...(r.error ? [`Error: ${r.error}`] : []), ...r.warnings.map(w => `Warning: ${w}`), '', ...r.log].join('\n');
+    try { await this.backend.clipboardSet(text); } catch { await navigator.clipboard?.writeText(text).catch(() => {}); }
+    this.copied.set(true);
+    setTimeout(() => this.copied.set(false), 2000);
+  }
   report(log: string[]) { return reportLines(log).join('\n'); }
   madeNames(m: { rdp?: string; vnc?: string }) { return [m.rdp, m.vnc].filter(Boolean).map(p => `“${p!.split('/').pop()}”`).join(' and '); }
   open(path: string) { this.setup.open(path); this.ui.close(); }

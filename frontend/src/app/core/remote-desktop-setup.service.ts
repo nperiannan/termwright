@@ -18,6 +18,8 @@ export interface RdRun extends RdProgress {
   log: string[];
   /** Sessions made when it ended without errors. */
   made: { rdp?: string; vnc?: string };
+  /** Services that run (a service that failed was removed again). */
+  ready?: { rdp: boolean; vnc: boolean };
 }
 
 /** What is kept of a request once its passwords have been sent. */
@@ -43,6 +45,8 @@ export class RemoteDesktopSetup {
   private unsubs: (() => void)[] = [];
   private req: RdRequest | null = null;
   private createSessions = true;
+  /** Services the script removed again because they did not come up. */
+  private removed = new Set<string>();
 
   /** Opens the dialog for a saved SSH session: connects it first when no terminal of it is open. */
   async openFor(path: string) {
@@ -90,6 +94,7 @@ export class RemoteDesktopSetup {
     const { sudoPassword: _s, accountPassword: _a, vncPassword: _v, ...kept } = r;
     this.req = kept;
     this.createSessions = createSessions;
+    this.removed.clear();
     this.unsubs.forEach(u => u());
     this.unsubs = [
       this.backend.on('rd:line:' + id, (line: string) => this.line(line)),
@@ -108,6 +113,8 @@ export class RemoteDesktopSetup {
     if (!r || r.phase !== 'running') return;
     const clean = cleanLine(raw);
     if (!clean.trim()) return;
+    const gone = /^TWREMOVED (rdp|vnc)$/.exec(clean.trim());
+    if (gone) { this.removed.add(gone[1]); return; }
     const p = applyLine(r, clean);
     this.run.set({ ...r, ...p, log: [...r.log.slice(-400), clean] });
   }
@@ -124,7 +131,9 @@ export class RemoteDesktopSetup {
       this.ui.toast(`Remote desktop setup on ${name} was cancelled.`, 'info');
       return;
     }
-    if (e.error || e.code !== 0) {
+    // exit status 3: one service did not come up and was removed again, the other works
+    const partial = !e.error && e.code === 3 && !r.check && this.removed.size > 0;
+    if (!partial && (e.error || e.code !== 0)) {
       const error = r.error || e.error || 'The setup ended with errors. Open the details to see what happened.';
       this.run.set({ ...r, phase: 'failed', step: 'Failed', detail: '', error });
       this.ui.toast(`Remote desktop setup on ${name} failed: ${error}`, 'error', 9000);
@@ -139,8 +148,8 @@ export class RemoteDesktopSetup {
     const tab = this.tabs.get(req?.tabId ?? '');
     if (this.createSessions && req && tab) {
       try {
-        if (req.rdp) made.rdp = await this.ensureSession(tab.session, 'RDP', req);
-        if (req.vnc) made.vnc = await this.ensureSession(tab.session, 'VNC', req);
+        if (req.rdp && !this.removed.has('rdp')) made.rdp = await this.ensureSession(tab.session, 'RDP', req);
+        if (req.vnc && !this.removed.has('vnc')) made.vnc = await this.ensureSession(tab.session, 'VNC', req);
         await this.ui.refreshTree();
       } catch (err) {
         const error = `The remote desktop is ready, but its sessions could not be created: ${errText(err)}`;
@@ -149,12 +158,14 @@ export class RemoteDesktopSetup {
         return;
       }
     }
-    this.run.set({ ...r, phase: 'done', progress: 100, step: 'Remote desktop is ready', detail: '', made });
+    const gone = [...this.removed].map(k => k.toUpperCase()).join(' and ');
+    const step = partial ? `Ready, except ${gone}: it did not work and was removed again` : 'Remote desktop is ready';
+    this.run.set({ ...r, phase: 'done', progress: 100, step, detail: '', error: '', made, ready: { rdp: !!req?.rdp && !this.removed.has('rdp'), vnc: !!req?.vnc && !this.removed.has('vnc') } });
     const actions = [
       ...(made.rdp ? [{ label: 'Open RDP', run: () => void this.tabs.openSession(made.rdp!, 'auto') }] : []),
       ...(made.vnc ? [{ label: 'Open VNC', run: () => void this.tabs.openSession(made.vnc!, 'auto') }] : []),
     ];
-    this.ui.toast(`Remote desktop is ready on ${name}.` + (actions.length ? ' The new sessions are next to it.' : ''), 'success', 15000, actions);
+    this.ui.toast(partial ? `Remote desktop is partly ready on ${name}: ${gone} failed and was removed again.` : `Remote desktop is ready on ${name}.` + (actions.length ? ' The new sessions are next to it.' : ''), partial ? 'info' : 'success', 15000, actions);
   }
 
   /** Opens one of the new sessions. */

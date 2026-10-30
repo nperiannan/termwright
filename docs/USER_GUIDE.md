@@ -261,6 +261,7 @@ Right-click an **SSH2** session → **Set Up Remote Desktop…** (or, in an open
 - **Create the sessions afterwards**: when the setup ends **without errors**, Termwright makes `name (RDP)` and `name (VNC)` next to the SSH session (address `127.0.0.1`, ports 3389 / 5902, the SSH session as the jump host, the user names above). The dialog and a toast have **Open RDP** and **Open VNC** buttons.
 - **Check First** only reports what is running and which users would be created; it changes nothing.
 - **Reconfigure services that already run** rewrites their settings and restarts them, so anyone connected is disconnected. Use it to repair a desktop.
+- **If it fails, it cleans up after itself.** What the setup created for a service that did not come up (its new user, files, service and firewall rule) is removed again, and only for that service: when VNC works and RDP fails, RDP is removed and VNC stays, with a note and only the working session created. Users that already existed and installed packages are never removed. **Copy log** (next to *Show details*) puts the error and the whole output, passwords masked, on the clipboard.
 - **Hide** lets the setup go on while you work; you are told when it ends. **Cancel setup** stops it.
 - Supported: **Ubuntu 24.04**. The dialog shows the machine's version, and the script stops before changing anything on other systems. The script is in `scripts/remote-desktop/` of the source.
 

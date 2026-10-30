@@ -34,6 +34,12 @@ RDP_USER=""
 VNC_USER=""
 CREATE_USERS=0
 SECRETS_STDIN=0
+JOURNAL=""           # what this run created, for undoing it (see "undo" below)
+LASTERR=""           # file: the last error, in words
+LASTSTEP=""          # file: the step that was running
+STATE_RDP=""         # "", ok or removed
+STATE_VNC=""
+DO_RDP=0 DO_VNC=0 RDP_RUNNING=0 VNC_RUNNING=0
 
 usage() {
   cat <<EOF
@@ -41,6 +47,9 @@ Usage: sudo ./$SCRIPT_NAME [options]
 
 Installs and configures XFCE with TigerVNC (VNC) and xrdp (RDP) on Ubuntu 24.04.
 A service that is already running is left alone; use --force to reconfigure it.
+When a service does not come up, what this run created for it (users, files, units,
+firewall rules) is removed again and the other service is kept; installed packages
+stay. Exit status: 0 done, 3 done except one service that was removed again, 1 failed.
 Both services listen on localhost only unless told otherwise.
 
 Options:
@@ -76,14 +85,34 @@ Examples:
 EOF
 }
 
-log()  { printf '\n[%s] %s\n' "$SCRIPT_NAME" "$*"; }
+note_err() { if [[ -n $LASTERR ]]; then printf '%s' "$1" >"$LASTERR" 2>/dev/null || true; fi; return 0; }
+log()  { printf '\n[%s] %s\n' "$SCRIPT_NAME" "$*"; if [[ -n $LASTSTEP ]]; then printf '%s' "$*" >"$LASTSTEP" 2>/dev/null || true; fi; return 0; }
 note() { printf '  %s\n' "$*"; }
 warn() { printf 'WARNING: %s\n' "$*" >&2; }
-die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+die()  { printf 'ERROR: %s\n' "$*" >&2; note_err "$*"; exit 1; }
 
-cleanup() { [[ -n $TMP_DIR && -d $TMP_DIR ]] && rm -rf "$TMP_DIR"; return 0; }
-trap cleanup EXIT
-trap 'printf "ERROR: line %s: %s (exit %s)\n" "$LINENO" "$BASH_COMMAND" "$?" >&2' ERR
+
+# What this run changes is written to a journal (see "undo" below). When a
+# service does not come up, only that service is removed again; when the whole
+# run dies, everything it did is. Packages stay installed.
+on_exit() {
+  local rc=$?
+  trap '' PIPE
+  set +e
+  if [[ $rc -ne 0 && $rc -ne 3 && -n $JOURNAL ]]; then
+    if (( DO_RDP )) && [[ -z $STATE_RDP ]]; then rollback_service rdp; STATE_RDP=removed; fi
+    if (( DO_VNC )) && [[ -z $STATE_VNC ]]; then rollback_service vnc; STATE_VNC=removed; fi
+    rollback_shared_if_unused
+  fi
+  [[ -n $TMP_DIR && -d $TMP_DIR ]] && rm -rf "$TMP_DIR"
+  exit "$rc"
+}
+trap on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+trap 'exit 141' PIPE
+trap 'rc=$?; printf "ERROR: line %s: %s (exit %s)\n" "$LINENO" "$BASH_COMMAND" "$rc" >&2; [[ -s ${LASTERR:-/dev/null} ]] || note_err "$(cat "${LASTSTEP:-/dev/null}" 2>/dev/null || true) failed (exit $rc)"' ERR
+
 
 # ---------------------------------------------------------------- arguments
 need_val() { [[ $2 -ge 2 ]] || die "$1 requires a value"; }
@@ -140,7 +169,7 @@ check_user_name() { # role name
 (( ENABLE_VNC || ENABLE_RDP )) || die "Nothing to do: both --no-vnc and --no-rdp were given."
 
 # home and group of a desktop user (a user that is still to be created gets /home/NAME)
-home_of()  { local h; h=$(getent passwd "$1" | cut -d: -f6); printf '%s' "${h:-/home/$1}"; }
+home_of()  { local h; h=$(getent passwd "$1" | cut -d: -f6 || true); printf '%s' "${h:-/home/$1}"; }
 group_of() { id -gn "$1" 2>/dev/null || printf '%s' "$1"; }
 VNC_PORT=$((5900 + VNC_DISPLAY))
 VNC_UNIT="tigervnc@${VNC_DISPLAY}.service"
@@ -248,24 +277,282 @@ fi
 exec 9>/run/lock/setup-remote-desktop.lock
 flock -n 9 || die "Another run of this script is in progress."
 
+# ---------------------------------------------------------------- undo
+# Everything this run creates or replaces is written to a journal, one line
+# "kind|service|a|b" each. rollback undoes the lines of one service, newest
+# first. Only what THIS run made is touched: users that already existed, and
+# files that were already as wanted, are not in the journal.
+JSVC=shared
+journal() { local IFS='|'; printf '%s\n' "$*" >>"$JOURNAL"; }
+
+remove_user() { # a user this run created
+  local u=$1 uid
+  [[ $u != root ]] || return 0
+  uid=$(id -u "$u" 2>/dev/null) || return 0
+  (( uid >= 1000 )) || return 0
+  loginctl terminate-user "$u" >/dev/null 2>&1 || true
+  pkill -KILL -u "$u" >/dev/null 2>&1 || true
+  sleep 1
+  userdel -r -f "$u" >/dev/null 2>&1 || warn "Could not remove the user $u."
+  return 0
+}
+
+rollback() { # rdp | vnc | shared
+  local svc=$1 kind s a b
+  local -a units
+  [[ -n $JOURNAL && -s $JOURNAL ]] || return 0
+  while IFS='|' read -r -u 8 kind s a b; do
+    [[ $s == "$svc" ]] || continue
+    case $kind in
+      units)  read -ra units <<<"$a"; systemctl disable --now "${units[@]}" </dev/null >/dev/null 2>&1 || true ;;
+      file)   rm -f -- "$a" || warn "Could not remove $a." ;;
+      backup) if [[ -e $b ]]; then mv -f -- "$b" "$a" || warn "Could not restore $a."; fi ;;
+      tree)   if [[ $a == /*/.vnc ]]; then rm -rf -- "$a" || warn "Could not remove $a."; fi ;;
+      ufw)    ufw delete allow from "$a" to any port "$b" proto tcp </dev/null >/dev/null 2>&1 || warn "Could not remove the firewall rule for port $b." ;;
+      user)   remove_user "$a" ;;
+    esac
+  done 8< <(tac "$JOURNAL")
+  # what was undone is forgotten, so undoing twice does nothing
+  grep -v -E "^[^|]+\|$svc\|" "$JOURNAL" >"$JOURNAL.new" || true
+  mv -f "$JOURNAL.new" "$JOURNAL"
+  return 0
+}
+
+rollback_service() { # rdp | vnc
+  local svc=$1
+  set +e
+  log "Removing what this run set up for ${svc^^}"
+  printf 'TWREMOVED %s\n' "$svc"
+  rollback "$svc"
+  systemctl daemon-reload >/dev/null 2>&1
+  # a service that ran before (--force) goes back to its old settings
+  if [[ $svc == rdp ]] && (( RDP_RUNNING )); then systemctl restart xrdp-sesman xrdp >/dev/null 2>&1; fi
+  if [[ $svc == vnc ]] && (( VNC_RUNNING )); then systemctl restart "$VNC_UNIT" >/dev/null 2>&1; fi
+  set -e
+  return 0
+}
+
+# the session launcher is shared: it goes only when no service of this run is left
+rollback_shared_if_unused() {
+  [[ $STATE_RDP == ok || $STATE_VNC == ok ]] && return 0
+  rollback shared
+  return 0
+}
+
 # ------------------------------------------------------------------- users
-create_user() { # name
+create_user() { # name service
   local u=$1
   if id "$u" >/dev/null 2>&1; then note "User $u exists - not changed"; return 0; fi
   [[ -n $ACCOUNT_PW ]] || die "No password was given for the new user $u."
   log "Creating user $u"
   useradd -m -s /bin/bash "$u" || die "Could not create user $u."
+  journal user "$2" "$u"
   printf '%s:%s\n' "$u" "$ACCOUNT_PW" | chpasswd || die "Could not set the password of $u."
 }
-if (( CREATE_USERS )); then
-  if (( DO_RDP )); then create_user "$RDP_USER"; fi
-  if (( DO_VNC )); then create_user "$VNC_USER"; fi
-fi
-ACCOUNT_PW=""
-RDP_HOME=$(home_of "$RDP_USER"); RDP_GROUP=$(group_of "$RDP_USER")
-VNC_HOME=$(home_of "$VNC_USER"); VNC_GROUP=$(group_of "$VNC_USER")
-if (( DO_RDP )); then [[ -d $RDP_HOME ]] || die "Home folder '$RDP_HOME' of $RDP_USER does not exist."; fi
-if (( DO_VNC )); then [[ -d $VNC_HOME ]] || die "Home folder '$VNC_HOME' of $VNC_USER does not exist."; fi
+
+# Put a file in place; return 0 when it changed (old copy kept as .backup.*).
+install_file() {
+  local src=$1 dst=$2 mode=$3 owner=$4 group=$5 changed=1 bak
+  if [[ -e $dst ]] && cmp -s "$src" "$dst"; then
+    changed=0
+  elif [[ -e $dst ]]; then
+    bak="$dst.backup.$(date +%Y%m%d%H%M%S)"
+    cp -a "$dst" "$bak"
+    journal backup "$JSVC" "$dst" "$bak"
+  else
+    journal file "$JSVC" "$dst"
+  fi
+  (( changed )) && install -D -m "$mode" -o "$owner" -g "$group" "$src" "$dst"
+  chmod "$mode" "$dst"
+  chown "$owner:$group" "$dst"
+  (( changed ))
+}
+
+# Remote XFCE sessions otherwise keep asking for a password for colour
+# profiles and package-source refreshes. Only for the desktop users.
+install_polkit() { # user
+  cat > "$TMP_DIR/polkit-$1" <<EOF
+// Termwright remote desktop: no authentication pop-ups in the remote session.
+polkit.addRule(function(action, subject) {
+    if (subject.user == "$1" &&
+        (action.id.indexOf("org.freedesktop.color-manager.") == 0 ||
+         action.id == "org.freedesktop.packagekit.system-sources-refresh")) {
+        return polkit.Result.YES;
+    }
+});
+EOF
+  install_file "$TMP_DIR/polkit-$1" "/etc/polkit-1/rules.d/45-remote-desktop-$1.rules" 0644 root root || true
+}
+
+open_firewall() { # port network(0|1)
+  local port=$1 net=$2 out
+  (( ENABLE_UFW )) || return 0
+  [[ -n $ALLOWED_CIDR ]] && (( net )) || return 0
+  command -v ufw >/dev/null 2>&1 || "${APT[@]}" install ufw
+  log "Firewall (UFW)"
+  out=$(ufw allow from "$ALLOWED_CIDR" to any port "$port" proto tcp)
+  printf '%s\n' "$out"
+  grep -q 'Skipping' <<<"$out" || journal ufw "$JSVC" "$ALLOWED_CIDR" "$port"
+  if ufw status | head -1 | grep -qi inactive; then
+    warn "UFW is inactive: the rules are saved but not enforced. Enable it yourself (sudo ufw enable) after allowing SSH."
+  fi
+  return 0
+}
+
+# --------------------------------------------------------------- services
+# Each service is set up in a subshell (a failure there stops that service
+# only), checked, and removed again when it does not work.
+setup_rdp() {
+  JSVC=rdp
+  if (( ! RDP_RUNNING )); then journal units rdp "xrdp xrdp-sesman"; fi
+  if (( CREATE_USERS )); then create_user "$RDP_USER" rdp; fi
+  RDP_HOME=$(home_of "$RDP_USER"); RDP_GROUP=$(group_of "$RDP_USER")
+  [[ -d $RDP_HOME ]] || die "Home folder '$RDP_HOME' of $RDP_USER does not exist."
+  log "Installing packages for RDP"
+  "${APT[@]}" install xrdp xorgxrdp
+  install_polkit "$RDP_USER"
+
+  log "Configuring xrdp"
+  printf '#!/bin/sh\nexec /usr/local/bin/start-remote-xfce\n' > "$TMP_DIR/xsession"
+  install_file "$TMP_DIR/xsession" "$RDP_HOME/.xsession" 0755 "$RDP_USER" "$RDP_GROUP" || true
+
+  adduser xrdp ssl-cert >/dev/null 2>&1 || true
+
+  local want bak
+  want="port=3389"
+  (( RDP_NETWORK )) || want="port=tcp://127.0.0.1:3389"
+  if ! grep -qxF "$want" /etc/xrdp/xrdp.ini; then
+    bak="/etc/xrdp/xrdp.ini.backup.$(date +%Y%m%d%H%M%S)"
+    cp -a /etc/xrdp/xrdp.ini "$bak"
+    journal backup rdp /etc/xrdp/xrdp.ini "$bak"
+    sed -i -E "0,/^port=(3389|tcp:\/\/[^[:space:]]*:3389)\$/s//${want//\//\\/}/" /etc/xrdp/xrdp.ini
+    grep -qxF "$want" /etc/xrdp/xrdp.ini || die "Could not set '$want' in /etc/xrdp/xrdp.ini."
+  fi
+  systemctl enable xrdp xrdp-sesman >/dev/null 2>&1
+  log "Starting xrdp"
+  systemctl restart xrdp-sesman xrdp
+  open_firewall "$RDP_PORT" "$RDP_NETWORK"
+}
+
+setup_vnc() {
+  JSVC=vnc
+  if (( ! VNC_RUNNING )); then journal units vnc "$VNC_UNIT"; fi
+  if (( CREATE_USERS )); then create_user "$VNC_USER" vnc; fi
+  VNC_HOME=$(home_of "$VNC_USER"); VNC_GROUP=$(group_of "$VNC_USER")
+  [[ -d $VNC_HOME ]] || die "Home folder '$VNC_HOME' of $VNC_USER does not exist."
+  log "Installing packages for VNC"
+  "${APT[@]}" install tigervnc-standalone-server tigervnc-common
+  install_polkit "$VNC_USER"
+
+  log "Configuring TigerVNC display :$VNC_DISPLAY (TCP $VNC_PORT)"
+  [[ -d $VNC_HOME/.vnc ]] || journal tree vnc "$VNC_HOME/.vnc"
+  install -d -m 0700 -o "$VNC_USER" -g "$VNC_GROUP" "$VNC_HOME/.vnc"
+  printf '#!/bin/sh\nexec /usr/local/bin/start-remote-xfce\n' > "$TMP_DIR/xstartup"
+  install_file "$TMP_DIR/xstartup" "$VNC_HOME/.vnc/xstartup" 0755 "$VNC_USER" "$VNC_GROUP" || true
+
+  local bak
+  if [[ -n $VNC_PW ]]; then   # from --vnc-password-stdin or --secrets-stdin
+    printf '%s\n' "$VNC_PW" | runuser -u "$VNC_USER" -- vncpasswd -f > "$TMP_DIR/vncpw"
+    [[ -s $TMP_DIR/vncpw ]] || die "vncpasswd produced no password file."
+    if [[ -e $VNC_PASSWD_FILE ]]; then
+      bak="$VNC_PASSWD_FILE.backup.$(date +%Y%m%d%H%M%S)"
+      cp -a "$VNC_PASSWD_FILE" "$bak"
+      journal backup vnc "$VNC_PASSWD_FILE" "$bak"
+    else
+      journal file vnc "$VNC_PASSWD_FILE"
+    fi
+    install -D -m 0600 -o "$VNC_USER" -g "$VNC_GROUP" "$TMP_DIR/vncpw" "$VNC_PASSWD_FILE"
+  elif [[ ! -s $VNC_PASSWD_FILE ]]; then
+    log "Set a VNC password for $VNC_USER"
+    journal file vnc "$VNC_PASSWD_FILE"
+    runuser -u "$VNC_USER" -- vncpasswd
+  fi
+  chmod 0600 "$VNC_PASSWD_FILE"
+  chown "$VNC_USER:$VNC_GROUP" "$VNC_PASSWD_FILE"
+
+  local localhost_arg=yes
+  (( VNC_NETWORK )) && localhost_arg=no
+  cat > "$TMP_DIR/vnc-unit" <<EOF
+[Unit]
+Description=TigerVNC server for $VNC_USER on display :%i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=$VNC_USER
+Group=$VNC_GROUP
+WorkingDirectory=$VNC_HOME
+Environment=HOME=$VNC_HOME
+TimeoutStartSec=60
+ExecStartPre=-/usr/bin/vncserver -kill :%i
+ExecStart=/usr/bin/vncserver :%i -geometry $GEOMETRY -depth $DEPTH -localhost $localhost_arg -SecurityTypes VncAuth
+ExecStop=-/usr/bin/vncserver -kill :%i
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  install_file "$TMP_DIR/vnc-unit" /etc/systemd/system/tigervnc@.service 0644 root root || true
+  systemctl daemon-reload
+  systemctl enable "$VNC_UNIT" >/dev/null 2>&1
+  log "Starting $VNC_UNIT"
+  systemctl restart "$VNC_UNIT"
+  open_firewall "$VNC_PORT" "$VNC_NETWORK"
+}
+
+wait_for() { local n=$1 i; shift; for ((i = 0; i < n; i++)); do "$@" && return 0; sleep 1; done; return 1; }
+check_port() { # name port network(0|1) unit...
+  local name=$1 port=$2 net=$3; shift 3
+  local u
+  for u in "$@"; do
+    wait_for 20 is_active "$u" || {
+      echo "$name: $u is not active" >&2
+      systemctl --no-pager --full status "$u" 2>&1 | tail -15 >&2 || true
+      note_err "$name: $u did not start"; return 1; }
+  done
+  wait_for 20 listening "$port" || { echo "$name: TCP $port is not listening" >&2; note_err "$name: TCP $port is not listening"; return 1; }
+  if (( ! net )) && exposed "$port"; then
+    echo "$name: TCP $port is reachable from the network, expected localhost only" >&2
+    note_err "$name: TCP $port is reachable from the network, expected localhost only"; return 1
+  fi
+  note "$name: OK (port $port, $( (( net )) && echo 'all interfaces' || echo 'localhost only'))"
+}
+login_warn() { # user
+  if local_login "$1"; then
+    warn "$1 is logged in at this computer's own screen. A remote desktop for the same user can show a black screen: log out locally first, or use another user."
+  fi
+  return 0
+}
+validate_rdp() { log "Checking RDP"; check_port RDP "$RDP_PORT" "$RDP_NETWORK" xrdp xrdp-sesman || return 1; login_warn "$RDP_USER"; }
+validate_vnc() { log "Checking VNC"; check_port VNC "$VNC_PORT" "$VNC_NETWORK" "$VNC_UNIT" || return 1; login_warn "$VNC_USER"; }
+
+FAILED_NOTES=()
+# shellcheck disable=SC2034  # st is a nameref: it sets STATE_RDP / STATE_VNC
+run_service() { # rdp | vnc
+  local svc=$1 rc=0 reason
+  local -n st=STATE_${svc^^}
+  : >"$LASTERR"; : >"$LASTSTEP"
+  set +e
+  ( set -e; "setup_$svc" )
+  rc=$?
+  if (( rc == 0 )); then "validate_$svc"; rc=$?; fi
+  set -e
+  if (( rc == 0 )); then st=ok; return 0; fi
+  reason=$(cat "$LASTERR" 2>/dev/null || true)
+  [[ -n $reason ]] || reason="$(cat "$LASTSTEP" 2>/dev/null || true) failed"
+  [[ $reason == "${svc^^}:"* ]] || reason="${svc^^}: $reason"
+  FAILED_NOTES+=("$reason")
+  rollback_service "$svc"
+  st=removed
+  return 0
+}
+
+# ------------------------------------------------------------------- run
+TMP_DIR=$(mktemp -d)
+JOURNAL=$TMP_DIR/journal; LASTERR=$TMP_DIR/lasterr; LASTSTEP=$TMP_DIR/laststep
+: >"$JOURNAL"
 
 # ----------------------------------------------------------------- packages
 log "Installing packages"
@@ -274,26 +561,7 @@ APT=(apt-get -o DPkg::Lock::Timeout=120 -y)
 "${APT[@]}" update || warn "apt-get update failed; trying with the package lists already here."
 packages=(xfce4 dbus-x11)
 (( GOODIES )) && packages+=(xfce4-goodies)
-(( DO_VNC )) && packages+=(tigervnc-standalone-server tigervnc-common)
-(( DO_RDP )) && packages+=(xrdp xorgxrdp)
 "${APT[@]}" install "${packages[@]}"
-
-TMP_DIR=$(mktemp -d)
-RESTART_RDP=0 RESTART_VNC=0
-
-# Put a file in place; return 0 when it changed (old copy kept as .backup.*).
-install_file() {
-  local src=$1 dst=$2 mode=$3 owner=$4 group=$5 changed=1
-  if [[ -e $dst ]] && cmp -s "$src" "$dst"; then
-    changed=0
-  elif [[ -e $dst ]]; then
-    cp -a "$dst" "$dst.backup.$(date +%Y%m%d%H%M%S)"
-  fi
-  (( changed )) && install -D -m "$mode" -o "$owner" -g "$group" "$src" "$dst"
-  chmod "$mode" "$dst"
-  chown "$owner:$group" "$dst"
-  (( changed ))
-}
 
 # ------------------------------------------------------- desktop launcher
 log "Creating the XFCE session launcher"
@@ -323,149 +591,41 @@ fi
 
 exec env -u WAYLAND_DISPLAY -u GNOME_SETUP_DISPLAY dbus-run-session -- startxfce4
 EOF
+JSVC=shared
 install_file "$TMP_DIR/start-remote-xfce" /usr/local/bin/start-remote-xfce 0755 root root || true
 
-# Remote XFCE sessions otherwise keep asking for a password for colour
-# profiles and package-source refreshes. Only for the desktop users.
-install_polkit() { # user
-  cat > "$TMP_DIR/polkit-$1" <<EOF
-// Termwright remote desktop: no authentication pop-ups in the remote session.
-polkit.addRule(function(action, subject) {
-    if (subject.user == "$1" &&
-        (action.id.indexOf("org.freedesktop.color-manager.") == 0 ||
-         action.id == "org.freedesktop.packagekit.system-sources-refresh")) {
-        return polkit.Result.YES;
-    }
-});
-EOF
-  install_file "$TMP_DIR/polkit-$1" "/etc/polkit-1/rules.d/45-remote-desktop-$1.rules" 0644 root root || true
-}
-if (( DO_RDP )); then install_polkit "$RDP_USER"; fi
-if (( DO_VNC )); then install_polkit "$VNC_USER"; fi
+if (( DO_RDP )); then run_service rdp; fi
+if (( DO_VNC )); then run_service vnc; fi
+ACCOUNT_PW=""; VNC_PW=""
 
-# -------------------------------------------------------------------- RDP
-if (( DO_RDP )); then
-  log "Configuring xrdp"
-  printf '#!/bin/sh\nexec /usr/local/bin/start-remote-xfce\n' > "$TMP_DIR/xsession"
-  install_file "$TMP_DIR/xsession" "$RDP_HOME/.xsession" 0755 "$RDP_USER" "$RDP_GROUP" || true
-
-  adduser xrdp ssl-cert >/dev/null 2>&1 || true
-
-  want="port=3389"
-  (( RDP_NETWORK )) || want="port=tcp://127.0.0.1:3389"
-  if ! grep -qxF "$want" /etc/xrdp/xrdp.ini; then
-    cp -a /etc/xrdp/xrdp.ini "/etc/xrdp/xrdp.ini.backup.$(date +%Y%m%d%H%M%S)"
-    sed -i -E "0,/^port=(3389|tcp:\/\/[^[:space:]]*:3389)\$/s//${want//\//\\/}/" /etc/xrdp/xrdp.ini
-    grep -qxF "$want" /etc/xrdp/xrdp.ini || die "Could not set '$want' in /etc/xrdp/xrdp.ini."
-  fi
-  systemctl enable xrdp xrdp-sesman >/dev/null 2>&1
-  RESTART_RDP=1
-fi
-
-# -------------------------------------------------------------------- VNC
-if (( DO_VNC )); then
-  log "Configuring TigerVNC display :$VNC_DISPLAY (TCP $VNC_PORT)"
-  install -d -m 0700 -o "$VNC_USER" -g "$VNC_GROUP" "$VNC_HOME/.vnc"
-  printf '#!/bin/sh\nexec /usr/local/bin/start-remote-xfce\n' > "$TMP_DIR/xstartup"
-  install_file "$TMP_DIR/xstartup" "$VNC_HOME/.vnc/xstartup" 0755 "$VNC_USER" "$VNC_GROUP" || true
-
-  if (( PW_STDIN )); then
-    printf '%s\n' "$VNC_PW" | runuser -u "$VNC_USER" -- vncpasswd -f > "$TMP_DIR/vncpw"
-    [[ -s $TMP_DIR/vncpw ]] || die "vncpasswd produced no password file."
-    install -D -m 0600 -o "$VNC_USER" -g "$VNC_GROUP" "$TMP_DIR/vncpw" "$VNC_PASSWD_FILE"
-    VNC_PW=""
-  elif [[ ! -s $VNC_PASSWD_FILE ]]; then
-    log "Set a VNC password for $VNC_USER"
-    runuser -u "$VNC_USER" -- vncpasswd
-  fi
-  chmod 0600 "$VNC_PASSWD_FILE"
-  chown "$VNC_USER:$VNC_GROUP" "$VNC_PASSWD_FILE"
-
-  localhost_arg=yes
-  (( VNC_NETWORK )) && localhost_arg=no
-  cat > "$TMP_DIR/vnc-unit" <<EOF
-[Unit]
-Description=TigerVNC server for $VNC_USER on display :%i
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=forking
-User=$VNC_USER
-Group=$VNC_GROUP
-WorkingDirectory=$VNC_HOME
-Environment=HOME=$VNC_HOME
-TimeoutStartSec=60
-ExecStartPre=-/usr/bin/vncserver -kill :%i
-ExecStart=/usr/bin/vncserver :%i -geometry $GEOMETRY -depth $DEPTH -localhost $localhost_arg -SecurityTypes VncAuth
-ExecStop=-/usr/bin/vncserver -kill :%i
-Restart=on-failure
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  install_file "$TMP_DIR/vnc-unit" /etc/systemd/system/tigervnc@.service 0644 root root || true
-  systemctl daemon-reload
-  systemctl enable "$VNC_UNIT" >/dev/null 2>&1
-  RESTART_VNC=1
-fi
-
-# ----------------------------------------------------------------- restart
-(( RESTART_RDP )) && { log "Starting xrdp"; systemctl restart xrdp-sesman xrdp; }
-(( RESTART_VNC )) && { log "Starting $VNC_UNIT"; systemctl restart "$VNC_UNIT"; }
-
-# --------------------------------------------------------------------- UFW
-if (( ENABLE_UFW )) && [[ -n $ALLOWED_CIDR ]]; then
-  log "Firewall (UFW)"
-  if (( ! RDP_NETWORK && ! VNC_NETWORK )); then
-    note "Both services listen on localhost only, so no firewall rule is needed."
-  else
-    command -v ufw >/dev/null 2>&1 || "${APT[@]}" install ufw
-    (( DO_RDP && RDP_NETWORK )) && ufw allow from "$ALLOWED_CIDR" to any port "$RDP_PORT" proto tcp
-    (( DO_VNC && VNC_NETWORK )) && ufw allow from "$ALLOWED_CIDR" to any port "$VNC_PORT" proto tcp
-    ufw status | head -1 | grep -qi inactive && \
-      warn "UFW is inactive: the rules are saved but not enforced. Enable it yourself (sudo ufw enable) after allowing SSH."
-  fi
-elif (( ENABLE_UFW )) && (( RDP_NETWORK || VNC_NETWORK )); then
+if (( ENABLE_UFW && (RDP_NETWORK || VNC_NETWORK) )) && [[ -z $ALLOWED_CIDR ]]; then
   note "Network access is on but no --allow-cidr was given: the firewall was not changed."
 fi
 
-# -------------------------------------------------------------- validation
-log "Checking"
-failed=0
-check_port() { # name port network(0|1) unit...
-  local name=$1 port=$2 net=$3; shift 3
-  local u
-  for u in "$@"; do
-    wait_for 20 is_active "$u" || { echo "$name: $u is not active" >&2; systemctl --no-pager --full status "$u" 2>&1 | tail -15 >&2 || true; failed=1; return; }
-  done
-  wait_for 20 listening "$port" || { echo "$name: TCP $port is not listening" >&2; failed=1; return; }
-  if (( ! net )) && exposed "$port"; then echo "$name: TCP $port is reachable from the network, expected localhost only" >&2; failed=1; return; fi
-  note "$name: OK (port $port, $( (( net )) && echo 'all interfaces' || echo 'localhost only'))"
-}
-wait_for() { local n=$1 i; shift; for ((i = 0; i < n; i++)); do "$@" && return 0; sleep 1; done; return 1; }
-(( DO_RDP )) && check_port RDP "$RDP_PORT" "$RDP_NETWORK" xrdp xrdp-sesman
-(( DO_VNC )) && check_port VNC "$VNC_PORT" "$VNC_NETWORK" "$VNC_UNIT"
+# ----------------------------------------------------------------- result
+tried=$(( DO_RDP + DO_VNC ))
+failed=${#FAILED_NOTES[@]}
+if (( failed >= tried )); then
+  rollback_shared_if_unused
+  die "Setup failed, and what this run had set up was removed again. ${FAILED_NOTES[*]}"
+fi
 
-if (( DO_RDP )) && local_login "$RDP_USER"; then
-  warn "$RDP_USER is logged in at this computer's own screen. A remote desktop for the same user can show a black screen: log out locally first, or use another user."
-fi
-if (( DO_VNC )) && [[ $VNC_USER != "$RDP_USER" ]] && local_login "$VNC_USER"; then
-  warn "$VNC_USER is logged in at this computer's own screen. A remote desktop for the same user can show a black screen: log out locally first, or use another user."
-fi
-if (( ENABLE_RDP && ENABLE_VNC )) && [[ $RDP_USER == "$VNC_USER" ]]; then
+if (( DO_RDP && DO_VNC )) && [[ $RDP_USER == "$VNC_USER" ]]; then
   warn "RDP and VNC share one user ($RDP_USER); using both at once can overwrite each other's XFCE settings. Use one user per service."
 fi
-
 report_done() {
   printf '\nSummary - %s (%s)\n' "$(hostname)" "$(hostname -I 2>/dev/null | xargs || true)"
-  (( DO_RDP )) && note "RDP: 127.0.0.1:$RDP_PORT  user $RDP_USER (Xorg session)"
-  (( DO_VNC )) && note "VNC: 127.0.0.1:$VNC_PORT  user $VNC_USER (display :$VNC_DISPLAY), $GEOMETRY"
-  (( ! RDP_NETWORK && ! VNC_NETWORK )) && \
+  if [[ $STATE_RDP == ok ]]; then note "RDP: 127.0.0.1:$RDP_PORT  user $RDP_USER (Xorg session)"; fi
+  if [[ $STATE_VNC == ok ]]; then note "VNC: 127.0.0.1:$VNC_PORT  user $VNC_USER (display :$VNC_DISPLAY), $GEOMETRY"; fi
+  if (( ! RDP_NETWORK && ! VNC_NETWORK )); then
     note "Reach them through SSH: ssh -L 3389:127.0.0.1:$RDP_PORT -L $VNC_PORT:127.0.0.1:$VNC_PORT <user>@<this host>, or in Termwright use this SSH session as the jump host with address 127.0.0.1."
+  fi
   note "Logs: journalctl -u xrdp -u xrdp-sesman -u $VNC_UNIT ; ~/.xsession-errors ; ~/.vnc/*.log"
 }
 report_done
-(( failed == 0 )) || die "Setup finished with errors (see above)."
+if (( failed > 0 )); then
+  for n in "${FAILED_NOTES[@]}"; do warn "$n - it was removed again; the other service was kept."; done
+  log "Done, but not everything: see the warnings above"
+  exit 3
+fi
 log "Done"
