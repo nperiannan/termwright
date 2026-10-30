@@ -9,7 +9,7 @@ import { Ui } from './ui.service';
  */
 
 const base = (p: string) => p.slice(p.lastIndexOf('/') + 1);
-const show = (u: JumpUse) => u.folder ? `${u.path}  (default jump host of the folder)` : `${u.path}  (${u.protocol || 'SSH2'})`;
+const show = (u: JumpUse) => u.folder ? `${u.path}  (default jump host of the folder)` : u.path.includes(`(${u.protocol})`) || !u.protocol ? u.path : `${u.path}  (${u.protocol})`;
 const names = (l: string[]) => l.length === 1 ? '"' + base(l[0]) + '"' : l.length + ' sessions';
 
 /** After sessions were moved or renamed: asks whether the sessions that use them as jump host follow. Returns the reverse map (for Undo) when they were updated. */

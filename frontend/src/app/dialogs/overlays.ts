@@ -26,15 +26,15 @@ import { Icon } from '../components/icon';
     }
     @if (ui.choiceReq(); as c) {
       <div class="modal-backdrop">
-        <div class="modal small choice" role="dialog" aria-modal="true">
+        <div class="modal choice" role="dialog" aria-modal="true">
           <div class="modal-head"><span class="mh-ic" [class.dz]="c.danger"><app-icon [name]="c.danger ? 'alert' : 'connect'" [size]="17" /></span><span class="mh-t">{{ c.title }}</span></div>
           <div class="modal-body"><p class="pre">{{ c.message }}</p>
             @if (c.items.length) { <ul class="cl">@for (i of c.items; track i) { <li>{{ i }}</li> }</ul> }</div>
-          <div class="modal-foot"><span class="spacer"></span>
-            <button type="button" (click)="closeChoice(null)">Cancel</button>
+          <div class="modal-foot choice-foot">
             @for (o of c.options; track o.value) {
               <button type="button" [class.primary]="o.primary" [class.danger]="o.danger" (click)="closeChoice(o.value)">{{ o.label }}</button>
             }
+            <button type="button" class="ghost" (click)="closeChoice(null)">Cancel</button>
           </div>
         </div>
       </div>
@@ -74,6 +74,13 @@ import { Icon } from '../components/icon';
     </div>
   `,
   styles: [`.field { display: flex; flex-direction: column; gap: 6px; } .pre { white-space: pre-wrap; margin: 0; }
+    .modal.choice { width: min(520px, calc(100vw - 32px)); max-width: none; }
+    .choice-foot { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+    .choice-foot .spacer { display: none; }
+    .choice-foot button { width: 100%; height: auto; min-height: 34px; padding: 8px 14px; white-space: normal; line-height: 1.3; text-align: center; margin: 0; }
+    .choice-foot button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+    .choice-foot button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+    .choice-foot button.ghost:hover { color: var(--text); background: var(--hover); }
     .cl { margin: 10px 0 0; padding: 6px 8px 6px 24px; max-height: 220px; overflow: auto; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); background: var(--input-bg); border-radius: 6px; user-select: text; }
     .cl li { padding: 1px 0; }
     .mh-ic.dz { background: rgba(229, 72, 77, .14) !important; color: var(--danger) !important; }
