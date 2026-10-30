@@ -5,6 +5,7 @@ export interface LogonAction { expect: string; send: string; hide: boolean; trai
 export interface Session {
   path: string; name: string; folder: string; protocol: string;
   hostname: string; port: number; username: string; identityFile: string; authMethods: string;
+  legacyAlgorithms: boolean; kexAlgorithms: string; ciphers: string; macs: string; hostKeyAlgorithms: string;
   emulation: string; termType: string; description: string[];
   rows: number; cols: number; scrollback: number; keepalive: boolean; keepaliveSec: number;
   comPort: string; baudRate: number; dataBits: number; stopBits: number; parity: number;

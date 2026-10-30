@@ -86,6 +86,11 @@ const (
 	kDevice       = "Termwright Device Type"
 	kOwnLogin     = "Termwright Own Login"
 	kAccount      = "Termwright Account"
+	kLegacyAlgos  = "Termwright Legacy Algorithms"
+	kKexAlgos     = "Termwright Kex Algorithms"
+	kCiphers      = "Termwright Ciphers"
+	kMACs         = "Termwright MACs"
+	kHostKeyAlgos = "Termwright Host Key Algorithms"
 	kEnv          = "Termwright Environment"
 	kRDPDomain    = "Termwright RDP Domain"
 	kRDPFull      = "Termwright RDP Full Screen"
@@ -150,15 +155,25 @@ type LogonAction struct {
 
 // Session is the editable view of a session file exposed to the UI.
 type Session struct {
-	Path             string        `json:"path"`   // "Folder/Sub/Name" (no extension)
-	Name             string        `json:"name"`   // last path element
-	Folder           string        `json:"folder"` // parent folder path, "" for root
-	Protocol         string        `json:"protocol"`
-	Hostname         string        `json:"hostname"`
-	Port             int           `json:"port"`
-	Username         string        `json:"username"`
-	IdentityFile     string        `json:"identityFile"`
-	AuthMethods      string        `json:"authMethods"`
+	Path         string `json:"path"`   // "Folder/Sub/Name" (no extension)
+	Name         string `json:"name"`   // last path element
+	Folder       string `json:"folder"` // parent folder path, "" for root
+	Protocol     string `json:"protocol"`
+	Hostname     string `json:"hostname"`
+	Port         int    `json:"port"`
+	Username     string `json:"username"`
+	IdentityFile string `json:"identityFile"`
+	AuthMethods  string `json:"authMethods"`
+
+	// SSH algorithms. By default Termwright offers modern ones only; old devices may need
+	// LegacyAlgorithms (weak ones are added at the end of each list) or custom OpenSSH-style
+	// lists ("a,b", "+a", "-a", "^a"): key exchange, ciphers, MACs and host key algorithms.
+	LegacyAlgorithms  bool   `json:"legacyAlgorithms"`
+	KexAlgorithms     string `json:"kexAlgorithms"`
+	Ciphers           string `json:"ciphers"`
+	MACs              string `json:"macs"`
+	HostKeyAlgorithms string `json:"hostKeyAlgorithms"`
+
 	Emulation        string        `json:"emulation"`
 	TermType         string        `json:"termType"`
 	Description      []string      `json:"description"`
@@ -338,6 +353,11 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.DeviceType = f.Str(kDevice, "")
 	s.OwnLogin = f.Bool(kOwnLogin, false)
 	s.Account = f.Str(kAccount, "")
+	s.LegacyAlgorithms = f.Bool(kLegacyAlgos, false)
+	s.KexAlgorithms = f.Str(kKexAlgos, "")
+	s.Ciphers = f.Str(kCiphers, "")
+	s.MACs = f.Str(kMACs, "")
+	s.HostKeyAlgorithms = f.Str(kHostKeyAlgos, "")
 	s.Environment = f.Str(kEnv, "")
 	s.RDPDomain = f.Str(kRDPDomain, "")
 	s.RDPFullScreen = f.Bool(kRDPFull, false)
@@ -662,6 +682,11 @@ func (s Session) Apply(f *sessionfile.File) {
 	setOptStr(f, kDevice, s.DeviceType)
 	setOptBool(f, kOwnLogin, s.OwnLogin && s.DeviceType != "")
 	setOptStr(f, kAccount, s.Account)
+	setOptBool(f, kLegacyAlgos, s.LegacyAlgorithms)
+	setOptStr(f, kKexAlgos, s.KexAlgorithms)
+	setOptStr(f, kCiphers, s.Ciphers)
+	setOptStr(f, kMACs, s.MACs)
+	setOptStr(f, kHostKeyAlgos, s.HostKeyAlgorithms)
 	setOptStr(f, kEnv, s.Environment)
 	setOptStr(f, kRDPDomain, s.RDPDomain)
 	setOptBool(f, kRDPFull, s.RDPFullScreen)

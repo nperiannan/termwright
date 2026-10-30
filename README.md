@@ -101,7 +101,7 @@ Earlier releases are described in the [changelog](CHANGELOG.md).
 | Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and Linux. |
 | Session management | Wake-on-LAN (also through a jump host); folders with defaults; favourites and recents; environments, with confirmation before multi-tab sends to production; reachability checks; bulk edit; workspaces; Quick Open; drag and drop. |
 | Discovery | Scans a network or range (up to /22): open ports, SSH and Telnet banners, web servers and certificates, SIP, SNMP v2c, DNS, MAC vendor. Each result shows its evidence; selected devices are added as sessions. Discovery never logs in. |
-| Import and export | Sessions are plain-text `.ini` files, and unknown keys are preserved byte for byte. Import from SecureCRT (Config folder, zip, XML), PuTTY / KiTTY, SuperPuTTY, MobaXterm, OpenSSH config, CSV, Ansible, NetBox and AWS EC2. Export to the same formats plus Tabby. |
+| Import and export | Sessions are plain-text `.ini` files, and unknown keys are preserved byte for byte. Import from SecureCRT (Config folder, zip, XML), PuTTY / KiTTY, SuperPuTTY, MobaXterm, mRemoteNG, OpenSSH config, CSV, Ansible, NetBox and AWS EC2. Export to the same formats plus Tabby. |
 | Terminal | Tabs and tiled layouts; xterm-256color and true colour; Unicode; scrollback search; keyword highlighting; timestamps; auto-scroll control; clickable links; session lock; zoom; per-session fonts and colour schemes. |
 | File transfer | SFTP browser with folder transfers, sync, resume, bookmarks, compare, server-to-server copy, SCP, sudo / su and jump-station targets. Files panel beside the terminal. SCP. ZMODEM (automatic `sz` / `rz`), YMODEM batch, XMODEM. |
 | Automation | Expect/send logon actions with named credentials; output triggers; logon scripts; Python, VBScript (Windows) and JavaScript scripting through a `crt`-style object; script recorder; key map; button bar; output alerts. |
@@ -174,6 +174,7 @@ Installation, first start and every feature are described in the [User Guide](do
   An XML or zip export also works. Session files are copied unchanged, and saved passwords are asked for once and stored in the OS keychain.
 - **PuTTY / KiTTY**: a registry export (`reg export HKCU\Software\SimonTatham\PuTTY\Sessions putty.reg`) or `~/.putty/sessions`. **SuperPuTTY**: `Sessions.xml`.
 - **MobaXterm**: *User sessions → Export all sessions to file*.
+- **mRemoteNG**: *File → Save Connection File As…* (`confCons.xml`); folders, inherited user names and saved passwords are kept.
 - **OpenSSH**: `~/.ssh/config` is read directly.
 
 **File → Export Sessions…** writes the same formats back, so you can always return to another program. The key-by-key mapping is documented in [docs/SESSION_FILES.md](docs/SESSION_FILES.md).
@@ -251,4 +252,4 @@ Termwright is licensed under the [Apache License 2.0](LICENSE). Third-party noti
 
 ---
 
-<sub>SecureCRT® is a registered trademark of VanDyke Software, Inc. PuTTY, KiTTY, SuperPuTTY, MobaXterm and other product names are the property of their respective owners. Termwright is an independent open-source project, not affiliated with or endorsed by any of them; these names are used only to identify the file formats Termwright can import and export.</sub>
+<sub>SecureCRT® is a registered trademark of VanDyke Software, Inc. PuTTY, KiTTY, SuperPuTTY, MobaXterm, mRemoteNG and other product names are the property of their respective owners. Termwright is an independent open-source project, not affiliated with or endorsed by any of them; these names are used only to identify the file formats Termwright can import and export.</sub>

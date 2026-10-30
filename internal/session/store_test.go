@@ -145,6 +145,7 @@ func TestV2FieldsRoundTrip(t *testing.T) {
 	s.ProxyType, s.ProxyHost, s.ProxyPort = "socks5", "p", 1080
 	s.AutoReconnect, s.X11Forward, s.AgentForward = true, true, true
 	s.KeywordSet, s.FontFamily, s.FontSize, s.Backspace = "Network", "Menlo", 15, "bs"
+	s.LegacyAlgorithms, s.KexAlgorithms, s.Ciphers, s.MACs, s.HostKeyAlgorithms = true, "+diffie-hellman-group1-sha1", "+aes128-cbc", "+hmac-sha1", "+ssh-rsa"
 	if _, err := st.Save(s, ""); err != nil {
 		t.Fatal(err)
 	}

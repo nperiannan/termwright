@@ -107,12 +107,14 @@ func (m *Manager) TestKeyLogin(tabID, keyPath, passphrase string) error {
 	defer cancel()
 	probe := &Tab{id: tabID, sess: s}
 	cfg := &ssh.ClientConfig{
-		User:              client.User(),
-		Auth:              []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback:   m.hostKeyCallback(ctx, probe),
-		HostKeyAlgorithms: m.knownHostAlgorithms(addr),
-		Timeout:           20 * time.Second,
-		ClientVersion:     "SSH-2.0-Termwright",
+		User:            client.User(),
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: m.hostKeyCallback(ctx, probe),
+		Timeout:         20 * time.Second,
+		ClientVersion:   "SSH-2.0-Termwright",
+	}
+	if err := applyAlgorithms(cfg, s, m.knownHostAlgorithms(addr)); err != nil {
+		return err
 	}
 	raw, _, err := m.dialNet(ctx, probe, s, addr, 0)
 	if err != nil {

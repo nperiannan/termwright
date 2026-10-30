@@ -67,6 +67,9 @@ func (s *Store) Import(src string, opt ImportOptions) (*ImportResult, error) {
 	if !strings.HasSuffix(lower, ".zip") && !strings.HasSuffix(lower, ".xml") && st.Size() < 64<<20 {
 		// PuTTY (.reg, session files) and MobaXterm (.mxtsessions, MobaXterm.ini) are recognised by content
 		if data, err := os.ReadFile(src); err == nil {
+			if isMRemoteNG(data) {
+				return s.importMRemoteNG(data, opt)
+			}
 			if res, ok := s.importThirdParty(src, data, opt); ok {
 				return res, nil
 			}
@@ -81,8 +84,13 @@ func (s *Store) Import(src string, opt ImportOptions) (*ImportResult, error) {
 		defer zr.Close()
 		return s.importFS(zr, opt)
 	case strings.HasSuffix(lower, ".xml"):
-		if data, err := os.ReadFile(src); err == nil && isSuperPuTTY(data) {
-			return s.importSuperPuTTY(data, opt)
+		if data, err := os.ReadFile(src); err == nil {
+			if isMRemoteNG(data) {
+				return s.importMRemoteNG(data, opt)
+			}
+			if isSuperPuTTY(data) {
+				return s.importSuperPuTTY(data, opt)
+			}
 		}
 		fh, err := os.Open(src)
 		if err != nil {

@@ -271,12 +271,14 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 	}
 
 	cfg := &ssh.ClientConfig{
-		User:              user,
-		Auth:              auths,
-		HostKeyCallback:   m.stepAfterHostKey(t, depth, m.hostKeyCallback(ctx, t)),
-		HostKeyAlgorithms: m.knownHostAlgorithms(addr),
-		Timeout:           20 * time.Second,
-		ClientVersion:     "SSH-2.0-Termwright",
+		User:            user,
+		Auth:            auths,
+		HostKeyCallback: m.stepAfterHostKey(t, depth, m.hostKeyCallback(ctx, t)),
+		Timeout:         20 * time.Second,
+		ClientVersion:   "SSH-2.0-Termwright",
+	}
+	if err := applyAlgorithms(cfg, s, m.knownHostAlgorithms(addr)); err != nil {
+		return nil, "", nil, err
 	}
 	if depth == 0 && s.JumpSession == "" {
 		m.step(t, "tcp")
@@ -293,7 +295,7 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 	stop()
 	if err != nil {
 		_ = raw.Close()
-		return nil, "", nil, err
+		return nil, "", nil, legacyHint(err, s)
 	}
 	client := ssh.NewClient(cc, chans, reqs)
 	if depth == 0 && lastPassword != "" && t != nil { // the tab's own login (not a jump host's)

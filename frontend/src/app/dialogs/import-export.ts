@@ -6,7 +6,7 @@ import { Icon } from '../components/icon';
 import { FolderPicker } from '../components/folder-picker';
 import { Ui } from '../core/ui.service';
 
-type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'csv' | 'ansible' | 'netbox' | 'aws';
+type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'putty' | 'moba' | 'mremoteng' | 'csv' | 'ansible' | 'netbox' | 'aws';
 
 /** Import sessions from SecureCRT (config folder, .zip, .xml, .ini), PuTTY/KiTTY, MobaXterm or OpenSSH config. */
 @Component({
@@ -62,6 +62,11 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
             } @else {
             <label>{{ modern() ? pathLabel() : 'Path' }}</label>
             <div class="row"><input name="path" class="pathin" [(ngModel)]="path" (change)="checkSettings()" required /><button type="button" (click)="browse()">Browse...</button></div>
+            }
+            @if (source === 'mremoteng') {
+              <label>Master password</label>
+              <input name="mrp" type="password" [(ngModel)]="configPass" autocomplete="off"
+                placeholder="only if the file has its own master password (the default needs none)" />
             }
             @if (isSecureCRT()) {
               <label>Config passphrase</label>
@@ -119,6 +124,12 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
             } @else if (source === 'moba') {
               <div class="hint">In MobaXterm: right-click "User sessions" → Export all sessions to file (.mxtsessions). SSH, Telnet and Serial
                 sessions are imported with their folders; RDP, VNC, FTP etc. are skipped.</div>
+            } @else if (source === 'mremoteng') {
+              <div class="hint">In mRemoteNG: File → Save Connection File As… and choose that <code>confCons.xml</code> (the default one is in
+                %APPDATA%\\mRemoteNG). Containers become folders; SSH, Telnet, RAW, RDP and VNC connections are imported with the user name,
+                domain, port and protocol they inherit from their container. Saved passwords are decrypted and moved into the OS keychain;
+                if you set a master password in mRemoteNG, type it above. HTTP, ICA, Rlogin and SSH1 connections are skipped.
+                If mRemoteNG encrypts the complete file, turn that off first (Tools → Options → Security).</div>
             } @else if (source === 'ssh') {
               <div class="hint">Each <code>Host</code> entry becomes an SSH2 session (HostName, User, Port, IdentityFile, ProxyJump).</div>
             } @else {
@@ -142,7 +153,7 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
           @if (r.passwordsImported) { <p><b>{{ r.passwordsImported }}</b> saved password(s) moved to the OS keychain.</p> }
           @if (r.errors?.length) { <pre class="log">{{ r.errors!.join('\\n') }}</pre> }
           @if (r.passwordErrors?.length) {
-            <div class="hint">Passwords not imported (enter the SecureCRT configuration passphrase and import again with "Overwrite",
+            <div class="hint">Passwords not imported (enter the SecureCRT configuration passphrase or the mRemoteNG master password and import again with "Overwrite",
               or type them when connecting):</div>
             <pre class="log">{{ r.passwordErrors!.join('\\n') }}</pre>
           }
@@ -208,7 +219,7 @@ export class ImportDialog {
     const c: Record<Source, { t: string; s: string }> = {
       twzip: { t: 'Termwright .zip', s: 'sessions and settings' }, twdir: { t: 'Termwright folder', s: 'export folder' },
       folder: { t: 'SecureCRT', s: 'Config folder' }, zip: { t: 'SecureCRT .zip', s: 'Sessions folder archive' }, xml: { t: 'SecureCRT .xml', s: 'Export Settings file' },
-      ini: { t: 'SecureCRT .ini', s: 'one session file' }, putty: { t: 'PuTTY / KiTTY', s: '.reg, folder, SuperPuTTY' }, moba: { t: 'MobaXterm', s: '.mxtsessions, .ini' },
+      ini: { t: 'SecureCRT .ini', s: 'one session file' }, putty: { t: 'PuTTY / KiTTY', s: '.reg, folder, SuperPuTTY' }, moba: { t: 'MobaXterm', s: '.mxtsessions, .ini' }, mremoteng: { t: 'mRemoteNG', s: 'confCons.xml' },
       ssh: { t: 'OpenSSH', s: '~/.ssh/config' }, csv: { t: 'CSV', s: 'spreadsheet export' }, ansible: { t: 'Ansible', s: 'INI or YAML inventory' },
       netbox: { t: 'NetBox', s: 'devices with a primary IP' }, aws: { t: 'AWS EC2', s: 'via the AWS CLI' },
     };
@@ -248,6 +259,7 @@ export class ImportDialog {
     { title: 'Other terminal apps', items: [
       { v: 'putty', label: 'PuTTY / KiTTY / SuperPuTTY sessions (.reg export, SuperPuTTY Sessions.xml, or the ~/.putty/sessions folder)' },
       { v: 'moba', label: 'MobaXterm sessions (.mxtsessions export or MobaXterm.ini)' },
+      { v: 'mremoteng', label: 'mRemoteNG connections (confCons.xml)' },
       { v: 'ssh', label: 'OpenSSH client config (~/.ssh/config)' },
     ] },
     { title: 'Inventories', items: [
@@ -277,6 +289,7 @@ export class ImportDialog {
       putty: [{ displayName: 'PuTTY / KiTTY registry export or SuperPuTTY Sessions.xml', pattern: '*.reg;*.xml' }],
       csv: [{ displayName: 'CSV', pattern: '*.csv;*.tsv;*.txt' }], ansible: [], netbox: [], aws: [],
       moba: [{ displayName: 'MobaXterm sessions', pattern: '*.mxtsessions;*.ini' }],
+      mremoteng: [{ displayName: 'mRemoteNG connections (confCons.xml)', pattern: '*.xml' }],
     };
     if (this.source === 'putty' && !(await this.ui.confirm('PuTTY Sessions', 'Choose a file - a .reg export or SuperPuTTY Sessions.xml? (Cancel = choose a ~/.putty/sessions folder)', 'File'))) {
       const d = await this.backend.chooseDirectory('Select ~/.putty/sessions Folder').catch(() => '');
@@ -297,7 +310,7 @@ export class ImportDialog {
     this.error.set('');
     try {
       const settings = this.sum() ? [this.partLogins && 'logins', this.partLibrary && 'library', this.partOptions && 'options'].filter((x): x is string => !!x) : [];
-      const opt = { targetFolder: this.target, conflict: this.conflict, includeDefault: false, configPassphrase: this.isSecureCRT() ? this.configPass : '', settings };
+      const opt = { targetFolder: this.target, conflict: this.conflict, includeDefault: false, configPassphrase: this.isSecureCRT() || this.source === 'mremoteng' ? this.configPass : '', settings };
       const r = this.source === 'netbox' ? await this.backend.importNetBox(this.nbUrl, this.nbToken, this.nbFilter, opt)
         : this.source === 'aws' ? await this.backend.importAWS(this.awsProfile, this.awsRegion, this.awsPublic, opt)
         : await this.backend.importSessions(this.path, opt);

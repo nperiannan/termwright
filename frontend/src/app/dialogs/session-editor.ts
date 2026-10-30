@@ -394,6 +394,24 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 <label>Keep-alive</label>
                 <div class="row"><label><input type="checkbox" name="ka" [(ngModel)]="s.keepalive" /> Send keep-alive every</label>
                   <input name="kas" type="number" min="5" class="short" [(ngModel)]="s.keepaliveSec" /> seconds</div>
+                <label>Algorithms</label>
+                <div class="checks">
+                  <label><input type="checkbox" name="legacyalgo" [(ngModel)]="s.legacyAlgorithms" /> Allow legacy algorithms (for old devices)</label>
+                  <div class="hint">For a device that fails with <i>no common algorithm for key exchange</i> (for example one that only offers
+                    <code>diffie-hellman-group1-sha1</code>, <code>aes128-cbc</code> or <code>hmac-sha1</code>). The weak algorithms are added at the
+                    end of each list, so modern ones are still used whenever the device offers them. Use it only on networks you trust.</div>
+                </div>
+                <label>Key exchange</label>
+                <input name="kexalgo" [(ngModel)]="s.kexAlgorithms" class="mono" spellcheck="false" placeholder="(default)  e.g. +diffie-hellman-group1-sha1" />
+                <label>Ciphers</label>
+                <input name="cipheralgo" [(ngModel)]="s.ciphers" class="mono" spellcheck="false" placeholder="(default)  e.g. +aes128-cbc,3des-cbc" />
+                <label>MACs</label>
+                <input name="macalgo" [(ngModel)]="s.macs" class="mono" spellcheck="false" placeholder="(default)  e.g. +hmac-sha1" />
+                <label>Host key</label>
+                <input name="hkalgo" [(ngModel)]="s.hostKeyAlgorithms" class="mono" spellcheck="false" placeholder="(default)  e.g. +ssh-rsa" />
+                <label></label>
+                <div class="hint">Optional lists in the OpenSSH way: <code>a,b</code> exactly these, <code>+a</code> add to the end, <code>^a</code> put first,
+                  <code>-a*</code> remove. Leave empty for the defaults.</div>
               </div>
             }
             @case ('firewall') {

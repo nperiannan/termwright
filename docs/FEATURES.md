@@ -259,7 +259,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 - **Native storage**: plain-text `.ini` files (`Config/Sessions/*.ini`); unknown keys are kept.
 - **Import from SecureCRT**: Config folder, zip, XML export or single `.ini`, with saved passwords moved to the keychain.
-- **Import from other programs**: PuTTY / KiTTY (`.reg`, `~/.putty/sessions`), SuperPuTTY (`Sessions.xml`, `-pw` passwords to the keychain, Cygterm / Mintty as Local Shell), MobaXterm (`.mxtsessions`, `MobaXterm.ini`), OpenSSH `~/.ssh/config`.
+- **Import from other programs**: PuTTY / KiTTY (`.reg`, `~/.putty/sessions`), SuperPuTTY (`Sessions.xml`, `-pw` passwords to the keychain, Cygterm / Mintty as Local Shell), MobaXterm (`.mxtsessions`, `MobaXterm.ini`), mRemoteNG (`confCons.xml`: folders, inherited user / port / protocol, passwords to the keychain), OpenSSH `~/.ssh/config`.
 - **Import from inventories**: CSV, Ansible (INI / YAML), NetBox, AWS EC2.
 - **Export**: Termwright folder, zip or XML (everything kept; SecureCRT can read them).
 - **Settings travel with the export**: zip and folder exports include device types, accounts (no passwords), Folder Defaults, the command library, checklists, jobs and Global Options; Import Sessions shows what is in the file and imports the parts you choose, following the target folder and renamed sessions.
