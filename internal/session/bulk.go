@@ -2,6 +2,7 @@ package session
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -77,6 +78,35 @@ func newBulk(name, host string) Session {
 // port, username|user, folder|group, device_type|type|os, description,
 // identity_file|key, com_port, baud. The delimiter (, ; or tab) is detected.
 func ParseCSV(data []byte) ([]Session, error) {
+	list, _, err := ParseCSVNotes(data)
+	return list, err
+}
+
+// ImportTemplateCSV is the example file offered by Import: every column, with sessions of each kind.
+//
+//go:embed import-template.csv
+var ImportTemplateCSV string
+
+// CSVColumns are the columns an import CSV may have, with the other names each is known by.
+var CSVColumns = []struct {
+	Name    string
+	Aliases []string
+}{
+	{"name", []string{"session"}}, {"host", []string{"hostname", "ip", "address", "ip_address"}}, {"protocol", nil}, {"port", nil},
+	{"username", []string{"user"}}, {"folder", []string{"group"}}, {"device_type", []string{"type", "devicetype", "device type", "os", "platform"}},
+	{"description", nil}, {"identity_file", []string{"key", "identity"}}, {"jump_host", []string{"jump", "jump_session", "jumphost"}},
+	{"environment", []string{"env"}}, {"mac", []string{"mac_address", "mac address"}}, {"account", nil}, {"files_panel", nil},
+	{"com_port", []string{"comport"}}, {"baud", []string{"baudrate"}}, {"network", nil},
+}
+
+var csvProtocols = map[string]bool{"": true, "ssh": true, "ssh2": true, "telnet": true, "serial": true, "console": true, "raw": true, "tcp": true,
+	"rdp": true, "vnc": true, "wol": true, "wake-on-lan": true, "wakeonlan": true}
+
+// ParseCSVNotes reads sessions like ParseCSV and also returns what it ignored or
+// replaced: columns it does not know, rows without a host, a protocol, port or
+// environment it does not know. Row numbers are the spreadsheet's (the header is row 1).
+func ParseCSVNotes(data []byte) ([]Session, []string, error) {
+	var notes []string
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	first, _, _ := bytes.Cut(data, []byte("\n"))
 	r := csv.NewReader(bytes.NewReader(data))
@@ -89,10 +119,10 @@ func ParseCSV(data []byte) ([]Session, error) {
 	r.TrimLeadingSpace = true
 	rows, err := r.ReadAll()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(rows) < 2 {
-		return nil, errors.New("csv: need a header row and at least one session")
+		return nil, nil, errors.New("csv: need a header row and at least one session")
 	}
 	col := map[string]int{}
 	alias := map[string]string{"hostname": "host", "ip": "host", "address": "host", "ip_address": "host", "user": "username",
@@ -108,10 +138,27 @@ func ParseCSV(data []byte) ([]Session, error) {
 			col[k] = i
 		}
 	}
+	known := map[string]bool{}
+	for _, c := range CSVColumns {
+		known[c.Name] = true
+	}
+	for i, h := range rows[0] {
+		k := strings.ToLower(strings.TrimSpace(h))
+		if a, ok := alias[k]; ok {
+			k = a
+		}
+		switch {
+		case k == "":
+		case !known[k]:
+			notes = append(notes, fmt.Sprintf("column %q is not used (known columns: %s)", strings.TrimSpace(h), csvColumnNames()))
+		case col[k] != i:
+			notes = append(notes, fmt.Sprintf("column %q is ignored: %q is already given by an earlier column", strings.TrimSpace(h), k))
+		}
+	}
 	if _, ok := col["host"]; !ok {
 		_, hasMAC := col["mac"]
 		if _, ok := col["com_port"]; !ok && !hasMAC {
-			return nil, errors.New("csv: no host column (expected one of host, hostname, ip, address)")
+			return nil, nil, errors.New("csv: no host column (expected one of host, hostname, ip, address)")
 		}
 	}
 	get := func(row []string, k string) string {
@@ -121,11 +168,26 @@ func ParseCSV(data []byte) ([]Session, error) {
 		return ""
 	}
 	var out []Session
-	for _, row := range rows[1:] {
+	for ri, row := range rows[1:] {
+		rowNo := ri + 2
 		host, com := get(row, "host"), get(row, "com_port")
 		wol := normProto(get(row, "protocol")) == ProtoWOL
 		if host == "" && com == "" && !(wol && get(row, "mac") != "") {
+			if strings.TrimSpace(strings.Join(row, "")) != "" {
+				notes = append(notes, fmt.Sprintf("row %d (%s): no host, skipped", rowNo, firstNonEmptyStr(get(row, "name"), "no name")))
+			}
 			continue
+		}
+		if p := strings.ToLower(get(row, "protocol")); !csvProtocols[p] {
+			notes = append(notes, fmt.Sprintf("row %d (%s): protocol %q is not known (use ssh, telnet, rdp, vnc, serial, raw or wol); SSH was used", rowNo, firstNonEmptyStr(get(row, "name"), host), get(row, "protocol")))
+		}
+		if v := get(row, "port"); v != "" {
+			if p, err := strconv.Atoi(v); err != nil || p < 1 || p > 65535 {
+				notes = append(notes, fmt.Sprintf("row %d (%s): port %q is not a number from 1 to 65535; the default of the protocol is used", rowNo, firstNonEmptyStr(get(row, "name"), host), v))
+			}
+		}
+		if e := strings.ToLower(get(row, "environment")); e != "" && e != "production" && e != "staging" && e != "test" && e != "development" {
+			notes = append(notes, fmt.Sprintf("row %d (%s): environment %q is ignored (use production, staging, test or development)", rowNo, firstNonEmptyStr(get(row, "name"), host), get(row, "environment")))
 		}
 		n := newBulk(get(row, "name"), host)
 		n.Protocol = normProto(get(row, "protocol"))
@@ -174,7 +236,7 @@ func ParseCSV(data []byte) ([]Session, error) {
 		}
 		out = append(out, n)
 	}
-	return out, nil
+	return out, notes, nil
 }
 
 // ansibleHost applies Ansible host variables to a session.
@@ -475,4 +537,19 @@ func sniffBulk(src, text string) string {
 		return "ansible-ini"
 	}
 	return ""
+}
+
+func firstNonEmptyStr(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func csvColumnNames() string {
+	var n []string
+	for _, c := range CSVColumns {
+		n = append(n, c.Name)
+	}
+	return strings.Join(n, ", ")
 }

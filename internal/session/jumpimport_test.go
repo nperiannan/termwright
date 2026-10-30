@@ -1,7 +1,9 @@
 package session
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -81,4 +83,53 @@ func TestImportKeepsJumpHost(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestImportTemplateCSV(t *testing.T) {
+	list, notes, err := ParseCSVNotes([]byte(ImportTemplateCSV))
+	if err != nil || len(notes) != 0 || len(list) != 9 {
+		t.Fatalf("%v, %d sessions, notes: %v", err, len(list), notes)
+	}
+	// into a folder: every session lands there and the jump hosts follow
+	dir := t.TempDir()
+	tmp := dir + "/t.csv"
+	if err := os.WriteFile(tmp, []byte(ImportTemplateCSV), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := NewStore(t.TempDir())
+	res, err := st.Import(tmp, ImportOptions{TargetFolder: "From CSV"})
+	if err != nil || len(res.Imported) != 9 || len(res.Errors) != 0 || len(res.Notes) != 0 {
+		t.Fatalf("%v %+v", err, res)
+	}
+	vnc, err := st.Get("From CSV/Lab/lab-pc (VNC)")
+	if err != nil || vnc.Protocol != ProtoVNC || vnc.Port != 5902 || vnc.Hostname != "127.0.0.1" || vnc.JumpSession != "From CSV/Lab/lab-pc" || !st.Exists(vnc.JumpSession) {
+		t.Fatalf("%+v %v", vnc, err)
+	}
+	if telnet, _ := st.Get("From CSV/Datacenter/Access/access-sw7"); telnet.JumpSession != "From CSV/Datacenter/jump-station" {
+		t.Fatalf("telnet jump %q", telnet.JumpSession)
+	}
+}
+
+func TestCSVNotes(t *testing.T) {
+	csv := "name,host,protocol,port,environment,colour,jump_host\n" +
+		"a,10.0.0.1,ssh1,22,prod,red,\n" +
+		"b,,ssh,22,,,\n" +
+		"c,10.0.0.3,rdp,abc,test,,nowhere/x\n"
+	list, notes, err := ParseCSVNotes([]byte(csv))
+	if err != nil || len(list) != 2 {
+		t.Fatalf("%v %d", err, len(list))
+	}
+	all := strings.Join(notes, "\n")
+	for _, want := range []string{`column "colour" is not used`, `row 2 (a): protocol "ssh1" is not known`, `row 2 (a): environment "prod" is ignored`, "row 3 (b): no host, skipped", `row 4 (c): port "abc"`} {
+		if !strings.Contains(all, want) {
+			t.Errorf("missing %q in:\n%s", want, all)
+		}
+	}
+	st, _ := NewStore(t.TempDir())
+	tmp := t.TempDir() + "/x.csv"
+	_ = os.WriteFile(tmp, []byte(csv), 0o600)
+	res, _ := st.Import(tmp, ImportOptions{})
+	if !strings.Contains(strings.Join(res.Notes, "\n"), `jump host "nowhere/x" is not in the file and not in your sessions`) {
+		t.Errorf("no note about the missing jump host: %v", res.Notes)
+	}
 }

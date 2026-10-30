@@ -31,7 +31,7 @@ Termwright is a free, open-source desktop application for people who spend their
 
 It is a native desktop program, not a web service. It is written in Go, with an Angular and xterm.js interface, and ships as a single binary for each platform. Sessions are plain-text files that you own. Passwords are kept in the operating system's keychain, never in session files. Nothing is sent anywhere except to the hosts you connect to.
 
-Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, MobaXterm and OpenSSH, or from CSV, Ansible, NetBox and AWS inventories. They can be exported back to those formats at any time.
+Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, MobaXterm and OpenSSH, or from CSV, Ansible, NetBox and AWS inventories. They can be exported back to those formats at any time. For any other tool, convert its sessions to the documented [import format](docs/IMPORT_FORMAT.md) (a CSV with a template) instead of waiting for an importer.
 
 ## Highlights
 

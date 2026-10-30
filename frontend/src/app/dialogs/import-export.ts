@@ -105,8 +105,12 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
             }
             <label></label>
             @if (source === 'csv') {
-              <div class="hint">First row = column names. Recognised: <code>name, host</code> (or ip/address), <code>protocol, port, username,
-                folder, device_type, description, identity_file, com_port, baud</code>. Comma, semicolon or tab separated.</div>
+              <div class="hint">First row = column names (comma, semicolon or tab separated). Only a host is needed (<code>host</code>, or ip/address); the others are
+                <code>name, folder, protocol</code> (ssh, telnet, rdp, vnc, serial, raw, wol)<code>, port, username, device_type, environment, jump_host, identity_file,
+                description, mac, account, files_panel, com_port, baud, network</code>. <code>jump_host</code> is the path of another session
+                (<code>Folder/name</code>), so RDP and VNC through an SSH session work too.
+                <button type="button" class="link" (click)="saveTemplate()">Save a template CSV…</button> ·
+                <button type="button" class="link" (click)="backend.openURL(formatGuide)">Format guide</button></div>
             } @else if (source === 'ansible') {
               <div class="hint">Groups become folders; <code>ansible_host, ansible_user, ansible_port, ansible_connection,
                 ansible_ssh_private_key_file</code> and <code>ansible_network_os</code> (→ device type) are used.</div>
@@ -152,6 +156,11 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
           @if (r.settings?.length) { <p><b>Settings</b></p><ul class="lst">@for (n of r.settings!; track n) { <li>{{ n }}</li> }</ul> }
           @if (r.passwordsImported) { <p><b>{{ r.passwordsImported }}</b> saved password(s) moved to the OS keychain.</p> }
           @if (r.errors?.length) { <pre class="log">{{ r.errors!.join('\\n') }}</pre> }
+          @if (r.notes?.length) {
+            <div class="hint">Left out or replaced in the file ({{ r.notes!.length }}):</div>
+            <pre class="log">{{ r.notes!.join('\\n') }}</pre>
+            <div class="hint"><button type="button" class="link" (click)="backend.openURL(formatGuide)">Format guide</button> - the columns and values the import accepts.</div>
+          }
           @if (r.passwordErrors?.length) {
             <div class="hint">Passwords not imported (enter the SecureCRT configuration passphrase or the mRemoteNG master password and import again with "Overwrite",
               or type them when connecting):</div>
@@ -173,6 +182,7 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
     </form>
   </div>`,
   styles: [`
+    .link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
     .src-groups { display: flex; flex-direction: column; gap: 10px; }
     .src-group { display: flex; flex-direction: column; gap: 5px; label { display: flex; gap: 8px; align-items: center; cursor: pointer; } }
     .src-title { font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
@@ -202,8 +212,9 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
     }`],
 })
 export class ImportDialog {
+  readonly formatGuide = 'https://github.com/nperiannan/termwright/blob/main/docs/IMPORT_FORMAT.md';
   protected ui = inject(Ui);
-  private backend = inject(Backend);
+  protected backend = inject(Backend);
   private cdr = inject(ChangeDetectorRef);
   readonly modern = () => this.ui.settings()?.layout !== 'classic';
   /** Sessions of other programs found in their usual places on this computer. */
@@ -302,6 +313,14 @@ export class ImportDialog {
       : await this.backend.chooseOpenFile('Select File', filters[this.source]).catch(() => '');
     if (p) { this.path = p; await this.checkSettings(); }
     this.cdr.markForCheck();
+  }
+
+  /** Saves the example CSV of the import format. */
+  async saveTemplate() {
+    try {
+      const p = await this.backend.saveTextAs('Save Template CSV', 'termwright-sessions-template.csv', await this.backend.importTemplate());
+      if (p) this.ui.toast('Saved ' + p, 'success');
+    } catch (e) { this.ui.error(e); }
   }
 
   async run() {

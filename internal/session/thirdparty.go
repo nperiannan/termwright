@@ -3,6 +3,7 @@ package session
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -480,7 +481,7 @@ func (s *Store) importThirdParty(src string, data []byte, opt ImportOptions) (*I
 		var err error
 		switch sniffBulk(src, text) {
 		case "csv":
-			list, err = ParseCSV([]byte(text))
+			list, res.Notes, err = ParseCSVNotes([]byte(text))
 		case "ansible-yaml":
 			list, err = ParseAnsibleYAML([]byte(text))
 		case "ansible-ini":
@@ -493,8 +494,31 @@ func (s *Store) importThirdParty(src string, data []byte, opt ImportOptions) (*I
 			return res, true
 		}
 		s.importSessions(list, opt, res)
+		s.csvJumpNotes(list, opt, res)
 	}
 	return res, true
+}
+
+// csvJumpNotes points the sessions of a table at the imported copy of their
+// jump host (the table names it by its path, like Termwright's CSV export), and
+// says which jump host is in neither the file nor the list of sessions.
+func (s *Store) csvJumpNotes(list []Session, opt ImportOptions, res *ImportResult) {
+	s.remapJumps(res)
+	for _, n := range list {
+		if n.JumpSession == "" {
+			continue
+		}
+		dest, ok := res.Paths[JoinPath(n.Folder, n.Name)]
+		if !ok {
+			continue
+		}
+		if _, inFile := res.Paths[n.JumpSession]; inFile {
+			continue
+		}
+		if !s.Exists(n.JumpSession) {
+			res.Notes = append(res.Notes, fmt.Sprintf("%s: its jump host %q is not in the file and not in your sessions: create it, or edit the session", dest, n.JumpSession))
+		}
+	}
 }
 
 // importPuTTYDir imports a ~/.putty/sessions directory; ok is false when the

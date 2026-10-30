@@ -1,0 +1,10 @@
+name,folder,protocol,host,port,username,device_type,environment,jump_host,identity_file,description,mac,account,files_panel,com_port,baud,network
+core-sw1,Datacenter/Core,ssh,10.10.0.1,22,admin,VOSS,production,,,Core switch 1,00:04:96:12:34:56,,yes,,,
+access-sw7,Datacenter/Access,telnet,10.10.7.1,23,admin,EXOS,,Datacenter/jump-station,,Reached through the jump station,,,,,,
+jump-station,Datacenter,ssh,192.0.2.10,22,ops,Linux,production,,~/.ssh/ops_ed25519,Linux jump station,,,yes,,,
+lab-pc,Lab,ssh,192.0.2.20,22,labuser,Linux,test,,,Lab machine with a remote desktop,,,,,,
+lab-pc (RDP),Lab,rdp,127.0.0.1,3389,labuser-rdp,,test,Lab/lab-pc,,RDP through the SSH session lab-pc,,,,,,
+lab-pc (VNC),Lab,vnc,127.0.0.1,5902,labuser-vnc,,test,Lab/lab-pc,,VNC through the SSH session lab-pc,,,,,,
+office-pc,Lab,rdp,192.0.2.30,3389,jdoe,,,,,Direct RDP,,,,,,
+console-1,Lab,serial,,,,,,,,USB console cable,,,,COM3,115200,
+office-nas,Lab,wol,,,,,,,,Wakes the NAS,3c:7c:3f:1a:22:90,,,,,192.0.2.0/24

@@ -121,6 +121,7 @@ export class Backend {
   findByMac(path: string) { return this.call<MovedDevice>('FindByMAC', path); }
   moveSession(path: string, host: string) { return this.call<Session>('MoveSession', path, host); }
   rememberMacs(macs: Record<string, string>) { return this.call<number>('RememberMACs', macs); }
+  importTemplate() { return this.call<string>('ImportTemplate'); }
   saveTextAs(title: string, name: string, text: string) { return this.call<string>('SaveTextAs', title, name, text); }
   historyAdd(e: Partial<HistoryEntry>) { return this.call<void>('HistoryAdd', e); }
   historyList() { return this.call<HistoryEntry[]>('HistoryList'); }

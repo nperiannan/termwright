@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"github.com/termwright/termwright/internal/session"
 	"regexp"
 	"strconv"
 	"strings"
@@ -435,3 +436,7 @@ func (a *App) RememberSessionPassword(path, password string) error {
 	}
 	return nil
 }
+
+// ImportTemplate is the example CSV of the import format (every column, with
+// sessions of each kind), for the Import dialog's "Save Template".
+func (a *App) ImportTemplate() string { return session.ImportTemplateCSV }

@@ -22,6 +22,9 @@ type ImportResult struct {
 	Renamed  []string `json:"renamed"`
 	Skipped  []string `json:"skipped"`
 	Errors   []string `json:"errors"`
+	// Notes are what the importer ignored or replaced in the file (an unknown
+	// column, a protocol it does not know), not failures.
+	Notes []string `json:"notes"`
 	// PasswordsImported counts saved SecureCRT passwords moved to the OS keychain.
 	PasswordsImported int      `json:"passwordsImported"`
 	PasswordErrors    []string `json:"passwordErrors"`
