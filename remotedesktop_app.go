@@ -349,10 +349,11 @@ func (a *App) ForgetRemoteDesktop(id string) { forgetRemoteDesktop(id) }
 // RemoteDesktopSessionPassword stores the password of the user the run
 // made for a session of it (kind "RDP" or "VNC") in the OS keychain, as the
 // session's saved password. Nothing is stored when the run did not set that
-// password (the user existed already, or the service was left alone).
-func (a *App) RemoteDesktopSessionPassword(id, path, kind string) error {
+// password (the user existed already, or the service was left alone); it
+// reports whether a password was stored.
+func (a *App) RemoteDesktopSessionPassword(id, path, kind string) (bool, error) {
 	if err := a.ready(); err != nil {
-		return err
+		return false, err
 	}
 	rdMu.Lock()
 	run := rdRuns[id]
@@ -371,22 +372,22 @@ func (a *App) RemoteDesktopSessionPassword(id, path, kind string) error {
 	}
 	rdMu.Unlock()
 	if pw == "" {
-		return nil
+		return false, nil
 	}
 	s, err := a.store.Get(path)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := secrets.Set(path, pw); err != nil {
-		return fmt.Errorf("could not save the password of %s: %w", path, err)
+		return false, fmt.Errorf("could not save the password of %s: %w", path, err)
 	}
 	if !s.SavePassword {
 		s.SavePassword = true
 		if _, err := a.store.Save(s, s.Path); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // uploadRemoteDesktopScript copies the setup script to the machine of an open
@@ -407,4 +408,30 @@ func (a *App) uploadRemoteDesktopScript(tabID string) (string, error) {
 		return "", fmt.Errorf("could not copy the script to %s: %w", remote, err)
 	}
 	return remote, nil
+}
+
+// RememberSessionPassword stores a password the user typed when opening a
+// session (for example the VNC login) as the session's saved password, so the
+// next opening does not ask again.
+func (a *App) RememberSessionPassword(path, password string) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	if password == "" {
+		return errors.New("no password to save")
+	}
+	s, err := a.store.Get(path)
+	if err != nil {
+		return err
+	}
+	if err := secrets.Set(path, password); err != nil {
+		return fmt.Errorf("could not save the password of %s: %w", path, err)
+	}
+	if !s.SavePassword {
+		s.SavePassword = true
+		if _, err := a.store.Save(s, s.Path); err != nil {
+			return err
+		}
+	}
+	return nil
 }

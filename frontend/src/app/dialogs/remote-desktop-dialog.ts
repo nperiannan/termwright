@@ -47,6 +47,7 @@ const SUPPORTED_OS: [string, string][] = [['ubuntu', '22.04'], ['ubuntu', '24.04
           @if (r.phase === 'done' && !r.check) {
             <div class="hint">
               @if (r.made.rdp || r.made.vnc) { The sessions {{ madeNames(r.made) }} are in the Session Manager next to this one. }
+              @if (r.unsaved?.length) { <div class="warn soft">No password is saved in the {{ r.unsaved!.join(' and ') }} session: {{ r.unsaved!.includes('VNC') ? 'the VNC service was already set up, so its password was not changed and Termwright does not know it' : 'the desktop user already existed, so its password is not known to Termwright' }}. You are asked for it when you first open the session and can save it then. To set a new password now, run the setup again with "Reconfigure services that already run".</div> }
               @else { {{ connectHint(r.ready) }} }
             </div>
           }

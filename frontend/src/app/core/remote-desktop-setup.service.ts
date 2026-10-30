@@ -18,6 +18,8 @@ export interface RdRun extends RdProgress {
   log: string[];
   /** Sessions made when it ended without errors. */
   made: { rdp?: string; vnc?: string };
+  /** Sessions made without a saved password: the desktop user or its VNC password was not set by this run. */
+  unsaved?: ('RDP' | 'VNC')[];
   /** Services that run (a service that failed was removed again). */
   ready?: { rdp: boolean; vnc: boolean };
 }
@@ -145,6 +147,7 @@ export class RemoteDesktopSetup {
       return;
     }
     const made: RdRun['made'] = {};
+    this.unsaved = [];
     const tab = this.tabs.get(req?.tabId ?? '');
     if (this.createSessions && req && tab) {
       try {
@@ -161,12 +164,18 @@ export class RemoteDesktopSetup {
     }
     const gone = [...this.removed].map(k => k.toUpperCase()).join(' and ');
     const step = partial ? `Ready, except ${gone}: it did not work and was removed again` : 'Remote desktop is ready';
-    this.run.set({ ...r, phase: 'done', progress: 100, step, detail: '', error: '', made, ready: { rdp: !!req?.rdp && !this.removed.has('rdp'), vnc: !!req?.vnc && !this.removed.has('vnc') } });
+    this.run.set({ ...r, phase: 'done', progress: 100, step, detail: '', error: '', made, unsaved: this.unsaved, ready: { rdp: !!req?.rdp && !this.removed.has('rdp'), vnc: !!req?.vnc && !this.removed.has('vnc') } });
     const actions = [
       ...(made.rdp ? [{ label: 'Open RDP', run: () => void this.tabs.openSession(made.rdp!, 'auto') }] : []),
       ...(made.vnc ? [{ label: 'Open VNC', run: () => void this.tabs.openSession(made.vnc!, 'auto') }] : []),
     ];
     this.ui.toast(partial ? `Remote desktop is partly ready on ${name}: ${gone} failed and was removed again.` : `Remote desktop is ready on ${name}.` + (actions.length ? ' The new sessions are next to it.' : ''), partial ? 'info' : 'success', 15000, actions);
+  }
+
+  private unsaved: ('RDP' | 'VNC')[] = [];
+
+  private async hasPassword(path: string): Promise<boolean> {
+    try { return (await this.backend.sessionPasswordState(path)) !== ''; } catch { return false; }
   }
 
   /** Opens one of the new sessions. */
@@ -176,7 +185,8 @@ export class RemoteDesktopSetup {
   private async ensureSession(runId: string, ssh: Session, kind: 'RDP' | 'VNC', o: RdRequest): Promise<string> {
     const path = await this.makeSession(ssh, kind, o);
     // the user name is in the session; the password too when this run set it (the OS keychain)
-    await this.backend.remoteDesktopSessionPassword(runId, path, kind);
+    const stored = await this.backend.remoteDesktopSessionPassword(runId, path, kind);
+    if (!stored && !(await this.hasPassword(path))) this.unsaved.push(kind);
     return path;
   }
 

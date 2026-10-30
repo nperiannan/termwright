@@ -136,7 +136,10 @@ export class RemoteView implements OnDestroy {
       case 'ready': this.ready = true; this.connect(); break;
       case 'status':
         this.tabs.patch(id, { state: m.state, message: m.message ?? '' });
-        if (m.state === 'connected') this.send({ type: 'focus' });
+        if (m.state === 'connected') {
+          this.send({ type: 'focus' });
+          this.offerToSavePassword();
+        } else if (m.state !== 'connecting') this.typedPassword = '';
         break;
       case 'name': this.desktop.set(m.name); break;
       case 'clipboard': if (m.text) void this.backend.clipboardSet(m.text); break;
@@ -152,11 +155,27 @@ export class RemoteView implements OnDestroy {
           const p = await this.ui.input('VNC login', 'Password for ' + (c.username ? c.username + '@' : '') + this.tab().session.hostname, '', true);
           if (p === null) { this.send({ type: 'disconnect' }); return; }
           c = { ...c, password: p };
+          this.typedPassword = p;
         }
         this.send({ type: 'credentials', ...c });
         break;
       }
     }
+  }
+
+  /** The password typed at the login worked: offer to keep it with the session, so it is not asked for again. */
+  private typedPassword = '';
+  private offerToSavePassword() {
+    const pw = this.typedPassword;
+    this.typedPassword = '';
+    const t = this.tab();
+    if (!pw || !t.session.path) return;
+    this.ui.toast('Save the password for ' + t.session.name + '? It is then not asked for again.', 'info', 20000, [{
+      label: 'Save Password',
+      run: () => void this.backend.rememberSessionPassword(t.session.path, pw)
+        .then(() => this.ui.toast('Password saved in the OS keychain.', 'success'))
+        .catch(e => this.ui.error(e)),
+    }]);
   }
 
   async pasteClipboard() {

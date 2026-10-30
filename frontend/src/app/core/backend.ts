@@ -149,7 +149,8 @@ export class Backend {
   restartRemoteDesktopService(path: string, which: 'RDP' | 'VNC', sudo: string) { return this.call<string>('RestartRemoteDesktopService', path, which, sudo); }
   remoteDesktopInfo(tabId: string) { return this.call<{ knownPassword: boolean; user: string }>('RemoteDesktopInfo', tabId); }
   startRemoteDesktop(run: RemoteDesktopRun) { return this.call<string>('StartRemoteDesktop', run); }
-  remoteDesktopSessionPassword(id: string, path: string, kind: 'RDP' | 'VNC') { return this.call<void>('RemoteDesktopSessionPassword', id, path, kind); }
+  remoteDesktopSessionPassword(id: string, path: string, kind: 'RDP' | 'VNC') { return this.call<boolean>('RemoteDesktopSessionPassword', id, path, kind); }
+  rememberSessionPassword(path: string, password: string) { return this.call<void>('RememberSessionPassword', path, password); }
   forgetRemoteDesktop(id: string) { return this.call<void>('ForgetRemoteDesktop', id); }
   cancelRemoteDesktop(id: string) { return this.call<void>('CancelRemoteDesktop', id); }
   sftpConnect(path: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; info: string; target: string }>('SFTPConnect', path, mode); }
