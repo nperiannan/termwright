@@ -20,6 +20,11 @@ import (
 //go:embed scripts/remote-desktop/diagnose-remote-desktop.sh
 var diagScript []byte
 
+// The script "Restart service" runs on the Linux machine.
+//
+//go:embed scripts/remote-desktop/restart-remote-desktop.sh
+var restartScript []byte
+
 // CollectRemoteDesktopLogs builds a report for finding out why an RDP or VNC
 // session does not connect, from the Session Manager:
 //
@@ -404,4 +409,99 @@ func readFull(c net.Conn, b []byte) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+// ---- restart a service ----
+
+// restartUnits are the systemd units of a remote desktop service: xrdp, or the TigerVNC display of the port.
+func restartUnits(kind string, port int) ([]string, error) {
+	switch kind {
+	case "RDP":
+		return []string{"xrdp.service", "xrdp-sesman.service"}, nil
+	case "VNC":
+		if port < 5901 || port > 5999 {
+			return nil, fmt.Errorf("port %d is not a VNC display port (5901 to 5999), so the service cannot be named", port)
+		}
+		return []string{fmt.Sprintf("tigervnc@%d.service", port-5900)}, nil
+	}
+	return nil, fmt.Errorf("%q is not RDP or VNC", kind)
+}
+
+// RestartRemoteDesktopService restarts the xrdp or TigerVNC service of an RDP,
+// VNC or SSH2 session's machine (which = "RDP" or "VNC"; for an RDP or VNC
+// session its own protocol), over the SSH session the desktop is reached
+// through. It repairs a service that hangs and clears the address TigerVNC
+// blocks after wrong passwords. Anyone connected is disconnected, so the
+// caller asks first. sudo is the password sudo may ask for (empty when it needs
+// none); it goes to the command's standard input and is never shown.
+func (a *App) RestartRemoteDesktopService(path, which, sudo string) (string, error) {
+	if err := a.ready(); err != nil {
+		return "", err
+	}
+	s, err := a.store.Get(path)
+	if err != nil {
+		return "", err
+	}
+	s = a.withFolderDefaults(s)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	id := randHex(8)
+
+	kind := strings.ToUpper(s.Protocol)
+	var port int
+	var hop *session.Session
+	var tu *term.Tunnel
+	switch kind {
+	case "RDP", "VNC":
+		which = kind
+		port = firstPort(s.Port, map[string]int{"RDP": 3389, "VNC": 5900}[kind])
+		if s.JumpSession != "" {
+			tu, err = a.terms.OpenTunnel(ctx, s, id, net.JoinHostPort(s.Hostname, strconv.Itoa(port)))
+			if err != nil {
+				return "", fmt.Errorf("could not reach the machine through its jump host: %w", err)
+			}
+			defer tu.Close()
+		} else {
+			hop = a.sshOfMachine(s.Hostname)
+		}
+	case session.ProtoSSH2:
+		which = strings.ToUpper(which)
+		port = map[string]int{"RDP": 3389, "VNC": 5902}[which]
+		for _, n := range a.remoteDesktopsOf(s) {
+			if strings.ToUpper(n.Protocol) == which {
+				port = firstPort(n.Port, port)
+			}
+		}
+		hop = &s
+	default:
+		return "", fmt.Errorf("%s is not an RDP, VNC or SSH2 session", s.Protocol)
+	}
+	units, err := restartUnits(which, port)
+	if err != nil {
+		return "", err
+	}
+	q := make([]string, len(units))
+	for i, u := range units {
+		q[i] = term.ShellQuote(u)
+	}
+	cmd := "sh -c " + term.ShellQuote(`IFS= read -r TW_SUDO; export TW_SUDO; exec bash -s -- "$@"`) + " sh " + strings.Join(q, " ")
+	stdin := []byte(sudo + "\n" + string(restartScript))
+	rep := &diagReport{secrets: []string{sudo}}
+	on := func(line string) { rep.addRaw(line) }
+	var code int
+	switch {
+	case tu != nil && tu.CanExec():
+		code, err = tu.Exec(ctx, cmd, stdin, on)
+	case hop != nil:
+		code, err = a.terms.ExecOn(ctx, id, *hop, cmd, stdin, on)
+	default:
+		return "", errors.New("no SSH session is known for this machine. Open the SSH session of the machine and restart the service there")
+	}
+	if err != nil {
+		return rep.String(), fmt.Errorf("could not run the restart on the machine: %w", err)
+	}
+	if code != 0 {
+		rep.addf("(the restart ended with status %d)", code)
+	}
+	return rep.String(), nil
 }

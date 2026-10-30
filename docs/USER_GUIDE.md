@@ -311,6 +311,12 @@ The logs of the services can only be read with `sudo`: type the sudo password in
 
 ![The report](screenshots/remote-desktop-logs.png)
 
+**Fix: restart the service.** Under the report, the *Fix* box has **Restart VNC service** / **Restart RDP service** (an SSH session offers both). It asks first, because anyone connected to that desktop is disconnected, then restarts `xrdp` (with `xrdp-sesman`) or `tigervnc@<display>` on the machine over the SSH session, and **collects a new report** so you see the result. Type the sudo password in the box when sudo asks for one (it is sent on standard input and never shown). The usual case is a VNC server that answers *Too many security failures*: TigerVNC blocks an address after several wrong passwords and, through the SSH session, every login comes from 127.0.0.1, so it blocks all of them. The report says so and the Restart button is highlighted; restarting clears the block. Set the password again (*Reconfigure services that already run*, or `sudo -u <vnc user> vncpasswd` on the machine) before connecting, so the block does not return.
+
+![The VNC address is blocked: Restart VNC service](screenshots/remote-desktop-fix.png)
+
+![After the restart the server answers normally](screenshots/remote-desktop-fixed.png)
+
 **One desktop at a time.** RDP and VNC to the same machine **as the same user** are two views of one desktop and one set of settings, so Termwright does not let both stay open (sessions made by *Set Up Remote Desktop* use two different users, so they never meet this):
 
 - Opening RDP while a VNC tab to the same machine is open (or the other way round) asks *"VNC is already open … Shall I close it and open RDP?"*. **Yes** closes that tab and opens the new one; **Cancel** opens nothing.

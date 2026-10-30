@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Collect Logs has a Fix: Restart service.** Under the report, *Restart VNC service* / *Restart RDP service* (an SSH session offers both) restarts `tigervnc@<display>` or `xrdp` and `xrdp-sesman` on the machine over the SSH session (it asks first; the sudo password goes on standard input and is never shown), then collects a new report to show the result. It is highlighted when the report finds the VNC server blocking the address after wrong passwords (*Too many security failures*), which a restart clears.
+
 * **Set Up Remote Desktop: who can connect is chosen per service.** RDP and VNC each have *Through this SSH session (recommended)* or *Directly from the network*, and the sessions are saved to match: `127.0.0.1` with the SSH session as jump host, or the machine's own address without a jump host. Opening VNC directly warns that it is not encrypted and its password has at most 8 characters. The firewall network applies to the services opened directly.
 * **Session Manager shows what 127.0.0.1 means**: a session that reaches `127.0.0.1` through a jump host is listed as `127.0.0.1 (on <jump host>)`, in the list, the hover card and the address bar.
 * **Collect Logs recognises a blocked VNC address**: TigerVNC answers `RFB 003.003` and *Too many security failures* to an address it has blocked after wrong passwords; the report now says so and what to do (restart the service or wait, set the password again with *Reconfigure*).
