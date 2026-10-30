@@ -89,8 +89,8 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **VNC** in a built-in viewer tab: VNC servers, Raspberry Pi, Linux desktops, macOS Screen Sharing.
 - **VNC options**: view only, fit to tab, Ctrl+Alt+Del, clipboard both ways.
 - **Through jump hosts and proxies**: Termwright opens a local tunnel for RDP and VNC.
-- **Set Up Remote Desktop…** (right-click an SSH session): installs XFCE with xrdp and/or TigerVNC on Ubuntu 24.04 by running a script in the SSH tab (you type the passwords there); services already running are left alone; creates the RDP and VNC sessions through the SSH session when it succeeds; *Check First* only reports.
-- **One desktop at a time**: opening RDP while VNC to the same machine is open (or the reverse) asks to close the first; when someone else is connected to the machine, Termwright warns and never closes their session.
+- **Set Up Remote Desktop…** (right-click an SSH session): installs XFCE with xrdp and/or TigerVNC on Ubuntu 24.04, running a script in the background (nothing typed in the terminal; one line of progress). Each service gets its own new user (`name-rdp`, `name-vnc`); passwords default to the SSH login's and travel on the SSH connection's input, never shown; services already running are left alone; creates the RDP and VNC sessions through the SSH session when it succeeds; *Check First* only reports.
+- **One desktop per user**: opening RDP while VNC to the same machine as the same user is open (or the reverse) asks to close the first; when someone else is connected to the machine, Termwright warns and never closes their session.
 
 ## Console servers
 

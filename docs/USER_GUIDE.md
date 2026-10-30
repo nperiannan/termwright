@@ -250,22 +250,31 @@ Discover Devices finds computers with RDP (3389) or VNC (5900) open and can add 
 
 ### Set up a remote desktop on a Linux machine
 
-Right-click an **SSH2** session → **Set Up Remote Desktop…** (or, in an open SSH tab, right-click the tab or use **Options → Set Up Remote Desktop…**). Termwright installs the XFCE desktop with **xrdp** (RDP, port 3389) and/or **TigerVNC** (VNC, display :2, port 5902) on that machine, by running a script in the SSH tab, so you see everything it does.
+Right-click an **SSH2** session → **Set Up Remote Desktop…** (or, in an open SSH tab, right-click the tab or use **Options → Set Up Remote Desktop…**). Termwright installs the XFCE desktop with **xrdp** (RDP, port 3389) and/or **TigerVNC** (VNC, display :2, port 5902) on that machine. It runs a script on the machine **in the background**: nothing is typed in your terminal, and the dialog shows one line of progress (*Show details* has the full output).
 
 ![Set Up Remote Desktop](screenshots/remote-desktop.png)
 
 - **Install**: RDP, VNC or both. A service that is **already running is left alone**, so running it again never disconnects anyone.
-- **Desktop user**: the Linux user who gets the desktop (not root). Pick a user who is **not logged in at the machine's own screen**: a remote desktop for the same user as a local GNOME or console session often stays black. Termwright checks this and warns (*Check First* does too).
-
-  ![Desktop user logged in locally](screenshots/remote-desktop-local.png)
-- **Who can connect**: *Through this SSH session only* (recommended: both services listen on the machine's own address and Termwright reaches them through the SSH connection) or *From the network* (all interfaces; add the network to open in the firewall).
-- **Create the sessions afterwards**: when the script ends **without errors**, Termwright makes `name (RDP)` and `name (VNC)` next to the SSH session (address `127.0.0.1`, ports 3389 / 5902, the SSH session as the jump host). The toast has **Open RDP** and **Open VNC** buttons.
-- **Check First** runs the script with `--check`: it only reports what is running and changes nothing.
-- **Reconfigure services that already run** (`--force`) rewrites their settings and restarts them, so anyone connected is disconnected. Use it to repair a desktop, for example a black screen over RDP after an earlier setup.
-- Passwords: you type your **sudo password** and the **VNC password** in the SSH tab. Termwright never sees them. The script is copied over the tab's own SSH connection and removed again afterwards.
+- **Desktop users**: each service gets a **user of its own**, by default `<your user>-rdp` and `<your user>-vnc`. They are created when they do not exist, without administrator rights; a user that exists is used as it is and its password is not changed. Two users mean the two desktops never disturb each other, and neither disturbs the user who is logged in at the machine's own screen (a remote desktop for that same user often stays black).
+- **Passwords**: for the new users, and for sudo, the default is **the password of this SSH login** (when it is saved), or choose another. VNC uses the same password by default; VNC only looks at its **first 8 characters**. The passwords travel on the SSH connection to the script's input, never on a command line, and are never shown or written to a file.
+- **Who can connect**: *Through this SSH session only* (recommended: both listen on the machine's own address and Termwright reaches them through the SSH connection) or *From the network* (all interfaces; add the network to open in the firewall).
+- **Create the sessions afterwards**: when the setup ends **without errors**, Termwright makes `name (RDP)` and `name (VNC)` next to the SSH session (address `127.0.0.1`, ports 3389 / 5902, the SSH session as the jump host, the user names above). The dialog and a toast have **Open RDP** and **Open VNC** buttons.
+- **Check First** only reports what is running and which users would be created; it changes nothing.
+- **Reconfigure services that already run** rewrites their settings and restarts them, so anyone connected is disconnected. Use it to repair a desktop.
+- **Hide** lets the setup go on while you work; you are told when it ends. **Cancel setup** stops it.
 - Supported: **Ubuntu 24.04**. The dialog shows the machine's version, and the script stops before changing anything on other systems. The script is in `scripts/remote-desktop/` of the source.
 
-**One desktop at a time.** RDP and VNC to the same machine are two views of one user's desktop and settings, so Termwright does not let both stay open:
+Wrong sudo password? The dialog says *The sudo password was not accepted*; **Back** returns to the form.
+
+![Setup progress](screenshots/remote-desktop-progress.png)
+
+![Remote desktop ready](screenshots/remote-desktop-done.png)
+
+A user who is logged in at the machine's own screen is flagged before you start:
+
+![Desktop user logged in locally](screenshots/remote-desktop-local.png)
+
+**One desktop at a time.** RDP and VNC to the same machine **as the same user** are two views of one desktop and one set of settings, so Termwright does not let both stay open (sessions made by *Set Up Remote Desktop* use two different users, so they never meet this):
 
 - Opening RDP while a VNC tab to the same machine is open (or the other way round) asks *"VNC is already open … Shall I close it and open RDP?"*. **Yes** closes that tab and opens the new one; **Cancel** opens nothing.
 

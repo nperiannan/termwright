@@ -287,3 +287,11 @@ export interface SerialPortInfo { name: string; label: string; usb: boolean; ser
 
 /** Model, OS version, serial number and base MAC address of a device (empty when unknown). */
 export interface DeviceFacts { model: string; version: string; serial: string; mac: string; }
+
+/** What the Set Up Remote Desktop dialog asks the backend to do (backend RemoteDesktopRun). */
+export interface RemoteDesktopRun {
+  tabId: string; rdp: boolean; vnc: boolean; rdpUser: string; vncUser: string; createUsers: boolean;
+  network: boolean; cidr: string; check: boolean; force: boolean;
+  sudoSame: boolean; sudoNone: boolean; sudoPassword: string;
+  accountSame: boolean; accountPassword: string; vncSame: boolean; vncPassword: string;
+}

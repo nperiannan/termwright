@@ -29,6 +29,11 @@ CHECK_ONLY=0
 PW_STDIN=0
 TMP_DIR=""
 VNC_PW=""
+ACCOUNT_PW=""
+RDP_USER=""
+VNC_USER=""
+CREATE_USERS=0
+SECRETS_STDIN=0
 
 usage() {
   cat <<EOF
@@ -39,7 +44,11 @@ A service that is already running is left alone; use --force to reconfigure it.
 Both services listen on localhost only unless told otherwise.
 
 Options:
-  --user USER             Desktop login user (default: the sudo user)
+  --user USER             Desktop login user for both services (default: the sudo user)
+  --rdp-user USER         Desktop user of RDP only (default: --user)
+  --vnc-user USER         Desktop user of VNC only (default: --user)
+  --create-users          Create --rdp-user / --vnc-user when they do not exist (an existing
+                          user is never changed). Needs the account password (--secrets-stdin)
   --vnc-display N         TigerVNC display number, 1-99 (default: 2; port = 5900+N)
   --geometry WxH          VNC screen size (default: 1920x1080)
   --depth N               VNC colour depth: 16, 24 or 32 (default: 24)
@@ -52,6 +61,9 @@ Options:
   --no-rdp                Do not set up RDP
   --goodies               Also install xfce4-goodies (a large package set)
   --vnc-password-stdin    Read the VNC password (one line) from standard input
+  --secrets-stdin         Read passwords from standard input as lines "TWACCOUNT <password>"
+                          (password of the new users) and "TWVNC <password>", ended by "TWEND".
+                          Other lines are ignored. Passwords never appear on a command line
   --force                 Reconfigure and restart services that are already running
   --check                 Only report what is running and what would be done
   -h, --help              Show this help
@@ -78,6 +90,10 @@ need_val() { [[ $2 -ge 2 ]] || die "$1 requires a value"; }
 while (($#)); do
   case "$1" in
     --user)         need_val "$1" $#; TARGET_USER=$2; shift 2 ;;
+    --rdp-user)     need_val "$1" $#; RDP_USER=$2; shift 2 ;;
+    --vnc-user)     need_val "$1" $#; VNC_USER=$2; shift 2 ;;
+    --create-users) CREATE_USERS=1; shift ;;
+    --secrets-stdin) SECRETS_STDIN=1; shift ;;
     --vnc-display)  need_val "$1" $#; VNC_DISPLAY=$2; shift 2 ;;
     --geometry)     need_val "$1" $#; GEOMETRY=$2; shift 2 ;;
     --depth)        need_val "$1" $#; DEPTH=$2; shift 2 ;;
@@ -104,19 +120,28 @@ done
   die "This script supports Ubuntu 24.04 only; found ${PRETTY_NAME:-an unknown system}."
 (( CHECK_ONLY )) || [[ $EUID -eq 0 ]] || die "Run with sudo or as root (or use --check)."
 
-[[ -n $TARGET_USER ]] || die "Say which user gets the desktop: --user NAME"
-[[ $TARGET_USER =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die "Invalid user name '$TARGET_USER'."
-[[ $TARGET_USER != root ]] || die "Do not run a graphical session as root."
-id "$TARGET_USER" >/dev/null 2>&1 || die "User '$TARGET_USER' does not exist."
+RDP_USER=${RDP_USER:-$TARGET_USER}
+VNC_USER=${VNC_USER:-$TARGET_USER}
+(( ENABLE_RDP )) && [[ -z $RDP_USER ]] && die "Say which user gets the RDP desktop: --user NAME or --rdp-user NAME"
+(( ENABLE_VNC )) && [[ -z $VNC_USER ]] && die "Say which user gets the VNC desktop: --user NAME or --vnc-user NAME"
+check_user_name() { # role name
+  [[ $2 =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die "Invalid $1 user name '$2'."
+  [[ $2 != root ]] || die "Do not run a graphical session as root."
+  if ! id "$2" >/dev/null 2>&1; then
+    (( CREATE_USERS )) || die "User '$2' does not exist (use --create-users to create it)."
+  fi
+}
+(( ENABLE_RDP )) && check_user_name RDP "$RDP_USER"
+(( ENABLE_VNC )) && check_user_name VNC "$VNC_USER"
 [[ $VNC_DISPLAY =~ ^[1-9][0-9]?$ ]] || die "VNC display must be a number from 1 to 99."
 [[ $GEOMETRY =~ ^[1-9][0-9]{2,4}x[1-9][0-9]{2,4}$ ]] || die "Geometry must look like 1920x1080."
 [[ $DEPTH =~ ^(16|24|32)$ ]] || die "Depth must be 16, 24 or 32."
 [[ -z $ALLOWED_CIDR || $ALLOWED_CIDR =~ ^[0-9a-fA-F:.]+(/[0-9]{1,3})?$ ]] || die "Invalid CIDR '$ALLOWED_CIDR'."
 (( ENABLE_VNC || ENABLE_RDP )) || die "Nothing to do: both --no-vnc and --no-rdp were given."
 
-TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
-TARGET_GROUP=$(id -gn "$TARGET_USER")
-[[ -d $TARGET_HOME ]] || die "Home folder '$TARGET_HOME' of $TARGET_USER does not exist."
+# home and group of a desktop user (a user that is still to be created gets /home/NAME)
+home_of()  { local h; h=$(getent passwd "$1" | cut -d: -f6); printf '%s' "${h:-/home/$1}"; }
+group_of() { id -gn "$1" 2>/dev/null || printf '%s' "$1"; }
 VNC_PORT=$((5900 + VNC_DISPLAY))
 VNC_UNIT="tigervnc@${VNC_DISPLAY}.service"
 RDP_PORT=3389
@@ -147,17 +172,25 @@ if (( DO_VNC )) && ! is_active "$VNC_UNIT"; then
   listening "$VNC_PORT" && die "TCP port $VNC_PORT is used by another program. Choose another --vnc-display."
 fi
 
-local_login() {
+local_login() { # user
   command -v loginctl >/dev/null 2>&1 && \
-    loginctl list-sessions --no-legend 2>/dev/null | awk -v u="$TARGET_USER" '$3 == u && $4 == "seat0" { f = 1 } END { exit !f }'
+    loginctl list-sessions --no-legend 2>/dev/null | awk -v u="$1" '$3 == u && $4 == "seat0" { f = 1 } END { exit !f }'
+}
+user_note() { # role user
+  if id "$2" >/dev/null 2>&1; then
+    note "$1 user $2: exists (not changed)"
+    local_login "$2" && warn "$2 is logged in at this computer's own screen: a remote desktop for the same user often stays black. Use another user or log out locally first."
+  else
+    note "$1 user $2: will be created (no administrator rights)"
+  fi
+  return 0
 }
 
 report() {
   local what
-  printf '\nUser %s on %s\n' "$TARGET_USER" "$(hostname)"
-  if local_login; then
-    warn "$TARGET_USER is logged in at this computer's own screen: a remote desktop for the same user often stays black. Use another user (--user NAME) or log out locally first."
-  fi
+  printf '\nDesktop users on %s\n' "$(hostname)"
+  (( ENABLE_RDP )) && user_note RDP "$RDP_USER"
+  (( ENABLE_VNC )) && user_note VNC "$VNC_USER"
   if (( ENABLE_RDP )); then
     if (( RDP_RUNNING )); then note "RDP  : already running (port $RDP_PORT) - $( (( FORCE )) && echo 'will be reconfigured (--force)' || echo 'left untouched')"
     else note "RDP  : not running - will be set up"; fi
@@ -181,20 +214,58 @@ if (( CHECK_ONLY )); then
   exit 0
 fi
 
+# Passwords arrive on standard input (never on a command line), after the
+# line sudo may have read for itself.
+read_secrets() {
+  local line i
+  for ((i = 0; i < 20; i++)); do
+    IFS= read -r -t 30 line || break
+    case $line in
+      "TWACCOUNT "*) ACCOUNT_PW=${line#TWACCOUNT } ;;
+      "TWVNC "*)     VNC_PW=${line#TWVNC } ;;
+      TWEND)         return 0 ;;
+    esac
+  done
+  die "--secrets-stdin: the passwords did not arrive."
+}
+(( SECRETS_STDIN )) && read_secrets
+
 # VNC password: settle it before anything is installed
-VNC_PASSWD_FILE=$TARGET_HOME/.vnc/passwd
+VNC_HOME=$(home_of "$VNC_USER")
+VNC_PASSWD_FILE=$VNC_HOME/.vnc/passwd
 if (( DO_VNC )); then
-  if (( PW_STDIN )); then
-    IFS= read -r VNC_PW || [[ -n $VNC_PW ]] || die "--vnc-password-stdin: no password on standard input."
+  if [[ -n $VNC_PW ]] || (( PW_STDIN )); then
+    if [[ -z $VNC_PW ]]; then
+      IFS= read -r VNC_PW || [[ -n $VNC_PW ]] || die "--vnc-password-stdin: no password on standard input."
+    fi
     (( ${#VNC_PW} >= 6 )) || die "The VNC password must have at least 6 characters."
     (( ${#VNC_PW} <= 8 )) || warn "VNC passwords are limited to 8 characters; only the first 8 are used."
   elif [[ ! -s $VNC_PASSWD_FILE ]] && ! [[ -t 0 && -t 1 ]]; then
-    die "No VNC password for $TARGET_USER and no terminal to ask. Use --vnc-password-stdin, or run: sudo -u $TARGET_USER vncpasswd"
+    die "No VNC password for $VNC_USER and no terminal to ask. Use --vnc-password-stdin, --secrets-stdin, or run: sudo -u $VNC_USER vncpasswd"
   fi
 fi
 
 exec 9>/run/lock/setup-remote-desktop.lock
 flock -n 9 || die "Another run of this script is in progress."
+
+# ------------------------------------------------------------------- users
+create_user() { # name
+  local u=$1
+  if id "$u" >/dev/null 2>&1; then note "User $u exists - not changed"; return 0; fi
+  [[ -n $ACCOUNT_PW ]] || die "No password was given for the new user $u."
+  log "Creating user $u"
+  useradd -m -s /bin/bash "$u" || die "Could not create user $u."
+  printf '%s:%s\n' "$u" "$ACCOUNT_PW" | chpasswd || die "Could not set the password of $u."
+}
+if (( CREATE_USERS )); then
+  if (( DO_RDP )); then create_user "$RDP_USER"; fi
+  if (( DO_VNC )); then create_user "$VNC_USER"; fi
+fi
+ACCOUNT_PW=""
+RDP_HOME=$(home_of "$RDP_USER"); RDP_GROUP=$(group_of "$RDP_USER")
+VNC_HOME=$(home_of "$VNC_USER"); VNC_GROUP=$(group_of "$VNC_USER")
+if (( DO_RDP )); then [[ -d $RDP_HOME ]] || die "Home folder '$RDP_HOME' of $RDP_USER does not exist."; fi
+if (( DO_VNC )); then [[ -d $VNC_HOME ]] || die "Home folder '$VNC_HOME' of $VNC_USER does not exist."; fi
 
 # ----------------------------------------------------------------- packages
 log "Installing packages"
@@ -255,24 +326,28 @@ EOF
 install_file "$TMP_DIR/start-remote-xfce" /usr/local/bin/start-remote-xfce 0755 root root || true
 
 # Remote XFCE sessions otherwise keep asking for a password for colour
-# profiles and package-source refreshes. Only for this user.
-cat > "$TMP_DIR/polkit" <<EOF
+# profiles and package-source refreshes. Only for the desktop users.
+install_polkit() { # user
+  cat > "$TMP_DIR/polkit-$1" <<EOF
 // Termwright remote desktop: no authentication pop-ups in the remote session.
 polkit.addRule(function(action, subject) {
-    if (subject.user == "$TARGET_USER" &&
+    if (subject.user == "$1" &&
         (action.id.indexOf("org.freedesktop.color-manager.") == 0 ||
          action.id == "org.freedesktop.packagekit.system-sources-refresh")) {
         return polkit.Result.YES;
     }
 });
 EOF
-install_file "$TMP_DIR/polkit" "/etc/polkit-1/rules.d/45-remote-desktop-${TARGET_USER}.rules" 0644 root root || true
+  install_file "$TMP_DIR/polkit-$1" "/etc/polkit-1/rules.d/45-remote-desktop-$1.rules" 0644 root root || true
+}
+if (( DO_RDP )); then install_polkit "$RDP_USER"; fi
+if (( DO_VNC )); then install_polkit "$VNC_USER"; fi
 
 # -------------------------------------------------------------------- RDP
 if (( DO_RDP )); then
   log "Configuring xrdp"
   printf '#!/bin/sh\nexec /usr/local/bin/start-remote-xfce\n' > "$TMP_DIR/xsession"
-  install_file "$TMP_DIR/xsession" "$TARGET_HOME/.xsession" 0755 "$TARGET_USER" "$TARGET_GROUP" || true
+  install_file "$TMP_DIR/xsession" "$RDP_HOME/.xsession" 0755 "$RDP_USER" "$RDP_GROUP" || true
 
   adduser xrdp ssl-cert >/dev/null 2>&1 || true
 
@@ -290,36 +365,36 @@ fi
 # -------------------------------------------------------------------- VNC
 if (( DO_VNC )); then
   log "Configuring TigerVNC display :$VNC_DISPLAY (TCP $VNC_PORT)"
-  install -d -m 0700 -o "$TARGET_USER" -g "$TARGET_GROUP" "$TARGET_HOME/.vnc"
+  install -d -m 0700 -o "$VNC_USER" -g "$VNC_GROUP" "$VNC_HOME/.vnc"
   printf '#!/bin/sh\nexec /usr/local/bin/start-remote-xfce\n' > "$TMP_DIR/xstartup"
-  install_file "$TMP_DIR/xstartup" "$TARGET_HOME/.vnc/xstartup" 0755 "$TARGET_USER" "$TARGET_GROUP" || true
+  install_file "$TMP_DIR/xstartup" "$VNC_HOME/.vnc/xstartup" 0755 "$VNC_USER" "$VNC_GROUP" || true
 
   if (( PW_STDIN )); then
-    printf '%s\n' "$VNC_PW" | runuser -u "$TARGET_USER" -- vncpasswd -f > "$TMP_DIR/vncpw"
+    printf '%s\n' "$VNC_PW" | runuser -u "$VNC_USER" -- vncpasswd -f > "$TMP_DIR/vncpw"
     [[ -s $TMP_DIR/vncpw ]] || die "vncpasswd produced no password file."
-    install -D -m 0600 -o "$TARGET_USER" -g "$TARGET_GROUP" "$TMP_DIR/vncpw" "$VNC_PASSWD_FILE"
+    install -D -m 0600 -o "$VNC_USER" -g "$VNC_GROUP" "$TMP_DIR/vncpw" "$VNC_PASSWD_FILE"
     VNC_PW=""
   elif [[ ! -s $VNC_PASSWD_FILE ]]; then
-    log "Set a VNC password for $TARGET_USER"
-    runuser -u "$TARGET_USER" -- vncpasswd
+    log "Set a VNC password for $VNC_USER"
+    runuser -u "$VNC_USER" -- vncpasswd
   fi
   chmod 0600 "$VNC_PASSWD_FILE"
-  chown "$TARGET_USER:$TARGET_GROUP" "$VNC_PASSWD_FILE"
+  chown "$VNC_USER:$VNC_GROUP" "$VNC_PASSWD_FILE"
 
   localhost_arg=yes
   (( VNC_NETWORK )) && localhost_arg=no
   cat > "$TMP_DIR/vnc-unit" <<EOF
 [Unit]
-Description=TigerVNC server for $TARGET_USER on display :%i
+Description=TigerVNC server for $VNC_USER on display :%i
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=forking
-User=$TARGET_USER
-Group=$TARGET_GROUP
-WorkingDirectory=$TARGET_HOME
-Environment=HOME=$TARGET_HOME
+User=$VNC_USER
+Group=$VNC_GROUP
+WorkingDirectory=$VNC_HOME
+Environment=HOME=$VNC_HOME
 TimeoutStartSec=60
 ExecStartPre=-/usr/bin/vncserver -kill :%i
 ExecStart=/usr/bin/vncserver :%i -geometry $GEOMETRY -depth $DEPTH -localhost $localhost_arg -SecurityTypes VncAuth
@@ -373,19 +448,22 @@ wait_for() { local n=$1 i; shift; for ((i = 0; i < n; i++)); do "$@" && return 0
 (( DO_RDP )) && check_port RDP "$RDP_PORT" "$RDP_NETWORK" xrdp xrdp-sesman
 (( DO_VNC )) && check_port VNC "$VNC_PORT" "$VNC_NETWORK" "$VNC_UNIT"
 
-if local_login; then
-  warn "$TARGET_USER is logged in at this computer's own screen. A remote desktop for the same user can show a black screen: log out locally first, or use another user."
+if (( DO_RDP )) && local_login "$RDP_USER"; then
+  warn "$RDP_USER is logged in at this computer's own screen. A remote desktop for the same user can show a black screen: log out locally first, or use another user."
 fi
-if (( DO_RDP && DO_VNC )); then
-  warn "RDP and VNC share one home folder; using both at once as $TARGET_USER can overwrite each other's XFCE settings."
+if (( DO_VNC )) && [[ $VNC_USER != "$RDP_USER" ]] && local_login "$VNC_USER"; then
+  warn "$VNC_USER is logged in at this computer's own screen. A remote desktop for the same user can show a black screen: log out locally first, or use another user."
+fi
+if (( ENABLE_RDP && ENABLE_VNC )) && [[ $RDP_USER == "$VNC_USER" ]]; then
+  warn "RDP and VNC share one user ($RDP_USER); using both at once can overwrite each other's XFCE settings. Use one user per service."
 fi
 
 report_done() {
   printf '\nSummary - %s (%s)\n' "$(hostname)" "$(hostname -I 2>/dev/null | xargs || true)"
-  (( DO_RDP )) && note "RDP: 127.0.0.1:$RDP_PORT  user $TARGET_USER (Xorg session)"
-  (( DO_VNC )) && note "VNC: 127.0.0.1:$VNC_PORT (display :$VNC_DISPLAY), $GEOMETRY"
+  (( DO_RDP )) && note "RDP: 127.0.0.1:$RDP_PORT  user $RDP_USER (Xorg session)"
+  (( DO_VNC )) && note "VNC: 127.0.0.1:$VNC_PORT  user $VNC_USER (display :$VNC_DISPLAY), $GEOMETRY"
   (( ! RDP_NETWORK && ! VNC_NETWORK )) && \
-    note "Reach them through SSH: ssh -L 3389:127.0.0.1:$RDP_PORT -L $VNC_PORT:127.0.0.1:$VNC_PORT $TARGET_USER@<this host>, or in Termwright use this SSH session as the jump host with address 127.0.0.1."
+    note "Reach them through SSH: ssh -L 3389:127.0.0.1:$RDP_PORT -L $VNC_PORT:127.0.0.1:$VNC_PORT <user>@<this host>, or in Termwright use this SSH session as the jump host with address 127.0.0.1."
   note "Logs: journalctl -u xrdp -u xrdp-sesman -u $VNC_UNIT ; ~/.xsession-errors ; ~/.vnc/*.log"
 }
 report_done

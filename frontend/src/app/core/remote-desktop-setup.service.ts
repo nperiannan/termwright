@@ -1,65 +1,48 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { Backend, errText } from './backend';
-import { Session } from './models';
+import { RemoteDesktopRun, Session } from './models';
+import { RdProgress, applyLine, cleanLine, emptyProgress } from './remote-desktop-progress';
 import { Tabs } from './tabs.service';
 import { Ui } from './ui.service';
-
-export interface RemoteDesktopOptions {
-  /** Terminal tab of the SSH session the script runs on. */
-  tabId: string;
-  user: string;
-  rdp: boolean;
-  vnc: boolean;
-  /** 'ssh': both services listen on the machine's own address only; 'network': on all interfaces. */
-  access: 'ssh' | 'network';
-  /** Network to open in the firewall (access = 'network'), e.g. 10.1.2.0/24. */
-  cidr: string;
-  /** Create the RDP / VNC sessions when the script ends without errors. */
-  createSessions: boolean;
-  /** Only report what is running, change nothing. */
-  check: boolean;
-  /** Reconfigure and restart services that already run (--force); connected users are disconnected. */
-  force?: boolean;
-}
 
 export const VNC_DISPLAY = 2;
 export const VNC_PORT = 5900 + VNC_DISPLAY;
 export const RDP_PORT = 3389;
 
-const SH = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
-
-/** The command typed into the terminal. It ends by telling Termwright (an OSC 1337 line) how the script ended. */
-export function remoteDesktopCommand(remote: string, o: Pick<RemoteDesktopOptions, 'user' | 'rdp' | 'vnc' | 'access' | 'cidr' | 'check' | 'force'>, token: string): string {
-  const args = ['--user', SH(o.user), '--vnc-display', String(VNC_DISPLAY)];
-  if (!o.rdp) args.push('--no-rdp');
-  if (!o.vnc) args.push('--no-vnc');
-  if (o.access === 'network') {
-    if (o.rdp) args.push('--rdp-network');
-    if (o.vnc) args.push('--vnc-network');
-    if (o.cidr) args.push('--allow-cidr', SH(o.cidr));
-  }
-  if (o.check) args.push('--check');
-  else if (o.force) args.push('--force');
-  const run = o.check ? 'bash' : 'sudo bash';
-  // leading space: kept out of the shell history
-  return ` ${run} ${SH(remote)} ${args.join(' ')}; _twrc=$?; rm -f ${SH(remote)}; ` +
-    `printf '\\033]1337;TwRemoteDesktop=%s;${token}\\007' "$_twrc"\r`;
+/** What a finished or running setup keeps (never a password). */
+export interface RdRun extends RdProgress {
+  id: string;
+  phase: 'running' | 'done' | 'failed' | 'cancelled';
+  check: boolean;
+  machine: string;
+  log: string[];
+  /** Sessions made when it ended without errors. */
+  made: { rdp?: string; vnc?: string };
 }
+
+/** What is kept of a request once its passwords have been sent. */
+export type RdRequest = Omit<RemoteDesktopRun, 'sudoPassword' | 'accountPassword' | 'vncPassword'>;
 
 /** Name of the session made for one protocol next to the SSH session. */
 export const remoteSessionName = (ssh: string, kind: 'RDP' | 'VNC') => `${ssh} (${kind})`;
 
 /**
- * Set Up Remote Desktop: copies the script to the Linux machine of an SSH
- * terminal tab, runs it there with sudo in that tab (so the user sees
- * everything and types the passwords there), and - only when it ends without
- * errors - creates the RDP and VNC sessions that reach the new desktop.
+ * Set Up Remote Desktop: runs the setup script on the Linux machine of an SSH
+ * tab in the background (nothing appears in the terminal), with the passwords
+ * handed over on its standard input, and follows its output as one line of
+ * progress. Only when it ends without errors are the RDP and VNC sessions made.
  */
 @Injectable({ providedIn: 'root' })
 export class RemoteDesktopSetup {
   private backend = inject(Backend);
   private ui = inject(Ui);
   private tabs = inject(Tabs);
+
+  /** The run shown in the dialog (null: the form). */
+  readonly run = signal<RdRun | null>(null);
+  private unsubs: (() => void)[] = [];
+  private req: RdRequest | null = null;
+  private createSessions = true;
 
   /** Opens the dialog for a saved SSH session: connects it first when no terminal of it is open. */
   async openFor(path: string) {
@@ -93,58 +76,96 @@ export class RemoteDesktopSetup {
     return undefined;
   }
 
-  /** Uploads the script, types the command in the tab and follows it to the end. */
-  async run(o: RemoteDesktopOptions) {
-    const t = this.tabs.get(o.tabId);
-    if (!t) throw new Error('The SSH tab is closed.');
-    const remote = await this.backend.uploadRemoteDesktopScript(o.tabId);
-    const token = Math.random().toString(36).slice(2, 10);
-    this.tabs.patch(o.tabId, { rdDone: '' });
-    this.tabs.activeId.set(o.tabId);
-    await this.backend.sendInput(o.tabId, remoteDesktopCommand(remote, o, token));
-    void this.follow(o, token);
+  /** Back to the form (after a finished run). */
+  reset() {
+    if (this.run()?.phase === 'running') return;
+    this.run.set(null);
   }
 
-  private async follow(o: RemoteDesktopOptions, token: string) {
-    const name = this.tabs.get(o.tabId)?.title ?? '';
-    for (let i = 0; i < 4 * 3600 * 2; i++) { // up to 4 hours: packages download, passwords are typed
-      await new Promise(r => setTimeout(r, 500));
-      const t = this.tabs.get(o.tabId);
-      if (!t || t.state === 'disconnected' || t.state === 'error') return; // tab closed or connection lost
-      const m = /^(\d+);(\w+)$/.exec(t.rdDone ?? '');
-      if (!m || m[2] !== token) continue;
-      const rc = +m[1];
-      if (o.check) { this.ui.toast(`Check finished on ${name}: nothing was changed.`, 'info', 6000); return; }
-      if (rc !== 0) { this.ui.toast(`Remote desktop setup on ${name} ended with errors - see the terminal tab.`, 'error', 9000); return; }
-      await this.finish(o, t.session);
+  /** Starts the script on the machine of the request's tab. The passwords in r are sent, then forgotten. */
+  async start(r: RemoteDesktopRun, createSessions: boolean) {
+    const tab = this.tabs.get(r.tabId);
+    if (!tab) throw new Error('The SSH tab is closed.');
+    const id = await this.backend.startRemoteDesktop(r);
+    const { sudoPassword: _s, accountPassword: _a, vncPassword: _v, ...kept } = r;
+    this.req = kept;
+    this.createSessions = createSessions;
+    this.unsubs.forEach(u => u());
+    this.unsubs = [
+      this.backend.on('rd:line:' + id, (line: string) => this.line(line)),
+      this.backend.on('rd:done:' + id, (e: { code: number; error: string }) => void this.done(e)),
+    ];
+    this.run.set({ ...emptyProgress(), id, phase: 'running', check: r.check, machine: tab.title, log: [], made: {} });
+  }
+
+  async cancel() {
+    const r = this.run();
+    if (r?.phase === 'running') await this.backend.cancelRemoteDesktop(r.id).catch(() => {});
+  }
+
+  private line(raw: string) {
+    const r = this.run();
+    if (!r || r.phase !== 'running') return;
+    const clean = cleanLine(raw);
+    if (!clean.trim()) return;
+    const p = applyLine(r, clean);
+    this.run.set({ ...r, ...p, log: [...r.log.slice(-400), clean] });
+  }
+
+  private async done(e: { code: number; error: string }) {
+    this.unsubs.forEach(u => u());
+    this.unsubs = [];
+    const r = this.run();
+    if (!r) return;
+    const req = this.req;
+    const name = r.machine;
+    if (e.error === 'cancelled') {
+      this.run.set({ ...r, phase: 'cancelled', step: 'Cancelled', detail: '', error: '' });
+      this.ui.toast(`Remote desktop setup on ${name} was cancelled.`, 'info');
       return;
     }
-  }
-
-  private async finish(o: RemoteDesktopOptions, ssh: Session) {
-    const made: { rdp?: string; vnc?: string } = {};
-    if (o.createSessions) {
+    if (e.error || e.code !== 0) {
+      const error = r.error || e.error || 'The setup ended with errors. Open the details to see what happened.';
+      this.run.set({ ...r, phase: 'failed', step: 'Failed', detail: '', error });
+      this.ui.toast(`Remote desktop setup on ${name} failed: ${error}`, 'error', 9000);
+      return;
+    }
+    if (r.check) {
+      this.run.set({ ...r, phase: 'done', progress: 100 });
+      this.ui.toast(`Check finished on ${name}: nothing was changed.`, 'info', 6000);
+      return;
+    }
+    const made: RdRun['made'] = {};
+    const tab = this.tabs.get(req?.tabId ?? '');
+    if (this.createSessions && req && tab) {
       try {
-        if (o.rdp) made.rdp = await this.ensureSession(ssh, 'RDP', o);
-        if (o.vnc) made.vnc = await this.ensureSession(ssh, 'VNC', o);
+        if (req.rdp) made.rdp = await this.ensureSession(tab.session, 'RDP', req);
+        if (req.vnc) made.vnc = await this.ensureSession(tab.session, 'VNC', req);
         await this.ui.refreshTree();
-      } catch (e) {
-        this.ui.toast(`The remote desktop is ready on ${ssh.name}, but its sessions could not be created: ${errText(e)}`, 'error', 9000);
+      } catch (err) {
+        const error = `The remote desktop is ready, but its sessions could not be created: ${errText(err)}`;
+        this.run.set({ ...r, phase: 'failed', step: 'Failed', detail: '', error });
+        this.ui.toast(error, 'error', 9000);
         return;
       }
     }
+    this.run.set({ ...r, phase: 'done', progress: 100, step: 'Remote desktop is ready', detail: '', made });
     const actions = [
       ...(made.rdp ? [{ label: 'Open RDP', run: () => void this.tabs.openSession(made.rdp!, 'auto') }] : []),
       ...(made.vnc ? [{ label: 'Open VNC', run: () => void this.tabs.openSession(made.vnc!, 'auto') }] : []),
     ];
-    this.ui.toast(`Remote desktop is ready on ${ssh.name}.` + (actions.length ? ' The new sessions are next to it.' : ''), 'success', 15000, actions);
+    this.ui.toast(`Remote desktop is ready on ${name}.` + (actions.length ? ' The new sessions are next to it.' : ''), 'success', 15000, actions);
   }
 
+  /** Opens one of the new sessions. */
+  open(path: string) { void this.tabs.openSession(path, 'auto'); }
+
   /** Creates "<ssh> (RDP|VNC)" in the folder of the SSH session; an existing one that already does the job is reused. */
-  private async ensureSession(ssh: Session, kind: 'RDP' | 'VNC', o: RemoteDesktopOptions): Promise<string> {
-    const viaSsh = o.access === 'ssh';
+  private async ensureSession(ssh: Session, kind: 'RDP' | 'VNC', o: RdRequest): Promise<string> {
+    const viaSsh = !o.network;
     const port = kind === 'RDP' ? RDP_PORT : VNC_PORT;
     const host = viaSsh ? '127.0.0.1' : ssh.hostname;
+    const user = kind === 'RDP' ? o.rdpUser : o.vncUser;
     const base = remoteSessionName(ssh.name, kind);
     const tree = this.ui.tree();
     for (let n = 1; n < 50; n++) {
@@ -152,12 +173,13 @@ export class RemoteDesktopSetup {
       const path = ssh.folder ? `${ssh.folder}/${name}` : name;
       const have = findNode(tree?.children, path);
       if (have) {
-        if (have.protocol === kind && (have.port ?? 0) === port && (have.hostname ?? '') === host && (!viaSsh || have.jump === ssh.path)) return path;
+        if (have.protocol === kind && (have.port ?? 0) === port && (have.hostname ?? '') === host && (!viaSsh || have.jump === ssh.path)
+          && (have.username ?? '') === user) return path;
         continue;
       }
       const s = await this.backend.newSessionDefaults();
       Object.assign(s, {
-        name, folder: ssh.folder, protocol: kind, hostname: host, port, username: o.user,
+        name, folder: ssh.folder, protocol: kind, hostname: host, port, username: user,
         jumpSession: viaSsh ? ssh.path : '', description: [`${kind} desktop of ${ssh.name} (made by Set Up Remote Desktop)`],
       } as Partial<Session>);
       return (await this.backend.saveSession(s, '')).path;
@@ -166,7 +188,7 @@ export class RemoteDesktopSetup {
   }
 }
 
-function findNode(list: { path: string; isFolder: boolean; protocol?: string; port?: number; hostname?: string; jump?: string; children?: any[] }[] | undefined, path: string): any {
+function findNode(list: { path: string; isFolder: boolean; protocol?: string; port?: number; hostname?: string; jump?: string; username?: string; children?: any[] }[] | undefined, path: string): any {
   for (const c of list ?? []) {
     if (c.path === path) return c;
     if (c.isFolder) { const x = findNode(c.children, path); if (x) return x; }

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary } from './models';
+  AccountInfo, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -145,7 +145,9 @@ export class Backend {
   discoverDownloadOui() { return this.call<number>('DiscoverDownloadOUI'); }
   sftpLoginShell(id: string) { return this.call<string>('SFTPLoginShell', id); }
   sftpOpen(tabId: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; target: string }>('SFTPOpen', tabId, mode); }
-  uploadRemoteDesktopScript(tabId: string) { return this.call<string>('UploadRemoteDesktopScript', tabId); }
+  remoteDesktopInfo(tabId: string) { return this.call<{ savedPassword: boolean; user: string }>('RemoteDesktopInfo', tabId); }
+  startRemoteDesktop(run: RemoteDesktopRun) { return this.call<string>('StartRemoteDesktop', run); }
+  cancelRemoteDesktop(id: string) { return this.call<void>('CancelRemoteDesktop', id); }
   sftpConnect(path: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; info: string; target: string }>('SFTPConnect', path, mode); }
   sftpSetRoot(id: string, root: boolean) { return this.call<string>('SFTPSetRoot', id, root); }
   sftpRunAs(id: string, command: string) { return this.call<{ home: string; user: string }>('SFTPRunAs', id, command); }

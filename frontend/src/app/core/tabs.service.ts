@@ -56,8 +56,6 @@ export interface TabView {
   cwd?: string;
   /** Terminal tab: user the shell runs as (OSC 1337 RemoteHost=user@host), e.g. root after "sudo su -". */
   shellUser?: string;
-  /** Terminal tab: how the last Set Up Remote Desktop script ended ("<exit code>;<token>", OSC 1337 TwRemoteDesktop=). */
-  rdDone?: string;
   /** Terminal tab: host the shell reports (OSC 7 file://host/… or RemoteHost=user@host); '' after ssh / exit until it reports again. */
   shellHost?: string;
   /** Terminal tab (SSH2): the Files panel beside it is shown. */
@@ -643,7 +641,9 @@ export class Tabs {
     const open = this.tabs().filter(t => (t.kind === 'rdp' || t.kind === 'vnc') && t.state !== 'disconnected' &&
       machineOf({ hostname: t.session.hostname, jumpSession: t.session.jumpSession }, root) === machine);
     const other = kind === 'rdp' ? 'vnc' : 'rdp';
-    const otherTabs = open.filter(t => t.kind === other);
+    // RDP and VNC of two different users do not disturb each other; the same (or unknown) user does
+    const wanted = (node?.username ?? s?.username ?? '').toLowerCase();
+    const otherTabs = open.filter(t => t.kind === other && (!wanted || !t.session.username || t.session.username.toLowerCase() === wanted));
     const mine = (k: RemoteKind) => open.filter(t => t.kind === k).length;
 
     // who else is on the machine: connections there minus the ones Termwright has open
