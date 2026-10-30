@@ -145,6 +145,7 @@ export class Backend {
   discoverDownloadOui() { return this.call<number>('DiscoverDownloadOUI'); }
   sftpLoginShell(id: string) { return this.call<string>('SFTPLoginShell', id); }
   sftpOpen(tabId: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; target: string }>('SFTPOpen', tabId, mode); }
+  uploadRemoteDesktopScript(tabId: string) { return this.call<string>('UploadRemoteDesktopScript', tabId); }
   sftpConnect(path: string, mode: SftpMode = '') { return this.call<{ id: string; home: string; info: string; target: string }>('SFTPConnect', path, mode); }
   sftpSetRoot(id: string, root: boolean) { return this.call<string>('SFTPSetRoot', id, root); }
   sftpRunAs(id: string, command: string) { return this.call<{ home: string; user: string }>('SFTPRunAs', id, command); }

@@ -525,6 +525,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     });
     term.parser.registerOscHandler(1337, d => {
       if (d.startsWith('CurrentDir=')) return setCwd(d.slice(11));
+      if (d.startsWith('TwRemoteDesktop=')) { this.tabs.patch(id, { rdDone: d.slice(16) }); return true; }
       if (d.startsWith('RemoteHost=')) {
         const user = d.slice(11).split('@')[0].trim();
         setHost(d.slice(11).split('@')[1] ?? '');

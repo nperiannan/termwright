@@ -1,3 +1,4 @@
+import { RemoteDesktopSetup } from '../core/remote-desktop-setup.service';
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -208,6 +209,7 @@ export function sessionAddr(n: SessionNode): string {
 export class SessionTree implements AfterViewInit, OnDestroy {
   protected ui = inject(Ui);
   private tabs = inject(Tabs);
+  private remoteDesktop = inject(RemoteDesktopSetup);
   protected wol = inject(Wol);
   protected ops = inject(SessionOps);
   private backend = inject(Backend);
@@ -714,6 +716,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ] : n.protocol === 'WOL' ? [] : [{ label: 'Connect', action: () => this.connect(n) }]),
           ...(n.hostname && n.protocol !== 'RDP' && n.protocol !== 'VNC' ? [
             ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', action: () => void this.openWeb(n.path, 'session') }] : []),
+            ...(n.protocol === 'SSH2' ? [{ label: 'Set Up Remote Desktop...', action: () => void this.remoteDesktop.openFor(n.path) }] : []),
             { label: 'Open Web Interface...', action: () => void this.openWeb(n.path, 'device') },
           ] : []),
           ...(n.mac ? [{ label: 'Wake Up (Wake-on-LAN)', action: () => void this.wake(n.path, 'none') }] : []),

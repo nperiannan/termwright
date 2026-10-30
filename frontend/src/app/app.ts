@@ -40,6 +40,8 @@ import { PlayerView } from './components/player-view';
 import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
+import { RemoteDesktopDialog } from './dialogs/remote-desktop-dialog';
+import { RemoteDesktopSetup } from './core/remote-desktop-setup.service';
 import { Palette } from './dialogs/palette';
 import { SessionsMenu } from './components/sessions-menu';
 import { Commands, sendSnippet } from './dialogs/commands';
@@ -54,13 +56,14 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App implements OnInit {
   protected ui = inject(Ui);
   protected tabs = inject(Tabs);
+  private remoteDesktop = inject(RemoteDesktopSetup);
   private backend = inject(Backend);
   private cmdWin = viewChild(CommandWindow);
 
@@ -464,6 +467,7 @@ export class App implements OnInit {
       case 'workspaces': this.ui.open('workspaces'); break;
       case 'compare': this.ui.open('compare'); break;
       case 'save-workspace': await saveWorkspace(this.ui, this.tabs); break;
+      case 'remote-desktop': this.remoteDesktop.openForTab(this.tabs.activeId()); break;
       case 'key-setup': {
         const t = this.tabs.get(this.tabs.activeId());
         this.ui.keySetupTab.set(t?.kind === 'terminal' && t.session.protocol === 'SSH2' && t.state === 'connected' ? t.id : '');
@@ -579,6 +583,7 @@ export class App implements OnInit {
         { label: 'Open Web Page Through This Session...', action: () => this.ui.openWeb(t.session, t.id, 'session') },
         { label: (t.filesPanel ? '✓ ' : '') + 'Files Panel', hint: shortcutOf('files-panel', this.isMac), action: () => this.tabs.patch(t.id, { filesPanel: !t.filesPanel }) },
         { label: 'Set Up Key Login...', action: () => { this.ui.keySetupTab.set(t.id); this.ui.open('keySetup'); }, disabled: t.state !== 'connected' },
+        { label: 'Set Up Remote Desktop...', action: () => this.remoteDesktop.openForTab(t.id), disabled: t.state !== 'connected' },
         { label: 'Connect SFTP Session (new login)', action: () => this.tabs.openSftpSession(t.session.path).catch(e => this.ui.error(e)),
           disabled: !t.session.path },
       ] : []),

@@ -304,6 +304,29 @@ func (m *Manager) SFTPReadText(id, p string, max int64) (string, error) {
 	return string(b), nil
 }
 
+// SFTPWriteFile creates a new remote file (it must not exist) with these
+// contents and permissions.
+func (m *Manager) SFTPWriteFile(id, p string, data []byte, mode os.FileMode) error {
+	s, err := m.sftpGet(id)
+	if err != nil {
+		return err
+	}
+	f, err := s.c.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = s.c.Remove(p)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = s.c.Remove(p)
+		return err
+	}
+	return s.c.Chmod(p, mode)
+}
+
 // SFTPCreateFile makes a new empty remote file; an existing file is left
 // alone (an error says it exists).
 func (m *Manager) SFTPCreateFile(id, p string) error {

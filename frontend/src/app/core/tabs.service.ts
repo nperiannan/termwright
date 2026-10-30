@@ -4,6 +4,7 @@ import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
 import type { SerializeAddon } from '@xterm/addon-serialize';
 import { Backend, SftpMode, errText } from './backend';
+import { RemoteKind, RemoteTarget, connectionsCommand, machineOf, nodeAt, parseConnections, sshPathFor } from './remote-guard';
 import { AlertEvent, DeviceFacts, RemoteInfo, Session, TabInfo, Transfer, isRemoteDesktop, unescape } from './models';
 import { Ui } from './ui.service';
 import { Wol } from './wol.service';
@@ -55,6 +56,8 @@ export interface TabView {
   cwd?: string;
   /** Terminal tab: user the shell runs as (OSC 1337 RemoteHost=user@host), e.g. root after "sudo su -". */
   shellUser?: string;
+  /** Terminal tab: how the last Set Up Remote Desktop script ended ("<exit code>;<token>", OSC 1337 TwRemoteDesktop=). */
+  rdDone?: string;
   /** Terminal tab: host the shell reports (OSC 7 file://host/… or RemoteHost=user@host); '' after ssh / exit until it reports again. */
   shellHost?: string;
   /** Terminal tab (SSH2): the Files panel beside it is shown. */
@@ -606,6 +609,7 @@ export class Tabs {
 
   /** RDP (opened in the computer's Remote Desktop client) or VNC (built-in viewer) tab. */
   async openRemote(path: string, s: Session | null) {
+    if (!(await this.remoteGuard(path, s))) return;
     const name = s?.name || s?.hostname || path.split('/').pop();
     this.ui.toast(`Opening ${name}...`);
     const r = await this.backend.openRemote(path, s);
@@ -617,6 +621,71 @@ export class Tabs {
     this.tabs.update(l => [...l, tv]);
     this.activeId.set(tv.id);
     if (path) setTimeout(() => void this.ui.loadSettings(), 300);
+  }
+
+  /**
+   * RDP and VNC to one machine fight over the same desktop. Before opening one
+   * while the other is open to the same machine, ask to close it; and when
+   * someone else is connected there (seen over SSH) say so - their session is
+   * never closed. Returns false when the user chose not to continue.
+   */
+  private async remoteGuard(path: string, s: Session | null): Promise<boolean> {
+    const root = this.ui.tree();
+    const node = path ? nodeAt(root, path) : undefined;
+    const proto = (node?.protocol ?? s?.protocol ?? '').toLowerCase();
+    if (proto !== 'rdp' && proto !== 'vnc') return true;
+    const kind = proto as RemoteKind;
+    const target: RemoteTarget = path
+      ? { path, hostname: node?.hostname ?? '', jumpSession: node?.jump, port: node?.port }
+      : { hostname: s?.hostname ?? '', jumpSession: s?.jumpSession, port: s?.port };
+    const machine = machineOf(target, root);
+    if (!machine) return true;
+    const open = this.tabs().filter(t => (t.kind === 'rdp' || t.kind === 'vnc') && t.state !== 'disconnected' &&
+      machineOf({ hostname: t.session.hostname, jumpSession: t.session.jumpSession }, root) === machine);
+    const other = kind === 'rdp' ? 'vnc' : 'rdp';
+    const otherTabs = open.filter(t => t.kind === other);
+    const mine = (k: RemoteKind) => open.filter(t => t.kind === k).length;
+
+    // who else is on the machine: connections there minus the ones Termwright has open
+    let foreign: Record<RemoteKind, number> = { rdp: 0, vnc: 0 };
+    const ssh = sshPathFor(target, root);
+    if (ssh) {
+      const rdpPort = kind === 'rdp' ? (target.port || 3389) : 3389;
+      const vncPorts = kind === 'vnc' && target.port ? [target.port] : [5900, 5901, 5902, 5903, 5904, 5905];
+      try {
+        const out = await Promise.race([
+          this.backend.runFactCommand(ssh, '', connectionsCommand([rdpPort, ...vncPorts])),
+          new Promise<string>((_, no) => setTimeout(() => no(new Error('timeout')), 8000)),
+        ]);
+        const n = parseConnections(out);
+        let rdp = 0, vnc = 0;
+        n.forEach((c, p) => { if (p === rdpPort) rdp += c; else vnc += c; });
+        foreign = { rdp: Math.max(0, rdp - mine('rdp')), vnc: Math.max(0, vnc - mine('vnc')) };
+      } catch { /* cannot ask the machine: carry on without the notice */ }
+    }
+
+    const KIND = kind.toUpperCase(), OTHER = other.toUpperCase();
+    if (otherTabs.length) {
+      const names = otherTabs.map(t => `"${t.title}"`).join(', ');
+      const ok = await this.ui.confirm(`${OTHER} is already open`,
+        `${OTHER} ${names} is already open to ${machine}. To continue, it has to be closed.\n\nShall I close it and open ${KIND}?`,
+        `Close ${OTHER} and open ${KIND}`);
+      if (!ok) return false;
+      for (const t of otherTabs) await this.close(t.id);
+    }
+    const sameN = foreign[kind], otherN = foreign[other];
+    if (sameN > 0 || otherN > 0) {
+      const who = (n: number, k: string) => `${n === 1 ? 'a connection' : n + ' connections'} to ${k}`;
+      const parts = [otherN > 0 ? who(otherN, OTHER) : '', sameN > 0 ? who(sameN, KIND) : ''].filter(Boolean).join(' and ');
+      const risk = otherN > 0
+        ? `Opening ${KIND} next to their ${OTHER} may disturb their desktop session.`
+        : `Opening ${KIND} may take over or share their desktop.`;
+      const ok = await this.ui.confirm('Someone else is connected',
+        `${machine} has ${parts} that ${parts.includes(' and ') || (sameN + otherN) > 1 ? 'are' : 'is'} not from this Termwright. Termwright does not close other people's sessions. ${risk}\n\nOpen ${KIND} anyway?`,
+        `Open ${KIND}`);
+      if (!ok) return false;
+    }
+    return true;
   }
 
   private playerSeq = 0;

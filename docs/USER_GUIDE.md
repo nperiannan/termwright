@@ -248,6 +248,30 @@ Choose **RDP** or **VNC** as the protocol of a session (or type `rdp host` / `vn
 
 Discover Devices finds computers with RDP (3389) or VNC (5900) open and can add them as RDP or VNC sessions.
 
+### Set up a remote desktop on a Linux machine
+
+Right-click an **SSH2** session → **Set Up Remote Desktop…** (or, in an open SSH tab, right-click the tab or use **Options → Set Up Remote Desktop…**). Termwright installs the XFCE desktop with **xrdp** (RDP, port 3389) and/or **TigerVNC** (VNC, display :2, port 5902) on that machine, by running a script in the SSH tab, so you see everything it does.
+
+![Set Up Remote Desktop](screenshots/remote-desktop.png)
+
+- **Install**: RDP, VNC or both. A service that is **already running is left alone**, so running it again never disconnects anyone.
+- **Desktop user**: the Linux user who gets the desktop (not root).
+- **Who can connect**: *Through this SSH session only* (recommended: both services listen on the machine's own address and Termwright reaches them through the SSH connection) or *From the network* (all interfaces; add the network to open in the firewall).
+- **Create the sessions afterwards**: when the script ends **without errors**, Termwright makes `name (RDP)` and `name (VNC)` next to the SSH session (address `127.0.0.1`, ports 3389 / 5902, the SSH session as the jump host). The toast has **Open RDP** and **Open VNC** buttons.
+- **Check First** runs the script with `--check`: it only reports what is running and changes nothing.
+- Passwords: you type your **sudo password** and the **VNC password** in the SSH tab. Termwright never sees them. The script is copied over the tab's own SSH connection and removed again afterwards.
+- Supported: **Ubuntu 24.04**. The dialog shows the machine's version, and the script stops before changing anything on other systems. The script is in `scripts/remote-desktop/` of the source.
+
+**One desktop at a time.** RDP and VNC to the same machine are two views of one user's desktop and settings, so Termwright does not let both stay open:
+
+- Opening RDP while a VNC tab to the same machine is open (or the other way round) asks *"VNC is already open … Shall I close it and open RDP?"*. **Yes** closes that tab and opens the new one; **Cancel** opens nothing.
+
+  ![RDP or VNC already open to the same machine](screenshots/remote-desktop-conflict.png)
+- When **someone else** is connected to the machine's RDP or VNC (Termwright asks the machine over the SSH session), it says so and asks whether to open anyway. It never closes other people's sessions.
+
+  ![Someone else is connected](screenshots/remote-desktop-others.png)
+
+
 ### Console servers
 
 Devices cabled to a console server (terminal server) get a session of protocol **Console**: Termwright connects to the console server's port for the device and then logs in to the device itself, so the console of a switch in another building opens with a double-click.
