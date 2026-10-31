@@ -41,6 +41,8 @@ type KeyBinding struct {
 type Credential struct {
 	Name     string `json:"name"`
 	Username string `json:"username"`
+	Auth     string `json:"auth,omitempty"`    // "" = password, "key" = private key (KeyFile)
+	KeyFile  string `json:"keyFile,omitempty"` // SSH private key of a key account; its passphrase is kept like any key passphrase
 	Note     string `json:"note,omitempty"`
 	Changed  string `json:"changed,omitempty"` // when its password was last set (RFC 3339)
 }
@@ -72,7 +74,7 @@ type Settings struct {
 	ThemeFollowsSystem   bool                         `json:"themeFollowsSystem"` // set once when the default became "system" (0.20.1)
 	HighlightOptIn       bool                         `json:"highlightOptIn"`     // set once when keyword highlighting became off by default (0.20.3)
 	Layout               string                       `json:"layout"`             // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
-	Style                string                       `json:"style"`              // modern layout: "" = standard, "glacier" = frosted glass
+	Style                string                       `json:"style"`              // modern layout: "" (or "glacier") = Glacier, frosted glass, the default; "standard" = the plain look
 	ModernLayout         bool                         `json:"modernLayout"`       // set once when the modern layout became the default (0.21.0)
 	HighlightStyle       string                       `json:"highlightStyle"`     // keyword highlighting: "" = colour the text, "background" = colour the background
 	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`        // session path → fact name → value ("_at" = when read)

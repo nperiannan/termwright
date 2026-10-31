@@ -45,7 +45,14 @@ import { parseConnectLine } from '../core/connect-string';
               <button type="button" [class.on]="!device" (click)="device = ''; onDevice()">None</button>
             </div></div>
         }
-        @if (protocol !== 'Raw' && protocol !== 'Local Shell') {
+        @if (protocol !== 'Raw' && protocol !== 'Local Shell' && accounts().length) {
+          <div class="f"><span>Account</span>
+            <select name="acct2" [(ngModel)]="account">
+              <option value="">{{ device && inherit ? 'The device type\'s login' : 'Own username and password' }}</option>
+              @for (a of accounts(); track a.name) { <option [value]="a.name">{{ a.name }} · {{ a.username || '(no username)' }}{{ a.auth === 'key' ? ' · key' : '' }}</option> }
+            </select></div>
+        }
+        @if (protocol !== 'Raw' && protocol !== 'Local Shell' && !account) {
           <div class="two">
             <div class="f grow"><span>Username</span>
               @if (device && inherit) { <div class="fake"><span>{{ devUser() || 'asked when connecting' }}</span><em>from {{ device }}</em><button type="button" class="link" (click)="inherit = false">change</button></div> }
@@ -105,7 +112,14 @@ import { parseConnectLine } from '../core/connect-string';
                 Use the device type's username and password{{ loginNote(devType()?.name, devUser()) }}</label>
             </div>
           }
-          @if (protocol !== 'Raw' && protocol !== 'Local Shell' && (!device || !inherit)) {
+          @if (protocol !== 'Raw' && protocol !== 'Local Shell' && accounts().length) {
+            <label>Account</label>
+            <select name="acct" [(ngModel)]="account">
+              <option value="">(none - {{ device && inherit ? 'the device type\'s login' : 'own username and password' }})</option>
+              @for (a of accounts(); track a.name) { <option [value]="a.name">{{ a.name }} · {{ a.username || '(no username)' }}</option> }
+            </select>
+          }
+          @if (protocol !== 'Raw' && protocol !== 'Local Shell' && !account && (!device || !inherit)) {
             <label>Username</label><input name="user" [(ngModel)]="user" placeholder="(prompt)" />
             @if (save) {
               <label>Password</label>
@@ -173,6 +187,9 @@ export class QuickConnect {
 
   device = '';
   inherit = true;
+  /** An account (Passwords & Accounts) to log in with; '' = the device type's login or the typed username. */
+  account = '';
+  readonly accounts = () => this.ui.settings()?.credentials ?? [];
   pw = '';
   noPw = false;
 
@@ -192,14 +209,14 @@ export class QuickConnect {
     if (p.protocol === 'Serial') { if (p.comPort) this.comPort = p.comPort; this.baud = p.baud; return; }
     this.host = p.host;
     const typed = /@/.test(text) || /\s-l\s/.test(text);
-    if (typed) { this.user = p.user; if (this.device) this.inherit = false; }
+    if (typed) { this.user = p.user; this.account = ''; if (this.device) this.inherit = false; }
   }
 
   /** The full Session Options dialog with what was filled in. */
   async moreOptions() {
     const s = await this.backend.newSessionDefaults();
     Object.assign(s, { protocol: this.protocol, hostname: this.host.trim(), port: Number(this.port) || defaultPort(this.protocol), username: this.user,
-      comPort: this.comPort, baudRate: this.baud, deviceType: this.device, ownLogin: !!this.device && !this.inherit, name: this.name || this.host.trim(), folder: this.ui.currentFolder() });
+      comPort: this.comPort, baudRate: this.baud, deviceType: this.device, ownLogin: !!this.device && !this.inherit, account: this.account, name: this.name || this.host.trim(), folder: this.ui.currentFolder() });
     this.ui.openSessionDialog(s, '', undefined, '', this.pw);
   }
 
@@ -249,7 +266,7 @@ export class QuickConnect {
 
   async connect() {
     let host = this.host.trim();
-    const own = !this.device || !this.inherit;
+    const own = !this.account && (!this.device || !this.inherit);
     let user = own ? this.user.trim() : '';
     let port = Number(this.port) || defaultPort(this.protocol);
     const at = host.lastIndexOf('@');
@@ -261,7 +278,7 @@ export class QuickConnect {
       Object.assign(s, {
         protocol: this.protocol, hostname: host, port, username: user, comPort: this.comPort, baudRate: this.baud, serialAutoBaud: this.autoBaud,
         logonActions: [], description: [], deviceType: this.device,
-        ownLogin: !!this.device && (!this.inherit || at > 0),
+        ownLogin: !!this.device && (!this.inherit || at > 0), account: this.account,
       });
       const setPw = own && (this.pw !== '' || this.noPw);
       if (this.save) {

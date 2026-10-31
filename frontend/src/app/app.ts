@@ -153,7 +153,7 @@ export class App implements OnInit {
     return m;
   });
   /** Cards on the start page: 8, or 15 (five rows of three) in the Glacier style. */
-  private readonly homeMax = computed(() => this.settings()?.style === 'glacier' ? 15 : 8);
+  private readonly homeMax = computed(() => this.settings()?.style !== 'standard' ? 15 : 8);
   readonly homeFavs = computed(() => (this.settings()?.favorites ?? []).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n).slice(0, this.homeMax()));
   readonly showAllRecent = signal(false);
   private readonly recentAll = computed(() => {
@@ -297,7 +297,7 @@ export class App implements OnInit {
       const light = t === 'light' || (t === 'system' && this.systemLight());
       document.documentElement.classList.toggle('light', light);
       document.documentElement.classList.toggle('modern', this.settings()?.layout !== 'classic');
-      document.documentElement.classList.toggle('glacier', this.settings()?.layout !== 'classic' && this.settings()?.style === 'glacier');
+      document.documentElement.classList.toggle('glacier', this.settings()?.layout !== 'classic' && this.settings()?.style !== 'standard');
       this.ui.lightUi.set(light);
       const root = document.documentElement.style;
       root.setProperty('--ui-font', uiFontStack(this.settings()?.uiFont));

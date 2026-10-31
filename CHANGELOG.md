@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Accounts can log in with a private key** ([#1](https://github.com/nperiannan/termwright/issues/1)): Passwords & Accounts → an account → *Log in with* **Password** or **Private key** (a key file, with *Browse…*). SSH sessions that use the account log in with its key - also as a jump host and for SFTP - unless the session has a key file of its own; the key's passphrase is asked once and can be saved like any key passphrase. The account's password stays optional, for Telnet or when the server refuses the key.
+* **Quick Connect has an Account list** ([#1](https://github.com/nperiannan/termwright/issues/1)): choose an account to log in with instead of typing a username and password, for a one-off connection or a session saved from Quick Connect. Typing `user@host` in the connect line goes back to the typed username.
+* **Glacier is the default style.** New and existing installations use Glacier unless *Standard* was chosen (Settings → General → Style).
+
 * **Glacier style** (Settings → General → Style, next to *Standard*): frosted glass panels - graphite in the dark theme, icy in the light one - for the Session Manager, title bar, start page, menus and dialogs, in the light and the dark theme. The start page shows raised cards, three per row and up to five rows (15), that lift on hover. The title bar keeps its height, so on macOS its icons stay level with the window buttons. *Standard* stays the default and is unchanged.
 
 ## 0.24.1 (2026-10-31)

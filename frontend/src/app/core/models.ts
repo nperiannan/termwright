@@ -130,7 +130,7 @@ export interface UpdateStatus {
 }
 
 /** A named username/password pair usable from logon actions (\s, \w). The password lives in the OS keychain. */
-export interface Credential { name: string; username: string; note?: string; changed?: string; }
+export interface Credential { name: string; username: string; auth?: '' | 'key'; keyFile?: string; note?: string; changed?: string; }
 /** Where an account is used (AccountsInfo). */
 export interface AccountInfo { name: string; sessions: number; folders: string[]; deviceTypes: string[]; password: '' | 'keychain' | 'manager'; }
 

@@ -89,7 +89,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 }
                 @if (modern() && s.layout !== 'classic') {
                   <label>Style</label>
-                  <div class="seg w2"><button type="button" [class.on]="!s.style" (click)="s.style = ''">Standard</button><button type="button" [class.on]="s.style === 'glacier'" (click)="s.style = 'glacier'">Glacier</button></div>
+                  <div class="seg w2"><button type="button" [class.on]="s.style === 'standard'" (click)="s.style = 'standard'">Standard</button><button type="button" [class.on]="s.style !== 'standard'" (click)="s.style = ''">Glacier</button></div>
                   <div class="hint">Glacier: frosted glass panels and raised cards, three per row - for the light and the dark theme.</div>
                 }
                 <label>Language</label>

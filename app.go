@@ -105,6 +105,7 @@ func (a *App) init() error {
 		return t
 	}
 	a.terms.Credential = a.credential
+	a.terms.CredentialKey = a.credentialKey
 	a.terms.OnAccountPasswordTyped = func(name, pw string) { _ = a.SetCredentialPassword(name, pw) }
 	a.terms.PythonPath = func() string { return a.cfg.Get().PythonPath }
 	a.terms.DeviceType = func(name string) (session.DeviceType, bool) {
@@ -1003,6 +1004,16 @@ func (a *App) credential(name string) (string, string, bool) {
 		}
 	}
 	return "", "", false
+}
+
+// credentialKey is the private key file of a key account ("" for a password account).
+func (a *App) credentialKey(name string) string {
+	for _, c := range a.cfg.Get().Credentials {
+		if c.Name == name && c.Auth == "key" {
+			return strings.TrimSpace(c.KeyFile)
+		}
+	}
+	return ""
 }
 
 // SetCredentialPassword stores (or with "" removes) a credential's password.

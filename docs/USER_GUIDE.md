@@ -954,6 +954,10 @@ An **account** is a username and a password that sessions log in with - for exam
 
 **Options → Passwords & Accounts → Accounts** lists them: the account, its username, where its password is (*Keychain*, *Password manager* or *Asked when connecting*), what uses it (sessions, folders, device types) and when its password was last changed. Click an account to change its name, username, password (or *Password manager…* for 1Password, Bitwarden, HashiCorp Vault or a command) and a note; *Show the sessions* lists the sessions that use it. **New Account**, **Remove Account…** (it says first what uses the account - those sessions then use their own login) and **Save Accounts**. Renaming an account renames it everywhere: sessions, folders, device types and logon actions.
 
+**Accounts with a private key**: *Log in with* → **Private key** and choose the key file (*Browse…*). SSH sessions that use the account - also when it is their jump host, and SFTP - log in with that key unless the session has a key file of its own. The key's passphrase is asked when it is first needed and can be saved (Key Passphrases). The password stays optional: Telnet and serial sessions use it, and SSH uses it when the server refuses the key.
+
+**Quick Connect** has an **Account** list when you have accounts: choose one to log in with it instead of typing a username and password (a typed `user@host` goes back to that username).
+
 ![Accounts](screenshots/accounts.png)
 
 **Who logs in** - every session has an **Account** list (Session Options → Connection, and the side panel):
@@ -1087,7 +1091,7 @@ In the modern layout Global Options is called **Settings** (⚙ in the title bar
 
 ### Interface language
 
-**Settings → General → Style** (modern layout): *Standard* is the look described so far; **Glacier** turns the window into frosted glass - the Session Manager, the title bar, menus and dialogs are translucent panels (graphite glass in the dark theme, icy glass in the light one), and the start page shows raised cards, three per row and up to five rows. It works with the light, dark and system themes; terminals keep their own colours. The title bar keeps its size, so on macOS its buttons stay level with the window buttons. Glass needs a little more graphics power; *Standard* is the lighter choice on old machines.
+**Settings → General → Style** (modern layout): **Glacier** (the default) turns the window into frosted glass - the Session Manager, the title bar, menus and dialogs are translucent panels (graphite glass in the dark theme, icy glass in the light one), and the start page shows raised cards, three per row and up to five rows. It works with the light, dark and system themes; terminals keep their own colours. The title bar keeps its size, so on macOS its buttons stay level with the window buttons. *Standard* is the plain look without glass - the lighter choice on old machines.
 
 | Glacier, dark | Glacier, light |
 |---|---|

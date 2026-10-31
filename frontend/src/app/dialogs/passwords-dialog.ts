@@ -39,19 +39,20 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
           }
           @switch (page()) {
             @case ('credentials') {
-              <p class="hint">An account is a username and password that sessions, folders (Folder Defaults) and device types log in with -
+              <p class="hint">An account is a username with a password or an SSH private key that sessions, folders (Folder Defaults) and device types log in with -
                 change its password here once and every session that uses it follows. In Logon Actions, <b>\\s</b> sends its username and <b>\\w</b> its password.</p>
               <div class="row acc-bar"><input class="acc-q" [(ngModel)]="accQ" placeholder="Search accounts" />
                 <button type="button" (click)="add()"><app-icon name="plus" [size]="14" class="md-only" /> New Account</button>
                 <button type="button" (click)="loadCandidates()" title="Sessions that share the same username and saved password">Convert Sessions…</button></div>
               <table class="list creds accts">
-                <thead><tr><th>Account</th><th>Username</th><th>Password</th><th>Used by</th><th>Changed</th></tr></thead>
+                <thead><tr><th>Account</th><th>Username</th><th>Login</th><th>Used by</th><th>Changed</th></tr></thead>
                 <tbody>
                   @for (c of shownCreds(); track c) {
                     <tr [class.sel]="c === cur" (click)="cur = c">
                       <td><b>{{ c.name || '(new account)' }}</b></td>
                       <td class="mono">{{ c.username }}</td>
-                      <td>@if (c.password) { <span class="pill pm2">{{ isRef(c.password) ? '◆ Password manager' : '● Changed' }}</span> }
+                      <td>@if (c.auth === 'key') { <span class="pill kc" [title]="c.keyFile || ''">⚿ Private key</span> }
+                        @else if (c.password) { <span class="pill pm2">{{ isRef(c.password) ? '◆ Password manager' : '● Changed' }}</span> }
                         @else if (pwKind(c) === 'manager') { <span class="pill pm2">◆ Password manager</span> }
                         @else if (pwKind(c) === 'keychain') { <span class="pill kc">● Keychain</span> }
                         @else { <span class="pill ask">○ Asked when connecting</span> }</td>
@@ -65,8 +66,16 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
                 <div class="acc-detail">
                   <label>Name</label><input [(ngModel)]="c.name" placeholder="e.g. lab-admin" appAutofocus />
                   <label>Username</label><input class="mono" [(ngModel)]="c.username" placeholder="login name" />
-                  <label>Password</label>
-                  <div class="row nowrap"><input [type]="isRef(c.password) ? 'text' : 'password'" [(ngModel)]="c.password" [placeholder]="c.hasPw ? '(saved - type to change)' : '(none - asked when connecting)'" />
+                  <label>Log in with</label>
+                  <div class="seg w2"><button type="button" [class.on]="c.auth !== 'key'" (click)="c.auth = ''">Password</button><button type="button" [class.on]="c.auth === 'key'" (click)="c.auth = 'key'">Private key</button></div>
+                  @if (c.auth === 'key') {
+                    <label>Private key</label>
+                    <div class="row nowrap"><input class="mono" [(ngModel)]="c.keyFile" placeholder="~/.ssh/id_ed25519" spellcheck="false" />
+                      <button type="button" (click)="pickAcctKey(c)">Browse…</button></div>
+                    <div class="hint wide">SSH sessions that use this account log in with this key (a session's own key file still wins). The passphrase is asked once and can be saved with Key Passphrases. Telnet and serial sessions use the password below.</div>
+                  }
+                  <label>{{ c.auth === 'key' ? 'Password (optional)' : 'Password' }}</label>
+                  <div class="row nowrap"><input [type]="isRef(c.password) ? 'text' : 'password'" [(ngModel)]="c.password" [placeholder]="c.hasPw ? '(saved - type to change)' : (c.auth === 'key' ? '(none - for Telnet, or when the key is refused)' : '(none - asked when connecting)')" />
                     <button type="button" class="pm" title="From a password manager (1Password, Bitwarden, Vault, command)" (click)="credRef(c)"><span class="cl-only">🔑</span><app-icon name="shield" [size]="15" class="md-only" /></button></div>
                   <label>Note</label><input [(ngModel)]="c.note" placeholder="optional" />
                   <span></span>
@@ -181,6 +190,8 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
       &.kc { color: var(--ok, #22c55e); background: color-mix(in srgb, var(--ok, #22c55e) 14%, transparent); }
       &.pm2 { color: #a78bfa; background: color-mix(in srgb, #a78bfa 16%, transparent); }
       &.ask { color: #e5a93b; background: color-mix(in srgb, #e5a93b 15%, transparent); } }
+    .acc-detail .wide { grid-column: 2 / -1; margin-top: -2px; }
+    .acc-detail .seg { min-width: 0; }
     .acc-detail { display: grid; grid-template-columns: 90px 1fr 90px 1fr; gap: 8px 12px; align-items: center; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 10px;
       > label { color: var(--muted); text-align: right; } > .hint { grid-column: 2 / span 3; margin: 0; a { color: var(--accent); cursor: pointer; } }
       > input, .row input { width: 100%; min-width: 0; } .row { gap: 4px; min-width: 0; input { flex: 1; } } }
@@ -334,6 +345,11 @@ export class PasswordsDialog implements OnInit {
 
   add() { const c: Acct = { name: '', username: '', note: '', password: '', hasPw: false, saved: '' }; this.creds.push(c); this.cur = c; }
 
+  async pickAcctKey(c: Acct) {
+    const p = await this.backend.chooseOpenFile('Choose Private Key').catch(() => '');
+    if (p) { c.keyFile = p; this.cdr.markForCheck(); }
+  }
+
   remove(i: number) {
     const [c] = this.creds.splice(i, 1);
     if (c.saved) this.removed.push(c.saved);
@@ -359,7 +375,8 @@ export class PasswordsDialog implements OnInit {
       }
       const s = this.ui.settings();
       const prev = new Map((s?.credentials ?? []).map(c => [c.name, c.changed]));
-      if (s) await this.ui.saveSettings({ ...s, credentials: list.map(c => ({ name: c.name, username: c.username, note: c.note?.trim() || undefined, changed: c.changed || prev.get(c.name) })) });
+      if (s) await this.ui.saveSettings({ ...s, credentials: list.map(c => ({ name: c.name, username: c.username, auth: c.auth === 'key' ? 'key' as const : undefined,
+        keyFile: c.auth === 'key' ? c.keyFile?.trim() || undefined : undefined, note: c.note?.trim() || undefined, changed: c.changed || prev.get(c.name) })) });
       await this.ui.loadSettings();
       this.creds = list;
       this.accInfo.set((await this.backend.accountsInfo().catch(() => null)) ?? []);

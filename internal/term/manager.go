@@ -169,6 +169,8 @@ type Manager struct {
 	DownloadDir func() string
 	// Credential returns the user name and password of a named credential.
 	Credential func(name string) (user, password string, ok bool)
+	// CredentialKey is the private key file of an account that logs in with a key ("" = password account).
+	CredentialKey func(name string) string
 	// OnAccountPasswordTyped saves a password typed for a session that logs
 	// in with an account (Remember), for the account.
 	OnAccountPasswordTyped func(account, password string)
@@ -912,7 +914,19 @@ func (m *Manager) CanLogInUnattended(s session.Session) bool {
 	if _, ok := m.loginPassword(s); ok {
 		return true
 	}
-	return s.IdentityFile != "" || s.SmartCard != ""
+	return s.IdentityFile != "" || s.SmartCard != "" || m.accountKey(s) != ""
+}
+
+// accountKey is the private key of the session's account, when the account
+// logs in with a key and the session has no key file of its own.
+func (m *Manager) accountKey(s session.Session) string {
+	if s.IdentityFile != "" || m.CredentialKey == nil {
+		return ""
+	}
+	if name := m.AccountOf(s); name != "" {
+		return m.CredentialKey(name)
+	}
+	return ""
 }
 
 func (m *Manager) loginPassword(s session.Session) (string, bool) {

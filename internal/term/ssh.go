@@ -181,6 +181,9 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 			user = u
 		}
 	}
+	if k := m.accountKey(s); k != "" {
+		s.IdentityFile = k // the account logs in with a private key
+	}
 	if s.TransportUser != "" {
 		user = s.TransportUser // console server login (the device behind the port logs in with s.Username)
 	}
