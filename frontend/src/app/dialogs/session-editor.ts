@@ -513,6 +513,9 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
               <div class="checks">
                 <label><input type="checkbox" name="autolog" [(ngModel)]="s.automateLogon" /> Automate logon</label>
                 <label><input type="checkbox" name="initcr" [(ngModel)]="s.initialCr" /> Send initial carriage return</label>
+                @if (s.protocol === 'Telnet' || s.protocol === 'Serial' || s.protocol === 'Console' || s.consoleServer) {
+                  <label title="When the login prompt comes back without you typing exit or logout - the device restarted, crashed or logged the session out - the login runs again (at most once every half minute)"><input type="checkbox" name="logagain" [(ngModel)]="s.loginAgain" /> Log in again when the device restarts</label>
+                }
               </div>
               <table class="list logon" [class.dim]="!s.automateLogon">
                 <thead><tr><th>Expect</th><th>Send</th><th class="c">Hide</th><th class="c">Send trailing CR</th><th>Credentials</th></tr></thead>

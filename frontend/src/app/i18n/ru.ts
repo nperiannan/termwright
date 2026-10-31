@@ -896,6 +896,8 @@ const ru: Record<string, string> = {
   'The device read the terminal\'s cursor position answer as typed text. Termwright no longer answers it for this session (Session Options → Terminal).': 'Устройство приняло ответ терминала о позиции курсора за набранный текст. Termwright больше не отвечает на этот запрос для этой сессии (Параметры сессии → Терминал).',
   'no password - Enter is sent at the password prompt': 'без пароля - на запрос пароля отправляется Enter',
   'The device has an empty password (e.g. EXOS admin): nothing is asked, Enter is sent': 'У устройства пустой пароль (например, admin в EXOS): ничего не спрашивается, отправляется Enter',
+  'Log in again when the device restarts': 'Входить снова после перезапуска устройства',
+  'When the login prompt comes back without you typing exit or logout - the device restarted, crashed or logged the session out - the login runs again (at most once every half minute)': 'Когда запрос входа появляется снова без ваших exit или logout - устройство перезапустилось, сбойнуло или завершило сеанс - вход выполняется снова (не чаще раза в полминуты)',
 };
 
 export default ru;

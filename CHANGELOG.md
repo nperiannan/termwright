@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Log in again when the device restarts** (Session Options → Logon Actions). A console server keeps the connection open while the switch behind it reboots or crashes, so *Reconnect automatically* never fires; with this option, a login prompt that comes back by itself is answered again (once every half minute at most). After your own `exit` or `logout` it is not.
 * **No login again after `exit`.** On a console that was still logged in, the automatic login waited for the first `login:` prompt - which came when you typed `exit` - and logged straight back in. Typing before the first login prompt (Enter alone excepted, to wake a console) now ends the automatic login for that connection.
 * **No password in the session side panel.** The Properties / New Session panel has the *No password* box of Session Options (for devices whose login has an empty password, such as EXOS `admin`); it showed "saved in the system keychain" for such a session.
 * **No more `^[[75;247R` before the prompt.** Some devices (EXOS on a console port, for example) ask the terminal where the cursor is and then read the answer as typed text. When a device prints that answer back, or rejects it as a command right after connecting ("% Invalid input detected"), Termwright stops answering for the session and remembers it; it can also be set by hand in Session Options → Terminal → *Do not answer cursor position requests*.

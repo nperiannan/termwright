@@ -116,6 +116,11 @@ type Tab struct {
 	seq       int64             // creation order (scripts address tabs by index)
 	alertBuf  string            // partial output line for alert matching
 	logonPass string            // password typed for \w during this connection
+	relogin   func() *logonRunner // "Log in again": a new login for a login prompt that comes back by itself
+	reTail    string              // the end of the output (plain text), to see that prompt
+	reStrip   logging.Stripper
+	lastTyped time.Time // the user last typed text (not Enter alone)
+	lastLogin time.Time // a login last started
 	loginPass string            // password the SSH login of this tab used (typed or saved); memory only
 	alertAt   map[int]time.Time
 	lastMsg   string // last status message (errors of background connections)
@@ -405,6 +410,17 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 	} else if len(actions) == 0 && basic != nil {
 		t.logon = basic
 	}
+	t.relogin, t.reTail, t.lastLogin = nil, "", time.Now()
+	if s.LoginAgain && t.logon != nil && (basicLoginProtocol(s) || s.ConsoleServer != "" || s.Protocol == session.ProtoConsole) {
+		again := append([]session.LogonAction(nil), actions...)
+		isBasic := t.logon == basic
+		t.relogin = func() *logonRunner {
+			if isBasic {
+				return m.basicLogin(s)
+			}
+			return newLogonRunner(again)
+		}
+	}
 	t.alertBuf, t.logonPass = "", ""
 	t.triggers = nil
 	if len(s.Triggers) > 0 {
@@ -626,6 +642,8 @@ func (m *Manager) pump(t *Tab, conn Conn) {
 				t.logon = nil
 				t.mu.Unlock()
 			}
+		} else if acts := m.loginAgain(t, batch); len(acts) > 0 {
+			m.runLogon(t, conn, acts)
 		}
 	}
 }
@@ -640,6 +658,9 @@ func (m *Manager) Write(id string, data []byte) error {
 	c, rec := t.conn, t.recorder
 	if t.logon != nil && t.logon.typed(data) {
 		t.logon = nil
+	}
+	if isTyping(data) {
+		t.lastTyped = time.Now()
 	}
 	t.mu.Unlock()
 	if c == nil {
@@ -877,6 +898,61 @@ func realActions(a []session.LogonAction) []session.LogonAction {
 		}
 	}
 	return out
+}
+
+// How long "Log in again" waits after the user typed and after the last login.
+var reloginTyped, reloginGap = 10 * time.Second, 30 * time.Second
+
+// loginAgain watches a connection whose session has "Log in again" for a login
+// prompt that comes back by itself - the device restarted, crashed or logged the
+// session out - and returns a new login for it, fed with the output so far. A
+// prompt that follows the user's typing (exit, logout) is left alone, and so is
+// one within half a minute of the last login (a refused password would loop).
+func (m *Manager) loginAgain(t *Tab, p []byte) []session.LogonAction {
+	t.mu.Lock()
+	again := t.relogin
+	if again == nil {
+		t.mu.Unlock()
+		return nil
+	}
+	t.reTail += string(t.reStrip.Strip(p))
+	if len(t.reTail) > 512 {
+		t.reTail = t.reTail[len(t.reTail)-512:]
+	}
+	tail := t.reTail
+	quiet := time.Since(t.lastTyped) > reloginTyped && time.Since(t.lastLogin) > reloginGap
+	t.mu.Unlock()
+	if i, _ := basicMatch(tail, basicUserPrompts); i < 0 || !quiet {
+		return nil
+	}
+	r := again() // outside the lock: it may read the keychain
+	if r == nil {
+		return nil
+	}
+	t.mu.Lock()
+	if t.logon != nil || t.relogin == nil {
+		t.mu.Unlock()
+		return nil
+	}
+	t.logon, t.reTail, t.lastLogin = r, "", time.Now()
+	t.mu.Unlock()
+	m.emit.Emit("toast", map[string]string{"level": "info", "message": "Logging in again: the login prompt came back by itself (the device may have restarted)."})
+	return r.feed([]byte(tail))
+}
+
+// isTyping: text the user typed - not Enter alone and not an escape sequence
+// (the terminal's own answers, function keys).
+func isTyping(p []byte) bool {
+	for _, b := range p {
+		switch {
+		case b == 0x1b:
+			return false
+		case b == '\r' || b == '\n' || b == 0:
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 // basicLoginProtocol: the connections whose login is typed in the terminal (SSH logs in itself).

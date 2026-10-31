@@ -57,6 +57,7 @@ const (
 	kLogon        = "Termwright Logon Actions"
 	kTermType     = "Termwright Terminal Type"
 	kNoCPR        = "Termwright No Cursor Reports"
+	kLoginAgain   = "Termwright Login Again"
 	kColorScheme  = "Color Scheme"
 	kFirewall     = "Firewall Name"
 	kAutoReconn   = "Auto Reconnect"
@@ -218,6 +219,7 @@ type Session struct {
 	LogonArgs        string        `json:"logonArgs"`   // arguments for the logon script (scriptArgs)
 	AutomateLogon    bool          `json:"automateLogon"`
 	InitialCR        bool          `json:"initialCr"` // send Enter right after connecting
+	LoginAgain       bool          `json:"loginAgain"` // log in again when the login prompt comes back by itself (restart, crash, idle logout)
 	UseLogonScript   bool          `json:"useLogonScript"`
 	RemoteCommand    string        `json:"remoteCommand"` // SSH2: run this instead of a login shell
 	UseRemoteCommand bool          `json:"useRemoteCommand"`
@@ -349,6 +351,7 @@ func FromFile(path string, f *sessionfile.File) Session {
 	}
 	s.AutomateLogon = f.Bool(kUseLogin, true)
 	s.InitialCR = f.Bool(kInitialCR, false)
+	s.LoginAgain = f.Bool(kLoginAgain, false)
 	s.LogonArgs = f.Str(kLogonArgs, "")
 	s.RemoteCommand = f.Str(kShellCmd, "")
 	s.UseRemoteCommand = f.Bool(kUseShellCmd, false)
@@ -680,6 +683,7 @@ func (s Session) Apply(f *sessionfile.File) {
 	f.SetStr(kLogonArgs, s.LogonArgs)
 	f.SetBool(kUseLogin, s.AutomateLogon)
 	f.SetBool(kInitialCR, s.InitialCR)
+	setOptBool(f, kLoginAgain, s.LoginAgain)
 	f.SetStr(kShellCmd, s.RemoteCommand)
 	f.SetBool(kUseShellCmd, s.UseRemoteCommand && strings.TrimSpace(s.RemoteCommand) != "")
 	setOptStr(f, kOpenAs, s.OpenAs)
