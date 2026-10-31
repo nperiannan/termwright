@@ -86,7 +86,7 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
                 if (it.moveToFirst()) it.getString(0) else null
             } ?: "sessions.zip"
             val data = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@launch
-            val list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Core.import(name, data) }
+            val list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Core.import(ctx, name, data) }
             store.saveSessions(list)
             sessions = list
             snack.showSnackbar("Imported ${list.size} sessions from $name")

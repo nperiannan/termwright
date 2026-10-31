@@ -26,8 +26,8 @@ sealed class WakeOutcome {
 
 /** Calls into the Go part (twcore.aar, from mobile/core). */
 object Core {
-    fun import(name: String, data: ByteArray): List<Sess> {
-        val a = JSONArray(Twcore.importSessions(name, data))
+    fun import(ctx: Context, name: String, data: ByteArray): List<Sess> {
+        val a = JSONArray(Twcore.importSessions(ctx.cacheDir.absolutePath, name, data))
         return (0 until a.length()).map { Sess.from(a.getJSONObject(it)) }
     }
 

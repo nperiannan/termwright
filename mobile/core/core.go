@@ -6,6 +6,7 @@
 package twcore
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -48,9 +49,17 @@ type appSession struct {
 // ImportSessions reads a file exported or saved by Termwright or another
 // program (Termwright .zip, SecureCRT, PuTTY, MobaXterm, the Termwright CSV
 // template...) - name is the file name, which tells the format - and returns
-// its sessions as a JSON list.
-func ImportSessions(name string, data []byte) (string, error) {
-	dir, err := os.MkdirTemp("", "twimport")
+// its sessions as a JSON list. tmpDir is a folder the app may write to (its
+// cache folder): Go's default, /data/local/tmp, is closed to apps on Android.
+func ImportSessions(tmpDir, name string, data []byte) (string, error) {
+	// a zip that lost its name on the way (shared from a chat or a cloud drive)
+	if bytes.HasPrefix(data, []byte("PK\x03\x04")) && !strings.HasSuffix(strings.ToLower(name), ".zip") {
+		name += ".zip"
+	}
+	if name == "" || name == ".zip" {
+		name = "sessions" + name
+	}
+	dir, err := os.MkdirTemp(tmpDir, "twimport")
 	if err != nil {
 		return "", err
 	}

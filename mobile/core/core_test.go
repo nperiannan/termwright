@@ -35,7 +35,8 @@ func TestImportTermwrightZip(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(zip)
-	js, err := ImportSessions("export.zip", data)
+	// the name may have lost its .zip on the way to the phone
+	js, err := ImportSessions(t.TempDir(), "Termwright export", data)
 	if err != nil {
 		t.Fatal(err)
 	}
