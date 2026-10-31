@@ -442,9 +442,22 @@ export class SessionTree implements AfterViewInit, OnDestroy {
 
   /** Cmd/Ctrl+C, X, V and Z in the Session Manager (not while typing in the filter). */
   treeKey(ev: KeyboardEvent) {
-    if (!(ev.metaKey || ev.ctrlKey) || ev.shiftKey || ev.altKey) return;
     const t = ev.target as HTMLElement;
     if (t.closest('input, textarea, select')) return;
+    // Delete (or Backspace / Cmd+Backspace, the delete key of a Mac) deletes the selected sessions or folder
+    if ((ev.key === 'Delete' || ev.key === 'Backspace') && !ev.shiftKey && !ev.altKey && !ev.ctrlKey) {
+      const sel = this.ui.selectedPaths();
+      const cur = this.ui.selectedPath();
+      const paths = sel.size > 1 ? [...sel] : cur ? [cur] : [];
+      if (!paths.length) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (paths.length > 1) { void this.deleteMany(paths); return; }
+      const n = this.ui.findNode(paths[0]);
+      if (n) void (n.isFolder ? this.deleteFolder(n) : this.deleteSession(n));
+      return;
+    }
+    if (!(ev.metaKey || ev.ctrlKey) || ev.shiftKey || ev.altKey) return;
     const k = ev.key.toLowerCase();
     const sel = this.ui.selectedPaths();
     const cur = this.ui.selectedPath();
@@ -792,8 +805,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   }
 
   private async deleteMany(paths: string[]) {
-    if (!(await this.ui.confirm('Delete Sessions', `Delete ${paths.length} sessions?\n\n${paths.slice(0, 12).join('\n')}${paths.length > 12 ? '\n…' : ''}`, 'Delete', true))) return;
-    await this.ops.remove(paths.map(p => ({ path: p, folder: false })));
+    await this.ops.confirmRemove(paths.map(p => ({ path: p, folder: !!this.ui.findNode(p)?.isFolder })), 'Delete Sessions',
+      `Delete ${paths.length} items?\n\n${paths.slice(0, 12).join('\n')}${paths.length > 12 ? '\n…' : ''}`);
     this.ui.selectedPaths.set(new Set());
   }
 
@@ -817,8 +830,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
 
   private async deleteFolder(n: SessionNode) {
     const count = this.countSessions(n);
-    if (!(await this.ui.confirm('Delete Folder', `Delete folder "${n.path}" and ${count} session(s) in it?\n\nUndo (⋯ menu) can re-create them.`, 'Delete', true))) return;
-    await this.ops.remove([{ path: n.path, folder: true }]);
+    await this.ops.confirmRemove([{ path: n.path, folder: true }], 'Delete Folder', `Delete folder "${n.path}" and ${count} session(s) in it?`);
   }
 
   private countSessions(n: SessionNode): number {
@@ -846,8 +858,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   }
 
   private async deleteSession(n: SessionNode) {
-    if (!(await this.ui.confirm('Delete Session', `Delete session "${n.path}"?`, 'Delete', true))) return;
-    await this.ops.remove([{ path: n.path, folder: false }]);
+    await this.ops.confirmRemove([{ path: n.path, folder: false }], 'Delete Session', `Delete session "${n.path}"?`);
   }
 
   dragStart(ev: DragEvent, n: SessionNode) {

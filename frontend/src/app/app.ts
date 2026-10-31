@@ -1,6 +1,7 @@
 import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend } from './core/backend';
+import { SessionOps } from './core/session-ops.service';
 import { i18n, previewLanguages, setPreviewLanguages } from './core/i18n';
 import { Tabs, TabView } from './core/tabs.service';
 import { connectString, findSessionByName, looksLikeConnect } from './core/connect-string';
@@ -67,6 +68,7 @@ export class App implements OnInit {
   protected tabs = inject(Tabs);
   private remoteDesktop = inject(RemoteDesktopSetup);
   private backend = inject(Backend);
+  private ops = inject(SessionOps);
   private cmdWin = viewChild(CommandWindow);
 
   readonly treeWidth = signal(this.loadNum('termwright.treeWidth', 260));
@@ -200,6 +202,8 @@ export class App implements OnInit {
       ...(n.protocol === 'SSH2' ? [{ separator: true }, n.openAs === 'sftp'
         ? { label: 'Create SSH Session (terminal)', action: () => void this.ui.copySessionAs(n.path, '') }
         : { label: 'Create SFTP Session', action: () => void this.ui.copySessionAs(n.path, 'sftp') }] : []),
+      { separator: true },
+      { label: 'Delete', action: () => void this.ops.confirmRemove([{ path: n.path, folder: false }], 'Delete Session', `Delete session "${n.path}"?`) },
     ]);
   }
 

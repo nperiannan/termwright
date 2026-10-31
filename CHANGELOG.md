@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Confirm before deleting sessions** (Settings → General, on by default): deleting sessions or folders asks first; turned off, they are deleted at once (Undo stays in the Session Manager's ⋯ menu). A jump host that other sessions use still always asks.
+* **The Delete key deletes** the selected sessions or folder in the Session Manager (Delete, or the Mac's delete key), and a start page card has *Delete* in its menu.
+
 ## 0.24.0 (2026-10-30)
 
 Remote desktop diagnosis, Wake-on-LAN that reaches the network, a documented import format and better scanning.

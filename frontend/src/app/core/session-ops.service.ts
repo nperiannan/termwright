@@ -167,6 +167,13 @@ export class SessionOps {
 
   // ---- delete (kept for Undo) ----
 
+  /** Asks first (unless turned off in Settings), then deletes. */
+  async confirmRemove(items: { path: string; folder: boolean }[], title: string, message: string) {
+    if (!this.ui.settings()?.noDeleteConfirm &&
+      !(await this.ui.confirm(title, message + '\n\nUndo is in the Session Manager\'s ⋯ menu. Turn this question off in Settings → General → Confirm before deleting sessions.', 'Delete', true))) return;
+    await this.remove(items);
+  }
+
   /** Deletes sessions and folders; Undo re-creates them (saved passwords are not kept). */
   async remove(items: { path: string; folder: boolean }[]) {
     // sessions that use these as jump host: asked whatever the settings say about confirming a delete

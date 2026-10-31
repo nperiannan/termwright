@@ -138,6 +138,7 @@ type Settings struct {
 	ConfirmPaste         bool                         `json:"confirmPaste"`     // ask before pasting several lines
 	QuickConnectSave     bool                         `json:"quickConnectSave"` // Quick Connect saves the session (switch on by default; remembered)
 	NoMoveConfirm        bool                         `json:"noMoveConfirm"`    // moving sessions or folders in the Session Manager does not ask first
+	NoDeleteConfirm      bool                         `json:"noDeleteConfirm"`  // deleting sessions or folders does not ask first (a jump host in use still asks)
 	Snippets             []Snippet                    `json:"snippets"`
 	Workspaces           []Workspace                  `json:"workspaces"`
 	FolderDefaults       []FolderDefault              `json:"folderDefaults"`
