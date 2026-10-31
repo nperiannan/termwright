@@ -22,12 +22,13 @@ type JumpUse struct {
 // deleted. With deep, the users of the users too (a deleted jump host takes
 // the sessions behind it down with it). Sessions named in except are left out.
 func (a *App) JumpUsers(paths []string, deep bool, except []string) []JumpUse {
+	out := []JumpUse{} // never null in JSON: the frontend reads .length
 	if a.ready() != nil {
-		return nil
+		return out
 	}
 	tree, err := a.store.Tree()
 	if err != nil {
-		return nil
+		return out
 	}
 	type ref struct{ path, name, proto, jump string }
 	var refs []ref
@@ -50,7 +51,6 @@ func (a *App) JumpUsers(paths []string, deep bool, except []string) []JumpUse {
 	for _, p := range paths {
 		want[p] = true
 	}
-	var out []JumpUse
 	seen := map[string]bool{}
 	for grew := true; grew; {
 		grew = false

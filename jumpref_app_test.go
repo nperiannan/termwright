@@ -35,6 +35,9 @@ func TestJumpRefsFollowAMove(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if us := a.JumpUsers([]string{"other/x"}, true, nil); us == nil || len(us) != 0 {
+		t.Fatalf("no users must be an empty list, not nil (JSON null): %#v", us)
+	}
 	if us := a.JumpUsers([]string{"lab/jump"}, false, nil); len(us) != 3 { // 2 sessions + the folder default
 		t.Fatalf("users = %+v", us)
 	}

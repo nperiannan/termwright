@@ -4,6 +4,11 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.24.1 (2026-10-31)
+
+Fixes deleting sessions.
+
+* **Fixed: deleting sessions and folders did nothing in 0.24.0.** The new check for sessions that use a deleted session as their jump host failed when no session used it, and stopped the delete. Moving or renaming a session also skipped its *Undo* for the same reason.
 * **Confirm before deleting sessions** (Settings → General, on by default): deleting sessions or folders asks first; turned off, they are deleted at once (Undo stays in the Session Manager's ⋯ menu). A jump host that other sessions use still always asks.
 * **The Delete key deletes** the selected sessions or folder in the Session Manager (Delete, or the Mac's delete key), and a start page card has *Delete* in its menu.
 

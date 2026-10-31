@@ -17,7 +17,7 @@ export async function followJump(ui: Ui, backend: Backend, pairs: { from: string
   pairs = pairs.filter(p => p.from !== p.to);
   if (!pairs.length) return null;
   let users: JumpUse[];
-  try { users = await backend.jumpUsers(pairs.map(p => p.from), false, []); } catch { return null; }
+  try { users = (await backend.jumpUsers(pairs.map(p => p.from), false, [])) ?? []; } catch { return null; }
   if (!users.length) return null;
   const used = pairs.filter(p => users.some(u => u.jump === p.from));
   const what = used.length === 1
@@ -46,7 +46,7 @@ export async function followJump(ui: Ui, backend: Backend, pairs: { from: string
  */
 export async function askDeleteJump(ui: Ui, backend: Backend, paths: string[]): Promise<{ extra: string[]; clear: string[] } | null> {
   let users: JumpUse[];
-  try { users = await backend.jumpUsers(paths, true, paths); } catch { return { extra: [], clear: [] }; }
+  try { users = (await backend.jumpUsers(paths, true, paths)) ?? []; } catch { return { extra: [], clear: [] }; }
   if (!users.length) return { extra: [], clear: [] };
   const sess = users.filter(u => !u.folder).map(u => u.path);
   const lead = paths.length === 1 ? `"${paths[0]}" is the jump host of` : 'Some of the sessions you are deleting are the jump host of';
