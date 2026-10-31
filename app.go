@@ -71,6 +71,7 @@ func (a *App) startup(ctx context.Context) {
 		a.initErr = err
 	}
 	go a.backupScheduler(ctx)
+	go a.wolScheduler(ctx)
 	go a.pruneRecordings(ctx)
 	go a.watchSessions(ctx)
 }

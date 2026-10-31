@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Scheduled Wake-on-LAN.** A Wake-on-LAN session can wake its device every day or Monday to Friday at a set time (session panel or Session Options → Connection), while Termwright is open. A wake missed by more than 15 minutes - the computer was asleep or Termwright closed - is skipped rather than sent late.
 * **Log in again when the device restarts** (Session Options → Logon Actions). A console server keeps the connection open while the switch behind it reboots or crashes, so *Reconnect automatically* never fires; with this option, a login prompt that comes back by itself is answered again (once every half minute at most). After your own `exit` or `logout` it is not.
 * **No login again after `exit`.** On a console that was still logged in, the automatic login waited for the first `login:` prompt - which came when you typed `exit` - and logged straight back in. Typing before the first login prompt (Enter alone excepted, to wake a console) now ends the automatic login for that connection.
 * **No password in the session side panel.** The Properties / New Session panel has the *No password* box of Session Options (for devices whose login has an empty password, such as EXOS `admin`); it showed "saved in the system keychain" for such a session.

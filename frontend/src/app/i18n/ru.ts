@@ -898,6 +898,13 @@ const ru: Record<string, string> = {
   'The device has an empty password (e.g. EXOS admin): nothing is asked, Enter is sent': 'У устройства пустой пароль (например, admin в EXOS): ничего не спрашивается, отправляется Enter',
   'Log in again when the device restarts': 'Входить снова после перезапуска устройства',
   'When the login prompt comes back without you typing exit or logout - the device restarted, crashed or logged the session out - the login runs again (at most once every half minute)': 'Когда запрос входа появляется снова без ваших exit или logout - устройство перезапустилось, сбойнуло или завершило сеанс - вход выполняется снова (не чаще раза в полминуты)',
+  'Wake on a schedule': 'Включать по расписанию',
+  'No schedule': 'Без расписания',
+  'At': 'В',
+  'while Termwright is open; a wake missed by more than 15 minutes (computer asleep, Termwright closed) is skipped': 'пока Termwright открыт; включение, пропущенное больше чем на 15 минут (компьютер спал, Termwright был закрыт), пропускается',
+  'Scheduled wake: magic packet sent to {0}': 'Включение по расписанию: magic packet отправлен на {0}',
+  'Scheduled wake of {0}: {1}': 'Включение по расписанию {0}: {1}',
+  'Logging in again: the login prompt came back by itself (the device may have restarted).': 'Повторный вход: запрос входа появился снова сам (возможно, устройство перезапустилось).',
 };
 
 export default ru;

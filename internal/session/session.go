@@ -111,6 +111,8 @@ const (
 	kWOLPort      = "Termwright WOL Port"
 	kWOLFrom      = "Termwright WOL From"
 	kWOLNet       = "Termwright WOL Network"
+	kWakeSched    = "Termwright Wake Schedule"
+	kWakeAt       = "Termwright Wake At"
 	kWOLScans     = "Termwright WOL Scans"
 	kWOLScanSecs  = "Termwright WOL Scan Seconds"
 	kWOLPingSecs  = "Termwright WOL Ping Seconds"
@@ -218,7 +220,7 @@ type Session struct {
 	LogonScript      string        `json:"logonScript"` // JavaScript file run after connecting
 	LogonArgs        string        `json:"logonArgs"`   // arguments for the logon script (scriptArgs)
 	AutomateLogon    bool          `json:"automateLogon"`
-	InitialCR        bool          `json:"initialCr"` // send Enter right after connecting
+	InitialCR        bool          `json:"initialCr"`  // send Enter right after connecting
 	LoginAgain       bool          `json:"loginAgain"` // log in again when the login prompt comes back by itself (restart, crash, idle logout)
 	UseLogonScript   bool          `json:"useLogonScript"`
 	RemoteCommand    string        `json:"remoteCommand"` // SSH2: run this instead of a login shell
@@ -254,6 +256,8 @@ type Session struct {
 	WOLBroadcast      string `json:"wolBroadcast"`   // Wake-on-LAN: "" = every network (or 255.255.255.255 from a server), else e.g. 192.168.20.255
 	WOLPort           int    `json:"wolPort"`        // Wake-on-LAN UDP port, 0 = 9
 	WOLFrom           string `json:"wolFrom"`        // "" = from the jump host / jump station when there is one, "local" = from this computer        // SSH2: a file browser beside the terminal that follows its folder
+	WakeSchedule      string `json:"wakeSchedule"`   // Wake-on-LAN session: "" (no schedule), "daily" or "weekdays", at WakeAt
+	WakeAt            string `json:"wakeAt"`         // "HH:MM", local time
 	WOLNetwork        string `json:"wolNetwork"`     // Wake-on-LAN session: the device's network (e.g. 192.168.1.0/24), searched for its MAC address when no IP is known
 	WOLScans          int    `json:"wolScans"`       // searches of the network after waking (0 = 4)
 	WOLScanSecs       int    `json:"wolScanSecs"`    // seconds between searches (0 = 30)
@@ -382,6 +386,8 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.WOLPort = int(f.DWord(kWOLPort, 0))
 	s.WOLFrom = f.Str(kWOLFrom, "")
 	s.WOLNetwork = f.Str(kWOLNet, "")
+	s.WakeSchedule = f.Str(kWakeSched, "")
+	s.WakeAt = f.Str(kWakeAt, "")
 	s.WOLScans = int(f.DWord(kWOLScans, 0))
 	s.WOLScanSecs = int(f.DWord(kWOLScanSecs, 0))
 	s.WOLPingSecs = int(int32(f.DWord(kWOLPingSecs, 0)))
@@ -731,6 +737,8 @@ func (s Session) Apply(f *sessionfile.File) {
 	setOptStr(f, kWOLBcast, s.WOLBroadcast)
 	setOptStr(f, kWOLFrom, s.WOLFrom)
 	setOptStr(f, kWOLNet, s.WOLNetwork)
+	setOptStr(f, kWakeSched, s.WakeSchedule)
+	setOptStr(f, kWakeAt, s.WakeAt)
 	for k, v := range map[string]int{kWOLScans: s.WOLScans, kWOLScanSecs: s.WOLScanSecs, kWOLPingSecs: s.WOLPingSecs} {
 		if v != 0 {
 			f.SetDWord(k, uint32(int32(v)))

@@ -62,6 +62,13 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
               <label class="f grow"><span>Network</span><input name="wolnet" class="mono" [(ngModel)]="s.wolNetwork" placeholder="192.168.1.0/24" spellcheck="false" /></label>
               <label class="f grow"><span>IP address <small>(or network)</small></span><input name="host" class="mono" [ngModel]="s.hostname" (ngModelChange)="wolIp($event)" placeholder="found by its MAC" spellcheck="false" /></label>
             </div>
+            <div class="two">
+              <label class="f grow"><span>Wake on a schedule</span>
+                <select name="wsch" [ngModel]="s.wakeSchedule || ''" (ngModelChange)="s.wakeSchedule = $event; s.wakeAt = s.wakeAt || '08:00'">
+                  <option value="">No schedule</option><option value="daily">Every day</option><option value="weekdays">Monday to Friday</option>
+                </select></label>
+              <label class="f port" style="flex: 0 0 140px"><span>At</span><input name="wat" type="time" [(ngModel)]="s.wakeAt" [disabled]="!s.wakeSchedule" /></label>
+            </div>
             <p class="note">Double-click sends the magic packet to the broadcast address of its network only (from the network, or the IP address's network). With an IP address the device is pinged until it answers, and every {{ pingMins(s) }} afterwards (green = up, orange = down); without one the network is searched for the MAC address and the address found is saved. More options: searches, interval, ping, jump host.</p>
           }
           @default {

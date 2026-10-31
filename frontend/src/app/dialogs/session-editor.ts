@@ -222,6 +222,11 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   <label>IP address</label>
                   <div class="row"><input name="hostname" class="mono" [ngModel]="s.hostname" (ngModelChange)="wolIp($event)" placeholder="or the network above" spellcheck="false" style="max-width: 200px" />
                     <span class="hint">pinged to show up (green) or down (orange); fills in the network above</span></div>
+                  <label>Wake on a schedule</label>
+                  <div class="row"><select name="wsch" [ngModel]="s.wakeSchedule || ''" (ngModelChange)="s.wakeSchedule = $event; s.wakeAt = s.wakeAt || '08:00'" style="max-width: 200px">
+                      <option value="">No schedule</option><option value="daily">Every day</option><option value="weekdays">Monday to Friday</option></select>
+                    <input name="wat" type="time" [(ngModel)]="s.wakeAt" [disabled]="!s.wakeSchedule" style="max-width: 120px" />
+                    <span class="hint">while Termwright is open; a wake missed by more than 15 minutes (computer asleep, Termwright closed) is skipped</span></div>
                   <label>UDP port</label>
                   <div class="row"><input name="wport" type="number" min="1" max="65535" class="short" [ngModel]="s.wolPort || 9" (ngModelChange)="s.wolPort = +$event === 9 ? 0 : +$event" />
                     <label>Broadcast</label><input name="wbc" class="mono" [(ngModel)]="s.wolBroadcast" placeholder="(the network's)" spellcheck="false" style="max-width: 160px"
