@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Glacier start page cards are never squeezed**: three per row when there is room, two or one when the start page is narrow - with the session side panel open or in a small window - instead of three cards with cut-off names.
 * **Environment… in the right-click menu** of a folder and of a session (it replaces *Mark as Production*): pick any environment from the list - each with its tag and colour - or *None* to follow the parent folder, or create a new one on the spot (name, tag, one of the ten colours, *Like production*). The menu item shows the current one, e.g. *Environment: Production (from the folder)…*.
 
 ## 0.25.0 (2026-10-31)
