@@ -1,0 +1,4 @@
+<!-- the light plate of the desktop icon -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient android:angle="315" android:startColor="#FFFFFFFF" android:centerColor="#FFF1F5F9" android:endColor="#FFE2E8F0" />
+</shape>

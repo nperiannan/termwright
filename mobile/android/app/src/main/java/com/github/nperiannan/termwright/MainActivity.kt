@@ -192,19 +192,14 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
     }
 }
 
-/** The Termwright logo: four rounded squares (as the app icon and the desktop app). */
+/** The Termwright logo: the four tiles of the app icon (res/drawable-nodpi/tw_logo.png). */
 @Composable
 fun TwLogo(size: androidx.compose.ui.unit.Dp) {
-    val colors = listOf(Color(0xFF2563EB), Color(0xFF7C3AED), Color(0xFF0D9488), Color(0xFF9333EA))
-    androidx.compose.foundation.Canvas(Modifier.size(size)) {
-        val gap = this.size.width * 0.08f
-        val cell = (this.size.width - gap) / 2
-        val r = androidx.compose.ui.geometry.CornerRadius(cell * 0.24f)
-        colors.forEachIndexed { i, c ->
-            drawRoundRect(c, topLeft = androidx.compose.ui.geometry.Offset((i % 2) * (cell + gap), (i / 2) * (cell + gap)),
-                size = androidx.compose.ui.geometry.Size(cell, cell), cornerRadius = r)
-        }
-    }
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(R.drawable.tw_logo),
+        contentDescription = "Termwright",
+        modifier = Modifier.size(size),
+    )
 }
 
 @Composable
