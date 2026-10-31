@@ -30,6 +30,32 @@
 | ![Start page and Session Manager, Glacier dark](docs/screenshots/glacier-start-dark.png) <br/>*Start page and Session Manager (Glacier, dark): folders with their environments, and every kind of session - SSH, SFTP, Linux, EXOS, IoT, RDP, VNC, Wake-on-LAN, Telnet, serial, local shell* | ![Linux session with the Files panel, Glacier dark](docs/screenshots/glacier-files-dark.png) <br/>*A Linux session with the Files panel beside the terminal* |
 | ![Session properties, Glacier light](docs/screenshots/glacier-properties-light.png) <br/>*Session properties beside the start page (Glacier, light)* | |
 
+## At a glance
+
+- SSH, Telnet, serial, raw TCP and local shell, in tabs or tiles
+- SFTP browser, and a Files panel beside the terminal
+- Jump hosts (chainable), proxies and port forwarding
+- RDP and VNC, also through a jump host
+- RDP and VNC installed on a Linux machine over SSH, and a one-click diagnosis when they do not connect
+- Device web interfaces opened through the SSH connection
+- Device discovery, with device type and network OS detection
+- Device facts: model, version, serial number, MAC address, uptime
+- Automatic login per device type (EXOS, VOSS, Cisco IOS, Linux or your own) and shared accounts
+- Which devices answer, for every session or one folder
+- Environments (production, staging, lab or your own) with colours and safeguards
+- Configuration backups with change detection
+- Automation: logon actions, triggers, Python / VBScript / JavaScript scripts, Run and Collect, checklists
+- A command window that sends to many tabs, a command library and command history
+- Session logs, and recordings with playback
+- Copy or save the terminal as text or as an HTML report
+- Compare two tabs, a tab and a file, or two SFTP files
+- Wake-on-LAN
+- Import from SecureCRT, PuTTY, MobaXterm, mRemoteNG and more
+- Windows, macOS and Linux
+- Glacier and Standard styles, dark and light themes
+
+And much more - see the [feature list](docs/FEATURES.md).
+
 ## Overview
 
 Termwright is a free, open-source desktop application for people who spend their day on the command line of switches, routers, firewalls, servers and cloud hosts. It keeps hundreds of sessions organised, logs in the way each kind of device expects, moves files to and from them, and automates the repetitive parts of change windows: backups, checklists, collecting the same values from many devices.

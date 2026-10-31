@@ -16,7 +16,10 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 ## Main window
 
 - **Modern layout** (default): tabs, a Sessions button (every session with its icon, filter, connect), Quick Connect, SFTP, the theme switch, Settings and a ⋯ menu in one title bar; the **Classic layout** (menu bar, toolbar, Connect Bar, tab strip) is one click away (View → Modern / Classic Layout).
+- **Styles**: **Glacier** (the default) - frosted glass on the title bar, Session Manager and start page, raised start page cards three to a row, graphite in the dark theme and icy in the light one - or **Standard**; Settings → General → Style.
+- **Glass or flat folder and file icons**: in the Session Manager, the Files panel, SFTP and the folder picker; *As the style*, *Glass* or *Flat* (Settings → General → Folder and file icons).
 - **Start page**: a search-or-connect box, quick actions spread under it and cards for favourite and recent sessions (device icon, address, device facts, last used, live state).
+- **Start page footer**: the slogan, the installed version and whether it is up to date, the GitHub download count, the licence and a link to the project.
 - **Session side panel**: New Session and Properties open beside the terminal with the everyday fields, the Files panel and auto-reconnect switches and the device facts; All session options… opens the full dialog.
 - **Connecting and error cards**: each connection step while it connects; on failure the reason, a hint and Try Again, Edit Session, Find by MAC Address, Close Tab.
 - **Welcome flow**: theme, text size and layout; import found sessions; optional master password; tips (Help → Welcome…).
@@ -24,6 +27,8 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Toolbar**: connect, quick connect, local shell, reconnect, disconnect, copy, paste, find, log, SFTP, scripts, layouts, lock and more.
 - **Connect Bar**: type `ssh admin@host`, `telnet host 2003`, `serial COM3 115200`, `raw host 4001`, `rdp host`, `vnc host`, `voss 10.1.1.1` or a session name and press Enter.
 - **Tabs**: one per connection with a status dot (connected, connecting, error, disconnected); middle-click closes.
+- **Drag tabs** to reorder them (title bar and classic tab strip); the order is kept for *Reopen the tabs that were open*.
+- **Double-click the empty title bar** to zoom (or minimise) the window, as the system's title-bar setting says.
 - **Tab badges**: `LOG` (logging), `● REC` (session recording), `SCRIPT` (script recording), `SEL` (in the send group), `PROD` (production).
 - **Layouts**: tabbed, tile side by side, tile stacked, tile grid.
 - **Status bar**: state, protocol, user@host, server version, route (jump host), transfer progress, terminal size, emulation, connected tabs.
@@ -38,6 +43,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 - **Protocols**: SSH2, Telnet, Serial, Local Shell, Raw TCP, RDP, VNC and Console (a port of a console server).
 - **Accounts**: a username and password (keychain or password manager) shared by sessions, folders and device types; each session chooses *Default* (folder → device type), an account, or its own login; one password change updates every session; Convert Sessions turns sessions with the same login into an account; *Update the Account Password* on a refused login.
+- **Accounts with a private key**: an account logs in with a password or an SSH key (and its passphrase); Quick Connect can log in with an account.
 - **Copy, Cut, Paste and Undo** in the Session Manager: copy or move sessions and whole folders (Cmd/Ctrl+C / X / V), confirmation before a move (on by default), and Undo of the last three moves, pastes or deletes, each saying first what it will do.
 - **Saved sessions**: double-click, Connect Terminal, Connect SFTP Session, or Connect All in Folder.
 - **Quick Connect**: one connect line (`voss admin@10.1.1.1`, `ssh user@host:2222`, `serial COM3 115200`) fills protocol, address, port, device type and user; or fill the fields; save it as a session (the switch is remembered; Settings → Save Quick Connect sessions makes it the default).
@@ -59,6 +65,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Smart cards** (PIV, CAC, YubiKey, other PKCS#11 tokens): any key on the card or a chosen one; PIN asked once and kept in memory only.
 - **Kerberos / GSSAPI**: uses your `kinit` ticket, or logs in to Kerberos itself.
 - **Host key checking**: known_hosts (Termwright's and `~/.ssh/known_hosts`), prompts for new and changed keys.
+- **Old devices**: *Allow legacy algorithms* (`diffie-hellman-group1-sha1`, `aes128-cbc`, `hmac-sha1` and more) per session, or key exchange, cipher, MAC and host key lists set by hand in the OpenSSH syntax.
 - **Keep-alive** at a chosen interval.
 - **Remote command**: run a command instead of a shell, e.g. `ssh -t` from a jump station to a cloud host.
 - **Agent forwarding** (including smart card keys) and **X11 forwarding**.
@@ -91,6 +98,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Through jump hosts and proxies**: Termwright opens a local tunnel for RDP and VNC.
 - **Set Up Remote Desktop…** (right-click an SSH session): installs XFCE with xrdp and/or TigerVNC on Ubuntu 22.04 / 24.04 and Debian 12, running a script in the background (nothing typed in the terminal; one line of progress). Each service gets its own new user (`name-rdp`, `name-vnc`); passwords default to the SSH login's (saved or typed) and travel on the SSH connection's input, never shown; the created sessions store the user name and password of the new user; services already running are left alone; creates the RDP and VNC sessions through the SSH session when it succeeds; *Check First* only reports. A service that does not come up is removed again (its new user, files, service and firewall rule) without touching the other one; *Copy log* copies the output.
 - **One desktop per user**: opening RDP while VNC to the same machine as the same user is open (or the reverse) asks to close the first; when someone else is connected to the machine, Termwright warns and never closes their session.
+- **Diagnose Remote Desktop** (right-click an RDP or VNC session): one line says what is wrong (red) or that nothing is, with the checks behind it - from this computer, through the jump host and on the machine over SSH; *Restart VNC / RDP service* fixes a blocked service.
 
 ## Console servers
 
@@ -113,7 +121,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 ## Session Manager
 
 - **Device icons**: switch, router, firewall, access point, server, computer, storage, phone, IoT, printer - as coloured tiles or plain glyphs (View → Tile / Glyph Icons).
-- **Folders coloured by level**: top level amber, sub-folders purple, deeper blue; production folders light red (right-click → Mark as Production).
+- **Folders coloured by level**: the top level and five levels of subfolders each have their own colour; a folder in an environment takes the environment's colour, and so does everything in it.
 - **Wake-on-LAN sessions** (protocol *Wake-on-LAN*, own icon): MAC address, network, optional IP address and UDP port; double-click sends the magic packet to the network's broadcast address only, then pings the device (with its NetBIOS name) or searches the network for the MAC address (4 times, 30 s apart, configurable) and saves the address found; pinged every 2 minutes (configurable) - green dot up, orange down.
 - **Wake-on-LAN**: wake a session's device by its MAC address - from this computer or, for devices behind a jump host or jump station, from that server; broadcast address and port per session; *Wake Up and Connect*; folders and selections; waits until the device answers.
 - **Device facts**: model, version, serial, MAC and uptime read after connecting in a background login, shown on the tab, status bar, cards and side panel; teach a fact by selecting the value (Edit → Save Selection as Device Fact, or Session Options → Device Facts → Run); edit, remove or add by hand.
@@ -124,9 +132,11 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Multi-select** (Cmd/Ctrl-click, Shift-click): connect, edit, back up, delete, add to favourites or drag together.
 - **Edit many sessions at once**: folder, device type, username, password, protocol, port, jump host, environment, color scheme, keyword set, auto reconnect.
 - **Drag and drop** sessions and folders; new, edit, duplicate, rename, delete.
+- **Expand / Collapse All** folders; the **Delete** key deletes the selection; a confirmation before deleting (on by default, Settings → General).
+- **Jump hosts stay linked**: moving, renaming or deleting a session that other sessions (SSH, RDP, VNC) use as their jump host lists them and asks whether to update - or delete - them, even when confirmations are turned off.
 - **Folder defaults**: username, device type, jump host, identity file, keyword set, color scheme, environment, smart card and recording for a whole folder.
-- **Environments**: Production, Staging, Test / Lab, Development; coloured tags and tab lines; production asks before multi-line pastes and multi-tab sends.
-- **Which devices answer**: optional dot per session from a TCP check every minute.
+- **Environments**: Production, Staging, Test / Lab and Development to start with - rename, recolour or remove them, or add your own (Pre-production, Customer A…) in ten colours that are never folder colours; right-click a folder or session → *Environment…*; subfolders and sessions inherit it; coloured tags and tab lines; protected environments (production) ask before multi-line pastes and multi-tab sends.
+- **Which devices answer**: optional dot per session from a TCP check every minute - for every session, or only the sessions of the selected folder.
 - **Left or right, shown or hidden**: a slim SESSIONS strip brings it back.
 - **Session icons** per protocol (SSH, SFTP, Telnet, Serial, Console, Local, Raw, RDP, VNC) with a via-badge for jump targets.
 
@@ -142,6 +152,9 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Add as sessions** with a suggested device type: all selected, or only chosen device types, optionally one subfolder per type.
 - **Connect without saving** by double-clicking a result.
 - **Already in sessions** marked, including devices that moved to a new address.
+- **This computer's networks** (wired, Wi-Fi, VPN) listed when the scan opens, to start a scan from one of them or type a network or range.
+- **Copy** a result's address, MAC address, vendor or system text.
+- **Wake-on-LAN sessions** for devices that show no login port.
 
 ## Devices that get a new address (DHCP)
 
@@ -188,6 +201,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Session logs**: plain text or raw, append, start on connect, file name tokens (`%H %S %Y%M%D…`), per-line timestamp prefix.
 - **Save Scrollback / Save Selection** to a file.
 - **Save Scrollback As HTML**: a report page with the Termwright logo, session, address, model, OS version, serial number, MAC address, device type, protocol, user, date and time, and the output with colors and keyword highlighting.
+- **Copy Scrollback** to the clipboard as text or as the HTML report (tab menu), to paste into a ticket or an e-mail.
 - **Session recording**: what the device showed with its timing, per tab, session, folder or all sessions; asciinema `.cast` files.
 - **Markers** (`Mod+J`) with a note at any point of a recording.
 - **Player tab**: play / pause, speed 0.5×-8×, seek, skip idle time, markers, find text, export as plain text.
@@ -261,6 +275,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Import from SecureCRT**: Config folder, zip, XML export or single `.ini`, with saved passwords moved to the keychain.
 - **Import from other programs**: PuTTY / KiTTY (`.reg`, `~/.putty/sessions`), SuperPuTTY (`Sessions.xml`, `-pw` passwords to the keychain, Cygterm / Mintty as Local Shell), MobaXterm (`.mxtsessions`, `MobaXterm.ini`), mRemoteNG (`confCons.xml`: folders, inherited user / port / protocol, passwords to the keychain), OpenSSH `~/.ssh/config`.
 - **Import from inventories**: CSV, Ansible (INI / YAML), NetBox, AWS EC2.
+- **Termwright template (CSV)**: a template to save and a [format guide](IMPORT_FORMAT.md), to bring sessions from any other tool.
 - **Export**: Termwright folder, zip or XML (everything kept; SecureCRT can read them).
 - **Settings travel with the export**: zip and folder exports include device types, accounts (no passwords), Folder Defaults, the command library, checklists, jobs and Global Options; Import Sessions shows what is in the file and imports the parts you choose, following the target folder and renamed sessions.
 - **Import Termwright exports**: Termwright .zip or export folder as their own import sources.
