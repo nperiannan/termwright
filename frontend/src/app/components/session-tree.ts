@@ -525,12 +525,36 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   folderEnv(path: string) { return envOf(path + '/x', '', this.ui.settings()?.folderDefaults); }
 
   /** Marks a folder (and everything in it) as production, or takes the mark off. */
-  setProduction(path: string, on: boolean) {
+  setProduction(path: string, on: boolean) { this.setFolderEnv(path, on ? 'production' : ''); }
+
+  /** A folder's environment (Folder Defaults); its subfolders and sessions follow unless they have their own. */
+  setFolderEnv(path: string, env: string) {
     const list = [...(this.ui.settings()?.folderDefaults ?? [])];
     const i = list.findIndex(d => d.folder === path);
-    if (i >= 0) list[i] = { ...list[i], environment: on ? 'production' : '' };
-    else if (on) list.push({ folder: path, username: '', deviceType: '', jumpSession: '', identityFile: '', keywordSet: '', colorScheme: '', environment: 'production' });
+    if (i >= 0) list[i] = { ...list[i], environment: env };
+    else if (env) list.push({ folder: path, username: '', deviceType: '', jumpSession: '', identityFile: '', keywordSet: '', colorScheme: '', environment: env });
     this.ui.patchSettings({ folderDefaults: list });
+  }
+  /** The environment set on the folder itself ('' = none - it may still follow a parent folder). */
+  ownFolderEnv(path: string) { return (this.ui.settings()?.folderDefaults ?? []).find(d => d.folder === path)?.environment ?? ''; }
+  /** ": Production" / ": Production (from the folder)" for the menu. */
+  envSuffix(own: string, effective: string) {
+    const e = envInfo(own || effective);
+    return e ? ': ' + e.label + (own ? '' : ' (from the folder)') : '';
+  }
+  /** Environment picker for a folder or a session. */
+  async chooseEnv(n: SessionNode) {
+    const parentEnv = n.isFolder ? envOf(n.path, '', this.ui.settings()?.folderDefaults) : envOf(n.path, '', this.ui.settings()?.folderDefaults);
+    const current = n.isFolder ? this.ownFolderEnv(n.path) : n.environment ?? '';
+    const v = await this.ui.pickEnvironment({ title: n.isFolder ? 'Folder Environment' : 'Session Environment', target: n.path, folder: !!n.isFolder, current, inherited: parentEnv });
+    if (v === null || v === current) return;
+    if (n.isFolder) { this.setFolderEnv(n.path, v); return; }
+    try {
+      const s = await this.backend.getSession(n.path);
+      s.environment = v;
+      await this.backend.saveSession(s, n.path);
+      await this.ui.refreshTree();
+    } catch (e) { this.ui.error(e); }
   }
 
   env(n: SessionNode) {
@@ -750,9 +774,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'Cut', hint: this.keys('X'), action: () => this.ops.cut([{ path: n.path, folder: true }]) },
           ...(this.ops.clip() ? [{ label: 'Paste' + this.clipWhat(), hint: this.keys('V'), action: () => void this.ops.paste(n.path) }] : []),
           { label: 'Folder Defaults...', action: () => { this.ui.folderDefaultsFor.set(n.path); this.ui.open('folderDefaults'); } },
-          ...((this.ui.settings()?.folderDefaults ?? []).find(d => d.folder === n.path)?.environment === 'production'
-            ? [{ label: 'Unmark Production', action: () => this.setProduction(n.path, false) }]
-            : this.folderEnv(n.path) === 'production' ? [] : [{ label: 'Mark as Production', action: () => this.setProduction(n.path, true) }]),
+          { label: 'Environment' + this.envSuffix(this.ownFolderEnv(n.path), this.folderEnv(n.path)) + '...', action: () => void this.chooseEnv(n) },
           { label: 'Export Folder...', action: () => this.ui.open('export') },
           { separator: true },
           { label: 'Delete Folder', action: () => this.deleteFolder(n) },
@@ -778,6 +800,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(n.protocol === 'WOL' && n.hostname ? [{ label: 'Check Now (ping)', action: () => this.wol.checkNow(n.path) }] : []),
           { separator: true },
           { label: 'Properties...', action: () => this.ui.editSession(n.path) },
+          { label: 'Environment' + this.envSuffix(n.environment ?? '', envOf(n.path, '', this.ui.settings()?.folderDefaults)) + '...', action: () => void this.chooseEnv(n) },
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }] : []),
           { label: this.isFav(n.path) ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav([n.path], !this.isFav(n.path)) },
           ...(sec === 'recent' ? [{ label: 'Remove from Recent', action: () => this.ui.removeRecent(n.path) }] : []),

@@ -6,6 +6,7 @@ import { Backend } from '../core/backend';
 import { AppInfo } from '../core/models';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
+import { ENV_COLORS, envFg, envList } from '../core/env';
 
 /** Confirm / input dialogs, context menu and toasts. */
 @Component({
@@ -36,6 +37,42 @@ import { Icon } from '../components/icon';
             }
             <button type="button" class="ghost" (click)="closeChoice(null)">Cancel</button>
           </div>
+        </div>
+      </div>
+    }
+    @if (ui.envPickReq(); as e) {
+      <div class="modal-backdrop">
+        <div class="modal small envpick" role="dialog" aria-modal="true">
+          <div class="modal-head"><span class="mh-ic"><app-icon name="layers" [size]="17" /></span><span class="mh-t">{{ e.title }}<span class="mh-s">{{ e.target }}</span></span></div>
+          <div class="modal-body">
+            <div class="ep-list" role="listbox">
+              @for (v of envs(); track v.id) {
+                <button type="button" class="ep" role="option" [class.on]="e.current === v.id" [attr.aria-selected]="e.current === v.id" (click)="closeEnv(v.id)">
+                  <span class="ep-tag" [style.background]="v.color" [style.color]="fg(v.color)">{{ v.short }}</span><span class="ep-n">{{ v.label }}</span>
+                  @if (v.protect) { <span class="ep-p">asks before pastes</span> }
+                  @if (e.current === v.id) { <app-icon name="check" [size]="14" /> }
+                </button>
+              }
+              <button type="button" class="ep" [class.on]="!e.current" (click)="closeEnv('')">
+                <span class="ep-tag none">-</span><span class="ep-n">None{{ e.inherited ? ' - follow the parent folder (' + envLabel(e.inherited) + ')' : '' }}</span>
+                @if (!e.current) { <app-icon name="check" [size]="14" /> }
+              </button>
+            </div>
+            @if (!newEnv()) {
+              <button type="button" class="link ep-new" (click)="newEnv.set(true)"><app-icon name="plus" [size]="13" /> New environment…</button>
+            } @else {
+              <div class="ep-form">
+                <div class="row"><input [(ngModel)]="neLabel" name="nel" placeholder="Name, e.g. Pre-production" appAutofocus />
+                  <input class="mono ep-short" [ngModel]="neShort" (ngModelChange)="neShort = $event.toUpperCase().slice(0, 6)" name="nes" placeholder="TAG" maxlength="6" /></div>
+                <div class="ep-sw">@for (c of colors; track c.c) { <button type="button" class="dotc" [class.on]="neColor === c.c" [style.background]="c.c" [title]="c.n" (click)="neColor = c.c"></button> }</div>
+                <label class="inline-check"><input type="checkbox" [(ngModel)]="neProtect" name="nep" /> Like production (asks before pastes, tag on the tab)</label>
+                <div class="row"><span class="spacer"></span><button type="button" (click)="newEnv.set(false)">Back</button>
+                  <button type="button" class="primary" [disabled]="!neLabel.trim()" (click)="createEnv()">Create and Use</button></div>
+              </div>
+            }
+            <div class="hint">{{ envHint(e.folder) }} Rename or recolour environments in Settings → Environments.</div>
+          </div>
+          <div class="modal-foot"><span class="spacer"></span><button type="button" (click)="closeEnv(null)">Cancel</button></div>
         </div>
       </div>
     }
@@ -81,6 +118,20 @@ import { Icon } from '../components/icon';
     .choice-foot button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
     .choice-foot button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
     .choice-foot button.ghost:hover { color: var(--text); background: var(--hover); }
+    .envpick .ep-list { display: flex; flex-direction: column; gap: 4px; }
+    .envpick .ep { height: auto; display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; text-align: left; border-radius: 8px;
+      border: 1px solid transparent; background: transparent; color: var(--text); cursor: pointer;
+      &:hover { background: var(--hover); } &.on { border-color: var(--accent); background: var(--accent-soft); }
+      app-icon { margin-left: auto; color: var(--accent); } }
+    .envpick .ep-tag { min-width: 50px; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: .03em; padding: 2px 6px; border-radius: 4px;
+      &.none { background: var(--surface-2); color: var(--muted); } }
+    .envpick .ep-n { font-weight: 500; } .envpick .ep-p { font-size: 11px; color: var(--muted); }
+    .envpick .ep-new { margin: 10px 0 4px; display: inline-flex; align-items: center; gap: 5px; height: auto; border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer; }
+    .envpick .ep-form { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 4px; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+      .row { display: flex; gap: 8px; align-items: center; } .row input { flex: 1; min-width: 0; } .row .ep-short { flex: 0 0 90px; } }
+    .envpick .ep-sw { display: flex; gap: 6px; flex-wrap: wrap; }
+    .envpick .dotc { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid transparent; box-shadow: 0 0 0 1px var(--line); cursor: pointer; &.on { border-color: var(--text); } }
+    .envpick .hint { margin-top: 12px; }
     .cl { margin: 10px 0 0; padding: 6px 8px 6px 24px; max-height: 220px; overflow: auto; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); background: var(--input-bg); border-radius: 6px; user-select: text; }
     .cl li { padding: 1px 0; }
     .mh-ic.dz { background: rgba(229, 72, 77, .14) !important; color: var(--danger) !important; }
@@ -114,6 +165,36 @@ export class Overlays {
     const c = this.ui.confirmReq();
     this.ui.confirmReq.set(null);
     c?.resolve(v);
+  }
+
+  readonly envs = envList;
+  readonly colors = ENV_COLORS;
+  readonly fg = envFg;
+  readonly newEnv = signal(false);
+  neLabel = ''; neShort = ''; neColor: string = ENV_COLORS[4].c; neProtect = false;
+  envHint(folder: boolean) {
+    return folder ? 'Every subfolder and session in the folder follows it, unless it has an environment of its own.'
+      : "Only this session; a folder's environment applies to all the sessions in it.";
+  }
+  envLabel(id: string) { return envList().find(e => e.id === id)?.label ?? id; }
+  closeEnv(v: string | null) {
+    const r = this.ui.envPickReq();
+    this.ui.envPickReq.set(null);
+    this.newEnv.set(false);
+    r?.resolve(v);
+  }
+  /** Adds the environment to Settings → Environments and picks it. */
+  async createEnv() {
+    const label = this.neLabel.trim();
+    if (!label) return;
+    const list = [...envList()];
+    let id = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'env';
+    const base = id; let n = 2;
+    while (list.some(e => e.id === id)) id = base + '-' + n++;
+    list.push({ id, label, short: (this.neShort || label).toUpperCase().slice(0, 6), color: this.neColor, protect: this.neProtect || undefined });
+    await this.ui.patchSettings({ environments: list });
+    this.neLabel = ''; this.neShort = ''; this.neProtect = false;
+    this.closeEnv(id);
   }
 
   closeChoice(v: string | null) {

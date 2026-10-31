@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Environment… in the right-click menu** of a folder and of a session (it replaces *Mark as Production*): pick any environment from the list - each with its tag and colour - or *None* to follow the parent folder, or create a new one on the spot (name, tag, one of the ten colours, *Like production*). The menu item shows the current one, e.g. *Environment: Production (from the folder)…*.
+
 ## 0.25.0 (2026-10-31)
 
 The Glacier style, your own environments, accounts with a private key, and a smoother Session Manager.
