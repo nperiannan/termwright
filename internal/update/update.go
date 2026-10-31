@@ -46,9 +46,10 @@ type release struct {
 	Prerelease  bool      `json:"prerelease"`
 	PublishedAt time.Time `json:"published_at"`
 	Assets      []struct {
-		Name string `json:"name"`
-		URL  string `json:"url"`
-		Size int64  `json:"size"`
+		Name      string    `json:"name"`
+		URL       string    `json:"url"`
+		Size      int64     `json:"size"`
+		UpdatedAt time.Time `json:"updated_at"`
 	} `json:"assets"`
 }
 
@@ -140,6 +141,17 @@ func Check(ctx context.Context, repo, channel, token, current string) (Info, err
 		names[i] = a.Name
 	}
 	if channel == "nightly" {
+		// the one nightly release is updated in place, so its published_at is
+		// the day it was first created; the build date is that of its assets
+		var built time.Time
+		for _, a := range r.Assets {
+			if a.UpdatedAt.After(built) {
+				built = a.UpdatedAt
+			}
+		}
+		if !built.IsZero() {
+			info.Published = built.Format(time.RFC3339)
+		}
 		sha := shaOf(r.Name)
 		info.Latest = "nightly " + sha
 		if m := verRe.FindStringSubmatch(strings.Join(names, " ")); m != nil {

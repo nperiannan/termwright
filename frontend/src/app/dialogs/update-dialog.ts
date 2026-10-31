@@ -19,7 +19,8 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
   <div class="modal-backdrop">
     <div class="modal upd">
       <div class="modal-head"><span class="mh-ic"><app-icon name="down" [size]="17" /></span>
-        <span class="mh-t">Software Update<span class="mh-s">{{ st() ? 'Termwright ' + base(st()!.current) + (st()!.runningNightly ? ' (nightly ' + sha(st()!.current) + ')' : '') + ' is installed' : 'Checking for updates…' }}</span></span></div>
+        <span class="mh-t">Software Update<span class="mh-s">{{ st() ? 'Termwright ' + base(st()!.current) + (st()!.runningNightly ? ' (nightly ' + sha(st()!.current) + ')' : '') + ' is installed' : 'Checking for updates…' }}</span></span>
+        <button type="button" class="mh-x" title="Close (Esc)" (click)="ui.close()">✕</button></div>
       <div class="modal-body">
         @if (checking()) {
           <p>Checking for updates…</p>
@@ -27,16 +28,16 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
           <p class="installed cl-only">Installed: <b>Termwright {{ base(s.current) }}</b>
             @if (s.runningNightly) { <span class="tag nightly">nightly {{ sha(s.current) }}</span> }</p>
 
-          <section class="card">
+          <section class="uc">
             <div class="title"><span class="tag stable">Stable</span>
               @if (s.stable; as i) {
-                @if (i.newer) { <b>Termwright {{ i.latest }} is available</b> } @else { <b>Termwright {{ i.latest }}</b> is the latest stable release }
-                <span class="hint">{{ date(i.published) }}</span>
+                @if (i.newer) { <b>Termwright {{ i.latest }} is available</b> } @else { <b>Termwright {{ i.latest }}</b> is the latest release }
+                <span class="hint when">{{ date(i.published) }}</span>
               } @else { <span class="err">{{ s.stableErr }}</span> }
             </div>
             @if (s.stable; as i) {
               @if (!i.newer) {
-                <p class="ok">{{ s.runningNightly ? 'Your nightly build already includes this release.' : 'You are up to date.' }}</p>
+                <p class="ok">✓ {{ s.runningNightly ? 'Your nightly build already includes this release.' : 'You are up to date.' }}</p>
               } @else {
                 @if (notes(i).length) {
                   <div class="notes">
@@ -46,39 +47,35 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
                     }
                   </div>
                 }
-                @if (i.assetName) {
-                  <button type="button" class="primary" [disabled]="busy()" (click)="download(i)">Download {{ i.latest }} ({{ size(i.assetSize) }})</button>
-                } @else { <p class="hint">No installer for this computer in that release - open the release page.</p> }
+                @if (!i.assetName) { <p class="hint">No installer for this computer in that release - open the release notes.</p> }
               }
             }
           </section>
 
           @if (s.nightly; as n) {
             @if (n.newer) {
-              <section class="card">
-                <div class="title"><span class="tag nightly">Nightly</span> <b>Build {{ sha(n.latest) }}</b>@if (n.version) { <span class="hint">based on {{ n.version }}</span> } <span class="hint">{{ date(n.published) }}</span>
-                  @if (modern()) { <button type="button" class="fold" (click)="nightlyOpen.set(!nightlyOpen())">{{ nightlyOpen() ? '▾ Hide' : '▸ Show' }}</button> }</div>
-                @if (modern() && !nightlyOpen()) {
-                  <div class="hint">Newest code, not released yet - back up before installing.</div>
-                } @else {
-                <div class="warn">
-                  <b>Untested build.</b> Nightly builds contain the newest code before it is released. They may crash, and they may change or
-                  lose your settings and saved sessions. <b>Back up before you install one</b>; passwords stay in the OS keychain and are not affected.
-                </div>
-                <div class="row">
-                  <button type="button" [disabled]="busy()" (click)="backup()">Back Up Now</button>
-                  @if (backupPath()) { <span class="hint">Saved to <span class="mono">{{ backupPath() }}</span></span> }
-                </div>
-                <label class="ack"><input type="checkbox" [checked]="ack()" (change)="ack.set(!ack())" /> I have a backup and accept the risk</label>
-                @if (n.assetName) {
-                  <button type="button" [disabled]="busy() || !ack()" (click)="download(n)">Download nightly ({{ size(n.assetSize) }})</button>
-                }
-                }
-              </section>
+              @if (nightlyShown()) {
+                <section class="uc">
+                  <div class="title"><span class="tag nightly">Nightly</span> <b>Build {{ sha(n.latest) }}</b>@if (n.version) { <span class="hint">based on {{ n.version }}</span> }
+                    <span class="hint when">{{ date(n.published) }}</span></div>
+                  <div class="warn">
+                    <b>Untested build.</b> Nightly builds contain the newest code before it is released. They may crash, and they may change or
+                    lose your settings and saved sessions. <b>Back up before you install one</b>; passwords stay in the OS keychain and are not affected.
+                  </div>
+                  <div class="row">
+                    <button type="button" [disabled]="busy()" (click)="backup()">Back Up Now</button>
+                    @if (n.assetName) { <button type="button" [disabled]="busy() || !ack()" [title]="ack() ? '' : 'Tick I have a backup and accept the risk first'" (click)="download(n)">Download Nightly ({{ size(n.assetSize) }})</button> }
+                  </div>
+                  @if (backupPath()) { <span class="hint">Backup saved to <span class="mono">{{ backupPath() }}</span></span> }
+                  <label class="ack"><input type="checkbox" [checked]="ack()" (change)="ack.set(!ack())" /> I have a backup and accept the risk</label>
+                </section>
+              } @else {
+                <p class="hint more">A newer nightly test build ({{ sha(n.latest) }}) exists. <a (click)="showNightly.set(true)">Show</a></p>
+              }
             } @else if (s.runningNightly) {
               <p class="hint">You have the latest nightly build.</p>
             }
-          } @else if (s.nightlyErr) { <p class="hint">Nightly builds: {{ s.nightlyErr }}</p> }
+          } @else if (s.nightlyErr && nightlyWanted()) { <p class="hint">Nightly builds: {{ s.nightlyErr }}</p> }
 
           @if (err()) { <p class="err">{{ err() }}</p> }
           @if (total() > 0 || done() > 0) {
@@ -99,20 +96,30 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
       <div class="modal-foot">
         @if (st()?.stable?.page) { <button type="button" (click)="backend.openURL(st()!.stable!.page)">Release Notes</button> }
         <span class="spacer"></span>
-        <button type="button" [class.primary]="modern() && !saved()" (click)="ui.close()">{{ modern() && !saved() ? 'Done' : 'Close' }}</button>
-        @if (saved()) { <button type="button" class="primary" (click)="openInstaller()">Open Installer</button> }
+        <button type="button" (click)="ui.close()">Close</button>
+        @if (saved()) {
+          <button type="button" class="primary" (click)="openInstaller()">Open Installer</button>
+        } @else {
+          <button type="button" class="primary" [disabled]="busy() || !target()" [title]="targetHint()" (click)="download(target()!)">{{ targetLabel() }}</button>
+        }
       </div>
     </div>
   </div>`,
   styles: [`
     .upd { width: min(640px, 92vw); }
     .installed { margin: 0 0 10px; }
-    .card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+    .uc { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+    .title .when { margin-left: auto; }
+    .more { margin: 2px 2px 0; } .more a { color: var(--accent); cursor: pointer; }
+    .mh-x { margin-left: auto; align-self: flex-start; width: 28px; height: 28px; padding: 0; border: 0 !important; background: transparent !important; color: var(--muted); font-size: 15px; border-radius: 6px; }
+    .mh-x:hover { background: var(--hover) !important; color: var(--text); }
+    .modal-head { display: flex; align-items: center; gap: 12px; }
+    .modal-foot button.primary:disabled { opacity: .45; }
     .title { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
     .tag { font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; padding: 1px 7px; border-radius: 10px; color: #fff; }
     .tag.stable { background: #16a34a; }
     .tag.nightly { background: #d97706; }
-    .ok { margin: 0; color: var(--muted); }
+    .ok { margin: 0; color: var(--ok, #16a34a); }
     .notes { align-self: stretch; max-height: 220px; overflow: auto; font-size: calc(12px * var(--ui-scale, 1)); background: var(--input-bg); padding: 8px 10px; border-radius: 6px; user-select: text; line-height: 1.5; }
     .nh { font-weight: 600; margin: 4px 0 2px; }
     .li { padding-left: 14px; position: relative; }
@@ -122,11 +129,9 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
     progress { width: 100%; accent-color: var(--accent); }
     .err { color: var(--danger); white-space: pre-wrap; }
     .mono { font-family: var(--mono, monospace); word-break: break-all; }
-    .fold { margin-left: auto; height: 22px; padding: 0 6px; border: 0 !important; background: transparent !important; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); }
     :host-context(.modern) {
       .upd { width: min(560px, 92vw); }
-      .card { border-color: var(--line); border-radius: var(--r-lg); padding: 12px 14px; background: var(--surface); }
-      .card + .card { background: var(--surface-2); }
+      .uc { border-color: var(--line); border-radius: var(--r-lg); padding: 12px 14px; background: var(--surface-2); }
       .title { align-items: center; width: 100%; }
       .tag { border-radius: 5px; padding: 2px 7px; font-weight: 700; }
       .tag.stable { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
@@ -140,8 +145,10 @@ interface NoteLine { kind: 'h' | 'li' | 'p'; text: string; }
 export class UpdateDialog implements OnInit, OnDestroy {
   protected ui = inject(Ui);
   protected backend = inject(Backend);
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
-  readonly nightlyOpen = signal(false);
+  /** Nightly builds are shown in full on the nightly channel or when running one; otherwise as a one-line link. */
+  readonly showNightly = signal(false);
+  readonly nightlyWanted = () => this.ui.settings()?.updateChannel === 'nightly' || !!this.st()?.runningNightly;
+  readonly nightlyShown = () => this.nightlyWanted() || this.showNightly();
   private cdr = inject(ChangeDetectorRef);
   readonly checking = signal(true);
   readonly st = signal<UpdateStatus | null>(null);
@@ -172,6 +179,19 @@ export class UpdateDialog implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() { this.unsub(); }
+
+  /** The footer Download fetches a newer stable release; it is inactive when there is none (a nightly downloads from its own card). */
+  target(): UpdateInfo | null {
+    const i = this.st()?.stable;
+    return i?.newer && i.assetName ? i : null;
+  }
+  targetLabel() {
+    const t = this.target();
+    return t ? `Download ${t.latest} (${this.size(t.assetSize)})` : 'Download';
+  }
+  targetHint() {
+    return this.target() ? '' : this.st()?.stable && !this.st()!.stable!.newer ? 'You have the latest stable version' : '';
+  }
 
   /** "0.11.1~git1a2b3c4" → "0.11.1" */
   base(v: string) { return v.replace(/[~-].*$/, ''); }

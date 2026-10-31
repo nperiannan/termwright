@@ -74,9 +74,9 @@
   .bigsearch { border-radius: 14px; }
   .qa button { border-radius: 12px; &:hover { background: linear-gradient(180deg, var(--g-hi), var(--g-glass-2)); border-color: var(--g-edge); } }
   .home-in { max-width: 960px; }
-  /* three per row; fewer when the start page is narrow (a side panel open, a small window), never squeezed */
-  .cards { grid-template-columns: repeat(auto-fill, minmax(max(220px, calc((100% - 28px) / 3)), 1fr)); gap: 14px; }
-  .card { position: relative; height: 132px; justify-content: space-between; overflow: hidden; border-radius: 16px; border-color: var(--g-edge);
+  /* start page cards only (.card and .cards are also used in dialogs); three per row; fewer when the start page is narrow (a side panel open, a small window), never squeezed */
+  .home .cards { grid-template-columns: repeat(auto-fill, minmax(max(220px, calc((100% - 28px) / 3)), 1fr)); gap: 14px; }
+  .home .card { position: relative; height: 132px; justify-content: space-between; overflow: hidden; border-radius: 16px; border-color: var(--g-edge);
     background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); box-shadow: var(--g-lift);
     backdrop-filter: var(--g-blur); -webkit-backdrop-filter: var(--g-blur);
     transform: perspective(900px) translateZ(0); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
@@ -102,7 +102,7 @@
     box-shadow: 0 1px 0 rgba(255, 255, 255, .4) inset, 0 6px 14px -6px rgba(47, 140, 240, .8); color: #fff; }
 }
 :root.glacier.light {
-  .card:hover { box-shadow: 0 1px 0 var(--g-hi) inset, 0 18px 34px -12px rgba(30, 70, 120, .35), 0 0 0 1px rgba(31, 122, 224, .3); }
-  .card app-device-icon, .card app-session-icon { filter: drop-shadow(0 5px 8px rgba(30, 70, 120, .25)); }
+  .home .card:hover { box-shadow: 0 1px 0 var(--g-hi) inset, 0 18px 34px -12px rgba(30, 70, 120, .35), 0 0 0 1px rgba(31, 122, 224, .3); }
+  .home .card app-device-icon, .home .card app-session-icon { filter: drop-shadow(0 5px 8px rgba(30, 70, 120, .25)); }
   .modal-backdrop { background: rgba(120, 150, 190, .25); }
 }

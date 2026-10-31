@@ -53,7 +53,7 @@ func TestCheckAndDownload(t *testing.T) {
 			fmt.Fprintf(w, `{"tag_name":"v0.7.0","name":"Termwright v0.7.0","body":"notes","html_url":"h",
 				"assets":[{"name":%q,"url":"%s/repos/o/r/releases/assets/1","size":5}]}`, asset, srv.URL)
 		case "/repos/o/r/releases/tags/nightly":
-			fmt.Fprint(w, `{"tag_name":"nightly","name":"Termwright nightly (abcdef1)","assets":[]}`)
+			fmt.Fprint(w, `{"tag_name":"nightly","name":"Termwright nightly (abcdef1)","published_at":"2026-10-26T03:00:00Z","assets":[{"name":"a.dmg","updated_at":"2026-10-31T12:10:00Z"},{"name":"b.deb","updated_at":"2026-10-31T12:05:00Z"}]}`)
 		case "/repos/o/r/compare/1234567...abcdef1":
 			fmt.Fprint(w, `{"status":"ahead"}`)
 		case "/repos/o/r/compare/7654321...abcdef1":
@@ -81,8 +81,8 @@ func TestCheckAndDownload(t *testing.T) {
 	if info, _ := Check(ctx, "o/r", "stable", "tok", "0.7.0"); info.Newer {
 		t.Fatal("same version reported newer")
 	}
-	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.6.0~gitabcdef1"); n.Newer {
-		t.Fatal("same nightly reported newer")
+	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.6.0~gitabcdef1"); n.Newer || n.Published != "2026-10-31T12:10:00Z" {
+		t.Fatalf("same nightly reported newer, or wrong build date %q", n.Published)
 	}
 	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.6.0~git1234567"); !n.Newer {
 		t.Fatal("different nightly not reported")
