@@ -82,6 +82,13 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.26.0
+
+- **Russian** ([#2](https://github.com/nperiannan/termwright/issues/2)). Settings → General → Language → *Русский*, now in every build, with the rest of the interface translated - backups, checklists, discovery, accounts, environments, the Files panel and SFTP, Software Update and more. File, folder and session names are never translated.
+- **Telnet and serial log in by themselves.** A session with a saved username and password needs no device type or logon actions: the usual `Login:` / `Username:` and `Password:` prompts are answered.
+- **Telnet opens in character mode**, as PuTTY and SecureCRT do, so console servers no longer hold typing until Enter (and switches behind them no longer print `^[[73;247R`).
+- **Smaller changes.** Software Update skips nightly builds that only change documentation and retries a nightly that was replaced while the window was open; Quick Connect's account list shows the right labels.
+
 ## What's new in 0.25.0
 
 - **Glacier style** (the new default). Frosted glass panels and raised start page cards - graphite in the dark theme, icy in the light one; *Standard* stays one click away in Settings → General → Style.

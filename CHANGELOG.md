@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.26.0 (2026-10-31)
+
+Russian in every build, and Telnet that logs in by itself and opens in character mode.
+
 * **Russian in every build** ([#2](https://github.com/nperiannan/termwright/issues/2)). Settings → General → Language → *Русский (частично)* is no longer limited to nightly builds. About 750 more texts are translated: Configuration Backups, Change Checklists, Run and Collect, Software Update, Discover Devices and its results, Passwords & Accounts, Environments, Folder Defaults, the folder and session menus, the Files panel and SFTP, Set Up Remote Desktop, Keyboard Shortcuts and Quick Open. Messages that come from the devices or from the background (connection errors) are still English. File, folder, bookmark and tab names are never translated.
 * **Fixed: Download nightly said "404 Not Found"** when a newer nightly was published while the update window was open (the nightly replaces its files). The window now looks again and downloads the build that is there.
 * **Fixed: Quick Connect showed program text** (`{{ device && inherit ? … }}`) in the Account list instead of *The device type's login* / *Own username and password*.
