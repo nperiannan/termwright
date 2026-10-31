@@ -1,3 +1,5 @@
+import { FolderIcon } from './folder-icon';
+import { glacierIcons } from '../core/icon-finish';
 import { Component, OnDestroy, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
@@ -25,7 +27,7 @@ const store = {
  */
 @Component({
   selector: 'app-files-panel',
-  imports: [FormsModule, Autofocus, FileIcon, Icon],
+  imports: [FormsModule, Autofocus, FileIcon, FolderIcon, Icon],
   host: { '[style.width.px]': 'width()', '[class.modern]': "ui.settings()?.layout !== 'classic'" },
   template: `
     <div class="grip" title="Drag to resize" (mousedown)="startResize($event)"></div>
@@ -71,7 +73,7 @@ const store = {
       @for (e of shown(); track e.name) {
         <div class="row" [attr.data-n]="e.name" [class.sel]="selected().has(e.name)" (click)="select(e, $event)" (dblclick)="open(e)" (contextmenu)="menu($event, e)"
           [title]="e.name + (e.isDir ? '' : ' - ' + size(e.size)) + ' - ' + e.mode">
-          @if (e.isDir) { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }
+          @if (e.isDir) { @if (glass()) { <app-folder-icon [size]="18" [style.opacity]="e.name.startsWith('.') ? .65 : 1" /> } @else { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }
           <span class="n">{{ e.name }}</span>
           <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
         </div>
@@ -138,6 +140,7 @@ const store = {
   `],
 })
 export class FilesPanel implements OnDestroy {
+  readonly glass = glacierIcons;
   readonly term = input.required<TabView>();
   protected ui = inject(Ui);
   private tabs = inject(Tabs);

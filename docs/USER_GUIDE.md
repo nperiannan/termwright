@@ -1099,7 +1099,7 @@ In the modern layout Global Options is called **Settings** (⚙ in the title bar
 
 **Start page footer**: the slogan, the version you run (green *up to date* or the newer release after the update check - click it for Software Update), the number of downloads from GitHub (not fetched when update checks are off), the licence and a link to the project.
 
-**Settings → General → Style** (modern layout): **Glacier** (the default) turns the window into frosted glass - the Session Manager, the title bar, menus and dialogs are translucent panels (graphite glass in the dark theme, icy glass in the light one), and the start page shows raised cards, three per row and up to five rows. It works with the light, dark and system themes; terminals keep their own colours. The title bar keeps its size, so on macOS its buttons stay level with the window buttons. *Standard* is the plain look without glass - the lighter choice on old machines.
+**Settings → General → Style** (modern layout): **Glacier** (the default) turns the window into frosted glass - the Session Manager, the title bar, menus and dialogs are translucent panels (graphite glass in the dark theme, icy glass in the light one), and the start page shows raised cards, three per row and up to five rows. It works with the light, dark and system themes; terminals keep their own colours. The title bar keeps its size, so on macOS its buttons stay level with the window buttons. *Standard* is the plain look without glass - the lighter choice on old machines. **Folder and file icons** (just below): *As the style* gives glass folders and file pages in Glacier and flat ones in Standard; *Glass* or *Flat* picks one look for both styles.
 
 | Glacier, dark | Glacier, light |
 |---|---|

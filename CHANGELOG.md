@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Glass folder and file icons**: in the Glacier style, folders in the Session Manager, the Files panel, SFTP and the folder picker have a front flap with a light edge and a soft shadow (lower when open), and files in the Files panel and SFTP are a page with a folded corner and a glossy type label. Settings → General → *Folder and file icons*: **As the style** (glass in Glacier, flat in Standard), **Glass** or **Flat** - so either look can be used with either style.
+
 ## 0.25.1 (2026-10-31)
 
 Readable dialogs in the Glacier style, tabs you can drag, and an Environment menu for folders and sessions.

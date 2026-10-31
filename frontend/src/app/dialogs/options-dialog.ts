@@ -93,6 +93,9 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label>Style</label>
                   <div class="seg w2"><button type="button" [class.on]="s.style === 'standard'" (click)="s.style = 'standard'">Standard</button><button type="button" [class.on]="s.style !== 'standard'" (click)="s.style = ''">Glacier</button></div>
                   <div class="hint">Glacier: frosted glass panels and raised cards, three per row - for the light and the dark theme.</div>
+                  <label>Folder and file icons</label>
+                  <div class="seg w3"><button type="button" [class.on]="!s.iconFinish" (click)="s.iconFinish = ''">As the style</button><button type="button" [class.on]="s.iconFinish === 'glacier'" (click)="s.iconFinish = 'glacier'">Glass</button><button type="button" [class.on]="s.iconFinish === 'flat'" (click)="s.iconFinish = 'flat'">Flat</button></div>
+                  <div class="hint">Glass: folders with a front flap and a light edge, files as a page with a type label - in the Session Manager, the Files panel and SFTP. <i>As the style</i> = glass in Glacier, flat in Standard.</div>
                 }
                 <label>Language</label>
                 <select name="lang" [ngModel]="s.language || ''" (ngModelChange)="s.language = $event">
@@ -590,7 +593,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
     .pv.light { background: #f6f7f9; color: #c9ced6; &::before { background: #e9ecf0; } &::after { background: #9aa3af; } }
     .pv.dark { background: #16181d; color: #3a3f48; &::before { background: #1e2127; } &::after { background: #6b7280; } }
     .pv.system { background: linear-gradient(110deg, #f6f7f9 50%, #16181d 50%); color: #8a919c; &::before { background: transparent; } &::after { background: #8a919c; } }
-    .seg.w2 { max-width: 300px; }
+    .seg.w2 { max-width: 300px; } .seg.w3 { max-width: 380px; }
     .pair .seg.w2 { max-width: none; }
   `],
 })

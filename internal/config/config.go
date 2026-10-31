@@ -67,18 +67,19 @@ type Settings struct {
 	DownloadDir          string                       `json:"downloadDir"`
 	FontFamily           string                       `json:"fontFamily"`
 	FontSize             int                          `json:"fontSize"`
-	LineHeight           float64                      `json:"lineHeight"`         // terminal line spacing (1.0 = the font's own; 0 = 1.0)
-	Theme                string                       `json:"theme"`              // ui theme: dark | light | system
-	UIFont               string                       `json:"uiFont"`             // interface font: "" (system), vscode, inter, plex
-	UIFontSize           int                          `json:"uiFontSize"`         // interface text size in px (13-17; 0 = 13)
-	ThemeFollowsSystem   bool                         `json:"themeFollowsSystem"` // set once when the default became "system" (0.20.1)
-	HighlightOptIn       bool                         `json:"highlightOptIn"`     // set once when keyword highlighting became off by default (0.20.3)
-	Layout               string                       `json:"layout"`             // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
-	Style                string                       `json:"style"`              // modern layout: "" (or "glacier") = Glacier, frosted glass, the default; "standard" = the plain look
-	ModernLayout         bool                         `json:"modernLayout"`       // set once when the modern layout became the default (0.21.0)
-	HighlightStyle       string                       `json:"highlightStyle"`     // keyword highlighting: "" = colour the text, "background" = colour the background
-	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`        // session path → fact name → value ("_at" = when read)
-	FactRulesAdded       bool                         `json:"factRulesAdded"`     // set once when the built-in device types got their fact rules (0.21.0)
+	LineHeight           float64                      `json:"lineHeight"`           // terminal line spacing (1.0 = the font's own; 0 = 1.0)
+	Theme                string                       `json:"theme"`                // ui theme: dark | light | system
+	UIFont               string                       `json:"uiFont"`               // interface font: "" (system), vscode, inter, plex
+	UIFontSize           int                          `json:"uiFontSize"`           // interface text size in px (13-17; 0 = 13)
+	ThemeFollowsSystem   bool                         `json:"themeFollowsSystem"`   // set once when the default became "system" (0.20.1)
+	HighlightOptIn       bool                         `json:"highlightOptIn"`       // set once when keyword highlighting became off by default (0.20.3)
+	Layout               string                       `json:"layout"`               // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
+	Style                string                       `json:"style"`                // modern layout: "" (or "glacier") = Glacier, frosted glass, the default; "standard" = the plain look
+	IconFinish           string                       `json:"iconFinish,omitempty"` // folder and file icons: "" = as the style (glass in Glacier), "glacier" or "flat"
+	ModernLayout         bool                         `json:"modernLayout"`         // set once when the modern layout became the default (0.21.0)
+	HighlightStyle       string                       `json:"highlightStyle"`       // keyword highlighting: "" = colour the text, "background" = colour the background
+	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`          // session path → fact name → value ("_at" = when read)
+	FactRulesAdded       bool                         `json:"factRulesAdded"`       // set once when the built-in device types got their fact rules (0.21.0)
 	KeywordsOn           bool                         `json:"keywordsOn"`
 	Language             string                       `json:"language"`            // interface language: "" = English, "ru" = Russian (partial)
 	IconStyle            string                       `json:"iconStyle"`           // device and session icons: "" = coloured tiles, "glyph" = the symbol only

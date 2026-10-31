@@ -1,4 +1,5 @@
 import { Component, computed, input } from '@angular/core';
+import { glacierIcons } from '../core/icon-finish';
 
 /** File categories by extension, each with its own color and mark. */
 const GROUPS: { re: RegExp; from: string; to: string; mark: string; title: string }[] = [
@@ -14,7 +15,18 @@ const GROUPS: { re: RegExp; from: string; to: string; mark: string; title: strin
 @Component({
   selector: 'app-file-icon',
   template: `
-    @if (badge()) {
+    @if (badge() && glass()) {
+      <svg viewBox="0 0 22 26" width="20" height="24" aria-hidden="true" class="gl" [style.opacity]="hidden() ? .7 : 1">
+        <defs>
+          <linearGradient [attr.id]="gid + 'p'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" /><stop offset="1" stop-color="#e3e9f1" /></linearGradient>
+        </defs>
+        <path d="M3 0H14L21 7V23Q21 26 18 26H3Q0 26 0 23V3Q0 0 3 0Z" [attr.fill]="'url(#' + gid + 'p)'" />
+        <path d="M14 0V5Q14 7 16 7H21Z" fill="#c8d2de" />
+        <rect x="0" y="12.5" width="19" height="9" rx="2" [attr.fill]="b().bg" />
+        <rect x="0" y="12.5" width="19" height="3.8" rx="1.6" fill="#fff" fill-opacity=".22" />
+        <text x="9.5" y="19.6" text-anchor="middle" font-size="6.6" font-weight="800" fill="#fff">{{ b().label }}</text>
+      </svg>
+    } @else if (badge()) {
       <span class="fb" [style.background]="b().bg" [style.opacity]="hidden() ? .7 : 1">{{ b().label }}</span>
     } @else {
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" [style.opacity]="hidden() ? .6 : 1">
@@ -41,6 +53,8 @@ const GROUPS: { re: RegExp; from: string; to: string; mark: string; title: strin
     </svg>
     }`,
   styles: [`:host { display: inline-flex; line-height: 0; flex: none; } svg { display: block; overflow: visible; }
+    svg.gl { filter: drop-shadow(0 1.5px 1.5px rgba(0, 0, 0, .28)); width: 20px; height: 24px; }
+    svg.gl text { font-family: var(--ui-font, system-ui), sans-serif; }
     .fb { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; color: #fff; font: 700 7.5px/1 var(--ui-font, system-ui), sans-serif; letter-spacing: .02em; }`],
   host: { '[attr.title]': 'g().title' },
 })
@@ -49,6 +63,8 @@ export class FileIcon {
   readonly link = input(false);
   /** A small coloured square with the file type (CFG, LOG, IMG…), as in the modern layout. */
   readonly badge = input(false);
+  /** Glacier: the badge becomes a page with a folded corner and a glossy type label. */
+  readonly glass = glacierIcons;
   readonly b = computed(() => badgeOf(this.name()));
   private static seq = 0;
   readonly gid = 'tw-fi-' + FileIcon.seq++;

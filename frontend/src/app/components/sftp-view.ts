@@ -1,3 +1,5 @@
+import { FolderIcon } from './folder-icon';
+import { glacierIcons } from '../core/icon-finish';
 import { Component, OnInit, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -23,7 +25,7 @@ interface Pane {
 /** Dual-pane SFTP file browser (local | remote) with transfer queue. */
 @Component({
   selector: 'app-sftp-view',
-  imports: [FormsModule, DatePipe, Icon, SessionIcon, FileIcon, Autofocus],
+  imports: [FormsModule, DatePipe, Icon, SessionIcon, FileIcon, FolderIcon, Autofocus],
   host: { '[class.modern]': 'modern()' },
   template: `
     @if (shell() && !shell()!.cwd && !cwdHintClosed()) {
@@ -116,7 +118,7 @@ interface Pane {
               <div class="row" [attr.data-n]="e.name" [class.sel]="p.selected.has(e.name)" (click)="select(p, e, $event)" (dblclick)="open(p, e)"
                    (contextmenu)="menu($event, p, e)">
                 @if (modern()) {
-                  <span class="n"><span class="ck" (click)="$event.stopPropagation(); toggle(p, e)" (dblclick)="$event.stopPropagation()" title="Select (also Cmd/Ctrl-click, Shift-click for a range)"><input type="checkbox" tabindex="-1" [checked]="p.selected.has(e.name)" /></span>@if (e.isDir) { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }{{ e.name }}</span>
+                  <span class="n"><span class="ck" (click)="$event.stopPropagation(); toggle(p, e)" (dblclick)="$event.stopPropagation()" title="Select (also Cmd/Ctrl-click, Shift-click for a range)"><input type="checkbox" tabindex="-1" [checked]="p.selected.has(e.name)" /></span>@if (e.isDir) { @if (glass()) { <app-folder-icon [size]="18" [style.opacity]="e.name.startsWith('.') ? .65 : 1" /> } @else { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }{{ e.name }}</span>
                   <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
                   <span class="d" [title]="(e.modTime | date: 'yyyy-MM-dd HH:mm') + '  ' + e.mode">{{ when(e.modTime) }}</span>
                 } @else {
@@ -224,6 +226,7 @@ interface Pane {
   styleUrl: './sftp-view.scss',
 })
 export class SftpView implements OnInit {
+  readonly glass = glacierIcons;
   readonly tab = input.required<TabView>();
   protected tabs = inject(Tabs);
   private backend = inject(Backend);
