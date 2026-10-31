@@ -23,12 +23,13 @@
   <a href="docs/ROADMAP.md">Roadmap</a>
 </p>
 
-![Termwright main window](docs/screenshots/main.png)
+![Termwright - start page and Session Manager in the Glacier style](docs/screenshots/glacier-start-dark.png)
+
+<p align="center"><i>The start page and Session Manager (Glacier, dark): folders with their environments, and every kind of session - SSH, SFTP, Linux, EXOS, IoT, RDP, VNC, Wake-on-LAN, Telnet, serial, local shell.</i></p>
 
 | | |
 |---|---|
-| ![Start page and Session Manager, Glacier dark](docs/screenshots/glacier-start-dark.png) <br/>*Start page and Session Manager (Glacier, dark): folders with their environments, and every kind of session - SSH, SFTP, Linux, EXOS, IoT, RDP, VNC, Wake-on-LAN, Telnet, serial, local shell* | ![Linux session with the Files panel, Glacier dark](docs/screenshots/glacier-files-dark.png) <br/>*A Linux session with the Files panel beside the terminal* |
-| ![Session properties, Glacier light](docs/screenshots/glacier-properties-light.png) <br/>*Session properties beside the start page (Glacier, light)* | |
+| ![Linux session with the Files panel, Glacier dark](docs/screenshots/glacier-files-dark.png) <br/>*A Linux session with the Files panel beside the terminal* | ![Session properties, Glacier light](docs/screenshots/glacier-properties-light.png) <br/>*Session properties beside the start page (Glacier, light)* |
 
 ## At a glance
 
