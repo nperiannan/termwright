@@ -133,6 +133,29 @@ func newLogonRunner(a []session.LogonAction) *logonRunner {
 	return &logonRunner{actions: a}
 }
 
+// typed tells the basic login what the user typed. Typing before its first
+// prompt means the user is at work (the console was still logged in): it stands
+// down, so that "exit" is not followed by an automatic login. Enter alone (to wake
+// a console) and the terminal's own answers (escape sequences) do not count.
+func (l *logonRunner) typed(p []byte) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.basic || l.idx > 0 {
+		return false
+	}
+	for i := 0; i < len(p); i++ {
+		switch b := p[i]; {
+		case b == 0x1b:
+			return false // an escape sequence: an answer of the terminal or a function key
+		case b == '\r' || b == '\n' || b == 0:
+		default:
+			l.idx = len(l.actions)
+			return true
+		}
+	}
+	return false
+}
+
 func (l *logonRunner) done() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()

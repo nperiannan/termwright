@@ -43,3 +43,24 @@ func TestRealActionsDropsEmptyRows(t *testing.T) {
 		t.Fatal("prompt followed by NUL not answered")
 	}
 }
+
+// A console that is still logged in: the user types "exit"; the login prompt
+// that follows is not answered.
+func TestBasicLoginStandsDownWhenTyping(t *testing.T) {
+	l := newBasicLogin(true, "")
+	if l.typed([]byte("\r")) || l.typed([]byte("\x1b[75;247R")) {
+		t.Fatal("Enter or a terminal answer counted as typing")
+	}
+	if !l.typed([]byte("e")) || !l.done() {
+		t.Fatal("typing did not stop the basic login")
+	}
+	if out := l.feed([]byte("exit\r\n\r\nlogin: ")); len(out) != 0 {
+		t.Fatal("login answered after the user typed")
+	}
+	// once logging in has started, typing does not stop it
+	l = newBasicLogin(true, "")
+	l.feed([]byte("login: "))
+	if l.typed([]byte("x")) {
+		t.Fatal("stopped after the username was sent")
+	}
+}

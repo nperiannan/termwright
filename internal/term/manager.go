@@ -638,6 +638,9 @@ func (m *Manager) Write(id string, data []byte) error {
 	}
 	t.mu.Lock()
 	c, rec := t.conn, t.recorder
+	if t.logon != nil && t.logon.typed(data) {
+		t.logon = nil
+	}
 	t.mu.Unlock()
 	if c == nil {
 		return nil
