@@ -41,6 +41,7 @@ type telnetConn struct {
 	raw      []byte
 	telnet   bool
 	addrInfo string
+	us, him  [256]bool // options we said WILL to / DO to (asked or agreed)
 }
 
 // dialFunc opens a TCP connection (directly, via proxy or via jump host).
@@ -59,7 +60,23 @@ func dialTelnet(ctx context.Context, s session.Session, cols, rows int, dial dia
 	if err != nil {
 		return nil, err
 	}
-	return &telnetConn{c: c, term: termType(s), cols: cols, rows: rows, raw: make([]byte, 32*1024), telnet: true, addrInfo: "Telnet " + addr + via}, nil
+	t := &telnetConn{c: c, term: termType(s), cols: cols, rows: rows, raw: make([]byte, 32*1024), telnet: true, addrInfo: "Telnet " + addr + via}
+	t.start()
+	return t, nil
+}
+
+// start opens the option negotiation the way PuTTY and SecureCRT do, instead
+// of only answering the server: some servers (terminal and console servers
+// among them) stay in line-at-a-time mode unless the client asks for
+// character mode. They then hold what is typed - and the terminal's answers
+// to the device's questions, such as its cursor position - until Enter, and
+// the device prints those answers as text (^[[73;247R).
+func (t *telnetConn) start() {
+	t.mu.Lock()
+	t.us[optNAWS], t.us[optTType], t.us[optSGA] = true, true, true
+	t.him[optSGA], t.him[optEcho] = true, true
+	t.mu.Unlock()
+	t.send(tIAC, tWILL, optNAWS, tIAC, tWILL, optTType, tIAC, tDO, optEcho, tIAC, tWILL, optSGA, tIAC, tDO, optSGA)
 }
 
 func dialRaw(ctx context.Context, s session.Session, dial dialFunc) (Conn, error) {
@@ -213,33 +230,62 @@ func (t *telnetConn) process(b byte) (byte, bool) {
 }
 
 func (t *telnetConn) negotiate(cmd, opt byte) {
+	// Each side answers a request only when it changes the option's state,
+	// so the requests sent by start() are not answered again (no loops).
+	t.mu.Lock()
+	us, him := t.us[opt], t.him[opt]
+	t.mu.Unlock()
+	set := func(we bool, v bool) {
+		t.mu.Lock()
+		if we {
+			t.us[opt] = v
+		} else {
+			t.him[opt] = v
+		}
+		t.mu.Unlock()
+	}
 	switch cmd {
 	case tDO:
 		switch opt {
-		case optTType, optBinary:
-			t.send(tIAC, tWILL, opt)
-		case optNAWS:
-			t.send(tIAC, tWILL, opt)
-			t.mu.Lock()
-			t.naws = true
-			t.mu.Unlock()
-			t.sendNAWS()
-		case optSGA:
-			t.send(tIAC, tWILL, opt)
+		case optTType, optBinary, optSGA, optNAWS:
+			if !us {
+				set(true, true)
+				t.send(tIAC, tWILL, opt)
+			}
+			if opt == optNAWS {
+				t.mu.Lock()
+				t.naws = true
+				t.mu.Unlock()
+				t.sendNAWS()
+			}
 		default:
 			t.send(tIAC, tWONT, opt)
 		}
 	case tWILL:
 		switch opt {
 		case optEcho, optSGA, optBinary:
-			t.send(tIAC, tDO, opt)
+			if !him {
+				set(false, true)
+				t.send(tIAC, tDO, opt)
+			}
 		default:
 			t.send(tIAC, tDONT, opt)
 		}
 	case tDONT:
-		t.send(tIAC, tWONT, opt)
+		if opt == optNAWS {
+			t.mu.Lock()
+			t.naws = false
+			t.mu.Unlock()
+		}
+		if us {
+			set(true, false)
+			t.send(tIAC, tWONT, opt)
+		}
 	case tWONT:
-		t.send(tIAC, tDONT, opt)
+		if him {
+			set(false, false)
+			t.send(tIAC, tDONT, opt)
+		}
 	}
 }
 

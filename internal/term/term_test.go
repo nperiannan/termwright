@@ -285,3 +285,38 @@ func TestUnescape(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// The client opens the negotiation (character mode) and does not answer its own
+// requests again when the server agrees, so the two sides cannot loop.
+func TestTelnetActiveNegotiation(t *testing.T) {
+	a, b := net.Pipe()
+	tc := &telnetConn{c: a, term: "xterm", cols: 80, rows: 24, raw: make([]byte, 1024), telnet: true}
+	got := make(chan []byte, 8)
+	go func() {
+		buf := make([]byte, 64)
+		for {
+			n, err := b.Read(buf)
+			if err != nil {
+				close(got)
+				return
+			}
+			got <- append([]byte(nil), buf[:n]...)
+		}
+	}()
+	go tc.start()
+	first := <-got
+	want := []byte{tIAC, tWILL, optNAWS, tIAC, tWILL, optTType, tIAC, tDO, optEcho, tIAC, tWILL, optSGA, tIAC, tDO, optSGA}
+	if string(first) != string(want) {
+		t.Fatalf("start sent %v", first)
+	}
+	// the server agrees to SGA both ways and to echo: nothing is answered
+	tc.negotiate(tDO, optSGA)
+	tc.negotiate(tWILL, optSGA)
+	tc.negotiate(tWILL, optEcho)
+	// it refuses an option the client did not ask for, and asks for one it does not support
+	tc.negotiate(tDO, 39)
+	if r := <-got; string(r) != string([]byte{tIAC, tWONT, 39}) {
+		t.Fatalf("expected only WONT 39, got %v", r)
+	}
+	a.Close()
+}

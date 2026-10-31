@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Telnet opens in character mode.** Termwright now starts the Telnet option negotiation itself (echo, suppress go-ahead, window size, terminal type), as PuTTY and SecureCRT do. Terminal and console servers that waited for it stayed in line mode: they held what was typed until Enter, and a switch behind them printed the terminal's answers as text, such as `^[[73;247R` before the prompt. A console server port that is not Telnet but plain TCP should use the *Raw* protocol.
 * **Telnet and serial log in without a device type.** A session with a saved username and password, but no device type and no logon actions, answers the usual `Login:` / `Username:` and `Password:` prompts by itself (any case; a banner that only mentions "login:" is not answered). Before, it stopped at the prompt.
 * **No nightly for documentation changes.** Software Update no longer offers a nightly build whose only changes since your version are documentation (README, docs), and a push that only changes documentation builds no nightly.
 
