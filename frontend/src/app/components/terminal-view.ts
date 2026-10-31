@@ -10,6 +10,7 @@ import { SerializeAddon } from '@xterm/addon-serialize';
 import { Backend } from '../core/backend';
 import { Tabs, TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { tr } from '../core/i18n';
 import { terminalTheme } from '../core/themes';
 import { comboOf } from '../core/models';
 import { FIX_LABELS, FixAction, fixFor } from '../core/fixes';
@@ -214,6 +215,10 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
   private unsub: (() => void)[] = [];
   private fitTimer?: ReturnType<typeof setTimeout>;
+  /** Cursor position answers: stop sending them when the device prints one back as text. */
+  private noCpr = false;
+  private cprSent?: { text: string; at: number };
+  private cprSeen = '';
   private history = inject(History);
 
   // ---- send bar (serial tabs; any tab from the right-click menu) ----
@@ -298,6 +303,25 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   clearAll() { this.term?.clear(); this.clearHighlights(); this.term?.focus(); }
 
   /** Remembers the command on the cursor line (prompt removed) for history search. */
+  /** The device printed the cursor position answer as text ("^[[75;247R"): it reads the answer as typed
+   *  input. Stop answering in this tab and remember it for the session. */
+  private cprEcho(id: string, text: string) {
+    const c = this.cprSent;
+    if (!c) return;
+    if (Date.now() - c.at > 5000) { this.cprSent = undefined; this.cprSeen = ''; return; }
+    this.cprSeen = (this.cprSeen + text).slice(-256);
+    if (!this.cprSeen.includes(c.text)) return;
+    this.cprSent = undefined;
+    this.cprSeen = '';
+    this.noCpr = true;
+    const t = this.tabs.get(id);
+    if (t?.session?.path) {
+      t.session.noCursorReport = true;
+      void this.backend.setNoCursorReport(t.session.path, true).catch(() => {});
+    }
+    this.ui.toast(tr('The device printed the terminal\'s cursor position answer as text. Termwright no longer answers it for this session (Session Options → Terminal).'), 'info', 9000);
+  }
+
   private remember(term: Terminal, t: TabView) {
     const b = term.buffer.active;
     let row = b.baseY + b.cursorY;
@@ -535,11 +559,13 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     });
     term.parser.registerOscHandler(633, d => d.startsWith('P;Cwd=') ? setCwd(d.slice(6)) : false);
     const dec = new TextDecoder();
+    const dec2 = new TextDecoder();
     const quietDec = new TextDecoder();
     let atLineStart = true;
     let hexCol = 0;
     this.unsub.push(this.backend.on('term:data:' + id, (b64: string) => {
       let bytes = b64ToBytes(b64);
+      if (this.cprSent) this.cprEcho(id, dec2.decode(bytes, { stream: true }));
       const q = this.tabs.quiet.get(id);
       if (q) {
         q.held += quietDec.decode(bytes, { stream: true });
@@ -594,6 +620,11 @@ export class TerminalView implements AfterViewInit, OnDestroy {
         return;
       }
       if (d === '\r' && t?.state === 'connected' && term.buffer.active.type === 'normal') this.remember(term, t);
+      // the terminal's answer to "where is the cursor?" (ESC[6n): some devices read it as typed text
+      if (/^\x1b\[\d+;\d+R$/.test(d)) {
+        if (t?.session?.noCursorReport || this.noCpr) return;
+        this.cprSent = { text: '^[' + d.slice(1), at: Date.now() };
+      }
       void this.backend.sendInput(id, d);
     });
     term.onBinary(d => void this.backend.sendBinary(id, btoa(d)));

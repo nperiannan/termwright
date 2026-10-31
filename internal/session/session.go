@@ -56,6 +56,7 @@ const (
 	kLocalDir     = "Initial Local Directory V2"
 	kLogon        = "Termwright Logon Actions"
 	kTermType     = "Termwright Terminal Type"
+	kNoCPR        = "Termwright No Cursor Reports"
 	kColorScheme  = "Color Scheme"
 	kFirewall     = "Firewall Name"
 	kAutoReconn   = "Auto Reconnect"
@@ -176,6 +177,7 @@ type Session struct {
 
 	Emulation        string        `json:"emulation"`
 	TermType         string        `json:"termType"`
+	NoCursorReport   bool          `json:"noCursorReport"` // do not answer the device's cursor position requests (ESC[6n)
 	Description      []string      `json:"description"`
 	Rows             int           `json:"rows"`
 	Cols             int           `json:"cols"`
@@ -297,6 +299,7 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.AuthMethods = f.Str(kAuths, s.AuthMethods)
 	s.Emulation = f.Str(kEmulation, s.Emulation)
 	s.TermType = f.Str(kTermType, "")
+	s.NoCursorReport = f.Bool(kNoCPR, false)
 	if d := f.List(kDescription); d != nil {
 		s.Description = d
 	}
@@ -568,6 +571,7 @@ func (s Session) Apply(f *sessionfile.File) {
 	f.SetStr(kAuths, s.AuthMethods)
 	f.SetStr(kEmulation, s.Emulation)
 	setOptStr(f, kTermType, s.TermType)
+	setOptBool(f, kNoCPR, s.NoCursorReport)
 	f.SetList(kDescription, s.Description)
 	f.SetDWord(kRows, uint32(s.Rows))
 	f.SetDWord(kCols, uint32(s.Cols))

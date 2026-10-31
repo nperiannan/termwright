@@ -890,6 +890,10 @@ const ru: Record<string, string> = {
   'Install': 'Установить',
   'Set Up': 'Настроить',
   '{0} - supported.': '{0} - поддерживается.',
+  'Do not answer cursor position requests': 'Не отвечать на запросы позиции курсора',
+  'For devices that print': 'Для устройств, которые печатают',
+  'before their prompt: the device asked where the cursor is, and the answer reached it as typed text. Termwright turns this on by itself when it sees that happen.': 'перед приглашением: устройство спросило, где курсор, и ответ попал к нему как набранный текст. Termwright включает это сам, когда замечает такое.',
+  'The device printed the terminal\'s cursor position answer as text. Termwright no longer answers it for this session (Session Options → Terminal).': 'Устройство напечатало ответ терминала о позиции курсора как текст. Termwright больше не отвечает на этот запрос для этой сессии (Параметры сессии → Терминал).',
 };
 
 export default ru;

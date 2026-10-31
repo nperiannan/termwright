@@ -57,6 +57,7 @@ export class Backend {
   getSession(path: string) { return this.call<Session>('GetSession', path); }
   newSessionDefaults() { return this.call<Session>('NewSessionDefaults'); }
   saveSession(s: Session, oldPath: string) { return this.call<Session>('SaveSession', s, oldPath); }
+  setNoCursorReport(path: string, on: boolean) { return this.call<void>('SetNoCursorReport', path, on); }
   deleteSession(path: string) { return this.call<void>('DeleteSession', path); }
   refreshFacts(path: string, all: boolean) { return this.call<Record<string, string> | null>('RefreshFacts', path, all); }
   runFactCommand(path: string, deviceType: string, command: string) { return this.call<string>('RunFactCommand', path, deviceType, command); }

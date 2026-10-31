@@ -183,3 +183,18 @@ func (a *App) RememberMACs(macs map[string]string) (int, error) {
 	}
 	return n, nil
 }
+
+// SetNoCursorReport saves a session's "Do not answer cursor position requests"
+// (set by the terminal when the device printed the answer as text).
+func (a *App) SetNoCursorReport(path string, on bool) error {
+	s, err := a.store.Get(path)
+	if err != nil {
+		return err
+	}
+	if s.NoCursorReport == on {
+		return nil
+	}
+	s.NoCursorReport = on
+	_, err = a.SaveSession(s, path)
+	return err
+}
