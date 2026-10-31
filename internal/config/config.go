@@ -72,6 +72,7 @@ type Settings struct {
 	ThemeFollowsSystem   bool                         `json:"themeFollowsSystem"` // set once when the default became "system" (0.20.1)
 	HighlightOptIn       bool                         `json:"highlightOptIn"`     // set once when keyword highlighting became off by default (0.20.3)
 	Layout               string                       `json:"layout"`             // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
+	Style                string                       `json:"style"`              // modern layout: "" = standard, "glacier" = frosted glass
 	ModernLayout         bool                         `json:"modernLayout"`       // set once when the modern layout became the default (0.21.0)
 	HighlightStyle       string                       `json:"highlightStyle"`     // keyword highlighting: "" = colour the text, "background" = colour the background
 	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`        // session path → fact name → value ("_at" = when read)

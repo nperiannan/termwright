@@ -88,7 +88,7 @@ export interface Settings {
   sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; lineHeight?: number; theme: string; uiFont?: string; uiFontSize?: number;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
-  language?: string; layout?: string; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
+  language?: string; layout?: string; style?: string; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;

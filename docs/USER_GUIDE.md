@@ -1087,6 +1087,12 @@ In the modern layout Global Options is called **Settings** (⚙ in the title bar
 
 ### Interface language
 
+**Settings → General → Style** (modern layout): *Standard* is the look described so far; **Glacier** turns the window into frosted glass - the Session Manager, the title bar, menus and dialogs are translucent panels over a soft aurora, and the start page shows raised cards, three per row and up to five rows. It works with the light, dark and system themes; terminals keep their own colours. The title bar keeps its size, so on macOS its buttons stay level with the window buttons. Glass needs a little more graphics power; *Standard* is the lighter choice on old machines.
+
+| Glacier, dark | Glacier, light |
+|---|---|
+| ![Glacier style, dark](screenshots/glacier-dark.png) | ![Glacier style, light](screenshots/glacier-light.png) |
+
 **Settings → General → Language** switches the interface language; the change shows as soon as you press *Save*. English is the default. **Русский (Russian)** is a *preview* of an unfinished translation and is offered **only in nightly and development builds**, not in releases (it is being reviewed); it is partial: the menus, the Session Manager, Quick Connect, Settings, Session Options (Connection, Authentication and the page names) and Import Sessions are translated, and everything else stays in English until it is translated too. Terminal output, session and folder names, file names, and error messages from the program's engine are never translated.
 
 ![Termwright in Russian](screenshots/language-ru.png)

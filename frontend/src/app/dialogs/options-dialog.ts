@@ -87,6 +87,11 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <option value="system">Follow system</option><option value="dark">Dark</option><option value="light">Light</option>
                 </select>
                 }
+                @if (modern() && s.layout !== 'classic') {
+                  <label>Style</label>
+                  <div class="seg w2"><button type="button" [class.on]="!s.style" (click)="s.style = ''">Standard</button><button type="button" [class.on]="s.style === 'glacier'" (click)="s.style = 'glacier'">Glacier</button></div>
+                  <div class="hint">Glacier: frosted glass panels and raised cards, three per row - for the light and the dark theme.</div>
+                }
                 <label>Language</label>
                 <select name="lang" [ngModel]="s.language || ''" (ngModelChange)="s.language = $event">
                   @for (l of languages; track l.code) { <option [value]="l.code" translate="no">{{ l.name }}</option> }

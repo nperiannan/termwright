@@ -152,14 +152,16 @@ export class App implements OnInit {
     walk(this.ui.tree());
     return m;
   });
-  readonly homeFavs = computed(() => (this.settings()?.favorites ?? []).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n).slice(0, 8));
+  /** Cards on the start page: 8, or 15 (five rows of three) in the Glacier style. */
+  private readonly homeMax = computed(() => this.settings()?.style === 'glacier' ? 15 : 8);
+  readonly homeFavs = computed(() => (this.settings()?.favorites ?? []).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n).slice(0, this.homeMax()));
   readonly showAllRecent = signal(false);
   private readonly recentAll = computed(() => {
     const fav = new Set(this.settings()?.favorites ?? []);
     return (this.settings()?.recentSessions ?? []).filter(p => !fav.has(p)).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n);
   });
-  readonly homeRecent = computed(() => this.showAllRecent() ? this.recentAll() : this.recentAll().slice(0, 8));
-  readonly recentMore = computed(() => this.recentAll().length > 8 || this.showAllRecent());
+  readonly homeRecent = computed(() => this.showAllRecent() ? this.recentAll() : this.recentAll().slice(0, this.homeMax()));
+  readonly recentMore = computed(() => this.recentAll().length > this.homeMax() || this.showAllRecent());
   /** Session path → state of its open tab (connected wins). */
   readonly liveState = computed(() => {
     const m = new Map<string, string>();
@@ -295,6 +297,7 @@ export class App implements OnInit {
       const light = t === 'light' || (t === 'system' && this.systemLight());
       document.documentElement.classList.toggle('light', light);
       document.documentElement.classList.toggle('modern', this.settings()?.layout !== 'classic');
+      document.documentElement.classList.toggle('glacier', this.settings()?.layout !== 'classic' && this.settings()?.style === 'glacier');
       this.ui.lightUi.set(light);
       const root = document.documentElement.style;
       root.setProperty('--ui-font', uiFontStack(this.settings()?.uiFont));

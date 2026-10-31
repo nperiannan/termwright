@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Glacier style** (Settings → General → Style, next to *Standard*): frosted glass panels over a soft aurora for the Session Manager, title bar, start page, menus and dialogs, in the light and the dark theme. The start page shows raised cards, three per row and up to five rows (15), that lift on hover. The title bar keeps its height, so on macOS its icons stay level with the window buttons. *Standard* stays the default and is unchanged.
+
 ## 0.24.1 (2026-10-31)
 
 Fixes deleting sessions.
