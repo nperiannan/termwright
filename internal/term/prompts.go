@@ -95,6 +95,38 @@ type logonRunner struct {
 	idx     int
 	window  string
 	strip   logging.Stripper
+	basic   bool // Expect is a list of prompts ("a|b"), matched in any case, only as the last thing on screen
+}
+
+// Prompts the basic login answers: a session with a username but no device
+// type and no logon actions still logs in at the usual Telnet and console prompts.
+const (
+	basicUserPrompts = "login:|username:|user name:|user:"
+	basicPassPrompts = "password:"
+)
+
+// newBasicLogin answers a username prompt with the session's username and,
+// when withPassword, the password prompt that follows with its saved password.
+// credential is the account whose login is used ("" = the session's own).
+func newBasicLogin(withPassword bool, credential string) *logonRunner {
+	a := []session.LogonAction{{Expect: basicUserPrompts, Send: `\s`, TrailingCR: true, Credential: credential}}
+	if withPassword {
+		a = append(a, session.LogonAction{Expect: basicPassPrompts, Send: `\w`, Hide: true, TrailingCR: true, Credential: credential})
+	}
+	return &logonRunner{actions: a, basic: true}
+}
+
+// basicMatch finds one of the "|"-separated prompts, in any case, followed by
+// nothing but spaces: a banner that mentions "login:" is not a prompt.
+func basicMatch(window, prompts string) (int, int) {
+	low := strings.ToLower(window)
+	rest := strings.TrimRight(low, " \t")
+	for _, p := range strings.Split(prompts, "|") {
+		if strings.HasSuffix(rest, p) {
+			return len(rest) - len(p), len(p)
+		}
+	}
+	return -1, 0
 }
 
 func newLogonRunner(a []session.LogonAction) *logonRunner {
@@ -119,7 +151,22 @@ func (l *logonRunner) feed(p []byte) []session.LogonAction {
 	var out []session.LogonAction
 	for l.idx < len(l.actions) {
 		a := l.actions[l.idx]
-		if a.Expect != "" {
+		if l.basic {
+			if l.idx == 0 && len(l.actions) > 1 {
+				if i, n := basicMatch(l.window, basicPassPrompts); i >= 0 { // asks only for a password
+					l.window = l.window[i+n:]
+					l.idx = 1
+					out = append(out, l.actions[1])
+					l.idx++
+					continue
+				}
+			}
+			i, n := basicMatch(l.window, a.Expect)
+			if i < 0 {
+				break
+			}
+			l.window = l.window[i+n:]
+		} else if a.Expect != "" {
 			exp := Unescape(a.Expect)
 			i := strings.Index(l.window, exp)
 			if i < 0 {

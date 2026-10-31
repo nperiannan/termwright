@@ -401,6 +401,17 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 	}
 	if len(actions) > 0 && (s.AutomateLogon || s.DeviceType != "") {
 		t.logon = newLogonRunner(actions)
+	} else if len(actions) == 0 && s.AutomateLogon && s.DeviceType == "" && basicLoginProtocol(s) {
+		// no device type and no logon actions: answer the usual login and password prompts
+		// with the saved username and password, as a terminal user would type them
+		cred := ""
+		if name, _, _, ok := m.accountLogin(s); ok {
+			cred = name
+		}
+		if s.Username != "" || cred != "" {
+			_, havePass := m.loginPassword(s)
+			t.logon = newBasicLogin(havePass, cred)
+		}
 	}
 	t.alertBuf, t.logonPass = "", ""
 	t.triggers = nil
@@ -842,6 +853,11 @@ func (m *Manager) AccountOf(s session.Session) string {
 
 // accountLogin returns the account's username and password, when the
 // session logs in with one that exists.
+// basicLoginProtocol: the connections whose login is typed in the terminal (SSH logs in itself).
+func basicLoginProtocol(s session.Session) bool {
+	return s.ConsoleServer == "" && (s.Protocol == session.ProtoTelnet || s.Protocol == session.ProtoSerial)
+}
+
 func (m *Manager) accountLogin(s session.Session) (name, user, pw string, ok bool) {
 	name = m.AccountOf(s)
 	if name == "" || m.Credential == nil {

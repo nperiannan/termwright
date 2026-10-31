@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Telnet and serial log in without a device type.** A session with a saved username and password, but no device type and no logon actions, answers the usual `Login:` / `Username:` and `Password:` prompts by itself (any case; a banner that only mentions "login:" is not answered). Before, it stopped at the prompt.
 * **No nightly for documentation changes.** Software Update no longer offers a nightly build whose only changes since your version are documentation (README, docs), and a push that only changes documentation builds no nightly.
 
 ## 0.25.2 (2026-10-31)

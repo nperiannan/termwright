@@ -132,6 +132,7 @@ Devices log in differently: EXOS is ready at `#` after username and password, VO
 - Optional defaults: protocol, port, initial carriage return and a prompt pattern. Background runs (backups, checklists) also recognise the prompt the device shows after the after-login steps, e.g. `sw:1(config)#` after `config terminal`.
 - **Backup commands**: what prints the configuration for [Configuration Backups](#configuration-backups). Built-in: EXOS `show configuration`, VOSS and Cisco IOS `show running-config`; add your own for other device types (one command per line).
 - A session's own Logon Actions still run, after the device type's steps.
+- **No device type, no logon actions**: a Telnet or serial session with a username still logs in by itself - it answers a prompt ending in `login:`, `username:`, `user name:` or `user:` (any case) with the username, and the `password:` that follows with the saved password (or a password-only prompt). Turn off *Automate logon* on the Logon Actions page to type the login yourself.
 
 ![Session with a device type](screenshots/session-device.png)
 
