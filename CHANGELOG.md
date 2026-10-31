@@ -4,7 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-* **No more `^[[75;247R` before the prompt.** Some devices (EXOS on a console port, for example) ask the terminal where the cursor is and then read the answer as typed text. When a device prints that answer back, Termwright stops answering for the session and remembers it; it can also be set by hand in Session Options → Terminal → *Do not answer cursor position requests*.
+* **No more `^[[75;247R` before the prompt.** Some devices (EXOS on a console port, for example) ask the terminal where the cursor is and then read the answer as typed text. When a device prints that answer back, or rejects it as a command right after connecting ("% Invalid input detected"), Termwright stops answering for the session and remembers it; it can also be set by hand in Session Options → Terminal → *Do not answer cursor position requests*.
 * **Fixed: Telnet and serial sessions imported from SecureCRT did not log in by themselves** (they have *Automate logon* off). With no device type and no logon actions, a session with a saved username now always answers the login and password prompts; leave the username empty to type the login yourself. Empty rows in an imported logon action table no longer count as logon actions, a prompt followed by a NUL byte is recognised, and the saved password is looked up before the connection starts to show output (macOS can stop to ask for keychain access).
 
 ## 0.26.0 (2026-10-31)

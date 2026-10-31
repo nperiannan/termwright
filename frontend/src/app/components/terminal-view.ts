@@ -217,7 +217,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   private fitTimer?: ReturnType<typeof setTimeout>;
   /** Cursor position answers: stop sending them when the device prints one back as text. */
   private noCpr = false;
-  private cprSent?: { text: string; at: number };
+  private cprSent?: { text: string; at: number; typed: boolean };
   private cprSeen = '';
   private history = inject(History);
 
@@ -309,8 +309,10 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     const c = this.cprSent;
     if (!c) return;
     if (Date.now() - c.at > 5000) { this.cprSent = undefined; this.cprSeen = ''; return; }
-    this.cprSeen = (this.cprSeen + text).slice(-256);
-    if (!this.cprSeen.includes(c.text)) return;
+    this.cprSeen = (this.cprSeen + text).slice(-512);
+    // printed back as text, or - before anything was typed - rejected as a command ("% Invalid input detected")
+    const rejected = !c.typed && /invalid input|invalid command|unrecognized command|unknown command|syntax error/i.test(this.cprSeen);
+    if (!this.cprSeen.includes(c.text) && !rejected) return;
     this.cprSent = undefined;
     this.cprSeen = '';
     this.noCpr = true;
@@ -319,7 +321,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       t.session.noCursorReport = true;
       void this.backend.setNoCursorReport(t.session.path, true).catch(() => {});
     }
-    this.ui.toast(tr('The device printed the terminal\'s cursor position answer as text. Termwright no longer answers it for this session (Session Options → Terminal).'), 'info', 9000);
+    this.ui.toast(tr('The device read the terminal\'s cursor position answer as typed text. Termwright no longer answers it for this session (Session Options → Terminal).'), 'info', 9000);
   }
 
   private remember(term: Terminal, t: TabView) {
@@ -623,8 +625,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       // the terminal's answer to "where is the cursor?" (ESC[6n): some devices read it as typed text
       if (/^\x1b\[\d+;\d+R$/.test(d)) {
         if (t?.session?.noCursorReport || this.noCpr) return;
-        this.cprSent = { text: '^[' + d.slice(1), at: Date.now() };
-      }
+        this.cprSent = { text: '^[' + d.slice(1), at: Date.now(), typed: false };
+      } else if (this.cprSent) this.cprSent.typed = true;
       void this.backend.sendInput(id, d);
     });
     term.onBinary(d => void this.backend.sendBinary(id, btoa(d)));

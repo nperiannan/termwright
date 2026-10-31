@@ -600,7 +600,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 <select name="bksp" [(ngModel)]="s.backspace"><option value="">Delete (^?)</option><option value="bs">Backspace (^H)</option></select>
                 <label></label>
                 <div class="checks"><label><input type="checkbox" name="nocpr" [(ngModel)]="s.noCursorReport" /> Do not answer cursor position requests</label>
-                  <div class="hint">For devices that print <span class="mono">^[[24;80R</span> before their prompt: the device asked where the cursor is, and the answer reached it as typed text. Termwright turns this on by itself when it sees that happen.</div></div>
+                  <div class="hint">For devices that print <span class="mono">^[[24;80R</span> before their prompt, or "Invalid input" right after connecting: the device asked where the cursor is, and the answer reached it as typed text. Termwright turns this on by itself when it sees that happen.</div></div>
                 <label>Keyword highlighting</label>
                 <select name="kws" [(ngModel)]="s.keywordSet">
                   <option value="">(global default)</option><option value="None">None</option>
