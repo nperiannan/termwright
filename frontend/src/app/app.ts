@@ -330,6 +330,8 @@ export class App implements OnInit {
     }
     const info = await this.backend.getAppInfo();
     setPreviewLanguages(info.version || '');
+    // "0.24.1", or "0.24.1 nightly" for a build of main ("0.24.1~git1234567")
+    this.appVersion.set((info.version || '').replace(/~git([0-9a-f]+)$/, ' nightly').replace(/-dev$/, ' dev'));
     this.insetTitle.set(!!info.insetTitle);
     if (info.insetTitle) void this.alignWithWindowButtons();
     if (info.initError) this.ui.toast('Startup error: ' + info.initError, 'error', 20000);
@@ -339,6 +341,8 @@ export class App implements OnInit {
     await this.ui.refreshTree();
     await this.tabs.restoreTabs();
     void this.startupUpdateCheck();
+    // the download count asks GitHub (cached for six hours); not when update checks are turned off
+    if (this.ui.settings()?.updateChannel !== 'off') this.backend.downloadCount().then(n => this.downloads.set(n > 0 ? n : 0)).catch(() => {});
     this.backend.on('menu', (a: string) => void this.action(a));
     // the session files changed on disk (sync, git pull, another Termwright): the Session Manager follows by itself
     let treeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -355,6 +359,13 @@ export class App implements OnInit {
     });
   }
 
+  /** Start page footer: this build's version, a newer release (from the update check) and the download count. */
+  readonly appVersion = signal('');
+  readonly newerVersion = signal('');
+  readonly upToDate = signal(false);
+  readonly downloads = signal(0);
+  openRepo() { this.backend.openURL('https://github.com/nperiannan/termwright'); }
+
   /** Quiet check at start-up (at most once a day): only a notice when something newer exists. */
   private async startupUpdateCheck() {
     const s = this.ui.settings();
@@ -366,6 +377,8 @@ export class App implements OnInit {
     } catch { /* storage unavailable: check anyway */ }
     try {
       const st = await this.backend.checkForUpdate();
+      this.newerVersion.set(st.stable?.newer ? st.stable.latest : '');
+      this.upToDate.set(!st.stable?.newer && !!st.stable);
       if (st.stable?.newer) this.ui.toast(`Termwright ${st.stable.latest} is available - Help → Check for Updates…`, 'success', 15000);
       else if (s.updateChannel === 'nightly' && st.nightly?.newer) this.ui.toast('A new nightly build is available - Help → Check for Updates…', 'success', 15000);
     } catch { /* offline or no token: stay quiet at start-up */ }

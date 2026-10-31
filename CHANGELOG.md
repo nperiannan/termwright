@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Start page footer**: *Built for the people who keep networks running.* - with the version you run (and, after the update check, *up to date* or the newer release, which opens Software Update), how many times Termwright was downloaded from GitHub, the licence and a link to the project. The download count is not fetched when update checks are turned off.
 * **Environments of your own** (Settings → Environments): rename and recolour Production, Staging, Test / Lab and Development, or add more (for example *Pre-production*, *Customer A*), each with a short tag and one of ten environment colours. *Like production* makes an environment ask before pastes and show its tag on the tab, as production does. The environment colours are never folder colours: folders now have their own colour for the top level and five levels of subfolders (amber, violet, blue, teal, pink, lime). A folder in an environment - and everything in it, subfolders and sessions - takes the environment's colour and tag, unless a subfolder or session has its own. CSV import takes the id of a custom environment too (and `prod`, `stage`, `lab`, `dev`).
 * **Linux sessions get the Files panel**: choosing a Linux device type (Linux, Ubuntu, Debian, RHEL, Rocky, …) for an SSH session turns on *Files panel beside the terminal*; it stays a choice. Discover Devices and Edit Sessions do the same.
 * **Expand All / Collapse All Folders** in the Session Manager's ⋯ menu.

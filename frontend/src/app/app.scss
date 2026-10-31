@@ -148,7 +148,18 @@ app-command-window { flex: none; }
 
 /* ---- start page (modern layout) ---- */
 .home { position: absolute; inset: 0; overflow: auto; background: var(--bg); }
-.home-in { max-width: 900px; margin: 0 auto; padding: 64px 40px 40px; display: flex; flex-direction: column; }
+.home-in { max-width: 900px; margin: 0 auto; padding: 64px 40px 24px; display: flex; flex-direction: column; min-height: 100%; }
+.home-foot { margin-top: auto; padding: 26px 0 4px; border-top: 1px solid var(--line); text-align: center;
+  .hf-s { font-size: calc(15px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .01em; }
+  .hf-s2 { margin-top: 4px; color: var(--muted); }
+  .hf-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
+  .hf-chip { height: auto; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface);
+    color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); line-height: 1.5; cursor: default;
+    b { color: var(--text); font-weight: 600; } }
+  button.hf-chip { cursor: pointer; &:hover { color: var(--text); border-color: var(--border); } }
+  .hf-chip.link { color: var(--accent); }
+  .hf-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint);
+    &.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); } &.new { background: var(--accent); box-shadow: 0 0 6px var(--accent); } } }
 .home-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 22px;
   .logo { display: block; user-select: none; -webkit-user-drag: none; }
   h1 { margin: 0; font-weight: 650; letter-spacing: .02em; font-size: calc(26px * var(--ui-scale, 1)); } }

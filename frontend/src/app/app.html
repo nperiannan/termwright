@@ -206,6 +206,19 @@
                 <div><b>No sessions yet</b><span>Sessions you connect to show up here. Star a session in the Session Manager to keep it at the top.</span></div>
                 <button (click)="action('quick-connect')"><app-icon name="quick" [size]="14" />Connect</button></div>
             }
+            <footer class="home-foot">
+              <div class="hf-s">Built for the people who keep networks running.</div>
+              <div class="hf-s2">The open-source terminal and session manager for network and infrastructure teams.</div>
+              <div class="hf-meta">
+                @if (appVersion(); as v) {
+                  <button type="button" class="hf-chip" (click)="action('check-updates')" [title]="newerVersion() ? 'Open Software Update' : 'Check for updates'">
+                    <span class="hf-dot" [class.new]="!!newerVersion()" [class.ok]="upToDate()"></span>Version <b>{{ v }}</b>{{ newerVersion() ? ' · ' + newerVersion() + ' available' : upToDate() ? ' · up to date' : '' }}</button>
+                }
+                @if (downloads() > 0) { <span class="hf-chip" title="Downloads of all releases, as GitHub counts them">⇣ <b>{{ downloads().toLocaleString() }}</b> downloads</span> }
+                <span class="hf-chip">Apache-2.0 · open source</span>
+                <button type="button" class="hf-chip link" (click)="openRepo()">★ GitHub</button>
+              </div>
+            </footer>
           </div>
         </div>
         } @else {
