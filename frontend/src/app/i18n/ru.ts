@@ -894,6 +894,8 @@ const ru: Record<string, string> = {
   'For devices that print': 'Для устройств, которые печатают',
   'before their prompt, or "Invalid input" right after connecting: the device asked where the cursor is, and the answer reached it as typed text. Termwright turns this on by itself when it sees that happen.': 'перед приглашением или «Invalid input» сразу после подключения: устройство спросило, где курсор, и ответ попал к нему как набранный текст. Termwright включает это сам, когда замечает такое.',
   'The device read the terminal\'s cursor position answer as typed text. Termwright no longer answers it for this session (Session Options → Terminal).': 'Устройство приняло ответ терминала о позиции курсора за набранный текст. Termwright больше не отвечает на этот запрос для этой сессии (Параметры сессии → Терминал).',
+  'no password - Enter is sent at the password prompt': 'без пароля - на запрос пароля отправляется Enter',
+  'The device has an empty password (e.g. EXOS admin): nothing is asked, Enter is sent': 'У устройства пустой пароль (например, admin в EXOS): ничего не спрашивается, отправляется Enter',
 };
 
 export default ru;

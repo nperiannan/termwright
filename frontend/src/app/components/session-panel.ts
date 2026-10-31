@@ -110,14 +110,19 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
         </div>
         @if (hasLogin()) {
           <div class="f"><span>Password</span>
-            @if (pwOpen()) {
-              <input name="pw" type="password" [(ngModel)]="pw" placeholder="saved in the system keychain" autocomplete="new-password" />
-            } @else {
-              <button type="button" class="pwbox" (click)="pwOpen.set(true)" title="Change the saved password">
-                <span class="dots">{{ pwState() === 'set' ? '••••••••••' : 'asked when connecting' }}</span>
-                @if (pwState() === 'set') { <span class="kc"><app-icon name="lock" [size]="12" /> In keychain</span> }
-              </button>
-            }
+            <div class="pwrow">
+              @if (noPw) {
+                <span class="pwbox off">no password - Enter is sent at the password prompt</span>
+              } @else if (pwOpen()) {
+                <input name="pw" type="password" [(ngModel)]="pw" placeholder="saved in the system keychain" autocomplete="new-password" />
+              } @else {
+                <button type="button" class="pwbox" (click)="pwOpen.set(true)" title="Change the saved password">
+                  <span class="dots">{{ pwState() === 'set' ? '••••••••••' : 'asked when connecting' }}</span>
+                  @if (pwState() === 'set') { <span class="kc"><app-icon name="lock" [size]="12" /> In keychain</span> }
+                </button>
+              }
+              <label class="nopw" title="The device has an empty password (e.g. EXOS admin): nothing is asked, Enter is sent"><input type="checkbox" name="nopw" [(ngModel)]="noPw" (ngModelChange)="pw = ''; pwOpen.set(true)" /> No password</label>
+            </div>
           </div>
         }
 
@@ -187,6 +192,10 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
       .fr { display: flex; gap: 10px; font-size: calc(12.5px * var(--ui-scale, 1)); span { width: 64px; flex: none; color: var(--muted); } b { font-weight: 500; overflow-wrap: anywhere; } }
       .fr.none { color: var(--muted); }
       .mono { font-family: var(--mono); } }
+    .pwrow { display: flex; gap: 10px; align-items: center; }
+    .pwrow > input, .pwrow > .pwbox { flex: 1; min-width: 0; }
+    .pwbox.off { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); cursor: default; }
+    .nopw { display: flex; gap: 5px; align-items: center; white-space: nowrap; font-size: calc(12.5px * var(--ui-scale, 1)); color: var(--muted); }
     .pwbox { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r);
       background: var(--input-bg); text-align: left; .dots { flex: 1; color: var(--muted); letter-spacing: .05em; }
       .kc { display: inline-flex; align-items: center; gap: 4px; color: var(--ok); font-size: calc(11.5px * var(--ui-scale, 1)); } }
@@ -234,6 +243,8 @@ export class SessionPanel {
   readonly error = signal('');
   readonly pwOpen = signal(false);
   readonly pwState = signal('');
+  /** The session's password is empty (saved as such): sent as an empty line, never asked. */
+  noPw = false;
   s: Session | null = null;
   pw = '';
 
@@ -242,13 +253,15 @@ export class SessionPanel {
       const e = this.edit();
       this.s = structuredClone(e.session);
       this.pw = '';
+      this.noPw = false;
       this.error.set('');
       this.pwState.set('');
       this.pwOpen.set(!e.oldPath);
       if (e.oldPath) {
         this.backend.sessionPasswordState(e.oldPath).then(st => {
           this.pwState.set(st);
-          this.pwOpen.set(st !== 'set');
+          this.noPw = st === 'empty';
+          this.pwOpen.set(st !== 'set' && st !== 'empty');
         }).catch(() => this.pwOpen.set(true));
       }
     });
@@ -361,7 +374,7 @@ export class SessionPanel {
     try {
       const e = this.edit();
       const saved = await storeSession(this.ui, this.backend, this.tabs, s, e.oldPath, e.tabId,
-        { pw: this.pw, noPw: this.pw === '' && this.pwState() === 'empty', wasEmpty: this.pwState() === 'empty' });
+        { pw: this.noPw ? '' : this.pw, noPw: this.noPw, wasEmpty: this.pwState() === 'empty' });
       this.close();
       if (connect) await this.tabs.openSession(saved.path);
       else this.ui.toast(`Saved ${saved.name}`, 'success');
