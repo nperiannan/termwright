@@ -200,11 +200,20 @@ func nightlyNewer(ctx context.Context, repo, token, current, sha, version string
 		if resp.StatusCode == http.StatusOK {
 			var c struct {
 				Status string `json:"status"`
+				Files  []struct {
+					Name string `json:"filename"`
+				} `json:"files"`
 			}
 			if json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&c) == nil {
 				switch c.Status {
 				case "ahead":
-					return true
+					// a nightly whose only changes are documentation has nothing new to install
+					for _, f := range c.Files {
+						if !docOnly(f.Name) {
+							return true
+						}
+					}
+					return len(c.Files) == 0
 				case "behind", "identical":
 					return false
 				}
@@ -212,6 +221,12 @@ func nightlyNewer(ctx context.Context, repo, token, current, sha, version string
 		}
 	}
 	return version != "" && Compare(version, current) > 0
+}
+
+// docOnly reports whether a changed file is documentation (README, CHANGELOG,
+// docs/…), which a build does not include.
+func docOnly(name string) bool {
+	return strings.HasPrefix(name, "docs/") || strings.HasSuffix(strings.ToLower(name), ".md")
 }
 
 var shaRe = regexp.MustCompile(`(?:~git|-git|\()([0-9a-f]{7,40})`)

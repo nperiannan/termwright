@@ -56,6 +56,10 @@ func TestCheckAndDownload(t *testing.T) {
 			fmt.Fprint(w, `{"tag_name":"nightly","name":"Termwright nightly (abcdef1)","published_at":"2026-10-26T03:00:00Z","assets":[{"name":"a.dmg","updated_at":"2026-10-31T12:10:00Z"},{"name":"b.deb","updated_at":"2026-10-31T12:05:00Z"}]}`)
 		case "/repos/o/r/compare/1234567...abcdef1":
 			fmt.Fprint(w, `{"status":"ahead"}`)
+		case "/repos/o/r/compare/2222222...abcdef1":
+			fmt.Fprint(w, `{"status":"ahead","files":[{"filename":"README.md"},{"filename":"docs/FEATURES.md"},{"filename":"docs/screenshots/a.png"}]}`)
+		case "/repos/o/r/compare/3333333...abcdef1":
+			fmt.Fprint(w, `{"status":"ahead","files":[{"filename":"CHANGELOG.md"},{"filename":"app.go"}]}`)
 		case "/repos/o/r/compare/7654321...abcdef1":
 			fmt.Fprint(w, `{"status":"behind"}`)
 		case "/repos/o/r/releases/assets/1":
@@ -86,6 +90,12 @@ func TestCheckAndDownload(t *testing.T) {
 	}
 	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.6.0~git1234567"); !n.Newer {
 		t.Fatal("different nightly not reported")
+	}
+	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.6.0~git2222222"); n.Newer {
+		t.Fatal("nightly with documentation changes only reported newer")
+	}
+	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.6.0~git3333333"); !n.Newer {
+		t.Fatal("nightly with code changes not reported")
 	}
 	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.6.0~git7654321"); n.Newer {
 		t.Fatal("older nightly reported newer")
