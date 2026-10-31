@@ -23,7 +23,7 @@ export type Dict = Record<string, string>;
 /** preview = not finished: offered and applied only in nightly and development builds, not in a release. */
 export const LANGUAGES: { code: string; name: string; preview?: boolean }[] = [
   { code: '', name: 'English' },
-  { code: 'ru', name: 'Русский (частично)', preview: true },
+  { code: 'ru', name: 'Русский (частично)' },
 ];
 
 /** True in nightly ("0.24.0~git1234567") and development builds, where unfinished languages are offered. */
@@ -107,7 +107,8 @@ class I18n {
 
   private fill(to: string, g: Record<string, string>): string {
     to = to.replace(/\{(\d)\|([^}]*)\}/g, (_, i: string, forms: string) => this.pick(Number(g['g' + i]), forms.split('|')));
-    return to.replace(/\{(\d)\}/g, (_, i: string) => g['g' + i] ?? '');
+    // a filled-in part is translated too when it is interface text ("last run {0}" with "8 hours ago")
+    return to.replace(/\{(\d)\}/g, (_, i: string) => { const v = g['g' + i] ?? ''; return this.lookup(v) ?? v; });
   }
 
   private pick(n: number, forms: string[]): string {

@@ -50,7 +50,7 @@ const store = {
       <div class="crumb mono" title="Click to type a path" (click)="editing.set(true)">
         @for (c of crumbs(); track $index) {
           @if (!$first && crumbs()[$index - 1].label !== '/') { <span class="cs">/</span> }
-          <button type="button" class="cb" [class.last]="$last" [title]="c.path" (click)="$event.stopPropagation(); go(c.path)">{{ c.label }}</button>
+          <button type="button" class="cb" translate="no" [class.last]="$last" [title]="c.path" (click)="$event.stopPropagation(); go(c.path)">{{ c.label }}</button>
         }
       </div>
     }
@@ -74,7 +74,7 @@ const store = {
         <div class="row" [attr.data-n]="e.name" [class.sel]="selected().has(e.name)" (click)="select(e, $event)" (dblclick)="open(e)" (contextmenu)="menu($event, e)"
           [title]="e.name + (e.isDir ? '' : ' - ' + size(e.size)) + ' - ' + e.mode">
           @if (e.isDir) { @if (glass()) { <app-folder-icon [size]="18" [style.opacity]="e.name.startsWith('.') ? .65 : 1" /> } @else { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }
-          <span class="n">{{ e.name }}</span>
+          <span class="n" translate="no">{{ e.name }}</span>
           <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
         </div>
       }

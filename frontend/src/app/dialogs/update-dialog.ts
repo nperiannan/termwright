@@ -234,7 +234,20 @@ export class UpdateDialog implements OnInit, OnDestroy {
     this.done.set(0);
     this.total.set(0);
     try {
-      this.saved.set(await this.backend.downloadUpdate(i.assetUrl, i.assetName));
+      try {
+        this.saved.set(await this.backend.downloadUpdate(i.assetUrl, i.assetName));
+      } catch (e) {
+        // the nightly is rebuilt in place: a push while this window was open replaces its files
+        // (new download links), so look again and fetch the build that is there now
+        if (!/404/.test(errText(e))) throw e;
+        const wasStable = i === this.st()?.stable;
+        const st = await this.backend.checkForUpdate();
+        this.st.set(st);
+        const now = wasStable ? st.stable : st.nightly;
+        if (!now?.assetUrl || now.assetUrl === i.assetUrl) throw e;
+        i = now;
+        this.saved.set(await this.backend.downloadUpdate(i.assetUrl, i.assetName));
+      }
       this.savedName.set(i.assetName);
     } catch (e) { this.err.set(errText(e)); }
     this.busy.set(false);

@@ -48,7 +48,7 @@ import { parseConnectLine } from '../core/connect-string';
         @if (protocol !== 'Raw' && protocol !== 'Local Shell' && accounts().length) {
           <div class="f"><span>Account</span>
             <select name="acct2" [(ngModel)]="account">
-              <option value="">{{ device && inherit ? 'The device type\'s login' : 'Own username and password' }}</option>
+              <option value="">{{ loginLabel(true) }}</option>
               @for (a of accounts(); track a.name) { <option [value]="a.name">{{ a.name }} · {{ a.username || '(no username)' }}{{ a.auth === 'key' ? ' · key' : '' }}</option> }
             </select></div>
         }
@@ -115,7 +115,7 @@ import { parseConnectLine } from '../core/connect-string';
           @if (protocol !== 'Raw' && protocol !== 'Local Shell' && accounts().length) {
             <label>Account</label>
             <select name="acct" [(ngModel)]="account">
-              <option value="">(none - {{ device && inherit ? 'the device type\'s login' : 'own username and password' }})</option>
+              <option value="">(none - {{ loginLabel(false) }})</option>
               @for (a of accounts(); track a.name) { <option [value]="a.name">{{ a.name }} · {{ a.username || '(no username)' }}</option> }
             </select>
           }
@@ -187,6 +187,11 @@ export class QuickConnect {
 
   device = '';
   inherit = true;
+  /** The login used without an account (the template cannot hold the apostrophe of "type's"). */
+  loginLabel(cap: boolean) {
+    const t = this.device && this.inherit ? "the device type's login" : 'own username and password';
+    return cap ? t[0].toUpperCase() + t.slice(1) : t;
+  }
   /** An account (Passwords & Accounts) to log in with; '' = the device type's login or the typed username. */
   account = '';
   readonly accounts = () => this.ui.settings()?.credentials ?? [];

@@ -67,7 +67,7 @@ interface Pane {
                 <div class="crumb" title="Click to type a path" (click)="editing.set(p.side)">
                   @for (c of crumbs(p); track $index) {
                     @if (!$first && crumbs(p)[$index - 1].label !== '/') { <span class="cs">/</span> }
-                    <button type="button" class="cb" [class.last]="$last" [title]="c.path" (click)="$event.stopPropagation(); go(p, c.path)">{{ c.label }}</button>
+                    <button type="button" class="cb" translate="no" [class.last]="$last" [title]="c.path" (click)="$event.stopPropagation(); go(p, c.path)">{{ c.label }}</button>
                   }
                 </div>
               } @else {
@@ -104,7 +104,7 @@ interface Pane {
           <div class="bmbar">
             @for (b of bookmarkList(p); track b.name + b.path) {
               <button type="button" class="bmc" [class.on]="b.path === p.dir" [title]="b.path + ' - right-click to remove'"
-                (click)="go(p, b.path)" (contextmenu)="bookmarkChipMenu($event, p, b)"><app-icon name="star" [size]="12" />{{ b.name }}</button>
+                (click)="go(p, b.path)" (contextmenu)="bookmarkChipMenu($event, p, b)"><app-icon name="star" [size]="12" /><span translate="no">{{ b.name }}</span></button>
             }
             @if (!isBookmarked(p)) { <button type="button" class="bmc add" title="Bookmark this folder" (click)="addBookmark(p)">+ Bookmark</button> }
           </div>
@@ -118,11 +118,11 @@ interface Pane {
               <div class="row" [attr.data-n]="e.name" [class.sel]="p.selected.has(e.name)" (click)="select(p, e, $event)" (dblclick)="open(p, e)"
                    (contextmenu)="menu($event, p, e)">
                 @if (modern()) {
-                  <span class="n"><span class="ck" (click)="$event.stopPropagation(); toggle(p, e)" (dblclick)="$event.stopPropagation()" title="Select (also Cmd/Ctrl-click, Shift-click for a range)"><input type="checkbox" tabindex="-1" [checked]="p.selected.has(e.name)" /></span>@if (e.isDir) { @if (glass()) { <app-folder-icon [size]="18" [style.opacity]="e.name.startsWith('.') ? .65 : 1" /> } @else { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }{{ e.name }}</span>
+                  <span class="n"><span class="ck" (click)="$event.stopPropagation(); toggle(p, e)" (dblclick)="$event.stopPropagation()" title="Select (also Cmd/Ctrl-click, Shift-click for a range)"><input type="checkbox" tabindex="-1" [checked]="p.selected.has(e.name)" /></span>@if (e.isDir) { @if (glass()) { <app-folder-icon [size]="18" [style.opacity]="e.name.startsWith('.') ? .65 : 1" /> } @else { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }<span translate="no">{{ e.name }}</span></span>
                   <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
                   <span class="d" [title]="(e.modTime | date: 'yyyy-MM-dd HH:mm') + '  ' + e.mode">{{ when(e.modTime) }}</span>
                 } @else {
-                <span class="n">@if (e.isDir) { <app-session-icon kind="folder" /> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" /> }{{ e.name }}</span>
+                <span class="n">@if (e.isDir) { <app-session-icon kind="folder" /> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" /> }<span translate="no">{{ e.name }}</span></span>
                 <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
                 <span class="d">{{ e.modTime | date: 'yyyy-MM-dd HH:mm' }}</span>
                 }
