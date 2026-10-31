@@ -123,7 +123,13 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Termwright", fontWeight = FontWeight.SemiBold) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TwLogo(26.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Termwright", fontWeight = FontWeight.SemiBold)
+                    }
+                },
                 actions = { TextButton(onClick = { picker.launch(arrayOf("*/*")) }) { Text("Import") } },
             )
         },
@@ -186,9 +192,26 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
     }
 }
 
+/** The Termwright logo: four rounded squares (as the app icon and the desktop app). */
+@Composable
+fun TwLogo(size: androidx.compose.ui.unit.Dp) {
+    val colors = listOf(Color(0xFF2563EB), Color(0xFF7C3AED), Color(0xFF0D9488), Color(0xFF9333EA))
+    androidx.compose.foundation.Canvas(Modifier.size(size)) {
+        val gap = this.size.width * 0.08f
+        val cell = (this.size.width - gap) / 2
+        val r = androidx.compose.ui.geometry.CornerRadius(cell * 0.24f)
+        colors.forEachIndexed { i, c ->
+            drawRoundRect(c, topLeft = androidx.compose.ui.geometry.Offset((i % 2) * (cell + gap), (i / 2) * (cell + gap)),
+                size = androidx.compose.ui.geometry.Size(cell, cell), cornerRadius = r)
+        }
+    }
+}
+
 @Composable
 private fun Empty(onImport: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        TwLogo(64.dp)
+        Spacer(Modifier.height(18.dp))
         Text("No sessions yet", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
         Text(
