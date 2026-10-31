@@ -2,6 +2,7 @@ package wol
 
 import (
 	"net"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -99,5 +100,60 @@ func TestPlanAdvertisesOnTheWholeNetwork(t *testing.T) {
 	// a wrong broadcast address is still refused
 	if _, err := Send([]byte{1}, "not-an-ip", 9); err == nil {
 		t.Fatal("bad address accepted")
+	}
+}
+
+func TestMACsAndKnock(t *testing.T) {
+	m, err := MACs("AA-BB-CC-DD-EE-FF, 11:22:33:44:55:66")
+	if err != nil || len(m) != 2 || m[0] != "aa:bb:cc:dd:ee:ff" {
+		t.Fatalf("%v %v", m, err)
+	}
+	if _, err := MACs("aa:bb, x"); err == nil {
+		t.Fatal("bad MAC accepted")
+	}
+	if p := KnockPorts("22, 5900;445 x 70000"); len(p) != 3 || p[2] != 445 {
+		t.Fatalf("%v", p)
+	}
+	if _, err := KnockCommand("mac.local; rm -rf /", []int{22}); err == nil {
+		t.Fatal("a host name was accepted")
+	}
+	// the knock reaches a listening port
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer ln.Close()
+	got := make(chan bool, 1)
+	go func() {
+		if c, err := ln.Accept(); err == nil {
+			c.Close()
+			got <- true
+		}
+	}()
+	cmd, err := KnockCommand("127.0.0.1", []int{ln.Addr().(*net.TCPAddr).Port})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("sh", "-c", cmd).CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	select {
+	case <-got:
+	case <-time.After(3 * time.Second):
+		t.Fatal("no connection")
+	}
+}
+
+// The perl fallback is valid perl (python3 is missing on some NAS systems).
+func TestRemoteCommandPerl(t *testing.T) {
+	if _, err := exec.LookPath("perl"); err != nil {
+		t.Skip("no perl")
+	}
+	p, _ := Packet("aa:bb:cc:dd:ee:ff")
+	c, _ := RemoteCommand(p, "aa:bb:cc:dd:ee:ff", "127.255.255.255", 9)
+	i := strings.Index(c, "perl -e '")
+	j := strings.Index(c[i+9:], "'")
+	if out, err := exec.Command("perl", "-c", "-e", c[i+9:i+9+j]).CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
 	}
 }

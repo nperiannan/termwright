@@ -905,6 +905,9 @@ const ru: Record<string, string> = {
   'Scheduled wake: magic packet sent to {0}': 'Включение по расписанию: magic packet отправлен на {0}',
   'Scheduled wake of {0}: {1}': 'Включение по расписанию {0}: {1}',
   'Logging in again: the login prompt came back by itself (the device may have restarted).': 'Повторный вход: запрос входа появился снова сам (возможно, устройство перезапустилось).',
+  'Wake a Mac through its sleep proxy': 'Включить Mac через его прокси сна',
+  'ports to connect to after the magic packet, at the IP address above. A Mac with Apple silicon often ignores the magic packet; with': 'порты для подключения после magic packet, по IP-адресу выше. Mac с Apple silicon часто не реагирует на magic packet; если включено',
+  'on and an Apple TV or HomePod on the network, a connection to a service it offers (SSH 22, Screen Sharing 5900, file sharing 445) wakes it. Laptops: on the power adapter, lid open or an external display.': 'и в сети есть Apple TV или HomePod, подключение к его службе (SSH 22, общий экран 5900, общий доступ к файлам 445) пробуждает его. Ноутбуки: от адаптера питания, крышка открыта или подключён внешний дисплей.',
 };
 
 export default ru;

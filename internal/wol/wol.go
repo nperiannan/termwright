@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 )
 
 // DefaultPort is the usual Wake-on-LAN UDP port (7 is also common).
@@ -229,5 +230,62 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 s.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1)
 for t in (%s):
   for i in range(3): s.sendto(bytes.fromhex("%x"),(t,%d))`, targets, pkt, port)
-	return fmt.Sprintf(`python3 -c '%s' 2>/dev/null || { %s; }`, py, wake), nil
+	// perl is on almost every Linux and NAS (TOS, DSM, QTS) that has no python3
+	pl := fmt.Sprintf(`use Socket;socket(S,PF_INET,SOCK_DGRAM,getprotobyname("udp")) or die;setsockopt(S,SOL_SOCKET,SO_BROADCAST,1);my $p=pack("H*","%x");for my $t (%s){for(1..3){send(S,$p,0,sockaddr_in(%d,inet_aton($t)))}}`, pkt, targets, port)
+	return fmt.Sprintf(`python3 -c '%s' 2>/dev/null || perl -e '%s' 2>/dev/null || { %s; }`, py, pl, wake), nil
+}
+
+// MACs splits a list of MAC addresses ("aa:bb:..., 11:22:...") - a laptop has
+// one for Wi-Fi and one for each wired adapter.
+func MACs(list string) ([]string, error) {
+	var out []string
+	for _, f := range strings.FieldsFunc(list, func(r rune) bool { return r == ',' || r == ';' || r == ' ' || r == '\t' || r == '\n' }) {
+		hw, err := ParseMAC(f)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, hw.String())
+	}
+	if len(out) == 0 {
+		return nil, errors.New("no MAC address")
+	}
+	return out, nil
+}
+
+// KnockPorts parses "22, 5900" into ports.
+func KnockPorts(list string) []int {
+	var out []int
+	for _, f := range strings.FieldsFunc(list, func(r rune) bool { return r == ',' || r == ';' || r == ' ' }) {
+		var n int
+		if _, err := fmt.Sscan(f, &n); err == nil && n > 0 && n < 65536 {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// KnockCommand is a shell command that opens a TCP connection to each port of
+// host from a Linux or NAS jump host, with a short timeout. A Bonjour Sleep
+// Proxy (Apple TV, HomePod, AirPort) answers for a sleeping Mac and wakes it
+// when a connection comes in for a service the Mac offers (SSH 22, Screen
+// Sharing 5900, file sharing 445) - a magic packet alone often does not wake an
+// Apple silicon Mac.
+func KnockCommand(host string, ports []int) (string, error) {
+	if net.ParseIP(host) == nil {
+		return "", errors.New("the device's IP address is needed to wake it through a sleep proxy")
+	}
+	ps := make([]string, len(ports))
+	for i, p := range ports {
+		ps[i] = strconv.Itoa(p)
+	}
+	list := strings.Join(ps, ",")
+	py := fmt.Sprintf(`import socket
+for p in (%s,):
+  try: socket.create_connection(("%s",p),2).close()
+  except Exception: pass`, list, host)
+	sh := ""
+	for _, p := range ps {
+		sh += fmt.Sprintf("{ timeout 2 bash -c 'echo > /dev/tcp/%s/%s' || nc -z -w 2 %s %s; } 2>/dev/null; ", host, p, host, p)
+	}
+	return fmt.Sprintf(`python3 -c '%s' 2>/dev/null || { %s true; }`, py, sh), nil
 }

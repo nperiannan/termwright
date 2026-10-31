@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/netip"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -18,11 +20,12 @@ import (
 
 // WakeResult tells where a Wake-on-LAN packet went and whether the device answered.
 type WakeResult struct {
-	Sent   []string `json:"sent"`   // broadcast addresses
-	Via    string   `json:"via"`    // "" = from this computer, else the server it was sent from
-	Target string   `json:"target"` // host:port that was watched
-	Awake  bool     `json:"awake"`
-	Waited int      `json:"waited"` // seconds until it answered (or gave up)
+	Sent    []string `json:"sent"`    // broadcast addresses
+	Knocked string   `json:"knocked"` // "host: ports" connected to for a sleep proxy, if any
+	Via     string   `json:"via"`     // "" = from this computer, else the server it was sent from
+	Target  string   `json:"target"`  // host:port that was watched
+	Awake   bool     `json:"awake"`
+	Waited  int      `json:"waited"` // seconds until it answered (or gave up)
 }
 
 // WakeSession sends a Wake-on-LAN packet to the session's MAC address - from
@@ -37,13 +40,13 @@ func (a *App) WakeSession(tabID string, s session.Session, wait bool) (WakeResul
 	if strings.TrimSpace(s.MAC) == "" {
 		return WakeResult{}, errors.New("no MAC address saved for " + s.Name + " - add it in Session Options → Connection")
 	}
-	pkt, err := wol.Packet(strings.TrimSpace(s.MAC))
+	macs, err := wol.MACs(s.MAC)
 	if err != nil {
 		return WakeResult{}, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
-	res, client, release, err := a.sendWake(ctx, tabID, s, pkt)
+	res, client, release, err := a.sendWake(ctx, tabID, s, macs)
 	if err != nil {
 		return WakeResult{}, err
 	}
@@ -163,7 +166,7 @@ func wakeFromHere(s session.Session) bool {
 
 // sendWake sends the packet from this computer or the route's SSH server and
 // returns that server's connection (nil = this computer) for the checks.
-func (a *App) sendWake(ctx context.Context, tabID string, s session.Session, pkt []byte) (WakeResult, *ssh.Client, func(), error) {
+func (a *App) sendWake(ctx context.Context, tabID string, s session.Session, macs []string) (WakeResult, *ssh.Client, func(), error) {
 	var res WakeResult
 	var client *ssh.Client
 	release := func() {}
@@ -175,36 +178,98 @@ func (a *App) sendWake(ctx context.Context, tabID string, s session.Session, pkt
 		}
 		client, release, res.Via = c, rel, via
 	}
-	var err error
 	if client != nil {
-		cmd, err := wol.RemoteCommand(pkt, s.MAC, bc, s.WOLPort)
-		if err != nil {
-			release()
-			return res, nil, func() {}, err
+		var cmds []string
+		for _, mac := range macs {
+			pkt, err := wol.Packet(mac)
+			if err != nil {
+				release()
+				return res, nil, func() {}, err
+			}
+			cmd, err := wol.RemoteCommand(pkt, mac, bc, s.WOLPort)
+			if err != nil {
+				release()
+				return res, nil, func() {}, err
+			}
+			cmds = append(cmds, "{ "+cmd+"; }")
 		}
-		ss, err := client.NewSession()
-		if err != nil {
-			release()
-			return res, nil, func() {}, err
-		}
-		out, err := ss.CombinedOutput(cmd)
-		_ = ss.Close()
+		out, err := runOn(client, strings.Join(cmds, " && "))
 		if err != nil {
 			release()
 			msg := strings.TrimSpace(string(out))
 			if msg == "" {
 				msg = err.Error()
 			}
-			return res, nil, func() {}, errors.New("sending from " + res.Via + " failed (it needs python3 or wakeonlan): " + msg)
+			return res, nil, func() {}, errors.New("sending from " + res.Via + " failed (it needs python3, perl or wakeonlan): " + msg)
 		}
 		if bc == "" {
 			bc = "255.255.255.255"
 		}
 		res.Sent = []string{bc}
-	} else if res.Sent, err = wol.Send(pkt, bc, s.WOLPort); err != nil {
-		return res, nil, release, err
+	} else {
+		for _, mac := range macs {
+			pkt, err := wol.Packet(mac)
+			if err != nil {
+				return res, nil, release, err
+			}
+			sent, err := wol.Send(pkt, bc, s.WOLPort)
+			if err != nil {
+				return res, nil, release, err
+			}
+			if res.Sent == nil {
+				res.Sent = sent
+			}
+		}
 	}
+	res.Knocked = a.knock(ctx, client, s)
 	return res, client, release, nil
+}
+
+func runOn(client *ssh.Client, cmd string) ([]byte, error) {
+	ss, err := client.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer ss.Close()
+	return ss.CombinedOutput(cmd)
+}
+
+// knock connects to the session's "knock" ports on its IP address, from the
+// jump host when the packet went from there. A Bonjour Sleep Proxy (Apple TV,
+// HomePod) that answers for a sleeping Mac wakes it for such a connection;
+// Apple silicon Macs often ignore the magic packet itself.
+func (a *App) knock(ctx context.Context, client *ssh.Client, s session.Session) string {
+	ports := wol.KnockPorts(s.WakeKnock)
+	host := strings.TrimSpace(s.Hostname)
+	if len(ports) == 0 || net.ParseIP(host) == nil {
+		return ""
+	}
+	if client != nil {
+		cmd, err := wol.KnockCommand(host, ports)
+		if err != nil {
+			return ""
+		}
+		done := make(chan struct{})
+		go func() { _, _ = runOn(client, cmd); close(done) }()
+		select {
+		case <-done:
+		case <-ctx.Done():
+		case <-time.After(time.Duration(2*len(ports)+3) * time.Second):
+		}
+	} else {
+		var wg sync.WaitGroup
+		for _, p := range ports {
+			wg.Add(1)
+			go func(p int) {
+				defer wg.Done()
+				if c, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(p)), 2*time.Second); err == nil {
+					_ = c.Close()
+				}
+			}(p)
+		}
+		wg.Wait()
+	}
+	return host + ": " + strings.Trim(strings.Join(strings.Fields(fmt.Sprint(ports)), ", "), "[]")
 }
 
 // wakeTarget is the address and port that show the device is up.

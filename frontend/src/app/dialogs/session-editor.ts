@@ -214,14 +214,17 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 }
                 @if (s.protocol === 'WOL') {
                   <label>MAC address</label>
-                  <div class="row"><input name="wmac" class="mono" [(ngModel)]="s.mac" placeholder="00:11:22:33:44:55" spellcheck="false" style="max-width: 200px" required />
-                    <span class="hint">of the wired port that is set to wake (BIOS / UEFI and the network card)</span></div>
+                  <div class="row"><input name="wmac" class="mono" [(ngModel)]="s.mac" placeholder="00:11:22:33:44:55" spellcheck="false" style="max-width: 320px" required />
+                    <span class="hint">of the wired port that is set to wake (BIOS / UEFI and the network card); several, separated by commas (a laptop's Wi-Fi and its dock), each get the packet</span></div>
                   <label>Network</label>
                   <div class="row"><input name="wnet" class="mono" [(ngModel)]="s.wolNetwork" placeholder="192.168.1.0/24" spellcheck="false" style="max-width: 200px" />
                     <span class="hint">the magic packet goes to its broadcast address - filled in from the IP address, change the mask if needed; without an IP address it is searched for the MAC address</span></div>
                   <label>IP address</label>
                   <div class="row"><input name="hostname" class="mono" [ngModel]="s.hostname" (ngModelChange)="wolIp($event)" placeholder="or the network above" spellcheck="false" style="max-width: 200px" />
                     <span class="hint">pinged to show up (green) or down (orange); fills in the network above</span></div>
+                  <label>Wake a Mac through its sleep proxy</label>
+                  <div class="row"><input name="wknock" class="mono" [(ngModel)]="s.wakeKnock" placeholder="22, 5900" spellcheck="false" style="max-width: 200px" />
+                    <span class="hint">ports to connect to after the magic packet, at the IP address above. A Mac with Apple silicon often ignores the magic packet; with <i>Wake for network access</i> on and an Apple TV or HomePod on the network, a connection to a service it offers (SSH 22, Screen Sharing 5900, file sharing 445) wakes it. Laptops: on the power adapter, lid open or an external display.</span></div>
                   <label>Wake on a schedule</label>
                   <div class="row"><select name="wsch" [ngModel]="s.wakeSchedule || ''" (ngModelChange)="s.wakeSchedule = $event; s.wakeAt = s.wakeAt || '08:00'" style="max-width: 200px">
                       <option value="">No schedule</option><option value="daily">Every day</option><option value="weekdays">Monday to Friday</option></select>

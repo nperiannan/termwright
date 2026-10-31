@@ -43,7 +43,7 @@ func (a *App) WakeDevice(s session.Session) (WakeResult, error) {
 	if strings.TrimSpace(s.MAC) == "" {
 		return WakeResult{}, errors.New("enter the device's MAC address")
 	}
-	pkt, err := wol.Packet(strings.TrimSpace(s.MAC))
+	macs, err := wol.MACs(s.MAC)
 	if err != nil {
 		return WakeResult{}, err
 	}
@@ -60,7 +60,7 @@ func (a *App) WakeDevice(s session.Session) (WakeResult, error) {
 		key = "mac:" + s.MAC
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	res, _, release, err := a.sendWake(ctx, "", s, pkt)
+	res, _, release, err := a.sendWake(ctx, "", s, macs)
 	if err != nil {
 		cancel()
 		return WakeResult{}, err
