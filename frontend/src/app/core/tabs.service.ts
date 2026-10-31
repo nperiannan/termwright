@@ -77,6 +77,18 @@ export class Tabs {
   private wol = inject(Wol);
 
   readonly tabs = signal<TabView[]>([]);
+
+  /** Moves a tab to another place in the tab strip (drag and drop); index = its new position. */
+  moveTab(id: string, index: number) {
+    this.tabs.update(l => {
+      const from = l.findIndex(t => t.id === id);
+      if (from < 0) return l;
+      const next = [...l];
+      const [t] = next.splice(from, 1);
+      next.splice(Math.max(0, Math.min(index > from ? index - 1 : index, next.length)), 0, t);
+      return next;
+    });
+  }
   readonly activeId = signal<string>('');
   readonly active = computed(() => this.tabs().find(t => t.id === this.activeId()) ?? null);
   /** Device type of the active terminal tab ('' = none). */

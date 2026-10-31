@@ -1,10 +1,12 @@
 @if (modern()) {
-  <header class="titlebar" [class.inset]="insetTitle()">
+  <header class="titlebar" [class.inset]="insetTitle()" (dblclick)="titleDblClick($event)">
     <button class="ab side-toggle" [class.on]="settings()?.showSessionManager" [title]="settings()?.showSessionManager ? 'Hide the Session Manager' : 'Show the Session Manager'"
             (click)="action('toggle-session-manager')"><app-icon name="sidebar" /></button>
     <nav class="ptabs" #ptabs (wheel)="tabsWheel($event)">
       @for (t of tabs.tabs(); track t.id) {
         <div class="ptab" [attr.data-tab]="t.id" [class.on]="t.id === tabs.activeId()" [title]="tabTip(t)"
+             draggable="true" (dragstart)="tabDragStart($event, t)" (dragover)="tabDragOver($event, t)" (drop)="tabDrop($event, t)" (dragend)="tabDragEnd()"
+             [class.drop-before]="dropAt()?.id === t.id && !dropAt()?.after" [class.drop-after]="dropAt()?.id === t.id && dropAt()?.after"
              (click)="tabs.activeId.set(t.id)" (auxclick)="onMiddleClick($event, t)" (contextmenu)="tabMenu($event, t)">
           <span class="dot" [class]="t.state" [style.box-shadow]="tabEnv(t) ? '0 0 0 2px ' + tabEnv(t)!.color : null"></span>
           <span class="label">{{ t.title }}</span>
@@ -107,6 +109,8 @@
     <nav class="tabbar">
       @for (t of tabs.tabs(); track t.id) {
         <div class="tab" [class.active]="t.id === tabs.activeId()" [title]="tabTip(t)"
+             draggable="true" (dragstart)="tabDragStart($event, t)" (dragover)="tabDragOver($event, t)" (drop)="tabDrop($event, t)" (dragend)="tabDragEnd()"
+             [class.drop-before]="dropAt()?.id === t.id && !dropAt()?.after" [class.drop-after]="dropAt()?.id === t.id && dropAt()?.after"
              [style.box-shadow]="tabEnv(t) ? 'inset 0 3px 0 ' + tabEnv(t)!.color : null"
              (click)="tabs.activeId.set(t.id)" (auxclick)="onMiddleClick($event, t)" (contextmenu)="tabMenu($event, t)">
           <span class="dot" [class]="t.state"></span>

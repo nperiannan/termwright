@@ -25,6 +25,11 @@
 
 ![Termwright main window](docs/screenshots/main.png)
 
+| | |
+|---|---|
+| ![Start page and Session Manager, Glacier dark](docs/screenshots/glacier-start-dark.png) <br/>*Start page and Session Manager (Glacier, dark): folders with their environments, and every kind of session - SSH, SFTP, Linux, EXOS, IoT, RDP, VNC, Wake-on-LAN, Telnet, serial, local shell* | ![Linux session with the Files panel, Glacier dark](docs/screenshots/glacier-files-dark.png) <br/>*A Linux session with the Files panel beside the terminal* |
+| ![Session properties, Glacier light](docs/screenshots/glacier-properties-light.png) <br/>*Session properties beside the start page (Glacier, light)* | |
+
 ## Overview
 
 Termwright is a free, open-source desktop application for people who spend their day on the command line of switches, routers, firewalls, servers and cloud hosts. It keeps hundreds of sessions organised, logs in the way each kind of device expects, moves files to and from them, and automates the repetitive parts of change windows: backups, checklists, collecting the same values from many devices.

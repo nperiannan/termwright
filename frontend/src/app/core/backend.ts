@@ -41,6 +41,7 @@ export class Backend {
   openURL(url: string) { window.runtime?.BrowserOpenURL(url); }
 
   getAppInfo() { return this.call<AppInfo>('GetAppInfo'); }
+  titleBarDoubleClick() { return this.call<void>('TitleBarDoubleClick'); }
   windowButtons() { return this.call<{ centerY: number; right: number } | null>('WindowButtons'); }
   downloadCount() { return this.call<number>('DownloadCount'); }
   quit() { return this.call<void>('Quit'); }

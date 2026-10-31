@@ -364,6 +364,39 @@ export class App implements OnInit {
   readonly newerVersion = signal('');
   readonly upToDate = signal(false);
   readonly downloads = signal(0);
+  // ---- tab strip: drag tabs to reorder them; double-click the empty title bar to zoom the window ----
+  private dragTab = '';
+  readonly dropAt = signal<{ id: string; after: boolean } | null>(null);
+  tabDragStart(ev: DragEvent, t: TabView) {
+    this.dragTab = t.id;
+    ev.dataTransfer?.setData('application/x-termwright-tab', t.id);
+    if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
+  }
+  tabDragOver(ev: DragEvent, t: TabView) {
+    if (!this.dragTab) return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const after = ev.clientX > r.left + r.width / 2;
+    const cur = this.dropAt();
+    if (cur?.id !== t.id || cur.after !== after) this.dropAt.set(t.id === this.dragTab ? null : { id: t.id, after });
+  }
+  tabDrop(ev: DragEvent, t: TabView) {
+    ev.preventDefault();
+    const at = this.dropAt(), id = this.dragTab;
+    this.tabDragEnd();
+    if (!id || !at || id === t.id) return;
+    const list = this.tabs.tabs();
+    const i = list.findIndex(x => x.id === at.id);
+    if (i >= 0) this.tabs.moveTab(id, at.after ? i + 1 : i);
+  }
+  tabDragEnd() { this.dragTab = ''; this.dropAt.set(null); }
+  /** A double-click on the title bar outside the tabs and buttons zooms (or restores) the window, as a system title bar does. */
+  titleDblClick(ev: MouseEvent) {
+    if ((ev.target as HTMLElement).closest('button, .ptab, input, .kbar, .theme-sw, .scriptpill')) return;
+    void this.backend.titleBarDoubleClick().catch(() => {});
+  }
+
   openRepo() { this.backend.openURL('https://github.com/nperiannan/termwright'); }
 
   /** Quiet check at start-up (at most once a day): only a notice when something newer exists. */
