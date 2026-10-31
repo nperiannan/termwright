@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.25.2 (2026-10-31)
+
+Glass folder and file icons in Glacier, and a clearer Software Update window.
+
 * **Glass folder and file icons**: in the Glacier style, folders in the Session Manager, the Files panel, SFTP and the folder picker have a front flap with a light edge and a soft shadow (lower when open), and files in the Files panel and SFTP are a page with a folded corner and a glossy type label. Settings → General → *Folder and file icons*: **As the style** (glass in Glacier, flat in Standard), **Glass** or **Flat** - so either look can be used with either style.
 * **Software Update window**: a ✕ in the header, and **Close** and **Download** at the bottom (Download is active only when a newer release is available). On the stable channel a nightly build is a one-line *Show* link instead of a card; shown, or on the nightly channel, it has **Back Up Now**, the risk checkbox and **Download Nightly** in view (they were folded away). Fixed in Glacier: the release cards had a large empty gap (the start page card style reached them, and other dialog cards). The nightly date is the build date, not the day the nightly release was first created.
 
