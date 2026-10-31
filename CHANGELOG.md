@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Fixed: Telnet and serial sessions imported from SecureCRT did not log in by themselves** (they have *Automate logon* off). With no device type and no logon actions, a session with a saved username now always answers the login and password prompts; leave the username empty to type the login yourself.
+
 ## 0.26.0 (2026-10-31)
 
 Russian in every build, and Telnet that logs in by itself and opens in character mode.

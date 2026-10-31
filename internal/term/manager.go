@@ -401,9 +401,11 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 	}
 	if len(actions) > 0 && (s.AutomateLogon || s.DeviceType != "") {
 		t.logon = newLogonRunner(actions)
-	} else if len(actions) == 0 && s.AutomateLogon && s.DeviceType == "" && basicLoginProtocol(s) {
+	} else if len(actions) == 0 && s.DeviceType == "" && basicLoginProtocol(s) {
 		// no device type and no logon actions: answer the usual login and password prompts
-		// with the saved username and password, as a terminal user would type them
+		// with the saved username and password, as a terminal user would type them.
+		// "Automate logon" is not asked: it is about the logon actions, and sessions imported
+		// from SecureCRT have it off ("Use Login Script"=0) although nothing was chosen.
 		cred := ""
 		if name, _, _, ok := m.accountLogin(s); ok {
 			cred = name
