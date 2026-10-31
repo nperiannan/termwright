@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.Termwright" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/bg</item>
+    </style>
+    <color name="bg">#FF0D0E11</color>
+    <color name="ic_bg">#FF15171B</color>
+</resources>

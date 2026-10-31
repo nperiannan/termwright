@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Termwright</string>
+    <string name="tile_label">Wake</string>
+</resources>

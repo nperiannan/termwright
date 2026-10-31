@@ -52,7 +52,7 @@
 - Compare two tabs, a tab and a file, or two SFTP files
 - Wake-on-LAN
 - Import from SecureCRT, PuTTY, MobaXterm, mRemoteNG and more
-- Windows, macOS and Linux
+- Windows, macOS and Linux, and an Android companion app for Wake-on-LAN ([preview](mobile/README.md))
 - Glacier and Standard styles, dark and light themes
 
 And much more - see the [feature list](docs/FEATURES.md).
