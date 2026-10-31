@@ -2,7 +2,9 @@ package wol
 
 import (
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -155,5 +157,38 @@ func TestRemoteCommandPerl(t *testing.T) {
 	j := strings.Index(c[i+9:], "'")
 	if out, err := exec.Command("perl", "-c", "-e", c[i+9:i+9+j]).CombinedOutput(); err != nil {
 		t.Fatalf("%v %s", err, out)
+	}
+}
+
+// The perl path of the remote command, run by a plain POSIX sh (dash, like
+// busybox ash on a NAS) with python3 failing: the packet arrives intact.
+func TestRemoteCommandPerlUnderPosixSh(t *testing.T) {
+	if _, err := exec.LookPath("dash"); err != nil {
+		t.Skip("no dash")
+	}
+	if _, err := exec.LookPath("perl"); err != nil {
+		t.Skip("no perl")
+	}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "python3"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Skip(err)
+	}
+	defer ln.Close()
+	p, _ := Packet("aa:bb:cc:dd:ee:ff")
+	c, _ := RemoteCommand(p, "aa:bb:cc:dd:ee:ff", "127.0.0.1", ln.LocalAddr().(*net.UDPAddr).Port)
+	cmd := exec.Command("dash", "-c", c)
+	cmd.Env = append(os.Environ(), "PATH="+bin+":/usr/bin:/bin")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	_ = ln.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 200)
+	n, _, err := ln.ReadFromUDP(buf)
+	if err != nil || string(buf[:n]) != string(p) {
+		t.Fatalf("got %d bytes, %v", n, err)
 	}
 }

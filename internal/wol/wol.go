@@ -231,7 +231,7 @@ s.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1)
 for t in (%s):
   for i in range(3): s.sendto(bytes.fromhex("%x"),(t,%d))`, targets, pkt, port)
 	// perl is on almost every Linux and NAS (TOS, DSM, QTS) that has no python3
-	pl := fmt.Sprintf(`use Socket;socket(S,PF_INET,SOCK_DGRAM,getprotobyname("udp")) or die;setsockopt(S,SOL_SOCKET,SO_BROADCAST,1);my $p=pack("H*","%x");for my $t (%s){for(1..3){send(S,$p,0,sockaddr_in(%d,inet_aton($t)))}}`, pkt, targets, port)
+	pl := fmt.Sprintf(`use Socket;socket(S,PF_INET,SOCK_DGRAM,0) or die;setsockopt(S,SOL_SOCKET,SO_BROADCAST,1);my $p=pack("H*","%x");for my $t (%s){for(1..3){send(S,$p,0,sockaddr_in(%d,inet_aton($t)))}}`, pkt, targets, port)
 	return fmt.Sprintf(`python3 -c '%s' 2>/dev/null || perl -e '%s' 2>/dev/null || { %s; }`, py, pl, wake), nil
 }
 
