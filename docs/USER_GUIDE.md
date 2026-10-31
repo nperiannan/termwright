@@ -1087,7 +1087,7 @@ In the modern layout Global Options is called **Settings** (⚙ in the title bar
 
 ### Interface language
 
-**Settings → General → Style** (modern layout): *Standard* is the look described so far; **Glacier** turns the window into frosted glass - the Session Manager, the title bar, menus and dialogs are translucent panels over a soft aurora, and the start page shows raised cards, three per row and up to five rows. It works with the light, dark and system themes; terminals keep their own colours. The title bar keeps its size, so on macOS its buttons stay level with the window buttons. Glass needs a little more graphics power; *Standard* is the lighter choice on old machines.
+**Settings → General → Style** (modern layout): *Standard* is the look described so far; **Glacier** turns the window into frosted glass - the Session Manager, the title bar, menus and dialogs are translucent panels (graphite glass in the dark theme, icy glass in the light one), and the start page shows raised cards, three per row and up to five rows. It works with the light, dark and system themes; terminals keep their own colours. The title bar keeps its size, so on macOS its buttons stay level with the window buttons. Glass needs a little more graphics power; *Standard* is the lighter choice on old machines.
 
 | Glacier, dark | Glacier, light |
 |---|---|
