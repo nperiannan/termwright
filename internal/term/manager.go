@@ -373,6 +373,7 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 		}
 		return
 	}
+	basic := m.basicLogin(s) // before the lock: a keychain read can wait for the system to ask
 	t.mu.Lock()
 	if t.gen != gen || ctx.Err() != nil {
 		t.mu.Unlock()
@@ -384,7 +385,7 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 	t.connected = time.Now()
 	t.retries = 0
 	t.logon = nil
-	actions := s.LogonActions
+	actions := realActions(s.LogonActions)
 	initialCR := s.InitialCR
 	if dt, ok := m.deviceOf(s); ok {
 		proto := s.Protocol
@@ -401,19 +402,8 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 	}
 	if len(actions) > 0 && (s.AutomateLogon || s.DeviceType != "") {
 		t.logon = newLogonRunner(actions)
-	} else if len(actions) == 0 && s.DeviceType == "" && basicLoginProtocol(s) {
-		// no device type and no logon actions: answer the usual login and password prompts
-		// with the saved username and password, as a terminal user would type them.
-		// "Automate logon" is not asked: it is about the logon actions, and sessions imported
-		// from SecureCRT have it off ("Use Login Script"=0) although nothing was chosen.
-		cred := ""
-		if name, _, _, ok := m.accountLogin(s); ok {
-			cred = name
-		}
-		if s.Username != "" || cred != "" {
-			_, havePass := m.loginPassword(s)
-			t.logon = newBasicLogin(havePass, cred)
-		}
+	} else if len(actions) == 0 && basic != nil {
+		t.logon = basic
 	}
 	t.alertBuf, t.logonPass = "", ""
 	t.triggers = nil
@@ -855,6 +845,37 @@ func (m *Manager) AccountOf(s session.Session) string {
 
 // accountLogin returns the account's username and password, when the
 // session logs in with one that exists.
+// basicLogin is the login for a Telnet or serial session with a username but no
+// device type and no logon actions: the usual login and password prompts are
+// answered with the saved username and password, as a terminal user would type
+// them. "Automate logon" is not asked: it is about the logon actions, and sessions
+// imported from SecureCRT have it off ("Use Login Script"=0) although nothing was chosen.
+func (m *Manager) basicLogin(s session.Session) *logonRunner {
+	if s.DeviceType != "" || !basicLoginProtocol(s) || len(realActions(s.LogonActions)) > 0 {
+		return nil
+	}
+	cred := ""
+	if name, _, _, ok := m.accountLogin(s); ok {
+		cred = name
+	}
+	if s.Username == "" && cred == "" {
+		return nil
+	}
+	_, havePass := m.loginPassword(s)
+	return newBasicLogin(havePass, cred)
+}
+
+// realActions drops empty rows (an imported table can hold them).
+func realActions(a []session.LogonAction) []session.LogonAction {
+	out := make([]session.LogonAction, 0, len(a))
+	for _, x := range a {
+		if x.Expect != "" || x.Send != "" {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
 // basicLoginProtocol: the connections whose login is typed in the terminal (SSH logs in itself).
 func basicLoginProtocol(s session.Session) bool {
 	return s.ConsoleServer == "" && (s.Protocol == session.ProtoTelnet || s.Protocol == session.ProtoSerial)

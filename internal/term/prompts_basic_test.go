@@ -1,6 +1,10 @@
 package term
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/termwright/termwright/internal/session"
+)
 
 func TestBasicLogin(t *testing.T) {
 	l := newBasicLogin(true, "")
@@ -27,5 +31,15 @@ func TestBasicLogin(t *testing.T) {
 	l = newBasicLogin(false, "")
 	if out := l.feed([]byte("username: ")); len(out) != 1 || !l.done() {
 		t.Fatal("username only not answered")
+	}
+}
+
+func TestRealActionsDropsEmptyRows(t *testing.T) {
+	if got := realActions([]session.LogonAction{{}, {Expect: "login:", Send: `\s`}, {}}); len(got) != 1 {
+		t.Fatalf("%+v", got)
+	}
+	l := newBasicLogin(false, "")
+	if out := l.feed([]byte("login: \x00")); len(out) != 1 {
+		t.Fatal("prompt followed by NUL not answered")
 	}
 }

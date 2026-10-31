@@ -120,7 +120,7 @@ func newBasicLogin(withPassword bool, credential string) *logonRunner {
 // nothing but spaces: a banner that mentions "login:" is not a prompt.
 func basicMatch(window, prompts string) (int, int) {
 	low := strings.ToLower(window)
-	rest := strings.TrimRight(low, " \t")
+	rest := strings.TrimRight(low, " \t\r\x00")
 	for _, p := range strings.Split(prompts, "|") {
 		if strings.HasSuffix(rest, p) {
 			return len(rest) - len(p), len(p)
