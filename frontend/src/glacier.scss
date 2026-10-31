@@ -2,7 +2,12 @@
    Frosted glass over a soft aurora: the surface colours become translucent,
    panels get a light top edge and layered shadows, cards lift on hover.
    The window title bar keeps its height and padding, so on macOS its icons
-   stay on the line of the window buttons. */
+   stay on the line of the window buttons.
+   backdrop-filter makes an element the containing block of position: fixed
+   descendants (hover cards, menus and pop-ups would be placed and clipped
+   inside it), so it is only used on elements without such descendants:
+   cards, menus, dialogs, toasts and the hover card itself. Panels over the
+   still background (title bar, Session Manager) need no blur. */
 
 :root.glacier {
   /* dark: graphite glass - near black, neutral, a faint cool sheen (not blue) */
@@ -47,12 +52,11 @@
 
 /* glass panels */
 :root.glacier {
-  .titlebar, .status.modern { background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); backdrop-filter: var(--g-blur); -webkit-backdrop-filter: var(--g-blur);
-    border-color: var(--g-edge); }
+  .titlebar, .status.modern { background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); border-color: var(--g-edge); }
   .titlebar { box-shadow: 0 1px 0 var(--g-hi) inset; }
   .main { padding: 8px 8px 0; gap: 0; }
   .main > .tree { margin: 0 2px 8px 0; border: 1px solid var(--g-edge) !important; border-radius: 14px; overflow: hidden;
-    background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); backdrop-filter: var(--g-blur); -webkit-backdrop-filter: var(--g-blur); box-shadow: var(--g-lift); }
+    background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); box-shadow: var(--g-lift); }
   .main.tree-right > .tree { margin: 0 0 8px 2px; }
   app-session-tree { background: transparent !important; }
   app-session-tree .sm-foot, app-session-tree .sec.all { border-color: var(--line) !important; }
@@ -63,8 +67,7 @@
   /* start page: the aurora shows through the work area while no tab is open */
   .home { background: transparent; }
   .terminals:has(.home) { background: transparent; }
-  .bigsearch, .qa button { background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); border-color: var(--g-edge); box-shadow: var(--g-lift);
-    backdrop-filter: var(--g-blur); -webkit-backdrop-filter: var(--g-blur); }
+  .bigsearch, .qa button { background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); border-color: var(--g-edge); box-shadow: var(--g-lift); }
   .bigsearch { border-radius: 14px; }
   .qa button { border-radius: 12px; &:hover { background: linear-gradient(180deg, var(--g-hi), var(--g-glass-2)); border-color: var(--g-edge); } }
   .home-in { max-width: 960px; }
@@ -84,7 +87,7 @@
   .home-empty { background: var(--g-glass); border-color: var(--g-edge); }
 
   /* menus, dialogs, toasts, hover cards: denser glass so text stays readable */
-  .modal, .ctx-menu, .toast, app-session-tree .hcard, .sessmenu, .palette {
+  .modal, .ctx-menu, .toast, app-session-tree .hcard, app-sessions-menu .sm {
     background: var(--g-solid) !important; border-color: var(--g-edge) !important;
     backdrop-filter: blur(28px) saturate(150%); -webkit-backdrop-filter: blur(28px) saturate(150%);
     box-shadow: 0 1px 0 var(--g-hi) inset, var(--shadow); }

@@ -76,7 +76,7 @@ table.keys td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
 
 /* context menu & toasts */
 .menu-catcher { position: fixed; inset: 0; z-index: 200; }
-.ctx-menu { position: fixed; z-index: 201; min-width: 200px; max-height: 70vh; overflow-y: auto; padding: 4px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow);
+.ctx-menu { position: fixed; z-index: 201; min-width: 200px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 4px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow);
   .item { padding: 5px 16px; cursor: default; display: flex; gap: 24px; justify-content: space-between;
     .hint-key { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); }
     &:hover .hint-key { color: inherit; } &:hover:not(.disabled) { background: var(--accent); color: #fff; } &.disabled { opacity: .45; } }

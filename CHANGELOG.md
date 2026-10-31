@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Fixed in the Glacier style: the Session Manager's hover card and the Sessions menu.** The glass blur of the Session Manager and the title bar made the hover card (and the title bar's Sessions menu) open inside those panels, where they were cut off. Panels over the still background no longer blur (it looks the same); menus, dialogs, cards and the hover card keep their glass.
+* **Context menus stay inside the window**: a menu opened near the bottom (or the right edge) moves up (or left) by its real size, so its last items - *Delete* - are no longer hidden under the status bar; a menu taller than the window scrolls.
+
 * **Accounts can log in with a private key** ([#1](https://github.com/nperiannan/termwright/issues/1)): Passwords & Accounts → an account → *Log in with* **Password** or **Private key** (a key file, with *Browse…*). SSH sessions that use the account log in with its key - also as a jump host and for SFTP - unless the session has a key file of its own; the key's passphrase is asked once and can be saved like any key passphrase. The account's password stays optional, for Telnet or when the server refuses the key.
 * **Quick Connect has an Account list** ([#1](https://github.com/nperiannan/termwright/issues/1)): choose an account to log in with instead of typing a username and password, for a one-off connection or a session saved from Quick Connect. Typing `user@host` in the connect line goes back to the typed username.
 * **Glacier is the default style.** New and existing installations use Glacier unless *Standard* was chosen (Settings → General → Style).

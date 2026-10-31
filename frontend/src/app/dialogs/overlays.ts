@@ -1,5 +1,5 @@
 import { menuBar } from '../core/menu';
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
 import { Backend } from '../core/backend';
@@ -88,6 +88,10 @@ import { Icon } from '../components/icon';
 })
 export class Overlays {
   protected ui = inject(Ui);
+  constructor() {
+    // a menu that would run past the bottom or right edge of the window moves up / left (its real size, once drawn)
+    effect(() => { if (this.ui.menu()) requestAnimationFrame(() => this.fitMenu()); });
+  }
   readonly modern = () => this.ui.settings()?.layout !== 'classic';
   /** The button names what it does: Create, Rename, Save… */
   okFor(title: string) {
@@ -98,6 +102,14 @@ export class Overlays {
     const t = title.toLowerCase();
     return secret ? 'key' : /folder/.test(t) ? 'folder' : /bookmark/.test(t) ? 'star' : /rename|edit/.test(t) ? 'edit' : /new|add/.test(t) ? 'plus' : 'edit';
   }
+  private fitMenu() {
+    const el = document.querySelector<HTMLElement>('app-overlays .ctx-menu');
+    if (!el) return;
+    const r = el.getBoundingClientRect(), pad = 8;
+    if (r.bottom > innerHeight - pad) el.style.top = Math.max(pad, innerHeight - r.height - pad) + 'px';
+    if (r.right > innerWidth - pad) el.style.left = Math.max(pad, innerWidth - r.width - pad) + 'px';
+  }
+
   closeConfirm(v: boolean) {
     const c = this.ui.confirmReq();
     this.ui.confirmReq.set(null);
