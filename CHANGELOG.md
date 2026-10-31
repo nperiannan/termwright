@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.25.1 (2026-10-31)
+
+Readable dialogs in the Glacier style, tabs you can drag, and an Environment menu for folders and sessions.
+
 * **Fixed in the Glacier style: see-through dialogs.** A dialog opened from another one (for example *Save as Device Fact* from Session Options), side panels and pop-ups were partly transparent, so the text behind showed through and they could not be read or edited - in the light and the dark theme. Dialogs, menus, panels and pop-ups are solid again; the glass stays on the title bar, the Session Manager, the start page and its cards.
 * **Drag tabs to reorder them** in the title bar (and in the classic tab strip); a line shows where the tab lands. The new order is kept for *Reopen the tabs that were open*.
 * **Double-click the empty title bar to zoom the window** (fill the screen, or back), as a system title bar does; on macOS it follows System Settings → Desktop & Dock → *Double-click a window's title bar to* (zoom, minimise or nothing).
