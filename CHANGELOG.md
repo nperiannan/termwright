@@ -4,6 +4,12 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Environments of your own** (Settings → Environments): rename and recolour Production, Staging, Test / Lab and Development, or add more (for example *Pre-production*, *Customer A*), each with a short tag and one of ten environment colours. *Like production* makes an environment ask before pastes and show its tag on the tab, as production does. The environment colours are never folder colours: folders now have their own colour for the top level and five levels of subfolders (amber, violet, blue, teal, pink, lime). A folder in an environment - and everything in it, subfolders and sessions - takes the environment's colour and tag, unless a subfolder or session has its own. CSV import takes the id of a custom environment too (and `prod`, `stage`, `lab`, `dev`).
+* **Linux sessions get the Files panel**: choosing a Linux device type (Linux, Ubuntu, Debian, RHEL, Rocky, …) for an SSH session turns on *Files panel beside the terminal*; it stays a choice. Discover Devices and Edit Sessions do the same.
+* **Expand All / Collapse All Folders** in the Session Manager's ⋯ menu.
+* **Which devices answer - for one folder**: with a folder selected, the pulse button checks only the sessions in that folder (and its subfolders); with no folder selected, every session. The ⋯ menu shows which folder is checked.
+* **Copy Scrollback** and **Copy Scrollback as HTML Report** (tab menu, the terminal's right-click menu and File): the whole output as text, or as the same report *Save Scrollback As HTML…* writes - colours, highlighting and the device's model, version and serial number - to paste into a mail or a document.
+
 * **Fixed in the Glacier style: the Session Manager's hover card and the Sessions menu.** The glass blur of the Session Manager and the title bar made the hover card (and the title bar's Sessions menu) open inside those panels, where they were cut off. Panels over the still background no longer blur (it looks the same); menus, dialogs, cards and the hover card keep their glass.
 * **Context menus stay inside the window**: a menu opened near the bottom (or the right edge) moves up (or left) by its real size, so its last items - *Delete* - are no longer hidden under the status bar; a menu taller than the window scrolls.
 

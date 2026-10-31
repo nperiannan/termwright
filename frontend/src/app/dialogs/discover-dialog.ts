@@ -1,3 +1,4 @@
+import { isUnixType } from '../core/device-kind';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DEVICE_KINDS, DeviceIcon, DeviceKind } from '../components/device-icon';
@@ -597,6 +598,7 @@ export class DiscoverDialog implements OnDestroy {
         Object.assign(s, {
           name: base, folder: dest, path: '', protocol: r.protocol || 'WOL', hostname: r.ip, port: r.protocol ? r.port : 0, mac: r.mac || '',
           deviceType: r.deviceType, description: [r.vendor, r.os].filter(Boolean).length ? [[r.vendor, r.os].filter(Boolean).join(' · ')] : [],
+          filesPanel: r.protocol === 'SSH2' && isUnixType(r.deviceType),
         });
         try {
           await this.backend.saveSession(s, '');

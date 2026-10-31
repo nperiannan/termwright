@@ -1,8 +1,9 @@
+import { filesPanelFor } from '../core/device-kind';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { followJump } from '../core/jump-refs';
 import { Backend, errText } from '../core/backend';
-import { ENVIRONMENTS } from '../core/env';
+import { envList } from '../core/env';
 import { PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
 import { SCHEME_NAMES } from '../core/themes';
 import { Ui } from '../core/ui.service';
@@ -75,7 +76,7 @@ type Key = 'folder' | 'deviceType' | 'account' | 'username' | 'password' | 'prot
           <input type="checkbox" [(ngModel)]="on.environment" /><label>Environment</label>
           <select [(ngModel)]="e.environment" (focus)="on.environment = true">
             <option value="">(none / folder default)</option>
-            @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
+            @for (v of envs(); track v.id) { <option [value]="v.id">{{ v.label }}</option> }
           </select>
 
           <input type="checkbox" [(ngModel)]="on.colorScheme" /><label>Color scheme</label>
@@ -131,7 +132,7 @@ export class BulkEdit {
   private backend = inject(Backend);
   readonly paths = this.ui.bulkPaths;
   readonly protocols = PROTOCOLS;
-  readonly envs = ENVIRONMENTS;
+  readonly envs = envList;
   showList = false;
   readonly busy = signal(false);
   readonly err = signal('');
@@ -174,7 +175,7 @@ export class BulkEdit {
   private change(s: Session) {
     const e = this.e, on = this.on;
     if (on.folder) s.folder = e.folder.trim().replace(/^\/+|\/+$/g, '');
-    if (on.deviceType) s.deviceType = e.deviceType;
+    if (on.deviceType) { s.deviceType = e.deviceType; filesPanelFor(s); }
     if (on.account) { s.account = e.account; s.ownLogin = e.account === '-'; }
     if (on.username) s.username = e.username.trim();
     if (on.protocol) s.protocol = e.protocol;

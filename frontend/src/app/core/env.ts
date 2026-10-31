@@ -1,16 +1,44 @@
-import { FolderDefault } from './models';
+import { signal } from '@angular/core';
+import { EnvDef, FolderDefault } from './models';
 
-/** Environments a session or folder can be marked with. */
-export const ENVIRONMENTS = [
-  { id: 'production', label: 'Production', short: 'PROD', color: '#e5484d' },
-  { id: 'staging', label: 'Staging', short: 'STAGE', color: '#f59e0b' },
-  { id: 'test', label: 'Test / Lab', short: 'LAB', color: '#22c55e' },
-  { id: 'development', label: 'Development', short: 'DEV', color: '#3b82f6' },
+/** The ten environment colours. None of them is a folder level colour (amber, violet, blue, teal,
+ *  pink, lime - see folder-icon.ts), so a folder's colour tells its environment apart from its depth. */
+export const ENV_COLORS = [
+  { c: '#e5484d', n: 'Red' }, { c: '#f97316', n: 'Orange' }, { c: '#facc15', n: 'Yellow' }, { c: '#16a34a', n: 'Green' },
+  { c: '#4f46e5', n: 'Indigo' }, { c: '#9f1239', n: 'Crimson' }, { c: '#92400e', n: 'Brown' }, { c: '#1e3a8a', n: 'Navy' },
+  { c: '#64748b', n: 'Slate' }, { c: '#d4d4d8', n: 'Silver' },
 ] as const;
 
-export function envInfo(id: string | null | undefined) {
-  return ENVIRONMENTS.find(e => e.id === id) ?? null;
+/** The built-in environments (Settings → Environments can rename, recolour or add to them). */
+export const DEFAULT_ENVIRONMENTS: EnvDef[] = [
+  { id: 'production', label: 'Production', short: 'PROD', color: '#e5484d', protect: true },
+  { id: 'staging', label: 'Staging', short: 'STAGE', color: '#f97316' },
+  { id: 'test', label: 'Test / Lab', short: 'LAB', color: '#16a34a' },
+  { id: 'development', label: 'Development', short: 'DEV', color: '#4f46e5' },
+];
+
+/** The environments in use: the settings' list, or the built-in four. Set by the app when settings load. */
+export const envList = signal<EnvDef[]>(DEFAULT_ENVIRONMENTS);
+export function setEnvironments(list: EnvDef[] | null | undefined) { envList.set(list?.length ? list : DEFAULT_ENVIRONMENTS); }
+/** @deprecated the list changes with the settings: read envList() */
+export const ENVIRONMENTS = DEFAULT_ENVIRONMENTS;
+
+/** Text colour on an environment colour: dark on light colours (yellow, silver), else white. */
+export function envFg(color: string): string {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color || '');
+  if (!m) return '#fff';
+  const [r, g, b] = m.slice(1).map(h => parseInt(h, 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#1b1c1f' : '#fff';
 }
+
+export function envInfo(id: string | null | undefined): (EnvDef & { fg: string }) | null {
+  if (!id) return null;
+  const e = envList().find(x => x.id === id);
+  return e ? { ...e, fg: envFg(e.color) } : null;
+}
+
+/** Pastes are confirmed and the tab shows the tag, as for production. */
+export function envProtected(id: string | null | undefined) { return !!envInfo(id)?.protect; }
 
 /** The environment of a session: its own, or the nearest folder's default. */
 export function envOf(path: string, own: string | null | undefined, defaults: FolderDefault[] | null | undefined): string {

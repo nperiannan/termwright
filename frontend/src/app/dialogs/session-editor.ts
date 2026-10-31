@@ -1,3 +1,4 @@
+import { filesPanelFor } from '../core/device-kind';
 import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
@@ -7,7 +8,7 @@ import { Backend, errText } from '../core/backend';
 import { BAUD_RATES, CONSOLE_METHODS, EMULATIONS, FACT_EVERY, FactRule, LogonAction, PROTOCOLS, Session, SessionNode, SmartCardKey, defaultPort } from '../core/models';
 import { SCHEME_NAMES } from '../core/themes';
 import { Tabs } from '../core/tabs.service';
-import { ENVIRONMENTS, envInfo, envOf } from '../core/env';
+import { envInfo, envList, envOf } from '../core/env';
 import { Ui } from '../core/ui.service';
 import { SerialPortPicker } from '../components/serial-port-picker';
 import { Icon } from '../components/icon';
@@ -155,7 +156,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 <div class="pair o4">
                 @if (!remote() && s.protocol !== 'WOL') {
                 <div class="f"><label>Device type</label>
-                <select name="devtype" [(ngModel)]="s.deviceType">
+                <select name="devtype" [ngModel]="s.deviceType" (ngModelChange)="s.deviceType = $event; onDeviceType()">
                   <option value="">(none)</option>
                   @for (d of deviceTypes(); track d) { <option [value]="d">{{ d }}</option> }
                 </select></div>
@@ -164,7 +165,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 <div class="row">
                   <select name="env" [(ngModel)]="s.environment" class="envsel" title="Colours the tab; production asks before a paste or a send to several tabs.">
                     <option value="">(none{{ folderEnv() ? ' - folder: ' + folderEnv() : '' }})</option>
-                    @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
+                    @for (v of envs(); track v.id) { <option [value]="v.id">{{ v.label }}</option> }
                   </select>
                   <span class="hint envhint">Colours the tab; production asks before a paste or a send to several tabs.</span>
                 </div></div>
@@ -723,7 +724,9 @@ export class SessionEditor implements OnInit {
   readonly protocols = PROTOCOLS;
   readonly emulations = EMULATIONS;
   readonly bauds = BAUD_RATES;
-  readonly envs = ENVIRONMENTS;
+  /** Linux device types turn the Files panel on (it stays a choice). */
+  onDeviceType() { if (this.s) filesPanelFor(this.s); }
+  readonly envs = envList;
   readonly folderEnv = computed(() => {
     const e = this.ui.editing();
     const s = e?.session;

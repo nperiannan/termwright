@@ -159,6 +159,8 @@ func buildMenu(app *App) *menu.Menu {
 	add(file, "Recordings...", "recordings")
 	add(file, "Save Scrollback As...", "save-scrollback")
 	add(file, "Save Scrollback As HTML...", "save-scrollback-html")
+	add(file, "Copy Scrollback", "copy-scrollback")
+	add(file, "Copy Scrollback as HTML Report", "copy-scrollback-html")
 	add(file, "Save Selection As...", "save-selection")
 	add(file, "Save Screen As Image...", "capture-screen")
 	file.AddSeparator()

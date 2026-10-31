@@ -8,7 +8,7 @@
              (click)="tabs.activeId.set(t.id)" (auxclick)="onMiddleClick($event, t)" (contextmenu)="tabMenu($event, t)">
           <span class="dot" [class]="t.state" [style.box-shadow]="tabEnv(t) ? '0 0 0 2px ' + tabEnv(t)!.color : null"></span>
           <span class="label">{{ t.title }}</span>
-          @if (tabEnv(t)?.id === 'production') { <span class="badge" [style.background]="tabEnv(t)!.color" title="Production">PROD</span> }
+          @if (tabEnv(t)?.protect) { <span class="badge" [style.background]="tabEnv(t)!.color" [style.color]="tabEnv(t)!.fg" [title]="tabEnv(t)!.label">{{ tabEnv(t)!.short }}</span> }
           @if (t.logFile) { <span class="badge" title="Logging to {{ t.logFile }}">LOG</span> }
           @if (t.castFile) { <span class="badge rec" title="Recording this session to {{ t.castFile }}">REC</span> }
           @if (t.recording) { <span class="badge" title="Recording a script">SCRIPT</span> }
@@ -111,7 +111,7 @@
              (click)="tabs.activeId.set(t.id)" (auxclick)="onMiddleClick($event, t)" (contextmenu)="tabMenu($event, t)">
           <span class="dot" [class]="t.state"></span>
           <span class="label">{{ t.title }}</span>
-          @if (tabEnv(t)?.id === 'production') { <span class="logbadge" [style.background]="tabEnv(t)!.color" title="Production">PROD</span> }
+          @if (tabEnv(t)?.protect) { <span class="logbadge" [style.background]="tabEnv(t)!.color" [style.color]="tabEnv(t)!.fg" [title]="tabEnv(t)!.label">{{ tabEnv(t)!.short }}</span> }
           @if (t.logFile) { <span class="logbadge" title="Logging to {{ t.logFile }}">LOG</span> }
           @if (t.castFile) { <span class="logbadge rec" title="Recording this session to {{ t.castFile }}">● REC</span> }
           @if (t.recording) { <span class="logbadge" title="Recording a script">SCRIPT</span> }
@@ -189,7 +189,7 @@
                         @if (devKind(n); as k) { <app-device-icon [kind]="k" [size]="40" /> } @else { <app-session-icon [kind]="protoKind(n)" [size]="40" /> }
                         <span class="ct">
                           <span class="cn"><span class="nm">{{ n.name }}</span>
-                            @if (cardEnv(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }</span>
+                            @if (cardEnv(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }</span>
                           <span class="ca">{{ cardAddr(n) }}</span>
                         </span>
                       </span>

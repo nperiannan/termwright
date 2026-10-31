@@ -91,7 +91,7 @@ export interface Settings {
   language?: string; layout?: string; style?: string; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
-  favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean;
+  favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean; reachFolder?: string;
   backupDir?: string; backupJobs?: BackupJob[] | null;
   checklists?: Checklist[] | null; checklistDir?: string; recordHistory?: boolean | null;
   recordSessions?: boolean; recordDir?: string; recordKeepDays?: number;
@@ -101,7 +101,7 @@ export interface Settings {
   customSchemes: { name: string; colors: Record<string, string> }[] | null; accentColor: string;
   restoreTabs: boolean; openTabs: string[] | null; inWindowMenu: boolean; forceTerminalScheme: boolean; pythonPath: string;
   deviceTypes: DeviceType[] | null; alerts: AlertRule[] | null; confirmPaste: boolean; quickConnectSave?: boolean; noMoveConfirm?: boolean; noDeleteConfirm?: boolean;
-  snippets: Snippet[] | null; workspaces: Workspace[] | null; folderDefaults: FolderDefault[] | null;
+  snippets: Snippet[] | null; workspaces: Workspace[] | null; folderDefaults: FolderDefault[] | null; environments?: EnvDef[] | null;
   credentials: Credential[] | null; masterHash: string;
   bookmarks: Bookmark[] | null; updateChannel: 'stable' | 'nightly' | 'off'; updateRepo: string; updateOnStart: boolean;
 }
@@ -227,7 +227,7 @@ export const ACTIONS: Record<string, string> = {
   'quick-connect': 'Quick Connect', collect: 'Run and Collect...', discover: 'Discover Devices...', backups: 'Configuration Backups...', checklists: 'Change Checklists...', history: 'Command History...', 'local-shell': 'Local Shell', reconnect: 'Reconnect', disconnect: 'Disconnect',
   'clone-tab': 'Clone Session', 'close-tab': 'Close Tab', 'next-tab': 'Next Tab', 'prev-tab': 'Previous Tab',
   copy: 'Copy', paste: 'Paste', 'copy-paste': 'Copy and Paste', find: 'Find', 'clear-scrollback': 'Clear Scrollback',
-  'clear-screen': 'Clear Screen', 'toggle-autoscroll': 'Auto Scroll On / Off', 'toggle-timestamps': 'Timestamps On / Off', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback', 'save-scrollback-html': 'Save Scrollback As HTML',
+  'clear-screen': 'Clear Screen', 'toggle-autoscroll': 'Auto Scroll On / Off', 'toggle-timestamps': 'Timestamps On / Off', reset: 'Reset Terminal', 'log-toggle': 'Start/Stop Log', 'save-scrollback': 'Save Scrollback', 'save-scrollback-html': 'Save Scrollback As HTML', 'copy-scrollback': 'Copy Scrollback', 'copy-scrollback-html': 'Copy Scrollback as HTML Report',
   'toggle-session-manager': 'Toggle Session Manager', 'toggle-session-manager-side': 'Move Session Manager Left / Right', 'toggle-command-window': 'Toggle Command Window',
   'toggle-button-bar': 'Toggle Button Bar', 'files-panel': 'Files Panel Beside the Terminal', 'web-page': 'Open Web Page Through This Session', wake: 'Wake Up (Wake-on-LAN)', 'sftp-tab': 'Open SFTP Tab', 'run-script': 'Run Script...',
   'record-toggle': 'Start/Stop Script Recording', 'cast-toggle': 'Start/Stop Session Recording', 'cast-marker': 'Add Marker to Recording', recordings: 'Recordings...', 'cancel-scripts': 'Cancel Scripts', lock: 'Lock Session',
@@ -284,6 +284,8 @@ export interface MovedDevice { path: string; old: string; new: string; mac: stri
 export interface ExportReport { count: number; skipped: string[]; notes: string[]; }
 
 /** A serial port found on this computer. */
+/** An environment (Settings → Environments). */
+export interface EnvDef { id: string; label: string; short: string; color: string; protect?: boolean; }
 /** Something that uses a session as its jump host: a session, or a folder whose default it is. */
 export interface JumpUse { path: string; name: string; protocol: string; folder: boolean; jump: string; }
 /** A network this computer has an address on (Discover Devices). */

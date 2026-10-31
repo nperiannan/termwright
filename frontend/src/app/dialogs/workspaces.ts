@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { FolderDefault, SessionNode, Workspace } from '../core/models';
 import { Layout, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
-import { ENVIRONMENTS } from '../core/env';
+import { envList } from '../core/env';
 import { Icon } from '../components/icon';
 import { FolderIcon } from '../components/folder-icon';
 
@@ -172,7 +172,7 @@ export class Workspaces {
             <div class="f"><label>Environment</label>
               <select name="env" [ngModel]="d.environment || ''" (ngModelChange)="d.environment = $event">
                 <option value="">(not set)</option>
-                @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
+                @for (v of envs(); track v.id) { <option [value]="v.id">{{ v.label }}</option> }
               </select></div>
             <div class="f"><label>Smart card</label>
               <select name="card" [ngModel]="d.smartCard || ''" (ngModelChange)="d.smartCard = $event">
@@ -199,7 +199,7 @@ export class FolderDefaults {
   readonly folder = this.ui.folderDefaultsFor();
   readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly depth = Math.max(0, this.folder.split('/').filter(Boolean).length - 1);
-  readonly envs = ENVIRONMENTS;
+  readonly envs = envList;
   d: FolderDefault = structuredClone((this.ui.settings()?.folderDefaults ?? []).find(x => x.folder === this.folder)
     ?? { folder: this.folder, username: '', deviceType: '', jumpSession: '', identityFile: '', keywordSet: '', colorScheme: '', environment: '' });
   readonly deviceTypes = computed(() => (this.ui.settings()?.deviceTypes ?? []).map(d => d.name));

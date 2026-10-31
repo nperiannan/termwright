@@ -186,8 +186,8 @@ func ParseCSVNotes(data []byte) ([]Session, []string, error) {
 				notes = append(notes, fmt.Sprintf("row %d (%s): port %q is not a number from 1 to 65535; the default of the protocol is used", rowNo, firstNonEmptyStr(get(row, "name"), host), v))
 			}
 		}
-		if e := strings.ToLower(get(row, "environment")); e != "" && e != "production" && e != "staging" && e != "test" && e != "development" {
-			notes = append(notes, fmt.Sprintf("row %d (%s): environment %q is ignored (use production, staging, test or development)", rowNo, firstNonEmptyStr(get(row, "name"), host), get(row, "environment")))
+		if e := get(row, "environment"); e != "" && envID(e) == "" {
+			notes = append(notes, fmt.Sprintf("row %d (%s): environment %q is ignored (use production, staging, test, development or the id of one made in Settings → Environments)", rowNo, firstNonEmptyStr(get(row, "name"), host), e))
 		}
 		n := newBulk(get(row, "name"), host)
 		n.Protocol = normProto(get(row, "protocol"))
@@ -212,10 +212,7 @@ func ParseCSVNotes(data []byte) ([]Session, []string, error) {
 		n.IdentityFile = get(row, "identity_file")
 		// written by Termwright's own CSV export, so a round trip keeps them
 		n.MAC = strings.ToLower(get(row, "mac"))
-		switch e := strings.ToLower(get(row, "environment")); e {
-		case "production", "staging", "test", "development":
-			n.Environment = e
-		}
+		n.Environment = envID(get(row, "environment"))
 		n.JumpSession = get(row, "jump_host")
 		n.Account = get(row, "account")
 		n.FilesPanel = strings.EqualFold(get(row, "files_panel"), "yes") || get(row, "files_panel") == "1" || strings.EqualFold(get(row, "files_panel"), "true")
@@ -552,4 +549,23 @@ func csvColumnNames() string {
 		n = append(n, c.Name)
 	}
 	return strings.Join(n, ", ")
+}
+
+// envID is the environment a CSV names: production, staging, test,
+// development or the id of a custom one (lower case letters, digits and
+// dashes, as Settings → Environments makes them); "" when it is not one.
+func envID(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	if v == "" || len(v) > 40 {
+		return ""
+	}
+	if alias, ok := map[string]string{"prod": "production", "stage": "staging", "lab": "test", "dev": "development"}[v]; ok {
+		return alias
+	}
+	for _, r := range v {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+			return ""
+		}
+	}
+	return v
 }

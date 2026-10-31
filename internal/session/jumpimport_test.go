@@ -112,7 +112,7 @@ func TestImportTemplateCSV(t *testing.T) {
 
 func TestCSVNotes(t *testing.T) {
 	csv := "name,host,protocol,port,environment,colour,jump_host\n" +
-		"a,10.0.0.1,ssh1,22,prod,red,\n" +
+		"a,10.0.0.1,ssh1,22,pre prod!,red,\n" +
 		"b,,ssh,22,,,\n" +
 		"c,10.0.0.3,rdp,abc,test,,nowhere/x\n"
 	list, notes, err := ParseCSVNotes([]byte(csv))
@@ -120,7 +120,7 @@ func TestCSVNotes(t *testing.T) {
 		t.Fatalf("%v %d", err, len(list))
 	}
 	all := strings.Join(notes, "\n")
-	for _, want := range []string{`column "colour" is not used`, `row 2 (a): protocol "ssh1" is not known`, `row 2 (a): environment "prod" is ignored`, "row 3 (b): no host, skipped", `row 4 (c): port "abc"`} {
+	for _, want := range []string{`column "colour" is not used`, `row 2 (a): protocol "ssh1" is not known`, `row 2 (a): environment "pre prod!" is ignored`, "row 3 (b): no host, skipped", `row 4 (c): port "abc"`} {
 		if !strings.Contains(all, want) {
 			t.Errorf("missing %q in:\n%s", want, all)
 		}
@@ -131,5 +131,14 @@ func TestCSVNotes(t *testing.T) {
 	res, _ := st.Import(tmp, ImportOptions{})
 	if !strings.Contains(strings.Join(res.Notes, "\n"), `jump host "nowhere/x" is not in the file and not in your sessions`) {
 		t.Errorf("no note about the missing jump host: %v", res.Notes)
+	}
+}
+
+func TestCSVEnvironments(t *testing.T) {
+	for in, want := range map[string]string{"Production": "production", "prod": "production", "DEV": "development", "lab": "test",
+		"stage": "staging", "pre-prod": "pre-prod", "customer-a": "customer-a", "pre prod!": "", "": ""} {
+		if got := envID(in); got != want {
+			t.Errorf("envID(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

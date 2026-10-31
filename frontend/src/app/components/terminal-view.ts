@@ -757,6 +757,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       { label: 'Select All', action: () => t?.selectAll() },
       { label: 'Copy as HTML (with colors)', action: () => void this.copyHtml(), disabled: !t?.hasSelection() },
       ...(this.tab().session.path && this.tab().kind === 'terminal' ? [{ label: 'Save Selection as Device Fact...', action: () => this.teachFact(), disabled: !t?.hasSelection() }] : []),
+      { label: 'Copy Scrollback', action: () => void this.tabs.copyScrollback(id) },
+      { label: 'Copy Scrollback as HTML Report', action: () => void this.tabs.copyScrollback(id, 'html') },
       { label: 'Save Scrollback As HTML...', action: () => void this.tabs.saveScrollback(id, 'html') },
       { separator: true },
       { label: (this.tabs.get(id)?.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.setTimestamps(!this.tabs.get(id)?.timestamps) },

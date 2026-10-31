@@ -8,7 +8,7 @@ import { RemoteKind, RemoteTarget, connectionsCommand, machineOf, nodeAt, parseC
 import { AlertEvent, DeviceFacts, RemoteInfo, Session, TabInfo, Transfer, isRemoteDesktop, unescape } from './models';
 import { Ui } from './ui.service';
 import { Wol } from './wol.service';
-import { envOf } from './env';
+import { envOf, envProtected } from './env';
 import { HtmlKeyword, bufferHtml } from './buffer-html';
 import { screenPng } from './screen-image';
 import { commandOfLine } from './history.service';
@@ -833,7 +833,7 @@ export class Tabs {
 
   /** True for tabs of production sessions (own setting or folder default). */
   isProduction(t: TabView) {
-    return envOf(t.session?.path ?? '', t.session?.environment, this.ui.settings()?.folderDefaults) === 'production';
+    return envProtected(envOf(t.session?.path ?? '', t.session?.environment, this.ui.settings()?.folderDefaults));
   }
 
   private prodOk = { key: '', until: 0 };
@@ -978,6 +978,40 @@ export class Tabs {
       if (!path) return;
       await this.backend.saveBase64File(path, png);
       this.ui.toast('Screen saved: ' + path, 'success');
+    } catch (e) { this.ui.error(e); }
+  }
+
+  /** Copies the whole scrollback: as text, or as the HTML report (colours, highlighting and the device facts header) to paste into a mail or a document. */
+  async copyScrollback(id = this.activeId(), format: 'text' | 'html' = 'text') {
+    const h = this.handles.get(id);
+    const t = this.get(id);
+    if (!h || !t) return;
+    const buf = h.term.buffer.active;
+    const lines: string[] = [];
+    for (let i = 0; i < buf.length; i++) lines.push(buf.getLine(i)?.translateToString(true) ?? '');
+    while (lines.length && lines[lines.length - 1] === '') lines.pop();
+    const text = lines.join('\n') + '\n';
+    try {
+      if (format === 'html') {
+        const icon = await fetch('icon.svg').then(r => r.ok ? r.text() : '').catch(() => '');
+        const remote = ['SSH2', 'Telnet'].includes(t.session.protocol ?? '') && !!t.session.path;
+        if (remote) this.ui.toast('Reading the model, OS version and serial number…', 'info');
+        const facts = await this.backend.deviceFacts(t.session.path ?? '', t.session.deviceType ?? '', text, remote).catch(() => null);
+        const html = scrollbackHtml(h, t, icon, facts);
+        try {
+          await navigator.clipboard.write([new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+          })]);
+          this.ui.toast(`Copied ${lines.length} lines as an HTML report - paste it into a mail or a document`, 'success');
+        } catch {
+          await this.backend.clipboardSet(text);
+          this.ui.toast(`This system does not take HTML from the app: copied ${lines.length} lines as text. Save Scrollback As HTML… keeps the colours.`, 'info', 8000);
+        }
+        return;
+      }
+      await this.backend.clipboardSet(text);
+      this.ui.toast(`Copied ${lines.length} lines`, 'success');
     } catch (e) { this.ui.error(e); }
   }
 

@@ -382,7 +382,9 @@ Devices cabled to a console server (terminal server) get a session of protocol *
 
   ![Edit Sessions](screenshots/bulk-edit.png)
 - **Environments**: mark a session (Session Options → Connection → *Environment*) or a whole folder (Folder Defaults) as **Production**, Staging, Test / Lab or Development. A coloured tag shows in the Session Manager and a coloured line on the tab. **Production** sessions ask before a multi-line paste and before the Command Window, Button Bar or Command Library sends to several tabs including them (once a minute for the same tabs).
-- **Which devices answer**: the pulse button in the header checks every minute whether each session's host answers on its port (a TCP connection that is closed at once - nothing is sent). Green = answers, red = no answer, grey = not checked (serial, local shell, or through a jump host or proxy).
+- **Your own environments**: **Settings → Environments** renames and recolours the four, or adds more (e.g. *Pre-production*, *Customer A*): a name, a short tag (up to 6 letters) and one of ten environment colours. *Like production* gives an environment production's paste questions and its tag on the tab. A folder in an environment - and everything in it, subfolders and sessions - takes its colour and tag unless a subfolder or session has an environment of its own.
+- **Expand All / Collapse All Folders**: the Session Manager's ⋯ menu.
+- **Which devices answer**: select a folder first to check only the sessions in it (and its subfolders); with no folder selected every session is checked. The pulse button in the header checks every minute whether each session's host answers on its port (a TCP connection that is closed at once - nothing is sent). Green = answers, red = no answer, grey = not checked (serial, local shell, or through a jump host or proxy).
 
   ![Session Manager with favourites, recent sessions, environments and the hover card](screenshots/session-manager.png)
 - **Icons** tell the session type at a glance:
@@ -396,7 +398,7 @@ Devices cabled to a console server (terminal server) get a session of protocol *
   | <img src="assets/icon-shell.svg" width="16"> slate `$` | Local shell |
   | <img src="assets/icon-raw.svg" width="16"> pink `<>` | Raw TCP |
   | small arrow badge | reached through a jump station (remote command `ssh … host`) |
-- **Folder colours and production folders**: folders are coloured by level (top level amber, sub-folders purple, deeper ones blue). Right-click a folder → **Mark as Production** colours it light red and sets the *Production* environment for every session in it (Folder Defaults); *Unmark Production* undoes it.
+- **Folder colours and production folders**: folders are coloured by level - top level amber, then violet, blue, teal, pink and lime for five levels of subfolders. A folder in an environment takes the environment's colour instead (the environment colours are never level colours). Right-click a folder → **Mark as Production** colours it light red and sets the *Production* environment for every session in it (Folder Defaults); *Unmark Production* undoes it.
 - **Compact Session Manager** (Global Options → General, or ⋯ → *Compact Session Manager*): one line per session instead of two, for long lists; folders keep their colours and counts, a little smaller. With compact rows the Session Manager's header has a **two-line rows** button that turns them back off, next to the pulse (which devices answer) and ⋯ buttons. View → *Tile / Glyph Icons* chooses coloured tiles or plain device symbols.
 - **Session side panel** (New Session, or right-click → *Properties…*): the everyday fields - name, folder, protocol, address and port, open as terminal or SFTP, device type, username, environment and password - plus two switches for SSH sessions, **Files panel beside the terminal** and **Reconnect automatically**, a **More Options…** button that opens every page of the session, the session's device facts (*Refresh* reads them now, *Edit* opens the Device Facts page) and an *Advanced* list (jump host, port forwarding, logon actions, terminal and appearance, logging, MAC address, keys) that opens the full Session Options at that page. *Save* keeps it, *Save & Connect* connects too, Esc closes the panel.
 - **Default session**: a session file named `Default` at the top level (e.g. an imported one) is used as the template for new sessions.
@@ -660,6 +662,8 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 
 ![Terminal menu with Copy as HTML](screenshots/term-menu.png)
 
+**Copy the output**: **Copy Scrollback** (tab menu, the terminal's right-click menu, File) puts the whole output on the clipboard as text; **Copy Scrollback as HTML Report** copies the same report as below - colours, highlighting and the device header - to paste into a mail or a document.
+
 **HTML report of a session**: File → **Save Scrollback As HTML…** (also right-click the terminal or a tab) saves the whole scrollback as one web page: a header with the Termwright logo, the session, its address, the device's **model** (e.g. `5720-48MXW`), **OS version**, **serial number** and **MAC address**, the device type, protocol, user, connection details, the date and time it was saved and the number of lines, then the output with its colors, bold text and **keyword highlighting** exactly as in the tab. Open it in any browser, attach it to a ticket or e-mail, or print it to PDF. Model, version, serial and MAC are taken from output already on the screen (`show sys-info`, `show switch`, `show version`, `/etc/os-release`); when something is missing and the tab is an SSH or Telnet session with a VOSS, EXOS, Cisco or Linux device type, Termwright reads them in a background connection - nothing is typed in your tab. The MAC address saved by Discover Devices is used when the device does not show one. *Save Scrollback As…* still saves plain text. For a long session turn on a session log as well: the scrollback keeps the last 10,000 lines (Session Options → Terminal → *Scrollback lines*).
 
 ![HTML report saved from a tab](screenshots/scrollback-html.png)
@@ -815,6 +819,8 @@ Folders use the same colored folder icon as the Session Manager. Files are color
 - **Resume** (⟳ on a failed or cancelled SFTP copy): restarts the same copy; partially copied files continue from where they stopped and files that are already complete are skipped.
 
 ### Files panel beside the terminal
+
+Choosing a **Linux** device type (Linux, Ubuntu, Debian, RHEL, Rocky, …) for an SSH session turns the Files panel on for it; untick it in Session Options if you do not want it.
 
 ![Files panel](screenshots/files-panel.png)
 

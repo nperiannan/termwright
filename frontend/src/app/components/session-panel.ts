@@ -1,9 +1,10 @@
+import { filesPanelFor } from '../core/device-kind';
 import { Component, HostListener, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
 import { BAUD_RATES, PROTOCOLS, Session, SessionNode, defaultPort } from '../core/models';
 import { accountChoice, defaultLogin, defaultText, setAccountChoice, userOf } from '../core/accounts';
-import { ENVIRONMENTS } from '../core/env';
+import { envList } from '../core/env';
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { Icon } from './icon';
@@ -79,7 +80,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
         @if (s.protocol !== 'RDP' && s.protocol !== 'VNC' && s.protocol !== 'Local Shell') {
           @if (s.protocol !== 'WOL') {
           <label class="f"><span>Device type</span>
-            <select name="dt" [(ngModel)]="s.deviceType">
+            <select name="dt" [ngModel]="s.deviceType" (ngModelChange)="s.deviceType = $event; onDeviceType()">
               <option value="">(none)</option>
               @for (d of deviceTypes(); track d) { <option [value]="d">{{ d }}</option> }
             </select></label>
@@ -104,7 +105,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
           <label class="f" [class.grow]="!hasLogin()" [class.envf]="hasLogin()"><span>Environment</span>
             <select name="env" [ngModel]="s.environment || ''" (ngModelChange)="s.environment = $event" [style.color]="envColor()">
               <option value="">(none)</option>
-              @for (v of envs; track v.id) { <option [value]="v.id">{{ v.label }}</option> }
+              @for (v of envs(); track v.id) { <option [value]="v.id">{{ v.label }}</option> }
             </select></label>
         </div>
         @if (hasLogin()) {
@@ -218,7 +219,9 @@ export class SessionPanel {
   readonly main = ['SSH2', 'Telnet', 'Serial', 'RDP'];
   readonly others = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP'].includes(p));
   readonly bauds = BAUD_RATES;
-  readonly envs = ENVIRONMENTS;
+  /** Linux device types turn the Files panel on (it stays a choice). */
+  onDeviceType() { if (this.s) filesPanelFor(this.s); }
+  readonly envs = envList;
   /** Every folder of the Session Manager, for the Folder field. */
   readonly folders = computed(() => {
     const out: string[] = [];
@@ -332,7 +335,7 @@ export class SessionPanel {
     const m: Record<string, SessionKind> = { Serial: 'serial', Console: 'console', 'Local Shell': 'shell', Telnet: 'telnet', Raw: 'raw', RDP: 'rdp', VNC: 'vnc', WOL: 'wol' };
     return m[this.s?.protocol ?? ''] ?? (this.s?.openAs === 'sftp' ? 'sftp' : 'ssh');
   }
-  envColor() { return this.envs.find(e => e.id === this.s?.environment)?.color ?? null; }
+  envColor() { return this.envs().find(e => e.id === this.s?.environment)?.color ?? null; }
 
   more(page: string) {
     if (!this.s) return;

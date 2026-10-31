@@ -16,7 +16,7 @@ import { menuBar, shortcutOf } from './core/menu';
 import { FilesPanel } from './components/files-panel';
 import { WebOpenDialog } from './dialogs/web-open';
 import { RemoteDiagDialog } from './dialogs/remote-diag-dialog';
-import { envInfo, envOf } from './core/env';
+import { envInfo, envOf, setEnvironments } from './core/env';
 import { Ui } from './core/ui.service';
 import { uiFontSize, uiFontStack } from './core/ui-fonts';
 import { Icon } from './components/icon';
@@ -292,6 +292,7 @@ export class App implements OnInit {
     this.systemLight.set(media.matches);
     media.addEventListener('change', e => this.systemLight.set(e.matches));
     effect(() => { previewLanguages(); void i18n.set(this.settings()?.language ?? ''); });
+    effect(() => setEnvironments(this.settings()?.environments));
     effect(() => {
       const t = this.settings()?.theme ?? 'system';
       const light = t === 'light' || (t === 'system' && this.systemLight());
@@ -394,6 +395,8 @@ export class App implements OnInit {
       case 'log-toggle': await this.tabs.toggleLog(); break;
       case 'save-scrollback': await this.tabs.saveScrollback(); break;
       case 'save-scrollback-html': await this.tabs.saveScrollback(undefined, 'html'); break;
+      case 'copy-scrollback': await this.tabs.copyScrollback(); break;
+      case 'copy-scrollback-html': await this.tabs.copyScrollback(undefined, 'html'); break;
       case 'import': this.ui.open('import'); break;
       case 'discover': this.ui.open('discover'); break;
       case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
@@ -621,6 +624,8 @@ export class App implements OnInit {
         { label: t.castFile ? 'Stop Recording' : 'Record Session', action: () => this.tabs.toggleCast(t.id), disabled: !t.castFile && t.state !== 'connected' },
         ...(t.castFile ? [{ label: 'Add Marker...', hint: this.isMac ? '⌘J' : 'Ctrl+Shift+J', action: () => this.tabs.addMarker(t.id) }] : []),
       ] : []),
+      { label: 'Copy Scrollback', action: () => void this.tabs.copyScrollback(t.id) },
+      ...(t.kind === 'terminal' ? [{ label: 'Copy Scrollback as HTML Report', action: () => void this.tabs.copyScrollback(t.id, 'html') }] : []),
       { label: 'Save Scrollback As...', action: () => this.tabs.saveScrollback(t.id) },
       ...(t.kind === 'terminal' ? [{ label: 'Save Scrollback As HTML...', action: () => this.tabs.saveScrollback(t.id, 'html') },
         { label: 'Save Screen As Image...', hint: shortcutOf('capture-screen', this.isMac), action: () => this.tabs.captureScreen(t.id) }] : []),

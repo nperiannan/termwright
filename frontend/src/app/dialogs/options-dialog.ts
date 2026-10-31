@@ -7,10 +7,11 @@ import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, Sm
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
+import { DEFAULT_ENVIRONMENTS, ENV_COLORS, envFg } from '../core/env';
 import { UI_FONTS, UI_SIZES, uiFontStack } from '../core/ui-fonts';
 
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
-type Page = 'general' | 'terminal' | 'schemes' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards';
+type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards';
 
 /** What Global Options can find: page, the text shown on the page, extra words people search for. */
 const SEARCH: [Page, string, string][] = [
@@ -28,13 +29,13 @@ const SEARCH: [Page, string, string][] = [
   ['terminal', 'Use this scheme for all sessions', 'force override'], ['terminal', 'Cursor', 'block underline bar'], ['terminal', 'Blink', 'cursor'],
   ['terminal', 'Scrollback lines', 'history buffer'], ['terminal', 'Terminal bar', 'timestamps auto scroll clear screen'], ['terminal', 'Copy on select', 'clipboard mouse'], ['terminal', 'Paste on right-click', 'mouse clipboard'],
   ['terminal', 'Paste line delay', 'slow paste milliseconds'],
-  ['schemes', 'Scheme', 'colour scheme custom colors palette'], ['keywords', 'Default set', 'keyword highlighting highlight words colour'],
+  ['schemes', 'Scheme', 'colour scheme custom colors palette'], ['envs', 'Environments', 'environment production staging test development colour tag folder'], ['keywords', 'Default set', 'keyword highlighting highlight words colour'],
   ['keymap', 'Key Map', 'shortcut keyboard binding hotkey'], ['buttons', 'Button Bar', 'buttons send command'],
   ['devices', 'Device Types', 'login profile exos voss cisco linux username password prompt'], ['devices', 'No password', 'device type'],
   ['devices', 'Send initial carriage return', 'enter'], ['devices', 'Backup commands', 'configuration backup running-config show configuration'], ['alerts', 'Alerts', 'notify pattern sound desktop notification'],
   ['updates', 'Notify me about', 'update stable nightly'], ['updates', 'Check at start-up', 'update automatic'], ['updates', 'Repository', 'github'],
 ];
-const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', keywords: 'Keyword Highlighting',
+const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', envs: 'Environments', keywords: 'Keyword Highlighting',
   keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates' };
 
 /** Global Options dialog. */
@@ -58,6 +59,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
           <a [class.on]="page() === 'general'" (click)="page.set('general')"><app-icon name="eye" [size]="15" />General</a>
           <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')"><app-icon name="shell" [size]="15" />{{ modern() ? 'Terminal' : 'Terminal & Appearance' }}</a>
           <a class="sub" [class.on]="page() === 'schemes'" (click)="page.set('schemes')"><app-icon name="palette" [size]="15" />Color Schemes</a>
+          <a class="sub" [class.on]="page() === 'envs'" (click)="page.set('envs')"><app-icon name="layers" [size]="15" />Environments</a>
           <a [class.on]="page() === 'keywords'" (click)="page.set('keywords')"><app-icon name="highlight" [size]="15" />Keyword Highlighting</a>
           <div class="cat-g">Automation</div>
           <a [class.on]="page() === 'keymap'" (click)="page.set('keymap')"><app-icon name="keyboard" [size]="15" />Key Map</a>
@@ -217,6 +219,33 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <label>Paste line delay</label>
                 <div class="row"><input name="pld" type="number" min="0" class="short" [(ngModel)]="s.pasteLineDelayMs" /> ms between lines (0 = off; useful for slow network devices)</div>
               </div>
+            }
+            @case ('envs') {
+              <p class="hint">An environment marks sessions and folders with a colour and a short tag (on tabs, cards and in the Session Manager).
+                A folder in an environment - and everything in it, subfolders and sessions - takes its colour and tag, unless a subfolder or
+                session has an environment of its own. The ten environment colours are never folder colours (amber, violet, blue, teal, pink and lime
+                mark the top level and the five levels of subfolders), so a folder's colour always tells which it is.</p>
+              <div class="envs">
+                @for (e of s.environments ?? []; track $index; let i = $index) {
+                  <div class="envrow">
+                    <span class="tagpv" [style.background]="e.color" [style.color]="envFg(e.color)">{{ e.short || '?' }}</span>
+                    <input class="lab" [(ngModel)]="e.label" [name]="'el' + i" placeholder="Name, e.g. Pre-production" />
+                    <input class="sh mono" [ngModel]="e.short" (ngModelChange)="e.short = $event.toUpperCase().slice(0, 6)" [name]="'es' + i" placeholder="TAG" maxlength="6" />
+                    <div class="sw">
+                      @for (c of envColors; track c.c) {
+                        <button type="button" class="dotc" [class.on]="e.color === c.c" [style.background]="c.c" [title]="c.n" (click)="e.color = c.c"></button>
+                      }
+                    </div>
+                    <label class="inline-check" title="Pastes into its tabs are confirmed and the tab shows the tag, as for production">
+                      <input type="checkbox" [(ngModel)]="e.protect" [name]="'ep' + i" /> Like production</label>
+                    <button type="button" class="icon-btn" [disabled]="e.id === 'production'" [title]="e.id === 'production' ? 'Production stays (you can rename and recolour it)' : 'Remove this environment'"
+                      (click)="removeEnv(i)"><app-icon name="trash" [size]="14" /></button>
+                  </div>
+                }
+              </div>
+              <div class="row" style="margin-top: 10px"><button type="button" (click)="addEnv()"><app-icon name="plus" [size]="14" class="md-only" /> New Environment</button>
+                <button type="button" class="link" (click)="resetEnvs()">Back to the four built-in ones</button></div>
+              <div class="hint">Renaming or recolouring an environment changes it on every session and folder that has it. A removed environment no longer shows on them (folder defaults that named it are cleared).</div>
             }
             @case ('schemes') {
               <div class="grid">
@@ -540,6 +569,14 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
   </div>
   }`,
   styles: [`
+    .envs { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .envrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface);
+      .tagpv { min-width: 52px; text-align: center; font-size: calc(10px * var(--ui-scale, 1)); font-weight: 700; letter-spacing: .03em; padding: 2px 6px; border-radius: 4px; }
+      .lab { flex: 1 1 160px; min-width: 120px; } .sh { width: 80px; }
+      .sw { display: flex; gap: 5px; }
+      .dotc { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid transparent; box-shadow: 0 0 0 1px var(--line);
+        &.on { border-color: var(--text); } }
+      .inline-check { white-space: nowrap; } }
     .gsec { display: none; }
     :host-context(.modern) .gsec { display: block; grid-column: 1 / -1; margin: 14px 0 2px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600;
       letter-spacing: .06em; text-transform: uppercase; color: var(--faint); &:first-child { margin-top: 0; } }
@@ -583,6 +620,31 @@ export class OptionsDialog implements OnInit {
     return SEARCH.filter(([p, label, extra]) => { const t = (label + ' ' + extra + ' ' + PAGE_NAMES[p]).toLowerCase(); return w.every(x => t.includes(x)); });
   });
   pageName(p: Page) { return PAGE_NAMES[p]; }
+
+  readonly envColors = ENV_COLORS;
+  readonly envFg = envFg;
+  addEnv() {
+    if (!this.s) return;
+    const list = (this.s.environments ??= []);
+    const used = new Set(list.map(e => e.color));
+    list.push({ id: '', label: '', short: '', color: (ENV_COLORS.find(c => !used.has(c.c)) ?? ENV_COLORS[0]).c });
+  }
+  removeEnv(i: number) { this.s?.environments?.splice(i, 1); }
+  resetEnvs() { if (this.s) this.s.environments = structuredClone(DEFAULT_ENVIRONMENTS); }
+  /** New environments get an id from their name (what sessions and folders store); empty rows are dropped. */
+  private normEnvs() {
+    if (!this.s?.environments) return;
+    const ids = new Set<string>();
+    this.s.environments = this.s.environments.filter(e => e.label.trim()).map(e => {
+      let id = e.id || e.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'env';
+      const base = id; let n = 2;
+      while (ids.has(id)) id = base + '-' + n++;
+      ids.add(id);
+      return { ...e, id, label: e.label.trim(), short: (e.short || e.label).trim().toUpperCase().slice(0, 6) };
+    });
+    const known = new Set(this.s.environments.map(e => e.id));
+    for (const d of this.s.folderDefaults ?? []) if (d.environment && !known.has(d.environment)) d.environment = '';
+  }
 
   /** Opens the page and highlights the option. */
   goTo(p: Page, label: string) {
@@ -778,6 +840,7 @@ export class OptionsDialog implements OnInit {
     this.ui.optionsPage.set('');
     const cur = this.ui.settings();
     if (cur) this.s = structuredClone(cur);
+    if (this.s && !this.s.environments?.length) this.s.environments = structuredClone(DEFAULT_ENVIRONMENTS);
     if (this.s) this.schemeName.set(!this.s.terminalScheme || this.s.terminalScheme === 'Auto' ? 'Default' : this.s.terminalScheme);
     this.schemeRev.update(v => v + 1);
     this.backend.getAppInfo().then(i => this.dataDir.set(i.dataDir)).catch(() => {});
@@ -830,6 +893,7 @@ export class OptionsDialog implements OnInit {
 
   async save() {
     if (!this.s) return;
+    this.normEnvs();
     this.s.fontSize = Number(this.s.fontSize) || 14;
     this.s.scrollback = Number(this.s.scrollback) || 10000;
     this.s.pasteLineDelayMs = Number(this.s.pasteLineDelayMs) || 0;

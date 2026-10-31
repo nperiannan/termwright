@@ -99,10 +99,11 @@ type Settings struct {
 	PasteLineDelayMs     int                          `json:"pasteLineDelayMs"`
 	Buttons              []Button                     `json:"buttons"`
 	RecentSessions       []string                     `json:"recentSessions"`
-	Favorites            []string                     `json:"favorites"`        // session paths shown at the top of the Session Manager
-	LastConnected        map[string]string            `json:"lastConnected"`    // session path → RFC 3339 time of the last connect
-	ShowReachability     bool                         `json:"showReachability"` // Session Manager: dot per session from a quick TCP check
-	BackupDir            string                       `json:"backupDir"`        // Configuration Backups folder ("" = Documents/Termwright Config Backups)
+	Favorites            []string                     `json:"favorites"`             // session paths shown at the top of the Session Manager
+	LastConnected        map[string]string            `json:"lastConnected"`         // session path → RFC 3339 time of the last connect
+	ShowReachability     bool                         `json:"showReachability"`      // Session Manager: dot per session from a quick TCP check
+	ReachFolder          string                       `json:"reachFolder,omitempty"` // the check covers only this folder (and its subfolders); "" = every session
+	BackupDir            string                       `json:"backupDir"`             // Configuration Backups folder ("" = Documents/Termwright Config Backups)
 	BackupJobs           []BackupJob                  `json:"backupJobs"`
 	Checklists           []Checklist                  `json:"checklists"`
 	Collections          []Collection                 `json:"collections"`
@@ -145,6 +146,7 @@ type Settings struct {
 	Snippets             []Snippet                    `json:"snippets"`
 	Workspaces           []Workspace                  `json:"workspaces"`
 	FolderDefaults       []FolderDefault              `json:"folderDefaults"`
+	Environments         []Environment                `json:"environments,omitempty"` // empty = the built-in four (production, staging, test, development)
 	Window               WindowState                  `json:"window"`
 }
 
@@ -178,6 +180,16 @@ type Workspace struct {
 type WorkspaceTab struct {
 	Session string `json:"session"`
 	Kind    string `json:"kind"` // terminal | sftp
+}
+
+// Environment marks sessions and folders (and everything in a folder that
+// has no environment of its own) with a colour and a short tag.
+type Environment struct {
+	ID      string `json:"id"`                // what sessions and folders store: production, staging, … or a custom one
+	Label   string `json:"label"`             // Production
+	Short   string `json:"short"`             // PROD (the tag on tabs and cards)
+	Color   string `json:"color"`             // one of the environment colours (not a folder level colour)
+	Protect bool   `json:"protect,omitempty"` // like production: pastes are confirmed, the tab shows its tag
 }
 
 // FolderDefault holds values inherited by every session in a folder (and its

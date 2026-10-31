@@ -66,8 +66,8 @@ export function sessionAddr(n: SessionNode): string {
       <button class="icon-btn" title="New session" (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" /></button>
       <button class="icon-btn" title="New folder" (click)="newFolder(ui.currentFolder())"><app-icon name="folder-plus" /></button>
       <button class="icon-btn" title="Refresh" (click)="ui.refreshTree(); checkNow()"><app-icon name="refresh" /></button>
-      <button class="icon-btn" [class.on]="reach()" [title]="reach() ? 'Hide which devices answer' : 'Show which devices answer (a quick TCP check of the port of each session, every minute)'"
-        (click)="ui.patchSettings({ showReachability: !reach() })"><app-icon name="pulse" /></button>
+      <button class="icon-btn" [class.on]="reach()" [title]="reachTitle()"
+        (click)="toggleReach()"><app-icon name="pulse" /></button>
       @if (ui.settings()?.layout !== 'classic') {
         <!-- modern layout, compact rows: back to two-line rows; the rest is in the ⋯ menu (the title bar hides the panel) -->
         <button class="icon-btn" title="Two-line rows: name and address, device icon and status (turns Compact Rows off)"
@@ -85,8 +85,8 @@ export function sessionAddr(n: SessionNode): string {
       @if (roomy()) { <app-icon name="find" [size]="14" /> }
       <input type="search" placeholder="Filter sessions" [(ngModel)]="filterText" (ngModelChange)="filter.set($event); showAll.set(false)" />
       @if (roomy()) {
-        <button class="icon-btn more" [class.on]="reach()" [title]="reach() ? 'Hide which devices answer' : 'Show which devices answer (a quick TCP check of the port of each session, every minute)'"
-          (click)="ui.patchSettings({ showReachability: !reach() })"><app-icon name="pulse" /></button>
+        <button class="icon-btn more" [class.on]="reach()" [title]="reachTitle()"
+          (click)="toggleReach()"><app-icon name="pulse" /></button>
         <button class="icon-btn more" title="New folder, refresh, reachability, compact rows, dock side, hide" (click)="headMenu($event)"><app-icon name="more" /></button>
       }
     </div>
@@ -124,7 +124,7 @@ export function sessionAddr(n: SessionNode): string {
                 @if (modern()) { <app-folder-icon [depth]="r.depth ?? 0" [env]="folderEnv(n.path)" [open]="expanded().has(n.path)" [size]="roomy() ? 22 : 16" /> }
                 @else { <app-session-icon [kind]="expanded().has(n.path) ? 'folder-open' : 'folder'" /> }
                 <span class="name">{{ n.name }}</span>
-                @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
+                @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
                 @if (modern()) { <span class="count">{{ counts().get(n.path) ?? 0 }}</span> }
               } @else {
                 <span class="twisty"></span>
@@ -154,19 +154,19 @@ export function sessionAddr(n: SessionNode): string {
         <span class="txt">
           <span class="line"><span class="name">{{ n.name }}</span>
             @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
-            @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }</span>
+            @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }</span>
           <span class="addr">@if (addrParts(n); as ap) {<span class="a">{{ ap.a }}</span>@if (ap.t) {<span class="t">· {{ ap.t }}</span>}}</span>
         </span>
         @if (n.protocol === 'WOL') { <span [class]="wolDot(n)" [title]="wolTitle(n)"></span> }
-        @else if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
+        @else if (reach() && inReach(n.path)) { <span class="dot" [class]="dotClass(n)"></span> }
         @else if (liveState().get(n.path); as st) { <span class="dot" [class]="'dot ' + (st === 'connected' ? 'up' : st === 'error' ? 'down' : 'unk')" [title]="'Open in a tab - ' + st"></span> }
       } @else {
         <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget || n.protocol === 'Console'" />
         @if (n.protocol === 'WOL') { <span [class]="wolDot(n)" [title]="wolTitle(n)"></span> }
-        @else if (reach()) { <span class="dot" [class]="dotClass(n)"></span> }
+        @else if (reach() && inReach(n.path)) { <span class="dot" [class]="dotClass(n)"></span> }
         <span class="name">{{ n.name }}</span>
         @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
-        @if (env(n); as e) { <span class="env" [style.background]="e.color" [title]="e.label">{{ e.short }}</span> }
+        @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
       }
     </ng-template>
     @if (roomy()) {
@@ -183,7 +183,7 @@ export function sessionAddr(n: SessionNode): string {
           @if (roomy()) { @if (devKind(h.n); as k) { <app-device-icon [kind]="k" [size]="32" /> } @else { <app-session-icon [kind]="protoIcon(h.n)" [size]="32" /> } }
           <div class="hht">
             <div class="hname">{{ h.n.name }}
-              @if (env(h.n); as e) { <span class="env" [style.background]="e.color">{{ e.label }}</span> }</div>
+              @if (env(h.n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg">{{ e.label }}</span> }</div>
             <div class="hsub mono">{{ target(h.n) }}</div>
           </div>
         </div>
@@ -316,7 +316,10 @@ export class SessionTree implements AfterViewInit, OnDestroy {
       { label: 'Clear Recent', action: () => void this.ui.clearRecent(), disabled: !(s?.recentSessions ?? []).length },
       { label: 'Clear Favourites', action: () => void this.ui.clearFavourites(), disabled: !(s?.favorites ?? []).length },
       { separator: true },
-      { label: (this.reach() ? '✓ ' : '') + 'Show Which Devices Answer', action: () => this.ui.patchSettings({ showReachability: !this.reach() }) },
+      { label: 'Expand All Folders', action: () => this.expandAll(true) },
+      { label: 'Collapse All Folders', action: () => this.expandAll(false) },
+      { separator: true },
+      { label: (this.reach() ? '✓ ' : '') + 'Show Which Devices Answer' + (this.reach() && this.reachFolder() ? ' (in ' + this.reachFolder() + ')' : ''), action: () => this.toggleReach() },
       { label: (s?.compactRows ? '✓ ' : '') + 'Compact Rows', action: () => this.ui.patchSettings({ compactRows: !s?.compactRows }) },
       { label: s?.sessionManagerRight ? 'Move to the Left' : 'Move to the Right', action: () => this.ui.actionHandler('toggle-session-manager-side') },
       { label: 'Hide Session Manager', action: () => this.ui.actionHandler('toggle-session-manager') },
@@ -408,6 +411,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   async checkNow() {
     if (!this.reach() || this.checking) return;
     const targets = [...this.byPath().values()]
+      .filter(n => this.inReach(n.path))
       .filter(n => !n.jump && !n.proxy && n.hostname && (n.protocol === 'SSH2' || n.protocol === 'Telnet' || n.protocol === 'Raw'))
       .map(n => ({ key: n.path, host: n.hostname!, port: this.portOf(n) }));
     if (!targets.length) return;
@@ -484,6 +488,32 @@ export class SessionTree implements AfterViewInit, OnDestroy {
       case 'waking': return w.message || 'Waking…';
       default: return n.hostname ? 'Not checked yet' : 'Unknown';
     }
+  }
+
+  /** The folder the device check covers ("" = every session). */
+  readonly reachFolder = computed(() => this.ui.settings()?.reachFolder ?? '');
+  inReach(path: string) { const f = this.reachFolder(); return !f || path.startsWith(f + '/'); }
+  reachTitle() {
+    const f = this.reachFolder();
+    if (this.reach()) return 'Hide which devices answer' + (f ? ' (checking the sessions in ' + f + ')' : '');
+    const sel = this.ui.selectedIsFolder() ? this.ui.selectedPath() : '';
+    return 'Show which devices answer - ' + (sel ? 'the sessions in ' + sel + ' (the selected folder)' : 'every session (select a folder to check only its sessions)') +
+      ': a quick TCP check of the port, every minute';
+  }
+  /** Turns the device check on for the selected folder's sessions (or every session when no folder is selected), or off. */
+  toggleReach() {
+    if (this.reach()) { this.ui.patchSettings({ showReachability: false, reachFolder: '' }); return; }
+    const folder = this.ui.selectedIsFolder() ? this.ui.selectedPath() ?? '' : '';
+    this.ui.patchSettings({ showReachability: true, reachFolder: folder });
+    this.ui.toast('Checking which devices answer' + (folder ? ' in ' + folder : ' - every session') + (folder ? '' : '. Select a folder first to check only its sessions.'), 'info', 5000);
+  }
+  /** Opens (or closes) every folder. */
+  expandAll(open: boolean) {
+    const all = new Set<string>();
+    const walk = (n: SessionNode | null | undefined) => n?.children?.forEach(c => { if (c.isFolder) { all.add(c.path); walk(c); } });
+    if (open) walk(this.ui.tree());
+    this.expanded.set(all);
+    try { localStorage.setItem(EXPANDED_KEY, JSON.stringify([...all])); } catch { /* storage unavailable */ }
   }
 
   dotClass(n: SessionNode) {
