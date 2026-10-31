@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.27.0 (2026-11-01)
+
+Wake-on-LAN on a schedule and for Macs with Apple silicon, logging in again after a device restarts, and console logins that behave.
+
 * **Waking a Mac with Apple silicon.** These Macs often ignore the magic packet but wake through a Bonjour Sleep Proxy (Apple TV, HomePod) when a connection comes in for a service they offer. A Wake-on-LAN session can now connect to such ports after the packet (*Wake a Mac through its sleep proxy*, e.g. `22, 5900`), from the jump host when the packet goes from there. A session can hold several MAC addresses (Wi-Fi and dock), and a jump host without python3 sends the packet with perl.
 * **Scheduled Wake-on-LAN.** A Wake-on-LAN session can wake its device every day or Monday to Friday at a set time (session panel or Session Options → Connection), while Termwright is open. A wake missed by more than 15 minutes - the computer was asleep or Termwright closed - is skipped rather than sent late.
 * **Log in again when the device restarts** (Session Options → Logon Actions). A console server keeps the connection open while the switch behind it reboots or crashes, so *Reconnect automatically* never fires; with this option, a login prompt that comes back by itself is answered again (once every half minute at most). After your own `exit` or `logout` it is not.

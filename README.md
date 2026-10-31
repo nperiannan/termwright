@@ -82,6 +82,13 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.27.0
+
+- **Wake-on-LAN on a schedule.** A Wake-on-LAN session can wake its device every day or Monday to Friday at a set time while Termwright is open.
+- **Waking a Mac with Apple silicon.** After the magic packet, Termwright can connect to the Mac's service ports (e.g. SSH 22, Screen Sharing 5900) so a Bonjour Sleep Proxy (Apple TV, HomePod) wakes it - also through a jump host such as a NAS. A session can hold several MAC addresses, and jump hosts without python3 send the packet with perl.
+- **Log in again when the device restarts.** A switch behind a console server that reboots or crashes shows its login prompt again on the same connection; with this option Termwright logs in again (not after your own `exit`).
+- **Console logins that behave.** Imported sessions log in by themselves, typing `exit` on a console that was still logged in no longer logs straight back in, *No password* is in the session panel, and devices that print `^[[75;247R` before the prompt are recognised and no longer asked.
+
 ## What's new in 0.26.0
 
 - **Russian** ([#2](https://github.com/nperiannan/termwright/issues/2)). Settings → General → Language → *Русский*, now in every build, with the rest of the interface translated - backups, checklists, discovery, accounts, environments, the Files panel and SFTP, Software Update and more. File, folder and session names are never translated.
