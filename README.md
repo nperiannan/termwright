@@ -51,6 +51,14 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.25.0
+
+- **Glacier style** (the new default). Frosted glass panels and raised start page cards - graphite in the dark theme, icy in the light one; *Standard* stays one click away in Settings → General → Style.
+- **Your own environments.** Rename, recolour or add environments (Pre-production, Customer A, …) with ten colours that are never folder colours; a folder's environment carries to everything in it. Folders now have their own colour for the top level and five levels of subfolders.
+- **Accounts with a private key** ([#1](https://github.com/nperiannan/termwright/issues/1)). An account logs in with a password or an SSH key, and Quick Connect can log in with an account.
+- **Session Manager.** Moving, renaming or deleting a jump host asks about the RDP, VNC and SSH sessions that use it; *Expand / Collapse All*; the device check for one folder; the Delete key; a confirmation before deleting (on by default).
+- **Smaller changes.** Linux sessions open the Files panel, *Copy Scrollback* as text or as the HTML report, the start page footer, and menus that stay inside the window.
+
 ## What's new in 0.24.0
 
 - **Diagnose Remote Desktop.** Right-click an RDP or VNC session that does not connect: one line says what is wrong (red) or that nothing is, with the checks behind it, and *Restart VNC / RDP service* fixes a blocked service. Set Up Remote Desktop now chooses *through the SSH session* or *directly from the network* for RDP and VNC separately.
@@ -72,30 +80,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 - **Settings travel with the export.** A zip or folder export carries device types, accounts (without passwords), Folder Defaults, the command library, checklists, jobs and the Global Options. Import Sessions shows what is in the file and imports the parts you choose, following the target folder.
 - **Exports keep everything new.** Accounts, the Files panel, *SFTP opens on* and Wake-on-LAN sessions survive Termwright's own exports; the CSV gains account, network and Files panel columns and reads RDP, VNC and Wake-on-LAN sessions back with their protocol.
 
-## What's new in 0.21.0
-
-- **Modern interface, now the default.** Tabs and a session list share the title bar. A start page shows favourite and recent sessions, New Session and Properties open in a side panel, and sessions have device icons and colour-coded folders. Every dialog has been redesigned. The classic layout (menu bar, toolbar and tab strip) remains one click away.
-- **Device facts.** Read after connecting without typing in your tab, and shown on the tab, status bar, cards, hover card and side panel. To teach a new fact, select its value in the output; facts can be edited, removed or added by hand in Session Options.
-- **Files panel.** A file browser beside the SSH terminal, opposite the Session Manager:
-  - it follows the terminal's folder;
-  - opening a folder in the panel `cd`s the terminal there;
-  - a double-clicked file opens in its usual program on your computer, and saved changes are offered for upload.
-- **Wake-on-LAN.** Wake-on-LAN sessions with their own icon: the magic packet goes to the device's network only. If its IP address is unknown, the network is searched for its MAC address. A green or orange dot shows from a regular ping whether it is up. Any session with a MAC address can be woken too, from its jump host when it sits behind one.
-- **Web pages through a session.** Open a device's web interface (firewall, IPMI, NAS, switch) behind a jump host, or any page as seen from an SSH server. A separate browser window with a temporary profile sends all its traffic and name lookups through the SSH connection, and the profile is deleted when the window closes.
-- **SFTP.**
-  - Clickable paths and a bookmark bar.
-  - Multi-select with check boxes and the keyboard.
-  - New File and Delete on both sides (local files go to the Trash).
-  - Copy, Sync and Diff between the panes; Compare reports when two files are identical.
-  - Transfer speed is shown.
-  - Through a jump station, SFTP opens on the host the terminal is on.
-- **Security.** An optional master password, set during first-run setup with a strength meter (four characters minimum), and an unlock window at start-up.
-- **Everyday details.**
-  - Keyword highlighting on by default.
-  - Command History with per-command removal and clearing by device type.
-  - Save Screen As Image.
-  - Keyboard shortcuts for nearly every menu command.
-  - Timestamps that start on the first line.
+Earlier releases are described in the [changelog](CHANGELOG.md).
 
 ## Capabilities
 
