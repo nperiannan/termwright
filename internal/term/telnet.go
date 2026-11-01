@@ -297,3 +297,10 @@ func (t *telnetConn) subneg() {
 		t.send(b...)
 	}
 }
+
+// DialTelnet opens a Telnet connection the way the desktop does (the option
+// negotiation, NAWS, the terminal type), over the dial given - for the Android
+// app, which has its own sessions and jump hosts.
+func DialTelnet(ctx context.Context, s session.Session, cols, rows int, dial func(ctx context.Context, addr string) (net.Conn, string, error)) (Conn, error) {
+	return dialTelnet(ctx, s, cols, rows, dial)
+}

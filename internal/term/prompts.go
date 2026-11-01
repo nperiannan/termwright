@@ -383,3 +383,16 @@ func Unescape(s string) string {
 }
 
 func userHome() (string, error) { return os.UserHomeDir() }
+
+// BasicPrompt tells whether the end of what a device printed asks for the
+// user name ("user") or the password ("password"), as the basic Telnet login
+// sees it; "" otherwise.
+func BasicPrompt(window string) string {
+	if _, n := basicMatch(window, basicPassPrompts); n > 0 {
+		return "password"
+	}
+	if _, n := basicMatch(window, basicUserPrompts); n > 0 {
+		return "user"
+	}
+	return ""
+}

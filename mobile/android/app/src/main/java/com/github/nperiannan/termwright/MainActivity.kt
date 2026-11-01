@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -88,6 +89,11 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
     var hostKey by remember { mutableStateOf<Triple<Sess, String, Boolean>?>(null) } // jump, key, changed
     var pending by remember { mutableStateOf<Sess?>(null) } // the device to wake once the user has answered
     var query by remember { mutableStateOf("") }
+    // terminals: the one shown, and what connecting is waiting for (a login, a host key)
+    var termShown by remember { mutableStateOf<TermSession?>(null) }
+    var devLogin by remember { mutableStateOf<Pair<Sess, String>?>(null) } // device, error
+    var termKey by remember { mutableStateOf<ConnectOutcome.HostKey?>(null) }
+    var pendingConnect by remember { mutableStateOf<Pair<Sess, TermSession?>?>(null) }
 
     fun importFrom(uri: Uri) = scope.launch {
         try {
@@ -108,6 +114,20 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { importFrom(it) } }
     LaunchedEffect(shared) { shared?.let { importFrom(it); sharedDone() } }
+
+    fun connect(s: Sess, existing: TermSession? = null) = scope.launch {
+        busy = s.path
+        val r = Terms.connect(ctx, store, s, sessions, existing)
+        busy = null
+        when (r) {
+            is ConnectOutcome.Opened -> termShown = r.ts
+            is ConnectOutcome.Failed -> if (existing != null) existing.print("\u001b[31m[Could not connect: ${r.text}]\u001b[0m\r\n")
+                else snack.showSnackbar("Could not connect to ${s.name}: ${r.text}")
+            is ConnectOutcome.NeedLogin -> { pendingConnect = s to existing; devLogin = s to r.error }
+            is ConnectOutcome.NeedJumpLogin -> { pendingConnect = s to existing; loginFor = r.jump to r.error }
+            is ConnectOutcome.HostKey -> { pendingConnect = s to existing; termKey = r }
+        }
+    }
 
     fun wake(d: Sess, acceptKey: String = "") = scope.launch {
         busy = d.path
@@ -138,7 +158,10 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
         }
     }
 
-    Scaffold(
+    val shownTerm = termShown?.takeIf { it in Terms.open }
+    if (shownTerm != null) {
+        TerminalScreen(shownTerm, onBack = { termShown = null }, onShow = { termShown = it }, onReconnect = { connect(it.sess, it) })
+    } else Scaffold(
         topBar = {
             TopAppBar(
                 title = {
@@ -158,6 +181,13 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
                 Empty { picker.launch(arrayOf("*/*")) }
                 return@Column
             }
+            if (Terms.open.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 4.dp)) {
+                Terms.open.forEach { o ->
+                    FilterChip(selected = o.state == "connected", onClick = { termShown = o }, modifier = Modifier.padding(end = 6.dp),
+                        label = { Text(o.sess.name, maxLines = 1) },
+                        leadingIcon = { Box(Modifier.size(8.dp).clip(CircleShape).background(if (o.state == "connected") Color(0xFF22C55E) else Color(0xFFF59E0B))) })
+                }
+            }
             OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 placeholder = { Text("Filter sessions") }, singleLine = true, shape = RoundedCornerShape(12.dp))
             val shown = sessions.filter { query.isBlank() || "${it.path} ${it.host}".contains(query, true) }
@@ -173,7 +203,8 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
                         }
                     }
                     item(key = s.path) {
-                        SessionRow(s, up[s.path], busy == s.path, s.path == favourite, onOpen = { open = s }, onWake = { wake(s) })
+                        SessionRow(s, up[s.path], busy == s.path, s.path == favourite, onOpen = { open = s }, onWake = { wake(s) },
+                            onConnect = { Terms.open.firstOrNull { it.sess.path == s.path && it.state != "closed" }?.let { termShown = it } ?: connect(s) })
                     }
                 }
             }
@@ -182,6 +213,7 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
 
     open?.let { s ->
         Details(s, sessions, store, s.path == favourite, onDismiss = { open = null }, onWake = { open = null; wake(s) },
+            onConnect = { open = null; connect(s) }, onDeviceLogin = { open = null; devLogin = s to "" },
             onFavourite = { store.favourite = if (s.path == favourite) "" else s.path; favourite = store.favourite },
             onLogin = { j -> open = null; loginFor = j to "" })
     }
@@ -191,7 +223,45 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
             loginFor = null
             pending?.let { wake(it) }
             pending = null
+            pendingConnect?.let { (d, ex) -> connect(d, ex) }
+            pendingConnect = null
         }
+    }
+    devLogin?.let { (d, err) ->
+        DeviceLoginDialog(d, Terms.login(store, d.path), err, onDismiss = { devLogin = null; pendingConnect = null }) { l, remember ->
+            val hk = store.login(d.path).hostKey
+            if (remember) {
+                store.saveLogin(d.path, l.copy(hostKey = hk))
+                Terms.temp.remove(d.path)
+            } else {
+                Terms.temp[d.path] = l
+            }
+            devLogin = null
+            pendingConnect?.let { (dd, ex) -> connect(dd, ex) }
+            pendingConnect = null
+        }
+    }
+    termKey?.let { k ->
+        AlertDialog(
+            onDismissRequest = { termKey = null; pendingConnect = null },
+            title = { Text(if (k.changed) "${k.of.name}: the key has changed" else "Trust ${k.of.name}?") },
+            text = {
+                Text(
+                    (if (k.changed) "The device shows another key than the one you accepted before. If it was not reinstalled, someone may be in between.\n\n"
+                    else "First connection to ${k.of.host}. Check that this is its key:\n\n") + k.key,
+                    fontFamily = FontFamily.Monospace, fontSize = 13.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    store.saveLogin(k.of.path, store.login(k.of.path).copy(hostKey = k.key))
+                    termKey = null
+                    pendingConnect?.let { (d, ex) -> connect(d, ex) }
+                    pendingConnect = null
+                }) { Text(if (k.changed) "Accept the new key" else "Trust and connect") }
+            },
+            dismissButton = { TextButton(onClick = { termKey = null; pendingConnect = null }) { Text("Cancel") } },
+        )
     }
     hostKey?.let { (jump, key, changed) ->
         AlertDialog(
@@ -237,7 +307,7 @@ private fun Empty(onImport: () -> Unit) {
 }
 
 @Composable
-private fun SessionRow(s: Sess, up: Boolean?, busy: Boolean, fav: Boolean, onOpen: () -> Unit, onWake: () -> Unit) {
+private fun SessionRow(s: Sess, up: Boolean?, busy: Boolean, fav: Boolean, onOpen: () -> Unit, onWake: () -> Unit, onConnect: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -253,10 +323,9 @@ private fun SessionRow(s: Sess, up: Boolean?, busy: Boolean, fav: Boolean, onOpe
         if (up != null) {
             Box(Modifier.padding(horizontal = 10.dp).size(9.dp).clip(CircleShape).background(if (up) Color(0xFF22C55E) else Color(0xFFF59E0B)))
         }
-        if (s.canWake) {
-            if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-            else FilledTonalButton(onClick = onWake, contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Wake") }
-        }
+        if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+        else if (s.canTerminal) FilledTonalButton(onClick = onConnect, contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Connect") }
+        else if (s.canWake) FilledTonalButton(onClick = onWake, contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Wake") }
     }
 }
 
@@ -278,7 +347,8 @@ private fun ProtoBadge(s: Sess) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Details(s: Sess, all: List<Sess>, store: Store, fav: Boolean, onDismiss: () -> Unit, onWake: () -> Unit, onFavourite: () -> Unit, onLogin: (Sess) -> Unit) {
+private fun Details(s: Sess, all: List<Sess>, store: Store, fav: Boolean, onDismiss: () -> Unit, onWake: () -> Unit, onConnect: () -> Unit,
+                    onDeviceLogin: () -> Unit, onFavourite: () -> Unit, onLogin: (Sess) -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val jump = all.firstOrNull { it.path == s.jump }
@@ -305,7 +375,12 @@ private fun Details(s: Sess, all: List<Sess>, store: Store, fav: Boolean, onDism
             if (s.knock.isNotBlank()) Field("Sleep proxy ports", s.knock)
             Field("Jump host", jump?.let { "${it.name} (${it.user}@${it.host})" } ?: "none - only from the device's network")
             Spacer(Modifier.height(16.dp))
-            if (s.canWake) Button(onClick = onWake, Modifier.fillMaxWidth()) { Text("Wake ${s.name}") }
+            if (s.canTerminal) Button(onClick = onConnect, Modifier.fillMaxWidth()) { Text("Connect to ${s.name}") }
+            if (s.canWake && s.canTerminal) OutlinedButton(onClick = onWake, Modifier.fillMaxWidth()) { Text("Wake ${s.name}") }
+            else if (s.canWake) Button(onClick = onWake, Modifier.fillMaxWidth()) { Text("Wake ${s.name}") }
+            if (s.canTerminal) OutlinedButton(onClick = onDeviceLogin, Modifier.fillMaxWidth()) {
+                Text(if (store.login(s.path).usable) "Login for ${s.name}…" else "Save a login for ${s.name}…")
+            }
             if (jump != null) OutlinedButton(onClick = { onLogin(jump) }, Modifier.fillMaxWidth()) { Text("Login for ${jump.name}…") }
             Spacer(Modifier.height(8.dp))
             if (s.host.isNotBlank()) SwitchRow("Show on the home screen widget", if (s.canWake) "With whether it is up and a Wake button" else "With whether it is up", onWidget) { v ->
@@ -394,6 +469,47 @@ private fun LoginDialog(jump: Sess, current: Login, error: String, onDismiss: ()
             }
         },
         confirmButton = { TextButton(onClick = { onSave(Login(password, key.trim(), passphrase)) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** The login to a device for its terminal: SSH needs it, Telnet answers the login prompts with it. */
+@Composable
+private fun DeviceLoginDialog(d: Sess, current: Login, error: String, onDismiss: () -> Unit, onSave: (Login, Boolean) -> Unit) {
+    var user by remember { mutableStateOf(current.user.ifEmpty { d.user }) }
+    var password by remember { mutableStateOf(current.password) }
+    var key by remember { mutableStateOf(current.key) }
+    var passphrase by remember { mutableStateOf(current.passphrase) }
+    var keep by remember { mutableStateOf(true) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Log in to ${d.name}") },
+        text = {
+            Column {
+                if (d.protocol == "Telnet") Text("Termwright types it when the device asks for the login and password.",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(user, { user = it }, label = { Text("User") }, singleLine = true)
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                if (d.protocol != "Telnet") {
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(key, { key = it }, label = { Text("or private key (paste)") }, minLines = 2, maxLines = 4,
+                        textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp))
+                    if (key.isNotBlank()) OutlinedTextField(passphrase, { passphrase = it }, label = { Text("Key passphrase") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation())
+                }
+                Row(Modifier.fillMaxWidth().clickable { keep = !keep }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = keep, onCheckedChange = { keep = it })
+                    Text("Remember (encrypted on this phone)", fontSize = 14.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(Login(password, key.trim(), passphrase, "", if (user == d.user) "" else user), keep) }) { Text("Connect") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

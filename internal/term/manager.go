@@ -110,18 +110,18 @@ type Tab struct {
 	subSeq    int
 	capture   func([]byte) // when set, output goes only here (file transfers)
 	recorder  *recorder
-	cast      *recording.Writer // session recording (.cast)
-	zwin      []byte            // tail of recent output for ZMODEM auto-detection
-	zpending  bool              // waiting for the user to pick files for "rz"
-	seq       int64             // creation order (scripts address tabs by index)
-	alertBuf  string            // partial output line for alert matching
-	logonPass string            // password typed for \w during this connection
+	cast      *recording.Writer   // session recording (.cast)
+	zwin      []byte              // tail of recent output for ZMODEM auto-detection
+	zpending  bool                // waiting for the user to pick files for "rz"
+	seq       int64               // creation order (scripts address tabs by index)
+	alertBuf  string              // partial output line for alert matching
+	logonPass string              // password typed for \w during this connection
 	relogin   func() *logonRunner // "Log in again": a new login for a login prompt that comes back by itself
 	reTail    string              // the end of the output (plain text), to see that prompt
 	reStrip   logging.Stripper
 	lastTyped time.Time // the user last typed text (not Enter alone)
 	lastLogin time.Time // a login last started
-	loginPass string            // password the SSH login of this tab used (typed or saved); memory only
+	loginPass string    // password the SSH login of this tab used (typed or saved); memory only
 	alertAt   map[int]time.Time
 	lastMsg   string // last status message (errors of background connections)
 }

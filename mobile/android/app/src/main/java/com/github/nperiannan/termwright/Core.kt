@@ -84,7 +84,7 @@ object Core {
             }
         }
 
-    private fun onDeviceNetwork(d: Sess, nets: List<String>): Boolean = nets.any { n ->
+    fun onDeviceNetwork(d: Sess, nets: List<String>): Boolean = nets.any { n ->
         val ip = n.substringBefore("/")
         val bits = n.substringAfter("/").toIntOrNull() ?: 24
         listOf(d.host, d.wolNetwork.substringBefore("/")).any { it.isNotBlank() && samePrefix(ip, it, bits) }

@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="xterm.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #0c0d10; overflow: hidden; }
+  #t { position: absolute; inset: 0; padding: 4px 6px; }
+</style>
+</head>
+<body>
+<div id="t"></div>
+<script src="xterm.js"></script>
+<script src="addon-fit.js"></script>
+<script>
+  // xterm.js (the desktop's terminal) in the Android app; "tw" is the app (TermSession.Bridge).
+  const el = document.getElementById('t');
+  const term = new Terminal({
+    fontFamily: 'monospace', fontSize: tw.fontSize(), cursorBlink: true, scrollback: 5000,
+    theme: { background: '#0c0d10', foreground: '#d6d8dc', cursor: '#d6d8dc' },
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(el);
+  // the phone keyboard: no auto-correction or capitals in a terminal
+  if (term.textarea) for (const [k, v] of [['autocapitalize', 'off'], ['autocorrect', 'off'], ['autocomplete', 'off'], ['spellcheck', 'false']]) term.textarea.setAttribute(k, v);
+  let cols = 0, rows = 0;
+  function refit() {
+    try { fit.fit(); } catch (e) {}
+    if (term.cols !== cols || term.rows !== rows) { cols = term.cols; rows = term.rows; tw.resize(cols, rows); }
+  }
+  new ResizeObserver(refit).observe(el);
+  term.onData(d => tw.input(d));
+  term.onBinary(d => tw.input(d));
+  window.twWrite = b64 => {
+    const s = atob(b64), u = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+    term.write(u);
+  };
+  window.twFont = n => { term.options.fontSize = n; refit(); };
+  window.twFocus = () => term.focus();
+  window.twSelection = () => term.getSelection();
+  window.twSelectAll = () => term.selectAll();
+  window.twPaste = t => term.paste(t);
+  // keys from the bar: the cursor keys follow the device's mode (vi, menus use "application" keys)
+  window.twKey = name => {
+    const app = term.modes && term.modes.applicationCursorKeysMode;
+    const cur = c => (app ? '\x1bO' : '\x1b[') + c;
+    const k = { up: cur('A'), down: cur('B'), right: cur('C'), left: cur('D'), home: cur('H'), end: cur('F'),
+      pgup: '\x1b[5~', pgdn: '\x1b[6~', esc: '\x1b', tab: '\t' }[name];
+    if (k) tw.key(k);
+  };
+  refit();
+  tw.ready();
+</script>
+</body>
+</html>

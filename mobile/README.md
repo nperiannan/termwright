@@ -13,6 +13,12 @@ including the sleep-proxy ports that wake a Mac with Apple silicon.
 - **Status dots**: green when the device answers on a port (22, 445, 3389, 5900, 80 or its sleep-proxy
   ports), every minute while the app is open. Apps cannot ping without root.
 - **Quick settings tile**: *Use for the Wake tile* on a session, then add the *Wake* tile to quick settings.
+- **Terminal** (SSH and Telnet): *Connect* on a session opens the desktop's terminal (xterm.js) with a bar for the keys a
+  phone keyboard lacks (Esc, Tab, Ctrl and Alt for the next key, arrows, Home/End, PgUp/PgDn, `| ? / - ~`). The login is
+  asked once (kept encrypted, or only until the app closes); a device's key is shown to accept the first time and a changed
+  key is never accepted silently. Telnet answers the login and password prompts with the saved login. Away from home,
+  sessions with a jump host go through it. Several sessions stay open; the menu has copy, paste, text size, Send Break,
+  reconnect and disconnect.
 - **Home screen widget** (*Termwright devices*): the devices you turn on with *Show on the home screen widget*,
   whether they are up (checked every 30 minutes, or tap ⟳), and a *Wake* button that follows the device until it answers.
 - **Wake on a schedule**: every day or weekdays at a time, sent from the phone also while the app is closed, with a
@@ -23,8 +29,8 @@ including the sleep-proxy ports that wake a Mac with Apple silicon.
 
 | Part | Where | What |
 |---|---|---|
-| Go core | `mobile/core` (package `twcore`) | Session import (the desktop's importers), wake packet, jump host commands, SSH - the desktop code |
-| Android app | `mobile/android` | Kotlin, Jetpack Compose; calls `twcore` through `twcore.aar` |
+| Go core | `mobile/core` (package `twcore`) | Session import (the desktop's importers), wake packet, jump host commands, SSH and Telnet terminals (the desktop's Telnet) |
+| Android app | `mobile/android` | Kotlin, Jetpack Compose; calls `twcore` through `twcore.aar`; the terminal is xterm.js (`assets/term`) in a WebView |
 
 The GitHub workflow (`build.yml`, job `android`) builds `twcore.aar` with gomobile and the APK with Gradle,
 and attaches `Termwright-<version>-android.apk` to every release and nightly.

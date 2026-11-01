@@ -22,6 +22,8 @@ data class Sess(
     val wakeSchedule: String = "", val wakeAt: String = "",
 ) {
     val canWake get() = mac.isNotBlank()
+    /** SSH and Telnet sessions open a terminal on the phone. */
+    val canTerminal get() = host.isNotBlank() && (protocol == "SSH2" || protocol == "Telnet")
     val isWol get() = protocol == "WOL"
 
     fun toJson(): JSONObject = JSONObject()
@@ -48,8 +50,8 @@ data class Sched(val mode: String = "daily", val at: String = "07:00", val on: B
 /** What the widget shows for a device: "up", "down", "waking", or a short reason it could not be woken. */
 data class Status(val state: String, val note: String = "")
 
-/** The login to a jump host, kept encrypted with a key in the Android Keystore. */
-data class Login(val password: String = "", val key: String = "", val passphrase: String = "", val hostKey: String = "") {
+/** The login to a jump host or a device, kept encrypted with a key in the Android Keystore (user: "" = the session's). */
+data class Login(val password: String = "", val key: String = "", val passphrase: String = "", val hostKey: String = "", val user: String = "") {
     val usable get() = password.isNotEmpty() || key.isNotBlank()
 }
 
@@ -74,6 +76,11 @@ class Store(private val ctx: Context) {
     var favourite: String
         get() = prefs.getString("favourite", "") ?: ""
         set(v) = prefs.edit().putString("favourite", v).apply()
+
+    /** The terminal's text size. */
+    var fontSize: Int
+        get() = prefs.getInt("fontSize", 13)
+        set(v) = prefs.edit().putInt("fontSize", v.coerceIn(8, 24)).apply()
 
     // ---- home screen widget: the devices on it, and what was last seen of them ----
     var widget: List<String>
@@ -120,12 +127,12 @@ class Store(private val ctx: Context) {
     fun login(path: String): Login {
         val all = logins()
         val o = all.optJSONObject(path) ?: return Login()
-        return Login(o.optString("password"), o.optString("key"), o.optString("passphrase"), o.optString("hostKey"))
+        return Login(o.optString("password"), o.optString("key"), o.optString("passphrase"), o.optString("hostKey"), o.optString("user"))
     }
 
     fun saveLogin(path: String, l: Login) {
         val all = logins()
-        all.put(path, JSONObject().put("password", l.password).put("key", l.key).put("passphrase", l.passphrase).put("hostKey", l.hostKey))
+        all.put(path, JSONObject().put("password", l.password).put("key", l.key).put("passphrase", l.passphrase).put("hostKey", l.hostKey).put("user", l.user))
         prefs.edit().putString("logins", encrypt(all.toString())).apply()
     }
 
