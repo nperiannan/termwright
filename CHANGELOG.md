@@ -4,6 +4,11 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.28.2 (2026-11-01)
+
+The Android terminal shows what the device prints, and calmer dark cards on the start page.
+
+* **Glacier dark: deep slate cards.** The start page cards are darker with a soft light from the top and grey sides; the light shine across them is gone.
 * **Android: the terminal shows what the device prints.** The terminal was sized for the whole screen and did not shrink when the keyboard opened, so the prompt, what you typed and the device's answers were hidden under the keyboard. It now fits the visible part above the keyboard and the key bar, keeps the cursor line in view, and never cuts the last row; the text is a little smaller (11), so a switch's output fits on a phone.
 
 ## 0.28.1 (2026-11-01)
