@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.28.0 (2026-11-01)
+
+The Android app grows up - an SSH and Telnet terminal, a home screen widget and wakes on a schedule - and the Glacier start page gets 3D cards and a neutral light theme.
+
 * **Glacier: a neutral light theme, 3D search bar and buttons, and what Termwright is.** The light Glacier theme is white and grey instead of bluish (blue stays for the accent, the selection and what is under the pointer). The search bar and the quick buttons on the start page are 3D like the cards - the buttons lift under the pointer and press down - with grey edges that show on the dark theme too. Beside the name: *Open-source remote access platform* and the protocols it speaks.
 * **Android: SSH and Telnet terminal.** *Connect* opens a terminal on the phone (the desktop's xterm.js) with a key bar for Esc, Tab, Ctrl, Alt, arrows and the characters a phone keyboard hides. Logins are asked once and kept encrypted (or only until the app closes), host keys are shown to accept, Telnet logs in with the saved login, and sessions with a jump host go through it when the phone is away. Several sessions stay open, with copy, paste, text size, Send Break and reconnect; a notification keeps them connected while the app is in the background (with *Disconnect all*), and SSH sends a keepalive every 30 s.
 * **Android: home screen widget and wakes on a schedule.** A *Termwright devices* widget shows the devices you pick, whether they are up, and a *Wake* button that follows the device until it answers. A device can be woken every day or on weekdays at a set time from the phone, also while the app is closed, with a notification afterwards; the computer's schedule comes with the import. The widget and notifications use the Termwright icon.
@@ -14,6 +18,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **The session type stays visible with a device type.** A session with a device type shows the device's icon (switch, server…), so how it opens was hidden. Start page cards now have a chip with the session icon and type (SSH, SFTP, Telnet, Serial…), and the Session Manager's hover card a *Session* line. On recent cards the time ("8 hours ago") sits beside the chips, so a long version no longer hides it.
 * **Wake-on-LAN menu: only the session you right-click.** *Wake Up* is greyed out ("device is up") while the device answers, and *Wake Up and Connect* is only on the session itself (an SSH, RDP or VNC session with the device's MAC address) - a Wake-on-LAN session no longer lists the device's other sessions ("Wake Up and Connect to TNAS" twice).
 * **Termwright for Android (preview).** A small companion app (`mobile/`, Kotlin with the Go core): import a Termwright export, see which devices answer, and wake them with one tap - from the phone on the same Wi-Fi, or through a jump host such as a NAS when away, with the sleep-proxy ports for Macs. A quick settings tile wakes a favourite. Logins are kept encrypted with the Android Keystore; a jump host's key is accepted once and checked after that. The APK is attached to releases and nightlies.
+
 ## 0.27.0 (2026-11-01)
 
 Wake-on-LAN on a schedule and for Macs with Apple silicon, logging in again after a device restarts, and console logins that behave.

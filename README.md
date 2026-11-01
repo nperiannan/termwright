@@ -83,6 +83,13 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.28.0
+
+- **Termwright for Android: a terminal.** SSH and Telnet sessions open on the phone with the desktop's terminal and a key bar for Esc, Tab, Ctrl, Alt and the arrows. Logins are kept encrypted, host keys are checked, sessions with a jump host go through it when you are away, and open sessions stay connected in the background.
+- **Android: widget and wakes on a schedule.** A home screen widget shows whether your devices are up with a *Wake* button, and the phone can wake a device every day or on weekdays, with a notification afterwards.
+- **3D start page.** On the Glacier style the recent and favourite cards, the search bar and the quick buttons are 3D; the cards reach past the search bar into free space and show the model with the login, the folder and the time. Recent keeps 12 sessions.
+- **A neutral light theme.** Glacier light is white and grey instead of bluish.
+
 ## What's new in 0.27.0
 
 - **Wake-on-LAN on a schedule.** A Wake-on-LAN session can wake its device every day or Monday to Friday at a set time while Termwright is open.
