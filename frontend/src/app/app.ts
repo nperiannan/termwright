@@ -10,7 +10,7 @@ import { ago } from './core/env';
 import { factList } from './core/facts';
 import { SessionIcon } from './components/session-icon';
 import { DeviceIcon, deviceKindOf } from './components/device-icon';
-import { sessionAddr } from './components/session-tree';
+import { protoName, sessionAddr } from './components/session-tree';
 import { SessionPanel } from './components/session-panel';
 import { menuBar, shortcutOf } from './core/menu';
 import { FilesPanel } from './components/files-panel';
@@ -180,10 +180,13 @@ export class App implements OnInit {
   cardMeta(n: SessionNode, recent: boolean) {
     const ver = this.ui.factsOf(n.path)?.['Version'] ?? '';
     const kind = [n.deviceType || ({ Serial: 'Serial', 'Local Shell': 'Local', Console: 'Console' } as Record<string, string>)[n.protocol ?? ''] || '', ver].filter(Boolean).join(' ');
-    const tail = recent ? this.lastAgo(n) : (n.protocol === 'Serial' ? '' : n.protocol ?? '');
+    // the protocol has its own chip when the icon shows the device type
+    const tail = recent ? this.lastAgo(n) : (n.protocol === 'Serial' || this.devKind(n) ? '' : n.protocol ?? '');
     return [kind, tail].filter(Boolean).join(' · ') || n.protocol || '';
   }
   devKind(n: SessionNode) { return n.protocol === 'WOL' ? null : deviceKindOf(n.deviceType); }
+  /** How the session opens: SSH, SFTP, Telnet, Serial… (the icon shows the device type instead). */
+  protoName(n: SessionNode) { return protoName(n); }
   addr(n: SessionNode) { return sessionAddr(n); }
   cardEnv(n: SessionNode) { return envInfo(envOf(n.path, n.environment, this.settings()?.folderDefaults)); }
   lastAgo(n: SessionNode) { return ago(this.settings()?.lastConnected?.[n.path]); }

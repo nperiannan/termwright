@@ -41,6 +41,12 @@ export function hostShown(n: SessionNode): string {
   return h;
 }
 
+/** How a session opens, for when its icon shows the device type: "SSH", "SFTP", "Telnet"… */
+export function protoName(n: SessionNode): string {
+  if (n.protocol === 'SSH2' || !n.protocol) return n.openAs === 'sftp' ? 'SFTP' : 'SSH';
+  return ({ Raw: 'Raw TCP', 'Local Shell': 'Local shell', WOL: 'Wake-on-LAN' } as Record<string, string>)[n.protocol] ?? n.protocol;
+}
+
 export function sessionAddr(n: SessionNode): string {
   let a: string;
   if (n.protocol === 'WOL') return (n.hostname || n.wolNetwork || n.mac || '') + ' · WOL';
@@ -190,6 +196,7 @@ export function sessionAddr(n: SessionNode): string {
         <div class="kv">
           @if (h.n.jump) { <span>Via</span><b>{{ h.n.jump }}</b> }
           @if (h.n.proxy) { <span>Via</span><b>a proxy</b> }
+          @if (devKind(h.n)) { <span>Session</span><b class="pv"><app-session-icon [kind]="protoIcon(h.n)" [size]="15" />{{ protoName(h.n) }}</b> }
           @if (h.n.deviceType) { <span>Device type</span><b>{{ h.n.deviceType }}</b> }
           @for (f of facts(h.n.path); track f[0]) { <span>{{ f[0] }}</span><b [class.mono]="f[0] === 'MAC'">{{ f[1] }}</b> }
           @if (h.n.mac && !ui.factsOf(h.n.path)?.['MAC']) { <span>MAC</span><b class="mono">{{ h.n.mac }}</b> }
@@ -682,6 +689,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
 
   connect(n: SessionNode) { void this.tabs.openSession(n.path); }
 
+  protoName(n: SessionNode) { return protoName(n); }
   protoIcon(n: SessionNode): SessionKind {
     switch (n.protocol) {
       case 'Serial': return 'serial';
