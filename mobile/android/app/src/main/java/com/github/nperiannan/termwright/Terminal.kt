@@ -64,6 +64,10 @@ class TermSession(val sess: Sess, ctx: Context) {
     @SuppressLint("SetJavaScriptEnabled")
     val web: WebView = WebView(ctx.applicationContext).apply {
         settings.javaScriptEnabled = true
+        // The phone's text size setting (Settings → Display → Font size) zooms a WebView's text by default. xterm
+        // measures its cells first and the zoomed letters then did not fit them: cut off at the bottom and squeezed
+        // together. The terminal's own text size (menu → Text size) is the one that counts here.
+        settings.textZoom = 100
         setBackgroundColor(0xFF0C0D10.toInt())
         overScrollMode = WebView.OVER_SCROLL_NEVER
         isVerticalScrollBarEnabled = false
