@@ -283,7 +283,9 @@ fun TerminalScreen(ts: TermSession, onBack: () -> Unit, onShow: (TermSession) ->
         view.keepScreenOn = true
         onDispose { view.keepScreenOn = false }
     }
-    Column(Modifier.fillMaxSize().background(Color(0xFF0C0D10)).systemBarsPadding().imePadding()) {
+    // a Surface sets the text colour for the dark terminal screen (without it the session name was black on dark grey)
+    Surface(Modifier.fillMaxSize(), color = Color(0xFF0C0D10), contentColor = Color(0xFFE4E5E9)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().background(Color(0xFF17181C)).padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Sessions") }
             Column(Modifier.weight(1f).clickable { switcher = true }) {
@@ -291,7 +293,7 @@ fun TerminalScreen(ts: TermSession, onBack: () -> Unit, onShow: (TermSession) ->
                 val proto = if (ts.sess.protocol == "SSH2") "SSH" else ts.sess.protocol
                 val st = when (ts.state) { "connecting" -> "connecting…"; "closed" -> "disconnected"; else -> "" }
                 Text(listOf(proto, st, "${Terms.open.size} open ⌄").filter { it.isNotEmpty() }.joinToString(" · "),
-                    fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF9A9EA7))
             }
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
@@ -346,6 +348,7 @@ fun TerminalScreen(ts: TermSession, onBack: () -> Unit, onShow: (TermSession) ->
             }
         }
         KeyBar(ts)
+    }
     }
     if (switcher) {
         ModalBottomSheet(onDismissRequest = { switcher = false }) {

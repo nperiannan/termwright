@@ -5,25 +5,35 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <link rel="stylesheet" href="xterm.css">
 <style>
+  /* a font of our own: the phone's "monospace" differs from maker to maker, and its letters were taller than the rows
+     xterm measured, so their lower part was cut off */
+  @font-face { font-family: TwMono; src: url(DejaVuSansMono.woff2) format('woff2'); font-weight: normal; }
+  @font-face { font-family: TwMono; src: url(DejaVuSansMono-Bold.woff2) format('woff2'); font-weight: bold; }
   html, body { margin: 0; height: 100%; background: #0c0d10; overflow: hidden; overscroll-behavior: none; }
   /* placed on the visible part of the page (above the keyboard); a little room at the bottom so the last row is never cut */
-  #t { position: fixed; left: 0; right: 0; top: 0; height: 100%; box-sizing: border-box; padding: 4px 6px 10px; }
+  #t { position: fixed; left: 0; right: 0; top: 0; height: 100%; }
+  /* the margins on an inner box: the fit addon reads its parent's height, which must not include them */
+  #x { position: absolute; left: 6px; right: 6px; top: 4px; bottom: 10px; }
 </style>
 </head>
 <body>
-<div id="t"></div>
+<div id="t"><div id="x"></div></div>
 <script src="xterm.js"></script>
 <script src="addon-fit.js"></script>
 <script>
+(async () => {
   // xterm.js (the desktop's terminal) in the Android app; "tw" is the app (TermSession.Bridge).
+  // xterm measures the letters when it opens: the font must be loaded by then.
+  try { await Promise.all([document.fonts.load('13px TwMono'), document.fonts.load('bold 13px TwMono')]); } catch (e) {}
   const el = document.getElementById('t');
   const term = new Terminal({
-    fontFamily: 'monospace', fontSize: tw.fontSize(), cursorBlink: true, scrollback: 5000,
+    fontFamily: 'TwMono, monospace', fontSize: tw.fontSize(), lineHeight: 1.1, cursorBlink: true, scrollback: 5000,
     theme: { background: '#0c0d10', foreground: '#d6d8dc', cursor: '#d6d8dc' },
   });
+  window.term = term;
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
-  term.open(el);
+  term.open(document.getElementById('x'));
   // the phone keyboard: no auto-correction or capitals in a terminal
   if (term.textarea) for (const [k, v] of [['autocapitalize', 'off'], ['autocorrect', 'off'], ['autocomplete', 'off'], ['spellcheck', 'false']]) term.textarea.setAttribute(k, v);
   let cols = 0, rows = 0;
@@ -45,7 +55,7 @@
   }
   if (vv) { vv.addEventListener('resize', place); vv.addEventListener('scroll', place); }
   window.addEventListener('resize', place);
-  new ResizeObserver(refit).observe(el);
+  new ResizeObserver(refit).observe(document.getElementById('x'));
   window.twRefit = place;
   term.onData(d => tw.input(d));
   term.onBinary(d => tw.input(d));
@@ -69,6 +79,7 @@
   };
   place();
   tw.ready();
+})();
 </script>
 </body>
 </html>
