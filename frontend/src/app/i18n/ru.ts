@@ -242,6 +242,7 @@ const ru: Record<string, string> = {
   'More': 'Ещё',
   'Workspaces': 'Рабочие области',
   'Built for the people who keep networks running.': 'Для тех, кто обеспечивает работу сетей.',
+  'Open-source remote access platform': 'Платформа удалённого доступа с открытым исходным кодом',
   'The open-source terminal and session manager for network and infrastructure teams.': 'Терминал и менеджер сессий с открытым исходным кодом для сетевых и инфраструктурных команд.',
   'Version': 'Версия',
   '· {0} available': '· доступна {0}',
