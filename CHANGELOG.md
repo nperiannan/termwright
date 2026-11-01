@@ -5,7 +5,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 ## Unreleased
 
 * **Discover Devices: calmer before a scan.** The window opens narrow, with the networks of this computer as a list to pick from (one line per network - wired and Wi-Fi on the same network share it), the addresses to type below, and the SNMP options folded away. It widens for the results.
-* **Android terminal: letters no longer cut off or squeezed on phones with a larger font size.** The phone's font size setting zoomed the terminal's text after xterm had measured its cells; the terminal now ignores it and has its own size (menu → Text size).
+* **Android terminal: letters no longer cut off at the bottom or squeezed together.** xterm measured its letters on a hidden canvas but showed them as page text, which the phone draws bigger (its font size setting) or in another font; the terminal now measures with page text, the way it draws, and ignores the phone's text zoom (the terminal has its own size: menu → Text size).
 * **Android terminal: whole letters, readable title.** The letters were taller than the rows (the phone's own monospace font), so their lower half was cut off; the terminal now has its own font (DejaVu Sans Mono), waits for it before measuring, and fits rows exactly. The session name in the terminal's title bar was black on dark grey.
 
 ## 0.28.2 (2026-11-01)

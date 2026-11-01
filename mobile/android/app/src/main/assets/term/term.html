@@ -25,6 +25,11 @@
   // xterm.js (the desktop's terminal) in the Android app; "tw" is the app (TermSession.Bridge).
   // xterm measures the letters when it opens: the font must be loaded by then.
   try { await Promise.all([document.fonts.load('13px TwMono'), document.fonts.load('bold 13px TwMono')]); } catch (e) {}
+  // xterm measures a letter on a hidden canvas, but shows the text as page text. On a phone the two can differ - the
+  // phone's font size setting zooms page text only, and a canvas may draw another font than the page - and the letters
+  // then do not fit their cells: cut off at the bottom and squeezed together. Without OffscreenCanvas xterm measures
+  // with page text, the same way it shows it, so the cells always fit what is drawn.
+  try { window.OffscreenCanvas = undefined; } catch (e) {}
   const el = document.getElementById('t');
   const term = new Terminal({
     fontFamily: 'TwMono, monospace', fontSize: tw.fontSize(), lineHeight: 1.1, cursorBlink: true, scrollback: 5000,
