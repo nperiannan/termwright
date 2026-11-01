@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">Termwright</string>
     <string name="tile_label">Wake</string>
+    <string name="widget_label">Termwright devices</string>
+    <string name="widget_desc">Whether your devices are up, and a button to wake them</string>
 </resources>

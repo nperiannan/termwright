@@ -19,6 +19,7 @@ data class Sess(
     val host: String, val port: Int, val user: String, val mac: String,
     val wolNetwork: String, val wolPort: Int, val broadcast: String, val knock: String,
     val jump: String, val deviceType: String, val environment: String,
+    val wakeSchedule: String = "", val wakeAt: String = "",
 ) {
     val canWake get() = mac.isNotBlank()
     val isWol get() = protocol == "WOL"
@@ -28,6 +29,7 @@ data class Sess(
         .put("host", host).put("port", port).put("user", user).put("mac", mac)
         .put("wolNetwork", wolNetwork).put("wolPort", wolPort).put("broadcast", broadcast).put("knock", knock)
         .put("jump", jump).put("deviceType", deviceType).put("environment", environment)
+        .put("wakeSchedule", wakeSchedule).put("wakeAt", wakeAt)
 
     companion object {
         fun from(o: JSONObject) = Sess(
@@ -35,9 +37,16 @@ data class Sess(
             o.optString("host"), o.optInt("port"), o.optString("user"), o.optString("mac"),
             o.optString("wolNetwork"), o.optInt("wolPort"), o.optString("broadcast"), o.optString("knock"),
             o.optString("jump"), o.optString("deviceType"), o.optString("environment"),
+            o.optString("wakeSchedule"), o.optString("wakeAt"),
         )
     }
 }
+
+/** A wake on a schedule from the phone: "daily" or "weekdays" at "HH:MM" (local time). */
+data class Sched(val mode: String = "daily", val at: String = "07:00", val on: Boolean = false)
+
+/** What the widget shows for a device: "up", "down", "waking", or a short reason it could not be woken. */
+data class Status(val state: String, val note: String = "")
 
 /** The login to a jump host, kept encrypted with a key in the Android Keystore. */
 data class Login(val password: String = "", val key: String = "", val passphrase: String = "", val hostKey: String = "") {
@@ -65,6 +74,48 @@ class Store(private val ctx: Context) {
     var favourite: String
         get() = prefs.getString("favourite", "") ?: ""
         set(v) = prefs.edit().putString("favourite", v).apply()
+
+    // ---- home screen widget: the devices on it, and what was last seen of them ----
+    var widget: List<String>
+        get() = strList(prefs.getString("widget", null))
+        set(v) = prefs.edit().putString("widget", JSONArray(v).toString()).apply()
+
+    fun status(path: String): Status? = obj("status").optJSONObject(path)?.let { Status(it.optString("state"), it.optString("note")) }
+
+    fun setStatus(path: String, st: Status) = synchronized(LOCK) {
+        val all = obj("status")
+        all.put(path, JSONObject().put("state", st.state).put("note", st.note))
+        prefs.edit().putString("status", all.toString()).commit()
+    }
+
+    /** When the widget's devices were last checked (milliseconds), 0 if never. */
+    var checkedAt: Long
+        get() = prefs.getLong("checkedAt", 0)
+        set(v) = prefs.edit().putLong("checkedAt", v).apply()
+
+    // ---- wakes on a schedule ----
+    /** The phone's schedule for a device; off, with the desktop's schedule (from the import) as the starting values, if none was set. */
+    fun schedule(s: Sess): Sched = obj("schedules").optJSONObject(s.path)?.let { Sched(it.optString("mode", "daily"), it.optString("at", "07:00"), it.optBoolean("on")) }
+        ?: Sched(s.wakeSchedule.ifEmpty { "daily" }, s.wakeAt.ifEmpty { "07:00" }, false)
+
+    fun setSchedule(path: String, sc: Sched) = synchronized(LOCK) {
+        val all = obj("schedules")
+        all.put(path, JSONObject().put("mode", sc.mode).put("at", sc.at).put("on", sc.on))
+        prefs.edit().putString("schedules", all.toString()).commit()
+    }
+
+    private fun obj(key: String): JSONObject = try {
+        JSONObject(prefs.getString(key, null) ?: "{}")
+    } catch (_: Exception) {
+        JSONObject()
+    }
+
+    private fun strList(json: String?): List<String> = try {
+        val a = JSONArray(json ?: "[]")
+        (0 until a.length()).map { a.getString(it) }
+    } catch (_: Exception) {
+        emptyList()
+    }
 
     fun login(path: String): Login {
         val all = logins()
@@ -117,5 +168,7 @@ class Store(private val ctx: Context) {
 
     companion object {
         private const val ALIAS = "termwright-logins"
+        /** Statuses are written from the widget's workers and the alarms at the same time. */
+        private val LOCK = Any()
     }
 }

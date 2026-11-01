@@ -1,6 +1,12 @@
 package com.github.nperiannan.termwright
 
+import android.Manifest
+import android.app.TimePickerDialog
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
+import android.text.format.DateFormat
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -12,6 +18,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,6 +40,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -89,6 +98,8 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
             val list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Core.import(ctx, name, data) }
             store.saveSessions(list)
             sessions = list
+            Scheduler.armAll(ctx)
+            Wakes.refreshWidget(ctx)
             snack.showSnackbar("Imported ${list.size} sessions from $name")
         } catch (e: Exception) {
             snack.showSnackbar("Import failed: ${e.message}")
@@ -101,7 +112,11 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
     fun wake(d: Sess, acceptKey: String = "") = scope.launch {
         busy = d.path
         when (val r = Core.wake(ctx, store, d, sessions, acceptKey)) {
-            is WakeOutcome.Done -> snack.showSnackbar(r.text)
+            is WakeOutcome.Done -> {
+                // the widget follows it until it answers
+                if (d.path in store.widget) WakeWorker.start(ctx, d.path, scheduled = false, sentAt = System.currentTimeMillis(), how = r.text)
+                snack.showSnackbar(r.text)
+            }
             is WakeOutcome.Failed -> snack.showSnackbar("Wake failed: ${r.text}")
             is WakeOutcome.NeedLogin -> { pending = d; loginFor = r.jump to r.error }
             is WakeOutcome.NewHostKey -> { pending = d; hostKey = Triple(r.jump, r.key, false) }
@@ -109,6 +124,9 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
         }
         busy = null
     }
+
+    // the schedules' alarms (Android drops them when the app is updated or force-stopped)
+    LaunchedEffect(Unit) { Scheduler.armAll(ctx) }
 
     // the dots: which devices answer, every minute while the app is open
     LaunchedEffect(sessions) {
@@ -163,7 +181,7 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
     }
 
     open?.let { s ->
-        Details(s, sessions, s.path == favourite, onDismiss = { open = null }, onWake = { open = null; wake(s) },
+        Details(s, sessions, store, s.path == favourite, onDismiss = { open = null }, onWake = { open = null; wake(s) },
             onFavourite = { store.favourite = if (s.path == favourite) "" else s.path; favourite = store.favourite },
             onLogin = { j -> open = null; loginFor = j to "" })
     }
@@ -260,10 +278,24 @@ private fun ProtoBadge(s: Sess) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Details(s: Sess, all: List<Sess>, fav: Boolean, onDismiss: () -> Unit, onWake: () -> Unit, onFavourite: () -> Unit, onLogin: (Sess) -> Unit) {
+private fun Details(s: Sess, all: List<Sess>, store: Store, fav: Boolean, onDismiss: () -> Unit, onWake: () -> Unit, onFavourite: () -> Unit, onLogin: (Sess) -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val jump = all.firstOrNull { it.path == s.jump }
+    var onWidget by remember(s.path) { mutableStateOf(s.path in store.widget) }
+    var sched by remember(s.path) { mutableStateOf(store.schedule(s)) }
+    var exact by remember { mutableStateOf(Scheduler.exact(ctx)) }
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    fun saveSched(n: Sched) {
+        sched = n
+        store.setSchedule(s.path, n)
+        Scheduler.arm(ctx, s)
+        if (n.on && Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
             Text(s.name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             Text(s.folder.ifEmpty { "Top level" }, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
@@ -275,12 +307,58 @@ private fun Details(s: Sess, all: List<Sess>, fav: Boolean, onDismiss: () -> Uni
             Spacer(Modifier.height(16.dp))
             if (s.canWake) Button(onClick = onWake, Modifier.fillMaxWidth()) { Text("Wake ${s.name}") }
             if (jump != null) OutlinedButton(onClick = { onLogin(jump) }, Modifier.fillMaxWidth()) { Text("Login for ${jump.name}…") }
-            if (s.canWake) OutlinedButton(onClick = onFavourite, Modifier.fillMaxWidth()) { Text(if (fav) "Remove from the Wake tile" else "Use for the Wake tile") }
-            if (s.canWake) Text(
-                "The Wake tile is in the quick settings (swipe down twice, edit, drag Wake in).",
-                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp),
-            )
+            Spacer(Modifier.height(8.dp))
+            if (s.host.isNotBlank()) SwitchRow("Show on the home screen widget", if (s.canWake) "With whether it is up and a Wake button" else "With whether it is up", onWidget) { v ->
+                onWidget = v
+                store.widget = if (v) (store.widget + s.path).distinct() else store.widget - s.path
+                if (v) StatusWorker.now(ctx)
+                scope.launch { Wakes.refreshWidget(ctx) }
+            }
+            if (s.canWake) {
+                SwitchRow("Use for the Wake tile", "Quick settings: swipe down twice, edit, drag Wake in", fav) { onFavourite() }
+                SwitchRow("Wake on a schedule", "From this phone, also while the app is closed", sched.on) { saveSched(sched.copy(on = it)) }
+                if (sched.on) {
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                        listOf("daily" to "Every day", "weekdays" to "Weekdays").forEachIndexed { i, (mode, label) ->
+                            SegmentedButton(selected = sched.mode == mode, onClick = { saveSched(sched.copy(mode = mode)) },
+                                shape = SegmentedButtonDefaults.itemShape(i, 2)) { Text(label) }
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val hm = sched.at.split(":").map { it.toIntOrNull() ?: 0 }
+                            TimePickerDialog(ctx, { _, h, m -> saveSched(sched.copy(at = "%02d:%02d".format(h, m))) },
+                                hm.getOrElse(0) { 7 }, hm.getOrElse(1) { 0 }, DateFormat.is24HourFormat(ctx)).show()
+                        },
+                        Modifier.fillMaxWidth().padding(top = 6.dp), shape = RoundedCornerShape(12.dp),
+                    ) { Text(sched.at, fontSize = 26.sp, fontWeight = FontWeight.SemiBold) }
+                    if (!exact && Build.VERSION.SDK_INT >= 31) {
+                        Text("Android may send it a few minutes late. Allow Alarms & reminders for the exact minute.",
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                        TextButton(onClick = {
+                            ctx.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + ctx.packageName)))
+                            exact = Scheduler.exact(ctx)
+                        }) { Text("Allow exact times") }
+                    }
+                }
+                if (s.wakeSchedule.isNotEmpty()) Text(
+                    "Termwright on your computer: ${if (s.wakeSchedule == "weekdays") "weekdays" else "every day"} at ${s.wakeAt}",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp),
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun SwitchRow(title: String, sub: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { onChange(!on) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title)
+            Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = on, onCheckedChange = onChange)
     }
 }
 

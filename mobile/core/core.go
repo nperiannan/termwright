@@ -44,6 +44,9 @@ type appSession struct {
 	DeviceType  string `json:"deviceType"`
 	Environment string `json:"environment"`
 	KeyFile     string `json:"keyFile"` // the desktop's key file name; the app asks for the key itself
+	// the desktop's wake schedule ("", "daily" or "weekdays", at "HH:MM"): the app offers it as the phone's
+	WakeSchedule string `json:"wakeSchedule"`
+	WakeAt       string `json:"wakeAt"`
 }
 
 // ImportSessions reads a file exported or saved by Termwright or another
@@ -107,16 +110,17 @@ func fromSession(s session.Session) appSession {
 	}
 	return appSession{Path: s.Path, Name: s.Name, Folder: folder, Protocol: s.Protocol, Host: s.Hostname, Port: s.Port,
 		User: s.Username, MAC: s.MAC, WOLNetwork: s.WOLNetwork, WOLPort: s.WOLPort, Broadcast: s.WOLBroadcast,
-		Knock: s.WakeKnock, Jump: s.JumpSession, DeviceType: s.DeviceType, Environment: s.Environment, KeyFile: filepath.Base(s.IdentityFile)}
+		Knock: s.WakeKnock, Jump: s.JumpSession, DeviceType: s.DeviceType, Environment: s.Environment, KeyFile: filepath.Base(s.IdentityFile),
+		WakeSchedule: s.WakeSchedule, WakeAt: s.WakeAt}
 }
 
 // wakeRequest is what Wake needs: the device, and the jump host to send from
 // when the phone is not on the device's network.
 type wakeRequest struct {
-	Device    appSession  `json:"device"`
-	LocalNets []string `json:"localNets"` // the phone's own networks, e.g. "192.168.1.23/24"
-	Jump      *jumpHost    `json:"jump"`
-	Force     string   `json:"force"` // "" automatic, "local" or "jump"
+	Device    appSession `json:"device"`
+	LocalNets []string   `json:"localNets"` // the phone's own networks, e.g. "192.168.1.23/24"
+	Jump      *jumpHost  `json:"jump"`
+	Force     string     `json:"force"` // "" automatic, "local" or "jump"
 }
 
 // jumpHost is an SSH login to the jump host (a NAS, a server on the device's network).

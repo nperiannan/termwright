@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- status bar icon: the four tiles of the Termwright icon with their symbols cut out (Android shows small icons in one colour) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M4.5,2.5h4.4a2,2 0 0 1 2,2v4.4a2,2 0 0 1 -2,2h-4.4a2,2 0 0 1 -2,-2v-4.4a2,2 0 0 1 2,-2zM15.1,2.5h4.4a2,2 0 0 1 2,2v4.4a2,2 0 0 1 -2,2h-4.4a2,2 0 0 1 -2,-2v-4.4a2,2 0 0 1 2,-2zM4.5,13.1h4.4a2,2 0 0 1 2,2v4.4a2,2 0 0 1 -2,2h-4.4a2,2 0 0 1 -2,-2v-4.4a2,2 0 0 1 2,-2zM15.1,13.1h4.4a2,2 0 0 1 2,2v4.4a2,2 0 0 1 -2,2h-4.4a2,2 0 0 1 -2,-2v-4.4a2,2 0 0 1 2,-2zM4.6,4.9L7,6.7L4.6,8.5L4.6,7.6L5.8,6.7L4.6,5.8ZM7.4,8.6h2v0.9h-2zM15,4.6h4.6v3.2h-4.6zM15.8,5.4v1.6h3v-1.6zM16.9,8.2h0.8v0.9h-0.8zM6.7,15.2a2,2 0 1 1 -0.01,0zM6.7,16a1.2,1.2 0 1 0 0.01,0zM8.2,18.9L8.9,18.2L10.1,19.4L9.4,20.1ZM15,15.3h4.6v1h-4.6zM15,17h4.6v1h-4.6zM15,18.7h4.6v1h-4.6z" />
+</vector>

@@ -13,6 +13,11 @@ including the sleep-proxy ports that wake a Mac with Apple silicon.
 - **Status dots**: green when the device answers on a port (22, 445, 3389, 5900, 80 or its sleep-proxy
   ports), every minute while the app is open. Apps cannot ping without root.
 - **Quick settings tile**: *Use for the Wake tile* on a session, then add the *Wake* tile to quick settings.
+- **Home screen widget** (*Termwright devices*): the devices you turn on with *Show on the home screen widget*,
+  whether they are up (checked every 30 minutes, or tap ⟳), and a *Wake* button that follows the device until it answers.
+- **Wake on a schedule**: every day or weekdays at a time, sent from the phone also while the app is closed, with a
+  notification afterwards (it answered after 18 s, or why it was not sent). A schedule set in Termwright on the computer
+  comes with the import as the starting time. For the exact minute on Android 12 and later, allow *Alarms & reminders*.
 
 ## How it is built
 

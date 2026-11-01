@@ -25,6 +25,7 @@ func TestImportTermwrightZip(t *testing.T) {
 	mac := session.Defaults()
 	mac.Name, mac.Folder, mac.Protocol, mac.Hostname = "macbook", "Home", session.ProtoWOL, "192.168.1.40"
 	mac.MAC, mac.WakeKnock, mac.JumpSession = "aa:bb:cc:dd:ee:ff, 11:22:33:44:55:66", "22, 5900", "Home/nas"
+	mac.WakeSchedule, mac.WakeAt = "weekdays", "07:00"
 	for _, s := range []session.Session{nas, mac} {
 		if _, err := st.Save(s, ""); err != nil {
 			t.Fatal(err)
@@ -46,7 +47,8 @@ func TestImportTermwrightZip(t *testing.T) {
 		t.Fatalf("%s", js)
 	}
 	m := got[0]
-	if m.Name != "macbook" || m.Protocol != session.ProtoWOL || m.Jump != "Home/nas" || !strings.Contains(m.MAC, "11:22") || m.Knock != "22, 5900" || m.Folder != "Home" {
+	if m.Name != "macbook" || m.Protocol != session.ProtoWOL || m.Jump != "Home/nas" || !strings.Contains(m.MAC, "11:22") || m.Knock != "22, 5900" || m.Folder != "Home" ||
+		m.WakeSchedule != "weekdays" || m.WakeAt != "07:00" {
 		t.Fatalf("%+v", m)
 	}
 }
