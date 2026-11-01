@@ -91,7 +91,7 @@ class TermSession(val sess: Sess, ctx: Context) {
     }
 
     /** The Go side, for the connection (a Go thread). */
-    val screen = object : Screen {
+    val screen: Screen = object : Screen {
         override fun output(data: ByteArray?) {
             data ?: return
             synchronized(pending) {
@@ -126,7 +126,9 @@ class TermSession(val sess: Sess, ctx: Context) {
     }
 
     /** Shows a line from the app itself (not from the device). */
-    fun print(text: String) = screen.output(text.toByteArray())
+    fun print(text: String) {
+        screen.output(text.toByteArray())
+    }
 
     /** From the phone keyboard: Ctrl and Alt from the bar apply to the next key. */
     private fun typed(d: String) {
@@ -143,7 +145,9 @@ class TermSession(val sess: Sess, ctx: Context) {
         writer.execute { runCatching { t.write(s.toByteArray()) } }
     }
 
-    fun keyFromBar(name: String) = web.evaluateJavascript("twKey('$name')", null)
+    fun keyFromBar(name: String) {
+        web.evaluateJavascript("twKey('$name')", null)
+    }
 
     fun opened(t: twcore.Terminal) {
         term = t
@@ -165,7 +169,9 @@ class TermSession(val sess: Sess, ctx: Context) {
         web.destroy()
     }
 
-    fun setFont(n: Int) = web.evaluateJavascript("twFont($n)", null)
+    fun setFont(n: Int) {
+        web.evaluateJavascript("twFont($n)", null)
+    }
 
     companion object {
         /** Ctrl + a key: Ctrl+C is 3, Ctrl+[ is Esc… */

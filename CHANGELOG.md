@@ -4,6 +4,12 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+## 0.28.1 (2026-11-01)
+
+The Android app for 0.28.0: it did not build.
+
+* **Fixed: the Android APK was missing from 0.28.0** - the terminal code did not compile. The release job also adds files to an existing release when it is run again.
+
 ## 0.28.0 (2026-11-01)
 
 The Android app grows up - an SSH and Telnet terminal, a home screen widget and wakes on a schedule - and the Glacier start page gets 3D cards and a neutral light theme.
