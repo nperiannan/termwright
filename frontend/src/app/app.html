@@ -180,7 +180,7 @@
               <button (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" [size]="15" />New Session</button>
               <button (click)="action('local-shell')"><app-icon name="shell" [size]="15" />Local Shell</button>
               <button (click)="action('import')"><app-icon name="import" [size]="15" />Import</button>
-              <button (click)="action('discover')"><app-icon name="pulse" [size]="15" />Discover Devices</button>
+              <button (click)="action('discover')"><app-icon name="radar" [size]="15" />Discover Devices</button>
             </div>
             @for (sec of [{ t: 'Favourites', l: homeFavs(), more: false }, { t: 'Recent', l: homeRecent(), more: true }]; track sec.t) {
               @if (sec.l.length) {

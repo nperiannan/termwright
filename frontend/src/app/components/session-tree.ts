@@ -179,7 +179,7 @@ export function sessionAddr(n: SessionNode): string {
       <div class="sm-foot">
         <button class="primary" title="New session in the selected folder" (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" [size]="14" /> New</button>
         <button title="Import sessions from another terminal program or a file" (click)="ui.open('import')"><app-icon name="import" [size]="14" /> Import</button>
-        <button title="Discover devices on a network" (click)="ui.open('discover')"><app-icon name="pulse" [size]="14" /> Scan</button>
+        <button title="Discover devices on a network" (click)="ui.open('discover')"><app-icon name="radar" [size]="14" /> Scan</button>
       </div>
     }
 

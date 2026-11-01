@@ -26,7 +26,7 @@ const ACK_KEY = 'termwright.discoverAck';
   template: `
   <div class="modal-backdrop">
     <div class="modal disc">
-      <div class="modal-head"><span class="dh-ic"><app-icon name="pulse" [size]="18" /></span>
+      <div class="modal-head"><span class="dh-ic"><app-icon name="radar" [size]="18" /></span>
         <span class="dh-t">Discover Devices<span class="dh-s">Find the devices on a network and add them as sessions - nothing logs in</span></span></div>
       <div class="modal-body">
         <div class="grid">
