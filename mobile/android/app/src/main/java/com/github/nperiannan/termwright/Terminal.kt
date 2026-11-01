@@ -65,6 +65,13 @@ class TermSession(val sess: Sess, ctx: Context) {
     val web: WebView = WebView(ctx.applicationContext).apply {
         settings.javaScriptEnabled = true
         setBackgroundColor(0xFF0C0D10.toInt())
+        overScrollMode = WebView.OVER_SCROLL_NEVER
+        isVerticalScrollBarEnabled = false
+        isHorizontalScrollBarEnabled = false
+        // when its size changes (the keyboard, rotation, the key bar), the terminal takes the new size at once
+        addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
+            if (r - l != or - ol || b - t != ob - ot) evaluateJavascript("window.twRefit && twRefit()", null)
+        }
         addJavascriptInterface(Bridge(), "tw")
         loadUrl("file:///android_asset/term/term.html")
     }

@@ -84,7 +84,7 @@ class Store(private val ctx: Context) {
 
     /** The terminal's text size. */
     var fontSize: Int
-        get() = prefs.getInt("fontSize", 13)
+        get() = prefs.getInt("fontSize", 11)
         set(v) = prefs.edit().putInt("fontSize", v.coerceIn(8, 24)).apply()
 
     // ---- home screen widget: the devices on it, and what was last seen of them ----

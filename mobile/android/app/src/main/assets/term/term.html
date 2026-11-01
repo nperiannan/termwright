@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <link rel="stylesheet" href="xterm.css">
 <style>
-  html, body { margin: 0; height: 100%; background: #0c0d10; overflow: hidden; }
-  #t { position: absolute; inset: 0; padding: 4px 6px; }
+  html, body { margin: 0; height: 100%; background: #0c0d10; overflow: hidden; overscroll-behavior: none; }
+  /* placed on the visible part of the page (above the keyboard); a little room at the bottom so the last row is never cut */
+  #t { position: fixed; left: 0; right: 0; top: 0; height: 100%; box-sizing: border-box; padding: 4px 6px 10px; }
 </style>
 </head>
 <body>
@@ -30,7 +31,22 @@
     try { fit.fit(); } catch (e) {}
     if (term.cols !== cols || term.rows !== rows) { cols = term.cols; rows = term.rows; tw.resize(cols, rows); }
   }
+  // The terminal fills what is visible of the page: when the keyboard opens the app makes the page smaller, and
+  // Android may only shrink the "visual viewport", so the bottom rows - the prompt and what is typed - would be
+  // hidden under the keyboard. Follow the visual viewport, refit, and keep the cursor line in view.
+  const vv = window.visualViewport;
+  function place() {
+    const h = vv ? vv.height : window.innerHeight;
+    el.style.top = (vv ? vv.offsetTop : 0) + 'px';
+    el.style.height = h + 'px';
+    window.scrollTo(0, 0);
+    refit();
+    term.scrollToBottom();
+  }
+  if (vv) { vv.addEventListener('resize', place); vv.addEventListener('scroll', place); }
+  window.addEventListener('resize', place);
   new ResizeObserver(refit).observe(el);
+  window.twRefit = place;
   term.onData(d => tw.input(d));
   term.onBinary(d => tw.input(d));
   window.twWrite = b64 => {
@@ -51,7 +67,7 @@
       pgup: '\x1b[5~', pgdn: '\x1b[6~', esc: '\x1b', tab: '\t' }[name];
     if (k) tw.key(k);
   };
-  refit();
+  place();
   tw.ready();
 </script>
 </body>
