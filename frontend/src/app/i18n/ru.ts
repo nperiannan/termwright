@@ -908,6 +908,9 @@ const ru: Record<string, string> = {
   'Wake a Mac through its sleep proxy': 'Включить Mac через его прокси сна',
   'ports to connect to after the magic packet, at the IP address above. A Mac with Apple silicon often ignores the magic packet; with': 'порты для подключения после magic packet, по IP-адресу выше. Mac с Apple silicon часто не реагирует на magic packet; если включено',
   'on and an Apple TV or HomePod on the network, a connection to a service it offers (SSH 22, Screen Sharing 5900, file sharing 445) wakes it. Laptops: on the power adapter, lid open or an external display.': 'и в сети есть Apple TV или HomePod, подключение к его службе (SSH 22, общий экран 5900, общий доступ к файлам 445) пробуждает его. Ноутбуки: от адаптера питания, крышка открыта или подключён внешний дисплей.',
+  'Connect to {0}': 'Подключиться к {0}',
+  'device is up': 'устройство включено',
+  'Wake Up and Connect to {0}': 'Включить и подключиться к {0}',
 };
 
 export default ru;

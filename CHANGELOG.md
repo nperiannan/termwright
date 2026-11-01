@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Wake-on-LAN menu follows the device.** When the device is up (green dot, or a tab connected to it), *Wake Up* is shown greyed out ("device is up") and *Wake Up and Connect to …* becomes *Connect to …*. Two sessions with the same name for the same device (for example *TNAS* in two folders) are told apart by their folder and protocol instead of appearing twice.
 * **Termwright for Android (preview).** A small companion app (`mobile/`, Kotlin with the Go core): import a Termwright export, see which devices answer, and wake them with one tap - from the phone on the same Wi-Fi, or through a jump host such as a NAS when away, with the sleep-proxy ports for Macs. A quick settings tile wakes a favourite. Logins are kept encrypted with the Android Keystore; a jump host's key is accepted once and checked after that. The APK is attached to releases and nightlies.
 ## 0.27.0 (2026-11-01)
 
