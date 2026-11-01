@@ -78,3 +78,15 @@ func TestKeywordsOnMigration(t *testing.T) {
 		t.Fatal("None was not kept")
 	}
 }
+
+func TestAddRecentKeepsTwelve(t *testing.T) {
+	m := &Manager{dataDir: t.TempDir()}
+	for i := 0; i < 15; i++ {
+		m.AddRecent("s" + string(rune('a'+i)))
+	}
+	m.AddRecent("sk") // used again: moves to the front, no duplicate
+	r := m.Get().RecentSessions
+	if len(r) != 12 || r[0] != "sk" || r[1] != "so" || r[11] != "sd" {
+		t.Fatalf("%v", r)
+	}
+}

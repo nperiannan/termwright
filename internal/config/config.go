@@ -569,12 +569,15 @@ func (m *Manager) Save(s Settings) error {
 	return nil
 }
 
-// AddRecent records a recently used session path (max 10).
+// maxRecent is how many recent sessions are kept: four rows of three cards.
+const maxRecent = 12
+
+// AddRecent records a recently used session path (at most maxRecent).
 func (m *Manager) AddRecent(p string) {
 	s := m.Get()
 	out := []string{p}
 	for _, r := range s.RecentSessions {
-		if r != p && len(out) < 10 {
+		if r != p && len(out) < maxRecent {
 			out = append(out, r)
 		}
 	}
