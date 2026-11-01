@@ -4,7 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-* **The session type stays visible with a device type.** A session with a device type shows the device's icon (switch, server…), so how it opens was hidden. Start page cards now have a chip with the session icon and type (SSH, SFTP, Telnet, Serial…), and the Session Manager's hover card a *Session* line.
+* **The session type stays visible with a device type.** A session with a device type shows the device's icon (switch, server…), so how it opens was hidden. Start page cards now have a chip with the session icon and type (SSH, SFTP, Telnet, Serial…), and the Session Manager's hover card a *Session* line. On recent cards the time ("8 hours ago") sits beside the chips, so a long version no longer hides it.
 * **Wake-on-LAN menu: only the session you right-click.** *Wake Up* is greyed out ("device is up") while the device answers, and *Wake Up and Connect* is only on the session itself (an SSH, RDP or VNC session with the device's MAC address) - a Wake-on-LAN session no longer lists the device's other sessions ("Wake Up and Connect to TNAS" twice).
 * **Termwright for Android (preview).** A small companion app (`mobile/`, Kotlin with the Go core): import a Termwright export, see which devices answer, and wake them with one tap - from the phone on the same Wi-Fi, or through a jump host such as a NAS when away, with the sleep-proxy ports for Macs. A quick settings tile wakes a favourite. Logins are kept encrypted with the Android Keystore; a jump host's key is accepted once and checked after that. The APK is attached to releases and nightlies.
 ## 0.27.0 (2026-11-01)

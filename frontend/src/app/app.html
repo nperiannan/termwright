@@ -197,7 +197,7 @@
                           <span class="ca">{{ cardAddr(n) }}</span>
                         </span>
                       </span>
-                      <span class="cmeta">@if (devKind(n)) { <span class="chip pchip" [title]="'Opens as ' + protoName(n)"><app-session-icon [kind]="protoKind(n)" [size]="14" />{{ protoName(n) }}</span> }<span class="chip">{{ cardMeta(n, sec.more) }}</span>
+                      <span class="cmeta">@if (devKind(n)) { <span class="chip pchip" [title]="'Opens as ' + protoName(n)"><app-session-icon [kind]="protoKind(n)" [size]="14" />{{ protoName(n) }}</span> }<span class="chip">{{ cardMeta(n, sec.more) }}</span>@if (cardAgo(n, sec.more); as a) { <span class="cago">{{ a }}</span> }
                         <span class="cdot" [class]="'cdot ' + (liveState().get(n.path) ?? '')" [title]="liveState().get(n.path) ? 'Open in a tab - ' + liveState().get(n.path) : 'Not open'"></span></span>
                     </button>
                   }
