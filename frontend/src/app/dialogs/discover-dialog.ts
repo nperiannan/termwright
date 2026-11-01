@@ -25,51 +25,49 @@ const ACK_KEY = 'termwright.discoverAck';
   imports: [FormsModule, DeviceIcon, Moved, FolderPicker, Icon],
   template: `
   <div class="modal-backdrop">
-    <div class="modal disc">
+    <div class="modal disc" [class.wide]="total() || rows().length">
       <div class="modal-head"><span class="dh-ic"><app-icon name="radar" [size]="18" /></span>
         <span class="dh-t">Discover Devices<span class="dh-s">Find the devices on a network and add them as sessions - nothing logs in</span></span></div>
       <div class="modal-body">
-        <div class="grid">
-          <label>Addresses</label>
-          <div>
-            <div class="row specrow">
-              <input name="spec" class="spec" [(ngModel)]="spec" [disabled]="running()" placeholder="192.168.1.0/24"
-                (keydown.enter)="start()" spellcheck="false" />
-              @if (running()) {
-                <button type="button" (click)="stop()">Stop</button>
-              } @else {
-                <button type="button" class="primary" [disabled]="!spec.trim() || (!acked && !ackNow)" (click)="start()">Scan</button>
+        <div class="pre">
+          <!-- before the first scan: the networks of this computer to pick from, then typed addresses; options folded away -->
+          @if (!total() && groups().length) {
+            <div class="sec"><span>Scan a network of this computer</span>
+              <button type="button" class="linkbtn" [disabled]="running()" (click)="loadNets()">Refresh</button></div>
+            <div class="nets" role="radiogroup" aria-label="Networks of this computer">
+              @for (g of groups(); track g.scan) {
+                <button type="button" class="net" role="radio" [class.sel]="spec.trim() === g.scan" [attr.aria-checked]="spec.trim() === g.scan"
+                  [disabled]="running()" (click)="spec = g.scan" [title]="g.note">
+                  <span class="rad"></span><b class="nn" translate="no">{{ g.scan }}</b><span class="via" translate="no">{{ g.via }}</span>
+                  @if (g.vpn) { <span class="nv">VPN</span> }
+                  <span class="nh">{{ g.hosts }} addresses</span>
+                  @if (g.note) { <span class="nt">{{ g.note }}</span> }
+                </button>
               }
             </div>
-            <div class="hint">A network (192.168.1.0/24, or 192.168.1.0 for its /24), a range (192.168.1.10-80) or addresses, up to a /22</div>
-            @if (nets().length) {
-              <div class="nets" role="listbox" aria-label="Networks of this computer">
-                <div class="nets-h"><span>Networks of this computer</span>
-                  <button type="button" class="linkbtn" [disabled]="running()" (click)="loadNets()">Refresh</button></div>
-                @for (n of nets(); track n.interface + n.address) {
-                  <button type="button" class="net" role="option" [class.sel]="isSel(n)" [disabled]="running()" [attr.aria-selected]="isSel(n)"
-                    (click)="pick(n)" [title]="n.note || ''">
-                    <span class="ni">{{ n.interface }}</span>
-                    <span class="na">{{ n.address }}</span>
-                    <span class="nn">{{ n.scan }}</span>
-                    <span class="nh">{{ n.hosts }} addresses</span>
-                    @if (n.vpn) { <span class="nv">VPN</span> }
-                    @if (n.note) { <span class="nt">{{ n.note }}</span> }
-                  </button>
-                }
-              </div>
+            <div class="sec">Or type addresses</div>
+          }
+          <div class="row specrow">
+            <input name="spec" class="spec" [(ngModel)]="spec" [disabled]="running()" placeholder="192.168.1.0/24"
+              (keydown.enter)="start()" spellcheck="false" />
+            @if (running()) {
+              <button type="button" (click)="stop()">Stop</button>
+            } @else {
+              <button type="button" class="primary" [disabled]="!spec.trim() || (!acked && !ackNow)" (click)="start()">Scan</button>
             }
           </div>
-          <label>SNMP</label>
-          <div class="row">
-            <label class="inline"><input type="checkbox" [(ngModel)]="useSnmp" [disabled]="running()" /> Look up name and model (SNMP v2c)</label>
-            <input class="comm" [type]="showComm ? 'text' : 'password'" [(ngModel)]="community" [disabled]="running() || !useSnmp" placeholder="community"
-              autocomplete="off" spellcheck="false" title="Read-only SNMP community. It is used for this scan only and not saved." />
-            <button type="button" class="icon-btn eye" (click)="showComm = !showComm" [disabled]="!useSnmp"
-              [title]="showComm ? 'Hide the community' : 'Show the community'">{{ showComm ? 'Hide' : 'Show' }}</button>
-          </div>
+          @if (!total()) { <div class="hint">A network, a range (192.168.1.10-80) or single addresses - up to a /22</div> }
+          <details class="opts" [open]="optsOpen" (toggle)="optsOpen = $any($event.target).open">
+            <summary><b>Options</b> <span class="hint">{{ useSnmp ? '· SNMP v2c lookup on' : '· SNMP v2c lookup off' }}</span></summary>
+            <div class="row">
+              <label class="inline"><input type="checkbox" [(ngModel)]="useSnmp" [disabled]="running()" /> Look up name and model (SNMP v2c)</label>
+              <input class="comm" [type]="showComm ? 'text' : 'password'" [(ngModel)]="community" [disabled]="running() || !useSnmp" placeholder="community"
+                autocomplete="off" spellcheck="false" title="Read-only SNMP community. It is used for this scan only and not saved." />
+              <button type="button" class="icon-btn eye" (click)="showComm = !showComm" [disabled]="!useSnmp"
+                [title]="showComm ? 'Hide the community' : 'Show the community'">{{ showComm ? 'Hide' : 'Show' }}</button>
+            </div>
+          </details>
           @if (!acked) {
-            <label></label>
             <div class="warn">Scanning connects to many addresses and can be noticed by security monitoring. Scan only networks you are
               allowed to scan, such as your lab. Termwright never tries to log in; it checks which ports answer, reads the SSH/Telnet
               greeting, the start page of web interfaces, asks phones over SIP and, with a community, reads the SNMP system description.
@@ -252,19 +250,31 @@ const ACK_KEY = 'termwright.discoverAck';
     .movedbar .bad { color: var(--danger); }
     .movedbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 10px; margin-bottom: 8px; border: 1px solid color-mix(in srgb, #f59e0b 55%, var(--border)); border-radius: 6px; background: color-mix(in srgb, #f59e0b 9%, transparent); font-size: calc(12.5px * var(--ui-scale, 1)); }
     select { max-width: 150px; }
-    .nets { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; max-width: 640px; }
-    .nets-h { display: flex; align-items: center; justify-content: space-between; height: auto; line-height: 1.2; font-size: 11px; opacity: .7; text-transform: uppercase; letter-spacing: .04em; }
-    .disc .nets .linkbtn { height: auto; min-height: 0; background: none; border: 0; padding: 0; color: var(--accent, #4f8cff); cursor: pointer; font-size: 11px; text-transform: none; }
-    .disc .nets .net { height: auto; min-height: 0; line-height: 1.35; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; text-align: left; width: 100%; padding: 6px 10px; border-radius: 6px;
-      border: 1px solid var(--border, rgba(128,128,128,.3)); background: transparent; color: inherit; cursor: pointer; font: inherit; }
-    .disc .nets .net:hover:not([disabled]) { background: var(--hover, rgba(128,128,128,.12)); }
-    .disc .nets .net.sel { border-color: var(--accent, #4f8cff); background: var(--hover, rgba(79,140,255,.12)); }
-    .net .ni { font-weight: 600; min-width: 64px; }
-    .net .na, .net .nn { font-family: var(--mono, monospace); }
-    .net .nn { min-width: 130px; }
-    .net .nh { opacity: .65; font-size: 11px; }
-    .net .nv { font-size: 10px; padding: 0 6px; border-radius: 8px; background: rgba(240,160,40,.25); }
-    .net .nt { flex-basis: 100%; font-size: 11px; opacity: .65; }
+    /* before a scan the window is narrow and calm; it widens for the results */
+    .disc:not(.wide) { width: min(700px, 95vw) !important; }
+    .pre { display: flex; flex-direction: column; gap: 8px; }
+    .sec { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600;
+      letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+    .disc .linkbtn { height: auto; min-height: 0; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: calc(11.5px * var(--ui-scale, 1));
+      text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .nets { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+    .disc .nets .net { height: auto; min-height: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; text-align: left; width: 100%; padding: 10px 14px;
+      border: 1px solid var(--line); border-radius: var(--r-lg, 10px); background: var(--surface); color: inherit; cursor: pointer; font: inherit; }
+    .disc .nets .net:hover:not([disabled]) { border-color: var(--border); background: var(--surface-2); }
+    .disc .nets .net.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+    .net .rad { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--faint); flex: none; box-sizing: border-box; }
+    .net.sel .rad { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px var(--surface); }
+    .net .nn { font-family: var(--mono); font-size: calc(13.5px * var(--ui-scale, 1)); }
+    .net .via { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); }
+    .net .nh { margin-left: auto; color: var(--faint); font-size: calc(12px * var(--ui-scale, 1)); }
+    .net .nv { font-size: calc(10.5px * var(--ui-scale, 1)); font-weight: 700; color: #e5a93b; background: rgba(229, 169, 59, .15); border-radius: 5px; padding: 1px 6px; }
+    .net .nt { flex-basis: 100%; padding-left: 26px; font-size: calc(11px * var(--ui-scale, 1)); color: var(--faint); }
+    .disc .specrow > input.spec { flex: 1 1 auto; width: auto; min-width: 160px; }
+    .disc.wide .specrow > input.spec { flex: 0 1 380px; width: 380px; }
+    .opts { margin-top: 2px; }
+    .opts summary { cursor: pointer; color: var(--muted); font-size: calc(12.5px * var(--ui-scale, 1)); user-select: none; b { color: var(--text); font-weight: 500; } .hint { margin-left: 5px; } }
+    .opts .row { margin-top: 8px; padding-left: 14px; }
+    .warn { font-size: calc(12px * var(--ui-scale, 1)); }
   `],
 })
 export class DiscoverDialog implements OnDestroy {
@@ -376,8 +386,20 @@ export class DiscoverDialog implements OnDestroy {
       if (!this.spec.trim() && first) this.spec = first.scan;
     }).catch(() => {});
   }
-  pick(n: LocalNet) { this.spec = n.scan; }
-  isSel(n: LocalNet) { return this.spec.trim() === n.scan; }
+  /** The networks to pick from, one per network: a computer on the same network by wire and Wi-Fi shows both ("en8 · .38 and en0 · .44"). */
+  readonly groups = computed(() => {
+    const m = new Map<string, { scan: string; via: string[]; hosts: number; vpn: boolean; notes: string[] }>();
+    for (const n of this.nets()) {
+      const g = m.get(n.scan) ?? { scan: n.scan, via: [], hosts: n.hosts, vpn: false, notes: [] };
+      g.via.push(n.interface + ' · .' + (n.address.split('.').pop() ?? n.address));
+      g.vpn ||= n.vpn;
+      if (n.note && !g.notes.includes(n.note)) g.notes.push(n.note);
+      m.set(n.scan, g);
+    }
+    return [...m.values()].map(g => ({ scan: g.scan, via: g.via.join('  and  '), hosts: g.hosts, vpn: g.vpn, note: g.notes.join(' · ') }));
+  });
+  /** The SNMP options are folded away until opened. */
+  optsOpen = false;
 
   constructor() { this.loadNets(); this.backend.discoverOuiStatus().then(d => this.ouiDate.set(d)).catch(() => {}); }
 
