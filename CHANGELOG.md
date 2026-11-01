@@ -4,7 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-* **3D cards on the Glacier start page.** Favourite and recent cards are thick tiles tipped back a little, with the icon standing off the face; the card under the pointer turns towards it (flat when the system asks to reduce motion). They reach up to half a card past the search bar on each side, only into free space, so a side panel or a small window never cuts them off.
+* **3D cards on the Glacier start page.** Favourite and recent cards are thick tiles tipped back a little, with the icon standing off the face; the card under the pointer turns towards it (flat when the system asks to reduce motion). They have room between them, and reach up to half a card past the search bar on each side, only into free space, so a side panel or a small window never cuts them off.
 * **More on each start page card.** The model and the login together (`7520-48Y-8C · admin@10.127.34.173`), the folder the session is in, a chip with how it connects on every card, and the time at the right, where a long version can no longer push it out.
 * **Recent keeps 12 sessions** (was 10): four full rows of three cards.
 * **A radar for Discover Devices.** The start page button, the Session Manager's *Scan* button and the Discover Devices window have a radar icon; the pulse stays with *Show which devices answer*, so the two no longer look alike.

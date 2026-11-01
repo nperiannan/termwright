@@ -88,7 +88,7 @@
   .qa button { border-radius: 12px; &:hover { background: linear-gradient(180deg, var(--g-hi), var(--g-glass-2)); border-color: var(--g-edge); } }
   .home-in { max-width: 960px; }
   /* start page cards only (.card and .cards are also used in dialogs); three per row; fewer when the start page is narrow (a side panel open, a small window), never squeezed */
-  .home .cards { grid-template-columns: repeat(auto-fill, minmax(max(220px, calc((100% - 28px) / 3)), 1fr)); gap: 14px;
+  .home .cards { --cgap: 26px; grid-template-columns: repeat(auto-fill, minmax(max(220px, calc((100% - 2 * var(--cgap)) / 3)), 1fr)); gap: calc(var(--cgap) + 8px) var(--cgap);
     /* wider than the search bar: up to half a card on each side, only into free space (never under a panel) */
     margin-inline: calc(-1 * clamp(0px, (100cqw - min(100cqw, 960px)) / 2 + 22px, 142px)); perspective: 1200px; }
   /* 3D slabs: a thick tile with a visible edge, tipped back a little; the icon stands off the face; the card under the pointer turns towards it */
