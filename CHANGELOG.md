@@ -4,14 +4,13 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-* **Discover Devices: calmer before a scan.** The window opens narrow, with the networks of this computer as a list to pick from (one line per network - wired and Wi-Fi on the same network share it), the addresses to type below, and the SNMP options folded away. It widens for the results.
-* **Android terminal: letters no longer cut off at the bottom or squeezed together.** xterm measured its letters on a hidden canvas but showed them as page text, which the phone draws bigger (its font size setting) or in another font; the terminal now measures with page text, the way it draws, and ignores the phone's text zoom (the terminal has its own size: menu → Text size).
-* **Android terminal: whole letters, readable title.** The letters were taller than the rows (the phone's own monospace font), so their lower half was cut off; the terminal now has its own font (DejaVu Sans Mono), waits for it before measuring, and fits rows exactly. The session name in the terminal's title bar was black on dark grey.
-
 ## 0.28.2 (2026-11-01)
 
-The Android terminal shows what the device prints, and calmer dark cards on the start page.
+The Android terminal works on real phones - whole letters, the prompt above the keyboard - with calmer dark cards on the start page and a tidier Discover Devices.
 
+* **Discover Devices: calmer before a scan.** The window opens narrow, with the networks of this computer as a list to pick from (one line per network - wired and Wi-Fi on the same network share it), the addresses to type below, and the SNMP options folded away. It widens for the results.
+* **Android terminal: letters no longer cut off at the bottom or squeezed together.** xterm measured its letters on a hidden canvas but showed them as page text, which the phone draws bigger (its font size setting) or in another font; the terminal now measures with page text, the way it draws, and ignores the phone's text zoom (the terminal has its own size: menu → Text size).
+* **Android terminal: its own font and a readable title.** The terminal brings DejaVu Sans Mono, so it looks the same on every phone, and the session name in its title bar is light (it was black on dark grey).
 * **Glacier dark: deep slate cards.** The start page cards are darker with a soft light from the top and grey sides; the light shine across them is gone.
 * **Android: the terminal shows what the device prints.** The terminal was sized for the whole screen and did not shrink when the keyboard opened, so the prompt, what you typed and the device's answers were hidden under the keyboard. It now fits the visible part above the keyboard and the key bar, keeps the cursor line in view, and never cuts the last row; the text is a little smaller (11), so a switch's output fits on a phone.
 

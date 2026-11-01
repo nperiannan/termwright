@@ -23,7 +23,7 @@
   <a href="docs/ROADMAP.md">Roadmap</a>
 </p>
 
-![Termwright - start page and Session Manager in the Glacier style](docs/screenshots/glacier-start-dark.png)
+![Termwright - start page with 3D cards and the Session Manager in the Glacier style](docs/screenshots/glacier-start-dark.png)
 
 <p align="center"><i>The start page and Session Manager (Glacier, dark): folders with their environments, and every kind of session - SSH, SFTP, Linux, EXOS, IoT, RDP, VNC, Wake-on-LAN, Telnet, serial, local shell.</i></p>
 
@@ -52,7 +52,7 @@
 - Compare two tabs, a tab and a file, or two SFTP files
 - Wake-on-LAN
 - Import from SecureCRT, PuTTY, MobaXterm, mRemoteNG and more
-- Windows, macOS and Linux, and an Android companion app for Wake-on-LAN ([preview](mobile/README.md))
+- Windows, macOS and Linux, and an Android companion app with an SSH and Telnet terminal, a device widget and Wake-on-LAN ([preview](mobile/README.md))
 - Glacier and Standard styles, dark and light themes
 
 And much more - see the [feature list](docs/FEATURES.md).
@@ -83,12 +83,13 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
-## What's new in 0.28.0
+## What's new in 0.28
 
 - **Termwright for Android: a terminal.** SSH and Telnet sessions open on the phone with the desktop's terminal and a key bar for Esc, Tab, Ctrl, Alt and the arrows. Logins are kept encrypted, host keys are checked, sessions with a jump host go through it when you are away, and open sessions stay connected in the background.
 - **Android: widget and wakes on a schedule.** A home screen widget shows whether your devices are up with a *Wake* button, and the phone can wake a device every day or on weekdays, with a notification afterwards.
 - **3D start page.** On the Glacier style the recent and favourite cards, the search bar and the quick buttons are 3D; the cards reach past the search bar into free space and show the model with the login, the folder and the time. Recent keeps 12 sessions.
 - **A neutral light theme.** Glacier light is white and grey instead of bluish.
+- **Discover Devices, calmer.** It opens narrow: pick a network of this computer or type addresses, with the SNMP options folded away; the window widens for the results.
 
 ## What's new in 0.27.0
 
@@ -170,7 +171,7 @@ The complete list is in [docs/FEATURES.md](docs/FEATURES.md).
 | ![Discover Devices](docs/screenshots/discover.png) <br/>*Network discovery with evidence per device* | ![Configuration backups](docs/screenshots/backups.png) <br/>*Configuration backups* |
 | ![Change checklist](docs/screenshots/checklist.png) <br/>*Change checklist: same or changed per device* | ![Run and Collect](docs/screenshots/collect.png) <br/>*Run and Collect into one table* |
 | ![Open Web Interface](docs/screenshots/web-open.png) <br/>*A device's web interface through its jump station* | ![Command History](docs/screenshots/history.png) <br/>*Command History* |
-| ![Light theme](docs/screenshots/light.png) <br/>*Light theme* | ![Files panel on the left](docs/screenshots/files-panel-right.png) <br/>*Files panel on the left when the Session Manager is on the right* |
+| ![Light theme](docs/screenshots/light.png) <br/>*Glacier, light: white and grey with 3D cards* | ![Files panel on the left](docs/screenshots/files-panel-right.png) <br/>*Files panel on the left when the Session Manager is on the right* |
 
 <details>
 <summary>More screenshots</summary>
