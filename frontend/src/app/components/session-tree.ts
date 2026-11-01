@@ -432,26 +432,6 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     if (n.protocol === 'WOL') return this.wol.get(n.path)?.state === 'up';
     return this.reachable().get(n.path) === true || this.liveState().get(n.path) === 'connected';
   }
-  /** A partner's name, with its folder when another partner has the same name (two "TNAS"). */
-  partnerLabel(p: SessionNode, w: SessionNode): string {
-    const same = this.wolPartners(w).filter(o => o.name === p.name).length > 1;
-    const folder = p.path.includes('/') ? p.path.slice(0, p.path.lastIndexOf('/')) : 'top level';
-    return same ? `${p.name} (${folder}, ${p.protocol === 'SSH2' ? 'SSH' : p.protocol})` : p.name;
-  }
-  wolPartners(w: SessionNode): SessionNode[] {
-    const out: SessionNode[] = [];
-    const mac = (w.mac ?? '').toLowerCase().replace(/[^0-9a-f]/g, '');
-    const walk = (n: SessionNode | null) => n?.children?.forEach(c => {
-      if (c.isFolder) walk(c);
-      else if (c.protocol !== 'WOL' && ((mac && (c.mac ?? '').toLowerCase().replace(/[^0-9a-f]/g, '') === mac) || (w.hostname && c.hostname === w.hostname))) out.push(c);
-    });
-    walk(this.ui.tree());
-    return out.slice(0, 4);
-  }
-  private async wakeThen(path: string, connect: string) {
-    try { await this.wol.wake(await this.backend.getSession(path), () => void this.tabs.openSession(connect)); } catch (e) { this.ui.error(e); }
-  }
-
   keys(k: string) { return (/Mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+') + k; }
   clipWhat() { const c = this.ops.clip(); return c ? (c.items.length === 1 ? ' "' + c.items[0].path.split('/').pop() + '"' : ' ' + c.items.length + ' Items') : ''; }
 
@@ -808,9 +788,6 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(n.protocol === 'RDP' || n.protocol === 'VNC' ? [{ label: 'Diagnose (why it does not connect)...', action: () => this.ui.openRemoteDiag(n.path, n.name, n.protocol!) }] : []),
           ...(n.mac ? [up ? { label: 'Wake Up (Wake-on-LAN)', disabled: true, hint: 'device is up' } : { label: 'Wake Up (Wake-on-LAN)', action: () => void this.wake(n.path, 'none') }] : []),
           ...(n.mac && n.protocol !== 'WOL' && !up ? [{ label: 'Wake Up and Connect', action: () => void this.wake(n.path, 'connect') }] : []),
-          // a device that is up is connected to straight away
-          ...(n.protocol === 'WOL' ? this.wolPartners(n).map(p => ({ label: `${up ? 'Connect' : 'Wake Up and Connect'} to ${this.partnerLabel(p, n)}`,
-            action: () => void (up ? this.tabs.openSession(p.path) : this.wakeThen(n.path, p.path)) })) : []),
           ...(n.protocol === 'WOL' && n.hostname ? [{ label: 'Check Now (ping)', action: () => this.wol.checkNow(n.path) }] : []),
           { separator: true },
           { label: 'Properties...', action: () => this.ui.editSession(n.path) },
