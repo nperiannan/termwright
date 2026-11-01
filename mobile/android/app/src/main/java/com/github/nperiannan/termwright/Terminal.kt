@@ -108,6 +108,7 @@ class TermSession(val sess: Sess, ctx: Context) {
                 state = "closed"
                 this@TermSession.reason = reason ?: ""
                 term = null
+                TermService.update(web.context)
                 print("\r\n\u001b[2m[Disconnected${if (reason.isNullOrBlank()) "" else ": $reason"}]\u001b[0m\r\n")
             }
         }
@@ -227,6 +228,7 @@ object Terms {
             val t = withContext(Dispatchers.IO) { Twcore.open(req.toString(), ts.screen) }
             ts.opened(t)
             if (ts !in open) open.add(ts)
+            TermService.update(ctx)
             ConnectOutcome.Opened(ts)
         } catch (e: Exception) {
             if (existing == null) ts.destroy() else ts.state = "closed"
@@ -246,9 +248,11 @@ object Terms {
         }
     }
 
-    fun close(ts: TermSession) {
+    fun close(ts: TermSession, update: Boolean = true) {
+        val ctx = ts.web.context
         open.remove(ts)
         ts.destroy()
+        if (update) TermService.update(ctx)
     }
 }
 

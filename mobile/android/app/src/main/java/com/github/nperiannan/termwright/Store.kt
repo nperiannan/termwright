@@ -77,6 +77,11 @@ class Store(private val ctx: Context) {
         get() = prefs.getString("favourite", "") ?: ""
         set(v) = prefs.edit().putString("favourite", v).apply()
 
+    /** Whether the app asked once for notifications (for the open terminals' notification). */
+    var askedNotify: Boolean
+        get() = prefs.getBoolean("askedNotify", false)
+        set(v) = prefs.edit().putBoolean("askedNotify", v).apply()
+
     /** The terminal's text size. */
     var fontSize: Int
         get() = prefs.getInt("fontSize", 13)

@@ -18,7 +18,8 @@ including the sleep-proxy ports that wake a Mac with Apple silicon.
   asked once (kept encrypted, or only until the app closes); a device's key is shown to accept the first time and a changed
   key is never accepted silently. Telnet answers the login and password prompts with the saved login. Away from home,
   sessions with a jump host go through it. Several sessions stay open; the menu has copy, paste, text size, Send Break,
-  reconnect and disconnect.
+  reconnect and disconnect. While a terminal is open, a notification (*1 session open*, with *Disconnect*) keeps them
+  connected in the background, and SSH sends a keepalive every 30 s so routers do not drop a quiet session.
 - **Home screen widget** (*Termwright devices*): the devices you turn on with *Show on the home screen widget*,
   whether they are up (checked every 30 minutes, or tap ⟳), and a *Wake* button that follows the device until it answers.
 - **Wake on a schedule**: every day or weekdays at a time, sent from the phone also while the app is closed, with a

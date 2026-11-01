@@ -181,6 +181,16 @@ func openSSH(r *termRequest, dial func(string) (net.Conn, error)) (*Terminal, io
 			return err
 		},
 		close: func() { _ = s.Close(); _ = client.Close() }}
+	// a keepalive every 30 s: home routers and mobile networks drop a quiet connection
+	go func() {
+		tk := time.NewTicker(30 * time.Second)
+		defer tk.Stop()
+		for range tk.C {
+			if _, _, err := client.SendRequest("keepalive@openssh.com", true, nil); err != nil {
+				return // closed
+			}
+		}
+	}()
 	return t, out, nil
 }
 

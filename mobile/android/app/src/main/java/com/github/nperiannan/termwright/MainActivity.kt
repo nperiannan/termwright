@@ -115,12 +115,22 @@ fun App(shared: Uri?, sharedDone: () -> Unit) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { importFrom(it) } }
     LaunchedEffect(shared) { shared?.let { importFrom(it); sharedDone() } }
 
+    // the notification that keeps terminals connected in the background needs this on Android 13 and later
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     fun connect(s: Sess, existing: TermSession? = null) = scope.launch {
         busy = s.path
         val r = Terms.connect(ctx, store, s, sessions, existing)
         busy = null
         when (r) {
-            is ConnectOutcome.Opened -> termShown = r.ts
+            is ConnectOutcome.Opened -> {
+                termShown = r.ts
+                if (Build.VERSION.SDK_INT >= 33 && !store.askedNotify &&
+                    ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    store.askedNotify = true
+                    askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
             is ConnectOutcome.Failed -> if (existing != null) existing.print("\u001b[31m[Could not connect: ${r.text}]\u001b[0m\r\n")
                 else snack.showSnackbar("Could not connect to ${s.name}: ${r.text}")
             is ConnectOutcome.NeedLogin -> { pendingConnect = s to existing; devLogin = s to r.error }
