@@ -19,6 +19,13 @@
   --g-blur: blur(18px) saturate(120%);
   --g-sel: linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .05)); --g-sel-edge: rgba(90, 180, 255, .45);
   --g-sheen: rgba(255, 255, 255, .06);
+  /* start page cards: 3D slabs */
+  --g-slab-face: linear-gradient(180deg, #23262d, #17191e); --g-slab-rim: rgba(255, 255, 255, .10); --g-chip: rgba(0, 0, 0, .35);
+  --g-slab: 0 1px 0 rgba(255, 255, 255, .18) inset, 0 -2px 0 rgba(0, 0, 0, .35) inset, 0 2px 0 #0f1013, 0 4px 0 #0c0d10, 0 6px 0 #0a0b0d,
+    0 8px 0 1px rgba(90, 170, 255, .10), 0 26px 30px -10px rgba(0, 0, 0, .85);
+  --g-slab-hover: 0 1px 0 rgba(255, 255, 255, .25) inset, 0 2px 0 #0f1013, 0 4px 0 #0c0d10, 0 6px 0 #0a0b0d, 0 8px 0 1px rgba(90, 170, 255, .35),
+    0 40px 40px -14px rgba(0, 0, 0, .9), 0 0 30px -6px rgba(90, 170, 255, .35);
+  --g-icon-lift: drop-shadow(0 10px 8px rgba(0, 0, 0, .7)) drop-shadow(0 0 14px rgba(80, 200, 170, .25));
   /* the colour tokens stay opaque: dialogs, pop-ups, menus and panels throughout the app paint with them,
      and over other content a see-through one is unreadable. The glass comes from the --g-* colours, used on purpose
      where the still background is all that lies behind: title bar, Session Manager, start page, cards. */
@@ -36,6 +43,12 @@
   --g-solid: #fafcff;
   --g-sel: linear-gradient(180deg, rgba(90, 180, 255, .22), rgba(90, 180, 255, .1)); --g-sel-edge: rgba(90, 180, 255, .35);
   --g-sheen: rgba(125, 211, 252, .18);
+  --g-slab-face: linear-gradient(180deg, #ffffff, #eef3f8); --g-slab-rim: rgba(20, 60, 110, .12); --g-chip: rgba(255, 255, 255, .7);
+  --g-slab: 0 1px 0 #fff inset, 0 -2px 0 rgba(20, 60, 110, .06) inset, 0 2px 0 #dbe3ec, 0 4px 0 #d0dae6, 0 6px 0 #c6d1de,
+    0 8px 0 1px rgba(31, 122, 224, .10), 0 24px 28px -12px rgba(30, 70, 120, .35);
+  --g-slab-hover: 0 1px 0 #fff inset, 0 2px 0 #dbe3ec, 0 4px 0 #d0dae6, 0 6px 0 #c6d1de, 0 8px 0 1px rgba(31, 122, 224, .35),
+    0 36px 36px -14px rgba(30, 70, 120, .4), 0 0 28px -8px rgba(31, 122, 224, .35);
+  --g-icon-lift: drop-shadow(0 8px 7px rgba(30, 70, 120, .35));
   --g-lift: 0 1px 0 rgba(255, 255, 255, .95) inset, 0 -1px 0 rgba(15, 40, 70, .06) inset, 0 12px 26px -10px rgba(30, 70, 120, .28), 0 2px 6px rgba(30, 70, 120, .1);
   --bg: #eef3f8; --chrome: #f6f9fc; --panel: #f9fbfd; --tab: #ecf1f7;
   --surface: #ffffff; --surface-2: #f3f6fa; --hover: rgba(20, 60, 110, .07);
@@ -68,26 +81,30 @@
   .tree-rail { margin: 0 6px 8px 0; border: 1px solid var(--g-edge) !important; border-radius: 12px; background: var(--g-glass); }
 
   /* start page: the aurora shows through the work area while no tab is open */
-  .home { background: transparent; }
+  .home { background: transparent; container-type: inline-size; }
   .terminals:has(.home) { background: transparent; }
   .bigsearch, .qa button { background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); border-color: var(--g-edge); box-shadow: var(--g-lift); }
   .bigsearch { border-radius: 14px; }
   .qa button { border-radius: 12px; &:hover { background: linear-gradient(180deg, var(--g-hi), var(--g-glass-2)); border-color: var(--g-edge); } }
   .home-in { max-width: 960px; }
   /* start page cards only (.card and .cards are also used in dialogs); three per row; fewer when the start page is narrow (a side panel open, a small window), never squeezed */
-  .home .cards { grid-template-columns: repeat(auto-fill, minmax(max(220px, calc((100% - 28px) / 3)), 1fr)); gap: 14px; }
-  .home .card { position: relative; height: 132px; justify-content: space-between; overflow: hidden; border-radius: 16px; border-color: var(--g-edge);
-    background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); box-shadow: var(--g-lift);
-    backdrop-filter: var(--g-blur); -webkit-backdrop-filter: var(--g-blur);
-    transform: perspective(900px) translateZ(0); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-    &::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: .55;
-      background: linear-gradient(135deg, var(--g-hi) 0%, transparent 28%), radial-gradient(120px 60px at 85% 0%, var(--g-sheen), transparent 70%); }
+  .home .cards { grid-template-columns: repeat(auto-fill, minmax(max(220px, calc((100% - 28px) / 3)), 1fr)); gap: 14px;
+    /* wider than the search bar: up to half a card on each side, only into free space (never under a panel) */
+    margin-inline: calc(-1 * clamp(0px, (100cqw - min(100cqw, 960px)) / 2 + 22px, 142px)); perspective: 1200px; }
+  /* 3D slabs: a thick tile with a visible edge, tipped back a little; the icon stands off the face; the card under the pointer turns towards it */
+  .home .card { position: relative; height: 132px; justify-content: space-between; border-radius: 18px; border-color: var(--g-slab-rim);
+    background: var(--g-slab-face); box-shadow: var(--g-slab);
+    transform: perspective(1000px) rotateX(5deg); transform-origin: 50% 100%; transform-style: preserve-3d;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    &::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: linear-gradient(180deg, var(--g-sheen), transparent 40%), linear-gradient(100deg, transparent 30%, var(--g-sheen) 42%, transparent 52%); }
     > * { position: relative; }
     .ctop { align-items: flex-start; }
-    app-device-icon, app-session-icon { filter: drop-shadow(0 5px 8px rgba(0, 0, 0, .35)); }
-    .chip { background: var(--g-glass); border-color: var(--g-edge); }
-    &:hover { background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); transform: perspective(900px) translateY(-3px) rotateX(2deg);
-      border-color: rgba(90, 180, 255, .45); box-shadow: 0 1px 0 var(--g-hi) inset, 0 18px 34px -12px rgba(0, 0, 0, .55), 0 0 0 1px rgba(90, 180, 255, .3); } }
+    app-device-icon, app-session-icon { transform: translateZ(26px) translateY(-3px); filter: var(--g-icon-lift); }
+    .chip { background: var(--g-chip); border-color: var(--g-edge); }
+    &:hover { background: var(--g-slab-face); border-color: rgba(90, 180, 255, .5); box-shadow: var(--g-slab-hover);
+      transform: perspective(1000px) rotateX(calc(2deg + var(--tx, 0deg))) rotateY(var(--ty, -4deg)) translateY(-8px); } }
+  @media (prefers-reduced-motion: reduce) { .home .card, .home .card:hover { transform: none; } }
   .home-empty { background: var(--g-glass); border-color: var(--g-edge); }
 
   /* menus, dialogs, toasts, hover cards: denser glass so text stays readable */
@@ -102,7 +119,5 @@
     box-shadow: 0 1px 0 rgba(255, 255, 255, .4) inset, 0 6px 14px -6px rgba(47, 140, 240, .8); color: #fff; }
 }
 :root.glacier.light {
-  .home .card:hover { box-shadow: 0 1px 0 var(--g-hi) inset, 0 18px 34px -12px rgba(30, 70, 120, .35), 0 0 0 1px rgba(31, 122, 224, .3); }
-  .home .card app-device-icon, .home .card app-session-icon { filter: drop-shadow(0 5px 8px rgba(30, 70, 120, .25)); }
   .modal-backdrop { background: rgba(120, 150, 190, .25); }
 }

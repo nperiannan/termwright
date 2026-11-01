@@ -195,7 +195,11 @@ app-command-window { flex: none; }
   .ca { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cmeta { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .cmeta .chip:not(.pchip) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cago { flex: none; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--faint); white-space: nowrap; }
+  .cf { display: flex; align-items: center; gap: 4px; margin-top: 2px; min-width: 0; font-size: calc(11px * var(--ui-scale, 1)); color: var(--faint);
+    span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    app-icon { flex: none; opacity: .8; } }
+  .cago { flex: none; margin-left: auto; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--faint); white-space: nowrap; }
+  .cago + .cdot { margin-left: 8px; }
   .pchip { flex: none; display: inline-flex; align-items: center; gap: 5px; padding-left: 6px; color: var(--text); }
   .chip { font-size: calc(11.5px * var(--ui-scale, 1)); padding: 2px 9px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

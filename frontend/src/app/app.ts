@@ -172,24 +172,30 @@ export class App implements OnInit {
     }
     return m;
   });
-  /** Card second line: the model when known, else user@host[:port]. */
+  /** Card second line: user@host[:port], after the model when it is known. */
   cardAddr(n: SessionNode) {
+    const a = sessionAddr({ ...n, deviceType: '', protocol: n.protocol === 'SSH2' ? 'SSH2' : n.protocol }).replace(/ · (Telnet|Raw|RDP|VNC|Serial|Console)$/, '');
     const m = this.ui.factsOf(n.path)?.['Model'];
-    if (m) return m + ' · ' + (n.hostname ?? ''); return sessionAddr({ ...n, deviceType: '', protocol: n.protocol === 'SSH2' ? 'SSH2' : n.protocol }).replace(/ · (Telnet|Raw|RDP|VNC|Serial|Console)$/, ''); }
+    return m ? m + ' · ' + a : a; }
+  /** The folder a card's session is in ("Datacenter › Core"), empty at the top level. */
+  cardFolder(n: SessionNode) { return n.path.split('/').slice(0, -1).join(' › '); }
   /** Card chip: the device type and its version ("EXOS 33.5.1.5"), or the protocol. */
   cardMeta(n: SessionNode, recent: boolean) {
     const ver = this.ui.factsOf(n.path)?.['Version'] ?? '';
     const kind = [n.deviceType || ({ Serial: 'Serial', 'Local Shell': 'Local', Console: 'Console' } as Record<string, string>)[n.protocol ?? ''] || '', ver].filter(Boolean).join(' ');
-    if (recent) return kind || this.lastAgo(n) || n.protocol || '';
+    if (recent) return kind || (this.devKind(n) ? '' : protoName(n));
     // the protocol has its own chip when the icon shows the device type
     return [kind, n.protocol === 'Serial' || this.devKind(n) ? '' : n.protocol ?? ''].filter(Boolean).join(' · ') || n.protocol || '';
   }
   /** When a recent card was last used, shown beside its chip (never cut off with the chip's text). */
-  cardAgo(n: SessionNode, recent: boolean) {
-    const ver = this.ui.factsOf(n.path)?.['Version'] ?? '';
-    const hasKind = !!(n.deviceType || ver || ['Serial', 'Local Shell', 'Console'].includes(n.protocol ?? ''));
-    return recent && hasKind ? this.lastAgo(n) : '';
+  cardAgo(n: SessionNode, recent: boolean) { return recent ? this.lastAgo(n) : ''; }
+  /** The 3D cards (Glacier) turn a little towards the pointer. */
+  tilt(ev: PointerEvent) {
+    const el = ev.currentTarget as HTMLElement, r = el.getBoundingClientRect();
+    el.style.setProperty('--ty', (((ev.clientX - r.left) / r.width - .5) * 10).toFixed(1) + 'deg');
+    el.style.setProperty('--tx', (-((ev.clientY - r.top) / r.height - .5) * 6).toFixed(1) + 'deg');
   }
+  untilt(ev: PointerEvent) { const el = ev.currentTarget as HTMLElement; el.style.removeProperty('--tx'); el.style.removeProperty('--ty'); }
   devKind(n: SessionNode) { return n.protocol === 'WOL' ? null : deviceKindOf(n.deviceType); }
   /** How the session opens: SSH, SFTP, Telnet, Serial… (the icon shows the device type instead). */
   protoName(n: SessionNode) { return protoName(n); }
