@@ -602,7 +602,11 @@ A team that shares a lab can run its own small **team server** (a Docker contain
 - **Join a Team…**: paste the invite the owner sent you. Termwright talks only to the server whose certificate matches the invite.
 - **The team**: who is in it and who is online. Owners and co-owners see the invite (*Copy*, *New Invite* - the old one stops working), make members co-owners and remove members. *You appear as* sets the name the team sees.
 
-Only names, user and computer names - and, from the next release, which devices are open or reserved - are shared; never passwords, keys or sessions. The [team server guide](TEAM_SERVER.md) covers firewalls, installing by hand, backups and updates.
+- **The team folder**: the team's inventory appears as a folder named after the team and follows the server within seconds. Name, folder, address, port, protocol, device type and MAC address come from the team; your login on each device stays yours.
+- **Push to Team…** (right-click a session, a folder or a selection; also in Discover Devices): offers your own sessions to the team. Devices the team has already - under any name - are shown as *already in the team as …* and left out. Owners and co-owners add directly; what members push waits for their approval.
+- **Open Admin Page** (owners and co-owners): the team's inventory, approvals, scans from the lab host, members and activity in your browser, signed in by Termwright - no passwords on the server.
+
+Only names, user and computer names and the device inventory are shared; never passwords, usernames, keys or terminal output. The [team server guide](TEAM_SERVER.md) covers firewalls, installing by hand, backups and updates.
 
 | Teams | Set Up a Team Server |
 |---|---|

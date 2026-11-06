@@ -35,6 +35,9 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
         <button type="button" class="ic" title="Close (Esc)" (click)="close()"><app-icon name="x" /></button>
       </header>
       <div class="body">
+        @if (s.team) {
+          <div class="teamnote"><b>From the team {{ teamName(s.team) }}</b> - its name, folder, address, port, protocol, device type and MAC address follow the team inventory (changed by the owner and co-owners). Your username, password, account and keys stay yours.</div>
+        }
         <label class="f"><span>Name</span><input name="name" [(ngModel)]="s.name" placeholder="e.g. core-sw1" /></label>
         <div class="f"><span>Folder</span><app-folder-picker [(value)]="s.folder" /></div>
         <div class="f"><span>Protocol</span>
@@ -196,6 +199,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
     }
   `,
   styles: [`
+    .teamnote { margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.45; background: color-mix(in srgb, var(--accent) 9%, transparent); }
     :host { flex: none; width: min(510px, 48vw); min-width: 340px; display: flex; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); }
     .sp { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     header { display: flex; align-items: center; gap: 10px; padding: 16px 14px 12px 18px; border-bottom: 1px solid var(--line); margin-bottom: 10px;
@@ -290,6 +294,8 @@ export class SessionPanel {
   installKey = false;
   readonly genBusy = signal(false);
   readonly genMsg = signal('');
+
+  teamName(ref: string) { return (this.ui.settings()?.teams ?? []).find(t => ref.startsWith(t.id + '/'))?.name ?? ''; }
 
   /** How the SSH session logs in: what was picked here, else what its authentication order and key say. */
   private picked: AuthMode | null = null;

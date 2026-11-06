@@ -41,6 +41,11 @@ type state struct {
 	Invite        string       `json:"invite"`
 	OwnerCodeHash string       `json:"ownerCodeHash,omitempty"` // until the owner joins
 	Members       []*memberRec `json:"members"`
+	Rev           int64        `json:"rev"` // inventory revision: grows with every change
+	Inventory     []*Device    `json:"inventory"`
+	Folders       []string     `json:"folders,omitempty"`  // folders made on the admin page, also when empty
+	Pending       []*Pending   `json:"pending,omitempty"`  // devices members pushed, waiting for approval
+	Activity      []Activity   `json:"activity,omitempty"` // newest last, at most maxActivity
 }
 
 // Server is a team server. Its data (team.json, the certificate and key) is in Dir.
@@ -56,6 +61,11 @@ type Server struct {
 	seen  map[string]time.Time // member id → last call (not saved on every call)
 	fails map[string]time.Time // remote address → last failed join
 	now   func() time.Time
+
+	changed  chan struct{}           // closed and replaced when the inventory changes (long polls wait on it)
+	links    map[string]linkCode     // admin sign-in codes
+	sessions map[string]adminSession // admin page cookies
+	scan     *scanState
 }
 
 // Open loads the team in dir, or makes a new one named name: a certificate, an
@@ -65,7 +75,8 @@ func Open(dir, name, version string, logger *log.Logger) (*Server, string, error
 	if logger == nil {
 		logger = log.New(io.Discard, "", 0)
 	}
-	s := &Server{Dir: dir, Version: version, Log: logger, seen: map[string]time.Time{}, fails: map[string]time.Time{}, now: time.Now}
+	s := &Server{Dir: dir, Version: version, Log: logger, seen: map[string]time.Time{}, fails: map[string]time.Time{}, now: time.Now,
+		changed: make(chan struct{}), links: map[string]linkCode{}, sessions: map[string]adminSession{}}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, "", err
 	}
@@ -172,6 +183,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/members/role", s.auth(s.setRole))
 	mux.HandleFunc("POST /api/members/remove", s.auth(s.remove))
 	mux.HandleFunc("POST /api/leave", s.auth(s.leave))
+	s.inventoryRoutes(mux)
 	return http.MaxBytesHandler(mux, 1<<20)
 }
 
@@ -271,6 +283,17 @@ func (s *Server) auth(h func(http.ResponseWriter, *http.Request, *memberRec)) ht
 		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if tok == "" {
+			if m := s.cookieMember(r); m != nil {
+				if r.Method != http.MethodGet && r.Header.Get("X-Termwright") != "1" {
+					fail(w, 403, "missing request header")
+					return
+				}
+				s.seen[m.ID] = s.now()
+				h(w, r, m)
+				return
+			}
+		}
 		if tok != "" {
 			th := hashToken(tok)
 			for _, m := range s.st.Members {
@@ -292,6 +315,11 @@ func (s *Server) auth(h func(http.ResponseWriter, *http.Request, *memberRec)) ht
 func manager(m *memberRec) bool { return m.Role == RoleOwner || m.Role == RoleCoOwner }
 
 func (s *Server) team(w http.ResponseWriter, _ *http.Request, me *memberRec) {
+	writeJSON(w, 200, s.teamView(me))
+}
+
+// teamView is the team as me sees it (mu held).
+func (s *Server) teamView(me *memberRec) Team {
 	t := Team{Name: s.st.Name, Version: s.Version, Me: me.ID, Role: me.Role}
 	if manager(me) {
 		t.Invite = s.st.Invite
@@ -312,7 +340,7 @@ func (s *Server) team(w http.ResponseWriter, _ *http.Request, me *memberRec) {
 		}
 		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
 	})
-	writeJSON(w, 200, t)
+	return t
 }
 
 func (s *Server) rotate(w http.ResponseWriter, _ *http.Request, me *memberRec) {

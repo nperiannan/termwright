@@ -45,6 +45,8 @@ export class Ui {
   readonly selectedPaths = signal<Set<string>>(new Set());
   /** Sessions the Edit Sessions dialog changes. */
   readonly bulkPaths = signal<string[]>([]);
+  /** What Push to Team… offers: sessions (paths, relative to base) or devices from Discover. */
+  readonly teamPush = signal<{ paths?: string[]; base?: string; items?: import('./models').TeamPushItem[] } | null>(null);
   /** Sessions the Configuration Backups window backs up right away (from the Session Manager); null = just open it. */
   readonly backupTargets = signal<string[] | null>(null);
   /** Sessions or folders the Change Checklists window starts with (from the Session Manager). */

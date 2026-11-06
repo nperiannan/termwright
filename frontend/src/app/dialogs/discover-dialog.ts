@@ -183,6 +183,9 @@ const ACK_KEY = 'termwright.discoverAck';
         }
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Close</button>
+        @if (rows().length && (ui.settings()?.teams ?? []).length) {
+          <button type="button" [disabled]="!selectedCount()" (click)="pushToTeam()" title="Offer the selected devices to your team's inventory (nothing is sent before you confirm)">Push to Team…</button>
+        }
         @if (rows().length) {
           <button type="button" class="primary" [disabled]="!selectedCount() || adding()" (click)="add()">
             {{ adding() ? 'Adding…' : selectedCount() ? 'Add ' + selectedCount() + ' Session' + (selectedCount() === 1 ? '' : 's') : 'Add Sessions' }}</button>
@@ -748,6 +751,18 @@ export class DiscoverDialog implements OnDestroy {
   selectAll(v: boolean) {
     const ips = new Set(this.shown().map(r => r.ip));
     this.rows.update(l => l.map(r => ips.has(r.ip) && r.protocol ? { ...r, selected: v } : r));
+  }
+
+  /** Push to Team… with the selected devices (as they would be added). */
+  pushToTeam() {
+    const sub = (r: { deviceType: string }) => this.byType() ? (r.deviceType || 'Other').replace(/[\\/:*?"<>|]+/g, '-') : '';
+    const items = this.toAdd().filter(r => r.ip).map(r => ({
+      path: '', name: (r.name || r.ip).replace(/[\\/:*?"<>|]+/g, '-').trim() || r.ip, folder: sub(r), host: r.ip,
+      port: r.protocol ? r.port : 0, protocol: r.protocol || 'SSH2', deviceType: r.deviceType, mac: r.mac || '',
+      description: [r.vendor, r.os].filter(Boolean).join(' · '),
+    }));
+    this.ui.teamPush.set({ items });
+   
   }
 
   async add() {

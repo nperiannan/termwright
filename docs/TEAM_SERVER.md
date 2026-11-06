@@ -11,9 +11,40 @@ Teams are **optional**. Without one, Termwright works exactly as before and send
 ## What is shared
 
 - Who is who: the name each person chose, their user name and computer name.
-- Device status, from the next release: which devices someone has open, and reservations with their note and end time.
+- The **team inventory**: the lab's devices - name, folder, address, port, protocol, device type, MAC address and description.
+- Coming next: which network devices someone has open, and reservations with their note and end time (switches, routers and the like - not computers, phones, printers or IoT boards, which take several logins at once).
 
-Passwords, keys, session files and terminal output are **never** sent. The server keeps only the team, its members and device status.
+Passwords, usernames, keys, session files and terminal output are **never** sent: everyone logs in to the team's devices with their own login, kept on their own computer.
+
+## The team inventory
+
+Every member's Session Manager shows a folder named after the team (e.g. *ENI-EP1-CHN*) with the team's devices. It follows the server: a device added, renamed, moved or deleted there shows up within seconds. The team decides a device's name, folder, address, port, protocol, device type and MAC address; your username, password, account, device type login and keys on it stay yours. A copy you make of a team device (Duplicate, Copy and Paste) is your own session. Leaving the team removes its folder; your own sessions are never touched.
+
+**Your own sessions stay yours** until you push them: right-click a session, a folder or a selection → **Push to Team…**, or in Discover Devices **Push to Team…** for the selected results. The window shows each device:
+
+- *new for the team*: ticked, it is pushed;
+- *already in the team as core-sw1 (Core)*: the team has it - matched by address and port, or by MAC address, whatever its name - and it is left out;
+- *waiting for approval*: someone pushed it already.
+
+Pushed by an owner or co-owner, devices are added at once. Pushed by a member, they wait on the admin page's **Approvals** until an owner or co-owner approves (optionally into another folder) or rejects them.
+
+| Push to Team | The admin page |
+|---|---|
+| ![Push to Team](screenshots/team-push.png) | ![Team admin page](screenshots/team-admin.png) |
+
+## The admin page
+
+Owners and co-owners manage the team in the browser: **Options → Teams… → Open Admin Page**. Termwright signs you in with a link that works once, for two minutes; the page then keeps you signed in for eight hours on that browser. There are no passwords on the server, and members cannot open it. The certificate is the team server's own, so the browser asks once whether to trust it.
+
+| Tab | |
+|---|---|
+| **Inventory** | the devices by folder: filter, *+ Device*, *+ Folder*, edit, move, delete, rename folders, **Import CSV…** / **Export CSV** (columns `name, folder, address, port, protocol, deviceType, mac, description`) |
+| **Approvals** | devices members pushed: approve (into their folder or another) or reject |
+| **Discover** | scans a network **from the team server's host**, inside the lab - also when you are at home on VPN. Nothing logs in. *Network devices only* (on by default) hides computers, phones and printers. Tick devices, pick a folder, **Add to Inventory**; devices the inventory has already are marked |
+| **Members** | the invite (*Copy*, *New Invite*), roles and *Remove* |
+| **Activity** | who added, changed, approved, removed what and when |
+
+MAC addresses in server scans need the container on the host's network (*Use the host's network* when setting it up) and devices on the host's own subnet.
 
 ## Setting a team server up from Termwright (recommended)
 
@@ -50,9 +81,9 @@ The key that proves your membership is kept in the system keychain, not in `sett
 
 | Role | Can |
 |---|---|
-| **Owner** (who set the server up) | everything: see and renew the invite, make members co-owners and back, remove anyone |
-| **Co-owner** | see and renew the invite, make members co-owners, remove members |
-| **Member** | see the team and device status; reserve devices (next release) |
+| **Owner** (who set the server up) | everything: the admin page, the inventory and approvals, the invite, co-owners, remove anyone |
+| **Co-owner** | the admin page, the inventory and approvals, the invite, make members co-owners, remove members |
+| **Member** | see the team and its inventory; push devices for approval; reserve devices (next) |
 
 **New Invite** stops the old invite; members who already joined stay in the team. A removed member is out at once and needs a new invite to come back. The owner can leave only when nobody else is in the team.
 

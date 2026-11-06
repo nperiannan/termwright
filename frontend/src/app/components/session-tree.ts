@@ -747,6 +747,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
         { label: `Back Up ${g.length} Configurations`, action: () => this.backUp(g) },
         { label: 'Change Checklist...', action: () => this.checklist(g) },
         { label: 'Run and Collect...', action: () => this.collect(g) },
+        ...this.pushItems(g, ''),
         { label: allFav ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav(g, !allFav) },
         { separator: true },
         { label: `Copy ${g.length} Sessions`, hint: this.keys('C'), action: () => this.ops.copy(g.map(p => ({ path: p, folder: false }))) },
@@ -766,6 +767,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'Back Up Configurations', action: () => this.backUp([n.path + '/']) },
           { label: 'Change Checklist...', action: () => this.checklist([n.path + '/']) },
           { label: 'Run and Collect...', action: () => this.collect([n.path + '/']) },
+          ...this.pushItems(this.pathsIn(n), n.path),
           { separator: true },
           { label: 'New Session...', action: () => this.ui.newSession(n.path) },
           { label: 'New Folder...', action: () => this.newFolder(n.path) },
@@ -814,6 +816,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [
             { label: 'Console Server Ports...', action: () => { this.ui.consoleServerFor.set(n.path); this.ui.open('consolePorts'); } },
           ] : []),
+          ...(n.team ? [{ label: 'From the team ' + this.teamName(n.team) + ' (its address and name follow the team)', disabled: true }] : this.pushItems([n.path], '')),
           { label: 'Duplicate', action: () => this.duplicate(n) },
           { label: 'Copy', hint: this.keys('C'), action: () => this.ops.copy([{ path: n.path, folder: false }]) },
           { label: 'Cut', hint: this.keys('X'), action: () => this.ops.cut([{ path: n.path, folder: false }]) },
@@ -845,6 +848,19 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   backUp(targets: string[]) {
     this.ui.backupTargets.set(targets);
     this.ui.open('backups');
+  }
+
+  teamName(ref: string) { return (this.ui.settings()?.teams ?? []).find(t => ref.startsWith(t.id + '/'))?.name ?? ''; }
+
+  /** Push to Team… for sessions of your own (team devices are the team's already). */
+  pushItems(paths: string[], base: string): MenuItem[] {
+    if (!(this.ui.settings()?.teams ?? []).length) return [];
+    const team = new Set<string>();
+    const walk = (n: SessionNode | null | undefined) => n?.children?.forEach(c => c.isFolder ? walk(c) : c.team && team.add(c.path));
+    walk(this.ui.tree());
+    const own = paths.filter(p => !team.has(p));
+    if (!own.length) return [];
+    return [{ label: own.length === 1 && paths.length === 1 && !base ? 'Push to Team...' : `Push ${own.length} to Team...`, action: () => { this.ui.teamPush.set({ paths: own, base }); } }];
   }
 
   bulkEdit(paths: string[]) {

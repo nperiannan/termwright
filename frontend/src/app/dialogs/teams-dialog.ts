@@ -43,6 +43,9 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
               <div class="mono muted">{{ t.address }}@if (t.reachable) { · {{ t.members }} member{{ t.members === 1 ? '' : 's' }} · {{ t.online }} online }</div>
               @if (t.error) { <div class="err">{{ t.error }}</div> }
             </div>
+            @if (t.role !== 'member' && t.reachable) {
+              <button type="button" class="primary" (click)="$event.stopPropagation(); openAdmin(t)" title="Inventory, approvals, scans and members - in your browser, signed in">Open Admin Page</button>
+            }
             <button type="button" (click)="$event.stopPropagation(); leave(t)">{{ t.role === 'owner' ? 'Leave…' : 'Leave' }}</button>
           </div>
         }
@@ -119,6 +122,8 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
           <button type="button" [class.on]="image === 'copy'" (click)="image = 'copy'" [disabled]="!!run()">Copy over SSH</button>
         </div>
         <span class="muted small"> {{ image === 'download' ? 'the host downloads it; falls back to copying when the host has no internet' : 'this computer downloads it and copies it to the host - for labs without internet' }}</span>
+        <label class="hn"><input type="checkbox" name="hn" [(ngModel)]="hostNetwork" [disabled]="!!run()" />
+          <span>Use the host's network <span class="muted small">- scans from the admin page then also find MAC addresses (devices on the host's own subnet). Off: the container has its own network and only the port is shared.</span></span></label>
         @if (steps().length) {
           <div class="steps">
             @for (s of steps(); track s.step + s.text) {
@@ -174,6 +179,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
     textarea { width: 100%; resize: vertical; }
     select, .row2 input { width: 100%; }
     .row2 { display: grid; grid-template-columns: 1fr 170px; gap: 10px; }
+    .hn { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; line-height: 1.4; .small { display: inline; } }
     .seg { width: min(360px, 100%); > button { white-space: nowrap; } }
     .steps { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.7;
       .st { display: inline-block; width: 18px; } .ok .st { color: #22c55e; } .fail { color: var(--danger); } .run .st { color: var(--accent); } .info { color: var(--muted); } }
@@ -203,6 +209,7 @@ export class TeamsDialog implements OnInit, OnDestroy {
   teamName = '';
   port = '';
   image: 'download' | 'copy' = 'download';
+  hostNetwork = false;
   readonly run = signal('');
   readonly steps = signal<TeamSetUpStep[]>([]);
   readonly done = signal<TeamSetUpResult | null>(null);
@@ -291,7 +298,7 @@ export class TeamsDialog implements OnInit, OnDestroy {
     const owner = t.role === 'owner';
     if (!(await this.ui.confirm('Leave ' + t.name, owner
       ? `You are the owner. The owner can leave only when nobody else is in the team; the team server keeps running on ${t.host || 'its host'}` + (t.container ? ` (${t.container})` : '') + '.'
-      : `You stop seeing and sharing device status with ${t.name}. You need a new invite to join again.`, 'Leave', true))) return;
+      : `You stop seeing and sharing device status with ${t.name}, and its team folder is removed from your Session Manager (your own sessions stay). You need a new invite to join again.`, 'Leave', true))) return;
     try { await this.backend.teamLeave(t.id, false); }
     catch (e) {
       const msg = errText(e);
@@ -299,6 +306,13 @@ export class TeamsDialog implements OnInit, OnDestroy {
       await this.backend.teamLeave(t.id, true).catch(() => {});
     }
     await this.load();
+  }
+
+  async openAdmin(t: TeamView) {
+    try {
+      await this.backend.teamOpenAdmin(t.id);
+      this.ui.toast('The admin page opens in your browser. Its certificate is the team server\'s own: accept it once if the browser asks.', 'info', 7000);
+    } catch (e) { this.error.set(errText(e)); }
   }
 
   async saveName() {
@@ -348,7 +362,7 @@ export class TeamsDialog implements OnInit, OnDestroy {
     if (!Number.isInteger(port) || port < 0) { this.error.set('The port is a number (or empty for a free one).'); return; }
     try {
       this.run.set('pending');
-      const id = await this.backend.teamSetUp({ sessionPath: this.host, name: this.teamName.trim(), port, image: this.image });
+      const id = await this.backend.teamSetUp({ sessionPath: this.host, name: this.teamName.trim(), port, image: this.image, hostNetwork: this.hostNetwork });
       if (this.run() === 'pending') this.run.set(id); // (done already when it ended at once)
     } catch (e) { this.run.set(''); this.error.set(errText(e)); }
   }

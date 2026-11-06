@@ -37,6 +37,7 @@ type Node struct {
 	Jump        string  `json:"jump,omitempty"`  // jump session name
 	Proxy       bool    `json:"proxy,omitempty"` // connects through a SOCKS/HTTP proxy
 	MAC         string  `json:"mac,omitempty"`
+	Team        string  `json:"team,omitempty"`    // a device of a team inventory ("teamID/deviceID")
 	Account     string  `json:"account,omitempty"` // "-" = own login, else an account ("" = default)
 	Console     string  `json:"console,omitempty"` // console port: "<console server path> port <n>"
 	WOLPing     int     `json:"wolPing,omitempty"` // Wake-on-LAN session: ping every … seconds (-1 = never)
@@ -139,6 +140,7 @@ func (s *Store) walk(n *Node, rel string) error {
 			c.Description = strings.Join(ss.Description, "\n")
 			c.DeviceType, c.Environment, c.Jump, c.Proxy = ss.DeviceType, ss.Environment, ss.JumpSession, ss.ProxyType != ""
 			c.MAC = ss.MAC
+			c.Team = ss.Team
 			c.Account = ss.Account
 			if c.Account == "" && ss.OwnLogin && ss.DeviceType != "" {
 				c.Account = "-"

@@ -340,6 +340,7 @@
   @case ('factTeach') { <app-fact-teach /> }
   @case ('shortcuts') { <app-about /> }
 }
+@if (ui.teamPush()) { <app-team-push-dialog /> }
 <app-prompt-dialog />
 @if (ui.lockScreen()) { <app-unlock /> }
 <app-overlays />

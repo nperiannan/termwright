@@ -5,6 +5,7 @@ export interface LogonAction { expect: string; send: string; hide: boolean; trai
 export interface Session {
   path: string; name: string; folder: string; protocol: string;
   hostname: string; port: number; username: string; identityFile: string; authMethods: string;
+  team?: string;
   legacyAlgorithms: boolean; kexAlgorithms: string; ciphers: string; macs: string; hostKeyAlgorithms: string;
   emulation: string; termType: string; noCursorReport?: boolean; description: string[];
   rows: number; cols: number; scrollback: number; keepalive: boolean; keepaliveSec: number;
@@ -78,7 +79,7 @@ export interface KeywordSet { name: string; keywords: Keyword[]; }
 export interface SessionNode {
   name: string; path: string; isFolder: boolean; protocol?: string; hostname?: string;
   username?: string; port?: number; description?: string; hopTarget?: string; openAs?: string; children?: SessionNode[];
-  deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string; mac?: string; wolPing?: number; wolNetwork?: string; account?: string;
+  deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string; mac?: string; wolPing?: number; wolNetwork?: string; account?: string; team?: string;
 }
 
 export interface Button { label: string; send: string; toAll: boolean; action: string; script: string; }
@@ -313,3 +314,6 @@ export interface TeamDetails { id: string; name: string; version: string; me: st
 export interface TeamInfo { name: string; version: string; members: number; online: number; owner: boolean; }
 export interface TeamSetUpStep { run: string; step: string; state: 'run' | 'ok' | 'fail' | 'info'; text: string; }
 export interface TeamSetUpResult { run: string; teamId: string; invite: string; error: string; }
+export interface TeamDevice { id?: string; name: string; folder: string; host: string; port: number; protocol: string; deviceType: string; mac: string; description: string; }
+export interface TeamPushItem extends TeamDevice { path: string; }
+export interface TeamPushResult { status: 'new' | 'added' | 'exists' | 'pending' | 'invalid'; name: string; folder: string; msg?: string; }

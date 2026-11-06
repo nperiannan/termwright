@@ -74,6 +74,7 @@ func (a *App) startup(ctx context.Context) {
 	go a.wolScheduler(ctx)
 	go a.pruneRecordings(ctx)
 	go a.watchSessions(ctx)
+	go a.startTeamSync()
 }
 
 func (a *App) init() error {
@@ -371,6 +372,9 @@ func (a *App) SaveSession(s session.Session, oldPath string) (session.Session, e
 			return s, fmt.Errorf("%q is not a MAC address (e.g. 00:04:96:12:34:56)", m)
 		}
 	}
+	if oldPath == "" {
+		s.Team = "" // a new session (or a pasted copy) is your own; team devices come from the team server
+	}
 	saved, err := a.store.Save(s, oldPath)
 	if err != nil {
 		return saved, err
@@ -412,6 +416,10 @@ func (a *App) DuplicateSession(path string) (string, error) {
 	}
 	if pw, ok := secrets.Lookup(path); ok { // the copy logs in like the original
 		_ = secrets.Set(dup, pw)
+	}
+	if c, err := a.store.Get(dup); err == nil && c.Team != "" { // a copy of a team device is your own
+		c.Team = ""
+		_, _ = a.store.Save(c, dup)
 	}
 	return dup, nil
 }

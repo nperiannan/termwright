@@ -193,6 +193,7 @@ func (a *App) teamJoin(addr, fp string, req team.JoinRequest, host, container st
 	if err := a.cfg.SetTeams(append(a.cfg.Get().Teams, t)); err != nil {
 		return config.TeamConn{}, err
 	}
+	a.startTeamSync()
 	return t, nil
 }
 
@@ -247,12 +248,20 @@ func (a *App) TeamLeave(id string, force bool) error {
 	}
 	_ = secrets.Delete(teamTokenKey(id))
 	var keep []config.TeamConn
+	var gone config.TeamConn
 	for _, t := range a.cfg.Get().Teams {
 		if t.ID != id {
 			keep = append(keep, t)
+		} else {
+			gone = t
 		}
 	}
-	return a.cfg.SetTeams(keep)
+	if err := a.cfg.SetTeams(keep); err != nil {
+		return err
+	}
+	a.startTeamSync()
+	a.removeTeamFolder(gone)
+	return nil
 }
 
 // ---- Setting a team server up on a Linux host with Docker ----
@@ -265,6 +274,7 @@ type TeamSetUpRequest struct {
 	Name        string `json:"name"`
 	Port        int    `json:"port"`
 	Image       string `json:"image"`
+	HostNetwork bool   `json:"hostNetwork"` // the container on the host's network: scans see MAC addresses
 }
 
 // TeamSetUpStep is one line of the setup's progress (event "team:setup").
@@ -501,8 +511,12 @@ func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host
 
 	// start it
 	emit("start", "run", "Starting "+name+" (restarts with the host)…")
-	cmd := fmt.Sprintf("%s run -d --name %s --restart unless-stopped -p %d:%d -v %s:/data -e TW_TEAM_NAME=%s %s 2>&1",
-		dk, name, port, team.DefaultPort, name, shQuote(strings.TrimSpace(r.Name)), shQuote(ref))
+	netArgs := fmt.Sprintf("-p %d:%d", port, team.DefaultPort)
+	if r.HostNetwork {
+		netArgs = fmt.Sprintf("--network host -e TW_LISTEN=:%d", port)
+	}
+	cmd := fmt.Sprintf("%s run -d --name %s --restart unless-stopped %s -v %s:/data -e TW_TEAM_NAME=%s %s 2>&1",
+		dk, name, netArgs, name, shQuote(strings.TrimSpace(r.Name)), shQuote(ref))
 	if msg, code, err := out(cmd, nil, 2*time.Minute); err != nil || code != 0 {
 		return config.TeamConn{}, "", failf("start", "The container did not start: %s", firstLine(msg+errText(err)))
 	}

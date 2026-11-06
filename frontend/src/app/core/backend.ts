@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamView } from './models';
+  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -133,8 +133,12 @@ export class Backend {
   teamSetRole(id: string, memberId: string, role: string) { return this.call<void>('TeamSetRole', id, memberId, role); }
   teamRemoveMember(id: string, memberId: string) { return this.call<void>('TeamRemoveMember', id, memberId); }
   teamLeave(id: string, force: boolean) { return this.call<void>('TeamLeave', id, force); }
-  teamSetUp(r: { sessionPath: string; name: string; port: number; image: string }) { return this.call<string>('TeamSetUp', r); }
+  teamSetUp(r: { sessionPath: string; name: string; port: number; image: string; hostNetwork: boolean }) { return this.call<string>('TeamSetUp', r); }
   teamSetUpCancel(run: string) { return this.call<void>('TeamSetUpCancel', run); }
+  teamPushDevices(paths: string[], base: string) { return this.call<TeamPushItem[]>('TeamPushDevices', paths, base); }
+  teamCheck(id: string, items: TeamPushItem[]) { return this.call<TeamPushResult[]>('TeamCheck', id, items); }
+  teamPush(id: string, items: TeamPushItem[]) { return this.call<TeamPushResult[]>('TeamPush', id, items); }
+  teamOpenAdmin(id: string) { return this.call<void>('TeamOpenAdmin', id); }
   importTemplate() { return this.call<string>('ImportTemplate'); }
   saveTextAs(title: string, name: string, text: string) { return this.call<string>('SaveTextAs', title, name, text); }
   historyAdd(e: Partial<HistoryEntry>) { return this.call<void>('HistoryAdd', e); }

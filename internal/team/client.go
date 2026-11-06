@@ -163,3 +163,45 @@ func (c *Client) Remove(ctx context.Context, id string) error {
 func (c *Client) Leave(ctx context.Context) error {
 	return c.call(ctx, http.MethodPost, "/api/leave", struct{}{}, nil)
 }
+
+// Inventory fetches the team inventory; with wait > 0 the server answers when
+// it is newer than rev, or after wait seconds.
+func (c *Client) Inventory(ctx context.Context, rev int64, wait int) (Inventory, error) {
+	var v Inventory
+	cl := c
+	if wait > 0 { // longer than the usual timeout
+		cp := *c
+		hc := *c.hc
+		hc.Timeout = time.Duration(wait+20) * time.Second
+		cp.hc = &hc
+		cl = &cp
+	}
+	err := cl.call(ctx, http.MethodGet, fmt.Sprintf("/api/inventory?rev=%d&wait=%d", rev, wait), nil, &v)
+	return v, err
+}
+
+// Check tells for each device whether the team has it already.
+func (c *Client) Check(ctx context.Context, d []Device) ([]PushResult, error) {
+	var v []PushResult
+	err := c.call(ctx, http.MethodPost, "/api/inventory/check", devicesBody{Devices: d}, &v)
+	return v, err
+}
+
+// Push offers devices to the team (added at once for owners and co-owners).
+func (c *Client) Push(ctx context.Context, d []Device) ([]PushResult, error) {
+	var v []PushResult
+	err := c.call(ctx, http.MethodPost, "/api/inventory/push", devicesBody{Devices: d}, &v)
+	return v, err
+}
+
+// AdminLink is a one-time sign-in path for the admin page ("/admin#c=…").
+func (c *Client) AdminLink(ctx context.Context) (string, error) {
+	var v AdminLink
+	err := c.call(ctx, http.MethodPost, "/api/admin/link", struct{}{}, &v)
+	return v.Path, err
+}
+
+// SaveDevices adds or changes inventory devices (owners and co-owners).
+func (c *Client) SaveDevices(ctx context.Context, d []Device) error {
+	return c.call(ctx, http.MethodPost, "/api/admin/devices", devicesBody{Devices: d}, nil)
+}
