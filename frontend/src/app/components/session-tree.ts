@@ -816,7 +816,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [
             { label: 'Console Server Ports...', action: () => { this.ui.consoleServerFor.set(n.path); this.ui.open('consolePorts'); } },
           ] : []),
-          ...(n.team ? [{ label: 'From the team ' + this.teamName(n.team) + ' (its address and name follow the team)', disabled: true }] : this.pushItems([n.path], '')),
+          ...(n.team && this.teamName(n.team) ? [{ label: 'From the team ' + this.teamName(n.team) + ' (its address and name follow the team)', disabled: true }] : this.pushItems([n.path], '')),
           { label: 'Duplicate', action: () => this.duplicate(n) },
           { label: 'Copy', hint: this.keys('C'), action: () => this.ops.copy([{ path: n.path, folder: false }]) },
           { label: 'Cut', hint: this.keys('X'), action: () => this.ops.cut([{ path: n.path, folder: false }]) },

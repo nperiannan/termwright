@@ -102,3 +102,18 @@ func srvDevices(t *testing.T, a *App, id string, d team.Device) {
 		t.Fatal(err)
 	}
 }
+
+// Without a team nothing runs: no sync loop, no connection, no team folder.
+func TestNoTeamNoSync(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(filepath.Join(dir, "Sessions"))
+	a := &App{store: st, cfg: cfg}
+	a.startTeamSync()
+	teamSyncMu.Lock()
+	n := len(teamSyncs)
+	teamSyncMu.Unlock()
+	if n != 0 || len(a.Teams()) != 0 {
+		t.Fatalf("%d sync loops, %d teams without joining one", n, len(a.Teams()))
+	}
+}

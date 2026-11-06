@@ -35,7 +35,7 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
         <button type="button" class="ic" title="Close (Esc)" (click)="close()"><app-icon name="x" /></button>
       </header>
       <div class="body">
-        @if (s.team) {
+        @if (s.team && teamName(s.team)) {
           <div class="teamnote"><b>From the team {{ teamName(s.team) }}</b> - its name, folder, address, port, protocol, device type and MAC address follow the team inventory (changed by the owner and co-owners). Your username, password, account and keys stay yours.</div>
         }
         <label class="f"><span>Name</span><input name="name" [(ngModel)]="s.name" placeholder="e.g. core-sw1" /></label>
