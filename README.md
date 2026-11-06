@@ -83,6 +83,20 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## Coming in the next release
+
+Already in the [nightly builds](https://github.com/nperiannan/termwright/releases/tag/nightly):
+
+- **A Mac look on Windows and Linux.** The interface uses Inter and terminals use Termwright Mono (DejaVu Sans Mono, which Menlo was made from), both shipped with Termwright, so it looks the same on every system. *System font of this computer* brings the old look back.
+- **Log in with a password, a key, or a key then a password**, chosen in the session panel and in Session Options. *Generate a new key* makes one for the server, and *Copy the key to the server at the first login* installs it at the first connection.
+- **Discover Devices: Connect ▾ and device types for every device.** Each device has a *Connect* button with every way it answered; phones, TVs, cameras and IoT boards can get a device type too, or a new one made from the list with its own icon. What to add sits in the bar at the bottom.
+- **Russian main menu** ([#2](https://github.com/nperiannan/termwright/issues/2)). File, Edit, View and the rest follow Settings → General → Language, without a restart.
+- **Properties is the last item** of a session's right-click menu.
+
+| | |
+|---|---|
+| ![Discover Devices with Connect](docs/screenshots/discover-connect.png) <br/>*Discover Devices: Connect ▾ with every way a device answered* | ![Log in with a key](docs/screenshots/session-login-key.png) <br/>*Log in with: Password · Key · Key, then password* |
+
 ## What's new in 0.28
 
 - **Termwright for Android: a terminal.** SSH and Telnet sessions open on the phone with the desktop's terminal and a key bar for Esc, Tab, Ctrl, Alt and the arrows. Logins are kept encrypted, host keys are checked, sessions with a jump host go through it when you are away, and open sessions stay connected in the background.
@@ -146,7 +160,7 @@ Earlier releases are described in the [changelog](CHANGELOG.md).
 | Device types | Per-platform login profiles: login steps for Telnet and serial, after-login steps for every protocol (for example `enable`, paging off), and credentials inherited or overridden per session. |
 | Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and Linux. |
 | Session management | Wake-on-LAN (also through a jump host); folders with defaults; favourites and recents; environments, with confirmation before multi-tab sends to production; reachability checks; bulk edit; workspaces; Quick Open; drag and drop. |
-| Discovery | Scans a network or range (up to /22): open ports, SSH and Telnet banners, web servers and certificates, SIP, SNMP v2c, DNS, MAC vendor. Each result shows its evidence; selected devices are added as sessions. Discovery never logs in. |
+| Discovery | Scans a network or range (up to /22): open ports, SSH and Telnet banners, web servers and certificates, SIP, SNMP v2c, DNS, MAC vendor. Each result shows its evidence, a guessed kind, a device type (also new ones, with their icon) and *Connect ▾* with every way it answered; selected devices are added as sessions. Discovery never logs in. |
 | Import and export | Sessions are plain-text `.ini` files, and unknown keys are preserved byte for byte. Import from SecureCRT (Config folder, zip, XML), PuTTY / KiTTY, SuperPuTTY, MobaXterm, mRemoteNG, OpenSSH config, CSV, Ansible, NetBox and AWS EC2. Export to the same formats plus Tabby. |
 | Terminal | Tabs and tiled layouts; xterm-256color and true colour; Unicode; scrollback search; keyword highlighting; timestamps; auto-scroll control; clickable links; session lock; zoom; per-session fonts and colour schemes. |
 | File transfer | SFTP browser with folder transfers, sync, resume, bookmarks, compare, server-to-server copy, SCP, sudo / su and jump-station targets. Files panel beside the terminal. SCP. ZMODEM (automatic `sz` / `rz`), YMODEM batch, XMODEM. |
@@ -168,7 +182,7 @@ The complete list is in [docs/FEATURES.md](docs/FEATURES.md).
 | ![Compare](docs/screenshots/sftp-compare.png) <br/>*Comparing two files, with the verdict at the top* | ![Device facts](docs/screenshots/device-facts.png) <br/>*Device facts: read, edit, teach* |
 | ![Tiled sessions](docs/screenshots/grid.png) <br/>*Tiled sessions with keyword highlighting* | ![Session Manager](docs/screenshots/session-manager.png) <br/>*Session Manager with the hover card* |
 | ![Quick Connect](docs/screenshots/quickconnect.png) <br/>*Quick Connect with a device type* | ![Settings](docs/screenshots/options.png) <br/>*Settings* |
-| ![Discover Devices](docs/screenshots/discover.png) <br/>*Network discovery with evidence per device* | ![Configuration backups](docs/screenshots/backups.png) <br/>*Configuration backups* |
+| ![Discover Devices](docs/screenshots/discover.png) <br/>*Network discovery: evidence, device type and Connect per device* | ![Configuration backups](docs/screenshots/backups.png) <br/>*Configuration backups* |
 | ![Change checklist](docs/screenshots/checklist.png) <br/>*Change checklist: same or changed per device* | ![Run and Collect](docs/screenshots/collect.png) <br/>*Run and Collect into one table* |
 | ![Open Web Interface](docs/screenshots/web-open.png) <br/>*A device's web interface through its jump station* | ![Command History](docs/screenshots/history.png) <br/>*Command History* |
 | ![Light theme](docs/screenshots/light.png) <br/>*Glacier, light: white and grey with 3D cards* | ![Files panel on the left](docs/screenshots/files-panel-right.png) <br/>*Files panel on the left when the Session Manager is on the right* |

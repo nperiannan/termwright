@@ -124,6 +124,7 @@ Devices log in differently: EXOS is ready at `#` after username and password, VO
 ![Device Types](screenshots/devicetypes.png)
 
 - Built-in: **EXOS**, **VOSS**, **Cisco IOS**, **Linux** - edit them or add your own (*New*, *Duplicate*).
+- **Icon**: the icon of the sessions with this device type - *From the name* (the default: EXOS and VOSS get a switch, Linux a server …) or one you pick: switch, router, firewall, access point, server, NAS, computer, phone, IP phone, IoT board, TV / media player, camera, printer. Device types made in Discover Devices (*+ New device type…*) get their icon there.
 - **Login steps** answer `login:` / `Password:` prompts; they run for Telnet, Serial and Raw (SSH authenticates before the shell starts).
 - **After-login steps** run for every protocol, e.g. `>` → `enable`, `#` → `terminal more disable`.
 - **Username and Password**: the device type's own login, with the password stored in the OS keychain (never in `settings.json`). Leave the password empty to be asked at connect time - the session's Login box then says *password asked when connecting*, and the password prompt offers **Remember for device type …**: tick it to save what you type, or leave the password empty and tick it to record that the device has none. Tick **No password** for devices whose account has an empty password (e.g. EXOS `admin` out of the box) - Termwright then sends an empty password and never asks. *Forget* removes a saved password.
@@ -199,6 +200,20 @@ The old algorithms are added at the **end** of each list, so a device that also 
 ![Custom algorithm lists](screenshots/algorithms-custom.png)
 
 An unknown name is reported by name when you connect. When the host key is already recorded in `known_hosts`, its algorithm is tried first so the saved key still matches. Use these options only on networks you trust: the weak algorithms are weak for a reason.
+
+### Log in with: password, key, or key then password
+
+An SSH session's side panel (New Session, or right-click → *Properties…*) and Session Options → Connection have **Log in with**:
+
+- **Password**: the username and password (also for devices that ask through keyboard-interactive prompts).
+- **Key**: an SSH key only. *Private key* is empty for the default keys in `~/.ssh` and the SSH agent; **Choose…** picks a key file; **+ Generate a new key** makes an Ed25519 key for this server (`~/.ssh/termwright_<host>_ed25519`, or reuses it when it is already there).
+- **Key, then password**: the key first, and the password when the server refuses the key - handy while a key is being rolled out.
+
+Tick **Copy the key to the server at the first login** and the first connection asks for the password once; when it is connected, Key Login Setup opens with the key filled in, adds the public key to the server and checks it. The password stays as a fallback (the session is set to *Key, then password*).
+
+| Session panel | Session Options → Connection |
+|---|---|
+| ![Log in with a key in the session panel](screenshots/session-login-key.png) | ![Log in with in Session Options](screenshots/session-options-login.png) |
 
 ### SSH keys: generate, install and store
 
@@ -362,7 +377,9 @@ Devices cabled to a console server (terminal server) get a session of protocol *
 
 - **New session**: **+** after the tabs, *New* at the bottom of the Session Manager, `Mod+N`, or right-click a folder → *New Session* (goes into the selected folder). It opens in the **session side panel** with the everyday fields; **All session options…** opens the full dialog.
 - **New folder**: folder-plus icon or right-click → *New Folder*. Folders can be nested.
-- **Edit**: right-click → *Properties…* (or *Options → Session Options* for the active tab).
+- **Edit**: right-click → *Properties…* (or *Options → Session Options* for the active tab). *Properties…* is always the last item of a session's menu, below *Delete*; for a folder the last item is *Folder Defaults…*.
+
+  ![A session's right-click menu with Properties at the end](screenshots/session-menu.png)
 - **Duplicate / Rename / Delete**: right-click a session. Deleting a folder deletes the sessions inside it (you are asked first).
 - **Move**: drag a session or folder onto another folder (or onto a session to drop into its folder; onto empty space for the top level). Termwright asks first - *Move "core-sw2" from "Datacenter/Core" to "Cloud"?* - so a slip of the mouse does not move anything; Settings → General → *Confirm before moving sessions* turns the question off.
 - **Copy, Cut and Paste**: right-click a session, folder or selection → **Copy** (`Cmd/Ctrl+C`) or **Cut** (`Cmd/Ctrl+X`), then right-click a folder → **Paste** (`Cmd/Ctrl+V`; on a session it pastes into that session's folder; the ⋯ menu pastes at the top level). Paste after Cut moves; after Copy it makes copies - a folder with all its sub-folders and sessions - keeping the names when they are free there (otherwise *name (2)*). Saved passwords are copied with the sessions.
@@ -471,10 +488,22 @@ You can also teach from the terminal: select the value in a tab, then **Edit →
 
    Besides the login and web ports, the scan asks each address over unicast mDNS which services it offers (DNS-SD) and tries CoAP, the ESPHome API, MQTT and Modbus/TCP, so microcontroller boards without SSH or a web page are found too. An iPhone offering `_apple-mobdev2` or an Android phone offering wireless debugging (`_adb-tls-connect`) is recognised the same way.
 
-   **Connect without saving**: double-click a device (or right-click → *Connect*) to open a tab to it straight away with the suggested device type; the window stays open.
+   **Connect without saving**: every device has a **Connect ▾** button. The button connects the recommended way (SSH before Telnet, then RDP, VNC or the web interface); **▾** lists every way the device answered - SSH, SFTP (files), Telnet, RDP, VNC, the web interface (HTTP or HTTPS). Double-click a device does the same as the button; right-click lists every way too (*Connect: SSH - recommended*, …). The tab opens with the suggested device type and the window stays open.
+
+   ![Connect ▾ lists every way a device answered](screenshots/discover-connect.png)
+
+   **Best guesses**: a device that nothing named gets a guess with its reason in the *Type* column, e.g. *Router / access point - likely: TP-Link, web admin only*, a TV or media player (Samsung, LG, Roku, Chromecast …), a camera (Hikvision, Dahua, Axis, Reolink …) or the gateway (the network's `.1` with a web page).
+
+   **Another device at a saved address**: when a session's address now answers with a different MAC address, *10.20.0.40 is now another device* names the session and both MAC addresses: **Keep** leaves the session as it is, **Update the session** saves the new MAC address.
 
    Product names win over generic words: a NAS whose SNMP says "Linux" but whose web page says "TerraMaster" is shown as a NAS.
-5. **Add**: devices with SSH or Telnet are ticked (those already in the Session Manager are marked *in sessions* and left unticked; this computer is never ticked). Devices without a login port are shown but cannot be added; tick *Only devices with SSH or Telnet* to hide them. Pick a **device type** per device - Termwright suggests one from the network OS that any evidence names (an SNMP description, the web certificate *Extreme Networks, Inc., EXOS* or the EXOS Telnet greeting *telnet session telnet0 on /dev/pty…* all mean EXOS, even when the switch runs OpenSSH), then from what the device reports (VOSS, Cisco IOS, Linux …) or, failing that, from the **Telnet login prompt** compared with the first login step of your device types (e.g. EXOS `login:`, VOSS `Login:`). Type or choose a **folder** (default *Discovered*) and click **Add N Sessions**.
+5. **Add**: devices with SSH or Telnet are ticked (those already in the Session Manager are marked *in sessions* and left unticked; this computer is never ticked). Devices without a login port can be added when they have a MAC address (as Wake-on-LAN sessions); tick *Only devices you can connect to* to hide the others.
+
+   Pick a **device type** per device - also for phones, IoT boards, TVs and other devices without SSH or Telnet, where it sets the session's icon. Termwright suggests one from the network OS that any evidence names (an SNMP description, the web certificate *Extreme Networks, Inc., EXOS* or the EXOS Telnet greeting *telnet session telnet0 on /dev/pty…* all mean EXOS, even when the switch runs OpenSSH), then from what the device reports (VOSS, Cisco IOS, Linux …) or, failing that, from the **Telnet login prompt** compared with the first login step of your device types (e.g. EXOS `login:`, VOSS `Login:`). **+ New device type…** at the end of the list makes a device type right there: a name and an icon (phone, IoT, TV, camera, router …); login steps can be added later in Options → Device Types.
+
+   ![+ New device type… with its icon](screenshots/discover-newtype.png)
+
+   What to add sits in the bar at the bottom, next to the button (greyed out until devices are selected): type or choose a **folder** (default *Discovered*) and click **Add N Sessions**.
    - **Add** *all selected devices* (the default) or *only the selected devices of these device types*: tick one or more device types (each shows how many selected devices it has; *(no device type)* covers devices without one).
    - **A subfolder per device type** files the sessions under the folder by device type, e.g. *Discovered/EXOS*, *Discovered/VOSS* (devices without a type go to *Other*).
    - These choices are remembered for the next scan. Sessions are named after the device and get its vendor and system as description; folder defaults apply as usual.
@@ -1083,7 +1112,7 @@ Notes:
 ![Light theme with Solarized Light](screenshots/light.png)
 
 - **UI theme**: the **theme switch** at the top right - sun = Light, moon = Dark, screen = follow the system (the default: light or dark with your computer, switching when it does). Hover it to see the current theme, click an icon to change it. The same choice is in Global Options → General, with an **accent color**.
-- **Interface font and text size** (Global Options → General): *System* (the default), *VS Code* (the font VS Code uses on each system - on macOS the same as System), *Inter* or *IBM Plex Sans* (both included with Termwright), and the text size from *Default (13)* to *Largest (17)*. The sample under the lists shows the choice before you press OK. It changes menus, dialogs and the Session Manager; the terminal font and size are under Terminal & Appearance (and View → Zoom).
+- **Interface font and text size** (Global Options → General): the default is the **Mac look** - the Mac's own font on macOS, and on Windows and Linux *Mac look - Inter*, the open font closest to it (shipped with Termwright). *System font of this computer* (Segoe UI, Ubuntu …), *VS Code* (the font VS Code uses on each system), *Inter* or *IBM Plex Sans* are the other choices, with the text size from *Default (13)* to *Largest (17)*. The sample under the lists shows the choice before you press OK. It changes menus, dialogs and the Session Manager; the terminal font and size are under Terminal & Appearance (and View → Zoom). Terminals use **Termwright Mono** (DejaVu Sans Mono, which Menlo was made from, also shipped) where Menlo is missing, so they look like the Mac's on every system; a terminal font you chose yourself stays.
 
   ![Interface font and text size](screenshots/options-font.png)
 
@@ -1113,7 +1142,7 @@ In the modern layout Global Options is called **Settings** (⚙ in the title bar
 |---|---|
 | ![Glacier style, dark](screenshots/glacier-dark.png) | ![Glacier style, light](screenshots/glacier-light.png) |
 
-**Settings → General → Language** switches the interface language; the change shows as soon as you press *Save*. English is the default. **Русский (Russian)** is a *preview* of an unfinished translation and is offered **only in nightly and development builds**, not in releases (it is being reviewed); it is partial: the menus, the Session Manager, Quick Connect, Settings, Session Options (Connection, Authentication and the page names) and Import Sessions are translated, and everything else stays in English until it is translated too. Terminal output, session and folder names, file names, and error messages from the program's engine are never translated.
+**Settings → General → Language** switches the interface language; the change shows as soon as you press *Save*, the main menu included (File, Edit, View, Transfer, Script, Options, Tab, Help - no restart needed). English is the default. **Русский (Russian)** translates the menus, the Session Manager, Quick Connect, Settings, Session Options and the dialogs; a text that has no translation yet stays in English. Terminal output, session and folder names, file names, and error messages from the program's engine are never translated. On macOS the application menu (About, Hide, Quit) is the system's and follows the language of macOS.
 
 ![Termwright in Russian](screenshots/language-ru.png)
 
