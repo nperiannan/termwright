@@ -83,9 +83,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
-## Coming in the next release
-
-Already in the [nightly builds](https://github.com/nperiannan/termwright/releases/tag/nightly):
+## What's new in 0.29
 
 - **A Mac look on Windows and Linux.** The interface uses Inter and terminals use Termwright Mono (DejaVu Sans Mono, which Menlo was made from), both shipped with Termwright, so it looks the same on every system. *System font of this computer* brings the old look back.
 - **Log in with a password, a key, or a key then a password**, chosen in the session panel and in Session Options. *Generate a new key* makes one for the server, and *Copy the key to the server at the first login* installs it at the first connection.

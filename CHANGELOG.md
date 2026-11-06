@@ -2,7 +2,9 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.29.0 (2026-11-06)
+
+A Mac look on every system, a simpler choice of how SSH logs in (with a key made and installed for you), Discover Devices that connects every way a device answers, and the main menu in Russian.
 
 * **A Mac look on Windows and Linux.** The interface uses Inter (shipped with Termwright, the open font closest to the Mac's) and terminals use Termwright Mono (DejaVu Sans Mono, which Menlo was made from), so Termwright looks the same on every system; the Mac keeps its own fonts. Settings → General → Interface font has *System font of this computer* for the old look; a terminal font you chose stays.
 * **Choose how an SSH session logs in, and make a key there.** The session panel has *Log in with: Password · Key · Key, then password*. With a key: pick a file, or *Generate a new key* (Ed25519, for this server), and tick *Copy the key to the server at the first login* - the first connection asks for the password once, Key Login Setup adds the public key and checks it. A session without a key of its own shows *Password* - also with an account, a password manager or a device type login; keys from the SSH agent and `~/.ssh` are still tried quietly first, as OpenSSH does.
