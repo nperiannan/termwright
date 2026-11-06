@@ -357,10 +357,11 @@ func teamSlug(name string) string {
 // shQuote quotes a value for the remote shell.
 func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
-// teamImageTag: the release's version, or "latest" for development builds.
+// teamImageTag: the release's version, or "nightly" for nightly and development
+// builds (the nightly build publishes the server too).
 func teamImageTag() string {
 	if strings.ContainsAny(Version, "-~+") || Version == "" {
-		return "latest"
+		return "nightly"
 	}
 	return Version
 }
@@ -589,8 +590,8 @@ func (a *App) teamServerBinary(ctx context.Context, arch, tag string) ([]byte, e
 	}
 	file := "termwright-team-linux-" + arch + ".tar.gz"
 	u := "https://github.com/" + repo + "/releases/download/v" + tag + "/" + file
-	if tag == "latest" {
-		u = "https://github.com/" + repo + "/releases/latest/download/" + file
+	if tag == "nightly" {
+		u = "https://github.com/" + repo + "/releases/download/nightly/" + file
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
