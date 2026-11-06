@@ -952,6 +952,8 @@ const ru: Record<string, string> = {
   'Mac look - Inter (default)': 'Как на Mac - Inter (по умолчанию)',
   'macOS (default)': 'macOS (по умолчанию)',
   'System font of this computer': 'Системный шрифт этого компьютера',
+  'Exit': 'Выход',
+  'Full Screen': 'Во весь экран',
 };
 
 export default ru;

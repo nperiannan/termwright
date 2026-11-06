@@ -281,6 +281,13 @@ func (a *App) SaveSettings(s config.Settings) error {
 		a.store = st
 	}
 	cur := a.cfg.Get()
+	if s.Language != cur.Language && a.ctx != nil {
+		// the native menu (File, Edit …) follows the interface language at once
+		defer func() {
+			wruntime.MenuSetApplicationMenu(a.ctx, buildMenu(a, s.Language))
+			wruntime.MenuUpdateApplicationMenu(a.ctx)
+		}()
+	}
 	s.MasterHash = cur.MasterHash // changed only through SetMasterPassword
 	// kept by the backend when sessions open; the window's copy may be older
 	s.RecentSessions, s.LastConnected = cur.RecentSessions, cur.LastConnected

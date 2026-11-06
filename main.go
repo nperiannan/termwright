@@ -41,13 +41,14 @@ func main() {
 	discover.RaiseFileLimit()
 	app := NewApp()
 	width, height, start := 1280, 820, options.Normal
-	modern := true
+	modern, lang := true, ""
 	if dir, err := config.DataDir(); err == nil {
 		if c, err := config.Load(dir); err == nil {
 			if w := c.Get().Window; w.Width >= 760 && w.Height >= 480 && w.Width < 20000 && w.Height < 20000 {
 				width, height = w.Width, w.Height
 			}
 			modern = c.Get().Layout != "classic"
+			lang = c.Get().Language
 			if c.Get().Window.Maximised {
 				start = options.Maximised
 			}
@@ -72,7 +73,7 @@ func main() {
 		OnStartup:                app.startup,
 		OnShutdown:               app.shutdown,
 		OnBeforeClose:            app.beforeClose,
-		Menu:                     buildMenu(app),
+		Menu:                     buildMenu(app, lang),
 		Bind:                     []interface{}{app},
 		EnableDefaultContextMenu: false,
 		Windows: &windows.Options{
@@ -100,7 +101,7 @@ var insetTitle bool
 // buildMenu creates the native application menu. Items emit "menu" events
 // that the Angular UI handles, so the same actions work from the toolbar,
 // keyboard shortcuts and the menu.
-func buildMenu(app *App) *menu.Menu {
+func buildMenu(app *App, lang string) *menu.Menu {
 	emit := func(action string) func(*menu.CallbackData) {
 		return func(*menu.CallbackData) {
 			if app.ctx != nil {
@@ -133,14 +134,15 @@ func buildMenu(app *App) *menu.Menu {
 		}
 		return acc(strings.ToLower(k))
 	}
-	add := func(m *menu.Menu, label, action string) { m.AddText(label, sc(action), emit(action)) }
+	t := func(s string) string { return menuText(lang, s) }
+	add := func(m *menu.Menu, label, action string) { m.AddText(t(label), sc(action), emit(action)) }
 
 	m := menu.NewMenu()
 	if isMac {
 		m.Append(menu.AppMenu())
 	}
 
-	file := m.AddSubmenu("File")
+	file := m.AddSubmenu(t("File"))
 	add(file, "Connect...", "connect")
 	add(file, "Quick Connect...", "quick-connect")
 	add(file, "Connect Local Shell", "local-shell")
@@ -173,14 +175,14 @@ func buildMenu(app *App) *menu.Menu {
 	file.AddSeparator()
 	add(file, "Close Tab", "close-tab")
 	if !isMac {
-		file.AddText("Exit", nil, func(*menu.CallbackData) { wruntime.Quit(app.ctx) })
+		file.AddText(t("Exit"), nil, func(*menu.CallbackData) { wruntime.Quit(app.ctx) })
 	}
 
-	edit := m.AddSubmenu("Edit")
+	edit := m.AddSubmenu(t("Edit"))
 	add(edit, "Copy", "copy")
 	add(edit, "Paste", "paste")
 	if isMac {
-		edit.AddText("Cut", keys.CmdOrCtrl("x"), emit("cut"))
+		edit.AddText(t("Cut"), keys.CmdOrCtrl("x"), emit("cut"))
 	}
 	add(edit, "Copy and Paste", "copy-paste")
 	add(edit, "Select All", "select-all")
@@ -194,7 +196,7 @@ func buildMenu(app *App) *menu.Menu {
 	add(edit, "Timestamps On / Off", "toggle-timestamps")
 	add(edit, "Auto Scroll On / Off", "toggle-autoscroll")
 
-	view := m.AddSubmenu("View")
+	view := m.AddSubmenu(t("View"))
 	add(view, "Quick Open...", "quick-open")
 	view.AddSeparator()
 	add(view, "Session Manager", "toggle-session-manager")
@@ -212,11 +214,11 @@ func buildMenu(app *App) *menu.Menu {
 	add(view, "Tile Stacked", "layout-tile-h")
 	add(view, "Tile Grid", "layout-grid")
 	view.AddSeparator()
-	view.AddText("Zoom In", keys.CmdOrCtrl("="), emit("zoom-in"))
-	view.AddText("Zoom Out", keys.CmdOrCtrl("-"), emit("zoom-out"))
-	view.AddText("Reset Zoom", keys.CmdOrCtrl("0"), emit("zoom-reset"))
+	view.AddText(t("Zoom In"), keys.CmdOrCtrl("="), emit("zoom-in"))
+	view.AddText(t("Zoom Out"), keys.CmdOrCtrl("-"), emit("zoom-out"))
+	view.AddText(t("Reset Zoom"), keys.CmdOrCtrl("0"), emit("zoom-reset"))
 	view.AddSeparator()
-	view.AddText("Full Screen", keys.Key("f11"), func(*menu.CallbackData) {
+	view.AddText(t("Full Screen"), keys.Key("f11"), func(*menu.CallbackData) {
 		if wruntime.WindowIsFullscreen(app.ctx) {
 			wruntime.WindowUnfullscreen(app.ctx)
 		} else {
@@ -224,7 +226,7 @@ func buildMenu(app *App) *menu.Menu {
 		}
 	})
 
-	xfer := m.AddSubmenu("Transfer")
+	xfer := m.AddSubmenu(t("Transfer"))
 	add(xfer, "Open SFTP Tab", "sftp-tab")
 	add(xfer, "Send File with XMODEM...", "xmodem")
 	add(xfer, "Receive File with XMODEM...", "xmodem-receive")
@@ -239,7 +241,7 @@ func buildMenu(app *App) *menu.Menu {
 	add(xfer, "SCP Upload Folder...", "scp-upload-folder")
 	add(xfer, "SCP Download...", "scp-download")
 
-	script := m.AddSubmenu("Script")
+	script := m.AddSubmenu(t("Script"))
 	add(script, "Command Library...", "command-library")
 	add(script, "Command History...", "history")
 	script.AddSeparator()
@@ -248,25 +250,25 @@ func buildMenu(app *App) *menu.Menu {
 	script.AddSeparator()
 	add(script, "Start / Stop Script Recording", "record-toggle")
 
-	opts := m.AddSubmenu("Options")
+	opts := m.AddSubmenu(t("Options"))
 	add(opts, "Session Options...", "session-options")
-	opts.AddText("Global Options...", keys.CmdOrCtrl(","), emit("global-options"))
+	opts.AddText(t("Global Options..."), keys.CmdOrCtrl(","), emit("global-options"))
 	opts.AddSeparator()
 	add(opts, "Passwords & Accounts...", "passwords")
 	add(opts, "Set Up Key Login / Generate Key...", "key-setup")
 
-	tabs := m.AddSubmenu("Tab")
+	tabs := m.AddSubmenu(t("Tab"))
 	add(tabs, "Compare Outputs...", "compare")
 	tabs.AddSeparator()
-	tabs.AddText("Next Tab", keys.Control("tab"), emit("next-tab"))
-	tabs.AddText("Previous Tab", keys.Combo("tab", keys.ControlKey, keys.ShiftKey), emit("prev-tab"))
+	tabs.AddText(t("Next Tab"), keys.Control("tab"), emit("next-tab"))
+	tabs.AddText(t("Previous Tab"), keys.Combo("tab", keys.ControlKey, keys.ShiftKey), emit("prev-tab"))
 	add(tabs, "Send Command to All Tabs...", "send-all")
 	add(tabs, "Send Break", "send-break")
 	tabs.AddSeparator()
 	add(tabs, "Lock Session", "lock")
 	add(tabs, "Lock All Sessions", "lock-all")
 
-	help := m.AddSubmenu("Help")
+	help := m.AddSubmenu(t("Help"))
 	add(help, "Welcome...", "welcome")
 	add(help, "User Guide", "user-guide")
 	add(help, "Check for Updates...", "check-updates")
