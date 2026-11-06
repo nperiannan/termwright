@@ -5,6 +5,7 @@ import { Autofocus } from '../core/autofocus';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { followJump } from '../core/jump-refs';
 import { Backend, errText } from '../core/backend';
+import { AuthMode, authModeOf, generateKeyFor, setAuthMode } from '../core/auth-mode';
 import { BAUD_RATES, CONSOLE_METHODS, EMULATIONS, FACT_EVERY, FactRule, LogonAction, PROTOCOLS, Session, SessionNode, SmartCardKey, defaultPort } from '../core/models';
 import { SCHEME_NAMES } from '../core/themes';
 import { Tabs } from '../core/tabs.service';
@@ -326,6 +327,31 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                     <label class="nowrap"><input type="checkbox" name="nopw" [(ngModel)]="noPw" /> No password</label>
                     <button type="button" class="nowrap" title="Read the password from 1Password, Bitwarden, HashiCorp Vault or a command when connecting" (click)="pickRef()">Password manager...</button>
                   </div>
+                }
+                @if (s.protocol === 'SSH2') {
+                  <!-- how the SSH session logs in (also on the Authentication page, in detail) -->
+                  <label class="o6">Log in with</label>
+                  <div class="o6">
+                    <div class="seg">
+                      <button type="button" [class.on]="authMode() === 'password'" (click)="setAuth('password')">Password</button>
+                      <button type="button" [class.on]="authMode() === 'key'" (click)="setAuth('key')">Key</button>
+                      <button type="button" [class.on]="authMode() === 'both'" (click)="setAuth('both')">Key, then password</button>
+                    </div>
+                    @if (authMode() === 'password') { <div class="hint">Password prompts and keyboard-interactive (one-time codes) are both answered.</div> }
+                  </div>
+                  @if (authMode() !== 'password') {
+                    <label class="o6">Private key</label>
+                    <div class="row o6"><input name="idfile" class="mono" [(ngModel)]="s.identityFile" placeholder="the default keys and the SSH agent" spellcheck="false" />
+                      <button type="button" class="nowrap" (click)="browseIdentity()">Choose...</button></div>
+                    <label class="o6"></label>
+                    <div class="o6 keyopts">
+                      <div class="row"><button type="button" (click)="genKey()" [disabled]="genBusy() || !s.hostname.trim()"
+                          [title]="s.hostname.trim() ? 'An Ed25519 key for this server, in your .ssh folder' : 'Enter the hostname first'">+ Generate a new key</button>
+                        @if (genMsg()) { <span class="genok">{{ genMsg() }}</span> }</div>
+                      <label class="kinst"><input type="checkbox" name="instKey" [(ngModel)]="installKey" />
+                        <span>Copy the key to the server at the first login<small>Asks for the password once, adds the public key to the server and checks that the key works; the password stays as a fallback.</small></span></label>
+                    </div>
+                  }
                 }
                 <label>Description</label>
                 <textarea name="description" rows="4" [ngModel]="s.description.join('\\n')" (ngModelChange)="s.description = $event ? $event.split('\\n') : []"></textarea>
@@ -721,6 +747,11 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
       label { display: flex; flex-direction: column; gap: 4px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); min-width: 0; }
       input { min-height: 30px; } input.mono { font-family: var(--mono); }
       .seg button { white-space: nowrap; } .spacer { flex: 1; } }
+    .keyopts { display: flex; flex-direction: column; gap: 8px; }
+    .genok { color: var(--ok); font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; }
+    .kinst { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; font-weight: 400;
+      input { margin-top: 2px; } small { display: block; color: var(--faint); font-size: calc(11.5px * var(--ui-scale, 1)); line-height: 1.4; } }
+    .mono { font-family: var(--mono); }
     .pair2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .fa { padding: 6px 0 2px; }
     .row input.mono { flex: 1; font-family: var(--mono); }
@@ -1087,6 +1118,32 @@ export class SessionEditor implements OnInit {
     finally { this.detecting.set(false); this.cdr.markForCheck(); }
   }
 
+  // ---- Log in with (Connection page) ----
+  /** Copy the key to the server when the session first connects (Key Login Setup opens then). */
+  installKey = false;
+  readonly genBusy = signal(false);
+  readonly genMsg = signal('');
+  authMode() { return authModeOf(this.s); }
+  setAuth(mode: AuthMode) {
+    if (!this.s) return;
+    setAuthMode(this.s, mode);
+    if (mode === 'password') this.installKey = false;
+  }
+  async genKey() {
+    const s = this.s;
+    if (!s?.hostname.trim()) return;
+    this.genBusy.set(true);
+    this.genMsg.set('');
+    try {
+      const k = await generateKeyFor(this.backend, s.hostname);
+      s.identityFile = k.path;
+      this.genMsg.set(k.message);
+      this.installKey = true;
+    } catch (e) { this.error.set(errText(e)); }
+    this.genBusy.set(false);
+    this.cdr.markForCheck();
+  }
+
   hasAuth(m: string) { return (this.s?.authMethods ?? '').split(',').includes(m); }
 
   toggleAuth(m: string) {
@@ -1173,8 +1230,12 @@ export class SessionEditor implements OnInit {
     s.fontSize = Number(s.fontSize) || 0;
     if (s.jumpSession && s.jumpSession === this.oldPath) { this.page.set('firewall'); this.error.set('A session cannot be its own jump host.'); return; }
     try {
+      const install = s.protocol === 'SSH2' && this.authMode() !== 'password' && this.installKey && !!s.identityFile.trim();
+      // the first login, before the key is on the server, needs the password: tried after the key
+      if (install && this.authMode() === 'key') setAuthMode(s, 'both');
       const saved = await storeSession(this.ui, this.backend, this.tabs, s, this.oldPath, this.tabId,
         { pw: this.pw, noPw: this.noPw, wasEmpty: this.pwState() === 'empty' });
+      if (install) this.ui.keyInstallAtLogin.set(saved.path, s.identityFile.trim());
       this.ui.close();
       if (connect) await this.tabs.openSession(saved.path);
     } catch (e) {
