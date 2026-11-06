@@ -75,14 +75,15 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
         }
         @if (error()) { <p class="err">{{ error() }}</p> }
         <div class="me">You appear as
-          <input name="dn" [(ngModel)]="displayName" (blur)="saveName()" (keydown.enter)="saveName()" [placeholder]="ident().name" />
+          <input name="dn" [(ngModel)]="displayName" (keydown.enter)="save()" [placeholder]="ident().name" />
           <span class="mono muted">{{ ident().user }}&#64;{{ ident().machine }}</span></div>
       </div>
       <div class="modal-foot">
         <button type="button" (click)="toJoin()">Join a Team…</button>
         <button type="button" (click)="toSetup()">Set Up a Team Server…</button>
         <span class="spacer"></span>
-        <button type="button" class="primary" (click)="close()">Done</button>
+        <button type="button" (click)="close()">Close</button>
+        <button type="button" class="primary" (click)="save()" title="Saves the name your teams see">Save</button>
       </div>
       }
 
@@ -101,6 +102,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
       <div class="modal-foot">
         <button type="button" (click)="back()">Back</button>
         <span class="spacer"></span>
+        <button type="button" (click)="close()">Close</button>
         <button type="submit" form="joinf" class="primary" [disabled]="busy() || !invite.trim()">{{ busy() ? 'Joining…' : 'Join' }}</button>
       </div>
       }
@@ -145,10 +147,11 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
         @if (error()) { <p class="err">{{ error() }}</p> }
       </form>
       <div class="modal-foot">
-        @if (done()?.teamId) { <span class="spacer"></span><button type="button" class="primary" (click)="back()">Done</button> }
+        @if (done()?.teamId) { <button type="button" (click)="back()">Back to Teams</button><span class="spacer"></span><button type="button" class="primary" (click)="close()">Close</button> }
         @else {
           <button type="button" (click)="run() ? cancelSetup() : back()">{{ run() ? 'Cancel' : 'Back' }}</button>
           <span class="spacer"></span>
+          <button type="button" (click)="close()" [disabled]="!!run()" [title]="run() ? 'Cancel the setup first' : ''">Close</button>
           <button type="submit" form="setf" class="primary" [disabled]="!!run() || !host || !teamName.trim()">{{ run() ? 'Setting up…' : done() ? 'Try Again' : 'Set Up' }}</button>
         }
       </div>
@@ -315,11 +318,17 @@ export class TeamsDialog implements OnInit, OnDestroy {
     } catch (e) { this.error.set(errText(e)); }
   }
 
-  async saveName() {
+  nameChanged() { return (this.ui.settings()?.teamDisplayName ?? '') !== this.displayName.trim(); }
+
+  /** Save: the name the teams see (the rest of the window acts at once), then close. */
+  async save() {
     const s = this.ui.settings();
-    const v = this.displayName.trim();
-    if (!s || (s.teamDisplayName ?? '') === v) return;
-    await this.ui.saveSettings({ ...s, teamDisplayName: v });
+    if (s && this.nameChanged()) {
+      try { await this.ui.saveSettings({ ...s, teamDisplayName: this.displayName.trim() }); }
+      catch (e) { this.error.set(errText(e)); return; }
+      void this.backend.teamIdentity().then(i => this.ident.set(i)).catch(() => {});
+    }
+    this.close();
   }
 
   toJoin() { this.error.set(''); this.info.set(null); this.invite = ''; this.view.set('join'); }

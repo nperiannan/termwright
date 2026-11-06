@@ -52,7 +52,7 @@ interface Row { item: TeamPushItem; check?: TeamPushResult; pick: boolean; resul
       <div class="modal-foot">
         <span class="muted">{{ summary() }}</span>
         <span class="spacer"></span>
-        @if (done()) { <button type="button" class="primary" (click)="close()">Done</button> }
+        @if (done()) { <button type="button" class="primary" (click)="close()">Close</button> }
         @else {
           <button type="button" (click)="close()">Cancel</button>
           <button type="button" class="primary" [disabled]="busy() || !picked()" (click)="push()">{{ busy() ? 'Pushing…' : 'Push ' + picked() + ' to ' + (team()?.name ?? 'the team') }}</button>
