@@ -46,6 +46,8 @@ export class Ui {
   /** Sessions the Edit Sessions dialog changes. */
   readonly bulkPaths = signal<string[]>([]);
   /** What Push to Team… offers: sessions (paths, relative to base) or devices from Discover. */
+  /** Reserve… for a session's device (current: the reservation to change). */
+  readonly teamReserve = signal<{ node: import('./models').SessionNode; current?: { until: string; note: string } } | null>(null);
   readonly teamPush = signal<{ paths?: string[]; base?: string; items?: import('./models').TeamPushItem[] } | null>(null);
   /** Sessions the Configuration Backups window backs up right away (from the Session Manager); null = just open it. */
   readonly backupTargets = signal<string[] | null>(null);

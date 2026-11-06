@@ -194,7 +194,8 @@
                         @if (devKind(n); as k) { <app-device-icon [kind]="k" [size]="40" /> } @else { <app-session-icon [kind]="protoKind(n)" [size]="40" /> }
                         <span class="ct">
                           <span class="cn"><span class="nm">{{ n.name }}</span>
-                            @if (cardEnv(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }</span>
+                            @if (cardEnv(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
+                            @if (teamStatus.label(teamStatus.stateOf(n)); as b) { <span class="tbadge" [class]="'tbadge ' + b.cls" [title]="b.title">{{ b.text }}</span> }</span>
                           <span class="ca">{{ cardAddr(n) }}</span>
                           @if (cardFolder(n); as f) { <span class="cf" translate="no"><app-icon name="folder" [size]="11" /><span>{{ f }}</span></span> }
                         </span>
@@ -341,6 +342,7 @@
   @case ('shortcuts') { <app-about /> }
 }
 @if (ui.teamPush()) { <app-team-push-dialog /> }
+@if (ui.teamReserve()) { <app-team-reserve-dialog /> }
 <app-prompt-dialog />
 @if (ui.lockScreen()) { <app-unlock /> }
 <app-overlays />

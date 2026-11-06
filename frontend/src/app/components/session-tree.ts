@@ -1,3 +1,4 @@
+import { TeamStatusService, isNetworkDevice } from '../core/team-status.service';
 import { RemoteDesktopSetup } from '../core/remote-desktop-setup.service';
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
@@ -160,9 +161,11 @@ export function sessionAddr(n: SessionNode): string {
         <span class="txt">
           <span class="line"><span class="name">{{ n.name }}</span>
             @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
-            @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }</span>
+            @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
+</span>
           <span class="addr">@if (addrParts(n); as ap) {<span class="a">{{ ap.a }}</span>@if (ap.t) {<span class="t">· {{ ap.t }}</span>}}</span>
         </span>
+        @if (teamBadge(n); as b) { <span class="tbadge" [class]="'tbadge ' + b.cls" [title]="b.title">{{ b.tiny }}</span> }
         @if (n.protocol === 'WOL') { <span [class]="wolDot(n)" [title]="wolTitle(n)"></span> }
         @else if (reach() && inReach(n.path)) { <span class="dot" [class]="dotClass(n)"></span> }
         @else if (liveState().get(n.path); as st) { <span class="dot" [class]="'dot ' + (st === 'connected' ? 'up' : st === 'error' ? 'down' : 'unk')" [title]="'Open in a tab - ' + st"></span> }
@@ -173,6 +176,7 @@ export function sessionAddr(n: SessionNode): string {
         <span class="name">{{ n.name }}</span>
         @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
         @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
+        @if (teamBadge(n); as b) { <span class="tbadge" [class]="'tbadge ' + b.cls" [title]="b.title">{{ b.tiny }}</span> }
       }
     </ng-template>
     @if (roomy()) {
@@ -223,6 +227,7 @@ export function sessionAddr(n: SessionNode): string {
 })
 export class SessionTree implements AfterViewInit, OnDestroy {
   protected ui = inject(Ui);
+  private teamStatus = inject(TeamStatusService);
   private tabs = inject(Tabs);
   private remoteDesktop = inject(RemoteDesktopSetup);
   protected wol = inject(Wol);
@@ -816,6 +821,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [
             { label: 'Console Server Ports...', action: () => { this.ui.consoleServerFor.set(n.path); this.ui.open('consolePorts'); } },
           ] : []),
+          ...this.reserveItems(n),
           ...(n.team && this.teamName(n.team) ? [{ label: 'From the team ' + this.teamName(n.team) + ' (its address and name follow the team)', disabled: true }] : this.pushItems([n.path], '')),
           { label: 'Duplicate', action: () => this.duplicate(n) },
           { label: 'Copy', hint: this.keys('C'), action: () => this.ops.copy([{ path: n.path, folder: false }]) },
@@ -848,6 +854,31 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   backUp(targets: string[]) {
     this.ui.backupTargets.set(targets);
     this.ui.open('backups');
+  }
+
+  teamBadge(n: SessionNode) { return this.teamStatus.label(this.teamStatus.stateOf(n)); }
+
+  /** Reserve… / Release for network devices of a team's inventory. */
+  reserveItems(n: SessionNode): MenuItem[] {
+    if (!(this.ui.settings()?.teams ?? []).length || !isNetworkDevice(n) || !n.hostname) return [];
+    const st = this.teamStatus.stateOf(n);
+    const out: MenuItem[] = [];
+    if (st?.others.length) out.push({ label: 'Open by ' + st.others.map(o => o.name).join(', '), disabled: true });
+    if (st?.reserved && !st.reservedByMe) {
+      out.push({ label: `Reserved by ${st.reserved.name} until ${new Date(st.reserved.until).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`, disabled: true });
+      if ((this.ui.settings()?.teams ?? []).find(t => t.id === st.teamId)?.role !== 'member') out.push({ label: 'Release the Reservation', action: () => void this.release(st.teamId, st.reserved!.id) });
+    } else if (st?.reservedByMe) {
+      out.push({ label: 'Change Reservation...', action: () => this.ui.teamReserve.set({ node: n, current: st.reserved }) });
+      out.push({ label: 'Release Reservation', action: () => void this.release(st.teamId, st.reserved!.id) });
+    } else {
+      out.push({ label: 'Reserve...', action: () => this.ui.teamReserve.set({ node: n }) });
+    }
+    return [...out, { separator: true }];
+  }
+
+  private async release(teamId: string, id: string) {
+    try { await this.backend.teamRelease(teamId, id); this.ui.toast('Released', 'success'); }
+    catch (e) { this.ui.error(e); }
   }
 
   teamName(ref: string) { return (this.ui.settings()?.teams ?? []).find(t => ref.startsWith(t.id + '/'))?.name ?? ''; }

@@ -139,6 +139,11 @@ export class Backend {
   teamCheck(id: string, items: TeamPushItem[]) { return this.call<TeamPushResult[]>('TeamCheck', id, items); }
   teamPush(id: string, items: TeamPushItem[]) { return this.call<TeamPushResult[]>('TeamPush', id, items); }
   teamOpenAdmin(id: string) { return this.call<void>('TeamOpenAdmin', id); }
+  teamPresence(devices: { host: string; port: number; protocol: string; mac?: string; name?: string; since?: string }[]) { return this.call<void>('TeamPresence', devices); }
+  teamStatuses() { return this.call<{ teamId: string; team: string; status: any }[]>('TeamStatuses'); }
+  teamReserve(d: { host: string; port: number; protocol: string; mac?: string; name?: string }, until: string, note: string) { return this.call<unknown>('TeamReserve', d, until, note); }
+  teamRelease(teamId: string, id: string) { return this.call<void>('TeamRelease', teamId, id); }
+  teamConnected(d: { host: string; port: number; protocol: string; mac?: string }) { return this.call<void>('TeamConnected', d); }
   importTemplate() { return this.call<string>('ImportTemplate'); }
   saveTextAs(title: string, name: string, text: string) { return this.call<string>('SaveTextAs', title, name, text); }
   historyAdd(e: Partial<HistoryEntry>) { return this.call<void>('HistoryAdd', e); }

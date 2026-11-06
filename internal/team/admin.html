@@ -1,44 +1,83 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Termwright team</title>
+<title>Termwright Team</title>
+<link rel="icon" href="/admin/icon.svg" type="image/svg+xml">
 <style>
-:root{--bg:#f4f5f8;--card:#fff;--text:#1d2330;--muted:#6b7280;--line:#e3e6ec;--accent:#2563eb;--soft:#e8f0fe;--ok:#16a34a;--bad:#dc2626;--warn:#b45309}
-@media (prefers-color-scheme:dark){:root{--bg:#111317;--card:#1a1c21;--text:#e7e9ee;--muted:#9097a3;--line:#2b2e35;--accent:#5aa9ff;--soft:#1e2a3b;--ok:#4ade80;--bad:#f87171;--warn:#f0bd5a}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13.5px/1.45 Inter,-apple-system,"Segoe UI",system-ui,sans-serif}
-header{display:flex;align-items:center;gap:14px;padding:12px 22px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
-.logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);flex:none}
-header b{font-size:16px}.sub{color:var(--muted);font-size:12px}
-nav{display:flex;gap:4px;margin-left:24px;flex-wrap:wrap}nav a{padding:6px 12px;border-radius:7px;color:var(--muted);cursor:pointer;text-decoration:none}
-nav a.on{background:var(--soft);color:var(--accent);font-weight:600}.count{background:var(--bad);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;margin-left:4px}
-.who{margin-left:auto;color:var(--muted);font-size:12px}.who a{color:var(--accent);cursor:pointer}
-main{padding:18px 22px;max-width:1400px}
-.tool{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
-button,.btn{font:inherit;border:1px solid var(--line);border-radius:7px;padding:5px 12px;background:var(--card);color:var(--text);cursor:pointer}
-button.p{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}button.d{color:var(--bad)}button:disabled{opacity:.5;cursor:default}
-input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:7px;padding:5px 9px;background:var(--card);color:var(--text)}
-.mono{font-family:Menlo,Consolas,monospace;font-size:12.5px}.muted{color:var(--muted)}.sp{flex:1}
-table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:8px;border-bottom:1px solid var(--line)}
-td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}tr:last-child td{border-bottom:0}
-tr.f td{background:var(--soft);font-weight:600;cursor:pointer}td a{color:var(--accent);cursor:pointer;margin-right:8px}td a.d{color:var(--bad)}
-.pill{font-size:11px;border-radius:5px;padding:1px 7px;background:var(--line);white-space:nowrap}.pill.in{background:var(--soft);color:var(--accent)}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.empty{padding:28px;text-align:center;color:var(--muted);background:var(--card);border:1px dashed var(--line);border-radius:10px}
-.msg{padding:9px 12px;border-radius:8px;margin-bottom:12px;background:var(--soft)}.msg.err{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
-.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;width:220px}.bar i{display:block;height:100%;background:var(--accent)}
-dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);padding:0;width:min(520px,94vw)}
-dialog::backdrop{background:rgba(0,0,0,.35)}dialog h3{margin:0;padding:12px 16px;border-bottom:1px solid var(--line);font-size:15px}
-dialog form>div.g{display:grid;grid-template-columns:120px 1fr;gap:8px 10px;padding:14px 16px;align-items:center}dialog .ft{display:flex;gap:8px;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--line)}
-.gate{max-width:560px;margin:80px auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px;line-height:1.6}
+:root{--bg:#eef1f5;--side:#f7f8fa;--card:#fff;--card2:#f8f9fb;--text:#18202c;--muted:#667085;--line:#e3e7ee;--accent:#2f7cf6;--accent2:#7c5cf6;--soft:#e9f1ff;--ok:#16a34a;--okbg:#e7f7ec;--bad:#dc2626;--badbg:#fdecec;--warn:#b45309;--warnbg:#fff4e0;
+  --shadow:0 1px 0 rgba(255,255,255,.7) inset,0 1px 2px rgba(16,24,40,.06),0 10px 24px -12px rgba(16,24,40,.18);--r:12px;--mono:Menlo,"SF Mono",Consolas,"DejaVu Sans Mono",monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1014;--side:#14161b;--card:#191c22;--card2:#1e2128;--text:#e8eaef;--muted:#9097a3;--line:#2a2e36;--accent:#5aa9ff;--accent2:#a48bff;--soft:#1c2a3d;--ok:#4ade80;--okbg:#14301f;--bad:#f87171;--badbg:#3a1a1a;--warn:#f0bd5a;--warnbg:#3a2c12;
+  --shadow:0 1px 0 rgba(255,255,255,.05) inset,0 12px 26px -14px rgba(0,0,0,.8)}}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:13.5px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100%}
+aside{background:var(--side);border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
+.brand{display:flex;gap:10px;align-items:center;padding:4px 8px 16px}.brand img{width:38px;height:38px}
+.brand b{display:block;font-size:15px;letter-spacing:-.01em}.brand span{color:var(--muted);font-size:11.5px}
+.team{margin:0 6px 12px;padding:10px 12px;border-radius:10px;background:var(--card);box-shadow:var(--shadow)}
+.team b{display:block;font-size:14px;word-break:break-word}.team span{color:var(--muted);font-size:11.5px}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:9px;color:var(--text);cursor:pointer;text-decoration:none;font-weight:500}
+.nav a:hover{background:color-mix(in srgb,var(--text) 6%,transparent)}.nav a.on{background:var(--soft);color:var(--accent)}
+.nav svg{width:17px;height:17px;flex:none;opacity:.85}.badge{margin-left:auto;background:var(--bad);color:#fff;border-radius:9px;padding:0 7px;font-size:11px;font-weight:600}
+.me{margin-top:auto;padding:10px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.me b{color:var(--text);display:block;font-size:13px}.me a{color:var(--accent);cursor:pointer}
+main{padding:24px 30px 60px;min-width:0}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:-.02em}.lead{color:var(--muted);margin:0 0 18px;max-width:900px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:16px}
+.card>h3{margin:0;padding:12px 16px;font-size:13.5px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}.card>h3 .sp{flex:1}
+.pad{padding:14px 16px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 16px;cursor:pointer}
+.stat b{display:block;font-size:26px;letter-spacing:-.02em}.stat span{color:var(--muted);font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:1100px){.grid2{grid-template-columns:1fr}.app{grid-template-columns:1fr}aside{position:static;height:auto}}
+.tool{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}.sp{flex:1}
+button{font:inherit;border:1px solid var(--line);border-radius:8px;padding:6px 13px;background:var(--card2);color:var(--text);cursor:pointer;white-space:nowrap}
+button:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+button.p{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 88%,#fff),var(--accent));border-color:transparent;color:#fff;font-weight:600}
+button.d{color:var(--bad)}button:disabled{opacity:.45;cursor:default}
+input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--card2);color:var(--text);outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);padding:0}
+.mono{font-family:var(--mono);font-size:12.3px}.muted{color:var(--muted)}.small{font-size:12px}
+table{width:100%;border-collapse:collapse}th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:9px 10px;border-bottom:1px solid var(--line);background:var(--card2);position:sticky;top:0}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}tr:last-child td{border-bottom:0}tbody tr:hover td{background:color-mix(in srgb,var(--accent) 4%,transparent)}
+th.c,td.c{width:34px;text-align:center}
+tr.f td{background:var(--card2);font-weight:600;cursor:pointer}td a{color:var(--accent);cursor:pointer;margin-right:10px}td a.d{color:var(--bad)}
+.pill{display:inline-block;font-size:11px;border-radius:10px;padding:1px 8px;background:color-mix(in srgb,var(--text) 8%,transparent);white-space:nowrap;font-weight:500}
+.pill.in{background:var(--soft);color:var(--accent)}.pill.ok{background:var(--okbg);color:var(--ok)}.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.bad{background:var(--badbg);color:var(--bad)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px}.dot.off{background:var(--muted);opacity:.5}
+.empty{padding:34px;text-align:center;color:var(--muted)}
+.msg{position:fixed;right:22px;bottom:22px;max-width:460px;padding:11px 15px;border-radius:10px;background:var(--card);border:1px solid var(--line);box-shadow:0 14px 30px rgba(0,0,0,.18);z-index:20}.msg.err{border-color:var(--bad);color:var(--bad)}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;width:200px}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.scroll{max-height:calc(100vh - 290px);overflow:auto}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--text);padding:0;width:min(540px,94vw);box-shadow:0 24px 60px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(10,14,20,.45)}dialog h3{margin:0;padding:14px 18px;border-bottom:1px solid var(--line);font-size:15px}
+dialog .g{display:grid;grid-template-columns:120px 1fr;gap:10px 12px;padding:16px 18px;align-items:center}dialog .ft{display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--line)}
+.steps{counter-reset:s;list-style:none;padding:0;margin:0}.steps li{position:relative;padding:0 0 14px 40px;line-height:1.55}
+.steps li:before{counter-increment:s;content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:var(--soft);color:var(--accent);font-weight:700;display:grid;place-items:center;font-size:12.5px}
+.help h4{margin:16px 0 6px}.help p,.help li{line-height:1.6}.help ul{padding-left:20px;margin:6px 0}
+.gate{max-width:560px;margin:12vh auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px;box-shadow:var(--shadow);line-height:1.6}
+.gate img{width:54px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px}.kv span{color:var(--muted)}
 </style></head><body>
-<div id="app"></div>
-<dialog id="dlg"></dialog>
+<div id="app"></div><div id="msg"></div><dialog id="dlg"></dialog>
 <script>
 "use strict";
-const $ = s => document.querySelector(s);
-const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const PROTOS = ['SSH2','Telnet','RDP','VNC','Raw'];
-const NETKINDS = ['switch','router','firewall','wireless'];
-let st = null, tab = 'inventory', filter = '', sel = new Set(), psel = new Set(), ssel = new Set(), closed = new Set(), scan = null, msg = null, timer = 0;
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const PROTOS = ['SSH2', 'Telnet', 'RDP', 'VNC', 'Raw'];
+const NETKINDS = ['switch', 'router', 'firewall', 'wireless'];
+const IC = {
+  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  inv: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
+  ok: '<path d="M20 6 9 17l-5-5"/>', scan: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 20a6 6 0 0 0-3-5.2"/>',
+  log: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>', help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/>'
+};
+const ico = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
+
+// what the person typed and picked survives every refresh
+const ui = { page: 'overview', filter: '', sel: new Set(), psel: new Set(), ssel: new Set(), closed: new Set(), targets: '', community: '', scanFolder: '', approveFolder: '',
+  onlyNet: true, hideKnown: true, dts: {} };
+let st = null, scan = null, lastJSON = '', msgTimer = 0;
 
 async function api(method, path, body) {
   const r = await fetch(path, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Termwright': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -46,68 +85,109 @@ async function api(method, path, body) {
   if (!r.ok) { const e = new Error((j && j.error) || r.status + ' ' + r.statusText); e.status = r.status; throw e; }
   return j;
 }
-function flash(text, err) { msg = { text, err }; render(); clearTimeout(timer); timer = setTimeout(() => { msg = null; render(); }, 6000); }
-async function act(fn, ok) { try { const r = await fn(); if (ok) flash(typeof ok === 'function' ? ok(r) : ok); await load(); } catch (e) { flash(e.message, true); } }
+function flash(text, err) { $('#msg').innerHTML = `<div class="msg ${err ? 'err' : ''}">${esc(text)}</div>`; clearTimeout(msgTimer); msgTimer = setTimeout(() => $('#msg').innerHTML = '', 6000); }
+async function act(fn, ok) { try { const r = await fn(); if (ok) flash(typeof ok === 'function' ? ok(r) : ok); await load(true); } catch (e) { flash(e.message, true); } }
+function typing() { const a = document.activeElement; return a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox'; }
 
 async function start() {
   const m = /[#&]c=([^&]+)/.exec(location.hash);
   if (m) { history.replaceState(null, '', '/admin'); try { await api('POST', '/api/admin/session', { code: m[1] }); } catch (e) { return gate(e.message); } }
-  await load();
-  setInterval(() => { if (!document.hidden && !$('#dlg').open) load(true); }, 10000);
+  try { ui.page = sessionStorage.getItem('tw.page') || 'overview'; } catch {}
+  await load(true);
+  setInterval(() => { if (!document.hidden && !$('#dlg').open) load(false); }, 8000);
 }
 function gate(text) {
-  $('#app').innerHTML = `<div class="gate"><b>Termwright team server</b><p>${esc(text || 'Open this page from Termwright: Options → Teams… → Open Admin Page.')}</p>
+  $('#app').innerHTML = `<div class="gate"><img src="/admin/icon.svg" alt=""><h1>Termwright team server</h1><p>${esc(text || 'Open this page from Termwright: Options → Teams… → Open Admin Page.')}</p>
   <p class="muted">The admin page is for the team's owner and co-owners. Termwright signs you in with a link that works once, for two minutes; there are no passwords on the server.</p></div>`;
 }
-async function load(quiet) {
-  try { st = await api('GET', '/api/admin/state'); if (tab === 'discover') scan = await api('GET', '/api/admin/scan'); render(); }
-  catch (e) { if (e.status === 401 || e.status === 403) return gate(e.status === 403 ? e.message : ''); if (!quiet) flash(e.message, true); }
+// load: force = render now; otherwise only when something changed and nobody is typing
+async function load(force) {
+  try {
+    const s = await api('GET', '/api/admin/state');
+    if (ui.page === 'discover' || (scan && scan.running)) scan = await api('GET', '/api/admin/scan');
+    const j = JSON.stringify([s, scan]);
+    st = s;
+    if (force || (j !== lastJSON && !typing())) { lastJSON = j; render(); }
+  } catch (e) { if (e.status === 401 || e.status === 403) return gate(e.status === 403 ? e.message : ''); if (force) flash(e.message, true); }
 }
 
+function go(p) { ui.page = p; try { sessionStorage.setItem('tw.page', p); } catch {} if (p === 'discover') api('GET', '/api/admin/scan').then(x => { scan = x; render(); }).catch(() => render()); else render(); window.scrollTo(0, 0); }
 function render() {
   if (!st) return;
-  const t = st.team, online = t.members.filter(m => m.online).length, me = t.members.find(m => m.id === st.me) || {};
-  const tabs = [['inventory', `Inventory (${st.inventory.devices.length})`], ['approvals', 'Approvals' + (st.pending.length ? `<span class="count">${st.pending.length}</span>` : '')],
-    ['discover', 'Discover'], ['members', `Members (${t.members.length})`], ['activity', 'Activity']];
-  $('#app').innerHTML = `<header><div class="logo"></div><div><b>${esc(t.name)}</b><div class="sub">Termwright team server ${esc(t.version)} · ${t.members.length} member${t.members.length === 1 ? '' : 's'} · ${online} online</div></div>
-    <nav>${tabs.map(([k, l]) => `<a class="${k === tab ? 'on' : ''}" data-tab="${k}">${l}</a>`).join('')}</nav>
-    <div class="who">${esc(me.name)} · ${me.role === 'owner' ? 'Owner' : 'Co-owner'} · <a id="out">Sign out</a></div></header>
-    <main>${msg ? `<div class="msg ${msg.err ? 'err' : ''}">${esc(msg.text)}</div>` : ''}${({ inventory, approvals, discover, members, activity })[tab]()}</main>`;
-  document.querySelectorAll('[data-tab]').forEach(a => a.onclick = async () => { tab = a.dataset.tab; if (tab === 'discover') scan = await api('GET', '/api/admin/scan').catch(() => null); render(); });
-  $('#out').onclick = async () => { await api('POST', '/api/admin/signout').catch(() => {}); gate('Signed out.'); };
+  // keep the focus and caret of the field being used
+  const a = document.activeElement, key = a && a.dataset ? a.dataset.k : null, ss = a && a.selectionStart, se = a && a.selectionEnd;
+  const t = st.team, me = t.members.find(m => m.id === st.me) || {}, online = t.members.filter(m => m.online).length;
+  const nav = [['overview', 'home', 'Overview'], ['inventory', 'inv', 'Inventory'], ['approvals', 'ok', 'Approvals', st.pending.length], ['discover', 'scan', 'Discover'],
+    ['members', 'users', 'Members'], ['activity', 'log', 'Activity'], ['help', 'help', 'Help & About']];
+  $('#app').innerHTML = `<div class="app"><aside>
+    <div class="brand"><img src="/admin/icon.svg" alt=""><div><b>Termwright</b><span>Team server</span></div></div>
+    <div class="team"><b>${esc(t.name)}</b><span>${t.members.length} member${t.members.length === 1 ? '' : 's'} · ${online} online · ${st.inventory.devices.length} devices</span></div>
+    <nav class="nav">${nav.map(([k, i, l, n]) => `<a class="${k === ui.page ? 'on' : ''}" data-go="${k}">${ico(i)}${l}${n ? `<span class="badge">${n}</span>` : ''}</a>`).join('')}</nav>
+    <div class="me"><b>${esc(me.name)}</b>${me.role === 'owner' ? 'Owner' : 'Co-owner'} · <a id="out">Sign out</a></div></aside>
+    <main>${PAGES[ui.page]()}</main></div>`;
   wire();
+  if (key) { const f = document.querySelector(`[data-k="${key}"]`); if (f) { f.focus(); try { f.setSelectionRange(ss, se); } catch {} } }
 }
 
-// ---- inventory ----
+// ---------- overview ----------
+function overview() {
+  const s = st.status, inUse = s.inUse || [], res = s.reserved || [];
+  return `<h1>Overview</h1><p class="lead">Who uses what in ${esc(st.team.name)} right now, and what needs you.</p>
+  <div class="stats">
+    <div class="stat" data-go="inventory"><b>${st.inventory.devices.length}</b><span>devices in the inventory</span></div>
+    <div class="stat" data-go="approvals"><b>${st.pending.length}</b><span>waiting for approval</span></div>
+    <div class="stat" data-go="members"><b>${st.team.members.filter(m => m.online).length} / ${st.team.members.length}</b><span>members online</span></div>
+    <div class="stat"><b>${inUse.length}</b><span>devices open now</span></div>
+    <div class="stat"><b>${res.length}</b><span>reservations</span></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>In use now</h3>${inUse.length ? `<table><tr><th>Device</th><th>Who</th><th>Since</th></tr>${inUse.map(u => `<tr><td>${esc(devName(u.device))}</td><td>${esc(u.name)}</td><td class="muted">${ago(u.since)}</td></tr>`).join('')}</table>`
+      : '<div class="empty">Nobody has a network device of the team open.</div>'}</div>
+    <div class="card"><h3>Reservations</h3>${res.length ? `<table><tr><th>Device</th><th>By</th><th>Until</th><th>Note</th><th></th></tr>${res.map(r => `<tr><td>${esc(devName(r.device))}</td><td>${esc(r.name)}</td>
+      <td>${esc(when(r.until))}</td><td class="muted">${esc(r.note)}</td><td><a class="d" data-rel="${esc(r.id)}">Release</a></td></tr>`).join('')}</table>`
+      : '<div class="empty">No device is reserved. Members reserve devices in Termwright: right-click a session → Reserve…</div>'}</div>
+  </div>
+  <div class="card"><h3>Recent activity<span class="sp"></span><a class="small" style="color:var(--accent);cursor:pointer;font-weight:500" data-go="activity">All</a></h3>${actTable(st.activity.slice(0, 8))}</div>`;
+}
+function devName(d) { const inv = st.inventory.devices.find(x => sameDev(x, d)); return (inv ? inv.name : d.name || d.host) + (inv && inv.name !== inv.host ? '' : ''); }
+function sameDev(a, b) { const pa = a.port || defPort(a.protocol), pb = b.port || defPort(b.protocol); return (a.host === b.host && pa === pb) || (!!a.mac && a.mac === b.mac); }
+function when(iso) { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+
+// ---------- inventory ----------
 function folders() {
   const s = new Set(st.inventory.folders || []);
   st.inventory.devices.forEach(d => { let f = d.folder; while (f) { s.add(f); f = f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : ''; } });
   return [...s].sort((a, b) => a.localeCompare(b));
 }
+function folderList(id) { return `<datalist id="${id}">${folders().map(f => `<option value="${esc(f)}">`).join('')}</datalist>`; }
 function types() { return [...new Set(st.inventory.devices.map(d => d.deviceType).filter(Boolean))].sort(); }
+function visibleDevices() { const q = ui.filter.toLowerCase(); return st.inventory.devices.filter(d => !q || [d.name, d.host, d.folder, d.deviceType, d.mac, d.description].join(' ').toLowerCase().includes(q)); }
 function inventory() {
-  const q = filter.toLowerCase();
-  const list = st.inventory.devices.filter(d => !q || [d.name, d.host, d.folder, d.deviceType, d.mac, d.description].join(' ').toLowerCase().includes(q));
+  const list = visibleDevices();
   const groups = new Map(); (st.inventory.folders || []).forEach(f => groups.set(f, [])); groups.set('', []);
   list.forEach(d => { if (!groups.has(d.folder)) groups.set(d.folder, []); groups.get(d.folder).push(d); });
   const keys = [...groups.keys()].sort((a, b) => a === '' ? -1 : b === '' ? 1 : a.localeCompare(b));
+  const allOn = list.length && list.every(d => ui.sel.has(d.id));
   let rows = '';
   for (const f of keys) {
     const ds = groups.get(f).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    if (!ds.length && (q || f === '')) continue;
-    if (f) rows += `<tr class="f" data-fold="${esc(f)}"><td colspan="8">${closed.has(f) ? '▸' : '▾'} 📁 ${esc(f)} <span class="muted" style="font-weight:400">· ${ds.length} device${ds.length === 1 ? '' : 's'}</span>
-      <span style="float:right;font-weight:400"><a data-rf="${esc(f)}">Rename</a>${ds.length ? '' : `<a class="d" data-df="${esc(f)}">Delete</a>`}</span></td></tr>`;
-    if (closed.has(f)) continue;
-    for (const d of ds) rows += `<tr><td><input type="checkbox" data-sel="${d.id}" ${sel.has(d.id) ? 'checked' : ''}></td><td>${f ? '&nbsp;&nbsp;&nbsp;' : ''}${esc(d.name)}</td>
+    if (!ds.length && (ui.filter || f === '')) continue;
+    const fOn = ds.length && ds.every(d => ui.sel.has(d.id));
+    if (f) rows += `<tr class="f" data-fold="${esc(f)}"><td class="c"><input type="checkbox" data-fsel="${esc(f)}" ${fOn ? 'checked' : ''} ${ds.length ? '' : 'disabled'}></td>
+      <td colspan="6">${ui.closed.has(f) ? '▸' : '▾'} 📁 ${esc(f)} <span class="muted" style="font-weight:400">· ${ds.length} device${ds.length === 1 ? '' : 's'}</span></td>
+      <td style="text-align:right;font-weight:400"><a data-rf="${esc(f)}">Rename</a>${ds.length ? '' : `<a class="d" data-df="${esc(f)}">Delete</a>`}</td></tr>`;
+    if (ui.closed.has(f)) continue;
+    for (const d of ds) rows += `<tr><td class="c"><input type="checkbox" data-sel="${d.id}" ${ui.sel.has(d.id) ? 'checked' : ''}></td><td>${f ? '<span style="display:inline-block;width:18px"></span>' : ''}${esc(d.name)}</td>
       <td class="mono">${esc(d.host)}${d.port && d.port !== defPort(d.protocol) ? ':' + d.port : ''}</td><td>${esc(d.protocol === 'SSH2' ? 'SSH' : d.protocol)}</td><td>${esc(d.deviceType)}</td>
-      <td class="mono muted">${esc(d.mac)}</td><td class="muted">${esc(d.addedBy)} · ${ago(d.added)}</td><td style="white-space:nowrap"><a data-edit="${d.id}">Edit</a><a class="d" data-del="${d.id}">Delete</a></td></tr>`;
+      <td class="mono muted">${esc(d.mac)}</td><td class="muted small">${esc(d.addedBy)} · ${ago(d.added)}</td><td style="white-space:nowrap;text-align:right"><a data-edit="${d.id}">Edit</a><a class="d" data-del="${d.id}">Delete</a></td></tr>`;
   }
-  return `<div class="tool"><input id="flt" placeholder="Filter devices" value="${esc(filter)}" style="min-width:240px">
-    <button id="add">+ Device</button><button id="addf">+ Folder</button><button id="imp">Import CSV…</button><button id="exp">Export CSV</button>
-    ${sel.size ? `<span class="muted">${sel.size} selected</span><button id="mv">Move to folder…</button><button class="d" id="delsel">Delete</button>` : ''}
-    <span class="sp"></span><span class="muted">Changes reach every member's Termwright within seconds</span><input type="file" id="csv" accept=".csv,text/csv" hidden></div>
-    ${st.inventory.devices.length || (st.inventory.folders || []).length ? `<table><tr><th style="width:28px"></th><th>Name</th><th>Address</th><th>Protocol</th><th>Device type</th><th>MAC</th><th>Added</th><th></th></tr>${rows}</table>`
-      : `<div class="empty">No devices yet. Add them here, scan a network on the Discover tab, or push sessions from Termwright (right-click → Push to Team…).</div>`}`;
+  return `<h1>Inventory</h1><p class="lead">The team's devices. Every member's Termwright shows them as a folder named after the team and follows changes within seconds; logins stay each person's own.</p>
+  <div class="card"><div class="tool"><input data-k="filter" placeholder="Filter: name, address, type, MAC…" value="${esc(ui.filter)}" style="min-width:260px">
+    <button id="add">+ Device</button><button id="addf">+ Folder</button><button id="imp">Import CSV…</button><button id="exp">Export CSV</button><span class="sp"></span>
+    ${ui.sel.size ? `<span class="muted">${ui.sel.size} selected</span><button id="mv">Move to folder…</button><button class="d" id="delsel">Delete</button><button id="clr">Clear</button>` : ''}
+    <input type="file" id="csv" accept=".csv,text/csv" hidden></div>
+    ${st.inventory.devices.length || (st.inventory.folders || []).length ? `<div class="scroll"><table><thead><tr><th class="c"><input type="checkbox" id="all" ${allOn ? 'checked' : ''} title="Select all shown"></th><th>Name</th><th>Address</th><th>Protocol</th><th>Device type</th><th>MAC</th><th>Added</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : `<div class="empty">No devices yet. Add them here, scan a network on <a style="color:var(--accent);cursor:pointer" data-go="discover">Discover</a>, or push sessions from Termwright (right-click → Push to Team…).</div>`}</div>`;
 }
 function defPort(p) { return ({ SSH2: 22, Telnet: 23, RDP: 3389, VNC: 5900 })[p] || 0; }
 function ago(iso) {
@@ -118,7 +198,7 @@ function deviceForm(d, title, save) {
   const dlg = $('#dlg');
   dlg.innerHTML = `<form method="dialog"><h3>${esc(title)}</h3><div class="g">
     <label>Name</label><input name="name" value="${esc(d.name)}" required>
-    <label>Folder</label><input name="folder" list="fl" value="${esc(d.folder)}" placeholder="(the team folder)"><datalist id="fl">${folders().map(f => `<option value="${esc(f)}">`).join('')}</datalist>
+    <label>Folder</label><input name="folder" list="fl" value="${esc(d.folder)}" placeholder="(the team folder)">${folderList('fl')}
     <label>Address</label><input name="host" class="mono" value="${esc(d.host)}" required placeholder="10.1.1.1 or host.example.com">
     <label>Protocol / port</label><div style="display:flex;gap:8px"><select name="protocol">${PROTOS.map(p => `<option ${p === (d.protocol || 'SSH2') ? 'selected' : ''} value="${p}">${p === 'SSH2' ? 'SSH' : p}</option>`).join('')}</select>
       <input name="port" type="number" min="0" max="65535" style="width:110px" value="${d.port || ''}" placeholder="default"></div>
@@ -127,15 +207,11 @@ function deviceForm(d, title, save) {
     <label>Description</label><input name="description" value="${esc(d.description)}">
     </div><div class="ft"><button value="cancel" formnovalidate>Cancel</button><button class="p" value="ok">Save</button></div></form>`;
   dlg.showModal();
-  dlg.onclose = () => {
-    if (dlg.returnValue !== 'ok') return;
-    const f = new FormData(dlg.querySelector('form')), v = Object.fromEntries(f.entries());
-    save({ ...d, ...v, port: Number(v.port) || 0 });
-  };
+  dlg.onclose = () => { if (dlg.returnValue !== 'ok') return; const v = Object.fromEntries(new FormData(dlg.querySelector('form')).entries()); save({ ...d, ...v, port: Number(v.port) || 0 }); };
 }
-function ask(title, label, value, ok) {
+function ask(title, label, value, ok, list) {
   const dlg = $('#dlg');
-  dlg.innerHTML = `<form method="dialog"><h3>${esc(title)}</h3><div class="g"><label>${esc(label)}</label><input name="v" list="fl" value="${esc(value)}"><datalist id="fl">${folders().map(f => `<option value="${esc(f)}">`).join('')}</datalist></div>
+  dlg.innerHTML = `<form method="dialog"><h3>${esc(title)}</h3><div class="g"><label>${esc(label)}</label><input name="v" ${list ? 'list="fl"' : ''} value="${esc(value)}">${list ? folderList('fl') : ''}</div>
     <div class="ft"><button value="cancel" formnovalidate>Cancel</button><button class="p" value="ok">OK</button></div></form>`;
   dlg.showModal(); dlg.onclose = () => { if (dlg.returnValue === 'ok') ok(dlg.querySelector('[name=v]').value.trim()); };
 }
@@ -170,86 +246,134 @@ async function importCSV(file) {
   act(() => api('POST', '/api/admin/devices', { devices }), r => `Imported: ${r.added} added, ${r.changed} changed, ${r.skipped} already in the inventory.`);
 }
 
-// ---- approvals ----
+// ---------- approvals ----------
 function approvals() {
-  if (!st.pending.length) return `<div class="empty">Nothing waits for approval. Devices members push from Termwright (right-click → Push to Team…) appear here.</div>`;
-  return `<div class="tool">${psel.size ? `<span class="muted">${psel.size} selected</span>` : '<span class="muted">Tick devices to approve or reject them</span>'}
-    <span class="sp"></span>into folder <input id="pf" list="fl" placeholder="as pushed" style="width:200px"><datalist id="fl">${folders().map(f => `<option value="${esc(f)}">`).join('')}</datalist>
-    <button class="p" id="apr" ${psel.size ? '' : 'disabled'}>Approve</button><button class="d" id="rej" ${psel.size ? '' : 'disabled'}>Reject</button></div>
-    <table><tr><th style="width:28px"><input type="checkbox" id="pall"></th><th>Name</th><th>Address</th><th>Protocol</th><th>Device type</th><th>Folder</th><th>Pushed by</th></tr>
-    ${st.pending.map(p => `<tr><td><input type="checkbox" data-psel="${p.id}" ${psel.has(p.id) ? 'checked' : ''}></td><td>${esc(p.device.name)}</td><td class="mono">${esc(p.device.host)}</td>
-      <td>${esc(p.device.protocol === 'SSH2' ? 'SSH' : p.device.protocol)}</td><td>${esc(p.device.deviceType)}</td><td>${esc(p.device.folder)}</td><td class="muted">${esc(p.name)} · ${ago(p.at)}</td></tr>`).join('')}</table>`;
+  const allOn = st.pending.length && st.pending.every(p => ui.psel.has(p.id));
+  return `<h1>Approvals</h1><p class="lead">Devices members pushed from Termwright. Until you approve them they stay only in that member's own sessions.</p>
+  <div class="card">${!st.pending.length ? `<div class="empty">Nothing waits for approval.</div>` : `<div class="tool"><span class="muted">${ui.psel.size ? ui.psel.size + ' selected' : 'Tick devices to approve or reject them'}</span><span class="sp"></span>
+    into folder <input data-k="approveFolder" list="fl" placeholder="as pushed" value="${esc(ui.approveFolder)}" style="width:220px">${folderList('fl')}
+    <button class="p" id="apr" ${ui.psel.size ? '' : 'disabled'}>Approve</button><button class="d" id="rej" ${ui.psel.size ? '' : 'disabled'}>Reject</button></div>
+    <div class="scroll"><table><thead><tr><th class="c"><input type="checkbox" id="pall" ${allOn ? 'checked' : ''}></th><th>Name</th><th>Address</th><th>Protocol</th><th>Device type</th><th>Folder</th><th>Pushed by</th></tr></thead><tbody>
+    ${st.pending.map(p => `<tr><td class="c"><input type="checkbox" data-psel="${p.id}" ${ui.psel.has(p.id) ? 'checked' : ''}></td><td>${esc(p.device.name)}</td><td class="mono">${esc(p.device.host)}</td>
+      <td>${esc(p.device.protocol === 'SSH2' ? 'SSH' : p.device.protocol)}</td><td>${esc(p.device.deviceType)}</td><td>${esc(p.device.folder)}</td><td class="muted">${esc(p.name)} · ${ago(p.at)}</td></tr>`).join('')}</tbody></table></div>`}</div>`;
 }
 
-// ---- discover (from the server) ----
-let onlyNet = true;
+// ---------- discover (from the server) ----------
 function isNet(r) { return NETKINDS.includes(r.kind) || (r.kind === 'unknown' && !!r.protocol); }
-function discover() {
-  const s = scan, res = s ? (s.results || []).filter(r => !r.self && (!onlyNet || isNet(r))) : [];
-  const pct = s && s.total ? Math.round(100 * s.done / s.total) : 0;
-  return `<div class="tool"><input id="tg" class="mono" style="min-width:280px" placeholder="10.127.36.0/24 · 10.127.36.10-80 · addresses" value="${esc(s ? s.targets : '')}">
-    <input id="cm" placeholder="SNMP community (optional)" style="width:200px">
-    <button class="p" id="scan" ${s && s.running ? 'disabled' : ''}>Scan from the server</button>${s && s.running ? '<button id="stop">Stop</button>' : ''}
-    ${s ? `<span class="bar"><i style="width:${pct}%"></i></span><span class="muted">${s.done} / ${s.total} · ${(s.results || []).length} found${s.running ? '' : ' · done'}</span>` : ''}</div>
-    <p class="muted" style="margin-top:-4px">The scan runs on the team server's host, inside the lab: it sees the lab networks even when you are away. Nothing logs in. Up to 1,024 addresses (a /22).</p>
-    ${s ? `<div class="tool"><label><input type="checkbox" id="onlynet" ${onlyNet ? 'checked' : ''}> Network devices only (switches, routers, firewalls, access points, unknown devices with SSH or Telnet)</label>
-      <span class="sp"></span>${ssel.size ? `Add <b>${ssel.size}</b> to folder <input id="sf" list="fl" placeholder="(the team folder)" style="width:200px"><datalist id="fl">${folders().map(f => `<option value="${esc(f)}">`).join('')}</datalist>
-      <button class="p" id="sadd">Add to Inventory</button>` : '<span class="muted">Tick devices to add them</span>'}</div>
-    <table><tr><th style="width:28px"></th><th>Device</th><th>Address</th><th>Kind</th><th>Vendor / system</th><th>Services</th><th>Device type</th></tr>
-    ${res.map(r => { const inTeam = s.inTeam && s.inTeam[r.ip]; return `<tr><td>${inTeam ? '' : `<input type="checkbox" data-ssel="${esc(r.ip)}" ${ssel.has(r.ip) ? 'checked' : ''}>`}</td>
-      <td>${esc(r.name)}${inTeam ? ` <span class="pill in">in inventory as ${esc(inTeam)}</span>` : ''}</td><td class="mono">${esc(r.ip)}<div class="muted">${esc(r.mac)}</div></td><td>${esc(r.kind)}</td>
-      <td>${esc([r.vendor, r.sysDescr || r.os].filter(Boolean).join(' · ').slice(0, 140))}</td><td>${esc((r.services || []).join(' '))}</td>
-      <td><input data-dt="${esc(r.ip)}" value="${esc(dtOf(r))}" style="width:120px"></td></tr>`; }).join('')}</table>` : ''}`;
+function scanRows() {
+  if (!scan) return [];
+  return (scan.results || []).filter(r => !r.self && (!ui.onlyNet || isNet(r)) && (!ui.hideKnown || !(scan.inTeam || {})[r.ip]));
 }
-const dts = {};
-function dtOf(r) { return dts[r.ip] ?? (r.platform || ''); }
+function discover() {
+  const s = scan, res = scanRows(), pct = s && s.total ? Math.round(100 * s.done / s.total) : 0;
+  const pickable = res.filter(r => !(s.inTeam || {})[r.ip]), allOn = pickable.length && pickable.every(r => ui.ssel.has(r.ip));
+  const known = s ? (s.results || []).filter(r => (s.inTeam || {})[r.ip]).length : 0;
+  return `<h1>Discover</h1><p class="lead">Scan a lab network <b>from the team server's host</b> - it sees the lab networks also when you are away on VPN. Nothing logs in. Up to 1,024 addresses (a /22).</p>
+  <div class="card"><div class="tool"><input data-k="targets" class="mono" style="min-width:300px" placeholder="10.127.36.0/24 · 10.127.36.10-80 · addresses" value="${esc(ui.targets || (s ? s.targets : ''))}">
+    <input data-k="community" placeholder="SNMP community (optional)" value="${esc(ui.community)}" style="width:210px">
+    <button class="p" id="scan" ${s && s.running ? 'disabled' : ''}>Scan</button>${s && s.running ? '<button id="stop">Stop</button>' : ''}
+    ${s ? `<span class="bar"><i style="width:${pct}%"></i></span><span class="muted">${s.done} / ${s.total} · ${(s.results || []).length} found${s.running ? '…' : ' · done'}</span>` : ''}</div>
+  ${s ? `<div class="tool"><label><input type="checkbox" id="onlynet" ${ui.onlyNet ? 'checked' : ''}> Network devices only</label>
+      <label><input type="checkbox" id="hideknown" ${ui.hideKnown ? 'checked' : ''}> Hide the ${known} already in the inventory</label><span class="sp"></span>
+      ${ui.ssel.size ? `Add <b>${ui.ssel.size}</b> to folder` : '<span class="muted">Tick devices, then add them to a folder</span>'}
+      <input data-k="scanFolder" list="fl" placeholder="(the team folder)" value="${esc(ui.scanFolder)}" style="width:220px">${folderList('fl')}
+      <button class="p" id="sadd" ${ui.ssel.size ? '' : 'disabled'}>Add to Inventory</button></div>
+    <div class="scroll"><table><thead><tr><th class="c"><input type="checkbox" id="sall" ${allOn ? 'checked' : ''} title="Select all shown"></th><th>Device</th><th>Address</th><th>Kind</th><th>Vendor / system</th><th>Services</th><th>Device type</th></tr></thead><tbody>
+    ${res.length ? res.map(r => { const inTeam = (s.inTeam || {})[r.ip]; return `<tr><td class="c">${inTeam ? '' : `<input type="checkbox" data-ssel="${esc(r.ip)}" ${ui.ssel.has(r.ip) ? 'checked' : ''}>`}</td>
+      <td>${esc(r.name)}${inTeam ? ` <span class="pill in">in inventory${inTeam !== r.name && inTeam !== r.ip ? ' as ' + esc(inTeam) : ''}</span>` : ''}</td><td class="mono">${esc(r.ip)}<div class="muted small">${esc(r.mac)}</div></td><td>${esc(r.kind)}</td>
+      <td>${esc([r.vendor, r.platform || r.os].filter(Boolean).join(' · ').slice(0, 120))}</td><td class="small">${esc((r.services || []).join(' '))}</td>
+      <td><input data-k="dt:${esc(r.ip)}" value="${esc(dtOf(r))}" style="width:130px" ${inTeam ? 'disabled' : ''}></td></tr>`; }).join('')
+      : `<tr><td colspan="7" class="empty">${s.running ? 'Scanning…' : 'Nothing to show' + (known ? ' - untick “Hide … already in the inventory” to see them' : '')}.</td></tr>`}</tbody></table></div>` : ''}</div>`;
+}
+function dtOf(r) { return ui.dts[r.ip] ?? (r.platform || ''); }
 
-// ---- members ----
+// ---------- members ----------
 function members() {
   const t = st.team, mine = t.role;
-  return `<div class="tool"><span>Invite</span><input class="mono" readonly value="${esc(st.invite)}" style="flex:1;min-width:300px" id="inv"><button id="cp">Copy</button><button id="rot">New Invite</button></div>
-    <p class="muted" style="margin-top:-4px">Send the invite by chat or e-mail; people join in Termwright with Options → Teams… → Join a Team…. A new invite stops the old one - members who joined stay.</p>
-    <table><tr><th>Name</th><th>Computer</th><th>Role</th><th>Last seen</th><th></th></tr>
+  return `<h1>Members</h1><p class="lead">Everyone in ${esc(t.name)}. People join in Termwright with the invite: Options → Teams… → Join a Team….</p>
+  <div class="card"><h3>Invite</h3><div class="tool" style="border:0"><input class="mono" readonly value="${esc(st.invite)}" style="flex:1;min-width:300px" id="inv"><button id="cp">Copy</button><button id="rot">New Invite</button></div>
+    <p class="pad muted small" style="margin:0;padding-top:0">Send it by chat or e-mail. A new invite stops the old one; members who joined stay.</p></div>
+  <div class="card"><table><thead><tr><th>Name</th><th>Computer</th><th>Role</th><th>Last seen</th><th></th></tr></thead><tbody>
     ${t.members.map(m => { const can = m.id !== st.me && m.role !== 'owner' && (mine === 'owner' || m.role === 'member');
-      return `<tr><td>${esc(m.name)}${m.id === st.me ? ' <span class="muted">(you)</span>' : ''}</td><td class="mono muted">${esc(m.user)}@${esc(m.machine)}</td>
-      <td><span class="pill">${({ owner: 'Owner', 'co-owner': 'Co-owner', member: 'Member' })[m.role]}</span></td><td>${m.online ? '<span class="ok">online</span>' : `<span class="muted">${ago(m.lastSeen)}${m.lastSeen ? ' ago' : ''}</span>`}</td>
-      <td>${can ? `<a data-role="${m.id}" data-to="${m.role === 'member' ? 'co-owner' : 'member'}">${m.role === 'member' ? 'Make co-owner' : 'Make member'}</a><a class="d" data-rm="${m.id}" data-n="${esc(m.name)}">Remove</a>` : ''}</td></tr>`; }).join('')}</table>`;
+      return `<tr><td><span class="dot ${m.online ? '' : 'off'}"></span>${esc(m.name)}${m.id === st.me ? ' <span class="muted">(you)</span>' : ''}</td><td class="mono muted">${esc(m.user)}@${esc(m.machine)}</td>
+      <td><span class="pill ${m.role !== 'member' ? 'in' : ''}">${({ owner: 'Owner', 'co-owner': 'Co-owner', member: 'Member' })[m.role]}</span></td><td>${m.online ? '<span class="pill ok">online</span>' : `<span class="muted">${m.lastSeen ? ago(m.lastSeen) + ' ago' : ''}</span>`}</td>
+      <td style="text-align:right">${can ? `<a data-role="${m.id}" data-to="${m.role === 'member' ? 'co-owner' : 'member'}">${m.role === 'member' ? 'Make co-owner' : 'Make member'}</a><a class="d" data-rm="${m.id}" data-n="${esc(m.name)}">Remove</a>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
-function activity() {
-  if (!st.activity.length) return `<div class="empty">Nothing yet.</div>`;
-  return `<table><tr><th style="width:170px">When</th><th style="width:200px">Who</th><th>What</th></tr>${st.activity.map(a => `<tr><td class="muted">${esc(new Date(a.at).toLocaleString())}</td><td>${esc(a.who)}</td><td>${esc(a.what)}</td></tr>`).join('')}</table>`;
+function actTable(list) {
+  if (!list.length) return '<div class="empty">Nothing yet.</div>';
+  return `<table><thead><tr><th style="width:190px">When</th><th style="width:200px">Who</th><th>What</th></tr></thead><tbody>${list.map(a => `<tr><td class="muted">${esc(new Date(a.at).toLocaleString())}</td><td>${esc(a.who)}</td><td>${esc(a.what)}</td></tr>`).join('')}</tbody></table>`;
 }
+function activity() { return `<h1>Activity</h1><p class="lead">Who added, changed, approved, reserved and removed what - the last 500 events.</p><div class="card"><div class="scroll">${actTable(st.activity)}</div></div>`; }
+
+// ---------- help & about ----------
+function help() {
+  const t = st.team;
+  return `<h1>Help & About</h1><p class="lead">Termwright is an open-source terminal and session manager for network and infrastructure teams. This team server lets a team share its lab.</p>
+  <div class="grid2">
+  <div class="card"><h3>How it works</h3><div class="pad"><ol class="steps">
+    <li><b>One server per team.</b> An owner sets it up from Termwright (Options → Teams… → Set Up a Team Server…): a small container on a lab host. No cloud, no company-wide admin.</li>
+    <li><b>Members join with the invite.</b> Termwright talks only to this server - it checks its certificate fingerprint, which is in the invite.</li>
+    <li><b>The inventory is shared.</b> Its devices appear in every member's Session Manager as the folder <i>${esc(t.name)}</i> and follow changes within seconds.</li>
+    <li><b>Logins stay personal.</b> Usernames, passwords, keys and terminal output never reach the server.</li>
+    <li><b>Members push, owners approve.</b> Right-click a session in Termwright → Push to Team…; devices the team has already are recognised by address or MAC whatever their name.</li>
+    <li><b>Who uses what.</b> Termwright reports which of the team's network devices it has open (switches, routers, firewalls, access points - not computers, phones, printers or IoT boards), and members reserve devices with a note.</li>
+  </ol></div></div>
+  <div class="card help"><h3>Roles</h3><div class="pad">
+    <p><b>Owner</b> - set the server up; everything here, and can manage co-owners.<br><b>Co-owner</b> - this admin page: inventory, approvals, scans, invite, members.<br><b>Member</b> - sees the team folder, pushes devices for approval, reserves devices.</p>
+    <h4>Signing in</h4><p>Only from Termwright (Teams → Open Admin Page): a link that works once, for two minutes, then a browser session of eight hours. There are no passwords on the server.</p>
+    <h4>The certificate warning</h4><p>The server makes its own certificate; browsers ask once whether to trust it. Termwright itself checks it by fingerprint.</p>
+    <h4>Lost the team in Termwright?</h4><p>Set Up a Team Server… again with the same host and team name reconnects you as the owner; members, inventory and invite stay.</p></div></div>
+  </div>
+  <div class="card"><h3>About</h3><div class="pad kv">
+    <span>Team</span><b>${esc(t.name)}</b><span>Server version</span><span class="mono" style="color:var(--text)">${esc(t.version)}</span>
+    <span>Address</span><span class="mono" style="color:var(--text)">${esc(location.host)}</span><span>Licence</span><span style="color:var(--text)">Apache-2.0, open source</span>
+    <span>Guide</span><a href="https://github.com/nperiannan/termwright/blob/main/docs/TEAM_SERVER.md" target="_blank" rel="noopener" style="color:var(--accent)">Team server guide</a>
+    <span>Project</span><a href="https://github.com/nperiannan/termwright" target="_blank" rel="noopener" style="color:var(--accent)">github.com/nperiannan/termwright</a></div></div>`;
+}
+const PAGES = { overview, inventory, approvals, discover, members, activity, help };
 
 function wire() {
-  const on = (sel, ev, fn) => document.querySelectorAll(sel).forEach(e => e[ev] = fn);
-  on('#flt', 'oninput', e => { filter = e.target.value; const p = e.target.selectionStart; render(); const f = $('#flt'); f.focus(); f.setSelectionRange(p, p); });
+  const on = (sel, ev, fn) => $$(sel).forEach(e => e[ev] = fn);
+  on('[data-go]', 'onclick', e => go(e.currentTarget.dataset.go));
+  on('#out', 'onclick', async () => { await api('POST', '/api/admin/signout').catch(() => {}); gate('Signed out.'); });
+  // typed values live in ui, so refreshes keep them
+  on('[data-k]', 'oninput', e => { const k = e.target.dataset.k; if (k.startsWith('dt:')) ui.dts[k.slice(3)] = e.target.value; else ui[k] = e.target.value; if (k === 'filter') render(); });
+  on('[data-rel]', 'onclick', e => { if (confirm('Release this reservation? Its member gets a notice.')) act(() => api('POST', '/api/release', { id: e.target.dataset.rel }), 'Released'); });
+  // inventory
   on('#add', 'onclick', () => deviceForm({ protocol: 'SSH2' }, 'New device', d => act(() => api('POST', '/api/admin/devices', { devices: [d] }), 'Added ' + d.name)));
-  on('#addf', 'onclick', () => ask('New folder', 'Folder', '', f => f && act(() => api('POST', '/api/admin/folders', { folder: f }))));
+  on('#addf', 'onclick', () => ask('New folder', 'Folder', '', f => f && act(() => api('POST', '/api/admin/folders', { folder: f })), true));
   on('#imp', 'onclick', () => $('#csv').click());
   on('#csv', 'onchange', e => e.target.files[0] && importCSV(e.target.files[0]));
   on('#exp', 'onclick', exportCSV);
-  on('[data-fold]', 'onclick', e => { if (e.target.closest('a')) return; const f = e.currentTarget.dataset.fold; closed.has(f) ? closed.delete(f) : closed.add(f); render(); });
+  on('[data-fold]', 'onclick', e => { if (e.target.closest('a,input')) return; const f = e.currentTarget.dataset.fold; ui.closed.has(f) ? ui.closed.delete(f) : ui.closed.add(f); render(); });
   on('[data-rf]', 'onclick', e => { const f = e.target.dataset.rf; ask('Rename folder', 'New name', f, to => to && to !== f && act(() => api('POST', '/api/admin/folders', { from: f, folder: to }))); });
   on('[data-df]', 'onclick', e => act(() => api('POST', '/api/admin/folders', { from: e.target.dataset.df })));
-  on('[data-sel]', 'onchange', e => { e.target.checked ? sel.add(e.target.dataset.sel) : sel.delete(e.target.dataset.sel); render(); });
+  on('#all', 'onchange', e => { visibleDevices().forEach(d => e.target.checked ? ui.sel.add(d.id) : ui.sel.delete(d.id)); render(); });
+  on('[data-fsel]', 'onchange', e => { const f = e.target.dataset.fsel; visibleDevices().filter(d => d.folder === f).forEach(d => e.target.checked ? ui.sel.add(d.id) : ui.sel.delete(d.id)); render(); });
+  on('[data-sel]', 'onchange', e => { e.target.checked ? ui.sel.add(e.target.dataset.sel) : ui.sel.delete(e.target.dataset.sel); render(); });
+  on('#clr', 'onclick', () => { ui.sel.clear(); render(); });
   on('[data-edit]', 'onclick', e => { const d = st.inventory.devices.find(x => x.id === e.target.dataset.edit); deviceForm(d, 'Edit ' + d.name, v => act(() => api('POST', '/api/admin/devices', { devices: [v] }), 'Saved ' + v.name)); });
   on('[data-del]', 'onclick', e => { const d = st.inventory.devices.find(x => x.id === e.target.dataset.del); if (confirm(`Delete ${d.name} from the team inventory? It disappears from every member's team folder.`)) act(() => api('POST', '/api/admin/devices/delete', { ids: [d.id] }), 'Deleted ' + d.name); });
-  on('#delsel', 'onclick', () => { if (confirm(`Delete ${sel.size} devices from the team inventory? They disappear from every member's team folder.`)) act(() => api('POST', '/api/admin/devices/delete', { ids: [...sel] }).then(r => { sel.clear(); return r; }), r => `Deleted ${r.deleted} devices`); });
-  on('#mv', 'onclick', () => ask('Move ' + sel.size + ' devices', 'To folder', '', f => act(() => api('POST', '/api/admin/devices', { devices: st.inventory.devices.filter(d => sel.has(d.id)).map(d => ({ ...d, folder: f })) }).then(r => { sel.clear(); return r; }), 'Moved')));
-  on('[data-psel]', 'onchange', e => { e.target.checked ? psel.add(e.target.dataset.psel) : psel.delete(e.target.dataset.psel); render(); });
-  on('#pall', 'onchange', e => { st.pending.forEach(p => e.target.checked ? psel.add(p.id) : psel.delete(p.id)); render(); });
-  const decide = ok => { const f = $('#pf').value.trim(); const body = { ids: [...psel] }; if (f) body.folder = f;
-    act(() => api('POST', ok ? '/api/admin/pending/approve' : '/api/admin/pending/reject', body).then(r => { psel.clear(); return r; }), r => ok ? `Approved ${r.done}` + (r.alreadyThere ? ` (${r.alreadyThere} were in the inventory already)` : '') : `Rejected ${r.done}`); };
+  on('#delsel', 'onclick', () => { if (confirm(`Delete ${ui.sel.size} devices from the team inventory? They disappear from every member's team folder.`)) act(() => api('POST', '/api/admin/devices/delete', { ids: [...ui.sel] }).then(r => { ui.sel.clear(); return r; }), r => `Deleted ${r.deleted} devices`); });
+  on('#mv', 'onclick', () => ask('Move ' + ui.sel.size + ' devices', 'To folder', '', f => act(() => api('POST', '/api/admin/devices', { devices: st.inventory.devices.filter(d => ui.sel.has(d.id)).map(d => ({ ...d, folder: f })) }).then(r => { ui.sel.clear(); return r; }), 'Moved'), true));
+  // approvals
+  on('[data-psel]', 'onchange', e => { e.target.checked ? ui.psel.add(e.target.dataset.psel) : ui.psel.delete(e.target.dataset.psel); render(); });
+  on('#pall', 'onchange', e => { st.pending.forEach(p => e.target.checked ? ui.psel.add(p.id) : ui.psel.delete(p.id)); render(); });
+  const decide = ok => { const body = { ids: [...ui.psel] }; if (ui.approveFolder.trim()) body.folder = ui.approveFolder.trim();
+    act(() => api('POST', ok ? '/api/admin/pending/approve' : '/api/admin/pending/reject', body).then(r => { ui.psel.clear(); return r; }), r => ok ? `Approved ${r.done}` + (r.alreadyThere ? ` (${r.alreadyThere} were in the inventory already)` : '') : `Rejected ${r.done}`); };
   on('#apr', 'onclick', () => decide(true)); on('#rej', 'onclick', () => decide(false));
-  on('#scan', 'onclick', async () => { ssel.clear(); try { await api('POST', '/api/admin/scan', { targets: $('#tg').value, community: $('#cm').value }); poll(); } catch (e) { flash(e.message, true); } });
+  // discover
+  on('#scan', 'onclick', async () => { ui.ssel.clear(); ui.dts = {}; try { await api('POST', '/api/admin/scan', { targets: ui.targets || (scan ? scan.targets : ''), community: ui.community }); poll(); } catch (e) { flash(e.message, true); } });
   on('#stop', 'onclick', () => api('POST', '/api/admin/scan/stop').catch(() => {}));
-  on('#onlynet', 'onchange', e => { onlyNet = e.target.checked; render(); });
-  on('[data-ssel]', 'onchange', e => { e.target.checked ? ssel.add(e.target.dataset.ssel) : ssel.delete(e.target.dataset.ssel); render(); });
-  on('[data-dt]', 'oninput', e => { dts[e.target.dataset.dt] = e.target.value; });
-  on('#sadd', 'onclick', () => { const f = $('#sf').value.trim();
-    const devices = scan.results.filter(r => ssel.has(r.ip)).map(r => ({ name: r.name || r.ip, folder: f, host: r.ip, port: r.port || 0, protocol: r.protocol || 'SSH2', deviceType: dtOf(r), mac: r.mac,
+  on('#onlynet', 'onchange', e => { ui.onlyNet = e.target.checked; render(); });
+  on('#hideknown', 'onchange', e => { ui.hideKnown = e.target.checked; render(); });
+  on('#sall', 'onchange', e => { scanRows().filter(r => !(scan.inTeam || {})[r.ip]).forEach(r => e.target.checked ? ui.ssel.add(r.ip) : ui.ssel.delete(r.ip)); render(); });
+  on('[data-ssel]', 'onchange', e => { e.target.checked ? ui.ssel.add(e.target.dataset.ssel) : ui.ssel.delete(e.target.dataset.ssel); render(); });
+  on('#sadd', 'onclick', () => {
+    const devices = scan.results.filter(r => ui.ssel.has(r.ip)).map(r => ({ name: r.name || r.ip, folder: ui.scanFolder.trim(), host: r.ip, port: r.port || 0, protocol: r.protocol || 'SSH2', deviceType: dtOf(r), mac: r.mac,
       description: [r.vendor, r.platform].filter(Boolean).join(' ') }));
-    act(() => api('POST', '/api/admin/devices', { devices }).then(async r => { ssel.clear(); scan = await api('GET', '/api/admin/scan'); return r; }), r => `Added ${r.added}` + (r.skipped ? `, ${r.skipped} were in the inventory already` : '')); });
+    act(() => api('POST', '/api/admin/devices', { devices }).then(async r => { ui.ssel.clear(); scan = await api('GET', '/api/admin/scan'); return r; }), r => `Added ${r.added}` + (r.skipped ? `, ${r.skipped} were in the inventory already` : '')); });
+  // members
   on('#cp', 'onclick', () => { navigator.clipboard?.writeText(st.invite).then(() => flash('Copied the invite'), () => { $('#inv').select(); document.execCommand('copy'); }); });
   on('#rot', 'onclick', () => { if (confirm('Make a new invite? The old one stops working; members who joined stay.')) act(() => api('POST', '/api/invite/rotate', {}), 'New invite made'); });
   on('[data-role]', 'onclick', e => act(() => api('POST', '/api/members/role', { id: e.target.dataset.role, role: e.target.dataset.to })));
@@ -257,8 +381,8 @@ function wire() {
 }
 async function poll() {
   try { scan = await api('GET', '/api/admin/scan'); } catch {}
-  if (tab === 'discover' && !$('#dlg').open) { const a = document.activeElement, id = a && a.id, ds = a && a.dataset && a.dataset.dt; render(); if (id) $('#' + id)?.focus(); else if (ds) document.querySelector(`[data-dt="${CSS.escape(ds)}"]`)?.focus(); }
-  if (scan && scan.running) setTimeout(poll, 1000);
+  if (ui.page === 'discover' && !$('#dlg').open) render();
+  if (scan && scan.running) setTimeout(poll, 1200);
 }
 start();
 </script>

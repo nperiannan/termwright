@@ -16,6 +16,9 @@ import (
 //go:embed admin.html
 var adminHTML []byte
 
+//go:embed icon.svg
+var iconSVG []byte
+
 const (
 	linkFor    = 2 * time.Minute
 	sessionFor = 8 * time.Hour
@@ -106,6 +109,12 @@ func (s *Server) adminSignOut(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
 	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+func (s *Server) adminIcon(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "max-age=86400")
+	_, _ = w.Write(iconSVG)
 }
 
 func (s *Server) adminPage(w http.ResponseWriter, _ *http.Request) {

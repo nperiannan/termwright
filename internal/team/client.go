@@ -205,3 +205,44 @@ func (c *Client) AdminLink(ctx context.Context) (string, error) {
 func (c *Client) SaveDevices(ctx context.Context, d []Device) error {
 	return c.call(ctx, http.MethodPost, "/api/admin/devices", devicesBody{Devices: d}, nil)
 }
+
+// Presence tells the server which of the team's devices this member has open now.
+func (c *Client) Presence(ctx context.Context, d []DeviceRef) error {
+	if d == nil {
+		d = []DeviceRef{}
+	}
+	return c.call(ctx, http.MethodPost, "/api/presence", map[string]any{"devices": d}, nil)
+}
+
+// Status is who uses and reserved which devices; with wait > 0 the server
+// answers when it is newer than rev (or a notice waits), or after wait seconds.
+func (c *Client) Status(ctx context.Context, rev int64, wait int) (Status, error) {
+	var v Status
+	cl := c
+	if wait > 0 {
+		cp := *c
+		hc := *c.hc
+		hc.Timeout = time.Duration(wait+20) * time.Second
+		cp.hc = &hc
+		cl = &cp
+	}
+	err := cl.call(ctx, http.MethodGet, fmt.Sprintf("/api/status?rev=%d&wait=%d", rev, wait), nil, &v)
+	return v, err
+}
+
+// Reserve keeps a device until a time, with a note.
+func (c *Client) Reserve(ctx context.Context, d DeviceRef, until time.Time, note string) (Reservation, error) {
+	var v Reservation
+	err := c.call(ctx, http.MethodPost, "/api/reserve", map[string]any{"device": d, "until": until.UTC().Format(time.RFC3339), "note": note}, &v)
+	return v, err
+}
+
+// Release ends a reservation.
+func (c *Client) Release(ctx context.Context, id string) error {
+	return c.call(ctx, http.MethodPost, "/api/release", MemberRef{ID: id}, nil)
+}
+
+// Connected tells the member who reserved a device that this member connected to it.
+func (c *Client) Connected(ctx context.Context, d DeviceRef) error {
+	return c.call(ctx, http.MethodPost, "/api/connected", map[string]any{"device": d}, nil)
+}

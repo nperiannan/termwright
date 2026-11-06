@@ -92,3 +92,9 @@
   .sm-foot { display: flex; gap: 6px; padding: 10px 10px; border-top: 1px solid var(--line);
     button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 30px; padding: 0 8px; border-radius: var(--r); } }
 }
+
+.tbadge { flex: none; margin: 0 2px 0 6px; font-size: 10.5px; line-height: 15px; padding: 0 7px; border-radius: 8px; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.tbadge.use { background: color-mix(in srgb, #f59e0b 18%, transparent); color: #f0bd5a; }
+.tbadge.res { background: color-mix(in srgb, #ef4444 18%, transparent); color: #f87171; }
+.tbadge.me { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+:root.light .tbadge.use { color: #b45309; } :root.light .tbadge.res { color: #dc2626; }

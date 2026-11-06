@@ -36,16 +36,17 @@ type memberRec struct {
 
 // state is what the server keeps in team.json.
 type state struct {
-	Name          string       `json:"name"`
-	Created       string       `json:"created"`
-	Invite        string       `json:"invite"`
-	OwnerCodeHash string       `json:"ownerCodeHash,omitempty"` // until the owner joins
-	Members       []*memberRec `json:"members"`
-	Rev           int64        `json:"rev"` // inventory revision: grows with every change
-	Inventory     []*Device    `json:"inventory"`
-	Folders       []string     `json:"folders,omitempty"`  // folders made on the admin page, also when empty
-	Pending       []*Pending   `json:"pending,omitempty"`  // devices members pushed, waiting for approval
-	Activity      []Activity   `json:"activity,omitempty"` // newest last, at most maxActivity
+	Name          string         `json:"name"`
+	Created       string         `json:"created"`
+	Invite        string         `json:"invite"`
+	OwnerCodeHash string         `json:"ownerCodeHash,omitempty"` // until the owner joins
+	Members       []*memberRec   `json:"members"`
+	Rev           int64          `json:"rev"` // inventory revision: grows with every change
+	Inventory     []*Device      `json:"inventory"`
+	Folders       []string       `json:"folders,omitempty"`  // folders made on the admin page, also when empty
+	Pending       []*Pending     `json:"pending,omitempty"`  // devices members pushed, waiting for approval
+	Activity      []Activity     `json:"activity,omitempty"` // newest last, at most maxActivity
+	Reservations  []*Reservation `json:"reservations,omitempty"`
 }
 
 // Server is a team server. Its data (team.json, the certificate and key) is in Dir.
@@ -66,6 +67,11 @@ type Server struct {
 	links    map[string]linkCode     // admin sign-in codes
 	sessions map[string]adminSession // admin page cookies
 	scan     *scanState
+
+	presence  map[string]*presenceRec // member id → the devices it has open (not saved)
+	notes     map[string][]Note       // member id → notices waiting for it
+	statusRev int64
+	statusCh  chan struct{} // closed and replaced when the status changes
 }
 
 // Open loads the team in dir, or makes a new one named name: a certificate, an
@@ -76,7 +82,8 @@ func Open(dir, name, version string, logger *log.Logger) (*Server, string, error
 		logger = log.New(io.Discard, "", 0)
 	}
 	s := &Server{Dir: dir, Version: version, Log: logger, seen: map[string]time.Time{}, fails: map[string]time.Time{}, now: time.Now,
-		changed: make(chan struct{}), links: map[string]linkCode{}, sessions: map[string]adminSession{}}
+		changed: make(chan struct{}), links: map[string]linkCode{}, sessions: map[string]adminSession{},
+		presence: map[string]*presenceRec{}, notes: map[string][]Note{}, statusCh: make(chan struct{})}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, "", err
 	}

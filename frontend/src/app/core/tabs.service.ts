@@ -1,4 +1,4 @@
-import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, Injector } from '@angular/core';
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
@@ -7,6 +7,7 @@ import { Backend, SftpMode, errText } from './backend';
 import { RemoteKind, RemoteTarget, connectionsCommand, machineOf, nodeAt, parseConnections, sshPathFor } from './remote-guard';
 import { AlertEvent, DeviceFacts, RemoteInfo, Session, TabInfo, Transfer, isRemoteDesktop, unescape } from './models';
 import { Ui } from './ui.service';
+import { TeamStatusService } from './team-status.service';
 import { Wol } from './wol.service';
 import { envOf, envProtected } from './env';
 import { HtmlKeyword, bufferHtml } from './buffer-html';
@@ -72,6 +73,7 @@ export interface TermHandle { term: Terminal; fit: FitAddon; search: SearchAddon
 /** Owns the list of open terminal tabs and routes actions to them. */
 @Injectable({ providedIn: 'root' })
 export class Tabs {
+  private injector = inject(Injector);
   private backend = inject(Backend);
   private ui = inject(Ui);
   private wol = inject(Wol);
@@ -587,6 +589,7 @@ export class Tabs {
       const node = this.ui.findNode(path);
       if (isRemoteDesktop(node?.protocol)) { await this.openRemote(path, null); return; }
       if (node?.protocol === 'WOL') { await this.wol.wake(await this.backend.getSession(path)); return; }
+      if ((this.ui.settings()?.teams ?? []).length && node && !(await this.injector.get(TeamStatusService).allowConnect(node))) return; // reserved by someone else
       if (as !== 'terminal') {
         const s = await this.backend.getSession(path);
         if (as === 'sftp' || (s.protocol === 'SSH2' && s.openAs === 'sftp')) {

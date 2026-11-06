@@ -12,7 +12,9 @@ Teams are **optional**. Without one, Termwright works exactly as before and send
 
 - Who is who: the name each person chose, their user name and computer name.
 - The **team inventory**: the lab's devices - name, folder, address, port, protocol, device type, MAC address and description.
-- Coming next: which network devices someone has open, and reservations with their note and end time (switches, routers and the like - not computers, phones, printers or IoT boards, which take several logins at once).
+- Which network devices someone has open, and reservations with their note and end time (switches, routers, firewalls, access points and the like - not computers, Linux machines, phones, printers or IoT boards, which take several logins at once).
+
+**In use and reserved.** In the Session Manager a team device someone else has open shows ● with their initials, a reserved one 🔒 (hover for name, time and note; the start page cards show names). Right-click → **Reserve…** keeps a device until a time with a note; **Release Reservation** ends it (owners and co-owners can release anyone's). Connecting to a device someone else reserved asks first and sends them a notice. A laptop that sleeps or closes drops out of *in use* within about a minute and a half.
 
 Passwords, usernames, keys, session files and terminal output are **never** sent: everyone logs in to the team's devices with their own login, kept on their own computer.
 
@@ -85,7 +87,7 @@ The key that proves your membership is kept in the system keychain, not in `sett
 |---|---|
 | **Owner** (who set the server up) | everything: the admin page, the inventory and approvals, the invite, co-owners, remove anyone |
 | **Co-owner** | the admin page, the inventory and approvals, the invite, make members co-owners, remove members |
-| **Member** | see the team and its inventory; push devices for approval; reserve devices (next) |
+| **Member** | see the team and its inventory; push devices for approval; reserve devices |
 
 **New Invite** stops the old invite; members who already joined stay in the team. A removed member is out at once and needs a new invite to come back. The owner can leave only when nobody else is in the team.
 

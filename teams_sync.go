@@ -43,6 +43,8 @@ func (a *App) startTeamSync() {
 			ctx, cancel := context.WithCancel(context.Background())
 			teamSyncs[t.ID] = cancel
 			go a.teamSyncLoop(ctx, t.ID)
+			go a.teamStatusLoop(ctx, t.ID)
+			go a.teamHeartbeat(ctx, t.ID)
 		}
 	}
 	for id, cancel := range teamSyncs {
@@ -85,6 +87,8 @@ func (a *App) teamSyncLoop(ctx context.Context, id string) {
 		}
 		backoff = 5 * time.Second
 		if inv.Rev != rev {
+			teamInvs.Store(id, inv)
+			go a.sendPresence(id, false) // devices open now that just came into the inventory
 			if err := a.applyInventory(id, inv); err == nil {
 				rev = inv.Rev
 			} else {

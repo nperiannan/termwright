@@ -176,6 +176,7 @@ func (s *Server) pendingOf(d *Device) *Pending {
 
 func (s *Server) inventoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/inventory", s.getInventory)
+	s.statusRoutes(mux)
 	mux.HandleFunc("POST /api/inventory/check", s.auth(s.check))
 	mux.HandleFunc("POST /api/inventory/push", s.auth(s.push))
 	mux.HandleFunc("GET /api/admin/state", s.auth(s.adminState))
@@ -191,6 +192,7 @@ func (s *Server) inventoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/scan", s.auth(s.scanStatus))
 	mux.HandleFunc("POST /api/admin/scan/stop", s.auth(s.stopScan))
 	mux.HandleFunc("GET /admin", s.adminPage)
+	mux.HandleFunc("GET /admin/icon.svg", s.adminIcon)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin", http.StatusFound)
 	})
@@ -321,6 +323,7 @@ type AdminState struct {
 	Activity  []Activity `json:"activity"`
 	Me        string     `json:"me"`
 	Invite    string     `json:"invite"` // the invite link, with the address the browser used
+	Status    Status     `json:"status"` // who uses and reserved which devices
 }
 
 func (s *Server) adminState(w http.ResponseWriter, r *http.Request, me *memberRec) {
@@ -342,7 +345,10 @@ func (s *Server) adminState(w http.ResponseWriter, r *http.Request, me *memberRe
 		p = []*Pending{}
 	}
 	link := Invitation{Address: r.Host, Key: s.st.Invite, Fingerprint: s.fp, Name: s.st.Name}.String()
-	writeJSON(w, 200, AdminState{Team: t, Inventory: inv, Pending: p, Activity: act, Me: me.ID, Invite: link})
+	s.prune()
+	stat := s.statusFor(me)
+	stat.Notes = []Note{}
+	writeJSON(w, 200, AdminState{Team: t, Inventory: inv, Pending: p, Activity: act, Me: me.ID, Invite: link, Status: stat})
 }
 
 // saveDevices adds or changes devices (an empty id adds).
@@ -666,3 +672,9 @@ func (s *Server) stopScan(w http.ResponseWriter, _ *http.Request, me *memberRec)
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
+
+// SameDevice: the same address and port, or the same MAC address.
+func SameDevice(a, b *Device) bool { return same(a, b) }
+
+// Dev is the device a reference names.
+func (r DeviceRef) Dev() *Device { return r.dev() }
