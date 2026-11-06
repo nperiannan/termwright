@@ -83,6 +83,7 @@ func (s *Server) statusRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/reserve", s.auth(s.reserve))
 	mux.HandleFunc("POST /api/release", s.auth(s.release))
 	mux.HandleFunc("POST /api/connected", s.auth(s.connected))
+	mux.HandleFunc("GET /api/admin/usage", s.auth(s.usageReport))
 }
 
 // wake tells the status long polls that something changed (mu held).
@@ -101,16 +102,19 @@ func (s *Server) prune() {
 	for id, p := range s.presence {
 		if now.Sub(p.at) > presenceFor {
 			delete(s.presence, id)
+			s.endedMember(id, p.at)
 			changed = true
 		}
 	}
 	var keep []*Reservation
 	for _, r := range s.st.Reservations {
 		if t, err := time.Parse(time.RFC3339, r.Until); err == nil && now.After(t) {
+			s.resEnded(r, t)
 			changed = true
 			continue
 		}
 		if _, m := s.find(r.By); m == nil { // the member left
+			s.resEnded(r, now)
 			changed = true
 			continue
 		}
@@ -163,6 +167,7 @@ func (s *Server) setPresence(w http.ResponseWriter, r *http.Request, me *memberR
 	}
 	old := s.presence[me.ID]
 	same := old != nil && refsKey(old.devices) == refsKey(list)
+	s.trackUse(me, list)
 	if len(list) == 0 {
 		delete(s.presence, me.ID)
 	} else {
@@ -331,6 +336,7 @@ func (s *Server) release(w http.ResponseWriter, r *http.Request, me *memberRec) 
 			return
 		}
 		s.st.Reservations = append(s.st.Reservations[:i], s.st.Reservations[i+1:]...)
+		s.resEnded(x, s.now())
 		s.log(me.Name, "released %s (reserved by %s)", nameOf(x.Device), x.Name)
 		if x.By != me.ID {
 			s.note(x.By, "%s released your reservation of %s.", me.Name, nameOf(x.Device))
@@ -358,6 +364,12 @@ func (s *Server) connected(w http.ResponseWriter, r *http.Request, me *memberRec
 	}
 	if x := s.reservationOf(b.Device); x != nil && x.By != me.ID {
 		s.note(x.By, "%s connected to %s, which you reserved.", me.Name, nameOf(x.Device))
+		dev := ""
+		if inv := s.find2(x.Device.dev()); inv != nil {
+			dev = inv.ID
+		}
+		s.usage.Con = append(s.usage.Con, ConRec{Dev: dev, DevName: x.Device.Name, M: me.ID, Name: me.Name, Owner: x.Name, T: s.now().Unix()})
+		s.saveUsage()
 		s.log(me.Name, "connected to %s, reserved by %s", nameOf(x.Device), x.Name)
 		s.wake(false)
 	}

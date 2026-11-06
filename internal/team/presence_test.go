@@ -66,3 +66,37 @@ func TestPresenceReserveAndNotices(t *testing.T) {
 		t.Fatalf("after the heartbeat stopped %+v", z)
 	}
 }
+
+func TestUsageHistory(t *testing.T) {
+	s, code, ts := start(t)
+	ctx := context.Background()
+	anon := NewClient(addr(ts), s.Fingerprint(), "")
+	own, _ := anon.Join(ctx, JoinRequest{OwnerCode: code, Name: "Natarajan"})
+	oc := NewClient(addr(ts), s.Fingerprint(), own.Token)
+	_, _ = oc.Push(ctx, []Device{{Name: "core-sw1", Host: "10.0.0.1", Protocol: "SSH2"}})
+	base := time.Now()
+	s.mu.Lock()
+	s.now = func() time.Time { return base }
+	s.mu.Unlock()
+	_ = oc.Presence(ctx, []DeviceRef{{Host: "10.0.0.1", Protocol: "SSH2"}})
+	_, _ = oc.Reserve(ctx, DeviceRef{Host: "10.0.0.1"}, base.Add(2*time.Hour), "test")
+	s.mu.Lock()
+	s.now = func() time.Time { return base.Add(time.Hour) }
+	s.mu.Unlock()
+	_ = oc.Presence(ctx, nil) // closed the tab after an hour
+	var rep UsageReport
+	if err := oc.call(ctx, "GET", "/api/admin/usage?days=7", nil, &rep); err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Use) != 1 || rep.Use[0].E-rep.Use[0].S != 3600 || rep.Use[0].DevName != "core-sw1" {
+		t.Fatalf("use %+v", rep.Use)
+	}
+	if len(rep.Res) != 1 || !rep.Res[0].Active {
+		t.Fatalf("res %+v", rep.Res)
+	}
+	// the history survives a restart
+	s2, _, _ := Open(s.Dir, "", "test", nil)
+	if len(s2.usage.Use) != 1 {
+		t.Fatalf("after restart %+v", s2.usage)
+	}
+}

@@ -2,63 +2,122 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Termwright Team</title>
 <link rel="icon" href="/admin/icon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem('tw.theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}</script>
 <style>
-:root{--bg:#eef1f5;--side:#f7f8fa;--card:#fff;--card2:#f8f9fb;--text:#18202c;--muted:#667085;--line:#e3e7ee;--accent:#2f7cf6;--accent2:#7c5cf6;--soft:#e9f1ff;--ok:#16a34a;--okbg:#e7f7ec;--bad:#dc2626;--badbg:#fdecec;--warn:#b45309;--warnbg:#fff4e0;
-  --shadow:0 1px 0 rgba(255,255,255,.7) inset,0 1px 2px rgba(16,24,40,.06),0 10px 24px -12px rgba(16,24,40,.18);--r:12px;--mono:Menlo,"SF Mono",Consolas,"DejaVu Sans Mono",monospace}
-@media (prefers-color-scheme:dark){:root{--bg:#0e1014;--side:#14161b;--card:#191c22;--card2:#1e2128;--text:#e8eaef;--muted:#9097a3;--line:#2a2e36;--accent:#5aa9ff;--accent2:#a48bff;--soft:#1c2a3d;--ok:#4ade80;--okbg:#14301f;--bad:#f87171;--badbg:#3a1a1a;--warn:#f0bd5a;--warnbg:#3a2c12;
-  --shadow:0 1px 0 rgba(255,255,255,.05) inset,0 12px 26px -14px rgba(0,0,0,.8)}}
+:root{--bg:#f3f5f8;--side:#fbfcfd;--card:#fff;--card2:#f7f8fa;--text:#141a24;--text2:#3d4655;--muted:#6b7483;--line:#e4e7ec;--line2:#eef0f3;
+  --accent:#2563eb;--accent2:#7c3aed;--soft:#eaf1ff;--seq1:#dbe7fd;--seq2:#9dbcf8;--seq3:#5b8ff0;--seq4:#2563eb;--seq5:#1d3f9e;
+  --ok:#15803d;--okbg:#e7f6ec;--bad:#c62828;--badbg:#fdecec;--warn:#a15c07;--warnbg:#fff3df;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.04);--r:10px;--mono:"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0d0f13;--side:#121419;--card:#171a20;--card2:#1c1f26;--text:#e9ebf0;--text2:#c3c8d2;--muted:#8e95a1;--line:#272b33;--line2:#20242b;
+  --accent:#5b9dff;--accent2:#a78bfa;--soft:#18263a;--seq1:#1a2a44;--seq2:#244a85;--seq3:#3a6fd0;--seq4:#5b9dff;--seq5:#a9cbff;
+  --ok:#4ade80;--okbg:#122a1b;--bad:#f87171;--badbg:#341717;--warn:#f5bd52;--warnbg:#33260f;--shadow:0 1px 0 rgba(255,255,255,.03) inset;color-scheme:dark}}
+:root[data-theme=dark]{--bg:#0d0f13;--side:#121419;--card:#171a20;--card2:#1c1f26;--text:#e9ebf0;--text2:#c3c8d2;--muted:#8e95a1;--line:#272b33;--line2:#20242b;
+  --accent:#5b9dff;--accent2:#a78bfa;--soft:#18263a;--seq1:#1a2a44;--seq2:#244a85;--seq3:#3a6fd0;--seq4:#5b9dff;--seq5:#a9cbff;
+  --ok:#4ade80;--okbg:#122a1b;--bad:#f87171;--badbg:#341717;--warn:#f5bd52;--warnbg:#33260f;--shadow:0 1px 0 rgba(255,255,255,.03) inset;color-scheme:dark}
 *{box-sizing:border-box}html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--text);font:13.5px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
-.app{display:grid;grid-template-columns:232px 1fr;min-height:100%}
-aside{background:var(--side);border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
-.brand{display:flex;gap:10px;align-items:center;padding:4px 8px 16px}.brand img{width:38px;height:38px}
-.brand b{display:block;font-size:15px;letter-spacing:-.01em}.brand span{color:var(--muted);font-size:11.5px}
-.team{margin:0 6px 12px;padding:10px 12px;border-radius:10px;background:var(--card);box-shadow:var(--shadow)}
-.team b{display:block;font-size:14px;word-break:break-word}.team span{color:var(--muted);font-size:11.5px}
-.nav a{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:9px;color:var(--text);cursor:pointer;text-decoration:none;font-weight:500}
-.nav a:hover{background:color-mix(in srgb,var(--text) 6%,transparent)}.nav a.on{background:var(--soft);color:var(--accent)}
-.nav svg{width:17px;height:17px;flex:none;opacity:.85}.badge{margin-left:auto;background:var(--bad);color:#fff;border-radius:9px;padding:0 7px;font-size:11px;font-weight:600}
-.me{margin-top:auto;padding:10px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.me b{color:var(--text);display:block;font-size:13px}.me a{color:var(--accent);cursor:pointer}
-main{padding:24px 30px 60px;min-width:0}
-h1{font-size:22px;margin:0 0 4px;letter-spacing:-.02em}.lead{color:var(--muted);margin:0 0 18px;max-width:900px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:16px}
-.card>h3{margin:0;padding:12px 16px;font-size:13.5px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}.card>h3 .sp{flex:1}
-.pad{padding:14px 16px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:16px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 16px;cursor:pointer}
-.stat b{display:block;font-size:26px;letter-spacing:-.02em}.stat span{color:var(--muted);font-size:12px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:1100px){.grid2{grid-template-columns:1fr}.app{grid-template-columns:1fr}aside{position:static;height:auto}}
-.tool{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}.sp{flex:1}
-button{font:inherit;border:1px solid var(--line);border-radius:8px;padding:6px 13px;background:var(--card2);color:var(--text);cursor:pointer;white-space:nowrap}
+body{margin:0;background:var(--bg);color:var(--text);font:13.5px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100%}
+aside{background:var(--side);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;gap:10px;align-items:center;padding:2px 8px 14px}.brand img{width:34px;height:34px}
+.brand b{display:block;font-size:14.5px;letter-spacing:-.01em}.brand span{color:var(--muted);font-size:11.5px}
+.team{margin:0 4px 14px;padding:10px 12px;border-radius:9px;background:var(--card);border:1px solid var(--line)}
+.team b{display:block;font-size:13.5px;word-break:break-word}.team span{color:var(--muted);font-size:11.5px}
+.grp{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:12px 12px 4px}
+.nav a{display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:7px;color:var(--text2);cursor:pointer;font-weight:500;margin:1px 0}
+.nav a:hover{background:color-mix(in srgb,var(--text) 5%,transparent)}.nav a.on{background:var(--soft);color:var(--accent)}
+.nav svg{width:16px;height:16px;flex:none}.badge{margin-left:auto;background:var(--bad);color:#fff;border-radius:9px;padding:0 7px;font-size:11px;font-weight:600}
+.me{margin-top:auto;padding:12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.me b{color:var(--text);display:block;font-size:13px}.me a{color:var(--accent);cursor:pointer}
+header.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px 28px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+header.top h1{font-size:17px;margin:0;letter-spacing:-.01em}.crumb{color:var(--muted);font-size:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:2px;gap:2px}
+.seg button{border:0;background:transparent;padding:4px 10px;border-radius:6px;color:var(--muted);font-weight:500;display:inline-flex;align-items:center;gap:5px}
+.seg button.on{background:var(--soft);color:var(--accent)}.seg svg{width:14px;height:14px}
+main{padding:22px 28px 60px;min-width:0;max-width:1500px}
+.lead{color:var(--muted);margin:0 0 18px;max-width:980px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:18px;min-width:0}
+.card>h3{margin:0;padding:12px 16px;font-size:13.5px;font-weight:600;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.card>h3 small{font-weight:400;color:var(--muted);font-size:12px}.card>h3 .sp{flex:1}
+.pad{padding:14px 16px}.sp{flex:1}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:14px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 16px;cursor:default;position:relative}
+.kpi[data-go]{cursor:pointer}.kpi[data-go]:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.kpi .l{color:var(--muted);font-size:12px;font-weight:500}.kpi .v{font-size:26px;font-weight:650;letter-spacing:-.02em;margin:2px 0 0;font-variant-numeric:tabular-nums}
+.kpi .v small{font-size:13px;color:var(--muted);font-weight:500;margin-left:3px}.kpi .d{font-size:11.5px;color:var(--muted)}
+.up{color:var(--ok)}.down{color:var(--bad)}
+.g2{display:grid;grid-template-columns:3fr 2fr;gap:18px}.g2b{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:1200px){.g2,.g2b{grid-template-columns:1fr}}@media(max-width:900px){.app{grid-template-columns:1fr}aside{position:static;height:auto}}
+.tool{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:11px 16px;border-bottom:1px solid var(--line)}
+button{font:inherit;border:1px solid var(--line);border-radius:7px;padding:6px 12px;background:var(--card);color:var(--text);cursor:pointer;white-space:nowrap}
 button:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
-button.p{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 88%,#fff),var(--accent));border-color:transparent;color:#fff;font-weight:600}
+button.p{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}button.p:hover{filter:brightness(1.07)}
 button.d{color:var(--bad)}button:disabled{opacity:.45;cursor:default}
-input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--card2);color:var(--text);outline:none}
-input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
-input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);padding:0}
-.mono{font-family:var(--mono);font-size:12.3px}.muted{color:var(--muted)}.small{font-size:12px}
-table{width:100%;border-collapse:collapse}th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:9px 10px;border-bottom:1px solid var(--line);background:var(--card2);position:sticky;top:0}
-td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}tr:last-child td{border-bottom:0}tbody tr:hover td{background:color-mix(in srgb,var(--accent) 4%,transparent)}
-th.c,td.c{width:34px;text-align:center}
-tr.f td{background:var(--card2);font-weight:600;cursor:pointer}td a{color:var(--accent);cursor:pointer;margin-right:10px}td a.d{color:var(--bad)}
-.pill{display:inline-block;font-size:11px;border-radius:10px;padding:1px 8px;background:color-mix(in srgb,var(--text) 8%,transparent);white-space:nowrap;font-weight:500}
+input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:7px;padding:6px 10px;background:var(--card);color:var(--text);outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);padding:0;vertical-align:-2px}
+.mono{font-family:var(--mono);font-size:12.3px}.muted{color:var(--muted)}.small{font-size:12px}.num{text-align:right;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--card2);position:sticky;top:0;white-space:nowrap;z-index:1}
+th[data-sort]{cursor:pointer}th[data-sort]:hover{color:var(--text)}th.num{text-align:right}
+td{padding:8px 12px;border-bottom:1px solid var(--line2);vertical-align:middle}tr:last-child td{border-bottom:0}tbody tr:hover td{background:color-mix(in srgb,var(--accent) 4%,transparent)}
+th.c,td.c{width:36px;text-align:center}
+tr.f td{background:var(--card2);font-weight:600;cursor:pointer}td a,.link{color:var(--accent);cursor:pointer;margin-right:10px;text-decoration:none}td a.d{color:var(--bad)}
+.pill{display:inline-block;font-size:11px;border-radius:10px;padding:1px 8px;background:color-mix(in srgb,var(--text) 7%,transparent);white-space:nowrap;font-weight:500}
 .pill.in{background:var(--soft);color:var(--accent)}.pill.ok{background:var(--okbg);color:var(--ok)}.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.bad{background:var(--badbg);color:var(--bad)}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px}.dot.off{background:var(--muted);opacity:.5}
-.empty{padding:34px;text-align:center;color:var(--muted)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px}.dot.off{background:var(--muted);opacity:.45}
+.empty{padding:30px;text-align:center;color:var(--muted)}
 .msg{position:fixed;right:22px;bottom:22px;max-width:460px;padding:11px 15px;border-radius:10px;background:var(--card);border:1px solid var(--line);box-shadow:0 14px 30px rgba(0,0,0,.18);z-index:20}.msg.err{border-color:var(--bad);color:var(--bad)}
-.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;width:200px}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
-.scroll{max-height:calc(100vh - 290px);overflow:auto}
-dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--text);padding:0;width:min(540px,94vw);box-shadow:0 24px 60px rgba(0,0,0,.3)}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;width:200px}.bar i{display:block;height:100%;background:var(--accent)}
+.meter{display:inline-flex;align-items:center;gap:8px;min-width:120px}.meter span{flex:1;height:6px;border-radius:3px;background:var(--line);overflow:hidden;min-width:60px}.meter i{display:block;height:100%;border-radius:3px;background:var(--seq4)}
+.scroll{max-height:calc(100vh - 300px);overflow:auto}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);padding:0;width:min(540px,94vw);box-shadow:0 24px 60px rgba(0,0,0,.3)}
 dialog::backdrop{background:rgba(10,14,20,.45)}dialog h3{margin:0;padding:14px 18px;border-bottom:1px solid var(--line);font-size:15px}
 dialog .g{display:grid;grid-template-columns:120px 1fr;gap:10px 12px;padding:16px 18px;align-items:center}dialog .ft{display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--line)}
 .steps{counter-reset:s;list-style:none;padding:0;margin:0}.steps li{position:relative;padding:0 0 14px 40px;line-height:1.55}
 .steps li:before{counter-increment:s;content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:var(--soft);color:var(--accent);font-weight:700;display:grid;place-items:center;font-size:12.5px}
-.help h4{margin:16px 0 6px}.help p,.help li{line-height:1.6}.help ul{padding-left:20px;margin:6px 0}
-.gate{max-width:560px;margin:12vh auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px;box-shadow:var(--shadow);line-height:1.6}
-.gate img{width:54px}
-.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px}.kv span{color:var(--muted)}
+.help h4{margin:14px 0 6px}.help p{line-height:1.6;margin:6px 0}
+.gate{max-width:560px;margin:12vh auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px;line-height:1.6}.gate img{width:52px}
+.kv{display:grid;grid-template-columns:160px 1fr;gap:7px 14px}.kv span:nth-child(odd){color:var(--muted)}
+.chart{padding:10px 12px 6px}.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{fill:var(--muted);font-size:10.5px;font-family:inherit}.chart .gl{stroke:var(--line2)}.chart .ax{stroke:var(--line)}
+.chart rect.b{fill:var(--seq4)}.chart rect.b:hover{fill:var(--seq5)}.chart rect.hit{fill:transparent}
+.heat td{padding:0;border:0;height:20px}.heat td.h{width:auto}.heat .lab{font-size:10.5px;color:var(--muted);padding-right:8px;white-space:nowrap;text-align:right;width:40px}
+.heat i{display:block;height:18px;margin:1px;border-radius:3px}
+.legend{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding:6px 12px 12px}.legend i{width:16px;height:10px;border-radius:2px;display:inline-block}
+.ins{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line2)}.ins:last-child{border-bottom:0}
+.ins .ic{flex:none;width:30px;height:30px;border-radius:8px;display:grid;place-items:center}.ins .ic svg{width:16px;height:16px}
+.ins.buy .ic{background:var(--warnbg);color:var(--warn)}.ins.rm .ic{background:var(--soft);color:var(--accent)}.ins.bad .ic{background:var(--badbg);color:var(--bad)}.ins.ok .ic{background:var(--okbg);color:var(--ok)}
+.ins b{display:block}.ins p{margin:2px 0 0;color:var(--text2);line-height:1.5}
+#tip{position:fixed;pointer-events:none;z-index:30;background:var(--text);color:var(--bg);padding:6px 9px;border-radius:7px;font-size:12px;line-height:1.4;display:none;max-width:280px;box-shadow:0 8px 20px rgba(0,0,0,.25)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 12px}.tabs a{padding:10px 12px;color:var(--muted);cursor:pointer;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs a.on{color:var(--accent);border-bottom-color:var(--accent)}
+
+.app{background:linear-gradient(90deg,var(--side) 240px,transparent 240px)}
+.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.chipk{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 14px;box-shadow:var(--shadow);cursor:pointer;min-width:140px}
+.chipk.on{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+.chipk b{font-size:19px;font-variant-numeric:tabular-nums}.chipk span{color:var(--muted);font-size:12px;line-height:1.25}
+.split{display:grid;grid-template-columns:230px 1fr;gap:18px;align-items:start}@media(max-width:1100px){.split{grid-template-columns:1fr}}
+.tree{padding:8px}.tree a{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:7px;color:var(--text2);cursor:pointer;font-size:13px}
+.tree a:hover{background:color-mix(in srgb,var(--text) 5%,transparent)}.tree a.on{background:var(--soft);color:var(--accent);font-weight:600}
+.tree a svg{width:15px;height:15px;flex:none;color:var(--muted)}.tree a.on svg{color:var(--accent)}.tree a .n{margin-left:auto;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.search{position:relative;display:inline-flex;align-items:center}.search svg{position:absolute;left:9px;width:15px;height:15px;color:var(--muted)}.search input{padding-left:30px}
+.dev{display:flex;align-items:center;gap:10px;min-width:0}.dev .di{flex:none;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:#fff}
+.dev .di svg{width:16px;height:16px}.dev b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dev .mono{color:var(--muted);font-size:11.5px}
+.k-switch{background:linear-gradient(135deg,#14b8a6,#0d9488)}.k-router{background:linear-gradient(135deg,#8b5cf6,#6d28d9)}.k-firewall{background:linear-gradient(135deg,#f43f5e,#be123c)}
+.k-wireless{background:linear-gradient(135deg,#ec4899,#be185d)}.k-server{background:linear-gradient(135deg,#64748b,#334155)}.k-other{background:linear-gradient(135deg,#60a5fa,#2563eb)}
+.chips{display:flex;gap:4px;flex-wrap:wrap}.tag{font-size:11px;border:1px solid var(--line);border-radius:6px;padding:0 6px;color:var(--text2);background:var(--card2)}
+tr .acts{opacity:.25;transition:opacity .15s;white-space:nowrap;text-align:right}tr:hover .acts{opacity:1}
+.ib{border:0;background:transparent;padding:5px;border-radius:6px;color:var(--muted)}.ib:hover{background:color-mix(in srgb,var(--text) 7%,transparent);color:var(--text)}.ib.d:hover{color:var(--bad)}.ib svg{width:15px;height:15px;display:block}
+.bulk{position:sticky;bottom:16px;z-index:4;display:flex;align-items:center;gap:10px;margin:12px auto 0;width:max-content;max-width:100%;padding:9px 12px 9px 16px;border-radius:12px;background:var(--text);color:var(--bg);box-shadow:0 14px 34px rgba(0,0,0,.28)}
+.bulk button{background:transparent;color:inherit;border-color:color-mix(in srgb,var(--bg) 30%,transparent)}.bulk button.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.bulk input{background:color-mix(in srgb,var(--bg) 12%,transparent);color:inherit;border-color:color-mix(in srgb,var(--bg) 30%,transparent)}
+.scanbox{display:grid;grid-template-columns:1fr 240px auto;gap:12px;align-items:end;padding:16px}.scanbox label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:500}
+.scanbox input{width:100%}.opts{display:flex;gap:18px;padding:0 16px 14px;color:var(--text2);flex-wrap:wrap}
+.prog{display:grid;grid-template-columns:repeat(4,1fr) 2fr;gap:0;border-top:1px solid var(--line)}.prog>div{padding:12px 16px;border-right:1px solid var(--line2)}.prog>div:last-child{border-right:0}
+.prog b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.prog span{font-size:12px;color:var(--muted)}
+.pbar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:6px}.pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s}
 </style></head><body>
-<div id="app"></div><div id="msg"></div><dialog id="dlg"></dialog>
+<div id="app"></div><div id="msg"></div><div id="tip"></div><dialog id="dlg"></dialog>
 <script>
 "use strict";
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
@@ -66,18 +125,29 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const PROTOS = ['SSH2', 'Telnet', 'RDP', 'VNC', 'Raw'];
 const NETKINDS = ['switch', 'router', 'firewall', 'wireless'];
 const IC = {
-  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  home: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   inv: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
   ok: '<path d="M20 6 9 17l-5-5"/>', scan: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 20a6 6 0 0 0-3-5.2"/>',
-  log: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>', help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/>'
+  log: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>', help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', mon: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  cart: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 12.4a1 1 0 0 0 1 .8h9.6a1 1 0 0 0 1-.8L21 7H6"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>', all: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', up: '<path d="M12 19V5M5 12l7-7 7 7"/>', down: '<path d="M12 5v14M5 12l7 7 7-7"/>',
+  sw: '<rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/>', rt: '<circle cx="12" cy="12" r="8"/><path d="M8 12h8M12 8v8M9 9l-1-1M15 15l1 1"/>',
+  fw: '<path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z"/>', wifi: '<path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0M12 19.5h.01"/>', srv: '<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+  trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>', warn: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
 };
 const ico = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
+const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 
 // what the person typed and picked survives every refresh
-const ui = { page: 'overview', filter: '', sel: new Set(), psel: new Set(), ssel: new Set(), closed: new Set(), targets: '', community: '', scanFolder: '', approveFolder: '',
-  onlyNet: true, hideKnown: true, dts: {} };
-let st = null, scan = null, lastJSON = '', msgTimer = 0;
+const ui = { page: store.get('tw.page', 'overview'), days: Number(store.get('tw.days', '30')), theme: store.get('tw.theme', 'system'), filter: '', sel: new Set(), psel: new Set(), ssel: new Set(),
+  closed: new Set(), targets: '', community: '', scanFolder: '', approveFolder: '', onlyNet: true, hideKnown: true, dts: {}, rtab: 'devices', rq: '', invFolder: '', invType: '', invStatus: 'all', rtype: '', unusedOnly: false,
+  sort: { devices: ['hours', -1], members: ['hours', -1], res: ['s', -1], sessions: ['s', -1] } };
+let st = null, scan = null, usage = null, lastJSON = '', msgTimer = 0;
 
 async function api(method, path, body) {
   const r = await fetch(path, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Termwright': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -88,70 +158,236 @@ async function api(method, path, body) {
 function flash(text, err) { $('#msg').innerHTML = `<div class="msg ${err ? 'err' : ''}">${esc(text)}</div>`; clearTimeout(msgTimer); msgTimer = setTimeout(() => $('#msg').innerHTML = '', 6000); }
 async function act(fn, ok) { try { const r = await fn(); if (ok) flash(typeof ok === 'function' ? ok(r) : ok); await load(true); } catch (e) { flash(e.message, true); } }
 function typing() { const a = document.activeElement; return a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox'; }
+function setTheme(t) { ui.theme = t; store.set('tw.theme', t); if (t === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t; render(); }
 
 async function start() {
   const m = /[#&]c=([^&]+)/.exec(location.hash);
   if (m) { history.replaceState(null, '', '/admin'); try { await api('POST', '/api/admin/session', { code: m[1] }); } catch (e) { return gate(e.message); } }
-  try { ui.page = sessionStorage.getItem('tw.page') || 'overview'; } catch {}
   await load(true);
-  setInterval(() => { if (!document.hidden && !$('#dlg').open) load(false); }, 8000);
+  setInterval(() => { if (!document.hidden && !$('#dlg').open) load(false); }, 10000);
 }
 function gate(text) {
-  $('#app').innerHTML = `<div class="gate"><img src="/admin/icon.svg" alt=""><h1>Termwright team server</h1><p>${esc(text || 'Open this page from Termwright: Options → Teams… → Open Admin Page.')}</p>
+  $('#app').innerHTML = `<div class="gate"><img src="/admin/icon.svg" alt=""><h2>Termwright team server</h2><p>${esc(text || 'Open this page from Termwright: Options → Teams… → Open Admin Page.')}</p>
   <p class="muted">The admin page is for the team's owner and co-owners. Termwright signs you in with a link that works once, for two minutes; there are no passwords on the server.</p></div>`;
 }
-// load: force = render now; otherwise only when something changed and nobody is typing
 async function load(force) {
   try {
     const s = await api('GET', '/api/admin/state');
     if (ui.page === 'discover' || (scan && scan.running)) scan = await api('GET', '/api/admin/scan');
-    const j = JSON.stringify([s, scan]);
+    if (['overview', 'reports', 'inventory'].includes(ui.page) || !usage) usage = await api('GET', `/api/admin/usage?days=${Math.min(366, ui.days * 2)}`);
+    const j = JSON.stringify([s, scan, usage && usage.use.length, usage && usage.res.length, usage && usage.con.length, s.status]);
     st = s;
     if (force || (j !== lastJSON && !typing())) { lastJSON = j; render(); }
   } catch (e) { if (e.status === 401 || e.status === 403) return gate(e.status === 403 ? e.message : ''); if (force) flash(e.message, true); }
 }
 
-function go(p) { ui.page = p; try { sessionStorage.setItem('tw.page', p); } catch {} if (p === 'discover') api('GET', '/api/admin/scan').then(x => { scan = x; render(); }).catch(() => render()); else render(); window.scrollTo(0, 0); }
+function go(p) { ui.page = p; store.set('tw.page', p); window.scrollTo(0, 0); if (p === 'discover') api('GET', '/api/admin/scan').then(x => { scan = x; render(); }).catch(() => render()); load(true); }
+const TITLES = { overview: 'Overview', reports: 'Usage reports', inventory: 'Inventory', approvals: 'Approvals', discover: 'Discover', members: 'Members', activity: 'Activity', help: 'Help & About' };
 function render() {
-  if (!st) return;
-  // keep the focus and caret of the field being used
-  const a = document.activeElement, key = a && a.dataset ? a.dataset.k : null, ss = a && a.selectionStart, se = a && a.selectionEnd;
+  if (!st || !PAGES[ui.page]) { if (st) ui.page = 'overview'; else return; }
+  const a = document.activeElement, key = a && a.dataset ? a.dataset.k : null, ss = a && a.selectionStart, se = a && a.selectionEnd, sy = window.scrollY;
   const t = st.team, me = t.members.find(m => m.id === st.me) || {}, online = t.members.filter(m => m.online).length;
-  const nav = [['overview', 'home', 'Overview'], ['inventory', 'inv', 'Inventory'], ['approvals', 'ok', 'Approvals', st.pending.length], ['discover', 'scan', 'Discover'],
-    ['members', 'users', 'Members'], ['activity', 'log', 'Activity'], ['help', 'help', 'Help & About']];
+  const nav = [['Monitor'], ['overview', 'home', 'Overview'], ['reports', 'chart', 'Usage reports'], ['Manage'], ['inventory', 'inv', 'Inventory'], ['approvals', 'ok', 'Approvals', st.pending.length],
+    ['discover', 'scan', 'Discover'], ['members', 'users', 'Members'], ['Audit'], ['activity', 'log', 'Activity'], ['help', 'help', 'Help & About']];
+  const period = ['overview', 'reports', 'inventory'].includes(ui.page);
   $('#app').innerHTML = `<div class="app"><aside>
     <div class="brand"><img src="/admin/icon.svg" alt=""><div><b>Termwright</b><span>Team server</span></div></div>
-    <div class="team"><b>${esc(t.name)}</b><span>${t.members.length} member${t.members.length === 1 ? '' : 's'} · ${online} online · ${st.inventory.devices.length} devices</span></div>
-    <nav class="nav">${nav.map(([k, i, l, n]) => `<a class="${k === ui.page ? 'on' : ''}" data-go="${k}">${ico(i)}${l}${n ? `<span class="badge">${n}</span>` : ''}</a>`).join('')}</nav>
+    <div class="team"><b>${esc(t.name)}</b><span>${st.inventory.devices.length} devices · ${t.members.length} members · ${online} online</span></div>
+    <nav class="nav">${nav.map(([k, i, l, n]) => i ? `<a class="${k === ui.page ? 'on' : ''}" data-go="${k}">${ico(i)}${l}${n ? `<span class="badge">${n}</span>` : ''}</a>` : `<div class="grp">${k}</div>`).join('')}</nav>
     <div class="me"><b>${esc(me.name)}</b>${me.role === 'owner' ? 'Owner' : 'Co-owner'} · <a id="out">Sign out</a></div></aside>
-    <main>${PAGES[ui.page]()}</main></div>`;
+    <div><header class="top"><div><div class="crumb">${esc(t.name)}</div><h1>${TITLES[ui.page]}</h1></div><span class="sp"></span>
+      ${period ? `<div class="seg" title="Period of the figures">${[7, 30, 90, 365].map(d => `<button data-days="${d}" class="${ui.days === d ? 'on' : ''}">${d === 365 ? '1 year' : d + ' days'}</button>`).join('')}</div>` : ''}
+      <div class="seg" title="Theme">${[['system', 'mon', 'System'], ['light', 'sun', 'Light'], ['dark', 'moon', 'Dark']].map(([k, i, l]) => `<button data-theme="${k}" class="${ui.theme === k ? 'on' : ''}" title="${l}">${ico(i)}</button>`).join('')}</div></header>
+    <main>${PAGES[ui.page]()}</main></div></div>`;
   wire();
+  window.scrollTo(0, sy);
   if (key) { const f = document.querySelector(`[data-k="${key}"]`); if (f) { f.focus(); try { f.setSelectionRange(ss, se); } catch {} } }
 }
 
-// ---------- overview ----------
-function overview() {
-  const s = st.status, inUse = s.inUse || [], res = s.reserved || [];
-  return `<h1>Overview</h1><p class="lead">Who uses what in ${esc(st.team.name)} right now, and what needs you.</p>
-  <div class="stats">
-    <div class="stat" data-go="inventory"><b>${st.inventory.devices.length}</b><span>devices in the inventory</span></div>
-    <div class="stat" data-go="approvals"><b>${st.pending.length}</b><span>waiting for approval</span></div>
-    <div class="stat" data-go="members"><b>${st.team.members.filter(m => m.online).length} / ${st.team.members.length}</b><span>members online</span></div>
-    <div class="stat"><b>${inUse.length}</b><span>devices open now</span></div>
-    <div class="stat"><b>${res.length}</b><span>reservations</span></div>
-  </div>
-  <div class="grid2">
-    <div class="card"><h3>In use now</h3>${inUse.length ? `<table><tr><th>Device</th><th>Who</th><th>Since</th></tr>${inUse.map(u => `<tr><td>${esc(devName(u.device))}</td><td>${esc(u.name)}</td><td class="muted">${ago(u.since)}</td></tr>`).join('')}</table>`
-      : '<div class="empty">Nobody has a network device of the team open.</div>'}</div>
-    <div class="card"><h3>Reservations</h3>${res.length ? `<table><tr><th>Device</th><th>By</th><th>Until</th><th>Note</th><th></th></tr>${res.map(r => `<tr><td>${esc(devName(r.device))}</td><td>${esc(r.name)}</td>
-      <td>${esc(when(r.until))}</td><td class="muted">${esc(r.note)}</td><td><a class="d" data-rel="${esc(r.id)}">Release</a></td></tr>`).join('')}</table>`
-      : '<div class="empty">No device is reserved. Members reserve devices in Termwright: right-click a session → Reserve…</div>'}</div>
-  </div>
-  <div class="card"><h3>Recent activity<span class="sp"></span><a class="small" style="color:var(--accent);cursor:pointer;font-weight:500" data-go="activity">All</a></h3>${actTable(st.activity.slice(0, 8))}</div>`;
+// ================= the figures =================
+const H = 3600, DAY = 86400;
+function overlap(s, e, a, b) { return Math.max(0, Math.min(e, b) - Math.max(s, a)); }
+function hrs(sec) { const h = sec / H; return h >= 100 ? Math.round(h) : h >= 10 ? h.toFixed(1).replace(/\.0$/, '') : h.toFixed(1); }
+function dur(sec) { if (sec < 60) return Math.round(sec) + ' s'; if (sec < H) return Math.round(sec / 60) + ' min'; if (sec < DAY) return (sec / H).toFixed(1).replace(/\.0$/, '') + ' h'; return (sec / DAY).toFixed(1).replace(/\.0$/, '') + ' d'; }
+function pct(x) { return (x * 100 >= 10 ? Math.round(x * 100) : (x * 100).toFixed(1)) + '%'; }
+function delta(cur, prev) {
+  if (!prev && !cur) return '<span class="muted">no change</span>';
+  if (!prev) return '<span class="up">new this period</span>';
+  const d = (cur - prev) / prev; return `<span class="${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(d * 100))}%</span> <span class="muted">vs previous ${ui.days} days</span>`;
 }
-function devName(d) { const inv = st.inventory.devices.find(x => sameDev(x, d)); return (inv ? inv.name : d.name || d.host) + (inv && inv.name !== inv.host ? '' : ''); }
+/** Everything the overview and reports show, for the chosen period (and the one before, for the trend). */
+function figures() {
+  if (!usage) return null;
+  const now = usage.now, a = now - ui.days * DAY, pa = now - 2 * ui.days * DAY, devs = st.inventory.devices;
+  const per = new Map(devs.map(d => [d.id, { d, open: 0, sessions: 0, users: new Set(), last: 0, res: 0, resN: 0, con: 0, peak: 0, ev: [] }]));
+  const ghost = id => { if (!per.has(id)) per.set(id, null); return per.get(id); };
+  const mem = new Map(), tot = { open: 0, res: 0, resN: 0, sessions: 0, con: 0, pOpen: 0, pRes: 0, pResN: 0, pSessions: 0, pCon: 0 };
+  const memOf = (id, name) => { if (!mem.has(id)) mem.set(id, { id, name, open: 0, sessions: 0, devs: new Set(), res: 0, resN: 0, last: 0, con: 0 }); return mem.get(id); };
+  const days = Math.min(ui.days, 366), daily = Array.from({ length: days }, () => ({ open: 0, res: 0 })), heat = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  const dayStart = d => { const x = new Date(d * 1000); x.setHours(0, 0, 0, 0); return x.getTime() / 1000; };
+  const first = dayStart(now) - (days - 1) * DAY;
+  const addDaily = (s, e, key) => { for (let i = 0; i < days; i++) { const ds = first + i * DAY; daily[i][key] += overlap(s, e, ds, ds + DAY); } };
+  for (const u of usage.use) {
+    const cur = overlap(u.s, u.e, a, now), prev = overlap(u.s, u.e, pa, a);
+    if (prev) { tot.pOpen += prev; if (u.s < a) tot.pSessions++; }
+    if (!cur) continue;
+    tot.open += cur; tot.sessions++;
+    const p = ghost(u.d); if (p) { p.open += cur; p.sessions++; p.users.add(u.n); p.last = Math.max(p.last, u.e); p.ev.push([Math.max(u.s, a), 1], [u.e, -1]); }
+    const m = memOf(u.m, u.n); m.open += cur; m.sessions++; m.devs.add(u.d); m.last = Math.max(m.last, u.e);
+    addDaily(u.s, u.e, 'open');
+    for (let t = Math.max(u.s, a); t < u.e;) { const x = new Date(t * 1000), hs = Math.floor(t / H) * H, he = Math.min(u.e, hs + H); heat[(x.getDay() + 6) % 7][x.getHours()] += he - t; t = he; }
+  }
+  for (const r of usage.res) {
+    const cur = overlap(r.s, r.e, a, now), prev = overlap(r.s, r.e, pa, a);
+    if (prev) { tot.pRes += prev; if (r.s < a && r.s >= pa) tot.pResN++; }
+    if (!cur) continue;
+    tot.res += cur; if (r.s >= a) tot.resN++;
+    const p = ghost(r.d); if (p) { p.res += cur; p.resN++; }
+    const m = memOf(r.m, r.n); m.res += cur; m.resN++;
+    addDaily(r.s, r.e, 'res');
+  }
+  for (const c of usage.con) { if (c.t >= a) { tot.con++; const p = ghost(c.d); if (p) p.con++; memOf(c.m, c.n).con++; } else if (c.t >= pa) tot.pCon++; }
+  for (const p of per.values()) { if (!p) continue; let n = 0; p.ev.sort((x, y) => x[0] - y[0] || x[1] - y[1]).forEach(([, k]) => { n += k; p.peak = Math.max(p.peak, n); }); }
+  const list = [...per.values()].filter(Boolean), span = ui.days * DAY;
+  list.forEach(p => { p.util = p.open / span; const added = Date.parse(p.d.added || 0) / 1000; p.isNew = added > a; });
+  const unused = list.filter(p => !p.sessions && !p.resN && !p.isNew);
+  const byType = new Map();
+  list.forEach(p => { const k = p.d.deviceType || '(no type)'; if (!byType.has(k)) byType.set(k, { type: k, n: 0, open: 0, con: 0, busy: 0, unused: 0 }); const t = byType.get(k); t.n++; t.open += p.open; t.con += p.con; if (p.peak > 1) t.busy++; if (unused.includes(p)) t.unused++; });
+  [...byType.values()].forEach(t => t.util = t.open / (t.n * span));
+  const allLive = (st.status.inUse || []).length, liveRes = (st.status.reserved || []).length;
+  return { a, now, list, mem: [...mem.values()], tot, daily, heat, first, unused, byType: [...byType.values()].sort((x, y) => y.util - x.util), allLive, liveRes,
+    util: list.length ? tot.open / (list.length * span) : 0 };
+}
+/** What the figures suggest: buy, remove, or reservations that sit idle. */
+function insights(f) {
+  const out = [];
+  f.byType.filter(t => t.n && (t.util > .35 || t.con >= 2 || t.busy >= Math.max(2, t.n * .6))).slice(0, 3).forEach(t => out.push({ k: 'buy', icon: 'cart',
+    t: `${t.type}: in demand`, p: `${t.n} device${t.n === 1 ? '' : 's'} open ${pct(t.util)} of the time${t.con ? `, ${t.con} connection${t.con === 1 ? '' : 's'} to devices someone else had reserved` : ''}${t.busy ? `, ${t.busy} shared by several people at once` : ''}. The team may need more ${t.type} devices.` }));
+  if (f.unused.length) out.push({ k: 'rm', icon: 'trash', t: `${f.unused.length} device${f.unused.length === 1 ? '' : 's'} not used in ${ui.days} days`,
+    p: `${f.unused.slice(0, 6).map(p => esc(p.d.name)).join(', ')}${f.unused.length > 6 ? ' and ' + (f.unused.length - 6) + ' more' : ''} - nobody opened or reserved ${f.unused.length === 1 ? 'it' : 'them'}. Candidates to remove from the inventory, lend or repurpose.`, go: 'unused' });
+  const idle = f.list.filter(p => p.res > 8 * H && p.open < p.res * .15).sort((x, y) => y.res - x.res).slice(0, 4);
+  if (idle.length) out.push({ k: 'bad', icon: 'lock', t: 'Reserved but hardly used', p: idle.map(p => `${esc(p.d.name)} (reserved ${dur(p.res)}, open ${dur(p.open)})`).join(', ') + '. Reservations keep others away - shorter ones would free the devices.' });
+  if (f.tot.con) out.push({ k: 'bad', icon: 'warn', t: `${f.tot.con} conflict${f.tot.con === 1 ? '' : 's'}`, p: 'People connected to devices someone else had reserved. See Usage reports → Devices, column Conflicts.' });
+  if (!out.length) out.push({ k: 'ok', icon: 'ok', t: 'Nothing stands out', p: usage && (usage.use.length || usage.res.length) ? 'Usage is spread evenly and no device sat idle for the whole period.' : 'The figures fill in as members use Termwright with the team: open sessions to the team\'s network devices and reservations are counted from now on.' });
+  return out;
+}
+
+// ---------- charts (inline SVG, one hue; hover shows the values) ----------
+function barChart(vals, labels, tips, opt = {}) {
+  const W = 760, Hh = opt.h || 190, L = 34, B = 22, T = 8, max = Math.max(...vals, 0.0001), n = vals.length, bw = (W - L) / n;
+  const nice = (() => { const raw = max / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; })(), top = Math.ceil(max / nice) * nice || 1;
+  const y = v => T + (Hh - T - B) * (1 - v / top);
+  let g = '';
+  for (let v = 0; v <= top + 1e-9; v += nice) g += `<line class="gl" x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 3.5}" text-anchor="end">${opt.fmt ? opt.fmt(v) : v}</text>`;
+  const every = Math.ceil(n / 10);
+  vals.forEach((v, i) => {
+    const x = L + i * bw + Math.max(1, bw * .18), w = Math.max(2, bw * .64), h = Math.max(v ? 2 : 0, y(0) - y(v));
+    g += `<rect class="b" x="${x}" y="${y(0) - h}" width="${w}" height="${h}" rx="${Math.min(4, w / 2)}"/><rect class="hit" x="${L + i * bw}" y="${T}" width="${bw}" height="${Hh - T - B}" data-tip="${esc(tips[i])}"/>`;
+    if (i % every === 0 || i === n - 1) g += `<text x="${L + i * bw + bw / 2}" y="${Hh - 6}" text-anchor="middle">${esc(labels[i])}</text>`;
+  });
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="${esc(opt.label || '')}"><line class="ax" x1="${L}" x2="${W}" y1="${y(0)}" y2="${y(0)}"/>${g}</svg></div>`;
+}
+function heatmap(heat) {
+  const max = Math.max(...heat.flat(), 1), steps = ['var(--line2)', 'var(--seq1)', 'var(--seq2)', 'var(--seq3)', 'var(--seq4)', 'var(--seq5)'];
+  const col = v => !v ? steps[0] : steps[Math.min(5, 1 + Math.floor(4.999 * v / max))];
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return `<div class="pad" style="padding-bottom:4px"><table class="heat"><tbody>${heat.map((row, d) => `<tr><td class="lab">${days[d]}</td>${row.map((v, h) => `<td class="h"><i style="background:${col(v)}" data-tip="${days[d]} ${String(h).padStart(2, '0')}:00-${String(h + 1).padStart(2, '0')}:00 · ${dur(v)} open in total"></i></td>`).join('')}</tr>`).join('')}
+    <tr><td></td>${Array.from({ length: 24 }, (_, h) => `<td class="lab" style="text-align:center;padding:2px 0 0">${h % 3 === 0 ? String(h).padStart(2, '0') : ''}</td>`).join('')}</tr></tbody></table></div>
+    <div class="legend">Less ${steps.map(c => `<i style="background:${c}"></i>`).join('')} More <span class="sp"></span>hours open, by weekday and hour (your time)</div>`;
+}
+function meter(x, label) { return `<span class="meter" title="${esc(label || '')}"><span><i style="width:${Math.min(100, x * 100)}%"></i></span><b class="small">${pct(x)}</b></span>`; }
+
+// ================= pages =================
+function overview() {
+  const f = figures(); if (!f) return '<div class="empty">Loading…</div>';
+  const s = st.status, inUse = s.inUse || [], res = s.reserved || [], top = [...f.list].sort((x, y) => y.open - x.open).filter(p => p.open).slice(0, 8);
+  const dl = f.daily.map((d, i) => new Date((f.first + i * DAY) * 1000));
+  return `<p class="lead">How ${esc(st.team.name)}'s lab is used over the last ${ui.days} days, what is happening now, and what the numbers suggest.</p>
+  <div class="kpis">
+    <div class="kpi" data-go="reports"><div class="l">Device hours open</div><div class="v">${hrs(f.tot.open)}<small>h</small></div><div class="d">${delta(f.tot.open, f.tot.pOpen)}</div></div>
+    <div class="kpi" data-go="reports"><div class="l">Lab utilization</div><div class="v">${pct(f.util)}</div><div class="d"><span class="muted">of all hours, ${f.list.length} devices</span></div></div>
+    <div class="kpi" data-go="reports"><div class="l">Reservations</div><div class="v">${f.tot.resN}</div><div class="d">${delta(f.tot.resN, f.tot.pResN)}</div></div>
+    <div class="kpi" data-go="reports"><div class="l">Not used</div><div class="v">${f.unused.length}<small>of ${f.list.length}</small></div><div class="d"><span class="muted">devices in ${ui.days} days</span></div></div>
+    <div class="kpi"><div class="l">Open now</div><div class="v">${inUse.length}</div><div class="d"><span class="muted">${res.length} reserved now</span></div></div>
+    <div class="kpi" data-go="approvals"><div class="l">Waiting for approval</div><div class="v">${st.pending.length}</div><div class="d"><span class="muted">${st.team.members.filter(m => m.online).length} of ${st.team.members.length} members online</span></div></div>
+  </div>
+  <div class="g2">
+    <div class="card"><h3>Device hours open per day<span class="sp"></span><small>all team network devices</small></h3>
+      ${barChart(f.daily.map(d => d.open / H), dl.map(d => d.toLocaleDateString([], ui.days > 90 ? { month: 'short' } : { day: 'numeric', month: 'short' })),
+        f.daily.map((d, i) => `${dl[i].toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} · ${dur(d.open)} open · ${dur(d.res)} reserved`), { fmt: v => v + ' h', label: 'Device hours open per day', h: 300 })}</div>
+    <div class="card"><h3>Insights</h3>${insights(f).map(i => `<div class="ins ${i.k}"><div class="ic">${ico(i.icon)}</div><div><b>${esc(i.t)}</b><p>${i.p}</p>${i.go ? `<a class="link small" data-unused="1">Show them</a>` : ''}</div></div>`).join('')}</div>
+  </div>
+  <div class="g2b">
+    <div class="card"><h3>When the lab is busy</h3>${heatmap(f.heat)}</div>
+    <div class="card"><h3>Utilization by device type<span class="sp"></span><small>share of all hours a device was open</small></h3>
+      ${f.byType.length ? `<table><thead><tr><th>Device type</th><th class="num">Devices</th><th>Utilization</th><th class="num">Conflicts</th><th class="num">Not used</th></tr></thead><tbody>${f.byType.map(t => `<tr><td>${esc(t.type)}</td><td class="num">${t.n}</td><td>${meter(t.util)}</td><td class="num">${t.con || '<span class="muted">0</span>'}</td><td class="num">${t.unused || '<span class="muted">0</span>'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No devices yet.</div>'}</div>
+  </div>
+  <div class="g2b">
+    <div class="card"><h3>Most used devices<span class="sp"></span><a class="link small" data-go="reports">All devices</a></h3>${top.length ? `<table><thead><tr><th>Device</th><th class="num">Hours</th><th>Utilization</th><th class="num">Users</th></tr></thead><tbody>${top.map(p => `<tr><td>${esc(p.d.name)} <span class="muted small">${esc(p.d.deviceType)}</span></td><td class="num">${hrs(p.open)}</td><td>${meter(p.util)}</td><td class="num">${p.users.size}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No device was open in this period.</div>'}</div>
+    <div class="card"><h3>Right now</h3>
+      ${inUse.length || res.length ? `<table><thead><tr><th>Device</th><th>Status</th><th>Who</th><th>Since / until</th><th></th></tr></thead><tbody>
+      ${inUse.map(u => `<tr><td>${esc(devName(u.device))}</td><td><span class="pill warn">open</span></td><td>${esc(u.name)}</td><td class="muted">${u.since ? 'for ' + dur(Date.now() / 1000 - Date.parse(u.since) / 1000) : ''}</td><td></td></tr>`).join('')}
+      ${res.map(r => `<tr><td>${esc(devName(r.device))}</td><td><span class="pill bad">reserved</span></td><td>${esc(r.name)}</td><td class="muted" title="${esc(r.note)}">until ${esc(when(r.until))}</td><td><a class="d" data-rel="${esc(r.id)}">Release</a></td></tr>`).join('')}</tbody></table>`
+      : '<div class="empty">Nobody has a team network device open or reserved.</div>'}</div>
+  </div>
+  <div class="card"><h3>Recent activity<span class="sp"></span><a class="link small" data-go="activity">All</a></h3>${actTable(st.activity.slice(0, 6))}</div>`;
+}
+function devName(d) { const inv = st.inventory.devices.find(x => sameDev(x, d)); return inv ? inv.name : d.name || d.host; }
 function sameDev(a, b) { const pa = a.port || defPort(a.protocol), pb = b.port || defPort(b.protocol); return (a.host === b.host && pa === pb) || (!!a.mac && a.mac === b.mac); }
-function when(iso) { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+function when(iso) { const d = typeof iso === 'number' ? new Date(iso * 1000) : new Date(iso); return isNaN(d) ? '' : d.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+
+// ---------- usage reports ----------
+function sortBy(list, tab, get) {
+  const [k, dir] = ui.sort[tab];
+  return list.sort((x, y) => { const a = get(x, k), b = get(y, k); return (typeof a === 'string' ? a.localeCompare(b, undefined, { numeric: true }) : a - b) * dir; });
+}
+function th(tab, k, label, num) { const [sk, dir] = ui.sort[tab]; return `<th data-sort="${tab}:${k}" class="${num ? 'num' : ''}">${label}${sk === k ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`; }
+function reportRows() {
+  const f = figures(); if (!f) return { f: null };
+  const q = ui.rq.toLowerCase();
+  const devs = sortBy(f.list.filter(p => (!q || [p.d.name, p.d.host, p.d.folder, p.d.deviceType].join(' ').toLowerCase().includes(q)) && (!ui.rtype || (p.d.deviceType || '(no type)') === ui.rtype) && (!ui.unusedOnly || f.unused.includes(p))), 'devices',
+    (p, k) => ({ name: p.d.name, folder: p.d.folder, type: p.d.deviceType, hours: p.open, sessions: p.sessions, users: p.users.size, util: p.util, res: p.res, resN: p.resN, con: p.con, peak: p.peak, last: p.last })[k]);
+  const mems = sortBy(f.mem.filter(m => !q || m.name.toLowerCase().includes(q)), 'members', (m, k) => ({ name: m.name, hours: m.open, sessions: m.sessions, devs: m.devs.size, res: m.res, resN: m.resN, con: m.con, last: m.last })[k]);
+  const name = id => (st.inventory.devices.find(d => d.id === id) || {}).name;
+  const resv = sortBy(usage.res.filter(r => r.e >= f.a).map(r => ({ ...r, dev: name(r.d) || r.dn, len: r.e - r.s, early: !r.active && r.e < r.u - 60 })).filter(r => !q || (r.dev + ' ' + r.n + ' ' + r.note).toLowerCase().includes(q)), 'res', (r, k) => ({ dev: r.dev, n: r.n, s: r.s, len: r.len })[k]);
+  const sess = sortBy(usage.use.filter(u => u.e >= f.a).map(u => ({ ...u, dev: name(u.d) || u.dn, len: u.e - Math.max(u.s, f.a) })).filter(u => !q || (u.dev + ' ' + u.n).toLowerCase().includes(q)), 'sessions', (u, k) => ({ dev: u.dev, n: u.n, s: u.s, len: u.len })[k]);
+  return { f, devs, mems, resv, sess };
+}
+function reports() {
+  const { f, devs, mems, resv, sess } = reportRows(); if (!f) return '<div class="empty">Loading…</div>';
+  const types = [...new Set(f.list.map(p => p.d.deviceType || '(no type)'))].sort();
+  const tabs = [['devices', `Devices (${f.list.length})`], ['members', `Members (${f.mem.length})`], ['res', `Reservations (${resv.length})`], ['sessions', `Sessions (${sess.length})`]];
+  let body = '';
+  if (ui.rtab === 'devices') body = `<table><thead><tr>${th('devices', 'name', 'Device')}${th('devices', 'type', 'Type')}${th('devices', 'folder', 'Folder')}${th('devices', 'hours', 'Hours open', 1)}${th('devices', 'util', 'Utilization')}${th('devices', 'sessions', 'Sessions', 1)}${th('devices', 'users', 'Users', 1)}${th('devices', 'peak', 'Peak at once', 1)}${th('devices', 'res', 'Reserved', 1)}${th('devices', 'resN', 'Reservations', 1)}${th('devices', 'con', 'Conflicts', 1)}${th('devices', 'last', 'Last used')}</tr></thead><tbody>
+    ${devs.map(p => `<tr><td>${esc(p.d.name)}<div class="muted small mono">${esc(p.d.host)}</div></td><td>${esc(p.d.deviceType)}</td><td class="muted">${esc(p.d.folder)}</td><td class="num">${hrs(p.open)} h</td><td>${meter(p.util)}</td>
+      <td class="num">${p.sessions}</td><td class="num" title="${esc([...p.users].join(', '))}">${p.users.size}</td><td class="num">${p.peak > 1 ? `<span class="pill warn">${p.peak}</span>` : p.peak}</td><td class="num">${p.res ? dur(p.res) : '<span class="muted">-</span>'}</td><td class="num">${p.resN}</td>
+      <td class="num">${p.con ? `<span class="pill bad">${p.con}</span>` : '<span class="muted">0</span>'}</td><td>${p.last ? `<span title="${esc(when(p.last))}">${ago(p.last * 1000)} ago</span>` : f.unused.includes(p) ? '<span class="pill">not used</span>' : p.isNew ? '<span class="pill in">new</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="12" class="empty">No device matches.</td></tr>'}</tbody></table>`;
+  if (ui.rtab === 'members') body = `<table><thead><tr>${th('members', 'name', 'Member')}${th('members', 'hours', 'Hours open', 1)}${th('members', 'sessions', 'Sessions', 1)}${th('members', 'devs', 'Devices used', 1)}${th('members', 'res', 'Reserved', 1)}${th('members', 'resN', 'Reservations', 1)}${th('members', 'con', 'Conflicts', 1)}${th('members', 'last', 'Last active')}</tr></thead><tbody>
+    ${mems.map(m => `<tr><td>${esc(m.name)}</td><td class="num">${hrs(m.open)} h</td><td class="num">${m.sessions}</td><td class="num">${m.devs.size}</td><td class="num">${m.res ? dur(m.res) : '-'}</td><td class="num">${m.resN}</td><td class="num">${m.con || '<span class="muted">0</span>'}</td><td>${m.last ? ago(m.last * 1000) + ' ago' : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No activity in this period.</td></tr>'}</tbody></table>`;
+  if (ui.rtab === 'res') body = `<table><thead><tr>${th('res', 'dev', 'Device')}${th('res', 'n', 'Reserved by')}${th('res', 's', 'From')}<th>To</th>${th('res', 'len', 'Length', 1)}<th>Status</th><th>Note</th></tr></thead><tbody>
+    ${resv.map(r => `<tr><td>${esc(r.dev)}</td><td>${esc(r.n)}</td><td>${esc(when(r.s))}</td><td>${esc(when(r.active ? r.u : r.e))}</td><td class="num">${dur(r.len)}</td><td>${r.active ? '<span class="pill bad">active</span>' : r.early ? '<span class="pill ok">released early</span>' : '<span class="pill">ended</span>'}</td><td class="muted">${esc(r.note)}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">No reservation in this period.</td></tr>'}</tbody></table>`;
+  if (ui.rtab === 'sessions') body = `<table><thead><tr>${th('sessions', 'dev', 'Device')}${th('sessions', 'n', 'Who')}${th('sessions', 's', 'Opened')}<th>Closed</th>${th('sessions', 'len', 'Length', 1)}</tr></thead><tbody>
+    ${sess.map(u => `<tr><td>${esc(u.dev)}</td><td>${esc(u.n)}</td><td>${esc(when(u.s))}</td><td>${u.open ? '<span class="pill warn">open now</span>' : esc(when(u.e))}</td><td class="num">${dur(u.len)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No session in this period.</td></tr>'}</tbody></table>`;
+  return `<p class="lead">Who used which device, for how long, who reserved what - per device, per member, and every reservation and session of the last ${ui.days} days. Counted for the team's network devices while a member's Termwright has them open.</p>
+  <div class="card"><div class="tabs">${tabs.map(([k, l]) => `<a data-rtab="${k}" class="${ui.rtab === k ? 'on' : ''}">${l}</a>`).join('')}</div>
+    <div class="tool"><input data-k="rq" placeholder="Filter…" value="${esc(ui.rq)}" style="min-width:240px">
+      ${ui.rtab === 'devices' ? `<select id="rtype"><option value="">All device types</option>${types.map(t => `<option ${ui.rtype === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      <label><input type="checkbox" id="unused" ${ui.unusedOnly ? 'checked' : ''}> Only devices not used</label>` : ''}
+      <span class="sp"></span><button id="rcsv">Export CSV</button></div>
+    <div class="scroll">${body}</div></div>`;
+}
+function reportCSV() {
+  const { f, devs, mems, resv, sess } = reportRows(), q = v => { v = String(v ?? ''); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const iso = t => t ? new Date(t * 1000).toISOString() : '';
+  let rows;
+  if (ui.rtab === 'devices') rows = [['device', 'address', 'type', 'folder', 'hours_open', 'utilization_pct', 'sessions', 'users', 'peak_at_once', 'reserved_hours', 'reservations', 'conflicts', 'last_used']]
+    .concat(devs.map(p => [p.d.name, p.d.host, p.d.deviceType, p.d.folder, (p.open / H).toFixed(2), (p.util * 100).toFixed(1), p.sessions, p.users.size, p.peak, (p.res / H).toFixed(2), p.resN, p.con, iso(p.last)]));
+  if (ui.rtab === 'members') rows = [['member', 'hours_open', 'sessions', 'devices_used', 'reserved_hours', 'reservations', 'conflicts', 'last_active']].concat(mems.map(m => [m.name, (m.open / H).toFixed(2), m.sessions, m.devs.size, (m.res / H).toFixed(2), m.resN, m.con, iso(m.last)]));
+  if (ui.rtab === 'res') rows = [['device', 'reserved_by', 'from', 'to', 'hours', 'status', 'note']].concat(resv.map(r => [r.dev, r.n, iso(r.s), iso(r.active ? r.u : r.e), (r.len / H).toFixed(2), r.active ? 'active' : r.early ? 'released early' : 'ended', r.note]));
+  if (ui.rtab === 'sessions') rows = [['device', 'who', 'opened', 'closed', 'hours']].concat(sess.map(u => [u.dev, u.n, iso(u.s), u.open ? '' : iso(u.e), (u.len / H).toFixed(2)]));
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r => r.map(q).join(',')).join('\n') + '\n'], { type: 'text/csv' }));
+  a.download = `${st.team.name.replace(/[^\w.-]+/g, '-')}-${ui.rtab}-${ui.days}d.csv`; a.click();
+}
 
 // ---------- inventory ----------
 function folders() {
@@ -162,37 +398,64 @@ function folders() {
 function folderList(id) { return `<datalist id="${id}">${folders().map(f => `<option value="${esc(f)}">`).join('')}</datalist>`; }
 function types() { return [...new Set(st.inventory.devices.map(d => d.deviceType).filter(Boolean))].sort(); }
 function visibleDevices() { const q = ui.filter.toLowerCase(); return st.inventory.devices.filter(d => !q || [d.name, d.host, d.folder, d.deviceType, d.mac, d.description].join(' ').toLowerCase().includes(q)); }
+function kindOf(t) {
+  t = (t || '').toLowerCase();
+  if (/firewall|fortigate|fortios|palo|pan-?os|asa\b|pfsense|opnsense|srx|checkpoint|sonicwall/.test(t)) return ['firewall', 'fw'];
+  if (/wireless|wi-?fi|\bap\b|access point|wing|unifi/.test(t)) return ['wireless', 'wifi'];
+  if (/router|ios-?xr|junos|mikrotik|routeros|vyos|isr|asr/.test(t)) return ['router', 'rt'];
+  if (/voss|exos|boss|switch|nx-?os|\bios\b|eos|fabric|extreme|cisco|arista|aruba|procurve|comware|icx|slx/.test(t)) return ['switch', 'sw'];
+  if (/linux|ubuntu|debian|centos|rhel|server|esxi|windows/.test(t)) return ['server', 'srv'];
+  return ['other', 'sw'];
+}
+function devCell(name, host, type, extra) { const [k, i] = kindOf(type); return `<div class="dev"><span class="di k-${k}">${ico(i)}</span><div style="min-width:0"><b>${esc(name)}</b><span class="mono">${esc(host)}</span>${extra || ''}</div></div>`; }
+function liveOf(d) { return { u: (st.status.inUse || []).filter(x => sameDev(d, x.device)), r: (st.status.reserved || []).find(x => sameDev(d, x.device)) }; }
+function invRows() {
+  const f = figures(), fig = new Map((f ? f.list : []).map(p => [p.d.id, p])), q = ui.filter.toLowerCase();
+  return st.inventory.devices.filter(d => {
+    if (q && ![d.name, d.host, d.folder, d.deviceType, d.mac, d.description].join(' ').toLowerCase().includes(q)) return false;
+    if (ui.invFolder && !(d.folder === ui.invFolder || d.folder.startsWith(ui.invFolder + '/'))) return false;
+    if (ui.invType && (d.deviceType || '(no type)') !== ui.invType) return false;
+    const l = liveOf(d), p = fig.get(d.id);
+    if (ui.invStatus === 'open' && !l.u.length) return false;
+    if (ui.invStatus === 'reserved' && !l.r) return false;
+    if (ui.invStatus === 'unused' && !(p && f.unused.includes(p))) return false;
+    return true;
+  }).sort((a, b) => (a.folder + '/' + a.name).localeCompare(b.folder + '/' + b.name, undefined, { numeric: true }));
+}
 function inventory() {
-  const list = visibleDevices();
-  const groups = new Map(); (st.inventory.folders || []).forEach(f => groups.set(f, [])); groups.set('', []);
-  list.forEach(d => { if (!groups.has(d.folder)) groups.set(d.folder, []); groups.get(d.folder).push(d); });
-  const keys = [...groups.keys()].sort((a, b) => a === '' ? -1 : b === '' ? 1 : a.localeCompare(b));
+  const devs = st.inventory.devices, f = figures(), fig = new Map((f ? f.list : []).map(p => [p.d.id, p])), list = invRows();
+  const openN = devs.filter(d => liveOf(d).u.length).length, resN = devs.filter(d => liveOf(d).r).length, unusedN = f ? f.unused.length : 0;
+  const allFolders = folders(), count = fo => devs.filter(d => d.folder === fo || d.folder.startsWith(fo + '/')).length;
+  const typesAll = [...new Set(devs.map(d => d.deviceType || '(no type)'))].sort();
+  const chip = (k, n, l) => `<div class="chipk ${ui.invStatus === k ? 'on' : ''}" data-ist="${k}"><b>${n}</b><span>${l}</span></div>`;
   const allOn = list.length && list.every(d => ui.sel.has(d.id));
-  let rows = '';
-  for (const f of keys) {
-    const ds = groups.get(f).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    if (!ds.length && (ui.filter || f === '')) continue;
-    const fOn = ds.length && ds.every(d => ui.sel.has(d.id));
-    if (f) rows += `<tr class="f" data-fold="${esc(f)}"><td class="c"><input type="checkbox" data-fsel="${esc(f)}" ${fOn ? 'checked' : ''} ${ds.length ? '' : 'disabled'}></td>
-      <td colspan="6">${ui.closed.has(f) ? '▸' : '▾'} 📁 ${esc(f)} <span class="muted" style="font-weight:400">· ${ds.length} device${ds.length === 1 ? '' : 's'}</span></td>
-      <td style="text-align:right;font-weight:400"><a data-rf="${esc(f)}">Rename</a>${ds.length ? '' : `<a class="d" data-df="${esc(f)}">Delete</a>`}</td></tr>`;
-    if (ui.closed.has(f)) continue;
-    for (const d of ds) rows += `<tr><td class="c"><input type="checkbox" data-sel="${d.id}" ${ui.sel.has(d.id) ? 'checked' : ''}></td><td>${f ? '<span style="display:inline-block;width:18px"></span>' : ''}${esc(d.name)}</td>
-      <td class="mono">${esc(d.host)}${d.port && d.port !== defPort(d.protocol) ? ':' + d.port : ''}</td><td>${esc(d.protocol === 'SSH2' ? 'SSH' : d.protocol)}</td><td>${esc(d.deviceType)}</td>
-      <td class="mono muted">${esc(d.mac)}</td><td class="muted small">${esc(d.addedBy)} · ${ago(d.added)}</td><td style="white-space:nowrap;text-align:right"><a data-edit="${d.id}">Edit</a><a class="d" data-del="${d.id}">Delete</a></td></tr>`;
-  }
-  return `<h1>Inventory</h1><p class="lead">The team's devices. Every member's Termwright shows them as a folder named after the team and follows changes within seconds; logins stay each person's own.</p>
-  <div class="card"><div class="tool"><input data-k="filter" placeholder="Filter: name, address, type, MAC…" value="${esc(ui.filter)}" style="min-width:260px">
-    <button id="add">+ Device</button><button id="addf">+ Folder</button><button id="imp">Import CSV…</button><button id="exp">Export CSV</button><span class="sp"></span>
-    ${ui.sel.size ? `<span class="muted">${ui.sel.size} selected</span><button id="mv">Move to folder…</button><button class="d" id="delsel">Delete</button><button id="clr">Clear</button>` : ''}
-    <input type="file" id="csv" accept=".csv,text/csv" hidden></div>
-    ${st.inventory.devices.length || (st.inventory.folders || []).length ? `<div class="scroll"><table><thead><tr><th class="c"><input type="checkbox" id="all" ${allOn ? 'checked' : ''} title="Select all shown"></th><th>Name</th><th>Address</th><th>Protocol</th><th>Device type</th><th>MAC</th><th>Added</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
-      : `<div class="empty">No devices yet. Add them here, scan a network on <a style="color:var(--accent);cursor:pointer" data-go="discover">Discover</a>, or push sessions from Termwright (right-click → Push to Team…).</div>`}</div>`;
+  const rows = list.map(d => { const l = liveOf(d), p = fig.get(d.id);
+    const status = (l.u.length ? `<span class="pill warn" title="${esc(l.u.map(x => x.name).join(', '))}">● ${esc(l.u.map(x => x.name.split(' ')[0]).join(', '))}</span> ` : '') + (l.r ? `<span class="pill bad" title="until ${esc(when(l.r.until))}${l.r.note ? ' - ' + esc(l.r.note) : ''}">🔒 ${esc(l.r.name.split(' ')[0])}</span>` : '') || (p && f.unused.includes(p) ? '<span class="pill">not used</span>' : '<span class="muted small">free</span>');
+    return `<tr><td class="c"><input type="checkbox" data-sel="${d.id}" ${ui.sel.has(d.id) ? 'checked' : ''}></td>
+      <td>${devCell(d.name, d.host + (d.port && d.port !== defPort(d.protocol) ? ':' + d.port : ''), d.deviceType)}</td>
+      <td><div class="chips">${d.deviceType ? `<span class="tag">${esc(d.deviceType)}</span>` : ''}<span class="tag">${esc(d.protocol === 'SSH2' ? 'SSH' : d.protocol)}</span></div></td>
+      <td class="muted small">${esc(d.folder || '-')}</td><td>${status}</td>
+      <td>${p ? meter(p.util, hrs(p.open) + ' h open in ' + ui.days + ' days') : ''}</td><td class="small">${p && p.last ? ago(p.last * 1000) + ' ago' : '<span class="muted">never</span>'}</td>
+      <td class="acts"><button class="ib" data-edit="${d.id}" title="Edit">${ico('edit')}</button><button class="ib d" data-del="${d.id}" title="Delete">${ico('trash')}</button></td></tr>`; }).join('');
+  return `<div class="summary">${chip('all', devs.length, 'devices')}${chip('open', openN, 'open now')}${chip('reserved', resN, 'reserved now')}${chip('unused', unusedN, `not used in ${ui.days} days`)}
+    <div class="chipk" style="cursor:default"><b>${typesAll.length}</b><span>device types</span></div><div class="chipk" style="cursor:default"><b>${allFolders.length}</b><span>folders</span></div></div>
+  <div class="split"><div class="card"><h3>Folders<span class="sp"></span><button class="ib" id="addf" title="New folder">${ico('folder')}</button></h3><div class="tree">
+      <a class="${!ui.invFolder ? 'on' : ''}" data-ifo="">${ico('all')}All devices<span class="n">${devs.length}</span></a>
+      ${allFolders.map(fo => `<a class="${ui.invFolder === fo ? 'on' : ''}" data-ifo="${esc(fo)}" style="padding-left:${9 + 14 * (fo.split('/').length - 1)}px" title="${esc(fo)}">${ico('folder')}${esc(fo.split('/').pop())}<span class="n">${count(fo)}</span></a>`).join('')}
+      ${ui.invFolder ? `<div style="padding:8px 9px 2px;display:flex;gap:10px"><a class="link small" data-rf="${esc(ui.invFolder)}" style="padding:0">Rename folder</a>${count(ui.invFolder) ? '' : `<a class="link small" data-df="${esc(ui.invFolder)}" style="padding:0;color:var(--bad)">Delete folder</a>`}</div>` : ''}</div></div>
+  <div class="card" style="min-width:0"><div class="tool"><span class="search">${ico('search')}<input data-k="filter" placeholder="Search name, address, MAC…" value="${esc(ui.filter)}" style="width:260px"></span>
+      <select id="itype"><option value="">All device types</option>${typesAll.map(t => `<option ${ui.invType === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      <span class="muted small">${list.length} of ${devs.length}</span><span class="sp"></span>
+      <button id="imp">Import CSV…</button><button id="exp">Export CSV</button><button class="p" id="add">+ Add device</button><input type="file" id="csv" accept=".csv,text/csv" hidden></div>
+    ${devs.length ? `<div class="scroll"><table><thead><tr><th class="c"><input type="checkbox" id="all" ${allOn ? 'checked' : ''} title="Select all shown"></th><th>Device</th><th>Type</th><th>Folder</th><th>Now</th><th>Utilization (${ui.days} d)</th><th>Last used</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="8" class="empty">No device matches the filters.</td></tr>'}</tbody></table></div>`
+      : `<div class="empty">No devices yet. Add them here, scan a network on <a class="link" data-go="discover">Discover</a>, or push sessions from Termwright (right-click → Push to Team…).</div>`}</div></div>
+  ${ui.sel.size ? `<div class="bulk"><b>${ui.sel.size} selected</b><button id="mv">Move to folder…</button><button id="delsel">Delete</button><button id="clr">Clear</button></div>` : ''}`;
 }
 function defPort(p) { return ({ SSH2: 22, Telnet: 23, RDP: 3389, VNC: 5900 })[p] || 0; }
-function ago(iso) {
-  if (!iso) return ''; const s = (Date.now() - Date.parse(iso)) / 1000;
-  return s < 90 ? 'now' : s < 5400 ? Math.round(s / 60) + ' min' : s < 129600 ? Math.round(s / 3600) + ' h' : Math.round(s / 86400) + ' d';
+function ago(t) {
+  if (!t) return ''; const s = (Date.now() - (typeof t === 'number' ? t : Date.parse(t))) / 1000;
+  return s < 90 ? 'moments' : s < 5400 ? Math.round(s / 60) + ' min' : s < 129600 ? Math.round(s / 3600) + ' h' : Math.round(s / 86400) + ' d';
 }
 function deviceForm(d, title, save) {
   const dlg = $('#dlg');
@@ -249,67 +512,68 @@ async function importCSV(file) {
 // ---------- approvals ----------
 function approvals() {
   const allOn = st.pending.length && st.pending.every(p => ui.psel.has(p.id));
-  return `<h1>Approvals</h1><p class="lead">Devices members pushed from Termwright. Until you approve them they stay only in that member's own sessions.</p>
+  return `<p class="lead">Devices members pushed from Termwright. Until you approve them they stay only in that member's own sessions.</p>
   <div class="card">${!st.pending.length ? `<div class="empty">Nothing waits for approval.</div>` : `<div class="tool"><span class="muted">${ui.psel.size ? ui.psel.size + ' selected' : 'Tick devices to approve or reject them'}</span><span class="sp"></span>
     into folder <input data-k="approveFolder" list="fl" placeholder="as pushed" value="${esc(ui.approveFolder)}" style="width:220px">${folderList('fl')}
     <button class="p" id="apr" ${ui.psel.size ? '' : 'disabled'}>Approve</button><button class="d" id="rej" ${ui.psel.size ? '' : 'disabled'}>Reject</button></div>
     <div class="scroll"><table><thead><tr><th class="c"><input type="checkbox" id="pall" ${allOn ? 'checked' : ''}></th><th>Name</th><th>Address</th><th>Protocol</th><th>Device type</th><th>Folder</th><th>Pushed by</th></tr></thead><tbody>
     ${st.pending.map(p => `<tr><td class="c"><input type="checkbox" data-psel="${p.id}" ${ui.psel.has(p.id) ? 'checked' : ''}></td><td>${esc(p.device.name)}</td><td class="mono">${esc(p.device.host)}</td>
-      <td>${esc(p.device.protocol === 'SSH2' ? 'SSH' : p.device.protocol)}</td><td>${esc(p.device.deviceType)}</td><td>${esc(p.device.folder)}</td><td class="muted">${esc(p.name)} · ${ago(p.at)}</td></tr>`).join('')}</tbody></table></div>`}</div>`;
+      <td>${esc(p.device.protocol === 'SSH2' ? 'SSH' : p.device.protocol)}</td><td>${esc(p.device.deviceType)}</td><td>${esc(p.device.folder)}</td><td class="muted">${esc(p.name)} · ${ago(p.at)} ago</td></tr>`).join('')}</tbody></table></div>`}</div>`;
 }
 
 // ---------- discover (from the server) ----------
 function isNet(r) { return NETKINDS.includes(r.kind) || (r.kind === 'unknown' && !!r.protocol); }
-function scanRows() {
-  if (!scan) return [];
-  return (scan.results || []).filter(r => !r.self && (!ui.onlyNet || isNet(r)) && (!ui.hideKnown || !(scan.inTeam || {})[r.ip]));
-}
+function scanRows() { return scan ? (scan.results || []).filter(r => !r.self && (!ui.onlyNet || isNet(r)) && (!ui.hideKnown || !(scan.inTeam || {})[r.ip])) : []; }
 function discover() {
-  const s = scan, res = scanRows(), pct = s && s.total ? Math.round(100 * s.done / s.total) : 0;
+  const s = scan, res = scanRows(), pc = s && s.total ? Math.round(100 * s.done / s.total) : 0;
   const pickable = res.filter(r => !(s.inTeam || {})[r.ip]), allOn = pickable.length && pickable.every(r => ui.ssel.has(r.ip));
-  const known = s ? (s.results || []).filter(r => (s.inTeam || {})[r.ip]).length : 0;
-  return `<h1>Discover</h1><p class="lead">Scan a lab network <b>from the team server's host</b> - it sees the lab networks also when you are away on VPN. Nothing logs in. Up to 1,024 addresses (a /22).</p>
-  <div class="card"><div class="tool"><input data-k="targets" class="mono" style="min-width:300px" placeholder="10.127.36.0/24 · 10.127.36.10-80 · addresses" value="${esc(ui.targets || (s ? s.targets : ''))}">
-    <input data-k="community" placeholder="SNMP community (optional)" value="${esc(ui.community)}" style="width:210px">
-    <button class="p" id="scan" ${s && s.running ? 'disabled' : ''}>Scan</button>${s && s.running ? '<button id="stop">Stop</button>' : ''}
-    ${s ? `<span class="bar"><i style="width:${pct}%"></i></span><span class="muted">${s.done} / ${s.total} · ${(s.results || []).length} found${s.running ? '…' : ' · done'}</span>` : ''}</div>
-  ${s ? `<div class="tool"><label><input type="checkbox" id="onlynet" ${ui.onlyNet ? 'checked' : ''}> Network devices only</label>
-      <label><input type="checkbox" id="hideknown" ${ui.hideKnown ? 'checked' : ''}> Hide the ${known} already in the inventory</label><span class="sp"></span>
-      ${ui.ssel.size ? `Add <b>${ui.ssel.size}</b> to folder` : '<span class="muted">Tick devices, then add them to a folder</span>'}
-      <input data-k="scanFolder" list="fl" placeholder="(the team folder)" value="${esc(ui.scanFolder)}" style="width:220px">${folderList('fl')}
-      <button class="p" id="sadd" ${ui.ssel.size ? '' : 'disabled'}>Add to Inventory</button></div>
-    <div class="scroll"><table><thead><tr><th class="c"><input type="checkbox" id="sall" ${allOn ? 'checked' : ''} title="Select all shown"></th><th>Device</th><th>Address</th><th>Kind</th><th>Vendor / system</th><th>Services</th><th>Device type</th></tr></thead><tbody>
+  const all = s ? (s.results || []).filter(r => !r.self) : [], known = all.filter(r => (s.inTeam || {})[r.ip]).length, netN = all.filter(isNet).length;
+  return `<p class="lead">Scan a lab network <b>from the team server's host</b> - it sees the lab networks also when you are away on VPN. Nothing logs in: open ports, SSH and Telnet greetings, web pages, SNMP and MAC vendors tell what each device is.</p>
+  <div class="card"><div class="scanbox"><div><label>Networks or addresses</label><input data-k="targets" class="mono" placeholder="10.127.36.0/24 · 10.127.36.10-80 · 10.127.3.5, 10.127.3.9" value="${esc(ui.targets || (s ? s.targets : ''))}"></div>
+      <div><label>SNMP v2c community (optional)</label><input data-k="community" placeholder="e.g. public" value="${esc(ui.community)}"></div>
+      <div>${s && s.running ? '<button id="stop">Stop</button>' : `<button class="p" id="scan" style="padding:7px 22px">Scan</button>`}</div></div>
+    <div class="opts"><label><input type="checkbox" id="onlynet" ${ui.onlyNet ? 'checked' : ''}> Network devices only <span class="muted">(switches, routers, firewalls, access points, unknown with SSH/Telnet)</span></label>
+      <label><input type="checkbox" id="hideknown" ${ui.hideKnown ? 'checked' : ''}> Hide devices already in the inventory</label></div>
+    ${s ? `<div class="prog"><div><b>${s.done}<span class="muted" style="font-size:13px"> / ${s.total}</span></b><span>addresses scanned</span></div><div><b>${all.length}</b><span>devices answered</span></div>
+      <div><b>${netN}</b><span>network devices</span></div><div><b>${all.length - known}</b><span>not in the inventory</span></div>
+      <div><span>${s.running ? 'Scanning ' + esc(s.targets) + '…' : 'Scan of ' + esc(s.targets) + ' by ' + esc(s.by) + ' · ' + esc(when(s.started))}</span><div class="pbar"><i style="width:${pc}%"></i></div></div></div>` : ''}</div>
+  ${s ? `<div class="card"><div class="tool"><b>Results</b><span class="muted small">${res.length} shown</span><span class="sp"></span><span class="muted small">Tick devices, then add them to the inventory</span></div>
+    <div class="scroll"><table><thead><tr><th class="c"><input type="checkbox" id="sall" ${allOn ? 'checked' : ''} title="Select all shown"></th><th>Device</th><th>Kind</th><th>Vendor / system</th><th>Services</th><th>Device type</th><th></th></tr></thead><tbody>
     ${res.length ? res.map(r => { const inTeam = (s.inTeam || {})[r.ip]; return `<tr><td class="c">${inTeam ? '' : `<input type="checkbox" data-ssel="${esc(r.ip)}" ${ui.ssel.has(r.ip) ? 'checked' : ''}>`}</td>
-      <td>${esc(r.name)}${inTeam ? ` <span class="pill in">in inventory${inTeam !== r.name && inTeam !== r.ip ? ' as ' + esc(inTeam) : ''}</span>` : ''}</td><td class="mono">${esc(r.ip)}<div class="muted small">${esc(r.mac)}</div></td><td>${esc(r.kind)}</td>
-      <td>${esc([r.vendor, r.platform || r.os].filter(Boolean).join(' · ').slice(0, 120))}</td><td class="small">${esc((r.services || []).join(' '))}</td>
-      <td><input data-k="dt:${esc(r.ip)}" value="${esc(dtOf(r))}" style="width:130px" ${inTeam ? 'disabled' : ''}></td></tr>`; }).join('')
-      : `<tr><td colspan="7" class="empty">${s.running ? 'Scanning…' : 'Nothing to show' + (known ? ' - untick “Hide … already in the inventory” to see them' : '')}.</td></tr>`}</tbody></table></div>` : ''}</div>`;
+      <td>${devCell(r.name, r.ip + (r.mac ? ' · ' + r.mac : ''), r.platform || r.kind)}</td><td><span class="tag">${esc(r.kind)}</span></td>
+      <td class="small">${esc([r.vendor, r.platform || r.os].filter(Boolean).join(' · ').slice(0, 120))}</td><td><div class="chips">${(r.services || []).map(x => `<span class="tag">${esc(x)}</span>`).join('')}</div></td>
+      <td><input data-k="dt:${esc(r.ip)}" value="${esc(dtOf(r))}" style="width:120px" ${inTeam ? 'disabled' : ''} placeholder="device type"></td>
+      <td>${inTeam ? `<span class="pill in">in inventory${inTeam !== r.name && inTeam !== r.ip ? ' as ' + esc(inTeam) : ''}</span>` : '<span class="pill ok">new</span>'}</td></tr>`; }).join('')
+      : `<tr><td colspan="7" class="empty">${s.running ? 'Scanning…' : 'Nothing to show' + (known && ui.hideKnown ? ' - untick “Hide devices already in the inventory” to see them' : '')}.</td></tr>`}</tbody></table></div></div>`
+  : `<div class="card"><div class="empty">Type a network such as <span class="mono">10.127.36.0/24</span> and press Scan. The results stay here while you work on other pages.</div></div>`}
+  ${ui.ssel.size ? `<div class="bulk"><b>${ui.ssel.size} selected</b>add to folder <input data-k="scanFolder" list="fl" placeholder="(the team folder)" value="${esc(ui.scanFolder)}" style="width:200px">${folderList('fl')}<button class="p" id="sadd">Add to Inventory</button><button id="sclr">Clear</button></div>` : ''}`;
 }
 function dtOf(r) { return ui.dts[r.ip] ?? (r.platform || ''); }
 
 // ---------- members ----------
 function members() {
-  const t = st.team, mine = t.role;
-  return `<h1>Members</h1><p class="lead">Everyone in ${esc(t.name)}. People join in Termwright with the invite: Options → Teams… → Join a Team….</p>
+  const t = st.team, mine = t.role, f = figures(), use = new Map((f ? f.mem : []).map(m => [m.id, m]));
+  return `<p class="lead">Everyone in ${esc(t.name)}. People join in Termwright with the invite: Options → Teams… → Join a Team….</p>
   <div class="card"><h3>Invite</h3><div class="tool" style="border:0"><input class="mono" readonly value="${esc(st.invite)}" style="flex:1;min-width:300px" id="inv"><button id="cp">Copy</button><button id="rot">New Invite</button></div>
     <p class="pad muted small" style="margin:0;padding-top:0">Send it by chat or e-mail. A new invite stops the old one; members who joined stay.</p></div>
-  <div class="card"><table><thead><tr><th>Name</th><th>Computer</th><th>Role</th><th>Last seen</th><th></th></tr></thead><tbody>
-    ${t.members.map(m => { const can = m.id !== st.me && m.role !== 'owner' && (mine === 'owner' || m.role === 'member');
+  <div class="card"><table><thead><tr><th>Name</th><th>Computer</th><th>Role</th><th>Status</th><th class="num">Hours (${ui.days} d)</th><th class="num">Reservations</th><th>Joined</th><th></th></tr></thead><tbody>
+    ${t.members.map(m => { const can = m.id !== st.me && m.role !== 'owner' && (mine === 'owner' || m.role === 'member'), u = use.get(m.id);
       return `<tr><td><span class="dot ${m.online ? '' : 'off'}"></span>${esc(m.name)}${m.id === st.me ? ' <span class="muted">(you)</span>' : ''}</td><td class="mono muted">${esc(m.user)}@${esc(m.machine)}</td>
-      <td><span class="pill ${m.role !== 'member' ? 'in' : ''}">${({ owner: 'Owner', 'co-owner': 'Co-owner', member: 'Member' })[m.role]}</span></td><td>${m.online ? '<span class="pill ok">online</span>' : `<span class="muted">${m.lastSeen ? ago(m.lastSeen) + ' ago' : ''}</span>`}</td>
+      <td><span class="pill ${m.role !== 'member' ? 'in' : ''}">${({ owner: 'Owner', 'co-owner': 'Co-owner', member: 'Member' })[m.role]}</span></td><td>${m.online ? '<span class="pill ok">online</span>' : `<span class="muted">${m.lastSeen ? 'seen ' + ago(m.lastSeen) + ' ago' : ''}</span>`}</td>
+      <td class="num">${u && u.open ? hrs(u.open) : '<span class="muted">0</span>'}</td><td class="num">${u ? u.resN : 0}</td><td class="muted small">${esc(when(m.joined))}</td>
       <td style="text-align:right">${can ? `<a data-role="${m.id}" data-to="${m.role === 'member' ? 'co-owner' : 'member'}">${m.role === 'member' ? 'Make co-owner' : 'Make member'}</a><a class="d" data-rm="${m.id}" data-n="${esc(m.name)}">Remove</a>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 function actTable(list) {
   if (!list.length) return '<div class="empty">Nothing yet.</div>';
-  return `<table><thead><tr><th style="width:190px">When</th><th style="width:200px">Who</th><th>What</th></tr></thead><tbody>${list.map(a => `<tr><td class="muted">${esc(new Date(a.at).toLocaleString())}</td><td>${esc(a.who)}</td><td>${esc(a.what)}</td></tr>`).join('')}</tbody></table>`;
+  return `<table><thead><tr><th style="width:200px">When</th><th style="width:220px">Who</th><th>What</th></tr></thead><tbody>${list.map(a => `<tr><td class="muted">${esc(when(a.at))}</td><td>${esc(a.who)}</td><td>${esc(a.what)}</td></tr>`).join('')}</tbody></table>`;
 }
-function activity() { return `<h1>Activity</h1><p class="lead">Who added, changed, approved, reserved and removed what - the last 500 events.</p><div class="card"><div class="scroll">${actTable(st.activity)}</div></div>`; }
+function activity() { return `<p class="lead">Who added, changed, approved, reserved and removed what - the last 500 events.</p><div class="card"><div class="scroll">${actTable(st.activity)}</div></div>`; }
 
 // ---------- help & about ----------
 function help() {
   const t = st.team;
-  return `<h1>Help & About</h1><p class="lead">Termwright is an open-source terminal and session manager for network and infrastructure teams. This team server lets a team share its lab.</p>
-  <div class="grid2">
+  return `<p class="lead">Termwright is an open-source terminal and session manager for network and infrastructure teams. This team server lets a team share its lab.</p>
+  <div class="g2b">
   <div class="card"><h3>How it works</h3><div class="pad"><ol class="steps">
     <li><b>One server per team.</b> An owner sets it up from Termwright (Options → Teams… → Set Up a Team Server…): a small container on a lab host. No cloud, no company-wide admin.</li>
     <li><b>Members join with the invite.</b> Termwright talks only to this server - it checks its certificate fingerprint, which is in the invite.</li>
@@ -318,27 +582,41 @@ function help() {
     <li><b>Members push, owners approve.</b> Right-click a session in Termwright → Push to Team…; devices the team has already are recognised by address or MAC whatever their name.</li>
     <li><b>Who uses what.</b> Termwright reports which of the team's network devices it has open (switches, routers, firewalls, access points - not computers, phones, printers or IoT boards), and members reserve devices with a note.</li>
   </ol></div></div>
-  <div class="card help"><h3>Roles</h3><div class="pad">
-    <p><b>Owner</b> - set the server up; everything here, and can manage co-owners.<br><b>Co-owner</b> - this admin page: inventory, approvals, scans, invite, members.<br><b>Member</b> - sees the team folder, pushes devices for approval, reserves devices.</p>
-    <h4>Signing in</h4><p>Only from Termwright (Teams → Open Admin Page): a link that works once, for two minutes, then a browser session of eight hours. There are no passwords on the server.</p>
-    <h4>The certificate warning</h4><p>The server makes its own certificate; browsers ask once whether to trust it. Termwright itself checks it by fingerprint.</p>
-    <h4>Lost the team in Termwright?</h4><p>Set Up a Team Server… again with the same host and team name reconnects you as the owner; members, inventory and invite stay.</p></div></div>
+  <div class="card help"><h3>Reading the reports</h3><div class="pad">
+    <p><b>Hours open</b> - time a member's Termwright had a terminal to the device connected. Two people at once count twice.</p>
+    <p><b>Utilization</b> - hours open divided by all hours of the period (24 × 7). 10% means the device was open about 17 hours a week.</p>
+    <p><b>Peak at once</b> - the most people with the device open at the same time. More than one often means the team needs more of that kind.</p>
+    <p><b>Conflicts</b> - connections to a device someone else had reserved.</p>
+    <p><b>Not used</b> - neither opened nor reserved in the period (devices added during it are marked <i>new</i>).</p>
+    <h4>Roles</h4><p><b>Owner</b> - everything here, and manages co-owners. <b>Co-owner</b> - this admin page. <b>Member</b> - the team folder, pushing devices for approval, reserving.</p>
+    <h4>Signing in</h4><p>Only from Termwright (Teams → Open Admin Page): a link that works once, for two minutes, then eight hours in this browser. No passwords on the server. The browser asks once to trust the server's own certificate.</p></div></div>
   </div>
   <div class="card"><h3>About</h3><div class="pad kv">
-    <span>Team</span><b>${esc(t.name)}</b><span>Server version</span><span class="mono" style="color:var(--text)">${esc(t.version)}</span>
-    <span>Address</span><span class="mono" style="color:var(--text)">${esc(location.host)}</span><span>Licence</span><span style="color:var(--text)">Apache-2.0, open source</span>
-    <span>Guide</span><a href="https://github.com/nperiannan/termwright/blob/main/docs/TEAM_SERVER.md" target="_blank" rel="noopener" style="color:var(--accent)">Team server guide</a>
-    <span>Project</span><a href="https://github.com/nperiannan/termwright" target="_blank" rel="noopener" style="color:var(--accent)">github.com/nperiannan/termwright</a></div></div>`;
+    <span>Team</span><b>${esc(t.name)}</b><span>Server version</span><span class="mono">${esc(t.version)}</span>
+    <span>Address</span><span class="mono">${esc(location.host)}</span><span>Licence</span><span>Apache-2.0, open source</span>
+    <span>Guide</span><a class="link" href="https://github.com/nperiannan/termwright/blob/main/docs/TEAM_SERVER.md" target="_blank" rel="noopener">Team server guide</a>
+    <span>Project</span><a class="link" href="https://github.com/nperiannan/termwright" target="_blank" rel="noopener">github.com/nperiannan/termwright</a></div></div>`;
 }
-const PAGES = { overview, inventory, approvals, discover, members, activity, help };
+const PAGES = { overview, reports, inventory, approvals, discover, members, activity, help };
 
 function wire() {
   const on = (sel, ev, fn) => $$(sel).forEach(e => e[ev] = fn);
   on('[data-go]', 'onclick', e => go(e.currentTarget.dataset.go));
+  on('[data-theme]', 'onclick', e => setTheme(e.currentTarget.dataset.theme));
+  on('[data-days]', 'onclick', e => { ui.days = Number(e.currentTarget.dataset.days); store.set('tw.days', ui.days); usage = null; load(true); });
   on('#out', 'onclick', async () => { await api('POST', '/api/admin/signout').catch(() => {}); gate('Signed out.'); });
-  // typed values live in ui, so refreshes keep them
-  on('[data-k]', 'oninput', e => { const k = e.target.dataset.k; if (k.startsWith('dt:')) ui.dts[k.slice(3)] = e.target.value; else ui[k] = e.target.value; if (k === 'filter') render(); });
+  on('[data-k]', 'oninput', e => { const k = e.target.dataset.k; if (k.startsWith('dt:')) ui.dts[k.slice(3)] = e.target.value; else ui[k] = e.target.value; if (k === 'filter' || k === 'rq') render(); });
   on('[data-rel]', 'onclick', e => { if (confirm('Release this reservation? Its member gets a notice.')) act(() => api('POST', '/api/release', { id: e.target.dataset.rel }), 'Released'); });
+  on('[data-unused]', 'onclick', () => { ui.rtab = 'devices'; ui.unusedOnly = true; go('reports'); });
+  // hover values for the charts
+  on('[data-tip]', 'onmousemove', e => { const t = $('#tip'); t.textContent = e.target.dataset.tip; t.style.display = 'block'; t.style.left = Math.min(innerWidth - 300, e.clientX + 14) + 'px'; t.style.top = (e.clientY + 14) + 'px'; });
+  on('[data-tip]', 'onmouseleave', () => { $('#tip').style.display = 'none'; });
+  // reports
+  on('[data-rtab]', 'onclick', e => { ui.rtab = e.target.dataset.rtab; render(); });
+  on('[data-sort]', 'onclick', e => { const [tab, k] = e.currentTarget.dataset.sort.split(':'); const cur = ui.sort[tab]; ui.sort[tab] = [k, cur[0] === k ? -cur[1] : (['name', 'folder', 'type', 'dev', 'n'].includes(k) ? 1 : -1)]; render(); });
+  on('#rtype', 'onchange', e => { ui.rtype = e.target.value; render(); });
+  on('#unused', 'onchange', e => { ui.unusedOnly = e.target.checked; render(); });
+  on('#rcsv', 'onclick', reportCSV);
   // inventory
   on('#add', 'onclick', () => deviceForm({ protocol: 'SSH2' }, 'New device', d => act(() => api('POST', '/api/admin/devices', { devices: [d] }), 'Added ' + d.name)));
   on('#addf', 'onclick', () => ask('New folder', 'Folder', '', f => f && act(() => api('POST', '/api/admin/folders', { folder: f })), true));
@@ -348,7 +626,11 @@ function wire() {
   on('[data-fold]', 'onclick', e => { if (e.target.closest('a,input')) return; const f = e.currentTarget.dataset.fold; ui.closed.has(f) ? ui.closed.delete(f) : ui.closed.add(f); render(); });
   on('[data-rf]', 'onclick', e => { const f = e.target.dataset.rf; ask('Rename folder', 'New name', f, to => to && to !== f && act(() => api('POST', '/api/admin/folders', { from: f, folder: to }))); });
   on('[data-df]', 'onclick', e => act(() => api('POST', '/api/admin/folders', { from: e.target.dataset.df })));
-  on('#all', 'onchange', e => { visibleDevices().forEach(d => e.target.checked ? ui.sel.add(d.id) : ui.sel.delete(d.id)); render(); });
+  on('[data-ist]', 'onclick', e => { const k = e.currentTarget.dataset.ist; ui.invStatus = ui.invStatus === k ? 'all' : k; render(); });
+  on('[data-ifo]', 'onclick', e => { ui.invFolder = e.currentTarget.dataset.ifo; render(); });
+  on('#itype', 'onchange', e => { ui.invType = e.target.value; render(); });
+  on('#sclr', 'onclick', () => { ui.ssel.clear(); render(); });
+  on('#all', 'onchange', e => { invRows().forEach(d => e.target.checked ? ui.sel.add(d.id) : ui.sel.delete(d.id)); render(); });
   on('[data-fsel]', 'onchange', e => { const f = e.target.dataset.fsel; visibleDevices().filter(d => d.folder === f).forEach(d => e.target.checked ? ui.sel.add(d.id) : ui.sel.delete(d.id)); render(); });
   on('[data-sel]', 'onchange', e => { e.target.checked ? ui.sel.add(e.target.dataset.sel) : ui.sel.delete(e.target.dataset.sel); render(); });
   on('#clr', 'onclick', () => { ui.sel.clear(); render(); });

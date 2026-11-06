@@ -72,6 +72,9 @@ type Server struct {
 	notes     map[string][]Note       // member id → notices waiting for it
 	statusRev int64
 	statusCh  chan struct{} // closed and replaced when the status changes
+
+	usage usageFile           // usage history (usage.json)
+	opens map[string]*openUse // member|device → open now
 }
 
 // Open loads the team in dir, or makes a new one named name: a certificate, an
@@ -90,6 +93,7 @@ func Open(dir, name, version string, logger *log.Logger) (*Server, string, error
 	if err := s.loadCert(); err != nil {
 		return nil, "", err
 	}
+	s.loadUsage()
 	code := ""
 	b, err := os.ReadFile(filepath.Join(dir, "team.json"))
 	switch {
