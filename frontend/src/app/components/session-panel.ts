@@ -14,6 +14,7 @@ import { FolderPicker } from './folder-picker';
 import { factList, factsAge } from '../core/facts';
 import { SessionIcon, SessionKind } from './session-icon';
 import { storeSession } from '../dialogs/session-editor';
+import { AuthMode, authModeOf, setAuthMode } from '../core/auth-mode';
 
 type Edit = { session: Session; oldPath: string; tabId?: string };
 
@@ -290,18 +291,13 @@ export class SessionPanel {
   readonly genBusy = signal(false);
   readonly genMsg = signal('');
 
-  /** How the SSH session logs in, from its authentication order. */
-  authMode(): 'password' | 'key' | 'both' {
-    const m = (this.s?.authMethods ?? '').split(',').filter(Boolean);
-    const key = m.includes('publickey'), pw = m.includes('password') || m.includes('keyboard-interactive');
-    return key && !pw ? 'key' : !key ? 'password' : 'both';
-  }
-  setAuth(mode: 'password' | 'key' | 'both') {
+  /** How the SSH session logs in: what was picked here, else what its authentication order and key say. */
+  private picked: AuthMode | null = null;
+  authMode(): AuthMode { return this.picked ?? authModeOf(this.s); }
+  setAuth(mode: AuthMode) {
     if (!this.s) return;
-    // keyboard-interactive and password go together: servers use either for the same password (and for one-time codes)
-    const keep = (this.s.authMethods ?? '').split(',').filter(a => a && !['publickey', 'keyboard-interactive', 'password'].includes(a)); // e.g. gssapi
-    const base = mode === 'password' ? ['keyboard-interactive', 'password'] : mode === 'key' ? ['publickey'] : ['publickey', 'keyboard-interactive', 'password'];
-    this.s.authMethods = [...keep, ...base].join(',');
+    this.picked = mode;
+    setAuthMode(this.s, mode);
     if (mode === 'password') this.installKey = false;
   }
   async chooseKey() {
@@ -334,6 +330,7 @@ export class SessionPanel {
       this.s = structuredClone(e.session);
       this.pw = '';
       this.installKey = false;
+      this.picked = null;
       this.genMsg.set('');
       this.noPw = false;
       this.error.set('');

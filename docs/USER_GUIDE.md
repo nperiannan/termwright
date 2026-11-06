@@ -205,7 +205,7 @@ An unknown name is reported by name when you connect. When the host key is alrea
 
 An SSH session's side panel (New Session, or right-click → *Properties…*) and Session Options → Connection have **Log in with**:
 
-- **Password**: the username and password (also for devices that ask through keyboard-interactive prompts).
+- **Password** (the default): the username and password - the session's own, an account's, a password manager's or the device type's - also for devices that ask through keyboard-interactive prompts. Keys from the SSH agent and `~/.ssh` are tried quietly first, as OpenSSH does; choosing *Password* again turns that off.
 - **Key**: an SSH key only. *Private key* is empty for the default keys in `~/.ssh` and the SSH agent; **Choose…** picks a key file; **+ Generate a new key** makes an Ed25519 key for this server (`~/.ssh/termwright_<host>_ed25519`, or reuses it when it is already there).
 - **Key, then password**: the key first, and the password when the server refuses the key - handy while a key is being rolled out.
 

@@ -7,7 +7,12 @@ export type AuthMode = 'password' | 'key' | 'both';
 export function authModeOf(s: Session | null | undefined): AuthMode {
   const m = (s?.authMethods ?? '').split(',').filter(Boolean);
   const key = m.includes('publickey'), pw = m.includes('password') || m.includes('keyboard-interactive');
-  return key && !pw ? 'key' : !key ? 'password' : 'both';
+  if (key && !pw) return 'key';
+  if (!key) return 'password';
+  // The default order (publickey first) without a key of the session's own is a password login: keys from the SSH
+  // agent and ~/.ssh are only tried quietly first, as OpenSSH does. Accounts, password managers and device types
+  // log in with a password too. Only a chosen key makes it "Key, then password".
+  return s?.identityFile?.trim() || s?.smartCard ? 'both' : 'password';
 }
 
 /** Sets the order for a mode; keyboard-interactive goes with password (servers use either for the same password and

@@ -1123,9 +1123,12 @@ export class SessionEditor implements OnInit {
   installKey = false;
   readonly genBusy = signal(false);
   readonly genMsg = signal('');
-  authMode() { return authModeOf(this.s); }
+  /** What was picked here; until then the mode the session's order and key say. */
+  private pickedAuth: AuthMode | null = null;
+  authMode() { return this.pickedAuth ?? authModeOf(this.s); }
   setAuth(mode: AuthMode) {
     if (!this.s) return;
+    this.pickedAuth = mode;
     setAuthMode(this.s, mode);
     if (mode === 'password') this.installKey = false;
   }
