@@ -38,13 +38,23 @@ Pushed by an owner or co-owner, devices are added at once. Pushed by a member, t
 
 Owners and co-owners manage the team in the browser: **Options → Teams… → Open Admin Page**. Termwright signs you in with a link that works once, for two minutes; the page then keeps you signed in for eight hours on that browser. There are no passwords on the server, and members cannot open it. The certificate is the team server's own, so the browser asks once whether to trust it.
 
-| Tab | |
+The page follows the system's light or dark theme, or the one you pick at the top right; the period (7, 30, 90 days or a year) applies to all figures.
+
+| Page | |
 |---|---|
-| **Inventory** | the devices by folder: filter, *+ Device*, *+ Folder*, edit, move, delete, rename folders, **Import CSV…** / **Export CSV** (columns `name, folder, address, port, protocol, deviceType, mac, description`) |
+| **Overview** | the lab at a glance: device hours open (with the trend against the period before), utilization, reservations, devices not used, what is open and reserved right now; device hours per day, *when the lab is busy* (weekday × hour), utilization per device type, the most used devices, and **insights** - device types in demand (busy, shared by several people at once, conflicts: the team may need more), devices nobody used (candidates to remove), reservations that sat idle |
+| **Usage reports** | per **device** (hours open, utilization, sessions, users, peak at once, hours reserved, reservations, conflicts, last used), per **member**, every **reservation** (from, to, length, released early or ended, note) and every **session** (who, opened, closed, length) - sortable, filterable, **Export CSV** |
+| **Inventory** | the devices with folders on the side, search, device type filter, who has each one open or reserved now, its utilization and when it was last used; *+ Add device*, edit, move, delete, folders, **Import CSV…** / **Export CSV** (columns `name, folder, address, port, protocol, deviceType, mac, description`) |
 | **Approvals** | devices members pushed: approve (into their folder or another) or reject |
 | **Discover** | scans a network **from the team server's host**, inside the lab - also when you are at home on VPN. Nothing logs in. *Network devices only* (on by default) hides computers, phones and printers. Tick devices, pick a folder, **Add to Inventory**; devices the inventory has already are marked |
 | **Members** | the invite (*Copy*, *New Invite*), roles and *Remove* |
 | **Activity** | who added, changed, approved, removed what and when |
+
+Usage is counted from the presence heartbeats of members' Termwright (only the team's network devices, only while a terminal is connected) and kept on the server for 400 days in `usage.json`, next to `team.json`.
+
+| Overview | Usage reports |
+|---|---|
+| ![Team overview](screenshots/team-admin.png) | ![Usage reports](screenshots/team-reports.png) |
 
 MAC addresses in server scans need the container on the host's network (*Use the host's network* when setting it up) and devices on the host's own subnet.
 

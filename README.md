@@ -85,6 +85,18 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.30
+
+- **Teams (optional).** A team runs its own small server on a lab host - set up from Termwright over SSH with Docker, no cloud. Members join with an invite; without a team Termwright works on its own as before.
+- **A shared inventory.** The team's devices appear in everyone's Session Manager as a folder and stay in sync; logins stay personal. *Push to Team…* offers your sessions, an owner approves.
+- **Who uses which device.** For network devices, everyone sees who has one open and who reserved it; *Reserve…* with an end time and a note, and a warning before connecting to someone else's reservation.
+- **Admin page with usage reports.** Utilization, hours open per device and member, reservations, busy hours, unused devices and what to buy or remove - see the [team server guide](docs/TEAM_SERVER.md).
+- **Old SSH algorithms in Quick Connect and for a whole folder** ([#4](https://github.com/nperiannan/termwright/issues/4)).
+
+| | |
+|---|---|
+| ![Team admin overview](docs/screenshots/team-admin.png) <br/>*The team admin page: utilization, busy hours, insights* | ![Reserve](docs/screenshots/teams.png) <br/>*Teams in Termwright* |
+
 ## What's new in 0.29
 
 - **A Mac look on Windows and Linux.** The interface uses Inter and terminals use Termwright Mono (DejaVu Sans Mono, which Menlo was made from), both shipped with Termwright, so it looks the same on every system. *System font of this computer* brings the old look back.
