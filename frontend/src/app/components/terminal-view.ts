@@ -530,6 +530,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     term.loadAddon(this.serialize);
     term.unicode.activeVersion = '11';
     term.open(this.host().nativeElement);
+    // a terminal opened while the bundled font was still loading measured another font: measure again once it is there
+    document.fonts?.ready.then(() => { if (!term.element) return; const f = term.options.fontFamily ?? ''; term.options.fontFamily = f + ' '; term.options.fontFamily = f; }).catch(() => {});
     (this.host().nativeElement.parentElement as HTMLElement).style.setProperty('--term-bg', String(theme.background));
     this.term = term;
     this.fit = fit;

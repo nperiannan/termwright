@@ -16,5 +16,9 @@ new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
   if (n instanceof Element) { plainInput(n); n.querySelectorAll('input, textarea').forEach(plainInput); }
 }))).observe(document.documentElement, { childList: true, subtree: true });
 
+// The bundled terminal font is loaded before the first terminal measures its letters (a terminal measures once,
+// with whatever font is there at that moment).
+try { void document.fonts.load("14px 'Termwright Mono'"); void document.fonts.load("bold 14px 'Termwright Mono'"); } catch { /* old webview */ }
+
 bootstrapApplication(App, appConfig)
   .catch((err) => console.error(err));

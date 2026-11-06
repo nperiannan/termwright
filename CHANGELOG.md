@@ -4,6 +4,12 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **A Mac look on Windows and Linux.** The interface uses Inter (shipped with Termwright, the open font closest to the Mac's) and terminals use Termwright Mono (DejaVu Sans Mono, which Menlo was made from), so Termwright looks the same on every system; the Mac keeps its own fonts. Settings → General → Interface font has *System font of this computer* for the old look; a terminal font you chose stays.
+* **Choose how an SSH session logs in, and make a key there.** The session panel has *Log in with: Password · Key · Key, then password*. With a key: pick a file, or *Generate a new key* (Ed25519, for this server), and tick *Copy the key to the server at the first login* - the first connection asks for the password once, Key Login Setup adds the public key and checks it.
+* **Properties is the last item of a session's right-click menu** (Folder Defaults for a folder), so it is always in the same place.
+* **Discover Devices, results.** Only the list scrolls; what to add (all or some device types, a subfolder per type, the folder) sits in the bar at the bottom next to *Add*, and is greyed out until devices are selected. Every device gets a *Connect ▾* button with each way it answered (SSH, SFTP, Telnet, RDP, VNC, the web interface), the recommended one first. Unknown devices get a best guess with its reason ("Router / access point - likely: TP-Link, web admin only"; TVs, cameras, the gateway). *192.168.1.40 is now another device* says which session and both MAC addresses, with *Keep* and *Update the session*.
+* **Device types for every device, and new ones from the scan.** Phones, IoT boards, TVs - devices with no SSH or Telnet - can have a device type too; *+ New device type…* in the list makes one with its icon (phone, IoT, TV, camera, router…). New icons: TV / media player and camera; Options → Device Types has an *Icon* choice.
+
 ## 0.28.2 (2026-11-01)
 
 The Android terminal works on real phones - whole letters, the prompt above the keyboard - with calmer dark cards on the start page and a tidier Discover Devices.

@@ -1,7 +1,7 @@
 import { isUnixType } from '../core/device-kind';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { DEVICE_KINDS, DeviceIcon, DeviceKind } from '../components/device-icon';
+import { DEVICE_KINDS, DeviceIcon, DeviceKind, customDeviceKinds } from '../components/device-icon';
 import { Backend, errText } from '../core/backend';
 import { DeviceType, DiscoverResult, LocalNet, MovedDevice, SessionNode } from '../core/models';
 import { Tabs } from '../core/tabs.service';
@@ -25,7 +25,7 @@ const ACK_KEY = 'termwright.discoverAck';
   imports: [FormsModule, DeviceIcon, Moved, FolderPicker, Icon],
   template: `
   <div class="modal-backdrop">
-    <div class="modal disc" [class.wide]="total() || rows().length">
+    <div class="modal disc" [class.results]="total() || rows().length">
       <div class="modal-head"><span class="dh-ic"><app-icon name="radar" [size]="18" /></span>
         <span class="dh-t">Discover Devices<span class="dh-s">Find the devices on a network and add them as sessions - nothing logs in</span></span></div>
       <div class="modal-body">
@@ -98,9 +98,14 @@ const ACK_KEY = 'termwright.discoverAck';
               <span>⚠ <b>{{ moved().length }} saved session{{ moved().length === 1 ? '' : 's' }}</b> answer{{ moved().length === 1 ? 's' : '' }} at a new address (same MAC address).</span>
               <button type="button" class="primary" (click)="reviewMoved()">Review…</button>
             }
-            @if (reused().length) {
-              <span class="bad">{{ reused().length }} saved session{{ reused().length === 1 ? '' : 's' }}: the address now belongs to <b>another device</b> and the device itself was not found ({{ reused().slice(0, 3).join(', ') }}{{ reused().length > 3 ? '…' : '' }}).</span>
+            @for (u of reused().slice(0, 3); track u.path) {
+              <div class="chg">⚠ <span><b>{{ u.ip }} is now another device.</b> Your session <b>{{ u.path }}</b> was for <span class="mono">{{ u.oldMac }}</span>;
+                that device was not found, <span class="mono">{{ u.newMac }}</span> answers there now.</span>
+                <span class="spacer"></span>
+                <button type="button" (click)="keepReused(u.path)" title="Leave the session as it is (the device may be switched off)">Keep</button>
+                <button type="button" (click)="updateReused(u)" title="Make the device now at this address the session's device (its MAC address is saved)">Update the session</button></div>
             }
+            @if (reused().length > 3) { <span class="hint">and {{ reused().length - 3 }} more sessions whose address now belongs to another device</span> }
             @if (noMac().length) {
               <span class="hint">{{ noMac().length }} saved session{{ noMac().length === 1 ? '' : 's' }} found at {{ noMac().length === 1 ? 'its' : 'their' }} address without a saved MAC address.</span>
               <button type="button" (click)="rememberMacs()" title="Save the MAC addresses so Termwright finds these devices again when their IP address changes">Remember MAC Addresses</button>
@@ -113,7 +118,7 @@ const ACK_KEY = 'termwright.discoverAck';
               <thead><tr>
                 <th class="c"><input type="checkbox" [checked]="allSelected()" (change)="selectAll(!allSelected())" title="Select all that can be added" /></th>
                 <th></th><th>Name</th><th>Address</th><th>Type</th><th>Vendor / system</th><th>Services</th>
-                @if (deviceTypes().length) { <th>Device type</th> }
+                <th>Device type</th><th></th>
               </tr></thead>
               <tbody>
                 @for (r of shown(); track r.ip) {
@@ -121,61 +126,83 @@ const ACK_KEY = 'termwright.discoverAck';
                     [title]="r.protocol ? 'Double-click to connect now (' + r.protocol + ') without saving' : r.mac ? 'No login port answered - it can be added as a Wake-on-LAN session' : ''">
                     <td class="c"><input type="checkbox" [checked]="r.selected" [disabled]="!addable(r)"
                       [title]="r.protocol ? '' : r.mac ? 'No login port answered - added as a Wake-on-LAN session' : 'No SSH, Telnet, RDP or VNC port answered and no MAC address - cannot be added as a session'" /></td>
-                    <td><app-device-icon [kind]="r.kind" /></td>
+                    <td><app-device-icon [kind]="typeOf(r).kind" /></td>
                     <td><b>{{ r.name }}</b>@if (r.self) { <span class="tag me">this computer</span> }@if (r.exists) { <span class="tag">in sessions</span> }@if (!r.protocol && r.mac && r.selected) { <span class="tag wol" title="Added as a Wake-on-LAN session">Wake-on-LAN</span> }
                       @if (r.dns && r.dns !== r.name) { <div class="hint">{{ r.dns }}</div> }</td>
                     <td class="mono">{{ r.ip }}@if (r.mac) { <div class="hint mac" title="Right-click the row to copy the MAC address">{{ r.mac }}</div> }</td>
-                    <td>{{ kindLabel(r.kind) }}</td>
+                    <td>{{ typeOf(r).label }}@if (typeOf(r).why) { <div class="hint likely">{{ typeOf(r).why }}</div> }</td>
                     <td class="sys">
                       <button type="button" class="info" [class.on]="r.open" (click)="details(r, $event)" title="What this is based on">ⓘ</button>
                       @if (r.vendor) { <b>{{ r.vendor }}</b> }{{ r.vendor && r.os ? ' · ' : '' }}{{ r.os }}
                       @if (r.open) { <ul class="ev">@for (e of r.evidence ?? []; track $index) { <li>{{ e }}</li> } @empty { <li>Only open ports were seen.</li> }</ul> }
                     </td>
                     <td>@for (s of r.services; track s) { <span class="svc" [class.login]="s === 'ssh' || s === 'telnet' || s === 'rdp' || s === 'vnc'">{{ svcLabel(s) }}</span> }</td>
-                    @if (deviceTypes().length) {
-                      <td (click)="$event.stopPropagation()">
-                        <select [(ngModel)]="r.deviceType" (ngModelChange)="r.touched = true" [disabled]="!r.protocol">
-                          <option value="">(none)</option>
-                          @for (d of deviceTypes(); track d.name) { <option [value]="d.name">{{ d.name }}</option> }
-                        </select>
-                      </td>
-                    }
+                    <td (click)="$event.stopPropagation()">
+                      <select #dt [ngModel]="r.deviceType" (ngModelChange)="pickType(r, $event, dt)" [disabled]="!addable(r)"
+                        [title]="addable(r) ? 'The device type sets the icon and, with a login, the prompts and commands' : 'This device cannot be added as a session'">
+                        <option value="">(none)</option>
+                        @for (d of deviceTypes(); track d.name) { <option [value]="d.name">{{ d.name }}</option> }
+                        <option value="+new">＋ New device type…</option>
+                      </select>
+                    </td>
+                    <td class="cx" (click)="$event.stopPropagation()">
+                      @if (actionsOf(r); as acts) {
+                        @if (acts.length) {
+                          <span class="split"><button type="button" (click)="run(r, acts[0])" [title]="acts[0].label + ' - without saving a session'">{{ acts[0].short }}</button><button type="button" class="dd" (click)="connectMenu($event, r)" title="All the ways to connect">▾</button></span>
+                        }
+                      }
+                    </td>
                   </tr>
                 }
               </tbody>
             </table>
-          </div>
-          <div class="save">
-            <label class="inline">Add
-              <select [ngModel]="saveMode()" (ngModelChange)="saveMode.set($event); savePrefs()">
-                <option value="all">all selected devices</option>
-                <option value="types">only the selected devices of these device types</option>
-              </select></label>
-            @if (saveMode() === 'types') {
-              @for (t of foundTypes(); track t) {
-                <label class="chip" [class.on]="picked().includes(t)"><input type="checkbox" [checked]="picked().includes(t)" (change)="toggleType(t)" />
-                  {{ t || '(no device type)' }} <span class="n">{{ countOf(t) }}</span></label>
-              } @empty { <span class="hint">No device can be added.</span> }
-            }
-            <span class="spacer"></span>
-            <label class="inline" title="For example Discovered/EXOS and Discovered/VOSS">
-              <input type="checkbox" [ngModel]="byType()" (ngModelChange)="byType.set($event); savePrefs()" /> A subfolder per device type</label>
           </div>
         }
       </div>
       @if (reviewing()) { <app-moved [embedded]="true" (closed)="reviewing.set(false)" /> }
       <div class="modal-foot">
         @if (rows().length) {
-          <label class="inline">Add to folder</label>
-          <app-folder-picker class="folder" [(value)]="folder" />
+          <!-- what to add, and where: here at the bottom, next to Add; usable once devices are selected -->
+          <div class="addopts" [class.off]="!selectedCount()">
+            <label class="inline">Add
+              <select [ngModel]="saveMode()" (ngModelChange)="saveMode.set($event); savePrefs()" [disabled]="!selectedCount()">
+                <option value="all">all selected devices</option>
+                <option value="types">only the selected devices of these device types</option>
+              </select></label>
+            @if (saveMode() === 'types' && selectedCount()) {
+              @for (t of foundTypes(); track t) {
+                <label class="chip" [class.on]="picked().includes(t)"><input type="checkbox" [checked]="picked().includes(t)" (change)="toggleType(t)" />
+                  {{ t || '(no device type)' }} <span class="n">{{ countOf(t) }}</span></label>
+              }
+            }
+            <label class="inline" title="For example Discovered/EXOS and Discovered/VOSS">
+              <input type="checkbox" [ngModel]="byType()" (ngModelChange)="byType.set($event); savePrefs()" [disabled]="!selectedCount()" /> a subfolder per device type</label>
+            <label class="inline">to</label>
+            <app-folder-picker class="folder" [(value)]="folder" />
+          </div>
         }
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Close</button>
         @if (rows().length) {
           <button type="button" class="primary" [disabled]="!selectedCount() || adding()" (click)="add()">
-            {{ adding() ? 'Adding…' : 'Add ' + selectedCount() + ' Session' + (selectedCount() === 1 ? '' : 's') }}</button>
+            {{ adding() ? 'Adding…' : selectedCount() ? 'Add ' + selectedCount() + ' Session' + (selectedCount() === 1 ? '' : 's') : 'Add Sessions' }}</button>
         }
       </div>
+      @if (newType(); as nt) {
+        <div class="ntype-back" (click)="newType.set(null)"></div>
+        <form class="ntype" (ngSubmit)="createType()" (click)="$event.stopPropagation()">
+          <b>New device type</b>
+          <label class="f"><span>Name</span><input name="ntname" [(ngModel)]="nt.name" placeholder="e.g. Phone, IoT, TV, Camera" required /></label>
+          <span class="f"><span>Icon</span></span>
+          <div class="icons">
+            @for (k of iconKinds; track k) {
+              <button type="button" [class.on]="nt.icon === k" (click)="nt.icon = k" [title]="kindLabel(k)"><app-device-icon [kind]="k" [size]="30" /></button>
+            }
+          </div>
+          <p class="hint">Sets the icon of the device's session. Login steps, prompts and commands can be added later in Options → Device Types.</p>
+          <div class="row end"><button type="button" (click)="newType.set(null)">Cancel</button><button type="submit" class="primary" [disabled]="!nt.name.trim()">Create</button></div>
+        </form>
+      }
     </div>
   </div>`,
   styles: [`
@@ -190,6 +217,29 @@ const ACK_KEY = 'termwright.discoverAck';
     .bar progress { width: 220px; accent-color: var(--accent); }
     .spacer { flex: 1; }
     .tbl { max-height: 52vh; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+    /* with results, only the list scrolls: the window has a fixed height, the parts above the list and the bar below stay */
+    .disc.results { height: min(880px, calc(100vh - 40px)); position: relative; }
+    .disc.results .modal-body { display: flex; flex-direction: column; overflow: hidden; overflow: clip; min-height: 0; }
+    .disc.results .modal-body > * { flex: none; }
+    .disc.results .tbl { flex: 1 1 auto; min-height: 120px; max-height: none; }
+    .modal-foot { flex-wrap: wrap; row-gap: 8px; }
+    .addopts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: calc(12.5px * var(--ui-scale, 1)); }
+    .addopts.off { opacity: .55; }
+    .addopts select { max-width: 330px; }
+    .likely { font-size: calc(11px * var(--ui-scale, 1)); }
+    .chg { display: flex; align-items: center; gap: 10px; width: 100%; font-size: calc(12.5px * var(--ui-scale, 1)); .mono { font-family: var(--mono); font-size: calc(11.5px * var(--ui-scale, 1)); } button { flex: none; } }
+    .cx { width: 1%; white-space: nowrap; }
+    .split { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden;
+      button { height: 26px; min-height: 0; border: 0; border-radius: 0; padding: 0 10px; background: var(--surface); font-size: calc(12px * var(--ui-scale, 1)); font-weight: 500; }
+      button:hover { background: var(--hover); } .dd { padding: 0 6px; border-left: 1px solid var(--border); } }
+    .ntype-back { position: absolute; inset: 0; background: rgba(0, 0, 0, .18); z-index: 20; }
+    .ntype { position: absolute; z-index: 21; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 380px; display: flex; flex-direction: column; gap: 10px;
+      padding: 16px 18px; background: var(--g-solid, var(--panel)); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow);
+      b { font-size: calc(14px * var(--ui-scale, 1)); } .f { display: flex; flex-direction: column; gap: 4px; > span { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); } }
+      .icons { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+      .icons button { height: 44px; padding: 0; display: grid; place-items: center; border: 2px solid transparent; border-radius: 10px; background: transparent; }
+      .icons button.on { border-color: var(--accent); background: var(--accent-soft); }
+      .row.end { justify-content: flex-end; } }
     table { width: 100%; }
     th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
     td, th { vertical-align: middle; }
@@ -251,7 +301,7 @@ const ACK_KEY = 'termwright.discoverAck';
     .movedbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 10px; margin-bottom: 8px; border: 1px solid color-mix(in srgb, #f59e0b 55%, var(--border)); border-radius: 6px; background: color-mix(in srgb, #f59e0b 9%, transparent); font-size: calc(12.5px * var(--ui-scale, 1)); }
     select { max-width: 150px; }
     /* before a scan the window is narrow and calm; it widens for the results */
-    .disc:not(.wide) { width: min(700px, 95vw) !important; }
+    .disc:not(.results) { width: min(700px, 95vw) !important; }
     .pre { display: flex; flex-direction: column; gap: 8px; }
     .sec { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600;
       letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
@@ -270,7 +320,7 @@ const ACK_KEY = 'termwright.discoverAck';
     .net .nv { font-size: calc(10.5px * var(--ui-scale, 1)); font-weight: 700; color: #e5a93b; background: rgba(229, 169, 59, .15); border-radius: 5px; padding: 1px 6px; }
     .net .nt { flex-basis: 100%; padding-left: 26px; font-size: calc(11px * var(--ui-scale, 1)); color: var(--faint); }
     .disc .specrow > input.spec { flex: 1 1 auto; width: auto; min-width: 160px; }
-    .disc.wide .specrow > input.spec { flex: 0 1 380px; width: 380px; }
+    .disc.results .specrow > input.spec { flex: 0 1 380px; width: 380px; }
     .opts { margin-top: 2px; }
     .opts summary { cursor: pointer; color: var(--muted); font-size: calc(12.5px * var(--ui-scale, 1)); user-select: none; b { color: var(--text); font-weight: 500; } .hint { margin-left: 5px; } }
     .opts .row { margin-top: 8px; padding-left: 14px; }
@@ -357,12 +407,24 @@ export class DiscoverDialog implements OnDestroy {
   readonly reused = computed(() => {
     const byIp = new Map(this.rows().filter(r => r.mac).map(r => [r.ip, r.mac]));
     const seen = new Set(this.rows().filter(r => r.mac).map(r => r.mac.toLowerCase()));
+    const kept = this.keptReused();
     return this.sessionNodes().filter(n => {
       const mac = normMac(n.mac);
       const now = n.hostname ? byIp.get(n.hostname) : '';
-      return !!mac && !!now && normMac(now) !== mac && !seen.has(mac);
-    }).map(n => n.path);
+      return !kept.has(n.path) && !!mac && !!now && normMac(now) !== mac && !seen.has(mac);
+    }).map(n => ({ path: n.path, ip: n.hostname!, oldMac: n.mac!, newMac: byIp.get(n.hostname!)! }));
   });
+  /** "Keep": sessions whose changed address the user has seen and left as they are (for this window). */
+  private readonly keptReused = signal(new Set<string>());
+  keepReused(path: string) { this.keptReused.update(s => new Set([...s, path])); }
+  /** "Update the session": the device now at the address becomes the session's device. */
+  async updateReused(u: { path: string; newMac: string }) {
+    try {
+      await this.backend.replaceMac(u.path, u.newMac);
+      await this.ui.refreshTree();
+      this.ui.toast(`${u.path.split('/').pop()} now belongs to the device ${u.newMac}`, 'success');
+    } catch (e) { this.ui.error(e); }
+  }
 
   async rememberMacs() {
     const list = this.noMac();
@@ -447,6 +509,93 @@ export class DiscoverDialog implements OnDestroy {
   }
   allSelected() { const a = this.shown().filter(r => r.protocol); return a.length > 0 && a.every(r => r.selected); }
   kindLabel(k: string) { return DEVICE_KINDS[k as DeviceKind]?.label ?? 'Unknown device'; }
+
+  /** What a device is: the scan's answer, or - for an unknown one - a best guess with its reason. */
+  typeOf(r: Row): { kind: DeviceKind; label: string; why: string } {
+    const own = customDeviceKinds().get((r.deviceType || '').toLowerCase()); // a device type given an icon (e.g. "Phone") decides
+    if (own) return { kind: own, label: this.kindLabel(own), why: '' };
+    const k = (r.kind || 'unknown') as DeviceKind;
+    if (k !== 'unknown') return { kind: k, label: this.kindLabel(k), why: '' };
+    const vendor = r.vendor || r.macVendor || '';
+    const web = r.services.includes('http') || r.services.includes('https');
+    const login = r.services.some(x => ['ssh', 'telnet', 'rdp', 'vnc', 'smb'].includes(x));
+    const v = vendor.toLowerCase();
+    if (/hikvision|dahua|axis comm|reolink|amcrest|uniview|wyze|foscam|hanwha/.test(v)) return { kind: 'camera', label: 'Camera', why: 'likely: ' + vendor };
+    if (/\blg electronics|samsung electronics|sony|roku|vizio|tcl|hisense|philips|sharp|panasonic|chromecast/.test(v) && !login)
+      return { kind: 'tv', label: 'TV / media player', why: 'likely: ' + vendor + (web ? ', web service' : '') };
+    if (web && !login && /tp-?link|netgear|asus|ubiquiti|mikrotik|d-?link|linksys|huawei|zte|tenda|cisco|aruba|ruckus|avm|fritz|draytek|zyxel|sagemcom|technicolor|arris|actiontec|cambium|edimax|buffalo|totolink|mercusys|xiaomi/.test(v))
+      return { kind: 'router', label: 'Router / access point', why: 'likely: ' + vendor + ', web admin only' };
+    if (/\.1$/.test(r.ip) && (web || r.services.includes('ssh')))
+      return { kind: 'router', label: 'Router / gateway', why: 'likely: the gateway address' + (web ? ', web admin' : '') };
+    return { kind: 'unknown', label: this.kindLabel('unknown'), why: '' };
+  }
+
+  // ---- device types made here ----
+  readonly newType = signal<{ row: Row; name: string; icon: DeviceKind } | null>(null);
+  readonly iconKinds: DeviceKind[] = ['mobile', 'iot', 'tv', 'camera', 'router', 'wireless', 'printer', 'computer', 'server', 'nas', 'phone', 'switch', 'firewall', 'unknown'];
+  pickType(r: Row, v: string, el: HTMLSelectElement) {
+    if (v !== '+new') { r.deviceType = v; r.touched = true; return; }
+    // the list keeps showing "+ New…": put the device's type back, then ask for the new one
+    queueMicrotask(() => { el.value = r.deviceType || ''; });
+    const t = this.typeOf(r);
+    const names: Partial<Record<DeviceKind, string>> = { mobile: 'Phone', iot: 'IoT', tv: 'TV', camera: 'Camera', router: 'Router', wireless: 'Access Point', printer: 'Printer', unknown: 'Unknown' };
+    this.rows.update(l => [...l]);
+    this.newType.set({ row: r, name: names[t.kind] ?? '', icon: t.kind });
+  }
+  async createType() {
+    const nt = this.newType();
+    if (!nt || !nt.name.trim()) return;
+    const name = nt.name.trim();
+    const list = this.ui.settings()?.deviceTypes ?? [];
+    const existing = list.find(d => d.name.toLowerCase() === name.toLowerCase());
+    const types: DeviceType[] = existing
+      ? list.map(d => (d === existing ? { ...d, icon: nt.icon } : d))
+      : [...list, { name, icon: nt.icon, protocol: nt.row.protocol === 'Telnet' ? 'Telnet' : 'SSH2', port: 0, username: '', credential: '', initialCr: false,
+          loginSteps: null, afterLogin: null, prompt: '' }];
+    try {
+      await this.ui.patchSettings({ deviceTypes: types });
+      nt.row.deviceType = existing?.name ?? name;
+      nt.row.touched = true;
+      this.rows.update(l => [...l]);
+      this.newType.set(null);
+    } catch (e) { this.ui.error(e); }
+  }
+
+  // ---- connecting from the list: every way the device answered ----
+  actionsOf(r: Row): { id: string; label: string; short: string }[] {
+    const has = (x: string) => r.services.includes(x);
+    const out: { id: string; label: string; short: string }[] = [];
+    if (has('ssh')) out.push({ id: 'ssh', label: 'SSH', short: 'SSH' }, { id: 'sftp', label: 'SFTP (files)', short: 'SFTP' });
+    if (has('telnet')) out.push({ id: 'telnet', label: 'Telnet', short: 'Telnet' });
+    if (has('rdp')) out.push({ id: 'rdp', label: 'Remote Desktop (RDP)', short: 'RDP' });
+    if (has('vnc')) out.push({ id: 'vnc', label: 'VNC', short: 'VNC' });
+    if (has('https')) out.push({ id: 'https', label: 'Web interface (HTTPS)', short: 'Web' });
+    if (has('http')) out.push({ id: 'http', label: 'Web interface (HTTP)', short: 'Web' });
+    // the recommended one first: the login the scan chose (SSH before Telnet; RDP for Windows), else the web interface
+    const best = ({ SSH2: 'ssh', Telnet: 'telnet', RDP: 'rdp', VNC: 'vnc' } as Record<string, string>)[r.protocol] ?? '';
+    const i = out.findIndex(a => a.id === best);
+    if (i > 0) out.unshift(...out.splice(i, 1));
+    return out;
+  }
+  connectMenu(ev: MouseEvent, r: Row) {
+    ev.stopPropagation();
+    const acts = this.actionsOf(r);
+    this.ui.showMenu(ev, acts.map((a, i) => ({ label: a.label + (i === 0 ? ' - recommended' : ''), action: () => void this.run(r, a) })));
+  }
+  /** Opens the device the chosen way without saving a session (the window stays open). */
+  async run(r: Row, a: { id: string }) {
+    if (a.id === 'http' || a.id === 'https') { this.backend.openURL(`${a.id}://${r.ip}/`); return; }
+    const proto: Record<string, [string, number]> = { ssh: ['SSH2', 22], sftp: ['SSH2', 22], telnet: ['Telnet', 23], rdp: ['RDP', 3389], vnc: ['VNC', 5900] };
+    const [p, port] = proto[a.id];
+    try {
+      const s = await this.sessionFor(r);
+      s.protocol = p;
+      s.port = r.protocol === p && r.port ? r.port : port;
+      if (a.id === 'sftp') s.openAs = 'sftp';
+      await this.tabs.openAdHoc(s);
+      this.ui.toast(`Connecting to ${r.name || r.ip} - the tab opens behind this window`, 'info');
+    } catch (e) { this.ui.error(e); }
+  }
   svcLabel(s: string) {
     return ({ ssh: 'SSH', telnet: 'Telnet', http: 'HTTP', https: 'HTTPS', smb: 'SMB', rdp: 'RDP', printer: 'Print', ipp: 'IPP', sip: 'SIP', 'sip-udp': 'SIP', mdns: 'mDNS', snmp: 'SNMP', esphome: 'ESPHome', mqtt: 'MQTT', modbus: 'Modbus', coap: 'CoAP', vnc: 'VNC' } as Record<string, string>)[s] ?? s;
   }
@@ -551,7 +700,8 @@ export class DiscoverDialog implements OnDestroy {
 
   rowMenu(ev: MouseEvent, r: Row) {
     this.ui.showMenu(ev, [
-      { label: r.protocol ? `Connect (${r.protocol})` : 'No SSH, Telnet, RDP or VNC port answered', disabled: !r.protocol, action: () => void this.connect(r) },
+      ...(this.actionsOf(r).length ? this.actionsOf(r).map((a, i) => ({ label: 'Connect: ' + a.label + (i === 0 ? ' - recommended' : ''), action: () => void this.run(r, a) }))
+        : [{ label: 'No SSH, Telnet, RDP, VNC or web service answered', disabled: true }]),
       { separator: true },
       { label: 'Copy IP Address', action: () => this.copy(r.ip, 'IP address') },
       { label: r.mac ? 'Copy MAC Address (' + r.mac + ')' : 'Copy MAC Address', disabled: !r.mac, action: () => this.copy(r.mac, 'MAC address') },

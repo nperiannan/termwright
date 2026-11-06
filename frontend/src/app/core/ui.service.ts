@@ -28,6 +28,10 @@ export class Ui {
   readonly lightUi = signal(false);
   /** Tab the Key Login Setup dialog works on ('' = generate a key only). */
   readonly keySetupTab = signal('');
+  /** A key chosen for Key Login Setup in advance (the session panel's "copy the key at the first login"). */
+  readonly keySetupKey = signal('');
+  /** Sessions whose key is to be copied to the server at their next login: session path → private key file. */
+  readonly keyInstallAtLogin = new Map<string, string>();
   /** SSH terminal tab the Set Up Remote Desktop dialog works on. */
   readonly remoteDesktopTab = signal('');
   /** Folder whose defaults the Folder Defaults dialog edits. */

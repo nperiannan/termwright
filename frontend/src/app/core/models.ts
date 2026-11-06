@@ -25,7 +25,7 @@ export interface Session {
 
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
-  name: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
+  name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
   loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string;
   facts?: FactRule[] | null;
 }

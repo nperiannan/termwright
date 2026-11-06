@@ -148,6 +148,9 @@ export class KeySetupDialog implements OnInit {
     this.comment = d.comment;
     this.existing.set(d.existing);
     this.use = !!t?.session.path;
+    const k = this.ui.keySetupKey();
+    if (k && t) { this.mode = 'existing'; this.path = k; if (!d.existing.includes(k)) this.existing.set([k, ...d.existing]); }
+    this.ui.keySetupKey.set('');
     this.cdr.markForCheck();
   }
 

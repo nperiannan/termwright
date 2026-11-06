@@ -90,3 +90,21 @@ func TestAddRecentKeepsTwelve(t *testing.T) {
 		t.Fatalf("%v", r)
 	}
 }
+
+func TestOldDefaultFontBecomesNew(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"fontFamily": "`+OldDefaultFontFamily+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Get().FontFamily != DefaultFontFamily {
+		t.Fatal(m.Get().FontFamily)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"fontFamily": "Fira Code"}`), 0o600)
+	if m, _ := Load(dir); m.Get().FontFamily != "Fira Code" {
+		t.Fatal("a chosen font changed")
+	}
+}

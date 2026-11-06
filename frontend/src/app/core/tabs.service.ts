@@ -551,6 +551,13 @@ export class Tabs {
       this.backend.on('term:status:' + ti.id, (st: { state: string; message: string; info: string }) => {
         const before = this.get(ti.id)?.state;
         if (st.state === 'connected' && before !== 'connected') this.factsAfterConnect(ti.id);
+        const key = st.state === 'connected' && before !== 'connected' && ti.session.path ? this.ui.keyInstallAtLogin.get(ti.session.path) : '';
+        if (key) {
+          this.ui.keyInstallAtLogin.delete(ti.session.path!);
+          this.ui.keySetupTab.set(ti.id);
+          this.ui.keySetupKey.set(key);
+          setTimeout(() => this.ui.open('keySetup'), 600); // after the login, so the dialog is not covered by the first output
+        }
         this.patch(ti.id, { state: st.state, message: st.message, info: st.info,
           ...(st.state === 'connected' ? { wasConnected: true, step: '' } : {}) });
         const h = this.handles.get(ti.id);

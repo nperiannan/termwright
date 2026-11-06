@@ -1,11 +1,15 @@
 @use 'glacier';
 /* Termwright global styles */
+/* The terminal and code font everywhere: DejaVu Sans Mono, which Menlo (the Mac's) was made from, shipped with the app so
+   Windows and Linux look like the Mac. The Mac keeps Menlo itself. */
+@font-face { font-family: 'Termwright Mono'; src: url('/fonts/DejaVuSansMono.woff2') format('woff2'); font-weight: 400; font-display: block; }
+@font-face { font-family: 'Termwright Mono'; src: url('/fonts/DejaVuSansMono-Bold.woff2') format('woff2'); font-weight: 700; font-display: block; }
 :root {
   --bg: #1e1f22; --chrome: #26272b; --panel: #222327; --tab: #2b2c31; --border: #36373d;
   --text: #dcdde1; --muted: #8b8e96; --hover: #303138; --selected: #2c3b55; --accent: #4f9cf7;
   --folder: #d9b45a; --folder-from: #38bdf8; --folder-to: #818cf8; --ok: #43c46b; --warn: #e5b33b; --danger: #d9534f;
   --input-bg: #18191c; --shadow: 0 8px 30px rgba(0, 0, 0, .45);
-  --mono: Menlo, Consolas, 'DejaVu Sans Mono', 'Courier New', monospace;
+  --mono: Menlo, 'Termwright Mono', Consolas, 'Courier New', monospace;
   // interface font and text size (Global Options → General); 13 px system font by default
   --ui-font: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, sans-serif; --ui-scale: 1;
   // design tokens (0.21): one spacing scale, three radii, raised surfaces

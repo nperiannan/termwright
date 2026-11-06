@@ -1,8 +1,8 @@
-import { Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
 import { Ui } from '../core/ui.service';
 
 /** Kinds of discovered devices. */
-export type DeviceKind = 'computer' | 'server' | 'nas' | 'phone' | 'mobile' | 'iot' | 'printer' | 'switch' | 'router' | 'firewall' | 'wireless' | 'unknown';
+export type DeviceKind = 'computer' | 'server' | 'nas' | 'phone' | 'mobile' | 'iot' | 'printer' | 'switch' | 'router' | 'firewall' | 'wireless' | 'tv' | 'camera' | 'unknown';
 
 export const DEVICE_KINDS: Record<DeviceKind, { from: string; to: string; label: string }> = {
   switch: { from: '#2dd4bf', to: '#0d9488', label: 'Network switch' },
@@ -16,6 +16,8 @@ export const DEVICE_KINDS: Record<DeviceKind, { from: string; to: string; label:
   mobile: { from: '#22d3ee', to: '#0891b2', label: 'Mobile phone / tablet' },
   iot: { from: '#a3e635', to: '#65a30d', label: 'IoT / embedded board' },
   printer: { from: '#fdba74', to: '#ea580c', label: 'Printer' },
+  tv: { from: '#818cf8', to: '#4f46e5', label: 'TV / media player' },
+  camera: { from: '#f87171', to: '#dc2626', label: 'Camera' },
   unknown: { from: '#cbd5e1', to: '#64748b', label: 'Unknown device' },
 };
 
@@ -44,15 +46,27 @@ const GLYPHS: Record<DeviceKind, Glyph> = {
     cut: 'M9.5 9.5h5v5h-5z', line: 'M9 2v3M12 2v3M15 2v3M9 19v3M12 19v3M15 19v3M2 9h3M2 12h3M2 15h3M19 9h3M19 12h3M19 15h3' },
   printer: { body: 'M7 3h10v4.6H7zM3 11.5A2.5 2.5 0 0 1 5.5 9h13a2.5 2.5 0 0 1 2.5 2.5v4a2.5 2.5 0 0 1-2.5 2.5H18v-3H6v3h-.5A2.5 2.5 0 0 1 3 15.5zM7.4 16.4h9.2V21H7.4z',
     leds: [[17.6, 11.8]] },
+  tv: { body: 'M2.5 6.5A2.5 2.5 0 0 1 5 4h14a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 19 17H5a2.5 2.5 0 0 1-2.5-2.5z',
+    cut: 'M4.6 6h14.8v9H4.6z', line: 'M7.5 20.5 9 17M16.5 20.5 15 17' },
+  camera: { body: 'M3 8.5A2.5 2.5 0 0 1 5.5 6h8A2.5 2.5 0 0 1 16 8.5v7a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 3 15.5zM16.5 10.6 21 8v8l-4.5-2.6z',
+    cut: 'M9.5 9.4a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2z' },
   unknown: { body: 'M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z',
     cutLine: 'M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4', leds: [[12, 16.8]] },
 };
 
 /** The kind of device a session's device type names ("VOSS" → switch,
  *  "Linux" → server); '' when the name says nothing about it. */
+/** Icons chosen for device types (Device Types, or New device type in Discover Devices): lower-case name → kind.
+ *  Filled from the settings by the Ui service. */
+export const customDeviceKinds = signal<ReadonlyMap<string, DeviceKind>>(new Map());
+
 export function deviceKindOf(deviceType: string | undefined): DeviceKind | '' {
   const t = (deviceType ?? '').toLowerCase();
   if (!t) return '';
+  const own = customDeviceKinds().get(t);
+  if (own) return own;
+  if (/\btv\b|television|media player|chromecast|roku|apple tv|fire ?tv|android tv/.test(t)) return 'tv';
+  if (/camera|\bcam\b|ip ?cam|nvr|cctv|hikvision|dahua|reolink/.test(t)) return 'camera';
   if (/firewall|fortigate|fortios|palo|pan-?os|asa\b|pfsense|opnsense|srx|checkpoint|sonicwall/.test(t)) return 'firewall';
   if (/wireless|wi-?fi|\bap\b|access point|wing|aruba ?os|unifi/.test(t)) return 'wireless';
   if (/router|ios-?xr|junos|mikrotik|routeros|vyos|edgeos|isr|asr/.test(t)) return 'router';

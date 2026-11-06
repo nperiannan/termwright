@@ -184,6 +184,23 @@ func (a *App) RememberMACs(macs map[string]string) (int, error) {
 	return n, nil
 }
 
+// ReplaceMAC saves the device now answering at a session's address as the
+// session's device (Discover Devices: "the address is now another device" →
+// Update the session).
+func (a *App) ReplaceMAC(path, mac string) error {
+	mac = discover.NormalizeMAC(mac)
+	if mac == "" {
+		return errors.New("no MAC address")
+	}
+	s, err := a.store.Get(path)
+	if err != nil {
+		return err
+	}
+	s.MAC = mac
+	_, err = a.SaveSession(s, path)
+	return err
+}
+
 // SetNoCursorReport saves a session's "Do not answer cursor position requests"
 // (set by the terminal when the device printed the answer as text).
 func (a *App) SetNoCursorReport(path string, on bool) error {

@@ -115,7 +115,30 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
               @for (v of envs(); track v.id) { <option [value]="v.id">{{ v.label }}</option> }
             </select></label>
         </div>
-        @if (hasLogin()) {
+        @if (s.protocol === 'SSH2') {
+          <!-- how an SSH session logs in: the order of s.authMethods, chosen in three plain words -->
+          <div class="f"><span>Log in with</span>
+            <div class="seg auth">
+              <button type="button" [class.on]="authMode() === 'password'" (click)="setAuth('password')">Password</button>
+              <button type="button" [class.on]="authMode() === 'key'" (click)="setAuth('key')">Key</button>
+              <button type="button" [class.on]="authMode() === 'both'" (click)="setAuth('both')">Key, then password</button>
+            </div>
+            @if (authMode() === 'password') { <small class="hint">Password prompts and keyboard-interactive (one-time codes) are both answered.</small> }
+          </div>
+          @if (authMode() !== 'password') {
+            <div class="keybox">
+              <label class="f"><span>Private key</span>
+                <div class="pwrow"><input name="idf" class="mono" [(ngModel)]="s.identityFile" placeholder="the default keys and the SSH agent" spellcheck="false" autocomplete="off" />
+                  <button type="button" (click)="chooseKey()">Choose…</button></div></label>
+              <div class="krow"><button type="button" (click)="genKey()" [disabled]="genBusy() || !s.hostname.trim()"
+                  [title]="s.hostname.trim() ? 'An Ed25519 key for this server, in your .ssh folder' : 'Enter the address first'">＋ Generate a new key</button>
+                @if (genMsg()) { <span class="genok">{{ genMsg() }}</span> }</div>
+              <label class="kinst"><input type="checkbox" name="instKey" [(ngModel)]="installKey" />
+                <span>Copy the key to the server at the first login<small>Asks for the password once, adds the public key to the server and checks that the key works; the password stays as a fallback.</small></span></label>
+            </div>
+          }
+        }
+        @if (hasLogin() && !(s.protocol === 'SSH2' && authMode() === 'key' && !installKey)) {
           <div class="f"><span>Password</span>
             <div class="pwrow">
               @if (noPw) {
@@ -202,6 +225,14 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
     .pwrow { display: flex; gap: 10px; align-items: center; }
     .pwrow > input, .pwrow > .pwbox { flex: 1; min-width: 0; }
     .pwbox.off { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); cursor: default; }
+    .auth button { font-size: calc(12.5px * var(--ui-scale, 1)); }
+    .hint { color: var(--faint); font-size: calc(11.5px * var(--ui-scale, 1)); margin-top: 4px; display: block; }
+    .keybox { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface);
+      .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); } }
+    .krow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .genok { color: var(--ok); font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; }
+    .kinst { display: flex; gap: 8px; align-items: flex-start; font-size: calc(12.5px * var(--ui-scale, 1)); cursor: pointer;
+      input { margin-top: 2px; } small { display: block; color: var(--faint); font-size: calc(11.5px * var(--ui-scale, 1)); line-height: 1.4; } }
     .nopw { display: flex; gap: 5px; align-items: center; white-space: nowrap; font-size: calc(12.5px * var(--ui-scale, 1)); color: var(--muted); }
     .pwbox { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r);
       background: var(--input-bg); text-align: left; .dots { flex: 1; color: var(--muted); letter-spacing: .05em; }
@@ -254,12 +285,56 @@ export class SessionPanel {
   noPw = false;
   s: Session | null = null;
   pw = '';
+  /** Copy the key to the server when the session first connects (Key Login Setup opens then). */
+  installKey = false;
+  readonly genBusy = signal(false);
+  readonly genMsg = signal('');
+
+  /** How the SSH session logs in, from its authentication order. */
+  authMode(): 'password' | 'key' | 'both' {
+    const m = (this.s?.authMethods ?? '').split(',').filter(Boolean);
+    const key = m.includes('publickey'), pw = m.includes('password') || m.includes('keyboard-interactive');
+    return key && !pw ? 'key' : !key ? 'password' : 'both';
+  }
+  setAuth(mode: 'password' | 'key' | 'both') {
+    if (!this.s) return;
+    // keyboard-interactive and password go together: servers use either for the same password (and for one-time codes)
+    const keep = (this.s.authMethods ?? '').split(',').filter(a => a && !['publickey', 'keyboard-interactive', 'password'].includes(a)); // e.g. gssapi
+    const base = mode === 'password' ? ['keyboard-interactive', 'password'] : mode === 'key' ? ['publickey'] : ['publickey', 'keyboard-interactive', 'password'];
+    this.s.authMethods = [...keep, ...base].join(',');
+    if (mode === 'password') this.installKey = false;
+  }
+  async chooseKey() {
+    const p = await this.backend.chooseOpenFile('Choose Private Key').catch(() => '');
+    if (p && this.s) this.s.identityFile = p.replace(/\.pub$/, '');
+  }
+  /** A new Ed25519 key for this server (no passphrase; Key Login Setup makes one with a passphrase). */
+  async genKey() {
+    const s = this.s;
+    if (!s || !s.hostname.trim()) return;
+    this.genBusy.set(true);
+    this.genMsg.set('');
+    try {
+      const d = await this.backend.keySetupDefaults(s.hostname.trim());
+      const file = d.defaultPath.split(/[\\/]/).pop();
+      if (d.existing.includes(d.defaultPath)) this.genMsg.set(`✓ ${file} already exists - it is used`);
+      else {
+        await this.backend.generateKeyPair('ed25519', d.defaultPath, d.comment, '');
+        this.genMsg.set(`✓ ${file} created (Ed25519)`);
+      }
+      s.identityFile = d.defaultPath;
+      this.installKey = true;
+    } catch (e) { this.error.set(errText(e)); }
+    this.genBusy.set(false);
+  }
 
   constructor() {
     effect(() => {
       const e = this.edit();
       this.s = structuredClone(e.session);
       this.pw = '';
+      this.installKey = false;
+      this.genMsg.set('');
       this.noPw = false;
       this.error.set('');
       this.pwState.set('');
@@ -380,8 +455,12 @@ export class SessionPanel {
     s.port = Number(s.port) || 0;
     try {
       const e = this.edit();
+      const install = s.protocol === 'SSH2' && this.authMode() !== 'password' && this.installKey && !!s.identityFile.trim();
+      // the first login, before the key is on the server, needs the password: tried after the key
+      if (install && this.authMode() === 'key') this.setAuth('both');
       const saved = await storeSession(this.ui, this.backend, this.tabs, s, e.oldPath, e.tabId,
         { pw: this.noPw ? '' : this.pw, noPw: this.noPw, wasEmpty: this.pwState() === 'empty' });
+      if (install) this.ui.keyInstallAtLogin.set(saved.path, s.identityFile.trim());
       this.close();
       if (connect) await this.tabs.openSession(saved.path);
       else this.ui.toast(`Saved ${saved.name}`, 'success');

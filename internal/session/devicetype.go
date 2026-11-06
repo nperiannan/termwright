@@ -6,7 +6,9 @@ import "strings"
 // Cisco IOS, Linux …). A session or a Quick Connect picks one by name, so a
 // connection needs only the address and the device type.
 type DeviceType struct {
-	Name     string `json:"name"`
+	Name string `json:"name"`
+	// Icon is the device picture for its sessions ("phone", "iot", "tv"…); "" = from the name.
+	Icon     string `json:"icon,omitempty"`
 	Protocol string `json:"protocol"` // default protocol for Quick Connect ("" = SSH2)
 	Port     int    `json:"port"`     // default port (0 = protocol default)
 	Username string `json:"username"` // login name; sessions inherit it unless they set OwnLogin

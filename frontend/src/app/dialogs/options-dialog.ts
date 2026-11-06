@@ -9,6 +9,7 @@ import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
 import { DEFAULT_ENVIRONMENTS, ENV_COLORS, envFg } from '../core/env';
 import { UI_FONTS, UI_SIZES, uiFontStack } from '../core/ui-fonts';
+import { DEVICE_KINDS } from '../components/device-icon';
 
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
 type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards';
@@ -363,6 +364,11 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
               @if (curDevice(); as d) {
                 <div class="grid">
                   <label>Name</label><input name="dtn" [(ngModel)]="d.name" />
+                  <label>Icon</label>
+                  <select name="dti" [ngModel]="d.icon || ''" (ngModelChange)="d.icon = $event || undefined" title="The picture of this device type's sessions">
+                    <option value="">From the name</option>
+                    @for (k of deviceKinds; track k.v) { <option [value]="k.v">{{ k.label }}</option> }
+                  </select>
                   <label>Default protocol</label>
                   <div class="row">
                     <select name="dtp" [(ngModel)]="d.protocol">@for (p of protocols; track p) { <option [value]="p">{{ p }}</option> }</select>
@@ -600,6 +606,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
 export class OptionsDialog implements OnInit {
   protected ui = inject(Ui);
   readonly uiFonts = UI_FONTS;
+  readonly deviceKinds = Object.entries(DEVICE_KINDS).map(([v, k]) => ({ v, label: k.label }));
   readonly uiSizes = UI_SIZES;
   readonly factNames = FACT_NAMES;
   readonly modern = () => this.ui.settings()?.layout !== 'classic';

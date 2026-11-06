@@ -9,7 +9,7 @@ import { SessionNode } from './core/models';
 import { ago } from './core/env';
 import { factList } from './core/facts';
 import { SessionIcon } from './components/session-icon';
-import { DeviceIcon, deviceKindOf } from './components/device-icon';
+import { DeviceIcon, DeviceKind, customDeviceKinds, deviceKindOf } from './components/device-icon';
 import { protoName, sessionAddr } from './components/session-tree';
 import { SessionPanel } from './components/session-panel';
 import { menuBar, shortcutOf } from './core/menu';
@@ -321,6 +321,8 @@ export class App implements OnInit {
       this.ui.lightUi.set(light);
       const root = document.documentElement.style;
       root.setProperty('--ui-font', uiFontStack(this.settings()?.uiFont));
+      // icons chosen for device types (e.g. "Phone", "TV" made in Discover Devices)
+      customDeviceKinds.set(new Map((this.settings()?.deviceTypes ?? []).filter(d => d.icon).map(d => [d.name.toLowerCase(), d.icon as DeviceKind])));
       root.setProperty('--ui-scale', String(uiFontSize(this.settings()?.uiFontSize) / 13));
       const accent = this.settings()?.accentColor;
       if (accent) document.documentElement.style.setProperty('--accent', accent);

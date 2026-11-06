@@ -1,6 +1,11 @@
-/** Interface fonts (Global Options → General). The default is the system font Termwright always used. */
+const isMac = typeof navigator !== 'undefined' && (navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac OS'));
+const SYSTEM = "system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, sans-serif";
+
+/** Interface fonts (Global Options → General). The default looks like the Mac everywhere: the Mac's own font on macOS,
+ *  Inter (shipped with Termwright, the closest open font) on Windows and Linux. */
 export const UI_FONTS: { v: string; label: string; stack: string }[] = [
-  { v: '', label: 'System (default)', stack: "system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, sans-serif" },
+  { v: '', label: isMac ? 'macOS (default)' : 'Mac look - Inter (default)', stack: isMac ? SYSTEM : "'Inter Variable', 'Inter', " + SYSTEM },
+  { v: 'system', label: 'System font of this computer', stack: SYSTEM },
   { v: 'vscode', label: 'VS Code (the font VS Code uses on each system)', stack: "-apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Ubuntu', 'Droid Sans', sans-serif" },
   { v: 'inter', label: 'Inter (wide and very readable)', stack: "'Inter Variable', 'Inter', system-ui, sans-serif" },
   { v: 'plex', label: 'IBM Plex Sans (technical, clear digits)', stack: "'IBM Plex Sans', system-ui, sans-serif" },

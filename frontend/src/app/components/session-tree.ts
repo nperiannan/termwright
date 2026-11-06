@@ -773,11 +773,13 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'Copy', hint: this.keys('C'), action: () => this.ops.copy([{ path: n.path, folder: true }]) },
           { label: 'Cut', hint: this.keys('X'), action: () => this.ops.cut([{ path: n.path, folder: true }]) },
           ...(this.ops.clip() ? [{ label: 'Paste' + this.clipWhat(), hint: this.keys('V'), action: () => void this.ops.paste(n.path) }] : []),
-          { label: 'Folder Defaults...', action: () => { this.ui.folderDefaultsFor.set(n.path); this.ui.open('folderDefaults'); } },
           { label: 'Environment' + this.envSuffix(this.ownFolderEnv(n.path), this.folderEnv(n.path)) + '...', action: () => void this.chooseEnv(n) },
           { label: 'Export Folder...', action: () => this.ui.open('export') },
           { separator: true },
           { label: 'Delete Folder', action: () => this.deleteFolder(n) },
+          // a folder's "properties" are its defaults: last, like Properties for a session
+          { separator: true },
+          { label: 'Folder Defaults...', action: () => { this.ui.folderDefaultsFor.set(n.path); this.ui.open('folderDefaults'); } },
         ]
       : [
           ...(n.protocol === 'SSH2' ? [
@@ -798,7 +800,6 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(n.mac && n.protocol !== 'WOL' && !up ? [{ label: 'Wake Up and Connect', action: () => void this.wake(n.path, 'connect') }] : []),
           ...(n.protocol === 'WOL' && n.hostname ? [{ label: 'Check Now (ping)', action: () => this.wol.checkNow(n.path) }] : []),
           { separator: true },
-          { label: 'Properties...', action: () => this.ui.editSession(n.path) },
           { label: 'Environment' + this.envSuffix(n.environment ?? '', envOf(n.path, '', this.ui.settings()?.folderDefaults)) + '...', action: () => void this.chooseEnv(n) },
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }] : []),
           { label: this.isFav(n.path) ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav([n.path], !this.isFav(n.path)) },
@@ -824,6 +825,9 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(n.protocol === 'WOL' ? [] : [{ label: 'Forget Saved Password', action: () => this.backend.forgetPassword(n.path).then(() => this.ui.toast('Password removed')) }]),
           { separator: true },
           { label: 'Delete', action: () => this.deleteSession(n) },
+          // always the last line, where it is found without searching
+          { separator: true },
+          { label: 'Properties...', action: () => this.ui.editSession(n.path) },
         ];
     this.ui.showMenu(ev, items);
   }

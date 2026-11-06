@@ -301,7 +301,7 @@ func Defaults(dataDir string) Settings {
 		SessionsDir:     filepath.Join(dataDir, "Config", "Sessions"),
 		LogDir:          filepath.Join(dataDir, "Logs"),
 		DownloadDir:     defaultDownloads(),
-		FontFamily:      "Menlo, Consolas, 'DejaVu Sans Mono', 'Courier New', monospace",
+		FontFamily:      DefaultFontFamily,
 		FontSize:        14,
 		LineHeight:      1,
 		Theme:           "system",
@@ -411,6 +411,11 @@ func Load(dataDir string) (*Manager, error) {
 		return nil, err
 	}
 	changed := defaultUpdateRepo(&m.cur)
+	// 0.29: the terminal font that was the default becomes the new default (the
+	// bundled Termwright Mono instead of Consolas on Windows); a font chosen stays.
+	if m.cur.FontFamily == OldDefaultFontFamily {
+		m.cur.FontFamily, changed = DefaultFontFamily, true
+	}
 	// Until 0.20.0 the theme was dark unless changed; it now follows the
 	// system (once - a theme chosen afterwards stays).
 	if !m.cur.ThemeFollowsSystem {
@@ -571,6 +576,14 @@ func (m *Manager) Save(s Settings) error {
 
 // maxRecent is how many recent sessions are kept: four rows of three cards.
 const maxRecent = 12
+
+// DefaultFontFamily is the terminal font: Menlo on the Mac, elsewhere the bundled
+// Termwright Mono (DejaVu Sans Mono, which Menlo was made from), so terminals look
+// alike on every system.
+const DefaultFontFamily = "Menlo, 'Termwright Mono', Consolas, 'Courier New', monospace"
+
+// OldDefaultFontFamily was the default before 0.29: a setting with it gets the new default.
+const OldDefaultFontFamily = "Menlo, Consolas, 'DejaVu Sans Mono', 'Courier New', monospace"
 
 // AddRecent records a recently used session path (at most maxRecent).
 func (m *Manager) AddRecent(p string) {
