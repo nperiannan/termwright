@@ -221,7 +221,8 @@ const ACK_KEY = 'termwright.discoverAck';
     .disc.results { height: min(880px, calc(100vh - 40px)); position: relative; }
     .disc.results .modal-body { display: flex; flex-direction: column; overflow: hidden; overflow: clip; min-height: 0; }
     .disc.results .modal-body > * { flex: none; }
-    .disc.results .tbl { flex: 1 1 auto; min-height: 120px; max-height: none; }
+    /* the list takes the rest of the height and scrolls (as specific as the rule above, which would otherwise stop it growing) */
+    .disc.results .modal-body > .tbl { flex: 1 1 0; min-height: 120px; max-height: none; overflow: auto; }
     .modal-foot { flex-wrap: wrap; row-gap: 8px; }
     .addopts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: calc(12.5px * var(--ui-scale, 1)); }
     .addopts.off { opacity: .55; }
@@ -246,8 +247,9 @@ const ACK_KEY = 'termwright.discoverAck';
     tr { cursor: default; }
     tr.dim td { opacity: .6; }
     .c { width: 28px; text-align: center; }
-    .sys { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    tr.opened .sys { white-space: normal; }
+    /* narrow and wrapping, so the device type and Connect columns fit beside it */
+    .sys { max-width: 250px; white-space: normal; overflow-wrap: anywhere; }
+
     .info { border: 0; background: none; padding: 0 4px 0 0; height: auto; color: var(--muted); cursor: pointer; font-size: calc(13px * var(--ui-scale, 1)); }
     .info.on, .info:hover { color: var(--accent); }
     .ev { margin: 4px 0 2px; padding-left: 16px; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); white-space: normal; user-select: text; }
