@@ -186,6 +186,8 @@ SSH keys on smart cards and tokens - PIV and CAC cards, YubiKey (PIV), SafeNet e
 
 A switch or appliance with old firmware may offer only weak algorithms (for example `diffie-hellman-group1-sha1`, `aes128-cbc` or `hmac-sha1`). Termwright does not use them by default, so the connection fails with *ssh: handshake failed … no common algorithm for key exchange*; the error then tells you what to do. In Session Options → **Authentication** → **Algorithms**, tick **Allow legacy algorithms (for old devices)** for that session only.
 
+The same switch is in **Quick Connect** (SSH: *Allow legacy algorithms*), for a connection without a saved session. For many sessions at once - e.g. a folder of old switches - right-click the folder → **Edit All Sessions in Folder…** (or select sessions → *Edit N Sessions…*), tick **Old SSH algorithms** and *Allow legacy algorithms*; only SSH sessions are changed ([#4](https://github.com/nperiannan/termwright/issues/4)).
+
 ![Allow legacy algorithms](screenshots/algorithms.png)
 
 The old algorithms are added at the **end** of each list, so a device that also offers modern ones still gets them. To control the lists yourself, fill in **Key exchange**, **Ciphers**, **MACs** and **Host key** with names separated by commas, in the OpenSSH way:

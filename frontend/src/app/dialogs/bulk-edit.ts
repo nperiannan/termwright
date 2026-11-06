@@ -12,9 +12,9 @@ import { Icon } from '../components/icon';
 /** Fields the dialog can change; a field is applied only when its box is ticked. */
 interface Edit {
   folder: string; deviceType: string; ownLogin: boolean; account: string; username: string; password: string; noPassword: boolean;
-  protocol: string; port: number; jumpSession: string; environment: string; colorScheme: string; keywordSet: string; autoReconnect: boolean;
+  protocol: string; port: number; jumpSession: string; environment: string; colorScheme: string; keywordSet: string; autoReconnect: boolean; legacyAlgorithms: boolean;
 }
-type Key = 'folder' | 'deviceType' | 'account' | 'username' | 'password' | 'protocol' | 'port' | 'jumpSession' | 'environment' | 'colorScheme' | 'keywordSet' | 'autoReconnect';
+type Key = 'folder' | 'deviceType' | 'account' | 'username' | 'password' | 'protocol' | 'port' | 'jumpSession' | 'environment' | 'colorScheme' | 'keywordSet' | 'autoReconnect' | 'legacyAlgorithms';
 
 /** Edit Sessions: changes the same settings in many sessions at once. */
 @Component({
@@ -93,6 +93,9 @@ type Key = 'folder' | 'deviceType' | 'account' | 'username' | 'password' | 'prot
 
           <input type="checkbox" [(ngModel)]="on.autoReconnect" /><label>Auto reconnect</label>
           <label class="inline"><input type="checkbox" [(ngModel)]="e.autoReconnect" (ngModelChange)="on.autoReconnect = true" /> Reconnect when the connection drops</label>
+
+          <input type="checkbox" [(ngModel)]="on.legacyAlgorithms" /><label>Old SSH algorithms</label>
+          <label class="inline" title="Weak algorithms such as diffie-hellman-group1-sha1, aes128-cbc or hmac-sha1, added at the end of each list - SSH sessions only"><input type="checkbox" [(ngModel)]="e.legacyAlgorithms" (ngModelChange)="on.legacyAlgorithms = true" /> Allow legacy algorithms (old devices) - SSH sessions only</label>
         </div>
         @if (err()) { <p class="err">{{ err() }}</p> }
       </div>
@@ -137,9 +140,9 @@ export class BulkEdit {
   readonly busy = signal(false);
   readonly err = signal('');
   e: Edit = { folder: '', deviceType: '', ownLogin: false, account: '', username: '', password: '', noPassword: false, protocol: 'SSH2', port: 22,
-    jumpSession: '', environment: '', colorScheme: '', keywordSet: '', autoReconnect: false };
+    jumpSession: '', environment: '', colorScheme: '', keywordSet: '', autoReconnect: false, legacyAlgorithms: false };
   on: Record<Key, boolean> = { folder: false, deviceType: false, account: false, username: false, password: false, protocol: false, port: false,
-    jumpSession: false, environment: false, colorScheme: false, keywordSet: false, autoReconnect: false };
+    jumpSession: false, environment: false, colorScheme: false, keywordSet: false, autoReconnect: false, legacyAlgorithms: false };
 
   readonly deviceTypes = computed(() => (this.ui.settings()?.deviceTypes ?? []).map(d => d.name));
   readonly keywordSets = computed(() => (this.ui.settings()?.keywordSets ?? []).map(k => k.name));
@@ -164,7 +167,7 @@ export class BulkEdit {
     if (first) this.backend.getSession(first).then(s => {
       this.e = { ...this.e, folder: s.folder, deviceType: s.deviceType, ownLogin: s.ownLogin, account: s.account || (s.ownLogin ? '-' : ''), username: s.username, protocol: s.protocol,
         port: s.port || defaultPort(s.protocol), jumpSession: s.jumpSession, environment: s.environment ?? '', colorScheme: s.colorScheme,
-        keywordSet: s.keywordSet, autoReconnect: s.autoReconnect };
+        keywordSet: s.keywordSet, autoReconnect: s.autoReconnect, legacyAlgorithms: !!s.legacyAlgorithms };
     }).catch(() => {});
   }
 
@@ -186,6 +189,7 @@ export class BulkEdit {
     if (on.colorScheme) s.colorScheme = e.colorScheme;
     if (on.keywordSet) s.keywordSet = e.keywordSet;
     if (on.autoReconnect) s.autoReconnect = e.autoReconnect;
+    if (on.legacyAlgorithms && s.protocol === 'SSH2') s.legacyAlgorithms = e.legacyAlgorithms;
     if (on.password) s.savePassword = true;
   }
 

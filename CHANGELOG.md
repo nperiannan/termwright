@@ -6,6 +6,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 * **Teams (optional): a team server of your own, set up from Termwright.** Options → Teams… → *Set Up a Team Server…* logs in to a Linux host of your lab with an SSH session, checks Docker, picks a free port from 7443 (never one in use, such as 80 or 8080), starts a small container that restarts with the host, and makes you its owner; *Join a Team…* takes the invite you send to your team. Owners and co-owners see and renew the invite and manage the members. Several teams can use the same host. The server checks nothing but its own certificate fingerprint and keeps no passwords, keys or sessions; without a team Termwright sends nothing anywhere. Next: who has which device open, and reservations. See [the team server guide](docs/TEAM_SERVER.md).
 * **The team server for manual installs**: each release has `termwright-team-linux-amd64.tar.gz` and `-arm64.tar.gz` (the program, a Dockerfile, a Compose file and a systemd unit) and the image `ghcr.io/nperiannan/termwright-team`.
+* **Old SSH algorithms in Quick Connect and for a whole folder** ([#4](https://github.com/nperiannan/termwright/issues/4)). Quick Connect has *Allow legacy algorithms* for SSH, and Edit Sessions (right-click a folder → *Edit All Sessions in Folder…*) has *Old SSH algorithms* to turn them on or off for every SSH session at once.
 
 ## 0.29.0 (2026-11-06)
 

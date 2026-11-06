@@ -62,6 +62,10 @@ import { parseConnectLine } from '../core/connect-string';
             }
           </div>
         }
+        @if (protocol === 'SSH2') {
+          <div class="checks"><label title="Weak algorithms such as diffie-hellman-group1-sha1, aes128-cbc or hmac-sha1, added at the end of each list"><input type="checkbox" name="legacy2" [(ngModel)]="legacy" />
+            <span class="tx"><span>Allow legacy algorithms</span><span class="hint">for old devices that offer only weak key exchange, ciphers or MACs</span></span></label></div>
+        }
         <div class="checks savebox">
           <label><input type="checkbox" name="save2" [ngModel]="save" (ngModelChange)="setSave($event)" />
             <span class="tx"><span>Save as a session</span><span class="hint">{{ save ? (name || host || comPort || 'new session') + ' · in ' + (ui.currentFolder() || 'the top level') : 'connect once, without saving' }}</span></span></label>
@@ -128,6 +132,10 @@ import { parseConnectLine } from '../core/connect-string';
                 <label><input type="checkbox" name="nopw" [(ngModel)]="noPw" (ngModelChange)="$event && (pw = '')" /> No password</label>
               </div>
             }
+          }
+          @if (protocol === 'SSH2') {
+            <label></label>
+            <div class="checks"><label><input type="checkbox" name="legacy" [(ngModel)]="legacy" /> Allow legacy algorithms (old devices)</label></div>
           }
           <label></label>
           <div class="checks">
@@ -197,6 +205,8 @@ export class QuickConnect {
   readonly accounts = () => this.ui.settings()?.credentials ?? [];
   pw = '';
   noPw = false;
+  /** Old SSH algorithms for this connection (devices with old firmware). */
+  legacy = false;
 
   readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP'];
@@ -221,7 +231,8 @@ export class QuickConnect {
   async moreOptions() {
     const s = await this.backend.newSessionDefaults();
     Object.assign(s, { protocol: this.protocol, hostname: this.host.trim(), port: Number(this.port) || defaultPort(this.protocol), username: this.user,
-      comPort: this.comPort, baudRate: this.baud, deviceType: this.device, ownLogin: !!this.device && !this.inherit, account: this.account, name: this.name || this.host.trim(), folder: this.ui.currentFolder() });
+      comPort: this.comPort, baudRate: this.baud, deviceType: this.device, ownLogin: !!this.device && !this.inherit, account: this.account, name: this.name || this.host.trim(), folder: this.ui.currentFolder(),
+      legacyAlgorithms: this.protocol === 'SSH2' && this.legacy });
     this.ui.openSessionDialog(s, '', undefined, '', this.pw);
   }
 
@@ -284,6 +295,7 @@ export class QuickConnect {
         protocol: this.protocol, hostname: host, port, username: user, comPort: this.comPort, baudRate: this.baud, serialAutoBaud: this.autoBaud,
         logonActions: [], description: [], deviceType: this.device,
         ownLogin: !!this.device && (!this.inherit || at > 0), account: this.account,
+        legacyAlgorithms: this.protocol === 'SSH2' && this.legacy,
       });
       const setPw = own && (this.pw !== '' || this.noPw);
       if (this.save) {

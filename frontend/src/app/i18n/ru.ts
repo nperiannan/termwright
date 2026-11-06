@@ -954,6 +954,7 @@ const ru: Record<string, string> = {
   'System font of this computer': 'Системный шрифт этого компьютера',
   'Exit': 'Выход',
   'Full Screen': 'Во весь экран',
+  'Allow legacy algorithms': 'Разрешить устаревшие алгоритмы', 'for old devices that offer only weak key exchange, ciphers or MACs': 'для старых устройств, которые предлагают только слабые алгоритмы обмена ключами, шифры или MAC', 'Allow legacy algorithms (old devices)': 'Разрешить устаревшие алгоритмы (старые устройства)', 'Old SSH algorithms': 'Старые алгоритмы SSH', 'Allow legacy algorithms (old devices) - SSH sessions only': 'Разрешить устаревшие алгоритмы (старые устройства) - только сессии SSH',
 };
 
 export default ru;
