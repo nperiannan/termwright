@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/termwright/termwright/internal/logging"
@@ -901,7 +902,16 @@ func realActions(a []session.LogonAction) []session.LogonAction {
 }
 
 // How long "Log in again" waits after the user typed and after the last login.
-var reloginTyped, reloginGap = 10 * time.Second, 30 * time.Second
+// reloginTyped and reloginGap: how long after the user's typing and after the
+// last login a prompt counts as the device's own (atomic: tests shorten them
+// while connections of earlier tests may still be reading).
+var reloginTyped, reloginGap = durationVar(10 * time.Second), durationVar(30 * time.Second)
+
+func durationVar(d time.Duration) *atomic.Int64 {
+	v := new(atomic.Int64)
+	v.Store(int64(d))
+	return v
+}
 
 // loginAgain watches a connection whose session has "Log in again" for a login
 // prompt that comes back by itself - the device restarted, crashed or logged the
@@ -920,7 +930,7 @@ func (m *Manager) loginAgain(t *Tab, p []byte) []session.LogonAction {
 		t.reTail = t.reTail[len(t.reTail)-512:]
 	}
 	tail := t.reTail
-	quiet := time.Since(t.lastTyped) > reloginTyped && time.Since(t.lastLogin) > reloginGap
+	quiet := time.Since(t.lastTyped) > time.Duration(reloginTyped.Load()) && time.Since(t.lastLogin) > time.Duration(reloginGap.Load())
 	t.mu.Unlock()
 	if i, _ := basicMatch(tail, basicUserPrompts); i < 0 || !quiet {
 		return nil

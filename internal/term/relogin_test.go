@@ -15,8 +15,7 @@ import (
 // A console that restarts while connected: the login prompt comes back by
 // itself and "Log in again" logs in a second time; without it, it does not.
 func TestLoginAgainAfterRestart(t *testing.T) {
-	reloginTyped, reloginGap = 50*time.Millisecond, 100*time.Millisecond
-	defer func() { reloginTyped, reloginGap = 10*time.Second, 30*time.Second }()
+	setRelogin(t, 50*time.Millisecond, 100*time.Millisecond)
 	for _, again := range []bool{true, false} {
 		srv, _ := net.Listen("tcp", "127.0.0.1:0")
 		logins := make(chan string, 4)
@@ -67,8 +66,7 @@ func TestLoginAgainAfterRestart(t *testing.T) {
 
 // "exit" typed by the user: the login prompt that follows is left alone.
 func TestLoginAgainNotAfterExit(t *testing.T) {
-	reloginTyped, reloginGap = 2*time.Second, 50*time.Millisecond
-	defer func() { reloginTyped, reloginGap = 10*time.Second, 30*time.Second }()
+	setRelogin(t, 2*time.Second, 50*time.Millisecond)
 	srv, _ := net.Listen("tcp", "127.0.0.1:0")
 	defer srv.Close()
 	logins := make(chan bool, 4)
@@ -109,4 +107,12 @@ func TestLoginAgainNotAfterExit(t *testing.T) {
 	case <-time.After(800 * time.Millisecond):
 	}
 	m.CloseAll()
+}
+
+// setRelogin shortens the relogin timings for a test and restores them after it.
+func setRelogin(t *testing.T, typed, gap time.Duration) {
+	oldT, oldG := reloginTyped.Load(), reloginGap.Load()
+	reloginTyped.Store(int64(typed))
+	reloginGap.Store(int64(gap))
+	t.Cleanup(func() { reloginTyped.Store(oldT); reloginGap.Store(oldG) })
 }
