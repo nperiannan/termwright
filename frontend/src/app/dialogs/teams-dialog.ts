@@ -174,8 +174,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
     textarea { width: 100%; resize: vertical; }
     select, .row2 input { width: 100%; }
     .row2 { display: grid; grid-template-columns: 1fr 170px; gap: 10px; }
-    .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
-      button { border: 0; border-radius: 0; background: transparent; padding: 5px 12px; white-space: nowrap; } button.on { background: color-mix(in srgb, var(--text) 10%, transparent); font-weight: 600; } }
+    .seg { width: min(360px, 100%); > button { white-space: nowrap; } }
     .steps { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.7;
       .st { display: inline-block; width: 18px; } .ok .st { color: #22c55e; } .fail { color: var(--danger); } .run .st { color: var(--accent); } .info { color: var(--muted); } }
     .found { display: flex; align-items: center; gap: 6px; margin: 10px 0 6px; app-icon { color: #22c55e; } }
