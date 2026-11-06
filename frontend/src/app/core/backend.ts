@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary } from './models';
+  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamView } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -124,6 +124,17 @@ export class Backend {
   moveSession(path: string, host: string) { return this.call<Session>('MoveSession', path, host); }
   rememberMacs(macs: Record<string, string>) { return this.call<number>('RememberMACs', macs); }
   replaceMac(path: string, mac: string) { return this.call<void>('ReplaceMAC', path, mac); }
+  teams() { return this.call<TeamView[]>('Teams'); }
+  teamIdentity() { return this.call<{ name: string; user: string; machine: string }>('TeamIdentity'); }
+  teamDetails(id: string) { return this.call<TeamDetails>('TeamDetails', id); }
+  teamInviteInfo(invite: string) { return this.call<TeamInfo>('TeamInviteInfo', invite); }
+  teamJoin(invite: string) { return this.call<TeamConn>('TeamJoin', invite); }
+  teamRotateInvite(id: string) { return this.call<string>('TeamRotateInvite', id); }
+  teamSetRole(id: string, memberId: string, role: string) { return this.call<void>('TeamSetRole', id, memberId, role); }
+  teamRemoveMember(id: string, memberId: string) { return this.call<void>('TeamRemoveMember', id, memberId); }
+  teamLeave(id: string, force: boolean) { return this.call<void>('TeamLeave', id, force); }
+  teamSetUp(r: { sessionPath: string; name: string; port: number; image: string }) { return this.call<string>('TeamSetUp', r); }
+  teamSetUpCancel(run: string) { return this.call<void>('TeamSetUpCancel', run); }
   importTemplate() { return this.call<string>('ImportTemplate'); }
   saveTextAs(title: string, name: string, text: string) { return this.call<string>('SaveTextAs', title, name, text); }
   historyAdd(e: Partial<HistoryEntry>) { return this.call<void>('HistoryAdd', e); }

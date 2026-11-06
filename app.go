@@ -292,6 +292,7 @@ func (a *App) SaveSettings(s config.Settings) error {
 	// kept by the backend when sessions open; the window's copy may be older
 	s.RecentSessions, s.LastConnected = cur.RecentSessions, cur.LastConnected
 	s.DeviceFacts = cur.DeviceFacts // read by RefreshFacts
+	s.Teams = cur.Teams             // changed through the Team… calls only
 	if err := a.cfg.Save(s); err != nil {
 		return err
 	}

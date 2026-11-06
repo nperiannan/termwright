@@ -72,6 +72,19 @@ func (m *Manager) ExecOn(ctx context.Context, tabID string, s session.Session, c
 	return execClient(ctx, client, cmd, stdin, onLine)
 }
 
+// ExecSession logs in to session s once (like ExecOn) and returns a function
+// that runs commands over that login, and one that closes it.
+func (m *Manager) ExecSession(ctx context.Context, tabID string, s session.Session) (func(ctx context.Context, cmd string, stdin []byte, onLine func(string)) (int, error), func(), error) {
+	client, _, cleanup, err := m.sshClient(ctx, &Tab{id: tabID, sess: s}, s, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	run := func(ctx context.Context, cmd string, stdin []byte, onLine func(string)) (int, error) {
+		return execClient(ctx, client, cmd, stdin, onLine)
+	}
+	return run, func() { _ = client.Close(); cleanup() }, nil
+}
+
 // Exec runs cmd on the SSH connection to the tunnel's jump host, like ExecStream.
 // It fails when the tunnel has no jump host.
 func (tu *Tunnel) Exec(ctx context.Context, cmd string, stdin []byte, onLine func(string)) (int, error) {

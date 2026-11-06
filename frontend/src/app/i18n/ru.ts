@@ -25,7 +25,7 @@ const ru: Record<string, string> = {
   'SCP Upload File...': 'SCP: загрузить файл...', 'SCP Upload Folder...': 'SCP: загрузить папку...', 'SCP Download...': 'SCP: скачать...',
   'Command Library...': 'Библиотека команд...', 'Command History...': 'История команд...', 'Run Script...': 'Запустить скрипт...', 'Cancel Running Scripts': 'Остановить скрипты',
   'Start / Stop Script Recording': 'Начать / остановить запись скрипта', 'Session Options...': 'Параметры сессии...', 'Global Options...': 'Общие параметры...', 'Passwords & Accounts...': 'Пароли и учётные записи...',
-  'Set Up Key Login / Generate Key...': 'Вход по ключу / создать ключ...', 'Set Up Remote Desktop...': 'Настроить удалённый рабочий стол...', 'Compare Outputs...': 'Сравнить вывод...',
+  'Set Up Key Login / Generate Key...': 'Вход по ключу / создать ключ...', 'Teams...': 'Рабочие группы...', 'Teams': 'Рабочие группы', 'Set Up Remote Desktop...': 'Настроить удалённый рабочий стол...', 'Compare Outputs...': 'Сравнить вывод...',
   'Next Tab': 'Следующая вкладка', 'Previous Tab': 'Предыдущая вкладка', 'Send Command to All Tabs...': 'Отправить команду во все вкладки...', 'Send Break': 'Отправить Break',
   'Lock Session': 'Заблокировать сессию', 'Lock All Sessions': 'Заблокировать все сессии', 'Welcome...': 'Приветствие...', 'User Guide': 'Руководство пользователя',
   'Keyboard Shortcuts': 'Сочетания клавиш', 'Check for Updates...': 'Проверить обновления...', 'About Termwright': 'О программе Termwright',

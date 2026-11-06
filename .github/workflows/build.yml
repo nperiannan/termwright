@@ -198,8 +198,52 @@ jobs:
           name: termwright-android
           path: dist/*
 
+  # The team server (cmd/termwright-team): a package per Linux architecture for
+  # the release, and the container image on ghcr.io (tags: the version and
+  # latest for releases, nightly for main).
+  team:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod }
+      - name: Build the team server
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then V="${GITHUB_REF_NAME#v}"; else V="$APP_VERSION-dev~git${GITHUB_SHA::7}"; fi
+          mkdir -p dist img
+          for a in amd64 arm64; do
+            rm -rf pkg && mkdir -p pkg/termwright-team
+            CGO_ENABLED=0 GOOS=linux GOARCH=$a go build -trimpath -ldflags "-s -w -X main.Version=$V" -o pkg/termwright-team/termwright-team ./cmd/termwright-team
+            cp deploy/team/Dockerfile deploy/team/docker-compose.yml deploy/team/termwright-team.service pkg/termwright-team/
+            cp docs/TEAM_SERVER.md pkg/termwright-team/INSTALL.md
+            cp LICENSE pkg/termwright-team/ 2>/dev/null || true
+            tar -C pkg -czf dist/termwright-team-linux-$a.tar.gz termwright-team
+            cp pkg/termwright-team/termwright-team img/termwright-team-linux-$a
+          done
+          echo "TEAM_VERSION=$V" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: termwright-team
+          path: dist/*
+      - name: Container image
+        if: github.event_name == 'push'
+        continue-on-error: true  # the packages still go into the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          IMG="ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')/termwright-team"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then TAGS="-t $IMG:$TEAM_VERSION -t $IMG:latest"; else TAGS="-t $IMG:nightly"; fi
+          docker buildx create --use
+          docker buildx build --platform linux/amd64,linux/arm64 -f deploy/team/Dockerfile.ci $TAGS --push img
+
   release:
-    needs: [build, android]
+    needs: [build, android, team]
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 15

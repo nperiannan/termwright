@@ -19,6 +19,7 @@
   <a href="docs/FEATURES.md">Feature List</a> ·
   <a href="docs/SCRIPTING.md">Scripting</a> ·
   <a href="docs/SESSION_FILES.md">Session Files</a> ·
+  <a href="docs/TEAM_SERVER.md">Team Server</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
   <a href="docs/ROADMAP.md">Roadmap</a>
 </p>
@@ -54,6 +55,7 @@
 - Import from SecureCRT, PuTTY, MobaXterm, mRemoteNG and more
 - Windows, macOS and Linux, and an Android companion app with an SSH and Telnet terminal, a device widget and Wake-on-LAN ([preview](mobile/README.md))
 - Glacier and Standard styles, dark and light themes
+- Teams (optional): a team server of your own on a lab host, set up from Termwright - see [Team Server](docs/TEAM_SERVER.md)
 
 And much more - see the [feature list](docs/FEATURES.md).
 

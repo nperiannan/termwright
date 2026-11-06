@@ -256,6 +256,7 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	opts.AddSeparator()
 	add(opts, "Passwords & Accounts...", "passwords")
 	add(opts, "Set Up Key Login / Generate Key...", "key-setup")
+	add(opts, "Teams...", "teams")
 
 	tabs := m.AddSubmenu(t("Tab"))
 	add(tabs, "Compare Outputs...", "compare")

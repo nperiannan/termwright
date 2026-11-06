@@ -1,0 +1,628 @@
+package main
+
+import (
+	"archive/tar"
+	"compress/gzip"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"os/user"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"github.com/termwright/termwright/internal/config"
+	"github.com/termwright/termwright/internal/secrets"
+	"github.com/termwright/termwright/internal/team"
+)
+
+// Teams: the team servers this Termwright joined, to see who uses which
+// device. Nothing happens - no connection, nothing sent - until a team is
+// joined or set up.
+
+// TeamView is a joined team with how its server answers now.
+type TeamView struct {
+	config.TeamConn
+	Reachable bool   `json:"reachable"`
+	Error     string `json:"error"`
+	Members   int    `json:"members"`
+	Online    int    `json:"online"`
+	Version   string `json:"version"`
+}
+
+// TeamDetails is a team with its members and, for owners and co-owners, the invite link.
+type TeamDetails struct {
+	team.Team
+	ID         string `json:"id"`
+	Address    string `json:"address"`
+	InviteLink string `json:"inviteLink"`
+}
+
+func teamTokenKey(id string) string { return "team:" + id }
+
+// teamIdentity is how the teams see this person: a display name, the OS user and the computer.
+func (a *App) teamIdentity() (name, usr, machine string) {
+	machine, _ = os.Hostname()
+	machine = strings.TrimSuffix(machine, ".local")
+	if u, err := user.Current(); err == nil {
+		usr = u.Username
+		if i := strings.LastIndexAny(usr, `\`); i >= 0 { // DOMAIN\user on Windows
+			usr = usr[i+1:]
+		}
+		name = strings.TrimSpace(u.Name)
+	}
+	if n := strings.TrimSpace(a.cfg.Get().TeamDisplayName); n != "" {
+		name = n
+	}
+	if name == "" {
+		name = usr
+	}
+	return
+}
+
+// TeamIdentity is the name the teams see and "user@computer".
+func (a *App) TeamIdentity() map[string]string {
+	n, u, m := a.teamIdentity()
+	return map[string]string{"name": n, "user": u, "machine": m}
+}
+
+func (a *App) teamConn(id string) (config.TeamConn, *team.Client, error) {
+	for _, t := range a.cfg.Get().Teams {
+		if t.ID == id {
+			tok, _ := secrets.Lookup(teamTokenKey(id))
+			return t, team.NewClient(t.Address, t.Fingerprint, tok), nil
+		}
+	}
+	return config.TeamConn{}, nil, errors.New("no such team")
+}
+
+func teamCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 12*time.Second)
+}
+
+// Teams lists the joined teams, asking each server how it is (at the same time).
+func (a *App) Teams() []TeamView {
+	ts := a.cfg.Get().Teams
+	out := make([]TeamView, len(ts))
+	var wg sync.WaitGroup
+	for i, t := range ts {
+		out[i] = TeamView{TeamConn: t}
+		wg.Add(1)
+		go func(v *TeamView) {
+			defer wg.Done()
+			_, c, _ := a.teamConn(v.ID)
+			ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+			defer cancel()
+			tm, err := c.Team(ctx)
+			if err != nil {
+				v.Error = err.Error()
+				if team.Unauthorized(err) {
+					v.Error = "You are no longer a member of this team."
+				}
+				return
+			}
+			v.Reachable, v.Members, v.Version, v.Role = true, len(tm.Members), tm.Version, tm.Role
+			for _, m := range tm.Members {
+				if m.Online {
+					v.Online++
+				}
+			}
+		}(&out[i])
+	}
+	wg.Wait()
+	// keep the role the server reports (an owner may have changed it)
+	changed := false
+	cur := a.cfg.Get().Teams
+	for i := range cur {
+		for _, v := range out {
+			if v.ID == cur[i].ID && v.Reachable && v.Role != cur[i].Role {
+				cur[i].Role, changed = v.Role, true
+			}
+		}
+	}
+	if changed {
+		_ = a.cfg.SetTeams(cur)
+	}
+	return out
+}
+
+// TeamDetails is a team's members (and the invite link for owners and co-owners).
+func (a *App) TeamDetails(id string) (TeamDetails, error) {
+	t, c, err := a.teamConn(id)
+	if err != nil {
+		return TeamDetails{}, err
+	}
+	ctx, cancel := teamCtx()
+	defer cancel()
+	tm, err := c.Team(ctx)
+	if err != nil {
+		return TeamDetails{}, err
+	}
+	d := TeamDetails{Team: tm, ID: id, Address: t.Address}
+	if tm.Invite != "" {
+		d.InviteLink = team.Invitation{Address: t.Address, Key: tm.Invite, Fingerprint: t.Fingerprint, Name: tm.Name}.String()
+	}
+	return d, nil
+}
+
+// TeamInviteInfo checks an invite before joining: the team's name and size.
+func (a *App) TeamInviteInfo(invite string) (team.Info, error) {
+	iv, err := team.ParseInvite(invite)
+	if err != nil {
+		return team.Info{}, err
+	}
+	ctx, cancel := teamCtx()
+	defer cancel()
+	return team.NewClient(iv.Address, iv.Fingerprint, "").Info(ctx)
+}
+
+// TeamJoin joins the team of an invite link.
+func (a *App) TeamJoin(invite string) (config.TeamConn, error) {
+	iv, err := team.ParseInvite(invite)
+	if err != nil {
+		return config.TeamConn{}, err
+	}
+	for _, t := range a.cfg.Get().Teams {
+		if t.Address == iv.Address && t.Fingerprint == iv.Fingerprint {
+			return t, errors.New("you are already in this team (" + t.Name + ")")
+		}
+	}
+	return a.teamJoin(iv.Address, iv.Fingerprint, team.JoinRequest{Invite: iv.Key}, "", "")
+}
+
+func (a *App) teamJoin(addr, fp string, req team.JoinRequest, host, container string) (config.TeamConn, error) {
+	req.Name, req.User, req.Machine = a.teamIdentity()
+	ctx, cancel := teamCtx()
+	defer cancel()
+	j, err := team.NewClient(addr, fp, "").Join(ctx, req)
+	if err != nil {
+		return config.TeamConn{}, err
+	}
+	t := config.TeamConn{ID: randHex(8), Name: j.Team, Address: addr, Fingerprint: team.NormFingerprint(fp), MemberID: j.MemberID, Role: j.Role, Host: host, Container: container}
+	if err := secrets.Set(teamTokenKey(t.ID), j.Token); err != nil {
+		return config.TeamConn{}, fmt.Errorf("the keychain could not keep the team key: %w", err)
+	}
+	if err := a.cfg.SetTeams(append(a.cfg.Get().Teams, t)); err != nil {
+		return config.TeamConn{}, err
+	}
+	return t, nil
+}
+
+// TeamRotateInvite makes a new invite (the old link stops working) and returns it.
+func (a *App) TeamRotateInvite(id string) (string, error) {
+	t, c, err := a.teamConn(id)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := teamCtx()
+	defer cancel()
+	k, err := c.RotateInvite(ctx)
+	if err != nil {
+		return "", err
+	}
+	return team.Invitation{Address: t.Address, Key: k, Fingerprint: t.Fingerprint, Name: t.Name}.String(), nil
+}
+
+// TeamSetRole makes a member co-owner or member.
+func (a *App) TeamSetRole(id, memberID, role string) error {
+	_, c, err := a.teamConn(id)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := teamCtx()
+	defer cancel()
+	return c.SetRole(ctx, memberID, role)
+}
+
+// TeamRemoveMember takes a member out of a team.
+func (a *App) TeamRemoveMember(id, memberID string) error {
+	_, c, err := a.teamConn(id)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := teamCtx()
+	defer cancel()
+	return c.Remove(ctx, memberID)
+}
+
+// TeamLeave leaves a team. With force, the team is forgotten here even when its
+// server cannot be reached (or no longer knows this member).
+func (a *App) TeamLeave(id string, force bool) error {
+	_, c, err := a.teamConn(id)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := teamCtx()
+	defer cancel()
+	if err := c.Leave(ctx); err != nil && !force && !team.Unauthorized(err) {
+		return err
+	}
+	_ = secrets.Delete(teamTokenKey(id))
+	var keep []config.TeamConn
+	for _, t := range a.cfg.Get().Teams {
+		if t.ID != id {
+			keep = append(keep, t)
+		}
+	}
+	return a.cfg.SetTeams(keep)
+}
+
+// ---- Setting a team server up on a Linux host with Docker ----
+
+// TeamSetUpRequest: the SSH session of the host, the team's name, the port
+// (0 = the first free one from 7443) and how the image gets there
+// ("download" from GitHub by the host, falling back to "copy" over SSH).
+type TeamSetUpRequest struct {
+	SessionPath string `json:"sessionPath"`
+	Name        string `json:"name"`
+	Port        int    `json:"port"`
+	Image       string `json:"image"`
+}
+
+// TeamSetUpStep is one line of the setup's progress (event "team:setup").
+type TeamSetUpStep struct {
+	Run   string `json:"run"`
+	Step  string `json:"step"`
+	State string `json:"state"` // run, ok, fail, info
+	Text  string `json:"text"`
+}
+
+// TeamSetUpResult ends a setup (event "team:setup:done").
+type TeamSetUpResult struct {
+	Run    string `json:"run"`
+	TeamID string `json:"teamId"`
+	Invite string `json:"invite"`
+	Error  string `json:"error"`
+}
+
+var teamSetups sync.Map // run id → cancel
+
+// TeamSetUp starts setting a team server up and returns the run id; progress
+// and the end come as events.
+func (a *App) TeamSetUp(r TeamSetUpRequest) (string, error) {
+	if err := a.ready(); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(r.Name) == "" {
+		return "", errors.New("give the team a name")
+	}
+	if teamSlug(r.Name) == "" {
+		return "", errors.New("the team name needs letters or digits")
+	}
+	if r.Port != 0 && (r.Port < 1024 || r.Port > 65535) {
+		return "", errors.New("pick a port from 1024 to 65535 (or leave it empty for a free one)")
+	}
+	s, err := a.store.Get(r.SessionPath)
+	if err != nil {
+		return "", err
+	}
+	s = a.withFolderDefaults(s)
+	if s.Protocol != "SSH2" {
+		return "", errors.New("pick an SSH session of the host")
+	}
+	id := randHex(8)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	teamSetups.Store(id, cancel)
+	emit := func(step, state, text string) {
+		if a.ctx != nil {
+			wruntime.EventsEmit(a.ctx, "team:setup", TeamSetUpStep{Run: id, Step: step, State: state, Text: text})
+		}
+	}
+	go func() {
+		defer cancel()
+		defer teamSetups.Delete(id)
+		res := TeamSetUpResult{Run: id}
+		tc, invite, err := a.teamSetUp(ctx, id, r, s.Hostname, emit)
+		if err != nil {
+			res.Error = err.Error()
+			if ctx.Err() == context.Canceled {
+				res.Error = "Cancelled."
+			}
+		} else {
+			res.TeamID, res.Invite = tc.ID, invite
+		}
+		if a.ctx != nil {
+			wruntime.EventsEmit(a.ctx, "team:setup:done", res)
+		}
+	}()
+	return id, nil
+}
+
+// TeamSetUpCancel stops a setup.
+func (a *App) TeamSetUpCancel(id string) {
+	if c, ok := teamSetups.Load(id); ok {
+		c.(context.CancelFunc)()
+	}
+}
+
+var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
+
+// teamSlug makes the container name part of a team name: "Switching Lab B" → "switching-lab-b".
+func teamSlug(name string) string {
+	s := strings.Trim(slugRe.ReplaceAllString(strings.ToLower(name), "-"), "-")
+	if len(s) > 40 {
+		s = strings.Trim(s[:40], "-")
+	}
+	return s
+}
+
+// shQuote quotes a value for the remote shell.
+func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+// teamImageTag: the release's version, or "latest" for development builds.
+func teamImageTag() string {
+	if strings.ContainsAny(Version, "-~+") || Version == "" {
+		return "latest"
+	}
+	return Version
+}
+
+var portRe = regexp.MustCompile(`:(\d+)(?:->|\s|$)`)
+
+// freePort is the first port from 7443 to 7499 that nothing listens on.
+func freePort(used map[int]bool) int {
+	for p := team.DefaultPort; p < 7500; p++ {
+		if !used[p] {
+			return p
+		}
+	}
+	return 0
+}
+
+func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host string, emit func(step, state, text string)) (config.TeamConn, string, error) {
+	sess, err := a.store.Get(r.SessionPath)
+	if err != nil {
+		return config.TeamConn{}, "", err
+	}
+	sess = a.withFolderDefaults(sess)
+	failf := func(step, f string, v ...any) error {
+		msg := fmt.Sprintf(f, v...)
+		emit(step, "fail", msg)
+		return errors.New(msg)
+	}
+
+	emit("login", "run", "Logging in to "+sess.Name+"…")
+	run, closeSSH, err := a.terms.ExecSession(ctx, "teamsetup-"+id, sess)
+	if err != nil {
+		return config.TeamConn{}, "", failf("login", "Could not log in to %s: %v", sess.Name, err)
+	}
+	defer closeSSH()
+	out := func(cmd string, stdin []byte, timeout time.Duration) (string, int, error) {
+		c, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		var b strings.Builder
+		code, err := run(c, cmd, stdin, func(l string) { b.WriteString(l); b.WriteString("\n") })
+		return strings.TrimSpace(b.String()), code, err
+	}
+	who, _, _ := out("id -un", nil, 20*time.Second)
+	emit("login", "ok", "Logged in as "+who+"@"+host)
+
+	// Docker, and whether this user may use it
+	emit("docker", "run", "Checking Docker…")
+	dk := "docker"
+	ver, code, err := out(`docker version --format '{{.Server.Version}}' 2>&1`, nil, 30*time.Second)
+	if err != nil {
+		return config.TeamConn{}, "", failf("docker", "Docker could not be checked: %v", err)
+	}
+	if code != 0 {
+		low := strings.ToLower(ver)
+		switch {
+		case strings.Contains(low, "not found"):
+			return config.TeamConn{}, "", failf("docker", "Docker is not installed on this host. Install Docker (or Podman with its docker command), then try again.")
+		case strings.Contains(low, "permission denied"):
+			if v2, c2, _ := out(`sudo -n docker version --format '{{.Server.Version}}' 2>&1`, nil, 30*time.Second); c2 == 0 {
+				dk, ver = "sudo -n docker", v2
+			} else {
+				return config.TeamConn{}, "", failf("docker", "%s may not use Docker. On the host: sudo usermod -aG docker %s (then log in again), or allow sudo without a password for docker.", who, who)
+			}
+		default:
+			return config.TeamConn{}, "", failf("docker", "Docker does not answer: %s", firstLine(ver))
+		}
+	}
+	emit("docker", "ok", "Docker "+firstLine(ver)+" - "+who+" may use it")
+
+	// one container per team; a second setup of the same team would only clash
+	slug := teamSlug(r.Name)
+	name := "termwright-team-" + slug
+	if have, _, _ := out(dk+" ps -a --filter "+shQuote("name=^/"+name+"$")+" --format '{{.Status}} {{.Ports}}'", nil, 30*time.Second); have != "" {
+		return config.TeamConn{}, "", failf("port", "This host already runs a team server named %s (%s). Pick another team name, or ask its owner for an invite.", name, firstLine(have))
+	}
+
+	// the port
+	emit("port", "run", "Finding a free port…")
+	lst, _, _ := out(`(ss -Htln 2>/dev/null || netstat -tln 2>/dev/null) | awk '{print $4}'; `+dk+` ps --format '{{.Ports}}' 2>/dev/null`, nil, 30*time.Second)
+	used := map[int]bool{}
+	for _, m := range portRe.FindAllStringSubmatch(lst+"\n", -1) {
+		if p, err := strconv.Atoi(m[1]); err == nil {
+			used[p] = true
+		}
+	}
+	port := r.Port
+	if port == 0 {
+		if port = freePort(used); port == 0 {
+			return config.TeamConn{}, "", failf("port", "No free port from 7443 to 7499 - type one.")
+		}
+	} else if used[port] {
+		return config.TeamConn{}, "", failf("port", "Port %d is in use on this host - pick another one, or leave it empty.", port)
+	}
+	note := ""
+	if used[80] || used[8080] {
+		note = " (80 and 8080 are in use - not touched)"
+	}
+	emit("port", "ok", fmt.Sprintf("Port %d free%s", port, note))
+
+	// the image: downloaded by the host, or copied over SSH and built there
+	tag := teamImageTag()
+	owner := strings.ToLower(strings.SplitN(a.cfg.Get().UpdateRepo, "/", 2)[0])
+	if owner == "" {
+		owner = "nperiannan"
+	}
+	ref := "ghcr.io/" + owner + "/termwright-team:" + tag
+	copied := r.Image == "copy"
+	if !copied {
+		emit("image", "run", "Downloading "+ref+" on the host…")
+		if msg, code, err := out(dk+" pull -q "+shQuote(ref)+" 2>&1", nil, 6*time.Minute); err != nil || code != 0 {
+			emit("image", "info", "The host could not download the image ("+firstLine(msg)+") - copying it over SSH instead")
+			copied = true
+		} else {
+			emit("image", "ok", "Image "+ref)
+		}
+	}
+	if copied {
+		arch, _, _ := out("uname -m", nil, 20*time.Second)
+		ga := map[string]string{"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}[strings.TrimSpace(arch)]
+		if ga == "" {
+			return config.TeamConn{}, "", failf("image", "The team server is built for x86-64 and ARM64 Linux; this host is %s.", arch)
+		}
+		emit("image", "run", "Getting the team server for linux/"+ga+"…")
+		bin, err := teamBinarySource(a, ctx, ga, tag)
+		if err != nil {
+			return config.TeamConn{}, "", failf("image", "Could not get the team server program: %v", err)
+		}
+		emit("image", "run", fmt.Sprintf("Copying it to the host (%.1f MB) and building the image…", float64(len(bin))/1e6))
+		ref = "termwright-team:" + tag
+		script := `set -e; d="$HOME/.termwright-team/image"; mkdir -p "$d"; cat > "$d/termwright-team"; chmod 755 "$d/termwright-team"; ` +
+			`printf '%s\n' 'FROM scratch' 'COPY termwright-team /termwright-team' 'VOLUME /data' 'EXPOSE 7443' 'ENTRYPOINT ["/termwright-team"]' > "$d/Dockerfile"; ` +
+			dk + ` build -q -t ` + shQuote(ref) + ` "$d" 2>&1`
+		if msg, code, err := out(script, bin, 6*time.Minute); err != nil || code != 0 {
+			return config.TeamConn{}, "", failf("image", "The image could not be built on the host: %s", firstLine(msg+errText(err)))
+		}
+		emit("image", "ok", "Image "+ref+" (copied over SSH)")
+	}
+
+	// start it
+	emit("start", "run", "Starting "+name+" (restarts with the host)…")
+	cmd := fmt.Sprintf("%s run -d --name %s --restart unless-stopped -p %d:%d -v %s:/data -e TW_TEAM_NAME=%s %s 2>&1",
+		dk, name, port, team.DefaultPort, name, shQuote(strings.TrimSpace(r.Name)), shQuote(ref))
+	if msg, code, err := out(cmd, nil, 2*time.Minute); err != nil || code != 0 {
+		return config.TeamConn{}, "", failf("start", "The container did not start: %s", firstLine(msg+errText(err)))
+	}
+	var ownerCode, fp string
+	for i := 0; i < 30 && ownerCode == ""; i++ {
+		logs, _, _ := out(dk+" logs "+name+" 2>&1 | grep 'TERMWRIGHT-TEAM owner-code=' | tail -1", nil, 20*time.Second)
+		for _, f := range strings.Fields(logs) {
+			if v, ok := strings.CutPrefix(f, "owner-code="); ok {
+				ownerCode = v
+			} else if v, ok := strings.CutPrefix(f, "fingerprint="); ok {
+				fp = v
+			}
+		}
+		if ownerCode == "" {
+			select {
+			case <-ctx.Done():
+				return config.TeamConn{}, "", ctx.Err()
+			case <-time.After(time.Second):
+			}
+		}
+	}
+	if ownerCode == "" || fp == "" {
+		logs, _, _ := out(dk+" logs --tail 5 "+name+" 2>&1", nil, 20*time.Second)
+		return config.TeamConn{}, "", failf("start", "The team server started but did not report its setup code: %s", firstLine(logs))
+	}
+	emit("start", "ok", "Started "+name)
+
+	// reach it from this computer and join as its owner
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
+	emit("reach", "run", "Reaching "+addr+" from this computer…")
+	c := team.NewClient(addr, fp, "")
+	var ierr error
+	for i := 0; i < 8; i++ {
+		ic, cancel := context.WithTimeout(ctx, 5*time.Second)
+		_, ierr = c.Info(ic)
+		cancel()
+		if ierr == nil || ctx.Err() != nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if ierr != nil {
+		return config.TeamConn{}, "", failf("reach", "The team server runs, but this computer cannot reach %s (%v). A firewall on the host may block port %d - e.g. sudo ufw allow %d/tcp, or sudo firewall-cmd --add-port=%d/tcp --permanent && sudo firewall-cmd --reload. The server keeps running: set it up again to finish, or join with an invite.",
+			addr, ierr, port, port, port, port)
+	}
+	tc, err := a.teamJoin(addr, fp, team.JoinRequest{OwnerCode: ownerCode}, r.SessionPath, name)
+	if err != nil {
+		return config.TeamConn{}, "", failf("reach", "Could not join as the owner: %v", err)
+	}
+	emit("reach", "ok", "Reached "+addr+" - you are the owner of "+tc.Name)
+	d, err := a.TeamDetails(tc.ID)
+	if err != nil {
+		return tc, "", nil
+	}
+	return tc, d.InviteLink, nil
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	if len(s) > 240 {
+		s = s[:240] + "…"
+	}
+	return s
+}
+
+func errText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return " " + err.Error()
+}
+
+// teamBinarySource gets the server program for the copy over SSH (tests replace it).
+var teamBinarySource = (*App).teamServerBinary
+
+// teamServerBinary downloads the team server program for linux/arch from the
+// GitHub release of this version (the latest release for development builds).
+func (a *App) teamServerBinary(ctx context.Context, arch, tag string) ([]byte, error) {
+	repo := a.cfg.Get().UpdateRepo
+	if repo == "" {
+		repo = "nperiannan/termwright"
+	}
+	file := "termwright-team-linux-" + arch + ".tar.gz"
+	u := "https://github.com/" + repo + "/releases/download/v" + tag + "/" + file
+	if tag == "latest" {
+		u = "https://github.com/" + repo + "/releases/latest/download/" + file
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s: %s", u, resp.Status)
+	}
+	return teamBinaryFromTarGz(resp.Body)
+}
+
+func teamBinaryFromTarGz(r io.Reader) ([]byte, error) {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
+	tr := tar.NewReader(gz)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			return nil, errors.New("the package has no termwright-team program")
+		}
+		if err != nil {
+			return nil, err
+		}
+		if h.Typeflag == tar.TypeReg && (h.Name == "termwright-team" || strings.HasSuffix(h.Name, "/termwright-team")) {
+			return io.ReadAll(io.LimitReader(tr, 64<<20))
+		}
+	}
+}

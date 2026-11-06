@@ -1,0 +1,10 @@
+# Used by the build workflow for the multi-platform image on ghcr.io.
+FROM scratch
+ARG TARGETARCH
+LABEL org.opencontainers.image.source="https://github.com/nperiannan/termwright" \
+      org.opencontainers.image.description="Termwright team server: who uses which device in a lab" \
+      org.opencontainers.image.licenses="Apache-2.0"
+COPY termwright-team-linux-${TARGETARCH} /termwright-team
+VOLUME /data
+EXPOSE 7443
+ENTRYPOINT ["/termwright-team"]

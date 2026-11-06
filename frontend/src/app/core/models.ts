@@ -103,6 +103,7 @@ export interface Settings {
   deviceTypes: DeviceType[] | null; alerts: AlertRule[] | null; confirmPaste: boolean; quickConnectSave?: boolean; noMoveConfirm?: boolean; noDeleteConfirm?: boolean;
   snippets: Snippet[] | null; workspaces: Workspace[] | null; folderDefaults: FolderDefault[] | null; environments?: EnvDef[] | null;
   credentials: Credential[] | null; masterHash: string;
+  teams?: TeamConn[] | null; teamDisplayName?: string;
   bookmarks: Bookmark[] | null; updateChannel: 'stable' | 'nightly' | 'off'; updateRepo: string; updateOnStart: boolean;
 }
 
@@ -302,3 +303,13 @@ export interface RemoteDesktopRun {
   sudoSame: boolean; sudoNone: boolean; sudoPassword: string;
   accountSame: boolean; accountPassword: string; vncSame: boolean; vncPassword: string;
 }
+
+/** A team server this Termwright joined (its key is in the keychain). */
+export interface TeamConn { id: string; name: string; address: string; fingerprint: string; memberId: string; role: TeamRole; host?: string; container?: string; }
+export type TeamRole = 'owner' | 'co-owner' | 'member';
+export interface TeamView extends TeamConn { reachable: boolean; error: string; members: number; online: number; version: string; }
+export interface TeamMember { id: string; name: string; user: string; machine: string; role: TeamRole; joined: string; lastSeen: string; online: boolean; }
+export interface TeamDetails { id: string; name: string; version: string; me: string; role: TeamRole; invite?: string; inviteLink: string; address: string; members: TeamMember[]; }
+export interface TeamInfo { name: string; version: string; members: number; online: number; owner: boolean; }
+export interface TeamSetUpStep { run: string; step: string; state: 'run' | 'ok' | 'fail' | 'info'; text: string; }
+export interface TeamSetUpResult { run: string; teamId: string; invite: string; error: string; }

@@ -1,0 +1,16 @@
+# docker compose up -d   (change the name and the port on the left as you like)
+services:
+  termwright-team:
+    image: ghcr.io/nperiannan/termwright-team:latest
+    # without internet on this host: comment out "image" above and build from this folder
+    # build: .
+    container_name: termwright-team-my-lab
+    restart: unless-stopped
+    environment:
+      TW_TEAM_NAME: "My Lab"
+    ports:
+      - "7443:7443"
+    volumes:
+      - termwright-team-my-lab:/data
+volumes:
+  termwright-team-my-lab:

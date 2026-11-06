@@ -1,0 +1,21 @@
+# Without Docker: copy termwright-team to /usr/local/bin, this file to
+# /etc/systemd/system/, then: sudo systemctl enable --now termwright-team
+[Unit]
+Description=Termwright team server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=yes
+StateDirectory=termwright-team
+Environment=TW_DATA=/var/lib/termwright-team
+Environment=TW_LISTEN=:7443
+Environment="TW_TEAM_NAME=My Lab"
+ExecStart=/usr/local/bin/termwright-team
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

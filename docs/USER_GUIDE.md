@@ -592,6 +592,20 @@ Switches that take their management address from DHCP, lab equipment, access poi
 
 Limits: MAC addresses are only visible on **this computer's own network** (the same subnet / VLAN). Devices behind a router, VPN, jump host or proxy cannot be checked this way. Where you can, a **DHCP reservation** or a **DNS name** in the session is the cleaner fix; the MAC address check is the safety net for networks where you do not control DHCP.
 
+### Teams: who uses which device
+
+A team that shares a lab can run its own small **team server** (a Docker container on a Linux host of the lab) and connect every member's Termwright to it. **Options → Teams…** is the place for it, and it is optional: until you join or set up a team, nothing changes and nothing is sent anywhere.
+
+- **Set Up a Team Server…**: pick the SSH session of the host and give the team a name. Termwright checks Docker, picks a free port from 7443 (never one in use), starts `termwright-team-<name>` with its own data volume, and makes you the **owner**. If the host has no internet, the image is copied over SSH.
+- **Join a Team…**: paste the invite the owner sent you. Termwright talks only to the server whose certificate matches the invite.
+- **The team**: who is in it and who is online. Owners and co-owners see the invite (*Copy*, *New Invite* - the old one stops working), make members co-owners and remove members. *You appear as* sets the name the team sees.
+
+Only names, user and computer names - and, from the next release, which devices are open or reserved - are shared; never passwords, keys or sessions. The [team server guide](TEAM_SERVER.md) covers firewalls, installing by hand, backups and updates.
+
+| Teams | Set Up a Team Server |
+|---|---|
+| ![Teams](screenshots/teams.png) | ![Set Up a Team Server](screenshots/teams-setup.png) |
+
 ## 5. Session Options reference
 
 ![Session Options](screenshots/session.png)

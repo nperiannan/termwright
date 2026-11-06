@@ -4,6 +4,7 @@ package main
 // the in-window menus (frontend/src/app/i18n/ru.ts). A label missing here stays
 // English; TestMenuRussian finds such labels.
 var menuRU = map[string]string{
+	"Teams...":                              "Рабочие группы...",
 	"About Termwright":                      "О программе Termwright",
 	"Add Marker to Recording...":            "Добавить метку в запись...",
 	"Auto Scroll On / Off":                  "Автопрокрутка вкл. / выкл.",

@@ -121,7 +121,9 @@ type Settings struct {
 	ShowConnectBar       bool                         `json:"showConnectBar"`
 	InWindowMenu         bool                         `json:"inWindowMenu"` // menu bar inside the window (default on macOS)
 	Credentials          []Credential                 `json:"credentials"`
-	MasterHash           string                       `json:"masterHash"` // scrypt verifier; empty = no master password
+	Teams                []TeamConn                   `json:"teams,omitempty"`           // team servers joined (kept by the backend)
+	TeamDisplayName      string                       `json:"teamDisplayName,omitempty"` // the name the teams see ("" = the OS user)
+	MasterHash           string                       `json:"masterHash"`                // scrypt verifier; empty = no master password
 	KeyMap               []KeyBinding                 `json:"keyMap"`
 	CustomSchemes        []ColorScheme                `json:"customSchemes"`
 	AccentColor          string                       `json:"accentColor"`
@@ -584,6 +586,26 @@ const DefaultFontFamily = "Menlo, 'Termwright Mono', Consolas, 'Courier New', mo
 
 // OldDefaultFontFamily was the default before 0.29: a setting with it gets the new default.
 const OldDefaultFontFamily = "Menlo, Consolas, 'DejaVu Sans Mono', 'Courier New', monospace"
+
+// TeamConn is a team server this Termwright joined. The member token is in the
+// OS keychain under "team:"+ID, never in settings.json.
+type TeamConn struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Address     string `json:"address"` // host:port
+	Fingerprint string `json:"fingerprint"`
+	MemberID    string `json:"memberId"`
+	Role        string `json:"role"`
+	Host        string `json:"host,omitempty"`      // the SSH session it was set up on (owners)
+	Container   string `json:"container,omitempty"` // its Docker container there
+}
+
+// SetTeams stores the teams joined.
+func (m *Manager) SetTeams(t []TeamConn) error {
+	s := m.Get()
+	s.Teams = append([]TeamConn(nil), t...)
+	return m.Save(s)
+}
 
 // AddRecent records a recently used session path (at most maxRecent).
 func (m *Manager) AddRecent(p string) {
