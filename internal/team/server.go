@@ -110,6 +110,36 @@ func Open(dir, name, version string, logger *log.Logger) (*Server, string, error
 	return s, code, nil
 }
 
+// RecoverFile is made in the data folder by "termwright-team -recover-owner"
+// (run with docker exec): the server then prints a new owner setup code, for
+// an owner whose Termwright lost the team. Only who can run commands on the
+// host can do it.
+const RecoverFile = "recover-owner"
+
+// WatchRecovery checks for RecoverFile every two seconds until ctx ends.
+func (s *Server) WatchRecovery(stop <-chan struct{}) {
+	t := time.NewTicker(2 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+		}
+		f := filepath.Join(s.Dir, RecoverFile)
+		if _, err := os.Stat(f); err != nil {
+			continue
+		}
+		_ = os.Remove(f)
+		code := randToken(18)
+		s.mu.Lock()
+		s.st.OwnerCodeHash = hashToken(code)
+		_ = s.save()
+		s.mu.Unlock()
+		s.Log.Printf("TERMWRIGHT-TEAM owner-code=%s fingerprint=%s (recovery: the next to join with it is the owner)", code, s.fp)
+	}
+}
+
 // Fingerprint is the SHA-256 of the server's certificate (hex), for invites.
 func (s *Server) Fingerprint() string { return s.fp }
 
@@ -267,6 +297,12 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 	s.st.Members = append(s.st.Members, m)
 	if role == RoleOwner {
 		s.st.OwnerCodeHash = ""
+		for _, o := range s.st.Members { // a recovered owner: the one before stays as co-owner
+			if o.Role == RoleOwner && o != m {
+				o.Role = RoleCoOwner
+				s.log(name, "took over as owner from %s (now co-owner)", o.Name)
+			}
+		}
 	}
 	if err := s.save(); err != nil {
 		fail(w, 500, "could not save: "+err.Error())

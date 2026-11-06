@@ -108,3 +108,24 @@ func TestOldDefaultFontBecomesNew(t *testing.T) {
 		t.Fatal("a chosen font changed")
 	}
 }
+
+// Teams are kept in teams.json: a settings.json written without them (by an
+// older Termwright) does not lose them.
+func TestTeamsSurviveAnOlderSettingsFile(t *testing.T) {
+	dir := t.TempDir()
+	m, _ := Load(dir)
+	if err := m.SetTeams([]TeamConn{{ID: "t1", Name: "Lab"}}); err != nil {
+		t.Fatal(err)
+	}
+	_ = m.Save(m.Get())
+	b, _ := os.ReadFile(filepath.Join(dir, "settings.json"))
+	if strings.Contains(string(b), `"teams"`) {
+		t.Fatal("teams written into settings.json")
+	}
+	// an older Termwright rewrites settings.json
+	_ = os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"fontSize":14}`), 0o600)
+	m2, _ := Load(dir)
+	if len(m2.Get().Teams) != 1 || m2.Get().Teams[0].Name != "Lab" {
+		t.Fatalf("teams lost: %+v", m2.Get().Teams)
+	}
+}

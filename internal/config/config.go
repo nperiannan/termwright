@@ -412,6 +412,16 @@ func Load(dataDir string) (*Manager, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
+	// the teams joined are in teams.json of their own: an older Termwright that
+	// rewrites settings.json does not know them and would drop them
+	if b, err := os.ReadFile(m.teamsFile()); err == nil {
+		var t []TeamConn
+		if json.Unmarshal(b, &t) == nil {
+			m.cur.Teams = t
+		}
+	} else if len(m.cur.Teams) > 0 { // 0.30 nightly kept them in settings.json
+		_ = m.writeTeams(m.cur.Teams)
+	}
 	changed := defaultUpdateRepo(&m.cur)
 	// 0.29: the terminal font that was the default becomes the new default (the
 	// bundled Termwright Mono instead of Consolas on Windows); a font chosen stays.
@@ -562,7 +572,10 @@ func (m *Manager) Save(s Settings) error {
 	if s.KeywordSets == nil {
 		s.KeywordSets = []KeywordSet{}
 	}
-	data, err := json.MarshalIndent(s, "", "  ")
+	s.Teams = m.cur.Teams // changed by SetTeams only, kept in teams.json
+	disk := s
+	disk.Teams = nil
+	data, err := json.MarshalIndent(disk, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -574,6 +587,22 @@ func (m *Manager) Save(s Settings) error {
 	}
 	m.cur = s
 	return nil
+}
+
+func (m *Manager) teamsFile() string { return filepath.Join(m.dataDir, "teams.json") }
+
+func (m *Manager) writeTeams(t []TeamConn) error {
+	if t == nil {
+		t = []TeamConn{}
+	}
+	data, err := json.MarshalIndent(t, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(m.teamsFile()+".tmp", data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(m.teamsFile()+".tmp", m.teamsFile())
 }
 
 // maxRecent is how many recent sessions are kept: four rows of three cards.
@@ -602,9 +631,14 @@ type TeamConn struct {
 
 // SetTeams stores the teams joined.
 func (m *Manager) SetTeams(t []TeamConn) error {
-	s := m.Get()
-	s.Teams = append([]TeamConn(nil), t...)
-	return m.Save(s)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t = append([]TeamConn(nil), t...)
+	if err := m.writeTeams(t); err != nil {
+		return err
+	}
+	m.cur.Teams = t
+	return nil
 }
 
 // AddRecent records a recently used session path (at most maxRecent).

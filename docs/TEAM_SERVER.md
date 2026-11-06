@@ -65,6 +65,8 @@ When the host's firewall blocks the port, the server runs but cannot be reached.
 - Ubuntu/Debian: `sudo ufw allow 7443/tcp`
 - RHEL/Rocky: `sudo firewall-cmd --add-port=7443/tcp --permanent && sudo firewall-cmd --reload`
 
+**Set up again to reconnect.** If your Termwright lost the team (a new computer, or settings reset), run *Set Up a Team Server…* again with the same host and team name. Termwright sees the running container and makes you its owner again: the team, its members, inventory, certificate and invite stay. Your earlier entry stays as a co-owner until you remove it. Only someone who can log in to the host and use Docker there can do this. By hand: `docker exec termwright-team-<name> /termwright-team -recover-owner`, then take the new code from `docker logs termwright-team-<name> | grep owner-code`.
+
 ## Joining a team
 
 **Options → Teams… → Join a Team…**, then paste the invite. It looks like `termwright-team://10.234.179.141:7443/?fp=…&k=…&n=…`.

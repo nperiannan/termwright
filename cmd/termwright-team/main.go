@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -36,9 +37,18 @@ func main() {
 	listen := flag.String("listen", env("TW_LISTEN", ":7443"), "address to listen on")
 	name := flag.String("name", env("TW_TEAM_NAME", "Team"), "team name (first start only)")
 	version := flag.Bool("version", false, "print the version")
+	recover := flag.Bool("recover-owner", false, "ask the running server for a new owner setup code (docker exec <container> /termwright-team -recover-owner)")
 	flag.Parse()
 	if *version {
 		println(Version)
+		return
+	}
+	if *recover {
+		if err := os.WriteFile(filepath.Join(*data, team.RecoverFile), []byte("1"), 0o600); err != nil {
+			println("cannot ask the server:", err.Error())
+			os.Exit(1)
+		}
+		println("asked - the server prints the new owner code in its log within a few seconds (docker logs <container> | grep owner-code)")
 		return
 	}
 	logger := log.New(os.Stdout, "", log.LstdFlags)
@@ -54,6 +64,8 @@ func main() {
 	}
 	srv := &http.Server{Addr: *listen, Handler: s.Handler(), TLSConfig: s.TLSConfig(),
 		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 2 * time.Minute, ErrorLog: log.New(os.Stderr, "http: ", 0)}
+	stop := make(chan struct{})
+	go s.WatchRecovery(stop)
 	go func() {
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)

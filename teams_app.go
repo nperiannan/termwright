@@ -187,10 +187,20 @@ func (a *App) teamJoin(addr, fp string, req team.JoinRequest, host, container st
 		return config.TeamConn{}, err
 	}
 	t := config.TeamConn{ID: randHex(8), Name: j.Team, Address: addr, Fingerprint: team.NormFingerprint(fp), MemberID: j.MemberID, Role: j.Role, Host: host, Container: container}
+	// the same team again (set up again, or reconnected as its owner): it keeps
+	// its id, so its team folder stays the same
+	var others []config.TeamConn
+	for _, o := range a.cfg.Get().Teams {
+		if o.Address == t.Address && o.Fingerprint == t.Fingerprint {
+			t.ID = o.ID
+		} else {
+			others = append(others, o)
+		}
+	}
 	if err := secrets.Set(teamTokenKey(t.ID), j.Token); err != nil {
 		return config.TeamConn{}, fmt.Errorf("the keychain could not keep the team key: %w", err)
 	}
-	if err := a.cfg.SetTeams(append(a.cfg.Get().Teams, t)); err != nil {
+	if err := a.cfg.SetTeams(append(others, t)); err != nil {
 		return config.TeamConn{}, err
 	}
 	a.startTeamSync()
@@ -443,8 +453,66 @@ func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host
 	// one container per team; a second setup of the same team would only clash
 	slug := teamSlug(r.Name)
 	name := "termwright-team-" + slug
+	// the owner setup code the server prints: the (after+1)th one in its log
+	ownerCodeOf := func(after int) (code, fp string) {
+		for i := 0; i < 30 && ctx.Err() == nil; i++ {
+			logs, _, _ := out(dk+" logs "+name+" 2>&1 | grep 'TERMWRIGHT-TEAM owner-code='", nil, 20*time.Second)
+			lines := strings.Split(strings.TrimSpace(logs), "\n")
+			if logs != "" && len(lines) > after {
+				for _, f := range strings.Fields(lines[len(lines)-1]) {
+					if v, ok := strings.CutPrefix(f, "owner-code="); ok {
+						code = v
+					} else if v, ok := strings.CutPrefix(f, "fingerprint="); ok {
+						fp = v
+					}
+				}
+				return
+			}
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Second):
+			}
+		}
+		return
+	}
 	if have, _, _ := out(dk+" ps -a --filter "+shQuote("name=^/"+name+"$")+" --format '{{.Status}} {{.Ports}}'", nil, 30*time.Second); have != "" {
-		return config.TeamConn{}, "", failf("port", "This host already runs a team server named %s (%s). Pick another team name, or ask its owner for an invite.", name, firstLine(have))
+		// the team's server runs here already: this Termwright lost the team (or
+		// it is set up again) - reconnect as its owner; its data, members,
+		// certificate and invite stay
+		emit("port", "info", "This host runs "+name+" already ("+firstLine(have)+") - reconnecting to it as its owner")
+		if !strings.HasPrefix(have, "Up") {
+			_, _, _ = out(dk+" start "+name+" 2>&1", nil, time.Minute)
+		}
+		port := 0
+		if ps, _, _ := out(dk+" port "+name+" 7443/tcp 2>/dev/null", nil, 20*time.Second); ps != "" {
+			if m := portRe.FindStringSubmatch(firstLine(ps) + "\n"); m != nil {
+				port, _ = strconv.Atoi(m[1])
+			}
+		}
+		if port == 0 { // host network: the port it listens on
+			env, _, _ := out(dk+" inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "+name, nil, 20*time.Second)
+			port = team.DefaultPort
+			for _, l := range strings.Split(env, "\n") {
+				if v, ok := strings.CutPrefix(strings.TrimSpace(l), "TW_LISTEN="); ok {
+					if i := strings.LastIndex(v, ":"); i >= 0 {
+						if p, err := strconv.Atoi(v[i+1:]); err == nil {
+							port = p
+						}
+					}
+				}
+			}
+		}
+		before, _, _ := out(dk+" logs "+name+" 2>&1 | grep -c 'TERMWRIGHT-TEAM owner-code='", nil, 20*time.Second)
+		n, _ := strconv.Atoi(strings.TrimSpace(before))
+		if msg, code, err := out(dk+" exec "+name+" /termwright-team -recover-owner -data /data 2>&1", nil, 30*time.Second); err != nil || code != 0 {
+			return config.TeamConn{}, "", failf("start", "The team server %s is too old to reconnect to (%s). Update it (docker pull, then start it again with the same volume) or remove it, then set up again.", name, firstLine(msg+errText(err)))
+		}
+		ownerCode, fp := ownerCodeOf(n)
+		if ownerCode == "" || fp == "" {
+			return config.TeamConn{}, "", failf("start", "The team server %s did not give a new owner code - is it running? (docker logs %s)", name, name)
+		}
+		emit("start", "ok", "The team server answered with a new owner code")
+		return a.teamReachAndJoin(ctx, r, host, name, port, ownerCode, fp, emit, failf)
 	}
 
 	// the port
@@ -520,23 +588,9 @@ func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host
 	if msg, code, err := out(cmd, nil, 2*time.Minute); err != nil || code != 0 {
 		return config.TeamConn{}, "", failf("start", "The container did not start: %s", firstLine(msg+errText(err)))
 	}
-	var ownerCode, fp string
-	for i := 0; i < 30 && ownerCode == ""; i++ {
-		logs, _, _ := out(dk+" logs "+name+" 2>&1 | grep 'TERMWRIGHT-TEAM owner-code=' | tail -1", nil, 20*time.Second)
-		for _, f := range strings.Fields(logs) {
-			if v, ok := strings.CutPrefix(f, "owner-code="); ok {
-				ownerCode = v
-			} else if v, ok := strings.CutPrefix(f, "fingerprint="); ok {
-				fp = v
-			}
-		}
-		if ownerCode == "" {
-			select {
-			case <-ctx.Done():
-				return config.TeamConn{}, "", ctx.Err()
-			case <-time.After(time.Second):
-			}
-		}
+	ownerCode, fp := ownerCodeOf(0)
+	if ctx.Err() != nil {
+		return config.TeamConn{}, "", ctx.Err()
 	}
 	if ownerCode == "" || fp == "" {
 		logs, _, _ := out(dk+" logs --tail 5 "+name+" 2>&1", nil, 20*time.Second)
@@ -544,7 +598,12 @@ func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host
 	}
 	emit("start", "ok", "Started "+name)
 
-	// reach it from this computer and join as its owner
+	return a.teamReachAndJoin(ctx, r, host, name, port, ownerCode, fp, emit, failf)
+}
+
+// teamReachAndJoin reaches the team server from this computer and joins it as its owner.
+func (a *App) teamReachAndJoin(ctx context.Context, r TeamSetUpRequest, host, name string, port int, ownerCode, fp string,
+	emit func(step, state, text string), failf func(step, f string, v ...any) error) (config.TeamConn, string, error) {
 	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	emit("reach", "run", "Reaching "+addr+" from this computer…")
 	c := team.NewClient(addr, fp, "")
