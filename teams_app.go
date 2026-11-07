@@ -21,6 +21,7 @@ import (
 
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/secrets"
+	"github.com/termwright/termwright/internal/session"
 	"github.com/termwright/termwright/internal/team"
 )
 
@@ -36,6 +37,11 @@ type TeamView struct {
 	Members   int    `json:"members"`
 	Online    int    `json:"online"`
 	Version   string `json:"version"`
+	// Update is the version this Termwright would update the team server to,
+	// when the server is older ("" when it is current or newer)
+	Update string `json:"update,omitempty"`
+	// Newer: the team server is newer than this Termwright
+	Newer bool `json:"newer,omitempty"`
 }
 
 // TeamDetails is a team with its members and, for owners and co-owners, the invite link.
@@ -110,6 +116,12 @@ func (a *App) Teams() []TeamView {
 				return
 			}
 			v.Reachable, v.Members, v.Version, v.Role = true, len(tm.Members), tm.Version, tm.Role
+			switch c := compareVersions(tm.Version, Version); {
+			case c < 0:
+				v.Update = teamImageTag()
+			case c > 0:
+				v.Newer = true
+			}
 			for _, m := range tm.Members {
 				if m.Online {
 					v.Online++
@@ -410,45 +422,15 @@ func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host
 		return errors.New(msg)
 	}
 
-	emit("login", "run", "Logging in to "+sess.Name+"…")
-	run, closeSSH, err := a.terms.ExecSession(ctx, "teamsetup-"+id, sess)
+	out, closeSSH, err := a.teamLogin(ctx, id, sess, host, emit, failf)
 	if err != nil {
-		return config.TeamConn{}, "", failf("login", "Could not log in to %s: %v", sess.Name, err)
+		return config.TeamConn{}, "", err
 	}
 	defer closeSSH()
-	out := func(cmd string, stdin []byte, timeout time.Duration) (string, int, error) {
-		c, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-		var b strings.Builder
-		code, err := run(c, cmd, stdin, func(l string) { b.WriteString(l); b.WriteString("\n") })
-		return strings.TrimSpace(b.String()), code, err
-	}
-	who, _, _ := out("id -un", nil, 20*time.Second)
-	emit("login", "ok", "Logged in as "+who+"@"+host)
-
-	// Docker, and whether this user may use it
-	emit("docker", "run", "Checking Docker…")
-	dk := "docker"
-	ver, code, err := out(`docker version --format '{{.Server.Version}}' 2>&1`, nil, 30*time.Second)
+	dk, err := teamDocker(out, emit, failf)
 	if err != nil {
-		return config.TeamConn{}, "", failf("docker", "Docker could not be checked: %v", err)
+		return config.TeamConn{}, "", err
 	}
-	if code != 0 {
-		low := strings.ToLower(ver)
-		switch {
-		case strings.Contains(low, "not found"):
-			return config.TeamConn{}, "", failf("docker", "Docker is not installed on this host. Install Docker (or Podman with its docker command), then try again.")
-		case strings.Contains(low, "permission denied"):
-			if v2, c2, _ := out(`sudo -n docker version --format '{{.Server.Version}}' 2>&1`, nil, 30*time.Second); c2 == 0 {
-				dk, ver = "sudo -n docker", v2
-			} else {
-				return config.TeamConn{}, "", failf("docker", "%s may not use Docker. On the host: sudo usermod -aG docker %s (then log in again), or allow sudo without a password for docker.", who, who)
-			}
-		default:
-			return config.TeamConn{}, "", failf("docker", "Docker does not answer: %s", firstLine(ver))
-		}
-	}
-	emit("docker", "ok", "Docker "+firstLine(ver)+" - "+who+" may use it")
 
 	// one container per team; a second setup of the same team would only clash
 	slug := teamSlug(r.Name)
@@ -539,42 +521,9 @@ func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host
 	emit("port", "ok", fmt.Sprintf("Port %d free%s", port, note))
 
 	// the image: downloaded by the host, or copied over SSH and built there
-	tag := teamImageTag()
-	owner := strings.ToLower(strings.SplitN(a.cfg.Get().UpdateRepo, "/", 2)[0])
-	if owner == "" {
-		owner = "nperiannan"
-	}
-	ref := "ghcr.io/" + owner + "/termwright-team:" + tag
-	copied := r.Image == "copy"
-	if !copied {
-		emit("image", "run", "Downloading "+ref+" on the host…")
-		if msg, code, err := out(dk+" pull -q "+shQuote(ref)+" 2>&1", nil, 6*time.Minute); err != nil || code != 0 {
-			emit("image", "info", "The host could not download the image ("+firstLine(msg)+") - copying it over SSH instead")
-			copied = true
-		} else {
-			emit("image", "ok", "Image "+ref)
-		}
-	}
-	if copied {
-		arch, _, _ := out("uname -m", nil, 20*time.Second)
-		ga := map[string]string{"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}[strings.TrimSpace(arch)]
-		if ga == "" {
-			return config.TeamConn{}, "", failf("image", "The team server is built for x86-64 and ARM64 Linux; this host is %s.", arch)
-		}
-		emit("image", "run", "Getting the team server for linux/"+ga+"…")
-		bin, err := teamBinarySource(a, ctx, ga, tag)
-		if err != nil {
-			return config.TeamConn{}, "", failf("image", "Could not get the team server program: %v", err)
-		}
-		emit("image", "run", fmt.Sprintf("Copying it to the host (%.1f MB) and building the image…", float64(len(bin))/1e6))
-		ref = "termwright-team:" + tag
-		script := `set -e; d="$HOME/.termwright-team/image"; mkdir -p "$d"; cat > "$d/termwright-team"; chmod 755 "$d/termwright-team"; ` +
-			`printf '%s\n' 'FROM scratch' 'COPY termwright-team /termwright-team' 'VOLUME /data' 'EXPOSE 7443' 'ENTRYPOINT ["/termwright-team"]' > "$d/Dockerfile"; ` +
-			dk + ` build -q -t ` + shQuote(ref) + ` "$d" 2>&1`
-		if msg, code, err := out(script, bin, 6*time.Minute); err != nil || code != 0 {
-			return config.TeamConn{}, "", failf("image", "The image could not be built on the host: %s", firstLine(msg+errText(err)))
-		}
-		emit("image", "ok", "Image "+ref+" (copied over SSH)")
+	ref, err := a.teamImage(ctx, out, dk, r.Image, emit, failf)
+	if err != nil {
+		return config.TeamConn{}, "", err
 	}
 
 	// start it
@@ -599,6 +548,153 @@ func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host
 	emit("start", "ok", "Started "+name)
 
 	return a.teamReachAndJoin(ctx, r, host, name, port, ownerCode, fp, emit, failf)
+}
+
+// remoteRun runs a command on the host: its output, exit code and error.
+type remoteRun func(cmd string, stdin []byte, timeout time.Duration) (string, int, error)
+
+// teamLogin logs in to the host of a team server over SSH.
+func (a *App) teamLogin(ctx context.Context, id string, sess session.Session, host string, emit func(step, state, text string),
+	failf func(step, f string, v ...any) error) (remoteRun, func(), error) {
+	emit("login", "run", "Logging in to "+sess.Name+"…")
+	run, closeSSH, err := a.terms.ExecSession(ctx, "teamsetup-"+id, sess)
+	if err != nil {
+		return nil, nil, failf("login", "Could not log in to %s: %v", sess.Name, err)
+	}
+	out := func(cmd string, stdin []byte, timeout time.Duration) (string, int, error) {
+		c, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		var b strings.Builder
+		code, err := run(c, cmd, stdin, func(l string) { b.WriteString(l); b.WriteString("\n") })
+		return strings.TrimSpace(b.String()), code, err
+	}
+	who, _, _ := out("id -un", nil, 20*time.Second)
+	emit("login", "ok", "Logged in as "+who+"@"+host)
+	return out, closeSSH, nil
+}
+
+// teamDocker checks Docker on the host and whether this user may use it: the
+// docker command to use ("docker" or "sudo -n docker").
+func teamDocker(out remoteRun, emit func(step, state, text string), failf func(step, f string, v ...any) error) (string, error) {
+	emit("docker", "run", "Checking Docker…")
+	who, _, _ := out("id -un", nil, 20*time.Second)
+	dk := "docker"
+	ver, code, err := out(`docker version --format '{{.Server.Version}}' 2>&1`, nil, 30*time.Second)
+	if err != nil {
+		return "", failf("docker", "Docker could not be checked: %v", err)
+	}
+	if code != 0 {
+		low := strings.ToLower(ver)
+		switch {
+		case strings.Contains(low, "not found"):
+			return "", failf("docker", "Docker is not installed on this host. Install Docker (or Podman with its docker command), then try again.")
+		case strings.Contains(low, "permission denied"):
+			if v2, c2, _ := out(`sudo -n docker version --format '{{.Server.Version}}' 2>&1`, nil, 30*time.Second); c2 == 0 {
+				dk, ver = "sudo -n docker", v2
+			} else {
+				return "", failf("docker", "%s may not use Docker. On the host: sudo usermod -aG docker %s (then log in again), or allow sudo without a password for docker.", who, who)
+			}
+		default:
+			return "", failf("docker", "Docker does not answer: %s", firstLine(ver))
+		}
+	}
+	emit("docker", "ok", "Docker "+firstLine(ver)+" - "+who+" may use it")
+	return dk, nil
+}
+
+// teamImage gets the team server's image for this Termwright onto the host:
+// downloaded by the host ("download", falling back to copying), or copied over
+// SSH and built there ("copy"). It returns the image's name.
+func (a *App) teamImage(ctx context.Context, out remoteRun, dk, mode string, emit func(step, state, text string),
+	failf func(step, f string, v ...any) error) (string, error) {
+	tag := teamImageTag()
+	owner := strings.ToLower(strings.SplitN(a.cfg.Get().UpdateRepo, "/", 2)[0])
+	if owner == "" {
+		owner = "nperiannan"
+	}
+	ref := "ghcr.io/" + owner + "/termwright-team:" + tag
+	copied := mode == "copy"
+	if !copied {
+		emit("image", "run", "Downloading "+ref+" on the host…")
+		if msg, code, err := out(dk+" pull -q "+shQuote(ref)+" 2>&1", nil, 6*time.Minute); err != nil || code != 0 {
+			emit("image", "info", "The host could not download the image ("+firstLine(msg)+") - copying it over SSH instead")
+			copied = true
+		} else {
+			emit("image", "ok", "Image "+ref)
+		}
+	}
+	if copied {
+		arch, _, _ := out("uname -m", nil, 20*time.Second)
+		ga := map[string]string{"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}[strings.TrimSpace(arch)]
+		if ga == "" {
+			return "", failf("image", "The team server is built for x86-64 and ARM64 Linux; this host is %s.", arch)
+		}
+		emit("image", "run", "Getting the team server for linux/"+ga+"…")
+		bin, err := teamBinarySource(a, ctx, ga, tag)
+		if err != nil {
+			return "", failf("image", "Could not get the team server program: %v", err)
+		}
+		emit("image", "run", fmt.Sprintf("Copying it to the host (%.1f MB) and building the image…", float64(len(bin))/1e6))
+		ref = "termwright-team:" + tag
+		script := `set -e; d="$HOME/.termwright-team/image"; mkdir -p "$d"; cat > "$d/termwright-team"; chmod 755 "$d/termwright-team"; ` +
+			`printf '%s\n' 'FROM scratch' 'COPY termwright-team /termwright-team' 'VOLUME /data' 'EXPOSE 7443' 'ENTRYPOINT ["/termwright-team"]' > "$d/Dockerfile"; ` +
+			dk + ` build -q -t ` + shQuote(ref) + ` "$d" 2>&1`
+		if msg, code, err := out(script, bin, 6*time.Minute); err != nil || code != 0 {
+			return "", failf("image", "The image could not be built on the host: %s", firstLine(msg+errText(err)))
+		}
+		emit("image", "ok", "Image "+ref+" (copied over SSH)")
+	}
+	return ref, nil
+}
+
+// compareVersions compares two Termwright versions by their numbers: -1, 0 or
+// 1. Of the same numbers, a release is newer than a development or nightly
+// build ("0.30.0-dev~git1234567", "0.30.0~git1234567"); "" and "dev" are oldest.
+func compareVersions(a, b string) int {
+	parse := func(v string) (n [3]int, pre bool, ok bool) {
+		v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+		core := v
+		if i := strings.IndexAny(v, "-~+"); i >= 0 {
+			core, pre = v[:i], true
+		}
+		f := strings.Split(core, ".")
+		if len(f) == 0 || len(f) > 3 {
+			return n, pre, false
+		}
+		for i, x := range f {
+			d, err := strconv.Atoi(x)
+			if err != nil {
+				return n, pre, false
+			}
+			n[i] = d
+		}
+		return n, pre, true
+	}
+	na, pa, oa := parse(a)
+	nb, pb, ob := parse(b)
+	switch {
+	case !oa && !ob:
+		return 0
+	case !oa:
+		return -1
+	case !ob:
+		return 1
+	}
+	for i := range na {
+		if na[i] != nb[i] {
+			if na[i] < nb[i] {
+				return -1
+			}
+			return 1
+		}
+	}
+	switch {
+	case pa == pb:
+		return 0
+	case pa:
+		return -1
+	}
+	return 1
 }
 
 // teamReachAndJoin reaches the team server from this computer and joins it as its owner.

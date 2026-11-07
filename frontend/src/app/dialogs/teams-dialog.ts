@@ -21,9 +21,11 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
   <div class="modal-backdrop" (click)="close()">
     <div class="modal teams" (click)="$event.stopPropagation()">
       <div class="modal-head"><span class="mh-ic"><app-icon name="sessions" [size]="17" /></span>
-        <span class="mh-t">{{ view() === 'setup' ? 'Set Up a Team Server' : view() === 'join' ? 'Join a Team' : 'Teams' }}
+        <span class="mh-t">{{ view() === 'setup' ? 'Set Up a Team Server' : view() === 'join' ? 'Join a Team' : view() === 'update' ? 'Update the Team Server' : 'Teams' }}
           <span class="mh-s">{{ view() === 'setup' ? 'A small Docker container on a Linux host of your lab - your team connects to it'
-            : view() === 'join' ? 'Paste the invite the team\\'s owner sent you' : 'Who uses which device - shared with your team servers only' }}</span></span></div>
+            : view() === 'join' ? 'Paste the invite the team\\'s owner sent you'
+            : view() === 'update' ? (upd()?.name + ' runs ' + (upd()?.version || '?') + ' - this Termwright brings it to ' + upd()?.update)
+            : 'Who uses which device - shared with your team servers only' }}</span></span></div>
 
       @switch (view()) {
       @case ('list') {
@@ -40,8 +42,18 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
             <span class="dot" [class.off]="!t.reachable"></span>
             <div class="tm">
               <div><b>{{ t.name }}</b> <span class="pill" [class.own]="t.role !== 'member'">{{ role(t.role) }}</span></div>
-              <div class="mono muted">{{ t.address }}@if (t.reachable) { · {{ t.members }} member{{ t.members === 1 ? '' : 's' }} · {{ t.online }} online }</div>
+              <div class="mono muted">{{ t.address }}@if (t.reachable) { · {{ t.members }} member{{ t.members === 1 ? '' : 's' }} · {{ t.online }} online · server {{ t.version || '?' }} }</div>
               @if (t.error) { <div class="err">{{ t.error }}</div> }
+              @if (t.reachable && t.update) {
+                <div class="upd"><app-icon name="download" [size]="13" />
+                  @if (t.role !== 'member') { <span>Version <b>{{ t.update }}</b> is available for the team server (it runs {{ t.version || 'an older one' }}).</span>
+                    <a (click)="$event.stopPropagation(); toUpdate(t)">Update Server…</a> }
+                  @else { <span>The team server runs {{ t.version || 'an older version' }}, older than this Termwright. Its owner can update it from Termwright.</span> }
+                </div>
+              }
+              @if (t.reachable && t.newer) {
+                <div class="upd new"><app-icon name="alert" [size]="13" /><span>The team server runs {{ t.version }}, newer than this Termwright - update Termwright (Help → Check for Updates).</span></div>
+              }
             </div>
             @if (t.role !== 'member' && t.reachable) {
               <button type="button" class="primary" (click)="$event.stopPropagation(); openAdmin(t)" title="Inventory, approvals, scans and members - in your browser, signed in">Open Admin Page</button>
@@ -104,6 +116,47 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
         <span class="spacer"></span>
         <button type="button" (click)="close()">Close</button>
         <button type="submit" form="joinf" class="primary" [disabled]="busy() || !invite.trim()">{{ busy() ? 'Joining…' : 'Join' }}</button>
+      </div>
+      }
+
+      @case ('update') {
+      <form class="modal-body" (ngSubmit)="update()" id="updf">
+        <div class="lbl">Host <span class="muted">- the SSH session of the Linux host the team server runs on ({{ upd()?.address }})</span></div>
+        <select name="uhost" [(ngModel)]="host" [disabled]="!!run()">
+          <option value="" disabled>Pick an SSH session…</option>
+          @for (p of sshSessions(); track p) { <option [value]="p">{{ p }}</option> }
+        </select>
+        <div class="lbl">Container image</div>
+        <div class="seg">
+          <button type="button" [class.on]="image === 'download'" (click)="image = 'download'" [disabled]="!!run()">Download (GitHub)</button>
+          <button type="button" [class.on]="image === 'copy'" (click)="image = 'copy'" [disabled]="!!run()">Copy over SSH</button>
+        </div>
+        <span class="muted small"> {{ image === 'download' ? 'the host downloads it; falls back to copying when the host has no internet' : 'this computer downloads it and copies it to the host - for labs without internet' }}</span>
+        @if (steps().length) {
+          <div class="steps">
+            @for (s of steps(); track s.step + s.text) {
+              <div [class]="s.state"><span class="st">{{ s.state === 'ok' ? '✓' : s.state === 'fail' ? '✕' : s.state === 'info' ? 'i' : '●' }}</span>{{ s.text }}</div>
+            }
+          </div>
+        }
+        @if (done(); as r) {
+          @if (r.error) { <p class="err">{{ r.error }}</p> }
+          @else { <div class="found"><app-icon name="check" [size]="14" /> {{ upd()?.name }} is up to date. Members reconnect by themselves.</div> }
+        }
+        @if (!run() && !done()) {
+          <p class="hint">Termwright logs in to the host, gets the team server {{ upd()?.update }} there and starts the team's container again with the same name, port, network and data volume.
+            The team, its members, inventory, usage history, certificate and invite stay. The team is offline for a few seconds; if the new version does not answer, the old one is started again.</p>
+        }
+        @if (error()) { <p class="err">{{ error() }}</p> }
+      </form>
+      <div class="modal-foot">
+        @if (done() && !done()!.error) { <button type="button" (click)="back()">Back to Teams</button><span class="spacer"></span><button type="button" class="primary" (click)="close()">Close</button> }
+        @else {
+          <button type="button" (click)="run() ? cancelSetup() : back()">{{ run() ? 'Cancel' : 'Back' }}</button>
+          <span class="spacer"></span>
+          <button type="button" (click)="close()" [disabled]="!!run()" [title]="run() ? 'Cancel the update first' : ''">Close</button>
+          <button type="submit" form="updf" class="primary" [disabled]="!!run() || !host">{{ run() ? 'Updating…' : done() ? 'Try Again' : 'Update' }}</button>
+        }
       </div>
       }
 
@@ -186,6 +239,10 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
     .seg { width: min(360px, 100%); > button { white-space: nowrap; } }
     .steps { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.7;
       .st { display: inline-block; width: 18px; } .ok .st { color: #22c55e; } .fail { color: var(--danger); } .run .st { color: var(--accent); } .info { color: var(--muted); } }
+    .upd { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 5px 9px; border-radius: 7px; font-size: calc(12px * var(--ui-scale, 1));
+      background: color-mix(in srgb, var(--accent) 10%, transparent); app-icon { color: var(--accent); flex: none; }
+      span { flex: 1; } a { color: var(--accent); cursor: pointer; font-weight: 600; white-space: nowrap; } }
+    .upd.new { background: color-mix(in srgb, var(--text) 6%, transparent); app-icon { color: var(--muted); } }
     .found { display: flex; align-items: center; gap: 6px; margin: 10px 0 6px; app-icon { color: #22c55e; } }
     .hint { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); margin: 10px 0 0; line-height: 1.45; }
     .err { color: var(--danger); margin: 10px 0 0; white-space: pre-wrap; }
@@ -194,7 +251,9 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
 export class TeamsDialog implements OnInit, OnDestroy {
   protected ui = inject(Ui);
   private backend = inject(Backend);
-  readonly view = signal<'list' | 'join' | 'setup'>('list');
+  readonly view = signal<'list' | 'join' | 'setup' | 'update'>('list');
+  /** the team whose server is updated */
+  readonly upd = signal<TeamView | null>(null);
   readonly teams = signal<TeamView[]>([]);
   readonly loading = signal(false);
   readonly sel = signal('');
@@ -338,6 +397,28 @@ export class TeamsDialog implements OnInit, OnDestroy {
     this.view.set('setup');
   }
   back() { this.error.set(''); this.view.set('list'); void this.load(); }
+
+  /** Update Server…: the host's session is the one it was set up with, or one that logs in to its address. */
+  toUpdate(t: TeamView) {
+    this.error.set(''); this.steps.set([]); this.done.set(null); this.upd.set(t);
+    const ssh = this.sshSessions(), addr = t.address.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+    const byAddr: string[] = [];
+    const walk = (n: SessionNode) => (n.children ?? []).forEach(c => c.isFolder ? walk(c) : c.protocol === 'SSH2' && (c.hostname ?? '').toLowerCase() === addr && byAddr.push(c.path));
+    const r = this.ui.tree(); if (r) walk(r);
+    this.host = t.host && ssh.includes(t.host) ? t.host : byAddr[0] ?? '';
+    this.view.set('update');
+  }
+
+  async update() {
+    const t = this.upd();
+    if (!t) return;
+    this.error.set(''); this.steps.set([]); this.done.set(null);
+    try {
+      this.run.set('pending');
+      const id = await this.backend.teamUpdateServer({ teamId: t.id, sessionPath: this.host, image: this.image });
+      if (this.run() === 'pending') this.run.set(id);
+    } catch (e) { this.run.set(''); this.error.set(errText(e)); }
+  }
 
   private infoTimer = 0;
   checkInvite() {

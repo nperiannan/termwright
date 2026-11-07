@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Update the team server from Termwright.** Options → Teams… shows each team server's version; when it is older than your Termwright, owners and co-owners get a notice and **Update Server…**: Termwright logs in to the host over SSH, gets the new image (downloaded or copied over SSH) and starts the team's container again with the same name, port, network, data volume and settings. The old container is kept until the new one answers and comes back if it does not. Members see that the server is older; everyone sees when it is newer than their Termwright.
+* **The admin page shows the team server's version** at the bottom left.
 * **Russian: Serial is now «COM-порт»** ([#2](https://github.com/nperiannan/termwright/issues/2)). «Последовательный порт» was too long for the protocol buttons. The serial port list's hints are translated too.
 
 ## 0.30.0 (2026-11-07)

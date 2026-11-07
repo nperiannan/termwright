@@ -27,6 +27,7 @@ aside{background:var(--side);border-right:1px solid var(--line);padding:16px 12p
 .nav a:hover{background:color-mix(in srgb,var(--text) 5%,transparent)}.nav a.on{background:var(--soft);color:var(--accent)}
 .nav svg{width:16px;height:16px;flex:none}.badge{margin-left:auto;background:var(--bad);color:#fff;border-radius:9px;padding:0 7px;font-size:11px;font-weight:600}
 .me{margin-top:auto;padding:12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.me b{color:var(--text);display:block;font-size:13px}.me a{color:var(--accent);cursor:pointer}
+.me .ver{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:11.5px;font-variant-numeric:tabular-nums}
 header.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px 28px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
 header.top h1{font-size:17px;margin:0;letter-spacing:-.01em}.crumb{color:var(--muted);font-size:12px}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:2px;gap:2px}
@@ -194,7 +195,8 @@ function render() {
     <div class="brand"><img src="/admin/icon.svg" alt=""><div><b>Termwright</b><span>Team server</span></div></div>
     <div class="team"><b>${esc(t.name)}</b><span>${st.inventory.devices.length} devices · ${t.members.length} members · ${online} online</span></div>
     <nav class="nav">${nav.map(([k, i, l, n]) => i ? `<a class="${k === ui.page ? 'on' : ''}" data-go="${k}">${ico(i)}${l}${n ? `<span class="badge">${n}</span>` : ''}</a>` : `<div class="grp">${k}</div>`).join('')}</nav>
-    <div class="me"><b>${esc(me.name)}</b>${me.role === 'owner' ? 'Owner' : 'Co-owner'} · <a id="out">Sign out</a></div></aside>
+    <div class="me"><b>${esc(me.name)}</b>${me.role === 'owner' ? 'Owner' : 'Co-owner'} · <a id="out">Sign out</a>
+      <div class="ver" title="The version of this team server. Owners update it from Termwright: Options → Teams…">Team server ${esc(t.version || 'dev')}</div></div></aside>
     <div><header class="top"><div><div class="crumb">${esc(t.name)}</div><h1>${TITLES[ui.page]}</h1></div><span class="sp"></span>
       ${period ? `<div class="seg" title="Period of the figures">${[7, 30, 90, 365].map(d => `<button data-days="${d}" class="${ui.days === d ? 'on' : ''}">${d === 365 ? '1 year' : d + ' days'}</button>`).join('')}</div>` : ''}
       <div class="seg" title="Theme">${[['system', 'mon', 'System'], ['light', 'sun', 'Light'], ['dark', 'moon', 'Dark']].map(([k, i, l]) => `<button data-theme="${k}" class="${ui.theme === k ? 'on' : ''}" title="${l}">${ico(i)}</button>`).join('')}</div></header>

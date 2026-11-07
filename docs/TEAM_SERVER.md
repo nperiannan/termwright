@@ -167,6 +167,12 @@ termwright-team://HOST:PORT/?k=OWNER-CODE&fp=FINGERPRINT
 
 **Backup**: copy the data folder or volume (`docker run --rm -v termwright-team-my-lab:/d -v "$PWD":/b alpine tar czf /b/team-backup.tgz -C /d .`). The certificate is part of it: a server set up again with a new certificate needs a new invite for everyone.
 
-**Update**: `docker pull ghcr.io/nperiannan/termwright-team:latest`, then remove the container and start it again with the same volume. The team and its members are kept.
+**Update from Termwright** (recommended): when a team server is older than your Termwright, owners and co-owners get a notice and **Options → Teams…** shows *Version X is available for the team server* → **Update Server…**. Pick the SSH session of the host (Termwright suggests the one it was set up with, or one that logs in to the team's address) and *Download* or *Copy over SSH*. Termwright gets the new image there and starts the team's container again with the same name, port, network, data volume and settings; the team, its members, inventory, usage history, certificate and invite stay. The old container is kept stopped until the new one answers, and is started again if it does not. Members are told when the server is older, and everyone when it is newer than their Termwright. The admin page shows the server's version at the bottom left.
+
+| A newer version for the team server | Update Server |
+|---|---|
+| ![Update available](screenshots/team-update.png) | ![Updating the team server](screenshots/team-update-run.png) |
+
+**Update by hand**: `docker pull ghcr.io/nperiannan/termwright-team:latest`, then remove the container and start it again with the same volume. The team and its members are kept.
 
 **Remove**: `docker rm -f termwright-team-my-lab && docker volume rm termwright-team-my-lab`.

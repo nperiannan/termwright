@@ -74,6 +74,17 @@ export class TeamStatusService {
     effect(() => {
       if (!(this.ui.settings()?.teams ?? []).length) { this.views.set(new Map()); return; }
       void this.backend.teamStatuses().then(l => this.views.set(new Map((l ?? []).map(v => [v.teamId, v])))).catch(() => {});
+      // once a run: tells owners and co-owners when their team server is older than this Termwright
+      if (!this.versionsChecked) {
+        this.versionsChecked = true;
+        setTimeout(() => void this.backend.teams().then(ts => {
+          for (const t of ts ?? []) {
+            if (t.reachable && t.update && t.role !== 'member')
+              this.ui.toast(`The team server of ${t.name} runs ${t.version || 'an older version'}: version ${t.update} is available.`, 'info', 15000,
+                [{ label: 'Update Server…', run: () => this.ui.open('teams') }]);
+          }
+        }).catch(() => {}), 8000);
+      }
     });
     // the open network devices, whenever the tabs change
     effect(() => {
@@ -93,6 +104,7 @@ export class TeamStatusService {
     });
   }
   private since = new Map<string, string>();
+  private versionsChecked = false;
 
   /** The status of a session's device ('' when no team has it or it is not a network device). */
   stateOf(s: { hostname?: string; port?: number; protocol?: string; mac?: string; deviceType?: string } | null | undefined): DeviceState | null {

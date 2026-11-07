@@ -608,6 +608,7 @@ A team that shares a lab can run its own small **team server** (a Docker contain
 
 - **The team folder**: the team's inventory appears as a folder named after the team and follows the server within seconds. Name, folder, address, port, protocol, device type and MAC address come from the team; your login on each device stays yours.
 - **Push to Team…** (right-click a session, a folder or a selection; also in Discover Devices): offers your own sessions to the team. Devices the team has already - under any name - are shown as *already in the team as …* and left out. Owners and co-owners add directly; what members push waits for their approval.
+- **Update Server…** (owners and co-owners): when the team server is older than your Termwright, the team shows *Version X is available for the team server*. Termwright logs in to the host, gets the new version and restarts the container with the same port, network and data; the team, history and invite stay, and the old version comes back if the new one does not answer.
 - **Open Admin Page** (owners and co-owners): the team's inventory, approvals, scans from the lab host, members and activity in your browser, signed in by Termwright - no passwords on the server.
 
 Only names, user and computer names and the device inventory are shared; never passwords, usernames, keys or terminal output. The [team server guide](TEAM_SERVER.md) covers firewalls, installing by hand, backups and updates.
