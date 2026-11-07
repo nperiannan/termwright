@@ -30,6 +30,12 @@ func TestCompareVersions(t *testing.T) {
 	}
 }
 
+func TestSameNumbers(t *testing.T) {
+	if !sameNumbers("0.30.0", "0.30.0~git1234567") || sameNumbers("0.30.1", "0.30.0~git1") || sameNumbers("", "") {
+		t.Fatal("sameNumbers")
+	}
+}
+
 func TestRunArgs(t *testing.T) {
 	spec := "bridge\nP||7443|7443/tcp\nP|::|7443|7443/tcp\nM|volume|termwright-team-lab||/data\nE|PATH=/usr/bin\nE|TW_TEAM_NAME=Lab B|x\n"
 	args, data := runArgs(spec)

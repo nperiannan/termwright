@@ -116,10 +116,14 @@ func (a *App) Teams() []TeamView {
 				return
 			}
 			v.Reachable, v.Members, v.Version, v.Role = true, len(tm.Members), tm.Version, tm.Role
-			switch c := compareVersions(tm.Version, Version); {
-			case c < 0:
+			cmp := compareVersions(tm.Version, Version)
+			if cmp > 0 && sameNumbers(tm.Version, Version) {
+				cmp = 0 // a nightly Termwright and the release of its numbers
+			}
+			switch {
+			case cmp < 0:
 				v.Update = teamImageTag()
-			case c > 0:
+			case cmp > 0:
 				v.Newer = true
 			}
 			for _, m := range tm.Members {
@@ -645,6 +649,18 @@ func (a *App) teamImage(ctx context.Context, out remoteRun, dk, mode string, emi
 		emit("image", "ok", "Image "+ref+" (copied over SSH)")
 	}
 	return ref, nil
+}
+
+// sameNumbers: two versions with the same numbers ("0.30.0" and "0.30.0~git1234567").
+func sameNumbers(a, b string) bool {
+	core := func(v string) string {
+		v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+		if i := strings.IndexAny(v, "-~+"); i >= 0 {
+			v = v[:i]
+		}
+		return v
+	}
+	return core(a) != "" && compareVersions(core(a), core(b)) == 0
 }
 
 // compareVersions compares two Termwright versions by their numbers: -1, 0 or
