@@ -2,11 +2,20 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.31.0 (2026-11-07)
+
+Update the team server from Termwright, working-hours utilization, Teams in Russian, and fixes from a review of the Teams feature.
 
 * **Update the team server from Termwright.** Options → Teams… shows each team server's version; when it is older than your Termwright, owners and co-owners get a notice and **Update Server…**: Termwright logs in to the host over SSH, gets the new image (downloaded or copied over SSH) and starts the team's container again with the same name, port, network, data volume and settings. The old container is kept until the new one answers and comes back if it does not. Members see that the server is older; everyone sees when it is newer than their Termwright.
 * **The admin page shows the team server's version** at the bottom left.
 * **Russian: Serial is now «COM-порт»** ([#2](https://github.com/nperiannan/termwright/issues/2)). «Последовательный порт» was too long for the protocol buttons. The serial port list's hints are translated too.
+* **Update Server… is careful about which container it touches.** It picks the container whose certificate is the team's (never another team's server on the same host, and nothing on the wrong host), checks that the new server answers with the new version, and otherwise starts the old one again. It keeps the container's environment (such as TZ), restart policy, memory and CPU limits and labels, updates a server from Docker Compose with Compose, and explains how to update one installed with systemd. One SSH login, at most 90 seconds of waiting, and the notice's *Update Server…* opens the update directly; *Later* skips that version for a week. Teams joined later are checked too, and a hint shows when no SSH session logs in to the team server's host.
+* **The same person on two computers is one person.** A member with your name (your laptop and the lab PC, say) is you: connecting from your other computer to your own reservation no longer asks, notifies you or counts as a conflict; your other computer can change or release it, and the card says *you (another computer)*. The admin page counts people, not computers, for members and *peak at once*.
+* **In use and reserved count for network devices only, by the team's device type.** A device without a device type is no longer counted (an iDRAC or a Linux server without a type was); the admin page's Inventory shows them as *not tracked* with a filter, so they can be given a type. The team server ignores others from older Termwrights too.
+* **Console sessions count.** A serial or console server session named after a team device (*core-sw1 console*, *core-sw1-con*) shows that device's status and counts as having it open.
+* **Utilization: all hours or working hours.** The admin page's top bar switches utilization between all hours and working hours (Monday to Friday, 9:00-18:00 in your time zone).
+* **Activity shows times in your time zone** (reservation ends were written in UTC).
+* **Teams in Russian.** The Teams window, Push to Team, Reserve, the team cards and notices and the update are translated.
 
 ## 0.30.0 (2026-11-07)
 

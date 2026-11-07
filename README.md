@@ -85,6 +85,17 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.31
+
+- **Update the team server from Termwright.** Options → Teams… shows each server's version; owners update an older one with *Update Server…* over SSH - same port, data and settings, and the old version comes back if the new one does not answer.
+- **Utilization over working hours** on the admin page, and **console sessions** named after a team device count as having it open.
+- **Fixes**: you on two computers are one person, devices without a network device type are not counted, activity times in your time zone.
+- **Teams in Russian**, and *Serial* is «COM-порт» ([#2](https://github.com/nperiannan/termwright/issues/2)).
+
+| | |
+|---|---|
+| ![Update available](docs/screenshots/team-update.png) <br/>*A newer version for the team server* | ![Updating the team server](docs/screenshots/team-update-run.png) <br/>*Update Server: same container, new version* |
+
 ## What's new in 0.30
 
 - **Teams (optional).** A team runs its own small server on a lab host - set up from Termwright over SSH with Docker, no cloud. Members join with an invite; without a team Termwright works on its own as before.
