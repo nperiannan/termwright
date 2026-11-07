@@ -15,6 +15,7 @@ Teams: a team server of your own on a lab host, a shared inventory, who uses and
 * **Usage reports for owners.** The admin page's Overview and Usage reports show how long whom had which device open, who reserved what and for how long, utilization per device and device type, when the lab is busy, devices nobody used, conflicts, and insights on what to buy or remove - for 7, 30, 90 days or a year, with CSV export. A theme switch (system, light, dark) sits at the top right. The Inventory and Discover pages are redone: folders on the side, device icons, status and utilization per device, select all, and a selection bar.
 * **The team server for manual installs**: each release has `termwright-team-linux-amd64.tar.gz` and `-arm64.tar.gz` (the program, a Dockerfile, a Compose file and a systemd unit) and the image `ghcr.io/nperiannan/termwright-team`.
 * **Old SSH algorithms in Quick Connect and for a whole folder** ([#4](https://github.com/nperiannan/termwright/issues/4)). Quick Connect and the New Session side panel have *Allow legacy algorithms* for SSH, and Edit Sessions (right-click a folder → *Edit All Sessions in Folder…*) has *Old SSH algorithms* to turn them on or off for every SSH session at once.
+* **Russian: Serial is now «COM-порт»** ([#2](https://github.com/nperiannan/termwright/issues/2)). «Последовательный порт» was too long for the protocol buttons. The serial port list's hints are translated too.
 
 ## 0.29.0 (2026-11-06)
 

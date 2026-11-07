@@ -50,7 +50,7 @@ const ru: Record<string, string> = {
   'Two-line rows: name and address, device icon and status (turns Compact Rows off)': 'Двухстрочные строки: имя и адрес, значок устройства и состояние (отключает компактные строки)',
 
   // ---- быстрое подключение и панель сессии ----
-  'Name': 'Имя', 'Folder': 'Папка', 'Protocol': 'Протокол', 'More…': 'Ещё…', 'Serial port': 'Последовательный порт', 'Speed': 'Скорость', 'Baud rate': 'Скорость (бод)',
+  'Name': 'Имя', 'Folder': 'Папка', 'Protocol': 'Протокол', 'More…': 'Ещё…', 'Serial port': 'COM-порт', 'Speed': 'Скорость', 'Baud rate': 'Скорость (бод)',
   'MAC address': 'MAC-адрес', 'UDP port': 'UDP-порт', 'IP address': 'IP-адрес', 'Address': 'Адрес', 'Port': 'Порт', 'Open as': 'Открыть как', 'Terminal': 'Терминал', 'SFTP file browser only': 'Только файловый менеджер SFTP',
   '(none)': '(нет)', 'Account': 'Учётная запись', 'Own username and password': 'Собственные имя и пароль', '+ New Account…': '+ Новая учётная запись…', 'Username': 'Имя пользователя', 'Environment': 'Среда',
   'Password': 'Пароль', 'In keychain': 'В связке ключей', 'Files panel beside the terminal': 'Панель файлов рядом с терминалом', 'Device facts': 'Параметры устройства', 
@@ -84,7 +84,7 @@ const ru: Record<string, string> = {
   'OK': 'ОК', 'Style': 'Стиль', 'Default set': 'Набор по умолчанию', 'Network': 'Сеть',
 
   // ---- Параметры сессии ----
-  'Connection': 'Подключение', 'Authentication': 'Аутентификация', 'Jump Host / Proxy': 'Промежуточный узел / прокси', 'Port Forwarding': 'Проброс портов', 'Device Facts': 'Параметры устройства', 'Serial': 'Последовательный порт',
+  'Connection': 'Подключение', 'Authentication': 'Аутентификация', 'Jump Host / Proxy': 'Промежуточный узел / прокси', 'Port Forwarding': 'Проброс портов', 'Device Facts': 'Параметры устройства', 'Serial': 'COM-порт',
   'Logon Actions': 'Действия при входе', 'Logging': 'Журналирование', 'Value for this session': 'Значение для этой сессии', 'Command': 'Команда', 'Every connect': 'При каждом подключении', 'Once': 'Один раз',
   'Device type': 'Тип устройства', 'Connect as': 'Подключаться как', 'Terminal (SSH2)': 'Терминал (SSH2)', 'Console server': 'Консольный сервер', 'Access': 'Доступ', 'Custom': 'Особый', 'TCP port': 'TCP-порт',
   'Description': 'Описание', 'Domain': 'Домен', 'Window': 'Окно', 'Full screen': 'Во весь экран', 'Size': 'Размер', 'Control': 'Управление', 'Methods': 'Способы',
@@ -262,7 +262,10 @@ const ru: Record<string, string> = {
   'New folder, refresh, reachability, compact rows, dock side, hide': 'Новая папка, обновить, доступность, компактные строки, сторона, скрыть',
   'Network switch': 'Сетевой коммутатор',
   'SSH2 terminal': 'Терминал SSH2',
-  'Serial console': 'Последовательная консоль',
+  'Serial console': 'Консоль через COM-порт',
+  'Choose a port…': 'Выберите порт…', 'No serial port found - plug in the cable': 'COM-порт не найден - подключите кабель',
+  '{0} ports found · the list updates by itself when a cable is plugged in or removed': 'Найдено {0} {0|порт|порта|портов} · список обновляется сам, когда кабель подключают или отключают',
+  '{0} port found · the list updates by itself when a cable is plugged in or removed': 'Найден {0} порт · список обновляется сам, когда кабель подключают или отключают',
   'Telnet (not encrypted)': 'Telnet (без шифрования)',
   'VNC remote screen': 'Удалённый экран VNC',
   'Remote Desktop (RDP)': 'Удалённый рабочий стол (RDP)',
