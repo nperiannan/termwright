@@ -2,6 +2,21 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## 0.32.0 (2026-11-08)
+
+Sync your own computers, Mosh and Telnet over TLS, keyboard and screen reader support in every dialog, and more for teams.
+
+* **Sync your own computers through a shared folder.** Settings → General → *Sync*: choose a folder your computers share (OneDrive, iCloud Drive, Dropbox, a network share). Every half minute sessions, accounts, device types, Folder Defaults and the library (and Global Options if you want) go to and come from your other computers; changes and deletions too, unless the session was changed there later. Passwords and keys never go there, and team folders stay with the team server.
+* **Mosh** for SSH sessions (Session Options → Connection → *Connect with Mosh*): the mosh program of your computer logs in with the session's address, port, user and key, and the session survives sleep, Wi-Fi changes and a new address. The tab says how to install mosh when it is missing (Windows: in WSL).
+* **Telnet over TLS** (telnets, port 992): the certificate is checked against the system's authorities and the host name, or *Accept any certificate* for an appliance's self-signed one.
+* **Local echo** (Session Options → Terminal) for Telnet, raw and serial devices that do not echo what you type.
+* **Escape closes dialogs, Tab stays in them.** Escape closes the menu or dialog on top the way its Close or Cancel button does (a busy dialog asks to cancel first); Tab and Shift+Tab stay inside the dialog, and a new dialog takes the focus. Dialogs are announced to screen readers with their title, and icon-only buttons by their tooltip.
+* **Teams: Tell Me When It Is Free.** Right-click a device someone else has open or reserved: a notice comes as soon as nobody else has it.
+* **Teams: hand the team over.** The owner makes another member the owner (Teams window or the admin page's Members) and stays as co-owner.
+* **Teams: backup and restore on the admin page** (owner): the team, members, invite, inventory, reservations, usage history and the certificate in one file, and putting a backup back. The server takes a restored certificate at once.
+* **Teams: a searchable activity log.** The admin page keeps 5000 events, with a filter and *Export CSV*; sign-ins are noted once per sign-in instead of each time the page opens, and role changes are noted too.
+* **Russian**: the remaining windows are translated - Passwords & Accounts, Run and Collect, the Command Library, Backups, Checklists, Session Options and the new features.
+
 ## 0.31.0 (2026-11-07)
 
 Update the team server from Termwright, working-hours utilization, Teams in Russian, and fixes from a review of the Teams feature.

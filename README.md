@@ -85,6 +85,17 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.32
+
+- **Sync your own computers** through a shared folder (OneDrive, iCloud Drive, Dropbox, a share): sessions, accounts and the library - never passwords.
+- **Mosh**, **Telnet over TLS** and **local echo**.
+- **Escape and Tab in every dialog**, and screen reader labels.
+- **Teams**: *Tell Me When It Is Free*, hand the team over, backup and restore, and a searchable activity log on the admin page.
+
+| | |
+|---|---|
+| ![Sync](docs/screenshots/sync.png) <br/>*Settings → General → Sync* | ![Tell Me When It Is Free](docs/screenshots/team-watch.png) <br/>*Wait for a busy device* |
+
 ## What's new in 0.31
 
 - **Update the team server from Termwright.** Options → Teams… shows each server's version; owners update an older one with *Update Server…* over SSH - same port, data and settings, and the old version comes back if the new one does not answer.
@@ -306,19 +317,55 @@ Release builds for Windows (amd64), Linux (amd64, arm64) and macOS (arm64) are p
 
 Termwright has no telemetry. Apart from the hosts you connect to (and the reachability checks and background logins you enable for them), it contacts only GitHub: for the update check and the download count shown in About.
 
+## Architecture
+
+```mermaid
+flowchart TB
+  subgraph PC["Your computer - Termwright"]
+    direction LR
+    UI["Angular UI<br/>terminals (xterm.js), Session Manager,<br/>dialogs, VNC viewer"] <-- "bound methods, events" --> Go["Go backend (Wails)<br/>SSH2 · Telnet and Telnet over TLS · Serial · Raw<br/>Local shell · Mosh · SFTP/SCP · ZMODEM/X/YMODEM<br/>tunnels · scripts · backups · discovery · Wake-on-LAN"]
+    Go --- Data[("Data folder<br/>sessions .ini, settings,<br/>logs, recordings, backups")]
+    Go --- Keys[("OS keychain /<br/>password managers")]
+  end
+  Dev["Your devices<br/>switches, routers, firewalls, servers"]
+  subgraph Lab["Lab host - Docker (optional, per team)"]
+    TS["Team server (termwright-team)<br/>members, inventory, who uses what,<br/>reservations, usage history, admin page"] --- TD[("/data<br/>team.json, usage.json, cert, key")]
+  end
+  Sync[("Sync folder (optional)<br/>OneDrive / iCloud / Dropbox / share")]
+  GH["GitHub<br/>releases, ghcr.io image"]
+  Browser["Browser<br/>admin page"]
+  Go -- "SSH, Telnet, serial, RDP, VNC, mosh<br/>directly, via jump hosts or proxies" --> Dev
+  Go -- "HTTPS, pinned certificate<br/>only after joining a team" --> TS
+  Go -- "sessions and settings,<br/>never passwords" --> Sync
+  Go -- "update check, downloads" --> GH
+  Browser -- "HTTPS, one-time link from Termwright" --> TS
+  TS -- "scans (Discover)" --> Dev
+```
+
+- **Termwright** is one program: an Angular interface over a Go backend (Wails). Connections, file transfers, scripts, backups and discovery run in the Go backend; passwords stay in the operating system's keychain or a password manager.
+- **Teams are optional.** Without a team nothing is sent anywhere. A team runs its own **team server** - a small container on a lab host, set up and updated from Termwright over SSH - which every member's Termwright talks to over HTTPS with the certificate pinned by the invite. The server never sees passwords, keys or terminal output.
+- **Sync is optional** too: with a sync folder, each Termwright writes its sessions and settings (never passwords) to a folder your computers share.
+
 ## Project structure
 
 ```
 main.go, app.go, *_app.go   application entry point, native menu, methods bound to the UI
+teams_*.go, sync_app.go     Teams (join, set up and update a team server, inventory sync, status) and folder sync
 internal/session            session model, folder store, import and export
 internal/sessionfile        lossless .ini / XML session file reader and writer
-internal/term               SSH2, Telnet, serial, local PTY, SFTP/SCP, file transfer protocols, scripting
+internal/term               SSH2, Telnet (and over TLS), serial, local PTY, Mosh, SFTP/SCP, file transfer protocols, scripting
+internal/team               the team server and its client: members, inventory, presence, reservations, usage, admin page
+internal/discover           network discovery (also used by the team server's scans)
+internal/backup, checklist  configuration backups, change checklists
 internal/config             data directory and global settings
-internal/secrets            OS keychain integration
+internal/secrets, vault     OS keychain integration, the encrypted password export
 internal/secretref          password manager integration
 internal/history            command history
+internal/facts, wol, update device facts, Wake-on-LAN, software update
+cmd/termwright-team         the team server program
+deploy/team                 Dockerfile, Compose file and systemd unit of the team server
 frontend/                   Angular application (standalone components, signals, zoneless) with xterm.js
-docs/                       user guide, feature list, scripting and session file references
+docs/                       user guide, feature list, team server guide, scripting and session file references
 ```
 
 ## Contributing
