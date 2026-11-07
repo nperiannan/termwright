@@ -1,4 +1,4 @@
-import { TeamStatusService, isNetworkDevice } from '../core/team-status.service';
+import { DeviceState, TeamStatusService, isNetworkDevice } from '../core/team-status.service';
 import { RemoteDesktopSetup } from '../core/remote-desktop-setup.service';
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
@@ -165,7 +165,7 @@ export function sessionAddr(n: SessionNode): string {
 </span>
           <span class="addr">@if (addrParts(n); as ap) {<span class="a">{{ ap.a }}</span>@if (ap.t) {<span class="t">· {{ ap.t }}</span>}}</span>
         </span>
-        @if (teamBadge(n); as b) { <span class="tbadge" [class]="'tbadge ' + b.cls" [title]="b.title">{{ b.tiny }}</span> }
+        @if (teamBadge(n); as b) { <span class="tbadge" [class]="'tbadge ' + b.cls" (mouseenter)="teamIn($event, n)" (mouseleave)="teamOut()">{{ b.tiny }}</span> }
         @if (n.protocol === 'WOL') { <span [class]="wolDot(n)" [title]="wolTitle(n)"></span> }
         @else if (reach() && inReach(n.path)) { <span class="dot" [class]="dotClass(n)"></span> }
         @else if (liveState().get(n.path); as st) { <span class="dot" [class]="'dot ' + (st === 'connected' ? 'up' : st === 'error' ? 'down' : 'unk')" [title]="'Open in a tab - ' + st"></span> }
@@ -176,7 +176,7 @@ export function sessionAddr(n: SessionNode): string {
         <span class="name">{{ n.name }}</span>
         @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
         @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
-        @if (teamBadge(n); as b) { <span class="tbadge" [class]="'tbadge ' + b.cls" [title]="b.title">{{ b.tiny }}</span> }
+        @if (teamBadge(n); as b) { <span class="tbadge" [class]="'tbadge ' + b.cls" (mouseenter)="teamIn($event, n)" (mouseleave)="teamOut()">{{ b.tiny }}</span> }
       }
     </ng-template>
     @if (roomy()) {
@@ -217,6 +217,21 @@ export function sessionAddr(n: SessionNode): string {
         </div>
         <div class="hfoot">{{ h.n.protocol === 'WOL' ? (h.n.hostname ? ((h.n.wolPing ?? 120) < 0 ? 'Not pinged' : 'Pinged every ' + pingEvery(h.n)) : 'Double-click wakes it and searches ' + (h.n.wolNetwork || 'its network')) : lastAgo(h.n.path) ? 'Connected ' + lastAgo(h.n.path) : 'Not connected yet' }}@if (factsAge(ui.factsOf(h.n.path)); as fa) { · facts {{ fa }} }</div>
         @if (h.n.description) { <div class="hdesc">{{ h.n.description }}</div> }
+        @if (teamState(h.n); as ts) {
+          @let td = teamStatus.details(ts);
+          <div class="tsec"><div class="tsh"><span class="tsdot" [class]="'tsdot ' + (ts.reserved ? 'res' : ts.open.length ? 'use' : 'free')"></span>{{ td.head }} <span class="muted">· {{ ts.team }}</span></div>
+            <div class="kv">@for (r of td.rows; track r[0] + r[1]) { <span>{{ r[0] }}</span><b class="lt">{{ r[1] }}</b> }</div></div>
+        }
+      </div>
+    }
+    @if (teamCard(); as c) {
+      @let td = teamStatus.details(c.st);
+      <div class="hcard mod tcard" [style.left.px]="c.x" [style.top.px]="c.y">
+        <div class="hh"><span class="tsico" [class]="'tsico ' + (c.st.reserved ? 'res' : c.st.open.length ? 'use' : 'free')">{{ c.st.reserved ? '🔒' : '●' }}</span>
+          <div class="hht"><div class="hname">{{ td.head }}</div><div class="hsub">{{ c.n.name }} · team {{ c.st.team }}</div></div></div>
+        <div class="kv">@for (r of td.rows; track r[0] + r[1]) { <span>{{ r[0] }}</span><b class="lt">{{ r[1] }}</b> }</div>
+        @if (td.note) { <div class="tnote">“{{ td.note }}”</div> }
+        <div class="hfoot">{{ td.foot }}</div>
       </div>
     }
   `,
@@ -227,7 +242,7 @@ export function sessionAddr(n: SessionNode): string {
 })
 export class SessionTree implements AfterViewInit, OnDestroy {
   protected ui = inject(Ui);
-  private teamStatus = inject(TeamStatusService);
+  protected teamStatus = inject(TeamStatusService);
   private tabs = inject(Tabs);
   private remoteDesktop = inject(RemoteDesktopSetup);
   protected wol = inject(Wol);
@@ -855,6 +870,24 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     this.ui.backupTargets.set(targets);
     this.ui.open('backups');
   }
+
+  readonly teamCard = signal<{ n: SessionNode; st: DeviceState; x: number; y: number } | null>(null);
+  private teamTimer: ReturnType<typeof setTimeout> | undefined;
+  teamState(n: SessionNode) { return this.teamStatus.stateOf(n); }
+  /** Hovering a team badge: the device card makes way for the team card. */
+  teamIn(ev: MouseEvent, n: SessionNode) {
+    ev.stopPropagation();
+    this.hoverOut();
+    clearTimeout(this.teamTimer);
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    this.teamTimer = setTimeout(() => {
+      const st = this.teamStatus.stateOf(n);
+      if (!st) return;
+      const x = Math.min(r.right + 10, window.innerWidth - 310), y = Math.min(r.top - 10, window.innerHeight - 260);
+      this.teamCard.set({ n, st, x, y: Math.max(8, y) });
+    }, 120);
+  }
+  teamOut() { clearTimeout(this.teamTimer); this.teamCard.set(null); }
 
   teamBadge(n: SessionNode) { return this.teamStatus.label(this.teamStatus.stateOf(n)); }
 

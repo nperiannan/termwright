@@ -8,7 +8,8 @@ import { deviceKindOf } from '../components/device-icon';
 export interface DeviceRef { host: string; port: number; protocol: string; mac?: string; name?: string; since?: string; }
 export interface Reservation { id: string; device: DeviceRef; by: string; name: string; until: string; note: string; at: string; }
 export interface InUse { device: DeviceRef; by: string; name: string; since: string; }
-export interface TeamStatus { rev: number; me: string; inUse: InUse[]; reserved: Reservation[]; }
+export interface LastUse { device: DeviceRef; name: string; s: number; e: number; }
+export interface TeamStatus { rev: number; me: string; inUse: InUse[]; reserved: Reservation[]; last?: LastUse[]; }
 interface View { teamId: string; team: string; status: TeamStatus; }
 
 /** What a device's status is for this person. */
@@ -17,6 +18,11 @@ export interface DeviceState {
   mine: boolean;            // I have it open (in some team's view)
   reserved?: Reservation;   // reserved by someone
   reservedByMe: boolean;
+  /** everyone with it open now, you included */
+  open: InUse[];
+  me: string;
+  /** the last time someone had it open (when nobody has it open now) */
+  last?: LastUse;
   teamId: string;
   team: string;
 }
@@ -32,6 +38,13 @@ export function isNetworkDevice(s: { protocol?: string; deviceType?: string }): 
 
 /** "Natarajan Periannan" → "NP". */
 function initials(n: string) { return n.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join(''); }
+/** 4 min, 2 h 10 min, 3 d 4 h */
+export function span(sec: number) {
+  const m = Math.max(1, Math.round(Math.max(0, sec) / 60));
+  if (m < 60) return m + ' min';
+  if (m < 1440) return Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '');
+  const h = Math.round(m / 60); return Math.floor(h / 24) + ' d' + (h % 24 ? ' ' + (h % 24) + ' h' : '');
+}
 function defPort(p: string) { return p === 'Telnet' ? 23 : 22; }
 function normMac(m?: string) { return (m ?? '').toLowerCase().replace(/[^0-9a-f]/g, ''); }
 export function sameDevice(a: { host?: string; hostname?: string; port?: number; protocol?: string; mac?: string }, b: DeviceRef) {
@@ -88,8 +101,10 @@ export class TeamStatusService {
       const others = v.status.inUse.filter(u => u.by !== v.status.me && sameDevice(s, u.device));
       const mine = v.status.inUse.some(u => u.by === v.status.me && sameDevice(s, u.device));
       const reserved = v.status.reserved.find(r => sameDevice(s, r.device));
-      if (others.length || mine || reserved) {
-        return { others, mine, reserved, reservedByMe: !!reserved && reserved.by === v.status.me, teamId: v.teamId, team: v.team };
+      const last = (v.status.last ?? []).find(l => sameDevice(s, l.device));
+      if (others.length || mine || reserved || last) {
+        const open = v.status.inUse.filter(u => sameDevice(s, u.device));
+        return { others, mine, reserved, reservedByMe: !!reserved && reserved.by === v.status.me, open, me: v.status.me, last, teamId: v.teamId, team: v.team };
       }
     }
     return null;
@@ -113,6 +128,28 @@ export class TeamStatusService {
   }
   private useText(st: DeviceState) {
     return st.others.length ? ' · open by ' + st.others.map(o => o.name + (o.since ? ' since ' + new Date(o.since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '')).join(', ') : '';
+  }
+
+  /** The lines of the team card: reservation, who has it open, when it was last used. */
+  details(st: DeviceState): { head: string; rows: [string, string][]; note?: string; foot: string } {
+    const now = Date.now() / 1000, t = (sec: number) => new Date(sec * 1000).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const rows: [string, string][] = [];
+    let head = 'Free', note: string | undefined;
+    if (st.reserved) {
+      const r = st.reserved, from = Date.parse(r.at) / 1000, to = Date.parse(r.until) / 1000;
+      head = st.reservedByMe ? 'Reserved by you' : 'Reserved by ' + r.name;
+      rows.push(['From', t(from)], ['Until', t(to) + (to > now ? ' · ' + span(to - now) + ' left' : '')], ['Length', span(to - from)]);
+      note = r.note || undefined;
+    }
+    if (st.open.length) {
+      if (!st.reserved) head = 'Open now';
+      for (const u of st.open) rows.push(['Open by', (u.by === st.me ? 'you' : u.name) + (u.since ? ' · since ' + t(Date.parse(u.since) / 1000) + ' (' + span(now - Date.parse(u.since) / 1000) + ')' : '')]);
+    } else if (st.last) {
+      rows.push(['Last used', st.last.name + ' · ' + t(st.last.s) + ' for ' + span(st.last.e - st.last.s)]);
+      rows.push([st.reserved ? 'Not open for' : 'Free for', span(now - st.last.e)]);
+    }
+    const foot = st.reservedByMe ? 'Right-click → Change Reservation… or Release Reservation' : st.reserved ? 'Connecting asks first; ' + st.reserved.name + ' gets a notice' : 'Right-click → Reserve… to keep it for a while';
+    return { head, rows, note, foot };
   }
 
   /** Before connecting: asks when someone else reserved the device; tells them when you go ahead. */

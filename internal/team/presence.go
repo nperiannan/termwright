@@ -75,6 +75,15 @@ type Status struct {
 	InUse    []InUse        `json:"inUse"`
 	Reserved []*Reservation `json:"reserved"`
 	Notes    []Note         `json:"notes"`
+	Last     []LastUse      `json:"last"` // per inventory device: the last time someone had it open
+}
+
+// LastUse is the most recent stretch someone had a device open (closed ones only).
+type LastUse struct {
+	Device DeviceRef `json:"device"`
+	Name   string    `json:"name"`
+	S      int64     `json:"s"`
+	E      int64     `json:"e"`
 }
 
 func (s *Server) statusRoutes(mux *http.ServeMux) {
@@ -197,6 +206,22 @@ func (s *Server) statusFor(me *memberRec) Status {
 		}
 	}
 	sort.Slice(st.InUse, func(i, j int) bool { return st.InUse[i].Since < st.InUse[j].Since })
+	last := map[string]UseRec{}
+	for _, u := range s.usage.Use {
+		if u.E > last[u.Dev].E {
+			last[u.Dev] = u
+		}
+	}
+	st.Last = []LastUse{}
+	for _, d := range s.st.Inventory {
+		if u, ok := last[d.ID]; ok {
+			port := d.Port
+			if port == 0 {
+				port = DefaultPortOf(d.Protocol)
+			}
+			st.Last = append(st.Last, LastUse{Device: DeviceRef{Host: d.Host, Port: port, Protocol: d.Protocol, MAC: d.MAC, Name: d.Name}, Name: u.Name, S: u.S, E: u.E})
+		}
+	}
 	return st
 }
 
