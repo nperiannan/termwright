@@ -20,7 +20,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Glass or flat folder and file icons**: in the Session Manager, the Files panel, SFTP and the folder picker; *As the style*, *Glass* or *Flat* (Settings → General → Folder and file icons).
 - **Start page**: a search-or-connect box, quick actions spread under it and cards for favourite and recent sessions (device icon, address, device facts, last used, live state).
 - **Start page footer**: the slogan, the installed version and whether it is up to date, the GitHub download count, the licence and a link to the project.
-- **Session side panel**: New Session and Properties open beside the terminal with the everyday fields, the Files panel and auto-reconnect switches and the device facts; All session options… opens the full dialog.
+- **Session side panel**: New Session and Properties open beside the terminal with the everyday fields, *Log in with* (Password, Key, Key then password - with key generation and copying the key at the first login), the Files panel, auto-reconnect and legacy algorithm switches and the device facts; All session options… opens the full dialog.
 - **Connecting and error cards**: each connection step while it connects; on failure the reason, a hint and Try Again, Edit Session, Find by MAC Address, Close Tab.
 - **Welcome flow**: theme, text size and layout; import found sessions; optional master password; tips (Help → Welcome…).
 - **Menu bar**: File, Edit, View, Transfer, Script, Options, Tab, Help; on macOS also inside the window (can be turned off).
@@ -34,7 +34,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Status bar**: state, protocol, user@host, server version, route (jump host), transfer progress, terminal size, emulation, connected tabs.
 - **Restore tabs**: the open sessions come back at the next start (optional).
 - **Window size and position** are remembered.
-- **Interface font and text size**: System (default), VS Code, Inter or IBM Plex Sans; text from 13 to 17 px.
+- **Interface font and text size**: the Mac look by default (Inter on Windows and Linux, shipped), System font of this computer, VS Code, Inter or IBM Plex Sans; text from 13 to 17 px. Terminals use Termwright Mono (DejaVu Sans Mono) where Menlo is missing.
 - **Themes**: dark, light or follow the system (the default), switched with the sun / moon / screen icons at the top right, with an accent color.
 - **Text kept as typed**: no auto-capitalisation, spelling or quote correction in fields (macOS).
 - **About**: version and a Copy Link button to share Termwright.
@@ -55,6 +55,17 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Auto reconnect**: retries after 2, 5, 10, 20, 30 s… (not after you disconnect or a login fails).
 - **Errors that offer the fix**: a failed connection explains why and offers Reconnect, Edit Session, Edit Jump Host, Device Type Login, Forget Saved Password or Find by MAC Address.
 
+## Teams (optional)
+
+Without a team Termwright works on its own and sends nothing anywhere.
+
+- **A team server of your own**: Options → Teams… → *Set Up a Team Server…* starts a small Docker container on a lab host over SSH (free port from 7443, image downloaded or copied over SSH), restarting with the host; several teams can share a host. Standalone packages and a Compose file for manual installs.
+- **Join with an invite**; Termwright trusts the server only by its certificate fingerprint. Roles: owner, co-owners, members.
+- **Shared inventory**: the team's devices appear as a folder in everyone's Session Manager and follow changes within seconds; logins stay personal.
+- **Push to Team…** from the Session Manager or Discover: devices the team has already (by address or MAC, any name) are recognised; members' pushes wait for approval.
+- **Who uses which device** (network devices only - not computers, Linux machines, phones, printers or IoT boards): badges for open (● initials) and reserved (🔒), a card with the reservation, who has it open since when, last used and free for; **Reserve…** until a time with a note; a warning and a notice when connecting to someone else's reservation.
+- **Admin page** (owners and co-owners, opened signed in from Termwright, no passwords on the server): overview with utilization, busy hours and insights (what to buy, what nobody uses), usage reports per device, member, reservation and session with CSV export, inventory with folders and CSV import/export, approvals, scans from the lab host, members and invites, activity log; light and dark theme.
+
 ## SSH2
 
 - **Password and keyboard-interactive** logins, with the password saved in the OS keychain if you want.
@@ -65,7 +76,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Smart cards** (PIV, CAC, YubiKey, other PKCS#11 tokens): any key on the card or a chosen one; PIN asked once and kept in memory only.
 - **Kerberos / GSSAPI**: uses your `kinit` ticket, or logs in to Kerberos itself.
 - **Host key checking**: known_hosts (Termwright's and `~/.ssh/known_hosts`), prompts for new and changed keys.
-- **Old devices**: *Allow legacy algorithms* (`diffie-hellman-group1-sha1`, `aes128-cbc`, `hmac-sha1` and more) per session, or key exchange, cipher, MAC and host key lists set by hand in the OpenSSH syntax.
+- **Old devices**: *Allow legacy algorithms* (`diffie-hellman-group1-sha1`, `aes128-cbc`, `hmac-sha1` and more) per session - in the New Session / Properties panel, Session Options and Quick Connect - or for a whole folder at once (Edit All Sessions in Folder → *Old SSH algorithms*); or key exchange, cipher, MAC and host key lists set by hand in the OpenSSH syntax.
 - **Keep-alive** at a chosen interval.
 - **Remote command**: run a command instead of a shell, e.g. `ssh -t` from a jump station to a cloud host.
 - **Agent forwarding** (including smart card keys) and **X11 forwarding**.
@@ -155,6 +166,9 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **This computer's networks** (wired, Wi-Fi, VPN) listed when the scan opens, to start a scan from one of them or type a network or range.
 - **Copy** a result's address, MAC address, vendor or system text.
 - **Wake-on-LAN sessions** for devices that show no login port.
+- **Connect ▾** per result with every way it answered (SSH, SFTP, Telnet, RDP, VNC, web), the recommended first.
+- **Device types for every device** (phones, IoT, TVs too) and **+ New device type…** with its icon, right from the results.
+- **Push to Team…** the selected results to a team's inventory.
 
 ## Devices that get a new address (DHCP)
 

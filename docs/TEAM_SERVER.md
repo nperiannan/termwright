@@ -16,6 +16,10 @@ Teams are **optional**. Without one, Termwright works exactly as before and send
 
 **In use and reserved.** In the Session Manager a team device someone else has open shows ● with their initials, a reserved one 🔒 (hover for name, time and note; the start page cards show names). Right-click → **Reserve…** keeps a device until a time with a note; **Release Reservation** ends it (owners and co-owners can release anyone's). Connecting to a device someone else reserved asks first and sends them a notice. A laptop that sleeps or closes drops out of *in use* within about a minute and a half.
 
+| Team card (hover the badge) | Device card | Reserve… |
+|---|---|---|
+| ![Team card](screenshots/team-card.png) | ![Device card](screenshots/team-device-card.png) | ![Reserve](screenshots/team-reserve.png) |
+
 Passwords, usernames, keys, session files and terminal output are **never** sent: everyone logs in to the team's devices with their own login, kept on their own computer.
 
 ## The team inventory

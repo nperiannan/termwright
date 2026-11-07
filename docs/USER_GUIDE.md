@@ -184,11 +184,15 @@ SSH keys on smart cards and tokens - PIV and CAC cards, YubiKey (PIV), SafeNet e
 
 ### Old devices: legacy SSH algorithms
 
-A switch or appliance with old firmware may offer only weak algorithms (for example `diffie-hellman-group1-sha1`, `aes128-cbc` or `hmac-sha1`). Termwright does not use them by default, so the connection fails with *ssh: handshake failed … no common algorithm for key exchange*; the error then tells you what to do. In Session Options → **Authentication** → **Algorithms**, tick **Allow legacy algorithms (for old devices)** for that session only.
+A switch or appliance with old firmware may offer only weak algorithms (for example `diffie-hellman-group1-sha1`, `aes128-cbc` or `hmac-sha1`). Termwright does not use them by default, so the connection fails with *ssh: handshake failed … no common algorithm for key exchange*; the error then tells you what to do. In Session Options → **Authentication** → **Algorithms**, tick **Allow legacy algorithms (for old devices)** for that session only. When you create the session, the **New Session** side panel has the same switch among its SSH switches: *Allow legacy algorithms*.
 
 The same switch is in **Quick Connect** (SSH: *Allow legacy algorithms*), for a connection without a saved session. For many sessions at once - e.g. a folder of old switches - right-click the folder → **Edit All Sessions in Folder…** (or select sessions → *Edit N Sessions…*), tick **Old SSH algorithms** and *Allow legacy algorithms*; only SSH sessions are changed ([#4](https://github.com/nperiannan/termwright/issues/4)).
 
 ![Allow legacy algorithms](screenshots/algorithms.png)
+
+| New Session panel | Quick Connect | Edit All Sessions in Folder |
+|---|---|---|
+| ![Legacy switch in the New Session panel](screenshots/session-panel-legacy.png) | ![Legacy switch in Quick Connect](screenshots/quickconnect-legacy.png) | ![Old SSH algorithms in Edit Sessions](screenshots/bulk-legacy.png) |
 
 The old algorithms are added at the **end** of each list, so a device that also offers modern ones still gets them. To control the lists yourself, fill in **Key exchange**, **Ciphers**, **MACs** and **Host key** with names separated by commas, in the OpenSSH way:
 
@@ -611,6 +615,24 @@ Only names, user and computer names and the device inventory are shared; never p
 | Teams | Set Up a Team Server |
 |---|---|
 | ![Teams](screenshots/teams.png) | ![Set Up a Team Server](screenshots/teams-setup.png) |
+
+**In use and reserved** (network devices only: switches, routers, firewalls, access points and the like reached by SSH or Telnet - not computers, Linux machines, phones, printers or IoT boards, which take several logins at once):
+
+- A team device someone else has open shows **●** with their initials at the end of its row; a reserved one shows **🔒** (*🔒 you* when it is yours). The start page cards show first names.
+- **Hover the badge** for the team card: who reserved it, from, until, how long and the note; who has it open and since when; when it was last used and how long it has been free. The device card (hover the device's name) shows the same at the bottom.
+- **Right-click → Reserve…** keeps a device until a time (2 or 4 hours, today, tomorrow or Friday 18:00, or a date and time you pick) with a note. **Change Reservation…** and **Release Reservation** are on the same menu; owners and co-owners can release anyone's.
+- **Connecting to a device someone else reserved** asks first and sends them a notice. A device someone else has open only shows a short message, since several people can be logged in.
+- A laptop that sleeps or closes drops out of *in use* within about a minute and a half.
+
+| Team card | Device card | Reserve |
+|---|---|---|
+| ![Team card](screenshots/team-card.png) | ![Device card with the team's status](screenshots/team-device-card.png) | ![Reserve a device](screenshots/team-reserve.png) |
+
+**The admin page** (owners and co-owners, **Options → Teams… → Open Admin Page**) shows how the lab is used over 7, 30, 90 days or a year: device hours open, utilization, when the lab is busy, the most and least used devices, reservations that sat idle, and insights such as device types in demand (the team may need more) or devices nobody used (candidates to remove). **Usage reports** list every device, member, reservation and session, with CSV export. The admin page also manages the inventory, approvals, scans from the lab, members and the activity log; it follows the system's light or dark theme or the one you pick. See the [team server guide](TEAM_SERVER.md#the-admin-page).
+
+| Overview | Usage reports |
+|---|---|
+| ![Team overview](screenshots/team-admin.png) | ![Usage reports](screenshots/team-reports.png) |
 
 ## 5. Session Options reference
 

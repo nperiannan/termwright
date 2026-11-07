@@ -91,11 +91,12 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 - **A shared inventory.** The team's devices appear in everyone's Session Manager as a folder and stay in sync; logins stay personal. *Push to Team…* offers your sessions, an owner approves.
 - **Who uses which device.** For network devices, everyone sees who has one open and who reserved it; *Reserve…* with an end time and a note, and a warning before connecting to someone else's reservation.
 - **Admin page with usage reports.** Utilization, hours open per device and member, reservations, busy hours, unused devices and what to buy or remove - see the [team server guide](docs/TEAM_SERVER.md).
-- **Old SSH algorithms in Quick Connect and for a whole folder** ([#4](https://github.com/nperiannan/termwright/issues/4)).
+- **Old SSH algorithms in Quick Connect, the New Session panel and for a whole folder** ([#4](https://github.com/nperiannan/termwright/issues/4)).
 
 | | |
 |---|---|
 | ![Team admin overview](docs/screenshots/team-admin.png) <br/>*The team admin page: utilization, busy hours, insights* | ![Reserve](docs/screenshots/teams.png) <br/>*Teams in Termwright* |
+| ![Team card](docs/screenshots/team-card.png) <br/>*Hover a team badge: reservation, who has it open, last used* | ![Reserve](docs/screenshots/team-reserve.png) <br/>*Reserve a device with an end time and a note* |
 
 ## What's new in 0.29
 

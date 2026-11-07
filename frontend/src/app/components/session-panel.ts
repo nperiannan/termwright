@@ -166,6 +166,8 @@ type Edit = { session: Session; oldPath: string; tabId?: string };
               <input type="checkbox" name="filesPanel" [(ngModel)]="s.filesPanel" />
               <span class="tx">Files panel beside the terminal<small>follows the terminal's folder; double-click opens a file here</small></span></label>
             <label><input type="checkbox" name="arcp" [(ngModel)]="s.autoReconnect" /><span class="tx">Reconnect automatically<small>when the connection drops</small></span></label>
+            <label title="Weak algorithms such as diffie-hellman-group1-sha1, aes128-cbc or hmac-sha1, added at the end of each list (Session Options → Authentication → Algorithms has the full lists)">
+              <input type="checkbox" name="legacyp" [(ngModel)]="s.legacyAlgorithms" /><span class="tx">Allow legacy algorithms<small>for old devices that offer only weak key exchange, ciphers or MACs</small></span></label>
           </div>
         }
         @if (edit().oldPath && (s.protocol === 'SSH2' || s.protocol === 'Telnet')) {
