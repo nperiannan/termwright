@@ -47,6 +47,7 @@ type state struct {
 	Pending       []*Pending     `json:"pending,omitempty"`  // devices members pushed, waiting for approval
 	Activity      []Activity     `json:"activity,omitempty"` // newest last, at most maxActivity
 	Reservations  []*Reservation `json:"reservations,omitempty"`
+	Watches       []*Watch       `json:"watches,omitempty"` // members waiting for a device to be free
 }
 
 // Server is a team server. Its data (team.json, the certificate and key) is in Dir.
@@ -55,13 +56,14 @@ type Server struct {
 	Version string
 	Log     *log.Logger
 
-	mu    sync.Mutex
-	st    state
-	cert  tls.Certificate
-	fp    string
-	seen  map[string]time.Time // member id → last call (not saved on every call)
-	fails map[string]time.Time // remote address → last failed join
-	now   func() time.Time
+	mu      sync.Mutex
+	st      state
+	cert    tls.Certificate
+	fp      string
+	signIns map[string]time.Time // the last admin sign-in noted per member
+	seen    map[string]time.Time // member id → last call (not saved on every call)
+	fails   map[string]time.Time // remote address → last failed join
+	now     func() time.Time
 
 	changed  chan struct{}           // closed and replaced when the inventory changes (long polls wait on it)
 	links    map[string]linkCode     // admin sign-in codes
@@ -86,7 +88,7 @@ func Open(dir, name, version string, logger *log.Logger) (*Server, string, error
 	}
 	s := &Server{Dir: dir, Version: version, Log: logger, seen: map[string]time.Time{}, fails: map[string]time.Time{}, now: time.Now,
 		changed: make(chan struct{}), links: map[string]linkCode{}, sessions: map[string]adminSession{},
-		presence: map[string]*presenceRec{}, notes: map[string][]Note{}, statusCh: make(chan struct{})}
+		presence: map[string]*presenceRec{}, notes: map[string][]Note{}, statusCh: make(chan struct{}), signIns: map[string]time.Time{}}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, "", err
 	}
@@ -156,7 +158,16 @@ func (s *Server) Fingerprint() string { return s.fp }
 
 // TLSConfig serves the server's own certificate.
 func (s *Server) TLSConfig() *tls.Config {
-	return &tls.Config{Certificates: []tls.Certificate{s.cert}, MinVersion: tls.VersionTLS12}
+	// the certificate is read at each connection: a restored backup's applies at once
+	cur := func() tls.Certificate {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.cert
+	}
+	return &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{cur()},
+		GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+			return &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{cur()}}, nil
+		}}
 }
 
 func (s *Server) loadCert() error {
@@ -224,6 +235,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/members/role", s.auth(s.setRole))
 	mux.HandleFunc("POST /api/members/remove", s.auth(s.remove))
 	mux.HandleFunc("POST /api/leave", s.auth(s.leave))
+	s.moreRoutes(mux)
 	s.inventoryRoutes(mux)
 	return http.MaxBytesHandler(mux, 1<<20)
 }
@@ -415,14 +427,29 @@ func (s *Server) find(id string) (int, *memberRec) {
 
 func (s *Server) setRole(w http.ResponseWriter, r *http.Request, me *memberRec) {
 	var req RoleChange
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Role != RoleCoOwner && req.Role != RoleMember) {
-		fail(w, 400, "the role is co-owner or member")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Role != RoleCoOwner && req.Role != RoleMember && req.Role != RoleOwner) {
+		fail(w, 400, "the role is owner, co-owner or member")
 		return
 	}
 	_, m := s.find(req.ID)
 	switch {
 	case m == nil:
 		fail(w, 404, "no such member")
+	case req.Role == RoleOwner:
+		// handing the team over: the new owner, and the old one stays as co-owner
+		if me.Role != RoleOwner || m.ID == me.ID {
+			fail(w, 403, "only the owner can hand the team over to another member")
+			return
+		}
+		m.Role, me.Role = RoleOwner, RoleCoOwner
+		s.log(me.Name, "made %s the owner (%s is a co-owner now)", m.Name, me.Name)
+		s.note(m.ID, "%s made you the owner of %s.", me.Name, s.st.Name)
+		if err := s.save(); err != nil {
+			fail(w, 500, err.Error())
+			return
+		}
+		s.wake(true)
+		writeJSON(w, 200, m.Member)
 	case !manager(me):
 		fail(w, 403, "only the owner and co-owners can change roles")
 	case m.Role == RoleOwner:
@@ -431,11 +458,11 @@ func (s *Server) setRole(w http.ResponseWriter, r *http.Request, me *memberRec) 
 		fail(w, 403, "only the owner can change another co-owner")
 	default:
 		m.Role = req.Role
+		s.log(me.Name, "made %s a %s", m.Name, m.Role)
 		if err := s.save(); err != nil {
 			fail(w, 500, err.Error())
 			return
 		}
-		s.Log.Printf("%s made %s %s", me.Name, m.Name, m.Role)
 		writeJSON(w, 200, m.Member)
 	}
 }

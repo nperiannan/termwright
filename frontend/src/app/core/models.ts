@@ -22,6 +22,7 @@ export interface Session {
   remoteCommand: string; useRemoteCommand: boolean; openAs: '' | 'sftp'; deviceType: string; ownLogin: boolean; account?: string; sftpToTarget: boolean; sftpOn?: '' | 'jump' | 'target'; filesPanel?: boolean;
   kerberosPrincipal: string; kerberosSpn: string; certificateFile: string; serialFlow: '' | 'rtscts' | 'xonxoff';
   serialAutoBaud?: boolean; timestamps?: boolean; noAutoScroll?: boolean;
+  localEcho?: boolean; mosh?: boolean; telnetTls?: boolean; tlsAnyCert?: boolean;
 }
 
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
@@ -105,6 +106,7 @@ export interface Settings {
   snippets: Snippet[] | null; workspaces: Workspace[] | null; folderDefaults: FolderDefault[] | null; environments?: EnvDef[] | null;
   credentials: Credential[] | null; masterHash: string;
   teams?: TeamConn[] | null; teamDisplayName?: string;
+  syncFolder?: string; syncId?: string; syncOptions?: boolean;
   bookmarks: Bookmark[] | null; updateChannel: 'stable' | 'nightly' | 'off'; updateRepo: string; updateOnStart: boolean;
 }
 
@@ -318,3 +320,6 @@ export interface TeamSetUpResult { run: string; teamId: string; invite: string; 
 export interface TeamDevice { id?: string; name: string; folder: string; host: string; port: number; protocol: string; deviceType: string; mac: string; description: string; }
 export interface TeamPushItem extends TeamDevice { path: string; }
 export interface TeamPushResult { status: 'new' | 'added' | 'exists' | 'pending' | 'invalid'; name: string; folder: string; msg?: string; }
+
+/** Sync between your own computers through a shared folder. */
+export interface SyncStatus { folder: string; last: string; peers: string[] | null; took: number; error: string; }

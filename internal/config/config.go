@@ -123,34 +123,38 @@ type Settings struct {
 	Credentials          []Credential                 `json:"credentials"`
 	Teams                []TeamConn                   `json:"teams,omitempty"`           // team servers joined (kept by the backend)
 	TeamDisplayName      string                       `json:"teamDisplayName,omitempty"` // the name the teams see ("" = the OS user)
-	MasterHash           string                       `json:"masterHash"`                // scrypt verifier; empty = no master password
-	KeyMap               []KeyBinding                 `json:"keyMap"`
-	CustomSchemes        []ColorScheme                `json:"customSchemes"`
-	AccentColor          string                       `json:"accentColor"`
-	RestoreTabs          bool                         `json:"restoreTabs"`
-	OpenTabs             []string                     `json:"openTabs"`
-	Bookmarks            []Bookmark                   `json:"bookmarks"`
-	SFTPCwdAuto          bool                         `json:"sftpCwdAuto"`              // turn on folder reporting in the shell when an SFTP tab opens from it
-	SFTPFollowTerminal   bool                         `json:"sftpFollowTerminal"`       // SFTP tabs follow the terminal folder
-	SFTPFollowUser       bool                         `json:"sftpFollowUser"`           // SFTP tabs browse as the terminal's user (root via sudo)
-	SessionManagerRight  bool                         `json:"sessionManagerRight"`      // Session Manager on the right side of the window
-	VaultAddr            string                       `json:"vaultAddr,omitempty"`      // HashiCorp Vault URL for vault:// references ("" = $VAULT_ADDR)
-	KeyPassphrases       []string                     `json:"keyPassphrases,omitempty"` // key files whose passphrase is in the OS keychain (no secrets here)
-	UpdateChannel        string                       `json:"updateChannel"`            // stable | nightly | off
-	UpdateRepo           string                       `json:"updateRepo"`               // GitHub owner/name
-	UpdateOnStart        bool                         `json:"updateOnStart"`
-	PythonPath           string                       `json:"pythonPath"` // interpreter for .py scripts ("" = find python3)
-	DeviceTypes          []session.DeviceType         `json:"deviceTypes"`
-	Alerts               []Alert                      `json:"alerts"`
-	ConfirmPaste         bool                         `json:"confirmPaste"`     // ask before pasting several lines
-	QuickConnectSave     bool                         `json:"quickConnectSave"` // Quick Connect saves the session (switch on by default; remembered)
-	NoMoveConfirm        bool                         `json:"noMoveConfirm"`    // moving sessions or folders in the Session Manager does not ask first
-	NoDeleteConfirm      bool                         `json:"noDeleteConfirm"`  // deleting sessions or folders does not ask first (a jump host in use still asks)
-	Snippets             []Snippet                    `json:"snippets"`
-	Workspaces           []Workspace                  `json:"workspaces"`
-	FolderDefaults       []FolderDefault              `json:"folderDefaults"`
-	Environments         []Environment                `json:"environments,omitempty"` // empty = the built-in four (production, staging, test, development)
-	Window               WindowState                  `json:"window"`
+	// Sync between your own computers through a shared folder (OneDrive, iCloud Drive, Dropbox…)
+	SyncFolder          string               `json:"syncFolder,omitempty"`  // "" = off
+	SyncID              string               `json:"syncId,omitempty"`      // this computer in the sync folder
+	SyncOptions         bool                 `json:"syncOptions,omitempty"` // Global Options too (sessions, accounts and the library always)
+	MasterHash          string               `json:"masterHash"`            // scrypt verifier; empty = no master password
+	KeyMap              []KeyBinding         `json:"keyMap"`
+	CustomSchemes       []ColorScheme        `json:"customSchemes"`
+	AccentColor         string               `json:"accentColor"`
+	RestoreTabs         bool                 `json:"restoreTabs"`
+	OpenTabs            []string             `json:"openTabs"`
+	Bookmarks           []Bookmark           `json:"bookmarks"`
+	SFTPCwdAuto         bool                 `json:"sftpCwdAuto"`              // turn on folder reporting in the shell when an SFTP tab opens from it
+	SFTPFollowTerminal  bool                 `json:"sftpFollowTerminal"`       // SFTP tabs follow the terminal folder
+	SFTPFollowUser      bool                 `json:"sftpFollowUser"`           // SFTP tabs browse as the terminal's user (root via sudo)
+	SessionManagerRight bool                 `json:"sessionManagerRight"`      // Session Manager on the right side of the window
+	VaultAddr           string               `json:"vaultAddr,omitempty"`      // HashiCorp Vault URL for vault:// references ("" = $VAULT_ADDR)
+	KeyPassphrases      []string             `json:"keyPassphrases,omitempty"` // key files whose passphrase is in the OS keychain (no secrets here)
+	UpdateChannel       string               `json:"updateChannel"`            // stable | nightly | off
+	UpdateRepo          string               `json:"updateRepo"`               // GitHub owner/name
+	UpdateOnStart       bool                 `json:"updateOnStart"`
+	PythonPath          string               `json:"pythonPath"` // interpreter for .py scripts ("" = find python3)
+	DeviceTypes         []session.DeviceType `json:"deviceTypes"`
+	Alerts              []Alert              `json:"alerts"`
+	ConfirmPaste        bool                 `json:"confirmPaste"`     // ask before pasting several lines
+	QuickConnectSave    bool                 `json:"quickConnectSave"` // Quick Connect saves the session (switch on by default; remembered)
+	NoMoveConfirm       bool                 `json:"noMoveConfirm"`    // moving sessions or folders in the Session Manager does not ask first
+	NoDeleteConfirm     bool                 `json:"noDeleteConfirm"`  // deleting sessions or folders does not ask first (a jump host in use still asks)
+	Snippets            []Snippet            `json:"snippets"`
+	Workspaces          []Workspace          `json:"workspaces"`
+	FolderDefaults      []FolderDefault      `json:"folderDefaults"`
+	Environments        []Environment        `json:"environments,omitempty"` // empty = the built-in four (production, staging, test, development)
+	Window              WindowState          `json:"window"`
 }
 
 // WindowState remembers the main window size and position.

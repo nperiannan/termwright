@@ -51,7 +51,7 @@ type Activity struct {
 	What string `json:"what"`
 }
 
-const maxActivity = 500
+const maxActivity = 5000
 
 // Inventory is what members fetch.
 type Inventory struct {
@@ -332,9 +332,11 @@ func (s *Server) adminState(w http.ResponseWriter, r *http.Request, me *memberRe
 		return
 	}
 	t := s.teamView(me)
-	act := make([]Activity, len(s.st.Activity))
-	for i, a := range s.st.Activity { // newest first
-		act[len(act)-1-i] = a
+	// the latest events (the Activity page asks for the rest a page at a time)
+	n := min(len(s.st.Activity), 50)
+	act := make([]Activity, n)
+	for i := 0; i < n; i++ { // newest first
+		act[i] = s.st.Activity[len(s.st.Activity)-1-i]
 	}
 	inv := Inventory{Rev: s.st.Rev, Devices: s.st.Inventory, Folders: s.st.Folders}
 	if inv.Devices == nil {

@@ -246,3 +246,45 @@ func (c *Client) Release(ctx context.Context, id string) error {
 func (c *Client) Connected(ctx context.Context, d DeviceRef) error {
 	return c.call(ctx, http.MethodPost, "/api/connected", map[string]any{"device": d}, nil)
 }
+
+// Watch starts (on) or stops waiting for a device to be free; free tells that it is free already.
+func (c *Client) Watch(ctx context.Context, d DeviceRef, on bool) (free bool, err error) {
+	var r struct {
+		Free bool `json:"free"`
+	}
+	err = c.call(ctx, http.MethodPost, "/api/watch", map[string]any{"device": d, "on": on}, &r)
+	return r.Free, err
+}
+
+// Backup downloads the team's backup (owner only).
+func (c *Client) Backup(ctx context.Context) ([]byte, error) {
+	return c.raw(ctx, http.MethodGet, "/api/admin/backup", nil)
+}
+
+// Restore puts a backup back (owner only).
+func (c *Client) Restore(ctx context.Context, b []byte) error {
+	_, err := c.raw(ctx, http.MethodPost, "/api/admin/restore", b)
+	return err
+}
+
+func (c *Client) raw(ctx context.Context, method, path string, in []byte) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, method, "https://"+c.Address+path, bytes.NewReader(in))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("the team server %s cannot be reached: %w", c.Address, unwrapNet(err))
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	if resp.StatusCode != http.StatusOK {
+		var e struct {
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(b, &e)
+		return nil, &APIError{Status: resp.StatusCode, Msg: e.Error}
+	}
+	return b, nil
+}

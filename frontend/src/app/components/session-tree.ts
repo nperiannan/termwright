@@ -1,3 +1,4 @@
+import { tr } from '../core/i18n';
 import { DeviceState, TeamStatusService, isNetworkDevice } from '../core/team-status.service';
 import { RemoteDesktopSetup } from '../core/remote-desktop-setup.service';
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild } from '@angular/core';
@@ -906,7 +907,19 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     } else {
       out.push({ label: 'Reserve...', action: () => this.ui.teamReserve.set({ node: n }) });
     }
+    // busy: wait for it
+    if (st && (st.others.length || (st.reserved && !st.reservedByMe)))
+      out.push(st.watching
+        ? { label: 'Stop Waiting for It', action: () => void this.watch(st.teamId, n, false) }
+        : { label: 'Tell Me When It Is Free', action: () => void this.watch(st.teamId, n, true) });
     return [...out, { separator: true }];
+  }
+
+  private async watch(teamId: string, n: SessionNode, on: boolean) {
+    try {
+      const free = await this.backend.teamWatch(teamId, { host: n.hostname!, port: n.port || (n.protocol === 'Telnet' ? 23 : 22), protocol: n.protocol ?? 'SSH2', mac: n.mac ?? '', name: n.name }, on);
+      this.ui.toast(free ? tr('{0} is free now.', n.name) : on ? tr('You get a notice when {0} is free.', n.name) : tr('You no longer wait for {0}.', n.name), on ? 'success' : 'info');
+    } catch (e) { this.ui.error(e); }
   }
 
   private async release(teamId: string, id: string) {

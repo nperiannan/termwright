@@ -12,7 +12,8 @@ export interface Reservation { id: string; device: DeviceRef; by: string; name: 
 export interface InUse { device: DeviceRef; by: string; name: string; since: string; }
 export interface LastUse { device: DeviceRef; name: string; s: number; e: number; }
 export interface TeamStatus { rev: number; me: string; inUse: InUse[]; reserved: Reservation[]; last?: LastUse[];
-  /** the other members with my name: me on another computer */ also?: string[]; }
+  /** the other members with my name: me on another computer */ also?: string[];
+  /** the devices I wait for */ watching?: DeviceRef[]; }
 interface View { teamId: string; team: string; status: TeamStatus; }
 
 /** What a device's status is for this person. */
@@ -26,6 +27,8 @@ export interface DeviceState {
   me: string;
   /** my other computers (members with my name) */
   also?: string[];
+  /** I wait for it to be free (a notice comes then) */
+  watching?: boolean;
   /** the last time someone had it open (when nobody has it open now) */
   last?: LastUse;
   teamId: string;
@@ -176,7 +179,8 @@ export class TeamStatusService {
       const last = (v.status.last ?? []).find(l => sameDevice(s, l.device));
       if (others.length || mine || reserved || last) {
         const open = v.status.inUse.filter(u => sameDevice(s, u.device));
-        return { others, mine, reserved, reservedByMe: !!reserved && isMe(reserved.by), open, me: v.status.me, also: v.status.also ?? [], last, teamId: v.teamId, team: v.team };
+        const watching = (v.status.watching ?? []).some(w => sameDevice(s, w));
+        return { others, mine, reserved, reservedByMe: !!reserved && isMe(reserved.by), open, me: v.status.me, also: v.status.also ?? [], last, teamId: v.teamId, team: v.team, watching };
       }
     }
     return null;
@@ -220,6 +224,7 @@ export class TeamStatusService {
       rows.push(['Last used', st.last.name + ' · ' + t(st.last.s) + ' for ' + span(st.last.e - st.last.s)]);
       rows.push([st.reserved ? 'Not open for' : 'Free for', span(now - st.last.e)]);
     }
+    if (st.watching) rows.push(['Waiting', 'you get a notice when it is free']);
     const foot = st.reservedByMe ? 'Right-click → Change Reservation… or Release Reservation' : st.reserved ? 'Connecting asks first; ' + st.reserved.name + ' gets a notice' : 'Right-click → Reserve… to keep it for a while';
     return { head, rows, note, foot };
   }

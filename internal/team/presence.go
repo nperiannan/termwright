@@ -73,7 +73,9 @@ type Status struct {
 	Rev int64  `json:"rev"`
 	Me  string `json:"me"`
 	// Also: the other members with my name - me on another computer
-	Also     []string       `json:"also"`
+	Also []string `json:"also"`
+	// Watching: the devices I wait for (a notice comes when they are free)
+	Watching []DeviceRef    `json:"watching"`
 	InUse    []InUse        `json:"inUse"`
 	Reserved []*Reservation `json:"reserved"`
 	Notes    []Note         `json:"notes"`
@@ -102,6 +104,7 @@ func (s *Server) wake(changed bool) {
 	if changed {
 		s.statusRev++
 	}
+	s.checkWatches()
 	close(s.statusCh)
 	s.statusCh = make(chan struct{})
 }
@@ -201,7 +204,12 @@ func (s *Server) statusFor(me *memberRec) Status {
 	if st.Notes == nil {
 		st.Notes = []Note{}
 	}
-	st.Also = []string{}
+	st.Also, st.Watching = []string{}, []DeviceRef{}
+	for _, x := range s.st.Watches {
+		if s.same(x.By, me) {
+			st.Watching = append(st.Watching, x.Device)
+		}
+	}
 	for _, m := range s.st.Members {
 		if m.ID != me.ID && sameName(m.Name, me.Name) {
 			st.Also = append(st.Also, m.ID)

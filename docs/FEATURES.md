@@ -65,9 +65,11 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Push to Team…** from the Session Manager or Discover: devices the team has already (by address or MAC, any name) are recognised; members' pushes wait for approval.
 - **Who uses which device** (network devices only - not computers, Linux machines, phones, printers or IoT boards): badges for open (● initials) and reserved (🔒), a card with the reservation, who has it open since when, last used and free for; **Reserve…** until a time with a note; a warning and a notice when connecting to someone else's reservation.
 - **Admin page** (owners and co-owners, opened signed in from Termwright, no passwords on the server): overview with utilization, busy hours and insights (what to buy, what nobody uses), usage reports per device, member, reservation and session with CSV export, inventory with folders and CSV import/export, approvals, scans from the lab host, members and invites, activity log; light and dark theme.
+- **Tell Me When It Is Free**: wait for a device someone else has open or reserved, a notice comes when it is free. **Hand over** the team to another member (the owner stays as co-owner). **Backup & restore** on the admin page (owner), and an **Activity** log of 5000 events with filter and CSV export.
 
 ## SSH2
 
+- **Mosh** for SSH sessions: roaming over Wi-Fi changes, sleep and new addresses with the mosh client of your computer (session's address, port, user and key).
 - **Password and keyboard-interactive** logins, with the password saved in the OS keychain if you want.
 - **Public keys**: identity file, encrypted keys, default `~/.ssh/id_*` keys and the SSH agent.
 - **PuTTY `.ppk` keys** used directly (formats 2 and 3), no conversion.
@@ -91,7 +93,8 @@ Without a team Termwright works on its own and sends nothing anywhere.
 
 ## Telnet, Serial and Raw
 
-- **Telnet** with option negotiation (window size, terminal type, echo, suppress go-ahead).
+- **Telnet** with option negotiation (window size, terminal type, echo, suppress go-ahead), and **Telnet over TLS** (telnets, port 992) with the system's certificate check or *Accept any certificate* for self-signed appliances.
+- **Local echo** for Telnet, raw and serial devices that do not echo what you type.
 - **Serial**: COM ports / tty devices listed in order with the USB adapter's name, updated by itself when a cable is plugged in; baud rate, data bits, parity, stop bits.
 - **Detect Speed**: finds the baud rate of a console (Enter at each common speed, the readable answer wins); optionally on every connect.
 - **Send bar** on serial tabs: port and speed of the connection, message box with CR / LF / CR+LF / no line ending, ↑/↓ recall, Timestamps, Auto scroll, Clear and Save; available on any tab from the right-click menu.
@@ -291,6 +294,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Import from inventories**: CSV, Ansible (INI / YAML), NetBox, AWS EC2.
 - **Termwright template (CSV)**: a template to save and a [format guide](IMPORT_FORMAT.md), to bring sessions from any other tool.
 - **Export**: Termwright folder, zip or XML (everything kept; SecureCRT can read them).
+- **Sync your own computers** through a shared folder (OneDrive, iCloud Drive, Dropbox, a network share): sessions, accounts, device types, folder defaults and the library (optionally Global Options) every half minute, deletions included; never passwords, never team folders.
 - **Settings travel with the export**: zip and folder exports include device types, accounts (no passwords), Folder Defaults, the command library, checklists, jobs and Global Options; Import Sessions shows what is in the file and imports the parts you choose, following the target folder and renamed sessions.
 - **Import Termwright exports**: Termwright .zip or export folder as their own import sources.
 - **Export to other programs**: PuTTY and KiTTY (.reg), PuTTY sessions folder, MobaXterm (.mxtsessions), Tabby profiles, OpenSSH config and CSV.
@@ -308,5 +312,6 @@ Without a team Termwright works on its own and sends nothing anywhere.
 
 ## Keyboard shortcuts
 
+- **Dialogs**: Escape closes the menu or dialog on top, Tab stays inside the dialog, and dialogs and icon buttons are announced to screen readers.
 - **A shortcut for nearly every menu command** (e.g. Disconnect, Clear Screen, Auto Scroll, Timestamps, Log Session, Open SFTP Tab, Save Screen As Image, Save Selection as Device Fact); Help → Keyboard Shortcuts lists them with a search box.
 - `Mod` = Cmd on macOS, Ctrl+Shift on Windows/Linux: `O` sessions, `Q` quick connect, `L` local shell, `R` reconnect, `W` close tab, `P` SFTP tab, `F` find, `S` save scrollback, `M` session manager, `K` command window, `B` button bar, `E` command library, `Y` command history, `J` recording marker, `G` Quick Open.

@@ -238,3 +238,16 @@ func (a *App) TeamConnected(d team.DeviceRef) {
 		}
 	}
 }
+
+// TeamWatch starts or stops waiting for a team device to be free: the team
+// server sends a notice when nobody else has it open or reserved. It returns
+// true when the device is free already.
+func (a *App) TeamWatch(teamID string, d team.DeviceRef, on bool) (bool, error) {
+	_, c, err := a.teamConn(teamID)
+	if err != nil {
+		return false, err
+	}
+	ctx, cancel := teamCtx()
+	defer cancel()
+	return c.Watch(ctx, normRef(d), on)
+}

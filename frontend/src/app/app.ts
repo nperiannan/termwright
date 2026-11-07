@@ -1,3 +1,4 @@
+import { A11y } from './core/a11y';
 import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend } from './core/backend';
@@ -70,6 +71,7 @@ import { FactTeach } from './dialogs/fact-teach';
 })
 export class App implements OnInit {
   protected ui = inject(Ui);
+  private a11y = inject(A11y); // Escape, Tab and screen reader support in dialogs
   protected teamStatus = inject(TeamStatusService);
   protected tabs = inject(Tabs);
   private remoteDesktop = inject(RemoteDesktopSetup);

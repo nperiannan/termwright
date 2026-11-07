@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView } from './models';
+  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -144,6 +144,9 @@ export class Backend {
   teamStatuses() { return this.call<{ teamId: string; team: string; status: any }[]>('TeamStatuses'); }
   teamReserve(d: { host: string; port: number; protocol: string; mac?: string; name?: string }, until: string, note: string) { return this.call<unknown>('TeamReserve', d, until, note); }
   teamRelease(teamId: string, id: string) { return this.call<void>('TeamRelease', teamId, id); }
+  syncNow() { return this.call<SyncStatus>('SyncNow'); }
+  syncState() { return this.call<SyncStatus>('SyncState'); }
+  teamWatch(teamId: string, d: { host: string; port: number; protocol: string; mac?: string; name?: string }, on: boolean) { return this.call<boolean>('TeamWatch', teamId, d, on); }
   teamConnected(d: { host: string; port: number; protocol: string; mac?: string }) { return this.call<void>('TeamConnected', d); }
   importTemplate() { return this.call<string>('ImportTemplate'); }
   saveTextAs(title: string, name: string, text: string) { return this.call<string>('SaveTextAs', title, name, text); }

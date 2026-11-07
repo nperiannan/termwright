@@ -4,6 +4,8 @@ Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial
 
 ![Main window](screenshots/main.png)
 
+> **New in 0.32:** [sync your own computers](#syncing-your-own-computers) through a shared folder, [Mosh](#mosh-roaming-ssh), Telnet over TLS and local echo, Escape and Tab in every dialog with screen reader labels, and for [teams](#teams-who-uses-which-device): *Tell Me When It Is Free*, handing the team over, backup and restore and a searchable activity log.
+>
 > **New in 0.21:** a **modern layout** (now the default - the classic one is a click away): tabs and search in the title bar, a [start page](#2-the-main-window) with your favourite and recent sessions, a [session side panel](#4-sessions-and-the-session-manager), new device icons and folders coloured by level, and every dialog redone. Also: [device facts](#device-facts) (model, version, MAC, uptime read after connecting - taught in two clicks), a [welcome flow](#first-start-welcome-and-master-password) with an optional **master password** and an **unlock window**, [SFTP](#sftp-browser) with clickable paths, a bookmark bar, check boxes for several files, **New File** and **Delete** on both sides, keyword highlighting on by default, **Save Screen As Image** and a shortcut for nearly every menu command.
 >
 > **New in 0.11:** [Kerberos (GSSAPI) login](#kerberos-gssapi-login), [SSH certificates and FIDO2 security keys](#ssh-certificates-and-fido2-security-keys), [password managers](#password-managers) (1Password, Bitwarden, HashiCorp Vault, any command), **VBScript** logon scripts, and `crt.Screen.Get` / `CurrentRow` read the rendered screen.
@@ -16,7 +18,7 @@ Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial
 2. [The main window](#2-the-main-window)
 3. [Connecting](#3-connecting) - device types, first SSH connection, [SSH keys: generate, install and store](#ssh-keys-generate-install-and-store), [old devices: legacy SSH algorithms](#old-devices-legacy-ssh-algorithms)
 4. [Sessions and the Session Manager](#4-sessions-and-the-session-manager) - [device facts](#device-facts), [Wake-on-LAN](#wake-on-lan)
-5. [Session Options reference](#5-session-options-reference)
+5. [Session Options reference](#5-session-options-reference) - [Mosh](#mosh-roaming-ssh), Telnet over TLS, local echo
 6. [Working in the terminal](#6-working-in-the-terminal)
 7. [Command Window, Button Bar and Connect Bar](#7-command-window-button-bar-and-connect-bar)
 8. [Logging and capturing output](#8-logging-and-capturing-output)
@@ -25,8 +27,8 @@ Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial
 11. [Tunnels, jump hosts and proxies](#11-tunnels-jump-hosts-and-proxies) - [web pages through a session](#web-pages-through-a-session)
 12. [Appearance: themes, color schemes, highlighting](#12-appearance-themes-color-schemes-highlighting)
 13. [Global Options reference](#13-global-options-reference)
-14. [Migrating from SecureCRT, PuTTY or MobaXterm](#14-migrating-from-securecrt-putty-or-mobaxterm)
-15. [Keyboard shortcuts](#15-keyboard-shortcuts)
+14. [Migrating from SecureCRT, PuTTY or MobaXterm](#14-migrating-from-securecrt-putty-or-mobaxterm) - [syncing your own computers](#syncing-your-own-computers)
+15. [Keyboard shortcuts](#15-keyboard-shortcuts) - Escape, Tab and screen readers in dialogs
 16. [Files and folders Termwright uses](#16-files-and-folders-termwright-uses)
 17. [Troubleshooting](#17-troubleshooting)
 
@@ -626,6 +628,8 @@ Only names, user and computer names and the device inventory are shared; never p
 - A laptop that sleeps or closes drops out of *in use* within about a minute and a half.
 - Only devices with a device type of a network device count; give the others a type in the team inventory. A serial or console server session named after a team device (*core-sw1 console*) shows that device's status and counts as having it open.
 - Members with your name are you on another computer: your reservation does not warn you there, and you can change or release it from either.
+- **Tell Me When It Is Free** (right-click a device someone else has open or reserved): you get a notice as soon as nobody else has it open or reserved. *Stop Waiting for It* is on the same menu; a wait ends by itself after a day.
+- **Hand the team over**: the owner chooses **Make owner…** next to a member in the Teams window (or on the admin page's Members). That member becomes the owner and you stay as co-owner.
 
 | Team card | Device card | Reserve |
 |---|---|---|
@@ -637,20 +641,26 @@ Only names, user and computer names and the device inventory are shared; never p
 |---|---|
 | ![Team overview](screenshots/team-admin.png) | ![Usage reports](screenshots/team-reports.png) |
 
+The admin page's **Activity** keeps the last 5000 events - who added, changed, approved, reserved, released, removed, handed over or signed in - with a filter and **Export CSV**. **Backup & restore** (owner) downloads the team's data in one file and puts a backup back.
+
+| Tell Me When It Is Free | Make owner | Activity | Backup & restore |
+|---|---|---|---|
+| ![Tell Me When It Is Free](screenshots/team-watch.png) | ![Make owner](screenshots/team-owner.png) | ![Activity](screenshots/team-activity.png) | ![Backup and restore](screenshots/team-backup.png) |
+
 ## 5. Session Options reference
 
 ![Session Options](screenshots/session.png)
 
 | Page | Settings |
 |---|---|
-| **Connection** | Name, folder, protocol (SSH2 / Telnet / Serial / Local Shell / Raw), device type, **Connect as** (SSH2: terminal or SFTP file browser only), hostname, port, username (blank = ask), password (saved, *No password*, or from a **password manager**), description. |
+| **Connection** | Name, folder, protocol (SSH2 / Telnet / Serial / Local Shell / Raw), device type, **Connect as** (SSH2: terminal or SFTP file browser only), hostname, port, username (blank = ask), password (saved, *No password*, or from a **password manager**), description. **Mosh** (SSH2): connect with the mosh client of this computer - see [Mosh](#mosh-roaming-ssh). **Telnet over TLS** (Telnet): telnets, port 992 by default; *Accept any certificate* for self-signed appliances. |
 | **SSH2 Authentication** | Auth methods to try (**gssapi / Kerberos**, public key, keyboard-interactive, password), Kerberos principal and service name, identity file, **certificate**, *save password in OS keychain*, **agent forwarding**, **X11 forwarding**, keep-alive interval. **Algorithms**: *Allow legacy algorithms* lets this session talk to an old device that only offers weak algorithms (`diffie-hellman-group1-sha1`, `aes128-cbc`, `hmac-sha1`, `ssh-rsa`); they are added at the end of each list, so modern ones are still preferred. Key exchange, Ciphers, MACs and Host key take lists in the OpenSSH syntax: `a,b` exactly these, `+a` add to the usual list, `-a*` remove, `^a` put first. Use it only on networks you trust. |
 | **Port Forwarding** (SSH2) | Local (`-L`), Remote (`-R`) and Dynamic SOCKS5 (`-D`) forwards; see [§11](#11-tunnels-jump-hosts-and-proxies). |
 | **Jump Host / Proxy** | Connect via another saved SSH2 session (chainable) or through a SOCKS5 / HTTP CONNECT proxy. |
 | **Serial** | Port (picked from the ports of this computer, see [Serial consoles](#serial-consoles)), baud with **Detect Speed**, data bits, parity, stop bits, **flow control** (none, RTS/CTS, XON/XOFF), assert DTR/RTS on open. |
 | **Local Shell** | Command to run (blank = login shell) and start directory. |
 | **Logon Actions & Triggers** | Automate logon (Expect/Send table with hide, trailing CR and credentials), send initial CR, logon **script** with arguments, SSH2 **remote command**, and triggers that answer prompts at any time; see [§10](#10-automation-logon-actions-triggers-scripts). |
-| **Terminal** | Emulation (Xterm, VT100/102/220, ANSI, Linux), TERM override, scrollback lines, color scheme, font and size, Backspace sends DEL (^?) or BS (^H), keyword set, auto reconnect, **timestamps** at the start of each line (off by default) and **auto scroll** (on by default). |
+| **Terminal** | Emulation (Xterm, VT100/102/220, ANSI, Linux), TERM override, scrollback lines, color scheme, font and size, Backspace sends DEL (^?) or BS (^H), keyword set, auto reconnect, **timestamps** at the start of each line (off by default) and **auto scroll** (on by default). **Local echo** shows what you type, for Telnet, raw and serial devices that do not echo it. |
 | **Log File** | File name with tokens, start on connect, append, raw log, per-line prefix; see [§8](#8-logging-and-capturing-output). |
 
 *Save & Connect* saves and opens a tab. Changes to an open session apply on the next (re)connect.
@@ -658,6 +668,16 @@ Only names, user and computer names and the device inventory are shared; never p
 | Serial | Terminal |
 |---|---|
 | ![Serial page](screenshots/serial.png) | ![Terminal page](screenshots/session-terminal.png) |
+
+### Mosh (roaming SSH)
+
+For an SSH session over Wi-Fi, a VPN or a laptop that sleeps, tick **Connect with Mosh** in Session Options → Connection. Termwright then runs the *mosh* program of your computer with the session's address, port, username and key: mosh logs in with ssh, then keeps the session alive over UDP, so it survives sleep, a new Wi-Fi network or address, and shows what you type at once on a slow link.
+
+- Install mosh on your computer (macOS: `brew install mosh`; Debian/Ubuntu: `sudo apt install mosh`; Fedora/RHEL: `sudo dnf install mosh`; Windows: mosh inside WSL) and **mosh-server** on the host; UDP ports 60000-61000 must be open to the host.
+- The password or key passphrase is typed in the terminal, as with ssh. SFTP tabs, the Files panel and port forwarding of the session use Termwright's own SSH.
+- Without mosh on your computer the tab says how to install it.
+
+![Mosh in Session Options](screenshots/session-mosh.png)
 
 ### Serial consoles
 
@@ -1277,6 +1297,17 @@ On the other computer choose **File → Import Sessions… → Termwright .zip**
 
 Passwords are never in a session export. **Passwords & Accounts → Export / Import** (the password vault, encrypted with a passphrase) moves the saved passwords, the accounts' passwords and the device types' passwords - import it too, so sessions that log in with an account can log in without asking.
 
+### Syncing your own computers
+
+**Settings → General → Sync** keeps your sessions the same on your laptop, desktop and lab PC through a folder they share - OneDrive, iCloud Drive, Dropbox, Google Drive or a network share. Choose the folder on each computer (the same one); every half minute each Termwright writes its sessions and settings there (in *Termwright Sync*) and takes in what the others wrote.
+
+- **What syncs**: sessions and folders, accounts (name and username), device types, Folder Defaults and the library (commands, checklists, Run and Collect, backup jobs, alerts, buttons, shortcuts, workspaces, bookmarks, favourites). Tick **Global Options too** for the appearance, terminal and behaviour settings.
+- **What never syncs**: passwords and key passphrases (each computer's keychain - use *Passwords & Accounts → Export / Import* to move them once), team folders (they come from the team server), and what belongs to one computer (folders on disk, open tabs, recent sessions).
+- **Changes and deletions**: a session changed on one computer is changed on the others; one deleted (or moved away) is deleted on the others - unless it was changed there later, then that version stays. Two computers changing the same session at the same time: the later change wins.
+- **Sync Now** syncs at once; the line under it says when it last synced and with how many other computers. **Turn Off** stops syncing; nothing is deleted.
+
+![Sync](screenshots/sync.png)
+
 ### Exporting to other programs
 
 Your sessions are never locked in. **File → Export Sessions…** also writes them for other programs - all sessions or the selected folder or session:
@@ -1331,7 +1362,15 @@ Tips: PuTTY needs `.ppk` keys (PuTTYgen converts OpenSSH keys) and OpenSSH canno
 
 Add your own in Global Options → Key Map. Help → Keyboard Shortcuts shows the list in the app.
 
+
+**Dialogs and the keyboard**: **Escape** closes the menu or dialog on top (as its Close or Cancel button would - a dialog that is busy, such as a team server setup, asks you to cancel first), **Tab** and **Shift+Tab** stay inside the dialog, and a dialog that opens takes the focus. Dialogs are announced to screen readers (VoiceOver, Narrator, Orca) with their title, and buttons that show only an icon by their tooltip.
+
 ## 16. Files and folders Termwright uses
+
+How the parts fit together - Termwright on your computer, your devices, and the optional team server and sync folder:
+
+![Architecture](screenshots/architecture.png)
+
 
 | What | Where |
 |---|---|

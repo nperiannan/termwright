@@ -16,6 +16,8 @@ Teams are **optional**. Without one, Termwright works exactly as before and send
 
 **In use and reserved.** In the Session Manager a team device someone else has open shows ● with their initials, a reserved one 🔒 (hover for name, time and note; the start page cards show names). Right-click → **Reserve…** keeps a device until a time with a note; **Release Reservation** ends it (owners and co-owners can release anyone's). Connecting to a device someone else reserved asks first and sends them a notice. A laptop that sleeps or closes drops out of *in use* within about a minute and a half. A device counts only with a device type of a network device (a device without one is *not tracked* on the admin page's Inventory). A serial or console server session named after a team device (*core-sw1 console*) counts as having that device open. Members with the same name - you on your laptop and on the lab PC - are one person: your own reservation does not warn you on your other computer, and the reports count people, not computers.
 
+**Tell Me When It Is Free**: right-click a device someone else has open or reserved; a notice comes when nobody else has it. **Hand over**: the owner makes another member the owner (Teams window or Members page) and stays as co-owner.
+
 | Team card (hover the badge) | Device card | Reserve… |
 |---|---|---|
 | ![Team card](screenshots/team-card.png) | ![Device card](screenshots/team-device-card.png) | ![Reserve](screenshots/team-reserve.png) |
@@ -51,8 +53,9 @@ The page follows the system's light or dark theme, or the one you pick at the to
 | **Inventory** | the devices with folders on the side, search, device type filter, who has each one open or reserved now, its utilization and when it was last used; *+ Add device*, edit, move, delete, folders, **Import CSV…** / **Export CSV** (columns `name, folder, address, port, protocol, deviceType, mac, description`) |
 | **Approvals** | devices members pushed: approve (into their folder or another) or reject |
 | **Discover** | scans a network **from the team server's host**, inside the lab - also when you are at home on VPN. Nothing logs in. *Network devices only* (on by default) hides computers, phones and printers. Tick devices, pick a folder, **Add to Inventory**; devices the inventory has already are marked |
-| **Members** | the invite (*Copy*, *New Invite*), roles and *Remove* |
-| **Activity** | who added, changed, approved, removed what and when |
+| **Members** | the invite (*Copy*, *New Invite*), roles, *Remove*, and *Make owner* (owner: hands the team over, you stay as co-owner) |
+| **Backup & restore** | owner only: *Download Backup* (team, members, invite, inventory, reservations, usage history, certificate and key in one .tar.gz) and *Restore from a File…* (the team goes back to how it was in the backup) |
+| **Activity** | the last 5000 events - who added, changed, approved, reserved, released, removed, handed over or signed in (once per sign-in) - with a filter and *Export CSV* |
 
 Usage is counted from the presence heartbeats of members' Termwright (only the team's network devices, only while a terminal is connected) and kept on the server for 400 days in `usage.json`, next to `team.json`.
 
@@ -165,7 +168,7 @@ termwright-team://HOST:PORT/?k=OWNER-CODE&fp=FINGERPRINT
 | `-listen` | `TW_LISTEN` | `:7443` | address and port |
 | `-name` | `TW_TEAM_NAME` | `Team` | the team's name (first start only) |
 
-**Backup**: copy the data folder or volume (`docker run --rm -v termwright-team-my-lab:/d -v "$PWD":/b alpine tar czf /b/team-backup.tgz -C /d .`). The certificate is part of it: a server set up again with a new certificate needs a new invite for everyone.
+**Backup**: on the admin page (owner) *Backup & restore → Download Backup*; or by hand, copy the data folder or volume (`docker run --rm -v termwright-team-my-lab:/d -v "$PWD":/b alpine tar czf /b/team-backup.tgz -C /d .`). The certificate is part of it: a server set up again with a new certificate needs a new invite for everyone.
 
 **Update from Termwright** (recommended): when a team server is older than your Termwright, owners and co-owners get a notice (*Later* skips that version for a week) and **Options → Teams…** shows *Version X is available for the team server* → **Update Server…**. Pick the SSH session of the host (Termwright suggests the one it was set up with, or one that logs in to the team's address) and *Download* or *Copy over SSH*. Termwright gets the new image there and starts the team's container again with the same name, port, network, data volume and settings; the team, its members, inventory, usage history, certificate and invite stay. Only the container whose certificate is the team's is touched, so a wrong host or another team's server on the same host is never changed. The old container is kept stopped until the new one answers with the new version (90 seconds at most), and is started again if it does not. Its environment, restart policy, memory and CPU limits and labels are kept; a server from Docker Compose is updated with Compose (*pull* and *up -d*); a server installed with systemd is updated by hand (below). Members are told when the server is older, and everyone when it is newer than their Termwright. The admin page shows the server's version at the bottom left.
 

@@ -119,7 +119,7 @@ export class Palette implements AfterViewInit {
     const n = this.results().length;
     if (ev.key === 'ArrowDown') { ev.preventDefault(); this.sel.set(n ? (this.sel() + 1) % n : 0); }
     else if (ev.key === 'ArrowUp') { ev.preventDefault(); this.sel.set(n ? (this.sel() - 1 + n) % n : 0); }
-    else if (ev.key === 'Escape') { this.ui.close(); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); this.ui.close(); }
     else if (ev.key === 'Enter') {
       ev.preventDefault();
       const it = this.results()[this.sel()];

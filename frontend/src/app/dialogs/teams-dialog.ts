@@ -1,3 +1,4 @@
+import { tr } from '../core/i18n';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, errText } from '../core/backend';
@@ -77,6 +78,9 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
                 <span class="mono muted">{{ m.user }}&#64;{{ m.machine }}</span>
                 <span class="pill" [class.own]="m.role !== 'member'">{{ role(m.role) }}</span>
                 <span class="sp"></span>
+                @if (d.role === 'owner' && m.id !== d.me) {
+                  <a (click)="handOver(d, m)" title="Make them the owner of the team; you stay as co-owner">Make owner…</a>
+                }
                 @if (canManage(d, m)) {
                   <a (click)="setRole(d, m, m.role === 'member' ? 'co-owner' : 'member')">{{ m.role === 'member' ? 'Make co-owner' : 'Make member' }}</a>
                   <a class="danger" (click)="removeMember(d, m)">Remove</a>
@@ -363,6 +367,14 @@ export class TeamsDialog implements OnInit, OnDestroy {
 
   async setRole(d: TeamDetails, m: TeamMember, role: string) {
     try { await this.backend.teamSetRole(d.id, m.id, role); await this.loadDetails(); } catch (e) { this.error.set(errText(e)); }
+  }
+
+  /** The owner hands the team over: the other member becomes the owner, they stay as co-owner. */
+  async handOver(d: TeamDetails, m: TeamMember) {
+    if (!(await this.ui.confirm(tr('Make {0} the owner of {1}?', m.name, d.name),
+      tr('{0} can then do everything you can now - remove members, hand the team over again, update and back up the server. You stay in the team as co-owner.', m.name), 'Make Owner'))) return;
+    try { await this.backend.teamSetRole(d.id, m.id, 'owner'); this.ui.toast(tr('{0} is the owner of {1} now.', m.name, d.name), 'success'); await this.load(); }
+    catch (e) { this.error.set(errText(e)); }
   }
 
   async removeMember(d: TeamDetails, m: TeamMember) {

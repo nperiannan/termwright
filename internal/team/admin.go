@@ -97,7 +97,11 @@ func (s *Server) adminSignIn(w http.ResponseWriter, r *http.Request) {
 	s.sessions[hashToken(tok)] = adminSession{member: m.ID, until: now.Add(sessionFor)}
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: tok, Path: "/", MaxAge: int(sessionFor / time.Second),
 		HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
-	s.log(m.Name, "opened the admin page")
+	// a sign-in is noted once per admin session's length, not each time the page opens
+	if last, ok := s.signIns[m.ID]; !ok || now.Sub(last) > sessionFor {
+		s.signIns[m.ID] = now
+		s.log(m.Name, "signed in to the admin page")
+	}
 	writeJSON(w, 200, map[string]string{"name": m.Name, "role": m.Role})
 }
 

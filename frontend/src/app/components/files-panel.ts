@@ -45,7 +45,7 @@ const store = {
     }
     @if (editing()) {
       <input class="path mono" [ngModel]="dir()" appAutofocus spellcheck="false"
-        (keydown.enter)="editing.set(false); go($any($event.target).value)" (keydown.escape)="editing.set(false)" (blur)="editing.set(false)" />
+        (keydown.enter)="editing.set(false); go($any($event.target).value)" (keydown.escape)="$event.preventDefault(); editing.set(false)" (blur)="editing.set(false)" />
     } @else {
       <div class="crumb mono" title="Click to type a path" (click)="editing.set(true)">
         @for (c of crumbs(); track $index) {

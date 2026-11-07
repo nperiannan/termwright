@@ -72,7 +72,7 @@ interface Pane {
                 </div>
               } @else {
                 <input class="path mono" [ngModel]="p.dir" appAutofocus (keydown.enter)="editing.set(''); go(p, $any($event.target).value)"
-                  (keydown.escape)="editing.set('')" (blur)="editing.set('')" spellcheck="false" />
+                  (keydown.escape)="$event.preventDefault(); editing.set('')" (blur)="editing.set('')" spellcheck="false" />
               }
               <button class="icon-btn" title="Up" (click)="up(p)"><app-icon name="up" /></button>
               <button class="icon-btn" title="Refresh" (click)="load(p)"><app-icon name="refresh" /></button>

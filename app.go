@@ -36,7 +36,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.31.0-dev"
+var Version = "0.32.0-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -75,6 +75,7 @@ func (a *App) startup(ctx context.Context) {
 	go a.pruneRecordings(ctx)
 	go a.watchSessions(ctx)
 	go a.startTeamSync()
+	go a.syncLoop(ctx)
 }
 
 func (a *App) init() error {
@@ -293,9 +294,17 @@ func (a *App) SaveSettings(s config.Settings) error {
 	// kept by the backend when sessions open; the window's copy may be older
 	s.RecentSessions, s.LastConnected = cur.RecentSessions, cur.LastConnected
 	s.DeviceFacts = cur.DeviceFacts // read by RefreshFacts
-	s.Teams = cur.Teams             // changed through the Team… calls only
+	s.Teams = cur.Teams
+	s.SyncID = cur.SyncID // this computer's id in the sync folder: only the sync sets it
 	if err := a.cfg.Save(s); err != nil {
 		return err
+	}
+	if s.SyncFolder != "" && (s.SyncFolder != cur.SyncFolder || s.SyncOptions != cur.SyncOptions) {
+		go a.syncOnce() // sync turned on or changed: at once
+	} else if s.SyncFolder == "" && cur.SyncFolder != "" {
+		syncMu.Lock()
+		syncStatus = SyncStatus{}
+		syncMu.Unlock()
 	}
 	if bad := a.applyAlerts(); len(bad) > 0 {
 		return errors.New("alert pattern: " + strings.Join(bad, "; "))

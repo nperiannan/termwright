@@ -255,7 +255,7 @@
       @if (findOpen()) {
         <div class="findbar">
           <input id="findInput" [(ngModel)]="findText" placeholder="Find in scrollback"
-                 (keydown.enter)="find($any($event).shiftKey)" (keydown.escape)="closeFind()" />
+                 (keydown.enter)="find($any($event).shiftKey)" (keydown.escape)="$event.preventDefault(); closeFind()" />
           <button (click)="find(true)" title="Previous (Shift+Enter)">↑</button>
           <button (click)="find(false)" title="Next (Enter)">↓</button>
           <button (click)="closeFind()" title="Close (Esc)">✕</button>

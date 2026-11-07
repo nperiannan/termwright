@@ -288,6 +288,19 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                       <button type="button" (click)="wakeNow()" [disabled]="!s.mac">Wake Now</button>
                     </div>
                   }
+                  @if (s.protocol === 'SSH2') {
+                    <label>Mosh</label>
+                    <div class="checks"><label title="mosh logs in with ssh, then keeps the session over UDP: it survives sleep, Wi-Fi changes and a new address, and types ahead on slow links">
+                      <input type="checkbox" name="mosh" [(ngModel)]="s.mosh" /> Connect with Mosh (roaming, survives sleep and network changes)</label>
+                      @if (s.mosh) { <div class="hint">Needs the mosh program on this computer (macOS: brew install mosh; Linux: the mosh package; Windows: mosh in WSL) and mosh-server on the host, with UDP ports 60000-61000 open. The login is typed in the terminal; SFTP and port forwarding use plain SSH.</div> }
+                    </div>
+                  }
+                  @if (s.protocol === 'Telnet') {
+                    <label>TLS</label>
+                    <div class="checks"><label><input type="checkbox" name="ttls" [ngModel]="s.telnetTls" (ngModelChange)="s.telnetTls = $event; s.port = $event && (!s.port || s.port === 23) ? 992 : !$event && s.port === 992 ? 23 : s.port" /> Telnet over TLS (telnets, port 992 by default)</label>
+                      @if (s.telnetTls) { <label title="Appliances often have a self-signed certificate. Only for devices you trust on networks you trust."><input type="checkbox" name="tlsany" [(ngModel)]="s.tlsAnyCert" /> Accept any certificate (self-signed)</label> }
+                    </div>
+                  }
                 }
                 @if (canLogin()) {
                   <label class="o5">Account</label>
@@ -644,7 +657,8 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   @for (k of keywordSets(); track k) { <option [value]="k">{{ k }}</option> }
                 </select>
                 <label>Connection</label>
-                <div class="checks"><label><input type="checkbox" name="arc" [(ngModel)]="s.autoReconnect" /> Auto reconnect when the connection drops</label></div>
+                <div class="checks"><label><input type="checkbox" name="arc" [(ngModel)]="s.autoReconnect" /> Auto reconnect when the connection drops</label>
+                  <label title="For devices that do not echo what you type (some Telnet, raw TCP and serial devices): Termwright shows it itself"><input type="checkbox" name="lecho" [(ngModel)]="s.localEcho" /> Local echo - show what I type (for devices that do not echo)</label></div>
                 <label>Display</label>
                 <div class="checks">
                   <label><input type="checkbox" name="tstamps" [(ngModel)]="s.timestamps" /> Show the local time at the start of each line (display only)</label>

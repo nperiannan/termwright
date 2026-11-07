@@ -630,6 +630,9 @@ export class TerminalView implements AfterViewInit, OnDestroy {
         this.cprSent = { text: '^[' + d.slice(1), at: Date.now(), typed: false };
       } else if (this.cprSent) this.cprSent.typed = true;
       void this.backend.sendInput(id, d);
+      // local echo: show what is typed, for devices that do not echo it (not escape sequences)
+      if (t?.session?.localEcho && t.state === 'connected' && !d.startsWith('\x1b'))
+        term.write(d.replace(/\r/g, '\r\n').replace(/\x7f|\b/g, '\b \b'));
     });
     term.onBinary(d => void this.backend.sendBinary(id, btoa(d)));
     // Route paste through the tab service (multi-line confirmation, line delay).

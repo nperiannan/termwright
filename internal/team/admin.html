@@ -131,6 +131,7 @@ const IC = {
   inv: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
   ok: '<path d="M20 6 9 17l-5-5"/>', scan: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 20a6 6 0 0 0-3-5.2"/>',
+  save: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
   log: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>', help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', mon: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
@@ -182,14 +183,14 @@ async function load(force) {
   } catch (e) { if (e.status === 401 || e.status === 403) return gate(e.status === 403 ? e.message : ''); if (force) flash(e.message, true); }
 }
 
-function go(p) { ui.page = p; store.set('tw.page', p); window.scrollTo(0, 0); if (p === 'discover') api('GET', '/api/admin/scan').then(x => { scan = x; render(); }).catch(() => render()); load(true); }
-const TITLES = { overview: 'Overview', reports: 'Usage reports', inventory: 'Inventory', approvals: 'Approvals', discover: 'Discover', members: 'Members', activity: 'Activity', help: 'Help & About' };
+function go(p) { ui.page = p; store.set('tw.page', p); window.scrollTo(0, 0); if (p === 'activity') loadAct(true); if (p === 'discover') api('GET', '/api/admin/scan').then(x => { scan = x; render(); }).catch(() => render()); load(true); }
+const TITLES = { overview: 'Overview', reports: 'Usage reports', inventory: 'Inventory', approvals: 'Approvals', discover: 'Discover', members: 'Members', backup: 'Backup & restore', activity: 'Activity', help: 'Help & About' };
 function render() {
   if (!st || !PAGES[ui.page]) { if (st) ui.page = 'overview'; else return; }
   const a = document.activeElement, key = a && a.dataset ? a.dataset.k : null, ss = a && a.selectionStart, se = a && a.selectionEnd, sy = window.scrollY;
   const t = st.team, me = t.members.find(m => m.id === st.me) || {}, online = t.members.filter(m => m.online).length;
   const nav = [['Monitor'], ['overview', 'home', 'Overview'], ['reports', 'chart', 'Usage reports'], ['Manage'], ['inventory', 'inv', 'Inventory'], ['approvals', 'ok', 'Approvals', st.pending.length],
-    ['discover', 'scan', 'Discover'], ['members', 'users', 'Members'], ['Audit'], ['activity', 'log', 'Activity'], ['help', 'help', 'Help & About']];
+    ['discover', 'scan', 'Discover'], ['members', 'users', 'Members'], ...(st.team.role === 'owner' ? [['backup', 'save', 'Backup & restore']] : []), ['Audit'], ['activity', 'log', 'Activity'], ['help', 'help', 'Help & About']];
   const period = ['overview', 'reports', 'inventory'].includes(ui.page);
   $('#app').innerHTML = `<div class="app"><aside>
     <div class="brand"><img src="/admin/icon.svg" alt=""><div><b>Termwright</b><span>Team server</span></div></div>
@@ -592,13 +593,50 @@ function members() {
       return `<tr><td><span class="dot ${m.online ? '' : 'off'}"></span>${esc(m.name)}${m.id === st.me ? ' <span class="muted">(you)</span>' : ''}</td><td class="mono muted">${esc(m.user)}@${esc(m.machine)}</td>
       <td><span class="pill ${m.role !== 'member' ? 'in' : ''}">${({ owner: 'Owner', 'co-owner': 'Co-owner', member: 'Member' })[m.role]}</span></td><td>${m.online ? '<span class="pill ok">online</span>' : `<span class="muted">${m.lastSeen ? 'seen ' + ago(m.lastSeen) + ' ago' : ''}</span>`}</td>
       <td class="num">${u && u.open ? hrs(u.open) : '<span class="muted">0</span>'}</td><td class="num">${u ? u.resN : 0}</td><td class="muted small">${esc(when(m.joined))}</td>
-      <td style="text-align:right">${can ? `<a data-role="${m.id}" data-to="${m.role === 'member' ? 'co-owner' : 'member'}">${m.role === 'member' ? 'Make co-owner' : 'Make member'}</a><a class="d" data-rm="${m.id}" data-n="${esc(m.name)}">Remove</a>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
+      <td style="text-align:right">${mine === 'owner' && m.id !== st.me ? `<a data-own="${m.id}" data-n="${esc(m.name)}">Make owner</a>` : ''}${can ? `<a data-role="${m.id}" data-to="${m.role === 'member' ? 'co-owner' : 'member'}">${m.role === 'member' ? 'Make co-owner' : 'Make member'}</a><a class="d" data-rm="${m.id}" data-n="${esc(m.name)}">Remove</a>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 function actTable(list) {
   if (!list.length) return '<div class="empty">Nothing yet.</div>';
   return `<table><thead><tr><th style="width:200px">When</th><th style="width:220px">Who</th><th>What</th></tr></thead><tbody>${list.map(a => `<tr><td class="muted">${esc(when(a.at))}</td><td>${esc(a.who)}</td><td>${esc(a.what).replace(/\{t:([^}]+)\}/g, (_, t) => esc(when(t)))}</td></tr>`).join('')}</tbody></table>`;
 }
-function activity() { return `<p class="lead">Who added, changed, approved, reserved and removed what - the last 500 events.</p><div class="card"><div class="scroll">${actTable(st.activity)}</div></div>`; }
+/** The activity log, from the server a page at a time, filtered by who or what. */
+async function loadAct(reset) {
+  if (reset) ui.act = null;
+  try {
+    const off = reset || !ui.act ? 0 : ui.act.items.length;
+    const r = await api('GET', `/api/admin/activity?q=${encodeURIComponent(ui.actQ || '')}&offset=${off}&limit=200`);
+    ui.act = { total: r.total, items: off ? ui.act.items.concat(r.items) : r.items };
+  } catch (e) { flash(e.message, true); }
+  render();
+}
+async function actCsv() {
+  try {
+    const r = await api('GET', `/api/admin/activity?q=${encodeURIComponent(ui.actQ || '')}&limit=5000`);
+    const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+    const rows = [['when', 'who', 'what']].concat(r.items.map(a => [a.at, a.who, a.what.replace(/\{t:([^}]+)\}/g, '$1')]));
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(x => x.map(q).join(',')).join('\n') + '\n'], { type: 'text/csv' }));
+    a.download = `${st.team.name.replace(/[^\w.-]+/g, '-')}-activity.csv`; a.click();
+  } catch (e) { flash(e.message, true); }
+}
+function activity() {
+  if (!ui.act) { setTimeout(() => { if (!ui.act) loadAct(true); }, 0); }
+  const a = ui.act || { total: 0, items: [] };
+  return `<p class="lead">Who added, changed, approved, reserved, released and removed what, and who signed in here - the last 5000 events.</p>
+  <div class="card"><div class="tool"><input id="aq" data-k="aq" placeholder="Filter by who or what, e.g. reserved or Anisha" value="${esc(ui.actQ || '')}" style="flex:1;min-width:260px">
+    <span class="muted small">${a.items.length} of ${a.total}</span><span class="sp"></span><button id="acsv">Export CSV</button></div>
+  <div class="scroll">${actTable(a.items)}</div>
+  ${a.items.length < a.total ? '<div class="pad" style="text-align:center"><button id="amore">Show 200 more</button></div>' : ''}</div>`;
+}
+
+// ---------- backup & restore (owner) ----------
+function backup() {
+  return `<p class="lead">The team's data in one file: the team, its members and invite, the inventory, reservations, the usage history and the server's certificate and key. Keep it somewhere safe - with it, someone could run a server that your members' Termwright trusts.</p>
+  <div class="g2b"><div class="card"><h3>Download a backup</h3><div class="pad"><p>A <span class="mono">.tar.gz</span> file of the server's data folder, as it is now. Nothing is changed.</p>
+    <button class="p" id="bdl">Download Backup</button></div></div>
+  <div class="card"><h3>Restore a backup</h3><div class="pad"><p>Puts the team back as it was in the backup: members and invite, inventory, reservations and usage history. Changes since then are lost. Members who joined after the backup need the invite again.</p>
+    <p class="muted small">When the backup comes from another server, its certificate is used from now on: members' Termwright keeps working if the backup is from the server they joined; otherwise send them the invite again.</p>
+    <button id="brs" class="d">Restore from a File…</button><input type="file" id="bfile" accept=".gz,.tgz,application/gzip" hidden></div></div></div>`;
+}
 
 // ---------- help & about ----------
 function help() {
@@ -615,7 +653,7 @@ function help() {
   </ol></div></div>
   <div class="card help"><h3>Reading the reports</h3><div class="pad">
     <p><b>Hours open</b> - time a member's Termwright had a terminal to the device connected. Two people at once count twice.</p>
-    <p><b>Utilization</b> - hours open divided by all hours of the period (24 × 7). 10% means the device was open about 17 hours a week.</p>
+    <p><b>Utilization</b> - hours open divided by all hours of the period (24 × 7), or by working hours (Monday to Friday, 9:00-18:00) with <i>Working hours</i> at the top. 10% of all hours is about 17 hours a week.</p>
     <p><b>Peak at once</b> - the most people with the device open at the same time. More than one often means the team needs more of that kind.</p>
     <p><b>Conflicts</b> - connections to a device someone else had reserved.</p>
     <p><b>Not used</b> - neither opened nor reserved in the period (devices added during it are marked <i>new</i>).</p>
@@ -628,7 +666,7 @@ function help() {
     <span>Guide</span><a class="link" href="https://github.com/nperiannan/termwright/blob/main/docs/TEAM_SERVER.md" target="_blank" rel="noopener">Team server guide</a>
     <span>Project</span><a class="link" href="https://github.com/nperiannan/termwright" target="_blank" rel="noopener">github.com/nperiannan/termwright</a></div></div>`;
 }
-const PAGES = { overview, reports, inventory, approvals, discover, members, activity, help };
+const PAGES = { overview, reports, inventory, approvals, discover, members, backup, activity, help };
 
 function wire() {
   const on = (sel, ev, fn) => $$(sel).forEach(e => e[ev] = fn);
@@ -690,6 +728,25 @@ function wire() {
   // members
   on('#cp', 'onclick', () => { navigator.clipboard?.writeText(st.invite).then(() => flash('Copied the invite'), () => { $('#inv').select(); document.execCommand('copy'); }); });
   on('#rot', 'onclick', () => { if (confirm('Make a new invite? The old one stops working; members who joined stay.')) act(() => api('POST', '/api/invite/rotate', {}), 'New invite made'); });
+  on('[data-own]', 'onclick', e => { if (confirm(`Make ${e.target.dataset.n} the owner of ${st.team.name}? You stay as co-owner.`)) act(() => api('POST', '/api/members/role', { id: e.target.dataset.own, role: 'owner' }), e.target.dataset.n + ' is the owner now'); });
+  const aq = $('#aq'); if (aq) aq.oninput = () => { ui.actQ = aq.value; clearTimeout(ui.aqT); ui.aqT = setTimeout(() => loadAct(true), 300); };
+  if ($('#amore')) $('#amore').onclick = () => loadAct(false);
+  if ($('#acsv')) $('#acsv').onclick = actCsv;
+  if ($('#bdl')) $('#bdl').onclick = () => { location.href = '/api/admin/backup'; setTimeout(() => load(true), 1500); };
+  if ($('#brs')) $('#brs').onclick = () => $('#bfile').click();
+  if ($('#bfile')) $('#bfile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    if (!confirm(`Restore ${st.team.name} from ${f.name}? The team goes back to how it was in the backup; changes since then are lost.`)) { e.target.value = ''; return; }
+    try {
+      const r = await fetch('/api/admin/restore', { method: 'POST', credentials: 'same-origin', headers: { 'X-Termwright': '1' }, body: await f.arrayBuffer() });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || r.status + ' ' + r.statusText);
+      if (j.signedOut) { alert('Restored. You are not the owner in that backup - this page signs out.'); location.reload(); return; }
+      flash('Restored' + (j.newCertificate ? ' - the server uses the backup\'s certificate now' : ''));
+      ui.act = null; await load(true);
+    } catch (err) { flash(err.message, true); }
+    e.target.value = '';
+  };
   on('[data-role]', 'onclick', e => act(() => api('POST', '/api/members/role', { id: e.target.dataset.role, role: e.target.dataset.to })));
   on('[data-rm]', 'onclick', e => { if (confirm(`Remove ${e.target.dataset.n} from the team?`)) act(() => api('POST', '/api/members/remove', { id: e.target.dataset.rm }), 'Removed ' + e.target.dataset.n); });
 }

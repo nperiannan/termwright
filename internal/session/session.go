@@ -129,6 +129,10 @@ const (
 	kSerialAuto   = "Termwright Serial Detect Speed"
 	kTimestamps   = "Termwright Show Timestamps"
 	kNoAutoScroll = "Termwright No Auto Scroll"
+	kLocalEcho    = "Termwright Local Echo"
+	kMosh         = "Termwright Mosh"
+	kTelnetTLS    = "Termwright Telnet TLS"
+	kTLSAnyCert   = "Termwright TLS Any Certificate"
 )
 
 // PortForward is an SSH tunnel definition.
@@ -272,6 +276,10 @@ type Session struct {
 	SerialAutoBaud    bool   `json:"serialAutoBaud"` // detect the speed when connecting
 	Timestamps        bool   `json:"timestamps"`     // local time at the start of each line (display only)
 	NoAutoScroll      bool   `json:"noAutoScroll"`   // keep the view still while output arrives
+	LocalEcho         bool   `json:"localEcho"`      // show typed characters (devices that do not echo)
+	Mosh              bool   `json:"mosh"`           // SSH2: connect with the mosh client (roaming)
+	TelnetTLS         bool   `json:"telnetTls"`      // Telnet over TLS (telnets)
+	TLSAnyCert        bool   `json:"tlsAnyCert"`     // Telnet over TLS: accept any certificate
 }
 
 // Defaults returns a new session with sensible default values.
@@ -460,6 +468,10 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.SerialAutoBaud = f.Bool(kSerialAuto, false)
 	s.Timestamps = f.Bool(kTimestamps, false)
 	s.NoAutoScroll = f.Bool(kNoAutoScroll, false)
+	s.LocalEcho = f.Bool(kLocalEcho, false)
+	s.Mosh = f.Bool(kMosh, false)
+	s.TelnetTLS = f.Bool(kTelnetTLS, false)
+	s.TLSAnyCert = f.Bool(kTLSAnyCert, false)
 	return s
 }
 
@@ -765,6 +777,10 @@ func (s Session) Apply(f *sessionfile.File) {
 	setOptBool(f, kSerialAuto, s.SerialAutoBaud)
 	setOptBool(f, kTimestamps, s.Timestamps)
 	setOptBool(f, kNoAutoScroll, s.NoAutoScroll)
+	setOptBool(f, kLocalEcho, s.LocalEcho)
+	setOptBool(f, kMosh, s.Mosh)
+	setOptBool(f, kTelnetTLS, s.TelnetTLS)
+	setOptBool(f, kTLSAnyCert, s.TLSAnyCert)
 }
 
 func setOptStr(f *sessionfile.File, k, v string) {

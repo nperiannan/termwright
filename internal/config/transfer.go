@@ -42,6 +42,7 @@ var localKeys = map[string]bool{
 	"masterHash": true, "keyPassphrases": true, "openTabs": true, "recentSessions": true,
 	"lastConnected": true, "deviceFacts": true, "window": true, "welcomeSeen": true,
 	"themeFollowsSystem": true, "highlightOptIn": true, "modernLayout": true, "factRulesAdded": true,
+	"syncFolder": true, "syncId": true, "syncOptions": true,
 }
 
 var loginKeys = map[string]bool{"deviceTypes": true, "credentials": true, "folderDefaults": true}

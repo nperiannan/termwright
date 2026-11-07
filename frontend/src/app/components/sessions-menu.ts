@@ -118,7 +118,7 @@ export class SessionsMenu implements AfterViewInit {
       ev.preventDefault();
       this.sel.set(n ? (this.sel() + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n : 0);
       setTimeout(() => this.list()?.nativeElement.querySelector('.r.on')?.scrollIntoView({ block: 'nearest' }), 0);
-    } else if (ev.key === 'Escape') this.closed.emit();
+    } else if (ev.key === 'Escape') { ev.preventDefault(); this.closed.emit(); }
     else if (ev.key === 'Enter') {
       ev.preventDefault();
       const r = this.pickable()[this.sel()];

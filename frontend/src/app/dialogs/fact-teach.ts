@@ -14,7 +14,7 @@ import { Ui } from '../core/ui.service';
   imports: [FormsModule],
   template: `
   <div class="modal-backdrop" [class.nested]="embedded()">
-    <form class="ft" (ngSubmit)="save()" (keydown.escape)="close()">
+    <form class="ft" (ngSubmit)="save()" (keydown.escape)="$event.preventDefault(); close()">
       @if (input(); as i) {
         <div class="hd">
           <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M4 12h7M4 18h5"/><circle cx="17" cy="15" r="3.5"/><path d="M19.6 17.6 22 20"/></svg></div>

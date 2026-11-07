@@ -445,7 +445,7 @@ export class SessionPanel {
 
   close() { this.ui.panel.set(null); }
 
-  @HostListener('keydown.escape') esc() { this.close(); }
+  @HostListener('keydown.escape', ['$event']) esc(e: Event) { e.preventDefault(); this.close(); }
 
   async save(connect: boolean) {
     const s = this.s;

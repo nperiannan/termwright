@@ -162,6 +162,7 @@ export class HistoryDialog implements AfterViewInit {
       ev.preventDefault();
       void this.remove(this.current()!);
     } else if (ev.key === 'Escape') {
+      ev.preventDefault();
       if (this.clearing()) this.clearing.set(false); else this.ui.close();
     }
   }

@@ -54,13 +54,23 @@ func dialTelnet(ctx context.Context, s session.Session, cols, rows int, dial dia
 	port := s.Port
 	if port == 0 {
 		port = 23
+		if s.TelnetTLS {
+			port = 992 // telnets
+		}
 	}
 	addr := net.JoinHostPort(s.Hostname, strconv.Itoa(port))
 	c, via, err := dial(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
-	t := &telnetConn{c: c, term: termType(s), cols: cols, rows: rows, raw: make([]byte, 32*1024), telnet: true, addrInfo: "Telnet " + addr + via}
+	name := "Telnet "
+	if s.TelnetTLS {
+		if c, err = telnetTLS(ctx, c, s); err != nil {
+			return nil, err
+		}
+		name = "Telnet over TLS "
+	}
+	t := &telnetConn{c: c, term: termType(s), cols: cols, rows: rows, raw: make([]byte, 32*1024), telnet: true, addrInfo: name + addr + via}
 	t.start()
 	return t, nil
 }

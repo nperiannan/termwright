@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { LANGUAGES, previewLanguages } from '../core/i18n';
 import { Backend } from '../core/backend';
-import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, comboOf, FACT_NAMES } from '../core/models';
+import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, comboOf, FACT_NAMES } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
@@ -188,6 +188,20 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="hint">Used to run Python (.py) scripts with the <code>crt</code> object. Python 3 must be installed.</div>
                 <label></label><div class="hint">Files received with ZMODEM (remote "sz") are saved here.</div>
                 <label>Data folder</label><div class="hint mono">{{ dataDir() }}</div>
+                <label>Sync</label>
+                <div class="sync">
+                  <div class="row"><input name="syncf" [(ngModel)]="s.syncFolder" placeholder="Off - choose a folder your computers share (OneDrive, iCloud Drive, Dropbox, a network share)" />
+                    <button type="button" (click)="browseSync()">Choose Folder...</button>
+                    @if (s.syncFolder) { <button type="button" (click)="s.syncFolder = ''">Turn Off</button> }</div>
+                  <label class="inline-check"><input type="checkbox" name="synco" [(ngModel)]="s.syncOptions" [disabled]="!s.syncFolder" /> Global Options too (theme, fonts, terminal and the rest of this window)</label>
+                  <div class="hint">Your sessions, accounts, device types, folder defaults and library (commands, checklists, buttons, workspaces…) go to and come from your other computers that use the same folder, every half minute. Passwords and keys never do - they stay in each computer's keychain. Team folders come from the team server. A session changed or deleted on one computer is changed or deleted on the others, unless it was changed there later.</div>
+                  @if (syncSt(); as st) {
+                    @if (st.folder) {
+                      <div class="hint">{{ st.error ? 'Sync: ' + st.error : 'Last synced ' + ago(st.last) + (st.peers?.length ? ' · with ' + st.peers!.length + ' other computer' + (st.peers!.length === 1 ? '' : 's') : ' · no other computer in this folder yet') }}
+                        <button type="button" class="link" (click)="syncNow()" [disabled]="s.syncFolder !== st.folder">Sync Now</button></div>
+                    }
+                  }
+                </div>
               </div>
             }
             @case ('terminal') {
@@ -847,6 +861,7 @@ export class OptionsDialog implements OnInit {
   }
 
   ngOnInit() {
+    void this.backend.syncState().then(x => this.syncSt.set(x)).catch(() => {});
     this.ui.optionsPage.set('');
     const cur = this.ui.settings();
     if (cur) this.s = structuredClone(cur);
@@ -874,6 +889,15 @@ export class OptionsDialog implements OnInit {
   }
   async forgetPins() { await this.backend.forgetSmartCardPins(); this.ui.toast('The PINs will be asked again'); await this.loadCards(true); }
   async copyKey(k: SmartCardKey) { await this.backend.clipboardSet(k.authorizedKey); this.ui.toast('Public key copied', 'success'); }
+
+  readonly syncSt = signal<SyncStatus | null>(null);
+  async browseSync() {
+    const d = await this.backend.chooseDirectory('Choose the Sync Folder').catch(() => '');
+    if (d && this.s) this.s.syncFolder = d;
+    this.cdr.markForCheck();
+  }
+  async syncNow() { this.syncSt.set(await this.backend.syncNow()); }
+  ago(iso: string) { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.round(m / 60) + ' h ago'; }
 
   async browse(field: 'sessionsDir' | 'logDir' | 'downloadDir' | 'recordDir') {
     const d = await this.backend.chooseDirectory('Choose Folder').catch(() => '');

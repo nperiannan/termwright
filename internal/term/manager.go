@@ -355,7 +355,11 @@ func (m *Manager) run(ctx context.Context, t *Tab, gen int) {
 	var err error
 	switch s.Protocol {
 	case session.ProtoSSH2, "SSH":
-		conn, err = m.dialSSH(ctx, t, s, cols, rows)
+		if s.Mosh {
+			conn, err = startMosh(s, cols, rows)
+		} else {
+			conn, err = m.dialSSH(ctx, t, s, cols, rows)
+		}
 	case session.ProtoTelnet:
 		conn, err = dialTelnet(ctx, s, cols, rows, dial)
 	case session.ProtoRaw:
