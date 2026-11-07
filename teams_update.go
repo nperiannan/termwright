@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,72 +86,85 @@ func (a *App) teamUpdate(ctx context.Context, id string, t config.TeamConn, r Te
 		emit(step, "fail", msg)
 		return errors.New(msg)
 	}
-	out, closeSSH, err := a.teamLogin(ctx, id, sess, host, emit, failf)
+	out, must, closeSSH, err := a.teamLogin(ctx, id, sess, host, emit, failf)
 	if err != nil {
 		return err
 	}
 	defer closeSSH()
-	// steps that must run even when the update is cancelled (putting the old
-	// container back)
-	run, closeSSH2, err := a.terms.ExecSession(context.Background(), "teamupdate-"+id, sess)
-	if err != nil {
-		return failf("login", "Could not log in to %s: %v", sess.Name, err)
-	}
-	defer closeSSH2()
-	must := func(cmd string) (string, int, error) {
-		c, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		var b strings.Builder
-		code, err := run(c, cmd, nil, func(l string) { b.WriteString(l); b.WriteString("\n") })
-		return strings.TrimSpace(b.String()), code, err
-	}
 	dk, err := teamDocker(out, emit, failf)
 	if err != nil {
 		return err
 	}
 
-	// the team's container: the one it was set up as, the team's name, or the
-	// one on the team's port
+	// the team's container: the one whose certificate is the team's (another
+	// team's server on the same host is never touched)
 	emit("find", "run", "Looking for the team server's container…")
 	_, port, _ := net.SplitHostPort(t.Address)
-	list, _, _ := out(dk+` ps -a --format '{{.Names}}|{{.Image}}|{{.Ports}}'`, nil, 30*time.Second)
-	name, byPort, all := "", "", []string{}
+	list, _, _ := out(dk+` ps -a --format '{{.Names}}|{{.Image}}' 2>/dev/null`, nil, 30*time.Second)
+	name, others := "", 0
 	for _, l := range strings.Split(list, "\n") {
-		f := strings.SplitN(l, "|", 3)
-		if len(f) < 3 || !(strings.Contains(f[1], "termwright-team") || strings.HasPrefix(f[0], "termwright-team-")) {
+		f := strings.SplitN(strings.TrimSpace(l), "|", 2)
+		if len(f) < 2 || !(strings.Contains(f[1], "termwright-team") || strings.HasPrefix(f[0], "termwright-team-")) || strings.HasSuffix(f[0], "-previous") {
 			continue
 		}
-		all = append(all, f[0])
-		switch {
-		case t.Container != "" && f[0] == t.Container, f[0] == "termwright-team-"+teamSlug(t.Name):
-			if name == "" || f[0] == t.Container {
-				name = f[0]
-			}
-		case strings.Contains(f[2], ":"+port+"->"):
-			byPort = f[0]
+		pem, _, _ := out(dk+" cp "+f[0]+":/data/cert.pem - 2>/dev/null", nil, 30*time.Second)
+		if fp := pemFingerprint(pem); fp != "" && fp == team.NormFingerprint(t.Fingerprint) {
+			name = f[0]
+			break
 		}
+		others++
 	}
 	if name == "" {
-		name = byPort
+		// a team server installed without Docker
+		if svc, _, _ := out("systemctl is-active termwright-team 2>/dev/null", nil, 20*time.Second); svc == "active" {
+			return failf("find", "On %s the team server runs as the systemd service termwright-team, not in Docker. Update it by hand: download termwright-team-linux-<arch>.tar.gz of the release, then sudo cp termwright-team /usr/local/bin/ && sudo systemctl restart termwright-team.", sess.Name)
+		}
+		also := ""
+		if others > 0 {
+			also = fmt.Sprintf(" It runs %d other team server%s - not this team's (their certificates differ), so they are left alone.", others, map[bool]string{true: "", false: "s"}[others == 1])
+		}
+		return failf("find", "%s has no container of the team server %s.%s Pick the SSH session of the host at %s (port %s).", sess.Name, t.Name, also, strings.TrimSuffix(t.Address, ":"+port), port)
 	}
-	if name == "" && len(all) == 1 {
-		name = all[0]
-	}
-	if name == "" {
-		return failf("find", "%s has no container of the team server %s (looked for termwright-team-%s, or one on port %s). Is it the host the team server runs on (%s)?",
-			sess.Name, t.Name, teamSlug(t.Name), port, t.Address)
-	}
-	old, _, _ := out(dk+" exec "+name+" /termwright-team -version 2>/dev/null", nil, 30*time.Second)
+	old := teamVersionNow(ctx, t)
 	img, _, _ := out(dk+" inspect -f '{{.Config.Image}}' "+name, nil, 30*time.Second)
-	emit("find", "ok", "Found "+name+" ("+firstLine(img)+", version "+orDash(firstLine(old))+")")
+	emit("find", "ok", "Found "+name+" ("+firstLine(img)+", version "+orDash(old)+") - its certificate is the team's")
 
-	// how it runs: network, ports, data and settings
+	// how it runs: network, ports, data, settings, limits, labels
 	spec, code, err := out(dk+" inspect -f "+shQuote(inspectFormat)+" "+name, nil, 30*time.Second)
 	if err != nil || code != 0 {
 		return failf("find", "Could not read how %s runs: %s", name, firstLine(spec+errText(err)))
 	}
-	args, data := runArgs(spec)
-	if !data {
+	c := parseContainer(spec)
+	tag := teamImageTag()
+
+	// a server from Docker Compose is updated by Compose
+	if c.compose.project != "" {
+		cc := c.compose
+		files := ""
+		for _, f := range strings.Split(cc.files, ",") {
+			if f = strings.TrimSpace(f); f != "" {
+				files += " -f " + shQuote(f)
+			}
+		}
+		cmp := dk + " compose -p " + shQuote(cc.project) + files
+		emit("image", "run", "It runs from Docker Compose ("+cc.dir+") - pulling and starting it with Compose…")
+		script := "cd " + shQuote(cc.dir) + " && " + cmp + " pull " + shQuote(cc.service) + " 2>&1 && " + cmp + " up -d " + shQuote(cc.service) + " 2>&1"
+		if msg, code, err := out(script, nil, 8*time.Minute); err != nil || code != 0 {
+			return failf("image", "Docker Compose could not update it: %s", lastLine(msg+errText(err)))
+		}
+		emit("image", "ok", "Started with Docker Compose")
+		info, err := teamWaitFor(ctx, t)
+		if err != nil {
+			return failf("reach", "The team server did not answer at %s after the update (%v). On the host: cd %s && docker compose logs %s", t.Address, err, cc.dir, cc.service)
+		}
+		if old != "" && compareVersions(info.Version, old) <= 0 {
+			return failf("reach", "The team server still runs %s: the Compose file names an image without a newer version. Set its image to ghcr.io/nperiannan/termwright-team:%s in %s, then update again.", info.Version, tag, cc.dir)
+		}
+		emit("reach", "ok", "The team server runs "+info.Version+" - the team, its members, inventory, history and invite are kept")
+		a.teamRemember(t.ID, r.SessionPath, name)
+		return nil
+	}
+	if !c.data {
 		return failf("find", "%s keeps its data inside the container (no volume at /data): a new container would lose the team. Back it up and set it up with a volume (see the team server guide).", name)
 	}
 
@@ -159,77 +176,132 @@ func (a *App) teamUpdate(ctx context.Context, id string, t config.TeamConn, r Te
 		return ctx.Err()
 	}
 
-	// swap: the old container is renamed and stopped, the new one started
+	// swap: the old container is renamed and stopped, the new one started; from
+	// here on every step runs even when cancelled, so the team is never left without one
 	emit("start", "run", "Starting "+name+" with the new image…")
 	prev := name + "-previous"
-	_, _, _ = must(dk + " rm -f " + prev + " 2>&1") // from an earlier update
-	if msg, code, err := must(dk + " rename " + name + " " + prev + " 2>&1"); err != nil || code != 0 {
+	_, _, _ = must(dk+" rm -f "+prev+" 2>&1", nil, time.Minute) // from an earlier update
+	if msg, code, err := must(dk+" rename "+name+" "+prev+" 2>&1", nil, time.Minute); err != nil || code != 0 {
 		return failf("start", "Could not rename %s: %s", name, firstLine(msg+errText(err)))
 	}
-	_, _, _ = must(dk + " stop -t 10 " + prev + " 2>&1")
+	_, _, _ = must(dk+" stop -t 10 "+prev+" 2>&1", nil, time.Minute)
 	back := func() {
-		_, _, _ = must(dk + " rm -f " + name + " 2>&1")
-		_, _, _ = must(dk + " rename " + prev + " " + name + " 2>&1")
-		_, _, _ = must(dk + " start " + name + " 2>&1")
+		_, _, _ = must(dk+" rm -f "+name+" 2>&1", nil, time.Minute)
+		_, _, _ = must(dk+" rename "+prev+" "+name+" 2>&1", nil, time.Minute)
+		_, _, _ = must(dk+" start "+name+" 2>&1", nil, time.Minute)
 	}
-	cmd := fmt.Sprintf("%s run -d --name %s --restart unless-stopped %s %s 2>&1", dk, name, strings.Join(args, " "), shQuote(ref))
-	if msg, code, err := must(cmd); err != nil || code != 0 {
+	cmd := fmt.Sprintf("%s run -d --name %s %s %s 2>&1", dk, name, strings.Join(c.args, " "), shQuote(ref))
+	if msg, code, err := must(cmd, nil, 2*time.Minute); err != nil || code != 0 {
 		back()
 		return failf("start", "The new container did not start (%s); the old one runs again.", firstLine(msg+errText(err)))
 	}
 	emit("start", "ok", "Started "+name+" ("+ref+")")
 
-	// the same server answers again: same certificate, the new version
+	// the same server answers again: the team's certificate (the client checks
+	// it), and the new version
 	emit("reach", "run", "Waiting for the team server to answer at "+t.Address+"…")
-	c := team.NewClient(t.Address, t.Fingerprint, "")
-	var info team.Info
-	for i := 0; i < 45; i++ {
-		ic, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-		info, err = c.Info(ic)
-		cancel()
-		if err == nil {
-			break
-		}
-		time.Sleep(2 * time.Second)
+	info, err := teamWaitFor(context.Background(), t)
+	if err == nil && tag != "nightly" && info.Version != tag {
+		err = fmt.Errorf("it answers with version %s, not %s", info.Version, tag)
 	}
 	if err != nil {
-		logs, _, _ := must(dk + " logs --tail 3 " + name + " 2>&1")
+		logs, _, _ := must(dk+" logs --tail 3 "+name+" 2>&1", nil, time.Minute)
 		back()
-		return failf("reach", "The new container did not answer at %s (%v; %s) - the old one runs again.", t.Address, err, firstLine(logs))
+		return failf("reach", "The new container did not answer as expected at %s (%v; %s) - the old one runs again.", t.Address, err, firstLine(logs))
 	}
-	_, _, _ = must(dk + " rm " + prev + " 2>&1")
+	_, _, _ = must(dk+" rm "+prev+" 2>&1", nil, time.Minute)
 	emit("reach", "ok", "The team server runs "+info.Version+" - the team, its members, inventory, history and invite are kept")
-
-	// remember the host and container for the next update
-	cur := a.cfg.Get().Teams
-	for i := range cur {
-		if cur[i].ID == t.ID {
-			cur[i].Host, cur[i].Container = r.SessionPath, name
-		}
-	}
-	_ = a.cfg.SetTeams(cur)
+	a.teamRemember(t.ID, r.SessionPath, name)
 	return nil
 }
 
-// inspectFormat reads how a container runs, for runArgs.
-const inspectFormat = `{{.HostConfig.NetworkMode}}{{"\n"}}{{range $p, $b := .HostConfig.PortBindings}}{{range $b}}P|{{.HostIp}}|{{.HostPort}}|{{$p}}{{"\n"}}{{end}}{{end}}` +
-	`{{range .Mounts}}M|{{.Type}}|{{.Name}}|{{.Source}}|{{.Destination}}{{"\n"}}{{end}}{{range .Config.Env}}E|{{.}}{{"\n"}}{{end}}`
+// teamVersionNow asks the team server its version ("" when it does not answer).
+func teamVersionNow(ctx context.Context, t config.TeamConn) string {
+	ic, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+	info, err := team.NewClient(t.Address, t.Fingerprint, "").Info(ic)
+	if err != nil {
+		return ""
+	}
+	return info.Version
+}
 
-// runArgs turns a container's settings (inspectFormat) into
-// docker run arguments: its network, published ports, volumes and TW_ settings.
-// data tells whether /data is a volume or a host folder.
-func runArgs(spec string) (args []string, data bool) {
+// teamWaitFor waits up to 90 seconds for the team server to answer.
+func teamWaitFor(ctx context.Context, t config.TeamConn) (team.Info, error) {
+	c := team.NewClient(t.Address, t.Fingerprint, "")
+	end := time.Now().Add(90 * time.Second)
+	for {
+		ic, cancel := context.WithTimeout(ctx, 4*time.Second)
+		info, err := c.Info(ic)
+		cancel()
+		if err == nil || time.Now().After(end) || ctx.Err() != nil {
+			return info, err
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+// teamRemember keeps the host and container of a team for the next update.
+func (a *App) teamRemember(id, sessionPath, container string) {
+	cur := a.cfg.Get().Teams
+	for i := range cur {
+		if cur[i].ID == id {
+			cur[i].Host, cur[i].Container = sessionPath, container
+		}
+	}
+	_ = a.cfg.SetTeams(cur)
+}
+
+// pemFingerprint is the SHA-256 fingerprint of the first certificate in text
+// (as the server and invites write it), or "".
+func pemFingerprint(text string) string {
+	i := strings.Index(text, "-----BEGIN CERTIFICATE-----")
+	if i < 0 {
+		return ""
+	}
+	b, _ := pem.Decode([]byte(text[i:]))
+	if b == nil {
+		return ""
+	}
+	sum := sha256.Sum256(b.Bytes)
+	return hex.EncodeToString(sum[:])
+}
+
+func lastLine(s string) string {
+	l := strings.Split(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(l[len(l)-1])
+}
+
+// inspectFormat reads how a container runs, for parseContainer.
+const inspectFormat = `{{.HostConfig.NetworkMode}}{{"\n"}}{{range $p, $b := .HostConfig.PortBindings}}{{range $b}}P|{{.HostIp}}|{{.HostPort}}|{{$p}}{{"\n"}}{{end}}{{end}}` +
+	`{{range .Mounts}}M|{{.Type}}|{{.Name}}|{{.Source}}|{{.Destination}}{{"\n"}}{{end}}{{range .Config.Env}}E|{{.}}{{"\n"}}{{end}}` +
+	`R|{{.HostConfig.RestartPolicy.Name}}|{{.HostConfig.RestartPolicy.MaximumRetryCount}}{{"\n"}}L|{{.HostConfig.Memory}}|{{.HostConfig.NanoCpus}}{{"\n"}}` +
+	`{{range $k, $v := .Config.Labels}}B|{{$k}}={{$v}}{{"\n"}}{{end}}`
+
+// container is how a team server's container runs: docker run arguments for
+// a new one, whether /data is kept outside it, and its Compose project.
+type container struct {
+	args    []string
+	data    bool
+	compose struct{ project, dir, files, service string }
+}
+
+// parseContainer reads inspectFormat's output: the network, published ports,
+// volumes, environment (but PATH), restart policy, memory and CPU limits and
+// labels.
+func parseContainer(spec string) (c container) {
 	lines := strings.Split(spec, "\n")
 	switch mode := strings.TrimSpace(lines[0]); mode {
 	case "", "default", "bridge":
 	case "host":
-		args = append(args, "--network host")
+		c.args = append(c.args, "--network host")
 	default:
-		args = append(args, "--network "+shQuote(mode))
+		c.args = append(c.args, "--network "+shQuote(mode))
 	}
+	restart := "--restart unless-stopped"
 	seen := map[string]bool{}
 	for _, l := range lines[1:] {
-		f := strings.Split(strings.TrimSpace(l), "|")
+		f := strings.Split(strings.TrimRight(l, "\r"), "|")
 		switch {
 		case f[0] == "P" && len(f) == 4:
 			ip, hp, cp := f[1], f[2], strings.TrimSuffix(f[3], "/tcp")
@@ -239,7 +311,7 @@ func runArgs(spec string) (args []string, data bool) {
 			}
 			if !seen[p] {
 				seen[p] = true
-				args = append(args, "-p "+shQuote(p))
+				c.args = append(c.args, "-p "+shQuote(p))
 			}
 		case f[0] == "M" && len(f) == 5:
 			src := f[3]
@@ -249,18 +321,55 @@ func runArgs(spec string) (args []string, data bool) {
 			if src == "" {
 				continue
 			}
-			args = append(args, "-v "+shQuote(src+":"+f[4]))
+			c.args = append(c.args, "-v "+shQuote(src+":"+f[4]))
 			if f[4] == "/data" {
-				data = true
+				c.data = true
 			}
 		case f[0] == "E" && len(f) >= 2:
-			e := strings.Join(f[1:], "|")
-			if strings.HasPrefix(e, "TW_") {
-				args = append(args, "-e "+shQuote(e))
+			if e := strings.Join(f[1:], "|"); e != "" && !strings.HasPrefix(e, "PATH=") {
+				c.args = append(c.args, "-e "+shQuote(e))
+			}
+		case f[0] == "R" && len(f) == 3:
+			switch f[1] {
+			case "always", "unless-stopped":
+				restart = "--restart " + f[1]
+			case "on-failure":
+				restart = "--restart on-failure"
+				if f[2] != "" && f[2] != "0" {
+					restart += ":" + f[2]
+				}
+			case "no":
+				restart = ""
+			}
+		case f[0] == "L" && len(f) == 3:
+			if f[1] != "" && f[1] != "0" {
+				c.args = append(c.args, "--memory "+f[1])
+			}
+			if n, err := strconv.ParseInt(f[2], 10, 64); err == nil && n > 0 {
+				c.args = append(c.args, fmt.Sprintf("--cpus %g", float64(n)/1e9))
+			}
+		case f[0] == "B" && len(f) >= 2:
+			kv := strings.Join(f[1:], "|")
+			k, v, _ := strings.Cut(kv, "=")
+			switch k {
+			case "com.docker.compose.project":
+				c.compose.project = v
+			case "com.docker.compose.project.working_dir":
+				c.compose.dir = v
+			case "com.docker.compose.project.config_files":
+				c.compose.files = v
+			case "com.docker.compose.service":
+				c.compose.service = v
+			}
+			if !strings.HasPrefix(k, "com.docker.compose.") && !strings.HasPrefix(k, "org.opencontainers.") {
+				c.args = append(c.args, "--label "+shQuote(kv))
 			}
 		}
 	}
-	return args, data
+	if restart != "" {
+		c.args = append(c.args, restart)
+	}
+	return c
 }
 
 func orDash(s string) string {

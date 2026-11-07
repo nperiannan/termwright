@@ -70,8 +70,10 @@ type Note struct {
 
 // Status is who uses and who reserved which devices, plus this member's notices.
 type Status struct {
-	Rev      int64          `json:"rev"`
-	Me       string         `json:"me"`
+	Rev int64  `json:"rev"`
+	Me  string `json:"me"`
+	// Also: the other members with my name - me on another computer
+	Also     []string       `json:"also"`
 	InUse    []InUse        `json:"inUse"`
 	Reserved []*Reservation `json:"reserved"`
 	Notes    []Note         `json:"notes"`
@@ -170,8 +172,11 @@ func (s *Server) setPresence(w http.ResponseWriter, r *http.Request, me *memberR
 	}
 	var list []DeviceRef
 	for _, d := range b.Devices {
+		// only the team's network devices count (older Termwrights send others too)
 		if tidyRef(&d) == "" {
-			list = append(list, d)
+			if inv := s.find2(d.dev()); inv != nil && Tracked(inv.DeviceType) {
+				list = append(list, d)
+			}
 		}
 	}
 	old := s.presence[me.ID]
@@ -195,6 +200,12 @@ func (s *Server) statusFor(me *memberRec) Status {
 	}
 	if st.Notes == nil {
 		st.Notes = []Note{}
+	}
+	st.Also = []string{}
+	for _, m := range s.st.Members {
+		if m.ID != me.ID && sameName(m.Name, me.Name) {
+			st.Also = append(st.Also, m.ID)
+		}
 	}
 	for id, p := range s.presence {
 		_, m := s.find(id)
@@ -323,7 +334,7 @@ func (s *Server) reserve(w http.ResponseWriter, r *http.Request, me *memberRec) 
 	}
 	s.prune()
 	cur := s.reservationOf(b.Device)
-	if cur != nil && cur.By != me.ID {
+	if cur != nil && !s.same(cur.By, me) {
 		fail(w, 409, "reserved by "+cur.Name+" until "+cur.Until)
 		return
 	}
@@ -332,7 +343,7 @@ func (s *Server) reserve(w http.ResponseWriter, r *http.Request, me *memberRec) 
 		s.st.Reservations = append(s.st.Reservations, cur)
 	}
 	cur.Device, cur.Until, cur.Note = b.Device, until.UTC().Format(time.RFC3339), clean(b.Note, 200)
-	s.log(me.Name, "reserved %s until %s", nameOf(b.Device), until.UTC().Format("Mon 2 Jan 15:04 UTC"))
+	s.log(me.Name, "reserved %s until %s", nameOf(b.Device), timeMark(until))
 	if err := s.save(); err != nil {
 		fail(w, 500, err.Error())
 		return
@@ -340,6 +351,26 @@ func (s *Server) reserve(w http.ResponseWriter, r *http.Request, me *memberRec) 
 	s.wake(true)
 	writeJSON(w, 200, cur)
 }
+
+// same: the member id is me, or me on another computer (a member with my name).
+func (s *Server) same(id string, me *memberRec) bool {
+	if id == me.ID {
+		return true
+	}
+	_, m := s.find(id)
+	return m != nil && sameName(m.Name, me.Name)
+}
+
+// sameName: the names people chose are the same person's ("Natarajan
+// Periannan" on the laptop and on the lab PC).
+func sameName(a, b string) bool {
+	a, b = strings.Join(strings.Fields(a), " "), strings.Join(strings.Fields(b), " ")
+	return a != "" && strings.EqualFold(a, b)
+}
+
+// timeMark puts a time in an activity text; the admin page shows it in the
+// browser's time zone ("{t:2026-11-08T12:30:00Z}").
+func timeMark(t time.Time) string { return "{t:" + t.UTC().Format(time.RFC3339) + "}" }
 
 func nameOf(d DeviceRef) string {
 	if d.Name != "" && d.Name != d.Host {
@@ -356,14 +387,14 @@ func (s *Server) release(w http.ResponseWriter, r *http.Request, me *memberRec) 
 		if x.ID != b.ID {
 			continue
 		}
-		if x.By != me.ID && !manager(me) {
+		if !s.same(x.By, me) && !manager(me) {
 			fail(w, 403, "only "+x.Name+", the owner or a co-owner can release this reservation")
 			return
 		}
 		s.st.Reservations = append(s.st.Reservations[:i], s.st.Reservations[i+1:]...)
 		s.resEnded(x, s.now())
 		s.log(me.Name, "released %s (reserved by %s)", nameOf(x.Device), x.Name)
-		if x.By != me.ID {
+		if !s.same(x.By, me) {
 			s.note(x.By, "%s released your reservation of %s.", me.Name, nameOf(x.Device))
 		}
 		if err := s.save(); err != nil {
@@ -387,7 +418,7 @@ func (s *Server) connected(w http.ResponseWriter, r *http.Request, me *memberRec
 		fail(w, 400, "bad request")
 		return
 	}
-	if x := s.reservationOf(b.Device); x != nil && x.By != me.ID {
+	if x := s.reservationOf(b.Device); x != nil && !s.same(x.By, me) {
 		s.note(x.By, "%s connected to %s, which you reserved.", me.Name, nameOf(x.Device))
 		dev := ""
 		if inv := s.find2(x.Device.dev()); inv != nil {

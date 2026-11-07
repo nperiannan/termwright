@@ -2,6 +2,7 @@ package team
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -15,7 +16,7 @@ func TestPresenceReserveAndNotices(t *testing.T) {
 	tm, _ := oc.Team(ctx)
 	ra, _ := anon.Join(ctx, JoinRequest{Invite: tm.Invite, Name: "Ravi"})
 	rc := NewClient(addr(ts), s.Fingerprint(), ra.Token)
-	_, _ = oc.Push(ctx, []Device{{Name: "core-sw1", Host: "10.127.35.13", Protocol: "SSH2", MAC: "0c:9b:78:ea:9c:00"}})
+	_, _ = oc.Push(ctx, []Device{{Name: "core-sw1", Host: "10.127.35.13", Protocol: "SSH2", DeviceType: "EXOS", MAC: "0c:9b:78:ea:9c:00"}})
 
 	st, _ := rc.Status(ctx, 0, 0)
 	// Ravi waits for a change; Natarajan opens the device (under another name, found by MAC)
@@ -73,12 +74,12 @@ func TestUsageHistory(t *testing.T) {
 	anon := NewClient(addr(ts), s.Fingerprint(), "")
 	own, _ := anon.Join(ctx, JoinRequest{OwnerCode: code, Name: "Natarajan"})
 	oc := NewClient(addr(ts), s.Fingerprint(), own.Token)
-	_, _ = oc.Push(ctx, []Device{{Name: "core-sw1", Host: "10.0.0.1", Protocol: "SSH2"}})
+	_, _ = oc.Push(ctx, []Device{{Name: "core-sw1", Host: "10.0.0.1", Protocol: "SSH2", DeviceType: "VOSS"}, {Name: "build-server", Host: "10.0.0.9", Protocol: "SSH2", DeviceType: "Linux"}})
 	base := time.Now()
 	s.mu.Lock()
 	s.now = func() time.Time { return base }
 	s.mu.Unlock()
-	_ = oc.Presence(ctx, []DeviceRef{{Host: "10.0.0.1", Protocol: "SSH2"}})
+	_ = oc.Presence(ctx, []DeviceRef{{Host: "10.0.0.1", Protocol: "SSH2"}, {Host: "10.0.0.9", Protocol: "SSH2"}}) // the Linux server is not counted
 	_, _ = oc.Reserve(ctx, DeviceRef{Host: "10.0.0.1"}, base.Add(2*time.Hour), "test")
 	s.mu.Lock()
 	s.now = func() time.Time { return base.Add(time.Hour) }
@@ -98,5 +99,51 @@ func TestUsageHistory(t *testing.T) {
 	s2, _, _ := Open(s.Dir, "", "test", nil)
 	if len(s2.usage.Use) != 1 {
 		t.Fatalf("after restart %+v", s2.usage)
+	}
+}
+
+// The same person on a second computer (a member with the same name) is not
+// warned about, notified of or counted against their own reservation.
+func TestSamePersonOnTwoComputers(t *testing.T) {
+	s, code, ts := start(t)
+	ctx := context.Background()
+	anon := NewClient(addr(ts), s.Fingerprint(), "")
+	own, _ := anon.Join(ctx, JoinRequest{OwnerCode: code, Name: "Natarajan Periannan"})
+	oc := NewClient(addr(ts), s.Fingerprint(), own.Token)
+	tm, _ := oc.Team(ctx)
+	vnc, _ := anon.Join(ctx, JoinRequest{Invite: tm.Invite, Name: "natarajan  periannan"})
+	vc := NewClient(addr(ts), s.Fingerprint(), vnc.Token)
+	_, _ = oc.Push(ctx, []Device{{Name: "core-sw1", Host: "10.127.35.13", Protocol: "SSH2"}})
+	res, err := oc.Reserve(ctx, DeviceRef{Host: "10.127.35.13", Protocol: "SSH2"}, time.Now().Add(2*time.Hour), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = vc.Connected(ctx, DeviceRef{Host: "10.127.35.13", Protocol: "SSH2"})
+	x, _ := oc.Status(ctx, 0, 0)
+	if len(x.Notes) != 0 || len(s.usage.Con) != 0 {
+		t.Fatalf("a notice or conflict for my own reservation: %+v %+v", x.Notes, s.usage.Con)
+	}
+	if len(x.Also) != 1 || x.Also[0] != vnc.MemberID {
+		t.Fatalf("also %+v", x.Also)
+	}
+	if _, err := vc.Reserve(ctx, DeviceRef{Host: "10.127.35.13", Protocol: "SSH2"}, time.Now().Add(3*time.Hour), "longer"); err != nil {
+		t.Fatalf("my other computer could not change my reservation: %v", err)
+	}
+	if err := vc.Release(ctx, res.ID); err != nil {
+		t.Fatalf("my other computer could not release my reservation: %v", err)
+	}
+	for _, a := range s.st.Activity {
+		if strings.Contains(a.What, "UTC") {
+			t.Fatalf("activity with a UTC time: %q", a.What)
+		}
+	}
+}
+
+func TestTracked(t *testing.T) {
+	for typ, want := range map[string]bool{"": false, "EXOS": true, "VOSS": true, "FortiGate": true, "Linux": false, "Ubuntu server": false, "Windows": false,
+		"IoT": false, "Printer": false, "Smart TV": false, "IP camera": false, "PDU": true, "Cisco IOS": true, "Synology NAS": false} {
+		if Tracked(typ) != want {
+			t.Errorf("Tracked(%q) = %v", typ, !want)
+		}
 	}
 }

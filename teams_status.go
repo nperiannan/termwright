@@ -63,7 +63,9 @@ func inInventory(id string, list []team.DeviceRef) []team.DeviceRef {
 	for _, d := range list {
 		for _, x := range inv.Devices {
 			if team.SameDevice(d.Dev(), x) {
-				out = append(out, d)
+				if team.Tracked(x.DeviceType) { // network devices only, by the team's device type
+					out = append(out, d)
+				}
 				break
 			}
 		}

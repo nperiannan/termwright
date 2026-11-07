@@ -426,7 +426,7 @@ func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host
 		return errors.New(msg)
 	}
 
-	out, closeSSH, err := a.teamLogin(ctx, id, sess, host, emit, failf)
+	out, _, closeSSH, err := a.teamLogin(ctx, id, sess, host, emit, failf)
 	if err != nil {
 		return config.TeamConn{}, "", err
 	}
@@ -557,24 +557,28 @@ func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host
 // remoteRun runs a command on the host: its output, exit code and error.
 type remoteRun func(cmd string, stdin []byte, timeout time.Duration) (string, int, error)
 
-// teamLogin logs in to the host of a team server over SSH.
+// teamLogin logs in to the host of a team server over SSH: out runs a command
+// (stopped when ctx ends), must runs one even after ctx ended (to put things back).
 func (a *App) teamLogin(ctx context.Context, id string, sess session.Session, host string, emit func(step, state, text string),
-	failf func(step, f string, v ...any) error) (remoteRun, func(), error) {
+	failf func(step, f string, v ...any) error) (out, must remoteRun, closeSSH func(), err error) {
 	emit("login", "run", "Logging in to "+sess.Name+"…")
 	run, closeSSH, err := a.terms.ExecSession(ctx, "teamsetup-"+id, sess)
 	if err != nil {
-		return nil, nil, failf("login", "Could not log in to %s: %v", sess.Name, err)
+		return nil, nil, nil, failf("login", "Could not log in to %s: %v", sess.Name, err)
 	}
-	out := func(cmd string, stdin []byte, timeout time.Duration) (string, int, error) {
-		c, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-		var b strings.Builder
-		code, err := run(c, cmd, stdin, func(l string) { b.WriteString(l); b.WriteString("\n") })
-		return strings.TrimSpace(b.String()), code, err
+	with := func(parent context.Context) remoteRun {
+		return func(cmd string, stdin []byte, timeout time.Duration) (string, int, error) {
+			c, cancel := context.WithTimeout(parent, timeout)
+			defer cancel()
+			var b strings.Builder
+			code, err := run(c, cmd, stdin, func(l string) { b.WriteString(l); b.WriteString("\n") })
+			return strings.TrimSpace(b.String()), code, err
+		}
 	}
+	out, must = with(ctx), with(context.Background())
 	who, _, _ := out("id -un", nil, 20*time.Second)
 	emit("login", "ok", "Logged in as "+who+"@"+host)
-	return out, closeSSH, nil
+	return out, must, closeSSH, nil
 }
 
 // teamDocker checks Docker on the host and whether this user may use it: the

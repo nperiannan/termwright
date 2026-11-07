@@ -145,7 +145,7 @@ const ico = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 
 // what the person typed and picked survives every refresh
-const ui = { page: store.get('tw.page', 'overview'), days: Number(store.get('tw.days', '30')), theme: store.get('tw.theme', 'system'), filter: '', sel: new Set(), psel: new Set(), ssel: new Set(),
+const ui = { page: store.get('tw.page', 'overview'), days: Number(store.get('tw.days', '30')), basis: store.get('tw.basis', 'all') === 'work' ? 'work' : 'all', theme: store.get('tw.theme', 'system'), filter: '', sel: new Set(), psel: new Set(), ssel: new Set(),
   closed: new Set(), targets: '', community: '', scanFolder: '', approveFolder: '', onlyNet: true, hideKnown: true, dts: {}, rtab: 'devices', rq: '', invFolder: '', invType: '', invStatus: 'all', rtype: '', unusedOnly: false,
   sort: { devices: ['hours', -1], members: ['hours', -1], res: ['s', -1], sessions: ['s', -1] } };
 let st = null, scan = null, usage = null, lastJSON = '', msgTimer = 0;
@@ -196,8 +196,9 @@ function render() {
     <div class="team"><b>${esc(t.name)}</b><span>${st.inventory.devices.length} devices · ${t.members.length} members · ${online} online</span></div>
     <nav class="nav">${nav.map(([k, i, l, n]) => i ? `<a class="${k === ui.page ? 'on' : ''}" data-go="${k}">${ico(i)}${l}${n ? `<span class="badge">${n}</span>` : ''}</a>` : `<div class="grp">${k}</div>`).join('')}</nav>
     <div class="me"><b>${esc(me.name)}</b>${me.role === 'owner' ? 'Owner' : 'Co-owner'} · <a id="out">Sign out</a>
-      <div class="ver" title="The version of this team server. Owners update it from Termwright: Options → Teams…">Team server ${esc(t.version || 'dev')}</div></div></aside>
+      <div class="ver" title="The version of this team server. Owners update it from Termwright: Options → Teams…">Team server ${esc(t.version || 'unknown')}</div></div></aside>
     <div><header class="top"><div><div class="crumb">${esc(t.name)}</div><h1>${TITLES[ui.page]}</h1></div><span class="sp"></span>
+      ${period ? `<div class="seg" title="Utilization counts all hours of the day, or working hours only: Monday to Friday, 9:00-18:00 in your time zone">${[['all', 'All hours'], ['work', 'Working hours']].map(([k, l]) => `<button data-basis="${k}" class="${ui.basis === k ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}
       ${period ? `<div class="seg" title="Period of the figures">${[7, 30, 90, 365].map(d => `<button data-days="${d}" class="${ui.days === d ? 'on' : ''}">${d === 365 ? '1 year' : d + ' days'}</button>`).join('')}</div>` : ''}
       <div class="seg" title="Theme">${[['system', 'mon', 'System'], ['light', 'sun', 'Light'], ['dark', 'moon', 'Dark']].map(([k, i, l]) => `<button data-theme="${k}" class="${ui.theme === k ? 'on' : ''}" title="${l}">${ico(i)}</button>`).join('')}</div></header>
     <main>${PAGES[ui.page]()}</main></div></div>`;
@@ -224,7 +225,9 @@ function figures() {
   const per = new Map(devs.map(d => [d.id, { d, open: 0, sessions: 0, users: new Set(), last: 0, res: 0, resN: 0, con: 0, peak: 0, ev: [] }]));
   const ghost = id => { if (!per.has(id)) per.set(id, null); return per.get(id); };
   const mem = new Map(), tot = { open: 0, res: 0, resN: 0, sessions: 0, con: 0, pOpen: 0, pRes: 0, pResN: 0, pSessions: 0, pCon: 0 };
-  const memOf = (id, name) => { if (!mem.has(id)) mem.set(id, { id, name, open: 0, sessions: 0, devs: new Set(), res: 0, resN: 0, last: 0, con: 0 }); return mem.get(id); };
+  // a person is known by the name they chose: the same name on two computers is one person
+  const memOf = (id, name) => { const k = person(name) || id; if (!mem.has(k)) mem.set(k, { id, name, open: 0, sessions: 0, devs: new Set(), res: 0, resN: 0, last: 0, con: 0 }); return mem.get(k); };
+  const work = ui.basis === 'work', basisOf = (s, e) => work ? workOverlap(s, e) : e - s;
   const days = Math.min(ui.days, 366), daily = Array.from({ length: days }, () => ({ open: 0, res: 0 })), heat = Array.from({ length: 7 }, () => new Array(24).fill(0));
   const dayStart = d => { const x = new Date(d * 1000); x.setHours(0, 0, 0, 0); return x.getTime() / 1000; };
   const first = dayStart(now) - (days - 1) * DAY;
@@ -234,7 +237,7 @@ function figures() {
     if (prev) { tot.pOpen += prev; if (u.s < a) tot.pSessions++; }
     if (!cur) continue;
     tot.open += cur; tot.sessions++;
-    const p = ghost(u.d); if (p) { p.open += cur; p.sessions++; p.users.add(u.n); p.last = Math.max(p.last, u.e); p.ev.push([Math.max(u.s, a), 1], [u.e, -1]); }
+    const p = ghost(u.d); if (p) { p.open += cur; p.uopen = (p.uopen || 0) + basisOf(Math.max(u.s, a), Math.min(u.e, now)); p.sessions++; p.users.add(u.n); p.last = Math.max(p.last, u.e); const k = person(u.n) || u.m; p.ev.push([Math.max(u.s, a), 1, k], [u.e, -1, k]); }
     const m = memOf(u.m, u.n); m.open += cur; m.sessions++; m.devs.add(u.d); m.last = Math.max(m.last, u.e);
     addDaily(u.s, u.e, 'open');
     for (let t = Math.max(u.s, a); t < u.e;) { const x = new Date(t * 1000), hs = Math.floor(t / H) * H, he = Math.min(u.e, hs + H); heat[(x.getDay() + 6) % 7][x.getHours()] += he - t; t = he; }
@@ -248,17 +251,42 @@ function figures() {
     const m = memOf(r.m, r.n); m.res += cur; m.resN++;
     addDaily(r.s, r.e, 'res');
   }
-  for (const c of usage.con) { if (c.t >= a) { tot.con++; const p = ghost(c.d); if (p) p.con++; memOf(c.m, c.n).con++; } else if (c.t >= pa) tot.pCon++; }
-  for (const p of per.values()) { if (!p) continue; let n = 0; p.ev.sort((x, y) => x[0] - y[0] || x[1] - y[1]).forEach(([, k]) => { n += k; p.peak = Math.max(p.peak, n); }); }
-  const list = [...per.values()].filter(Boolean), span = ui.days * DAY;
-  list.forEach(p => { p.util = p.open / span; const added = Date.parse(p.d.added || 0) / 1000; p.isNew = added > a; });
+  for (const c of usage.con) { if (person(c.n) && person(c.n) === person(c.o)) continue; if (c.t >= a) { tot.con++; const p = ghost(c.d); if (p) p.con++; memOf(c.m, c.n).con++; } else if (c.t >= pa) tot.pCon++; }
+  // the most people (not computers) who had it open at once
+  for (const p of per.values()) { if (!p) continue; const on = new Map(); p.ev.sort((x, y) => x[0] - y[0] || x[1] - y[1]).forEach(([, k, who]) => { on.set(who, (on.get(who) || 0) + k); if (!on.get(who)) on.delete(who); p.peak = Math.max(p.peak, on.size); }); }
+  // only the network devices count: no device type, computers, servers, phones, printers… are not tracked
+  const list = [...per.values()].filter(p => p && tracked(p.d.deviceType)), span = work ? workOverlap(a, now) || 1 : ui.days * DAY;
+  list.forEach(p => { p.util = (p.uopen || 0) / span; const added = Date.parse(p.d.added || 0) / 1000; p.isNew = added > a; });
   const unused = list.filter(p => !p.sessions && !p.resN && !p.isNew);
   const byType = new Map();
-  list.forEach(p => { const k = p.d.deviceType || '(no type)'; if (!byType.has(k)) byType.set(k, { type: k, n: 0, open: 0, con: 0, busy: 0, unused: 0 }); const t = byType.get(k); t.n++; t.open += p.open; t.con += p.con; if (p.peak > 1) t.busy++; if (unused.includes(p)) t.unused++; });
-  [...byType.values()].forEach(t => t.util = t.open / (t.n * span));
+  list.forEach(p => { const k = p.d.deviceType || '(no type)'; if (!byType.has(k)) byType.set(k, { type: k, n: 0, open: 0, uopen: 0, con: 0, busy: 0, unused: 0 }); const t = byType.get(k); t.n++; t.open += p.open; t.uopen += p.uopen || 0; t.con += p.con; if (p.peak > 1) t.busy++; if (unused.includes(p)) t.unused++; });
+  [...byType.values()].forEach(t => t.util = t.uopen / (t.n * span));
   const allLive = (st.status.inUse || []).length, liveRes = (st.status.reserved || []).length;
   return { a, now, list, mem: [...mem.values()], tot, daily, heat, first, unused, byType: [...byType.values()].sort((x, y) => y.util - x.util), allLive, liveRes,
-    util: list.length ? tot.open / (list.length * span) : 0 };
+    util: list.length ? list.reduce((x, p) => x + (p.uopen || 0), 0) / (list.length * span) : 0, untracked: devs.filter(d => !tracked(d.deviceType)).length };
+}
+/** A person: the name they chose, the same on each of their computers. */
+function person(n) { return (n || '').trim().replace(/\s+/g, ' ').toLowerCase(); }
+/** Working hours: Monday to Friday, 9:00 to 18:00 in this browser's time zone. */
+const WORK = [9, 18];
+/** Seconds of [s, e) inside working hours. */
+function workOverlap(s, e) {
+  let n = 0;
+  for (let d = new Date(s * 1000); d.setHours(0, 0, 0, 0), d.getTime() / 1000 < e; d.setDate(d.getDate() + 1)) {
+    const wd = d.getDay();
+    if (wd === 0 || wd === 6) continue;
+    const ws = new Date(d); ws.setHours(WORK[0]); const we = new Date(d); we.setHours(WORK[1]);
+    n += overlap(s, e, ws.getTime() / 1000, we.getTime() / 1000);
+  }
+  return n;
+}
+/** In use and reserved count for network devices only - as in Termwright: a device needs a device type, and
+ *  computers, servers, phones, printers, storage, TVs, cameras and IoT boards take several logins at once. */
+function tracked(t) {
+  t = (t || '').toLowerCase();
+  if (!t) return false;
+  if (/firewall|fortigate|fortios|palo|pan-?os|asa\b|pfsense|opnsense|srx|checkpoint|sonicwall|wireless|wi-?fi|\bap\b|access point|wing|aruba ?os|unifi|router|ios-?xr|junos|mikrotik|routeros|vyos|edgeos|isr|asr|voss|exos|boss|switch|nx-?os|\bios\b|eos|cumulus|sonic|fabric|extreme|cisco|arista|aruba|procurve|comware|dell ?os|icx|fastiron|slx|netiron/.test(t)) return !/\btv\b|television|media player|chromecast|roku|apple tv|fire ?tv|android tv|camera|\bcam\b|ip ?cam|nvr|cctv|hikvision|dahua|reolink/.test(t);
+  return !/\btv\b|television|media player|chromecast|roku|apple tv|fire ?tv|android tv|camera|\bcam\b|ip ?cam|nvr|cctv|hikvision|dahua|reolink|linux|ubuntu|debian|centos|rhel|red hat|fedora|alpine|unix|bsd|solaris|aix|server|esxi|windows|macos|mac os|desktop|laptop|nas|synology|qnap|truenas|storage|printer|phone|voip|iot|raspberry|embedded|esp32|arduino/.test(t);
 }
 /** What the figures suggest: buy, remove, or reservations that sit idle. */
 function insights(f) {
@@ -307,7 +335,7 @@ function overview() {
   return `<p class="lead">How ${esc(st.team.name)}'s lab is used over the last ${ui.days} days, what is happening now, and what the numbers suggest.</p>
   <div class="kpis">
     <div class="kpi" data-go="reports"><div class="l">Device hours open</div><div class="v">${hrs(f.tot.open)}<small>h</small></div><div class="d">${delta(f.tot.open, f.tot.pOpen)}</div></div>
-    <div class="kpi" data-go="reports"><div class="l">Lab utilization</div><div class="v">${pct(f.util)}</div><div class="d"><span class="muted">of all hours, ${f.list.length} devices</span></div></div>
+    <div class="kpi" data-go="reports"><div class="l">Lab utilization</div><div class="v">${pct(f.util)}</div><div class="d"><span class="muted">of ${ui.basis === 'work' ? 'working hours (Mon-Fri 9-18)' : 'all hours'}, ${f.list.length} network devices</span></div></div>
     <div class="kpi" data-go="reports"><div class="l">Reservations</div><div class="v">${f.tot.resN}</div><div class="d">${delta(f.tot.resN, f.tot.pResN)}</div></div>
     <div class="kpi" data-go="reports"><div class="l">Not used</div><div class="v">${f.unused.length}<small>of ${f.list.length}</small></div><div class="d"><span class="muted">devices in ${ui.days} days</span></div></div>
     <div class="kpi"><div class="l">Open now</div><div class="v">${inUse.length}</div><div class="d"><span class="muted">${res.length} reserved now</span></div></div>
@@ -321,7 +349,7 @@ function overview() {
   </div>
   <div class="g2b">
     <div class="card"><h3>When the lab is busy</h3>${heatmap(f.heat)}</div>
-    <div class="card"><h3>Utilization by device type<span class="sp"></span><small>share of all hours a device was open</small></h3>
+    <div class="card"><h3>Utilization by device type<span class="sp"></span><small>share of ${ui.basis === 'work' ? 'working hours' : 'all hours'} a device was open</small></h3>
       ${f.byType.length ? `<table><thead><tr><th>Device type</th><th class="num">Devices</th><th>Utilization</th><th class="num">Conflicts</th><th class="num">Not used</th></tr></thead><tbody>${f.byType.map(t => `<tr><td>${esc(t.type)}</td><td class="num">${t.n}</td><td>${meter(t.util)}</td><td class="num">${t.con || '<span class="muted">0</span>'}</td><td class="num">${t.unused || '<span class="muted">0</span>'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No devices yet.</div>'}</div>
   </div>
   <div class="g2b">
@@ -421,6 +449,7 @@ function invRows() {
     if (ui.invStatus === 'open' && !l.u.length) return false;
     if (ui.invStatus === 'reserved' && !l.r) return false;
     if (ui.invStatus === 'unused' && !(p && f.unused.includes(p))) return false;
+    if (ui.invStatus === 'untracked' && tracked(d.deviceType)) return false;
     return true;
   }).sort((a, b) => (a.folder + '/' + a.name).localeCompare(b.folder + '/' + b.name, undefined, { numeric: true }));
 }
@@ -432,14 +461,14 @@ function inventory() {
   const chip = (k, n, l) => `<div class="chipk ${ui.invStatus === k ? 'on' : ''}" data-ist="${k}"><b>${n}</b><span>${l}</span></div>`;
   const allOn = list.length && list.every(d => ui.sel.has(d.id));
   const rows = list.map(d => { const l = liveOf(d), p = fig.get(d.id);
-    const status = (l.u.length ? `<span class="pill warn" title="${esc(l.u.map(x => x.name).join(', '))}">● ${esc(l.u.map(x => x.name.split(' ')[0]).join(', '))}</span> ` : '') + (l.r ? `<span class="pill bad" title="until ${esc(when(l.r.until))}${l.r.note ? ' - ' + esc(l.r.note) : ''}">🔒 ${esc(l.r.name.split(' ')[0])}</span>` : '') || (p && f.unused.includes(p) ? '<span class="pill">not used</span>' : '<span class="muted small">free</span>');
+    const status = (l.u.length ? `<span class="pill warn" title="${esc(l.u.map(x => x.name).join(', '))}">● ${esc(l.u.map(x => x.name.split(' ')[0]).join(', '))}</span> ` : '') + (l.r ? `<span class="pill bad" title="until ${esc(when(l.r.until))}${l.r.note ? ' - ' + esc(l.r.note) : ''}">🔒 ${esc(l.r.name.split(' ')[0])}</span>` : '') || (!tracked(d.deviceType) ? `<span class="muted small" title="${d.deviceType ? 'This device type takes several logins at once' : 'No device type - give it one to count it'}">not tracked</span>` : p && f.unused.includes(p) ? '<span class="pill">not used</span>' : '<span class="muted small">free</span>');
     return `<tr><td class="c"><input type="checkbox" data-sel="${d.id}" ${ui.sel.has(d.id) ? 'checked' : ''}></td>
       <td>${devCell(d.name, d.host + (d.port && d.port !== defPort(d.protocol) ? ':' + d.port : ''), d.deviceType)}</td>
       <td><div class="chips">${d.deviceType ? `<span class="tag">${esc(d.deviceType)}</span>` : ''}<span class="tag">${esc(d.protocol === 'SSH2' ? 'SSH' : d.protocol)}</span></div></td>
       <td class="muted small">${esc(d.folder || '-')}</td><td>${status}</td>
       <td>${p ? meter(p.util, hrs(p.open) + ' h open in ' + ui.days + ' days') : ''}</td><td class="small">${p && p.last ? ago(p.last * 1000) + ' ago' : '<span class="muted">never</span>'}</td>
       <td class="acts"><button class="ib" data-edit="${d.id}" title="Edit">${ico('edit')}</button><button class="ib d" data-del="${d.id}" title="Delete">${ico('trash')}</button></td></tr>`; }).join('');
-  return `<div class="summary">${chip('all', devs.length, 'devices')}${chip('open', openN, 'open now')}${chip('reserved', resN, 'reserved now')}${chip('unused', unusedN, `not used in ${ui.days} days`)}
+  return `<div class="summary">${chip('all', devs.length, 'devices')}${chip('open', openN, 'open now')}${chip('reserved', resN, 'reserved now')}${chip('unused', unusedN, `not used in ${ui.days} days`)}${f && f.untracked ? `<div class="chipk ${ui.invStatus === 'untracked' ? 'on' : ''}" data-ist="untracked" title="In use, reservations and usage count for network devices only. Give these a device type (switch, router, firewall…) to count them; computers, servers, phones and printers are never counted."><b>${f.untracked}</b><span>not tracked</span></div>` : ''}
     <div class="chipk" style="cursor:default"><b>${typesAll.length}</b><span>device types</span></div><div class="chipk" style="cursor:default"><b>${allFolders.length}</b><span>folders</span></div></div>
   <div class="split"><div class="card"><h3>Folders<span class="sp"></span><button class="ib" id="addf" title="New folder">${ico('folder')}</button></h3><div class="tree">
       <a class="${!ui.invFolder ? 'on' : ''}" data-ifo="">${ico('all')}All devices<span class="n">${devs.length}</span></a>
@@ -567,7 +596,7 @@ function members() {
 }
 function actTable(list) {
   if (!list.length) return '<div class="empty">Nothing yet.</div>';
-  return `<table><thead><tr><th style="width:200px">When</th><th style="width:220px">Who</th><th>What</th></tr></thead><tbody>${list.map(a => `<tr><td class="muted">${esc(when(a.at))}</td><td>${esc(a.who)}</td><td>${esc(a.what)}</td></tr>`).join('')}</tbody></table>`;
+  return `<table><thead><tr><th style="width:200px">When</th><th style="width:220px">Who</th><th>What</th></tr></thead><tbody>${list.map(a => `<tr><td class="muted">${esc(when(a.at))}</td><td>${esc(a.who)}</td><td>${esc(a.what).replace(/\{t:([^}]+)\}/g, (_, t) => esc(when(t)))}</td></tr>`).join('')}</tbody></table>`;
 }
 function activity() { return `<p class="lead">Who added, changed, approved, reserved and removed what - the last 500 events.</p><div class="card"><div class="scroll">${actTable(st.activity)}</div></div>`; }
 
@@ -605,6 +634,7 @@ function wire() {
   const on = (sel, ev, fn) => $$(sel).forEach(e => e[ev] = fn);
   on('[data-go]', 'onclick', e => go(e.currentTarget.dataset.go));
   on('[data-theme]', 'onclick', e => setTheme(e.currentTarget.dataset.theme));
+  on('[data-basis]', 'onclick', e => { ui.basis = e.currentTarget.dataset.basis; store.set('tw.basis', ui.basis); render(); });
   on('[data-days]', 'onclick', e => { ui.days = Number(e.currentTarget.dataset.days); store.set('tw.days', ui.days); usage = null; load(true); });
   on('#out', 'onclick', async () => { await api('POST', '/api/admin/signout').catch(() => {}); gate('Signed out.'); });
   on('[data-k]', 'oninput', e => { const k = e.target.dataset.k; if (k.startsWith('dt:')) ui.dts[k.slice(3)] = e.target.value; else ui[k] = e.target.value; if (k === 'filter' || k === 'rq') render(); });

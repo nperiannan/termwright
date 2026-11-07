@@ -624,12 +624,14 @@ Only names, user and computer names and the device inventory are shared; never p
 - **Right-click → Reserve…** keeps a device until a time (2 or 4 hours, today, tomorrow or Friday 18:00, or a date and time you pick) with a note. **Change Reservation…** and **Release Reservation** are on the same menu; owners and co-owners can release anyone's.
 - **Connecting to a device someone else reserved** asks first and sends them a notice. A device someone else has open only shows a short message, since several people can be logged in.
 - A laptop that sleeps or closes drops out of *in use* within about a minute and a half.
+- Only devices with a device type of a network device count; give the others a type in the team inventory. A serial or console server session named after a team device (*core-sw1 console*) shows that device's status and counts as having it open.
+- Members with your name are you on another computer: your reservation does not warn you there, and you can change or release it from either.
 
 | Team card | Device card | Reserve |
 |---|---|---|
 | ![Team card](screenshots/team-card.png) | ![Device card with the team's status](screenshots/team-device-card.png) | ![Reserve a device](screenshots/team-reserve.png) |
 
-**The admin page** (owners and co-owners, **Options → Teams… → Open Admin Page**) shows how the lab is used over 7, 30, 90 days or a year: device hours open, utilization, when the lab is busy, the most and least used devices, reservations that sat idle, and insights such as device types in demand (the team may need more) or devices nobody used (candidates to remove). **Usage reports** list every device, member, reservation and session, with CSV export. The admin page also manages the inventory, approvals, scans from the lab, members and the activity log; it follows the system's light or dark theme or the one you pick. See the [team server guide](TEAM_SERVER.md#the-admin-page).
+**The admin page** (owners and co-owners, **Options → Teams… → Open Admin Page**) shows how the lab is used over 7, 30, 90 days or a year (utilization over all hours or working hours): device hours open, utilization, when the lab is busy, the most and least used devices, reservations that sat idle, and insights such as device types in demand (the team may need more) or devices nobody used (candidates to remove). **Usage reports** list every device, member, reservation and session, with CSV export. The admin page also manages the inventory, approvals, scans from the lab, members and the activity log; it follows the system's light or dark theme or the one you pick. See the [team server guide](TEAM_SERVER.md#the-admin-page).
 
 | Overview | Usage reports |
 |---|---|

@@ -1,7 +1,9 @@
-import { Injectable, effect, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { Backend } from './backend';
 import { Ui } from './ui.service';
 import { Tabs } from './tabs.service';
+import { SessionNode } from './models';
+import { tr } from './i18n';
 import { deviceKindOf } from '../components/device-icon';
 
 /** A device as the team server knows it: address and port, or MAC address. */
@@ -9,7 +11,8 @@ export interface DeviceRef { host: string; port: number; protocol: string; mac?:
 export interface Reservation { id: string; device: DeviceRef; by: string; name: string; until: string; note: string; at: string; }
 export interface InUse { device: DeviceRef; by: string; name: string; since: string; }
 export interface LastUse { device: DeviceRef; name: string; s: number; e: number; }
-export interface TeamStatus { rev: number; me: string; inUse: InUse[]; reserved: Reservation[]; last?: LastUse[]; }
+export interface TeamStatus { rev: number; me: string; inUse: InUse[]; reserved: Reservation[]; last?: LastUse[];
+  /** the other members with my name: me on another computer */ also?: string[]; }
 interface View { teamId: string; team: string; status: TeamStatus; }
 
 /** What a device's status is for this person. */
@@ -21,6 +24,8 @@ export interface DeviceState {
   /** everyone with it open now, you included */
   open: InUse[];
   me: string;
+  /** my other computers (members with my name) */
+  also?: string[];
   /** the last time someone had it open (when nobody has it open now) */
   last?: LastUse;
   teamId: string;
@@ -30,11 +35,20 @@ export interface DeviceState {
 /** Kinds that take several logins at once: never "in use" or reserved. */
 const SHARED_KINDS = new Set(['iot', 'phone', 'mobile', 'server', 'computer', 'printer', 'nas', 'tv', 'camera']);
 
-/** A network device (switch, router, firewall, access point, …) reached by SSH or Telnet. */
+/** A network device (switch, router, firewall, access point, …) reached by SSH or Telnet: it has a
+ *  device type, and not one of the kinds that take several logins at once. */
 export function isNetworkDevice(s: { protocol?: string; deviceType?: string }): boolean {
   if (s.protocol !== 'SSH2' && s.protocol !== 'Telnet') return false;
+  if (!(s.deviceType ?? '').trim()) return false;
   return !SHARED_KINDS.has(deviceKindOf(s.deviceType));
 }
+
+/** A console session's device name: "core-sw1 console", "core-sw1-con", "core-sw1 (console)" → "core-sw1". */
+export function consoleName(n: string): string {
+  return n.trim().toLowerCase().replace(/[\s_-]*\(?\b(console|con|serial|cons)\b\)?$/, '').trim();
+}
+
+type SessionLike = { name?: string; hostname?: string; port?: number; protocol?: string; mac?: string; deviceType?: string };
 
 /** "Natarajan Periannan" → "NP". */
 function initials(n: string) { return n.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join(''); }
@@ -74,14 +88,16 @@ export class TeamStatusService {
     effect(() => {
       if (!(this.ui.settings()?.teams ?? []).length) { this.views.set(new Map()); return; }
       void this.backend.teamStatuses().then(l => this.views.set(new Map((l ?? []).map(v => [v.teamId, v])))).catch(() => {});
-      // once a run: tells owners and co-owners when their team server is older than this Termwright
-      if (!this.versionsChecked) {
-        this.versionsChecked = true;
+      // tells owners and co-owners once a run when a team server is older than this Termwright (teams joined later too)
+      const fresh = (this.ui.settings()?.teams ?? []).map(t => t.id).filter(id => !this.versionsChecked.has(id));
+      if (fresh.length) {
+        fresh.forEach(id => this.versionsChecked.add(id));
         setTimeout(() => void this.backend.teams().then(ts => {
           for (const t of ts ?? []) {
-            if (t.reachable && t.update && t.role !== 'member')
-              this.ui.toast(`The team server of ${t.name} runs ${t.version || 'an older version'}: version ${t.update} is available.`, 'info', 15000,
-                [{ label: 'Update Server…', run: () => this.ui.open('teams') }]);
+            if (!fresh.includes(t.id) || !t.reachable || !t.update || t.role === 'member' || this.snoozed(t.id, t.update)) continue;
+            this.ui.toast(tr('The team server of {0} runs {1}: version {2} is available.', t.name, t.version || '?', t.update), 'info', 15000, [
+              { label: 'Update Server…', run: () => { this.ui.teamsUpdate.set(t.id); this.ui.open('teams'); } },
+              { label: 'Later', run: () => this.snooze(t.id, t.update!) }]);
           }
         }).catch(() => {}), 8000);
       }
@@ -89,10 +105,15 @@ export class TeamStatusService {
     // the open network devices, whenever the tabs change
     effect(() => {
       const teams = (this.ui.settings()?.teams ?? []).length;
+      // connected SSH and Telnet tabs, and consoles of team devices; Termwright keeps those of each team's
+      // inventory whose device type is a network device
+      const seen = new Set<string>();
       const list = this.tabs.tabs()
-        .filter(t => t.kind === 'terminal' && t.state === 'connected' && t.session && isNetworkDevice(t.session) && t.session.hostname)
-        .map(t => ({ host: t.session.hostname, port: t.session.port || defPort(t.session.protocol), protocol: t.session.protocol, mac: t.session.mac ?? '',
-          name: t.session.name || t.session.hostname, since: '' } as DeviceRef));
+        .filter(t => t.kind === 'terminal' && t.state === 'connected' && t.session)
+        .map(t => this.target(t.session))
+        .filter((d): d is SessionLike => !!d && !!d.hostname)
+        .map(d => ({ host: d.hostname!, port: d.port || defPort(d.protocol ?? ''), protocol: d.protocol ?? 'SSH2', mac: d.mac ?? '', name: d.name || d.hostname!, since: '' } as DeviceRef))
+        .filter(d => { const k = d.host + ':' + d.port; if (seen.has(k)) return false; seen.add(k); return true; });
       const key = JSON.stringify(list.map(d => d.host + ':' + d.port + '/' + d.mac).sort());
       if (!teams || key === this.lastSent) return;
       this.lastSent = key;
@@ -104,19 +125,58 @@ export class TeamStatusService {
     });
   }
   private since = new Map<string, string>();
-  private versionsChecked = false;
+
+  /** The team devices of the Session Manager (team folders), by name: a serial or console server
+   *  session named after one is its console. */
+  private readonly teamByName = computed(() => {
+    const m = new Map<string, SessionLike>();
+    const walk = (n: SessionNode) => (n.children ?? []).forEach(c => {
+      if (c.isFolder) walk(c);
+      else if (c.team && c.hostname && (c.protocol === 'SSH2' || c.protocol === 'Telnet')) m.set(consoleName(c.name), c);
+    });
+    const r = this.ui.tree();
+    if (r) walk(r);
+    return m;
+  });
+
+  /** The device whose team status a session shows: itself (SSH, Telnet), or for a console session
+   *  (Serial, console server port) the team device it is named after. */
+  target(s: SessionLike | null | undefined): SessionLike | null {
+    if (!s) return null;
+    if (s.protocol === 'Serial' || s.protocol === 'Console') return s.name ? this.teamByName().get(consoleName(s.name)) ?? null : null;
+    if ((s.protocol === 'SSH2' || s.protocol === 'Telnet') && s.hostname) return s;
+    return null;
+  }
+  private versionsChecked = new Set<string>();
+  private static readonly LATER = 'termwright.teamUpdateLater';
+  /** "Later" on an update notice: not again for this version for a week */
+  private snooze(id: string, version: string) {
+    try {
+      const m = JSON.parse(localStorage.getItem(TeamStatusService.LATER) || '{}');
+      m[id] = { version, until: Date.now() + 7 * 864e5 };
+      localStorage.setItem(TeamStatusService.LATER, JSON.stringify(m));
+    } catch { /* no storage: it asks again next time */ }
+  }
+  private snoozed(id: string, version: string): boolean {
+    try {
+      const x = JSON.parse(localStorage.getItem(TeamStatusService.LATER) || '{}')[id];
+      return !!x && x.version === version && x.until > Date.now();
+    } catch { return false; }
+  }
 
   /** The status of a session's device ('' when no team has it or it is not a network device). */
-  stateOf(s: { hostname?: string; port?: number; protocol?: string; mac?: string; deviceType?: string } | null | undefined): DeviceState | null {
-    if (!s || !s.hostname || !isNetworkDevice(s) || !this.views().size) return null;
+  stateOf(x: SessionLike | null | undefined): DeviceState | null {
+    const s = this.target(x);
+    if (!s || !s.hostname || !this.views().size) return null;
     for (const v of this.views().values()) {
-      const others = v.status.inUse.filter(u => u.by !== v.status.me && sameDevice(s, u.device));
-      const mine = v.status.inUse.some(u => u.by === v.status.me && sameDevice(s, u.device));
+      const isMe = (id: string) => id === v.status.me || (v.status.also ?? []).includes(id);
+      const others = v.status.inUse.filter(u => !isMe(u.by) && sameDevice(s, u.device));
+      const mine = v.status.inUse.some(u => isMe(u.by) && sameDevice(s, u.device));
       const reserved = v.status.reserved.find(r => sameDevice(s, r.device));
       const last = (v.status.last ?? []).find(l => sameDevice(s, l.device));
       if (others.length || mine || reserved || last) {
         const open = v.status.inUse.filter(u => sameDevice(s, u.device));
-        return { others, mine, reserved, reservedByMe: !!reserved && reserved.by === v.status.me, open, me: v.status.me, last, teamId: v.teamId, team: v.team };
+        return { others, mine, reserved, reservedByMe: !!reserved && isMe(reserved.by), open, me: v.status.me, also: v.status.also ?? [], last, teamId: v.teamId, team: v.team };
       }
     }
     return null;
@@ -155,7 +215,7 @@ export class TeamStatusService {
     }
     if (st.open.length) {
       if (!st.reserved) head = 'Open now';
-      for (const u of st.open) rows.push(['Open by', (u.by === st.me ? 'you' : u.name) + (u.since ? ' · since ' + t(Date.parse(u.since) / 1000) + ' (' + span(now - Date.parse(u.since) / 1000) + ')' : '')]);
+      for (const u of st.open) rows.push(['Open by', (u.by === st.me ? 'you' : st.also?.includes(u.by) ? 'you (another computer)' : u.name) + (u.since ? ' · since ' + t(Date.parse(u.since) / 1000) + ' (' + span(now - Date.parse(u.since) / 1000) + ')' : '')]);
     } else if (st.last) {
       rows.push(['Last used', st.last.name + ' · ' + t(st.last.s) + ' for ' + span(st.last.e - st.last.s)]);
       rows.push([st.reserved ? 'Not open for' : 'Free for', span(now - st.last.e)]);
@@ -165,19 +225,21 @@ export class TeamStatusService {
   }
 
   /** Before connecting: asks when someone else reserved the device; tells them when you go ahead. */
-  async allowConnect(s: { hostname?: string; port?: number; protocol?: string; mac?: string; deviceType?: string; name?: string }): Promise<boolean> {
-    const st = this.stateOf(s);
-    if (!st) return true;
+  async allowConnect(x: SessionLike): Promise<boolean> {
+    const st = this.stateOf(x), s = this.target(x);
+    if (!st || !s) return true;
+    const label = x.name || s.name || s.hostname;
     if (st.reserved && !st.reservedByMe) {
       const r = st.reserved;
-      const ok = await this.ui.confirm(`${s.name || s.hostname} is reserved by ${r.name}`,
-        `Until ${new Date(r.until).toLocaleString()}${r.note ? '\n“' + r.note + '”' : ''}\n\n${r.name} gets a notice that you connected.` + (st.others.length ? `\nOpen now by ${st.others.map(o => o.name).join(', ')}.` : ''),
+      const ok = await this.ui.confirm(tr('{0} is reserved by {1}', label ?? '', r.name),
+        tr('Until {0}', new Date(r.until).toLocaleString()) + (r.note ? '\n“' + r.note + '”' : '') + '\n\n' + tr('{0} gets a notice that you connected.', r.name)
+          + (st.others.length ? '\n' + tr('Open now by {0}.', st.others.map(o => o.name).join(', ')) : ''),
         'Connect Anyway');
       if (!ok) return false;
       void this.backend.teamConnected({ host: s.hostname!, port: s.port || defPort(s.protocol ?? ''), protocol: s.protocol ?? 'SSH2', mac: s.mac ?? '' }).catch(() => {});
       return true;
     }
-    if (st.others.length) this.ui.toast(`${s.name || s.hostname} is open by ${st.others.map(o => o.name).join(', ')} too.`, 'info', 7000);
+    if (st.others.length) this.ui.toast(tr('{0} is open by {1} too.', label ?? '', st.others.map(o => o.name).join(', ')), 'info', 7000);
     return true;
   }
 }

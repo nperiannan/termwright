@@ -126,6 +126,9 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
           <option value="" disabled>Pick an SSH session…</option>
           @for (p of sshSessions(); track p) { <option [value]="p">{{ p }}</option> }
         </select>
+        @if (hostAddr() && !host && !run()) {
+          <p class="hint warnh">No SSH session logs in to {{ hostAddr() }}. Pick the session of that host above, or create one (File → New Session…, address {{ hostAddr() }}, a user who may use Docker there) and come back.</p>
+        }
         <div class="lbl">Container image</div>
         <div class="seg">
           <button type="button" [class.on]="image === 'download'" (click)="image = 'download'" [disabled]="!!run()">Download (GitHub)</button>
@@ -145,7 +148,8 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
         }
         @if (!run() && !done()) {
           <p class="hint">Termwright logs in to the host, gets the team server {{ upd()?.update }} there and starts the team's container again with the same name, port, network and data volume.
-            The team, its members, inventory, usage history, certificate and invite stay. The team is offline for a few seconds; if the new version does not answer, the old one is started again.</p>
+            The team, its members, inventory, usage history, certificate and invite stay. The team is offline for a few seconds; if the new version does not answer within 90 seconds, the old one is started again.
+            Only the container whose certificate is this team's is touched; a server from Docker Compose is updated with Compose.</p>
         }
         @if (error()) { <p class="err">{{ error() }}</p> }
       </form>
@@ -244,6 +248,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
       span { flex: 1; } a { color: var(--accent); cursor: pointer; font-weight: 600; white-space: nowrap; } }
     .upd.new { background: color-mix(in srgb, var(--text) 6%, transparent); app-icon { color: var(--muted); } }
     .found { display: flex; align-items: center; gap: 6px; margin: 10px 0 6px; app-icon { color: #22c55e; } }
+    .hint.warnh { color: #d97706; }
     .hint { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); margin: 10px 0 0; line-height: 1.45; }
     .err { color: var(--danger); margin: 10px 0 0; white-space: pre-wrap; }
   `],
@@ -254,6 +259,8 @@ export class TeamsDialog implements OnInit, OnDestroy {
   readonly view = signal<'list' | 'join' | 'setup' | 'update'>('list');
   /** the team whose server is updated */
   readonly upd = signal<TeamView | null>(null);
+  /** the team's host address when no SSH session logs in to it */
+  readonly hostAddr = signal('');
   readonly teams = signal<TeamView[]>([]);
   readonly loading = signal(false);
   readonly sel = signal('');
@@ -291,7 +298,14 @@ export class TeamsDialog implements OnInit, OnDestroy {
   ngOnInit() {
     this.displayName = this.ui.settings()?.teamDisplayName ?? '';
     void this.backend.teamIdentity().then(i => this.ident.set(i)).catch(() => {});
-    void this.load();
+    void this.load().then(() => {
+      // opened from an update notice: straight to Update the Team Server
+      const id = this.ui.teamsUpdate();
+      if (!id) return;
+      this.ui.teamsUpdate.set('');
+      const t = this.teams().find(x => x.id === id);
+      if (t?.update) this.toUpdate(t);
+    });
     this.offs.push(this.backend.on('team:setup', (s: TeamSetUpStep) => {
       if (this.run() !== 'pending' && s.run !== this.run()) return;
       // a step replaces its own running line
@@ -406,6 +420,7 @@ export class TeamsDialog implements OnInit, OnDestroy {
     const walk = (n: SessionNode) => (n.children ?? []).forEach(c => c.isFolder ? walk(c) : c.protocol === 'SSH2' && (c.hostname ?? '').toLowerCase() === addr && byAddr.push(c.path));
     const r = this.ui.tree(); if (r) walk(r);
     this.host = t.host && ssh.includes(t.host) ? t.host : byAddr[0] ?? '';
+    this.hostAddr.set(byAddr.length || (t.host && ssh.includes(t.host)) ? '' : addr);
     this.view.set('update');
   }
 

@@ -48,6 +48,8 @@ export class Ui {
   /** What Push to Team… offers: sessions (paths, relative to base) or devices from Discover. */
   /** Reserve… for a session's device (current: the reservation to change). */
   readonly teamReserve = signal<{ node: import('./models').SessionNode; current?: { until: string; note: string } } | null>(null);
+  /** a team whose server the Teams window opens to update */
+  readonly teamsUpdate = signal('');
   readonly teamPush = signal<{ paths?: string[]; base?: string; items?: import('./models').TeamPushItem[] } | null>(null);
   /** Sessions the Configuration Backups window backs up right away (from the Session Manager); null = just open it. */
   readonly backupTargets = signal<string[] | null>(null);
