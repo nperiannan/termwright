@@ -42,6 +42,8 @@ type TeamView struct {
 	Update string `json:"update,omitempty"`
 	// Newer: the team server is newer than this Termwright
 	Newer bool `json:"newer,omitempty"`
+	// SignIn: single sign-on asks to sign in again
+	SignIn bool `json:"signIn,omitempty"`
 }
 
 // TeamDetails is a team with its members and, for owners and co-owners, the invite link.
@@ -110,7 +112,10 @@ func (a *App) Teams() []TeamView {
 			tm, err := c.Team(ctx)
 			if err != nil {
 				v.Error = err.Error()
-				if team.Unauthorized(err) {
+				switch {
+				case team.NeedsSSO(err):
+					v.Error, v.SignIn = "Sign in again with your company account - the team asks for it every few weeks.", true
+				case team.Unauthorized(err):
 					v.Error = "You are no longer a member of this team."
 				}
 				return
@@ -202,6 +207,11 @@ func (a *App) teamJoin(addr, fp string, req team.JoinRequest, host, container st
 	if err != nil {
 		return config.TeamConn{}, err
 	}
+	return a.teamJoined(addr, fp, j, host, container)
+}
+
+// teamJoined keeps a team this Termwright joined (the member's token in the keychain).
+func (a *App) teamJoined(addr, fp string, j team.Joined, host, container string) (config.TeamConn, error) {
 	t := config.TeamConn{ID: randHex(8), Name: j.Team, Address: addr, Fingerprint: team.NormFingerprint(fp), MemberID: j.MemberID, Role: j.Role, Host: host, Container: container}
 	// the same team again (set up again, or reconnected as its owner): it keeps
 	// its id, so its team folder stays the same

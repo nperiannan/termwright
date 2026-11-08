@@ -87,6 +87,8 @@ export class TeamStatusService {
 
   constructor() {
     this.backend.on('team:status', (v: View) => this.views.update(m => new Map(m).set(v.teamId, v)));
+    this.backend.on('team:sso', (n: { teamId: string; team: string }) => this.ui.toast(tr('{0} asks you to sign in again with your company account.', n.team), 'info', 20000,
+      [{ label: tr('Sign In Again…'), run: () => void this.backend.teamSSOAgain(n.teamId).then(() => this.ui.toast(tr('Signed in to {0}', n.team), 'success')).catch(e => this.ui.error(e)) }]));
     this.backend.on('team:note', (n: { team: string; text: string }) => this.ui.toast(`${n.team}: ${n.text}`, 'info', 12000));
     effect(() => {
       if (!(this.ui.settings()?.teams ?? []).length) { this.views.set(new Map()); return; }

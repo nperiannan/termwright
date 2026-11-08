@@ -298,3 +298,30 @@ func (c *Client) raw(ctx context.Context, method, path string, in []byte) ([]byt
 	}
 	return b, nil
 }
+
+// SSOBegin starts a single sign-on (join, or again with s.Member): the page
+// to open in the browser, and the request and secret to collect it with.
+func (c *Client) SSOBegin(ctx context.Context, s SSOStart) (url, req, secret string, err error) {
+	var v struct {
+		URL    string `json:"url"`
+		Req    string `json:"req"`
+		Secret string `json:"secret"`
+	}
+	err = c.call(ctx, http.MethodPost, "/api/sso/start", s, &v)
+	return v.URL, v.Req, v.Secret, err
+}
+
+// SSOCollect waits (up to about 50 s) for the browser's sign-in; waiting is
+// true when it has not finished yet.
+func (c *Client) SSOCollect(ctx context.Context, req, secret string) (j Joined, waiting bool, err error) {
+	cp := *c
+	hc := *c.hc
+	hc.Timeout = 70 * time.Second
+	cp.hc = &hc
+	err = cp.call(ctx, http.MethodPost, "/api/sso/claim", map[string]string{"req": req, "secret": secret}, &j)
+	var a *APIError
+	if errors.As(err, &a) && a.Status == http.StatusAccepted {
+		return j, true, nil
+	}
+	return j, false, err
+}

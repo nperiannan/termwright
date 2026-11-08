@@ -117,6 +117,8 @@ tr .acts{opacity:.25;transition:opacity .15s;white-space:nowrap;text-align:right
 .prog{display:grid;grid-template-columns:repeat(4,1fr) 2fr;gap:0;border-top:1px solid var(--line)}.prog>div{padding:12px 16px;border-right:1px solid var(--line2)}.prog>div:last-child{border-right:0}
 .prog b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.prog span{font-size:12px;color:var(--muted)}
 .pbar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:6px}.pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s}
+.form .fl{display:grid;grid-template-columns:190px 1fr;gap:4px 12px;align-items:center;margin:0 0 12px}.form .fl>span{color:var(--muted);font-size:13px}.form .fl input{width:100%}.form .fl small{grid-column:2;color:var(--muted);font-size:12px}
+.form .ck{display:flex;gap:8px;align-items:center;margin:4px 0 12px 202px;font-size:13px}.form .acts2{display:flex;gap:8px;margin:14px 0 0 202px}.small.bad{color:var(--bad)}
 </style></head><body>
 <div id="app"></div><div id="msg"></div><div id="tip"></div><dialog id="dlg"></dialog>
 <script>
@@ -132,6 +134,7 @@ const IC = {
   ok: '<path d="M20 6 9 17l-5-5"/>', scan: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 20a6 6 0 0 0-3-5.2"/>',
   save: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3M17 6l3 3M14 9l2 2"/>',
   log: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>', help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', mon: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
@@ -184,13 +187,13 @@ async function load(force) {
 }
 
 function go(p) { ui.page = p; store.set('tw.page', p); window.scrollTo(0, 0); if (p === 'activity') loadAct(true); if (p === 'discover') api('GET', '/api/admin/scan').then(x => { scan = x; render(); }).catch(() => render()); load(true); }
-const TITLES = { overview: 'Overview', reports: 'Usage reports', inventory: 'Inventory', approvals: 'Approvals', discover: 'Discover', members: 'Members', backup: 'Backup & restore', activity: 'Activity', help: 'Help & About' };
+const TITLES = { overview: 'Overview', reports: 'Usage reports', inventory: 'Inventory', approvals: 'Approvals', discover: 'Discover', members: 'Members', sso: 'Single sign-on', backup: 'Backup & restore', activity: 'Activity', help: 'Help & About' };
 function render() {
   if (!st || !PAGES[ui.page]) { if (st) ui.page = 'overview'; else return; }
   const a = document.activeElement, key = a && a.dataset ? a.dataset.k : null, ss = a && a.selectionStart, se = a && a.selectionEnd, sy = window.scrollY;
   const t = st.team, me = t.members.find(m => m.id === st.me) || {}, online = t.members.filter(m => m.online).length;
   const nav = [['Monitor'], ['overview', 'home', 'Overview'], ['reports', 'chart', 'Usage reports'], ['Manage'], ['inventory', 'inv', 'Inventory'], ['approvals', 'ok', 'Approvals', st.pending.length],
-    ['discover', 'scan', 'Discover'], ['members', 'users', 'Members'], ...(st.team.role === 'owner' ? [['backup', 'save', 'Backup & restore']] : []), ['Audit'], ['activity', 'log', 'Activity'], ['help', 'help', 'Help & About']];
+    ['discover', 'scan', 'Discover'], ['members', 'users', 'Members'], ...(st.team.role === 'owner' ? [['sso', 'key', 'Single sign-on'], ['backup', 'save', 'Backup & restore']] : []), ['Audit'], ['activity', 'log', 'Activity'], ['help', 'help', 'Help & About']];
   const period = ['overview', 'reports', 'inventory'].includes(ui.page);
   $('#app').innerHTML = `<div class="app"><aside>
     <div class="brand"><img src="/admin/icon.svg" alt=""><div><b>Termwright</b><span>Team server</span></div></div>
@@ -590,7 +593,7 @@ function members() {
     <p class="pad muted small" style="margin:0;padding-top:0">Send it by chat or e-mail. A new invite stops the old one; members who joined stay.</p></div>
   <div class="card"><table><thead><tr><th>Name</th><th>Computer</th><th>Role</th><th>Status</th><th class="num">Hours (${ui.days} d)</th><th class="num">Reservations</th><th>Joined</th><th></th></tr></thead><tbody>
     ${t.members.map(m => { const can = m.id !== st.me && m.role !== 'owner' && (mine === 'owner' || m.role === 'member'), u = use.get(m.id);
-      return `<tr><td><span class="dot ${m.online ? '' : 'off'}"></span>${esc(m.name)}${m.id === st.me ? ' <span class="muted">(you)</span>' : ''}</td><td class="mono muted">${esc(m.user)}@${esc(m.machine)}</td>
+      return `<tr><td><span class="dot ${m.online ? '' : 'off'}"></span>${esc(m.name)}${m.id === st.me ? ' <span class="muted">(you)</span>' : ''}${m.sso ? ` <span class="pill in" title="Joined with single sign-on">SSO</span><div class="muted small">${esc(m.email || '')}</div>` : ''}</td><td class="mono muted">${esc(m.user)}@${esc(m.machine)}</td>
       <td><span class="pill ${m.role !== 'member' ? 'in' : ''}">${({ owner: 'Owner', 'co-owner': 'Co-owner', member: 'Member' })[m.role]}</span></td><td>${m.online ? '<span class="pill ok">online</span>' : `<span class="muted">${m.lastSeen ? 'seen ' + ago(m.lastSeen) + ' ago' : ''}</span>`}</td>
       <td class="num">${u && u.open ? hrs(u.open) : '<span class="muted">0</span>'}</td><td class="num">${u ? u.resN : 0}</td><td class="muted small">${esc(when(m.joined))}</td>
       <td style="text-align:right">${mine === 'owner' && m.id !== st.me ? `<a data-own="${m.id}" data-n="${esc(m.name)}">Make owner</a>` : ''}${can ? `<a data-role="${m.id}" data-to="${m.role === 'member' ? 'co-owner' : 'member'}">${m.role === 'member' ? 'Make co-owner' : 'Make member'}</a><a class="d" data-rm="${m.id}" data-n="${esc(m.name)}">Remove</a>` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
@@ -626,6 +629,36 @@ function activity() {
     <span class="muted small">${a.items.length} of ${a.total}</span><span class="sp"></span><button id="acsv">Export CSV</button></div>
   <div class="scroll">${actTable(a.items)}</div>
   ${a.items.length < a.total ? '<div class="pad" style="text-align:center"><button id="amore">Show 200 more</button></div>' : ''}</div>`;
+}
+
+// ---------- single sign-on (owner) ----------
+function sso() {
+  const c = st.sso || {}, on = !!c.clientId, f = ui.ssoForm || (ui.ssoForm = { label: c.label || 'Microsoft', issuer: c.issuer || '', clientId: c.clientId || '', secret: '',
+    domains: (c.domains || []).join(', '), groups: (c.groups || []).join(', '), inviteToo: on ? !!c.inviteToo : true, renewDays: on ? (c.renewDays || 0) : 30 });
+  const redirect = 'https://' + location.host + '/sso/callback';
+  const fld = (k, label, hint, attrs = '') => `<label class="fl"><span>${label}</span><input data-k="sso-${k}" data-sso="${k}" value="${esc(f[k])}" ${attrs}>${hint ? `<small>${hint}</small>` : ''}</label>`;
+  return `<p class="lead">Members join and stay in ${esc(st.team.name)} with their company account - Microsoft Entra ID, Okta, Google or any OpenID Connect sign-in - instead of the invite key. ${on ? '<span class="pill ok">On</span>' : '<span class="pill">Off</span>'}</p>
+  <div class="g2b"><div class="card"><h3>Sign-in service</h3><div class="pad form">
+    ${fld('label', 'Button name', 'what members see: <i>Join with Microsoft</i>')}
+    ${fld('issuer', 'Issuer', 'Entra ID: <span class="mono">https://login.microsoftonline.com/&lt;Directory (tenant) ID&gt;/v2.0</span>', 'placeholder="https://login.microsoftonline.com/…/v2.0"')}
+    ${fld('clientId', 'Application (client) ID', '')}
+    ${fld('secret', 'Client secret', c.hasSecret ? 'saved - type a new one to change it' : 'empty for a public client (Entra: Allow public client flows)', 'type="password" autocomplete="off"')}
+    ${fld('domains', 'Allowed e-mail domains', 'e.g. example.com - empty: any account the service signs in', 'placeholder="example.com"')}
+    ${fld('groups', 'Allowed groups (ids)', 'empty: any; needs the <i>groups</i> claim in the app registration')}
+    <label class="ck"><input type="checkbox" data-sso="inviteToo" ${f.inviteToo ? 'checked' : ''}> Members may also join with the invite key</label>
+    <label class="fl"><span>Sign in again every</span><input data-k="sso-renew" data-sso="renewDays" type="number" min="0" value="${f.renewDays}" style="width:90px"> <small>days (0 = never) - someone who left the company drops out then</small></label>
+    <div class="acts2"><button class="p" id="ssosave">Save</button>${on ? '<button id="ssotest">Test Sign-In</button><button class="d" id="ssooff">Turn Off</button>' : ''}</div>
+    ${ui.ssoTest ? `<div class="pad small ${ui.ssoTest.err ? 'bad' : ''}" style="padding-left:0">${esc(ui.ssoTest.text)}</div>` : ''}
+  </div></div>
+  <div class="card help"><h3>Microsoft Entra ID, step by step</h3><div class="pad"><ol class="steps">
+    <li>Entra admin center → <b>App registrations → New registration</b>, e.g. <i>Termwright ${esc(st.team.name)}</i>, single tenant.</li>
+    <li><b>Redirect URI</b>: platform <i>Web</i>, this address:<div class="tool" style="border:0;padding:6px 0"><input class="mono" readonly value="${esc(redirect)}" style="flex:1" id="ssoredir"><button id="ssocp">Copy</button></div></li>
+    <li><b>Certificates &amp; secrets → New client secret</b>, paste it here (or leave it empty and turn on <i>Allow public client flows</i>).</li>
+    <li><b>Token configuration → Add optional claim → ID → email</b>; for allowed groups also <i>Add groups claim</i>.</li>
+    <li>Copy the <b>Application (client) ID</b> and the <b>Directory (tenant) ID</b> from the Overview into the fields here, Save and <b>Test Sign-In</b>.</li>
+  </ol>
+  ${st.ssoInvite ? `<h4>Invite for single sign-on</h4><p>Send this to the team: it has the server's address and certificate, not the key. Termwright then offers <i>Join with ${esc(c.label || 'your company account')}</i>.</p><div class="tool" style="border:0;padding:0"><input class="mono" readonly value="${esc(st.ssoInvite)}" style="flex:1" id="ssoinv"><button id="ssoicp">Copy</button></div>` : ''}
+  </div></div></div>`;
 }
 
 // ---------- backup & restore (owner) ----------
@@ -666,7 +699,7 @@ function help() {
     <span>Guide</span><a class="link" href="https://github.com/nperiannan/termwright/blob/main/docs/TEAM_SERVER.md" target="_blank" rel="noopener">Team server guide</a>
     <span>Project</span><a class="link" href="https://github.com/nperiannan/termwright" target="_blank" rel="noopener">github.com/nperiannan/termwright</a></div></div>`;
 }
-const PAGES = { overview, reports, inventory, approvals, discover, members, backup, activity, help };
+const PAGES = { overview, reports, inventory, approvals, discover, members, sso, backup, activity, help };
 
 function wire() {
   const on = (sel, ev, fn) => $$(sel).forEach(e => e[ev] = fn);
@@ -732,6 +765,28 @@ function wire() {
   const aq = $('#aq'); if (aq) aq.oninput = () => { ui.actQ = aq.value; clearTimeout(ui.aqT); ui.aqT = setTimeout(() => loadAct(true), 300); };
   if ($('#amore')) $('#amore').onclick = () => loadAct(false);
   if ($('#acsv')) $('#acsv').onclick = actCsv;
+  document.querySelectorAll('[data-sso]').forEach(el => el.oninput = el.onchange = () => { const k = el.dataset.sso; ui.ssoForm[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value; });
+  const ssoBody = off => ({ label: ui.ssoForm.label, issuer: off ? '' : ui.ssoForm.issuer, clientId: off ? '' : ui.ssoForm.clientId, clientSecret: ui.ssoForm.secret,
+    domains: ui.ssoForm.domains.split(/[ ,;]+/).filter(Boolean), groups: ui.ssoForm.groups.split(/[ ,;]+/).filter(Boolean), inviteToo: ui.ssoForm.inviteToo, renewDays: ui.ssoForm.renewDays });
+  if ($('#ssosave')) $('#ssosave').onclick = () => act(() => api('POST', '/api/admin/sso', ssoBody(false)).then(() => { ui.ssoForm = null; ui.ssoTest = null; }), 'Single sign-on saved');
+  if ($('#ssooff')) $('#ssooff').onclick = () => { if (confirm('Turn single sign-on off? Members who joined with it stay; new members need the invite key.')) act(() => api('POST', '/api/admin/sso', ssoBody(true)).then(() => { ui.ssoForm = null; }), 'Single sign-on is off'); };
+  if ($('#ssotest')) $('#ssotest').onclick = async () => {
+    try {
+      const t = await api('POST', '/api/admin/sso/test', {});
+      window.open(t.url, '_blank', 'noopener');
+      ui.ssoTest = { text: 'Sign in in the new tab…' }; render();
+      for (let i = 0; i < 6; i++) {
+        const r = await fetch('/api/sso/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ req: t.req, secret: t.secret }) });
+        if (r.status === 202) continue;
+        const j = await r.json().catch(() => ({}));
+        ui.ssoTest = r.ok ? { text: 'It works: signed in as ' + (j.email || j.preferred_username || j.upn || '?') + (j.name ? ' (' + j.name + ')' : '') + (j.groups ? ' · groups: ' + j.groups.length : ' · no groups claim') } : { err: true, text: j.error || r.statusText };
+        break;
+      }
+    } catch (e) { ui.ssoTest = { err: true, text: e.message }; }
+    render();
+  };
+  if ($('#ssocp')) $('#ssocp').onclick = () => { navigator.clipboard.writeText($('#ssoredir').value); flash('Copied'); };
+  if ($('#ssoicp')) $('#ssoicp').onclick = () => { navigator.clipboard.writeText($('#ssoinv').value); flash('Copied'); };
   if ($('#bdl')) $('#bdl').onclick = () => { location.href = '/api/admin/backup'; setTimeout(() => load(true), 1500); };
   if ($('#brs')) $('#brs').onclick = () => $('#bfile').click();
   if ($('#bfile')) $('#bfile').onchange = async e => {

@@ -45,6 +45,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
               <div><b>{{ t.name }}</b> <span class="pill" [class.own]="t.role !== 'member'">{{ role(t.role) }}</span></div>
               <div class="mono muted">{{ t.address }}@if (t.reachable) { · {{ t.members }} member{{ t.members === 1 ? '' : 's' }} · {{ t.online }} online · server {{ t.version || '?' }} }</div>
               @if (t.error) { <div class="err">{{ t.error }}</div> }
+              @if (t.signIn) { <div class="upd"><app-icon name="key" [size]="13" /><span>Your team uses single sign-on.</span><a (click)="$event.stopPropagation(); signInAgain(t)">{{ ssoBusy() ? 'Waiting for the browser…' : 'Sign In Again…' }}</a></div> }
               @if (t.reachable && t.update) {
                 <div class="upd"><app-icon name="download" [size]="13" />
                   @if (t.role !== 'member') { <span>Version <b>{{ t.update }}</b> is available for the team server (it runs {{ t.version || 'an older one' }}).</span>
@@ -110,6 +111,11 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
           placeholder="termwright-team://10.234.179.141:7443/?k=…&fp=…"></textarea>
         @if (info(); as i) {
           <div class="found"><app-icon name="check" [size]="14" /> <b>{{ i.name }}</b> · {{ i.members }} member{{ i.members === 1 ? '' : 's' }}, {{ i.online }} online · server {{ i.version }}</div>
+          @if (i.sso) {
+            <div class="sso"><button type="button" class="primary" (click)="joinSSO()" [disabled]="busy()"><app-icon name="key" [size]="14" /> {{ busy() ? 'Waiting for the sign-in in your browser…' : 'Join with ' + i.sso }}</button>
+              @if (busy()) { <button type="button" (click)="cancelSSO()">Cancel</button> }
+              <span class="muted small">{{ i.inviteToo ? 'or Join with the invite key below' : 'this team uses single sign-on' }}</span></div>
+          }
         }
         <p class="hint">The invite holds the server's address, the team key and the fingerprint of its certificate: Termwright talks only to that server.
           Your name, user name and computer name are shown to the team - never passwords, keys or sessions.</p>
@@ -119,7 +125,9 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
         <button type="button" (click)="back()">Back</button>
         <span class="spacer"></span>
         <button type="button" (click)="close()">Close</button>
-        <button type="submit" form="joinf" class="primary" [disabled]="busy() || !invite.trim()">{{ busy() ? 'Joining…' : 'Join' }}</button>
+        @if (!info()?.sso || info()?.inviteToo) {
+          <button type="submit" form="joinf" [class.primary]="!info()?.sso" [disabled]="busy() || !invite.trim()">{{ busy() ? 'Joining…' : 'Join' }}</button>
+        }
       </div>
       }
 
@@ -251,6 +259,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
       background: color-mix(in srgb, var(--accent) 10%, transparent); app-icon { color: var(--accent); flex: none; }
       span { flex: 1; } a { color: var(--accent); cursor: pointer; font-weight: 600; white-space: nowrap; } }
     .upd.new { background: color-mix(in srgb, var(--text) 6%, transparent); app-icon { color: var(--muted); } }
+    .sso { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; flex-wrap: wrap; button app-icon { margin-right: 4px; } }
     .found { display: flex; align-items: center; gap: 6px; margin: 10px 0 6px; app-icon { color: #22c55e; } }
     .hint.warnh { color: #d97706; }
     .hint { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); margin: 10px 0 0; line-height: 1.45; }
@@ -457,6 +466,27 @@ export class TeamsDialog implements OnInit, OnDestroy {
     this.infoTimer = window.setTimeout(async () => {
       try { this.info.set(await this.backend.teamInviteInfo(v)); } catch (e) { this.error.set(errText(e)); }
     }, 400);
+  }
+
+  readonly ssoBusy = signal(false);
+  /** Joins with the company account: the sign-in opens in the browser. */
+  async joinSSO() {
+    this.busy.set(true); this.error.set('');
+    try {
+      const t = await this.backend.teamJoinSSO(this.invite.trim());
+      this.sel.set(t.id);
+      this.ui.toast(tr('You joined {0}', t.name), 'success');
+      this.back();
+    } catch (e) { const m = errText(e); if (m !== 'cancelled') this.error.set(m); }
+    finally { this.busy.set(false); }
+  }
+  cancelSSO() { void this.backend.teamSSOCancel(); }
+  async signInAgain(t: TeamView) {
+    if (this.ssoBusy()) return;
+    this.ssoBusy.set(true);
+    try { await this.backend.teamSSOAgain(t.id); this.ui.toast(tr('Signed in to {0}', t.name), 'success'); await this.load(); }
+    catch (e) { const m = errText(e); if (m !== 'cancelled') this.error.set(m); }
+    finally { this.ssoBusy.set(false); }
   }
 
   async join() {

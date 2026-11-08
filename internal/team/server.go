@@ -33,6 +33,8 @@ const onlineFor = 2 * time.Minute
 type memberRec struct {
 	Member
 	TokenHash string `json:"tokenHash"`
+	SSOSub    string `json:"ssoSub,omitempty"` // the account at the identity provider (oid or sub)
+	SSOAt     string `json:"ssoAt,omitempty"`  // the last single sign-on
 }
 
 // state is what the server keeps in team.json.
@@ -49,6 +51,7 @@ type state struct {
 	Activity      []Activity     `json:"activity,omitempty"` // newest last, at most maxActivity
 	Reservations  []*Reservation `json:"reservations,omitempty"`
 	Watches       []*Watch       `json:"watches,omitempty"` // members waiting for a device to be free
+	SSO           *SSOConfig     `json:"sso,omitempty"`     // single sign-on (nil = invite only)
 }
 
 // Server is a team server. Its data (team.json, the certificate and key) is in Dir.
@@ -61,13 +64,14 @@ type Server struct {
 	st         state
 	cert       tls.Certificate
 	fp         string
-	signIns    map[string]time.Time // the last admin sign-in noted per member
-	usageDirty bool                 // usage.json to be written (flushLoop)
-	usageWrite sync.Mutex           // one writer of usage.json at a time
-	lastUse    map[string]UseRec    // per device its last closed session (lastUses)
-	lastRev    int64                // changes when Status.Last does
-	seen       map[string]time.Time // member id → last call (not saved on every call)
-	fails      map[string]time.Time // remote address → last failed join
+	signIns    map[string]time.Time   // the last admin sign-in noted per member
+	ssoReqs    map[string]*ssoPending // single sign-ons waiting for the browser
+	usageDirty bool                   // usage.json to be written (flushLoop)
+	usageWrite sync.Mutex             // one writer of usage.json at a time
+	lastUse    map[string]UseRec      // per device its last closed session (lastUses)
+	lastRev    int64                  // changes when Status.Last does
+	seen       map[string]time.Time   // member id → last call (not saved on every call)
+	fails      map[string]time.Time   // remote address → last failed join
 	now        func() time.Time
 
 	changed  chan struct{}           // closed and replaced when the inventory changes (long polls wait on it)
@@ -93,7 +97,7 @@ func Open(dir, name, version string, logger *log.Logger) (*Server, string, error
 	}
 	s := &Server{Dir: dir, Version: version, Log: logger, seen: map[string]time.Time{}, fails: map[string]time.Time{}, now: time.Now,
 		changed: make(chan struct{}), links: map[string]linkCode{}, sessions: map[string]adminSession{},
-		presence: map[string]*presenceRec{}, notes: map[string][]Note{}, statusCh: make(chan struct{}), signIns: map[string]time.Time{}}
+		presence: map[string]*presenceRec{}, notes: map[string][]Note{}, statusCh: make(chan struct{}), signIns: map[string]time.Time{}, ssoReqs: map[string]*ssoPending{}}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, "", err
 	}
@@ -242,6 +246,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/members/remove", s.auth(s.remove))
 	mux.HandleFunc("POST /api/leave", s.auth(s.leave))
 	s.moreRoutes(mux)
+	s.ssoRoutes(mux)
 	s.inventoryRoutes(mux)
 	limited := http.MaxBytesHandler(mux, 16<<20)
 	return gzipJSON(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +282,14 @@ func (s *Server) info(w http.ResponseWriter, _ *http.Request) {
 			n++
 		}
 	}
-	writeJSON(w, 200, Info{Name: s.st.Name, Version: s.Version, Members: len(s.st.Members), Online: n, Owner: s.ownerID() != ""})
+	info := Info{Name: s.st.Name, Version: s.Version, Members: len(s.st.Members), Online: n, Owner: s.ownerID() != ""}
+	if c := s.st.SSO; c != nil && c.ClientID != "" {
+		info.SSO, info.InviteToo = c.Label, c.InviteToo
+		if info.SSO == "" {
+			info.SSO = "your company account"
+		}
+	}
+	writeJSON(w, 200, info)
 }
 
 func clean(v string, max int) string {
@@ -316,6 +328,9 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case req.OwnerCode != "" && s.st.OwnerCodeHash != "" && subtle.ConstantTimeCompare([]byte(hashToken(req.OwnerCode)), []byte(s.st.OwnerCodeHash)) == 1:
 		role = RoleOwner
+	case req.Invite != "" && s.st.SSO != nil && !s.st.SSO.InviteToo:
+		fail(w, 403, "this team uses single sign-on - join with your company account")
+		return
 	case req.Invite != "" && subtle.ConstantTimeCompare([]byte(req.Invite), []byte(s.st.Invite)) == 1:
 		role = RoleMember
 	default:
@@ -370,6 +385,10 @@ func (s *Server) auth(h func(http.ResponseWriter, *http.Request, *memberRec)) ht
 			th := hashToken(tok)
 			for _, m := range s.st.Members {
 				if subtle.ConstantTimeCompare([]byte(th), []byte(m.TokenHash)) == 1 {
+					if s.ssoExpired(m) {
+						fail(w, 401, SSORenewMsg)
+						return
+					}
 					s.seen[m.ID] = s.now()
 					if t, err := time.Parse(time.RFC3339, m.LastSeen); err != nil || s.now().Sub(t) > time.Hour {
 						m.LastSeen = s.now().UTC().Format(time.RFC3339)

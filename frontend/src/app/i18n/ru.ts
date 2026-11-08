@@ -1300,6 +1300,18 @@ const ru: Record<string, string> = {
   '{0} models - pick one, or leave it empty for the first: {1}': 'Моделей: {0} - выберите одну или оставьте пустым для первой: {1}',
   'The service lists no models.': 'Сервис не сообщает моделей.',
   '(right-click in a terminal). Passwords, secrets, keys, SNMP communities and tokens are always removed first, and the window shows what was sent. Commands are pasted without Enter - you check them and press Enter. Check your company\'s policy before sending device output to an outside service; Ollama keeps everything on your network.': '(правый клик в терминале). Пароли, секреты, ключи, SNMP-сообщества и токены всегда удаляются заранее, а окно показывает, что было отправлено. Команды вставляются без Enter - вы проверяете их и нажимаете Enter. Перед отправкой вывода устройств во внешний сервис проверьте политику компании; Ollama оставляет всё в вашей сети.',
+  // single sign-on
+  'Join with {0}': 'Войти через {0}',
+  'Waiting for the sign-in in your browser…': 'Ожидание входа в браузере…',
+  'or Join with the invite key below': 'или присоединитесь по ключу приглашения ниже',
+  'this team uses single sign-on': 'эта группа использует единый вход',
+  'Your team uses single sign-on.': 'Ваша группа использует единый вход.',
+  'Sign In Again…': 'Войти снова…',
+  'Waiting for the browser…': 'Ожидание браузера…',
+  'Sign in again with your company account - the team asks for it every few weeks.': 'Войдите снова с корпоративной учётной записью - группа просит об этом раз в несколько недель.',
+  '{0} asks you to sign in again with your company account.': '{0} просит снова войти с корпоративной учётной записью.',
+  'Signed in to {0}': 'Вход в {0} выполнен',
+  'your company account': 'корпоративной учётной записью',
 };
 
 export default ru;

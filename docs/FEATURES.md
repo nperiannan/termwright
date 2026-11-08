@@ -66,6 +66,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Who uses which device** (network devices only - not computers, Linux machines, phones, printers or IoT boards): badges for open (● initials) and reserved (🔒), a card with the reservation, who has it open since when, last used and free for; **Reserve…** until a time with a note; a warning and a notice when connecting to someone else's reservation.
 - **Admin page** (owners and co-owners, opened signed in from Termwright, no passwords on the server): overview with utilization, busy hours and insights (what to buy, what nobody uses), usage reports per device, member, reservation and session with CSV export, inventory with folders and CSV import/export, approvals, scans from the lab host, members and invites, activity log; light and dark theme.
 - **Tell Me When It Is Free**: wait for a device someone else has open or reserved, a notice comes when it is free. **Hand over** the team to another member (the owner stays as co-owner). **Backup & restore** on the admin page (owner), and an **Activity** log of 5000 events with filter and CSV export.
+- **Single sign-on** for teams: members join and stay with their company account (Microsoft Entra ID, Okta, Google - any OpenID Connect service), with allowed domains and groups and a sign-in again every few weeks; set up on the admin page.
 
 ## SSH2
 

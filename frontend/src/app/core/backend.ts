@@ -150,6 +150,9 @@ export class Backend {
   aiAsk(r: { kind: string; text: string; deviceType: string; protocol: string }) { return this.call<AIAnswer>('AIAsk', r); }
   syncNow() { return this.call<SyncStatus>('SyncNow'); }
   syncState() { return this.call<SyncStatus>('SyncState'); }
+  teamJoinSSO(invite: string) { return this.call<TeamConn>('TeamJoinSSO', invite); }
+  teamSSOAgain(id: string) { return this.call<void>('TeamSSOAgain', id); }
+  teamSSOCancel() { return this.call<void>('TeamSSOCancel'); }
   teamWatch(teamId: string, d: { host: string; port: number; protocol: string; mac?: string; name?: string }, on: boolean) { return this.call<boolean>('TeamWatch', teamId, d, on); }
   teamConnected(d: { host: string; port: number; protocol: string; mac?: string }) { return this.call<void>('TeamConnected', d); }
   importTemplate() { return this.call<string>('ImportTemplate'); }

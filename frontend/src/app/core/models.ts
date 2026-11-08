@@ -312,10 +312,12 @@ export interface RemoteDesktopRun {
 export interface TeamConn { id: string; name: string; address: string; fingerprint: string; memberId: string; role: TeamRole; host?: string; container?: string; }
 export type TeamRole = 'owner' | 'co-owner' | 'member';
 export interface TeamView extends TeamConn { reachable: boolean; error: string; members: number; online: number; version: string;
-  /** the version to update the team server to, when it is older than this Termwright */ update?: string; newer?: boolean; }
+  /** the version to update the team server to, when it is older than this Termwright */ update?: string; newer?: boolean;
+  /** single sign-on asks to sign in again */ signIn?: boolean; }
 export interface TeamMember { id: string; name: string; user: string; machine: string; role: TeamRole; joined: string; lastSeen: string; online: boolean; }
 export interface TeamDetails { id: string; name: string; version: string; me: string; role: TeamRole; invite?: string; inviteLink: string; address: string; members: TeamMember[]; }
-export interface TeamInfo { name: string; version: string; members: number; online: number; owner: boolean; }
+export interface TeamInfo { name: string; version: string; members: number; online: number; owner: boolean;
+  /** single sign-on: the company account's name ("Microsoft"); inviteToo: the invite key works as well */ sso?: string; inviteToo?: boolean; }
 export interface TeamSetUpStep { run: string; step: string; state: 'run' | 'ok' | 'fail' | 'info'; text: string; }
 export interface TeamSetUpResult { run: string; teamId: string; invite: string; error: string; }
 export interface TeamDevice { id?: string; name: string; folder: string; host: string; port: number; protocol: string; deviceType: string; mac: string; description: string; }

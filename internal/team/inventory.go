@@ -323,8 +323,16 @@ type AdminState struct {
 	Pending   []*Pending `json:"pending"`
 	Activity  []Activity `json:"activity"`
 	Me        string     `json:"me"`
-	Invite    string     `json:"invite"` // the invite link, with the address the browser used
-	Status    Status     `json:"status"` // who uses and reserved which devices
+	Invite    string     `json:"invite"`              // the invite link, with the address the browser used
+	Status    Status     `json:"status"`              // who uses and reserved which devices
+	SSO       *SSOView   `json:"sso,omitempty"`       // single sign-on (owner only; never the secret)
+	SSOInvite string     `json:"ssoInvite,omitempty"` // an invite without the key, for single sign-on
+}
+
+// SSOView is the single sign-on setup as the admin page shows it.
+type SSOView struct {
+	SSOConfig
+	HasSecret bool `json:"hasSecret"`
 }
 
 func (s *Server) adminState(w http.ResponseWriter, r *http.Request, me *memberRec) {
@@ -351,7 +359,18 @@ func (s *Server) adminState(w http.ResponseWriter, r *http.Request, me *memberRe
 	s.prune()
 	stat := s.statusFor(me)
 	stat.Notes = []Note{}
-	writeJSON(w, 200, AdminState{Team: t, Inventory: inv, Pending: p, Activity: act, Me: me.ID, Invite: link, Status: stat})
+	st := AdminState{Team: t, Inventory: inv, Pending: p, Activity: act, Me: me.ID, Invite: link, Status: stat}
+	if me.Role == RoleOwner {
+		st.SSO = &SSOView{}
+		if c := s.st.SSO; c != nil {
+			st.SSO = &SSOView{SSOConfig: *c, HasSecret: c.ClientSecret != ""}
+			st.SSO.ClientSecret = ""
+		}
+	}
+	if s.st.SSO != nil && manager(me) {
+		st.SSOInvite = Invitation{Address: r.Host, Fingerprint: s.fp, Name: s.st.Name}.String()
+	}
+	writeJSON(w, 200, st)
 }
 
 // saveDevices adds or changes devices (an empty id adds).

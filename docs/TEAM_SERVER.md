@@ -98,6 +98,21 @@ The invite holds:
 
 The key that proves your membership is kept in the system keychain, not in `settings.json`.
 
+## Single sign-on (Microsoft Entra ID, Okta, Google)
+
+Members can join - and stay in the team - with their company account instead of the invite key. The owner sets it up on the admin page, **Single sign-on**:
+
+1. In the Entra admin center: **App registrations → New registration** (single tenant). **Redirect URI**: platform *Web*, `https://<team server>:<port>/sso/callback` (the page shows it with *Copy*).
+2. **Certificates & secrets → New client secret**, or leave the secret empty and turn on *Allow public client flows* (Termwright uses PKCE either way).
+3. **Token configuration**: add the optional claim *email* to the ID token; for allowed groups also *Add groups claim*.
+4. On the admin page: the **Issuer** `https://login.microsoftonline.com/<Directory (tenant) ID>/v2.0`, the **Application (client) ID**, the secret, and optionally **allowed e-mail domains** and **group ids**. **Save**, then **Test Sign-In**.
+
+Then send the team the **invite for single sign-on** from that page (the server's address and certificate, no key). In Termwright, *Join a Team* shows **Join with Microsoft**: the sign-in opens in the browser, and Termwright joins when it is done. *Members may also join with the invite key* keeps the old way open. **Sign in again every … days** (30 by default): after that a member's Termwright asks them to sign in again, so someone who left the company drops out. Another account cannot take over a member, and the ID token's signature, issuer, audience, expiry and nonce are all checked. Okta, Google and other OpenID Connect services work the same way with their issuer address.
+
+| Single sign-on on the admin page | Joining in Termwright |
+|---|---|
+| ![Single sign-on](screenshots/team-sso.png) | ![Join with Microsoft](screenshots/team-sso-join.png) |
+
 ## Roles
 
 | Role | Can |

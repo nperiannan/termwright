@@ -59,7 +59,7 @@ func (a *App) teamSyncLoop(ctx context.Context, id string) {
 	rev := int64(-1)
 	backoff := 5 * time.Second
 	for ctx.Err() == nil {
-		_, c, err := a.teamConn(id)
+		t, c, err := a.teamConn(id)
 		if err != nil {
 			return // left
 		}
@@ -70,6 +70,12 @@ func (a *App) teamSyncLoop(ctx context.Context, id string) {
 		inv, err := c.Inventory(ctx, rev, wait)
 		if err != nil {
 			if ctx.Err() != nil {
+				return
+			}
+			if team.NeedsSSO(err) {
+				if a.ctx != nil { // once: the Teams window then offers Sign In Again
+					wruntime.EventsEmit(a.ctx, "team:sso", map[string]string{"teamId": id, "team": t.Name})
+				}
 				return
 			}
 			if team.Unauthorized(err) {

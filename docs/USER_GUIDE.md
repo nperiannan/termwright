@@ -605,7 +605,7 @@ Limits: MAC addresses are only visible on **this computer's own network** (the s
 A team that shares a lab can run its own small **team server** (a Docker container on a Linux host of the lab) and connect every member's Termwright to it. **Options → Teams…** is the place for it, and it is optional: until you join or set up a team, nothing changes and nothing is sent anywhere.
 
 - **Set Up a Team Server…**: pick the SSH session of the host and give the team a name. Termwright checks Docker, picks a free port from 7443 (never one in use), starts `termwright-team-<name>` with its own data volume, and makes you the **owner**. If the host has no internet, the image is copied over SSH.
-- **Join a Team…**: paste the invite the owner sent you. Termwright talks only to the server whose certificate matches the invite.
+- **Join a Team…**: paste the invite the owner sent you. Termwright talks only to the server whose certificate matches the invite. A team with **single sign-on** shows *Join with Microsoft* (or its own name): the sign-in opens in your browser; every few weeks Termwright asks you to sign in again.
 - **The team**: who is in it and who is online. Owners and co-owners see the invite (*Copy*, *New Invite* - the old one stops working), make members co-owners and remove members. *You appear as* sets the name the team sees.
 
 - **The team folder**: the team's inventory appears as a folder named after the team and follows the server within seconds. Name, folder, address, port, protocol, device type and MAC address come from the team; your login on each device stays yours.

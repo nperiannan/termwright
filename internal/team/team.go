@@ -37,6 +37,9 @@ type Info struct {
 	Members int    `json:"members"`
 	Online  int    `json:"online"`
 	Owner   bool   `json:"owner"` // an owner has joined (the setup code is used)
+	// SSO: members join with their company account ("Microsoft"…; "" = invite only)
+	SSO       string `json:"sso,omitempty"`
+	InviteToo bool   `json:"inviteToo,omitempty"` // with SSO, the invite key works too
 }
 
 // JoinRequest joins a team with the invite key, or as its owner with the setup code.
@@ -67,6 +70,8 @@ type Member struct {
 	Joined   string `json:"joined"`   // RFC 3339
 	LastSeen string `json:"lastSeen"` // RFC 3339
 	Online   bool   `json:"online"`
+	Email    string `json:"email,omitempty"` // joined with single sign-on: the account
+	SSO      bool   `json:"sso,omitempty"`
 }
 
 // Team is the team as a member sees it (GET /api/team). Invite is filled in
@@ -103,7 +108,9 @@ const InviteScheme = "termwright-team://"
 // String is the invite link.
 func (iv Invitation) String() string {
 	q := url.Values{}
-	q.Set("k", iv.Key)
+	if iv.Key != "" { // none: a team with single sign-on
+		q.Set("k", iv.Key)
+	}
 	q.Set("fp", iv.Fingerprint)
 	if iv.Name != "" {
 		q.Set("n", iv.Name)
@@ -129,7 +136,7 @@ func ParseInvite(s string) (Invitation, error) {
 	if p, err := strconv.Atoi(port); err != nil || p <= 0 || p > 65535 {
 		return Invitation{}, errors.New("the invite has a wrong port")
 	}
-	if iv.Key == "" || len(iv.Fingerprint) != 64 {
+	if len(iv.Fingerprint) != 64 { // the key may be missing: a team with single sign-on
 		return Invitation{}, errors.New("the invite is incomplete - copy all of it")
 	}
 	return iv, nil
