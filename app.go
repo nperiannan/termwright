@@ -175,6 +175,7 @@ func (a *App) init() error {
 
 func (a *App) shutdown(context.Context) {
 	closeWebPages()
+	fsMgr.StopAll()
 	if a.terms != nil {
 		a.terms.CloseAll()
 	}
@@ -295,7 +296,8 @@ func (a *App) SaveSettings(s config.Settings) error {
 	s.RecentSessions, s.LastConnected = cur.RecentSessions, cur.LastConnected
 	s.DeviceFacts = cur.DeviceFacts // read by RefreshFacts
 	s.Teams = cur.Teams
-	s.SyncID = cur.SyncID // this computer's id in the sync folder: only the sync sets it
+	s.FileServers = cur.FileServers // changed only through FileServersSave
+	s.SyncID = cur.SyncID           // this computer's id in the sync folder: only the sync sets it
 	if err := a.cfg.Save(s); err != nil {
 		return err
 	}

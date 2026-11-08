@@ -67,6 +67,7 @@ var menuRU = map[string]string{
 	"Run Script...":                         "Запустить скрипт...",
 	"Run and Collect...":                    "Выполнить и собрать...",
 	"SCP Download...":                       "SCP: скачать...",
+	"File Servers (TFTP, FTP, HTTP)...":     "Файловые серверы (TFTP, FTP, HTTP)...",
 	"SCP Upload File...":                    "SCP: загрузить файл...",
 	"SCP Upload Folder...":                  "SCP: загрузить папку...",
 	"Save Screen As Image...":               "Сохранить экран как изображение...",

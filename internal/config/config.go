@@ -45,6 +45,30 @@ type AISettings struct {
 	HideHosts bool   `json:"hideHosts,omitempty"` // replace IP addresses, MAC addresses and host names before sending
 }
 
+// FileServersSettings: the TFTP, FTP and HTTP servers devices fetch files
+// from. The FTP password is in the OS keychain.
+type FileServersSettings struct {
+	Folder      string          `json:"folder,omitempty"`  // "" = ~/Termwright/Files
+	Address     string          `json:"address,omitempty"` // "*" = all addresses, "" = not chosen yet (all)
+	TFTPPort    int             `json:"tftpPort,omitempty"`
+	FTPPort     int             `json:"ftpPort,omitempty"`
+	HTTPPort    int             `json:"httpPort,omitempty"`
+	TFTPWrite   bool            `json:"tftpWrite,omitempty"`   // devices can upload over TFTP
+	FTPWrite    bool            `json:"ftpWrite,omitempty"`    // devices can upload over FTP
+	FTPUser     string          `json:"ftpUser,omitempty"`     // "" = termwright
+	IdleMinutes int             `json:"idleMinutes,omitempty"` // stop after this long without transfers; 0 = 30, -1 = never
+	Commands    []ServerCommand `json:"commands,omitempty"`    // the user's own device commands
+}
+
+// ServerCommand is a device command template for the File Servers window:
+// {ip} {port} {file} {name} {user} {password} {url} are filled in.
+type ServerCommand struct {
+	DeviceType string `json:"deviceType"`
+	Protocol   string `json:"protocol"`      // tftp, ftp, http
+	Put        bool   `json:"put,omitempty"` // the device sends a file
+	Text       string `json:"text"`
+}
+
 // Credential is a named user name; its password is kept in the OS keychain.
 type Credential struct {
 	Name     string `json:"name"`
@@ -137,6 +161,7 @@ type Settings struct {
 	SyncOptions bool   `json:"syncOptions,omitempty"` // Global Options too (sessions, accounts and the library always)
 	// AI assistant (optional, off by default): Explain and Suggest with the user's own provider
 	AI                  AISettings           `json:"ai,omitempty"`
+	FileServers         FileServersSettings  `json:"fileServers,omitempty"`
 	MasterHash          string               `json:"masterHash"` // scrypt verifier; empty = no master password
 	KeyMap              []KeyBinding         `json:"keyMap"`
 	CustomSchemes       []ColorScheme        `json:"customSchemes"`

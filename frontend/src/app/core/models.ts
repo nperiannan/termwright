@@ -329,5 +329,15 @@ export interface SyncStatus { folder: string; last: string; peers: string[] | nu
 
 /** The AI assistant (optional): the provider and model; the API key is in the OS keychain. */
 export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama'; model?: string; baseUrl?: string; hideHosts?: boolean; }
+export interface FileServersSettings { folder: string; address: string; tftpPort: number; ftpPort: number; httpPort: number; tftpWrite: boolean; ftpWrite: boolean;
+  ftpUser: string; idleMinutes: number; commands?: ServerCommand[] | null; }
+export interface ServerCommand { deviceType: string; protocol: string; put?: boolean; text: string; }
+export interface FileServer { kind: 'tftp' | 'ftp' | 'http'; running: boolean; port: number; address: string; error?: string; }
+export interface FileServersState { servers: FileServer[]; folder: string; stopped?: string; }
+export interface FileTransfer { id: number; server: string; peer: string; file: string; put: boolean; state: 'running' | 'done' | 'error' | 'refused';
+  bytes: number; size: number; error?: string; start: string; end?: string; }
+export interface FileServersView { settings: FileServersSettings; state: FileServersState; transfers: FileTransfer[]; }
+export interface FSAddress { ip: string; label: string; reaches: boolean; }
+export interface ServedFile { name: string; size: number; }
 export interface AIStatus { provider: string; model: string; hasKey: boolean; ready: boolean; }
 export interface AIAnswer { text: string; commands: string[]; sent: string; removed: number; model: string; }

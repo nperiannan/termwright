@@ -46,6 +46,8 @@ import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
 import { TeamsDialog } from './dialogs/teams-dialog';
+import { FileServersDialog } from './dialogs/file-servers-dialog';
+import { ServersIndicator } from './components/servers-indicator';
 import { TeamPushDialog } from './dialogs/team-push-dialog';
 import { TeamReserveDialog } from './dialogs/team-reserve-dialog';
 import { AIDialog } from './dialogs/ai-dialog';
@@ -66,7 +68,7 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, TeamPushDialog, TeamReserveDialog, AIDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, ServersIndicator, TeamPushDialog, TeamReserveDialog, AIDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -475,6 +477,7 @@ export class App implements OnInit {
       case 'import': this.ui.open('import'); break;
       case 'discover': this.ui.open('discover'); break;
       case 'teams': this.ui.open('teams'); break;
+      case 'file-servers': this.ui.open('fileServers'); break;
       case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
       case 'checklists': this.ui.open('checklists'); break;
       case 'collect': this.ui.open('collect'); break;

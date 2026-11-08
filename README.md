@@ -258,7 +258,7 @@ Termwright has no telemetry. Apart from the hosts you connect to (and the reacha
 flowchart TB
   subgraph PC["Your computer - Termwright"]
     direction LR
-    UI["Angular UI<br/>terminals (xterm.js), Session Manager,<br/>dialogs, VNC viewer"] <-- "bound methods, events" --> Go["Go backend (Wails)<br/>SSH2 · Telnet and Telnet over TLS · Serial · Raw<br/>Local shell · Mosh · SFTP/SCP · ZMODEM/X/YMODEM<br/>tunnels · scripts · backups · discovery · Wake-on-LAN"]
+    UI["Angular UI<br/>terminals (xterm.js), Session Manager,<br/>dialogs, VNC viewer"] <-- "bound methods, events" --> Go["Go backend (Wails)<br/>SSH2 · Telnet and Telnet over TLS · Serial · Raw<br/>Local shell · Mosh · SFTP/SCP · ZMODEM/X/YMODEM<br/>tunnels · scripts · backups · discovery · Wake-on-LAN<br/>TFTP · FTP · HTTP file servers"]
     Go --- Data[("Data folder<br/>sessions .ini, settings,<br/>logs, recordings, backups")]
     Go --- Keys[("OS keychain /<br/>password managers")]
   end
@@ -270,6 +270,7 @@ flowchart TB
   GH["GitHub<br/>releases, ghcr.io image"]
   Browser["Browser<br/>admin page"]
   Go -- "SSH, Telnet, serial, RDP, VNC, mosh<br/>directly, via jump hosts or proxies" --> Dev
+  Dev -- "TFTP, FTP, HTTP: images, licences, configs<br/>(file servers, only while started)" --> Go
   Go -- "HTTPS, pinned certificate<br/>only after joining a team" --> TS
   Go -- "sessions and settings,<br/>never passwords" --> Sync
   Go -- "update check, downloads" --> GH
@@ -289,6 +290,7 @@ teams_*.go, sync_app.go     Teams (join, set up and update a team server, invent
 internal/session            session model, folder store, import and export
 internal/sessionfile        lossless .ini / XML session file reader and writer
 internal/term               SSH2, Telnet (and over TLS), serial, local PTY, Mosh, SFTP/SCP, file transfer protocols, scripting
+internal/fileserve          TFTP, FTP and HTTP servers devices fetch files from and send files to
 internal/team               the team server and its client: members, inventory, presence, reservations, usage, admin page
 internal/discover           network discovery (also used by the team server's scans)
 internal/backup, checklist  configuration backups, change checklists

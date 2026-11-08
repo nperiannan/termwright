@@ -988,6 +988,26 @@ flowchart LR
 
 To copy with SCP while browsing with SFTP, set **Via: SCP** in the SFTP tab (above). For devices that offer SCP but not SFTP: **Transfer → SCP Upload File…** or **SCP Upload Folder…** (pick, then the remote folder/path) and **SCP Download…** (remote file *or folder* path, then a local folder). Folders are copied recursively (`scp -r`).
 
+### File servers (TFTP, FTP, HTTP)
+
+Most switches and routers fetch software images, licences and configurations *themselves* - you type `download image …` or `copy tftp://…` on the device and it connects to a server. **Transfer → File Servers (TFTP, FTP, HTTP)…** turns this computer into that server, so you need no separate TFTP or FTP program.
+
+![File Servers](screenshots/file-servers.png)
+
+- **Folder**: the files devices can fetch, and where the files they send are saved (`Termwright/Files` in your home folder unless you change it). Nothing outside it can be read or written - a device asking for `../../something` is refused and the refusal is listed under *Transfers*.
+- **Listen on**: the address of this computer the servers use. Termwright picks the one that reaches the device of the open tab (marked *reaches …*); *All addresses of this computer* is there when you need it.
+- **TFTP** (UDP, port 69), **FTP** (TCP, port 21) and **HTTP** (TCP, port 8080) each have **Start** / **Stop**. TFTP understands the block size and transfer size options, so large images go fast; FTP works in passive and active mode and needs the user name and password shown (the password is made for you and kept in the keychain - **Copy** it, or make a **new** one); HTTP only sends files.
+- **Devices can upload files** (TFTP and FTP) lets devices send files, for example a configuration backup. It is off for TFTP until you turn it on.
+- **Command for the device**: choose what the device does (*fetches* or *sends*), its type, the protocol and the file, and Termwright writes the command with this computer's address in it - for example `download image 10.1.1.20 summitX-32.6.1.2.xos vr "VR-Mgmt"` for EXOS or `copy tftp://10.1.1.20/image.bin flash:image.bin` for Cisco IOS. **Paste in** types it in the open tab without Enter; **Copy** copies it. Built in: EXOS, Cisco IOS, Cisco NX-OS, Arista EOS, Juniper Junos, Linux and *Any device (URL only)*. **Edit** changes the command for a device type, or adds one for a type that has none (VOSS, for example) - `{url}`, `{ip}`, `{port}`, `{file}`, `{base}`, `{name}`, `{user}` and `{password}` are filled in. Check a command against your device's software version before you rely on it.
+- **Transfers** lists every file fetched or sent, with progress, speed and size, and the requests that were refused.
+- While a server runs, the status bar shows it (with the progress of a transfer); click it to see the transfers and stop a server:
+
+![File servers in the status bar](screenshots/file-servers-status.png)
+
+**Safety.** TFTP, FTP and HTTP are not encrypted: files and the FTP password cross the network as they are, so use them on lab and management networks. The servers stop on their own after 30 minutes without transfers (10 minutes to 4 hours, or never) and always when Termwright closes. FTP data connections go only to the address the FTP login came from, so the server cannot be used to reach other machines.
+
+**Ports below 1024 on Linux** (TFTP 69, FTP 21) need permission: choose a port above 1024 for the server, or allow it once with `sudo setcap cap_net_bind_service=+ep /path/to/termwright`. On Windows, the firewall asks the first time a server starts; allow it for the network the devices are on. macOS needs nothing.
+
 ## 10. Automation: logon actions, triggers, scripts
 
 **Logon Actions** (Session Options → Logon Actions & Triggers):

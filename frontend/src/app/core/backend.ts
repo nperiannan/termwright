@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus } from './models';
+  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -144,6 +144,17 @@ export class Backend {
   teamStatuses() { return this.call<{ teamId: string; team: string; status: any }[]>('TeamStatuses'); }
   teamReserve(d: { host: string; port: number; protocol: string; mac?: string; name?: string }, until: string, note: string) { return this.call<unknown>('TeamReserve', d, until, note); }
   teamRelease(teamId: string, id: string) { return this.call<void>('TeamRelease', teamId, id); }
+  fileServers() { return this.call<FileServersView>('FileServers'); }
+  fileServersSave(s: FileServersSettings) { return this.call<void>('FileServersSave', s); }
+  fileServersStart(kind: string) { return this.call<void>('FileServersStart', kind); }
+  fileServersStop(kind: string) { return this.call<void>('FileServersStop', kind); }
+  fileServersClear() { return this.call<void>('FileServersClear'); }
+  fileServersFiles() { return this.call<ServedFile[]>('FileServersFiles'); }
+  fileServersPassword() { return this.call<string>('FileServersPassword'); }
+  fileServersNewPassword() { return this.call<string>('FileServersNewPassword'); }
+  fileServersChooseFolder() { return this.call<string>('FileServersChooseFolder'); }
+  fileServersShowFolder() { return this.call<void>('FileServersShowFolder'); }
+  fileServersAddresses(host: string) { return this.call<FSAddress[]>('FileServersAddresses', host); }
   aiState() { return this.call<AIStatus>('AIState'); }
   aiSetKey(provider: string, key: string) { return this.call<void>('AISetKey', provider, key); }
   aiModels(s: AISettings) { return this.call<string[]>('AIModels', s); }

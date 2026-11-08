@@ -240,6 +240,8 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	add(xfer, "SCP Upload File...", "scp-upload")
 	add(xfer, "SCP Upload Folder...", "scp-upload-folder")
 	add(xfer, "SCP Download...", "scp-download")
+	xfer.AddSeparator()
+	add(xfer, "File Servers (TFTP, FTP, HTTP)...", "file-servers")
 
 	script := m.AddSubmenu(t("Script"))
 	add(script, "Command Library...", "command-library")

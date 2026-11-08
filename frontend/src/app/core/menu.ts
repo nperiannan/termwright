@@ -50,7 +50,8 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Send Text File...', action: 'send-file' }, { sep: true },
       { label: 'Open Web Page Through This Session...', action: 'web-page' }, { label: 'Wake Up (Wake-on-LAN)', action: 'wake' }, { sep: true },
       { label: 'SCP Upload File...', action: 'scp-upload' }, { label: 'SCP Upload Folder...', action: 'scp-upload-folder' },
-      { label: 'SCP Download...', action: 'scp-download' },
+      { label: 'SCP Download...', action: 'scp-download' }, { sep: true },
+      { label: 'File Servers (TFTP, FTP, HTTP)...', action: 'file-servers' },
     ] },
     { title: 'Script', items: [
       { label: 'Command Library...', action: 'command-library', keys: k('E') }, { label: 'Command History...', action: 'history', keys: k('Y') }, { sep: true },

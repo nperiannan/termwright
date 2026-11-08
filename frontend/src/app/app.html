@@ -285,6 +285,7 @@
     <span class="grow"></span>
   }
   @if (activeXfer(); as x) { <span class="xfer" [title]="x.file">⇅ {{ x.direction }} {{ pct(x) }}%</span> }
+  <app-servers-indicator />
   @if (tabs.connectedCount() > 1) { <span>{{ tabs.connectedCount() }} connected</span> }
 </footer>
 } @else {
@@ -305,6 +306,7 @@
   @if (activeXfer(); as x) {
     <span class="xfer" [title]="x.file">⇅ {{ x.direction }} {{ pct(x) }}%</span>
   }
+  <app-servers-indicator />
   <span>{{ tabs.connectedCount() }} connected</span>
 </footer>
 }
@@ -317,6 +319,7 @@
   @case ('update') { <app-update-dialog /> }
   @case ('keySetup') { <app-key-setup-dialog /> }
   @case ('teams') { <app-teams-dialog /> }
+  @case ('fileServers') { <app-file-servers-dialog /> }
   @case ('remoteDesktop') { <app-remote-desktop-dialog /> }
   @case ('palette') { <app-palette /> }
   @case ('commands') { <app-commands /> }
