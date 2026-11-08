@@ -5,6 +5,7 @@ package main
 // English; TestMenuRussian finds such labels.
 var menuRU = map[string]string{
 	"Teams...":                              "Рабочие группы...",
+	"AI Assistant...":                       "ИИ-помощник...",
 	"About Termwright":                      "О программе Termwright",
 	"Add Marker to Recording...":            "Добавить метку в запись...",
 	"Auto Scroll On / Off":                  "Автопрокрутка вкл. / выкл.",

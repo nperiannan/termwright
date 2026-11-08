@@ -259,6 +259,7 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	add(opts, "Passwords & Accounts...", "passwords")
 	add(opts, "Set Up Key Login / Generate Key...", "key-setup")
 	add(opts, "Teams...", "teams")
+	add(opts, "AI Assistant...", "ai-assistant")
 
 	tabs := m.AddSubmenu(t("Tab"))
 	add(tabs, "Compare Outputs...", "compare")

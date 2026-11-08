@@ -232,3 +232,7 @@ app-command-window { flex: none; }
 .tbadge.res { background: color-mix(in srgb, #ef4444 18%, transparent); color: #f87171; }
 .tbadge.me { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 :root.light .tbadge.use { color: #b45309; } :root.light .tbadge.res { color: #dc2626; }
+
+/* the AI button: a small amber dot while no AI service is set up */
+.ab.ai, .tb.ai { position: relative; }
+.aidot { position: absolute; right: 5px; top: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--chrome); pointer-events: none; }

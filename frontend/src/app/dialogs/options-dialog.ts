@@ -67,7 +67,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
           <a [class.on]="page() === 'buttons'" (click)="page.set('buttons')"><app-icon name="buttons" [size]="15" />Button Bar</a>
           <a [class.on]="page() === 'devices'" (click)="page.set('devices')"><app-icon name="device" [size]="15" />Device Types</a>
           <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')"><app-icon name="bell" [size]="15" />Alerts</a>
-          <a [class.on]="page() === 'ai'" (click)="page.set('ai'); loadAI()"><app-icon name="pulse" [size]="15" />AI Assistant</a>
+          <a [class.on]="page() === 'ai'" (click)="page.set('ai'); loadAI()"><app-icon name="sparkles" [size]="15" />AI Assistant</a>
           <div class="cat-g">System</div>
           <a [class.on]="page() === 'cards'" (click)="page.set('cards'); loadCards()"><app-icon name="card" [size]="15" />Smart Cards</a>
           <a [class.on]="page() === 'updates'" (click)="page.set('updates')"><app-icon name="down" [size]="15" />Updates</a>

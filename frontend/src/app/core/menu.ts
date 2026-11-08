@@ -61,7 +61,7 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
     { title: 'Options', items: [
       { label: 'Session Options...', action: 'session-options' }, { label: 'Global Options...', action: 'global-options', keys: isMac ? '⌘,' : 'Ctrl+,' },
       { sep: true }, { label: 'Passwords & Accounts...', action: 'passwords' },
-      { label: 'Set Up Key Login / Generate Key...', action: 'key-setup' }, { label: 'Teams...', action: 'teams' },
+      { label: 'Set Up Key Login / Generate Key...', action: 'key-setup' }, { label: 'Teams...', action: 'teams' }, { label: 'AI Assistant...', action: 'ai-assistant' },
       { label: 'Set Up Remote Desktop...', action: 'remote-desktop' },
     ] },
     { title: 'Tab', items: [

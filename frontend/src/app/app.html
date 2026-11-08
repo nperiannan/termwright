@@ -32,6 +32,7 @@
     <button class="ab" title="Open SFTP tab" [disabled]="active()?.session?.protocol !== 'SSH2' || active()?.state !== 'connected'" (click)="action('sftp-tab')"><app-icon name="sftp" /></button>
     <button class="ab" [class.on]="!!active()?.filesPanel" [title]="'Files panel beside the terminal (' + scLabel('files-panel') + ')'" [disabled]="active()?.kind !== 'terminal' || active()?.session?.protocol !== 'SSH2'" (click)="action('files-panel')"><app-icon name="files-panel" /></button>
     <button class="ab" [class.on]="tabs.layout() !== 'tabs'" title="Layout: tabbed, side by side, stacked or grid" (click)="layoutMenu($event)"><app-icon [name]="layoutIcon()" /></button>
+    <button class="ab ai" [title]="aiReady() === false ? 'AI Assistant - not set up yet: click to choose the AI service' : 'AI Assistant: ask about the terminal output, or for a command'" (click)="openAI()"><app-icon name="sparkles" />@if (aiReady() === false) { <span class="aidot"></span> }</button>
     <div class="theme-sw" role="radiogroup" aria-label="Theme">
       @for (o of themes; track o.v) {
         <button type="button" role="radio" [attr.aria-checked]="themeMode() === o.v" [class.on]="themeMode() === o.v"
@@ -50,6 +51,7 @@
 <header class="toolbar" [class.inset]="insetTitle() && !settings()?.inWindowMenu">
   <button class="tb" title="Connect (Session Manager)" (click)="action('connect')"><app-icon name="connect" /></button>
   <button class="tb" title="Quick Connect" (click)="action('quick-connect')"><app-icon name="quick" /></button>
+  <button class="tb ai" title="AI Assistant" (click)="openAI()"><app-icon name="sparkles" />@if (aiReady() === false) { <span class="aidot"></span> }</button>
   <button class="tb" title="Local Shell" (click)="action('local-shell')"><app-icon name="shell" /></button>
   <span class="sep"></span>
   <button class="tb" title="Reconnect" [disabled]="!active()" (click)="action('reconnect')"><app-icon name="reconnect" /></button>

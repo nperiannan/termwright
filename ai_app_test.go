@@ -110,3 +110,40 @@ func TestAIAskEndToEnd(t *testing.T) {
 		t.Fatalf("answer %+v", ans)
 	}
 }
+
+func TestAIQuestion(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Messages []struct{ Content string } `json:"messages"`
+		}
+		json.NewDecoder(r.Body).Decode(&b)
+		got = b.Messages[len(b.Messages)-1].Content
+		json.NewEncoder(w).Encode(map[string]any{"message": map[string]string{"content": "ok"}})
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	s := cfg.Get()
+	s.AI = config.AISettings{Provider: "ollama", BaseURL: srv.URL, Model: "m", HideHosts: true}
+	_ = cfg.Save(s)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	ans, err := a.AIAsk(AIRequest{Kind: "explain", Question: "Why can 10.1.1.5 not reach the server?", Text: "ping 10.1.1.5 failed\nsnmp-server community TopSecret RO", DeviceType: "EXOS"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "My question: Why can [host-1] not reach") || !strings.Contains(got, "ping [host-1] failed") || strings.Contains(got, "TopSecret") || strings.Contains(ans.Sent, "My question") {
+		t.Fatalf("sent %q / %q", got, ans.Sent)
+	}
+	// a question alone
+	if _, err := a.AIAsk(AIRequest{Kind: "explain", Question: "What does LACP do?"}); err != nil || got != "My question: What does LACP do?" {
+		t.Fatalf("question only: %q %v", got, err)
+	}
+	// a very long text is cut to its end
+	long := strings.Repeat("x", aiMaxText+500) + "\nTHE END"
+	a.AIAsk(AIRequest{Kind: "explain", Text: long})
+	if !strings.Contains(got, "THE END") || len(got) > aiMaxText+1000 {
+		t.Fatalf("long text: %d", len(got))
+	}
+}

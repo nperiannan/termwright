@@ -716,7 +716,22 @@ For an SSH session over Wi-Fi, a VPN or a laptop that sleeps, tick **Connect wit
 
 Off until you choose an AI service in **Settings → AI Assistant**: **Claude** (your Anthropic API key), an **OpenAI-compatible** service (OpenAI, Azure OpenAI or a company gateway, by address and key) or **Ollama** (a model on your computer or a lab server - nothing leaves your network). Keys are kept in the OS keychain; **Load Models** lists what the service offers (empty = its newest).
 
-- **Explain with AI** (select output or an error, right-click in the terminal): what it means, whether something is wrong, and what to check next, with commands for the tab's device type.
+- **The AI button** (the sparkles in the title bar, also **Options → AI Assistant…**) is always there. Until an AI service is set up it shows a small amber dot and opens these settings; afterwards it opens the AI window for the open tab.
+
+  ![The AI button in the title bar](screenshots/ai-button.png)
+
+- **What to send** - Termwright picks for you, and you can change it:
+  - **Selected text** in the terminal (chosen when you have a selection),
+  - **Copied text** from the clipboard,
+  - **Whole terminal** - the screen and the scrollback (chosen when nothing is selected),
+  - **Selected tabs** - the tabs in the send group (Command Window → *Selected tabs*), each under its name and device type.
+
+  Sending a whole terminal or several tabs shows how many lines and about how many tokens that is, with a warning that it uses much more of your AI allowance; keep only the last 200, 500 or 1,000 lines, or select the part you need. *What will be sent* shows the text and lets you shorten it.
+- **Your question** (optional): *Why is port 3 down? Which ports are free?* - or one click on *Explain this*, *Find problems*, *Summarise* or *Commands to fix it*. Without a question the AI explains the output; a question alone works too.
+
+  ![Ask about the output](screenshots/ai-ask.png)
+
+- **Explain with AI** (right-click in the terminal) opens the same window with the selection - or, with nothing selected, the whole terminal.
 - **Ask AI for a Command** (right-click): *show the LLDP neighbours*, *find which port a MAC address is on* - the commands for that device type.
 - Each command has **Paste** (types it at the prompt **without Enter** and closes the window - you check it and press Enter), **Copy** and **Save** (to the Command Library, for that device type). Nothing the AI answers is ever run by itself.
 - **Privacy**: nothing is sent until you ask. Passwords, secrets, keys, SNMP communities and tokens are removed first; *Also replace IP addresses, MAC addresses and host names* hides those too. *What was sent* shows exactly what left your computer. Check your company's policy before sending device output to an outside service.

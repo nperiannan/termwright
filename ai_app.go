@@ -32,6 +32,7 @@ type AIRequest struct {
 	Text       string `json:"text"`       // the selection or the question
 	DeviceType string `json:"deviceType"` // the session's device type ("" = unknown)
 	Protocol   string `json:"protocol"`
+	Question   string `json:"question,omitempty"` // explain: what the user wants to know about the text (optional)
 }
 
 // AIAnswer: the answer and what was sent.
@@ -149,14 +150,20 @@ func (a *App) AIAsk(r AIRequest) (AIAnswer, error) {
 	if s.Provider == "" {
 		return AIAnswer{}, errors.New("the AI assistant is off - choose an AI service in Settings → AI Assistant")
 	}
-	text := strings.TrimSpace(r.Text)
-	if text == "" {
+	text, q := strings.TrimSpace(r.Text), strings.TrimSpace(r.Question)
+	if text == "" && q == "" {
 		return AIAnswer{}, errors.New("nothing to ask")
 	}
-	if len(text) > 24000 { // the end of a long selection matters most (the error, the prompt)
-		text = "…\n" + text[len(text)-24000:]
+	if len(text) > aiMaxText { // the end of a long output matters most (the error, the prompt)
+		text = "…\n" + text[len(text)-aiMaxText:]
 	}
-	sent, removed := aiRedact(text, s.HideHosts)
+	// the question and the text together, so a host has the same [host-N] in both
+	const cut = "\n\u241e\n"
+	both, removed := aiRedact(q+cut+text, s.HideHosts)
+	sent := both
+	if i := strings.Index(both, cut); i >= 0 {
+		r.Question, sent = both[:i], both[i+len(cut):]
+	}
 	key, _ := secrets.Lookup(aiKeyName + s.Provider)
 	if aiNeedsKey(s.Provider) && key == "" {
 		return AIAnswer{}, errors.New("add the API key in Settings → AI Assistant")
@@ -179,6 +186,10 @@ func (a *App) AIAsk(r AIRequest) (AIAnswer, error) {
 	return AIAnswer{Text: out, Commands: aiCommands(out), Sent: sent, Removed: removed, Model: model}, nil
 }
 
+// aiMaxText: the most text sent (the whole terminal of a long session is cut
+// to its end; the window warns before sending this much).
+const aiMaxText = 200000
+
 func aiPrompt(r AIRequest, text string) (string, string) {
 	dev := r.DeviceType
 	if dev == "" {
@@ -191,6 +202,13 @@ func aiPrompt(r AIRequest, text string) (string, string) {
 		"Parts of the text were replaced with [secret] or [host-N] before it was sent to you; keep them as they are."
 	switch r.Kind {
 	case "explain":
+		q := strings.TrimSpace(r.Question)
+		switch {
+		case q != "" && text == "":
+			return sys, "My question: " + q
+		case q != "":
+			return sys, "My question: " + q + "\n\nThe output from the device (or devices):\n```\n" + text + "\n```"
+		}
 		return sys, "Explain this output or error from the device: what it means, whether something is wrong, and what to check or do next.\n\n```\n" + text + "\n```"
 	default:
 		return sys, "What I want to do: " + text + "\nGive the command or commands for this device."

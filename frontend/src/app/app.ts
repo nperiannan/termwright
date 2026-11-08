@@ -89,6 +89,12 @@ export class App implements OnInit {
   readonly backendMissing = !this.backend.available;
   readonly settings = this.ui.settings;
   readonly active = this.tabs.active;
+  /** The AI assistant has a service set up (null until known): the title bar button shows a dot when not. */
+  readonly aiReady = signal<boolean | null>(null);
+  private readonly aiCheck = effect(() => {
+    this.settings()?.ai;
+    void this.backend.aiState().then(s => this.aiReady.set(s.ready)).catch(() => this.aiReady.set(false));
+  });
   readonly recent = computed(() => this.settings()?.recentSessions ?? []);
   /** Tab hover: name, environment, device type, the device's facts and the connection. */
   tabTip(t: TabView) {
@@ -249,6 +255,16 @@ export class App implements OnInit {
   }
 
   /** Status bar (modern): "SSH2 · admin@10.1.1.1:22", "Serial · COM3 115200". */
+  /** The title bar's AI button: the AI window for the open tab, or the settings when no AI service is set up. */
+  async openAI() {
+    const ready = await this.backend.aiState().then(s => s.ready).catch(() => false);
+    this.aiReady.set(ready);
+    if (!ready) { this.ui.openOptions('ai'); return; }
+    const t = this.active();
+    const term = t?.kind === 'terminal' ? t : null;
+    this.ui.aiReq.set({ kind: 'explain', text: '', tabId: term?.id, deviceType: term?.session?.deviceType ?? '', protocol: term?.session?.protocol ?? '' });
+  }
+
   statusTarget(t: TabView) {
     const s = t.session;
     if (t.kind === 'sftp') return 'SFTP · ' + (t.info || s.hostname);
@@ -478,6 +494,7 @@ export class App implements OnInit {
       case 'discover': this.ui.open('discover'); break;
       case 'teams': this.ui.open('teams'); break;
       case 'file-servers': this.ui.open('fileServers'); break;
+      case 'ai-assistant': void this.openAI(); break;
       case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
       case 'checklists': this.ui.open('checklists'); break;
       case 'collect': this.ui.open('collect'); break;

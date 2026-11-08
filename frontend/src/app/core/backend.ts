@@ -158,7 +158,7 @@ export class Backend {
   aiState() { return this.call<AIStatus>('AIState'); }
   aiSetKey(provider: string, key: string) { return this.call<void>('AISetKey', provider, key); }
   aiModels(s: AISettings) { return this.call<string[]>('AIModels', s); }
-  aiAsk(r: { kind: string; text: string; deviceType: string; protocol: string }) { return this.call<AIAnswer>('AIAsk', r); }
+  aiAsk(r: { kind: string; text: string; deviceType: string; protocol: string; question?: string }) { return this.call<AIAnswer>('AIAsk', r); }
   syncNow() { return this.call<SyncStatus>('SyncNow'); }
   syncState() { return this.call<SyncStatus>('SyncState'); }
   teamJoinSSO(invite: string) { return this.call<TeamConn>('TeamJoinSSO', invite); }

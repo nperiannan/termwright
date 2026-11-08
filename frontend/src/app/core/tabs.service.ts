@@ -1007,6 +1007,20 @@ export class Tabs {
   }
 
   /** Copies the whole scrollback: as text, or as the HTML report (colours, highlighting and the device facts header) to paste into a mail or a document. */
+  /** A terminal tab's selected text ('' when none). */
+  selectionText(id = this.activeId()) { return this.handles.get(id)?.term.getSelection() ?? ''; }
+
+  /** A terminal tab's screen and scrollback as text (trailing empty lines left out). */
+  bufferText(id = this.activeId()) {
+    const h = this.handles.get(id);
+    if (!h) return '';
+    const buf = h.term.buffer.active;
+    const lines: string[] = [];
+    for (let i = 0; i < buf.length; i++) lines.push(buf.getLine(i)?.translateToString(true) ?? '');
+    while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+    return lines.join('\n');
+  }
+
   async copyScrollback(id = this.activeId(), format: 'text' | 'html' = 'text') {
     const h = this.handles.get(id);
     const t = this.get(id);
