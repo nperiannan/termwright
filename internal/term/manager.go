@@ -298,6 +298,21 @@ func (m *Manager) LoginPassword(id string) (string, bool) {
 	return t.loginPass, t.loginPass != ""
 }
 
+// List returns a snapshot of every tab.
+func (m *Manager) List() []TabInfo {
+	m.mu.Lock()
+	ts := make([]*Tab, 0, len(m.tabs))
+	for _, t := range m.tabs {
+		ts = append(ts, t)
+	}
+	m.mu.Unlock()
+	out := make([]TabInfo, 0, len(ts))
+	for _, t := range ts {
+		out = append(out, t.snapshot())
+	}
+	return out
+}
+
 // Info returns a tab snapshot.
 func (m *Manager) Info(id string) (TabInfo, error) {
 	t, err := m.get(id)

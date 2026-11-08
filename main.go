@@ -10,6 +10,7 @@ import (
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/discover"
 	"log"
+	"os"
 	"runtime"
 	"strings"
 
@@ -38,6 +39,10 @@ var shortcuts = func() map[string]string {
 }()
 
 func main() {
+	// "Termwright mcp": the connector Claude Desktop / Claude Code start (stdin/stdout, no window)
+	if len(os.Args) > 1 && os.Args[1] == "mcp" {
+		os.Exit(mcpBridgeMain())
+	}
 	discover.RaiseFileLimit()
 	app := NewApp()
 	width, height, start := 1280, 820, options.Normal

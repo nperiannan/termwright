@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -145,5 +148,48 @@ func TestAIQuestion(t *testing.T) {
 	a.AIAsk(AIRequest{Kind: "explain", Text: long})
 	if !strings.Contains(got, "THE END") || len(got) > aiMaxText+1000 {
 		t.Fatalf("long text: %d", len(got))
+	}
+}
+
+func TestAIClaudeCode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script stand-in")
+	}
+	dir := t.TempDir()
+	// a stand-in for the claude program: prints its arguments and what it read
+	fake := filepath.Join(dir, "claude")
+	os.WriteFile(fake, []byte("#!/bin/sh\necho \"ARGS: $*\"\necho \"STDIN: $(cat)\"\n"), 0o755)
+	cfg, _ := config.Load(dir)
+	s := cfg.Get()
+	s.AI = config.AISettings{Provider: "claudecode", BaseURL: fake}
+	_ = cfg.Save(s)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	if !a.AIState().Ready {
+		t.Fatal("not ready with the program found")
+	}
+	ans, err := a.AIAsk(AIRequest{Kind: "explain", Question: "Why is port 3 down?", Text: "3 Default D R\nsnmp-server community TopSecret RO", DeviceType: "EXOS"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ans.Text, "-p --output-format text") || !strings.Contains(ans.Text, "--tools") || !strings.Contains(ans.Text, "Device type: EXOS") ||
+		!strings.Contains(ans.Text, "STDIN: My question: Why is port 3 down?") || strings.Contains(ans.Text, "TopSecret") || ans.Model != "Claude Code" || strings.Contains(ans.Text, "--model") {
+		t.Fatalf("answer %q (%s)", ans.Text, ans.Model)
+	}
+	s.AI.Model = "opus"
+	_ = cfg.Save(s)
+	if ans, _ := a.AIAsk(AIRequest{Kind: "suggest", Text: "show lldp neighbours"}); !strings.Contains(ans.Text, "--model opus") {
+		t.Fatalf("model: %q", ans.Text)
+	}
+	// not signed in
+	os.WriteFile(fake, []byte("#!/bin/sh\necho 'Invalid API key · Please run /login' >&2\nexit 1\n"), 0o755)
+	if _, err := a.AIAsk(AIRequest{Kind: "suggest", Text: "x"}); err == nil || !strings.Contains(err.Error(), "not signed in") {
+		t.Fatalf("login error: %v", err)
+	}
+	// not installed
+	s.AI.BaseURL = filepath.Join(dir, "nope")
+	_ = cfg.Save(s)
+	if a.AIState().Ready {
+		t.Fatal("ready without the program")
 	}
 }

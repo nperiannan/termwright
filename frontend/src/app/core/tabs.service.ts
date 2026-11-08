@@ -133,6 +133,14 @@ export class Tabs {
       for (let y = 0; y < term.rows; y++) lines.push(b.getLine(b.baseY + y)?.translateToString(false) ?? ''.padEnd(term.cols));
       void this.backend.screenReply(r.id, { lines, row: b.cursorY + 1, col: b.cursorX + 1, rows: term.rows, cols: term.cols });
     });
+    // the Claude connector (MCP): the open tab, or the last lines of a tab
+    this.backend.on('text:request', (r: { id: string; tabId: string; lines: number }) => {
+      if (!r.tabId && !r.lines) { void this.backend.textReply(r.id, this.activeId() ?? '', 0); return; }
+      const all = this.bufferText(r.tabId);
+      const lines = all ? all.split('\n') : [];
+      void this.backend.textReply(r.id, lines.slice(-Math.max(1, r.lines)).join('\n'), lines.length);
+    });
+    this.backend.on('mcp:open', (path: string) => { void this.openSession(path); });
     this.backend.on('xfer:progress', (tr: Transfer) => {
       this.transfers.update(l => {
         const i = l.findIndex(x => x.id === tr.id);

@@ -60,6 +60,10 @@ func (a *App) AIState() AIStatus {
 	k, _ := secrets.Lookup(aiKeyName + s.Provider)
 	st := AIStatus{Provider: s.Provider, Model: s.Model, HasKey: k != ""}
 	st.Ready = s.Provider != "" && (!aiNeedsKey(s.Provider) || st.HasKey)
+	if s.Provider == "claudecode" {
+		_, err := claudeCodePath(s.BaseURL)
+		st.Ready = err == nil
+	}
 	return st
 }
 
@@ -80,6 +84,11 @@ func (a *App) AIModels(s config.AISettings) ([]string, error) {
 	defer cancel()
 	key, _ := secrets.Lookup(aiKeyName + s.Provider)
 	switch s.Provider {
+	case "claudecode": // Claude Code's names for the newest models
+		if _, err := claudeCodePath(s.BaseURL); err != nil {
+			return nil, err
+		}
+		return []string{"sonnet", "opus", "haiku"}, nil
 	case "anthropic":
 		var v struct {
 			Data []struct {
@@ -169,19 +178,26 @@ func (a *App) AIAsk(r AIRequest) (AIAnswer, error) {
 		return AIAnswer{}, errors.New("add the API key in Settings → AI Assistant")
 	}
 	model := s.Model
-	if model == "" {
+	if model == "" && s.Provider != "claudecode" { // Claude Code picks its own default
 		ms, err := a.AIModels(s)
 		if err != nil || len(ms) == 0 {
 			return AIAnswer{}, fmt.Errorf("choose a model in Settings → AI Assistant (%v)", err)
 		}
 		model = ms[0]
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	wait := 90 * time.Second
+	if s.Provider == "claudecode" {
+		wait = claudeCodeTimeout + 10*time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
 	sys, user := aiPrompt(r, sent)
 	out, err := aiChat(ctx, s, key, model, sys, user)
 	if err != nil {
 		return AIAnswer{}, err
+	}
+	if model == "" {
+		model = "Claude Code"
 	}
 	return AIAnswer{Text: out, Commands: aiCommands(out), Sent: sent, Removed: removed, Model: model}, nil
 }
@@ -217,6 +233,8 @@ func aiPrompt(r AIRequest, text string) (string, string) {
 
 func aiChat(ctx context.Context, s config.AISettings, key, model, sys, user string) (string, error) {
 	switch s.Provider {
+	case "claudecode":
+		return claudeCodeChat(ctx, s.BaseURL, model, sys, user)
 	case "anthropic":
 		body := map[string]any{"model": model, "max_tokens": 1500, "system": sys, "messages": []map[string]string{{"role": "user", "content": user}}}
 		var v struct {

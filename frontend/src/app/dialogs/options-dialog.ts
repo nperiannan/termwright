@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { LANGUAGES, previewLanguages, tr } from '../core/i18n';
 import { Backend, errText } from '../core/backend';
-import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, comboOf, FACT_NAMES } from '../core/models';
+import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, MCPInfo, comboOf, FACT_NAMES } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
@@ -491,12 +491,20 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <option value="anthropic">Claude (Anthropic API key)</option>
                   <option value="openai">OpenAI-compatible (OpenAI, Azure OpenAI, a company gateway)</option>
                   <option value="ollama">Ollama (a local model - nothing leaves your network)</option>
+                  <option value="claudecode">Claude Code (your Claude login - no API key)</option>
                 </select>
                 @if (s.ai?.provider === 'anthropic' || s.ai?.provider === 'openai') {
                   <label>API key</label>
                   <div class="row"><input name="aik" type="password" [(ngModel)]="aiKey" autocomplete="off" [placeholder]="aiSt()?.hasKey ? '(saved in the OS keychain - type to change)' : 'paste the key'" />
                     <button type="button" (click)="saveAIKey()" [disabled]="!aiKey.trim()">Save Key</button>
                     @if (aiSt()?.hasKey) { <button type="button" (click)="forgetAIKey()">Forget</button> }</div>
+                }
+                @if (s.ai?.provider === 'claudecode') {
+                  <label>Claude Code</label>
+                  <div class="row"><input name="aicc" [ngModel]="s.ai?.baseUrl || ''" (ngModelChange)="setAI({ baseUrl: $event })" placeholder="(found on this computer)" />
+                    <button type="button" (click)="loadAIModels()">Check</button></div>
+                  <label></label>
+                  <div class="hint">Uses the Claude Code program on this computer with the Claude account it is signed in to - install it from claude.com/claude-code and run <code>claude</code> once in a terminal to sign in. Termwright runs it without tools: it only answers, it cannot read files or run commands.</div>
                 }
                 @if (s.ai?.provider === 'openai' || s.ai?.provider === 'ollama') {
                   <label>Address</label>
@@ -505,7 +513,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 @if (s.ai?.provider) {
                   <label>Model</label>
                   <div class="row">
-                    <input name="aim" [ngModel]="s.ai?.model || ''" (ngModelChange)="setAI({ model: $event })" list="aimodels" placeholder="(the newest the service offers)" />
+                    <input name="aim" [ngModel]="s.ai?.model || ''" (ngModelChange)="setAI({ model: $event })" list="aimodels" [placeholder]="s.ai?.provider === 'claudecode' ? '(the default of Claude Code)' : '(the newest the service offers)'" />
                     <datalist id="aimodels">@for (m of aiModels(); track m) { <option [value]="m"></option> }</datalist>
                     <button type="button" (click)="loadAIModels()">Load Models</button>
                   </div>
@@ -514,6 +522,31 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label></label>
                   <div class="hint">Nothing is sent until you choose <b>Explain with AI</b> or <b>Ask AI for a Command</b> (right-click in a terminal). Passwords, secrets, keys, SNMP communities and tokens are always removed first, and the window shows what was sent. Commands are pasted without Enter - you check them and press Enter. Check your company's policy before sending device output to an outside service; Ollama keeps everything on your network.</div>
                   @if (aiMsg()) { <label></label><div class="hint">{{ aiMsg() }}</div> }
+                }
+              </div>
+              <div class="grid">
+                <h4 class="gsec">Use Termwright from Claude</h4>
+                <label>Claude connector</label>
+                <div class="checks"><label><input type="checkbox" name="mcp" [ngModel]="!!s.ai?.mcp" (ngModelChange)="setAI({ mcp: $event })" /> Let Claude Desktop and Claude Code use Termwright</label></div>
+                <label></label>
+                <div class="hint">In a Claude chat you can then ask about your devices - <i>look at my access-sw7 tab: why is port 3 down?</i> Claude lists your tabs and sessions and reads a tab (passwords, keys and SNMP communities removed). Termwright must be open.</div>
+                @if (s.ai?.mcp) {
+                  <label>Commands</label>
+                  <select name="mcpc" [ngModel]="s.ai?.mcpCommands || ''" (ngModelChange)="setAI({ mcpCommands: $event })">
+                    <option value="">Ask me each time before Claude types a command or connects</option>
+                    <option value="never">Never - Claude can only read</option>
+                  </select>
+                  <label>Set up</label>
+                  <div class="row wrap">
+                    <button type="button" (click)="mcpDesktop()">{{ mcp()?.inDesktop ? '✓ In Claude Desktop - Add Again' : 'Add to Claude Desktop' }}</button>
+                    <button type="button" (click)="mcpCode()">Add to Claude Code</button>
+                  </div>
+                  <label></label>
+                  <div class="hint">Restart Claude Desktop after adding. By hand - Claude Code: <code class="sel">{{ mcp()?.codeCmd }}</code>
+                    <button type="button" class="link" (click)="copyText(mcp()?.codeCmd ?? '')">Copy</button><br>
+                    Claude Desktop (Settings → Developer → Edit Config): command <code class="sel">{{ mcp()?.command }}</code> with the argument <code>mcp</code>.
+                    {{ mcp()?.running ? tr('The connector is running.') : tr('The connector starts when you press Save.') }}</div>
+                  @if (mcpMsg()) { <label></label><div class="hint">{{ mcpMsg() }}</div> }
                 }
               </div>
             }
@@ -655,6 +688,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
 export class OptionsDialog implements OnInit {
   protected ui = inject(Ui);
   readonly uiFonts = UI_FONTS;
+  protected readonly tr = tr;
   readonly deviceKinds = Object.entries(DEVICE_KINDS).map(([v, k]) => ({ v, label: k.label }));
   readonly uiSizes = UI_SIZES;
   readonly factNames = FACT_NAMES;
@@ -932,7 +966,22 @@ export class OptionsDialog implements OnInit {
   readonly aiModels = signal<string[]>([]);
   readonly aiMsg = signal('');
   aiKey = '';
-  loadAI() { void this.backend.aiState().then(x => this.aiSt.set(x)).catch(() => {}); }
+  loadAI() {
+    void this.backend.aiState().then(x => this.aiSt.set(x)).catch(() => {});
+    void this.backend.mcpState().then(x => this.mcp.set(x)).catch(() => {});
+  }
+  readonly mcp = signal<MCPInfo | null>(null);
+  readonly mcpMsg = signal('');
+  async mcpDesktop() {
+    try { await this.backend.mcpAddToDesktop(); this.mcpMsg.set(tr('Added to Claude Desktop - restart Claude Desktop, then look for Termwright under its connectors.')); this.loadAI(); }
+    catch (e) { this.mcpMsg.set(errText(e)); }
+  }
+  async mcpCode() {
+    this.mcpMsg.set(tr('Adding…'));
+    try { await this.backend.mcpAddToClaudeCode(); this.mcpMsg.set(tr('Added to Claude Code - start a new claude session and type /mcp to see it.')); }
+    catch (e) { this.mcpMsg.set(errText(e)); }
+  }
+  async copyText(t: string) { if (t) { await this.backend.clipboardSet(t); this.ui.toast(tr('Copied'), 'success'); } }
   setAI(p: Partial<AISettings>) { if (this.s) this.s.ai = { ...(this.s.ai ?? {}), ...p }; this.cdr.markForCheck(); }
   async saveAIKey() {
     const p = this.s?.ai?.provider ?? '';
@@ -945,7 +994,8 @@ export class OptionsDialog implements OnInit {
     try {
       const m = await this.backend.aiModels(this.s?.ai ?? {});
       this.aiModels.set(m ?? []);
-      this.aiMsg.set(m?.length ? tr('{0} models - pick one, or leave it empty for the first: {1}', m.length, m[0]) : tr('The service lists no models.'));
+      this.aiMsg.set(this.s?.ai?.provider === 'claudecode' ? tr('Claude Code is installed. Model: sonnet, opus or haiku - or leave it empty for Claude Code\'s default.')
+        : m?.length ? tr('{0} models - pick one, or leave it empty for the first: {1}', m.length, m[0]) : tr('The service lists no models.'));
     } catch (e) { this.aiMsg.set(errText(e)); }
   }
   async browseSync() {

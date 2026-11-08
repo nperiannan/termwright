@@ -714,7 +714,7 @@ For an SSH session over Wi-Fi, a VPN or a laptop that sleeps, tick **Connect wit
 
 ### AI assistant (optional)
 
-Off until you choose an AI service in **Settings → AI Assistant**: **Claude** (your Anthropic API key), an **OpenAI-compatible** service (OpenAI, Azure OpenAI or a company gateway, by address and key) or **Ollama** (a model on your computer or a lab server - nothing leaves your network). Keys are kept in the OS keychain; **Load Models** lists what the service offers (empty = its newest).
+Off until you choose an AI service in **Settings → AI Assistant**: **Claude** (your Anthropic API key), an **OpenAI-compatible** service (OpenAI, Azure OpenAI or a company gateway, by address and key), **Ollama** (a model on your computer or a lab server - nothing leaves your network) or **Claude Code** - the Claude Code program on your computer, signed in with your own Claude account, so no API key is needed (install it from claude.com/claude-code and run `claude` once in a terminal to sign in; **Check** finds it; Termwright runs it without tools, so it only answers). Keys are kept in the OS keychain; **Load Models** lists what the service offers (empty = its newest).
 
 - **The AI button** (the sparkles in the title bar, also **Options → AI Assistant…**) is always there. Until an AI service is set up it shows a small amber dot and opens these settings; afterwards it opens the AI window for the open tab.
 
@@ -735,6 +735,22 @@ Off until you choose an AI service in **Settings → AI Assistant**: **Claude** 
 - **Ask AI for a Command** (right-click): *show the LLDP neighbours*, *find which port a MAC address is on* - the commands for that device type.
 - Each command has **Paste** (types it at the prompt **without Enter** and closes the window - you check it and press Enter), **Copy** and **Save** (to the Command Library, for that device type). Nothing the AI answers is ever run by itself.
 - **Privacy**: nothing is sent until you ask. Passwords, secrets, keys, SNMP communities and tokens are removed first; *Also replace IP addresses, MAC addresses and host names* hides those too. *What was sent* shows exactly what left your computer. Check your company's policy before sending device output to an outside service.
+
+#### Use Termwright from Claude Desktop or Claude Code
+
+Termwright can also work the other way round: as a **connector** (an MCP server) that Claude Desktop and Claude Code use, so you can ask in a Claude chat *"look at my access-sw7 tab - why is port 3 down?"* or *"which of my saved sessions are EXOS switches?"*.
+
+1. **Settings → AI Assistant → Use Termwright from Claude**: tick *Let Claude Desktop and Claude Code use Termwright* and press **Save**.
+2. **Add to Claude Desktop** (then restart Claude Desktop) and/or **Add to Claude Code** - or by hand: Claude Code `claude mcp add --scope user termwright -- <Termwright program> mcp`; Claude Desktop: *Settings → Developer → Edit Config*, a server with the Termwright program as the command and `mcp` as its argument (the page shows the exact path).
+3. Keep Termwright open while Claude uses it.
+
+![Use Termwright from Claude](screenshots/ai-connector.png)
+
+What Claude can do: **list the open tabs** and **the saved sessions**, **read a tab** (the end of its screen and scrollback - passwords, keys and SNMP communities removed), and - only when you allow it in Termwright - **open a session** and **type a command**, getting the output back. *Commands: Never* keeps Claude to reading. Every command shows in Termwright first; *Allow in This Tab for 15 Minutes* saves asking again for read-only commands, and commands that may change the device (configure, delete, reboot, save…) are always asked, with a warning:
+
+![Claude asks before it types](screenshots/ai-approve.png)
+
+The connector listens only on this computer (127.0.0.1) with a random key kept in Termwright's data folder for your user only; web pages cannot reach it.
 
 | Explain | Suggest a command | Settings |
 |---|---|---|

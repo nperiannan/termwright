@@ -39,10 +39,13 @@ type KeyBinding struct {
 
 // AISettings: the AI assistant's provider. The API key is in the OS keychain.
 type AISettings struct {
-	Provider  string `json:"provider,omitempty"`  // "" (off), "anthropic", "openai" or "ollama"
+	Provider  string `json:"provider,omitempty"`  // "" (off), "anthropic", "openai", "ollama" or "claudecode" (BaseURL: the claude program, "" = find it)
 	Model     string `json:"model,omitempty"`     // "" = the provider's newest that Termwright finds
 	BaseURL   string `json:"baseUrl,omitempty"`   // openai: an OpenAI-compatible endpoint; ollama: its address
 	HideHosts bool   `json:"hideHosts,omitempty"` // replace IP addresses, MAC addresses and host names before sending
+	// Termwright as a connector (MCP server) for Claude Desktop and Claude Code
+	MCP         bool   `json:"mcp,omitempty"`
+	MCPCommands string `json:"mcpCommands,omitempty"` // "" = ask before typing a command or connecting, "never" = read only
 }
 
 // FileServersSettings: the TFTP, FTP and HTTP servers devices fetch files

@@ -120,6 +120,7 @@ func (a *App) init() error {
 		return session.DeviceType{}, false
 	}
 	a.applyAlerts()
+	a.mcpApply()
 	term.Version = Version
 	a.terms.KeyPassphrase = func(path string) string {
 		if a.isLocked() {
@@ -176,6 +177,7 @@ func (a *App) init() error {
 func (a *App) shutdown(context.Context) {
 	closeWebPages()
 	fsMgr.StopAll()
+	a.mcpStop()
 	if a.terms != nil {
 		a.terms.CloseAll()
 	}
@@ -308,6 +310,7 @@ func (a *App) SaveSettings(s config.Settings) error {
 		syncStatus = SyncStatus{}
 		syncMu.Unlock()
 	}
+	a.mcpApply()
 	if bad := a.applyAlerts(); len(bad) > 0 {
 		return errors.New("alert pattern: " + strings.Join(bad, "; "))
 	}
