@@ -150,7 +150,7 @@ const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch {
 
 // what the person typed and picked survives every refresh
 const ui = { page: store.get('tw.page', 'overview'), days: Number(store.get('tw.days', '30')), basis: store.get('tw.basis', 'all') === 'work' ? 'work' : 'all', theme: store.get('tw.theme', 'system'), filter: '', sel: new Set(), psel: new Set(), ssel: new Set(),
-  closed: new Set(), targets: '', community: '', scanFolder: '', approveFolder: '', onlyNet: true, hideKnown: true, dts: {}, rtab: 'devices', rq: '', invFolder: '', invType: '', invStatus: 'all', rtype: '', unusedOnly: false,
+  closed: new Set(), targets: '', community: '', scanFolder: '', approveFolder: '', onlyNet: store.get('tw.onlyNet', '1') === '1', hideKnown: store.get('tw.hideKnown', '1') === '1', dts: {}, rtab: 'devices', rq: '', invFolder: '', invType: '', invStatus: 'all', rtype: '', unusedOnly: false,
   sort: { devices: ['hours', -1], members: ['hours', -1], res: ['s', -1], sessions: ['s', -1] } };
 let st = null, scan = null, usage = null, lastJSON = '', msgTimer = 0;
 
@@ -164,6 +164,20 @@ function flash(text, err) { $('#msg').innerHTML = `<div class="msg ${err ? 'err'
 async function act(fn, ok) { try { const r = await fn(); if (ok) flash(typeof ok === 'function' ? ok(r) : ok); await load(true); } catch (e) { flash(e.message, true); } }
 function typing() { const a = document.activeElement; return a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox'; }
 function setTheme(t) { ui.theme = t; store.set('tw.theme', t); if (t === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t; render(); }
+
+// The Discover filters, from one listener that every render keeps (and remembered).
+document.addEventListener('change', e => {
+  const t = e.target, k = t && { onlynet: 'onlyNet', hideknown: 'hideKnown' }[t.id];
+  if (!k) return;
+  ui[k] = t.checked; store.set('tw.' + k, t.checked ? '1' : '0'); render();
+});
+// No refresh while a mouse button is down: the page drawn again under the
+// pointer between press and release loses the click (a check box that does not change).
+let pointerDown = false, renderLater = false;
+document.addEventListener('pointerdown', () => { pointerDown = true; }, true);
+document.addEventListener('pointerup', () => { pointerDown = false; if (renderLater) { renderLater = false; setTimeout(render, 0); } }, true);
+document.addEventListener('pointercancel', () => { pointerDown = false; }, true);
+function quietRender() { if (pointerDown) renderLater = true; else render(); }
 
 async function start() {
   const m = /[#&]c=([^&]+)/.exec(location.hash);
@@ -182,7 +196,7 @@ async function load(force) {
     if (['overview', 'reports', 'inventory'].includes(ui.page) || !usage) usage = await api('GET', `/api/admin/usage?days=${Math.min(366, ui.days * 2)}`);
     const j = JSON.stringify([s, scan, usage && usage.use.length, usage && usage.res.length, usage && usage.con.length, s.status]);
     st = s;
-    if (force || (j !== lastJSON && !typing())) { lastJSON = j; render(); }
+    if (force || (j !== lastJSON && !typing())) { lastJSON = j; force ? render() : quietRender(); }
   } catch (e) { if (e.status === 401 || e.status === 403) return gate(e.status === 403 ? e.message : ''); if (force) flash(e.message, true); }
 }
 
@@ -750,8 +764,6 @@ function wire() {
   // discover
   on('#scan', 'onclick', async () => { ui.ssel.clear(); ui.dts = {}; try { await api('POST', '/api/admin/scan', { targets: ui.targets || (scan ? scan.targets : ''), community: ui.community }); poll(); } catch (e) { flash(e.message, true); } });
   on('#stop', 'onclick', () => api('POST', '/api/admin/scan/stop').catch(() => {}));
-  on('#onlynet', 'onchange', e => { ui.onlyNet = e.target.checked; render(); });
-  on('#hideknown', 'onchange', e => { ui.hideKnown = e.target.checked; render(); });
   on('#sall', 'onchange', e => { scanRows().filter(r => !(scan.inTeam || {})[r.ip]).forEach(r => e.target.checked ? ui.ssel.add(r.ip) : ui.ssel.delete(r.ip)); render(); });
   on('[data-ssel]', 'onchange', e => { e.target.checked ? ui.ssel.add(e.target.dataset.ssel) : ui.ssel.delete(e.target.dataset.ssel); render(); });
   on('#sadd', 'onclick', () => {
@@ -807,7 +819,7 @@ function wire() {
 }
 async function poll() {
   try { scan = await api('GET', '/api/admin/scan'); } catch {}
-  if (ui.page === 'discover' && !$('#dlg').open) render();
+  if (ui.page === 'discover' && !$('#dlg').open) quietRender();
   if (scan && scan.running) setTimeout(poll, 1200);
 }
 start();

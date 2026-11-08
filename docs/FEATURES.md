@@ -306,7 +306,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 
 ## Appearance
 
-- **Keyword highlighting on by default** (Network set): up / enable green, down / error red, warning / disable amber, addresses blue; the text is coloured (or the background, as an option).
+- **Keyword highlighting on by default** (Network set): up / enable green, down / error red, warning / disable amber, addresses blue, and the EXOS port summary's E / D / A / R states; the text is coloured (or the background, as an option).
 - **Save Screen As Image**: the visible terminal as a PNG with its colours and highlighting.
 - **12 built-in color schemes** (Solarized, Dracula, Nord, Gruvbox, Catppuccin…), *Auto* follows the UI theme.
 - **Custom scheme editor** with live preview.

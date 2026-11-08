@@ -129,3 +129,52 @@ func TestTeamsSurviveAnOlderSettingsFile(t *testing.T) {
 		t.Fatalf("teams lost: %+v", m2.Get().Teams)
 	}
 }
+
+func TestExosPortKeywords(t *testing.T) {
+	// new settings and older ones both get them, once
+	dir := t.TempDir()
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := len(m.Get().KeywordSets[0].Keywords)
+	if !m.Get().ExosPortColors || n != 8 {
+		t.Fatalf("new settings: %d keywords", n)
+	}
+	old := `{"keywordsOn":true,"factRulesAdded":true,"keywordSets":[{"name":"Network","keywords":[{"text":"\\bdown\\b","regex":true,"color":"#7a1f1f"}]}]}`
+	os.WriteFile(filepath.Join(dir, "settings.json"), []byte(old), 0o600)
+	m, _ = Load(dir)
+	if k := m.Get().KeywordSets[0].Keywords; len(k) != 5 || !k[4].CaseSensitive {
+		t.Fatalf("older settings: %+v", k)
+	}
+	// a removed keyword is not added again
+	s := m.Get()
+	s.KeywordSets[0].Keywords = s.KeywordSets[0].Keywords[:2]
+	m.Save(s)
+	m, _ = Load(dir)
+	if len(m.Get().KeywordSets[0].Keywords) != 2 {
+		t.Fatal("added again")
+	}
+	// what they colour (Go's regexp has no look-behind: check the shape with an equivalent)
+	rows := map[string]string{
+		"1                         (0130)            E     A      10G    FULL":  "E A",
+		"3                         Default           D     R":                   "D R",
+		"51:2                      Default           E     NP":                  "E",
+		"57       VM-57            Default           E     A      10G    FULL":  "E A",
+		"Port     Display          VLAN Name         Port  Link  Speed  Duplex": "",
+		"Default route via 10.0.0.1 E A":                                        "",
+	}
+	row := regexp.MustCompile(`^\d+(?::\d+)*\s.*\s([ED])\s+(A|R|NP|L|D)(?:\s|$)`)
+	for line, want := range rows {
+		got := ""
+		if m := row.FindStringSubmatch(line); m != nil {
+			got = m[1]
+			if m[2] == "A" || m[2] == "R" {
+				got += " " + m[2]
+			}
+		}
+		if got != want {
+			t.Errorf("%q: %q, want %q", line, got, want)
+		}
+	}
+}

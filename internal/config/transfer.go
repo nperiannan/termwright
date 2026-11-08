@@ -41,7 +41,7 @@ var localKeys = map[string]bool{
 	"checklistDir": true, "recordDir": true, "pythonPath": true, "smartCardLibraries": true,
 	"masterHash": true, "keyPassphrases": true, "openTabs": true, "recentSessions": true,
 	"lastConnected": true, "deviceFacts": true, "window": true, "welcomeSeen": true,
-	"themeFollowsSystem": true, "highlightOptIn": true, "modernLayout": true, "factRulesAdded": true,
+	"themeFollowsSystem": true, "highlightOptIn": true, "modernLayout": true, "factRulesAdded": true, "exosPortColors": true,
 	"syncFolder": true, "syncId": true, "syncOptions": true, "fileServers": true,
 }
 

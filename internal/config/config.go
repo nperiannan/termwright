@@ -86,6 +86,18 @@ type ColorScheme struct {
 	Colors map[string]string `json:"colors"`
 }
 
+// ExosPortKeywords colour the state columns of the ExtremeXOS port summary
+// (show ports / show port no-refresh): Port State E (enabled) and D
+// (disabled), Link State A (active - up) and R (ready - down). They match only
+// a row that starts with a port number and has the two state columns, so
+// other output is left alone.
+var ExosPortKeywords = []Keyword{
+	{Text: `(?<=^\d+(?::\d+)*\s.*\s)E(?=\s+(?:A|R|NP|L|D)(?:\s|$))`, Regex: true, CaseSensitive: true, Color: "#1f5a2c"},
+	{Text: `(?<=^\d+(?::\d+)*\s.*\s)D(?=\s+(?:A|R|NP|L|D)(?:\s|$))`, Regex: true, CaseSensitive: true, Color: "#6b5310"},
+	{Text: `(?<=^\d+(?::\d+)*\s.*\s[ED]\s+)A(?=\s|$)`, Regex: true, CaseSensitive: true, Color: "#1f5a2c"},
+	{Text: `(?<=^\d+(?::\d+)*\s.*\s[ED]\s+)R(?=\s|$)`, Regex: true, CaseSensitive: true, Color: "#7a1f1f"},
+}
+
 // KeywordSet is a named list of keywords a session can use.
 type KeywordSet struct {
 	Name     string    `json:"name"`
@@ -111,6 +123,7 @@ type Settings struct {
 	ModernLayout         bool                         `json:"modernLayout"`         // set once when the modern layout became the default (0.21.0)
 	HighlightStyle       string                       `json:"highlightStyle"`       // keyword highlighting: "" = colour the text, "background" = colour the background
 	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`          // session path → fact name → value ("_at" = when read)
+	ExosPortColors       bool                         `json:"exosPortColors"`       // set once when the Network set got the EXOS port-state keywords (0.33.0)
 	FactRulesAdded       bool                         `json:"factRulesAdded"`       // set once when the built-in device types got their fact rules (0.21.0)
 	KeywordsOn           bool                         `json:"keywordsOn"`
 	Language             string                       `json:"language"`            // interface language: "" = English, "ru" = Russian (partial)
@@ -371,7 +384,7 @@ func Defaults(dataDir string) Settings {
 				{Text: `\b(up|ok|success|enabled?|active|forwarding)\b`, Regex: true, Color: "#1f5a2c"},
 				{Text: `\b\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?\b`, Regex: true, Color: "#1f3f6b"},
 			},
-		}},
+		}}, // + ExosPortKeywords, added when the settings load (as for older settings)
 		DefaultKeywordSet:  "Network", // up / down, enable / disable, errors and addresses in colour; "None" turns it off
 		Bookmarks:          []Bookmark{},
 		UpdateChannel:      "stable",
@@ -508,6 +521,24 @@ func Load(dataDir string) (*Manager, error) {
 			}
 		}
 		m.cur.KeywordsOn, changed = true, true
+	}
+	// EXOS port summary colours (0.33.0): once, the Network set gets them.
+	if !m.cur.ExosPortColors {
+		for i, k := range m.cur.KeywordSets {
+			if k.Name != "Network" {
+				continue
+			}
+			for _, w := range ExosPortKeywords {
+				have := false
+				for _, x := range k.Keywords {
+					have = have || x.Text == w.Text
+				}
+				if !have {
+					m.cur.KeywordSets[i].Keywords = append(m.cur.KeywordSets[i].Keywords, w)
+				}
+			}
+		}
+		m.cur.ExosPortColors, changed = true, true
 	}
 	// The modern layout (0.21.0) keeps the Button Bar out of the way (once -
 	// it can be shown again from View).
