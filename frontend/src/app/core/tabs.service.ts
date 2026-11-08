@@ -528,6 +528,9 @@ export class Tabs {
     }
   }
 
+  /** Puts the keyboard focus in a tab's terminal. */
+  focus(id: string) { setTimeout(() => this.handles.get(id)?.term.focus()); }
+
   unlock(id: string, pw: string): boolean {
     if ((this.lockPw.get(id) ?? '') !== pw) return false;
     this.lockPw.delete(id);

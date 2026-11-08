@@ -107,6 +107,7 @@ export interface Settings {
   credentials: Credential[] | null; masterHash: string;
   teams?: TeamConn[] | null; teamDisplayName?: string;
   syncFolder?: string; syncId?: string; syncOptions?: boolean;
+  ai?: AISettings;
   bookmarks: Bookmark[] | null; updateChannel: 'stable' | 'nightly' | 'off'; updateRepo: string; updateOnStart: boolean;
 }
 
@@ -323,3 +324,8 @@ export interface TeamPushResult { status: 'new' | 'added' | 'exists' | 'pending'
 
 /** Sync between your own computers through a shared folder. */
 export interface SyncStatus { folder: string; last: string; peers: string[] | null; took: number; error: string; }
+
+/** The AI assistant (optional): the provider and model; the API key is in the OS keychain. */
+export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama'; model?: string; baseUrl?: string; hideHosts?: boolean; }
+export interface AIStatus { provider: string; model: string; hasKey: boolean; ready: boolean; }
+export interface AIAnswer { text: string; commands: string[]; sent: string; removed: number; model: string; }

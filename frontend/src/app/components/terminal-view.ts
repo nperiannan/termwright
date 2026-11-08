@@ -795,6 +795,10 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       { label: 'Select All', action: () => t?.selectAll() },
       { label: 'Copy as HTML (with colors)', action: () => void this.copyHtml(), disabled: !t?.hasSelection() },
       ...(this.tab().session.path && this.tab().kind === 'terminal' ? [{ label: 'Save Selection as Device Fact...', action: () => this.teachFact(), disabled: !t?.hasSelection() }] : []),
+      { separator: true },
+      { label: 'Explain with AI...', action: () => this.ai('explain', t?.getSelection() ?? ''), disabled: !t?.hasSelection() },
+      { label: 'Ask AI for a Command...', action: () => this.ai('suggest', '') },
+      { separator: true },
       { label: 'Copy Scrollback', action: () => void this.tabs.copyScrollback(id) },
       { label: 'Copy Scrollback as HTML Report', action: () => void this.tabs.copyScrollback(id, 'html') },
       { label: 'Save Scrollback As HTML...', action: () => void this.tabs.saveScrollback(id, 'html') },
@@ -807,6 +811,12 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       { label: 'Clear Scrollback', action: () => t?.clear() },
       { label: 'Reset Terminal', action: () => t?.reset() },
     ]);
+  }
+
+  /** The AI assistant for this tab: explain the selection or suggest a command for its device type. */
+  ai(kind: 'explain' | 'suggest', text: string) {
+    const s = this.tab().session;
+    this.ui.aiReq.set({ kind, text, tabId: this.tab().id, deviceType: s.deviceType ?? '', protocol: s.protocol });
   }
 
   private serialize?: SerializeAddon;

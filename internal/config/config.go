@@ -37,6 +37,14 @@ type KeyBinding struct {
 	Script string `json:"script"` // path of a .js file to run
 }
 
+// AISettings: the AI assistant's provider. The API key is in the OS keychain.
+type AISettings struct {
+	Provider  string `json:"provider,omitempty"`  // "" (off), "anthropic", "openai" or "ollama"
+	Model     string `json:"model,omitempty"`     // "" = the provider's newest that Termwright finds
+	BaseURL   string `json:"baseUrl,omitempty"`   // openai: an OpenAI-compatible endpoint; ollama: its address
+	HideHosts bool   `json:"hideHosts,omitempty"` // replace IP addresses, MAC addresses and host names before sending
+}
+
 // Credential is a named user name; its password is kept in the OS keychain.
 type Credential struct {
 	Name     string `json:"name"`
@@ -124,10 +132,12 @@ type Settings struct {
 	Teams                []TeamConn                   `json:"teams,omitempty"`           // team servers joined (kept by the backend)
 	TeamDisplayName      string                       `json:"teamDisplayName,omitempty"` // the name the teams see ("" = the OS user)
 	// Sync between your own computers through a shared folder (OneDrive, iCloud Drive, Dropbox…)
-	SyncFolder          string               `json:"syncFolder,omitempty"`  // "" = off
-	SyncID              string               `json:"syncId,omitempty"`      // this computer in the sync folder
-	SyncOptions         bool                 `json:"syncOptions,omitempty"` // Global Options too (sessions, accounts and the library always)
-	MasterHash          string               `json:"masterHash"`            // scrypt verifier; empty = no master password
+	SyncFolder  string `json:"syncFolder,omitempty"`  // "" = off
+	SyncID      string `json:"syncId,omitempty"`      // this computer in the sync folder
+	SyncOptions bool   `json:"syncOptions,omitempty"` // Global Options too (sessions, accounts and the library always)
+	// AI assistant (optional, off by default): Explain and Suggest with the user's own provider
+	AI                  AISettings           `json:"ai,omitempty"`
+	MasterHash          string               `json:"masterHash"` // scrypt verifier; empty = no master password
 	KeyMap              []KeyBinding         `json:"keyMap"`
 	CustomSchemes       []ColorScheme        `json:"customSchemes"`
 	AccentColor         string               `json:"accentColor"`

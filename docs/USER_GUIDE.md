@@ -19,7 +19,7 @@ Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial
 3. [Connecting](#3-connecting) - device types, first SSH connection, [SSH keys: generate, install and store](#ssh-keys-generate-install-and-store), [old devices: legacy SSH algorithms](#old-devices-legacy-ssh-algorithms)
 4. [Sessions and the Session Manager](#4-sessions-and-the-session-manager) - [device facts](#device-facts), [Wake-on-LAN](#wake-on-lan)
 5. [Session Options reference](#5-session-options-reference) - [Mosh](#mosh-roaming-ssh), Telnet over TLS, local echo
-6. [Working in the terminal](#6-working-in-the-terminal)
+6. [Working in the terminal](#6-working-in-the-terminal) - [AI assistant](#ai-assistant-optional)
 7. [Command Window, Button Bar and Connect Bar](#7-command-window-button-bar-and-connect-bar)
 8. [Logging and capturing output](#8-logging-and-capturing-output)
 9. [File transfer](#9-file-transfer)
@@ -711,6 +711,19 @@ For an SSH session over Wi-Fi, a VPN or a laptop that sleeps, tick **Connect wit
 
 - **Lock**: Tab → Lock Session (or the lock button) blocks keyboard input to a tab until you enter the password you chose; *Lock All Sessions* locks every tab.
 - **Tab menu** (right-click a tab): Reconnect, Disconnect, Clone, Add to Send Group, Open SFTP Tab, **Files Panel**, Set Up Key Login, Connect SFTP Session, Log, Save Scrollback, Timestamps, Auto Scroll, Send Bar, Clear Screen, Session Options, Rename Tab, Close, Close Other Tabs. Middle-click closes a tab.
+
+### AI assistant (optional)
+
+Off until you choose an AI service in **Settings → AI Assistant**: **Claude** (your Anthropic API key), an **OpenAI-compatible** service (OpenAI, Azure OpenAI or a company gateway, by address and key) or **Ollama** (a model on your computer or a lab server - nothing leaves your network). Keys are kept in the OS keychain; **Load Models** lists what the service offers (empty = its newest).
+
+- **Explain with AI** (select output or an error, right-click in the terminal): what it means, whether something is wrong, and what to check next, with commands for the tab's device type.
+- **Ask AI for a Command** (right-click): *show the LLDP neighbours*, *find which port a MAC address is on* - the commands for that device type.
+- Each command has **Paste** (types it at the prompt **without Enter** and closes the window - you check it and press Enter), **Copy** and **Save** (to the Command Library, for that device type). Nothing the AI answers is ever run by itself.
+- **Privacy**: nothing is sent until you ask. Passwords, secrets, keys, SNMP communities and tokens are removed first; *Also replace IP addresses, MAC addresses and host names* hides those too. *What was sent* shows exactly what left your computer. Check your company's policy before sending device output to an outside service.
+
+| Explain | Suggest a command | Settings |
+|---|---|---|
+| ![Explain with AI](screenshots/ai-explain.png) | ![Suggest a command](screenshots/ai-suggest.png) | ![AI Assistant settings](screenshots/ai-settings.png) |
 
 ## 7. Command Window, Button Bar and Connect Bar
 

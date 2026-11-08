@@ -21,6 +21,14 @@ export class A11y {
 
   constructor() {
     if (typeof document === 'undefined') return;
+    // an open menu takes Escape before anything else - also before a terminal, which would send it to the device
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      if (this.ui.menu()) { this.ui.menu.set(null); e.preventDefault(); e.stopPropagation(); return; }
+      // a dialog is open but the focus is outside it (in a terminal behind it): the dialog gets Escape
+      const m = this.top(), t = e.target as Node | null;
+      if (m && t && !m.contains(t)) { e.stopPropagation(); this.key(e); }
+    }, true);
     document.addEventListener('keydown', e => this.key(e));
     // terminal output changes the page all the time: mark at most every 150 ms, and not for the terminals
     let timer = 0;

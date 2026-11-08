@@ -48,6 +48,7 @@ import { KeySetupDialog } from './dialogs/key-setup-dialog';
 import { TeamsDialog } from './dialogs/teams-dialog';
 import { TeamPushDialog } from './dialogs/team-push-dialog';
 import { TeamReserveDialog } from './dialogs/team-reserve-dialog';
+import { AIDialog } from './dialogs/ai-dialog';
 import { TeamStatusService } from './core/team-status.service';
 import { RemoteDesktopDialog } from './dialogs/remote-desktop-dialog';
 import { RemoteDesktopSetup } from './core/remote-desktop-setup.service';
@@ -65,7 +66,7 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, TeamPushDialog, TeamReserveDialog, AIDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

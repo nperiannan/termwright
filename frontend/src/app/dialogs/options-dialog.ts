@@ -1,9 +1,9 @@
 import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
-import { LANGUAGES, previewLanguages } from '../core/i18n';
-import { Backend } from '../core/backend';
-import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, comboOf, FACT_NAMES } from '../core/models';
+import { LANGUAGES, previewLanguages, tr } from '../core/i18n';
+import { Backend, errText } from '../core/backend';
+import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, comboOf, FACT_NAMES } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
@@ -12,7 +12,7 @@ import { UI_FONTS, UI_SIZES, uiFontStack } from '../core/ui-fonts';
 import { DEVICE_KINDS } from '../components/device-icon';
 
 interface DtPw { orig: string; pw: string; empty: boolean; state: string; forget: boolean; }
-type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards';
+type Page = 'general' | 'terminal' | 'schemes' | 'envs' | 'keywords' | 'keymap' | 'buttons' | 'updates' | 'devices' | 'alerts' | 'cards' | 'ai';
 
 /** What Global Options can find: page, the text shown on the page, extra words people search for. */
 const SEARCH: [Page, string, string][] = [
@@ -37,7 +37,7 @@ const SEARCH: [Page, string, string][] = [
   ['updates', 'Notify me about', 'update stable nightly'], ['updates', 'Check at start-up', 'update automatic'], ['updates', 'Repository', 'github'],
 ];
 const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Terminal & Appearance', schemes: 'Color Schemes', envs: 'Environments', keywords: 'Keyword Highlighting',
-  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates' };
+  keymap: 'Key Map', buttons: 'Button Bar', devices: 'Device Types', alerts: 'Alerts', cards: 'Smart Cards', updates: 'Updates', ai: 'AI Assistant' };
 
 /** Global Options dialog. */
 @Component({
@@ -67,6 +67,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
           <a [class.on]="page() === 'buttons'" (click)="page.set('buttons')"><app-icon name="buttons" [size]="15" />Button Bar</a>
           <a [class.on]="page() === 'devices'" (click)="page.set('devices')"><app-icon name="device" [size]="15" />Device Types</a>
           <a [class.on]="page() === 'alerts'" (click)="page.set('alerts')"><app-icon name="bell" [size]="15" />Alerts</a>
+          <a [class.on]="page() === 'ai'" (click)="page.set('ai'); loadAI()"><app-icon name="pulse" [size]="15" />AI Assistant</a>
           <div class="cat-g">System</div>
           <a [class.on]="page() === 'cards'" (click)="page.set('cards'); loadCards()"><app-icon name="card" [size]="15" />Smart Cards</a>
           <a [class.on]="page() === 'updates'" (click)="page.set('updates')"><app-icon name="down" [size]="15" />Updates</a>
@@ -482,6 +483,40 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
               </table>
               <button type="button" (click)="(s.alerts ??= []).push({ pattern: '', regex: false, caseSensitive: false, enabled: true, sound: true, desktop: true })">Add alert</button>
             }
+            @case ('ai') {
+              <div class="grid">
+                <label>AI service</label>
+                <select name="aip" [ngModel]="s.ai?.provider || ''" (ngModelChange)="setAI({ provider: $event, model: '' }); aiModels.set([])">
+                  <option value="">Off</option>
+                  <option value="anthropic">Claude (Anthropic API key)</option>
+                  <option value="openai">OpenAI-compatible (OpenAI, Azure OpenAI, a company gateway)</option>
+                  <option value="ollama">Ollama (a local model - nothing leaves your network)</option>
+                </select>
+                @if (s.ai?.provider === 'anthropic' || s.ai?.provider === 'openai') {
+                  <label>API key</label>
+                  <div class="row"><input name="aik" type="password" [(ngModel)]="aiKey" autocomplete="off" [placeholder]="aiSt()?.hasKey ? '(saved in the OS keychain - type to change)' : 'paste the key'" />
+                    <button type="button" (click)="saveAIKey()" [disabled]="!aiKey.trim()">Save Key</button>
+                    @if (aiSt()?.hasKey) { <button type="button" (click)="forgetAIKey()">Forget</button> }</div>
+                }
+                @if (s.ai?.provider === 'openai' || s.ai?.provider === 'ollama') {
+                  <label>Address</label>
+                  <input name="aib" [ngModel]="s.ai?.baseUrl || ''" (ngModelChange)="setAI({ baseUrl: $event })" [placeholder]="s.ai?.provider === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1'" />
+                }
+                @if (s.ai?.provider) {
+                  <label>Model</label>
+                  <div class="row">
+                    <input name="aim" [ngModel]="s.ai?.model || ''" (ngModelChange)="setAI({ model: $event })" list="aimodels" placeholder="(the newest the service offers)" />
+                    <datalist id="aimodels">@for (m of aiModels(); track m) { <option [value]="m"></option> }</datalist>
+                    <button type="button" (click)="loadAIModels()">Load Models</button>
+                  </div>
+                  <label>Privacy</label>
+                  <div class="checks"><label><input type="checkbox" name="aih" [ngModel]="!!s.ai?.hideHosts" (ngModelChange)="setAI({ hideHosts: $event })" /> Also replace IP addresses, MAC addresses and host names before sending</label></div>
+                  <label></label>
+                  <div class="hint">Nothing is sent until you choose <b>Explain with AI</b> or <b>Ask AI for a Command</b> (right-click in a terminal). Passwords, secrets, keys, SNMP communities and tokens are always removed first, and the window shows what was sent. Commands are pasted without Enter - you check them and press Enter. Check your company's policy before sending device output to an outside service; Ollama keeps everything on your network.</div>
+                  @if (aiMsg()) { <label></label><div class="hint">{{ aiMsg() }}</div> }
+                }
+              </div>
+            }
             @case ('cards') {
               <p class="hint">SSH keys on smart cards and tokens - PIV and CAC cards, YubiKey (PIV), SafeNet eToken, HSMs - through the card's PKCS#11 library.
                 The private key never leaves the card. Choose the key in Session Options → SSH2 Authentication → Smart card.</p>
@@ -862,6 +897,7 @@ export class OptionsDialog implements OnInit {
 
   ngOnInit() {
     void this.backend.syncState().then(x => this.syncSt.set(x)).catch(() => {});
+    if (this.page() === 'ai') this.loadAI();
     this.ui.optionsPage.set('');
     const cur = this.ui.settings();
     if (cur) this.s = structuredClone(cur);
@@ -891,6 +927,27 @@ export class OptionsDialog implements OnInit {
   async copyKey(k: SmartCardKey) { await this.backend.clipboardSet(k.authorizedKey); this.ui.toast('Public key copied', 'success'); }
 
   readonly syncSt = signal<SyncStatus | null>(null);
+  // AI assistant
+  readonly aiSt = signal<AIStatus | null>(null);
+  readonly aiModels = signal<string[]>([]);
+  readonly aiMsg = signal('');
+  aiKey = '';
+  loadAI() { void this.backend.aiState().then(x => this.aiSt.set(x)).catch(() => {}); }
+  setAI(p: Partial<AISettings>) { if (this.s) this.s.ai = { ...(this.s.ai ?? {}), ...p }; this.cdr.markForCheck(); }
+  async saveAIKey() {
+    const p = this.s?.ai?.provider ?? '';
+    try { await this.backend.aiSetKey(p, this.aiKey); this.aiKey = ''; this.aiMsg.set(tr('The key is saved in the OS keychain.')); this.loadAI(); }
+    catch (e) { this.aiMsg.set(errText(e)); }
+  }
+  async forgetAIKey() { await this.backend.aiSetKey(this.s?.ai?.provider ?? '', '').catch(() => {}); this.loadAI(); }
+  async loadAIModels() {
+    this.aiMsg.set('');
+    try {
+      const m = await this.backend.aiModels(this.s?.ai ?? {});
+      this.aiModels.set(m ?? []);
+      this.aiMsg.set(m?.length ? tr('{0} models - pick one, or leave it empty for the first: {1}', m.length, m[0]) : tr('The service lists no models.'));
+    } catch (e) { this.aiMsg.set(errText(e)); }
+  }
   async browseSync() {
     const d = await this.backend.chooseDirectory('Choose the Sync Folder').catch(() => '');
     if (d && this.s) this.s.syncFolder = d;

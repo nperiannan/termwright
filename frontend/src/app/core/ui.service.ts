@@ -47,6 +47,8 @@ export class Ui {
   readonly bulkPaths = signal<string[]>([]);
   /** What Push to Team… offers: sessions (paths, relative to base) or devices from Discover. */
   /** Reserve… for a session's device (current: the reservation to change). */
+  /** the AI assistant's window: Explain a selection or Suggest a command, for a tab */
+  readonly aiReq = signal<{ kind: 'explain' | 'suggest'; text: string; tabId?: string; deviceType: string; protocol: string } | null>(null);
   readonly teamReserve = signal<{ node: import('./models').SessionNode; current?: { until: string; note: string } } | null>(null);
   /** a team whose server the Teams window opens to update */
   readonly teamsUpdate = signal('');

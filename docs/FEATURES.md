@@ -185,6 +185,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 
 ## Terminal
 
+- **AI assistant** (optional, off by default): *Explain with AI* for output and errors and *Ask AI for a Command* for the tab's device type, with Claude, an OpenAI-compatible service or a local Ollama; secrets removed before sending, commands pasted without Enter, *Save* to the Command Library.
 - **Emulation**: xterm-256color with true color, VT100/102/220, ANSI, Linux; Unicode.
 - **Scrollback** with search (`Mod+F`), clear scrollback, reset terminal.
 - **Terminal bar** under SSH, Telnet, Raw and local tabs: Timestamps, Auto scroll and Clear (can be hidden per tab or everywhere).

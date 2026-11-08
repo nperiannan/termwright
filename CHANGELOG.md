@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **AI assistant (optional, off by default).** Right-click in a terminal: *Explain with AI* explains the selected output or error, *Ask AI for a Command* gives the commands for the tab's device type. Choose the service in Settings → AI Assistant: Claude (your API key), an OpenAI-compatible service (OpenAI, Azure OpenAI, a company gateway) or Ollama (local - nothing leaves your network). Passwords, secrets, keys, SNMP communities and tokens are removed before sending (and, if you want, addresses and host names); the window shows what was sent; commands are pasted without Enter or saved to the Command Library.
+* **Escape over the terminal.** Escape closes the right-click menu and a dialog also when the keyboard focus is in the terminal behind them (it went to the device before).
 * **Faster with big session trees.** The Session Manager reloads in 80 ms instead of 0.8 s with 20,000 sessions (unchanged files are not read again), and the sync's half-minute check reads only files that changed. Measurements and how to repeat them: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 * **Team server for big teams.** The usage history is written in the background every 15 seconds instead of on every change; *last used* goes to members only when it changed; large answers are compressed; requests may be up to 16 MB (a backup to restore up to 256 MB - before, restoring the backup of a busy team failed at 1 MB). With 200 members and 5,000 devices, everyone's heartbeat is answered within half a second.
 
