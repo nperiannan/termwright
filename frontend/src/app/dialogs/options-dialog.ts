@@ -991,11 +991,18 @@ export class OptionsDialog implements OnInit {
   async forgetAIKey() { await this.backend.aiSetKey(this.s?.ai?.provider ?? '', '').catch(() => {}); this.loadAI(); }
   async loadAIModels() {
     this.aiMsg.set('');
+    if (this.s?.ai?.provider === 'claudecode') {
+      try {
+        const p = await this.backend.claudeCodeFind(this.s.ai.baseUrl ?? '');
+        this.aiModels.set(['sonnet', 'opus', 'haiku']);
+        this.aiMsg.set(tr('Claude Code found: {0}. Model: sonnet, opus or haiku - or leave it empty for its default.', p));
+      } catch (e) { this.aiMsg.set(errText(e)); }
+      return;
+    }
     try {
       const m = await this.backend.aiModels(this.s?.ai ?? {});
       this.aiModels.set(m ?? []);
-      this.aiMsg.set(this.s?.ai?.provider === 'claudecode' ? tr('Claude Code is installed. Model: sonnet, opus or haiku - or leave it empty for Claude Code\'s default.')
-        : m?.length ? tr('{0} models - pick one, or leave it empty for the first: {1}', m.length, m[0]) : tr('The service lists no models.'));
+      this.aiMsg.set(m?.length ? tr('{0} models - pick one, or leave it empty for the first: {1}', m.length, m[0]) : tr('The service lists no models.'));
     } catch (e) { this.aiMsg.set(errText(e)); }
   }
   async browseSync() {

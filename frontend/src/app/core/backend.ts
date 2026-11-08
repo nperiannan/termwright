@@ -156,6 +156,7 @@ export class Backend {
   fileServersShowFolder() { return this.call<void>('FileServersShowFolder'); }
   fileServersAddresses(host: string) { return this.call<FSAddress[]>('FileServersAddresses', host); }
   textReply(id: string, text: string, total: number) { return this.call<void>('TextReply', id, text, total); }
+  claudeCodeFind(path: string) { return this.call<string>('ClaudeCodeFind', path); }
   mcpState() { return this.call<MCPInfo>('MCPState'); }
   mcpAddToDesktop() { return this.call<void>('MCPAddToDesktop'); }
   mcpAddToClaudeCode() { return this.call<string>('MCPAddToClaudeCode'); }

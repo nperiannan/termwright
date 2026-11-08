@@ -54,21 +54,114 @@ func claudeCodePath(given string) (string, error) {
 			}
 		}
 	}
-	if runtime.GOOS != "windows" { // as the login shell sees it (nvm, asdf, …)
+	// version folders: nvm, the native installer, and the copy Claude Desktop keeps for its Code tab
+	var globs []string
+	switch runtime.GOOS {
+	case "windows":
+		globs = []string{filepath.Join(os.Getenv("APPDATA"), "Claude", "claude-code", "*", "claude.exe"), filepath.Join(os.Getenv("LOCALAPPDATA"), "AnthropicClaude", "*", "claude.exe")}
+	default:
+		globs = []string{filepath.Join(home, ".nvm", "versions", "node", "*", "bin", "claude"), filepath.Join(home, ".volta", "bin", "claude"),
+			filepath.Join(home, ".local", "share", "claude", "versions", "*"), filepath.Join(home, ".asdf", "shims", "claude"), filepath.Join(home, ".npm", "bin", "claude")}
+	}
+	if p := newestFile(globs); p != "" {
+		return p, nil
+	}
+	for _, root := range claudeDesktopDirs(home) {
+		if p := findClaudeIn(root, 6); p != "" && isClaudeCode(p) {
+			return p, nil
+		}
+	}
+	if runtime.GOOS != "windows" { // as the user's shell sees it (nvm and friends set in .zshrc)
 		sh := os.Getenv("SHELL")
 		if sh == "" {
 			sh = "/bin/zsh"
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if out, err := exec.CommandContext(ctx, sh, "-lc", "command -v claude").Output(); err == nil {
-			if p := strings.TrimSpace(string(out)); p != "" && filepath.IsAbs(p) {
+		for _, flags := range []string{"-lc", "-ilc"} {
+			ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+			out, _ := exec.CommandContext(ctx, sh, flags, "command -v claude").Output()
+			cancel()
+			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+			if p := strings.TrimSpace(lines[len(lines)-1]); filepath.IsAbs(p) && isExec(p) {
 				return p, nil
 			}
 		}
 	}
 	return "", errors.New("Claude Code was not found on this computer - install it (claude.com/claude-code) and sign in once by running claude in a terminal, or give its path")
 }
+
+// newestFile is the most recently changed executable file the patterns match.
+func newestFile(patterns []string) string {
+	best, bestT := "", time.Time{}
+	for _, g := range patterns {
+		m, _ := filepath.Glob(g)
+		for _, p := range m {
+			if fi, err := os.Stat(p); err == nil && !fi.IsDir() && isExec(p) && fi.ModTime().After(bestT) {
+				best, bestT = p, fi.ModTime()
+			}
+		}
+	}
+	return best
+}
+
+// isClaudeCode: the program answers --version as Claude Code does.
+func isClaudeCode(p string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	c := exec.CommandContext(ctx, p, "--version")
+	hideWindow(c)
+	out, err := c.Output()
+	return err == nil && strings.Contains(strings.ToLower(string(out)), "claude code")
+}
+
+func isExec(p string) bool {
+	fi, err := os.Stat(p)
+	if err != nil || fi.IsDir() {
+		return false
+	}
+	return runtime.GOOS == "windows" || fi.Mode().Perm()&0o111 != 0
+}
+
+// claudeDesktopDirs: where Claude Desktop keeps its files (and its own Claude Code).
+func claudeDesktopDirs(home string) []string {
+	switch runtime.GOOS {
+	case "windows":
+		return []string{filepath.Join(os.Getenv("APPDATA"), "Claude"), filepath.Join(os.Getenv("LOCALAPPDATA"), "AnthropicClaude")}
+	case "darwin":
+		return []string{filepath.Join(home, "Library", "Application Support", "Claude"), "/Applications/Claude.app/Contents/Resources", filepath.Join(home, "Applications", "Claude.app", "Contents", "Resources")}
+	}
+	return []string{filepath.Join(home, ".config", "Claude")}
+}
+
+// findClaudeIn looks a few folders deep for the newest claude program.
+func findClaudeIn(root string, depth int) string {
+	name := "claude"
+	if runtime.GOOS == "windows" {
+		name = "claude.exe"
+	}
+	best, bestT := "", time.Time{}
+	base := strings.Count(filepath.Clean(root), string(filepath.Separator))
+	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return filepath.SkipDir
+		}
+		if d.IsDir() {
+			if strings.Count(p, string(filepath.Separator))-base >= depth || strings.HasPrefix(d.Name(), ".") || d.Name() == "node_modules" || d.Name() == "Cache" || d.Name() == "IndexedDB" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Name() == name && isExec(p) {
+			if fi, err := d.Info(); err == nil && fi.ModTime().After(bestT) {
+				best, bestT = p, fi.ModTime()
+			}
+		}
+		return nil
+	})
+	return best
+}
+
+// ClaudeCodeFind tells the settings page where Claude Code is (given: the path typed, "" = search).
+func (a *App) ClaudeCodeFind(given string) (string, error) { return claudeCodePath(given) }
 
 // claudeCodeArgs: print mode, plain text, no tools, nothing saved, only our system prompt.
 func claudeCodeArgs(model, sys string, withTools bool) []string {

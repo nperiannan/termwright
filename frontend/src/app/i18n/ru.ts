@@ -1438,6 +1438,7 @@ const ru: Record<string, string> = {
   'Claude wants to connect': 'Claude хочет подключиться',
   'Allow': 'Разрешить',
   'Allow in This Tab for 15 Minutes': 'Разрешить в этой вкладке на 15 минут',
+  'Claude Code found: {0}. Model: sonnet, opus or haiku - or leave it empty for its default.': 'Claude Code найден: {0}. Модель: sonnet, opus или haiku - или оставьте пусто для модели по умолчанию.',
 };
 
 export default ru;

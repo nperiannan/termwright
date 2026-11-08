@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/session"
@@ -191,5 +192,29 @@ func TestAIClaudeCode(t *testing.T) {
 	_ = cfg.Save(s)
 	if a.AIState().Ready {
 		t.Fatal("ready without the program")
+	}
+}
+
+func TestFindClaudeCode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script stand-in")
+	}
+	root := t.TempDir()
+	// the copy Claude Desktop keeps: <support>/Claude/claude-code/<version>/claude
+	for _, v := range []string{"2.0.1", "2.0.9"} {
+		d := filepath.Join(root, "claude-code", v)
+		os.MkdirAll(d, 0o755)
+		os.WriteFile(filepath.Join(d, "claude"), []byte("#!/bin/sh\necho '"+v+" (Claude Code)'\n"), 0o755)
+		time.Sleep(20 * time.Millisecond)
+	}
+	os.MkdirAll(filepath.Join(root, "logs"), 0o755)
+	os.WriteFile(filepath.Join(root, "logs", "claude"), []byte("not a program"), 0o644)
+	p := findClaudeIn(root, 6)
+	if !strings.HasSuffix(p, filepath.Join("2.0.9", "claude")) || !isClaudeCode(p) {
+		t.Fatalf("found %q", p)
+	}
+	os.WriteFile(filepath.Join(root, "other"), []byte("#!/bin/sh\necho something else\n"), 0o755)
+	if isClaudeCode(filepath.Join(root, "other")) {
+		t.Fatal("another program taken for Claude Code")
 	}
 }
