@@ -2,6 +2,11 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+* **Faster with big session trees.** The Session Manager reloads in 80 ms instead of 0.8 s with 20,000 sessions (unchanged files are not read again), and the sync's half-minute check reads only files that changed. Measurements and how to repeat them: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+* **Team server for big teams.** The usage history is written in the background every 15 seconds instead of on every change; *last used* goes to members only when it changed; large answers are compressed; requests may be up to 16 MB (a backup to restore up to 256 MB - before, restoring the backup of a busy team failed at 1 MB). With 200 members and 5,000 devices, everyone's heartbeat is answered within half a second.
+
 ## 0.32.0 (2026-11-08)
 
 Sync your own computers, Mosh and Telnet over TLS, keyboard and screen reader support in every dialog, and more for teams.

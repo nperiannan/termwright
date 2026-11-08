@@ -79,7 +79,10 @@ type Status struct {
 	InUse    []InUse        `json:"inUse"`
 	Reserved []*Reservation `json:"reserved"`
 	Notes    []Note         `json:"notes"`
-	Last     []LastUse      `json:"last"` // per inventory device: the last time someone had it open
+	Last     []LastUse      `json:"last,omitempty"` // per inventory device: the last time someone had it open
+	// LastRev changes when Last does; a client that has Last of this LastRev
+	// asks with last=LastRev and gets it left out (it is long in a big lab)
+	LastRev int64 `json:"lastRev"`
 }
 
 // LastUse is the most recent stretch someone had a device open (closed ones only).
@@ -225,12 +228,8 @@ func (s *Server) statusFor(me *memberRec) Status {
 		}
 	}
 	sort.Slice(st.InUse, func(i, j int) bool { return st.InUse[i].Since < st.InUse[j].Since })
-	last := map[string]UseRec{}
-	for _, u := range s.usage.Use {
-		if u.E > last[u.Dev].E {
-			last[u.Dev] = u
-		}
-	}
+	last := s.lastUses()
+	st.LastRev = s.lastRev
 	st.Last = []LastUse{}
 	for _, d := range s.st.Inventory {
 		if u, ok := last[d.ID]; ok {
@@ -260,7 +259,11 @@ func (s *Server) getStatus(w http.ResponseWriter, r *http.Request) {
 			ok = true
 			s.prune()
 			if s.statusRev != have || len(s.notes[me.ID]) > 0 || wait <= 0 {
-				writeJSON(w, 200, s.statusFor(me))
+				st := s.statusFor(me)
+				if lr := r.URL.Query().Get("last"); lr != "" && lr == strconv.FormatInt(st.LastRev, 10) {
+					st.Last = nil // the client has it
+				}
+				writeJSON(w, 200, st)
 				delete(s.notes, me.ID)
 				return
 			}

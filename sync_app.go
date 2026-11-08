@@ -66,7 +66,14 @@ type SyncStatus struct {
 var (
 	syncMu     sync.Mutex
 	syncStatus SyncStatus
+	syncHashes = map[string]syncFileHash{} // per session file, while it does not change (syncMu held)
 )
+
+type syncFileHash struct {
+	mod  time.Time
+	size int64
+	sum  [32]byte
+}
 
 // syncLoop syncs every 30 seconds while a sync folder is set.
 func (a *App) syncLoop(ctx context.Context) {
@@ -339,15 +346,27 @@ func (a *App) syncFile(p string) string {
 // syncHash is a hash of the sessions' files and the settings that sync.
 func (a *App) syncHash(paths []string) (string, error) {
 	h := sha256.New()
+	next := map[string]syncFileHash{}
 	for _, p := range paths {
-		b, err := os.ReadFile(a.syncFile(p))
+		// a file that did not change is not read again (thousands of sessions, every half minute)
+		fi, err := os.Stat(a.syncFile(p))
 		if err != nil {
 			continue
 		}
+		fh, ok := syncHashes[p]
+		if !ok || !fh.mod.Equal(fi.ModTime()) || fh.size != fi.Size() {
+			b, err := os.ReadFile(a.syncFile(p))
+			if err != nil {
+				continue
+			}
+			sum := sha256.Sum256(b)
+			fh = syncFileHash{mod: fi.ModTime(), size: fi.Size(), sum: sum}
+		}
+		next[p] = fh
 		h.Write([]byte(p + "\x00"))
-		h.Write(b)
-		h.Write([]byte{0})
+		h.Write(fh.sum[:])
 	}
+	syncHashes = next
 	data, err := config.ExportSettings(a.cfg.Get(), "")
 	if err != nil {
 		return "", err

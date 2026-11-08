@@ -164,7 +164,9 @@ func (s *Server) backup(w http.ResponseWriter, r *http.Request, me *memberRec) {
 		fail(w, 403, "only the owner can download a backup")
 		return
 	}
-	s.saveUsage()
+	s.trimUsage()
+	s.writeUsage(&s.usage) // the backup has the history up to now
+	s.usageDirty = false
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
@@ -194,7 +196,7 @@ func (s *Server) restore(w http.ResponseWriter, r *http.Request, me *memberRec) 
 		fail(w, 403, "only the owner can restore a backup")
 		return
 	}
-	files, err := readBackup(http.MaxBytesReader(w, r.Body, 64<<20))
+	files, err := readBackup(http.MaxBytesReader(w, r.Body, 256<<20))
 	if err != nil {
 		fail(w, 400, err.Error())
 		return
@@ -237,13 +239,15 @@ func (s *Server) restore(w http.ResponseWriter, r *http.Request, me *memberRec) 
 	s.st = st
 	s.usage = u
 	s.opens = map[string]*openUse{}
+	s.lastUse = nil
+	s.lastRev++
 	s.presence = map[string]*presenceRec{}
 	s.log(me.Name, "restored a backup of %s", timeMark(s.now()))
 	if err := s.save(); err != nil {
 		fail(w, 500, err.Error())
 		return
 	}
-	s.saveUsage()
+	s.writeUsage(&s.usage)
 	s.st.Rev++
 	close(s.changed)
 	s.changed = make(chan struct{})
@@ -270,7 +274,7 @@ func readBackup(r io.Reader) (map[string][]byte, error) {
 		name := filepath.Base(h.Name)
 		for _, f := range backupFiles {
 			if name == f {
-				b, err := io.ReadAll(io.LimitReader(tr, 64<<20))
+				b, err := io.ReadAll(io.LimitReader(tr, 256<<20))
 				if err != nil {
 					return nil, err
 				}

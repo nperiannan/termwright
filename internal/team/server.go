@@ -1,6 +1,7 @@
 package team
 
 import (
+	"compress/gzip"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -56,14 +57,18 @@ type Server struct {
 	Version string
 	Log     *log.Logger
 
-	mu      sync.Mutex
-	st      state
-	cert    tls.Certificate
-	fp      string
-	signIns map[string]time.Time // the last admin sign-in noted per member
-	seen    map[string]time.Time // member id → last call (not saved on every call)
-	fails   map[string]time.Time // remote address → last failed join
-	now     func() time.Time
+	mu         sync.Mutex
+	st         state
+	cert       tls.Certificate
+	fp         string
+	signIns    map[string]time.Time // the last admin sign-in noted per member
+	usageDirty bool                 // usage.json to be written (flushLoop)
+	usageWrite sync.Mutex           // one writer of usage.json at a time
+	lastUse    map[string]UseRec    // per device its last closed session (lastUses)
+	lastRev    int64                // changes when Status.Last does
+	seen       map[string]time.Time // member id → last call (not saved on every call)
+	fails      map[string]time.Time // remote address → last failed join
+	now        func() time.Time
 
 	changed  chan struct{}           // closed and replaced when the inventory changes (long polls wait on it)
 	links    map[string]linkCode     // admin sign-in codes
@@ -120,6 +125,7 @@ func Open(dir, name, version string, logger *log.Logger) (*Server, string, error
 	if err := s.save(); err != nil {
 		return nil, "", err
 	}
+	go s.flushLoop()
 	return s, code, nil
 }
 
@@ -205,7 +211,7 @@ func (s *Server) loadCert() error {
 
 // save writes team.json (the caller holds mu, or nobody else runs yet).
 func (s *Server) save() error {
-	b, err := json.MarshalIndent(s.st, "", "  ")
+	b, err := json.Marshal(s.st) // compact: a big lab's inventory is MBs
 	if err != nil {
 		return err
 	}
@@ -237,7 +243,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/leave", s.auth(s.leave))
 	s.moreRoutes(mux)
 	s.inventoryRoutes(mux)
-	return http.MaxBytesHandler(mux, 1<<20)
+	limited := http.MaxBytesHandler(mux, 16<<20)
+	return gzipJSON(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/admin/restore" {
+			mux.ServeHTTP(w, r) // a backup carries the usage history: limited there (256 MB)
+			return
+		}
+		limited.ServeHTTP(w, r)
+	}))
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -514,4 +527,32 @@ func (s *Server) leave(w http.ResponseWriter, _ *http.Request, me *memberRec) {
 func (s *Server) drop(i int) {
 	delete(s.seen, s.st.Members[i].ID)
 	s.st.Members = append(s.st.Members[:i], s.st.Members[i+1:]...)
+}
+
+// gzipJSON compresses JSON answers for clients that accept it: a year of
+// usage history is tens of MB, a few MB compressed.
+func gzipJSON(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || !strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api/admin/backup" ||
+			!strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			h.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Add("Vary", "Accept-Encoding")
+		gz, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		defer gz.Close()
+		h.ServeHTTP(gzipWriter{ResponseWriter: w, w: gz}, r)
+	})
+}
+
+type gzipWriter struct {
+	http.ResponseWriter
+	w *gzip.Writer
+}
+
+func (g gzipWriter) Write(b []byte) (int, error) { return g.w.Write(b) }
+func (g gzipWriter) WriteHeader(code int) {
+	g.ResponseWriter.Header().Del("Content-Length")
+	g.ResponseWriter.WriteHeader(code)
 }

@@ -140,7 +140,8 @@ func (a *App) teamHeartbeat(ctx context.Context, id string) {
 }
 
 func (a *App) teamStatusLoop(ctx context.Context, id string) {
-	rev := int64(-1)
+	rev, lastRev := int64(-1), int64(-1)
+	var last []team.LastUse
 	backoff := 5 * time.Second
 	for ctx.Err() == nil {
 		t, c, err := a.teamConn(id)
@@ -151,7 +152,7 @@ func (a *App) teamStatusLoop(ctx context.Context, id string) {
 		if rev < 0 {
 			wait = 0
 		}
-		st, err := c.Status(ctx, rev, wait)
+		st, err := c.StatusSince(ctx, rev, lastRev, wait)
 		if err != nil {
 			if ctx.Err() != nil || team.Unauthorized(err) {
 				return
@@ -173,6 +174,12 @@ func (a *App) teamStatusLoop(ctx context.Context, id string) {
 			}
 		}
 		st.Notes = nil
+		// "last used" comes only when it changed
+		if st.Last == nil && st.LastRev == lastRev {
+			st.Last = last
+		} else {
+			last, lastRev = st.Last, st.LastRev
+		}
 		if st.Rev != rev {
 			rev = st.Rev
 			teamStatuses.Store(id, st)

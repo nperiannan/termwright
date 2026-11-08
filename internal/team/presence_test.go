@@ -95,7 +95,8 @@ func TestUsageHistory(t *testing.T) {
 	if len(rep.Res) != 1 || !rep.Res[0].Active {
 		t.Fatalf("res %+v", rep.Res)
 	}
-	// the history survives a restart
+	// the history survives a restart (the server writes it when it stops)
+	s.FlushUsage()
 	s2, _, _ := Open(s.Dir, "", "test", nil)
 	if len(s2.usage.Use) != 1 {
 		t.Fatalf("after restart %+v", s2.usage)

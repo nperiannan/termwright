@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/termwright/termwright/internal/sessionfile"
 )
@@ -52,6 +53,15 @@ type Store struct {
 	root string
 	// OnChange is called after sessions or folders were added, changed, moved or deleted.
 	OnChange func()
+	// nodes: the Session Manager's line of each session file, kept while the
+	// file does not change (a tree of thousands is not parsed again each time)
+	nodes, seen map[string]nodeCache
+}
+
+type nodeCache struct {
+	mod  time.Time
+	size int64
+	node Node
 }
 
 func (s *Store) changed() {
@@ -106,7 +116,9 @@ func (s *Store) Tree() (*Node, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	root := &Node{Name: "Sessions", IsFolder: true}
+	s.seen = map[string]nodeCache{}
 	err := s.walk(root, "")
+	s.nodes, s.seen = s.seen, nil // only the files there now
 	return root, err
 }
 
@@ -133,6 +145,13 @@ func (s *Store) walk(n *Node, rel string) error {
 			continue // template for new sessions, not shown in the tree
 		}
 		p := JoinPath(rel, base)
+		info, ierr := e.Info()
+		if nc, ok := s.nodes[p]; ok && ierr == nil && nc.mod.Equal(info.ModTime()) && nc.size == info.Size() {
+			c := nc.node
+			n.Children = append(n.Children, &c)
+			s.seen[p] = nc
+			continue
+		}
 		c := &Node{Name: base, Path: p}
 		if f, err := s.readFile(p); err == nil {
 			ss := FromFile(p, f)
@@ -162,6 +181,9 @@ func (s *Store) walk(n *Node, rel string) error {
 			}
 			if ss.Protocol == ProtoSSH2 {
 				c.OpenAs = ss.OpenAs
+			}
+			if ierr == nil {
+				s.seen[p] = nodeCache{mod: info.ModTime(), size: info.Size(), node: *c}
 			}
 		}
 		n.Children = append(n.Children, c)

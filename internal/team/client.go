@@ -217,6 +217,12 @@ func (c *Client) Presence(ctx context.Context, d []DeviceRef) error {
 // Status is who uses and reserved which devices; with wait > 0 the server
 // answers when it is newer than rev (or a notice waits), or after wait seconds.
 func (c *Client) Status(ctx context.Context, rev int64, wait int) (Status, error) {
+	return c.StatusSince(ctx, rev, -1, wait)
+}
+
+// StatusSince is Status for a client that has Last of lastRev already: Last
+// is then left out unless it changed (lastRev -1: always included).
+func (c *Client) StatusSince(ctx context.Context, rev, lastRev int64, wait int) (Status, error) {
 	var v Status
 	cl := c
 	if wait > 0 {
@@ -226,7 +232,11 @@ func (c *Client) Status(ctx context.Context, rev int64, wait int) (Status, error
 		cp.hc = &hc
 		cl = &cp
 	}
-	err := cl.call(ctx, http.MethodGet, fmt.Sprintf("/api/status?rev=%d&wait=%d", rev, wait), nil, &v)
+	q := fmt.Sprintf("/api/status?rev=%d&wait=%d", rev, wait)
+	if lastRev >= 0 {
+		q += fmt.Sprintf("&last=%d", lastRev)
+	}
+	err := cl.call(ctx, http.MethodGet, q, nil, &v)
 	return v, err
 }
 
@@ -278,7 +288,7 @@ func (c *Client) raw(ctx context.Context, method, path string, in []byte) ([]byt
 		return nil, fmt.Errorf("the team server %s cannot be reached: %w", c.Address, unwrapNet(err))
 	}
 	defer resp.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 256<<20))
 	if resp.StatusCode != http.StatusOK {
 		var e struct {
 			Error string `json:"error"`

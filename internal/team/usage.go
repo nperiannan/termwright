@@ -66,6 +66,8 @@ func (s *Server) usageFile() string { return filepath.Join(s.Dir, "usage.json") 
 
 func (s *Server) loadUsage() {
 	s.opens = map[string]*openUse{}
+	s.lastUse = nil
+	s.lastRev++
 	if b, err := os.ReadFile(s.usageFile()); err == nil {
 		_ = json.Unmarshal(b, &s.usage)
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -74,7 +76,39 @@ func (s *Server) loadUsage() {
 }
 
 // saveUsage writes usage.json, dropping what is older than keepUsage (mu held).
-func (s *Server) saveUsage() {
+// saveUsage marks usage.json to be written (mu held): the history of a big
+// team is tens of MB, so it is written at most every 15 seconds in the
+// background (flushUsage), and when the server stops.
+func (s *Server) saveUsage() { s.usageDirty = true }
+
+// flushUsage writes usage.json if it changed; the copy is made under mu, the
+// writing happens without it, so members are not kept waiting.
+func (s *Server) FlushUsage() {
+	s.mu.Lock()
+	if !s.usageDirty {
+		s.mu.Unlock()
+		return
+	}
+	s.usageDirty = false
+	s.trimUsage()
+	u := usageFile{Use: append([]UseRec(nil), s.usage.Use...), Res: append([]ResRec(nil), s.usage.Res...), Con: append([]ConRec(nil), s.usage.Con...)}
+	s.mu.Unlock()
+	s.usageWrite.Lock()
+	defer s.usageWrite.Unlock()
+	s.writeUsage(&u)
+}
+
+// flushLoop writes usage.json every 15 seconds while it changes.
+func (s *Server) flushLoop() {
+	t := time.NewTicker(15 * time.Second)
+	defer t.Stop()
+	for range t.C {
+		s.FlushUsage()
+	}
+}
+
+// trimUsage drops what is older than keepUsage (mu held).
+func (s *Server) trimUsage() {
 	cut := s.now().Add(-keepUsage).Unix()
 	u := &s.usage
 	for len(u.Use) > 0 && u.Use[0].E < cut {
@@ -86,6 +120,9 @@ func (s *Server) saveUsage() {
 	for len(u.Con) > 0 && u.Con[0].T < cut {
 		u.Con = u.Con[1:]
 	}
+}
+
+func (s *Server) writeUsage(u *usageFile) {
 	b, err := json.Marshal(u)
 	if err != nil {
 		return
@@ -132,7 +169,26 @@ func (s *Server) closeUse(k string, end time.Time) {
 		return
 	}
 	s.usage.Use = append(s.usage.Use, o.rec)
+	if s.lastUse != nil && o.rec.E > s.lastUse[o.rec.Dev].E {
+		s.lastUse[o.rec.Dev] = o.rec
+	}
+	s.lastRev++
 	s.saveUsage()
+}
+
+// lastUses: per device, its last closed session (mu held). Worked out once
+// from the history, then kept as sessions close, so the status - asked by
+// every member all the time - does not go through the whole history.
+func (s *Server) lastUses() map[string]UseRec {
+	if s.lastUse == nil {
+		s.lastUse = map[string]UseRec{}
+		for _, u := range s.usage.Use {
+			if u.E > s.lastUse[u.Dev].E {
+				s.lastUse[u.Dev] = u
+			}
+		}
+	}
+	return s.lastUse
 }
 
 // endedMember closes the stretches of a member whose heartbeat stopped at last (mu held).

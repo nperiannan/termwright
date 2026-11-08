@@ -151,6 +151,7 @@ func (s *Server) log(who, f string, v ...any) {
 // bump saves a changed inventory and wakes the long polls (mu held).
 func (s *Server) bump() error {
 	s.st.Rev++
+	s.lastRev++ // names and addresses in Last come from the inventory
 	close(s.changed)
 	s.changed = make(chan struct{})
 	return s.save()
