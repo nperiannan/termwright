@@ -177,6 +177,7 @@ func (a *App) init() error {
 func (a *App) shutdown(context.Context) {
 	closeWebPages()
 	fsMgr.StopAll()
+	a.IperfServerStop()
 	a.mcpStop()
 	if a.terms != nil {
 		a.terms.CloseAll()

@@ -1041,6 +1041,26 @@ flowchart LR
 
 To copy with SCP while browsing with SFTP, set **Via: SCP** in the SFTP tab (above). For devices that offer SCP but not SFTP: **Transfer → SCP Upload File…** or **SCP Upload Folder…** (pick, then the remote folder/path) and **SCP Download…** (remote file *or folder* path, then a local folder). Folders are copied recursively (`scp -r`).
 
+### Network Check (reachability and iPerf3)
+
+**Transfer → Network Check (Reachability, iPerf3)…** answers "who can reach what": this computer and the device tabs you choose, against a list of targets.
+
+- **Targets**: addresses or names separated by commas; `host:port` checks a TCP port. `gateway`, `dns` and `internet` are this computer's own default gateway, name lookup and internet connection (HTTPS when ping is blocked). The open tab's address is added for you.
+- **From**: *This computer* always, plus the connected device tabs you tick. For a device, Termwright types the device's own read-only ping in its tab (EXOS `ping count 4 …`, VOSS `ping … count 4`, Cisco and Arista `ping … repeat 4`, Junos, Linux), so you see it there too; for production devices it asks once first.
+- **The matrix**: one row per target, one column per source, with the time or the failure in each cell. A line under it points at the device that misses what this computer reaches.
+- **Click a cell** for the path: **Traceroute** draws each hop from the source to the target and marks where the answers stop, with the output below. **Copy Report** copies the matrix as text.
+
+![Network Check](screenshots/net-check.png)
+
+**Speed (iPerf3)** measures throughput between two points inside your network with the iperf3 program (install it once: `brew install iperf3`, `winget install iperf3` or the iperf3 package on Linux):
+
+- **iPerf3 server on this computer**: start it, then run the command shown (`iperf3 -c <this computer> -t 10`) on a Linux host or a device with iperf3 - *Paste in <tab>* types it for you. The last test's result appears in the window. The server stops after 30 minutes without tests and when Termwright closes; iperf3 is its own program, so the firewall may ask about it once.
+- **Test to a server**: the address of an iPerf3 server, 5 to 30 seconds, one way or both ways - the result in Mbit/s each way.
+
+A public internet speed test is left out on purpose: it measures your own line, not the devices.
+
+![Network Check: iPerf3](screenshots/net-check-iperf.png)
+
 ### File servers (TFTP, FTP, HTTP)
 
 Most switches and routers fetch software images, licences and configurations *themselves* - you type `download image …` or `copy tftp://…` on the device and it connects to a server. **Transfer → File Servers (TFTP, FTP, HTTP)…** turns this computer into that server, so you need no separate TFTP or FTP program.

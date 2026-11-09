@@ -257,6 +257,8 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Working directory detection**: SFTP opens in the terminal's folder, follows every `cd`, and can `cd` the terminal; also follows `sudo su -`, and knows whether the terminal is on the jump station or the target (*SFTP opens on*: where the terminal is, or always one of them).
 - **Colored files**: folders and files colored by type, links and hidden files marked.
 - **SCP** upload and download of files and folders.
+- **Network Check**: who can reach what - this computer and the open device tabs (their own ping and traceroute) against gateway, DNS, internet and any host or port, as a matrix; a cell opens the traceroute path with the hop where it stops; **iPerf3** server and client for throughput inside the network.
+- **Firewall check for the file servers**: whether the computer's firewall lets devices in, one-click allow, and a test fetch from the device.
 - **File servers (TFTP, FTP, HTTP)** on this computer for devices to fetch images and licences and send configurations: one folder, one address, uploads only when allowed, a transfer log, the device command written for you (EXOS, Cisco IOS / NX-OS, Arista, Junos, Linux, or your own), a status-bar indicator, and they stop on their own.
 - **ZMODEM** (`sz` / `rz` detected automatically), **YMODEM** batch and **XMODEM** for serial consoles and boot loaders.
 

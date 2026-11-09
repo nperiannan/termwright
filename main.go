@@ -245,6 +245,7 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	add(xfer, "SCP Download...", "scp-download")
 	xfer.AddSeparator()
 	add(xfer, "File Servers (TFTP, FTP, HTTP)...", "file-servers")
+	add(xfer, "Network Check (Reachability, iPerf3)...", "net-check")
 
 	script := m.AddSubmenu(t("Script"))
 	add(script, "Command Library...", "command-library")
