@@ -213,6 +213,9 @@ func claudeCodeResult(out string) (string, *AIUsage, error) {
 			CacheR int `json:"cache_read_input_tokens"`
 			CacheW int `json:"cache_creation_input_tokens"`
 		} `json:"usage"`
+		Models map[string]struct {
+			Out int `json:"outputTokens"`
+		} `json:"modelUsage"`
 	}
 	t := strings.TrimSpace(out)
 	if !strings.HasPrefix(t, "{") || json.Unmarshal([]byte(t), &v) != nil || v.Type == "" {
@@ -221,7 +224,14 @@ func claudeCodeResult(out string) (string, *AIUsage, error) {
 	if v.IsError {
 		return "", nil, errors.New("Claude Code: " + v.Result)
 	}
-	return strings.TrimSpace(v.Result), &AIUsage{In: v.Usage.In + v.Usage.CacheR + v.Usage.CacheW, Out: v.Usage.Out}, nil
+	u := &AIUsage{In: v.Usage.In + v.Usage.CacheR + v.Usage.CacheW, Out: v.Usage.Out}
+	best := -1
+	for name, m := range v.Models { // the model that wrote the answer: the most output
+		if m.Out > best || (m.Out == best && name < u.Model) {
+			best, u.Model = m.Out, name
+		}
+	}
+	return strings.TrimSpace(v.Result), u, nil
 }
 
 // claudeCodeRun asks once; picDir (may be "") holds pictures it may read.

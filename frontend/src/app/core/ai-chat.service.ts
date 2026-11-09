@@ -17,7 +17,8 @@ export type CtxKind = 'selection' | 'clipboard' | 'terminal' | 'tab' | 'file';
 export interface Ctx { id: number; kind: CtxKind; tabId?: string; label: string; detail: string; text: string; }
 export interface Img { name: string; mediaType: string; data: string; url: string; }
 export type StepState = 'ask' | 'running' | 'done' | 'skipped' | 'error' | 'refused';
-export interface Step { kind: 'run' | 'open'; tab: string; command: string; output?: string; state: StepState; auto?: boolean; danger?: boolean; note?: string; }
+export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record';
+export interface Step { kind: StepKind; tab: string; command: string; output?: string; state: StepState; auto?: boolean; danger?: boolean; note?: string; failed?: boolean; prod?: boolean; }
 export interface ChatMsg {
   id: number; role: 'user' | 'assistant'; text: string; time: string;
   ctx?: { label: string; detail: string }[]; images?: Img[]; wire?: string; hidden?: boolean;
@@ -31,9 +32,20 @@ const KEY_CHATS = 'tw.ai.chats', KEY_DOCK = 'tw.ai.dock', KEY_W = 'tw.ai.width',
 /** What the agent may do. */
 export const AGENT_TOOLS = [
   { k: 'run', name: 'Run commands in tabs', what: 'Types a command in an open tab and reads the output' },
-  { k: 'open', name: 'Connect to saved sessions', what: 'Opens a saved session in a new tab' },
+  { k: 'open', name: 'Connect to saved sessions', what: 'Finds saved sessions by folder, name or address and connects with their saved login' },
+  { k: 'log', name: 'Logger', what: 'Logs a tab to a file in the log folder - also in Read only' },
+  { k: 'record', name: 'Recorder', what: 'Records a tab with a marker for each command - also in Read only' },
 ] as const;
-const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 10;
+const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 25;
+
+/** What the agent may do on its own, from "Read only" (white) to fully autonomous (orange). */
+export type AgentPerm = '' | 'every' | 'readonly' | 'auto';
+export const AGENT_PERMS: { k: AgentPerm; name: string; what: string; tone: 'auto' | 'ask' | 'ro' }[] = [
+  { k: 'auto', name: 'Fully autonomous', what: 'Runs commands and changes without asking. Production sessions and reboot / erase still ask.', tone: 'auto' },
+  { k: '', name: 'Changes ask first', what: 'Read-only commands run by themselves; changes wait for you.', tone: 'ask' },
+  { k: 'every', name: 'Ask before every command', what: 'Every command and connection waits for you.', tone: 'ask' },
+  { k: 'readonly', name: 'Read only', what: 'Only read-only commands; changes are given to you as text.', tone: 'ro' },
+];
 
 const NET_RO = ['show', 'sh', 'display', 'dis', 'ping', 'traceroute', 'tracert', 'trace'];
 const LINUX_RO = ['ls', 'cat', 'head', 'tail', 'grep', 'ip a', 'ip addr', 'ip r', 'ip route', 'ip link', 'ip neigh', 'ifconfig', 'ping', 'traceroute', 'tracepath',
@@ -58,6 +70,11 @@ export function isReadOnly(cmd: string, list: string[]): boolean {
   return list.some(x => { const w = x.toLowerCase(); return h === w || h.startsWith(w + ' '); });
 }
 
+/** Asks even in fully autonomous mode: the device restarts, or loses its configuration or files. */
+export const DESTRUCTIVE = /^\s*(reboot|reload|halt|poweroff|shutdown\s*(-h|-r|now)|erase|format|write\s+erase|unconfigure\s+switch|delete\s+(flash|config|startup|nvram|bootflash|\S*\.cfg|\S*\.xsf)|clear\s+config|factory|rm\s+-rf|mkfs|dd\s)/i;
+/** A device's answer that says the command failed. */
+const FAILED = /(^|\n)\s*(%\s*(invalid|incomplete|ambiguous|unknown|error)|error:|invalid input|syntax error|command not found|unrecognized command|\^\s*$)/i;
+
 export const RISKY = /^\s*(conf(ig(ure)?)?\b|unconfigure|delete|del\b|erase|clear\b|reboot|reload|restart|shutdown|no\s|write\b|copy\b|save\b|disable\b|enable\s+ports?\b|format|rm\s|kill|halt|poweroff|set\s|unset\s|download|upload|install|upgrade|reset|sudo\b)/i;
 
 let nid = 0;
@@ -81,7 +98,7 @@ export class AIChat {
   readonly images = signal<Img[]>([]);
   readonly keep = signal(0); // whole terminal: the last N lines (0 = all)
   readonly error = signal('');
-  readonly tools = signal<Record<string, boolean>>((() => { try { return { run: true, open: true, ...JSON.parse(store(KEY_TOOLS) || '{}') }; } catch { return { run: true, open: true }; } })());
+  readonly tools = signal<Record<string, boolean>>((() => { const d = { run: true, open: true, log: true, record: true }; try { return { ...d, ...JSON.parse(store(KEY_TOOLS) || '{}') }; } catch { return d; } })());
   setTool(k: string, on: boolean) { this.tools.update(t => ({ ...t, [k]: on })); save(KEY_TOOLS, JSON.stringify(this.tools())); }
   /** The tokens this chat used so far, as the AI service counted them. */
   readonly used = computed(() => (this.current()?.msgs ?? []).reduce((a, m) => ({ in: a.in + (m.usage?.in ?? 0), out: a.out + (m.usage?.out ?? 0) }), { in: 0, out: 0 }));
@@ -108,7 +125,7 @@ export class AIChat {
       });
     });
   }
-  readonly perm = computed(() => this.ui.settings()?.ai?.agentPerm ?? '');
+  readonly perm = computed<AgentPerm>(() => this.ui.settings()?.ai?.agentPerm ?? '');
 
   // ---- panel ----
   show(on = true) { this.open.set(on); }
@@ -200,6 +217,7 @@ export class AIChat {
           deviceType: t?.session?.deviceType ?? '', protocol: t?.session?.protocol ?? '', agent,
           tabs: agent ? this.tabs.tabs().filter(x => x.kind === 'terminal').map(x => `${x.title} (${x.session.deviceType || 'unknown'}, ${x.state})`) : [],
           tools: Object.entries(this.tools()).filter(([, on]) => on).map(([k]) => k).concat(['none']),
+          folders: agent ? folders(this.ui.tree()) : [], perm: this.perm(),
         });
         const { text, actions } = parseActions(ans.text);
         const msg: ChatMsg = { id: ++nid, role: 'assistant', text, time: now(), wire: ans.text, model: ans.model, secs: Math.round((Date.now() - started) / 1000), steps: [], usage: ans.usage ?? null };
@@ -208,7 +226,7 @@ export class AIChat {
         const results: string[] = [];
         for (const a of actions) {
           if (this.stopping) break;
-          if (!this.tools()[a.kind]) { results.push(`${a.kind} ${a.tab}: not done - the user turned this tool off.`); continue; }
+          if (!this.tools()[a.kind === 'find' ? 'open' : a.kind]) { results.push(`${a.kind} ${a.tab}: not done - the user turned this tool off.`); continue; }
           const s: Step = { kind: a.kind, tab: a.tab, command: a.command, state: 'running' };
           msg.steps!.push(s); this.touch(chatId);
           results.push(await this.act(s, chatId));
@@ -228,18 +246,35 @@ export class AIChat {
   /** One agent step: open a session or run a command, asking when the rules say so. */
   private async act(s: Step, chatId: string): Promise<string> {
     const perm = this.perm();
+    if (s.kind === 'find') {
+      const hits = findSessions(this.ui.tree(), s.tab);
+      s.state = 'done'; s.auto = true;
+      s.output = hits.length ? hits.slice(0, 60).map(h => `${h.path}  ${h.hostname ?? ''}  ${h.deviceType ?? ''}`).join('\n') : tr('No saved session matches');
+      s.note = tr('{0} found', hits.length);
+      return `find ${s.tab}: ` + (hits.length ? `${hits.length} saved session(s) - path | address | device type | environment:\n` + hits.slice(0, 60).map(h => `${h.path} | ${h.hostname ?? ''} | ${h.deviceType || 'unknown'} | ${this.isProd(h.path, h.environment) ? 'production' : 'not production'}`).join('\n') + (hits.length > 60 ? `\n… and ${hits.length - 60} more - narrow the search.` : '') : 'no saved session matches.');
+    }
     if (s.kind === 'open') {
-      const node = findSession(this.ui.tree(), s.tab);
-      if (!node) { s.state = 'error'; s.note = tr('No saved session is called {0}', s.tab); return `open ${s.tab}: no saved session has that name.`; }
+      const found = resolveSession(this.ui.tree(), s.tab);
+      if (!found.node) { s.state = 'error'; s.note = found.many ? tr('{0} sessions match - be more exact', found.many) : tr('No saved session is called {0}', s.tab); return `open ${s.tab}: ` + (found.many ? `${found.many} saved sessions match - use the folder/name path from find.` : 'no saved session has that name, path or address - use find.'); }
+      const node = found.node;
       s.tab = node.name;
-      const prod = !!envInfo(envOf(node.path, node.environment, this.ui.settings()?.folderDefaults))?.protect;
+      const prod = this.isProd(node.path, node.environment);
+      const open = this.tabs.tabs().find(x => x.kind === 'terminal' && x.session?.path === node.path && x.state === 'connected');
+      if (open) { s.state = 'done'; s.auto = true; s.output = tr('Already connected'); return `open ${node.name}: already connected; the tab is called ${open.title}.`; }
+      s.prod = prod;
       if (perm === 'every' || prod) { const r = await this.ask(s, chatId); if (r.go !== 'run') return this.refusal(s, r.go); }
       s.state = 'running'; s.auto = perm !== 'every' && !prod; this.touch(chatId);
       await this.tabs.openSession(node.path);
-      const t = await waitFor(() => this.tabs.tabs().find(x => x.session?.path === node.path && x.state === 'connected'), 30000);
-      if (!t) { s.state = 'error'; s.note = tr('Did not connect within 30 seconds'); return `open ${node.name}: did not connect within 30 seconds.`; }
+      const before = new Set(this.tabs.tabs().map(x => x.id));
+      const t = await waitFor(() => this.tabs.tabs().find(x => x.session?.path === node.path && (x.state === 'connected' || (!before.has(x.id) && (x.state === 'error' || x.state === 'disconnected')))), 60000);
+      if (!t || t.state !== 'connected') {
+        s.state = 'error'; s.note = t?.message ? t.message.slice(0, 160) : tr('Did not connect within a minute');
+        return `open ${node.name}: not connected - ${t?.message || 'no answer within a minute (no saved login, or the device does not answer)'}. Tell the user; do not retry the same session.`;
+      }
+      await sleep(1200); // the banner and the prompt
       s.state = 'done'; s.output = tr('Connected'); return `open ${node.name}: connected; the tab is called ${t.title}.`;
     }
+    if (s.kind === 'log' || s.kind === 'record') return this.evidence(s);
     const t = findTab(this.tabs.tabs(), s.tab);
     if (!t) { s.state = 'error'; s.note = tr('No open tab is called {0}', s.tab); return `run ${s.tab}: no open tab has that name - open it first.`; }
     s.tab = t.title;
@@ -248,17 +283,50 @@ export class AIChat {
     const ro = isReadOnly(s.command, readOnlyList(t.session.deviceType ?? '', dt?.aiReadOnly));
     const prod = !!envInfo(envOf(t.session.path, t.session.environment, this.ui.settings()?.folderDefaults))?.protect;
     s.danger = !ro && RISKY.test(s.command);
+    const destroy = DESTRUCTIVE.test(s.command);
+    s.prod = prod; s.danger = s.danger || destroy;
     if (perm === 'readonly' && !ro) { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `run ${t.title}: ${s.command} - not run: the user allows only read-only commands. Tell the user the command instead.`; }
-    if (!ro || prod || perm === 'every') {
+    if (perm === 'auto' ? (prod || destroy) : (!ro || prod || perm === 'every')) {
       const r = await this.ask(s, chatId);
       if (r.go !== 'run') return this.refusal(s, r.go);
       if (r.command && r.command.trim() !== s.command) s.command = r.command.trim();
     } else s.auto = true;
     s.state = 'running'; this.touch(chatId);
+    if (t.castFile) void this.backend.addRecordingMarker(t.id, 'AI: ' + s.command).catch(() => {});
     const out = await this.runIn(t.id, s.command);
     s.output = out; s.state = 'done';
+    if (FAILED.test(out.split('\n').slice(1).join('\n'))) { s.failed = true; s.note = tr('The device reported an error'); }
     const paging = /(--more--|press any key|<--- more --->|q to quit)\s*$/i.test(out.trim());
     return `run ${t.title}: ${s.command}\n\`\`\`\n${out.length > MAX_OUT ? '…\n' + out.slice(-MAX_OUT) : out}\n\`\`\`${paging ? '\n(The device is paging: turn paging off and run it again.)' : ''}`;
+  }
+
+  private isProd(path: string, env?: string) { return !!envInfo(envOf(path, env, this.ui.settings()?.folderDefaults))?.protect; }
+
+  /** Logger and recorder: local files only, so never asked - also in Read only. */
+  private async evidence(s: Step): Promise<string> {
+    const t = findTab(this.tabs.tabs(), s.tab);
+    if (!t) { s.state = 'error'; s.note = tr('No open tab is called {0}', s.tab); return `${s.kind} ${s.tab}: no open tab has that name.`; }
+    s.tab = t.title; s.auto = true;
+    const c = s.command.trim().toLowerCase();
+    try {
+      if (s.kind === 'log') {
+        if (c === 'off') { if (t.logFile) await this.backend.stopLog(t.id); s.state = 'done'; s.output = t.logFile || ''; return `log ${t.title}: off` + (t.logFile ? ` - saved to ${t.logFile}` : ' (it was not logging)') + '.'; }
+        if (t.logFile) { s.state = 'done'; s.output = t.logFile; return `log ${t.title}: already logging to ${t.logFile}.`; }
+        const dir = (this.ui.settings()?.logDir ?? '').replace(/[\\/]+$/, '');
+        const p = await this.backend.startLog(t.id, dir ? `${dir}/AI-%S-%Y%M%D-%h%m%s.log` : '', true, false);
+        s.state = 'done'; s.output = p; return `log ${t.title}: on - ${p}.`;
+      }
+      const mark = /^mark\b\s*(.*)$/i.exec(s.command.trim());
+      if (mark) {
+        if (!t.castFile) { s.state = 'error'; s.note = tr('Not recording'); return `record ${t.title}: mark - not recording; turn record on first.`; }
+        await this.backend.addRecordingMarker(t.id, mark[1] || 'Marker'); s.state = 'done'; s.output = mark[1]; return `record ${t.title}: marker added.`;
+      }
+      if (c === 'off') { const f = t.castFile; if (f) await this.tabs.toggleCast(t.id); s.state = 'done'; s.output = f || ''; return `record ${t.title}: off` + (f ? ` - saved to ${f}` : ' (it was not recording)') + '.'; }
+      if (t.castFile) { s.state = 'done'; s.output = t.castFile; return `record ${t.title}: already recording to ${t.castFile}.`; }
+      await this.tabs.toggleCast(t.id);
+      const f = (await waitFor(() => this.tabs.get(t.id)?.castFile, 3000)) ?? '';
+      s.state = f ? 'done' : 'error'; s.output = f; return `record ${t.title}: ` + (f ? `on - ${f}.` : 'could not start.');
+    } catch (e) { s.state = 'error'; s.note = errText(e); return `${s.kind} ${t.title}: ${errText(e)}`; }
   }
 
   private ask(s: Step, chatId: string) {
@@ -302,15 +370,17 @@ export class AIChat {
 }
 
 /** The answer's text without its termwright block, and the actions in it. */
-export function parseActions(text: string): { text: string; actions: { kind: 'run' | 'open'; tab: string; command: string }[] } {
-  const actions: { kind: 'run' | 'open'; tab: string; command: string }[] = [];
+export function parseActions(text: string): { text: string; actions: { kind: StepKind; tab: string; command: string }[] } {
+  const actions: { kind: StepKind; tab: string; command: string }[] = [];
   const out = text.replace(/```termwright[^\n]*\n([\s\S]*?)```/g, (_, body: string) => {
     for (const raw of body.split('\n')) {
       const l = raw.trim();
       let m = /^run\s+(.+?)\s*:\s*(.+)$/i.exec(l);
       if (m) { actions.push({ kind: 'run', tab: m[1].trim(), command: m[2].trim() }); continue; }
-      m = /^open\s+(.+)$/i.exec(l);
-      if (m) actions.push({ kind: 'open', tab: m[1].trim(), command: '' });
+      m = /^(log|record)\s+(.+?)\s*:\s*(.+)$/i.exec(l);
+      if (m) { actions.push({ kind: m[1].toLowerCase() as StepKind, tab: m[2].trim(), command: m[3].trim() }); continue; }
+      m = /^(open|find)\s+(.+)$/i.exec(l);
+      if (m) actions.push({ kind: m[1].toLowerCase() as StepKind, tab: m[2].trim(), command: '' });
     }
     return '';
   });
@@ -323,16 +393,37 @@ function findTab(tabs: TabView[], name: string) {
   return terms.find(t => t.title.toLowerCase() === n) ?? terms.find(t => t.session?.name?.toLowerCase() === n) ?? terms.find(t => t.session?.path?.toLowerCase() === n) ?? null;
 }
 
-function findSession(root: SessionNode | null, name: string): SessionNode | null {
-  const n = name.trim().toLowerCase();
-  let hit: SessionNode | null = null;
-  const walk = (x: SessionNode | null) => {
-    if (!x || hit) return;
-    if (!x.isFolder && (x.name.toLowerCase() === n || x.path.toLowerCase() === n)) { hit = x; return; }
-    (x.children ?? []).forEach(walk);
-  };
+function sessions(root: SessionNode | null): SessionNode[] {
+  const out: SessionNode[] = [];
+  const walk = (x: SessionNode | null) => { if (!x) return; if (!x.isFolder) out.push(x); (x.children ?? []).forEach(walk); };
   walk(root);
-  return hit;
+  return out;
+}
+
+/** The saved-session folders, for the agent. */
+function folders(root: SessionNode | null): string[] {
+  const out: string[] = [];
+  const walk = (x: SessionNode | null) => { if (!x) return; if (x.isFolder && x.path) out.push(x.path); (x.children ?? []).forEach(walk); };
+  walk(root);
+  return out;
+}
+
+/** Saved sessions whose folder/name path, address or device type contains every word. */
+export function findSessions(root: SessionNode | null, q: string): SessionNode[] {
+  const words = q.trim().toLowerCase().replace(/^["']|["']$/g, '').split(/\s+/).filter(w => w && w !== '*');
+  return sessions(root).filter(s => { const h = `${s.path} ${s.hostname ?? ''} ${s.deviceType ?? ''} ${s.description ?? ''}`.toLowerCase(); return words.every(w => h.includes(w)); });
+}
+
+/** A saved session by path, name or address; `many` when a name or address is not unique. */
+export function resolveSession(root: SessionNode | null, name: string): { node: SessionNode | null; many: number } {
+  const n = name.trim().replace(/^["']|["']$/g, '').toLowerCase();
+  const all = sessions(root);
+  const by = (f: (s: SessionNode) => boolean) => all.filter(f);
+  for (const l of [by(s => s.path.toLowerCase() === n), by(s => s.name.toLowerCase() === n), by(s => (s.hostname ?? '').toLowerCase() === n)]) {
+    if (l.length === 1) return { node: l[0], many: 0 };
+    if (l.length > 1) return { node: null, many: l.length };
+  }
+  return { node: null, many: 0 };
 }
 
 async function waitFor<T>(f: () => T | undefined | null, ms: number): Promise<T | null> {

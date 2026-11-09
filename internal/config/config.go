@@ -46,6 +46,9 @@ type AISettings struct {
 	// Termwright as a connector (MCP server) for Claude Desktop and Claude Code
 	MCP         bool   `json:"mcp,omitempty"`
 	MCPCommands string `json:"mcpCommands,omitempty"` // "" = ask before typing a command or connecting, "never" = read only
+	// the AI panel's Agent mode: "" = changes ask first, "every" = ask before every
+	// command, "readonly" = only read-only commands, "auto" = fully autonomous
+	AgentPerm string `json:"agentPerm,omitempty"`
 }
 
 // FileServersSettings: the TFTP, FTP and HTTP servers devices fetch files

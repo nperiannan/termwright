@@ -4,7 +4,7 @@ import { Backend } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { Tabs } from '../core/tabs.service';
 import { Icon } from './icon';
-import { AGENT_TOOLS, AIChat, ChatMsg, Img, Step } from '../core/ai-chat.service';
+import { AGENT_PERMS, AGENT_TOOLS, AgentPerm, AIChat, ChatMsg, Img, Step } from '../core/ai-chat.service';
 import { AIStatus } from '../core/models';
 import { tr } from '../core/i18n';
 
@@ -42,6 +42,14 @@ function spans(t: string): Span[] {
   return t.split(/(\*\*[^*]+\*\*|`[^`]+`)/).filter(Boolean).map(x => x.startsWith('**') ? { t: x.slice(2, -2), b: true } : x.startsWith('`') && x.length > 1 ? { t: x.slice(1, -1), c: true } : { t: x });
 }
 
+/** "claude-sonnet-5-5" → "Sonnet 5.5", "sonnet" → "Sonnet"; other names as they are. */
+export function nice(m: string): string {
+  const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+  const c = /^(?:claude-)?(opus|sonnet|haiku|fable)(?:-(\d+)(?:-(\d+))?)?(?:-\d{8})?$/i.exec(m.trim());
+  if (c) return cap(c[1].toLowerCase()) + (c[2] ? ' ' + c[2] + (c[3] ? '.' + c[3] : '') : '');
+  return m;
+}
+
 /** The AI assistant as a chat panel: docked right or left, or floating. */
 @Component({
   selector: 'app-ai-panel',
@@ -51,9 +59,18 @@ function spans(t: string): Span[] {
   <span class="grip" (mousedown)="resize($event)" title="Drag to resize"></span>
   <header class="hd" (mousedown)="move($event)">
     <span class="sp"><app-icon name="sparkles" [size]="16" /></span><span class="t">AI Assistant</span>
-    <span class="chipm" [title]="tr('The AI service - change it in Settings → AI Assistant')">{{ service() }}</span>
+    <span class="modw"><button type="button" class="chipm" [class.on]="mmenu()" (click)="openModels()" [title]="provider() + ' - ' + tr('click to choose the model')" aria-haspopup="menu" [attr.aria-expanded]="mmenu()">{{ service() }}<app-icon name="chevron-down" [size]="11" /></button>
+      @if (mmenu()) {
+        <div class="menu models" role="menu" (click)="$event.stopPropagation()">
+          <div class="mh">{{ tr('Model') }}<small>{{ provider() }}</small></div>
+          <button type="button" role="menuitemradio" [attr.aria-checked]="!st()?.model" (click)="setModel('')"><span class="ck">@if (!st()?.model) { <app-icon name="check" [size]="12" /> }</span>{{ tr('Default') }}<small>{{ lastModel() ? nice(lastModel()) : tr('the newest') }}</small></button>
+          @if (models() === null) { <div class="mf">{{ tr('Loading the models…') }}</div> }
+          @for (m of models() ?? []; track m) { <button type="button" role="menuitemradio" [attr.aria-checked]="st()?.model === m" (click)="setModel(m)"><span class="ck">@if (st()?.model === m) { <app-icon name="check" [size]="12" /> }</span>{{ nice(m) }}@if (nice(m) !== m) { <small class="mono">{{ m }}</small> }</button> }
+          @if (modelErr()) { <div class="mf">{{ modelErr() }}</div> }
+          <button type="button" class="foot" (click)="mmenu.set(false); ui.openOptions('ai')"><app-icon name="options" [size]="12" />{{ tr('AI settings…') }}</button>
+        </div>
+      }</span>
     <span class="grow"></span>
-    <button type="button" class="ib" title="New chat" aria-label="New chat" (click)="ai.newChat()" [disabled]="ai.busy()"><app-icon name="plus" [size]="15" /></button>
     <button type="button" class="ib" [class.on]="ai.view() === 'history'" title="Chats" aria-label="Chats" (click)="ai.view.set(ai.view() === 'history' ? 'chat' : 'history')"><app-icon name="history" [size]="15" /></button>
     <span class="sep"></span>
     <button type="button" class="ib" [class.on]="ai.dock() === 'left'" title="Dock left" aria-label="Dock left" (click)="ai.setDock('left')"><app-icon name="dock-left" [size]="15" /></button>
@@ -96,7 +113,7 @@ function spans(t: string): Span[] {
               <div class="ut">{{ m.text }}</div></div></div>
         } @else {
           <div class="msg"><div class="who"><span class="av a"><app-icon name="sparkles" [size]="12" /></span>AI Assistant
-            @if (m.model) { <span class="when">{{ m.model }}{{ m.secs ? ' · ' + m.secs + ' s' : '' }}</span> }
+            @if (m.model) { <span class="when" [title]="m.model">{{ nice(m.model) }}{{ m.secs ? ' · ' + m.secs + ' s' : '' }}</span> }
             @if (m.usage) { <span class="when tok" [title]="tr('Tokens as the AI service counted them: {0} sent (the chat so far and the instructions), {1} in the answer', m.usage.in.toLocaleString(), m.usage.out.toLocaleString())">↑ {{ k(m.usage.in) }} ↓ {{ k(m.usage.out) }}</span> }</div>
             @if (m.error) { <div class="ab err">{{ m.error }}</div> }
             @if (m.text) {
@@ -117,18 +134,29 @@ function spans(t: string): Span[] {
               </div>
             }
             @if (m.steps?.length) { <div class="used"><app-icon name="wrench" [size]="12" />{{ tr('Tools used') }}: {{ toolsUsed(m) }}</div> }
+            @if (devices(m); as ds) { @if (ds.length) {
+              <div class="devs" [attr.aria-label]="tr('Devices')">@for (d of ds; track d.tab) {
+                <span class="dv" [class]="'dv ' + d.state" [title]="tr('{0}: {1} commands run, {2} with an error', d.tab, d.ok + d.err, d.err)"><i></i>{{ d.tab }}
+                  @if (d.state === 'ask') { <small>{{ tr('waiting') }}</small> } @else if (d.state === 'running') { <small>{{ tr('working') }}</small> } @else if (!d.runs) { <small>{{ d.err ? tr('not connected') : tr('connected') }}</small> } @else { <small>✓{{ d.ok }}@if (d.err) { · ✗{{ d.err }} }</small> }</span> }</div>
+            } }
             @for (s of m.steps ?? []; track $index) {
               @if (s.state === 'ask') {
                 <div class="appr" [class.danger]="s.danger"><div class="q"><app-icon name="alert" [size]="15" /><div>
-                  <b>{{ s.kind === 'open' ? tr('Connect to {0}?', s.tab) : tr('Run on {0}?', s.tab) }}</b>
+                  <b>{{ s.kind === 'open' ? tr('Connect to {0}?', s.tab) : tr('Run on {0}?', s.tab) }}</b>@if (s.prod) { <span class="prodb">PROD</span> }
+                  @if (s.prod) { <div class="hint">{{ tr('Production session: Termwright asks before every command and connection, whatever the agent may do.') }}</div> }
                   <div class="hint">{{ s.danger ? tr('This may change the device or interrupt traffic.') : s.kind === 'open' ? tr('Opens the session in a new tab.') : tr('Check the command - it is typed in the tab as it is.') }}</div></div></div>
                   @if (s.kind === 'run') { <input class="mono" [(ngModel)]="edits[$index + '-' + m.id]" [placeholder]="s.command" [attr.aria-label]="tr('Command')" (focus)="seed(m.id, $index, s)" /> }
                   <div class="btns"><button type="button" class="primary" [class.danger]="s.danger" (click)="ai.decide(s, 'run', edits[$index + '-' + m.id])">{{ s.kind === 'open' ? tr('Connect') : tr('Run') }}</button>
                     <button type="button" (click)="ai.decide(s, 'skip')">Skip</button><button type="button" (click)="ai.decide(s, 'stop')">Stop</button></div></div>
               } @else {
-                <details class="step" [class]="'step ' + s.state"><summary class="sh">
-                  <span class="si">@switch (s.state) { @case ('done') { <app-icon name="check" [size]="13" /> } @case ('running') { <span class="spin"></span> } @default { <app-icon name="x" [size]="13" /> } }</span>
-                  <span class="grow">@if (s.kind === 'open') { {{ tr('Connect to') }} <b>{{ s.tab }}</b> } @else { <code>{{ s.command }}</code> {{ tr('on') }} <b>{{ s.tab }}</b> }</span>
+                <details class="step" [class]="'step ' + s.state + (s.failed ? ' failed' : '')"><summary class="sh">
+                  <span class="si">@switch (s.state) { @case ('done') { <app-icon [name]="s.failed ? 'alert' : 'check'" [size]="13" /> } @case ('running') { <span class="spin"></span> } @default { <app-icon name="x" [size]="13" /> } }</span>
+                  <span class="grow">@switch (s.kind) {
+                    @case ('open') { {{ tr('Connect to') }} <b>{{ s.tab }}</b> }
+                    @case ('find') { <app-icon name="search" [size]="11" /> {{ tr('Find sessions') }} <b>{{ s.tab }}</b> }
+                    @case ('log') { <app-icon name="log" [size]="11" /> {{ tr('Logger') }} {{ s.command }} · <b>{{ s.tab }}</b> }
+                    @case ('record') { <app-icon name="record" [size]="11" /> {{ tr('Recorder') }} {{ s.command }} · <b>{{ s.tab }}</b> }
+                    @default { <code>{{ s.command }}</code> {{ tr('on') }} <b>{{ s.tab }}</b> } }</span>
                   <span class="hint">{{ s.note || (s.auto ? tr('auto') : s.state === 'done' ? tr('allowed') : '') }}</span></summary>
                   @if (s.output) { <pre>{{ s.output }}</pre> }</details>
               }
@@ -161,9 +189,16 @@ function spans(t: string): Span[] {
         <div class="bar">
           <select class="sel" [ngModel]="ai.mode()" (ngModelChange)="ai.mode.set($event)" [attr.aria-label]="tr('Mode')" [title]="tr('Ask: answers only. Agent: the AI may run commands in your tabs.')"><option value="ask">Ask</option><option value="agent">Agent</option></select>
           @if (ai.mode() === 'agent') {
-            <select class="sel perm" [ngModel]="ai.perm()" (ngModelChange)="setPerm($event)" [attr.aria-label]="tr('Agent permissions')"
-              [title]="tr('Production tabs always ask. Change the read-only commands per device type in Settings → Device Types.')">
-              <option value="">{{ tr('Changes ask first') }}</option><option value="every">{{ tr('Ask before every command') }}</option><option value="readonly">{{ tr('Read only') }}</option></select>
+            <span class="permw"><button type="button" class="sel perm" [class]="'sel perm ' + permTone()" (click)="pmenu.set(!pmenu())" aria-haspopup="menu" [attr.aria-expanded]="pmenu()" [attr.aria-label]="tr('Agent permissions')" [title]="tr('What the agent may do without asking')"><i class="pd"></i><span>{{ tr(permName()) }}</span><app-icon name="chevron-down" [size]="11" /></button>
+              @if (pmenu()) {
+                <div class="menu perms" role="menu" (click)="$event.stopPropagation()">
+                  <div class="mh">{{ tr('What the agent may do') }}</div>
+                  @for (o of perms; track o.k) {
+                    <button type="button" role="menuitemradio" [class]="'prow ' + o.tone" [attr.aria-checked]="ai.perm() === o.k" (click)="setPerm(o.k)"><i class="pd"></i><span class="pt"><b>{{ tr(o.name) }}</b><small>{{ tr(o.what) }}</small></span><span class="ck">@if (ai.perm() === o.k) { <app-icon name="check" [size]="13" /> }</span></button>
+                  }
+                  <div class="mf"><app-icon name="shield" [size]="11" /> {{ tr('Production sessions always ask before every command and connection, in every mode.') }}</div>
+                </div>
+              }</span>
           }
           @if (ai.mode() === 'agent') {
             <span class="toolw"><button type="button" class="ib tl" [class.on]="tmenu()" [title]="tr('Tools the agent may use')" [attr.aria-label]="tr('Tools')" (click)="tmenu.set(!tmenu())"><app-icon name="wrench" [size]="14" /><span class="cnt">{{ toolCount() }}</span></button>
@@ -173,7 +208,7 @@ function spans(t: string): Span[] {
                   @for (t of agentTools; track t.k) {
                     <label class="trow"><input type="checkbox" [checked]="ai.tools()[t.k]" (change)="ai.setTool(t.k, $any($event.target).checked)" /><span><b>{{ tr(t.name) }}</b><small>{{ tr(t.what) }}</small></span></label>
                   }
-                  <div class="mf">{{ tr('Each use shows in the chat. Production sessions always ask first.') }}</div>
+                  <div class="mf">{{ tr('Each use shows in the chat. Logger and Recorder only write files on this computer, so they never ask.') }}</div>
                 </div>
               }</span>
           }
@@ -255,7 +290,28 @@ function spans(t: string): Span[] {
     .att .rm { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; }
     textarea { display: block; width: 100%; min-height: 72px; max-height: 260px; resize: none; border: 0; outline: 0; background: transparent; padding: 8px 12px; line-height: 1.5; font: inherit; color: var(--text); box-shadow: none !important; }
     .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px 8px 10px; }
-    .sel { width: auto; height: 26px; padding: 0 6px; font-size: calc(12px * var(--ui-scale, 1)); border-radius: 6px; } .sel.perm { color: var(--warn); flex: 0 1 170px; min-width: 64px; text-overflow: ellipsis; }
+    .sel { width: auto; height: 26px; padding: 0 6px; font-size: calc(12px * var(--ui-scale, 1)); border-radius: 6px; }
+    :host { --orange: #f5862e; --tone-ask: var(--warn); } :host-context(:root.light) { --orange: #d2600a; --tone-ask: #a87808; }
+    .permw { position: relative; display: inline-flex; flex: 0 1 190px; min-width: 64px; }
+    button.sel.perm { display: inline-flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 0 7px; border: 1px solid var(--line); background: var(--input-bg, var(--bg)); color: var(--text);
+      span { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+    .pd { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
+    .auto { --tone: var(--orange); } .ask { --tone: var(--tone-ask); } .ro { --tone: var(--text); }
+    button.sel.perm.auto, button.sel.perm.ask { color: var(--tone); border-color: color-mix(in srgb, var(--tone) 45%, var(--line)); }
+    button.sel.perm.auto { background: color-mix(in srgb, var(--orange) 10%, var(--input-bg, var(--bg))); }
+    .auto .pd, .ask .pd { background: var(--tone); } .ro .pd { background: transparent; border: 1.5px solid var(--text); }
+    .menu.perms { width: 300px; gap: 2px; max-height: none; }
+    .menu .prow { align-items: flex-start; padding: 7px 8px; .pd { margin-top: 5px; } .pt { display: flex; flex-direction: column; gap: 1px; flex: 1; } b { font-weight: 600; color: var(--tone); } small { margin: 0; color: var(--muted); line-height: 1.35; } .ck { color: var(--accent); } }
+    .ck { width: 14px; flex: none; display: inline-flex; }
+    .modw { position: relative; display: inline-flex; min-width: 0; flex: 0 1 auto; } .modw .chipm { max-width: 100%; }
+    button.chipm { display: inline-flex; align-items: center; gap: 4px; height: auto; background: none; cursor: pointer; } button.chipm:hover, button.chipm.on { color: var(--text); border-color: var(--accent); }
+    .menu.models { top: calc(100% + 6px); bottom: auto; left: 0; width: 260px; z-index: 8; .mh { display: flex; justify-content: space-between; small { margin: 0; font-weight: 400; } } .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); } .foot { border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; margin-top: 4px; color: var(--muted); } }
+    .prodb { margin-left: 6px; padding: 0 5px; border-radius: 4px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .03em; vertical-align: 1px; }
+    .devs { margin-left: 29px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .dv { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: calc(11.5px * var(--ui-scale, 1)); font-weight: 500;
+      i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); } small { color: var(--muted); font-weight: 400; } }
+    .dv.err i { background: var(--warn); } .dv.ask i { background: var(--warn); } .dv.running i { background: var(--accent); animation: blink 1.2s infinite; }
+    .step.failed .si { color: var(--warn); }
     .send { width: 30px; height: 30px; padding: 0; border-radius: 8px; background: var(--accent); border-color: var(--accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; }
     .send:disabled { opacity: .45; } .send.stop { background: var(--danger); border-color: var(--danger); } .sq { width: 10px; height: 10px; border-radius: 2px; background: #fff; }
     .warn { display: flex; gap: 6px; align-items: center; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--warn); padding: 7px 2px 0; select { width: auto; height: auto; padding: 0 4px; font-size: inherit; } }
@@ -298,6 +354,16 @@ export class AIPanel implements OnInit {
   readonly st = signal<AIStatus | null>(null);
   readonly menu = signal(false);
   readonly tmenu = signal(false);
+  readonly pmenu = signal(false);
+  readonly mmenu = signal(false);
+  readonly models = signal<string[] | null>(null);
+  readonly modelErr = signal('');
+  protected readonly perms = AGENT_PERMS;
+  readonly permTone = computed(() => AGENT_PERMS.find(p => p.k === this.ai.perm())?.tone ?? 'ask');
+  readonly permName = computed(() => AGENT_PERMS.find(p => p.k === this.ai.perm())?.name ?? 'Changes ask first');
+  readonly provider = computed(() => PROVIDER[this.st()?.provider ?? ''] ?? '');
+  /** The model that answered last in this chat - what "Default" is. */
+  readonly lastModel = computed(() => [...(this.ai.current()?.msgs ?? [])].reverse().find(m => m.role === 'assistant' && m.model && m.model !== 'Claude Code')?.model ?? '');
   protected readonly agentTools = AGENT_TOOLS;
   readonly toolCount = computed(() => AGENT_TOOLS.filter(t => this.ai.tools()[t.k]).length);
   readonly fx = signal(Math.max(20, innerWidth - 500));
@@ -310,7 +376,8 @@ export class AIPanel implements OnInit {
   readonly msgs = computed(() => (this.ai.current()?.msgs ?? []).filter(m => !m.hidden));
   readonly tab = computed(() => { const t = this.tabs.active(); return t && t.kind === 'terminal' ? t : null; });
   readonly otherTabs = computed(() => this.tabs.tabs().filter(t => t.kind === 'terminal' && t.id !== this.tab()?.id));
-  readonly service = computed(() => { const s = this.st(); if (!s?.provider) return tr('Off'); return (PROVIDER[s.provider] ?? s.provider) + (s.model ? ' · ' + s.model : ''); });
+  readonly service = computed(() => { const s = this.st(); if (!s?.provider) return tr('Off'); const m = s.model || this.lastModel(); return m ? nice(m) : PROVIDER[s.provider] ?? s.provider; });
+  protected readonly nice = nice;
   readonly waiting = computed(() => (this.ai.current()?.msgs ?? []).some(m => (m.steps ?? []).some(s => s.state === 'ask')));
   private renders = new WeakMap<ChatMsg, { text: string; b: Block[] }>();
 
@@ -330,8 +397,37 @@ export class AIPanel implements OnInit {
   }
   k(n: number) { return n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + 'k' : String(n); }
   toolsUsed(m: ChatMsg) {
-    const runs = (m.steps ?? []).filter(s => s.kind === 'run').length, opens = (m.steps ?? []).filter(s => s.kind === 'open').length;
-    return [runs ? tr('Run commands') + ' ×' + runs : '', opens ? tr('Connect to sessions') + ' ×' + opens : ''].filter(Boolean).join(' · ');
+    const n = (k: string) => (m.steps ?? []).filter(s => s.kind === k).length;
+    return [['run', 'Run commands'], ['find', 'Find sessions'], ['open', 'Connect to sessions'], ['log', 'Logger'], ['record', 'Recorder']]
+      .map(([k, l]) => n(k) ? tr(l) + ' ×' + n(k) : '').filter(Boolean).join(' · ');
+  }
+  /** Per device: commands that ran, those the device refused, and what it is doing now. */
+  devices(m: ChatMsg) {
+    const by = new Map<string, { tab: string; ok: number; err: number; runs: number; state: string }>();
+    for (const s of m.steps ?? []) {
+      if (s.kind !== 'run' && s.kind !== 'open') continue;
+      const d = by.get(s.tab) ?? { tab: s.tab, ok: 0, err: 0, runs: 0, state: 'done' };
+      if (s.kind === 'run') d.runs++;
+      if (s.kind === 'run' && s.state === 'done') { if (s.failed) d.err++; else d.ok++; }
+      if (s.state === 'error') d.err++;
+      if (s.state === 'ask' || s.state === 'running') d.state = s.state;
+      else if (d.state === 'done' && d.err) d.state = 'err';
+      by.set(s.tab, d);
+    }
+    return [...by.values()];
+  }
+  openModels() {
+    this.mmenu.set(!this.mmenu());
+    if (!this.mmenu()) return;
+    this.models.set(null); this.modelErr.set('');
+    const a = this.ui.settings()?.ai;
+    if (!a?.provider) { this.models.set([]); return; }
+    this.backend.aiModels(a).then(l => this.models.set(l ?? [])).catch(e => { this.models.set([]); this.modelErr.set(String(e?.message ?? e)); });
+  }
+  setModel(m: string) {
+    this.mmenu.set(false);
+    const s = this.ui.settings(); if (!s) return;
+    void this.ui.saveSettings({ ...s, ai: { ...(s.ai ?? {}), model: m } });
   }
   canSend() { return !!(this.text.trim() || this.ai.ctxs().length || this.ai.images().length); }
 
@@ -370,7 +466,12 @@ export class AIPanel implements OnInit {
   }
 
   seed(id: number, i: number, s: Step) { const k = i + '-' + id; if (this.edits[k] === undefined) this.edits[k] = s.command; }
-  setPerm(v: string) { const s = this.ui.settings(); if (s) void this.ui.saveSettings({ ...s, ai: { ...(s.ai ?? {}), agentPerm: v as '' | 'every' | 'readonly' } }); }
+  async setPerm(v: AgentPerm) {
+    this.pmenu.set(false);
+    if (v === 'auto' && this.ai.perm() !== 'auto' && !(await this.ui.confirm(tr('Fully autonomous agent'),
+      tr('The AI will run commands and change the configuration of the devices it connects to without asking you, using their saved logins. Production sessions still ask before every command, and reboot, reload and erase always ask. You can press Stop at any time.'), tr('Allow'), true))) return;
+    const s = this.ui.settings(); if (s) void this.ui.saveSettings({ ...s, ai: { ...(s.ai ?? {}), agentPerm: v } });
+  }
 
   paste(lines: string[]) {
     const t = this.tab(); if (!t) return;
@@ -404,10 +505,12 @@ export class AIPanel implements OnInit {
     const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); };
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
   }
-  @HostListener('document:keydown.escape') esc() { this.menu.set(false); this.tmenu.set(false); }
+  @HostListener('document:keydown.escape') esc() { this.menu.set(false); this.tmenu.set(false); this.pmenu.set(false); this.mmenu.set(false); }
   @HostListener('document:click', ['$event']) out(e: MouseEvent) {
     const t = e.target as HTMLElement;
     if (this.menu() && !t.closest('.addw')) this.menu.set(false);
     if (this.tmenu() && !t.closest('.toolw')) this.tmenu.set(false);
+    if (this.pmenu() && !t.closest('.permw')) this.pmenu.set(false);
+    if (this.mmenu() && !t.closest('.modw')) this.mmenu.set(false);
   }
 }

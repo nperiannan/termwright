@@ -328,7 +328,7 @@ export interface TeamPushResult { status: 'new' | 'added' | 'exists' | 'pending'
 export interface SyncStatus { folder: string; last: string; peers: string[] | null; took: number; error: string; }
 
 /** The AI assistant (optional): the provider and model; the API key is in the OS keychain. */
-export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; agentPerm?: '' | 'every' | 'readonly'; }
+export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; agentPerm?: '' | 'every' | 'readonly' | 'auto'; }
 export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; }
 export interface FileServersSettings { folder: string; address: string; tftpPort: number; ftpPort: number; httpPort: number; tftpWrite: boolean; ftpWrite: boolean;
   ftpUser: string; idleMinutes: number; commands?: ServerCommand[] | null; }
@@ -341,4 +341,4 @@ export interface FileServersView { settings: FileServersSettings; state: FileSer
 export interface FSAddress { ip: string; label: string; reaches: boolean; }
 export interface ServedFile { name: string; size: number; }
 export interface AIStatus { provider: string; model: string; hasKey: boolean; ready: boolean; }
-export interface AIAnswer { text: string; commands: string[]; sent: string; removed: number; model: string; usage?: { in: number; out: number } | null; }
+export interface AIAnswer { text: string; commands: string[]; sent: string; removed: number; model: string; usage?: { in: number; out: number; model?: string } | null; }

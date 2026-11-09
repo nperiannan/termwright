@@ -93,12 +93,21 @@ func TestAIUsageAndTools(t *testing.T) {
 	if _, _, err := claudeCodeResult(`{"type":"result","is_error":true,"result":"Invalid API key"}`); err == nil {
 		t.Fatal("error not reported")
 	}
+	if _, u, _ := claudeCodeResult(`{"type":"result","result":"x","usage":{},"modelUsage":{"claude-haiku-4-5":{"outputTokens":12},"claude-sonnet-5-5":{"outputTokens":300}}}`); u.Model != "claude-sonnet-5-5" {
+		t.Fatalf("model %q", u.Model)
+	}
 	if txt, u, _ := claudeCodeResult("plain answer"); txt != "plain answer" || u != nil {
 		t.Fatal("plain text")
 	}
 	sys := aiChatSystem(AIChatRequest{Agent: true, Tools: []string{"run"}})
 	if !strings.Contains(sys, "run <tab name>") || strings.Contains(sys, "open <saved") || !strings.Contains(sys, "```termwright\nrun") {
 		t.Fatalf("run only: %s", sys)
+	}
+	sys = aiChatSystem(AIChatRequest{Agent: true, Tools: []string{"run", "open", "log", "record"}, Folders: []string{"Datacenter/Rack 4"}, Perm: "auto"})
+	for _, w := range []string{"find <text>", "log <tab name>: on|off", "record <tab name>", "Datacenter/Rack 4", "autonomously", "never ask for, show or type passwords"} {
+		if !strings.Contains(sys, w) {
+			t.Fatalf("missing %q: %s", w, sys)
+		}
 	}
 	if sys := aiChatSystem(AIChatRequest{Agent: true, Tools: []string{"none"}}); strings.Contains(sys, "AGENT MODE") {
 		t.Fatal("agent without tools")

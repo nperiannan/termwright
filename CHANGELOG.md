@@ -5,6 +5,11 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 ## Unreleased
 
 * **AI panel** instead of the AI window: a chat beside the terminal - docked right or left, or floating - with follow-up questions, chat history, a large typing area, pasted pictures, and *Add context* (selection, copied text, whole terminal, other tabs, files).
+* **AI Agent: fully autonomous mode** (orange; the other levels are yellow, Read only white). The agent runs commands and configuration changes without asking - production sessions still ask before every command and connection, and reboot / reload / erase always ask. It confirms once when chosen.
+* **AI Agent works on groups of devices:** it finds saved sessions by folder (location), name, address or device type and connects by name, path or IP with the saved login (never sent to the AI); a chip per device shows its progress, and commands the device refuses are flagged. A connection that fails is reported at once instead of after a timeout.
+* **AI Agent tools Logger and Recorder:** it logs and records the tabs it works on (a marker per command), also in Read only.
+* **Choose the AI model in the AI panel** (the chip in its header); answers show the model that wrote them (Claude Code reports it, e.g. Sonnet 5.5).
+* **Fixed:** the AI agent permission was not kept after restarting Termwright.
 * **AI panel: tokens, New Chat, agent tools.** Each answer shows the tokens sent and received (as Claude, OpenAI-compatible services, Ollama and Claude Code count them), the chat its total, and the typing area an estimate before sending. **New Chat** sits under the header and in Chats. In Agent mode the wrench button chooses the tools (run commands in tabs, connect to saved sessions) and each answer lists the tools it used. Claude Code now answers in JSON, which gives its token counts.
 * **AI Agent mode**: the AI connects to saved sessions and runs commands in your tabs to find a problem or fix it. Read-only commands (per device type, editable in Device Types) run by themselves; anything else shows the exact command to Run, Edit, Skip or Stop; production sessions always ask; or choose *Ask before every command* / *Read only*.
 * **Start page cards:** the time and the open/closed dot move to the top right while the quick buttons show.

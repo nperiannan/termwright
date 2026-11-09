@@ -38,8 +38,10 @@ type AIChatRequest struct {
 	DeviceType string   `json:"deviceType"`
 	Protocol   string   `json:"protocol"`
 	Agent      bool     `json:"agent"`
-	Tabs       []string `json:"tabs"`  // agent: the open tabs, "name (device type, state)"
-	Tools      []string `json:"tools"` // agent: what it may do - "run" (commands in tabs), "open" (connect to saved sessions)
+	Tabs       []string `json:"tabs"`    // agent: the open tabs, "name (device type, state)"
+	Tools      []string `json:"tools"`   // agent: what it may do - "run" (commands in tabs), "open" (find and connect to saved sessions), "log", "record"
+	Folders    []string `json:"folders"` // agent: the saved-session folders
+	Perm       string   `json:"perm"`    // agent: "" changes ask first, "every", "readonly", "auto" (fully autonomous)
 }
 
 const aiMaxImages = 4
@@ -122,7 +124,9 @@ func (a *App) AIChat(r AIChatRequest) (AIAnswer, error) {
 	if err != nil {
 		return AIAnswer{}, err
 	}
-	if model == "" {
+	if usage != nil && usage.Model != "" {
+		model = usage.Model
+	} else if model == "" {
 		model = "Claude Code"
 	}
 	return AIAnswer{Text: out, Commands: aiCommands(out), Sent: msgs[len(msgs)-1].Text, Removed: removed, Model: model, Usage: usage}, nil
@@ -131,11 +135,14 @@ func (a *App) AIChat(r AIChatRequest) (AIAnswer, error) {
 func aiChatSystem(r AIChatRequest) string {
 	sys, _ := aiPrompt(AIRequest{Kind: "explain", DeviceType: r.DeviceType, Protocol: r.Protocol}, "")
 	sys += "\nThe user may paste pictures (screenshots, photos of devices); describe what matters in them."
-	run, open := len(r.Tools) == 0, len(r.Tools) == 0
+	on := map[string]bool{}
 	for _, t := range r.Tools {
-		run, open = run || t == "run", open || t == "open"
+		on[t] = true
 	}
-	if !r.Agent || (!run && !open) {
+	if len(r.Tools) == 0 { // older windows: commands and sessions
+		on["run"], on["open"] = true, true
+	}
+	if !r.Agent || (!on["run"] && !on["open"]) {
 		return sys
 	}
 	tabs := "none"
@@ -143,19 +150,52 @@ func aiChatSystem(r AIChatRequest) string {
 		tabs = strings.Join(r.Tabs, "; ")
 	}
 	var lines, what []string
-	if run {
+	if on["run"] {
 		lines, what = append(lines, "run <tab name>: <one command line>"), append(what, "run commands in the open tabs")
 	}
-	if open {
-		lines, what = append(lines, "open <saved session name>"), append(what, "connect to saved sessions")
+	if on["open"] {
+		lines = append(lines, "find <text>", "open <saved session: its name, folder/name, or address>")
+		what = append(what, "find saved sessions (by folder, name, address or device type) and connect to them")
 	}
-	return sys + `
+	if on["log"] {
+		lines, what = append(lines, "log <tab name>: on|off"), append(what, "log a tab to a file")
+	}
+	if on["record"] {
+		lines, what = append(lines, "record <tab name>: on|off|mark <note>"), append(what, "record a tab (a replayable recording with markers)")
+	}
+	out := sys + `
 
-AGENT MODE. Through Termwright you can ` + strings.Join(what, " and ") + `. To do so, end your answer with one block:
+AGENT MODE. Through Termwright you can ` + strings.Join(what, ", ") + `. To do so, end your answer with one block:
 ` + "```termwright\n" + strings.Join(lines, "\n") + "\n```" + `
-Termwright does them in that order - each after the user allows it - and sends you the results in the next message. Then continue, or give your conclusion with no block.
-Rules: one command per run line, exactly as typed at that device's prompt; prefer read-only commands (show, display, ping, traceroute) to find the cause; propose configuration changes only when the user asked for a fix, one at a time, and say what each does before the block; never save the configuration, reboot or erase unless the user asked for exactly that; turn off paging first if the output pages (EXOS: disable clipaging, VOSS: terminal more disable, Cisco: terminal length 0).
-Open tabs: ` + tabs + "."
+Termwright does them in that order and sends you the results in the next message. Then continue, or give your conclusion with no block.
+Rules: one command per run line, exactly as typed at that device's prompt; prefer read-only commands (show, display, ping, traceroute) to find the cause; propose configuration changes only when the user asked for a fix or a configuration, and say what each does before the block; never save the configuration, reboot or erase unless the user asked for exactly that; turn off paging first if the output pages (EXOS: disable clipaging, VOSS: terminal more disable, Cisco: terminal length 0).`
+	if on["open"] {
+		out += `
+Saved sessions log in with the credentials stored in Termwright: never ask for, show or type passwords. For a group of devices (a location, a folder, an address range) use find first, then open each one you need.`
+		if len(r.Folders) > 0 {
+			f := r.Folders
+			if len(f) > 80 {
+				f = f[:80]
+			}
+			out += "\nSaved session folders: " + strings.Join(f, "; ") + "."
+		}
+	}
+	if on["log"] || on["record"] {
+		out += `
+To keep evidence, turn on log (and record, when it helps to replay the session) on each tab before you debug or change it, and turn them off when you finish; Termwright tells you the file names - tell the user.`
+	}
+	switch r.Perm {
+	case "auto":
+		out += `
+The user let you work autonomously: commands and changes run without asking, except on production sessions and for reboot, reload or erase. Work in small steps, check each change with a show command before the next device, stop and report if something fails, and end with a short status table: device, what was done, result.`
+	case "readonly":
+		out += `
+The user allows only read-only commands: give configuration changes as commands for the user, do not run them.`
+	default:
+		out += `
+Each command that is not read-only waits for the user to allow it.`
+	}
+	return out + "\nOpen tabs: " + tabs + "."
 }
 
 // aiConverse sends a chat to the provider.
@@ -175,6 +215,7 @@ func aiConverse(ctx context.Context, s config.AISettings, key, model, sys string
 		}
 		body := map[string]any{"model": model, "max_tokens": 2500, "system": sys, "messages": ms}
 		var v struct {
+			Model   string `json:"model"`
 			Content []struct {
 				Type string `json:"type"`
 				Text string `json:"text"`
@@ -195,7 +236,7 @@ func aiConverse(ctx context.Context, s config.AISettings, key, model, sys string
 				b.WriteString(c.Text)
 			}
 		}
-		return b.String(), &AIUsage{In: v.Usage.In + v.Usage.CacheR + v.Usage.CacheW, Out: v.Usage.Out}, nil
+		return b.String(), &AIUsage{In: v.Usage.In + v.Usage.CacheR + v.Usage.CacheW, Out: v.Usage.Out, Model: v.Model}, nil
 	case "openai":
 		ms := []map[string]any{{"role": "system", "content": sys}}
 		for _, m := range msgs {
@@ -211,6 +252,7 @@ func aiConverse(ctx context.Context, s config.AISettings, key, model, sys string
 		}
 		body := map[string]any{"model": model, "messages": ms}
 		var v struct {
+			Model   string `json:"model"`
 			Choices []struct {
 				Message struct {
 					Content string `json:"content"`

@@ -47,8 +47,9 @@ type AIAnswer struct {
 
 // AIUsage: the tokens a question used, as the AI service reports them.
 type AIUsage struct {
-	In  int `json:"in"`  // sent (with the chat so far and the instructions)
-	Out int `json:"out"` // the answer
+	In    int    `json:"in"`              // sent (with the chat so far and the instructions)
+	Out   int    `json:"out"`             // the answer
+	Model string `json:"model,omitempty"` // the model that answered, when the service says
 }
 
 // AIStatus tells the UI whether the assistant is set up.

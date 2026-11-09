@@ -719,6 +719,7 @@ Off until you choose an AI service in **Settings → AI Assistant**: **Claude** 
 - **The AI panel** - the sparkles button in the title bar (also **Options → AI Assistant…**, or right-click in a terminal → *Explain with AI* / *Ask AI for a Command*) opens the AI assistant as a chat beside the terminal. Until an AI service is set up the button shows a small amber dot and opens these settings.
   - **Dock it** on the right (the default) or the left, or let it **float** as its own window - the buttons in its header; drag its edge to make it wider. Termwright remembers your choice.
   - **A conversation**: ask follow-up questions; answers scroll like a chat. **New Chat** (the button under the header, or **+** in the header) starts a new chat; the chat's title (or the clock button) opens **Chats** - earlier chats, kept on this computer (the device output sent with them is not kept); click one to continue it.
+  - **Model**: the chip next to *AI Assistant* shows the model that answers (*Sonnet 5.5*); click it to choose another (for Claude Code: Sonnet, Opus or Haiku) or *Default*. Each answer shows the model that wrote it.
   - **Tokens**: each answer shows **↑ sent ↓ received** as the AI service counted them, the bar under the header shows the total for the chat (**⇅**), and next to Send you see about how many tokens the next question will send. Every question sends the chat so far, so long chats cost more - start a new chat for a new problem. With Claude Code about 14k of each question are Claude Code's own instructions (mostly cached by Claude).
   - **What goes with a question** - shown as chips above the typing area: the **selected text** of the terminal (chosen when you have a selection), otherwise the **whole terminal**; **+ Add context** (or type **@**) adds copied text, the whole terminal, another tab, or a picture or text file. A long terminal shows how many tokens it is, with a warning and *keep the last 200 / 500 / 1,000 lines*.
   - **Pictures**: paste a screenshot (⌘V / Ctrl+V), drop it, or attach it - up to 4 per message, 5 MB each. Claude, OpenAI-compatible services and Ollama vision models read them; Claude Code reads them from a temporary folder (it may read only those files).
@@ -726,16 +727,29 @@ Off until you choose an AI service in **Settings → AI Assistant**: **Claude** 
 
   ![The AI panel](screenshots/ai-ask.png)
 
-- **Agent mode** (switch *Ask* to *Agent* under the typing area): the AI may run commands in your tabs and connect to saved sessions to find a problem - or fix it if you ask - and reads the results itself. Every step shows in the chat (which device, which command, its output). Next to the mode, choose what it may do:
-  - **Changes ask first** (default): commands on the device type's *read-only* list run by themselves; anything else shows a card with the exact command and device - **Run** (you can edit the command first), **Skip** or **Stop**.
-  - **Ask before every command**.
-  - **Read only**: it never runs anything that is not on the read-only list.
+- **Agent mode** (switch *Ask* to *Agent* under the typing area): the AI may run commands in your tabs, find saved sessions and connect to them to find a problem - or fix or configure something if you ask - and reads the results itself. Every step shows in the chat (which device, which command, its output). The button next to the mode chooses what it may do without asking (the colour shows the level):
+  - **Fully autonomous** (orange): commands and configuration changes run without asking - for example *Configure MLAG on the EXOS switches in Building B*. Termwright asks you to confirm once when you choose it. Even then, **reboot, reload, erase** and similar always ask.
+  - **Changes ask first** (yellow, the default): commands on the device type's *read-only* list run by themselves; anything else shows a card with the exact command and device - **Run** (you can edit the command first), **Skip** or **Stop**.
+  - **Ask before every command** (yellow).
+  - **Read only** (white): it never runs anything that is not on the read-only list; changes come back as text for you.
 
-  The **wrench** button (with how many are on) chooses the tools the agent may use: **Run commands in tabs** and **Connect to saved sessions** - turn one off and the AI is not offered it. Under each answer, **Tools used** counts what it did (*Run commands ×3 · Connect to sessions ×1*), and each step card shows the tab, the command and whether it ran by itself (*auto*), after you allowed it, or was skipped.
+  **Production is always guarded:** on a session in a **production** environment, every command and every connection waits for you - in every mode, fully autonomous included. The card is marked **PROD**.
 
-  On a session in a **production** environment, every command and connection asks first, whatever you chose. The read-only list is per device type (**Settings → Device Types → AI agent: read-only**, one command beginning per line); empty = `show`, `display`, `ping`, `traceroute`… for network devices and the usual read-only commands for Linux. A command with `;`, `&&`, redirection or a pipe into anything but a filter (include, grep…) always asks. The commands are typed in the visible tab, so they appear there and in its log like your own.
+  ![What the agent may do](screenshots/ai-agent-perms.png)
 
-  ![Agent mode asks before a change](screenshots/ai-agent.png)
+  **Groups of devices**: the agent finds saved sessions by folder (a location such as *Building B* or *Datacenter/Rack 4*), name, address or device type, and connects by name, folder/name or IP address. It logs in with the credentials saved in Termwright; passwords are never sent to the AI. If a session cannot connect (no saved login, the device does not answer, another device at the address), the agent is told and stops trying that one. Under each answer, a chip per device shows how it is going - *working*, *waiting* (for you), ✓ commands that ran, ✗ commands the device refused (the step shows *The device reported an error*).
+
+  The **wrench** button (with how many are on) chooses the tools the agent may use - turn one off and the AI is not offered it:
+  - **Run commands in tabs**.
+  - **Connect to saved sessions** (find and open).
+  - **Logger**: logs a tab to a file in your log folder (`AI-<session>-<date>.log`).
+  - **Recorder**: records a tab as a replayable session recording, with a marker for each command the agent runs.
+
+  Logger and Recorder only write files on this computer, so they never ask and work in Read only too; the agent turns them on before it debugs or changes a device and off at the end, and tells you the files. **Tools used** under each answer counts what it did (*Run commands ×6 · Logger ×2*); each step card shows the tab, the command and whether it ran by itself (*auto*), after you allowed it, or was skipped.
+
+  The read-only list is per device type (**Settings → Device Types → AI agent: read-only**, one command beginning per line); empty = `show`, `display`, `ping`, `traceroute`… for network devices and the usual read-only commands for Linux. A command with `;`, `&&`, redirection or a pipe into anything but a filter (include, grep…) always asks (except in fully autonomous mode). The commands are typed in the visible tab, so they appear there and in its log like your own.
+
+  ![The agent configures a switch, with a status per device](screenshots/ai-agent.png)
 
 - Each command has **Paste** (types it at the prompt **without Enter** and closes the window - you check it and press Enter), **Copy** and **Save** (to the Command Library, for that device type). Nothing the AI answers is ever run by itself.
 - **Privacy**: nothing is sent until you ask. Passwords, secrets, keys, SNMP communities and tokens are removed first; *Also replace IP addresses, MAC addresses and host names* hides those too. *What was sent* shows exactly what left your computer. Check your company's policy before sending device output to an outside service.
