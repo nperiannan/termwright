@@ -5,7 +5,7 @@ import { Ui } from '../core/ui.service';
 import { Tabs } from '../core/tabs.service';
 import { Icon } from '../components/icon';
 import { FileServers, pct, size } from '../core/file-servers.service';
-import { FSAddress, FileServer, FileServersSettings, ServedFile, ServerCommand } from '../core/models';
+import { FSAddress, FileServer, FirewallState, FileServersSettings, ServedFile, ServerCommand } from '../core/models';
 import { ANY, Fill, Proto, deviceTypes, fill, needsStandardPort, template } from '../core/device-commands';
 import { tr } from '../core/i18n';
 
@@ -59,6 +59,34 @@ import { tr } from '../core/i18n';
               @else { <div class="muted small">Stopped</div> }
             </div>
           }
+        </div>
+        <div class="fwp">
+          <div class="fwh"><app-icon name="shield" [size]="15" /><b>{{ tr('Firewall') }}</b><span class="muted small">{{ fw()?.name || '' }}</span><span class="grow"></span>
+            @if (pasteTab(); as t) {
+              <button type="button" (click)="testFrom(t.id, t.title)" [disabled]="!anyRunning() || fs.test().state === 'wait'"
+                [title]="anyRunning() ? tr('Types a command in {0} that fetches a small test file from this computer - you press Enter', t.title) : tr('Start a server first')">
+                {{ fs.test().state === 'wait' ? tr('Waiting for {0}…', fs.test().device) : tr('Test from {0}', t.title) }}</button>
+            }
+            @if (fw()?.canFix && fw()?.app !== 'allowed' && fw()?.on === 'on') { <button type="button" class="primary" (click)="allowFw()" [disabled]="fwBusy()">{{ tr('Allow Termwright…') }}</button> }
+            <button type="button" class="icon" (click)="checkFw()" [disabled]="fwBusy()" [title]="tr('Check again')" [attr.aria-label]="tr('Check again')"><app-icon name="refresh" [size]="13" /></button>
+          </div>
+          @if (fw(); as f) {
+            <div class="fwc">
+              <div class="t"><b><i [class]="f.on === 'on' ? 'ok' : f.on === 'off' ? 'mu' : 'mu'">{{ f.on === 'on' ? '✓' : '–' }}</i>{{ !f.name ? tr('No firewall found') : f.on === 'on' ? tr('Firewall on') : f.on === 'off' ? tr('Firewall off') : tr('Firewall state unknown') }}</b>
+                <span>{{ f.name || tr('nothing to allow on this computer') }}</span></div>
+              <div class="t"><b><i [class]="f.app === 'allowed' ? 'ok' : f.app === 'blocked' ? 'bad' : 'w'">{{ f.app === 'allowed' ? '✓' : f.app === 'blocked' ? '✕' : '!' }}</i>{{ f.app === 'allowed' ? tr('Termwright allowed') : f.app === 'blocked' ? tr('Termwright blocked') : f.app === 'ask' ? tr('Not decided yet') : tr('Not known') }}</b>
+                <span>{{ f.app === 'blocked' ? tr('devices cannot reach the servers') : f.app === 'ask' ? tr('the system asks when a server starts - choose Allow') : f.app === 'allowed' ? tr('devices can reach the servers') : f.program }}</span></div>
+              <div class="t"><b><i class="w">!</i>{{ tr('TFTP ports') }}</b><span>{{ tr('a new UDP port per file - allow the program, not only port {0}', s()?.tftpPort ?? 69) }}</span></div>
+              <div class="t"><b><i [class]="fs.test().state === 'ok' ? 'ok' : fs.test().state === 'fail' ? 'bad' : 'mu'">{{ fs.test().state === 'ok' ? '✓' : fs.test().state === 'fail' ? '✕' : fs.test().state === 'wait' ? '…' : '–' }}</i>{{ tr('Device test') }}</b>
+                <span>{{ fs.test().state === 'ok' ? tr('{0} reached it', fs.test().device) : fs.test().state === 'fail' ? tr('{0} did not reach it', fs.test().device) : fs.test().state === 'wait' ? tr('press Enter in {0}', fs.test().device) : tr('not run yet') }}</span></div>
+            </div>
+            @for (n of f.notes ?? []; track n) { <div class="muted small note">{{ n }}</div> }
+            @if (f.fix && f.app !== 'allowed') {
+              <div class="muted small note"><a href="" (click)="$event.preventDefault(); fwCmd.set(!fwCmd())">{{ fwCmd() ? tr('Hide the command') : tr('Show the command') }}</a>
+                @if (!f.canFix) { - {{ tr('run it as an administrator') }} }</div>
+              @if (fwCmd()) { <div class="cmdline"><code>{{ f.fix }}</code><button type="button" (click)="copyFw()">Copy</button></div> }
+            }
+          } @else { <div class="muted small">{{ tr('Checking the firewall…') }}</div> }
         </div>
         <div class="warn"><app-icon name="alert" [size]="14" /><span>{{ tr('TFTP, FTP and HTTP are not encrypted - files and the FTP password cross the network as they are.') }}
           {{ tr('The servers stop on their own after') }}
@@ -145,6 +173,14 @@ import { tr } from '../core/i18n';
     .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--input-bg); }
     .sec { font-weight: 600; margin: 4px 0 6px; display: flex; align-items: center; gap: 8px; .muted { font-weight: 400; } }
     .seg.mini button { white-space: nowrap; padding: 2px 10px; font-size: calc(11.5px * var(--ui-scale, 1)); }
+    .fwp { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; background: var(--surface-2); margin-bottom: 12px; }
+    .fwp a { color: var(--accent); }
+    .fwh { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; app-icon { color: var(--accent); display: inline-flex; } button { height: 26px; } }
+    .fwc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .fwc .t { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: var(--bg); font-size: calc(12px * var(--ui-scale, 1)); display: flex; flex-direction: column; gap: 2px; min-width: 0;
+      b { display: flex; gap: 6px; align-items: center; font-weight: 600; } span { color: var(--muted); }
+      i { font-style: normal; width: 14px; text-align: center; } .ok { color: var(--ok); } .bad { color: var(--danger); } .w { color: var(--warn); } .mu { color: var(--muted); } }
+    @media (max-width: 760px) { .fwc { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .cmdbox { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; background: var(--surface-2); margin-bottom: 14px; }
     .cmdline { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
     .cmdline code { flex: 1; min-width: 0; font-family: var(--mono); font-size: calc(12.5px * var(--ui-scale, 1)); padding: 6px 8px; background: var(--input-bg); border: 1px solid var(--line); border-radius: var(--r-sm); overflow-x: auto; white-space: nowrap; user-select: text; }
@@ -239,6 +275,7 @@ export class FileServersDialog implements OnInit, OnDestroy {
       this.name.set(`${(t?.title || 'device').replace(/[^\w.-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.cfg`);
       await this.loadFiles();
       this.password.set(await this.backend.fileServersPassword().catch(() => ''));
+      void this.checkFw();
     } catch (e) { this.ui.toast(errText(e), 'error'); }
     this.tick = setInterval(() => this.now.set(Date.now()), 1000);
   }
@@ -289,6 +326,41 @@ export class FileServersDialog implements OnInit, OnDestroy {
   }
 
   setPut(v: boolean) { this.put.set(v); this.editing.set(false); }
+
+  readonly fw = signal<FirewallState | null>(null);
+  readonly fwBusy = signal(false);
+  readonly fwCmd = signal(false);
+  async checkFw() {
+    this.fwBusy.set(true);
+    try { this.fw.set(await this.backend.firewallCheck()); } catch { this.fw.set({ name: '', on: 'unknown', app: 'unknown', notes: [], fix: '', canFix: false, program: '' }); }
+    this.fwBusy.set(false);
+  }
+  async allowFw() {
+    const f = this.fw(); if (!f) return;
+    if (!(await this.ui.confirm(tr('Allow Termwright'), tr('Let devices reach Termwright through {0}? The system asks for an administrator password and runs:', f.name) + '\n\n' + f.fix, tr('Allow')))) return;
+    this.fwBusy.set(true);
+    try { this.fw.set(await this.backend.firewallAllow()); this.ui.toast(tr('The firewall lets devices reach Termwright now'), 'success'); }
+    catch (e) { this.ui.toast(errText(e), 'error', 8000); }
+    this.fwBusy.set(false);
+  }
+  async copyFw() { await this.backend.clipboardSet(this.fw()?.fix ?? ''); this.ui.toast(tr('Copied'), 'success'); }
+  /** Types a command in the tab that fetches a small test file; the transfer list tells whether it arrived. */
+  async testFrom(id: string, title: string) {
+    try {
+      const name = await this.backend.fileServersTestFile();
+      await this.loadFiles();
+      const running = (['tftp', 'http', 'ftp'] as Proto[]).filter(p => this.server(p)?.running && template(this.own(), this.dtype(), p, false, name));
+      if (!running.length) { this.ui.toast(tr('No command to fetch a file for this device type with the running servers - choose the device type or start TFTP or HTTP'), 'error', 8000); return; }
+      this.put.set(false); this.file.set(name); this.proto.set(running[0]);
+      const c = this.command();
+      if (!c) return;
+      void this.tabs.paste(id, c.text);
+      this.fs.startTest(title, running[0]);
+      this.ui.close();
+      this.tabs.focus(id);
+      this.ui.toast(tr('Press Enter in {0}: it fetches termwright-test.txt (a few bytes) - you can delete it on the device afterwards', title), 'info', 9000);
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
 
   paste(id: string) {
     const c = this.command();

@@ -340,5 +340,6 @@ export interface FileTransfer { id: number; server: string; peer: string; file: 
 export interface FileServersView { settings: FileServersSettings; state: FileServersState; transfers: FileTransfer[]; }
 export interface FSAddress { ip: string; label: string; reaches: boolean; }
 export interface ServedFile { name: string; size: number; }
+export interface FirewallState { name: string; on: 'on' | 'off' | 'unknown'; app: 'allowed' | 'blocked' | 'ask' | 'unknown'; notes: string[] | null; fix: string; canFix: boolean; program: string; }
 export interface AIStatus { provider: string; model: string; hasKey: boolean; ready: boolean; }
 export interface AIAnswer { text: string; commands: string[]; sent: string; removed: number; model: string; usage?: { in: number; out: number; model?: string } | null; }

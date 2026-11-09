@@ -31,6 +31,19 @@ export class FileServers {
     return s;
   });
 
+  /** The device test: a device fetches termwright-test.txt; '' = none, 'wait', 'ok', 'fail'. */
+  readonly test = signal<{ state: '' | 'wait' | 'ok' | 'fail'; device: string; via: string; since: number }>({ state: '', device: '', via: '', since: 0 });
+  private testTimer?: ReturnType<typeof setTimeout>;
+  startTest(device: string, via: string) {
+    clearTimeout(this.testTimer);
+    this.test.set({ state: 'wait', device, via, since: Date.now() });
+    this.testTimer = setTimeout(() => {
+      if (this.test().state !== 'wait') return;
+      this.test.set({ ...this.test(), state: 'fail' });
+      this.ui.toast(tr('{0} did not reach {1} on this computer within 2 minutes - the firewall or the route blocks it.', device, via.toUpperCase()), 'error', 10000);
+    }, 120000);
+  }
+
   constructor() {
     this.backend.on('fs:state', (s: FileServersState) => {
       const was = this.running().length > 0;
@@ -45,6 +58,12 @@ export class FileServers {
       const i = l.findIndex(x => x.id === t.id);
       if (i >= 0) l[i] = t; else l.unshift(t);
       this.transfers.set(l.slice(0, 200));
+      const k = this.test();
+      if (k.state === 'wait' && /termwright-test\.txt$/.test(t.file) && !t.put) {
+        clearTimeout(this.testTimer);
+        this.test.set({ ...k, state: 'ok' });
+        this.ui.toast(tr('{0} reached {1} on this computer ({2}) - the firewall lets it in.', k.device, t.server.toUpperCase(), t.peer), 'success', 8000);
+      }
     });
   }
 

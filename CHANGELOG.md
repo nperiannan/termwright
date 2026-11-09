@@ -6,6 +6,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 An AI assistant and agent beside the terminal - with your own Claude login or any AI service - built-in TFTP, FTP and HTTP servers, single sign-on for teams, and one modern window.
 
+* **File servers: firewall check.** The File Servers window shows whether this computer's firewall (macOS, Windows Defender, ufw, firewalld) lets devices reach Termwright, allows it with one click (the system asks for an administrator password), and **Test from <tab>** proves a device can fetch a file from this computer.
 * **Restore from Backup…** (Settings → General → Backup, next to *Back Up Now*): pick a backup zip; your current settings are backed up first, Termwright closes, and the backup is put back when it starts again (files that are not in the backup stay).
 * **AI chats are kept in the data folder** (`ai-chats.json`, readable only by you) instead of the window's own storage, so backups include them; the chosen **agent tools** are a setting now (backed up, exported and synced). Both move over by themselves.
 * **The Classic layout is removed** (toolbar, tab strip, in-window menu bar, Connect Bar). Everyone gets the modern window: every menu command is in the title bar's ⋯ menu (and the macOS menu) with the same shortcuts, and View → Connect Bar opens Quick Open. Settings that chose Classic open the modern window; nothing else changes.

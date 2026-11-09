@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo } from './models';
+  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -150,6 +150,9 @@ export class Backend {
   fileServersStop(kind: string) { return this.call<void>('FileServersStop', kind); }
   fileServersClear() { return this.call<void>('FileServersClear'); }
   fileServersFiles() { return this.call<ServedFile[]>('FileServersFiles'); }
+  fileServersTestFile() { return this.call<string>('FileServersTestFile'); }
+  firewallCheck() { return this.call<FirewallState>('FirewallCheck'); }
+  firewallAllow() { return this.call<FirewallState>('FirewallAllow'); }
   fileServersPassword() { return this.call<string>('FileServersPassword'); }
   fileServersNewPassword() { return this.call<string>('FileServersNewPassword'); }
   fileServersChooseFolder() { return this.call<string>('FileServersChooseFolder'); }
