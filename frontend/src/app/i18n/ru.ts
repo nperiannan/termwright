@@ -1666,6 +1666,8 @@ const ru: Record<string, string> = {
   'answers': 'отвечает',
   'of': 'из',
   '0 of {0} answered': 'ответов: 0 из {0}',
+  'this device': 'это устройство',
+  'no route': 'нет маршрута',
   'no clear answer': 'нет ясного ответа',
   'Production devices': 'Рабочие устройства',
   'Run it on a Linux host or a device that has iperf3. iperf3 is its own program: the firewall may ask about it once. The server stops after 30 minutes without tests and when Termwright closes.': 'Запустите на Linux-хосте или устройстве с iperf3. iperf3 - отдельная программа: брандмауэр может один раз спросить о ней. Сервер останавливается через 30 минут без тестов и при закрытии Termwright.',

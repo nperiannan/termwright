@@ -8,18 +8,33 @@ import { IperfInfo, IperfTest, NCResult } from '../core/models';
 import { envInfo, envOf } from '../core/env';
 import { tr } from '../core/i18n';
 
-/** What a device types for ping and traceroute, by device type. Read-only commands. */
-const DEVICE_CMDS: [RegExp, string, string][] = [
-  [/exos|switch engine/i, 'ping count 4 {ip}', 'traceroute {ip}'],
-  [/voss|fabric engine|vsp|boss/i, 'ping {ip} count 4', 'traceroute {ip}'],
-  [/nx-?os/i, 'ping {ip} count 4', 'traceroute {ip}'],
+/** What a device types for ping and traceroute, by device type. Read-only commands.
+ *  The 4th to 6th fields: the same in the management VR / VRF (tried when the
+ *  default one does not answer - a switch's management port is often there). */
+const DEVICE_CMDS: [RegExp, string, string, string?, string?, string?][] = [
+  [/exos|switch engine/i, 'ping count 4 {ip}', 'traceroute {ip}', 'ping count 4 vr VR-Mgmt {ip}', 'traceroute vr VR-Mgmt {ip}', 'VR-Mgmt'],
+  [/voss|fabric engine|vsp/i, 'ping {ip} count 4', 'traceroute {ip}', 'ping {ip} count 4 vrf MgmtRouter', 'traceroute {ip} vrf MgmtRouter', 'MgmtRouter'],
+  [/boss/i, 'ping {ip} count 4', 'traceroute {ip}'],
+  [/nx-?os/i, 'ping {ip} count 4', 'traceroute {ip}', 'ping {ip} count 4 vrf management', 'traceroute {ip} vrf management', 'management'],
   [/ios|cisco|arista|\beos\b/i, 'ping {ip} repeat 4', 'traceroute {ip}'],
   [/junos|juniper/i, 'ping {ip} count 4 rapid', 'traceroute {ip}'],
   [/linux|unix|ubuntu|debian|centos|rhel|server|bsd|mac/i, 'ping -c 4 -W 1 {ip}', 'traceroute -n -m 15 {ip}'],
 ];
-export function deviceCommand(deviceType: string, ip: string, trace: boolean): string {
+/** The ping or traceroute a device types; mgmt = in its management VR / VRF ('' when it has none). */
+export function deviceCommand(deviceType: string, ip: string, trace: boolean, mgmt = false): string {
   const m = DEVICE_CMDS.find(([re]) => re.test(deviceType || ''));
+  if (mgmt) return m?.[3] ? (trace ? m[4]! : m[3]).replace('{ip}', ip) : '';
   return (m ? (trace ? m[2] : m[1]) : (trace ? 'traceroute {ip}' : 'ping {ip}')).replace('{ip}', ip);
+}
+/** The name of a device type's management VR / VRF ('' = none). */
+export function mgmtVR(deviceType: string): string {
+  return DEVICE_CMDS.find(([re]) => re.test(deviceType || ''))?.[5] ?? '';
+}
+
+/** The same host: equal ignoring case, a port or a trailing dot. */
+export function sameHost(a: string, b?: string): boolean {
+  const n = (x: string) => x.trim().toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
+  return !!b && n(a) === n(b);
 }
 
 /** A device's ping output: answered or not, the average time when it says. */
@@ -36,6 +51,7 @@ export function parseDevicePing(out: string): { state: 'ok' | 'bad' | 'na'; summ
   if (recv < 0 && /no answer|timed out|unreachable|100% (?:packet )?loss|request timeout|\.\.\.\.\./i.test(o)) { recv = 0; sent = Math.max(sent, 4); }
   const t = ms ? (ms >= 10 ? `${Math.round(ms)} ms` : `${ms.toFixed(1)} ms`) : '';
   if (recv > 0) return { state: 'ok', ms, summary: (t || tr('answers')) + (sent > recv ? ` · ${recv} ${tr('of')} ${sent}` : '') };
+  if (recv === 0 && (sent === 0 || /transmit error|no route/i.test(o))) return { state: 'bad', ms: 0, summary: tr('no route') };
   if (recv === 0) return { state: 'bad', ms: 0, summary: tr('0 of {0} answered', sent > 0 ? sent : 4) };
   return { state: 'na', ms: 0, summary: tr('no clear answer') };
 }
@@ -52,7 +68,7 @@ export function parseHops(out: string): string[] {
   return hops.filter(h => h !== undefined);
 }
 
-type Cell = NCResult & { running?: boolean; hops?: string[]; trace?: string; tracing?: boolean };
+type Cell = NCResult & { vr?: string; running?: boolean; hops?: string[]; trace?: string; tracing?: boolean };
 const SPECIAL = ['gateway', 'dns', 'internet'];
 const LOCAL = 'local';
 
@@ -293,10 +309,20 @@ export class NetCheckDialog implements OnInit, OnDestroy {
       for (const t of targets) {
         if (this.special(t)) continue;
         const host = t.replace(/:\d+$/, '');
-        const cmd = deviceCommand(s.session.deviceType ?? '', host, false);
-        const out = await this.runIn(s.id, cmd, 20000);
-        const p = parseDevicePing(out);
-        this.put(s.id, t, { target: t, address: host, state: p.state, summary: p.summary, ms: p.ms, detail: out });
+        const dt = s.session.deviceType ?? '';
+        // a device does not ping its own address
+        if (sameHost(host, s.session.hostname)) { this.put(s.id, t, { target: t, address: host, state: 'na', summary: tr('this device'), ms: 0, detail: '' }); continue; }
+        let out = await this.runIn(s.id, deviceCommand(dt, host, false), 20000);
+        let p = parseDevicePing(out), vr = '';
+        // not in the default VR: try the management one (where a switch's management port is)
+        const alt = p.state !== 'ok' ? deviceCommand(dt, host, false, true) : '';
+        if (alt) {
+          const out2 = await this.runIn(s.id, alt, 20000);
+          const p2 = parseDevicePing(out2);
+          if (p2.state === 'ok') { p = { ...p2, summary: p2.summary + ' · ' + mgmtVR(dt) }; vr = mgmtVR(dt); }
+          out = out + '\n' + out2;
+        }
+        this.put(s.id, t, { target: t, address: host, state: p.state, summary: p.summary, ms: p.ms, detail: out, vr });
       }
     });
     await Promise.all([local, ...devices]);
@@ -309,7 +335,7 @@ export class NetCheckDialog implements OnInit, OnDestroy {
     let out = '';
     try {
       if (src === LOCAL) out = await this.backend.netCheckTrace(t);
-      else out = await this.runIn(src, deviceCommand(this.tabOf(src)?.session.deviceType ?? '', t.replace(/:\d+$/, ''), true), 60000);
+      else out = await this.runIn(src, deviceCommand(this.tabOf(src)?.session.deviceType ?? '', t.replace(/:\d+$/, ''), true, !!c.vr), 60000);
     } catch (e) { out = errText(e); }
     const hops = parseHops(out);
     // the target itself is shown at the end of the path
