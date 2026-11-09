@@ -2,7 +2,9 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.33.0 (2026-11-10)
+
+An AI assistant and agent beside the terminal - with your own Claude login or any AI service - built-in TFTP, FTP and HTTP servers, single sign-on for teams, and one modern window.
 
 * **The Classic layout is removed** (toolbar, tab strip, in-window menu bar, Connect Bar). Everyone gets the modern window: every menu command is in the title bar's ⋯ menu (and the macOS menu) with the same shortcuts, and View → Connect Bar opens Quick Open. Settings that chose Classic open the modern window; nothing else changes.
 * **Start page buttons in three styles** - *Raised* (the default: a thick edge, they lift and press down), *Keycaps* (like keyboard keys, with the shortcut) or *Glow cards* (a round icon glowing in the action's colour). Each action has its own colour. Choose in Settings → General or on the Welcome screen.

@@ -85,6 +85,17 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.33
+
+- **AI assistant and agent** beside the terminal (docked or floating): ask about the output or a screenshot; in **Agent** mode it finds and connects to sessions by folder, name or address and runs commands - read-only by itself, changes after you allow them, or fully autonomous. **Production sessions always ask first.** Logs and recordings as evidence, a status per device, tokens per answer.
+- **Your choice of AI**: Claude Code with your own Claude login (model and effort), Claude, OpenAI-compatible services or Ollama on your network - and **Termwright as a connector for Claude Desktop and Claude Code**.
+- **Built-in TFTP, FTP and HTTP servers** for software images, licences and configuration backups.
+- **Single sign-on for teams** (Microsoft Entra ID, Okta, Google, OpenID Connect), **EXOS port states in colour**, start page buttons in three styles, and one modern window (the Classic layout is gone).
+
+| | |
+|---|---|
+| ![AI agent](docs/screenshots/ai-agent.png) <br/>*The agent configures a switch, with a status per device* | ![File servers](docs/screenshots/file-servers.png) <br/>*Transfer → File Servers* |
+
 ## What's new in 0.32
 
 - **Sync your own computers** through a shared folder (OneDrive, iCloud Drive, Dropbox, a share): sessions, accounts and the library - never passwords.
@@ -106,19 +117,6 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 | | |
 |---|---|
 | ![Update available](docs/screenshots/team-update.png) <br/>*A newer version for the team server* | ![Updating the team server](docs/screenshots/team-update-run.png) <br/>*Update Server: same container, new version* |
-
-## What's new in 0.30
-
-- **Teams (optional).** A team runs its own small server on a lab host - set up from Termwright over SSH with Docker, no cloud. Members join with an invite; without a team Termwright works on its own as before.
-- **A shared inventory.** The team's devices appear in everyone's Session Manager as a folder and stay in sync; logins stay personal. *Push to Team…* offers your sessions, an owner approves.
-- **Who uses which device.** For network devices, everyone sees who has one open and who reserved it; *Reserve…* with an end time and a note, and a warning before connecting to someone else's reservation.
-- **Admin page with usage reports.** Utilization, hours open per device and member, reservations, busy hours, unused devices and what to buy or remove - see the [team server guide](docs/TEAM_SERVER.md).
-- **Old SSH algorithms in Quick Connect, the New Session panel and for a whole folder** ([#4](https://github.com/nperiannan/termwright/issues/4)).
-
-| | |
-|---|---|
-| ![Team admin overview](docs/screenshots/team-admin.png) <br/>*The team admin page: utilization, busy hours, insights* | ![Reserve](docs/screenshots/teams.png) <br/>*Teams in Termwright* |
-| ![Team card](docs/screenshots/team-card.png) <br/>*Hover a team badge: reservation, who has it open, last used* | ![Reserve](docs/screenshots/team-reserve.png) <br/>*Reserve a device with an end time and a note* |
 
 ## Capabilities
 
