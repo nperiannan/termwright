@@ -276,6 +276,9 @@ export class Backend {
   scpTransferSftp(sftpId: string, dir: 'up' | 'down', src: string, dest: string) { return this.call<string>('SCPTransferSFTP', sftpId, dir, src, dest); }
   checkForUpdate() { return this.call<UpdateStatus>('CheckForUpdate'); }
   backupConfig() { return this.call<string>('BackupConfig'); }
+  restoreConfig(path: string) { return this.call<{ files: number; sessions: number; before: string }>('RestoreConfig', path); }
+  aiChatsLoad() { return this.call<string>('AIChatsLoad'); }
+  aiChatsSave(data: string) { return this.call<void>('AIChatsSave', data); }
   downloadUpdate(url: string, name: string) { return this.call<string>('DownloadUpdate', url, name); }
   openUpdate(path: string) { return this.call<void>('OpenUpdate', path); }
   sendYmodem(tabId: string, files: string[]) { return this.call<string>('SendYmodem', tabId, files); }

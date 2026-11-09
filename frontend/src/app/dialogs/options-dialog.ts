@@ -175,6 +175,13 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div class="hint">Used to run Python (.py) scripts with the <code>crt</code> object. Python 3 must be installed.</div>
                 <label></label><div class="hint">Files received with ZMODEM (remote "sz") are saved here.</div>
                 <label>Data folder</label><div class="hint mono">{{ dataDir() }}</div>
+                <label>Backup</label>
+                <div>
+                  <div class="row"><button type="button" [disabled]="bkBusy()" (click)="backupNow()">Back Up Now</button>
+                    <button type="button" [disabled]="bkBusy()" (click)="restoreBackup()">Restore from Backup…</button></div>
+                  <div class="hint">A zip in Documents/Termwright Backups with your settings, sessions, accounts, library, device types, AI chats and team links - everything in the data folder but logs. Passwords and keys stay in the OS keychain.</div>
+                  @if (bkMsg()) { <div class="hint">{{ bkMsg() }}</div> }
+                </div>
                 <label>Sync</label>
                 <div class="sync">
                   <div class="row"><input name="syncf" [(ngModel)]="s.syncFolder" placeholder="Off - choose a folder your computers share (OneDrive, iCloud Drive, Dropbox, a network share)" />
@@ -1051,6 +1058,26 @@ export class OptionsDialog implements OnInit {
       this.aiCheck.set(true);
       this.aiMsg.set(m?.length ? tr('{0} models - pick one, or leave it empty for the first: {1}', m.length, m[0]) : tr('The service lists no models.'));
     } catch (e) { this.aiMsg.set(errText(e)); this.aiCheck.set(false); }
+  }
+  readonly bkBusy = signal(false);
+  readonly bkMsg = signal('');
+  async backupNow() {
+    this.bkBusy.set(true); this.bkMsg.set('');
+    try { this.bkMsg.set(tr('Backup saved to {0}', await this.backend.backupConfig())); } catch (e) { this.bkMsg.set(errText(e)); }
+    this.bkBusy.set(false);
+  }
+  /** Restores a backup: the current settings are backed up first, Termwright closes and the backup is applied when it starts again. */
+  async restoreBackup() {
+    const p = await this.backend.chooseOpenFile(tr('Restore from Backup'), [{ displayName: tr('Termwright backup'), pattern: '*.zip' }]).catch(() => '');
+    if (!p) return;
+    if (!(await this.ui.confirm(tr('Restore from Backup'), tr('Replace your settings, sessions, accounts, library and AI chats with the ones in {0}? Your current ones are backed up first. Termwright closes - start it again to finish. Open tabs are closed.', p.split(/[\\/]/).pop() ?? p), tr('Restore and Close'), true))) return;
+    this.bkBusy.set(true); this.bkMsg.set('');
+    try {
+      const r = await this.backend.restoreConfig(p);
+      if (await this.ui.confirm(tr('Start Termwright Again'), tr('{0} files are ready to restore. Your settings from before are in {1}. Close Termwright now and start it again to finish.', r.files, r.before), tr('Close Termwright'))) await this.backend.quit();
+      else this.bkMsg.set(tr('The backup is restored the next time Termwright starts. Your settings from before: {0}', r.before));
+    } catch (e) { this.bkMsg.set(errText(e)); }
+    this.bkBusy.set(false);
   }
   async browseSync() {
     const d = await this.backend.chooseDirectory('Choose the Sync Folder').catch(() => '');

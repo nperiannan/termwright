@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -356,4 +357,40 @@ func claudeCodeConverse(ctx context.Context, path, model, effort, sys string, ms
 		}
 	}
 	return claudeCodeRun(ctx, path, model, effort, sys, b.String(), dir)
+}
+
+// The AI panel's chats (and where the panel sits) are kept in the data folder,
+// so backups and restores include them. The device output sent with a
+// question is not stored.
+const aiChatsFile = "ai-chats.json"
+
+// AIChatsLoad returns what AIChatsSave stored ("" when nothing yet).
+func (a *App) AIChatsLoad() (string, error) {
+	if err := a.ready(); err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(filepath.Join(a.cfg.DataDir(), aiChatsFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	return string(b), err
+}
+
+// AIChatsSave stores the chats (JSON, at most 8 MB), readable only by you.
+func (a *App) AIChatsSave(data string) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	if len(data) > 8<<20 {
+		return errors.New("the chats are too large to keep")
+	}
+	if !json.Valid([]byte(data)) {
+		return errors.New("not JSON")
+	}
+	dst := filepath.Join(a.cfg.DataDir(), aiChatsFile)
+	tmp := dst + ".tmp"
+	if err := os.WriteFile(tmp, []byte(data), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, dst)
 }

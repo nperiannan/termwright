@@ -48,6 +48,7 @@ func main() {
 	width, height, start := 1280, 820, options.Normal
 	lang := ""
 	if dir, err := config.DataDir(); err == nil {
+		_ = config.ApplyPendingRestore(dir) // Settings → Restore from Backup…, finished before anything reads the settings
 		if c, err := config.Load(dir); err == nil {
 			if w := c.Get().Window; w.Width >= 760 && w.Height >= 480 && w.Width < 20000 && w.Height < 20000 {
 				width, height = w.Width, w.Height

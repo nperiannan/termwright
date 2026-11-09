@@ -51,6 +51,8 @@ type AISettings struct {
 	AgentPerm string `json:"agentPerm,omitempty"`
 	// Claude Code's effort: "" (the model's default), "low", "medium", "high", "xhigh" or "max"
 	Effort string `json:"effort,omitempty"`
+	// the agent tools turned off ("run", "open", "log", "record"); empty = all on
+	AgentToolsOff []string `json:"agentToolsOff,omitempty"`
 }
 
 // FileServersSettings: the TFTP, FTP and HTTP servers devices fetch files

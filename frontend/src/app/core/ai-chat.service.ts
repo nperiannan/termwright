@@ -114,7 +114,9 @@ export class AIChat {
   readonly open = signal(false);
   readonly dock = signal<Dock>((store(KEY_DOCK) as Dock) || 'right');
   readonly width = signal(Number(store(KEY_W)) || 440);
-  readonly chats = signal<Chat[]>(loadChats());
+  /** Kept in the data folder (ai-chats.json), so backups include them. */
+  readonly chats = signal<Chat[]>([]);
+  private loaded = false;
   readonly currentId = signal<string>('');
   readonly view = signal<'chat' | 'history'>('chat');
   readonly busy = signal(false);
@@ -123,8 +125,17 @@ export class AIChat {
   readonly images = signal<Img[]>([]);
   readonly keep = signal(0); // whole terminal: the last N lines (0 = all)
   readonly error = signal('');
-  readonly tools = signal<Record<string, boolean>>((() => { const d = { run: true, open: true, log: true, record: true }; try { return { ...d, ...JSON.parse(store(KEY_TOOLS) || '{}') }; } catch { return d; } })());
-  setTool(k: string, on: boolean) { this.tools.update(t => ({ ...t, [k]: on })); save(KEY_TOOLS, JSON.stringify(this.tools())); }
+  /** The agent tools that are on - a setting (AI → agentToolsOff), so it is backed up, exported and synced. */
+  readonly tools = computed<Record<string, boolean>>(() => {
+    const off = new Set(this.ui.settings()?.ai?.agentToolsOff ?? []);
+    return Object.fromEntries(AGENT_TOOLS.map(t => [t.k, !off.has(t.k)]));
+  });
+  setTool(k: string, on: boolean) {
+    const s = this.ui.settings(); if (!s) return;
+    const off = new Set(s.ai?.agentToolsOff ?? []);
+    if (on) off.delete(k); else off.add(k);
+    void this.ui.saveSettings({ ...s, ai: { ...(s.ai ?? {}), agentToolsOff: [...off] } });
+  }
   /** The tokens this chat used so far, as the AI service counted them. */
   readonly used = computed(() => (this.current()?.msgs ?? []).reduce((a, m) => ({ in: a.in + (m.usage?.in ?? 0), out: a.out + (m.usage?.out ?? 0) }), { in: 0, out: 0 }));
   /** About how many tokens the next question sends: the chat so far, what goes with it, and the question. */
@@ -139,6 +150,20 @@ export class AIChat {
   readonly current = computed(() => this.chats().find(c => c.id === this.currentId()) ?? null);
 
   constructor() {
+    void this.loadChats();
+    // the agent tools choice was kept in the browser before 0.33: move it into the settings once
+    effect(() => {
+      const st = this.ui.settings(); if (!st) return;
+      untracked(() => {
+        const old = store(KEY_TOOLS); if (!old) return;
+        try {
+          const t = JSON.parse(old) as Record<string, boolean>;
+          const off = Object.entries(t).filter(([, on]) => on === false).map(([k]) => k);
+          if (off.length && !(st.ai?.agentToolsOff ?? []).length) void this.ui.saveSettings({ ...st, ai: { ...(st.ai ?? {}), agentToolsOff: off } });
+        } catch { /* ignore */ }
+        drop(KEY_TOOLS);
+      });
+    });
     // right-click → Explain with AI / Ask AI for a Command open the panel
     effect(() => {
       const r = this.ui.aiReq();
@@ -154,8 +179,26 @@ export class AIChat {
 
   // ---- panel ----
   show(on = true) { this.open.set(on); }
-  setDock(d: Dock) { this.dock.set(d); save(KEY_DOCK, d); }
-  setWidth(w: number) { const v = Math.max(320, Math.min(900, Math.round(w))); this.width.set(v); save(KEY_W, String(v)); }
+  setDock(d: Dock) { this.dock.set(d); save(KEY_DOCK, d); this.persist(); }
+  setWidth(w: number) { const v = Math.max(320, Math.min(900, Math.round(w))); this.width.set(v); save(KEY_W, String(v)); this.persist(); }
+
+  /** Reads the chats from the data folder; chats kept in the browser by an earlier version move there once. */
+  private async loadChats() {
+    try {
+      const raw = await this.backend.aiChatsLoad();
+      if (raw) {
+        const v = JSON.parse(raw) as { chats?: Chat[]; dock?: Dock; width?: number };
+        if (Array.isArray(v.chats)) this.chats.set([...this.chats(), ...v.chats.filter(c => !this.chats().some(x => x.id === c.id))]);
+        if (v.dock) this.dock.set(v.dock);
+        if (v.width) this.width.set(v.width);
+      } else {
+        const old = browserChats();
+        if (old.length) { this.chats.set(old); this.loaded = true; this.persist(); }
+      }
+      drop(KEY_CHATS);
+    } catch { this.chats.set(browserChats()); }
+    this.loaded = true;
+  }
 
   /** Opens the panel for the active tab: the selection, else the whole terminal. */
   start(opts: { text?: string; tabId?: string; suggest?: boolean } = {}) {
@@ -388,9 +431,14 @@ export class AIChat {
   }
   private touch(chatId: string) { this.chats.update(l => l.map(c => c.id === chatId ? { ...c, msgs: [...c.msgs] } : c)); }
   /** Chats are kept on this computer; the device output that went with them is not. */
+  private saving?: ReturnType<typeof setTimeout>;
   persist() {
-    const keep = this.chats().slice(0, MAX_CHATS).map(c => ({ ...c, msgs: c.msgs.map(m => ({ ...m, wire: m.role === 'assistant' ? m.wire : undefined, images: (m.images ?? []).map(i => ({ ...i, data: '', url: '' })) })) }));
-    save(KEY_CHATS, JSON.stringify(keep));
+    if (!this.loaded) return;
+    clearTimeout(this.saving);
+    this.saving = setTimeout(() => {
+      const keep = this.chats().slice(0, MAX_CHATS).map(c => ({ ...c, msgs: c.msgs.map(m => ({ ...m, wire: m.role === 'assistant' ? m.wire : undefined, images: (m.images ?? []).map(i => ({ ...i, data: '', url: '' })) })) }));
+      void this.backend.aiChatsSave(JSON.stringify({ version: 1, chats: keep, dock: this.dock(), width: this.width() })).catch(() => {});
+    }, 300);
   }
 }
 
@@ -459,4 +507,5 @@ async function waitFor<T>(f: () => T | undefined | null, ms: number): Promise<T 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 function store(k: string) { try { return localStorage.getItem(k) ?? ''; } catch { return ''; } }
 function save(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* full or blocked */ } }
-function loadChats(): Chat[] { try { const v = JSON.parse(localStorage.getItem(KEY_CHATS) ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; } }
+function browserChats(): Chat[] { try { const v = JSON.parse(localStorage.getItem(KEY_CHATS) ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; } }
+function drop(k: string) { try { localStorage.removeItem(k); } catch { /* blocked */ } }

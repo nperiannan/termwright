@@ -1317,7 +1317,7 @@ A translation is a plain text list in the source (`frontend/src/app/i18n/ru.ts`,
 
 - the **installed** version (and the commit, for a nightly build);
 - the **latest stable release** with its date and *What's new*; if it is newer, **Download** fetches the installer for this computer (macOS DMG, Windows setup.exe, Linux .deb) into the Downloads folder and **Open Installer** starts it. Termwright never replaces itself silently;
-- a **nightly build**, only when one exists that is newer than what you run (Termwright asks GitHub whether the nightly commit is ahead of yours, so an older nightly is never offered). Nightly builds are untested: they may crash or change or lose settings and sessions. **Back Up Now** saves your settings and sessions to `Documents/Termwright Backups/termwright-backup-<date>.zip` (passwords stay in the OS keychain), and the nightly download is enabled only after a backup or after you tick *I have a backup and accept the risk*. To restore, quit Termwright and unzip the backup over the data folder (§16).
+- a **nightly build**, only when one exists that is newer than what you run (Termwright asks GitHub whether the nightly commit is ahead of yours, so an older nightly is never offered). Nightly builds are untested: they may crash or change or lose settings and sessions. **Back Up Now** saves your settings and sessions to `Documents/Termwright Backups/termwright-backup-<date>.zip` (passwords stay in the OS keychain), and the nightly download is enabled only after a backup or after you tick *I have a backup and accept the risk*. To restore, use **Settings → General → Backup → Restore from Backup…**.
 
 Options → Global Options → **Updates** decides when you are told about updates:
 
@@ -1455,6 +1455,7 @@ How the parts fit together - Termwright on your computer, your devices, and the 
 | What | Where |
 |---|---|
 | Data folder | macOS `~/Library/Application Support/Termwright`, Windows `%APPDATA%\Termwright`, Linux `~/.config/Termwright` (override with the `TERMWRIGHT_HOME` environment variable) |
+| Backup and restore | Settings → General → Backup: **Back Up Now** writes `Documents/Termwright Backups/termwright-backup-<date>.zip` (the data folder without logs, and the sessions folder) - settings, sessions, accounts, library, device types, AI chats (`ai-chats.json`) and team links; passwords and keys stay in the OS keychain. **Restore from Backup…** backs up the current state first, closes Termwright and puts the backup back when it starts again. |
 | Sessions | `<data>/Config/Sessions/**.ini` (or the folder set in Global Options) |
 | Device types, command library, workspaces, folder defaults, alerts | `<data>/settings.json` |
 | Window size and position | remembered in `<data>/settings.json` |

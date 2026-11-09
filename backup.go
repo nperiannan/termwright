@@ -2,12 +2,15 @@ package main
 
 import (
 	"archive/zip"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/termwright/termwright/internal/config"
 )
 
 // BackupConfig writes a zip of the settings, sessions and other configuration
@@ -87,4 +90,29 @@ func (a *App) BackupConfig() (string, error) {
 		return "", err
 	}
 	return dest, nil
+}
+
+// RestoreResult: what a restore will bring back, and where the copy of the
+// settings from before it went.
+type RestoreResult struct {
+	config.RestoreInfo
+	Before string `json:"before"`
+}
+
+// RestoreConfig restores a backup made with BackupConfig. The settings as
+// they are now are backed up first; the backup is unpacked and applied when
+// Termwright starts again (the window then closes).
+func (a *App) RestoreConfig(zipPath string) (RestoreResult, error) {
+	if err := a.ready(); err != nil {
+		return RestoreResult{}, err
+	}
+	before, err := a.BackupConfig()
+	if err != nil {
+		return RestoreResult{}, fmt.Errorf("could not back up the current settings first: %w", err)
+	}
+	info, err := config.StageRestore(a.cfg.DataDir(), zipPath)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	return RestoreResult{RestoreInfo: info, Before: before}, nil
 }
