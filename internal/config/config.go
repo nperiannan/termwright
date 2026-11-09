@@ -134,14 +134,15 @@ type Settings struct {
 	ExosPortColors       bool                         `json:"exosPortColors"`       // set once when the Network set got the EXOS port-state keywords (0.33.0)
 	FactRulesAdded       bool                         `json:"factRulesAdded"`       // set once when the built-in device types got their fact rules (0.21.0)
 	KeywordsOn           bool                         `json:"keywordsOn"`
-	Language             string                       `json:"language"`            // interface language: "" = English, "ru" = Russian (partial)
-	IconStyle            string                       `json:"iconStyle"`           // device and session icons: "" = coloured tiles, "glyph" = the symbol only
-	CompactRows          bool                         `json:"compactRows"`         // modern layout: one-line Session Manager rows
-	WelcomeSeen          string                       `json:"welcomeSeen"`         // version whose welcome flow was finished or skipped ("0.21")
-	HideTerminalBar      bool                         `json:"hideTerminalBar"`     // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
-	TerminalScheme       string                       `json:"terminalScheme"`      // scheme name or "Auto" (follow the UI theme)
-	ForceTermScheme      bool                         `json:"forceTerminalScheme"` // global scheme wins over session schemes
-	CursorStyle          string                       `json:"cursorStyle"`         // block | underline | bar
+	Language             string                       `json:"language"`               // interface language: "" = English, "ru" = Russian (partial)
+	IconStyle            string                       `json:"iconStyle"`              // device and session icons: "" = coloured tiles, "glyph" = the symbol only
+	QuickButtons         string                       `json:"quickButtons,omitempty"` // start page buttons: "" = raised slabs, "keycap", "glow"
+	CompactRows          bool                         `json:"compactRows"`            // modern layout: one-line Session Manager rows
+	WelcomeSeen          string                       `json:"welcomeSeen"`            // version whose welcome flow was finished or skipped ("0.21")
+	HideTerminalBar      bool                         `json:"hideTerminalBar"`        // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
+	TerminalScheme       string                       `json:"terminalScheme"`         // scheme name or "Auto" (follow the UI theme)
+	ForceTermScheme      bool                         `json:"forceTerminalScheme"`    // global scheme wins over session schemes
+	CursorStyle          string                       `json:"cursorStyle"`            // block | underline | bar
 	CursorBlink          bool                         `json:"cursorBlink"`
 	Scrollback           int                          `json:"scrollback"`
 	CopyOnSelect         bool                         `json:"copyOnSelect"`

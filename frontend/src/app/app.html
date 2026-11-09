@@ -179,12 +179,16 @@
               <input [(ngModel)]="homeText" (keydown.enter)="homeGo()" spellcheck="false" autocomplete="off" placeholder="Search or connect…" />
               <span class="eg">voss 10.1.1.1 · ssh admin&#64;host · serial COM3</span>
             </label>
-            <div class="qa">
-              <button (click)="action('quick-connect')"><app-icon name="quick" [size]="15" />Quick Connect</button>
-              <button (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" [size]="15" />New Session</button>
-              <button (click)="action('local-shell')"><app-icon name="shell" [size]="15" />Local Shell</button>
-              <button (click)="action('import')"><app-icon name="import" [size]="15" />Import</button>
-              <button (click)="action('discover')"><app-icon name="radar" [size]="15" />Discover Devices</button>
+            <div [class]="'qa qs-' + qaStyle()">
+              @for (b of quickButtons; track b.a) {
+                <button type="button" [class]="b.c" (click)="quick(b.a)" [title]="b.label + (scLabel(b.a) ? ' (' + scLabel(b.a) + ')' : '')">
+                  @switch (qaStyle()) {
+                    @case ('keycap') { <span class="top"><app-icon [name]="b.icon" [size]="16" />@if (scLabel(b.a)) { <kbd>{{ scLabel(b.a) }}</kbd> }</span><span class="nm">{{ b.label }}</span> }
+                    @case ('glow') { <span class="ic"><app-icon [name]="b.icon" [size]="19" /></span><span class="nm">{{ b.label }}<small>{{ b.hint }}</small></span> }
+                    @default { <app-icon [name]="b.icon" [size]="16" /><span class="nm">{{ b.label }}</span> }
+                  }
+                </button>
+              }
             </div>
             @for (sec of [{ t: 'Favourites', l: homeFavs(), more: false }, { t: 'Recent', l: homeRecent(), more: true }]; track sec.t) {
               @if (sec.l.length) {

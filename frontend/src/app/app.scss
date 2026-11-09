@@ -182,11 +182,6 @@ app-command-window { flex: none; }
   .eg { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); color: var(--faint); white-space: nowrap; }
   input { min-width: 150px !important; }
   &:focus-within .eg { display: none; } }
-.qa { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 40px;
-  button { flex: 1 1 140px; height: 40px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; border: 1px solid var(--line); border-radius: var(--r);
-    background: var(--surface); color: var(--text); font-weight: 500;
-    app-icon { color: var(--accent); }
-    &:hover { background: var(--surface-2); border-color: var(--border); } } }
 .home h3 { display: flex; align-items: center; margin: 0 0 12px; padding: 0 2px; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint);
   .hlinks { margin-left: auto; display: flex; gap: 14px; }
   a { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--accent); cursor: pointer; }

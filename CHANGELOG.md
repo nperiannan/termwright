@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Start page buttons in three styles** - *Raised* (the default: a thick edge, they lift and press down), *Keycaps* (like keyboard keys, with the shortcut) or *Glow cards* (a round icon glowing in the action's colour). Each action has its own colour. Choose in Settings → General or on the Welcome screen.
 * **Settings → AI Assistant: Model is a drop-down list** of the models the service offers (loaded when opened, readable names such as *Sonnet 5.5*), and you can still type a model name. For Claude Code it lists the newest of each family (Opus, Sonnet, Haiku…) and every version the installed Claude Code knows (read from the program, nothing sent).
 * **Claude Code effort** (Low, Medium, High, Extra high, Max, or the model's default) in Settings → AI Assistant and in the AI panel's model menu; the panel shows the model and effort in use.
 * **Switches look right:** the knob is centred and fills the switch (a border from the text-box style pushed it down).

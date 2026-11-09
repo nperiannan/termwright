@@ -1,0 +1,53 @@
+/* Termwright start page: the quick buttons, in three styles (global so the app component stays small) */
+/* start page buttons (Settings → General → Start page buttons): each action keeps its colour */
+.qa { --c-quick: #f5b942; --c-new: #5aa9ff; --c-shell: #4ade80; --c-import: #a78bfa; --c-disc: #2dd4bf;
+  display: flex; flex-wrap: wrap; gap: 12px; margin: 14px 0 40px;
+  button { flex: 1 1 140px; min-width: 0; height: auto; padding: 0; margin: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;
+    transition: transform .25s cubic-bezier(.2, .8, .2, 1), box-shadow .25s, border-color .2s, background .2s; }
+  .q { --c: var(--c-quick); } .n { --c: var(--c-new); } .s { --c: var(--c-shell); } .im { --c: var(--c-import); } .d { --c: var(--c-disc); }
+  app-icon { color: var(--c); display: inline-flex; }
+  .nm { overflow: hidden; text-overflow: ellipsis; }
+  small { display: block; color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); font-weight: 400; }
+  kbd { font: 500 calc(10.5px * var(--ui-scale, 1)) var(--ui-font); color: var(--muted); border: 1px solid rgba(255, 255, 255, .14); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; } }
+:root.light .qa { --c-quick: #d48a06; --c-new: #1f7ae0; --c-shell: #16a34a; --c-import: #7c3aed; --c-disc: #0d9488; kbd { border-color: var(--border); } }
+
+/* raised slabs: a thick bottom edge; they lift under the pointer and press down */
+.qa.qs-slab button { display: flex; align-items: center; justify-content: center; gap: 9px; height: 46px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .08);
+  background: linear-gradient(180deg, #2a2c32, #1d1e23);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .10) inset, 0 -2px 0 rgba(0, 0, 0, .35) inset, 0 3px 0 #0a0b0d, 0 10px 18px -8px rgba(0, 0, 0, .8);
+  app-icon { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c) 55%, transparent)); }
+  &:hover { transform: translateY(-2px); box-shadow: 0 1px 0 rgba(255, 255, 255, .12) inset, 0 -2px 0 rgba(0, 0, 0, .35) inset, 0 5px 0 #0a0b0d, 0 16px 24px -8px rgba(0, 0, 0, .85); }
+  &:active { transform: translateY(2px); transition-duration: .06s; box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 1px 0 #0a0b0d, 0 4px 8px -4px rgba(0, 0, 0, .7); } }
+:root.light .qa.qs-slab button { border-color: rgba(22, 24, 28, .10); background: linear-gradient(180deg, #fff, #f1f2f4);
+  box-shadow: 0 1px 0 #fff inset, 0 -2px 0 rgba(22, 24, 28, .05) inset, 0 3px 0 #d5d8dd, 0 10px 16px -8px rgba(22, 24, 28, .3);
+  app-icon { filter: none; }
+  &:hover { box-shadow: 0 1px 0 #fff inset, 0 5px 0 #d5d8dd, 0 16px 22px -8px rgba(22, 24, 28, .35); }
+  &:active { box-shadow: 0 1px 0 #fff inset, 0 1px 0 #d5d8dd, 0 3px 6px -3px rgba(22, 24, 28, .3); } }
+
+/* keycaps: like keyboard keys, with the shortcut; they push down */
+.qa.qs-keycap { margin-bottom: 44px; }
+.qa.qs-keycap button { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; height: 70px; padding: 9px 12px 12px; border-radius: 11px; text-align: left;
+  border: 1px solid #000; background: linear-gradient(180deg, #34363d, #26272c);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .14) inset, 0 6px 0 #15161a, 0 6px 0 1px #000, 0 14px 18px -6px rgba(0, 0, 0, .8);
+  .top { display: flex; width: 100%; align-items: center; } kbd { margin-left: auto; } .nm { max-width: 100%; }
+  &:hover { transform: translateY(-1px); background: linear-gradient(180deg, #3a3c44, #2a2b31); }
+  &:active { transform: translateY(4px); transition-duration: .06s; box-shadow: 0 1px 0 rgba(255, 255, 255, .1) inset, 0 2px 0 #15161a, 0 2px 0 1px #000, 0 4px 8px -4px rgba(0, 0, 0, .8); } }
+:root.light .qa.qs-keycap button { border-color: #c8ccd2; background: linear-gradient(180deg, #fff, #eef0f2);
+  box-shadow: 0 1px 0 #fff inset, 0 6px 0 #d3d7dc, 0 6px 0 1px #bfc4ca, 0 14px 16px -6px rgba(22, 24, 28, .3);
+  &:hover { background: linear-gradient(180deg, #fff, #f5f6f8); }
+  &:active { box-shadow: 0 1px 0 #fff inset, 0 2px 0 #d3d7dc, 0 2px 0 1px #bfc4ca; } }
+
+/* glowing cards: a round icon in the action's colour; they rise with a glow */
+.qa.qs-glow button { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px 13px; border-radius: 16px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 9%, var(--surface)), var(--surface));
+  box-shadow: 0 20px 30px -18px rgba(0, 0, 0, .8), 0 1px 0 rgba(255, 255, 255, .06) inset;
+  .ic { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
+    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 35%, transparent), color-mix(in srgb, var(--c) 10%, transparent) 70%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent), 0 8px 18px -6px color-mix(in srgb, var(--c) 60%, transparent); }
+  .nm { text-align: center; max-width: 100%; }
+  &:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--c) 40%, var(--line)); box-shadow: 0 26px 34px -18px color-mix(in srgb, var(--c) 55%, rgba(0, 0, 0, .8)), 0 1px 0 rgba(255, 255, 255, .08) inset; }
+  &:active { transform: translateY(-1px); transition-duration: .06s; } }
+:root.light .qa.qs-glow button { box-shadow: 0 18px 26px -18px rgba(22, 24, 28, .4), 0 1px 0 #fff inset;
+  &:hover { box-shadow: 0 24px 30px -18px color-mix(in srgb, var(--c) 45%, rgba(22, 24, 28, .4)), 0 1px 0 #fff inset; } }
+.qa button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .qa button, .qa button:hover, .qa button:active { transform: none; transition: none; } }

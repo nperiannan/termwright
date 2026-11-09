@@ -117,6 +117,17 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   }
                   @if (isMac) { <div class="hint">On macOS the window's own title bar changes the next time Termwright starts.</div> }
                 </div></div>
+                <div class="f"><label>Start page buttons</label>
+                <div>
+                  @if (modern()) {
+                    <div class="seg w3"><button type="button" [class.on]="!s.quickButtons" (click)="s.quickButtons = ''">Raised</button><button type="button" [class.on]="s.quickButtons === 'keycap'" (click)="s.quickButtons = 'keycap'">Keycaps</button><button type="button" [class.on]="s.quickButtons === 'glow'" (click)="s.quickButtons = 'glow'">Glow cards</button></div>
+                  } @else {
+                  <select name="qbtn" [ngModel]="s.quickButtons || ''" (ngModelChange)="s.quickButtons = $event">
+                    <option value="">Raised - a thick edge; they lift and press down</option><option value="keycap">Keycaps - like keyboard keys, with the shortcut</option><option value="glow">Glow cards - a round icon that glows in its colour</option>
+                  </select>
+                  }
+                  <div class="hint">Quick Connect, New Session, Local Shell, Import and Discover Devices on the start page (Modern layout).</div>
+                </div></div>
                 <div class="f"><label>Icons</label>
                 <div>
                   @if (modern()) {

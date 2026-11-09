@@ -95,15 +95,9 @@
   /* start page: the aurora shows through the work area while no tab is open */
   .home { background: transparent; container-type: inline-size; }
   .terminals:has(.home) { background: transparent; }
-  /* the search bar and the quick buttons are 3D like the cards: thinner slabs; the buttons lift under the pointer and press down */
+  /* the search bar is 3D like the cards: a thinner slab (the quick buttons: app.scss) */
   .bigsearch { background: var(--g-slab-face); border-color: var(--g-slab-rim); border-radius: 16px; box-shadow: var(--g-slab-thin);
     &:focus-within { border-color: rgba(90, 169, 255, .55); box-shadow: var(--g-slab-thin), 0 0 0 3px rgba(90, 169, 255, .18); } }
-  .qa button { background: var(--g-slab-face); border-color: var(--g-slab-rim); border-radius: 12px; box-shadow: var(--g-slab-btn);
-    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
-    app-icon { filter: var(--g-icon-lift); }
-    &:hover { background: var(--g-slab-face); border-color: rgba(90, 169, 255, .45); box-shadow: var(--g-slab-btn-hover); transform: translateY(-2px); }
-    &:active { box-shadow: var(--g-slab-btn-down); transform: translateY(3px); } }
-  @media (prefers-reduced-motion: reduce) { .qa button:hover, .qa button:active { transform: none; } }
   .home-in { max-width: 960px; }
   /* start page cards only (.card and .cards are also used in dialogs); three per row; fewer when the start page is narrow (a side panel open, a small window), never squeezed */
   .home .cards { --cgap: 26px; grid-template-columns: repeat(auto-fill, minmax(max(220px, calc((100% - 2 * var(--cgap)) / 3)), 1fr)); gap: calc(var(--cgap) + 8px) var(--cgap);

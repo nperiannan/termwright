@@ -124,6 +124,16 @@ export class App implements OnInit {
   readonly isMac = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac OS');
   /** The shortcut of a menu action, for tooltips ("⌘N"). */
   scLabel(action: string) { return shortcutOf(action, this.isMac); }
+  /** Start page buttons: raised slabs (default), keycaps or glowing cards - Settings → General. */
+  readonly qaStyle = computed(() => this.settings()?.quickButtons || 'slab');
+  readonly quickButtons = [
+    { a: 'quick-connect', c: 'q', icon: 'quick', label: 'Quick Connect', hint: 'Host or address' },
+    { a: 'new-session', c: 'n', icon: 'plus', label: 'New Session', hint: 'Save a device' },
+    { a: 'local-shell', c: 's', icon: 'shell', label: 'Local Shell', hint: 'This computer' },
+    { a: 'import', c: 'im', icon: 'import', label: 'Import', hint: 'Other apps, CSV' },
+    { a: 'discover', c: 'd', icon: 'radar', label: 'Discover Devices', hint: 'Scan a network' },
+  ];
+  quick(a: string) { if (a === 'new-session') this.ui.newSession(this.ui.currentFolder()); else void this.action(a); }
 
   // ---- theme switch (top right) ----
   readonly systemLight = signal(false);

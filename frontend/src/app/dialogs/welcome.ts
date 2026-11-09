@@ -48,6 +48,15 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
             <button type="button" [class.on]="!classic()" (click)="ui.patchSettings({ layout: '' })"><b>Modern</b><small>tabs and search in the title bar</small></button>
             <button type="button" [class.on]="classic()" (click)="ui.patchSettings({ layout: 'classic' })"><b>Classic</b><small>toolbar, tab strip and menu bar</small></button>
           </div>
+          @if (!classic()) {
+            <div class="lbl">Start page buttons</div>
+            <div class="seg qbs">
+              @for (q of qbs; track q.v) {
+                <button type="button" [class.on]="(ui.settings()?.quickButtons || '') === q.v" (click)="ui.patchSettings({ quickButtons: q.v })">
+                  <span [class]="'qb ' + (q.v || 'slab')"><i></i>Connect</span><small>{{ q.label }}</small></button>
+              }
+            </div>
+          }
         }
         @case (1) {
           <h2>Bring your sessions</h2>
@@ -148,6 +157,14 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
         small { font-size: 11px; color: var(--muted); font-weight: 400; }
         &.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); } } }
     .seg.wide button { height: 52px; font-size: calc(13px * var(--ui-scale, 1)); }
+    /* small samples of the start page buttons */
+    .seg.qbs button { height: 70px; gap: 6px; }
+    .qb { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 7px; color: var(--text);
+      i { width: 7px; height: 7px; border-radius: 50%; background: #5aa9ff; } }
+    .qb.slab { background: linear-gradient(180deg, var(--surface), var(--surface-2)); border: 1px solid var(--line); box-shadow: 0 2px 0 var(--border), 0 4px 8px -4px rgba(0, 0, 0, .5); }
+    .qb.keycap { flex-direction: column; align-items: flex-start; gap: 3px; padding: 4px 9px 6px; border: 1px solid var(--border); background: linear-gradient(180deg, var(--surface-2), var(--surface)); box-shadow: 0 3px 0 var(--border); }
+    .qb.glow { flex-direction: column; gap: 3px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface);
+      i { width: 12px; height: 12px; box-shadow: 0 0 8px #5aa9ff; } }
     .found { display: flex; flex-direction: column; gap: 6px; }
     .src { display: grid; grid-template-columns: 110px 1fr auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2);
       .app { font-weight: 600; } .path { color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -201,6 +218,7 @@ export class Welcome {
     { v: 'system', label: 'System', icon: 'theme-system' },
   ];
   readonly sizes = UI_SIZES;
+  readonly qbs: { v: '' | 'keycap' | 'glow'; label: string }[] = [{ v: '', label: 'Raised' }, { v: 'keycap', label: 'Keycaps' }, { v: 'glow', label: 'Glow cards' }];
   readonly theme = computed(() => { const t = this.ui.settings()?.theme; return t === 'light' || t === 'dark' ? t : 'system'; });
   readonly size = computed(() => uiFontSize(this.ui.settings()?.uiFontSize));
   readonly classic = computed(() => this.ui.settings()?.layout === 'classic');
