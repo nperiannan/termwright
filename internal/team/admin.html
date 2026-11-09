@@ -150,7 +150,7 @@ const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch {
 
 // what the person typed and picked survives every refresh
 const ui = { page: store.get('tw.page', 'overview'), days: Number(store.get('tw.days', '30')), basis: store.get('tw.basis', 'all') === 'work' ? 'work' : 'all', theme: store.get('tw.theme', 'system'), filter: '', sel: new Set(), psel: new Set(), ssel: new Set(),
-  closed: new Set(), targets: '', community: '', scanFolder: '', approveFolder: '', onlyNet: store.get('tw.onlyNet', '1') === '1', hideKnown: store.get('tw.hideKnown', '1') === '1', dts: {}, rtab: 'devices', rq: '', invFolder: '', invType: '', invStatus: 'all', rtype: '', unusedOnly: false,
+  closed: new Set(), targets: '', community: '', scanFolder: '', approveFolder: '', onlyNet: store.get('tw.onlyNet', '1') === '1', hideKnown: store.get('tw.hideKnown', '1') === '1', dts: {}, rtab: 'devices', rq: '', invFolder: '', invType: '', invStatus: 'all', rtype: '', unusedOnly: false, freeOnly: false,
   sort: { devices: ['hours', -1], members: ['hours', -1], res: ['s', -1], sessions: ['s', -1] } };
 let st = null, scan = null, usage = null, lastJSON = '', msgTimer = 0;
 
@@ -393,8 +393,8 @@ function th(tab, k, label, num) { const [sk, dir] = ui.sort[tab]; return `<th da
 function reportRows() {
   const f = figures(); if (!f) return { f: null };
   const q = ui.rq.toLowerCase();
-  const devs = sortBy(f.list.filter(p => (!q || [p.d.name, p.d.host, p.d.folder, p.d.deviceType].join(' ').toLowerCase().includes(q)) && (!ui.rtype || (p.d.deviceType || '(no type)') === ui.rtype) && (!ui.unusedOnly || f.unused.includes(p))), 'devices',
-    (p, k) => ({ name: p.d.name, folder: p.d.folder, type: p.d.deviceType, hours: p.open, sessions: p.sessions, users: p.users.size, util: p.util, res: p.res, resN: p.resN, con: p.con, peak: p.peak, last: p.last })[k]);
+  const devs = sortBy(f.list.filter(p => (!q || [p.d.name, p.d.host, p.d.folder, p.d.deviceType].join(' ').toLowerCase().includes(q)) && (!ui.rtype || (p.d.deviceType || '(no type)') === ui.rtype) && (!ui.unusedOnly || f.unused.includes(p)) && (!ui.freeOnly || nowOf(p.d).rank === 0)), 'devices',
+    (p, k) => ({ name: p.d.name, folder: p.d.folder, type: p.d.deviceType, now: nowOf(p.d).rank, hours: p.open, sessions: p.sessions, users: p.users.size, util: p.util, res: p.res, resN: p.resN, con: p.con, peak: p.peak, last: p.last })[k]);
   const mems = sortBy(f.mem.filter(m => !q || m.name.toLowerCase().includes(q)), 'members', (m, k) => ({ name: m.name, hours: m.open, sessions: m.sessions, devs: m.devs.size, res: m.res, resN: m.resN, con: m.con, last: m.last })[k]);
   const name = id => (st.inventory.devices.find(d => d.id === id) || {}).name;
   const resv = sortBy(usage.res.filter(r => r.e >= f.a).map(r => ({ ...r, dev: name(r.d) || r.dn, len: r.e - r.s, early: !r.active && r.e < r.u - 60 })).filter(r => !q || (r.dev + ' ' + r.n + ' ' + r.note).toLowerCase().includes(q)), 'res', (r, k) => ({ dev: r.dev, n: r.n, s: r.s, len: r.len })[k]);
@@ -406,10 +406,10 @@ function reports() {
   const types = [...new Set(f.list.map(p => p.d.deviceType || '(no type)'))].sort();
   const tabs = [['devices', `Devices (${f.list.length})`], ['members', `Members (${f.mem.length})`], ['res', `Reservations (${resv.length})`], ['sessions', `Sessions (${sess.length})`]];
   let body = '';
-  if (ui.rtab === 'devices') body = `<table><thead><tr>${th('devices', 'name', 'Device')}${th('devices', 'type', 'Type')}${th('devices', 'folder', 'Folder')}${th('devices', 'hours', 'Hours open', 1)}${th('devices', 'util', 'Utilization')}${th('devices', 'sessions', 'Sessions', 1)}${th('devices', 'users', 'Users', 1)}${th('devices', 'peak', 'Peak at once', 1)}${th('devices', 'res', 'Reserved', 1)}${th('devices', 'resN', 'Reservations', 1)}${th('devices', 'con', 'Conflicts', 1)}${th('devices', 'last', 'Last used')}</tr></thead><tbody>
-    ${devs.map(p => `<tr><td>${esc(p.d.name)}<div class="muted small mono">${esc(p.d.host)}</div></td><td>${esc(p.d.deviceType)}</td><td class="muted">${esc(p.d.folder)}</td><td class="num">${hrs(p.open)} h</td><td>${meter(p.util)}</td>
+  if (ui.rtab === 'devices') body = `<table><thead><tr>${th('devices', 'name', 'Device')}${th('devices', 'type', 'Type')}${th('devices', 'folder', 'Folder')}${th('devices', 'now', 'Now')}${th('devices', 'hours', 'Hours open', 1)}${th('devices', 'util', 'Utilization')}${th('devices', 'sessions', 'Sessions', 1)}${th('devices', 'users', 'Users', 1)}${th('devices', 'peak', 'Peak at once', 1)}${th('devices', 'res', 'Reserved', 1)}${th('devices', 'resN', 'Reservations', 1)}${th('devices', 'con', 'Conflicts', 1)}${th('devices', 'last', 'Last used')}</tr></thead><tbody>
+    ${devs.map(p => `<tr><td>${esc(p.d.name)}<div class="muted small mono">${esc(p.d.host)}</div></td><td>${esc(p.d.deviceType)}</td><td class="muted">${esc(p.d.folder)}</td><td>${nowOf(p.d).html}</td><td class="num">${hrs(p.open)} h</td><td>${meter(p.util)}</td>
       <td class="num">${p.sessions}</td><td class="num" title="${esc([...p.users].join(', '))}">${p.users.size}</td><td class="num">${p.peak > 1 ? `<span class="pill warn">${p.peak}</span>` : p.peak}</td><td class="num">${p.res ? dur(p.res) : '<span class="muted">-</span>'}</td><td class="num">${p.resN}</td>
-      <td class="num">${p.con ? `<span class="pill bad">${p.con}</span>` : '<span class="muted">0</span>'}</td><td>${p.last ? `<span title="${esc(when(p.last))}">${ago(p.last * 1000)} ago</span>` : f.unused.includes(p) ? '<span class="pill">not used</span>' : p.isNew ? '<span class="pill in">new</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="12" class="empty">No device matches.</td></tr>'}</tbody></table>`;
+      <td class="num">${p.con ? `<span class="pill bad">${p.con}</span>` : '<span class="muted">0</span>'}</td><td>${p.last ? `<span title="${esc(when(p.last))}">${ago(p.last * 1000)} ago</span>` : f.unused.includes(p) ? '<span class="pill">not used</span>' : p.isNew ? '<span class="pill in">new</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="13" class="empty">No device matches.</td></tr>'}</tbody></table>`;
   if (ui.rtab === 'members') body = `<table><thead><tr>${th('members', 'name', 'Member')}${th('members', 'hours', 'Hours open', 1)}${th('members', 'sessions', 'Sessions', 1)}${th('members', 'devs', 'Devices used', 1)}${th('members', 'res', 'Reserved', 1)}${th('members', 'resN', 'Reservations', 1)}${th('members', 'con', 'Conflicts', 1)}${th('members', 'last', 'Last active')}</tr></thead><tbody>
     ${mems.map(m => `<tr><td>${esc(m.name)}</td><td class="num">${hrs(m.open)} h</td><td class="num">${m.sessions}</td><td class="num">${m.devs.size}</td><td class="num">${m.res ? dur(m.res) : '-'}</td><td class="num">${m.resN}</td><td class="num">${m.con || '<span class="muted">0</span>'}</td><td>${m.last ? ago(m.last * 1000) + ' ago' : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No activity in this period.</td></tr>'}</tbody></table>`;
   if (ui.rtab === 'res') body = `<table><thead><tr>${th('res', 'dev', 'Device')}${th('res', 'n', 'Reserved by')}${th('res', 's', 'From')}<th>To</th>${th('res', 'len', 'Length', 1)}<th>Status</th><th>Note</th></tr></thead><tbody>
@@ -420,7 +420,8 @@ function reports() {
   <div class="card"><div class="tabs">${tabs.map(([k, l]) => `<a data-rtab="${k}" class="${ui.rtab === k ? 'on' : ''}">${l}</a>`).join('')}</div>
     <div class="tool"><input data-k="rq" placeholder="Filter…" value="${esc(ui.rq)}" style="min-width:240px">
       ${ui.rtab === 'devices' ? `<select id="rtype"><option value="">All device types</option>${types.map(t => `<option ${ui.rtype === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
-      <label><input type="checkbox" id="unused" ${ui.unusedOnly ? 'checked' : ''}> Only devices not used</label>` : ''}
+      <label><input type="checkbox" id="unused" ${ui.unusedOnly ? 'checked' : ''}> Only devices not used</label>
+      <label title="Nobody has them open or reserved"><input type="checkbox" id="freeonly" ${ui.freeOnly ? 'checked' : ''}> Only free now (${f.list.filter(p => nowOf(p.d).rank === 0).length})</label>` : ''}
       <span class="sp"></span><button id="rcsv">Export CSV</button></div>
     <div class="scroll">${body}</div></div>`;
 }
@@ -428,8 +429,8 @@ function reportCSV() {
   const { f, devs, mems, resv, sess } = reportRows(), q = v => { v = String(v ?? ''); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   const iso = t => t ? new Date(t * 1000).toISOString() : '';
   let rows;
-  if (ui.rtab === 'devices') rows = [['device', 'address', 'type', 'folder', 'hours_open', 'utilization_pct', 'sessions', 'users', 'peak_at_once', 'reserved_hours', 'reservations', 'conflicts', 'last_used']]
-    .concat(devs.map(p => [p.d.name, p.d.host, p.d.deviceType, p.d.folder, (p.open / H).toFixed(2), (p.util * 100).toFixed(1), p.sessions, p.users.size, p.peak, (p.res / H).toFixed(2), p.resN, p.con, iso(p.last)]));
+  if (ui.rtab === 'devices') rows = [['device', 'address', 'type', 'folder', 'now', 'hours_open', 'utilization_pct', 'sessions', 'users', 'peak_at_once', 'reserved_hours', 'reservations', 'conflicts', 'last_used']]
+    .concat(devs.map(p => [p.d.name, p.d.host, p.d.deviceType, p.d.folder, nowOf(p.d).text, (p.open / H).toFixed(2), (p.util * 100).toFixed(1), p.sessions, p.users.size, p.peak, (p.res / H).toFixed(2), p.resN, p.con, iso(p.last)]));
   if (ui.rtab === 'members') rows = [['member', 'hours_open', 'sessions', 'devices_used', 'reserved_hours', 'reservations', 'conflicts', 'last_active']].concat(mems.map(m => [m.name, (m.open / H).toFixed(2), m.sessions, m.devs.size, (m.res / H).toFixed(2), m.resN, m.con, iso(m.last)]));
   if (ui.rtab === 'res') rows = [['device', 'reserved_by', 'from', 'to', 'hours', 'status', 'note']].concat(resv.map(r => [r.dev, r.n, iso(r.s), iso(r.active ? r.u : r.e), (r.len / H).toFixed(2), r.active ? 'active' : r.early ? 'released early' : 'ended', r.note]));
   if (ui.rtab === 'sessions') rows = [['device', 'who', 'opened', 'closed', 'hours']].concat(sess.map(u => [u.dev, u.n, iso(u.s), u.open ? '' : iso(u.e), (u.len / H).toFixed(2)]));
@@ -457,6 +458,14 @@ function kindOf(t) {
 }
 function devCell(name, host, type, extra) { const [k, i] = kindOf(type); return `<div class="dev"><span class="di k-${k}">${ico(i)}</span><div style="min-width:0"><b>${esc(name)}</b><span class="mono">${esc(host)}</span>${extra || ''}</div></div>`; }
 function liveOf(d) { return { u: (st.status.inUse || []).filter(x => sameDev(d, x.device)), r: (st.status.reserved || []).find(x => sameDev(d, x.device)) }; }
+// A device right now: free to use or reserve, open (by whom), reserved (by whom, until when). rank sorts free first.
+function nowOf(d) {
+  const l = liveOf(d);
+  if (l.r) return { rank: 2, text: 'reserved by ' + l.r.name + ' until ' + when(l.r.until), html: `<span class="pill bad" title="until ${esc(when(l.r.until))}${l.r.note ? ' - ' + esc(l.r.note) : ''}">🔒 ${esc(l.r.name.split(' ')[0])}</span>` + (l.u.length ? ` <span class="pill warn" title="${esc(l.u.map(x => x.name).join(', '))}">● ${l.u.length}</span>` : '') };
+  if (l.u.length) return { rank: 1, text: 'in use by ' + l.u.map(x => x.name).join(', '), html: `<span class="pill warn" title="${esc(l.u.map(x => x.name).join(', '))}">● ${esc(l.u.map(x => x.name.split(' ')[0]).join(', '))}</span>` };
+  if (!tracked(d.deviceType)) return { rank: 3, text: 'not tracked', html: '<span class="muted small">not tracked</span>' };
+  return { rank: 0, text: 'free', html: '<span class="pill in" title="Nobody has it open or reserved - free to use or reserve">free</span>' };
+}
 function invRows() {
   const f = figures(), fig = new Map((f ? f.list : []).map(p => [p.d.id, p])), q = ui.filter.toLowerCase();
   return st.inventory.devices.filter(d => {
@@ -479,7 +488,7 @@ function inventory() {
   const chip = (k, n, l) => `<div class="chipk ${ui.invStatus === k ? 'on' : ''}" data-ist="${k}"><b>${n}</b><span>${l}</span></div>`;
   const allOn = list.length && list.every(d => ui.sel.has(d.id));
   const rows = list.map(d => { const l = liveOf(d), p = fig.get(d.id);
-    const status = (l.u.length ? `<span class="pill warn" title="${esc(l.u.map(x => x.name).join(', '))}">● ${esc(l.u.map(x => x.name.split(' ')[0]).join(', '))}</span> ` : '') + (l.r ? `<span class="pill bad" title="until ${esc(when(l.r.until))}${l.r.note ? ' - ' + esc(l.r.note) : ''}">🔒 ${esc(l.r.name.split(' ')[0])}</span>` : '') || (!tracked(d.deviceType) ? `<span class="muted small" title="${d.deviceType ? 'This device type takes several logins at once' : 'No device type - give it one to count it'}">not tracked</span>` : p && f.unused.includes(p) ? '<span class="pill">not used</span>' : '<span class="muted small">free</span>');
+    const n = nowOf(d), status = n.rank === 0 && p && f.unused.includes(p) ? '<span class="pill">not used</span> <span class="pill in">free</span>' : n.html;
     return `<tr><td class="c"><input type="checkbox" data-sel="${d.id}" ${ui.sel.has(d.id) ? 'checked' : ''}></td>
       <td>${devCell(d.name, d.host + (d.port && d.port !== defPort(d.protocol) ? ':' + d.port : ''), d.deviceType)}</td>
       <td><div class="chips">${d.deviceType ? `<span class="tag">${esc(d.deviceType)}</span>` : ''}<span class="tag">${esc(d.protocol === 'SSH2' ? 'SSH' : d.protocol)}</span></div></td>
@@ -702,6 +711,7 @@ function help() {
     <p><b>Hours open</b> - time a member's Termwright had a terminal to the device connected. Two people at once count twice.</p>
     <p><b>Utilization</b> - hours open divided by all hours of the period (24 × 7), or by working hours (Monday to Friday, 9:00-18:00) with <i>Working hours</i> at the top. 10% of all hours is about 17 hours a week.</p>
     <p><b>Peak at once</b> - the most people with the device open at the same time. More than one often means the team needs more of that kind.</p>
+    <p><b>Now</b> - whether the device is free to use or reserve right now, who has it open, or who reserved it until when. <i>Only free now</i> lists just the free ones.</p>
     <p><b>Conflicts</b> - connections to a device someone else had reserved.</p>
     <p><b>Not used</b> - neither opened nor reserved in the period (devices added during it are marked <i>new</i>).</p>
     <h4>Roles</h4><p><b>Owner</b> - everything here, and manages co-owners. <b>Co-owner</b> - this admin page. <b>Member</b> - the team folder, pushing devices for approval, reserving.</p>
@@ -733,6 +743,7 @@ function wire() {
   on('[data-sort]', 'onclick', e => { const [tab, k] = e.currentTarget.dataset.sort.split(':'); const cur = ui.sort[tab]; ui.sort[tab] = [k, cur[0] === k ? -cur[1] : (['name', 'folder', 'type', 'dev', 'n'].includes(k) ? 1 : -1)]; render(); });
   on('#rtype', 'onchange', e => { ui.rtype = e.target.value; render(); });
   on('#unused', 'onchange', e => { ui.unusedOnly = e.target.checked; render(); });
+  on('#freeonly', 'onchange', e => { ui.freeOnly = e.target.checked; render(); });
   on('#rcsv', 'onclick', reportCSV);
   // inventory
   on('#add', 'onclick', () => deviceForm({ protocol: 'SSH2' }, 'New device', d => act(() => api('POST', '/api/admin/devices', { devices: [d] }), 'Added ' + d.name)));
