@@ -2,11 +2,17 @@
 
 Termwright is a terminal emulator and session manager for **SSH2, Telnet, Serial, Raw TCP and local shells**, with SFTP/SCP/ZMODEM/YMODEM/XMODEM file transfer, logon automation, key-login setup (including PuTTY `.ppk` keys) Kerberos, SSH certificates and FIDO2 keys, password-manager integration, and Python, VBScript or JavaScript scripting. It runs on macOS (Apple Silicon), Windows and Linux, and imports and exports the sessions of other terminal programs (SecureCRT®, PuTTY, KiTTY, SuperPuTTY, MobaXterm, OpenSSH).
 
-![Main window](screenshots/main.png)
+![The start page: favourites and recent sessions as cards](screenshots/main.png)
 
+| | |
+|---|---|
+| ![A switch with the AI assistant beside it](screenshots/ai-terminal.png) <br/>*A terminal with the [AI assistant](#ai-assistant-optional) beside it* | ![A VNC desktop in a tab](screenshots/vnc.png) <br/>*A [VNC](#remote-desktops-rdp-and-vnc) desktop in a tab* |
+
+> **New in 0.33:** an [AI assistant and agent](#ai-assistant-optional) beside the terminal (your own Claude login, Claude, OpenAI-compatible services or Ollama) that can connect to sessions and run commands - production always asks first - built-in [TFTP, FTP and HTTP servers](#file-servers-tftp-ftp-http), single sign-on for teams, start page buttons in three styles, and backup and restore in Settings.
+>
 > **New in 0.32:** [sync your own computers](#syncing-your-own-computers) through a shared folder, [Mosh](#mosh-roaming-ssh), Telnet over TLS and local echo, Escape and Tab in every dialog with screen reader labels, and for [teams](#teams-who-uses-which-device): *Tell Me When It Is Free*, handing the team over, backup and restore and a searchable activity log.
 >
-> **New in 0.21:** a **modern layout** (now the default - the classic one is a click away): tabs and search in the title bar, a [start page](#2-the-main-window) with your favourite and recent sessions, a [session side panel](#4-sessions-and-the-session-manager), new device icons and folders coloured by level, and every dialog redone. Also: [device facts](#device-facts) (model, version, MAC, uptime read after connecting - taught in two clicks), a [welcome flow](#first-start-welcome-and-master-password) with an optional **master password** and an **unlock window**, [SFTP](#sftp-browser) with clickable paths, a bookmark bar, check boxes for several files, **New File** and **Delete** on both sides, keyword highlighting on by default, **Save Screen As Image** and a shortcut for nearly every menu command.
+> **New in 0.21:** a **modern layout**: tabs and search in the title bar, a [start page](#2-the-main-window) with your favourite and recent sessions, a [session side panel](#4-sessions-and-the-session-manager), new device icons and folders coloured by level, and every dialog redone. Also: [device facts](#device-facts) (model, version, MAC, uptime read after connecting - taught in two clicks), a [welcome flow](#first-start-welcome-and-master-password) with an optional **master password** and an **unlock window**, [SFTP](#sftp-browser) with clickable paths, a bookmark bar, check boxes for several files, **New File** and **Delete** on both sides, keyword highlighting on by default, **Save Screen As Image** and a shortcut for nearly every menu command.
 >
 > **New in 0.11:** [Kerberos (GSSAPI) login](#kerberos-gssapi-login), [SSH certificates and FIDO2 security keys](#ssh-certificates-and-fido2-security-keys), [password managers](#password-managers) (1Password, Bitwarden, HashiCorp Vault, any command), **VBScript** logon scripts, and `crt.Screen.Get` / `CurrentRow` read the rendered screen.
 >
