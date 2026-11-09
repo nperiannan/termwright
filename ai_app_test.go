@@ -173,7 +173,7 @@ func TestAIClaudeCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(ans.Text, "-p --output-format text") || !strings.Contains(ans.Text, "--tools") || !strings.Contains(ans.Text, "Device type: EXOS") ||
+	if !strings.Contains(ans.Text, "-p --output-format json") || !strings.Contains(ans.Text, "--tools") || !strings.Contains(ans.Text, "Device type: EXOS") ||
 		!strings.Contains(ans.Text, "STDIN: My question: Why is port 3 down?") || strings.Contains(ans.Text, "TopSecret") || ans.Model != "Claude Code" || strings.Contains(ans.Text, "--model") {
 		t.Fatalf("answer %q (%s)", ans.Text, ans.Model)
 	}

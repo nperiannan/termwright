@@ -4,7 +4,7 @@ import { Backend } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { Tabs } from '../core/tabs.service';
 import { Icon } from './icon';
-import { AIChat, ChatMsg, Img, Step } from '../core/ai-chat.service';
+import { AGENT_TOOLS, AIChat, ChatMsg, Img, Step } from '../core/ai-chat.service';
 import { AIStatus } from '../core/models';
 import { tr } from '../core/i18n';
 
@@ -68,6 +68,7 @@ function spans(t: string): Span[] {
       <button type="button" class="primary" (click)="ui.openOptions('ai')">Open AI Settings…</button></div>
   } @else if (ai.view() === 'history') {
     <div class="conv hist">
+      <button type="button" class="newc wide" (click)="ai.newChat()" [disabled]="ai.busy()"><app-icon name="plus" [size]="13" />{{ tr('New Chat') }}</button>
       @for (c of ai.chats(); track c.id) {
         <div class="hrow" [class.on]="c.id === ai.currentId()" (click)="ai.openChat(c.id)" role="button" tabindex="0" (keydown.enter)="ai.openChat(c.id)">
           <div class="grow"><div class="ht">{{ c.title }}</div><div class="hint"><app-icon name="shell" [size]="11" /> {{ c.device || tr('no tab') }} · {{ ago(c.updated) }}</div></div>
@@ -75,6 +76,11 @@ function spans(t: string): Span[] {
       } @empty { <p class="hint pad">{{ tr('Your chats appear here. They stay on this computer; the device output sent with them is not kept.') }}</p> }
     </div>
   } @else {
+    <div class="sub">
+      <button type="button" class="ctitle" (click)="ai.view.set('history')" [title]="tr('All chats')"><app-icon name="history" [size]="12" /><span>{{ ai.current()?.title || tr('New chat') }}</span></button>
+      @if (ai.used().in + ai.used().out) { <span class="usage" [title]="tr('This chat so far, as the AI service counted: {0} tokens sent, {1} received', ai.used().in.toLocaleString(), ai.used().out.toLocaleString())">⇅ {{ k(ai.used().in + ai.used().out) }} {{ tr('tokens') }}</span> }
+      <button type="button" class="newc" (click)="ai.newChat()" [disabled]="ai.busy() || !ai.current()"><app-icon name="plus" [size]="12" />{{ tr('New Chat') }}</button>
+    </div>
     <div class="conv" #conv>
       @if (!msgs().length) {
         <div class="empty"><span class="big"><app-icon name="sparkles" [size]="26" /></span><h3>{{ tab() ? tr('Ask about this terminal') : tr('Ask the AI assistant') }}</h3>
@@ -90,7 +96,8 @@ function spans(t: string): Span[] {
               <div class="ut">{{ m.text }}</div></div></div>
         } @else {
           <div class="msg"><div class="who"><span class="av a"><app-icon name="sparkles" [size]="12" /></span>AI Assistant
-            @if (m.model) { <span class="when">{{ m.model }}{{ m.secs ? ' · ' + m.secs + ' s' : '' }}</span> }</div>
+            @if (m.model) { <span class="when">{{ m.model }}{{ m.secs ? ' · ' + m.secs + ' s' : '' }}</span> }
+            @if (m.usage) { <span class="when tok" [title]="tr('Tokens as the AI service counted them: {0} sent (the chat so far and the instructions), {1} in the answer', m.usage.in.toLocaleString(), m.usage.out.toLocaleString())">↑ {{ k(m.usage.in) }} ↓ {{ k(m.usage.out) }}</span> }</div>
             @if (m.error) { <div class="ab err">{{ m.error }}</div> }
             @if (m.text) {
               <div class="ab">
@@ -109,6 +116,7 @@ function spans(t: string): Span[] {
                 }
               </div>
             }
+            @if (m.steps?.length) { <div class="used"><app-icon name="wrench" [size]="12" />{{ tr('Tools used') }}: {{ toolsUsed(m) }}</div> }
             @for (s of m.steps ?? []; track $index) {
               @if (s.state === 'ask') {
                 <div class="appr" [class.danger]="s.danger"><div class="q"><app-icon name="alert" [size]="15" /><div>
@@ -157,10 +165,22 @@ function spans(t: string): Span[] {
               [title]="tr('Production tabs always ask. Change the read-only commands per device type in Settings → Device Types.')">
               <option value="">{{ tr('Changes ask first') }}</option><option value="every">{{ tr('Ask before every command') }}</option><option value="readonly">{{ tr('Read only') }}</option></select>
           }
+          @if (ai.mode() === 'agent') {
+            <span class="toolw"><button type="button" class="ib tl" [class.on]="tmenu()" [title]="tr('Tools the agent may use')" [attr.aria-label]="tr('Tools')" (click)="tmenu.set(!tmenu())"><app-icon name="wrench" [size]="14" /><span class="cnt">{{ toolCount() }}</span></button>
+              @if (tmenu()) {
+                <div class="menu tools" role="dialog" [attr.aria-label]="tr('Agent tools')" (click)="$event.stopPropagation()">
+                  <div class="mh">{{ tr('Tools the agent may use') }}</div>
+                  @for (t of agentTools; track t.k) {
+                    <label class="trow"><input type="checkbox" [checked]="ai.tools()[t.k]" (change)="ai.setTool(t.k, $any($event.target).checked)" /><span><b>{{ tr(t.name) }}</b><small>{{ tr(t.what) }}</small></span></label>
+                  }
+                  <div class="mf">{{ tr('Each use shows in the chat. Production sessions always ask first.') }}</div>
+                </div>
+              }</span>
+          }
           <button type="button" class="ib" [title]="tr('Attach a picture or a text file')" [attr.aria-label]="tr('Attach')" (click)="file.click()"><app-icon name="clip" [size]="14" /></button>
           <input #file type="file" hidden multiple accept="image/*,.txt,.log,.cfg,.conf,.csv,.json,.xml,.yaml,.yml" (change)="files($any($event.target).files); $any($event.target).value = ''" />
           <span class="grow"></span>
-          @if (ai.ctxs().length) { <span class="hint">≈ {{ ai.tokens().toLocaleString() }} {{ tr('tokens') }}</span> }
+          @if (canSend()) { <span class="hint" [title]="tr('About how many tokens this question sends: the chat so far, what goes with it and your question')">≈ {{ k(ai.estimate(text)) }} {{ tr('tokens') }}</span> }
           @if (ai.busy()) { <button type="button" class="send stop" [title]="tr('Stop (Esc)')" [attr.aria-label]="tr('Stop')" (click)="ai.stop()"><span class="sq"></span></button> }
           @else { <button type="button" class="send" [title]="tr('Send (Enter) - Shift+Enter for a new line')" [attr.aria-label]="tr('Send')" (click)="go()" [disabled]="!canSend()"><app-icon name="up" [size]="15" /></button> }
         </div>
@@ -190,6 +210,7 @@ function spans(t: string): Span[] {
     .av { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; flex: none; }
     .av.u { background: #7c5cff; color: #fff; } .av.a { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
     .when, .hint { color: var(--muted); font-weight: 400; font-size: calc(11px * var(--ui-scale, 1)); }
+    .hint { white-space: nowrap; flex: none; } .send { flex: none; }
     .ub { margin-left: 29px; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); line-height: 1.5; min-width: 0; }
     .ut { white-space: pre-wrap; overflow-wrap: anywhere; }
     .ctx { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
@@ -234,7 +255,7 @@ function spans(t: string): Span[] {
     .att .rm { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; }
     textarea { display: block; width: 100%; min-height: 72px; max-height: 260px; resize: none; border: 0; outline: 0; background: transparent; padding: 8px 12px; line-height: 1.5; font: inherit; color: var(--text); box-shadow: none !important; }
     .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px 8px 10px; }
-    .sel { width: auto; height: 26px; padding: 0 6px; font-size: calc(12px * var(--ui-scale, 1)); border-radius: 6px; } .sel.perm { color: var(--warn); max-width: 170px; }
+    .sel { width: auto; height: 26px; padding: 0 6px; font-size: calc(12px * var(--ui-scale, 1)); border-radius: 6px; } .sel.perm { color: var(--warn); flex: 0 1 170px; min-width: 64px; text-overflow: ellipsis; }
     .send { width: 30px; height: 30px; padding: 0; border-radius: 8px; background: var(--accent); border-color: var(--accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; }
     .send:disabled { opacity: .45; } .send.stop { background: var(--danger); border-color: var(--danger); } .sq { width: 10px; height: 10px; border-radius: 2px; background: #fff; }
     .warn { display: flex; gap: 6px; align-items: center; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--warn); padding: 7px 2px 0; select { width: auto; height: auto; padding: 0 4px; font-size: inherit; } }
@@ -244,7 +265,21 @@ function spans(t: string): Span[] {
     .sugg { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 340px; margin-top: 8px; }
     .sugg button { text-align: left; padding: 8px 12px; height: auto; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
     .sugg button:hover { border-color: var(--accent); }
-    .hist { gap: 2px; } .hrow { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+    .hist { gap: 2px; }
+    .sub { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel); min-height: 34px; }
+    .ctitle { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 2px 4px; height: auto; color: var(--muted); min-width: 0; flex: 1; justify-content: flex-start;
+      span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } &:hover { color: var(--text); } }
+    .usage { font-size: calc(11px * var(--ui-scale, 1)); color: var(--muted); white-space: nowrap; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; }
+    .newc { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; height: 24px; font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; border-radius: 6px; }
+    .newc.wide { justify-content: center; margin-bottom: 8px; height: 30px; }
+    .tok { font-variant-numeric: tabular-nums; }
+    .used { margin-left: 29px; display: flex; align-items: center; gap: 6px; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); }
+    .toolw { position: relative; display: inline-flex; }
+    .ib.tl { width: auto; padding: 0 6px; gap: 3px; } .cnt { font-size: 10.5px; font-weight: 600; }
+    .menu.tools { width: 280px; left: auto; right: -80px; gap: 2px; }
+    .mh { font-weight: 600; padding: 6px 8px 4px; font-size: calc(12px * var(--ui-scale, 1)); } .mf { padding: 6px 8px 4px; font-size: calc(11px * var(--ui-scale, 1)); color: var(--muted); border-top: 1px solid var(--line); margin-top: 4px; }
+    .trow { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 6px; cursor: pointer; input { margin-top: 2px; } span { display: flex; flex-direction: column; } b { font-weight: 500; } small { color: var(--muted); }
+      &:hover { background: var(--hover); } } .hrow { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
     .hrow:hover { background: var(--hover); } .hrow.on { background: color-mix(in srgb, var(--accent) 12%, transparent); }
     .ht { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .pad { padding: 10px; }
     @media (prefers-reduced-motion: reduce) { .conv { scroll-behavior: auto; } .typing i, .spin { animation: none; } }
@@ -262,6 +297,9 @@ export class AIPanel implements OnInit {
   readonly file = viewChild.required<ElementRef<HTMLInputElement>>('file');
   readonly st = signal<AIStatus | null>(null);
   readonly menu = signal(false);
+  readonly tmenu = signal(false);
+  protected readonly agentTools = AGENT_TOOLS;
+  readonly toolCount = computed(() => AGENT_TOOLS.filter(t => this.ai.tools()[t.k]).length);
   readonly fx = signal(Math.max(20, innerWidth - 500));
   readonly fy = signal(90);
   text = '';
@@ -289,6 +327,11 @@ export class AIPanel implements OnInit {
     const s = (Date.now() - +new Date(iso)) / 1000;
     if (s < 60) return tr('just now'); if (s < 3600) return tr('{0} min ago', Math.floor(s / 60)); if (s < 86400) return tr('{0} h ago', Math.floor(s / 3600));
     return tr('{0} days ago', Math.floor(s / 86400));
+  }
+  k(n: number) { return n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + 'k' : String(n); }
+  toolsUsed(m: ChatMsg) {
+    const runs = (m.steps ?? []).filter(s => s.kind === 'run').length, opens = (m.steps ?? []).filter(s => s.kind === 'open').length;
+    return [runs ? tr('Run commands') + ' ×' + runs : '', opens ? tr('Connect to sessions') + ' ×' + opens : ''].filter(Boolean).join(' · ');
   }
   canSend() { return !!(this.text.trim() || this.ai.ctxs().length || this.ai.images().length); }
 
@@ -361,5 +404,10 @@ export class AIPanel implements OnInit {
     const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); };
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
   }
-  @HostListener('document:click', ['$event']) out(e: MouseEvent) { if (this.menu() && !(e.target as HTMLElement).closest('.addw')) this.menu.set(false); }
+  @HostListener('document:keydown.escape') esc() { this.menu.set(false); this.tmenu.set(false); }
+  @HostListener('document:click', ['$event']) out(e: MouseEvent) {
+    const t = e.target as HTMLElement;
+    if (this.menu() && !t.closest('.addw')) this.menu.set(false);
+    if (this.tmenu() && !t.closest('.toolw')) this.tmenu.set(false);
+  }
 }

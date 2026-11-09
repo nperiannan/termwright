@@ -21,12 +21,18 @@ export interface Step { kind: 'run' | 'open'; tab: string; command: string; outp
 export interface ChatMsg {
   id: number; role: 'user' | 'assistant'; text: string; time: string;
   ctx?: { label: string; detail: string }[]; images?: Img[]; wire?: string; hidden?: boolean;
-  model?: string; secs?: number; steps?: Step[]; error?: string;
+  model?: string; secs?: number; steps?: Step[]; error?: string; usage?: { in: number; out: number } | null;
 }
 export interface Chat { id: string; title: string; device: string; updated: string; msgs: ChatMsg[]; }
 export type Dock = 'right' | 'left' | 'float';
 
-const KEY_CHATS = 'tw.ai.chats', KEY_DOCK = 'tw.ai.dock', KEY_W = 'tw.ai.width';
+const KEY_CHATS = 'tw.ai.chats', KEY_DOCK = 'tw.ai.dock', KEY_W = 'tw.ai.width', KEY_TOOLS = 'tw.ai.tools';
+
+/** What the agent may do. */
+export const AGENT_TOOLS = [
+  { k: 'run', name: 'Run commands in tabs', what: 'Types a command in an open tab and reads the output' },
+  { k: 'open', name: 'Connect to saved sessions', what: 'Opens a saved session in a new tab' },
+] as const;
 const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 10;
 
 const NET_RO = ['show', 'sh', 'display', 'dis', 'ping', 'traceroute', 'tracert', 'trace'];
@@ -75,6 +81,15 @@ export class AIChat {
   readonly images = signal<Img[]>([]);
   readonly keep = signal(0); // whole terminal: the last N lines (0 = all)
   readonly error = signal('');
+  readonly tools = signal<Record<string, boolean>>((() => { try { return { run: true, open: true, ...JSON.parse(store(KEY_TOOLS) || '{}') }; } catch { return { run: true, open: true }; } })());
+  setTool(k: string, on: boolean) { this.tools.update(t => ({ ...t, [k]: on })); save(KEY_TOOLS, JSON.stringify(this.tools())); }
+  /** The tokens this chat used so far, as the AI service counted them. */
+  readonly used = computed(() => (this.current()?.msgs ?? []).reduce((a, m) => ({ in: a.in + (m.usage?.in ?? 0), out: a.out + (m.usage?.out ?? 0) }), { in: 0, out: 0 }));
+  /** About how many tokens the next question sends: the chat so far, what goes with it, and the question. */
+  estimate(typed: string) {
+    const hist = (this.current()?.msgs ?? []).reduce((n, m) => n + (m.wire ?? m.text).length, 0);
+    return Math.ceil((hist + this.ctxs().reduce((n, c) => n + this.ctxTextLen(c), 0) + typed.length) / 4) + this.images().length * 1500;
+  }
   private stopping = false;
   /** Approvals waiting for the user, by step. */
   private waits = new Map<Step, (r: { go: 'run' | 'skip' | 'stop'; command?: string }) => void>();
@@ -184,14 +199,16 @@ export class AIChat {
           messages: chat.msgs.filter(m => !m.error).map(m => ({ role: m.role, text: m.wire ?? m.text, images: (m.images ?? []).map(i => ({ name: i.name, mediaType: i.mediaType, data: i.data })) })),
           deviceType: t?.session?.deviceType ?? '', protocol: t?.session?.protocol ?? '', agent,
           tabs: agent ? this.tabs.tabs().filter(x => x.kind === 'terminal').map(x => `${x.title} (${x.session.deviceType || 'unknown'}, ${x.state})`) : [],
+          tools: Object.entries(this.tools()).filter(([, on]) => on).map(([k]) => k).concat(['none']),
         });
         const { text, actions } = parseActions(ans.text);
-        const msg: ChatMsg = { id: ++nid, role: 'assistant', text, time: now(), wire: ans.text, model: ans.model, secs: Math.round((Date.now() - started) / 1000), steps: [] };
+        const msg: ChatMsg = { id: ++nid, role: 'assistant', text, time: now(), wire: ans.text, model: ans.model, secs: Math.round((Date.now() - started) / 1000), steps: [], usage: ans.usage ?? null };
         this.push(chatId, msg);
         if (!agent || !actions.length || this.stopping) break;
         const results: string[] = [];
         for (const a of actions) {
           if (this.stopping) break;
+          if (!this.tools()[a.kind]) { results.push(`${a.kind} ${a.tab}: not done - the user turned this tool off.`); continue; }
           const s: Step = { kind: a.kind, tab: a.tab, command: a.command, state: 'running' };
           msg.steps!.push(s); this.touch(chatId);
           results.push(await this.act(s, chatId));

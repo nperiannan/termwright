@@ -1551,6 +1551,22 @@ const ru: Record<string, string> = {
   '{0} is larger than 5 MB': '{0} больше 5 МБ',
   '{0} is larger than 1 MB': '{0} больше 1 МБ',
   'AI agent: read-only': 'Агент ИИ: только чтение',
+  'New Chat': 'Новый чат',
+  'All chats': 'Все чаты',
+  'Tools used': 'Использованы инструменты',
+  'Run commands': 'Команды',
+  'Connect to sessions': 'Подключения к сессиям',
+  'Tools': 'Инструменты',
+  'Agent tools': 'Инструменты агента',
+  'Tools the agent may use': 'Что может делать агент',
+  'Run commands in tabs': 'Выполнять команды во вкладках',
+  'Connect to saved sessions': 'Подключаться к сохранённым сессиям',
+  'Types a command in an open tab and reads the output': 'Вводит команду в открытой вкладке и читает вывод',
+  'Opens a saved session in a new tab': 'Открывает сохранённую сессию в новой вкладке',
+  'Each use shows in the chat. Production sessions always ask first.': 'Каждое действие видно в чате. Для рабочих (production) сессий всегда спрашивается разрешение.',
+  'About how many tokens this question sends: the chat so far, what goes with it and your question': 'Примерно столько токенов отправит этот вопрос: чат до сих пор, приложенный контекст и ваш вопрос',
+  'This chat so far, as the AI service counted: {0} tokens sent, {1} received': 'Этот чат по подсчёту сервиса ИИ: отправлено {0} токенов, получено {1}',
+  'Tokens as the AI service counted them: {0} sent (the chat so far and the instructions), {1} in the answer': 'Токены по подсчёту сервиса ИИ: отправлено {0} (чат и инструкции), в ответе {1}',
 };
 
 export default ru;

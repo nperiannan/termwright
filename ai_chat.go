@@ -38,7 +38,8 @@ type AIChatRequest struct {
 	DeviceType string   `json:"deviceType"`
 	Protocol   string   `json:"protocol"`
 	Agent      bool     `json:"agent"`
-	Tabs       []string `json:"tabs"` // agent: the open tabs, "name (device type, state)"
+	Tabs       []string `json:"tabs"`  // agent: the open tabs, "name (device type, state)"
+	Tools      []string `json:"tools"` // agent: what it may do - "run" (commands in tabs), "open" (connect to saved sessions)
 }
 
 const aiMaxImages = 4
@@ -117,40 +118,48 @@ func (a *App) AIChat(r AIChatRequest) (AIAnswer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
 	sys := aiChatSystem(r)
-	out, err := aiConverse(ctx, s, key, model, sys, msgs)
+	out, usage, err := aiConverse(ctx, s, key, model, sys, msgs)
 	if err != nil {
 		return AIAnswer{}, err
 	}
 	if model == "" {
 		model = "Claude Code"
 	}
-	return AIAnswer{Text: out, Commands: aiCommands(out), Sent: msgs[len(msgs)-1].Text, Removed: removed, Model: model}, nil
+	return AIAnswer{Text: out, Commands: aiCommands(out), Sent: msgs[len(msgs)-1].Text, Removed: removed, Model: model, Usage: usage}, nil
 }
 
 func aiChatSystem(r AIChatRequest) string {
 	sys, _ := aiPrompt(AIRequest{Kind: "explain", DeviceType: r.DeviceType, Protocol: r.Protocol}, "")
 	sys += "\nThe user may paste pictures (screenshots, photos of devices); describe what matters in them."
-	if !r.Agent {
+	run, open := len(r.Tools) == 0, len(r.Tools) == 0
+	for _, t := range r.Tools {
+		run, open = run || t == "run", open || t == "open"
+	}
+	if !r.Agent || (!run && !open) {
 		return sys
 	}
 	tabs := "none"
 	if len(r.Tabs) > 0 {
 		tabs = strings.Join(r.Tabs, "; ")
 	}
+	var lines, what []string
+	if run {
+		lines, what = append(lines, "run <tab name>: <one command line>"), append(what, "run commands in the open tabs")
+	}
+	if open {
+		lines, what = append(lines, "open <saved session name>"), append(what, "connect to saved sessions")
+	}
 	return sys + `
 
-AGENT MODE. You can work on the user's devices through Termwright. To run commands, end your answer with one block:
-` + "```termwright" + `
-run <tab name>: <one command line>
-open <saved session name>
-` + "```" + `
-Termwright runs them in that order - each after the user allows it - and sends you the output in the next message. Then continue: run more, or give your conclusion with no block.
-Rules: one command per run line, exactly as typed at that device's prompt; prefer read-only commands (show, display, ping, traceroute) to find the cause; propose configuration changes only when the user asked for a fix, one at a time, and say what each does before the block; never save the configuration, reboot or erase unless the user asked for exactly that; turn off paging first if the output pages (EXOS: disable clipaging, VOSS: terminal more disable, Cisco: terminal length 0). Use open only for a device that is not open yet.
+AGENT MODE. Through Termwright you can ` + strings.Join(what, " and ") + `. To do so, end your answer with one block:
+` + "```termwright\n" + strings.Join(lines, "\n") + "\n```" + `
+Termwright does them in that order - each after the user allows it - and sends you the results in the next message. Then continue, or give your conclusion with no block.
+Rules: one command per run line, exactly as typed at that device's prompt; prefer read-only commands (show, display, ping, traceroute) to find the cause; propose configuration changes only when the user asked for a fix, one at a time, and say what each does before the block; never save the configuration, reboot or erase unless the user asked for exactly that; turn off paging first if the output pages (EXOS: disable clipaging, VOSS: terminal more disable, Cisco: terminal length 0).
 Open tabs: ` + tabs + "."
 }
 
 // aiConverse sends a chat to the provider.
-func aiConverse(ctx context.Context, s config.AISettings, key, model, sys string, msgs []AIMsg) (string, error) {
+func aiConverse(ctx context.Context, s config.AISettings, key, model, sys string, msgs []AIMsg) (string, *AIUsage, error) {
 	switch s.Provider {
 	case "claudecode":
 		return claudeCodeConverse(ctx, s.BaseURL, model, sys, msgs)
@@ -170,9 +179,15 @@ func aiConverse(ctx context.Context, s config.AISettings, key, model, sys string
 				Type string `json:"type"`
 				Text string `json:"text"`
 			} `json:"content"`
+			Usage struct {
+				In     int `json:"input_tokens"`
+				Out    int `json:"output_tokens"`
+				CacheR int `json:"cache_read_input_tokens"`
+				CacheW int `json:"cache_creation_input_tokens"`
+			} `json:"usage"`
 		}
 		if err := aiPost(ctx, "https://api.anthropic.com/v1/messages", map[string]string{"x-api-key": key, "anthropic-version": "2023-06-01"}, body, &v); err != nil {
-			return "", err
+			return "", nil, err
 		}
 		var b strings.Builder
 		for _, c := range v.Content {
@@ -180,7 +195,7 @@ func aiConverse(ctx context.Context, s config.AISettings, key, model, sys string
 				b.WriteString(c.Text)
 			}
 		}
-		return b.String(), nil
+		return b.String(), &AIUsage{In: v.Usage.In + v.Usage.CacheR + v.Usage.CacheW, Out: v.Usage.Out}, nil
 	case "openai":
 		ms := []map[string]any{{"role": "system", "content": sys}}
 		for _, m := range msgs {
@@ -201,14 +216,22 @@ func aiConverse(ctx context.Context, s config.AISettings, key, model, sys string
 					Content string `json:"content"`
 				} `json:"message"`
 			} `json:"choices"`
+			Usage *struct {
+				In  int `json:"prompt_tokens"`
+				Out int `json:"completion_tokens"`
+			} `json:"usage"`
 		}
 		if err := aiPost(ctx, aiBase(s)+"/v1/chat/completions", map[string]string{"Authorization": "Bearer " + key}, body, &v); err != nil {
-			return "", err
+			return "", nil, err
 		}
 		if len(v.Choices) == 0 {
-			return "", errors.New("the AI service gave no answer")
+			return "", nil, errors.New("the AI service gave no answer")
 		}
-		return v.Choices[0].Message.Content, nil
+		var u *AIUsage
+		if v.Usage != nil {
+			u = &AIUsage{In: v.Usage.In, Out: v.Usage.Out}
+		}
+		return v.Choices[0].Message.Content, u, nil
 	case "ollama":
 		ms := []map[string]any{{"role": "system", "content": sys}}
 		for _, m := range msgs {
@@ -227,13 +250,15 @@ func aiConverse(ctx context.Context, s config.AISettings, key, model, sys string
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
+			In  int `json:"prompt_eval_count"`
+			Out int `json:"eval_count"`
 		}
 		if err := aiPost(ctx, aiBase(s)+"/api/chat", nil, body, &v); err != nil {
-			return "", err
+			return "", nil, err
 		}
-		return v.Message.Content, nil
+		return v.Message.Content, &AIUsage{In: v.In, Out: v.Out}, nil
 	}
-	return "", errors.New("unknown AI service " + s.Provider)
+	return "", nil, errors.New("unknown AI service " + s.Provider)
 }
 
 func nonEmpty(s string) string {
@@ -245,7 +270,7 @@ func nonEmpty(s string) string {
 
 // claudeCodeConverse: Claude Code answers one prompt, so the chat goes in as a
 // transcript; pictures are files in a fresh folder it may read (and nothing else).
-func claudeCodeConverse(ctx context.Context, path, model, sys string, msgs []AIMsg) (string, error) {
+func claudeCodeConverse(ctx context.Context, path, model, sys string, msgs []AIMsg) (string, *AIUsage, error) {
 	var b strings.Builder
 	var dir string
 	n := 0
@@ -267,7 +292,7 @@ func claudeCodeConverse(ctx context.Context, path, model, sys string, msgs []AIM
 			}
 			if dir == "" {
 				if dir, err = os.MkdirTemp("", "termwright-ai-"); err != nil {
-					return "", err
+					return "", nil, err
 				}
 				defer os.RemoveAll(dir)
 			}
@@ -283,7 +308,7 @@ func claudeCodeConverse(ctx context.Context, path, model, sys string, msgs []AIM
 			}
 			name := fmt.Sprintf("picture-%d%s", n, ext)
 			if err := os.WriteFile(filepath.Join(dir, name), raw, 0o600); err != nil {
-				return "", err
+				return "", nil, err
 			}
 			fmt.Fprintf(&b, "\n[Picture: %s - read it with the Read tool]", filepath.Join(dir, name))
 		}

@@ -341,4 +341,4 @@ export interface FileServersView { settings: FileServersSettings; state: FileSer
 export interface FSAddress { ip: string; label: string; reaches: boolean; }
 export interface ServedFile { name: string; size: number; }
 export interface AIStatus { provider: string; model: string; hasKey: boolean; ready: boolean; }
-export interface AIAnswer { text: string; commands: string[]; sent: string; removed: number; model: string; }
+export interface AIAnswer { text: string; commands: string[]; sent: string; removed: number; model: string; usage?: { in: number; out: number } | null; }

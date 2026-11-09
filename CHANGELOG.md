@@ -5,6 +5,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 ## Unreleased
 
 * **AI panel** instead of the AI window: a chat beside the terminal - docked right or left, or floating - with follow-up questions, chat history, a large typing area, pasted pictures, and *Add context* (selection, copied text, whole terminal, other tabs, files).
+* **AI panel: tokens, New Chat, agent tools.** Each answer shows the tokens sent and received (as Claude, OpenAI-compatible services, Ollama and Claude Code count them), the chat its total, and the typing area an estimate before sending. **New Chat** sits under the header and in Chats. In Agent mode the wrench button chooses the tools (run commands in tabs, connect to saved sessions) and each answer lists the tools it used. Claude Code now answers in JSON, which gives its token counts.
 * **AI Agent mode**: the AI connects to saved sessions and runs commands in your tabs to find a problem or fix it. Read-only commands (per device type, editable in Device Types) run by themselves; anything else shows the exact command to Run, Edit, Skip or Stop; production sessions always ask; or choose *Ask before every command* / *Read only*.
 * **Start page cards:** the time and the open/closed dot move to the top right while the quick buttons show.
 * **Start page cards:** the card under the pointer comes forward smoothly (no more tilting) and shows quick buttons - Connect, Open in SFTP, Copy the address, More; the long path tooltip that covered the next card is gone.

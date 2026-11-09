@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -174,7 +175,7 @@ func (a *App) ClaudeCodeFind(given string) (string, error) { return claudeCodePa
 // claudeCodeArgs: print mode, plain text, nothing saved, only our system
 // prompt, and no tools - or only Read, for pictures in their own folder.
 func claudeCodeArgs(model, sys string, withTools, read bool) []string {
-	a := []string{"-p", "--output-format", "text", "--no-session-persistence", "--strict-mcp-config", "--system-prompt", sys}
+	a := []string{"-p", "--output-format", "json", "--no-session-persistence", "--strict-mcp-config", "--system-prompt", sys}
 	switch {
 	case withTools && read:
 		a = append(a, "--tools", "Read", "--allowedTools", "Read")
@@ -196,14 +197,38 @@ func claudeCodeArgs(model, sys string, withTools, read bool) []string {
 var claudeCodeTimeout = 3 * time.Minute
 
 func claudeCodeChat(ctx context.Context, path, model, sys, user string) (string, error) {
-	return claudeCodeRun(ctx, path, model, sys, user, "")
+	out, _, err := claudeCodeRun(ctx, path, model, sys, user, "")
+	return out, err
+}
+
+// claudeCodeResult reads the JSON Claude Code prints (plain text from an older one).
+func claudeCodeResult(out string) (string, *AIUsage, error) {
+	var v struct {
+		Type    string `json:"type"`
+		IsError bool   `json:"is_error"`
+		Result  string `json:"result"`
+		Usage   struct {
+			In     int `json:"input_tokens"`
+			Out    int `json:"output_tokens"`
+			CacheR int `json:"cache_read_input_tokens"`
+			CacheW int `json:"cache_creation_input_tokens"`
+		} `json:"usage"`
+	}
+	t := strings.TrimSpace(out)
+	if !strings.HasPrefix(t, "{") || json.Unmarshal([]byte(t), &v) != nil || v.Type == "" {
+		return t, nil, nil
+	}
+	if v.IsError {
+		return "", nil, errors.New("Claude Code: " + v.Result)
+	}
+	return strings.TrimSpace(v.Result), &AIUsage{In: v.Usage.In + v.Usage.CacheR + v.Usage.CacheW, Out: v.Usage.Out}, nil
 }
 
 // claudeCodeRun asks once; picDir (may be "") holds pictures it may read.
-func claudeCodeRun(ctx context.Context, path, model, sys, user, picDir string) (string, error) {
+func claudeCodeRun(ctx context.Context, path, model, sys, user, picDir string) (string, *AIUsage, error) {
 	bin, err := claudeCodePath(path)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	run := func(withTools bool) (string, string, error) {
 		c, cancel := context.WithTimeout(ctx, claudeCodeTimeout)
@@ -234,7 +259,7 @@ func claudeCodeRun(ctx context.Context, path, model, sys, user, picDir string) (
 		}
 		low := strings.ToLower(msg)
 		if strings.Contains(low, "login") || strings.Contains(low, "log in") || strings.Contains(low, "not authenticated") || strings.Contains(low, "/login") {
-			return "", errors.New("Claude Code is not signed in - run claude in a terminal once and sign in with your Claude account")
+			return "", nil, errors.New("Claude Code is not signed in - run claude in a terminal once and sign in with your Claude account")
 		}
 		if len(msg) > 400 {
 			msg = msg[:400] + "…"
@@ -242,12 +267,16 @@ func claudeCodeRun(ctx context.Context, path, model, sys, user, picDir string) (
 		if msg == "" {
 			msg = err.Error()
 		}
-		return "", errors.New("Claude Code: " + msg)
+		return "", nil, errors.New("Claude Code: " + msg)
 	}
-	if strings.TrimSpace(out) == "" {
-		return "", errors.New("Claude Code gave no answer")
+	text, usage, err := claudeCodeResult(out)
+	if err != nil {
+		return "", nil, err
 	}
-	return strings.TrimSpace(out), nil
+	if text == "" {
+		return "", nil, errors.New("Claude Code gave no answer")
+	}
+	return text, usage, nil
 }
 
 func runQuiet(ctx context.Context, bin string, args ...string) error {

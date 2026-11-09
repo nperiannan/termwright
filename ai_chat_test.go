@@ -85,3 +85,22 @@ func TestAIChatClaudeCodePictures(t *testing.T) {
 		t.Fatalf("tools: %s", ans.Text)
 	}
 }
+
+func TestAIUsageAndTools(t *testing.T) {
+	if txt, u, err := claudeCodeResult(`{"type":"result","is_error":false,"result":"hello","usage":{"input_tokens":10,"cache_read_input_tokens":2000,"cache_creation_input_tokens":300,"output_tokens":42}}`); err != nil || txt != "hello" || u.In != 2310 || u.Out != 42 {
+		t.Fatalf("%q %+v %v", txt, u, err)
+	}
+	if _, _, err := claudeCodeResult(`{"type":"result","is_error":true,"result":"Invalid API key"}`); err == nil {
+		t.Fatal("error not reported")
+	}
+	if txt, u, _ := claudeCodeResult("plain answer"); txt != "plain answer" || u != nil {
+		t.Fatal("plain text")
+	}
+	sys := aiChatSystem(AIChatRequest{Agent: true, Tools: []string{"run"}})
+	if !strings.Contains(sys, "run <tab name>") || strings.Contains(sys, "open <saved") || !strings.Contains(sys, "```termwright\nrun") {
+		t.Fatalf("run only: %s", sys)
+	}
+	if sys := aiChatSystem(AIChatRequest{Agent: true, Tools: []string{"none"}}); strings.Contains(sys, "AGENT MODE") {
+		t.Fatal("agent without tools")
+	}
+}

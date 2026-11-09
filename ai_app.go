@@ -42,6 +42,13 @@ type AIAnswer struct {
 	Sent     string   `json:"sent"`     // the text as sent, after removing secrets
 	Removed  int      `json:"removed"`  // how many secrets were removed
 	Model    string   `json:"model"`
+	Usage    *AIUsage `json:"usage,omitempty"` // tokens, as the service counted them
+}
+
+// AIUsage: the tokens a question used, as the AI service reports them.
+type AIUsage struct {
+	In  int `json:"in"`  // sent (with the chat so far and the instructions)
+	Out int `json:"out"` // the answer
 }
 
 // AIStatus tells the UI whether the assistant is set up.

@@ -718,7 +718,8 @@ Off until you choose an AI service in **Settings → AI Assistant**: **Claude** 
 
 - **The AI panel** - the sparkles button in the title bar (also **Options → AI Assistant…**, or right-click in a terminal → *Explain with AI* / *Ask AI for a Command*) opens the AI assistant as a chat beside the terminal. Until an AI service is set up the button shows a small amber dot and opens these settings.
   - **Dock it** on the right (the default) or the left, or let it **float** as its own window - the buttons in its header; drag its edge to make it wider. Termwright remembers your choice.
-  - **A conversation**: ask follow-up questions; answers scroll like a chat. **New chat** starts over; **Chats** lists earlier chats (kept on this computer - the device output sent with them is not kept).
+  - **A conversation**: ask follow-up questions; answers scroll like a chat. **New Chat** (the button under the header, or **+** in the header) starts a new chat; the chat's title (or the clock button) opens **Chats** - earlier chats, kept on this computer (the device output sent with them is not kept); click one to continue it.
+  - **Tokens**: each answer shows **↑ sent ↓ received** as the AI service counted them, the bar under the header shows the total for the chat (**⇅**), and next to Send you see about how many tokens the next question will send. Every question sends the chat so far, so long chats cost more - start a new chat for a new problem. With Claude Code about 14k of each question are Claude Code's own instructions (mostly cached by Claude).
   - **What goes with a question** - shown as chips above the typing area: the **selected text** of the terminal (chosen when you have a selection), otherwise the **whole terminal**; **+ Add context** (or type **@**) adds copied text, the whole terminal, another tab, or a picture or text file. A long terminal shows how many tokens it is, with a warning and *keep the last 200 / 500 / 1,000 lines*.
   - **Pictures**: paste a screenshot (⌘V / Ctrl+V), drop it, or attach it - up to 4 per message, 5 MB each. Claude, OpenAI-compatible services and Ollama vision models read them; Claude Code reads them from a temporary folder (it may read only those files).
   - **Typing**: a large box that grows as you type; Enter sends, Shift+Enter starts a new line, Esc stops.
@@ -729,6 +730,8 @@ Off until you choose an AI service in **Settings → AI Assistant**: **Claude** 
   - **Changes ask first** (default): commands on the device type's *read-only* list run by themselves; anything else shows a card with the exact command and device - **Run** (you can edit the command first), **Skip** or **Stop**.
   - **Ask before every command**.
   - **Read only**: it never runs anything that is not on the read-only list.
+
+  The **wrench** button (with how many are on) chooses the tools the agent may use: **Run commands in tabs** and **Connect to saved sessions** - turn one off and the AI is not offered it. Under each answer, **Tools used** counts what it did (*Run commands ×3 · Connect to sessions ×1*), and each step card shows the tab, the command and whether it ran by itself (*auto*), after you allowed it, or was skipped.
 
   On a session in a **production** environment, every command and connection asks first, whatever you chose. The read-only list is per device type (**Settings → Device Types → AI agent: read-only**, one command beginning per line); empty = `show`, `display`, `ping`, `traceroute`… for network devices and the usual read-only commands for Linux. A command with `;`, `&&`, redirection or a pipe into anything but a filter (include, grep…) always asks. The commands are typed in the visible tab, so they appear there and in its log like your own.
 
