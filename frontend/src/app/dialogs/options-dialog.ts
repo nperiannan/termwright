@@ -50,7 +50,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
   <div class="modal-backdrop">
     <form class="modal wide" (ngSubmit)="save()">
       <div class="modal-head"><span class="mh-ic"><app-icon name="options" [size]="18" /></span>
-        <span class="mh-t">{{ modern() ? 'Settings' : 'Global Options' }}<span class="mh-s">Global Options for every session</span></span></div>
+        <span class="mh-t">{{ 'Settings' }}<span class="mh-s">Global Options for every session</span></span></div>
       <div class="modal-split">
         <nav class="cat">
           <input type="search" class="osearch" placeholder="Search options" [ngModel]="q()" (ngModelChange)="q.set($event)" name="osearch" autocomplete="off" />
@@ -60,7 +60,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
             } @empty { <span class="nohit">Nothing found</span> }
           } @else {
           <a [class.on]="page() === 'general'" (click)="page.set('general')"><app-icon name="eye" [size]="15" />General</a>
-          <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')"><app-icon name="shell" [size]="15" />{{ modern() ? 'Terminal' : 'Terminal & Appearance' }}</a>
+          <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')"><app-icon name="shell" [size]="15" />{{ 'Terminal' }}</a>
           <a class="sub" [class.on]="page() === 'schemes'" (click)="page.set('schemes')"><app-icon name="palette" [size]="15" />Color Schemes</a>
           <a class="sub" [class.on]="page() === 'envs'" (click)="page.set('envs')"><app-icon name="layers" [size]="15" />Environments</a>
           <a [class.on]="page() === 'keywords'" (click)="page.set('keywords')"><app-icon name="highlight" [size]="15" />Keyword Highlighting</a>
@@ -82,65 +82,42 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
               <div class="grid">
                 <h4 class="gsec">Appearance</h4>
                 <label>UI theme</label>
-                @if (modern()) {
+                
                   <div class="themes">
                     @for (t of themeTiles; track t.v) {
                       <button type="button" class="tht" [class.on]="(s.theme || 'system') === t.v" (click)="s.theme = t.v"><span class="pv {{ t.v }}"></span>{{ t.label }}</button>
                     }
                   </div>
-                } @else {
-                <select name="theme" [(ngModel)]="s.theme">
-                  <option value="system">Follow system</option><option value="dark">Dark</option><option value="light">Light</option>
-                </select>
-                }
-                @if (modern() && s.layout !== 'classic') {
+                
+                
                   <label>Style</label>
                   <div class="seg w2"><button type="button" [class.on]="s.style === 'standard'" (click)="s.style = 'standard'">Standard</button><button type="button" [class.on]="s.style !== 'standard'" (click)="s.style = ''">Glacier</button></div>
                   <div class="hint">Glacier: frosted glass panels and raised cards, three per row - for the light and the dark theme.</div>
                   <label>Folder and file icons</label>
                   <div class="seg w3"><button type="button" [class.on]="!s.iconFinish" (click)="s.iconFinish = ''">As the style</button><button type="button" [class.on]="s.iconFinish === 'glacier'" (click)="s.iconFinish = 'glacier'">Glass</button><button type="button" [class.on]="s.iconFinish === 'flat'" (click)="s.iconFinish = 'flat'">Flat</button></div>
                   <div class="hint">Glass: folders with a front flap and a light edge, files as a page with a type label - in the Session Manager, the Files panel and SFTP. <i>As the style</i> = glass in Glacier, flat in Standard.</div>
-                }
+                
                 <label>Language</label>
                 <select name="lang" [ngModel]="s.language || ''" (ngModelChange)="s.language = $event">
                   @for (l of languages; track l.code) { <option [value]="l.code" translate="no">{{ l.name }}</option> }
                 </select>
                 <div class="pair">
-                <div class="f"><label>Layout</label>
-                <div>
-                  @if (modern()) {
-                    <div class="seg w2"><button type="button" [class.on]="!s.layout" (click)="s.layout = ''">Modern</button><button type="button" [class.on]="s.layout === 'classic'" (click)="s.layout = 'classic'">Classic</button></div>
-                  } @else {
-                  <select name="layout" [ngModel]="s.layout || ''" (ngModelChange)="s.layout = $event">
-                    <option value="">Modern - tabs and search in the title bar</option><option value="classic">Classic - toolbar, tab strip and menu bar</option>
-                  </select>
-                  }
-                  @if (isMac) { <div class="hint">On macOS the window's own title bar changes the next time Termwright starts.</div> }
-                </div></div>
                 <div class="f"><label>Start page buttons</label>
                 <div>
-                  @if (modern()) {
+                  
                     <div class="seg w3"><button type="button" [class.on]="!s.quickButtons" (click)="s.quickButtons = ''">Raised</button><button type="button" [class.on]="s.quickButtons === 'keycap'" (click)="s.quickButtons = 'keycap'">Keycaps</button><button type="button" [class.on]="s.quickButtons === 'glow'" (click)="s.quickButtons = 'glow'">Glow cards</button></div>
-                  } @else {
-                  <select name="qbtn" [ngModel]="s.quickButtons || ''" (ngModelChange)="s.quickButtons = $event">
-                    <option value="">Raised - a thick edge; they lift and press down</option><option value="keycap">Keycaps - like keyboard keys, with the shortcut</option><option value="glow">Glow cards - a round icon that glows in its colour</option>
-                  </select>
-                  }
-                  <div class="hint">Quick Connect, New Session, Local Shell, Import and Discover Devices on the start page (Modern layout).</div>
+                  
+                  <div class="hint">Quick Connect, New Session, Local Shell, Import and Discover Devices on the start page.</div>
                 </div></div>
                 <div class="f"><label>Icons</label>
                 <div>
-                  @if (modern()) {
+                  
                     <div class="seg w2"><button type="button" [class.on]="!s.iconStyle" (click)="s.iconStyle = ''">Tiles</button><button type="button" [class.on]="s.iconStyle === 'glyph'" (click)="s.iconStyle = 'glyph'">Glyphs</button></div>
-                  } @else {
-                  <select name="icons" [ngModel]="s.iconStyle || ''" (ngModelChange)="s.iconStyle = $event">
-                    <option value="">Coloured tiles - the device in white on its colour</option><option value="glyph">Glyphs - the device in its colour, no tile</option>
-                  </select>
-                  }
-                  @if (s.layout !== 'classic') {
+                  
+                  
                     <label class="inline-check" style="margin-top: 6px"><input type="checkbox" name="compact" [ngModel]="!!s.compactRows" (ngModelChange)="s.compactRows = $event" />
                       Compact Session Manager (one line per session - more sessions in view)</label>
-                  }
+                  
                 </div></div>
                 </div>
                 <label>Interface font</label>
@@ -156,22 +133,18 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <h4 class="gsec">Behaviour</h4>
                 <label class="cl">Behavior</label>
                 <div class="checks">
-                  <label><input type="checkbox" name="cc" [(ngModel)]="s.confirmClose" /> @if (modern()) { <span class="tx">Confirm before closing connected tabs<small>and before quitting</small></span> } @else { Confirm before closing connected tabs / quitting }</label>
-                  <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" /> @if (modern()) { <span class="tx">Confirm pasting more than one line<small>shows the lines first - production tabs always ask</small></span> } @else { Confirm before pasting more than one line }</label>
+                  <label><input type="checkbox" name="cc" [(ngModel)]="s.confirmClose" />  <span class="tx">Confirm before closing connected tabs<small>and before quitting</small></span> </label>
+                  <label><input type="checkbox" name="cpaste" [(ngModel)]="s.confirmPaste" />  <span class="tx">Confirm pasting more than one line<small>shows the lines first - production tabs always ask</small></span> </label>
                   <label><input type="checkbox" name="rhist" [ngModel]="s.recordHistory !== false" (ngModelChange)="s.recordHistory = $event" />
-                    @if (modern()) { <span class="tx">Remember typed commands<small>for Command History and suggestions - never commands with passwords, secrets or keys</small></span> }
-                    @else { Remember typed commands for Command History and suggestions (never commands with passwords, secrets or keys) }</label>
-                  <label><input type="checkbox" name="qcs" [ngModel]="!!s.quickConnectSave" (ngModelChange)="s.quickConnectSave = $event" /> @if (modern()) { <span class="tx">Save Quick Connect sessions<small>every connection made with Quick Connect is kept in the Session Manager (in the selected folder)</small></span> } @else { Save Quick Connect sessions in the Session Manager }</label>
-                  <label><input type="checkbox" name="nmc" [ngModel]="!s.noMoveConfirm" (ngModelChange)="s.noMoveConfirm = !$event" /> @if (modern()) { <span class="tx">Confirm before moving sessions<small>dragging or pasting sessions and folders into another folder asks first (Undo is in the Session Manager's ⋯ menu)</small></span> } @else { Confirm before moving sessions and folders in the Session Manager }</label>
-                  <label><input type="checkbox" name="ndc" [ngModel]="!s.noDeleteConfirm" (ngModelChange)="s.noDeleteConfirm = !$event" /> @if (modern()) { <span class="tx">Confirm before deleting sessions<small>deleting sessions and folders asks first (Undo is in the Session Manager's ⋯ menu); a jump host that other sessions use always asks</small></span> } @else { Confirm before deleting sessions and folders in the Session Manager }</label>
-                  <label><input type="checkbox" name="rt" [(ngModel)]="s.restoreTabs" /> @if (modern()) { <span class="tx">Reopen the tabs that were open<small>when Termwright starts</small></span> } @else { Reopen the sessions that were open when Termwright was closed }</label>
-                  <label><input type="checkbox" name="sm" [(ngModel)]="s.showSessionManager" /> @if (modern()) { <span class="tx">Show Session Manager<small>the session list on the left (or right)</small></span> } @else { Show Session Manager }</label>
-                  <label><input type="checkbox" name="bb" [(ngModel)]="s.showButtonBar" /> @if (modern()) { <span class="tx">Show Button Bar<small>buttons that send commands, under the terminal</small></span> } @else { Show Button Bar }</label>
-                  <label><input type="checkbox" name="cw" [(ngModel)]="s.showCommandWindow" /> @if (modern()) { <span class="tx">Show Command Window<small>type a command and send it to one or more tabs</small></span> } @else { Show Command Window }</label>
-                  @if (s.layout === 'classic') {
-                    <label><input type="checkbox" name="cbar" [(ngModel)]="s.showConnectBar" /> Show Connect Bar in the toolbar</label>
-                    <label><input type="checkbox" name="iwm" [(ngModel)]="s.inWindowMenu" /> Show the menu bar inside the window (macOS also keeps the top-of-screen menu)</label>
-                  }
+                     <span class="tx">Remember typed commands<small>for Command History and suggestions - never commands with passwords, secrets or keys</small></span> </label>
+                  <label><input type="checkbox" name="qcs" [ngModel]="!!s.quickConnectSave" (ngModelChange)="s.quickConnectSave = $event" />  <span class="tx">Save Quick Connect sessions<small>every connection made with Quick Connect is kept in the Session Manager (in the selected folder)</small></span> </label>
+                  <label><input type="checkbox" name="nmc" [ngModel]="!s.noMoveConfirm" (ngModelChange)="s.noMoveConfirm = !$event" />  <span class="tx">Confirm before moving sessions<small>dragging or pasting sessions and folders into another folder asks first (Undo is in the Session Manager's ⋯ menu)</small></span> </label>
+                  <label><input type="checkbox" name="ndc" [ngModel]="!s.noDeleteConfirm" (ngModelChange)="s.noDeleteConfirm = !$event" />  <span class="tx">Confirm before deleting sessions<small>deleting sessions and folders asks first (Undo is in the Session Manager's ⋯ menu); a jump host that other sessions use always asks</small></span> </label>
+                  <label><input type="checkbox" name="rt" [(ngModel)]="s.restoreTabs" />  <span class="tx">Reopen the tabs that were open<small>when Termwright starts</small></span> </label>
+                  <label><input type="checkbox" name="sm" [(ngModel)]="s.showSessionManager" />  <span class="tx">Show Session Manager<small>the session list on the left (or right)</small></span> </label>
+                  <label><input type="checkbox" name="bb" [(ngModel)]="s.showButtonBar" />  <span class="tx">Show Button Bar<small>buttons that send commands, under the terminal</small></span> </label>
+                  <label><input type="checkbox" name="cw" [(ngModel)]="s.showCommandWindow" />  <span class="tx">Show Command Window<small>type a command and send it to one or more tabs</small></span> </label>
+                  
                 </div>
                 <h4 class="gsec">Folders and files</h4>
                 <label>Sessions folder</label>
@@ -681,10 +654,10 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
         </div>
       </div>
       <div class="modal-foot">
-        @if (modern()) { <span class="hint">Changes apply when you press Save</span> }
+         <span class="hint">Changes apply when you press Save</span> 
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Cancel</button>
-        <button type="submit" class="primary">{{ modern() ? 'Save' : 'OK' }}</button>
+        <button type="submit" class="primary">{{ 'Save' }}</button>
       </div>
     </form>
   </div>
@@ -740,7 +713,6 @@ export class OptionsDialog implements OnInit {
   readonly deviceKinds = Object.entries(DEVICE_KINDS).map(([v, k]) => ({ v, label: k.label }));
   readonly uiSizes = UI_SIZES;
   readonly factNames = FACT_NAMES;
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly languages = LANGUAGES.filter(l => !l.preview || previewLanguages());
   readonly themeTiles = [{ v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }, { v: 'system', label: 'System' }];
   reOk(re: string) { if (!re) return true; try { new RegExp(re); return true; } catch { return false; } }

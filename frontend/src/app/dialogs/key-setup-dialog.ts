@@ -39,18 +39,12 @@ interface Step { text: string; state: 'run' | 'ok' | 'err' | 'info'; }
         <div class="grid">
           @if (mode === 'new') {
             <label>Key type</label>
-            @if (modern()) {
+            
               <div class="seg"><button type="button" [class.on]="kind === 'ed25519'" (click)="kind = 'ed25519'; kindChanged()" title="Recommended">Ed25519</button>
                 <button type="button" [class.on]="kind === 'ecdsa'" (click)="kind = 'ecdsa'; kindChanged()">ECDSA</button>
                 <button type="button" [class.on]="kind === 'rsa'" (click)="kind = 'rsa'; kindChanged()">RSA 4096</button></div>
               <div class="hint">Ed25519 is recommended; RSA 4096 for older servers and devices.</div>
-            } @else {
-            <select name="kind" [(ngModel)]="kind" (ngModelChange)="kindChanged()">
-              <option value="ed25519">Ed25519 (recommended)</option>
-              <option value="rsa">RSA 4096 (older servers/devices)</option>
-              <option value="ecdsa">ECDSA P-256</option>
-            </select>
-            }
+            
             <label>Save as</label><input name="path" [(ngModel)]="path" class="mono" />
             <label>Comment</label><input name="comment" [(ngModel)]="comment" />
           } @else {
@@ -118,7 +112,6 @@ interface Step { text: string; state: 'run' | 'ok' | 'err' | 'info'; }
 })
 export class KeySetupDialog implements OnInit {
   protected ui = inject(Ui);
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   private backend = inject(Backend);
   private tabs = inject(Tabs);
   private cdr = inject(ChangeDetectorRef);

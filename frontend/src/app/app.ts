@@ -160,7 +160,6 @@ export class App implements OnInit {
   readonly menus = menuBar(this.isMac);
 
   // ---- layout: modern (tabs in the title bar) or classic (toolbar, tab strip, menus) ----
-  readonly modern = computed(() => this.settings()?.layout !== 'classic');
   /** Title-bar session list, under its button. */
   readonly sessMenu = signal<{ top: number; right: number } | null>(null);
   openSessMenu(ev: MouseEvent) {
@@ -308,7 +307,7 @@ export class App implements OnInit {
     ]);
   }
 
-  /** The "⋯" button: the menus of the classic menu bar, one level deep. */
+  /** The "⋯" button: the menus (File, Edit, View…), one level deep. */
   moreMenu(ev: MouseEvent) {
     const el = ev.currentTarget as HTMLElement;
     const r = el.getBoundingClientRect();
@@ -324,8 +323,6 @@ export class App implements OnInit {
       { label: (s?.showButtonBar ? '✓ ' : '') + 'Button Bar', action: () => void this.action('toggle-button-bar') },
       { label: (s?.compactRows ? '✓ ' : '') + 'Compact Session Manager', action: () => this.ui.patchSettings({ compactRows: !s?.compactRows }) },
       { label: (s?.iconStyle === 'glyph' ? '✓ ' : '') + 'Glyph Icons (no tiles)', action: () => void this.action('toggle-icon-style') },
-      { separator: true },
-      { label: 'Switch to the Classic Layout (toolbar and menus)', action: () => void this.action('toggle-layout') },
     ]);
   }
 
@@ -347,8 +344,8 @@ export class App implements OnInit {
       const t = this.settings()?.theme ?? 'system';
       const light = t === 'light' || (t === 'system' && this.systemLight());
       document.documentElement.classList.toggle('light', light);
-      document.documentElement.classList.toggle('modern', this.settings()?.layout !== 'classic');
-      const glacier = this.settings()?.layout !== 'classic' && this.settings()?.style !== 'standard';
+      document.documentElement.classList.add('modern');
+      const glacier = this.settings()?.style !== 'standard';
       document.documentElement.classList.toggle('glacier', glacier);
       const fin = this.settings()?.iconFinish ?? '';
       glacierIcons.set(fin === 'glacier' || (fin === '' && glacier));
@@ -601,19 +598,10 @@ export class App implements OnInit {
       case 'layout-grid': this.tabs.setLayout('grid'); break;
       case 'lock': await this.tabs.lock(false); break;
       case 'lock-all': await this.tabs.lock(true); break;
-      case 'toggle-window-menu': this.ui.patchSettings({ inWindowMenu: !s?.inWindowMenu }); break;
       case 'toggle-icon-style': this.ui.patchSettings({ iconStyle: s?.iconStyle === 'glyph' ? '' : 'glyph' }); break;
-      case 'toggle-layout': {
-        const toClassic = s?.layout !== 'classic';
-        this.ui.patchSettings({ layout: toClassic ? 'classic' : '' });
-        this.ui.toast((toClassic ? 'Classic layout' : 'Modern layout') + ' - View → Modern / Classic Layout switches back'
-          + (this.isMac ? '. The window title bar follows when Termwright restarts.' : ''), 'info', 6000);
-        break;
-      }
       case 'toggle-connect-bar':
-        // the modern layout has no toolbar: Quick Open does what the Connect Bar does
-        if (this.modern()) { this.action('quick-open'); this.ui.toast('In the modern layout Quick Open (' + this.quickOpenKeys + ') is the Connect Bar: type an address, "ssh user@host", "voss 10.1.1.1" or a session name and press Enter.', 'info', 8000); }
-        else this.ui.patchSettings({ showConnectBar: !s?.showConnectBar });
+        // Quick Open does what the old Connect Bar did
+        this.action('quick-open'); this.ui.toast('Quick Open (' + this.quickOpenKeys + ') is the Connect Bar: type an address, "ssh user@host", "voss 10.1.1.1" or a session name and press Enter.', 'info', 8000);
         break;
       case 'shortcuts': this.ui.open('shortcuts'); break;
       case 'about': this.ui.open('about'); break;

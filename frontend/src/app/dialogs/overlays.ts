@@ -84,7 +84,7 @@ import { ENV_COLORS, envFg, envList } from '../core/env';
             <input name="v" [(ngModel)]="r.value" [type]="r.secret ? 'password' : 'text'" [attr.autocomplete]="r.secret ? 'off' : null" appAutofocus /></label></div>
           <div class="modal-foot"><span class="spacer"></span>
             <button type="button" (click)="closeInput(false)">Cancel</button>
-            <button type="submit" class="primary">{{ modern() ? okFor(r.title) : 'OK' }}</button>
+            <button type="submit" class="primary">{{ okFor(r.title) }}</button>
           </div>
         </form>
       </div>
@@ -143,7 +143,6 @@ export class Overlays {
     // a menu that would run past the bottom or right edge of the window moves up / left (its real size, once drawn)
     effect(() => { if (this.ui.menu()) requestAnimationFrame(() => this.fitMenu()); });
   }
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   /** The button names what it does: Create, Rename, Save… */
   okFor(title: string) {
     const t = title.toLowerCase();
@@ -234,7 +233,7 @@ export class Overlays {
             </div></div>
           <p>A free, open-source terminal emulator, session manager and file-transfer client for network and
             system engineers - one app for Windows, Linux and macOS.</p>
-          @if (modern()) {
+          
             <div class="tiles">
               @for (f of tiles; track f[0]) { <div class="tile"><b>{{ f[0] }}</b><span>{{ f[1] }}</span></div> }
             </div>
@@ -245,7 +244,7 @@ export class Overlays {
               <button type="button" (click)="copyRepo()"><app-icon name="copy" [size]="13" />{{ copied() ? 'Copied' : 'Copy Link' }}</button>
             </div>
             <p class="hint">Created by <b>Natarajan Periannan</b> · <a class="mono" (click)="backend.openURL(repo)">{{ repo.replace('https://', '') }}</a></p>
-          }
+          
           <ul class="features cl-only">
             <li><b>Connect</b> - SSH2, Telnet, Serial (RTS/CTS, XON/XOFF), local shell and raw TCP; jump hosts, SOCKS/HTTP proxies, port forwarding, X11 and agent forwarding</li>
             <li><b>Organise</b> - device types (login profiles), session manager with folders and folder defaults, workspaces, Quick Open, tabs and tiled layouts; imports sessions from other terminal programs, PuTTY, MobaXterm and OpenSSH config</li>
@@ -272,7 +271,7 @@ export class Overlays {
         <div class="modal-head"><span class="mh-ic"><app-icon name="keyboard" [size]="17" /></span>
           <span class="mh-t">Keyboard Shortcuts<span class="mh-s">Every menu command{{ isMacOS ? ' - shown for macOS' : '' }}</span></span></div>
         <div class="modal-body">
-          @if (modern()) {
+          
             <input type="search" class="kq" [value]="kq()" (input)="kq.set($any($event.target).value)" placeholder="Find a command or a key" />
             <div class="kgroups">
               @for (g of keyGroups(); track g.title) {
@@ -280,13 +279,13 @@ export class Overlays {
                   <div class="kc">@for (k of g.items; track k[1]) { <div class="kr"><span>{{ k[1] }}</span><span class="caps">@for (c of caps(k[0]); track $index) { <kbd>{{ c }}</kbd> }</span></div> }</div></div>
               } @empty { <div class="hint">Nothing matches.</div> }
             </div>
-          }
+          
           <table class="list keys cl-only">
             @for (k of keys; track k[0]) { <tr><td class="mono">{{ k[0] }}</td><td>{{ k[1] }}</td></tr> }
           </table>
         </div>
       }
-      <div class="modal-foot">@if (modern() && ui.dialog() !== 'about') { <span class="hint">Add your own keys in Settings → Key Map</span> }<span class="spacer"></span><button class="primary" (click)="ui.close()">Close</button></div>
+      <div class="modal-foot">@if (ui.dialog() !== 'about') { <span class="hint">Add your own keys in Settings → Key Map</span> }<span class="spacer"></span><button class="primary" (click)="ui.close()">Close</button></div>
     </div>
   </div>`,
   imports: [Icon],
@@ -323,7 +322,6 @@ export class About {
     catch { this.ui.toast(this.repo, 'info', 8000); }
   }
   readonly mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+Shift+';
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly tiles: [string, string][] = [
     ['Connect', 'SSH2, Telnet, Serial, RDP, VNC, local shell; jump hosts and proxies'], ['Organise', 'folders, device types, workspaces, import from other programs'],
     ['Automate', 'logon actions, triggers, scripts, command library, alerts'], ['Transfer', 'SFTP with bookmarks and sync, SCP, ZMODEM, YMODEM, XMODEM'],

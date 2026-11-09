@@ -32,11 +32,11 @@ export async function openWorkspace(tabs: Tabs, ws: Workspace) {
   imports: [FormsModule, Icon],
   template: `
   <div class="modal-backdrop">
-    <div class="modal" [class.ws-m]="modern()">
+    <div class="modal ws-m">
       <div class="modal-head"><span class="mh-ic"><app-icon name="layers" [size]="17" /></span>
         <span class="mh-t">Workspaces<span class="mh-s">A set of sessions and how they are laid out - open them all at once</span></span></div>
       <div class="modal-body">
-        @if (modern()) {
+        
           <div class="cards">
             @for (w of list(); track w.name) {
               <div class="ws">
@@ -49,27 +49,10 @@ export async function openWorkspace(tabs: Tabs, ws: Workspace) {
               </div>
             } @empty { <div class="empty">No workspaces yet. Open the sessions you work with together, arrange them, then <b>Save current tabs…</b></div> }
           </div>
-        } @else {
-        <p class="hint">A workspace remembers a set of sessions and the layout (tabs, side by side, grid). Save the current tabs with
-          <b>Save Current…</b>; open one to reconnect all of its sessions.</p>
-        <table class="list">
-          <tbody>
-            @for (w of list(); track w.name) {
-              <tr>
-                <td><b>{{ w.name }}</b><div class="hint">{{ w.tabs.length }} sessions · {{ w.layout }} · {{ names(w) }}</div></td>
-                <td class="nowrap">
-                  <button type="button" class="primary" (click)="open(w)">Open</button>
-                  <button type="button" (click)="rename(w)">Rename</button>
-                  <button type="button" class="icon-btn" title="Delete" (click)="remove(w)">✕</button>
-                </td>
-              </tr>
-            } @empty { <tr><td class="hint">No workspaces yet.</td></tr> }
-          </tbody>
-        </table>
-        }
+        
       </div>
       <div class="modal-foot">
-        <button type="button" (click)="saveCurrent()"><app-icon name="plus" [size]="14" class="md-only" />{{ modern() ? ' Save current tabs…' : 'Save Current…' }}</button>
+        <button type="button" (click)="saveCurrent()"><app-icon name="plus" [size]="14" class="md-only" />{{ ' Save current tabs…' }}</button>
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Close</button>
       </div>
@@ -96,7 +79,6 @@ export class Workspaces {
   protected ui = inject(Ui);
   private tabs = inject(Tabs);
   readonly list = computed(() => this.ui.settings()?.workspaces ?? []);
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   layoutName(l: string) { return ({ 'tile-v': 'side by side', 'tile-h': 'one above the other', grid: 'grid' } as Record<string, string>)[l] ?? 'tabs'; }
   /** The workspace's sessions; a green dot when one is open now. */
   chips(w: Workspace) {
@@ -182,11 +164,11 @@ export class Workspaces {
           </div>
           <label class="cl-only">Recording</label>
           <div class="checks rec"><label><input type="checkbox" name="rec" [(ngModel)]="d.record" />
-            @if (modern()) { <span class="tx">Record every connection<small>of the sessions in this folder</small></span> } @else { Record every connection of the sessions in this folder }</label></div>
+             <span class="tx">Record every connection<small>of the sessions in this folder</small></span> </label></div>
         </div>
       </div>
       <div class="modal-foot">
-        <button type="button" [class.danger-link]="modern()" (click)="clear()">Remove Defaults</button>
+        <button type="button" class="danger-link" (click)="clear()">Remove Defaults</button>
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Cancel</button>
         <button type="submit" class="primary">Save</button>
@@ -197,7 +179,6 @@ export class Workspaces {
 export class FolderDefaults {
   protected ui = inject(Ui);
   readonly folder = this.ui.folderDefaultsFor();
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly depth = Math.max(0, this.folder.split('/').filter(Boolean).length - 1);
   readonly envs = envList;
   d: FolderDefault = structuredClone((this.ui.settings()?.folderDefaults ?? []).find(x => x.folder === this.folder)

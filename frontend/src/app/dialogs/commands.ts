@@ -39,7 +39,7 @@ export async function sendSnippet(ui: Ui, tabs: Tabs, s: Snippet, target: SendTa
               <a [class.on]="sel() === c.i" (click)="select(c.i)" (dblclick)="send()" [title]="c.s.text"><span class="nm">{{ c.s.name }}</span><span class="tx md-only">{{ firstLine(c.s.text) }}</span></a>
             }
           }
-          <button type="button" class="add" (click)="add()"><app-icon name="plus" [size]="14" class="md-only" /> {{ modern() ? 'New command' : '+ New command' }}</button>
+          <button type="button" class="add" (click)="add()"><app-icon name="plus" [size]="14" class="md-only" /> {{ 'New command' }}</button>
         </nav>
         <div class="modal-body">
           @if (cur(); as c) {
@@ -63,19 +63,13 @@ export async function sendSnippet(ui: Ui, tabs: Tabs, s: Snippet, target: SendTa
                 <label>Asks for</label><div class="hint">{{ v }}</div>
               }
               <label>Send to</label>
-              @if (modern()) {
+              
                 <div class="seg sendto">
                   <button type="button" [class.on]="target === 'active'" (click)="target = 'active'">Active tab</button>
                   <button type="button" [class.on]="target === 'selected'" (click)="target = 'selected'">Selected tabs ({{ tabs.targets('selected').length }})</button>
                   <button type="button" [class.on]="target === 'all'" (click)="target = 'all'">All connected ({{ tabs.connectedCount() }})</button>
                 </div>
-              } @else {
-              <div class="checks row">
-                <label><input type="radio" name="tgt" value="active" [(ngModel)]="target" /> Active tab</label>
-                <label><input type="radio" name="tgt" value="selected" [(ngModel)]="target" /> Selected tabs ({{ tabs.targets('selected').length }})</label>
-                <label><input type="radio" name="tgt" value="all" [(ngModel)]="target" /> All connected ({{ tabs.connectedCount() }})</label>
-              </div>
-              }
+              
             </div>
           } @else {
             <p class="hint">Save commands you use often - per device type, troubleshooting steps, config snippets. Double-click a command
@@ -84,13 +78,13 @@ export async function sendSnippet(ui: Ui, tabs: Tabs, s: Snippet, target: SendTa
         </div>
       </div>
       <div class="modal-foot">
-        @if (cur()) { <button type="button" class="danger-text" [class.danger-link]="modern()" (click)="remove()">Delete</button> }
+        @if (cur()) { <button type="button" class="danger-text danger-link" (click)="remove()">Delete</button> }
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Close</button>
         @if (cur()) {
           <button type="button" (click)="save()" [disabled]="!dirty">Save</button>
           <button type="button" class="md-only" (click)="toWindow()">To Command Window</button>
-          <button type="button" class="primary" (click)="send()">{{ modern() ? (target === 'active' ? 'Send to tab' : 'Send') : 'Send' }}</button>
+          <button type="button" class="primary" (click)="send()">{{ (target === 'active' ? 'Send to tab' : 'Send') }}</button>
         }
       </div>
     </div>
@@ -136,7 +130,6 @@ export class Commands {
   readonly filter = signal('');
   readonly ph = 'One command per line. Use {{name}} or {{name:default}} for values asked when sending.';
   target: 'active' | 'selected' | 'all' = 'active';
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   firstLine(t: string) { return (t || '').split('\n')[0]; }
   /** Puts the command in the Command Window to change it before sending. */
   async toWindow() {

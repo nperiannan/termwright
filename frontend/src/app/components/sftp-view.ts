@@ -10,7 +10,6 @@ import { Tabs, TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { FileIcon } from './file-icon';
 import { Icon } from './icon';
-import { SessionIcon } from './session-icon';
 import { Autofocus } from '../core/autofocus';
 
 interface Pane {
@@ -25,8 +24,8 @@ interface Pane {
 /** Dual-pane SFTP file browser (local | remote) with transfer queue. */
 @Component({
   selector: 'app-sftp-view',
-  imports: [FormsModule, DatePipe, Icon, SessionIcon, FileIcon, FolderIcon, Autofocus],
-  host: { '[class.modern]': 'modern()' },
+  imports: [FormsModule, DatePipe, Icon, FileIcon, FolderIcon, Autofocus],
+  host: { class: 'modern' },
   template: `
     @if (shell() && !shell()!.cwd && !cwdHintClosed()) {
       <div class="cwd-hint">
@@ -37,7 +36,7 @@ interface Pane {
         <button type="button" class="icon-btn" title="Hide" (click)="closeCwdHint()">✕</button>
       </div>
     }
-    @if (modern()) {
+    
       <div class="stb">
         <span class="stic"><app-icon name="sftp" [size]="16" /></span>
         <b class="stt">SFTP · {{ tab().session.name || hostOnly() }}</b>
@@ -56,13 +55,13 @@ interface Pane {
           title="Protocol used by → and ← (browsing always uses SFTP). SCP helps with devices whose SFTP server is slow or limited.">
           <option value="sftp">SFTP</option><option value="scp">SCP</option></select>
       </div>
-    }
+    
     <div class="panes">
       @for (p of [local(), remote()]; track p.side) {
         <section class="pane" [class.focus]="focus() === p.side" (mousedown)="focus.set(p.side)">
           <header>
             <span class="label" [title]="p.side === 'remote' && tab().hopTarget ? 'Files on ' + tab().hopTarget + ', reached through the jump station ' + tab().session.hostname : ''">{{ p.side === 'local' ? 'This computer' : (tab().root ? tab().runAsUser + ' @ ' + hostOnly() : tab().hopTarget || tab().session.hostname || 'Server') }}@if (p.side === 'remote' && tab().hopTarget) {<span class="via-jump"> via {{ tab().session.hostname }}</span>}</span>
-            @if (modern()) {
+            
               @if (editing() !== p.side) {
                 <div class="crumb" title="Click to type a path" (click)="editing.set(p.side)">
                   @for (c of crumbs(p); track $index) {
@@ -80,26 +79,7 @@ interface Pane {
               <button class="icon-btn" title="New file" (click)="newFile(p)"><app-icon name="file-plus" /></button>
               <button class="icon-btn del" [disabled]="!p.selected.size" [title]="delTitle(p)" (click)="remove(p)"><app-icon name="trash" /></button>
               <button class="icon-btn bm" [class.on]="isBookmarked(p)" title="Bookmarks" (click)="bookmarkMenu($event, p)"><app-icon name="star" /></button>
-            } @else {
-              <button class="icon-btn" title="Up" (click)="up(p)"><app-icon name="up" /></button>
-              <input class="path mono" [ngModel]="p.dir" (keydown.enter)="go(p, $any($event.target).value)" spellcheck="false" />
-              <button class="icon-btn" title="Refresh" (click)="load(p)"><app-icon name="refresh" /></button>
-              <button class="icon-btn" title="New folder" (click)="mkdir(p)"><app-icon name="folder-plus" /></button>
-              <button class="icon-btn" title="New file" (click)="newFile(p)"><app-icon name="file-plus" /></button>
-              <button class="icon-btn del" [disabled]="!p.selected.size" [title]="delTitle(p)" (click)="remove(p)"><app-icon name="trash" /></button>
-              @if (p.side === 'remote') {
-                <button class="root-btn" [class.on]="tab().root" [disabled]="rootBusy()" (click)="runAsMenu($event)"
-                  [title]="tab().root ? 'Browsing as ' + tab().runAsUser + '. Click to switch back or to another user.' : 'Browse as root or another user (sudo, su, …)'">
-                  {{ rootBusy() ? '…' : tab().root ? 'as ' + tab().runAsUser + ' ▾' : 'Run as ▾' }}</button>
-              }
-              @if (p.side === 'remote' && shell()) {
-                <button class="root-btn" [class.on]="follow()" (click)="terminalMenu($event)"
-                  [title]="shell()!.cwd ? 'Terminal folder: ' + shell()!.cwd + (follow() ? ' (following)' : '') : 'The terminal does not report its folder yet'">
-                  &gt;_ {{ follow() ? 'Following' : 'Terminal' }} ▾</button>              } @else if (p.side === 'remote' && elsewhere()) {
-                <button class="root-btn away" (click)="elsewhereMenu($event)" [title]="'The terminal is on ' + elsewhere() + ', not on the host this tab browses'">&gt;_ On {{ shortHost(elsewhere()) }} ▾</button>
-              }
-              <button class="icon-btn bm" [class.on]="isBookmarked(p)" title="Bookmarks" (click)="bookmarkMenu($event, p)">{{ isBookmarked(p) ? '★' : '☆' }}</button>
-            }
+            
           </header>
           <div class="bmbar">
             @for (b of bookmarkList(p); track b.name + b.path) {
@@ -109,23 +89,19 @@ interface Pane {
             @if (!isBookmarked(p)) { <button type="button" class="bmc add" title="Bookmark this folder" (click)="addBookmark(p)">+ Bookmark</button> }
           </div>
           <div class="list" tabindex="0" (keydown)="key($event, p)" [class.multi]="p.selected.size > 0">
-            <div class="row head"><span class="n">@if (modern()) { <span class="ck" title="Select all / none" (click)="toggleAll(p)"><input type="checkbox" tabindex="-1" [checked]="p.entries.length > 0 && p.selected.size === p.entries.length" [indeterminate]="p.selected.size > 0 && p.selected.size < p.entries.length" /></span> }Name</span><span class="s">Size</span><span class="d">Modified</span><span class="m">Mode</span></div>
+            <div class="row head"><span class="n"> <span class="ck" title="Select all / none" (click)="toggleAll(p)"><input type="checkbox" tabindex="-1" [checked]="p.entries.length > 0 && p.selected.size === p.entries.length" [indeterminate]="p.selected.size > 0 && p.selected.size < p.entries.length" /></span> Name</span><span class="s">Size</span><span class="d">Modified</span><span class="m">Mode</span></div>
             @if (p.error) { <div class="err pad">{{ p.error }}</div> }
-            @if (modern() && crumbs(p).length > 1) {
+            @if (crumbs(p).length > 1) {
               <div class="row" title="Up one folder" (dblclick)="up(p)"><span class="n"><span class="fold"></span>..</span><span class="s"></span><span class="d"></span><span class="m"></span></div>
             }
             @for (e of p.entries; track e.name) {
               <div class="row" [attr.data-n]="e.name" [class.sel]="p.selected.has(e.name)" (click)="select(p, e, $event)" (dblclick)="open(p, e)"
                    (contextmenu)="menu($event, p, e)">
-                @if (modern()) {
+                
                   <span class="n"><span class="ck" (click)="$event.stopPropagation(); toggle(p, e)" (dblclick)="$event.stopPropagation()" title="Select (also Cmd/Ctrl-click, Shift-click for a range)"><input type="checkbox" tabindex="-1" [checked]="p.selected.has(e.name)" /></span>@if (e.isDir) { @if (glass()) { <app-folder-icon [size]="18" [style.opacity]="e.name.startsWith('.') ? .65 : 1" /> } @else { <span class="fold" [class.dot]="e.name.startsWith('.')"></span> } } @else { <app-file-icon [name]="e.name" [link]="e.isLink" [badge]="true" /> }<span translate="no">{{ e.name }}</span></span>
                   <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
                   <span class="d" [title]="(e.modTime | date: 'yyyy-MM-dd HH:mm') + '  ' + e.mode">{{ when(e.modTime) }}</span>
-                } @else {
-                <span class="n">@if (e.isDir) { <app-session-icon kind="folder" /> } @else { <app-file-icon [name]="e.name" [link]="e.isLink" /> }<span translate="no">{{ e.name }}</span></span>
-                <span class="s">{{ e.isDir ? '' : size(e.size) }}</span>
-                <span class="d">{{ e.modTime | date: 'yyyy-MM-dd HH:mm' }}</span>
-                }
+                
                 <span class="m mono">{{ e.mode }}</span>
               </div>
             }
@@ -133,7 +109,7 @@ interface Pane {
           <footer>{{ p.entries.length }} items @if (p.selected.size) { · {{ p.selected.size }} selected <a class="clr" (click)="clearSel(p)">Clear</a> }</footer>
         </section>
         @if (p.side === 'local') {
-          @if (modern()) {
+          
             <div class="mid">
               <span class="ml">Copy</span>
               <button class="ar" [title]="'Upload the selected files to the server via ' + via().toUpperCase()" [disabled]="!local().selected.size" (click)="transfer('up')">→</button>
@@ -144,25 +120,11 @@ interface Pane {
               <span class="ml">Diff</span>
               <button class="ar sy" [disabled]="!canCompare()" [title]="compareTitle()" (click)="compare()"><app-icon name="compare" [size]="16" /></button>
             </div>
-          } @else {
-            <div class="mid">
-              <div class="via" role="radiogroup" title="Protocol used by → and ← (browsing always uses SFTP). SCP helps with devices whose SFTP server is slow or limited.">
-                <span class="via-label">Copy via</span>
-                <button type="button" role="radio" [class.on]="via() === 'sftp'" [attr.aria-checked]="via() === 'sftp'" (click)="setVia('sftp')">SFTP</button>
-                <button type="button" role="radio" [class.on]="via() === 'scp'" [attr.aria-checked]="via() === 'scp'" (click)="setVia('scp')"
-                  [disabled]="tab().root" [attr.title]="tab().root ? 'SCP cannot copy as another user; SFTP is used' : null">SCP</button>
-              </div>
-              <button [title]="'Upload selected to server via ' + via().toUpperCase()" [disabled]="!local().selected.size" (click)="transfer('up')">→</button>
-              <button [title]="'Download selected to this computer via ' + via().toUpperCase()" [disabled]="!remote().selected.size" (click)="transfer('down')">←</button>
-              <span class="sync-label">Sync</span>
-              <button class="sync" title="Sync folder contents up: copy new and changed files from this computer to the server (nothing is deleted)" (click)="sync('up')">⇉</button>
-              <button class="sync" title="Sync folder contents down: copy new and changed files from the server to this computer (nothing is deleted)" (click)="sync('down')">⇇</button>
-            </div>
-          }
+          
         }
       }
     </div>
-    @if (modern()) {
+    
       @if (current(); as t) {
         <div class="xbar" [class]="'xbar ' + t.state">
           <span class="xf" [title]="t.file">{{ dirGlyph(t.direction) }} {{ t.file }}</span>
@@ -201,27 +163,7 @@ interface Pane {
         </div>
       }
       }
-    } @else {
-      @if (shown().length) {
-        <div class="queue">
-          @for (t of shown(); track t.id) {
-            <div class="xfer" [class]="t.state">
-              <span class="dir">{{ dirGlyph(t.direction) }}</span>
-              <span class="file mono" [title]="t.file">{{ t.file }}</span>
-              <progress [max]="t.total || 1" [value]="t.bytes"></progress>
-              <span class="num">{{ size(t.bytes) }} / {{ size(t.total) }} · {{ t.filesDone }}/{{ t.filesTotal }}</span>
-              <span class="st">{{ t.state === 'error' ? t.error : t.state }}</span>
-              @if (t.state === 'running') { <button class="icon-btn" (click)="cancel(t.id)">✕</button> }
-              @if (t.resumable && (t.state === 'error' || t.state === 'cancelled')) {
-                <button class="icon-btn" title="Resume: continue partial files, skip completed ones" (click)="resume(t.id)">⟳</button>
-              }
-            </div>
-          }
-          <button class="clear" (click)="clearDone()">Clear finished</button>
-          <button class="clear" title="Close - transfers that are running go on in the background" (click)="closeTransfers()">Close</button>
-        </div>
-      }
-    }
+    
   `,
   styleUrl: './sftp-view.scss',
 })
@@ -238,7 +180,6 @@ export class SftpView implements OnInit {
   /** Protocol used by → / ← (browsing always uses SFTP). */
   readonly via = signal<'sftp' | 'scp'>('sftp');
   readonly size = formatBytes;
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   /** The pane whose path is being typed (modern layout shows clickable folders otherwise). */
   readonly editing = signal<'' | 'local' | 'remote'>('');
   /** The transfer the bar shows: the first running one, else the latest. */

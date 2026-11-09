@@ -23,7 +23,7 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
             <button type="button" class="link" (click)="saveTemplate()">Save the Termwright import template…</button> ·
             <button type="button" class="link" (click)="backend.openURL(formatGuide)">Format guide</button> · then import the file as
             <button type="button" class="link" (click)="source = 'csv'; pick('csv')">Termwright template (CSV)</button>.</div>
-          @if (modern()) {
+          
             @if (found().length) {
               <div class="found">
                 <div class="fh"><span class="g"></span><b>Found on this computer</b></div>
@@ -41,7 +41,7 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
                 }
               </div>
             }
-          }
+          
           <div class="grid">
             <label class="cl-only" style="align-self: start; padding-top: 1px">Source</label>
             <div class="src-groups cl-only">
@@ -64,7 +64,7 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
               <label></label>
               <div class="checks"><label><input type="checkbox" name="awspub" [(ngModel)]="awsPublic" /> Use public IP addresses (default: private, e.g. via a jump host)</label></div>
             } @else {
-            <label>{{ modern() ? pathLabel() : 'Path' }}</label>
+            <label>{{ pathLabel() }}</label>
             <div class="row"><input name="path" class="pathin" [(ngModel)]="path" (change)="checkSettings()" required /><button type="button" (click)="browse()">Browse...</button></div>
             }
             @if (source === 'mremoteng') {
@@ -79,19 +79,13 @@ type Source = 'twzip' | 'twdir' | 'folder' | 'zip' | 'xml' | 'ini' | 'ssh' | 'pu
             }
             <div class="pair">
               <div class="f"><label>Into folder</label>
-                @if (modern()) { <app-folder-picker [(value)]="target" /> } @else { <input name="tf" [(ngModel)]="target" placeholder="(top level)" /> }</div>
+                 <app-folder-picker [(value)]="target" /> </div>
               <div class="f"><label>If a name exists</label>
-                @if (modern()) {
+                
                   <div class="seg"><button type="button" [class.on]="conflict === 'rename'" (click)="conflict = 'rename'">Keep both</button>
                     <button type="button" [class.on]="conflict === 'overwrite'" (click)="conflict = 'overwrite'">Replace</button>
                     <button type="button" [class.on]="conflict === 'skip'" (click)="conflict = 'skip'">Skip</button></div>
-                } @else {
-                <select name="conf" [(ngModel)]="conflict">
-                  <option value="rename">Keep both (rename)</option>
-                  <option value="overwrite">Overwrite</option>
-                  <option value="skip">Skip</option>
-                </select>
-                }</div>
+                </div>
             </div>
             @if (sum(); as m) {
               <label class="cl-only" style="align-self: start">Settings</label>
@@ -221,7 +215,6 @@ export class ImportDialog {
   protected ui = inject(Ui);
   protected backend = inject(Backend);
   private cdr = inject(ChangeDetectorRef);
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   /** Sessions of other programs found in their usual places on this computer. */
   readonly found = signal<ImportSource[]>([]);
   constructor() { this.backend.findImportSources().then(l => this.found.set(l ?? [])).catch(() => {}); }
@@ -380,7 +373,7 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
             <ul class="lst">@for (n of r.notes; track n) { <li>{{ n }}</li> }</ul>
           }
         } @else {
-        @if (modern()) {
+        
           <div class="xs">
             <div class="lbl">Sessions</div>
             <div class="seg scope"><button type="button" [class.on]="scope === 'all'" (click)="scope = 'all'">All sessions</button>
@@ -402,34 +395,7 @@ const OTHER_FORMATS: { v: ExportFormat; label: string; ext: string; hint: string
             <div class="row"><input name="dest2" class="pathin" [(ngModel)]="dest" required /><button type="button" (click)="browse()">Browse...</button></div>
             <div class="hint">@if (hint()) { {{ hint() }} } Passwords are not written into the export - Passwords &amp; Accounts → Export / Import moves them.</div>
           </div>
-        } @else {
-        <div class="grid">
-          <label>Sessions</label>
-          <div class="checks">
-            <label><input type="radio" name="scope" value="all" [(ngModel)]="scope" /> All sessions</label>
-            <label [class.disabled]="!selected"><input type="radio" name="scope" value="sel" [(ngModel)]="scope" [disabled]="!selected" />
-              Selected: {{ selected || '(nothing selected)' }}</label>
-          </div>
-          <label>Format</label>
-          <div class="checks">
-            <div class="grp">Termwright (everything is kept)</div>
-            <label><input type="radio" name="fmt" value="dir" [(ngModel)]="format" (ngModelChange)="dest = ''" /> Folder (Sessions/*.ini; also works as a SecureCRT Config/Sessions folder)</label>
-            <label><input type="radio" name="fmt" value="zip" [(ngModel)]="format" (ngModelChange)="dest = ''" /> Zip archive</label>
-            <label><input type="radio" name="fmt" value="xml" [(ngModel)]="format" (ngModelChange)="dest = ''" /> XML (also for SecureCRT's Import Settings)</label>
-            @if (own.some(o => o.v === format)) {
-              <label [class.disabled]="format === 'xml'"><input type="checkbox" name="ws1" [(ngModel)]="withSettings" [disabled]="format === 'xml'" />
-                Include settings (device types, accounts, Folder Defaults, command library, Global Options){{ format === 'xml' ? ' - Zip or Folder only' : '' }}</label>
-            }
-            <div class="grp">Other programs (name, folder, address, login, key, jump host, forwards, serial settings)</div>
-            @for (f of others; track f.v) {
-              <label><input type="radio" name="fmt" [value]="f.v" [(ngModel)]="format" (ngModelChange)="dest = ''" /> {{ f.label }}</label>
-            }
-          </div>
-          <label>Destination</label>
-          <div class="row"><input name="dest" [(ngModel)]="dest" required /><button type="button" (click)="browse()">Browse...</button></div>
-          @if (hint()) { <label></label><div class="hint">{{ hint() }} Passwords are never exported.</div> }
-        </div>
-        }
+        
         }
         @if (error()) { <div class="err">{{ error() }}</div> }
       </div>
@@ -477,7 +443,6 @@ export class ExportDialog {
   readonly error = signal('');
   readonly report = signal<ExportReport | null>(null);
   readonly others = OTHER_FORMATS;
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly own: { v: ExportFormat; t: string; s: string }[] = [
     { v: 'zip', t: 'Zip archive', s: 'one file, easy to send' }, { v: 'dir', t: 'Folder', s: 'Sessions/*.ini' }, { v: 'xml', t: 'XML', s: 'also for SecureCRT' }];
   chipOf(v: ExportFormat) {

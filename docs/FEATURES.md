@@ -15,7 +15,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 
 ## Main window
 
-- **Modern layout** (default): tabs, a Sessions button (every session with its icon, filter, connect), Quick Connect, SFTP, the theme switch, Settings and a ⋯ menu in one title bar; the **Classic layout** (menu bar, toolbar, Connect Bar, tab strip) is one click away (View → Modern / Classic Layout).
+- **Modern layout** (default): tabs, a Sessions button (every session with its icon, filter, connect), Quick Connect, SFTP, the theme switch, Settings and a ⋯ menu in one title bar.
 - **Styles**: **Glacier** (the default) - frosted glass on the title bar, Session Manager and start page, raised start page cards three to a row, graphite in the dark theme and icy in the light one - or **Standard**; Settings → General → Style.
 - **Glass or flat folder and file icons**: in the Session Manager, the Files panel, SFTP and the folder picker; *As the style*, *Glass* or *Flat* (Settings → General → Folder and file icons).
 - **Start page**: a search-or-connect box, quick actions spread under it and cards for favourite and recent sessions (device icon, address, device facts, last used, live state).
@@ -27,7 +27,7 @@ Everything Termwright does, one line each. Details and screenshots are in the [U
 - **Toolbar**: connect, quick connect, local shell, reconnect, disconnect, copy, paste, find, log, SFTP, scripts, layouts, lock and more.
 - **Connect Bar**: type `ssh admin@host`, `telnet host 2003`, `serial COM3 115200`, `raw host 4001`, `rdp host`, `vnc host`, `voss 10.1.1.1` or a session name and press Enter.
 - **Tabs**: one per connection with a status dot (connected, connecting, error, disconnected); middle-click closes.
-- **Drag tabs** to reorder them (title bar and classic tab strip); the order is kept for *Reopen the tabs that were open*.
+- **Drag tabs** to reorder them (in the title bar); the order is kept for *Reopen the tabs that were open*.
 - **Double-click the empty title bar** to zoom (or minimise) the window, as the system's title-bar setting says.
 - **Tab badges**: `LOG` (logging), `● REC` (session recording), `SCRIPT` (script recording), `SEL` (in the send group), `PROD` (production).
 - **Layouts**: tabbed, tile side by side, tile stacked, tile grid.

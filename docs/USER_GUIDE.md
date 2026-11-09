@@ -53,7 +53,7 @@ To build from source see the [README](../README.md#build).
 
 The first time Termwright starts (and once after updating to a new version; **Help → Welcome…** shows it again) a short welcome flow opens:
 
-1. **Look** - theme (Light, Dark or System), text size and layout (Modern or Classic).
+1. **Look** - theme (Light, Dark or System), text size and the start page buttons.
 2. **Sessions** - sessions of SecureCRT, PuTTY, SuperPuTTY, MobaXterm and OpenSSH found in their usual places are listed with an **Import** button; export files (SecureCRT `.xml`/`.zip` or Config folder, PuTTY/KiTTY `.reg`, SuperPuTTY `Sessions.xml`, MobaXterm, CSV) are one click away.
 3. **Security** - an optional **master password**. Type one (any 4 or more characters; a meter shows how strong it is - capitals, numbers and symbols help but are never required) and confirm it, or press **Skip**. It can be set, changed or removed later in Options → Passwords & Accounts → Master Password.
 4. **Done** - a few tips, then *Start Using Termwright* or *Discover Devices*.
@@ -68,7 +68,7 @@ With a master password set, Termwright starts with an **unlock window**: type th
 
 ## 2. The main window
 
-Termwright has two layouts: **Modern** (the default) and **Classic** (toolbar, tab strip and menu bar). Switch at any time with **View → Modern / Classic Layout**, the **⋯** menu, Quick Open or Options → Settings → General → Layout; on macOS the window's title bar follows after a restart.
+Termwright has one layout: tabs, the Sessions list, search and the menus (**⋯**) in the title bar. (The Classic layout with a toolbar, tab strip and menu bar was removed in 0.33; settings that chose it open the same window.)
 
 | Area (modern layout) | What it does |
 |---|---|
@@ -85,7 +85,7 @@ Termwright has two layouts: **Modern** (the default) and **Classic** (toolbar, t
 |---|---|
 | ![Start page](screenshots/home.png) | ![Session side panel](screenshots/session-panel.png) |
 
-In the **classic layout** the menu bar (on macOS also the top-of-screen menu), the toolbar with Connect, Quick Connect, Local Shell, Reconnect, Disconnect, Copy, Paste, Find, Log, SFTP and the layout buttons, the **Connect Bar** and the tab strip are back; everything else works the same.
+Every command of the old menu bar is in the **⋯** menu of the title bar (on macOS also in the top-of-screen menu), with the same keyboard shortcuts.
 
 The Session Manager can move to the **other side** or be **hidden** (View → Session Manager Left / Right, View → Session Manager, `Mod+M`); position, visibility and width are remembered.
 
@@ -786,7 +786,7 @@ The connector listens only on this computer (127.0.0.1) with a random key kept i
 - `+` adds a button. Right-click a button to edit, move, delete or toggle *Send to All Tabs*.
 - In *Options → Global Options → Button Bar* each button can **send text** (escapes: `\r` Enter, `\n`, `\t`, `\e` Esc, `\x03` Ctrl+C), run an **action** (e.g. *Open SFTP Tab*) and/or run a **script**.
 
-**Connect Bar** (classic layout): see [§3](#3-connecting). Hide it in Global Options → General. The modern layout has no toolbar: **Quick Open** (`Cmd+G` / `Ctrl+Shift+G`), the start page's box and the title bar's **Sessions** list connect the same way (View → Connect Bar opens Quick Open).
+**Connect Bar**: **Quick Open** (`Cmd+G` / `Ctrl+Shift+G`), the start page's box and the title bar's **Sessions** list connect the same way (View → Connect Bar opens Quick Open).
 
 **Command History** (Script → Command History…, `Cmd+Y` / `Ctrl+Shift+Y`, or *History…* in the Command Window): every command you type in a terminal or send from the Command Window is remembered with the session, device type and time (up to 5000).
 - Type words to search (`isis adj`); *Only VOSS* (the active tab's device type) narrows it down.
@@ -963,7 +963,7 @@ Folders use the same colored folder icon as the Session Manager. Files are color
   ![New File](screenshots/sftp-newfile.png)
 - Right-click (server side): Download, Rename, Delete, New Folder, Refresh. Right-click (this computer): Upload, Move to Trash, New Folder, Refresh.
 - **Sync ⇉ / ⇇** copies only new or changed files (size or newer time) from the current local folder to the current remote folder or back. Nothing is deleted.
-- The **transfer bar** at the bottom shows the current copy with progress, speed and time left, *Cancel*, and *N more* for the other transfers (Resume and Clear for finished ones). **✕ closes it** - copies that are running go on in the background (the status bar still shows them) and the bar comes back for the next transfer. The classic layout's queue has *Close* too.
+- The **transfer bar** at the bottom shows the current copy with progress, speed and time left, *Cancel*, and *N more* for the other transfers (Resume and Clear for finished ones). **✕ closes it** - copies that are running go on in the background (the status bar still shows them) and the bar comes back for the next transfer.
 - **Bookmarks**: the **bookmark bar** under each path lists the bookmarks of that side - click one to open it, right-click to remove it, **+ Bookmark** saves the current folder (the ☆ in the header does the same and lists them). Server bookmarks belong to their session; local bookmarks are shared by all sessions.
 - **Server-to-server copy**: with two SFTP tabs open (e.g. two switches), right-click files or folders on one server → **Copy to <other server>: <its current folder>**. The data streams through this computer; nothing is stored locally. The ⇄ entry in the queue shows progress.
 - **Copy via SFTP / SCP** (the SFTP / SCP selector in the top bar - between the panes in the classic layout; the choice is remembered per session): browsing always uses SFTP, but → / ← (and double-click, Upload/Download in the right-click menu) can copy with **SCP** over the same login - useful when a device's SFTP server is slow or limited. Folders are copied recursively; the queue shows `↑ SCP` / `↓ SCP`. Sync, resume and server-to-server copy stay SFTP.
@@ -1275,7 +1275,7 @@ Notes:
 
 ## 13. Global Options reference
 
-In the modern layout Global Options is called **Settings** (⚙ in the title bar). The General page starts with **Appearance** - theme previews, Layout (Modern / Classic) and Icons (Tiles / Glyphs) side by side, interface font and text size - then **Behaviour** (each switch with a short explanation: confirm before closing, confirm multi-line paste, remember typed commands, **save Quick Connect sessions**, reopen the tabs that were open, show the Session Manager, Button Bar and Command Window) and **Folders and files**. Changes apply when you press *Save*.
+Global Options is called **Settings** (⚙ in the title bar). The General page starts with **Appearance** - theme previews, Icons (Tiles / Glyphs), Start page buttons, interface font and text size - then **Behaviour** (each switch with a short explanation: confirm before closing, confirm multi-line paste, remember typed commands, **save Quick Connect sessions**, reopen the tabs that were open, show the Session Manager, Button Bar and Command Window) and **Folders and files**. Changes apply when you press *Save*.
 
 ### Interface language
 

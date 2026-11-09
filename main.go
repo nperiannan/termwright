@@ -46,22 +46,21 @@ func main() {
 	discover.RaiseFileLimit()
 	app := NewApp()
 	width, height, start := 1280, 820, options.Normal
-	modern, lang := true, ""
+	lang := ""
 	if dir, err := config.DataDir(); err == nil {
 		if c, err := config.Load(dir); err == nil {
 			if w := c.Get().Window; w.Width >= 760 && w.Height >= 480 && w.Width < 20000 && w.Height < 20000 {
 				width, height = w.Width, w.Height
 			}
-			modern = c.Get().Layout != "classic"
 			lang = c.Get().Language
 			if c.Get().Window.Maximised {
 				start = options.Maximised
 			}
 		}
 	}
-	// macOS, modern layout: the tabs share the title bar with the window buttons.
+	// macOS: the tabs share the title bar with the window buttons.
 	var titleBar *mac.TitleBar
-	if modern && runtime.GOOS == "darwin" {
+	if runtime.GOOS == "darwin" {
 		titleBar = mac.TitleBarHiddenInset()
 		insetTitle = true
 	}
@@ -210,8 +209,6 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	add(view, "Files Panel", "files-panel")
 	add(view, "Button Bar", "toggle-button-bar")
 	add(view, "Connect Bar", "toggle-connect-bar")
-	add(view, "Menu Bar in Window", "toggle-window-menu")
-	add(view, "Modern / Classic Layout", "toggle-layout")
 	add(view, "Tile / Glyph Icons", "toggle-icon-style")
 	view.AddSeparator()
 	add(view, "Tabbed", "layout-tabs")

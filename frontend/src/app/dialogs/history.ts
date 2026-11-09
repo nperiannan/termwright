@@ -132,7 +132,6 @@ export class HistoryDialog implements AfterViewInit {
   readonly onlyDt = signal(!!this.tabs.activeDeviceType());
   readonly results = computed<HistoryEntry[]>(() => this.hist.search(this.query(), this.onlyDt() ? this.dt() : '', 300));
   readonly current = computed(() => this.results()[this.sel()] ?? null);
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   /** A steady colour per device type for its badge. */
   dtColor(name: string) {
     const fixed: Record<string, string> = { voss: '#0d9488', exos: '#7c3aed', 'cisco ios': '#2563eb', linux: '#d97706' };

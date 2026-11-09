@@ -125,7 +125,7 @@ type Settings struct {
 	UIFontSize           int                          `json:"uiFontSize"`           // interface text size in px (13-17; 0 = 13)
 	ThemeFollowsSystem   bool                         `json:"themeFollowsSystem"`   // set once when the default became "system" (0.20.1)
 	HighlightOptIn       bool                         `json:"highlightOptIn"`       // set once when keyword highlighting became off by default (0.20.3)
-	Layout               string                       `json:"layout"`               // "" = modern (title bar with tabs), "classic" = toolbar, tab strip and menus
+	Layout               string                       `json:"layout"`               // always "" (modern: tabs in the title bar); "classic" was removed in 0.33
 	Style                string                       `json:"style"`                // modern layout: "" (or "glacier") = Glacier, frosted glass, the default; "standard" = the plain look
 	IconFinish           string                       `json:"iconFinish,omitempty"` // folder and file icons: "" = as the style (glass in Glacier), "glacier" or "flat"
 	ModernLayout         bool                         `json:"modernLayout"`         // set once when the modern layout became the default (0.21.0)
@@ -553,6 +553,10 @@ func Load(dataDir string) (*Manager, error) {
 	// it can be shown again from View).
 	if !m.cur.ModernLayout {
 		m.cur.ShowButtonBar, m.cur.ModernLayout, changed = false, true, true
+	}
+	// The classic layout is gone (0.33): everyone uses the modern one.
+	if m.cur.Layout != "" {
+		m.cur.Layout, changed = "", true
 	}
 	if changed {
 		_ = m.Save(m.cur)

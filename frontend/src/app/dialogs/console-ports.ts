@@ -49,11 +49,7 @@ interface Port { port: number; name: string; exists: boolean; }
               </select></div>
           </div>
           <label>Folder</label>
-          @if (modern()) { <app-folder-picker [value]="folder()" (valueChange)="folder.set($event)" /> }
-          @else {
-          <input [ngModel]="folder()" (ngModelChange)="folder.set($event)" list="cp-folders" placeholder="(top level)" />
-          <datalist id="cp-folders">@for (f of folders(); track f) { <option [value]="f"></option> }</datalist>
-          }
+           <app-folder-picker [value]="folder()" (valueChange)="folder.set($event)" /> 
         </div>
         <div class="prev">
           <table class="list">
@@ -97,7 +93,6 @@ export class ConsolePorts {
   private backend = inject(Backend);
   readonly methods = CONSOLE_METHODS;
   readonly server = this.ui.consoleServerFor;
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly node = computed<SessionNode | null>(() => this.ui.findNode(this.server()));
   readonly host = computed(() => this.node()?.hostname ?? '');
   readonly method = signal('opengear-ssh');

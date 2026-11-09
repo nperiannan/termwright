@@ -66,7 +66,7 @@ export function sessionAddr(n: SessionNode): string {
 @Component({
   selector: 'app-session-tree',
   imports: [NgTemplateOutlet, FormsModule, Icon, SessionIcon, DeviceIcon, FolderIcon],
-  host: { '[class.roomy]': 'roomy()', '[class.mcompact]': '!roomy() && modern()', '(keydown)': 'treeKey($event)', tabindex: '-1' },
+  host: { '[class.roomy]': 'roomy()', '[class.mcompact]': '!roomy()', '(keydown)': 'treeKey($event)', tabindex: '-1' },
   template: `
     @if (!roomy()) {
     <div class="sm-head">
@@ -76,17 +76,12 @@ export function sessionAddr(n: SessionNode): string {
       <button class="icon-btn" title="Refresh" (click)="ui.refreshTree(); checkNow()"><app-icon name="refresh" /></button>
       <button class="icon-btn" [class.on]="reach()" [title]="reachTitle()"
         (click)="toggleReach()"><app-icon name="pulse" /></button>
-      @if (ui.settings()?.layout !== 'classic') {
+      
         <!-- modern layout, compact rows: back to two-line rows; the rest is in the ⋯ menu (the title bar hides the panel) -->
         <button class="icon-btn" title="Two-line rows: name and address, device icon and status (turns Compact Rows off)"
           (click)="ui.patchSettings({ compactRows: false })"><app-icon name="rows" /></button>
         <button class="icon-btn" title="New folder, refresh, reachability, compact rows, dock side, hide" (click)="headMenu($event)"><app-icon name="more" /></button>
-      } @else {
-      <button class="icon-btn" [title]="ui.settings()?.sessionManagerRight ? 'Move the Session Manager to the left' : 'Move the Session Manager to the right'"
-        (click)="ui.actionHandler('toggle-session-manager-side')"><app-icon [name]="ui.settings()?.sessionManagerRight ? 'dock-left' : 'dock-right'" /></button>
-      <button class="icon-btn" title="Hide the Session Manager (View → Session Manager or the toolbar shows it again)"
-        (click)="ui.actionHandler('toggle-session-manager')"><app-icon name="hide-panel" /></button>
-      }
+      
     </div>
     }
     <div class="sm-search">
@@ -107,7 +102,7 @@ export function sessionAddr(n: SessionNode): string {
           @case ('sec') {
             <div class="sec" (click)="toggleSection(r.sec!)" (contextmenu)="secMenu($event, r.sec!)"><span class="twisty" [class.open]="!closedSec().has(r.sec!)"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>{{ r.label }}</div>
           }
-          @case ('all') { <div class="sec all">All sessions @if (modern()) { <span class="total">{{ counts().get('') ?? 0 }}</span> }</div> }
+          @case ('all') { <div class="sec all">All sessions  <span class="total">{{ counts().get('') ?? 0 }}</span> </div> }
           @case ('item') {
             <div class="row session" [class.sel]="isSel(r.n!)" [style.padding-left.px]="r.sec ? 22 : 8"
                  (click)="select(r.n!, $event)" (dblclick)="connect(r.n!)" (contextmenu)="nodeMenu($event, r.n!, r.sec)"
@@ -129,11 +124,10 @@ export function sessionAddr(n: SessionNode): string {
                  (contextmenu)="nodeMenu($event, n)">
               @if (n.isFolder) {
                 <span class="twisty" [class.open]="expanded().has(n.path)" (click)="toggle(n.path); $event.stopPropagation()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                @if (modern()) { <app-folder-icon [depth]="r.depth ?? 0" [env]="folderEnv(n.path)" [open]="expanded().has(n.path)" [size]="roomy() ? 22 : 16" /> }
-                @else { <app-session-icon [kind]="expanded().has(n.path) ? 'folder-open' : 'folder'" /> }
+                 <app-folder-icon [depth]="r.depth ?? 0" [env]="folderEnv(n.path)" [open]="expanded().has(n.path)" [size]="roomy() ? 22 : 16" /> 
                 <span class="name">{{ n.name }}</span>
                 @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
-                @if (modern()) { <span class="count">{{ counts().get(n.path) ?? 0 }}</span> }
+                 <span class="count">{{ counts().get(n.path) ?? 0 }}</span> 
               } @else {
                 <span class="twisty"></span>
                 <ng-container [ngTemplateOutlet]="sessTpl" [ngTemplateOutletContext]="{ $implicit: n }" />
@@ -306,8 +300,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   /** Everything the body shows, as flat rows (sections, sessions, tree nodes). */
   /** Modern layout: two-line session rows with device icons, folder counts and a footer. */
   /** Modern layout (two-line or compact rows): coloured folders and counts. */
-  readonly modern = computed(() => this.ui.settings()?.layout !== 'classic');
-  readonly roomy = computed(() => this.ui.settings()?.layout !== 'classic' && !this.ui.settings()?.compactRows);
+  readonly roomy = computed(() => !this.ui.settings()?.compactRows);
   /** Sessions under each folder (all levels). */
   readonly counts = computed(() => {
     const m = new Map<string, number>();

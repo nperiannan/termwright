@@ -46,8 +46,6 @@ var menuRU = map[string]string{
 	"Lock All Sessions":                     "Заблокировать все сессии",
 	"Lock Session":                          "Заблокировать сессию",
 	"Log Session...":                        "Журнал сессии...",
-	"Menu Bar in Window":                    "Меню в окне",
-	"Modern / Classic Layout":               "Современный / классический вид",
 	"New Session...":                        "Новая сессия...",
 	"Next Tab":                              "Следующая вкладка",
 	"Open SFTP Tab":                         "Открыть вкладку SFTP",

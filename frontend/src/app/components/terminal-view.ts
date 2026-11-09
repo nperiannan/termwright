@@ -72,7 +72,7 @@ function b64ToBytes(b64: string): Uint8Array {
 @Component({
   selector: 'app-terminal-view',
   imports: [FormsModule, DeviceIcon],
-  host: { '[class.modern]': "ui.settings()?.layout !== 'classic'" },
+  host: { class: 'modern' },
   template: `<div class="term-host" #host (contextmenu)="onContextMenu($event)"></div>
     @if (tab().autoScroll === false) {
       <div class="paused" title="New output does not move the view">Auto scroll is off <button type="button" (click)="setAutoScroll(true)">Turn On</button></div>
@@ -337,7 +337,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   /** Modern layout, before the first successful connect: a card instead of an empty terminal. */
   readonly card = computed(() => {
     const t = this.tab();
-    if (t.wasConnected || this.ui.settings()?.layout === 'classic') return '';
+    if (t.wasConnected) return '';
     return t.state === 'connecting' ? 'connecting' : t.state === 'error' ? 'error' : '';
   });
   readonly steps = computed(() => {
@@ -483,7 +483,7 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       t.options.cursorBlink = s.cursorBlink;
       const theme = terminalTheme(this.tab().session.colorScheme, s, this.ui.lightUi());
       // modern layout with the automatic scheme: the cursor takes the accent colour
-      if (s.layout !== 'classic' && !sess.colorScheme && (s.terminalScheme || 'Auto') === 'Auto') {
+      if (!sess.colorScheme && (s.terminalScheme || 'Auto') === 'Auto') {
         theme.cursor = s.accentColor || (this.ui.lightUi() ? '#1f6fd6' : '#4f9cf7');
         theme.cursorAccent = String(theme.background);
       }

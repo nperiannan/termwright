@@ -178,3 +178,23 @@ func TestExosPortKeywords(t *testing.T) {
 		}
 	}
 }
+
+func TestClassicLayoutMigrated(t *testing.T) {
+	dir := t.TempDir()
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := m.Get()
+	s.Layout = "classic"
+	if err := m.Save(s); err != nil {
+		t.Fatal(err)
+	}
+	m2, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m2.Get().Layout != "" {
+		t.Fatalf("layout %q", m2.Get().Layout)
+	}
+}

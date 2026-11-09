@@ -14,7 +14,7 @@ import { parseConnectLine } from '../core/connect-string';
   imports: [FormsModule, Autofocus, SerialPortPicker, Icon],
   template: `
   <div class="modal-backdrop">
-    @if (modern()) {
+    
     <form class="modal qc" (ngSubmit)="connect()" autocomplete="off">
       <div class="modal-head"><span class="mh-ic"><app-icon name="quick" [size]="18" /></span>
         <span class="mh-t">Quick Connect<span class="mh-s">Connect without saving - or save it as a session</span></span></div>
@@ -79,78 +79,7 @@ import { parseConnectLine } from '../core/connect-string';
         <button type="submit" class="primary"><app-icon name="quick" [size]="14" /> Connect</button>
       </div>
     </form>
-    } @else {
-    <form class="modal" (ngSubmit)="connect()" autocomplete="off">
-      <div class="modal-head">Quick Connect</div>
-      <div class="modal-body">
-        <div class="grid">
-          <label>Device type</label>
-          <select name="dev" [(ngModel)]="device" (ngModelChange)="onDevice()">
-            <option value="">(none)</option>
-            @for (d of ui.settings()?.deviceTypes ?? []; track d.name) { <option [value]="d.name">{{ d.name }}</option> }
-          </select>
-          <label>Protocol</label>
-          <select name="protocol" [(ngModel)]="protocol" (ngModelChange)="onProto()">
-            @for (p of protocols; track p) { <option [value]="p">{{ p }}</option> }
-          </select>
-          @if (protocol === 'Serial') {
-            <label>Port</label>
-            <app-serial-port-picker [(value)]="comPort" />
-            <label>Baud rate</label>
-            <div>
-              <div class="row">
-                <select name="baud" [(ngModel)]="baud" [disabled]="autoBaud">@for (b of bauds; track b) { <option [ngValue]="b">{{ b }}</option> }</select>
-                <button type="button" (click)="detectBaud()" [disabled]="!comPort || detecting()">{{ detecting() ? 'Detecting…' : 'Detect Speed' }}</button>
-              </div>
-              <div class="checks" style="margin-top: 6px"><label><input type="checkbox" name="autobaud" [(ngModel)]="autoBaud" /> Detect the speed when connecting</label></div>
-              @if (baudMsg()) { <div class="hint">{{ baudMsg() }}</div> }
-            </div>
-          } @else if (protocol !== 'Local Shell') {
-            <label>Hostname</label><input name="host" [(ngModel)]="host" required appAutofocus placeholder="host, user@host or host:port" />
-            <label>Port</label><input name="port" type="number" class="short" [(ngModel)]="port" />
-          }
-          @if (device && protocol !== 'Raw') {
-            <label>Login</label>
-            <div class="checks">
-              <label><input type="checkbox" name="inherit" [(ngModel)]="inherit" />
-                Use the device type's username and password{{ loginNote(devType()?.name, devUser()) }}</label>
-            </div>
-          }
-          @if (protocol !== 'Raw' && protocol !== 'Local Shell' && accounts().length) {
-            <label>Account</label>
-            <select name="acct" [(ngModel)]="account">
-              <option value="">(none - {{ loginLabel(false) }})</option>
-              @for (a of accounts(); track a.name) { <option [value]="a.name">{{ a.name }} · {{ a.username || '(no username)' }}</option> }
-            </select>
-          }
-          @if (protocol !== 'Raw' && protocol !== 'Local Shell' && !account && (!device || !inherit)) {
-            <label>Username</label><input name="user" [(ngModel)]="user" placeholder="(prompt)" />
-            @if (save) {
-              <label>Password</label>
-              <div class="row">
-                <input name="pw" type="password" autocomplete="new-password" [(ngModel)]="pw" [disabled]="noPw" placeholder="(asked when connecting)" />
-                <label><input type="checkbox" name="nopw" [(ngModel)]="noPw" (ngModelChange)="$event && (pw = '')" /> No password</label>
-              </div>
-            }
-          }
-          @if (protocol === 'SSH2') {
-            <label></label>
-            <div class="checks"><label><input type="checkbox" name="legacy" [(ngModel)]="legacy" /> Allow legacy algorithms (old devices)</label></div>
-          }
-          <label></label>
-          <div class="checks">
-            <label><input type="checkbox" name="save" [ngModel]="save" (ngModelChange)="setSave($event)" /> Save session</label>
-          </div>
-          @if (save) { <label>Session name</label><input name="sname" [(ngModel)]="name" [placeholder]="host || comPort" /> }
-        </div>
-      </div>
-      <div class="modal-foot">
-        <span class="spacer"></span>
-        <button type="button" (click)="ui.close()">Cancel</button>
-        <button type="submit" class="primary">Connect</button>
-      </div>
-    </form>
-    }
+    
   </div>`,
   styles: [`
     .qc { width: 500px; }
@@ -208,7 +137,6 @@ export class QuickConnect {
   /** Old SSH algorithms for this connection (devices with old firmware). */
   legacy = false;
 
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP'];
   readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP'].includes(p));
   line = '';

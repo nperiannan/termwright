@@ -68,7 +68,7 @@ interface Item extends MovedDevice { selected: boolean; done?: boolean; error?: 
         <span class="spacer"></span>
         <button type="button" (click)="close()">{{ anyDone() ? 'Close' : 'Cancel' }}</button>
         @if (tab && anyDone()) { <button type="button" (click)="reconnect()">Reconnect Tab</button> }
-        <button type="button" class="primary" [disabled]="!selected().length || busy()" (click)="apply()">{{ busy() ? 'Updating…' : modern() && selected().length ? 'Update ' + selected().length + ' Session' + (selected().length === 1 ? '' : 's') : 'Update Sessions' }}</button>
+        <button type="button" class="primary" [disabled]="!selected().length || busy()" (click)="apply()">{{ busy() ? 'Updating…' : selected().length ? 'Update ' + selected().length + ' Session' + (selected().length === 1 ? '' : 's') : 'Update Sessions' }}</button>
       </div>
     </div>
   </div>`,
@@ -84,7 +84,6 @@ interface Item extends MovedDevice { selected: boolean; done?: boolean; error?: 
 })
 export class Moved {
   protected ui = inject(Ui);
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   private backend = inject(Backend);
   private tabs = inject(Tabs);
   readonly items = signal<Item[]>([]);

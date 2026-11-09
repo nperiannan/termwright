@@ -83,16 +83,14 @@ import { Icon } from '../components/icon';
               }
             </div>
             @if (run(); as r) {
-              @if (modern()) {
+              
                 <div class="steps">
                   <span class="stp" [class.d]="stepOf(r).before">{{ stepOf(r).before ? '✓' : '1' }} Before{{ stepOf(r).before ? ' · ' + stepOf(r).before : '' }}</span><span class="arw">→</span>
                   <span class="stp" [class.d]="stepOf(r).after" [class.a]="!stepOf(r).after">{{ stepOf(r).after ? '✓' : '2' }} After{{ stepOf(r).after ? ' · ' + stepOf(r).after : '' }}</span><span class="arw">→</span>
                   <span class="stp" [class.a]="!!stepOf(r).after">3 Compare</span>
                   <span class="sum2">{{ summary(r) }}</span>
                 </div>
-              } @else {
-              <div class="sum">{{ summary(r) }}</div>
-              }
+              
             }
             <div class="devs">
               <table class="list">
@@ -268,7 +266,6 @@ export class Checklists implements OnDestroy {
     return d + (r.note ? ' - ' + r.note : '');
   }
 
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   /** Which steps of a change are done (and how many devices). */
   stepOf(r: CheckRun) {
     const ds = Object.values(r.devices);

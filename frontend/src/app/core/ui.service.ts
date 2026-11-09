@@ -189,7 +189,7 @@ export class Ui {
   close() { this.dialog.set(null); this.editing.set(null); }
 
   /** In the modern layout sessions are edited in a side panel (with a link to the full dialog). */
-  private usePanel(full: boolean) { return !full && this.settings()?.layout !== 'classic'; }
+  private usePanel(full: boolean) { return !full; }
 
   async newSession(folder = '', full = false) {
     try {

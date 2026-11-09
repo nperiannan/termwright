@@ -54,12 +54,12 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
   <div class="modal-backdrop">
     <form class="modal wide" (ngSubmit)="save(false)" autocomplete="off">
       <div class="modal-head"><span class="mh-ic dev">@if (devKind(); as k) { <app-device-icon [kind]="k" [size]="34" /> } @else { <app-session-icon [kind]="protoKind()" [size]="34" /> }</span>
-        <span class="mh-t">{{ modern() ? (s.name || 'New Session') : (oldPath ? 'Session Options - ' + oldPath : 'New Session') }}<span class="mh-s">{{ subtitle() }}</span></span></div>
+        <span class="mh-t">{{ (s.name || 'New Session') }}<span class="mh-s">{{ subtitle() }}</span></span></div>
       <div class="modal-split">
         <nav class="cat so">
           <a [class.on]="page() === 'connection'" (click)="page.set('connection')" style="order: 1"><app-icon name="connect" [size]="15" />Connection</a>
           @if (s.protocol === 'SSH2') {
-            <a class="sub" [class.on]="page() === 'auth'" (click)="page.set('auth')" style="order: 2"><app-icon name="key" [size]="15" />{{ modern() ? 'Authentication' : 'SSH2 Authentication' }}</a>
+            <a class="sub" [class.on]="page() === 'auth'" (click)="page.set('auth')" style="order: 2"><app-icon name="key" [size]="15" />{{ 'Authentication' }}</a>
           }
           @if (!noTerm()) { <a class="sub" [class.on]="page() === 'forward'" [class.dim]="s.protocol !== 'SSH2'" (click)="page.set('forward')" style="order: 5"><app-icon name="forward" [size]="15" />Port Forwarding</a> }
           @if (remote()) { <a class="sub" [class.on]="page() === 'remote'" (click)="page.set('remote')" style="order: 3"><app-icon name="monitor" [size]="15" />{{ s.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' }}</a> }
@@ -73,9 +73,9 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
           @if (s.protocol === 'Local Shell') { <a class="sub" [class.on]="page() === 'local'" (click)="page.set('local')" style="order: 7"><app-icon name="shell" [size]="15" />Local Shell</a> }
           @if (!noTerm()) {
             <div class="cat-g" style="order: 8">Terminal</div>
-            <a class="sub" [class.on]="page() === 'logon'" (click)="page.set('logon')" style="order: 10"><app-icon name="script" [size]="15" />{{ modern() ? 'Logon Actions' : 'Logon Actions & Triggers' }}</a>
-            <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')" style="order: 9"><app-icon name="shell" [size]="15" />{{ modern() ? 'Appearance' : 'Terminal' }}</a>
-            <a class="sub" [class.on]="page() === 'log'" (click)="page.set('log')" style="order: 11"><app-icon name="log" [size]="15" />{{ modern() ? 'Logging' : 'Log File' }}</a>
+            <a class="sub" [class.on]="page() === 'logon'" (click)="page.set('logon')" style="order: 10"><app-icon name="script" [size]="15" />{{ 'Logon Actions' }}</a>
+            <a [class.on]="page() === 'terminal'" (click)="page.set('terminal')" style="order: 9"><app-icon name="shell" [size]="15" />{{ 'Appearance' }}</a>
+            <a class="sub" [class.on]="page() === 'log'" (click)="page.set('log')" style="order: 11"><app-icon name="log" [size]="15" />{{ 'Logging' }}</a>
           }
         </nav>
         <div class="modal-body">
@@ -138,21 +138,16 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 <div class="pair o1">
                   <div class="f"><label>Name</label><input name="name" [(ngModel)]="s.name" required placeholder="e.g. core-switch-01" /></div>
                   <div class="f"><label>Folder</label>
-                    @if (modern()) { <app-folder-picker [(value)]="s.folder" /> }
-                    @else { <input name="folder" [(ngModel)]="s.folder" placeholder="e.g. Datacenter/Rack 4 (blank = top level)" /> }</div>
+                     <app-folder-picker [(value)]="s.folder" /> </div>
                 </div>
                 <div class="f o2"><label>Protocol</label>
-                @if (modern()) {
+                
                   <div class="seg">
                     @for (p of mainProtos; track p) { <button type="button" [class.on]="s.protocol === p" (click)="s.protocol = p; protocolChanged()">{{ p === 'SSH2' ? 'SSH' : p }}</button> }
                     <select name="otherp" [ngModel]="mainProtos.includes(s.protocol) ? '' : s.protocol" (ngModelChange)="$event && (s.protocol = $event) && protocolChanged()">
                       <option value="">More…</option>@for (p of otherProtos; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p }}</option> }</select>
                   </div>
-                } @else {
-                <select name="protocol" [(ngModel)]="s.protocol" (ngModelChange)="protocolChanged()">
-                  @for (p of protocols; track p) { <option [value]="p">{{ p === 'WOL' ? 'Wake-on-LAN' : p }}</option> }
-                </select>
-                }
+                
                 </div>
                 <div class="pair o4">
                 @if (!remote() && s.protocol !== 'WOL') {
@@ -266,7 +261,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 }
                 @if (s.protocol === 'SSH2' || s.protocol === 'Telnet' || s.protocol === 'Raw' || remote()) {
                   <div class="pair hp o3">
-                    <div class="f"><label>{{ modern() ? 'Address' : 'Hostname' }}</label><input name="hostname" [(ngModel)]="s.hostname" required placeholder="host name or IP address" /></div>
+                    <div class="f"><label>{{ 'Address' }}</label><input name="hostname" [(ngModel)]="s.hostname" required placeholder="host name or IP address" /></div>
                     <div class="f"><label>Port</label><input name="port" type="number" min="1" max="65535" [(ngModel)]="s.port" class="short" /></div>
                   </div>
                   <label>MAC address</label>
@@ -318,16 +313,16 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                       <button type="button" (click)="ui.open('passwords')">{{ au.account ? 'Edit Account…' : 'Accounts…' }}</button></div>
                   }
                 }
-                @if (s.protocol !== 'WOL' && (s.protocol === 'SSH2' || (modern() && !remote() && s.protocol !== 'Local Shell'))) {
-                  <label class="o5">{{ modern() ? '' : 'Options' }}</label>
+                @if (s.protocol !== 'WOL' && (s.protocol === 'SSH2' || (!remote() && s.protocol !== 'Local Shell'))) {
+                  <label class="o5">{{ '' }}</label>
                   <div class="checks o5">
-                    @if (modern() && !remote() && s.protocol !== 'Local Shell') {
+                    @if (!remote() && s.protocol !== 'Local Shell') {
                       <label><input type="checkbox" name="arc2" [(ngModel)]="s.autoReconnect" /><span class="tx">Reconnect automatically<small>when the connection drops</small></span></label>
                     }
                     @if (s.protocol === 'SSH2') {
                       <label title="A file browser beside the terminal, opposite the Session Manager: it follows the terminal's folder and opens files on this computer (View → Files Panel shows or hides it for a tab)">
                         <input type="checkbox" name="filesPanel" [(ngModel)]="s.filesPanel" />
-                        @if (modern()) { <span class="tx">Files panel beside the terminal<small>follows the terminal's folder; double-click opens a file here</small></span> } @else { Show the Files panel beside the terminal }</label>
+                         <span class="tx">Files panel beside the terminal<small>follows the terminal's folder; double-click opens a file here</small></span> </label>
                     }
                   </div>
                 }
@@ -1042,7 +1037,6 @@ export class SessionEditor implements OnInit {
   remote() { return this.s?.protocol === 'RDP' || this.s?.protocol === 'VNC'; }
   /** Sessions without a terminal (remote desktops, Wake-on-LAN). */
   noTerm() { return this.remote() || this.s?.protocol === 'WOL'; }
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly mainProtos = ['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'];
   readonly otherProtos = PROTOCOLS.filter(p => !['SSH2', 'Telnet', 'Serial', 'RDP', 'VNC'].includes(p));
   devKind() { return this.s?.protocol === 'WOL' ? null : deviceKindOf(this.s?.deviceType); }

@@ -43,12 +43,6 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
           <div class="seg">
             @for (z of sizes; track z.v) { <button type="button" [class.on]="size() === z.v" (click)="setSize(z.v)"><span [style.font-size.px]="z.v + 2">Aa</span><small>{{ z.v }} px</small></button> }
           </div>
-          <div class="lbl">Layout</div>
-          <div class="seg wide">
-            <button type="button" [class.on]="!classic()" (click)="ui.patchSettings({ layout: '' })"><b>Modern</b><small>tabs and search in the title bar</small></button>
-            <button type="button" [class.on]="classic()" (click)="ui.patchSettings({ layout: 'classic' })"><b>Classic</b><small>toolbar, tab strip and menu bar</small></button>
-          </div>
-          @if (!classic()) {
             <div class="lbl">Start page buttons</div>
             <div class="seg qbs">
               @for (q of qbs; track q.v) {
@@ -56,7 +50,7 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
                   <span [class]="'qb ' + (q.v || 'slab')"><i></i>Connect</span><small>{{ q.label }}</small></button>
               }
             </div>
-          }
+          
         }
         @case (1) {
           <h2>Bring your sessions</h2>
@@ -221,7 +215,6 @@ export class Welcome {
   readonly qbs: { v: '' | 'keycap' | 'glow'; label: string }[] = [{ v: '', label: 'Raised' }, { v: 'keycap', label: 'Keycaps' }, { v: 'glow', label: 'Glow cards' }];
   readonly theme = computed(() => { const t = this.ui.settings()?.theme; return t === 'light' || t === 'dark' ? t : 'system'; });
   readonly size = computed(() => uiFontSize(this.ui.settings()?.uiFontSize));
-  readonly classic = computed(() => this.ui.settings()?.layout === 'classic');
 
   readonly kinds: FileKind[] = [
     { label: 'SecureCRT (.xml, .zip)', title: 'SecureCRT Export', filters: [{ displayName: 'SecureCRT export (*.xml, *.zip)', pattern: '*.xml;*.zip' }] },

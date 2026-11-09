@@ -13,17 +13,13 @@ import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models'
   template: `
     <div class="cw-bar">
       <span class="title">Command Window</span>
-      @if (modern()) {
+      
         <div class="seg tg" title="Where Send goes">
           <button type="button" [class.on]="target === 'active'" (click)="target = 'active'">Active tab</button>
           <button type="button" [class.on]="target === 'all'" (click)="target = 'all'">All connected ({{ tabs.connectedCount() }})</button>
           <button type="button" [class.on]="target === 'selected'" (click)="target = 'selected'">Selected ({{ tabs.targets('selected').length }})</button>
         </div>
-      } @else {
-      <label><input type="radio" name="cwTarget" value="active" [(ngModel)]="target" /> Active tab</label>
-      <label><input type="radio" name="cwTarget" value="all" [(ngModel)]="target" /> All connected tabs ({{ tabs.connectedCount() }})</label>
-      <label><input type="radio" name="cwTarget" value="selected" [(ngModel)]="target" /> Selected tabs ({{ tabs.targets('selected').length }})</label>
-      }
+      
       <button class="pick" title="Choose the tabs to send to" (click)="pick($event)">Choose…</button>
       <label class="sw" title="Send characters immediately as you type"><input type="checkbox" [(ngModel)]="charMode" /> Send characters immediately</label>
       <span class="spacer"></span>
@@ -51,7 +47,7 @@ import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models'
   // Typing only re-renders this component; the suggestion list is worked out
   // once the keys pause (holding Backspace does not rebuild it on every key).
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '[class.modern]': 'modern()' },
+  host: { class: 'modern' },
   styles: [`
     :host(.modern) { background: var(--surface); border-top-color: var(--line);
       .cw-bar { gap: 10px; padding: 6px 10px; .title { text-transform: none; letter-spacing: 0; color: var(--text); font-size: calc(12.5px * var(--ui-scale, 1)); }
@@ -81,7 +77,6 @@ import { Snippet, fillSnippet, snippetTypes, snippetVars } from '../core/models'
 export class CommandWindow implements OnDestroy {
   protected tabs = inject(Tabs);
   protected ui = inject(Ui);
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   private box = viewChild.required<ElementRef<HTMLTextAreaElement>>('box');
   readonly text = signal('');
   target: 'active' | 'all' | 'selected' = 'active';

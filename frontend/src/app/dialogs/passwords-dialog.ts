@@ -172,7 +172,7 @@ type Page = 'credentials' | 'keys' | 'managers' | 'master' | 'vault';
           @if (err()) { <div class="err">{{ err() }}</div> }
         </div>
       </div>
-      <div class="modal-foot"><span class="spacer"></span><button type="button" [class.primary]="modern()" (click)="ui.close()">{{ modern() ? 'Done' : 'Close' }}</button></div>
+      <div class="modal-foot"><span class="spacer"></span><button type="button" class="primary" (click)="ui.close()">Done</button></div>
     </div>
   </div>`,
   styles: [`
@@ -219,7 +219,6 @@ export class PasswordsDialog implements OnInit {
   private backend = inject(Backend);
   private cdr = inject(ChangeDetectorRef);
   readonly page = signal<Page>('credentials');
-  readonly modern = () => this.ui.settings()?.layout !== 'classic';
   readonly pageNames: Record<Page, string> = { credentials: 'Accounts', keys: 'Key Passphrases', managers: 'Password Managers', master: 'Master Password', vault: 'Export / Import' };
   readonly hasMaster = signal(false);
   readonly msg = signal('');

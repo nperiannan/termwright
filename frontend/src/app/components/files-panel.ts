@@ -28,7 +28,7 @@ const store = {
 @Component({
   selector: 'app-files-panel',
   imports: [FormsModule, Autofocus, FileIcon, FolderIcon, Icon],
-  host: { '[style.width.px]': 'width()', '[class.modern]': "ui.settings()?.layout !== 'classic'" },
+  host: { '[style.width.px]': 'width()', class: 'modern' },
   template: `
     <div class="grip" title="Drag to resize" (mousedown)="startResize($event)"></div>
     <div class="dh">
