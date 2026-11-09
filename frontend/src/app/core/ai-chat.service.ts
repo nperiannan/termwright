@@ -85,6 +85,23 @@ export function nice(m: string): string {
   return m;
 }
 
+/** Claude Code's effort levels ("" = the model's default). */
+export const EFFORTS: { k: string; name: string }[] = [
+  { k: '', name: 'Default' }, { k: 'low', name: 'Low' }, { k: 'medium', name: 'Medium' }, { k: 'high', name: 'High' }, { k: 'xhigh', name: 'Extra high' }, { k: 'max', name: 'Max' },
+];
+
+/** The model list for a service: the newest of each family (Claude Code's short names) first, then the versions. */
+export function modelChoices(provider: string, models: string[]): { value: string; label: string; hint: string; group: string }[] {
+  const ids = models.filter(m => /^claude-/.test(m));
+  return models.map(m => {
+    if (/^(opus|sonnet|haiku|fable)$/.test(m)) {
+      const newest = ids.find(id => id.startsWith('claude-' + m + '-')) ?? '';
+      return { value: m, label: (newest ? nice(newest) : nice(m)) + ' · ' + tr('newest'), hint: m, group: provider === 'claudecode' ? tr('Newest') : '' };
+    }
+    return { value: m, label: nice(m), hint: nice(m).toLowerCase() !== m.toLowerCase() ? m : '', group: provider === 'claudecode' ? tr('Versions') : '' };
+  });
+}
+
 let nid = 0;
 const now = () => new Date().toISOString();
 

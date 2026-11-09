@@ -2,7 +2,7 @@ import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '
 import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { LANGUAGES, previewLanguages, tr } from '../core/i18n';
-import { nice, readOnlyList } from '../core/ai-chat.service';
+import { EFFORTS, modelChoices, readOnlyList } from '../core/ai-chat.service';
 import { Combo, ComboOption } from '../components/combo';
 import { Backend, errText } from '../core/backend';
 import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, MCPInfo, comboOf, FACT_NAMES } from '../core/models';
@@ -522,6 +522,10 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                       <app-combo class="v" name="aim" label="Model" [value]="s.ai?.model || ''" (valueChange)="setAI({ model: $event })" [options]="modelOptions()" [loading]="aiLoading()"
                         [loadingText]="tr('Loading the models…')" [emptyText]="tr('The service lists no models - type a model name')" (opened)="!aiModels().length && !aiLoading() && loadAIModels()"
                         [placeholder]="tr(s.ai?.provider === 'claudecode' ? 'Default of Claude Code' : 'The newest the service offers')" /></div>
+                    @if (s.ai?.provider === 'claudecode') {
+                      <div class="li"><span class="l">Effort<small>How hard the model thinks: higher is slower and uses more of your allowance</small></span>
+                        <select name="aie" class="v" [ngModel]="s.ai?.effort || ''" (ngModelChange)="setAI({ effort: $event })">@for (e of efforts; track e.k) { <option [value]="e.k">{{ tr(e.k ? e.name : 'Default of the model') }}</option> }</select></div>
+                    }
                   }
                 </div>
                 <div class="gf">@switch (s.ai?.provider) {
@@ -999,10 +1003,11 @@ export class OptionsDialog implements OnInit {
   readonly aiSt = signal<AIStatus | null>(null);
   readonly aiModels = signal<string[]>([]);
   readonly aiLoading = signal(false);
+  protected readonly efforts = EFFORTS;
   /** The model list: the service's default first, then what it offers (Claude names made readable). */
   modelOptions(): ComboOption[] {
     const cc = this.s?.ai?.provider === 'claudecode';
-    return [{ value: '', label: cc ? tr('Default of Claude Code') : tr('The newest the service offers') }, ...this.aiModels().map(m => ({ value: m, label: nice(m), hint: nice(m).toLowerCase() !== m.toLowerCase() ? m : '' }))];
+    return [{ value: '', label: cc ? tr('Default of Claude Code') : tr('The newest the service offers'), group: cc ? tr('Newest') : '' }, ...modelChoices(this.s?.ai?.provider ?? '', this.aiModels())];
   }
   readonly aiMsg = signal('');
   aiKey = '';
@@ -1051,8 +1056,8 @@ export class OptionsDialog implements OnInit {
     if (this.s?.ai?.provider === 'claudecode') {
       try {
         const p = await this.backend.claudeCodeFind(this.s.ai.baseUrl ?? '');
-        this.aiModels.set(['sonnet', 'opus', 'haiku']);
-        this.aiMsg.set(tr('Claude Code found: {0}. Choose the model below, or keep the default of Claude Code.', p));
+        this.aiModels.set((await this.backend.aiModels(this.s.ai).catch(() => null)) ?? ['opus', 'sonnet', 'haiku']);
+        this.aiMsg.set(tr('Claude Code found: {0}. Choose the model and the effort below, or keep the defaults.', p));
         this.aiCheck.set(true);
       } catch (e) { this.aiMsg.set(errText(e)); this.aiCheck.set(false); }
       return;

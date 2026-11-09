@@ -9,8 +9,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -174,7 +178,7 @@ func (a *App) ClaudeCodeFind(given string) (string, error) { return claudeCodePa
 
 // claudeCodeArgs: print mode, plain text, nothing saved, only our system
 // prompt, and no tools - or only Read, for pictures in their own folder.
-func claudeCodeArgs(model, sys string, withTools, read bool) []string {
+func claudeCodeArgs(model, effort, sys string, withTools, read bool) []string {
 	a := []string{"-p", "--output-format", "json", "--no-session-persistence", "--strict-mcp-config", "--system-prompt", sys}
 	switch {
 	case withTools && read:
@@ -191,13 +195,28 @@ func claudeCodeArgs(model, sys string, withTools, read bool) []string {
 	if model != "" {
 		a = append(a, "--model", model)
 	}
+	if effort != "" {
+		a = append(a, "--effort", effort)
+	}
 	return a
+}
+
+// ClaudeCodeEfforts are the effort levels Claude Code takes ("" = the model's default).
+var ClaudeCodeEfforts = []string{"low", "medium", "high", "xhigh", "max"}
+
+func validEffort(e string) string {
+	for _, x := range ClaudeCodeEfforts {
+		if e == x {
+			return e
+		}
+	}
+	return ""
 }
 
 var claudeCodeTimeout = 3 * time.Minute
 
-func claudeCodeChat(ctx context.Context, path, model, sys, user string) (string, error) {
-	out, _, err := claudeCodeRun(ctx, path, model, sys, user, "")
+func claudeCodeChat(ctx context.Context, path, model, effort, sys, user string) (string, error) {
+	out, _, err := claudeCodeRun(ctx, path, model, effort, sys, user, "")
 	return out, err
 }
 
@@ -235,15 +254,16 @@ func claudeCodeResult(out string) (string, *AIUsage, error) {
 }
 
 // claudeCodeRun asks once; picDir (may be "") holds pictures it may read.
-func claudeCodeRun(ctx context.Context, path, model, sys, user, picDir string) (string, *AIUsage, error) {
+func claudeCodeRun(ctx context.Context, path, model, effort, sys, user, picDir string) (string, *AIUsage, error) {
 	bin, err := claudeCodePath(path)
 	if err != nil {
 		return "", nil, err
 	}
+	effort = validEffort(effort)
 	run := func(withTools bool) (string, string, error) {
 		c, cancel := context.WithTimeout(ctx, claudeCodeTimeout)
 		defer cancel()
-		cmd := exec.CommandContext(c, bin, claudeCodeArgs(model, sys, withTools, picDir != "")...)
+		cmd := exec.CommandContext(c, bin, claudeCodeArgs(model, effort, sys, withTools, picDir != "")...)
 		cmd.Dir = os.TempDir() // not a project folder: nothing of the user's is in reach
 		if picDir != "" {
 			cmd.Dir = picDir
@@ -259,6 +279,10 @@ func claudeCodeRun(ctx context.Context, path, model, sys, user, picDir string) (
 		return out.String(), errb.String(), err
 	}
 	out, stderr, err := run(true)
+	if err != nil && effort != "" && strings.Contains(stderr+out, "unknown option") && strings.Contains(stderr+out, "effort") { // older: no --effort
+		effort = ""
+		out, stderr, err = run(true)
+	}
 	if err != nil && strings.Contains(stderr+out, "unknown option") { // an older Claude Code without --tools
 		out, stderr, err = run(false)
 	}
@@ -300,4 +324,111 @@ func runOutput(ctx context.Context, bin string, args ...string) (string, error) 
 	hideWindow(c)
 	out, err := c.CombinedOutput()
 	return string(out), err
+}
+
+// ---- the models the installed Claude Code knows ----
+
+var ccPrefix = []byte("claude-")
+var ccModelRe = regexp.MustCompile("^[\"'`]claude-(fable|opus|sonnet|haiku)-(\\d+)(?:-(\\d+))?[\"'`]")
+
+var ccModels struct {
+	sync.Mutex
+	key  string
+	list []string
+}
+
+// claudeCodeModelIDs reads the model names built into the claude program
+// (newest first per family, from version 4 on) - no question is sent, so it
+// costs nothing. Kept until the program changes.
+func claudeCodeModelIDs(bin string) []string {
+	st, err := os.Stat(bin)
+	if err != nil {
+		return nil
+	}
+	key := fmt.Sprintf("%s|%d|%d", bin, st.Size(), st.ModTime().UnixNano())
+	ccModels.Lock()
+	defer ccModels.Unlock()
+	if ccModels.key == key {
+		return ccModels.list
+	}
+	f, err := os.Open(bin)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	type ver struct {
+		fam        string
+		maj, minor int
+	}
+	seen := map[string]ver{}
+	buf := make([]byte, 4<<20)
+	var tail []byte
+	for {
+		n, err := f.Read(buf)
+		if n > 0 {
+			chunk := append(append([]byte{}, tail...), buf[:n]...)
+			for i := 0; ; {
+				k := bytes.Index(chunk[i:], ccPrefix)
+				if k < 0 {
+					break
+				}
+				at := i + k
+				i = at + len(ccPrefix)
+				if at == 0 {
+					continue
+				}
+				m := ccModelRe.FindSubmatch(chunk[at-1 : min(len(chunk), at+40)])
+				if m == nil {
+					continue
+				}
+				maj, _ := strconv.Atoi(string(m[2]))
+				minor := -1
+				if len(m[3]) > 0 {
+					minor, _ = strconv.Atoi(string(m[3]))
+				}
+				if maj < 4 || maj > 99 || minor > 99 {
+					continue
+				}
+				id := "claude-" + string(m[1]) + "-" + string(m[2])
+				if minor >= 0 {
+					id += "-" + string(m[3])
+				}
+				seen[id] = ver{string(m[1]), maj, minor}
+			}
+			if len(chunk) > 64 {
+				tail = append([]byte{}, chunk[len(chunk)-64:]...)
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	order := map[string]int{"fable": 0, "opus": 1, "sonnet": 2, "haiku": 3}
+	out := make([]string, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := seen[out[i]], seen[out[j]]
+		if a.fam != b.fam {
+			return order[a.fam] < order[b.fam]
+		}
+		if a.maj != b.maj {
+			return a.maj > b.maj
+		}
+		return max(a.minor, 0) > max(b.minor, 0)
+	})
+	// "claude-opus-5" and "claude-opus-5-0" are the same model
+	keep := out[:0]
+	have := map[string]bool{}
+	for _, id := range out {
+		v := seen[id]
+		k := fmt.Sprintf("%s-%d-%d", v.fam, v.maj, max(v.minor, 0))
+		if !have[k] {
+			have[k] = true
+			keep = append(keep, id)
+		}
+	}
+	ccModels.key, ccModels.list = key, keep
+	return keep
 }

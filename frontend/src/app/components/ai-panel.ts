@@ -4,7 +4,7 @@ import { Backend } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { Tabs } from '../core/tabs.service';
 import { Icon } from './icon';
-import { AGENT_PERMS, AGENT_TOOLS, AgentPerm, AIChat, ChatMsg, Img, Step, nice } from '../core/ai-chat.service';
+import { AGENT_PERMS, AGENT_TOOLS, AgentPerm, AIChat, ChatMsg, EFFORTS, Img, Step, modelChoices, nice } from '../core/ai-chat.service';
 import { AIStatus } from '../core/models';
 import { tr } from '../core/i18n';
 
@@ -54,10 +54,19 @@ function spans(t: string): Span[] {
     <span class="modw"><button type="button" class="chipm" [class.on]="mmenu()" (click)="openModels()" [title]="provider() + ' - ' + tr('click to choose the model')" aria-haspopup="menu" [attr.aria-expanded]="mmenu()">{{ service() }}<app-icon name="chevron-down" [size]="11" /></button>
       @if (mmenu()) {
         <div class="menu models" role="menu" (click)="$event.stopPropagation()">
-          <div class="mh">{{ tr('Model') }}<small>{{ provider() }}</small></div>
+          <div class="mh">{{ tr('AI model') }}<small>{{ provider() }}</small></div>
+          @if (isCC()) {
+            <div class="grp">{{ tr('Effort') }}</div>
+            <div class="effs" role="radiogroup" [attr.aria-label]="tr('Effort')">@for (e of efforts; track e.k) {
+              <button type="button" role="radio" class="eff" [class.on]="(ui.settings()?.ai?.effort || '') === e.k" [attr.aria-checked]="(ui.settings()?.ai?.effort || '') === e.k" (click)="setEffort(e.k)" [title]="e.k ? tr(e.name) : tr('Default of the model')">{{ tr(e.name) }}</button> }</div>
+          }
+          <div class="grp">{{ tr('Model') }}</div>
           <button type="button" role="menuitemradio" [attr.aria-checked]="!st()?.model" (click)="setModel('')"><span class="ck">@if (!st()?.model) { <app-icon name="check" [size]="12" /> }</span>{{ tr('Default') }}<small>{{ lastModel() ? nice(lastModel()) : tr('the newest') }}</small></button>
           @if (models() === null) { <div class="mf">{{ tr('Loading the models…') }}</div> }
-          @for (m of models() ?? []; track m) { <button type="button" role="menuitemradio" [attr.aria-checked]="st()?.model === m" (click)="setModel(m)"><span class="ck">@if (st()?.model === m) { <app-icon name="check" [size]="12" /> }</span>{{ nice(m) }}@if (nice(m) !== m) { <small class="mono">{{ m }}</small> }</button> }
+          @for (o of choices(); track o.value; let i = $index) {
+            @if (o.group && o.group !== choices()[i - 1]?.group) { <div class="grp">{{ o.group }}</div> }
+            <button type="button" role="menuitemradio" [attr.aria-checked]="st()?.model === o.value" (click)="setModel(o.value)"><span class="ck">@if (st()?.model === o.value) { <app-icon name="check" [size]="12" /> }</span>{{ o.label }}@if (o.hint) { <small class="mono">{{ o.hint }}</small> }</button>
+          }
           @if (modelErr()) { <div class="mf">{{ modelErr() }}</div> }
           <button type="button" class="foot" (click)="mmenu.set(false); ui.openOptions('ai')"><app-icon name="options" [size]="12" />{{ tr('AI settings…') }}</button>
         </div>
@@ -297,7 +306,11 @@ function spans(t: string): Span[] {
     .ck { width: 14px; flex: none; display: inline-flex; }
     .modw { position: relative; display: inline-flex; min-width: 0; flex: 0 1 auto; } .modw .chipm { max-width: 100%; }
     button.chipm { display: inline-flex; align-items: center; gap: 4px; height: auto; background: none; cursor: pointer; } button.chipm:hover, button.chipm.on { color: var(--text); border-color: var(--accent); }
-    .menu.models { top: calc(100% + 6px); bottom: auto; left: 0; width: 260px; z-index: 8; .mh { display: flex; justify-content: space-between; small { margin: 0; font-weight: 400; } } .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); } .foot { border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; margin-top: 4px; color: var(--muted); } }
+    .menu.models .grp { padding: 8px 8px 3px; font-size: calc(10.5px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+    .effs { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 6px 6px; }
+    .menu .eff { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: calc(11.5px * var(--ui-scale, 1)); height: auto; }
+    .menu .eff.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+    .menu.models { top: calc(100% + 6px); bottom: auto; left: 0; width: 290px; max-height: min(520px, calc(100vh - 140px)); z-index: 8; .mh { display: flex; justify-content: space-between; small { margin: 0; font-weight: 400; } } .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); } .foot { border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; margin-top: 4px; color: var(--muted); } }
     .prodb { margin-left: 6px; padding: 0 5px; border-radius: 4px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .03em; vertical-align: 1px; }
     .devs { margin-left: 29px; display: flex; flex-wrap: wrap; gap: 6px; }
     .dv { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: calc(11.5px * var(--ui-scale, 1)); font-weight: 500;
@@ -368,7 +381,8 @@ export class AIPanel implements OnInit {
   readonly msgs = computed(() => (this.ai.current()?.msgs ?? []).filter(m => !m.hidden));
   readonly tab = computed(() => { const t = this.tabs.active(); return t && t.kind === 'terminal' ? t : null; });
   readonly otherTabs = computed(() => this.tabs.tabs().filter(t => t.kind === 'terminal' && t.id !== this.tab()?.id));
-  readonly service = computed(() => { const s = this.st(); if (!s?.provider) return tr('Off'); const m = s.model || this.lastModel(); return m ? nice(m) : PROVIDER[s.provider] ?? s.provider; });
+  readonly service = computed(() => { const s = this.st(); if (!s?.provider) return tr('Off'); const m = s.model || this.lastModel(); const e = EFFORTS.find(x => x.k && x.k === this.ui.settings()?.ai?.effort);
+    return (m ? nice(m) : PROVIDER[s.provider] ?? s.provider) + (e && s.provider === 'claudecode' ? ' · ' + tr(e.name) : ''); });
   protected readonly nice = nice;
   readonly waiting = computed(() => (this.ai.current()?.msgs ?? []).some(m => (m.steps ?? []).some(s => s.state === 'ask')));
   private renders = new WeakMap<ChatMsg, { text: string; b: Block[] }>();
@@ -415,6 +429,13 @@ export class AIPanel implements OnInit {
     const a = this.ui.settings()?.ai;
     if (!a?.provider) { this.models.set([]); return; }
     this.backend.aiModels(a).then(l => this.models.set(l ?? [])).catch(e => { this.models.set([]); this.modelErr.set(String(e?.message ?? e)); });
+  }
+  readonly isCC = computed(() => this.st()?.provider === 'claudecode');
+  protected readonly efforts = EFFORTS;
+  readonly choices = computed(() => modelChoices(this.st()?.provider ?? '', this.models() ?? []));
+  setEffort(e: string) {
+    const s = this.ui.settings(); if (!s) return;
+    void this.ui.saveSettings({ ...s, ai: { ...(s.ai ?? {}), effort: e } });
   }
   setModel(m: string) {
     this.mmenu.set(false);

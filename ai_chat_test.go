@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -111,5 +112,29 @@ func TestAIUsageAndTools(t *testing.T) {
 	}
 	if sys := aiChatSystem(AIChatRequest{Agent: true, Tools: []string{"none"}}); strings.Contains(sys, "AGENT MODE") {
 		t.Fatal("agent without tools")
+	}
+}
+
+func TestClaudeCodeModelsAndEffort(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "claude")
+	junk := strings.Repeat("x", 5<<20) // across the read chunks
+	os.WriteFile(bin, []byte(`a="claude-opus-4-8";b='claude-sonnet-5-5'`+junk+"`claude-opus-5-5` \"claude-opus-5\" \"claude-haiku-4-5-20251001\" \"claude-sonnet-3-7\" claude-opus-9-9-x \"claude-opus-4\" \"claude-opus-4-0\""), 0o755)
+	got := strings.Join(claudeCodeModelIDs(bin), " ")
+	if got != "claude-opus-5-5 claude-opus-5 claude-opus-4-8 claude-opus-4 claude-sonnet-5-5" && got != "claude-opus-5-5 claude-opus-5 claude-opus-4-8 claude-opus-4-0 claude-sonnet-5-5" {
+		t.Fatalf("models: %s", got)
+	}
+	a := strings.Join(claudeCodeArgs("opus", "high", "sys", true, false), " ")
+	if !strings.Contains(a, "--model opus --effort high") {
+		t.Fatalf("args: %s", a)
+	}
+	// an older Claude Code without --effort: asked again without it
+	fake := filepath.Join(dir, "old")
+	os.WriteFile(fake, []byte("#!/bin/sh\ncase \"$*\" in *--effort*) echo \"error: unknown option '--effort'\" >&2; exit 1;; esac\necho '{\"type\":\"result\",\"result\":\"fine\",\"usage\":{}}'\n"), 0o755)
+	if out, _, err := claudeCodeRun(context.Background(), fake, "", "max", "s", "q", ""); err != nil || out != "fine" {
+		t.Fatalf("fallback: %q %v", out, err)
+	}
+	if out, _, _ := claudeCodeRun(context.Background(), fake, "", "bogus", "s", "q", ""); out != "fine" {
+		t.Fatal("an unknown effort is not passed on")
 	}
 }

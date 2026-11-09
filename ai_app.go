@@ -92,11 +92,25 @@ func (a *App) AIModels(s config.AISettings) ([]string, error) {
 	defer cancel()
 	key, _ := secrets.Lookup(aiKeyName + s.Provider)
 	switch s.Provider {
-	case "claudecode": // Claude Code's names for the newest models
-		if _, err := claudeCodePath(s.BaseURL); err != nil {
+	case "claudecode": // its names for the newest models, then the versions it knows
+		bin, err := claudeCodePath(s.BaseURL)
+		if err != nil {
 			return nil, err
 		}
-		return []string{"sonnet", "opus", "haiku"}, nil
+		ids := claudeCodeModelIDs(bin)
+		out := []string{}
+		for _, f := range []string{"fable", "opus", "sonnet", "haiku"} {
+			for _, id := range ids {
+				if strings.HasPrefix(id, "claude-"+f+"-") {
+					out = append(out, f)
+					break
+				}
+			}
+		}
+		if len(out) == 0 {
+			out = []string{"opus", "sonnet", "haiku"}
+		}
+		return append(out, ids...), nil
 	case "anthropic":
 		var v struct {
 			Data []struct {
@@ -242,7 +256,7 @@ func aiPrompt(r AIRequest, text string) (string, string) {
 func aiChat(ctx context.Context, s config.AISettings, key, model, sys, user string) (string, error) {
 	switch s.Provider {
 	case "claudecode":
-		return claudeCodeChat(ctx, s.BaseURL, model, sys, user)
+		return claudeCodeChat(ctx, s.BaseURL, model, s.Effort, sys, user)
 	case "anthropic":
 		body := map[string]any{"model": model, "max_tokens": 1500, "system": sys, "messages": []map[string]string{{"role": "user", "content": user}}}
 		var v struct {

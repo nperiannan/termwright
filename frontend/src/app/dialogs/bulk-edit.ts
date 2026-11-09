@@ -120,10 +120,10 @@ type Key = 'folder' | 'deviceType' | 'account' | 'username' | 'password' | 'prot
     :host-context(.modern) {
       .grid3 { grid-template-columns: 34px 120px 1fr; gap: 0 10px; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 4px 14px; background: var(--surface);
         > * { min-height: 40px; display: flex; align-items: center; } > datalist { display: none; } > input:not([type=checkbox]), > .row > input, > .row > select, > select { min-height: 30px; }
-        > input[type=checkbox] { appearance: none; -webkit-appearance: none; position: relative; width: 30px; height: 18px; min-height: 0; margin: 11px 0; border-radius: 9px;
+        > input[type=checkbox] { appearance: none; -webkit-appearance: none; position: relative; box-sizing: border-box; width: 32px; height: 18px; min-height: 0; margin: 11px 0; padding: 0; border: 0 !important; border-radius: 9px;
           background: var(--line); cursor: pointer; transition: background .15s;
-          &::before { content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: left .15s; }
-          &:checked { background: var(--accent); &::before { left: 14px; } } }
+          &::before { content: ''; position: absolute; left: 1px; top: 1px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 0 0 .5px rgba(0, 0, 0, .06); transition: left .18s cubic-bezier(.2, .8, .2, 1); }
+          &:checked { background: var(--accent); &::before { left: 15px; } } }
         > input[type=checkbox]:not(:checked) + label { color: var(--muted); }
         > input[type=checkbox]:not(:checked) + label + * { opacity: .5; } }
       .list { border-color: var(--line); border-radius: var(--r-lg); }

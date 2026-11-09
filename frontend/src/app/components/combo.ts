@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Icon } from './icon';
 import { tr } from '../core/i18n';
 
-export interface ComboOption { value: string; label?: string; hint?: string; }
+export interface ComboOption { value: string; label?: string; hint?: string; group?: string; }
 
 /**
  * A text box with a drop-down list: pick one of the options, or type your own.
@@ -20,6 +20,7 @@ export interface ComboOption { value: string; label?: string; hint?: string; }
     @if (open()) {
       <div #list class="list" role="listbox" [style.left.px]="pos().x" [style.top.px]="pos().y" [style.width.px]="pos().w" (mousedown)="$event.preventDefault()">
         @for (o of shown(); track o.value; let i = $index) {
+          @if (o.group && o.group !== shown()[i - 1]?.group) { <div class="grp">{{ o.group }}</div> }
           <div class="opt" role="option" [class.on]="i === hi()" [attr.aria-selected]="o.value === value()" (mouseenter)="hi.set(i)" (click)="pick(o.value)">
             <span class="ck">@if (o.value === value()) { <app-icon name="check" [size]="12" /> }</span>
             <span class="lb">{{ o.label || o.value }}</span>@if (o.hint) { <small>{{ o.hint }}</small> }
@@ -39,6 +40,7 @@ export interface ComboOption { value: string; label?: string; hint?: string; }
     .ck { width: 14px; flex: none; display: inline-flex; color: var(--accent); }
     .lb { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     small { margin-left: auto; color: var(--muted); font-family: var(--mono); font-size: calc(11px * var(--ui-scale, 1)); white-space: nowrap; }
+    .grp { padding: 8px 8px 3px; font-size: calc(10.5px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
     .none { padding: 7px 10px; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); }
   `],
 })

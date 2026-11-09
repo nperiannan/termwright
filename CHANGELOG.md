@@ -4,7 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
-* **Settings → AI Assistant: Model is a drop-down list** of the models the service offers (loaded when opened, readable names such as *Sonnet 5.5*), and you can still type a model name.
+* **Settings → AI Assistant: Model is a drop-down list** of the models the service offers (loaded when opened, readable names such as *Sonnet 5.5*), and you can still type a model name. For Claude Code it lists the newest of each family (Opus, Sonnet, Haiku…) and every version the installed Claude Code knows (read from the program, nothing sent).
+* **Claude Code effort** (Low, Medium, High, Extra high, Max, or the model's default) in Settings → AI Assistant and in the AI panel's model menu; the panel shows the model and effort in use.
+* **Switches look right:** the knob is centred and fills the switch (a border from the text-box style pushed it down).
 * **Start page: at most 12 cards** in Favourites and Recent together - favourites first, recent sessions fill the rest (*Show all* still lists every recent session).
 * **AI panel** instead of the AI window: a chat beside the terminal - docked right or left, or floating - with follow-up questions, chat history, a large typing area, pasted pictures, and *Add context* (selection, copied text, whole terminal, other tabs, files).
 * **AI Agent: fully autonomous mode** (orange; the other levels are yellow, Read only white). The agent runs commands and configuration changes without asking - production sessions still ask before every command and connection, and reboot / reload / erase always ask. It confirms once when chosen.

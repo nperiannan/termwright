@@ -202,7 +202,7 @@ Each command that is not read-only waits for the user to allow it.`
 func aiConverse(ctx context.Context, s config.AISettings, key, model, sys string, msgs []AIMsg) (string, *AIUsage, error) {
 	switch s.Provider {
 	case "claudecode":
-		return claudeCodeConverse(ctx, s.BaseURL, model, sys, msgs)
+		return claudeCodeConverse(ctx, s.BaseURL, model, s.Effort, sys, msgs)
 	case "anthropic":
 		var ms []map[string]any
 		for _, m := range msgs {
@@ -312,7 +312,7 @@ func nonEmpty(s string) string {
 
 // claudeCodeConverse: Claude Code answers one prompt, so the chat goes in as a
 // transcript; pictures are files in a fresh folder it may read (and nothing else).
-func claudeCodeConverse(ctx context.Context, path, model, sys string, msgs []AIMsg) (string, *AIUsage, error) {
+func claudeCodeConverse(ctx context.Context, path, model, effort, sys string, msgs []AIMsg) (string, *AIUsage, error) {
 	var b strings.Builder
 	var dir string
 	n := 0
@@ -355,5 +355,5 @@ func claudeCodeConverse(ctx context.Context, path, model, sys string, msgs []AIM
 			fmt.Fprintf(&b, "\n[Picture: %s - read it with the Read tool]", filepath.Join(dir, name))
 		}
 	}
-	return claudeCodeRun(ctx, path, model, sys, b.String(), dir)
+	return claudeCodeRun(ctx, path, model, effort, sys, b.String(), dir)
 }

@@ -49,6 +49,8 @@ type AISettings struct {
 	// the AI panel's Agent mode: "" = changes ask first, "every" = ask before every
 	// command, "readonly" = only read-only commands, "auto" = fully autonomous
 	AgentPerm string `json:"agentPerm,omitempty"`
+	// Claude Code's effort: "" (the model's default), "low", "medium", "high", "xhigh" or "max"
+	Effort string `json:"effort,omitempty"`
 }
 
 // FileServersSettings: the TFTP, FTP and HTTP servers devices fetch files
