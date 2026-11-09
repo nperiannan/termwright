@@ -248,9 +248,17 @@ app-command-window { flex: none; }
   transition: opacity .22s ease .06s, transform .3s cubic-bezier(.2, .8, .2, 1) .06s; }
 .home .card:hover .cact, .home .card:focus-visible .cact, .home .card:focus-within .cact { opacity: 1; transform: none; pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) { .home .card, .home .card .cact { transition: none; } .home .card:hover, .home .card:focus-visible { transform: none; } }
-.home .card:hover .cdot, .home .card:focus-within .cdot { visibility: hidden; }
 .home .card .cact > span { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
   background: var(--surface-2); border: 1px solid var(--line); color: var(--text); transition: background .1s, border-color .1s;
   &:hover { border-color: var(--accent); color: var(--accent); }
   &.p { background: var(--accent); border-color: var(--accent); color: #fff; &:hover { filter: brightness(1.1); color: #fff; } } }
 @media (hover: none) { .home .card .cact { opacity: 1; pointer-events: auto; } }
+
+/* when it was used and whether it is open: bottom right, and up to the top right while the quick buttons show */
+.card { .cmeta { padding-right: 104px; } }
+.home .card .cstamp { position: absolute; right: 18px; bottom: 22px; display: flex; align-items: center; gap: 8px; pointer-events: auto;
+  transition: bottom .38s cubic-bezier(.2, .8, .2, 1), right .38s cubic-bezier(.2, .8, .2, 1);
+  .cago { margin: 0; } .cago + .cdot { margin-left: 0; } .cdot { margin-left: 0; } }
+.home .card .ctop { transition: padding-right .3s cubic-bezier(.2, .8, .2, 1); }
+.home .card:hover, .home .card:focus-within { .cstamp { bottom: calc(100% - 34px); right: 16px; } .ctop { padding-right: 96px; } }
+@media (prefers-reduced-motion: reduce) { .home .card .cstamp, .home .card .ctop { transition: none; } }

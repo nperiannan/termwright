@@ -12,7 +12,7 @@ type Src = 'selection' | 'clipboard' | 'terminal' | 'tabs';
 const nLines = (t: string) => t ? t.split('\n').length : 0;
 const tail = (t: string, n: number) => { if (!n) return t; const l = t.split('\n'); return l.length > n ? l.slice(-n).join('\n') : t; };
 
-const PROVIDER: Record<string, string> = { anthropic: 'Claude', openai: 'OpenAI-compatible', ollama: 'Ollama' };
+const PROVIDER: Record<string, string> = { anthropic: 'Claude', openai: 'OpenAI-compatible', ollama: 'Ollama', claudecode: 'Claude Code' };
 
 /**
  * The AI assistant: Explain a selection (output or an error) or Suggest a

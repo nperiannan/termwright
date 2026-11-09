@@ -28,6 +28,10 @@ type DeviceType struct {
 	// command per line (e.g. "show running-config"); empty = the built-in
 	// default for the device type's name, if any.
 	BackupCommands string `json:"backupCommands"`
+	// AIReadOnly: commands the AI agent may run without asking (beginnings,
+	// one per line, e.g. "show"); empty = the built-in list (show, display,
+	// ping, traceroute… - or the usual read-only commands for Linux).
+	AIReadOnly string `json:"aiReadOnly,omitempty"`
 	// Facts are values read from command output after connecting (model,
 	// version, serial, MAC, uptime, or any the user adds).
 	Facts []FactRule `json:"facts"`

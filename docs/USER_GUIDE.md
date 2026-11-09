@@ -716,23 +716,24 @@ For an SSH session over Wi-Fi, a VPN or a laptop that sleeps, tick **Connect wit
 
 Off until you choose an AI service in **Settings → AI Assistant**: **Claude** (your Anthropic API key), an **OpenAI-compatible** service (OpenAI, Azure OpenAI or a company gateway, by address and key), **Ollama** (a model on your computer or a lab server - nothing leaves your network) or **Claude Code** - the Claude Code program on your computer, signed in with your own Claude account, so no API key is needed (install it from claude.com/claude-code and run `claude` once in a terminal to sign in; **Test** finds it and shows where; Termwright runs it without tools, so it only answers). Keys are kept in the OS keychain; **Load Models** lists what the service offers (empty = its newest).
 
-- **The AI button** (the sparkles in the title bar, also **Options → AI Assistant…**) is always there. Until an AI service is set up it shows a small amber dot and opens these settings; afterwards it opens the AI window for the open tab.
+- **The AI panel** - the sparkles button in the title bar (also **Options → AI Assistant…**, or right-click in a terminal → *Explain with AI* / *Ask AI for a Command*) opens the AI assistant as a chat beside the terminal. Until an AI service is set up the button shows a small amber dot and opens these settings.
+  - **Dock it** on the right (the default) or the left, or let it **float** as its own window - the buttons in its header; drag its edge to make it wider. Termwright remembers your choice.
+  - **A conversation**: ask follow-up questions; answers scroll like a chat. **New chat** starts over; **Chats** lists earlier chats (kept on this computer - the device output sent with them is not kept).
+  - **What goes with a question** - shown as chips above the typing area: the **selected text** of the terminal (chosen when you have a selection), otherwise the **whole terminal**; **+ Add context** (or type **@**) adds copied text, the whole terminal, another tab, or a picture or text file. A long terminal shows how many tokens it is, with a warning and *keep the last 200 / 500 / 1,000 lines*.
+  - **Pictures**: paste a screenshot (⌘V / Ctrl+V), drop it, or attach it - up to 4 per message, 5 MB each. Claude, OpenAI-compatible services and Ollama vision models read them; Claude Code reads them from a temporary folder (it may read only those files).
+  - **Typing**: a large box that grows as you type; Enter sends, Shift+Enter starts a new line, Esc stops.
 
-  ![The AI button in the title bar](screenshots/ai-button.png)
+  ![The AI panel](screenshots/ai-ask.png)
 
-- **What to send** - Termwright picks for you, and you can change it:
-  - **Selected text** in the terminal (chosen when you have a selection),
-  - **Copied text** from the clipboard,
-  - **Whole terminal** - the screen and the scrollback (chosen when nothing is selected),
-  - **Selected tabs** - the tabs in the send group (Command Window → *Selected tabs*), each under its name and device type.
+- **Agent mode** (switch *Ask* to *Agent* under the typing area): the AI may run commands in your tabs and connect to saved sessions to find a problem - or fix it if you ask - and reads the results itself. Every step shows in the chat (which device, which command, its output). Next to the mode, choose what it may do:
+  - **Changes ask first** (default): commands on the device type's *read-only* list run by themselves; anything else shows a card with the exact command and device - **Run** (you can edit the command first), **Skip** or **Stop**.
+  - **Ask before every command**.
+  - **Read only**: it never runs anything that is not on the read-only list.
 
-  Sending a whole terminal or several tabs shows how many lines and about how many tokens that is, with a warning that it uses much more of your AI allowance; keep only the last 200, 500 or 1,000 lines, or select the part you need. *What will be sent* shows the text and lets you shorten it.
-- **Your question** (optional): *Why is port 3 down? Which ports are free?* - or one click on *Explain this*, *Find problems*, *Summarise* or *Commands to fix it*. Without a question the AI explains the output; a question alone works too.
+  On a session in a **production** environment, every command and connection asks first, whatever you chose. The read-only list is per device type (**Settings → Device Types → AI agent: read-only**, one command beginning per line); empty = `show`, `display`, `ping`, `traceroute`… for network devices and the usual read-only commands for Linux. A command with `;`, `&&`, redirection or a pipe into anything but a filter (include, grep…) always asks. The commands are typed in the visible tab, so they appear there and in its log like your own.
 
-  ![Ask about the output](screenshots/ai-ask.png)
+  ![Agent mode asks before a change](screenshots/ai-agent.png)
 
-- **Explain with AI** (right-click in the terminal) opens the same window with the selection - or, with nothing selected, the whole terminal.
-- **Ask AI for a Command** (right-click): *show the LLDP neighbours*, *find which port a MAC address is on* - the commands for that device type.
 - Each command has **Paste** (types it at the prompt **without Enter** and closes the window - you check it and press Enter), **Copy** and **Save** (to the Command Library, for that device type). Nothing the AI answers is ever run by itself.
 - **Privacy**: nothing is sent until you ask. Passwords, secrets, keys, SNMP communities and tokens are removed first; *Also replace IP addresses, MAC addresses and host names* hides those too. *What was sent* shows exactly what left your computer. Check your company's policy before sending device output to an outside service.
 
@@ -752,9 +753,7 @@ What Claude can do: **list the open tabs** and **the saved sessions**, **read a 
 
 The connector listens only on this computer (127.0.0.1) with a random key kept in Termwright's data folder for your user only; web pages cannot reach it.
 
-| Explain | Suggest a command | Settings |
-|---|---|---|
-| ![Explain with AI](screenshots/ai-explain.png) | ![Suggest a command](screenshots/ai-suggest.png) | ![AI Assistant settings](screenshots/ai-settings.png) |
+![AI Assistant settings](screenshots/ai-connector.png)
 
 ## 7. Command Window, Button Bar and Connect Bar
 

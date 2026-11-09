@@ -106,6 +106,7 @@
     <button type="button" class="tree-rail" title="Show the Session Manager" (click)="action('toggle-session-manager')">
       <app-icon name="tree" /><span>Sessions</span></button>
   }
+  @if (aiChat.open() && aiChat.dock() === 'left') { <app-ai-panel /> }
   <section class="work">
     @if (!modern()) {
     <nav class="tabbar">
@@ -202,7 +203,8 @@
                           @if (cardFolder(n); as f) { <span class="cf" translate="no"><app-icon name="folder" [size]="11" /><span>{{ f }}</span></span> }
                         </span>
                       </span>
-                      <span class="cmeta">@if (devKind(n)) { <span class="chip pchip" [title]="'Opens as ' + protoName(n)"><app-session-icon [kind]="protoKind(n)" [size]="14" />{{ protoName(n) }}</span> }@if (cardMeta(n, sec.more); as m) { <span class="chip">{{ m }}</span> }@if (cardAgo(n, sec.more); as a) { <span class="cago">{{ a }}</span> }
+                      <span class="cmeta">@if (devKind(n)) { <span class="chip pchip" [title]="'Opens as ' + protoName(n)"><app-session-icon [kind]="protoKind(n)" [size]="14" />{{ protoName(n) }}</span> }@if (cardMeta(n, sec.more); as m) { <span class="chip">{{ m }}</span> }</span>
+                      <span class="cstamp">@if (cardAgo(n, sec.more); as a) { <span class="cago">{{ a }}</span> }
                         <span class="cdot" [class]="'cdot ' + (liveState().get(n.path) ?? '')" [title]="liveState().get(n.path) ? 'Open in a tab - ' + liveState().get(n.path) : 'Not open'"></span></span>
                       <span class="cact" (click)="$event.stopPropagation()" (dblclick)="$event.stopPropagation()">
                         <span role="button" class="p" title="Connect" aria-label="Connect" (click)="tabs.openSession(n.path)"><app-icon name="play" [size]="13" /></span>
@@ -270,6 +272,7 @@
       }
     </div>
   </section>
+  @if (aiChat.open() && aiChat.dock() !== 'left') { <app-ai-panel /> }
   @if (modern() && ui.panel(); as p) { <app-session-panel [edit]="p" /> }
 </div>
 
@@ -353,7 +356,6 @@
 }
 @if (ui.teamPush()) { <app-team-push-dialog /> }
 @if (ui.teamReserve()) { <app-team-reserve-dialog /> }
-@if (ui.aiReq()) { <app-ai-dialog /> }
 <app-prompt-dialog />
 @if (ui.lockScreen()) { <app-unlock /> }
 <app-overlays />

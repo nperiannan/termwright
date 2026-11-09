@@ -171,13 +171,21 @@ func findClaudeIn(root string, depth int) string {
 // ClaudeCodeFind tells the settings page where Claude Code is (given: the path typed, "" = search).
 func (a *App) ClaudeCodeFind(given string) (string, error) { return claudeCodePath(given) }
 
-// claudeCodeArgs: print mode, plain text, no tools, nothing saved, only our system prompt.
-func claudeCodeArgs(model, sys string, withTools bool) []string {
+// claudeCodeArgs: print mode, plain text, nothing saved, only our system
+// prompt, and no tools - or only Read, for pictures in their own folder.
+func claudeCodeArgs(model, sys string, withTools, read bool) []string {
 	a := []string{"-p", "--output-format", "text", "--no-session-persistence", "--strict-mcp-config", "--system-prompt", sys}
-	if withTools {
+	switch {
+	case withTools && read:
+		a = append(a, "--tools", "Read", "--allowedTools", "Read")
+	case withTools:
 		a = append(a, "--tools", "")
-	} else {
-		a = append(a, "--disallowedTools", "Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Read,Glob,Grep,Task")
+	default:
+		dis := "Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Glob,Grep,Task"
+		if !read {
+			dis += ",Read"
+		}
+		a = append(a, "--disallowedTools", dis)
 	}
 	if model != "" {
 		a = append(a, "--model", model)
@@ -188,6 +196,11 @@ func claudeCodeArgs(model, sys string, withTools bool) []string {
 var claudeCodeTimeout = 3 * time.Minute
 
 func claudeCodeChat(ctx context.Context, path, model, sys, user string) (string, error) {
+	return claudeCodeRun(ctx, path, model, sys, user, "")
+}
+
+// claudeCodeRun asks once; picDir (may be "") holds pictures it may read.
+func claudeCodeRun(ctx context.Context, path, model, sys, user, picDir string) (string, error) {
 	bin, err := claudeCodePath(path)
 	if err != nil {
 		return "", err
@@ -195,8 +208,11 @@ func claudeCodeChat(ctx context.Context, path, model, sys, user string) (string,
 	run := func(withTools bool) (string, string, error) {
 		c, cancel := context.WithTimeout(ctx, claudeCodeTimeout)
 		defer cancel()
-		cmd := exec.CommandContext(c, bin, claudeCodeArgs(model, sys, withTools)...)
+		cmd := exec.CommandContext(c, bin, claudeCodeArgs(model, sys, withTools, picDir != "")...)
 		cmd.Dir = os.TempDir() // not a project folder: nothing of the user's is in reach
+		if picDir != "" {
+			cmd.Dir = picDir
+		}
 		cmd.Stdin = strings.NewReader(user)
 		var out, errb bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &errb

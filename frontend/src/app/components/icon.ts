@@ -6,6 +6,9 @@ const PATHS: Record<string, string> = {
   // title-bar session list: small tiles with lines
   sessions: 'M4 5h4v4H4zM11 7h9M4 10.5h4v4H4zM11 12.5h9M4 16h4v4H4zM11 18h9',
   // Session Manager rows with two lines each (name and address)
+  float: 'M4 8h11v12H4zM9 4h11v11',
+  image: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01',
+  clip: 'M20 11l-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7',
   sparkles: 'M11 3l1.8 5.2L18 10l-5.2 1.8L11 17l-1.8-5.2L4 10l5.2-1.8zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z',
   server: 'M4 4.5h16v6.5H4zM4 13h16v6.5H4zM7 7.75h.01M7 16.25h.01M10 7.75h7M10 16.25h7',
   rows: 'M4 4.5h16v6.5H4zM4 13h16v6.5H4zM7 7h7M7 9h4M7 15.5h7M7 17.5h4',

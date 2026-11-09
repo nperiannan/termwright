@@ -47,10 +47,11 @@ import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
 import { TeamsDialog } from './dialogs/teams-dialog';
 import { FileServersDialog } from './dialogs/file-servers-dialog';
+import { AIPanel } from './components/ai-panel';
+import { AIChat } from './core/ai-chat.service';
 import { ServersIndicator } from './components/servers-indicator';
 import { TeamPushDialog } from './dialogs/team-push-dialog';
 import { TeamReserveDialog } from './dialogs/team-reserve-dialog';
-import { AIDialog } from './dialogs/ai-dialog';
 import { TeamStatusService } from './core/team-status.service';
 import { RemoteDesktopDialog } from './dialogs/remote-desktop-dialog';
 import { RemoteDesktopSetup } from './core/remote-desktop-setup.service';
@@ -68,7 +69,7 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, ServersIndicator, TeamPushDialog, TeamReserveDialog, AIDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -89,6 +90,7 @@ export class App implements OnInit {
   readonly backendMissing = !this.backend.available;
   readonly settings = this.ui.settings;
   readonly active = this.tabs.active;
+  protected readonly aiChat = inject(AIChat);
   /** The AI assistant has a service set up (null until known): the title bar button shows a dot when not. */
   readonly aiReady = signal<boolean | null>(null);
   private readonly aiCheck = effect(() => {
@@ -255,9 +257,8 @@ export class App implements OnInit {
     const ready = await this.backend.aiState().then(s => s.ready).catch(() => false);
     this.aiReady.set(ready);
     if (!ready) { this.ui.openOptions('ai'); return; }
-    const t = this.active();
-    const term = t?.kind === 'terminal' ? t : null;
-    this.ui.aiReq.set({ kind: 'explain', text: '', tabId: term?.id, deviceType: term?.session?.deviceType ?? '', protocol: term?.session?.protocol ?? '' });
+    if (this.aiChat.open()) { this.aiChat.show(false); return; }
+    this.aiChat.start();
   }
 
   statusTarget(t: TabView) {

@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '
 import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { LANGUAGES, previewLanguages, tr } from '../core/i18n';
+import { readOnlyList } from '../core/ai-chat.service';
 import { Backend, errText } from '../core/backend';
 import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, MCPInfo, comboOf, FACT_NAMES } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
@@ -414,6 +415,9 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label>Backup commands</label>
                   <textarea name="dtbk" class="mono" rows="2" [(ngModel)]="d.backupCommands"
                     [placeholder]="backupDefault(d.name) || 'Commands that print the configuration, one per line, e.g. show running-config'"></textarea>
+                  <label>AI agent: read-only</label>
+                  <textarea name="dtro" class="mono" rows="2" [(ngModel)]="d.aiReadOnly" [placeholder]="readOnlyDefault(d.name)"
+                    title="The AI agent runs commands that begin with these without asking (except on production); everything else asks first. One per line."></textarea>
                   <label></label>
                   <div class="checks"><label><input type="checkbox" name="dticr" [(ngModel)]="d.initialCr" /> Send initial carriage return</label></div>
                 </div>
@@ -729,6 +733,7 @@ export class OptionsDialog implements OnInit {
   private cdr = inject(ChangeDetectorRef);
   readonly page = signal<Page>((this.ui.optionsPage() || 'general') as Page);
   /** Built-in backup command shown when a device type has none of its own. */
+  readOnlyDefault(name: string) { return 'Runs without asking (one per line; empty = ' + readOnlyList(name, '').join(', ') + ')'; }
   backupDefault(name: string) {
     const d: Record<string, string> = { exos: 'show configuration', voss: 'show running-config', 'cisco ios': 'show running-config' };
     const c = d[name.toLowerCase()];
