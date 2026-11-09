@@ -714,7 +714,7 @@ For an SSH session over Wi-Fi, a VPN or a laptop that sleeps, tick **Connect wit
 
 ### AI assistant (optional)
 
-Off until you choose an AI service in **Settings → AI Assistant**: **Claude** (your Anthropic API key), an **OpenAI-compatible** service (OpenAI, Azure OpenAI or a company gateway, by address and key), **Ollama** (a model on your computer or a lab server - nothing leaves your network) or **Claude Code** - the Claude Code program on your computer, signed in with your own Claude account, so no API key is needed (install it from claude.com/claude-code and run `claude` once in a terminal to sign in; **Check** finds it; Termwright runs it without tools, so it only answers). Keys are kept in the OS keychain; **Load Models** lists what the service offers (empty = its newest).
+Off until you choose an AI service in **Settings → AI Assistant**: **Claude** (your Anthropic API key), an **OpenAI-compatible** service (OpenAI, Azure OpenAI or a company gateway, by address and key), **Ollama** (a model on your computer or a lab server - nothing leaves your network) or **Claude Code** - the Claude Code program on your computer, signed in with your own Claude account, so no API key is needed (install it from claude.com/claude-code and run `claude` once in a terminal to sign in; **Test** finds it and shows where; Termwright runs it without tools, so it only answers). Keys are kept in the OS keychain; **Load Models** lists what the service offers (empty = its newest).
 
 - **The AI button** (the sparkles in the title bar, also **Options → AI Assistant…**) is always there. Until an AI service is set up it shows a small amber dot and opens these settings; afterwards it opens the AI window for the open tab.
 
@@ -740,8 +740,8 @@ Off until you choose an AI service in **Settings → AI Assistant**: **Claude** 
 
 Termwright can also work the other way round: as a **connector** (an MCP server) that Claude Desktop and Claude Code use, so you can ask in a Claude chat *"look at my access-sw7 tab - why is port 3 down?"* or *"which of my saved sessions are EXOS switches?"*.
 
-1. **Settings → AI Assistant → Use Termwright from Claude**: tick *Let Claude Desktop and Claude Code use Termwright* and press **Save**.
-2. **Add to Claude Desktop** (then restart Claude Desktop) and/or **Add to Claude Code** - or by hand: Claude Code `claude mcp add --scope user termwright -- <Termwright program> mcp`; Claude Desktop: *Settings → Developer → Edit Config*, a server with the Termwright program as the command and `mcp` as its argument (the page shows the exact path).
+1. **Settings → AI Assistant → Use Termwright from Claude**: switch on *Let Claude use Termwright* and press **Save**.
+2. **Add** next to *Claude Desktop* (then restart Claude Desktop) and/or next to *Claude Code* - or *Set up by hand*: Claude Code `claude mcp add --scope user termwright -- <Termwright program> mcp`; Claude Desktop: *Settings → Developer → Edit Config*, a server with the Termwright program as the command and `mcp` as its argument (the page shows the exact path).
 3. Keep Termwright open while Claude uses it.
 
 ![Use Termwright from Claude](screenshots/ai-connector.png)

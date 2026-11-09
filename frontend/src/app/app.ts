@@ -3,7 +3,7 @@ import { Component, ElementRef, OnInit, computed, effect, inject, signal, viewCh
 import { FormsModule } from '@angular/forms';
 import { Backend } from './core/backend';
 import { SessionOps } from './core/session-ops.service';
-import { i18n, previewLanguages, setPreviewLanguages } from './core/i18n';
+import { i18n, previewLanguages, setPreviewLanguages, tr } from './core/i18n';
 import { Tabs, TabView } from './core/tabs.service';
 import { connectString, findSessionByName, looksLikeConnect } from './core/connect-string';
 import { SessionNode } from './core/models';
@@ -206,12 +206,7 @@ export class App implements OnInit {
   /** When a recent card was last used, shown beside its chip (never cut off with the chip's text). */
   cardAgo(n: SessionNode, recent: boolean) { return recent ? this.lastAgo(n) : ''; }
   /** The 3D cards (Glacier) turn a little towards the pointer. */
-  tilt(ev: PointerEvent) {
-    const el = ev.currentTarget as HTMLElement, r = el.getBoundingClientRect();
-    el.style.setProperty('--ty', (((ev.clientX - r.left) / r.width - .5) * 10).toFixed(1) + 'deg');
-    el.style.setProperty('--tx', (-((ev.clientY - r.top) / r.height - .5) * 6).toFixed(1) + 'deg');
-  }
-  untilt(ev: PointerEvent) { const el = ev.currentTarget as HTMLElement; el.style.removeProperty('--tx'); el.style.removeProperty('--ty'); }
+  async copyAddr(n: SessionNode) { await this.backend.clipboardSet(this.cardAddr(n)); this.ui.toast(tr('Copied {0}', this.cardAddr(n)), 'success'); }
   devKind(n: SessionNode) { return n.protocol === 'WOL' ? null : deviceKindOf(n.deviceType); }
   /** How the session opens: SSH, SFTP, Telnet, Serial… (the icon shows the device type instead). */
   protoName(n: SessionNode) { return protoName(n); }

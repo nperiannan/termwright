@@ -236,3 +236,21 @@ app-command-window { flex: none; }
 /* the AI button: a small amber dot while no AI service is set up */
 .ab.ai, .tb.ai { position: relative; }
 .aidot { position: absolute; right: 5px; top: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--chrome); pointer-events: none; }
+
+/* start page cards: quick actions on hover (Connect, SFTP, Copy, More) - no tooltip over the next card */
+.home .card { position: relative; }
+/* the card under the pointer comes forward a little - one smooth, springy ease (no 3D tilt) */
+.home .card { transition: transform .34s cubic-bezier(.2, .8, .2, 1), box-shadow .34s cubic-bezier(.2, .8, .2, 1), border-color .2s ease, background-color .2s ease;
+  will-change: transform; backface-visibility: hidden; }
+.home .card:hover, .home .card:focus-visible { z-index: 2; transform: translateY(-4px) scale(1.035); box-shadow: 0 18px 40px rgba(0, 0, 0, .22), 0 2px 6px rgba(0, 0, 0, .12); }
+.home .card:active { transform: translateY(-1px) scale(1.01); transition-duration: .12s; }
+.home .card .cact { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; opacity: 0; transform: translateY(4px); pointer-events: none;
+  transition: opacity .22s ease .06s, transform .3s cubic-bezier(.2, .8, .2, 1) .06s; }
+.home .card:hover .cact, .home .card:focus-visible .cact, .home .card:focus-within .cact { opacity: 1; transform: none; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .home .card, .home .card .cact { transition: none; } .home .card:hover, .home .card:focus-visible { transform: none; } }
+.home .card:hover .cdot, .home .card:focus-within .cdot { visibility: hidden; }
+.home .card .cact > span { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--text); transition: background .1s, border-color .1s;
+  &:hover { border-color: var(--accent); color: var(--accent); }
+  &.p { background: var(--accent); border-color: var(--accent); color: #fff; &:hover { filter: brightness(1.1); color: #fff; } } }
+@media (hover: none) { .home .card .cact { opacity: 1; pointer-events: auto; } }

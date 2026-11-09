@@ -484,70 +484,79 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
               <button type="button" (click)="(s.alerts ??= []).push({ pattern: '', regex: false, caseSensitive: false, enabled: true, sound: true, desktop: true })">Add alert</button>
             }
             @case ('ai') {
-              <div class="grid">
-                <label>AI service</label>
-                <select name="aip" [ngModel]="s.ai?.provider || ''" (ngModelChange)="setAI({ provider: $event, model: '' }); aiModels.set([])">
-                  <option value="">Off</option>
-                  <option value="anthropic">Claude (Anthropic API key)</option>
-                  <option value="openai">OpenAI-compatible (OpenAI, Azure OpenAI, a company gateway)</option>
-                  <option value="ollama">Ollama (a local model - nothing leaves your network)</option>
-                  <option value="claudecode">Claude Code (your Claude login - no API key)</option>
-                </select>
-                @if (s.ai?.provider === 'anthropic' || s.ai?.provider === 'openai') {
-                  <label>API key</label>
-                  <div class="row"><input name="aik" type="password" [(ngModel)]="aiKey" autocomplete="off" [placeholder]="aiSt()?.hasKey ? '(saved in the OS keychain - type to change)' : 'paste the key'" />
-                    <button type="button" (click)="saveAIKey()" [disabled]="!aiKey.trim()">Save Key</button>
-                    @if (aiSt()?.hasKey) { <button type="button" (click)="forgetAIKey()">Forget</button> }</div>
-                }
-                @if (s.ai?.provider === 'claudecode') {
-                  <label>Claude Code</label>
-                  <div class="row"><input name="aicc" [ngModel]="s.ai?.baseUrl || ''" (ngModelChange)="setAI({ baseUrl: $event })" placeholder="(found on this computer)" />
-                    <button type="button" (click)="loadAIModels()">Check</button></div>
-                  <label></label>
-                  <div class="hint">Uses the Claude Code program on this computer with the Claude account it is signed in to - install it from claude.com/claude-code and run <code>claude</code> once in a terminal to sign in. Termwright runs it without tools: it only answers, it cannot read files or run commands.</div>
-                }
-                @if (s.ai?.provider === 'openai' || s.ai?.provider === 'ollama') {
-                  <label>Address</label>
-                  <input name="aib" [ngModel]="s.ai?.baseUrl || ''" (ngModelChange)="setAI({ baseUrl: $event })" [placeholder]="s.ai?.provider === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1'" />
-                }
-                @if (s.ai?.provider) {
-                  <label>Model</label>
-                  <div class="row">
-                    <input name="aim" [ngModel]="s.ai?.model || ''" (ngModelChange)="setAI({ model: $event })" list="aimodels" [placeholder]="s.ai?.provider === 'claudecode' ? '(the default of Claude Code)' : '(the newest the service offers)'" />
-                    <datalist id="aimodels">@for (m of aiModels(); track m) { <option [value]="m"></option> }</datalist>
-                    <button type="button" (click)="loadAIModels()">Load Models</button>
-                  </div>
-                  <label>Privacy</label>
-                  <div class="checks"><label><input type="checkbox" name="aih" [ngModel]="!!s.ai?.hideHosts" (ngModelChange)="setAI({ hideHosts: $event })" /> Also replace IP addresses, MAC addresses and host names before sending</label></div>
-                  <label></label>
-                  <div class="hint">Nothing is sent until you choose <b>Explain with AI</b> or <b>Ask AI for a Command</b> (right-click in a terminal). Passwords, secrets, keys, SNMP communities and tokens are always removed first, and the window shows what was sent. Commands are pasted without Enter - you check them and press Enter. Check your company's policy before sending device output to an outside service; Ollama keeps everything on your network.</div>
-                  @if (aiMsg()) { <label></label><div class="hint">{{ aiMsg() }}</div> }
-                }
-              </div>
-              <div class="grid">
-                <h4 class="gsec">Use Termwright from Claude</h4>
-                <label>Claude connector</label>
-                <div class="checks"><label><input type="checkbox" name="mcp" [ngModel]="!!s.ai?.mcp" (ngModelChange)="setAI({ mcp: $event })" /> Let Claude Desktop and Claude Code use Termwright</label></div>
-                <label></label>
-                <div class="hint">In a Claude chat you can then ask about your devices - <i>look at my access-sw7 tab: why is port 3 down?</i> Claude lists your tabs and sessions and reads a tab (passwords, keys and SNMP communities removed). Termwright must be open.</div>
-                @if (s.ai?.mcp) {
-                  <label>Commands</label>
-                  <select name="mcpc" [ngModel]="s.ai?.mcpCommands || ''" (ngModelChange)="setAI({ mcpCommands: $event })">
-                    <option value="">Ask me each time before Claude types a command or connects</option>
-                    <option value="never">Never - Claude can only read</option>
-                  </select>
-                  <label>Set up</label>
-                  <div class="row wrap">
-                    <button type="button" (click)="mcpDesktop()">{{ mcp()?.inDesktop ? '✓ In Claude Desktop - Add Again' : 'Add to Claude Desktop' }}</button>
-                    <button type="button" (click)="mcpCode()">Add to Claude Code</button>
-                  </div>
-                  <label></label>
-                  <div class="hint">Restart Claude Desktop after adding. By hand - Claude Code: <code class="sel">{{ mcp()?.codeCmd }}</code>
-                    <button type="button" class="link" (click)="copyText(mcp()?.codeCmd ?? '')">Copy</button><br>
-                    Claude Desktop (Settings → Developer → Edit Config): command <code class="sel">{{ mcp()?.command }}</code> with the argument <code>mcp</code>.
-                    {{ mcp()?.running ? tr('The connector is running.') : tr('The connector starts when you press Save.') }}</div>
-                  @if (mcpMsg()) { <label></label><div class="hint">{{ mcpMsg() }}</div> }
-                }
+              <div class="glist">
+                <div class="gt">AI service</div>
+                <div class="list">
+                  <div class="li"><span class="l">Service</span>
+                    <select name="aip" class="v" [ngModel]="s.ai?.provider || ''" (ngModelChange)="setAI({ provider: $event, model: '', baseUrl: '' }); aiModels.set([]); aiCheck.set(null); aiMsg.set('')">
+                      <option value="">Off</option>
+                      <option value="claudecode">Claude Code - your Claude login</option>
+                      <option value="anthropic">Claude API - Anthropic API key</option>
+                      <option value="openai">OpenAI-compatible - OpenAI, Azure, a gateway</option>
+                      <option value="ollama">Ollama - a local model</option>
+                    </select></div>
+                  @if (s.ai?.provider === 'anthropic' || s.ai?.provider === 'openai') {
+                    <div class="li"><span class="l">API key<small>{{ aiSt()?.hasKey ? 'Saved in the OS keychain' : 'Kept in the OS keychain, never in the settings' }}</small></span>
+                      <input name="aik" class="v" type="password" [(ngModel)]="aiKey" autocomplete="off" [placeholder]="aiSt()?.hasKey ? '•••••••• (type to change)' : 'paste the key'" />
+                      <button type="button" (click)="saveAIKey()" [disabled]="!aiKey.trim()">Save Key</button>
+                      @if (aiSt()?.hasKey) { <button type="button" (click)="forgetAIKey()">Forget</button> }</div>
+                  }
+                  @if (s.ai?.provider === 'openai' || s.ai?.provider === 'ollama') {
+                    <div class="li"><span class="l">Address</span>
+                      <input name="aib" class="v" [ngModel]="s.ai?.baseUrl || ''" (ngModelChange)="setAI({ baseUrl: $event })" [placeholder]="s.ai?.provider === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1'" /></div>
+                  }
+                  @if (s.ai?.provider === 'claudecode') {
+                    <div class="li"><span class="l">Program<small>Empty = found on this computer</small></span>
+                      <input name="aicc" class="v mono" [ngModel]="s.ai?.baseUrl || ''" (ngModelChange)="setAI({ baseUrl: $event }); aiCheck.set(null)" placeholder="~/.local/bin/claude" /></div>
+                  }
+                  @if (s.ai?.provider) {
+                    <div class="li"><span class="l">Status<small>{{ aiMsg() || 'Test checks the service with the settings above' }}</small></span>
+                      <span class="pill" [class]="'pill ' + aiStatus().cls"><i></i>{{ aiStatus().text }}</span>
+                      <button type="button" (click)="loadAIModels()">Test</button></div>
+                    <div class="li"><span class="l">Model</span>
+                      <input name="aim" class="v" [ngModel]="s.ai?.model || ''" (ngModelChange)="setAI({ model: $event })" list="aimodels" [placeholder]="s.ai?.provider === 'claudecode' ? 'Default of Claude Code' : 'The newest the service offers'" />
+                      <datalist id="aimodels">@for (m of aiModels(); track m) { <option [value]="m"></option> }</datalist></div>
+                  }
+                </div>
+                <div class="gf">@switch (s.ai?.provider) {
+                  @case ('claudecode') { Uses the Claude account Claude Code is signed in to - no API key. Termwright runs it without tools: it only answers. Install it from claude.com/claude-code and run <code>claude</code> once to sign in. }
+                  @case ('ollama') { A model on this computer or a lab server - nothing leaves your network. }
+                  @case ('') { Off: the ✦ button opens this page. }
+                  @default { The device output you choose is sent to this service. }
+                }</div>
+
+                <div class="gt">Privacy</div>
+                <div class="list">
+                  <div class="li"><span class="l">Remove passwords, keys, SNMP communities and tokens<small>Always on</small></span>
+                    <span class="sw"><input type="checkbox" checked disabled aria-label="Remove secrets (always on)" /></span></div>
+                  <div class="li"><span class="l">Hide IP addresses, MAC addresses and host names<small>They become [host-1], [host-2]… before sending</small></span>
+                    <span class="sw"><input type="checkbox" name="aih" [ngModel]="!!s.ai?.hideHosts" (ngModelChange)="setAI({ hideHosts: $event })" aria-label="Hide addresses and host names" /></span></div>
+                </div>
+                <div class="gf">Nothing is sent until you ask - from the ✦ button or right-click → Explain with AI - and the window shows what was sent. Check your company's policy before sending device output to an AI service.</div>
+
+                <div class="gt">Claude connector</div>
+                <div class="list">
+                  <div class="li"><span class="l">Let Claude use Termwright<small>Claude Desktop and Claude Code can list your tabs and sessions and read a tab</small></span>
+                    @if (s.ai?.mcp) { <span class="pill" [class.ok]="mcp()?.running"><i></i>{{ mcp()?.running ? 'Running' : 'Starts on Save' }}</span> }
+                    <span class="sw"><input type="checkbox" name="mcp" [ngModel]="!!s.ai?.mcp" (ngModelChange)="setAI({ mcp: $event })" aria-label="Let Claude use Termwright" /></span></div>
+                  @if (s.ai?.mcp) {
+                    <div class="li"><span class="l">Commands<small>Opening a session or typing in a tab</small></span>
+                      <select name="mcpc" class="v" [ngModel]="s.ai?.mcpCommands || ''" (ngModelChange)="setAI({ mcpCommands: $event })">
+                        <option value="">Ask me each time</option>
+                        <option value="never">Never - Claude only reads</option>
+                      </select></div>
+                    <div class="li"><span class="l">Claude Desktop<small>{{ mcp()?.inDesktop ? 'Restart Claude Desktop after adding' : 'Adds Termwright to its connectors' }}</small></span>
+                      <span class="pill" [class.ok]="mcp()?.inDesktop" [class.warn]="!mcp()?.inDesktop"><i></i>{{ mcp()?.inDesktop ? 'Added' : 'Not added' }}</span>
+                      <button type="button" [class.primary]="!mcp()?.inDesktop" (click)="mcpDesktop()">{{ mcp()?.inDesktop ? 'Add Again' : 'Add' }}</button></div>
+                    <div class="li"><span class="l">Claude Code<small>claude mcp add, for your user</small></span>
+                      <span class="pill" [class.ok]="codeAdded()" [class.warn]="!codeAdded()"><i></i>{{ codeAdded() ? 'Added' : 'Not added' }}</span>
+                      <button type="button" [class.primary]="!codeAdded()" (click)="mcpCode()">{{ codeAdded() ? 'Add Again' : 'Add' }}</button></div>
+                    <details class="li man"><summary class="l">Set up by hand</summary>
+                      <div class="mrow"><span>Claude Code</span><code>{{ mcp()?.codeCmd }}</code><button type="button" (click)="copyText(mcp()?.codeCmd ?? '')">Copy</button></div>
+                      <div class="mrow"><span>Claude Desktop</span><code>{{ mcp()?.command }} mcp</code><button type="button" (click)="copyText(mcp()?.command ?? '')">Copy</button></div></details>
+                  }
+                </div>
+                <div class="gf">{{ mcpMsg() || 'Every command Claude wants to type is shown in Termwright first. The connector listens on this computer only, with a random key.' }}</div>
               </div>
             }
             @case ('cards') {
@@ -660,6 +669,24 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
   </div>
   }`,
   styles: [`
+    .glist { max-width: 760px;
+      .gt { font-size: calc(11px * var(--ui-scale, 1)); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 4px 0 6px 4px; }
+      .list { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+      .li { display: flex; align-items: center; gap: 10px; padding: 9px 14px; min-height: 30px; }
+      .li + .li { border-top: 1px solid var(--line); }
+      .l { flex: 1; min-width: 0; small { display: block; color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); margin-top: 1px; overflow-wrap: anywhere; } }
+      .v { width: 300px; max-width: 48%; flex: none; }
+      .mono { font-family: var(--mono); }
+      .gf { font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); margin: 6px 4px 18px; line-height: 1.5; code { font-size: inherit; } }
+      .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: calc(11.5px * var(--ui-scale, 1)); white-space: nowrap; border: 1px solid var(--line); color: var(--muted);
+        i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        &.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+        &.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+        &.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); } }
+      .man { display: block; summary { cursor: pointer; color: var(--muted); } }
+      .mrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; span { width: 110px; flex: none; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); }
+        code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 5px 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); } }
+      @media (max-width: 760px) { .li { flex-wrap: wrap; } .v { width: 100%; max-width: none; } } }
     .envs { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
     .envrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface);
       .tagpv { min-width: 52px; text-align: center; font-size: calc(10px * var(--ui-scale, 1)); font-weight: 700; letter-spacing: .03em; padding: 2px 6px; border-radius: 4px; }
@@ -971,6 +998,19 @@ export class OptionsDialog implements OnInit {
     void this.backend.mcpState().then(x => this.mcp.set(x)).catch(() => {});
   }
   readonly mcp = signal<MCPInfo | null>(null);
+  readonly aiCheck = signal<boolean | null>(null); // the last Test: worked / failed
+  readonly codeAdded = signal(false);
+  /** The status pill: the last Test, else what the saved settings say. */
+  aiStatus(): { cls: string; text: string } {
+    const p = this.s?.ai?.provider ?? '';
+    if (!p) return { cls: '', text: tr('Off') };
+    if (this.aiCheck() === true) return { cls: 'ok', text: tr('Ready') };
+    if (this.aiCheck() === false) return { cls: 'bad', text: tr('Not working') };
+    const st = this.aiSt();
+    if ((p === 'anthropic' || p === 'openai') && !st?.hasKey) return { cls: 'warn', text: tr('Needs a key') };
+    if (st?.provider === p && st.ready) return { cls: 'ok', text: tr('Ready') };
+    return { cls: '', text: tr('Not tested') };
+  }
   readonly mcpMsg = signal('');
   async mcpDesktop() {
     try { await this.backend.mcpAddToDesktop(); this.mcpMsg.set(tr('Added to Claude Desktop - restart Claude Desktop, then look for Termwright under its connectors.')); this.loadAI(); }
@@ -978,7 +1018,7 @@ export class OptionsDialog implements OnInit {
   }
   async mcpCode() {
     this.mcpMsg.set(tr('Adding…'));
-    try { await this.backend.mcpAddToClaudeCode(); this.mcpMsg.set(tr('Added to Claude Code - start a new claude session and type /mcp to see it.')); }
+    try { await this.backend.mcpAddToClaudeCode(); this.codeAdded.set(true); this.mcpMsg.set(tr('Added to Claude Code - start a new claude session and type /mcp to see it.')); }
     catch (e) { this.mcpMsg.set(errText(e)); }
   }
   async copyText(t: string) { if (t) { await this.backend.clipboardSet(t); this.ui.toast(tr('Copied'), 'success'); } }
@@ -996,14 +1036,16 @@ export class OptionsDialog implements OnInit {
         const p = await this.backend.claudeCodeFind(this.s.ai.baseUrl ?? '');
         this.aiModels.set(['sonnet', 'opus', 'haiku']);
         this.aiMsg.set(tr('Claude Code found: {0}. Model: sonnet, opus or haiku - or leave it empty for its default.', p));
-      } catch (e) { this.aiMsg.set(errText(e)); }
+        this.aiCheck.set(true);
+      } catch (e) { this.aiMsg.set(errText(e)); this.aiCheck.set(false); }
       return;
     }
     try {
       const m = await this.backend.aiModels(this.s?.ai ?? {});
       this.aiModels.set(m ?? []);
+      this.aiCheck.set(true);
       this.aiMsg.set(m?.length ? tr('{0} models - pick one, or leave it empty for the first: {1}', m.length, m[0]) : tr('The service lists no models.'));
-    } catch (e) { this.aiMsg.set(errText(e)); }
+    } catch (e) { this.aiMsg.set(errText(e)); this.aiCheck.set(false); }
   }
   async browseSync() {
     const d = await this.backend.chooseDirectory('Choose the Sync Folder').catch(() => '');
