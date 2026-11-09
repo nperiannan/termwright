@@ -272,3 +272,8 @@ details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top
     &.on { border-color: var(--accent) !important; background: var(--accent-soft) !important; color: var(--accent); } } }
 
 :root.modern.light :is(.checks, .inline-check, .sw) input[type=checkbox]:not(:checked) { background: #c9cdd4; }
+
+/* environment tags (PROD, LAB…) by the folder colour scheme (Settings → General → Folder colours):
+   vivid = solid; soft = tinted; steel blue = outlined. The tag's text colour is the environment's colour. */
+:root.fc-soft .envtag { background: color-mix(in srgb, currentColor 15%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent); }
+:root.fc-steel .envtag { background: transparent !important; box-shadow: inset 0 0 0 1px currentColor; }

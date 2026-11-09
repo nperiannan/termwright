@@ -1641,6 +1641,11 @@ const ru: Record<string, string> = {
   'Press Enter in {0}: it fetches termwright-test.txt (a few bytes) - you can delete it on the device afterwards': 'Нажмите Enter в {0}: скачается termwright-test.txt (несколько байт) - потом его можно удалить с устройства',
   '{0} reached {1} on this computer ({2}) - the firewall lets it in.': '{0} достучался до {1} на этом компьютере ({2}) - брандмауэр его пропускает.',
   '{0} did not reach {1} on this computer within 2 minutes - the firewall or the route blocks it.': '{0} не достучался до {1} на этом компьютере за 2 минуты - мешает брандмауэр или маршрут.',
+  'Folder colours': 'Цвета папок',
+  'Soft': 'Мягкие',
+  'Vivid': 'Яркие',
+  'Steel blue': 'Стальной синий',
+  'Folders by level, and the environment tags (PROD, LAB…): soft tones with tinted tags, bright colours with solid tags, or blue-grey with outlined tags.': 'Папки по уровням и метки сред (PROD, LAB…): мягкие тона с полупрозрачными метками, яркие цвета со сплошными метками или серо-синие с контурными метками.',
 };
 
 export default ru;

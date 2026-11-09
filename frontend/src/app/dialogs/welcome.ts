@@ -43,6 +43,13 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
           <div class="seg">
             @for (z of sizes; track z.v) { <button type="button" [class.on]="size() === z.v" (click)="setSize(z.v)"><span [style.font-size.px]="z.v + 2">Aa</span><small>{{ z.v }} px</small></button> }
           </div>
+            <div class="lbl">Folder colours</div>
+            <div class="seg qbs">
+              @for (f of fcs; track f.v) {
+                <button type="button" [class.on]="(ui.settings()?.folderColors || '') === f.v" (click)="ui.patchSettings({ folderColors: f.v })">
+                  <span class="fcs">@for (c of f.c; track $index) { <i [style.background]="c"></i> }<em [class]="'tg ' + (f.v || 'soft')" [style.color]="f.v === 'vivid' ? '#fff' : f.t" [style.background]="f.v === 'vivid' ? f.t : ''">PROD</em></span><small>{{ f.label }}</small></button>
+              }
+            </div>
             <div class="lbl">Start page buttons</div>
             <div class="seg qbs">
               @for (q of qbs; track q.v) {
@@ -151,6 +158,11 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
         small { font-size: 11px; color: var(--muted); font-weight: 400; }
         &.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); } } }
     .seg.wide button { height: 52px; font-size: calc(13px * var(--ui-scale, 1)); }
+    /* small samples of the folder colours */
+    .fcs { display: inline-flex; align-items: center; gap: 4px; i { width: 14px; height: 11px; border-radius: 2px 3px 3px 3px; } }
+    .fcs .tg { font-style: normal; font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-left: 4px; }
+    .fcs .tg.soft { background: color-mix(in srgb, currentColor 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent); }
+    .fcs .tg.steel { box-shadow: inset 0 0 0 1px currentColor; }
     /* small samples of the start page buttons */
     .seg.qbs button { height: 70px; gap: 6px; }
     .qb { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 7px; color: var(--text);
@@ -212,6 +224,11 @@ export class Welcome {
     { v: 'system', label: 'System', icon: 'theme-system' },
   ];
   readonly sizes = UI_SIZES;
+  readonly fcs: { v: '' | 'vivid' | 'steel'; label: string; c: string[]; t: string }[] = [
+    { v: '', label: 'Soft', c: ['#d2a654', '#9d7ee0', '#5f9be3'], t: '#d2575b' },
+    { v: 'vivid', label: 'Vivid', c: ['#e5a93b', '#a970ff', '#4f9cf7'], t: '#e5484d' },
+    { v: 'steel', label: 'Steel blue', c: ['#6d8db3', '#8fa8c9', '#abbfd8'], t: '#bd5a5f' },
+  ];
   readonly qbs: { v: '' | 'keycap' | 'glow'; label: string }[] = [{ v: '', label: 'Raised' }, { v: 'keycap', label: 'Keycaps' }, { v: 'glow', label: 'Glow cards' }];
   readonly theme = computed(() => { const t = this.ui.settings()?.theme; return t === 'light' || t === 'dark' ? t : 'system'; });
   readonly size = computed(() => uiFontSize(this.ui.settings()?.uiFontSize));

@@ -59,7 +59,7 @@ To build from source see the [README](../README.md#build).
 
 The first time Termwright starts (and once after updating to a new version; **Help → Welcome…** shows it again) a short welcome flow opens:
 
-1. **Look** - theme (Light, Dark or System), text size and the start page buttons.
+1. **Look** - theme (Light, Dark or System), text size, folder colours and the start page buttons.
 2. **Sessions** - sessions of SecureCRT, PuTTY, SuperPuTTY, MobaXterm and OpenSSH found in their usual places are listed with an **Import** button; export files (SecureCRT `.xml`/`.zip` or Config folder, PuTTY/KiTTY `.reg`, SuperPuTTY `Sessions.xml`, MobaXterm, CSV) are one click away.
 3. **Security** - an optional **master password**. Type one (any 4 or more characters; a meter shows how strong it is - capitals, numbers and symbols help but are never required) and confirm it, or press **Skip**. It can be set, changed or removed later in Options → Passwords & Accounts → Master Password.
 4. **Done** - a few tips, then *Start Using Termwright* or *Discover Devices*.
@@ -1284,7 +1284,7 @@ Notes:
 
 ## 13. Global Options reference
 
-Global Options is called **Settings** (⚙ in the title bar). The General page starts with **Appearance** - theme previews, Icons (Tiles / Glyphs), Start page buttons, interface font and text size - then **Behaviour** (each switch with a short explanation: confirm before closing, confirm multi-line paste, remember typed commands, **save Quick Connect sessions**, reopen the tabs that were open, show the Session Manager, Button Bar and Command Window) and **Folders and files**. Changes apply when you press *Save*.
+Global Options is called **Settings** (⚙ in the title bar). The General page starts with **Appearance** - theme previews, Icons (Tiles / Glyphs), **Folder colours** (*Soft* - the default, *Vivid* or *Steel blue*: the folders by level and the PROD / LAB tags), Start page buttons, interface font and text size - then **Behaviour** (each switch with a short explanation: confirm before closing, confirm multi-line paste, remember typed commands, **save Quick Connect sessions**, reopen the tabs that were open, show the Session Manager, Button Bar and Command Window) and **Folders and files**. Changes apply when you press *Save*.
 
 ### Interface language
 

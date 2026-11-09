@@ -139,6 +139,7 @@ type Settings struct {
 	Language             string                       `json:"language"`               // interface language: "" = English, "ru" = Russian (partial)
 	IconStyle            string                       `json:"iconStyle"`              // device and session icons: "" = coloured tiles, "glyph" = the symbol only
 	QuickButtons         string                       `json:"quickButtons,omitempty"` // start page buttons: "" = raised slabs, "keycap", "glow"
+	FolderColors         string                       `json:"folderColors,omitempty"` // folder and environment colours: "" = soft, "vivid", "steel"
 	CompactRows          bool                         `json:"compactRows"`            // modern layout: one-line Session Manager rows
 	WelcomeSeen          string                       `json:"welcomeSeen"`            // version whose welcome flow was finished or skipped ("0.21")
 	HideTerminalBar      bool                         `json:"hideTerminalBar"`        // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs

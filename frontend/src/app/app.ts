@@ -7,7 +7,7 @@ import { i18n, previewLanguages, setPreviewLanguages, tr } from './core/i18n';
 import { Tabs, TabView } from './core/tabs.service';
 import { connectString, findSessionByName, looksLikeConnect } from './core/connect-string';
 import { SessionNode } from './core/models';
-import { ago } from './core/env';
+import { ago, folderScheme, FolderScheme } from './core/env';
 import { factList } from './core/facts';
 import { SessionIcon } from './components/session-icon';
 import { DeviceIcon, DeviceKind, customDeviceKinds, deviceKindOf } from './components/device-icon';
@@ -349,6 +349,9 @@ export class App implements OnInit {
       document.documentElement.classList.toggle('glacier', glacier);
       const fin = this.settings()?.iconFinish ?? '';
       glacierIcons.set(fin === 'glacier' || (fin === '' && glacier));
+      const fc = (this.settings()?.folderColors || 'soft') as FolderScheme;
+      folderScheme.set(fc);
+      for (const k of ['soft', 'vivid', 'steel']) document.documentElement.classList.toggle('fc-' + k, k === fc);
       this.ui.lightUi.set(light);
       const root = document.documentElement.style;
       root.setProperty('--ui-font', uiFontStack(this.settings()?.uiFont));

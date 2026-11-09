@@ -6,6 +6,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 An AI assistant and agent beside the terminal - with your own Claude login or any AI service - built-in TFTP, FTP and HTTP servers, single sign-on for teams, and one modern window.
 
+* **Calmer folder and environment colours.** *Soft* (the new default: softer folder colours by level, tinted PROD / LAB tags), *Vivid* (the colours until now, solid tags) or *Steel blue* (blue-grey by level, outlined tags) - Settings → General → Folder colours, and on the Welcome screen. Your own environment colours are toned the same way.
 * **File servers: firewall check.** The File Servers window shows whether this computer's firewall (macOS, Windows Defender, ufw, firewalld) lets devices reach Termwright, allows it with one click (the system asks for an administrator password), and **Test from <tab>** proves a device can fetch a file from this computer.
 * **Restore from Backup…** (Settings → General → Backup, next to *Back Up Now*): pick a backup zip; your current settings are backed up first, Termwright closes, and the backup is put back when it starts again (files that are not in the backup stay).
 * **AI chats are kept in the data folder** (`ai-chats.json`, readable only by you) instead of the window's own storage, so backups include them; the chosen **agent tools** are a setting now (backed up, exported and synced). Both move over by themselves.

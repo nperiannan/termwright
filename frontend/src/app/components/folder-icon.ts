@@ -1,17 +1,24 @@
 import { Component, computed, input } from '@angular/core';
 
-import { envInfo } from '../core/env';
+import { envInfo, folderScheme } from '../core/env';
 import { glacierIcons } from '../core/icon-finish';
 
 /** Folder colours by level: the top level and five levels of subfolders (deeper ones keep the last).
  *  A folder in an environment - its own or a parent folder's - takes the environment's colour instead;
  *  the environment colours (core/env.ts) are none of these. */
 export const FOLDER_LEVEL_COLORS = ['#e5a93b', '#a970ff', '#4f9cf7', '#14b8c6', '#ec4899', '#a3e635'];
+/** The same levels in the calmer schemes (Settings → General → Folder colours). */
+export const FOLDER_SCHEMES = {
+  vivid: FOLDER_LEVEL_COLORS,
+  soft: ['#d2a654', '#9d7ee0', '#5f9be3', '#2fa7b2', '#d47aa6', '#94c25a'],
+  steel: ['#6d8db3', '#7e9bbf', '#8fa8c9', '#9db4d1', '#abbfd8', '#b8c9de'],
+} as const;
 
 export function folderColor(depth: number, env = ''): string {
   const e = envInfo(env);
   if (e) return e.color;
-  return FOLDER_LEVEL_COLORS[Math.max(0, Math.min(depth, FOLDER_LEVEL_COLORS.length - 1))];
+  const l = FOLDER_SCHEMES[folderScheme()];
+  return l[Math.max(0, Math.min(depth, l.length - 1))];
 }
 
 /** Modern Session Manager folder: a solid folder shape in its level's colour. */

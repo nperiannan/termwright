@@ -102,6 +102,11 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   @for (l of languages; track l.code) { <option [value]="l.code" translate="no">{{ l.name }}</option> }
                 </select>
                 <div class="pair">
+                <div class="f"><label>Folder colours</label>
+                <div>
+                  <div class="seg w3"><button type="button" [class.on]="!s.folderColors" (click)="s.folderColors = ''">Soft</button><button type="button" [class.on]="s.folderColors === 'vivid'" (click)="s.folderColors = 'vivid'">Vivid</button><button type="button" [class.on]="s.folderColors === 'steel'" (click)="s.folderColors = 'steel'">Steel blue</button></div>
+                  <div class="hint">Folders by level, and the environment tags (PROD, LAB…): soft tones with tinted tags, bright colours with solid tags, or blue-grey with outlined tags.</div>
+                </div></div>
                 <div class="f"><label>Start page buttons</label>
                 <div>
                   

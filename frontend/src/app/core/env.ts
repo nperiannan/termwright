@@ -31,10 +31,34 @@ export function envFg(color: string): string {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#1b1c1f' : '#fff';
 }
 
+/** Folder and environment colours (Settings → General): soft (the default), vivid or steel blue. */
+export type FolderScheme = 'soft' | 'vivid' | 'steel';
+export const folderScheme = signal<FolderScheme>('soft');
+
+const TONED: Record<'soft' | 'steel', Record<string, string>> = {
+  soft: { '#e5484d': '#d2575b', '#f97316': '#d9813f', '#16a34a': '#3f9d62', '#4f46e5': '#6366d6', '#64748b': '#7b8594' },
+  steel: { '#e5484d': '#bd5a5f', '#f97316': '#c4824f', '#16a34a': '#539a6d', '#4f46e5': '#6d70c0', '#64748b': '#8a93a1' },
+};
+/** An environment colour as the scheme shows it: calmer in soft and steel blue (an own colour is mixed with grey). */
+export function toned(color: string, scheme: FolderScheme = folderScheme()): string {
+  if (scheme === 'vivid') return color;
+  const c = color.toLowerCase();
+  if (TONED[scheme][c]) return TONED[scheme][c];
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+  if (!m) return color;
+  const k = scheme === 'soft' ? 0.15 : 0.3;
+  return '#' + m.slice(1).map(h => Math.round(parseInt(h, 16) * (1 - k) + 0x80 * k).toString(16).padStart(2, '0')).join('');
+}
+
+/** An environment with the colour to show (toned by the scheme) and its text colour - in soft and
+ *  steel blue the tag is tinted or outlined, so its text is the colour itself. */
 export function envInfo(id: string | null | undefined): (EnvDef & { fg: string }) | null {
   if (!id) return null;
   const e = envList().find(x => x.id === id);
-  return e ? { ...e, fg: envFg(e.color) } : null;
+  if (!e) return null;
+  const s = folderScheme();
+  const color = toned(e.color, s);
+  return { ...e, color, fg: s === 'vivid' ? envFg(color) : color };
 }
 
 /** Pastes are confirmed and the tab shows the tag, as for production. */

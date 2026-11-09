@@ -126,7 +126,7 @@ export function sessionAddr(n: SessionNode): string {
                 <span class="twisty" [class.open]="expanded().has(n.path)" (click)="toggle(n.path); $event.stopPropagation()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2.5 L8 6 L4 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                  <app-folder-icon [depth]="r.depth ?? 0" [env]="folderEnv(n.path)" [open]="expanded().has(n.path)" [size]="roomy() ? 22 : 16" /> 
                 <span class="name">{{ n.name }}</span>
-                @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
+                @if (env(n); as e) { <span class="env envtag" [style.background]="e.color" [style.color]="e.fg" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
                  <span class="count">{{ counts().get(n.path) ?? 0 }}</span> 
               } @else {
                 <span class="twisty"></span>
@@ -156,7 +156,7 @@ export function sessionAddr(n: SessionNode): string {
         <span class="txt">
           <span class="line"><span class="name">{{ n.name }}</span>
             @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
-            @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
+            @if (env(n); as e) { <span class="env envtag" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
 </span>
           <span class="addr">@if (addrParts(n); as ap) {<span class="a">{{ ap.a }}</span>@if (ap.t) {<span class="t">· {{ ap.t }}</span>}}</span>
         </span>
@@ -170,7 +170,7 @@ export function sessionAddr(n: SessionNode): string {
         @else if (reach() && inReach(n.path)) { <span class="dot" [class]="dotClass(n)"></span> }
         <span class="name">{{ n.name }}</span>
         @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
-        @if (env(n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
+        @if (env(n); as e) { <span class="env envtag" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
         @if (teamBadge(n); as b) { <span class="tbadge" [class]="'tbadge ' + b.cls" (mouseenter)="teamIn($event, n)" (mouseleave)="teamOut()">{{ b.tiny }}</span> }
       }
     </ng-template>
@@ -188,7 +188,7 @@ export function sessionAddr(n: SessionNode): string {
           @if (roomy()) { @if (devKind(h.n); as k) { <app-device-icon [kind]="k" [size]="32" /> } @else { <app-session-icon [kind]="protoIcon(h.n)" [size]="32" /> } }
           <div class="hht">
             <div class="hname">{{ h.n.name }}
-              @if (env(h.n); as e) { <span class="env" [style.background]="e.color" [style.color]="e.fg">{{ e.label }}</span> }</div>
+              @if (env(h.n); as e) { <span class="env envtag" [style.background]="e.color" [style.color]="e.fg">{{ e.label }}</span> }</div>
             <div class="hsub mono">{{ target(h.n) }}</div>
           </div>
         </div>
