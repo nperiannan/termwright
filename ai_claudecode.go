@@ -66,9 +66,14 @@ func claudeCodePath(given string) (string, error) {
 	if p := newestFile(globs); p != "" {
 		return p, nil
 	}
+	vmOnly := false
 	for _, root := range claudeDesktopDirs(home) {
-		if p := findClaudeIn(root, 6); p != "" && isClaudeCode(p) {
-			return p, nil
+		if p := findClaudeIn(root, 6); p != "" {
+			if isClaudeCode(p) {
+				return p, nil
+			}
+			// claude-code-vm: the Linux copy Claude Desktop runs in its own sandbox - not for this computer
+			vmOnly = vmOnly || strings.Contains(p, "claude-code-vm")
 		}
 	}
 	if runtime.GOOS != "windows" { // as the user's shell sees it (nvm and friends set in .zshrc)
@@ -85,6 +90,9 @@ func claudeCodePath(given string) (string, error) {
 				return p, nil
 			}
 		}
+	}
+	if vmOnly {
+		return "", errors.New("only Claude Desktop's own copy of Claude Code was found - it runs inside Claude Desktop's sandbox, not on this computer. Install Claude Code (curl -fsSL https://claude.ai/install.sh | bash), run claude once to sign in, then press Check")
 	}
 	return "", errors.New("Claude Code was not found on this computer - install it (claude.com/claude-code) and sign in once by running claude in a terminal, or give its path")
 }
