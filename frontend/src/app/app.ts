@@ -172,15 +172,17 @@ export class App implements OnInit {
     return m;
   });
   /** Cards on the start page: 8, or 15 (five rows of three) in the Glacier style. */
-  private readonly homeMax = computed(() => this.settings()?.style !== 'standard' ? 15 : 8);
+  /** Start page: at most 12 cards in all - favourites first, recent sessions fill the rest. */
+  private readonly homeMax = signal(12);
   readonly homeFavs = computed(() => (this.settings()?.favorites ?? []).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n).slice(0, this.homeMax()));
+  private readonly recentRoom = computed(() => Math.max(0, this.homeMax() - this.homeFavs().length));
   readonly showAllRecent = signal(false);
   private readonly recentAll = computed(() => {
     const fav = new Set(this.settings()?.favorites ?? []);
     return (this.settings()?.recentSessions ?? []).filter(p => !fav.has(p)).map(p => this.byPath().get(p)).filter((n): n is SessionNode => !!n);
   });
-  readonly homeRecent = computed(() => this.showAllRecent() ? this.recentAll() : this.recentAll().slice(0, this.homeMax()));
-  readonly recentMore = computed(() => this.recentAll().length > this.homeMax() || this.showAllRecent());
+  readonly homeRecent = computed(() => this.showAllRecent() ? this.recentAll() : this.recentAll().slice(0, this.recentRoom()));
+  readonly recentMore = computed(() => this.recentAll().length > this.recentRoom() || this.showAllRecent());
   /** Session path → state of its open tab (connected wins). */
   readonly liveState = computed(() => {
     const m = new Map<string, string>();
