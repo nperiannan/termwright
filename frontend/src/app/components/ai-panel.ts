@@ -4,7 +4,7 @@ import { Backend } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { Tabs } from '../core/tabs.service';
 import { Icon } from './icon';
-import { AGENT_PERMS, AGENT_TOOLS, AgentPerm, AIChat, ChatMsg, Img, Step } from '../core/ai-chat.service';
+import { AGENT_PERMS, AGENT_TOOLS, AgentPerm, AIChat, ChatMsg, Img, Step, nice } from '../core/ai-chat.service';
 import { AIStatus } from '../core/models';
 import { tr } from '../core/i18n';
 
@@ -40,14 +40,6 @@ function blocks(text: string): Block[] {
 }
 function spans(t: string): Span[] {
   return t.split(/(\*\*[^*]+\*\*|`[^`]+`)/).filter(Boolean).map(x => x.startsWith('**') ? { t: x.slice(2, -2), b: true } : x.startsWith('`') && x.length > 1 ? { t: x.slice(1, -1), c: true } : { t: x });
-}
-
-/** "claude-sonnet-5-5" → "Sonnet 5.5", "sonnet" → "Sonnet"; other names as they are. */
-export function nice(m: string): string {
-  const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
-  const c = /^(?:claude-)?(opus|sonnet|haiku|fable)(?:-(\d+)(?:-(\d+))?)?(?:-\d{8})?$/i.exec(m.trim());
-  if (c) return cap(c[1].toLowerCase()) + (c[2] ? ' ' + c[2] + (c[3] ? '.' + c[3] : '') : '');
-  return m;
 }
 
 /** The AI assistant as a chat panel: docked right or left, or floating. */

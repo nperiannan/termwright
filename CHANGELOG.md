@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+* **Settings → AI Assistant: Model is a drop-down list** of the models the service offers (loaded when opened, readable names such as *Sonnet 5.5*), and you can still type a model name.
 * **Start page: at most 12 cards** in Favourites and Recent together - favourites first, recent sessions fill the rest (*Show all* still lists every recent session).
 * **AI panel** instead of the AI window: a chat beside the terminal - docked right or left, or floating - with follow-up questions, chat history, a large typing area, pasted pictures, and *Add context* (selection, copied text, whole terminal, other tabs, files).
 * **AI Agent: fully autonomous mode** (orange; the other levels are yellow, Read only white). The agent runs commands and configuration changes without asking - production sessions still ask before every command and connection, and reboot / reload / erase always ask. It confirms once when chosen.

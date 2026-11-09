@@ -1602,6 +1602,9 @@ const ru: Record<string, string> = {
   'Not recording': 'Запись не идёт',
   'The device reported an error': 'Устройство сообщило об ошибке',
   'Production session: Termwright asks before every command and connection, whatever the agent may do.': 'Рабочая сессия: Termwright спрашивает перед каждой командой и подключением, что бы ни было разрешено агенту.',
+  'The service lists no models - type a model name': 'Сервис не перечисляет модели - введите название модели',
+  'Show the list': 'Показать список',
+  'Claude Code found: {0}. Choose the model below, or keep the default of Claude Code.': 'Claude Code найден: {0}. Выберите модель ниже или оставьте модель по умолчанию.',
 };
 
 export default ru;

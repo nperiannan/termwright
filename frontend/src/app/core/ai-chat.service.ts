@@ -77,6 +77,14 @@ const FAILED = /(^|\n)\s*(%\s*(invalid|incomplete|ambiguous|unknown|error)|error
 
 export const RISKY = /^\s*(conf(ig(ure)?)?\b|unconfigure|delete|del\b|erase|clear\b|reboot|reload|restart|shutdown|no\s|write\b|copy\b|save\b|disable\b|enable\s+ports?\b|format|rm\s|kill|halt|poweroff|set\s|unset\s|download|upload|install|upgrade|reset|sudo\b)/i;
 
+/** "claude-sonnet-5-5" → "Sonnet 5.5", "sonnet" → "Sonnet"; other names as they are. */
+export function nice(m: string): string {
+  const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+  const c = /^(?:claude-)?(opus|sonnet|haiku|fable)(?:-(\d+)(?:-(\d+))?)?(?:-\d{8})?$/i.exec(m.trim());
+  if (c) return cap(c[1].toLowerCase()) + (c[2] ? ' ' + c[2] + (c[3] ? '.' + c[3] : '') : '');
+  return m;
+}
+
 let nid = 0;
 const now = () => new Date().toISOString();
 

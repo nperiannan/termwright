@@ -2,7 +2,8 @@ import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '
 import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { LANGUAGES, previewLanguages, tr } from '../core/i18n';
-import { readOnlyList } from '../core/ai-chat.service';
+import { nice, readOnlyList } from '../core/ai-chat.service';
+import { Combo, ComboOption } from '../components/combo';
 import { Backend, errText } from '../core/backend';
 import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, MCPInfo, comboOf, FACT_NAMES } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
@@ -43,7 +44,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
 /** Global Options dialog. */
 @Component({
   selector: 'app-options-dialog',
-  imports: [FormsModule, Icon],
+  imports: [FormsModule, Icon, Combo],
   template: `
   @if (s) {
   <div class="modal-backdrop">
@@ -518,8 +519,9 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                       <span class="pill" [class]="'pill ' + aiStatus().cls"><i></i>{{ aiStatus().text }}</span>
                       <button type="button" (click)="loadAIModels()">Test</button></div>
                     <div class="li"><span class="l">Model</span>
-                      <input name="aim" class="v" [ngModel]="s.ai?.model || ''" (ngModelChange)="setAI({ model: $event })" list="aimodels" [placeholder]="s.ai?.provider === 'claudecode' ? 'Default of Claude Code' : 'The newest the service offers'" />
-                      <datalist id="aimodels">@for (m of aiModels(); track m) { <option [value]="m"></option> }</datalist></div>
+                      <app-combo class="v" name="aim" label="Model" [value]="s.ai?.model || ''" (valueChange)="setAI({ model: $event })" [options]="modelOptions()" [loading]="aiLoading()"
+                        [loadingText]="tr('Loading the models…')" [emptyText]="tr('The service lists no models - type a model name')" (opened)="!aiModels().length && !aiLoading() && loadAIModels()"
+                        [placeholder]="tr(s.ai?.provider === 'claudecode' ? 'Default of Claude Code' : 'The newest the service offers')" /></div>
                   }
                 </div>
                 <div class="gf">@switch (s.ai?.provider) {
@@ -996,6 +998,12 @@ export class OptionsDialog implements OnInit {
   // AI assistant
   readonly aiSt = signal<AIStatus | null>(null);
   readonly aiModels = signal<string[]>([]);
+  readonly aiLoading = signal(false);
+  /** The model list: the service's default first, then what it offers (Claude names made readable). */
+  modelOptions(): ComboOption[] {
+    const cc = this.s?.ai?.provider === 'claudecode';
+    return [{ value: '', label: cc ? tr('Default of Claude Code') : tr('The newest the service offers') }, ...this.aiModels().map(m => ({ value: m, label: nice(m), hint: nice(m).toLowerCase() !== m.toLowerCase() ? m : '' }))];
+  }
   readonly aiMsg = signal('');
   aiKey = '';
   loadAI() {
@@ -1035,12 +1043,16 @@ export class OptionsDialog implements OnInit {
   }
   async forgetAIKey() { await this.backend.aiSetKey(this.s?.ai?.provider ?? '', '').catch(() => {}); this.loadAI(); }
   async loadAIModels() {
+    this.aiLoading.set(true);
+    try { await this.loadAIModelsNow(); } finally { this.aiLoading.set(false); this.cdr.markForCheck(); }
+  }
+  private async loadAIModelsNow() {
     this.aiMsg.set('');
     if (this.s?.ai?.provider === 'claudecode') {
       try {
         const p = await this.backend.claudeCodeFind(this.s.ai.baseUrl ?? '');
         this.aiModels.set(['sonnet', 'opus', 'haiku']);
-        this.aiMsg.set(tr('Claude Code found: {0}. Model: sonnet, opus or haiku - or leave it empty for its default.', p));
+        this.aiMsg.set(tr('Claude Code found: {0}. Choose the model below, or keep the default of Claude Code.', p));
         this.aiCheck.set(true);
       } catch (e) { this.aiMsg.set(errText(e)); this.aiCheck.set(false); }
       return;
