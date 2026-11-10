@@ -111,10 +111,12 @@ func (d *PersonaDef) Render(vm VM, p *Persona) (string, error) {
 	return b.String(), nil
 }
 
-// Hash says whether a persona file changed since it was written.
+// Hash says whether a persona file changed since it was written. It names
+// the writer too: a file written by an older writer (which could miss the
+// partition) is written again.
 func Hash(s string) string {
 	h := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(h[:8])
+	return "w2-" + hex.EncodeToString(h[:8])
 }
 
 // ParsePorts reads "10:1, 3:3" (front-panel port : VM port).
