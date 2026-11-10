@@ -168,6 +168,9 @@ func (a *App) labSave() error {
 // labKey reads or makes the switches' SSH host key (mu held).
 func (a *App) labKey() (ssh.Signer, error) {
 	if simLab.key != nil {
+		if simLab.lab != nil {
+			simLab.lab.SetKey(simLab.key) // a reloaded lab has no key of its own
+		}
 		return simLab.key, nil
 	}
 	f := filepath.Join(a.labDir(), "hostkey.pem")
@@ -288,12 +291,16 @@ func (a *App) LabAdd(r LabRequest) (LabView, error) {
 		r.MgmtNet = simLab.meta.MgmtNet
 	}
 	if r.MgmtNet == "" {
-		r.MgmtNet = "10.99.0.0/24"
+		r.MgmtNet = "10.99.0.0/16"
 	}
 	if simLab.pack == nil {
 		return a.labView(), errors.New("load a device pack (.vm) first")
 	}
 	specs, links, err := sim.Plan(simLab.pack, r.Groups, r.MgmtNet, r.Cabling, r.Password, freePortFrom(22001), simLab.lab.Specs(), simLab.lab.Links())
+	if err != nil && r.MgmtNet == "10.99.0.0/24" && strings.Contains(err.Error(), "is full") {
+		r.MgmtNet = "10.99.0.0/16" // the old default: grow it, the addresses so far stay
+		specs, links, err = sim.Plan(simLab.pack, r.Groups, r.MgmtNet, r.Cabling, r.Password, freePortFrom(22001), simLab.lab.Specs(), simLab.lab.Links())
+	}
 	if err != nil {
 		return a.labView(), err
 	}

@@ -143,7 +143,7 @@ export class Ui {
 
   toast(message: string, level: Toast['level'] = 'info', ms = 4000, actions?: ToastAction[]) {
     const t: Toast = { id: ++this.toastSeq, level, message, actions };
-    this.toasts.update(l => [...l, t]);
+    this.toasts.update(l => [...l.filter(x => x.message !== message || x.level !== level), t]); // the same message once
     setTimeout(() => this.dismissToast(t.id), actions?.length ? Math.max(ms, 12000) : ms);
   }
 

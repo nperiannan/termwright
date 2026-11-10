@@ -26,7 +26,7 @@ func TestPersona(t *testing.T) {
 	}
 	l, _ := testLab()
 	sc := l.WriteFileScript(l.VMs[0], "/data/persona.yaml", "a: 1")
-	if !strings.Contains(sc, "is-dir /data") || !strings.Contains(sc, "vfs-label \"$f\" 2>/dev/null)\" = data") || !strings.Contains(sc, `p="$2/persona.yaml"`) || !strings.Contains(sc, "a: 1\nTW_PERSONA_END") {
+	if !strings.Contains(sc, "dir=/data") || !strings.Contains(sc, "-v lab=data") || !strings.Contains(sc, `p="$at/persona.yaml"`) || !strings.Contains(sc, "a: 1\nTW_PERSONA_END") || !strings.Contains(sc, "/etc/fstab") {
 		t.Fatal(sc)
 	}
 }

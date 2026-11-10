@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -78,6 +79,8 @@ var emuLab struct {
 	perr             map[string]string  // why the persona file could not be written
 	packProfiles     []emu.Image        // the device pack's image profiles (refreshed by EmuState)
 	personaTried     map[string]bool    // that was tried once already (no second round)
+	pinfo            map[string]string  // where the persona file went, or what the check after boot saw
+	pcheck           map[string]bool    // the persona was checked on the CLI since the VM started
 }
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
@@ -112,6 +115,7 @@ type EmuDevice struct {
 	Persona      *emu.Persona `json:"persona"`
 	PersonaOK    bool         `json:"personaOk"` // the persona file in its disk is the current one
 	PersonaError string       `json:"personaError"`
+	PersonaInfo  string       `json:"personaInfo"` // where the file was written, what the CLI showed after boot
 }
 
 // EmuLinkView is a cable, with port names.
@@ -206,6 +210,7 @@ func (a *App) emuLoad() {
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
 	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
 	emuLab.personaTried, emuLab.perr = map[string]bool{}, map[string]string{}
+	emuLab.pinfo, emuLab.pcheck = map[string]string{}, map[string]bool{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
 		_ = json.Unmarshal(b, &emuLab.f)
 	}
@@ -705,25 +710,11 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 	if l == nil || len(l.VMs) == 0 {
 		mgmt := r.Mgmt
 		if mgmt == "" || mgmt == "auto" {
-			switch {
-			case info.Sudo && info.LanKind != "":
-				mgmt = "lan"
-			case info.Sudo:
-				mgmt = "bridge"
-			default:
-				mgmt = "forward"
-			}
+			mgmt = emuBestMgmt(info)
 		}
-		if mgmt == "lan" && (!info.Sudo || info.LanKind == "") {
+		if err := emuMgmtOK(info, mgmt); err != nil {
 			emuLab.mu.Unlock()
-			if info.Wifi {
-				return EmuView{}, errors.New("the host's network port is Wi-Fi: switches cannot join it; use a bridge on the host or port forwarding")
-			}
-			return EmuView{}, errors.New("the host's network needs password-less sudo on the host (or a network port to join); use port forwarding")
-		}
-		if mgmt == "bridge" && !info.Sudo {
-			emuLab.mu.Unlock()
-			return EmuView{}, errors.New("a bridge needs password-less sudo on the host; use port forwarding")
+			return EmuView{}, err
 		}
 		l = &emu.Lab{ID: randHex(1), Dir: "termwright-lab", Mgmt: mgmt, LanIf: info.LanIf, LanKind: info.LanKind, MgmtNet: orStr(r.MgmtNet, "10.99.0.0/24"), Base: 20000 + int(randByte())%40*100, KVM: info.KVM == "yes"}
 		emuLab.f.Lab, emuLab.f.Host = l, r.Host
@@ -764,7 +755,7 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 		names2 := orStr(g.Names, "sw-{n}")
 		for i, k := 1, 0; k < g.Count; i++ {
 			name := strings.ReplaceAll(names2, "{n}", strconv.Itoa(i))
-			if !strings.Contains(names2, "{n}") && g.Count > 1 {
+			if !strings.Contains(names2, "{n}") && (g.Count > 1 || names[names2]) {
 				name = names2 + "-" + strconv.Itoa(i)
 			}
 			if names[name] {
@@ -877,6 +868,38 @@ func emuPlace(add, all []emu.VM) {
 }
 
 // emuSessions makes a VM's SSH and console sessions (lock not held).
+// emuTarget is where a VM's SSH session goes (and through which jump host).
+func emuTarget(l *emu.Lab, v emu.VM, host string) (string, int, string) {
+	switch l.Mgmt {
+	case "bridge":
+		return strings.Split(v.MgmtIP, "/")[0], 22, host
+	case "nat":
+		return orStr(strings.Split(v.MgmtIP, "/")[0], "0.0.0.0"), 22, host // reached through the host
+	case "lan":
+		if l.LanKind == "macvtap" {
+			return orStr(strings.Split(v.MgmtIP, "/")[0], "0.0.0.0"), 22, "" // the host cannot reach its own macvtap guests: straight from this computer
+		}
+		return orStr(strings.Split(v.MgmtIP, "/")[0], "0.0.0.0"), 22, host
+	}
+	return "127.0.0.1", l.SSHPort(v), host
+}
+
+// emuRetarget points a VM's SSH session where its management is now.
+func (a *App) emuRetarget(v emu.VM) {
+	emuLab.mu.Lock()
+	l, host, path := emuLab.f.Lab, emuLab.f.Host, emuLab.f.Sessions[v.ID]
+	if l == nil || path == "" {
+		emuLab.mu.Unlock()
+		return
+	}
+	hostname, port, jump := emuTarget(l, v, host)
+	emuLab.mu.Unlock()
+	if s, err := a.store.Get(path); err == nil {
+		s.Hostname, s.Port, s.JumpSession = hostname, port, jump
+		_, _ = a.store.Save(s, path)
+	}
+}
+
 func (a *App) emuSessions(v emu.VM) {
 	emuLab.mu.Lock()
 	l, host, folder := emuLab.f.Lab, emuLab.f.Host, emuLab.f.Folder
@@ -886,16 +909,7 @@ func (a *App) emuSessions(v emu.VM) {
 		return
 	}
 	login, dt, nm := orStr(im.Login, "admin"), im.DeviceType, im.Name
-	hostname, port, jump := "127.0.0.1", l.SSHPort(v), host
-	switch {
-	case l.Mgmt == "bridge":
-		hostname, port = strings.Split(v.MgmtIP, "/")[0], 22
-	case l.Mgmt == "lan":
-		hostname, port = orStr(strings.Split(v.MgmtIP, "/")[0], "0.0.0.0"), 22
-		if l.LanKind == "macvtap" {
-			jump = "" // the host cannot reach its own macvtap guests: straight from this computer
-		}
-	}
+	hostname, port, jump := emuTarget(l, v, host)
 	conPort := l.ConsolePort(v)
 	emuLab.mu.Unlock()
 	pw, _ := secrets.Lookup(emuImageKey(v.Image))
@@ -1004,10 +1018,11 @@ func (a *App) emuStart(host string, ids []string) {
 			out, err := a.emuRun(host, w.script, 5*time.Minute)
 			emuLab.mu.Lock()
 			switch {
-			case err == nil && strings.Contains(out, "ok "):
+			case err == nil && strings.HasPrefix(lastLine(out), "ok "):
 				if vv := l.VMByID(w.v.ID); vv != nil && vv.Persona != nil {
 					vv.Persona.Applied = w.hash
 				}
+				emuLab.pinfo[w.v.ID] = "written to " + strings.TrimPrefix(lastLine(out), "ok ")
 				delete(emuLab.personaTried, w.v.ID)
 				delete(emuLab.perr, w.v.ID)
 			case strings.Contains(out, "no filesystem") && !emuLab.personaTried[w.v.ID]:
@@ -1030,7 +1045,8 @@ func (a *App) emuStart(host string, ids []string) {
 	for _, v := range vms {
 		emuLab.state[v.ID] = "starting"
 		emuLab.starting[v.ID] = time.Now()
-		delete(emuLab.ready, v.ID) // its console log starts empty
+		delete(emuLab.pcheck, v.ID) // the persona is checked again on this boot
+		delete(emuLab.ready, v.ID)  // its console log starts empty
 	}
 	emuLab.mu.Unlock()
 	out, err := a.emuRun(host, script, 3*time.Minute)
@@ -1042,6 +1058,12 @@ func (a *App) emuStart(host string, ids []string) {
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.SplitN(strings.TrimSpace(line), " ", 3)
 		if len(f) >= 2 && f[0] == "fail" {
+			if f[1] == "all" { // nothing could start
+				for _, v := range vms {
+					emuLab.errs[v.ID] = strings.TrimSpace(strings.Join(f[2:], " "))
+				}
+				continue
+			}
 			emuLab.errs[f[1]] = strings.TrimSpace(strings.Join(f[2:], " "))
 		}
 	}
@@ -1100,7 +1122,8 @@ func (a *App) emuWatch(host string, ids []string) {
 				continue
 			}
 			needDay0 := !v.Day0Done && len(im.Day0) > 0
-			if (needDay0 || l.Mgmt == "lan") && !emuLab.day0[id] {
+			needCheck := im.Persona != nil && im.Persona.Check != "" && v.Persona != nil && v.Persona.Applied != "" && !emuLab.pcheck[id]
+			if (needDay0 || needCheck || l.Mgmt == "lan") && !emuLab.day0[id] {
 				day0 = append(day0, *v)
 				emuLab.day0[id] = true
 			}
@@ -1176,6 +1199,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		_ = a.emuSave()
 		emuLab.mu.Unlock()
 	}
+	a.emuCheckPersona(ctx, c, &im, v)
 	if lan {
 		// the management port is on the host's network: its address comes from DHCP
 		emuLab.mu.Lock()
@@ -1211,6 +1235,154 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		return
 	}
 	a.emuNotify(nil, v.Name+" is configured")
+}
+
+// emuBestMgmt is the management a new lab gets: the host's network on a
+// real host, else the host's NAT network (DHCP, like GNS3's NAT node), else
+// a lab bridge, else port forwarding.
+func emuBestMgmt(info *emu.HostInfo) string {
+	vm := info.Virt != "" && info.Virt != "none" && info.Virt != "unknown"
+	switch {
+	case info.Sudo && info.LanKind != "" && !vm:
+		return "lan"
+	case info.Sudo && info.Nat != "":
+		return "nat"
+	case info.Sudo && info.LanKind != "":
+		return "lan"
+	case info.Sudo:
+		return "bridge"
+	}
+	return "forward"
+}
+
+// emuMgmtOK says why a host cannot give its switches that management.
+func emuMgmtOK(info *emu.HostInfo, mgmt string) error {
+	switch mgmt {
+	case "lan":
+		if info.Wifi {
+			return errors.New("the host's network port is Wi-Fi: switches cannot join it; use the host's NAT network or port forwarding")
+		}
+		if !info.Sudo || info.LanKind == "" {
+			return errors.New("the host's network needs password-less sudo on the host (or a network port to join); use port forwarding")
+		}
+	case "nat":
+		if !info.Sudo {
+			return errors.New("the NAT network needs password-less sudo on the host; use port forwarding")
+		}
+		if info.Nat == "" && !info.Libvirt {
+			return errors.New("the host has no NAT network (libvirt's virbr0): run Set Up QEMU/KVM on the host first")
+		}
+	case "bridge":
+		if !info.Sudo {
+			return errors.New("a bridge needs password-less sudo on the host; use port forwarding")
+		}
+	case "forward":
+	default:
+		return errors.New("unknown management: " + mgmt)
+	}
+	return nil
+}
+
+// EmuSetMgmt changes how the lab's switches are managed (the switches must
+// be stopped; it applies when they start): "lan", "nat", "bridge" or "forward".
+func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
+	emuLab.mu.Lock()
+	l, host := emuLab.f.Lab, emuLab.f.Host
+	if l == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	emuLab.mu.Unlock()
+	st := a.emuPoll(true)
+	emuLab.mu.Lock()
+	if len(st.Up) > 0 {
+		emuLab.mu.Unlock()
+		return a.EmuState()
+	}
+	var info *emu.HostInfo
+	for i := range emuLab.f.Hosts {
+		if emuLab.f.Hosts[i].Session == host {
+			info = &emuLab.f.Hosts[i].Info
+		}
+	}
+	emuLab.mu.Unlock()
+	if info == nil || info.Dir == "" {
+		h, err := a.EmuCheckHost(host)
+		if err != nil {
+			return EmuView{}, err
+		}
+		info = &h.Info
+	}
+	if err := emuMgmtOK(info, mgmt); err != nil {
+		return EmuView{}, err
+	}
+	emuLab.mu.Lock()
+	l = emuLab.f.Lab
+	if l == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	if mgmt == "bridge" && strings.TrimSpace(mgmtNet) != "" {
+		if _, err := netip.ParsePrefix(strings.TrimSpace(mgmtNet)); err != nil {
+			emuLab.mu.Unlock()
+			return EmuView{}, fmt.Errorf("management network %q: use an IPv4 network like 10.99.0.0/24", mgmtNet)
+		}
+		l.MgmtNet = strings.TrimSpace(mgmtNet)
+	}
+	old := l.Mgmt
+	l.Mgmt, l.LanIf, l.LanKind = mgmt, info.LanIf, info.LanKind
+	for i := range l.VMs {
+		v := &l.VMs[i]
+		v.MgmtIP, v.Gateway = l.Address(v.Index)
+		if old != mgmt {
+			if im := emuImage(v.Image); im != nil && (strings.Contains(strings.Join(im.Day0, "\n"), "{mgmt") || strings.Contains(strings.Join(im.Day0, "\n"), "{gateway}")) {
+				v.Day0Done = false // its address is part of day 0
+			}
+		}
+	}
+	vms := append([]emu.VM(nil), l.VMs...)
+	_ = a.emuSave()
+	emuLab.mu.Unlock()
+	for _, v := range vms {
+		a.emuRetarget(v)
+	}
+	return a.EmuState()
+}
+
+// emuCheckPersona asks the switch, on its CLI, which model it is (the
+// profile's check command) once per boot: a switch that booted as the plain
+// image shows a persona error.
+func (a *App) emuCheckPersona(ctx context.Context, c *emu.Console, im *emu.Image, v emu.VM) {
+	emuLab.mu.Lock()
+	cur := emuLab.f.Lab.VMByID(v.ID)
+	if im.Persona == nil || im.Persona.Check == "" || cur == nil || cur.Persona == nil || cur.Persona.Applied == "" || len(cur.Persona.Slots) == 0 || emuLab.pcheck[v.ID] {
+		emuLab.mu.Unlock()
+		return
+	}
+	emuLab.pcheck[v.ID] = true
+	emuLab.state[v.ID] = "persona check"
+	model := cur.Persona.Slots[0].Model
+	emuLab.mu.Unlock()
+	var out string
+	var err error
+	for _, cmd := range strings.Split(im.Persona.Check, "\n") { // "enable\nshow inventory"
+		if cmd = strings.TrimSpace(cmd); cmd != "" && err == nil {
+			var o string
+			o, err = emu.Ask(ctx, c, im, cmd)
+			out += o
+		}
+	}
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	switch {
+	case err != nil:
+		emuLab.pinfo[v.ID] = "not checked: " + err.Error()
+	case strings.Contains(strings.ToLower(out), strings.ToLower(model)):
+		emuLab.pinfo[v.ID] = "checked: " + im.Persona.Check + " shows " + model
+		delete(emuLab.perr, v.ID)
+	default:
+		emuLab.perr[v.ID] = fmt.Sprintf("the switch did not take the persona: %q does not show %s (it reads %s at boot - see where it was written below)", im.Persona.Check, model, im.Persona.File)
+	}
 }
 
 // emuSetAddress keeps a VM's management address (learned from DHCP) and
@@ -1276,6 +1448,25 @@ func (a *App) emuPoll(force bool) emu.Status {
 				emuLab.ready[v.ID] = true
 			}
 		}
+		if l.Mgmt == "nat" { // addresses from the NAT network's DHCP leases: no CLI needed (any image)
+			bits := "24"
+			if _, b, ok := strings.Cut(st.NatNet, "/"); ok {
+				bits = b
+			}
+			for i := range l.VMs {
+				v := &l.VMs[i]
+				if _, up := st.Up[v.ID]; !up {
+					continue
+				}
+				if ip := st.Leases[strings.ToLower(l.MAC(*v, 0))]; ip != "" && v.MgmtIP != ip+"/"+bits {
+					v.Gateway, v.MgmtIP = strings.Split(st.NatNet, "/")[0], ip+"/"+bits
+					go func(id, name, addr string) {
+						a.emuSetAddress(id, addr)
+						a.emuNotify(nil, name+" has the address "+strings.Split(addr, "/")[0])
+					}(v.ID, v.Name, ip+"/"+bits)
+				}
+			}
+		}
 		emuLab.status = st
 		emuLab.statusAt = now
 	}
@@ -1288,6 +1479,9 @@ func (a *App) EmuState() (EmuView, error) {
 	emuLab.mu.Lock()
 	a.emuLoad()
 	emuLab.packProfiles = prof
+	if emuTopUp(emuLab.f.Images, prof) {
+		_ = a.emuSave()
+	}
 	has := emuLab.f.Lab != nil && len(emuLab.f.Lab.VMs) > 0
 	emuLab.mu.Unlock()
 	if has {
@@ -1345,8 +1539,10 @@ func (a *App) emuView() EmuView {
 			onHost[im.ID] = true
 		}
 		switch {
-		case l.Mgmt == "lan" && vm.MgmtIP == "":
+		case (l.Mgmt == "lan" || l.Mgmt == "nat") && vm.MgmtIP == "":
 			d.SSH = "DHCP (not known yet)"
+		case l.Mgmt == "nat":
+			d.SSH = strings.Split(vm.MgmtIP, "/")[0] + ":22 through the host"
 		case l.Mgmt == "bridge" || l.Mgmt == "lan":
 			d.SSH = strings.Split(vm.MgmtIP, "/")[0] + ":22"
 		default:
@@ -1369,6 +1565,8 @@ func (a *App) emuView() EmuView {
 			d.State, d.StateText = "booting", "writing its persona file"
 		case s == "dhcp":
 			d.State, d.StateText, d.Running = "day0", "waiting for its DHCP address", true
+		case s == "persona check":
+			d.State, d.StateText, d.Running = "day0", "checking its persona", true
 		case strings.HasPrefix(s, "day0"):
 			d.State, d.StateText, d.Running = "day0", "day-0 config "+strings.TrimPrefix(strings.TrimPrefix(s, "day0"), " "), true
 		case !up:
@@ -1385,9 +1583,11 @@ func (a *App) emuView() EmuView {
 			d.State, d.StateText, d.Running = "running", "running", true
 			if d.Error != "" {
 				d.StateText = "running · day-0 failed"
+			} else if emuLab.perr[vm.ID] != "" {
+				d.StateText = "running · no persona"
 			}
 		}
-		d.DiskGB, d.Template, d.Persona, d.PersonaError = vm.DiskGB, vm.Template, vm.Persona, emuLab.perr[vm.ID]
+		d.DiskGB, d.Template, d.Persona, d.PersonaError, d.PersonaInfo = vm.DiskGB, vm.Template, vm.Persona, emuLab.perr[vm.ID], emuLab.pinfo[vm.ID]
 		if im != nil && im.Persona != nil && vm.Persona != nil {
 			if txt, err := im.Persona.Render(vm, vm.Persona); err == nil {
 				d.PersonaOK = emu.Hash(txt) == vm.Persona.Applied
@@ -2291,6 +2491,33 @@ func (a *App) emuPackProfiles() []emu.Image {
 		return nil
 	}
 	return pf.Images
+}
+
+// emuTopUp gives images made from a pack profile what a newer pack adds to
+// it: console answers and the persona check (what the user set stays).
+func emuTopUp(imgs []emu.Image, prof []emu.Image) bool {
+	changed := false
+	for i := range imgs {
+		im := &imgs[i]
+		for _, p := range prof {
+			if p.Name != im.Name {
+				continue
+			}
+			for _, pa := range p.Answers {
+				has := false
+				for _, a := range im.Answers {
+					has = has || a.Match == pa.Match
+				}
+				if !has {
+					im.Answers, changed = append(im.Answers, pa), true
+				}
+			}
+			if p.Persona != nil && im.Persona != nil && im.Persona.Check == "" && p.Persona.Check != "" {
+				im.Persona.Check, changed = p.Persona.Check, true
+			}
+		}
+	}
+	return changed
 }
 
 // emuRecognise picks the pack's profile whose file name pattern matches, with the version it names.

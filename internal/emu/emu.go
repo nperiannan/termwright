@@ -112,8 +112,9 @@ type Cable struct {
 type Lab struct {
 	ID      string  `json:"id"`      // short, part of the folder and interface names
 	Dir     string  `json:"dir"`     // on the host, relative to the home folder
-	Mgmt    string  `json:"mgmt"`    // "lan" (the host's network, DHCP), "bridge" (a lab bridge on the host) or "forward"
+	Mgmt    string  `json:"mgmt"`    // "lan" (the host's network, DHCP), "nat" (the host's NAT network, DHCP), "bridge" (a lab bridge on the host) or "forward"
 	LanIf   string  `json:"lanIf"`   // lan: the host's bridge (tap on it) or network port (macvtap on it)
+	NatBr   string  `json:"natBr"`   // nat: the host's NAT bridge with a DHCP server (libvirt's virbr0)
 	LanKind string  `json:"lanKind"` // lan: "bridge" or "macvtap"
 	MgmtNet string  `json:"mgmtNet"` // bridge mode: the bridge's network (10.99.0.0/24)
 	Base    int     `json:"base"`    // first TCP/UDP port on the host's 127.0.0.1
@@ -161,6 +162,19 @@ func (l *Lab) tap(v VM) string { return fmt.Sprintf("tw%s%dm", l.ID, v.Index) }
 // Bridge is the host's management bridge in bridge mode.
 func (l *Lab) Bridge() string { return "tw" + l.ID + "br" }
 
+// NatBridge is the host's NAT bridge in nat mode.
+func (l *Lab) NatBridge() string {
+	if l.NatBr != "" {
+		return l.NatBr
+	}
+	return "virbr0"
+}
+
+// tapped: the management port is a tap on a bridge of the host.
+func (l *Lab) tapped() bool {
+	return l.Mgmt == "bridge" || l.Mgmt == "nat" || l.Mgmt == "lan" && l.LanKind != "macvtap"
+}
+
 // PortName is data port n as the switch calls it.
 func (im *Image) PortNameOf(n int) string {
 	f := im.PortName
@@ -204,7 +218,7 @@ func (l *Lab) Args(v VM, im *Image) []string {
 	switch {
 	case l.Mgmt == "lan" && l.LanKind == "macvtap":
 		a = append(a, "-netdev", "tap,id=n0,fd=3") // the macvtap device, opened by the start script
-	case l.Mgmt == "bridge" || l.Mgmt == "lan":
+	case l.tapped():
 		a = append(a, "-netdev", "tap,id=n0,ifname="+l.tap(v)+",script=no,downscript=no")
 	default:
 		a = append(a, "-netdev", fmt.Sprintf("user,id=n0,hostfwd=tcp:127.0.0.1:%d-:22", l.SSHPort(v)))
@@ -258,6 +272,11 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		gw := l.gatewayPrefix()
 		fmt.Fprintf(&b, "ip link show %s >/dev/null 2>&1 || { sudo -n ip link add %s type bridge && sudo -n ip addr add %s dev %s; }\nsudo -n ip link set %s up\n", br, br, gw, br, br)
 	}
+	if l.Mgmt == "nat" { // libvirt's default network: started when it is not up
+		br := Q(l.NatBridge())
+		fmt.Fprintf(&b, "ip link show %s >/dev/null 2>&1 || sudo -n virsh -c qemu:///system net-start default >/dev/null 2>&1\n", br)
+		fmt.Fprintf(&b, "ip link show %s >/dev/null 2>&1 || { echo \"fail all the host has no NAT network %s: run Set Up QEMU/KVM, which sets up libvirt's default network\"; exit 0; }\n", br, l.NatBridge())
+	}
 	for _, v := range vms {
 		im := imgs[v.Image]
 		if im == nil {
@@ -272,10 +291,13 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip link add link %s name %s address %s type macvtap mode bridge; sudo -n ip link set %s up\n", t, Q(l.LanIf), t, l.MAC(v, 0), t)
 			fmt.Fprintf(&b, " idx=$(cat /sys/class/net/%s/ifindex); for i in 1 2 3 4 5 6 7 8 9 10; do [ -e /dev/tap$idx ] && break; sleep 0.2; done; sudo -n chown \"$(id -un)\" /dev/tap$idx\n", t)
 			redir = " 3<>/dev/tap$idx"
-		case l.Mgmt == "bridge" || l.Mgmt == "lan":
+		case l.tapped():
 			br := l.Bridge()
-			if l.Mgmt == "lan" {
+			switch l.Mgmt {
+			case "lan":
 				br = l.LanIf
+			case "nat":
+				br = l.NatBridge()
 			}
 			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip tuntap add %s mode tap user \"$(id -un)\"; sudo -n ip link set %s master %s up\n", t, t, t, Q(br))
 		}
@@ -313,7 +335,7 @@ func (l *Lab) StopScript(ids []string) string {
 	dir := l.VMDir()
 	for _, id := range ids {
 		fmt.Fprintf(&b, "if [ -f %s/%s.pid ]; then kill \"$(cat %s/%s.pid)\" 2>/dev/null; rm -f %s/%s.pid; fi\n", Q(dir), id, Q(dir), id, Q(dir), id)
-		if l.Mgmt == "bridge" || l.Mgmt == "lan" {
+		if l.Mgmt != "forward" && l.Mgmt != "" {
 			if v := l.VMByID(id); v != nil {
 				fmt.Fprintf(&b, "sleep 0.3; sudo -n ip link del %s 2>/dev/null\n", l.tap(*v))
 			}
@@ -340,6 +362,12 @@ func (l *Lab) StatusScript(tails []string) string {
 	dir := Q(l.VMDir())
 	s := "cd " + dir + " 2>/dev/null || exit 0\necho \"clk $(getconf CLK_TCK 2>/dev/null || echo 100)\"\nawk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print \"mem \" int(t/1024) \" \" int(a/1024)}' /proc/meminfo\necho \"cores $(nproc) $(cut -d' ' -f1 /proc/loadavg)\"\nfor p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
 		" if kill -0 \"$pid\" 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null)\"; else echo \"down $n\"; fi; done\n"
+	if l.Mgmt == "nat" { // the DHCP leases of the NAT network (libvirt), then the host's neighbours
+		br := Q(l.NatBridge())
+		s += fmt.Sprintf("f=/var/lib/libvirt/dnsmasq/%s.status; { cat $f 2>/dev/null || sudo -n cat $f 2>/dev/null; } | awk -F'\"' '/\"ip-address\"/{ip=$4} /\"mac-address\"/{mac=$4} /}/{if(ip!=\"\"&&mac!=\"\")print \"lease\",mac,ip; ip=\"\";mac=\"\"}'\n", l.NatBridge())
+		s += fmt.Sprintf("ip neigh show dev %s 2>/dev/null | awk '$2==\"lladdr\"&&$1~/^[0-9.]+$/{print \"lease\",$3,$1}'\n", br)
+		s += fmt.Sprintf("echo \"natnet $(ip -4 -o addr show dev %s 2>/dev/null | awk '{print $4}' | head -1)\"\n", br)
+	}
 	for _, id := range tails {
 		s += fmt.Sprintf("[ -f %s.log ] && echo \"log %s $(tail -c 4000 %s.log | base64 | tr -d '\\n')\"\n", id, id, id)
 	}
@@ -355,11 +383,13 @@ type Status struct {
 	Load     float64            // its load average
 	Up       map[string]float64 // running VMs and the CPU ticks they used
 	Log      map[string]string  // console log ends
+	Leases   map[string]string  // nat: MAC address → IPv4 address on the NAT network
+	NatNet   string             // nat: the host's address on it (192.168.122.1/24)
 }
 
 // ParseStatus reads StatusScript's output.
 func ParseStatus(out string, b64 func(string) ([]byte, error)) Status {
-	st := Status{Up: map[string]float64{}, Log: map[string]string{}}
+	st := Status{Up: map[string]float64{}, Log: map[string]string{}, Leases: map[string]string{}}
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Fields(line)
 		switch {
@@ -369,6 +399,12 @@ func ParseStatus(out string, b64 func(string) ([]byte, error)) Status {
 		case len(f) == 3 && f[0] == "cores":
 			st.Cores, _ = strconv.Atoi(f[1])
 			st.Load, _ = strconv.ParseFloat(f[2], 64)
+		case len(f) == 3 && f[0] == "lease":
+			if m := strings.ToLower(f[1]); st.Leases[m] == "" { // the leases first
+				st.Leases[m] = f[2]
+			}
+		case len(f) == 2 && f[0] == "natnet":
+			st.NatNet = f[1]
 		case len(f) == 2 && f[0] == "clk":
 			st.Clk, _ = strconv.ParseFloat(f[1], 64)
 		case len(f) >= 2 && f[0] == "up":
@@ -433,8 +469,8 @@ func (l *Lab) gatewayPrefix() string {
 
 // Address gives VM index i its management address and gateway.
 func (l *Lab) Address(i int) (string, string) {
-	if l.Mgmt == "lan" {
-		return "", "" // from the network's DHCP; learned from the switch
+	if l.Mgmt == "lan" || l.Mgmt == "nat" {
+		return "", "" // from the network's DHCP; learned from the switch or the host's DHCP leases
 	}
 	if l.Mgmt != "bridge" {
 		return "10.0.2.15/24", "10.0.2.2" // QEMU's user-mode network, the same in every VM
@@ -500,11 +536,22 @@ func (l *Lab) Wire(add []VM, kind string, imgs map[string]*Image) {
 			link(cores[1], v)
 		}
 	case "chain", "ring":
-		for i := 0; i+1 < len(add); i++ {
-			link(add[i], add[i+1])
+		seq := add
+		isNew := map[string]bool{}
+		for _, v := range add {
+			isNew[v.ID] = true
 		}
-		if kind == "ring" && len(add) > 2 {
-			link(add[len(add)-1], add[0])
+		for i := len(l.VMs) - 1; i >= 0; i-- { // added to a lab: they go on from its last switch
+			if !isNew[l.VMs[i].ID] {
+				seq = append([]VM{l.VMs[i]}, add...)
+				break
+			}
+		}
+		for i := 0; i+1 < len(seq); i++ {
+			link(seq[i], seq[i+1])
+		}
+		if kind == "ring" && len(seq) > 2 {
+			link(seq[len(seq)-1], seq[0])
 		}
 	}
 }

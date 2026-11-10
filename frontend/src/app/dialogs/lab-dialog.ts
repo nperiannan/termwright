@@ -73,6 +73,13 @@ const NW = 150, NH = 46;
             <span class="m">vCPU <b>{{ u.vcpus }}</b> / {{ u.hostCpus || '?' }}<i class="meter"><i [style.width.%]="pct(u.vcpus, u.hostCpus)"></i></i></span>
             <span class="m">RAM <b>{{ gb(u.ram) }}</b> / {{ gb(u.hostMemTotal) }} · {{ tr('{0} free', gb(u.hostMemFree)) }}<i class="meter"><i [style.width.%]="pct(u.hostMemTotal - u.hostMemFree, u.hostMemTotal)" [class.over]="u.hostMemFree < 1024"></i></i></span>
             <span class="m">CPU {{ tr('now') }} <b>{{ u.cores.toFixed(1) }}</b> {{ tr('cores') }} · {{ tr('load') }} {{ u.load }}</span>
+            <span class="mg" [title]="u.running ? tr('Stop the switches to change it') : tr('How the switches’ first port (management) is connected; it applies when they start')">{{ tr('Management') }}
+              <select [ngModel]="lab.state()?.mgmt" (ngModelChange)="setMgmt($event)" name="lmg" [disabled]="u.running > 0 || lab.busy()">
+                <option value="lan">{{ tr('The host’s network (bridged)') }}</option>
+                <option value="nat">{{ tr('The host’s NAT network') }}</option>
+                <option value="bridge">{{ tr('Lab bridge on the host') }}</option>
+                <option value="forward">{{ tr('Port forwarding on the host') }}</option>
+              </select></span>
             <span class="muted small">{{ tr('A stopped switch frees its vCPU and memory at once.') }}</span>
           </div>
         }
@@ -151,7 +158,8 @@ const NW = 150, NH = 46;
                     <p class="muted small">{{ tr('The switch gets them when it starts next (Restart). A disk only grows; 0 keeps the image’s size.') }}</p>
                     @if (personaDef(d); as pd) {
                       <h4>{{ pd.name || tr('Persona') }} @if (d.persona) { <span [class]="d.personaOk ? 'ok' : 'warn'">{{ d.personaOk ? '✓ ' + tr('in the switch') : '● ' + tr('not written yet') }}</span> }</h4>
-                      @if (d.personaError) { <p class="err small">{{ tr('The persona file could not be written:') }} {{ d.personaError }}</p> }
+                      @if (d.personaError) { <p class="err small">{{ tr('Persona problem:') }} {{ d.personaError }}</p> }
+                      @if (d.personaInfo) { <p class="muted small mono">{{ d.personaInfo }}</p> }
                       <table class="slots"><thead><tr><th>#</th><th>{{ tr('Model') }}</th><th>{{ tr('Serial') }}</th><th>{{ pd.modules || tr('Module') }}</th>@if (pd.stack) { <th>{{ tr('Primary') }}</th><th>{{ tr('Ports') }}</th><th></th> }</tr></thead>
                         <tbody>@for (sl of slots(); track $index) {
                           <tr><td>{{ $index + 1 }}</td>
@@ -426,7 +434,7 @@ const NW = 150, NH = 46;
     .pendm { color: var(--warn); font-size: 10px; }
     .stepn { display: inline-flex; width: 17px; height: 17px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 700; align-items: center; justify-content: center; margin-right: 6px; }
     .hoststrip { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 8px 18px; border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: 12.5px;
-      .m { display: inline-flex; align-items: center; gap: 6px; } .meter { display: inline-block; width: 70px; height: 6px; border-radius: 4px; background: var(--surface); overflow: hidden; i { display: block; height: 100%; background: var(--accent); } i.over { background: var(--danger); } } }
+      .m, .mg { display: inline-flex; align-items: center; gap: 6px; } .mg select { height: 24px; font-size: 12px; } .meter { display: inline-block; width: 70px; height: 6px; border-radius: 4px; background: var(--surface); overflow: hidden; i { display: block; height: 100%; background: var(--accent); } i.over { background: var(--danger); } } }
     .sercol { display: flex; flex-direction: column; gap: 6px; } .macrow { display: flex; gap: 6px; input { flex: 1; height: 26px; font-size: 12px; } }
     .devpanel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; margin-top: 10px; .tail { margin-top: 0; } h4 { margin: 0 0 6px; font-size: 13px; }
       .row2 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; input { height: 26px; } .n { width: 56px; } .n2 { width: 76px; } .grow { flex: 1; } }
@@ -659,6 +667,18 @@ export class LabDialog implements OnInit, OnDestroy {
   async chooseImageFile(id: string) {
     const p = await this.backend.chooseOpenFile(tr('VM image file'), [{ displayName: tr('VM images'), pattern: '*.qcow2;*.img;*.vmdk;*.raw' }]).catch(() => '');
     if (p && await this.lab.setImageFile(id, p)) this.pickImage(id);
+  }
+  async setMgmt(m: string) {
+    const was = this.lab.state()?.mgmt ?? '';
+    if (m === was) return;
+    const text: Record<string, string> = {
+      lan: tr('The switches join the host’s network and get addresses from its DHCP server.'),
+      nat: tr('The switches get addresses from the host’s NAT network (DHCP, like GNS3’s NAT node) and are reached through the host.'),
+      bridge: tr('The switches get fixed addresses on a bridge of their own on the host, reached through the host.'),
+      forward: tr('Each switch’s SSH is forwarded to a port on the host (no root needed).'),
+    };
+    if (await this.ui.confirm(tr('Change management'), text[m] + ' ' + tr('Their sessions are updated; it applies when the switches start.'), tr('Change'))) await this.lab.setMgmt(m);
+    else { this.lab.emu.set({ ...this.lab.emu()! }); } // put the select back
   }
   async removeImage() { const im = this.imEdit(); if (im && await this.ui.confirm(tr('Remove image'), tr('Forget {0}? Its copy on the hosts stays.', im.name), tr('Remove'), true) && await this.lab.removeImage(im.id)) this.imEdit.set(null); }
   // hosts

@@ -179,3 +179,34 @@ func TestDay0(t *testing.T) {
 		t.Fatalf("%q", l)
 	}
 }
+
+func TestNatAndChain(t *testing.T) {
+	l, imgs := testLab()
+	l.Mgmt = "nat"
+	if a := strings.Join(l.Args(l.VMs[0], imgs["i1"]), " "); !strings.Contains(a, "tap,id=n0,ifname=twa10m") {
+		t.Fatal(a)
+	}
+	sc := l.StartScript(l.VMs[:1], imgs)
+	if !strings.Contains(sc, "net-start default") || !strings.Contains(sc, "master virbr0") {
+		t.Fatal(sc)
+	}
+	if ip, gw := l.Address(0); ip != "" || gw != "" {
+		t.Fatal(ip, gw)
+	}
+	if st := l.StatusScript(nil); !strings.Contains(st, "virbr0.status") || !strings.Contains(st, "ip neigh show dev virbr0") {
+		t.Fatal(st)
+	}
+	st := ParseStatus("lease 52:54:00:AA:00:01 192.168.122.45\nlease 52:54:00:aa:00:01 192.168.122.99\nnatnet 192.168.122.1/24\n", nil)
+	if st.Leases["52:54:00:aa:00:01"] != "192.168.122.45" || st.NatNet != "192.168.122.1/24" {
+		t.Fatalf("%+v", st)
+	}
+	if !strings.Contains(l.StopScript([]string{"v1"}), "ip link del twa10m") {
+		t.Fatal("tap not removed")
+	}
+	// switches added to a lab go on from its last switch
+	l2, imgs2 := testLab()
+	l2.Wire(l2.VMs[2:], "chain", imgs2)
+	if len(l2.Cables) != 1 || l2.Cables[0].A != "v2" || l2.Cables[0].B != "v3" {
+		t.Fatalf("%+v", l2.Cables)
+	}
+}

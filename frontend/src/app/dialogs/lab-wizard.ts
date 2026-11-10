@@ -98,9 +98,11 @@ const CABLING = [
               }
               @if (!add) {
                 <b class="sub">{{ tr('Management') }}</b>
-                <div class="choice three">
+                <div class="choice four">
                   <label class="c" [class.on]="mgmt === 'lan'" [class.off]="!lanOk()"><input type="radio" name="mg" value="lan" [(ngModel)]="mgmt" [disabled]="!lanOk()" /><b>{{ tr('The host’s network (bridged)') }}</b>
                     <span class="muted small">{{ lanText() }}</span></label>
+                  <label class="c" [class.on]="mgmt === 'nat'" [class.off]="!natOk()"><input type="radio" name="mg" value="nat" [(ngModel)]="mgmt" [disabled]="!natOk()" /><b>{{ tr('The host’s NAT network') }}</b>
+                    <span class="muted small">{{ natText() }}</span></label>
                   <label class="c" [class.on]="mgmt === 'forward'"><input type="radio" name="mg" value="forward" [(ngModel)]="mgmt" /><b>{{ tr('Port forwarding on the host') }}</b><span class="muted small">{{ tr('No root needed. Each switch’s management port is reached through the host (127.0.0.1:port on the host); its sessions use the host session as jump host.') }}</span></label>
                   <label class="c" [class.on]="mgmt === 'bridge'" [class.off]="!hostInfo()?.sudo"><input type="radio" name="mg" value="bridge" [(ngModel)]="mgmt" [disabled]="!hostInfo()?.sudo" /><b>{{ tr('Lab bridge on the host') }}</b><span class="muted small">{{ tr('Needs password-less sudo. The switches get addresses in {0} on a bridge of their own on the host, reachable from the host only.', mgmtNet) }}</span></label>
                 </div>
@@ -166,7 +168,7 @@ const CABLING = [
           }
         </div>
       </div>
-      <div class="modal-foot"><span class="muted small">{{ summary() }}</span><span class="spacer"></span>
+      <div class="modal-foot wfoot"><span class="muted small sumtxt" [title]="summary()">{{ summary() }}</span><span class="spacer"></span>
         <button type="button" (click)="ui.close()">{{ tr('Cancel') }}</button>
         @if (step() > first) { <button type="button" (click)="step.set(step() - 1)">{{ tr('Back') }}</button> }
         @if (step() < 3) { <button type="button" class="primary" (click)="step.set(step() + 1)" [disabled]="!canNext()">{{ tr('Next') }}</button> }
@@ -176,6 +178,8 @@ const CABLING = [
   </div>`,
   styles: [`
     .labz { width: min(980px, 96vw); }
+    .wfoot button { white-space: nowrap; flex: none; }
+    .wfoot .sumtxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .wiz { display: grid; grid-template-columns: 190px 1fr; min-height: 430px; }
     .steps { border-right: 1px solid var(--line); padding: 14px 10px; background: var(--surface-2); }
     .steps div { padding: 8px 10px; border-radius: 8px; color: var(--muted); margin-bottom: 4px; font-size: 13px; }
@@ -204,7 +208,7 @@ const CABLING = [
     .prev rect { fill: var(--surface); stroke: var(--line); } .prev .old rect { stroke-dasharray: 4 3; }
     .prev text { fill: var(--text); font: 600 11px var(--ui-font); text-anchor: middle; }
     .prev line { stroke: var(--ok); stroke-width: 1.6; } .prev line.isc { stroke: var(--accent); stroke-width: 3; }
-    .choice .c { cursor: pointer; } .choice.three { grid-template-columns: repeat(3, 1fr); } .choice input { display: none; } b.sub { display: block; margin-top: 12px; }
+    .choice .c { cursor: pointer; } .choice.three { grid-template-columns: repeat(3, 1fr); } .choice.four { grid-template-columns: repeat(4, 1fr); } .choice.four .c { padding: 11px; } .choice input { display: none; } b.sub { display: block; margin-top: 12px; }
     .hsel { min-width: 330px; } .ok { color: var(--ok); } .bad { color: var(--danger); } .warn { color: var(--warn); }
     .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 10px; } .kpis.three { grid-template-columns: repeat(3, 1fr); }
     .kpis > div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--surface); display: flex; flex-direction: column; gap: 2px; }
@@ -232,7 +236,7 @@ export class LabWizard {
   protected stepNames = ['Where it runs', 'Switches', 'Cabling', 'Review'];
   protected cabling = CABLING;
   protected cable = 'leaf-spine';
-  protected mgmtNet = '10.99.0.0/24';
+  protected mgmtNet = '10.99.0.0/16';
   protected password = '';
   protected start = true;
   protected rows = signal<Row[]>([]);
@@ -317,7 +321,18 @@ export class LabWizard {
   setUp() { this.lab.setupFor.set(this.host); this.ui.open('lab'); }
   async check() { const h = await this.lab.checkHost(this.host); if (h) { this.hostInfo.set(h.info); if (!this.add) this.mgmt = this.bestMgmt(h.info); } }
   /** The first port joins the host's network (DHCP) whenever the host allows it. */
-  bestMgmt(h: EmuHostInfo | null) { return h?.sudo && h.lanKind ? 'lan' : h?.sudo ? 'bridge' : 'forward'; }
+  /** As Termwright picks it: the host's network on a real host, its NAT network on a VM host, then a lab bridge, then port forwarding. */
+  bestMgmt(h: EmuHostInfo | null) {
+    const vm = !!h?.virt && h.virt !== 'none' && h.virt !== 'unknown';
+    return h?.sudo && h.lanKind && !vm ? 'lan' : h?.sudo && h.nat ? 'nat' : h?.sudo && h.lanKind ? 'lan' : h?.sudo ? 'bridge' : 'forward';
+  }
+  natOk() { const h = this.hostInfo(); return !!h?.sudo && (!!h.nat || !!h.libvirt); }
+  natText() {
+    const h = this.hostInfo();
+    if (!h?.sudo) return tr('Needs password-less sudo on the host.');
+    if (!h.nat && !h.libvirt) return tr('The host has no NAT network yet: Set Up QEMU/KVM installs libvirt’s (virbr0).');
+    return tr('Like GNS3’s NAT node: the switches get addresses from the host’s DHCP ({0}), reach out through the host, and are reached through the host. Works with any image.', h.nat || 'virbr0');
+  }
   lanOk() { const h = this.hostInfo(); return !!h?.sudo && !!h.lanKind; }
   lanText() {
     const h = this.hostInfo();
@@ -373,8 +388,21 @@ export class LabWizard {
     const names: { name: string; os: string; old?: boolean }[] = [];
     const em = this.kind() === 'emu';
     if (this.add) for (const d of (em ? this.lab.emu() : this.lab.sim())?.devices ?? []) names.push({ name: d.hostname, os: d.os, old: true });
-    for (const r of em ? this.drows().map(r => ({ ...r, os: '' })) : this.rows()) for (let i = 1; i <= Math.min(r.count, 12); i++) names.push({ name: r.names.replace('{n}', String(i)), os: r.os });
-    const shown = names.slice(0, 16);
+    const used = new Set(names.map(n => n.name.toLowerCase()));
+    for (const r of em ? this.drows().map(r => ({ ...r, os: '' })) : this.rows()) {
+      let n = 1;
+      for (let i = 1; i <= Math.min(r.count, 12); i++) { // numbered on past the names in use, as Termwright does
+        let name = '';
+        const pat = r.names.includes('{n}') || em && r.count === 1 ? r.names : r.names + '-{n}';
+        do { name = pat.includes('{n}') ? pat.replace('{n}', String(n)) : n > 1 ? pat + '-' + (n - 1) : pat; n++; } while (used.has(name.toLowerCase()));
+        used.add(name.toLowerCase());
+        names.push({ name, os: r.os });
+      }
+    }
+    // keep the last switches there already (the new ones are cabled to them) and the new ones
+    const olds = names.filter(n => n.old), news = names.filter(n => !n.old);
+    const keepOld = this.cable === 'leaf-spine' ? olds.slice(0, 2) : olds.slice(-Math.min(olds.length, 3));
+    const shown = [...keepOld, ...news].slice(0, 16);
     let cores: number[] = [];
     if (this.cable === 'leaf-spine') {
       cores = shown.length > 1 ? [0, 1] : [0];
@@ -392,8 +420,10 @@ export class LabWizard {
       for (const l of bottom) if (!shown[l].old) for (const c of top) join(c, l);
     } else if (this.cable === 'chain' || this.cable === 'ring') {
       const fresh = shown.map((_, i) => i).filter(i => !shown[i].old);
-      for (let k = 0; k + 1 < fresh.length; k++) join(fresh[k], fresh[k + 1]);
-      if (this.cable === 'ring' && fresh.length > 2) join(fresh[fresh.length - 1], fresh[0]);
+      const lastOld = shown.map((_, i) => i).filter(i => shown[i].old).pop();
+      const seq = lastOld !== undefined && fresh.length ? [lastOld, ...fresh] : fresh;
+      for (let k = 0; k + 1 < seq.length; k++) join(seq[k], seq[k + 1]);
+      if (this.cable === 'ring' && seq.length > 2) join(seq[seq.length - 1], seq[0]);
     }
     return { w, lines, nodes: shown.map((n, i) => ({ ...n, ...at.get(i)! })) };
   });

@@ -111,6 +111,10 @@ var ErrTimeout = errors.New("timed out")
 
 // Wait waits until the new console text matches one of res; it returns which.
 // Each answer whose text shows up meanwhile is typed once per appearance.
+// builtinAnswers are questions any image may ask at the first login, after
+// the image's own answers: "[y/N/q]" questionnaires quit with the defaults.
+var builtinAnswers = []Answer{{Match: "[y/N/q]:", Send: "q"}}
+
 func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Answer, res ...*regexp.Regexp) (int, error) {
 	t := time.NewTimer(timeout)
 	defer t.Stop()
@@ -128,7 +132,7 @@ func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Ans
 				return i, nil
 			}
 		}
-		for _, a := range answers {
+		for _, a := range append(answers[:len(answers):len(answers)], builtinAnswers...) {
 			if a.Match != "" {
 				if k := strings.Index(tail, a.Match); k >= 0 {
 					c.mu.Lock()
@@ -279,6 +283,15 @@ func FindAddress(out string) string {
 		return m[1] + m[2]
 	}
 	return ""
+}
+
+// Ask logs in and returns what a command printed.
+func Ask(ctx context.Context, c *Console, im *Image, cmd string) (string, error) {
+	prompt, err := Login(ctx, c, im)
+	if err != nil {
+		return "", err
+	}
+	return Run(ctx, c, im, prompt, cmd)
 }
 
 // AskAddress logs in and reads the management address with the image's address command.

@@ -23,6 +23,9 @@ func SetupPlan(h HostInfo) []string {
 	default:
 		p = append(p, "install QEMU (the distribution "+orStr(h.OSID, "is unknown")+" is not supported - install qemu-system-x86_64 and qemu-img by hand)")
 	}
+	if h.Nat == "" {
+		p = append(p, "install libvirt and start its default NAT network (virbr0, with DHCP) - switches get addresses there like on GNS3's NAT node")
+	}
 	if h.KVM == "none" && h.VT {
 		p = append(p, "load the KVM module (modprobe kvm_intel or kvm_amd)")
 	}
@@ -58,6 +61,21 @@ esac
 command -v qemu-system-x86_64 >/dev/null 2>&1 || { echo "@@fail qemu-system-x86_64 is still missing"; exit 1; }
 # libguestfs (persona files) reads the host's kernel, which Ubuntu keeps readable by root only
 chmod 0644 /boot/vmlinuz-* 2>/dev/null || true
+echo "@@step nat"
+# libvirt's default network: a NAT bridge (virbr0) with DHCP for the switches' management ports
+if ! ip link show virbr0 >/dev/null 2>&1; then
+ case "$ids" in
+  *" debian "*|*" ubuntu "*) apt-get install -y -q libvirt-daemon-system dnsmasq-base ;;
+  *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*|*" ol "*) dnf install -y libvirt-daemon-config-network libvirt-daemon-kvm || yum install -y libvirt-daemon-config-network libvirt-daemon-kvm ;;
+  *" suse "*|*" opensuse "*|*" sles "*) zypper -n install libvirt-daemon-config-network libvirt-daemon-qemu ;;
+  *" arch "*) pacman -S --noconfirm --needed libvirt dnsmasq ;;
+ esac
+ systemctl enable --now libvirtd >/dev/null 2>&1 || systemctl enable --now virtqemud.socket virtnetworkd.socket >/dev/null 2>&1 || true
+ virsh -c qemu:///system net-info default >/dev/null 2>&1 || { [ -f /usr/share/libvirt/networks/default.xml ] && virsh -c qemu:///system net-define /usr/share/libvirt/networks/default.xml >/dev/null; }
+ virsh -c qemu:///system net-start default >/dev/null 2>&1
+ virsh -c qemu:///system net-autostart default >/dev/null 2>&1
+ if ip link show virbr0 >/dev/null 2>&1; then echo "@@note NAT network virbr0: $(ip -4 -o addr show dev virbr0 | awk '{print $4}')"; else echo "@@note libvirt's NAT network could not be started: NAT management is not available (the other modes are)"; fi
+fi
 echo "@@step kvm"
 if [ ! -e /dev/kvm ]; then
  if grep -q vmx /proc/cpuinfo; then modprobe kvm_intel; elif grep -q svm /proc/cpuinfo; then modprobe kvm_amd; fi

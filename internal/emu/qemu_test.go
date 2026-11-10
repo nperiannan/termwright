@@ -109,7 +109,7 @@ func TestPersonaWrite(t *testing.T) {
 	l := &Lab{ID: "e2", Dir: "termwright-lab", VMs: []VM{{ID: "v1", Name: "sw-1", Image: "g", DiskGB: 1}}}
 	run(l.PrepareScript(l.VMs, map[string]*Image{"g": im}))
 	out := run(l.WriteFileScript(l.VMs[0], "/scratch/persona.yaml", "system:\n  slots: []\n"))
-	if !strings.Contains(out, "ok /dev/sda") {
+	if !strings.Contains(out, "ok /dev/sda1 /scratch/persona.yaml (folder)") {
 		t.Fatalf("write: %s", out)
 	}
 	got := run("guestfish --ro -a termwright-lab/lab-e2/v1.qcow2 -m /dev/sda1 cat /scratch/persona.yaml")
@@ -118,5 +118,14 @@ func TestPersonaWrite(t *testing.T) {
 	}
 	if size := run("qemu-img info termwright-lab/lab-e2/v1.qcow2 | grep 'virtual size'"); !strings.Contains(size, "1 GiB") {
 		t.Fatalf("not grown: %s", size)
+	}
+	// a /scratch partition that the image's fstab mounts (by UUID) over an empty /scratch folder
+	if two := os.Getenv("TW_EMU_GUESTFS2"); two != "" {
+		if o, err := exec.Command("cp", two, filepath.Join(home, "termwright-lab/lab-e2/v1.qcow2")).CombinedOutput(); err != nil {
+			t.Fatal(string(o))
+		}
+		if out := run(l.WriteFileScript(l.VMs[0], "/scratch/persona.yaml", "x: 1\n")); !strings.Contains(out, "ok /dev/sda2 /persona.yaml (fstab: UUID=") {
+			t.Fatalf("fstab write: %s", out)
+		}
 	}
 }

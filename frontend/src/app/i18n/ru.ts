@@ -2054,6 +2054,22 @@ const ru: Record<string, string> = {
   'starting': 'запускается',
   'copying the image': 'копирование образа',
   'One per line: text the console shows => what to type (nothing after => is Enter).': 'По одному в строке: текст в консоли => что набрать (пусто после => - Enter).',
+  'Persona problem:': 'Проблема с персоной:',
+  'checking its persona': 'проверка персоны',
+  'running · no persona': 'работает · без персоны',
+  'waiting for its DHCP address': 'ожидает адрес DHCP',
+  'writing its persona file': 'запись файла персоны',
+  'The host’s NAT network': 'NAT-сеть хоста',
+  'The host has no NAT network yet: Set Up QEMU/KVM installs libvirt’s (virbr0).': 'На хосте ещё нет NAT-сети: «Настроить QEMU/KVM» установит сеть libvirt (virbr0).',
+  'Like GNS3’s NAT node: the switches get addresses from the host’s DHCP ({0}), reach out through the host, and are reached through the host. Works with any image.': 'Как узел NAT в GNS3: коммутаторы получают адреса от DHCP хоста ({0}), выходят в сеть и доступны через хост. Работает с любым образом.',
+  'Stop the switches to change it': 'Остановите коммутаторы, чтобы изменить',
+  'How the switches’ first port (management) is connected; it applies when they start': 'Как подключён первый порт коммутаторов (управление); применяется при запуске',
+  'The switches join the host’s network and get addresses from its DHCP server.': 'Коммутаторы подключаются к сети хоста и получают адреса от её DHCP-сервера.',
+  'The switches get addresses from the host’s NAT network (DHCP, like GNS3’s NAT node) and are reached through the host.': 'Коммутаторы получают адреса в NAT-сети хоста (DHCP, как узел NAT в GNS3) и доступны через хост.',
+  'The switches get fixed addresses on a bridge of their own on the host, reached through the host.': 'Коммутаторы получают постоянные адреса на собственном мосту хоста и доступны через хост.',
+  'Each switch’s SSH is forwarded to a port on the host (no root needed).': 'SSH каждого коммутатора перенаправляется на порт хоста (root не нужен).',
+  'Change management': 'Изменить управление',
+  'Their sessions are updated; it applies when the switches start.': 'Их сеансы обновляются; изменение применяется при запуске коммутаторов.',
 };
 
 export default ru;

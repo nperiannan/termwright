@@ -86,7 +86,7 @@ func Plan(pack *Pack, groups []Group, mgmtNet, cabling, password string, firstPo
 				ip = ip.Next()
 			}
 			if !pfx.Contains(ip.Next()) { // keep the broadcast address free
-				return nil, nil, fmt.Errorf("management network %s is full", pfx)
+				return nil, nil, fmt.Errorf("management network %s is full: remove switches or use a bigger network (like 10.99.0.0/16)", pfx)
 			}
 			usedIP[ip] = true
 			for usedPort[port] {
@@ -157,11 +157,15 @@ func Cable(pack *Pack, add, have []Spec, links []Link, preset string) []Link {
 	}
 	switch preset {
 	case CableChain, CableRing:
-		for i := 0; i+1 < len(add); i++ {
-			add1(link(add[i], add[i+1]))
+		seq := add
+		if len(have) > 0 && len(add) > 0 { // added to a lab: they go on from its last switch
+			seq = append([]Spec{have[len(have)-1]}, add...)
 		}
-		if preset == CableRing && len(add) > 2 {
-			add1(link(add[len(add)-1], add[0]))
+		for i := 0; i+1 < len(seq); i++ {
+			add1(link(seq[i], seq[i+1]))
+		}
+		if preset == CableRing && len(seq) > 2 {
+			add1(link(seq[len(seq)-1], seq[0]))
 		}
 	case CableLeafSpine:
 		var cores, leaves []Spec

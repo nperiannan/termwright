@@ -28,6 +28,7 @@ type PersonaDef struct {
 	Stack    bool           `json:"stack"`   // the persona can be a stack of several slots
 	Modules  string         `json:"modules"` // what a module is called ("VIM")
 	OSName   string         `json:"osName"`  // what the image is called as such a device (shown after the model)
+	Check    string         `json:"check"`   // a CLI command whose output names the model once the persona took ("show version")
 }
 
 // PersonaModel is a model a VM can be, with the modules it can take.
@@ -132,35 +133,56 @@ func ParsePorts(s string) ([]PortMap, error) {
 }
 
 // WriteFileScript writes content into the file at file (a path in the VM)
-// in a VM's disk with libguestfs, on the host, while the VM is off. It finds
-// the filesystem that has the file's folder, or one labelled like it (a
-// /scratch partition). It prints "ok <filesystem>" or "fail <why>".
+// in a VM's disk with libguestfs, on the host, while the VM is off. The
+// filesystem is the one the image mounts at the file's folder: from the
+// image's /etc/fstab (LABEL=, UUID= or a device), else one labelled like the
+// folder (a "scratch" partition), else the folder itself on the root
+// filesystem when nothing is mounted there. The file is read back. It prints
+// "ok <filesystem> <path> (<how>)" or "fail <why>"; "fail no filesystem…"
+// when the folder's filesystem does not exist yet (made on the first boot).
 func (l *Lab) WriteFileScript(v VM, file, content string) string {
 	disk := l.VMDir() + "/" + v.ID + ".qcow2"
 	dir, base := path.Dir(file), path.Base(file)
-	label := strings.TrimPrefix(path.Base(dir), "/")
+	label := path.Base(dir)
 	tmp := l.VMDir() + "/" + v.ID + ".persona"
 	return fmt.Sprintf(`command -v guestfish >/dev/null 2>&1 || { echo "fail libguestfs-tools (guestfish) is not installed on the host: use Set Up QEMU/KVM"; exit 0; }
 export LIBGUESTFS_BACKEND=direct
-d=%s
-cat > %s <<'TW_PERSONA_END'
-%sTW_PERSONA_END
-target=""
-if ! fsl=$(guestfish --ro -a "$d" run : list-filesystems 2>&1); then
- case "$fsl" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start (it needs to read the host's kernel): run Set Up QEMU/KVM, which makes /boot/vmlinuz readable";; *) echo "fail libguestfs: $(echo $fsl | tr '\n' ' ' | cut -c1-300)";; esac
- rm -f %s; exit 0
-fi
-for f in $(echo "$fsl" | cut -d: -f1); do
- if [ "$(guestfish --ro -a "$d" -m "$f" is-dir %s 2>/dev/null)" = true ]; then target="$f %s"; break; fi
- if [ "$(guestfish --ro -a "$d" run : vfs-label "$f" 2>/dev/null)" = %s ]; then target="$f /"; break; fi
-done
-if [ -z "$target" ]; then echo "fail no filesystem with %s in the disk (has the switch booted once?)"; rm -f %s; exit 0; fi
-set -- $target
-p="$2/%s"; [ "$2" = / ] && p="/%s"
-if out=$(guestfish -a "$d" -m "$1" upload %s "$p" 2>&1); then echo "ok $1"; else
- case "$out" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start (it needs to read the host's kernel): run Set Up QEMU/KVM, which makes /boot/vmlinuz readable - $(echo $out | tr '\n' ' ' | cut -c1-200)";; *) echo "fail $(echo $out | tr '\n' ' ' | cut -c1-300)";; esac; fi
-rm -f %s
-`, Q(disk), Q(tmp), ensureNL(content), Q(tmp), Q(dir), Q(dir), Q(label), Q(dir), Q(tmp), base, base, Q(tmp), Q(tmp))
+d=%[1]s; t=%[2]s; dir=%[3]s
+hint() { case "$1" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start (it needs to read the host's kernel): run Set Up QEMU/KVM, which makes /boot/vmlinuz readable";; *) echo "fail $2$(echo $1 | tr '\n' ' ' | cut -c1-300)";; esac; rm -f "$t" "$t.gf"; exit 0; }
+cat > "$t" <<'TW_PERSONA_END'
+%[4]sTW_PERSONA_END
+fsl=$(guestfish --ro -a "$d" run : list-filesystems 2>&1) || hint "$fsl" "libguestfs: "
+{ echo run
+  echo "$fsl" | while IFS= read -r line; do f=${line%%%%:*}; ty=${line#*: }
+    case "$ty" in unknown|swap|"") continue;; esac
+    echo "echo @fs $f $ty"; echo "echo @label"; echo "-vfs-label $f"; echo "echo @uuid"; echo "-vfs-uuid $f"
+    echo "-mount-ro $f /"; echo "echo @isdir"; echo "-is-dir $dir"; echo "echo @fstab"; echo "-cat /etc/fstab"; echo "echo @end"; echo "-umount-all"
+  done; } > "$t.gf"
+info=$(guestfish --ro -a "$d" < "$t.gf" 2>/dev/null)
+pick=$(echo "$info" | awk -v dir="$dir" -v lab=%[5]s '
+/^@fs /{f=$2; ty[f]=$3; n++; ord[n]=f; s=""; next}
+/^@(label|uuid|isdir|fstab|end)$/{s=substr($0,2); next}
+s=="label"{L[f]=$0; next}
+s=="uuid"{U[f]=$0; next}
+s=="isdir"{D[f]=$0; next}
+s=="fstab"{R[f]=1; if ($0 !~ /^[ \t]*#/ && ($2==dir || $2==dir"/")) spec=$1; next}
+END{
+ if (spec!="") { x=spec; sub(/^\/dev\/disk\/by-label\//,"LABEL=",x); sub(/^\/dev\/disk\/by-uuid\//,"UUID=",x); gsub(/"/,"",x)
+  y=x; sub(/^\/dev\/(hd|vd|xvd)/,"/dev/sd",y)
+  for (i=1;i<=n;i++) { f=ord[i]
+   if ((x ~ /^LABEL=/ && L[f]==substr(x,7)) || (x ~ /^UUID=/ && tolower(U[f])==tolower(substr(x,6))) || y==f) { print "use", f, "/", "fstab: " spec; exit } } }
+ for (i=1;i<=n;i++) { f=ord[i]; if (L[f]!="" && tolower(L[f])==tolower(lab)) { print "use", f, "/", "label " L[f]; exit } }
+ if (spec=="") for (i=1;i<=n;i++) { f=ord[i]; if (D[f]=="true") { print "use", f, dir, "folder"; exit } }
+ printf "none"; for (i=1;i<=n;i++) { f=ord[i]; printf " %%s %%s%%s%%s;", f, ty[f], (L[f]!="" ? " label " L[f] : ""), (R[f] ? " root" : "") }
+ if (spec!="") printf " the image mounts %%s from %%s", dir, spec
+ print "" }')
+case "$pick" in use*) ;; *) echo "fail no filesystem with $dir in the disk (has the switch booted once?) - found:${pick#none}"; rm -f "$t" "$t.gf"; exit 0;; esac
+set -- $pick; fs=$2; at=$3; shift 3; how="$*"
+p="$at/%[6]s"; [ "$at" = / ] && p="/%[6]s"
+out=$(guestfish -a "$d" -m "$fs" upload "$t" "$p" : cat "$p" 2>&1) || hint "$out" ""
+if [ "$out" = "$(cat "$t")" ]; then echo "ok $fs $p ($how)"; else echo "fail the file read back from $fs $p differs: $(echo $out | cut -c1-200)"; fi
+rm -f "$t" "$t.gf"
+`, Q(disk), Q(tmp), Q(dir), ensureNL(content), Q(label), base)
 }
 
 // ShutdownScript asks VMs to power off (ACPI) and waits up to secs seconds,

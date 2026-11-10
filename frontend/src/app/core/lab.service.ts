@@ -98,6 +98,7 @@ export class LabService {
   async start(ids: string[] = []) { const ok = await this.run(() => (this.e ? this.backend.emuStart(ids) : this.backend.labStart(ids))); await this.ui.refreshTree(); return ok; }
   stop(ids: string[] = []) { return this.run(() => (this.e ? this.backend.emuStop(ids) : this.backend.labStop(ids))); }
   restart(ids: string[]) { return this.run(() => this.backend.emuRestart(ids)); }
+  setMgmt(mgmt: string, mgmtNet = '') { return this.run(() => this.backend.emuSetMgmt(mgmt, mgmtNet), 'Management changed - it applies when the switches start'); }
   reset(ids: string[]) { return this.run(() => this.backend.emuReset(ids), 'Back to day 0: the switches boot as new'); }
   async remove(ids: string[], sessions: boolean) {
     const ok = await this.run(() => (this.e ? this.backend.emuRemove(ids, sessions) : this.backend.labRemove(ids, sessions)));
