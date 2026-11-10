@@ -50,6 +50,7 @@ type Image struct {
 	Answers    []Answer `json:"answers"`            // questions on the console and what to answer
 	Extra      string   `json:"extra"`              // more qemu options
 	Source     string   `json:"source"`             // where the profile came from (a GNS3 appliance…)
+	AddrCmd    string   `json:"addrCmd"`            // a CLI command that prints the management address (host's network mode)
 	Serial     string   `json:"serial"`             // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
 }
 
@@ -89,7 +90,9 @@ type Cable struct {
 type Lab struct {
 	ID      string  `json:"id"`      // short, part of the folder and interface names
 	Dir     string  `json:"dir"`     // on the host, relative to the home folder
-	Mgmt    string  `json:"mgmt"`    // "forward" or "bridge"
+	Mgmt    string  `json:"mgmt"`    // "lan" (the host's network, DHCP), "bridge" (a lab bridge on the host) or "forward"
+	LanIf   string  `json:"lanIf"`   // lan: the host's bridge (tap on it) or network port (macvtap on it)
+	LanKind string  `json:"lanKind"` // lan: "bridge" or "macvtap"
 	MgmtNet string  `json:"mgmtNet"` // bridge mode: the bridge's network (10.99.0.0/24)
 	Base    int     `json:"base"`    // first TCP/UDP port on the host's 127.0.0.1
 	KVM     bool    `json:"kvm"`     // false: software emulation (slow, for tests)
@@ -175,10 +178,13 @@ func (l *Lab) Args(v VM, im *Image) []string {
 	if nic == "" {
 		nic = "e1000"
 	}
-	// management
-	if l.Mgmt == "bridge" {
+	// management: the first port
+	switch {
+	case l.Mgmt == "lan" && l.LanKind == "macvtap":
+		a = append(a, "-netdev", "tap,id=n0,fd=3") // the macvtap device, opened by the start script
+	case l.Mgmt == "bridge" || l.Mgmt == "lan":
 		a = append(a, "-netdev", "tap,id=n0,ifname="+l.tap(v)+",script=no,downscript=no")
-	} else {
+	default:
 		a = append(a, "-netdev", fmt.Sprintf("user,id=n0,hostfwd=tcp:127.0.0.1:%d-:22", l.SSHPort(v)))
 	}
 	a = append(a, "-device", nic+",netdev=n0,mac="+l.MAC(v, 0))
@@ -239,12 +245,21 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		disk := dir + "/" + v.ID + ".qcow2"
 		fmt.Fprintf(&b, "if [ -f %s/%s.pid ] && kill -0 \"$(cat %s/%s.pid)\" 2>/dev/null; then echo 'up %s'; else\n", Q(dir), v.ID, Q(dir), v.ID, v.ID)
 		fmt.Fprintf(&b, " [ -f %s ] || qemu-img create -q -f qcow2 -F qcow2 -b \"$HOME/%s/%s\" %s || { echo 'fail %s disk'; }\n", Q(disk), l.ImageDir(), im.FileName, Q(disk), v.ID)
-		if l.Mgmt == "bridge" {
-			t := l.tap(v)
-			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip tuntap add %s mode tap user \"$(id -un)\"; sudo -n ip link set %s master %s up\n", t, t, t, l.Bridge())
+		t, redir := l.tap(v), ""
+		switch {
+		case l.Mgmt == "lan" && l.LanKind == "macvtap":
+			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip link add link %s name %s address %s type macvtap mode bridge; sudo -n ip link set %s up\n", t, Q(l.LanIf), t, l.MAC(v, 0), t)
+			fmt.Fprintf(&b, " idx=$(cat /sys/class/net/%s/ifindex); sudo -n chown \"$(id -un)\" /dev/tap$idx\n", t)
+			redir = " 3<>/dev/tap$idx"
+		case l.Mgmt == "bridge" || l.Mgmt == "lan":
+			br := l.Bridge()
+			if l.Mgmt == "lan" {
+				br = l.LanIf
+			}
+			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip tuntap add %s mode tap user \"$(id -un)\"; sudo -n ip link set %s master %s up\n", t, t, t, Q(br))
 		}
 		fmt.Fprintf(&b, " : > %s/%s.log\n", Q(dir), v.ID)
-		fmt.Fprintf(&b, " if out=$(qemu-system-x86_64 %s 2>&1); then echo 'started %s'; else echo \"fail %s $(echo $out | tr '\\n' ' ')\"; fi\nfi\n", joinArgs(l.Args(v, im)), v.ID, v.ID)
+		fmt.Fprintf(&b, " if out=$(qemu-system-x86_64 %s%s 2>&1); then echo 'started %s'; else echo \"fail %s $(echo $out | tr '\\n' ' ')\"; fi\nfi\n", joinArgs(l.Args(v, im)), redir, v.ID, v.ID)
 	}
 	return b.String()
 }
@@ -255,7 +270,7 @@ func (l *Lab) StopScript(ids []string) string {
 	dir := l.VMDir()
 	for _, id := range ids {
 		fmt.Fprintf(&b, "if [ -f %s/%s.pid ]; then kill \"$(cat %s/%s.pid)\" 2>/dev/null; rm -f %s/%s.pid; fi\n", Q(dir), id, Q(dir), id, Q(dir), id)
-		if l.Mgmt == "bridge" {
+		if l.Mgmt == "bridge" || l.Mgmt == "lan" {
 			if v := l.VMByID(id); v != nil {
 				fmt.Fprintf(&b, "sleep 0.3; sudo -n ip link del %s 2>/dev/null\n", l.tap(*v))
 			}
@@ -365,6 +380,9 @@ func (l *Lab) gatewayPrefix() string {
 
 // Address gives VM index i its management address and gateway.
 func (l *Lab) Address(i int) (string, string) {
+	if l.Mgmt == "lan" {
+		return "", "" // from the network's DHCP; learned from the switch
+	}
 	if l.Mgmt != "bridge" {
 		return "10.0.2.15/24", "10.0.2.2" // QEMU's user-mode network, the same in every VM
 	}

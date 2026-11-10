@@ -81,9 +81,11 @@ const CABLING = [
               }
               @if (!add) {
                 <b class="sub">{{ tr('Management') }}</b>
-                <div class="choice">
+                <div class="choice three">
+                  <label class="c" [class.on]="mgmt === 'lan'" [class.off]="!lanOk()"><input type="radio" name="mg" value="lan" [(ngModel)]="mgmt" [disabled]="!lanOk()" /><b>{{ tr('The host’s network (bridged)') }}</b>
+                    <span class="muted small">{{ lanText() }}</span></label>
                   <label class="c" [class.on]="mgmt === 'forward'"><input type="radio" name="mg" value="forward" [(ngModel)]="mgmt" /><b>{{ tr('Port forwarding on the host') }}</b><span class="muted small">{{ tr('No root needed. Each switch’s management port is reached through the host (127.0.0.1:port on the host); its sessions use the host session as jump host.') }}</span></label>
-                  <label class="c" [class.on]="mgmt === 'bridge'" [class.off]="!hostInfo()?.sudo"><input type="radio" name="mg" value="bridge" [(ngModel)]="mgmt" [disabled]="!hostInfo()?.sudo" /><b>{{ tr('Bridge on the host') }}</b><span class="muted small">{{ tr('Needs password-less sudo. The switches get addresses in {0} on a bridge of the host, reachable from the host.', mgmtNet) }}</span></label>
+                  <label class="c" [class.on]="mgmt === 'bridge'" [class.off]="!hostInfo()?.sudo"><input type="radio" name="mg" value="bridge" [(ngModel)]="mgmt" [disabled]="!hostInfo()?.sudo" /><b>{{ tr('Lab bridge on the host') }}</b><span class="muted small">{{ tr('Needs password-less sudo. The switches get addresses in {0} on a bridge of their own on the host, reachable from the host only.', mgmtNet) }}</span></label>
                 </div>
               }
               } @else {
@@ -125,7 +127,7 @@ const CABLING = [
                 <span>{{ tr('Runs on') }}</span><span>{{ hostLabel() }} - {{ tr('real VM images') }}</span>
                 <span>{{ tr('Switches') }}</span><span>{{ summary() }}</span>
                 <span>{{ tr('Cabling') }}</span><span>{{ tr(cablingLabel()) }}</span>
-                <span>{{ tr('Management') }}</span><span>{{ (add ? lab.emu()?.mgmt : mgmt) === 'bridge' ? tr('Bridge on the host') : tr('Port forwarding on the host') }}</span>
+                <span>{{ tr('Management') }}</span><span>{{ mgmtLabel(add ? (lab.emu()?.mgmt ?? '') : mgmt) }}</span>
                 <span>{{ tr('Day-0 config') }}</span><span>{{ tr('The images’ first-boot commands, typed on each console') }}</span>
                 <span>{{ tr('Sessions') }}</span><span>{{ tr('Folder') }}: {{ lab.emu()?.folder || 'Emulated Lab' }} {{ tr('(SSH and console per switch)') }}</span>
               </div>
@@ -185,7 +187,7 @@ const CABLING = [
     .prev rect { fill: var(--surface); stroke: var(--line); } .prev .old rect { stroke-dasharray: 4 3; }
     .prev text { fill: var(--text); font: 600 11px var(--ui-font); text-anchor: middle; }
     .prev line { stroke: var(--ok); stroke-width: 1.6; } .prev line.isc { stroke: var(--accent); stroke-width: 3; }
-    .choice .c { cursor: pointer; } .choice input { display: none; } b.sub { display: block; margin-top: 12px; }
+    .choice .c { cursor: pointer; } .choice.three { grid-template-columns: repeat(3, 1fr); } .choice input { display: none; } b.sub { display: block; margin-top: 12px; }
     .hsel { min-width: 330px; } .ok { color: var(--ok); } .bad { color: var(--danger); } .warn { color: var(--warn); }
     .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 4px 0 10px; } .kpis.three { grid-template-columns: repeat(3, 1fr); }
     .kpis > div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--surface); display: flex; flex-direction: column; gap: 2px; }
@@ -217,7 +219,7 @@ export class LabWizard {
     const e = this.lab.emu();
     this.host = e?.host || e?.hosts?.[0]?.session || this.hostChoices()[0]?.path || '';
     this.hostInfo.set(this.hostOf(this.host));
-    this.mgmt = this.hostInfo()?.sudo ? 'bridge' : 'forward';
+    this.mgmt = this.bestMgmt(this.hostInfo());
     this.erows.set(this.images().slice(0, 2).map((im, i) => ({ image: im.id, count: i ? 4 : 2, names: (i ? 'leaf' : 'core') + '-{n}', cpus: im.cpus || 1, ram: im.ram || 1024 })));
     if (this.add && this.kind() === 'emu') this.erows.set(this.erows().slice(0, 1).map(r => ({ ...r, count: 1, names: 'sw-{n}' })));
   }
@@ -240,7 +242,19 @@ export class LabWizard {
   });
   hostLabel() { return this.hostChoices().find(h => h.path === this.host)?.label.replace(/ \(.*\)$/, '') ?? this.host; }
   setUp() { this.lab.setupFor.set(this.host); this.ui.open('lab'); }
-  async check() { const h = await this.lab.checkHost(this.host); if (h) { this.hostInfo.set(h.info); if (!this.add) this.mgmt = h.info.sudo ? 'bridge' : 'forward'; } }
+  async check() { const h = await this.lab.checkHost(this.host); if (h) { this.hostInfo.set(h.info); if (!this.add) this.mgmt = this.bestMgmt(h.info); } }
+  /** The first port joins the host's network (DHCP) whenever the host allows it. */
+  bestMgmt(h: EmuHostInfo | null) { return h?.sudo && h.lanKind ? 'lan' : h?.sudo ? 'bridge' : 'forward'; }
+  lanOk() { const h = this.hostInfo(); return !!h?.sudo && !!h.lanKind; }
+  lanText() {
+    const h = this.hostInfo();
+    if (!h) return '';
+    if (!h.sudo) return tr('Needs password-less sudo on the host.');
+    if (!h.lanKind) return h.wifi ? tr('The host’s network port is Wi-Fi; switches cannot join it.') : tr('The host has no network port to join.');
+    return (h.lanKind === 'bridge' ? tr('Each switch’s first port joins the bridge {0} of the host', h.lanIf) : tr('Each switch’s first port joins the network of {0} (macvtap; the host’s own set-up is not changed)', h.lanIf))
+      + ' - ' + tr('it gets its address from your DHCP server, so this computer and the cloud reach it directly.');
+  }
+  mgmtLabel(m: string) { return m === 'lan' ? tr('The host’s network (bridged, DHCP)') : m === 'bridge' ? tr('Lab bridge on the host') : tr('Port forwarding on the host'); }
   protected fits = computed(() => { const h = this.hostInfo(); if (!h) return []; return this.images().slice(0, 3).map(im => ({ name: im.name, n: Math.max(0, Math.min(Math.floor(h.memFree / (im.ram || 1024)), Math.floor(h.cpus * 2 / (im.cpus || 1)))) })); });
   protected need = computed(() => this.erows().reduce((n, r) => ({ cpus: n.cpus + r.count * (r.cpus || 1), ram: n.ram + r.count * (r.ram || 1024), disk: n.disk + r.count * 1024 }), { cpus: 0, ram: 0, disk: 0 }));
   pct(a: number, b: number) { return b ? Math.min(100, Math.round(a * 100 / b)) : 0; }

@@ -27,6 +27,11 @@ type HostInfo struct {
 	Pkg      string   `json:"pkg"`      // the package manager Set Up uses (apt, dnf, dnf-fedora, zypper, pacman)
 	Plan     []string `json:"plan"`     // what Set Up would do
 	CanSetup bool     `json:"canSetup"` // Set Up can fix the problems
+	Uplink   string   `json:"uplink"`   // the port of the default route
+	Bridges  []string `json:"bridges"`  // the host's bridges with a network port in them
+	Wifi     bool     `json:"wifi"`     // the uplink is Wi-Fi
+	LanIf    string   `json:"lanIf"`    // where switches join the host's network: a bridge, or the uplink (macvtap)
+	LanKind  string   `json:"lanKind"`  // "bridge" or "macvtap" ("" = not possible)
 	Problems []string `json:"problems"` // what stops VMs from running
 	Notes    []string `json:"notes"`    // what works, but differently
 }
@@ -44,6 +49,9 @@ awk '/^MemTotal:/{print "memtotal="int($2/1024)} /^MemAvailable:/{print "memfree
 mkdir -p ` + Q(dir) + ` 2>/dev/null && echo "diskfree=$(df -Pk ` + Q(dir) + ` | awk 'NR==2{print int($4/1024)}')"
 sudo -n true 2>/dev/null && echo sudo=yes
 command -v base64 >/dev/null 2>&1 || echo nobase64=yes
+dev=$(ip -o route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p'); echo "uplink=$dev"
+[ -n "$dev" ] && [ -d "/sys/class/net/$dev/wireless" ] && echo wifi=yes
+for b in /sys/class/net/*/bridge; do [ -d "$b" ] || continue; n=$(basename "$(dirname "$b")"); echo "bridge=$n:$(ls "/sys/class/net/$n/brif" 2>/dev/null | tr '\n' ',')"; done
 `
 }
 
@@ -84,6 +92,19 @@ func ParseProbe(out, dir string) HostInfo {
 			h.DiskFree, _ = strconv.ParseInt(v, 10, 64)
 		case "sudo":
 			h.Sudo = true
+		case "uplink":
+			h.Uplink = v
+		case "wifi":
+			h.Wifi = true
+		case "bridge":
+			name, members, _ := strings.Cut(v, ":")
+			for _, m := range strings.Split(members, ",") {
+				// a bridge with a real port in it (not Termwright's, libvirt's or Docker's own)
+				if m != "" && !strings.HasPrefix(m, "tw") && !strings.HasPrefix(m, "vnet") && !strings.HasPrefix(m, "veth") && !strings.HasPrefix(m, "tap") {
+					h.Bridges = append(h.Bridges, name)
+					break
+				}
+			}
 		case "osid":
 			h.OSID = strings.TrimSpace(v)
 		case "nobase64":
@@ -120,6 +141,14 @@ func ParseProbe(out, dir string) HostInfo {
 		h.Pkg = "zypper"
 	case strings.Contains(ids, " arch "):
 		h.Pkg = "pacman"
+	}
+	for _, b := range h.Bridges {
+		if b == h.Uplink {
+			h.LanIf, h.LanKind = b, "bridge" // the host's own address is on a bridge: switches join it
+		}
+	}
+	if h.LanKind == "" && h.Uplink != "" && !h.Wifi {
+		h.LanIf, h.LanKind = h.Uplink, "macvtap" // straight onto the network port, the host's set-up untouched
 	}
 	needs := h.QEMU == "" || !h.QemuImg || h.KVM == "noaccess" || h.KVM == "none" && h.VT
 	if needs && h.Arch == "x86_64" || needs && h.Arch == "" {

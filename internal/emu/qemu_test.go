@@ -70,6 +70,10 @@ func TestQEMU(t *testing.T) {
 	if err := Day0(ctx, c, im, l.VMs[0], 1, nil); err != nil {
 		t.Fatalf("day0: %v\n%s", err, c.Text())
 	}
+	im.AddrCmd = "show ip"
+	if a, err := AskAddress(ctx, c, im); err != nil || a != "10.20.30.40" {
+		t.Fatalf("address %q %v\n%s", a, err, c.Text())
+	}
 	c.Close()
 	txt := c.Text()
 	if !strings.Contains(txt, "answer=n") || !strings.Contains(txt, "ran: hostname sw-1") || !strings.Contains(txt, "ran: ip 10.0.2.15/24 gw 10.0.2.2") {

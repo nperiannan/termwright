@@ -56,6 +56,37 @@ func TestArgsAndWiring(t *testing.T) {
 	}
 }
 
+func TestLanAndAddress(t *testing.T) {
+	l, imgs := testLab()
+	l.Mgmt, l.LanIf, l.LanKind = "lan", "eno1", "macvtap"
+	sc := l.StartScript(l.VMs[:1], imgs)
+	if !strings.Contains(sc, "ip link add link eno1 name twa10m address 52:54:a1:00:00:00 type macvtap mode bridge") || !strings.Contains(sc, "3<>/dev/tap$idx") || !strings.Contains(sc, "tap,id=n0,fd=3") {
+		t.Fatalf("macvtap:\n%s", sc)
+	}
+	l.LanIf, l.LanKind = "br0", "bridge"
+	if sc := l.StartScript(l.VMs[:1], imgs); !strings.Contains(sc, "master br0 up") {
+		t.Fatalf("bridge:\n%s", sc)
+	}
+	if ip, gw := l.Address(0); ip != "" || gw != "" {
+		t.Error("lan address")
+	}
+	out := "show vlan Mgmt\r\nMgmt   4095  10.127.35.22  /24  ----  ANY  1 /1   VR-Mgmt\nmask 255.255.255.0\n"
+	if a := FindAddress(CleanConsole(out)); a != "10.127.35.22" {
+		t.Errorf("address %q", a)
+	}
+	if a := FindAddress("x\n inet 0.0.0.0 127.0.0.1 169.254.1.1 192.168.1.20/24"); a != "192.168.1.20/24" {
+		t.Errorf("address %q", a)
+	}
+	h := ParseProbe("user=lab\narch=x86_64\nkvm=yes\nqemu=8\nqemuimg=yes\nsudo=yes\nuplink=br0\nbridge=br0:eno1,\nbridge=virbr0:\n", "d")
+	if h.LanIf != "br0" || h.LanKind != "bridge" || len(h.Bridges) != 1 {
+		t.Errorf("%+v", h)
+	}
+	h = ParseProbe("user=lab\narch=x86_64\nuplink=ens160\n", "d")
+	if h.LanIf != "ens160" || h.LanKind != "macvtap" {
+		t.Errorf("%+v", h)
+	}
+}
+
 func TestStatusAndProbe(t *testing.T) {
 	log := base64.StdEncoding.EncodeToString([]byte("SeaBIOS\r\n\x1b[2JBooting...\r\nsw1 login: "))
 	st := ParseStatus("clk 100\nup v1 12.5\ndown v2\nlog v1 "+log+"\n", base64.StdEncoding.DecodeString)

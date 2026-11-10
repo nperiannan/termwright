@@ -662,13 +662,27 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 	if l == nil || len(l.VMs) == 0 {
 		mgmt := r.Mgmt
 		if mgmt == "" || mgmt == "auto" {
-			mgmt = map[bool]string{true: "bridge", false: "forward"}[info.Sudo]
+			switch {
+			case info.Sudo && info.LanKind != "":
+				mgmt = "lan"
+			case info.Sudo:
+				mgmt = "bridge"
+			default:
+				mgmt = "forward"
+			}
+		}
+		if mgmt == "lan" && (!info.Sudo || info.LanKind == "") {
+			emuLab.mu.Unlock()
+			if info.Wifi {
+				return EmuView{}, errors.New("the host's network port is Wi-Fi: switches cannot join it; use a bridge on the host or port forwarding")
+			}
+			return EmuView{}, errors.New("the host's network needs password-less sudo on the host (or a network port to join); use port forwarding")
 		}
 		if mgmt == "bridge" && !info.Sudo {
 			emuLab.mu.Unlock()
 			return EmuView{}, errors.New("a bridge needs password-less sudo on the host; use port forwarding")
 		}
-		l = &emu.Lab{ID: randHex(1), Dir: "termwright-lab", Mgmt: mgmt, MgmtNet: orStr(r.MgmtNet, "10.99.0.0/24"), Base: 20000 + int(randByte())%40*100, KVM: info.KVM == "yes"}
+		l = &emu.Lab{ID: randHex(1), Dir: "termwright-lab", Mgmt: mgmt, LanIf: info.LanIf, LanKind: info.LanKind, MgmtNet: orStr(r.MgmtNet, "10.99.0.0/24"), Base: 20000 + int(randByte())%40*100, KVM: info.KVM == "yes"}
 		emuLab.f.Lab, emuLab.f.Host = l, r.Host
 		emuLab.f.Sessions, emuLab.f.Consoles = map[string]string{}, map[string]string{}
 	}
@@ -792,9 +806,15 @@ func (a *App) emuSessions(v emu.VM) {
 		return
 	}
 	login, dt, nm := orStr(im.Login, "admin"), im.DeviceType, im.Name
-	hostname, port := "127.0.0.1", l.SSHPort(v)
-	if l.Mgmt == "bridge" {
+	hostname, port, jump := "127.0.0.1", l.SSHPort(v), host
+	switch {
+	case l.Mgmt == "bridge":
 		hostname, port = strings.Split(v.MgmtIP, "/")[0], 22
+	case l.Mgmt == "lan":
+		hostname, port = orStr(strings.Split(v.MgmtIP, "/")[0], "0.0.0.0"), 22
+		if l.LanKind == "macvtap" {
+			jump = "" // the host cannot reach its own macvtap guests: straight from this computer
+		}
 	}
 	conPort := l.ConsolePort(v)
 	emuLab.mu.Unlock()
@@ -808,7 +828,7 @@ func (a *App) emuSessions(v emu.VM) {
 			n = name + " (" + strconv.Itoa(i) + ")"
 		}
 	}
-	ss := session.Session{Name: free(folder, v.Name), Folder: folder, Protocol: session.ProtoSSH2, Hostname: hostname, Port: port, Username: login, DeviceType: dt, JumpSession: host,
+	ss := session.Session{Name: free(folder, v.Name), Folder: folder, Protocol: session.ProtoSSH2, Hostname: hostname, Port: port, Username: login, DeviceType: dt, JumpSession: jump,
 		Description: []string{fmt.Sprintf("Emulated %s (Termwright lab) on its KVM host - management %s", nm, v.MgmtIP)}}
 	if saved, err := a.store.Save(ss, ""); err == nil {
 		if pw != "" {
@@ -942,7 +962,8 @@ func (a *App) emuWatch(host string, ids []string) {
 				continue
 			}
 			delete(pending, id)
-			if !v.Day0Done && len(im.Day0) > 0 && !emuLab.day0[id] {
+			needDay0 := !v.Day0Done && len(im.Day0) > 0
+			if (needDay0 || l.Mgmt == "lan") && !emuLab.day0[id] {
 				day0 = append(day0, *v)
 				emuLab.day0[id] = true
 			}
@@ -971,7 +992,14 @@ func (a *App) emuDay0(host string, v emu.VM) {
 	}
 	im := *im0
 	port := l.ConsolePort(v)
-	emuLab.state[v.ID] = "day0"
+	cur := l.VMByID(v.ID)
+	doDay0 := cur != nil && !cur.Day0Done && len(im.Day0) > 0
+	lan := l.Mgmt == "lan"
+	if doDay0 {
+		emuLab.state[v.ID] = "day0"
+	} else {
+		emuLab.state[v.ID] = "dhcp"
+	}
 	emuLab.mu.Unlock()
 	im.Password, _ = secrets.Lookup(emuImageKey(im.ID))
 	fail := func(err error) {
@@ -993,23 +1021,71 @@ func (a *App) emuDay0(host string, v emu.VM) {
 	defer c.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	err = emu.Day0(ctx, c, &im, v, v.Index+1, func(i int, cmd string) {
+	if doDay0 {
+		err = emu.Day0(ctx, c, &im, v, v.Index+1, func(i int, cmd string) {
+			emuLab.mu.Lock()
+			emuLab.state[v.ID] = fmt.Sprintf("day0 %d/%d", i+1, len(im.Day0))
+			emuLab.mu.Unlock()
+		})
+		if err != nil {
+			fail(err)
+			return
+		}
 		emuLab.mu.Lock()
-		emuLab.state[v.ID] = fmt.Sprintf("day0 %d/%d", i+1, len(im.Day0))
+		if vv := l.VMByID(v.ID); vv != nil {
+			vv.Day0Done = true
+		}
+		delete(emuLab.errs, v.ID)
+		_ = a.emuSave()
 		emuLab.mu.Unlock()
-	})
-	if err != nil {
-		fail(err)
+	}
+	if lan {
+		// the management port is on the host's network: its address comes from DHCP
+		emuLab.mu.Lock()
+		emuLab.state[v.ID] = "dhcp"
+		emuLab.mu.Unlock()
+		if im.AddrCmd == "" {
+			emuLab.mu.Lock()
+			emuLab.errs[v.ID] = "Its address is unknown: give the image an address command (Images), or look it up on the console"
+			emuLab.mu.Unlock()
+			return
+		}
+		var addr string
+		for try := 0; try < 12 && ctx.Err() == nil; try++ {
+			if addr, err = emu.AskAddress(ctx, c, &im); err == nil {
+				break
+			}
+			time.Sleep(10 * time.Second)
+		}
+		if addr == "" {
+			fail(fmt.Errorf("no DHCP address after 2 minutes: %v", err))
+			return
+		}
+		a.emuSetAddress(v.ID, addr)
+		a.emuNotify(nil, v.Name+" has the address "+strings.Split(addr, "/")[0])
 		return
 	}
+	a.emuNotify(nil, v.Name+" is configured")
+}
+
+// emuSetAddress keeps a VM's management address (learned from DHCP) and
+// points its SSH session there.
+func (a *App) emuSetAddress(id, addr string) {
 	emuLab.mu.Lock()
-	if vv := l.VMByID(v.ID); vv != nil {
-		vv.Day0Done = true
+	l := emuLab.f.Lab
+	path := emuLab.f.Sessions[id]
+	if l != nil {
+		if v := l.VMByID(id); v != nil {
+			v.MgmtIP = addr
+		}
 	}
-	delete(emuLab.errs, v.ID)
+	delete(emuLab.errs, id)
 	_ = a.emuSave()
 	emuLab.mu.Unlock()
-	a.emuNotify(nil, v.Name+" is configured")
+	if s, err := a.store.Get(path); err == nil {
+		s.Hostname, s.Port = strings.Split(addr, "/")[0], 22
+		_, _ = a.store.Save(s, path)
+	}
 }
 
 // emuPoll reads the VMs' state on the host (at most every 2 s; tails: with
@@ -1110,9 +1186,12 @@ func (a *App) emuView() EmuView {
 			d.Model, d.OS, d.Ports = im.Name, orStr(im.DeviceType, "VM"), im.DataPorts()
 			onHost[im.ID] = true
 		}
-		if l.Mgmt == "bridge" {
+		switch {
+		case l.Mgmt == "lan" && vm.MgmtIP == "":
+			d.SSH = "DHCP (not known yet)"
+		case l.Mgmt == "bridge" || l.Mgmt == "lan":
 			d.SSH = strings.Split(vm.MgmtIP, "/")[0] + ":22"
-		} else {
+		default:
 			d.SSH = "127.0.0.1:" + strconv.Itoa(d.Port) + " on the host"
 		}
 		_, up := st.Up[vm.ID]
@@ -1128,6 +1207,8 @@ func (a *App) emuView() EmuView {
 			}
 		case s == "starting":
 			d.State, d.StateText = "booting", "starting"
+		case s == "dhcp":
+			d.State, d.StateText, d.Running = "day0", "waiting for its DHCP address", true
 		case strings.HasPrefix(s, "day0"):
 			d.State, d.StateText, d.Running = "day0", "day-0 config "+strings.TrimPrefix(strings.TrimPrefix(s, "day0"), " "), true
 		case !up:

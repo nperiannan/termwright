@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/netip"
 	"regexp"
 	"strings"
 	"sync"
@@ -175,12 +176,11 @@ func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Ans
 // DefaultPrompt matches a CLI prompt at the end of the output.
 const DefaultPrompt = `[>#$%]\s*$`
 
-// Day0 logs in on the console and types the image's first-boot commands for v
-// (the VM's number n fills {n}); step is told each command as it is typed.
-func Day0(ctx context.Context, c *Console, im *Image, v VM, n int, step func(i int, cmd string)) error {
+// Login gets the console to the CLI prompt: logs in when it shows a login prompt.
+func Login(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 	prompt, err := regexp.Compile(orStr(im.Prompt, DefaultPrompt))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	login := regexp.MustCompile(`(?i)(login|username|user name)\s*:\s*$`)
 	pass := regexp.MustCompile(`(?i)password\s*:\s*$`)
@@ -192,34 +192,61 @@ func Day0(ctx context.Context, c *Console, im *Image, v VM, n int, step func(i i
 		var err error
 		i, err = c.Wait(ctx, 90*time.Second, im.Answers, login, prompt, pass)
 		if err != nil {
-			return errors.New("no login prompt on the console: " + err.Error())
+			return nil, errors.New("no login prompt on the console: " + err.Error())
 		}
 		if i == 2 {
 			_ = c.Send("")
 		}
 	}
 	if i == 2 {
-		return errors.New("the console asks for a password but shows no login prompt")
+		return nil, errors.New("the console asks for a password but shows no login prompt")
 	}
 	if i == 0 {
 		_ = c.Send(orStr(im.Login, "admin"))
 		j, err := c.Wait(ctx, 60*time.Second, im.Answers, pass, prompt, login)
 		if err != nil {
-			return errors.New("no prompt after the login: " + err.Error())
+			return nil, errors.New("no prompt after the login: " + err.Error())
 		}
 		if j == 2 {
-			return errors.New("the login was refused")
+			return nil, errors.New("the login was refused")
 		}
 		if j == 0 {
 			_ = c.Send(im.Password)
 			k, err := c.Wait(ctx, 60*time.Second, im.Answers, prompt, login)
 			if err != nil {
-				return errors.New("no prompt after the password: " + err.Error())
+				return nil, errors.New("no prompt after the password: " + err.Error())
 			}
 			if k == 1 {
-				return errors.New("the login or password was refused")
+				return nil, errors.New("the login or password was refused")
 			}
 		}
+	}
+	return prompt, nil
+}
+
+// Run types a command and returns what it printed (up to the next prompt).
+func Run(ctx context.Context, c *Console, im *Image, prompt *regexp.Regexp, cmd string) (string, error) {
+	c.mu.Lock()
+	from := c.buf.Len()
+	c.mu.Unlock()
+	if err := c.Send(cmd); err != nil {
+		return "", err
+	}
+	if _, err := c.Wait(ctx, 120*time.Second, im.Answers, prompt); err != nil {
+		return "", errors.New("no prompt after " + cmd + ": " + err.Error())
+	}
+	c.mu.Lock()
+	out := c.buf.String()[from:c.mark]
+	c.mu.Unlock()
+	return out, nil
+}
+
+// Day0 logs in on the console and types the image's first-boot commands for v
+// (the VM's number n fills {n}); step is told each command as it is typed.
+func Day0(ctx context.Context, c *Console, im *Image, v VM, n int, step func(i int, cmd string)) error {
+	prompt, err := Login(ctx, c, im)
+	if err != nil {
+		return err
 	}
 	for k, cmd := range im.Day0 {
 		cmd = Fill(cmd, v, n)
@@ -229,14 +256,48 @@ func Day0(ctx context.Context, c *Console, im *Image, v VM, n int, step func(i i
 		if step != nil {
 			step(k, cmd)
 		}
-		if err := c.Send(cmd); err != nil {
+		if _, err := Run(ctx, c, im, prompt, cmd); err != nil {
 			return err
-		}
-		if _, err := c.Wait(ctx, 120*time.Second, im.Answers, prompt); err != nil {
-			return errors.New("no prompt after " + cmd + ": " + err.Error())
 		}
 	}
 	return nil
+}
+
+var ipv4 = regexp.MustCompile(`\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(/\d{1,2})?\b`)
+
+// FindAddress is the first usable IPv4 address in a command's output (not
+// 0.0.0.0, loopback, link-local or a netmask), with its /bits when shown.
+func FindAddress(out string) string {
+	if i := strings.IndexAny(out, "\n"); i >= 0 {
+		out = out[i+1:] // the echoed command
+	}
+	for _, m := range ipv4.FindAllStringSubmatch(out, -1) {
+		ip, err := netip.ParseAddr(m[1])
+		if err != nil || ip.IsUnspecified() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || strings.HasPrefix(m[1], "255.") {
+			continue
+		}
+		return m[1] + m[2]
+	}
+	return ""
+}
+
+// AskAddress logs in and reads the management address with the image's address command.
+func AskAddress(ctx context.Context, c *Console, im *Image) (string, error) {
+	if im.AddrCmd == "" {
+		return "", errors.New("the image has no address command")
+	}
+	prompt, err := Login(ctx, c, im)
+	if err != nil {
+		return "", err
+	}
+	out, err := Run(ctx, c, im, prompt, im.AddrCmd)
+	if err != nil {
+		return "", err
+	}
+	if a := FindAddress(out); a != "" {
+		return a, nil
+	}
+	return "", errors.New(im.AddrCmd + " shows no address yet")
 }
 
 func orStr(v ...string) string {

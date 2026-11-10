@@ -122,7 +122,7 @@ const NW = 150, NH = 46;
                       <button type="button" class="sm" (click)="connect(d); $event.stopPropagation()" [disabled]="d.state !== 'running'">SSH</button>
                       <button type="button" class="sm" (click)="d.running || d.state === 'booting' ? lab.stop([d.id]) : lab.start([d.id]); $event.stopPropagation()">{{ d.running || d.state === 'booting' ? tr('Stop') : tr('Start') }}</button></td>
                   </tr>
-                } @empty { <tr><td colspan="9" class="muted">{{ tr('No switches yet: New Lab… makes them from your images.') }}</td></tr> }
+                } @empty { <tr><td colspan="10" class="muted">{{ tr('No switches yet: New Lab… makes them from your images.') }}</td></tr> }
                 </tbody></table></div>
               @if (focused(); as d) { @if (d.error) { <p class="err small">{{ d.hostname }}: {{ d.error }}</p> }
                 <div class="tail"><div class="th">{{ tr('{0} · console (last lines)', d.hostname) }}<span class="spacer"></span><a (click)="loadTail()">{{ tr('Refresh') }}</a></div><pre>{{ tail() || tr('(nothing yet)') }}</pre></div> }
@@ -267,6 +267,8 @@ const NW = 150, NH = 46;
                       <span>{{ tr('Disk') }}</span><select [(ngModel)]="im.disk" name="imdk"><option value="ide">IDE</option><option value="virtio">virtio</option><option value="sata">SATA</option><option value="scsi">SCSI</option></select>
                       <span>{{ tr('Ready when') }}</span><input class="mono" [(ngModel)]="im.ready" name="imrd" placeholder="login:" />
                       <span>{{ tr('Login') }}</span><span class="row2"><input [(ngModel)]="im.login" name="iml" class="n3" /> <input type="password" [(ngModel)]="imPassword" name="impw" [placeholder]="im.hasPassword ? tr('(saved)') : tr('no password')" autocomplete="new-password" class="n3" /></span>
+                      <span>{{ tr('Address command') }}</span><input class="mono" [(ngModel)]="im.addrCmd" name="imac" [placeholder]="'show vlan Mgmt'" spellcheck="false" />
+                      <span></span><span class="muted small">{{ tr('On the host’s network the switch gets its address by DHCP: Termwright types this on the console after each boot and takes the first address it shows.') }}</span>
                       <span>{{ tr('Serial format') }}</span><input class="mono" [(ngModel)]="im.serial" name="imsn" [placeholder]="'AB{YY}{WW}-{N:5}'" spellcheck="false" />
                       <span></span><span class="muted small">{{ tr('New switches get a serial number like this: {N:5} digits, {A:2} letters, {H:4} hex, {YY} year, {WW} week, {R:1-9} a number between, {L:abc} one of the letters. Empty: the VM’s own.') }}</span>
                       <span>{{ tr('Prompt') }}</span><input class="mono" [(ngModel)]="im.prompt" name="impr" placeholder="[>#$]\\s*$" />
@@ -307,16 +309,16 @@ const NW = 150, NH = 46;
                 </div>
               }
               <div class="tbl"><table>
-                <thead><tr><th>{{ tr('Host') }}</th><th>{{ tr('System') }}</th><th>KVM</th><th>QEMU</th><th>vCPU</th><th>RAM {{ tr('free') }}</th><th>{{ tr('Disk free') }}</th><th>sudo</th><th></th></tr></thead>
+                <thead><tr><th>{{ tr('Host') }}</th><th>{{ tr('System') }}</th><th>KVM</th><th>QEMU</th><th>vCPU</th><th>{{ tr('Network') }}</th><th>RAM {{ tr('free') }}</th><th>{{ tr('Disk free') }}</th><th>sudo</th><th></th></tr></thead>
                 <tbody>@for (h of hosts(); track h.session) {
                   <tr><td><b>{{ h.name }}</b>@if (h.session === lab.state()?.host) { <span class="pill b">{{ tr('the lab') }}</span> }<div class="muted small">{{ h.info.user }}</div></td><td class="small">{{ h.info.os }}</td>
-                    <td><span [class.ok]="h.info.kvm === 'yes'" [class.bad]="h.info.kvm !== 'yes'">{{ h.info.kvm === 'yes' ? '✓' : h.info.kvm }}</span></td><td class="small">{{ h.info.qemu || '-' }}</td><td>{{ h.info.cpus }}</td>
+                    <td><span [class.ok]="h.info.kvm === 'yes'" [class.bad]="h.info.kvm !== 'yes'">{{ h.info.kvm === 'yes' ? '✓' : h.info.kvm }}</span></td><td class="small">{{ h.info.qemu || '-' }}</td><td>{{ h.info.cpus }}</td><td class="small">{{ h.info.lanKind ? h.info.lanIf + ' (' + (h.info.lanKind === 'bridge' ? tr('bridge') : 'macvtap') + ')' : (h.info.uplink || '-') }}</td>
                     <td>{{ gb(h.info.memFree) }} / {{ gb(h.info.memTotal) }}</td><td>{{ gb(h.info.diskFree) }}</td><td>{{ h.info.sudo ? '✓' : '-' }}</td>
                     <td class="acts">@if (h.info.canSetup) { <button type="button" class="sm primary" (click)="openSetup(h.session)">{{ tr('Set Up QEMU/KVM…') }}</button> }
                       <button type="button" class="sm" (click)="checkHost(h.session)" [disabled]="lab.busy()">{{ tr('Check Again') }}</button> <button type="button" class="sm" (click)="lab.removeHost(h.session)">{{ tr('Remove') }}</button></td></tr>
-                  @for (p of h.info.problems ?? []; track $index) { <tr><td></td><td colspan="8" class="bad small">✕ {{ p }}</td></tr> }
-                  @for (p of h.info.notes ?? []; track $index) { <tr><td></td><td colspan="8" class="warn small">! {{ p }}</td></tr> }
-                } @empty { <tr><td colspan="9" class="muted">{{ tr('No KVM hosts yet: pick the SSH session of a Linux server with KVM and QEMU.') }}</td></tr> }</tbody></table></div>
+                  @for (p of h.info.problems ?? []; track $index) { <tr><td></td><td colspan="9" class="bad small">✕ {{ p }}</td></tr> }
+                  @for (p of h.info.notes ?? []; track $index) { <tr><td></td><td colspan="9" class="warn small">! {{ p }}</td></tr> }
+                } @empty { <tr><td colspan="10" class="muted">{{ tr('No KVM hosts yet: pick the SSH session of a Linux server with KVM and QEMU.') }}</td></tr> }</tbody></table></div>
               <p class="muted small note">{{ tr('Termwright runs qemu on the host over SSH, as the session’s user, in the folder ~/termwright-lab; Set Up installs QEMU from the distribution’s packages when it is missing. The switches’ sessions go through the host session as jump host.') }}</p>
             }
             @case ('cables') {
