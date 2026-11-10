@@ -2308,6 +2308,25 @@ func (a *App) EmuSetPersona(id string, p emu.Persona) (EmuView, error) {
 	return a.EmuState()
 }
 
+// EmuPersonaPreview renders the persona file a switch would get with p.
+func (a *App) EmuPersonaPreview(id string, p emu.Persona) (string, error) {
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	l := emuLab.f.Lab
+	if l == nil || l.VMByID(id) == nil {
+		return "", errors.New("no such switch")
+	}
+	v := *l.VMByID(id)
+	im := emuImage(v.Image)
+	if im == nil || im.Persona == nil {
+		return "", errors.New("its image has no persona")
+	}
+	for i := range p.Slots {
+		p.Slots[i].Num = i + 1
+	}
+	return im.Persona.Render(v, &p)
+}
+
 // EmuSetResources changes a switch's vCPUs, memory (MB) and disk size (GB, it
 // only grows); it gets them when it starts next.
 func (a *App) EmuSetResources(id string, cpus, ram, diskGB int) (EmuView, error) {

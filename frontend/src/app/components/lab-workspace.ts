@@ -6,6 +6,7 @@ import { EmuDeviceType, LabDevice, LabLink, LabModel } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
+import { LabConfigure, LabHosts, LabImages, LabNew } from './lab-pages';
 
 const BW = 104, BH = 46;
 type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; dt?: EmuDeviceType; m?: LabModel };
@@ -14,7 +15,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule],
+  imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew],
   template: `
   <div class="ws" (click)="menu.set(null)">
     <div class="tb">
@@ -31,9 +32,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       <span class="sep"></span>
       <button type="button" (click)="wizard()">＋ {{ devs().length ? tr('Add Switches') : tr('New Lab') }}</button>
       @if (emu()) {
-        <button type="button" (click)="dialog('hosts')">{{ tr('Hosts') }}</button>
-        <button type="button" (click)="dialog('images')">{{ tr('Images') }}</button>
-        <button type="button" (click)="dialog('templates')">{{ tr('Templates') }}</button>
+        <button type="button" (click)="page.set('hosts')">{{ tr('Hosts') }}</button>
+        <button type="button" (click)="page.set('images')">{{ tr('Images') }}</button>
+        <button type="button" (click)="page.set('templates')">{{ tr('Templates') }}</button>
       } @else { <button type="button" (click)="dialog('list')">{{ tr('Device Pack and List') }}</button> }
       <span class="sp"></span>
       @if (emu() && devs().length) {
@@ -49,6 +50,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     </div>
 
     <div class="main">
+      @if (page() === 'new') { <app-lab-new [emu]="emu()" (closed)="page.set(''); ghost.set(null)" (changed)="ghost.set($event)" (hostsPage)="page.set('hosts')" (made)="ui.refreshTree()" /> }
       <div class="pal">
         <input class="srch" [(ngModel)]="q" name="pq" [placeholder]="tr('Search devices')" spellcheck="false" />
         @for (g of groups(); track g.name) {
@@ -66,7 +68,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       <div class="cv" #cv (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
            (contextmenu)="$event.preventDefault()">
         @if (linkMode()) { <div class="bar2">⟷ {{ linkText() }} <span class="k2">Esc</span> <a (click)="cancelLink(); $event.stopPropagation()">{{ tr('Cancel') }}</a></div> }
-        @if (!devs().length) {
+        @if (!devs().length && !ghosts().length) {
           <div class="empty"><b>{{ emu() ? tr('No switches yet') : tr('No simulated switches yet') }}</b><span>{{ tr('Drag a device from the left, or') }} <a (click)="wizard()">{{ tr('make a lab') }}</a>.</span></div>
         }
         <div class="inner" [style.width.px]="area().w * zoom()" [style.height.px]="area().h * zoom()">
@@ -80,8 +82,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                   <rect class="pb" [attr.x]="k.p2.x - k.w2 / 2" [attr.y]="k.p2.y - 9" [attr.width]="k.w2" height="18" rx="5" /><text class="pt" [attr.x]="k.p2.x" [attr.y]="k.p2.y + 4">{{ k.bPort }}</text>
                 </g>
               }
+              @for (g of ghostLines(); track $index) { <line class="gl" [attr.x1]="g.x1" [attr.y1]="g.y1" [attr.x2]="g.x2" [attr.y2]="g.y2" /> }
               @if (rubber(); as r) { <line class="rb" [attr.x1]="r.x1" [attr.y1]="r.y1" [attr.x2]="r.x2" [attr.y2]="r.y2" /> }
             </svg>
+            @for (g of ghosts(); track g.name) { <div class="node ghost" [style.left.px]="g.x - 75" [style.top.px]="g.y - BH / 2"><div class="nbox"><span class="ico"></span></div><div class="nn">{{ g.name }}</div><div class="nm">{{ tr('new') }}</div></div> }
             @for (d of devs(); track d.id) {
               <div class="node" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
                    (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)">
@@ -98,7 +102,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (portPick(); as pp) {
           <div class="ports" [style.left.px]="pp.x" [style.top.px]="pp.y" (click)="$event.stopPropagation()">
             <div class="ph"><b>{{ nameOf(pp.id) }}</b> · {{ tr('pick a port') }}</div>
-            <div class="pl">@for (p of pp.ports; track p) { <button type="button" class="sm" (click)="portChosen(p)">{{ p }}</button> } @empty { <span class="muted small">{{ tr('No free port') }}</span> }</div>
+            <div class="face">@for (p of pp.all; track p.name) { <button type="button" class="pt" [class.used]="!!p.peer" [disabled]="!!p.peer" [title]="p.peer ? p.name + ' → ' + p.peer : tr('free')" (click)="portChosen(p.name)">{{ p.short }}</button> }</div>
+            <div class="lg"><span><i></i>{{ tr('free') }}</span><span><i class="u"></i>{{ tr('cabled (hover: to where)') }}</span><span class="sp"></span><button type="button" class="sm" (click)="portChosen(pp.ports[0])" [disabled]="!pp.ports.length">{{ tr('Next Free Port') }}</button></div>
           </div>
         }
         @if (menu(); as m) {
@@ -159,6 +164,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       </div>
     </div>
 
+    @switch (page()) {
+      @case ('configure') { <app-lab-configure [devId]="cfgId()" [emu]="emu()" (closed)="page.set('')" (images)="page.set('images')" /> }
+      @case ('images') { <app-lab-images start="images" (closed)="page.set('')" /> }
+      @case ('templates') { <app-lab-images start="templates" (closed)="page.set('')" /> }
+      @case ('hosts') { <app-lab-hosts (closed)="page.set('')" /> }
+    }
     <div class="dock">
       <div class="dtabs">
         <a [class.on]="dock() === 'events'" (click)="dock.set('events')">{{ tr('Events') }}@if (problems()) { <span class="cnt">{{ problems() }}</span> }</a>
@@ -205,6 +216,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .lk.down .ln { stroke: var(--danger); stroke-dasharray: 6 5; } .lk.selk .ln { stroke-width: 3.5; }
     .pb { fill: var(--surface); stroke: var(--line); } .pt { font: 600 10px var(--mono, monospace); fill: var(--muted); text-anchor: middle; }
     .lk.down .pb { stroke: var(--danger); } .lk.down .pt { fill: var(--danger); }
+    .gl { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 5; opacity: .7; } .node.ghost { opacity: .55; pointer-events: none; .nbox { border-style: dashed; border-color: var(--accent); } }
+    .main { position: relative; }
     .rb { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 8 5; }
     .node { position: absolute; width: 150px; text-align: center; cursor: pointer; user-select: none; }
     .nbox { margin: 0 auto; width: ${BW}px; height: ${BH}px; border-radius: 10px; background: var(--surface); border: 1.5px solid var(--line); box-shadow: 0 2px 6px rgba(0,0,0,.06); display: flex; align-items: center; justify-content: center; position: relative;
@@ -217,7 +230,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .badge.r { color: var(--danger); border-color: var(--danger); }
     .bar2 { position: sticky; top: 10px; margin: 10px auto 0; width: max-content; z-index: 6; display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 500;
       .k2 { background: rgba(255,255,255,.2); border-radius: 6px; padding: 1px 7px; font-size: 12px; } a { color: #fff; text-decoration: underline; cursor: pointer; } }
-    .ports { position: absolute; z-index: 7; width: 300px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.16); padding: 10px;
+    .face { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 3px; padding: 8px; border-radius: 9px; background: linear-gradient(#323b4b, #262d3a); max-height: 200px; overflow: auto; }
+    .pt { height: 22px; min-width: 0; padding: 0; border: 0; border-radius: 3px; background: #55607a; color: #e8ecf5; font: 600 9.5px var(--mono, monospace); cursor: pointer; &:hover:not(:disabled) { background: #fff; color: #1d2330; } &.used { background: #1fa45a; cursor: not-allowed; opacity: 1; } }
+    .lg { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 11.5px; color: var(--muted); i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #55607a; margin-right: 4px; vertical-align: -1px; } i.u { background: #1fa45a; } }
+    .ports { position: absolute; z-index: 7; width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.16); padding: 10px;
       .ph { margin-bottom: 8px; } .pl { display: flex; flex-wrap: wrap; gap: 4px; max-height: 180px; overflow: auto; button { min-width: 44px; font-family: var(--mono, monospace); } } }
     .menu { position: absolute; z-index: 8; width: 220px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.16); padding: 5px;
       a { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 6px; cursor: pointer; &:hover { background: var(--accent-soft); } &.off { opacity: .45; pointer-events: none; } }
@@ -262,7 +278,37 @@ export class LabWorkspace implements OnDestroy {
   protected zoom = signal(1);
   protected linkMode = signal(false);
   protected linkA = signal<{ id: string; port: string } | null>(null);
-  protected portPick = signal<{ id: string; ports: string[]; x: number; y: number; side: 'a' | 'b' } | null>(null);
+  protected portPick = signal<{ id: string; ports: string[]; all: { name: string; short: string; peer: string }[]; x: number; y: number; side: 'a' | 'b' } | null>(null);
+  protected page = signal<'' | 'configure' | 'images' | 'templates' | 'hosts' | 'new'>('');
+  protected cfgId = signal('');
+  protected ghost = signal<{ names: string[]; cable: string } | null>(null);
+  protected ghosts = computed(() => {
+    const g = this.ghost(); if (!g) return [];
+    let maxY = 0; for (const d of this.devs()) maxY = Math.max(maxY, this.pos(d).y);
+    const y0 = this.devs().length ? maxY + 150 : 100;
+    const spine = g.cable === 'leaf-spine' && !this.devs().length;
+    return g.names.map((name, i) => {
+      if (spine && i < 2) return { name, x: 300 + i * 260, y: y0 };
+      const k = spine ? i - 2 : i, per = 6;
+      return { name, x: 120 + (k % per) * 170, y: y0 + (spine ? 150 : 0) + Math.floor(k / per) * 150 };
+    });
+  });
+  protected ghostLines = computed(() => {
+    const g = this.ghost(), gs = this.ghosts(); if (!g || !gs.length) return [];
+    const out: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    const j = (a: { x: number; y: number }, b: { x: number; y: number }) => out.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+    const old = this.devs();
+    if (g.cable === 'leaf-spine') {
+      const cores = old.length >= 2 ? [this.pos(old[0]), this.pos(old[1])] : gs.slice(0, 2);
+      if (!old.length && gs.length > 1) j(gs[0], gs[1]);
+      for (const l of old.length >= 2 ? gs : gs.slice(2)) for (const c of cores) j(c, l);
+    } else if (g.cable === 'chain' || g.cable === 'ring') {
+      const seq = [...(old.length ? [this.pos(old[old.length - 1])] : []), ...gs];
+      for (let k = 0; k + 1 < seq.length; k++) j(seq[k], seq[k + 1]);
+      if (g.cable === 'ring' && seq.length > 2) j(seq[seq.length - 1], seq[0]);
+    }
+    return out;
+  });
   protected mouse = signal<{ x: number; y: number } | null>(null);
   private moved = signal(new Map<string, { x: number; y: number }>());
   private dragging: { id: string; dx: number; dy: number; moved: boolean } | null = null;
@@ -273,7 +319,7 @@ export class LabWorkspace implements OnDestroy {
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
     this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); }, 3000);
   }
-  @HostListener('document:keydown.escape') onEsc() { if (this.visible() && (this.linkMode() || this.menu())) { this.cancelLink(); this.menu.set(null); } }
+  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.page()) { this.page.set(''); this.ghost.set(null); } else { this.cancelLink(); this.menu.set(null); } }
   ngOnDestroy() { clearInterval(this.timer); this.lab.watch('ws-' + this.tab().id, false); }
 
   protected hostName = computed(() => (this.st()?.host ?? '').split('/').pop() ?? '');
@@ -460,7 +506,11 @@ export class LabWorkspace implements OnDestroy {
     if (side === 'a') this.linkA.set({ id: d.id, port: '' });
     const ports = await this.lab.freePorts(d.id);
     const p = this.pos(d);
-    this.portPick.set({ id: d.id, ports, side, x: Math.max(8, p.x * this.zoom() - 150), y: (p.y + BH / 2 + 46) * this.zoom() });
+    const peerOf = new Map<string, string>();
+    for (const k of this.links()) { if (k.a === d.id) peerOf.set(k.aPort, this.nameOf(k.b) + ' ' + k.bPort); if (k.b === d.id) peerOf.set(k.bPort, this.nameOf(k.a) + ' ' + k.aPort); }
+    const names = [...new Set([...ports, ...peerOf.keys()])].sort((x, y) => x.localeCompare(y, undefined, { numeric: true }));
+    const all = names.map(n => ({ name: n, short: n.split(/[:/]/).pop() ?? n, peer: peerOf.get(n) ?? '' }));
+    this.portPick.set({ id: d.id, ports, all, side, x: Math.max(8, p.x * this.zoom() - 210), y: (p.y + BH / 2 + 46) * this.zoom() });
     void ev;
   }
   async portChosen(port: string) {
@@ -478,9 +528,9 @@ export class LabWorkspace implements OnDestroy {
   console(d: LabDevice) { const p = this.lab.consoleOf(d.id); if (p) void this.tabs.openSession(p); }
   ssh(d: LabDevice) { const p = this.lab.sessionOf(d.id); if (p) void this.tabs.openSession(p); }
   consoleAll() { for (const d of this.devs().filter(x => x.running)) (this.emu() ? this.console(d) : this.ssh(d)); }
-  configure(d: LabDevice) { this.dialog('list', d.id); }
+  configure(d: LabDevice) { this.cfgId.set(d.id); this.page.set('configure'); }
   dialog(tab: string, focus = '') { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.dialogTab.set({ tab, focus }); this.ui.open('lab'); }
-  wizard() { this.ui.labWizard.set({ add: this.devs().length > 0, kind: this.emu() ? 'emu' : 'sim' }); this.ui.open('labWizard'); }
+  wizard() { this.page.set('new'); }
   async reset(d: LabDevice) { if (await this.ui.confirm(tr('Back to Day 0'), tr('Throw away the disk of {0} and boot it as new? Its configuration is lost; the day-0 commands are typed again.', d.hostname), tr('Back to Day 0'), true)) await this.lab.reset([d.id]); }
   async remove(d: LabDevice) {
     const msg = this.emu() ? tr('Remove {0} emulated switches? They stop, their disks on the host and their sessions are deleted.', 1) : tr('Remove {0} simulated switches and their sessions? Their configuration is lost.', 1);
