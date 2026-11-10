@@ -102,6 +102,13 @@ func TestEmuLab(t *testing.T) {
 	if v.Devices[0].State != "running" || v.Devices[1].State != "running" {
 		t.Fatalf("not running: %+v\n%s", v.Devices, a.EmuConsoleTail(v.Devices[0].ID))
 	}
+	var evs []string
+	for _, e := range v.Events {
+		evs = append(evs, e.Name+": "+e.Text)
+	}
+	if j := strings.Join(evs, "\n"); !strings.Contains(j, "sw-1: starting on") || !strings.Contains(j, "sw-2: booted") || !strings.Contains(j, "day-0 typed") {
+		t.Fatalf("events:\n%s", j)
+	}
 	tail := a.EmuConsoleTail(v.Devices[1].ID)
 	if !strings.Contains(tail, "ran: hostname sw-2") || !strings.Contains(tail, "answer=n") {
 		t.Fatalf("console tail:\n%s", tail)

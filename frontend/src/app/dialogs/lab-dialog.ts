@@ -552,12 +552,19 @@ export class LabDialog implements OnInit, OnDestroy {
 
   private tailTimer: ReturnType<typeof setInterval> | null = null;
   ngOnInit() {
-    this.lab.watching.set(true); void this.lab.refresh();
+    this.lab.watch('dialog', true); void this.lab.refresh();
+    const dt = this.lab.dialogTab();
+    if (dt) {
+      this.lab.dialogTab.set(null);
+      if (dt.tab === 'hosts' || dt.tab === 'images' || dt.tab === 'templates') this.manage.set(true);
+      this.tab.set(dt.tab as 'list');
+      const d = this.lab.devices().find(x => x.id === dt.focus); if (d) this.focusOn(d);
+    }
     const sf = this.lab.setupFor();
     if (sf) { this.lab.setupFor.set(''); this.lab.kind.set('emu'); this.manage.set(true); this.tab.set('hosts'); this.openSetup(sf); }
     this.tailTimer = setInterval(() => { if (this.emu() && this.tab() === 'list' && this.focus()) void this.loadTail(); }, 3000);
   }
-  ngOnDestroy() { this.lab.watching.set(false); if (this.tailTimer) clearInterval(this.tailTimer); }
+  ngOnDestroy() { this.lab.watch('dialog', false); if (this.tailTimer) clearInterval(this.tailTimer); }
   setKind(k: 'sim' | 'emu') { this.lab.kind.set(k); this.tab.set('list'); this.sel.set(new Set()); this.focus.set(''); this.manage.set(false); }
   gb(mb?: number) { return !mb ? '-' : mb >= 1024 ? (mb / 1024).toFixed(mb % 1024 ? 1 : 0) + ' GB' : mb + ' MB'; }
   mb(bytes: number) { return !bytes ? '-' : bytes >= 1 << 30 ? (bytes / (1 << 30)).toFixed(1) + ' GB' : Math.round(bytes / (1 << 20)) + ' MB'; }

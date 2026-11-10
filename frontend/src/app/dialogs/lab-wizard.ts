@@ -4,6 +4,7 @@ import { LabService } from '../core/lab.service';
 import { EmuDeviceType, EmuGroup, EmuHostInfo, LabGroup, LabModel, SessionNode } from '../core/models';
 import { Backend } from '../core/backend';
 import { Ui } from '../core/ui.service';
+import { Tabs } from '../core/tabs.service';
 import { tr } from '../core/i18n';
 import { Icon } from '../components/icon';
 
@@ -226,6 +227,7 @@ const CABLING = [
 })
 export class LabWizard {
   protected ui = inject(Ui);
+  private tabs = inject(Tabs);
   protected lab = inject(LabService);
   private backend = inject(Backend);
   protected tr = tr;
@@ -432,13 +434,15 @@ export class LabWizard {
     if (this.kind() === 'emu') {
       const groups = this.drows().filter(r => r.count > 0 && r.image).map(r => ({ image: r.image, model: this.dtOf(r.key)?.model ?? '', module: r.module, count: r.count, names: r.names, serialStart: r.serial, macStart: r.mac, cpus: r.cpus, ram: r.ram, diskGb: r.diskGb }));
       const ok = await this.lab.addEmu({ host: this.add ? (this.lab.emu()?.host ?? this.host) : this.host, groups, cabling: this.cable, mgmt: this.mgmt, mgmtNet: this.mgmtNet, start: this.start });
-      if (ok) this.ui.open('lab');
+      if (ok) this.done();
       return;
     }
     const ok = await this.lab.add({
       groups: this.rows().filter(r => r.count > 0).map(r => ({ os: r.os, model: r.model, count: r.count, names: r.names })),
       mgmtNet: this.add ? '' : this.mgmtNet, cabling: this.cable, password: this.password, start: this.start,
     });
-    if (ok) this.ui.open('lab');
+    if (ok) this.done();
   }
+  /** Back to the lab: its workspace tab when it is open, else the Lab window. */
+  private done() { if (this.tabs.tabs().some(t => t.kind === 'lab')) this.ui.close(); else this.ui.open('lab'); }
 }

@@ -16,6 +16,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Fixed: day-0 stopped at a first-login questionnaire** (`… [y/N/q]:`): it is answered with `q`, the defaults.
 * **Fixed (simulated lab): "no host key"** when starting switches after the lab was reloaded (for example after loading a device pack). New simulated labs use `10.99.0.0/16` (a lab with the old full `/24` grows to `/16`), the "network is full" error shows once and says what to do, and the wizard's buttons no longer wrap.
 * **Lab cabling:** switches added to a lab go on from its last switch in a chain or ring; the preview numbers new names past the ones in use, as the lab does, instead of showing the same name twice.
+* **Lab workspace.** The lab buttons at the top right open the lab as a tab, in the style of GNS3: a palette of devices to drag onto the canvas, the switches with live states, model and address, cables with the port at each end (pulled ones red), right-click menus, Add Link (switch, port, switch, port), zoom, the selected switch with its persona and problems, the topology summary, the host's use, and an **Events** log of everything done to each switch - started, persona written where or why not, booted, day-0, persona checked, address, errors - plus the end of its console. Hosts, Images and Templates still open the Lab window.
 
 ## 0.34.1 (2026-11-10)
 

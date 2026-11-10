@@ -42,6 +42,7 @@ import { Collect } from './dialogs/collect';
 import { Recordings } from './dialogs/recordings';
 import { Moved } from './dialogs/moved';
 import { PlayerView } from './components/player-view';
+import { LabWorkspace } from './components/lab-workspace';
 import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
@@ -74,14 +75,14 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App implements OnInit {
   protected ui = inject(Ui);
   private labs = inject(LabService);
-  openLab(k: 'sim' | 'emu') { this.labs.kind.set(k); this.ui.open('lab'); }
+  openLab(k: 'sim' | 'emu') { this.labs.kind.set(k); void this.tabs.openLab(k); }
   private a11y = inject(A11y); // Escape, Tab and screen reader support in dialogs
   protected teamStatus = inject(TeamStatusService);
   protected tabs = inject(Tabs);
@@ -510,7 +511,7 @@ export class App implements OnInit {
       case 'teams': this.ui.open('teams'); break;
       case 'file-servers': this.ui.open('fileServers'); break;
       case 'net-check': this.ui.open('netCheck'); break;
-      case 'sim-lab': this.ui.open('lab'); break;
+      case 'sim-lab': void this.tabs.openLab(this.labs.kind()); break;
       case 'ai-assistant': void this.openAI(); break;
       case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
       case 'checklists': this.ui.open('checklists'); break;

@@ -81,6 +81,7 @@ var emuLab struct {
 	personaTried     map[string]bool    // that was tried once already (no second round)
 	pinfo            map[string]string  // where the persona file went, or what the check after boot saw
 	pcheck           map[string]bool    // the persona was checked on the CLI since the VM started
+	events           []EmuEvent         // the Events log, newest last
 }
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
@@ -138,8 +139,39 @@ type EmuImageView struct {
 }
 
 // EmuView is the emulated lab for the Lab window (shaped like LabView).
+// EmuEvent is something Termwright did to a switch, or saw it do (the Events log).
+type EmuEvent struct {
+	At    time.Time `json:"at"`
+	VM    string    `json:"vm"`
+	Name  string    `json:"name"`
+	Level string    `json:"level"` // "info", "ok", "warn", "error"
+	Text  string    `json:"text"`
+}
+
+// emuEv adds to the Events log (emuLab.mu held).
+func emuEv(id, level, text string) {
+	name := id
+	if l := emuLab.f.Lab; l != nil {
+		if v := l.VMByID(id); v != nil {
+			name = v.Name
+		}
+	}
+	emuLab.events = append(emuLab.events, EmuEvent{At: time.Now(), VM: id, Name: name, Level: level, Text: text})
+	if n := len(emuLab.events); n > 400 {
+		emuLab.events = append([]EmuEvent(nil), emuLab.events[n-300:]...)
+	}
+}
+
+// emuEvent adds to the Events log.
+func emuEvent(id, level, text string) {
+	emuLab.mu.Lock()
+	emuEv(id, level, text)
+	emuLab.mu.Unlock()
+}
+
 type EmuView struct {
 	Kind        string            `json:"kind"` // "emu"
+	Events      []EmuEvent        `json:"events"`
 	Exists      bool              `json:"exists"`
 	Running     bool              `json:"running"`
 	Folder      string            `json:"folder"`
@@ -1023,13 +1055,16 @@ func (a *App) emuStart(host string, ids []string) {
 					vv.Persona.Applied = w.hash
 				}
 				emuLab.pinfo[w.v.ID] = "written to " + strings.TrimPrefix(lastLine(out), "ok ")
+				emuEv(w.v.ID, "ok", "persona "+emuLab.pinfo[w.v.ID]+", read back")
 				delete(emuLab.personaTried, w.v.ID)
 				delete(emuLab.perr, w.v.ID)
 			case strings.Contains(out, "no filesystem") && !emuLab.personaTried[w.v.ID]:
 				emuLab.personaAfterBoot[w.v.ID] = true // its folder appears on the first boot
 				emuLab.personaTried[w.v.ID] = true
+				emuEv(w.v.ID, "info", "persona: "+strings.TrimPrefix(lastLine(out), "fail ")+" - it boots once, then the file is written")
 			default:
 				emuLab.perr[w.v.ID] = strings.TrimSpace(strings.TrimPrefix(lastLine(out+errText(err)), "fail "))
+				emuEv(w.v.ID, "error", "persona not written: "+emuLab.perr[w.v.ID])
 			}
 			emuLab.mu.Unlock()
 		}
@@ -1045,6 +1080,7 @@ func (a *App) emuStart(host string, ids []string) {
 	for _, v := range vms {
 		emuLab.state[v.ID] = "starting"
 		emuLab.starting[v.ID] = time.Now()
+		emuEv(v.ID, "info", "starting on "+host)
 		delete(emuLab.pcheck, v.ID) // the persona is checked again on this boot
 		delete(emuLab.ready, v.ID)  // its console log starts empty
 	}
@@ -1061,10 +1097,12 @@ func (a *App) emuStart(host string, ids []string) {
 			if f[1] == "all" { // nothing could start
 				for _, v := range vms {
 					emuLab.errs[v.ID] = strings.TrimSpace(strings.Join(f[2:], " "))
+					emuEv(v.ID, "error", "did not start: "+emuLab.errs[v.ID])
 				}
 				continue
 			}
 			emuLab.errs[f[1]] = strings.TrimSpace(strings.Join(f[2:], " "))
+			emuEv(f[1], "error", "did not start: "+emuLab.errs[f[1]])
 		}
 	}
 	var gone []string
@@ -1165,6 +1203,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 	fail := func(err error) {
 		emuLab.mu.Lock()
 		emuLab.errs[v.ID] = "Day-0 configuration: " + err.Error()
+		emuEv(v.ID, "error", emuLab.errs[v.ID])
 		emuLab.mu.Unlock()
 	}
 	cl, err := a.emuClient(context.Background(), host)
@@ -1196,6 +1235,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 			vv.Day0Done = true
 		}
 		delete(emuLab.errs, v.ID)
+		emuEv(v.ID, "ok", "day-0 typed: "+strings.Join(im.Day0, " · "))
 		_ = a.emuSave()
 		emuLab.mu.Unlock()
 	}
@@ -1377,10 +1417,13 @@ func (a *App) emuCheckPersona(ctx context.Context, c *emu.Console, im *emu.Image
 	switch {
 	case err != nil:
 		emuLab.pinfo[v.ID] = "not checked: " + err.Error()
+		emuEv(v.ID, "warn", "persona "+emuLab.pinfo[v.ID])
 	case strings.Contains(strings.ToLower(out), strings.ToLower(model)):
-		emuLab.pinfo[v.ID] = "checked: " + im.Persona.Check + " shows " + model
+		emuLab.pinfo[v.ID] = "checked: " + strings.ReplaceAll(im.Persona.Check, "\n", " + ") + " shows " + model
 		delete(emuLab.perr, v.ID)
+		emuEv(v.ID, "ok", "persona "+emuLab.pinfo[v.ID])
 	default:
+		defer func() { emuEv(v.ID, "error", "no persona: "+emuLab.perr[v.ID]) }()
 		emuLab.perr[v.ID] = fmt.Sprintf("the switch did not take the persona: %q does not show %s (it reads %s at boot - see where it was written below)", im.Persona.Check, model, im.Persona.File)
 	}
 }
@@ -1397,6 +1440,7 @@ func (a *App) emuSetAddress(id, addr string) {
 		}
 	}
 	delete(emuLab.errs, id)
+	emuEv(id, "ok", "has the address "+strings.Split(addr, "/")[0]+" - its SSH session points there")
 	_ = a.emuSave()
 	emuLab.mu.Unlock()
 	if s, err := a.store.Get(path); err == nil {
@@ -1444,8 +1488,9 @@ func (a *App) emuPoll(force bool) emu.Status {
 		for _, v := range l.VMs {
 			if _, up := st.Up[v.ID]; !up {
 				delete(emuLab.ready, v.ID)
-			} else if im := emuImage(v.Image); im != nil && im.ReadyIn(st.Log[v.ID]) {
+			} else if im := emuImage(v.Image); im != nil && !emuLab.ready[v.ID] && im.ReadyIn(st.Log[v.ID]) {
 				emuLab.ready[v.ID] = true
+				emuEv(v.ID, "ok", "booted - the console shows "+orStr(im.Ready, "its prompt"))
 			}
 		}
 		if l.Mgmt == "nat" { // addresses from the NAT network's DHCP leases: no CLI needed (any image)
@@ -1494,7 +1539,7 @@ func (a *App) EmuState() (EmuView, error) {
 
 func (a *App) emuView() EmuView {
 	f := &emuLab.f
-	v := EmuView{Kind: "emu", DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
+	v := EmuView{Kind: "emu", Events: append([]EmuEvent(nil), emuLab.events[max(0, len(emuLab.events)-200):]...), DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
 	for i := range f.Hosts {
 		if f.Hosts[i].Session == f.Host {
 			v.HostInfo = &f.Hosts[i].Info
@@ -1670,6 +1715,9 @@ func (a *App) EmuStop(ids []string) (EmuView, error) {
 	}
 	emuLab.mu.Lock()
 	script := emuLab.f.Lab.StopScript(ids)
+	for _, id := range ids {
+		emuEv(id, "info", "stopped")
+	}
 	emuLab.mu.Unlock()
 	if _, err := a.emuRun(host, script, time.Minute); err != nil {
 		return EmuView{}, err
@@ -2197,6 +2245,7 @@ func (a *App) emuPersonaReboot(host, id string) {
 		return
 	}
 	emuLab.state[id] = "persona"
+	emuEv(id, "info", "powering off to write the persona file (its folder exists now)")
 	emuLab.mu.Unlock()
 	a.emuPowerOff(host, id, 90*time.Second)
 	emuLab.mu.Lock()

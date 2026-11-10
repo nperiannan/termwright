@@ -32,7 +32,9 @@ export interface TabView {
   cols: number;
   rows: number;
   locked: boolean;
-  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player';
+  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab';
+  /** Lab tab: which lab it shows. */
+  labKind?: 'sim' | 'emu';
   /** Terminal tab: the session recording (.cast) being written. */
   castFile?: string;
   /** Player tab: the recording it plays. */
@@ -724,6 +726,20 @@ export class Tabs {
     return true;
   }
 
+  /** The lab workspace tab (one per kind). */
+  async openLab(kind: 'sim' | 'emu') {
+    const open = this.tabs().find(t => t.kind === 'lab' && t.labKind === kind);
+    if (open) { this.activeId.set(open.id); return; }
+    const s = await this.backend.newSessionDefaults();
+    const name = kind === 'emu' ? 'Emulated Lab' : 'Simulated Lab';
+    const tv: TabView = {
+      id: 'lab-' + kind, title: (kind === 'emu' ? '⬡ ' : '⚗ ') + name, state: 'connected', message: '', info: name,
+      session: { ...s, name, path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'lab', labKind: kind, parentId: '', home: '', recording: false,
+    };
+    this.tabs.update(l => [...l, tv]);
+    this.activeId.set(tv.id);
+  }
+
   private playerSeq = 0;
   /** Player tab for a session recording (.cast). */
   async openPlayer(path: string, title = '') {
@@ -824,7 +840,7 @@ export class Tabs {
       await this.backend.closeRemote(id).catch(() => {});
     } else if (t.kind === 'sftp') {
       await this.backend.sftpClose(id).catch(() => {});
-    } else if (t.state === 'connected' && s?.confirmClose) {
+    } else if (t.state === 'connected' && s?.confirmClose && t.kind !== 'lab') {
       const ok = await this.ui.confirm('Close Tab', `Disconnect from "${t.title}"?`, 'Disconnect');
       if (!ok) return;
     }

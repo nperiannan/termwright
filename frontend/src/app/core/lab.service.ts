@@ -16,8 +16,13 @@ export class LabService {
   readonly kind = signal<'sim' | 'emu'>('sim');
   readonly state = computed(() => (this.kind() === 'emu' ? this.emu() : this.sim()));
   readonly busy = signal(false);
+  /** The Lab window opens on this tab (and switch), from the workspace. */
+  readonly dialogTab = signal<{ tab: string; focus: string } | null>(null);
   /** The Lab window is open (refresh more often). */
   readonly watching = signal(false);
+  private watchers = new Set<string>();
+  /** The Lab window or a workspace tab shows the lab (who: its name). */
+  watch(who: string, on: boolean) { if (on) this.watchers.add(who); else this.watchers.delete(who); this.watching.set(this.watchers.size > 0); if (on) this.schedule(); }
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   readonly devices = computed(() => this.state()?.devices ?? []);
