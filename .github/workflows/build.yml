@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
 env:
-  APP_VERSION: 0.34.0
+  APP_VERSION: 0.34.1
 
 jobs:
   test:
