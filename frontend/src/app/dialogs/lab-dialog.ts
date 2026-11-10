@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
-import { LabDevice, LabLink, LabOutput, LabPack } from '../core/models';
+import { EmuImage, LabDevice, LabLink, LabOutput, LabPack, SessionNode } from '../core/models';
 import { Backend } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { Tabs } from '../core/tabs.service';
@@ -18,7 +18,8 @@ const NW = 150, NH = 46;
   <div class="modal-backdrop" (click)="ui.close()">
     <div class="modal labw" (click)="$event.stopPropagation()">
       <div class="modal-head"><span class="mh-ic"><app-icon name="server" [size]="17" /></span>
-        <span class="mh-t">{{ tr('Simulated Lab') }}<span class="mh-s">{{ subtitle() }}</span></span></div>
+        <span class="mh-t">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}<span class="mh-s">{{ subtitle() }}</span></span>
+        <span class="spacer"></span><select class="kindsel" [ngModel]="lab.kind()" (ngModelChange)="setKind($event)" name="kind" [attr.aria-label]="tr('Lab')"><option value="sim">{{ tr('Simulated lab (this computer)') }}</option><option value="emu">{{ tr('Emulated lab (KVM host)') }}</option></select></div>
       @if (consent(); as c) {
         <div class="modal-body consent">
           <div class="big">{{ tr('Load this device pack?') }}</div>
@@ -30,12 +31,20 @@ const NW = 150, NH = 46;
           <label class="chk"><input type="checkbox" [(ngModel)]="agree" name="agree" /> {{ tr('I am allowed to use this pack and agree to its terms') }}</label>
           <div class="btns" style="margin-top:14px"><button type="button" (click)="consent.set(null)">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="accept()" [disabled]="!agree || lab.busy()">{{ tr('Load Pack') }}</button></div>
         </div>
-      } @else if (!lab.state()?.exists) {
+      } @else if (emu() && !lab.state()?.exists && !manage()) {
+        <div class="modal-body empty">
+          <div class="big">{{ tr('No emulated lab yet') }}</div>
+          <p class="muted">{{ tr('The emulated lab boots the vendors’ own VM images (.qcow2) with QEMU/KVM on a Linux host you reach over SSH, so the real operating system runs - protocols, APIs and cloud agents included. Add the images you downloaded from the vendor, then make a lab.') }}</p>
+          <div class="btns center"><button type="button" class="primary" (click)="wizard(false)" [disabled]="!images().length">{{ tr('New Lab…') }}</button>
+            <button type="button" (click)="manage.set(true); tab.set('images')">{{ tr('Images') }} ({{ images().length }})…</button>
+            <button type="button" (click)="manage.set(true); tab.set('hosts')">{{ tr('KVM Hosts') }} ({{ hosts().length }})…</button></div>
+        </div>
+      } @else if (!emu() && !lab.state()?.exists) {
         <div class="modal-body empty">
           @if (!pack() || pack()!.error) {
             <div class="big">{{ pack()?.error ? tr('The device pack could not be loaded') : tr('Load a device pack first') }}</div>
             @if (pack()?.error; as e) { <p class="err">{{ pack()!.name }}: {{ e }}</p> }
-            @if (lab.state()?.waiting) { <p class="muted">{{ tr('{0} switches wait for it.', lab.state()!.waiting) }}</p> }
+            @if (lab.state()?.waiting) { <p class="muted">{{ tr('{0} switches wait for it.', lab.state()!.waiting ?? 0) }}</p> }
             <p class="muted">{{ tr('The simulator runs switches from a device pack (.vm file): their models, commands and outputs. Termwright itself carries none - load a pack you are allowed to use. A few MB per switch, no virtual machines; not the real operating system, no protocols are run.') }}</p>
             <button type="button" class="primary" (click)="choosePack()">{{ tr('Load Device Pack (.vm)…') }}</button>
           } @else {
@@ -49,21 +58,31 @@ const NW = 150, NH = 46;
           <button type="button" role="tab" [class.on]="tab() === 'list'" (click)="tab.set('list')">{{ tr('Switches') }} ({{ lab.devices().length }})</button>
           <button type="button" role="tab" [class.on]="tab() === 'topo'" (click)="tab.set('topo')">{{ tr('Topology') }}</button>
           <button type="button" role="tab" [class.on]="tab() === 'cables'" (click)="tab.set('cables')">{{ tr('Cables') }} ({{ lab.links().length }})</button>
-          <button type="button" role="tab" [class.on]="tab() === 'outputs'" (click)="openOutputs()">{{ tr('Command Outputs') }} ({{ (lab.state()?.outputs ?? []).length }})</button>
+          @if (emu()) {
+            <button type="button" role="tab" [class.on]="tab() === 'images'" (click)="tab.set('images')">{{ tr('Images') }} ({{ images().length }})</button>
+            <button type="button" role="tab" [class.on]="tab() === 'hosts'" (click)="tab.set('hosts')">{{ tr('KVM Hosts') }} ({{ hosts().length }})</button>
+          } @else { <button type="button" role="tab" [class.on]="tab() === 'outputs'" (click)="openOutputs()">{{ tr('Command Outputs') }} ({{ (lab.state()?.outputs ?? []).length }})</button> }
         </div>
         <div class="modal-body">
+          @if (tab() !== 'images' && tab() !== 'hosts') {
           <div class="bar">
             <span class="muted">{{ tr('Runs on') }}</span>
-            <select name="where" aria-label="Runs on"><option>{{ tr('This computer - simulated') }}</option><option disabled>{{ tr('A Linux host with KVM - real NOS VMs (planned)') }}</option></select>
+            <span class="where">{{ emu() ? (hostName() + ' - ' + tr('real VM images') + (lab.state()?.kvm === false ? ' (' + tr('no KVM: slow') + ')' : '')) : tr('This computer - simulated') }}</span>
             @if (lab.running() > 0) { <button type="button" class="primary" (click)="lab.stop()" [disabled]="lab.busy()">■ {{ tr('Stop Lab') }}</button> }
             @else { <button type="button" class="primary" (click)="lab.start()" [disabled]="lab.busy()">▶ {{ tr('Start Lab') }}</button> }
             <button type="button" (click)="wizard(true)">+ {{ tr('Add Switches') }}</button>
             <button type="button" [class.on]="cableMode()" (click)="toggleCable()" [title]="tr('Click two switches in the topology, or pick them here')">⟷ {{ tr('Cable') }}</button>
             <span class="spacer"></span>
             <button type="button" (click)="openSessions()" [disabled]="!openable().length">{{ openable().length === 1 ? tr('Open 1 Session') : tr('Open {0} Sessions', openable().length) }}</button>
-            <button type="button" (click)="serialsOpen.set(!serialsOpen())" [class.on]="serialsOpen()" [title]="tr('Give the switches serial numbers from a list')">{{ tr('Serial Numbers…') }}</button>
+            @if (emu()) {
+              <button type="button" (click)="openConsoles()" [disabled]="!picked().length">{{ tr('Console') }}</button>
+              <button type="button" (click)="lab.restart(pickedIds())" [disabled]="!picked().length || lab.busy()" [title]="tr('Stop and start: cable changes take effect')">{{ tr('Restart') }}</button>
+              <button type="button" (click)="resetSel()" [disabled]="!picked().length || lab.busy()" [title]="tr('Throw the disk away and boot as new; the day-0 commands are typed again')">{{ tr('Back to Day 0') }}</button>
+            } @else {
+            <button type="button" (click)="serialsOpen.set(!serialsOpen())" [class.on]="serialsOpen()" [title]="tr('Give the switches serial numbers from a list')">{{ tr('Serial Numbers…') }}</button> }
             <button type="button" class="danger-ghost" (click)="removeSel()" [disabled]="!sel().size">{{ tr('Remove') }}</button>
           </div>
+          }
           @if (serialsOpen()) {
             <div class="serbar">
               <textarea [(ngModel)]="serialText" name="ser" rows="4" spellcheck="false" [placeholder]="tr('One serial number per line')"></textarea>
@@ -85,6 +104,29 @@ const NW = 150, NH = 46;
           }
           @switch (tab()) {
             @case ('list') {
+              @if (emu()) {
+              <div class="tbl"><table>
+                <thead><tr><th class="c"><input type="checkbox" [checked]="allSel()" (change)="selAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th>
+                  <th>{{ tr('Switch') }}</th><th>{{ tr('Image') }}</th><th>vCPU · RAM</th><th>{{ tr('SSH (management)') }}</th><th>{{ tr('Console') }}</th><th>{{ tr('State') }}</th><th>CPU</th><th></th></tr></thead>
+                <tbody>
+                @for (d of lab.devices(); track d.id) {
+                  <tr [class.sel]="sel().has(d.id)" [class.foc]="focus() === d.id" (click)="focusOn(d)">
+                    <td class="c"><input type="checkbox" [checked]="sel().has(d.id)" (change)="toggleSel(d.id)" (click)="$event.stopPropagation()" /></td>
+                    <td><b>{{ d.hostname }}</b></td><td><span class="os">{{ lab.osShort(d.os) }}</span> {{ d.model }}</td><td>{{ d.cpus }} · {{ gb(d.ram) }}</td>
+                    <td class="mono">{{ d.ssh }}</td><td class="mono">telnet :{{ d.console }}</td>
+                    <td><span class="pill" [class]="'pill ' + stCls(d)" [title]="d.error || ''">@if (d.state === 'running') { <span class="dot"></span> } @else if (d.state === 'stopped') { <span class="dot off"></span> } @else if (d.state !== 'failed') { <span class="dot y"></span> }{{ tr(d.stateText || d.state || '') }}</span></td>
+                    <td>{{ d.running ? (d.cpu ?? 0).toFixed(0) + ' %' : '-' }}</td>
+                    <td class="acts"><button type="button" class="sm" (click)="console(d); $event.stopPropagation()" [disabled]="!d.running">{{ tr('Console') }}</button>
+                      <button type="button" class="sm" (click)="connect(d); $event.stopPropagation()" [disabled]="d.state !== 'running'">SSH</button>
+                      <button type="button" class="sm" (click)="d.running || d.state === 'booting' ? lab.stop([d.id]) : lab.start([d.id]); $event.stopPropagation()">{{ d.running || d.state === 'booting' ? tr('Stop') : tr('Start') }}</button></td>
+                  </tr>
+                } @empty { <tr><td colspan="9" class="muted">{{ tr('No switches yet: New Lab… makes them from your images.') }}</td></tr> }
+                </tbody></table></div>
+              @if (focused(); as d) { @if (d.error) { <p class="err small">{{ d.hostname }}: {{ d.error }}</p> }
+                <div class="tail"><div class="th">{{ tr('{0} · console (last lines)', d.hostname) }}<span class="spacer"></span><a (click)="loadTail()">{{ tr('Refresh') }}</a></div><pre>{{ tail() || tr('(nothing yet)') }}</pre></div> }
+              @else { <p class="muted small note">{{ tr('The real operating system runs in each VM on the KVM host. Termwright boots it, waits for the console to be ready and types the image’s day-0 commands once. Click a switch for its console.') }}</p> }
+              @if (!lab.devices().length) { <div class="btns" style="margin-top:10px"><button type="button" class="primary" (click)="wizard(false)" [disabled]="!images().length">{{ tr('New Lab…') }}</button></div> }
+              } @else {
               <div class="tbl"><table>
                 <thead><tr><th class="c"><input type="checkbox" [checked]="allSel()" (change)="selAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th>
                   <th>{{ tr('Switch') }}</th><th>OS</th><th>{{ tr('Model') }}</th><th>{{ tr('Serial') }}</th><th>{{ tr('Management') }}</th><th>SSH</th><th>{{ tr('State') }}</th><th>{{ tr('Logins') }}</th><th></th></tr></thead>
@@ -103,6 +145,7 @@ const NW = 150, NH = 46;
                 }
                 </tbody></table></div>
               <p class="muted small note">{{ tr('Simulated on this computer: the switches’ command line, VLANs, ports and IP interfaces, ping and LLDP over the cables. Not the real operating system - no protocols are run. A switch forgets what was not saved (save configuration / save config) when it stops.') }}</p>
+              }
             }
             @case ('topo') {
               <div class="split">
@@ -116,18 +159,38 @@ const NW = 150, NH = 46;
                       }
                     }
                     @for (d of lab.devices(); track d.id) {
-                      <g class="n" [class.sel]="focus() === d.id" [class.pick]="cable()?.a === d.id" (pointerdown)="grab($event, d)" (click)="clickNode(d)" (dblclick)="connect(d)">
+                      <g class="n" [class.sel]="focus() === d.id" [class.pick]="cable()?.a === d.id" (pointerdown)="grab($event, d)" (click)="clickNode(d)" (dblclick)="emu() ? console(d) : connect(d)">
                         <rect [attr.x]="pos(d).x" [attr.y]="pos(d).y" [attr.width]="NW" [attr.height]="NH" rx="9" />
-                        <circle [attr.cx]="pos(d).x + 12" [attr.cy]="pos(d).y + 15" r="4" [class]="d.running ? 'on' : 'off'" />
+                        <circle [attr.cx]="pos(d).x + 12" [attr.cy]="pos(d).y + 15" r="4" [class]="nodeCls(d)" />
                         <text [attr.x]="pos(d).x + 22" [attr.y]="pos(d).y + 19">{{ d.hostname }}</text>
-                        <text class="s" [attr.x]="pos(d).x + 12" [attr.y]="pos(d).y + 36">{{ lab.osShort(d.os) }} · {{ d.mgmtIp.split('/')[0] }}</text>
+                        <text class="s" [attr.x]="pos(d).x + 12" [attr.y]="pos(d).y + 36">{{ lab.osShort(d.os) }} · {{ emu() ? (d.state === 'running' ? ':' + d.console : tr(d.stateText || '')) : d.mgmtIp.split('/')[0] }}</text>
                       </g>
                     }
                   </svg>
-                  <div class="hint muted small">{{ cableMode() ? tr('Cable: click the first switch, then the second.') : tr('Drag to arrange · click for details · double-click to connect') }}</div>
+                  <div class="hint muted small">{{ cableMode() ? tr('Cable: click the first switch, then the second.') : emu() ? tr('Drag to arrange · click for details · double-click for the console') : tr('Drag to arrange · click for details · double-click to connect') }}</div>
                 </div>
                 <div class="insp">
-                  @if (focused(); as d) {
+                  @if (emu() && focused(); as d) {
+                    <h4>{{ d.hostname }} <span class="os">{{ lab.osShort(d.os) }}</span></h4>
+                    <div class="kv"><span>{{ tr('State') }}</span><span [class.ok]="d.state === 'running'" [class.bad]="d.state === 'failed'">{{ tr(d.stateText || '') }}</span>
+                      <span>{{ tr('Image') }}</span><span>{{ d.model }}</span><span>{{ tr('Host') }}</span><span>{{ hostName() }}</span>
+                      <span>vCPU · RAM</span><span>{{ d.cpus }} · {{ gb(d.ram) }}@if (d.running) { · CPU {{ (d.cpu ?? 0).toFixed(0) }} % }</span>
+                      <span>SSH</span><span class="mono">{{ d.ssh }}</span><span>{{ tr('Console') }}</span><span class="mono">telnet :{{ d.console }}</span>
+                      <span>{{ tr('Management') }}</span><span class="mono">{{ d.mgmtIp }}</span><span>MAC</span><span class="mono">{{ d.mac }}</span></div>
+                    @if (d.error) { <p class="err small">{{ d.error }}</p> }
+                    <h4>{{ tr('Cables') }}</h4>
+                    <div class="kv">
+                      @for (c of cablesOf(d); track c.port) { <span class="mono">{{ c.port }}</span><span [class.bad]="!c.up">{{ c.peer }} {{ c.peerPort }}@if (c.down) { · {{ tr('pulled') }} } @else if (!c.up) { · {{ tr('down') }} }
+                        <a class="x" (click)="lab.setLink(d.id, c.port, !!c.down)" [title]="c.down ? tr('Plug the cable in again') : tr('Pull the cable (the link goes down on both switches)')">{{ c.down ? '⏚' : '⏻' }}</a>
+                        <a class="x" (click)="lab.disconnect(d.id, c.port)" [title]="tr('Remove the cable (when the switches restart)')">✕</a></span> }
+                      @empty { <span class="muted">{{ tr('none') }}</span><span></span> }
+                    </div>
+                    <p class="muted small">{{ tr('New and removed cables take effect when both switches restart; pulling a cable works at once.') }}</p>
+                    <div class="btns"><button type="button" class="primary sm" (click)="console(d)" [disabled]="!d.running">{{ tr('Console') }}</button>
+                      <button type="button" class="sm" (click)="connect(d)" [disabled]="d.state !== 'running'">SSH</button>
+                      <button type="button" class="sm" (click)="lab.restart([d.id])" [disabled]="lab.busy()">{{ tr('Restart') }}</button>
+                      <button type="button" class="sm" (click)="resetOne(d)" [disabled]="lab.busy()">{{ tr('Back to Day 0') }}</button></div>
+                  } @else if (focused(); as d) {
                     <h4>{{ d.hostname }} <span class="os" [class]="'os ' + d.os">{{ lab.osShort(d.os) }}</span></h4>
                     <div class="kv"><span>{{ tr('State') }}</span><span [class.ok]="d.running">{{ d.running ? '● ' + tr('running') : tr('stopped') }}@if (d.logins) { · {{ d.logins }} {{ tr('logins') }} }</span>
                       <span>{{ tr('Model') }}</span><span>{{ d.model }}</span><span>{{ tr('Software') }}</span><span>{{ d.version }}</span>
@@ -169,14 +232,74 @@ const NW = 150, NH = 46;
               </div>
               <div class="bar" style="margin-top:10px"><span class="spacer"></span><button type="button" class="primary" (click)="saveOuts()" [disabled]="lab.busy()">{{ tr('Save Outputs') }}</button></div>
             }
+            @case ('images') {
+              <div class="bar"><button type="button" class="primary" (click)="addImage()" [disabled]="lab.busy()">+ {{ tr('Add Image (.qcow2, .img, .vmdk)…') }}</button>
+                <button type="button" (click)="importAppliance()" [disabled]="lab.busy()">{{ tr('Import GNS3 Appliance (.gns3a)…') }}</button><span class="spacer"></span>
+                <button type="button" (click)="imEdit() && lab.upload(imEdit()!.id)" [disabled]="!imEdit() || !lab.state()?.host || imEdit()!.missing">{{ tr('Copy to Host') }}</button>
+                <button type="button" class="danger-ghost" (click)="removeImage()" [disabled]="!imEdit()">{{ tr('Remove') }}</button></div>
+              <div class="split ims">
+                <div class="canvas plain"><table>
+                  <thead><tr><th>{{ tr('Image') }}</th><th>{{ tr('File') }}</th><th>{{ tr('Size') }}</th><th>vCPU · RAM</th><th>{{ tr('Ports') }}</th><th>{{ tr('Ready at') }}</th><th>{{ hostName() || tr('Host') }}</th></tr></thead>
+                  <tbody>@for (im of images(); track im.id) {
+                    <tr [class.sel]="imEdit()?.id === im.id" (click)="pickImage(im.id)"><td><b>{{ im.name }}</b></td><td class="mono">{{ im.fileName || '-' }}@if (im.missing) { <span class="bad"> · {{ tr('file missing') }}</span> }</td>
+                      <td>{{ mb(im.size) }}</td><td>{{ im.cpus }} · {{ gb(im.ram) }}</td><td>{{ im.nics }} × {{ im.nic }}</td><td class="mono">{{ im.ready }}</td>
+                      <td>@if (im.upload) { <span class="pill b">{{ tr('copying') }} {{ im.upload }}</span> } @else if (im.onHost) { <span class="pill g">✓ {{ tr('on the host') }}</span> } @else { <span class="pill">{{ tr('copied when needed') }}</span> }</td></tr>
+                  } @empty { <tr><td colspan="7" class="muted">{{ tr('No images yet.') }}</td></tr> }</tbody></table>
+                  <p class="muted small" style="padding:10px 12px">{{ tr('Images are yours: download them from the vendor (several network operating systems offer free VM images) and add them here. Termwright copies each image to the host once; every switch boots from a small copy-on-write disk on top of it.') }}</p></div>
+                <div class="insp wide">
+                  @if (imEdit(); as im) {
+                    <h4>{{ tr('Image') }}</h4>
+                    <div class="kv form">
+                      <span>{{ tr('Name') }}</span><input [(ngModel)]="im.name" name="imn" />
+                      <span>{{ tr('File') }}</span><span><span class="mono small">{{ im.fileName || '-' }}</span> <a (click)="chooseImageFile(im.id)">{{ tr('Choose…') }}</a></span>
+                      <span>{{ tr('Device type') }}</span><input [(ngModel)]="im.deviceType" name="imd" [placeholder]="'Linux, Cisco IOS…'" />
+                      <span>vCPU · RAM</span><span class="row2"><input type="number" min="1" [(ngModel)]="im.cpus" name="imc" class="n" /> <input type="number" min="128" step="256" [(ngModel)]="im.ram" name="imr" class="n2" /> MB</span>
+                      <span>{{ tr('Ports') }}</span><span class="row2"><input type="number" min="1" max="60" [(ngModel)]="im.nics" name="imp" class="n" />
+                        <select [(ngModel)]="im.nic" name="imnic">@for (n of nicModels; track n) { <option [value]="n">{{ n }}</option> }</select></span>
+                      <span></span><span class="muted small">{{ tr('The first port is the management port; the others can be cabled.') }}</span>
+                      <span>{{ tr('Port names') }}</span><input class="mono" [(ngModel)]="im.portName" name="impn" placeholder="{n}  ·  1/{n}" />
+                      <span>{{ tr('Disk') }}</span><select [(ngModel)]="im.disk" name="imdk"><option value="ide">IDE</option><option value="virtio">virtio</option><option value="sata">SATA</option><option value="scsi">SCSI</option></select>
+                      <span>{{ tr('Ready when') }}</span><input class="mono" [(ngModel)]="im.ready" name="imrd" placeholder="login:" />
+                      <span>{{ tr('Login') }}</span><span class="row2"><input [(ngModel)]="im.login" name="iml" class="n3" /> <input type="password" [(ngModel)]="imPassword" name="impw" [placeholder]="im.hasPassword ? tr('(saved)') : tr('no password')" autocomplete="new-password" class="n3" /></span>
+                      <span>{{ tr('Prompt') }}</span><input class="mono" [(ngModel)]="im.prompt" name="impr" placeholder="[>#$]\\s*$" />
+                    </div>
+                    <h4>{{ tr('First boot (day-0) commands') }}</h4>
+                    <textarea class="mono day0" [(ngModel)]="day0Text" name="imday0" spellcheck="false" rows="6"></textarea>
+                    <p class="muted small">{{ tr('Typed on the console after the first boot. {hostname} {mgmtIp} {mgmtAddr} {mgmtMask} {gateway} {n} are filled in per switch.') }}</p>
+                    <h4>{{ tr('Answers on the console') }}</h4>
+                    <textarea class="mono day0" [(ngModel)]="answersText" name="imans" spellcheck="false" rows="3" [placeholder]="'[y/N] => n'"></textarea>
+                    <p class="muted small">{{ tr('One per line: text the console shows => what to type (nothing after => is Enter).') }}</p>
+                    <span class="muted small">{{ tr('More QEMU options') }}</span><input class="mono wide" [(ngModel)]="im.extra" name="imx" spellcheck="false" />
+                    @if (im.source) { <p class="muted small">{{ tr('From') }}: {{ im.source }}</p> }
+                    <div class="btns" style="margin-top:10px"><button type="button" class="primary sm" (click)="saveImage()" [disabled]="lab.busy()">{{ tr('Save') }}</button></div>
+                  } @else { <p class="muted small">{{ tr('Click an image for how it boots.') }}</p> }
+                </div>
+              </div>
+            }
+            @case ('hosts') {
+              <div class="bar"><span class="muted">{{ tr('SSH session of a Linux host') }}</span>
+                <select [ngModel]="hostPick || sshSessions()[0]" (ngModelChange)="hostPick = $event" name="hpick" class="hpick">@for (s of sshSessions(); track s) { <option [value]="s">{{ s }}</option> }</select>
+                <button type="button" class="primary" (click)="checkHost(hostPick || sshSessions()[0])" [disabled]="!(hostPick || sshSessions()[0]) || lab.busy()">{{ tr('Check and Add') }}</button></div>
+              <div class="tbl"><table>
+                <thead><tr><th>{{ tr('Host') }}</th><th>{{ tr('System') }}</th><th>KVM</th><th>QEMU</th><th>vCPU</th><th>RAM {{ tr('free') }}</th><th>{{ tr('Disk free') }}</th><th>sudo</th><th></th></tr></thead>
+                <tbody>@for (h of hosts(); track h.session) {
+                  <tr><td><b>{{ h.name }}</b>@if (h.session === lab.state()?.host) { <span class="pill b">{{ tr('the lab') }}</span> }<div class="muted small">{{ h.info.user }}</div></td><td class="small">{{ h.info.os }}</td>
+                    <td><span [class.ok]="h.info.kvm === 'yes'" [class.bad]="h.info.kvm !== 'yes'">{{ h.info.kvm === 'yes' ? '✓' : h.info.kvm }}</span></td><td class="small">{{ h.info.qemu || '-' }}</td><td>{{ h.info.cpus }}</td>
+                    <td>{{ gb(h.info.memFree) }} / {{ gb(h.info.memTotal) }}</td><td>{{ gb(h.info.diskFree) }}</td><td>{{ h.info.sudo ? '✓' : '-' }}</td>
+                    <td class="acts"><button type="button" class="sm" (click)="checkHost(h.session)" [disabled]="lab.busy()">{{ tr('Check Again') }}</button> <button type="button" class="sm" (click)="lab.removeHost(h.session)">{{ tr('Remove') }}</button></td></tr>
+                  @for (p of h.info.problems ?? []; track $index) { <tr><td></td><td colspan="8" class="bad small">✕ {{ p }}</td></tr> }
+                  @for (p of h.info.notes ?? []; track $index) { <tr><td></td><td colspan="8" class="warn small">! {{ p }}</td></tr> }
+                } @empty { <tr><td colspan="9" class="muted">{{ tr('No KVM hosts yet: pick the SSH session of a Linux server with KVM and QEMU.') }}</td></tr> }</tbody></table></div>
+              <p class="muted small note">{{ tr('Nothing is installed on the host: Termwright runs qemu there over SSH, as the session’s user, in the folder ~/termwright-lab. The switches’ sessions go through the host session as jump host.') }}</p>
+            }
             @case ('cables') {
               <div class="tbl"><table>
                 <thead><tr><th>{{ tr('Switch') }}</th><th>{{ tr('Port') }}</th><th></th><th>{{ tr('Switch') }}</th><th>{{ tr('Port') }}</th><th>{{ tr('State') }}</th><th></th></tr></thead>
                 <tbody>
                 @for (k of lab.links(); track $index) {
                   <tr><td>{{ nameOf(k.a) }}</td><td class="mono">{{ k.aPort }}</td><td>⟷</td><td>{{ nameOf(k.b) }}</td><td class="mono">{{ k.bPort }}</td>
-                    <td><span class="pill" [class.g]="k.up" [class.r]="!k.up">{{ k.up ? tr('up') : tr('down') }}</span></td>
-                    <td class="acts"><button type="button" class="sm" (click)="lab.disconnect(k.a, k.aPort)">{{ tr('Remove') }}</button></td></tr>
+                    <td><span class="pill" [class.g]="k.up" [class.r]="!k.up">{{ k.up ? tr('up') : k.down ? tr('pulled') : tr('down') }}</span></td>
+                    <td class="acts">@if (emu()) { <button type="button" class="sm" (click)="lab.setLink(k.a, k.aPort, !!k.down)">{{ k.down ? tr('Plug In') : tr('Pull') }}</button> } <button type="button" class="sm" (click)="lab.disconnect(k.a, k.aPort)">{{ tr('Remove') }}</button></td></tr>
                 } @empty { <tr><td colspan="7" class="muted">{{ tr('No cables. Use Cable to connect two switches.') }}</td></tr> }
                 </tbody></table></div>
             }
@@ -189,6 +312,16 @@ const NW = 150, NH = 46;
   </div>`,
   styles: [`
     .labw { width: min(1180px, 96vw); }
+    .modal-head .spacer { flex: 1; } .kindsel { height: 28px; font-size: 12.5px; margin-left: 12px; }
+    .btns.center { justify-content: center; } .where { font-weight: 500; } .warn { color: var(--warn); }
+    .pill.y { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+    .dot.y { background: var(--warn); } tr.foc td { box-shadow: inset 0 1px 0 var(--accent), inset 0 -1px 0 var(--accent); }
+    .tail { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; .th { display: flex; padding: 6px 12px; font-size: 12px; font-weight: 600; background: var(--surface-2); a { cursor: pointer; color: var(--accent); font-weight: 400; } }
+      pre { margin: 0; padding: 8px 12px; font: 11.5px/1.5 var(--mono); max-height: 190px; overflow: auto; white-space: pre-wrap; } }
+    .ims { height: min(560px, 60vh); } .ims td, .ims th { white-space: nowrap; } .canvas.plain { background: var(--surface); overflow: auto; } .insp.wide { width: 410px; }
+    .kv.form { grid-template-columns: 110px 1fr; align-items: center; input, select { height: 26px; font-size: 12.5px; min-width: 0; } .row2 { display: flex; gap: 6px; align-items: center; } .n { width: 54px; } .n2 { width: 80px; } .n3 { width: 120px; } a { cursor: pointer; color: var(--accent); } }
+    .day0 { width: 100%; font-size: 11.5px; resize: vertical; } input.wide { width: 100%; height: 26px; margin-top: 4px; } .hpick { min-width: 280px; }
+    .topo circle.y { fill: var(--warn); } .topo circle.b { fill: var(--accent); } .topo circle.r { fill: var(--danger); }
     .serbar { display: grid; grid-template-columns: 280px 1fr; gap: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 10px; background: var(--surface);
       textarea { font: 12px var(--mono); resize: vertical; } p { margin: 0 0 8px; } }
     .idin { width: 100%; height: 24px; }
@@ -254,7 +387,13 @@ export class LabDialog implements OnInit, OnDestroy {
   private backend = inject(Backend);
   protected tr = tr;
   protected NW = NW; protected NH = NH;
-  protected tab = signal<'list' | 'topo' | 'cables' | 'outputs'>('list');
+  protected tab = signal<'list' | 'topo' | 'cables' | 'outputs' | 'images' | 'hosts'>('list');
+  protected emu = computed(() => this.lab.kind() === 'emu');
+  protected manage = signal(false);
+  protected images = computed(() => this.lab.emu()?.images ?? []);
+  protected hosts = computed(() => this.lab.emu()?.hosts ?? []);
+  protected hostName = computed(() => { const e = this.lab.emu(); return e?.hosts?.find(h => h.session === e.host)?.name ?? e?.host ?? ''; });
+  protected nicModels = ['e1000', 'virtio-net-pci', 'vmxnet3', 'rtl8139', 'i82559er', 'e1000e'];
   protected sel = signal(new Set<string>());
   protected focus = signal('');
   protected cfg = signal('');
@@ -265,21 +404,81 @@ export class LabDialog implements OnInit, OnDestroy {
 
   protected subtitle = computed(() => {
     const ds = this.lab.devices(), ls = this.lab.links();
-    if (!ds.length) return tr('Switches simulated on this computer, from a device pack');
+    if (!ds.length) return this.emu() ? tr('Real VM images on a Linux KVM host') : tr('Switches simulated on this computer, from a device pack');
+    if (this.emu()) return tr('{0} switches · {1} ready', ds.length, ds.filter(d => d.state === 'running').length) + ' · ' + this.hostName();
     const down = ls.filter(l => !l.up).length;
     return tr('{0} switches · {1} running', ds.length, this.lab.running()) + (down ? ' · ' + tr('{0} cables down', down) : '');
   });
   protected focused = computed(() => this.lab.devices().find(d => d.id === this.focus()));
   protected allSel = computed(() => this.lab.devices().length > 0 && this.lab.devices().every(d => this.sel().has(d.id)));
-  protected openable = computed(() => this.lab.devices().filter(d => d.running && (this.sel().size ? this.sel().has(d.id) : true)));
+  protected openable = computed(() => this.lab.devices().filter(d => (d.state ? d.state === 'running' : d.running) && (this.sel().size ? this.sel().has(d.id) : true)));
   protected box = computed(() => {
     let w = 900, h = 420;
     for (const d of this.lab.devices()) { const p = this.pos(d); w = Math.max(w, p.x + NW + 40); h = Math.max(h, p.y + NH + 40); }
     return { w, h };
   });
 
-  ngOnInit() { this.lab.watching.set(true); void this.lab.refresh(); }
-  ngOnDestroy() { this.lab.watching.set(false); }
+  private tailTimer: ReturnType<typeof setInterval> | null = null;
+  ngOnInit() {
+    this.lab.watching.set(true); void this.lab.refresh();
+    this.tailTimer = setInterval(() => { if (this.emu() && this.tab() === 'list' && this.focus()) void this.loadTail(); }, 3000);
+  }
+  ngOnDestroy() { this.lab.watching.set(false); if (this.tailTimer) clearInterval(this.tailTimer); }
+  setKind(k: 'sim' | 'emu') { this.lab.kind.set(k); this.tab.set('list'); this.sel.set(new Set()); this.focus.set(''); this.manage.set(false); }
+  gb(mb?: number) { return !mb ? '-' : mb >= 1024 ? (mb / 1024).toFixed(mb % 1024 ? 1 : 0) + ' GB' : mb + ' MB'; }
+  mb(bytes: number) { return !bytes ? '-' : bytes >= 1 << 30 ? (bytes / (1 << 30)).toFixed(1) + ' GB' : Math.round(bytes / (1 << 20)) + ' MB'; }
+  stCls(d: LabDevice) { return d.state === 'running' ? 'g' : d.state === 'failed' ? 'r' : d.state === 'stopped' ? '' : 'y'; }
+  nodeCls(d: LabDevice) { return !d.state ? (d.running ? 'on' : 'off') : d.state === 'running' ? 'on' : d.state === 'stopped' ? 'off' : d.state === 'failed' ? 'r' : d.state === 'day0' ? 'b' : 'y'; }
+  protected tail = signal('');
+  focusOn(d: LabDevice) { this.focus.set(d.id); this.tail.set(''); void this.loadTail(); }
+  async loadTail() { const id = this.focus(); if (id) { const t = await this.lab.consoleTail(id); if (this.focus() === id) this.tail.set(t); } }
+  protected picked = computed(() => this.lab.devices().filter(d => this.sel().size ? this.sel().has(d.id) : d.id === this.focus()));
+  pickedIds() { return this.picked().map(d => d.id); }
+  console(d: LabDevice) { const p = this.lab.consoleOf(d.id); if (p) void this.tabs.openSession(p); }
+  openConsoles() { for (const d of this.picked()) this.console(d); }
+  async resetSel() { const ds = this.picked(); if (ds.length && await this.ui.confirm(tr('Back to Day 0'), tr('Throw away the disks of {0} switches and boot them as new? Their configuration is lost; the day-0 commands are typed again.', ds.length), tr('Back to Day 0'), true)) await this.lab.reset(ds.map(d => d.id)); }
+  async resetOne(d: LabDevice) { if (await this.ui.confirm(tr('Back to Day 0'), tr('Throw away the disk of {0} and boot it as new? Its configuration is lost; the day-0 commands are typed again.', d.hostname), tr('Back to Day 0'), true)) await this.lab.reset([d.id]); }
+
+  // images
+  protected imEdit = signal<EmuImage | null>(null);
+  protected imPassword = '';
+  protected day0Text = '';
+  protected answersText = '';
+  pickImage(id: string) {
+    const im = this.images().find(i => i.id === id); if (!im) return;
+    this.imEdit.set({ ...im }); this.imPassword = '';
+    this.day0Text = (im.day0 ?? []).join('\n');
+    this.answersText = (im.answers ?? []).map(a => a.match + ' => ' + a.send).join('\n');
+  }
+  async saveImage() {
+    const im = this.imEdit(); if (!im) return;
+    const out: EmuImage = { ...im, password: this.imPassword, day0: this.day0Text.split(/\r?\n/).filter(l => l.trim()),
+      answers: this.answersText.split(/\r?\n/).filter(l => l.includes('=>')).map(l => { const i = l.indexOf('=>'); return { match: l.slice(0, i).trim(), send: l.slice(i + 2).trim() }; }),
+      cpus: +im.cpus || 1, ram: +im.ram || 1024, nics: +im.nics || 1 };
+    if (await this.lab.saveImage(out)) this.pickImage(im.id);
+  }
+  async addImage() {
+    const p = await this.backend.chooseOpenFile(tr('Add VM Image'), [{ displayName: tr('VM images'), pattern: '*.qcow2;*.img;*.vmdk;*.raw' }]).catch(() => '');
+    if (p && await this.lab.addImage(p)) { const ims = this.images(); if (ims.length) this.pickImage(ims[ims.length - 1].id); }
+  }
+  async importAppliance() {
+    const p = await this.backend.chooseOpenFile(tr('Import GNS3 Appliance'), [{ displayName: tr('GNS3 appliances'), pattern: '*.gns3a' }]).catch(() => '');
+    if (p && await this.lab.importAppliance(p)) { const ims = this.images(); if (ims.length) this.pickImage(ims[ims.length - 1].id); }
+  }
+  async chooseImageFile(id: string) {
+    const p = await this.backend.chooseOpenFile(tr('VM image file'), [{ displayName: tr('VM images'), pattern: '*.qcow2;*.img;*.vmdk;*.raw' }]).catch(() => '');
+    if (p && await this.lab.setImageFile(id, p)) this.pickImage(id);
+  }
+  async removeImage() { const im = this.imEdit(); if (im && await this.ui.confirm(tr('Remove image'), tr('Forget {0}? Its copy on the hosts stays.', im.name), tr('Remove'), true) && await this.lab.removeImage(im.id)) this.imEdit.set(null); }
+  // hosts
+  protected hostPick = '';
+  protected sshSessions = computed(() => {
+    const out: string[] = [], skip = [this.lab.emu()?.folder, this.lab.sim()?.folder].filter(Boolean) as string[];
+    const walk = (n: SessionNode | null | undefined) => n?.children?.forEach(c => { if (c.isFolder) { if (!skip.some(f => c.path === f || c.path.startsWith(f + '/'))) walk(c); } else if (c.protocol === 'SSH2') out.push(c.path); });
+    walk(this.ui.tree());
+    return out;
+  });
+  async checkHost(path: string) { if (path) await this.lab.checkHost(path); }
 
   pos(d: LabDevice) { return this.moved().get(d.id) ?? { x: d.x || 40, y: d.y || 60 }; }
   nameOf(id: string) { return this.lab.devices().find(d => d.id === id)?.hostname ?? id; }
@@ -297,10 +496,10 @@ export class LabDialog implements OnInit, OnDestroy {
     return { x1: e1.x, y1: e1.y, x2: e2.x, y2: e2.y };
   }
   cablesOf(d: LabDevice) {
-    const out: { port: string; peer: string; peerPort: string; up: boolean }[] = [];
+    const out: { port: string; peer: string; peerPort: string; up: boolean; down: boolean }[] = [];
     for (const k of this.lab.links()) {
-      if (k.a === d.id) out.push({ port: k.aPort, peer: this.nameOf(k.b), peerPort: k.bPort, up: !!k.up });
-      else if (k.b === d.id) out.push({ port: k.bPort, peer: this.nameOf(k.a), peerPort: k.aPort, up: !!k.up });
+      if (k.a === d.id) out.push({ port: k.aPort, peer: this.nameOf(k.b), peerPort: k.bPort, up: !!k.up, down: !!k.down });
+      else if (k.b === d.id) out.push({ port: k.bPort, peer: this.nameOf(k.a), peerPort: k.aPort, up: !!k.up, down: !!k.down });
     }
     return out;
   }
@@ -341,7 +540,7 @@ export class LabDialog implements OnInit, OnDestroy {
   async accept() { const c = this.consent(); if (c && await this.lab.acceptPack(c.path, c.info.hash)) this.consent.set(null); }
   async removePack() { if (await this.ui.confirm(tr('Remove device pack'), tr('Remove {0} from this computer?', this.pack()?.name ?? ''), tr('Remove'), true)) await this.lab.removePack(); }
 
-  wizard(add: boolean) { this.ui.labWizard.set({ add }); this.ui.open('labWizard'); }
+  wizard(add: boolean) { this.ui.labWizard.set({ add, kind: this.lab.kind() }); this.ui.open('labWizard'); }
 
   connect(d: LabDevice) { const p = this.lab.sessionOf(d.id); if (p) void this.tabs.openSession(p); }
   openSessions() { for (const d of this.openable()) this.connect(d); this.ui.close(); }
@@ -349,7 +548,8 @@ export class LabDialog implements OnInit, OnDestroy {
   async removeSel() {
     const ids = [...this.sel()];
     if (!ids.length) return;
-    if (!(await this.ui.confirm(tr('Remove switches'), tr('Remove {0} simulated switches and their sessions? Their configuration is lost.', ids.length), tr('Remove'), true))) return;
+    const msg = this.emu() ? tr('Remove {0} emulated switches? They stop, their disks on the host and their sessions are deleted.', ids.length) : tr('Remove {0} simulated switches and their sessions? Their configuration is lost.', ids.length);
+    if (!(await this.ui.confirm(tr('Remove switches'), msg, tr('Remove'), true))) return;
     if (await this.lab.remove(ids, true)) this.sel.set(new Set());
   }
 
@@ -391,7 +591,7 @@ export class LabDialog implements OnInit, OnDestroy {
     if (this.tab() !== 'topo' && ds.length >= 2) void this.startCable(ds[0].id, ds[1].id);
   }
   clickNode(d: LabDevice) {
-    this.focus.set(d.id); this.cfg.set('');
+    this.focus.set(d.id); this.cfg.set(''); this.tail.set('');
     if (!this.cableMode()) return;
     const c = this.cable();
     if (!c || (c.a && c.b)) { this.cable.set({ a: d.id, aPort: '', aPorts: [], b: '', bPort: '', bPorts: [] }); return; }

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack } from './models';
+  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -63,6 +63,27 @@ export class Backend {
   labPackInfo(path: string) { return this.call<LabPack>('LabPackInfo', path); }
   labPackAccept(path: string, hash: string) { return this.call<LabView>('LabPackAccept', path, hash); }
   labPackRemove() { return this.call<LabView>('LabPackRemove'); }
+  emuState() { return this.call<LabView>('EmuState'); }
+  emuCheckHost(session: string) { return this.call<EmuHost>('EmuCheckHost', session); }
+  emuRemoveHost(session: string) { return this.call<LabView>('EmuRemoveHost', session); }
+  emuAddImage(path: string) { return this.call<LabView>('EmuAddImage', path); }
+  emuImportAppliance(path: string) { return this.call<LabView>('EmuImportAppliance', path); }
+  emuSetImageFile(id: string, path: string) { return this.call<LabView>('EmuSetImageFile', id, path); }
+  emuSaveImage(im: EmuImage, clearPassword: boolean) { return this.call<LabView>('EmuSaveImage', im, clearPassword); }
+  emuRemoveImage(id: string) { return this.call<LabView>('EmuRemoveImage', id); }
+  emuUpload(id: string, host: string) { return this.call<LabView>('EmuUpload', id, host); }
+  emuAdd(r: EmuRequest) { return this.call<LabView>('EmuAdd', r); }
+  emuStart(ids: string[]) { return this.call<LabView>('EmuStart', ids); }
+  emuStop(ids: string[]) { return this.call<LabView>('EmuStop', ids); }
+  emuRestart(ids: string[]) { return this.call<LabView>('EmuRestart', ids); }
+  emuReset(ids: string[]) { return this.call<LabView>('EmuReset', ids); }
+  emuRemove(ids: string[], sessions: boolean) { return this.call<LabView>('EmuRemove', ids, sessions); }
+  emuConnect(l: LabLink) { return this.call<LabView>('EmuConnect', l); }
+  emuDisconnect(id: string, port: string) { return this.call<LabView>('EmuDisconnect', id, port); }
+  emuSetLink(id: string, port: string, up: boolean) { return this.call<LabView>('EmuSetLink', id, port, up); }
+  emuPlace(id: string, x: number, y: number) { return this.call<void>('EmuPlace', id, x, y); }
+  emuFreePorts(id: string) { return this.call<string[] | null>('EmuFreePorts', id); }
+  emuConsoleTail(id: string) { return this.call<string>('EmuConsoleTail', id); }
   labAdd(r: LabRequest) { return this.call<LabView>('LabAdd', r); }
   labStart(ids: string[]) { return this.call<LabView>('LabStart', ids); }
   labStop(ids: string[]) { return this.call<LabView>('LabStop', ids); }

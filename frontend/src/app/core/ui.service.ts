@@ -46,7 +46,7 @@ export class Ui {
   /** Sessions the Edit Sessions dialog changes. */
   readonly bulkPaths = signal<string[]>([]);
   /** New Lab wizard: add = add switches to the lab there is. */
-  readonly labWizard = signal<{ add: boolean }>({ add: false });
+  readonly labWizard = signal<{ add: boolean; kind?: 'sim' | 'emu' }>({ add: false });
   /** Name After Devices: the sessions and where they are (the window's subtitle). */
   readonly nameAfter = signal<{ paths: string[]; title: string }>({ paths: [], title: '' });
   /** What Push to Team… offers: sessions (paths, relative to base) or devices from Discover. */

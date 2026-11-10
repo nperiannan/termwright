@@ -180,6 +180,7 @@ func (a *App) shutdown(context.Context) {
 	fsMgr.StopAll()
 	a.IperfServerStop()
 	a.labShutdown()
+	a.emuShutdown()
 	a.mcpStop()
 	if a.terms != nil {
 		a.terms.CloseAll()

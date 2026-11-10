@@ -129,7 +129,7 @@ export function sessionAddr(n: SessionNode): string {
                  <app-folder-icon [depth]="r.depth ?? 0" [env]="folderEnv(n.path)" [open]="expanded().has(n.path)" [size]="roomy() ? 22 : 16" /> 
                 <span class="name">{{ n.name }}</span>
                 @if (env(n); as e) { <span class="env envtag" [style.background]="e.color" [style.color]="e.fg" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
-                @if (labFolder(n)) { <span class="labpill" [class.on]="lab.running() > 0" title="Simulated lab - right-click to start or stop">{{ lab.running() }} / {{ lab.devices().length }} running</span> }
+                @if (labFolder(n)) { @let lp = labPill(n); <span class="labpill" [class.on]="lp.on > 0" [title]="lp.title">{{ lp.text }}</span> }
                  <span class="count">{{ counts().get(n.path) ?? 0 }}</span> 
               } @else {
                 <span class="twisty"></span>
@@ -248,13 +248,28 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   protected wol = inject(Wol);
   protected lab = inject(LabService);
 
-  /** A session of the simulated lab: running, starting or stopped. */
+  /** A session of a lab: running, starting or stopped. */
   labDot(n: SessionNode): { cls: string; title: string } | null {
-    const d = this.lab.deviceOf(n.hostname, n.port);
+    const d = this.lab.deviceOf(n.hostname, n.port, n.path);
     if (!d) return null;
+    if (d.state) return d.state === 'running' ? { cls: 'up', title: 'Emulated switch - running' } : d.state === 'stopped' ? { cls: 'unk', title: 'Emulated switch - stopped' }
+      : d.state === 'failed' ? { cls: 'down', title: 'Emulated switch - ' + (d.error || 'failed') } : { cls: 'warn', title: 'Emulated switch - ' + (d.stateText || d.state) };
     return d.running ? { cls: 'up', title: 'Simulated switch - running' + (d.logins ? ', ' + d.logins + ' login' + (d.logins > 1 ? 's' : '') : '') } : { cls: 'unk', title: 'Simulated switch - stopped' };
   }
-  labFolder(n: SessionNode) { const st = this.lab.state(); return !!st?.exists && n.isFolder && n.path === st.folder; }
+  /** The lab whose folder this is ('' = none). */
+  labKind(n: SessionNode): '' | 'sim' | 'emu' {
+    if (!n.isFolder) return '';
+    if (this.lab.sim()?.exists && n.path === this.lab.sim()!.folder) return 'sim';
+    if (this.lab.emu()?.exists && n.path === this.lab.emu()!.folder) return 'emu';
+    return '';
+  }
+  labFolder(n: SessionNode) { return this.labKind(n) !== ''; }
+  labPill(n: SessionNode) {
+    const k = this.labKind(n), v = k === 'emu' ? this.lab.emu() : this.lab.sim();
+    const on = k === 'emu' ? this.lab.emuRunning() : this.lab.simRunning();
+    return { on, text: on + ' / ' + (v?.devices?.length ?? 0) + (k === 'emu' ? ' ready' : ' running'), title: k === 'emu' ? 'Emulated lab - right-click to start or stop' : 'Simulated lab - right-click to start or stop' };
+  }
+  private labDo(n: SessionNode, f: () => unknown) { const k = this.labKind(n); if (k) this.lab.kind.set(k); void f(); }
   protected ops = inject(SessionOps);
   private backend = inject(Backend);
   private async wake(path: string, then: 'none' | 'connect') {
@@ -795,8 +810,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'Edit All Sessions in Folder...', action: () => this.bulkEdit(this.pathsIn(n)) },
           { label: 'Back Up Configurations', action: () => this.backUp([n.path + '/']) },
           { label: 'Name After Devices...', action: () => this.nameAfter(this.pathsIn(n), n.path) },
-          ...(this.labFolder(n) ? [{ separator: true }, { label: 'Start Lab', action: () => void this.lab.start() }, { label: 'Stop Lab', action: () => void this.lab.stop() },
-            { label: 'Open Lab Window...', action: () => this.ui.open('lab') }, { label: 'Add Switches...', action: () => { this.ui.labWizard.set({ add: true }); this.ui.open('labWizard'); } }, { separator: true }] : []),
+          ...(this.labFolder(n) ? [{ separator: true }, { label: 'Start Lab', action: () => this.labDo(n, () => this.lab.start()) }, { label: 'Stop Lab', action: () => this.labDo(n, () => this.lab.stop()) },
+            { label: 'Open Lab Window...', action: () => this.labDo(n, () => this.ui.open('lab')) }, { label: 'Add Switches...', action: () => this.labDo(n, () => { this.ui.labWizard.set({ add: true }); this.ui.open('labWizard'); }) }, { separator: true }] : []),
           { label: 'Change Checklist...', action: () => this.checklist([n.path + '/']) },
           { label: 'Run and Collect...', action: () => this.collect([n.path + '/']) },
           ...this.pushItems(this.pathsIn(n), n.path),
