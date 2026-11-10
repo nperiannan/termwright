@@ -12,6 +12,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -73,40 +75,43 @@ var emuLab struct {
 	cpu              map[string]float64 // CPU use now, in cores (1 = one core busy)
 	ready            map[string]bool    // the console showed the ready text since the VM started (it may scroll out of the log's end later)
 	personaAfterBoot map[string]bool    // the persona file is written once the VM has booted (its folder did not exist yet)
+	perr             map[string]string  // why the persona file could not be written
+	packProfiles     []emu.Image        // the device pack's image profiles (refreshed by EmuState)
 	personaTried     map[string]bool    // that was tried once already (no second round)
 }
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
 type EmuDevice struct {
-	ID        string       `json:"id"`
-	OS        string       `json:"os"` // device type
-	Model     string       `json:"model"`
-	Image     string       `json:"image"`
-	Version   string       `json:"version"`
-	Serial    string       `json:"serial"`
-	MAC       string       `json:"mac"`
-	Hostname  string       `json:"hostname"`
-	MgmtIP    string       `json:"mgmtIp"`
-	Port      int          `json:"port"`
-	Ports     int          `json:"ports"`
-	Running   bool         `json:"running"`
-	Logins    int          `json:"logins"`
-	Unsaved   bool         `json:"unsaved"`
-	X         int          `json:"x"`
-	Y         int          `json:"y"`
-	State     string       `json:"state"` // stopped, uploading, booting, day0, running, failed
-	StateText string       `json:"stateText"`
-	CPU       float64      `json:"cpu"`   // % of its vCPUs, now
-	Cores     float64      `json:"cores"` // host cores it uses now
-	CPUs      int          `json:"cpus"`
-	RAM       int          `json:"ram"`
-	Console   int          `json:"console"`
-	SSH       string       `json:"ssh"` // how its management is reached, as text
-	Error     string       `json:"error"`
-	DiskGB    int          `json:"diskGb"`
-	Template  string       `json:"template"`
-	Persona   *emu.Persona `json:"persona"`
-	PersonaOK bool         `json:"personaOk"` // the persona file in its disk is the current one
+	ID           string       `json:"id"`
+	OS           string       `json:"os"` // device type
+	Model        string       `json:"model"`
+	Image        string       `json:"image"`
+	Version      string       `json:"version"`
+	Serial       string       `json:"serial"`
+	MAC          string       `json:"mac"`
+	Hostname     string       `json:"hostname"`
+	MgmtIP       string       `json:"mgmtIp"`
+	Port         int          `json:"port"`
+	Ports        int          `json:"ports"`
+	Running      bool         `json:"running"`
+	Logins       int          `json:"logins"`
+	Unsaved      bool         `json:"unsaved"`
+	X            int          `json:"x"`
+	Y            int          `json:"y"`
+	State        string       `json:"state"` // stopped, uploading, booting, day0, running, failed
+	StateText    string       `json:"stateText"`
+	CPU          float64      `json:"cpu"`   // % of its vCPUs, now
+	Cores        float64      `json:"cores"` // host cores it uses now
+	CPUs         int          `json:"cpus"`
+	RAM          int          `json:"ram"`
+	Console      int          `json:"console"`
+	SSH          string       `json:"ssh"` // how its management is reached, as text
+	Error        string       `json:"error"`
+	DiskGB       int          `json:"diskGb"`
+	Template     string       `json:"template"`
+	Persona      *emu.Persona `json:"persona"`
+	PersonaOK    bool         `json:"personaOk"` // the persona file in its disk is the current one
+	PersonaError string       `json:"personaError"`
 }
 
 // EmuLinkView is a cable, with port names.
@@ -130,25 +135,26 @@ type EmuImageView struct {
 
 // EmuView is the emulated lab for the Lab window (shaped like LabView).
 type EmuView struct {
-	Kind      string            `json:"kind"` // "emu"
-	Exists    bool              `json:"exists"`
-	Running   bool              `json:"running"`
-	Folder    string            `json:"folder"`
-	MgmtNet   string            `json:"mgmtNet"`
-	Mgmt      string            `json:"mgmt"`
-	Devices   []EmuDevice       `json:"devices"`
-	Links     []EmuLinkView     `json:"links"`
-	Sessions  map[string]string `json:"sessions"`
-	Consoles  map[string]string `json:"consoles"`
-	Models    []LabModel        `json:"models"`
-	OS        map[string]LabOS  `json:"os"`
-	Host      string            `json:"host"`
-	HostInfo  *emu.HostInfo     `json:"hostInfo"`
-	Hosts     []EmuHost         `json:"hosts"`
-	Images    []EmuImageView    `json:"images"`
-	KVM       bool              `json:"kvm"`
-	Templates []emu.Template    `json:"templates"`
-	Usage     EmuUsage          `json:"usage"`
+	Kind        string            `json:"kind"` // "emu"
+	Exists      bool              `json:"exists"`
+	Running     bool              `json:"running"`
+	Folder      string            `json:"folder"`
+	MgmtNet     string            `json:"mgmtNet"`
+	Mgmt        string            `json:"mgmt"`
+	Devices     []EmuDevice       `json:"devices"`
+	Links       []EmuLinkView     `json:"links"`
+	Sessions    map[string]string `json:"sessions"`
+	Consoles    map[string]string `json:"consoles"`
+	Models      []LabModel        `json:"models"`
+	OS          map[string]LabOS  `json:"os"`
+	Host        string            `json:"host"`
+	HostInfo    *emu.HostInfo     `json:"hostInfo"`
+	Hosts       []EmuHost         `json:"hosts"`
+	Images      []EmuImageView    `json:"images"`
+	KVM         bool              `json:"kvm"`
+	Templates   []emu.Template    `json:"templates"`
+	Usage       EmuUsage          `json:"usage"`
+	DeviceTypes []EmuDeviceType   `json:"deviceTypes"`
 }
 
 // EmuUsage is what the lab takes of its host now (stopped switches take nothing).
@@ -166,13 +172,17 @@ type EmuUsage struct {
 
 // EmuGroup asks for Count VMs of an image.
 type EmuGroup struct {
-	Template string `json:"template"` // a template (its image, resources, persona, serial and MAC start), or:
-	Image    string `json:"image"`
-	Count    int    `json:"count"`
-	Names    string `json:"names"`
-	CPUs     int    `json:"cpus"`
-	RAM      int    `json:"ram"`
-	DiskGB   int    `json:"diskGb"`
+	Template    string `json:"template"` // a template (its image, resources, persona, serial and MAC start), or:
+	Model       string `json:"model"`    // a persona model of the image ("" = the image as it is)
+	Module      string `json:"module"`
+	SerialStart string `json:"serialStart"`
+	MACStart    string `json:"macStart"`
+	Image       string `json:"image"`
+	Count       int    `json:"count"`
+	Names       string `json:"names"`
+	CPUs        int    `json:"cpus"`
+	RAM         int    `json:"ram"`
+	DiskGB      int    `json:"diskGb"`
 }
 
 // EmuRequest makes the emulated lab (or adds VMs to it).
@@ -195,7 +205,7 @@ func (a *App) emuLoad() {
 	emuLab.loaded = true
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
 	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
-	emuLab.personaTried = map[string]bool{}
+	emuLab.personaTried, emuLab.perr = map[string]bool{}, map[string]string{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
 		_ = json.Unmarshal(b, &emuLab.f)
 	}
@@ -393,7 +403,14 @@ func (a *App) EmuAddImage(p string) (EmuView, error) {
 	}
 	base := filepath.Base(p)
 	name := strings.TrimSuffix(base, filepath.Ext(base))
-	im := emu.Image{ID: randHex(4), Name: name, File: p, FileName: base, Size: size, SHA256: sum, DeviceType: guessDeviceType(name), CPUs: 1, RAM: 2048, NICs: 8, NIC: "e1000", Disk: "ide", Ready: "login:", Login: "admin"}
+	im := emu.Image{ID: randHex(4), Name: name, File: p, FileName: base, Size: size, SHA256: sum, DeviceType: guessDeviceType(name), CPUs: 1, RAM: 2048, NICs: 8, NIC: "e1000", Disk: "ide", Ready: "login:", Login: "admin",
+		Version: versionIn(base)}
+	if pr, ver := a.emuRecognise(base); pr != nil {
+		keep := im
+		im = *pr
+		im.ID, im.File, im.FileName, im.Size, im.SHA256, im.Match = keep.ID, keep.File, keep.FileName, keep.Size, keep.SHA256, ""
+		im.Version = orStr(ver, keep.Version)
+	}
 	emuLab.mu.Lock()
 	a.emuLoad()
 	emuLab.f.Images = append(emuLab.f.Images, im)
@@ -756,18 +773,26 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 			names[name] = true
 			v := emu.VM{ID: "v" + randHex(3), Name: name, Image: im.ID, Index: next, CPUs: orInt(g.CPUs, im.CPUs), RAM: orInt(g.RAM, im.RAM)}
 			switch {
+			case g.SerialStart != "":
+				v.Serial = emu.NextSerial(g.SerialStart, k)
 			case tp != nil && tp.SerialStart != "":
 				v.Serial = emu.NextSerial(tp.SerialStart, made+k)
 			case im.Serial != "":
 				v.Serial = sim.Generate(im.Serial)
 			}
 			v.DiskGB = g.DiskGB
+			if g.MACStart != "" {
+				v.BaseMAC = emu.NextMAC(g.MACStart, k)
+			}
+			if g.Model != "" && im.Persona != nil {
+				v.Persona = &emu.Persona{Slots: []emu.Slot{{Num: 1, Model: g.Model, Serial: v.Serial, Module: g.Module, Master: true}}}
+			}
 			if tp != nil {
 				v.Template, v.DiskGB = tp.ID, orInt(g.DiskGB, tp.DiskGB)
-				if tp.MACStart != "" {
+				if tp.MACStart != "" && g.MACStart == "" {
 					v.BaseMAC = emu.NextMAC(tp.MACStart, made+k)
 				}
-				if tp.Model != "" && im.Persona != nil {
+				if tp.Model != "" && im.Persona != nil && g.Model == "" {
 					v.Persona = &emu.Persona{Slots: []emu.Slot{{Num: 1, Model: tp.Model, Serial: v.Serial, Module: tp.Module, Master: true}}, Values: tp.Values}
 				}
 			}
@@ -984,11 +1009,12 @@ func (a *App) emuStart(host string, ids []string) {
 					vv.Persona.Applied = w.hash
 				}
 				delete(emuLab.personaTried, w.v.ID)
+				delete(emuLab.perr, w.v.ID)
 			case strings.Contains(out, "no filesystem") && !emuLab.personaTried[w.v.ID]:
 				emuLab.personaAfterBoot[w.v.ID] = true // its folder appears on the first boot
 				emuLab.personaTried[w.v.ID] = true
 			default:
-				emuLab.errs[w.v.ID] = "Persona file: " + strings.TrimSpace(strings.TrimPrefix(lastLine(out+errText(err)), "fail "))
+				emuLab.perr[w.v.ID] = strings.TrimSpace(strings.TrimPrefix(lastLine(out+errText(err)), "fail "))
 			}
 			emuLab.mu.Unlock()
 		}
@@ -1169,7 +1195,15 @@ func (a *App) emuDay0(host string, v emu.VM) {
 			time.Sleep(10 * time.Second)
 		}
 		if addr == "" {
-			fail(fmt.Errorf("no DHCP address after 2 minutes: %v", err))
+			hint := " Check that a DHCP server serves the host's network."
+			emuLab.mu.Lock()
+			for _, h := range emuLab.f.Hosts {
+				if h.Session == host && h.Info.Virt != "" && h.Info.Virt != "none" && h.Info.Virt != "unknown" {
+					hint = " The host is itself a VM (" + h.Info.Virt + "): its virtual switch must let the switches' MAC addresses through (VMware: Promiscuous mode, MAC address changes and Forged transmits on its port group)."
+				}
+			}
+			emuLab.mu.Unlock()
+			fail(fmt.Errorf("no DHCP address after 2 minutes (%v).%s", err, hint))
 			return
 		}
 		a.emuSetAddress(v.ID, addr)
@@ -1250,8 +1284,10 @@ func (a *App) emuPoll(force bool) emu.Status {
 
 // EmuState returns the emulated lab (and reads its VMs' state on the host).
 func (a *App) EmuState() (EmuView, error) {
+	prof := a.emuPackProfiles()
 	emuLab.mu.Lock()
 	a.emuLoad()
+	emuLab.packProfiles = prof
 	has := emuLab.f.Lab != nil && len(emuLab.f.Lab.VMs) > 0
 	emuLab.mu.Unlock()
 	if has {
@@ -1264,7 +1300,7 @@ func (a *App) EmuState() (EmuView, error) {
 
 func (a *App) emuView() EmuView {
 	f := &emuLab.f
-	v := EmuView{Kind: "emu", Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
+	v := EmuView{Kind: "emu", DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
 	for i := range f.Hosts {
 		if f.Hosts[i].Session == f.Host {
 			v.HostInfo = &f.Hosts[i].Info
@@ -1272,6 +1308,9 @@ func (a *App) emuView() EmuView {
 	}
 	onHost := map[string]bool{}
 	for _, im := range f.Images {
+		if im.Version == "" {
+			im.Version = versionIn(im.FileName)
+		}
 		iv := EmuImageView{Image: im, Upload: emuLab.upload[im.ID]}
 		iv.Password = ""
 		if pw, _ := secrets.Lookup(emuImageKey(im.ID)); pw != "" {
@@ -1348,7 +1387,7 @@ func (a *App) emuView() EmuView {
 				d.StateText = "running · day-0 failed"
 			}
 		}
-		d.DiskGB, d.Template, d.Persona = vm.DiskGB, vm.Template, vm.Persona
+		d.DiskGB, d.Template, d.Persona, d.PersonaError = vm.DiskGB, vm.Template, vm.Persona, emuLab.perr[vm.ID]
 		if im != nil && im.Persona != nil && vm.Persona != nil {
 			if txt, err := im.Persona.Render(vm, vm.Persona); err == nil {
 				d.PersonaOK = emu.Hash(txt) == vm.Persona.Applied
@@ -1958,9 +1997,8 @@ func (a *App) emuPersonaReboot(host, id string) {
 		return
 	}
 	emuLab.state[id] = "persona"
-	script := l.ShutdownScript([]string{id}, 90)
 	emuLab.mu.Unlock()
-	_, _ = a.emuRun(host, script, 3*time.Minute)
+	a.emuPowerOff(host, id, 90*time.Second)
 	emuLab.mu.Lock()
 	delete(emuLab.state, id)
 	emuLab.mu.Unlock()
@@ -2203,4 +2241,229 @@ func (a *App) EmuSetMACs(ids []string, start string) (EmuView, error) {
 		return EmuView{}, err
 	}
 	return a.EmuState()
+}
+
+// emuPowerOff asks a VM to shut down (ACPI, as the power button) and stops it
+// when it has not after wait.
+func (a *App) emuPowerOff(host, id string, wait time.Duration) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	v := l.VMByID(id)
+	if v == nil {
+		emuLab.mu.Unlock()
+		return
+	}
+	mon, stop := l.MonitorPort(*v), l.StopScript([]string{id})
+	emuLab.mu.Unlock()
+	if cl, err := a.emuClient(context.Background(), host); err == nil {
+		if conn, err := cl.Dial("tcp", "127.0.0.1:"+strconv.Itoa(mon)); err == nil {
+			_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+			_, _ = fmt.Fprintf(conn, "system_powerdown\r\n")
+			buf := make([]byte, 512)
+			_, _ = conn.Read(buf)
+			time.Sleep(300 * time.Millisecond)
+			_ = conn.Close()
+		}
+	}
+	for end := time.Now().Add(wait); time.Now().Before(end); time.Sleep(2 * time.Second) {
+		if _, up := a.emuPoll(true).Up[id]; !up {
+			break
+		}
+	}
+	_, _ = a.emuRun(host, stop, time.Minute)
+}
+
+var versionRe = regexp.MustCompile(`\d+\.\d+\.\d+(?:\.\d+)?`)
+
+// versionIn finds a version number in a file name ("vm-33.4.1.15.x86_64" → 33.4.1.15).
+func versionIn(name string) string { return versionRe.FindString(name) }
+
+// emuPackProfiles are the image profiles of the loaded device pack (its emulator.json).
+func (a *App) emuPackProfiles() []emu.Image {
+	simLab.mu.Lock()
+	defer simLab.mu.Unlock()
+	_ = a.labLoad()
+	if simLab.pack == nil || len(simLab.pack.Emulator) == 0 {
+		return nil
+	}
+	var pf emuProfiles
+	if json.Unmarshal(simLab.pack.Emulator, &pf) != nil {
+		return nil
+	}
+	return pf.Images
+}
+
+// emuRecognise picks the pack's profile whose file name pattern matches, with the version it names.
+func (a *App) emuRecognise(file string) (*emu.Image, string) {
+	for _, pr := range a.emuPackProfiles() {
+		if pr.Match == "" {
+			continue
+		}
+		re, err := regexp.Compile(pr.Match)
+		if err != nil {
+			continue
+		}
+		m := re.FindStringSubmatch(file)
+		if m == nil {
+			continue
+		}
+		ver := ""
+		if i := re.SubexpIndex("version"); i > 0 && i < len(m) {
+			ver = m[i]
+		}
+		p := pr
+		return &p, ver
+	}
+	return nil, ""
+}
+
+// EmuDeviceType is a device the emulated lab can make: a persona model of an
+// image kind, or a plain image kind, with the images (versions) that can be it.
+type EmuDeviceType struct {
+	Key     string            `json:"key"`     // "<kind>|<model>"
+	Model   string            `json:"model"`   // "" = the image as it is
+	Kind    string            `json:"kind"`    // the image kind (its profile name, e.g. what the pack calls it)
+	OSName  string            `json:"osName"`  // shown after the model
+	Modules []string          `json:"modules"` // modules it can take
+	ModName string            `json:"modName"` // what a module is called
+	Images  []string          `json:"images"`  // image ids, newest version first
+	CPUs    int               `json:"cpus"`
+	RAM     int               `json:"ram"`
+	Values  map[string]string `json:"values"`
+}
+
+// emuDeviceTypes lists what can be made (lock held; profiles from the pack).
+func (a *App) emuDeviceTypes(profiles []emu.Image) []EmuDeviceType {
+	kindOf := func(im emu.Image) string { return orStr(personaKind(im), im.Name) }
+	byKind := map[string][]emu.Image{}
+	var order []string
+	add := func(k string) {
+		if _, ok := byKind[k]; !ok {
+			order = append(order, k)
+			byKind[k] = nil
+		}
+	}
+	for _, pr := range profiles {
+		add(kindOf(pr))
+	}
+	for _, im := range emuLab.f.Images {
+		if im.Version == "" {
+			im.Version = versionIn(im.FileName)
+		}
+		k := kindOf(im)
+		add(k)
+		byKind[k] = append(byKind[k], im)
+	}
+	var out []EmuDeviceType
+	for _, k := range order {
+		ims := byKind[k]
+		sort.SliceStable(ims, func(i, j int) bool { return versionLess(ims[j].Version, ims[i].Version) })
+		var ids []string
+		for _, im := range ims {
+			if im.File != "" {
+				ids = append(ids, im.ID)
+			}
+		}
+		// the persona of the kind: an image's, or the pack profile's
+		var def *emu.PersonaDef
+		ref := emu.Image{}
+		for _, im := range ims {
+			if im.Persona != nil {
+				def, ref = im.Persona, im
+				break
+			}
+		}
+		if def == nil {
+			for _, pr := range profiles {
+				if kindOf(pr) == k && pr.Persona != nil {
+					def, ref = pr.Persona, pr
+				}
+			}
+		}
+		if def == nil {
+			if len(ims) > 0 {
+				ref = ims[0]
+			}
+			out = append(out, EmuDeviceType{Key: k + "|", Kind: k, OSName: ref.DeviceType, Images: ids, CPUs: ref.CPUs, RAM: ref.RAM})
+			continue
+		}
+		vals := map[string]string{}
+		for _, v := range def.Values {
+			vals[v.Key] = v.Default
+		}
+		for _, m := range def.Models {
+			out = append(out, EmuDeviceType{Key: k + "|" + m.Name, Model: m.Name, Kind: k, OSName: orStr(def.OSName, ref.DeviceType), Modules: m.Modules, ModName: def.Modules, Images: ids, CPUs: ref.CPUs, RAM: ref.RAM, Values: vals})
+		}
+	}
+	return out
+}
+
+// personaKind names the kind of an image with a persona (images of one kind are its versions).
+func personaKind(im emu.Image) string {
+	if im.Persona == nil {
+		return ""
+	}
+	return im.Name
+}
+
+// versionLess compares dotted versions numerically.
+func versionLess(a, b string) bool {
+	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(pa) || i < len(pb); i++ {
+		var x, y int
+		if i < len(pa) {
+			x, _ = strconv.Atoi(pa[i])
+		}
+		if i < len(pb) {
+			y, _ = strconv.Atoi(pb[i])
+		}
+		if x != y {
+			return x < y
+		}
+	}
+	return false
+}
+
+// EmuSuggestion is a first serial number and MAC address that look real for a model.
+type EmuSuggestion struct {
+	Serial string `json:"serial"`
+	MAC    string `json:"mac"`
+}
+
+// EmuSuggest makes a serial number and a base MAC in the format the device pack
+// gives for the model (or the nearest model of its family), else neutral ones.
+func (a *App) EmuSuggest(model string) EmuSuggestion {
+	simLab.mu.Lock()
+	p := simLab.pack
+	simLab.mu.Unlock()
+	if p != nil {
+		m, ok := p.ModelOf(model)
+		if !ok {
+			fam := strings.SplitN(model, "-", 2)[0]
+			for _, x := range p.Models {
+				if strings.HasPrefix(x.SKU, fam+"-") && x.Serial != "" {
+					m, ok = x, true
+					break
+				}
+			}
+		}
+		if ok && m.Serial != "" {
+			mac := sim.Generate(m.MAC)
+			if emu.NextMAC(mac, 0) == "" {
+				mac = sim.Generate("02:{h:2}:{h:2}:{h:2}:{h:2}:00")
+			}
+			return EmuSuggestion{Serial: sim.Generate(m.Serial), MAC: macBlock(mac)}
+		}
+	}
+	return EmuSuggestion{Serial: sim.Generate("{L:ABCDEFHJKLMNPRSTUVWXY}{L:ABCDEFHJKLMNPRSTUVWXY}{YY}{WW}{L:GKQ}-{N:5}"), MAC: macBlock(sim.Generate("02:{h:2}:{h:2}:{h:2}:{h:2}:00"))}
+}
+
+// macBlock rounds a MAC down to a block of 64 (the switch's ports follow it).
+func macBlock(mac string) string {
+	hw, err := net.ParseMAC(mac)
+	if err != nil || len(hw) != 6 {
+		return mac
+	}
+	hw[5] &^= 63
+	return hw.String()
 }

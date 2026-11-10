@@ -83,6 +83,21 @@ func TestLabPackConsentAddStartReload(t *testing.T) {
 	if !strings.Contains(string(out), "Name    : sw1") {
 		t.Fatalf("show system: %s", out)
 	}
+	// the pack's emulator profiles: an image file is recognised, its models are devices
+	emuLab.loaded, emuLab.f = false, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	img := filepath.Join(dir, "demo-vm-1.2.3.qcow2")
+	_ = os.WriteFile(img, []byte("x"), 0o644)
+	ev, err := a.EmuAddImage(img)
+	if err != nil || len(ev.Images) != 1 || ev.Images[0].Persona == nil || ev.Images[0].Version != "1.2.3" || ev.Images[0].Name != "Demo VM" {
+		t.Fatalf("recognise %v %+v", err, ev.Images)
+	}
+	if len(ev.DeviceTypes) != 2 || ev.DeviceTypes[0].Model != "D100-24T-4X" || ev.DeviceTypes[0].OSName != "Demo OS" || len(ev.DeviceTypes[0].Images) != 1 {
+		t.Fatalf("device types %+v", ev.DeviceTypes)
+	}
+	if sg := a.EmuSuggest("D100-24T-4X"); !strings.HasPrefix(sg.Serial, "DM") || !strings.HasPrefix(sg.MAC, "02:00:00:") {
+		t.Fatalf("suggest %+v", sg)
+	}
 	// a deleted session comes back when the lab starts; serials in the pack's format
 	if err := st.Delete("Simulated Lab/sw1"); err != nil {
 		t.Fatal(err)

@@ -33,6 +33,7 @@ type HostInfo struct {
 	LanIf    string   `json:"lanIf"`    // where switches join the host's network: a bridge, or the uplink (macvtap)
 	LanKind  string   `json:"lanKind"`  // "bridge" or "macvtap" ("" = not possible)
 	Guestfs  bool     `json:"guestfs"`  // libguestfs is there (persona files)
+	Virt     string   `json:"virt"`     // the host is itself a VM: vmware, kvm, microsoft… ("none" = hardware)
 	Problems []string `json:"problems"` // what stops VMs from running
 	Notes    []string `json:"notes"`    // what works, but differently
 }
@@ -51,6 +52,7 @@ mkdir -p ` + Q(dir) + ` 2>/dev/null && echo "diskfree=$(df -Pk ` + Q(dir) + ` | 
 sudo -n true 2>/dev/null && echo sudo=yes
 command -v base64 >/dev/null 2>&1 || echo nobase64=yes
 command -v guestfish >/dev/null 2>&1 && echo guestfs=yes
+echo "virt=$(systemd-detect-virt 2>/dev/null || echo unknown)"
 dev=$(ip -o route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p'); echo "uplink=$dev"
 [ -n "$dev" ] && [ -d "/sys/class/net/$dev/wireless" ] && echo wifi=yes
 for b in /sys/class/net/*/bridge; do [ -d "$b" ] || continue; n=$(basename "$(dirname "$b")"); echo "bridge=$n:$(ls "/sys/class/net/$n/brif" 2>/dev/null | tr '\n' ',')"; done
@@ -94,6 +96,8 @@ func ParseProbe(out, dir string) HostInfo {
 			h.DiskFree, _ = strconv.ParseInt(v, 10, 64)
 		case "sudo":
 			h.Sudo = true
+		case "virt":
+			h.Virt = v
 		case "guestfs":
 			h.Guestfs = true
 		case "uplink":
@@ -153,6 +157,9 @@ func ParseProbe(out, dir string) HostInfo {
 	}
 	if h.LanKind == "" && h.Uplink != "" && !h.Wifi {
 		h.LanIf, h.LanKind = h.Uplink, "macvtap" // straight onto the network port, the host's set-up untouched
+	}
+	if h.LanKind != "" && h.Virt != "" && h.Virt != "none" && h.Virt != "unknown" {
+		h.Notes = append(h.Notes, "This host is itself a VM ("+h.Virt+"): switches on its network get addresses only when its virtual switch lets their own MAC addresses through - on VMware allow Promiscuous mode, MAC address changes and Forged transmits on its port group; on Hyper-V turn on MAC address spoofing. Otherwise use port forwarding.")
 	}
 	if !h.Guestfs && h.QEMU != "" {
 		h.Notes = append(h.Notes, "libguestfs-tools is not installed: persona files (a device model and serial number for the image) cannot be written. Set Up installs it.")

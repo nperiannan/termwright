@@ -27,6 +27,7 @@ type PersonaDef struct {
 	Values   []PersonaValue `json:"values"`  // more fields, the same for all slots
 	Stack    bool           `json:"stack"`   // the persona can be a stack of several slots
 	Modules  string         `json:"modules"` // what a module is called ("VIM")
+	OSName   string         `json:"osName"`  // what the image is called as such a device (shown after the model)
 }
 
 // PersonaModel is a model a VM can be, with the modules it can take.
@@ -145,16 +146,21 @@ d=%s
 cat > %s <<'TW_PERSONA_END'
 %sTW_PERSONA_END
 target=""
-for f in $(guestfish --ro -a "$d" run : list-filesystems 2>/dev/null | cut -d: -f1); do
+if ! fsl=$(guestfish --ro -a "$d" run : list-filesystems 2>&1); then
+ case "$fsl" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start (it needs to read the host's kernel): run Set Up QEMU/KVM, which makes /boot/vmlinuz readable";; *) echo "fail libguestfs: $(echo $fsl | tr '\n' ' ' | cut -c1-300)";; esac
+ rm -f %s; exit 0
+fi
+for f in $(echo "$fsl" | cut -d: -f1); do
  if [ "$(guestfish --ro -a "$d" -m "$f" is-dir %s 2>/dev/null)" = true ]; then target="$f %s"; break; fi
  if [ "$(guestfish --ro -a "$d" run : vfs-label "$f" 2>/dev/null)" = %s ]; then target="$f /"; break; fi
 done
 if [ -z "$target" ]; then echo "fail no filesystem with %s in the disk (has the switch booted once?)"; rm -f %s; exit 0; fi
 set -- $target
 p="$2/%s"; [ "$2" = / ] && p="/%s"
-if out=$(guestfish -a "$d" -m "$1" upload %s "$p" 2>&1); then echo "ok $1"; else echo "fail $(echo $out | tr '\n' ' ')"; fi
+if out=$(guestfish -a "$d" -m "$1" upload %s "$p" 2>&1); then echo "ok $1"; else
+ case "$out" in *vmlinuz*|*"Permission denied"*|*supermin*) echo "fail libguestfs cannot start (it needs to read the host's kernel): run Set Up QEMU/KVM, which makes /boot/vmlinuz readable - $(echo $out | tr '\n' ' ' | cut -c1-200)";; *) echo "fail $(echo $out | tr '\n' ' ' | cut -c1-300)";; esac; fi
 rm -f %s
-`, Q(disk), Q(tmp), ensureNL(content), Q(dir), Q(dir), Q(label), Q(dir), Q(tmp), base, base, Q(tmp), Q(tmp))
+`, Q(disk), Q(tmp), ensureNL(content), Q(tmp), Q(dir), Q(dir), Q(label), Q(dir), Q(tmp), base, base, Q(tmp), Q(tmp))
 }
 
 // ShutdownScript asks VMs to power off (ACPI) and waits up to secs seconds,

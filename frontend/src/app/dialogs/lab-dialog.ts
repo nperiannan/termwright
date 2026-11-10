@@ -129,7 +129,7 @@ const NW = 150, NH = 46;
                 @for (d of lab.devices(); track d.id) {
                   <tr [class.sel]="sel().has(d.id)" [class.foc]="focus() === d.id" (click)="focusOn(d)">
                     <td class="c"><input type="checkbox" [checked]="sel().has(d.id)" (change)="toggleSel(d.id)" (click)="$event.stopPropagation()" /></td>
-                    <td><b>{{ d.hostname }}</b></td><td><span class="os">{{ lab.osShort(d.os) }}</span> {{ d.model }}</td><td>{{ d.persona?.slots?.[0]?.model ?? '-' }}@if ((d.persona?.slots?.length ?? 0) > 1) { <span class="pill b">{{ tr('stack of {0}', d.persona!.slots.length) }}</span> }@if (d.persona && !d.personaOk) { <span class="pendm" [title]="tr('Not written into the switch yet: Apply')"> ●</span> }</td>
+                    <td><b>{{ d.hostname }}</b></td><td><span class="os">{{ lab.osShort(d.os) }}</span> {{ d.model }}</td><td>{{ d.persona?.slots?.[0]?.model ?? '-' }}@if ((d.persona?.slots?.length ?? 0) > 1) { <span class="pill b">{{ tr('stack of {0}', d.persona!.slots.length) }}</span> }@if (d.personaError) { <span class="bad" [title]="d.personaError"> ⚠</span> } @else if (d.persona && !d.personaOk) { <span class="pendm" [title]="tr('Not written into the switch yet: Apply')"> ●</span> }</td>
                     <td class="mono">{{ d.serial || '-' }}</td><td>{{ d.cpus }} · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }</td>
                     <td class="mono">{{ d.ssh }}</td><td class="mono">telnet :{{ d.console }}</td>
                     <td><span class="pill" [class]="'pill ' + stCls(d)" [title]="d.error || ''">@if (d.state === 'running') { <span class="dot"></span> } @else if (d.state === 'stopped') { <span class="dot off"></span> } @else if (d.state !== 'failed') { <span class="dot y"></span> }{{ tr(d.stateText || d.state || '') }}</span></td>
@@ -151,6 +151,7 @@ const NW = 150, NH = 46;
                     <p class="muted small">{{ tr('The switch gets them when it starts next (Restart). A disk only grows; 0 keeps the image’s size.') }}</p>
                     @if (personaDef(d); as pd) {
                       <h4>{{ pd.name || tr('Persona') }} @if (d.persona) { <span [class]="d.personaOk ? 'ok' : 'warn'">{{ d.personaOk ? '✓ ' + tr('in the switch') : '● ' + tr('not written yet') }}</span> }</h4>
+                      @if (d.personaError) { <p class="err small">{{ tr('The persona file could not be written:') }} {{ d.personaError }}</p> }
                       <table class="slots"><thead><tr><th>#</th><th>{{ tr('Model') }}</th><th>{{ tr('Serial') }}</th><th>{{ pd.modules || tr('Module') }}</th>@if (pd.stack) { <th>{{ tr('Primary') }}</th><th>{{ tr('Ports') }}</th><th></th> }</tr></thead>
                         <tbody>@for (sl of slots(); track $index) {
                           <tr><td>{{ $index + 1 }}</td>

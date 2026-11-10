@@ -53,6 +53,7 @@ type Image struct {
 	AddrCmd    string      `json:"addrCmd"`            // a CLI command that prints the management address (host's network mode)
 	Persona    *PersonaDef `json:"persona,omitempty"`  // a file that makes the image act as a given device
 	Version    string      `json:"version"`            // the software version of the image (for the lists)
+	Match      string      `json:"match,omitempty"`    // profiles: a regexp on the file name that picks this profile; a "version" group gives the version
 	Serial     string      `json:"serial"`             // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
 }
 
@@ -269,7 +270,7 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		switch {
 		case l.Mgmt == "lan" && l.LanKind == "macvtap":
 			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip link add link %s name %s address %s type macvtap mode bridge; sudo -n ip link set %s up\n", t, Q(l.LanIf), t, l.MAC(v, 0), t)
-			fmt.Fprintf(&b, " idx=$(cat /sys/class/net/%s/ifindex); sudo -n chown \"$(id -un)\" /dev/tap$idx\n", t)
+			fmt.Fprintf(&b, " idx=$(cat /sys/class/net/%s/ifindex); for i in 1 2 3 4 5 6 7 8 9 10; do [ -e /dev/tap$idx ] && break; sleep 0.2; done; sudo -n chown \"$(id -un)\" /dev/tap$idx\n", t)
 			redir = " 3<>/dev/tap$idx"
 		case l.Mgmt == "bridge" || l.Mgmt == "lan":
 			br := l.Bridge()

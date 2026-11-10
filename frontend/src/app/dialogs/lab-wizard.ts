@@ -1,12 +1,14 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
-import { EmuGroup, EmuHostInfo, LabGroup, LabModel, SessionNode } from '../core/models';
+import { EmuDeviceType, EmuGroup, EmuHostInfo, LabGroup, LabModel, SessionNode } from '../core/models';
+import { Backend } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { Icon } from '../components/icon';
 
 interface Row extends LabGroup { os: string; }
+interface DRow { key: string; image: string; module: string; count: number; names: string; serial: string; mac: string; cpus: number; ram: number; diskGb: number; open: boolean; }
 const CABLING = [
   { v: 'leaf-spine', label: 'Leaf-spine', hint: 'The first two switches (the first row) as the core pair with a link between them; every other switch to both cores.' },
   { v: 'chain', label: 'Chain', hint: 'Each switch to the next one.' },
@@ -61,20 +63,33 @@ const CABLING = [
             }
             @case (1) {
               @if (kind() === 'emu') {
-              <div class="tbl"><table>
-                <thead><tr><th>{{ tr('Template or image') }}</th><th>{{ tr('How many') }}</th><th>{{ tr('Names') }}</th><th>vCPU</th><th>RAM (MB)</th><th>{{ tr('Data ports') }}</th><th></th></tr></thead>
-                <tbody>@for (r of erows(); track $index) {
-                  <tr><td><select [ngModel]="r.template ? 't:' + r.template : 'i:' + r.image" (ngModelChange)="setSource($index, $event)" [name]="'ei' + $index">
-                      @if (templates().length) { <optgroup [label]="tr('Templates')">@for (t of templates(); track t.id) { <option [value]="'t:' + t.id">{{ t.name }}</option> }</optgroup> }
-                      <optgroup [label]="tr('Images')">@for (im of images(); track im.id) { <option [value]="'i:' + im.id">{{ im.name }}{{ im.version ? ' · ' + im.version : '' }}</option> }</optgroup></select></td>
-                    <td><input type="number" min="0" max="200" [ngModel]="r.count" (ngModelChange)="epatch($index, { count: +$event })" [name]="'en' + $index" class="num" /></td>
-                    <td><input class="mono" [ngModel]="r.names" (ngModelChange)="epatch($index, { names: $event })" [name]="'ep' + $index" spellcheck="false" /></td>
-                    <td><input type="number" min="1" [ngModel]="r.cpus" (ngModelChange)="epatch($index, { cpus: +$event })" [name]="'ec' + $index" class="num s" /></td>
-                    <td><input type="number" min="128" step="256" [ngModel]="r.ram" (ngModelChange)="epatch($index, { ram: +$event })" [name]="'er' + $index" class="num" /></td>
-                    <td>{{ imageOf(r.image)?.nics ? imageOf(r.image)!.nics - 1 : 0 }}</td>
-                    <td><button type="button" class="sm" (click)="edrop($index)" [disabled]="erows().length === 1">✕</button></td></tr>
+              @if (!deviceTypes().length) {
+                <div class="empty2"><b>{{ tr('No images yet') }}</b><p class="muted small">{{ tr('Add the VM image files you downloaded (for example the EXOS or VOSS VM). Termwright recognises them and lists the devices they can be.') }}</p>
+                  <button type="button" class="primary" (click)="addImage(-1)">{{ tr('Add Image File…') }}</button></div>
+              } @else {
+              <div class="tbl"><table class="dev">
+                <thead><tr><th>{{ tr('Device') }}</th><th>{{ tr('Software') }}</th><th>{{ tr('How many') }}</th><th>{{ tr('Names') }}</th><th></th></tr></thead>
+                <tbody>@for (r of drows(); track $index) {
+                  <tr><td><select class="devsel" [ngModel]="r.key" (ngModelChange)="setDevice($index, $event)" [name]="'dk' + $index">
+                      @for (g of deviceGroups(); track g.name) { <optgroup [label]="g.name">@for (d of g.items; track d.key) { <option [value]="d.key">{{ d.model || d.kind }}{{ d.model && d.osName ? ' · ' + d.osName : '' }}</option> }</optgroup> }</select></td>
+                    <td>@if (dtOf(r.key)?.images?.length) { <select [ngModel]="r.image" (ngModelChange)="dpatch($index, { image: $event })" [name]="'di' + $index">@for (id of dtOf(r.key)!.images; track id) { <option [value]="id">{{ imageLabel(id) }}</option> }</select> }
+                      @else { <button type="button" class="sm primary" (click)="addImage($index)">{{ tr('Add Image File…') }}</button> }</td>
+                    <td><input type="number" min="1" max="200" [ngModel]="r.count" (ngModelChange)="dpatch($index, { count: +$event })" [name]="'dn' + $index" class="num" /></td>
+                    <td><input class="mono" [ngModel]="r.names" (ngModelChange)="dpatch($index, { names: $event })" [name]="'dm' + $index" spellcheck="false" [title]="tr('{n} is the number')" /></td>
+                    <td><button type="button" class="sm" (click)="ddrop($index)" [disabled]="drows().length === 1" [title]="tr('Remove')">✕</button></td></tr>
+                  <tr class="sub"><td colspan="5"><div class="subrow">
+                    @if (dtOf(r.key)?.modules?.length) { <label>{{ dtOf(r.key)!.modName || tr('Module') }} <select [ngModel]="r.module" (ngModelChange)="dpatch($index, { module: $event })" [name]="'dv' + $index"><option value="">{{ tr('none') }}</option>@for (m of dtOf(r.key)!.modules; track m) { <option [value]="m">{{ m }}</option> }</select></label> }
+                    <label>{{ tr('Serial from') }} <input class="mono ser" [ngModel]="r.serial" (ngModelChange)="dpatch($index, { serial: $event })" [name]="'ds' + $index" spellcheck="false" /></label>
+                    <label>{{ tr('MAC from') }} <input class="mono mac" [ngModel]="r.mac" (ngModelChange)="dpatch($index, { mac: $event })" [name]="'dc' + $index" spellcheck="false" /></label>
+                    <button type="button" class="sm" (click)="suggest($index)" [title]="tr('Make a new serial number and MAC address in the model’s format')">↻ {{ tr('New') }}</button>
+                    <a class="res" (click)="dpatch($index, { open: !r.open })">{{ r.open ? '▾' : '▸' }} {{ tr('{0} vCPU · {1}', r.cpus, gb(r.ram)) }}{{ r.diskGb ? ' · ' + r.diskGb + ' GB' : '' }}</a>
+                    @if (r.open) { <label>vCPU <input type="number" min="1" [ngModel]="r.cpus" (ngModelChange)="dpatch($index, { cpus: +$event })" [name]="'dpc' + $index" class="num s" /></label>
+                      <label>RAM <input type="number" min="256" step="256" [ngModel]="r.ram" (ngModelChange)="dpatch($index, { ram: +$event })" [name]="'dpr' + $index" class="num" /> MB</label>
+                      <label>{{ tr('Disk') }} <input type="number" min="0" [ngModel]="r.diskGb" (ngModelChange)="dpatch($index, { diskGb: +$event })" [name]="'dpd' + $index" class="num s" /> GB</label> }
+                  </div></td></tr>
                 }</tbody></table></div>
-              <div class="bar"><button type="button" class="sm" (click)="emore()">+ {{ tr('Add a row') }}</button></div>
+              <div class="bar"><button type="button" class="sm" (click)="dmore()">+ {{ tr('Add Another Device') }}</button><span class="spacer"></span><a class="muted small" (click)="addImage(-1)">{{ tr('Add an image file…') }}</a></div>
+              }
               @if (hostInfo(); as h) {
                 <div class="kpis three"><div><small>vCPU</small><b>{{ need().cpus }}</b><span class="muted">{{ tr('of {0}', h.cpus) }}</span><i class="meter"><i [style.width.%]="pct(need().cpus, h.cpus * 2)"></i></i></div>
                   <div><small>RAM</small><b>{{ gb(need().ram) }}</b><span class="muted">{{ tr('of {0} free', gb(h.memFree)) }}</span><i class="meter"><i [style.width.%]="pct(need().ram, h.memFree)" [class.over]="need().ram > h.memFree"></i></i></div>
@@ -196,7 +211,11 @@ const CABLING = [
     .kpis small { color: var(--muted); font-size: 11.5px; } .kpis b { font-size: 20px; } .kpis .fits { font-size: 13px; font-weight: 600; }
     .meter { display: block; height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin-top: 4px; } .meter i { display: block; height: 100%; background: var(--accent); } .meter i.over { background: var(--danger); }
     .checks { border: 1px solid var(--line); border-radius: 10px; padding: 4px 12px; } .checks div { padding: 5px 0; border-top: 1px solid var(--line); font-size: 13px; } .checks div:first-child { border-top: 0; }
-    input.num.s { width: 56px; }
+    input.num.s { width: 56px; } .devsel { width: 220px; } table.dev td > select:not(.devsel) { width: 190px; } table.dev td > input.mono { width: 110px; } table.dev td > input.num { width: 60px; }
+    table.dev tr.sub td { border-top: 0; padding-top: 0; padding-bottom: 9px; }
+    .subrow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted);
+      label { display: inline-flex; gap: 6px; align-items: center; } input, select { height: 26px; font-size: 12px; } .ser { width: 140px; } .mac { width: 142px; } .res { cursor: pointer; color: var(--accent); } }
+    .empty2 { text-align: center; padding: 30px; border: 1px dashed var(--line); border-radius: 12px; p { max-width: 480px; margin: 6px auto 14px; } }
     .kv { display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; font-size: 13px; margin-bottom: 14px; } .kv > span:nth-child(odd) { color: var(--muted); }
     .chk { display: inline-flex; gap: 8px; align-items: center; }
   `],
@@ -204,6 +223,7 @@ const CABLING = [
 export class LabWizard {
   protected ui = inject(Ui);
   protected lab = inject(LabService);
+  private backend = inject(Backend);
   protected tr = tr;
   protected kind = signal<'sim' | 'emu'>(this.ui.labWizard().kind ?? this.lab.kind());
   protected add = this.ui.labWizard().add && !!(this.kind() === 'emu' ? this.lab.emu() : this.lab.sim())?.exists;
@@ -223,14 +243,8 @@ export class LabWizard {
     this.hostInfo.set(this.hostOf(this.host));
     this.mgmt = this.bestMgmt(this.hostInfo());
     this.erows.set(this.images().slice(0, 2).map((im, i) => ({ image: im.id, count: i ? 4 : 2, names: (i ? 'leaf' : 'core') + '-{n}', cpus: im.cpus || 1, ram: im.ram || 1024 })));
-    const tps = this.templates(), want = this.lab.wizardTemplate();
-    this.lab.wizardTemplate.set('');
-    if (tps.length) {
-      const pick = (want ? tps.filter(t => t.id === want) : tps.slice(0, 2));
-      this.erows.set([]);
-      pick.forEach((t, i) => { this.erows.set([...this.erows(), { image: t.image, count: 1, names: '', cpus: 1, ram: 1024 }]); this.setSource(i, 't:' + t.id); this.epatch(i, { count: want || i ? (want ? 1 : 4) : 2 }); });
-    }
     if (this.add && this.kind() === 'emu') this.erows.set(this.erows().slice(0, 1).map(r => ({ ...r, count: 1, names: 'sw-{n}' })));
+    void this.firstDevices();
   }
   osShort(os: string) { return this.lab.sim()?.os?.[os]?.short || os.toUpperCase(); }
   setKind(k: 'sim' | 'emu') { if (k === 'sim' && !this.lab.sim()?.pack) return; this.kind.set(k); }
@@ -255,6 +269,51 @@ export class LabWizard {
     return out;
   });
   hostLabel() { return this.hostChoices().find(h => h.path === this.host)?.label.replace(/ \(.*\)$/, '') ?? this.host; }
+  // devices (emulated): a model the images can be, the image (version) to use, serial and MAC start
+  protected deviceTypes = computed(() => this.lab.emu()?.deviceTypes ?? []);
+  protected deviceGroups = computed(() => {
+    const g = new Map<string, EmuDeviceType[]>();
+    for (const d of this.deviceTypes()) { const n = d.model ? (d.osName || d.kind) : this.tr('Images as they are'); g.set(n, [...(g.get(n) ?? []), d]); }
+    return [...g].map(([name, items]) => ({ name, items }));
+  });
+  protected drows = signal<DRow[]>([]);
+  dtOf(key: string) { return this.deviceTypes().find(d => d.key === key); }
+  dtLabel(key: string) { const d = this.dtOf(key); return d ? (d.model ? d.model + (d.osName ? ' ' + d.osName : '') : d.kind) : ''; }
+  imageLabel(id: string) { const im = this.imageOf(id); return im ? (im.version ? im.version + ' · ' : '') + im.fileName : id; }
+  dpatch(i: number, p: Partial<DRow>) { this.drows.set(this.drows().map((r, j) => (j === i ? { ...r, ...p } : r))); }
+  private newRow(key: string, count: number): DRow {
+    const d = this.dtOf(key);
+    const base = (d?.model || d?.kind || 'sw').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return { key, image: d?.images?.[0] ?? '', module: '', count, names: base + '-{n}', serial: '', mac: '', cpus: d?.cpus || 1, ram: d?.ram || 2048, diskGb: 0, open: false };
+  }
+  async setDevice(i: number, key: string) {
+    const r = this.newRow(key, this.drows()[i]?.count || 1);
+    this.dpatch(i, r); await this.suggest(i);
+  }
+  async suggest(i: number) {
+    const r = this.drows()[i]; const d = r && this.dtOf(r.key);
+    const s = await this.backend.emuSuggest(d?.model || d?.kind || '').catch(() => null);
+    if (s) this.dpatch(i, { serial: s.serial, mac: s.mac });
+  }
+  async dmore() { const d = this.deviceTypes()[0]; if (!d) return; this.drows.set([...this.drows(), this.newRow(d.key, 1)]); await this.suggest(this.drows().length - 1); }
+  ddrop(i: number) { this.drows.set(this.drows().filter((_, j) => j !== i)); }
+  async addImage(i: number) {
+    const p = await this.backend.chooseOpenFile(tr('Add VM Image'), [{ displayName: tr('VM images'), pattern: '*.qcow2;*.img;*.vmdk;*.raw' }]).catch(() => '');
+    if (!p || !(await this.lab.addImage(p))) return;
+    if (i >= 0) { const r = this.drows()[i]; const d = this.dtOf(r.key); if (d?.images?.length) this.dpatch(i, { image: d.images[0] }); }
+    else if (!this.drows().length && this.deviceTypes().length) await this.dmore();
+  }
+  private async firstDevices() {
+    const want = this.lab.wizardTemplate(); this.lab.wizardTemplate.set('');
+    const t = want ? this.templates().find(x => x.id === want) : undefined;
+    const ds = this.deviceTypes();
+    if (t) {
+      const key = ds.find(d => d.model === t.model && d.images.includes(t.image))?.key ?? ds.find(d => d.images.includes(t.image))?.key ?? '';
+      if (key) { this.drows.set([{ ...this.newRow(key, 1), image: t.image, module: t.module, cpus: t.cpus, ram: t.ram, diskGb: t.diskGb, serial: t.serialStart, mac: t.macStart }]); if (!t.serialStart || !t.macStart) await this.suggest(0); return; }
+    }
+    const first = ds.find(d => d.images.length) ?? ds[0];
+    if (first) { this.drows.set([this.newRow(first.key, this.add ? 1 : 2)]); await this.suggest(0); }
+  }
   setUp() { this.lab.setupFor.set(this.host); this.ui.open('lab'); }
   async check() { const h = await this.lab.checkHost(this.host); if (h) { this.hostInfo.set(h.info); if (!this.add) this.mgmt = this.bestMgmt(h.info); } }
   /** The first port joins the host's network (DHCP) whenever the host allows it. */
@@ -270,7 +329,7 @@ export class LabWizard {
   }
   mgmtLabel(m: string) { return m === 'lan' ? tr('The host’s network (bridged, DHCP)') : m === 'bridge' ? tr('Lab bridge on the host') : tr('Port forwarding on the host'); }
   protected fits = computed(() => { const h = this.hostInfo(); if (!h) return []; return this.images().slice(0, 3).map(im => ({ name: im.name, n: Math.max(0, Math.min(Math.floor(h.memFree / (im.ram || 1024)), Math.floor(h.cpus * 2 / (im.cpus || 1)))) })); });
-  protected need = computed(() => this.erows().reduce((n, r) => ({ cpus: n.cpus + r.count * (r.cpus || 1), ram: n.ram + r.count * (r.ram || 1024), disk: n.disk + r.count * 1024 }), { cpus: 0, ram: 0, disk: 0 }));
+  protected need = computed(() => this.drows().reduce((n, r) => ({ cpus: n.cpus + r.count * (r.cpus || 1), ram: n.ram + r.count * (r.ram || 1024), disk: n.disk + r.count * 1024 }), { cpus: 0, ram: 0, disk: 0 }));
   pct(a: number, b: number) { return b ? Math.min(100, Math.round(a * 100 / b)) : 0; }
   gb(mb: number) { return mb >= 1024 ? (mb / 1024).toFixed(mb % 1024 ? 1 : 0) + ' GB' : mb + ' MB'; }
   epatch(i: number, p: Partial<EmuGroup>) { this.erows.set(this.erows().map((r, j) => (j === i ? { ...r, ...p } : r))); }
@@ -283,9 +342,9 @@ export class LabWizard {
     return true;
   }
 
-  protected total = computed(() => (this.kind() === 'emu' ? this.erows() : this.rows()).reduce((n, r) => n + (r.count > 0 ? r.count : 0), 0));
+  protected total = computed(() => (this.kind() === 'emu' ? this.drows().filter(r => !!r.image) : this.rows()).reduce((n, r) => n + (r.count > 0 ? r.count : 0), 0));
   protected summary = computed(() => {
-    const parts = this.kind() === 'emu' ? this.erows().filter(r => r.count > 0).map(r => `${r.count} × ${r.template ? this.templates().find(t => t.id === r.template)?.name ?? '' : this.imageOf(r.image)?.name ?? ''}`) : this.rows().filter(r => r.count > 0).map(r => `${r.count} × ${r.model}`);
+    const parts = this.kind() === 'emu' ? this.drows().filter(r => r.count > 0 && r.image).map(r => `${r.count} × ${this.dtLabel(r.key)}`) : this.rows().filter(r => r.count > 0).map(r => `${r.count} × ${r.model}`);
     return parts.length ? tr('{0} switches', this.total()) + ' (' + parts.join(', ') + ')' : tr('No switches chosen');
   });
   protected cablingLabel = () => CABLING.find(c => c.v === this.cable)?.label ?? '';
@@ -314,7 +373,7 @@ export class LabWizard {
     const names: { name: string; os: string; old?: boolean }[] = [];
     const em = this.kind() === 'emu';
     if (this.add) for (const d of (em ? this.lab.emu() : this.lab.sim())?.devices ?? []) names.push({ name: d.hostname, os: d.os, old: true });
-    for (const r of em ? this.erows().map(r => ({ ...r, os: '' })) : this.rows()) for (let i = 1; i <= Math.min(r.count, 12); i++) names.push({ name: r.names.replace('{n}', String(i)), os: r.os });
+    for (const r of em ? this.drows().map(r => ({ ...r, os: '' })) : this.rows()) for (let i = 1; i <= Math.min(r.count, 12); i++) names.push({ name: r.names.replace('{n}', String(i)), os: r.os });
     const shown = names.slice(0, 16);
     let cores: number[] = [];
     if (this.cable === 'leaf-spine') {
@@ -341,7 +400,8 @@ export class LabWizard {
 
   async create() {
     if (this.kind() === 'emu') {
-      const ok = await this.lab.addEmu({ host: this.add ? (this.lab.emu()?.host ?? this.host) : this.host, groups: this.erows().filter(r => r.count > 0), cabling: this.cable, mgmt: this.mgmt, mgmtNet: this.mgmtNet, start: this.start });
+      const groups = this.drows().filter(r => r.count > 0 && r.image).map(r => ({ image: r.image, model: this.dtOf(r.key)?.model ?? '', module: r.module, count: r.count, names: r.names, serialStart: r.serial, macStart: r.mac, cpus: r.cpus, ram: r.ram, diskGb: r.diskGb }));
+      const ok = await this.lab.addEmu({ host: this.add ? (this.lab.emu()?.host ?? this.host) : this.host, groups, cabling: this.cable, mgmt: this.mgmt, mgmtNet: this.mgmtNet, start: this.start });
       if (ok) this.ui.open('lab');
       return;
     }

@@ -31,6 +31,7 @@ import (
 //	os/<id>/os.json      prompts, modes, errors, keep rules, commands
 //	os/<id>/*.tmpl       outputs
 //	tests/*.txt          transcripts ("> command" then the expected output)
+//	emulator.json        optional: image profiles and personas for the emulated lab
 
 // Pack is a loaded device pack.
 type Pack struct {
@@ -47,6 +48,7 @@ type Pack struct {
 	PortTypes map[string]PortType `json:"-"`
 	Hash      string              `json:"-"` // sha256 of the .vm file
 	Tests     map[string]string   `json:"-"` // tests/*.txt
+	Emulator  []byte              `json:"-"` // emulator.json: image profiles for the emulated lab (the app reads it)
 }
 
 // PortType is what the letters of a model name stand for ("MW" multirate…).
@@ -169,6 +171,10 @@ func LoadPack(fsys fs.FS, hash string) (*Pack, error) {
 		return nil, err
 	}
 	p.Models = models.Models
+	if f, err := fsys.Open("emulator.json"); err == nil {
+		p.Emulator, _ = io.ReadAll(io.LimitReader(f, 8<<20))
+		f.Close()
+	}
 	if err := readJSON(fsys, "ports.json", &p.PortTypes); err != nil {
 		return nil, err
 	}
