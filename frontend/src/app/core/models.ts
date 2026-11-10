@@ -89,19 +89,24 @@ export interface LabPack { id: string; name: string; version: string; vendor: st
 export interface LabOS { name: string; short: string; configCommand: string; }
 export interface LabDevice { id: string; os: string; model: string; version: string; serial: string; mac: string; hostname: string; mgmtIp: string; port: number; ports: number; running: boolean; logins: number; unsaved: boolean; x: number; y: number;
   /** Emulated lab only. */
-  state?: string; stateText?: string; cpu?: number; cores?: number; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; }
+  state?: string; stateText?: string; cpu?: number; cores?: number; diskGb?: number; template?: string; persona?: EmuPersona | null; personaOk?: boolean; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; }
 export interface LabLink { a: string; aPort: string; b: string; bPort: string; up?: boolean; down?: boolean; }
 export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
   /** Emulated lab only. */
-  kind?: 'emu'; mgmt?: string; consoles?: Record<string, string> | null; host?: string; hostInfo?: EmuHostInfo | null; hosts?: EmuHost[] | null; images?: EmuImage[] | null; kvm?: boolean; }
+  kind?: 'emu'; mgmt?: string; consoles?: Record<string, string> | null; host?: string; hostInfo?: EmuHostInfo | null; hosts?: EmuHost[] | null; images?: EmuImage[] | null; kvm?: boolean; templates?: EmuTemplate[] | null; usage?: EmuUsage; }
+export interface EmuPersonaDef { name: string; file: string; template: string; models: { name: string; modules: string[] | null }[] | null; values: { key: string; label: string; default: string }[] | null; stack: boolean; modules: string; }
+export interface EmuSlot { num: number; model: string; serial: string; module: string; master: boolean; ports: { port: number; vif: number }[] | null; }
+export interface EmuPersona { slots: EmuSlot[]; values: Record<string, string> | null; applied?: string; }
+export interface EmuTemplate { id: string; name: string; image: string; cpus: number; ram: number; diskGb: number; model: string; module: string; values: Record<string, string> | null; serialStart: string; macStart: string; }
+export interface EmuUsage { hostCpus: number; hostMemTotal: number; hostMemFree: number; load: number; running: number; vcpus: number; ram: number; cores: number; diskGb: number; }
 export interface EmuHostInfo { user: string; os: string; kernel: string; arch: string; kvm: string; vt: boolean; qemu: string; qemuImg: boolean; cpus: number; load: number; memTotal: number; memFree: number; diskFree: number; sudo: boolean; dir: string; problems: string[] | null; notes: string[] | null; osId: string; pkg: string; plan: string[] | null; canSetup: boolean; uplink: string; bridges: string[] | null; wifi: boolean; lanIf: string; lanKind: string; }
 export interface EmuSetupLine { run: string; kind: string; text: string; }
 export interface EmuSetupDone { run: string; error: string; host: EmuHost | null; }
 export interface EmuHost { session: string; name: string; info: EmuHostInfo; checked: string; }
 export interface EmuAnswer { match: string; send: string; }
-export interface EmuImage { id: string; name: string; file: string; fileName: string; size: number; sha256: string; deviceType: string; cpus: number; ram: number; nics: number; nic: string; disk: string; portName: string; ready: string; login: string; password?: string; prompt: string; day0: string[] | null; answers: EmuAnswer[] | null; extra: string; source: string; serial: string; addrCmd: string;
+export interface EmuImage { id: string; name: string; file: string; fileName: string; size: number; sha256: string; deviceType: string; cpus: number; ram: number; nics: number; nic: string; disk: string; portName: string; ready: string; login: string; password?: string; prompt: string; day0: string[] | null; answers: EmuAnswer[] | null; extra: string; source: string; serial: string; addrCmd: string; persona?: EmuPersonaDef | null; version?: string;
   hasPassword?: boolean; onHost?: boolean; upload?: string; missing?: boolean; }
-export interface EmuGroup { image: string; count: number; names: string; cpus?: number; ram?: number; }
+export interface EmuGroup { template?: string; diskGb?: number; image: string; count: number; names: string; cpus?: number; ram?: number; }
 export interface EmuRequest { host: string; groups: EmuGroup[]; cabling: string; mgmt: string; mgmtNet: string; start: boolean; }
 export interface LabOutput { os: string; command: string; text: string; }
 export interface LabGroup { os?: string; model: string; count: number; names: string; }

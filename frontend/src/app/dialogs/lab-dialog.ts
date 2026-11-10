@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
-import { EmuImage, LabDevice, LabLink, LabOutput, LabPack, SessionNode } from '../core/models';
+import { EmuImage, EmuPersonaDef, EmuSlot, EmuTemplate, LabDevice, LabLink, LabOutput, LabPack, SessionNode } from '../core/models';
 import { Backend } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { Tabs } from '../core/tabs.service';
@@ -55,14 +55,27 @@ const NW = 150, NH = 46;
         </div>
       } @else {
         <div class="ltabs" role="tablist">
-          <button type="button" role="tab" [class.on]="tab() === 'list'" (click)="tab.set('list')">{{ tr('Switches') }} ({{ lab.devices().length }})</button>
+          @if (emu()) {
+            <button type="button" role="tab" [class.on]="tab() === 'hosts'" (click)="tab.set('hosts')"><span class="stepn">1</span>{{ tr('KVM Hosts') }} ({{ hosts().length }})</button>
+            <button type="button" role="tab" [class.on]="tab() === 'images'" (click)="tab.set('images')"><span class="stepn">2</span>{{ tr('Images') }} ({{ images().length }})</button>
+            <button type="button" role="tab" [class.on]="tab() === 'templates'" (click)="tab.set('templates')"><span class="stepn">3</span>{{ tr('Templates') }} ({{ templates().length }})</button>
+            <button type="button" role="tab" [class.on]="tab() === 'list'" (click)="tab.set('list')"><span class="stepn">4</span>{{ tr('Switches') }} ({{ lab.devices().length }})</button>
+          } @else { <button type="button" role="tab" [class.on]="tab() === 'list'" (click)="tab.set('list')">{{ tr('Switches') }} ({{ lab.devices().length }})</button> }
           <button type="button" role="tab" [class.on]="tab() === 'topo'" (click)="tab.set('topo')">{{ tr('Topology') }}</button>
           <button type="button" role="tab" [class.on]="tab() === 'cables'" (click)="tab.set('cables')">{{ tr('Cables') }} ({{ lab.links().length }})</button>
-          @if (emu()) {
-            <button type="button" role="tab" [class.on]="tab() === 'images'" (click)="tab.set('images')">{{ tr('Images') }} ({{ images().length }})</button>
-            <button type="button" role="tab" [class.on]="tab() === 'hosts'" (click)="tab.set('hosts')">{{ tr('KVM Hosts') }} ({{ hosts().length }})</button>
-          } @else { <button type="button" role="tab" [class.on]="tab() === 'outputs'" (click)="openOutputs()">{{ tr('Command Outputs') }} ({{ (lab.state()?.outputs ?? []).length }})</button> }
+          @if (!emu()) { <button type="button" role="tab" [class.on]="tab() === 'outputs'" (click)="openOutputs()">{{ tr('Command Outputs') }} ({{ (lab.state()?.outputs ?? []).length }})</button> }
         </div>
+        @if (emu() && usage(); as u) {
+          <div class="hoststrip">
+            <b>{{ hostName() || tr('No host yet') }}</b>
+            <span [class.ok]="lab.state()?.kvm" [class.warn]="lab.state()?.kvm === false">{{ lab.state()?.kvm === false ? tr('no KVM: slow') : 'KVM' }}</span>
+            <span>{{ tr('{0} of {1} switches running', u.running, lab.devices().length) }}</span>
+            <span class="m">vCPU <b>{{ u.vcpus }}</b> / {{ u.hostCpus || '?' }}<i class="meter"><i [style.width.%]="pct(u.vcpus, u.hostCpus)"></i></i></span>
+            <span class="m">RAM <b>{{ gb(u.ram) }}</b> / {{ gb(u.hostMemTotal) }} · {{ tr('{0} free', gb(u.hostMemFree)) }}<i class="meter"><i [style.width.%]="pct(u.hostMemTotal - u.hostMemFree, u.hostMemTotal)" [class.over]="u.hostMemFree < 1024"></i></i></span>
+            <span class="m">CPU {{ tr('now') }} <b>{{ u.cores.toFixed(1) }}</b> {{ tr('cores') }} · {{ tr('load') }} {{ u.load }}</span>
+            <span class="muted small">{{ tr('A stopped switch frees its vCPU and memory at once.') }}</span>
+          </div>
+        }
         <div class="modal-body">
           @if (tab() !== 'images' && tab() !== 'hosts') {
           <div class="bar">
@@ -85,7 +98,9 @@ const NW = 150, NH = 46;
           }
           @if (serialsOpen()) {
             <div class="serbar">
-              <textarea [(ngModel)]="serialText" name="ser" rows="4" spellcheck="false" [placeholder]="tr('One serial number per line')"></textarea>
+              <div class="sercol"><textarea [(ngModel)]="serialText" name="ser" rows="4" spellcheck="false" [placeholder]="tr('One serial number per line - or only the first: the others count up from it')"></textarea>
+                <div class="macrow"><input class="mono" [(ngModel)]="macStart" name="macst" [placeholder]="tr('First MAC, e.g. 00:04:96:a1:00:00')" spellcheck="false" />
+                  <button type="button" class="sm" (click)="applyMACs()" [disabled]="!macStart.trim()" [title]="tr('Each switch gets a block of 64 addresses from it')">{{ tr('Set MACs') }}</button></div></div>
               <div><p class="muted small">@if (emu()) { {{ tr('Given in order to {0} - the switches ticked in the list, or all of them. Each VM gets it as its SMBIOS serial number (system, board and chassis) when it starts next - Restart them; whether the operating system shows it depends on the image.', sel().size ? tr('{0} ticked switches', sel().size) : tr('all {0} switches', lab.devices().length)) }} }
                   @else { {{ tr('Given in order to {0} - the switches ticked in the list, or all of them. Each switch shows it in show version / show switch / show sys-info and in the outputs ({serial}).', sel().size ? tr('{0} ticked switches', sel().size) : tr('all {0} switches', lab.devices().length)) }} }</p>
                 <button type="button" class="primary sm" (click)="applySerials()" [disabled]="!serialText.trim()">{{ tr('Set Serial Numbers') }}</button>
@@ -109,12 +124,13 @@ const NW = 150, NH = 46;
               @if (emu()) {
               <div class="tbl"><table>
                 <thead><tr><th class="c"><input type="checkbox" [checked]="allSel()" (change)="selAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th>
-                  <th>{{ tr('Switch') }}</th><th>{{ tr('Image') }}</th><th>{{ tr('Serial') }}</th><th>vCPU · RAM</th><th>{{ tr('SSH (management)') }}</th><th>{{ tr('Console') }}</th><th>{{ tr('State') }}</th><th>CPU</th><th></th></tr></thead>
+                  <th>{{ tr('Switch') }}</th><th>{{ tr('Image') }}</th><th>{{ tr('Model') }}</th><th>{{ tr('Serial') }}</th><th>vCPU · RAM · {{ tr('Disk') }}</th><th>{{ tr('SSH (management)') }}</th><th>{{ tr('Console') }}</th><th>{{ tr('State') }}</th><th>CPU</th><th></th></tr></thead>
                 <tbody>
                 @for (d of lab.devices(); track d.id) {
                   <tr [class.sel]="sel().has(d.id)" [class.foc]="focus() === d.id" (click)="focusOn(d)">
                     <td class="c"><input type="checkbox" [checked]="sel().has(d.id)" (change)="toggleSel(d.id)" (click)="$event.stopPropagation()" /></td>
-                    <td><b>{{ d.hostname }}</b></td><td><span class="os">{{ lab.osShort(d.os) }}</span> {{ d.model }}</td><td class="mono">{{ d.serial || '-' }}</td><td>{{ d.cpus }} · {{ gb(d.ram) }}</td>
+                    <td><b>{{ d.hostname }}</b></td><td><span class="os">{{ lab.osShort(d.os) }}</span> {{ d.model }}</td><td>{{ d.persona?.slots?.[0]?.model ?? '-' }}@if ((d.persona?.slots?.length ?? 0) > 1) { <span class="pill b">{{ tr('stack of {0}', d.persona!.slots.length) }}</span> }@if (d.persona && !d.personaOk) { <span class="pendm" [title]="tr('Not written into the switch yet: Apply')"> ●</span> }</td>
+                    <td class="mono">{{ d.serial || '-' }}</td><td>{{ d.cpus }} · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }</td>
                     <td class="mono">{{ d.ssh }}</td><td class="mono">telnet :{{ d.console }}</td>
                     <td><span class="pill" [class]="'pill ' + stCls(d)" [title]="d.error || ''">@if (d.state === 'running') { <span class="dot"></span> } @else if (d.state === 'stopped') { <span class="dot off"></span> } @else if (d.state !== 'failed') { <span class="dot y"></span> }{{ tr(d.stateText || d.state || '') }}</span></td>
                     <td [title]="tr('{0} host cores now (QEMU’s own threads included)', (d.cores ?? 0).toFixed(2))">{{ d.running ? cpuPct(d) : '-' }}</td>
@@ -122,10 +138,39 @@ const NW = 150, NH = 46;
                       <button type="button" class="sm" (click)="connect(d); $event.stopPropagation()" [disabled]="d.state !== 'running'">SSH</button>
                       <button type="button" class="sm" (click)="d.running || d.state === 'booting' ? lab.stop([d.id]) : lab.start([d.id]); $event.stopPropagation()">{{ d.running || d.state === 'booting' ? tr('Stop') : tr('Start') }}</button></td>
                   </tr>
-                } @empty { <tr><td colspan="10" class="muted">{{ tr('No switches yet: New Lab… makes them from your images.') }}</td></tr> }
+                } @empty { <tr><td colspan="11" class="muted">{{ tr('No switches yet: New Lab… makes them from your templates.') }}</td></tr> }
                 </tbody></table></div>
-              @if (focused(); as d) { @if (d.error) { <p class="err small">{{ d.hostname }}: {{ d.error }}</p> }
-                <div class="tail"><div class="th">{{ tr('{0} · console (last lines)', d.hostname) }}<span class="spacer"></span><a (click)="loadTail()">{{ tr('Refresh') }}</a></div><pre>{{ tail() || tr('(nothing yet)') }}</pre></div> }
+              @if (focused(); as d) { @if (d.error) { <p class="err small">{{ d.error }}</p> }
+                <div class="devpanel">
+                  <div class="dcol">
+                    <h4>{{ d.hostname }} · {{ tr('Resources') }}</h4>
+                    <div class="row2"><label>vCPU <input type="number" min="1" [(ngModel)]="resCpus" name="rc" class="n" /></label>
+                      <label>RAM <input type="number" min="256" step="256" [(ngModel)]="resRam" name="rr" class="n2" /> MB</label>
+                      <label>{{ tr('Disk') }} <input type="number" min="0" [(ngModel)]="resDisk" name="rd" class="n" /> GB</label>
+                      <button type="button" class="sm" (click)="saveResources(d)" [disabled]="lab.busy()">{{ tr('Save') }}</button></div>
+                    <p class="muted small">{{ tr('The switch gets them when it starts next (Restart). A disk only grows; 0 keeps the image’s size.') }}</p>
+                    @if (personaDef(d); as pd) {
+                      <h4>{{ pd.name || tr('Persona') }} @if (d.persona) { <span [class]="d.personaOk ? 'ok' : 'warn'">{{ d.personaOk ? '✓ ' + tr('in the switch') : '● ' + tr('not written yet') }}</span> }</h4>
+                      <table class="slots"><thead><tr><th>#</th><th>{{ tr('Model') }}</th><th>{{ tr('Serial') }}</th><th>{{ pd.modules || tr('Module') }}</th>@if (pd.stack) { <th>{{ tr('Primary') }}</th><th>{{ tr('Ports') }}</th><th></th> }</tr></thead>
+                        <tbody>@for (sl of slots(); track $index) {
+                          <tr><td>{{ $index + 1 }}</td>
+                            <td><select [(ngModel)]="sl.model" [name]="'sm' + $index">@for (m of pd.models ?? []; track m.name) { <option [value]="m.name">{{ m.name }}</option> }</select></td>
+                            <td><input class="mono" [(ngModel)]="sl.serial" [name]="'ss' + $index" /></td>
+                            <td><select [(ngModel)]="sl.module" [name]="'sv' + $index"><option value="">-</option>@for (x of modulesOf(pd, sl.model); track x) { <option [value]="x">{{ x }}</option> }</select></td>
+                            @if (pd.stack) { <td><input type="radio" name="master" [checked]="sl.master" (change)="setMaster($index)" /></td>
+                              <td><input class="mono ports" [(ngModel)]="slotPorts[$index]" [name]="'sp' + $index" placeholder="10:1, 3:3" [title]="tr('Front-panel port : VM port, for the stack links')" /></td>
+                              <td><button type="button" class="sm" (click)="dropSlot($index)" [disabled]="slots().length === 1">✕</button></td> }</tr>
+                        }</tbody></table>
+                      @for (v of pd.values ?? []; track v.key) { <div class="row2"><span class="muted small">{{ v.label || v.key }}</span><input class="mono grow" [(ngModel)]="pvals[v.key]" [name]="'pv' + v.key" [placeholder]="v.default" /></div> }
+                      <div class="btns">@if (pd.stack) { <button type="button" class="sm" (click)="addSlot(pd)">+ {{ tr('Stack Member') }}</button> }
+                        <button type="button" class="sm" (click)="savePersona(d, false)" [disabled]="lab.busy()">{{ tr('Save') }}</button>
+                        <button type="button" class="primary sm" (click)="savePersona(d, true)" [disabled]="lab.busy()">{{ tr('Save and Apply') }}</button>
+                        @if (d.persona) { <button type="button" class="sm" (click)="clearPersona(d)">{{ tr('No Persona') }}</button> }</div>
+                      <p class="muted small">{{ tr('Apply writes {0} into the switch’s disk while it is off and boots it again (a running switch is powered off for it). The first slot’s serial number is the switch’s.', pd.file) }}</p>
+                    }
+                  </div>
+                  <div class="tail"><div class="th">{{ tr('{0} · console (last lines)', d.hostname) }}<span class="spacer"></span><a (click)="loadTail()">{{ tr('Refresh') }}</a></div><pre>{{ tail() || tr('(nothing yet)') }}</pre></div>
+                </div> }
               @else { <p class="muted small note">{{ tr('The real operating system runs in each VM on the KVM host. Termwright boots it, waits for the console to be ready and types the image’s day-0 commands once. Click a switch for its console.') }}</p> }
               @if (!lab.devices().length) { <div class="btns" style="margin-top:10px"><button type="button" class="primary" (click)="wizard(false)" [disabled]="!images().length">{{ tr('New Lab…') }}</button></div> }
               } @else {
@@ -240,23 +285,25 @@ const NW = 150, NH = 46;
             }
             @case ('images') {
               <div class="bar"><button type="button" class="primary" (click)="addImage()" [disabled]="lab.busy()">+ {{ tr('Add Image (.qcow2, .img, .vmdk)…') }}</button>
-                <button type="button" (click)="importAppliance()" [disabled]="lab.busy()">{{ tr('Import GNS3 Appliance (.gns3a)…') }}</button><span class="spacer"></span>
+                <button type="button" (click)="importAppliance()" [disabled]="lab.busy()">{{ tr('Import GNS3 Appliance (.gns3a)…') }}</button>
+                <button type="button" (click)="importProfiles()" [disabled]="lab.busy()" [title]="tr('Image profiles and templates from a file (for example from a private pack)')">{{ tr('Import Profiles (.json)…') }}</button><span class="spacer"></span>
                 <button type="button" (click)="imEdit() && lab.upload(imEdit()!.id)" [disabled]="!imEdit() || !lab.state()?.host || imEdit()!.missing">{{ tr('Copy to Host') }}</button>
                 <button type="button" class="danger-ghost" (click)="removeImage()" [disabled]="!imEdit()">{{ tr('Remove') }}</button></div>
               <div class="split ims">
                 <div class="canvas plain"><table>
-                  <thead><tr><th>{{ tr('Image') }}</th><th>{{ tr('File') }}</th><th>{{ tr('Size') }}</th><th>vCPU · RAM</th><th>{{ tr('Ports') }}</th><th>{{ tr('Ready at') }}</th><th>{{ hostName() || tr('Host') }}</th></tr></thead>
+                  <thead><tr><th>{{ tr('Image') }}</th><th>{{ tr('Version') }}</th><th>{{ tr('File') }}</th><th>{{ tr('Size') }}</th><th>vCPU · RAM</th><th>{{ tr('Ports') }}</th><th>{{ tr('Ready at') }}</th><th>{{ hostName() || tr('Host') }}</th></tr></thead>
                   <tbody>@for (im of images(); track im.id) {
-                    <tr [class.sel]="imEdit()?.id === im.id" (click)="pickImage(im.id)"><td><b>{{ im.name }}</b></td><td class="mono">{{ im.fileName || '-' }}@if (im.missing) { <span class="bad"> · {{ tr('file missing') }}</span> }</td>
+                    <tr [class.sel]="imEdit()?.id === im.id" (click)="pickImage(im.id)"><td><b>{{ im.name }}</b>@if (im.persona) { <span class="pill b" [title]="tr('Can act as other models: {0}', personaModels(im))">{{ im.persona.name || tr('Persona') }}</span> }</td><td>{{ im.version || '-' }}</td><td class="mono">{{ im.fileName || '-' }}@if (im.missing) { <span class="bad"> · {{ tr('file missing') }}</span> }</td>
                       <td>{{ mb(im.size) }}</td><td>{{ im.cpus }} · {{ gb(im.ram) }}</td><td>{{ im.nics }} × {{ im.nic }}</td><td class="mono">{{ im.ready }}</td>
                       <td>@if (im.upload) { <span class="pill b">{{ tr('copying') }} {{ im.upload }}</span> } @else if (im.onHost) { <span class="pill g">✓ {{ tr('on the host') }}</span> } @else { <span class="pill">{{ tr('copied when needed') }}</span> }</td></tr>
-                  } @empty { <tr><td colspan="7" class="muted">{{ tr('No images yet.') }}</td></tr> }</tbody></table>
+                  } @empty { <tr><td colspan="8" class="muted">{{ tr('No images yet.') }}</td></tr> }</tbody></table>
                   <p class="muted small" style="padding:10px 12px">{{ tr('Images are yours: download them from the vendor (several network operating systems offer free VM images) and add them here. Termwright copies each image to the host once; every switch boots from a small copy-on-write disk on top of it.') }}</p></div>
                 <div class="insp wide">
                   @if (imEdit(); as im) {
                     <h4>{{ tr('Image') }}</h4>
                     <div class="kv form">
                       <span>{{ tr('Name') }}</span><input [(ngModel)]="im.name" name="imn" />
+                      <span>{{ tr('Version') }}</span><input [(ngModel)]="im.version" name="imv" placeholder="33.4.1.15" />
                       <span>{{ tr('File') }}</span><span><span class="mono small">{{ im.fileName || '-' }}</span> <a (click)="chooseImageFile(im.id)">{{ tr('Choose…') }}</a></span>
                       <span>{{ tr('Device type') }}</span><input [(ngModel)]="im.deviceType" name="imd" [placeholder]="'Linux, Cisco IOS…'" />
                       <span>vCPU · RAM</span><span class="row2"><input type="number" min="1" [(ngModel)]="im.cpus" name="imc" class="n" /> <input type="number" min="128" step="256" [(ngModel)]="im.ram" name="imr" class="n2" /> MB</span>
@@ -283,6 +330,39 @@ const NW = 150, NH = 46;
                     @if (im.source) { <p class="muted small">{{ tr('From') }}: {{ im.source }}</p> }
                     <div class="btns" style="margin-top:10px"><button type="button" class="primary sm" (click)="saveImage()" [disabled]="lab.busy()">{{ tr('Save') }}</button></div>
                   } @else { <p class="muted small">{{ tr('Click an image for how it boots.') }}</p> }
+                </div>
+              </div>
+            }
+            @case ('templates') {
+              <div class="bar"><button type="button" class="primary" (click)="newTemplate()" [disabled]="!images().length">+ {{ tr('New Template') }}</button><span class="spacer"></span>
+                <button type="button" (click)="tpEdit() && addFromTemplate(tpEdit()!.id)" [disabled]="!tpEdit()?.id || !lab.state()?.host && !hosts().length">{{ tr('Add Switches from It…') }}</button>
+                <button type="button" class="danger-ghost" (click)="removeTemplate()" [disabled]="!tpEdit()?.id">{{ tr('Remove') }}</button></div>
+              <div class="split ims">
+                <div class="canvas plain"><table>
+                  <thead><tr><th>{{ tr('Template') }}</th><th>{{ tr('Image') }}</th><th>{{ tr('Model') }}</th><th>vCPU · RAM · {{ tr('Disk') }}</th><th>{{ tr('Serial from') }}</th><th>{{ tr('MAC from') }}</th><th>{{ tr('Switches') }}</th></tr></thead>
+                  <tbody>@for (t of templates(); track t.id) {
+                    <tr [class.sel]="tpEdit()?.id === t.id" (click)="pickTemplate(t.id)"><td><b>{{ t.name }}</b></td><td>{{ imageName(t.image) }}</td><td>{{ t.model || '-' }}@if (t.module) { + {{ t.module }} }</td>
+                      <td>{{ t.cpus }} · {{ gb(t.ram) }}@if (t.diskGb) { · {{ t.diskGb }} GB }</td><td class="mono">{{ t.serialStart || '-' }}</td><td class="mono">{{ t.macStart || '-' }}</td><td>{{ usedBy(t.id) }}</td></tr>
+                  } @empty { <tr><td colspan="7" class="muted">{{ tr('No templates yet: a template is an image with its resources, the model it acts as, and where serial numbers and MAC addresses start.') }}</td></tr> }</tbody></table></div>
+                <div class="insp wide">
+                  @if (tpEdit(); as t) {
+                    <h4>{{ t.id ? tr('Template') : tr('New Template') }}</h4>
+                    <div class="kv form">
+                      <span>{{ tr('Name') }}</span><input [(ngModel)]="t.name" name="tpn" placeholder="M-48" />
+                      <span>{{ tr('Image') }}</span><select [(ngModel)]="t.image" name="tpi" (ngModelChange)="tpImage($event)">@for (im of images(); track im.id) { <option [value]="im.id">{{ im.name }}{{ im.version ? ' · ' + im.version : '' }}</option> }</select>
+                      @if (personaDefOf(t.image); as pd) {
+                        <span>{{ tr('Model') }}</span><select [(ngModel)]="t.model" name="tpm"><option value="">{{ tr('(the image’s own)') }}</option>@for (m of pd.models ?? []; track m.name) { <option [value]="m.name">{{ m.name }}</option> }</select>
+                        <span>{{ pd.modules || tr('Module') }}</span><select [(ngModel)]="t.module" name="tpx"><option value="">-</option>@for (x of modulesOf(pd, t.model); track x) { <option [value]="x">{{ x }}</option> }</select>
+                        @for (v of pd.values ?? []; track v.key) { <span>{{ v.label || v.key }}</span><input class="mono" [(ngModel)]="tpVals[v.key]" [name]="'tv' + v.key" [placeholder]="v.default" /> }
+                      }
+                      <span>vCPU · RAM</span><span class="row2"><input type="number" min="1" [(ngModel)]="t.cpus" name="tpc" class="n" /> <input type="number" min="256" step="256" [(ngModel)]="t.ram" name="tpr" class="n2" /> MB</span>
+                      <span>{{ tr('Disk') }}</span><span class="row2"><input type="number" min="0" [(ngModel)]="t.diskGb" name="tpd" class="n" /> GB <span class="muted small">{{ tr('0 = the image’s size') }}</span></span>
+                      <span>{{ tr('Serial from') }}</span><input class="mono" [(ngModel)]="t.serialStart" name="tps" placeholder="AR022205Q-40036" spellcheck="false" />
+                      <span>{{ tr('MAC from') }}</span><input class="mono" [(ngModel)]="t.macStart" name="tpmac" placeholder="00:04:96:a1:00:00" spellcheck="false" />
+                    </div>
+                    <p class="muted small">{{ tr('Each new switch from this template takes the next serial number (the last number counts up: …-40036, …-40037) and the next block of 64 MAC addresses.') }}</p>
+                    <div class="btns"><button type="button" class="primary sm" (click)="saveTemplate()" [disabled]="lab.busy() || !t.name || !t.image">{{ tr('Save') }}</button></div>
+                  } @else { <p class="muted small">{{ tr('Click a template, or make a new one from an image.') }}</p> }
                 </div>
               </div>
             }
@@ -341,7 +421,16 @@ const NW = 150, NH = 46;
   </div>`,
   styles: [`
     .labw { width: min(1180px, 96vw); }
-    .modal-head .spacer { flex: 1; } .kindsel { height: 28px; font-size: 12.5px; margin-left: 12px; }
+    .modal-head .spacer { flex: 1; }
+    .pendm { color: var(--warn); font-size: 10px; }
+    .stepn { display: inline-flex; width: 17px; height: 17px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 700; align-items: center; justify-content: center; margin-right: 6px; }
+    .hoststrip { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 8px 18px; border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: 12.5px;
+      .m { display: inline-flex; align-items: center; gap: 6px; } .meter { display: inline-block; width: 70px; height: 6px; border-radius: 4px; background: var(--surface); overflow: hidden; i { display: block; height: 100%; background: var(--accent); } i.over { background: var(--danger); } } }
+    .sercol { display: flex; flex-direction: column; gap: 6px; } .macrow { display: flex; gap: 6px; input { flex: 1; height: 26px; font-size: 12px; } }
+    .devpanel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; margin-top: 10px; .tail { margin-top: 0; } h4 { margin: 0 0 6px; font-size: 13px; }
+      .row2 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; input { height: 26px; } .n { width: 56px; } .n2 { width: 76px; } .grow { flex: 1; } }
+      .dcol { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; overflow: auto; max-height: 300px; }
+      table.slots { width: 100%; margin-bottom: 8px; th, td { padding: 3px 5px; font-size: 12px; } select, input { height: 24px; font-size: 12px; width: 100%; } input[type=radio] { width: auto; } .ports { width: 90px; } } } .kindsel { height: 28px; font-size: 12.5px; margin-left: 12px; }
     .btns.center { justify-content: center; } .where { font-weight: 500; } .warn { color: var(--warn); }
     .pill.y { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
     .dot.y { background: var(--warn); } tr.foc td { box-shadow: inset 0 1px 0 var(--accent), inset 0 -1px 0 var(--accent); }
@@ -419,7 +508,9 @@ export class LabDialog implements OnInit, OnDestroy {
   private backend = inject(Backend);
   protected tr = tr;
   protected NW = NW; protected NH = NH;
-  protected tab = signal<'list' | 'topo' | 'cables' | 'outputs' | 'images' | 'hosts'>('list');
+  protected tab = signal<'list' | 'topo' | 'cables' | 'outputs' | 'images' | 'hosts' | 'templates'>('list');
+  protected templates = computed(() => this.lab.emu()?.templates ?? []);
+  protected usage = computed(() => this.lab.emu()?.usage ?? null);
   protected emu = computed(() => this.lab.kind() === 'emu');
   protected manage = signal(false);
   protected images = computed(() => this.lab.emu()?.images ?? []);
@@ -464,7 +555,7 @@ export class LabDialog implements OnInit, OnDestroy {
   stCls(d: LabDevice) { return d.state === 'running' ? 'g' : d.state === 'failed' ? 'r' : d.state === 'stopped' ? '' : 'y'; }
   nodeCls(d: LabDevice) { return !d.state ? (d.running ? 'on' : 'off') : d.state === 'running' ? 'on' : d.state === 'stopped' ? 'off' : d.state === 'failed' ? 'r' : d.state === 'day0' ? 'b' : 'y'; }
   protected tail = signal('');
-  focusOn(d: LabDevice) { this.focus.set(d.id); this.tail.set(''); void this.loadTail(); }
+  focusOn(d: LabDevice) { this.focus.set(d.id); this.tail.set(''); this.loadDevice(d); void this.loadTail(); }
   async loadTail() { const id = this.focus(); if (id) { const t = await this.lab.consoleTail(id); if (this.focus() === id) this.tail.set(t); } }
   protected picked = computed(() => this.lab.devices().filter(d => this.sel().size ? this.sel().has(d.id) : d.id === this.focus()));
   pickedIds() { return this.picked().map(d => d.id); }
@@ -478,6 +569,66 @@ export class LabDialog implements OnInit, OnDestroy {
   protected imPassword = '';
   protected day0Text = '';
   protected answersText = '';
+  pct(a: number, b: number) { return b ? Math.min(100, Math.round(a * 100 / b)) : 0; }
+  imageName(id: string) { const im = this.images().find(i => i.id === id); return im ? im.name + (im.version ? ' · ' + im.version : '') : '-'; }
+  personaDefOf(imageId: string) { return this.images().find(i => i.id === imageId)?.persona ?? null; }
+  personaDef(d: LabDevice) { return d.image ? this.personaDefOf(d.image) : null; }
+  personaModels(im: EmuImage) { return (im.persona?.models ?? []).map(m => m.name).join(', '); }
+  modulesOf(pd: EmuPersonaDef, model: string) { return pd.models?.find(m => m.name === model)?.modules ?? []; }
+  usedBy(tid: string) { return this.lab.devices().filter(d => d.template === tid).length; }
+  // templates
+  protected tpEdit = signal<EmuTemplate | null>(null);
+  protected tpVals: Record<string, string> = {};
+  pickTemplate(id: string) { const t = this.templates().find(x => x.id === id); if (t) { this.tpEdit.set({ ...t }); this.tpVals = { ...(t.values ?? {}) }; } }
+  newTemplate() { const im = this.images()[0]; this.tpEdit.set({ id: '', name: '', image: im?.id ?? '', cpus: im?.cpus || 1, ram: im?.ram || 2048, diskGb: 0, model: '', module: '', values: {}, serialStart: '', macStart: '' }); this.tpVals = {}; }
+  tpImage(id: string) { const t = this.tpEdit(); const im = this.images().find(i => i.id === id); if (t && im) this.tpEdit.set({ ...t, image: id, cpus: im.cpus || t.cpus, ram: im.ram || t.ram, model: '', module: '' }); }
+  async saveTemplate() {
+    const t = this.tpEdit(); if (!t) return;
+    const isNew = !t.id;
+    if (await this.lab.saveTemplate({ ...t, cpus: +t.cpus || 1, ram: +t.ram || 1024, diskGb: +t.diskGb || 0, values: { ...this.tpVals } })) {
+      const list = this.templates(); this.pickTemplate(isNew ? list[list.length - 1]?.id : t.id);
+    }
+  }
+  async removeTemplate() { const t = this.tpEdit(); if (t?.id && await this.lab.removeTemplate(t.id)) this.tpEdit.set(null); }
+  addFromTemplate(id: string) { this.lab.wizardTemplate.set(id); this.wizard(!!this.lab.state()?.exists); }
+  async importProfiles() {
+    const p = await this.backend.chooseOpenFile(tr('Import Image Profiles'), [{ displayName: tr('Image profiles'), pattern: '*.json' }]).catch(() => '');
+    if (p) await this.lab.importProfiles(p);
+  }
+  // resources and persona of the focused switch
+  protected resCpus = 1; protected resRam = 1024; protected resDisk = 0;
+  protected slots = signal<EmuSlot[]>([]);
+  protected slotPorts: string[] = [];
+  protected pvals: Record<string, string> = {};
+  private loadDevice(d: LabDevice) {
+    this.resCpus = d.cpus || 1; this.resRam = d.ram || 1024; this.resDisk = d.diskGb || 0;
+    const pd = this.personaDef(d);
+    const sl = d.persona?.slots?.length ? d.persona.slots.map((x, i) => ({ ...x, serial: x.serial || (i === 0 ? d.serial || '' : '') })) : [{ num: 1, model: pd?.models?.[0]?.name ?? '', serial: d.serial || '', module: '', master: true, ports: null }];
+    this.slots.set(sl); this.slotPorts = sl.map(x => (x.ports ?? []).map(p => p.port + ':' + p.vif).join(', '));
+    this.pvals = { ...(d.persona?.values ?? {}) };
+  }
+  async saveResources(d: LabDevice) { await this.lab.setResources(d.id, +this.resCpus || 1, +this.resRam || 1024, +this.resDisk || 0); }
+  addSlot(pd: EmuPersonaDef) {
+    const last = this.slots()[this.slots().length - 1];
+    this.slots.set([...this.slots(), { num: this.slots().length + 1, model: last?.model ?? pd.models?.[0]?.name ?? '', serial: '', module: '', master: false, ports: null }]); this.slotPorts.push('');
+  }
+  dropSlot(i: number) { this.slots.set(this.slots().filter((_, j) => j !== i)); this.slotPorts.splice(i, 1); }
+  setMaster(i: number) { this.slots.set(this.slots().map((x, j) => ({ ...x, master: j === i }))); }
+  async savePersona(d: LabDevice, apply: boolean) {
+    const sl: EmuSlot[] = [];
+    for (const [i, x] of this.slots().entries()) {
+      const ports: { port: number; vif: number }[] = [];
+      for (const f of (this.slotPorts[i] ?? '').split(/[,; ]+/).filter(Boolean)) { const [p, v] = f.split(':').map(Number); if (!p || !v) { this.ui.error(tr('{0} is not port:vm-port', f)); return; } ports.push({ port: p, vif: v }); }
+      sl.push({ ...x, num: i + 1, ports });
+    }
+    if (await this.lab.setPersona(d.id, { slots: sl, values: { ...this.pvals } }) && apply) await this.lab.applyPersona([d.id]);
+  }
+  async clearPersona(d: LabDevice) { if (await this.lab.setPersona(d.id, { slots: [], values: null })) { const n = this.lab.devices().find(x => x.id === d.id); if (n) this.loadDevice(n); } }
+  protected macStart = '';
+  async applyMACs() {
+    const ids = (this.sel().size ? this.lab.devices().filter(d => this.sel().has(d.id)) : this.lab.devices()).map(d => d.id);
+    if (await this.lab.setMACs(ids, this.macStart.trim())) this.macStart = '';
+  }
   cpuPct(d: LabDevice) { return Math.min(100, Math.round(d.cpu ?? 0)) + ' %'; }
   async newSerials() {
     const ids = (this.sel().size ? this.lab.devices().filter(d => this.sel().has(d.id)) : this.lab.devices()).map(d => d.id);

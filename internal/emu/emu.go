@@ -29,29 +29,31 @@ import (
 
 // Image is a VM image and how to boot it (its profile).
 type Image struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	File       string   `json:"file"`       // the image on this computer
-	FileName   string   `json:"fileName"`   // its name on the hosts
-	Size       int64    `json:"size"`       // bytes
-	SHA256     string   `json:"sha256"`     // of the file, to know it is on a host already
-	DeviceType string   `json:"deviceType"` // the sessions' device type (Linux, Cisco IOS…)
-	CPUs       int      `json:"cpus"`
-	RAM        int      `json:"ram"`      // MB
-	NICs       int      `json:"nics"`     // network ports, the first one is management
-	NIC        string   `json:"nic"`      // e1000, virtio-net-pci, vmxnet3…
-	Disk       string   `json:"disk"`     // virtio, ide, sata, scsi
-	PortName   string   `json:"portName"` // data port n as the OS calls it: "{n}" or "1/{n}"
-	Ready      string   `json:"ready"`    // console text when it can be logged in to ("login:")
-	Login      string   `json:"login"`
-	Password   string   `json:"password,omitempty"` // in the keychain, never in the lab file
-	Prompt     string   `json:"prompt"`             // regexp of the CLI prompt (default [>#$]\s*$)
-	Day0       []string `json:"day0"`               // first-boot commands, with {hostname} {mgmtIp} …
-	Answers    []Answer `json:"answers"`            // questions on the console and what to answer
-	Extra      string   `json:"extra"`              // more qemu options
-	Source     string   `json:"source"`             // where the profile came from (a GNS3 appliance…)
-	AddrCmd    string   `json:"addrCmd"`            // a CLI command that prints the management address (host's network mode)
-	Serial     string   `json:"serial"`             // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
+	ID         string      `json:"id"`
+	Name       string      `json:"name"`
+	File       string      `json:"file"`       // the image on this computer
+	FileName   string      `json:"fileName"`   // its name on the hosts
+	Size       int64       `json:"size"`       // bytes
+	SHA256     string      `json:"sha256"`     // of the file, to know it is on a host already
+	DeviceType string      `json:"deviceType"` // the sessions' device type (Linux, Cisco IOS…)
+	CPUs       int         `json:"cpus"`
+	RAM        int         `json:"ram"`      // MB
+	NICs       int         `json:"nics"`     // network ports, the first one is management
+	NIC        string      `json:"nic"`      // e1000, virtio-net-pci, vmxnet3…
+	Disk       string      `json:"disk"`     // virtio, ide, sata, scsi
+	PortName   string      `json:"portName"` // data port n as the OS calls it: "{n}" or "1/{n}"
+	Ready      string      `json:"ready"`    // console text when it can be logged in to ("login:")
+	Login      string      `json:"login"`
+	Password   string      `json:"password,omitempty"` // in the keychain, never in the lab file
+	Prompt     string      `json:"prompt"`             // regexp of the CLI prompt (default [>#$]\s*$)
+	Day0       []string    `json:"day0"`               // first-boot commands, with {hostname} {mgmtIp} …
+	Answers    []Answer    `json:"answers"`            // questions on the console and what to answer
+	Extra      string      `json:"extra"`              // more qemu options
+	Source     string      `json:"source"`             // where the profile came from (a GNS3 appliance…)
+	AddrCmd    string      `json:"addrCmd"`            // a CLI command that prints the management address (host's network mode)
+	Persona    *PersonaDef `json:"persona,omitempty"`  // a file that makes the image act as a given device
+	Version    string      `json:"version"`            // the software version of the image (for the lists)
+	Serial     string      `json:"serial"`             // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
 }
 
 // Answer: when the console shows Match (plain text), Send is typed (and Enter).
@@ -60,21 +62,40 @@ type Answer struct {
 	Send  string `json:"send"`
 }
 
+// Template is a device to make switches from: an image with its resources,
+// the persona model, and where serial numbers and MAC addresses start.
+type Template struct {
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Image       string            `json:"image"`
+	CPUs        int               `json:"cpus"`
+	RAM         int               `json:"ram"`    // MB
+	DiskGB      int               `json:"diskGb"` // 0 = the image's size
+	Model       string            `json:"model"`  // persona model ("" = none)
+	Module      string            `json:"module"`
+	Values      map[string]string `json:"values"`
+	SerialStart string            `json:"serialStart"` // the first serial number; the next switches count up from it
+	MACStart    string            `json:"macStart"`    // the first switch's base MAC; the next ones follow
+}
+
 // VM is one switch of the lab.
 type VM struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"` // hostname, also the session name
-	Image    string `json:"image"`
-	Index    int    `json:"index"` // its number in the lab: ports and MACs come from it
-	CPUs     int    `json:"cpus"`
-	RAM      int    `json:"ram"`
-	MgmtIP   string `json:"mgmtIp"` // address/bits it gets on day 0
-	Gateway  string `json:"gateway"`
-	Day0Done bool   `json:"day0Done"`
-	Serial   string `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
-	BaseMAC  string `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
-	X        int    `json:"x"`
-	Y        int    `json:"y"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"` // hostname, also the session name
+	Image    string   `json:"image"`
+	Index    int      `json:"index"` // its number in the lab: ports and MACs come from it
+	CPUs     int      `json:"cpus"`
+	RAM      int      `json:"ram"`
+	MgmtIP   string   `json:"mgmtIp"` // address/bits it gets on day 0
+	Gateway  string   `json:"gateway"`
+	Day0Done bool     `json:"day0Done"`
+	Serial   string   `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
+	BaseMAC  string   `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
+	DiskGB   int      `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
+	Template string   `json:"template,omitempty"`
+	Persona  *Persona `json:"persona,omitempty"`
+	X        int      `json:"x"`
+	Y        int      `json:"y"`
 }
 
 // Cable joins data port APort of A to BPort of B (port numbers from 1).
@@ -242,9 +263,8 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 			fmt.Fprintf(&b, "echo 'fail %s no image'\n", v.ID)
 			continue
 		}
-		disk := dir + "/" + v.ID + ".qcow2"
 		fmt.Fprintf(&b, "if [ -f %s/%s.pid ] && kill -0 \"$(cat %s/%s.pid)\" 2>/dev/null; then echo 'up %s'; else\n", Q(dir), v.ID, Q(dir), v.ID, v.ID)
-		fmt.Fprintf(&b, " [ -f %s ] || qemu-img create -q -f qcow2 -F qcow2 -b \"$HOME/%s/%s\" %s || { echo 'fail %s disk'; }\n", Q(disk), l.ImageDir(), im.FileName, Q(disk), v.ID)
+		b.WriteString(l.diskCmd(v, im))
 		t, redir := l.tap(v), ""
 		switch {
 		case l.Mgmt == "lan" && l.LanKind == "macvtap":
@@ -260,6 +280,28 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		}
 		fmt.Fprintf(&b, " : > %s/%s.log\n", Q(dir), v.ID)
 		fmt.Fprintf(&b, " if out=$(qemu-system-x86_64 %s%s 2>&1); then echo 'started %s'; else echo \"fail %s $(echo $out | tr '\\n' ' ')\"; fi\nfi\n", joinArgs(l.Args(v, im)), redir, v.ID, v.ID)
+	}
+	return b.String()
+}
+
+// diskCmd makes a VM's disk (a copy-on-write layer on the image) and grows it to its size.
+func (l *Lab) diskCmd(v VM, im *Image) string {
+	disk := l.VMDir() + "/" + v.ID + ".qcow2"
+	s := fmt.Sprintf(" [ -f %s ] || qemu-img create -q -f qcow2 -F qcow2 -b \"$HOME/%s/%s\" %s || { echo 'fail %s disk'; }\n", Q(disk), l.ImageDir(), im.FileName, Q(disk), v.ID)
+	if v.DiskGB > 0 {
+		s += fmt.Sprintf(" cur=$(qemu-img info --output=json %s 2>/dev/null | sed -n 's/.*\"virtual-size\": *\\([0-9]*\\).*/\\1/p' | head -1); [ -n \"$cur\" ] && [ \"$cur\" -lt %d ] && qemu-img resize -q %s %dG\n", Q(disk), int64(v.DiskGB)<<30, Q(disk), v.DiskGB)
+	}
+	return s
+}
+
+// PrepareScript makes the disks of VMs without starting them.
+func (l *Lab) PrepareScript(vms []VM, imgs map[string]*Image) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "mkdir -p %s || exit 1\n", Q(l.VMDir()))
+	for _, v := range vms {
+		if im := imgs[v.Image]; im != nil {
+			b.WriteString(l.diskCmd(v, im))
+		}
 	}
 	return b.String()
 }
@@ -295,7 +337,7 @@ func (l *Lab) ResetScript(ids []string) string {
 // then "log <id> <base64 of the console log's end>" for the ones in tails.
 func (l *Lab) StatusScript(tails []string) string {
 	dir := Q(l.VMDir())
-	s := "cd " + dir + " 2>/dev/null || exit 0\necho \"clk $(getconf CLK_TCK 2>/dev/null || echo 100)\"\nfor p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
+	s := "cd " + dir + " 2>/dev/null || exit 0\necho \"clk $(getconf CLK_TCK 2>/dev/null || echo 100)\"\nawk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print \"mem \" int(t/1024) \" \" int(a/1024)}' /proc/meminfo\necho \"cores $(nproc) $(cut -d' ' -f1 /proc/loadavg)\"\nfor p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
 		" if kill -0 \"$pid\" 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null)\"; else echo \"down $n\"; fi; done\n"
 	for _, id := range tails {
 		s += fmt.Sprintf("[ -f %s.log ] && echo \"log %s $(tail -c 4000 %s.log | base64 | tr -d '\\n')\"\n", id, id, id)
@@ -305,9 +347,13 @@ func (l *Lab) StatusScript(tails []string) string {
 
 // Status is what StatusScript found.
 type Status struct {
-	Clk float64            // CPU ticks per second
-	Up  map[string]float64 // running VMs and the CPU ticks they used
-	Log map[string]string  // console log ends
+	Clk      float64            // CPU ticks per second
+	MemTotal int64              // the host's memory, MB
+	MemFree  int64              // available now, MB
+	Cores    int                // the host's CPU cores
+	Load     float64            // its load average
+	Up       map[string]float64 // running VMs and the CPU ticks they used
+	Log      map[string]string  // console log ends
 }
 
 // ParseStatus reads StatusScript's output.
@@ -316,6 +362,12 @@ func ParseStatus(out string, b64 func(string) ([]byte, error)) Status {
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Fields(line)
 		switch {
+		case len(f) == 3 && f[0] == "mem":
+			st.MemTotal, _ = strconv.ParseInt(f[1], 10, 64)
+			st.MemFree, _ = strconv.ParseInt(f[2], 10, 64)
+		case len(f) == 3 && f[0] == "cores":
+			st.Cores, _ = strconv.Atoi(f[1])
+			st.Load, _ = strconv.ParseFloat(f[2], 64)
 		case len(f) == 2 && f[0] == "clk":
 			st.Clk, _ = strconv.ParseFloat(f[1], 64)
 		case len(f) >= 2 && f[0] == "up":
@@ -525,3 +577,33 @@ func orInt(v ...int) int {
 
 // SortVMs orders VMs by index.
 func SortVMs(v []VM) { sort.Slice(v, func(i, j int) bool { return v[i].Index < v[j].Index }) }
+
+// NextSerial is the serial number i steps after start: its last number
+// counts up, keeping its width ("AR022205Q-40036", 2 → "AR022205Q-40038").
+func NextSerial(start string, i int) string {
+	if start == "" || i == 0 {
+		return start
+	}
+	j := len(start)
+	for j > 0 && start[j-1] >= '0' && start[j-1] <= '9' {
+		j--
+	}
+	digits := start[j:]
+	if digits == "" {
+		return fmt.Sprintf("%s-%d", start, i)
+	}
+	n, _ := strconv.ParseUint(digits, 10, 64)
+	return start[:j] + fmt.Sprintf("%0*d", len(digits), n+uint64(i))
+}
+
+// NextMAC is the base MAC of the i-th switch from start: each switch keeps a
+// block of 64 addresses (its ports take the first ones).
+func NextMAC(start string, i int) string {
+	hw, err := net.ParseMAC(start)
+	if err != nil || len(hw) != 6 {
+		return ""
+	}
+	x := uint64(hw[0])<<40 | uint64(hw[1])<<32 | uint64(hw[2])<<24 | uint64(hw[3])<<16 | uint64(hw[4])<<8 | uint64(hw[5])
+	x += uint64(i) * 64
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", byte(x>>40), byte(x>>32), byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
+}

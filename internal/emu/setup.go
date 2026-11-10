@@ -11,15 +11,15 @@ func SetupPlan(h HostInfo) []string {
 	var p []string
 	switch pm := h.Pkg; pm {
 	case "apt":
-		p = append(p, "apt-get install qemu-system-x86 qemu-utils")
+		p = append(p, "apt-get install qemu-system-x86 qemu-utils libguestfs-tools, and make /boot/vmlinuz-* readable (libguestfs needs it)")
 	case "dnf-fedora":
-		p = append(p, "dnf install qemu-system-x86-core qemu-img")
+		p = append(p, "dnf install qemu-system-x86-core qemu-img guestfs-tools")
 	case "dnf":
-		p = append(p, "dnf install qemu-kvm qemu-img, and qemu-system-x86_64 as a link to /usr/libexec/qemu-kvm")
+		p = append(p, "dnf install qemu-kvm qemu-img guestfs-tools, and qemu-system-x86_64 as a link to /usr/libexec/qemu-kvm")
 	case "zypper":
-		p = append(p, "zypper install qemu-x86 qemu-tools")
+		p = append(p, "zypper install qemu-x86 qemu-tools guestfs-tools")
 	case "pacman":
-		p = append(p, "pacman -S qemu-base")
+		p = append(p, "pacman -S qemu-base libguestfs")
 	default:
 		p = append(p, "install QEMU (the distribution "+orStr(h.OSID, "is unknown")+" is not supported - install qemu-system-x86_64 and qemu-img by hand)")
 	}
@@ -43,19 +43,21 @@ case "$ids" in
  *" debian "*|*" ubuntu "*)
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -q || { echo "@@fail apt-get update failed"; exit 1; }
-  apt-get install -y -q qemu-system-x86 qemu-utils || { echo "@@fail apt-get install failed"; exit 1; } ;;
+  apt-get install -y -q qemu-system-x86 qemu-utils libguestfs-tools || { echo "@@fail apt-get install failed"; exit 1; } ;;
  *" fedora "*)
-  dnf install -y qemu-system-x86-core qemu-img || { echo "@@fail dnf install failed"; exit 1; } ;;
+  dnf install -y qemu-system-x86-core qemu-img guestfs-tools || { echo "@@fail dnf install failed"; exit 1; } ;;
  *" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*|*" ol "*)
-  dnf install -y qemu-kvm qemu-img || yum install -y qemu-kvm qemu-img || { echo "@@fail dnf install failed"; exit 1; }
+  dnf install -y qemu-kvm qemu-img guestfs-tools || yum install -y qemu-kvm qemu-img libguestfs-tools-c || { echo "@@fail dnf install failed"; exit 1; }
   if ! command -v qemu-system-x86_64 >/dev/null 2>&1 && [ -x /usr/libexec/qemu-kvm ]; then ln -s /usr/libexec/qemu-kvm /usr/local/bin/qemu-system-x86_64; echo "@@note qemu-system-x86_64 is a link to /usr/libexec/qemu-kvm"; fi ;;
  *" suse "*|*" opensuse "*|*" sles "*)
-  zypper -n install qemu-x86 qemu-tools || { echo "@@fail zypper install failed"; exit 1; } ;;
+  zypper -n install qemu-x86 qemu-tools guestfs-tools || { echo "@@fail zypper install failed"; exit 1; } ;;
  *" arch "*)
-  pacman -S --noconfirm --needed qemu-base || { echo "@@fail pacman failed"; exit 1; } ;;
+  pacman -S --noconfirm --needed qemu-base libguestfs || { echo "@@fail pacman failed"; exit 1; } ;;
  *) echo "@@fail this Linux ($ID) is not supported: install qemu-system-x86_64 and qemu-img by hand"; exit 1 ;;
 esac
 command -v qemu-system-x86_64 >/dev/null 2>&1 || { echo "@@fail qemu-system-x86_64 is still missing"; exit 1; }
+# libguestfs (persona files) reads the host's kernel, which Ubuntu keeps readable by root only
+chmod 0644 /boot/vmlinuz-* 2>/dev/null || true
 echo "@@step kvm"
 if [ ! -e /dev/kvm ]; then
  if grep -q vmx /proc/cpuinfo; then modprobe kvm_intel; elif grep -q svm /proc/cpuinfo; then modprobe kvm_amd; fi

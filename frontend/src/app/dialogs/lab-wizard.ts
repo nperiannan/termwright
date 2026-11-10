@@ -62,9 +62,11 @@ const CABLING = [
             @case (1) {
               @if (kind() === 'emu') {
               <div class="tbl"><table>
-                <thead><tr><th>{{ tr('Image') }}</th><th>{{ tr('How many') }}</th><th>{{ tr('Names') }}</th><th>vCPU</th><th>RAM (MB)</th><th>{{ tr('Data ports') }}</th><th></th></tr></thead>
+                <thead><tr><th>{{ tr('Template or image') }}</th><th>{{ tr('How many') }}</th><th>{{ tr('Names') }}</th><th>vCPU</th><th>RAM (MB)</th><th>{{ tr('Data ports') }}</th><th></th></tr></thead>
                 <tbody>@for (r of erows(); track $index) {
-                  <tr><td><select [ngModel]="r.image" (ngModelChange)="setImage($index, $event)" [name]="'ei' + $index">@for (im of images(); track im.id) { <option [value]="im.id">{{ im.name }}</option> }</select></td>
+                  <tr><td><select [ngModel]="r.template ? 't:' + r.template : 'i:' + r.image" (ngModelChange)="setSource($index, $event)" [name]="'ei' + $index">
+                      @if (templates().length) { <optgroup [label]="tr('Templates')">@for (t of templates(); track t.id) { <option [value]="'t:' + t.id">{{ t.name }}</option> }</optgroup> }
+                      <optgroup [label]="tr('Images')">@for (im of images(); track im.id) { <option [value]="'i:' + im.id">{{ im.name }}{{ im.version ? ' · ' + im.version : '' }}</option> }</optgroup></select></td>
                     <td><input type="number" min="0" max="200" [ngModel]="r.count" (ngModelChange)="epatch($index, { count: +$event })" [name]="'en' + $index" class="num" /></td>
                     <td><input class="mono" [ngModel]="r.names" (ngModelChange)="epatch($index, { names: $event })" [name]="'ep' + $index" spellcheck="false" /></td>
                     <td><input type="number" min="1" [ngModel]="r.cpus" (ngModelChange)="epatch($index, { cpus: +$event })" [name]="'ec' + $index" class="num s" /></td>
@@ -221,6 +223,13 @@ export class LabWizard {
     this.hostInfo.set(this.hostOf(this.host));
     this.mgmt = this.bestMgmt(this.hostInfo());
     this.erows.set(this.images().slice(0, 2).map((im, i) => ({ image: im.id, count: i ? 4 : 2, names: (i ? 'leaf' : 'core') + '-{n}', cpus: im.cpus || 1, ram: im.ram || 1024 })));
+    const tps = this.templates(), want = this.lab.wizardTemplate();
+    this.lab.wizardTemplate.set('');
+    if (tps.length) {
+      const pick = (want ? tps.filter(t => t.id === want) : tps.slice(0, 2));
+      this.erows.set([]);
+      pick.forEach((t, i) => { this.erows.set([...this.erows(), { image: t.image, count: 1, names: '', cpus: 1, ram: 1024 }]); this.setSource(i, 't:' + t.id); this.epatch(i, { count: want || i ? (want ? 1 : 4) : 2 }); });
+    }
     if (this.add && this.kind() === 'emu') this.erows.set(this.erows().slice(0, 1).map(r => ({ ...r, count: 1, names: 'sw-{n}' })));
   }
   osShort(os: string) { return this.lab.sim()?.os?.[os]?.short || os.toUpperCase(); }
@@ -231,6 +240,11 @@ export class LabWizard {
   protected mgmt = 'forward';
   protected erows = signal<EmuGroup[]>([]);
   protected images = computed(() => this.lab.emu()?.images ?? []);
+  protected templates = computed(() => this.lab.emu()?.templates ?? []);
+  setSource(i: number, v: string) {
+    if (v.startsWith('t:')) { const t = this.templates().find(x => x.id === v.slice(2)); if (t) this.epatch(i, { template: t.id, image: t.image, cpus: t.cpus, ram: t.ram, diskGb: t.diskGb, names: t.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-{n}' }); }
+    else { const im = this.imageOf(v.slice(2)); this.epatch(i, { template: '', image: v.slice(2), cpus: im?.cpus || 1, ram: im?.ram || 1024, diskGb: 0 }); }
+  }
   imageOf(id: string) { return this.images().find(i => i.id === id); }
   hostOf(path: string) { return this.lab.emu()?.hosts?.find(h => h.session === path)?.info ?? null; }
   protected hostChoices = computed(() => {
@@ -271,7 +285,7 @@ export class LabWizard {
 
   protected total = computed(() => (this.kind() === 'emu' ? this.erows() : this.rows()).reduce((n, r) => n + (r.count > 0 ? r.count : 0), 0));
   protected summary = computed(() => {
-    const parts = this.kind() === 'emu' ? this.erows().filter(r => r.count > 0).map(r => `${r.count} × ${this.imageOf(r.image)?.name ?? ''}`) : this.rows().filter(r => r.count > 0).map(r => `${r.count} × ${r.model}`);
+    const parts = this.kind() === 'emu' ? this.erows().filter(r => r.count > 0).map(r => `${r.count} × ${r.template ? this.templates().find(t => t.id === r.template)?.name ?? '' : this.imageOf(r.image)?.name ?? ''}`) : this.rows().filter(r => r.count > 0).map(r => `${r.count} × ${r.model}`);
     return parts.length ? tr('{0} switches', this.total()) + ' (' + parts.join(', ') + ')' : tr('No switches chosen');
   });
   protected cablingLabel = () => CABLING.find(c => c.v === this.cable)?.label ?? '';

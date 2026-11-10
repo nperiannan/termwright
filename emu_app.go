@@ -40,13 +40,14 @@ type EmuHost struct {
 }
 
 type emuFile struct {
-	Hosts    []EmuHost         `json:"hosts"`
-	Images   []emu.Image       `json:"images"`
-	Host     string            `json:"host"` // the lab's host (session path)
-	Folder   string            `json:"folder"`
-	Lab      *emu.Lab          `json:"lab"`
-	Sessions map[string]string `json:"sessions"` // VM → its SSH session
-	Consoles map[string]string `json:"consoles"` // VM → its console session
+	Hosts     []EmuHost         `json:"hosts"`
+	Images    []emu.Image       `json:"images"`
+	Templates []emu.Template    `json:"templates"`
+	Host      string            `json:"host"` // the lab's host (session path)
+	Folder    string            `json:"folder"`
+	Lab       *emu.Lab          `json:"lab"`
+	Sessions  map[string]string `json:"sessions"` // VM → its SSH session
+	Consoles  map[string]string `json:"consoles"` // VM → its console session
 }
 
 type emuConn struct {
@@ -55,51 +56,57 @@ type emuConn struct {
 }
 
 var emuLab struct {
-	mu       sync.Mutex
-	f        emuFile
-	loaded   bool
-	conns    map[string]*emuConn
-	status   emu.Status
-	statusAt time.Time
-	polling  bool
-	state    map[string]string // VM → what it does now (uploading, day-0 …) when not just booting/running
-	errs     map[string]string // VM → why it failed
-	day0     map[string]bool   // day-0 runs now
-	upload   map[string]string // image → upload progress ("41 %")
-	starting map[string]time.Time
-	ticks    map[string]float64 // CPU ticks at the last poll
-	ticksAt  time.Time
-	cpu      map[string]float64 // CPU use now, in cores (1 = one core busy)
-	ready    map[string]bool    // the console showed the ready text since the VM started (it may scroll out of the log's end later)
+	mu               sync.Mutex
+	f                emuFile
+	loaded           bool
+	conns            map[string]*emuConn
+	status           emu.Status
+	statusAt         time.Time
+	polling          bool
+	state            map[string]string // VM → what it does now (uploading, day-0 …) when not just booting/running
+	errs             map[string]string // VM → why it failed
+	day0             map[string]bool   // day-0 runs now
+	upload           map[string]string // image → upload progress ("41 %")
+	starting         map[string]time.Time
+	ticks            map[string]float64 // CPU ticks at the last poll
+	ticksAt          time.Time
+	cpu              map[string]float64 // CPU use now, in cores (1 = one core busy)
+	ready            map[string]bool    // the console showed the ready text since the VM started (it may scroll out of the log's end later)
+	personaAfterBoot map[string]bool    // the persona file is written once the VM has booted (its folder did not exist yet)
+	personaTried     map[string]bool    // that was tried once already (no second round)
 }
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
 type EmuDevice struct {
-	ID        string  `json:"id"`
-	OS        string  `json:"os"` // device type
-	Model     string  `json:"model"`
-	Image     string  `json:"image"`
-	Version   string  `json:"version"`
-	Serial    string  `json:"serial"`
-	MAC       string  `json:"mac"`
-	Hostname  string  `json:"hostname"`
-	MgmtIP    string  `json:"mgmtIp"`
-	Port      int     `json:"port"`
-	Ports     int     `json:"ports"`
-	Running   bool    `json:"running"`
-	Logins    int     `json:"logins"`
-	Unsaved   bool    `json:"unsaved"`
-	X         int     `json:"x"`
-	Y         int     `json:"y"`
-	State     string  `json:"state"` // stopped, uploading, booting, day0, running, failed
-	StateText string  `json:"stateText"`
-	CPU       float64 `json:"cpu"`   // % of its vCPUs, now
-	Cores     float64 `json:"cores"` // host cores it uses now
-	CPUs      int     `json:"cpus"`
-	RAM       int     `json:"ram"`
-	Console   int     `json:"console"`
-	SSH       string  `json:"ssh"` // how its management is reached, as text
-	Error     string  `json:"error"`
+	ID        string       `json:"id"`
+	OS        string       `json:"os"` // device type
+	Model     string       `json:"model"`
+	Image     string       `json:"image"`
+	Version   string       `json:"version"`
+	Serial    string       `json:"serial"`
+	MAC       string       `json:"mac"`
+	Hostname  string       `json:"hostname"`
+	MgmtIP    string       `json:"mgmtIp"`
+	Port      int          `json:"port"`
+	Ports     int          `json:"ports"`
+	Running   bool         `json:"running"`
+	Logins    int          `json:"logins"`
+	Unsaved   bool         `json:"unsaved"`
+	X         int          `json:"x"`
+	Y         int          `json:"y"`
+	State     string       `json:"state"` // stopped, uploading, booting, day0, running, failed
+	StateText string       `json:"stateText"`
+	CPU       float64      `json:"cpu"`   // % of its vCPUs, now
+	Cores     float64      `json:"cores"` // host cores it uses now
+	CPUs      int          `json:"cpus"`
+	RAM       int          `json:"ram"`
+	Console   int          `json:"console"`
+	SSH       string       `json:"ssh"` // how its management is reached, as text
+	Error     string       `json:"error"`
+	DiskGB    int          `json:"diskGb"`
+	Template  string       `json:"template"`
+	Persona   *emu.Persona `json:"persona"`
+	PersonaOK bool         `json:"personaOk"` // the persona file in its disk is the current one
 }
 
 // EmuLinkView is a cable, with port names.
@@ -123,32 +130,49 @@ type EmuImageView struct {
 
 // EmuView is the emulated lab for the Lab window (shaped like LabView).
 type EmuView struct {
-	Kind     string            `json:"kind"` // "emu"
-	Exists   bool              `json:"exists"`
-	Running  bool              `json:"running"`
-	Folder   string            `json:"folder"`
-	MgmtNet  string            `json:"mgmtNet"`
-	Mgmt     string            `json:"mgmt"`
-	Devices  []EmuDevice       `json:"devices"`
-	Links    []EmuLinkView     `json:"links"`
-	Sessions map[string]string `json:"sessions"`
-	Consoles map[string]string `json:"consoles"`
-	Models   []LabModel        `json:"models"`
-	OS       map[string]LabOS  `json:"os"`
-	Host     string            `json:"host"`
-	HostInfo *emu.HostInfo     `json:"hostInfo"`
-	Hosts    []EmuHost         `json:"hosts"`
-	Images   []EmuImageView    `json:"images"`
-	KVM      bool              `json:"kvm"`
+	Kind      string            `json:"kind"` // "emu"
+	Exists    bool              `json:"exists"`
+	Running   bool              `json:"running"`
+	Folder    string            `json:"folder"`
+	MgmtNet   string            `json:"mgmtNet"`
+	Mgmt      string            `json:"mgmt"`
+	Devices   []EmuDevice       `json:"devices"`
+	Links     []EmuLinkView     `json:"links"`
+	Sessions  map[string]string `json:"sessions"`
+	Consoles  map[string]string `json:"consoles"`
+	Models    []LabModel        `json:"models"`
+	OS        map[string]LabOS  `json:"os"`
+	Host      string            `json:"host"`
+	HostInfo  *emu.HostInfo     `json:"hostInfo"`
+	Hosts     []EmuHost         `json:"hosts"`
+	Images    []EmuImageView    `json:"images"`
+	KVM       bool              `json:"kvm"`
+	Templates []emu.Template    `json:"templates"`
+	Usage     EmuUsage          `json:"usage"`
+}
+
+// EmuUsage is what the lab takes of its host now (stopped switches take nothing).
+type EmuUsage struct {
+	HostCPUs     int     `json:"hostCpus"`
+	HostMemTotal int64   `json:"hostMemTotal"` // MB
+	HostMemFree  int64   `json:"hostMemFree"`  // MB, available now
+	Load         float64 `json:"load"`
+	Running      int     `json:"running"`
+	VCPUs        int     `json:"vcpus"` // of the running switches
+	RAM          int     `json:"ram"`   // MB, of the running switches
+	Cores        float64 `json:"cores"` // host cores they use now
+	DiskGB       int     `json:"diskGb"`
 }
 
 // EmuGroup asks for Count VMs of an image.
 type EmuGroup struct {
-	Image string `json:"image"`
-	Count int    `json:"count"`
-	Names string `json:"names"`
-	CPUs  int    `json:"cpus"`
-	RAM   int    `json:"ram"`
+	Template string `json:"template"` // a template (its image, resources, persona, serial and MAC start), or:
+	Image    string `json:"image"`
+	Count    int    `json:"count"`
+	Names    string `json:"names"`
+	CPUs     int    `json:"cpus"`
+	RAM      int    `json:"ram"`
+	DiskGB   int    `json:"diskGb"`
 }
 
 // EmuRequest makes the emulated lab (or adds VMs to it).
@@ -170,7 +194,8 @@ func (a *App) emuLoad() {
 	}
 	emuLab.loaded = true
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
-	emuLab.ticks, emuLab.cpu, emuLab.ready = map[string]float64{}, map[string]float64{}, map[string]bool{}
+	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
+	emuLab.personaTried = map[string]bool{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
 		_ = json.Unmarshal(b, &emuLab.f)
 	}
@@ -698,6 +723,22 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 	}
 	var add []emu.VM
 	for _, g := range r.Groups {
+		var tp *emu.Template
+		if g.Template != "" {
+			if tp = emuTemplate(g.Template); tp == nil {
+				emuLab.mu.Unlock()
+				return EmuView{}, errors.New("unknown template")
+			}
+			g.Image = tp.Image
+			g.CPUs, g.RAM = orInt(g.CPUs, tp.CPUs), orInt(g.RAM, tp.RAM)
+		}
+		// the template's serial numbers and MACs count on from the switches made from it before
+		made := 0
+		for _, v := range l.VMs {
+			if tp != nil && v.Template == tp.ID {
+				made++
+			}
+		}
 		im := imgs[g.Image]
 		if im == nil {
 			emuLab.mu.Unlock()
@@ -714,8 +755,21 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 			}
 			names[name] = true
 			v := emu.VM{ID: "v" + randHex(3), Name: name, Image: im.ID, Index: next, CPUs: orInt(g.CPUs, im.CPUs), RAM: orInt(g.RAM, im.RAM)}
-			if im.Serial != "" {
+			switch {
+			case tp != nil && tp.SerialStart != "":
+				v.Serial = emu.NextSerial(tp.SerialStart, made+k)
+			case im.Serial != "":
 				v.Serial = sim.Generate(im.Serial)
+			}
+			v.DiskGB = g.DiskGB
+			if tp != nil {
+				v.Template, v.DiskGB = tp.ID, orInt(g.DiskGB, tp.DiskGB)
+				if tp.MACStart != "" {
+					v.BaseMAC = emu.NextMAC(tp.MACStart, made+k)
+				}
+				if tp.Model != "" && im.Persona != nil {
+					v.Persona = &emu.Persona{Slots: []emu.Slot{{Num: 1, Model: tp.Model, Serial: v.Serial, Module: tp.Module, Master: true}}, Values: tp.Values}
+				}
 			}
 			v.MgmtIP, v.Gateway = l.Address(next)
 			next++
@@ -896,6 +950,56 @@ func (a *App) emuStart(host string, ids []string) {
 		im := imgs[k]
 		ptrs[k] = &im
 	}
+	// persona files go into the disks before the VMs start
+	type pw struct {
+		v      emu.VM
+		script string
+		hash   string
+	}
+	var writes []pw
+	for _, v := range vms {
+		if im := ptrs[v.Image]; im != nil && im.Persona != nil && v.Persona != nil {
+			if txt, err := im.Persona.Render(v, v.Persona); err == nil && txt != "" && emu.Hash(txt) != v.Persona.Applied {
+				writes = append(writes, pw{v, l.WriteFileScript(v, im.Persona.File, txt), emu.Hash(txt)})
+			} else if err != nil {
+				emuLab.errs[v.ID] = err.Error()
+			}
+		}
+	}
+	if len(writes) > 0 {
+		var wv []emu.VM
+		for _, w := range writes {
+			wv = append(wv, w.v)
+			emuLab.state[w.v.ID] = "persona"
+		}
+		prep := l.PrepareScript(wv, ptrs)
+		emuLab.mu.Unlock()
+		_, _ = a.emuRun(host, prep, 5*time.Minute)
+		for _, w := range writes {
+			out, err := a.emuRun(host, w.script, 5*time.Minute)
+			emuLab.mu.Lock()
+			switch {
+			case err == nil && strings.Contains(out, "ok "):
+				if vv := l.VMByID(w.v.ID); vv != nil && vv.Persona != nil {
+					vv.Persona.Applied = w.hash
+				}
+				delete(emuLab.personaTried, w.v.ID)
+			case strings.Contains(out, "no filesystem") && !emuLab.personaTried[w.v.ID]:
+				emuLab.personaAfterBoot[w.v.ID] = true // its folder appears on the first boot
+				emuLab.personaTried[w.v.ID] = true
+			default:
+				emuLab.errs[w.v.ID] = "Persona file: " + strings.TrimSpace(strings.TrimPrefix(lastLine(out+errText(err)), "fail "))
+			}
+			emuLab.mu.Unlock()
+		}
+		emuLab.mu.Lock()
+		_ = a.emuSave()
+		for i := range vms {
+			if vv := l.VMByID(vms[i].ID); vv != nil {
+				vms[i] = *vv
+			}
+		}
+	}
 	script := l.StartScript(vms, ptrs)
 	for _, v := range vms {
 		emuLab.state[v.ID] = "starting"
@@ -964,6 +1068,11 @@ func (a *App) emuWatch(host string, ids []string) {
 				continue
 			}
 			delete(pending, id)
+			if emuLab.personaAfterBoot[id] {
+				delete(emuLab.personaAfterBoot, id)
+				go a.emuPersonaReboot(host, id)
+				continue
+			}
 			needDay0 := !v.Day0Done && len(im.Day0) > 0
 			if (needDay0 || l.Mgmt == "lan") && !emuLab.day0[id] {
 				day0 = append(day0, *v)
@@ -1155,7 +1264,7 @@ func (a *App) EmuState() (EmuView, error) {
 
 func (a *App) emuView() EmuView {
 	f := &emuLab.f
-	v := EmuView{Kind: "emu", Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
+	v := EmuView{Kind: "emu", Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
 	for i := range f.Hosts {
 		if f.Hosts[i].Session == f.Host {
 			v.HostInfo = &f.Hosts[i].Info
@@ -1187,6 +1296,7 @@ func (a *App) emuView() EmuView {
 	}
 	v.Mgmt, v.MgmtNet, v.KVM = l.Mgmt, l.MgmtNet, l.KVM
 	st := emuLab.status
+	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
 	for _, vm := range l.VMs {
 		im := emuImage(vm.Image)
 		d := EmuDevice{ID: vm.ID, Hostname: vm.Name, Image: vm.Image, MgmtIP: vm.MgmtIP, MAC: l.MAC(vm, 0), X: vm.X, Y: vm.Y, CPUs: vm.CPUs, RAM: vm.RAM,
@@ -1216,6 +1326,8 @@ func (a *App) emuView() EmuView {
 			}
 		case s == "starting":
 			d.State, d.StateText = "booting", "starting"
+		case s == "persona":
+			d.State, d.StateText = "booting", "writing its persona file"
 		case s == "dhcp":
 			d.State, d.StateText, d.Running = "day0", "waiting for its DHCP address", true
 		case strings.HasPrefix(s, "day0"):
@@ -1236,6 +1348,19 @@ func (a *App) emuView() EmuView {
 				d.StateText = "running · day-0 failed"
 			}
 		}
+		d.DiskGB, d.Template, d.Persona = vm.DiskGB, vm.Template, vm.Persona
+		if im != nil && im.Persona != nil && vm.Persona != nil {
+			if txt, err := im.Persona.Render(vm, vm.Persona); err == nil {
+				d.PersonaOK = emu.Hash(txt) == vm.Persona.Applied
+			}
+		}
+		if up {
+			v.Usage.Running++
+			v.Usage.VCPUs += orInt(vm.CPUs, 1)
+			v.Usage.RAM += orInt(vm.RAM, 1024)
+			v.Usage.Cores += emuLab.cpu[vm.ID]
+		}
+		v.Usage.DiskGB += vm.DiskGB
 		if d.Running {
 			v.Running = true
 		}
@@ -1745,6 +1870,9 @@ func (a *App) EmuSetIdentity(id, serial, mac string) (EmuView, error) {
 		return EmuView{}, errors.New("no such switch")
 	}
 	v.Serial, v.BaseMAC = strings.TrimSpace(serial), mac
+	if v.Persona != nil && len(v.Persona.Slots) > 0 {
+		v.Persona.Slots[0].Serial = v.Serial
+	}
 	err := a.emuSave()
 	emuLab.mu.Unlock()
 	if err != nil {
@@ -1791,8 +1919,13 @@ func (a *App) EmuSetSerials(ids []string, serials []string, fromFormat bool) (Em
 			} else {
 				none = append(none, v.Name)
 			}
+		} else if len(list) == 1 {
+			v.Serial = emu.NextSerial(list[0], i) // the first one given, the others count up
 		} else if i < len(list) {
 			v.Serial = list[i]
+		}
+		if v.Persona != nil && len(v.Persona.Slots) > 0 {
+			v.Persona.Slots[0].Serial = v.Serial
 		}
 	}
 	err := a.emuSave()
@@ -1805,4 +1938,269 @@ func (a *App) EmuSetSerials(ids []string, serials []string, fromFormat bool) (Em
 		return v, fmt.Errorf("no serial number format in the image of %s: set one in Images", strings.Join(none, ", "))
 	}
 	return v, nil
+}
+
+func emuTemplate(id string) *emu.Template {
+	for i := range emuLab.f.Templates {
+		if emuLab.f.Templates[i].ID == id {
+			return &emuLab.f.Templates[i]
+		}
+	}
+	return nil
+}
+
+// emuPersonaReboot powers a VM off, writes its persona file into its disk and starts it again.
+func (a *App) emuPersonaReboot(host, id string) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	if l == nil || l.VMByID(id) == nil {
+		emuLab.mu.Unlock()
+		return
+	}
+	emuLab.state[id] = "persona"
+	script := l.ShutdownScript([]string{id}, 90)
+	emuLab.mu.Unlock()
+	_, _ = a.emuRun(host, script, 3*time.Minute)
+	emuLab.mu.Lock()
+	delete(emuLab.state, id)
+	emuLab.mu.Unlock()
+	a.emuStart(host, []string{id}) // writes the file (the disk has its folder now), then boots
+}
+
+// EmuApplyPersona writes the switches' persona files: running ones are powered off for it and started again.
+func (a *App) EmuApplyPersona(ids []string) (EmuView, error) {
+	host, ids := a.emuIDs(ids)
+	if host == "" {
+		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	st := a.emuPoll(true)
+	for _, id := range ids {
+		if _, up := st.Up[id]; up {
+			go a.emuPersonaReboot(host, id)
+		} else {
+			go a.emuStart(host, []string{id})
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	return a.EmuState()
+}
+
+// EmuSetPersona keeps a switch's persona (model, serial numbers, modules, stack
+// members); it is written into its disk on the next start or EmuApplyPersona.
+func (a *App) EmuSetPersona(id string, p emu.Persona) (EmuView, error) {
+	emuLab.mu.Lock()
+	a.emuLoad()
+	l := emuLab.f.Lab
+	var v *emu.VM
+	if l != nil {
+		v = l.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such switch")
+	}
+	if len(p.Slots) == 0 {
+		v.Persona = nil
+	} else {
+		if v.Persona != nil {
+			p.Applied = v.Persona.Applied
+		}
+		for i := range p.Slots {
+			p.Slots[i].Num = i + 1
+		}
+		v.Persona = &p
+		if p.Slots[0].Serial != "" {
+			v.Serial = p.Slots[0].Serial // the first slot's serial is the switch's
+		}
+	}
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
+// EmuSetResources changes a switch's vCPUs, memory (MB) and disk size (GB, it
+// only grows); it gets them when it starts next.
+func (a *App) EmuSetResources(id string, cpus, ram, diskGB int) (EmuView, error) {
+	if cpus < 1 || ram < 128 || diskGB < 0 {
+		return EmuView{}, errors.New("at least 1 vCPU and 128 MB")
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	l := emuLab.f.Lab
+	var v *emu.VM
+	if l != nil {
+		v = l.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such switch")
+	}
+	if diskGB > 0 && diskGB < v.DiskGB {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("a disk can only grow")
+	}
+	v.CPUs, v.RAM, v.DiskGB = cpus, ram, diskGB
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
+// EmuSaveTemplate adds or changes a template (no ID = a new one).
+func (a *App) EmuSaveTemplate(t emu.Template) (EmuView, error) {
+	if strings.TrimSpace(t.Name) == "" {
+		return EmuView{}, errors.New("give the template a name")
+	}
+	if t.MACStart != "" && emu.NextMAC(t.MACStart, 0) == "" {
+		return EmuView{}, fmt.Errorf("%q is not a MAC address", t.MACStart)
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	if emuImage(t.Image) == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("choose the template's image")
+	}
+	if t.ID == "" {
+		t.ID = "t" + randHex(3)
+		emuLab.f.Templates = append(emuLab.f.Templates, t)
+	} else if cur := emuTemplate(t.ID); cur != nil {
+		*cur = t
+	} else {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such template")
+	}
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
+// EmuRemoveTemplate forgets a template (switches made from it stay).
+func (a *App) EmuRemoveTemplate(id string) (EmuView, error) {
+	emuLab.mu.Lock()
+	a.emuLoad()
+	var keep []emu.Template
+	for _, t := range emuLab.f.Templates {
+		if t.ID != id {
+			keep = append(keep, t)
+		}
+	}
+	emuLab.f.Templates = keep
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
+// emuProfiles is a file of image profiles and templates (for example from a private pack).
+type emuProfiles struct {
+	Images    []emu.Image    `json:"images"`
+	Templates []emu.Template `json:"templates"` // Image is the image profile's name
+}
+
+// EmuImportProfiles reads image profiles (how to boot an image, its persona)
+// and templates from a JSON file. A profile whose file name matches an image
+// already added updates it (its file stays); others are added without a file.
+func (a *App) EmuImportProfiles(p string) (EmuView, error) {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return EmuView{}, err
+	}
+	var pf emuProfiles
+	if err := json.Unmarshal(b, &pf); err != nil {
+		return EmuView{}, fmt.Errorf("not a profile file: %w", err)
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	byName := map[string]string{}
+	for _, im := range pf.Images {
+		var cur *emu.Image
+		for i := range emuLab.f.Images {
+			x := &emuLab.f.Images[i]
+			if im.FileName != "" && strings.EqualFold(x.FileName, im.FileName) || strings.EqualFold(x.Name, im.Name) {
+				cur = x
+				break
+			}
+		}
+		if cur != nil {
+			keepID, file, fn, size, sum := cur.ID, cur.File, cur.FileName, cur.Size, cur.SHA256
+			*cur = im
+			cur.ID, cur.File, cur.FileName, cur.Size, cur.SHA256 = keepID, file, orStr(fn, im.FileName), size, sum
+			byName[im.Name] = keepID
+			continue
+		}
+		im.ID, im.File, im.SHA256 = randHex(4), "", ""
+		im.Password = ""
+		emuLab.f.Images = append(emuLab.f.Images, im)
+		byName[im.Name] = im.ID
+	}
+	for _, t := range pf.Templates {
+		id := byName[t.Image]
+		if id == "" {
+			for _, x := range emuLab.f.Images {
+				if strings.EqualFold(x.Name, t.Image) {
+					id = x.ID
+				}
+			}
+		}
+		if id == "" {
+			continue
+		}
+		t.ID, t.Image = "t"+randHex(3), id
+		replaced := false
+		for i := range emuLab.f.Templates {
+			if strings.EqualFold(emuLab.f.Templates[i].Name, t.Name) {
+				t.ID = emuLab.f.Templates[i].ID
+				emuLab.f.Templates[i], replaced = t, true
+			}
+		}
+		if !replaced {
+			emuLab.f.Templates = append(emuLab.f.Templates, t)
+		}
+	}
+	err = a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
+// EmuSetMACs gives switches base MAC addresses from start, a block of 64 each.
+func (a *App) EmuSetMACs(ids []string, start string) (EmuView, error) {
+	if emu.NextMAC(start, 0) == "" {
+		return EmuView{}, fmt.Errorf("%q is not a MAC address", start)
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	l := emuLab.f.Lab
+	if l == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	if len(ids) == 0 {
+		for _, v := range l.VMs {
+			ids = append(ids, v.ID)
+		}
+	}
+	for i, id := range ids {
+		if v := l.VMByID(id); v != nil {
+			v.BaseMAC = emu.NextMAC(start, i)
+		}
+	}
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
 }

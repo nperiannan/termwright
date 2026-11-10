@@ -32,6 +32,7 @@ type HostInfo struct {
 	Wifi     bool     `json:"wifi"`     // the uplink is Wi-Fi
 	LanIf    string   `json:"lanIf"`    // where switches join the host's network: a bridge, or the uplink (macvtap)
 	LanKind  string   `json:"lanKind"`  // "bridge" or "macvtap" ("" = not possible)
+	Guestfs  bool     `json:"guestfs"`  // libguestfs is there (persona files)
 	Problems []string `json:"problems"` // what stops VMs from running
 	Notes    []string `json:"notes"`    // what works, but differently
 }
@@ -49,6 +50,7 @@ awk '/^MemTotal:/{print "memtotal="int($2/1024)} /^MemAvailable:/{print "memfree
 mkdir -p ` + Q(dir) + ` 2>/dev/null && echo "diskfree=$(df -Pk ` + Q(dir) + ` | awk 'NR==2{print int($4/1024)}')"
 sudo -n true 2>/dev/null && echo sudo=yes
 command -v base64 >/dev/null 2>&1 || echo nobase64=yes
+command -v guestfish >/dev/null 2>&1 && echo guestfs=yes
 dev=$(ip -o route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p'); echo "uplink=$dev"
 [ -n "$dev" ] && [ -d "/sys/class/net/$dev/wireless" ] && echo wifi=yes
 for b in /sys/class/net/*/bridge; do [ -d "$b" ] || continue; n=$(basename "$(dirname "$b")"); echo "bridge=$n:$(ls "/sys/class/net/$n/brif" 2>/dev/null | tr '\n' ',')"; done
@@ -92,6 +94,8 @@ func ParseProbe(out, dir string) HostInfo {
 			h.DiskFree, _ = strconv.ParseInt(v, 10, 64)
 		case "sudo":
 			h.Sudo = true
+		case "guestfs":
+			h.Guestfs = true
 		case "uplink":
 			h.Uplink = v
 		case "wifi":
@@ -150,7 +154,10 @@ func ParseProbe(out, dir string) HostInfo {
 	if h.LanKind == "" && h.Uplink != "" && !h.Wifi {
 		h.LanIf, h.LanKind = h.Uplink, "macvtap" // straight onto the network port, the host's set-up untouched
 	}
-	needs := h.QEMU == "" || !h.QemuImg || h.KVM == "noaccess" || h.KVM == "none" && h.VT
+	if !h.Guestfs && h.QEMU != "" {
+		h.Notes = append(h.Notes, "libguestfs-tools is not installed: persona files (a device model and serial number for the image) cannot be written. Set Up installs it.")
+	}
+	needs := !h.Guestfs || h.QEMU == "" || !h.QemuImg || h.KVM == "noaccess" || h.KVM == "none" && h.VT
 	if needs && h.Arch == "x86_64" || needs && h.Arch == "" {
 		h.CanSetup = h.Pkg != "" || h.QEMU != ""
 		h.Plan = SetupPlan(h)

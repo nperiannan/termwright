@@ -86,3 +86,37 @@ func TestQEMU(t *testing.T) {
 		t.Fatalf("still up %+v", st)
 	}
 }
+
+// TestPersonaWrite writes a persona file into a VM disk with libguestfs
+// (TW_EMU_GUESTFS = a qcow2 image with a filesystem that has /scratch).
+func TestPersonaWrite(t *testing.T) {
+	img := os.Getenv("TW_EMU_GUESTFS")
+	if img == "" {
+		t.Skip("TW_EMU_GUESTFS not set")
+	}
+	home := t.TempDir()
+	run := func(script string) string {
+		c := exec.Command("bash", "-c", script)
+		c.Dir, c.Env = home, append(os.Environ(), "HOME="+home, "LIBGUESTFS_BACKEND=direct")
+		out, _ := c.CombinedOutput()
+		return string(out)
+	}
+	_ = os.MkdirAll(filepath.Join(home, "termwright-lab/images"), 0o755)
+	if out, err := exec.Command("cp", img, filepath.Join(home, "termwright-lab/images/gf.qcow2")).CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	im := &Image{ID: "g", FileName: "gf.qcow2"}
+	l := &Lab{ID: "e2", Dir: "termwright-lab", VMs: []VM{{ID: "v1", Name: "sw-1", Image: "g", DiskGB: 1}}}
+	run(l.PrepareScript(l.VMs, map[string]*Image{"g": im}))
+	out := run(l.WriteFileScript(l.VMs[0], "/scratch/persona.yaml", "system:\n  slots: []\n"))
+	if !strings.Contains(out, "ok /dev/sda") {
+		t.Fatalf("write: %s", out)
+	}
+	got := run("guestfish --ro -a termwright-lab/lab-e2/v1.qcow2 -m /dev/sda1 cat /scratch/persona.yaml")
+	if strings.TrimRight(got, "\n") != "system:\n  slots: []" {
+		t.Fatalf("read back %q", got)
+	}
+	if size := run("qemu-img info termwright-lab/lab-e2/v1.qcow2 | grep 'virtual size'"); !strings.Contains(size, "1 GiB") {
+		t.Fatalf("not grown: %s", size)
+	}
+}

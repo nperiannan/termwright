@@ -161,3 +161,78 @@ func TestEmuSetup(t *testing.T) {
 		t.Fatalf("%+v %v", h.Info, err)
 	}
 }
+
+// TestEmuPersona writes a persona file into a switch's disk before it boots
+// (TW_EMU_GUESTFS: a qcow2 with /scratch; plus the TestEmuLab variables).
+func TestEmuPersona(t *testing.T) {
+	addr, keyFile, kernel, initrd, gf := os.Getenv("TW_EMU_SSH"), os.Getenv("TW_EMU_SSH_KEY"), os.Getenv("TW_EMU_KERNEL"), os.Getenv("TW_EMU_INITRD"), os.Getenv("TW_EMU_GUESTFS")
+	if addr == "" || keyFile == "" || kernel == "" || gf == "" {
+		t.Skip("TW_EMU_SSH / TW_EMU_SSH_KEY / TW_EMU_KERNEL / TW_EMU_GUESTFS not set")
+	}
+	kb, _ := os.ReadFile(keyFile)
+	signer, _ := ssh.ParsePrivateKey(kb)
+	old := emuDial
+	emuDial = func(a *App, ctx context.Context, s session.Session) (*ssh.Client, func(), error) {
+		c, err := ssh.Dial("tcp", addr, &ssh.ClientConfig{User: os.Getenv("TW_EMU_SSH_USER"), Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)}, HostKeyCallback: ssh.InsecureIgnoreHostKey()})
+		if err != nil {
+			return nil, nil, err
+		}
+		return c, func() { _ = c.Close() }, nil
+	}
+	defer func() { emuDial = old }()
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = false, emuFile{}
+	defer func() { a.emuShutdown(); emuLab.loaded, emuLab.f = false, emuFile{} }()
+	host, _ := st.Save(session.Session{Name: "kvm-1", Protocol: session.ProtoSSH2, Hostname: "127.0.0.1", Port: 2299, Username: "root"}, "")
+	if _, err := a.EmuCheckHost(host.Path); err != nil {
+		t.Fatal(err)
+	}
+	img := filepath.Join(dir, "dt.qcow2")
+	b, _ := os.ReadFile(gf)
+	_ = os.WriteFile(img, b, 0o644)
+	v, err := a.EmuAddImage(img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	im := v.Images[0].Image
+	im.RAM, im.NICs, im.Ready = 256, 2, "fake login:"
+	im.Extra = "-kernel " + kernel + " -initrd " + initrd + " -append 'console=ttyS0 quiet panic=-1'"
+	im.Persona = &emu.PersonaDef{Name: "Persona", File: "/scratch/persona.yaml", Template: "model: {{(index .Slots 0).Model}} serial: {{(index .Slots 0).Serial}}\n",
+		Models: []emu.PersonaModel{{Name: "M-24"}}}
+	if _, err := a.EmuSaveImage(im, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.EmuSaveTemplate(emu.Template{Name: "M-24", Image: im.ID, CPUs: 1, RAM: 256, Model: "M-24", SerialStart: "AB-0099"}); err != nil {
+		t.Fatal(err)
+	}
+	tid := emuLab.f.Templates[0].ID
+	v, err = a.EmuAdd(EmuRequest{Host: host.Path, Groups: []EmuGroup{{Template: tid, Count: 2, Names: "dt-{n}"}}, Mgmt: "forward", Start: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = a.EmuRemove(nil, true) }()
+	if v.Devices[1].Serial != "AB-0100" {
+		t.Fatalf("serials %s %s", v.Devices[0].Serial, v.Devices[1].Serial)
+	}
+	deadline := time.Now().Add(5 * time.Minute)
+	for time.Now().Before(deadline) {
+		v, _ = a.EmuState()
+		if v.Devices[0].PersonaOK && v.Devices[1].PersonaOK && v.Devices[0].State == "running" {
+			break
+		}
+		time.Sleep(3 * time.Second)
+	}
+	if !v.Devices[0].PersonaOK || !v.Devices[1].PersonaOK {
+		t.Fatalf("persona not written: %+v", v.Devices)
+	}
+	emuLab.mu.Lock()
+	disk := emuLab.f.Lab.VMDir() + "/" + v.Devices[1].ID + ".qcow2"
+	emuLab.mu.Unlock()
+	out, _ := a.emuRun(host.Path, "LIBGUESTFS_BACKEND=direct guestfish --ro -a "+disk+" -m /dev/sda1 cat /scratch/persona.yaml", 3*time.Minute)
+	if !strings.Contains(out, "model: M-24 serial: AB-0100") {
+		t.Fatalf("persona file: %q", out)
+	}
+}

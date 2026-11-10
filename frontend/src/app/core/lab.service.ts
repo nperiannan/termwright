@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Backend, errText } from './backend';
-import { EmuImage, EmuRequest, EmuSetupDone, EmuSetupLine, LabDevice, LabLink, LabOutput, LabRequest, LabView } from './models';
+import { EmuImage, EmuPersona, EmuTemplate, EmuRequest, EmuSetupDone, EmuSetupLine, LabDevice, LabLink, LabOutput, LabRequest, LabView } from './models';
 import { Ui } from './ui.service';
 
 /** The labs for the Lab window and the Session Manager, refreshed while they run:
@@ -135,6 +135,15 @@ export class LabService {
     try { const run = await this.backend.emuSetupHost(host, password); this.setup.set({ run, host, step: '', lines: [], done: false, error: '' }); }
     catch (e) { this.ui.error(errText(e)); }
   }
+  saveTemplate(t: EmuTemplate) { return this.run(() => this.backend.emuSaveTemplate(t), 'Template saved'); }
+  removeTemplate(id: string) { return this.run(() => this.backend.emuRemoveTemplate(id)); }
+  importProfiles(path: string) { return this.run(() => this.backend.emuImportProfiles(path), 'Image profiles imported - choose their image files'); }
+  setPersona(id: string, p: EmuPersona) { return this.run(() => this.backend.emuSetPersona(id, p), 'Saved - Apply writes it into the switch'); }
+  applyPersona(ids: string[]) { return this.run(() => this.backend.emuApplyPersona(ids), 'Writing the persona file - the switch boots again'); }
+  setResources(id: string, cpus: number, ram: number, diskGb: number) { return this.run(() => this.backend.emuSetResources(id, cpus, ram, diskGb), 'Saved - the switch gets them when it starts next'); }
+  setMACs(ids: string[], start: string) { return this.run(() => (this.e ? this.backend.emuSetMACs(ids, start) : this.backend.labSetMACs(ids, start)), 'MAC addresses set'); }
+  /** The template to preselect in New Lab / Add Switches. */
+  readonly wizardTemplate = signal('');
   removeHost(session: string) { return this.run(() => this.backend.emuRemoveHost(session)); }
   addImage(path: string) { return this.run(() => this.backend.emuAddImage(path), 'Image added - check its settings'); }
   importAppliance(path: string) { return this.run(() => this.backend.emuImportAppliance(path), 'Appliance imported'); }

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest } from './models';
+  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -64,6 +64,14 @@ export class Backend {
   labPackAccept(path: string, hash: string) { return this.call<LabView>('LabPackAccept', path, hash); }
   labPackRemove() { return this.call<LabView>('LabPackRemove'); }
   emuState() { return this.call<LabView>('EmuState'); }
+  emuSaveTemplate(t: EmuTemplate) { return this.call<LabView>('EmuSaveTemplate', t); }
+  emuRemoveTemplate(id: string) { return this.call<LabView>('EmuRemoveTemplate', id); }
+  emuImportProfiles(path: string) { return this.call<LabView>('EmuImportProfiles', path); }
+  emuSetPersona(id: string, p: EmuPersona) { return this.call<LabView>('EmuSetPersona', id, p); }
+  emuApplyPersona(ids: string[]) { return this.call<LabView>('EmuApplyPersona', ids); }
+  emuSetResources(id: string, cpus: number, ram: number, diskGb: number) { return this.call<LabView>('EmuSetResources', id, cpus, ram, diskGb); }
+  emuSetMACs(ids: string[], start: string) { return this.call<LabView>('EmuSetMACs', ids, start); }
+  labSetMACs(ids: string[], start: string) { return this.call<LabView>('LabSetMACs', ids, start); }
   emuSetIdentity(id: string, serial: string, mac: string) { return this.call<LabView>('EmuSetIdentity', id, serial, mac); }
   emuSetSerials(ids: string[], serials: string[], fromFormat: boolean) { return this.call<LabView>('EmuSetSerials', ids, serials, fromFormat); }
   labNewSerials(ids: string[]) { return this.call<LabView>('LabNewSerials', ids); }

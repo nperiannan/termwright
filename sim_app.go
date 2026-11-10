@@ -16,6 +16,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 
+	"github.com/termwright/termwright/internal/emu"
 	"github.com/termwright/termwright/internal/session"
 	"github.com/termwright/termwright/internal/sim"
 )
@@ -642,9 +643,31 @@ func (a *App) LabSetSerials(ids []string, serials []string) (LabView, error) {
 		seen[strings.ToLower(s)] = true
 	}
 	for i, id := range ids {
-		if i < len(list) {
+		switch {
+		case len(list) == 1:
+			simLab.lab.SetIdentity(id, emu.NextSerial(list[0], i), "") // the first one given, the others count up
+		case i < len(list):
 			simLab.lab.SetIdentity(id, list[i], "")
 		}
+	}
+	return a.labView(), a.labSave()
+}
+
+// LabSetMACs gives switches MAC addresses from start, a block of 64 each.
+func (a *App) LabSetMACs(ids []string, start string) (LabView, error) {
+	simLab.mu.Lock()
+	defer simLab.mu.Unlock()
+	if err := a.labLoad(); err != nil {
+		return LabView{}, err
+	}
+	if emu.NextMAC(start, 0) == "" {
+		return a.labView(), fmt.Errorf("%q is not a MAC address", start)
+	}
+	if len(ids) == 0 {
+		ids = simLab.lab.SortedIDs()
+	}
+	for i, id := range ids {
+		simLab.lab.SetIdentity(id, "", emu.NextMAC(start, i))
 	}
 	return a.labView(), a.labSave()
 }
