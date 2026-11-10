@@ -50,6 +50,7 @@ import { FileServersDialog } from './dialogs/file-servers-dialog';
 import { NetCheckDialog } from './dialogs/net-check-dialog';
 import { NameAfterDialog } from './dialogs/name-after-dialog';
 import { LabDialog } from './dialogs/lab-dialog';
+import { LabService } from './core/lab.service';
 import { LabWizard } from './dialogs/lab-wizard';
 import { AIPanel } from './components/ai-panel';
 import { AIChat } from './core/ai-chat.service';
@@ -79,6 +80,8 @@ import { FactTeach } from './dialogs/fact-teach';
 })
 export class App implements OnInit {
   protected ui = inject(Ui);
+  private labs = inject(LabService);
+  openLab(k: 'sim' | 'emu') { this.labs.kind.set(k); this.ui.open('lab'); }
   private a11y = inject(A11y); // Escape, Tab and screen reader support in dialogs
   protected teamStatus = inject(TeamStatusService);
   protected tabs = inject(Tabs);

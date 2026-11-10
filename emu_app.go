@@ -70,6 +70,7 @@ var emuLab struct {
 	ticks    map[string]float64 // CPU ticks at the last poll
 	ticksAt  time.Time
 	cpu      map[string]float64 // CPU use now, in cores (1 = one core busy)
+	ready    map[string]bool    // the console showed the ready text since the VM started (it may scroll out of the log's end later)
 }
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
@@ -169,7 +170,7 @@ func (a *App) emuLoad() {
 	}
 	emuLab.loaded = true
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
-	emuLab.ticks, emuLab.cpu = map[string]float64{}, map[string]float64{}
+	emuLab.ticks, emuLab.cpu, emuLab.ready = map[string]float64{}, map[string]float64{}, map[string]bool{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
 		_ = json.Unmarshal(b, &emuLab.f)
 	}
@@ -899,6 +900,7 @@ func (a *App) emuStart(host string, ids []string) {
 	for _, v := range vms {
 		emuLab.state[v.ID] = "starting"
 		emuLab.starting[v.ID] = time.Now()
+		delete(emuLab.ready, v.ID) // its console log starts empty
 	}
 	emuLab.mu.Unlock()
 	out, err := a.emuRun(host, script, 3*time.Minute)
@@ -958,7 +960,7 @@ func (a *App) emuWatch(host string, ids []string) {
 				continue
 			}
 			im := emuImage(v.Image)
-			if im == nil || !im.ReadyIn(st.Log[id]) {
+			if im == nil || !emuLab.ready[id] {
 				continue
 			}
 			delete(pending, id)
@@ -1124,6 +1126,13 @@ func (a *App) emuPoll(force bool) emu.Status {
 		for id, t := range st.Up {
 			emuLab.ticks[id] = t
 		}
+		for _, v := range l.VMs {
+			if _, up := st.Up[v.ID]; !up {
+				delete(emuLab.ready, v.ID)
+			} else if im := emuImage(v.Image); im != nil && im.ReadyIn(st.Log[v.ID]) {
+				emuLab.ready[v.ID] = true
+			}
+		}
 		emuLab.status = st
 		emuLab.statusAt = now
 	}
@@ -1216,7 +1225,7 @@ func (a *App) emuView() EmuView {
 			if d.Error != "" {
 				d.State, d.StateText = "failed", "failed"
 			}
-		case im != nil && !im.ReadyIn(st.Log[vm.ID]):
+		case im != nil && !emuLab.ready[vm.ID]:
 			d.State, d.StateText, d.Running = "booting", "booting", true
 			if t, ok := emuLab.starting[vm.ID]; ok {
 				d.StateText += " · " + fmtDur(time.Since(t))

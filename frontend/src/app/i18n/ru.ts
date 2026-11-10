@@ -1852,6 +1852,10 @@ const ru: Record<string, string> = {
   'This model runs more than one operating system': 'Эта модель работает с несколькими ОС',
   'OS': 'ОС',
   // ---- эмулированная лаборатория ----
+  'Simulated Lab: switches from a device pack, on this computer': 'Симулированная лаборатория: коммутаторы из пакета устройств на этом компьютере',
+  'Emulated Lab: real VM images on a Linux KVM host': 'Эмулированная лаборатория: настоящие образы ВМ на Linux-хосте с KVM',
+  'Local Shell: a terminal on this computer': 'Локальная оболочка: терминал на этом компьютере',
+  'Shell': 'Оболочка',
   'The host’s network (bridged)': 'Сеть хоста (мост)',
   'Lab bridge on the host': 'Мост лаборатории на хосте',
   'Needs password-less sudo. The switches get addresses in {0} on a bridge of their own on the host, reachable from the host only.': 'Нужен sudo без пароля. Коммутаторы получают адреса в {0} на собственном мосту на хосте, доступные только с хоста.',

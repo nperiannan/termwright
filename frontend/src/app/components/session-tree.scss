@@ -89,8 +89,7 @@
   .count { margin-left: auto; color: var(--faint); font-size: calc(12px * var(--ui-scale, 1)); }
   .sec { height: 30px; padding: 0 14px; margin-top: 0; color: var(--faint); letter-spacing: .06em; }
   .sec.all { border-top: 1px solid var(--line); margin: 0; padding: 6px 14px 0; height: 32px; }
-  .sm-foot { display: flex; gap: 6px; padding: 10px 10px; border-top: 1px solid var(--line);
-    button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 30px; padding: 0 8px; border-radius: var(--r); } }
+  .sm-foot { display: flex; gap: 8px; padding: 10px 10px 12px; border-top: 1px solid var(--line); }
 }
 
 .tbadge { flex: none; margin: 0 2px 0 6px; font-size: 10.5px; line-height: 15px; padding: 0 7px; border-radius: 8px; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }

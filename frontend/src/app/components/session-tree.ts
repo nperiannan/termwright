@@ -180,10 +180,10 @@ export function sessionAddr(n: SessionNode): string {
       }
     </ng-template>
     @if (roomy()) {
-      <div class="sm-foot">
-        <button class="primary" title="New session in the selected folder" (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" [size]="14" /> New</button>
-        <button title="Import sessions from another terminal program or a file" (click)="ui.open('import')"><app-icon name="import" [size]="14" /> Import</button>
-        <button title="Discover devices on a network" (click)="ui.open('discover')"><app-icon name="radar" [size]="14" /> Scan</button>
+      <div class="sm-foot qa qs-slab sm-qa">
+        <button type="button" class="n" title="New session in the selected folder" (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" [size]="15" /><span class="nm">New</span></button>
+        <button type="button" class="s" title="Local Shell: a terminal on this computer" (click)="tabs.openLocalShell()"><app-icon name="shell" [size]="15" /><span class="nm">Shell</span></button>
+        <button type="button" class="d" title="Discover devices on a network" (click)="ui.open('discover')"><app-icon name="radar" [size]="15" /><span class="nm">Scan</span></button>
       </div>
     }
 
@@ -243,7 +243,7 @@ export function sessionAddr(n: SessionNode): string {
 export class SessionTree implements AfterViewInit, OnDestroy {
   protected ui = inject(Ui);
   protected teamStatus = inject(TeamStatusService);
-  private tabs = inject(Tabs);
+  protected tabs = inject(Tabs);
   private remoteDesktop = inject(RemoteDesktopSetup);
   protected wol = inject(Wol);
   protected lab = inject(LabService);
