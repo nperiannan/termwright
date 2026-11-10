@@ -135,17 +135,20 @@ type Settings struct {
 	DeviceFacts          map[string]map[string]string `json:"deviceFacts"`          // session path → fact name → value ("_at" = when read)
 	ExosPortColors       bool                         `json:"exosPortColors"`       // set once when the Network set got the EXOS port-state keywords (0.33.0)
 	FactRulesAdded       bool                         `json:"factRulesAdded"`       // set once when the built-in device types got their fact rules (0.21.0)
+	HostnameFactAdded    bool                         `json:"hostnameFactAdded"`    // set once when the built-in device types got the Hostname fact (0.34.0)
 	KeywordsOn           bool                         `json:"keywordsOn"`
-	Language             string                       `json:"language"`               // interface language: "" = English, "ru" = Russian (partial)
-	IconStyle            string                       `json:"iconStyle"`              // device and session icons: "" = coloured tiles, "glyph" = the symbol only
-	QuickButtons         string                       `json:"quickButtons,omitempty"` // start page buttons: "" = raised slabs, "keycap", "glow"
-	FolderColors         string                       `json:"folderColors,omitempty"` // folder and environment colours: "" = soft, "vivid", "steel"
-	CompactRows          bool                         `json:"compactRows"`            // modern layout: one-line Session Manager rows
-	WelcomeSeen          string                       `json:"welcomeSeen"`            // version whose welcome flow was finished or skipped ("0.21")
-	HideTerminalBar      bool                         `json:"hideTerminalBar"`        // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
-	TerminalScheme       string                       `json:"terminalScheme"`         // scheme name or "Auto" (follow the UI theme)
-	ForceTermScheme      bool                         `json:"forceTerminalScheme"`    // global scheme wins over session schemes
-	CursorStyle          string                       `json:"cursorStyle"`            // block | underline | bar
+	Language             string                       `json:"language"`                  // interface language: "" = English, "ru" = Russian (partial)
+	IconStyle            string                       `json:"iconStyle"`                 // device and session icons: "" = coloured tiles, "glyph" = the symbol only
+	QuickButtons         string                       `json:"quickButtons,omitempty"`    // start page buttons: "" = raised slabs, "keycap", "glow"
+	FolderColors         string                       `json:"folderColors,omitempty"`    // folder and environment colours: "" = soft, "vivid", "steel"
+	NameAfterDevice      string                       `json:"nameAfterDevice,omitempty"` // a session named by its address, after connecting: "" = suggest the device's name, "auto" = rename (with Undo), "off"
+	NameFormat           string                       `json:"nameFormat,omitempty"`      // Name After Devices: "" = hostname, "model" = hostname (model), "octet" = hostname · last octet
+	CompactRows          bool                         `json:"compactRows"`               // modern layout: one-line Session Manager rows
+	WelcomeSeen          string                       `json:"welcomeSeen"`               // version whose welcome flow was finished or skipped ("0.21")
+	HideTerminalBar      bool                         `json:"hideTerminalBar"`           // no bar (timestamps, auto scroll, clear) under SSH / Telnet / local tabs
+	TerminalScheme       string                       `json:"terminalScheme"`            // scheme name or "Auto" (follow the UI theme)
+	ForceTermScheme      bool                         `json:"forceTerminalScheme"`       // global scheme wins over session schemes
+	CursorStyle          string                       `json:"cursorStyle"`               // block | underline | bar
 	CursorBlink          bool                         `json:"cursorBlink"`
 	Scrollback           int                          `json:"scrollback"`
 	CopyOnSelect         bool                         `json:"copyOnSelect"`
@@ -511,6 +514,22 @@ func Load(dataDir string) (*Manager, error) {
 			}
 		}
 		m.cur.FactRulesAdded, changed = true, true
+	}
+	// Hostname fact (0.34.0), for naming sessions after their devices: added
+	// once to the built-in device types that have no Hostname rule.
+	if !m.cur.HostnameFactAdded {
+		for i, d := range m.cur.DeviceTypes {
+			has := false
+			for _, r := range d.Facts {
+				has = has || strings.EqualFold(r.Name, "Hostname")
+			}
+			for _, r := range session.BuiltinFacts(d.Name) {
+				if r.Name == "Hostname" && !has {
+					m.cur.DeviceTypes[i].Facts = append([]session.FactRule{r}, d.Facts...)
+				}
+			}
+		}
+		m.cur.HostnameFactAdded, changed = true, true
 	}
 	// Keyword highlighting is on by default (0.21.0): once, the Network set
 	// becomes the default when none was chosen, and its built-in words also

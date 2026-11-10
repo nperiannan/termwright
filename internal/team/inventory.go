@@ -30,6 +30,8 @@ type Device struct {
 	DeviceType  string `json:"deviceType"`
 	MAC         string `json:"mac"`
 	Description string `json:"description"`
+	Hostname    string `json:"hostname,omitempty"` // the name the device gives itself (read by a member's Termwright, or SNMP sysName from a scan)
+	Model       string `json:"model,omitempty"`
 	AddedBy     string `json:"addedBy"`
 	Added       string `json:"added"`
 	Updated     string `json:"updated"`
@@ -118,6 +120,8 @@ func tidy(d *Device) string {
 	d.Protocol = clean(d.Protocol, 20)
 	d.DeviceType = clean(d.DeviceType, 60)
 	d.Description = clean(d.Description, 300)
+	d.Hostname = clean(d.Hostname, 80)
+	d.Model = clean(d.Model, 80)
 	d.MAC = discover.NormalizeMAC(d.MAC)
 	if d.Protocol == "" {
 		d.Protocol = "SSH2"
@@ -180,6 +184,7 @@ func (s *Server) inventoryRoutes(mux *http.ServeMux) {
 	s.statusRoutes(mux)
 	mux.HandleFunc("POST /api/inventory/check", s.auth(s.check))
 	mux.HandleFunc("POST /api/inventory/push", s.auth(s.push))
+	mux.HandleFunc("POST /api/inventory/facts", s.auth(s.deviceFacts))
 	mux.HandleFunc("GET /api/admin/state", s.auth(s.adminState))
 	mux.HandleFunc("POST /api/admin/devices", s.auth(s.saveDevices))
 	mux.HandleFunc("POST /api/admin/devices/delete", s.auth(s.deleteDevices))
@@ -415,6 +420,12 @@ func (s *Server) saveDevices(w http.ResponseWriter, r *http.Request, me *memberR
 			added++
 		} else {
 			d.ID, d.AddedBy, d.Added, d.Updated = cur.ID, cur.AddedBy, cur.Added, now
+			if d.Hostname == "" {
+				d.Hostname = cur.Hostname
+			}
+			if d.Model == "" {
+				d.Model = cur.Model
+			}
 			*cur = d
 			changed++
 		}
@@ -656,6 +667,9 @@ func (s *Server) startScan(w http.ResponseWriter, r *http.Request, me *memberRec
 		})
 		s.mu.Lock()
 		sc.Running = false
+		if s.namesFromScan(sc.Results) > 0 {
+			_ = s.save()
+		}
 		sort.Slice(sc.Results, func(i, j int) bool {
 			a, _ := netip.ParseAddr(sc.Results[i].IP)
 			b, _ := netip.ParseAddr(sc.Results[j].IP)
@@ -700,3 +714,57 @@ func SameDevice(a, b *Device) bool { return same(a, b) }
 
 // Dev is the device a reference names.
 func (r DeviceRef) Dev() *Device { return r.dev() }
+
+// namesFromScan gives inventory devices without a hostname the name they told
+// the scan (SNMP sysName); returns how many got one (mu held).
+func (s *Server) namesFromScan(results []discover.Result) int {
+	n := 0
+	for _, r := range results {
+		name := clean(r.SysName, 80)
+		if name == "" || isIP(name) {
+			continue
+		}
+		for _, d := range s.st.Inventory {
+			if d.Host == r.IP && d.Hostname == "" {
+				d.Hostname = name
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func isIP(s string) bool { _, err := netip.ParseAddr(s); return err == nil }
+
+// deviceFacts: a member's Termwright read a team device's hostname and model.
+func (s *Server) deviceFacts(w http.ResponseWriter, r *http.Request, me *memberRec) {
+	var b struct {
+		Device   DeviceRef `json:"device"`
+		Hostname string    `json:"hostname"`
+		Model    string    `json:"model"`
+	}
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&b) != nil || tidyRef(&b.Device) != "" {
+		fail(w, 400, "bad request")
+		return
+	}
+	h, m := clean(b.Hostname, 80), clean(b.Model, 80)
+	if isIP(h) {
+		h = ""
+	}
+	d := s.find2(b.Device.dev())
+	if d == nil || (h == "" || h == d.Hostname) && (m == "" || m == d.Model) {
+		writeJSON(w, 200, map[string]bool{"changed": false})
+		return
+	}
+	if h != "" {
+		d.Hostname = h
+	}
+	if m != "" {
+		d.Model = m
+	}
+	if err := s.save(); err != nil {
+		fail(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"changed": true})
+}

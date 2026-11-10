@@ -13,6 +13,9 @@ import { envOf, envProtected } from './env';
 import { HtmlKeyword, bufferHtml } from './buffer-html';
 import { screenPng } from './screen-image';
 import { commandOfLine } from './history.service';
+import { NameFormat, deviceName, isAddressName, keepName, keptNames } from './device-name';
+import { followJump } from './jump-refs';
+import { tr } from './i18n';
 
 export interface TabView {
   id: string;
@@ -963,7 +966,53 @@ export class Tabs {
     const t = this.get(id);
     const p = t?.session?.path;
     if (!p || t.kind !== 'terminal' || (t.session.protocol !== 'SSH2' && t.session.protocol !== 'Telnet')) return;
-    setTimeout(() => void this.ui.refreshFacts(p), 1500);
+    setTimeout(() => void this.ui.refreshFacts(p).then(f => this.offerDeviceName(t.session, f)), 1500);
+  }
+
+  /** Renames sessions (Name After Devices) and keeps their open tabs, the
+   *  Session Manager and jump-host references in step. Returns the new paths
+   *  ('' = not renamed) and shows what failed. */
+  async renameSessions(items: { path: string; name: string }[], follow = true): Promise<string[]> {
+    const res = await this.backend.renameSessions(items);
+    await this.ui.refreshTree();
+    const moved: { from: string; to: string }[] = [];
+    for (const r of res) {
+      if (r.error || !r.path || r.path === r.old) continue;
+      moved.push({ from: r.old, to: r.path });
+      for (const t of this.tabs()) {
+        if (t.session.path !== r.old) continue;
+        await this.backend.refreshTabSession(t.id, r.path).catch(() => {});
+        const name = r.path.split('/').pop() ?? t.title;
+        this.patch(t.id, { session: { ...t.session, path: r.path, name }, title: name });
+      }
+    }
+    const bad = res.filter(r => r.error);
+    if (bad.length) this.ui.error(bad.map(r => `${r.old}: ${r.error}`).join(' · '));
+    if (follow && moved.length) await followJump(this.ui, this.backend, moved);
+    return res.map(r => (r.error ? '' : r.path));
+  }
+
+  /** After connecting: a session named by its address gets the device's own
+   *  name offered (or, with "Rename automatically", renamed with Undo). Not
+   *  for team devices (the team names them) or a session told to keep its name. */
+  async offerDeviceName(s: Session, f: Record<string, string> | null) {
+    const mode = this.ui.settings()?.nameAfterDevice || '';
+    const host = (f?.['Hostname'] || '').trim();
+    if (mode === 'off' || !s.path || s.team || !host || !isAddressName(s.name, s.hostname) || host === s.name || isAddressName(host, '')) return;
+    if (keptNames().includes(s.path)) return;
+    const model = f?.['Model'];
+    const rename = async (name: string) => (await this.renameSessions([{ path: s.path, name }]))[0] || '';
+    const back = (p: string) => () => { keepName(s.path); void this.renameSessions([{ path: p, name: s.name }], false); };
+    if (mode === 'auto') {
+      const name = deviceName(host, model, s.hostname, (this.ui.settings()?.nameFormat || '') as NameFormat);
+      const p = await rename(name);
+      if (p) this.ui.toast(tr('{0} is now {1} - named after the device', s.name, name), 'success', 10000, [{ label: tr('Undo'), run: back(p) }]);
+      return;
+    }
+    const plain = deviceName(host, model, s.hostname, ''), withModel = deviceName(host, model, s.hostname, 'model');
+    const act = (name: string) => ({ label: name === plain ? tr('Rename to {0}', name) : name, run: () => void rename(name).then(p => p && this.ui.toast(tr('Renamed to {0}', name), 'success', 8000, [{ label: tr('Undo'), run: back(p) }])) });
+    const acts = [act(plain), ...(withModel !== plain ? [act(withModel)] : []), { label: tr('Keep'), run: () => keepName(s.path) }];
+    this.ui.toast(tr('{0} calls itself {1}', s.name, host) + (model ? ' · ' + model : ''), 'info', 20000, acts);
   }
 
   /** Saves the visible screen of a terminal tab as a PNG image. */

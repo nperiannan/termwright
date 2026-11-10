@@ -456,6 +456,15 @@ You can also teach from the terminal: select the value in a tab, then **Edit →
 |---|---|
 | ![Device facts](screenshots/device-facts.png) | ![Save as Device Fact](screenshots/fact-teach.png) |
 
+### Name After Devices
+
+Sessions named by their address (`10.127.35.13`) can take the name the device gives itself - its **hostname**, read as a device fact (EXOS `show switch`, VOSS `show sys-info`, Cisco `show version`, Linux `hostname`).
+
+- **Right-click a folder or a selection → Name After Devices…** (or one session → *Name After Device…*): Termwright reads each device's hostname and model in the background with the session's own saved login, a few at a time, and lists them. Pick the format - **Hostname**, **Hostname (model)** or **Hostname · last octet** - edit any name, untick what should stay, then **Rename**. Sessions without a saved login or a hostname rule are shown and left alone. **Undo** in the notice renames them back.
+- **After connecting**: when a session named by its address connects, Termwright offers the device's name in a notice - *Rename to core-vsp-1*, the name with the model, or *Keep* (it does not ask again for that session). With **Settings → General → Sessions named by an address → Rename automatically** it renames at once, in the chosen format, with **Undo**; *Off* stops both.
+- The address stays the session's host, open tabs follow the new name, and sessions that use it as a jump host are asked to follow too. A name that was not the address is kept in the description (*Was named …*).
+- **Team devices** are named by the team: Termwright tells the team server the hostname and model it read, and the owner renames them for everyone on the admin page (**Inventory → select → Name After Devices**).
+
 ### Discover devices
 
 **File → Discover Devices…** (also in the command palette) finds the devices in a network, tells what each one is, and adds the ones you pick as sessions. It **never tries to log in**.

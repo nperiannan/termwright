@@ -57,6 +57,7 @@ func BuiltinFacts(name string) []FactRule {
 	switch strings.ToUpper(name) {
 	case "VOSS":
 		return []FactRule{
+			fact("Hostname", "show sys-info", `SysName\s*:\s*(\S+)`, false),
 			fact("Model", "show sys-info", `ModelName\s*:\s*(\S+)`, false),
 			fact("Version", "show sys-info", `SysDescr\s*:\s*\S+\s*\(([^)]+)\)`, true),
 			fact("Serial", "show sys-info", `Serial#\s*:\s*(\S+)`, false),
@@ -65,6 +66,7 @@ func BuiltinFacts(name string) []FactRule {
 		}
 	case "EXOS":
 		return []FactRule{
+			fact("Hostname", "show switch", `SysName:\s*(\S+)`, false),
 			fact("Model", "show switch", `System Type:\s*(.+?)\s*$`, false),
 			fact("Version", "show switch", `Primary ver:\s*(\S+)`, true),
 			fact("Serial", "show version", `^Switch\s*:\s*\S+\s+(\S+)`, false),
@@ -73,6 +75,7 @@ func BuiltinFacts(name string) []FactRule {
 		}
 	case "CISCO IOS":
 		return []FactRule{
+			fact("Hostname", "show version", `^(\S+) uptime is`, false),
 			fact("Model", "show version", `^[Cc]isco (\S+) \(`, false),
 			fact("Version", "show version", `Cisco IOS.*Version ([^,\s]+)`, true),
 			fact("Serial", "show version", `Processor board ID (\S+)`, false),
@@ -81,6 +84,7 @@ func BuiltinFacts(name string) []FactRule {
 		}
 	case "LINUX":
 		return []FactRule{
+			fact("Hostname", "hostname -s", `^([A-Za-z0-9][\w.-]*)\s*$`, false),
 			fact("Version", "cat /etc/os-release", `PRETTY_NAME="?([^"\n]+?)"?\s*$`, true),
 			fact("Kernel", "uname -r", `^(\d+\.\d+\S*)\s*$`, true),
 			fact("Uptime", "uptime -p", `^up (.+?)\s*$`, true),

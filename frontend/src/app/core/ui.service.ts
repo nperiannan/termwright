@@ -5,7 +5,7 @@ import { MovedDevice, Session, SessionNode, Settings, Snippet } from './models';
 export interface ToastAction { label: string; run: () => void; }
 export interface Toast { id: number; level: 'info' | 'error' | 'success'; message: string; actions?: ToastAction[]; }
 export interface MenuItem { label?: string; action?: () => void; separator?: boolean; disabled?: boolean; hint?: string; }
-export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings' | 'moved' | 'welcome' | 'factTeach' | 'webOpen' | 'remoteDesktop' | 'remoteDiag' | 'teams' | 'fileServers' | 'netCheck';
+export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings' | 'moved' | 'welcome' | 'factTeach' | 'webOpen' | 'remoteDesktop' | 'remoteDiag' | 'teams' | 'fileServers' | 'netCheck' | 'nameAfter';
 
 interface ConfirmReq { title: string; message: string; ok: string; danger: boolean; resolve: (v: boolean) => void; }
 /** A question with a list and several answers (value = what is returned; null = cancelled). */
@@ -45,6 +45,8 @@ export class Ui {
   readonly selectedPaths = signal<Set<string>>(new Set());
   /** Sessions the Edit Sessions dialog changes. */
   readonly bulkPaths = signal<string[]>([]);
+  /** Name After Devices: the sessions and where they are (the window's subtitle). */
+  readonly nameAfter = signal<{ paths: string[]; title: string }>({ paths: [], title: '' });
   /** What Push to Team… offers: sessions (paths, relative to base) or devices from Discover. */
   /** Reserve… for a session's device (current: the reservation to change). */
   /** the AI assistant's window: Explain a selection or Suggest a command, for a tab */
@@ -237,12 +239,13 @@ export class Ui {
   }
 
   /** Reads a session's device facts in the background (all = every rule, asked from a menu). */
-  async refreshFacts(path: string, all = false) {
+  async refreshFacts(path: string, all = false): Promise<Record<string, string> | null> {
     try {
       const f = await this.backend.refreshFacts(path, all);
       if (f) this.setFactsLocal(path, f);
       if (all) this.toast(f && Object.keys(f).some(k => k !== '_at') ? 'Device facts updated' : 'No device facts found - add fact rules to the device type', f ? 'success' : 'info');
-    } catch (e) { if (all) this.error(e); }
+      return f;
+    } catch (e) { if (all) this.error(e); return null; }
   }
 
   /** Keeps the window's copy of the facts current (the backend stores them). */

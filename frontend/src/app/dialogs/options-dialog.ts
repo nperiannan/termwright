@@ -151,6 +151,11 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label><input type="checkbox" name="cw" [(ngModel)]="s.showCommandWindow" />  <span class="tx">Show Command Window<small>type a command and send it to one or more tabs</small></span> </label>
                   
                 </div>
+                <label>Sessions named by an address</label>
+                <div>
+                  <div class="seg w3"><button type="button" [class.on]="!s.nameAfterDevice" (click)="s.nameAfterDevice = ''">Suggest the device’s name</button><button type="button" [class.on]="s.nameAfterDevice === 'auto'" (click)="s.nameAfterDevice = 'auto'">Rename automatically</button><button type="button" [class.on]="s.nameAfterDevice === 'off'" (click)="s.nameAfterDevice = 'off'">Off</button></div>
+                  <div class="hint">After connecting to a session named like 10.1.1.1, Termwright reads the name the device gives itself (its hostname) and offers it, or renames the session with Undo. Team devices are named by the team. Right-click a folder → Name After Devices… does many at once.</div>
+                </div>
                 <h4 class="gsec">Folders and files</h4>
                 <label>Sessions folder</label>
                 <div class="row"><input name="sd" [(ngModel)]="s.sessionsDir" /><button type="button" (click)="browse('sessionsDir')">Browse...</button></div>

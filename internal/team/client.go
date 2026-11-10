@@ -257,6 +257,11 @@ func (c *Client) Connected(ctx context.Context, d DeviceRef) error {
 	return c.call(ctx, http.MethodPost, "/api/connected", map[string]any{"device": d}, nil)
 }
 
+// Facts tells the team the hostname and model read from a device in its inventory.
+func (c *Client) Facts(ctx context.Context, d DeviceRef, hostname, model string) error {
+	return c.call(ctx, http.MethodPost, "/api/inventory/facts", map[string]any{"device": d, "hostname": hostname, "model": model}, nil)
+}
+
 // Watch starts (on) or stops waiting for a device to be free; free tells that it is free already.
 func (c *Client) Watch(ctx context.Context, d DeviceRef, on bool) (free bool, err error) {
 	var r struct {

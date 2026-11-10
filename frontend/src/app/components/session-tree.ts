@@ -1,3 +1,4 @@
+import { isAddressName } from '../core/device-name';
 import { tr } from '../core/i18n';
 import { DeviceState, TeamStatusService, isNetworkDevice } from '../core/team-status.service';
 import { RemoteDesktopSetup } from '../core/remote-desktop-setup.service';
@@ -759,6 +760,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
         { separator: true },
         { label: `Edit ${g.length} Sessions...`, action: () => this.bulkEdit(g) },
         { label: `Back Up ${g.length} Configurations`, action: () => this.backUp(g) },
+        { label: 'Name After Devices...', action: () => this.nameAfter(g, `${g.length} sessions`) },
         { label: 'Change Checklist...', action: () => this.checklist(g) },
         { label: 'Run and Collect...', action: () => this.collect(g) },
         ...this.pushItems(g, ''),
@@ -779,6 +781,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'Wake Up All in Folder (Wake-on-LAN)', action: () => void this.tabs.wakeMany(this.pathsIn(n)) },
           { label: 'Edit All Sessions in Folder...', action: () => this.bulkEdit(this.pathsIn(n)) },
           { label: 'Back Up Configurations', action: () => this.backUp([n.path + '/']) },
+          { label: 'Name After Devices...', action: () => this.nameAfter(this.pathsIn(n), n.path) },
           { label: 'Change Checklist...', action: () => this.checklist([n.path + '/']) },
           { label: 'Run and Collect...', action: () => this.collect([n.path + '/']) },
           ...this.pushItems(this.pathsIn(n), n.path),
@@ -818,6 +821,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { separator: true },
           { label: 'Environment' + this.envSuffix(n.environment ?? '', envOf(n.path, '', this.ui.settings()?.folderDefaults)) + '...', action: () => void this.chooseEnv(n) },
           ...(n.protocol === 'SSH2' || n.protocol === 'Telnet' ? [{ label: 'Refresh Device Facts', action: () => void this.ui.refreshFacts(n.path, true) }] : []),
+          ...((n.protocol === 'SSH2' || n.protocol === 'Telnet') && !n.team && isAddressName(n.name, n.hostname) ? [{ label: 'Name After Device...', action: () => this.nameAfter([n.path], n.path) }] : []),
           { label: this.isFav(n.path) ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav([n.path], !this.isFav(n.path)) },
           ...(sec === 'recent' ? [{ label: 'Remove from Recent', action: () => this.ui.removeRecent(n.path) }] : []),
           ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'WOL' ? [] : [
@@ -931,6 +935,13 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     const own = paths.filter(p => !team.has(p));
     if (!own.length) return [];
     return [{ label: own.length === 1 && paths.length === 1 && !base ? 'Push to Team...' : `Push ${own.length} to Team...`, action: () => { this.ui.teamPush.set({ paths: own, base }); } }];
+  }
+
+  /** Name After Devices: sessions named by an address get the device's own name. */
+  nameAfter(paths: string[], title: string) {
+    if (!paths.length) return;
+    this.ui.nameAfter.set({ paths, title });
+    this.ui.open('nameAfter');
   }
 
   bulkEdit(paths: string[]) {

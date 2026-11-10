@@ -48,6 +48,7 @@ import { KeySetupDialog } from './dialogs/key-setup-dialog';
 import { TeamsDialog } from './dialogs/teams-dialog';
 import { FileServersDialog } from './dialogs/file-servers-dialog';
 import { NetCheckDialog } from './dialogs/net-check-dialog';
+import { NameAfterDialog } from './dialogs/name-after-dialog';
 import { AIPanel } from './components/ai-panel';
 import { AIChat } from './core/ai-chat.service';
 import { ServersIndicator } from './components/servers-indicator';
@@ -70,7 +71,7 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
