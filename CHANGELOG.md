@@ -2,6 +2,12 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## 0.34.1 (2026-11-10)
+
+A fix for the team admin page.
+
+* **Team admin: Discover check boxes.** Ticking a scanned device (or *select all*) could do nothing when the page refreshed while the mouse button was down - mostly in Safari. The boxes now keep their listener across refreshes, and the page waits until the click is handled before drawing itself again.
+
 ## 0.34.0 (2026-11-10)
 
 Name sessions after their devices, a Network Check from this computer and the device tabs, a firewall check for the file servers, calmer folder colours, and who is free now on the team admin page.

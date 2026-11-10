@@ -171,12 +171,24 @@ document.addEventListener('change', e => {
   if (!k) return;
   ui[k] = t.checked; store.set('tw.' + k, t.checked ? '1' : '0'); render();
 });
-// No refresh while a mouse button is down: the page drawn again under the
-// pointer between press and release loses the click (a check box that does not change).
+// The Discover check boxes, also from one listener that every render keeps:
+// a box drawn again between press and release still counts.
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (!t || !scan) return;
+  if (t.dataset && t.dataset.ssel) { t.checked ? ui.ssel.add(t.dataset.ssel) : ui.ssel.delete(t.dataset.ssel); render(); }
+  else if (t.id === 'sall') { scanRows().filter(r => !(scan.inTeam || {})[r.ip]).forEach(r => t.checked ? ui.ssel.add(r.ip) : ui.ssel.delete(r.ip)); render(); }
+});
+// No refresh while a mouse button is down, nor until its click has been
+// handled: the page drawn again under the pointer between press and click
+// loses the click (a check box that does not change - seen in Safari).
 let pointerDown = false, renderLater = false;
+const flushLater = () => { pointerDown = false; if (renderLater) { renderLater = false; setTimeout(render, 120); } };
 document.addEventListener('pointerdown', () => { pointerDown = true; }, true);
-document.addEventListener('pointerup', () => { pointerDown = false; if (renderLater) { renderLater = false; setTimeout(render, 0); } }, true);
-document.addEventListener('pointercancel', () => { pointerDown = false; }, true);
+document.addEventListener('mousedown', () => { pointerDown = true; }, true);
+document.addEventListener('click', flushLater, true);
+document.addEventListener('pointercancel', flushLater, true);
+document.addEventListener('pointerup', () => setTimeout(() => { if (pointerDown) flushLater(); }, 300), true);
 function quietRender() { if (pointerDown) renderLater = true; else render(); }
 
 async function start() {
@@ -203,6 +215,7 @@ async function load(force) {
 function go(p) { ui.page = p; store.set('tw.page', p); window.scrollTo(0, 0); if (p === 'activity') loadAct(true); if (p === 'discover') api('GET', '/api/admin/scan').then(x => { scan = x; render(); }).catch(() => render()); load(true); }
 const TITLES = { overview: 'Overview', reports: 'Usage reports', inventory: 'Inventory', approvals: 'Approvals', discover: 'Discover', members: 'Members', sso: 'Single sign-on', backup: 'Backup & restore', activity: 'Activity', help: 'Help & About' };
 function render() {
+  if (pointerDown) { renderLater = true; return; } // after the click (see flushLater)
   if (!st || !PAGES[ui.page]) { if (st) ui.page = 'overview'; else return; }
   const a = document.activeElement, key = a && a.dataset ? a.dataset.k : null, ss = a && a.selectionStart, se = a && a.selectionEnd, sy = window.scrollY;
   const t = st.team, me = t.members.find(m => m.id === st.me) || {}, online = t.members.filter(m => m.online).length;
@@ -802,8 +815,6 @@ function wire() {
   // discover
   on('#scan', 'onclick', async () => { ui.ssel.clear(); ui.dts = {}; try { await api('POST', '/api/admin/scan', { targets: ui.targets || (scan ? scan.targets : ''), community: ui.community }); poll(); } catch (e) { flash(e.message, true); } });
   on('#stop', 'onclick', () => api('POST', '/api/admin/scan/stop').catch(() => {}));
-  on('#sall', 'onchange', e => { scanRows().filter(r => !(scan.inTeam || {})[r.ip]).forEach(r => e.target.checked ? ui.ssel.add(r.ip) : ui.ssel.delete(r.ip)); render(); });
-  on('[data-ssel]', 'onchange', e => { e.target.checked ? ui.ssel.add(e.target.dataset.ssel) : ui.ssel.delete(e.target.dataset.ssel); render(); });
   on('#sadd', 'onclick', () => {
     const devices = scan.results.filter(r => ui.ssel.has(r.ip)).map(r => ({ name: r.name || r.ip, folder: ui.scanFolder.trim(), host: r.ip, port: r.port || 0, protocol: r.protocol || 'SSH2', deviceType: dtOf(r), mac: r.mac,
       description: [r.vendor, r.platform].filter(Boolean).join(' ') }));
