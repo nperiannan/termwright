@@ -2,6 +2,10 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased - Simulated lab
+
+* **Simulated lab** (Transfer → Simulated Lab…): switches simulated on this computer, each a small SSH server on 127.0.0.1 with a command line - abbreviations, `?` help, Tab, VLANs, ports, IP interfaces, save and reset, ping, traceroute and LLDP between the switches over the cables you draw (not a real operating system: no protocols are run). The switches come from a **device pack** (one `.vm` file: models, port layout, commands, outputs, serial formats) that you load with your consent - it shows the pack’s terms and checksum, is kept on this computer only and can be removed; Termwright carries no models itself. A model’s name sets its ports (`…-16MW-8T`: 16 MW and 8 T ports). **New Lab…** chooses models, operating system, counts, names, management network and cabling (leaf-spine, chain, ring); the Lab window shows the switches, the topology (drag, details, show config, cables) and the cables; their sessions are in a **Simulated Lab** folder with live state and Start / Stop Lab. Serial numbers and MAC addresses can be changed; **Command Outputs** print pasted real output with each switch’s values filled in. Packs are tested with transcripts. Real network OS images on Linux KVM hosts are planned.
+
 ## 0.34.1 (2026-11-10)
 
 A fix for the team admin page.

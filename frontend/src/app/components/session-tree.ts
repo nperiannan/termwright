@@ -1,4 +1,5 @@
 import { isAddressName } from '../core/device-name';
+import { LabService } from '../core/lab.service';
 import { tr } from '../core/i18n';
 import { DeviceState, TeamStatusService, isNetworkDevice } from '../core/team-status.service';
 import { RemoteDesktopSetup } from '../core/remote-desktop-setup.service';
@@ -128,6 +129,7 @@ export function sessionAddr(n: SessionNode): string {
                  <app-folder-icon [depth]="r.depth ?? 0" [env]="folderEnv(n.path)" [open]="expanded().has(n.path)" [size]="roomy() ? 22 : 16" /> 
                 <span class="name">{{ n.name }}</span>
                 @if (env(n); as e) { <span class="env envtag" [style.background]="e.color" [style.color]="e.fg" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
+                @if (labFolder(n)) { <span class="labpill" [class.on]="lab.running() > 0" title="Simulated lab - right-click to start or stop">{{ lab.running() }} / {{ lab.devices().length }} running</span> }
                  <span class="count">{{ counts().get(n.path) ?? 0 }}</span> 
               } @else {
                 <span class="twisty"></span>
@@ -165,10 +167,12 @@ export function sessionAddr(n: SessionNode): string {
         @if (n.protocol === 'WOL') { <span [class]="wolDot(n)" [title]="wolTitle(n)"></span> }
         @else if (reach() && inReach(n.path)) { <span class="dot" [class]="dotClass(n)"></span> }
         @else if (liveState().get(n.path); as st) { <span class="dot" [class]="'dot ' + (st === 'connected' ? 'up' : st === 'error' ? 'down' : 'unk')" [title]="'Open in a tab - ' + st"></span> }
+        @else if (labDot(n); as d) { <span class="dot" [class]="'dot ' + d.cls" [title]="d.title"></span> }
       } @else {
         <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget || n.protocol === 'Console'" />
         @if (n.protocol === 'WOL') { <span [class]="wolDot(n)" [title]="wolTitle(n)"></span> }
         @else if (reach() && inReach(n.path)) { <span class="dot" [class]="dotClass(n)"></span> }
+        @else if (labDot(n); as d) { <span class="dot" [class]="'dot ' + d.cls" [title]="d.title"></span> }
         <span class="name">{{ n.name }}</span>
         @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
         @if (env(n); as e) { <span class="env envtag" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
@@ -242,6 +246,15 @@ export class SessionTree implements AfterViewInit, OnDestroy {
   private tabs = inject(Tabs);
   private remoteDesktop = inject(RemoteDesktopSetup);
   protected wol = inject(Wol);
+  protected lab = inject(LabService);
+
+  /** A session of the simulated lab: running, starting or stopped. */
+  labDot(n: SessionNode): { cls: string; title: string } | null {
+    const d = this.lab.deviceOf(n.hostname, n.port);
+    if (!d) return null;
+    return d.running ? { cls: 'up', title: 'Simulated switch - running' + (d.logins ? ', ' + d.logins + ' login' + (d.logins > 1 ? 's' : '') : '') } : { cls: 'unk', title: 'Simulated switch - stopped' };
+  }
+  labFolder(n: SessionNode) { const st = this.lab.state(); return !!st?.exists && n.isFolder && n.path === st.folder; }
   protected ops = inject(SessionOps);
   private backend = inject(Backend);
   private async wake(path: string, then: 'none' | 'connect') {
@@ -782,6 +795,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'Edit All Sessions in Folder...', action: () => this.bulkEdit(this.pathsIn(n)) },
           { label: 'Back Up Configurations', action: () => this.backUp([n.path + '/']) },
           { label: 'Name After Devices...', action: () => this.nameAfter(this.pathsIn(n), n.path) },
+          ...(this.labFolder(n) ? [{ separator: true }, { label: 'Start Lab', action: () => void this.lab.start() }, { label: 'Stop Lab', action: () => void this.lab.stop() },
+            { label: 'Open Lab Window...', action: () => this.ui.open('lab') }, { label: 'Add Switches...', action: () => { this.ui.labWizard.set({ add: true }); this.ui.open('labWizard'); } }, { separator: true }] : []),
           { label: 'Change Checklist...', action: () => this.checklist([n.path + '/']) },
           { label: 'Run and Collect...', action: () => this.collect([n.path + '/']) },
           ...this.pushItems(this.pathsIn(n), n.path),

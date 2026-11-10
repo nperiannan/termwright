@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName } from './models';
+  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -59,6 +59,22 @@ export class Backend {
   saveSession(s: Session, oldPath: string) { return this.call<Session>('SaveSession', s, oldPath); }
   setNoCursorReport(path: string, on: boolean) { return this.call<void>('SetNoCursorReport', path, on); }
   deleteSession(path: string) { return this.call<void>('DeleteSession', path); }
+  labState() { return this.call<LabView>('LabState'); }
+  labPackInfo(path: string) { return this.call<LabPack>('LabPackInfo', path); }
+  labPackAccept(path: string, hash: string) { return this.call<LabView>('LabPackAccept', path, hash); }
+  labPackRemove() { return this.call<LabView>('LabPackRemove'); }
+  labAdd(r: LabRequest) { return this.call<LabView>('LabAdd', r); }
+  labStart(ids: string[]) { return this.call<LabView>('LabStart', ids); }
+  labStop(ids: string[]) { return this.call<LabView>('LabStop', ids); }
+  labRemove(ids: string[], sessions: boolean) { return this.call<LabView>('LabRemove', ids, sessions); }
+  labConnect(l: LabLink) { return this.call<LabView>('LabConnect', l); }
+  labDisconnect(id: string, port: string) { return this.call<LabView>('LabDisconnect', id, port); }
+  labPlace(id: string, x: number, y: number) { return this.call<void>('LabPlace', id, x, y); }
+  labFreePorts(id: string) { return this.call<string[] | null>('LabFreePorts', id); }
+  labSetIdentity(id: string, serial: string, mac: string) { return this.call<LabView>('LabSetIdentity', id, serial, mac); }
+  labSetSerials(ids: string[], serials: string[]) { return this.call<LabView>('LabSetSerials', ids, serials); }
+  labSetOutputs(o: LabOutput[]) { return this.call<LabView>('LabSetOutputs', o); }
+  labShow(id: string, cmd: string) { return this.call<string>('LabShow', id, cmd); }
   readDeviceNames(paths: string[]) { return this.call<DeviceName[]>('ReadDeviceNames', paths); }
   renameSessions(items: { path: string; name: string }[]) { return this.call<{ old: string; path: string; error?: string }[]>('RenameSessions', items); }
   refreshFacts(path: string, all: boolean) { return this.call<Record<string, string> | null>('RefreshFacts', path, all); }

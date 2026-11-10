@@ -1,0 +1,2 @@
+{{with .Ping}}{{if .OK}}{{.Host}} answers{{else if .Route}}{{.Host}} does not answer{{else}}no route to {{.Host}}{{end}}{{if .Mgmt}} (management){{end}}
+{{end}}

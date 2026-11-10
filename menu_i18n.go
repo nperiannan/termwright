@@ -23,6 +23,7 @@ var menuRU = map[string]string{
 	"Compare Outputs...":                      "Сравнить вывод...",
 	"Configuration Backups...":                "Резервные копии конфигураций...",
 	"Network Check (Reachability, iPerf3)...": "Проверка сети (доступность, iPerf3)...",
+	"Simulated Lab...":                        "Симулированная лаборатория...",
 	"Connect Bar":                             "Строка подключения",
 	"Connect Local Shell":                     "Локальная оболочка",
 	"Connect...":                              "Подключиться...",

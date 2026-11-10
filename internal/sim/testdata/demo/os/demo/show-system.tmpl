@@ -1,0 +1,9 @@
+Name    : {{.Sys.Hostname}}
+Model   : {{.Sys.Model}} ({{.Model.part}})
+Serial  : {{.Sys.Serial}}
+Ports   : {{.Sys.Ports}}
+{{range .VLANs}}VLAN {{.Tag}} {{.Name}} {{default "-" .IP}} untagged={{ranges "," false .Untagged}} tagged={{ranges "," false .Tagged}}
+{{end}}{{range .Static}}route {{.Net}} via {{.Gateway}}
+{{end}}{{range .Extra}}kept {{.Line}}
+{{end}}{{if .KV.ntp}}ntp server {{.KV.ntp}}
+{{end}}

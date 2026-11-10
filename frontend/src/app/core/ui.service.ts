@@ -5,7 +5,7 @@ import { MovedDevice, Session, SessionNode, Settings, Snippet } from './models';
 export interface ToastAction { label: string; run: () => void; }
 export interface Toast { id: number; level: 'info' | 'error' | 'success'; message: string; actions?: ToastAction[]; }
 export interface MenuItem { label?: string; action?: () => void; separator?: boolean; disabled?: boolean; hint?: string; }
-export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings' | 'moved' | 'welcome' | 'factTeach' | 'webOpen' | 'remoteDesktop' | 'remoteDiag' | 'teams' | 'fileServers' | 'netCheck' | 'nameAfter';
+export type DialogName = 'sessionEditor' | 'quickConnect' | 'options' | 'import' | 'export' | 'about' | 'shortcuts' | 'passwords' | 'update' | 'keySetup' | 'palette' | 'commands' | 'workspaces' | 'folderDefaults' | 'compare' | 'discover' | 'bulkEdit' | 'backups' | 'checklists' | 'history' | 'collect' | 'consolePorts' | 'recordings' | 'moved' | 'welcome' | 'factTeach' | 'webOpen' | 'remoteDesktop' | 'remoteDiag' | 'teams' | 'fileServers' | 'netCheck' | 'nameAfter' | 'lab' | 'labWizard';
 
 interface ConfirmReq { title: string; message: string; ok: string; danger: boolean; resolve: (v: boolean) => void; }
 /** A question with a list and several answers (value = what is returned; null = cancelled). */
@@ -45,6 +45,8 @@ export class Ui {
   readonly selectedPaths = signal<Set<string>>(new Set());
   /** Sessions the Edit Sessions dialog changes. */
   readonly bulkPaths = signal<string[]>([]);
+  /** New Lab wizard: add = add switches to the lab there is. */
+  readonly labWizard = signal<{ add: boolean }>({ add: false });
   /** Name After Devices: the sessions and where they are (the window's subtitle). */
   readonly nameAfter = signal<{ paths: string[]; title: string }>({ paths: [], title: '' });
   /** What Push to Team… offers: sessions (paths, relative to base) or devices from Discover. */

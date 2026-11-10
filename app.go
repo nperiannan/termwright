@@ -76,6 +76,7 @@ func (a *App) startup(ctx context.Context) {
 	go a.watchSessions(ctx)
 	go a.startTeamSync()
 	go a.syncLoop(ctx)
+	go a.labAutoStart(ctx)
 }
 
 func (a *App) init() error {
@@ -178,6 +179,7 @@ func (a *App) shutdown(context.Context) {
 	closeWebPages()
 	fsMgr.StopAll()
 	a.IperfServerStop()
+	a.labShutdown()
 	a.mcpStop()
 	if a.terms != nil {
 		a.terms.CloseAll()

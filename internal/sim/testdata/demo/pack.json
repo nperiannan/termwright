@@ -1,0 +1,1 @@
+{"id": "demo", "name": "Demo switches", "version": "1.0.0", "vendor": "Example", "description": "A made-up switch OS for the simulator's own tests.", "license": "Public domain", "os": ["demo"]}

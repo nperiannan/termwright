@@ -1,0 +1,172 @@
+{
+ "name": "Demo OS",
+ "deviceType": "Demo",
+ "portStyle": "n",
+ "startMode": "u",
+ "execMode": "a",
+ "prompts": {
+  "u": "{{.Sys.Hostname}}>",
+  "a": "{{if .Unsaved}}*{{end}}{{.Sys.Hostname}}#",
+  "c": "{{.Sys.Hostname}}(cfg)#"
+ },
+ "exitTo": {
+  "c": "a",
+  "a": "quit",
+  "u": "quit"
+ },
+ "ctrlCTo": {
+  "c": "a"
+ },
+ "banner": "Demo OS {{.Sys.Version}}\n",
+ "more": "-- more --",
+ "count": false,
+ "errors": {
+  "invalid": "{{.Args.caret}}^ bad\n",
+  "incomplete": "incomplete\n",
+  "ambiguous": "ambiguous: {{.Args.line}}\n",
+  "unrecognized": "no such command\n",
+  "cancelled": "cancelled\n",
+  "vlan.missing": "no vlan {{.Err.Value}}\n",
+  "port": "no port {{.Err.Value}}\n",
+  "vlan.untagged": "port {{.Err.Value}} is untagged in {{.Args.vlan}}\n"
+ },
+ "mgmtVRs": [
+  "mgmt"
+ ],
+ "vrs": {
+  "mgmt": "mgmt",
+  "default": "default"
+ },
+ "keep": {
+  "modes": "c",
+  "no": "no"
+ },
+ "commands": [
+  {
+   "cmd": "enable",
+   "modes": "u",
+   "do": [
+    "mode a"
+   ],
+   "help": "admin"
+  },
+  {
+   "cmd": "config",
+   "modes": "a",
+   "do": [
+    "mode c"
+   ],
+   "help": "configure"
+  },
+  {
+   "cmd": "exit",
+   "do": [
+    "exit"
+   ],
+   "help": "leave"
+  },
+  {
+   "cmd": "show system",
+   "modes": "uac",
+   "out": "show-system.tmpl",
+   "help": "system"
+  },
+  {
+   "cmd": "show serial",
+   "modes": "uac",
+   "out": "{{.Sys.Serial}} {{.Model.subSerial}}\n",
+   "help": "serial"
+  },
+  {
+   "cmd": "show long",
+   "modes": "uac",
+   "out": "{{range seq 60}}line {{.}}\n{{end}}",
+   "help": "a long output"
+  },
+  {
+   "cmd": "hostname <name>",
+   "modes": "c",
+   "do": [
+    "set sys.name {name}"
+   ],
+   "help": "name"
+  },
+  {
+   "cmd": "vlan <id> name <name>",
+   "modes": "c",
+   "do": [
+    "vlan.createid {id} {name}"
+   ],
+   "help": "vlan"
+  },
+  {
+   "cmd": "vlan <id> ports <ports> <how>",
+   "modes": "c",
+   "do": [
+    "vlan.add #{id} {ports} {how}"
+   ],
+   "help": "members"
+  },
+  {
+   "cmd": "vlan <id> address <ip>",
+   "modes": "c",
+   "do": [
+    "vlan.ip #{id} {ip}"
+   ],
+   "help": "address"
+  },
+  {
+   "cmd": "route <net> <gw>",
+   "modes": "c",
+   "do": [
+    "route.add {net} {gw}"
+   ],
+   "help": "route"
+  },
+  {
+   "cmd": "ntp server <host>",
+   "modes": "c",
+   "do": [
+    "set kv.ntp {host}"
+   ],
+   "help": "time server"
+  },
+  {
+   "cmd": "save",
+   "modes": "ac",
+   "do": [
+    "confirm \"Save?\"",
+    "save"
+   ],
+   "out": "saved\n",
+   "help": "save"
+  },
+  {
+   "cmd": "paging off",
+   "do": [
+    "paging off"
+   ],
+   "help": "no paging"
+  },
+  {
+   "cmd": "ping <host>",
+   "modes": "ua",
+   "do": [
+    "ping {host}"
+   ],
+   "out": "ping.tmpl",
+   "help": "ping"
+  },
+  {
+   "cmd": "ping <host> vr <vr>",
+   "modes": "ua",
+   "do": [
+    "ping {host} 1 {vr}"
+   ],
+   "out": "ping.tmpl",
+   "help": "ping"
+  }
+ ],
+ "short": "DEMO",
+ "configCommand": "show system"
+}

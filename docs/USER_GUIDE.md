@@ -1050,6 +1050,25 @@ flowchart LR
 
 To copy with SCP while browsing with SFTP, set **Via: SCP** in the SFTP tab (above). For devices that offer SCP but not SFTP: **Transfer → SCP Upload File…** or **SCP Upload Folder…** (pick, then the remote folder/path) and **SCP Download…** (remote file *or folder* path, then a local folder). Folders are copied recursively (`scp -r`).
 
+### Simulated lab
+
+**Transfer → Simulated Lab…** runs simulated switches on this computer - for trying commands, training, testing scripts, backups, Network Check or the AI agent without real hardware. Each switch is a small SSH server on `127.0.0.1` (a few MB, no virtual machine) with a command line: abbreviations, `?` help, Tab completion, error messages, VLANs, ports, IP interfaces, save, reboot, and ping, traceroute and LLDP between the simulated switches over the cables you draw. It is **not** a real operating system: protocols (STP, LACP, OSPF…) are not run.
+
+- **Device packs**: Termwright itself carries no switch models. What a switch is - its models, port layout, operating system, commands, outputs, error messages, serial number and MAC formats - comes from a **device pack**, one `.vm` file. **Load Device Pack (.vm)…** in the Lab window shows the pack's name, version, publisher, contents, terms and SHA-256 checksum; it is loaded only after you tick *I am allowed to use this pack and agree to its terms*. The pack is copied to Termwright's data folder on this computer, never sent anywhere, and can be removed or replaced by a newer version (*Load another…*). A lab whose pack is missing keeps its switches until the pack is loaded again.
+- **Port layout from the model**: the pack names the port types, and a model's name sets its ports - for example a model `…-16MW-8T` gets 16 ports of type *MW* and 8 of type *T*, and `…-48MXW` gets 48 ports of type *MXW*. Uplink port types come after them.
+- **New Lab…** walks through four steps: where it runs (this computer; real network OS images on a Linux host with KVM are planned), which switches (family, model, its operating system when the model runs more than one, how many, names like `lab-{n}`, management network, an optional password - without one any password is taken), the cabling (**Leaf-spine** with the first two switches as the core pair, **Chain**, **Ring** or none, with a preview) and a review.
+- Every switch gets a session in the **Simulated Lab** folder (address `127.0.0.1` and its own port, the device type the pack names, user `admin`); its SSH host key is trusted already. The folder shows how many switches run and has **Start Lab**, **Stop Lab**, **Open Lab Window…** and **Add Switches…** on its right-click menu; each session has a dot for running or stopped.
+- The **Lab window** lists the switches (state, logins, management address, Connect, Start / Stop), draws the **Topology** (drag to arrange; click a switch for its details, cables and configuration; double-click to connect) and lists the **Cables** (up or down). **Cable** connects two switches: click them in the topology, then pick the ports. **Remove** removes switches with their sessions.
+- A switch keeps what was saved and forgets the rest when it stops or reboots - like a real one. The lab starts again with Termwright when it was running.
+- **Configuration the pack does not model is kept** when the pack says so: the command is taken, kept per interface and shown in the configuration, so scripts and templates run without errors. The simulator does not *run* what they configure.
+- **Serial numbers and MAC addresses** are made in the pack's format per model and can be changed: ✎ next to the MAC in the Topology inspector, or **Serial Numbers…** for a list (one per line, given in order to the ticked switches or all of them).
+- **Command Outputs**: paste the output of a show command from a real switch and the simulator prints it with each switch's values filled in: `{hostname}`, `{serial}`, `{mac}`, `{mgmtAddr}`, `{model}`, `{version}`, `{uptime}`, and from its configuration `{word:prefix|default}`, `{line:prefix|default}` or `{if:prefix|yes|no}`.
+- In-band ping works when a VLAN with the same tag reaches the other switch over enabled, cabled ports; the management addresses answer in the management VR / VRF the pack names.
+
+**Making a device pack**: a `.vm` file is a zip with `pack.json` (id, name, version, publisher, terms), `ports.json` (port types), `models.json` (models, port groups, serial and MAC formats such as `AB{YY}{WW}{N:4}`), and per operating system `os/<id>/os.json` (prompts, modes, commands with their actions and outputs, error messages) with Go text templates for the outputs. `tests/*.txt` are transcripts (`> command` and the expected output) that `TW_PACK=<pack> go test ./internal/sim -run TestPackFromEnv` checks. A small example is in `internal/sim/testdata/demo`.
+
+![Simulated lab](screenshots/sim-lab.png)
+
 ### Network Check (reachability and iPerf3)
 
 **Transfer → Network Check (Reachability, iPerf3)…** answers "who can reach what": this computer and the device tabs you choose, against a list of targets.

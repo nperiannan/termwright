@@ -83,6 +83,17 @@ export interface SessionNode {
   deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string; mac?: string; wolPing?: number; wolNetwork?: string; account?: string; team?: string;
 }
 
+/** Simulated lab (internal/sim). */
+export interface LabModel { sku: string; family: string; os: string[]; osName: Record<string, string>; ports: number; layout: string; }
+export interface LabPack { id: string; name: string; version: string; vendor: string; description: string; license: string; hash: string; os: string[]; models: number; file?: string; accepted?: string; error?: string; }
+export interface LabOS { name: string; short: string; configCommand: string; }
+export interface LabDevice { id: string; os: string; model: string; version: string; serial: string; mac: string; hostname: string; mgmtIp: string; port: number; ports: number; running: boolean; logins: number; unsaved: boolean; x: number; y: number; }
+export interface LabLink { a: string; aPort: string; b: string; bPort: string; up?: boolean; }
+export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack: LabPack | null; waiting: number; os: Record<string, LabOS> | null; }
+export interface LabOutput { os: string; command: string; text: string; }
+export interface LabGroup { os?: string; model: string; count: number; names: string; }
+export interface LabRequest { groups: LabGroup[]; mgmtNet: string; cabling: string; password: string; start: boolean; }
+
 /** What Name After Devices found for one session (state: read, nologin, norule, notfound, failed, team). */
 export interface DeviceName { path: string; name: string; host: string; hostname: string; model: string; team: boolean; state: string; detail: string; }
 
@@ -242,7 +253,7 @@ export const ACTIONS: Record<string, string> = {
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',
   'xmodem': 'Send XMODEM...', 'xmodem-receive': 'Receive XMODEM...', 'scp-upload': 'SCP Upload File...', 'scp-upload-folder': 'SCP Upload Folder...', 'scp-download': 'SCP Download...',
-  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'workspaces': 'Workspaces...',
+  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'workspaces': 'Workspaces...',
   'save-workspace': 'Save Workspace...', 'compare': 'Compare Outputs...',
   'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out', 'global-options': 'Global Options', 'session-options': 'Session Options',
 };

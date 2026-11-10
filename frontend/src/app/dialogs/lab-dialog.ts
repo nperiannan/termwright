@@ -1,0 +1,410 @@
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { LabService } from '../core/lab.service';
+import { LabDevice, LabLink, LabOutput, LabPack } from '../core/models';
+import { Backend } from '../core/backend';
+import { Ui } from '../core/ui.service';
+import { Tabs } from '../core/tabs.service';
+import { tr } from '../core/i18n';
+import { Icon } from '../components/icon';
+
+const NW = 150, NH = 46;
+
+/** The simulated lab: its switches (list and topology), cables, start / stop. */
+@Component({
+  selector: 'app-lab-dialog',
+  imports: [FormsModule, Icon],
+  template: `
+  <div class="modal-backdrop" (click)="ui.close()">
+    <div class="modal labw" (click)="$event.stopPropagation()">
+      <div class="modal-head"><span class="mh-ic"><app-icon name="server" [size]="17" /></span>
+        <span class="mh-t">{{ tr('Simulated Lab') }}<span class="mh-s">{{ subtitle() }}</span></span></div>
+      @if (consent(); as c) {
+        <div class="modal-body consent">
+          <div class="big">{{ tr('Load this device pack?') }}</div>
+          <div class="kv wide"><span>{{ tr('Name') }}</span><b>{{ c.info.name }}</b><span>{{ tr('Version') }}</span><span>{{ c.info.version }}</span>
+            <span>{{ tr('From') }}</span><span>{{ c.info.vendor }}</span><span>{{ tr('Contents') }}</span><span>{{ tr('{0} models', c.info.models) }} · {{ c.info.os.join(', ') }}</span>
+            <span>{{ tr('Terms') }}</span><span class="terms">{{ c.info.license }}</span><span>SHA-256</span><span class="mono small">{{ c.info.hash }}</span></div>
+          <p class="muted">{{ c.info.description }}</p>
+          <p class="muted small">{{ tr('A device pack tells the simulator what its switches are: models, commands and outputs. It is kept on this computer only (in Termwright’s data folder), it is not sent anywhere, and you can remove it in the Lab window.') }}</p>
+          <label class="chk"><input type="checkbox" [(ngModel)]="agree" name="agree" /> {{ tr('I am allowed to use this pack and agree to its terms') }}</label>
+          <div class="btns" style="margin-top:14px"><button type="button" (click)="consent.set(null)">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="accept()" [disabled]="!agree || lab.busy()">{{ tr('Load Pack') }}</button></div>
+        </div>
+      } @else if (!lab.state()?.exists) {
+        <div class="modal-body empty">
+          @if (!pack() || pack()!.error) {
+            <div class="big">{{ pack()?.error ? tr('The device pack could not be loaded') : tr('Load a device pack first') }}</div>
+            @if (pack()?.error; as e) { <p class="err">{{ pack()!.name }}: {{ e }}</p> }
+            @if (lab.state()?.waiting) { <p class="muted">{{ tr('{0} switches wait for it.', lab.state()!.waiting) }}</p> }
+            <p class="muted">{{ tr('The simulator runs switches from a device pack (.vm file): their models, commands and outputs. Termwright itself carries none - load a pack you are allowed to use. A few MB per switch, no virtual machines; not the real operating system, no protocols are run.') }}</p>
+            <button type="button" class="primary" (click)="choosePack()">{{ tr('Load Device Pack (.vm)…') }}</button>
+          } @else {
+            <div class="big">{{ tr('No simulated lab yet') }}</div>
+            <p class="muted">{{ tr('Device pack: {0} {1}', pack()!.name, pack()!.version) }} · <a (click)="choosePack()">{{ tr('Load another…') }}</a> · <a (click)="removePack()">{{ tr('Remove') }}</a></p>
+            <button type="button" class="primary" (click)="wizard(false)">{{ tr('New Lab…') }}</button>
+          }
+        </div>
+      } @else {
+        <div class="ltabs" role="tablist">
+          <button type="button" role="tab" [class.on]="tab() === 'list'" (click)="tab.set('list')">{{ tr('Switches') }} ({{ lab.devices().length }})</button>
+          <button type="button" role="tab" [class.on]="tab() === 'topo'" (click)="tab.set('topo')">{{ tr('Topology') }}</button>
+          <button type="button" role="tab" [class.on]="tab() === 'cables'" (click)="tab.set('cables')">{{ tr('Cables') }} ({{ lab.links().length }})</button>
+          <button type="button" role="tab" [class.on]="tab() === 'outputs'" (click)="openOutputs()">{{ tr('Command Outputs') }} ({{ (lab.state()?.outputs ?? []).length }})</button>
+        </div>
+        <div class="modal-body">
+          <div class="bar">
+            <span class="muted">{{ tr('Runs on') }}</span>
+            <select name="where" aria-label="Runs on"><option>{{ tr('This computer - simulated') }}</option><option disabled>{{ tr('A Linux host with KVM - real NOS VMs (planned)') }}</option></select>
+            @if (lab.running() > 0) { <button type="button" class="primary" (click)="lab.stop()" [disabled]="lab.busy()">■ {{ tr('Stop Lab') }}</button> }
+            @else { <button type="button" class="primary" (click)="lab.start()" [disabled]="lab.busy()">▶ {{ tr('Start Lab') }}</button> }
+            <button type="button" (click)="wizard(true)">+ {{ tr('Add Switches') }}</button>
+            <button type="button" [class.on]="cableMode()" (click)="toggleCable()" [title]="tr('Click two switches in the topology, or pick them here')">⟷ {{ tr('Cable') }}</button>
+            <span class="spacer"></span>
+            <button type="button" (click)="openSessions()" [disabled]="!openable().length">{{ openable().length === 1 ? tr('Open 1 Session') : tr('Open {0} Sessions', openable().length) }}</button>
+            <button type="button" (click)="serialsOpen.set(!serialsOpen())" [class.on]="serialsOpen()" [title]="tr('Give the switches serial numbers from a list')">{{ tr('Serial Numbers…') }}</button>
+            <button type="button" class="danger-ghost" (click)="removeSel()" [disabled]="!sel().size">{{ tr('Remove') }}</button>
+          </div>
+          @if (serialsOpen()) {
+            <div class="serbar">
+              <textarea [(ngModel)]="serialText" name="ser" rows="4" spellcheck="false" [placeholder]="tr('One serial number per line')"></textarea>
+              <div><p class="muted small">{{ tr('Given in order to {0} - the switches ticked in the list, or all of them. Each switch shows it in show version / show switch / show sys-info and in the outputs ({serial}).', sel().size ? tr('{0} ticked switches', sel().size) : tr('all {0} switches', lab.devices().length)) }}</p>
+                <button type="button" class="primary sm" (click)="applySerials()" [disabled]="!serialText.trim()">{{ tr('Set Serial Numbers') }}</button>
+                <button type="button" class="sm" (click)="serialsOpen.set(false)">{{ tr('Cancel') }}</button></div>
+            </div>
+          }
+          @if (cable(); as c) {
+            <div class="cablebar">
+              <select [ngModel]="c.a" (ngModelChange)="pickA($event)" name="ca">@for (d of lab.devices(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select>
+              <select [(ngModel)]="c.aPort" name="cap">@for (p of c.aPorts; track p) { <option [value]="p">{{ p }}</option> }</select>
+              <span>⟷</span>
+              <select [ngModel]="c.b" (ngModelChange)="pickB($event)" name="cb">@for (d of lab.devices(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select>
+              <select [(ngModel)]="c.bPort" name="cbp">@for (p of c.bPorts; track p) { <option [value]="p">{{ p }}</option> }</select>
+              <button type="button" class="primary" (click)="addCable()" [disabled]="!c.a || !c.b || c.a === c.b || !c.aPort || !c.bPort">{{ tr('Add Cable') }}</button>
+              <button type="button" (click)="cable.set(null); cableMode.set(false)">{{ tr('Cancel') }}</button>
+            </div>
+          }
+          @switch (tab()) {
+            @case ('list') {
+              <div class="tbl"><table>
+                <thead><tr><th class="c"><input type="checkbox" [checked]="allSel()" (change)="selAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th>
+                  <th>{{ tr('Switch') }}</th><th>OS</th><th>{{ tr('Model') }}</th><th>{{ tr('Serial') }}</th><th>{{ tr('Management') }}</th><th>SSH</th><th>{{ tr('State') }}</th><th>{{ tr('Logins') }}</th><th></th></tr></thead>
+                <tbody>
+                @for (d of lab.devices(); track d.id) {
+                  <tr [class.sel]="sel().has(d.id)" (click)="focus.set(d.id)">
+                    <td class="c"><input type="checkbox" [checked]="sel().has(d.id)" (change)="toggleSel(d.id)" (click)="$event.stopPropagation()" /></td>
+                    <td><b>{{ d.hostname }}</b>@if (d.unsaved) { <span class="muted" [title]="tr('Changes not saved on the switch')"> *</span> }</td>
+                    <td><span class="os" [class]="'os ' + d.os">{{ lab.osShort(d.os) }}</span></td>
+                    <td>{{ d.model }}</td><td class="mono">{{ d.serial }}</td><td class="mono">{{ d.mgmtIp }}</td><td class="mono">127.0.0.1:{{ d.port }}</td>
+                    <td><span class="pill" [class.g]="d.running"><span class="dot" [class.off]="!d.running"></span>{{ d.running ? tr('running') : tr('stopped') }}</span></td>
+                    <td>@if (d.logins) { <span class="pill b">● {{ d.logins }}</span> } @else { <span class="muted">-</span> }</td>
+                    <td class="acts"><button type="button" class="sm" (click)="connect(d); $event.stopPropagation()" [disabled]="!d.running">{{ tr('Connect') }}</button>
+                      <button type="button" class="sm" (click)="d.running ? lab.stop([d.id]) : lab.start([d.id]); $event.stopPropagation()">{{ d.running ? tr('Stop') : tr('Start') }}</button></td>
+                  </tr>
+                }
+                </tbody></table></div>
+              <p class="muted small note">{{ tr('Simulated on this computer: the switches’ command line, VLANs, ports and IP interfaces, ping and LLDP over the cables. Not the real operating system - no protocols are run. A switch forgets what was not saved (save configuration / save config) when it stops.') }}</p>
+            }
+            @case ('topo') {
+              <div class="split">
+                <div class="canvas">
+                  <svg #svg class="topo" [attr.viewBox]="'0 0 ' + box().w + ' ' + box().h" (pointermove)="drag($event, $any(svg))" (pointerup)="drop()" (pointerleave)="drop()">
+                    @for (k of lab.links(); track $index) {
+                      @if (line(k); as L) {
+                        <line [attr.x1]="L.x1" [attr.y1]="L.y1" [attr.x2]="L.x2" [attr.y2]="L.y2" [class]="'c' + (k.up ? '' : ' d')" />
+                        <text class="pl" [attr.x]="L.x1 + (L.x2 - L.x1) * .16" [attr.y]="L.y1 + (L.y2 - L.y1) * .16 - 3">{{ k.aPort }}</text>
+                        <text class="pl" [attr.x]="L.x1 + (L.x2 - L.x1) * .84" [attr.y]="L.y1 + (L.y2 - L.y1) * .84 - 3">{{ k.bPort }}</text>
+                      }
+                    }
+                    @for (d of lab.devices(); track d.id) {
+                      <g class="n" [class.sel]="focus() === d.id" [class.pick]="cable()?.a === d.id" (pointerdown)="grab($event, d)" (click)="clickNode(d)" (dblclick)="connect(d)">
+                        <rect [attr.x]="pos(d).x" [attr.y]="pos(d).y" [attr.width]="NW" [attr.height]="NH" rx="9" />
+                        <circle [attr.cx]="pos(d).x + 12" [attr.cy]="pos(d).y + 15" r="4" [class]="d.running ? 'on' : 'off'" />
+                        <text [attr.x]="pos(d).x + 22" [attr.y]="pos(d).y + 19">{{ d.hostname }}</text>
+                        <text class="s" [attr.x]="pos(d).x + 12" [attr.y]="pos(d).y + 36">{{ lab.osShort(d.os) }} · {{ d.mgmtIp.split('/')[0] }}</text>
+                      </g>
+                    }
+                  </svg>
+                  <div class="hint muted small">{{ cableMode() ? tr('Cable: click the first switch, then the second.') : tr('Drag to arrange · click for details · double-click to connect') }}</div>
+                </div>
+                <div class="insp">
+                  @if (focused(); as d) {
+                    <h4>{{ d.hostname }} <span class="os" [class]="'os ' + d.os">{{ lab.osShort(d.os) }}</span></h4>
+                    <div class="kv"><span>{{ tr('State') }}</span><span [class.ok]="d.running">{{ d.running ? '● ' + tr('running') : tr('stopped') }}@if (d.logins) { · {{ d.logins }} {{ tr('logins') }} }</span>
+                      <span>{{ tr('Model') }}</span><span>{{ d.model }}</span><span>{{ tr('Software') }}</span><span>{{ d.version }}</span>
+                      <span>{{ tr('Serial') }}</span><span class="mono">@if (idEdit()) { <input class="mono idin" [(ngModel)]="idSerial" name="ids" /> } @else { {{ d.serial }} }</span>
+                      <span>MAC</span><span class="mono">@if (idEdit()) { <input class="mono idin" [(ngModel)]="idMac" name="idm" /> } @else { {{ d.mac }} <a class="x" (click)="editId(d)" [title]="tr('Change the serial number and MAC address')">✎</a> }</span>
+                      <span>{{ tr('Management') }}</span><span class="mono">{{ d.mgmtIp }}</span><span>SSH</span><span class="mono">127.0.0.1:{{ d.port }}</span>
+                      <span>{{ tr('Session') }}</span><span>{{ lab.sessionOf(d.id) || '-' }}</span></div>
+                    @if (idEdit()) { <div class="btns" style="margin:-6px 0 12px"><button type="button" class="primary sm" (click)="saveId(d)">{{ tr('Save') }}</button><button type="button" class="sm" (click)="idEdit.set(false)">{{ tr('Cancel') }}</button></div> }
+                    <h4>{{ tr('Cables') }}</h4>
+                    <div class="kv">
+                      @for (c of cablesOf(d); track c.port) { <span class="mono">{{ c.port }}</span><span [class.bad]="!c.up">{{ c.peer }} {{ c.peerPort }}@if (!c.up) { · {{ tr('down') }} } <a class="x" (click)="lab.disconnect(d.id, c.port)" [title]="tr('Remove the cable')">✕</a></span> }
+                      @empty { <span class="muted">{{ tr('none') }}</span><span></span> }
+                    </div>
+                    <div class="btns"><button type="button" class="primary sm" (click)="connect(d)" [disabled]="!d.running">{{ tr('Connect') }}</button>
+                      <button type="button" class="sm" (click)="d.running ? lab.stop([d.id]) : lab.start([d.id])">{{ d.running ? tr('Stop') : tr('Start') }}</button>
+                      <button type="button" class="sm" (click)="showConfig(d)">{{ tr('Show config') }}</button></div>
+                    @if (cfg()) { <pre class="cfg">{{ cfg() }}</pre> }
+                  } @else { <p class="muted small">{{ tr('Click a switch for its details and cables.') }}</p> }
+                </div>
+              </div>
+            }
+            @case ('outputs') {
+              <div class="outs">
+                <div class="olist">
+                  @for (o of outs(); track $index) {
+                    <a [class.on]="oSel() === $index" (click)="oSel.set($index)"><span class="os" [class]="'os ' + (o.os || 'both')">{{ o.os ? lab.osShort(o.os) : tr('All') }}</span> <span class="mono">{{ o.command || tr('(new)') }}</span></a>
+                  } @empty { <p class="muted small">{{ tr('No outputs yet.') }}</p> }
+                  <button type="button" class="sm" (click)="addOut()">+ {{ tr('Add Output') }}</button>
+                </div>
+                <div class="oedit">
+                  @if (outs()[oSel()]; as o) {
+                    <div class="bar"><select [(ngModel)]="o.os" name="oos">@for (k of osIds(); track k) { <option [value]="k">{{ lab.osShort(k) }}</option> }<option value="">{{ tr('All') }}</option></select>
+                      <input class="mono grow" [(ngModel)]="o.command" name="ocmd" [placeholder]="tr('show …')" spellcheck="false" />
+                      <button type="button" class="sm danger-ghost" (click)="dropOut()">{{ tr('Remove') }}</button></div>
+                    <textarea class="otext" [(ngModel)]="o.text" name="otext" spellcheck="false" [placeholder]="tr('Paste the output of the command from a real switch')"></textarea>
+                    <p class="muted small">{{ tr('Placeholders: {hostname} {serial} {mac} {mgmtAddr} {mgmtIp} {model} {version} {uptime} {time}; from the configuration: {word:snmp-server location|none} (the next word), {line:prefix|default} (the rest of the line), {if:ssh enable|Enabled|Disabled}; the pack’s own values with {word:kv name|default}.') }}</p>
+                  } @else { <p class="muted small">{{ tr('The simulator prints these instead of its own output, with each switch’s values filled in - paste the real output of a command so tools that read it see what a real switch prints.') }}</p> }
+                </div>
+              </div>
+              <div class="bar" style="margin-top:10px"><span class="spacer"></span><button type="button" class="primary" (click)="saveOuts()" [disabled]="lab.busy()">{{ tr('Save Outputs') }}</button></div>
+            }
+            @case ('cables') {
+              <div class="tbl"><table>
+                <thead><tr><th>{{ tr('Switch') }}</th><th>{{ tr('Port') }}</th><th></th><th>{{ tr('Switch') }}</th><th>{{ tr('Port') }}</th><th>{{ tr('State') }}</th><th></th></tr></thead>
+                <tbody>
+                @for (k of lab.links(); track $index) {
+                  <tr><td>{{ nameOf(k.a) }}</td><td class="mono">{{ k.aPort }}</td><td>⟷</td><td>{{ nameOf(k.b) }}</td><td class="mono">{{ k.bPort }}</td>
+                    <td><span class="pill" [class.g]="k.up" [class.r]="!k.up">{{ k.up ? tr('up') : tr('down') }}</span></td>
+                    <td class="acts"><button type="button" class="sm" (click)="lab.disconnect(k.a, k.aPort)">{{ tr('Remove') }}</button></td></tr>
+                } @empty { <tr><td colspan="7" class="muted">{{ tr('No cables. Use Cable to connect two switches.') }}</td></tr> }
+                </tbody></table></div>
+            }
+          }
+        </div>
+        <div class="modal-foot"><span class="muted small">{{ tr('Sessions are in the Session Manager under {0}', lab.state()?.folder || '') }}</span><span class="spacer"></span>
+          <button type="button" class="primary" (click)="ui.close()">{{ tr('Close') }}</button></div>
+      }
+    </div>
+  </div>`,
+  styles: [`
+    .labw { width: min(1180px, 96vw); }
+    .serbar { display: grid; grid-template-columns: 280px 1fr; gap: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 10px; background: var(--surface);
+      textarea { font: 12px var(--mono); resize: vertical; } p { margin: 0 0 8px; } }
+    .idin { width: 100%; height: 24px; }
+    .outs { display: grid; grid-template-columns: 260px 1fr; gap: 12px; min-height: 380px; }
+    .olist { border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: flex; flex-direction: column; gap: 2px; overflow: auto; max-height: 52vh;
+      a { padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; gap: 6px; align-items: center; } a.on { background: var(--accent-soft); } button { margin-top: 6px; align-self: flex-start; } }
+    .oedit { display: flex; flex-direction: column; min-width: 0; .grow { flex: 1; } }
+    .otext { flex: 1; min-height: 260px; font: 12px/1.45 var(--mono); resize: vertical; white-space: pre; }
+    .os.both { background: var(--surface-2); color: var(--muted); }
+    .empty { text-align: center; padding: 40px 30px; .big { font-size: 17px; font-weight: 600; margin-bottom: 8px; } p { max-width: 560px; margin: 0 auto 16px; } a { cursor: pointer; color: var(--accent); } }
+    .consent { padding: 24px 30px; .big { font-size: 17px; font-weight: 600; margin-bottom: 12px; } .kv.wide { grid-template-columns: 110px 1fr; } .terms { color: var(--warn); } }
+    .chk { display: inline-flex; gap: 8px; align-items: center; } .err { color: var(--danger); }
+    .ltabs { display: flex; gap: 4px; padding: 0 18px; border-bottom: 1px solid var(--line);
+      button { border: 0; background: none; border-radius: 0; height: 36px; padding: 0 12px; color: var(--muted); border-bottom: 2px solid transparent; }
+      button.on { color: var(--text); border-bottom-color: var(--accent); } }
+    .bar, .cablebar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+    .cablebar { padding: 8px 10px; border: 1px solid var(--accent); border-radius: 9px; background: var(--accent-soft); }
+    .bar button.on { border-color: var(--accent); color: var(--accent); }
+    .spacer { flex: 1; }
+    .tbl { max-height: 52vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-size: 12px; font-weight: 600; padding: 7px 10px; z-index: 1; }
+    td { padding: 6px 10px; border-top: 1px solid var(--line); vertical-align: middle; }
+    tr.sel td { background: var(--accent-soft); }
+    .c { width: 30px; }
+    .acts { text-align: right; white-space: nowrap; }
+    button.sm { height: 26px; padding: 0 9px; font-size: 12px; }
+    .mono { font-family: var(--mono); font-size: 12px; }
+    .os { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 5px; letter-spacing: .3px; background: color-mix(in srgb, #7c5cff 18%, transparent); color: #8f75ff; }
+    
+    .pill { display: inline-flex; gap: 5px; align-items: center; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; border: 1px solid var(--line); white-space: nowrap; color: var(--muted); }
+    .pill.g { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+    .pill.r { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+    .pill.b { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; } .dot.off { background: var(--faint); }
+    .note { margin: 10px 0 0; }
+    .split { display: flex; height: min(540px, 58vh); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .canvas { flex: 1; min-width: 0; position: relative; overflow: auto; background: var(--bg); }
+    .canvas .hint { position: absolute; left: 10px; bottom: 6px; }
+    .topo { display: block; width: 100%; min-width: 600px; height: 100%; user-select: none; }
+    .topo .n { cursor: grab; }
+    .topo .n rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+    .topo .n.sel rect { stroke: var(--accent); stroke-width: 2; }
+    .topo .n.pick rect { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 4 3; }
+    .topo .n text { fill: var(--text); font: 600 12px var(--ui-font); } .topo .n text.s { fill: var(--muted); font: 11px var(--mono); }
+    .topo circle.on { fill: var(--ok); } .topo circle.off { fill: var(--faint); }
+    .topo line.c { stroke: var(--ok); stroke-width: 2; } .topo line.c.d { stroke: var(--danger); stroke-dasharray: 5 4; }
+    .topo text.pl { fill: var(--muted); font: 10px var(--mono); }
+    .insp { width: 300px; border-left: 1px solid var(--line); padding: 12px 14px; overflow: auto; background: var(--surface); }
+    .insp h4 { margin: 0 0 6px; font-size: 13px; }
+    .kv { display: grid; grid-template-columns: 96px 1fr; gap: 5px 8px; font-size: 12.5px; margin-bottom: 12px; }
+    .kv > span:nth-child(odd) { color: var(--muted); }
+    .kv .x { margin-left: 6px; cursor: pointer; color: var(--muted); }
+    .ok { color: var(--ok); } .bad { color: var(--danger); }
+    .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .cfg { margin: 10px 0 0; max-height: 200px; overflow: auto; font: 11px/1.4 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; white-space: pre; }
+  `],
+})
+export class LabDialog implements OnInit, OnDestroy {
+  protected ui = inject(Ui);
+  protected lab = inject(LabService);
+  private tabs = inject(Tabs);
+  private backend = inject(Backend);
+  protected tr = tr;
+  protected NW = NW; protected NH = NH;
+  protected tab = signal<'list' | 'topo' | 'cables' | 'outputs'>('list');
+  protected sel = signal(new Set<string>());
+  protected focus = signal('');
+  protected cfg = signal('');
+  protected cableMode = signal(false);
+  protected cable = signal<{ a: string; aPort: string; aPorts: string[]; b: string; bPort: string; bPorts: string[] } | null>(null);
+  private moved = signal(new Map<string, { x: number; y: number }>());
+  private dragging: { id: string; dx: number; dy: number; moved: boolean } | null = null;
+
+  protected subtitle = computed(() => {
+    const ds = this.lab.devices(), ls = this.lab.links();
+    if (!ds.length) return tr('Switches simulated on this computer, from a device pack');
+    const down = ls.filter(l => !l.up).length;
+    return tr('{0} switches · {1} running', ds.length, this.lab.running()) + (down ? ' · ' + tr('{0} cables down', down) : '');
+  });
+  protected focused = computed(() => this.lab.devices().find(d => d.id === this.focus()));
+  protected allSel = computed(() => this.lab.devices().length > 0 && this.lab.devices().every(d => this.sel().has(d.id)));
+  protected openable = computed(() => this.lab.devices().filter(d => d.running && (this.sel().size ? this.sel().has(d.id) : true)));
+  protected box = computed(() => {
+    let w = 900, h = 420;
+    for (const d of this.lab.devices()) { const p = this.pos(d); w = Math.max(w, p.x + NW + 40); h = Math.max(h, p.y + NH + 40); }
+    return { w, h };
+  });
+
+  ngOnInit() { this.lab.watching.set(true); void this.lab.refresh(); }
+  ngOnDestroy() { this.lab.watching.set(false); }
+
+  pos(d: LabDevice) { return this.moved().get(d.id) ?? { x: d.x || 40, y: d.y || 60 }; }
+  nameOf(id: string) { return this.lab.devices().find(d => d.id === id)?.hostname ?? id; }
+  line(k: LabLink) {
+    const a = this.lab.devices().find(d => d.id === k.a), b = this.lab.devices().find(d => d.id === k.b);
+    if (!a || !b) return null;
+    const pa = this.pos(a), pb = this.pos(b);
+    const ax = pa.x + NW / 2, ay = pa.y + NH / 2, bx = pb.x + NW / 2, by = pb.y + NH / 2;
+    // from the edge of each box, not its middle
+    const edge = (x: number, y: number, tx: number, ty: number) => {
+      const dx = tx - x, dy = ty - y; const s = Math.min(Math.abs((NW / 2) / (dx || 1e-6)), Math.abs((NH / 2) / (dy || 1e-6)));
+      return { x: x + dx * Math.min(s, 1), y: y + dy * Math.min(s, 1) };
+    };
+    const e1 = edge(ax, ay, bx, by), e2 = edge(bx, by, ax, ay);
+    return { x1: e1.x, y1: e1.y, x2: e2.x, y2: e2.y };
+  }
+  cablesOf(d: LabDevice) {
+    const out: { port: string; peer: string; peerPort: string; up: boolean }[] = [];
+    for (const k of this.lab.links()) {
+      if (k.a === d.id) out.push({ port: k.aPort, peer: this.nameOf(k.b), peerPort: k.bPort, up: !!k.up });
+      else if (k.b === d.id) out.push({ port: k.bPort, peer: this.nameOf(k.a), peerPort: k.aPort, up: !!k.up });
+    }
+    return out;
+  }
+
+  toggleSel(id: string) { const s = new Set(this.sel()); s.has(id) ? s.delete(id) : s.add(id); this.sel.set(s); }
+  selAll(on: boolean) { this.sel.set(on ? new Set(this.lab.devices().map(d => d.id)) : new Set()); }
+
+  // identity
+  protected idEdit = signal(false);
+  protected idSerial = ''; protected idMac = '';
+  editId(d: LabDevice) { this.idSerial = d.serial; this.idMac = d.mac; this.idEdit.set(true); }
+  async saveId(d: LabDevice) { if (await this.lab.setIdentity(d.id, this.idSerial, this.idMac)) this.idEdit.set(false); }
+  protected serialsOpen = signal(false);
+  protected serialText = '';
+  async applySerials() {
+    const ids = (this.sel().size ? this.lab.devices().filter(d => this.sel().has(d.id)) : this.lab.devices()).map(d => d.id);
+    if (await this.lab.setSerials(ids, this.serialText.split(/\r?\n/))) { this.serialsOpen.set(false); this.serialText = ''; }
+  }
+
+  // command outputs
+  protected outs = signal<LabOutput[]>([]);
+  protected oSel = signal(0);
+  openOutputs() { this.outs.set((this.lab.state()?.outputs ?? []).map(o => ({ ...o }))); this.oSel.set(0); this.tab.set('outputs'); }
+  osIds() { return Object.keys(this.lab.state()?.os ?? {}).sort(); }
+  addOut() { this.outs.set([...this.outs(), { os: this.osIds()[0] ?? '', command: '', text: '' }]); this.oSel.set(this.outs().length - 1); }
+  dropOut() { this.outs.set(this.outs().filter((_, i) => i !== this.oSel())); this.oSel.set(Math.max(0, this.oSel() - 1)); }
+  async saveOuts() { if (await this.lab.setOutputs(this.outs().filter(o => o.command.trim()))) this.openOutputs(); }
+
+  // device pack
+  protected pack = computed(() => this.lab.state()?.pack ?? null);
+  protected consent = signal<{ path: string; info: LabPack } | null>(null);
+  protected agree = false;
+  async choosePack() {
+    const path = await this.backend.chooseOpenFile(tr('Load Device Pack'), [{ displayName: tr('Device packs'), pattern: '*.vm' }]).catch(() => '');
+    if (!path) return;
+    try { this.agree = false; this.consent.set({ path, info: await this.lab.packInfo(path) }); } catch (e) { this.ui.error(e); }
+  }
+  async accept() { const c = this.consent(); if (c && await this.lab.acceptPack(c.path, c.info.hash)) this.consent.set(null); }
+  async removePack() { if (await this.ui.confirm(tr('Remove device pack'), tr('Remove {0} from this computer?', this.pack()?.name ?? ''), tr('Remove'), true)) await this.lab.removePack(); }
+
+  wizard(add: boolean) { this.ui.labWizard.set({ add }); this.ui.open('labWizard'); }
+
+  connect(d: LabDevice) { const p = this.lab.sessionOf(d.id); if (p) void this.tabs.openSession(p); }
+  openSessions() { for (const d of this.openable()) this.connect(d); this.ui.close(); }
+
+  async removeSel() {
+    const ids = [...this.sel()];
+    if (!ids.length) return;
+    if (!(await this.ui.confirm(tr('Remove switches'), tr('Remove {0} simulated switches and their sessions? Their configuration is lost.', ids.length), tr('Remove'), true))) return;
+    if (await this.lab.remove(ids, true)) this.sel.set(new Set());
+  }
+
+  async showConfig(d: LabDevice) {
+    const cmd = this.lab.state()?.os?.[d.os]?.configCommand;
+    this.cfg.set(cmd ? await this.lab.show(d.id, cmd) : tr('The device pack names no command for the configuration.'));
+  }
+
+  // dragging in the topology
+  grab(ev: PointerEvent, d: LabDevice) {
+    if (this.cableMode()) return;
+    const svg = (ev.target as Element).closest('svg') as SVGSVGElement;
+    const p = this.toSvg(ev, svg), q = this.pos(d);
+    this.dragging = { id: d.id, dx: p.x - q.x, dy: p.y - q.y, moved: false };
+  }
+  drag(ev: PointerEvent, svg: SVGSVGElement) {
+    if (!this.dragging) return;
+    const p = this.toSvg(ev, svg);
+    const m = new Map(this.moved());
+    m.set(this.dragging.id, { x: Math.max(0, p.x - this.dragging.dx), y: Math.max(0, p.y - this.dragging.dy) });
+    this.moved.set(m);
+    this.dragging.moved = true;
+  }
+  drop() {
+    const d = this.dragging; this.dragging = null;
+    if (d?.moved) { const p = this.moved().get(d.id)!; this.lab.place(d.id, p.x, p.y); }
+  }
+  private toSvg(ev: PointerEvent, svg: SVGSVGElement) {
+    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const m = svg.getScreenCTM(); const r = m ? pt.matrixTransform(m.inverse()) : pt;
+    return { x: r.x, y: r.y };
+  }
+
+  // cables
+  toggleCable() {
+    if (this.cableMode()) { this.cableMode.set(false); this.cable.set(null); return; }
+    this.cableMode.set(true);
+    const ds = this.lab.devices();
+    if (this.tab() !== 'topo' && ds.length >= 2) void this.startCable(ds[0].id, ds[1].id);
+  }
+  clickNode(d: LabDevice) {
+    this.focus.set(d.id); this.cfg.set('');
+    if (!this.cableMode()) return;
+    const c = this.cable();
+    if (!c || (c.a && c.b)) { this.cable.set({ a: d.id, aPort: '', aPorts: [], b: '', bPort: '', bPorts: [] }); return; }
+    if (c.a !== d.id) void this.startCable(c.a, d.id);
+  }
+  private async startCable(a: string, b: string) {
+    const [ap, bp] = await Promise.all([this.lab.freePorts(a), this.lab.freePorts(b)]);
+    this.cable.set({ a, aPort: ap[0] ?? '', aPorts: ap, b, bPort: bp[0] ?? '', bPorts: bp });
+  }
+  async pickA(id: string) { const c = this.cable()!; const p = await this.lab.freePorts(id); this.cable.set({ ...c, a: id, aPorts: p, aPort: p[0] ?? '' }); }
+  async pickB(id: string) { const c = this.cable()!; const p = await this.lab.freePorts(id); this.cable.set({ ...c, b: id, bPorts: p, bPort: p[0] ?? '' }); }
+  async addCable() {
+    const c = this.cable(); if (!c) return;
+    if (await this.lab.connect({ a: c.a, aPort: c.aPort, b: c.b, bPort: c.bPort })) { this.cable.set(null); this.cableMode.set(false); }
+  }
+}
