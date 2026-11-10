@@ -254,12 +254,20 @@ func (a *App) labView() LabView {
 	return v
 }
 
+var labEnsured bool
+
 // LabState returns the lab (empty when there is none yet).
 func (a *App) LabState() (LabView, error) {
 	simLab.mu.Lock()
 	defer simLab.mu.Unlock()
 	if err := a.labLoad(); err != nil {
 		return LabView{}, err
+	}
+	if !labEnsured && simLab.pack != nil {
+		labEnsured = true
+		if a.labEnsureSessions() {
+			_ = a.labSave()
+		}
 	}
 	return a.labView(), nil
 }
@@ -404,6 +412,7 @@ func (a *App) LabStart(ids []string) (LabView, error) {
 		}
 	}
 	simLab.meta.Running = simLab.lab.Running()
+	a.labEnsureSessions()
 	_ = a.labSave()
 	if len(errs) > 0 {
 		return a.labView(), errors.New(strings.Join(errs, "; "))
@@ -513,9 +522,76 @@ func (a *App) labAutoStart(_ context.Context) {
 	if _, err := a.labKey(); err != nil {
 		return
 	}
+	a.labEnsureSessions()
+	_ = a.labSave()
 	for _, id := range simLab.lab.SortedIDs() {
 		_ = simLab.lab.StartDevice(id)
 	}
+}
+
+// labEnsureSessions makes the sessions of switches whose session is gone (a
+// deleted folder, a lab from an older version) again (mu held). It says
+// whether it made any.
+func (a *App) labEnsureSessions() bool {
+	if simLab.lab == nil || simLab.pack == nil {
+		return false
+	}
+	made := false
+	for _, sp := range simLab.lab.Specs() {
+		if p := simLab.meta.Sessions[sp.ID]; p != "" {
+			if _, err := a.store.Get(p); err == nil {
+				continue
+			}
+		}
+		if p, err := a.labSession(sp, ""); err == nil {
+			simLab.meta.Sessions[sp.ID] = p
+			made = true
+		}
+	}
+	if made {
+		var ports []int
+		for _, sp := range simLab.lab.Specs() {
+			ports = append(ports, sp.Port)
+		}
+		a.labTrust(ports)
+	}
+	return made
+}
+
+// LabNewSerials gives switches new serial numbers in their model's format
+// from the device pack (all of them when ids is empty).
+func (a *App) LabNewSerials(ids []string) (LabView, error) {
+	simLab.mu.Lock()
+	defer simLab.mu.Unlock()
+	if err := a.labLoad(); err != nil {
+		return LabView{}, err
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	var none []string
+	for _, sp := range simLab.lab.Specs() {
+		if len(ids) > 0 && !want[sp.ID] {
+			continue
+		}
+		m, ok := simLab.pack.ModelOf(sp.SKU)
+		if !ok {
+			m, ok = simLab.pack.ModelOf(sp.Model)
+		}
+		if !ok || m.Serial == "" {
+			none = append(none, sp.Saved.Hostname)
+			continue
+		}
+		simLab.lab.SetIdentity(sp.ID, sim.Generate(m.Serial), "")
+	}
+	if err := a.labSave(); err != nil {
+		return a.labView(), err
+	}
+	if len(none) > 0 {
+		return a.labView(), fmt.Errorf("the device pack has no serial number format for %s (their model is not in the pack)", strings.Join(none, ", "))
+	}
+	return a.labView(), nil
 }
 
 // labShutdown stops the switches (the lab starts again next time).

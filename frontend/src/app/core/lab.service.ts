@@ -95,7 +95,7 @@ export class LabService {
     if (ok) { this.kind.set('emu'); await this.ui.refreshTree(); }
     return ok;
   }
-  start(ids: string[] = []) { return this.run(() => (this.e ? this.backend.emuStart(ids) : this.backend.labStart(ids))); }
+  async start(ids: string[] = []) { const ok = await this.run(() => (this.e ? this.backend.emuStart(ids) : this.backend.labStart(ids))); await this.ui.refreshTree(); return ok; }
   stop(ids: string[] = []) { return this.run(() => (this.e ? this.backend.emuStop(ids) : this.backend.labStop(ids))); }
   restart(ids: string[]) { return this.run(() => this.backend.emuRestart(ids)); }
   reset(ids: string[]) { return this.run(() => this.backend.emuReset(ids), 'Back to day 0: the switches boot as new'); }
@@ -113,8 +113,9 @@ export class LabService {
   freePorts(id: string) { return (this.e ? this.backend.emuFreePorts(id) : this.backend.labFreePorts(id)).then(p => p ?? []).catch(() => [] as string[]); }
   show(id: string, cmd: string) { return this.backend.labShow(id, cmd).catch(e => errText(e)); }
   consoleTail(id: string) { return this.backend.emuConsoleTail(id).catch(() => ''); }
-  setIdentity(id: string, serial: string, mac: string) { return this.run(() => this.backend.labSetIdentity(id, serial, mac), 'Saved'); }
-  setSerials(ids: string[], serials: string[]) { return this.run(() => this.backend.labSetSerials(ids, serials), 'Serial numbers set'); }
+  setIdentity(id: string, serial: string, mac: string) { return this.run(() => (this.e ? this.backend.emuSetIdentity(id, serial, mac) : this.backend.labSetIdentity(id, serial, mac)), this.e ? 'Saved - the switch gets it when it starts next' : 'Saved'); }
+  setSerials(ids: string[], serials: string[]) { return this.run(() => (this.e ? this.backend.emuSetSerials(ids, serials, false) : this.backend.labSetSerials(ids, serials)), 'Serial numbers set'); }
+  newSerials(ids: string[]) { return this.run(() => (this.e ? this.backend.emuSetSerials(ids, [], true) : this.backend.labNewSerials(ids)), 'New serial numbers set'); }
   setOutputs(o: LabOutput[]) { return this.run(() => this.backend.labSetOutputs(o), 'Outputs saved'); }
   /** Reads a device pack for the consent step (nothing is kept). */
   packInfo(path: string) { return this.backend.labPackInfo(path); }

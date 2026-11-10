@@ -19,6 +19,7 @@ package emu
 
 import (
 	"fmt"
+	"net"
 	"net/netip"
 	"regexp"
 	"sort"
@@ -49,6 +50,7 @@ type Image struct {
 	Answers    []Answer `json:"answers"`            // questions on the console and what to answer
 	Extra      string   `json:"extra"`              // more qemu options
 	Source     string   `json:"source"`             // where the profile came from (a GNS3 appliance…)
+	Serial     string   `json:"serial"`             // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
 }
 
 // Answer: when the console shows Match (plain text), Send is typed (and Enter).
@@ -68,6 +70,8 @@ type VM struct {
 	MgmtIP   string `json:"mgmtIp"` // address/bits it gets on day 0
 	Gateway  string `json:"gateway"`
 	Day0Done bool   `json:"day0Done"`
+	Serial   string `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
+	BaseMAC  string `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
 	X        int    `json:"x"`
 	Y        int    `json:"y"`
 }
@@ -117,6 +121,11 @@ func (l *Lab) VMByID(id string) *VM {
 
 // MAC of port n (0 = management) of a VM: QEMU's own prefix, unique in the lab.
 func (l *Lab) MAC(v VM, n int) string {
+	if hw, err := net.ParseMAC(v.BaseMAC); err == nil && len(hw) == 6 {
+		x := uint64(hw[0])<<40 | uint64(hw[1])<<32 | uint64(hw[2])<<24 | uint64(hw[3])<<16 | uint64(hw[4])<<8 | uint64(hw[5])
+		x += uint64(n)
+		return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", byte(x>>40), byte(x>>32), byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
+	}
 	id, _ := strconv.ParseUint(l.ID, 16, 64)
 	return fmt.Sprintf("52:54:%02x:%02x:%02x:%02x", byte(id), byte(v.Index>>8), byte(v.Index), byte(n))
 }
@@ -195,6 +204,10 @@ func (l *Lab) Args(v VM, im *Image) []string {
 			a = append(a, "-device", fmt.Sprintf("%s,mac=%s", nic, l.MAC(v, n)))
 		}
 	}
+	if v.Serial != "" {
+		sn := strings.ReplaceAll(v.Serial, ",", ",,")
+		a = append(a, "-smbios", "type=1,serial="+sn, "-smbios", "type=2,serial="+sn, "-smbios", "type=3,serial="+sn)
+	}
 	a = append(a,
 		"-chardev", fmt.Sprintf("socket,id=con0,host=127.0.0.1,port=%d,server=on,wait=off,telnet=on,logfile=%s/%s.log", l.ConsolePort(v), dir, v.ID),
 		"-serial", "chardev:con0",
@@ -262,12 +275,13 @@ func (l *Lab) ResetScript(ids []string) string {
 	return b.String()
 }
 
-// StatusScript prints a line per VM: "up <id> <cpu%>" or "down <id>",
+// StatusScript prints "clk <ticks per second>", a line per VM: "up <id> <CPU
+// ticks used so far>" or "down <id>",
 // then "log <id> <base64 of the console log's end>" for the ones in tails.
 func (l *Lab) StatusScript(tails []string) string {
 	dir := Q(l.VMDir())
-	s := "cd " + dir + " 2>/dev/null || exit 0\nfor p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
-		" if kill -0 \"$pid\" 2>/dev/null; then echo \"up $n $(ps -o pcpu= -p \"$pid\" | tr -d ' ')\"; else echo \"down $n\"; fi; done\n"
+	s := "cd " + dir + " 2>/dev/null || exit 0\necho \"clk $(getconf CLK_TCK 2>/dev/null || echo 100)\"\nfor p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
+		" if kill -0 \"$pid\" 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null)\"; else echo \"down $n\"; fi; done\n"
 	for _, id := range tails {
 		s += fmt.Sprintf("[ -f %s.log ] && echo \"log %s $(tail -c 4000 %s.log | base64 | tr -d '\\n')\"\n", id, id, id)
 	}
@@ -276,7 +290,8 @@ func (l *Lab) StatusScript(tails []string) string {
 
 // Status is what StatusScript found.
 type Status struct {
-	Up  map[string]float64 // running VMs and their CPU use
+	Clk float64            // CPU ticks per second
+	Up  map[string]float64 // running VMs and the CPU ticks they used
 	Log map[string]string  // console log ends
 }
 
@@ -286,6 +301,8 @@ func ParseStatus(out string, b64 func(string) ([]byte, error)) Status {
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Fields(line)
 		switch {
+		case len(f) == 2 && f[0] == "clk":
+			st.Clk, _ = strconv.ParseFloat(f[1], 64)
 		case len(f) >= 2 && f[0] == "up":
 			c := 0.0
 			if len(f) > 2 {

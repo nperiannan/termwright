@@ -78,16 +78,18 @@ const NW = 150, NH = 46;
               <button type="button" (click)="openConsoles()" [disabled]="!picked().length">{{ tr('Console') }}</button>
               <button type="button" (click)="lab.restart(pickedIds())" [disabled]="!picked().length || lab.busy()" [title]="tr('Stop and start: cable changes take effect')">{{ tr('Restart') }}</button>
               <button type="button" (click)="resetSel()" [disabled]="!picked().length || lab.busy()" [title]="tr('Throw the disk away and boot as new; the day-0 commands are typed again')">{{ tr('Back to Day 0') }}</button>
-            } @else {
-            <button type="button" (click)="serialsOpen.set(!serialsOpen())" [class.on]="serialsOpen()" [title]="tr('Give the switches serial numbers from a list')">{{ tr('Serial Numbers…') }}</button> }
+            }
+            <button type="button" (click)="serialsOpen.set(!serialsOpen())" [class.on]="serialsOpen()" [title]="tr('Give the switches serial numbers from a list')">{{ tr('Serial Numbers…') }}</button>
             <button type="button" class="danger-ghost" (click)="removeSel()" [disabled]="!sel().size">{{ tr('Remove') }}</button>
           </div>
           }
           @if (serialsOpen()) {
             <div class="serbar">
               <textarea [(ngModel)]="serialText" name="ser" rows="4" spellcheck="false" [placeholder]="tr('One serial number per line')"></textarea>
-              <div><p class="muted small">{{ tr('Given in order to {0} - the switches ticked in the list, or all of them. Each switch shows it in show version / show switch / show sys-info and in the outputs ({serial}).', sel().size ? tr('{0} ticked switches', sel().size) : tr('all {0} switches', lab.devices().length)) }}</p>
+              <div><p class="muted small">@if (emu()) { {{ tr('Given in order to {0} - the switches ticked in the list, or all of them. Each VM gets it as its SMBIOS serial number (system, board and chassis) when it starts next - Restart them; whether the operating system shows it depends on the image.', sel().size ? tr('{0} ticked switches', sel().size) : tr('all {0} switches', lab.devices().length)) }} }
+                  @else { {{ tr('Given in order to {0} - the switches ticked in the list, or all of them. Each switch shows it in show version / show switch / show sys-info and in the outputs ({serial}).', sel().size ? tr('{0} ticked switches', sel().size) : tr('all {0} switches', lab.devices().length)) }} }</p>
                 <button type="button" class="primary sm" (click)="applySerials()" [disabled]="!serialText.trim()">{{ tr('Set Serial Numbers') }}</button>
+                <button type="button" class="sm" (click)="newSerials()" [title]="emu() ? tr('In each image’s serial number format (Images)') : tr('In each model’s format from the device pack')">{{ tr('New in the Model’s Format') }}</button>
                 <button type="button" class="sm" (click)="serialsOpen.set(false)">{{ tr('Cancel') }}</button></div>
             </div>
           }
@@ -107,15 +109,15 @@ const NW = 150, NH = 46;
               @if (emu()) {
               <div class="tbl"><table>
                 <thead><tr><th class="c"><input type="checkbox" [checked]="allSel()" (change)="selAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th>
-                  <th>{{ tr('Switch') }}</th><th>{{ tr('Image') }}</th><th>vCPU · RAM</th><th>{{ tr('SSH (management)') }}</th><th>{{ tr('Console') }}</th><th>{{ tr('State') }}</th><th>CPU</th><th></th></tr></thead>
+                  <th>{{ tr('Switch') }}</th><th>{{ tr('Image') }}</th><th>{{ tr('Serial') }}</th><th>vCPU · RAM</th><th>{{ tr('SSH (management)') }}</th><th>{{ tr('Console') }}</th><th>{{ tr('State') }}</th><th>CPU</th><th></th></tr></thead>
                 <tbody>
                 @for (d of lab.devices(); track d.id) {
                   <tr [class.sel]="sel().has(d.id)" [class.foc]="focus() === d.id" (click)="focusOn(d)">
                     <td class="c"><input type="checkbox" [checked]="sel().has(d.id)" (change)="toggleSel(d.id)" (click)="$event.stopPropagation()" /></td>
-                    <td><b>{{ d.hostname }}</b></td><td><span class="os">{{ lab.osShort(d.os) }}</span> {{ d.model }}</td><td>{{ d.cpus }} · {{ gb(d.ram) }}</td>
+                    <td><b>{{ d.hostname }}</b></td><td><span class="os">{{ lab.osShort(d.os) }}</span> {{ d.model }}</td><td class="mono">{{ d.serial || '-' }}</td><td>{{ d.cpus }} · {{ gb(d.ram) }}</td>
                     <td class="mono">{{ d.ssh }}</td><td class="mono">telnet :{{ d.console }}</td>
                     <td><span class="pill" [class]="'pill ' + stCls(d)" [title]="d.error || ''">@if (d.state === 'running') { <span class="dot"></span> } @else if (d.state === 'stopped') { <span class="dot off"></span> } @else if (d.state !== 'failed') { <span class="dot y"></span> }{{ tr(d.stateText || d.state || '') }}</span></td>
-                    <td>{{ d.running ? (d.cpu ?? 0).toFixed(0) + ' %' : '-' }}</td>
+                    <td [title]="tr('{0} host cores now (QEMU’s own threads included)', (d.cores ?? 0).toFixed(2))">{{ d.running ? cpuPct(d) : '-' }}</td>
                     <td class="acts"><button type="button" class="sm" (click)="console(d); $event.stopPropagation()" [disabled]="!d.running">{{ tr('Console') }}</button>
                       <button type="button" class="sm" (click)="connect(d); $event.stopPropagation()" [disabled]="d.state !== 'running'">SSH</button>
                       <button type="button" class="sm" (click)="d.running || d.state === 'booting' ? lab.stop([d.id]) : lab.start([d.id]); $event.stopPropagation()">{{ d.running || d.state === 'booting' ? tr('Stop') : tr('Start') }}</button></td>
@@ -174,9 +176,13 @@ const NW = 150, NH = 46;
                     <h4>{{ d.hostname }} <span class="os">{{ lab.osShort(d.os) }}</span></h4>
                     <div class="kv"><span>{{ tr('State') }}</span><span [class.ok]="d.state === 'running'" [class.bad]="d.state === 'failed'">{{ tr(d.stateText || '') }}</span>
                       <span>{{ tr('Image') }}</span><span>{{ d.model }}</span><span>{{ tr('Host') }}</span><span>{{ hostName() }}</span>
-                      <span>vCPU · RAM</span><span>{{ d.cpus }} · {{ gb(d.ram) }}@if (d.running) { · CPU {{ (d.cpu ?? 0).toFixed(0) }} % }</span>
+                      <span>vCPU · RAM</span><span>{{ d.cpus }} · {{ gb(d.ram) }}@if (d.running) { · CPU {{ cpuPct(d) }} }</span>
+                      <span>{{ tr('Serial') }}</span><span class="mono">@if (idEdit()) { <input class="mono idin" [(ngModel)]="idSerial" name="ids" [placeholder]="tr('the VM’s own')" /> } @else { {{ d.serial || '-' }} }</span>
+                      <span>MAC</span><span class="mono">@if (idEdit()) { <input class="mono idin" [(ngModel)]="idMac" name="idm" /> } @else { {{ d.mac }} <a class="x" (click)="editId(d)" [title]="tr('Change the serial number and MAC address')">✎</a> }</span>
                       <span>SSH</span><span class="mono">{{ d.ssh }}</span><span>{{ tr('Console') }}</span><span class="mono">telnet :{{ d.console }}</span>
-                      <span>{{ tr('Management') }}</span><span class="mono">{{ d.mgmtIp }}</span><span>MAC</span><span class="mono">{{ d.mac }}</span></div>
+                      <span>{{ tr('Management') }}</span><span class="mono">{{ d.mgmtIp }}</span></div>
+                    @if (idEdit()) { <div class="btns" style="margin:-6px 0 6px"><button type="button" class="primary sm" (click)="saveId(d)">{{ tr('Save') }}</button><button type="button" class="sm" (click)="idEdit.set(false)">{{ tr('Cancel') }}</button></div>
+                      <p class="muted small">{{ tr('The VM gets them when it starts next (Restart). The serial number goes to its SMBIOS (system, board, chassis); the MAC is its first port’s, the others follow.') }}</p> }
                     @if (d.error) { <p class="err small">{{ d.error }}</p> }
                     <h4>{{ tr('Cables') }}</h4>
                     <div class="kv">
@@ -261,6 +267,8 @@ const NW = 150, NH = 46;
                       <span>{{ tr('Disk') }}</span><select [(ngModel)]="im.disk" name="imdk"><option value="ide">IDE</option><option value="virtio">virtio</option><option value="sata">SATA</option><option value="scsi">SCSI</option></select>
                       <span>{{ tr('Ready when') }}</span><input class="mono" [(ngModel)]="im.ready" name="imrd" placeholder="login:" />
                       <span>{{ tr('Login') }}</span><span class="row2"><input [(ngModel)]="im.login" name="iml" class="n3" /> <input type="password" [(ngModel)]="imPassword" name="impw" [placeholder]="im.hasPassword ? tr('(saved)') : tr('no password')" autocomplete="new-password" class="n3" /></span>
+                      <span>{{ tr('Serial format') }}</span><input class="mono" [(ngModel)]="im.serial" name="imsn" [placeholder]="'AB{YY}{WW}-{N:5}'" spellcheck="false" />
+                      <span></span><span class="muted small">{{ tr('New switches get a serial number like this: {N:5} digits, {A:2} letters, {H:4} hex, {YY} year, {WW} week, {R:1-9} a number between, {L:abc} one of the letters. Empty: the VM’s own.') }}</span>
                       <span>{{ tr('Prompt') }}</span><input class="mono" [(ngModel)]="im.prompt" name="impr" placeholder="[>#$]\\s*$" />
                     </div>
                     <h4>{{ tr('First boot (day-0) commands') }}</h4>
@@ -468,6 +476,11 @@ export class LabDialog implements OnInit, OnDestroy {
   protected imPassword = '';
   protected day0Text = '';
   protected answersText = '';
+  cpuPct(d: LabDevice) { return Math.min(100, Math.round(d.cpu ?? 0)) + ' %'; }
+  async newSerials() {
+    const ids = (this.sel().size ? this.lab.devices().filter(d => this.sel().has(d.id)) : this.lab.devices()).map(d => d.id);
+    if (await this.lab.newSerials(ids)) this.serialsOpen.set(false);
+  }
   pickImage(id: string) {
     const im = this.images().find(i => i.id === id); if (!im) return;
     this.imEdit.set({ ...im }); this.imPassword = '';

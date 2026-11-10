@@ -64,6 +64,9 @@ export class Backend {
   labPackAccept(path: string, hash: string) { return this.call<LabView>('LabPackAccept', path, hash); }
   labPackRemove() { return this.call<LabView>('LabPackRemove'); }
   emuState() { return this.call<LabView>('EmuState'); }
+  emuSetIdentity(id: string, serial: string, mac: string) { return this.call<LabView>('EmuSetIdentity', id, serial, mac); }
+  emuSetSerials(ids: string[], serials: string[], fromFormat: boolean) { return this.call<LabView>('EmuSetSerials', ids, serials, fromFormat); }
+  labNewSerials(ids: string[]) { return this.call<LabView>('LabNewSerials', ids); }
   emuSetupHost(session: string, password: string) { return this.call<string>('EmuSetupHost', session, password); }
   emuCheckHost(session: string) { return this.call<EmuHost>('EmuCheckHost', session); }
   emuRemoveHost(session: string) { return this.call<LabView>('EmuRemoveHost', session); }

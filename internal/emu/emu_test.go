@@ -46,6 +46,11 @@ func TestArgsAndWiring(t *testing.T) {
 	if !strings.Contains(strings.Join(l.Args(l.VMs[0], imgs["i1"]), " "), "tap,id=n0,ifname=twa10m") {
 		t.Error("tap")
 	}
+	v0 := l.VMs[0]
+	v0.Serial, v0.BaseMAC = "AB12,3", "02:04:96:00:00:fe"
+	if a := strings.Join(l.Args(v0, imgs["i1"]), " "); !strings.Contains(a, "type=1,serial=AB12,,3") || !strings.Contains(a, "mac=02:04:96:00:01:00") {
+		t.Errorf("serial/mac args: %s", a)
+	}
 	if got := Fill("configure vlan Mgmt ipaddress {mgmtAddr} {mgmtMask} ; {hostname} {gateway}", VM{Name: "sw", MgmtIP: "10.0.2.15/24", Gateway: "10.0.2.2"}, 1); got != "configure vlan Mgmt ipaddress 10.0.2.15 255.255.255.0 ; sw 10.0.2.2" {
 		t.Error(got)
 	}
@@ -53,8 +58,8 @@ func TestArgsAndWiring(t *testing.T) {
 
 func TestStatusAndProbe(t *testing.T) {
 	log := base64.StdEncoding.EncodeToString([]byte("SeaBIOS\r\n\x1b[2JBooting...\r\nsw1 login: "))
-	st := ParseStatus("up v1 12.5\ndown v2\nlog v1 "+log+"\n", base64.StdEncoding.DecodeString)
-	if st.Up["v1"] != 12.5 || len(st.Up) != 1 || !strings.HasSuffix(st.Log["v1"], "login: ") || strings.Contains(st.Log["v1"], "\x1b") {
+	st := ParseStatus("clk 100\nup v1 12.5\ndown v2\nlog v1 "+log+"\n", base64.StdEncoding.DecodeString)
+	if st.Up["v1"] != 12.5 || st.Clk != 100 || len(st.Up) != 1 || !strings.HasSuffix(st.Log["v1"], "login: ") || strings.Contains(st.Log["v1"], "\x1b") {
 		t.Fatalf("%+v", st)
 	}
 	h := ParseProbe("user=lab\nos=Ubuntu 24.04\narch=x86_64\nkvm=noaccess\nvt=yes\nqemu=QEMU emulator version 8.2.2 (Debian)\nqemuimg=yes\ncpus=32\nmemtotal=128000\nmemfree=96000\ndiskfree=500000\n", "termwright-lab")

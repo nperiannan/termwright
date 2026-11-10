@@ -83,6 +83,19 @@ func TestLabPackConsentAddStartReload(t *testing.T) {
 	if !strings.Contains(string(out), "Name    : sw1") {
 		t.Fatalf("show system: %s", out)
 	}
+	// a deleted session comes back when the lab starts; serials in the pack's format
+	if err := st.Delete("Simulated Lab/sw1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.LabStart(nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Get(v.Sessions[v.Devices[0].ID]); err != nil {
+		t.Fatalf("session not made again: %v", err)
+	}
+	if v2, err := a.LabNewSerials(nil); err != nil || !strings.HasPrefix(v2.Devices[0].Serial, "DM") || v2.Devices[0].Serial == v.Devices[0].Serial {
+		t.Fatalf("new serials %v %+v", err, v2.Devices)
+	}
 	// serial numbers, outputs
 	if _, err := a.LabSetSerials([]string{v.Devices[0].ID, v.Devices[1].ID}, []string{"A1", "A1"}); err == nil {
 		t.Fatal("duplicate serials")

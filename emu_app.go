@@ -24,6 +24,7 @@ import (
 	"github.com/termwright/termwright/internal/emu"
 	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/session"
+	"github.com/termwright/termwright/internal/sim"
 )
 
 // The emulated lab: real network OS images (the vendor's VM images) booted
@@ -66,6 +67,9 @@ var emuLab struct {
 	day0     map[string]bool   // day-0 runs now
 	upload   map[string]string // image → upload progress ("41 %")
 	starting map[string]time.Time
+	ticks    map[string]float64 // CPU ticks at the last poll
+	ticksAt  time.Time
+	cpu      map[string]float64 // CPU use now, in cores (1 = one core busy)
 }
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
@@ -88,7 +92,8 @@ type EmuDevice struct {
 	Y         int     `json:"y"`
 	State     string  `json:"state"` // stopped, uploading, booting, day0, running, failed
 	StateText string  `json:"stateText"`
-	CPU       float64 `json:"cpu"`
+	CPU       float64 `json:"cpu"`   // % of its vCPUs, now
+	Cores     float64 `json:"cores"` // host cores it uses now
 	CPUs      int     `json:"cpus"`
 	RAM       int     `json:"ram"`
 	Console   int     `json:"console"`
@@ -164,6 +169,7 @@ func (a *App) emuLoad() {
 	}
 	emuLab.loaded = true
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
+	emuLab.ticks, emuLab.cpu = map[string]float64{}, map[string]float64{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
 		_ = json.Unmarshal(b, &emuLab.f)
 	}
@@ -693,6 +699,9 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 			}
 			names[name] = true
 			v := emu.VM{ID: "v" + randHex(3), Name: name, Image: im.ID, Index: next, CPUs: orInt(g.CPUs, im.CPUs), RAM: orInt(g.RAM, im.RAM)}
+			if im.Serial != "" {
+				v.Serial = sim.Generate(im.Serial)
+			}
 			v.MgmtIP, v.Gateway = l.Address(next)
 			next++
 			k++
@@ -1025,8 +1034,22 @@ func (a *App) emuPoll(force bool) emu.Status {
 	defer emuLab.mu.Unlock()
 	emuLab.polling = false
 	if err == nil {
-		emuLab.status = emu.ParseStatus(out, base64.StdEncoding.DecodeString)
-		emuLab.statusAt = time.Now()
+		st := emu.ParseStatus(out, base64.StdEncoding.DecodeString)
+		now := time.Now()
+		// CPU use since the last poll (ps would give the average since the VM started)
+		if dt := now.Sub(emuLab.ticksAt).Seconds(); dt > 0.5 && st.Clk > 0 {
+			for id, t := range st.Up {
+				if prev, ok := emuLab.ticks[id]; ok && t >= prev {
+					emuLab.cpu[id] = (t - prev) / st.Clk / dt
+				}
+			}
+		}
+		emuLab.ticks, emuLab.ticksAt = map[string]float64{}, now
+		for id, t := range st.Up {
+			emuLab.ticks[id] = t
+		}
+		emuLab.status = st
+		emuLab.statusAt = now
 	}
 	return emuLab.status
 }
@@ -1092,8 +1115,11 @@ func (a *App) emuView() EmuView {
 		} else {
 			d.SSH = "127.0.0.1:" + strconv.Itoa(d.Port) + " on the host"
 		}
-		cpu, up := st.Up[vm.ID]
-		d.CPU = cpu
+		_, up := st.Up[vm.ID]
+		// % of its vCPUs; QEMU's own threads (disk, network, emulation) can add a little more
+		d.CPU = emuLab.cpu[vm.ID] * 100 / float64(orInt(vm.CPUs, 1))
+		d.Cores = emuLab.cpu[vm.ID]
+		d.Serial = vm.Serial
 		switch s := emuLab.state[vm.ID]; {
 		case s == "uploading":
 			d.State, d.StateText = "uploading", "copying the image"
@@ -1606,4 +1632,87 @@ func (a *App) emuSetup(host, password string, emit func(kind, text string)) erro
 		return errors.New("the set-up stopped")
 	}
 	return nil
+}
+
+// EmuSetIdentity changes a VM's serial number (its SMBIOS serial) and base MAC
+// address ("" mac = from the lab); the VM gets them when it starts next.
+func (a *App) EmuSetIdentity(id, serial, mac string) (EmuView, error) {
+	mac = strings.ToLower(strings.TrimSpace(mac))
+	if mac != "" {
+		if hw, err := net.ParseMAC(mac); err != nil || len(hw) != 6 || hw[0]&1 == 1 {
+			return EmuView{}, fmt.Errorf("%q is not a MAC address of a port", mac)
+		}
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	l := emuLab.f.Lab
+	var v *emu.VM
+	if l != nil {
+		v = l.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such switch")
+	}
+	v.Serial, v.BaseMAC = strings.TrimSpace(serial), mac
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
+// EmuSetSerials gives VMs serial numbers from a list, in order (empty
+// lines skipped); fromFormat makes new ones in each image's serial format instead.
+func (a *App) EmuSetSerials(ids []string, serials []string, fromFormat bool) (EmuView, error) {
+	var list []string
+	seen := map[string]bool{}
+	for _, s := range serials {
+		if s = strings.TrimSpace(s); s != "" {
+			if seen[strings.ToLower(s)] {
+				return EmuView{}, fmt.Errorf("serial number %s is in the list twice", s)
+			}
+			seen[strings.ToLower(s)] = true
+			list = append(list, s)
+		}
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	l := emuLab.f.Lab
+	if l == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	if len(ids) == 0 {
+		for _, v := range l.VMs {
+			ids = append(ids, v.ID)
+		}
+	}
+	var none []string
+	for i, id := range ids {
+		v := l.VMByID(id)
+		if v == nil {
+			continue
+		}
+		if fromFormat {
+			if im := emuImage(v.Image); im != nil && im.Serial != "" {
+				v.Serial = sim.Generate(im.Serial)
+			} else {
+				none = append(none, v.Name)
+			}
+		} else if i < len(list) {
+			v.Serial = list[i]
+		}
+	}
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	v, _ := a.EmuState()
+	if len(none) > 0 {
+		return v, fmt.Errorf("no serial number format in the image of %s: set one in Images", strings.Join(none, ", "))
+	}
+	return v, nil
 }
