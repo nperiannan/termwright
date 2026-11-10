@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Backend, errText } from './backend';
-import { EmuImage, EmuRequest, LabDevice, LabLink, LabOutput, LabRequest, LabView } from './models';
+import { EmuImage, EmuRequest, EmuSetupDone, EmuSetupLine, LabDevice, LabLink, LabOutput, LabRequest, LabView } from './models';
 import { Ui } from './ui.service';
 
 /** The labs for the Lab window and the Session Manager, refreshed while they run:
@@ -38,6 +38,16 @@ export class LabService {
     void this.refresh();
     this.backend.on('emu:error', (m: string) => this.ui.error(m));
     this.backend.on('emu:done', (m: string) => { this.ui.toast(m, 'success'); void this.refresh(); });
+    this.backend.on('emu:setup', (l: EmuSetupLine) => {
+      const s = this.setup(); if (!s || s.run !== l.run) return;
+      this.setup.set({ ...s, step: l.kind === 'step' ? l.text : s.step, lines: [...s.lines, (l.kind === 'line' ? '' : l.kind === 'step' ? '▸ ' : l.kind === 'fail' ? '✕ ' : '! ') + l.text].slice(-300) });
+    });
+    this.backend.on('emu:setup:done', (d: EmuSetupDone) => {
+      const s = this.setup(); if (!s || s.run !== d.run) return;
+      this.setup.set({ ...s, done: true, error: d.error });
+      if (d.error) this.ui.error(d.error); else this.ui.toast('The host is set up', 'success');
+      void this.refresh();
+    });
   }
 
   async refresh() {
@@ -115,6 +125,14 @@ export class LabService {
     this.busy.set(true);
     try { const h = await this.backend.emuCheckHost(session); this.emu.set(await this.backend.emuState()); return h; }
     catch (e) { this.ui.error(errText(e)); return null; } finally { this.busy.set(false); }
+  }
+  /** A host to set up when the Lab window opens (from the wizard). */
+  readonly setupFor = signal('');
+  /** The running (or last) host set-up. */
+  readonly setup = signal<{ run: string; host: string; step: string; lines: string[]; done: boolean; error: string } | null>(null);
+  async setupHost(host: string, password: string) {
+    try { const run = await this.backend.emuSetupHost(host, password); this.setup.set({ run, host, step: '', lines: [], done: false, error: '' }); }
+    catch (e) { this.ui.error(errText(e)); }
   }
   removeHost(session: string) { return this.run(() => this.backend.emuRemoveHost(session)); }
   addImage(path: string) { return this.run(() => this.backend.emuAddImage(path), 'Image added - check its settings'); }

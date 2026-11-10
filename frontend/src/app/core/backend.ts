@@ -64,6 +64,7 @@ export class Backend {
   labPackAccept(path: string, hash: string) { return this.call<LabView>('LabPackAccept', path, hash); }
   labPackRemove() { return this.call<LabView>('LabPackRemove'); }
   emuState() { return this.call<LabView>('EmuState'); }
+  emuSetupHost(session: string, password: string) { return this.call<string>('EmuSetupHost', session, password); }
   emuCheckHost(session: string) { return this.call<EmuHost>('EmuCheckHost', session); }
   emuRemoveHost(session: string) { return this.call<LabView>('EmuRemoveHost', session); }
   emuAddImage(path: string) { return this.call<LabView>('EmuAddImage', path); }

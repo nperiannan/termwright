@@ -53,9 +53,10 @@ const CABLING = [
                     <div><span [class]="h.qemu ? 'ok' : 'bad'">{{ h.qemu ? '✓' : '✕' }}</span> QEMU {{ h.qemu || tr('missing') }}</div>
                     <div><span class="ok">✓</span> {{ tr('Lab folder ~/{0} - images and switch disks are kept here', h.dir) }}</div>
                     @for (p of h.problems ?? []; track $index) { <div class="bad">✕ {{ p }}</div> }
+                    @if (h.canSetup) { <div><button type="button" class="sm primary" (click)="setUp()">{{ tr('Set Up QEMU/KVM on This Host…') }}</button> <span class="muted small">{{ tr('installs QEMU from the distribution’s packages and lets {0} use KVM', h.user) }}</span></div> }
                     @for (p of h.notes ?? []; track $index) { <div class="warn">! {{ p }}</div> }
                   </div>
-                } @else { <p class="muted small">{{ tr('Pick the SSH session of a Linux server with KVM and QEMU (qemu-system-x86, qemu-utils), then Check. Nothing is installed there; Termwright only runs qemu.') }}</p> }
+                } @else { <p class="muted small">{{ tr('Pick the SSH session of a Linux server, then Check. When QEMU or KVM access is missing, Set Up installs it from the distribution’s packages.') }}</p> }
               }
             }
             @case (1) {
@@ -238,6 +239,7 @@ export class LabWizard {
     return out;
   });
   hostLabel() { return this.hostChoices().find(h => h.path === this.host)?.label.replace(/ \(.*\)$/, '') ?? this.host; }
+  setUp() { this.lab.setupFor.set(this.host); this.ui.open('lab'); }
   async check() { const h = await this.lab.checkHost(this.host); if (h) { this.hostInfo.set(h.info); if (!this.add) this.mgmt = h.info.sudo ? 'bridge' : 'forward'; } }
   protected fits = computed(() => { const h = this.hostInfo(); if (!h) return []; return this.images().slice(0, 3).map(im => ({ name: im.name, n: Math.max(0, Math.min(Math.floor(h.memFree / (im.ram || 1024)), Math.floor(h.cpus * 2 / (im.cpus || 1)))) })); });
   protected need = computed(() => this.erows().reduce((n, r) => ({ cpus: n.cpus + r.count * (r.cpus || 1), ram: n.ram + r.count * (r.ram || 1024), disk: n.disk + r.count * 1024 }), { cpus: 0, ram: 0, disk: 0 }));

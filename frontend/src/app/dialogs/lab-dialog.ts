@@ -280,17 +280,36 @@ const NW = 150, NH = 46;
               <div class="bar"><span class="muted">{{ tr('SSH session of a Linux host') }}</span>
                 <select [ngModel]="hostPick || sshSessions()[0]" (ngModelChange)="hostPick = $event" name="hpick" class="hpick">@for (s of sshSessions(); track s) { <option [value]="s">{{ s }}</option> }</select>
                 <button type="button" class="primary" (click)="checkHost(hostPick || sshSessions()[0])" [disabled]="!(hostPick || sshSessions()[0]) || lab.busy()">{{ tr('Check and Add') }}</button></div>
+              @if (setupHost(); as h) {
+                <div class="setup">
+                  <div class="big">{{ tr('Set up {0} for the emulated lab', h.name) }}</div>
+                  @if (!running()) {
+                    <p class="muted small">{{ tr('Termwright logs in to the host and runs, as root (sudo):') }}</p>
+                    <ul>@for (p of h.info.plan ?? []; track $index) { <li class="mono small">{{ p }}</li> }</ul>
+                    <p class="muted small">{{ tr('Packages come from the distribution’s own repositories. Nothing else is changed; the switches run as {0}, not as root.', h.info.user) }}</p>
+                    <div class="bar">@if (!h.info.sudo) { <span class="muted">{{ tr('sudo password of {0}', h.info.user) }}</span><input type="password" [(ngModel)]="sudoPw" name="sudopw" autocomplete="off" class="pw" /> }
+                      <button type="button" class="primary" (click)="runSetup(h.session)" [disabled]="!h.info.sudo && !sudoPw">{{ tr('Set Up') }}</button><button type="button" (click)="closeSetup()">{{ tr('Cancel') }}</button>
+                      <span class="muted small">{{ h.info.sudo ? tr('sudo works without a password here.') : tr('The password goes to sudo on the host only; it is not saved.') }}</span></div>
+                  }
+                  @if (lab.setup(); as s) { @if (s.host === h.session) {
+                    <div class="bar"><b>{{ s.done ? (s.error ? tr('Set-up failed') : tr('Set up') + ' ✓') : tr('Setting up…') + ' ' + s.step }}</b><span class="spacer"></span>@if (s.done) { <button type="button" class="sm" (click)="closeSetup()">{{ tr('Close') }}</button> }</div>
+                    @if (s.error) { <p class="err small">{{ s.error }}</p> }
+                    <pre class="setuplog">{{ s.lines.join('\n') || '…' }}</pre>
+                  } }
+                </div>
+              }
               <div class="tbl"><table>
                 <thead><tr><th>{{ tr('Host') }}</th><th>{{ tr('System') }}</th><th>KVM</th><th>QEMU</th><th>vCPU</th><th>RAM {{ tr('free') }}</th><th>{{ tr('Disk free') }}</th><th>sudo</th><th></th></tr></thead>
                 <tbody>@for (h of hosts(); track h.session) {
                   <tr><td><b>{{ h.name }}</b>@if (h.session === lab.state()?.host) { <span class="pill b">{{ tr('the lab') }}</span> }<div class="muted small">{{ h.info.user }}</div></td><td class="small">{{ h.info.os }}</td>
                     <td><span [class.ok]="h.info.kvm === 'yes'" [class.bad]="h.info.kvm !== 'yes'">{{ h.info.kvm === 'yes' ? '✓' : h.info.kvm }}</span></td><td class="small">{{ h.info.qemu || '-' }}</td><td>{{ h.info.cpus }}</td>
                     <td>{{ gb(h.info.memFree) }} / {{ gb(h.info.memTotal) }}</td><td>{{ gb(h.info.diskFree) }}</td><td>{{ h.info.sudo ? '✓' : '-' }}</td>
-                    <td class="acts"><button type="button" class="sm" (click)="checkHost(h.session)" [disabled]="lab.busy()">{{ tr('Check Again') }}</button> <button type="button" class="sm" (click)="lab.removeHost(h.session)">{{ tr('Remove') }}</button></td></tr>
+                    <td class="acts">@if (h.info.canSetup) { <button type="button" class="sm primary" (click)="openSetup(h.session)">{{ tr('Set Up QEMU/KVM…') }}</button> }
+                      <button type="button" class="sm" (click)="checkHost(h.session)" [disabled]="lab.busy()">{{ tr('Check Again') }}</button> <button type="button" class="sm" (click)="lab.removeHost(h.session)">{{ tr('Remove') }}</button></td></tr>
                   @for (p of h.info.problems ?? []; track $index) { <tr><td></td><td colspan="8" class="bad small">✕ {{ p }}</td></tr> }
                   @for (p of h.info.notes ?? []; track $index) { <tr><td></td><td colspan="8" class="warn small">! {{ p }}</td></tr> }
                 } @empty { <tr><td colspan="9" class="muted">{{ tr('No KVM hosts yet: pick the SSH session of a Linux server with KVM and QEMU.') }}</td></tr> }</tbody></table></div>
-              <p class="muted small note">{{ tr('Nothing is installed on the host: Termwright runs qemu there over SSH, as the session’s user, in the folder ~/termwright-lab. The switches’ sessions go through the host session as jump host.') }}</p>
+              <p class="muted small note">{{ tr('Termwright runs qemu on the host over SSH, as the session’s user, in the folder ~/termwright-lab; Set Up installs QEMU from the distribution’s packages when it is missing. The switches’ sessions go through the host session as jump host.') }}</p>
             }
             @case ('cables') {
               <div class="tbl"><table>
@@ -321,6 +340,9 @@ const NW = 150, NH = 46;
     .ims { height: min(560px, 60vh); } .ims td, .ims th { white-space: nowrap; } .canvas.plain { background: var(--surface); overflow: auto; } .insp.wide { width: 410px; }
     .kv.form { grid-template-columns: 110px 1fr; align-items: center; input, select { height: 26px; font-size: 12.5px; min-width: 0; } .row2 { display: flex; gap: 6px; align-items: center; } .n { width: 54px; } .n2 { width: 80px; } .n3 { width: 120px; } a { cursor: pointer; color: var(--accent); } }
     .day0 { width: 100%; font-size: 11.5px; resize: vertical; } input.wide { width: 100%; height: 26px; margin-top: 4px; } .hpick { min-width: 280px; }
+    .setup { border: 1px solid var(--accent); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: var(--accent-soft);
+      .big { font-weight: 600; margin-bottom: 6px; } ul { margin: 4px 0 8px; padding-left: 20px; } input.pw { width: 160px; } }
+    .setuplog { margin: 0; max-height: 200px; overflow: auto; font: 11px/1.45 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; white-space: pre-wrap; }
     .topo circle.y { fill: var(--warn); } .topo circle.b { fill: var(--accent); } .topo circle.r { fill: var(--danger); }
     .serbar { display: grid; grid-template-columns: 280px 1fr; gap: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 10px; background: var(--surface);
       textarea { font: 12px var(--mono); resize: vertical; } p { margin: 0 0 8px; } }
@@ -421,6 +443,8 @@ export class LabDialog implements OnInit, OnDestroy {
   private tailTimer: ReturnType<typeof setInterval> | null = null;
   ngOnInit() {
     this.lab.watching.set(true); void this.lab.refresh();
+    const sf = this.lab.setupFor();
+    if (sf) { this.lab.setupFor.set(''); this.lab.kind.set('emu'); this.manage.set(true); this.tab.set('hosts'); this.openSetup(sf); }
     this.tailTimer = setInterval(() => { if (this.emu() && this.tab() === 'list' && this.focus()) void this.loadTail(); }, 3000);
   }
   ngOnDestroy() { this.lab.watching.set(false); if (this.tailTimer) clearInterval(this.tailTimer); }
@@ -479,6 +503,14 @@ export class LabDialog implements OnInit, OnDestroy {
     return out;
   });
   async checkHost(path: string) { if (path) await this.lab.checkHost(path); }
+  // host set-up
+  protected setupOf = signal('');
+  protected sudoPw = '';
+  protected setupHost = computed(() => this.hosts().find(h => h.session === this.setupOf()) ?? null);
+  protected running = computed(() => { const s = this.lab.setup(); return !!s && s.host === this.setupOf(); });
+  openSetup(host: string) { this.setupOf.set(host); this.sudoPw = ''; if (this.lab.setup()?.done) this.lab.setup.set(null); }
+  closeSetup() { this.setupOf.set(''); this.sudoPw = ''; if (this.lab.setup()?.done) this.lab.setup.set(null); }
+  async runSetup(host: string) { const pw = this.sudoPw; this.sudoPw = ''; await this.lab.setupHost(host, pw); }
 
   pos(d: LabDevice) { return this.moved().get(d.id) ?? { x: d.x || 40, y: d.y || 60 }; }
   nameOf(id: string) { return this.lab.devices().find(d => d.id === id)?.hostname ?? id; }

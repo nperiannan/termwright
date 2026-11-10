@@ -94,7 +94,9 @@ export interface LabLink { a: string; aPort: string; b: string; bPort: string; u
 export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
   /** Emulated lab only. */
   kind?: 'emu'; mgmt?: string; consoles?: Record<string, string> | null; host?: string; hostInfo?: EmuHostInfo | null; hosts?: EmuHost[] | null; images?: EmuImage[] | null; kvm?: boolean; }
-export interface EmuHostInfo { user: string; os: string; kernel: string; arch: string; kvm: string; vt: boolean; qemu: string; qemuImg: boolean; cpus: number; load: number; memTotal: number; memFree: number; diskFree: number; sudo: boolean; dir: string; problems: string[] | null; notes: string[] | null; }
+export interface EmuHostInfo { user: string; os: string; kernel: string; arch: string; kvm: string; vt: boolean; qemu: string; qemuImg: boolean; cpus: number; load: number; memTotal: number; memFree: number; diskFree: number; sudo: boolean; dir: string; problems: string[] | null; notes: string[] | null; osId: string; pkg: string; plan: string[] | null; canSetup: boolean; }
+export interface EmuSetupLine { run: string; kind: string; text: string; }
+export interface EmuSetupDone { run: string; error: string; host: EmuHost | null; }
 export interface EmuHost { session: string; name: string; info: EmuHostInfo; checked: string; }
 export interface EmuAnswer { match: string; send: string; }
 export interface EmuImage { id: string; name: string; file: string; fileName: string; size: number; sha256: string; deviceType: string; cpus: number; ram: number; nics: number; nic: string; disk: string; portName: string; ready: string; login: string; password?: string; prompt: string; day0: string[] | null; answers: EmuAnswer[] | null; extra: string; source: string;

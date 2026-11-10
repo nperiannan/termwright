@@ -1472,3 +1472,138 @@ func (a *App) emuShutdown() {
 		delete(emuLab.conns, k)
 	}
 }
+
+// EmuSetupLine is a line of a host's set-up.
+type EmuSetupLine struct {
+	Run  string `json:"run"`
+	Kind string `json:"kind"` // step, note, fail, line
+	Text string `json:"text"`
+}
+
+// EmuSetupDone ends a set-up: the host as checked afterwards.
+type EmuSetupDone struct {
+	Run   string   `json:"run"`
+	Error string   `json:"error"`
+	Host  *EmuHost `json:"host"`
+}
+
+// EmuSetupHost installs QEMU on a Linux host and lets its user use KVM
+// (package emu, SetupScript), in the background; password is the sudo
+// password when sudo asks for one ("" = sudo without a password). Its lines
+// come as "emu:setup" events, the end as "emu:setup:done".
+func (a *App) EmuSetupHost(sessionPath, password string) (string, error) {
+	if err := a.ready(); err != nil {
+		return "", err
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	emuLab.mu.Unlock()
+	id := randHex(4)
+	emit := func(kind, text string) {
+		if a.ctx != nil {
+			wruntime.EventsEmit(a.ctx, "emu:setup", EmuSetupLine{Run: id, Kind: kind, Text: text})
+		}
+	}
+	go func() {
+		err := a.emuSetup(sessionPath, password, emit)
+		// the kvm group counts for new logins only
+		emuLab.mu.Lock()
+		if c := emuLab.conns[sessionPath]; c != nil {
+			c.close()
+			delete(emuLab.conns, sessionPath)
+		}
+		emuLab.mu.Unlock()
+		done := EmuSetupDone{Run: id}
+		if err != nil {
+			done.Error = err.Error()
+		}
+		if h, err2 := a.EmuCheckHost(sessionPath); err2 == nil {
+			done.Host = &h
+		} else if done.Error == "" {
+			done.Error = err2.Error()
+		}
+		if a.ctx != nil {
+			wruntime.EventsEmit(a.ctx, "emu:setup:done", done)
+		}
+	}()
+	return id, nil
+}
+
+func (a *App) emuSetup(host, password string, emit func(kind, text string)) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	cl, err := a.emuClient(ctx, host)
+	if err != nil {
+		return err
+	}
+	s, err := cl.NewSession()
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	if password != "" {
+		s.Stdin = strings.NewReader(password + "\n")
+	}
+	out, err := s.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	s.Stderr = s.Stdout
+	if err := s.Start(emu.SetupCommand(password != "")); err != nil {
+		return err
+	}
+	failed, done, sudoAsk := "", false, false
+	buf := make([]byte, 0, 4096)
+	readLine := func(line string) {
+		line = strings.TrimRight(line, "\r")
+		switch {
+		case strings.HasPrefix(line, "@@step "):
+			emit("step", strings.TrimPrefix(line, "@@step "))
+		case strings.HasPrefix(line, "@@note "):
+			emit("note", strings.TrimPrefix(line, "@@note "))
+		case strings.HasPrefix(line, "@@fail "):
+			failed = strings.TrimPrefix(line, "@@fail ")
+			emit("fail", failed)
+		case line == "@@done":
+			done = true
+		case strings.Contains(line, "a password is required") || strings.Contains(line, "incorrect password") || strings.Contains(line, "Sorry, try again"):
+			sudoAsk = true
+		case line != "":
+			emit("line", line)
+		}
+	}
+	rd := make([]byte, 4096)
+	for {
+		n, rerr := out.Read(rd)
+		buf = append(buf, rd[:n]...)
+		for {
+			i := strings.IndexByte(string(buf), '\n')
+			if i < 0 {
+				break
+			}
+			readLine(string(buf[:i]))
+			buf = buf[i+1:]
+		}
+		if rerr != nil {
+			break
+		}
+	}
+	if len(buf) > 0 {
+		readLine(string(buf))
+	}
+	werr := s.Wait()
+	switch {
+	case sudoAsk && password == "":
+		return errors.New("sudo asks for a password on this host: enter it and set up again")
+	case sudoAsk:
+		return errors.New("sudo did not take the password")
+	case failed != "":
+		return errors.New(failed)
+	case !done:
+		if werr != nil {
+			return fmt.Errorf("the set-up stopped: %v", werr)
+		}
+		return errors.New("the set-up stopped")
+	}
+	return nil
+}

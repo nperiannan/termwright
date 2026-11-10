@@ -23,6 +23,10 @@ type HostInfo struct {
 	DiskFree int64    `json:"diskFree"` // MB, in the lab folder
 	Sudo     bool     `json:"sudo"`     // password-less sudo (bridge mode)
 	Dir      string   `json:"dir"`
+	OSID     string   `json:"osId"`     // ID and ID_LIKE of /etc/os-release
+	Pkg      string   `json:"pkg"`      // the package manager Set Up uses (apt, dnf, dnf-fedora, zypper, pacman)
+	Plan     []string `json:"plan"`     // what Set Up would do
+	CanSetup bool     `json:"canSetup"` // Set Up can fix the problems
 	Problems []string `json:"problems"` // what stops VMs from running
 	Notes    []string `json:"notes"`    // what works, but differently
 }
@@ -30,7 +34,7 @@ type HostInfo struct {
 // ProbeScript checks a host (dir: the lab folder, relative to the home folder).
 func ProbeScript(dir string) string {
 	return `echo "user=$(id -un)"
-. /etc/os-release 2>/dev/null; echo "os=$PRETTY_NAME"; echo "kernel=$(uname -r)"; echo "arch=$(uname -m)"
+. /etc/os-release 2>/dev/null; echo "os=$PRETTY_NAME"; echo "osid=$ID $ID_LIKE"; echo "kernel=$(uname -r)"; echo "arch=$(uname -m)"
 if [ -e /dev/kvm ]; then if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then echo kvm=yes; else echo kvm=noaccess; fi; else echo kvm=none; fi
 grep -qE 'vmx|svm' /proc/cpuinfo 2>/dev/null && echo vt=yes
 echo "qemu=$(qemu-system-x86_64 --version 2>/dev/null | head -1)"
@@ -80,6 +84,8 @@ func ParseProbe(out, dir string) HostInfo {
 			h.DiskFree, _ = strconv.ParseInt(v, 10, 64)
 		case "sudo":
 			h.Sudo = true
+		case "osid":
+			h.OSID = strings.TrimSpace(v)
 		case "nobase64":
 			h.Problems = append(h.Problems, "base64 is missing on the host (coreutils).")
 		}
@@ -101,6 +107,24 @@ func ParseProbe(out, dir string) HostInfo {
 		} else {
 			h.Notes = append(h.Notes, "No KVM (CPU virtualization is off or this is a VM without nested virtualization): VMs run in software emulation, many times slower.")
 		}
+	}
+	ids := " " + h.OSID + " "
+	switch {
+	case strings.Contains(ids, " debian ") || strings.Contains(ids, " ubuntu "):
+		h.Pkg = "apt"
+	case strings.Contains(ids, " fedora ") && !strings.Contains(ids, " rhel "):
+		h.Pkg = "dnf-fedora"
+	case strings.Contains(ids, " rhel ") || strings.Contains(ids, " centos ") || strings.Contains(ids, " rocky ") || strings.Contains(ids, " almalinux "):
+		h.Pkg = "dnf"
+	case strings.Contains(ids, " suse ") || strings.Contains(ids, " opensuse ") || strings.Contains(ids, " sles "):
+		h.Pkg = "zypper"
+	case strings.Contains(ids, " arch "):
+		h.Pkg = "pacman"
+	}
+	needs := h.QEMU == "" || !h.QemuImg || h.KVM == "noaccess" || h.KVM == "none" && h.VT
+	if needs && h.Arch == "x86_64" || needs && h.Arch == "" {
+		h.CanSetup = h.Pkg != "" || h.QEMU != ""
+		h.Plan = SetupPlan(h)
 	}
 	if !h.Sudo {
 		h.Notes = append(h.Notes, "No password-less sudo: management by port forwarding on the host. With sudo, switches can get their own addresses on a bridge.")

@@ -116,3 +116,48 @@ func TestEmuLab(t *testing.T) {
 		t.Fatalf("stop %+v %v", v.Devices, err)
 	}
 }
+
+// TestEmuSetup runs the host set-up (packages, KVM module, kvm group) over SSH
+// on the TW_EMU_SSH host - it installs QEMU there, so only on a test machine.
+func TestEmuSetup(t *testing.T) {
+	addr, keyFile := os.Getenv("TW_EMU_SSH"), os.Getenv("TW_EMU_SSH_KEY")
+	if addr == "" || keyFile == "" || os.Getenv("TW_EMU_SETUP") == "" {
+		t.Skip("TW_EMU_SSH / TW_EMU_SSH_KEY / TW_EMU_SETUP not set")
+	}
+	kb, _ := os.ReadFile(keyFile)
+	signer, err := ssh.ParsePrivateKey(kb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := emuDial
+	emuDial = func(a *App, ctx context.Context, s session.Session) (*ssh.Client, func(), error) {
+		c, err := ssh.Dial("tcp", addr, &ssh.ClientConfig{User: os.Getenv("TW_EMU_SSH_USER"), Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)}, HostKeyCallback: ssh.InsecureIgnoreHostKey()})
+		if err != nil {
+			return nil, nil, err
+		}
+		return c, func() { _ = c.Close() }, nil
+	}
+	defer func() { emuDial = old }()
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = false, emuFile{}
+	defer func() { a.emuShutdown(); emuLab.loaded, emuLab.f = false, emuFile{} }()
+	host, _ := st.Save(session.Session{Name: "kvm-1", Protocol: session.ProtoSSH2, Hostname: "127.0.0.1", Port: 2299, Username: os.Getenv("TW_EMU_SSH_USER")}, "")
+	emuLab.mu.Lock()
+	a.emuLoad()
+	emuLab.mu.Unlock()
+	var lines []string
+	if err := a.emuSetup(host.Path, "", func(k, s string) { lines = append(lines, k+": "+s) }); err != nil {
+		t.Fatalf("%v\n%s", err, strings.Join(lines, "\n"))
+	}
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "step: packages") || !strings.Contains(joined, "step: group") {
+		t.Fatal(joined)
+	}
+	h, err := a.EmuCheckHost(host.Path)
+	if err != nil || h.Info.QEMU == "" || h.Info.Pkg != "apt" {
+		t.Fatalf("%+v %v", h.Info, err)
+	}
+}
