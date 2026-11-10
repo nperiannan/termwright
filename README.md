@@ -85,6 +85,17 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
   - configuration backups with change detection, change checklists, and Run and Collect.
 - **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
 
+## What's new in 0.34
+
+- **Name After Devices**: sessions named by an address (`10.127.35.13`) take the name the device gives itself - for a whole folder at once, offered after connecting, or automatically with Undo. Team servers learn each device's hostname and model; owners rename for everyone.
+- **Network Check** (Transfer → Network Check…): who can reach what - this computer and the open device tabs against the gateway, DNS, internet and any host, with the traceroute path and an iPerf3 server and client. On switches it also tries the management VR / VRF.
+- **File servers: firewall check** - whether the firewall lets devices reach Termwright, allow it in one click, and a test from the device.
+- **Who is free now** on the team admin page, a **Model** column, and **calmer folder colours** (Soft, Vivid or Steel blue).
+
+| | |
+|---|---|
+| ![Network Check](docs/screenshots/net-check.png) <br/>*Transfer → Network Check* | ![Usage reports](docs/screenshots/team-reports.png) <br/>*Team admin: Usage reports* |
+
 ## What's new in 0.33
 
 - **AI assistant and agent** beside the terminal (docked or floating): ask about the output or a screenshot; in **Agent** mode it finds and connects to sessions by folder, name or address and runs commands - read-only by itself, changes after you allow them, or fully autonomous. **Production sessions always ask first.** Logs and recordings as evidence, a status per device, tokens per answer.
@@ -106,17 +117,6 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 | | |
 |---|---|
 | ![Sync](docs/screenshots/sync.png) <br/>*Settings → General → Sync* | ![Tell Me When It Is Free](docs/screenshots/team-watch.png) <br/>*Wait for a busy device* |
-
-## What's new in 0.31
-
-- **Update the team server from Termwright.** Options → Teams… shows each server's version; owners update an older one with *Update Server…* over SSH - same port, data and settings, and the old version comes back if the new one does not answer.
-- **Utilization over working hours** on the admin page, and **console sessions** named after a team device count as having it open.
-- **Fixes**: you on two computers are one person, devices without a network device type are not counted, activity times in your time zone.
-- **Teams in Russian**, and *Serial* is «COM-порт» ([#2](https://github.com/nperiannan/termwright/issues/2)).
-
-| | |
-|---|---|
-| ![Update available](docs/screenshots/team-update.png) <br/>*A newer version for the team server* | ![Updating the team server](docs/screenshots/team-update-run.png) <br/>*Update Server: same container, new version* |
 
 ## Capabilities
 
