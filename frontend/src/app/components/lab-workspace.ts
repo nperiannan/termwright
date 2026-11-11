@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
@@ -55,7 +55,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <label>{{ tr('First switch’s address') }}</label><input class="mono" [(ngModel)]="f.addr" name="cfa" placeholder="10.0.0.146" />
               <label>{{ tr('Gateway') }}</label><input class="mono" [(ngModel)]="f.gw" name="cfg" />
               <p class="muted small">{{ tr('The next switches take the addresses after it ({0} switches: up to {1}). Pick free addresses: no DHCP server may hand them out.', devs().length, lastAddr(f.addr)) }}</p>
-              <div class="row2"><span class="sp"></span><button type="button" (click)="cloudF.set(null)">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="applyCloud()" [disabled]="!f.addr.trim()">{{ tr('Use') }}</button></div>
+              <div class="row2"><span class="sp"></span><button type="button" (click)="cloudF.set(null); revertMgmt()">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="applyCloud()" [disabled]="!f.addr.trim()">{{ tr('Use') }}</button></div>
             </div>
           }</span>
       }
@@ -296,6 +296,7 @@ export class LabWorkspace implements OnDestroy {
   private backend = inject(Backend);
   protected tabs = inject(Tabs);
   protected ui = inject(Ui);
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected tr = tr;
   protected BH = BH;
   protected q = '';
@@ -368,7 +369,7 @@ export class LabWorkspace implements OnDestroy {
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
     this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); }, 3000);
   }
-  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.cloudF()) { this.cloudF.set(null); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else { this.cancelLink(); this.menu.set(null); } }
+  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else { this.cancelLink(); this.menu.set(null); } }
   ngOnDestroy() { clearInterval(this.timer); this.lab.watch('ws-' + this.tab().id, false); for (const id of Object.values(this.docked())) void this.tabs.close(id); }
 
   protected hostName = computed(() => (this.st()?.host ?? '').split('/').pop() ?? '');
@@ -647,9 +648,11 @@ export class LabWorkspace implements OnDestroy {
     this.cloudF.set(null);
     await this.setMgmt('cloud', (f.addr.trim() + ' ' + f.gw.trim()).trim());
   }
+  /** Shows the lab's management in the menu again (a change not made). */
+  protected revertMgmt() { const el = this.host.nativeElement.querySelector<HTMLSelectElement>('select[name=wmg]'); if (el) el.value = this.st()?.mgmt ?? ''; }
   async setMgmt(m: string, net = '') {
     const was = this.st()?.mgmt ?? '';
-    if (m === 'cloud' && !net) { this.lab.emu.set({ ...this.lab.emu()! }); this.openCloud(); return; }
+    if (m === 'cloud' && !net) { this.revertMgmt(); this.openCloud(); return; }
     if (m === was && m !== 'cloud') return;
     const text: Record<string, string> = {
       lan: tr('The switches join the host’s network and get addresses from its DHCP server.'),
@@ -661,16 +664,16 @@ export class LabWorkspace implements OnDestroy {
     const up = this.devs().filter(d => d.running).map(d => d.id);
     if (!up.length) {
       if (await this.ui.confirm(tr('Change management'), text[m] + ' ' + tr('Their sessions are updated; it applies when the switches start.'), tr('Change'))) await this.lab.setMgmt(m, net);
-      else this.lab.emu.set({ ...this.lab.emu()! });
+      else this.revertMgmt();
       return;
     }
     // running switches are stopped for it and started again
     if (!(await this.ui.confirm(tr('Change management'), text[m] + ' ' + tr('{0} switches are running: they are stopped, and started again with it (their configuration stays). Their sessions are updated.', up.length), tr('Stop, Change and Start')))) {
-      this.lab.emu.set({ ...this.lab.emu()! });
+      this.revertMgmt();
       return;
     }
-    if (!(await this.lab.stop(up))) { this.lab.emu.set({ ...this.lab.emu()! }); return; }
-    if (!(await this.lab.setMgmt(m, net))) this.lab.emu.set({ ...this.lab.emu()! }); // they start again as they were
+    if (!(await this.lab.stop(up))) { this.revertMgmt(); return; }
+    if (!(await this.lab.setMgmt(m, net))) this.revertMgmt(); // they start again as they were
     await this.lab.start(up);
   }
 }

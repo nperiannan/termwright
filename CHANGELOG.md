@@ -35,6 +35,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Session options: why Proxy cannot be chosen.** A session goes through a jump host or a proxy, not both; the page now says so when a jump host is set (lab sessions use the KVM host as jump host).
 * **Fixed: changing the management while switches ran could be ignored** (the switches kept their NAT addresses although the menu showed the new choice): a status read still running from before the stop said they were up. Termwright now waits for a fresh one, says so when switches still run, and the switches start again either way. Their SSH address shows "through the host" for the routed host network and the lab bridge.
 * **Lab console pane:** it says when the switch's console is open in a tab (a console takes one connection) with *Go to the Tab*, takes the keyboard when it connects, and **Console** moves a console from the pane to a tab.
+* **Fixed: the routed host network (cloud) could not be chosen on a host checked by an older Termwright** (its own address was not known yet): the host is checked again, and when a management change fails the menu shows the lab's real management again instead of the choice that was not made.
+* **Lab reachability check:** once a switch has its management address, Termwright tries it from the host (ping, SSH port 22, Telnet port 23) and says in Events what answers - so a session that does not connect tells whether the switch or the way to it is the problem.
 
 ## 0.34.1 (2026-11-10)
 

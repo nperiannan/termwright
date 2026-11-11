@@ -1369,7 +1369,7 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 		}
 	}
 	emuLab.mu.Unlock()
-	if info == nil {
+	if info == nil || r.Mgmt == "cloud" && info.LanAddr == "" { // checked by an older Termwright: without the host's address
 		h, err := a.EmuCheckHost(r.Host)
 		if err != nil {
 			return EmuView{}, err
@@ -2028,9 +2028,53 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		}
 		a.emuSetAddress(v.ID, addr)
 		a.emuNotify(nil, v.Name+" has the address "+strings.Split(addr, "/")[0])
+		a.emuReach(host, v.ID)
 		return
 	}
 	a.emuNotify(nil, v.Name+" is configured")
+	a.emuReach(host, v.ID)
+}
+
+// emuReach tries a switch's management address from the host (ping, SSH,
+// Telnet) and says what answers in the Events log: where a session fails,
+// this tells the switch apart from the way to it.
+func (a *App) emuReach(host, id string) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	var ip string
+	if l != nil && l.Mgmt != "forward" && l.Mgmt != "" {
+		if v := l.VMByID(id); v != nil {
+			ip = strings.Split(v.MgmtIP, "/")[0]
+		}
+	}
+	emuLab.mu.Unlock()
+	if _, err := netip.ParseAddr(ip); err != nil {
+		return
+	}
+	script := fmt.Sprintf("ip=%s; if ping -c1 -W2 $ip >/dev/null 2>&1; then echo ping=yes; else echo ping=no; fi\nfor p in 22 23; do if timeout 3 bash -c \"</dev/tcp/$ip/$p\" 2>/dev/null; then echo p$p=open; else echo p$p=closed; fi; done\necho \"route=$(ip -o route get $ip 2>/dev/null | head -1)\"\n", ip)
+	out, err := a.emuRun(host, script, 30*time.Second)
+	if err != nil {
+		return
+	}
+	r := map[string]string{}
+	for _, line := range strings.Split(out, "\n") {
+		if k, v, ok := strings.Cut(strings.TrimSpace(line), "="); ok {
+			r[k] = v
+		}
+	}
+	level := "ok"
+	msg := fmt.Sprintf("from the host %s: ping %s, SSH (22) %s, Telnet (23) %s", ip, map[string]string{"yes": "answers", "no": "no answer"}[r["ping"]], r["p22"], r["p23"])
+	if r["p22"] != "open" {
+		level = "warn"
+		if r["ping"] != "yes" {
+			msg += " - the host cannot reach it: check the switch's address on its console (" + strings.TrimSpace(r["route"]) + ")"
+		} else {
+			msg += " - it answers but SSH is off: enable SSH on the switch (EXOS: enable ssh2)"
+		}
+	}
+	emuLab.mu.Lock()
+	emuEv(id, level, msg)
+	emuLab.mu.Unlock()
 }
 
 // emuBestMgmt is the management a new lab gets: the host's network on a
@@ -2109,7 +2153,7 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 		}
 	}
 	emuLab.mu.Unlock()
-	if info == nil || info.Dir == "" {
+	if info == nil || info.Dir == "" || mgmt == "cloud" && info.LanAddr == "" { // checked by an older Termwright: without the host's address
 		h, err := a.EmuCheckHost(host)
 		if err != nil {
 			return EmuView{}, err
