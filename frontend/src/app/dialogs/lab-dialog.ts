@@ -29,7 +29,7 @@ const NW = 150, NH = 46;
           <p class="muted">{{ c.info.description }}</p>
           <p class="muted small">{{ tr('A device pack tells the simulator what its switches are: models, commands and outputs. It is kept on this computer only (in Termwright’s data folder), it is not sent anywhere, and you can remove it in the Lab window.') }}</p>
           <label class="chk"><input type="checkbox" [(ngModel)]="agree" name="agree" /> {{ tr('I am allowed to use this pack and agree to its terms') }}</label>
-          <div class="btns" style="margin-top:14px"><button type="button" (click)="consent.set(null)">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="accept()" [disabled]="!agree || lab.busy()">{{ tr('Load Pack') }}</button></div>
+          <div class="btns" style="margin-top:14px"><button type="button" (click)="consent.set(null); packOnly && ui.close()">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="accept()" [disabled]="!agree || lab.busy()">{{ tr('Load Pack') }}</button></div>
         </div>
       } @else if (emu() && !lab.state()?.exists && !manage()) {
         <div class="modal-body empty">
@@ -559,6 +559,7 @@ export class LabDialog implements OnInit, OnDestroy {
       if (dt.tab === 'hosts' || dt.tab === 'images' || dt.tab === 'templates') this.manage.set(true);
       this.tab.set(dt.tab as 'list');
       const d = this.lab.devices().find(x => x.id === dt.focus); if (d) this.focusOn(d);
+      if (dt.action === 'pack') { this.packOnly = true; void this.choosePack(); }
     }
     const sf = this.lab.setupFor();
     if (sf) { this.lab.setupFor.set(''); this.lab.kind.set('emu'); this.manage.set(true); this.tab.set('hosts'); this.openSetup(sf); }
@@ -760,10 +761,12 @@ export class LabDialog implements OnInit, OnDestroy {
   protected agree = false;
   async choosePack() {
     const path = await this.backend.chooseOpenFile(tr('Load Device Pack'), [{ displayName: tr('Device packs'), pattern: '*.vm' }]).catch(() => '');
-    if (!path) return;
+    if (!path) { if (this.packOnly) this.ui.close(); return; }
     try { this.agree = false; this.consent.set({ path, info: await this.lab.packInfo(path) }); } catch (e) { this.ui.error(e); }
   }
-  async accept() { const c = this.consent(); if (c && await this.lab.acceptPack(c.path, c.info.hash)) this.consent.set(null); }
+  /** Opened only to load a device pack (from the workspace): close when done. */
+  protected packOnly = false;
+  async accept() { const c = this.consent(); if (c && await this.lab.acceptPack(c.path, c.info.hash)) { this.consent.set(null); if (this.packOnly) this.ui.close(); } }
   async removePack() { if (await this.ui.confirm(tr('Remove device pack'), tr('Remove {0} from this computer?', this.pack()?.name ?? ''), tr('Remove'), true)) await this.lab.removePack(); }
 
   wizard(add: boolean) { this.ui.labWizard.set({ add, kind: this.lab.kind() }); this.ui.open('labWizard'); }

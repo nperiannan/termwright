@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
@@ -495,8 +496,8 @@ type EmuCatalogItem struct {
 	Added bool   `json:"added"` // images of it are in the list already
 }
 
-// emuCatalog: appliances of the public GNS3 registry that boot from one disk
-// image (no CD-ROM, second disk or container), so they run as they are.
+// emuCatalog: QEMU appliances of the public GNS3 registry (disks, CD-ROMs
+// and BIOS files; container appliances cannot run on a KVM host).
 var emuCatalog = []EmuCatalogItem{
 	{File: "vyos", Name: "VyOS", Group: "Routers and firewalls", Note: "Open source router. Stable images need a (free) account at the project's site; rolling builds are free."},
 	{File: "frr", Name: "FRR (FRRouting)", Group: "Routers and firewalls", Note: "Open source routing suite on Alpine Linux. Free download."},
@@ -508,11 +509,18 @@ var emuCatalog = []EmuCatalogItem{
 	{File: "cumulus-vx", Name: "Cumulus VX", Group: "Data-centre switches", Note: "Linux switch OS. Free download."},
 	{File: "exos", Name: "EXOS VM", Group: "Data-centre switches", Note: "Switch OS VM. Free download."},
 	{File: "extreme-networks-voss", Name: "VOSS VM", Group: "Data-centre switches", Note: "Switch OS VM. Free download."},
+	{File: "arista-veos", Name: "Arista vEOS", Group: "Data-centre switches", Note: "Boots from a small Aboot disk with the EOS disk as the second one. Both files from the vendor with your account."},
+	{File: "cisco-iosv", Name: "Cisco IOSv", Group: "Vendor images (sign-in needed)", Note: "The router image from the vendor with your account; the small start-up disk downloads freely."},
+	{File: "cisco-nxosv9k", Name: "Cisco Nexus 9000v", Group: "Vendor images (sign-in needed)", Note: "The switch image from the vendor with your account; the UEFI BIOS file downloads freely. Needs 8 GB of memory."},
+	{File: "fortigate", Name: "FortiGate VM", Group: "Vendor images (sign-in needed)", Note: "The firewall image from the vendor with your account; the empty log disk downloads freely."},
 	{File: "cisco-iosvl2", Name: "Cisco IOSvL2", Group: "Vendor images (sign-in needed)", Note: "Get the image from the vendor with your account, then choose the file."},
 	{File: "cisco-csr1000v", Name: "Cisco CSR 1000v", Group: "Vendor images (sign-in needed)", Note: "Get the image from the vendor with your account, then choose the file."},
 	{File: "juniper-vsrx", Name: "Juniper vSRX", Group: "Vendor images (sign-in needed)", Note: "Get the image from the vendor with your account, then choose the file."},
 	{File: "alpine-linux-virt", Name: "Alpine Linux", Group: "Linux and test tools", Note: "Small Linux for hosts and servers. Free download."},
 	{File: "debian", Name: "Debian", Group: "Linux and test tools", Note: "Linux. Free download."},
+	{File: "ubuntu-cloud", Name: "Ubuntu Cloud", Group: "Linux and test tools", Note: "Ubuntu server with a cloud-init CD-ROM (user ubuntu). Free download."},
+	{File: "fedora-cloud", Name: "Fedora Cloud", Group: "Linux and test tools", Note: "Fedora server with a cloud-init CD-ROM. Free download."},
+	{File: "almalinux", Name: "AlmaLinux", Group: "Linux and test tools", Note: "Enterprise Linux with a cloud-init CD-ROM. Free download."},
 	{File: "tinycore-linux", Name: "Tiny Core Linux", Group: "Linux and test tools", Note: "Very small Linux for end hosts. Free download."},
 	{File: "kali-linux", Name: "Kali Linux", Group: "Linux and test tools", Note: "Security testing Linux. Free download."},
 	{File: "ostinato", Name: "Ostinato", Group: "Linux and test tools", Note: "Traffic generator."},
@@ -585,6 +593,17 @@ func (a *App) emuImportAppliance(b []byte, dir string, source ...string) (EmuVie
 		if ap.Password != "" {
 			_ = secrets.Set(emuImageKey(pr.ID), ap.Password)
 		}
+		for i := range pr.Disks {
+			for _, d := range []string{dir, a.emuDownloadDir()} {
+				if d == "" {
+					continue
+				}
+				if sum, size, err := fileSHA256(filepath.Join(d, pr.Disks[i].FileName)); err == nil {
+					pr.Disks[i].File, pr.Disks[i].SHA256, pr.Disks[i].Size = filepath.Join(d, pr.Disks[i].FileName), sum, size
+					break
+				}
+			}
+		}
 		if pr.FileName != "" {
 			for _, d := range []string{dir, a.emuDownloadDir()} {
 				if d == "" {
@@ -629,7 +648,7 @@ func (a *App) EmuDownload(ids []string) (EmuView, error) {
 	a.emuLoad()
 	var todo []emu.Image
 	for _, id := range ids {
-		if im := emuImage(id); im != nil && im.URL != "" && im.File == "" && emuLab.download[id] == "" {
+		if im := emuImage(id); im != nil && emuLab.download[id] == "" && emuNeedsDownload(im) {
 			todo = append(todo, *im)
 			emuLab.download[id] = "waiting"
 		}
@@ -656,35 +675,93 @@ func (a *App) EmuDownload(ids []string) (EmuView, error) {
 	return a.EmuState()
 }
 
+// emuNeedsDownload: a file of the image is missing and has a download link.
+func emuNeedsDownload(im *emu.Image) bool {
+	if im.File == "" && im.URL != "" {
+		return true
+	}
+	for _, d := range im.Disks {
+		if d.File == "" && d.URL != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// emuDownloadOne downloads the missing files of an image (its disk, then the others).
 func (a *App) emuDownloadOne(im emu.Image) error {
+	if im.File == "" && im.URL != "" {
+		f, sum, size, err := a.emuFetch(im.ID, "", im.URL, im.FileName, im.MD5, im.Size)
+		if err != nil {
+			return err
+		}
+		emuLab.mu.Lock()
+		if x := emuImage(im.ID); x != nil {
+			x.File, x.SHA256, x.Size = f, sum, size
+			_ = a.emuSave()
+		}
+		emuLab.mu.Unlock()
+	}
+	for i, d := range im.Disks {
+		if d.File != "" || d.URL == "" {
+			continue
+		}
+		f, sum, size, err := a.emuFetch(im.ID, d.Slot, d.URL, d.FileName, d.MD5, d.Size)
+		if err != nil {
+			return fmt.Errorf("%s (%s): %w", emuDiskName(d.Slot), d.FileName, err)
+		}
+		emuLab.mu.Lock()
+		if x := emuImage(im.ID); x != nil && i < len(x.Disks) {
+			x.Disks[i].File, x.Disks[i].SHA256, x.Disks[i].Size = f, sum, size
+			_ = a.emuSave()
+		}
+		emuLab.mu.Unlock()
+	}
+	return nil
+}
+
+// emuFetch downloads a file to the download folder and checks its MD5 (a
+// .zip is unpacked: the file of that name inside it).
+func (a *App) emuFetch(id, slot, url, fileName, md5sum string, size int64) (string, string, int64, error) {
 	dir := a.emuDownloadDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return "", "", 0, err
 	}
-	if !strings.HasPrefix(im.URL, "https://") && !strings.HasPrefix(im.URL, "http://") {
-		return errors.New("not a web link: " + im.URL)
+	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
+		return "", "", 0, errors.New("not a web link: " + url)
 	}
-	resp, err := http.Get(im.URL)
+	dst := filepath.Join(dir, filepath.Base(fileName))
+	if sum, sz, err := fileSHA256(dst); err == nil && md5sum != "" && fileMD5(dst) == strings.ToLower(md5sum) {
+		return dst, sum, sz, nil // downloaded before
+	}
+	resp, err := http.Get(url)
 	if err != nil {
-		return err
+		return "", "", 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("the server answered %s", resp.Status)
+		return "", "", 0, fmt.Errorf("the server answered %s", resp.Status)
 	}
-	dst := filepath.Join(dir, filepath.Base(im.FileName))
-	f, err := os.Create(dst + ".part")
+	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
+		return "", "", 0, errors.New("the link gave a web page, not the file: open the download page and choose the file")
+	}
+	zipped := strings.Contains(strings.ToLower(url), ".zip")
+	part := dst + ".part"
+	f, err := os.Create(part)
 	if err != nil {
-		return err
+		return "", "", 0, err
 	}
-	total := im.Size
+	total := size
 	if resp.ContentLength > 0 {
 		total = resp.ContentLength
 	}
-	h := md5.New()
-	pw := &progressWriter{w: io.MultiWriter(f, h), total: total, fn: func(pct int) {
+	label := ""
+	if slot != "" {
+		label = emuDiskName(slot) + " "
+	}
+	pw := &progressWriter{w: f, total: total, fn: func(pct int) {
 		emuLab.mu.Lock()
-		emuLab.download[im.ID] = strconv.Itoa(pct) + " %"
+		emuLab.download[id] = label + strconv.Itoa(pct) + " %"
 		emuLab.mu.Unlock()
 	}}
 	_, err = io.Copy(pw, resp.Body)
@@ -692,27 +769,103 @@ func (a *App) emuDownloadOne(im emu.Image) error {
 		err = cerr
 	}
 	if err != nil {
-		_ = os.Remove(dst + ".part")
-		return err
+		_ = os.Remove(part)
+		return "", "", 0, err
 	}
-	if sum := hex.EncodeToString(h.Sum(nil)); im.MD5 != "" && !strings.EqualFold(sum, im.MD5) {
-		_ = os.Remove(dst + ".part")
-		return fmt.Errorf("MD5 %s, the appliance says %s - the file was not kept", sum, im.MD5)
+	if zipped {
+		if err := unzipOne(part, filepath.Base(fileName), dst+".unz"); err != nil {
+			_ = os.Remove(part)
+			return "", "", 0, err
+		}
+		_ = os.Remove(part)
+		part = dst + ".unz"
 	}
-	if err := os.Rename(dst+".part", dst); err != nil {
-		return err
+	if sum := fileMD5(part); md5sum != "" && !strings.EqualFold(sum, md5sum) {
+		_ = os.Remove(part)
+		return "", "", 0, fmt.Errorf("MD5 %s, the appliance says %s - the file was not kept", sum, md5sum)
 	}
-	sum, size, err := fileSHA256(dst)
+	if err := os.Rename(part, dst); err != nil {
+		return "", "", 0, err
+	}
+	sum, sz, err := fileSHA256(dst)
+	return dst, sum, sz, err
+}
+
+func fileMD5(p string) string {
+	f, err := os.Open(p)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	h := md5.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// unzipOne writes the member called name (or the only file) of a zip archive to dst.
+func unzipOne(zipFile, name, dst string) error {
+	zr, err := zip.OpenReader(zipFile)
+	if err != nil {
+		return fmt.Errorf("not a zip archive: %w", err)
+	}
+	defer zr.Close()
+	var pick *zip.File
+	for _, f := range zr.File {
+		if filepath.Base(f.Name) == name || (pick == nil && !f.FileInfo().IsDir() && len(zr.File) == 1) {
+			pick = f
+		}
+	}
+	if pick == nil {
+		return errors.New(name + " is not in the archive")
+	}
+	r, err := pick.Open()
 	if err != nil {
 		return err
 	}
-	emuLab.mu.Lock()
-	defer emuLab.mu.Unlock()
-	if x := emuImage(im.ID); x != nil {
-		x.File, x.SHA256, x.Size = dst, sum, size
-		return a.emuSave()
+	defer r.Close()
+	w, err := os.Create(dst)
+	if err != nil {
+		return err
 	}
-	return nil
+	if _, err := io.Copy(w, io.LimitReader(r, 64<<30)); err != nil {
+		w.Close()
+		return err
+	}
+	return w.Close()
+}
+
+// EmuSetDiskFile gives an image's other disk (hdb…, cdrom, bios) its file.
+func (a *App) EmuSetDiskFile(id, slot, p string) (EmuView, error) {
+	sum, size, err := fileSHA256(p)
+	if err != nil {
+		return EmuView{}, err
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	im := emuImage(id)
+	found := false
+	if im != nil {
+		for i := range im.Disks {
+			if im.Disks[i].Slot == slot {
+				im.Disks[i].File, im.Disks[i].SHA256, im.Disks[i].Size, found = p, sum, size, true
+				if im.Disks[i].FileName == "" {
+					im.Disks[i].FileName = filepath.Base(p)
+				}
+			}
+		}
+	}
+	if !found {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such disk")
+	}
+	err = a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
 }
 
 // EmuSetImageFile gives an image (from an appliance) its file.
@@ -799,13 +952,42 @@ func (a *App) EmuRemoveImage(id string) (EmuView, error) {
 
 // emuUpload copies an image to a host once (a .sha256 file next to it says it is there).
 func (a *App) emuUpload(host string, im emu.Image, dir string) error {
-	remote := dir + "/images/" + im.FileName
-	if out, _ := a.emuRun(host, "cat "+emu.Q(remote+".sha256")+" 2>/dev/null", 30*time.Second); strings.TrimSpace(out) == im.SHA256 && im.SHA256 != "" {
+	if err := a.emuUploadFile(host, im, im.FileName, im.File, im.SHA256, im.Size, dir, ""); err != nil {
+		return err
+	}
+	for _, d := range im.Disks {
+		if err := a.emuUploadFile(host, im, d.FileName, d.File, d.SHA256, d.Size, dir, d.Slot); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// emuDiskName says what a disk slot is.
+func emuDiskName(slot string) string {
+	switch slot {
+	case "cdrom":
+		return "CD-ROM"
+	case "bios":
+		return "BIOS"
+	case "":
+		return "disk"
+	}
+	return "disk " + strings.TrimPrefix(slot, "hd")
+}
+
+func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha string, size int64, dir, slot string) error {
+	remote := dir + "/images/" + fileName
+	if out, _ := a.emuRun(host, "cat "+emu.Q(remote+".sha256")+" 2>/dev/null", 30*time.Second); strings.TrimSpace(out) == sha && sha != "" {
 		return nil
 	}
-	if im.File == "" {
+	if file == "" {
+		if slot != "" {
+			return fmt.Errorf("the %s file of the image %s (%s) is not chosen yet: Images → Download or Choose", emuDiskName(slot), im.Name, fileName)
+		}
 		return fmt.Errorf("the file of the image %s is not chosen yet", im.Name)
 	}
+	im.File, im.SHA256, im.Size = file, sha, size
 	src, err := os.Open(im.File)
 	if err != nil {
 		return fmt.Errorf("image %s: %w", im.Name, err)
@@ -1786,6 +1968,13 @@ func (a *App) emuView() EmuView {
 			}
 		} else {
 			iv.Missing = true
+		}
+		for _, d := range im.Disks {
+			if d.File == "" {
+				iv.Missing = true
+			} else if _, err := os.Stat(d.File); err != nil {
+				iv.Missing = true
+			}
 		}
 		v.Images = append(v.Images, iv)
 		dt := orStr(im.DeviceType, "VM")
@@ -2903,7 +3092,7 @@ func (a *App) emuDeviceTypes(profiles []emu.Image) []EmuDeviceType {
 		sort.SliceStable(ims, func(i, j int) bool { return versionLess(ims[j].Version, ims[i].Version) })
 		var ids []string
 		for _, im := range ims {
-			if im.File != "" {
+			if im.HasFiles() {
 				ids = append(ids, im.ID)
 			}
 		}

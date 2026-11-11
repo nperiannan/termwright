@@ -2278,6 +2278,22 @@ const ru: Record<string, string> = {
   '{0} of {1} added': 'добавлено {0} из {1}',
   'No direct download: get the file from the maker (an account may be needed), then Choose… it below.': 'Прямой загрузки нет: получите файл у производителя (может понадобиться учётная запись), затем выберите его ниже.',
   'Open the download page': 'Открыть страницу загрузки',
+  'Choose the file': 'Выберите файл',
+  'Container appliances are not in the list: they do not run on a KVM host.': 'Appliance в контейнерах в списке нет: они не запускаются на хосте KVM.',
+  'Disk, CD-ROM or BIOS files': 'Файлы дисков, CD-ROM или BIOS',
+  'Download page': 'Страница загрузки',
+  'Fourth disk': 'Четвёртый диск',
+  'Load Another Pack…': 'Загрузить другой пакет…',
+  'No device pack': 'Нет пакета устройств',
+  'On this computer': 'На этом компьютере',
+  'Ready-made settings from the public GNS3 registry, with their second disks, CD-ROMs and BIOS files. Add one: its versions join the image list; then download the files (or choose them when the maker wants you to sign in).': 'Готовые настройки из публичного реестра GNS3 со вторыми дисками, CD-ROM и файлами BIOS. Добавьте: его версии появятся в списке образов; затем скачайте файлы (или выберите их, если производитель требует входа).',
+  'Second disk': 'Второй диск',
+  'Switch List and Outputs': 'Список коммутаторов и выводы',
+  'The device pack is loaded or changed in the Simulated Lab tab (the flask at the top right): Load Device Pack.': 'Пакет устройств загружается или меняется на вкладке «Симулированная лаборатория» (колба вверху справа): «Загрузить пакет устройств».',
+  'The device pack the simulated switches come from': 'Пакет устройств, из которого берутся симулированные коммутаторы',
+  'Third disk': 'Третий диск',
+  'downloads with Download': 'скачивается кнопкой «Скачать»',
+  'get it from the maker, then Choose…': 'получите у производителя, затем «Выбрать…»',
 };
 
 export default ru;

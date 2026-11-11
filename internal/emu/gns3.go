@@ -14,6 +14,9 @@ type qemuProps struct {
 	RAM         int    `json:"ram"`
 	CPUs        int    `json:"cpus"`
 	DiskIf      string `json:"hda_disk_interface"`
+	HdbIf       string `json:"hdb_disk_interface"`
+	HdcIf       string `json:"hdc_disk_interface"`
+	HddIf       string `json:"hdd_disk_interface"`
 	Arch        string `json:"arch"`
 	Platform    string `json:"platform"`
 	Options     string `json:"options"`
@@ -36,6 +39,15 @@ func (p qemuProps) over(o qemuProps) qemuProps {
 	}
 	if o.DiskIf != "" {
 		p.DiskIf = o.DiskIf
+	}
+	if o.HdbIf != "" {
+		p.HdbIf = o.HdbIf
+	}
+	if o.HdcIf != "" {
+		p.HdcIf = o.HdcIf
+	}
+	if o.HddIf != "" {
+		p.HddIf = o.HddIf
 	}
 	if o.Arch != "" {
 		p.Arch = o.Arch
@@ -150,15 +162,29 @@ func ParseAppliance(data []byte) (Appliance, error) {
 			continue
 		}
 		im := base
-		if q, ok := named[v.Settings]; ok && v.Settings != "" {
-			im = mk(def.over(q))
+		q := *def
+		if o, ok := named[v.Settings]; ok && v.Settings != "" {
+			q = def.over(o)
+			im = mk(q)
+		}
+		im.Disks = nil
+		for _, sl := range []struct{ key, slot, bus string }{{"hdb_disk_image", "hdb", q.HdbIf}, {"hdc_disk_image", "hdc", q.HdcIf}, {"hdd_disk_image", "hdd", q.HddIf}, {"cdrom_image", "cdrom", ""}, {"bios_image", "bios", ""}} {
+			if fn := v.Images[sl.key]; fn != "" {
+				d := Disk{Slot: sl.slot, FileName: fn, Bus: sl.bus}
+				for _, x := range a.Images {
+					if x.Filename == fn {
+						d.Size, d.MD5, d.URL, d.Page = x.Size, strings.ToLower(x.MD5), x.URL, x.Page
+					}
+				}
+				im.Disks = append(im.Disks, d)
+			}
 		}
 		im.FileName = f
 		im.Version = strings.TrimPrefix(strings.TrimPrefix(v.Name, "v"), "V")
 		for _, x := range a.Images {
 			if x.Filename == f {
 				im.Size, im.MD5, im.URL, im.Page = x.Size, strings.ToLower(x.MD5), x.URL, x.Page
-				if x.Version != "" {
+				if x.Version != "" && v.Name == "" {
 					im.Version = strings.TrimPrefix(strings.TrimPrefix(x.Version, "v"), "V")
 				}
 			}

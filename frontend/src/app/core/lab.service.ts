@@ -17,7 +17,7 @@ export class LabService {
   readonly state = computed(() => (this.kind() === 'emu' ? this.emu() : this.sim()));
   readonly busy = signal(false);
   /** The Lab window opens on this tab (and switch), from the workspace. */
-  readonly dialogTab = signal<{ tab: string; focus: string } | null>(null);
+  readonly dialogTab = signal<{ tab: string; focus: string; action?: 'pack' } | null>(null);
   /** The Lab window is open (refresh more often). */
   readonly watching = signal(false);
   private watchers = new Set<string>();

@@ -21,7 +21,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
       @if (emu()) { <span class="chip" [title]="tr('KVM host')"><i class="d" [class.ok]="!!st()?.host"></i>{{ hostName() || tr('No host yet') }}@if (st()?.kvm) { · KVM }</span> }
-      @else if (st()?.pack) { <span class="chip">{{ st()!.pack!.name }} {{ st()!.pack!.version }}</span> }
+      @else { <span class="chip" [title]="tr('The device pack the simulated switches come from')">{{ st()?.pack ? st()!.pack!.name + ' ' + st()!.pack!.version : tr('No device pack') }}</span>
+        <button type="button" (click)="loadPack()">{{ st()?.pack ? tr('Load Another Pack…') : tr('Load Device Pack (.vm)…') }}</button> }
       <span class="sep"></span>
       <button type="button" class="primary" (click)="lab.start([])" [disabled]="!devs().length || lab.busy()">▶ {{ tr('Start All') }}</button>
       <button type="button" (click)="lab.stop([])" [disabled]="!running() || lab.busy()">■ {{ tr('Stop All') }}</button>
@@ -35,7 +36,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <button type="button" (click)="page.set('hosts')">{{ tr('Hosts') }}</button>
         <button type="button" (click)="page.set('images')">{{ tr('Images') }}</button>
         <button type="button" (click)="page.set('templates')">{{ tr('Templates') }}</button>
-      } @else { <button type="button" (click)="dialog('list')">{{ tr('Device Pack and List') }}</button> }
+      } @else { <button type="button" (click)="dialog('list')">{{ tr('Switch List and Outputs') }}</button> }
       <span class="sp"></span>
       @if (emu() && devs().length) {
         <span class="chip mg" [title]="running() ? tr('Stop the switches to change it') : tr('How the switches’ first port (management) is connected; it applies when they start')">{{ tr('Management') }}
@@ -60,7 +61,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <span class="ico" [class]="'ico ' + p.cls"></span><div><span>{{ p.name }}</span>@if (p.sub) { <small>{{ p.sub }}</small> }</div></div>
           }
         } @empty {
-          <p class="muted small">{{ emu() ? tr('No images yet: Images → Add Image.') : tr('Load a device pack first.') }}</p>
+          @if (emu()) { <p class="muted small">{{ tr('No images yet: Images → Add Image.') }}</p> }
+          @else { <p class="muted small">{{ tr('Load a device pack first.') }}</p><button type="button" class="primary" (click)="loadPack()">{{ tr('Load Device Pack (.vm)…') }}</button> }
         }
         <div class="hint">{{ tr('Drag a device onto the canvas to add it.') }}</div>
       </div>
@@ -568,6 +570,7 @@ export class LabWorkspace implements OnDestroy {
   consoleAll() { for (const d of this.devs().filter(x => x.running)) (this.emu() ? this.console(d) : this.ssh(d)); }
   configure(d: LabDevice) { this.cfgId.set(d.id); this.page.set('configure'); }
   dialog(tab: string, focus = '') { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.dialogTab.set({ tab, focus }); this.ui.open('lab'); }
+  loadPack() { this.lab.kind.set('sim'); this.lab.dialogTab.set({ tab: 'list', focus: '', action: 'pack' }); this.ui.open('lab'); }
   wizard() { this.preset.set(''); this.page.set('new'); }
   async reset(d: LabDevice) { if (await this.ui.confirm(tr('Back to Day 0'), tr('Throw away the disk of {0} and boot it as new? Its configuration is lost; the day-0 commands are typed again.', d.hostname), tr('Back to Day 0'), true)) await this.lab.reset([d.id]); }
   async remove(d: LabDevice) {

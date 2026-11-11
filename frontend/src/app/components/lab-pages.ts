@@ -18,6 +18,7 @@ const PAGE = `
   .sp { flex: 1; } .muted { color: var(--muted); } .small { font-size: 12px; } .mono { font-family: var(--mono, monospace); font-size: 12px; } .dlb { position: relative; border: 1px solid var(--line); border-radius: 8px; height: 32px; padding: 0 14px; font-weight: 600; overflow: hidden; cursor: default; opacity: 1 !important;
     &.busy { background: linear-gradient(90deg, var(--accent) 0 var(--p, 0%), var(--accent-soft) var(--p, 0%) 100%); color: var(--text); border-color: var(--accent); span { position: relative; } }
     &.done { background: var(--success, #1fa45a); border-color: var(--success, #1fa45a); color: #fff; } }
+  table.files td.acts { white-space: nowrap; text-align: right; } table.files td { overflow-wrap: anywhere; }
   .catg { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; .card { margin: 0; } }
   .lnk { color: var(--accent); cursor: pointer; }
   .unit { flex: none !important; color: var(--muted); font-size: 12px; white-space: nowrap; }
@@ -454,15 +455,20 @@ export class LabNew implements OnInit {
           <div class="pad" style="overflow: auto">
             @if (edit(); as im) {
               <div class="row2" style="justify-content: flex-start"><div style="flex: 1"><b style="font-size: 15px">{{ im.name }}@if (im.version) { · {{ im.version }} }</b><div class="muted small mono">{{ im.fileName }} · {{ mb(im.size) }}@if (im.sha256) { · sha256 {{ im.sha256.slice(0, 4) }}…{{ im.sha256.slice(-4) }} }</div></div>
-                @if (im.url) {
-                  @if (im.file) { <button type="button" class="dlb done" disabled>✓ {{ tr('Downloaded') }}</button> }
+                @if (hasLinks(im)) {
+                  @if (!needs(im)) { <button type="button" class="dlb done" disabled>✓ {{ tr('Downloaded') }}</button> }
                   @else if (dl(im)) { <button type="button" class="dlb busy" disabled [style.--p]="pctOf(dl(im)) + '%'"><span>{{ dl(im) === 'waiting' ? tr('Waiting…') : tr('Downloading {0}', dl(im)) }}</span></button> }
-                  @else { <button type="button" class="primary" (click)="lab.download([im.id])" [disabled]="lab.busy()">⤓ {{ tr('Download ({0})', mb(im.size)) }}</button> }
+                  @else { <button type="button" class="primary" (click)="lab.download([im.id])" [disabled]="lab.busy()">⤓ {{ tr('Download ({0})', mb(dlSize(im))) }}</button> }
                 }
                 <span class="pill">{{ tr('Used by {0} switches · {1} templates', usedBy(im.id), tplBy(im.id)) }}</span></div>
-              @if (!im.url && im.page && !im.file) { <p class="small" style="margin: 6px 0 0">{{ tr('No direct download: get the file from the maker (an account may be needed), then Choose… it below.') }} <a class="lnk" (click)="openPage(im.page)">{{ tr('Open the download page') }}</a></p> }
-              @if (im.url) { <p class="muted small mono" style="margin: 4px 0 0; overflow-wrap: anywhere">{{ tr('From') }} {{ im.url }}@if (im.md5) { · MD5 {{ im.md5 }} }</p>
-                <p class="muted small" style="margin: 2px 0 0">{{ im.file ? tr('Saved as {0}', im.file) : tr('Downloads go to {0}', lab.emu()?.downloadDir ?? '') }}</p> }
+              <div class="sec">{{ tr('Files') }}<span class="muted small">{{ tr('Downloads go to {0}', lab.emu()?.downloadDir ?? '') }}</span></div>
+              <table class="t files"><thead><tr><th>{{ tr('Use') }}</th><th>{{ tr('File') }}</th><th>{{ tr('Size') }}</th><th>{{ tr('On this computer') }}</th><th></th></tr></thead><tbody>
+                @for (f of filesOf(im); track f.slot) {
+                  <tr><td>{{ slotName(f.slot) }}</td><td class="mono" [title]="f.url || f.page || ''">{{ f.fileName || '-' }}</td><td>{{ mb(f.size) }}</td>
+                    <td [class.g]="!!f.file" [class.r]="!f.file && !f.url" class="small">{{ f.file ? '✓ ' + f.file : f.url ? tr('downloads with Download') : tr('get it from the maker, then Choose…') }}</td>
+                    <td class="acts">@if (!f.file && !f.url && f.page) { <a class="lnk small" (click)="openPage(f.page)">{{ tr('Download page') }}</a> } <button type="button" class="sm" (click)="chooseSlot(im.id, f.slot)">{{ tr('Choose…') }}</button></td></tr>
+                }
+              </tbody></table>
               <div class="sec">{{ tr('Boot') }}</div>
               <div class="f3">
                 <label>{{ tr('Name') }}</label><input [(ngModel)]="im.name" name="iname" /><label>{{ tr('Version') }}</label><input [(ngModel)]="im.version" name="iver" />
@@ -471,7 +477,6 @@ export class LabNew implements OnInit {
                 <label>{{ tr('Disk size') }}</label><span class="muted small">{{ tr('the image’s own size; a template or a switch can make it bigger') }}</span>
                 <label>{{ tr('Network ports') }}</label><input type="number" min="1" [(ngModel)]="im.nics" name="inics" /><label>{{ tr('Adapter type') }}</label><select [(ngModel)]="im.nic" name="inic">@for (n of nics(im.nic); track n) { <option [value]="n">{{ n }}</option> }</select>
                 <label>{{ tr('Port names') }}</label><input class="mono" [(ngModel)]="im.portName" name="ipn" placeholder="{n} or 1/{n}" /><span></span><span></span>
-                <label>{{ tr('File') }}</label><div class="wide row2"><span class="mono small">{{ im.file || '-' }}</span><button type="button" class="sm" (click)="chooseFile(im.id)">{{ tr('Choose…') }}</button></div>
               </div>
               <div class="sec">{{ tr('Console and first login') }}<span class="muted small">{{ tr('how Termwright logs in on the serial console') }}</span></div>
               <div class="f3">
@@ -521,7 +526,7 @@ export class LabNew implements OnInit {
         }
         @case ('public') {
           <div class="lst">
-            <p class="muted small">{{ tr('Ready-made settings from the public GNS3 registry for images that boot from one disk. Add one: its versions join the image list; then download the files (or choose them when the maker wants you to sign in).') }}</p>
+            <p class="muted small">{{ tr('Ready-made settings from the public GNS3 registry, with their second disks, CD-ROMs and BIOS files. Add one: its versions join the image list; then download the files (or choose them when the maker wants you to sign in).') }}</p>
             @for (g of catGroups(); track g) { <div class="grp">{{ g }}</div><div class="muted small">{{ catCount(g) }}</div> }
           </div>
           <div class="pad">
@@ -536,12 +541,13 @@ export class LabNew implements OnInit {
                 }
               </div>
             } @empty { <p class="muted">{{ catErr() || tr('Loading…') }}</p> }
-            <p class="muted small">{{ tr('Images that need a second disk, a CD-ROM or a container (and cloud images that need a cloud-init disk) are not in the list yet.') }}</p>
+            <p class="muted small">{{ tr('Container appliances are not in the list: they do not run on a KVM host.') }}</p>
           </div>
         }
         @case ('profiles') {
           <div class="lst">
             <p class="muted small">{{ tr('An image file you add is recognised by its name; New Lab offers these devices.') }}</p>
+            <p class="muted small">{{ tr('The device pack is loaded or changed in the Simulated Lab tab (the flask at the top right): Load Device Pack.') }}</p>
           </div>
           <div class="pad"><table class="t"><thead><tr><th>{{ tr('Device') }}</th><th>{{ tr('OS') }}</th><th>{{ tr('Modules') }}</th><th>{{ tr('Images') }}</th></tr></thead><tbody>
             @for (d of lab.state()?.deviceTypes ?? []; track d.key) { <tr><td>{{ d.model || d.kind }}</td><td>{{ d.osName || d.kind }}</td><td class="small">{{ (d.modules ?? []).join(', ') || '-' }}</td><td>{{ d.images.length || tr('no image yet') }}</td></tr> }
@@ -620,8 +626,18 @@ export class LabImages implements OnInit {
   async importAppliance() { const p = await this.backend.chooseOpenFile(tr('Import GNS3 Appliance'), [{ displayName: tr('GNS3 appliances'), pattern: '*.gns3a' }]).catch(() => ''); if (p && await this.lab.importAppliance(p)) { const l = this.images(); if (l.length) this.pick(l[l.length - 1].id); } }
   async importProfiles() { const p = await this.backend.chooseOpenFile(tr('Import Image Profiles'), [{ displayName: tr('Image profiles'), pattern: '*.json' }]).catch(() => ''); if (p) await this.lab.importProfiles(p); }
   async removeImage(im: EmuImage) { if (await this.ui.confirm(tr('Remove image'), tr('Forget {0}? Its copy on the hosts stays.', im.name), tr('Remove'), true) && await this.lab.removeImage(im.id)) this.edit.set(null); }
-  protected toDownload = computed(() => this.images().filter(i => i.url && !i.file && !this.dl(i)).map(i => i.id));
-  pctOf(p: string) { return Math.max(0, Math.min(100, parseInt(p, 10) || 0)); }
+  protected toDownload = computed(() => this.images().filter(i => this.needs(i) && !this.dl(i)).map(i => i.id));
+  filesOf(im: EmuImage) { return [{ slot: '', fileName: im.fileName, file: im.file, size: im.size, url: im.url ?? '', page: im.page ?? '' }, ...(im.disks ?? []).map(d => ({ slot: d.slot, fileName: d.fileName, file: d.file, size: d.size, url: d.url ?? '', page: d.page ?? '' }))]; }
+  needs(im: EmuImage) { return this.filesOf(im).some(f => !f.file && !!f.url); }
+  hasLinks(im: EmuImage) { return this.filesOf(im).some(f => !!f.url); }
+  dlSize(im: EmuImage) { return this.filesOf(im).filter(f => !f.file && f.url).reduce((n, f) => n + (f.size || 0), 0); }
+  slotName(s: string) { return ({ '': tr('Disk'), hdb: tr('Second disk'), hdc: tr('Third disk'), hdd: tr('Fourth disk'), cdrom: 'CD-ROM', bios: 'BIOS' } as Record<string, string>)[s] ?? s; }
+  async chooseSlot(id: string, slot: string) {
+    if (!slot) { await this.chooseFile(id); return; }
+    const p = await this.backend.chooseOpenFile(tr('Choose the file'), [{ displayName: tr('Disk, CD-ROM or BIOS files'), pattern: '*.qcow2;*.img;*.iso;*.fd;*.bin;*.vmdk;*.raw' }]).catch(() => '');
+    if (p) { try { this.lab.emu.set(await this.backend.emuSetDiskFile(id, slot, p)); this.pick(id); } catch (e) { this.ui.error(errText(e)); } }
+  }
+  pctOf(p: string) { const m = /(\d+)\s*%/.exec(p); return Math.max(0, Math.min(100, m ? +m[1] : 0)); }
   protected downloading = computed(() => {
     const l = this.images().filter(i => this.dl(i));
     if (!l.length) return { n: 0, at: 0, pct: 0 };
@@ -630,7 +646,7 @@ export class LabImages implements OnInit {
     const doneN = all.filter(i => i.file).length;
     return { n: all.length, at: Math.min(all.length, doneN + 1), pct: act ? this.pctOf(this.dl(act)) : 0 };
   });
-  protected downloaded = computed(() => this.images().filter(i => i.url && i.file).length);
+  protected downloaded = computed(() => this.images().filter(i => this.hasLinks(i) && !this.needs(i)).length);
   dl(im: EmuImage) { return (im as EmuImage & { download?: string }).download ?? ''; }
   imageOf(id: string) { return this.images().find(i => i.id === id); }
   diskName(b?: string) { return ({ ide: 'IDE', sata: 'SATA', scsi: 'SCSI', virtio: 'virtio', sd: 'SD' } as Record<string, string>)[b || 'ide'] ?? (b || 'IDE'); }

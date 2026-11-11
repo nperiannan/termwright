@@ -58,6 +58,34 @@ type Image struct {
 	URL        string      `json:"url,omitempty"`      // where the image file can be downloaded (from a GNS3 appliance)
 	MD5        string      `json:"md5,omitempty"`      // its MD5 sum, to check a download
 	Page       string      `json:"page,omitempty"`     // a web page where it can be had (an account may be needed)
+	Disks      []Disk      `json:"disks,omitempty"`    // more files the VM needs: a second disk, a CD-ROM, a BIOS
+}
+
+// Disk is another file an image boots with: "hdb", "hdc", "hdd" (more disks,
+// each VM writes to a layer of its own), "cdrom" (read-only) or "bios".
+type Disk struct {
+	Slot     string `json:"slot"`
+	FileName string `json:"fileName"` // its name on the hosts
+	File     string `json:"file"`     // on this computer
+	SHA256   string `json:"sha256"`
+	Size     int64  `json:"size"`
+	URL      string `json:"url,omitempty"`
+	MD5      string `json:"md5,omitempty"`
+	Page     string `json:"page,omitempty"`
+	Bus      string `json:"bus,omitempty"` // hdb…: ide, sata, scsi, virtio ("" = the image's)
+}
+
+// HasFiles says the image has all its files on this computer.
+func (im *Image) HasFiles() bool {
+	if im.File == "" {
+		return false
+	}
+	for _, d := range im.Disks {
+		if d.File == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // Answer: when the console shows Match (plain text), Send is typed (and Enter).
@@ -204,14 +232,35 @@ func (l *Lab) Args(v VM, im *Image) []string {
 	} else {
 		a = append(a, "-accel", "tcg")
 	}
-	disk := dir + "/" + v.ID + ".qcow2"
-	switch im.Disk {
-	case "ide", "scsi":
-		a = append(a, "-drive", "file="+disk+",if="+im.Disk+",format=qcow2")
-	case "sata":
-		a = append(a, "-device", "ahci,id=ahci", "-drive", "file="+disk+",if=none,id=d0,format=qcow2", "-device", "ide-hd,drive=d0,bus=ahci.0")
-	default:
-		a = append(a, "-drive", "file="+disk+",if=virtio,format=qcow2")
+	// disks: the VM's layer on the image, then its layers on more disks (hdb…)
+	type hd struct{ file, bus string }
+	hds := []hd{{dir + "/" + v.ID + ".qcow2", im.Disk}}
+	for _, d := range im.Disks {
+		if strings.HasPrefix(d.Slot, "hd") {
+			hds = append(hds, hd{dir + "/" + v.ID + "-" + d.Slot + ".qcow2", orStr(d.Bus, im.Disk)})
+		}
+	}
+	ahci := false
+	for i, h := range hds {
+		switch h.bus {
+		case "ide", "scsi":
+			a = append(a, "-drive", fmt.Sprintf("file=%s,if=%s,index=%d,format=qcow2", h.file, h.bus, i))
+		case "sata":
+			if !ahci {
+				a, ahci = append(a, "-device", "ahci,id=ahci"), true
+			}
+			a = append(a, "-drive", fmt.Sprintf("file=%s,if=none,id=d%d,format=qcow2", h.file, i), "-device", fmt.Sprintf("ide-hd,drive=d%d,bus=ahci.%d", i, i))
+		default:
+			a = append(a, "-drive", "file="+h.file+",if=virtio,format=qcow2")
+		}
+	}
+	for _, d := range im.Disks {
+		switch d.Slot {
+		case "cdrom": // read-only, straight from the image folder
+			a = append(a, "-drive", "file="+l.ImageDir()+"/"+d.FileName+",media=cdrom,readonly=on,if=ide,index=3")
+		case "bios":
+			a = append(a, "-bios", l.ImageDir()+"/"+d.FileName)
+		}
 	}
 	nic := im.NIC
 	if nic == "" {
@@ -313,7 +362,16 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 // diskCmd makes a VM's disk (a copy-on-write layer on the image) and grows it to its size.
 func (l *Lab) diskCmd(v VM, im *Image) string {
 	disk := l.VMDir() + "/" + v.ID + ".qcow2"
-	s := fmt.Sprintf(" [ -f %s ] || qemu-img create -q -f qcow2 -F qcow2 -b \"$HOME/%s/%s\" %s || { echo 'fail %s disk'; }\n", Q(disk), l.ImageDir(), im.FileName, Q(disk), v.ID)
+	// a layer on the image (its format read from the file: qcow2, or raw for an .iso or .img)
+	layer := func(dst, base string) string {
+		return fmt.Sprintf(" [ -f %s ] || { b=\"$HOME/%s/%s\"; f=$(qemu-img info \"$b\" 2>/dev/null | sed -n 's/^file format: //p' | head -1); qemu-img create -q -f qcow2 -F \"${f:-qcow2}\" -b \"$b\" %s; } || { echo 'fail %s disk %s'; }\n", Q(dst), l.ImageDir(), base, Q(dst), v.ID, base)
+	}
+	s := layer(disk, im.FileName)
+	for _, d := range im.Disks {
+		if strings.HasPrefix(d.Slot, "hd") {
+			s += layer(l.VMDir()+"/"+v.ID+"-"+d.Slot+".qcow2", d.FileName)
+		}
+	}
 	if v.DiskGB > 0 {
 		s += fmt.Sprintf(" cur=$(qemu-img info --output=json %s 2>/dev/null | sed -n 's/.*\"virtual-size\": *\\([0-9]*\\).*/\\1/p' | head -1); [ -n \"$cur\" ] && [ \"$cur\" -lt %d ] && qemu-img resize -q %s %dG\n", Q(disk), int64(v.DiskGB)<<30, Q(disk), v.DiskGB)
 	}
@@ -353,7 +411,7 @@ func (l *Lab) ResetScript(ids []string) string {
 	var b strings.Builder
 	b.WriteString(l.StopScript(ids))
 	for _, id := range ids {
-		fmt.Fprintf(&b, "sleep 0.5; rm -f %s/%s.qcow2 %s/%s.log\n", Q(l.VMDir()), id, Q(l.VMDir()), id)
+		fmt.Fprintf(&b, "sleep 0.5; rm -f %s/%s.qcow2 %s/%s-hd?.qcow2 %s/%s.log\n", Q(l.VMDir()), id, Q(l.VMDir()), id, Q(l.VMDir()), id)
 	}
 	return b.String()
 }

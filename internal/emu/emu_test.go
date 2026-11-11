@@ -36,7 +36,7 @@ func TestArgsAndWiring(t *testing.T) {
 		t.Errorf("peer args: %s", b)
 	}
 	s := l.StartScript(l.VMs[:1], imgs)
-	if !strings.Contains(s, `qemu-img create -q -f qcow2 -F qcow2 -b "$HOME/termwright-lab/images/demo.qcow2" termwright-lab/lab-a1/v1.qcow2`) || !strings.Contains(s, "qemu-system-x86_64 -name core-1") {
+	if !strings.Contains(s, `b="$HOME/termwright-lab/images/demo.qcow2"`) || !strings.Contains(s, `qemu-img create -q -f qcow2 -F "${f:-qcow2}" -b "$b" termwright-lab/lab-a1/v1.qcow2`) || !strings.Contains(s, "qemu-system-x86_64 -name core-1") {
 		t.Errorf("start script:\n%s", s)
 	}
 	l.Mgmt, l.MgmtNet = "bridge", "10.99.0.0/24"
@@ -209,5 +209,31 @@ func TestNatAndChain(t *testing.T) {
 	l2.Wire(l2.VMs[2:], "chain", imgs2)
 	if len(l2.Cables) != 1 || l2.Cables[0].A != "v2" || l2.Cables[0].B != "v3" {
 		t.Fatalf("%+v", l2.Cables)
+	}
+}
+
+func TestMoreDisks(t *testing.T) {
+	l, imgs := testLab()
+	im := imgs["i1"]
+	im.Disk = "sata"
+	im.Disks = []Disk{{Slot: "hdb", FileName: "two.qcow2", Bus: "sata"}, {Slot: "cdrom", FileName: "seed.iso"}, {Slot: "bios", FileName: "OVMF.fd"}}
+	a := strings.Join(l.Args(l.VMs[0], im), " ")
+	for _, want := range []string{"-device ahci,id=ahci -drive file=termwright-lab/lab-a1/v1.qcow2,if=none,id=d0", "ide-hd,drive=d1,bus=ahci.1", "file=termwright-lab/lab-a1/v1-hdb.qcow2",
+		"file=termwright-lab/images/seed.iso,media=cdrom,readonly=on", "-bios termwright-lab/images/OVMF.fd"} {
+		if !strings.Contains(a, want) {
+			t.Errorf("args lack %q:\n%s", want, a)
+		}
+	}
+	if strings.Count(a, "ahci,id=ahci") != 1 {
+		t.Error("two AHCI controllers")
+	}
+	if s := l.PrepareScript(l.VMs[:1], imgs); !strings.Contains(s, "v1-hdb.qcow2") || !strings.Contains(s, "images/two.qcow2") {
+		t.Error(s)
+	}
+	if !strings.Contains(l.ResetScript([]string{"v1"}), "v1-hd?.qcow2") {
+		t.Error("reset keeps the second disk")
+	}
+	if im.HasFiles() {
+		t.Error("files missing")
 	}
 }
