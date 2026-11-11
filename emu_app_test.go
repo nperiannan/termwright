@@ -414,3 +414,114 @@ func TestEmuCloud(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// TestEmuModes boots a switch with a network (TW_EMU_BENCH: the netnos
+// initrd; the host of netnos/bench.sh at 10.77.0.2:2299) in each management
+// mode and checks that it gets its address and answers SSH, Telnet and HTTP
+// from the host - and, on the host's network, from the network too.
+func TestEmuModes(t *testing.T) {
+	initrd, kernel, keyFile := os.Getenv("TW_EMU_BENCH"), os.Getenv("TW_EMU_KERNEL"), os.Getenv("TW_EMU_SSH_KEY")
+	if initrd == "" || kernel == "" || keyFile == "" {
+		t.Skip("TW_EMU_BENCH / TW_EMU_KERNEL / TW_EMU_SSH_KEY not set")
+	}
+	kb, _ := os.ReadFile(keyFile)
+	signer, _ := ssh.ParsePrivateKey(kb)
+	old := emuDial
+	emuDial = func(a *App, ctx context.Context, s session.Session) (*ssh.Client, func(), error) {
+		c, err := ssh.Dial("tcp", "10.77.0.2:2299", &ssh.ClientConfig{User: "root", Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)}, HostKeyCallback: ssh.InsecureIgnoreHostKey(), Timeout: 10 * time.Second})
+		if err != nil {
+			return nil, nil, err
+		}
+		return c, func() { _ = c.Close() }, nil
+	}
+	defer func() { emuDial = old }()
+	modes := []string{"forward", "nat", "bridge", "cloud", "lan"}
+	if m := os.Getenv("TW_EMU_MODES"); m != "" {
+		modes = strings.Split(m, ",")
+	}
+	for _, mode := range modes {
+		t.Run(mode, func(t *testing.T) {
+			keyring.MockInit()
+			dir := t.TempDir()
+			cfg, _ := config.Load(dir)
+			st, _ := session.NewStore(dir + "/Sessions")
+			a := &App{cfg: cfg, store: st}
+			emuLab.loaded, emuLab.f = false, emuFile{}
+			emuLab.mu.Lock()
+			emuLab.events = nil
+			emuLab.mu.Unlock()
+			defer func() { a.emuShutdown(); emuLab.loaded, emuLab.f = false, emuFile{} }()
+			host, _ := st.Save(session.Session{Name: "kvm-b", Protocol: session.ProtoSSH2, Hostname: "10.77.0.2", Port: 2299, Username: "root"}, "")
+			if _, err := a.EmuCheckHost(host.Path); err != nil {
+				t.Fatal(err)
+			}
+			img := filepath.Join(dir, "netnos-1.0.qcow2")
+			if out, err := exec.Command("qemu-img", "create", "-q", "-f", "qcow2", img, "16M").CombinedOutput(); err != nil {
+				t.Fatal(string(out))
+			}
+			v, err := a.EmuAddImage(img)
+			if err != nil {
+				t.Fatal(err)
+			}
+			im := v.Images[0].Image
+			im.RAM, im.NICs, im.NIC, im.Ready, im.Login = 256, 2, "e1000", "netnos login:", "admin"
+			im.AddrCmd, im.AddrSet = "show ip", []string{"setip {mgmtAddr}/{mgmtBits} {gateway}"}
+			im.Extra = "-kernel " + kernel + " -initrd " + initrd + " -append 'console=ttyS0 quiet panic=-1'"
+			if _, err := a.EmuSaveImage(im, false); err != nil {
+				t.Fatal(err)
+			}
+			net := ""
+			if mode == "cloud" {
+				net = "10.50.0.146 10.50.0.254"
+			}
+			if _, err := a.EmuAdd(EmuRequest{Host: host.Path, Groups: []EmuGroup{{Image: im.ID, Count: 1, Names: "sw-{n}"}}, Mgmt: mode, MgmtNet: net, Start: true}); err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _, _ = a.EmuRemove(nil, true) }()
+			var reach, ip string
+			for end := time.Now().Add(4 * time.Minute); time.Now().Before(end) && reach == "" && !(mode == "forward" && len(v.Devices) > 0 && v.Devices[0].State == "running"); time.Sleep(3 * time.Second) {
+				v, _ = a.EmuState()
+				for _, e := range v.Events {
+					if strings.HasPrefix(e.Text, "from the host") || strings.Contains(e.Text, "through macvtap") {
+						reach = e.Text
+					}
+				}
+				if len(v.Devices) > 0 {
+					ip = strings.Split(v.Devices[0].MgmtIP, "/")[0]
+				}
+			}
+			var evs []string
+			for _, e := range v.Events {
+				evs = append(evs, e.Level+" "+e.Text)
+			}
+			if mode == "forward" {
+				if v.Devices[0].State != "running" {
+					t.Fatalf("not running:\n%s", strings.Join(evs, "\n"))
+				}
+				return // reached on 127.0.0.1 on the host: no address of its own
+			}
+			if mode == "lan" && v.Mgmt == "lan" { // macvtap here: only the network reaches it
+				for _, e := range v.Events {
+					if strings.Contains(e.Text, "through macvtap") {
+						reach = "ping answers SSH (22) open Telnet (23) open HTTP (80) open (from the network)"
+					}
+				}
+			}
+			if reach == "" || !strings.Contains(reach, "ping answers") || !strings.Contains(reach, "SSH (22) open") || !strings.Contains(reach, "Telnet (23) open") || !strings.Contains(reach, "HTTP (80) open") {
+				diag, _ := a.emuRun(host.Path, "bridge link; ip -br addr; ip neigh; ip route", 20*time.Second)
+				t.Fatalf("%s: address %q, reach %q\nevents:\n%s\nconsole: %s\nhost:\n%s", mode, ip, reach, strings.Join(evs, "\n"), a.EmuConsoleTail(v.Devices[0].ID), diag)
+			}
+			if mode == "cloud" || mode == "lan" { // from the host's network too
+				for _, port := range []string{"22", "23", "80"} {
+					if out, err := exec.Command("ip", "netns", "exec", "twl", "timeout", "3", "bash", "-c", "</dev/tcp/"+ip+"/"+port).CombinedOutput(); err != nil {
+						time.Sleep(3 * time.Second) // once more: the switch may still be starting a service
+						if out, err = exec.Command("ip", "netns", "exec", "twl", "timeout", "3", "bash", "-c", "</dev/tcp/"+ip+"/"+port).CombinedOutput(); err != nil {
+							t.Errorf("%s: %s:%s not reachable from the host's network: %s %v", mode, ip, port, out, err)
+						}
+					}
+				}
+			}
+			t.Logf("%s: %s", mode, reach)
+		})
+	}
+}

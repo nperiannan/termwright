@@ -181,8 +181,16 @@ func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Ans
 			loc := pager.FindStringIndex(tail)
 			if loc != nil {
 				send = " " // the next page (no Enter)
-			} else if loc = yesNo.FindStringIndex(tail); loc != nil && c.Confirm {
-				send = "y"
+			} else if loc = yesNo.FindStringIndex(tail); loc != nil {
+				// day-0 commands are confirmed; any other question (at a
+				// login: "save your configuration changes to primary.cfg?
+				// (y/N)") takes its default, the capital letter
+				send = "n"
+				if c.Confirm {
+					send = "y"
+				} else if q := tail[loc[0]:loc[1]]; strings.Contains(q, "Y/") || strings.Contains(q, "Yes/") {
+					send = "y"
+				}
 			}
 			if loc != nil && send != "" {
 				c.mu.Lock()
@@ -325,12 +333,6 @@ func Run(ctx context.Context, c *Console, im *Image, prompt *regexp.Regexp, cmd 
 	var err error
 	for try := 0; try < int(2*time.Minute/rePrompt); try++ {
 		if _, err = c.Wait(ctx, rePrompt, im.Answers, prompt); !errors.Is(err, ErrTimeout) {
-			break
-		}
-		c.mu.Lock()
-		pending := yesNo.MatchString(c.buf.String()[c.mark:])
-		c.mu.Unlock()
-		if pending { // a question no answer covers: stop and say which
 			break
 		}
 		_ = c.Send("")

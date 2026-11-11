@@ -362,6 +362,13 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 	var b strings.Builder
 	dir := l.VMDir()
 	fmt.Fprintf(&b, "mkdir -p %s || exit 1\n", Q(dir))
+	// Termwright's bridges left without ports (removed labs, an earlier management)
+	// go: one with the same network would take the switches' traffic
+	ours := ""
+	if l.Mgmt == "bridge" || l.Mgmt == "cloud" {
+		ours = l.Bridge()
+	}
+	fmt.Fprintf(&b, "for p in /sys/class/net/tw*br; do [ -d \"$p/bridge\" ] || continue; n=${p##*/}; [ \"$n\" = %q ] && continue; [ -z \"$(ls $p/brif 2>/dev/null)\" ] && sudo -n ip link del \"$n\" 2>/dev/null; done\n", ours)
 	if l.Mgmt == "lan" && l.LanIf != "" {
 		// like GNS3's cloud node: the host's port takes frames for the switches' own MACs too
 		fmt.Fprintf(&b, "sudo -n ip link set %s promisc on 2>/dev/null\n", Q(l.LanIf))

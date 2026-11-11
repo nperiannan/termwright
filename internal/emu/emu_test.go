@@ -353,3 +353,54 @@ func TestCloudMgmt(t *testing.T) {
 		t.Error("route kept")
 	}
 }
+
+// A yes/no question at the login (EXOS: save to primary.cfg? after its
+// questionnaire) takes its default, so the check after it gets its prompt.
+func TestLoginDefaultAnswer(t *testing.T) {
+	a, b := net.Pipe()
+	got := make(chan string, 1)
+	go func() {
+		w := func(s string) { _, _ = b.Write([]byte(s)) }
+		buf := make([]byte, 64)
+		read := func() string {
+			var s strings.Builder
+			for {
+				n, err := b.Read(buf)
+				if err != nil {
+					return s.String()
+				}
+				for _, ch := range buf[:n] {
+					if ch == '\r' {
+						return s.String()
+					}
+					s.WriteByte(ch)
+				}
+			}
+		}
+		read()
+		w("login: ")
+		read()
+		w("password: ")
+		read()
+		w("Would you like to disable Telnet? [y/N/q]: ")
+		q := read()
+		w("\r\nDo you wish to save your configuration changes to primary.cfg? (y/N) ")
+		ans := read()
+		w("\r\n* sw.1 # ")
+		cmd := read()
+		got <- q + "|" + ans + "|" + cmd
+		w("\r\nSwitch : 5520-24T\r\n* sw.2 # ")
+		time.Sleep(200 * time.Millisecond)
+		b.Close()
+	}()
+	c := NewConsole(a)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := Ask(ctx, c, &Image{Login: "admin", Answers: []Answer{{Match: "[y/N/q]:", Send: "q"}}}, "show switch")
+	if err != nil || !strings.Contains(out, "5520-24T") {
+		t.Fatal(err, out)
+	}
+	if g := <-got; g != "q|n|show switch" {
+		t.Fatalf("%q", g)
+	}
+}

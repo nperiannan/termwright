@@ -2047,23 +2047,36 @@ func (a *App) emuReach(host, id string) {
 			ip = strings.Split(v.MgmtIP, "/")[0]
 		}
 	}
+	if ip != "" && l.Mgmt == "lan" && l.LanKind == "macvtap" { // Linux does not let a host talk to its own macvtap guests
+		emuEv(id, "info", "on the host's network through macvtap: the host itself cannot reach it (a Linux rule), the network and this computer can - SSH to "+ip)
+		ip = ""
+	}
 	emuLab.mu.Unlock()
 	if _, err := netip.ParseAddr(ip); err != nil {
 		return
 	}
-	script := fmt.Sprintf("ip=%s; if ping -c1 -W2 $ip >/dev/null 2>&1; then echo ping=yes; else echo ping=no; fi\nfor p in 22 23; do if timeout 3 bash -c \"</dev/tcp/$ip/$p\" 2>/dev/null; then echo p$p=open; else echo p$p=closed; fi; done\necho \"route=$(ip -o route get $ip 2>/dev/null | head -1)\"\n", ip)
-	out, err := a.emuRun(host, script, 30*time.Second)
-	if err != nil {
-		return
-	}
+	script := fmt.Sprintf("ip=%s; P=$(command -v ping || echo busybox ping); if $P -c1 -W2 $ip >/dev/null 2>&1; then echo ping=yes; else echo ping=no; fi\nfor p in 22 23 80; do if timeout 3 bash -c \"</dev/tcp/$ip/$p\" 2>/dev/null; then echo p$p=open; else echo p$p=closed; fi; done\necho \"route=$(ip -o route get $ip 2>/dev/null | head -1)\"\n", ip)
 	r := map[string]string{}
-	for _, line := range strings.Split(out, "\n") {
-		if k, v, ok := strings.Cut(strings.TrimSpace(line), "="); ok {
-			r[k] = v
+	for try := 0; try < 6; try++ { // a switch starts its services after its login prompt: tried for a minute
+		if try > 0 {
+			time.Sleep(10 * time.Second)
+		}
+		out, err := a.emuRun(host, script, 30*time.Second)
+		if err != nil {
+			return
+		}
+		r = map[string]string{}
+		for _, line := range strings.Split(out, "\n") {
+			if k, v, ok := strings.Cut(strings.TrimSpace(line), "="); ok {
+				r[k] = v
+			}
+		}
+		if r["p22"] == "open" {
+			break
 		}
 	}
 	level := "ok"
-	msg := fmt.Sprintf("from the host %s: ping %s, SSH (22) %s, Telnet (23) %s", ip, map[string]string{"yes": "answers", "no": "no answer"}[r["ping"]], r["p22"], r["p23"])
+	msg := fmt.Sprintf("from the host %s: ping %s, SSH (22) %s, Telnet (23) %s, HTTP (80) %s", ip, map[string]string{"yes": "answers", "no": "no answer"}[r["ping"]], r["p22"], r["p23"], r["p80"])
 	if r["p22"] != "open" {
 		level = "warn"
 		if r["ping"] != "yes" {
@@ -2396,10 +2409,19 @@ func (a *App) emuPoll(force bool) emu.Status {
 				}
 				if ip := st.Leases[strings.ToLower(l.MAC(*v, 0))]; ip != "" && v.MgmtIP != ip+"/"+bits {
 					v.Gateway, v.MgmtIP = strings.Split(st.NatNet, "/")[0], ip+"/"+bits
-					go func(id, name, addr string) {
+					go func(id, name, addr, host string) {
 						a.emuSetAddress(id, addr)
 						a.emuNotify(nil, name+" has the address "+strings.Split(addr, "/")[0])
-					}(v.ID, v.Name, ip+"/"+bits)
+						for end := time.Now().Add(5 * time.Minute); time.Now().Before(end); time.Sleep(5 * time.Second) {
+							emuLab.mu.Lock()
+							ready := emuLab.ready[id]
+							emuLab.mu.Unlock()
+							if ready {
+								a.emuReach(host, id)
+								return
+							}
+						}
+					}(v.ID, v.Name, ip+"/"+bits, emuLab.f.Host)
 				}
 			}
 		}
@@ -2675,6 +2697,9 @@ func (a *App) EmuRemove(ids []string, sessions bool) (EmuView, error) {
 	}
 	emuLab.mu.Lock()
 	script := emuLab.f.Lab.ResetScript(ids)
+	if len(ids) >= len(emuLab.f.Lab.VMs) { // the last switches: the lab's bridge goes too
+		script += "sudo -n ip link del " + emuLab.f.Lab.Bridge() + " 2>/dev/null\n"
+	}
 	emuLab.mu.Unlock()
 	_, _ = a.emuRun(host, script, time.Minute)
 	emuLab.mu.Lock()
@@ -3510,6 +3535,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) bool {
 				if !has {
 					im.Answers, changed = append(im.Answers, pa), true
 				}
+			}
+			if len(p.Day0) > len(im.Day0) && slices.Equal(im.Day0, p.Day0[:len(im.Day0)]) { // the pack's day-0 grew (save configuration added)
+				im.Day0, changed = p.Day0, true
 			}
 			if len(im.AddrSet) == 0 && len(p.AddrSet) > 0 {
 				im.AddrSet, changed = p.AddrSet, true
