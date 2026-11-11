@@ -2415,6 +2415,11 @@ const ru: Record<string, string> = {
   'Cabling checked with LLDP - see the cables and the Events': 'Кабели проверены по LLDP — см. кабели и события',
   'LAG removed from the switch': 'LAG удалён с коммутатора',
   'LAG set on the switch': 'LAG настроен на коммутаторе',
+  'Draw As': 'Рисовать как',
+  'Access switch': 'Коммутатор доступа',
+  'Core switch': 'Коммутатор ядра',
+  'Wireless AP': 'Точка доступа',
+  'Cloud': 'Облако',
 };
 
 export default ru;

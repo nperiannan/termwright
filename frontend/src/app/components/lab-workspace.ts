@@ -8,15 +8,16 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabConfigure, LabHosts, LabImages, LabNew } from './lab-pages';
 import { TerminalView } from './terminal-view';
+import { DevIcon, DevRole, ROLES, roleOf } from './dev-icon';
 
-const BW = 104, BH = 46;
+const BW = 104, BH = 64;
 type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; dt?: EmuDeviceType; m?: LabModel };
 
 /** The lab as a workspace tab: device palette, canvas with cables, the
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew, TerminalView],
+  imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon],
   template: `
   <div class="ws" (click)="menu.set(null); topos.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px'">
     <div class="tb">
@@ -96,7 +97,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="grp"><span>{{ g.name }}</span><span>{{ g.ver }}</span></div>
           @for (p of g.items; track p.key) {
             <div class="dev" draggable="true" (dragstart)="dragPal($event, p)" (dblclick)="addAt(p, null)" [title]="tr('Drag onto the canvas, or double-click to add one')">
-              <span class="ico" [class]="'ico ' + p.cls"></span><div><span>{{ p.name }}</span>@if (p.sub) { <small>{{ p.sub }}</small> }</div></div>
+              <app-dev-icon class="pico" [role]="palRole(p)" [size]="46" state="idle" /><div><span>{{ p.name }}</span>@if (p.sub) { <small>{{ p.sub }}</small> }</div></div>
           }
         } @empty {
           @if (emu()) { <p class="muted small">{{ tr('No images yet: Images → Add Image.') }}</p> }
@@ -129,11 +130,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @for (g of ghostLines(); track $index) { <line class="gl" [attr.x1]="g.x1" [attr.y1]="g.y1" [attr.x2]="g.x2" [attr.y2]="g.y2" /> }
               @if (rubber(); as r) { <line class="rb" [attr.x1]="r.x1" [attr.y1]="r.y1" [attr.x2]="r.x2" [attr.y2]="r.y2" /> }
             </svg>
-            @for (g of ghosts(); track g.name) { <div class="node ghost" [style.left.px]="g.x - 75" [style.top.px]="g.y - BH / 2"><div class="nbox"><span class="ico"></span></div><div class="nn">{{ g.name }}</div><div class="nm">{{ tr('new') }}</div></div> }
+            @for (g of ghosts(); track g.name) { <div class="node ghost" [style.left.px]="g.x - 75" [style.top.px]="g.y - BH / 2"><div class="nbox"><app-dev-icon role="access" [size]="100" state="idle" /></div><div class="nn">{{ g.name }}</div><div class="nm">{{ tr('new') }}</div></div> }
             @for (d of devs(); track d.id) {
               <div class="node" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
                    (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)" (mouseenter)="hov.set(d.id)" (mouseleave)="hov.set('')">
-                <div class="nbox" [class.dim]="stateOf(d) === 'off'"><span class="ico" [class]="'ico ' + icoOf(d)"></span><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
+                <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nn">{{ d.hostname }}</div>
                 <div class="nm">{{ d.persona?.slots?.[0]?.model || d.model }} · {{ subOf(d) }}</div>
                 @if (d.personaError) { <span class="badge r" [title]="d.personaError">{{ tr('no persona') }}</span> }
@@ -180,6 +181,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (emu()) { <a (click)="mdo('lags', d)" [class.off]="!d.running">{{ tr('Read Its LAGs') }}</a> }
               <a (click)="mdo('link', d)">{{ tr('Add Link from Here') }}</a>
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
+              @if (emu()) { <hr /><span class="mh2">{{ tr('Draw As') }}</span><div class="roles">@for (r of roles; track r.k) { <a [class.on]="roleOfDev(d) === r.k" (click)="setRole(d, r.k)" [title]="tr(r.name)"><app-dev-icon [role]="r.k" [size]="34" state="idle" /></a> }</div> }
               @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [class.off]="d.running" [title]="d.running ? tr('Stop it first') : tr('It starts there from its image (day 0); its cables to this host become UDP tunnels')">→ {{ o.name || hname(o.session) }}</a> } }
               <hr />
               <a class="r" (click)="mdo('remove', d)">{{ tr('Delete') }}</a>
@@ -336,6 +338,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .zone .zh i { margin: 0; }
     .lk.tun .ln:not(.dn) { stroke: #a46cf0; stroke-dasharray: 7 5; }
     .hsel { margin-right: 4px; }
+    .pico { flex: none; margin: -4px 0; }
+    .menu .roles { display: grid; grid-template-columns: repeat(4, 40px); gap: 2px; padding: 2px 8px 6px; }
+    .menu .roles a { padding: 2px; border-radius: 6px; text-align: center; } .menu .roles a.on { background: var(--accent-soft); outline: 1px solid var(--accent); }
     .menu .mh2 { display: block; padding: 4px 12px 2px; font-size: 11px; color: var(--muted); }
     .ntip { position: absolute; z-index: 9; min-width: 250px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); pointer-events: none; font-size: 12px;
       .th { margin-bottom: 6px; white-space: nowrap; } table { border-collapse: collapse; } td { padding: 2px 10px 2px 0; white-space: nowrap; } td:first-child { color: var(--muted); } }
@@ -353,9 +358,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .main { position: relative; }
     .rb { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 8 5; }
     .node { position: absolute; width: 150px; text-align: center; cursor: pointer; user-select: none; }
-    .nbox { margin: 0 auto; width: ${BW}px; height: ${BH}px; border-radius: 10px; background: var(--surface); border: 1.5px solid var(--line); box-shadow: 0 2px 6px rgba(0,0,0,.06); display: flex; align-items: center; justify-content: center; position: relative;
-      .ico { width: 64px; height: 26px; } &.dim { opacity: .6; } }
-    .node.sel .nbox { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); } .node.pick .nbox { border-color: var(--accent); border-style: dashed; }
+    .nbox { margin: 0 auto; width: ${BW}px; height: ${BH}px; border-radius: 12px; border: 1.5px solid transparent; display: flex; align-items: flex-end; justify-content: center; position: relative;
+      app-dev-icon { margin-bottom: -6px; } }
+    .node:hover .nbox { border-color: var(--line); }
+    .node.sel .nbox { border-color: var(--accent); border-style: dashed; background: var(--accent-soft); } .node.pick .nbox { border-color: var(--accent); border-style: dashed; }
     i.st { position: absolute; top: -5px; right: -5px; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--surface); background: var(--muted); }
     i.st.on { background: var(--success, #1fa45a); } i.st.boot { background: var(--warning, #e39b17); } i.st.bad, i.st.off { background: var(--danger); }
     .chip.mg { position: relative; }
@@ -565,6 +571,12 @@ export class LabWorkspace implements OnDestroy {
   });
   protected events = computed(() => [...(this.st()?.events ?? [])].reverse());
   protected problems = computed(() => (this.st()?.events ?? []).filter(e => e.level === 'error').length);
+  protected readonly roles = ROLES;
+  palRole(p: Pal): DevRole { return p.cls === 'l' ? 'server' : roleOf(p.name, p.os); }
+  async setRole(d: LabDevice, r: DevRole) { this.menu.set(null); try { await this.backend.emuSetRole(d.id, r === roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? '') ? '' : r); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
+  /** What the switch is drawn as: the role chosen in Configure…, else one from its model. */
+  roleOfDev(d: LabDevice): DevRole { return (d.role as DevRole) || roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? ''); }
+  iconState(d: LabDevice): 'run' | 'boot' | 'off' | 'idle' { const s = this.stateOf(d); return s === 'on' ? 'run' : s === 'boot' ? 'boot' : 'off'; }
   stateOf(d: LabDevice): 'on' | 'boot' | 'bad' | 'off' {
     if (!this.emu()) return d.running ? 'on' : 'off';
     // green: up (a problem shows as a "!" beside it), orange: on its way, red: down or failed

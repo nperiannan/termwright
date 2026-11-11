@@ -151,6 +151,7 @@ type VM struct {
 	Template string   `json:"template,omitempty"`
 	Persona  *Persona `json:"persona,omitempty"`
 	FastKey  string   `json:"fastKey,omitempty"` // its running state was saved in its disk with this setup (FastKey): it resumes from it
+	Role     string   `json:"role,omitempty"`    // what it is drawn as ("access", "core", "router"…; "" = from its model)
 	X        int      `json:"x"`
 	Y        int      `json:"y"`
 }

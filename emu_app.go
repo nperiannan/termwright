@@ -169,6 +169,7 @@ type EmuDevice struct {
 	CPU          float64      `json:"cpu"`             // % of its vCPUs, now
 	MemUsed      int64        `json:"memUsed"`         // MB its VM uses now (resident)
 	Saved        bool         `json:"saved,omitempty"` // stopped with its running state saved: it starts in seconds
+	Role         string       `json:"role,omitempty"`  // drawn as (set by the user)
 	Cores        float64      `json:"cores"`           // host cores it uses now
 	CPUs         int          `json:"cpus"`
 	RAM          int          `json:"ram"`
@@ -3023,6 +3024,7 @@ func (a *App) emuView() EmuView {
 			}
 		}
 		d.DiskGB, d.Template, d.Persona, d.PersonaError, d.PersonaInfo = vm.DiskGB, vm.Template, vm.Persona, emuLab.perr[vm.ID], emuLab.pinfo[vm.ID]
+		d.Role = vm.Role
 		if im != nil && im.Persona != nil && vm.Persona != nil {
 			if txt, err := im.Persona.Render(vm, vm.Persona); err == nil && emu.Hash(txt) == vm.Persona.Applied {
 				// written; with a check command it counts once the switch showed the model (kept across restarts of Termwright)
@@ -4883,5 +4885,27 @@ func (a *App) EmuMoveVM(id, host string) (EmuView, error) {
 		return EmuView{}, err
 	}
 	a.emuRetarget(vv)
+	return a.EmuState()
+}
+
+// EmuSetRole sets what a switch is drawn as in the topology ("" = from its model).
+func (a *App) EmuSetRole(id, role string) (EmuView, error) {
+	switch role {
+	case "", "access", "core", "router", "fw", "ap", "server", "host", "cloud":
+	default:
+		return EmuView{}, fmt.Errorf("no role %q", role)
+	}
+	emuLab.mu.Lock()
+	var err error
+	if l := emuLab.f.Lab; l == nil || l.VMByID(id) == nil {
+		err = errors.New("no such switch")
+	} else {
+		l.VMByID(id).Role = role
+		err = a.emuSave()
+	}
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
 	return a.EmuState()
 }
