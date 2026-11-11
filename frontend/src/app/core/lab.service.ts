@@ -113,6 +113,8 @@ export class LabService {
   connect(l: LabLink) { return this.run(() => (this.e ? this.backend.emuConnect(l) : this.backend.labConnect(l))); }
   disconnect(id: string, port: string) { return this.run(() => (this.e ? this.backend.emuDisconnect(id, port) : this.backend.labDisconnect(id, port))); }
   setLink(id: string, port: string, up: boolean) { return this.run(() => this.backend.emuSetLink(id, port, up)); }
+  setLag(vm: string, name: string, mode: string, ports: string[]) { return this.run(() => this.backend.emuSetLag(vm, name, mode, ports)); }
+  readLags(ids: string[] = []) { return this.run(() => this.backend.emuReadLags(ids), 'LAGs read from the switches'); }
   place(id: string, x: number, y: number) {
     void (this.e ? this.backend.emuPlace(id, Math.round(x), Math.round(y)) : this.backend.labPlace(id, Math.round(x), Math.round(y))).catch(() => {});
   }

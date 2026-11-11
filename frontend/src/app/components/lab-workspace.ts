@@ -2,7 +2,7 @@ import { Component, ElementRef, HostListener, OnDestroy, computed, effect, injec
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { EmuDeviceType, LabDevice, LabLink, LabModel } from '../core/models';
+import { EmuDeviceType, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -97,11 +97,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="scale" [style.transform]="'scale(' + zoom() + ')'" [style.width.px]="area().w" [style.height.px]="area().h">
             <svg class="links" [attr.width]="area().w" [attr.height]="area().h">
               @for (k of lines(); track k.key) {
-                <g class="lk" [class.down]="k.down" [class.selk]="selLink() === k.key" (click)="pickLink(k, $event)" (contextmenu)="linkMenu(k, $event)">
-                  <line class="hit" [attr.x1]="k.x1" [attr.y1]="k.y1" [attr.x2]="k.x2" [attr.y2]="k.y2" />
-                  <line class="ln" [attr.x1]="k.x1" [attr.y1]="k.y1" [attr.x2]="k.x2" [attr.y2]="k.y2" [class.up]="k.up" />
-                  <rect class="pb" [attr.x]="k.p1.x - k.w1 / 2" [attr.y]="k.p1.y - 9" [attr.width]="k.w1" height="18" rx="5" /><text class="pt" [attr.x]="k.p1.x" [attr.y]="k.p1.y + 4">{{ k.aPort }}</text>
-                  <rect class="pb" [attr.x]="k.p2.x - k.w2 / 2" [attr.y]="k.p2.y - 9" [attr.width]="k.w2" height="18" rx="5" /><text class="pt" [attr.x]="k.p2.x" [attr.y]="k.p2.y + 4">{{ k.bPort }}</text>
+                <g class="lk" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
+                  <title>{{ k.tip }}</title>
+                  @for (m of k.paths; track $index) { <path class="hit" [attr.d]="m.d" /><path class="ln" [attr.d]="m.d" [class.up]="m.up" [class.dn]="m.down" [class.thick]="m.thick" /> }
+                  @for (r of k.rings; track $index) { <circle class="ring" [attr.cx]="r.x" [attr.cy]="r.y" r="11" /> }
+                  @for (lb of k.labels; track $index) { <rect class="pb" [class.lb]="lb.lag" [attr.x]="lb.x - lb.w / 2" [attr.y]="lb.y - 9" [attr.width]="lb.w" height="18" rx="5" /><text class="pt" [attr.x]="lb.x" [attr.y]="lb.y + 4">{{ lb.t }}</text> }
                 </g>
               }
               @for (g of ghostLines(); track $index) { <line class="gl" [attr.x1]="g.x1" [attr.y1]="g.y1" [attr.x2]="g.x2" [attr.y2]="g.y2" /> }
@@ -139,6 +139,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <a (click)="mdo('ssh', d)" [class.off]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }} <kbd>{{ emu() ? d.ssh : '127.0.0.1:' + d.port }}</kbd></a>
               <hr />
               <a (click)="mdo('configure', d)">{{ tr('Configure…') }}</a>
+              @if (emu()) { <a (click)="mdo('lags', d)" [class.off]="!d.running">{{ tr('Read Its LAGs') }}</a> }
               <a (click)="mdo('link', d)">{{ tr('Add Link from Here') }}</a>
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
               <hr />
@@ -146,6 +147,15 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             }
             @if (m.link; as k) {
               @if (emu()) { <a (click)="ldo('pull', k)">{{ k.down ? tr('Plug In') : tr('Pull') }}</a> }
+              @if (emu() && pairOf(k); as pr) {
+                <hr />
+                <a (click)="lag(pr, 'lacp', 'both')">{{ tr('LAG the {0} cables to {1}: LACP on both', pr.n, nameOf(pr.b)) }}</a>
+                <a (click)="lag(pr, 'static', 'both')">{{ tr('… static on both') }}</a>
+                <a (click)="lag(pr, 'lacp', 'a')">{{ tr('… LAG on {0} only', nameOf(pr.a)) }}</a>
+                <a (click)="lag(pr, 'lacp', 'b')">{{ tr('… LAG on {0} only', nameOf(pr.b)) }}</a>
+                @if (k.lagA || k.lagB) { <a (click)="lag(pr, '', 'both')">{{ tr('Remove the LAG') }}</a> }
+                <hr />
+              }
               <a class="r" (click)="ldo('remove', k)">{{ tr('Remove the Cable') }}</a>
             }
           </div>
@@ -247,6 +257,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     svg.links { position: absolute; left: 0; top: 0; overflow: visible; }
     .lk { cursor: pointer; } .lk .hit { stroke: transparent; stroke-width: 12; } .lk .ln { stroke: var(--muted); stroke-width: 2.2; stroke-dasharray: 2 5; } .lk .ln.up { stroke: var(--success, #1fa45a); stroke-dasharray: none; }
     .lk.down .ln { stroke: var(--danger); stroke-dasharray: 6 5; } .lk.selk .ln { stroke-width: 3.5; }
+    .lk .ln { fill: none; } .lk .hit { fill: none; } .lk .ln.dn { stroke: var(--danger); stroke-dasharray: 6 5; }
+    .lk .ln.thick { stroke-width: 7; stroke-linecap: round; } .lk.selk .ln.thick { stroke-width: 9; }
+    .lk.warn .ln.thick { stroke: var(--warning, #e39b17); }
+    .lk .ring { fill: var(--bg); stroke: var(--text); stroke-width: 2; } .lk.warn .ring { stroke: var(--warning, #e39b17); }
+    .pb.lb { stroke: var(--accent); } .lk.warn .pb.lb { stroke: var(--warning, #e39b17); }
     .pb { fill: var(--surface); stroke: var(--line); } .pt { font: 600 10px var(--mono, monospace); fill: var(--muted); text-anchor: middle; }
     .lk.down .pb { stroke: var(--danger); } .lk.down .pt { fill: var(--danger); }
     .gl { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 5; opacity: .7; } .node.ghost { opacity: .55; pointer-events: none; .nbox { border-style: dashed; border-color: var(--accent); } }
@@ -272,7 +287,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .lg { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 11.5px; color: var(--muted); i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #55607a; margin-right: 4px; vertical-align: -1px; } i.u { background: #1fa45a; } }
     .ports { position: absolute; z-index: 7; width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.16); padding: 10px;
       .ph { margin-bottom: 8px; } .pl { display: flex; flex-wrap: wrap; gap: 4px; max-height: 180px; overflow: auto; button { min-width: 44px; font-family: var(--mono, monospace); } } }
-    .menu { position: absolute; z-index: 8; width: 220px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.16); padding: 5px;
+    .menu { position: absolute; z-index: 8; width: 260px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.16); padding: 5px;
       a { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 6px; cursor: pointer; &:hover { background: var(--accent-soft); } &.off { opacity: .45; pointer-events: none; } }
       hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; } kbd { color: var(--muted); font: 11px var(--mono, monospace); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
     .zoom { position: sticky; float: right; right: 12px; bottom: 12px; top: calc(100% - 44px); display: flex; gap: 4px; margin: -44px 12px 0 0; z-index: 5; }
@@ -488,16 +503,88 @@ export class LabWorkspace implements OnDestroy {
     for (const d of this.devs()) { const p = this.pos(d); w = Math.max(w, p.x + 200); h = Math.max(h, p.y + 160); }
     return { w, h };
   });
+  /**
+   * The cables, drawn so that several between the same two switches are all
+   * seen: side by side, fanning out from each switch. Cables in a LAG are one
+   * thicker track with a ring at each switch that has the LAG; on a switch
+   * without it they fan out to their own ports (one ring: a LAG on one side).
+   */
   protected lines = computed(() => {
     this.moved();
-    const out = [];
-    for (const k of this.links()) {
-      const a = this.devs().find(d => d.id === k.a), b = this.devs().find(d => d.id === k.b);
+    type Lk = LabLink & { key: string };
+    const pairs = new Map<string, { p: LabDevice; q: LabDevice; ls: { k: Lk; pp: string; qp: string; lp: LabLag | null; lq: LabLag | null }[] }>();
+    for (const k0 of this.links()) {
+      const a = this.devs().find(d => d.id === k0.a), b = this.devs().find(d => d.id === k0.b);
       if (!a || !b) continue;
-      const pa = this.pos(a), pb = this.pos(b);
-      const e1 = this.edge(pa, pb), e2 = this.edge(pb, pa);
-      const at = (t: number) => ({ x: e1.x + (e2.x - e1.x) * t, y: e1.y + (e2.y - e1.y) * t });
-      out.push({ key: k.a + '/' + k.aPort, ...k, x1: e1.x, y1: e1.y, x2: e2.x, y2: e2.y, p1: at(0.18), p2: at(0.82), w1: k.aPort.length * 6.4 + 10, w2: k.bPort.length * 6.4 + 10, up: !!k.up, down: !!k.down });
+      const k = { ...k0, key: k0.a + '/' + k0.aPort };
+      const flip = a.id > b.id, id = flip ? b.id + '|' + a.id : a.id + '|' + b.id;
+      if (!pairs.has(id)) pairs.set(id, { p: flip ? b : a, q: flip ? a : b, ls: [] });
+      pairs.get(id)!.ls.push(flip ? { k, pp: k.bPort, qp: k.aPort, lp: k.lagB ?? null, lq: k.lagA ?? null } : { k, pp: k.aPort, qp: k.bPort, lp: k.lagA ?? null, lq: k.lagB ?? null });
+    }
+    const out: { key: string; link: Lk; tip: string; down: boolean; warn: boolean; paths: { d: string; up: boolean; down: boolean; thick: boolean }[]; rings: { x: number; y: number }[]; labels: { x: number; y: number; t: string; w: number; lag: boolean }[] }[] = [];
+    const P = (v: { x: number; y: number }) => v.x.toFixed(1) + ' ' + v.y.toFixed(1);
+    const lw = (t: string) => t.length * 6.2 + 10;
+    for (const { p, q, ls } of pairs.values()) {
+      const pa = this.pos(p), pb = this.pos(q);
+      const A = this.edge(pa, pb), B = this.edge(pb, pa);
+      const L = Math.hypot(B.x - A.x, B.y - A.y) || 1, u = { x: (B.x - A.x) / L, y: (B.y - A.y) / L }, n = { x: -u.y, y: u.x };
+      const at = (o: { x: number; y: number }, along: number, side: number) => ({ x: o.x + u.x * along + n.x * side, y: o.y + u.y * along + n.y * side });
+      // tracks: a LAG (by its names at both ends) is one, every other cable its own
+      const tracks: (typeof ls)[] = [];
+      const byLag = new Map<string, typeof ls>();
+      for (const l of ls) {
+        if (!l.lp && !l.lq) { tracks.push([l]); continue; }
+        const g = (l.lp?.name ?? '') + '|' + (l.lq?.name ?? '');
+        if (!byLag.has(g)) { byLag.set(g, []); tracks.push(byLag.get(g)!); }
+        byLag.get(g)!.push(l);
+      }
+      const fan = Math.min(56, L * 0.22), gap = 22;
+      // a curve from s to e that leaves s and reaches e along the cable's direction, offset by side
+      const curve = (s: { x: number; y: number }, e: { x: number; y: number }, s1: { x: number; y: number }, e1: { x: number; y: number }) =>
+        'M' + P(s) + ' C' + P(at(s, fan * 0.55, 0)) + ' ' + P(at(s1, -fan * 0.45, 0)) + ' ' + P(s1) + ' L' + P(e1) + ' C' + P(at(e1, fan * 0.45, 0)) + ' ' + P(at(e, -fan * 0.55, 0)) + ' ' + P(e);
+      tracks.forEach((tk, i) => {
+        const o = (i - (tracks.length - 1) / 2) * gap;
+        const first = tk[0], up = tk.every(l => !!l.k.up), down = tk.every(l => !!l.k.down);
+        const item = { key: first.k.key, link: first.k, tip: '', down, warn: false, paths: [] as { d: string; up: boolean; down: boolean; thick: boolean }[], rings: [] as { x: number; y: number }[], labels: [] as { x: number; y: number; t: string; w: number; lag: boolean }[] };
+        const S = at(A, fan, o), E = at(B, -fan, o);
+        if (tk.length === 1 && !first.lp && !first.lq) { // a single cable
+          const l = first;
+          item.paths.push({ d: o === 0 ? 'M' + P(A) + ' L' + P(B) : curve(A, B, S, E), up: !!l.k.up, down: !!l.k.down, thick: false });
+          const lp = at(A, Math.min(L * 0.2, fan + 14), o), lq = at(B, -Math.min(L * 0.2, fan + 14), o);
+          item.labels.push({ ...lp, t: l.pp, w: lw(l.pp), lag: false }, { ...lq, t: l.qp, w: lw(l.qp), lag: false });
+          item.tip = p.hostname + ' ' + l.pp + ' ⇄ ' + q.hostname + ' ' + l.qp;
+        } else { // a LAG: a thick track, a ring where it is set; single cables fan out where it is not
+          const lp = first.lp, lq = first.lq;
+          item.warn = !lp || !lq || (lp.mode !== lq.mode);
+          const s0 = lp ? S : at(A, L * 0.42, o), e0 = lq ? E : at(B, -L * 0.42, o);
+          item.paths.push({ d: 'M' + P(s0) + ' L' + P(e0), up, down, thick: true });
+          const side = (end: 'p' | 'q') => {
+            const o0 = end === 'p' ? A : B, ring = end === 'p' ? S : E, lag = end === 'p' ? lp : lq, dir = end === 'p' ? 1 : -1;
+            if (lag) {
+              item.rings.push(ring);
+              tk.forEach((l, j) => { const st = at(o0, 0, (j - (tk.length - 1) / 2) * 5); item.paths.push({ d: 'M' + P(st) + ' L' + P(ring), up: !!l.k.up, down: !!l.k.down, thick: false }); });
+              const ports = tk.map(l => end === 'p' ? l.pp : l.qp).join(',');
+              const t = (lag.mode === 'static' ? 'static ' : 'LACP ') + ports;
+              item.labels.push({ ...at(ring, dir * 8, (o >= 0 ? 1 : -1) * 22), t, w: lw(t), lag: true });
+            } else { // single cables from the end of the track to their ports
+              const from = end === 'p' ? s0 : e0;
+              tk.forEach((l, j) => {
+                const so = o + (j - (tk.length - 1) / 2) * gap * 0.8, mid = at(o0, dir * fan, so);
+                item.paths.push({ d: end === 'p' ? 'M' + P(o0) + ' C' + P(at(o0, fan * 0.5, 0)) + ' ' + P(at(mid, -fan * 0.4, 0)) + ' ' + P(mid) + ' L' + P(from)
+                  : 'M' + P(from) + ' L' + P(mid) + ' C' + P(at(mid, fan * 0.4, 0)) + ' ' + P(at(o0, -fan * 0.5, 0)) + ' ' + P(o0), up: !!l.k.up, down: !!l.k.down, thick: false });
+                const t = end === 'p' ? l.pp : l.qp;
+                item.labels.push({ ...at(o0, dir * Math.min(L * 0.2, fan + 14), so), t, w: lw(t), lag: false });
+              });
+            }
+          };
+          side('p'); side('q');
+          const mid = at(A, L / 2, o), t = 'LAG ×' + tk.length;
+          item.labels.push({ ...at(mid, 0, (o >= 0 ? 1 : -1) * 14), t, w: lw(t), lag: true });
+          item.tip = (lp ? p.hostname + ' ' + lp.name + ' (' + lp.mode + ')' : p.hostname + ' no LAG') + ' ⇄ ' + (lq ? q.hostname + ' ' + lq.name + ' (' + lq.mode + ')' : q.hostname + ' no LAG') + ' · ' + tk.map(l => l.pp + '-' + l.qp).join(', ')
+            + (!lp || !lq ? ' - ' + tr('the LAG is set on one side only') : lp.mode !== lq.mode ? ' - ' + tr('static on one side, LACP on the other') : '');
+        }
+        out.push(item);
+      });
     }
     return out;
   });
@@ -556,9 +643,27 @@ export class LabWorkspace implements OnDestroy {
       case 'console': this.console(d); break;
       case 'ssh': this.ssh(d); break;
       case 'configure': this.configure(d); break;
+      case 'lags': void this.lab.readLags([d.id]); break;
       case 'link': this.startLinkFrom(d); break;
       case 'reset': void this.reset(d); break;
       case 'remove': void this.remove(d); break;
+    }
+  }
+  /** The cables between the two switches of a cable, and their ports at each end. */
+  pairOf(k: LabLink) {
+    const ls = this.links().filter(x => (x.a === k.a && x.b === k.b) || (x.a === k.b && x.b === k.a));
+    const aPorts = ls.map(x => x.a === k.a ? x.aPort : x.bPort), bPorts = ls.map(x => x.a === k.a ? x.bPort : x.aPort);
+    const lagA = ls.map(x => x.a === k.a ? x.lagA : x.lagB).find(g => !!g)?.name ?? '', lagB = ls.map(x => x.a === k.a ? x.lagB : x.lagA).find(g => !!g)?.name ?? '';
+    return ls.length > 1 ? { a: k.a, b: k.b, aPorts, bPorts, lagA, lagB, n: ls.length } : null;
+  }
+  /** A LAG of the cables between two switches on one end or both ('' mode: removed). */
+  async lag(pr: { a: string; b: string; aPorts: string[]; bPorts: string[]; lagA: string; lagB: string }, mode: string, where: 'a' | 'b' | 'both') {
+    this.menu.set(null);
+    const ends = where === 'both' ? (['a', 'b'] as const) : [where];
+    for (const e of ['a', 'b'] as const) {
+      const vm = e === 'a' ? pr.a : pr.b, ports = e === 'a' ? pr.aPorts : pr.bPorts, name = e === 'a' ? pr.lagA : pr.lagB;
+      if (mode && (ends as readonly string[]).includes(e)) await this.lab.setLag(vm, name, mode, ports);
+      else if (name) await this.lab.setLag(vm, name, '', []); // not on this end (or removed)
     }
   }
   ldo(what: string, k: LabLink) { this.menu.set(null); void (what === 'pull' ? this.lab.setLink(k.a, k.aPort, !!k.down) : this.lab.disconnect(k.a, k.aPort)); }

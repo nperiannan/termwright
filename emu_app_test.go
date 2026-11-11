@@ -568,3 +568,33 @@ func TestEmuModes(t *testing.T) {
 		})
 	}
 }
+
+func TestEmuSetLag(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = true, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	t.Setenv("HOME", dir)
+	emuLab.f.Images = []emu.Image{{ID: "i1", NICs: 9, PortName: "1/{n}"}}
+	emuLab.f.Lab = &emu.Lab{ID: "a1", VMs: []emu.VM{{ID: "v1", Image: "i1"}, {ID: "v2", Image: "i1", Index: 1}},
+		Cables: []emu.Cable{{A: "v1", APort: 1, B: "v2", BPort: 1}, {A: "v1", APort: 2, B: "v2", BPort: 2}, {A: "v1", APort: 3, B: "v2", BPort: 3}}}
+	if _, err := a.EmuSetLag("v1", "", "lacp", []string{"1/1", "1/2"}); err != nil {
+		t.Fatal(err)
+	}
+	a.emuKeepLags(emuLab.f.Lab.VMs[1], &emuLab.f.Images[0], []emu.SwitchLag{{Name: "1", Mode: "static", Ports: []string{"1/2", "1/3"}}})
+	l := emuLab.f.Lab
+	if g := l.LagOf("v1", 2); g == nil || g.Name != "LAG 1" || g.Mode != "lacp" {
+		t.Fatalf("user lag %+v", g)
+	}
+	if g := l.LagOf("v2", 3); g == nil || g.Source != "switch" || l.LagOf("v2", 1) != nil {
+		t.Fatalf("switch lag %+v", l.Lags)
+	}
+	if _, err := a.EmuSetLag("v1", "LAG 1", "", nil); err != nil || l.LagOf("v1", 1) != nil {
+		t.Fatalf("removed? %v %+v", err, l.Lags)
+	}
+	if _, err := a.EmuSetLag("v1", "", "lacp", []string{"9/9"}); err == nil {
+		t.Fatal("a port that is not there")
+	}
+}

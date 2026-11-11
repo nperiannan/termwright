@@ -404,3 +404,35 @@ func TestLoginDefaultAnswer(t *testing.T) {
 		t.Fatalf("%q", g)
 	}
 }
+
+func TestParseLags(t *testing.T) {
+	exos := `Load Sharing Monitor
+Config    Current Agg     Min     Ld Share  Dist  Ld Share  Agg Link  Link Up
+Master    Master  Control Active  Algorithm Flags Group     Mbr State Transitions
+==============================================================================
+     1       1    LACP       1    L3_L4     A     1         Y     A         1
+                                  L3_L4     A     2         Y     A         1
+     5       -    Static     1    L2        A     5         N     R         0
+                                  L2        A     6         N     R         0
+==============================================================================
+Link State: A-Active, D-Disabled, R-Ready, NP-Port not present, L-Loopback`
+	got := ParseLags(exos)
+	if len(got) != 2 || got[0].Mode != "lacp" || strings.Join(got[0].Ports, ",") != "1,2" || got[1].Mode != "static" || strings.Join(got[1].Ports, ",") != "5,6" {
+		t.Fatalf("exos %+v", got)
+	}
+	voss := `================================================================================
+                                    Mlt Info
+================================================================================
+                        PORT     SVLAN   MLT        MLT          PORT         VLAN
+MLTID IFINDEX NAME      TYPE     TYPE    ADMIN      CURRENT      MEMBERS      IDS
+--------------------------------------------------------------------------------
+1     6144    MLT-1     access   normal  norm       norm         1/1-1/2,1/5  1`
+	got = ParseLags(voss)
+	if len(got) != 1 || strings.Join(got[0].Ports, ",") != "1/1,1/2,1/5" {
+		t.Fatalf("voss %+v", got)
+	}
+	im := &Image{NICs: 9, PortName: "{n}"}
+	if im.DataPortOf("1:3") != 3 || im.DataPortOf("7") != 7 || im.DataPortOf("99") != 0 {
+		t.Fatal("port names")
+	}
+}

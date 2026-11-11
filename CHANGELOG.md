@@ -48,6 +48,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Lab switches in the Session Manager:** right-click a switch's session (or its console) to **Start**, **Stop** or **Restart** the switch. Fixed: a starting emulated switch showed a large yellow oval instead of a dot.
 * **Fixed: a new fixed address was not taken by EXOS switches that had one already** (EXOS refuses a second address on the Mgmt VLAN): device pack 1.4.5 removes the old one first, and Termwright now asks the switch which address it has after typing it - when it is not the one given, Events says so (with what the switch showed) instead of pointing the session at it.
 * **The active tab stands out:** tinted with the accent colour, an accent line under it and its name in bold.
+* **Lab topology: every cable is shown.** Several cables between the same two switches run side by side, fanning out from each switch with their own ports (before, they were drawn on top of each other and only one could be seen).
+* **LAGs in the topology.** The cables of a LAG are one thicker track with a ring at each switch that has the LAG (static or LACP, with its ports); a LAG set on one switch only has one ring there, its cables fan out to single ports on the other switch and it is shown in orange with the reason on hover. LAGs are read from the switches after they start (the image's LAG command: `show sharing` on EXOS, `show mlt` on VOSS; *Read Its LAGs* on a switch) and can be set in Termwright on a cable's menu (LACP or static, on both switches or one); what a switch reports wins.
 
 ## 0.34.1 (2026-11-10)
 

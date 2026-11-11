@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/netip"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -52,6 +53,7 @@ type Image struct {
 	Extra      string      `json:"extra"`              // more qemu options
 	Source     string      `json:"source"`             // where the profile came from (a GNS3 appliance…)
 	AddrCmd    string      `json:"addrCmd"`            // a CLI command that prints the management address (host's network mode)
+	LagCmd     string      `json:"lagCmd,omitempty"`   // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
 	Persona    *PersonaDef `json:"persona,omitempty"`  // a file that makes the image act as a given device
 	Version    string      `json:"version"`            // the software version of the image (for the lists)
 	Match      string      `json:"match,omitempty"`    // profiles: a regexp on the file name that picks this profile; a "version" group gives the version
@@ -122,7 +124,7 @@ type VM struct {
 	MgmtIP   string   `json:"mgmtIp"` // address/bits it gets on day 0
 	Gateway  string   `json:"gateway"`
 	Day0Done bool     `json:"day0Done"`
-	Direct   bool     `json:"direct,omitempty"` // its management address answers this computer straight (no jump host)
+	Direct   bool     `json:"direct,omitempty"`  // its management address answers this computer straight (no jump host)
 	Serial   string   `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
 	BaseMAC  string   `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
 	DiskGB   int      `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
@@ -141,23 +143,50 @@ type Cable struct {
 	Down  bool   `json:"down,omitempty"` // pulled: the link is off on both ends
 }
 
+// Lag is a link aggregation on one switch: its data ports (VM port numbers),
+// static or LACP, set in Termwright or read from the switch.
+type Lag struct {
+	VM     string `json:"vm"`
+	Name   string `json:"name"`
+	Mode   string `json:"mode"` // "lacp" or "static"
+	Ports  []int  `json:"ports"`
+	Source string `json:"source"` // "user" or "switch"
+}
+
+// LagOf is the LAG a VM's data port belongs to (nil = none); one read
+// from the switch wins over one set in Termwright.
+func (l *Lab) LagOf(vm string, port int) *Lag {
+	var found *Lag
+	for i := range l.Lags {
+		g := &l.Lags[i]
+		if g.VM != vm || !slices.Contains(g.Ports, port) {
+			continue
+		}
+		if found == nil || g.Source == "switch" {
+			found = g
+		}
+	}
+	return found
+}
+
 // Lab is what a host runs.
 type Lab struct {
-	ID      string  `json:"id"`      // short, part of the folder and interface names
-	Dir     string  `json:"dir"`     // on the host, relative to the home folder
-	Mgmt    string  `json:"mgmt"`    // "lan" (the host's network, DHCP), "cloud" (the host's network, routed by the host: fixed addresses), "nat" (the host's NAT network, DHCP), "bridge" (a lab bridge on the host) or "forward"
-	LanIf   string  `json:"lanIf"`   // lan: the host's bridge (tap on it) or network port (macvtap on it)
-	NatBr   string  `json:"natBr"`   // nat: the host's NAT bridge with a DHCP server (libvirt's virbr0)
-	LanKind string  `json:"lanKind"` // lan: "bridge" or "macvtap"
-	MgmtNet string  `json:"mgmtNet"` // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.234.179.146/24)
-	CloudGw string  `json:"cloudGw"` // cloud (and lan with fixed addresses): the host's network's gateway
-	LanFixed bool   `json:"lanFixed,omitempty"` // lan: fixed addresses from MgmtNet on (a network without DHCP)
-	CloudIf string  `json:"cloudIf"` // cloud: the host's port on its network
-	HostIP  string  `json:"hostIp"`  // cloud: the host's own address there
-	Base    int     `json:"base"`    // first TCP/UDP port on the host's 127.0.0.1
-	KVM     bool    `json:"kvm"`     // false: software emulation (slow, for tests)
-	VMs     []VM    `json:"vms"`
-	Cables  []Cable `json:"cables"`
+	ID       string  `json:"id"`                 // short, part of the folder and interface names
+	Dir      string  `json:"dir"`                // on the host, relative to the home folder
+	Mgmt     string  `json:"mgmt"`               // "lan" (the host's network, DHCP), "cloud" (the host's network, routed by the host: fixed addresses), "nat" (the host's NAT network, DHCP), "bridge" (a lab bridge on the host) or "forward"
+	LanIf    string  `json:"lanIf"`              // lan: the host's bridge (tap on it) or network port (macvtap on it)
+	NatBr    string  `json:"natBr"`              // nat: the host's NAT bridge with a DHCP server (libvirt's virbr0)
+	LanKind  string  `json:"lanKind"`            // lan: "bridge" or "macvtap"
+	MgmtNet  string  `json:"mgmtNet"`            // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.234.179.146/24)
+	CloudGw  string  `json:"cloudGw"`            // cloud (and lan with fixed addresses): the host's network's gateway
+	LanFixed bool    `json:"lanFixed,omitempty"` // lan: fixed addresses from MgmtNet on (a network without DHCP)
+	CloudIf  string  `json:"cloudIf"`            // cloud: the host's port on its network
+	HostIP   string  `json:"hostIp"`             // cloud: the host's own address there
+	Base     int     `json:"base"`               // first TCP/UDP port on the host's 127.0.0.1
+	KVM      bool    `json:"kvm"`                // false: software emulation (slow, for tests)
+	VMs      []VM    `json:"vms"`
+	Cables   []Cable `json:"cables"`
+	Lags     []Lag   `json:"lags,omitempty"`
 }
 
 // Ports on the host for VM i: SSH forward, console, monitor, and data port n's UDP socket.
@@ -213,7 +242,9 @@ func (l *Lab) tapped() bool {
 }
 
 // Fixed: the switches get fixed addresses (typed on their console), not DHCP.
-func (l *Lab) Fixed() bool { return l.Mgmt == "bridge" || l.Mgmt == "cloud" || l.Mgmt == "lan" && l.LanFixed }
+func (l *Lab) Fixed() bool {
+	return l.Mgmt == "bridge" || l.Mgmt == "cloud" || l.Mgmt == "lan" && l.LanFixed
+}
 
 // DownLinks are the data ports of a running VM whose link must be down (the
 // HMP set_link names): ports without a cable (a NIC without a network would

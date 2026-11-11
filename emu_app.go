@@ -134,12 +134,21 @@ type EmuDevice struct {
 
 // EmuLinkView is a cable, with port names.
 type EmuLinkView struct {
-	A     string `json:"a"`
-	APort string `json:"aPort"`
-	B     string `json:"b"`
-	BPort string `json:"bPort"`
-	Up    bool   `json:"up"`
-	Down  bool   `json:"down"`
+	A     string      `json:"a"`
+	APort string      `json:"aPort"`
+	B     string      `json:"b"`
+	BPort string      `json:"bPort"`
+	Up    bool        `json:"up"`
+	Down  bool        `json:"down"`
+	LagA  *EmuLagView `json:"lagA,omitempty"` // the LAG its port on A is in
+	LagB  *EmuLagView `json:"lagB,omitempty"`
+}
+
+// EmuLagView is a LAG at one end of a cable.
+type EmuLagView struct {
+	Name   string `json:"name"`
+	Mode   string `json:"mode"`
+	Source string `json:"source"`
 }
 
 // EmuImageView is an image with its state on the lab's host.
@@ -1986,6 +1995,11 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		emuLab.mu.Unlock()
 	}
 	a.emuCheckPersona(ctx, c, &im, v)
+	if im.LagCmd != "" { // its LAGs, for the topology
+		if out, err := emu.Ask(ctx, c, &im, im.LagCmd); err == nil {
+			a.emuKeepLags(v, &im, emu.ParseLags(emu.CleanConsole(out)))
+		}
+	}
 	if fixed {
 		// the management address is fixed: typed at each start (the switch's own
 		// configuration need not be saved for it)
@@ -2695,6 +2709,12 @@ func (a *App) emuView() EmuView {
 		_, ua := st.Up[c.A]
 		_, ub := st.Up[c.B]
 		lv.Up = ua && ub && !c.Down
+		if g := l.LagOf(c.A, c.APort); g != nil {
+			lv.LagA = &EmuLagView{Name: g.Name, Mode: g.Mode, Source: g.Source}
+		}
+		if g := l.LagOf(c.B, c.BPort); g != nil {
+			lv.LagB = &EmuLagView{Name: g.Name, Mode: g.Mode, Source: g.Source}
+		}
 		v.Links = append(v.Links, lv)
 	}
 	for i := range v.Images {
@@ -3646,6 +3666,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) bool {
 			if len(p.Day0) > len(im.Day0) && slices.Equal(im.Day0, p.Day0[:len(im.Day0)]) { // the pack's day-0 grew (save configuration added)
 				im.Day0, changed = p.Day0, true
 			}
+			if im.LagCmd == "" && p.LagCmd != "" {
+				im.LagCmd, changed = p.LagCmd, true
+			}
 			if len(p.AddrSet) > len(im.AddrSet) && (len(im.AddrSet) == 0 || slices.Equal(im.AddrSet, p.AddrSet[len(p.AddrSet)-len(im.AddrSet):])) {
 				im.AddrSet, changed = p.AddrSet, true // the pack's commands grew (an old address is removed first)
 			}
@@ -3833,4 +3856,164 @@ func macBlock(mac string) string {
 	}
 	hw[5] &^= 63
 	return hw.String()
+}
+
+// EmuSetLag makes (or changes) a LAG on a switch in Termwright: its ports
+// (by name), "lacp" or "static"; no ports removes it. The ports leave other
+// LAGs set in Termwright on that switch.
+func (a *App) EmuSetLag(vm, name, mode string, portNames []string) (EmuView, error) {
+	emuLab.mu.Lock()
+	a.emuLoad()
+	l := emuLab.f.Lab
+	if l == nil || l.VMByID(vm) == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such switch")
+	}
+	im := emuImage(l.VMByID(vm).Image)
+	var ports []int
+	for _, pn := range portNames {
+		n := 0
+		if im != nil {
+			n = im.DataPortOf(pn)
+		}
+		if n == 0 {
+			emuLab.mu.Unlock()
+			return EmuView{}, fmt.Errorf("no port %s on that switch", pn)
+		}
+		ports = append(ports, n)
+	}
+	if mode != "static" {
+		mode = "lacp"
+	}
+	if name == "" {
+		used := map[string]bool{}
+		for _, g := range l.Lags {
+			if g.VM == vm {
+				used[g.Name] = true
+			}
+		}
+		for n := 1; ; n++ {
+			if name = "LAG " + strconv.Itoa(n); !used[name] {
+				break
+			}
+		}
+	}
+	var keep []emu.Lag
+	for _, g := range l.Lags {
+		if g.VM == vm && g.Source == "user" {
+			if g.Name == name {
+				continue
+			}
+			g.Ports = slices.DeleteFunc(slices.Clone(g.Ports), func(p int) bool { return slices.Contains(ports, p) })
+			if len(g.Ports) == 0 {
+				continue
+			}
+		}
+		keep = append(keep, g)
+	}
+	if len(ports) > 0 {
+		keep = append(keep, emu.Lag{VM: vm, Name: name, Mode: mode, Ports: slices.Sorted(slices.Values(ports)), Source: "user"})
+	}
+	l.Lags = keep
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
+// EmuReadLags asks running switches (all when ids is empty) for their LAGs
+// on the console (the image's LAG command) and keeps what they say.
+func (a *App) EmuReadLags(ids []string) (EmuView, error) {
+	host, ids := a.emuIDs(ids)
+	if host == "" {
+		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	st := a.emuPollFresh()
+	for _, id := range ids {
+		if _, up := st.Up[id]; !up {
+			continue
+		}
+		emuLab.mu.Lock()
+		v := emuLab.f.Lab.VMByID(id)
+		var vv emu.VM
+		var im *emu.Image
+		if v != nil {
+			vv, im = *v, emuImage(v.Image)
+		}
+		emuLab.mu.Unlock()
+		if im == nil || im.LagCmd == "" {
+			continue
+		}
+		if err := a.emuReadLag(host, vv, *im); err != nil {
+			emuLab.mu.Lock()
+			emuEv(id, "warn", "LAGs not read: "+err.Error())
+			emuLab.mu.Unlock()
+			continue
+		}
+	}
+	return a.EmuState()
+}
+
+// emuReadLag reads one switch's LAGs on its console.
+func (a *App) emuReadLag(host string, v emu.VM, im emu.Image) error {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	if l == nil {
+		emuLab.mu.Unlock()
+		return errors.New("there is no emulated lab")
+	}
+	port := l.ConsolePort(v)
+	emuLab.mu.Unlock()
+	im.Password, _ = secrets.Lookup(emuImageKey(im.ID))
+	cl, err := a.emuClient(context.Background(), host)
+	if err != nil {
+		return err
+	}
+	conn, err := cl.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		return fmt.Errorf("console: %w (is it open in a tab or the console pane?)", err)
+	}
+	c := emu.NewConsole(conn)
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	out, err := emu.Ask(ctx, c, &im, im.LagCmd)
+	if err != nil {
+		return err
+	}
+	a.emuKeepLags(v, &im, emu.ParseLags(emu.CleanConsole(out)))
+	return nil
+}
+
+// emuKeepLags keeps the LAGs a switch reported (in place of the ones read before).
+func (a *App) emuKeepLags(v emu.VM, im *emu.Image, found []emu.SwitchLag) {
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	l := emuLab.f.Lab
+	if l == nil {
+		return
+	}
+	keep := slices.DeleteFunc(slices.Clone(l.Lags), func(g emu.Lag) bool { return g.VM == v.ID && g.Source == "switch" })
+	var names []string
+	for _, f := range found {
+		g := emu.Lag{VM: v.ID, Name: f.Name, Mode: f.Mode, Source: "switch"}
+		for _, p := range f.Ports {
+			if n := im.DataPortOf(p); n > 0 {
+				g.Ports = append(g.Ports, n)
+			}
+		}
+		if len(g.Ports) > 0 {
+			keep = append(keep, g)
+			names = append(names, fmt.Sprintf("%s (%s, %d ports)", g.Name, g.Mode, len(g.Ports)))
+		}
+	}
+	l.Lags = keep
+	if len(names) > 0 {
+		emuEv(v.ID, "ok", "LAGs on the switch: "+strings.Join(names, ", "))
+	} else {
+		emuEv(v.ID, "info", "no LAGs on the switch")
+	}
+	_ = a.emuSave()
 }

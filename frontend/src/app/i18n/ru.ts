@@ -2335,6 +2335,14 @@ const ru: Record<string, string> = {
   'Fixed addresses (no DHCP there)': 'Фиксированные адреса (DHCP там нет)',
   'The switches join the host’s network with fixed addresses from {0} on.': 'Коммутаторы подключаются к сети хоста с фиксированными адресами начиная с {0}.',
   'empty: from a DHCP server': 'пусто: от DHCP-сервера',
+  'Read Its LAGs': 'Прочитать его LAG',
+  'LAG the {0} cables to {1}: LACP on both': 'Объединить {0} кабелей к {1} в LAG: LACP с обеих сторон',
+  '… static on both': '… статический с обеих сторон',
+  '… LAG on {0} only': '… LAG только на {0}',
+  'Remove the LAG': 'Удалить LAG',
+  'the LAG is set on one side only': 'LAG настроен только с одной стороны',
+  'static on one side, LACP on the other': 'статический с одной стороны, LACP с другой',
+  'LAGs read from the switches': 'LAG прочитаны с коммутаторов',
 };
 
 export default ru;
