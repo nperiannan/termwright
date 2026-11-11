@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -640,5 +642,106 @@ func TestEmuTopologies(t *testing.T) {
 	}
 	if _, err := emuTopoName("a/b"); err == nil {
 		t.Error("a name with /")
+	}
+}
+
+// TestEmuTwoHosts runs one switch on each of two hosts (the bench's twh and
+// twh2) with a cable between them: a UDP tunnel between the hosts.
+func TestEmuTwoHosts(t *testing.T) {
+	initrd, kernel, keyFile := os.Getenv("TW_EMU_BENCH"), os.Getenv("TW_EMU_KERNEL"), os.Getenv("TW_EMU_SSH_KEY")
+	if initrd == "" || kernel == "" || keyFile == "" {
+		t.Skip("TW_EMU_BENCH / TW_EMU_KERNEL / TW_EMU_SSH_KEY not set")
+	}
+	kb, _ := os.ReadFile(keyFile)
+	signer, _ := ssh.ParsePrivateKey(kb)
+	old := emuDial
+	emuDial = func(a *App, ctx context.Context, s session.Session) (*ssh.Client, func(), error) {
+		c, err := ssh.Dial("tcp", s.Hostname+":2299", &ssh.ClientConfig{User: "root", Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)}, HostKeyCallback: ssh.InsecureIgnoreHostKey(), Timeout: 10 * time.Second})
+		if err != nil {
+			return nil, nil, err
+		}
+		return c, func() { _ = c.Close() }, nil
+	}
+	defer func() { emuDial = old }()
+	keyring.MockInit()
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = false, emuFile{}
+	emuLab.mu.Lock()
+	emuLab.events = nil
+	emuLab.mu.Unlock()
+	defer func() { a.emuShutdown(); emuLab.loaded, emuLab.f = false, emuFile{} }()
+	ha, _ := st.Save(session.Session{Name: "kvm-a", Protocol: session.ProtoSSH2, Hostname: "10.77.0.2", Port: 2299, Username: "root"}, "")
+	hb, _ := st.Save(session.Session{Name: "kvm-b", Protocol: session.ProtoSSH2, Hostname: "10.77.0.6", Port: 2299, Username: "root"}, "")
+	for _, h := range []string{ha.Path, hb.Path} {
+		if _, err := a.EmuCheckHost(h); err != nil {
+			t.Fatal(err)
+		}
+	}
+	img := filepath.Join(dir, "netnos-1.0.qcow2")
+	_ = exec.Command("qemu-img", "create", "-q", "-f", "qcow2", img, "16M").Run()
+	v, err := a.EmuAddImage(img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	im := v.Images[0].Image
+	im.RAM, im.NICs, im.NIC, im.Ready, im.Login = 256, 3, "e1000", "netnos login:", "admin"
+	im.Day0 = []string{"x ip link set eth1 up", "x ip addr add 10.9.9.{n}/24 dev eth1"}
+	im.Extra = "-kernel " + kernel + " -initrd " + initrd + " -append 'console=ttyS0 quiet panic=-1'"
+	if _, err := a.EmuSaveImage(im, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.EmuAdd(EmuRequest{Host: ha.Path, Groups: []EmuGroup{{Image: im.ID, Count: 1, Names: "a-{n}"}}, Mgmt: "forward"}); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = a.EmuRemove(nil, true) }()
+	if v, err = a.EmuAdd(EmuRequest{Host: hb.Path, Groups: []EmuGroup{{Image: im.ID, Count: 1, Names: "b-{n}"}}, Cabling: "chain", Mgmt: "forward", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Devices) != 2 || v.Devices[1].Host != hb.Path || len(v.Links) != 1 || len(v.HostUse) != 2 || v.HostUse[1].Mgmt != "forward" {
+		t.Fatalf("view: devices %+v links %+v hosts %+v", v.Devices, v.Links, v.HostUse)
+	}
+	if _, err := a.EmuStart(nil); err != nil {
+		t.Fatal(err)
+	}
+	// both boot and type day 0 (each on its host)
+	for end := time.Now().Add(4 * time.Minute); time.Now().Before(end); time.Sleep(3 * time.Second) {
+		emuLab.mu.Lock()
+		done := emuLab.f.Lab.VMs[0].Day0Done && emuLab.f.Lab.VMs[1].Day0Done
+		emuLab.mu.Unlock()
+		if done {
+			break
+		}
+	}
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	va := *l.VMByID(v.Devices[0].ID)
+	conPort := l.ConsolePort(va)
+	emuLab.mu.Unlock()
+	if !va.Day0Done {
+		v, _ = a.EmuState()
+		t.Fatalf("day 0 not typed: %+v", v.Events)
+	}
+	// a-1 reaches b-1 over the cable between the hosts
+	cl, err := a.emuClient(context.Background(), ha.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := cl.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(conPort)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := emu.NewConsole(conn)
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	out, err := emu.Ask(ctx, c, &im, "x ping -c 3 -W 2 10.9.9.2")
+	if err != nil || !strings.Contains(out, " 0% packet loss") && !strings.Contains(out, "3 packets received") {
+		t.Fatalf("no traffic over the tunnel: %v\n%s", err, out)
+	}
+	if v, _ = a.EmuState(); v.HostUse[0].Running+v.HostUse[1].Running != 2 {
+		t.Errorf("host use %+v", v.HostUse)
 	}
 }

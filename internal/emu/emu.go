@@ -124,6 +124,7 @@ type VM struct {
 	MgmtIP   string   `json:"mgmtIp"` // address/bits it gets on day 0
 	Gateway  string   `json:"gateway"`
 	Day0Done bool     `json:"day0Done"`
+	Host     string   `json:"host,omitempty"`    // the KVM host it runs on (a session path; "" = the lab's own host)
 	Direct   bool     `json:"direct,omitempty"`  // its management address answers this computer straight (no jump host)
 	Serial   string   `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
 	BaseMAC  string   `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
@@ -141,6 +142,88 @@ type Cable struct {
 	B     string `json:"b"`
 	BPort int    `json:"bPort"`
 	Down  bool   `json:"down,omitempty"` // pulled: the link is off on both ends
+}
+
+// HostNet is how a host's switches are managed (the fields of Lab for its own host).
+type HostNet struct {
+	Mgmt     string `json:"mgmt"`
+	LanIf    string `json:"lanIf,omitempty"`
+	LanKind  string `json:"lanKind,omitempty"`
+	NatBr    string `json:"natBr,omitempty"`
+	MgmtNet  string `json:"mgmtNet,omitempty"`
+	CloudGw  string `json:"cloudGw,omitempty"`
+	CloudIf  string `json:"cloudIf,omitempty"`
+	HostIP   string `json:"hostIp,omitempty"`
+	LanFixed bool   `json:"lanFixed,omitempty"`
+}
+
+// Net is the management of a host of the lab (main: the lab's own host).
+func (l *Lab) Net(host, main string) HostNet {
+	if host == "" || host == main {
+		return HostNet{Mgmt: l.Mgmt, LanIf: l.LanIf, LanKind: l.LanKind, NatBr: l.NatBr, MgmtNet: l.MgmtNet, CloudGw: l.CloudGw, CloudIf: l.CloudIf, HostIP: l.HostIP, LanFixed: l.LanFixed}
+	}
+	if n, ok := l.Nets[host]; ok {
+		return n
+	}
+	return HostNet{Mgmt: "forward"}
+}
+
+// SetNet sets the management of a host of the lab.
+func (l *Lab) SetNet(host, main string, n HostNet) {
+	if host == "" || host == main {
+		l.Mgmt, l.LanIf, l.LanKind, l.NatBr, l.MgmtNet, l.CloudGw, l.CloudIf, l.HostIP, l.LanFixed = n.Mgmt, n.LanIf, n.LanKind, n.NatBr, n.MgmtNet, n.CloudGw, n.CloudIf, n.HostIP, n.LanFixed
+		return
+	}
+	if l.Nets == nil {
+		l.Nets = map[string]HostNet{}
+	}
+	l.Nets[host] = n
+}
+
+// HostOf is the host a VM runs on.
+func (l *Lab) HostOf(v VM, main string) string {
+	if v.Host == "" {
+		return main
+	}
+	return v.Host
+}
+
+// Hosts are the lab's hosts, its own first.
+func (l *Lab) Hosts(main string) []string {
+	out := []string{main}
+	for _, v := range l.VMs {
+		if h := l.HostOf(v, main); !slices.Contains(out, h) {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+// For is the lab as one host runs it: that host's management, and the VMs on
+// other hosts reached at their host's address (cables to them are UDP tunnels
+// between the hosts).
+func (l *Lab) For(host, main string) *Lab {
+	c := *l
+	c.SetNet("", "", l.Net(host, main))
+	c.remote = map[string]string{}
+	for _, v := range l.VMs {
+		if h := l.HostOf(v, main); h != host {
+			c.remote[v.ID] = orStr(l.Addrs[h], "0.0.0.0")
+		}
+	}
+	return &c
+}
+
+// Slot is a VM's place among the VMs of its host (fixed management
+// addresses count from the host's first address with it).
+func (l *Lab) Slot(v VM) int {
+	n := 0
+	for _, o := range l.VMs {
+		if _, far := l.remote[o.ID]; !far && o.Index < v.Index && o.Host == v.Host {
+			n++
+		}
+	}
+	return n
 }
 
 // Lag is a link aggregation on one switch: its data ports (VM port numbers),
@@ -187,6 +270,12 @@ type Lab struct {
 	VMs      []VM    `json:"vms"`
 	Cables   []Cable `json:"cables"`
 	Lags     []Lag   `json:"lags,omitempty"`
+	// Nets: the management of the lab's other hosts (its own host's is above);
+	// Addrs: each host's address the others send cable traffic to.
+	Nets  map[string]HostNet `json:"nets,omitempty"`
+	Addrs map[string]string  `json:"addrs,omitempty"`
+	// set on a host's view (For): VMs elsewhere with their host's address
+	remote map[string]string
 }
 
 // Ports on the host for VM i: SSH forward, console, monitor, and data port n's UDP socket.
@@ -353,21 +442,24 @@ func (l *Lab) Args(v VM, im *Image) []string {
 	}
 	a = append(a, "-device", nic+",netdev=n0,mac="+l.MAC(v, 0))
 	// data ports: cabled ones get a UDP socket to the other end
-	peer := map[int]int{}
+	peer, peerAt := map[int]int{}, map[int]string{}
 	for _, c := range l.Cables {
 		if c.A == v.ID {
 			if o := l.VMByID(c.B); o != nil {
-				peer[c.APort] = l.udpPort(*o, c.BPort)
+				peer[c.APort], peerAt[c.APort] = l.udpPort(*o, c.BPort), l.remote[o.ID]
 			}
 		}
 		if c.B == v.ID {
 			if o := l.VMByID(c.A); o != nil {
-				peer[c.BPort] = l.udpPort(*o, c.APort)
+				peer[c.BPort], peerAt[c.BPort] = l.udpPort(*o, c.APort), l.remote[o.ID]
 			}
 		}
 	}
 	for n := 1; n < im.NICs; n++ {
-		if p, ok := peer[n]; ok {
+		if p, ok := peer[n]; ok && peerAt[n] != "" { // the other end on another host: a UDP tunnel between the hosts
+			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,udp=%s:%d,localaddr=0.0.0.0:%d", n, peerAt[n], p, l.udpPort(v, n)),
+				"-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.MAC(v, n)))
+		} else if ok {
 			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,udp=127.0.0.1:%d,localaddr=127.0.0.1:%d", n, p, l.udpPort(v, n)),
 				"-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.MAC(v, n)))
 		} else {
@@ -425,7 +517,7 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		fmt.Fprintf(&b, "sudo -n sysctl -qw net.ipv4.ip_forward=1 net.ipv4.conf.%s.proxy_arp=1 net.ipv4.conf.%s.proxy_arp=1 net.ipv4.conf.%s.rp_filter=0 >/dev/null\n", br, l.CloudIf, br)
 		fmt.Fprintf(&b, "if command -v iptables >/dev/null 2>&1; then for d in -i -o; do sudo -n iptables -C FORWARD $d %s -j ACCEPT 2>/dev/null || sudo -n iptables -I FORWARD $d %s -j ACCEPT; done; fi\n", br, br)
 		for _, v := range vms {
-			if ip, _ := l.Address(v.Index); ip != "" {
+			if ip, _ := l.Address(l.Slot(v)); ip != "" {
 				fmt.Fprintf(&b, "sudo -n ip route replace %s/32 dev %s\n", strings.Split(ip, "/")[0], br)
 			}
 		}
@@ -510,7 +602,7 @@ func (l *Lab) StopScript(ids []string) string {
 		if l.Mgmt != "forward" && l.Mgmt != "" {
 			if v := l.VMByID(id); v != nil {
 				fmt.Fprintf(&b, "sleep 0.3; sudo -n ip link del %s 2>/dev/null\n", l.tap(*v))
-				if ip, _ := l.Address(v.Index); l.Mgmt == "cloud" && ip != "" {
+				if ip, _ := l.Address(l.Slot(*v)); l.Mgmt == "cloud" && ip != "" {
 					fmt.Fprintf(&b, "sudo -n ip route del %s/32 dev %s 2>/dev/null\n", strings.Split(ip, "/")[0], l.Bridge())
 				}
 			}

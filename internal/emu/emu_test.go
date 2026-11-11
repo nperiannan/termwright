@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"net"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -434,5 +435,33 @@ MLTID IFINDEX NAME      TYPE     TYPE    ADMIN      CURRENT      MEMBERS      ID
 	im := &Image{NICs: 9, PortName: "{n}"}
 	if im.DataPortOf("1:3") != 3 || im.DataPortOf("7") != 7 || im.DataPortOf("99") != 0 {
 		t.Fatal("port names")
+	}
+}
+
+// Two hosts: each runs its switches with its own management; a cable between
+// them is a UDP tunnel to the other host's address.
+func TestTwoHosts(t *testing.T) {
+	im := &Image{ID: "i1", NICs: 4, NIC: "e1000", FileName: "x.qcow2"}
+	l := &Lab{ID: "a1", Dir: "d", Base: 20000, Mgmt: "cloud", MgmtNet: "10.1.0.146/24", CloudGw: "10.1.0.254", CloudIf: "ens160", HostIP: "10.1.0.20",
+		VMs:    []VM{{ID: "v1", Image: "i1", Index: 0}, {ID: "v2", Image: "i1", Index: 1, Host: "kvm-2"}},
+		Cables: []Cable{{A: "v1", APort: 1, B: "v2", BPort: 2}},
+		Nets:   map[string]HostNet{"kvm-2": {Mgmt: "nat"}},
+		Addrs:  map[string]string{"kvm-1": "10.1.0.20", "kvm-2": "10.1.0.60"}}
+	if h := l.Hosts("kvm-1"); strings.Join(h, ",") != "kvm-1,kvm-2" {
+		t.Fatal(h)
+	}
+	a1 := strings.Join(l.For("kvm-1", "kvm-1").Args(l.VMs[0], im), " ")
+	a2 := strings.Join(l.For("kvm-2", "kvm-1").Args(l.VMs[1], im), " ")
+	if !strings.Contains(a1, fmt.Sprintf("udp=10.1.0.60:%d,localaddr=0.0.0.0:%d", l.udpPort(l.VMs[1], 2), l.udpPort(l.VMs[0], 1))) {
+		t.Errorf("kvm-1 side: %s", a1)
+	}
+	if !strings.Contains(a2, fmt.Sprintf("udp=10.1.0.20:%d,localaddr=0.0.0.0:%d", l.udpPort(l.VMs[0], 1), l.udpPort(l.VMs[1], 2))) {
+		t.Errorf("kvm-2 side: %s", a2)
+	}
+	if v := l.For("kvm-2", "kvm-1"); v.Mgmt != "nat" || l.For("kvm-1", "kvm-1").Mgmt != "cloud" {
+		t.Error("management per host")
+	}
+	if ip, _ := l.For("kvm-1", "kvm-1").Address(0); ip != "10.1.0.146/24" {
+		t.Error("cloud address on its host", ip)
 	}
 }

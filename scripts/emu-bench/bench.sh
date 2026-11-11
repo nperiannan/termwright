@@ -3,18 +3,27 @@
 #   TW_EMU_BENCH=netnos-initrd.gz TW_EMU_KERNEL=/boot/vmlinuz-$(uname -r) TW_EMU_SSH_KEY=<key> go test -run TestEmuModes .
 # (the host sshd config and key: see emu_app_test.go TestEmuLab)
 # A host (netns twh, reached on 10.77.0.2:2299) on a LAN (netns twl, 10.50.0.0/24, gateway .254, a server .142, DHCP .100-.120)
-for n in twh twl; do ip netns del $n 2>/dev/null; done; ip link del twr0 2>/dev/null
-ip netns add twh; ip netns add twl
+for n in twh twh2 twl; do ip netns del $n 2>/dev/null; done; ip link del twr0 2>/dev/null; ip link del twr1 2>/dev/null
+ip netns add twh; ip netns add twh2; ip netns add twl
 ip link add twr0 type veth peer name h0 netns twh
 ip addr add 10.77.0.1/30 dev twr0; ip link set twr0 up
 ip -n twh addr add 10.77.0.2/30 dev h0; ip -n twh link set h0 up; ip -n twh link set lo up
 ip link add up0 netns twh type veth peer name lan0 netns twl
 ip -n twh addr add 10.50.0.20/24 dev up0; ip -n twh link set up0 up; ip -n twh route add default via 10.50.0.254
-ip -n twl addr add 10.50.0.254/24 dev lan0; ip -n twl addr add 10.50.0.142/24 dev lan0; ip -n twl link set lan0 up; ip -n twl link set lo up
+# the LAN: a bridge in twl with the host's ports in it
+ip -n twl link add lanbr type bridge; ip -n twl link set lan0 master lanbr up; ip -n twl link set lanbr up
+ip -n twl addr add 10.50.0.254/24 dev lanbr; ip -n twl addr add 10.50.0.142/24 dev lanbr; ip -n twl link set lo up
+# a second host (twh2, reached on 10.77.0.6:2299) on the same LAN
+ip link add twr1 type veth peer name h1 netns twh2
+ip addr add 10.77.0.5/30 dev twr1; ip link set twr1 up
+ip -n twh2 addr add 10.77.0.6/30 dev h1; ip -n twh2 link set h1 up; ip -n twh2 link set lo up
+ip link add up0 netns twh2 type veth peer name lan1 netns twl
+ip -n twh2 addr add 10.50.0.21/24 dev up0; ip -n twh2 link set up0 up; ip -n twh2 route add default via 10.50.0.254
+ip -n twl link set lan1 master lanbr up
 mkdir -p /tmp/twb; cat > /tmp/twb/udhcpd-lan.conf <<C
 start 10.50.0.100
 end 10.50.0.120
-interface lan0
+interface lanbr
 option subnet 255.255.255.0
 option router 10.50.0.254
 lease_file /tmp/twb/lan.leases
@@ -43,6 +52,7 @@ mkdir -p /var/lib/libvirt/dnsmasq
 (while [ -e /tmp/twb/udhcpd-nat.pid ]; do busybox dumpleases -f /tmp/twb/nat.leases 2>/dev/null | awk 'BEGIN{print "["} NR>1{printf "%s  {\n    \"ip-address\": \"%s\",\n    \"mac-address\": \"%s\"\n  }", (n++?",\n":""), $2, $1} END{print "\n]"}' > /var/lib/libvirt/dnsmasq/virbr0.status; sleep 2; done) &
 # the host's SSH
 ip netns exec twh /usr/sbin/sshd -f /home/claude/emu-test/sshd/sshd_config -o ListenAddress=10.77.0.2 -o PidFile=/tmp/twb/sshd.pid
+ip netns exec twh2 /usr/sbin/sshd -f /home/claude/emu-test/sshd/sshd_config -o ListenAddress=10.77.0.6 -o PidFile=/tmp/twb/sshd2.pid
 # this computer (the root namespace) reaches the LAN through the host, as a user's computer would
 ip route replace 10.50.0.0/24 via 10.77.0.2; ip -n twl route add 10.77.0.0/30 via 10.50.0.20
 ip netns exec twh sysctl -qw net.ipv4.ip_forward=1

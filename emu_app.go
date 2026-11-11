@@ -58,8 +58,8 @@ type emuFile struct {
 	Host      string            `json:"host"` // the lab's host (session path)
 	Folder    string            `json:"folder"`
 	Lab       *emu.Lab          `json:"lab"`
-	Sessions  map[string]string `json:"sessions"` // VM → its SSH session
-	Consoles  map[string]string `json:"consoles"` // VM → its console session
+	Sessions  map[string]string `json:"sessions"`           // VM → its SSH session
+	Consoles  map[string]string `json:"consoles"`           // VM → its console session
 	Topology  string            `json:"topology,omitempty"` // the name the open lab is saved under ("" = not saved yet)
 }
 
@@ -73,6 +73,27 @@ type emuTopo struct {
 	Lab      *emu.Lab          `json:"lab"`
 	Sessions map[string]string `json:"sessions"`
 	Consoles map[string]string `json:"consoles"`
+}
+
+// EmuHostUse is one host of the lab: how its switches are managed and what they use.
+type EmuHostUse struct {
+	Host     string  `json:"host"` // session path
+	Name     string  `json:"name"`
+	Addr     string  `json:"addr"`
+	Mgmt     string  `json:"mgmt"`
+	MgmtNet  string  `json:"mgmtNet"`
+	CloudGw  string  `json:"cloudGw"`
+	LanFixed bool    `json:"lanFixed"`
+	CPUs     int     `json:"cpus"` // the host's cores
+	MemTotal int64   `json:"memTotal"`
+	MemFree  int64   `json:"memFree"`
+	Load     float64 `json:"load"`
+	Cores    float64 `json:"cores"` // what its switches use now
+	VCPUs    int     `json:"vcpus"` // given to its switches
+	RAM      int     `json:"ram"`
+	Switches int     `json:"switches"`
+	Running  int     `json:"running"`
+	Main     bool    `json:"main"`
 }
 
 // EmuTopoInfo is a saved topology in the list.
@@ -90,6 +111,7 @@ type emuConn struct {
 }
 
 var emuLab struct {
+	hostStatus       map[string]emu.Status // each host's last status
 	mu               sync.Mutex
 	f                emuFile
 	loaded           bool
@@ -122,6 +144,7 @@ var emuLab struct {
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
 type EmuDevice struct {
+	Host         string       `json:"host"` // the KVM host it runs on (session path)
 	ID           string       `json:"id"`
 	OS           string       `json:"os"` // device type
 	Model        string       `json:"model"`
@@ -140,9 +163,9 @@ type EmuDevice struct {
 	Y            int          `json:"y"`
 	State        string       `json:"state"` // stopped, uploading, booting, day0, running, failed
 	StateText    string       `json:"stateText"`
-	CPU          float64      `json:"cpu"`   // % of its vCPUs, now
+	CPU          float64      `json:"cpu"`     // % of its vCPUs, now
 	MemUsed      int64        `json:"memUsed"` // MB its VM uses now (resident)
-	Cores        float64      `json:"cores"` // host cores it uses now
+	Cores        float64      `json:"cores"`   // host cores it uses now
 	CPUs         int          `json:"cpus"`
 	RAM          int          `json:"ram"`
 	Console      int          `json:"console"`
@@ -226,7 +249,7 @@ type EmuView struct {
 	Folder        string            `json:"folder"`
 	MgmtNet       string            `json:"mgmtNet"`
 	Topology      string            `json:"topology,omitempty"` // the name the open lab is saved under
-	CloudGw       string            `json:"cloudGw,omitempty"` // cloud: the gateway the switches use
+	CloudGw       string            `json:"cloudGw,omitempty"`  // cloud: the gateway the switches use
 	LanFixed      bool              `json:"lanFixed,omitempty"` // lan: fixed addresses (no DHCP)
 	Mgmt          string            `json:"mgmt"`
 	Devices       []EmuDevice       `json:"devices"`
@@ -242,6 +265,7 @@ type EmuView struct {
 	KVM           bool              `json:"kvm"`
 	Templates     []emu.Template    `json:"templates"`
 	Usage         EmuUsage          `json:"usage"`
+	HostUse       []EmuHostUse      `json:"hostUse"` // every host of the lab: its management and what it gives the switches
 	DeviceTypes   []EmuDeviceType   `json:"deviceTypes"`
 }
 
@@ -1396,10 +1420,6 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 	}
 	emuLab.mu.Lock()
 	a.emuLoad()
-	if emuLab.f.Lab != nil && len(emuLab.f.Lab.VMs) > 0 && r.Host != "" && r.Host != emuLab.f.Host {
-		emuLab.mu.Unlock()
-		return EmuView{}, errors.New("the emulated lab runs on another host: add the switches there, or remove its switches first")
-	}
 	var info *emu.HostInfo
 	for i := range emuLab.f.Hosts {
 		if emuLab.f.Hosts[i].Session == r.Host {
@@ -1438,7 +1458,40 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 		}
 		emuLab.f.Lab, emuLab.f.Host = l, r.Host
 		emuLab.f.Sessions, emuLab.f.Consoles = map[string]string{}, map[string]string{}
+	} else if r.Host != "" && r.Host != emuLab.f.Host && !slices.Contains(l.Hosts(emuLab.f.Host), r.Host) {
+		// a further host of the lab: its switches get its own management
+		mgmt := r.Mgmt
+		if mgmt == "" || mgmt == "auto" {
+			mgmt = emuBestMgmt(info)
+		}
+		if err := emuMgmtOK(info, mgmt); err != nil {
+			emuLab.mu.Unlock()
+			return EmuView{}, err
+		}
+		tmp := &emu.Lab{Mgmt: mgmt, LanIf: info.LanIf, LanKind: info.LanKind, MgmtNet: orStr(r.MgmtNet, "10.99.0.0/24")}
+		if mgmt == "cloud" || mgmt == "lan" && strings.TrimSpace(r.MgmtNet) != "" {
+			if err := emuCloud(tmp, info, r.MgmtNet); err != nil {
+				emuLab.mu.Unlock()
+				return EmuView{}, err
+			}
+			tmp.LanFixed = mgmt == "lan"
+		}
+		l.SetNet(r.Host, emuLab.f.Host, tmp.Net("", ""))
 	}
+	if r.Host == "" {
+		r.Host = emuLab.f.Host
+	}
+	if l.Addrs == nil {
+		l.Addrs = map[string]string{}
+	}
+	if ip := strings.Split(info.LanAddr, "/")[0]; ip != "" {
+		l.Addrs[r.Host] = ip
+	}
+	onHost := ""
+	if r.Host != emuLab.f.Host {
+		onHost = r.Host
+	}
+	lv := l.For(r.Host, emuLab.f.Host)
 	imgs := emuImages()
 	next := 0
 	names := map[string]bool{}
@@ -1481,7 +1534,7 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 				continue
 			}
 			names[name] = true
-			v := emu.VM{ID: "v" + randHex(3), Name: name, Image: im.ID, Index: next, CPUs: orInt(g.CPUs, im.CPUs), RAM: orInt(g.RAM, im.RAM)}
+			v := emu.VM{ID: "v" + randHex(3), Name: name, Image: im.ID, Index: next, CPUs: orInt(g.CPUs, im.CPUs), RAM: orInt(g.RAM, im.RAM), Host: onHost}
 			switch {
 			case g.SerialStart != "":
 				v.Serial = emu.NextSerial(g.SerialStart, k)
@@ -1506,7 +1559,8 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 					v.Persona = &emu.Persona{Slots: []emu.Slot{{Num: 1, Model: tp.Model, Serial: v.Serial, Module: tp.Module, Master: true}}, Values: tp.Values}
 				}
 			}
-			v.MgmtIP, v.Gateway = l.Address(next)
+			v.MgmtIP, v.Gateway = lv.Address(lv.Slot(v))
+			lv.VMs = append(lv.VMs, v)
 			next++
 			k++
 			add = append(add, v)
@@ -1515,7 +1569,6 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 	l.VMs = append(l.VMs, add...)
 	emuPlace(add, l.VMs)
 	l.Wire(add, r.Cabling, imgs)
-	host := emuLab.f.Host
 	if err := a.emuSave(); err != nil {
 		emuLab.mu.Unlock()
 		return EmuView{}, err
@@ -1532,9 +1585,74 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 		for i, v := range add {
 			ids[i] = v.ID
 		}
-		go a.emuStart(host, ids)
+		return a.EmuStart(ids)
 	}
 	return a.EmuState()
+}
+
+// emuFor is the lab as one host runs it (mu held): its management, and the
+// other hosts' addresses for the cables between them.
+func (a *App) emuFor(host string) *emu.Lab {
+	l := emuLab.f.Lab
+	if l == nil {
+		return nil
+	}
+	if l.Addrs == nil {
+		l.Addrs = map[string]string{}
+	}
+	for _, h := range emuLab.f.Hosts {
+		if ip := strings.Split(h.Info.LanAddr, "/")[0]; ip != "" {
+			l.Addrs[h.Session] = ip
+		}
+	}
+	return l.For(host, emuLab.f.Host)
+}
+
+// emuHostOf is the host a VM runs on (mu held).
+func emuHostOf(v emu.VM) string {
+	if emuLab.f.Lab == nil {
+		return emuLab.f.Host
+	}
+	return emuLab.f.Lab.HostOf(v, emuLab.f.Host)
+}
+
+// emuHostOfID is the host a VM runs on (no lock held).
+func (a *App) emuHostOfID(id string) string {
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	if v := emuLab.f.Lab.VMByID(id); v != nil {
+		return emuHostOf(*v)
+	}
+	return emuLab.f.Host
+}
+
+// emuGroups splits VMs (all when ids is empty) by the host they run on, the
+// lab's own host first.
+func (a *App) emuGroups(ids []string) ([]string, map[string][]string) {
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	a.emuLoad()
+	l := emuLab.f.Lab
+	if l == nil || emuLab.f.Host == "" {
+		return nil, nil
+	}
+	if len(ids) == 0 {
+		for _, v := range l.VMs {
+			ids = append(ids, v.ID)
+		}
+	}
+	by := map[string][]string{}
+	var hosts []string
+	for _, id := range ids {
+		if v := l.VMByID(id); v != nil {
+			h := emuHostOf(*v)
+			if _, ok := by[h]; !ok {
+				hosts = append(hosts, h)
+			}
+			by[h] = append(by[h], id)
+		}
+	}
+	return hosts, by
 }
 
 func randByte() byte { b, _ := hex.DecodeString(randHex(1)); return b[0] }
@@ -1611,7 +1729,11 @@ func emuTarget(l *emu.Lab, v emu.VM, host string) (string, int, string) {
 // emuRetarget points a VM's SSH session where its management is now.
 func (a *App) emuRetarget(v emu.VM) {
 	emuLab.mu.Lock()
-	l, host, path := emuLab.f.Lab, emuLab.f.Host, emuLab.f.Sessions[v.ID]
+	l, path := emuLab.f.Lab, emuLab.f.Sessions[v.ID]
+	host := emuHostOf(v)
+	if l != nil {
+		l = a.emuFor(host)
+	}
 	if l == nil || path == "" {
 		emuLab.mu.Unlock()
 		return
@@ -1621,6 +1743,13 @@ func (a *App) emuRetarget(v emu.VM) {
 	if s, err := a.store.Get(path); err == nil {
 		s.Hostname, s.Port, s.JumpSession = hostname, port, jump
 		_, _ = a.store.Save(s, path)
+	}
+	emuLab.mu.Lock()
+	con := emuLab.f.Consoles[v.ID]
+	emuLab.mu.Unlock()
+	if s, err := a.store.Get(con); err == nil && con != "" && s.JumpSession != host { // its console is on its host
+		s.JumpSession = host
+		_, _ = a.store.Save(s, con)
 	}
 	a.emuLogins(v)
 }
@@ -1663,7 +1792,11 @@ func (a *App) emuLoginPassword(path string, v emu.VM) {
 
 func (a *App) emuSessions(v emu.VM) {
 	emuLab.mu.Lock()
-	l, host, folder := emuLab.f.Lab, emuLab.f.Host, emuLab.f.Folder
+	l, folder := emuLab.f.Lab, emuLab.f.Folder
+	host := emuHostOf(v)
+	if l != nil {
+		l = a.emuFor(host)
+	}
 	im := emuImage(v.Image)
 	if im == nil || l == nil {
 		emuLab.mu.Unlock()
@@ -1704,7 +1837,7 @@ func (a *App) emuSessions(v emu.VM) {
 // emuStart uploads the images the VMs need and starts them; their boot is then watched.
 func (a *App) emuStart(host string, ids []string) {
 	emuLab.mu.Lock()
-	l := emuLab.f.Lab
+	l := a.emuFor(host) // the lab as this host runs it (its management, tunnels to the other hosts)
 	if l == nil {
 		emuLab.mu.Unlock()
 		return
@@ -1902,8 +2035,8 @@ func (a *App) emuWatch(host string, ids []string) {
 		time.Sleep(3 * time.Second)
 		st := a.emuPoll(true)
 		emuLab.mu.Lock()
-		l := emuLab.f.Lab
-		if l == nil || emuLab.f.Host != host {
+		l := a.emuFor(host)
+		if l == nil || !slices.Contains(l.Hosts(emuLab.f.Host), host) {
 			emuLab.mu.Unlock()
 			return
 		}
@@ -1953,7 +2086,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		emuLab.mu.Unlock()
 	}()
 	emuLab.mu.Lock()
-	l := emuLab.f.Lab
+	l := a.emuFor(host)
 	im0 := emuImage(v.Image)
 	if l == nil || im0 == nil {
 		emuLab.mu.Unlock()
@@ -2102,7 +2235,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 // this tells the switch apart from the way to it.
 func (a *App) emuReach(host, id string) {
 	emuLab.mu.Lock()
-	l := emuLab.f.Lab
+	l := a.emuFor(host)
 	var ip string
 	if l != nil && l.Mgmt != "forward" && l.Mgmt != "" {
 		if v := l.VMByID(id); v != nil {
@@ -2158,6 +2291,11 @@ func (a *App) emuReach(host, id string) {
 func (a *App) emuDirect(id, ip string) {
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
+	if l != nil {
+		if v := l.VMByID(id); v != nil {
+			l = a.emuFor(emuHostOf(*v))
+		}
+	}
 	if l == nil || !(l.Mgmt == "cloud" || l.Mgmt == "lan") {
 		emuLab.mu.Unlock()
 		return
@@ -2250,7 +2388,15 @@ func emuMgmtOK(info *emu.HostInfo, mgmt string) error {
 // be stopped; it applies when they start): "lan", "nat", "bridge" or "forward".
 func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 	emuLab.mu.Lock()
-	l, host := emuLab.f.Lab, emuLab.f.Host
+	host := emuLab.f.Host
+	emuLab.mu.Unlock()
+	return a.EmuSetHostMgmt(host, mgmt, mgmtNet)
+}
+
+// EmuSetHostMgmt changes how one host's switches are managed (they are off).
+func (a *App) EmuSetHostMgmt(host, mgmt, mgmtNet string) (EmuView, error) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
 	if l == nil {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("there is no emulated lab")
@@ -2258,7 +2404,13 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 	emuLab.mu.Unlock()
 	st := a.emuPollFresh()
 	emuLab.mu.Lock()
-	if len(st.Up) > 0 {
+	up := false
+	for _, v := range emuLab.f.Lab.VMs {
+		if _, ok := st.Up[v.ID]; ok && emuHostOf(v) == host {
+			up = true
+		}
+	}
+	if up {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("stop the switches first: the management changes while they are off")
 	}
@@ -2280,11 +2432,12 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 		return EmuView{}, err
 	}
 	emuLab.mu.Lock()
-	l = emuLab.f.Lab
-	if l == nil {
+	l0 := emuLab.f.Lab
+	if l0 == nil {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("there is no emulated lab")
 	}
+	l = a.emuFor(host) // its view: the management set on it is kept for the host below
 	l.LanFixed = false
 	if mgmt == "cloud" || mgmt == "lan" && strings.TrimSpace(mgmtNet) != "" { // lan: fixed addresses on a network without DHCP
 		if err := emuCloud(l, info, mgmtNet); err != nil {
@@ -2304,17 +2457,26 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 	}
 	old := l.Mgmt
 	l.Mgmt, l.LanIf, l.LanKind = mgmt, info.LanIf, info.LanKind
-	for i := range l.VMs {
-		v := &l.VMs[i]
+	l0.SetNet(host, emuLab.f.Host, l.Net("", ""))
+	var vms []emu.VM
+	for i := range l0.VMs {
+		v := &l0.VMs[i] // the lab's own VMs
+		if emuHostOf(*v) != host {
+			continue
+		}
 		v.Direct = false // checked again once it has its address
-		v.MgmtIP, v.Gateway = l.Address(v.Index)
+		v.MgmtIP, v.Gateway = l.Address(l.Slot(*v))
 		if old != mgmt {
 			if im := emuImage(v.Image); im != nil && (strings.Contains(strings.Join(im.Day0, "\n"), "{mgmt") || strings.Contains(strings.Join(im.Day0, "\n"), "{gateway}")) {
 				v.Day0Done = false // its address is part of day 0
 			}
 		}
 	}
-	vms := append([]emu.VM(nil), l.VMs...)
+	for _, v := range l0.VMs {
+		if emuHostOf(v) == host {
+			vms = append(vms, v)
+		}
+	}
 	fixed := l.Mgmt == "cloud" || l.Mgmt == "lan" && l.LanFixed
 	_ = a.emuSave()
 	emuLab.mu.Unlock()
@@ -2513,70 +2675,121 @@ func (a *App) emuPoll(force bool) emu.Status {
 		return st
 	}
 	emuLab.polling = true
-	var tails []string
-	for _, v := range l.VMs {
-		tails = append(tails, v.ID)
+	main := emuLab.f.Host
+	hosts := l.Hosts(main)
+	scripts := map[string]string{}
+	for _, h := range hosts {
+		var tails []string
+		for _, v := range l.VMs {
+			if l.HostOf(v, main) == h {
+				tails = append(tails, v.ID)
+			}
+		}
+		scripts[h] = a.emuFor(h).StatusScript(tails)
 	}
-	script, host := l.StatusScript(tails), emuLab.f.Host
 	emuLab.mu.Unlock()
-	out, err := a.emuRun(host, script, 20*time.Second)
+	// every host of the lab at once
+	outs, errs := map[string]string{}, map[string]error{}
+	var wg sync.WaitGroup
+	var omu sync.Mutex
+	for _, h := range hosts {
+		wg.Add(1)
+		go func(h string) {
+			defer wg.Done()
+			out, err := a.emuRun(h, scripts[h], 20*time.Second)
+			omu.Lock()
+			outs[h], errs[h] = out, err
+			omu.Unlock()
+		}(h)
+	}
+	wg.Wait()
 	emuLab.mu.Lock()
 	defer emuLab.mu.Unlock()
 	emuLab.polling = false
-	if err == nil {
-		st := emu.ParseStatus(out, base64.StdEncoding.DecodeString)
-		now := time.Now()
+	if emuLab.hostStatus == nil {
+		emuLab.hostStatus = map[string]emu.Status{}
+	}
+	now := time.Now()
+	dt := now.Sub(emuLab.ticksAt).Seconds()
+	ticks := map[string]float64{}
+	for _, h := range hosts {
+		if errs[h] != nil {
+			continue // its switches keep their last state
+		}
+		st := emu.ParseStatus(outs[h], base64.StdEncoding.DecodeString)
 		// CPU use since the last poll (ps would give the average since the VM started)
-		if dt := now.Sub(emuLab.ticksAt).Seconds(); dt > 0.5 && st.Clk > 0 {
+		if dt > 0.5 && st.Clk > 0 {
 			for id, t := range st.Up {
 				if prev, ok := emuLab.ticks[id]; ok && t >= prev {
 					emuLab.cpu[id] = (t - prev) / st.Clk / dt
 				}
 			}
 		}
-		emuLab.ticks, emuLab.ticksAt = map[string]float64{}, now
 		for id, t := range st.Up {
-			emuLab.ticks[id] = t
+			ticks[id] = t
 		}
-		for _, v := range l.VMs {
-			if _, up := st.Up[v.ID]; !up {
-				delete(emuLab.ready, v.ID)
-			} else if im := emuImage(v.Image); im != nil && !emuLab.ready[v.ID] && im.ReadyIn(st.Log[v.ID]) {
-				emuLab.ready[v.ID] = true
-				emuEv(v.ID, "ok", "booted - the console shows "+orStr(im.Ready, "its prompt"))
-			}
-		}
-		if l.Mgmt == "nat" { // addresses from the NAT network's DHCP leases: no CLI needed (any image)
-			bits := "24"
-			if _, b, ok := strings.Cut(st.NatNet, "/"); ok {
-				bits = b
-			}
-			for i := range l.VMs {
-				v := &l.VMs[i]
-				if _, up := st.Up[v.ID]; !up {
-					continue
-				}
-				if ip := st.Leases[strings.ToLower(l.MAC(*v, 0))]; ip != "" && v.MgmtIP != ip+"/"+bits {
-					v.Gateway, v.MgmtIP = strings.Split(st.NatNet, "/")[0], ip+"/"+bits
-					go func(id, name, addr, host string) {
-						a.emuSetAddress(id, addr)
-						a.emuNotify(nil, name+" has the address "+strings.Split(addr, "/")[0])
-						for end := time.Now().Add(5 * time.Minute); time.Now().Before(end); time.Sleep(5 * time.Second) {
-							emuLab.mu.Lock()
-							ready := emuLab.ready[id]
-							emuLab.mu.Unlock()
-							if ready {
-								a.emuReach(host, id)
-								return
-							}
-						}
-					}(v.ID, v.Name, ip+"/"+bits, emuLab.f.Host)
-				}
-			}
-		}
-		emuLab.status = st
-		emuLab.statusAt = now
+		emuLab.hostStatus[h] = st
 	}
+	emuLab.ticks, emuLab.ticksAt = ticks, now
+	// the lab's status: every host's switches; the host figures are its own host's
+	m := emu.Status{Up: map[string]float64{}, RSS: map[string]int64{}, Log: map[string]string{}, Leases: map[string]string{}}
+	if st, ok := emuLab.hostStatus[main]; ok {
+		m.Clk, m.MemTotal, m.MemFree, m.Cores, m.Load, m.NatNet = st.Clk, st.MemTotal, st.MemFree, st.Cores, st.Load, st.NatNet
+	}
+	for _, h := range hosts {
+		st := emuLab.hostStatus[h]
+		for k, v := range st.Up {
+			m.Up[k] = v
+		}
+		for k, v := range st.RSS {
+			m.RSS[k] = v
+		}
+		for k, v := range st.Log {
+			m.Log[k] = v
+		}
+	}
+	for _, v := range l.VMs {
+		if _, up := m.Up[v.ID]; !up {
+			delete(emuLab.ready, v.ID)
+		} else if im := emuImage(v.Image); im != nil && !emuLab.ready[v.ID] && im.ReadyIn(m.Log[v.ID]) {
+			emuLab.ready[v.ID] = true
+			emuEv(v.ID, "ok", "booted - the console shows "+orStr(im.Ready, "its prompt"))
+		}
+	}
+	for _, h := range hosts {
+		st, ok := emuLab.hostStatus[h]
+		if !ok || l.Net(h, main).Mgmt != "nat" { // addresses from the NAT network's DHCP leases: no CLI needed (any image)
+			continue
+		}
+		bits := "24"
+		if _, b, ok := strings.Cut(st.NatNet, "/"); ok {
+			bits = b
+		}
+		for i := range l.VMs {
+			v := &l.VMs[i]
+			if _, up := st.Up[v.ID]; !up || l.HostOf(*v, main) != h {
+				continue
+			}
+			if ip := st.Leases[strings.ToLower(l.MAC(*v, 0))]; ip != "" && v.MgmtIP != ip+"/"+bits {
+				v.Gateway, v.MgmtIP = strings.Split(st.NatNet, "/")[0], ip+"/"+bits
+				go func(id, name, addr, host string) {
+					a.emuSetAddress(id, addr)
+					a.emuNotify(nil, name+" has the address "+strings.Split(addr, "/")[0])
+					for end := time.Now().Add(5 * time.Minute); time.Now().Before(end); time.Sleep(5 * time.Second) {
+						emuLab.mu.Lock()
+						ready := emuLab.ready[id]
+						emuLab.mu.Unlock()
+						if ready {
+							a.emuReach(host, id)
+							return
+						}
+					}
+				}(v.ID, v.Name, ip+"/"+bits, h)
+			}
+		}
+	}
+	emuLab.status = m
+	emuLab.statusAt = now
 	return emuLab.status
 }
 
@@ -2644,6 +2857,24 @@ func (a *App) emuView() EmuView {
 	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw, v.LanFixed = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw, l.LanFixed
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
+	for _, h := range l.Hosts(f.Host) {
+		hs, n := emuLab.hostStatus[h], l.Net(h, f.Host)
+		u := EmuHostUse{Host: h, Name: h[strings.LastIndex(h, "/")+1:], Addr: l.Addrs[h], Mgmt: n.Mgmt, MgmtNet: n.MgmtNet, CloudGw: n.CloudGw, LanFixed: n.LanFixed,
+			CPUs: hs.Cores, MemTotal: hs.MemTotal, MemFree: hs.MemFree, Load: hs.Load, Main: h == f.Host}
+		for _, vm := range l.VMs {
+			if l.HostOf(vm, f.Host) != h {
+				continue
+			}
+			u.Switches++
+			if _, up := hs.Up[vm.ID]; up {
+				u.Running++
+				u.VCPUs += vm.CPUs
+				u.RAM += vm.RAM
+				u.Cores += emuLab.cpu[vm.ID]
+			}
+		}
+		v.HostUse = append(v.HostUse, u)
+	}
 	for _, vm := range l.VMs {
 		im := emuImage(vm.Image)
 		d := EmuDevice{ID: vm.ID, Hostname: vm.Name, Image: vm.Image, MgmtIP: vm.MgmtIP, MAC: l.MAC(vm, 0), X: vm.X, Y: vm.Y, CPUs: vm.CPUs, RAM: vm.RAM,
@@ -2652,14 +2883,16 @@ func (a *App) emuView() EmuView {
 			d.Model, d.OS, d.Ports = im.Name, orStr(im.DeviceType, "VM"), im.DataPorts()
 			onHost[im.ID] = true
 		}
+		vl := a.emuFor(emuHostOf(vm)) // its host's management
+		d.Host = emuHostOf(vm)
 		switch {
-		case (l.Mgmt == "lan" || l.Mgmt == "nat") && vm.MgmtIP == "":
+		case (vl.Mgmt == "lan" || vl.Mgmt == "nat") && vm.MgmtIP == "":
 			d.SSH = "DHCP (not known yet)"
-		case l.Mgmt == "nat":
+		case vl.Mgmt == "nat":
 			d.SSH = strings.Split(vm.MgmtIP, "/")[0] + ":22 through the host"
-		case l.Mgmt == "bridge" || l.Mgmt == "cloud":
+		case vl.Mgmt == "bridge" || vl.Mgmt == "cloud":
 			d.SSH = strings.Split(vm.MgmtIP, "/")[0] + ":22 through the host"
-		case l.Mgmt == "lan":
+		case vl.Mgmt == "lan":
 			d.SSH = strings.Split(vm.MgmtIP, "/")[0] + ":22"
 		default:
 			d.SSH = "127.0.0.1:" + strconv.Itoa(d.Port) + " on the host"
@@ -2791,7 +3024,10 @@ func (a *App) EmuStart(ids []string) (EmuView, error) {
 	for _, v := range vs {
 		a.emuLogins(v)
 	}
-	go a.emuStart(host, ids)
+	hosts, by := a.emuGroups(ids)
+	for _, h := range hosts { // each host starts its switches
+		go a.emuStart(h, by[h])
+	}
 	time.Sleep(50 * time.Millisecond)
 	return a.EmuState()
 }
@@ -2802,14 +3038,18 @@ func (a *App) EmuStop(ids []string) (EmuView, error) {
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
 	}
-	emuLab.mu.Lock()
-	script := emuLab.f.Lab.StopScript(ids)
-	for _, id := range ids {
-		emuEv(id, "info", "stopped")
-	}
-	emuLab.mu.Unlock()
-	if _, err := a.emuRun(host, script, time.Minute); err != nil {
-		return EmuView{}, err
+	_ = host
+	hosts, by := a.emuGroups(ids)
+	for _, h := range hosts {
+		emuLab.mu.Lock()
+		script := a.emuFor(h).StopScript(by[h])
+		for _, id := range by[h] {
+			emuEv(id, "info", "stopped")
+		}
+		emuLab.mu.Unlock()
+		if _, err := a.emuRun(h, script, time.Minute); err != nil {
+			return EmuView{}, err
+		}
 	}
 	a.emuPollFresh()
 	return a.EmuState()
@@ -2829,17 +3069,21 @@ func (a *App) EmuReset(ids []string) (EmuView, error) {
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
 	}
-	emuLab.mu.Lock()
-	script := emuLab.f.Lab.ResetScript(ids)
-	for _, id := range ids {
-		if v := emuLab.f.Lab.VMByID(id); v != nil {
-			v.Day0Done = false
+	_ = host
+	hosts, by := a.emuGroups(ids)
+	for _, h := range hosts {
+		emuLab.mu.Lock()
+		script := a.emuFor(h).ResetScript(by[h])
+		for _, id := range by[h] {
+			if v := emuLab.f.Lab.VMByID(id); v != nil {
+				v.Day0Done = false
+			}
 		}
-	}
-	_ = a.emuSave()
-	emuLab.mu.Unlock()
-	if _, err := a.emuRun(host, script, time.Minute); err != nil {
-		return EmuView{}, err
+		_ = a.emuSave()
+		emuLab.mu.Unlock()
+		if _, err := a.emuRun(h, script, time.Minute); err != nil {
+			return EmuView{}, err
+		}
 	}
 	return a.EmuStart(ids)
 }
@@ -2851,13 +3095,23 @@ func (a *App) EmuRemove(ids []string, sessions bool) (EmuView, error) {
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
 	}
-	emuLab.mu.Lock()
-	script := emuLab.f.Lab.ResetScript(ids)
-	if len(ids) >= len(emuLab.f.Lab.VMs) { // the last switches: the lab's bridge goes too
-		script += "sudo -n ip link del " + emuLab.f.Lab.Bridge() + " 2>/dev/null\n"
+	_ = host
+	hosts, by := a.emuGroups(ids)
+	for _, h := range hosts {
+		emuLab.mu.Lock()
+		on := 0
+		for _, v := range emuLab.f.Lab.VMs {
+			if emuHostOf(v) == h {
+				on++
+			}
+		}
+		script := a.emuFor(h).ResetScript(by[h])
+		if len(by[h]) >= on { // the host's last switches: the lab's bridge there goes too
+			script += "sudo -n ip link del " + emuLab.f.Lab.Bridge() + " 2>/dev/null\n"
+		}
+		emuLab.mu.Unlock()
+		_, _ = a.emuRun(h, script, time.Minute)
 	}
-	emuLab.mu.Unlock()
-	_, _ = a.emuRun(host, script, time.Minute)
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
 	gone := map[string]bool{}
@@ -2990,6 +3244,7 @@ func (a *App) EmuSetLink(id, port string, up bool) (EmuView, error) {
 	p := emuPort(emuImage(v.Image), port)
 	type end struct {
 		mon, n int
+		host   string
 	}
 	var ends []end
 	for i := range l.Cables {
@@ -2997,18 +3252,21 @@ func (a *App) EmuSetLink(id, port string, up bool) (EmuView, error) {
 		if c.A == id && c.APort == p || c.B == id && c.BPort == p {
 			c.Down = !up
 			if x := l.VMByID(c.A); x != nil {
-				ends = append(ends, end{l.MonitorPort(*x), c.APort})
+				ends = append(ends, end{l.MonitorPort(*x), c.APort, emuHostOf(*x)})
 			}
 			if x := l.VMByID(c.B); x != nil {
-				ends = append(ends, end{l.MonitorPort(*x), c.BPort})
+				ends = append(ends, end{l.MonitorPort(*x), c.BPort, emuHostOf(*x)})
 			}
 		}
 	}
-	host := emuLab.f.Host
 	_ = a.emuSave()
 	emuLab.mu.Unlock()
-	if cl, err := a.emuClient(context.Background(), host); err == nil {
-		for _, e := range ends {
+	for _, e := range ends { // each end on its own host
+		cl, err := a.emuClient(context.Background(), e.host)
+		if err != nil {
+			continue
+		}
+		{
 			if conn, err := cl.Dial("tcp", "127.0.0.1:"+strconv.Itoa(e.mon)); err == nil {
 				_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 				_, _ = fmt.Fprintf(conn, "set_link n%d %s\r\n", e.n, map[bool]string{true: "on", false: "off"}[up])
@@ -3353,11 +3611,18 @@ func (a *App) EmuApplyPersona(ids []string) (EmuView, error) {
 		return EmuView{}, errors.New("there is no emulated lab")
 	}
 	st := a.emuPollFresh()
+	_ = host
 	for _, id := range ids {
+		emuLab.mu.Lock()
+		h := emuLab.f.Host
+		if v := emuLab.f.Lab.VMByID(id); v != nil {
+			h = emuHostOf(*v)
+		}
+		emuLab.mu.Unlock()
 		if _, up := st.Up[id]; up {
-			go a.emuPersonaReboot(host, id)
+			go a.emuPersonaReboot(h, id)
 		} else {
-			go a.emuStart(host, []string{id})
+			go a.emuStart(h, []string{id})
 		}
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -3613,7 +3878,7 @@ func (a *App) emuPowerOff(host, id string, wait time.Duration) {
 		emuLab.mu.Unlock()
 		return
 	}
-	mon, stop := l.MonitorPort(*v), l.StopScript([]string{id})
+	mon, stop := l.MonitorPort(*v), a.emuFor(host).StopScript([]string{id})
 	emuLab.mu.Unlock()
 	if cl, err := a.emuClient(context.Background(), host); err == nil {
 		if conn, err := cl.Dial("tcp", "127.0.0.1:"+strconv.Itoa(mon)); err == nil {
@@ -3975,7 +4240,7 @@ func (a *App) EmuReadLags(ids []string) (EmuView, error) {
 		if im == nil || im.LagCmd == "" {
 			continue
 		}
-		if err := a.emuReadLag(host, vv, *im); err != nil {
+		if err := a.emuReadLag(a.emuHostOfID(vv.ID), vv, *im); err != nil {
 			emuLab.mu.Lock()
 			emuEv(id, "warn", "LAGs not read: "+err.Error())
 			emuLab.mu.Unlock()
@@ -4251,4 +4516,79 @@ func (a *App) EmuDeleteTopology(name string) error {
 		return errors.New("that topology is open: open another one first")
 	}
 	return os.Remove(a.emuTopoPath(name))
+}
+
+// EmuMoveVM moves a stopped switch to another host of yours: it starts there
+// from the image again (its disk on the old host goes; day 0 is typed again),
+// with that host's management; cables to switches on other hosts become UDP
+// tunnels between the hosts.
+func (a *App) EmuMoveVM(id, host string) (EmuView, error) {
+	emuLab.mu.Lock()
+	a.emuLoad()
+	l := emuLab.f.Lab
+	var v *emu.VM
+	if l != nil {
+		v = l.VMByID(id)
+	}
+	known := false
+	for _, h := range emuLab.f.Hosts {
+		known = known || h.Session == host
+	}
+	if v == nil || host == "" {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such switch")
+	}
+	if !known {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("add that host first (Hosts)")
+	}
+	from := emuHostOf(*v)
+	if from == host {
+		emuLab.mu.Unlock()
+		return a.EmuState()
+	}
+	emuLab.mu.Unlock()
+	if _, up := a.emuPollFresh().Up[id]; up {
+		return EmuView{}, errors.New("stop the switch first: it moves while it is off")
+	}
+	emuLab.mu.Lock()
+	reset := a.emuFor(from).ResetScript([]string{id})
+	emuLab.mu.Unlock()
+	_, _ = a.emuRun(from, reset, time.Minute) // its disk on the old host
+	var info *emu.HostInfo
+	emuLab.mu.Lock()
+	for i := range emuLab.f.Hosts {
+		if emuLab.f.Hosts[i].Session == host {
+			info = &emuLab.f.Hosts[i].Info
+		}
+	}
+	if l.Nets == nil || host != emuLab.f.Host {
+		if _, ok := l.Nets[host]; !ok && host != emuLab.f.Host && info != nil {
+			mgmt := emuBestMgmt(info)
+			if mgmt == "cloud" || mgmt == "lan" && info.LanKind == "" {
+				mgmt = "nat"
+			}
+			l.SetNet(host, emuLab.f.Host, emu.HostNet{Mgmt: mgmt, LanIf: info.LanIf, LanKind: info.LanKind, MgmtNet: "10.99.0.0/24"})
+		}
+	}
+	v = l.VMByID(id)
+	v.Host = ""
+	if host != emuLab.f.Host {
+		v.Host = host
+	}
+	v.Day0Done, v.Direct = false, false
+	if v.Persona != nil {
+		v.Persona.Applied = ""
+	}
+	lv := a.emuFor(host)
+	v.MgmtIP, v.Gateway = lv.Address(lv.Slot(*v))
+	emuEv(id, "info", "moved to "+host[strings.LastIndex(host, "/")+1:]+": it starts there from the image")
+	vv := *v
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	a.emuRetarget(vv)
+	return a.EmuState()
 }
