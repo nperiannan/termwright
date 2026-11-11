@@ -7,6 +7,7 @@ import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabConfigure, LabHosts, LabImages, LabNew } from './lab-pages';
+import { TerminalView } from './terminal-view';
 
 const BW = 104, BH = 46;
 type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; dt?: EmuDeviceType; m?: LabModel };
@@ -15,7 +16,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew],
+  imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew, TerminalView],
   template: `
   <div class="ws" (click)="menu.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px'">
     <div class="tb">
@@ -188,8 +189,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       <div class="dtabs">
         <a [class.on]="dock() === 'events'" (click)="dock.set('events')">{{ tr('Events') }}@if (problems()) { <span class="cnt">{{ problems() }}</span> }</a>
         @if (emu() && selDev(); as d) { <a [class.on]="dock() === 'console'" (click)="dock.set('console'); loadTail()">{{ tr('{0} console', d.hostname) }}</a> }
-        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : tr('The end of its console (read-only); open the console to type') }}</span>
-        <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button>
+        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
+        @if (dock() === 'console' && dockTab(); as t) { <button type="button" class="sm" (click)="undock()" [title]="tr('Close the connection to its console')">{{ tr('Disconnect') }}</button> }
+        @else { <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button> }
         @if (dock() === 'events' && emu()) { <button type="button" class="sm" (click)="clearEvents()">{{ tr('Clear') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
       </div>
@@ -198,7 +200,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           @for (e of events(); track $index) { <div [class]="e.level"><span class="t">{{ time(e.at) }}</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span>{{ e.text }}</span></div> }
           @empty { <div><span class="t"></span><b></b><span class="muted">{{ emu() ? tr('Nothing yet - start a switch.') : tr('Simulated switches start at once; their state is on the canvas.') }}</span></div> }
         </div>
-      } @else { <pre class="tail">{{ tail() || tr('No console output yet.') }}</pre> }
+      } @else if (dockTab(); as t) {
+        <div class="dterm"><app-terminal-view [tab]="t" [visible]="visible() && dock() === 'console'" /></div>
+      } @else {
+        <div class="tailw" (click)="typeHere()" [title]="tr('Click to connect and type')"><pre class="tail">{{ tail() || tr('No console output yet.') }}</pre>
+          @if (selDev()?.running) { <button type="button" class="primary sm typ" (click)="typeHere(); $event.stopPropagation()">⌨ {{ tr('Type here') }}</button> }</div>
+      }
     </div>
   </div>`,
   styles: [`
@@ -277,6 +284,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .ev { padding: 6px 14px; overflow: auto; div { display: grid; grid-template-columns: 64px 120px 1fr; gap: 10px; padding: 2px 0; font-size: 12px; } .t { color: var(--muted); } b { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ok span:last-child { color: var(--success, #1fa45a); } .error span:last-child { color: var(--danger); } .warn span:last-child { color: var(--warning, #e39b17); } }
     .tail { margin: 0; padding: 8px 14px; overflow: auto; font: 11.5px/1.45 var(--mono, monospace); white-space: pre-wrap; }
+    .tailw { position: relative; min-height: 0; overflow: hidden; display: flex; cursor: text; .tail { flex: 1; } .typ { position: absolute; right: 14px; bottom: 10px; } }
+    .dterm { position: relative; min-height: 0; overflow: hidden; padding: 4px 6px; display: flex; > * { flex: 1; min-width: 0; } }
   `],
 })
 export class LabWorkspace implements OnDestroy {
@@ -359,7 +368,7 @@ export class LabWorkspace implements OnDestroy {
     this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); }, 3000);
   }
   @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.cloudF()) { this.cloudF.set(null); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else { this.cancelLink(); this.menu.set(null); } }
-  ngOnDestroy() { clearInterval(this.timer); this.lab.watch('ws-' + this.tab().id, false); }
+  ngOnDestroy() { clearInterval(this.timer); this.lab.watch('ws-' + this.tab().id, false); for (const id of Object.values(this.docked())) void this.tabs.close(id); }
 
   protected hostName = computed(() => (this.st()?.host ?? '').split('/').pop() ?? '');
   protected running = computed(() => this.devs().filter(d => d.running).length);
@@ -594,6 +603,21 @@ export class LabWorkspace implements OnDestroy {
   async remove(d: LabDevice) {
     const msg = this.emu() ? tr('Remove {0} emulated switches? They stop, their disks on the host and their sessions are deleted.', 1) : tr('Remove {0} simulated switches and their sessions? Their configuration is lost.', 1);
     if (await this.ui.confirm(tr('Remove switches'), msg, tr('Remove'), true) && await this.lab.remove([d.id], true)) { if (this.sel() === d.id) this.sel.set(''); }
+  }
+  /** Live consoles in the pane, by switch. */
+  private docked = signal<Record<string, string>>({});
+  protected dockTab = computed(() => { const id = this.docked()[this.sel()]; return id ? this.tabs.get(id) : null; });
+  async typeHere() {
+    const d = this.selDev(); if (!d || !d.running || this.dockTab()) return;
+    const p = this.lab.consoleOf(d.id); if (!p) return;
+    const id = await this.tabs.openDocked(p);
+    if (id) this.docked.update(m => ({ ...m, [d.id]: id }));
+  }
+  async undock() {
+    const id = this.docked()[this.sel()]; if (!id) return;
+    this.docked.update(m => { const n = { ...m }; delete n[this.sel()]; return n; });
+    await this.tabs.close(id);
+    void this.loadTail();
   }
   async loadTail() { const id = this.sel(); if (id && this.emu()) { const t = await this.lab.consoleTail(id); if (this.sel() === id) this.tail.set(t); } }
   protected cloudF = signal<{ addr: string; gw: string; net: string } | null>(null);

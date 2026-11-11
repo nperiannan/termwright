@@ -124,7 +124,7 @@ export class App implements OnInit {
   tabEnv(t: TabView) { return envInfo(envOf(t.session?.path ?? '', t.session?.environment, this.settings()?.folderDefaults)); }
   readonly tiled = computed(() => this.tabs.layout() !== 'tabs');
   readonly gridCols = computed(() => {
-    const n = this.tabs.tabs().length;
+    const n = this.tabs.shown().length;
     const l = this.tabs.layout();
     return l === 'grid' ? Math.max(1, Math.ceil(Math.sqrt(n))) : n;
   });

@@ -2317,6 +2317,13 @@ const ru: Record<string, string> = {
   'Like GNS3’s cloud: the switches get fixed addresses on the host’s network {0} (from the first one on) and are reached from it and reach it with any protocol. The host answers for them, so nothing has to be allowed on a VM host’s virtual switch.': 'Как облако GNS3: коммутаторы получают фиксированные адреса в сети хоста {0} (начиная с первого), доступны из неё и видят её по любому протоколу. Хост отвечает за них, поэтому на виртуальном коммутаторе хоста-ВМ ничего разрешать не нужно.',
   'fixed addresses, any protocol, no virtual switch settings': 'фиксированные адреса, любой протокол, без настроек виртуального коммутатора',
   'no network port with an address': 'нет сетевого порта с адресом',
+  'A session goes through a jump host or a proxy, not both: choose "(none - connect directly)" above to use a proxy.': 'Сеанс идёт через промежуточный хост или через прокси, но не через оба: чтобы выбрать прокси, укажите выше «(none - connect directly)».',
+  'A SOCKS5 or HTTP proxy (for example a company proxy) that the connection goes through.': 'Прокси SOCKS5 или HTTP (например, корпоративный), через который идёт подключение.',
+  'Click to connect and type': 'Нажмите, чтобы подключиться и вводить',
+  'Type here': 'Ввод здесь',
+  'Live console - day-0 and checks wait while it is connected': 'Консоль в реальном времени: пока она подключена, day-0 и проверки ждут',
+  'The end of its console; click it to type': 'Конец его консоли; нажмите, чтобы вводить',
+  'Close the connection to its console': 'Закрыть подключение к его консоли',
 };
 
 export default ru;

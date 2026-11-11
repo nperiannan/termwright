@@ -474,6 +474,8 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 <select name="ptype" [(ngModel)]="s.proxyType" [disabled]="!!s.jumpSession">
                   <option value="">None</option><option value="socks5">SOCKS5</option><option value="http">HTTP CONNECT</option>
                 </select>
+                <label></label>
+                <div class="hint">{{ s.jumpSession ? 'A session goes through a jump host or a proxy, not both: choose "(none - connect directly)" above to use a proxy.' : 'A SOCKS5 or HTTP proxy (for example a company proxy) that the connection goes through.' }}</div>
                 @if (s.proxyType && !s.jumpSession) {
                   <label>Proxy host</label>
                   <div class="row"><input name="phost" [(ngModel)]="s.proxyHost" /> Port <input name="pport" type="number" class="short" [(ngModel)]="s.proxyPort" /></div>

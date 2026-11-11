@@ -19,6 +19,8 @@ import { tr } from './i18n';
 
 export interface TabView {
   id: string;
+  /** Shown in a pane of its own (a lab's console pane), not in the tab strip. */
+  docked?: boolean;
   title: string;
   state: string;
   message: string;
@@ -159,7 +161,7 @@ export class Tabs {
       }
     });
     this.backend.on('tab:opened', (ti: TabInfo) => this.add(ti));
-    this.backend.on('tab:activate', (id: string) => { if (this.get(id)) this.activeId.set(id); });
+    this.backend.on('tab:activate', (id: string) => { if (this.get(id) && !this.get(id)!.docked) this.activeId.set(id); });
     this.backend.on('alert', (a: AlertEvent) => this.onAlert(a));
     effect(() => { const id = this.activeId(); if (this.get(id)?.alert) this.patch(id, { alert: false }); });
     this.backend.on('zmodem:send-request', async (tabId: string) => {
@@ -555,9 +557,9 @@ export class Tabs {
   /** Current remote folder of each SFTP tab (target folder for server-to-server copies). */
   readonly sftpDirs = new Map<string, string>();
 
-  private add(ti: TabInfo) {
+  private add(ti: TabInfo, docked = false) {
     const tv: TabView = {
-      id: ti.id, title: ti.title, state: ti.state, message: '', info: ti.info,
+      id: ti.id, docked, title: ti.title, state: ti.state, message: '', info: ti.info,
       session: ti.session, logFile: ti.logFile, cols: 0, rows: 0, locked: false,
       kind: 'terminal', parentId: '', home: '', recording: false,
       timestamps: !!ti.session.timestamps, autoScroll: !ti.session.noAutoScroll, sendBar: ti.session.protocol === 'Serial' || !this.ui.settings()?.hideTerminalBar,
@@ -589,8 +591,23 @@ export class Tabs {
       this.backend.on('term:rec:' + ti.id, (path: string) => this.patch(ti.id, { castFile: path })),
     ]);
     this.tabs.update(l => [...l, tv]);
-    this.activeId.set(ti.id);
+    if (!docked) this.activeId.set(ti.id);
     if (ti.session.path) setTimeout(() => void this.ui.loadSettings(), 300); // recent sessions and last-connected times
+  }
+
+  /** The tabs of the tab strip (docked ones live in their own pane). */
+  readonly shown = computed(() => this.tabs().filter(t => !t.docked));
+
+  /** Opens a session as a docked tab (in a pane of its own); its id, or "". */
+  async openDocked(path: string): Promise<string> {
+    try {
+      const ti = await this.backend.openTab(path);
+      this.add(ti, true);
+      return ti.id;
+    } catch (e) {
+      this.ui.error(e);
+      return '';
+    }
   }
 
   patch(id: string, p: Partial<TabView>) {
@@ -854,13 +871,14 @@ export class Tabs {
     const idx = list.findIndex(x => x.id === id);
     this.tabs.set(list.filter(x => x.id !== id));
     if (this.activeId() === id) {
-      const next = this.tabs()[Math.min(idx, this.tabs().length - 1)];
+      const l2 = this.shown();
+      const next = l2[Math.min(idx, l2.length - 1)];
       this.activeId.set(next?.id ?? '');
     }
   }
 
   next(step = 1) {
-    const l = this.tabs();
+    const l = this.shown();
     if (!l.length) return;
     const i = l.findIndex(t => t.id === this.activeId());
     this.activeId.set(l[(i + step + l.length) % l.length].id);
