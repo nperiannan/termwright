@@ -2655,7 +2655,7 @@ func (a *App) emuPowerOff(host, id string, wait time.Duration) {
 
 
 // versionIn finds the software version in a file name: the first run of
-// numbers like 9.4.0.0 that does not start inside a word ("FEGNS3.9.4.0.0"
+// numbers like 9.4.0.0 that does not start inside a word ("NOSGNS3.9.4.0.0"
 // is 9.4.0.0, "vm-33.4.1.15" is 33.4.1.15, "v9.1" counts after a v).
 var versionAt = regexp.MustCompile(`^\d+\.\d+\.\d+(?:\.\d+)?`)
 
