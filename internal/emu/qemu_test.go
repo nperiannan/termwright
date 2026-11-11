@@ -129,3 +129,67 @@ func TestPersonaWrite(t *testing.T) {
 		}
 	}
 }
+
+// TestQEMUFast saves a running VM's state into its disk and starts it from
+// there: no boot (the console stays quiet), the same machine as it was.
+func TestQEMUFast(t *testing.T) {
+	kernel, initrd := os.Getenv("TW_EMU_KERNEL"), os.Getenv("TW_EMU_INITRD")
+	if kernel == "" || initrd == "" {
+		t.Skip("TW_EMU_KERNEL / TW_EMU_INITRD not set")
+	}
+	home := t.TempDir()
+	run := func(script string) string {
+		c := exec.Command("bash", "-c", script)
+		c.Dir, c.Env = home, append(os.Environ(), "HOME="+home)
+		out, _ := c.CombinedOutput()
+		return string(out)
+	}
+	_ = os.MkdirAll(filepath.Join(home, "termwright-lab/images"), 0o755)
+	if out, err := exec.Command("qemu-img", "create", "-q", "-f", "qcow2", filepath.Join(home, "termwright-lab/images/fake.qcow2"), "16M").CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	im := &Image{ID: "f", Name: "Fake NOS", FileName: "fake.qcow2", RAM: 256, CPUs: 1, NICs: 2, NIC: "e1000", Ready: "fake login:",
+		Extra: "-kernel " + kernel + " -initrd " + initrd + " -append 'console=ttyS0 quiet panic=-1'"}
+	base := 33000 + os.Getpid()%2000*8
+	l := &Lab{ID: "e2", Dir: "termwright-lab", Mgmt: "forward", Base: base, VMs: []VM{{ID: "v1", Name: "sw-1", Image: "f"}}}
+	imgs := map[string]*Image{"f": im}
+	defer run(l.StopScript([]string{"v1"}))
+	wait := func(ok func(Status) bool) Status {
+		var st Status
+		for end := time.Now().Add(90 * time.Second); time.Now().Before(end); time.Sleep(time.Second) {
+			if st = ParseStatus(run(l.StatusScript([]string{"v1"}, map[string]string{"v1": im.Ready})), base64.StdEncoding.DecodeString); ok(st) {
+				break
+			}
+		}
+		return st
+	}
+	if out := run(l.StartScript(l.VMs, imgs)); !strings.Contains(out, "started v1") {
+		t.Fatal(out)
+	}
+	if st := wait(func(s Status) bool { return s.Ready["v1"] }); !st.Ready["v1"] {
+		t.Fatalf("no boot: %q", st.Log["v1"])
+	}
+	out := run(l.SaveScript([]string{"v1"}))
+	if !strings.Contains(out, "saved v1") {
+		t.Fatalf("save: %s", out)
+	}
+	l.VMs[0].FastKey = l.FastKey(l.VMs[0], im)
+	t0 := time.Now()
+	if out := run(l.StartScript(l.VMs, imgs)); !strings.Contains(out, "resumed v1") {
+		t.Fatalf("resume: %s", out)
+	}
+	if st := wait(func(s Status) bool { _, up := s.Up["v1"]; return up }); len(st.Up) != 1 || st.Ready["v1"] {
+		t.Fatalf("after resume: up %v, it booted again: %v", st.Up, st.Ready["v1"])
+	}
+	t.Logf("resumed in %v", time.Since(t0))
+	// another setup (more memory): it boots, and the old state goes
+	run(l.StopScript([]string{"v1"}))
+	time.Sleep(time.Second)
+	im.RAM = 320
+	if out := run(l.StartScript(l.VMs, imgs)); !strings.Contains(out, "started v1") {
+		t.Fatalf("changed: %s", out)
+	}
+	if out := run("qemu-img snapshot -l termwright-lab/lab-e2/v1.qcow2 2>&1; ls termwright-lab"); strings.Contains(out, FastSnap) {
+		t.Fatalf("the old state stayed: %s", out)
+	}
+}

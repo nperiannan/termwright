@@ -2385,6 +2385,16 @@ const ru: Record<string, string> = {
   'in the lab': 'в лаборатории',
   'Moved - it starts there from its image (day 0)': 'Перенесён - запустится там с образа (day 0)',
   'It starts on that host from its image (day 0, its saved configuration is not taken along) with that host’s management. Its cables to switches on other hosts become UDP tunnels.': 'Он запустится на том хосте с образа (day 0, сохранённая конфигурация не переносится) с управлением этого хоста. Его кабели к коммутаторам на других хостах станут UDP-туннелями.',
+  'Fast start': 'Быстрый запуск',
+  'On: Stop saves each running switch’s state into its disk, and Start resumes it in seconds (no boot, no day 0). A change to its persona, management, memory or image makes it boot again.': 'Вкл.: «Стоп» сохраняет состояние каждого работающего коммутатора на его диск, а «Старт» возобновляет его за секунды (без загрузки и без day 0). Изменение персоны, управления, памяти или образа приводит к обычной загрузке.',
+  'Its running state is saved: it starts again in seconds': 'Его состояние сохраняется: он снова запустится за секунды',
+  'Stop and Save State': 'Остановить с сохранением состояния',
+  'No saved state: it boots next time': 'Без сохранения состояния: в следующий раз он загрузится заново',
+  'Shut Down': 'Выключить',
+  'Fast start on - Stop saves the switches’ running state': 'Быстрый запуск включён: «Стоп» сохраняет состояние коммутаторов',
+  'Fast start off - the switches boot each time': 'Быстрый запуск выключен: коммутаторы загружаются каждый раз',
+  'stopped · state saved': 'остановлен · состояние сохранено',
+  'saving its running state': 'сохраняет своё состояние',
 };
 
 export default ru;

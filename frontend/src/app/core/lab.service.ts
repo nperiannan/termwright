@@ -101,6 +101,8 @@ export class LabService {
     return ok;
   }
   async start(ids: string[] = []) { const ok = await this.run(() => (this.e ? this.backend.emuStart(ids) : this.backend.labStart(ids))); await this.ui.refreshTree(); return ok; }
+  shutDown(ids: string[] = []) { return this.run(() => this.backend.emuShutDown(ids)); }
+  setFast(on: boolean) { return this.run(() => this.backend.emuSetFast(on), on ? 'Fast start on - Stop saves the switches’ running state' : 'Fast start off - the switches boot each time'); }
   stop(ids: string[] = []) { return this.run(() => (this.e ? this.backend.emuStop(ids) : this.backend.labStop(ids))); }
   restart(ids: string[]) { return this.run(() => this.backend.emuRestart(ids)); }
   setMgmt(mgmt: string, mgmtNet = '') { return this.run(() => this.backend.emuSetMgmt(mgmt, mgmtNet), 'Management changed - it applies when the switches start'); }

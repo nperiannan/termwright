@@ -577,3 +577,11 @@ func TestStatusReady(t *testing.T) {
 		t.Fatal(st.Ready)
 	}
 }
+
+func TestPagerQuit(t *testing.T) {
+	for _, s := range []string{"x\r\n--More-- (q = quit) ", "--More--", "Press <SPACE> to continue or <Q> to quit:"} {
+		if !pager.MatchString(s) {
+			t.Fatal(s)
+		}
+	}
+}

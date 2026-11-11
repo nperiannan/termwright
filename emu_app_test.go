@@ -140,8 +140,25 @@ func TestEmuLab(t *testing.T) {
 	if st := a.emuPollFresh(); len(st.Up) != 0 {
 		t.Fatalf("still up after Stop: %v", st.Up)
 	}
+	if v, _ := a.EmuState(); !v.Devices[0].Saved || v.Devices[0].StateText != "stopped · state saved" {
+		t.Fatalf("not saved: %+v", v.Devices[0])
+	}
 	if _, err := a.EmuStart(nil); err != nil {
 		t.Fatal(err)
+	}
+	// Fast start: they resume from the saved state, no boot and no day 0
+	for end := time.Now().Add(60 * time.Second); time.Now().Before(end); time.Sleep(time.Second) {
+		if v, _ = a.EmuState(); !v.Devices[0].Running || v.Devices[0].State != "running" || v.Devices[1].State != "running" {
+			continue
+		}
+		break
+	}
+	evs = nil
+	for _, e := range v.Events {
+		evs = append(evs, e.Name+": "+e.Text)
+	}
+	if j := strings.Join(evs, "\n"); strings.Count(j, "resumed from its saved state") != 2 || v.Devices[0].State != "running" {
+		t.Fatalf("not resumed: %+v\n%s", v.Devices, j)
 	}
 	if v.Links[0].Up != true {
 		t.Fatal("link not up")

@@ -38,7 +38,7 @@ var yesNo = regexp.MustCompile(`(?i)[(\[]\s*(y/n|yes/no)\s*[)\]]\s*[:?]?\s*$`)
 var rePrompt = 15 * time.Second
 
 // pager is a "more" prompt waiting at the end of the console.
-var pager = regexp.MustCompile(`(?i)(press\s+<?space>?\s+to\s+continue[^\n]*|--\s*more\s*--)\s*$`)
+var pager = regexp.MustCompile(`(?i)(press\s+<?space>?\s+to\s+continue[^\n]*|--\s*more\s*--(?:\s*\(q\s*=\s*quit\))?)\s*$`)
 
 func (c *Console) answered(q, sent string) {
 	if c.OnAnswer != nil {

@@ -134,6 +134,7 @@ var emuLab struct {
 	personaTried     map[string]bool    // that was tried once already (no second round)
 	pinfo            map[string]string  // where the persona file went, or what the check after boot saw
 	pcheck           map[string]bool    // the persona was checked on the CLI since the VM started
+	resumed          map[string]bool    // it started from its saved running state (no boot, no day 0)
 	events           []EmuEvent         // the Events log, newest last
 	download         map[string]string  // image → download progress ("waiting", "41 %")
 	dlQueue          []string           // images waiting to download, in order
@@ -163,9 +164,10 @@ type EmuDevice struct {
 	Y            int          `json:"y"`
 	State        string       `json:"state"` // stopped, uploading, booting, day0, running, failed
 	StateText    string       `json:"stateText"`
-	CPU          float64      `json:"cpu"`     // % of its vCPUs, now
-	MemUsed      int64        `json:"memUsed"` // MB its VM uses now (resident)
-	Cores        float64      `json:"cores"`   // host cores it uses now
+	CPU          float64      `json:"cpu"`             // % of its vCPUs, now
+	MemUsed      int64        `json:"memUsed"`         // MB its VM uses now (resident)
+	Saved        bool         `json:"saved,omitempty"` // stopped with its running state saved: it starts in seconds
+	Cores        float64      `json:"cores"`           // host cores it uses now
 	CPUs         int          `json:"cpus"`
 	RAM          int          `json:"ram"`
 	Console      int          `json:"console"`
@@ -265,7 +267,8 @@ type EmuView struct {
 	KVM           bool              `json:"kvm"`
 	Templates     []emu.Template    `json:"templates"`
 	Usage         EmuUsage          `json:"usage"`
-	HostUse       []EmuHostUse      `json:"hostUse"` // every host of the lab: its management and what it gives the switches
+	HostUse       []EmuHostUse      `json:"hostUse"`
+	Fast          bool              `json:"fast"` // Fast start: Stop saves the switches' running state // every host of the lab: its management and what it gives the switches
 	DeviceTypes   []EmuDeviceType   `json:"deviceTypes"`
 }
 
@@ -318,7 +321,7 @@ func (a *App) emuLoad() {
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
 	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
 	emuLab.personaTried, emuLab.perr = map[string]bool{}, map[string]string{}
-	emuLab.pinfo, emuLab.pcheck = map[string]string{}, map[string]bool{}
+	emuLab.pinfo, emuLab.pcheck, emuLab.resumed = map[string]string{}, map[string]bool{}, map[string]bool{}
 	emuLab.download = map[string]string{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
 		_ = json.Unmarshal(b, &emuLab.f)
@@ -1943,9 +1946,15 @@ func (a *App) emuStart(host string, ids []string) {
 	for _, v := range vms {
 		emuLab.state[v.ID] = "starting"
 		emuLab.starting[v.ID] = time.Now()
-		emuEv(v.ID, "info", "starting on "+host)
-		delete(emuLab.pcheck, v.ID) // the persona is checked again on this boot
-		delete(emuLab.ready, v.ID)  // its console log starts empty
+		resume := v.FastKey != "" && ptrs[v.Image] != nil && v.FastKey == l.FastKey(v, ptrs[v.Image])
+		if resume {
+			emuEv(v.ID, "info", "starting on "+host+" from its saved state")
+		} else {
+			emuEv(v.ID, "info", "starting on "+host)
+			delete(emuLab.pcheck, v.ID) // the persona is checked again on this boot
+		}
+		delete(emuLab.ready, v.ID) // its console log starts empty
+		delete(emuLab.resumed, v.ID)
 	}
 	emuLab.mu.Unlock()
 	out, err := a.emuRun(host, script, 3*time.Minute)
@@ -1956,6 +1965,16 @@ func (a *App) emuStart(host string, ids []string) {
 	emuLab.mu.Lock()
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.SplitN(strings.TrimSpace(line), " ", 3)
+		if len(f) == 2 && (f[0] == "resumed" || f[0] == "started") {
+			if vv := l.VMByID(f[1]); vv != nil && vv.FastKey != "" {
+				vv.FastKey = "" // used (or dropped): a stop without saving must not bring the old state back
+				_ = a.emuSave()
+			}
+			if f[0] == "resumed" {
+				emuLab.ready[f[1]], emuLab.resumed[f[1]] = true, true
+				emuEv(f[1], "ok", "resumed from its saved state - configuration, address and sessions as they were")
+			}
+		}
 		if len(f) >= 2 && f[0] == "fail" {
 			if f[1] == "all" { // nothing could start
 				for _, v := range vms {
@@ -2065,6 +2084,9 @@ func (a *App) emuWatch(host string, ids []string) {
 				continue
 			}
 			delete(pending, id)
+			if emuLab.resumed[id] { // as it was saved: booted, day 0 and its persona done
+				continue
+			}
 			if emuLab.personaAfterBoot[id] {
 				delete(emuLab.personaAfterBoot, id)
 				go a.emuPersonaReboot(host, id)
@@ -2882,7 +2904,7 @@ func (a *App) emuView() EmuView {
 	if l == nil {
 		return v
 	}
-	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw, v.LanFixed = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw, l.LanFixed
+	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw, v.LanFixed, v.Fast = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw, l.LanFixed, !l.NoFast
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
 	for _, h := range l.Hosts(f.Host) {
@@ -2947,8 +2969,13 @@ func (a *App) emuView() EmuView {
 			d.State, d.StateText, d.Running = "day0", "checking its persona", true
 		case strings.HasPrefix(s, "day0"):
 			d.State, d.StateText, d.Running = "day0", "day-0 config "+strings.TrimPrefix(strings.TrimPrefix(s, "day0"), " "), true
+		case s == "saving":
+			d.State, d.StateText, d.Running = "day0", "saving its running state", true
 		case !up:
 			d.State, d.StateText = "stopped", "stopped"
+			if vm.FastKey != "" {
+				d.StateText, d.Saved = "stopped · state saved", true
+			}
 			if d.Error != "" {
 				d.State, d.StateText = "failed", "failed"
 			}
@@ -3060,22 +3087,74 @@ func (a *App) EmuStart(ids []string) (EmuView, error) {
 	return a.EmuState()
 }
 
-// EmuStop stops VMs (all when ids is empty): like pulling the power.
+// EmuStop stops VMs (all when ids is empty). A switch that runs (booted, day 0
+// done) has its running state saved into its disk first, unless the lab has
+// Fast start off: it then starts again in seconds. The others: like pulling the power.
 func (a *App) EmuStop(ids []string) (EmuView, error) {
+	return a.emuStop(ids, true)
+}
+
+// EmuShutDown stops VMs without saving their state: they boot next time.
+func (a *App) EmuShutDown(ids []string) (EmuView, error) {
+	return a.emuStop(ids, false)
+}
+
+func (a *App) emuStop(ids []string, save bool) (EmuView, error) {
 	host, ids := a.emuIDs(ids)
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
 	}
-	_ = host
+	st := a.emuPollFresh()
 	hosts, by := a.emuGroups(ids)
 	for _, h := range hosts {
 		emuLab.mu.Lock()
-		script := a.emuFor(h).StopScript(by[h])
+		l := a.emuFor(h)
+		var keep, cold []string
 		for _, id := range by[h] {
-			emuEv(id, "info", "stopped")
+			_, up := st.Up[id]
+			if save && !emuLab.f.Lab.NoFast && up && emuLab.ready[id] && !emuLab.day0[id] && emuLab.state[id] == "" {
+				keep = append(keep, id)
+				emuLab.state[id] = "saving"
+			} else {
+				cold = append(cold, id)
+				emuEv(id, "info", "stopped")
+			}
+		}
+		script := l.StopScript(cold) + l.DropFastScript(cold)
+		if len(keep) > 0 {
+			script = l.SaveScript(keep) + script
+		}
+		for _, id := range cold {
+			if v := emuLab.f.Lab.VMByID(id); v != nil {
+				v.FastKey = ""
+			}
 		}
 		emuLab.mu.Unlock()
-		if _, err := a.emuRun(h, script, time.Minute); err != nil {
+		out, err := a.emuRun(h, script, 15*time.Minute)
+		emuLab.mu.Lock()
+		for _, id := range keep {
+			delete(emuLab.state, id)
+		}
+		for _, line := range strings.Split(out, "\n") {
+			f := strings.SplitN(strings.TrimSpace(line), " ", 3)
+			if len(f) >= 2 && slices.Contains(keep, f[1]) {
+				v := emuLab.f.Lab.VMByID(f[1])
+				im := emuImage("")
+				if v != nil {
+					im = emuImage(v.Image)
+				}
+				switch {
+				case f[0] == "saved" && v != nil && im != nil:
+					v.FastKey = l.FastKey(*v, im)
+					emuEv(f[1], "ok", "stopped with its running state saved - it starts again in seconds")
+				case f[0] == "fail":
+					emuEv(f[1], "warn", "stopped, but its running state was not saved ("+strings.Join(f[2:], " ")+") - it boots next time")
+				}
+			}
+		}
+		_ = a.emuSave()
+		emuLab.mu.Unlock()
+		if err != nil {
 			return EmuView{}, err
 		}
 	}
@@ -3083,9 +3162,32 @@ func (a *App) EmuStop(ids []string) (EmuView, error) {
 	return a.EmuState()
 }
 
+// EmuSetFast turns Fast start on or off for the lab: off, Stop shuts the
+// switches down and the saved states go (they boot each time).
+func (a *App) EmuSetFast(on bool) (EmuView, error) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	if l == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	l.NoFast = !on
+	if !on {
+		for i := range l.VMs {
+			l.VMs[i].FastKey = "" // they boot next time; the snapshots go when they start
+		}
+	}
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
 // EmuRestart stops and starts VMs (a changed cable needs this).
 func (a *App) EmuRestart(ids []string) (EmuView, error) {
-	if _, err := a.EmuStop(ids); err != nil {
+	if _, err := a.EmuShutDown(ids); err != nil { // a real boot
 		return EmuView{}, err
 	}
 	return a.EmuStart(ids)

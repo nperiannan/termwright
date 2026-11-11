@@ -55,6 +55,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       } @else { <button type="button" (click)="dialog('list')">{{ tr('Switch List and Outputs') }}</button> }
       <span class="sp"></span>
       @if (emu() && devs().length) {
+        <label class="chip fs" [title]="tr('On: Stop saves each running switch’s state into its disk, and Start resumes it in seconds (no boot, no day 0). A change to its persona, management, memory or image makes it boot again.')"><input type="checkbox" [checked]="!!st()?.fast" (change)="lab.setFast($any($event.target).checked)" [disabled]="lab.busy()" />{{ tr('Fast start') }}</label>
         <span class="chip mg" [title]="tr('How the switches’ first port (management) is connected; it applies when they start')">{{ tr('Management') }}
           @if (multi()) { <select class="hsel" [ngModel]="mg().host" (ngModelChange)="mgHost.set($event)" name="wmh" [title]="tr('Each host has its own management')">@for (u of hostUse(); track u.host) { <option [value]="u.host">{{ u.name }}</option> }</select> }
           <select [ngModel]="mg().mgmt" (ngModelChange)="setMgmt($event)" name="wmg" [disabled]="lab.busy()">
@@ -166,7 +167,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="menu" [style.left.px]="m.x" [style.top.px]="m.y" (click)="$event.stopPropagation()">
             @if (m.dev; as d) {
               <a (click)="mdo('start', d)" [class.off]="d.running">▶ {{ tr('Start') }}</a>
-              <a (click)="mdo('stop', d)" [class.off]="!d.running">■ {{ tr('Stop') }}</a>
+              <a (click)="mdo('stop', d)" [class.off]="!d.running" [title]="emu() && st()?.fast ? tr('Its running state is saved: it starts again in seconds') : ''">■ {{ emu() && st()?.fast ? tr('Stop and Save State') : tr('Stop') }}</a>
+              @if (emu() && st()?.fast) { <a (click)="mdo('shutdown', d)" [class.off]="!d.running && !d.saved" [title]="tr('No saved state: it boots next time')">⏻ {{ tr('Shut Down') }}</a> }
               @if (emu()) { <a (click)="mdo('restart', d)" [class.off]="!d.running">⟳ {{ tr('Reload') }}</a> }
               <hr />
               @if (emu()) { <a (click)="mdo('console', d)" [class.off]="!d.running">{{ tr('Console') }} <kbd>telnet :{{ d.console }}</kbd></a> }
@@ -322,6 +324,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       .row2 { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; } .sp { flex: 1; }
       .ti { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; &.cur { border-color: var(--accent); }
         .tn { flex: 1; min-width: 0; display: flex; flex-direction: column; } .x { padding: 2px 7px; } } }
+    .chip.fs { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; margin-right: 6px; }
+    .chip.fs input { margin: 0; }
     .zone { position: absolute; border: 1.5px dashed; border-radius: 14px; pointer-events: none; }
     .zone .zh { display: flex; gap: 7px; align-items: center; padding: 6px 10px; font-size: 11.5px; white-space: nowrap; }
     .zone .zh i, .hd { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
@@ -793,6 +797,7 @@ export class LabWorkspace implements OnDestroy {
     switch (what) {
       case 'start': void this.lab.start([d.id]); break;
       case 'stop': void this.lab.stop([d.id]); break;
+      case 'shutdown': void this.lab.shutDown([d.id]); break;
       case 'restart': void this.lab.restart([d.id]); break;
       case 'console': this.console(d); break;
       case 'ssh': this.ssh(d); break;

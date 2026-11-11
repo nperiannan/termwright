@@ -147,6 +147,7 @@ type VM struct {
 	DiskGB   int      `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
 	Template string   `json:"template,omitempty"`
 	Persona  *Persona `json:"persona,omitempty"`
+	FastKey  string   `json:"fastKey,omitempty"` // its running state was saved in its disk with this setup (FastKey): it resumes from it
 	X        int      `json:"x"`
 	Y        int      `json:"y"`
 }
@@ -279,6 +280,7 @@ type Lab struct {
 	MgmtNet  string  `json:"mgmtNet"`            // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.234.179.146/24)
 	CloudGw  string  `json:"cloudGw"`            // cloud (and lan with fixed addresses): the host's network's gateway
 	LanFixed bool    `json:"lanFixed,omitempty"` // lan: fixed addresses from MgmtNet on (a network without DHCP)
+	NoFast   bool    `json:"noFast,omitempty"`   // Stop shuts the switches down (no saved running state: they boot each time)
 	CloudIf  string  `json:"cloudIf"`            // cloud: the host's port on its network
 	HostIP   string  `json:"hostIp"`             // cloud: the host's own address there
 	Base     int     `json:"base"`               // first TCP/UDP port on the host's 127.0.0.1
@@ -568,7 +570,67 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip tuntap add %s mode tap user \"$(id -un)\"; sudo -n ip link set %s master %s up\n", t, t, t, Q(br))
 		}
 		fmt.Fprintf(&b, " : > %s/%s.log\n", Q(dir), v.ID)
-		fmt.Fprintf(&b, " if out=$(qemu-system-x86_64 %s%s 2>&1); then echo 'started %s'; else echo \"fail %s $(echo $out | tr '\\n' ' ')\"; fi\nfi\n", joinArgs(l.Args(v, im)), redir, v.ID, v.ID)
+		// its saved running state, while what it depends on is the same; else it boots (and the old state goes)
+		if v.FastKey != "" && v.FastKey == l.FastKey(v, im) {
+			fmt.Fprintf(&b, " lv=; qemu-img snapshot -l %s/%s.qcow2 2>/dev/null | grep -q ' %s ' && lv='-loadvm %s'\n", Q(dir), v.ID, FastSnap, FastSnap)
+		} else {
+			fmt.Fprintf(&b, " lv=; for d in %s; do [ -f \"$d\" ] && qemu-img snapshot -l \"$d\" 2>/dev/null | grep -q ' %s ' && qemu-img snapshot -d %s \"$d\" 2>/dev/null; done\n", l.disks(v.ID), FastSnap, FastSnap)
+		}
+		q := "qemu-system-x86_64 " + joinArgs(l.Args(v, im))
+		fmt.Fprintf(&b, " if out=$(%s $lv%s 2>&1); then if [ -n \"$lv\" ]; then echo 'resumed %s'; else echo 'started %s'; fi\n", q, redir, v.ID, v.ID)
+		// a saved state that does not load (another QEMU, another CPU): it boots instead
+		fmt.Fprintf(&b, " elif [ -n \"$lv\" ] && for d in %s; do [ -f \"$d\" ] && qemu-img snapshot -d %s \"$d\" 2>/dev/null; done; out2=$(%s%s 2>&1); then echo 'started %s'\n", l.disks(v.ID), FastSnap, q, redir, v.ID)
+		fmt.Fprintf(&b, " else echo \"fail %s $(echo $out $out2 | tr '\\n' ' ')\"; fi\nfi\n", v.ID)
+	}
+	return b.String()
+}
+
+// FastSnap is the snapshot in a VM's disk that holds its saved running state.
+const FastSnap = "tw-fast"
+
+// FastKey sums up what a saved running state depends on: a VM resumes from it
+// only while these stay the same (else it boots, with the snapshot dropped).
+func (l *Lab) FastKey(v VM, im *Image) string {
+	pa := ""
+	if v.Persona != nil {
+		pa = v.Persona.Applied
+	}
+	return Hash(fmt.Sprint(im.ID, im.FileName, im.NICs, im.NIC, im.Disk, im.Extra, orInt(v.CPUs, im.CPUs, 1), orInt(v.RAM, im.RAM, 1024), v.DiskGB,
+		v.Serial, v.BaseMAC, pa, v.Host, l.Mgmt, l.MgmtNet, l.LanFixed, l.LanIf, v.MgmtIP))[:12]
+}
+
+// disks lists a VM's disk files on the host.
+func (l *Lab) disks(id string) string {
+	d := Q(l.VMDir())
+	return fmt.Sprintf("%s/%s.qcow2 %s/%s-hd?.qcow2", d, id, d, id)
+}
+
+// SaveScript saves the running state of VMs into their disks and stops them
+// ("saved <id>"); a VM whose state could not be saved is stopped all the same
+// ("fail <id> why"). It starts again from there in seconds.
+func (l *Lab) SaveScript(ids []string) string {
+	var b strings.Builder
+	dir := Q(l.VMDir())
+	for _, id := range ids {
+		v := l.VMByID(id)
+		if v == nil {
+			continue
+		}
+		// the monitor: stop, save, and list the snapshots - its row (with a date) shows it is done
+		fmt.Fprintf(&b, "if [ -f %s/%s.pid ] && kill -0 \"$(cat %s/%s.pid)\" 2>/dev/null; then\n", dir, id, dir, id)
+		fmt.Fprintf(&b, " r=$(timeout 900 bash -c 'exec 3<>/dev/tcp/127.0.0.1/%d || exit 1; printf \"stop\\r\\nsavevm %s\\r\\ninfo snapshots\\r\\n\" >&3; while IFS= read -r -t 900 l <&3; do case \"$l\" in *%s*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*) echo ok; break;; *rror*) echo \"err $l\"; break;; esac; done; printf \"quit\\r\\n\" >&3; sleep 1' 2>&1 | tr -d '\\r' | tail -1)\n", l.MonitorPort(*v), FastSnap, FastSnap)
+		fmt.Fprintf(&b, " for i in 1 2 3 4 5 6 7 8 9 10; do kill -0 \"$(cat %s/%s.pid)\" 2>/dev/null || break; sleep 0.5; done\n", dir, id)
+		fmt.Fprintf(&b, " case \"$r\" in ok*) echo 'saved %s';; *) echo \"fail %s ${r:-no answer from its monitor}\";; esac\nfi\n", id, id)
+	}
+	b.WriteString(l.StopScript(ids))
+	return b.String()
+}
+
+// DropFastScript removes the saved running state of VMs: they boot next time.
+func (l *Lab) DropFastScript(ids []string) string {
+	var b strings.Builder
+	for _, id := range ids {
+		fmt.Fprintf(&b, "for d in %s; do [ -f \"$d\" ] && qemu-img snapshot -d %s \"$d\" 2>/dev/null; done; true\n", l.disks(id), FastSnap)
 	}
 	return b.String()
 }
