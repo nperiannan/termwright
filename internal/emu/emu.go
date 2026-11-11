@@ -640,8 +640,10 @@ func (l *Lab) ResetScript(ids []string) string {
 
 // StatusScript prints "clk <ticks per second>", a line per VM: "up <id> <CPU
 // ticks used so far>" or "down <id>",
-// then "log <id> <base64 of the console log's end>" for the ones in tails.
-func (l *Lab) StatusScript(tails []string) string {
+// then "log <id> <base64 of the console log's end>" for the ones in tails, and
+// "ready <id>" when its console log (since it started) shows its ready text:
+// the end alone loses it once the switch printed more (a login, show commands).
+func (l *Lab) StatusScript(tails []string, ready ...map[string]string) string {
 	dir := Q(l.VMDir())
 	s := "cd " + dir + " 2>/dev/null || exit 0\necho \"clk $(getconf CLK_TCK 2>/dev/null || echo 100)\"\nawk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print \"mem \" int(t/1024) \" \" int(a/1024)}' /proc/meminfo\necho \"cores $(nproc) $(cut -d' ' -f1 /proc/loadavg)\"\nfor p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
 		" if kill -0 \"$pid\" 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null) $(awk '/^VmRSS:/{print $2}' /proc/$pid/status 2>/dev/null)\"; else echo \"down $n\"; fi; done\n"
@@ -653,6 +655,9 @@ func (l *Lab) StatusScript(tails []string) string {
 	}
 	for _, id := range tails {
 		s += fmt.Sprintf("[ -f %s.log ] && echo \"log %s $(tail -c 4000 %s.log | base64 | tr -d '\\n')\"\n", id, id, id)
+		if len(ready) > 0 && ready[0][id] != "" {
+			s += fmt.Sprintf("grep -qaF -- %s %s.log 2>/dev/null && echo \"ready %s\"\n", Q(ready[0][id]), id, id)
+		}
 	}
 	return s
 }
@@ -667,13 +672,14 @@ type Status struct {
 	Up       map[string]float64 // running VMs and the CPU ticks they used
 	RSS      map[string]int64   // their memory in use (resident), MB
 	Log      map[string]string  // console log ends
+	Ready    map[string]bool    // the console log shows the image's ready text
 	Leases   map[string]string  // nat: MAC address → IPv4 address on the NAT network
 	NatNet   string             // nat: the host's address on it (192.168.122.1/24)
 }
 
 // ParseStatus reads StatusScript's output.
 func ParseStatus(out string, b64 func(string) ([]byte, error)) Status {
-	st := Status{Up: map[string]float64{}, RSS: map[string]int64{}, Log: map[string]string{}, Leases: map[string]string{}}
+	st := Status{Up: map[string]float64{}, RSS: map[string]int64{}, Log: map[string]string{}, Ready: map[string]bool{}, Leases: map[string]string{}}
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Fields(line)
 		switch {
@@ -687,6 +693,8 @@ func ParseStatus(out string, b64 func(string) ([]byte, error)) Status {
 			if m := strings.ToLower(f[1]); st.Leases[m] == "" { // the leases first
 				st.Leases[m] = f[2]
 			}
+		case len(f) == 2 && f[0] == "ready":
+			st.Ready[f[1]] = true
 		case len(f) == 2 && f[0] == "natnet":
 			st.NatNet = f[1]
 		case len(f) == 2 && f[0] == "clk":

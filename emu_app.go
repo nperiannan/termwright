@@ -2688,12 +2688,16 @@ func (a *App) emuPoll(force bool) emu.Status {
 	scripts := map[string]string{}
 	for _, h := range hosts {
 		var tails []string
+		ready := map[string]string{}
 		for _, v := range l.VMs {
 			if l.HostOf(v, main) == h {
 				tails = append(tails, v.ID)
+				if im := emuImage(v.Image); im != nil && !emuLab.ready[v.ID] {
+					ready[v.ID] = im.Ready
+				}
 			}
 		}
-		scripts[h] = a.emuFor(h).StatusScript(tails)
+		scripts[h] = a.emuFor(h).StatusScript(tails, ready)
 	}
 	emuLab.mu.Unlock()
 	// every host of the lab at once
@@ -2740,7 +2744,7 @@ func (a *App) emuPoll(force bool) emu.Status {
 	}
 	emuLab.ticks, emuLab.ticksAt = ticks, now
 	// the lab's status: every host's switches; the host figures are its own host's
-	m := emu.Status{Up: map[string]float64{}, RSS: map[string]int64{}, Log: map[string]string{}, Leases: map[string]string{}}
+	m := emu.Status{Up: map[string]float64{}, RSS: map[string]int64{}, Log: map[string]string{}, Ready: map[string]bool{}, Leases: map[string]string{}}
 	if st, ok := emuLab.hostStatus[main]; ok {
 		m.Clk, m.MemTotal, m.MemFree, m.Cores, m.Load, m.NatNet = st.Clk, st.MemTotal, st.MemFree, st.Cores, st.Load, st.NatNet
 	}
@@ -2755,11 +2759,14 @@ func (a *App) emuPoll(force bool) emu.Status {
 		for k, v := range st.Log {
 			m.Log[k] = v
 		}
+		for k, v := range st.Ready {
+			m.Ready[k] = v
+		}
 	}
 	for _, v := range l.VMs {
 		if _, up := m.Up[v.ID]; !up {
 			delete(emuLab.ready, v.ID)
-		} else if im := emuImage(v.Image); im != nil && !emuLab.ready[v.ID] && im.ReadyIn(m.Log[v.ID]) {
+		} else if im := emuImage(v.Image); im != nil && !emuLab.ready[v.ID] && (im.ReadyIn(m.Log[v.ID]) || m.Ready[v.ID]) {
 			emuLab.ready[v.ID] = true
 			emuEv(v.ID, "ok", "booted - the console shows "+orStr(im.Ready, "its prompt"))
 		}

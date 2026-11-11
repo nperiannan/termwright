@@ -564,3 +564,16 @@ func TestLoginNewPassword(t *testing.T) {
 		t.Fatalf("%q, shown %q", g, shown)
 	}
 }
+
+// A switch is ready when its whole console log shows the ready text, not
+// only its end (a login and show commands push it out).
+func TestStatusReady(t *testing.T) {
+	l := &Lab{Dir: "lab"}
+	s := l.StatusScript([]string{"v1", "v2"}, map[string]string{"v1": "login:"})
+	if !strings.Contains(s, "grep -qaF -- login: v1.log") || strings.Contains(s, "v2.log 2>/dev/null && echo") {
+		t.Fatal(s)
+	}
+	if st := ParseStatus("up v1 5\nready v1\n", nil); !st.Ready["v1"] || st.Ready["v2"] {
+		t.Fatal(st.Ready)
+	}
+}

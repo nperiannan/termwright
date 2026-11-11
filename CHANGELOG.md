@@ -58,6 +58,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Emulated lab: the factory password while none is set.** A device pack can give an image its factory password (Fabric Engine), used for the console login and the sessions until you set one; a login refused without any password now says to set the image's password.
 * **Telnet: Enter is a bare CR in binary mode.** Once binary was agreed (a QEMU serial console asks for it) Enter no longer sends CR NUL: the NUL reached Fabric Engine as a character, so a typed password had one character too many and an empty login followed. The emulated lab also waits out a console lock-out ("Lock out for 60 seconds") before logging in again, does not retry a login refused without a password, and existing images get the pack's factory password and ready text.
 * **Emulated lab: a first login that asks for a new password.** A console answer can type the image's password (`{password}`), so a switch that must change its default password at the first login (Fabric Engine: *Enter the New password*) gets it twice and carries on; the events say "the image's password" instead of the password.
+* **Emulated lab: running switches no longer stay "booting".** A switch is ready when its console log since the start shows its ready text (*login:*), not only the end of it: after a login and some commands, or after Termwright was restarted, the end no longer showed it and the switch stayed orange with *booting* though it ran.
 
 ## 0.34.1 (2026-11-10)
 
