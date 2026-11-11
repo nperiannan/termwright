@@ -206,6 +206,33 @@ func (l *Lab) tapped() bool {
 	return l.Mgmt == "bridge" || l.Mgmt == "nat" || l.Mgmt == "lan" && l.LanKind != "macvtap"
 }
 
+// DownLinks are the data ports of a running VM whose link must be down (the
+// HMP set_link names): ports without a cable (a NIC without a network would
+// show its link up) and pulled cables.
+func (l *Lab) DownLinks(v VM, im *Image) []string {
+	cabled := map[int]bool{}
+	var out []string
+	for _, c := range l.Cables {
+		for _, e := range []struct {
+			id string
+			n  int
+		}{{c.A, c.APort}, {c.B, c.BPort}} {
+			if e.id == v.ID {
+				cabled[e.n] = true
+				if c.Down {
+					out = append(out, fmt.Sprintf("n%d", e.n))
+				}
+			}
+		}
+	}
+	for n := 1; n < im.NICs; n++ {
+		if !cabled[n] {
+			out = append(out, fmt.Sprintf("nic%d", n))
+		}
+	}
+	return out
+}
+
 // PortName is data port n as the switch calls it.
 func (im *Image) PortNameOf(n int) string {
 	f := im.PortName
@@ -295,7 +322,7 @@ func (l *Lab) Args(v VM, im *Image) []string {
 			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,udp=127.0.0.1:%d,localaddr=127.0.0.1:%d", n, p, l.udpPort(v, n)),
 				"-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.MAC(v, n)))
 		} else {
-			a = append(a, "-device", fmt.Sprintf("%s,mac=%s", nic, l.MAC(v, n)))
+			a = append(a, "-device", fmt.Sprintf("%s,id=nic%d,mac=%s", nic, n, l.MAC(v, n)))
 		}
 	}
 	if v.Serial != "" {
@@ -319,6 +346,10 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 	var b strings.Builder
 	dir := l.VMDir()
 	fmt.Fprintf(&b, "mkdir -p %s || exit 1\n", Q(dir))
+	if l.Mgmt == "lan" && l.LanIf != "" {
+		// like GNS3's cloud node: the host's port takes frames for the switches' own MACs too
+		fmt.Fprintf(&b, "sudo -n ip link set %s promisc on 2>/dev/null\n", Q(l.LanIf))
+	}
 	if l.Mgmt == "bridge" {
 		br := l.Bridge()
 		gw := l.gatewayPrefix()

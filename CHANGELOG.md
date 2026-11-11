@@ -23,6 +23,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Emulated lab: public appliances.** Images → *Public appliances* lists open-source routers, firewalls, switch OSes, Linux hosts and a traffic generator (and vendor lab images that need your own account) from the public GNS3 registry; **Add** puts their versions in the image list, ready for Download All. GNS3 appliance files in the newer registry format (several settings, default login, download pages) are read.
 * **Emulated lab: more disks, CD-ROMs and BIOS files.** An image can boot with a second (third, fourth) disk, a CD-ROM and a BIOS file, as GNS3 appliances describe them; each switch writes to a layer of its own on every disk (raw disks and ISO files work too). The image page lists all its files with Choose… and Download (zipped files are unpacked), and the public appliance list now includes images that need them and cloud images with their cloud-init CD-ROM.
 * **Simulated lab workspace: Load Device Pack** in the toolbar (and on the empty palette).
+* **Fixed: emulated switches showed every port active** although only a few were cabled: ports without a cable (and pulled cables) now have their link down after the switch starts, as in GNS3. On the host's network the host's port is put in promiscuous mode, as GNS3's cloud node does.
 
 ## 0.34.1 (2026-11-10)
 

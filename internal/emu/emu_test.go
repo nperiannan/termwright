@@ -25,7 +25,7 @@ func TestArgsAndWiring(t *testing.T) {
 	a := strings.Join(l.Args(l.VMs[0], imgs["i1"]), " ")
 	for _, want := range []string{"-enable-kvm", "-m 512", "file=termwright-lab/lab-a1/v1.qcow2,if=ide", "hostfwd=tcp:127.0.0.1:20000-:22",
 		"socket,id=n1,udp=127.0.0.1:24065,localaddr=127.0.0.1:24001", "port=20001,server=on,wait=off,telnet=on,logfile=termwright-lab/lab-a1/v1.log",
-		"telnet:127.0.0.1:20002,server,nowait", "-daemonize", "e1000,mac=52:54:a1:00:00:03"} {
+		"telnet:127.0.0.1:20002,server,nowait", "-daemonize", "e1000,id=nic3,mac=52:54:a1:00:00:03"} {
 		if !strings.Contains(a, want) {
 			t.Errorf("args lack %q:\n%s", want, a)
 		}
@@ -235,5 +235,17 @@ func TestMoreDisks(t *testing.T) {
 	}
 	if im.HasFiles() {
 		t.Error("files missing")
+	}
+}
+
+func TestDownLinks(t *testing.T) {
+	l, imgs := testLab()
+	l.Cables = []Cable{{A: "v1", APort: 1, B: "v2", BPort: 1}, {A: "v1", APort: 2, B: "v3", BPort: 1, Down: true}}
+	got := strings.Join(l.DownLinks(l.VMs[0], imgs["i1"]), " ")
+	if got != "n2 nic3" {
+		t.Fatal(got)
+	}
+	if a := strings.Join(l.Args(l.VMs[0], imgs["i1"]), " "); !strings.Contains(a, "e1000,id=nic3,mac=") {
+		t.Fatal(a)
 	}
 }

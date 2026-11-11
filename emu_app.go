@@ -1510,7 +1510,55 @@ func (a *App) emuStart(host string, ids []string) {
 	if len(gone) > 0 {
 		_, _ = a.emuRun(host, l.ResetScript(gone), time.Minute)
 	}
+	a.emuLinksDown(host, vms, ptrs)
 	go a.emuWatch(host, ids)
+}
+
+// emuLinksDown takes the link of ports without a cable (and of pulled
+// cables) down in VMs that just started, as GNS3 does: a NIC without a
+// network would show its link up.
+func (a *App) emuLinksDown(host string, vms []emu.VM, imgs map[string]*emu.Image) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	type job struct {
+		id    string
+		mon   int
+		links []string
+	}
+	var jobs []job
+	if l != nil {
+		for _, v := range vms {
+			if im := imgs[v.Image]; im != nil && l.VMByID(v.ID) != nil {
+				if d := l.DownLinks(v, im); len(d) > 0 {
+					jobs = append(jobs, job{v.ID, l.MonitorPort(v), d})
+				}
+			}
+		}
+	}
+	emuLab.mu.Unlock()
+	if len(jobs) == 0 {
+		return
+	}
+	cl, err := a.emuClient(context.Background(), host)
+	if err != nil {
+		return
+	}
+	for _, j := range jobs {
+		conn, err := cl.Dial("tcp", "127.0.0.1:"+strconv.Itoa(j.mon))
+		if err != nil {
+			continue
+		}
+		_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+		buf := make([]byte, 4096)
+		_, _ = conn.Read(buf) // the monitor's greeting
+		for _, n := range j.links {
+			_, _ = fmt.Fprintf(conn, "set_link %s off\r\n", n)
+			time.Sleep(50 * time.Millisecond)
+		}
+		_, _ = conn.Read(buf)
+		_ = conn.Close()
+		emuEvent(j.id, "info", fmt.Sprintf("link down on %d ports without a cable", len(j.links)))
+	}
 }
 
 // emuWatch follows the VMs' boot (the console logs) and types day 0 on the ones that need it.
