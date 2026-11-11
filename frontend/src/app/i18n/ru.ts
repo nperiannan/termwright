@@ -2324,6 +2324,9 @@ const ru: Record<string, string> = {
   'Live console - day-0 and checks wait while it is connected': 'Консоль в реальном времени: пока она подключена, day-0 и проверки ждут',
   'The end of its console; click it to type': 'Конец его консоли; нажмите, чтобы вводить',
   'Close the connection to its console': 'Закрыть подключение к его консоли',
+  'Its console is open in a tab - close that tab to type here (a console takes one connection).': 'Его консоль открыта во вкладке: закройте её, чтобы вводить здесь (консоль принимает одно подключение).',
+  'Its console is open in a tab': 'Его консоль открыта во вкладке',
+  'Go to the Tab': 'Перейти к вкладке',
 };
 
 export default ru;

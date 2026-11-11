@@ -127,6 +127,19 @@ func TestEmuLab(t *testing.T) {
 	if !strings.Contains(tail, "ran: hostname sw-2") || !strings.Contains(tail, "answer=n") {
 		t.Fatalf("console tail:\n%s", tail)
 	}
+	if _, err := a.EmuSetMgmt("bridge", ""); err == nil || !strings.Contains(err.Error(), "stop the switches") {
+		t.Errorf("management changed under running switches: %v", err)
+	}
+	// a poll that was running before the stop does not hide it
+	if _, err := a.EmuStop(nil); err != nil {
+		t.Fatal(err)
+	}
+	if st := a.emuPollFresh(); len(st.Up) != 0 {
+		t.Fatalf("still up after Stop: %v", st.Up)
+	}
+	if _, err := a.EmuStart(nil); err != nil {
+		t.Fatal(err)
+	}
 	if v.Links[0].Up != true {
 		t.Fatal("link not up")
 	}

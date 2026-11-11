@@ -204,7 +204,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <div class="dterm"><app-terminal-view [tab]="t" [visible]="visible() && dock() === 'console'" /></div>
       } @else {
         <div class="tailw" (click)="typeHere()" [title]="tr('Click to connect and type')"><pre class="tail">{{ tail() || tr('No console output yet.') }}</pre>
-          @if (selDev()?.running) { <button type="button" class="primary sm typ" (click)="typeHere(); $event.stopPropagation()">⌨ {{ tr('Type here') }}</button> }</div>
+          @if (conTab(); as ct) { <div class="typ"><span class="muted small">{{ tr('Its console is open in a tab') }}</span> <button type="button" class="sm" (click)="tabs.activeId.set(ct.id); $event.stopPropagation()">{{ tr('Go to the Tab') }}</button></div> }
+          @else if (selDev()?.running) { <button type="button" class="primary sm typ" (click)="typeHere(); $event.stopPropagation()">⌨ {{ tr('Type here') }}</button> }</div>
       }
     </div>
   </div>`,
@@ -293,7 +294,7 @@ export class LabWorkspace implements OnDestroy {
   readonly visible = input(true);
   protected lab = inject(LabService);
   private backend = inject(Backend);
-  private tabs = inject(Tabs);
+  protected tabs = inject(Tabs);
   protected ui = inject(Ui);
   protected tr = tr;
   protected BH = BH;
@@ -592,7 +593,12 @@ export class LabWorkspace implements OnDestroy {
   }
 
   // actions
-  console(d: LabDevice) { const p = this.lab.consoleOf(d.id); if (p) void this.tabs.openSession(p); }
+  async console(d: LabDevice) {
+    const p = this.lab.consoleOf(d.id); if (!p) return;
+    const dk = this.docked()[d.id];
+    if (dk) { this.docked.update(m => { const n = { ...m }; delete n[d.id]; return n; }); await this.tabs.close(dk); } // a console takes one connection
+    void this.tabs.openSession(p);
+  }
   ssh(d: LabDevice) { const p = this.lab.sessionOf(d.id); if (p) void this.tabs.openSession(p); }
   consoleAll() { for (const d of this.devs().filter(x => x.running)) (this.emu() ? this.console(d) : this.ssh(d)); }
   configure(d: LabDevice) { this.cfgId.set(d.id); this.page.set('configure'); }
@@ -607,11 +613,15 @@ export class LabWorkspace implements OnDestroy {
   /** Live consoles in the pane, by switch. */
   private docked = signal<Record<string, string>>({});
   protected dockTab = computed(() => { const id = this.docked()[this.sel()]; return id ? this.tabs.get(id) : null; });
+  /** The switch's console open in a tab of its own: the console takes one connection, so the pane cannot have it too. */
+  protected conTab = computed(() => { const d = this.selDev(); const p = d ? this.lab.consoleOf(d.id) : ''; return p ? this.tabs.tabs().find(t => !t.docked && t.session?.path === p && t.state !== 'disconnected' && t.state !== 'error') ?? null : null; });
   async typeHere() {
     const d = this.selDev(); if (!d || !d.running || this.dockTab()) return;
+    if (this.conTab()) { this.ui.toast(tr('Its console is open in a tab - close that tab to type here (a console takes one connection).'), 'error'); return; }
     const p = this.lab.consoleOf(d.id); if (!p) return;
     const id = await this.tabs.openDocked(p);
     if (id) this.docked.update(m => ({ ...m, [d.id]: id }));
+    setTimeout(() => document.querySelector<HTMLElement>('app-lab-workspace .dterm textarea')?.focus(), 400);
   }
   async undock() {
     const id = this.docked()[this.sel()]; if (!id) return;
@@ -659,7 +669,8 @@ export class LabWorkspace implements OnDestroy {
       this.lab.emu.set({ ...this.lab.emu()! });
       return;
     }
-    if (await this.lab.stop(up) && await this.lab.setMgmt(m, net)) await this.lab.start(up);
-    else this.lab.emu.set({ ...this.lab.emu()! });
+    if (!(await this.lab.stop(up))) { this.lab.emu.set({ ...this.lab.emu()! }); return; }
+    if (!(await this.lab.setMgmt(m, net))) this.lab.emu.set({ ...this.lab.emu()! }); // they start again as they were
+    await this.lab.start(up);
   }
 }

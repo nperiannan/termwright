@@ -2096,11 +2096,11 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 		return EmuView{}, errors.New("there is no emulated lab")
 	}
 	emuLab.mu.Unlock()
-	st := a.emuPoll(true)
+	st := a.emuPollFresh()
 	emuLab.mu.Lock()
 	if len(st.Up) > 0 {
 		emuLab.mu.Unlock()
-		return a.EmuState()
+		return EmuView{}, errors.New("stop the switches first: the management changes while they are off")
 	}
 	var info *emu.HostInfo
 	for i := range emuLab.f.Hosts {
@@ -2283,6 +2283,21 @@ func (a *App) emuSetAddress(id, addr string) {
 
 // emuPoll reads the VMs' state on the host (at most every 2 s; tails: with
 // console log ends for the ones not ready yet).
+// emuPollFresh reads the VMs' state now: it waits for a poll already
+// running (whose answer may be from before a stop) and polls again.
+func (a *App) emuPollFresh() emu.Status {
+	for i := 0; i < 100; i++ {
+		emuLab.mu.Lock()
+		busy := emuLab.polling
+		emuLab.mu.Unlock()
+		if !busy {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return a.emuPoll(true)
+}
+
 func (a *App) emuPoll(force bool) emu.Status {
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
@@ -2427,7 +2442,9 @@ func (a *App) emuView() EmuView {
 			d.SSH = "DHCP (not known yet)"
 		case l.Mgmt == "nat":
 			d.SSH = strings.Split(vm.MgmtIP, "/")[0] + ":22 through the host"
-		case l.Mgmt == "bridge" || l.Mgmt == "lan":
+		case l.Mgmt == "bridge" || l.Mgmt == "cloud":
+			d.SSH = strings.Split(vm.MgmtIP, "/")[0] + ":22 through the host"
+		case l.Mgmt == "lan":
 			d.SSH = strings.Split(vm.MgmtIP, "/")[0] + ":22"
 		default:
 			d.SSH = "127.0.0.1:" + strconv.Itoa(d.Port) + " on the host"
@@ -2572,7 +2589,7 @@ func (a *App) EmuStop(ids []string) (EmuView, error) {
 	if _, err := a.emuRun(host, script, time.Minute); err != nil {
 		return EmuView{}, err
 	}
-	a.emuPoll(true)
+	a.emuPollFresh()
 	return a.EmuState()
 }
 
@@ -3110,7 +3127,7 @@ func (a *App) EmuApplyPersona(ids []string) (EmuView, error) {
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
 	}
-	st := a.emuPoll(true)
+	st := a.emuPollFresh()
 	for _, id := range ids {
 		if _, up := st.Up[id]; up {
 			go a.emuPersonaReboot(host, id)
@@ -3384,7 +3401,7 @@ func (a *App) emuPowerOff(host, id string, wait time.Duration) {
 		}
 	}
 	for end := time.Now().Add(wait); time.Now().Before(end); time.Sleep(2 * time.Second) {
-		if _, up := a.emuPoll(true).Up[id]; !up {
+		if _, up := a.emuPollFresh().Up[id]; !up {
 			break
 		}
 	}
