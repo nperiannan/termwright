@@ -465,3 +465,49 @@ func TestTwoHosts(t *testing.T) {
 		t.Error("cloud address on its host", ip)
 	}
 }
+
+// A log message right after the login hides the prompt: Enter shows it again.
+func TestLoginPromptHidden(t *testing.T) {
+	old := rePrompt
+	rePrompt = 300 * time.Millisecond
+	defer func() { rePrompt = old }()
+	a, b := net.Pipe()
+	go func() {
+		w := func(s string) { _, _ = b.Write([]byte(s)) }
+		buf := make([]byte, 64)
+		read := func() string {
+			var s strings.Builder
+			for {
+				n, err := b.Read(buf)
+				if err != nil {
+					return s.String()
+				}
+				for _, ch := range buf[:n] {
+					if ch == '\r' {
+						return s.String()
+					}
+					s.WriteByte(ch)
+				}
+			}
+		}
+		read()
+		w("Login: ")
+		read()
+		w("Password: ")
+		read()
+		w("\r\nVSP:1>\r\nCP1 Mgmt SW INFO ZTP+ discovery failed - No DNS server configured\r\n")
+		read() // the Enter that shows the prompt again
+		w("\r\nVSP:1>")
+		read()
+		w("\r\nversion 9.4\r\nVSP:1>")
+		time.Sleep(200 * time.Millisecond)
+		b.Close()
+	}()
+	c := NewConsole(a)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := Ask(ctx, c, &Image{Login: "rwa", Password: "rwa"}, "show version")
+	if err != nil || !strings.Contains(out, "version 9.4") {
+		t.Fatalf("got %q, %v", out, err)
+	}
+}

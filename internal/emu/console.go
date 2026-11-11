@@ -308,7 +308,7 @@ func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) 
 		}
 		if j == 0 {
 			_ = c.Send(im.Password)
-			k, err := c.Wait(ctx, 60*time.Second, im.Answers, prompt, login)
+			k, err := waitNudged(ctx, c, im, 2*time.Minute, prompt, login)
 			if err != nil {
 				return nil, errors.New("no prompt after the password: " + err.Error())
 			}
@@ -318,6 +318,25 @@ func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) 
 		}
 	}
 	return prompt, nil
+}
+
+// waitNudged waits like Wait, typing Enter when nothing matched for a while:
+// log messages printed after a prompt (Fabric Engine's "ZTP+ discovery
+// failed" right after the login) hide it from the end of the console, and
+// Enter shows it again.
+func waitNudged(ctx context.Context, c *Console, im *Image, total time.Duration, res ...*regexp.Regexp) (int, error) {
+	var err error
+	for end := time.Now().Add(total); ; {
+		step := min(rePrompt, time.Until(end))
+		if step <= 0 {
+			return -1, err
+		}
+		var i int
+		if i, err = c.Wait(ctx, step, im.Answers, res...); !errors.Is(err, ErrTimeout) {
+			return i, err
+		}
+		_ = c.Send("")
+	}
 }
 
 // Run types a command and returns what it printed (up to the next prompt).
