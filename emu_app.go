@@ -3242,8 +3242,16 @@ func (a *App) EmuReset(ids []string) (EmuView, error) {
 		script := a.emuFor(h).ResetScript(by[h])
 		for _, id := range by[h] {
 			if v := emuLab.f.Lab.VMByID(id); v != nil {
-				v.Day0Done = false
+				// a new disk from the image: its persona file is written again (before its first boot), nothing saved
+				v.Day0Done, v.Direct, v.FastKey = false, false, ""
+				if v.Persona != nil {
+					v.Persona.Applied, v.Persona.Took, v.Persona.Fail = "", "", ""
+				}
 			}
+			delete(emuLab.perr, id)
+			delete(emuLab.pinfo, id)
+			delete(emuLab.personaTried, id)
+			delete(emuLab.personaAfterBoot, id)
 		}
 		_ = a.emuSave()
 		emuLab.mu.Unlock()

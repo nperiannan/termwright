@@ -464,7 +464,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
             @case ('firewall') {
               <div class="rt" [class.off]="s.jumpOff">
                 <div class="rth"><div class="tx"><b>Jump host</b><small>{{ s.jumpOff ? 'Off: the session does not go through it; it stays set and works again when you turn it on.' : 'Connect through another saved SSH2 session (like ProxyJump). Jump hosts can be chained.' }}</small></div>
-                  <label class="tgl" [title]="s.jumpOff ? 'Turn the jump host on' : 'Turn the jump host off (it stays set)'"><input type="checkbox" name="jumpOn" [checked]="!s.jumpOff" [disabled]="!s.jumpOff && !s.jumpSession" (change)="setJump($any($event.target).checked)" /><span class="knob"></span></label></div>
+                  <label class="tgl" [title]="s.jumpOff ? 'Turn the jump host on' : s.jumpSession ? 'Turn the jump host off (it stays set)' : 'No jump host: choose one below and it is on'"><input type="checkbox" name="jumpOn" [checked]="!s.jumpOff && !!s.jumpSession" [disabled]="!s.jumpOff && !s.jumpSession" (change)="setJump($any($event.target).checked)" /><span class="knob"></span></label></div>
                 @if (s.jumpOff) {
                   <select name="jumpOff" disabled><option>{{ s.offJump || '(none)' }}</option></select>
                 } @else {
@@ -476,7 +476,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
               </div>
               <div class="rt" [class.off]="s.proxyOff">
                 <div class="rth"><div class="tx"><b>Proxy</b><small>{{ s.proxyOff ? 'Off: the connection does not use it; it stays set and works again when you turn it on.' : s.jumpSession ? 'A connection goes through a jump host or a proxy, not both: the jump host is used.' : 'A SOCKS5 or HTTP proxy (for example a company proxy) that the connection goes through.' }}</small></div>
-                  <label class="tgl" [title]="s.proxyOff ? 'Turn the proxy on' : 'Turn the proxy off (it stays set)'"><input type="checkbox" name="proxyOn" [checked]="!s.proxyOff" [disabled]="!s.proxyOff && !s.proxyType" (change)="setProxy($any($event.target).checked)" /><span class="knob"></span></label></div>
+                  <label class="tgl" [title]="s.proxyOff ? 'Turn the proxy on' : s.proxyType ? 'Turn the proxy off (it stays set)' : 'No proxy: choose a type below and it is on'"><input type="checkbox" name="proxyOn" [checked]="!s.proxyOff && !!s.proxyType" [disabled]="!s.proxyOff && !s.proxyType" (change)="setProxy($any($event.target).checked)" /><span class="knob"></span></label></div>
                 @if (s.proxyOff) {
                   <div class="grid">
                     <label>Type</label><select name="ptypeOff" disabled><option>{{ s.offProxy?.type === 'socks5' ? 'SOCKS5' : s.offProxy?.type === 'http' ? 'HTTP CONNECT' : 'None' }}</option></select>

@@ -63,6 +63,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Emulated lab: Fabric Engine's "--More-- (q = quit)"** is recognised as a page prompt; day 0 and the LAG check waited on it until the switch was stopped.
 * **Emulated lab: a persona that did not take says why.** The check lists the persona file's folder on the switch: the file there means the switch read it and kept its first model (some images take a persona only on their first boot - Back to Day 0), no file means it went to another filesystem of the disk. The check's output drops the banner lines.
 * **Emulated lab: the persona badge says what is known.** ✓ only once the switch showed the model on its CLI (kept across restarts of Termwright); *persona ?* while the file is written but not checked yet; *no persona* with the reason when the check found another model.
+* **Emulated lab: Back to Day 0 writes the persona again.** The new disk got no persona file (Termwright still counted the old one as written), so the switch booted as the plain image. Reset also forgets the saved state and the old persona check. Session editor: the Jump host and Proxy switches show off while none is chosen.
 
 ## 0.34.1 (2026-11-10)
 
