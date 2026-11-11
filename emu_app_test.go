@@ -511,6 +511,16 @@ func TestEmuModes(t *testing.T) {
 				diag, _ := a.emuRun(host.Path, "bridge link; ip -br addr; ip neigh; ip route", 20*time.Second)
 				t.Fatalf("%s: address %q, reach %q\nevents:\n%s\nconsole: %s\nhost:\n%s", mode, ip, reach, strings.Join(evs, "\n"), a.EmuConsoleTail(v.Devices[0].ID), diag)
 			}
+			if mode == "cloud" { // this computer reaches it: the session goes straight
+				for end := time.Now().Add(30 * time.Second); time.Now().Before(end); time.Sleep(time.Second) {
+					if ss, err := st.Get(v.Sessions[v.Devices[0].ID]); err == nil && ss.JumpSession == "" && ss.Hostname == ip {
+						break
+					}
+				}
+				if ss, err := st.Get(v.Sessions[v.Devices[0].ID]); err != nil || ss.JumpSession != "" || ss.Hostname != ip {
+					t.Errorf("cloud: the session does not go straight: %+v %v", ss, err)
+				}
+			}
 			if mode == "cloud" || mode == "lan" { // from the host's network too
 				for _, port := range []string{"22", "23", "80"} {
 					if out, err := exec.Command("ip", "netns", "exec", "twl", "timeout", "3", "bash", "-c", "</dev/tcp/"+ip+"/"+port).CombinedOutput(); err != nil {

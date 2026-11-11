@@ -43,4 +43,7 @@ mkdir -p /var/lib/libvirt/dnsmasq
 (while [ -e /tmp/twb/udhcpd-nat.pid ]; do busybox dumpleases -f /tmp/twb/nat.leases 2>/dev/null | awk 'BEGIN{print "["} NR>1{printf "%s  {\n    \"ip-address\": \"%s\",\n    \"mac-address\": \"%s\"\n  }", (n++?",\n":""), $2, $1} END{print "\n]"}' > /var/lib/libvirt/dnsmasq/virbr0.status; sleep 2; done) &
 # the host's SSH
 ip netns exec twh /usr/sbin/sshd -f /home/claude/emu-test/sshd/sshd_config -o ListenAddress=10.77.0.2 -o PidFile=/tmp/twb/sshd.pid
+# this computer (the root namespace) reaches the LAN through the host, as a user's computer would
+ip route replace 10.50.0.0/24 via 10.77.0.2; ip -n twl route add 10.77.0.0/30 via 10.50.0.20
+ip netns exec twh sysctl -qw net.ipv4.ip_forward=1
 echo bench up

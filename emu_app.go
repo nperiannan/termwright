@@ -1551,12 +1551,17 @@ func emuPlace(add, all []emu.VM) {
 // emuTarget is where a VM's SSH session goes (and through which jump host).
 func emuTarget(l *emu.Lab, v emu.VM, host string) (string, int, string) {
 	switch l.Mgmt {
-	case "bridge", "cloud":
-		return strings.Split(v.MgmtIP, "/")[0], 22, host // cloud: on the host's network, through the host so it works from anywhere the host does
+	case "cloud":
+		if v.Direct { // this computer reaches it straight
+			return strings.Split(v.MgmtIP, "/")[0], 22, ""
+		}
+		return strings.Split(v.MgmtIP, "/")[0], 22, host
+	case "bridge":
+		return strings.Split(v.MgmtIP, "/")[0], 22, host
 	case "nat":
 		return orStr(strings.Split(v.MgmtIP, "/")[0], "0.0.0.0"), 22, host // reached through the host
 	case "lan":
-		if l.LanKind == "macvtap" {
+		if l.LanKind == "macvtap" || v.Direct {
 			return orStr(strings.Split(v.MgmtIP, "/")[0], "0.0.0.0"), 22, "" // the host cannot reach its own macvtap guests: straight from this computer
 		}
 		return orStr(strings.Split(v.MgmtIP, "/")[0], "0.0.0.0"), 22, host
@@ -2088,6 +2093,47 @@ func (a *App) emuReach(host, id string) {
 	emuLab.mu.Lock()
 	emuEv(id, level, msg)
 	emuLab.mu.Unlock()
+	a.emuDirect(id, ip)
+}
+
+// emuDirect tries a switch on the host's network from this computer: when its
+// SSH answers, its session connects straight, else through the host.
+func (a *App) emuDirect(id, ip string) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	if l == nil || !(l.Mgmt == "cloud" || l.Mgmt == "lan") {
+		emuLab.mu.Unlock()
+		return
+	}
+	emuLab.mu.Unlock()
+	direct := false
+	for try := 0; try < 3 && !direct; try++ {
+		if c, err := net.DialTimeout("tcp", net.JoinHostPort(ip, "22"), 3*time.Second); err == nil {
+			_ = c.Close()
+			direct = true
+		}
+	}
+	emuLab.mu.Lock()
+	v := l.VMByID(id)
+	if v == nil {
+		emuLab.mu.Unlock()
+		return
+	}
+	changed := v.Direct != direct
+	v.Direct = direct
+	if direct {
+		emuEv(id, "ok", "this computer reaches "+ip+" straight: its SSH session connects without the jump host")
+	} else {
+		emuEv(id, "info", "this computer does not reach "+ip+" (SSH): its SSH session goes through the host")
+	}
+	vv := *v
+	if changed {
+		_ = a.emuSave()
+	}
+	emuLab.mu.Unlock()
+	if changed {
+		a.emuRetarget(vv)
+	}
 }
 
 // emuBestMgmt is the management a new lab gets: the host's network on a
@@ -2201,6 +2247,7 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 	l.Mgmt, l.LanIf, l.LanKind = mgmt, info.LanIf, info.LanKind
 	for i := range l.VMs {
 		v := &l.VMs[i]
+		v.Direct = false // checked again once it has its address
 		v.MgmtIP, v.Gateway = l.Address(v.Index)
 		if old != mgmt {
 			if im := emuImage(v.Image); im != nil && (strings.Contains(strings.Join(im.Day0, "\n"), "{mgmt") || strings.Contains(strings.Join(im.Day0, "\n"), "{gateway}")) {

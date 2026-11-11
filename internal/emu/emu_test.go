@@ -344,7 +344,7 @@ func TestCloudMgmt(t *testing.T) {
 		t.Fatal("not tapped")
 	}
 	s := l.StartScript(l.VMs, nil)
-	for _, want := range []string{"ip link add twc1br type bridge", "ip addr replace 10.50.0.20/32 dev twc1br", "net.ipv4.conf.twc1br.proxy_arp=1 net.ipv4.conf.ens160.proxy_arp=1", "net.ipv4.ip_forward=1", "ip route replace 10.50.0.146/32 dev twc1br", "ip route replace 10.50.0.147/32 dev twc1br"} {
+	for _, want := range []string{"ip link add twc1br type bridge", "sudo -n ip addr add 10.50.0.20/32 dev twc1br", "net.ipv4.conf.twc1br.proxy_arp=1 net.ipv4.conf.ens160.proxy_arp=1", "net.ipv4.ip_forward=1", "ip route replace 10.50.0.146/32 dev twc1br", "ip route replace 10.50.0.147/32 dev twc1br"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("start lacks %q:\n%s", want, s)
 		}

@@ -122,6 +122,7 @@ type VM struct {
 	MgmtIP   string   `json:"mgmtIp"` // address/bits it gets on day 0
 	Gateway  string   `json:"gateway"`
 	Day0Done bool     `json:"day0Done"`
+	Direct   bool     `json:"direct,omitempty"` // its management address answers this computer straight (no jump host)
 	Serial   string   `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
 	BaseMAC  string   `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
 	DiskGB   int      `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
@@ -376,7 +377,8 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 	if l.Mgmt == "bridge" {
 		br := l.Bridge()
 		gw := l.gatewayPrefix()
-		fmt.Fprintf(&b, "ip link show %s >/dev/null 2>&1 || { sudo -n ip link add %s type bridge && sudo -n ip addr add %s dev %s; }\nsudo -n ip link set %s up\n", br, br, gw, br, br)
+		fmt.Fprintf(&b, "ip link show %s >/dev/null 2>&1 || sudo -n ip link add %s type bridge\nsudo -n ip link set %s up\n", br, br, br)
+		b.WriteString(onlyAddr(br, gw))
 	}
 	if l.Mgmt == "cloud" {
 		// like GNS3's cloud, but routed: the switches sit on a bridge of the host and
@@ -386,7 +388,7 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		br := l.Bridge()
 		fmt.Fprintf(&b, "ip link show %s >/dev/null 2>&1 || sudo -n ip link add %s type bridge || { echo 'fail all could not make the bridge %s (sudo)'; exit 0; }\nsudo -n ip link set %s up\n", br, br, br, br)
 		if ip := strings.Split(l.HostIP, "/")[0]; ip != "" {
-			fmt.Fprintf(&b, "sudo -n ip addr replace %s/32 dev %s\n", ip, br)
+			b.WriteString(onlyAddr(br, ip+"/32"))
 		}
 		fmt.Fprintf(&b, "sudo -n sysctl -qw net.ipv4.ip_forward=1 net.ipv4.conf.%s.proxy_arp=1 net.ipv4.conf.%s.proxy_arp=1 net.ipv4.conf.%s.rp_filter=0 >/dev/null\n", br, l.CloudIf, br)
 		fmt.Fprintf(&b, "if command -v iptables >/dev/null 2>&1; then for d in -i -o; do sudo -n iptables -C FORWARD $d %s -j ACCEPT 2>/dev/null || sudo -n iptables -I FORWARD $d %s -j ACCEPT; done; fi\n", br, br)
@@ -429,6 +431,11 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		fmt.Fprintf(&b, " if out=$(qemu-system-x86_64 %s%s 2>&1); then echo 'started %s'; else echo \"fail %s $(echo $out | tr '\\n' ' ')\"; fi\nfi\n", joinArgs(l.Args(v, im)), redir, v.ID, v.ID)
 	}
 	return b.String()
+}
+
+// onlyAddr gives a bridge this one address (one left from another management goes).
+func onlyAddr(br, addr string) string {
+	return fmt.Sprintf("for a in $(ip -4 -o addr show dev %s | awk '{print $4}'); do [ \"$a\" = %q ] || sudo -n ip addr del \"$a\" dev %s; done\nip -4 -o addr show dev %s | grep -q ' %s ' || sudo -n ip addr add %s dev %s\n", br, addr, br, br, addr, addr, br)
 }
 
 // diskCmd makes a VM's disk (a copy-on-write layer on the image) and grows it to its size.
