@@ -1998,6 +1998,19 @@ func (a *App) emuDay0(host string, v emu.VM) {
 			fail(emuWithTail(fmt.Errorf("setting its address %s: %w", v.MgmtIP, err), c))
 			return
 		}
+		// the switch says which address it has: a command it refused (an old
+		// address in the way) shows here, before the session points there
+		if ip := strings.Split(v.MgmtIP, "/")[0]; im.AddrCmd != "" {
+			out, err := emu.Ask(ctx, c, &im, im.AddrCmd)
+			if err == nil && !strings.Contains(out, ip) {
+				o := strings.Join(strings.Fields(emu.CleanConsole(out)), " ")
+				if len(o) > 300 {
+					o = o[:300] + "…"
+				}
+				fail(fmt.Errorf("the switch did not take the address %s (%s shows: %s) - check the image's Set address commands", ip, im.AddrCmd, o))
+				return
+			}
+		}
 		emuLab.mu.Lock()
 		emuEv(v.ID, "ok", "has the address "+strings.Split(v.MgmtIP, "/")[0]+" (gateway "+orStr(v.Gateway, "none")+") - its SSH session points there")
 		emuLab.mu.Unlock()
@@ -3633,8 +3646,8 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) bool {
 			if len(p.Day0) > len(im.Day0) && slices.Equal(im.Day0, p.Day0[:len(im.Day0)]) { // the pack's day-0 grew (save configuration added)
 				im.Day0, changed = p.Day0, true
 			}
-			if len(im.AddrSet) == 0 && len(p.AddrSet) > 0 {
-				im.AddrSet, changed = p.AddrSet, true
+			if len(p.AddrSet) > len(im.AddrSet) && (len(im.AddrSet) == 0 || slices.Equal(im.AddrSet, p.AddrSet[len(p.AddrSet)-len(im.AddrSet):])) {
+				im.AddrSet, changed = p.AddrSet, true // the pack's commands grew (an old address is removed first)
 			}
 			if p.Persona != nil && im.Persona != nil && im.Persona.Check == "" && p.Persona.Check != "" {
 				im.Persona.Check, changed = p.Persona.Check, true

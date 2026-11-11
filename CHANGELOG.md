@@ -46,6 +46,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Session options: turn the jump host or the proxy off.** Each has its own switch on the Jump Host / Proxy page and is turned off without being lost: the connection does not use it, it stays shown (greyed) and works again when it is turned on.
 * **Emulated lab: fixed addresses that another device uses are found.** When the management takes fixed addresses (routed or bridged host network), Termwright asks the network for them while the switches are off and names the ones another device answers on (with its MAC address), so a session does not end up at that device.
 * **Lab switches in the Session Manager:** right-click a switch's session (or its console) to **Start**, **Stop** or **Restart** the switch. Fixed: a starting emulated switch showed a large yellow oval instead of a dot.
+* **Fixed: a new fixed address was not taken by EXOS switches that had one already** (EXOS refuses a second address on the Mgmt VLAN): device pack 1.4.5 removes the old one first, and Termwright now asks the switch which address it has after typing it - when it is not the one given, Events says so (with what the switch showed) instead of pointing the session at it.
+* **The active tab stands out:** tinted with the accent colour, an accent line under it and its name in bold.
 
 ## 0.34.1 (2026-11-10)
 
