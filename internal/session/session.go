@@ -69,7 +69,8 @@ const (
 	kProxyHost    = "Termwright Proxy Host"
 	kProxyPort    = "Termwright Proxy Port"
 	kProxyUser    = "Termwright Proxy User"
-	kRouteOff     = "Termwright Route Off"
+	kJumpOff      = "Termwright Jump Off"
+	kProxyOff     = "Termwright Proxy Off"
 	kFontFamily   = "Termwright Font"
 	kFontSize     = "Termwright Font Size"
 	kBackspace    = "Termwright Backspace"
@@ -217,10 +218,12 @@ type Session struct {
 	ProxyHost        string        `json:"proxyHost"`
 	ProxyPort        int           `json:"proxyPort"`
 	ProxyUser        string        `json:"proxyUser"`
-	// RouteOff: the jump host and proxy are kept (OffRoute) but not used - the
-	// session connects straight until they are turned on again.
-	RouteOff bool   `json:"routeOff,omitempty"`
-	OffRoute *Route `json:"offRoute,omitempty"`
+	// JumpOff / ProxyOff: the jump host / proxy is kept (OffJump / OffProxy)
+	// but not used until it is turned on again.
+	JumpOff  bool   `json:"jumpOff,omitempty"`
+	OffJump  string `json:"offJump,omitempty"`
+	ProxyOff bool   `json:"proxyOff,omitempty"`
+	OffProxy *Proxy `json:"offProxy,omitempty"`
 	AutoReconnect    bool          `json:"autoReconnect"`
 	X11Forward       bool          `json:"x11Forward"`
 	AgentForward     bool          `json:"agentForward"`
@@ -458,9 +461,12 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.ProxyHost = f.Str(kProxyHost, "")
 	s.ProxyPort = int(f.DWord(kProxyPort, 0))
 	s.ProxyUser = f.Str(kProxyUser, "")
-	if s.RouteOff = f.Bool(kRouteOff, false); s.RouteOff {
-		s.OffRoute = &Route{Jump: s.JumpSession, ProxyType: s.ProxyType, ProxyHost: s.ProxyHost, ProxyPort: s.ProxyPort, ProxyUser: s.ProxyUser}
-		s.JumpSession, s.ProxyType, s.ProxyHost, s.ProxyPort, s.ProxyUser = "", "", "", 0, ""
+	if s.JumpOff = f.Bool(kJumpOff, false); s.JumpOff {
+		s.OffJump, s.JumpSession = s.JumpSession, ""
+	}
+	if s.ProxyOff = f.Bool(kProxyOff, false); s.ProxyOff {
+		s.OffProxy = &Proxy{Type: s.ProxyType, Host: s.ProxyHost, Port: s.ProxyPort, User: s.ProxyUser}
+		s.ProxyType, s.ProxyHost, s.ProxyPort, s.ProxyUser = "", "", 0, ""
 	}
 	s.AutoReconnect = f.Bool(kAutoReconn, false)
 	s.X11Forward = f.Bool(kX11, false)
@@ -678,21 +684,28 @@ func (s Session) Apply(f *sessionfile.File) {
 	} else {
 		f.Delete(kForwards)
 	}
-	r := s.route()
-	if r.Jump != "" {
-		f.SetStr(kFirewall, "Session:"+r.Jump)
+	jump, r := s.JumpSession, Proxy{Type: s.ProxyType, Host: s.ProxyHost, Port: s.ProxyPort, User: s.ProxyUser}
+	if s.JumpOff && jump == "" { // a jump host set while off counts as the kept one
+		jump = s.OffJump
+	}
+	if s.ProxyOff && r.Type == "" && s.OffProxy != nil {
+		r = *s.OffProxy
+	}
+	if jump != "" {
+		f.SetStr(kFirewall, "Session:"+jump)
 	} else if strings.HasPrefix(f.Str(kFirewall, ""), "Session:") {
 		f.SetStr(kFirewall, "None")
 	}
-	setOptStr(f, kProxyType, r.ProxyType)
-	setOptStr(f, kProxyHost, r.ProxyHost)
-	if r.ProxyPort > 0 {
-		f.SetDWord(kProxyPort, uint32(r.ProxyPort))
+	setOptStr(f, kProxyType, r.Type)
+	setOptStr(f, kProxyHost, r.Host)
+	if r.Port > 0 {
+		f.SetDWord(kProxyPort, uint32(r.Port))
 	} else {
 		f.Delete(kProxyPort)
 	}
-	setOptStr(f, kProxyUser, r.ProxyUser)
-	setOptBool(f, kRouteOff, s.RouteOff)
+	setOptStr(f, kProxyUser, r.User)
+	setOptBool(f, kJumpOff, s.JumpOff)
+	setOptBool(f, kProxyOff, s.ProxyOff)
 	if s.AutoReconnect || f.Get(kAutoReconn) != nil {
 		f.SetBool(kAutoReconn, s.AutoReconnect)
 	}
@@ -794,30 +807,12 @@ func (s Session) Apply(f *sessionfile.File) {
 	setOptBool(f, kTLSAnyCert, s.TLSAnyCert)
 }
 
-// Route is a session's way to its host: a jump host and/or a proxy.
-type Route struct {
-	Jump      string `json:"jump"`
-	ProxyType string `json:"proxyType"`
-	ProxyHost string `json:"proxyHost"`
-	ProxyPort int    `json:"proxyPort"`
-	ProxyUser string `json:"proxyUser"`
-}
-
-// route is the jump host and proxy kept in the file: the turned-off ones
-// (a jump host or proxy set while off counts as the kept one).
-func (s Session) route() Route {
-	r := Route{Jump: s.JumpSession, ProxyType: s.ProxyType, ProxyHost: s.ProxyHost, ProxyPort: s.ProxyPort, ProxyUser: s.ProxyUser}
-	if !s.RouteOff || s.OffRoute == nil {
-		return r
-	}
-	o := *s.OffRoute
-	if r.Jump != "" {
-		o.Jump = r.Jump
-	}
-	if r.ProxyType != "" {
-		o.ProxyType, o.ProxyHost, o.ProxyPort, o.ProxyUser = r.ProxyType, r.ProxyHost, r.ProxyPort, r.ProxyUser
-	}
-	return o
+// Proxy is a session's SOCKS5 or HTTP proxy.
+type Proxy struct {
+	Type string `json:"type"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
+	User string `json:"user"`
 }
 
 func setOptStr(f *sessionfile.File, k, v string) {

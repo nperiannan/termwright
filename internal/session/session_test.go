@@ -26,9 +26,9 @@ func roundTripForTest(t *testing.T, s Session) Session {
 	return got
 }
 
-// A turned-off jump host and proxy are kept but not used.
+// A turned-off jump host or proxy is kept but not used, each on its own.
 func TestRouteOff(t *testing.T) {
-	s := Session{Name: "r", Protocol: ProtoSSH2, Hostname: "h", JumpSession: "Lab/jump", ProxyType: "socks5", ProxyHost: "p", ProxyPort: 1080, RouteOff: true}
+	s := Session{Name: "r", Protocol: ProtoSSH2, Hostname: "h", JumpSession: "Lab/jump", ProxyType: "socks5", ProxyHost: "p", ProxyPort: 1080, JumpOff: true}
 	st, err := NewStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -37,26 +37,24 @@ func TestRouteOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := st.Get("r")
-	if got.JumpSession != "" || got.ProxyType != "" || !got.RouteOff || got.OffRoute == nil || got.OffRoute.Jump != "Lab/jump" || got.OffRoute.ProxyPort != 1080 {
-		t.Fatalf("off: %+v %+v", got, got.OffRoute)
+	if got.JumpSession != "" || got.OffJump != "Lab/jump" || got.ProxyType != "socks5" || got.ProxyOff {
+		t.Fatalf("jump off: %+v", got)
 	}
-	// saved again while off (another field changed): still kept
+	got.ProxyOff, got.OffProxy, got.ProxyType, got.ProxyHost, got.ProxyPort = true, &Proxy{Type: "socks5", Host: "p", Port: 1080}, "", "", 0
 	got.Hostname = "h2"
 	if _, err := st.Save(got, "r"); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = st.Get("r")
-	if got.OffRoute == nil || got.OffRoute.Jump != "Lab/jump" || got.JumpSession != "" {
-		t.Fatalf("lost while off: %+v", got.OffRoute)
+	if got.ProxyType != "" || got.OffProxy == nil || got.OffProxy.Port != 1080 || got.OffJump != "Lab/jump" || got.JumpSession != "" {
+		t.Fatalf("both off: %+v %+v", got, got.OffProxy)
 	}
-	// turned on again
-	o := *got.OffRoute
-	got.RouteOff, got.OffRoute, got.JumpSession, got.ProxyType, got.ProxyHost, got.ProxyPort = false, nil, o.Jump, o.ProxyType, o.ProxyHost, o.ProxyPort
+	got.JumpOff, got.JumpSession, got.OffJump = false, got.OffJump, ""
 	if _, err := st.Save(got, "r"); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = st.Get("r")
-	if got.JumpSession != "Lab/jump" || got.ProxyType != "socks5" || got.RouteOff {
-		t.Fatalf("on: %+v", got)
+	if got.JumpSession != "Lab/jump" || got.JumpOff || !got.ProxyOff || got.OffProxy == nil {
+		t.Fatalf("jump on again: %+v", got)
 	}
 }

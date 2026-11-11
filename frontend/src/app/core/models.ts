@@ -15,8 +15,8 @@ export interface Session {
   logonActions: LogonAction[];
   triggers: Trigger[]; portForwards: PortForward[];
   jumpSession: string; proxyType: '' | 'socks5' | 'http'; proxyHost: string; proxyPort: number; proxyUser: string;
-  /** The jump host and proxy are kept (offRoute) but not used. */
-  routeOff?: boolean; offRoute?: { jump: string; proxyType: '' | 'socks5' | 'http'; proxyHost: string; proxyPort: number; proxyUser: string } | null;
+  /** A turned-off jump host / proxy is kept (offJump / offProxy) but not used. */
+  jumpOff?: boolean; offJump?: string; proxyOff?: boolean; offProxy?: { type: '' | 'socks5' | 'http'; host: string; port: number; user: string } | null;
   autoReconnect: boolean; x11Forward: boolean; agentForward: boolean;
   consoleServer?: string; consolePort?: number; consoleMethod?: string; consoleUser?: string; consoleBase?: number; consoleProtocol?: string;
   environment?: string; rdpDomain?: string; rdpFullScreen?: boolean; rdpSize?: string; vncViewOnly?: boolean; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;

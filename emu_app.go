@@ -2260,12 +2260,55 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 		}
 	}
 	vms := append([]emu.VM(nil), l.VMs...)
+	fixed := l.Mgmt == "cloud" || l.Mgmt == "lan" && l.LanFixed
 	_ = a.emuSave()
 	emuLab.mu.Unlock()
 	for _, v := range vms {
 		a.emuRetarget(v)
 	}
+	if fixed { // the switches are off: an address that answers now is another device's
+		var ips []string
+		for _, v := range vms {
+			if ip := strings.Split(v.MgmtIP, "/")[0]; ip != "" {
+				ips = append(ips, ip)
+			}
+		}
+		if used := a.emuAddrInUse(host, ips); len(used) > 0 {
+			var l []string
+			for _, v := range vms {
+				if mac, ok := used[strings.Split(v.MgmtIP, "/")[0]]; ok {
+					msg := strings.Split(v.MgmtIP, "/")[0] + " is already used on the network (by " + orStr(mac, "a device") + "): pick other addresses for the switches (Management)"
+					emuLab.mu.Lock()
+					emuEv(v.ID, "error", msg)
+					emuLab.mu.Unlock()
+					l = append(l, strings.Split(v.MgmtIP, "/")[0]+" ("+orStr(mac, "?")+")")
+				}
+			}
+			view, _ := a.EmuState()
+			return view, errors.New("addresses already used on the network by other devices: " + strings.Join(l, ", ") + " - the switches would clash with them; pick a free range")
+		}
+	}
 	return a.EmuState()
+}
+
+// emuAddrInUse pings addresses from the host and says which answer (with the
+// MAC address that answered): used by other devices while the switches are off.
+func (a *App) emuAddrInUse(host string, ips []string) map[string]string {
+	if len(ips) == 0 {
+		return nil
+	}
+	script := "P=$(command -v ping || echo busybox ping)\nfor ip in " + strings.Join(ips, " ") + "; do if $P -c1 -W1 $ip >/dev/null 2>&1; then echo \"used $ip $(ip neigh show $ip | awk '{print $5}' | head -1)\"; fi; done\n"
+	out, err := a.emuRun(host, script, time.Duration(len(ips)*2+10)*time.Second)
+	if err != nil {
+		return nil
+	}
+	used := map[string]string{}
+	for _, line := range strings.Split(out, "\n") {
+		if f := strings.Fields(line); len(f) >= 2 && f[0] == "used" {
+			used[f[1]] = strings.Join(f[2:], "")
+		}
+	}
+	return used
 }
 
 // emuCloud sets a lab up for the host's network, routed: spec is the first

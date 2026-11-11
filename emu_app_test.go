@@ -435,12 +435,39 @@ func TestEmuModes(t *testing.T) {
 		return c, func() { _ = c.Close() }, nil
 	}
 	defer func() { emuDial = old }()
-	modes := []string{"forward", "nat", "bridge", "cloud", "lan", "lan-fixed"}
+	modes := []string{"forward", "nat", "bridge", "cloud", "lan", "lan-fixed", "conflict"}
 	if m := os.Getenv("TW_EMU_MODES"); m != "" {
 		modes = strings.Split(m, ",")
 	}
 	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
+			if mode == "conflict" { // fixed addresses another device answers on
+				keyring.MockInit()
+				dir := t.TempDir()
+				cfg, _ := config.Load(dir)
+				st, _ := session.NewStore(dir + "/Sessions")
+				a := &App{cfg: cfg, store: st}
+				emuLab.loaded, emuLab.f = false, emuFile{}
+				defer func() { a.emuShutdown(); emuLab.loaded, emuLab.f = false, emuFile{} }()
+				host, _ := st.Save(session.Session{Name: "kvm-b", Protocol: session.ProtoSSH2, Hostname: "10.77.0.2", Port: 2299, Username: "root"}, "")
+				if _, err := a.EmuCheckHost(host.Path); err != nil {
+					t.Fatal(err)
+				}
+				img := filepath.Join(dir, "c.qcow2")
+				_ = exec.Command("qemu-img", "create", "-q", "-f", "qcow2", img, "16M").Run()
+				v, err := a.EmuAddImage(img)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := a.EmuAdd(EmuRequest{Host: host.Path, Groups: []EmuGroup{{Image: v.Images[0].ID, Count: 2, Names: "c-{n}"}}, Mgmt: "forward"}); err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _, _ = a.EmuRemove(nil, true) }()
+				if _, err := a.EmuSetMgmt("lan", "10.50.0.141 10.50.0.254"); err == nil || !strings.Contains(err.Error(), "10.50.0.142") || strings.Contains(err.Error(), "10.50.0.141 ") {
+					t.Fatalf("conflict not found: %v", err)
+				}
+				return
+			}
 			keyring.MockInit()
 			dir := t.TempDir()
 			cfg, _ := config.Load(dir)
