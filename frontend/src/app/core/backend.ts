@@ -64,9 +64,12 @@ export class Backend {
   labPackAccept(path: string, hash: string) { return this.call<LabView>('LabPackAccept', path, hash); }
   labPackRemove() { return this.call<LabView>('LabPackRemove'); }
   emuState() { return this.call<LabView>('EmuState'); }
-  emuCatalog() { return this.call<{ file: string; name: string; group: string; note: string; added: boolean }[]>('EmuCatalog'); }
+  emuCatalog() { return this.call<{ file: string; name: string; group: string; note: string; added: boolean; count: number }[]>('EmuCatalog'); }
   emuAddFromCatalog(file: string) { return this.call<LabView>('EmuAddFromCatalog', file); }
   emuSetDiskFile(id: string, slot: string, path: string) { return this.call<LabView>('EmuSetDiskFile', id, slot, path); }
+  emuDownloadStop(id: string) { return this.call<LabView>('EmuDownloadStop', id); }
+  emuDownloadMove(id: string, where: string) { return this.call<LabView>('EmuDownloadMove', id, where); }
+  emuRemoveFromCatalog(file: string, files: boolean) { return this.call<LabView>('EmuRemoveFromCatalog', file, files); }
   emuClearEvents() { return this.call<LabView>('EmuClearEvents'); }
   emuDownload(ids: string[]) { return this.call<LabView>('EmuDownload', ids); }
   emuPersonaPreview(id: string, p: EmuPersona) { return this.call<string>('EmuPersonaPreview', id, p); }

@@ -239,8 +239,17 @@ func (im *Image) PortNameOf(n int) string {
 	if f == "" {
 		f = "{n}"
 	}
+	// {n*4-4}: a step and an offset (SONiC's Ethernet0, Ethernet4…)
+	f = portFormula.ReplaceAllStringFunc(f, func(m string) string {
+		p := portFormula.FindStringSubmatch(m)
+		k, _ := strconv.Atoi(p[1])
+		b, _ := strconv.Atoi(strings.ReplaceAll(p[2], "+", ""))
+		return strconv.Itoa(n*k + b)
+	})
 	return strings.ReplaceAll(f, "{n}", strconv.Itoa(n))
 }
+
+var portFormula = regexp.MustCompile(`\{n\*(\d+)([+-]\d+)?\}`)
 
 // DataPorts is how many ports can be cabled.
 func (im *Image) DataPorts() int {

@@ -2,6 +2,9 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
+	"compress/bzip2"
+	"compress/gzip"
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
@@ -17,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +28,7 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
+	"github.com/ulikunitz/xz"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/crypto/ssh"
 
@@ -85,7 +90,11 @@ var emuLab struct {
 	pinfo            map[string]string  // where the persona file went, or what the check after boot saw
 	pcheck           map[string]bool    // the persona was checked on the CLI since the VM started
 	events           []EmuEvent         // the Events log, newest last
-	download         map[string]string  // image → download progress
+	download         map[string]string  // image → download progress ("waiting", "41 %")
+	dlQueue          []string           // images waiting to download, in order
+	dlCur            string             // the image downloading now
+	dlCancel         context.CancelFunc // stops it
+	dlRunning        bool
 }
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
@@ -175,28 +184,29 @@ func emuEvent(id, level, text string) {
 }
 
 type EmuView struct {
-	Kind        string            `json:"kind"` // "emu"
-	Events      []EmuEvent        `json:"events"`
-	DownloadDir string            `json:"downloadDir"` // where image downloads go on this computer
-	Exists      bool              `json:"exists"`
-	Running     bool              `json:"running"`
-	Folder      string            `json:"folder"`
-	MgmtNet     string            `json:"mgmtNet"`
-	Mgmt        string            `json:"mgmt"`
-	Devices     []EmuDevice       `json:"devices"`
-	Links       []EmuLinkView     `json:"links"`
-	Sessions    map[string]string `json:"sessions"`
-	Consoles    map[string]string `json:"consoles"`
-	Models      []LabModel        `json:"models"`
-	OS          map[string]LabOS  `json:"os"`
-	Host        string            `json:"host"`
-	HostInfo    *emu.HostInfo     `json:"hostInfo"`
-	Hosts       []EmuHost         `json:"hosts"`
-	Images      []EmuImageView    `json:"images"`
-	KVM         bool              `json:"kvm"`
-	Templates   []emu.Template    `json:"templates"`
-	Usage       EmuUsage          `json:"usage"`
-	DeviceTypes []EmuDeviceType   `json:"deviceTypes"`
+	Kind          string            `json:"kind"` // "emu"
+	Events        []EmuEvent        `json:"events"`
+	DownloadDir   string            `json:"downloadDir"`   // where image downloads go on this computer
+	DownloadQueue []string          `json:"downloadQueue"` // the image downloading now, then the waiting ones in order
+	Exists        bool              `json:"exists"`
+	Running       bool              `json:"running"`
+	Folder        string            `json:"folder"`
+	MgmtNet       string            `json:"mgmtNet"`
+	Mgmt          string            `json:"mgmt"`
+	Devices       []EmuDevice       `json:"devices"`
+	Links         []EmuLinkView     `json:"links"`
+	Sessions      map[string]string `json:"sessions"`
+	Consoles      map[string]string `json:"consoles"`
+	Models        []LabModel        `json:"models"`
+	OS            map[string]LabOS  `json:"os"`
+	Host          string            `json:"host"`
+	HostInfo      *emu.HostInfo     `json:"hostInfo"`
+	Hosts         []EmuHost         `json:"hosts"`
+	Images        []EmuImageView    `json:"images"`
+	KVM           bool              `json:"kvm"`
+	Templates     []emu.Template    `json:"templates"`
+	Usage         EmuUsage          `json:"usage"`
+	DeviceTypes   []EmuDeviceType   `json:"deviceTypes"`
 }
 
 // EmuUsage is what the lab takes of its host now (stopped switches take nothing).
@@ -494,11 +504,26 @@ type EmuCatalogItem struct {
 	Group string `json:"group"`
 	Note  string `json:"note"`
 	Added bool   `json:"added"` // images of it are in the list already
+	Count int    `json:"count"` // how many images of it are in the list
+	json  string // a built-in appliance (not in the GNS3 registry)
 }
+
+// emuSonicVS: SONiC's virtual switch, which the GNS3 registry has no file
+// for; its builds come from the SONiC build server (gzip, unpacked on download).
+const emuSonicVS = `{"name": "SONiC-VS", "category": "multilayer_switch", "registry_version": 3,
+ "default_username": "admin", "default_password": "YourPaSsWoRd",
+ "usage": "Login admin / YourPaSsWoRd. Data ports are Ethernet0, Ethernet4, Ethernet8…",
+ "port_name_format": "Ethernet{n*4-4}",
+ "qemu": {"adapter_type": "e1000", "adapters": 10, "ram": 4096, "cpus": 2, "hda_disk_interface": "virtio", "arch": "x86_64"},
+ "images": [
+  {"filename": "sonic-vs-master.img", "version": "master", "direct_download_url": "https://sonic-build.azurewebsites.net/api/sonic/artifacts?branchName=master&platform=vs&target=target/sonic-vs.img.gz", "download_url": "https://sonic-build.azurewebsites.net/ui/sonic/pipelines"},
+  {"filename": "sonic-vs-202411.img", "version": "202411", "direct_download_url": "https://sonic-build.azurewebsites.net/api/sonic/artifacts?branchName=202411&platform=vs&target=target/sonic-vs.img.gz", "download_url": "https://sonic-build.azurewebsites.net/ui/sonic/pipelines"}],
+ "versions": [{"name": "202411", "images": {"hda_disk_image": "sonic-vs-202411.img"}}, {"name": "master", "images": {"hda_disk_image": "sonic-vs-master.img"}}]}`
 
 // emuCatalog: QEMU appliances of the public GNS3 registry (disks, CD-ROMs
 // and BIOS files; container appliances cannot run on a KVM host).
 var emuCatalog = []EmuCatalogItem{
+	{File: "sonic-vs", Name: "SONiC-VS", Group: "Data-centre switches", Note: "Open source data-centre switch OS (virtual switch build). Free download from the SONiC build server; login admin / YourPaSsWoRd.", json: emuSonicVS},
 	{File: "vyos", Name: "VyOS", Group: "Routers and firewalls", Note: "Open source router. Stable images need a (free) account at the project's site; rolling builds are free."},
 	{File: "frr", Name: "FRR (FRRouting)", Group: "Routers and firewalls", Note: "Open source routing suite on Alpine Linux. Free download."},
 	{File: "bird", Name: "BIRD", Group: "Routers and firewalls", Note: "Open source routing daemon. Free download."},
@@ -534,8 +559,9 @@ func (a *App) EmuCatalog() []EmuCatalogItem {
 	out := append([]EmuCatalogItem(nil), emuCatalog...)
 	for i := range out {
 		for _, im := range emuLab.f.Images {
-			if im.Source == "GNS3 appliance "+out[i].Name || strings.EqualFold(im.Source, "GNS3 registry "+out[i].File) {
+			if strings.EqualFold(im.Source, "GNS3 registry "+out[i].File) {
 				out[i].Added = true
+				out[i].Count++
 			}
 		}
 	}
@@ -544,12 +570,17 @@ func (a *App) EmuCatalog() []EmuCatalogItem {
 
 // EmuAddFromCatalog fetches a public appliance from the GNS3 registry and adds its versions.
 func (a *App) EmuAddFromCatalog(file string) (EmuView, error) {
-	ok := false
-	for _, c := range emuCatalog {
-		ok = ok || c.File == file
+	var item *EmuCatalogItem
+	for i := range emuCatalog {
+		if emuCatalog[i].File == file {
+			item = &emuCatalog[i]
+		}
 	}
-	if !ok {
+	if item == nil {
 		return EmuView{}, errors.New("not in the list: " + file)
+	}
+	if item.json != "" {
+		return a.emuImportAppliance([]byte(item.json), "", "GNS3 registry "+file)
 	}
 	resp, err := http.Get("https://raw.githubusercontent.com/GNS3/gns3-registry/master/appliances/" + file + ".gns3a")
 	if err != nil {
@@ -564,6 +595,81 @@ func (a *App) EmuAddFromCatalog(file string) (EmuView, error) {
 		return EmuView{}, err
 	}
 	return a.emuImportAppliance(b, "", "GNS3 registry "+file)
+}
+
+// EmuRemoveFromCatalog takes the images added from a public appliance out of
+// the list (refused while switches use one), stops their downloads and, with
+// files, deletes the files Termwright downloaded for them (not ones chosen elsewhere).
+func (a *App) EmuRemoveFromCatalog(file string, files bool) (EmuView, error) {
+	emuLab.mu.Lock()
+	a.emuLoad()
+	src := "GNS3 registry " + file
+	drop := map[string]bool{}
+	for _, im := range emuLab.f.Images {
+		if strings.EqualFold(im.Source, src) {
+			drop[im.ID] = true
+		}
+	}
+	if l := emuLab.f.Lab; l != nil {
+		for _, v := range l.VMs {
+			if drop[v.Image] {
+				emuLab.mu.Unlock()
+				return EmuView{}, fmt.Errorf("switch %s uses one of these images: remove it first", v.Name)
+			}
+		}
+	}
+	for _, t := range emuLab.f.Templates {
+		if drop[t.Image] {
+			emuLab.mu.Unlock()
+			return EmuView{}, fmt.Errorf("template %s uses one of these images: remove it first", t.Name)
+		}
+	}
+	for id := range drop {
+		if emuLab.dlCur == id && emuLab.dlCancel != nil {
+			emuLab.dlCancel()
+		}
+		emuLab.dlQueue = slices.DeleteFunc(emuLab.dlQueue, func(x string) bool { return x == id })
+		delete(emuLab.download, id)
+	}
+	var keep []emu.Image
+	var gone []string
+	for _, im := range emuLab.f.Images {
+		if !drop[im.ID] {
+			keep = append(keep, im)
+			continue
+		}
+		_ = secrets.Delete(emuImageKey(im.ID))
+		gone = append(gone, im.File)
+		for _, d := range im.Disks {
+			gone = append(gone, d.File)
+		}
+	}
+	emuLab.f.Images = keep
+	used := map[string]bool{}
+	for _, im := range keep {
+		used[im.File] = true
+		for _, d := range im.Disks {
+			used[d.File] = true
+		}
+	}
+	dl := a.emuDownloadDir() + string(filepath.Separator)
+	deleted := 0
+	if files {
+		for _, f := range gone {
+			if f != "" && !used[f] && strings.HasPrefix(f, dl) {
+				if os.Remove(f) == nil {
+					deleted++
+				}
+			}
+		}
+	}
+	emuEv("", "info", fmt.Sprintf("%s: %d images removed, %d downloaded files deleted", file, len(drop), deleted))
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
 }
 
 // emuImportAppliance adds an appliance's versions as images (dir: where its
@@ -646,32 +752,105 @@ func (a *App) emuDownloadDir() string { return filepath.Join(a.labDir(), "images
 func (a *App) EmuDownload(ids []string) (EmuView, error) {
 	emuLab.mu.Lock()
 	a.emuLoad()
-	var todo []emu.Image
 	for _, id := range ids {
 		if im := emuImage(id); im != nil && emuLab.download[id] == "" && emuNeedsDownload(im) {
-			todo = append(todo, *im)
+			emuLab.dlQueue = append(emuLab.dlQueue, id)
 			emuLab.download[id] = "waiting"
 		}
 	}
-	emuLab.mu.Unlock()
-	if len(todo) == 0 {
-		return a.EmuState()
+	start := !emuLab.dlRunning && len(emuLab.dlQueue) > 0
+	if start {
+		emuLab.dlRunning = true
 	}
-	go func() {
-		for _, im := range todo {
-			err := a.emuDownloadOne(im)
-			emuLab.mu.Lock()
-			delete(emuLab.download, im.ID)
-			if err != nil {
-				emuEv("", "error", im.Name+" "+im.Version+": download failed: "+err.Error())
-			} else {
-				emuEv("", "ok", im.Name+" "+im.Version+": downloaded and checked ("+im.FileName+")")
-			}
+	emuLab.mu.Unlock()
+	if start {
+		go a.emuDownloadWorker()
+	}
+	return a.EmuState()
+}
+
+// emuDownloadWorker downloads the queue, one image after the other.
+func (a *App) emuDownloadWorker() {
+	n := 0
+	for {
+		emuLab.mu.Lock()
+		if len(emuLab.dlQueue) == 0 {
+			emuLab.dlRunning, emuLab.dlCur, emuLab.dlCancel = false, "", nil
 			emuLab.mu.Unlock()
+			if n > 0 {
+				a.emuNotify(nil, "Downloads finished")
+			}
+			return
+		}
+		id := emuLab.dlQueue[0]
+		emuLab.dlQueue = emuLab.dlQueue[1:]
+		im := emuImage(id)
+		if im == nil {
+			delete(emuLab.download, id)
+			emuLab.mu.Unlock()
+			continue
+		}
+		cp := *im
+		ctx, cancel := context.WithCancel(context.Background())
+		emuLab.dlCur, emuLab.dlCancel = id, cancel
+		emuLab.download[id] = "0 %"
+		emuLab.mu.Unlock()
+		err := a.emuDownloadOne(ctx, cp)
+		stopped := ctx.Err() != nil
+		cancel()
+		n++
+		emuLab.mu.Lock()
+		delete(emuLab.download, id)
+		emuLab.dlCur, emuLab.dlCancel = "", nil
+		switch {
+		case stopped:
+			emuEv("", "warn", cp.Name+" "+cp.Version+": download stopped")
+		case err != nil:
+			emuEv("", "error", cp.Name+" "+cp.Version+": download failed: "+err.Error())
+		default:
+			emuEv("", "ok", cp.Name+" "+cp.Version+": downloaded and checked ("+cp.FileName+")")
+		}
+		emuLab.mu.Unlock()
+		if !stopped {
 			a.emuNotify(err, "")
 		}
-		a.emuNotify(nil, "Downloads finished")
-	}()
+	}
+}
+
+// EmuDownloadStop stops an image's download, or takes it out of the queue.
+func (a *App) EmuDownloadStop(id string) (EmuView, error) {
+	emuLab.mu.Lock()
+	if emuLab.dlCur == id && emuLab.dlCancel != nil {
+		emuLab.dlCancel()
+	} else {
+		emuLab.dlQueue = slices.DeleteFunc(emuLab.dlQueue, func(x string) bool { return x == id })
+		delete(emuLab.download, id)
+	}
+	emuLab.mu.Unlock()
+	return a.EmuState()
+}
+
+// EmuDownloadMove moves a waiting download: "first", "up", "down" or "last".
+func (a *App) EmuDownloadMove(id, where string) (EmuView, error) {
+	emuLab.mu.Lock()
+	q := emuLab.dlQueue
+	i := slices.Index(q, id)
+	if i >= 0 {
+		q = slices.Delete(q, i, i+1)
+		j := i
+		switch where {
+		case "first":
+			j = 0
+		case "up":
+			j = max(0, i-1)
+		case "down":
+			j = min(len(q), i+1)
+		case "last":
+			j = len(q)
+		}
+		emuLab.dlQueue = slices.Insert(q, j, id)
+	}
+	emuLab.mu.Unlock()
 	return a.EmuState()
 }
 
@@ -689,9 +868,9 @@ func emuNeedsDownload(im *emu.Image) bool {
 }
 
 // emuDownloadOne downloads the missing files of an image (its disk, then the others).
-func (a *App) emuDownloadOne(im emu.Image) error {
+func (a *App) emuDownloadOne(ctx context.Context, im emu.Image) error {
 	if im.File == "" && im.URL != "" {
-		f, sum, size, err := a.emuFetch(im.ID, "", im.URL, im.FileName, im.MD5, im.Size)
+		f, sum, size, err := a.emuFetch(ctx, im.ID, "", im.URL, im.FileName, im.MD5, im.Size)
 		if err != nil {
 			return err
 		}
@@ -706,7 +885,7 @@ func (a *App) emuDownloadOne(im emu.Image) error {
 		if d.File != "" || d.URL == "" {
 			continue
 		}
-		f, sum, size, err := a.emuFetch(im.ID, d.Slot, d.URL, d.FileName, d.MD5, d.Size)
+		f, sum, size, err := a.emuFetch(ctx, im.ID, d.Slot, d.URL, d.FileName, d.MD5, d.Size)
 		if err != nil {
 			return fmt.Errorf("%s (%s): %w", emuDiskName(d.Slot), d.FileName, err)
 		}
@@ -722,7 +901,7 @@ func (a *App) emuDownloadOne(im emu.Image) error {
 
 // emuFetch downloads a file to the download folder and checks its MD5 (a
 // .zip is unpacked: the file of that name inside it).
-func (a *App) emuFetch(id, slot, url, fileName, md5sum string, size int64) (string, string, int64, error) {
+func (a *App) emuFetch(ctx context.Context, id, slot, url, fileName, md5sum string, size int64) (string, string, int64, error) {
 	dir := a.emuDownloadDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", "", 0, err
@@ -734,7 +913,11 @@ func (a *App) emuFetch(id, slot, url, fileName, md5sum string, size int64) (stri
 	if sum, sz, err := fileSHA256(dst); err == nil && md5sum != "" && fileMD5(dst) == strings.ToLower(md5sum) {
 		return dst, sum, sz, nil // downloaded before
 	}
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", "", 0, err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", "", 0, err
 	}
@@ -746,6 +929,7 @@ func (a *App) emuFetch(id, slot, url, fileName, md5sum string, size int64) (stri
 		return "", "", 0, errors.New("the link gave a web page, not the file: open the download page and choose the file")
 	}
 	zipped := strings.Contains(strings.ToLower(url), ".zip")
+	packed := emuPacking(url, fileName)
 	part := dst + ".part"
 	f, err := os.Create(part)
 	if err != nil {
@@ -771,6 +955,17 @@ func (a *App) emuFetch(id, slot, url, fileName, md5sum string, size int64) (stri
 	if err != nil {
 		_ = os.Remove(part)
 		return "", "", 0, err
+	}
+	if packed != "" {
+		emuLab.mu.Lock()
+		emuLab.download[id] = label + "100 % unpacking"
+		emuLab.mu.Unlock()
+		if err := unpackTo(packed, part, dst+".unz"); err != nil {
+			_ = os.Remove(part)
+			return "", "", 0, err
+		}
+		_ = os.Remove(part)
+		part = dst + ".unz"
 	}
 	if zipped {
 		if err := unzipOne(part, filepath.Base(fileName), dst+".unz"); err != nil {
@@ -802,6 +997,48 @@ func fileMD5(p string) string {
 		return ""
 	}
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// emuPacking says how a download is packed ("gz", "xz", "bz2" or ""),
+// from the link, when the wanted file is not itself packed that way.
+func emuPacking(url, fileName string) string {
+	u, f := strings.ToLower(url), strings.ToLower(fileName)
+	for _, k := range []string{"gz", "xz", "bz2"} {
+		if strings.Contains(u, "."+k) && !strings.HasSuffix(f, "."+k) {
+			return k
+		}
+	}
+	return ""
+}
+
+// unpackTo unpacks a gzip, xz or bzip2 file.
+func unpackTo(kind, src, dst string) error {
+	f, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	var zr io.Reader
+	switch kind {
+	case "xz":
+		zr, err = xz.NewReader(bufio.NewReaderSize(f, 1<<20))
+	case "bz2":
+		zr = bzip2.NewReader(bufio.NewReaderSize(f, 1<<20))
+	default:
+		zr, err = gzip.NewReader(f)
+	}
+	if err != nil {
+		return fmt.Errorf("not a %s file: %w", kind, err)
+	}
+	w, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(w, io.LimitReader(zr, 64<<30)); err != nil {
+		w.Close()
+		return err
+	}
+	return w.Close()
 }
 
 // unzipOne writes the member called name (or the only file) of a zip archive to dst.
@@ -1994,7 +2231,7 @@ func (a *App) EmuState() (EmuView, error) {
 
 func (a *App) emuView() EmuView {
 	f := &emuLab.f
-	v := EmuView{Kind: "emu", DownloadDir: a.emuDownloadDir(), Events: append([]EmuEvent(nil), emuLab.events[max(0, len(emuLab.events)-200):]...), DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
+	v := EmuView{Kind: "emu", DownloadDir: a.emuDownloadDir(), DownloadQueue: slices.DeleteFunc(append([]string{emuLab.dlCur}, emuLab.dlQueue...), func(x string) bool { return x == "" }), Events: append([]EmuEvent(nil), emuLab.events[max(0, len(emuLab.events)-200):]...), DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
 	for i := range f.Hosts {
 		if f.Hosts[i].Session == f.Host {
 			v.HostInfo = &f.Hosts[i].Info

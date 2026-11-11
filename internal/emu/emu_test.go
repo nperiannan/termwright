@@ -249,3 +249,10 @@ func TestDownLinks(t *testing.T) {
 		t.Fatal(a)
 	}
 }
+
+func TestPortFormula(t *testing.T) {
+	im := &Image{PortName: "Ethernet{n*4-4}"}
+	if im.PortNameOf(1) != "Ethernet0" || im.PortNameOf(3) != "Ethernet8" {
+		t.Fatal(im.PortNameOf(1), im.PortNameOf(3))
+	}
+}

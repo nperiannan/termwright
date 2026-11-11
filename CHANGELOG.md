@@ -24,6 +24,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Emulated lab: more disks, CD-ROMs and BIOS files.** An image can boot with a second (third, fourth) disk, a CD-ROM and a BIOS file, as GNS3 appliances describe them; each switch writes to a layer of its own on every disk (raw disks and ISO files work too). The image page lists all its files with Choose… and Download (zipped files are unpacked), and the public appliance list now includes images that need them and cloud images with their cloud-init CD-ROM.
 * **Simulated lab workspace: Load Device Pack** in the toolbar (and on the empty palette).
 * **Fixed: emulated switches showed every port active** although only a few were cabled: ports without a cable (and pulled cables) now have their link down after the switch starts, as in GNS3. On the host's network the host's port is put in promiscuous mode, as GNS3's cloud node does.
+* **Lab downloads: a queue you can order.** The Images page shows what is downloading and what waits, in order, with *Next*, *Earlier*, *Later*, ✕ (stop it, or take it out of the queue) and *Stop all*. Downloads packed as `.gz`, `.xz` or `.bz2` (as many registry images are) are unpacked before their MD5 sum is checked.
+* **Public appliances can be removed.** An added appliance shows how many of its images are in the list and **Remove**, which takes them out and deletes the files Termwright downloaded for them (not files you chose yourself, and not while a switch or template uses them).
+* **SONiC-VS** in the public appliances (the community build of the SONiC network OS, versions 202411 and master, login `admin`): its ports are named `Ethernet0`, `Ethernet4`, … - port names can now count in steps (`Ethernet{n*4-4}`).
 
 ## 0.34.1 (2026-11-10)
 

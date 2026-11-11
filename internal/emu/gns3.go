@@ -202,6 +202,9 @@ func gnsPortName(f string) string {
 	if f == "" {
 		return ""
 	}
+	if strings.Contains(f, "{n") {
+		return f // already Termwright's form
+	}
 	f = strings.NewReplacer("{port1}", "{n}", "{0}", "{n}", "{port0}", "{n}").Replace(f)
 	return f
 }

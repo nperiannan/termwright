@@ -281,7 +281,66 @@ func TestEmuCatalog(t *testing.T) {
 			t.Errorf("%s: no images", c.File)
 		}
 	}
-	if l := a.EmuCatalog(); !l[0].Added {
-		t.Error("not marked added")
+	if l := a.EmuCatalog(); !l[0].Added || l[0].Count != 2 {
+		t.Errorf("not marked added: %+v", l[0])
+	}
+	v, err := a.EmuRemoveFromCatalog("frr", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, im := range v.Images {
+		if im.Source == "GNS3 registry frr" {
+			t.Fatal("frr still there")
+		}
+	}
+	for _, im := range v.Images {
+		if im.Source == "GNS3 registry sonic-vs" && (im.PortNameOf(2) != "Ethernet4" || im.Login != "admin" || im.URL == "") {
+			t.Errorf("sonic: %+v", im.Image)
+		}
+	}
+}
+
+func TestEmuUnpack(t *testing.T) {
+	cases := map[string]string{
+		"https://x/ipfire.img.xz":                   "xz",
+		"https://x/a.img.gz":                        "gz",
+		"https://x/a?target=target/sonic-vs.img.gz": "gz",
+		"https://x/a.qcow2.bz2":                     "bz2",
+		"https://x/a.qcow2":                         "",
+	}
+	for u, want := range cases {
+		if got := emuPacking(u, "a.img"); got != want {
+			t.Errorf("%s: %q, want %q", u, got, want)
+		}
+	}
+	if got := emuPacking("https://x/a.img.gz", "a.img.gz"); got != "" {
+		t.Errorf("a wanted .gz file was unpacked: %q", got)
+	}
+	dir := t.TempDir()
+	want := strings.Repeat("termwright disk ", 5000)
+	src := filepath.Join(dir, "plain")
+	if err := os.WriteFile(src, []byte(want), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for kind, tool := range map[string]string{"xz": "xz", "gz": "gzip", "bz2": "bzip2"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			continue
+		}
+		out, err := exec.Command(tool, "-c", src).Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		packed := filepath.Join(dir, "p."+kind)
+		os.WriteFile(packed, out, 0o644)
+		dst := filepath.Join(dir, "u."+kind)
+		if err := unpackTo(kind, packed, dst); err != nil {
+			t.Fatalf("%s: %v", kind, err)
+		}
+		if b, _ := os.ReadFile(dst); string(b) != want {
+			t.Errorf("%s: unpacked %d bytes, want %d", kind, len(b), len(want))
+		}
+	}
+	if err := unpackTo("xz", src, filepath.Join(dir, "bad")); err == nil {
+		t.Error("a plain file passed as xz")
 	}
 }

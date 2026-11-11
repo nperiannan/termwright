@@ -19,6 +19,11 @@ const PAGE = `
     &.busy { background: linear-gradient(90deg, var(--accent) 0 var(--p, 0%), var(--accent-soft) var(--p, 0%) 100%); color: var(--text); border-color: var(--accent); span { position: relative; } }
     &.done { background: var(--success, #1fa45a); border-color: var(--success, #1fa45a); color: #fff; } }
   table.files td.acts { white-space: nowrap; text-align: right; } table.files td { overflow-wrap: anywhere; }
+  .dq { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 6px; margin-bottom: 8px; max-height: 260px; overflow: auto;
+    .dqh { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px 6px; }
+    .dqi { display: flex; align-items: center; gap: 4px; padding: 5px 6px; border-radius: 7px; cursor: pointer; &:hover { background: var(--surface-2); } &.cur { background: var(--accent-soft); } }
+    .dqn { flex: 1; min-width: 0; span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; } small { color: var(--muted); font-size: 11px; } .meter { margin: 3px 0 0; } }
+    button.xs { height: 22px; min-width: 22px; padding: 0 4px; font-size: 11px; } }
   .catg { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; .card { margin: 0; } }
   .lnk { color: var(--accent); cursor: pointer; }
   .unit { flex: none !important; color: var(--muted); font-size: 12px; white-space: nowrap; }
@@ -438,7 +443,21 @@ export class LabNew implements OnInit {
       @switch (tab()) {
         @case ('images') {
           <div class="lst">
-            @if (downloading().n) { <button type="button" class="dlb busy" style="width: 100%; margin-bottom: 6px" disabled [style.--p]="downloading().pct + '%'"><span>{{ tr('Downloading {0} of {1} · {2}', downloading().at, downloading().n, downloading().pct + ' %') }}</span></button> }
+            @if (queue().length) {
+              <div class="dq">
+                <div class="dqh"><b>{{ tr('Downloads') }}</b><span class="muted small">{{ tr('{0} waiting', queue().length - 1) }}</span><span class="sp"></span>@if (queue().length > 1) { <a class="lnk small" (click)="stopAll()">{{ tr('Stop all') }}</a> }</div>
+                @for (q of queue(); track q.id; let i = $index) {
+                  <div class="dqi" [class.cur]="i === 0" (click)="pick(q.id)">
+                    <div class="dqn"><span>{{ q.name }} {{ q.version }}</span><small>{{ i === 0 ? tr('downloading {0}', q.state) : tr('waiting · #{0}', i) }}</small>
+                      @if (i === 0) { <div class="meter"><i [style.width]="pctOf(q.state) + '%'"></i></div> }</div>
+                    @if (i > 0) { <button type="button" class="xs" [title]="tr('Next')" (click)="move(q.id, 'first'); $event.stopPropagation()">⇡</button>
+                      <button type="button" class="xs" [title]="tr('Earlier')" (click)="move(q.id, 'up'); $event.stopPropagation()" [disabled]="i === 1">↑</button>
+                      <button type="button" class="xs" [title]="tr('Later')" (click)="move(q.id, 'down'); $event.stopPropagation()" [disabled]="i === queue().length - 1">↓</button> }
+                    <button type="button" class="xs" [title]="i === 0 ? tr('Stop this download') : tr('Take it out of the queue')" (click)="stop(q.id); $event.stopPropagation()">✕</button>
+                  </div>
+                }
+              </div>
+            }
             @else if (toDownload().length) { <button type="button" class="primary" style="width: 100%; margin-bottom: 6px" (click)="lab.download(toDownload())" [disabled]="lab.busy()">⤓ {{ tr('Download All ({0})', toDownload().length) }}</button> }
             @else if (downloaded()) { <button type="button" class="dlb done" style="width: 100%; margin-bottom: 6px" disabled>✓ {{ tr('All downloaded ({0})', downloaded()) }}</button> }
             @if (images().some(i => i.url)) { <p class="muted small" style="margin: 0 0 6px">{{ tr('Downloads go to {0}', lab.emu()?.downloadDir ?? '') }}</p> }
@@ -536,7 +555,7 @@ export class LabNew implements OnInit {
                 @for (c of catIn(g); track c.file) {
                   <div class="card"><div class="row2"><b>{{ c.name }}</b>@if (c.added) { <span class="badge g">{{ tr('added') }}</span> }</div>
                     <p class="muted small" style="margin: 6px 0 8px">{{ c.note }}</p>
-                    @if (c.added) { <button type="button" class="sm" (click)="showAdded(c.file)">{{ tr('Show') }}</button> }
+                    @if (c.added) { <button type="button" class="sm" (click)="showAdded(c.file)">{{ tr('Show') }}</button> <button type="button" class="sm danger-ghost" (click)="removeCat(c.file, c.name, c.count)" [disabled]="lab.busy()">{{ tr('Remove') }}</button> <span class="muted small">{{ tr('{0} images', c.count) }}</span> }
                     @else { <button type="button" class="sm primary" (click)="addCat(c.file, c.name)" [disabled]="lab.busy()">+ {{ tr('Add') }}</button> }</div>
                 }
               </div>
@@ -572,8 +591,17 @@ export class LabImages implements OnInit {
   private ui = inject(Ui);
   protected tr = tr;
   protected tab = signal<'images' | 'templates' | 'profiles' | 'public'>('images');
-  protected cat = signal<{ file: string; name: string; group: string; note: string; added: boolean }[]>([]);
+  protected cat = signal<{ file: string; name: string; group: string; note: string; added: boolean; count: number }[]>([]);
+  protected queue = computed(() => (this.lab.emu()?.downloadQueue ?? []).map(id => { const im = this.images().find(i => i.id === id); return { id, name: im?.name ?? id, version: im?.version ?? '', state: im ? this.dl(im) : '' }; }));
+  async move(id: string, where: string) { try { this.lab.emu.set(await this.backend.emuDownloadMove(id, where)); } catch (e) { this.ui.error(errText(e)); } }
+  async stop(id: string) { try { this.lab.emu.set(await this.backend.emuDownloadStop(id)); } catch (e) { this.ui.error(errText(e)); } }
+  async stopAll() { for (const q of [...this.queue()].reverse()) await this.stop(q.id); }
+  async removeCat(file: string, name: string, n: number) {
+    if (!(await this.ui.confirm(tr('Remove {0}', name), tr('Take the {0} images of {1} out of the list and delete the files Termwright downloaded for them? Files you chose yourself stay.', n, name), tr('Remove'), true))) return;
+    try { this.lab.emu.set(await this.backend.emuRemoveFromCatalog(file, true)); this.cat.set(await this.backend.emuCatalog()); this.edit.set(null); } catch (e) { this.ui.error(errText(e)); }
+  }
   protected catErr = signal('');
+  async openPublicRefresh() { try { this.cat.set(await this.backend.emuCatalog()); } catch { /* keep */ } }
   async openPublic() { this.tab.set('public'); try { this.cat.set(await this.backend.emuCatalog()); } catch (e) { this.catErr.set(errText(e)); } }
   catGroups() { return [...new Set(this.cat().map(c => c.group))]; }
   catIn(g: string) { return this.cat().filter(c => c.group === g); }
@@ -647,7 +675,7 @@ export class LabImages implements OnInit {
     return { n: all.length, at: Math.min(all.length, doneN + 1), pct: act ? this.pctOf(this.dl(act)) : 0 };
   });
   protected downloaded = computed(() => this.images().filter(i => this.hasLinks(i) && !this.needs(i)).length);
-  dl(im: EmuImage) { return (im as EmuImage & { download?: string }).download ?? ''; }
+  dl(im: EmuImage) { return ((im as EmuImage & { download?: string }).download ?? '').replace('unpacking', this.tr('unpacking')); }
   imageOf(id: string) { return this.images().find(i => i.id === id); }
   diskName(b?: string) { return ({ ide: 'IDE', sata: 'SATA', scsi: 'SCSI', virtio: 'virtio', sd: 'SD' } as Record<string, string>)[b || 'ide'] ?? (b || 'IDE'); }
   buses(cur?: string) { const l = ['ide', 'sata', 'scsi', 'virtio']; if (cur && !l.includes(cur)) l.push(cur); return l.map(v => ({ v, l: this.diskName(v) + (v === 'ide' ? ' (' + tr('most network images') + ')' : v === 'virtio' ? ' (' + tr('fastest, needs drivers') + ')' : '') })); }

@@ -2294,6 +2294,15 @@ const ru: Record<string, string> = {
   'Third disk': 'Третий диск',
   'downloads with Download': 'скачивается кнопкой «Скачать»',
   'get it from the maker, then Choose…': 'получите у производителя, затем «Выбрать…»',
+  'Earlier': 'Раньше',
+  'Stop all': 'Остановить все',
+  'Stop this download': 'Остановить эту загрузку',
+  'Take it out of the queue': 'Убрать из очереди',
+  'waiting · #{0}': 'ожидает · №{0}',
+  '{0} images': 'образов: {0}',
+  '{0} waiting': 'в очереди: {0}',
+  'unpacking': 'распаковка',
+  'Take the {0} images of {1} out of the list and delete the files Termwright downloaded for them? Files you chose yourself stay.': 'Убрать {0} образов {1} из списка и удалить файлы, которые Termwright для них скачал? Файлы, выбранные вами, останутся.',
 };
 
 export default ru;
