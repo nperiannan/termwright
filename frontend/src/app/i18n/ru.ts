@@ -2271,6 +2271,13 @@ const ru: Record<string, string> = {
   'downloaded': 'скачан',
   'Downloading {0} of {1} · {2}': 'Скачивание {0} из {1} · {2}',
   'All downloaded ({0})': 'Все скачаны ({0})',
+  'Public appliances': 'Публичные appliance',
+  'Ready-made settings from the public GNS3 registry for images that boot from one disk. Add one: its versions join the image list; then download the files (or choose them when the maker wants you to sign in).': 'Готовые настройки из публичного реестра GNS3 для образов, загружающихся с одного диска. Добавьте: его версии появятся в списке образов; затем скачайте файлы (или выберите их, если производитель требует входа).',
+  'Loading…': 'Загрузка…',
+  'Images that need a second disk, a CD-ROM or a container (and cloud images that need a cloud-init disk) are not in the list yet.': 'Образов, которым нужен второй диск, CD-ROM или контейнер (и облачных образов с диском cloud-init), в списке пока нет.',
+  '{0} of {1} added': 'добавлено {0} из {1}',
+  'No direct download: get the file from the maker (an account may be needed), then Choose… it below.': 'Прямой загрузки нет: получите файл у производителя (может понадобиться учётная запись), затем выберите его ниже.',
+  'Open the download page': 'Открыть страницу загрузки',
 };
 
 export default ru;

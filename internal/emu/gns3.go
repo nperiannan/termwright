@@ -6,22 +6,68 @@ import (
 	"strings"
 )
 
+// qemuProps are the QEMU settings of an appliance (registry v4: "qemu";
+// v8: a "settings" entry's "template_properties").
+type qemuProps struct {
+	AdapterType string `json:"adapter_type"`
+	Adapters    int    `json:"adapters"`
+	RAM         int    `json:"ram"`
+	CPUs        int    `json:"cpus"`
+	DiskIf      string `json:"hda_disk_interface"`
+	Arch        string `json:"arch"`
+	Platform    string `json:"platform"`
+	Options     string `json:"options"`
+	PortName    string `json:"port_name_format"`
+}
+
+// over puts the values set in o over p.
+func (p qemuProps) over(o qemuProps) qemuProps {
+	if o.AdapterType != "" {
+		p.AdapterType = o.AdapterType
+	}
+	if o.Adapters != 0 {
+		p.Adapters = o.Adapters
+	}
+	if o.RAM != 0 {
+		p.RAM = o.RAM
+	}
+	if o.CPUs != 0 {
+		p.CPUs = o.CPUs
+	}
+	if o.DiskIf != "" {
+		p.DiskIf = o.DiskIf
+	}
+	if o.Arch != "" {
+		p.Arch = o.Arch
+	}
+	if o.Platform != "" {
+		p.Platform = o.Platform
+	}
+	if o.Options != "" {
+		p.Options = o.Options
+	}
+	if o.PortName != "" {
+		p.PortName = o.PortName
+	}
+	return p
+}
+
 // appliance is the part of a GNS3 appliance file (.gns3a, public JSON) that says how to boot an image.
 type appliance struct {
-	Name     string `json:"name"`
-	Category string `json:"category"`
-	Vendor   string `json:"vendor_name"`
-	Usage    string `json:"usage"`
-	Qemu     *struct {
-		AdapterType string `json:"adapter_type"`
-		Adapters    int    `json:"adapters"`
-		RAM         int    `json:"ram"`
-		CPUs        int    `json:"cpus"`
-		DiskIf      string `json:"hda_disk_interface"`
-		Arch        string `json:"arch"`
-		Console     string `json:"console_type"`
-		Options     string `json:"options"`
-	} `json:"qemu"`
+	Name     string     `json:"name"`
+	Category string     `json:"category"`
+	Vendor   string     `json:"vendor_name"`
+	Usage    string     `json:"usage"`
+	User     string     `json:"default_username"`
+	Password string     `json:"default_password"`
+	Qemu     *qemuProps `json:"qemu"`
+	Settings []struct {
+		Name    string    `json:"name"`
+		Default bool      `json:"default"`
+		Inherit bool      `json:"inherit_default_properties"`
+		Type    string    `json:"template_type"`
+		Props   qemuProps `json:"template_properties"`
+	} `json:"settings"`
 	PortName string `json:"port_name_format"`
 	Images   []struct {
 		Filename string `json:"filename"`
@@ -29,10 +75,12 @@ type appliance struct {
 		Size     int64  `json:"filesize"`
 		MD5      string `json:"md5sum"`
 		URL      string `json:"direct_download_url"`
+		Page     string `json:"download_url"`
 	} `json:"images"`
 	Versions []struct {
-		Name   string            `json:"name"`
-		Images map[string]string `json:"images"`
+		Name     string            `json:"name"`
+		Settings string            `json:"settings"`
+		Images   map[string]string `json:"images"`
 	} `json:"versions"`
 }
 
@@ -40,6 +88,8 @@ type appliance struct {
 type Appliance struct {
 	Name     string  `json:"name"`
 	Usage    string  `json:"usage"`
+	User     string  `json:"user"`
+	Password string  `json:"password"`
 	Profiles []Image `json:"profiles"` // FileName says which image file each version needs
 }
 
@@ -49,32 +99,65 @@ func ParseAppliance(data []byte) (Appliance, error) {
 	if err := json.Unmarshal(data, &a); err != nil {
 		return Appliance{}, errors.New("not a GNS3 appliance file: " + err.Error())
 	}
-	if a.Qemu == nil {
+	// the QEMU settings: v4 "qemu", or v8's default "settings" entry (others per version)
+	var def *qemuProps
+	named := map[string]qemuProps{}
+	if a.Qemu != nil {
+		def = a.Qemu
+	}
+	for _, st := range a.Settings {
+		if st.Type != "" && st.Type != "qemu" {
+			continue
+		}
+		if st.Default && def == nil {
+			p := st.Props
+			def = &p
+		}
+		named[st.Name] = st.Props
+	}
+	if def == nil {
+		for _, st := range a.Settings { // no default: the first QEMU one
+			if st.Type == "" || st.Type == "qemu" {
+				p := st.Props
+				def = &p
+				break
+			}
+		}
+	}
+	if def == nil {
 		return Appliance{}, errors.New(a.Name + " is not a QEMU appliance (only QEMU images can run on a KVM host)")
 	}
-	if a.Qemu.Arch != "" && a.Qemu.Arch != "x86_64" && a.Qemu.Arch != "i386" {
-		return Appliance{}, errors.New(a.Name + " needs " + a.Qemu.Arch + "; KVM hosts run x86_64")
+	arch := orStr(def.Arch, def.Platform)
+	if arch != "" && arch != "x86_64" && arch != "i386" {
+		return Appliance{}, errors.New(a.Name + " needs " + arch + "; KVM hosts run x86_64")
 	}
-	base := Image{Name: a.Name, CPUs: a.Qemu.CPUs, RAM: a.Qemu.RAM, NICs: a.Qemu.Adapters, NIC: a.Qemu.AdapterType, Disk: a.Qemu.DiskIf,
-		PortName: gnsPortName(a.PortName), Ready: "login:", Extra: cleanOptions(a.Qemu.Options), Source: "GNS3 appliance " + a.Name}
-	if base.CPUs == 0 {
-		base.CPUs = 1
+	mk := func(q qemuProps) Image {
+		im := Image{Name: a.Name, CPUs: q.CPUs, RAM: q.RAM, NICs: q.Adapters, NIC: q.AdapterType, Disk: q.DiskIf,
+			PortName: gnsPortName(orStr(q.PortName, a.PortName)), Ready: "login:", Login: a.User, Extra: cleanOptions(q.Options), Source: "GNS3 appliance " + a.Name}
+		if im.CPUs == 0 {
+			im.CPUs = 1
+		}
+		if im.NIC == "" {
+			im.NIC = "e1000"
+		}
+		return im
 	}
-	if base.NIC == "" {
-		base.NIC = "e1000"
-	}
-	out := Appliance{Name: a.Name, Usage: a.Usage}
+	base := mk(*def)
+	out := Appliance{Name: a.Name, Usage: a.Usage, User: a.User, Password: a.Password}
 	for _, v := range a.Versions {
 		f := v.Images["hda_disk_image"]
 		if f == "" {
 			continue
 		}
 		im := base
+		if q, ok := named[v.Settings]; ok && v.Settings != "" {
+			im = mk(def.over(q))
+		}
 		im.FileName = f
 		im.Version = strings.TrimPrefix(strings.TrimPrefix(v.Name, "v"), "V")
 		for _, x := range a.Images {
 			if x.Filename == f {
-				im.Size, im.MD5, im.URL = x.Size, strings.ToLower(x.MD5), x.URL
+				im.Size, im.MD5, im.URL, im.Page = x.Size, strings.ToLower(x.MD5), x.URL, x.Page
 				if x.Version != "" {
 					im.Version = strings.TrimPrefix(strings.TrimPrefix(x.Version, "v"), "V")
 				}

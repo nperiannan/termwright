@@ -57,6 +57,7 @@ type Image struct {
 	Serial     string      `json:"serial"`             // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
 	URL        string      `json:"url,omitempty"`      // where the image file can be downloaded (from a GNS3 appliance)
 	MD5        string      `json:"md5,omitempty"`      // its MD5 sum, to check a download
+	Page       string      `json:"page,omitempty"`     // a web page where it can be had (an account may be needed)
 }
 
 // Answer: when the console shows Match (plain text), Send is typed (and Enter).

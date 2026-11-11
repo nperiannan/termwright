@@ -483,6 +483,84 @@ func (a *App) EmuImportAppliance(p string) (EmuView, error) {
 	if err != nil {
 		return EmuView{}, err
 	}
+	return a.emuImportAppliance(b, filepath.Dir(p))
+}
+
+// EmuCatalogItem is a public appliance of the GNS3 registry Termwright offers.
+type EmuCatalogItem struct {
+	File  string `json:"file"` // its name in the registry (without .gns3a)
+	Name  string `json:"name"`
+	Group string `json:"group"`
+	Note  string `json:"note"`
+	Added bool   `json:"added"` // images of it are in the list already
+}
+
+// emuCatalog: appliances of the public GNS3 registry that boot from one disk
+// image (no CD-ROM, second disk or container), so they run as they are.
+var emuCatalog = []EmuCatalogItem{
+	{File: "vyos", Name: "VyOS", Group: "Routers and firewalls", Note: "Open source router. Stable images need a (free) account at the project's site; rolling builds are free."},
+	{File: "frr", Name: "FRR (FRRouting)", Group: "Routers and firewalls", Note: "Open source routing suite on Alpine Linux. Free download."},
+	{File: "bird", Name: "BIRD", Group: "Routers and firewalls", Note: "Open source routing daemon. Free download."},
+	{File: "openwrt", Name: "OpenWrt", Group: "Routers and firewalls", Note: "Open source router OS. Free download."},
+	{File: "mikrotik-chr", Name: "MikroTik Cloud Hosted Router", Group: "Routers and firewalls", Note: "Free download (speed limited without a licence)."},
+	{File: "opnsense", Name: "OPNsense", Group: "Routers and firewalls", Note: "Open source firewall."},
+	{File: "ipfire", Name: "IPFire", Group: "Routers and firewalls", Note: "Open source firewall. Free download."},
+	{File: "cumulus-vx", Name: "Cumulus VX", Group: "Data-centre switches", Note: "Linux switch OS. Free download."},
+	{File: "exos", Name: "EXOS VM", Group: "Data-centre switches", Note: "Switch OS VM. Free download."},
+	{File: "extreme-networks-voss", Name: "VOSS VM", Group: "Data-centre switches", Note: "Switch OS VM. Free download."},
+	{File: "cisco-iosvl2", Name: "Cisco IOSvL2", Group: "Vendor images (sign-in needed)", Note: "Get the image from the vendor with your account, then choose the file."},
+	{File: "cisco-csr1000v", Name: "Cisco CSR 1000v", Group: "Vendor images (sign-in needed)", Note: "Get the image from the vendor with your account, then choose the file."},
+	{File: "juniper-vsrx", Name: "Juniper vSRX", Group: "Vendor images (sign-in needed)", Note: "Get the image from the vendor with your account, then choose the file."},
+	{File: "alpine-linux-virt", Name: "Alpine Linux", Group: "Linux and test tools", Note: "Small Linux for hosts and servers. Free download."},
+	{File: "debian", Name: "Debian", Group: "Linux and test tools", Note: "Linux. Free download."},
+	{File: "tinycore-linux", Name: "Tiny Core Linux", Group: "Linux and test tools", Note: "Very small Linux for end hosts. Free download."},
+	{File: "kali-linux", Name: "Kali Linux", Group: "Linux and test tools", Note: "Security testing Linux. Free download."},
+	{File: "ostinato", Name: "Ostinato", Group: "Linux and test tools", Note: "Traffic generator."},
+}
+
+// EmuCatalog lists the public appliances (and which are in the image list).
+func (a *App) EmuCatalog() []EmuCatalogItem {
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	a.emuLoad()
+	out := append([]EmuCatalogItem(nil), emuCatalog...)
+	for i := range out {
+		for _, im := range emuLab.f.Images {
+			if im.Source == "GNS3 appliance "+out[i].Name || strings.EqualFold(im.Source, "GNS3 registry "+out[i].File) {
+				out[i].Added = true
+			}
+		}
+	}
+	return out
+}
+
+// EmuAddFromCatalog fetches a public appliance from the GNS3 registry and adds its versions.
+func (a *App) EmuAddFromCatalog(file string) (EmuView, error) {
+	ok := false
+	for _, c := range emuCatalog {
+		ok = ok || c.File == file
+	}
+	if !ok {
+		return EmuView{}, errors.New("not in the list: " + file)
+	}
+	resp, err := http.Get("https://raw.githubusercontent.com/GNS3/gns3-registry/master/appliances/" + file + ".gns3a")
+	if err != nil {
+		return EmuView{}, fmt.Errorf("the GNS3 registry: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return EmuView{}, fmt.Errorf("the GNS3 registry answered %s", resp.Status)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.emuImportAppliance(b, "", "GNS3 registry "+file)
+}
+
+// emuImportAppliance adds an appliance's versions as images (dir: where its
+// image files may lie; source: what the images say they came from).
+func (a *App) emuImportAppliance(b []byte, dir string, source ...string) (EmuView, error) {
 	ap, err := emu.ParseAppliance(b)
 	if err != nil {
 		return EmuView{}, err
@@ -498,8 +576,20 @@ func (a *App) EmuImportAppliance(p string) (EmuView, error) {
 			pr.ID, pr.FileName, pr.Size, pr.URL, pr.MD5, pr.Match = keep.ID, keep.FileName, keep.Size, keep.URL, keep.MD5, ""
 			pr.Version = orStr(keep.Version, ver)
 		}
+		if len(source) > 0 {
+			pr.Source = source[0]
+		}
+		if pr.Login == "" && ap.User != "" {
+			pr.Login = ap.User
+		}
+		if ap.Password != "" {
+			_ = secrets.Set(emuImageKey(pr.ID), ap.Password)
+		}
 		if pr.FileName != "" {
-			for _, d := range []string{filepath.Dir(p), a.emuDownloadDir()} {
+			for _, d := range []string{dir, a.emuDownloadDir()} {
+				if d == "" {
+					continue
+				}
 				f := filepath.Join(d, pr.FileName)
 				if sum, size, err := fileSHA256(f); err == nil {
 					pr.File, pr.SHA256, pr.Size = f, sum, size

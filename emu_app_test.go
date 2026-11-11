@@ -250,3 +250,38 @@ func TestVersionIn(t *testing.T) {
 		}
 	}
 }
+
+// The public appliance list (TW_NET=1: fetches from the GNS3 registry).
+func TestEmuCatalog(t *testing.T) {
+	if os.Getenv("TW_NET") == "" {
+		t.Skip("TW_NET not set")
+	}
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = false, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	for _, c := range emuCatalog {
+		v, err := a.EmuAddFromCatalog(c.File)
+		if err != nil {
+			t.Errorf("%s: %v", c.File, err)
+			continue
+		}
+		n := 0
+		for _, im := range v.Images {
+			if im.Source == "GNS3 registry "+c.File {
+				n++
+				if im.FileName == "" || im.Version == "" || (im.URL == "" && im.Page == "") {
+					t.Errorf("%s: %+v", c.File, im.Image)
+				}
+			}
+		}
+		if n == 0 {
+			t.Errorf("%s: no images", c.File)
+		}
+	}
+	if l := a.EmuCatalog(); !l[0].Added {
+		t.Error("not marked added")
+	}
+}

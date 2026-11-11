@@ -18,6 +18,8 @@ const PAGE = `
   .sp { flex: 1; } .muted { color: var(--muted); } .small { font-size: 12px; } .mono { font-family: var(--mono, monospace); font-size: 12px; } .dlb { position: relative; border: 1px solid var(--line); border-radius: 8px; height: 32px; padding: 0 14px; font-weight: 600; overflow: hidden; cursor: default; opacity: 1 !important;
     &.busy { background: linear-gradient(90deg, var(--accent) 0 var(--p, 0%), var(--accent-soft) var(--p, 0%) 100%); color: var(--text); border-color: var(--accent); span { position: relative; } }
     &.done { background: var(--success, #1fa45a); border-color: var(--success, #1fa45a); color: #fff; } }
+  .catg { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; .card { margin: 0; } }
+  .lnk { color: var(--accent); cursor: pointer; }
   .unit { flex: none !important; color: var(--muted); font-size: 12px; white-space: nowrap; }
   .g { color: var(--success, #1fa45a); } .w { color: var(--warning, #e39b17); } .r { color: var(--danger); }
   .f { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px 14px; align-items: center; margin-bottom: 14px; > label { color: var(--muted); } }
@@ -430,7 +432,7 @@ export class LabNew implements OnInit {
   <div class="ov" (click)="closed.emit()"></div>
   <div class="mdl">
     <div class="mh"><div><h2>{{ tr('Images and Templates') }}</h2><div class="muted small">{{ tr('The switch images Termwright can boot, what it knows about each, and the devices made from them') }}</div></div><span class="sp"></span><button type="button" class="sm" (click)="closed.emit()">✕</button></div>
-    <div class="mt"><a [class.on]="tab() === 'images'" (click)="tab.set('images')">{{ tr('Images ({0})', images().length) }}</a><a [class.on]="tab() === 'templates'" (click)="tab.set('templates')">{{ tr('Templates ({0})', templates().length) }}</a><a [class.on]="tab() === 'profiles'" (click)="tab.set('profiles')">{{ tr('Profiles from the device pack') }}</a></div>
+    <div class="mt"><a [class.on]="tab() === 'images'" (click)="tab.set('images')">{{ tr('Images ({0})', images().length) }}</a><a [class.on]="tab() === 'templates'" (click)="tab.set('templates')">{{ tr('Templates ({0})', templates().length) }}</a><a [class.on]="tab() === 'profiles'" (click)="tab.set('profiles')">{{ tr('Profiles from the device pack') }}</a><a [class.on]="tab() === 'public'" (click)="openPublic()">{{ tr('Public appliances') }}</a></div>
     <div class="mb" style="display: grid; grid-template-columns: 320px minmax(0, 1fr)">
       @switch (tab()) {
         @case ('images') {
@@ -458,6 +460,7 @@ export class LabNew implements OnInit {
                   @else { <button type="button" class="primary" (click)="lab.download([im.id])" [disabled]="lab.busy()">⤓ {{ tr('Download ({0})', mb(im.size)) }}</button> }
                 }
                 <span class="pill">{{ tr('Used by {0} switches · {1} templates', usedBy(im.id), tplBy(im.id)) }}</span></div>
+              @if (!im.url && im.page && !im.file) { <p class="small" style="margin: 6px 0 0">{{ tr('No direct download: get the file from the maker (an account may be needed), then Choose… it below.') }} <a class="lnk" (click)="openPage(im.page)">{{ tr('Open the download page') }}</a></p> }
               @if (im.url) { <p class="muted small mono" style="margin: 4px 0 0; overflow-wrap: anywhere">{{ tr('From') }} {{ im.url }}@if (im.md5) { · MD5 {{ im.md5 }} }</p>
                 <p class="muted small" style="margin: 2px 0 0">{{ im.file ? tr('Saved as {0}', im.file) : tr('Downloads go to {0}', lab.emu()?.downloadDir ?? '') }}</p> }
               <div class="sec">{{ tr('Boot') }}</div>
@@ -516,6 +519,26 @@ export class LabNew implements OnInit {
             } @else { <p class="muted">{{ tr('A template is an image with resources, the model it acts as and where serial numbers and MACs start.') }}</p> }
           </div>
         }
+        @case ('public') {
+          <div class="lst">
+            <p class="muted small">{{ tr('Ready-made settings from the public GNS3 registry for images that boot from one disk. Add one: its versions join the image list; then download the files (or choose them when the maker wants you to sign in).') }}</p>
+            @for (g of catGroups(); track g) { <div class="grp">{{ g }}</div><div class="muted small">{{ catCount(g) }}</div> }
+          </div>
+          <div class="pad">
+            @for (g of catGroups(); track g) {
+              <div class="sec">{{ g }}</div>
+              <div class="catg">
+                @for (c of catIn(g); track c.file) {
+                  <div class="card"><div class="row2"><b>{{ c.name }}</b>@if (c.added) { <span class="badge g">{{ tr('added') }}</span> }</div>
+                    <p class="muted small" style="margin: 6px 0 8px">{{ c.note }}</p>
+                    @if (c.added) { <button type="button" class="sm" (click)="showAdded(c.file)">{{ tr('Show') }}</button> }
+                    @else { <button type="button" class="sm primary" (click)="addCat(c.file, c.name)" [disabled]="lab.busy()">+ {{ tr('Add') }}</button> }</div>
+                }
+              </div>
+            } @empty { <p class="muted">{{ catErr() || tr('Loading…') }}</p> }
+            <p class="muted small">{{ tr('Images that need a second disk, a CD-ROM or a container (and cloud images that need a cloud-init disk) are not in the list yet.') }}</p>
+          </div>
+        }
         @case ('profiles') {
           <div class="lst">
             <p class="muted small">{{ tr('An image file you add is recognised by its name; New Lab offers these devices.') }}</p>
@@ -542,7 +565,19 @@ export class LabImages implements OnInit {
   private backend = inject(Backend);
   private ui = inject(Ui);
   protected tr = tr;
-  protected tab = signal<'images' | 'templates' | 'profiles'>('images');
+  protected tab = signal<'images' | 'templates' | 'profiles' | 'public'>('images');
+  protected cat = signal<{ file: string; name: string; group: string; note: string; added: boolean }[]>([]);
+  protected catErr = signal('');
+  async openPublic() { this.tab.set('public'); try { this.cat.set(await this.backend.emuCatalog()); } catch (e) { this.catErr.set(errText(e)); } }
+  catGroups() { return [...new Set(this.cat().map(c => c.group))]; }
+  catIn(g: string) { return this.cat().filter(c => c.group === g); }
+  catCount(g: string) { const l = this.catIn(g); return tr('{0} of {1} added', l.filter(c => c.added).length, l.length); }
+  async addCat(file: string, name: string) {
+    const before = new Set(this.images().map(i => i.id));
+    if (await this.lab.addFromCatalog(file, name)) { this.cat.set(await this.backend.emuCatalog().catch(() => this.cat())); const n = this.images().find(i => !before.has(i.id)); if (n) { this.tab.set('images'); this.pick(n.id); } }
+  }
+  showAdded(file: string) { const im = this.images().find(i => (i as EmuImage).source === 'GNS3 registry ' + file); this.tab.set('images'); if (im) this.pick(im.id); }
+  openPage(u: string) { this.backend.openURL(u); }
   protected images = computed(() => this.lab.emu()?.images ?? []);
   protected templates = computed(() => this.lab.emu()?.templates ?? []);
   protected edit = signal<EmuImage | null>(null);
