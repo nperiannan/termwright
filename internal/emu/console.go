@@ -171,7 +171,11 @@ func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Ans
 					if err := c.Send(a.Send); err != nil {
 						return -1, err
 					}
-					c.answered(tail[:k+len(a.Match)], a.Send)
+					sent := a.Send
+					if a.secret {
+						sent = "the image's password"
+					}
+					c.answered(tail[:k+len(a.Match)], sent)
 					tail, answeredOne = "", true
 					break
 				}
@@ -296,7 +300,7 @@ func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) 
 	i := -1
 	for try := 0; try < 3 && i != 0 && i != 1; try++ {
 		var err error
-		i, err = c.Wait(ctx, 90*time.Second, im.Answers, login, prompt, pass)
+		i, err = c.Wait(ctx, 90*time.Second, im.answers(), login, prompt, pass)
 		if err != nil {
 			return nil, errors.New("no login prompt on the console: " + err.Error())
 		}
@@ -309,7 +313,7 @@ func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) 
 	}
 	if i == 0 {
 		_ = c.Send(orStr(im.Login, "admin"))
-		j, err := c.Wait(ctx, 60*time.Second, im.Answers, pass, prompt, login)
+		j, err := c.Wait(ctx, 60*time.Second, im.answers(), pass, prompt, login)
 		if err != nil {
 			return nil, errors.New("no prompt after the login: " + err.Error())
 		}
@@ -345,7 +349,7 @@ func waitNudged(ctx context.Context, c *Console, im *Image, total time.Duration,
 			return -1, err
 		}
 		var i int
-		if i, err = c.Wait(ctx, step, im.Answers, res...); !errors.Is(err, ErrTimeout) {
+		if i, err = c.Wait(ctx, step, im.answers(), res...); !errors.Is(err, ErrTimeout) {
 			return i, err
 		}
 		_ = c.Send("")
@@ -364,7 +368,7 @@ func Run(ctx context.Context, c *Console, im *Image, prompt *regexp.Regexp, cmd 
 	// console: Enter shows it again (every 15 s, for 2 minutes)
 	var err error
 	for try := 0; try < int(2*time.Minute/rePrompt); try++ {
-		if _, err = c.Wait(ctx, rePrompt, im.Answers, prompt); !errors.Is(err, ErrTimeout) {
+		if _, err = c.Wait(ctx, rePrompt, im.answers(), prompt); !errors.Is(err, ErrTimeout) {
 			break
 		}
 		_ = c.Send("")

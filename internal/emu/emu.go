@@ -93,9 +93,24 @@ func (im *Image) HasFiles() bool {
 }
 
 // Answer: when the console shows Match (plain text), Send is typed (and Enter).
+// "{password}" in Send is the image's password (a first login that asks for a
+// new one); such an answer is not shown in the events.
 type Answer struct {
-	Match string `json:"match"`
-	Send  string `json:"send"`
+	Match  string `json:"match"`
+	Send   string `json:"send"`
+	secret bool
+}
+
+// answers are the image's console answers with its password filled in.
+func (im *Image) answers() []Answer {
+	out := make([]Answer, len(im.Answers))
+	for i, a := range im.Answers {
+		out[i] = a
+		if strings.Contains(a.Send, "{password}") {
+			out[i].Send, out[i].secret = strings.ReplaceAll(a.Send, "{password}", im.Password), true
+		}
+	}
+	return out
 }
 
 // Template is a device to make switches from: an image with its resources,

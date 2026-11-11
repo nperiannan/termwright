@@ -511,3 +511,56 @@ func TestLoginPromptHidden(t *testing.T) {
 		t.Fatalf("got %q, %v", out, err)
 	}
 }
+
+// A first login that asks for a new password gets the image's password twice.
+func TestLoginNewPassword(t *testing.T) {
+	a, b := net.Pipe()
+	got := make(chan string, 1)
+	go func() {
+		w := func(s string) { _, _ = b.Write([]byte(s)) }
+		buf := make([]byte, 64)
+		read := func() string {
+			var s strings.Builder
+			for {
+				n, err := b.Read(buf)
+				if err != nil {
+					return s.String()
+				}
+				for _, ch := range buf[:n] {
+					if ch == '\r' {
+						return s.String()
+					}
+					s.WriteByte(ch)
+				}
+			}
+		}
+		read()
+		w("Login: ")
+		read()
+		w("Password: ")
+		read()
+		w("\r\n\tPlease change the password to continue.\r\n\r\nEnter the New password : ")
+		n1 := read()
+		w("\r\nRe-enter the New password : ")
+		n2 := read()
+		got <- n1 + "|" + n2
+		w("\r\nVSP:1>")
+		read()
+		w("\r\nversion 9.4\r\nVSP:1>")
+		time.Sleep(200 * time.Millisecond)
+		b.Close()
+	}()
+	c := NewConsole(a)
+	var shown string
+	c.OnAnswer = func(q, sent string) { shown += sent }
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	im := &Image{Login: "rwa", Password: "pw1", Answers: []Answer{{Match: "New password", Send: "{password}"}}}
+	out, err := Ask(ctx, c, im, "show version")
+	if err != nil || !strings.Contains(out, "version 9.4") {
+		t.Fatalf("got %q, %v", out, err)
+	}
+	if g := <-got; g != "pw1|pw1" || strings.Contains(shown, "pw1") {
+		t.Fatalf("%q, shown %q", g, shown)
+	}
+}
