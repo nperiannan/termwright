@@ -39,8 +39,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       } @else { <button type="button" (click)="dialog('list')">{{ tr('Switch List and Outputs') }}</button> }
       <span class="sp"></span>
       @if (emu() && devs().length) {
-        <span class="chip mg" [title]="running() ? tr('Stop the switches to change it') : tr('How the switches’ first port (management) is connected; it applies when they start')">{{ tr('Management') }}
-          <select [ngModel]="st()?.mgmt" (ngModelChange)="setMgmt($event)" name="wmg" [disabled]="running() > 0 || lab.busy()">
+        <span class="chip mg" [title]="tr('How the switches’ first port (management) is connected; it applies when they start')">{{ tr('Management') }}
+          <select [ngModel]="st()?.mgmt" (ngModelChange)="setMgmt($event)" name="wmg" [disabled]="lab.busy()">
             <option value="lan">{{ tr('The host’s network (bridged)') }}</option>
             <option value="nat">{{ tr('The host’s NAT network') }}</option>
             <option value="bridge">{{ tr('Lab bridge on the host') }}</option>
@@ -591,7 +591,18 @@ export class LabWorkspace implements OnDestroy {
       bridge: tr('The switches get fixed addresses on a bridge of their own on the host, reached through the host.'),
       forward: tr('Each switch’s SSH is forwarded to a port on the host (no root needed).'),
     };
-    if (await this.ui.confirm(tr('Change management'), text[m] + ' ' + tr('Their sessions are updated; it applies when the switches start.'), tr('Change'))) await this.lab.setMgmt(m);
+    const up = this.devs().filter(d => d.running).map(d => d.id);
+    if (!up.length) {
+      if (await this.ui.confirm(tr('Change management'), text[m] + ' ' + tr('Their sessions are updated; it applies when the switches start.'), tr('Change'))) await this.lab.setMgmt(m);
+      else this.lab.emu.set({ ...this.lab.emu()! });
+      return;
+    }
+    // running switches are stopped for it and started again
+    if (!(await this.ui.confirm(tr('Change management'), text[m] + ' ' + tr('{0} switches are running: they are stopped, and started again with it (their configuration stays). Their sessions are updated.', up.length), tr('Stop, Change and Start')))) {
+      this.lab.emu.set({ ...this.lab.emu()! });
+      return;
+    }
+    if (await this.lab.stop(up) && await this.lab.setMgmt(m)) await this.lab.start(up);
     else this.lab.emu.set({ ...this.lab.emu()! });
   }
 }

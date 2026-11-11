@@ -2304,6 +2304,8 @@ const ru: Record<string, string> = {
   'unpacking': 'распаковка',
   'Take the {0} images of {1} out of the list and delete the files Termwright downloaded for them? Files you chose yourself stay.': 'Убрать {0} образов {1} из списка и удалить файлы, которые Termwright для них скачал? Файлы, выбранные вами, останутся.',
   '{0} with a problem': 'с проблемой: {0}',
+  '{0} switches are running: they are stopped, and started again with it (their configuration stays). Their sessions are updated.': 'Запущено коммутаторов: {0}. Они будут остановлены и запущены снова с новым подключением (их конфигурация сохранится). Их сеансы обновятся.',
+  'Stop, Change and Start': 'Остановить, изменить и запустить',
 };
 
 export default ru;
