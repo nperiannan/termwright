@@ -91,7 +91,7 @@ export interface LabPack { id: string; name: string; version: string; vendor: st
 export interface LabOS { name: string; short: string; configCommand: string; }
 export interface LabDevice { id: string; os: string; model: string; version: string; serial: string; mac: string; hostname: string; mgmtIp: string; port: number; ports: number; running: boolean; logins: number; unsaved: boolean; x: number; y: number;
   /** Emulated lab only. */
-  state?: string; stateText?: string; cpu?: number; cores?: number; diskGb?: number; template?: string; persona?: EmuPersona | null; personaOk?: boolean; personaError?: string; personaInfo?: string; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; memUsed?: number; host?: string; saved?: boolean; role?: string; }
+  state?: string; stateText?: string; cpu?: number; cores?: number; diskGb?: number; template?: string; persona?: EmuPersona | null; personaOk?: boolean; personaError?: string; personaInfo?: string; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; memUsed?: number; host?: string; saved?: boolean; role?: string; uplinks?: string[] | null; }
 export interface LabEvent { at: string; vm: string; name: string; level: 'info' | 'ok' | 'warn' | 'error'; text: string; }
 export interface EmuTopoInfo { name: string; saved: string; hosts: string[] | null; switches: number; open: boolean; }
 export interface LabLag { name: string; mode: string; source: string; }
@@ -105,7 +105,7 @@ export interface EmuSlot { num: number; model: string; serial: string; module: s
 export interface EmuPersona { slots: EmuSlot[]; values: Record<string, string> | null; applied?: string; }
 export interface EmuTemplate { id: string; name: string; image: string; cpus: number; ram: number; diskGb: number; model: string; module: string; values: Record<string, string> | null; serialStart: string; macStart: string; }
 export interface EmuDeviceType { key: string; model: string; kind: string; osName: string; modules: string[] | null; modName: string; images: string[]; cpus: number; ram: number; values: Record<string, string> | null; }
-export interface EmuUsage { hostCpus: number; hostMemTotal: number; hostMemFree: number; load: number; running: number; vcpus: number; ram: number; cores: number; diskGb: number; }
+export interface EmuUsage { hostCpus: number; hostMemTotal: number; hostMemFree: number; load: number; running: number; vcpus: number; ram: number; cores: number; diskGb: number; saved?: number; }
 export interface EmuHostInfo { user: string; os: string; kernel: string; arch: string; kvm: string; vt: boolean; qemu: string; qemuImg: boolean; cpus: number; load: number; memTotal: number; memFree: number; diskFree: number; sudo: boolean; dir: string; problems: string[] | null; notes: string[] | null; osId: string; pkg: string; plan: string[] | null; canSetup: boolean; uplink: string; bridges: string[] | null; wifi: boolean; lanIf: string; lanKind: string; lanAddr?: string; gateway?: string; virt?: string; guestfs?: boolean; nat?: string; libvirt?: boolean; }
 export interface EmuSetupLine { run: string; kind: string; text: string; }
 export interface EmuSetupDone { run: string; error: string; host: EmuHost | null; }

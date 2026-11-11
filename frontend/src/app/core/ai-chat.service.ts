@@ -416,7 +416,7 @@ export class AIChat {
       const dev = (n?: string) => devs.find(d => d.hostname.toLowerCase() === (n ?? '').toLowerCase() || d.id === n);
       const ids = (n?: string) => (n ?? '').toLowerCase() === 'all' ? devs.map(d => d.id) : (dev(n) ? [dev(n)!.id] : null);
       const bad = (why: string) => { s.state = 'error'; s.note = why; return `${line}: not done - ${why}.`; };
-      const known = ['start', 'stop', 'shutdown', 'cable', 'uncable', 'pull', 'plug', 'lag', 'nolag', 'readlags', 'setlag', 'unsetlag', 'checkcabling'];
+      const known = ['start', 'stop', 'shutdown', 'cable', 'uncable', 'pull', 'plug', 'lag', 'nolag', 'readlags', 'setlag', 'unsetlag', 'checkcabling', 'uplink'];
       if (!known.includes(verb)) return bad(`unknown lab command; use ${['show', ...known].join(', ')}`);
       if (!v.exists || !devs.length) return bad('there is no emulated lab with switches');
       const one = verb === 'checkcabling' ? devs.map(d => d.id) : verb === 'start' || verb === 'stop' ? ids(args[0]) : dev(args[0]) ? [dev(args[0])!.id] : null;
@@ -449,6 +449,7 @@ export class AIChat {
           break;
         }
         case 'nolag': if (!args[1]) return bad('give the LAG name'); out = await this.backend.emuSetLag(one[0], args[1], '', []); break;
+        case 'uplink': if (!args[1] || !/^(on|off)$/i.test(args[2] ?? '')) return bad('give lab uplink <switch> <port> on|off'); out = await this.backend.emuSetUplink(one[0], args[1], args[2].toLowerCase() === 'on'); break;
         case 'setlag': case 'unsetlag': if (!args[1]) return bad('give the LAG name (lab show lists them)'); out = await this.backend.emuApplyLag(one[0], args.slice(1).join(' '), verb === 'unsetlag'); break;
         case 'checkcabling': {
           out = await this.backend.emuCheckCabling();

@@ -599,3 +599,22 @@ func TestLagCommands(t *testing.T) {
 		t.Fatal("static has no commands")
 	}
 }
+
+// A data port on the host's network: a tap on its bridge, or macvtap with its own fd.
+func TestUplinks(t *testing.T) {
+	im := &Image{FileName: "x.qcow2", NICs: 4, NIC: "e1000"}
+	for _, kind := range []string{"bridge", "macvtap"} {
+		l := &Lab{ID: "u1", Dir: "lab", Mgmt: "nat", LanIf: "br0", LanKind: kind, VMs: []VM{{ID: "v1", Image: "i", Uplinks: []int{2}}}}
+		args := strings.Join(l.Args(l.VMs[0], im), " ")
+		sc := l.StartScript(l.VMs, map[string]*Image{"i": im})
+		if kind == "bridge" && (!strings.Contains(args, "tap,id=n2,ifname=twu10u2") || !strings.Contains(sc, "master br0")) {
+			t.Fatalf("bridge:\n%s\n%s", args, sc)
+		}
+		if kind == "macvtap" && (!strings.Contains(args, "tap,id=n2,fd=12") || !strings.Contains(sc, "type macvtap") || !strings.Contains(sc, "12<>/dev/tap$i2")) {
+			t.Fatalf("macvtap:\n%s\n%s", args, sc)
+		}
+		if st := l.StopScript([]string{"v1"}); !strings.Contains(st, "ip link del twu10u2") {
+			t.Fatal(st)
+		}
+	}
+}

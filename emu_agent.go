@@ -62,8 +62,12 @@ func (a *App) emuAgentText() string {
 		if d.Error != "" && !strings.Contains(state, "failed") {
 			state += " (problem: " + d.Error + ")"
 		}
-		fmt.Fprintf(&b, "- %s | %s, %s | %s | %s | %s | telnet %s:%d | %q, console %q | %s\n",
-			d.Hostname, model, sw, state, host, orStr(d.SSH, "-"), host, d.Console, v.Sessions[d.ID], v.Consoles[d.ID], persona)
+		up := ""
+		if len(d.Uplinks) > 0 {
+			up = " | data ports on the host's network: " + strings.Join(d.Uplinks, ", ")
+		}
+		fmt.Fprintf(&b, "- %s | %s, %s | %s | %s | %s | telnet %s:%d | %q, console %q | %s%s\n",
+			d.Hostname, model, sw, state, host, orStr(d.SSH, "-"), host, d.Console, v.Sessions[d.ID], v.Consoles[d.ID], persona, up)
 	}
 	if len(v.Links) > 0 {
 		b.WriteString("Cables:\n")
@@ -145,6 +149,7 @@ lab readlags <switch>                     (read the LAGs the switch has)
 lab setlag <switch> <name>                (type a LAG marked in the topology on the switch, with the image's own commands)
 lab unsetlag <switch> <name>              (remove a LAG from the switch)
 lab checkcabling                          (compare the switches' LLDP neighbours with the cables)
+lab uplink <switch> <port> on|off         (put a data port on the KVM host's network, like a cloud node; applies when the switch starts)
 To configure a switch, open its saved session (the first quoted name; its console session when its management does not answer) and run commands there, in that switch's own CLI syntax. A LAG has to be set on the switches themselves (and both ends must match: static or LACP, the same ports): mark it with lab lag on each end, then lab setlag on each end (or configure it in the switch's session yourself), then lab readlags so the topology shows it. New cables work once both switches restart (lab stop, then lab start). Starting a switch takes minutes unless it resumes from a saved state; a switch is ready when its state is running. Never stop, restart or remove switches the user did not ask about.`
 
 // emuAgentLab is what AIChat adds to the system prompt when the agent may use the lab.

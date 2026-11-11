@@ -166,11 +166,12 @@ type EmuDevice struct {
 	Y            int          `json:"y"`
 	State        string       `json:"state"` // stopped, uploading, booting, day0, running, failed
 	StateText    string       `json:"stateText"`
-	CPU          float64      `json:"cpu"`             // % of its vCPUs, now
-	MemUsed      int64        `json:"memUsed"`         // MB its VM uses now (resident)
-	Saved        bool         `json:"saved,omitempty"` // stopped with its running state saved: it starts in seconds
-	Role         string       `json:"role,omitempty"`  // drawn as (set by the user)
-	Cores        float64      `json:"cores"`           // host cores it uses now
+	CPU          float64      `json:"cpu"`               // % of its vCPUs, now
+	MemUsed      int64        `json:"memUsed"`           // MB its VM uses now (resident)
+	Saved        bool         `json:"saved,omitempty"`   // stopped with its running state saved: it starts in seconds
+	Role         string       `json:"role,omitempty"`    // drawn as (set by the user)
+	Uplinks      []string     `json:"uplinks,omitempty"` // its data ports on the host's network
+	Cores        float64      `json:"cores"`             // host cores it uses now
 	CPUs         int          `json:"cpus"`
 	RAM          int          `json:"ram"`
 	Console      int          `json:"console"`
@@ -287,6 +288,7 @@ type EmuUsage struct {
 	RAM          int     `json:"ram"`   // MB, of the running switches
 	Cores        float64 `json:"cores"` // host cores they use now
 	DiskGB       int     `json:"diskGb"`
+	Saved        int     `json:"saved"` // MB, about what the saved running states take on the hosts' disks
 }
 
 // EmuGroup asks for Count VMs of an image.
@@ -3007,6 +3009,7 @@ func (a *App) emuView() EmuView {
 			d.State, d.StateText = "stopped", "stopped"
 			if vm.FastKey != "" {
 				d.StateText, d.Saved = "stopped · state saved", true
+				v.Usage.Saved += orInt(vm.RAM, 1024) // about what the saved state takes on the host's disk
 			}
 			if d.Error != "" {
 				d.State, d.StateText = "failed", "failed"
@@ -3026,6 +3029,11 @@ func (a *App) emuView() EmuView {
 		}
 		d.DiskGB, d.Template, d.Persona, d.PersonaError, d.PersonaInfo = vm.DiskGB, vm.Template, vm.Persona, emuLab.perr[vm.ID], emuLab.pinfo[vm.ID]
 		d.Role = vm.Role
+		if im != nil {
+			for _, n := range vm.Uplinks {
+				d.Uplinks = append(d.Uplinks, im.PortNameOf(n))
+			}
+		}
 		if im != nil && im.Persona != nil && vm.Persona != nil {
 			if txt, err := im.Persona.Render(vm, vm.Persona); err == nil && emu.Hash(txt) == vm.Persona.Applied {
 				// written; with a check command it counts once the switch showed the model (kept across restarts of Termwright)
@@ -3364,6 +3372,10 @@ func (a *App) EmuConnect(k EmuLinkView) (EmuView, error) {
 			return EmuView{}, errors.New("a port has a cable already")
 		}
 	}
+	if slices.Contains(va.Uplinks, pa) || slices.Contains(vb.Uplinks, pb) {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("a port is on the host's network: take it off first")
+	}
 	if pa == 0 || pb == 0 {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("unknown port")
@@ -3492,6 +3504,9 @@ func (a *App) EmuFreePorts(id string) []string {
 		return nil
 	}
 	used := map[int]bool{}
+	for _, n := range v.Uplinks {
+		used[n] = true
+	}
 	for _, c := range l.Cables {
 		if c.A == id {
 			used[c.APort] = true
@@ -5189,4 +5204,51 @@ func (a *App) EmuImportTopology(path string) ([]EmuTopoInfo, error) {
 		return nil, err
 	}
 	return a.EmuTopologies(), nil
+}
+
+// EmuSetUplink puts a data port of a switch on its host's network (like a
+// cloud node on that port: the host's bridge, or macvtap on its network port),
+// or takes it off; it applies when the switch starts.
+func (a *App) EmuSetUplink(id, port string, on bool) (EmuView, error) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	var v *emu.VM
+	if l != nil {
+		v = l.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such switch")
+	}
+	im := emuImage(v.Image)
+	n := emuPort(im, port)
+	if n == 0 {
+		emuLab.mu.Unlock()
+		return EmuView{}, fmt.Errorf("no data port %s on that switch", port)
+	}
+	if on {
+		for _, c := range l.Cables {
+			if c.A == id && c.APort == n || c.B == id && c.BPort == n {
+				emuLab.mu.Unlock()
+				return EmuView{}, errors.New("that port has a cable: remove it first")
+			}
+		}
+		if ln := a.emuFor(emuHostOf(*v)); ln == nil || ln.LanIf == "" {
+			emuLab.mu.Unlock()
+			return EmuView{}, errors.New("the host's network port is not known: check the host again (Hosts)")
+		}
+		if !slices.Contains(v.Uplinks, n) {
+			v.Uplinks = append(v.Uplinks, n)
+		}
+		emuEv(id, "info", "port "+port+" goes on the host's network when it starts")
+	} else {
+		v.Uplinks = slices.DeleteFunc(v.Uplinks, func(x int) bool { return x == n })
+		emuEv(id, "info", "port "+port+" comes off the host's network when it restarts")
+	}
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
 }

@@ -2435,6 +2435,15 @@ const ru: Record<string, string> = {
   'Check UDP Between Hosts': 'Проверить UDP между хостами',
   'Add Switches: pick another host for them': 'Добавить коммутаторы: выберите для них другой хост',
   'Add a Host to this Topology': 'Добавить хост в эту топологию',
+  'Like a cloud node on a data port: the port joins the host’s network (applies when the switch starts)': 'Как облачный узел на порту данных: порт подключается к сети хоста (применяется при запуске коммутатора)',
+  'Port on the Host’s Network…': 'Порт в сети хоста…',
+  'Take {0} off the Host’s Network': 'Отключить {0} от сети хоста',
+  'On the host’s network: {0}': 'В сети хоста: {0}',
+  'Port on the Host’s Network': 'Порт в сети хоста',
+  'Data port of {0} to put on the host’s network (free: {1})': 'Порт данных {0} для подключения к сети хоста (свободны: {1})',
+  '{0} {1} goes on the host’s network when it starts (or restarts)': '{0} {1} подключится к сети хоста при запуске (или перезапуске)',
+  '{0} {1} comes off the host’s network when it restarts': '{0} {1} отключится от сети хоста при перезапуске',
+  'Saved states now: about {0} on the hosts’ disks.': 'Сохранённые состояния сейчас: около {0} на дисках хостов.',
 };
 
 export default ru;

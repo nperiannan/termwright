@@ -151,6 +151,7 @@ type VM struct {
 	Template string   `json:"template,omitempty"`
 	Persona  *Persona `json:"persona,omitempty"`
 	FastKey  string   `json:"fastKey,omitempty"` // its running state was saved in its disk with this setup (FastKey): it resumes from it
+	Uplinks  []int    `json:"uplinks,omitempty"` // data ports on the host's network (its bridge, or macvtap on its port)
 	Role     string   `json:"role,omitempty"`    // what it is drawn as ("access", "core", "router"…; "" = from its model)
 	X        int      `json:"x"`
 	Y        int      `json:"y"`
@@ -336,6 +337,36 @@ func (l *Lab) MAC(v VM, n int) string {
 // tap is the management interface name in bridge mode (at most 15 characters).
 func (l *Lab) tap(v VM) string { return fmt.Sprintf("tw%s%dm", l.ID, v.Index) }
 
+// upTap is the host's interface for data port n of v on the host's network.
+func (l *Lab) upTap(v VM, n int) string { return fmt.Sprintf("tw%s%du%d", l.ID, v.Index, n) }
+
+// upFD: the file descriptor of a data port's macvtap is upFD+n.
+const upFD = 10
+
+// upScript makes the host's interfaces for a VM's data ports on the host's
+// network (" redir" for qemu's fds with macvtap).
+func (l *Lab) upScript(v VM, im *Image) (string, string) {
+	if len(v.Uplinks) == 0 || l.LanIf == "" {
+		return "", ""
+	}
+	var b strings.Builder
+	redir := ""
+	for _, n := range v.Uplinks {
+		if n < 1 || n >= im.NICs {
+			continue
+		}
+		t := l.upTap(v, n)
+		if l.LanKind == "macvtap" {
+			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip link add link %s name %s address %s type macvtap mode bridge; sudo -n ip link set %s up\n", t, Q(l.LanIf), t, l.MAC(v, n), t)
+			fmt.Fprintf(&b, " i%d=$(cat /sys/class/net/%s/ifindex); for i in 1 2 3 4 5 6 7 8 9 10; do [ -e /dev/tap$i%d ] && break; sleep 0.2; done; sudo -n chown \"$(id -un)\" /dev/tap$i%d\n", n, t, n, n)
+			redir += fmt.Sprintf(" %d<>/dev/tap$i%d", upFD+n, n)
+		} else {
+			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip tuntap add %s mode tap user \"$(id -un)\"; sudo -n ip link set %s master %s up\n", t, t, t, Q(l.LanIf))
+		}
+	}
+	return b.String(), redir
+}
+
 // Bridge is the host's management bridge in bridge mode.
 func (l *Lab) Bridge() string { return "tw" + l.ID + "br" }
 
@@ -478,7 +509,14 @@ func (l *Lab) Args(v VM, im *Image) []string {
 		}
 	}
 	for n := 1; n < im.NICs; n++ {
-		if p, ok := peer[n]; ok && peerAt[n] != "" { // the other end on another host: a UDP tunnel between the hosts
+		if slices.Contains(v.Uplinks, n) && l.LanIf != "" { // on the host's network (like a cloud node on a data port)
+			if l.LanKind == "macvtap" {
+				a = append(a, "-netdev", fmt.Sprintf("tap,id=n%d,fd=%d", n, upFD+n))
+			} else {
+				a = append(a, "-netdev", fmt.Sprintf("tap,id=n%d,ifname=%s,script=no,downscript=no", n, l.upTap(v, n)))
+			}
+			a = append(a, "-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.MAC(v, n)))
+		} else if p, ok := peer[n]; ok && peerAt[n] != "" { // the other end on another host: a UDP tunnel between the hosts
 			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,udp=%s:%d,localaddr=0.0.0.0:%d", n, peerAt[n], p, l.udpPort(v, n)),
 				"-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.MAC(v, n)))
 		} else if ok {
@@ -573,6 +611,10 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 			}
 			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip tuntap add %s mode tap user \"$(id -un)\"; sudo -n ip link set %s master %s up\n", t, t, t, Q(br))
 		}
+		if up, r := l.upScript(v, im); up != "" {
+			b.WriteString(up)
+			redir += r
+		}
 		fmt.Fprintf(&b, " : > %s/%s.log\n", Q(dir), v.ID)
 		// its saved running state, while what it depends on is the same; else it boots (and the old state goes)
 		if v.FastKey != "" && v.FastKey == l.FastKey(v, im) {
@@ -600,7 +642,7 @@ func (l *Lab) FastKey(v VM, im *Image) string {
 		pa = v.Persona.Applied
 	}
 	return Hash(fmt.Sprint(im.ID, im.FileName, im.NICs, im.NIC, im.Disk, im.Extra, orInt(v.CPUs, im.CPUs, 1), orInt(v.RAM, im.RAM, 1024), v.DiskGB,
-		v.Serial, v.BaseMAC, pa, v.Host, l.Mgmt, l.MgmtNet, l.LanFixed, l.LanIf, v.MgmtIP))[:12]
+		v.Serial, v.BaseMAC, pa, v.Host, l.Mgmt, l.MgmtNet, l.LanFixed, l.LanIf, v.MgmtIP, v.Uplinks))[:12]
 }
 
 // disks lists a VM's disk files on the host.
@@ -703,6 +745,11 @@ func (l *Lab) StopScript(ids []string) string {
 				if ip, _ := l.Address(l.Slot(*v)); l.Mgmt == "cloud" && ip != "" {
 					fmt.Fprintf(&b, "sudo -n ip route del %s/32 dev %s 2>/dev/null\n", strings.Split(ip, "/")[0], l.Bridge())
 				}
+			}
+		}
+		if v := l.VMByID(id); v != nil {
+			for _, n := range v.Uplinks {
+				fmt.Fprintf(&b, "sudo -n ip link del %s 2>/dev/null\n", l.upTap(*v, n))
 			}
 		}
 		fmt.Fprintf(&b, "echo 'stopped %s'\n", id)

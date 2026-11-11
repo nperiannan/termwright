@@ -68,7 +68,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       } @else { <button type="button" (click)="dialog('list')">{{ tr('Switch List and Outputs') }}</button> }
       <span class="sp"></span>
       @if (emu() && devs().length) {
-        <label class="chip fs" [title]="tr('On: Stop saves each running switch’s state into its disk, and Start resumes it in seconds (no boot, no day 0). A change to its persona, management, memory or image makes it boot again.')"><input type="checkbox" [checked]="!!st()?.fast" (change)="lab.setFast($any($event.target).checked)" [disabled]="lab.busy()" />{{ tr('Fast start') }}</label>
+        <label class="chip fs" [title]="tr('On: Stop saves each running switch’s state into its disk, and Start resumes it in seconds (no boot, no day 0). A change to its persona, management, memory or image makes it boot again.') + (st()?.usage?.saved ? ' ' + tr('Saved states now: about {0} on the hosts’ disks.', gb(st()!.usage!.saved)) : '')"><input type="checkbox" [checked]="!!st()?.fast" (change)="lab.setFast($any($event.target).checked)" [disabled]="lab.busy()" />{{ tr('Fast start') }}</label>
         <span class="chip mg" [title]="tr('How the switches’ first port (management) is connected; it applies when they start')">{{ tr('Management') }}
           @if (multi()) { <select class="hsel" [ngModel]="mg().host" (ngModelChange)="mgHost.set($event)" name="wmh" [title]="tr('Each host has its own management')">@for (u of hostUse(); track u.host) { <option [value]="u.host">{{ u.name }}</option> }</select> }
           <select [ngModel]="mg().mgmt" (ngModelChange)="setMgmt($event)" name="wmg" [disabled]="lab.busy()">
@@ -148,6 +148,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nn">{{ d.hostname }}</div>
                 <div class="nm">{{ d.persona?.slots?.[0]?.model || d.model }} · {{ subOf(d) }}</div>
+                @if (d.uplinks?.length) { <span class="badge up" [title]="tr('On the host’s network: {0}', d.uplinks!.join(', '))">⇡ {{ d.uplinks!.join(',') }}</span> }
                 @if (d.personaError) { <span class="badge r" [title]="d.personaError">{{ tr('no persona') }}</span> }
                 @else if (d.persona && d.personaOk) { <span class="badge">{{ tr('persona') }} ✓</span> }
                 @else if (d.persona && d.personaInfo?.startsWith('written')) { <span class="badge" [title]="tr('The file is in its disk; the switch has not shown the model on its CLI yet')">{{ tr('persona') }} ?</span> }
@@ -191,6 +192,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <a (click)="mdo('configure', d)">{{ tr('Configure…') }}</a>
               @if (emu()) { <a (click)="mdo('lags', d)" [class.off]="!d.running">{{ tr('Read Its LAGs') }}</a> }
               <a (click)="mdo('link', d)">{{ tr('Add Link from Here') }}</a>
+              @if (emu()) { <a (click)="uplink(d)" [title]="tr('Like a cloud node on a data port: the port joins the host’s network (applies when the switch starts)')">{{ tr('Port on the Host’s Network…') }}</a>
+                @for (u of d.uplinks ?? []; track u) { <a (click)="setUplink(d, u, false)">{{ tr('Take {0} off the Host’s Network', u) }}</a> } }
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
               @if (emu()) { <hr /><span class="mh2">{{ tr('Draw As') }}</span><div class="roles">@for (r of roles; track r.k) { <a [class.on]="roleOfDev(d) === r.k" (click)="setRole(d, r.k)" [title]="tr(r.name)"><app-dev-icon [role]="r.k" [size]="34" state="idle" /></a> }</div> }
               @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [class.off]="d.running" [title]="d.running ? tr('Stop it first') : tr('It starts there from its image (day 0); its cables to this host become UDP tunnels')">→ {{ o.name || hname(o.session) }}</a> } }
@@ -356,6 +359,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .okt { color: var(--success, #1fa45a); } .badt { color: var(--warning, #e39b17); } .addh { width: 100%; margin-top: 6px; }
     .remap { border: 1px solid var(--accent); border-radius: 10px; padding: 10px; margin: 6px 0 8px; background: var(--accent-soft); display: grid; gap: 6px; }
     .remap p { margin: 0; } .rmr { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr); gap: 8px; align-items: center; } .rmr select { min-width: 0; width: 100%; } .remap .row2 { margin: 2px 0 0; }
+    .badge.up { border-color: var(--accent); color: var(--accent); }
     .menu .roles { display: grid; grid-template-columns: repeat(4, 40px); gap: 2px; padding: 2px 8px 6px; }
     .menu .roles a { padding: 2px; border-radius: 6px; text-align: center; } .menu .roles a.on { background: var(--accent-soft); outline: 1px solid var(--accent); }
     .menu .mh2 { display: block; padding: 4px 12px 2px; font-size: 11px; color: var(--muted); }
@@ -624,6 +628,17 @@ export class LabWorkspace implements OnDestroy {
   protected events = computed(() => [...(this.st()?.events ?? [])].reverse());
   protected problems = computed(() => (this.st()?.events ?? []).filter(e => e.level === 'error').length);
   protected readonly roles = ROLES;
+  async uplink(d: LabDevice) {
+    this.menu.set(null);
+    let free: string[] = [];
+    try { free = (await this.backend.emuFreePorts(d.id)) ?? []; } catch { /* none */ }
+    const p = await this.ui.input(tr('Port on the Host’s Network'), tr('Data port of {0} to put on the host’s network (free: {1})', d.hostname, free.slice(0, 12).join(', ') + (free.length > 12 ? '…' : '')), free[free.length - 1] ?? '');
+    if (p) await this.setUplink(d, p.trim(), true);
+  }
+  async setUplink(d: LabDevice, port: string, on: boolean) {
+    this.menu.set(null);
+    try { await this.backend.emuSetUplink(d.id, port, on); await this.lab.refresh(); this.ui.toast(on ? tr('{0} {1} goes on the host’s network when it starts (or restarts)', d.hostname, port) : tr('{0} {1} comes off the host’s network when it restarts', d.hostname, port)); } catch (e) { this.ui.error(e); }
+  }
   palRole(p: Pal): DevRole { return p.cls === 'l' ? 'server' : roleOf(p.name, p.os); }
   async setRole(d: LabDevice, r: DevRole) { this.menu.set(null); try { await this.backend.emuSetRole(d.id, r === roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? '') ? '' : r); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
   /** What the switch is drawn as: the role chosen in Configure…, else one from its model. */
