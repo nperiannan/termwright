@@ -269,6 +269,17 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     const on = k === 'emu' ? this.lab.emuRunning() : this.lab.simRunning();
     return { on, text: on + ' / ' + (v?.devices?.length ?? 0) + (k === 'emu' ? ' ready' : ' running'), title: k === 'emu' ? 'Emulated lab - right-click to start or stop' : 'Simulated lab - right-click to start or stop' };
   }
+  /** Start / Stop / Restart for the session of a lab switch (or its console). */
+  private switchItems(n: SessionNode): MenuItem[] {
+    const d = this.lab.deviceOf(n.hostname, n.port, n.path);
+    if (!d) return [];
+    const emu = !!d.state, kind = emu ? 'emu' : 'sim';
+    const run = (f: () => unknown) => { this.lab.kind.set(kind); void f(); };
+    const items: MenuItem[] = d.running
+      ? [{ label: 'Stop Switch', action: () => run(() => this.lab.stop([d.id])) }, ...(emu ? [{ label: 'Restart Switch', action: () => run(() => this.lab.restart([d.id])) }] : [])]
+      : [{ label: 'Start Switch', action: () => run(() => this.lab.start([d.id])) }];
+    return [...items, { separator: true }];
+  }
   private labDo(n: SessionNode, f: () => unknown) { const k = this.labKind(n); if (k) this.lab.kind.set(k); void f(); }
   protected ops = inject(SessionOps);
   private backend = inject(Backend);
@@ -831,6 +842,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'Folder Defaults...', action: () => { this.ui.folderDefaultsFor.set(n.path); this.ui.open('folderDefaults'); } },
         ]
       : [
+          ...this.switchItems(n),
           ...(n.protocol === 'SSH2' ? [
             { label: 'Connect Terminal', action: () => void this.tabs.openSession(n.path, 'terminal') },
             ...(n.hopTarget ? [

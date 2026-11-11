@@ -272,8 +272,8 @@ interface NRow { key: string; count: number; names: string; module: string; seri
           </select>
         </div>
         <p class="muted small hint">{{ mgmtText() }}</p>
-        @if (mgmt === 'cloud') {
-          <div class="f"><label>{{ tr('First switch’s address') }}</label><input class="mono" [(ngModel)]="cloudAddr" name="nca" [placeholder]="info()?.lanAddr?.split('/')?.[0] ?? ''" /></div>
+        @if (mgmt === 'cloud' || mgmt === 'lan') {
+          <div class="f"><label>{{ tr('First switch’s address') }}</label><input class="mono" [(ngModel)]="cloudAddr" name="nca" [placeholder]="mgmt === 'lan' ? tr('empty: from a DHCP server') : info()?.lanAddr?.split('/')?.[0] ?? ''" /></div>
           <div class="f"><label>{{ tr('Gateway') }}</label><input class="mono" [(ngModel)]="cloudGw" name="ncg" [placeholder]="info()?.gateway ?? ''" /></div>
         }
       }
@@ -427,7 +427,7 @@ export class LabNew implements OnInit {
         const d = this.dt(r.key); if (!d) continue;
         groups.push({ image: d.images[0], model: d.model, module: r.module, count: r.count, names: r.names, serialStart: r.serial.trim(), macStart: r.mac.trim(), cpus: d.cpus, ram: d.ram });
       }
-      ok = await this.lab.addEmu({ host: this.exists() ? this.lab.emu()?.host ?? this.host : this.host, groups, cabling: this.cable, mgmt: this.exists() ? '' : this.mgmt, mgmtNet: this.mgmt === 'cloud' ? (this.cloudAddr.trim() + ' ' + (this.cloudGw.trim() || this.hostsInfo()?.gateway || '')).trim() : '', start: this.start });
+      ok = await this.lab.addEmu({ host: this.exists() ? this.lab.emu()?.host ?? this.host : this.host, groups, cabling: this.cable, mgmt: this.exists() ? '' : this.mgmt, mgmtNet: this.mgmt === 'cloud' || (this.mgmt === 'lan' && this.cloudAddr.trim()) ? (this.cloudAddr.trim() + ' ' + (this.cloudGw.trim() || this.hostsInfo()?.gateway || '')).trim() : '', start: this.start });
     } else {
       ok = await this.lab.add({ groups: this.rows().filter(x => x.count > 0).map(r => { const [model, os] = r.key.split('|'); return { os, model, count: r.count, names: r.names }; }), mgmtNet: '', cabling: this.cable, password: '', start: this.start });
     }

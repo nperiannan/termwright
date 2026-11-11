@@ -24,7 +24,7 @@
 .sec { display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; margin-top: 4px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600;
   text-transform: uppercase; letter-spacing: .04em; color: var(--muted); cursor: pointer; user-select: none;
   &.all { cursor: default; padding-left: 10px; border-top: 1px solid var(--border); margin-top: 6px; padding-top: 4px; } }
-.row .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; margin-left: -2px;
+.row .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; margin-left: -2px; padding: 0; border: 0; box-sizing: content-box;
   &.up { background: var(--ok, #22c55e); } &.down { background: var(--danger, #e5484d); } &.unk { background: var(--border); } &.warn { background: var(--warn, #f5a524); }
   &.wdown { background: #f59e0b; } &.waking { background: #f59e0b; animation: wolpulse 1s ease-in-out infinite; } }
 @keyframes wolpulse { 50% { opacity: .3; } }

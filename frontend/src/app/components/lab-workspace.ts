@@ -47,15 +47,23 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             <option value="nat">{{ tr('The host’s NAT network') }}</option>
             <option value="bridge">{{ tr('Lab bridge on the host') }}</option>
             <option value="forward">{{ tr('Port forwarding on the host') }}</option>
-          </select>@if (st()?.mgmt === 'cloud') { <button type="button" class="sm" (click)="openCloud(); $event.stopPropagation()" [title]="tr('Addresses of the switches on the host’s network')">{{ st()?.mgmtNet?.split('/')?.[0] }}…</button> }
+          </select>@if (st()?.mgmt === 'cloud' || st()?.mgmt === 'lan') { <button type="button" class="sm" (click)="openCloud(st()!.mgmt!); $event.stopPropagation()" [title]="tr('Addresses of the switches on the host’s network')">{{ st()?.mgmt === 'lan' && !st()?.lanFixed ? 'DHCP' : st()?.mgmtNet?.split('/')?.[0] }}…</button> }
           @if (cloudF(); as f) {
             <div class="cloudf" (click)="$event.stopPropagation()">
-              <b>{{ tr('The host’s network, routed (cloud)') }}</b>
-              <p class="muted small">{{ tr('Like GNS3’s cloud: the switches get fixed addresses on the host’s network {0} and can reach and be reached from it (SSH, HTTP/HTTPS, FTP, TFTP, SCP…). The host answers for their addresses and forwards for them, so only the host’s own MAC address is seen there: nothing has to be allowed on a VMware or Hyper-V virtual switch, and Wi-Fi works.', f.net) }}</p>
-              <label>{{ tr('First switch’s address') }}</label><input class="mono" [(ngModel)]="f.addr" name="cfa" placeholder="10.0.0.146" />
-              <label>{{ tr('Gateway') }}</label><input class="mono" [(ngModel)]="f.gw" name="cfg" />
-              <p class="muted small">{{ tr('The next switches take the addresses after it ({0} switches: up to {1}). Pick free addresses: no DHCP server may hand them out.', devs().length, lastAddr(f.addr)) }}</p>
-              <div class="row2"><span class="sp"></span><button type="button" (click)="cloudF.set(null); revertMgmt()">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="applyCloud()" [disabled]="!f.addr.trim()">{{ tr('Use') }}</button></div>
+              @if (f.mode === 'cloud') {
+                <b>{{ tr('The host’s network, routed (cloud)') }}</b>
+                <p class="muted small">{{ tr('Like GNS3’s cloud: the switches get fixed addresses on the host’s network {0} and can reach and be reached from it (SSH, HTTP/HTTPS, FTP, TFTP, SCP…). The host answers for their addresses and forwards for them, so only the host’s own MAC address is seen there: nothing has to be allowed on a VMware or Hyper-V virtual switch, and Wi-Fi works.', f.net) }}</p>
+              } @else {
+                <b>{{ tr('The host’s network (bridged)') }}</b>
+                <p class="muted small">{{ tr('The switches join the host’s network {0} as devices of their own, like GNS3’s cloud node: reached straight from it. A host that is itself a VM needs Promiscuous mode, MAC address changes and Forged transmits allowed on its port group.', f.net) }}</p>
+                <div class="seg"><label><input type="radio" name="cfm" [value]="false" [(ngModel)]="f.fixed" /> {{ tr('From a DHCP server on the network') }}</label><label><input type="radio" name="cfm" [value]="true" [(ngModel)]="f.fixed" /> {{ tr('Fixed addresses (no DHCP there)') }}</label></div>
+              }
+              @if (f.mode === 'cloud' || f.fixed) {
+                <label>{{ tr('First switch’s address') }}</label><input class="mono" [(ngModel)]="f.addr" name="cfa" placeholder="10.0.0.146" />
+                <label>{{ tr('Gateway') }}</label><input class="mono" [(ngModel)]="f.gw" name="cfg" />
+                <p class="muted small">{{ tr('The next switches take the addresses after it ({0} switches: up to {1}). Pick free addresses: no DHCP server may hand them out.', devs().length, lastAddr(f.addr)) }}</p>
+              }
+              <div class="row2"><span class="sp"></span><button type="button" (click)="cloudF.set(null); revertMgmt()">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="applyCloud()" [disabled]="(f.mode === 'cloud' || f.fixed) && !f.addr.trim()">{{ tr('Use') }}</button></div>
             </div>
           }</span>
       }
@@ -252,7 +260,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     i.st.on { background: var(--success, #1fa45a); } i.st.boot { background: var(--warning, #e39b17); } i.st.bad, i.st.off { background: var(--danger); }
     .chip.mg { position: relative; }
     .cloudf { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 380px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; text-align: left; white-space: normal;
-      b, p, .row2 { grid-column: 1 / -1; margin: 0; } input { width: 100%; } .row2 { display: flex; gap: 8px; } .sp { flex: 1; } }
+      b, p, .row2, .seg { grid-column: 1 / -1; margin: 0; } .seg { display: flex; flex-direction: column; gap: 4px; label { display: flex; gap: 6px; align-items: center; } input { width: auto; } } input { width: 100%; } .row2 { display: flex; gap: 8px; } .sp { flex: 1; } }
     i.wn { position: absolute; top: -6px; left: -6px; width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--surface); background: var(--warning, #e39b17); color: #1d2330; font: 800 10px/11px var(--sans, sans-serif); font-style: normal; text-align: center; cursor: help; }
     .nn { font-weight: 600; margin-top: 5px; } .nm { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .badge { display: inline-block; margin-top: 3px; font-size: 10.5px; padding: 1px 7px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line); }
@@ -631,11 +639,12 @@ export class LabWorkspace implements OnDestroy {
     void this.loadTail();
   }
   async loadTail() { const id = this.sel(); if (id && this.emu()) { const t = await this.lab.consoleTail(id); if (this.sel() === id) this.tail.set(t); } }
-  protected cloudF = signal<{ addr: string; gw: string; net: string } | null>(null);
-  openCloud() {
+  protected cloudF = signal<{ mode: string; fixed: boolean; addr: string; gw: string; net: string } | null>(null);
+  openCloud(mode: string) {
     const v = this.st(), h = v?.hostInfo;
     const net = h?.lanAddr ?? '';
-    this.cloudF.set({ addr: v?.mgmt === 'cloud' ? (v?.mgmtNet ?? '').split('/')[0] : '', gw: v?.mgmt === 'cloud' ? v?.cloudGw ?? '' : h?.gateway ?? '', net: net ? net.replace(/\.\d+\//, '.0/') : tr('of the host') });
+    const had = v?.mgmt === 'cloud' || (v?.mgmt === 'lan' && !!v?.lanFixed); // fixed addresses already
+    this.cloudF.set({ mode, fixed: mode === 'cloud' || had, addr: had ? (v?.mgmtNet ?? '').split('/')[0] : '', gw: had ? v?.cloudGw ?? '' : h?.gateway ?? '', net: net ? net.replace(/\.\d+\//, '.0/') : tr('of the host') });
   }
   lastAddr(a: string) {
     const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(a.trim()); const n = Math.max(this.devs().length, 1);
@@ -646,16 +655,17 @@ export class LabWorkspace implements OnDestroy {
   async applyCloud() {
     const f = this.cloudF(); if (!f) return;
     this.cloudF.set(null);
-    await this.setMgmt('cloud', (f.addr.trim() + ' ' + f.gw.trim()).trim());
+    await this.setMgmt(f.mode, f.mode === 'cloud' || f.fixed ? (f.addr.trim() + ' ' + f.gw.trim()).trim() : '');
   }
   /** Shows the lab's management in the menu again (a change not made). */
   protected revertMgmt() { const el = this.host.nativeElement.querySelector<HTMLSelectElement>('select[name=wmg]'); if (el) el.value = this.st()?.mgmt ?? ''; }
-  async setMgmt(m: string, net = '') {
+  async setMgmt(m: string, net: string | null = null) {
     const was = this.st()?.mgmt ?? '';
-    if (m === 'cloud' && !net) { this.revertMgmt(); this.openCloud(); return; }
-    if (m === was && m !== 'cloud') return;
+    if ((m === 'cloud' || m === 'lan') && net === null) { this.revertMgmt(); this.openCloud(m); return; } // their addresses first
+    if (m === was && m !== 'cloud' && m !== 'lan') return;
+    net = net ?? '';
     const text: Record<string, string> = {
-      lan: tr('The switches join the host’s network and get addresses from its DHCP server.'),
+      lan: net ? tr('The switches join the host’s network with fixed addresses from {0} on.', net.split(' ')[0]) : tr('The switches join the host’s network and get addresses from its DHCP server.'),
       nat: tr('The switches get addresses from the host’s NAT network (DHCP, like GNS3’s NAT node) and are reached through the host.'),
       bridge: tr('The switches get fixed addresses on a bridge of their own on the host, reached through the host.'),
       forward: tr('Each switch’s SSH is forwarded to a port on the host (no root needed).'),

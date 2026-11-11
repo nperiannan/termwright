@@ -150,7 +150,8 @@ type Lab struct {
 	NatBr   string  `json:"natBr"`   // nat: the host's NAT bridge with a DHCP server (libvirt's virbr0)
 	LanKind string  `json:"lanKind"` // lan: "bridge" or "macvtap"
 	MgmtNet string  `json:"mgmtNet"` // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.234.179.146/24)
-	CloudGw string  `json:"cloudGw"` // cloud: the host's network's gateway
+	CloudGw string  `json:"cloudGw"` // cloud (and lan with fixed addresses): the host's network's gateway
+	LanFixed bool   `json:"lanFixed,omitempty"` // lan: fixed addresses from MgmtNet on (a network without DHCP)
 	CloudIf string  `json:"cloudIf"` // cloud: the host's port on its network
 	HostIP  string  `json:"hostIp"`  // cloud: the host's own address there
 	Base    int     `json:"base"`    // first TCP/UDP port on the host's 127.0.0.1
@@ -212,7 +213,7 @@ func (l *Lab) tapped() bool {
 }
 
 // Fixed: the switches get fixed addresses (typed on their console), not DHCP.
-func (l *Lab) Fixed() bool { return l.Mgmt == "bridge" || l.Mgmt == "cloud" }
+func (l *Lab) Fixed() bool { return l.Mgmt == "bridge" || l.Mgmt == "cloud" || l.Mgmt == "lan" && l.LanFixed }
 
 // DownLinks are the data ports of a running VM whose link must be down (the
 // HMP set_link names): ports without a cable (a NIC without a network would
@@ -612,10 +613,10 @@ func (l *Lab) gatewayPrefix() string {
 
 // Address gives VM index i its management address and gateway.
 func (l *Lab) Address(i int) (string, string) {
-	if l.Mgmt == "lan" || l.Mgmt == "nat" {
+	if l.Mgmt == "lan" && !l.LanFixed || l.Mgmt == "nat" {
 		return "", "" // from the network's DHCP; learned from the switch or the host's DHCP leases
 	}
-	if l.Mgmt == "cloud" { // from the first address on, the host's network's gateway
+	if l.Mgmt == "cloud" || l.Mgmt == "lan" { // from the first address on, the host's network's gateway
 		p, err := netip.ParsePrefix(l.MgmtNet)
 		if err != nil {
 			return "", ""

@@ -462,26 +462,44 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
               </div>
             }
             @case ('firewall') {
-              <div class="grid">
-                <label>Jump host</label>
-                <select name="jump" [(ngModel)]="s.jumpSession">
-                  <option value="">(none - connect directly)</option>
-                  @for (p of jumpChoices(); track p) { <option [value]="p">{{ p }}</option> }
-                </select>
-                <label></label>
-                <div class="hint">Connect through another saved SSH2 session (like ProxyJump). Jump hosts can be chained.</div>
-                <label>Proxy</label>
-                <select name="ptype" [(ngModel)]="s.proxyType" [disabled]="!!s.jumpSession">
-                  <option value="">None</option><option value="socks5">SOCKS5</option><option value="http">HTTP CONNECT</option>
-                </select>
-                <label></label>
-                <div class="hint">{{ s.jumpSession ? 'A session goes through a jump host or a proxy, not both: choose "(none - connect directly)" above to use a proxy.' : 'A SOCKS5 or HTTP proxy (for example a company proxy) that the connection goes through.' }}</div>
-                @if (s.proxyType && !s.jumpSession) {
-                  <label>Proxy host</label>
-                  <div class="row"><input name="phost" [(ngModel)]="s.proxyHost" /> Port <input name="pport" type="number" class="short" [(ngModel)]="s.proxyPort" /></div>
-                  <label>Proxy user</label><input name="puser" [(ngModel)]="s.proxyUser" placeholder="(no authentication)" />
-                }
+              <div class="routesw" [class.off]="s.routeOff">
+                <label class="tgl"><input type="checkbox" name="routeOn" [checked]="!s.routeOff" (change)="setRoute($any($event.target).checked)" /><span class="knob"></span></label>
+                <div class="tx"><b>{{ s.routeOff ? 'Jump host and proxy are off' : 'Use the jump host and proxy' }}</b>
+                  <small>{{ s.routeOff ? 'The session connects straight. They stay set below and work again when you turn this on.' : 'Turn off to connect straight for a while, without losing what is set here.' }}</small></div>
               </div>
+              @if (s.routeOff) {
+                <div class="grid dim">
+                  <label>Jump host</label>
+                  <select name="jumpOff" disabled><option>{{ s.offRoute?.jump || '(none - connect directly)' }}</option></select>
+                  <label>Proxy</label>
+                  <select name="ptypeOff" disabled><option>{{ s.offRoute?.proxyType === 'socks5' ? 'SOCKS5' : s.offRoute?.proxyType === 'http' ? 'HTTP CONNECT' : 'None' }}</option></select>
+                  @if (s.offRoute?.proxyType) {
+                    <label>Proxy host</label>
+                    <div class="row"><input name="phostOff" [value]="s.offRoute?.proxyHost ?? ''" disabled /> Port <input name="pportOff" class="short" [value]="s.offRoute?.proxyPort ?? ''" disabled /></div>
+                  }
+                </div>
+              } @else {
+              <div class="grid">
+                  <label>Jump host</label>
+                  <select name="jump" [(ngModel)]="s.jumpSession">
+                    <option value="">(none - connect directly)</option>
+                    @for (p of jumpChoices(); track p) { <option [value]="p">{{ p }}</option> }
+                  </select>
+                  <label></label>
+                  <div class="hint">Connect through another saved SSH2 session (like ProxyJump). Jump hosts can be chained.</div>
+                  <label>Proxy</label>
+                  <select name="ptype" [(ngModel)]="s.proxyType" [disabled]="!!s.jumpSession">
+                    <option value="">None</option><option value="socks5">SOCKS5</option><option value="http">HTTP CONNECT</option>
+                  </select>
+                  <label></label>
+                  <div class="hint">{{ s.jumpSession ? 'A session goes through a jump host or a proxy, not both: choose "(none - connect directly)" above to use a proxy.' : 'A SOCKS5 or HTTP proxy (for example a company proxy) that the connection goes through.' }}</div>
+                  @if (s.proxyType && !s.jumpSession) {
+                    <label>Proxy host</label>
+                    <div class="row"><input name="phost" [(ngModel)]="s.proxyHost" /> Port <input name="pport" type="number" class="short" [(ngModel)]="s.proxyPort" /></div>
+                    <label>Proxy user</label><input name="puser" [(ngModel)]="s.proxyUser" placeholder="(no authentication)" />
+                  }
+                </div>
+              }
             }
             @case ('forward') {
               @if (s.protocol !== 'SSH2') {
@@ -743,6 +761,15 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
   }
   `,
   styles: [`
+    .routesw { display: flex; gap: 12px; align-items: center; padding: 10px 14px; margin-bottom: 14px; border: 1px solid var(--line, var(--border)); border-radius: 10px; background: var(--surface-2, var(--input-bg));
+      .tx { display: flex; flex-direction: column; line-height: 1.4; small { color: var(--muted); } }
+      &.off { border-color: color-mix(in srgb, #f59e0b 55%, transparent); } }
+    .tgl { position: relative; width: 34px; height: 20px; flex: none; cursor: pointer;
+      input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+      .knob { position: absolute; inset: 0; border-radius: 10px; background: var(--border); transition: background .15s;
+        &::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; } }
+      input:checked + .knob { background: var(--accent); &::after { transform: translateX(14px); } } }
+    .grid.dim { opacity: .55; }
     .acct-card { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--line, var(--border)); border-radius: 10px; background: var(--surface-2, var(--input-bg));
       .av { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; font-size: calc(11px * var(--ui-scale, 1)); background: var(--accent-soft, #23314a); color: var(--accent); }
       .tx { flex: 1; display: flex; flex-direction: column; line-height: 1.4; small { color: var(--muted); } }
@@ -844,6 +871,19 @@ export class SessionEditor implements OnInit {
 
   /** SFTP opens on: '' where the terminal is, 'jump' or 'target' (older sessions: the target flag). */
   sftpOn(s: Session) { return s.sftpOn || (s.sftpToTarget ? 'target' : ''); }
+  /** Turns the jump host and proxy on or off; off keeps them for later. */
+  setRoute(on: boolean) {
+    const s = this.s; if (!s) return;
+    if (!on && !s.routeOff) {
+      s.offRoute = { jump: s.jumpSession || '', proxyType: s.proxyType || '', proxyHost: s.proxyHost || '', proxyPort: s.proxyPort || 0, proxyUser: s.proxyUser || '' };
+      s.jumpSession = ''; s.proxyType = ''; s.proxyHost = ''; s.proxyPort = 0; s.proxyUser = '';
+      s.routeOff = true;
+    } else if (on && s.routeOff) {
+      const o = s.offRoute;
+      if (o) { s.jumpSession = o.jump; s.proxyType = o.proxyType; s.proxyHost = o.proxyHost; s.proxyPort = o.proxyPort; s.proxyUser = o.proxyUser; }
+      s.routeOff = false; s.offRoute = null;
+    }
+  }
   setSftpOn(s: Session, v: '' | 'jump' | 'target') { s.sftpOn = v; s.sftpToTarget = v === 'target'; }
   hopTarget(cmd: string) {
     const w = (cmd ?? '').trim().split(/\s+/).filter(x => x !== 'exec');

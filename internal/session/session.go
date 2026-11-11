@@ -69,6 +69,7 @@ const (
 	kProxyHost    = "Termwright Proxy Host"
 	kProxyPort    = "Termwright Proxy Port"
 	kProxyUser    = "Termwright Proxy User"
+	kRouteOff     = "Termwright Route Off"
 	kFontFamily   = "Termwright Font"
 	kFontSize     = "Termwright Font Size"
 	kBackspace    = "Termwright Backspace"
@@ -216,6 +217,10 @@ type Session struct {
 	ProxyHost        string        `json:"proxyHost"`
 	ProxyPort        int           `json:"proxyPort"`
 	ProxyUser        string        `json:"proxyUser"`
+	// RouteOff: the jump host and proxy are kept (OffRoute) but not used - the
+	// session connects straight until they are turned on again.
+	RouteOff bool   `json:"routeOff,omitempty"`
+	OffRoute *Route `json:"offRoute,omitempty"`
 	AutoReconnect    bool          `json:"autoReconnect"`
 	X11Forward       bool          `json:"x11Forward"`
 	AgentForward     bool          `json:"agentForward"`
@@ -453,6 +458,10 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.ProxyHost = f.Str(kProxyHost, "")
 	s.ProxyPort = int(f.DWord(kProxyPort, 0))
 	s.ProxyUser = f.Str(kProxyUser, "")
+	if s.RouteOff = f.Bool(kRouteOff, false); s.RouteOff {
+		s.OffRoute = &Route{Jump: s.JumpSession, ProxyType: s.ProxyType, ProxyHost: s.ProxyHost, ProxyPort: s.ProxyPort, ProxyUser: s.ProxyUser}
+		s.JumpSession, s.ProxyType, s.ProxyHost, s.ProxyPort, s.ProxyUser = "", "", "", 0, ""
+	}
 	s.AutoReconnect = f.Bool(kAutoReconn, false)
 	s.X11Forward = f.Bool(kX11, false)
 	s.AgentForward = f.Bool(kAgentFwd, false)
@@ -669,19 +678,21 @@ func (s Session) Apply(f *sessionfile.File) {
 	} else {
 		f.Delete(kForwards)
 	}
-	if s.JumpSession != "" {
-		f.SetStr(kFirewall, "Session:"+s.JumpSession)
+	r := s.route()
+	if r.Jump != "" {
+		f.SetStr(kFirewall, "Session:"+r.Jump)
 	} else if strings.HasPrefix(f.Str(kFirewall, ""), "Session:") {
 		f.SetStr(kFirewall, "None")
 	}
-	setOptStr(f, kProxyType, s.ProxyType)
-	setOptStr(f, kProxyHost, s.ProxyHost)
-	if s.ProxyPort > 0 {
-		f.SetDWord(kProxyPort, uint32(s.ProxyPort))
+	setOptStr(f, kProxyType, r.ProxyType)
+	setOptStr(f, kProxyHost, r.ProxyHost)
+	if r.ProxyPort > 0 {
+		f.SetDWord(kProxyPort, uint32(r.ProxyPort))
 	} else {
 		f.Delete(kProxyPort)
 	}
-	setOptStr(f, kProxyUser, s.ProxyUser)
+	setOptStr(f, kProxyUser, r.ProxyUser)
+	setOptBool(f, kRouteOff, s.RouteOff)
 	if s.AutoReconnect || f.Get(kAutoReconn) != nil {
 		f.SetBool(kAutoReconn, s.AutoReconnect)
 	}
@@ -781,6 +792,32 @@ func (s Session) Apply(f *sessionfile.File) {
 	setOptBool(f, kMosh, s.Mosh)
 	setOptBool(f, kTelnetTLS, s.TelnetTLS)
 	setOptBool(f, kTLSAnyCert, s.TLSAnyCert)
+}
+
+// Route is a session's way to its host: a jump host and/or a proxy.
+type Route struct {
+	Jump      string `json:"jump"`
+	ProxyType string `json:"proxyType"`
+	ProxyHost string `json:"proxyHost"`
+	ProxyPort int    `json:"proxyPort"`
+	ProxyUser string `json:"proxyUser"`
+}
+
+// route is the jump host and proxy kept in the file: the turned-off ones
+// (a jump host or proxy set while off counts as the kept one).
+func (s Session) route() Route {
+	r := Route{Jump: s.JumpSession, ProxyType: s.ProxyType, ProxyHost: s.ProxyHost, ProxyPort: s.ProxyPort, ProxyUser: s.ProxyUser}
+	if !s.RouteOff || s.OffRoute == nil {
+		return r
+	}
+	o := *s.OffRoute
+	if r.Jump != "" {
+		o.Jump = r.Jump
+	}
+	if r.ProxyType != "" {
+		o.ProxyType, o.ProxyHost, o.ProxyPort, o.ProxyUser = r.ProxyType, r.ProxyHost, r.ProxyPort, r.ProxyUser
+	}
+	return o
 }
 
 func setOptStr(f *sessionfile.File, k, v string) {

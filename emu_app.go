@@ -193,6 +193,7 @@ type EmuView struct {
 	Folder        string            `json:"folder"`
 	MgmtNet       string            `json:"mgmtNet"`
 	CloudGw       string            `json:"cloudGw,omitempty"` // cloud: the gateway the switches use
+	LanFixed      bool              `json:"lanFixed,omitempty"` // lan: fixed addresses (no DHCP)
 	Mgmt          string            `json:"mgmt"`
 	Devices       []EmuDevice       `json:"devices"`
 	Links         []EmuLinkView     `json:"links"`
@@ -1369,7 +1370,7 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 		}
 	}
 	emuLab.mu.Unlock()
-	if info == nil || r.Mgmt == "cloud" && info.LanAddr == "" { // checked by an older Termwright: without the host's address
+	if info == nil || (r.Mgmt == "cloud" || r.Mgmt == "lan") && info.LanAddr == "" { // checked by an older Termwright: without the host's address
 		h, err := a.EmuCheckHost(r.Host)
 		if err != nil {
 			return EmuView{}, err
@@ -1391,11 +1392,12 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 			return EmuView{}, err
 		}
 		l = &emu.Lab{ID: randHex(1), Dir: "termwright-lab", Mgmt: mgmt, LanIf: info.LanIf, LanKind: info.LanKind, MgmtNet: orStr(r.MgmtNet, "10.99.0.0/24"), Base: 20000 + int(randByte())%40*100, KVM: info.KVM == "yes"}
-		if mgmt == "cloud" {
+		if mgmt == "cloud" || mgmt == "lan" && strings.TrimSpace(r.MgmtNet) != "" {
 			if err := emuCloud(l, info, r.MgmtNet); err != nil {
 				emuLab.mu.Unlock()
 				return EmuView{}, err
 			}
+			l.LanFixed = mgmt == "lan"
 		}
 		emuLab.f.Lab, emuLab.f.Host = l, r.Host
 		emuLab.f.Sessions, emuLab.f.Consoles = map[string]string{}, map[string]string{}
@@ -1893,7 +1895,7 @@ func (a *App) emuWatch(host string, ids []string) {
 			}
 			needDay0 := !v.Day0Done && len(im.Day0) > 0
 			needCheck := im.Persona != nil && im.Persona.Check != "" && v.Persona != nil && v.Persona.Applied != "" && !emuLab.pcheck[id]
-			if (needDay0 || needCheck || l.Mgmt == "lan" || l.Fixed() && len(im.AddrSet) > 0) && !emuLab.day0[id] {
+			if (needDay0 || needCheck || l.Mgmt == "lan" && !l.LanFixed || l.Fixed() && len(im.AddrSet) > 0) && !emuLab.day0[id] {
 				day0 = append(day0, *v)
 				emuLab.day0[id] = true
 			}
@@ -1924,7 +1926,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 	port := l.ConsolePort(v)
 	cur := l.VMByID(v.ID)
 	doDay0 := cur != nil && !cur.Day0Done && len(im.Day0) > 0
-	lan := l.Mgmt == "lan"
+	lan := l.Mgmt == "lan" && !l.LanFixed // DHCP on the host's network
 	fixed := l.Fixed() && len(im.AddrSet) > 0 && cur != nil && cur.MgmtIP != ""
 	if cur != nil {
 		v = *cur // its address as it is now
@@ -2212,7 +2214,7 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 		}
 	}
 	emuLab.mu.Unlock()
-	if info == nil || info.Dir == "" || mgmt == "cloud" && info.LanAddr == "" { // checked by an older Termwright: without the host's address
+	if info == nil || info.Dir == "" || (mgmt == "cloud" || mgmt == "lan") && info.LanAddr == "" { // checked by an older Termwright: without the host's address
 		h, err := a.EmuCheckHost(host)
 		if err != nil {
 			return EmuView{}, err
@@ -2228,11 +2230,13 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("there is no emulated lab")
 	}
-	if mgmt == "cloud" {
+	l.LanFixed = false
+	if mgmt == "cloud" || mgmt == "lan" && strings.TrimSpace(mgmtNet) != "" { // lan: fixed addresses on a network without DHCP
 		if err := emuCloud(l, info, mgmtNet); err != nil {
 			emuLab.mu.Unlock()
 			return EmuView{}, err
 		}
+		l.LanFixed = mgmt == "lan"
 	} else if mgmt == "bridge" && strings.TrimSpace(mgmtNet) != "" {
 		if _, err := netip.ParsePrefix(strings.TrimSpace(mgmtNet)); err != nil {
 			emuLab.mu.Unlock()
@@ -2240,7 +2244,7 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 		}
 		l.MgmtNet = strings.TrimSpace(mgmtNet)
 	}
-	if mgmt != "cloud" && l.Mgmt == "cloud" {
+	if mgmt != "cloud" && !l.LanFixed && (l.Mgmt == "cloud" || l.Mgmt == "lan") {
 		l.MgmtNet = "10.99.0.0/24" // the cloud's first address is no bridge network
 	}
 	old := l.Mgmt
@@ -2539,7 +2543,7 @@ func (a *App) emuView() EmuView {
 	if l == nil {
 		return v
 	}
-	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw
+	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw, v.LanFixed = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw, l.LanFixed
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
 	for _, vm := range l.VMs {

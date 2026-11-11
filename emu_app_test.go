@@ -435,7 +435,7 @@ func TestEmuModes(t *testing.T) {
 		return c, func() { _ = c.Close() }, nil
 	}
 	defer func() { emuDial = old }()
-	modes := []string{"forward", "nat", "bridge", "cloud", "lan"}
+	modes := []string{"forward", "nat", "bridge", "cloud", "lan", "lan-fixed"}
 	if m := os.Getenv("TW_EMU_MODES"); m != "" {
 		modes = strings.Split(m, ",")
 	}
@@ -470,11 +470,14 @@ func TestEmuModes(t *testing.T) {
 			if _, err := a.EmuSaveImage(im, false); err != nil {
 				t.Fatal(err)
 			}
-			net := ""
-			if mode == "cloud" {
+			net, mgmt := "", mode
+			switch mode {
+			case "cloud":
 				net = "10.50.0.146 10.50.0.254"
+			case "lan-fixed": // the host's network without DHCP: fixed addresses
+				net, mgmt = "10.50.0.150 10.50.0.254", "lan"
 			}
-			if _, err := a.EmuAdd(EmuRequest{Host: host.Path, Groups: []EmuGroup{{Image: im.ID, Count: 1, Names: "sw-{n}"}}, Mgmt: mode, MgmtNet: net, Start: true}); err != nil {
+			if _, err := a.EmuAdd(EmuRequest{Host: host.Path, Groups: []EmuGroup{{Image: im.ID, Count: 1, Names: "sw-{n}"}}, Mgmt: mgmt, MgmtNet: net, Start: true}); err != nil {
 				t.Fatal(err)
 			}
 			defer func() { _, _ = a.EmuRemove(nil, true) }()
@@ -500,7 +503,7 @@ func TestEmuModes(t *testing.T) {
 				}
 				return // reached on 127.0.0.1 on the host: no address of its own
 			}
-			if mode == "lan" && v.Mgmt == "lan" { // macvtap here: only the network reaches it
+			if (mode == "lan" || mode == "lan-fixed") && v.Mgmt == "lan" { // macvtap here: only the network reaches it
 				for _, e := range v.Events {
 					if strings.Contains(e.Text, "through macvtap") {
 						reach = "ping answers SSH (22) open Telnet (23) open HTTP (80) open (from the network)"
@@ -521,7 +524,10 @@ func TestEmuModes(t *testing.T) {
 					t.Errorf("cloud: the session does not go straight: %+v %v", ss, err)
 				}
 			}
-			if mode == "cloud" || mode == "lan" { // from the host's network too
+			if mode == "lan-fixed" && ip != "10.50.0.150" {
+				t.Errorf("lan-fixed: address %q, want the fixed 10.50.0.150", ip)
+			}
+			if mode == "cloud" || mode == "lan" || mode == "lan-fixed" { // from the host's network too
 				for _, port := range []string{"22", "23", "80"} {
 					if out, err := exec.Command("ip", "netns", "exec", "twl", "timeout", "3", "bash", "-c", "</dev/tcp/"+ip+"/"+port).CombinedOutput(); err != nil {
 						time.Sleep(3 * time.Second) // once more: the switch may still be starting a service

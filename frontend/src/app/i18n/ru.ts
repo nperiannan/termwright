@@ -2327,6 +2327,14 @@ const ru: Record<string, string> = {
   'Its console is open in a tab - close that tab to type here (a console takes one connection).': 'Его консоль открыта во вкладке: закройте её, чтобы вводить здесь (консоль принимает одно подключение).',
   'Its console is open in a tab': 'Его консоль открыта во вкладке',
   'Go to the Tab': 'Перейти к вкладке',
+  'Stop Switch': 'Остановить коммутатор',
+  'Start Switch': 'Запустить коммутатор',
+  'Restart Switch': 'Перезапустить коммутатор',
+  'The switches join the host’s network {0} as devices of their own, like GNS3’s cloud node: reached straight from it. A host that is itself a VM needs Promiscuous mode, MAC address changes and Forged transmits allowed on its port group.': 'Коммутаторы подключаются к сети хоста {0} как отдельные устройства, как облачный узел GNS3, и доступны из неё напрямую. Если хост сам является ВМ, на его группе портов нужно разрешить Promiscuous mode, MAC address changes и Forged transmits.',
+  'From a DHCP server on the network': 'От DHCP-сервера в сети',
+  'Fixed addresses (no DHCP there)': 'Фиксированные адреса (DHCP там нет)',
+  'The switches join the host’s network with fixed addresses from {0} on.': 'Коммутаторы подключаются к сети хоста с фиксированными адресами начиная с {0}.',
+  'empty: from a DHCP server': 'пусто: от DHCP-сервера',
 };
 
 export default ru;
