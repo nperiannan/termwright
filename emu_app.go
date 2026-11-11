@@ -1165,7 +1165,7 @@ func (a *App) EmuSaveImage(im emu.Image, clearPassword bool) (EmuView, error) {
 		return EmuView{}, err
 	}
 	for _, v := range users {
-		a.emuRetarget(v) // the switches' sessions take the new login
+		a.emuLogins(v) // the switches' sessions take the new login
 	}
 	return a.EmuState()
 }
@@ -1569,9 +1569,23 @@ func (a *App) emuRetarget(v emu.VM) {
 	emuLab.mu.Unlock()
 	if s, err := a.store.Get(path); err == nil {
 		s.Hostname, s.Port, s.JumpSession = hostname, port, jump
-		a.emuLogin(&s, v)
-		if saved, err := a.store.Save(s, path); err == nil {
-			a.emuLoginPassword(saved.Path, v)
+		_, _ = a.store.Save(s, path)
+	}
+	a.emuLogins(v)
+}
+
+// emuLogins gives a switch's SSH and console sessions the image's login
+// (sessions made before this, or after the image's password changed).
+func (a *App) emuLogins(v emu.VM) {
+	emuLab.mu.Lock()
+	paths := []string{emuLab.f.Sessions[v.ID], emuLab.f.Consoles[v.ID]}
+	emuLab.mu.Unlock()
+	for _, p := range paths {
+		if s, err := a.store.Get(p); err == nil && p != "" {
+			a.emuLogin(&s, v)
+			if saved, err := a.store.Save(s, p); err == nil {
+				a.emuLoginPassword(saved.Path, v)
+			}
 		}
 	}
 }
@@ -1626,9 +1640,10 @@ func (a *App) emuSessions(v emu.VM) {
 		emuLab.mu.Unlock()
 	}
 	cf := session.JoinPath(folder, "Consoles")
-	cs := session.Session{Name: free(cf, v.Name+" console"), Folder: cf, Protocol: session.ProtoTelnet, Hostname: "127.0.0.1", Port: conPort, DeviceType: dt, JumpSession: host,
+	cs := session.Session{Name: free(cf, v.Name+" console"), Folder: cf, Protocol: session.ProtoTelnet, Hostname: "127.0.0.1", Port: conPort, Username: login, OwnLogin: true, SavePassword: true, DeviceType: dt, JumpSession: host,
 		Description: []string{"Serial console of the emulated switch " + v.Name}}
 	if saved, err := a.store.Save(cs, ""); err == nil {
+		a.emuLoginPassword(saved.Path, v)
 		emuLab.mu.Lock()
 		emuLab.f.Consoles[v.ID] = saved.Path
 		emuLab.mu.Unlock()
@@ -1922,6 +1937,14 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		return
 	}
 	c := emu.NewConsole(conn)
+	c.OnAnswer = func(q, sent string) {
+		if sent == "" {
+			sent = "Enter"
+		}
+		emuLab.mu.Lock()
+		emuEv(v.ID, "info", fmt.Sprintf("answered %q with %s", q, sent))
+		emuLab.mu.Unlock()
+	}
 	defer c.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
@@ -2427,6 +2450,17 @@ func (a *App) EmuStart(ids []string) (EmuView, error) {
 	host, ids := a.emuIDs(ids)
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	emuLab.mu.Lock()
+	var vs []emu.VM
+	for _, id := range ids {
+		if v := emuLab.f.Lab.VMByID(id); v != nil {
+			vs = append(vs, *v)
+		}
+	}
+	emuLab.mu.Unlock()
+	for _, v := range vs {
+		a.emuLogins(v)
 	}
 	go a.emuStart(host, ids)
 	time.Sleep(50 * time.Millisecond)

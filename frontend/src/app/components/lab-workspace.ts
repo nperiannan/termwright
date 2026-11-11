@@ -47,7 +47,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             <option value="forward">{{ tr('Port forwarding on the host') }}</option>
           </select></span>
       }
-      <span class="chip"><span class="g">{{ tr('{0} running', counts().on) }}</span>@if (counts().boot) { · <span class="w">{{ tr('{0} booting', counts().boot) }}</span> }@if (counts().bad) { · <span class="r">{{ tr('{0} failed', counts().bad) }}</span> } · {{ tr('{0} stopped', counts().off) }}</span>
+      <span class="chip"><span class="g">{{ tr('{0} running', counts().on) }}</span>@if (counts().boot) { · <span class="w">{{ tr('{0} booting', counts().boot) }}</span> }@if (counts().warn) { · <span class="w">{{ tr('{0} with a problem', counts().warn) }}</span> }@if (counts().bad) { · <span class="r">{{ tr('{0} failed', counts().bad) }}</span> } · {{ tr('{0} stopped', counts().off) }}</span>
     </div>
 
     <div class="main">
@@ -91,7 +91,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             @for (d of devs(); track d.id) {
               <div class="node" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
                    (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)">
-                <div class="nbox" [class.dim]="stateOf(d) === 'off'"><span class="ico" [class]="'ico ' + icoOf(d)"></span><i class="st" [class]="'st ' + stateOf(d)"></i></div>
+                <div class="nbox" [class.dim]="stateOf(d) === 'off'"><span class="ico" [class]="'ico ' + icoOf(d)"></span><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nn">{{ d.hostname }}</div>
                 <div class="nm">{{ d.persona?.slots?.[0]?.model || d.model }} · {{ subOf(d) }}</div>
                 @if (d.personaError) { <span class="badge r" [title]="d.personaError">{{ tr('no persona') }}</span> }
@@ -138,7 +138,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <h3>{{ d.hostname }}</h3>
           <div class="card"><div class="kv">
             <span>{{ tr('Device') }}</span><b>{{ d.persona?.slots?.[0]?.model || d.model }}@if (d.version) { · {{ d.version }} }</b>
-            <span>{{ tr('State') }}</span><span [class]="stateOf(d)">{{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span>
+            <span>{{ tr('State') }}</span><span [class]="warnOf(d) ? 'w' : stateOf(d)">{{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span>
             @if (d.persona) { <span>{{ tr('Persona') }}</span><span [class.r]="!!d.personaError" [class.g]="!d.personaError && d.personaOk">{{ d.personaError || (d.personaOk ? '✓ ' + tr('in the switch') : tr('not written yet')) }}</span> }
             @if (d.personaInfo) { <span></span><span class="mono xs">{{ d.personaInfo }}</span> }
             <span>{{ tr('Serial') }}</span><span class="mono">{{ d.serial || '-' }}</span>
@@ -200,7 +200,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .chip.mg select { height: 24px; font-size: 12px; }
     .g, .on { color: var(--success, #1fa45a); } .w, .boot { color: var(--warning, #e39b17); } .r, .bad { color: var(--danger); }
     i.d { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; flex: none; }
-    i.d.ok, i.d.on { background: var(--success, #1fa45a); } i.d.boot { background: var(--warning, #e39b17); } i.d.bad { background: var(--danger); }
+    i.d.ok, i.d.on { background: var(--success, #1fa45a); } i.d.boot { background: var(--warning, #e39b17); } i.d.bad, i.d.off { background: var(--danger); }
     .main { display: grid; grid-template-columns: 230px 1fr 300px; min-height: 0; }
     .pal { border-right: 1px solid var(--line); background: var(--surface); padding: 10px; overflow: auto; }
     .srch { width: 100%; height: 30px; margin-bottom: 6px; }
@@ -230,7 +230,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       .ico { width: 64px; height: 26px; } &.dim { opacity: .6; } }
     .node.sel .nbox { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); } .node.pick .nbox { border-color: var(--accent); border-style: dashed; }
     i.st { position: absolute; top: -5px; right: -5px; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--surface); background: var(--muted); }
-    i.st.on { background: var(--success, #1fa45a); } i.st.boot { background: var(--warning, #e39b17); } i.st.bad { background: var(--danger); }
+    i.st.on { background: var(--success, #1fa45a); } i.st.boot { background: var(--warning, #e39b17); } i.st.bad, i.st.off { background: var(--danger); }
+    i.wn { position: absolute; top: -6px; left: -6px; width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--surface); background: var(--warning, #e39b17); color: #1d2330; font: 800 10px/11px var(--sans, sans-serif); font-style: normal; text-align: center; cursor: help; }
     .nn { font-weight: 600; margin-top: 5px; } .nm { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .badge { display: inline-block; margin-top: 3px; font-size: 10.5px; padding: 1px 7px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line); }
     .badge.r { color: var(--danger); border-color: var(--danger); }
@@ -349,19 +350,22 @@ export class LabWorkspace implements OnDestroy {
   protected hostName = computed(() => (this.st()?.host ?? '').split('/').pop() ?? '');
   protected running = computed(() => this.devs().filter(d => d.running).length);
   protected counts = computed(() => {
-    const c = { on: 0, boot: 0, bad: 0, off: 0 };
-    for (const d of this.devs()) c[this.stateOf(d)]++;
+    const c = { on: 0, boot: 0, bad: 0, off: 0, warn: 0 };
+    for (const d of this.devs()) { c[this.stateOf(d)]++; if (this.warnOf(d)) c.warn++; }
     return c;
   });
   protected events = computed(() => [...(this.st()?.events ?? [])].reverse());
   protected problems = computed(() => (this.st()?.events ?? []).filter(e => e.level === 'error').length);
   stateOf(d: LabDevice): 'on' | 'boot' | 'bad' | 'off' {
     if (!this.emu()) return d.running ? 'on' : 'off';
-    if (d.state === 'failed' || (d.running && (d.error || d.personaError))) return 'bad';
+    // green: up (a problem shows as a "!" beside it), orange: on its way, red: down or failed
+    if (d.state === 'failed') return 'bad';
     if (d.state === 'running') return 'on';
     if (d.state === 'stopped' || !d.state) return 'off';
     return 'boot';
   }
+  /** The problem of a switch that is up ("" = none): it stays green, with a "!". */
+  warnOf(d: LabDevice) { return this.emu() && d.running && d.state !== 'failed' ? (d.personaError || d.error || '') : ''; }
   subOf(d: LabDevice) {
     if (!this.emu()) return d.running ? d.mgmtIp.split('/')[0] : tr('stopped');
     return d.state === 'running' ? this.addrOf(d) : tr(d.stateText || 'stopped');

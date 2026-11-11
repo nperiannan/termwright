@@ -96,6 +96,11 @@ func TestEmuLab(t *testing.T) {
 	if pw, ok := secrets.Lookup(s1.Path); !ok {
 		t.Errorf("no password saved for the session (want the image's, even empty): %q", pw)
 	}
+	if c1, err := st.Get(v.Consoles[v.Devices[0].ID]); err != nil || c1.Username != s1.Username {
+		t.Errorf("the console does not log in as the image's user: %+v %v", c1.Username, err)
+	} else if _, ok := secrets.Lookup(c1.Path); !ok {
+		t.Errorf("no password saved for the console")
+	}
 	// boot and day 0
 	deadline := time.Now().Add(150 * time.Second)
 	for time.Now().Before(deadline) {
@@ -250,6 +255,33 @@ func TestEmuPersona(t *testing.T) {
 	out, _ := a.emuRun(host.Path, "LIBGUESTFS_BACKEND=direct guestfish --ro -a "+disk+" -m /dev/sda1 cat /scratch/persona.yaml", 3*time.Minute)
 	if !strings.Contains(out, "model: M-24 serial: AB-0100") {
 		t.Fatalf("persona file: %q", out)
+	}
+	// stopped and started again, an unchanged persona is not written (and the switch not booted twice)
+	id := v.Devices[1].ID
+	writes := func() (n int) {
+		emuLab.mu.Lock()
+		defer emuLab.mu.Unlock()
+		for _, e := range emuLab.events {
+			if e.VM == id && (strings.Contains(e.Text, "persona written") || strings.Contains(e.Text, "powering off")) {
+				n++
+			}
+		}
+		return n
+	}
+	before := writes()
+	if _, err := a.EmuStop([]string{id}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.EmuStart([]string{id}); err != nil {
+		t.Fatal(err)
+	}
+	for end := time.Now().Add(2 * time.Minute); time.Now().Before(end); time.Sleep(2 * time.Second) {
+		if v, _ = a.EmuState(); v.Devices[1].State == "running" {
+			break
+		}
+	}
+	if n := writes(); n != before {
+		t.Fatalf("the persona was written again on a plain restart (%d -> %d)", before, n)
 	}
 }
 func TestVersionIn(t *testing.T) {

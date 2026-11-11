@@ -2303,6 +2303,7 @@ const ru: Record<string, string> = {
   '{0} waiting': 'в очереди: {0}',
   'unpacking': 'распаковка',
   'Take the {0} images of {1} out of the list and delete the files Termwright downloaded for them? Files you chose yourself stay.': 'Убрать {0} образов {1} из списка и удалить файлы, которые Termwright для них скачал? Файлы, выбранные вами, останутся.',
+  '{0} with a problem': 'с проблемой: {0}',
 };
 
 export default ru;

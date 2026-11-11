@@ -23,6 +23,30 @@ type Console struct {
 	err  error
 	// OnText gets what the console shows, as it comes (for a live view).
 	OnText func(string)
+	// OnAnswer is told each question answered on the console.
+	OnAnswer func(question, sent string)
+	// Confirm answers yes/no questions with y (while typing day-0 commands:
+	// the user asked for them, so their confirmations are answered).
+	Confirm bool
+}
+
+// yesNo is a yes/no question waiting at the end of the console.
+var yesNo = regexp.MustCompile(`(?i)[(\[]\s*(y/n|yes/no)\s*[)\]]\s*[:?]?\s*$`)
+
+// rePrompt: how long a command may show no prompt before Enter is typed.
+var rePrompt = 15 * time.Second
+
+// pager is a "more" prompt waiting at the end of the console.
+var pager = regexp.MustCompile(`(?i)(press\s+<?space>?\s+to\s+continue[^\n]*|--\s*more\s*--)\s*$`)
+
+func (c *Console) answered(q, sent string) {
+	if c.OnAnswer != nil {
+		q = strings.TrimSpace(q)
+		if i := strings.LastIndex(q, "\n"); i >= 0 {
+			q = strings.TrimSpace(q[i+1:])
+		}
+		c.OnAnswer(q, sent)
+	}
 }
 
 // NewConsole reads the console in the background; telnet options are refused.
@@ -133,17 +157,46 @@ func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Ans
 				return i, nil
 			}
 		}
+		// a question is answered only while it waits at the end of the
+		// console: text that went by (a questionnaire of an earlier login,
+		// a show command's output) is not answered again
+		answeredOne := false
 		for _, a := range append(answers[:len(answers):len(answers)], builtinAnswers...) {
 			if a.Match != "" {
-				if k := strings.Index(tail, a.Match); k >= 0 {
+				if k := strings.LastIndex(tail, a.Match); k >= 0 && strings.Trim(tail[k+len(a.Match):], " \t\r\n:?>") == "" {
 					c.mu.Lock()
 					c.mark += k + len(a.Match)
 					c.mu.Unlock()
 					if err := c.Send(a.Send); err != nil {
 						return -1, err
 					}
-					tail = ""
+					c.answered(tail[:k+len(a.Match)], a.Send)
+					tail, answeredOne = "", true
 					break
+				}
+			}
+		}
+		if !answeredOne && tail != "" {
+			var send string
+			loc := pager.FindStringIndex(tail)
+			if loc != nil {
+				send = " " // the next page (no Enter)
+			} else if loc = yesNo.FindStringIndex(tail); loc != nil && c.Confirm {
+				send = "y"
+			}
+			if loc != nil && send != "" {
+				c.mu.Lock()
+				c.mark += loc[1]
+				c.mu.Unlock()
+				var err error
+				if send == " " {
+					_, err = c.rw.Write([]byte(" "))
+				} else {
+					err = c.Send(send)
+					c.answered(tail[:loc[1]], send)
+				}
+				if err != nil {
+					return -1, err
 				}
 			}
 		}
@@ -267,7 +320,31 @@ func Run(ctx context.Context, c *Console, im *Image, prompt *regexp.Regexp, cmd 
 	if err := c.Send(cmd); err != nil {
 		return "", err
 	}
-	if _, err := c.Wait(ctx, 120*time.Second, im.Answers, prompt); err != nil {
+	// a log message printed after the prompt hides it from the end of the
+	// console: Enter shows it again (every 15 s, for 2 minutes)
+	var err error
+	for try := 0; try < int(2*time.Minute/rePrompt); try++ {
+		if _, err = c.Wait(ctx, rePrompt, im.Answers, prompt); !errors.Is(err, ErrTimeout) {
+			break
+		}
+		c.mu.Lock()
+		pending := yesNo.MatchString(c.buf.String()[c.mark:])
+		c.mu.Unlock()
+		if pending { // a question no answer covers: stop and say which
+			break
+		}
+		_ = c.Send("")
+	}
+	if err != nil {
+		c.mu.Lock()
+		q := strings.TrimSpace(c.buf.String()[c.mark:])
+		c.mu.Unlock()
+		if i := strings.LastIndex(q, "\n"); i >= 0 {
+			q = strings.TrimSpace(q[i+1:])
+		}
+		if m := yesNo.FindString(q); m != "" {
+			return "", fmt.Errorf("%s asks %q: add an answer to the image (Answers: %s => y or n)", cmd, q, strings.TrimSpace(m))
+		}
 		return "", errors.New("no prompt after " + cmd + ": " + err.Error())
 	}
 	c.mu.Lock()
@@ -283,6 +360,8 @@ func Day0(ctx context.Context, c *Console, im *Image, v VM, n int, step func(i i
 	if err != nil {
 		return err
 	}
+	c.Confirm = true
+	defer func() { c.Confirm = false }()
 	for k, cmd := range im.Day0 {
 		cmd = Fill(cmd, v, n)
 		if strings.TrimSpace(cmd) == "" {

@@ -256,3 +256,80 @@ func TestPortFormula(t *testing.T) {
 		t.Fatal(im.PortNameOf(1), im.PortNameOf(3))
 	}
 }
+
+// Day-0 on a console that asks to confirm a command, prints a log line after
+// the prompt and pages, with an old questionnaire in a command's output.
+func TestConsoleQuestions(t *testing.T) {
+	old := rePrompt
+	rePrompt = 300 * time.Millisecond
+	defer func() { rePrompt = old }()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	a, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := ln.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make(chan []string, 1)
+	go func() {
+		var lines []string
+		w := func(s string) { _, _ = b.Write([]byte(s)) }
+		one := make([]byte, 1)
+		read := func(stop byte) string {
+			var s strings.Builder
+			for {
+				if _, err := b.Read(one); err != nil {
+					return s.String()
+				}
+				if one[0] == stop || one[0] == '\r' {
+					if one[0] == ' ' {
+						return "<space>"
+					}
+					return s.String()
+				}
+				s.WriteByte(one[0])
+			}
+		}
+		read('\r')
+		w("sw login: ")
+		lines = append(lines, read('\r'))
+		w("password: ")
+		lines = append(lines, read('\r'))
+		w("sw.1 # ")
+		lines = append(lines, read('\r'))
+		w("\r\nThis will take a while. Continue? (y/N) ")
+		lines = append(lines, read('\r'))
+		w("\r\n* sw.2 # \r\n<Info:AAA> ssh2 started\r\n")
+		lines = append(lines, read('\r')) // Enter for the prompt again
+		w("* sw.3 # ")
+		lines = append(lines, read('\r'))
+		w("\r\nWould you like to disable Telnet? [y/N/q]: q\r\nline\r\nPress <SPACE> to continue or <Q> to quit:")
+		lines = append(lines, read(' '))
+		w("\r\nmore\r\n* sw.4 # ")
+		got <- lines
+		time.Sleep(200 * time.Millisecond)
+		b.Close()
+	}()
+	c := NewConsole(a)
+	var asked []string
+	c.OnAnswer = func(q, s string) { asked = append(asked, q+" => "+s) }
+	im := &Image{Login: "admin", Answers: []Answer{{Match: "[y/N/q]:", Send: "q"}}, Day0: []string{"enable ssh2", "show log"}}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := Day0(ctx, c, im, VM{Name: "sw"}, 1, nil); err != nil {
+		t.Fatal(err, c.Text())
+	}
+	l := <-got
+	if strings.Join(l, "|") != "admin||enable ssh2|y||show log|<space>" {
+		t.Fatalf("%q", l)
+	}
+	if len(asked) != 1 || !strings.Contains(asked[0], "Continue? (y/N) => y") {
+		t.Fatalf("answers %q", asked)
+	}
+}
