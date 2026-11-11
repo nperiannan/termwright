@@ -536,7 +536,7 @@ func (l *Lab) ResetScript(ids []string) string {
 func (l *Lab) StatusScript(tails []string) string {
 	dir := Q(l.VMDir())
 	s := "cd " + dir + " 2>/dev/null || exit 0\necho \"clk $(getconf CLK_TCK 2>/dev/null || echo 100)\"\nawk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print \"mem \" int(t/1024) \" \" int(a/1024)}' /proc/meminfo\necho \"cores $(nproc) $(cut -d' ' -f1 /proc/loadavg)\"\nfor p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
-		" if kill -0 \"$pid\" 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null)\"; else echo \"down $n\"; fi; done\n"
+		" if kill -0 \"$pid\" 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null) $(awk '/^VmRSS:/{print $2}' /proc/$pid/status 2>/dev/null)\"; else echo \"down $n\"; fi; done\n"
 	if l.Mgmt == "nat" { // the DHCP leases of the NAT network (libvirt), then the host's neighbours
 		br := Q(l.NatBridge())
 		s += fmt.Sprintf("f=/var/lib/libvirt/dnsmasq/%s.status; { cat $f 2>/dev/null || sudo -n cat $f 2>/dev/null; } | awk -F'\"' '/\"ip-address\"/{ip=$4} /\"mac-address\"/{mac=$4} /}/{if(ip!=\"\"&&mac!=\"\")print \"lease\",mac,ip; ip=\"\";mac=\"\"}'\n", l.NatBridge())
@@ -557,6 +557,7 @@ type Status struct {
 	Cores    int                // the host's CPU cores
 	Load     float64            // its load average
 	Up       map[string]float64 // running VMs and the CPU ticks they used
+	RSS      map[string]int64   // their memory in use (resident), MB
 	Log      map[string]string  // console log ends
 	Leases   map[string]string  // nat: MAC address → IPv4 address on the NAT network
 	NatNet   string             // nat: the host's address on it (192.168.122.1/24)
@@ -564,7 +565,7 @@ type Status struct {
 
 // ParseStatus reads StatusScript's output.
 func ParseStatus(out string, b64 func(string) ([]byte, error)) Status {
-	st := Status{Up: map[string]float64{}, Log: map[string]string{}, Leases: map[string]string{}}
+	st := Status{Up: map[string]float64{}, RSS: map[string]int64{}, Log: map[string]string{}, Leases: map[string]string{}}
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Fields(line)
 		switch {
@@ -588,6 +589,11 @@ func ParseStatus(out string, b64 func(string) ([]byte, error)) Status {
 				c, _ = strconv.ParseFloat(f[2], 64)
 			}
 			st.Up[f[1]] = c
+			if len(f) > 3 {
+				if kb, err := strconv.ParseInt(f[3], 10, 64); err == nil {
+					st.RSS[f[1]] = kb / 1024
+				}
+			}
 		case len(f) >= 2 && f[0] == "log":
 			if len(f) == 3 {
 				if raw, err := b64(f[2]); err == nil {

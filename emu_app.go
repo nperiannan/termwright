@@ -118,6 +118,7 @@ type EmuDevice struct {
 	State        string       `json:"state"` // stopped, uploading, booting, day0, running, failed
 	StateText    string       `json:"stateText"`
 	CPU          float64      `json:"cpu"`   // % of its vCPUs, now
+	MemUsed      int64        `json:"memUsed"` // MB its VM uses now (resident)
 	Cores        float64      `json:"cores"` // host cores it uses now
 	CPUs         int          `json:"cpus"`
 	RAM          int          `json:"ram"`
@@ -2640,6 +2641,7 @@ func (a *App) emuView() EmuView {
 		// % of its vCPUs; QEMU's own threads (disk, network, emulation) can add a little more
 		d.CPU = emuLab.cpu[vm.ID] * 100 / float64(orInt(vm.CPUs, 1))
 		d.Cores = emuLab.cpu[vm.ID]
+		d.MemUsed = st.RSS[vm.ID]
 		d.Serial = vm.Serial
 		switch s := emuLab.state[vm.ID]; {
 		case s == "uploading":

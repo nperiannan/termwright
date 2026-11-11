@@ -50,6 +50,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **The active tab stands out:** tinted with the accent colour, an accent line under it and its name in bold.
 * **Lab topology: every cable is shown.** Several cables between the same two switches run side by side, fanning out from each switch with their own ports (before, they were drawn on top of each other and only one could be seen).
 * **LAGs in the topology.** The cables of a LAG are one thicker track with a ring at each switch that has the LAG (static or LACP, with its ports); a LAG set on one switch only has one ring there, its cables fan out to single ports on the other switch and it is shown in orange with the reason on hover. LAGs are read from the switches after they start (the image's LAG command: `show sharing` on EXOS, `show mlt` on VOSS; *Read Its LAGs* on a switch) and can be set in Termwright on a cable's menu (LACP or static, on both switches or one); what a switch reports wins.
+* **Lab: hover a switch** for where it runs, its console (host and port), management address and port, CPU and memory it uses now, serial number, MAC and cables. **Inventory** (a tab of the lab's bottom pane) lists every switch under its host with its state, console, management, CPU and memory, and the host's CPU and memory; *Copy* gives it as CSV. The memory a switch uses now is read from the host.
+* **Team admin page, Discover:** a click anywhere on a result row ticks it, and the selection is kept by the page itself, so a box can no longer be left out of step when the page is drawn again during the click. (A team server older than 0.34.1 still has the earlier page: update it with Options → Teams → Update Server….)
 
 ## 0.34.1 (2026-11-10)
 

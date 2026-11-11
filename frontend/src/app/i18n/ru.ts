@@ -2343,6 +2343,14 @@ const ru: Record<string, string> = {
   'the LAG is set on one side only': 'LAG настроен только с одной стороны',
   'static on one side, LACP on the other': 'статический с одной стороны, LACP с другой',
   'LAGs read from the switches': 'LAG прочитаны с коммутаторов',
+  'Every switch under its host: console, management, what it uses now': 'Каждый коммутатор под своим хостом: консоль, управление, текущая нагрузка',
+  'of {0} vCPU': 'из {0} vCPU',
+  '{0} in a LAG': '{0} в LAG',
+  'bridged, fixed {0}+': 'мост, фиксированные с {0}',
+  'bridged, DHCP': 'мост, DHCP',
+  'routed, {0}+': 'маршрутизация, с {0}',
+  'lab bridge': 'мост лаборатории',
+  'port forwarding': 'проброс портов',
 };
 
 export default ru;

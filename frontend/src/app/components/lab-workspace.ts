@@ -110,13 +110,27 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             @for (g of ghosts(); track g.name) { <div class="node ghost" [style.left.px]="g.x - 75" [style.top.px]="g.y - BH / 2"><div class="nbox"><span class="ico"></span></div><div class="nn">{{ g.name }}</div><div class="nm">{{ tr('new') }}</div></div> }
             @for (d of devs(); track d.id) {
               <div class="node" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
-                   (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)">
+                   (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)" (mouseenter)="hov.set(d.id)" (mouseleave)="hov.set('')">
                 <div class="nbox" [class.dim]="stateOf(d) === 'off'"><span class="ico" [class]="'ico ' + icoOf(d)"></span><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nn">{{ d.hostname }}</div>
                 <div class="nm">{{ d.persona?.slots?.[0]?.model || d.model }} · {{ subOf(d) }}</div>
                 @if (d.personaError) { <span class="badge r" [title]="d.personaError">{{ tr('no persona') }}</span> }
                 @else if (d.persona && d.personaOk) { <span class="badge">{{ tr('persona') }} ✓</span> }
                 @else if (d.error) { <span class="badge r" [title]="d.error">{{ tr('problem') }}</span> }
+              </div>
+            }
+            @if (hovDev(); as h) {
+              <div class="ntip" [style.left.px]="pos(h).x + 82" [style.top.px]="pos(h).y - 34">
+                <div class="th"><b>{{ h.hostname }}</b> <span [class]="stateOf(h)">● {{ tr(h.stateText || (h.running ? 'running' : 'stopped')) }}</span> <span class="muted">· {{ h.persona?.slots?.[0]?.model || h.model }}</span></div>
+                <table>
+                  @if (emu()) { <tr><td>{{ tr('Host') }}</td><td>{{ hostName() }}@if (st()?.hostInfo?.lanAddr; as ha) { <span class="muted"> ({{ ha.split('/')[0] }})</span> }</td></tr>
+                    <tr><td>{{ tr('Console') }}</td><td class="mono">telnet {{ hostName() }}:{{ h.console }}</td></tr> }
+                  <tr><td>{{ tr('Management') }}</td><td class="mono">{{ emu() ? (h.ssh || '-') : addrOf(h) + ':' + h.port }}</td></tr>
+                  @if (emu() && h.running) { <tr><td>CPU</td><td>{{ (h.cpu ?? 0).toFixed(0) }} % {{ tr('of {0} vCPU', h.cpus ?? 1) }}</td></tr>
+                    <tr><td>{{ tr('Memory') }}</td><td>{{ h.memUsed ? gb(h.memUsed) + ' / ' : '' }}{{ gb(h.ram) }}</td></tr> }
+                  <tr><td>{{ tr('Serial') }} · MAC</td><td class="mono">{{ h.serial || '-' }} · {{ h.mac || '-' }}</td></tr>
+                  <tr><td>{{ tr('Cables') }}</td><td>{{ cablesOf(h.id) }}</td></tr>
+                </table>
               </div>
             }
           </div>
@@ -206,14 +220,29 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       <div class="grip" (pointerdown)="gripDown($event)" [title]="tr('Drag to make the pane taller or shorter')"></div>
       <div class="dtabs">
         <a [class.on]="dock() === 'events'" (click)="dock.set('events')">{{ tr('Events') }}@if (problems()) { <span class="cnt">{{ problems() }}</span> }</a>
+        @if (emu()) { <a [class.on]="dock() === 'inv'" (click)="dock.set('inv')">{{ tr('Inventory') }}</a> }
         @if (emu() && selDev(); as d) { <a [class.on]="dock() === 'console'" (click)="dock.set('console'); loadTail()">{{ tr('{0} console', d.hostname) }}</a> }
-        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
+        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'inv' ? tr('Every switch under its host: console, management, what it uses now') : dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
         @if (dock() === 'console' && dockTab(); as t) { <button type="button" class="sm" (click)="undock()" [title]="tr('Close the connection to its console')">{{ tr('Disconnect') }}</button> }
         @else { <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button> }
         @if (dock() === 'events' && emu()) { <button type="button" class="sm" (click)="clearEvents()">{{ tr('Clear') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
       </div>
-      @if (dock() === 'events') {
+      @if (dock() === 'inv') {
+        <div class="inv"><table>
+          <tr><th>{{ tr('Switch') }}</th><th>{{ tr('State') }}</th><th>{{ tr('Console') }}</th><th>{{ tr('Management') }}</th><th>CPU</th><th>{{ tr('Memory') }}</th></tr>
+          @for (g of inventory(); track g.host) {
+            <tr class="h"><td colspan="4"><b>{{ g.host }}</b>@if (g.addr) { <span class="muted"> · {{ g.addr }}</span> }<span class="muted"> · {{ g.mgmt }} · {{ tr('{0} switches · {1} running', g.devs.length, g.running) }}</span></td>
+              <td><span class="mtr"><i [style.width.%]="g.cpuPct"></i></span>{{ g.cpuText }}</td><td><span class="mtr"><i [style.width.%]="g.memPct"></i></span>{{ g.memText }}</td></tr>
+            @for (d of g.devs; track d.id) {
+              <tr [class.on]="sel() === d.id" (click)="select(d)"><td>{{ d.hostname }}</td><td [class]="stateOf(d)">● {{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</td>
+                <td class="mono">{{ g.host }}:{{ d.console }}</td><td class="mono">{{ d.ssh || '-' }}</td>
+                <td>@if (d.running) { <span class="mtr"><i [style.width.%]="d.cpu ?? 0"></i></span>{{ (d.cpu ?? 0).toFixed(0) }} % }</td>
+                <td>@if (d.running) { <span class="mtr"><i [style.width.%]="pct(d.memUsed ?? 0, d.ram ?? 0)"></i></span>{{ d.memUsed ? gb(d.memUsed) + ' / ' : '' }}{{ gb(d.ram) }} }</td></tr>
+            }
+          }
+        </table></div>
+      } @else if (dock() === 'events') {
         <div class="ev">
           @for (e of events(); track $index) { <div [class]="e.level"><span class="t">{{ time(e.at) }}</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span>{{ e.text }}</span></div> }
           @empty { <div><span class="t"></span><b></b><span class="muted">{{ emu() ? tr('Nothing yet - start a switch.') : tr('Simulated switches start at once; their state is on the canvas.') }}</span></div> }
@@ -257,6 +286,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     svg.links { position: absolute; left: 0; top: 0; overflow: visible; }
     .lk { cursor: pointer; } .lk .hit { stroke: transparent; stroke-width: 12; } .lk .ln { stroke: var(--muted); stroke-width: 2.2; stroke-dasharray: 2 5; } .lk .ln.up { stroke: var(--success, #1fa45a); stroke-dasharray: none; }
     .lk.down .ln { stroke: var(--danger); stroke-dasharray: 6 5; } .lk.selk .ln { stroke-width: 3.5; }
+    .ntip { position: absolute; z-index: 9; min-width: 250px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); pointer-events: none; font-size: 12px;
+      .th { margin-bottom: 6px; white-space: nowrap; } table { border-collapse: collapse; } td { padding: 2px 10px 2px 0; white-space: nowrap; } td:first-child { color: var(--muted); } }
+    .inv { overflow: auto; padding: 0 14px 10px; table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); font-size: 12px; white-space: nowrap; }
+      th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--surface); } tr.h td { background: var(--surface-2); } tr.on td { background: var(--accent-soft); } tr:not(.h) { cursor: pointer; }
+      .mtr { display: inline-block; width: 60px; height: 5px; border-radius: 3px; background: var(--line); vertical-align: middle; margin-right: 6px; i { display: block; height: 100%; border-radius: 3px; background: var(--accent); } } }
     .lk .ln { fill: none; } .lk .hit { fill: none; } .lk .ln.dn { stroke: var(--danger); stroke-dasharray: 6 5; }
     .lk .ln.thick { stroke-width: 7; stroke-linecap: round; } .lk.selk .ln.thick { stroke-width: 9; }
     .lk.warn .ln.thick { stroke: var(--warning, #e39b17); }
@@ -331,7 +365,22 @@ export class LabWorkspace implements OnDestroy {
   protected selDev = computed(() => this.devs().find(d => d.id === this.sel()) ?? null);
   protected selLink = signal('');
   protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink } | null>(null);
-  protected dock = signal<'events' | 'console'>('events');
+  protected dock = signal<'events' | 'console' | 'inv'>('events');
+  protected hov = signal('');
+  protected hovDev = computed(() => this.devs().find(d => d.id === this.hov()) ?? null);
+  cablesOf(id: string) {
+    const ls = this.links().filter(k => k.a === id || k.b === id), lag = ls.filter(k => (k.a === id ? k.lagA : k.lagB)).length;
+    return ls.length + (lag ? ' (' + tr('{0} in a LAG', lag) + ')' : '');
+  }
+  /** The switches under their host, with what the host and each switch use now. */
+  protected inventory = computed(() => {
+    const v = this.st(), u = v?.usage, devs = this.devs();
+    const mg: Record<string, string> = { lan: v?.lanFixed ? tr('bridged, fixed {0}+', (v?.mgmtNet ?? '').split('/')[0]) : tr('bridged, DHCP'), cloud: tr('routed, {0}+', (v?.mgmtNet ?? '').split('/')[0]), nat: tr('NAT network'), bridge: tr('lab bridge'), forward: tr('port forwarding') };
+    const used = (u?.hostMemTotal ?? 0) - (u?.hostMemFree ?? 0);
+    return [{ host: this.hostName(), addr: v?.hostInfo?.lanAddr?.split('/')[0] ?? '', mgmt: mg[v?.mgmt ?? ''] ?? '', devs, running: devs.filter(d => d.running).length,
+      cpuPct: this.pct(u?.cores ?? 0, u?.hostCpus ?? 0), cpuText: (u?.cores ?? 0).toFixed(1) + ' / ' + (u?.hostCpus ?? '?') + ' ' + tr('cores'),
+      memPct: this.pct(used, u?.hostMemTotal ?? 0), memText: this.gb(used) + ' / ' + this.gb(u?.hostMemTotal) }];
+  });
   protected tail = signal('');
   protected zoom = signal(1);
   protected linkMode = signal(false);
@@ -349,7 +398,7 @@ export class LabWorkspace implements OnDestroy {
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
   }
   async copyDock() {
-    const text = this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + e.name + '  ' + e.level.toUpperCase() + '  ' + e.text).join('\n') : this.tail();
+    const text = this.dock() === 'inv' ? ['host,switch,state,console,management,cpu %,memory MB,ram MB', ...this.inventory().flatMap(g => g.devs.map(d => [g.host, d.hostname, d.state || (d.running ? 'running' : 'stopped'), g.host + ':' + d.console, d.ssh ?? '', (d.cpu ?? 0).toFixed(0), d.memUsed ?? '', d.ram ?? ''].join(',')))].join('\n') : this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + e.name + '  ' + e.level.toUpperCase() + '  ' + e.text).join('\n') : this.tail();
     try { await navigator.clipboard.writeText(text); this.ui.toast(tr('Copied'), 'success'); } catch { this.ui.error(tr('Could not copy')); }
   }
   async clearEvents() { try { this.lab.emu.set(await this.backend.emuClearEvents()); } catch { /* ignore */ } }
