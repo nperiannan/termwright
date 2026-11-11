@@ -19,6 +19,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -2636,6 +2637,21 @@ func (a *App) emuCheckPersona(ctx context.Context, c *emu.Console, im *emu.Image
 			out += o
 		}
 	}
+	// not that model: is the file where the switch looks for it?
+	where := ""
+	if err == nil && !strings.Contains(strings.ToLower(out), strings.ToLower(model)) {
+		dir, base := path.Dir(im.Persona.File), path.Base(im.Persona.File)
+		if ls, lerr := emu.Ask(ctx, c, im, "ls "+dir); lerr == nil {
+			ls = emu.CleanConsole(ls)
+			switch {
+			case strings.Contains(ls, base):
+				where = fmt.Sprintf("; %s is in %s on the switch, so it read it and kept its first model: this image may take a persona only on its very first boot - Back to Day 0 writes it before that", base, dir)
+			case strings.Contains(strings.ToLower(ls), "no such") || strings.Contains(strings.ToLower(ls), "invalid") || strings.Contains(strings.ToLower(ls), "error"):
+			default:
+				where = fmt.Sprintf("; %s is not in %s on the switch: it was written to another filesystem of the disk", base, dir)
+			}
+		}
+	}
 	emuLab.mu.Lock()
 	defer emuLab.mu.Unlock()
 	switch {
@@ -2648,8 +2664,10 @@ func (a *App) emuCheckPersona(ctx context.Context, c *emu.Console, im *emu.Image
 		emuEv(v.ID, "ok", "persona "+emuLab.pinfo[v.ID])
 	default:
 		defer func() { emuEv(v.ID, "error", "no persona: "+emuLab.perr[v.ID]) }()
-		emuLab.perr[v.ID] = fmt.Sprintf("the switch did not take the persona: %q does not show %s (it reads %s at boot - see where it was written below)", im.Persona.Check, model, im.Persona.File)
-		if o := strings.Join(strings.Fields(emu.CleanConsole(out)), " "); o != "" {
+		emuLab.perr[v.ID] = fmt.Sprintf("the switch did not take the persona: %q does not show %s (it reads %s at boot - see where it was written below)%s", strings.ReplaceAll(im.Persona.Check, "\n", " + "), model, im.Persona.File, where)
+		o := emu.CleanConsole(out)
+		o = regexp.MustCompile(`\*{5,}|Command Execution Time:[^\n]*`).ReplaceAllString(o, " ")
+		if o := strings.Join(strings.Fields(o), " "); o != "" {
 			if len(o) > 200 {
 				o = o[:200] + "…"
 			}
