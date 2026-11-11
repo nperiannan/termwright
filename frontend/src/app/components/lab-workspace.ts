@@ -137,6 +137,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="nm">{{ d.persona?.slots?.[0]?.model || d.model }} · {{ subOf(d) }}</div>
                 @if (d.personaError) { <span class="badge r" [title]="d.personaError">{{ tr('no persona') }}</span> }
                 @else if (d.persona && d.personaOk) { <span class="badge">{{ tr('persona') }} ✓</span> }
+                @else if (d.persona && d.personaInfo?.startsWith('written')) { <span class="badge" [title]="tr('The file is in its disk; the switch has not shown the model on its CLI yet')">{{ tr('persona') }} ?</span> }
                 @else if (d.error) { <span class="badge r" [title]="d.error">{{ tr('problem') }}</span> }
               </div>
             }
@@ -206,7 +207,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="card"><div class="kv">
             <span>{{ tr('Device') }}</span><b>{{ d.persona?.slots?.[0]?.model || d.model }}@if (d.version) { · {{ d.version }} }</b>
             <span>{{ tr('State') }}</span><span [class]="warnOf(d) ? 'w' : stateOf(d)">{{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span>
-            @if (d.persona) { <span>{{ tr('Persona') }}</span><span [class.r]="!!d.personaError" [class.g]="!d.personaError && d.personaOk">{{ d.personaError || (d.personaOk ? '✓ ' + tr('in the switch') : tr('not written yet')) }}</span> }
+            @if (d.persona) { <span>{{ tr('Persona') }}</span><span [class.r]="!!d.personaError" [class.g]="!d.personaError && d.personaOk">{{ d.personaError || (d.personaOk ? '✓ ' + tr('in the switch') : d.personaInfo ? tr(d.personaInfo) : tr('not written yet')) }}</span> }
             @if (d.personaInfo) { <span></span><span class="mono xs">{{ d.personaInfo }}</span> }
             <span>{{ tr('Serial') }}</span><span class="mono">{{ d.serial || '-' }}</span>
             <span>MAC</span><span class="mono">{{ d.mac || '-' }}</span>

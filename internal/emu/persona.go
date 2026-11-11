@@ -50,6 +50,8 @@ type Persona struct {
 	Slots   []Slot            `json:"slots"`
 	Values  map[string]string `json:"values"`
 	Applied string            `json:"applied,omitempty"` // hash of the file last written into its disk
+	Took    string            `json:"took,omitempty"`    // Applied when the switch showed the model on its CLI
+	Fail    string            `json:"fail,omitempty"`    // why the check after boot found another model (for Applied)
 }
 
 // Slot is one device of the persona (one stack member).

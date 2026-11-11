@@ -62,6 +62,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Emulated lab: Fast start.** Stop saves each running switch's state into its disk (a QEMU snapshot) and Start resumes it in seconds - no boot, no day 0, its configuration, address and sessions as they were. *Shut Down* on a switch's menu (and Reload) stops it without saving, so it boots next time. A changed persona, management, memory, CPUs, disk size or image makes it boot again, and the old state is dropped; a state that does not load (another QEMU) boots instead. *Fast start* in the lab's bar turns it off. The saved state takes the switch's memory size on the host's disk.
 * **Emulated lab: Fabric Engine's "--More-- (q = quit)"** is recognised as a page prompt; day 0 and the LAG check waited on it until the switch was stopped.
 * **Emulated lab: a persona that did not take says why.** The check lists the persona file's folder on the switch: the file there means the switch read it and kept its first model (some images take a persona only on their first boot - Back to Day 0), no file means it went to another filesystem of the disk. The check's output drops the banner lines.
+* **Emulated lab: the persona badge says what is known.** ✓ only once the switch showed the model on its CLI (kept across restarts of Termwright); *persona ?* while the file is written but not checked yet; *no persona* with the reason when the check found another model.
 
 ## 0.34.1 (2026-11-10)
 

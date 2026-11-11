@@ -2395,6 +2395,8 @@ const ru: Record<string, string> = {
   'Fast start off - the switches boot each time': 'Быстрый запуск выключен: коммутаторы загружаются каждый раз',
   'stopped · state saved': 'остановлен · состояние сохранено',
   'saving its running state': 'сохраняет своё состояние',
+  'The file is in its disk; the switch has not shown the model on its CLI yet': 'Файл записан на диск; коммутатор ещё не показал эту модель в CLI',
+  'written, not checked on the switch yet': 'записана, ещё не проверена на коммутаторе',
 };
 
 export default ru;

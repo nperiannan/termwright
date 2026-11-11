@@ -2661,9 +2661,19 @@ func (a *App) emuCheckPersona(ctx context.Context, c *emu.Console, im *emu.Image
 	case strings.Contains(strings.ToLower(out), strings.ToLower(model)):
 		emuLab.pinfo[v.ID] = "checked: " + strings.ReplaceAll(im.Persona.Check, "\n", " + ") + " shows " + model
 		delete(emuLab.perr, v.ID)
+		if c := emuLab.f.Lab.VMByID(v.ID); c != nil && c.Persona != nil {
+			c.Persona.Took, c.Persona.Fail = c.Persona.Applied, ""
+			_ = a.emuSave()
+		}
 		emuEv(v.ID, "ok", "persona "+emuLab.pinfo[v.ID])
 	default:
-		defer func() { emuEv(v.ID, "error", "no persona: "+emuLab.perr[v.ID]) }()
+		defer func() {
+			if c := emuLab.f.Lab.VMByID(v.ID); c != nil && c.Persona != nil {
+				c.Persona.Took, c.Persona.Fail = "", emuLab.perr[v.ID]
+				_ = a.emuSave()
+			}
+			emuEv(v.ID, "error", "no persona: "+emuLab.perr[v.ID])
+		}()
 		emuLab.perr[v.ID] = fmt.Sprintf("the switch did not take the persona: %q does not show %s (it reads %s at boot - see where it was written below)%s", strings.ReplaceAll(im.Persona.Check, "\n", " + "), model, im.Persona.File, where)
 		o := emu.CleanConsole(out)
 		o = regexp.MustCompile(`\*{5,}|Command Execution Time:[^\n]*`).ReplaceAllString(o, " ")
@@ -3012,8 +3022,16 @@ func (a *App) emuView() EmuView {
 		}
 		d.DiskGB, d.Template, d.Persona, d.PersonaError, d.PersonaInfo = vm.DiskGB, vm.Template, vm.Persona, emuLab.perr[vm.ID], emuLab.pinfo[vm.ID]
 		if im != nil && im.Persona != nil && vm.Persona != nil {
-			if txt, err := im.Persona.Render(vm, vm.Persona); err == nil {
-				d.PersonaOK = emu.Hash(txt) == vm.Persona.Applied
+			if txt, err := im.Persona.Render(vm, vm.Persona); err == nil && emu.Hash(txt) == vm.Persona.Applied {
+				// written; with a check command it counts once the switch showed the model (kept across restarts of Termwright)
+				switch {
+				case im.Persona.Check == "" || vm.Persona.Took == vm.Persona.Applied:
+					d.PersonaOK = true
+				case vm.Persona.Fail != "" && d.PersonaError == "":
+					d.PersonaError = vm.Persona.Fail
+				case d.PersonaInfo == "":
+					d.PersonaInfo = "written, not checked on the switch yet"
+				}
 			}
 		}
 		if up {
