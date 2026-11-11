@@ -95,7 +95,7 @@ export interface LabDevice { id: string; os: string; model: string; version: str
 export interface LabEvent { at: string; vm: string; name: string; level: 'info' | 'ok' | 'warn' | 'error'; text: string; }
 export interface EmuTopoInfo { name: string; saved: string; hosts: string[] | null; switches: number; open: boolean; }
 export interface LabLag { name: string; mode: string; source: string; }
-export interface LabLink { a: string; aPort: string; b: string; bPort: string; up?: boolean; down?: boolean; lagA?: LabLag | null; lagB?: LabLag | null; }
+export interface LabLink { a: string; aPort: string; b: string; bPort: string; up?: boolean; down?: boolean; lagA?: LabLag | null; lagB?: LabLag | null; lldp?: string; }
 export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
   /** Emulated lab only. */
   kind?: 'emu'; topology?: string; cloudGw?: string; lanFixed?: boolean; events?: LabEvent[] | null; downloadDir?: string; downloadQueue?: string[] | null; mgmt?: string; consoles?: Record<string, string> | null; host?: string; hostInfo?: EmuHostInfo | null; hosts?: EmuHost[] | null; images?: EmuImage[] | null; kvm?: boolean; templates?: EmuTemplate[] | null; usage?: EmuUsage; deviceTypes?: EmuDeviceType[] | null; hostUse?: EmuHostUse[] | null; fast?: boolean; }

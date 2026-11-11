@@ -585,3 +585,17 @@ func TestPagerQuit(t *testing.T) {
 		}
 	}
 }
+
+func TestLagCommands(t *testing.T) {
+	im := &Image{Name: "NOS", PortName: "1/{n}", LagSet: map[string][]string{"lacp": {"lag {id} add {ports} master {master} lacp"}}, LagDel: []string{"no lag {id}"}}
+	got, err := im.LagCommands(Lag{Name: "LAG 3", Mode: "lacp", Ports: []int{2, 4}}, false)
+	if err != nil || len(got) != 1 || got[0] != "lag 3 add 1/2,1/4 master 1/2 lacp" {
+		t.Fatal(got, err)
+	}
+	if got, _ := im.LagCommands(Lag{Name: "LAG 3", Mode: "lacp", Ports: []int{2}}, true); got[0] != "no lag 3" {
+		t.Fatal(got)
+	}
+	if _, err := im.LagCommands(Lag{Name: "x", Mode: "static", Ports: []int{1}}, false); err == nil {
+		t.Fatal("static has no commands")
+	}
+}

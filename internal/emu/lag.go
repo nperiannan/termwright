@@ -1,6 +1,8 @@
 package emu
 
 import (
+	"errors"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -127,4 +129,40 @@ func (im *Image) DataPortOf(name string) int {
 		}
 	}
 	return 0
+}
+
+// LagCommands are the CLI commands that make LAG g on a switch of this image
+// (or remove it): the image's LagSet for its mode, or LagDel.
+func (im *Image) LagCommands(g Lag, remove bool) ([]string, error) {
+	tpl := im.LagSet[g.Mode]
+	if remove {
+		tpl = im.LagDel
+	}
+	if len(tpl) == 0 {
+		what := "make a " + g.Mode + " LAG"
+		if remove {
+			what = "remove a LAG"
+		}
+		return nil, fmt.Errorf("the image %s has no commands to %s (its device profile)", im.Name, what)
+	}
+	if len(g.Ports) == 0 {
+		return nil, errors.New("the LAG has no ports")
+	}
+	var names []string
+	for _, p := range g.Ports {
+		names = append(names, im.PortNameOf(p))
+	}
+	id := strings.TrimLeftFunc(g.Name, func(r rune) bool { return r < '0' || r > '9' })
+	if i := strings.IndexFunc(id, func(r rune) bool { return r < '0' || r > '9' }); i >= 0 {
+		id = id[:i]
+	}
+	if id == "" {
+		id = "1"
+	}
+	r := strings.NewReplacer("{id}", id, "{name}", g.Name, "{ports}", strings.Join(names, ","), "{master}", names[0], "{first}", names[0], "{last}", names[len(names)-1], "{mode}", g.Mode)
+	out := make([]string, len(tpl))
+	for i, t := range tpl {
+		out[i] = r.Replace(t)
+	}
+	return out, nil
 }

@@ -160,6 +160,19 @@ func TestEmuLab(t *testing.T) {
 	if j := strings.Join(evs, "\n"); strings.Count(j, "resumed from its saved state") != 2 || v.Devices[0].State != "running" {
 		t.Fatalf("not resumed: %+v\n%s", v.Devices, j)
 	}
+	// a LAG marked in the topology, typed on the switch's console
+	emuLab.mu.Lock()
+	emuLab.f.Images[0].LagSet = map[string][]string{"lacp": {"lag add {ports} master {master}"}}
+	emuLab.mu.Unlock()
+	if _, err := a.EmuSetLag(v.Devices[0].ID, "LAG 1", "lacp", []string{v.Links[0].APort}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.EmuApplyLag(v.Devices[0].ID, "LAG 1", false); err != nil {
+		t.Fatal(err)
+	}
+	if tail := a.EmuConsoleTail(v.Devices[0].ID); !strings.Contains(tail, "ran: lag add "+v.Links[0].APort+" master "+v.Links[0].APort) {
+		t.Fatalf("LAG not typed:\n%s", tail)
+	}
 	if v.Links[0].Up != true {
 		t.Fatal("link not up")
 	}
@@ -797,6 +810,22 @@ func TestEmuAgentText(t *testing.T) {
 	for _, want := range []string{"- core-1 | ", `"Emulated Lab/core-1"`, "acc-1", "kvm-2", "core-1 1/1 <-> acc-1 1/1", "LAG 1 (lacp) on core-1", "UDP tunnel", "KVM hosts:"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("no %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestEmuNeighbors(t *testing.T) {
+	out := "LLDP Port  Neighbor Chassis ID  Neighbor Port ID  TTL  Age  Neighbor System Name\n=====\n1   00:04:96:9C:E5:00   1   120   7   core-2\n2   00:04:96:9C:E5:00   5   120   7   acc-9\n3   00:04:96:11:22:00   7   120   7   5520-24T\n"
+	n := emuNeighbors(out, map[string]bool{"1": true, "2": true, "3": true, "4": true})
+	names := []string{"core-1", "core-2", "acc-9"}
+	for _, c := range []struct{ port, peer, pport, want string }{
+		{"1", "core-2", "1", "ok: LLDP sees core-2 1"},
+		{"2", "core-2", "2", "wrong: the port sees acc-9 instead of core-2"},
+		{"3", "core-2", "7", "ok: LLDP sees port 7 (the switches do not send their lab names)"},
+		{"4", "core-2", "4", "none: no LLDP neighbour on that port (link down, or LLDP off)"},
+	} {
+		if g := emuJudge(n[c.port], c.peer, c.pport, names); g != c.want {
+			t.Errorf("port %s: %q", c.port, g)
 		}
 	}
 }

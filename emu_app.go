@@ -136,6 +136,7 @@ var emuLab struct {
 	pinfo            map[string]string  // where the persona file went, or what the check after boot saw
 	pcheck           map[string]bool    // the persona was checked on the CLI since the VM started
 	resumed          map[string]bool    // it started from its saved running state (no boot, no day 0)
+	lldp             map[string]string  // cable → what the last cabling check found (LLDP)
 	events           []EmuEvent         // the Events log, newest last
 	download         map[string]string  // image → download progress ("waiting", "41 %")
 	dlQueue          []string           // images waiting to download, in order
@@ -192,6 +193,7 @@ type EmuLinkView struct {
 	Down  bool        `json:"down"`
 	LagA  *EmuLagView `json:"lagA,omitempty"` // the LAG its port on A is in
 	LagB  *EmuLagView `json:"lagB,omitempty"`
+	Lldp  string      `json:"lldp,omitempty"` // the last cabling check: "ok …", "wrong: …" or "none: …"
 }
 
 // EmuLagView is a LAG at one end of a cable.
@@ -322,7 +324,7 @@ func (a *App) emuLoad() {
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
 	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
 	emuLab.personaTried, emuLab.perr = map[string]bool{}, map[string]string{}
-	emuLab.pinfo, emuLab.pcheck, emuLab.resumed = map[string]string{}, map[string]bool{}, map[string]bool{}
+	emuLab.pinfo, emuLab.pcheck, emuLab.resumed, emuLab.lldp = map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]string{}
 	emuLab.download = map[string]string{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
 		_ = json.Unmarshal(b, &emuLab.f)
@@ -3068,6 +3070,7 @@ func (a *App) emuView() EmuView {
 		if g := l.LagOf(c.B, c.BPort); g != nil {
 			lv.LagB = &EmuLagView{Name: g.Name, Mode: g.Mode, Source: g.Source}
 		}
+		lv.Lldp = emuLab.lldp[emuCableKey(c)]
 		v.Links = append(v.Links, lv)
 	}
 	for i := range v.Images {
@@ -4136,6 +4139,12 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			if im.LagCmd == "" && p.LagCmd != "" {
 				im.LagCmd, changed = p.LagCmd, true
 			}
+			if len(im.LagSet) == 0 && len(p.LagSet) > 0 {
+				im.LagSet, im.LagDel, changed = p.LagSet, p.LagDel, true
+			}
+			if im.NeighborCmd == "" && p.NeighborCmd != "" {
+				im.NeighborCmd, changed = p.NeighborCmd, true
+			}
 			if len(p.AddrSet) > len(im.AddrSet) && (len(im.AddrSet) == 0 || slices.Equal(im.AddrSet, p.AddrSet[len(p.AddrSet)-len(im.AddrSet):])) {
 				im.AddrSet, changed = p.AddrSet, true // the pack's commands grew (an old address is removed first)
 			}
@@ -4432,11 +4441,22 @@ func (a *App) EmuReadLags(ids []string) (EmuView, error) {
 
 // emuReadLag reads one switch's LAGs on its console.
 func (a *App) emuReadLag(host string, v emu.VM, im emu.Image) error {
+	out, err := a.emuOnConsole(host, v, im, false, im.LagCmd)
+	if err != nil {
+		return err
+	}
+	a.emuKeepLags(v, &im, emu.ParseLags(out))
+	return nil
+}
+
+// emuOnConsole logs in on a switch's console and types commands; it returns
+// what they printed. confirm: a question they ask is answered yes.
+func (a *App) emuOnConsole(host string, v emu.VM, im emu.Image, confirm bool, cmds ...string) (string, error) {
 	emuLab.mu.Lock()
-	l := emuLab.f.Lab
+	l := a.emuFor(host)
 	if l == nil {
 		emuLab.mu.Unlock()
-		return errors.New("there is no emulated lab")
+		return "", errors.New("there is no emulated lab")
 	}
 	port := l.ConsolePort(v)
 	emuLab.mu.Unlock()
@@ -4444,22 +4464,114 @@ func (a *App) emuReadLag(host string, v emu.VM, im emu.Image) error {
 	im.Password = orStr(im.Password, im.DefaultPassword) // the factory password while none is set
 	cl, err := a.emuClient(context.Background(), host)
 	if err != nil {
-		return err
+		return "", err
 	}
 	conn, err := cl.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
-		return fmt.Errorf("console: %w (is it open in a tab or the console pane?)", err)
+		return "", fmt.Errorf("console: %w (is it open in a tab or the console pane?)", err)
 	}
 	c := emu.NewConsole(conn)
+	c.Confirm = confirm
 	defer c.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	out, err := emu.Ask(ctx, c, &im, im.LagCmd)
-	if err != nil {
-		return err
+	var b strings.Builder
+	for _, cmd := range cmds {
+		out, err := emu.Ask(ctx, c, &im, cmd)
+		b.WriteString(emu.CleanConsole(out))
+		b.WriteString("\n")
+		if err != nil {
+			return b.String(), fmt.Errorf("%s: %w", cmd, err)
+		}
 	}
-	a.emuKeepLags(v, &im, emu.ParseLags(emu.CleanConsole(out)))
-	return nil
+	return b.String(), nil
+}
+
+// EmuLagCommands are the commands that would make (or remove) a LAG of the
+// topology on its switch - shown before they are typed.
+func (a *App) EmuLagCommands(vm, name string, remove bool) ([]string, error) {
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	g, im, err := emuLagOf(vm, name)
+	if err != nil {
+		return nil, err
+	}
+	return im.LagCommands(g, remove)
+}
+
+func emuLagOf(vm, name string) (emu.Lag, *emu.Image, error) {
+	l := emuLab.f.Lab
+	if l == nil || l.VMByID(vm) == nil {
+		return emu.Lag{}, nil, errors.New("no such switch")
+	}
+	im := emuImage(l.VMByID(vm).Image)
+	if im == nil {
+		return emu.Lag{}, nil, errors.New("the switch has no image")
+	}
+	for _, g := range l.Lags {
+		if g.VM == vm && g.Name == name {
+			return g, im, nil
+		}
+	}
+	return emu.Lag{}, nil, fmt.Errorf("no LAG %q on that switch", name)
+}
+
+// EmuApplyLag types a LAG of the topology on its switch (or removes it from
+// the switch) on the console, then reads the switch's LAGs back.
+func (a *App) EmuApplyLag(vm, name string, remove bool) (EmuView, error) {
+	emuLab.mu.Lock()
+	g, im, err := emuLagOf(vm, name)
+	var cmds []string
+	if err == nil {
+		cmds, err = im.LagCommands(g, remove)
+	}
+	var v emu.VM
+	var imc emu.Image
+	if err == nil {
+		v, imc = *emuLab.f.Lab.VMByID(vm), *im
+	}
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	if _, up := a.emuPollFresh().Up[vm]; !up {
+		return EmuView{}, errors.New("start the switch first")
+	}
+	host := a.emuHostOfID(vm)
+	out, err := a.emuOnConsole(host, v, imc, true, cmds...)
+	emuLab.mu.Lock()
+	what := "set on the switch"
+	if remove {
+		what = "removed from the switch"
+	}
+	if err != nil {
+		emuEv(vm, "error", fmt.Sprintf("LAG %s not %s: %v", name, what, err))
+	} else if bad := emuCLIError(out); bad != "" {
+		err = fmt.Errorf("the switch said: %s", bad)
+		emuEv(vm, "error", fmt.Sprintf("LAG %s not %s: %s", name, what, bad))
+	} else {
+		emuEv(vm, "ok", fmt.Sprintf("LAG %s %s: %s", name, what, strings.Join(cmds, " · ")))
+	}
+	emuLab.mu.Unlock()
+	if imc.LagCmd != "" {
+		_ = a.emuReadLag(host, v, imc) // what the switch has now
+	}
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
+// emuCLIError finds an error line in what CLI commands printed.
+func emuCLIError(out string) string {
+	for _, l := range strings.Split(out, "\n") {
+		t := strings.TrimSpace(l)
+		low := strings.ToLower(t)
+		if strings.HasPrefix(low, "error") || strings.HasPrefix(low, "%") || strings.Contains(low, "invalid input") || strings.HasPrefix(low, "^") && len(t) > 1 {
+			return t
+		}
+	}
+	return ""
 }
 
 // emuKeepLags keeps the LAGs a switch reported (in place of the ones read before).

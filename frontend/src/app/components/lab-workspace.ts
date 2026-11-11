@@ -45,6 +45,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       @if (emu()) { <button type="button" (click)="sel() && lab.restart([sel()])" [disabled]="!selDev()?.running || lab.busy()" [title]="tr('Restart the selected switch')">⟳ {{ tr('Reload') }}</button> }
       <span class="sep"></span>
       <button type="button" [class.on]="linkMode()" (click)="toggleLink(); $event.stopPropagation()" [disabled]="devs().length < 2">⟷ {{ tr('Add Link') }}</button>
+      @if (emu() && links().length) { <button type="button" (click)="lab.checkCabling()" [disabled]="lab.busy() || !running()" [title]="tr('Asks the running switches for their LLDP neighbours and marks each cable: as drawn, or not')">{{ tr('Check Cabling') }}</button> }
       <button type="button" (click)="consoleAll()" [disabled]="!running()">⌨ {{ emu() ? tr('Console All') : tr('Open All') }}</button>
       <span class="sep"></span>
       <button type="button" (click)="wizard()">＋ {{ devs().length ? tr('Add Switches') : tr('New Lab') }}</button>
@@ -192,6 +193,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <a (click)="lag(pr, 'lacp', 'a')">{{ tr('… LAG on {0} only', nameOf(pr.a)) }}</a>
                 <a (click)="lag(pr, 'lacp', 'b')">{{ tr('… LAG on {0} only', nameOf(pr.b)) }}</a>
                 @if (k.lagA || k.lagB) { <a (click)="lag(pr, '', 'both')">{{ tr('Remove the LAG') }}</a> }
+                @if (k.lagA?.source === 'user' || k.lagB?.source === 'user') { <a (click)="applyLag(k, false)" [title]="tr('Types the LAG on the switches’ consoles - you see the commands first')">{{ tr('Set the LAG on the Switches…') }}</a> }
+                @if (k.lagA?.source === 'switch' || k.lagB?.source === 'switch') { <a (click)="applyLag(k, true)">{{ tr('Remove the LAG from the Switches…') }}</a> }
                 <hr />
               }
               <a class="r" (click)="ldo('remove', k)">{{ tr('Remove the Cable') }}</a>
@@ -710,7 +713,8 @@ export class LabWorkspace implements OnDestroy {
           item.paths.push({ d: o === 0 ? 'M' + P(A) + ' L' + P(B) : curve(A, B, S, E), up: !!l.k.up, down: !!l.k.down, thick: false });
           const lp = at(A, Math.min(L * 0.2, fan + 14), o), lq = at(B, -Math.min(L * 0.2, fan + 14), o);
           item.labels.push({ ...lp, t: l.pp, w: lw(l.pp), lag: false }, { ...lq, t: l.qp, w: lw(l.qp), lag: false });
-          item.tip = p.hostname + ' ' + l.pp + ' ⇄ ' + q.hostname + ' ' + l.qp;
+          item.tip = p.hostname + ' ' + l.pp + ' ⇄ ' + q.hostname + ' ' + l.qp + (l.k.lldp ? ' · LLDP ' + l.k.lldp : '');
+          item.warn = !!l.k.lldp && !l.k.lldp.startsWith('ok');
         } else { // a LAG: a thick track, a ring where it is set; single cables fan out where it is not
           const lp = first.lp, lq = first.lq;
           item.warn = !lp || !lq || (lp.mode !== lq.mode);
@@ -825,6 +829,23 @@ export class LabWorkspace implements OnDestroy {
       if (mode && (ends as readonly string[]).includes(e)) await this.lab.setLag(vm, name, mode, ports);
       else if (name) await this.lab.setLag(vm, name, '', []); // not on this end (or removed)
     }
+  }
+  /** Types the LAG(s) of a cable's ends on the switches (or removes them there), after showing the commands. */
+  async applyLag(k: LabLink, remove: boolean) {
+    this.menu.set(null);
+    const ends: [string, LabLag][] = [];
+    for (const [vm, g] of [[k.a, k.lagA], [k.b, k.lagB]] as [string, LabLag | null | undefined][]) if (g && (remove ? g.source === 'switch' : g.source === 'user')) ends.push([vm, g]);
+    const items: string[] = [], todo: [string, string][] = [];
+    for (const [vm, g] of ends) {
+      try { const c = await this.backend.emuLagCommands(vm, g.name, remove); items.push(this.nameOf(vm) + ': ' + c.join(' · ')); todo.push([vm, g.name]); }
+      catch (e) { items.push(this.nameOf(vm) + ': ' + tr('cannot - {0}', String((e as Error)?.message ?? e))); }
+    }
+    if (!todo.length) { await this.ui.choose(remove ? tr('Remove the LAG from the Switches') : tr('Set the LAG on the Switches'), tr('Nothing can be typed:'), items, [{ label: tr('Close'), value: '' }]); return; }
+    const go = await this.ui.choose(remove ? tr('Remove the LAG from the Switches') : tr('Set the LAG on the Switches'),
+      tr('These commands are typed on each switch’s console (close its console tab first); then its LAGs are read back.'), items,
+      [{ label: tr('Cancel'), value: '' }, { label: remove ? tr('Remove') : tr('Set the LAG'), value: 'go', primary: true }], remove);
+    if (go !== 'go') return;
+    for (const [vm, name] of todo) await this.lab.applyLag(vm, name, remove);
   }
   ldo(what: string, k: LabLink) { this.menu.set(null); void (what === 'pull' ? this.lab.setLink(k.a, k.aPort, !!k.down) : this.lab.disconnect(k.a, k.aPort)); }
 

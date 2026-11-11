@@ -121,6 +121,8 @@ export class LabService {
   saveTopology(name: string) { return this.run(() => this.backend.emuSaveTopology(name), 'Topology saved'); }
   openTopology(name: string, start: boolean) { return this.run(() => this.backend.emuOpenTopology(name, start), start ? 'Opened - the switches start' : 'Opened'); }
   newTopology(name: string) { return this.run(() => this.backend.emuNewTopology(name), 'New topology - add switches'); }
+  applyLag(vm: string, name: string, remove: boolean) { return this.run(() => this.backend.emuApplyLag(vm, name, remove), remove ? 'LAG removed from the switch' : 'LAG set on the switch'); }
+  checkCabling() { return this.run(() => this.backend.emuCheckCabling(), 'Cabling checked with LLDP - see the cables and the Events'); }
   readLags(ids: string[] = []) { return this.run(() => this.backend.emuReadLags(ids), 'LAGs read from the switches'); }
   place(id: string, x: number, y: number) {
     void (this.e ? this.backend.emuPlace(id, Math.round(x), Math.round(y)) : this.backend.labPlace(id, Math.round(x), Math.round(y))).catch(() => {});

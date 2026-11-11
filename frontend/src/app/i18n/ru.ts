@@ -2401,6 +2401,20 @@ const ru: Record<string, string> = {
   'Change the emulated lab?': 'Изменить эмулируемую лабораторию?',
   'Do It': 'Выполнить',
   'Sees the emulated lab (switches, cables, LAGs, KVM hosts), starts and stops switches, adds cables and marks LAGs': 'Видит эмулируемую лабораторию (коммутаторы, кабели, LAG, хосты KVM), запускает и останавливает коммутаторы, добавляет кабели и отмечает LAG',
+  'Types the LAG on the switches’ consoles - you see the commands first': 'Вводит LAG на консолях коммутаторов — сначала вы видите команды',
+  'Set the LAG on the Switches…': 'Настроить LAG на коммутаторах…',
+  'Remove the LAG from the Switches…': 'Удалить LAG с коммутаторов…',
+  'Remove the LAG from the Switches': 'Удалить LAG с коммутаторов',
+  'Set the LAG on the Switches': 'Настроить LAG на коммутаторах',
+  'cannot - {0}': 'нельзя: {0}',
+  'Nothing can be typed:': 'Нечего вводить:',
+  'These commands are typed on each switch’s console (close its console tab first); then its LAGs are read back.': 'Эти команды вводятся на консоли каждого коммутатора (сначала закройте вкладку его консоли); затем его LAG считываются заново.',
+  'Set the LAG': 'Настроить LAG',
+  'Check Cabling': 'Проверить кабели',
+  'Asks the running switches for their LLDP neighbours and marks each cable: as drawn, or not': 'Запрашивает у работающих коммутаторов соседей LLDP и отмечает каждый кабель: как нарисован или нет',
+  'Cabling checked with LLDP - see the cables and the Events': 'Кабели проверены по LLDP — см. кабели и события',
+  'LAG removed from the switch': 'LAG удалён с коммутатора',
+  'LAG set on the switch': 'LAG настроен на коммутаторе',
 };
 
 export default ru;

@@ -90,7 +90,11 @@ func (a *App) emuAgentText() string {
 					}
 				}
 			}
-			fmt.Fprintf(&b, "- %s %s <-> %s %s: %s%s%s\n", name[l.A], l.APort, name[l.B], l.BPort, st, lag, tun)
+			check := ""
+			if l.Lldp != "" {
+				check = "; cabling check: " + l.Lldp
+			}
+			fmt.Fprintf(&b, "- %s %s <-> %s %s: %s%s%s%s\n", name[l.A], l.APort, name[l.B], l.BPort, st, lag, tun, check)
 		}
 	} else {
 		b.WriteString("Cables: none.\n")
@@ -138,7 +142,10 @@ lab cable <switch> <port> <switch> <port>  lab uncable <switch> <port>
 lab pull <switch> <port>                  lab plug <switch> <port>     (take a cable's link down / up)
 lab lag <switch> <name> lacp|static <port,port,...>   lab nolag <switch> <name>   (mark a LAG in the topology)
 lab readlags <switch>                     (read the LAGs the switch has)
-To configure a switch, open its saved session (the first quoted name; its console session when its management does not answer) and run commands there, in that switch's own CLI syntax. A LAG has to be set on the switches themselves (and both ends must match: static or LACP, the same ports); after setting it, use lab readlags so the topology shows it. New cables work once both switches restart (lab stop, then lab start). Starting a switch takes minutes unless it resumes from a saved state; a switch is ready when its state is running. Never stop, restart or remove switches the user did not ask about.`
+lab setlag <switch> <name>                (type a LAG marked in the topology on the switch, with the image's own commands)
+lab unsetlag <switch> <name>              (remove a LAG from the switch)
+lab checkcabling                          (compare the switches' LLDP neighbours with the cables)
+To configure a switch, open its saved session (the first quoted name; its console session when its management does not answer) and run commands there, in that switch's own CLI syntax. A LAG has to be set on the switches themselves (and both ends must match: static or LACP, the same ports): mark it with lab lag on each end, then lab setlag on each end (or configure it in the switch's session yourself), then lab readlags so the topology shows it. New cables work once both switches restart (lab stop, then lab start). Starting a switch takes minutes unless it resumes from a saved state; a switch is ready when its state is running. Never stop, restart or remove switches the user did not ask about.`
 
 // emuAgentLab is what AIChat adds to the system prompt when the agent may use the lab.
 func (a *App) emuAgentLab() string {
