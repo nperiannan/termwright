@@ -27,9 +27,20 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="topos" (click)="$event.stopPropagation()">
             <div class="row2"><b>{{ tr('Topologies') }}</b><span class="sp"></span>
               <button type="button" class="sm" (click)="saveTopo()" [disabled]="!devs().length">{{ st()?.topology ? tr('Save As…') : tr('Save…') }}</button>
-              <button type="button" class="sm" (click)="newTopo()">{{ tr('New Topology…') }}</button></div>
+              <button type="button" class="sm" (click)="newTopo()">{{ tr('New Topology…') }}</button><button type="button" class="sm" (click)="importTopo()" [title]="tr('Add a topology from a .twlab file')">{{ tr('Import…') }}</button></div>
+            @if (remap(); as rm) {
+              <div class="remap"><b>{{ tr('Open {0} on your hosts', rm.name) }}</b>
+                <p class="muted small">{{ tr('This topology ran on hosts that are not yours (or not checked). Choose where each one’s switches go; on another host they start from their images.') }}</p>
+                @for (r of rm.rows; track r.from) {
+                  <div class="rmr"><span class="mono">{{ hostLabel(r.from) }}</span><span>→</span>
+                    <select [ngModel]="r.to" (ngModelChange)="r.to = $event" [name]="'rm' + $index">@for (h of hostChoices(); track h.session) { <option [value]="h.session">{{ h.label }}</option> }</select></div>
+                }
+                <div class="row2"><span class="sp"></span><button type="button" class="sm" (click)="remap.set(null)">{{ tr('Cancel') }}</button><button type="button" class="sm primary" (click)="openRemapped()" [disabled]="!hostChoices().length">{{ tr('Open') }}</button></div>
+              </div>
+            }
             @for (t of tl; track t.name) {
               <div class="ti" [class.cur]="t.open"><div class="tn"><b>{{ t.name }}</b><small class="muted">{{ tr('{0} switches', t.switches) }}@if (t.hosts?.length) { · {{ hostLabel(t.hosts![0]) }} } · {{ when(t.saved) }}</small></div>
+                <button type="button" class="sm x" (click)="dupTopo(t.name)" [title]="tr('Duplicate')">⧉</button><button type="button" class="sm x" (click)="renTopo(t.name)" [title]="tr('Rename')">✎</button><button type="button" class="sm x" (click)="exportTopo(t.name)" [title]="tr('Export (.twlab)')">⇪</button>
                 @if (t.open) { <span class="muted small">{{ tr('open') }}</span> }
                 @else { <button type="button" class="sm" (click)="openTopo(t.name, false)">{{ tr('Open') }}</button><button type="button" class="sm primary" (click)="openTopo(t.name, true)" [disabled]="!t.switches">▶ {{ tr('Open and Start All') }}</button>
                   <button type="button" class="sm x" (click)="delTopo(t.name)" [title]="tr('Delete')">✕</button> }
@@ -238,7 +249,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <div class="mr"><span>RAM {{ gb(u.ram) }} / {{ gb(u.memTotal) }}</span><span class="muted">{{ tr('{0} free', gb(u.memFree)) }}</span></div><div class="meter"><i [style.width.%]="pct(u.memTotal - u.memFree, u.memTotal)" [style.background]="hcol(u.host)"></i></div>
             </div>
           }
-          @if (tunnels(); as n) { <div class="card"><div class="mr"><b>{{ tr('Cables between hosts') }}</b><span class="muted">{{ n }}</span></div><div class="muted small">{{ tr('UDP tunnels: the hosts must reach each other on UDP 20000-29999') }}</div></div> }
+          @if (tunnels(); as n) { <div class="card"><div class="mr"><b>{{ tr('Cables between hosts') }}</b><span class="muted">{{ n }}</span></div><div class="muted small">{{ tr('UDP tunnels: the hosts must reach each other on UDP 20000-29999') }}</div>
+            @for (r of hostLinks(); track $index) { <div class="small" [class.okt]="r.ok" [class.badt]="!r.ok">{{ r.ok ? '✓' : '✗' }} {{ r.from }} → {{ r.to }}@if (!r.ok) { <span class="muted"> · {{ r.text }}</span> }</div> }
+            <button type="button" class="sm" (click)="checkTunnels()" [disabled]="checkingT()">{{ checkingT() ? tr('Checking…') : tr('Check UDP Between Hosts') }}</button></div> }
+          <button type="button" class="sm addh" (click)="wizard()" [title]="tr('Add Switches: pick another host for them')">+ {{ tr('Add a Host to this Topology') }}</button>
         } @else if (emu() && st()?.usage; as u) {
           <h3>{{ tr('Host') }} · {{ hostName() }}</h3>
           <div class="card">
@@ -326,10 +340,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .lk { cursor: pointer; } .lk .hit { stroke: transparent; stroke-width: 12; } .lk .ln { stroke: var(--muted); stroke-width: 2.2; stroke-dasharray: 2 5; } .lk .ln.up { stroke: var(--success, #1fa45a); stroke-dasharray: none; }
     .lk.down .ln { stroke: var(--danger); stroke-dasharray: 6 5; } .lk.selk .ln { stroke-width: 3.5; }
     .topo { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; background: var(--accent-soft); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
-    .topos { position: absolute; top: 46px; left: 12px; z-index: 30; width: 520px; max-height: 60vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    .topos { position: absolute; top: 46px; left: 12px; z-index: 30; width: 600px; max-width: calc(100vw - 40px); white-space: normal; max-height: 60vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35);
       .row2 { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; } .sp { flex: 1; }
       .ti { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; &.cur { border-color: var(--accent); }
-        .tn { flex: 1; min-width: 0; display: flex; flex-direction: column; } .x { padding: 2px 7px; } } }
+        .tn { flex: 1; min-width: 0; display: flex; flex-direction: column; small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } } .x { padding: 2px 6px; } } }
     .chip.fs { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; margin-right: 6px; }
     .chip.fs input { margin: 0; }
     .zone { position: absolute; border: 1.5px dashed; border-radius: 14px; pointer-events: none; }
@@ -339,6 +353,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .lk.tun .ln:not(.dn) { stroke: #a46cf0; stroke-dasharray: 7 5; }
     .hsel { margin-right: 4px; }
     .pico { flex: none; margin: -4px 0; }
+    .okt { color: var(--success, #1fa45a); } .badt { color: var(--warning, #e39b17); } .addh { width: 100%; margin-top: 6px; }
+    .remap { border: 1px solid var(--accent); border-radius: 10px; padding: 10px; margin: 6px 0 8px; background: var(--accent-soft); display: grid; gap: 6px; }
+    .remap p { margin: 0; } .rmr { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr); gap: 8px; align-items: center; } .rmr select { min-width: 0; width: 100%; } .remap .row2 { margin: 2px 0 0; }
     .menu .roles { display: grid; grid-template-columns: repeat(4, 40px); gap: 2px; padding: 2px 8px 6px; }
     .menu .roles a { padding: 2px; border-radius: 6px; text-align: center; } .menu .roles a.on { background: var(--accent-soft); outline: 1px solid var(--accent); }
     .menu .mh2 { display: block; padding: 4px 12px 2px; font-size: 11px; color: var(--muted); }
@@ -434,8 +451,40 @@ export class LabWorkspace implements OnDestroy {
     if (await this.lab.newTopology(n)) { this.topos.set(null); void this.ui.refreshTree(); }
   }
   async openTopo(name: string, start: boolean) {
+    const t = this.topos()?.find(x => x.name === name), mine = new Set((this.st()?.hosts ?? []).filter(h => !(h.info.problems ?? []).length).map(h => h.session));
+    const away = (t?.hosts ?? []).filter(h => !mine.has(h));
+    if (away.length) { // its hosts are not all here: choose where their switches go
+      const best = this.hostChoices()[0]?.session ?? '';
+      this.remap.set({ name, start, rows: (t?.hosts ?? []).map(h => ({ from: h, to: mine.has(h) ? h : best })) });
+      return;
+    }
     if (this.running() && !(await this.ui.confirm(tr('Open {0}', name), tr('The running switches of this topology are stopped first; it stays saved.'), tr('Stop and Open')))) return;
     if (await this.lab.openTopology(name, start)) { this.topos.set(null); void this.ui.refreshTree(); }
+  }
+  protected remap = signal<{ name: string; start: boolean; rows: { from: string; to: string }[] } | null>(null);
+  /** Your checked hosts, most free memory first, with what they have. */
+  protected hostChoices = computed(() => (this.st()?.hosts ?? []).filter(h => !(h.info.problems ?? []).length).sort((a, b) => (b.info.memFree || 0) - (a.info.memFree || 0))
+    .map(h => ({ session: h.session, label: (h.name || this.hname(h.session)) + ' · ' + (h.info.cpus ?? '?') + ' vCPU · ' + this.gb(h.info.memFree) + ' ' + tr('free') + ' · ' + this.gb(h.info.diskFree) + ' ' + tr('disk') })));
+  async openRemapped() {
+    const rm = this.remap(); if (!rm) return;
+    const map: Record<string, string> = {};
+    for (const r of rm.rows) if (r.to && r.to !== r.from) map[r.from] = r.to;
+    if (this.running() && !(await this.ui.confirm(tr('Open {0}', rm.name), tr('The running switches of this topology are stopped first; it stays saved.'), tr('Stop and Open')))) return;
+    if (await this.lab.openTopology(rm.name, rm.start, map)) { this.remap.set(null); this.topos.set(null); void this.ui.refreshTree(); }
+  }
+  async dupTopo(name: string) {
+    const n = await this.ui.input(tr('Duplicate {0}', name), tr('Name of the copy (a lab of its own: its switches boot from their images)'), name + ' copy'); if (!n) return;
+    try { this.topos.set(await this.backend.emuDuplicateTopology(name, n)); } catch (e) { this.ui.error(e); }
+  }
+  async renTopo(name: string) {
+    const n = await this.ui.input(tr('Rename {0}', name), tr('Name'), name); if (!n || n === name) return;
+    try { this.topos.set(await this.backend.emuRenameTopology(name, n)); await this.lab.refresh(); } catch (e) { this.ui.error(e); }
+  }
+  async exportTopo(name: string) {
+    try { const p = await this.backend.chooseSaveFile(tr('Export Topology'), name + '.twlab', [{ displayName: 'Termwright lab topology', pattern: '*.twlab' }]); if (!p) return; await this.backend.emuExportTopology(name, p); this.ui.toast(tr('Exported to {0}', p)); } catch (e) { this.ui.error(e); }
+  }
+  async importTopo() {
+    try { const p = await this.backend.chooseOpenFile(tr('Import Topology'), [{ displayName: 'Termwright lab topology', pattern: '*.twlab;*.json' }]); if (!p) return; this.topos.set(await this.backend.emuImportTopology(p)); } catch (e) { this.ui.error(e); }
   }
   async delTopo(name: string) { if (await this.ui.confirm(tr('Delete {0}', name), tr('Forget this saved topology? Its sessions stay in the Session Manager.'), tr('Delete'), true)) { try { await this.backend.emuDeleteTopology(name); } catch (e) { this.ui.error(e); } await this.reTopos(); } }
   hostLabel(p: string) { return p.split('/').pop() ?? p; }
@@ -478,6 +527,9 @@ export class LabWorkspace implements OnDestroy {
     if (await this.ui.confirm(tr('Move {0} to {1}', d.hostname, this.hname(host)), tr('It starts on that host from its image (day 0, its saved configuration is not taken along) with that host’s management. Its cables to switches on other hosts become UDP tunnels.'), tr('Move'))) await this.lab.moveVM(d.id, host);
   }
   protected tunnels = computed(() => this.lines().filter(k => k.tun).length);
+  protected hostLinks = signal<{ from: string; to: string; ok: boolean; text: string }[]>([]);
+  protected checkingT = signal(false);
+  async checkTunnels() { this.checkingT.set(true); try { this.hostLinks.set(await this.backend.emuCheckTunnels()); } catch (e) { this.ui.error(e); } finally { this.checkingT.set(false); } }
   /** Each host as an area round its switches (only when the lab is on more than one host). */
   protected zones = computed(() => {
     if (!this.multi()) return [];
@@ -790,7 +842,15 @@ export class LabWorkspace implements OnDestroy {
   }
   up() {
     const g = this.dragging; this.dragging = null;
-    if (g?.moved) { const p = this.moved().get(g.id)!; this.lab.place(g.id, p.x - 75, p.y - BH / 2); }
+    if (g?.moved) { const p = this.moved().get(g.id)!; this.lab.place(g.id, p.x - 75, p.y - BH / 2); this.dropOnHost(g.id, p); }
+  }
+  /** A switch dropped in another host's area moves there (when it is stopped). */
+  private dropOnHost(id: string, p: { x: number; y: number }) {
+    const d = this.devs().find(x => x.id === id); if (!d || !this.multi()) return;
+    const z = this.zones().find(z => z.host !== this.hostOfDev(d) && p.x >= z.x && p.x <= z.x + z.w && p.y >= z.y && p.y <= z.y + z.h);
+    if (!z) return;
+    if (d.running) { this.ui.toast(tr('Stop {0} first: a switch moves to another host while it is off', d.hostname), 'error'); return; }
+    void this.moveTo(d, z.host);
   }
   zoomBy(d: number) { this.zoom.set(Math.min(2, Math.max(0.4, +(this.zoom() + d).toFixed(1)))); }
   fit(cv: HTMLElement) { const a = this.area(); this.zoom.set(Math.max(0.4, Math.min(1.5, +Math.min(cv.clientWidth / a.w, cv.clientHeight / a.h).toFixed(2)))); }

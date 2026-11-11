@@ -4660,11 +4660,11 @@ func (a *App) EmuTopologies() []EmuTopoInfo {
 			continue
 		}
 		info := EmuTopoInfo{Name: t.Name, Saved: t.Saved, Open: t.Name == open}
-		if t.Host != "" {
-			info.Hosts = []string{t.Host}
-		}
 		if t.Lab != nil {
 			info.Switches = len(t.Lab.VMs)
+			info.Hosts = t.Lab.Hosts(t.Host)
+		} else if t.Host != "" {
+			info.Hosts = []string{t.Host}
 		}
 		out = append(out, info)
 	}
@@ -4727,6 +4727,13 @@ func (a *App) emuSwitchTo(t emuTopo) {
 // EmuOpenTopology opens a saved topology (the open one is kept as it is) and,
 // with start, starts all its switches. Running switches are stopped first.
 func (a *App) EmuOpenTopology(name string, start bool) (EmuView, error) {
+	return a.EmuOpenTopologyOn(name, start, nil)
+}
+
+// EmuOpenTopologyOn opens a saved topology with its hosts replaced (old →
+// new host session): its switches on a replaced host start there from their
+// image, with that host's best management.
+func (a *App) EmuOpenTopologyOn(name string, start bool, hosts map[string]string) (EmuView, error) {
 	b, err := os.ReadFile(a.emuTopoPath(name))
 	if err != nil {
 		return EmuView{}, fmt.Errorf("no topology named %q", name)
@@ -4751,6 +4758,11 @@ func (a *App) EmuOpenTopology(name string, start bool) (EmuView, error) {
 		}
 		a.emuSwitchTo(t)
 	}
+	moved, err := a.emuRemap(hosts)
+	if err != nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, err
+	}
 	err = a.emuSave()
 	host := emuLab.f.Host
 	var ids []string
@@ -4762,6 +4774,22 @@ func (a *App) EmuOpenTopology(name string, start bool) (EmuView, error) {
 	emuLab.mu.Unlock()
 	if err != nil {
 		return EmuView{}, err
+	}
+	for _, v := range moved { // their sessions: the new host's management
+		a.emuRetarget(v)
+	}
+	emuLab.mu.Lock()
+	var bare []emu.VM // a copied or imported topology: its switches get sessions of their own
+	if emuLab.f.Lab != nil {
+		for _, v := range emuLab.f.Lab.VMs {
+			if emuLab.f.Sessions[v.ID] == "" {
+				bare = append(bare, v)
+			}
+		}
+	}
+	emuLab.mu.Unlock()
+	for _, v := range bare {
+		a.emuSessions(v)
 	}
 	if start && host != "" && len(ids) > 0 {
 		return a.EmuStart(ids)
@@ -4908,4 +4936,240 @@ func (a *App) EmuSetRole(id, role string) (EmuView, error) {
 		return EmuView{}, err
 	}
 	return a.EmuState()
+}
+
+// emuRemap moves the open lab to other hosts (mu held): old host → new host.
+func (a *App) emuRemap(m map[string]string) ([]emu.VM, error) {
+	l, main := emuLab.f.Lab, emuLab.f.Host
+	if l == nil || len(m) == 0 {
+		return nil, nil
+	}
+	info := func(h string) *emu.HostInfo {
+		for i := range emuLab.f.Hosts {
+			if emuLab.f.Hosts[i].Session == h {
+				return &emuLab.f.Hosts[i].Info
+			}
+		}
+		return nil
+	}
+	to := func(h string) string {
+		if n := m[h]; n != "" {
+			return n
+		}
+		return h
+	}
+	for _, n := range m {
+		if n != "" && info(n) == nil {
+			return nil, fmt.Errorf("%s is not one of your hosts (Hosts)", n)
+		}
+	}
+	newMain := to(main)
+	best := func(h string) emu.HostNet { // what a host the lab did not use gets (as Move to Host)
+		i := info(h)
+		if i == nil {
+			return emu.HostNet{Mgmt: "forward"}
+		}
+		mg := emuBestMgmt(i)
+		if mg == "cloud" || mg == "lan" && i.LanKind == "" {
+			mg = "nat"
+		}
+		return emu.HostNet{Mgmt: mg, LanIf: i.LanIf, LanKind: i.LanKind, MgmtNet: "10.99.0.0/24"}
+	}
+	// management per host: a host that stays keeps its own; a new one gets its best
+	nets := map[string]emu.HostNet{}
+	for _, h := range l.Hosts(main) {
+		if to(h) == h {
+			nets[h] = l.Net(h, main)
+		} else {
+			nets[to(h)] = best(to(h))
+		}
+	}
+	moved := map[string]bool{}
+	for i := range l.VMs {
+		v := &l.VMs[i]
+		old := orStr(v.Host, main)
+		nw := to(old)
+		if nw != old {
+			moved[v.ID] = true
+			v.Day0Done, v.Direct, v.FastKey = false, false, ""
+			if v.Persona != nil {
+				v.Persona.Applied, v.Persona.Took, v.Persona.Fail = "", "", ""
+			}
+		}
+		v.Host = ""
+		if nw != newMain {
+			v.Host = nw
+		}
+	}
+	emuLab.f.Host = newMain
+	l.Nets = nil
+	for h, n := range nets {
+		l.SetNet(h, newMain, n)
+	}
+	var out []emu.VM
+	for i := range l.VMs {
+		if v := &l.VMs[i]; moved[v.ID] {
+			lv := a.emuFor(orStr(v.Host, newMain))
+			v.MgmtIP, v.Gateway = lv.Address(lv.Slot(*v))
+			out = append(out, *v)
+		}
+	}
+	return out, nil
+}
+
+// emuReadTopo reads a saved topology (the open one as it is now).
+func (a *App) emuReadTopo(name string) (emuTopo, error) {
+	emuLab.mu.Lock()
+	if emuLab.f.Topology == name {
+		_ = a.emuWriteTopo()
+	}
+	emuLab.mu.Unlock()
+	var t emuTopo
+	b, err := os.ReadFile(a.emuTopoPath(name))
+	if err != nil {
+		return t, fmt.Errorf("no topology named %q", name)
+	}
+	if err := json.Unmarshal(b, &t); err != nil || t.Lab == nil {
+		return t, fmt.Errorf("topology %q cannot be read", name)
+	}
+	return t, nil
+}
+
+func (a *App) emuPutTopo(t emuTopo) error {
+	t.Saved = time.Now().Format(time.RFC3339)
+	b, err := json.MarshalIndent(t, "", " ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(a.emuTopoDir(), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(a.emuTopoPath(t.Name), b, 0o600)
+}
+
+// emuFresh makes a topology a new lab of its own: its own disks on the hosts
+// (switches boot from their images), its own sessions folder.
+func emuFresh(t *emuTopo) {
+	l := *t.Lab
+	l.ID = randHex(1)
+	l.VMs = append([]emu.VM(nil), l.VMs...)
+	for i := range l.VMs {
+		v := &l.VMs[i]
+		v.Day0Done, v.Direct, v.FastKey = false, false, ""
+		if v.Persona != nil {
+			p := *v.Persona
+			p.Applied, p.Took, p.Fail = "", "", ""
+			v.Persona = &p
+		}
+	}
+	t.Lab = &l
+	t.Folder = "Emulated Lab/" + t.Name
+	t.Sessions, t.Consoles = nil, nil
+}
+
+func (a *App) emuFreeTopoName(name string) string {
+	n := name
+	for i := 2; ; i++ {
+		if _, err := os.Stat(a.emuTopoPath(n)); err != nil {
+			return n
+		}
+		n = fmt.Sprintf("%s (%d)", name, i)
+	}
+}
+
+// EmuDuplicateTopology saves a copy of a topology under another name: a lab
+// of its own (its switches boot from their images, sessions of their own).
+func (a *App) EmuDuplicateTopology(name, newName string) ([]EmuTopoInfo, error) {
+	newName, err := emuTopoName(newName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(a.emuTopoPath(newName)); err == nil {
+		return nil, fmt.Errorf("a topology named %q is there already", newName)
+	}
+	t, err := a.emuReadTopo(name)
+	if err != nil {
+		return nil, err
+	}
+	t.Name = newName
+	emuFresh(&t)
+	if err := a.emuPutTopo(t); err != nil {
+		return nil, err
+	}
+	return a.EmuTopologies(), nil
+}
+
+// EmuRenameTopology gives a saved topology another name (the open one too).
+func (a *App) EmuRenameTopology(name, newName string) ([]EmuTopoInfo, error) {
+	newName, err := emuTopoName(newName)
+	if err != nil {
+		return nil, err
+	}
+	if newName == name {
+		return a.EmuTopologies(), nil
+	}
+	if _, err := os.Stat(a.emuTopoPath(newName)); err == nil {
+		return nil, fmt.Errorf("a topology named %q is there already", newName)
+	}
+	emuLab.mu.Lock()
+	open := emuLab.f.Topology == name
+	if open {
+		emuLab.f.Topology = newName
+		err = a.emuWriteTopo()
+		if err == nil {
+			err = a.emuSave()
+		}
+	}
+	emuLab.mu.Unlock()
+	if !open {
+		var t emuTopo
+		if t, err = a.emuReadTopo(name); err == nil {
+			t.Name = newName
+			err = a.emuPutTopo(t)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	_ = os.Remove(a.emuTopoPath(name))
+	return a.EmuTopologies(), nil
+}
+
+// EmuExportTopology writes a topology to a file (.twlab) to open on another computer.
+func (a *App) EmuExportTopology(name, path string) error {
+	t, err := a.emuReadTopo(name)
+	if err != nil {
+		return err
+	}
+	t.Sessions, t.Consoles = nil, nil // this computer's sessions
+	b, err := json.MarshalIndent(struct {
+		Kind string `json:"kind"`
+		emuTopo
+	}{"termwright-lab-topology", t}, "", " ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o600)
+}
+
+// EmuImportTopology adds a topology from a .twlab file (a lab of its own; when
+// its hosts are not yours, Open asks which of yours to use).
+func (a *App) EmuImportTopology(path string) ([]EmuTopoInfo, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var t emuTopo
+	if err := json.Unmarshal(b, &t); err != nil || t.Lab == nil || t.Name == "" {
+		return nil, errors.New("not a Termwright lab topology")
+	}
+	if t.Name, err = emuTopoName(t.Name); err != nil {
+		return nil, err
+	}
+	t.Name = a.emuFreeTopoName(t.Name)
+	emuFresh(&t)
+	if err := a.emuPutTopo(t); err != nil {
+		return nil, err
+	}
+	return a.EmuTopologies(), nil
 }

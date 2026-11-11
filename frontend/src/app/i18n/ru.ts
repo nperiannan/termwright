@@ -2420,6 +2420,21 @@ const ru: Record<string, string> = {
   'Core switch': 'Коммутатор ядра',
   'Wireless AP': 'Точка доступа',
   'Cloud': 'Облако',
+  'Import…': 'Импорт…',
+  'Add a topology from a .twlab file': 'Добавить топологию из файла .twlab',
+  'Open {0} on your hosts': 'Открыть {0} на ваших хостах',
+  'This topology ran on hosts that are not yours (or not checked). Choose where each one’s switches go; on another host they start from their images.': 'Эта топология работала на хостах, которых у вас нет (или они не проверены). Выберите, куда отправить коммутаторы каждого; на другом хосте они запускаются с образов.',
+  'Export (.twlab)': 'Экспорт (.twlab)',
+  'Duplicate {0}': 'Дублировать {0}',
+  'Name of the copy (a lab of its own: its switches boot from their images)': 'Имя копии (отдельная лаборатория: её коммутаторы загружаются с образов)',
+  'Rename {0}': 'Переименовать {0}',
+  'Export Topology': 'Экспорт топологии',
+  'Exported to {0}': 'Экспортировано в {0}',
+  'Import Topology': 'Импорт топологии',
+  'Stop {0} first: a switch moves to another host while it is off': 'Сначала остановите {0}: коммутатор переносится на другой хост выключенным',
+  'Check UDP Between Hosts': 'Проверить UDP между хостами',
+  'Add Switches: pick another host for them': 'Добавить коммутаторы: выберите для них другой хост',
+  'Add a Host to this Topology': 'Добавить хост в эту топологию',
 };
 
 export default ru;

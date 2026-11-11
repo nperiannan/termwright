@@ -119,7 +119,7 @@ export class LabService {
   moveVM(id: string, host: string) { return this.run(() => this.backend.emuMoveVM(id, host), 'Moved - it starts there from its image (day 0)'); }
   setLag(vm: string, name: string, mode: string, ports: string[]) { return this.run(() => this.backend.emuSetLag(vm, name, mode, ports)); }
   saveTopology(name: string) { return this.run(() => this.backend.emuSaveTopology(name), 'Topology saved'); }
-  openTopology(name: string, start: boolean) { return this.run(() => this.backend.emuOpenTopology(name, start), start ? 'Opened - the switches start' : 'Opened'); }
+  openTopology(name: string, start: boolean, hosts: Record<string, string> | null = null) { return this.run(() => (hosts ? this.backend.emuOpenTopologyOn(name, start, hosts) : this.backend.emuOpenTopology(name, start)), start ? 'Opened - the switches start' : 'Opened'); }
   newTopology(name: string) { return this.run(() => this.backend.emuNewTopology(name), 'New topology - add switches'); }
   applyLag(vm: string, name: string, remove: boolean) { return this.run(() => this.backend.emuApplyLag(vm, name, remove), remove ? 'LAG removed from the switch' : 'LAG set on the switch'); }
   checkCabling() { return this.run(() => this.backend.emuCheckCabling(), 'Cabling checked with LLDP - see the cables and the Events'); }

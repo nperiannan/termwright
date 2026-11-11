@@ -774,6 +774,11 @@ func TestEmuTwoHosts(t *testing.T) {
 	if v, _ = a.EmuState(); v.HostUse[0].Running+v.HostUse[1].Running != 2 {
 		t.Errorf("host use %+v", v.HostUse)
 	}
+	// the hosts reach each other on UDP, both ways
+	hl, err := a.EmuCheckTunnels()
+	if err != nil || len(hl) != 2 || !hl[0].OK || !hl[1].OK {
+		t.Errorf("tunnel check: %v %+v", err, hl)
+	}
 }
 
 // A newer pack gives existing images its factory password and its later ready text.
@@ -827,5 +832,72 @@ func TestEmuNeighbors(t *testing.T) {
 		if g := emuJudge(n[c.port], c.peer, c.pport, names); g != c.want {
 			t.Errorf("port %s: %q", c.port, g)
 		}
+	}
+}
+
+// Opening a topology where a host is gone: its switches go to another host, with that host's management.
+func TestEmuRemap(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = true, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	t.Setenv("HOME", dir)
+	emuLab.f.Host = "Lab/kvm-1"
+	emuLab.f.Hosts = []EmuHost{{Session: "Lab/kvm-1", Info: emu.HostInfo{LanAddr: "10.0.0.1/24", Sudo: true, Nat: "192.168.122.1/24"}}, {Session: "Lab/kvm-3", Info: emu.HostInfo{LanAddr: "10.0.0.3/24", Sudo: true, Nat: "192.168.122.1/24"}}}
+	emuLab.f.Lab = &emu.Lab{ID: "a1", Mgmt: "cloud", MgmtNet: "10.0.0.50/24", VMs: []emu.VM{{ID: "v1", Name: "core-1", Day0Done: true}, {ID: "v2", Name: "acc-1", Index: 1, Host: "Lab/kvm-2", Day0Done: true, FastKey: "k"}},
+		Nets: map[string]emu.HostNet{"Lab/kvm-2": {Mgmt: "bridge"}}}
+	moved, err := a.emuRemap(map[string]string{"Lab/kvm-2": "Lab/kvm-3"})
+	l := emuLab.f.Lab
+	if err != nil || len(moved) != 1 || l.VMs[1].Host != "Lab/kvm-3" || l.VMs[1].Day0Done || l.VMs[1].FastKey != "" || !l.VMs[0].Day0Done || l.Mgmt != "cloud" {
+		t.Fatalf("%v %+v", err, l.VMs)
+	}
+	if _, ok := l.Nets["Lab/kvm-2"]; ok || l.Nets["Lab/kvm-3"].Mgmt != "nat" {
+		t.Fatalf("nets %+v", l.Nets)
+	}
+	if _, err := a.emuRemap(map[string]string{"Lab/kvm-1": "Lab/kvm-9"}); err == nil {
+		t.Fatal("a host that is not there")
+	}
+}
+
+func TestEmuTopologyCopies(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = false, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	a.emuLoad()
+	emuLab.f.Lab = &emu.Lab{ID: "a1", VMs: []emu.VM{{ID: "v1", Name: "core-1", Day0Done: true}}}
+	emuLab.f.Sessions = map[string]string{"v1": "Emulated Lab/core-1"}
+	if _, err := a.EmuSaveTopology("EP1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.EmuDuplicateTopology("EP1", "EP1 copy"); err != nil {
+		t.Fatal(err)
+	}
+	c, err := a.emuReadTopo("EP1 copy")
+	if err != nil || c.Lab.ID == "a1" || c.Lab.VMs[0].Day0Done || c.Sessions != nil || c.Folder != "Emulated Lab/EP1 copy" {
+		t.Fatalf("copy %+v %v", c, err)
+	}
+	if _, err := a.EmuRenameTopology("EP1", "EP1 main"); err != nil || emuLab.f.Topology != "EP1 main" {
+		t.Fatalf("rename %v %q", err, emuLab.f.Topology)
+	}
+	f := filepath.Join(dir, "x.twlab")
+	if err := a.EmuExportTopology("EP1 main", f); err != nil {
+		t.Fatal(err)
+	}
+	l, err := a.EmuImportTopology(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, x := range l {
+		names = append(names, x.Name)
+	}
+	if !slices.Contains(names, "EP1 main (2)") || !slices.Contains(names, "EP1 copy") || slices.Contains(names, "EP1") {
+		t.Fatal(names)
 	}
 }

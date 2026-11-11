@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/termwright/termwright/internal/emu"
 )
@@ -144,4 +145,77 @@ func (a *App) EmuCheckCabling() (EmuView, error) {
 	}
 	emuLab.mu.Unlock()
 	return a.EmuState()
+}
+
+// EmuHostLink is whether one host's cable traffic reaches another (UDP).
+type EmuHostLink struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	OK   bool   `json:"ok"`
+	Text string `json:"text"`
+}
+
+// EmuCheckTunnels sends UDP from each host of the lab to each other one, as
+// the cables between hosts do, and says which arrive.
+func (a *App) EmuCheckTunnels() ([]EmuHostLink, error) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	if l == nil {
+		emuLab.mu.Unlock()
+		return nil, errors.New("there is no emulated lab")
+	}
+	_ = a.emuFor(emuLab.f.Host) // the hosts' addresses
+	hosts := l.Hosts(emuLab.f.Host)
+	addr := map[string]string{}
+	for _, h := range hosts {
+		addr[h] = l.Addrs[h]
+	}
+	emuLab.mu.Unlock()
+	if len(hosts) < 2 {
+		return nil, errors.New("the lab runs on one host: there are no cables between hosts")
+	}
+	name := func(h string) string { return h[strings.LastIndex(h, "/")+1:] }
+	var out []EmuHostLink
+	for _, from := range hosts {
+		for _, to := range hosts {
+			if from == to {
+				continue
+			}
+			r := EmuHostLink{From: name(from), To: name(to)}
+			if addr[to] == "" {
+				r.Text = "no address known for " + r.To + " (check it under Hosts)"
+				out = append(out, r)
+				continue
+			}
+			port := 29900 + len(out)
+			// the receiver listens for 8 s; the sender sends a few datagrams meanwhile
+			recv := fmt.Sprintf(`timeout 9 python3 -c "import socket,sys;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.bind(('0.0.0.0',%d));s.settimeout(8);d,a=s.recvfrom(64);print('got',a[0])" 2>&1 || echo nothing`, port)
+			done := make(chan string, 1)
+			go func() { o, err := a.emuRun(to, recv, 20*time.Second); done <- o + errText(err) }()
+			time.Sleep(2 * time.Second)
+			_, _ = a.emuRun(from, fmt.Sprintf("bash -c 'for i in 1 2 3 4 5 6 7 8; do echo tw > /dev/udp/%s/%d; sleep 0.5; done' 2>/dev/null; true", addr[to], port), 15*time.Second)
+			got := <-done
+			switch {
+			case strings.Contains(got, "got "):
+				r.OK, r.Text = true, fmt.Sprintf("UDP from %s reaches %s (%s)", r.From, r.To, addr[to])
+			case strings.Contains(got, "python3") && strings.Contains(got, "not found"):
+				r.Text = r.To + " has no python3 to listen with: not checked"
+			default:
+				r.Text = fmt.Sprintf("UDP from %s does not reach %s (%s) on ports 20000-29999: a firewall between them, or on %s", r.From, r.To, addr[to], r.To)
+			}
+			out = append(out, r)
+		}
+	}
+	emuLab.mu.Lock()
+	for _, r := range out {
+		lvl := "ok"
+		if !r.OK {
+			lvl = "warn"
+		}
+		if len(l.VMs) > 0 {
+			emuEv(l.VMs[0].ID, lvl, "hosts: "+r.Text)
+		}
+	}
+	emuLab.mu.Unlock()
+	return out, nil
 }
