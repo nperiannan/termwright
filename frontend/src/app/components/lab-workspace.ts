@@ -2,7 +2,7 @@ import { Component, ElementRef, HostListener, OnDestroy, computed, effect, injec
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { EmuDeviceType, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
+import { EmuDeviceType, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -11,7 +11,7 @@ import { TerminalView } from './terminal-view';
 import { DevIcon, DevRole, ROLES, roleOf } from './dev-icon';
 
 const BW = 104, BH = 64;
-type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; dt?: EmuDeviceType; m?: LabModel };
+type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
 
 /** The lab as a workspace tab: device palette, canvas with cables, the
  *  selected switch, the topology summary and the Events log. */
@@ -639,7 +639,7 @@ export class LabWorkspace implements OnDestroy {
     this.menu.set(null);
     try { await this.backend.emuSetUplink(d.id, port, on); await this.lab.refresh(); this.ui.toast(on ? tr('{0} {1} goes on the host’s network when it starts (or restarts)', d.hostname, port) : tr('{0} {1} comes off the host’s network when it restarts', d.hostname, port)); } catch (e) { this.ui.error(e); }
   }
-  palRole(p: Pal): DevRole { return p.cls === 'l' ? 'server' : roleOf(p.name, p.os); }
+  palRole(p: Pal): DevRole { return p.cls === 'l' ? 'server' : roleOf((p.tpl?.model || '') + ' ' + p.name, p.os); }
   async setRole(d: LabDevice, r: DevRole) { this.menu.set(null); try { await this.backend.emuSetRole(d.id, r === roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? '') ? '' : r); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
   /** What the switch is drawn as: the role chosen in Configure…, else one from its model. */
   roleOfDev(d: LabDevice): DevRole { return (d.role as DevRole) || roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? ''); }
@@ -675,6 +675,13 @@ export class LabWorkspace implements OnDestroy {
         items.push({ key: dt.key, name: dt.model || im?.name || dt.kind, sub: dt.modules?.length ? (dt.modName || 'VIM') + ' ' + dt.modules.map(m => m.replace(/^\d+-VIM-/, '')).join(' / ') : (dt.model ? '' : im?.fileName ?? ''),
           group: dt.osName || dt.kind || tr('Other images'), ver: im?.version ?? '', os: dt.kind, cls: /voss|fabric/i.test(dt.kind + dt.osName + (im?.fileName ?? '') + (im?.deviceType ?? '')) ? 'v' : /linux|ubuntu|debian|centos|alpine|cloudimg/i.test(dt.kind + (im?.fileName ?? '') + (im?.deviceType ?? '')) ? 'l' : '', dt });
       }
+      // templates (an image with resources and a persona model) are device types too
+      for (const t of this.st()?.templates ?? []) {
+        const im = (this.st()?.images ?? []).find(i => i.id === t.image);
+        if (!im) continue;
+        const dt = { key: 'tpl:' + t.id, model: t.model, kind: im.name, osName: '', images: [im.id], cpus: t.cpus, ram: t.ram } as unknown as EmuDeviceType;
+        items.push({ key: dt.key, name: t.name, sub: [t.model, t.module, (t.cpus || im.cpus) + ' vCPU', this.gb(t.ram || im.ram)].filter(Boolean).join(' · '), group: tr('Templates'), ver: im.version ?? '', os: im.deviceType ?? im.name, cls: '', dt, tpl: t });
+      }
     } else {
       for (const m of this.st()?.models ?? []) items.push({ key: m.sku, name: m.sku, sub: m.os.map(o => this.lab.osShort(o)).join(' / '), group: m.family, ver: '', os: m.os[0], cls: 's', m });
     }
@@ -706,7 +713,7 @@ export class LabWorkspace implements OnDestroy {
         const s0 = await this.backend.emuSuggest(p.dt?.model || p.dt?.kind || '').catch(() => null);
         const n0 = (p.dt?.model || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-{n}';
         {
-          const made = await this.lab.addEmu({ host, groups: [{ image: p.dt!.images[0], model: p.dt!.model, module: '', count: 1, names: n0, serialStart: s0?.serial ?? '', macStart: s0?.mac ?? '', cpus: p.dt!.cpus, ram: p.dt!.ram }], cabling: 'none', mgmt: '', mgmtNet: '', start: false });
+          const made = await this.lab.addEmu({ host, groups: [{ image: p.dt!.images[0], model: p.dt!.model, module: p.tpl?.module ?? '', template: p.tpl?.id, diskGb: p.tpl?.diskGb, count: 1, names: n0, serialStart: s0?.serial ?? '', macStart: s0?.mac ?? '', cpus: p.dt!.cpus, ram: p.dt!.ram }], cabling: 'none', mgmt: '', mgmtNet: '', start: false });
           if (!made) return;
         }
         const fresh0 = this.devs().find(d => !before.has(d.id));
@@ -717,7 +724,7 @@ export class LabWorkspace implements OnDestroy {
       if (!e?.host) { this.preset.set(p.key); this.page.set('new'); return; }
       const s = await this.backend.emuSuggest(p.dt?.model || p.dt?.kind || '').catch(() => null);
       const names = (p.dt?.model || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-{n}';
-      ok = await this.lab.addEmu({ host: e.host, groups: [{ image: p.dt!.images[0], model: p.dt!.model, module: '', count: 1, names, serialStart: s?.serial ?? '', macStart: s?.mac ?? '', cpus: p.dt!.cpus, ram: p.dt!.ram }], cabling: 'none', mgmt: '', mgmtNet: '', start: false });
+      ok = await this.lab.addEmu({ host: e.host, groups: [{ image: p.dt!.images[0], model: p.dt!.model, module: p.tpl?.module ?? '', template: p.tpl?.id, diskGb: p.tpl?.diskGb, count: 1, names, serialStart: s?.serial ?? '', macStart: s?.mac ?? '', cpus: p.dt!.cpus, ram: p.dt!.ram }], cabling: 'none', mgmt: '', mgmtNet: '', start: false });
     } else {
       if (!this.lab.sim()?.pack) { this.dialog('list'); return; }
       ok = await this.lab.add({ groups: [{ os: p.os, model: p.name, count: 1, names: '' }], mgmtNet: '', cabling: 'none', password: '', start: false });
