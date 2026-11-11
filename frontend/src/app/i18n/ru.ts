@@ -2372,6 +2372,19 @@ const ru: Record<string, string> = {
   'Opened - the switches start': 'Открыта - коммутаторы запускаются',
   'Opened': 'Открыта',
   'New topology - add switches': 'Новая топология - добавьте коммутаторы',
+  'Each host has its own management': 'У каждого хоста своё управление',
+  'Move to Host': 'Перенести на хост',
+  'Stop it first': 'Сначала остановите его',
+  'It starts there from its image (day 0); its cables to this host become UDP tunnels': 'Он запустится там с образа (day 0); его кабели к этому хосту станут UDP-туннелями',
+  'Cables between hosts': 'Кабели между хостами',
+  'UDP tunnels: the hosts must reach each other on UDP 20000-29999': 'UDP-туннели: хосты должны быть доступны друг другу по UDP 20000-29999',
+  'Move {0} to {1}': 'Перенести {0} на {1}',
+  'Move': 'Перенести',
+  'UDP tunnel {0} ⇄ {1}': 'UDP-туннель {0} ⇄ {1}',
+  'another host: its cables to this lab become UDP tunnels': 'другой хост: его кабели к этой лаборатории станут UDP-туннелями',
+  'in the lab': 'в лаборатории',
+  'Moved - it starts there from its image (day 0)': 'Перенесён - запустится там с образа (day 0)',
+  'It starts on that host from its image (day 0, its saved configuration is not taken along) with that host’s management. Its cables to switches on other hosts become UDP tunnels.': 'Он запустится на том хосте с образа (day 0, сохранённая конфигурация не переносится) с управлением этого хоста. Его кабели к коммутаторам на других хостах станут UDP-туннелями.',
 };
 
 export default ru;

@@ -56,13 +56,14 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       <span class="sp"></span>
       @if (emu() && devs().length) {
         <span class="chip mg" [title]="tr('How the switches’ first port (management) is connected; it applies when they start')">{{ tr('Management') }}
-          <select [ngModel]="st()?.mgmt" (ngModelChange)="setMgmt($event)" name="wmg" [disabled]="lab.busy()">
+          @if (multi()) { <select class="hsel" [ngModel]="mg().host" (ngModelChange)="mgHost.set($event)" name="wmh" [title]="tr('Each host has its own management')">@for (u of hostUse(); track u.host) { <option [value]="u.host">{{ u.name }}</option> }</select> }
+          <select [ngModel]="mg().mgmt" (ngModelChange)="setMgmt($event)" name="wmg" [disabled]="lab.busy()">
             <option value="cloud">{{ tr('The host’s network, routed (cloud)') }}</option>
             <option value="lan">{{ tr('The host’s network (bridged)') }}</option>
             <option value="nat">{{ tr('The host’s NAT network') }}</option>
             <option value="bridge">{{ tr('Lab bridge on the host') }}</option>
             <option value="forward">{{ tr('Port forwarding on the host') }}</option>
-          </select>@if (st()?.mgmt === 'cloud' || st()?.mgmt === 'lan') { <button type="button" class="sm" (click)="openCloud(st()!.mgmt!); $event.stopPropagation()" [title]="tr('Addresses of the switches on the host’s network')">{{ st()?.mgmt === 'lan' && !st()?.lanFixed ? 'DHCP' : st()?.mgmtNet?.split('/')?.[0] }}…</button> }
+          </select>@if (mg().mgmt === 'cloud' || mg().mgmt === 'lan') { <button type="button" class="sm" (click)="openCloud(mg().mgmt); $event.stopPropagation()" [title]="tr('Addresses of the switches on the host’s network')">{{ mg().mgmt === 'lan' && !mg().lanFixed ? 'DHCP' : mg().mgmtNet.split('/')[0] }}…</button> }
           @if (cloudF(); as f) {
             <div class="cloudf" (click)="$event.stopPropagation()">
               @if (f.mode === 'cloud') {
@@ -110,9 +111,13 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         }
         <div class="inner" [style.width.px]="area().w * zoom()" [style.height.px]="area().h * zoom()">
           <div class="scale" [style.transform]="'scale(' + zoom() + ')'" [style.width.px]="area().w" [style.height.px]="area().h">
+            @for (z of zones(); track z.host) {
+              <div class="zone" [style.left.px]="z.x" [style.top.px]="z.y" [style.width.px]="z.w" [style.height.px]="z.h" [style.border-color]="z.c" [style.background]="z.c + '0f'">
+                <div class="zh"><i [style.background]="z.c"></i><b>{{ z.name }}</b><span class="muted">{{ z.text }}</span></div></div>
+            }
             <svg class="links" [attr.width]="area().w" [attr.height]="area().h">
               @for (k of lines(); track k.key) {
-                <g class="lk" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
+                <g class="lk" [class.tun]="k.tun" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
                   <title>{{ k.tip }}</title>
                   @for (m of k.paths; track $index) { <path class="hit" [attr.d]="m.d" /><path class="ln" [attr.d]="m.d" [class.up]="m.up" [class.dn]="m.down" [class.thick]="m.thick" /> }
                   @for (r of k.rings; track $index) { <circle class="ring" [attr.cx]="r.x" [attr.cy]="r.y" r="11" /> }
@@ -138,8 +143,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <div class="ntip" [style.left.px]="pos(h).x + 82" [style.top.px]="pos(h).y - 34">
                 <div class="th"><b>{{ h.hostname }}</b> <span [class]="stateOf(h)">● {{ tr(h.stateText || (h.running ? 'running' : 'stopped')) }}</span> <span class="muted">· {{ h.persona?.slots?.[0]?.model || h.model }}</span></div>
                 <table>
-                  @if (emu()) { <tr><td>{{ tr('Host') }}</td><td>{{ hostName() }}@if (st()?.hostInfo?.lanAddr; as ha) { <span class="muted"> ({{ ha.split('/')[0] }})</span> }</td></tr>
-                    <tr><td>{{ tr('Console') }}</td><td class="mono">telnet {{ hostName() }}:{{ h.console }}</td></tr> }
+                  @if (emu()) { <tr><td>{{ tr('Host') }}</td><td>{{ hname(hostOfDev(h)) }}@if (addrOfHost(hostOfDev(h)); as ha) { <span class="muted"> ({{ ha }})</span> }</td></tr>
+                    <tr><td>{{ tr('Console') }}</td><td class="mono">telnet {{ hname(hostOfDev(h)) }}:{{ h.console }}</td></tr> }
                   <tr><td>{{ tr('Management') }}</td><td class="mono">{{ emu() ? (h.ssh || '-') : addrOf(h) + ':' + h.port }}</td></tr>
                   @if (emu() && h.running) { <tr><td>CPU</td><td>{{ (h.cpu ?? 0).toFixed(0) }} % {{ tr('of {0} vCPU', h.cpus ?? 1) }}</td></tr>
                     <tr><td>{{ tr('Memory') }}</td><td>{{ h.memUsed ? gb(h.memUsed) + ' / ' : '' }}{{ gb(h.ram) }}</td></tr> }
@@ -171,6 +176,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (emu()) { <a (click)="mdo('lags', d)" [class.off]="!d.running">{{ tr('Read Its LAGs') }}</a> }
               <a (click)="mdo('link', d)">{{ tr('Add Link from Here') }}</a>
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
+              @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [class.off]="d.running" [title]="d.running ? tr('Stop it first') : tr('It starts there from its image (day 0); its cables to this host become UDP tunnels')">→ {{ o.name || hname(o.session) }}</a> } }
               <hr />
               <a class="r" (click)="mdo('remove', d)">{{ tr('Delete') }}</a>
             }
@@ -215,7 +221,17 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           @for (d of devs(); track d.id) { <tr [class.on]="sel() === d.id" (click)="select(d)"><td><i class="d" [class]="'d ' + stateOf(d)"></i>{{ d.hostname }}</td><td class="mono">{{ emu() ? ':' + d.console : ':' + d.port }}</td><td class="mono">{{ addrOf(d) }}</td></tr> }
           @empty { <tr><td class="muted">{{ tr('No switches yet') }}</td></tr> }
         </table></div>
-        @if (emu() && st()?.usage; as u) {
+        @if (emu() && multi()) {
+          @for (u of hostUse(); track u.host) {
+            <h3><i class="hd" [style.background]="hcol(u.host)"></i>{{ tr('Host') }} · {{ u.name }}@if (u.main) { <span class="muted small"> · {{ tr('the lab’s host') }}</span> }</h3>
+            <div class="card">
+              <div class="mr"><span>{{ tr('{0} switches · {1} running', u.switches, u.running) }}</span><span class="muted">{{ mgName(u) }}</span></div>
+              <div class="mr"><span>vCPU {{ u.vcpus }} / {{ u.cpus || '?' }}</span><span class="muted">{{ tr('load') }} {{ u.load }}</span></div><div class="meter"><i [style.width.%]="pct(u.vcpus, u.cpus)" [style.background]="hcol(u.host)"></i></div>
+              <div class="mr"><span>RAM {{ gb(u.ram) }} / {{ gb(u.memTotal) }}</span><span class="muted">{{ tr('{0} free', gb(u.memFree)) }}</span></div><div class="meter"><i [style.width.%]="pct(u.memTotal - u.memFree, u.memTotal)" [style.background]="hcol(u.host)"></i></div>
+            </div>
+          }
+          @if (tunnels(); as n) { <div class="card"><div class="mr"><b>{{ tr('Cables between hosts') }}</b><span class="muted">{{ n }}</span></div><div class="muted small">{{ tr('UDP tunnels: the hosts must reach each other on UDP 20000-29999') }}</div></div> }
+        } @else if (emu() && st()?.usage; as u) {
           <h3>{{ tr('Host') }} · {{ hostName() }}</h3>
           <div class="card">
             <div class="mr"><span>vCPU {{ u.vcpus }} / {{ u.hostCpus || '?' }}</span><span class="muted">{{ tr('load') }} {{ u.load }}</span></div><div class="meter"><i [style.width.%]="pct(u.vcpus, u.hostCpus)"></i></div>
@@ -247,7 +263,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <div class="inv"><table>
           <tr><th>{{ tr('Switch') }}</th><th>{{ tr('State') }}</th><th>{{ tr('Console') }}</th><th>{{ tr('Management') }}</th><th>CPU</th><th>{{ tr('Memory') }}</th></tr>
           @for (g of inventory(); track g.host) {
-            <tr class="h"><td colspan="4"><b>{{ g.host }}</b>@if (g.addr) { <span class="muted"> · {{ g.addr }}</span> }<span class="muted"> · {{ g.mgmt }} · {{ tr('{0} switches · {1} running', g.devs.length, g.running) }}</span></td>
+            <tr class="h"><td colspan="4">@if (multi()) { <i class="hd" [style.background]="hcol(g.id)"></i> }<b>{{ g.host }}</b>@if (g.addr) { <span class="muted"> · {{ g.addr }}</span> }<span class="muted"> · {{ g.mgmt }} · {{ tr('{0} switches · {1} running', g.devs.length, g.running) }}</span></td>
               <td><span class="mtr"><i [style.width.%]="g.cpuPct"></i></span>{{ g.cpuText }}</td><td><span class="mtr"><i [style.width.%]="g.memPct"></i></span>{{ g.memText }}</td></tr>
             @for (d of g.devs; track d.id) {
               <tr [class.on]="sel() === d.id" (click)="select(d)"><td>{{ d.hostname }}</td><td [class]="stateOf(d)">● {{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</td>
@@ -306,6 +322,13 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       .row2 { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; } .sp { flex: 1; }
       .ti { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; &.cur { border-color: var(--accent); }
         .tn { flex: 1; min-width: 0; display: flex; flex-direction: column; } .x { padding: 2px 7px; } } }
+    .zone { position: absolute; border: 1.5px dashed; border-radius: 14px; pointer-events: none; }
+    .zone .zh { display: flex; gap: 7px; align-items: center; padding: 6px 10px; font-size: 11.5px; white-space: nowrap; }
+    .zone .zh i, .hd { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .zone .zh i { margin: 0; }
+    .lk.tun .ln:not(.dn) { stroke: #a46cf0; stroke-dasharray: 7 5; }
+    .hsel { margin-right: 4px; }
+    .menu .mh2 { display: block; padding: 4px 12px 2px; font-size: 11px; color: var(--muted); }
     .ntip { position: absolute; z-index: 9; min-width: 250px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); pointer-events: none; font-size: 12px;
       .th { margin-bottom: 6px; white-space: nowrap; } table { border-collapse: collapse; } td { padding: 2px 10px 2px 0; white-space: nowrap; } td:first-child { color: var(--muted); } }
     .inv { overflow: auto; padding: 0 14px 10px; table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); font-size: 12px; white-space: nowrap; }
@@ -411,11 +434,56 @@ export class LabWorkspace implements OnDestroy {
   /** The switches under their host, with what the host and each switch use now. */
   protected inventory = computed(() => {
     const v = this.st(), u = v?.usage, devs = this.devs();
-    const mg: Record<string, string> = { lan: v?.lanFixed ? tr('bridged, fixed {0}+', (v?.mgmtNet ?? '').split('/')[0]) : tr('bridged, DHCP'), cloud: tr('routed, {0}+', (v?.mgmtNet ?? '').split('/')[0]), nat: tr('NAT network'), bridge: tr('lab bridge'), forward: tr('port forwarding') };
+    if (this.multi()) return this.hostUse().map(h => {
+      const ds = devs.filter(d => this.hostOfDev(d) === h.host), used = h.memTotal - h.memFree;
+      return { id: h.host, host: h.name, addr: (h.addr || '').split('/')[0], mgmt: this.mgName(h), devs: ds, running: ds.filter(d => d.running).length,
+        cpuPct: this.pct(h.cores, h.cpus), cpuText: h.cores.toFixed(1) + ' / ' + (h.cpus || '?') + ' ' + tr('cores'), memPct: this.pct(used, h.memTotal), memText: this.gb(used) + ' / ' + this.gb(h.memTotal) };
+    });
     const used = (u?.hostMemTotal ?? 0) - (u?.hostMemFree ?? 0);
-    return [{ host: this.hostName(), addr: v?.hostInfo?.lanAddr?.split('/')[0] ?? '', mgmt: mg[v?.mgmt ?? ''] ?? '', devs, running: devs.filter(d => d.running).length,
+    return [{ id: v?.host ?? '', host: this.hostName(), addr: v?.hostInfo?.lanAddr?.split('/')[0] ?? '', mgmt: this.mgName({ mgmt: v?.mgmt ?? '', mgmtNet: v?.mgmtNet ?? '', lanFixed: v?.lanFixed }), devs, running: devs.filter(d => d.running).length,
       cpuPct: this.pct(u?.cores ?? 0, u?.hostCpus ?? 0), cpuText: (u?.cores ?? 0).toFixed(1) + ' / ' + (u?.hostCpus ?? '?') + ' ' + tr('cores'),
       memPct: this.pct(used, u?.hostMemTotal ?? 0), memText: this.gb(used) + ' / ' + this.gb(u?.hostMemTotal) }];
+  });
+  /** How a host's switches are managed, in a few words. */
+  mgName(h: { mgmt: string; mgmtNet: string; lanFixed?: boolean }) {
+    const a = (h.mgmtNet ?? '').split('/')[0];
+    const mg: Record<string, string> = { lan: h.lanFixed ? tr('bridged, fixed {0}+', a) : tr('bridged, DHCP'), cloud: tr('routed, {0}+', a), nat: tr('NAT network'), bridge: tr('lab bridge'), forward: tr('port forwarding') };
+    return mg[h.mgmt] ?? '';
+  }
+  protected hostUse = computed(() => this.st()?.hostUse ?? []);
+  protected multi = computed(() => this.hostUse().length > 1);
+  hostOfDev(d: LabDevice) { return d.host || this.st()?.host || ''; }
+  hname(h: string) { return h.split('/').pop() ?? h; }
+  addrOfHost(h: string) { const u = this.hostUse().find(x => x.host === h); return (u?.addr || (h === this.st()?.host ? this.st()?.hostInfo?.lanAddr ?? '' : '')).split('/')[0]; }
+  hcol(h: string) { const i = this.hostUse().findIndex(u => u.host === h); return ['#3b8cf6', '#a46cf0', '#1fb5a5', '#e3842a', '#d65db1', '#8fb339'][Math.max(0, i) % 6]; }
+  /** Hosts the switch could move to: the checked hosts without problems. */
+  otherHosts(d: LabDevice) { return (this.st()?.hosts ?? []).filter(h => h.session !== this.hostOfDev(d) && !(h.info.problems ?? []).length); }
+  async moveTo(d: LabDevice, host: string) {
+    if (d.running) return;
+    this.menu.set(null);
+    if (await this.ui.confirm(tr('Move {0} to {1}', d.hostname, this.hname(host)), tr('It starts on that host from its image (day 0, its saved configuration is not taken along) with that host’s management. Its cables to switches on other hosts become UDP tunnels.'), tr('Move'))) await this.lab.moveVM(d.id, host);
+  }
+  protected tunnels = computed(() => this.lines().filter(k => k.tun).length);
+  /** Each host as an area round its switches (only when the lab is on more than one host). */
+  protected zones = computed(() => {
+    if (!this.multi()) return [];
+    this.moved();
+    const out: { host: string; name: string; text: string; c: string; x: number; y: number; w: number; h: number }[] = [];
+    for (const u of this.hostUse()) {
+      const ps = this.devs().filter(d => this.hostOfDev(d) === u.host).map(d => this.pos(d));
+      if (!ps.length) continue;
+      const x0 = Math.min(...ps.map(p => p.x)) - 105, y0 = Math.min(...ps.map(p => p.y)) - 66, x1 = Math.max(...ps.map(p => p.x)) + 105, y1 = Math.max(...ps.map(p => p.y)) + 62;
+      const text = [this.addrOfHost(u.host), this.mgName(u), u.vcpus + ' / ' + (u.cpus || '?') + ' vCPU', this.gb(u.ram) + ' / ' + this.gb(u.memTotal)].filter(Boolean).join(' · ');
+      out.push({ host: u.host, name: u.name, text, c: this.hcol(u.host), x: Math.max(4, x0), y: Math.max(4, y0), w: x1 - Math.max(4, x0), h: y1 - Math.max(4, y0) });
+    }
+    return out;
+  });
+  /** The host whose management the chip shows ('' = the lab's own). */
+  protected mgHost = signal('');
+  protected mg = computed(() => {
+    const v = this.st(), main = v?.host ?? '', h = this.mgHost() && this.hostUse().some(u => u.host === this.mgHost()) ? this.mgHost() : main;
+    const u = this.hostUse().find(x => x.host === h), info = h === main ? v?.hostInfo : (v?.hosts ?? []).find(x => x.session === h)?.info;
+    return { host: h, main: h === main, mgmt: u?.mgmt ?? v?.mgmt ?? '', mgmtNet: u?.mgmtNet ?? v?.mgmtNet ?? '', cloudGw: u?.cloudGw ?? v?.cloudGw ?? '', lanFixed: u ? !!u.lanFixed : !!v?.lanFixed, lanAddr: info?.lanAddr ?? '', gateway: info?.gateway ?? '' };
   });
   protected tail = signal('');
   protected zoom = signal(1);
@@ -606,11 +674,11 @@ export class LabWorkspace implements OnDestroy {
       if (!pairs.has(id)) pairs.set(id, { p: flip ? b : a, q: flip ? a : b, ls: [] });
       pairs.get(id)!.ls.push(flip ? { k, pp: k.bPort, qp: k.aPort, lp: k.lagB ?? null, lq: k.lagA ?? null } : { k, pp: k.aPort, qp: k.bPort, lp: k.lagA ?? null, lq: k.lagB ?? null });
     }
-    const out: { key: string; link: Lk; tip: string; down: boolean; warn: boolean; paths: { d: string; up: boolean; down: boolean; thick: boolean }[]; rings: { x: number; y: number }[]; labels: { x: number; y: number; t: string; w: number; lag: boolean }[] }[] = [];
+    const out: { key: string; link: Lk; tip: string; tun: boolean; down: boolean; warn: boolean; paths: { d: string; up: boolean; down: boolean; thick: boolean }[]; rings: { x: number; y: number }[]; labels: { x: number; y: number; t: string; w: number; lag: boolean }[] }[] = [];
     const P = (v: { x: number; y: number }) => v.x.toFixed(1) + ' ' + v.y.toFixed(1);
     const lw = (t: string) => t.length * 6.2 + 10;
     for (const { p, q, ls } of pairs.values()) {
-      const pa = this.pos(p), pb = this.pos(q);
+      const pa = this.pos(p), pb = this.pos(q), tun = this.multi() && this.hostOfDev(p) !== this.hostOfDev(q);
       const A = this.edge(pa, pb), B = this.edge(pb, pa);
       const L = Math.hypot(B.x - A.x, B.y - A.y) || 1, u = { x: (B.x - A.x) / L, y: (B.y - A.y) / L }, n = { x: -u.y, y: u.x };
       const at = (o: { x: number; y: number }, along: number, side: number) => ({ x: o.x + u.x * along + n.x * side, y: o.y + u.y * along + n.y * side });
@@ -630,7 +698,7 @@ export class LabWorkspace implements OnDestroy {
       tracks.forEach((tk, i) => {
         const o = (i - (tracks.length - 1) / 2) * gap;
         const first = tk[0], up = tk.every(l => !!l.k.up), down = tk.every(l => !!l.k.down);
-        const item = { key: first.k.key, link: first.k, tip: '', down, warn: false, paths: [] as { d: string; up: boolean; down: boolean; thick: boolean }[], rings: [] as { x: number; y: number }[], labels: [] as { x: number; y: number; t: string; w: number; lag: boolean }[] };
+        const item = { key: first.k.key, link: first.k, tip: '', tun, down, warn: false, paths: [] as { d: string; up: boolean; down: boolean; thick: boolean }[], rings: [] as { x: number; y: number }[], labels: [] as { x: number; y: number; t: string; w: number; lag: boolean }[] };
         const S = at(A, fan, o), E = at(B, -fan, o);
         if (tk.length === 1 && !first.lp && !first.lq) { // a single cable
           const l = first;
@@ -668,6 +736,7 @@ export class LabWorkspace implements OnDestroy {
           item.tip = (lp ? p.hostname + ' ' + lp.name + ' (' + lp.mode + ')' : p.hostname + ' no LAG') + ' ⇄ ' + (lq ? q.hostname + ' ' + lq.name + ' (' + lq.mode + ')' : q.hostname + ' no LAG') + ' · ' + tk.map(l => l.pp + '-' + l.qp).join(', ')
             + (!lp || !lq ? ' - ' + tr('the LAG is set on one side only') : lp.mode !== lq.mode ? ' - ' + tr('static on one side, LACP on the other') : '');
         }
+        if (tun) item.tip = tr('UDP tunnel {0} ⇄ {1}', this.hname(this.hostOfDev(p)), this.hname(this.hostOfDev(q))) + ' · ' + item.tip;
         out.push(item);
       });
     }
@@ -831,10 +900,10 @@ export class LabWorkspace implements OnDestroy {
   async loadTail() { const id = this.sel(); if (id && this.emu()) { const t = await this.lab.consoleTail(id); if (this.sel() === id) this.tail.set(t); } }
   protected cloudF = signal<{ mode: string; fixed: boolean; addr: string; gw: string; net: string } | null>(null);
   openCloud(mode: string) {
-    const v = this.st(), h = v?.hostInfo;
-    const net = h?.lanAddr ?? '';
-    const had = v?.mgmt === 'cloud' || (v?.mgmt === 'lan' && !!v?.lanFixed); // fixed addresses already
-    this.cloudF.set({ mode, fixed: mode === 'cloud' || had, addr: had ? (v?.mgmtNet ?? '').split('/')[0] : '', gw: had ? v?.cloudGw ?? '' : h?.gateway ?? '', net: net ? net.replace(/\.\d+\//, '.0/') : tr('of the host') });
+    const v = this.mg();
+    const net = v.lanAddr;
+    const had = v.mgmt === 'cloud' || (v.mgmt === 'lan' && v.lanFixed); // fixed addresses already
+    this.cloudF.set({ mode, fixed: mode === 'cloud' || had, addr: had ? v.mgmtNet.split('/')[0] : '', gw: had ? v.cloudGw : v.gateway, net: net ? net.replace(/\.\d+\//, '.0/') : tr('of the host') });
   }
   lastAddr(a: string) {
     const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(a.trim()); const n = Math.max(this.devs().length, 1);
@@ -848,9 +917,9 @@ export class LabWorkspace implements OnDestroy {
     await this.setMgmt(f.mode, f.mode === 'cloud' || f.fixed ? (f.addr.trim() + ' ' + f.gw.trim()).trim() : '');
   }
   /** Shows the lab's management in the menu again (a change not made). */
-  protected revertMgmt() { const el = this.host.nativeElement.querySelector<HTMLSelectElement>('select[name=wmg]'); if (el) el.value = this.st()?.mgmt ?? ''; }
+  protected revertMgmt() { const el = this.host.nativeElement.querySelector<HTMLSelectElement>('select[name=wmg]'); if (el) el.value = this.mg().mgmt; }
   async setMgmt(m: string, net: string | null = null) {
-    const was = this.st()?.mgmt ?? '';
+    const g = this.mg(), was = g.mgmt, set = (m: string, n: string) => g.main ? this.lab.setMgmt(m, n) : this.lab.setHostMgmt(g.host, m, n);
     if ((m === 'cloud' || m === 'lan') && net === null) { this.revertMgmt(); this.openCloud(m); return; } // their addresses first
     if (m === was && m !== 'cloud' && m !== 'lan') return;
     net = net ?? '';
@@ -861,9 +930,9 @@ export class LabWorkspace implements OnDestroy {
       forward: tr('Each switch’s SSH is forwarded to a port on the host (no root needed).'),
       cloud: tr('The switches get the addresses from {0} on the host’s network, typed on their consoles at each start, and are reached directly.', net.split(' ')[0]),
     };
-    const up = this.devs().filter(d => d.running).map(d => d.id);
+    const up = this.devs().filter(d => d.running && this.hostOfDev(d) === g.host).map(d => d.id);
     if (!up.length) {
-      if (await this.ui.confirm(tr('Change management'), text[m] + ' ' + tr('Their sessions are updated; it applies when the switches start.'), tr('Change'))) await this.lab.setMgmt(m, net);
+      if (await this.ui.confirm(tr('Change management'), text[m] + ' ' + tr('Their sessions are updated; it applies when the switches start.'), tr('Change'))) await set(m, net);
       else this.revertMgmt();
       return;
     }
@@ -873,7 +942,7 @@ export class LabWorkspace implements OnDestroy {
       return;
     }
     if (!(await this.lab.stop(up))) { this.revertMgmt(); return; }
-    if (!(await this.lab.setMgmt(m, net))) this.revertMgmt(); // they start again as they were
+    if (!(await set(m, net))) this.revertMgmt(); // they start again as they were
     await this.lab.start(up);
   }
 }

@@ -250,17 +250,17 @@ interface NRow { key: string; count: number; names: string; module: string; seri
     <div class="mh"><div><h2>{{ exists() ? tr('Add Switches') : tr('New Lab') }}</h2><div class="muted small">{{ tr('Choices here, the lab on the canvas') }}</div></div><span class="sp"></span><button type="button" class="sm" (click)="closed.emit()">✕</button></div>
     <div class="body">
       @if (emu()) {
-        <div class="sec">{{ tr('Runs on') }}@if (!exists()) { <a class="lnk small" (click)="hostsPage.emit()">+ {{ tr('Add a host') }}</a> }</div>
+        <div class="sec">{{ tr('Runs on') }}@if (exists()) { <span class="muted small"> · {{ tr('another host: its cables to this lab become UDP tunnels') }}</span> } <a class="lnk small" (click)="hostsPage.emit()">+ {{ tr('Add a host') }}</a></div>
         @for (h of shownHosts(); track h.session) {
-          <div class="hc" [class.on]="host === h.session" [class.off]="exists() || !!h.info.problems?.length" (click)="!exists() && !h.info.problems?.length && pickHost(h.session)">
-            <div class="row2"><i class="d" [class]="'d ' + ((h.info.problems ?? []).length ? 'bad' : 'ok')"></i><b>{{ h.name || h.session }}</b><span class="muted small">{{ isVM(h) ? tr('VM ({0})', h.info.virt ?? '') : tr('hardware') }}{{ h.info.kvm === 'yes' ? ' · KVM' : ' · ' + tr('no KVM') }}</span>@if (host === h.session) { <span class="badge g">{{ exists() ? tr('the lab’s host') : tr('chosen') }}</span> }</div>
+          <div class="hc" [class.on]="host === h.session" [class.off]="!!h.info.problems?.length" (click)="!h.info.problems?.length && pickHost(h.session)">
+            <div class="row2"><i class="d" [class]="'d ' + ((h.info.problems ?? []).length ? 'bad' : 'ok')"></i><b>{{ h.name || h.session }}</b><span class="muted small">{{ isVM(h) ? tr('VM ({0})', h.info.virt ?? '') : tr('hardware') }}{{ h.info.kvm === 'yes' ? ' · KVM' : ' · ' + tr('no KVM') }}</span>@if (inLab(h.session)) { <span class="badge">{{ tr('in the lab') }}</span> }@if (host === h.session) { <span class="badge g">{{ tr('chosen') }}</span> }</div>
             <div class="res"><span>vCPU <b>{{ h.info.cpus }}</b> <small>{{ tr('load {0}', h.info.load) }}</small></span><span>RAM <b>{{ gb(h.info.memFree) }}</b> <small>{{ tr('free of {0}', gb(h.info.memTotal)) }}</small></span><span>{{ tr('Disk') }} <b>{{ gb(h.info.diskFree) }}</b> <small>{{ tr('free') }}</small></span></div>
             <div class="meter"><i [style.width.%]="pct(h.info.memTotal - h.info.memFree, h.info.memTotal)"></i></div>
             @if ((h.info.problems ?? []).length) { <span class="r small">{{ h.info.problems![0] }}</span> }
           </div>
         } @empty { <a class="lnk" (click)="hostsPage.emit()">+ {{ tr('Add a KVM host first') }}</a> }
       }
-      @if (emu() && !exists()) {
+      @if (emu() && (!exists() || !inLab(host))) {
         <div class="f" style="margin-top: 10px">
           <label>{{ tr('Management') }}</label>
           <select [(ngModel)]="mgmt" name="nm">
@@ -303,7 +303,7 @@ interface NRow { key: string; count: number; names: string; module: string; seri
     </div>
     <div class="mf"><label class="small"><input type="checkbox" [(ngModel)]="start" name="nst" /> {{ tr('Start now') }}</label><span class="sp"></span>
       <button type="button" (click)="closed.emit()">{{ tr('Cancel') }}</button>
-      <button type="button" class="primary" (click)="create()" [disabled]="!total() || lab.busy() || (emu() && !exists() && !host)">{{ tr('Create {0} Switches', total()) }}</button></div>
+      <button type="button" class="primary" (click)="create()" [disabled]="!total() || lab.busy() || (emu() && !host)">{{ tr('Create {0} Switches', total()) }}</button></div>
   </div>`,
   styles: [PAGE + `
     :host { position: absolute; right: 0; top: 0; bottom: 0; width: 420px; z-index: 20; }
@@ -360,10 +360,11 @@ export class LabNew implements OnInit {
   }
   protected shownHosts = computed(() => {
     const l = [...this.hosts()];
-    if (this.exists()) return l.filter(h => h.session === this.lab.emu()?.host);
     return l.sort((a, b) => (b.info.memFree || 0) - (a.info.memFree || 0)); // most free memory first
   });
   isVM(h: EmuHost) { return !!h.info.virt && h.info.virt !== 'none' && h.info.virt !== 'unknown'; }
+  /** The host runs switches of the lab already (its management is set). */
+  inLab(s: string) { const v = this.lab.emu(); return !!v?.exists && (s === v.host || (v.hostUse ?? []).some(u => u.host === s && u.switches > 0)); }
   pickHost(s: string) { this.host = s; this.pickMgmt(); }
   async suggest(i: number) {
     const r = this.rows()[i]; if (!r || !this.emu()) return;
@@ -427,7 +428,7 @@ export class LabNew implements OnInit {
         const d = this.dt(r.key); if (!d) continue;
         groups.push({ image: d.images[0], model: d.model, module: r.module, count: r.count, names: r.names, serialStart: r.serial.trim(), macStart: r.mac.trim(), cpus: d.cpus, ram: d.ram });
       }
-      ok = await this.lab.addEmu({ host: this.exists() ? this.lab.emu()?.host ?? this.host : this.host, groups, cabling: this.cable, mgmt: this.exists() ? '' : this.mgmt, mgmtNet: this.mgmt === 'cloud' || (this.mgmt === 'lan' && this.cloudAddr.trim()) ? (this.cloudAddr.trim() + ' ' + (this.cloudGw.trim() || this.hostsInfo()?.gateway || '')).trim() : '', start: this.start });
+      ok = await this.lab.addEmu({ host: this.host, groups, cabling: this.cable, mgmt: this.exists() && this.inLab(this.host) ? '' : this.mgmt, mgmtNet: this.mgmt === 'cloud' || (this.mgmt === 'lan' && this.cloudAddr.trim()) ? (this.cloudAddr.trim() + ' ' + (this.cloudGw.trim() || this.hostsInfo()?.gateway || '')).trim() : '', start: this.start });
     } else {
       ok = await this.lab.add({ groups: this.rows().filter(x => x.count > 0).map(r => { const [model, os] = r.key.split('|'); return { os, model, count: r.count, names: r.names }; }), mgmtNet: '', cabling: this.cable, password: '', start: this.start });
     }
