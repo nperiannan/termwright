@@ -15,7 +15,7 @@ const PAGE = `
   .mt { display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--line); a { padding: 10px 14px; color: var(--muted); font-weight: 500; cursor: pointer; } a.on { color: var(--text); box-shadow: inset 0 -2px var(--accent); } }
   .mb { overflow: auto; min-height: 0; } .pad { padding: 16px 20px; }
   .mf { display: flex; align-items: center; gap: 8px; padding: 0 20px; border-top: 1px solid var(--line); }
-  .sp { flex: 1; } .muted { color: var(--muted); } .small { font-size: 12px; } .mono { font-family: var(--mono, monospace); font-size: 12px; }
+  .sp { flex: 1; } .muted { color: var(--muted); } .small { font-size: 12px; } .mono { font-family: var(--mono, monospace); font-size: 12px; } .unit { flex: none !important; color: var(--muted); font-size: 12px; white-space: nowrap; }
   .g { color: var(--success, #1fa45a); } .w { color: var(--warning, #e39b17); } .r { color: var(--danger); }
   .f { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px 14px; align-items: center; margin-bottom: 14px; > label { color: var(--muted); } }
   .f3 { display: grid; grid-template-columns: 130px minmax(0, 1fr) 130px minmax(0, 1fr); gap: 8px 12px; align-items: center; > label { color: var(--muted); font-size: 12px; } .wide { grid-column: 2 / span 3; } }
@@ -229,7 +229,7 @@ export class LabConfigure implements OnInit {
 }
 
 // ---------------------------------------------------------------- New Lab / Add Switches (side panel)
-interface NRow { key: string; count: number; names: string; module: string; }
+interface NRow { key: string; count: number; names: string; module: string; serial: string; mac: string; }
 /** New Lab and Add Switches as a side panel; the canvas shows what it makes. */
 @Component({
   selector: 'app-lab-new',
@@ -238,11 +238,19 @@ interface NRow { key: string; count: number; names: string; module: string; }
   <div class="dockp">
     <div class="mh"><div><h2>{{ exists() ? tr('Add Switches') : tr('New Lab') }}</h2><div class="muted small">{{ tr('Choices here, the lab on the canvas') }}</div></div><span class="sp"></span><button type="button" class="sm" (click)="closed.emit()">✕</button></div>
     <div class="body">
+      @if (emu()) {
+        <div class="sec">{{ tr('Runs on') }}@if (!exists()) { <a class="lnk small" (click)="hostsPage.emit()">+ {{ tr('Add a host') }}</a> }</div>
+        @for (h of shownHosts(); track h.session) {
+          <div class="hc" [class.on]="host === h.session" [class.off]="exists() || !!h.info.problems?.length" (click)="!exists() && !h.info.problems?.length && pickHost(h.session)">
+            <div class="row2"><i class="d" [class]="'d ' + ((h.info.problems ?? []).length ? 'bad' : 'ok')"></i><b>{{ h.name || h.session }}</b><span class="muted small">{{ isVM(h) ? tr('VM ({0})', h.info.virt ?? '') : tr('hardware') }}{{ h.info.kvm === 'yes' ? ' · KVM' : ' · ' + tr('no KVM') }}</span>@if (host === h.session) { <span class="badge g">{{ exists() ? tr('the lab’s host') : tr('chosen') }}</span> }</div>
+            <div class="res"><span>vCPU <b>{{ h.info.cpus }}</b> <small>{{ tr('load {0}', h.info.load) }}</small></span><span>RAM <b>{{ gb(h.info.memFree) }}</b> <small>{{ tr('free of {0}', gb(h.info.memTotal)) }}</small></span><span>{{ tr('Disk') }} <b>{{ gb(h.info.diskFree) }}</b> <small>{{ tr('free') }}</small></span></div>
+            <div class="meter"><i [style.width.%]="pct(h.info.memTotal - h.info.memFree, h.info.memTotal)"></i></div>
+            @if ((h.info.problems ?? []).length) { <span class="r small">{{ h.info.problems![0] }}</span> }
+          </div>
+        } @empty { <a class="lnk" (click)="hostsPage.emit()">+ {{ tr('Add a KVM host first') }}</a> }
+      }
       @if (emu() && !exists()) {
-        <div class="f">
-          <label>{{ tr('Runs on') }}</label>
-          @if (hosts().length) { <select [(ngModel)]="host" name="nh" (ngModelChange)="pickMgmt()">@for (h of hosts(); track h.session) { <option [value]="h.session">{{ h.name || h.session }}{{ h.info.problems?.length ? ' · ' + tr('needs Set Up') : '' }}</option> }</select> }
-          @else { <a class="lnk" (click)="hostsPage.emit()">+ {{ tr('Add a KVM host first') }}</a> }
+        <div class="f" style="margin-top: 10px">
           <label>{{ tr('Management') }}</label>
           <select [(ngModel)]="mgmt" name="nm">
             <option value="nat" [disabled]="!info()?.sudo || (!info()?.nat && !info()?.libvirt)">{{ tr('The host’s NAT network') }}{{ best() === 'nat' ? ' ✓' : '' }}</option>
@@ -256,11 +264,15 @@ interface NRow { key: string; count: number; names: string; module: string; }
       <div class="sec">{{ tr('Switches') }}</div>
       @for (r of rows(); track $index; let i = $index) {
         <div class="card">
-          <div class="row2"><select [ngModel]="r.key" (ngModelChange)="patch(i, { key: $event, module: '', names: nameFor($event) })" [name]="'nk' + i">@for (o of options(); track o.key) { <option [value]="o.key">{{ o.label }}</option> }</select>
+          <div class="row2"><select [ngModel]="r.key" (ngModelChange)="patch(i, { key: $event, module: '', names: nameFor($event) }); suggest(i)" [name]="'nk' + i">@for (o of options(); track o.key) { <option [value]="o.key">{{ o.label }}</option> }</select>
             <span class="cnt"><button type="button" class="sm" (click)="patch(i, { count: Math.max(0, r.count - 1) })">−</button><b>{{ r.count }}</b><button type="button" class="sm" (click)="patch(i, { count: r.count + 1 })">+</button></span>
             <a class="x" (click)="drop(i)" [title]="tr('Remove')">✕</a></div>
           <div class="row2" style="margin-top: 6px"><input [ngModel]="r.names" (ngModelChange)="patch(i, { names: $event })" [name]="'nn' + i" [title]="tr('Names: {n} is the number')" />
             @if (modules(r.key).length) { <select [ngModel]="r.module" (ngModelChange)="patch(i, { module: $event })" [name]="'nx' + i"><option value="">{{ tr('no module') }}</option>@for (m of modules(r.key); track m) { <option [value]="m">{{ m }}</option> }</select> }</div>
+          @if (emu()) {
+            <div class="row2 sm2" style="margin-top: 6px"><span class="lb">{{ tr('Serial from') }}</span><input class="mono" [ngModel]="r.serial" (ngModelChange)="patch(i, { serial: $event })" [name]="'ns' + i" /><button type="button" class="sm" (click)="suggest(i)" [title]="tr('New in the model’s format')">↻</button></div>
+            <div class="row2 sm2" style="margin-top: 4px"><span class="lb">{{ tr('MAC from') }}</span><input class="mono" [ngModel]="r.mac" (ngModelChange)="patch(i, { mac: $event })" [name]="'nm' + i" /><button type="button" class="sm" (click)="suggest(i)" [title]="tr('New')">↻</button></div>
+          }
         </div>
       }
       <button type="button" class="wide" (click)="more()" [disabled]="!options().length">+ {{ tr('Add a device') }}</button>
@@ -282,11 +294,17 @@ interface NRow { key: string; count: number; names: string; module: string; }
     .dockp { position: absolute; inset: 0; background: var(--surface); border-left: 1px solid var(--line); box-shadow: -12px 0 30px rgba(0,0,0,.1); z-index: 20; display: grid; grid-template-rows: 64px minmax(0, 1fr) 60px; }
     .body { padding: 14px 18px; overflow: auto; } .f { grid-template-columns: 100px minmax(0, 1fr); } .hint { margin: -6px 0 6px; }
     .cnt { flex: none !important; display: inline-flex; align-items: center; gap: 8px; b { min-width: 18px; text-align: center; } }
-    .x { flex: none !important; cursor: pointer; color: var(--muted); padding: 0 4px; } .wide { width: 100%; } .lnk { color: var(--accent); cursor: pointer; }
+    .x { flex: none !important; cursor: pointer; color: var(--muted); padding: 0 4px; } .wide { width: 100%; } .lnk { color: var(--accent); cursor: pointer; font-weight: 400; }
+    .hc { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; background: var(--surface);
+      &.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); } &.off:not(.on) { opacity: .55; cursor: default; } .row2 > * { flex: none; } .row2 > b { flex: 1; }
+      .res { display: flex; gap: 14px; margin-top: 6px; font-size: 12px; small { color: var(--muted); } } }
+    .sm2 .lb { flex: none; width: 76px; font-size: 12px; color: var(--muted); } .sm2 input { height: 26px; font-size: 12px; }
   `],
 })
 export class LabNew implements OnInit {
   readonly emu = input(true);
+  /** A device to start with (dropped on an empty canvas). */
+  readonly preset = input('');
   readonly closed = output<void>();
   readonly hostsPage = output<void>();
   /** The names and cabling it would make (for the canvas preview). */
@@ -314,12 +332,28 @@ export class LabNew implements OnInit {
     return (this.lab.emu()?.deviceTypes ?? []).filter(d => d.images?.length).map(d => { const im = ims.find(i => i.id === d.images[0]); return { key: d.key, label: (d.model || im?.name || d.kind) + (d.osName ? ' · ' + d.osName : '') + (im?.version ? ' ' + im.version : '') }; });
   });
   ngOnInit() {
-    this.host = this.lab.emu()?.host || this.hosts()[0]?.session || '';
+    const ok = this.hosts().filter(h => !(h.info.problems ?? []).length).sort((a, b) => (b.info.memFree || 0) - (a.info.memFree || 0));
+    this.host = this.exists() ? this.lab.emu()?.host ?? '' : (ok.find(h => h.session === this.lab.emu()?.host) ?? ok[0])?.session ?? '';
     this.pickMgmt();
     if (this.exists()) this.cable = 'chain';
-    const first = this.options().slice(0, this.exists() ? 1 : 2);
-    this.rows.set(first.map((o, i) => ({ key: o.key, count: this.exists() ? 1 : i === 0 ? 2 : 3, names: this.nameFor(o.key), module: '' })));
+    const pre = this.options().find(o => o.key === this.preset());
+    const first = pre ? [pre] : this.options().slice(0, this.exists() ? 1 : 2);
+    this.rows.set(first.map((o, i) => ({ key: o.key, count: pre || this.exists() ? 1 : i === 0 ? 2 : 3, names: this.nameFor(o.key), module: '', serial: '', mac: '' })));
+    this.rows().forEach((_, i) => void this.suggest(i));
     this.changed.emit(this.plan());
+  }
+  protected shownHosts = computed(() => {
+    const l = [...this.hosts()];
+    if (this.exists()) return l.filter(h => h.session === this.lab.emu()?.host);
+    return l.sort((a, b) => (b.info.memFree || 0) - (a.info.memFree || 0)); // most free memory first
+  });
+  isVM(h: EmuHost) { return !!h.info.virt && h.info.virt !== 'none' && h.info.virt !== 'unknown'; }
+  pickHost(s: string) { this.host = s; this.pickMgmt(); }
+  async suggest(i: number) {
+    const r = this.rows()[i]; if (!r || !this.emu()) return;
+    const d = this.dt(r.key);
+    const s = await this.backend.emuSuggest(d?.model || d?.kind || '').catch(() => null);
+    if (s) this.rows.set(this.rows().map((x, j) => (j === i ? { ...x, serial: s.serial || x.serial, mac: s.mac || x.mac } : x)));
   }
   pickMgmt() {
     const h = this.hosts().find(x => x.session === this.host)?.info ?? null;
@@ -346,7 +380,7 @@ export class LabNew implements OnInit {
     return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-{n}';
   }
   patch(i: number, p: Partial<NRow>) { this.rows.set(this.rows().map((r, j) => (j === i ? { ...r, ...p } : r))); this.changed.emit(this.plan()); }
-  more() { const o = this.options()[0]; if (o) { this.rows.set([...this.rows(), { key: o.key, count: 1, names: this.nameFor(o.key), module: '' }]); this.changed.emit(this.plan()); } }
+  more() { const o = this.options()[0]; if (o) { this.rows.set([...this.rows(), { key: o.key, count: 1, names: this.nameFor(o.key), module: '', serial: '', mac: '' }]); void this.suggest(this.rows().length - 1); this.changed.emit(this.plan()); } }
   drop(i: number) { this.rows.set(this.rows().filter((_, j) => j !== i)); this.changed.emit(this.plan()); }
   protected total = computed(() => this.rows().reduce((n, r) => n + r.count, 0));
   protected need = computed(() => {
@@ -374,8 +408,7 @@ export class LabNew implements OnInit {
       const groups = [];
       for (const r of this.rows().filter(x => x.count > 0)) {
         const d = this.dt(r.key); if (!d) continue;
-        const s = await this.backend.emuSuggest(d.model || d.kind).catch(() => null);
-        groups.push({ image: d.images[0], model: d.model, module: r.module, count: r.count, names: r.names, serialStart: s?.serial ?? '', macStart: s?.mac ?? '', cpus: d.cpus, ram: d.ram });
+        groups.push({ image: d.images[0], model: d.model, module: r.module, count: r.count, names: r.names, serialStart: r.serial.trim(), macStart: r.mac.trim(), cpus: d.cpus, ram: d.ram });
       }
       ok = await this.lab.addEmu({ host: this.exists() ? this.lab.emu()?.host ?? this.host : this.host, groups, cabling: this.cable, mgmt: this.exists() ? '' : this.mgmt, mgmtNet: '', start: this.start });
     } else {
@@ -399,11 +432,12 @@ export class LabNew implements OnInit {
       @switch (tab()) {
         @case ('images') {
           <div class="lst">
+            @if (toDownload().length) { <button type="button" class="primary" style="width: 100%; margin-bottom: 6px" (click)="lab.download(toDownload())" [disabled]="lab.busy()">⤓ {{ tr('Download All ({0})', toDownload().length) }}</button> }
             @for (g of groups(); track g.name) {
               <div class="grp">{{ g.name }}</div>
               @for (im of g.items; track im.id) {
                 <div class="it" [class.on]="edit()?.id === im.id" (click)="pick(im.id)"><div><span>{{ im.version || im.name }}</span>@if (im.persona) { <span class="badge g">{{ tr('persona') }}</span> }
-                  <small class="mono">{{ im.fileName || tr('no file chosen') }}</small><small>{{ mb(im.size) }} · <span [class.w]="uploading(im)">{{ where(im) }}</span></small></div></div>
+                  <small class="mono">{{ im.fileName || tr('no file chosen') }}</small><small>{{ im.cpus }} vCPU · {{ gb(im.ram) }} RAM · {{ diskName(im.disk) }} · {{ mb(im.size) }}</small><small [class.w]="uploading(im) || !!dl(im)" [class.r]="!im.file && !im.url">{{ dl(im) ? tr('downloading {0}', dl(im)) : !im.file && im.url ? tr('not downloaded yet') : where(im) }}</small></div></div>
               }
             } @empty { <p class="muted small">{{ tr('No images yet.') }}</p> }
             <div class="drop" (click)="addImage()"><b style="color: var(--text)">+ {{ tr('Add Image…') }}</b><br />.qcow2 / .img / .vmdk / .raw · {{ tr('recognised by its name with the device pack’s patterns') }}</div>
@@ -412,14 +446,17 @@ export class LabNew implements OnInit {
           <div class="pad" style="overflow: auto">
             @if (edit(); as im) {
               <div class="row2" style="justify-content: flex-start"><div style="flex: 1"><b style="font-size: 15px">{{ im.name }}@if (im.version) { · {{ im.version }} }</b><div class="muted small mono">{{ im.fileName }} · {{ mb(im.size) }}@if (im.sha256) { · sha256 {{ im.sha256.slice(0, 4) }}…{{ im.sha256.slice(-4) }} }</div></div>
+                @if (!im.file && im.url) { <button type="button" class="primary" (click)="lab.download([im.id])" [disabled]="!!dl(im) || lab.busy()">{{ dl(im) ? tr('Downloading {0}', dl(im)) : tr('Download ({0})', mb(im.size)) }}</button> }
                 <span class="pill">{{ tr('Used by {0} switches · {1} templates', usedBy(im.id), tplBy(im.id)) }}</span></div>
+              @if (im.url) { <p class="muted small mono" style="margin: 4px 0 0; overflow-wrap: anywhere">{{ im.url }}@if (im.md5) { · MD5 {{ im.md5 }} }</p> }
               <div class="sec">{{ tr('Boot') }}</div>
               <div class="f3">
                 <label>{{ tr('Name') }}</label><input [(ngModel)]="im.name" name="iname" /><label>{{ tr('Version') }}</label><input [(ngModel)]="im.version" name="iver" />
-                <label>vCPU / RAM</label><div class="row2"><input type="number" [(ngModel)]="im.cpus" name="icpu" /><input type="number" [(ngModel)]="im.ram" name="iram" /></div>
-                <label>{{ tr('Disk bus') }}</label><select [(ngModel)]="im.disk" name="idisk"><option value="ide">IDE</option><option value="sata">SATA</option><option value="virtio">virtio</option><option value="scsi">SCSI</option></select>
-                <label>{{ tr('Network ports') }}</label><div class="row2"><input type="number" [(ngModel)]="im.nics" name="inics" /><select [(ngModel)]="im.nic" name="inic"><option>e1000</option><option>virtio-net-pci</option><option>vmxnet3</option><option>rtl8139</option></select></div>
-                <label>{{ tr('Port names') }}</label><input class="mono" [(ngModel)]="im.portName" name="ipn" placeholder="{n} or 1/{n}" />
+                <label>vCPU</label><input type="number" min="1" [(ngModel)]="im.cpus" name="icpu" /><label>{{ tr('Memory') }}</label><div class="row2"><input type="number" min="256" step="256" [(ngModel)]="im.ram" name="iram" /><span class="unit">MB = {{ gb(im.ram) }}</span></div>
+                <label>{{ tr('Disk type') }}</label><select [(ngModel)]="im.disk" name="idisk">@for (b of buses(im.disk); track b.v) { <option [value]="b.v">{{ b.l }}</option> }</select>
+                <label>{{ tr('Disk size') }}</label><span class="muted small">{{ tr('the image’s own size; a template or a switch can make it bigger') }}</span>
+                <label>{{ tr('Network ports') }}</label><input type="number" min="1" [(ngModel)]="im.nics" name="inics" /><label>{{ tr('Adapter type') }}</label><select [(ngModel)]="im.nic" name="inic">@for (n of nics(im.nic); track n) { <option [value]="n">{{ n }}</option> }</select>
+                <label>{{ tr('Port names') }}</label><input class="mono" [(ngModel)]="im.portName" name="ipn" placeholder="{n} or 1/{n}" /><span></span><span></span>
                 <label>{{ tr('File') }}</label><div class="wide row2"><span class="mono small">{{ im.file || '-' }}</span><button type="button" class="sm" (click)="chooseFile(im.id)">{{ tr('Choose…') }}</button></div>
               </div>
               <div class="sec">{{ tr('Console and first login') }}<span class="muted small">{{ tr('how Termwright logs in on the serial console') }}</span></div>
@@ -428,7 +465,8 @@ export class LabNew implements OnInit {
                 <label>{{ tr('Answers') }}</label><textarea class="wide" rows="2" [(ngModel)]="answers" name="ians" [placeholder]="'[y/N]: => n'"></textarea>
                 <label>{{ tr('Day 0') }}</label><textarea class="wide" rows="3" [(ngModel)]="day0" name="id0" placeholder="configure snmp sysName {hostname}"></textarea>
                 <label>{{ tr('Address command') }}</label><input class="mono" [(ngModel)]="im.addrCmd" name="iadr" /><label>{{ tr('Device type') }}</label><input [(ngModel)]="im.deviceType" name="idt" />
-                <label>{{ tr('More QEMU options') }}</label><input class="mono wide" [(ngModel)]="im.extra" name="iex" />
+                <label>{{ tr('More QEMU options') }}</label><input class="mono wide" [(ngModel)]="im.extra" name="iex" placeholder="-cpu host -machine q35" />
+                <span></span><p class="wide muted small" style="margin: 0">{{ tr('Added to the QEMU command line as they are, for images that need them. Examples: -cpu host (the host CPU’s features), -cpu Nehalem, -machine q35, -smp sockets=1,cores=2, -device virtio-rng-pci, -boot order=c, -rtc base=utc. Termwright sets the disk, network ports, console, memory and vCPU itself.') }}</p>
               </div>
               @if (im.persona; as p) {
                 <div class="sec">{{ tr('Persona') }} <span class="badge g">{{ p.name }}</span></div>
@@ -443,7 +481,7 @@ export class LabNew implements OnInit {
         }
         @case ('templates') {
           <div class="lst">
-            @for (t of templates(); track t.id) { <div class="it" [class.on]="tpl()?.id === t.id" (click)="pickTpl(t)"><div><span>{{ t.name }}</span><small>{{ imageName(t.image) }}</small><small>{{ t.cpus }} vCPU · {{ gb(t.ram) }}@if (t.module) { · {{ t.module }} }</small></div></div> }
+            @for (t of templates(); track t.id) { <div class="it" [class.on]="tpl()?.id === t.id" (click)="pickTpl(t)"><div><span>{{ t.name }}</span><small>{{ imageName(t.image) }}</small><small>{{ t.cpus }} vCPU · {{ gb(t.ram) }} RAM · {{ t.diskGb ? t.diskGb + ' GB ' + tr('disk') : tr('disk of the image') }}@if (t.module) { · {{ t.module }} }</small></div></div> }
             @empty { <p class="muted small">{{ tr('No templates yet.') }}</p> }
             <button type="button" class="primary" style="width: 100%; margin-top: 10px" (click)="newTpl()" [disabled]="!images().length">+ {{ tr('New Template') }}</button>
           </div>
@@ -453,12 +491,14 @@ export class LabNew implements OnInit {
                 <label>{{ tr('Name') }}</label><input [(ngModel)]="t.name" name="tn" placeholder="M-48" />
                 <label>{{ tr('Image') }}</label><select [ngModel]="t.image" (ngModelChange)="tplImage($event)" name="ti">@for (im of images(); track im.id) { <option [value]="im.id">{{ im.name }}{{ im.version ? ' · ' + im.version : '' }}</option> }</select>
                 @if (tplDef(); as p) {
-                  <label>{{ tr('Model') }}</label><select [(ngModel)]="t.model" name="tm"><option value="">-</option>@for (m of p.models ?? []; track m.name) { <option [value]="m.name">{{ m.name }}</option> }</select>
+                  <label>{{ tr('Model') }}</label><select [ngModel]="t.model" (ngModelChange)="t.model = $event; suggestTpl(true, true)" name="tm"><option value="">-</option>@for (m of p.models ?? []; track m.name) { <option [value]="m.name">{{ m.name }}</option> }</select>
                   <label>{{ p.modules || tr('Module') }}</label><select [(ngModel)]="t.module" name="tx"><option value="">{{ tr('none') }}</option>@for (m of tplMods(); track m) { <option [value]="m">{{ m }}</option> }</select>
                 }
-                <label>vCPU / RAM / {{ tr('Disk') }}</label><div class="row2"><input type="number" [(ngModel)]="t.cpus" name="tc" /><input type="number" [(ngModel)]="t.ram" name="tr" /><input type="number" [(ngModel)]="t.diskGb" name="td" /></div>
-                <label>{{ tr('First serial number') }}</label><input class="mono" [(ngModel)]="t.serialStart" name="ts" />
-                <label>{{ tr('First MAC address') }}</label><input class="mono" [(ngModel)]="t.macStart" name="tmac" />
+                <label>vCPU</label><input type="number" min="1" [(ngModel)]="t.cpus" name="tc" style="max-width: 120px" />
+                <label>{{ tr('Memory') }}</label><div class="row2" style="max-width: 360px"><input type="number" min="256" step="256" [(ngModel)]="t.ram" name="tr" /><span class="unit">MB = {{ gb(t.ram) }}</span></div>
+                <label>{{ tr('Disk') }}</label><div class="row2" style="max-width: 460px"><input type="number" min="0" [(ngModel)]="t.diskGb" name="td" /><span class="unit">GB · {{ tr('0 = the image’s size') }} · {{ diskName(imageOf(t.image)?.disk) }}</span></div>
+                <label>{{ tr('First serial number') }}</label><div class="row2"><input class="mono" [(ngModel)]="t.serialStart" name="ts" /><button type="button" (click)="suggestTpl(true, false)">↻ {{ tr('New') }}</button></div>
+                <label>{{ tr('First MAC address') }}</label><div class="row2"><input class="mono" [(ngModel)]="t.macStart" name="tmac" /><button type="button" (click)="suggestTpl(false, true)">↻ {{ tr('New') }}</button></div>
               </div>
               <p class="muted small">{{ tr('Used by {0} switches.', tplUse(t.id)) }}</p>
               <div class="row2" style="justify-content: flex-start"><button type="button" class="primary" (click)="saveTpl()" [disabled]="!t.name || !t.image || lab.busy()">{{ tr('Save') }}</button>@if (t.id) { <button type="button" class="danger-ghost" (click)="removeTpl()">{{ tr('Remove') }}</button> }</div>
@@ -534,10 +574,23 @@ export class LabImages implements OnInit {
   async importAppliance() { const p = await this.backend.chooseOpenFile(tr('Import GNS3 Appliance'), [{ displayName: tr('GNS3 appliances'), pattern: '*.gns3a' }]).catch(() => ''); if (p && await this.lab.importAppliance(p)) { const l = this.images(); if (l.length) this.pick(l[l.length - 1].id); } }
   async importProfiles() { const p = await this.backend.chooseOpenFile(tr('Import Image Profiles'), [{ displayName: tr('Image profiles'), pattern: '*.json' }]).catch(() => ''); if (p) await this.lab.importProfiles(p); }
   async removeImage(im: EmuImage) { if (await this.ui.confirm(tr('Remove image'), tr('Forget {0}? Its copy on the hosts stays.', im.name), tr('Remove'), true) && await this.lab.removeImage(im.id)) this.edit.set(null); }
+  protected toDownload = computed(() => this.images().filter(i => i.url && !i.file && !this.dl(i)).map(i => i.id));
+  dl(im: EmuImage) { return (im as EmuImage & { download?: string }).download ?? ''; }
+  imageOf(id: string) { return this.images().find(i => i.id === id); }
+  diskName(b?: string) { return ({ ide: 'IDE', sata: 'SATA', scsi: 'SCSI', virtio: 'virtio', sd: 'SD' } as Record<string, string>)[b || 'ide'] ?? (b || 'IDE'); }
+  buses(cur?: string) { const l = ['ide', 'sata', 'scsi', 'virtio']; if (cur && !l.includes(cur)) l.push(cur); return l.map(v => ({ v, l: this.diskName(v) + (v === 'ide' ? ' (' + tr('most network images') + ')' : v === 'virtio' ? ' (' + tr('fastest, needs drivers') + ')' : '') })); }
+  nics(cur?: string) { const l = ['e1000', 'virtio-net-pci', 'vmxnet3', 'rtl8139', 'e1000e', 'i82559er']; if (cur && !l.includes(cur)) l.push(cur); return l; }
+  async suggestTpl(serial: boolean, mac: boolean) {
+    const t = this.tpl(); if (!t) return;
+    const s = await this.backend.emuSuggest(t.model || this.imageOf(t.image)?.name || '').catch(() => null);
+    if (!s) return;
+    this.tpl.set({ ...t, serialStart: serial || !t.serialStart ? s.serial || t.serialStart : t.serialStart, macStart: mac || !t.macStart ? s.mac || t.macStart : t.macStart });
+  }
   protected tplDef = computed(() => this.images().find(i => i.id === this.tpl()?.image)?.persona ?? null);
   tplMods() { return (this.tplDef()?.models ?? []).find(x => x.name === this.tpl()?.model)?.modules ?? []; }
-  pickTpl(t: EmuTemplate) { this.tpl.set({ ...t }); }
-  newTpl() { const im = this.images()[0]; this.tpl.set({ id: '', name: '', image: im?.id ?? '', cpus: im?.cpus || 1, ram: im?.ram || 2048, diskGb: 0, model: '', module: '', values: {}, serialStart: '', macStart: '' }); }
+  pickTpl(t: EmuTemplate) { this.tpl.set({ ...t }); this.pickTplFill(); }
+  newTpl() { const im = this.images()[0]; this.tpl.set({ id: '', name: '', image: im?.id ?? '', cpus: im?.cpus || 1, ram: im?.ram || 2048, diskGb: 0, model: im?.persona?.models?.[0]?.name ?? '', module: '', values: {}, serialStart: '', macStart: '' }); void this.suggestTpl(true, true); }
+  pickTplFill() { const t = this.tpl(); if (t && (!t.serialStart || !t.macStart)) void this.suggestTpl(false, false); }
   tplImage(id: string) { const t = this.tpl(); const im = this.images().find(i => i.id === id); if (t && im) this.tpl.set({ ...t, image: id, cpus: im.cpus || t.cpus, ram: im.ram || t.ram, model: '', module: '' }); }
   async saveTpl() {
     const t = this.tpl(); if (!t) return;

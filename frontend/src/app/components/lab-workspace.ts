@@ -50,7 +50,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     </div>
 
     <div class="main">
-      @if (page() === 'new') { <app-lab-new [emu]="emu()" (closed)="page.set(''); ghost.set(null)" (changed)="ghost.set($event)" (hostsPage)="page.set('hosts')" (made)="ui.refreshTree()" /> }
+      @if (page() === 'new') { <app-lab-new [emu]="emu()" [preset]="preset()" (closed)="page.set(''); ghost.set(null)" (changed)="ghost.set($event)" (hostsPage)="page.set('hosts')" (made)="ui.refreshTree()" /> }
       <div class="pal">
         <input class="srch" [(ngModel)]="q" name="pq" [placeholder]="tr('Search devices')" spellcheck="false" />
         @for (g of groups(); track g.name) {
@@ -281,6 +281,7 @@ export class LabWorkspace implements OnDestroy {
   protected portPick = signal<{ id: string; ports: string[]; all: { name: string; short: string; peer: string }[]; x: number; y: number; side: 'a' | 'b' } | null>(null);
   protected page = signal<'' | 'configure' | 'images' | 'templates' | 'hosts' | 'new'>('');
   protected cfgId = signal('');
+  protected preset = signal('');
   protected ghost = signal<{ names: string[]; cable: string } | null>(null);
   protected ghosts = computed(() => {
     const g = this.ghost(); if (!g) return [];
@@ -357,7 +358,7 @@ export class LabWorkspace implements OnDestroy {
         if (!dt.images?.length) continue;
         const im = (this.st()?.images ?? []).find(i => i.id === dt.images[0]);
         items.push({ key: dt.key, name: dt.model || im?.name || dt.kind, sub: dt.modules?.length ? (dt.modName || 'VIM') + ' ' + dt.modules.map(m => m.replace(/^\d+-VIM-/, '')).join(' / ') : (dt.model ? '' : im?.fileName ?? ''),
-          group: dt.osName || dt.kind || tr('Other images'), ver: im?.version ?? '', os: dt.kind, cls: /voss|fabric/i.test(dt.kind + dt.osName) ? 'v' : dt.model ? '' : 'l', dt });
+          group: dt.osName || dt.kind || tr('Other images'), ver: im?.version ?? '', os: dt.kind, cls: /voss|fabric/i.test(dt.kind + dt.osName + (im?.fileName ?? '') + (im?.deviceType ?? '')) ? 'v' : /linux|ubuntu|debian|centos|alpine|cloudimg/i.test(dt.kind + (im?.fileName ?? '') + (im?.deviceType ?? '')) ? 'l' : '', dt });
       }
     } else {
       for (const m of this.st()?.models ?? []) items.push({ key: m.sku, name: m.sku, sub: m.os.map(o => this.lab.osShort(o)).join(' / '), group: m.family, ver: '', os: m.os[0], cls: 's', m });
@@ -382,7 +383,23 @@ export class LabWorkspace implements OnDestroy {
     let ok = false;
     if (this.emu()) {
       const e = this.lab.emu();
-      if (!e?.exists || !e.host) { this.wizard(); return; }
+      if (!this.devs().length) {
+        // a new lab: straight away on the only host (or the lab's), else the New Lab panel with this device
+        const good = (e?.hosts ?? []).filter(h => !(h.info.problems ?? []).length);
+        const host = good.find(h => h.session === e?.host)?.session ?? (good.length === 1 ? good[0].session : '');
+        if (!host) { this.preset.set(p.key); this.page.set('new'); return; }
+        const s0 = await this.backend.emuSuggest(p.dt?.model || p.dt?.kind || '').catch(() => null);
+        const n0 = (p.dt?.model || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-{n}';
+        {
+          const made = await this.lab.addEmu({ host, groups: [{ image: p.dt!.images[0], model: p.dt!.model, module: '', count: 1, names: n0, serialStart: s0?.serial ?? '', macStart: s0?.mac ?? '', cpus: p.dt!.cpus, ram: p.dt!.ram }], cabling: 'none', mgmt: '', mgmtNet: '', start: false });
+          if (!made) return;
+        }
+        const fresh0 = this.devs().find(d => !before.has(d.id));
+        if (fresh0) { const q = at ?? { x: 300, y: 200 }; this.moved.update(m => new Map(m).set(fresh0.id, q)); this.lab.place(fresh0.id, q.x, q.y); this.sel.set(fresh0.id); }
+        await this.ui.refreshTree();
+        return;
+      }
+      if (!e?.host) { this.preset.set(p.key); this.page.set('new'); return; }
       const s = await this.backend.emuSuggest(p.dt?.model || p.dt?.kind || '').catch(() => null);
       const names = (p.dt?.model || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-{n}';
       ok = await this.lab.addEmu({ host: e.host, groups: [{ image: p.dt!.images[0], model: p.dt!.model, module: '', count: 1, names, serialStart: s?.serial ?? '', macStart: s?.mac ?? '', cpus: p.dt!.cpus, ram: p.dt!.ram }], cabling: 'none', mgmt: '', mgmtNet: '', start: false });
@@ -530,7 +547,7 @@ export class LabWorkspace implements OnDestroy {
   consoleAll() { for (const d of this.devs().filter(x => x.running)) (this.emu() ? this.console(d) : this.ssh(d)); }
   configure(d: LabDevice) { this.cfgId.set(d.id); this.page.set('configure'); }
   dialog(tab: string, focus = '') { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.dialogTab.set({ tab, focus }); this.ui.open('lab'); }
-  wizard() { this.page.set('new'); }
+  wizard() { this.preset.set(''); this.page.set('new'); }
   async reset(d: LabDevice) { if (await this.ui.confirm(tr('Back to Day 0'), tr('Throw away the disk of {0} and boot it as new? Its configuration is lost; the day-0 commands are typed again.', d.hostname), tr('Back to Day 0'), true)) await this.lab.reset([d.id]); }
   async remove(d: LabDevice) {
     const msg = this.emu() ? tr('Remove {0} emulated switches? They stop, their disks on the host and their sessions are deleted.', 1) : tr('Remove {0} simulated switches and their sessions? Their configuration is lost.', 1);

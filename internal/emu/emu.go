@@ -55,6 +55,8 @@ type Image struct {
 	Version    string      `json:"version"`            // the software version of the image (for the lists)
 	Match      string      `json:"match,omitempty"`    // profiles: a regexp on the file name that picks this profile; a "version" group gives the version
 	Serial     string      `json:"serial"`             // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
+	URL        string      `json:"url,omitempty"`      // where the image file can be downloaded (from a GNS3 appliance)
+	MD5        string      `json:"md5,omitempty"`      // its MD5 sum, to check a download
 }
 
 // Answer: when the console shows Match (plain text), Send is typed (and Enter).

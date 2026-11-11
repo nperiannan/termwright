@@ -101,12 +101,13 @@ func TestStatusAndProbe(t *testing.T) {
 
 func TestGNS3(t *testing.T) {
 	a, err := ParseAppliance([]byte(`{"name":"Demo VM","qemu":{"adapter_type":"virtio-net-pci","adapters":8,"ram":2048,"hda_disk_interface":"virtio","arch":"x86_64","options":"-nographic -cpu Nehalem"},"port_name_format":"Ethernet{0}",
-	 "versions":[{"name":"1.0","images":{"hda_disk_image":"demo-1.0.qcow2"}}]}`))
+	 "images":[{"filename":"demo-1.0.qcow2","version":"v1.0","md5sum":"ABC","filesize":10,"direct_download_url":"https://example.com/demo-1.0.qcow2"}],
+	 "versions":[{"name":"v1.0","images":{"hda_disk_image":"demo-1.0.qcow2"}}]}`))
 	if err != nil || len(a.Profiles) != 1 {
 		t.Fatal(err, a)
 	}
 	p := a.Profiles[0]
-	if p.Name != "Demo VM 1.0" || p.FileName != "demo-1.0.qcow2" || p.NICs != 8 || p.NIC != "virtio-net-pci" || p.Extra != "-cpu Nehalem" || p.PortNameOf(3) != "Ethernet3" {
+	if p.Name != "Demo VM" || p.Version != "1.0" || p.URL != "https://example.com/demo-1.0.qcow2" || p.MD5 != "abc" || p.Size != 10 || p.FileName != "demo-1.0.qcow2" || p.NICs != 8 || p.NIC != "virtio-net-pci" || p.Extra != "-cpu Nehalem" || p.PortNameOf(3) != "Ethernet3" {
 		t.Fatalf("%+v", p)
 	}
 	if _, err := ParseAppliance([]byte(`{"name":"x","docker":{}}`)); err == nil {

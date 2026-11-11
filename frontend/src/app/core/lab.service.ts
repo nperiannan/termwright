@@ -156,6 +156,7 @@ export class LabService {
   setImageFile(id: string, path: string) { return this.run(() => this.backend.emuSetImageFile(id, path)); }
   saveImage(im: EmuImage, clearPassword = false) { return this.run(() => this.backend.emuSaveImage(im, clearPassword), 'Image saved'); }
   removeImage(id: string) { return this.run(() => this.backend.emuRemoveImage(id)); }
+  download(ids: string[]) { return this.run(() => this.backend.emuDownload(ids), ids.length === 1 ? 'Downloading the image…' : 'Downloading ' + ids.length + ' images one after the other…'); }
   upload(id: string, host = '') { return this.run(() => this.backend.emuUpload(id, host), 'Copying the image to the host…'); }
   osShort(os: string) { return this.state()?.os?.[os]?.short || os.toUpperCase(); }
   sessionOf(id: string) { return this.state()?.sessions?.[id] ?? ''; }

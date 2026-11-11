@@ -27,6 +27,8 @@ type appliance struct {
 		Filename string `json:"filename"`
 		Version  string `json:"version"`
 		Size     int64  `json:"filesize"`
+		MD5      string `json:"md5sum"`
+		URL      string `json:"direct_download_url"`
 	} `json:"images"`
 	Versions []struct {
 		Name   string            `json:"name"`
@@ -68,8 +70,16 @@ func ParseAppliance(data []byte) (Appliance, error) {
 			continue
 		}
 		im := base
-		im.Name = a.Name + " " + v.Name
 		im.FileName = f
+		im.Version = strings.TrimPrefix(strings.TrimPrefix(v.Name, "v"), "V")
+		for _, x := range a.Images {
+			if x.Filename == f {
+				im.Size, im.MD5, im.URL = x.Size, strings.ToLower(x.MD5), x.URL
+				if x.Version != "" {
+					im.Version = strings.TrimPrefix(strings.TrimPrefix(x.Version, "v"), "V")
+				}
+			}
+		}
 		out.Profiles = append(out.Profiles, im)
 	}
 	if len(out.Profiles) == 0 {

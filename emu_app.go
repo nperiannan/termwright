@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -82,6 +84,7 @@ var emuLab struct {
 	pinfo            map[string]string  // where the persona file went, or what the check after boot saw
 	pcheck           map[string]bool    // the persona was checked on the CLI since the VM started
 	events           []EmuEvent         // the Events log, newest last
+	download         map[string]string  // image → download progress
 }
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
@@ -135,6 +138,7 @@ type EmuImageView struct {
 	HasPassword bool   `json:"hasPassword"`
 	OnHost      bool   `json:"onHost"`
 	Upload      string `json:"upload"`
+	Download    string `json:"download"` // download to this computer: "41 %"…
 	Missing     bool   `json:"missing"` // the file is not on this computer (any more)
 }
 
@@ -150,7 +154,7 @@ type EmuEvent struct {
 
 // emuEv adds to the Events log (emuLab.mu held).
 func emuEv(id, level, text string) {
-	name := id
+	name := orStr(id, "images")
 	if l := emuLab.f.Lab; l != nil {
 		if v := l.VMByID(id); v != nil {
 			name = v.Name
@@ -243,6 +247,7 @@ func (a *App) emuLoad() {
 	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
 	emuLab.personaTried, emuLab.perr = map[string]bool{}, map[string]string{}
 	emuLab.pinfo, emuLab.pcheck = map[string]string{}, map[string]bool{}
+	emuLab.download = map[string]string{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
 		_ = json.Unmarshal(b, &emuLab.f)
 	}
@@ -485,10 +490,20 @@ func (a *App) EmuImportAppliance(p string) (EmuView, error) {
 	for _, pr := range ap.Profiles {
 		pr.ID = randHex(4)
 		pr.DeviceType = guessDeviceType(pr.Name)
+		if known, ver := a.emuRecognise(pr.FileName); known != nil && pr.FileName != "" {
+			// the device pack knows this image: its profile, with the appliance's file and download
+			keep := pr
+			pr = *known
+			pr.ID, pr.FileName, pr.Size, pr.URL, pr.MD5, pr.Match = keep.ID, keep.FileName, keep.Size, keep.URL, keep.MD5, ""
+			pr.Version = orStr(keep.Version, ver)
+		}
 		if pr.FileName != "" {
-			f := filepath.Join(filepath.Dir(p), pr.FileName)
-			if sum, size, err := fileSHA256(f); err == nil {
-				pr.File, pr.SHA256, pr.Size = f, sum, size
+			for _, d := range []string{filepath.Dir(p), a.emuDownloadDir()} {
+				f := filepath.Join(d, pr.FileName)
+				if sum, size, err := fileSHA256(f); err == nil {
+					pr.File, pr.SHA256, pr.Size = f, sum, size
+					break
+				}
 			}
 		}
 		add = append(add, pr)
@@ -502,6 +517,103 @@ func (a *App) EmuImportAppliance(p string) (EmuView, error) {
 		return EmuView{}, err
 	}
 	return a.EmuState()
+}
+
+// emuDownloadDir is where downloaded images are kept on this computer.
+func (a *App) emuDownloadDir() string { return filepath.Join(a.labDir(), "images") }
+
+// EmuDownload downloads the files of images that have a download link (from a
+// GNS3 appliance) to this computer, one after the other, and checks their MD5
+// sums; each becomes the image's file. Progress shows on the images.
+func (a *App) EmuDownload(ids []string) (EmuView, error) {
+	emuLab.mu.Lock()
+	a.emuLoad()
+	var todo []emu.Image
+	for _, id := range ids {
+		if im := emuImage(id); im != nil && im.URL != "" && im.File == "" && emuLab.download[id] == "" {
+			todo = append(todo, *im)
+			emuLab.download[id] = "waiting"
+		}
+	}
+	emuLab.mu.Unlock()
+	if len(todo) == 0 {
+		return a.EmuState()
+	}
+	go func() {
+		for _, im := range todo {
+			err := a.emuDownloadOne(im)
+			emuLab.mu.Lock()
+			delete(emuLab.download, im.ID)
+			if err != nil {
+				emuEv("", "error", im.Name+" "+im.Version+": download failed: "+err.Error())
+			} else {
+				emuEv("", "ok", im.Name+" "+im.Version+": downloaded and checked ("+im.FileName+")")
+			}
+			emuLab.mu.Unlock()
+			a.emuNotify(err, "")
+		}
+		a.emuNotify(nil, "Downloads finished")
+	}()
+	return a.EmuState()
+}
+
+func (a *App) emuDownloadOne(im emu.Image) error {
+	dir := a.emuDownloadDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if !strings.HasPrefix(im.URL, "https://") && !strings.HasPrefix(im.URL, "http://") {
+		return errors.New("not a web link: " + im.URL)
+	}
+	resp, err := http.Get(im.URL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("the server answered %s", resp.Status)
+	}
+	dst := filepath.Join(dir, filepath.Base(im.FileName))
+	f, err := os.Create(dst + ".part")
+	if err != nil {
+		return err
+	}
+	total := im.Size
+	if resp.ContentLength > 0 {
+		total = resp.ContentLength
+	}
+	h := md5.New()
+	pw := &progressWriter{w: io.MultiWriter(f, h), total: total, fn: func(pct int) {
+		emuLab.mu.Lock()
+		emuLab.download[im.ID] = strconv.Itoa(pct) + " %"
+		emuLab.mu.Unlock()
+	}}
+	_, err = io.Copy(pw, resp.Body)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(dst + ".part")
+		return err
+	}
+	if sum := hex.EncodeToString(h.Sum(nil)); im.MD5 != "" && !strings.EqualFold(sum, im.MD5) {
+		_ = os.Remove(dst + ".part")
+		return fmt.Errorf("MD5 %s, the appliance says %s - the file was not kept", sum, im.MD5)
+	}
+	if err := os.Rename(dst+".part", dst); err != nil {
+		return err
+	}
+	sum, size, err := fileSHA256(dst)
+	if err != nil {
+		return err
+	}
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	if x := emuImage(im.ID); x != nil {
+		x.File, x.SHA256, x.Size = dst, sum, size
+		return a.emuSave()
+	}
+	return nil
 }
 
 // EmuSetImageFile gives an image (from an appliance) its file.
@@ -1550,7 +1662,7 @@ func (a *App) emuView() EmuView {
 		if im.Version == "" {
 			im.Version = versionIn(im.FileName)
 		}
-		iv := EmuImageView{Image: im, Upload: emuLab.upload[im.ID]}
+		iv := EmuImageView{Image: im, Upload: emuLab.upload[im.ID], Download: emuLab.download[im.ID]}
 		iv.Password = ""
 		if pw, _ := secrets.Lookup(emuImageKey(im.ID)); pw != "" {
 			iv.HasPassword = true
@@ -2541,10 +2653,31 @@ func (a *App) emuPowerOff(host, id string, wait time.Duration) {
 	_, _ = a.emuRun(host, stop, time.Minute)
 }
 
-var versionRe = regexp.MustCompile(`\d+\.\d+\.\d+(?:\.\d+)?`)
+
+// versionIn finds the software version in a file name: the first run of
+// numbers like 9.4.0.0 that does not start inside a word ("FEGNS3.9.4.0.0"
+// is 9.4.0.0, "vm-33.4.1.15" is 33.4.1.15, "v9.1" counts after a v).
+var versionAt = regexp.MustCompile(`^\d+\.\d+\.\d+(?:\.\d+)?`)
+
+func versionIn(name string) string {
+	for i := 0; i < len(name); i++ {
+		if name[i] < '0' || name[i] > '9' {
+			continue
+		}
+		if i > 0 {
+			c := name[i-1]
+			if c >= '0' && c <= '9' || (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z') && c != 'v' && c != 'V' {
+				continue // inside a number or a word ("GNS3")
+			}
+		}
+		if v := versionAt.FindString(name[i:]); v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 // versionIn finds a version number in a file name ("vm-33.4.1.15.x86_64" → 33.4.1.15).
-func versionIn(name string) string { return versionRe.FindString(name) }
 
 // emuPackProfiles are the image profiles of the loaded device pack (its emulator.json).
 func (a *App) emuPackProfiles() []emu.Image {
