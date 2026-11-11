@@ -30,38 +30,39 @@ import (
 
 // Image is a VM image and how to boot it (its profile).
 type Image struct {
-	ID         string      `json:"id"`
-	Name       string      `json:"name"`
-	File       string      `json:"file"`       // the image on this computer
-	FileName   string      `json:"fileName"`   // its name on the hosts
-	Size       int64       `json:"size"`       // bytes
-	SHA256     string      `json:"sha256"`     // of the file, to know it is on a host already
-	DeviceType string      `json:"deviceType"` // the sessions' device type (Linux, Cisco IOS…)
-	CPUs       int         `json:"cpus"`
-	RAM        int         `json:"ram"`      // MB
-	NICs       int         `json:"nics"`     // network ports, the first one is management
-	NIC        string      `json:"nic"`      // e1000, virtio-net-pci, vmxnet3…
-	Disk       string      `json:"disk"`     // virtio, ide, sata, scsi
-	PortName   string      `json:"portName"` // data port n as the OS calls it: "{n}" or "1/{n}"
-	Ready      string      `json:"ready"`    // console text when it can be logged in to ("login:")
-	Login      string      `json:"login"`
-	Password   string      `json:"password,omitempty"` // in the keychain, never in the lab file
-	Prompt     string      `json:"prompt"`             // regexp of the CLI prompt (default [>#$]\s*$)
-	Day0       []string    `json:"day0"`               // first-boot commands, with {hostname} {mgmtIp} …
-	AddrSet    []string    `json:"addrSet,omitempty"`  // commands that give the management port a fixed address ({mgmtAddr} {mgmtBits} {mgmtMask} {gateway}), typed at each start when the lab's management has fixed addresses
-	Answers    []Answer    `json:"answers"`            // questions on the console and what to answer
-	Extra      string      `json:"extra"`              // more qemu options
-	Source     string      `json:"source"`             // where the profile came from (a GNS3 appliance…)
-	AddrCmd    string      `json:"addrCmd"`            // a CLI command that prints the management address (host's network mode)
-	LagCmd     string      `json:"lagCmd,omitempty"`   // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
-	Persona    *PersonaDef `json:"persona,omitempty"`  // a file that makes the image act as a given device
-	Version    string      `json:"version"`            // the software version of the image (for the lists)
-	Match      string      `json:"match,omitempty"`    // profiles: a regexp on the file name that picks this profile; a "version" group gives the version
-	Serial     string      `json:"serial"`             // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
-	URL        string      `json:"url,omitempty"`      // where the image file can be downloaded (from a GNS3 appliance)
-	MD5        string      `json:"md5,omitempty"`      // its MD5 sum, to check a download
-	Page       string      `json:"page,omitempty"`     // a web page where it can be had (an account may be needed)
-	Disks      []Disk      `json:"disks,omitempty"`    // more files the VM needs: a second disk, a CD-ROM, a BIOS
+	ID              string      `json:"id"`
+	Name            string      `json:"name"`
+	File            string      `json:"file"`       // the image on this computer
+	FileName        string      `json:"fileName"`   // its name on the hosts
+	Size            int64       `json:"size"`       // bytes
+	SHA256          string      `json:"sha256"`     // of the file, to know it is on a host already
+	DeviceType      string      `json:"deviceType"` // the sessions' device type (Linux, Cisco IOS…)
+	CPUs            int         `json:"cpus"`
+	RAM             int         `json:"ram"`      // MB
+	NICs            int         `json:"nics"`     // network ports, the first one is management
+	NIC             string      `json:"nic"`      // e1000, virtio-net-pci, vmxnet3…
+	Disk            string      `json:"disk"`     // virtio, ide, sata, scsi
+	PortName        string      `json:"portName"` // data port n as the OS calls it: "{n}" or "1/{n}"
+	Ready           string      `json:"ready"`    // console text when it can be logged in to ("login:")
+	Login           string      `json:"login"`
+	Password        string      `json:"password,omitempty"`        // in the keychain, never in the lab file
+	DefaultPassword string      `json:"defaultPassword,omitempty"` // the factory password from the vendor's guide, used while none is set
+	Prompt          string      `json:"prompt"`                    // regexp of the CLI prompt (default [>#$]\s*$)
+	Day0            []string    `json:"day0"`                      // first-boot commands, with {hostname} {mgmtIp} …
+	AddrSet         []string    `json:"addrSet,omitempty"`         // commands that give the management port a fixed address ({mgmtAddr} {mgmtBits} {mgmtMask} {gateway}), typed at each start when the lab's management has fixed addresses
+	Answers         []Answer    `json:"answers"`                   // questions on the console and what to answer
+	Extra           string      `json:"extra"`                     // more qemu options
+	Source          string      `json:"source"`                    // where the profile came from (a GNS3 appliance…)
+	AddrCmd         string      `json:"addrCmd"`                   // a CLI command that prints the management address (host's network mode)
+	LagCmd          string      `json:"lagCmd,omitempty"`          // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
+	Persona         *PersonaDef `json:"persona,omitempty"`         // a file that makes the image act as a given device
+	Version         string      `json:"version"`                   // the software version of the image (for the lists)
+	Match           string      `json:"match,omitempty"`           // profiles: a regexp on the file name that picks this profile; a "version" group gives the version
+	Serial          string      `json:"serial"`                    // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
+	URL             string      `json:"url,omitempty"`             // where the image file can be downloaded (from a GNS3 appliance)
+	MD5             string      `json:"md5,omitempty"`             // its MD5 sum, to check a download
+	Page            string      `json:"page,omitempty"`            // a web page where it can be had (an account may be needed)
+	Disks           []Disk      `json:"disks,omitempty"`           // more files the VM needs: a second disk, a CD-ROM, a BIOS
 }
 
 // Disk is another file an image boots with: "hdb", "hdc", "hdd" (more disks,

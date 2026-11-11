@@ -1787,6 +1787,13 @@ func (a *App) emuLogin(s *session.Session, v emu.VM) {
 
 func (a *App) emuLoginPassword(path string, v emu.VM) {
 	pw, _ := secrets.Lookup(emuImageKey(v.Image))
+	if pw == "" {
+		emuLab.mu.Lock()
+		if im := emuImage(v.Image); im != nil {
+			pw = im.DefaultPassword
+		}
+		emuLab.mu.Unlock()
+	}
 	_ = a.SetSessionPassword(path, pw, true)
 }
 
@@ -2108,6 +2115,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 	}
 	emuLab.mu.Unlock()
 	im.Password, _ = secrets.Lookup(emuImageKey(im.ID))
+	im.Password = orStr(im.Password, im.DefaultPassword) // the factory password while none is set
 	fail := func(err error) {
 		emuLab.mu.Lock()
 		emuLab.errs[v.ID] = "Day-0 configuration: " + err.Error()
@@ -4261,6 +4269,7 @@ func (a *App) emuReadLag(host string, v emu.VM, im emu.Image) error {
 	port := l.ConsolePort(v)
 	emuLab.mu.Unlock()
 	im.Password, _ = secrets.Lookup(emuImageKey(im.ID))
+	im.Password = orStr(im.Password, im.DefaultPassword) // the factory password while none is set
 	cl, err := a.emuClient(context.Background(), host)
 	if err != nil {
 		return err

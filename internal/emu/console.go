@@ -313,6 +313,9 @@ func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) 
 				return nil, errors.New("no prompt after the password: " + err.Error())
 			}
 			if k == 1 {
+				if im.Password == "" {
+					return nil, errors.New("the login was refused without a password: set the image's password (Images → the image → Login)")
+				}
 				return nil, errors.New("the login or password was refused")
 			}
 		}
