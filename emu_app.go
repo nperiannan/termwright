@@ -139,7 +139,7 @@ type EmuImageView struct {
 	OnHost      bool   `json:"onHost"`
 	Upload      string `json:"upload"`
 	Download    string `json:"download"` // download to this computer: "41 %"…
-	Missing     bool   `json:"missing"` // the file is not on this computer (any more)
+	Missing     bool   `json:"missing"`  // the file is not on this computer (any more)
 }
 
 // EmuView is the emulated lab for the Lab window (shaped like LabView).
@@ -176,6 +176,7 @@ func emuEvent(id, level, text string) {
 type EmuView struct {
 	Kind        string            `json:"kind"` // "emu"
 	Events      []EmuEvent        `json:"events"`
+	DownloadDir string            `json:"downloadDir"` // where image downloads go on this computer
 	Exists      bool              `json:"exists"`
 	Running     bool              `json:"running"`
 	Folder      string            `json:"folder"`
@@ -516,6 +517,14 @@ func (a *App) EmuImportAppliance(p string) (EmuView, error) {
 	if err != nil {
 		return EmuView{}, err
 	}
+	return a.EmuState()
+}
+
+// EmuClearEvents empties the Events log.
+func (a *App) EmuClearEvents() (EmuView, error) {
+	emuLab.mu.Lock()
+	emuLab.events = nil
+	emuLab.mu.Unlock()
 	return a.EmuState()
 }
 
@@ -1143,7 +1152,7 @@ func (a *App) emuStart(host string, ids []string) {
 	for _, v := range vms {
 		if im := ptrs[v.Image]; im != nil && im.Persona != nil && v.Persona != nil {
 			if txt, err := im.Persona.Render(v, v.Persona); err == nil && txt != "" && emu.Hash(txt) != v.Persona.Applied {
-				writes = append(writes, pw{v, l.WriteFileScript(v, im.Persona.File, txt), emu.Hash(txt)})
+				writes = append(writes, pw{v, l.WriteFileScript(v, im.Persona.File, txt, im.Persona.FSHas...), emu.Hash(txt)})
 			} else if err != nil {
 				emuLab.errs[v.ID] = err.Error()
 			}
@@ -1339,7 +1348,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 			emuLab.mu.Unlock()
 		})
 		if err != nil {
-			fail(err)
+			fail(emuWithTail(err, c))
 			return
 		}
 		emuLab.mu.Lock()
@@ -1379,7 +1388,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 				}
 			}
 			emuLab.mu.Unlock()
-			fail(fmt.Errorf("no DHCP address after 2 minutes (%v).%s", err, hint))
+			fail(emuWithTail(fmt.Errorf("no DHCP address after 2 minutes (%v).%s", err, hint), c))
 			return
 		}
 		a.emuSetAddress(v.ID, addr)
@@ -1501,6 +1510,14 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 	return a.EmuState()
 }
 
+// emuWithTail adds what the console showed to an error (unless it says so already).
+func emuWithTail(err error, c *emu.Console) error {
+	if err == nil || strings.Contains(err.Error(), "the console showed") {
+		return err
+	}
+	return fmt.Errorf("%w - the console showed: %s", err, c.Tail(220))
+}
+
 // emuCheckPersona asks the switch, on its CLI, which model it is (the
 // profile's check command) once per boot: a switch that booted as the plain
 // image shows a persona error.
@@ -1537,6 +1554,12 @@ func (a *App) emuCheckPersona(ctx context.Context, c *emu.Console, im *emu.Image
 	default:
 		defer func() { emuEv(v.ID, "error", "no persona: "+emuLab.perr[v.ID]) }()
 		emuLab.perr[v.ID] = fmt.Sprintf("the switch did not take the persona: %q does not show %s (it reads %s at boot - see where it was written below)", im.Persona.Check, model, im.Persona.File)
+		if o := strings.Join(strings.Fields(emu.CleanConsole(out)), " "); o != "" {
+			if len(o) > 200 {
+				o = o[:200] + "…"
+			}
+			emuLab.perr[v.ID] += " - it printed: " + o
+		}
 	}
 }
 
@@ -1651,7 +1674,7 @@ func (a *App) EmuState() (EmuView, error) {
 
 func (a *App) emuView() EmuView {
 	f := &emuLab.f
-	v := EmuView{Kind: "emu", Events: append([]EmuEvent(nil), emuLab.events[max(0, len(emuLab.events)-200):]...), DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
+	v := EmuView{Kind: "emu", DownloadDir: a.emuDownloadDir(), Events: append([]EmuEvent(nil), emuLab.events[max(0, len(emuLab.events)-200):]...), DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
 	for i := range f.Hosts {
 		if f.Hosts[i].Session == f.Host {
 			v.HostInfo = &f.Hosts[i].Info
@@ -2653,7 +2676,6 @@ func (a *App) emuPowerOff(host, id string, wait time.Duration) {
 	_, _ = a.emuRun(host, stop, time.Minute)
 }
 
-
 // versionIn finds the software version in a file name: the first run of
 // numbers like 9.4.0.0 that does not start inside a word ("NOSGNS3.9.4.0.0"
 // is 9.4.0.0, "vm-33.4.1.15" is 33.4.1.15, "v9.1" counts after a v).
@@ -2715,6 +2737,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) bool {
 			}
 			if p.Persona != nil && im.Persona != nil && im.Persona.Check == "" && p.Persona.Check != "" {
 				im.Persona.Check, changed = p.Persona.Check, true
+			}
+			if p.Persona != nil && im.Persona != nil && len(im.Persona.FSHas) == 0 && len(p.Persona.FSHas) > 0 {
+				im.Persona.FSHas, changed = p.Persona.FSHas, true
 			}
 		}
 	}

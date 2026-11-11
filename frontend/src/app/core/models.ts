@@ -94,7 +94,7 @@ export interface LabEvent { at: string; vm: string; name: string; level: 'info' 
 export interface LabLink { a: string; aPort: string; b: string; bPort: string; up?: boolean; down?: boolean; }
 export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
   /** Emulated lab only. */
-  kind?: 'emu'; events?: LabEvent[] | null; mgmt?: string; consoles?: Record<string, string> | null; host?: string; hostInfo?: EmuHostInfo | null; hosts?: EmuHost[] | null; images?: EmuImage[] | null; kvm?: boolean; templates?: EmuTemplate[] | null; usage?: EmuUsage; deviceTypes?: EmuDeviceType[] | null; }
+  kind?: 'emu'; events?: LabEvent[] | null; downloadDir?: string; mgmt?: string; consoles?: Record<string, string> | null; host?: string; hostInfo?: EmuHostInfo | null; hosts?: EmuHost[] | null; images?: EmuImage[] | null; kvm?: boolean; templates?: EmuTemplate[] | null; usage?: EmuUsage; deviceTypes?: EmuDeviceType[] | null; }
 export interface EmuPersonaDef { name: string; file: string; template: string; models: { name: string; modules: string[] | null }[] | null; values: { key: string; label: string; default: string }[] | null; stack: boolean; modules: string; osName?: string; check?: string; }
 export interface EmuSlot { num: number; model: string; serial: string; module: string; master: boolean; ports: { port: number; vif: number }[] | null; }
 export interface EmuPersona { slots: EmuSlot[]; values: Record<string, string> | null; applied?: string; }

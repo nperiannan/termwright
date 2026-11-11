@@ -15,7 +15,10 @@ const PAGE = `
   .mt { display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--line); a { padding: 10px 14px; color: var(--muted); font-weight: 500; cursor: pointer; } a.on { color: var(--text); box-shadow: inset 0 -2px var(--accent); } }
   .mb { overflow: auto; min-height: 0; } .pad { padding: 16px 20px; }
   .mf { display: flex; align-items: center; gap: 8px; padding: 0 20px; border-top: 1px solid var(--line); }
-  .sp { flex: 1; } .muted { color: var(--muted); } .small { font-size: 12px; } .mono { font-family: var(--mono, monospace); font-size: 12px; } .unit { flex: none !important; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .sp { flex: 1; } .muted { color: var(--muted); } .small { font-size: 12px; } .mono { font-family: var(--mono, monospace); font-size: 12px; } .dlb { position: relative; border: 1px solid var(--line); border-radius: 8px; height: 32px; padding: 0 14px; font-weight: 600; overflow: hidden; cursor: default; opacity: 1 !important;
+    &.busy { background: linear-gradient(90deg, var(--accent) 0 var(--p, 0%), var(--accent-soft) var(--p, 0%) 100%); color: var(--text); border-color: var(--accent); span { position: relative; } }
+    &.done { background: var(--success, #1fa45a); border-color: var(--success, #1fa45a); color: #fff; } }
+  .unit { flex: none !important; color: var(--muted); font-size: 12px; white-space: nowrap; }
   .g { color: var(--success, #1fa45a); } .w { color: var(--warning, #e39b17); } .r { color: var(--danger); }
   .f { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px 14px; align-items: center; margin-bottom: 14px; > label { color: var(--muted); } }
   .f3 { display: grid; grid-template-columns: 130px minmax(0, 1fr) 130px minmax(0, 1fr); gap: 8px 12px; align-items: center; > label { color: var(--muted); font-size: 12px; } .wide { grid-column: 2 / span 3; } }
@@ -432,12 +435,15 @@ export class LabNew implements OnInit {
       @switch (tab()) {
         @case ('images') {
           <div class="lst">
-            @if (toDownload().length) { <button type="button" class="primary" style="width: 100%; margin-bottom: 6px" (click)="lab.download(toDownload())" [disabled]="lab.busy()">⤓ {{ tr('Download All ({0})', toDownload().length) }}</button> }
+            @if (downloading().n) { <button type="button" class="dlb busy" style="width: 100%; margin-bottom: 6px" disabled [style.--p]="downloading().pct + '%'"><span>{{ tr('Downloading {0} of {1} · {2}', downloading().at, downloading().n, downloading().pct + ' %') }}</span></button> }
+            @else if (toDownload().length) { <button type="button" class="primary" style="width: 100%; margin-bottom: 6px" (click)="lab.download(toDownload())" [disabled]="lab.busy()">⤓ {{ tr('Download All ({0})', toDownload().length) }}</button> }
+            @else if (downloaded()) { <button type="button" class="dlb done" style="width: 100%; margin-bottom: 6px" disabled>✓ {{ tr('All downloaded ({0})', downloaded()) }}</button> }
+            @if (images().some(i => i.url)) { <p class="muted small" style="margin: 0 0 6px">{{ tr('Downloads go to {0}', lab.emu()?.downloadDir ?? '') }}</p> }
             @for (g of groups(); track g.name) {
               <div class="grp">{{ g.name }}</div>
               @for (im of g.items; track im.id) {
                 <div class="it" [class.on]="edit()?.id === im.id" (click)="pick(im.id)"><div><span>{{ im.version || im.name }}</span>@if (im.persona) { <span class="badge g">{{ tr('persona') }}</span> }
-                  <small class="mono">{{ im.fileName || tr('no file chosen') }}</small><small>{{ im.cpus }} vCPU · {{ gb(im.ram) }} RAM · {{ diskName(im.disk) }} · {{ mb(im.size) }}</small><small [class.w]="uploading(im) || !!dl(im)" [class.r]="!im.file && !im.url">{{ dl(im) ? tr('downloading {0}', dl(im)) : !im.file && im.url ? tr('not downloaded yet') : where(im) }}</small></div></div>
+                  <small class="mono">{{ im.fileName || tr('no file chosen') }}</small><small>{{ im.cpus }} vCPU · {{ gb(im.ram) }} RAM · {{ diskName(im.disk) }} · {{ mb(im.size) }}</small><small [class.w]="uploading(im) || !!dl(im)" [class.r]="!im.file && !im.url" [class.g]="!!im.file && !!im.url && !dl(im) && !uploading(im)">{{ dl(im) ? (dl(im) === 'waiting' ? tr('waiting to download') : tr('downloading {0}', dl(im))) : !im.file && im.url ? tr('not downloaded yet') : (im.url ? '✓ ' + tr('downloaded') + ' · ' : '') + where(im) }}</small>@if (dl(im) && dl(im) !== 'waiting') { <div class="meter"><i [style.width]="pctOf(dl(im)) + '%'"></i></div> }</div></div>
               }
             } @empty { <p class="muted small">{{ tr('No images yet.') }}</p> }
             <div class="drop" (click)="addImage()"><b style="color: var(--text)">+ {{ tr('Add Image…') }}</b><br />.qcow2 / .img / .vmdk / .raw · {{ tr('recognised by its name with the device pack’s patterns') }}</div>
@@ -446,9 +452,14 @@ export class LabNew implements OnInit {
           <div class="pad" style="overflow: auto">
             @if (edit(); as im) {
               <div class="row2" style="justify-content: flex-start"><div style="flex: 1"><b style="font-size: 15px">{{ im.name }}@if (im.version) { · {{ im.version }} }</b><div class="muted small mono">{{ im.fileName }} · {{ mb(im.size) }}@if (im.sha256) { · sha256 {{ im.sha256.slice(0, 4) }}…{{ im.sha256.slice(-4) }} }</div></div>
-                @if (!im.file && im.url) { <button type="button" class="primary" (click)="lab.download([im.id])" [disabled]="!!dl(im) || lab.busy()">{{ dl(im) ? tr('Downloading {0}', dl(im)) : tr('Download ({0})', mb(im.size)) }}</button> }
+                @if (im.url) {
+                  @if (im.file) { <button type="button" class="dlb done" disabled>✓ {{ tr('Downloaded') }}</button> }
+                  @else if (dl(im)) { <button type="button" class="dlb busy" disabled [style.--p]="pctOf(dl(im)) + '%'"><span>{{ dl(im) === 'waiting' ? tr('Waiting…') : tr('Downloading {0}', dl(im)) }}</span></button> }
+                  @else { <button type="button" class="primary" (click)="lab.download([im.id])" [disabled]="lab.busy()">⤓ {{ tr('Download ({0})', mb(im.size)) }}</button> }
+                }
                 <span class="pill">{{ tr('Used by {0} switches · {1} templates', usedBy(im.id), tplBy(im.id)) }}</span></div>
-              @if (im.url) { <p class="muted small mono" style="margin: 4px 0 0; overflow-wrap: anywhere">{{ im.url }}@if (im.md5) { · MD5 {{ im.md5 }} }</p> }
+              @if (im.url) { <p class="muted small mono" style="margin: 4px 0 0; overflow-wrap: anywhere">{{ tr('From') }} {{ im.url }}@if (im.md5) { · MD5 {{ im.md5 }} }</p>
+                <p class="muted small" style="margin: 2px 0 0">{{ im.file ? tr('Saved as {0}', im.file) : tr('Downloads go to {0}', lab.emu()?.downloadDir ?? '') }}</p> }
               <div class="sec">{{ tr('Boot') }}</div>
               <div class="f3">
                 <label>{{ tr('Name') }}</label><input [(ngModel)]="im.name" name="iname" /><label>{{ tr('Version') }}</label><input [(ngModel)]="im.version" name="iver" />
@@ -575,6 +586,16 @@ export class LabImages implements OnInit {
   async importProfiles() { const p = await this.backend.chooseOpenFile(tr('Import Image Profiles'), [{ displayName: tr('Image profiles'), pattern: '*.json' }]).catch(() => ''); if (p) await this.lab.importProfiles(p); }
   async removeImage(im: EmuImage) { if (await this.ui.confirm(tr('Remove image'), tr('Forget {0}? Its copy on the hosts stays.', im.name), tr('Remove'), true) && await this.lab.removeImage(im.id)) this.edit.set(null); }
   protected toDownload = computed(() => this.images().filter(i => i.url && !i.file && !this.dl(i)).map(i => i.id));
+  pctOf(p: string) { return Math.max(0, Math.min(100, parseInt(p, 10) || 0)); }
+  protected downloading = computed(() => {
+    const l = this.images().filter(i => this.dl(i));
+    if (!l.length) return { n: 0, at: 0, pct: 0 };
+    const all = this.images().filter(i => i.url && (this.dl(i) || i.file));
+    const act = l.find(i => this.dl(i) !== 'waiting');
+    const doneN = all.filter(i => i.file).length;
+    return { n: all.length, at: Math.min(all.length, doneN + 1), pct: act ? this.pctOf(this.dl(act)) : 0 };
+  });
+  protected downloaded = computed(() => this.images().filter(i => i.url && i.file).length);
   dl(im: EmuImage) { return (im as EmuImage & { download?: string }).download ?? ''; }
   imageOf(id: string) { return this.images().find(i => i.id === id); }
   diskName(b?: string) { return ({ ide: 'IDE', sata: 'SATA', scsi: 'SCSI', virtio: 'virtio', sd: 'SD' } as Record<string, string>)[b || 'ide'] ?? (b || 'IDE'); }

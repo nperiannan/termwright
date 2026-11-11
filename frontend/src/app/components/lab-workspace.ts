@@ -17,7 +17,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
   selector: 'app-lab-workspace',
   imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew],
   template: `
-  <div class="ws" (click)="menu.set(null)">
+  <div class="ws" (click)="menu.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px'">
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
       @if (emu()) { <span class="chip" [title]="tr('KVM host')"><i class="d" [class.ok]="!!st()?.host"></i>{{ hostName() || tr('No host yet') }}@if (st()?.kvm) { · KVM }</span> }
@@ -171,10 +171,14 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       @case ('hosts') { <app-lab-hosts (closed)="page.set('')" /> }
     }
     <div class="dock">
+      <div class="grip" (pointerdown)="gripDown($event)" [title]="tr('Drag to make the pane taller or shorter')"></div>
       <div class="dtabs">
         <a [class.on]="dock() === 'events'" (click)="dock.set('events')">{{ tr('Events') }}@if (problems()) { <span class="cnt">{{ problems() }}</span> }</a>
         @if (emu() && selDev(); as d) { <a [class.on]="dock() === 'console'" (click)="dock.set('console'); loadTail()">{{ tr('{0} console', d.hostname) }}</a> }
-        <span class="sp"></span><span class="muted small">{{ dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : tr('The end of its console (read-only); open the console to type') }}</span>
+        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : tr('The end of its console (read-only); open the console to type') }}</span>
+        <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button>
+        @if (dock() === 'events' && emu()) { <button type="button" class="sm" (click)="clearEvents()">{{ tr('Clear') }}</button> }
+        <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
       </div>
       @if (dock() === 'events') {
         <div class="ev">
@@ -186,7 +190,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
   </div>`,
   styles: [`
     :host { display: block; height: 100%; }
-    .ws { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) 190px; background: var(--bg); color: var(--text); font-size: 13px; }
+    .ws { height: 100%; display: grid; background: var(--bg); color: var(--text); font-size: 13px; }
     .tb { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); white-space: nowrap;
       button { height: 30px; white-space: nowrap; } button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } }
       .lname { margin-right: 4px; font-size: 14px; } .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; flex: none; } .sp { flex: 1; }
@@ -246,7 +250,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .xs { font-size: 11px; color: var(--muted); } .btns { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .tbl { padding: 4px 8px; } table { width: 100%; border-collapse: collapse; font-size: 12px; } td { padding: 4px 2px; border-bottom: 1px solid var(--line); cursor: pointer; } tr:last-child td { border: 0; } tr.on td { color: var(--accent); }
     .mr { display: flex; justify-content: space-between; font-size: 12px; } .meter { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 4px 0 8px; i { display: block; height: 100%; background: var(--accent); } }
-    .dock { border-top: 1px solid var(--line); background: var(--surface); display: grid; grid-template-rows: 34px 1fr; min-height: 0; }
+    .dock { border-top: 1px solid var(--line); background: var(--surface); display: grid; grid-template-rows: 5px 34px minmax(0, 1fr); min-height: 0; }
+    .grip { cursor: ns-resize; background: transparent; &:hover { background: var(--accent-soft); } }
+    .dtabs button { margin-left: 4px; } .hint2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ev div { user-select: text; } .tail { user-select: text; }
     .dtabs { display: flex; align-items: center; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line);
       a { padding: 6px 12px; color: var(--muted); font-weight: 500; cursor: pointer; } a.on { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
       .cnt { margin-left: 6px; background: var(--danger); color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; } }
@@ -281,6 +288,20 @@ export class LabWorkspace implements OnDestroy {
   protected portPick = signal<{ id: string; ports: string[]; all: { name: string; short: string; peer: string }[]; x: number; y: number; side: 'a' | 'b' } | null>(null);
   protected page = signal<'' | 'configure' | 'images' | 'templates' | 'hosts' | 'new'>('');
   protected cfgId = signal('');
+  protected dockH = signal(this.savedDockH());
+  private savedDockH() { try { return Math.min(700, Math.max(90, +(localStorage.getItem('tw.lab.dockH') ?? '') || 190)); } catch { return 190; } }
+  gripDown(ev: PointerEvent) {
+    ev.preventDefault();
+    const y0 = ev.clientY, h0 = this.dockH();
+    const mv = (e: PointerEvent) => this.dockH.set(Math.min(Math.round(window.innerHeight * 0.75), Math.max(90, h0 + (y0 - e.clientY))));
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); try { localStorage.setItem('tw.lab.dockH', String(this.dockH())); } catch { /* not kept */ } };
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+  }
+  async copyDock() {
+    const text = this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + e.name + '  ' + e.level.toUpperCase() + '  ' + e.text).join('\n') : this.tail();
+    try { await navigator.clipboard.writeText(text); this.ui.toast(tr('Copied'), 'success'); } catch { this.ui.error(tr('Could not copy')); }
+  }
+  async clearEvents() { try { this.lab.emu.set(await this.backend.emuClearEvents()); } catch { /* ignore */ } }
   protected preset = signal('');
   protected ghost = signal<{ names: string[]; cable: string } | null>(null);
   protected ghosts = computed(() => {

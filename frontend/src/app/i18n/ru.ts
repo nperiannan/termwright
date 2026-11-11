@@ -2259,6 +2259,18 @@ const ru: Record<string, string> = {
   'not downloaded yet': 'ещё не скачан',
   'the image’s own size; a template or a switch can make it bigger': 'собственный размер образа; шаблон или коммутатор может его увеличить',
   'the lab’s host': 'хост лаборатории',
+  'Drag to make the pane taller or shorter': 'Перетащите, чтобы изменить высоту панели',
+  'Copy to the clipboard': 'Скопировать в буфер обмена',
+  'Taller or shorter': 'Выше или ниже',
+  'Could not copy': 'Не удалось скопировать',
+  'Downloaded': 'Скачано',
+  'Waiting…': 'Ожидание…',
+  'Saved as {0}': 'Сохранено как {0}',
+  'Downloads go to {0}': 'Загрузки сохраняются в {0}',
+  'waiting to download': 'ожидает загрузки',
+  'downloaded': 'скачан',
+  'Downloading {0} of {1} · {2}': 'Скачивание {0} из {1} · {2}',
+  'All downloaded ({0})': 'Все скачаны ({0})',
 };
 
 export default ru;

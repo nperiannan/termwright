@@ -3,6 +3,7 @@ package emu
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/netip"
 	"regexp"
@@ -180,8 +181,38 @@ func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Ans
 // DefaultPrompt matches a CLI prompt at the end of the output.
 const DefaultPrompt = `[>#$%]\s*$`
 
-// Login gets the console to the CLI prompt: logs in when it shows a login prompt.
+// Tail is the end of what the console showed (n characters, one line).
+func (c *Console) Tail(n int) string {
+	t := strings.Join(strings.Fields(CleanConsole(c.Text())), " ")
+	if len(t) > n {
+		t = "…" + t[len(t)-n:]
+	}
+	return t
+}
+
+// Login gets the console to the CLI prompt: logs in when it shows a login
+// prompt. A refused login is tried again (a switch still starting up can
+// refuse the first one); the error ends with what the console showed.
 func Login(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
+	var err error
+	for try := 0; try < 3; try++ {
+		var p *regexp.Regexp
+		if p, err = login1(ctx, c, im); err == nil {
+			return p, nil
+		}
+		if !strings.Contains(err.Error(), "refused") {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(10 * time.Second):
+		}
+	}
+	return nil, fmt.Errorf("%w - the console showed: %s", err, c.Tail(220))
+}
+
+func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 	prompt, err := regexp.Compile(orStr(im.Prompt, DefaultPrompt))
 	if err != nil {
 		return nil, err

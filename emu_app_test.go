@@ -245,6 +245,8 @@ func TestEmuPersona(t *testing.T) {
 }
 func TestVersionIn(t *testing.T) {
 	for in, want := range map[string]string{"NOSGNS3.9.4.0.0.qcow2": "9.4.0.0", "vm-33.4.1.15.x86_64.qcow2": "33.4.1.15", "EXOS-VM_v32.6.3.126.qcow2": "32.6.3.126", "VOSSGEN-9.1.0.0.qcow2": "9.1.0.0", "demo-vm-1.2.3.qcow2": "1.2.3", "noble.img": ""} {
-		if got := versionIn(in); got != want { t.Errorf("%s: %q want %q", in, got, want) }
+		if got := versionIn(in); got != want {
+			t.Errorf("%s: %q want %q", in, got, want)
+		}
 	}
 }

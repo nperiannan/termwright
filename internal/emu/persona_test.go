@@ -25,8 +25,8 @@ func TestPersona(t *testing.T) {
 		t.Fatal(NextMAC("00:04:96:aa:00:00", 2))
 	}
 	l, _ := testLab()
-	sc := l.WriteFileScript(l.VMs[0], "/data/persona.yaml", "a: 1")
-	if !strings.Contains(sc, "dir=/data") || !strings.Contains(sc, "-v lab=data") || !strings.Contains(sc, `p="$at/persona.yaml"`) || !strings.Contains(sc, "a: 1\nTW_PERSONA_END") || !strings.Contains(sc, "/etc/fstab") {
+	sc := l.WriteFileScript(l.VMs[0], "/data/persona.yaml", "a: 1", "cfg", "log")
+	if !strings.Contains(sc, "dir=/data") || !strings.Contains(sc, "-v lab=data") || !strings.Contains(sc, `p="$at/persona.yaml"`) || !strings.Contains(sc, "a: 1\nTW_PERSONA_END") || !strings.Contains(sc, "/etc/fstab") || !strings.Contains(sc, "-v has='cfg log'") {
 		t.Fatal(sc)
 	}
 }

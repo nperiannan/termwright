@@ -24,11 +24,12 @@ type PersonaDef struct {
 	File     string         `json:"file"`     // its path in the VM (/scratch/config.yaml)
 	Template string         `json:"template"` // Go text/template over PersonaData
 	Models   []PersonaModel `json:"models"`
-	Values   []PersonaValue `json:"values"`  // more fields, the same for all slots
-	Stack    bool           `json:"stack"`   // the persona can be a stack of several slots
-	Modules  string         `json:"modules"` // what a module is called ("VIM")
-	OSName   string         `json:"osName"`  // what the image is called as such a device (shown after the model)
-	Check    string         `json:"check"`   // a CLI command whose output names the model once the persona took ("show version")
+	Values   []PersonaValue `json:"values"`          // more fields, the same for all slots
+	Stack    bool           `json:"stack"`           // the persona can be a stack of several slots
+	Modules  string         `json:"modules"`         // what a module is called ("VIM")
+	OSName   string         `json:"osName"`          // what the image is called as such a device (shown after the model)
+	FSHas    []string       `json:"fsHas,omitempty"` // names at the top of the filesystem the file goes on, when the image mounts it from its own scripts
+	Check    string         `json:"check"`           // a CLI command whose output names the model once the persona took ("show version")
 }
 
 // PersonaModel is a model a VM can be, with the modules it can take.
@@ -113,10 +114,10 @@ func (d *PersonaDef) Render(vm VM, p *Persona) (string, error) {
 
 // Hash says whether a persona file changed since it was written. It names
 // the writer too: a file written by an older writer (which could miss the
-// partition) is written again.
+// partition: w2 took an empty mount-point folder) is written again.
 func Hash(s string) string {
 	h := sha256.Sum256([]byte(s))
-	return "w2-" + hex.EncodeToString(h[:8])
+	return "w3-" + hex.EncodeToString(h[:8])
 }
 
 // ParsePorts reads "10:1, 3:3" (front-panel port : VM port).
@@ -142,7 +143,11 @@ func ParsePorts(s string) ([]PortMap, error) {
 // filesystem when nothing is mounted there. The file is read back. It prints
 // "ok <filesystem> <path> (<how>)" or "fail <why>"; "fail no filesystem…"
 // when the folder's filesystem does not exist yet (made on the first boot).
-func (l *Lab) WriteFileScript(v VM, file, content string) string {
+// has: names at the top of the wanted filesystem (from the profile), which
+// pick it when nothing else says where the folder is (a partition the image
+// mounts from its own start scripts). An empty folder on a root filesystem is
+// taken for a mount point, not the place to write.
+func (l *Lab) WriteFileScript(v VM, file, content string, has ...string) string {
 	disk := l.VMDir() + "/" + v.ID + ".qcow2"
 	dir, base := path.Dir(file), path.Base(file)
 	label := path.Base(dir)
@@ -158,12 +163,15 @@ fsl=$(guestfish --ro -a "$d" run : list-filesystems 2>&1) || hint "$fsl" "libgue
   echo "$fsl" | while IFS= read -r line; do f=${line%%%%:*}; ty=${line#*: }
     case "$ty" in unknown|swap|"") continue;; esac
     echo "echo @fs $f $ty"; echo "echo @label"; echo "-vfs-label $f"; echo "echo @uuid"; echo "-vfs-uuid $f"
-    echo "-mount-ro $f /"; echo "echo @isdir"; echo "-is-dir $dir"; echo "echo @fstab"; echo "-cat /etc/fstab"; echo "echo @end"; echo "-umount-all"
+    echo "-mount-ro $f /"; echo "echo @isdir"; echo "-is-dir $dir"; echo "echo @ls"; echo "-ls /"; echo "echo @dirls"; echo "-ls $dir"; echo "echo @fstab"; echo "-cat /etc/fstab"; echo "echo @end"; echo "-umount-all"
   done; } > "$t.gf"
 info=$(guestfish --ro -a "$d" < "$t.gf" 2>/dev/null)
-pick=$(echo "$info" | awk -v dir="$dir" -v lab=%[5]s '
+pick=$(echo "$info" | awk -v dir="$dir" -v lab=%[5]s -v has=%[7]s '
+BEGIN{nh=split(has, hl, " "); for (i=1;i<=nh;i++) H[hl[i]]=1}
 /^@fs /{f=$2; ty[f]=$3; n++; ord[n]=f; s=""; next}
-/^@(label|uuid|isdir|fstab|end)$/{s=substr($0,2); next}
+/^@(label|uuid|isdir|ls|dirls|fstab|end)$/{s=substr($0,2); next}
+s=="ls"{ if (nt[f]<8) T[f]=T[f] (nt[f]++ ? "," : "") $0; if ($0 ~ /^(etc|bin|sbin|usr|lib)$/) ISR[f]=1; if ($0 in H) HIT[f]++; next}
+s=="dirls"{ if ($0!="" && $0!="lost+found") DC[f]++; next}
 s=="label"{L[f]=$0; next}
 s=="uuid"{U[f]=$0; next}
 s=="isdir"{D[f]=$0; next}
@@ -173,9 +181,12 @@ END{
   y=x; sub(/^\/dev\/(hd|vd|xvd)/,"/dev/sd",y)
   for (i=1;i<=n;i++) { f=ord[i]
    if ((x ~ /^LABEL=/ && L[f]==substr(x,7)) || (x ~ /^UUID=/ && tolower(U[f])==tolower(substr(x,6))) || y==f) { print "use", f, "/", "fstab: " spec; exit } } }
+ best=""; for (i=1;i<=n;i++) { f=ord[i]; if (HIT[f]>0 && HIT[f]>HIT[best]) best=f }
+ if (best!="") { print "use", best, "/", "it has " T[best]; exit }
  for (i=1;i<=n;i++) { f=ord[i]; if (L[f]!="" && tolower(L[f])==tolower(lab)) { print "use", f, "/", "label " L[f]; exit } }
- if (spec=="") for (i=1;i<=n;i++) { f=ord[i]; if (D[f]=="true") { print "use", f, dir, "folder"; exit } }
- printf "none"; for (i=1;i<=n;i++) { f=ord[i]; printf " %%s %%s%%s%%s;", f, ty[f], (L[f]!="" ? " label " L[f] : ""), (R[f] ? " root" : "") }
+ others=0; for (i=1;i<=n;i++) if (!ISR[ord[i]]) others++
+ if (spec=="") for (i=1;i<=n;i++) { f=ord[i]; if (D[f]=="true" && (DC[f]>0 || !ISR[f] || others==0)) { print "use", f, dir, "folder"; exit } }
+ printf "none"; for (i=1;i<=n;i++) { f=ord[i]; printf " %%s %%s%%s%%s [%%s];", f, ty[f], (L[f]!="" ? " label " L[f] : ""), (ISR[f] ? " root" (D[f]=="true" ? ", " dir " empty: a mount point" : "") : ""), T[f] }
  if (spec!="") printf " the image mounts %%s from %%s", dir, spec
  print "" }')
 case "$pick" in use*) ;; *) echo "fail no filesystem with $dir in the disk (has the switch booted once?) - found:${pick#none}"; rm -f "$t" "$t.gf"; exit 0;; esac
@@ -184,7 +195,7 @@ p="$at/%[6]s"; [ "$at" = / ] && p="/%[6]s"
 out=$(guestfish -a "$d" -m "$fs" upload "$t" "$p" : cat "$p" 2>&1) || hint "$out" ""
 if [ "$out" = "$(cat "$t")" ]; then echo "ok $fs $p ($how)"; else echo "fail the file read back from $fs $p differs: $(echo $out | cut -c1-200)"; fi
 rm -f "$t" "$t.gf"
-`, Q(disk), Q(tmp), Q(dir), ensureNL(content), Q(label), base)
+`, Q(disk), Q(tmp), Q(dir), ensureNL(content), Q(label), base, Q(strings.Join(has, " ")))
 }
 
 // ShutdownScript asks VMs to power off (ACPI) and waits up to secs seconds,
