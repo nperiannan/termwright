@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -596,5 +597,48 @@ func TestEmuSetLag(t *testing.T) {
 	}
 	if _, err := a.EmuSetLag("v1", "", "lacp", []string{"9/9"}); err == nil {
 		t.Fatal("a port that is not there")
+	}
+}
+
+func TestEmuTopologies(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = false, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	a.emuLoad()
+	emuLab.f.Lab = &emu.Lab{ID: "a1", VMs: []emu.VM{{ID: "v1", Name: "core-1"}, {ID: "v2", Name: "core-2"}}}
+	if _, err := a.EmuSaveTopology("EP1 scale"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.EmuNewTopology("MLAG lab"); err != nil {
+		t.Fatal(err)
+	}
+	if emuLab.f.Lab != nil || emuLab.f.Topology != "MLAG lab" || emuLab.f.Folder != "Emulated Lab/MLAG lab" {
+		t.Fatalf("new: %+v", emuLab.f)
+	}
+	l := a.EmuTopologies()
+	if len(l) != 2 || !slices.ContainsFunc(l, func(x EmuTopoInfo) bool { return x.Name == "EP1 scale" && x.Switches == 2 && !x.Open }) {
+		t.Fatalf("list %+v", l)
+	}
+	if _, err := a.EmuSaveTopology("EP1 scale"); err == nil {
+		t.Error("an empty lab saved over another")
+	}
+	if _, err := a.EmuOpenTopology("EP1 scale", false); err != nil {
+		t.Fatal(err)
+	}
+	if emuLab.f.Lab == nil || len(emuLab.f.Lab.VMs) != 2 || emuLab.f.Topology != "EP1 scale" {
+		t.Fatalf("open: %+v", emuLab.f.Lab)
+	}
+	if err := a.EmuDeleteTopology("EP1 scale"); err == nil {
+		t.Error("the open topology deleted")
+	}
+	if err := a.EmuDeleteTopology("MLAG lab"); err != nil || len(a.EmuTopologies()) != 1 {
+		t.Errorf("delete: %v %+v", err, a.EmuTopologies())
+	}
+	if _, err := emuTopoName("a/b"); err == nil {
+		t.Error("a name with /")
 	}
 }

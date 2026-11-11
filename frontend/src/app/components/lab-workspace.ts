@@ -2,7 +2,7 @@ import { Component, ElementRef, HostListener, OnDestroy, computed, effect, injec
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { EmuDeviceType, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
+import { EmuDeviceType, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -18,10 +18,25 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
   selector: 'app-lab-workspace',
   imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew, TerminalView],
   template: `
-  <div class="ws" (click)="menu.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px'">
+  <div class="ws" (click)="menu.set(null); topos.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px'">
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
-      @if (emu()) { <span class="chip" [title]="tr('KVM host')"><i class="d" [class.ok]="!!st()?.host"></i>{{ hostName() || tr('No host yet') }}@if (st()?.kvm) { · KVM }</span> }
+      @if (emu()) { <span class="topo" (click)="openTopos(); $event.stopPropagation()" [title]="tr('Topologies: save, open, new')"><span class="muted">{{ tr('Topology') }}</span> <b>{{ st()?.topology || tr('Untitled') }}</b> ▾</span>
+        @if (topos(); as tl) {
+          <div class="topos" (click)="$event.stopPropagation()">
+            <div class="row2"><b>{{ tr('Topologies') }}</b><span class="sp"></span>
+              <button type="button" class="sm" (click)="saveTopo()" [disabled]="!devs().length">{{ st()?.topology ? tr('Save As…') : tr('Save…') }}</button>
+              <button type="button" class="sm" (click)="newTopo()">{{ tr('New Topology…') }}</button></div>
+            @for (t of tl; track t.name) {
+              <div class="ti" [class.cur]="t.open"><div class="tn"><b>{{ t.name }}</b><small class="muted">{{ tr('{0} switches', t.switches) }}@if (t.hosts?.length) { · {{ hostLabel(t.hosts![0]) }} } · {{ when(t.saved) }}</small></div>
+                @if (t.open) { <span class="muted small">{{ tr('open') }}</span> }
+                @else { <button type="button" class="sm" (click)="openTopo(t.name, false)">{{ tr('Open') }}</button><button type="button" class="sm primary" (click)="openTopo(t.name, true)" [disabled]="!t.switches">▶ {{ tr('Open and Start All') }}</button>
+                  <button type="button" class="sm x" (click)="delTopo(t.name)" [title]="tr('Delete')">✕</button> }
+              </div>
+            } @empty { <p class="muted small">{{ tr('No saved topologies yet: Save… keeps this lab under a name.') }}</p> }
+          </div>
+        }
+        <span class="chip" [title]="tr('KVM host')"><i class="d" [class.ok]="!!st()?.host"></i>{{ hostName() || tr('No host yet') }}@if (st()?.kvm) { · KVM }</span> }
       @else { <span class="chip" [title]="tr('The device pack the simulated switches come from')">{{ st()?.pack ? st()!.pack!.name + ' ' + st()!.pack!.version : tr('No device pack') }}</span>
         <button type="button" (click)="loadPack()">{{ st()?.pack ? tr('Load Another Pack…') : tr('Load Device Pack (.vm)…') }}</button> }
       <span class="sep"></span>
@@ -259,7 +274,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
   styles: [`
     :host { display: block; height: 100%; }
     .ws { height: 100%; display: grid; background: var(--bg); color: var(--text); font-size: 13px; }
-    .tb { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); white-space: nowrap;
+    .tb { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); white-space: nowrap;
       button { height: 30px; white-space: nowrap; } button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } }
       .lname { margin-right: 4px; font-size: 14px; } .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; flex: none; } .sp { flex: 1; }
     .chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); white-space: nowrap; }
@@ -286,6 +301,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     svg.links { position: absolute; left: 0; top: 0; overflow: visible; }
     .lk { cursor: pointer; } .lk .hit { stroke: transparent; stroke-width: 12; } .lk .ln { stroke: var(--muted); stroke-width: 2.2; stroke-dasharray: 2 5; } .lk .ln.up { stroke: var(--success, #1fa45a); stroke-dasharray: none; }
     .lk.down .ln { stroke: var(--danger); stroke-dasharray: 6 5; } .lk.selk .ln { stroke-width: 3.5; }
+    .topo { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; background: var(--accent-soft); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+    .topos { position: absolute; top: 46px; left: 12px; z-index: 30; width: 520px; max-height: 60vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      .row2 { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; } .sp { flex: 1; }
+      .ti { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; &.cur { border-color: var(--accent); }
+        .tn { flex: 1; min-width: 0; display: flex; flex-direction: column; } .x { padding: 2px 7px; } } }
     .ntip { position: absolute; z-index: 9; min-width: 250px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); pointer-events: none; font-size: 12px;
       .th { margin-bottom: 6px; white-space: nowrap; } table { border-collapse: collapse; } td { padding: 2px 10px 2px 0; white-space: nowrap; } td:first-child { color: var(--muted); } }
     .inv { overflow: auto; padding: 0 14px 10px; table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); font-size: 12px; white-space: nowrap; }
@@ -367,6 +387,22 @@ export class LabWorkspace implements OnDestroy {
   protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink } | null>(null);
   protected dock = signal<'events' | 'console' | 'inv'>('events');
   protected hov = signal('');
+  protected topos = signal<EmuTopoInfo[] | null>(null);
+  async openTopos() { if (this.topos()) { this.topos.set(null); return; } try { this.topos.set(await this.backend.emuTopologies()); } catch (e) { this.ui.error(e); } }
+  private async reTopos() { try { this.topos.set(await this.backend.emuTopologies()); } catch { /* ignore */ } }
+  async saveTopo() { const n = await this.ui.input(tr('Save Topology'), tr('Name'), this.st()?.topology || ''); if (n && await this.lab.saveTopology(n)) await this.reTopos(); }
+  async newTopo() {
+    const n = await this.ui.input(tr('New Topology'), tr('Name')); if (!n) return;
+    if (this.running() && !(await this.ui.confirm(tr('New Topology'), tr('The running switches of this topology are stopped first; it stays saved.'), tr('Stop and Continue')))) return;
+    if (await this.lab.newTopology(n)) { this.topos.set(null); void this.ui.refreshTree(); }
+  }
+  async openTopo(name: string, start: boolean) {
+    if (this.running() && !(await this.ui.confirm(tr('Open {0}', name), tr('The running switches of this topology are stopped first; it stays saved.'), tr('Stop and Open')))) return;
+    if (await this.lab.openTopology(name, start)) { this.topos.set(null); void this.ui.refreshTree(); }
+  }
+  async delTopo(name: string) { if (await this.ui.confirm(tr('Delete {0}', name), tr('Forget this saved topology? Its sessions stay in the Session Manager.'), tr('Delete'), true)) { try { await this.backend.emuDeleteTopology(name); } catch (e) { this.ui.error(e); } await this.reTopos(); } }
+  hostLabel(p: string) { return p.split('/').pop() ?? p; }
+  when(iso: string) { const d = new Date(iso); return isNaN(+d) ? '' : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
   protected hovDev = computed(() => this.devs().find(d => d.id === this.hov()) ?? null);
   cablesOf(id: string) {
     const ls = this.links().filter(k => k.a === id || k.b === id), lag = ls.filter(k => (k.a === id ? k.lagA : k.lagB)).length;

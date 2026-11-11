@@ -114,6 +114,9 @@ export class LabService {
   disconnect(id: string, port: string) { return this.run(() => (this.e ? this.backend.emuDisconnect(id, port) : this.backend.labDisconnect(id, port))); }
   setLink(id: string, port: string, up: boolean) { return this.run(() => this.backend.emuSetLink(id, port, up)); }
   setLag(vm: string, name: string, mode: string, ports: string[]) { return this.run(() => this.backend.emuSetLag(vm, name, mode, ports)); }
+  saveTopology(name: string) { return this.run(() => this.backend.emuSaveTopology(name), 'Topology saved'); }
+  openTopology(name: string, start: boolean) { return this.run(() => this.backend.emuOpenTopology(name, start), start ? 'Opened - the switches start' : 'Opened'); }
+  newTopology(name: string) { return this.run(() => this.backend.emuNewTopology(name), 'New topology - add switches'); }
   readLags(ids: string[] = []) { return this.run(() => this.backend.emuReadLags(ids), 'LAGs read from the switches'); }
   place(id: string, x: number, y: number) {
     void (this.e ? this.backend.emuPlace(id, Math.round(x), Math.round(y)) : this.backend.labPlace(id, Math.round(x), Math.round(y))).catch(() => {});

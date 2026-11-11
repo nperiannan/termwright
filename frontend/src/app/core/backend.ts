@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona } from './models';
+  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -100,6 +100,11 @@ export class Backend {
   emuSetMgmt(mgmt: string, mgmtNet: string) { return this.call<LabView>('EmuSetMgmt', mgmt, mgmtNet); }
   emuSetLag(vm: string, name: string, mode: string, ports: string[]) { return this.call<LabView>('EmuSetLag', vm, name, mode, ports); }
   emuReadLags(ids: string[]) { return this.call<LabView>('EmuReadLags', ids); }
+  emuTopologies() { return this.call<EmuTopoInfo[]>('EmuTopologies'); }
+  emuSaveTopology(name: string) { return this.call<LabView>('EmuSaveTopology', name); }
+  emuOpenTopology(name: string, start: boolean) { return this.call<LabView>('EmuOpenTopology', name, start); }
+  emuNewTopology(name: string) { return this.call<LabView>('EmuNewTopology', name); }
+  emuDeleteTopology(name: string) { return this.call<void>('EmuDeleteTopology', name); }
   emuRestart(ids: string[]) { return this.call<LabView>('EmuRestart', ids); }
   emuReset(ids: string[]) { return this.call<LabView>('EmuReset', ids); }
   emuRemove(ids: string[], sessions: boolean) { return this.call<LabView>('EmuRemove', ids, sessions); }

@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -59,6 +60,28 @@ type emuFile struct {
 	Lab       *emu.Lab          `json:"lab"`
 	Sessions  map[string]string `json:"sessions"` // VM → its SSH session
 	Consoles  map[string]string `json:"consoles"` // VM → its console session
+	Topology  string            `json:"topology,omitempty"` // the name the open lab is saved under ("" = not saved yet)
+}
+
+// emuTopo is a saved topology: a lab with its switches, cables, management
+// and sessions, opened again later (on the same hosts).
+type emuTopo struct {
+	Name     string            `json:"name"`
+	Saved    string            `json:"saved"`
+	Host     string            `json:"host"`
+	Folder   string            `json:"folder"`
+	Lab      *emu.Lab          `json:"lab"`
+	Sessions map[string]string `json:"sessions"`
+	Consoles map[string]string `json:"consoles"`
+}
+
+// EmuTopoInfo is a saved topology in the list.
+type EmuTopoInfo struct {
+	Name     string   `json:"name"`
+	Saved    string   `json:"saved"`
+	Hosts    []string `json:"hosts"`
+	Switches int      `json:"switches"`
+	Open     bool     `json:"open"`
 }
 
 type emuConn struct {
@@ -202,6 +225,7 @@ type EmuView struct {
 	Running       bool              `json:"running"`
 	Folder        string            `json:"folder"`
 	MgmtNet       string            `json:"mgmtNet"`
+	Topology      string            `json:"topology,omitempty"` // the name the open lab is saved under
 	CloudGw       string            `json:"cloudGw,omitempty"` // cloud: the gateway the switches use
 	LanFixed      bool              `json:"lanFixed,omitempty"` // lan: fixed addresses (no DHCP)
 	Mgmt          string            `json:"mgmt"`
@@ -283,6 +307,9 @@ func (a *App) emuLoad() {
 // emuSave writes the file (lock held).
 func (a *App) emuSave() error {
 	_ = os.MkdirAll(a.labDir(), 0o700)
+	if emuLab.f.Topology != "" { // the open topology is kept as it changes
+		_ = a.emuWriteTopo()
+	}
 	f := emuLab.f
 	f.Images = append([]emu.Image(nil), f.Images...)
 	for i := range f.Images {
@@ -2574,7 +2601,7 @@ func (a *App) EmuState() (EmuView, error) {
 
 func (a *App) emuView() EmuView {
 	f := &emuLab.f
-	v := EmuView{Kind: "emu", DownloadDir: a.emuDownloadDir(), DownloadQueue: slices.DeleteFunc(append([]string{emuLab.dlCur}, emuLab.dlQueue...), func(x string) bool { return x == "" }), Events: append([]EmuEvent(nil), emuLab.events[max(0, len(emuLab.events)-200):]...), DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}}
+	v := EmuView{Kind: "emu", DownloadDir: a.emuDownloadDir(), DownloadQueue: slices.DeleteFunc(append([]string{emuLab.dlCur}, emuLab.dlQueue...), func(x string) bool { return x == "" }), Events: append([]EmuEvent(nil), emuLab.events[max(0, len(emuLab.events)-200):]...), DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}, Topology: f.Topology}
 	for i := range f.Hosts {
 		if f.Hosts[i].Session == f.Host {
 			v.HostInfo = &f.Hosts[i].Info
@@ -4018,4 +4045,210 @@ func (a *App) emuKeepLags(v emu.VM, im *emu.Image, found []emu.SwitchLag) {
 		emuEv(v.ID, "info", "no LAGs on the switch")
 	}
 	_ = a.emuSave()
+}
+
+func (a *App) emuTopoDir() string { return filepath.Join(a.labDir(), "topologies") }
+
+func (a *App) emuTopoPath(name string) string {
+	return filepath.Join(a.emuTopoDir(), url.PathEscape(name)+".json")
+}
+
+// emuWriteTopo writes the open lab to its topology file (mu held).
+func (a *App) emuWriteTopo() error {
+	f := emuLab.f
+	t := emuTopo{Name: f.Topology, Saved: time.Now().Format(time.RFC3339), Host: f.Host, Folder: f.Folder, Lab: f.Lab, Sessions: f.Sessions, Consoles: f.Consoles}
+	b, err := json.MarshalIndent(t, "", " ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(a.emuTopoDir(), 0o700); err != nil {
+		return err
+	}
+	p := a.emuTopoPath(f.Topology)
+	if err := os.WriteFile(p+".tmp", b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(p+".tmp", p)
+}
+
+func emuTopoName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 80 || strings.ContainsAny(name, "/\\:*?\"<>|") {
+		return "", errors.New("give the topology a name (no / \\ : * ? \" < > |)")
+	}
+	return name, nil
+}
+
+// EmuTopologies lists the saved topologies, newest first.
+func (a *App) EmuTopologies() []EmuTopoInfo {
+	emuLab.mu.Lock()
+	a.emuLoad()
+	open := emuLab.f.Topology
+	emuLab.mu.Unlock()
+	ents, _ := os.ReadDir(a.emuTopoDir())
+	var out []EmuTopoInfo
+	for _, e := range ents {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(a.emuTopoDir(), e.Name()))
+		if err != nil {
+			continue
+		}
+		var t emuTopo
+		if json.Unmarshal(b, &t) != nil || t.Name == "" {
+			continue
+		}
+		info := EmuTopoInfo{Name: t.Name, Saved: t.Saved, Open: t.Name == open}
+		if t.Host != "" {
+			info.Hosts = []string{t.Host}
+		}
+		if t.Lab != nil {
+			info.Switches = len(t.Lab.VMs)
+		}
+		out = append(out, info)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Saved > out[j].Saved })
+	return out
+}
+
+// EmuSaveTopology saves the open lab under a name (and keeps it there as it changes).
+func (a *App) EmuSaveTopology(name string) (EmuView, error) {
+	name, err := emuTopoName(name)
+	if err != nil {
+		return EmuView{}, err
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	if emuLab.f.Lab == nil || len(emuLab.f.Lab.VMs) == 0 {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("the lab has no switches to save yet")
+	}
+	if name != emuLab.f.Topology {
+		if _, err := os.Stat(a.emuTopoPath(name)); err == nil {
+			emuLab.mu.Unlock()
+			return EmuView{}, fmt.Errorf("a topology named %q is there already: pick another name", name)
+		}
+	}
+	emuLab.f.Topology = name
+	err = a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
+// emuRunningAny says whether switches of the open lab run (no lock held).
+func (a *App) emuRunningAny() bool {
+	emuLab.mu.Lock()
+	has := emuLab.f.Lab != nil && len(emuLab.f.Lab.VMs) > 0 && emuLab.f.Host != ""
+	emuLab.mu.Unlock()
+	return has && len(a.emuPollFresh().Up) > 0
+}
+
+// emuSwitchTo makes another topology the open one (mu held): runtime state
+// of the old one goes.
+func (a *App) emuSwitchTo(t emuTopo) {
+	emuLab.f.Topology, emuLab.f.Host, emuLab.f.Folder, emuLab.f.Lab = t.Name, t.Host, orStr(t.Folder, "Emulated Lab"), t.Lab
+	emuLab.f.Sessions, emuLab.f.Consoles = t.Sessions, t.Consoles
+	if emuLab.f.Sessions == nil {
+		emuLab.f.Sessions = map[string]string{}
+	}
+	if emuLab.f.Consoles == nil {
+		emuLab.f.Consoles = map[string]string{}
+	}
+	emuLab.state, emuLab.errs, emuLab.day0, emuLab.starting = map[string]string{}, map[string]string{}, map[string]bool{}, map[string]time.Time{}
+	emuLab.ready, emuLab.personaAfterBoot, emuLab.personaTried, emuLab.perr = map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]string{}
+	emuLab.pinfo, emuLab.pcheck, emuLab.ticks, emuLab.cpu = map[string]string{}, map[string]bool{}, map[string]float64{}, map[string]float64{}
+	emuLab.status, emuLab.statusAt = emu.Status{}, time.Time{}
+}
+
+// EmuOpenTopology opens a saved topology (the open one is kept as it is) and,
+// with start, starts all its switches. Running switches are stopped first.
+func (a *App) EmuOpenTopology(name string, start bool) (EmuView, error) {
+	b, err := os.ReadFile(a.emuTopoPath(name))
+	if err != nil {
+		return EmuView{}, fmt.Errorf("no topology named %q", name)
+	}
+	var t emuTopo
+	if err := json.Unmarshal(b, &t); err != nil {
+		return EmuView{}, fmt.Errorf("topology %q: %w", name, err)
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	same := emuLab.f.Topology == t.Name
+	emuLab.mu.Unlock()
+	if !same && a.emuRunningAny() {
+		if _, err := a.EmuStop(nil); err != nil {
+			return EmuView{}, err
+		}
+	}
+	emuLab.mu.Lock()
+	if !same {
+		if emuLab.f.Topology != "" {
+			_ = a.emuWriteTopo()
+		}
+		a.emuSwitchTo(t)
+	}
+	err = a.emuSave()
+	host := emuLab.f.Host
+	var ids []string
+	if emuLab.f.Lab != nil {
+		for _, v := range emuLab.f.Lab.VMs {
+			ids = append(ids, v.ID)
+		}
+	}
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	if start && host != "" && len(ids) > 0 {
+		return a.EmuStart(ids)
+	}
+	return a.EmuState()
+}
+
+// EmuNewTopology starts an empty lab under a name (the open one is kept);
+// running switches are stopped first.
+func (a *App) EmuNewTopology(name string) (EmuView, error) {
+	name, err := emuTopoName(name)
+	if err != nil {
+		return EmuView{}, err
+	}
+	if _, err := os.Stat(a.emuTopoPath(name)); err == nil {
+		return EmuView{}, fmt.Errorf("a topology named %q is there already: open it, or pick another name", name)
+	}
+	if a.emuRunningAny() {
+		if _, err := a.EmuStop(nil); err != nil {
+			return EmuView{}, err
+		}
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	if emuLab.f.Topology != "" {
+		_ = a.emuWriteTopo()
+	} else if emuLab.f.Lab != nil && len(emuLab.f.Lab.VMs) > 0 { // an unsaved lab is kept under a name of its own
+		emuLab.f.Topology = "Lab " + time.Now().Format("2006-01-02 15:04")
+		_ = a.emuWriteTopo()
+	}
+	a.emuSwitchTo(emuTopo{Name: name, Host: emuLab.f.Host, Folder: "Emulated Lab/" + name})
+	err = a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}
+
+// EmuDeleteTopology forgets a saved topology that is not open (its switches'
+// sessions and disks on the host stay until removed in it).
+func (a *App) EmuDeleteTopology(name string) error {
+	emuLab.mu.Lock()
+	open := emuLab.f.Topology
+	emuLab.mu.Unlock()
+	if name == open {
+		return errors.New("that topology is open: open another one first")
+	}
+	return os.Remove(a.emuTopoPath(name))
 }
