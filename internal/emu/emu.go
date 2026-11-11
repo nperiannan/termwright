@@ -648,19 +648,35 @@ func onlyAddr(br, addr string) string {
 func (l *Lab) diskCmd(v VM, im *Image) string {
 	disk := l.VMDir() + "/" + v.ID + ".qcow2"
 	// a layer on the image (its format read from the file: qcow2, or raw for an .iso or .img)
-	layer := func(dst, base string) string {
-		return fmt.Sprintf(" [ -f %s ] || { b=\"$HOME/%s/%s\"; f=$(qemu-img info \"$b\" 2>/dev/null | sed -n 's/^file format: //p' | head -1); qemu-img create -q -f qcow2 -F \"${f:-qcow2}\" -b \"$b\" %s; } || { echo 'fail %s disk %s'; }\n", Q(dst), l.ImageDir(), base, Q(dst), v.ID, base)
+	layer := func(dst, base string, booted bool) string {
+		pick := ""
+		if booted { // a copy of the image booted once (its folders made): a persona can go in before the first boot
+			pick = "[ -f \"$b" + BootedSuffix + "\" ] && b=\"$b" + BootedSuffix + "\"; "
+		}
+		return fmt.Sprintf(" [ -f %s ] || { b=\"$HOME/%s/%s\"; %sf=$(qemu-img info \"$b\" 2>/dev/null | sed -n 's/^file format: //p' | head -1); qemu-img create -q -f qcow2 -F \"${f:-qcow2}\" -b \"$b\" %s; } || { echo 'fail %s disk %s'; }\n", Q(dst), l.ImageDir(), base, pick, Q(dst), v.ID, base)
 	}
-	s := layer(disk, im.FileName)
+	s := layer(disk, im.FileName, im.Persona != nil)
 	for _, d := range im.Disks {
 		if strings.HasPrefix(d.Slot, "hd") {
-			s += layer(l.VMDir()+"/"+v.ID+"-"+d.Slot+".qcow2", d.FileName)
+			s += layer(l.VMDir()+"/"+v.ID+"-"+d.Slot+".qcow2", d.FileName, false)
 		}
 	}
 	if v.DiskGB > 0 {
 		s += fmt.Sprintf(" cur=$(qemu-img info --output=json %s 2>/dev/null | sed -n 's/.*\"virtual-size\": *\\([0-9]*\\).*/\\1/p' | head -1); [ -n \"$cur\" ] && [ \"$cur\" -lt %d ] && qemu-img resize -q %s %dG\n", Q(disk), int64(v.DiskGB)<<30, Q(disk), v.DiskGB)
 	}
 	return s
+}
+
+// BootedSuffix names the copy of an image that booted once (next to it).
+const BootedSuffix = ".booted.qcow2"
+
+// BootedScript keeps a VM's disk, just after its first boot (powered off,
+// nothing written into it yet), as the image's booted copy: the next switches
+// from that image start on it, so their persona file goes in before their
+// first boot and they boot once. "booted" when made, nothing when there is one.
+func (l *Lab) BootedScript(v VM, im *Image) string {
+	b := "$HOME/" + l.ImageDir() + "/" + im.FileName + BootedSuffix
+	return fmt.Sprintf("b=\"%s\"; [ -f \"$b\" ] || { qemu-img convert -O qcow2 %s/%s.qcow2 \"$b.tmp\" && mv \"$b.tmp\" \"$b\" && echo booted; } 2>&1 | tail -1\n", b, Q(l.VMDir()), v.ID)
 }
 
 // PrepareScript makes the disks of VMs without starting them.

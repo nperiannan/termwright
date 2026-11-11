@@ -1343,6 +1343,7 @@ func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha strin
 		return fmt.Errorf("copying %s to the host: %w", im.Name, err)
 	}
 	_ = sc.Remove(remote)
+	_ = sc.Remove(remote + emu.BootedSuffix) // the booted copy of the old file
 	if err := sc.Rename(tmp, remote); err != nil {
 		return err
 	}
@@ -3777,6 +3778,22 @@ func (a *App) emuPersonaReboot(host, id string) {
 	emuEv(id, "info", "powering off to write the persona file (its folder exists now)")
 	emuLab.mu.Unlock()
 	a.emuPowerOff(host, id, 90*time.Second)
+	// its disk now: booted once, nothing of its own in it yet - kept as the image's booted copy
+	emuLab.mu.Lock()
+	script := ""
+	if lv := a.emuFor(host); lv != nil && lv.VMByID(id) != nil {
+		if im := emuImage(lv.VMByID(id).Image); im != nil {
+			script = lv.BootedScript(*lv.VMByID(id), im)
+		}
+	}
+	emuLab.mu.Unlock()
+	if script != "" {
+		if out, _ := a.emuRun(host, script, 10*time.Minute); strings.Contains(out, "booted") {
+			emuLab.mu.Lock()
+			emuEv(id, "info", "kept a copy of the image that booted once: the next switches from it on this host get their persona before their first boot (one boot)")
+			emuLab.mu.Unlock()
+		}
+	}
 	emuLab.mu.Lock()
 	delete(emuLab.state, id)
 	emuLab.mu.Unlock()

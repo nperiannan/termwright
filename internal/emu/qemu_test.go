@@ -193,3 +193,33 @@ func TestQEMUFast(t *testing.T) {
 		t.Fatalf("the old state stayed: %s", out)
 	}
 }
+
+// The booted copy of an image: kept from a switch's disk, the next switches' disks start on it.
+func TestBootedCopy(t *testing.T) {
+	if _, err := exec.LookPath("qemu-img"); err != nil {
+		t.Skip("no qemu-img")
+	}
+	home := t.TempDir()
+	run := func(script string) string {
+		c := exec.Command("bash", "-c", script)
+		c.Dir, c.Env = home, append(os.Environ(), "HOME="+home)
+		out, _ := c.CombinedOutput()
+		return string(out)
+	}
+	_ = os.MkdirAll(filepath.Join(home, "lab/images"), 0o755)
+	_, _ = exec.Command("qemu-img", "create", "-q", "-f", "qcow2", filepath.Join(home, "lab/images/nos.qcow2"), "16M").CombinedOutput()
+	im := &Image{ID: "i", FileName: "nos.qcow2", Persona: &PersonaDef{File: "/scratch/p.yaml"}}
+	l := &Lab{ID: "b1", Dir: "lab", VMs: []VM{{ID: "v1", Image: "i"}, {ID: "v2", Image: "i", Index: 1}}}
+	imgs := map[string]*Image{"i": im}
+	run(l.PrepareScript(l.VMs[:1], imgs))
+	if out := run(l.BootedScript(l.VMs[0], im)); !strings.Contains(out, "booted") {
+		t.Fatalf("no booted copy: %s", out)
+	}
+	if out := run(l.BootedScript(l.VMs[0], im)); strings.Contains(out, "booted") {
+		t.Fatal("made twice")
+	}
+	run(l.PrepareScript(l.VMs[1:], imgs))
+	if out := run("qemu-img info lab/lab-b1/v2.qcow2"); !strings.Contains(out, "nos.qcow2"+BootedSuffix) {
+		t.Fatalf("v2 not on the booted copy:\n%s", out)
+	}
+}
