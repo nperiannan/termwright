@@ -143,11 +143,11 @@ function spans(t: string): Span[] {
             @for (s of m.steps ?? []; track $index) {
               @if (s.state === 'ask') {
                 <div class="appr" [class.danger]="s.danger"><div class="q"><app-icon name="alert" [size]="15" /><div>
-                  <b>{{ s.kind === 'open' ? tr('Connect to {0}?', s.tab) : tr('Run on {0}?', s.tab) }}</b>@if (s.prod) { <span class="prodb">PROD</span> }
+                  <b>{{ s.kind === 'open' ? tr('Connect to {0}?', s.tab) : s.kind === 'lab' ? tr('Change the emulated lab?') : tr('Run on {0}?', s.tab) }}</b>@if (s.prod) { <span class="prodb">PROD</span> }
                   @if (s.prod) { <div class="hint">{{ tr('Production session: Termwright asks before every command and connection, whatever the agent may do.') }}</div> }
-                  <div class="hint">{{ s.danger ? tr('This may change the device or interrupt traffic.') : s.kind === 'open' ? tr('Opens the session in a new tab.') : tr('Check the command - it is typed in the tab as it is.') }}</div></div></div>
+                  <div class="hint">{{ s.danger ? tr('This may change the device or interrupt traffic.') : s.kind === 'open' ? tr('Opens the session in a new tab.') : s.kind === 'lab' ? 'lab ' + s.command : tr('Check the command - it is typed in the tab as it is.') }}</div></div></div>
                   @if (s.kind === 'run') { <input class="mono" [(ngModel)]="edits[$index + '-' + m.id]" [placeholder]="s.command" [attr.aria-label]="tr('Command')" (focus)="seed(m.id, $index, s)" /> }
-                  <div class="btns"><button type="button" class="primary" [class.danger]="s.danger" (click)="ai.decide(s, 'run', edits[$index + '-' + m.id])">{{ s.kind === 'open' ? tr('Connect') : tr('Run') }}</button>
+                  <div class="btns"><button type="button" class="primary" [class.danger]="s.danger" (click)="ai.decide(s, 'run', edits[$index + '-' + m.id])">{{ s.kind === 'open' ? tr('Connect') : s.kind === 'lab' ? tr('Do It') : tr('Run') }}</button>
                     <button type="button" (click)="ai.decide(s, 'skip')">Skip</button><button type="button" (click)="ai.decide(s, 'stop')">Stop</button></div></div>
               } @else {
                 <details class="step" [class]="'step ' + s.state + (s.failed ? ' failed' : '')"><summary class="sh">
@@ -156,6 +156,7 @@ function spans(t: string): Span[] {
                     @case ('open') { {{ tr('Connect to') }} <b>{{ s.tab }}</b> }
                     @case ('find') { <app-icon name="search" [size]="11" /> {{ tr('Find sessions') }} <b>{{ s.tab }}</b> }
                     @case ('log') { <app-icon name="log" [size]="11" /> {{ tr('Logger') }} {{ s.command }} · <b>{{ s.tab }}</b> }
+                    @case ('lab') { <app-icon name="cube" [size]="11" /> {{ tr('Emulated lab') }} <code>{{ s.command }}</code> }
                     @case ('record') { <app-icon name="record" [size]="11" /> {{ tr('Recorder') }} {{ s.command }} · <b>{{ s.tab }}</b> }
                     @default { <code>{{ s.command }}</code> {{ tr('on') }} <b>{{ s.tab }}</b> } }</span>
                   <span class="hint">{{ s.note || (s.auto ? tr('auto') : s.state === 'done' ? tr('allowed') : '') }}</span></summary>

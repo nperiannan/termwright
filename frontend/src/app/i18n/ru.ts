@@ -2397,6 +2397,10 @@ const ru: Record<string, string> = {
   'saving its running state': 'сохраняет своё состояние',
   'The file is in its disk; the switch has not shown the model on its CLI yet': 'Файл записан на диск; коммутатор ещё не показал эту модель в CLI',
   'written, not checked on the switch yet': 'записана, ещё не проверена на коммутаторе',
+  'Emulated lab': 'Эмулируемая лаборатория',
+  'Change the emulated lab?': 'Изменить эмулируемую лабораторию?',
+  'Do It': 'Выполнить',
+  'Sees the emulated lab (switches, cables, LAGs, KVM hosts), starts and stops switches, adds cables and marks LAGs': 'Видит эмулируемую лабораторию (коммутаторы, кабели, LAG, хосты KVM), запускает и останавливает коммутаторы, добавляет кабели и отмечает LAG',
 };
 
 export default ru;

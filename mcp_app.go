@@ -62,6 +62,7 @@ var mcpTools = []mcpTool{
 			"tab":   map[string]any{"type": "string", "description": "the tab id or name (from list_tabs); empty = the tab the user has open"},
 			"lines": map[string]any{"type": "integer", "description": "how many lines from the end (default 200, at most 3000)"},
 		})},
+	{"show_lab", "Show Termwright's emulated lab: its switches (model, software, state, KVM host, management address, console, the saved sessions to open), the cables between them with LAGs, and the KVM hosts with their CPU and memory. To configure a switch, open its saved session and send commands.", mcpSchema(map[string]any{})},
 	{"list_sessions", "List the saved sessions (devices) in Termwright's Session Manager: path, address, protocol and device type.",
 		mcpSchema(map[string]any{"filter": map[string]any{"type": "string", "description": "only sessions whose path, address or device type contains this"}})},
 	{"open_session", "Connect to a saved session in a new Termwright tab. The user is asked in Termwright first.",
@@ -424,6 +425,9 @@ func (a *App) mcpCall(_ context.Context, name string, args map[string]any) (stri
 		}
 		out, _ := aiRedact(txt.Text, false)
 		return fmt.Sprintf("%s (%s, %s) - the last %d of %d lines:\n%s", t.Title, orDash(t.Session.DeviceType), t.State, min(n, txt.Total), txt.Total, out), nil
+	case "show_lab":
+		out, _ := aiRedact(a.EmuAgentText(), false)
+		return out, nil
 	case "list_sessions":
 		f := strings.ToLower(argStr(args, "filter"))
 		paths, _ := a.store.AllSessions(nil)

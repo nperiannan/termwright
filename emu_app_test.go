@@ -775,3 +775,28 @@ func TestEmuTopUp(t *testing.T) {
 		t.Fatal("topped up twice")
 	}
 }
+
+// The AI agent sees the lab: switches with their sessions, cables with LAGs and tunnels, the hosts.
+func TestEmuAgentText(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = true, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	t.Setenv("HOME", dir)
+	emuLab.f.Host = "Lab/kvm-1"
+	emuLab.f.Images = []emu.Image{{ID: "i1", Name: "EXOS-VM", DeviceType: "EXOS", Version: "33.6", NICs: 9, PortName: "1/{n}"}}
+	emuLab.f.Sessions = map[string]string{"v1": "Emulated Lab/core-1"}
+	emuLab.f.Consoles = map[string]string{"v1": "Emulated Lab/Consoles/core-1 console"}
+	emuLab.f.Lab = &emu.Lab{ID: "a1", Mgmt: "cloud", MgmtNet: "10.1.1.10/24", VMs: []emu.VM{{ID: "v1", Name: "core-1", Image: "i1", MgmtIP: "10.1.1.10/24"}, {ID: "v2", Name: "acc-1", Image: "i1", Index: 1, Host: "Lab/kvm-2"}},
+		Cables: []emu.Cable{{A: "v1", APort: 1, B: "v2", BPort: 1}},
+		Lags:   []emu.Lag{{VM: "v1", Name: "1", Mode: "lacp", Ports: []int{1}, Source: "switch"}}}
+	got := a.emuAgentText()
+	t.Log(got)
+	for _, want := range []string{"- core-1 | ", `"Emulated Lab/core-1"`, "acc-1", "kvm-2", "core-1 1/1 <-> acc-1 1/1", "LAG 1 (lacp) on core-1", "UDP tunnel", "KVM hosts:"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("no %q in:\n%s", want, got)
+		}
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -40,7 +41,7 @@ type AIChatRequest struct {
 	Protocol   string   `json:"protocol"`
 	Agent      bool     `json:"agent"`
 	Tabs       []string `json:"tabs"`    // agent: the open tabs, "name (device type, state)"
-	Tools      []string `json:"tools"`   // agent: what it may do - "run" (commands in tabs), "open" (find and connect to saved sessions), "log", "record"
+	Tools      []string `json:"tools"`   // agent: what it may do - "run" (commands in tabs), "open" (find and connect to saved sessions), "log", "record", "lab" (the emulated lab)
 	Folders    []string `json:"folders"` // agent: the saved-session folders
 	Perm       string   `json:"perm"`    // agent: "" changes ask first, "every", "readonly", "auto" (fully autonomous)
 }
@@ -121,6 +122,10 @@ func (a *App) AIChat(r AIChatRequest) (AIAnswer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
 	sys := aiChatSystem(r)
+	if r.Agent && slices.Contains(r.Tools, "lab") {
+		lab, _ := aiRedact(a.emuAgentLab(), s.HideHosts) // the same as the chat: secrets out, hosts hidden when set
+		sys += lab
+	}
 	out, usage, err := aiConverse(ctx, s, key, model, sys, msgs)
 	if err != nil {
 		return AIAnswer{}, err

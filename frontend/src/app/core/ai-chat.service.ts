@@ -2,7 +2,7 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { Backend, errText } from './backend';
 import { Ui } from './ui.service';
 import { Tabs, TabView } from './tabs.service';
-import { SessionNode } from './models';
+import { LabView, SessionNode } from './models';
 import { envInfo, envOf } from './env';
 import { tr } from './i18n';
 
@@ -17,7 +17,7 @@ export type CtxKind = 'selection' | 'clipboard' | 'terminal' | 'tab' | 'file';
 export interface Ctx { id: number; kind: CtxKind; tabId?: string; label: string; detail: string; text: string; }
 export interface Img { name: string; mediaType: string; data: string; url: string; }
 export type StepState = 'ask' | 'running' | 'done' | 'skipped' | 'error' | 'refused';
-export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record';
+export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab';
 export interface Step { kind: StepKind; tab: string; command: string; output?: string; state: StepState; auto?: boolean; danger?: boolean; note?: string; failed?: boolean; prod?: boolean; }
 export interface ChatMsg {
   id: number; role: 'user' | 'assistant'; text: string; time: string;
@@ -35,6 +35,7 @@ export const AGENT_TOOLS = [
   { k: 'open', name: 'Connect to saved sessions', what: 'Finds saved sessions by folder, name or address and connects with their saved login' },
   { k: 'log', name: 'Logger', what: 'Logs a tab to a file in the log folder - also in Read only' },
   { k: 'record', name: 'Recorder', what: 'Records a tab with a marker for each command - also in Read only' },
+  { k: 'lab', name: 'Emulated lab', what: 'Sees the emulated lab (switches, cables, LAGs, KVM hosts), starts and stops switches, adds cables and marks LAGs' },
 ] as const;
 const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 25;
 
@@ -343,6 +344,7 @@ export class AIChat {
       s.state = 'done'; s.output = tr('Connected'); return `open ${node.name}: connected; the tab is called ${t.title}.`;
     }
     if (s.kind === 'log' || s.kind === 'record') return this.evidence(s);
+    if (s.kind === 'lab') return this.labStep(s, chatId);
     const t = findTab(this.tabs.tabs(), s.tab);
     if (!t) { s.state = 'error'; s.note = tr('No open tab is called {0}', s.tab); return `run ${s.tab}: no open tab has that name - open it first.`; }
     s.tab = t.title;
@@ -395,6 +397,69 @@ export class AIChat {
       const f = (await waitFor(() => this.tabs.get(t.id)?.castFile, 3000)) ?? '';
       s.state = f ? 'done' : 'error'; s.output = f; return `record ${t.title}: ` + (f ? `on - ${f}.` : 'could not start.');
     } catch (e) { s.state = 'error'; s.note = errText(e); return `${s.kind} ${t.title}: ${errText(e)}`; }
+  }
+
+  /** A lab line: lab show (read), or a change to the emulated lab (asked like a configuration change). */
+  private async labStep(s: Step, chatId: string): Promise<string> {
+    const line = `lab ${s.command}`;
+    const [verb0, ...args] = s.command.trim().split(/\s+/);
+    const verb = (verb0 ?? '').toLowerCase();
+    s.tab = tr('Emulated lab');
+    try {
+      if (verb === 'show' || verb === '') {
+        const t = await this.backend.emuAgentText();
+        s.state = 'done'; s.auto = true; s.output = t;
+        return `${line}:\n${t}`;
+      }
+      const v: LabView = await this.backend.emuState();
+      const devs = v.devices ?? [];
+      const dev = (n?: string) => devs.find(d => d.hostname.toLowerCase() === (n ?? '').toLowerCase() || d.id === n);
+      const ids = (n?: string) => (n ?? '').toLowerCase() === 'all' ? devs.map(d => d.id) : (dev(n) ? [dev(n)!.id] : null);
+      const bad = (why: string) => { s.state = 'error'; s.note = why; return `${line}: not done - ${why}.`; };
+      const known = ['start', 'stop', 'shutdown', 'cable', 'uncable', 'pull', 'plug', 'lag', 'nolag', 'readlags'];
+      if (!known.includes(verb)) return bad(`unknown lab command; use ${['show', ...known].join(', ')}`);
+      if (!v.exists || !devs.length) return bad('there is no emulated lab with switches');
+      const one = verb === 'start' || verb === 'stop' ? ids(args[0]) : dev(args[0]) ? [dev(args[0])!.id] : null;
+      if (!one) return bad(`no switch is called ${args[0] ?? ''} (lab show lists them)`);
+      // reading the switch's LAGs changes nothing; the rest change the lab
+      if (verb !== 'readlags') {
+        const perm = this.perm();
+        if (perm === 'readonly') { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `${line}: not done - the user allows only read-only actions. Tell the user what to do instead.`; }
+        if (perm !== 'auto') { const r = await this.ask(s, chatId); if (r.go !== 'run') return this.refusal(s, r.go); }
+      }
+      s.state = 'running'; this.touch(chatId);
+      let out: LabView;
+      switch (verb) {
+        case 'start': out = await this.backend.emuStart(one); break;
+        case 'stop': out = await this.backend.emuStop(one); break;
+        case 'shutdown': out = await this.backend.emuShutDown(one); break;
+        case 'cable': {
+          const b = dev(args[2]);
+          if (!b || !args[1] || !args[3]) return bad('give lab cable <switch> <port> <switch> <port>');
+          out = await this.backend.emuConnect({ a: one[0], aPort: args[1], b: b.id, bPort: args[3] });
+          break;
+        }
+        case 'uncable': if (!args[1]) return bad('give the port'); out = await this.backend.emuDisconnect(one[0], args[1]); break;
+        case 'pull': case 'plug': if (!args[1]) return bad('give the port'); out = await this.backend.emuSetLink(one[0], args[1], verb === 'plug'); break;
+        case 'lag': {
+          const mode = (args[2] ?? '').toLowerCase();
+          const ports = (args.slice(3).join(',')).split(',').map(p => p.trim()).filter(Boolean);
+          if (!args[1] || (mode !== 'lacp' && mode !== 'static') || !ports.length) return bad('give lab lag <switch> <name> lacp|static <port,port>');
+          out = await this.backend.emuSetLag(one[0], args[1], mode, ports);
+          break;
+        }
+        case 'nolag': if (!args[1]) return bad('give the LAG name'); out = await this.backend.emuSetLag(one[0], args[1], '', []); break;
+        default: out = await this.backend.emuReadLags(one);
+      }
+      void this.ui.refreshTree();
+      const names = one.map(id => devs.find(d => d.id === id)?.hostname ?? id);
+      const after = (out.devices ?? []).filter(d => one.includes(d.id)).map(d => `${d.hostname}: ${d.stateText || d.state}`).join(', ');
+      s.state = 'done'; s.output = after || tr('Done');
+      return `${line}: done for ${names.join(', ')}` + (after ? ` - now ${after}` : '') + '. Use lab show to see the lab again.';
+    } catch (e) {
+      s.state = 'error'; s.note = errText(e).slice(0, 160);
+      return `${line}: failed - ${errText(e)}`;
+    }
   }
 
   private ask(s: Step, chatId: string) {
@@ -452,6 +517,8 @@ export function parseActions(text: string): { text: string; actions: { kind: Ste
       if (m) { actions.push({ kind: 'run', tab: m[1].trim(), command: m[2].trim() }); continue; }
       m = /^(log|record)\s+(.+?)\s*:\s*(.+)$/i.exec(l);
       if (m) { actions.push({ kind: m[1].toLowerCase() as StepKind, tab: m[2].trim(), command: m[3].trim() }); continue; }
+      m = /^lab(?:\s+(.*))?$/i.exec(l);
+      if (m) { actions.push({ kind: 'lab', tab: 'lab', command: (m[1] ?? 'show').trim() }); continue; }
       m = /^(open|find)\s+(.+)$/i.exec(l);
       if (m) actions.push({ kind: m[1].toLowerCase() as StepKind, tab: m[2].trim(), command: '' });
     }

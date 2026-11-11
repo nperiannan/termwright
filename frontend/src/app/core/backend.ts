@@ -117,6 +117,7 @@ export class Backend {
   emuSetLink(id: string, port: string, up: boolean) { return this.call<LabView>('EmuSetLink', id, port, up); }
   emuPlace(id: string, x: number, y: number) { return this.call<void>('EmuPlace', id, x, y); }
   emuFreePorts(id: string) { return this.call<string[] | null>('EmuFreePorts', id); }
+  emuAgentText() { return this.call<string>('EmuAgentText'); }
   emuConsoleTail(id: string) { return this.call<string>('EmuConsoleTail', id); }
   labAdd(r: LabRequest) { return this.call<LabView>('LabAdd', r); }
   labStart(ids: string[]) { return this.call<LabView>('LabStart', ids); }
