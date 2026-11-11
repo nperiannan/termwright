@@ -2807,8 +2807,21 @@ func (a *App) EmuState() (EmuView, error) {
 	emuLab.mu.Lock()
 	a.emuLoad()
 	emuLab.packProfiles = prof
-	if emuTopUp(emuLab.f.Images, prof) {
+	if up, pw := emuTopUp(emuLab.f.Images, prof); up {
 		_ = a.emuSave()
+		if l := emuLab.f.Lab; l != nil && len(pw) > 0 { // their sessions take the factory password
+			var vs []emu.VM
+			for _, v := range l.VMs {
+				if slices.Contains(pw, v.Image) {
+					vs = append(vs, v)
+				}
+			}
+			go func() {
+				for _, v := range vs {
+					a.emuLogins(v)
+				}
+			}()
+		}
 	}
 	has := emuLab.f.Lab != nil && len(emuLab.f.Lab.VMs) > 0
 	emuLab.mu.Unlock()
@@ -3948,8 +3961,7 @@ func (a *App) emuPackProfiles() []emu.Image {
 
 // emuTopUp gives images made from a pack profile what a newer pack adds to
 // it: console answers and the persona check (what the user set stays).
-func emuTopUp(imgs []emu.Image, prof []emu.Image) bool {
-	changed := false
+func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 	for i := range imgs {
 		im := &imgs[i]
 		for _, p := range prof {
@@ -3977,12 +3989,19 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) bool {
 			if p.Persona != nil && im.Persona != nil && im.Persona.Check == "" && p.Persona.Check != "" {
 				im.Persona.Check, changed = p.Persona.Check, true
 			}
+			if im.DefaultPassword == "" && p.DefaultPassword != "" {
+				im.DefaultPassword, changed = p.DefaultPassword, true
+				pw = append(pw, im.ID)
+			}
+			if strings.EqualFold(im.Ready, "login:") && p.Ready != "" && !strings.EqualFold(p.Ready, "login:") { // the pack waits for a later sign of a finished boot
+				im.Ready, changed = p.Ready, true
+			}
 			if p.Persona != nil && im.Persona != nil && len(im.Persona.FSHas) == 0 && len(p.Persona.FSHas) > 0 {
 				im.Persona.FSHas, changed = p.Persona.FSHas, true
 			}
 		}
 	}
-	return changed
+	return changed, pw
 }
 
 // emuRecognise picks the pack's profile whose file name pattern matches, with the version it names.

@@ -745,3 +745,16 @@ func TestEmuTwoHosts(t *testing.T) {
 		t.Errorf("host use %+v", v.HostUse)
 	}
 }
+
+// A newer pack gives existing images its factory password and its later ready text.
+func TestEmuTopUp(t *testing.T) {
+	imgs := []emu.Image{{ID: "a", Name: "VOSS", Ready: "Login:"}, {ID: "b", Name: "EXOS", Ready: "login:"}}
+	prof := []emu.Image{{Name: "VOSS", Ready: "Boot sequence successful", DefaultPassword: "x"}, {Name: "EXOS", Ready: "login:"}}
+	up, pw := emuTopUp(imgs, prof)
+	if !up || len(pw) != 1 || pw[0] != "a" || imgs[0].DefaultPassword != "x" || imgs[0].Ready != "Boot sequence successful" || imgs[1].Ready != "login:" {
+		t.Fatal(up, pw, imgs)
+	}
+	if up, _ := emuTopUp(imgs, prof); up {
+		t.Fatal("topped up twice")
+	}
+}

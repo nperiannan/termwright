@@ -116,17 +116,23 @@ func (t *telnetConn) send(b ...byte) {
 	_, _ = t.c.Write(b)
 }
 
-// Write escapes IAC and maps CR to CR NUL as required by the NVT.
+// Write escapes IAC and maps CR to CR NUL as required by the NVT - not in
+// binary mode (RFC 856), where the NUL reaches the device as a character: a
+// QEMU serial console asks for binary, and Fabric Engine took the NUL as part
+// of the password ("rwa" arrived as four characters) or as an empty login.
 func (t *telnetConn) Write(p []byte) (int, error) {
 	if !t.telnet {
 		return t.c.Write(p)
 	}
+	t.mu.Lock()
+	bin := t.us[optBinary]
+	t.mu.Unlock()
 	out := make([]byte, 0, len(p)+8)
 	for i, b := range p {
 		out = append(out, b)
 		if b == tIAC {
 			out = append(out, tIAC)
-		} else if b == '\r' && (i+1 >= len(p) || p[i+1] != '\n') {
+		} else if b == '\r' && !bin && (i+1 >= len(p) || p[i+1] != '\n') {
 			out = append(out, 0)
 		}
 	}

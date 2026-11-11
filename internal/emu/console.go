@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/netip"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -251,6 +252,10 @@ func (c *Console) Tail(n int) string {
 	return t
 }
 
+// lockOut: a switch that locks its console after failed logins ("Lock out for
+// 60 seconds.").
+var lockOut = regexp.MustCompile(`(?i)lock(?:ed)? ?out for (\d+) sec`)
+
 // Login gets the console to the CLI prompt: logs in when it shows a login
 // prompt. A refused login is tried again (a switch still starting up can
 // refuse the first one); the error ends with what the console showed.
@@ -261,13 +266,18 @@ func Login(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 		if p, err = login1(ctx, c, im); err == nil {
 			return p, nil
 		}
-		if !strings.Contains(err.Error(), "refused") {
-			break
+		if !strings.Contains(err.Error(), "refused") || im.Password == "" {
+			break // without a password it is refused again
+		}
+		wait := 10 * time.Second
+		if m := lockOut.FindStringSubmatch(c.Tail(600)); m != nil { // too many attempts: the console is locked for a while
+			n, _ := strconv.Atoi(m[1])
+			wait = time.Duration(n+5) * time.Second
 		}
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(10 * time.Second):
+		case <-time.After(wait):
 		}
 	}
 	return nil, fmt.Errorf("%w - the console showed: %s", err, c.Tail(220))

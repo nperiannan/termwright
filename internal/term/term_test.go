@@ -373,3 +373,24 @@ func TestSSHWrongPasswordStops(t *testing.T) {
 	}
 	m.CloseAll()
 }
+
+// Enter is CR NUL on an NVT, a bare CR once binary was agreed (a QEMU serial
+// console asks for it, and the NUL would reach the switch as a character).
+func TestTelnetBinaryCR(t *testing.T) {
+	for _, bin := range []bool{false, true} {
+		a, b := net.Pipe()
+		tc := &telnetConn{c: a, telnet: true}
+		tc.us[optBinary] = bin
+		got := make(chan []byte, 1)
+		go func() { buf := make([]byte, 16); n, _ := b.Read(buf); got <- buf[:n] }()
+		_, _ = tc.Write([]byte("rwa\r"))
+		want := "rwa\r\x00"
+		if bin {
+			want = "rwa\r"
+		}
+		if g := string(<-got); g != want {
+			t.Fatalf("binary %v: %q", bin, g)
+		}
+		a.Close()
+	}
+}
