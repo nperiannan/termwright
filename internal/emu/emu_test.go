@@ -3,8 +3,8 @@ package emu
 import (
 	"context"
 	"encoding/base64"
-	"net"
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"

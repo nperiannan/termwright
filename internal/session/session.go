@@ -186,73 +186,73 @@ type Session struct {
 	MACs              string `json:"macs"`
 	HostKeyAlgorithms string `json:"hostKeyAlgorithms"`
 
-	Emulation        string        `json:"emulation"`
-	TermType         string        `json:"termType"`
-	NoCursorReport   bool          `json:"noCursorReport"` // do not answer the device's cursor position requests (ESC[6n)
-	Description      []string      `json:"description"`
-	Rows             int           `json:"rows"`
-	Cols             int           `json:"cols"`
-	Scrollback       int           `json:"scrollback"`
-	Keepalive        bool          `json:"keepalive"`
-	KeepaliveSec     int           `json:"keepaliveSec"`
-	ComPort          string        `json:"comPort"`
-	BaudRate         int           `json:"baudRate"`
-	DataBits         int           `json:"dataBits"`
-	StopBits         int           `json:"stopBits"` // 0 = 1, 1 = 1.5, 2 = 2
-	Parity           int           `json:"parity"`   // 0 none, 1 odd, 2 even, 3 mark, 4 space
-	LogFile          string        `json:"logFile"`
-	LogOnConnect     bool          `json:"logOnConnect"`
-	LogAppend        bool          `json:"logAppend"`
-	LogEachLine      string        `json:"logEachLine"`
-	LogRaw           bool          `json:"logRaw"`
-	RecordSession    bool          `json:"recordSession"` // record every connection (asciinema .cast)
-	SavePassword     bool          `json:"savePassword"`
-	LocalCommand     string        `json:"localCommand"`
-	LocalDir         string        `json:"localDir"`
-	ColorScheme      string        `json:"colorScheme"`
-	LogonActions     []LogonAction `json:"logonActions"`
-	Triggers         []Trigger     `json:"triggers"`
-	PortForwards     []PortForward `json:"portForwards"`
-	JumpSession      string        `json:"jumpSession"` // path of a session used as jump host
-	ProxyType        string        `json:"proxyType"`   // "" | socks5 | http
-	ProxyHost        string        `json:"proxyHost"`
-	ProxyPort        int           `json:"proxyPort"`
-	ProxyUser        string        `json:"proxyUser"`
+	Emulation      string        `json:"emulation"`
+	TermType       string        `json:"termType"`
+	NoCursorReport bool          `json:"noCursorReport"` // do not answer the device's cursor position requests (ESC[6n)
+	Description    []string      `json:"description"`
+	Rows           int           `json:"rows"`
+	Cols           int           `json:"cols"`
+	Scrollback     int           `json:"scrollback"`
+	Keepalive      bool          `json:"keepalive"`
+	KeepaliveSec   int           `json:"keepaliveSec"`
+	ComPort        string        `json:"comPort"`
+	BaudRate       int           `json:"baudRate"`
+	DataBits       int           `json:"dataBits"`
+	StopBits       int           `json:"stopBits"` // 0 = 1, 1 = 1.5, 2 = 2
+	Parity         int           `json:"parity"`   // 0 none, 1 odd, 2 even, 3 mark, 4 space
+	LogFile        string        `json:"logFile"`
+	LogOnConnect   bool          `json:"logOnConnect"`
+	LogAppend      bool          `json:"logAppend"`
+	LogEachLine    string        `json:"logEachLine"`
+	LogRaw         bool          `json:"logRaw"`
+	RecordSession  bool          `json:"recordSession"` // record every connection (asciinema .cast)
+	SavePassword   bool          `json:"savePassword"`
+	LocalCommand   string        `json:"localCommand"`
+	LocalDir       string        `json:"localDir"`
+	ColorScheme    string        `json:"colorScheme"`
+	LogonActions   []LogonAction `json:"logonActions"`
+	Triggers       []Trigger     `json:"triggers"`
+	PortForwards   []PortForward `json:"portForwards"`
+	JumpSession    string        `json:"jumpSession"` // path of a session used as jump host
+	ProxyType      string        `json:"proxyType"`   // "" | socks5 | http
+	ProxyHost      string        `json:"proxyHost"`
+	ProxyPort      int           `json:"proxyPort"`
+	ProxyUser      string        `json:"proxyUser"`
 	// JumpOff / ProxyOff: the jump host / proxy is kept (OffJump / OffProxy)
 	// but not used until it is turned on again.
-	JumpOff  bool   `json:"jumpOff,omitempty"`
-	OffJump  string `json:"offJump,omitempty"`
-	ProxyOff bool   `json:"proxyOff,omitempty"`
-	OffProxy *Proxy `json:"offProxy,omitempty"`
-	AutoReconnect    bool          `json:"autoReconnect"`
-	X11Forward       bool          `json:"x11Forward"`
-	AgentForward     bool          `json:"agentForward"`
-	KeywordSet       string        `json:"keywordSet"`
-	FontFamily       string        `json:"fontFamily"`
-	FontSize         int           `json:"fontSize"`
-	Backspace        string        `json:"backspace"`   // "" (DEL, default) | "bs" (Ctrl+H)
-	LogonScript      string        `json:"logonScript"` // JavaScript file run after connecting
-	LogonArgs        string        `json:"logonArgs"`   // arguments for the logon script (scriptArgs)
-	AutomateLogon    bool          `json:"automateLogon"`
-	InitialCR        bool          `json:"initialCr"`  // send Enter right after connecting
-	LoginAgain       bool          `json:"loginAgain"` // log in again when the login prompt comes back by itself (restart, crash, idle logout)
-	UseLogonScript   bool          `json:"useLogonScript"`
-	RemoteCommand    string        `json:"remoteCommand"` // SSH2: run this instead of a login shell
-	UseRemoteCommand bool          `json:"useRemoteCommand"`
-	OpenAs           string        `json:"openAs"`          // SSH2: "" = terminal, "sftp" = SFTP browser only
-	DeviceType       string        `json:"deviceType"`      // name of a device type (login profile)
-	OwnLogin         bool          `json:"ownLogin"`        // with a device type: use this session's username/password instead of the device type's
-	Account          string        `json:"account"`         // who logs in: "" = default (folder, then device type), "-" = this session's own username and password, else a saved account
-	RDPDomain        string        `json:"rdpDomain"`       // RDP: Windows domain of the user
-	RDPFullScreen    bool          `json:"rdpFullScreen"`   // RDP: open full screen
-	RDPSize          string        `json:"rdpSize"`         // RDP: window size such as "1600x900" ("" = the client's default)
-	VNCViewOnly      bool          `json:"vncViewOnly"`     // VNC: watch only, no keyboard or mouse
-	ConsoleServer    string        `json:"consoleServer"`   // Console: the console server's session path
-	ConsolePort      int           `json:"consolePort"`     // Console: port (line) number on the console server
-	ConsoleMethod    string        `json:"consoleMethod"`   // Console: how ports are reached (see console.go)
-	ConsoleUser      string        `json:"consoleUser"`     // Console, custom: user name template ({user}, {port}, {nn})
-	ConsoleBase      int           `json:"consoleBase"`     // Console, custom: TCP port = base + port number (0 = the server's port)
-	ConsoleProtocol  string        `json:"consoleProtocol"` // Console, custom: SSH2 or Telnet
+	JumpOff          bool   `json:"jumpOff,omitempty"`
+	OffJump          string `json:"offJump,omitempty"`
+	ProxyOff         bool   `json:"proxyOff,omitempty"`
+	OffProxy         *Proxy `json:"offProxy,omitempty"`
+	AutoReconnect    bool   `json:"autoReconnect"`
+	X11Forward       bool   `json:"x11Forward"`
+	AgentForward     bool   `json:"agentForward"`
+	KeywordSet       string `json:"keywordSet"`
+	FontFamily       string `json:"fontFamily"`
+	FontSize         int    `json:"fontSize"`
+	Backspace        string `json:"backspace"`   // "" (DEL, default) | "bs" (Ctrl+H)
+	LogonScript      string `json:"logonScript"` // JavaScript file run after connecting
+	LogonArgs        string `json:"logonArgs"`   // arguments for the logon script (scriptArgs)
+	AutomateLogon    bool   `json:"automateLogon"`
+	InitialCR        bool   `json:"initialCr"`  // send Enter right after connecting
+	LoginAgain       bool   `json:"loginAgain"` // log in again when the login prompt comes back by itself (restart, crash, idle logout)
+	UseLogonScript   bool   `json:"useLogonScript"`
+	RemoteCommand    string `json:"remoteCommand"` // SSH2: run this instead of a login shell
+	UseRemoteCommand bool   `json:"useRemoteCommand"`
+	OpenAs           string `json:"openAs"`          // SSH2: "" = terminal, "sftp" = SFTP browser only
+	DeviceType       string `json:"deviceType"`      // name of a device type (login profile)
+	OwnLogin         bool   `json:"ownLogin"`        // with a device type: use this session's username/password instead of the device type's
+	Account          string `json:"account"`         // who logs in: "" = default (folder, then device type), "-" = this session's own username and password, else a saved account
+	RDPDomain        string `json:"rdpDomain"`       // RDP: Windows domain of the user
+	RDPFullScreen    bool   `json:"rdpFullScreen"`   // RDP: open full screen
+	RDPSize          string `json:"rdpSize"`         // RDP: window size such as "1600x900" ("" = the client's default)
+	VNCViewOnly      bool   `json:"vncViewOnly"`     // VNC: watch only, no keyboard or mouse
+	ConsoleServer    string `json:"consoleServer"`   // Console: the console server's session path
+	ConsolePort      int    `json:"consolePort"`     // Console: port (line) number on the console server
+	ConsoleMethod    string `json:"consoleMethod"`   // Console: how ports are reached (see console.go)
+	ConsoleUser      string `json:"consoleUser"`     // Console, custom: user name template ({user}, {port}, {nn})
+	ConsoleBase      int    `json:"consoleBase"`     // Console, custom: TCP port = base + port number (0 = the server's port)
+	ConsoleProtocol  string `json:"consoleProtocol"` // Console, custom: SSH2 or Telnet
 	// Set when connecting (not saved): the SSH login to a console server uses
 	// this user and the saved password of this session path, while Username
 	// and the device type log in to the device behind the port.
