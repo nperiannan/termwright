@@ -385,3 +385,19 @@ func TestEmuUnpack(t *testing.T) {
 		t.Error("a plain file passed as xz")
 	}
 }
+
+func TestEmuCloud(t *testing.T) {
+	info := &emu.HostInfo{LanAddr: "10.234.179.20/24", Gateway: "10.234.179.254", Uplink: "ens160", Sudo: true}
+	l := &emu.Lab{VMs: []emu.VM{{ID: "a"}, {ID: "b"}}}
+	if err := emuCloud(l, info, "10.234.179.146"); err != nil || l.MgmtNet != "10.234.179.146/24" || l.CloudGw != "10.234.179.254" || l.CloudIf != "ens160" || l.HostIP != "10.234.179.20" {
+		t.Fatalf("%v %+v", err, l)
+	}
+	for spec, bad := range map[string]string{"": "first switch", "10.1.1.5": "not on the host's network", "10.234.179.19": "take 10.234.179.20", "10.234.179.254 10.234.179.1": "run past", "10.234.179.30 10.9.9.9": "gateway"} {
+		if err := emuCloud(l, info, spec); err == nil || !strings.Contains(err.Error(), bad) {
+			t.Errorf("%q: %v (want %q)", spec, err, bad)
+		}
+	}
+	if err := emuMgmtOK(info, "cloud"); err != nil {
+		t.Error(err)
+	}
+}

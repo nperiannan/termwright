@@ -2306,6 +2306,17 @@ const ru: Record<string, string> = {
   '{0} with a problem': 'с проблемой: {0}',
   '{0} switches are running: they are stopped, and started again with it (their configuration stays). Their sessions are updated.': 'Запущено коммутаторов: {0}. Они будут остановлены и запущены снова с новым подключением (их конфигурация сохранится). Их сеансы обновятся.',
   'Stop, Change and Start': 'Остановить, изменить и запустить',
+  'The host’s network, routed (cloud)': 'Сеть хоста, маршрутизация (облако)',
+  'Addresses of the switches on the host’s network': 'Адреса коммутаторов в сети хоста',
+  'Like GNS3’s cloud: the switches get fixed addresses on the host’s network {0} and can reach and be reached from it (SSH, HTTP/HTTPS, FTP, TFTP, SCP…). The host answers for their addresses and forwards for them, so only the host’s own MAC address is seen there: nothing has to be allowed on a VMware or Hyper-V virtual switch, and Wi-Fi works.': 'Как облако GNS3: коммутаторы получают фиксированные адреса в сети хоста {0}, доступны из неё и сами её видят (SSH, HTTP/HTTPS, FTP, TFTP, SCP…). Хост отвечает за их адреса и пересылает их трафик, поэтому в сети виден только MAC-адрес хоста: на виртуальном коммутаторе VMware или Hyper-V ничего разрешать не нужно, работает и Wi-Fi.',
+  'First switch’s address': 'Адрес первого коммутатора',
+  'The next switches take the addresses after it ({0} switches: up to {1}). Pick free addresses: no DHCP server may hand them out.': 'Следующие коммутаторы получают адреса после него (коммутаторов: {0}, до {1}). Выберите свободные адреса, которые не раздаёт DHCP-сервер.',
+  'The switches get the addresses from {0} on the host’s network, typed on their consoles at each start, and are reached directly.': 'Коммутаторы получают адреса начиная с {0} в сети хоста (вводятся в консоли при каждом запуске) и доступны напрямую.',
+  'Set address': 'Задать адрес',
+  'Typed at each start when the switches have fixed addresses (the host’s network routed, or a lab bridge): {mgmtAddr} {mgmtBits} {mgmtMask} {gateway}': 'Вводится при каждом запуске, если у коммутаторов фиксированные адреса (сеть хоста с маршрутизацией или мост лаборатории): {mgmtAddr} {mgmtBits} {mgmtMask} {gateway}',
+  'Like GNS3’s cloud: the switches get fixed addresses on the host’s network {0} (from the first one on) and are reached from it and reach it with any protocol. The host answers for them, so nothing has to be allowed on a VM host’s virtual switch.': 'Как облако GNS3: коммутаторы получают фиксированные адреса в сети хоста {0} (начиная с первого), доступны из неё и видят её по любому протоколу. Хост отвечает за них, поэтому на виртуальном коммутаторе хоста-ВМ ничего разрешать не нужно.',
+  'fixed addresses, any protocol, no virtual switch settings': 'фиксированные адреса, любой протокол, без настроек виртуального коммутатора',
+  'no network port with an address': 'нет сетевого порта с адресом',
 };
 
 export default ru;

@@ -192,6 +192,7 @@ type EmuView struct {
 	Running       bool              `json:"running"`
 	Folder        string            `json:"folder"`
 	MgmtNet       string            `json:"mgmtNet"`
+	CloudGw       string            `json:"cloudGw,omitempty"` // cloud: the gateway the switches use
 	Mgmt          string            `json:"mgmt"`
 	Devices       []EmuDevice       `json:"devices"`
 	Links         []EmuLinkView     `json:"links"`
@@ -1390,6 +1391,12 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 			return EmuView{}, err
 		}
 		l = &emu.Lab{ID: randHex(1), Dir: "termwright-lab", Mgmt: mgmt, LanIf: info.LanIf, LanKind: info.LanKind, MgmtNet: orStr(r.MgmtNet, "10.99.0.0/24"), Base: 20000 + int(randByte())%40*100, KVM: info.KVM == "yes"}
+		if mgmt == "cloud" {
+			if err := emuCloud(l, info, r.MgmtNet); err != nil {
+				emuLab.mu.Unlock()
+				return EmuView{}, err
+			}
+		}
 		emuLab.f.Lab, emuLab.f.Host = l, r.Host
 		emuLab.f.Sessions, emuLab.f.Consoles = map[string]string{}, map[string]string{}
 	}
@@ -1544,8 +1551,8 @@ func emuPlace(add, all []emu.VM) {
 // emuTarget is where a VM's SSH session goes (and through which jump host).
 func emuTarget(l *emu.Lab, v emu.VM, host string) (string, int, string) {
 	switch l.Mgmt {
-	case "bridge":
-		return strings.Split(v.MgmtIP, "/")[0], 22, host
+	case "bridge", "cloud":
+		return strings.Split(v.MgmtIP, "/")[0], 22, host // cloud: on the host's network, through the host so it works from anywhere the host does
 	case "nat":
 		return orStr(strings.Split(v.MgmtIP, "/")[0], "0.0.0.0"), 22, host // reached through the host
 	case "lan":
@@ -1881,7 +1888,7 @@ func (a *App) emuWatch(host string, ids []string) {
 			}
 			needDay0 := !v.Day0Done && len(im.Day0) > 0
 			needCheck := im.Persona != nil && im.Persona.Check != "" && v.Persona != nil && v.Persona.Applied != "" && !emuLab.pcheck[id]
-			if (needDay0 || needCheck || l.Mgmt == "lan") && !emuLab.day0[id] {
+			if (needDay0 || needCheck || l.Mgmt == "lan" || l.Fixed() && len(im.AddrSet) > 0) && !emuLab.day0[id] {
 				day0 = append(day0, *v)
 				emuLab.day0[id] = true
 			}
@@ -1913,6 +1920,10 @@ func (a *App) emuDay0(host string, v emu.VM) {
 	cur := l.VMByID(v.ID)
 	doDay0 := cur != nil && !cur.Day0Done && len(im.Day0) > 0
 	lan := l.Mgmt == "lan"
+	fixed := l.Fixed() && len(im.AddrSet) > 0 && cur != nil && cur.MgmtIP != ""
+	if cur != nil {
+		v = *cur // its address as it is now
+	}
 	if doDay0 {
 		emuLab.state[v.ID] = "day0"
 	} else {
@@ -1968,6 +1979,23 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		emuLab.mu.Unlock()
 	}
 	a.emuCheckPersona(ctx, c, &im, v)
+	if fixed {
+		// the management address is fixed: typed at each start (the switch's own
+		// configuration need not be saved for it)
+		emuLab.mu.Lock()
+		emuLab.state[v.ID] = "address"
+		emuLab.mu.Unlock()
+		set := im
+		set.Day0 = im.AddrSet
+		if err := emu.Day0(ctx, c, &set, v, v.Index+1, nil); err != nil {
+			fail(emuWithTail(fmt.Errorf("setting its address %s: %w", v.MgmtIP, err), c))
+			return
+		}
+		emuLab.mu.Lock()
+		emuEv(v.ID, "ok", "has the address "+strings.Split(v.MgmtIP, "/")[0]+" (gateway "+orStr(v.Gateway, "none")+") - its SSH session points there")
+		emuLab.mu.Unlock()
+		a.emuRetarget(v)
+	}
 	if lan {
 		// the management port is on the host's network: its address comes from DHCP
 		emuLab.mu.Lock()
@@ -2044,6 +2072,13 @@ func emuMgmtOK(info *emu.HostInfo, mgmt string) error {
 		if !info.Sudo {
 			return errors.New("a bridge needs password-less sudo on the host; use port forwarding")
 		}
+	case "cloud":
+		if !info.Sudo {
+			return errors.New("the host's network (routed) needs password-less sudo on the host; use port forwarding")
+		}
+		if info.Uplink == "" || info.LanAddr == "" {
+			return errors.New("the host has no network port with an address to route the switches onto")
+		}
 	case "forward":
 	default:
 		return errors.New("unknown management: " + mgmt)
@@ -2090,12 +2125,20 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("there is no emulated lab")
 	}
-	if mgmt == "bridge" && strings.TrimSpace(mgmtNet) != "" {
+	if mgmt == "cloud" {
+		if err := emuCloud(l, info, mgmtNet); err != nil {
+			emuLab.mu.Unlock()
+			return EmuView{}, err
+		}
+	} else if mgmt == "bridge" && strings.TrimSpace(mgmtNet) != "" {
 		if _, err := netip.ParsePrefix(strings.TrimSpace(mgmtNet)); err != nil {
 			emuLab.mu.Unlock()
 			return EmuView{}, fmt.Errorf("management network %q: use an IPv4 network like 10.99.0.0/24", mgmtNet)
 		}
 		l.MgmtNet = strings.TrimSpace(mgmtNet)
+	}
+	if mgmt != "cloud" && l.Mgmt == "cloud" {
+		l.MgmtNet = "10.99.0.0/24" // the cloud's first address is no bridge network
 	}
 	old := l.Mgmt
 	l.Mgmt, l.LanIf, l.LanKind = mgmt, info.LanIf, info.LanKind
@@ -2115,6 +2158,53 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 		a.emuRetarget(v)
 	}
 	return a.EmuState()
+}
+
+// emuCloud sets a lab up for the host's network, routed: spec is the first
+// switch's address (its prefix length from the host's own when left out) and,
+// after a space, the gateway (the host's default gateway when left out):
+// "10.234.179.146/24 10.234.179.254".
+func emuCloud(l *emu.Lab, info *emu.HostInfo, spec string) error {
+	host, err := netip.ParsePrefix(info.LanAddr)
+	if err != nil {
+		return errors.New("the host's own address on its network is unknown: check the host again (Hosts)")
+	}
+	f := strings.Fields(spec)
+	if len(f) == 0 {
+		return fmt.Errorf("give the first switch's address on the host's network (%s), for example %s", host.Masked(), host.Masked().Addr().Next().Next())
+	}
+	first := f[0]
+	if !strings.Contains(first, "/") {
+		first += "/" + strconv.Itoa(host.Bits())
+	}
+	p, err := netip.ParsePrefix(first)
+	if err != nil || !p.Addr().Is4() {
+		return fmt.Errorf("%q is no IPv4 address", f[0])
+	}
+	if !host.Masked().Contains(p.Addr()) {
+		return fmt.Errorf("%s is not on the host's network %s", p.Addr(), host.Masked())
+	}
+	gw := info.Gateway
+	if len(f) > 1 {
+		gw = f[1]
+	}
+	if g, err := netip.ParseAddr(gw); gw != "" && (err != nil || !host.Masked().Contains(g)) {
+		return fmt.Errorf("the gateway %s is not on the host's network %s", gw, host.Masked())
+	}
+	last := p.Addr()
+	for i := 1; i < max(len(l.VMs), 1); i++ {
+		last = last.Next()
+	}
+	for _, a := range []string{host.Addr().String(), gw} {
+		if aa, err := netip.ParseAddr(a); err == nil && p.Addr().Compare(aa) <= 0 && aa.Compare(last) <= 0 {
+			return fmt.Errorf("the switches' addresses %s - %s take %s (the host or the gateway): start after it", p.Addr(), last, a)
+		}
+	}
+	if !host.Masked().Contains(last) || !host.Masked().Contains(last.Next()) { // the last address is the broadcast
+		return fmt.Errorf("%d switches from %s run past the network %s", len(l.VMs), p.Addr(), host.Masked())
+	}
+	l.MgmtNet, l.CloudGw, l.CloudIf, l.HostIP = p.String(), gw, info.Uplink, host.Addr().String()
+	return nil
 }
 
 // emuWithTail adds what the console showed to an error (unless it says so already).
@@ -2321,7 +2411,7 @@ func (a *App) emuView() EmuView {
 	if l == nil {
 		return v
 	}
-	v.Mgmt, v.MgmtNet, v.KVM = l.Mgmt, l.MgmtNet, l.KVM
+	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
 	for _, vm := range l.VMs {
@@ -3359,6 +3449,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) bool {
 				if !has {
 					im.Answers, changed = append(im.Answers, pa), true
 				}
+			}
+			if len(im.AddrSet) == 0 && len(p.AddrSet) > 0 {
+				im.AddrSet, changed = p.AddrSet, true
 			}
 			if p.Persona != nil && im.Persona != nil && im.Persona.Check == "" && p.Persona.Check != "" {
 				im.Persona.Check, changed = p.Persona.Check, true

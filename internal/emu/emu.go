@@ -47,6 +47,7 @@ type Image struct {
 	Password   string      `json:"password,omitempty"` // in the keychain, never in the lab file
 	Prompt     string      `json:"prompt"`             // regexp of the CLI prompt (default [>#$]\s*$)
 	Day0       []string    `json:"day0"`               // first-boot commands, with {hostname} {mgmtIp} …
+	AddrSet    []string    `json:"addrSet,omitempty"`  // commands that give the management port a fixed address ({mgmtAddr} {mgmtBits} {mgmtMask} {gateway}), typed at each start when the lab's management has fixed addresses
 	Answers    []Answer    `json:"answers"`            // questions on the console and what to answer
 	Extra      string      `json:"extra"`              // more qemu options
 	Source     string      `json:"source"`             // where the profile came from (a GNS3 appliance…)
@@ -143,11 +144,14 @@ type Cable struct {
 type Lab struct {
 	ID      string  `json:"id"`      // short, part of the folder and interface names
 	Dir     string  `json:"dir"`     // on the host, relative to the home folder
-	Mgmt    string  `json:"mgmt"`    // "lan" (the host's network, DHCP), "nat" (the host's NAT network, DHCP), "bridge" (a lab bridge on the host) or "forward"
+	Mgmt    string  `json:"mgmt"`    // "lan" (the host's network, DHCP), "cloud" (the host's network, routed by the host: fixed addresses), "nat" (the host's NAT network, DHCP), "bridge" (a lab bridge on the host) or "forward"
 	LanIf   string  `json:"lanIf"`   // lan: the host's bridge (tap on it) or network port (macvtap on it)
 	NatBr   string  `json:"natBr"`   // nat: the host's NAT bridge with a DHCP server (libvirt's virbr0)
 	LanKind string  `json:"lanKind"` // lan: "bridge" or "macvtap"
-	MgmtNet string  `json:"mgmtNet"` // bridge mode: the bridge's network (10.99.0.0/24)
+	MgmtNet string  `json:"mgmtNet"` // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.234.179.146/24)
+	CloudGw string  `json:"cloudGw"` // cloud: the host's network's gateway
+	CloudIf string  `json:"cloudIf"` // cloud: the host's port on its network
+	HostIP  string  `json:"hostIp"`  // cloud: the host's own address there
 	Base    int     `json:"base"`    // first TCP/UDP port on the host's 127.0.0.1
 	KVM     bool    `json:"kvm"`     // false: software emulation (slow, for tests)
 	VMs     []VM    `json:"vms"`
@@ -203,8 +207,11 @@ func (l *Lab) NatBridge() string {
 
 // tapped: the management port is a tap on a bridge of the host.
 func (l *Lab) tapped() bool {
-	return l.Mgmt == "bridge" || l.Mgmt == "nat" || l.Mgmt == "lan" && l.LanKind != "macvtap"
+	return l.Mgmt == "bridge" || l.Mgmt == "cloud" || l.Mgmt == "nat" || l.Mgmt == "lan" && l.LanKind != "macvtap"
 }
+
+// Fixed: the switches get fixed addresses (typed on their console), not DHCP.
+func (l *Lab) Fixed() bool { return l.Mgmt == "bridge" || l.Mgmt == "cloud" }
 
 // DownLinks are the data ports of a running VM whose link must be down (the
 // HMP set_link names): ports without a cable (a NIC without a network would
@@ -364,6 +371,24 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		gw := l.gatewayPrefix()
 		fmt.Fprintf(&b, "ip link show %s >/dev/null 2>&1 || { sudo -n ip link add %s type bridge && sudo -n ip addr add %s dev %s; }\nsudo -n ip link set %s up\n", br, br, gw, br, br)
 	}
+	if l.Mgmt == "cloud" {
+		// like GNS3's cloud, but routed: the switches sit on a bridge of the host and
+		// the host answers ARP for their addresses on its network (proxy ARP) and
+		// forwards for them, so the network only ever sees the host's own MAC address
+		// (nothing to allow on a VM host's virtual switch, and Wi-Fi works too)
+		br := l.Bridge()
+		fmt.Fprintf(&b, "ip link show %s >/dev/null 2>&1 || sudo -n ip link add %s type bridge || { echo 'fail all could not make the bridge %s (sudo)'; exit 0; }\nsudo -n ip link set %s up\n", br, br, br, br)
+		if ip := strings.Split(l.HostIP, "/")[0]; ip != "" {
+			fmt.Fprintf(&b, "sudo -n ip addr replace %s/32 dev %s\n", ip, br)
+		}
+		fmt.Fprintf(&b, "sudo -n sysctl -qw net.ipv4.ip_forward=1 net.ipv4.conf.%s.proxy_arp=1 net.ipv4.conf.%s.proxy_arp=1 net.ipv4.conf.%s.rp_filter=0 >/dev/null\n", br, l.CloudIf, br)
+		fmt.Fprintf(&b, "if command -v iptables >/dev/null 2>&1; then for d in -i -o; do sudo -n iptables -C FORWARD $d %s -j ACCEPT 2>/dev/null || sudo -n iptables -I FORWARD $d %s -j ACCEPT; done; fi\n", br, br)
+		for _, v := range vms {
+			if ip, _ := l.Address(v.Index); ip != "" {
+				fmt.Fprintf(&b, "sudo -n ip route replace %s/32 dev %s\n", strings.Split(ip, "/")[0], br)
+			}
+		}
+	}
 	if l.Mgmt == "nat" { // libvirt's default network: started when it is not up
 		br := Q(l.NatBridge())
 		fmt.Fprintf(&b, "ip link show %s >/dev/null 2>&1 || sudo -n virsh -c qemu:///system net-start default >/dev/null 2>&1\n", br)
@@ -439,6 +464,9 @@ func (l *Lab) StopScript(ids []string) string {
 		if l.Mgmt != "forward" && l.Mgmt != "" {
 			if v := l.VMByID(id); v != nil {
 				fmt.Fprintf(&b, "sleep 0.3; sudo -n ip link del %s 2>/dev/null\n", l.tap(*v))
+				if ip, _ := l.Address(v.Index); l.Mgmt == "cloud" && ip != "" {
+					fmt.Fprintf(&b, "sudo -n ip route del %s/32 dev %s 2>/dev/null\n", strings.Split(ip, "/")[0], l.Bridge())
+				}
 			}
 		}
 		fmt.Fprintf(&b, "echo 'stopped %s'\n", id)
@@ -572,6 +600,17 @@ func (l *Lab) gatewayPrefix() string {
 func (l *Lab) Address(i int) (string, string) {
 	if l.Mgmt == "lan" || l.Mgmt == "nat" {
 		return "", "" // from the network's DHCP; learned from the switch or the host's DHCP leases
+	}
+	if l.Mgmt == "cloud" { // from the first address on, the host's network's gateway
+		p, err := netip.ParsePrefix(l.MgmtNet)
+		if err != nil {
+			return "", ""
+		}
+		a := p.Addr()
+		for k := 0; k < i; k++ {
+			a = a.Next()
+		}
+		return a.String() + "/" + strconv.Itoa(p.Bits()), l.CloudGw
 	}
 	if l.Mgmt != "bridge" {
 		return "10.0.2.15/24", "10.0.2.2" // QEMU's user-mode network, the same in every VM

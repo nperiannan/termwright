@@ -333,3 +333,23 @@ func TestConsoleQuestions(t *testing.T) {
 		t.Fatalf("answers %q", asked)
 	}
 }
+
+// The host's network, routed: a bridge, proxy ARP both ways, a /32 route per switch.
+func TestCloudMgmt(t *testing.T) {
+	l := &Lab{ID: "c1", Dir: "x", Mgmt: "cloud", MgmtNet: "10.50.0.146/24", CloudGw: "10.50.0.254", CloudIf: "ens160", HostIP: "10.50.0.20", VMs: []VM{{ID: "v1", Index: 0}, {ID: "v2", Index: 1}}}
+	if ip, gw := l.Address(1); ip != "10.50.0.147/24" || gw != "10.50.0.254" {
+		t.Fatal(ip, gw)
+	}
+	if !l.Fixed() || !strings.Contains(strings.Join(l.Args(l.VMs[0], &Image{NICs: 2}), " "), "tap,id=n0,ifname=twc10m") {
+		t.Fatal("not tapped")
+	}
+	s := l.StartScript(l.VMs, nil)
+	for _, want := range []string{"ip link add twc1br type bridge", "ip addr replace 10.50.0.20/32 dev twc1br", "net.ipv4.conf.twc1br.proxy_arp=1 net.ipv4.conf.ens160.proxy_arp=1", "net.ipv4.ip_forward=1", "ip route replace 10.50.0.146/32 dev twc1br", "ip route replace 10.50.0.147/32 dev twc1br"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("start lacks %q:\n%s", want, s)
+		}
+	}
+	if !strings.Contains(l.StopScript([]string{"v2"}), "ip route del 10.50.0.147/32 dev twc1br") {
+		t.Error("route kept")
+	}
+}

@@ -264,6 +264,7 @@ interface NRow { key: string; count: number; names: string; module: string; seri
         <div class="f" style="margin-top: 10px">
           <label>{{ tr('Management') }}</label>
           <select [(ngModel)]="mgmt" name="nm">
+            <option value="cloud" [disabled]="!info()?.sudo || !info()?.lanAddr">{{ tr('The host’s network, routed (cloud)') }}</option>
             <option value="nat" [disabled]="!info()?.sudo || (!info()?.nat && !info()?.libvirt)">{{ tr('The host’s NAT network') }}{{ best() === 'nat' ? ' ✓' : '' }}</option>
             <option value="lan" [disabled]="!info()?.sudo || !info()?.lanKind">{{ tr('The host’s network (bridged)') }}{{ best() === 'lan' ? ' ✓' : '' }}</option>
             <option value="bridge" [disabled]="!info()?.sudo">{{ tr('Lab bridge on the host') }}{{ best() === 'bridge' ? ' ✓' : '' }}</option>
@@ -271,6 +272,10 @@ interface NRow { key: string; count: number; names: string; module: string; seri
           </select>
         </div>
         <p class="muted small hint">{{ mgmtText() }}</p>
+        @if (mgmt === 'cloud') {
+          <div class="f"><label>{{ tr('First switch’s address') }}</label><input class="mono" [(ngModel)]="cloudAddr" name="nca" [placeholder]="info()?.lanAddr?.split('/')?.[0] ?? ''" /></div>
+          <div class="f"><label>{{ tr('Gateway') }}</label><input class="mono" [(ngModel)]="cloudGw" name="ncg" [placeholder]="info()?.gateway ?? ''" /></div>
+        }
       }
       <div class="sec">{{ tr('Switches') }}</div>
       @for (r of rows(); track $index; let i = $index) {
@@ -331,7 +336,7 @@ export class LabNew implements OnInit {
   protected exists = computed(() => (this.st()?.devices ?? []).length > 0);
   protected hosts = computed<EmuHost[]>(() => this.lab.emu()?.hosts ?? []);
   protected host = '';
-  protected mgmt = 'forward';
+  protected mgmt = 'forward'; protected cloudAddr = ''; protected cloudGw = '';
   protected cable = 'leaf-spine';
   protected start = true;
   protected rows = signal<NRow[]>([]);
@@ -381,6 +386,7 @@ export class LabNew implements OnInit {
       case 'nat': return tr('Like GNS3’s NAT node: the switches get addresses from the host’s DHCP ({0}), reach out through the host, and are reached through the host. Works with any image.', this.hostsInfo()?.nat || 'virbr0');
       case 'lan': return tr('The switches join the host’s network and get addresses from its DHCP server.');
       case 'bridge': return tr('The switches get fixed addresses on a bridge of their own on the host, reached through the host.');
+      case 'cloud': return tr('Like GNS3’s cloud: the switches get fixed addresses on the host’s network {0} (from the first one on) and are reached from it and reach it with any protocol. The host answers for them, so nothing has to be allowed on a VM host’s virtual switch.', this.hostsInfo()?.lanAddr ?? '');
       default: return tr('Each switch’s SSH is forwarded to a port on the host (no root needed).');
     }
   }
@@ -421,7 +427,7 @@ export class LabNew implements OnInit {
         const d = this.dt(r.key); if (!d) continue;
         groups.push({ image: d.images[0], model: d.model, module: r.module, count: r.count, names: r.names, serialStart: r.serial.trim(), macStart: r.mac.trim(), cpus: d.cpus, ram: d.ram });
       }
-      ok = await this.lab.addEmu({ host: this.exists() ? this.lab.emu()?.host ?? this.host : this.host, groups, cabling: this.cable, mgmt: this.exists() ? '' : this.mgmt, mgmtNet: '', start: this.start });
+      ok = await this.lab.addEmu({ host: this.exists() ? this.lab.emu()?.host ?? this.host : this.host, groups, cabling: this.cable, mgmt: this.exists() ? '' : this.mgmt, mgmtNet: this.mgmt === 'cloud' ? (this.cloudAddr.trim() + ' ' + (this.cloudGw.trim() || this.hostsInfo()?.gateway || '')).trim() : '', start: this.start });
     } else {
       ok = await this.lab.add({ groups: this.rows().filter(x => x.count > 0).map(r => { const [model, os] = r.key.split('|'); return { os, model, count: r.count, names: r.names }; }), mgmtNet: '', cabling: this.cable, password: '', start: this.start });
     }
@@ -502,6 +508,7 @@ export class LabNew implements OnInit {
                 <label>{{ tr('Ready when') }}</label><input class="mono" [(ngModel)]="im.ready" name="irdy" /><label>{{ tr('Login') }}</label><div class="row2"><input [(ngModel)]="im.login" name="ilog" /><input type="password" [(ngModel)]="password" name="ipw" [placeholder]="tr('password (keychain)')" autocomplete="off" /></div>
                 <label>{{ tr('Answers') }}</label><textarea class="wide" rows="2" [(ngModel)]="answers" name="ians" [placeholder]="'[y/N]: => n'"></textarea>
                 <label>{{ tr('Day 0') }}</label><textarea class="wide" rows="3" [(ngModel)]="day0" name="id0" placeholder="configure snmp sysName {hostname}"></textarea>
+                <label>{{ tr('Set address') }}</label><textarea class="wide mono" rows="2" [(ngModel)]="addrSet" name="iads" [placeholder]="'configure vlan Mgmt ipaddress {mgmtAddr}/{mgmtBits}'" [title]="tr('Typed at each start when the switches have fixed addresses (the host’s network routed, or a lab bridge): {mgmtAddr} {mgmtBits} {mgmtMask} {gateway}')"></textarea>
                 <label>{{ tr('Address command') }}</label><input class="mono" [(ngModel)]="im.addrCmd" name="iadr" /><label>{{ tr('Device type') }}</label><input [(ngModel)]="im.deviceType" name="idt" />
                 <label>{{ tr('More QEMU options') }}</label><input class="mono wide" [(ngModel)]="im.extra" name="iex" placeholder="-cpu host -machine q35" />
                 <span></span><p class="wide muted small" style="margin: 0">{{ tr('Added to the QEMU command line as they are, for images that need them. Examples: -cpu host (the host CPU’s features), -cpu Nehalem, -machine q35, -smp sockets=1,cores=2, -device virtio-rng-pci, -boot order=c, -rtc base=utc. Termwright sets the disk, network ports, console, memory and vCPU itself.') }}</p>
@@ -616,7 +623,7 @@ export class LabImages implements OnInit {
   protected templates = computed(() => this.lab.emu()?.templates ?? []);
   protected edit = signal<EmuImage | null>(null);
   protected tpl = signal<EmuTemplate | null>(null);
-  protected password = ''; protected day0 = ''; protected answers = '';
+  protected password = ''; protected day0 = ''; protected answers = ''; protected addrSet = '';
   ngOnInit() { this.tab.set(this.start()); const im = this.images()[0]; if (im) this.pick(im.id); }
   protected groups = computed(() => {
     const out: { name: string; items: EmuImage[] }[] = [];
@@ -639,11 +646,11 @@ export class LabImages implements OnInit {
   pick(id: string) {
     const im = this.images().find(i => i.id === id); if (!im) return;
     this.edit.set({ ...im, persona: im.persona ? { ...im.persona } : im.persona }); this.password = '';
-    this.day0 = (im.day0 ?? []).join('\n'); this.answers = (im.answers ?? []).map(a => a.match + ' => ' + a.send).join('\n');
+    this.day0 = (im.day0 ?? []).join('\n'); this.addrSet = (im.addrSet ?? []).join('\n'); this.answers = (im.answers ?? []).map(a => a.match + ' => ' + a.send).join('\n');
   }
   async saveImage() {
     const im = this.edit(); if (!im) return;
-    const out: EmuImage = { ...im, password: this.password, day0: this.day0.split(/\r?\n/).filter(l => l.trim()),
+    const out: EmuImage = { ...im, password: this.password, day0: this.day0.split(/\r?\n/).filter(l => l.trim()), addrSet: this.addrSet.split(/\r?\n/).filter(l => l.trim()),
       answers: this.answers.split(/\r?\n/).filter(l => l.includes('=>')).map(l => { const i = l.indexOf('=>'); return { match: l.slice(0, i).trim(), send: l.slice(i + 2).trim() }; }),
       cpus: +im.cpus || 1, ram: +im.ram || 1024, nics: +im.nics || 1 };
     if (await this.lab.saveImage(out)) this.pick(im.id);
@@ -741,6 +748,7 @@ export class LabImages implements OnInit {
             <div class="card"><b>{{ tr('Management of the switches') }}</b><div class="chk" style="margin-top: 8px">
               <span [class]="h.info.sudo && h.info.nat ? 'y' : 'x'">{{ h.info.sudo && h.info.nat ? '✓' : '✕' }}</span><span>{{ tr('The host’s NAT network') }}</span><span class="muted">{{ h.info.nat ? tr('DHCP on virbr0') : tr('after Set Up') }}@if (best(h) === 'nat') { <span class="badge g">{{ tr('best here') }}</span> }</span>
               <span [class]="h.info.sudo && h.info.lanKind ? (isVM(h) ? 'n' : 'y') : 'x'">{{ h.info.sudo && h.info.lanKind ? (isVM(h) ? '!' : '✓') : '✕' }}</span><span>{{ tr('The host’s network (bridged)') }}</span><span class="muted">{{ h.info.lanIf ? h.info.lanIf + ' (' + h.info.lanKind + ')' : tr('no port to join') }}{{ isVM(h) ? ' - ' + tr('its virtual switch must allow MAC changes and forged transmits') : '' }}@if (best(h) === 'lan') { <span class="badge g">{{ tr('best here') }}</span> }</span>
+              <span [class]="h.info.sudo && h.info.lanAddr ? 'y' : 'x'">{{ h.info.sudo && h.info.lanAddr ? '✓' : '✕' }}</span><span>{{ tr('The host’s network, routed (cloud)') }}</span><span class="muted">{{ h.info.lanAddr ? (h.info.uplink + ' ' + h.info.lanAddr + ' · ' + tr('fixed addresses, any protocol, no virtual switch settings')) : tr('no network port with an address') }}</span>
               <span [class]="h.info.sudo ? 'y' : 'x'">{{ h.info.sudo ? '✓' : '✕' }}</span><span>{{ tr('Lab bridge on the host') }}</span><span class="muted">{{ tr('from the host only') }}</span>
               <span class="y">✓</span><span>{{ tr('Port forwarding on the host') }}</span><span class="muted">{{ tr('always works') }}</span>
             </div>@for (n of h.info.notes ?? []; track n) { <p class="muted small" style="margin: 8px 0 0">{{ n }}</p> }</div>

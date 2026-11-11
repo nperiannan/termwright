@@ -28,6 +28,8 @@ type HostInfo struct {
 	Plan     []string `json:"plan"`     // what Set Up would do
 	CanSetup bool     `json:"canSetup"` // Set Up can fix the problems
 	Uplink   string   `json:"uplink"`   // the port of the default route
+	LanAddr  string   `json:"lanAddr"`  // the host's address on it (10.234.179.20/24)
+	Gateway  string   `json:"gateway"`  // the default route's gateway
 	Bridges  []string `json:"bridges"`  // the host's bridges with a network port in them
 	Wifi     bool     `json:"wifi"`     // the uplink is Wi-Fi
 	LanIf    string   `json:"lanIf"`    // where switches join the host's network: a bridge, or the uplink (macvtap)
@@ -59,6 +61,8 @@ echo "nat=$(ip -4 -o addr show dev virbr0 2>/dev/null | awk '{print $4}' | head 
 echo "virt=$(systemd-detect-virt 2>/dev/null || echo unknown)"
 dev=$(ip -o route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p'); echo "uplink=$dev"
 [ -n "$dev" ] && [ -d "/sys/class/net/$dev/wireless" ] && echo wifi=yes
+[ -n "$dev" ] && echo "lanaddr=$(ip -4 -o addr show dev "$dev" 2>/dev/null | awk '{print $4}' | head -1)"
+echo "gateway=$(ip -4 route show default 2>/dev/null | awk '{print $3}' | head -1)"
 for b in /sys/class/net/*/bridge; do [ -d "$b" ] || continue; n=$(basename "$(dirname "$b")"); echo "bridge=$n:$(ls "/sys/class/net/$n/brif" 2>/dev/null | tr '\n' ',')"; done
 `
 }
@@ -112,6 +116,10 @@ func ParseProbe(out, dir string) HostInfo {
 			h.Uplink = v
 		case "wifi":
 			h.Wifi = true
+		case "lanaddr":
+			h.LanAddr = v
+		case "gateway":
+			h.Gateway = v
 		case "bridge":
 			name, members, _ := strings.Cut(v, ":")
 			for _, m := range strings.Split(members, ",") {

@@ -41,11 +41,22 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       @if (emu() && devs().length) {
         <span class="chip mg" [title]="tr('How the switches’ first port (management) is connected; it applies when they start')">{{ tr('Management') }}
           <select [ngModel]="st()?.mgmt" (ngModelChange)="setMgmt($event)" name="wmg" [disabled]="lab.busy()">
+            <option value="cloud">{{ tr('The host’s network, routed (cloud)') }}</option>
             <option value="lan">{{ tr('The host’s network (bridged)') }}</option>
             <option value="nat">{{ tr('The host’s NAT network') }}</option>
             <option value="bridge">{{ tr('Lab bridge on the host') }}</option>
             <option value="forward">{{ tr('Port forwarding on the host') }}</option>
-          </select></span>
+          </select>@if (st()?.mgmt === 'cloud') { <button type="button" class="sm" (click)="openCloud(); $event.stopPropagation()" [title]="tr('Addresses of the switches on the host’s network')">{{ st()?.mgmtNet?.split('/')?.[0] }}…</button> }
+          @if (cloudF(); as f) {
+            <div class="cloudf" (click)="$event.stopPropagation()">
+              <b>{{ tr('The host’s network, routed (cloud)') }}</b>
+              <p class="muted small">{{ tr('Like GNS3’s cloud: the switches get fixed addresses on the host’s network {0} and can reach and be reached from it (SSH, HTTP/HTTPS, FTP, TFTP, SCP…). The host answers for their addresses and forwards for them, so only the host’s own MAC address is seen there: nothing has to be allowed on a VMware or Hyper-V virtual switch, and Wi-Fi works.', f.net) }}</p>
+              <label>{{ tr('First switch’s address') }}</label><input class="mono" [(ngModel)]="f.addr" name="cfa" placeholder="10.0.0.146" />
+              <label>{{ tr('Gateway') }}</label><input class="mono" [(ngModel)]="f.gw" name="cfg" />
+              <p class="muted small">{{ tr('The next switches take the addresses after it ({0} switches: up to {1}). Pick free addresses: no DHCP server may hand them out.', devs().length, lastAddr(f.addr)) }}</p>
+              <div class="row2"><span class="sp"></span><button type="button" (click)="cloudF.set(null)">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="applyCloud()" [disabled]="!f.addr.trim()">{{ tr('Use') }}</button></div>
+            </div>
+          }</span>
       }
       <span class="chip"><span class="g">{{ tr('{0} running', counts().on) }}</span>@if (counts().boot) { · <span class="w">{{ tr('{0} booting', counts().boot) }}</span> }@if (counts().warn) { · <span class="w">{{ tr('{0} with a problem', counts().warn) }}</span> }@if (counts().bad) { · <span class="r">{{ tr('{0} failed', counts().bad) }}</span> } · {{ tr('{0} stopped', counts().off) }}</span>
     </div>
@@ -231,6 +242,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .node.sel .nbox { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); } .node.pick .nbox { border-color: var(--accent); border-style: dashed; }
     i.st { position: absolute; top: -5px; right: -5px; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--surface); background: var(--muted); }
     i.st.on { background: var(--success, #1fa45a); } i.st.boot { background: var(--warning, #e39b17); } i.st.bad, i.st.off { background: var(--danger); }
+    .chip.mg { position: relative; }
+    .cloudf { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 380px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; text-align: left; white-space: normal;
+      b, p, .row2 { grid-column: 1 / -1; margin: 0; } input { width: 100%; } .row2 { display: flex; gap: 8px; } .sp { flex: 1; } }
     i.wn { position: absolute; top: -6px; left: -6px; width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--surface); background: var(--warning, #e39b17); color: #1d2330; font: 800 10px/11px var(--sans, sans-serif); font-style: normal; text-align: center; cursor: help; }
     .nn { font-weight: 600; margin-top: 5px; } .nm { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .badge { display: inline-block; margin-top: 3px; font-size: 10.5px; padding: 1px 7px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line); }
@@ -344,7 +358,7 @@ export class LabWorkspace implements OnDestroy {
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
     this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); }, 3000);
   }
-  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.page()) { this.page.set(''); this.ghost.set(null); } else { this.cancelLink(); this.menu.set(null); } }
+  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.cloudF()) { this.cloudF.set(null); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else { this.cancelLink(); this.menu.set(null); } }
   ngOnDestroy() { clearInterval(this.timer); this.lab.watch('ws-' + this.tab().id, false); }
 
   protected hostName = computed(() => (this.st()?.host ?? '').split('/').pop() ?? '');
@@ -582,18 +596,37 @@ export class LabWorkspace implements OnDestroy {
     if (await this.ui.confirm(tr('Remove switches'), msg, tr('Remove'), true) && await this.lab.remove([d.id], true)) { if (this.sel() === d.id) this.sel.set(''); }
   }
   async loadTail() { const id = this.sel(); if (id && this.emu()) { const t = await this.lab.consoleTail(id); if (this.sel() === id) this.tail.set(t); } }
-  async setMgmt(m: string) {
+  protected cloudF = signal<{ addr: string; gw: string; net: string } | null>(null);
+  openCloud() {
+    const v = this.st(), h = v?.hostInfo;
+    const net = h?.lanAddr ?? '';
+    this.cloudF.set({ addr: v?.mgmt === 'cloud' ? (v?.mgmtNet ?? '').split('/')[0] : '', gw: v?.mgmt === 'cloud' ? v?.cloudGw ?? '' : h?.gateway ?? '', net: net ? net.replace(/\.\d+\//, '.0/') : tr('of the host') });
+  }
+  lastAddr(a: string) {
+    const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(a.trim()); const n = Math.max(this.devs().length, 1);
+    if (!m) return '…';
+    const x = ((+m[1] << 24) >>> 0) + (+m[2] << 16) + (+m[3] << 8) + +m[4] + n - 1;
+    return [x >>> 24 & 255, x >>> 16 & 255, x >>> 8 & 255, x & 255].join('.');
+  }
+  async applyCloud() {
+    const f = this.cloudF(); if (!f) return;
+    this.cloudF.set(null);
+    await this.setMgmt('cloud', (f.addr.trim() + ' ' + f.gw.trim()).trim());
+  }
+  async setMgmt(m: string, net = '') {
     const was = this.st()?.mgmt ?? '';
-    if (m === was) return;
+    if (m === 'cloud' && !net) { this.lab.emu.set({ ...this.lab.emu()! }); this.openCloud(); return; }
+    if (m === was && m !== 'cloud') return;
     const text: Record<string, string> = {
       lan: tr('The switches join the host’s network and get addresses from its DHCP server.'),
       nat: tr('The switches get addresses from the host’s NAT network (DHCP, like GNS3’s NAT node) and are reached through the host.'),
       bridge: tr('The switches get fixed addresses on a bridge of their own on the host, reached through the host.'),
       forward: tr('Each switch’s SSH is forwarded to a port on the host (no root needed).'),
+      cloud: tr('The switches get the addresses from {0} on the host’s network, typed on their consoles at each start, and are reached directly.', net.split(' ')[0]),
     };
     const up = this.devs().filter(d => d.running).map(d => d.id);
     if (!up.length) {
-      if (await this.ui.confirm(tr('Change management'), text[m] + ' ' + tr('Their sessions are updated; it applies when the switches start.'), tr('Change'))) await this.lab.setMgmt(m);
+      if (await this.ui.confirm(tr('Change management'), text[m] + ' ' + tr('Their sessions are updated; it applies when the switches start.'), tr('Change'))) await this.lab.setMgmt(m, net);
       else this.lab.emu.set({ ...this.lab.emu()! });
       return;
     }
@@ -602,7 +635,7 @@ export class LabWorkspace implements OnDestroy {
       this.lab.emu.set({ ...this.lab.emu()! });
       return;
     }
-    if (await this.lab.stop(up) && await this.lab.setMgmt(m)) await this.lab.start(up);
+    if (await this.lab.stop(up) && await this.lab.setMgmt(m, net)) await this.lab.start(up);
     else this.lab.emu.set({ ...this.lab.emu()! });
   }
 }
