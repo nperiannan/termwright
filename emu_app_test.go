@@ -9,10 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zalando/go-keyring"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/emu"
+	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/session"
 )
 
@@ -30,6 +32,7 @@ func TestEmuLab(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	keyring.MockInit()
 	signer, err := ssh.ParsePrivateKey(kb)
 	if err != nil {
 		t.Fatal(err)
@@ -86,6 +89,12 @@ func TestEmuLab(t *testing.T) {
 	s1, err := st.Get(v.Sessions[v.Devices[0].ID])
 	if err != nil || s1.JumpSession != host.Path || s1.Hostname != "127.0.0.1" || s1.Port != v.Devices[0].Port {
 		t.Fatalf("session %+v %v", s1, err)
+	}
+	if (s1.DeviceType != "" && !s1.OwnLogin) || s1.Username == "" {
+		t.Fatalf("the session does not use the image's own login: %+v", s1)
+	}
+	if pw, ok := secrets.Lookup(s1.Path); !ok {
+		t.Errorf("no password saved for the session (want the image's, even empty): %q", pw)
 	}
 	// boot and day 0
 	deadline := time.Now().Add(150 * time.Second)

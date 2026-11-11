@@ -208,12 +208,25 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 			saved, haveSaved = m.SavedPassword(s.TransportPath)
 		}
 	}
+	triedSaved, asked := false, 0
 	askPassword := func(msg string) (string, error) {
 		if haveSaved {
-			haveSaved = false // only try once
+			haveSaved, triedSaved = false, true // only try once
 			lastPassword = saved
 			return saved, nil
 		}
+		// The keyboard-interactive and password methods share the tries,
+		// so a refused login asks three times in all, not three per method.
+		if asked >= 3 {
+			return "", fmt.Errorf("the login as %s was refused %d times: check the user name and password", user, asked+btoi(triedSaved))
+		}
+		switch {
+		case asked > 0:
+			msg = "Wrong password, try again.\n" + msg
+		case triedSaved:
+			msg = "The saved password was refused.\n" + msg
+		}
+		asked++
 		pr := Prompt{TabID: t.id, Kind: "credentials", Title: "Enter Secure Shell Password",
 			Message: msg, Fields: []PromptField{{Label: "Password", Secret: true}}, AllowRemember: pwPath != ""}
 		if account != "" && s.TransportPath == "" && m.OnAccountPasswordTyped != nil {
@@ -298,6 +311,9 @@ func (m *Manager) sshClient(ctx context.Context, t *Tab, s session.Session, dept
 	stop()
 	if err != nil {
 		_ = raw.Close()
+		if n := asked + btoi(triedSaved); n > 0 && strings.Contains(err.Error(), "unable to authenticate") && !strings.Contains(err.Error(), "refused") {
+			err = fmt.Errorf("the login as %s was refused %d times: check the user name and password", user, n)
+		}
 		return nil, "", nil, legacyHint(err, s)
 	}
 	client := ssh.NewClient(cc, chans, reqs)
@@ -565,4 +581,11 @@ func hostListContains(list, host string) bool {
 		}
 	}
 	return false
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

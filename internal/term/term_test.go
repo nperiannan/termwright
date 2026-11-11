@@ -320,3 +320,56 @@ func TestTelnetActiveNegotiation(t *testing.T) {
 	}
 	a.Close()
 }
+
+// A refused login asks three times in all, says why, and then stops.
+func TestSSHWrongPasswordStops(t *testing.T) {
+	addr := startSSHServer(t, "s3cret")
+	host, port, _ := net.SplitHostPort(addr)
+	em := &recEmitter{}
+	m := NewManager(em, t.TempDir(), func() string { return t.TempDir() })
+	var mu sync.Mutex
+	var msgs []string
+	var status string
+	em.onEvent = func(name string, d any) {
+		if strings.HasPrefix(name, "term:status:") {
+			status += fmt.Sprint(d)
+		}
+	}
+	em.onPrompt = func(p Prompt) {
+		if p.Kind == "hostkey" {
+			m.Prompts().Answer(p.ID, PromptReply{OK: true, Choice: "Accept & Save"})
+			return
+		}
+		mu.Lock()
+		msgs = append(msgs, p.Message)
+		mu.Unlock()
+		m.Prompts().Answer(p.ID, PromptReply{OK: true, Values: []string{"wrong"}})
+	}
+	s := session.Defaults()
+	s.Hostname, s.Username = host, "admin"
+	fmt.Sscan(port, &s.Port)
+	s.AuthMethods = "keyboard-interactive,password"
+	ti := m.Create(s)
+	err := m.Start(ti.ID, 100, 30)
+	waitFor(t, func() bool {
+		em.mu.Lock()
+		defer em.mu.Unlock()
+		return err != nil || (len(em.states) > 0 && (em.states[len(em.states)-1] == StateDisconnected || em.states[len(em.states)-1] == StateError))
+	})
+	time.Sleep(200 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(msgs) != 3 {
+		t.Fatalf("asked %d times, want 3: %q", len(msgs), msgs)
+	}
+	if !strings.Contains(msgs[1], "Wrong password") {
+		t.Errorf("second ask does not say why: %q", msgs[1])
+	}
+	em.mu.Lock()
+	st := status
+	em.mu.Unlock()
+	if !strings.Contains(st+em.output(), "refused 3 times") && (err == nil || !strings.Contains(err.Error(), "refused 3 times")) {
+		t.Errorf("no clear error: %v / %q / %q", err, st, em.output())
+	}
+	m.CloseAll()
+}

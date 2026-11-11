@@ -1152,9 +1152,20 @@ func (a *App) EmuSaveImage(im emu.Image, clearPassword bool) (EmuView, error) {
 	}
 	*cur = im
 	err := a.emuSave()
+	var users []emu.VM
+	if l := emuLab.f.Lab; l != nil {
+		for _, v := range l.VMs {
+			if v.Image == im.ID {
+				users = append(users, v)
+			}
+		}
+	}
 	emuLab.mu.Unlock()
 	if err != nil {
 		return EmuView{}, err
+	}
+	for _, v := range users {
+		a.emuRetarget(v) // the switches' sessions take the new login
 	}
 	return a.EmuState()
 }
@@ -1558,8 +1569,31 @@ func (a *App) emuRetarget(v emu.VM) {
 	emuLab.mu.Unlock()
 	if s, err := a.store.Get(path); err == nil {
 		s.Hostname, s.Port, s.JumpSession = hostname, port, jump
-		_, _ = a.store.Save(s, path)
+		a.emuLogin(&s, v)
+		if saved, err := a.store.Save(s, path); err == nil {
+			a.emuLoginPassword(saved.Path, v)
+		}
 	}
+}
+
+// emuLogin gives a switch's SSH session the image's own login: not the
+// device type's (that is for real switches of that kind), and with the
+// image's password even when it is empty (EXOS' admin has none), so the
+// session logs in without asking.
+func (a *App) emuLogin(s *session.Session, v emu.VM) {
+	emuLab.mu.Lock()
+	im := emuImage(v.Image)
+	login := "admin"
+	if im != nil {
+		login = orStr(im.Login, "admin")
+	}
+	emuLab.mu.Unlock()
+	s.Username, s.OwnLogin, s.SavePassword = login, true, true
+}
+
+func (a *App) emuLoginPassword(path string, v emu.VM) {
+	pw, _ := secrets.Lookup(emuImageKey(v.Image))
+	_ = a.SetSessionPassword(path, pw, true)
 }
 
 func (a *App) emuSessions(v emu.VM) {
@@ -1574,7 +1608,6 @@ func (a *App) emuSessions(v emu.VM) {
 	hostname, port, jump := emuTarget(l, v, host)
 	conPort := l.ConsolePort(v)
 	emuLab.mu.Unlock()
-	pw, _ := secrets.Lookup(emuImageKey(v.Image))
 	free := func(folder, name string) string {
 		n := name
 		for i := 2; ; i++ {
@@ -1584,16 +1617,10 @@ func (a *App) emuSessions(v emu.VM) {
 			n = name + " (" + strconv.Itoa(i) + ")"
 		}
 	}
-	ss := session.Session{Name: free(folder, v.Name), Folder: folder, Protocol: session.ProtoSSH2, Hostname: hostname, Port: port, Username: login, DeviceType: dt, JumpSession: jump,
+	ss := session.Session{Name: free(folder, v.Name), Folder: folder, Protocol: session.ProtoSSH2, Hostname: hostname, Port: port, Username: login, OwnLogin: true, SavePassword: true, DeviceType: dt, JumpSession: jump,
 		Description: []string{fmt.Sprintf("Emulated %s (Termwright lab) on its KVM host - management %s", nm, v.MgmtIP)}}
 	if saved, err := a.store.Save(ss, ""); err == nil {
-		if pw != "" {
-			_ = a.SetSessionPassword(saved.Path, pw, false)
-			if cur, err := a.store.Get(saved.Path); err == nil && !cur.SavePassword {
-				cur.SavePassword = true
-				_, _ = a.store.Save(cur, saved.Path)
-			}
-		}
+		a.emuLoginPassword(saved.Path, v)
 		emuLab.mu.Lock()
 		emuLab.f.Sessions[v.ID] = saved.Path
 		emuLab.mu.Unlock()

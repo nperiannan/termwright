@@ -27,6 +27,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Lab downloads: a queue you can order.** The Images page shows what is downloading and what waits, in order, with *Next*, *Earlier*, *Later*, ✕ (stop it, or take it out of the queue) and *Stop all*. Downloads packed as `.gz`, `.xz` or `.bz2` (as many registry images are) are unpacked before their MD5 sum is checked.
 * **Public appliances can be removed.** An added appliance shows how many of its images are in the list and **Remove**, which takes them out and deletes the files Termwright downloaded for them (not files you chose yourself, and not while a switch or template uses them).
 * **SONiC-VS** in the public appliances (the community build of the SONiC network OS, versions 202411 and master, login `admin`): its ports are named `Ethernet0`, `Ethernet4`, … - port names can now count in steps (`Ethernet{n*4-4}`).
+* **Fixed: an emulated switch's SSH session kept asking for the password.** The session used the device type's saved login (meant for your real switches of that kind) or, for an image whose login has no password (EXOS' `admin`), had none saved; it now always uses the image's own login and password, an empty one included, and follows when the image's password is changed. In all SSH sessions a refused password is asked for three times in all (not three times per login method), the prompt says the saved or typed password was refused, and the error then says the login was refused.
 
 ## 0.34.1 (2026-11-10)
 
