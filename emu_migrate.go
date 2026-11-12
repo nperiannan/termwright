@@ -564,6 +564,11 @@ func (a *App) emuMoveLive(id, to string) error {
 
 	}
 	a.emuMoveStep(id, map[bool]string{true: "moving its disk and memory (live)", false: "moving its memory (live)"}[inc])
+	// as fast as the network goes; a switch that writes its memory faster than it goes is slowed down
+	// (auto-converge) until it can finish, and a pause up to a second at the end is fine
+	_, _ = src.do("migrate_set_parameter max-bandwidth 10g", 10*time.Second)
+	_, _ = src.do("migrate_set_parameter downtime-limit 1000", 10*time.Second)
+	_, _ = src.do("migrate_set_capability auto-converge on", 10*time.Second)
 	if out, err := src.do(fmt.Sprintf("migrate %s tcp:%s:%d", migFlags, toIP, migPort), 30*time.Second); err != nil || strings.Contains(strings.ToLower(out), "error") {
 		cancelJobs()
 		undo()
@@ -585,8 +590,21 @@ func (a *App) emuMoveLive(id, to string) error {
 		out, _ := src.do("info migrate", 10*time.Second)
 		last = out
 		// how far: the memory sent, of all of it (pages written again are sent again, so it can slow near the end)
+		// its disk too (QEMU up to 9.0 sends it with the memory)
 		if tot, rem := kb(out, "total ram"), kb(out, "remaining ram"); tot > 0 && rem >= 0 {
-			show(emuRate(tot-rem, tot, 0, liveStart))
+			dt, dr := kb(out, "total disk"), kb(out, "remaining disk")
+			t := ""
+			if dt > 0 && dr >= 0 {
+				t = emuRate(tot-rem+dt-dr, tot+dt, 0, liveStart) + fmt.Sprintf(" · disk %s of %s, memory %s of %s", emuBytes(dt-dr), emuBytes(dt), emuBytes(tot-rem), emuBytes(tot))
+			} else {
+				t = emuRate(tot-rem, tot, 0, liveStart)
+			}
+			if m := regexp.MustCompile(`(?m)^cpu throttle percentage: (\d+)`).FindStringSubmatch(out); m != nil && m[1] != "0" {
+				t += " · it writes its memory faster than it goes: slowed " + m[1] + " % so it can finish"
+			} else if rem > 0 && rem*50 < tot && time.Since(liveStart) > 20*time.Second {
+				t += " · the last memory it changes is sent again"
+			}
+			show(t)
 		}
 		if m := regexp.MustCompile(`(?m)^Migration status: (\S+)`).FindStringSubmatch(out); m != nil {
 			status = m[1]

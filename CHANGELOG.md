@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, live moves finish: no bandwidth cap, a switch that writes its memory faster than it goes over is slowed down until it can finish (auto-converge), and the last pause may take up to a second. The progress counts its disk too (QEMU up to 9.0 sends it with the memory) - "99 % · about 2 s left" for minutes was the memory done and the disk still going - and says when the switch is being slowed.
+
 - Emulated lab, a live move to a host on another network works: the switch goes across running, then gets an address of the new host's network typed on its console (the old one removed first) and its SSH session follows - it keeps running throughout. Before, it was refused with "a live move keeps it".
 
 - Emulated lab, KVM turned on at a host shows at once: a host without KVM is looked at again each minute, Move to Host looks at both hosts' /dev/kvm before it offers anything (Live and the "no KVM" warning were from the last check, and from the topology's hosts only), and the Events say "KVM is on now on …".
