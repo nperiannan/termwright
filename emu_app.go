@@ -131,6 +131,7 @@ var emuLab struct {
 	cpu              map[string]float64 // CPU use now, in cores (1 = one core busy)
 	ready            map[string]bool    // the console showed the ready text since the VM started (it may scroll out of the log's end later)
 	bootAns          map[string]time.Time // when a boot menu was last answered
+	addrOK           map[string]bool      // the switch showed its management address (since it started)
 	personaAfterBoot map[string]bool    // the persona file is written once the VM has booted (its folder did not exist yet)
 	perr             map[string]string  // why the persona file could not be written
 	packProfiles     []emu.Image        // the device pack's image profiles (refreshed by EmuState)
@@ -324,6 +325,30 @@ func (a *App) emuBootAnswer(host string, v emu.VM, ans emu.Answer) {
 	say("info", fmt.Sprintf("its boot stopped at %q - typed %s so it goes on booting", ans.Match, orStr(ans.Send, "Enter")))
 }
 
+func imOrNil(im *emu.Image) *emu.Image {
+	if im == nil {
+		return &emu.Image{}
+	}
+	return im
+}
+
+// EmuDay0Again types a running switch's day 0 (its address, persona check) again,
+// after it failed: its disk and configuration stay.
+func (a *App) EmuDay0Again(id string) (EmuView, error) {
+	emuLab.mu.Lock()
+	if emuLab.f.Lab == nil || emuLab.f.Lab.VMByID(id) == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such switch")
+	}
+	delete(emuLab.day0, id)
+	delete(emuLab.errs, id)
+	delete(emuLab.pcheck, id)
+	emuEv(id, "info", "typing day 0 again")
+	emuLab.statusAt = time.Time{}
+	emuLab.mu.Unlock()
+	return a.EmuState()
+}
+
 // emuEvent adds to the Events log.
 func emuEvent(id, level, text string) {
 	emuLab.mu.Lock()
@@ -412,7 +437,7 @@ func (a *App) emuLoad() {
 	emuLab.loaded = true
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
 	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
-	emuLab.personaTried, emuLab.perr, emuLab.bootAns = map[string]bool{}, map[string]string{}, map[string]time.Time{}
+	emuLab.personaTried, emuLab.perr, emuLab.bootAns, emuLab.addrOK = map[string]bool{}, map[string]string{}, map[string]time.Time{}, map[string]bool{}
 	emuLab.pinfo, emuLab.pcheck, emuLab.resumed, emuLab.lldp = map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]string{}
 	emuLab.download = map[string]string{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
@@ -1996,6 +2021,7 @@ func (a *App) emuStart(host string, ids []string) {
 			}
 			emuLab.state[id] = "uploading"
 			delete(emuLab.errs, id)
+			delete(emuLab.addrOK, id)
 		}
 	}
 	dir := l.Dir
@@ -2351,6 +2377,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 			}
 		}
 		emuLab.mu.Lock()
+		emuLab.addrOK[v.ID] = true
 		emuEv(v.ID, "ok", "has the address "+strings.Split(v.MgmtIP, "/")[0]+" (gateway "+orStr(v.Gateway, "none")+") - its SSH session points there")
 		emuLab.mu.Unlock()
 		a.emuRetarget(v)
@@ -2837,6 +2864,7 @@ func (a *App) emuSetAddress(id, addr string) {
 		}
 	}
 	delete(emuLab.errs, id)
+	emuLab.addrOK[id] = true
 	emuEv(id, "ok", "has the address "+strings.Split(addr, "/")[0]+" - its SSH session points there")
 	_ = a.emuSave()
 	emuLab.mu.Unlock()
@@ -3122,6 +3150,10 @@ func (a *App) emuView() EmuView {
 			d.SSH = "127.0.0.1:" + strconv.Itoa(d.Port) + " on the host"
 		}
 		_, up := st.Up[vm.ID]
+		// a fixed address is set by day 0: until then the switch does not have it
+		if up && vl.Fixed() && len(imOrNil(im).AddrSet) > 0 && !emuLab.addrOK[vm.ID] {
+			d.SSH += " · " + "planned, not on the switch yet"
+		}
 		// % of its vCPUs; QEMU's own threads (disk, network, emulation) can add a little more
 		d.CPU = emuLab.cpu[vm.ID] * 100 / float64(orInt(vm.CPUs, 1))
 		d.Cores = emuLab.cpu[vm.ID]

@@ -297,7 +297,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             <span>{{ tr('Management') }}</span><span class="mono">{{ emu() ? d.ssh : d.mgmtIp }}</span>
             @if (emu()) { <span>{{ tr('Console') }}</span><span class="mono">telnet :{{ d.console }}</span>
               <span>{{ tr('Resources') }}</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }@if (d.running && d.cpu !== undefined) { · CPU {{ d.cpu!.toFixed(0) }} % }</span> }
-            @if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a></span> }
+            @if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
           </div>
           <div class="btns">@if (emu()) { <button type="button" class="primary sm" (click)="console(d)" [disabled]="!d.running">{{ tr('Console') }}</button> }
             <button type="button" class="sm" (click)="ssh(d)" [disabled]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }}</button><button type="button" class="sm" (click)="configure(d)">{{ tr('Configure…') }}</button></div></div>
