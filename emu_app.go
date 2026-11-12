@@ -1663,6 +1663,43 @@ func emuCopyWhy(err error) string {
 	return "an error on the host"
 }
 
+// emuSetKVM records that a host has (or no longer has) usable KVM, and says so in the Events (emuLab.mu held).
+func (a *App) emuSetKVM(host string, kvm bool) {
+	for i := range emuLab.f.Hosts {
+		h := &emuLab.f.Hosts[i]
+		if h.Session != host || (h.Info.KVM == "yes") == kvm {
+			continue
+		}
+		if kvm {
+			h.Info.KVM = "yes"
+			h.Info.Problems = slices.DeleteFunc(h.Info.Problems, func(p string) bool { return strings.Contains(p, "KVM") || strings.Contains(p, "/dev/kvm") })
+			emuEvOn(host, "", "ok", "KVM is on now on "+host[strings.LastIndex(host, "/")+1:]+": its switches run at full speed (a running one gets it when it starts again)")
+		} else {
+			h.Info.KVM = "none"
+			emuEvOn(host, "", "warn", "KVM is gone on "+host[strings.LastIndex(host, "/")+1:]+": its switches run in software emulation, 5 to 10 times slower")
+		}
+		if l := emuLab.f.Lab; l != nil && host == emuLab.f.Host {
+			l.KVM = kvm
+		}
+		_ = a.emuSave()
+	}
+}
+
+var emuKVMSeen = map[string]time.Time{} // when a host without KVM was last looked at (emuLab.mu)
+
+// EmuHostKVM looks at a host's /dev/kvm now (a second), records a change and says whether it is usable.
+func (a *App) EmuHostKVM(host string) (bool, error) {
+	out, err := a.emuRun(host, "[ -r /dev/kvm ] && [ -w /dev/kvm ] && echo kvm=yes; true", 20*time.Second)
+	if err != nil {
+		return false, err
+	}
+	kvm := strings.Contains(out, "kvm=yes")
+	emuLab.mu.Lock()
+	a.emuSetKVM(host, kvm)
+	emuLab.mu.Unlock()
+	return kvm, nil
+}
+
 // emuStartWhy adds what to do to a start failure QEMU (or the shell) reported.
 func emuStartWhy(m string) string {
 	switch {
@@ -2383,12 +2420,7 @@ func (a *App) emuStart(host string, ids []string) {
 		if g := strings.Fields(strings.TrimSpace(line)); len(g) == 3 && g[0] == "accel" {
 			kvm := g[1] == "kvm"
 			if kvm != l.KVM { // the host's KVM changed since it was checked: what it has now counts
-				for i := range emuLab.f.Hosts {
-					if emuLab.f.Hosts[i].Session == host {
-						emuLab.f.Hosts[i].Info.KVM = map[bool]string{true: "yes", false: "none"}[kvm]
-						_ = a.emuSave()
-					}
-				}
+				a.emuSetKVM(host, kvm)
 			}
 			if !kvm {
 				emuEv(g[2], "warn", "no KVM on "+host[strings.LastIndex(host, "/")+1:]+" (no usable /dev/kvm): it runs in software emulation, 5 to 10 times slower - a switch can take 10 minutes or more to boot, and one that checks its own timing may restart. Turn on nested virtualization for that VM (VMware: Expose hardware assisted virtualization to the guest OS), then Hosts → Check Again")
@@ -3297,6 +3329,13 @@ func (a *App) EmuState() (EmuView, error) {
 	emuLab.mu.Lock()
 	a.emuLoad()
 	emuLab.packProfiles = prof
+	// a host without KVM is looked at again each minute: KVM turned on there shows (and counts) at once
+	for _, h := range emuLab.f.Hosts {
+		if h.Info.KVM != "yes" && time.Since(emuKVMSeen[h.Session]) > time.Minute {
+			emuKVMSeen[h.Session] = time.Now()
+			go func(s string) { _, _ = a.EmuHostKVM(s) }(h.Session)
+		}
+	}
 	if up, pw := emuTopUp(emuLab.f.Images, prof); up {
 		_ = a.emuSave()
 		if l := emuLab.f.Lab; l != nil && len(pw) > 0 { // their sessions take the factory password

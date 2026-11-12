@@ -1095,3 +1095,24 @@ func TestEmuRate(t *testing.T) {
 		t.Error(g)
 	}
 }
+
+// KVM turned on at a host counts at once, with a line in the Events.
+func TestEmuSetKVM(t *testing.T) {
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	saved, ev := emuLab.f, emuLab.events
+	defer func() { emuLab.f, emuLab.events = saved, ev }()
+	emuLab.f.Hosts = []EmuHost{{Session: "B/u", Info: emu.HostInfo{KVM: "none", Problems: []string{"No /dev/kvm: software emulation"}}}}
+	cfg, err := config.Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &App{cfg: cfg}
+	a.emuSetKVM("B/u", true)
+	if h := emuLab.f.Hosts[0].Info; h.KVM != "yes" || len(h.Problems) != 0 {
+		t.Errorf("%+v", h)
+	}
+	if e := emuLab.events[len(emuLab.events)-1]; !strings.Contains(e.Text, "KVM is on now on u") || e.Host != "B/u" {
+		t.Errorf("%+v", e)
+	}
+}

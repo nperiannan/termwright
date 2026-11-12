@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, KVM turned on at a host shows at once: a host without KVM is looked at again each minute, Move to Host looks at both hosts' /dev/kvm before it offers anything (Live and the "no KVM" warning were from the last check, and from the topology's hosts only), and the Events say "KVM is on now on …".
+
 - Emulated lab, Set Up on a host whose user has only Termwright's network commands without a password asked for no password and stopped with "Process exited with status 1" and an empty log: the host check now tells that apart from sudo for anything, Set Up asks for the sudo password then, and sudo's own messages reach the log.
 - Emulated lab, Remove Host: one tick, *Everything Termwright put on this host*, chooses all of it (images, switch disks, what Set Up did); each can still be chosen alone. Nothing is deleted unless chosen.
 

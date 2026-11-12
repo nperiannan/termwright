@@ -716,7 +716,10 @@ export class LabWorkspace implements OnDestroy {
   async moveTo(d: LabDevice, host: string) {
     this.menu.set(null);
     const to = this.hname(host);
-    const kvmOf = (h: string) => this.mgRows().find(r => r.host === h)?.kvm === 'KVM';
+    // KVM as each host has it now (a second each): turned on since the last check counts at once
+    const now: Record<string, boolean> = {};
+    await Promise.all([this.hostOfDev(d), host].map(async h => { try { now[h] = await this.backend.emuHostKVM(h); } catch { /* unreachable: from the last check */ } }));
+    const kvmOf = (h: string) => now[h] ?? ((this.st()?.hosts ?? []).find(x => x.session === h)?.info?.kvm === 'yes' || (h === this.st()?.host && !!this.st()?.kvm));
     const live = d.running && kvmOf(this.hostOfDev(d)) === kvmOf(host); // a running switch cannot change between KVM and no KVM
     const items = d.running
       ? [...(live ? [tr('Live: it keeps running, its memory and disk go across; a ping or two may be lost')] : [tr('Live is not offered: one host has KVM and the other does not, so a running switch cannot go across as it is')]),
@@ -859,7 +862,7 @@ export class LabWorkspace implements OnDestroy {
     const rows = this.hostUse().length ? this.hostUse() : [{ host: main, name: this.hostName(), mgmt: v?.mgmt ?? '', mgmtNet: v?.mgmtNet ?? '', lanFixed: !!v?.lanFixed } as EmuHostUse];
     return rows.map(u => {
       const info = u.host === main ? v?.hostInfo : (v?.hosts ?? []).find(x => x.session === u.host)?.info;
-      const kvm = (u.host === main ? !!v?.kvm : info?.kvm === 'yes') ? 'KVM' : tr('no KVM');
+      const kvm = (info ? info.kvm === 'yes' : !!v?.kvm) ? 'KVM' : tr('no KVM');
       const us = this.st()?.usage, one = !this.hostUse().length;
       return { host: u.host, name: u.name || this.hname(u.host), c: this.hcol(u.host), mgmt: u.mgmt, kvm,
         switches: one ? this.devs().length : u.switches, running: one ? this.running() : u.running, vcpus: one ? us?.vcpus ?? 0 : u.vcpus, cpus: one ? us?.hostCpus ?? 0 : u.cpus,
