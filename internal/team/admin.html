@@ -55,6 +55,7 @@ button.d{color:var(--bad)}button:disabled{opacity:.45;cursor:default}
 input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:7px;padding:6px 10px;background:var(--card);color:var(--text);outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
 input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);padding:0;vertical-align:-2px}
+tr.pick{cursor:pointer}
 .mono{font-family:var(--mono);font-size:12.3px}.muted{color:var(--muted)}.small{font-size:12px}.num{text-align:right;font-variant-numeric:tabular-nums}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--card2);position:sticky;top:0;white-space:nowrap;z-index:1}
@@ -176,8 +177,17 @@ document.addEventListener('change', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (!t || !scan) return;
-  if (t.dataset && t.dataset.ssel) { t.checked ? ui.ssel.add(t.dataset.ssel) : ui.ssel.delete(t.dataset.ssel); render(); }
-  else if (t.id === 'sall') { scanRows().filter(r => !(scan.inTeam || {})[r.ip]).forEach(r => t.checked ? ui.ssel.add(r.ip) : ui.ssel.delete(r.ip)); render(); }
+  if (t.id === 'sall') { scanRows().filter(r => !(scan.inTeam || {})[r.ip]).forEach(r => t.checked ? ui.ssel.add(r.ip) : ui.ssel.delete(r.ip)); render(); }
+});
+// A result row is ticked by a click on it or on its box: the selection is
+// kept here and the page drawn from it, so a box the browser lost track of (a
+// redraw during the click) cannot leave it out of step.
+document.addEventListener('click', e => {
+  const tr = e.target && e.target.closest && e.target.closest('tr[data-srow]');
+  if (!tr || !scan || e.target.closest('select, button, a, input:not([data-ssel])')) return;
+  const ip = tr.dataset.srow;
+  ui.ssel.has(ip) ? ui.ssel.delete(ip) : ui.ssel.add(ip);
+  setTimeout(render, 0);
 });
 // No refresh while a mouse button is down, nor until its click has been
 // handled: the page drawn again under the pointer between press and click
@@ -635,7 +645,7 @@ function discover() {
       <div><span>${s.running ? 'Scanning ' + esc(s.targets) + '…' : 'Scan of ' + esc(s.targets) + ' by ' + esc(s.by) + ' · ' + esc(when(s.started))}</span><div class="pbar"><i style="width:${pc}%"></i></div></div></div>` : ''}</div>
   ${s ? `<div class="card"><div class="tool"><b>Results</b><span class="muted small">${res.length} shown</span><span class="sp"></span><span class="muted small">Tick devices, then add them to the inventory</span></div>
     <div class="scroll"><table><thead><tr><th class="c"><input type="checkbox" id="sall" ${allOn ? 'checked' : ''} title="Select all shown"></th><th>Device</th><th>Kind</th><th>Vendor / system</th><th>Services</th><th>Device type</th><th></th></tr></thead><tbody>
-    ${res.length ? res.map(r => { const inTeam = (s.inTeam || {})[r.ip]; return `<tr><td class="c">${inTeam ? '' : `<input type="checkbox" data-ssel="${esc(r.ip)}" ${ui.ssel.has(r.ip) ? 'checked' : ''}>`}</td>
+    ${res.length ? res.map(r => { const inTeam = (s.inTeam || {})[r.ip]; return `<tr ${inTeam ? '' : `data-srow="${esc(r.ip)}" class="pick"`}><td class="c">${inTeam ? '' : `<input type="checkbox" data-ssel="${esc(r.ip)}" ${ui.ssel.has(r.ip) ? 'checked' : ''}>`}</td>
       <td>${devCell(r.name, r.ip + (r.mac ? ' · ' + r.mac : ''), r.platform || r.kind)}</td><td><span class="tag">${esc(r.kind)}</span></td>
       <td class="small">${esc([r.vendor, r.platform || r.os].filter(Boolean).join(' · ').slice(0, 120))}</td><td><div class="chips">${(r.services || []).map(x => `<span class="tag">${esc(x)}</span>`).join('')}</div></td>
       <td><input data-k="dt:${esc(r.ip)}" value="${esc(dtOf(r))}" style="width:120px" ${inTeam ? 'disabled' : ''} placeholder="device type"></td>
@@ -767,7 +777,7 @@ const PAGES = { overview, reports, inventory, approvals, discover, members, sso,
 function wire() {
   const on = (sel, ev, fn) => $$(sel).forEach(e => e[ev] = fn);
   on('[data-go]', 'onclick', e => go(e.currentTarget.dataset.go));
-  on('[data-theme]', 'onclick', e => setTheme(e.currentTarget.dataset.theme));
+  on('button[data-theme], a[data-theme]', 'onclick', e => setTheme(e.currentTarget.dataset.theme));
   on('[data-basis]', 'onclick', e => { ui.basis = e.currentTarget.dataset.basis; store.set('tw.basis', ui.basis); render(); });
   on('[data-days]', 'onclick', e => { ui.days = Number(e.currentTarget.dataset.days); store.set('tw.days', ui.days); usage = null; load(true); });
   on('#out', 'onclick', async () => { await api('POST', '/api/admin/signout').catch(() => {}); gate('Signed out.'); });

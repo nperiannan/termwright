@@ -2,6 +2,11 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+* **Fixed: no check box on the team admin page could be ticked** once a theme (Light or Dark) had been picked on it: the theme's click handler also landed on the page itself and drew the page again on every click, before the box could count.
+* **Team admin page, Discover:** a click anywhere on a result row ticks it, and the selection is kept by the page itself.
+
 ## 0.34.1 (2026-11-10)
 
 A fix for the team admin page.
