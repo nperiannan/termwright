@@ -850,6 +850,14 @@ func TestEmuTwoHosts(t *testing.T) {
 		t.Fatal(err)
 	}
 	moved("it resumed there")
+	// Remove Host: what it can take back or wipe; refused while switches of the topology run there
+	ri, err := a.EmuRemoveHostInfo(hb.Path)
+	if err != nil || ri.Error != "" || ri.ImagesBytes == 0 || ri.LabDirs == 0 || ri.Switches == 0 {
+		t.Errorf("remove info: %v %+v", err, ri)
+	}
+	if _, err := a.EmuRemoveHostWith(EmuRemoveHostReq{Host: hb.Path, Images: true}); err == nil || !strings.Contains(err.Error(), "move or remove them first") {
+		t.Errorf("remove with switches there: %v", err)
+	}
 }
 
 // A newer pack gives existing images its factory password and its later ready text.

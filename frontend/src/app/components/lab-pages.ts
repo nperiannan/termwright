@@ -2,7 +2,7 @@ import { Component, OnInit, computed, effect, inject, input, output, signal } fr
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend, errText } from '../core/backend';
-import { EmuDeviceType, EmuHost, EmuImage, EmuPersonaDef, EmuSlot, EmuTemplate, LabDevice, SessionNode } from '../core/models';
+import { EmuDeviceType, EmuHost, EmuRemoveInfo, EmuImage, EmuPersonaDef, EmuSlot, EmuTemplate, LabDevice, SessionNode } from '../core/models';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabHostImages } from './lab-host-images';
@@ -53,6 +53,7 @@ const PAGE = `
   .meter { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 6px 0 2px; i { display: block; height: 100%; background: var(--accent); } }
   .big3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; .card { margin: 0; } b { font-size: 20px; } }
   .chk { display: grid; grid-template-columns: 22px 170px minmax(0, 1fr); gap: 6px 8px; align-items: start; font-size: 12.5px; .y { color: var(--success, #1fa45a); font-weight: 700; } .n { color: var(--warning, #e39b17); font-weight: 700; } .x { color: var(--danger); font-weight: 700; } }
+  .rmc { border-color: color-mix(in srgb, var(--danger, #e5484d) 45%, var(--line)); } .rmg { display: grid; gap: 7px; margin-top: 8px; label { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; } code { font-size: 11.5px; } }
   .stp { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 10px 0 8px; } .log.full { height: 260px; } .setupc { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
   .log { font: 11px/1.55 var(--mono, monospace); background: #111722; color: #cfd6e4; border-radius: 9px; padding: 10px; height: 170px; overflow: auto; white-space: pre-wrap; margin: 0; }
   i.d { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; } i.d.ok { background: var(--success, #1fa45a); } i.d.wa { background: var(--warning, #e39b17); } i.d.bad { background: var(--danger); }
@@ -736,7 +737,28 @@ export class LabImages implements OnInit {
           <div class="row2" style="justify-content: flex-start"><div style="flex: 1"><b style="font-size: 15px">{{ h.name || h.session }}</b> <span class="badge">{{ state(h) }}</span>
             <div class="muted small">{{ h.info.user }} · {{ h.info.os }} · {{ tr('kernel') }} {{ h.info.kernel }} · {{ h.info.arch }} · {{ isVM(h) ? tr('VM ({0})', h.info.virt ?? '') : tr('hardware') }}@if (h.checked) { · {{ tr('checked {0}', h.checked) }} }</div></div>
             <button type="button" (click)="lab.checkHost(h.session)" [disabled]="lab.busy() || (!!setupHere() && !setupHere()!.done)">{{ tr('Check Again') }}</button>
-            @if ((h.info.canSetup || !h.info.sudo) && !setupHere()) { <button type="button" class="primary" (click)="setupOpen.set(!setupOpen())">{{ tr('Set Up…') }}</button> }</div>
+            @if (!setupHere()) { <button type="button" [class.primary]="h.info.canSetup || !h.info.sudo" (click)="setupOpen.set(!setupOpen()); rm.set(null)" [title]="h.info.canSetup || !h.info.sudo ? tr('Install and set up what is missing') : tr('Everything is there: run every step again, for example after a change on the host')">{{ h.info.canSetup || !h.info.sudo ? tr('Set Up…') : tr('Set Up Again…') }}</button> }</div>
+          @if (rm(); as r) {
+            <div class="card rmc" style="margin-top: 14px"><div class="row2" style="justify-content: flex-start"><b style="flex: none">{{ tr('Remove {0}', h.name || h.session) }}</b><span class="muted small">{{ tr('choose what stays on the host; Termwright forgets the host either way') }}</span><span class="sp"></span><a class="muted" (click)="rm.set(null)">✕</a></div>
+              @if (r.error) { <p class="small r">{{ tr('The host cannot be reached ({0}): it can only be forgotten - nothing on it changes.', r.error) }}</p> }
+              @else {
+                @if (r.switches) { <p class="small r">{{ tr('{0} switches of this topology run here: move or remove them first.', r.switches) }}</p> }
+                <div class="rmg">
+                  <b class="small">{{ tr('Files') }}</b>
+                  <label><input type="checkbox" [(ngModel)]="ro.images" name="rimg" [disabled]="!r.imagesBytes" /> {{ tr('Delete its images') }} <span class="muted">· {{ gb2(r.imagesBytes) }}@if (r.imagesDir) { {{ tr('in') }} <code>{{ r.imagesDir }}</code> }</span></label>
+                  <label><input type="checkbox" [(ngModel)]="ro.labs" name="rlab" [disabled]="!r.labDirs" /> {{ tr('Delete the switches’ own disks') }} <span class="muted">· {{ tr('{0} topologies, {1} - their configurations go with them', r.labDirs, gb2(r.labBytes)) }}</span></label>
+                  <b class="small">{{ tr('What Set Up did') }}</b>
+                  @if (!r.sudoRule && !r.group && !(r.pkgs ?? []).length) { <span class="muted small">{{ tr('Nothing recorded (set up by hand, or by an older Termwright): nothing to take back.') }}</span> }
+                  @if (r.sudoRule) { <label><input type="checkbox" [(ngModel)]="ro.sudoRule" name="rsu" /> {{ tr('Remove its sudo rule') }} <span class="muted">· /etc/sudoers.d/termwright</span></label> }
+                  @if (r.group) { <label><input type="checkbox" [(ngModel)]="ro.group" name="rgr" /> {{ tr('Take {0} out of the kvm group', cur()?.info?.user ?? '') }}</label> }
+                  @if ((r.pkgs ?? []).length) { <label><input type="checkbox" [(ngModel)]="ro.pkgs" name="rpk" /> {{ tr('Uninstall the packages it installed') }} <span class="muted">· {{ (r.pkgs ?? []).join(', ') }}</span></label> }
+                  @if ((ro.sudoRule || ro.group || ro.pkgs) && !r.fullSudo) { <input type="password" [(ngModel)]="ro.password" name="rpw" [placeholder]="tr('sudo password of {0}', h.info.user)" autocomplete="off" style="max-width: 260px" /> }
+                </div>
+              }
+              <div class="row2" style="justify-content: flex-end; margin-top: 10px"><button type="button" (click)="rm.set(null)">{{ tr('Cancel') }}</button>
+                <button type="button" class="danger" (click)="removeNow(h, r)" [disabled]="lab.busy() || !!r.switches || ((ro.sudoRule || ro.group || ro.pkgs) && !r.fullSudo && !ro.password && !r.error)">{{ removeLabel(r) }}</button></div>
+            </div>
+          }
           @if (setupOpen() || setupHere()) {
             <div class="card setupc" style="margin-top: 14px"><div class="row2" style="justify-content: flex-start"><b style="flex: none">{{ tr('Set Up the Host') }}</b><span class="muted small">{{ tr('installs what is missing, as root on the host') }}</span><span class="sp"></span>
                 @if (!setupHere() || setupHere()!.done) { <a class="muted" (click)="setupOpen.set(false); lab.setup.set(null)">✕</a> }</div>
@@ -745,7 +767,8 @@ export class LabImages implements OnInit {
                   <span class="sp"></span><b class="small" [class.r]="!!s.error" [class.g]="s.done && !s.error">{{ s.done ? (s.error ? tr('Set-up failed') + ': ' + s.error : tr('Set up') + ' ✓ · ' + tr('checked again')) : tr('Setting up…') }}</b></div>
                 <pre class="log full">{{ s.lines.join('\n') }}</pre>
               } @else {
-                <ul class="small">@for (p of h.info.plan ?? []; track p) { <li>{{ p }}</li> }</ul>
+                @if ((h.info.plan ?? []).length) { <ul class="small">@for (p of h.info.plan ?? []; track p) { <li>{{ p }}</li> }</ul> }
+                @else { <p class="small muted">{{ tr('Nothing is missing. Set Up runs every step again - packages, the NAT network, KVM, the sudo rule and the kvm group - which is safe to repeat, for example after something changed on the host.') }}</p> }
                 <div class="row2" style="justify-content: flex-start">@if (!h.info.sudo) { <input type="password" [(ngModel)]="pw" name="spw" [placeholder]="tr('sudo password of {0}', h.info.user)" autocomplete="off" style="max-width: 260px" /> }
                   <button type="button" class="primary" (click)="setup(h)" [disabled]="!h.info.sudo && !pw">{{ tr('Set Up') }}</button></div>
               }
@@ -776,13 +799,14 @@ export class LabImages implements OnInit {
         } @else { <p class="muted">{{ tr('Add a host on the left.') }}</p> }
       </div>
     </div>
-    <div class="mf">@if (cur(); as h) { <button type="button" class="danger-ghost" (click)="remove(h)">{{ tr('Remove Host') }}</button> }<span class="sp"></span><button type="button" class="primary" (click)="closed.emit()">{{ tr('Close') }}</button></div>
+    <div class="mf">@if (cur(); as h) { <button type="button" class="danger-ghost" (click)="remove(h)" [disabled]="loadingRm()">{{ loadingRm() ? tr('Reading the host…') : tr('Remove Host…') }}</button> }<span class="sp"></span><button type="button" class="primary" (click)="closed.emit()">{{ tr('Close') }}</button></div>
   </div>`,
   styles: [PAGE],
 })
 export class LabHosts {
   readonly closed = output<void>();
   protected lab = inject(LabService);
+  private backend = inject(Backend);
   private ui = inject(Ui);
   protected tr = tr;
   protected hosts = computed<EmuHost[]>(() => this.lab.emu()?.hosts ?? []);
@@ -820,7 +844,24 @@ export class LabHosts {
   pct(a: number, b: number) { return b ? Math.min(100, (a / b) * 100) : 0; }
   async add() { const h = await this.lab.checkHost(this.pick); if (h) { this.sel.set(this.pick); this.pick = ''; } }
   async setup(h: EmuHost) { const pw = this.pw; this.pw = ''; await this.lab.setupHost(h.session, pw); }
-  async remove(h: EmuHost) { if (await this.ui.confirm(tr('Remove Host'), tr('Forget {0} as a KVM host? Nothing on it is changed.', h.name || h.session), tr('Remove'), true)) await this.lab.removeHost(h.session); }
+  protected rm = signal<EmuRemoveInfo | null>(null);
+  protected loadingRm = signal(false);
+  protected ro = { images: false, labs: false, sudoRule: true, group: false, pkgs: false, password: '' };
+  /** Remove Host: first what it can take back or wipe on the host, for the user to choose. */
+  async remove(h: EmuHost) {
+    this.setupOpen.set(false); this.loadingRm.set(true);
+    this.ro = { images: false, labs: false, sudoRule: true, group: false, pkgs: false, password: '' };
+    try { this.rm.set(await this.backend.emuRemoveHostInfo(h.session)); } catch (e) { this.ui.error(errText(e)); } finally { this.loadingRm.set(false); }
+  }
+  removeLabel(r: EmuRemoveInfo) { const o = this.ro; return r.error ? tr('Forget the Host') : o.images || o.labs || (o.sudoRule && r.sudoRule) || (o.group && r.group) || (o.pkgs && (r.pkgs ?? []).length) ? tr('Remove and Clean Up') : tr('Remove, Keep Everything There'); }
+  async removeNow(h: EmuHost, r: EmuRemoveInfo) {
+    const o = this.ro, what = [o.images ? tr('its images ({0})', this.gb2(r.imagesBytes)) : '', o.labs ? tr('the switches’ disks ({0})', this.gb2(r.labBytes)) : ''].filter(Boolean);
+    if (what.length && !(await this.ui.confirm(tr('Delete on {0}', h.name || h.session), tr('Delete {0} on the host? This cannot be undone.', what.join(tr(' and '))), tr('Delete and Remove'), true))) return;
+    const req = { host: h.session, images: !r.error && o.images, labs: !r.error && o.labs, sudoRule: !r.error && o.sudoRule && r.sudoRule, group: !r.error && o.group && r.group, pkgs: !r.error && o.pkgs && !!(r.pkgs ?? []).length, password: o.password, forgetOff: !!r.error };
+    this.ro.password = '';
+    try { this.lab.emu.set(await this.backend.emuRemoveHostWith(req)); this.rm.set(null); this.sel.set(''); this.ui.toast(tr('{0} is removed', h.name || h.session), 'success'); } catch (e) { this.ui.error(errText(e)); }
+  }
+  gb2(n: number) { return !n ? '0' : n >= 2 ** 30 ? (n / 2 ** 30).toFixed(1) + ' GB' : Math.round(n / 2 ** 20) + ' MB'; }
   stepLabel(s: string) { return ({ packages: 'Packages', nat: 'NAT network (libvirt, virbr0)', kvm: 'KVM module', sudo: 'Network commands without a password', group: 'KVM group' } as Record<string, string>)[s] ?? s; }
   private stepIdx(s: { step: string; done: boolean }, st: string) { const i = this.steps.indexOf(s.step), j = this.steps.indexOf(st); return { i, j }; }
   stepMark(s: { step: string; done: boolean; error: string }, st: string) { const { i, j } = this.stepIdx(s, st); return s.done && !s.error ? '✓' : j < i ? '✓' : j === i ? (s.error ? '✕' : '…') : '○'; }

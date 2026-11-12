@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, Hosts: **Set Up Again…** is always there for a host that has everything, to run every step again (safe to repeat, for example after something changed on the host). Set Up now writes down what it adds (packages it installed, its sudo rule, the user put in the kvm group) in /var/lib/termwright/setup.
+- Emulated lab, **Remove Host…** first reads the host and asks what to do there: delete its images (with their size and folder), delete the switches' own disks, remove Set Up's sudo rule, take the user out of the kvm group, uninstall the packages Set Up installed (only those it wrote down) - each one a choice, with the sudo password when needed, and a last confirmation before anything is deleted. "Remove, Keep Everything There" only forgets the host; a host that cannot be reached can only be forgotten. Refused while switches of the open topology run there.
+
 - Emulated lab, Hosts → Set Up: the **Set Up…** button is next to Check Again (no scrolling down), its panel opens at the top with the steps in one row and the log across the full width, and *What the host has* ticks each item as its step is done; at the end the host is checked again and its rows show the result at once (no closing and opening again).
 - Emulated lab, hosts without KVM: a switch starting there says so in the Events (software emulation, 5 to 10 times slower, and how to turn on nested virtualization); moving a switch from a KVM host to one without says so in the move dialog. An image profile can give such hosts an Intel CPU model (*tcgCpu*) for images that do not recognise QEMU's default CPU.
 

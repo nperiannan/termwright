@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, EmuMatrix, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo } from './models';
+  AccountInfo, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -104,6 +104,8 @@ export class Backend {
   emuConsoleLog(id: string) { return this.call<string>('EmuConsoleLog', id); }
   emuDay0Again(id: string) { return this.call<LabView>('EmuDay0Again', id); }
   emuMigrate(id: string, host: string, live: boolean) { return this.call<LabView>('EmuMigrate', id, host, live); }
+  emuRemoveHostInfo(host: string) { return this.call<EmuRemoveInfo>('EmuRemoveHostInfo', host); }
+  emuRemoveHostWith(r: EmuRemoveHostReq) { return this.call<LabView>('EmuRemoveHostWith', r); }
   emuImageMatrix() { return this.call<EmuMatrix>('EmuImageMatrix'); }
   emuSyncImages(hosts: string[], images: string[], force: boolean) { return this.call<EmuMatrix>('EmuSyncImages', hosts, images, force); }
   emuSyncSettings(syncAll: boolean, keep20: boolean) { return this.call<EmuMatrix>('EmuSyncSettings', syncAll, keep20); }

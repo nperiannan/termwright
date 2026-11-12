@@ -44,20 +44,28 @@ func SetupScript() string {
 	return strings.TrimSpace(`
 . /etc/os-release 2>/dev/null
 ids=" $ID $ID_LIKE "
+# what Set Up adds is written down, so Remove Host can take back exactly that
+mkdir -p /var/lib/termwright; rec=/var/lib/termwright/setup; touch $rec; chmod 0644 $rec
+note_new() { for p in "$@"; do if command -v dpkg >/dev/null 2>&1; then dpkg -s "$p" >/dev/null 2>&1 && continue; elif command -v rpm >/dev/null 2>&1; then rpm -q "$p" >/dev/null 2>&1 && continue; elif command -v pacman >/dev/null 2>&1; then pacman -Q "$p" >/dev/null 2>&1 && continue; fi; grep -qx "pkg $p" $rec || echo "pkg $p" >> $rec; done; }
 echo "@@step packages"
 case "$ids" in
  *" debian "*|*" ubuntu "*)
   export DEBIAN_FRONTEND=noninteractive
+  note_new qemu-system-x86 qemu-utils libguestfs-tools
   apt-get update -q || { echo "@@fail apt-get update failed"; exit 1; }
   apt-get install -y -q qemu-system-x86 qemu-utils libguestfs-tools || { echo "@@fail apt-get install failed"; exit 1; } ;;
  *" fedora "*)
+  note_new qemu-system-x86-core qemu-img guestfs-tools
   dnf install -y qemu-system-x86-core qemu-img guestfs-tools || { echo "@@fail dnf install failed"; exit 1; } ;;
  *" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*|*" ol "*)
+  note_new qemu-kvm qemu-img guestfs-tools
   dnf install -y qemu-kvm qemu-img guestfs-tools || yum install -y qemu-kvm qemu-img libguestfs-tools-c || { echo "@@fail dnf install failed"; exit 1; }
   if ! command -v qemu-system-x86_64 >/dev/null 2>&1 && [ -x /usr/libexec/qemu-kvm ]; then ln -s /usr/libexec/qemu-kvm /usr/local/bin/qemu-system-x86_64; echo "@@note qemu-system-x86_64 is a link to /usr/libexec/qemu-kvm"; fi ;;
  *" suse "*|*" opensuse "*|*" sles "*)
+  note_new qemu-x86 qemu-tools guestfs-tools
   zypper -n install qemu-x86 qemu-tools guestfs-tools || { echo "@@fail zypper install failed"; exit 1; } ;;
  *" arch "*)
+  note_new qemu-base libguestfs
   pacman -S --noconfirm --needed qemu-base libguestfs || { echo "@@fail pacman failed"; exit 1; } ;;
  *) echo "@@fail this Linux ($ID) is not supported: install qemu-system-x86_64 and qemu-img by hand"; exit 1 ;;
 esac
@@ -68,8 +76,8 @@ echo "@@step nat"
 # libvirt's default network: a NAT bridge (virbr0) with DHCP for the switches' management ports
 if ! ip link show virbr0 >/dev/null 2>&1; then
  case "$ids" in
-  *" debian "*|*" ubuntu "*) apt-get install -y -q libvirt-daemon-system dnsmasq-base ;;
-  *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*|*" ol "*) dnf install -y libvirt-daemon-config-network libvirt-daemon-kvm || yum install -y libvirt-daemon-config-network libvirt-daemon-kvm ;;
+  *" debian "*|*" ubuntu "*) note_new libvirt-daemon-system dnsmasq-base; apt-get install -y -q libvirt-daemon-system dnsmasq-base ;;
+  *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*|*" ol "*) note_new libvirt-daemon-config-network libvirt-daemon-kvm; dnf install -y libvirt-daemon-config-network libvirt-daemon-kvm || yum install -y libvirt-daemon-config-network libvirt-daemon-kvm ;;
   *" suse "*|*" opensuse "*|*" sles "*) zypper -n install libvirt-daemon-config-network libvirt-daemon-qemu ;;
   *" arch "*) pacman -S --noconfirm --needed libvirt dnsmasq ;;
  esac
@@ -91,12 +99,14 @@ if [ -n "$TWUSER" ] && [ "$TWUSER" != root ] && [ ! -f /etc/sudoers.d/termwright
  ch=$(command -v chown); cmds="$cmds, $ch $TWUSER /dev/tap*"
  [ -d /var/lib/libvirt/dnsmasq ] && cmds="$cmds, $(command -v cat) /var/lib/libvirt/dnsmasq/*"
  t=$(mktemp); printf '# Termwright: the network commands of its emulated switches\n%s ALL=(root) NOPASSWD: %s\n' "$TWUSER" "$cmds" > "$t"
- if visudo -cf "$t" >/dev/null 2>&1; then install -m 0440 "$t" /etc/sudoers.d/termwright && echo "@@note $TWUSER may run $cmds with sudo without a password (/etc/sudoers.d/termwright)"; else echo "@@note the sudo rule did not pass visudo: not written"; fi
+ if visudo -cf "$t" >/dev/null 2>&1; then install -m 0440 "$t" /etc/sudoers.d/termwright && { grep -qx sudo $rec || echo sudo >> $rec; } && echo "@@note $TWUSER may run $cmds with sudo without a password (/etc/sudoers.d/termwright)"; else echo "@@note the sudo rule did not pass visudo: not written"; fi
  rm -f "$t"
 fi
 echo "@@step group"
 getent group kvm >/dev/null 2>&1 || groupadd -r kvm
-if [ -n "$TWUSER" ] && [ "$TWUSER" != root ]; then usermod -aG kvm "$TWUSER" || { echo "@@fail usermod failed"; exit 1; }; fi
+if [ -n "$TWUSER" ] && [ "$TWUSER" != root ]; then
+ id -nG "$TWUSER" | tr ' ' '\n' | grep -qx kvm || { usermod -aG kvm "$TWUSER" || { echo "@@fail usermod failed"; exit 1; }; grep -qx "group $TWUSER" $rec || echo "group $TWUSER" >> $rec; }
+fi
 if [ -e /dev/kvm ]; then chgrp kvm /dev/kvm && chmod 660 /dev/kvm; fi
 echo "@@done"`)
 }
@@ -108,4 +118,43 @@ func SetupCommand(password bool) string {
 		sudo = "sudo -S -p ''"
 	}
 	return `TWUSER=$(id -un); export TWUSER; if [ "$(id -u)" = 0 ]; then sh -c ` + Q(SetupScript()) + `; else ` + sudo + ` env TWUSER="$TWUSER" sh -c ` + Q(SetupScript()) + `; fi`
+}
+
+
+// UndoScript is the root part of Remove Host: it takes back what Set Up wrote
+// down (/var/lib/termwright/setup) - its sudo rule, the user in the kvm group,
+// the packages it installed - as chosen. Prints "@@note …", "@@done".
+func UndoScript(sudo, group, pkgs bool) string {
+	b := func(x bool) string {
+		if x {
+			return "1"
+		}
+		return ""
+	}
+	return strings.TrimSpace(`
+rec=/var/lib/termwright/setup; [ -f $rec ] || touch $rec
+SUDO=` + b(sudo) + `; GROUP=` + b(group) + `; PKGS=` + b(pkgs) + `
+if [ -n "$SUDO" ] && [ -f /etc/sudoers.d/termwright ]; then rm -f /etc/sudoers.d/termwright && sed -i '/^sudo$/d' $rec && echo "@@note the sudo rule is removed"; fi
+if [ -n "$GROUP" ] && [ -n "$TWUSER" ] && grep -qx "group $TWUSER" $rec; then gpasswd -d "$TWUSER" kvm >/dev/null 2>&1 && sed -i "/^group $TWUSER\$/d" $rec && echo "@@note $TWUSER is out of the kvm group"; fi
+if [ -n "$PKGS" ]; then
+ p=$(sed -n 's/^pkg //p' $rec | tr '\n' ' ')
+ if [ -n "$p" ]; then
+  if command -v apt-get >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get remove -y -q $p >/dev/null 2>&1 && apt-get autoremove -y -q >/dev/null 2>&1
+  elif command -v dnf >/dev/null 2>&1; then dnf remove -y $p >/dev/null 2>&1
+  elif command -v zypper >/dev/null 2>&1; then zypper -n remove $p >/dev/null 2>&1
+  elif command -v pacman >/dev/null 2>&1; then pacman -R --noconfirm $p >/dev/null 2>&1
+  fi && sed -i '/^pkg /d' $rec && echo "@@note removed: $p"
+ fi
+fi
+echo "@@done"`)
+}
+
+// UndoCommand runs UndoScript as root (sudo -n, or sudo -S reading the password).
+func UndoCommand(sudo, group, pkgs, password bool) string {
+	s := "sudo -n"
+	if password {
+		s = "sudo -S -p ''"
+	}
+	sc := UndoScript(sudo, group, pkgs)
+	return `TWUSER=$(id -un); export TWUSER; if [ "$(id -u)" = 0 ]; then sh -c ` + Q(sc) + `; else ` + s + ` env TWUSER="$TWUSER" sh -c ` + Q(sc) + `; fi`
 }

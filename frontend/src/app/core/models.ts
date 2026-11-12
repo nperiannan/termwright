@@ -390,3 +390,5 @@ export interface EmuMatrixHost { session: string; name: string; addr: string; kv
 export interface EmuMatrixImage { id: string; name: string; version: string; fileName: string; size: number; local: boolean; switches: number; }
 export interface EmuReach { from: string; to: string; udp: string; tcp: string; text: string; at: string; }
 export interface EmuMatrix { hosts: EmuMatrixHost[] | null; images: EmuMatrixImage[] | null; cells: Record<string, Record<string, string>> | null; reach: EmuReach[] | null; busy: boolean; checking: boolean; syncAll: boolean; keep20: boolean; }
+export interface EmuRemoveInfo { switches: number; imagesBytes: number; imagesDir: string; labBytes: number; labDirs: number; sudoRule: boolean; group: boolean; pkgs: string[] | null; fullSudo: boolean; error: string; }
+export interface EmuRemoveHostReq { host: string; images: boolean; labs: boolean; sudoRule: boolean; group: boolean; pkgs: boolean; password: string; forgetOff: boolean; }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -612,4 +613,152 @@ mkdir -p "$(dirname "$old")"; ln -s "$new" "$old"; echo moved`
 func (a *App) EmuOpenPortsText(host string) string {
 	return "sudo ufw allow 20000:29999/udp && sudo ufw allow 29400:29999/tcp\n\n" +
 		"sudo firewall-cmd --permanent --add-port=20000-29999/udp --add-port=29400-29999/tcp && sudo firewall-cmd --reload"
+}
+
+// EmuRemoveInfo is what Remove Host can take back or wipe on a host.
+type EmuRemoveInfo struct {
+	Switches    int      `json:"switches"`    // switches of the open topology on it
+	ImagesBytes int64    `json:"imagesBytes"` // its images
+	ImagesDir   string   `json:"imagesDir"`
+	LabBytes    int64    `json:"labBytes"` // the switches' own disks (all topologies) in its lab folder
+	LabDirs     int      `json:"labDirs"`
+	SudoRule    bool     `json:"sudoRule"` // Set Up wrote its sudo rule
+	Group       bool     `json:"group"`    // Set Up put the user in the kvm group
+	Pkgs        []string `json:"pkgs"`     // packages Set Up installed
+	FullSudo    bool     `json:"fullSudo"` // sudo without a password for anything (else the password is needed to take back)
+	Error       string   `json:"error"`    // the host could not be reached: it can only be forgotten
+}
+
+// EmuRemoveHostInfo reads what Remove Host can take back or wipe on a host.
+func (a *App) EmuRemoveHostInfo(host string) (EmuRemoveInfo, error) {
+	emuLab.mu.Lock()
+	a.emuLoad()
+	dir := emuLabDir()
+	var r EmuRemoveInfo
+	if l := emuLab.f.Lab; l != nil {
+		for _, v := range l.VMs {
+			if emuHostOf(v) == host {
+				r.Switches++
+			}
+		}
+	}
+	emuLab.mu.Unlock()
+	out, err := a.emuRun(host, `d="$HOME/`+dir+`"; [ -e "$d/images" ] && echo "@img $(du -sbL "$d/images" 2>/dev/null | cut -f1) $(readlink -f "$d/images")"
+n=0; t=0; for l in "$d"/lab-*; do [ -d "$l" ] || continue; n=$((n+1)); s=$(du -sb "$l" 2>/dev/null | cut -f1); t=$((t+${s:-0})); done; echo "@lab $n $t"
+cat /var/lib/termwright/setup 2>/dev/null; sudo -n true 2>/dev/null && echo "@fullsudo"; true`, time.Minute)
+	if err != nil {
+		r.Error = err.Error()
+		return r, nil
+	}
+	for _, ln := range strings.Split(out, "\n") {
+		f := strings.Fields(strings.TrimSpace(ln))
+		switch {
+		case len(f) >= 2 && f[0] == "@img":
+			r.ImagesBytes, _ = strconv.ParseInt(f[1], 10, 64)
+			if len(f) >= 3 {
+				r.ImagesDir = f[2]
+			}
+		case len(f) == 3 && f[0] == "@lab":
+			r.LabDirs, _ = strconv.Atoi(f[1])
+			r.LabBytes, _ = strconv.ParseInt(f[2], 10, 64)
+		case len(f) == 1 && f[0] == "@fullsudo":
+			r.FullSudo = true
+		case len(f) == 1 && f[0] == "sudo":
+			r.SudoRule = true
+		case len(f) == 2 && f[0] == "group":
+			r.Group = true
+		case len(f) == 2 && f[0] == "pkg":
+			r.Pkgs = append(r.Pkgs, f[1])
+		}
+	}
+	return r, nil
+}
+
+// EmuRemoveHostReq says what Remove Host does on the host before it forgets it.
+type EmuRemoveHostReq struct {
+	Host      string `json:"host"`
+	Images    bool   `json:"images"`    // delete its images
+	Labs      bool   `json:"labs"`      // delete the switches' own disks (all topologies) in its lab folder
+	SudoRule  bool   `json:"sudoRule"`  // remove Set Up's sudo rule
+	Group     bool   `json:"group"`     // take the user out of the kvm group (when Set Up put it there)
+	Pkgs      bool   `json:"pkgs"`      // remove the packages Set Up installed
+	Password  string `json:"password"`  // the sudo password, when sudo asks for one
+	ForgetOff bool   `json:"forgetOff"` // a host that cannot be reached: only forget it
+}
+
+// EmuRemoveHostWith takes back or wipes what was chosen on the host, then forgets it.
+func (a *App) EmuRemoveHostWith(r EmuRemoveHostReq) (EmuView, error) {
+	emuLab.mu.Lock()
+	a.emuLoad()
+	dir := emuLabDir()
+	if l := emuLab.f.Lab; l != nil {
+		for _, v := range l.VMs {
+			if emuHostOf(v) == r.Host {
+				emuLab.mu.Unlock()
+				return EmuView{}, errors.New("switches of this topology run on this host: move or remove them first")
+			}
+		}
+	}
+	emuLab.mu.Unlock()
+	var notes []string
+	if !r.ForgetOff && (r.Images || r.Labs) {
+		script := `d="$HOME/` + dir + `"`
+		if r.Labs {
+			script += `; for l in "$d"/lab-*; do [ -d "$l" ] || continue; for p in "$l"/*.pid; do [ -f "$p" ] && kill "$(cat "$p")" 2>/dev/null; done; rm -rf "$l"; done; echo "@@note the switches' disks are deleted"`
+		}
+		if r.Images {
+			script += `; if [ -L "$d/images" ]; then t=$(readlink -f "$d/images"); rm -f "$d/images"; [ -n "$t" ] && [ "$t" != / ] && [ "$t" != "$HOME" ] && rm -rf "$t"; else rm -rf "$d/images"; fi; echo "@@note the images are deleted"`
+		}
+		script += `; rmdir "$d" 2>/dev/null; true`
+		out, err := a.emuRun(r.Host, script, 10*time.Minute)
+		if err != nil {
+			return EmuView{}, fmt.Errorf("deleting on the host: %w", err)
+		}
+		notes = append(notes, emuNotes(out)...)
+	}
+	if !r.ForgetOff && (r.SudoRule || r.Group || r.Pkgs) {
+		cl, err := a.emuClient(context.Background(), r.Host)
+		if err != nil {
+			return EmuView{}, err
+		}
+		s, err := cl.NewSession()
+		if err != nil {
+			return EmuView{}, err
+		}
+		if r.Password != "" {
+			s.Stdin = strings.NewReader(r.Password + "\n")
+		}
+		out, err := s.CombinedOutput(emu.UndoCommand(r.SudoRule, r.Group, r.Pkgs, r.Password != ""))
+		s.Close()
+		o := string(out)
+		if strings.Contains(o, "a password is required") || strings.Contains(o, "incorrect password") || strings.Contains(o, "Sorry, try again") {
+			return EmuView{}, errors.New("sudo wants the password: type it and try again (nothing was taken back)")
+		}
+		if !strings.Contains(o, "@@done") {
+			return EmuView{}, fmt.Errorf("taking back Set Up: %v %s", err, strings.TrimSpace(o))
+		}
+		notes = append(notes, emuNotes(o)...)
+	}
+	emuLab.mu.Lock()
+	if c := emuLab.conns[r.Host]; c != nil {
+		c.close()
+		delete(emuLab.conns, r.Host)
+	}
+	for _, n := range notes {
+		emuEvOn(r.Host, "", "info", "removing the host: "+n)
+	}
+	emuEvOn(r.Host, "", "ok", "the host is removed from Termwright")
+	emuLab.mu.Unlock()
+	return a.EmuRemoveHost(r.Host)
+}
+
+// emuNotes are the "@@note" lines of a script.
+func emuNotes(out string) []string {
+	var n []string
+	for _, ln := range strings.Split(out, "\n") {
+		if t, ok := strings.CutPrefix(strings.TrimSpace(ln), "@@note "); ok {
+			n = append(n, t)
+		}
+	}
+	return n
 }
