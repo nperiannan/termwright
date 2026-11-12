@@ -2,7 +2,7 @@ import { Component, ElementRef, HostListener, OnDestroy, computed, effect, injec
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { EmuDeviceType, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
+import { EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -19,7 +19,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
   selector: 'app-lab-workspace',
   imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon],
   template: `
-  <div class="ws" (click)="menu.set(null); topos.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px'">
+  <div class="ws" (click)="menu.set(null); topos.set(null); mgOpen.set(false)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
       @if (emu()) { <span class="topo" (click)="openTopos(); $event.stopPropagation()" [title]="tr('Topologies: save, open, new')"><span class="muted">{{ tr('Topology') }}</span> <b>{{ st()?.topology || tr('Untitled') }}</b> ▾</span>
@@ -48,36 +48,43 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             } @empty { <p class="muted small">{{ tr('No saved topologies yet: Save… keeps this lab under a name.') }}</p> }
           </div>
         }
-        <span class="chip" [title]="tr('KVM host')"><i class="d" [class.ok]="!!st()?.host"></i>{{ hostName() || tr('No host yet') }}@if (st()?.kvm) { · KVM }</span> }
+        @if (!st()?.host) { <span class="chip" [title]="tr('KVM host')"><i class="d"></i>{{ tr('No host yet') }}</span> } }
       @else { <span class="chip" [title]="tr('The device pack the simulated switches come from')">{{ st()?.pack ? st()!.pack!.name + ' ' + st()!.pack!.version : tr('No device pack') }}</span>
         <button type="button" (click)="loadPack()">{{ st()?.pack ? tr('Load Another Pack…') : tr('Load Device Pack (.vm)…') }}</button> }
-      <span class="sep"></span>
-      <button type="button" class="primary" (click)="lab.start([])" [disabled]="!devs().length || lab.busy()">▶ {{ tr('Start All') }}</button>
-      <button type="button" (click)="lab.stop([])" [disabled]="!running() || lab.busy()">■ {{ tr('Stop All') }}</button>
-      @if (emu()) { <button type="button" (click)="sel() && lab.restart([sel()])" [disabled]="!selDev()?.running || lab.busy()" [title]="tr('Restart the selected switch')">⟳ {{ tr('Reload') }}</button> }
-      <span class="sep"></span>
-      <button type="button" [class.on]="linkMode()" (click)="toggleLink(); $event.stopPropagation()" [disabled]="devs().length < 2">⟷ {{ tr('Add Link') }}</button>
-      @if (emu() && links().length) { <button type="button" (click)="lab.checkCabling()" [disabled]="lab.busy() || !running()" [title]="tr('Asks the running switches for their LLDP neighbours and marks each cable: as drawn, or not')">{{ tr('Check Cabling') }}</button> }
-      <button type="button" (click)="consoleAll()" [disabled]="!running()">⌨ {{ emu() ? tr('Console All') : tr('Open All') }}</button>
-      <span class="sep"></span>
-      <button type="button" (click)="wizard()">＋ {{ devs().length ? tr('Add Switches') : tr('New Lab') }}</button>
       @if (emu()) {
-        <button type="button" (click)="page.set('hosts')">{{ tr('Hosts') }}</button>
-        <button type="button" (click)="page.set('images')">{{ tr('Images') }}</button>
-        <button type="button" (click)="page.set('templates')">{{ tr('Templates') }}</button>
-      } @else { <button type="button" (click)="dialog('list')">{{ tr('Switch List and Outputs') }}</button> }
+        <nav class="ptabs">
+          <a [class.on]="page() !== 'hosts' && page() !== 'images' && page() !== 'templates'" (click)="page.set('')">{{ tr('Canvas') }}</a>
+          <a [class.on]="page() === 'hosts'" (click)="page.set('hosts')">{{ tr('Hosts') }}@if ((st()?.hosts ?? []).length) { <small>{{ st()!.hosts!.length }}</small> }</a>
+          <a [class.on]="page() === 'images'" (click)="page.set('images')">{{ tr('Images') }}@if ((st()?.images ?? []).length) { <small>{{ st()!.images!.length }}</small> }</a>
+          <a [class.on]="page() === 'templates'" (click)="page.set('templates')">{{ tr('Templates') }}@if ((st()?.templates ?? []).length) { <small>{{ st()!.templates!.length }}</small> }</a>
+        </nav>
+      }
+      @if (devs().length) {
+        <span class="health" [title]="tr('{0} running', counts().on) + ' · ' + tr('{0} booting', counts().boot) + ' · ' + tr('{0} with a problem', counts().warn + counts().bad) + ' · ' + tr('{0} stopped', counts().off)">
+          <span class="hbar"><i class="on" [style.flex]="counts().on"></i><i class="boot" [style.flex]="counts().boot"></i><i class="bad" [style.flex]="counts().warn + counts().bad"></i><i class="off" [style.flex]="counts().off"></i></span>
+          <span class="htx"><span class="g">{{ tr('{0} up', counts().on) }}</span>@if (counts().boot) { <span class="w">· {{ tr('{0} booting', counts().boot) }}</span> }@if (counts().warn + counts().bad) { <span class="r">· {{ tr('{0} with a problem', counts().warn + counts().bad) }}</span> }@if (counts().off) { <span class="muted">· {{ tr('{0} off', counts().off) }}</span> }</span>
+        </span>
+      }
       <span class="sp"></span>
       @if (emu() && devs().length) {
-        <label class="chip fs" [title]="tr('On: Stop saves each running switch’s state into its disk, and Start resumes it in seconds (no boot, no day 0). A change to its persona, management, memory or image makes it boot again.') + (st()?.usage?.saved ? ' ' + tr('Saved states now: about {0} on the hosts’ disks.', gb(st()!.usage!.saved)) : '')"><input type="checkbox" [checked]="!!st()?.fast" (change)="lab.setFast($any($event.target).checked)" [disabled]="lab.busy()" />{{ tr('Fast start') }}</label>
-        <span class="chip mg" [title]="tr('How the switches’ first port (management) is connected; it applies when they start')">{{ tr('Management') }}
-          @if (multi()) { <select class="hsel" [ngModel]="mg().host" (ngModelChange)="mgHost.set($event)" name="wmh" [title]="tr('Each host has its own management')">@for (u of hostUse(); track u.host) { <option [value]="u.host">{{ u.name }}</option> }</select> }
-          <select [ngModel]="mg().mgmt" (ngModelChange)="setMgmt($event)" name="wmg" [disabled]="lab.busy()">
-            <option value="cloud">{{ tr('The host’s network, routed (cloud)') }}</option>
-            <option value="lan">{{ tr('The host’s network (bridged)') }}</option>
-            <option value="nat">{{ tr('The host’s NAT network') }}</option>
-            <option value="bridge">{{ tr('Lab bridge on the host') }}</option>
-            <option value="forward">{{ tr('Port forwarding on the host') }}</option>
-          </select>@if (mg().mgmt === 'cloud' || mg().mgmt === 'lan') { <button type="button" class="sm" (click)="openCloud(mg().mgmt); $event.stopPropagation()" [title]="tr('Addresses of the switches on the host’s network')">{{ mg().mgmt === 'lan' && !mg().lanFixed ? 'DHCP' : mg().mgmtNet.split('/')[0] }}…</button> }
+        <span class="mgw">
+          <button type="button" class="mgb" (click)="mgOpen.set(!mgOpen()); $event.stopPropagation()" [title]="tr('How the switches’ first port (management) is connected, on each host')">@if (multi()) { @for (r of mgRows(); track r.host) { <i class="hd" [style.background]="r.c"></i> } }<span class="mgt"><span class="mgl">{{ tr('Management') }}: </span>{{ mgSummary() }}</span> ▾</button>
+          @if (mgOpen()) {
+            <div class="mgp" (click)="$event.stopPropagation()">
+              <b>{{ tr('Management of the switches’ first port') }}</b>
+              <p class="muted small">{{ tr('Each host has its own. A change applies when the switches start; running ones are stopped and started again.') }}</p>
+              @for (r of mgRows(); track r.host) {
+                <div class="mgr"><span class="mgn">@if (multi()) { <i class="hd" [style.background]="r.c"></i> }{{ r.name }}<small class="muted">{{ r.kvm }}</small></span>
+                  <select [attr.data-h]="r.host" [ngModel]="r.mgmt" (ngModelChange)="mgHost.set(r.host); setMgmt($event)" [disabled]="lab.busy()">
+                    <option value="cloud">{{ tr('The host’s network, routed (cloud)') }}</option>
+                    <option value="lan">{{ tr('The host’s network (bridged)') }}</option>
+                    <option value="nat">{{ tr('The host’s NAT network') }}</option>
+                    <option value="bridge">{{ tr('Lab bridge on the host') }}</option>
+                    <option value="forward">{{ tr('Port forwarding on the host') }}</option>
+                  </select>
+                  @if (r.mgmt === 'cloud' || r.mgmt === 'lan') { <button type="button" class="sm" (click)="mgHost.set(r.host); openCloud(r.mgmt)" [title]="tr('Addresses of the switches on the host’s network')">{{ r.addr }}…</button> } @else { <span></span> }
+                </div>
+              }
           @if (cloudF(); as f) {
             <div class="cloudf" (click)="$event.stopPropagation()">
               @if (f.mode === 'cloud') {
@@ -95,9 +102,14 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               }
               <div class="row2"><span class="sp"></span><button type="button" (click)="cloudF.set(null); revertMgmt()">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="applyCloud()" [disabled]="(f.mode === 'cloud' || f.fixed) && !f.addr.trim()">{{ tr('Use') }}</button></div>
             </div>
-          }</span>
+          }
+            </div>
+          }
+        </span>
       }
-      <span class="chip"><span class="g">{{ tr('{0} running', counts().on) }}</span>@if (counts().boot) { · <span class="w">{{ tr('{0} booting', counts().boot) }}</span> }@if (counts().warn) { · <span class="w">{{ tr('{0} with a problem', counts().warn) }}</span> }@if (counts().bad) { · <span class="r">{{ tr('{0} failed', counts().bad) }}</span> } · {{ tr('{0} stopped', counts().off) }}</span>
+      @if (!emu()) { <button type="button" (click)="dialog('list')">{{ tr('Switch List and Outputs') }}</button> }
+      <button type="button" class="primary" (click)="lab.start([])" [disabled]="!devs().length || lab.busy()">▶ {{ tr('Start All') }}</button>
+      <button type="button" (click)="lab.stop([])" [disabled]="!running() || lab.busy()">■ {{ tr('Stop All') }}</button>
     </div>
 
     <div class="main">
@@ -219,9 +231,18 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             }
           </div>
         }
-        <div class="zoom"><button type="button" class="sm" (click)="zoomBy(-0.1)">−</button><button type="button" class="sm" (click)="zoom.set(1)">{{ (zoom() * 100).toFixed(0) }} %</button><button type="button" class="sm" (click)="zoomBy(0.1)">+</button><button type="button" class="sm" (click)="fit(cv)">{{ tr('Fit') }}</button>
-          @if (emu()) { <select class="looksel" [ngModel]="defLook()" (ngModelChange)="setDefLook($event)" name="looksel" [title]="tr('How devices are drawn (Draw As on a switch changes its kind only)')">@for (st of looks; track st.k) { <option [value]="st.k">{{ tr(st.name) }}</option> }</select> }</div>
       </div>
+      @if (page() !== 'new') { <div class="tdw"><div class="tdock" (click)="$event.stopPropagation()">
+        <button type="button" (click)="wizard()" [title]="devs().length ? tr('Add switches to this lab') : tr('Make a lab')">＋<span>{{ devs().length ? tr('Add Switches') : tr('New Lab') }}</span></button>
+        <button type="button" [class.on]="linkMode()" (click)="toggleLink(); $event.stopPropagation()" [disabled]="devs().length < 2" [title]="tr('Draw a cable between two switches')">⟷<span>{{ tr('Add Link') }}</span></button>
+        <i class="dsep"></i>
+        @if (emu()) { <button type="button" (click)="sel() && lab.restart([sel()])" [disabled]="!selDev()?.running || lab.busy()" [title]="selDev() ? tr('Restart {0}', selDev()!.hostname) : tr('Select a running switch to restart it')">⟳<span>{{ tr('Restart') }}</span></button> }
+        <button type="button" (click)="consoleAll()" [disabled]="!running()" [title]="tr('Open the console of every running switch')">⌨<span>{{ emu() ? tr('Console All') : tr('Open All') }}</span></button>
+        @if (emu() && links().length) { <button type="button" (click)="lab.checkCabling()" [disabled]="lab.busy() || !running()" [title]="tr('Asks the running switches for their LLDP neighbours and marks each cable: as drawn, or not')">✓<span>{{ tr('Check Cabling') }}</span></button> }
+        <i class="dsep"></i>
+        <button type="button" class="z" (click)="zoomBy(-0.1)" [attr.aria-label]="tr('Zoom out')">−</button><button type="button" class="z pct" (click)="zoom.set(1)" [title]="tr('Back to 100 %')">{{ (zoom() * 100).toFixed(0) }} %</button><button type="button" class="z" (click)="zoomBy(0.1)" [attr.aria-label]="tr('Zoom in')">+</button><button type="button" class="z" (click)="fit(cv)" [title]="tr('Fit')">⤢</button>
+        @if (emu()) { <select class="looksel" [ngModel]="defLook()" (ngModelChange)="setDefLook($event)" name="looksel" [title]="tr('How devices are drawn (Draw As on a switch changes its kind only)')">@for (st of looks; track st.k) { <option [value]="st.k">{{ tr(st.name) }}</option> }</select> }
+      </div></div> }
 
       <div class="side">
         @if (selDev(); as d) {
@@ -316,13 +337,54 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           @else if (selDev()?.running) { <button type="button" class="primary sm typ" (click)="typeHere(); $event.stopPropagation()">⌨ {{ tr('Type here') }}</button> }</div>
       }
     </div>
+    <div class="sbar">
+      @if (emu()) {
+        <span class="si top">⬢ {{ st()?.topology || tr('Untitled') }}</span>
+        @for (r of mgRows(); track r.host) { <a class="si" (click)="mgOpen.set(true); $event.stopPropagation()" [title]="r.name + ' · ' + r.long"><i class="hd" [style.background]="r.c"></i>{{ r.name }}<span class="muted">{{ r.kvm }} · {{ r.short }}</span></a> }
+        @if (busyLine(); as b) { <a class="si job" (click)="dock.set('events')" [title]="tr('See the Events')"><i class="spin"></i>{{ b }}</a> }
+        <span class="sp"></span>
+        @if ((st()?.downloadQueue ?? []).length) { <a class="si" (click)="page.set('images')">↓ {{ tr('{0} images downloading or waiting', st()!.downloadQueue!.length) }}</a> }
+        <span class="si">{{ tr('{0} images', (st()?.images ?? []).length) }}</span>
+        @if (totals(); as t) { <span class="si">vCPU {{ t.v }} / {{ t.c }} · RAM {{ gb(t.r) }} / {{ gb(t.m) }}</span> }
+        <label class="si fs" [title]="tr('On: Stop saves each running switch’s state into its disk, and Start resumes it in seconds (no boot, no day 0). A change to its persona, management, memory or image makes it boot again.') + (st()?.usage?.saved ? ' ' + tr('Saved states now: about {0} on the hosts’ disks.', gb(st()!.usage!.saved)) : '')"><input type="checkbox" [checked]="!!st()?.fast" (change)="lab.setFast($any($event.target).checked)" [disabled]="lab.busy()" />{{ tr('Fast start') }}@if (st()?.usage?.saved) { <span class="muted">· {{ gb(st()!.usage!.saved) }}</span> }</label>
+      } @else {
+        <span class="si top">{{ st()?.pack ? st()!.pack!.name + ' ' + st()!.pack!.version : tr('No device pack') }}</span>
+        <span class="sp"></span><span class="si">{{ tr('{0} running', counts().on) }} · {{ tr('{0} stopped', counts().off) }}</span>
+      }
+    </div>
   </div>`,
   styles: [`
     :host { display: block; height: 100%; }
     .ws { height: 100%; display: grid; background: var(--bg); color: var(--text); font-size: 13px; }
-    .tb { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); white-space: nowrap;
+    .tb { position: relative; display: flex; flex-wrap: nowrap; min-width: 0; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); white-space: nowrap;
       button { height: 30px; white-space: nowrap; } button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } }
       .lname { margin-right: 4px; font-size: 14px; } .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; flex: none; } .sp { flex: 1; }
+    .tb { container-type: inline-size; } .tb > button { flex: none; } .tb > .topo { flex: 0 1 auto; min-width: 80px; } .lname { flex: none; }
+    @container (max-width: 1050px) { .lname, .mgl { display: none; } .health .htx { display: none; } }
+    .htx > span + span { margin-left: 4px; }
+    @container (max-width: 820px) { .ptabs a { padding: 0 7px; } .ptabs small { display: none; } }
+    .ptabs { display: flex; align-self: stretch; margin: -8px 0 -8px 4px; flex: none;
+      a { display: flex; align-items: center; gap: 5px; padding: 0 11px; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; } a.on { color: var(--text); border-color: var(--accent); } small { font-size: 11px; color: var(--muted); } }
+    .health { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); font-size: 12px; min-width: 0; overflow: hidden; }
+    .hbar { display: flex; width: 60px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--line); flex: none; margin-right: 3px;
+      i { display: block; } i.on { background: var(--success, #1fa45a); } i.boot { background: var(--warning, #e39b17); } i.bad { background: var(--danger); } i.off { background: var(--muted); opacity: .5; } }
+    .mgw { position: relative; min-width: 90px; flex: 0 1 auto; } .htx { overflow: hidden; text-overflow: ellipsis; }
+    .si.fs { cursor: pointer; input { margin: 0; } } .mgb { max-width: 300px; width: 100%; display: inline-flex; align-items: center; gap: 6px; } .mgt { overflow: hidden; text-overflow: ellipsis; }
+    .mgp { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 540px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); white-space: normal; display: grid; gap: 8px;
+      p { margin: 0; } .cloudf { position: static; width: auto; box-shadow: none; margin-top: 4px; } }
+    .mgr { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 8px; align-items: center; select { width: 100%; } }
+    .mgn { display: flex; align-items: center; gap: 4px; overflow: hidden; small { margin-left: 4px; } }
+    .tdw { position: absolute; left: 230px; right: 300px; bottom: 14px; display: flex; justify-content: center; pointer-events: none; z-index: 6; container-type: inline-size; }
+    .tdock { pointer-events: auto; display: flex; align-items: center; gap: 2px; padding: 5px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 10px 28px rgba(0,0,0,.35); max-width: calc(100% - 24px); overflow-x: auto;
+      button { height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; background: none; border-radius: 8px; white-space: nowrap; font-size: 12.5px; }
+      button:hover:not(:disabled) { background: var(--surface-2); } button.on { background: var(--accent-soft); color: var(--accent); } button.z { padding: 0 8px; } .pct { min-width: 54px; justify-content: center; color: var(--muted); } .looksel { margin-left: 4px; } }
+    .dsep { width: 1px; height: 20px; background: var(--line); margin: 0 3px; flex: none; }
+    @container (max-width: 620px) { .tdock button span { display: none; } }
+    .sbar { display: flex; align-items: center; min-width: 0; overflow: hidden; border-top: 1px solid var(--line); background: var(--surface); font-size: 11.5px; .sp { flex: 1; } }
+    .si { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-right: 1px solid var(--line); white-space: nowrap; color: var(--text); text-decoration: none; flex: none; .hd { margin: 0; } }
+    a.si { cursor: pointer; } a.si:hover { background: var(--surface-2); } .si.top { background: var(--accent); color: #fff; border: 0; } .si.job { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .spin { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: twspin .8s linear infinite; flex: none; }
+    @keyframes twspin { to { transform: rotate(360deg); } } @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
     .chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); white-space: nowrap; }
     .chip.mg select { height: 24px; font-size: 12px; }
     .g, .on { color: var(--success, #1fa45a); } .w, .boot { color: var(--warning, #e39b17); } .r, .bad { color: var(--danger); }
@@ -568,6 +630,29 @@ export class LabWorkspace implements OnDestroy {
       out.push({ host: u.host, name: u.name, text, c: this.hcol(u.host), x: Math.max(4, x0), y: Math.max(4, y0), w: x1 - Math.max(4, x0), h: y1 - Math.max(4, y0) });
     }
     return out;
+  });
+  protected mgOpen = signal(false);
+  /** Each host's management, for the header menu and the status bar. */
+  protected mgRows = computed(() => {
+    const v = this.st(), main = v?.host ?? '';
+    const short: Record<string, string> = { cloud: tr('routed'), lan: tr('bridged'), nat: 'NAT', bridge: tr('lab bridge'), forward: tr('port forwarding') };
+    const rows = this.hostUse().length ? this.hostUse() : [{ host: main, name: this.hostName(), mgmt: v?.mgmt ?? '', mgmtNet: v?.mgmtNet ?? '', lanFixed: !!v?.lanFixed } as EmuHostUse];
+    return rows.map(u => {
+      const info = u.host === main ? v?.hostInfo : (v?.hosts ?? []).find(x => x.session === u.host)?.info;
+      const kvm = (u.host === main ? !!v?.kvm : info?.kvm === 'yes') ? 'KVM' : tr('no KVM');
+      return { host: u.host, name: u.name || this.hname(u.host), c: this.hcol(u.host), mgmt: u.mgmt, kvm, short: short[u.mgmt] ?? u.mgmt, long: this.mgName(u),
+        addr: u.mgmt === 'lan' && !u.lanFixed ? 'DHCP' : (u.mgmtNet || '').split('/')[0] || tr('Addresses') };
+    });
+  });
+  protected mgSummary = computed(() => { const r = this.mgRows(); return !r.length ? '' : r.every(x => x.mgmt === r[0].mgmt) ? r[0].short : tr('{0} hosts', r.length); });
+  /** What is going on now, for the status bar: the first busy switch (and how many more). */
+  protected busyLine = computed(() => {
+    const b = this.devs().filter(d => /moving|starting|booting|saving|copying|resuming|stopping/i.test(d.stateText || d.state || ''));
+    return b.length ? b[0].hostname + ': ' + tr(b[0].stateText || b[0].state || '') + (b.length > 1 ? ' · ' + tr('{0} more', b.length - 1) : '') : '';
+  });
+  protected totals = computed(() => {
+    const u = this.hostUse(); if (!u.length) return null;
+    return { v: u.reduce((a, x) => a + (x.vcpus || 0), 0), c: u.reduce((a, x) => a + (x.cpus || 0), 0), r: u.reduce((a, x) => a + (x.ram || 0), 0), m: u.reduce((a, x) => a + (x.memTotal || 0), 0) };
   });
   /** The host whose management the chip shows ('' = the lab's own). */
   protected mgHost = signal('');
@@ -1092,7 +1177,7 @@ export class LabWorkspace implements OnDestroy {
     await this.setMgmt(f.mode, f.mode === 'cloud' || f.fixed ? (f.addr.trim() + ' ' + f.gw.trim()).trim() : '');
   }
   /** Shows the lab's management in the menu again (a change not made). */
-  protected revertMgmt() { const el = this.host.nativeElement.querySelector<HTMLSelectElement>('select[name=wmg]'); if (el) el.value = this.mg().mgmt; }
+  protected revertMgmt() { const h = this.mg().host; const el = [...this.host.nativeElement.querySelectorAll<HTMLSelectElement>('select[data-h]')].find(x => x.dataset['h'] === h); if (el) el.value = this.mg().mgmt; }
   async setMgmt(m: string, net: string | null = null) {
     const g = this.mg(), was = g.mgmt, set = (m: string, n: string) => g.main ? this.lab.setMgmt(m, n) : this.lab.setHostMgmt(g.host, m, n);
     if ((m === 'cloud' || m === 'lan') && net === null) { this.revertMgmt(); this.openCloud(m); return; } // their addresses first

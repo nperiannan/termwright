@@ -77,6 +77,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Fixed: switches did not start when an old cable relay was cleaned up** (the clean-up matched its own start script).
 * **Emulated lab: short problems in the side panel.** A persona problem shows in three lines at most, in plain words (*The switch did not take the persona: it does not show 5720-48MW*); the whole text is in its tooltip and **Details in Events ›** opens the Events log.
 * **Emulated lab: the Events log is kept** (its last 300 entries) when Termwright starts again or is updated; **Clear** empties it.
+* **Emulated lab: a calmer workspace that never reflows.** One header row: the topology, page tabs (*Canvas, Hosts, Images, Templates*, with counts), a health bar with the switch counts, **Management** (one menu for every host: each host's management side by side, with KVM shown) and Start/Stop All. The canvas tools float at the bottom of the canvas (*Add Switches, Add Link, Restart the selected switch, Console All, Check Cabling*, zoom and the drawing style). A status bar at the bottom shows the topology, each host with its KVM and management, what is happening now (a switch booting or moving, and how many more), downloads, images, vCPU and memory in use, and *Fast start*. On a narrow window the header drops words, never a row.
 
 ## 0.34.1 (2026-11-10)
 
