@@ -179,9 +179,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             @for (g of ghosts(); track g.name) { <div class="node ghost" [style.left.px]="g.x - 75" [style.top.px]="g.y - BH / 2"><div class="nbox"><app-dev-icon role="access" [look]="defLook()" [size]="100" state="idle" /></div><div class="nn">{{ g.name }}</div><div class="nm">{{ tr('new') }}</div></div> }
             @for (m of moves(); track m.id) {
               <svg class="mvl" [attr.width]="area().w" [attr.height]="area().h"><line [attr.x1]="m.x1" [attr.y1]="m.y1" [attr.x2]="m.x2" [attr.y2]="m.y2" /></svg>
-              <div class="node ghost mv" [style.left.px]="m.x2 - 75" [style.top.px]="m.y2 - BH / 2" [title]="tr('Moving to {0}: {1}', m.to, m.step)">
+              <div class="node ghost mv" [style.left.px]="m.x2 - 75" [style.top.px]="m.y2 - BH / 2" [title]="tr('Moving to {0}: {1}', m.to, m.step) + (m.rest ? ' · ' + m.pct + ' % · ' + m.rest : '')">
                 <div class="nbox"><app-dev-icon [role]="m.role" [look]="m.look" [size]="100" state="boot" /></div>
-                <div class="nn">{{ m.name }} <span class="muted">→ {{ m.to }}</span></div><div class="nm"><i class="spin"></i> {{ m.step }}</div></div>
+                <div class="nn">{{ m.name }} <span class="muted">→ {{ m.to }}</span></div><div class="nm"><i class="spin"></i> {{ m.step }}</div>@if (m.pct >= 0) { <div class="mvp"><i [style.width.%]="m.pct"></i></div><div class="mvr">{{ m.pct }} % · {{ m.rest }}</div> }</div>
             }
             @for (d of devs(); track d.id) {
               <div class="node" [class.dimn]="dimOf(d)" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
@@ -555,7 +555,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .lk.down .pb { stroke: var(--danger); } .lk.down .pt { fill: var(--danger); }
     .mvl { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; line { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 6; animation: mvdash 1s linear infinite; } }
     @keyframes mvdash { to { stroke-dashoffset: -12; } } @media (prefers-reduced-motion: reduce) { .mvl line { animation: none; } }
-    .node.ghost.mv { opacity: .9; pointer-events: auto; .nbox { border: 1.5px dashed var(--accent); background: var(--accent-soft); } .nm { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--accent); } }
+    .node.ghost.mv { opacity: .9; pointer-events: auto; .mvp { width: 150px; height: 4px; margin: 4px auto 2px; border-radius: 2px; background: var(--line); overflow: hidden; i { display: block; height: 100%; background: var(--accent); transition: width .5s; } } .mvr { font-size: 10.5px; color: var(--muted); white-space: nowrap; } .nbox { border: 1.5px dashed var(--accent); background: var(--accent-soft); } .nm { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--accent); } }
     .gl { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 5; opacity: .7; } .node.ghost { opacity: .55; pointer-events: none; .nbox { border-style: dashed; border-color: var(--accent); } }
     .main { position: relative; }
     .rb { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 8 5; }
@@ -785,7 +785,7 @@ export class LabWorkspace implements OnDestroy {
   private moveSpot = new Map<string, { to: string; x: number; y: number }>();
   protected moves = computed(() => {
     this.moved();
-    const out: { id: string; name: string; to: string; step: string; role: DevRole; look: IconStyle; x1: number; y1: number; x2: number; y2: number }[] = [];
+    const out: { id: string; name: string; to: string; step: string; pct: number; rest: string; role: DevRole; look: IconStyle; x1: number; y1: number; x2: number; y2: number }[] = [];
     for (const d of this.devs()) {
       if (!d.movingTo) continue;
       const p = this.pos(d);
@@ -795,7 +795,8 @@ export class LabWorkspace implements OnDestroy {
         at = there.length ? { to: d.movingTo, x: Math.max(...there.map(q => q.x)) + 180, y: there.reduce((a, q) => a + q.y, 0) / there.length } : { to: d.movingTo, x: p.x + 240, y: p.y };
         this.moveSpot.set(d.id, at);
       }
-      out.push({ id: d.id, name: d.hostname, to: this.hname(d.movingTo), step: (d.stateText || '').replace(/^moving · /, ''), role: this.roleOfDev(d), look: this.lookOf(d), x1: p.x, y1: p.y, x2: at.x, y2: at.y });
+      const st = (d.stateText || '').replace(/^moving · /, ''), pg = /^(.*?) · (\d+) % · (.*)$/.exec(st);
+      out.push({ id: d.id, name: d.hostname, to: this.hname(d.movingTo), step: pg ? pg[1] : st, pct: pg ? +pg[2] : -1, rest: pg ? pg[3] : '', role: this.roleOfDev(d), look: this.lookOf(d), x1: p.x, y1: p.y, x2: at.x, y2: at.y });
     }
     return out;
   });

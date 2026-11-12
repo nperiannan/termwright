@@ -1604,6 +1604,17 @@ func (a *App) emuCopyOnce(host string, im emu.Image, src *os.File, tmp, dir stri
 		emuLab.mu.Lock()
 		emuLab.upload[im.ID] = strconv.Itoa(pct) + " %"
 		emuLab.mu.Unlock()
+		emuSyncPct(host, im.ID, pct)
+	}, txt: func(t string) {
+		emuLab.mu.Lock()
+		for id, to := range emuLab.moveTo { // a move waiting for this image there shows how far it is
+			if to == host && strings.HasPrefix(emuLab.state[id], "moving: the image on the new host") {
+				emuLab.state[id] = "moving: the image on the new host · " + t
+			}
+		}
+		emuLab.upload[im.ID] = t
+		emuLab.mu.Unlock()
+		emuSyncText(host, im.ID, t)
 	}}
 	_, err = io.Copy(pw, src)
 	if cerr := dst.Close(); err == nil {
@@ -1666,12 +1677,51 @@ type progressWriter struct {
 	total int64
 	last  int
 	fn    func(int)
+	txt   func(string) // "41 % · 1.2 GB of 2.9 GB · 18 MB/s · about 2 min left", once a second
+	from  int64        // where it started (a copy that goes on)
+	start time.Time
+	shown time.Time
+}
+
+// emuRate says how far a copy is and how long it takes at this speed.
+func emuRate(done, total, from int64, start time.Time) string {
+	s := ""
+	if total > 0 {
+		s = fmt.Sprintf("%d %% · %s of %s", done*100/total, emuBytes(done), emuBytes(total))
+	} else {
+		s = emuBytes(done)
+	}
+	if sec := time.Since(start).Seconds(); sec >= 2 && done > from {
+		bps := float64(done-from) / sec
+		s += " · " + emuBytes(int64(bps)) + "/s"
+		if total > done && bps > 0 {
+			left := time.Duration(float64(total-done)/bps) * time.Second
+			switch {
+			case left < time.Minute:
+				s += fmt.Sprintf(" · about %d s left", int(left.Seconds())+1)
+			case left < time.Hour:
+				s += fmt.Sprintf(" · about %d min left", int(left.Minutes()+0.5))
+			default:
+				s += fmt.Sprintf(" · about %.1f h left", left.Hours())
+			}
+		}
+	}
+	return s
 }
 
 func (p *progressWriter) Write(b []byte) (int, error) {
 	n, err := p.w.Write(b)
 	p.n += int64(n)
-	if p.total > 0 {
+	if p.txt != nil {
+		if p.start.IsZero() {
+			p.start, p.from = time.Now(), p.n-int64(n)
+		}
+		if time.Since(p.shown) >= time.Second {
+			p.shown = time.Now()
+			p.txt(emuRate(p.n, p.total, p.from, p.start))
+		}
+	}
+	if p.total > 0 && p.fn != nil {
 		if pct := int(p.n * 100 / p.total); pct != p.last {
 			p.last = pct
 			p.fn(pct)

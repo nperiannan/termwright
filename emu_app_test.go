@@ -1051,3 +1051,12 @@ func TestEmuMoveTargetNetwork(t *testing.T) {
 		t.Errorf("fixed to port forwarding: %v", err)
 	}
 }
+
+func TestEmuRate(t *testing.T) {
+	if g := emuRate(1<<30, 4<<30, 0, time.Now().Add(-10*time.Second)); g != "25 % · 1.0 GB of 4.0 GB · 102 MB/s · about 31 s left" {
+		t.Error(g)
+	}
+	if g := emuRate(5<<20, 0, 0, time.Now()); g != "5 MB" {
+		t.Error(g)
+	}
+}

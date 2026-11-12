@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/netip"
 	"os"
@@ -94,7 +95,11 @@ func (h *emuHMP) close() { h.c.Close() }
 
 // emuCopyFile copies a file from one host to another through this computer
 // (the two SSH connections it has; no login between the hosts needed).
-func (a *App) emuCopyFile(from, to, src, dst string) error {
+func (a *App) emuCopyFile(from, to, src, dst string, txt func(string)) error {
+	total := int64(0)
+	if out, err := a.emuRun(from, "stat -c %s "+emu.Q(src)+" 2>/dev/null || stat -f %z "+emu.Q(src), 30*time.Second); err == nil {
+		total, _ = strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+	}
 	cf, err := a.emuClient(context.Background(), from)
 	if err != nil {
 		return err
@@ -112,7 +117,7 @@ func (a *App) emuCopyFile(from, to, src, dst string) error {
 	if err != nil {
 		return err
 	}
-	if err := ss.Start("cat " + src); err != nil {
+	if err := ss.Start("cat " + emu.Q(src)); err != nil {
 		return err
 	}
 	ds, err := ct.NewSession()
@@ -120,9 +125,26 @@ func (a *App) emuCopyFile(from, to, src, dst string) error {
 		return err
 	}
 	defer ds.Close()
-	ds.Stdin = r
-	if out, err := ds.CombinedOutput(fmt.Sprintf("mkdir -p %s && cat > %s.part && mv %s.part %s", path.Dir(dst), dst, dst, dst)); err != nil {
-		return fmt.Errorf("copying to the new host: %v %s", err, strings.TrimSpace(string(out)))
+	w, err := ds.StdinPipe()
+	if err != nil {
+		return err
+	}
+	var out strings.Builder
+	ds.Stdout, ds.Stderr = &out, &out
+	if err := ds.Start(fmt.Sprintf("mkdir -p %s && cat > %s.part && mv %s.part %s", emu.Q(path.Dir(dst)), emu.Q(dst), emu.Q(dst), emu.Q(dst))); err != nil {
+		return err
+	}
+	pw := &progressWriter{w: w, total: total, txt: txt}
+	_, cerr := io.Copy(pw, r)
+	_ = w.Close()
+	if err := ds.Wait(); err != nil {
+		return fmt.Errorf("copying to the new host: %v %s", err, strings.TrimSpace(out.String()))
+	}
+	if cerr != nil {
+		return cerr
+	}
+	if total > 0 && pw.n != total {
+		return fmt.Errorf("copying to the new host: %s of %s arrived", emuBytes(pw.n), emuBytes(total))
 	}
 	return ss.Wait()
 }
@@ -289,6 +311,17 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 	return a.EmuState()
 }
 
+// emuMoveProgress shows a move's copy with how far it is, its speed and the time left.
+func (a *App) emuMoveProgress(id, step string) func(string) {
+	return func(t string) {
+		emuLab.mu.Lock()
+		if emuLab.moveTo[id] != "" {
+			emuLab.state[id] = "moving: " + step + " · " + t
+		}
+		emuLab.mu.Unlock()
+	}
+}
+
 func (a *App) emuMoveStep(id, text string) {
 	emuLab.mu.Lock()
 	emuLab.state[id] = "moving: " + text
@@ -323,7 +356,7 @@ func (a *App) emuMovePrep(id, from, to string) (emu.VM, emu.Image, *emu.Lab, []e
 		name := strings.TrimSuffix(d.Backing, emu.BootedSuffix) + ".booted-" + emuShort(from) + ".qcow2"
 		if out, _ := a.emuRun(to, fmt.Sprintf("[ -f %s/%s ] && echo have", lf.ImageDir(), name), time.Minute); !strings.Contains(out, "have") {
 			a.emuMoveStep(id, "copying the booted image to the new host")
-			if err := a.emuCopyFile(from, to, lf.ImageDir()+"/"+d.Backing, lf.ImageDir()+"/"+name); err != nil {
+			if err := a.emuCopyFile(from, to, lf.ImageDir()+"/"+d.Backing, lf.ImageDir()+"/"+name, a.emuMoveProgress(id, "copying the booted image to the new host")); err != nil {
 				return vv, im, lf, nil, nil, err
 			}
 		}
@@ -508,9 +541,24 @@ func (a *App) emuMoveLive(id, to string) error {
 		return fmt.Errorf("its memory did not start moving (TCP %d between the hosts?): %s", migPort, out)
 	}
 	var status, last string
+	liveStep := map[bool]string{true: "moving its disk and memory (live)", false: "moving its memory (live)"}[inc]
+	show := a.emuMoveProgress(id, liveStep)
+	kb := func(out, what string) int64 {
+		m := regexp.MustCompile(`(?m)^` + what + `: (\d+) kbytes`).FindStringSubmatch(out)
+		if m == nil {
+			return -1
+		}
+		n, _ := strconv.ParseInt(m[1], 10, 64)
+		return n * 1024
+	}
+	liveStart := time.Now()
 	for end := time.Now().Add(30 * time.Minute); ; time.Sleep(500 * time.Millisecond) {
 		out, _ := src.do("info migrate", 10*time.Second)
 		last = out
+		// how far: the memory sent, of all of it (pages written again are sent again, so it can slow near the end)
+		if tot, rem := kb(out, "total ram"), kb(out, "remaining ram"); tot > 0 && rem >= 0 {
+			show(emuRate(tot-rem, tot, 0, liveStart))
+		}
 		if m := regexp.MustCompile(`(?m)^Migration status: (\S+)`).FindStringSubmatch(out); m != nil {
 			status = m[1]
 		}
@@ -601,8 +649,9 @@ func (a *App) emuMoveCopy(id, to string, running, readdr bool) error {
 		return err
 	}
 	for _, d := range disks {
-		a.emuMoveStep(id, fmt.Sprintf("copying its disk %s to the new host", path.Base(d.Path)))
-		if err := a.emuCopyFile(from, to, d.Path, d.Path); err != nil {
+		step := fmt.Sprintf("copying its disk %s to the new host", path.Base(d.Path))
+		a.emuMoveStep(id, step)
+		if err := a.emuCopyFile(from, to, d.Path, d.Path, a.emuMoveProgress(id, step)); err != nil {
 			return err
 		}
 		if out, err := a.emuRun(to, fmt.Sprintf("qemu-img rebase -u -F qcow2 -b \"$HOME/%s/%s\" %s || echo fail", lf.ImageDir(), bases[d.Backing], d.Path), time.Minute); err != nil || strings.Contains(out, "fail") {
