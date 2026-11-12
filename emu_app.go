@@ -5507,7 +5507,7 @@ func (a *App) EmuSetRole(id, role string) (EmuView, error) {
 // ("" = the default), or with id "" the default style for all.
 func (a *App) EmuSetIconStyle(id, style string) (EmuView, error) {
 	switch style {
-	case "", "box", "iso", "classic", "blue", "line", "front":
+	case "", "box", "iso", "classic", "blue", "line", "front", "slate", "steel", "rack":
 	default:
 		return EmuView{}, fmt.Errorf("no icon style %q", style)
 	}

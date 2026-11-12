@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, three new icon styles, neutral with colour only for the status lights: **Slate tiles** (a slate tile with a white symbol per role), **Steel isometric** (grey hardware in 3-D with its ports) and **Rack front (1U)** (the front of the box as it sits in a rack: ears, port blocks, LEDs). Pick them in the tool dock (all switches) or per switch (Draw As…).
+
 - Emulated lab, **Log** tab in the bottom pane: the emulator's own log (emulator.log in the lab folder, three files of 5 MB) with everything the lab does, at a level you choose - Errors, Warnings, Info (default), Debug (each command run on a host, how long it took and how it ended, what day 0 typed) or Verbose (also the commands' text and output, secrets removed). Refresh, Copy and Save….
 - Emulated lab, Fabric Engine on the host's network (macvtap): it answers on its OOB port with its own MAC (its MAC block + 0x81), not the NIC's, so nothing reached it by SSH; the port now gets the MAC the switch uses (an image profile setting: mgmtMacAlign/mgmtMacOffset, in the device pack 1.5.6), and NAT leases are found by it too.
 - Emulated lab, the hover card shows the switch's type (EXOS/VOSS), model (or "no persona") and firmware; the name under a switch can be dragged away from a cable (double-click puts it back) and has a backdrop so a cable does not run through it.
