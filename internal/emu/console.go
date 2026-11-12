@@ -328,6 +328,9 @@ var authDown = regexp.MustCompile(`(?i)failed to connect to authentication servi
 // authDownWait: how long a login is left alone when the switch's login service did not answer.
 var authDownWait = 15 * time.Second
 
+// quietWait: how long a console is listened to before Enter wakes it.
+var quietWait = 2 * time.Second
+
 // notReadyWait: how long a login that is not ready yet is left alone before Enter is typed again.
 var notReadyWait = 10 * time.Second
 
@@ -338,18 +341,29 @@ func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) 
 	}
 	login := regexp.MustCompile(`(?i)(login|username|user name)\s*:\s*$`)
 	pass := regexp.MustCompile(`(?i)password\s*:\s*$`)
-	_ = c.Send("")
+	// a console that shows something by itself is not woken: each Enter at a login prompt is
+	// an empty user name, and some switches count those as failed logins and lock the console
+	// (Fabric Engine: "Access denied : length 0 not allowed", then "Lock out for 60 seconds")
+	i, err := c.Wait(ctx, quietWait, im.answers(), login, prompt, pass)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		_ = c.Send("")
+		i = -1
+	}
 	// logged in already (a console left at a prompt), or the login prompt; the
 	// Enter that woke the console may have been taken as an empty user name
-	i := -1
+	enters := 0
 	for try := 0; try < 3 && i != 0 && i != 1; try++ {
 		var err error
 		i, err = c.Wait(ctx, 90*time.Second, im.answers(), login, prompt, pass)
 		if err != nil {
 			return nil, errors.New("no login prompt on the console: " + err.Error())
 		}
-		if i == 2 {
+		if i == 2 && enters == 0 { // a password asked for an empty user name: one Enter ends it (one failed login, not three)
 			_ = c.Send("")
+			enters++
 		}
 	}
 	if i == 2 {

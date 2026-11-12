@@ -223,8 +223,8 @@ function box(k: string, lit: boolean): string {
 /** The look of the device drawings. */
 export type IconStyle = 'box' | 'iso' | 'classic' | 'blue' | 'line' | 'front';
 export const ICON_STYLES: { k: IconStyle; name: string }[] = [
-  { k: 'box', name: 'Boxes' }, { k: 'iso', name: 'Isometric hardware' }, { k: 'classic', name: 'Classic diagram symbols' }, { k: 'blue', name: 'Classic 3-D (diagram blue)' },
-  { k: 'line', name: 'Line icons' }, { k: 'front', name: 'Front panels' },
+  { k: 'box', name: 'Boxes' }, { k: 'iso', name: 'Isometric hardware' }, { k: 'blue', name: 'Classic 3-D (diagram blue)' },
+  { k: 'front', name: 'Front panels' },
 ];
 const strip = (svg: string) => svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
 

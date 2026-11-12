@@ -5177,7 +5177,7 @@ func (a *App) EmuTopologies() []EmuTopoInfo {
 	open := emuLab.f.Topology
 	emuLab.mu.Unlock()
 	ents, _ := os.ReadDir(a.emuTopoDir())
-	var out []EmuTopoInfo
+	out := []EmuTopoInfo{} // empty, not null: the topology menu opens with no saved one too
 	for _, e := range ents {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue

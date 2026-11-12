@@ -165,6 +165,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="zh"><i [style.background]="z.c"></i><b>{{ z.name }}</b><span class="muted">{{ z.text }}</span></div></div>
             }
             <svg class="links" [attr.width]="area().w" [attr.height]="area().h">
+              @for (c of clouds(); track c.host) { @for (u of c.links; track u.dev + u.port) {
+                <g class="lk cll"><title>{{ tr('{0} {1} is on the host’s network ({2})', u.name, u.port, c.name) }}</title><path class="ln up" [attr.d]="'M' + u.x + ' ' + u.y + ' L' + c.x + ' ' + c.y" />
+                  @if (showPorts()) { <rect class="pb" [attr.x]="u.lx - 18" [attr.y]="u.ly - 9" width="36" height="18" rx="5" /><text class="pt" [attr.x]="u.lx" [attr.y]="u.ly + 4">{{ u.port.split('/').pop() }}</text> }</g>
+              } }
               @for (k of lines(); track k.key) {
                 <g class="lk" [class.dimk]="linkDim(k.link)" [class.tun]="k.tun" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
                   <title>{{ k.tip }}</title>
@@ -183,17 +187,22 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="nbox"><app-dev-icon [role]="m.role" [look]="m.look" [size]="100" state="boot" /></div>
                 <div class="nn">{{ m.name }} <span class="muted">→ {{ m.to }}</span></div><div class="nm"><i class="spin"></i> {{ m.step }}</div>@if (m.pct >= 0) { <div class="mvp"><i [style.width.%]="m.pct"></i></div><div class="mvr">{{ m.pct }} % · {{ m.rest }}</div> }</div>
             }
+            @for (c of clouds(); track c.host) {
+              <div class="node cloud" [class.pick]="linkMode() && !!linkA()?.port" [style.left.px]="c.x - 75" [style.top.px]="c.y - 44" (pointerdown)="cloudGrab($event, c.host)" (click)="cloudClick(c.host, $event)"
+                   [title]="tr('The network of {0} ({1}): a switch port cabled here is on it, like a cloud node. Add Link from a switch port to here; right-click a switch to take a port off.', c.name, c.lan)">
+                <div class="cbox"><svg viewBox="0 0 64 40" width="76" height="48"><path d="M18 34h30a10 10 0 0 0 1-20 14 14 0 0 0-26-4A11 11 0 0 0 18 34z" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="2"/></svg></div>
+                <div class="nn">{{ tr('Cloud') }}</div><div class="nm">{{ c.name }} · {{ c.lan || tr('host network') }}</div>
+              </div>
+            }
             @for (d of devs(); track d.id) {
               <div class="node" [class.dimn]="dimOf(d)" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
                    (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)" (mouseenter)="hov.set(d.id)" (mouseleave)="hov.set('')">
                 <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [look]="lookOf(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nn">{{ d.hostname }}</div>
-                <div class="nm">{{ d.persona?.slots?.[0]?.model || d.model }}@if (showAddr()) { · {{ subOf(d) }} }</div>
+                <div class="nm" [title]="d.persona?.slots?.[0]?.model ? tr('Persona: it runs as a {0}', d.persona!.slots![0].model) : tr('The image as it is (no persona)')">{{ d.persona?.slots?.[0]?.model ? modelOf(d) + ' · ' + osOf(d) : modelOf(d) }} {{ d.version }}@if (showAddr()) { · {{ subOf(d) }} }</div>
                 @if (hostMode() === 'tags') { <div class="htg"><i [style.background]="hcol(hostOfDev(d))"></i>{{ hname(hostOfDev(d)) }}</div> }
                 @if (d.uplinks?.length) { <span class="badge up" [title]="tr('On the host’s network: {0}', d.uplinks!.join(', '))">⇡ {{ d.uplinks!.join(',') }}</span> }
                 @if (d.personaError) { <span class="badge r" [title]="d.personaError">{{ tr('no persona') }}</span> }
-                @else if (d.persona && d.personaOk) { <span class="badge">{{ tr('persona') }} ✓</span> }
-                @else if (d.persona && d.personaInfo?.startsWith('written')) { <span class="badge" [title]="tr('The file is in its disk; the switch has not shown the model on its CLI yet')">{{ tr('persona') }} ?</span> }
                 @else if (d.error) { <span class="badge r" [title]="d.error">{{ tr('problem') }}</span> }
               </div>
             }
@@ -263,7 +272,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       </div>
       @if (page() !== 'new') { <div class="tdw"><div class="tdock" (click)="$event.stopPropagation()">
         <button type="button" (click)="wizard()" [title]="devs().length ? tr('Add switches to this lab') : tr('Make a lab')">＋<span>{{ devs().length ? tr('Add Switches') : tr('New Lab') }}</span></button>
-        <button type="button" [class.on]="linkMode()" (click)="toggleLink(); $event.stopPropagation()" [disabled]="devs().length < 2" [title]="tr('Draw a cable between two switches')">⟷<span>{{ tr('Add Link') }}</span></button>
+        <button type="button" [class.on]="linkMode()" (click)="toggleLink(); $event.stopPropagation()" [disabled]="devs().length < 2 && !clouds().length" [title]="tr('Draw a cable between two switches')">⟷<span>{{ tr('Add Link') }}</span></button>
+        @if (emu()) { <button type="button" (click)="addCloud(); $event.stopPropagation()" [disabled]="!devs().length" [title]="tr('A cloud: the host’s own network, to cable switch ports to (Add Link from a port to the cloud)')">☁<span>{{ tr('Add Cloud') }}</span></button> }
         <i class="dsep"></i>
         @if (emu()) { <button type="button" (click)="sel() && lab.restart([sel()])" [disabled]="!selDev()?.running || lab.busy()" [title]="selDev() ? tr('Restart {0}', selDev()!.hostname) : tr('Select a running switch to restart it')">⟳<span>{{ tr('Restart') }}</span></button> }
         <button type="button" (click)="consoleAll()" [disabled]="!running()" [title]="tr('Open the console of every running switch')">⌨<span>{{ emu() ? tr('Console All') : tr('Open All') }}</span></button>
@@ -342,12 +352,13 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       <div class="dtabs">
         <a [class.on]="dock() === 'events'" (click)="dock.set('events')">{{ tr('Events') }}@if (problems()) { <span class="cnt">{{ problems() }}</span> }</a>
         @if (emu()) { <a [class.on]="dock() === 'inv'" (click)="dock.set('inv')">{{ tr('Inventory') }}</a> }
-        @if (emu() && selDev(); as d) { <a [class.on]="dock() === 'console'" (click)="dock.set('console'); loadTail()">{{ tr('{0} console', d.hostname) }}</a> }
+        @if (emu() && selDev(); as d) { <a [class.on]="dock() === 'console'" (click)="dock.set('console'); loadTail()">{{ tr('{0} console', d.hostname) }}</a><a [class.on]="dock() === 'clog'" (click)="dock.set('clog'); loadClog()" [title]="tr('Everything its console showed since it started, with its Events')">{{ tr('Console Log') }}</a> }
         <span class="sp"></span><span class="muted small hint2">{{ dock() === 'inv' ? tr('Every switch under its host: console, management, what it uses now') : dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
         @if (dock() === 'console' && dockTab(); as t) { <button type="button" class="sm" (click)="undock()" [title]="tr('Close the connection to its console')">{{ tr('Disconnect') }}</button> }
         @if (dock() === 'inv' && inventory().length > 1) { <button type="button" class="sm" (click)="flipAll()">{{ invClosed().size === inventory().length ? tr('Expand All') : tr('Collapse All') }}</button> }
         @else { <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button> }
         @if (dock() === 'events' && emu()) { <button type="button" class="sm" (click)="clearEvents()">{{ tr('Clear') }}</button> }
+        @if (dock() === 'clog' && selDev(); as d) { <button type="button" class="sm" (click)="loadClog()" [disabled]="clogBusy()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveConsoleLog(d)">{{ tr('Save…') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
       </div>
       @if (dock() === 'inv') {
@@ -376,6 +387,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           @for (e of events(); track $index) { <div [class]="e.level"><span class="t">{{ time(e.at) }}</span><span class="eh" [title]="e.host || tr('this computer')">@if (e.host) { <i [style.background]="hcol(e.host)"></i>{{ hname(e.host) }} } @else { <span class="muted">{{ tr('this computer') }}</span> }</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span>{{ e.text }}</span></div> }
           @empty { <div><span class="t"></span><b></b><span class="muted">{{ emu() ? tr('Nothing yet - start a switch.') : tr('Simulated switches start at once; their state is on the canvas.') }}</span></div> }
         </div>
+      } @else if (dock() === 'clog') {
+        <div class="tailw"><pre class="tail">{{ clogBusy() && !clog() ? tr('Reading the log…') : clog() || tr('No console output yet.') }}</pre></div>
       } @else if (dockTab(); as t) {
         <div class="dterm"><app-terminal-view [tab]="t" [visible]="visible() && dock() === 'console'" /></div>
       } @else {
@@ -556,6 +569,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .lk.down .pb { stroke: var(--danger); } .lk.down .pt { fill: var(--danger); }
     .mvl { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; line { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 6; animation: mvdash 1s linear infinite; } }
     @keyframes mvdash { to { stroke-dashoffset: -12; } } @media (prefers-reduced-motion: reduce) { .mvl line { animation: none; } }
+    .node.cloud { cursor: grab; .cbox { height: 56px; display: flex; align-items: flex-end; justify-content: center; } } .node.cloud.pick .cbox svg path { stroke-width: 3; } .cll .ln { stroke-dasharray: 3 4; }
     .node.ghost.mv { opacity: .9; pointer-events: auto; .mvp { width: 150px; height: 4px; margin: 4px auto 2px; border-radius: 2px; background: var(--line); overflow: hidden; i { display: block; height: 100%; background: var(--accent); transition: width .5s; } } .mvr { font-size: 10.5px; color: var(--muted); white-space: nowrap; } .nbox { border: 1.5px dashed var(--accent); background: var(--accent-soft); } .nm { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--accent); } }
     .gl { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 5; opacity: .7; } .node.ghost { opacity: .55; pointer-events: none; .nbox { border-style: dashed; border-color: var(--accent); } }
     .main { position: relative; }
@@ -626,11 +640,15 @@ export class LabWorkspace implements OnDestroy {
   protected selDev = computed(() => this.devs().find(d => d.id === this.sel()) ?? null);
   protected selLink = signal('');
   protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink } | null>(null);
-  protected dock = signal<'events' | 'console' | 'inv'>('events');
+  protected dock = signal<'events' | 'console' | 'inv' | 'clog'>('events');
+  protected clog = signal('');
+  protected clogBusy = signal(false);
+  /** The selected switch's console log since it started, with its Events (to read, copy or save). */
+  async loadClog() { const d = this.selDev(); if (!d) return; this.clogBusy.set(true); try { this.clog.set(await this.backend.emuConsoleLog(d.id)); } catch (e) { this.clog.set(String(e)); } finally { this.clogBusy.set(false); } }
   protected hov = signal('');
   protected topos = signal<EmuTopoInfo[] | null>(null);
-  async openTopos() { if (this.topos()) { this.topos.set(null); return; } try { this.topos.set(await this.backend.emuTopologies()); } catch (e) { this.ui.error(e); } }
-  private async reTopos() { try { this.topos.set(await this.backend.emuTopologies()); } catch { /* ignore */ } }
+  async openTopos() { if (this.topos()) { this.topos.set(null); return; } try { this.topos.set((await this.backend.emuTopologies()) ?? []); } catch (e) { this.ui.error(e); } }
+  private async reTopos() { try { this.topos.set((await this.backend.emuTopologies()) ?? []); } catch { /* ignore */ } }
   async saveTopo() { const n = await this.ui.input(tr('Save Topology'), tr('Name'), this.st()?.topology || ''); if (n && await this.lab.saveTopology(n)) await this.reTopos(); }
   async newTopo() {
     const n = await this.ui.input(tr('New Topology'), tr('Name')); if (!n) return;
@@ -777,6 +795,52 @@ export class LabWorkspace implements OnDestroy {
     return this.onlyProblems() && !(k.up === false || (a && this.problem(a)) || (b && this.problem(b)));
   }
   protected zsel = signal('');
+  /** Clouds: per host, its own network; a switch port cabled to it is on that network (an uplink). Shown when a port is on it, or added. */
+  protected cloudOn = signal<Set<string>>(new Set(JSON.parse((() => { try { return localStorage.getItem('tw.clouds') || '[]'; } catch { return '[]'; } })())));
+  protected cloudAt = signal<Record<string, { x: number; y: number }>>((() => { try { return JSON.parse(localStorage.getItem('tw.cloudAt') || '{}'); } catch { return {}; } })());
+  protected clouds = computed(() => {
+    this.moved();
+    const v = this.st(), main = v?.host ?? '', by = new Map<string, LabDevice[]>();
+    for (const d of this.devs()) { const h = this.hostOfDev(d) || main; by.set(h, [...(by.get(h) ?? []), d]); }
+    const hosts = new Set<string>([...this.cloudOn()].filter(h => by.has(h)));
+    for (const d of this.devs()) if (d.uplinks?.length) hosts.add(this.hostOfDev(d) || main);
+    return [...hosts].map(h => {
+      const ds = by.get(h) ?? [], ps = ds.map(d => this.pos(d));
+      const at = this.cloudAt()[h] ?? { x: ps.length ? Math.max(...ps.map(p => p.x)) + 240 : 300, y: ps.length ? Math.max(60, Math.min(...ps.map(p => p.y)) - 130) : 120 }; // above and beside its host's switches
+      const info = h === main ? v?.hostInfo : (v?.hosts ?? []).find(x => x.session === h)?.info;
+      const links = ds.flatMap(d => (d.uplinks ?? []).map(port => { const p = this.pos(d); return { dev: d.id, name: d.hostname, port, x: p.x, y: p.y, lx: Math.round(p.x + (at.x - p.x) * 0.25), ly: Math.round(p.y + (at.y - p.y) * 0.25) }; }));
+      return { host: h, name: this.hname(h), lan: info?.lanIf ?? '', x: at.x, y: at.y, links };
+    });
+  });
+  addCloud() {
+    const d = this.selDev(), h = (d && this.hostOfDev(d)) || this.st()?.host || '';
+    const on = new Set(this.cloudOn()); on.add(h); this.cloudOn.set(on);
+    try { localStorage.setItem('tw.clouds', JSON.stringify([...on])); } catch { /* per viewer only */ }
+    this.ui.toast(tr('Cloud added: Add Link from a switch port to it'));
+  }
+  cloudGrab(ev: PointerEvent, h: string) {
+    if (this.linkMode()) return;
+    ev.stopPropagation();
+    const c = this.clouds().find(x => x.host === h); if (!c) return;
+    const x0 = ev.clientX, y0 = ev.clientY, z = this.zoom();
+    const mv = (e: PointerEvent) => this.cloudAt.set({ ...this.cloudAt(), [h]: { x: Math.round(c.x + (e.clientX - x0) / z), y: Math.round(c.y + (e.clientY - y0) / z) } });
+    const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); try { localStorage.setItem('tw.cloudAt', JSON.stringify(this.cloudAt())); } catch { /* per viewer only */ } };
+    addEventListener('pointermove', mv); addEventListener('pointerup', up);
+  }
+  /** Add Link: a switch port, then the cloud - the port goes on the host's network. */
+  async cloudClick(h: string, ev: MouseEvent) {
+    ev.stopPropagation();
+    if (!this.linkMode()) return;
+    const a = this.linkA(), d = a && this.devs().find(x => x.id === a.id);
+    if (!d || !a?.port) { this.ui.toast(tr('First click a switch and pick its port, then the cloud')); return; }
+    if ((this.hostOfDev(d) || this.st()?.host) !== h) { this.ui.error(tr('{0} runs on another host: cable it to that host’s cloud', d.hostname)); return; }
+    this.cancelLink();
+    await this.setUplink(d, a.port, true);
+  }
+  /** EXOS or VOSS (the device type), for the canvas. */
+  osOf(d: LabDevice) { const o = `${d.os} ${(d as LabDevice & { deviceType?: string }).deviceType ?? ''}`; return /exos|switch engine/i.test(o) ? 'EXOS' : /voss|fabric engine|vsp/i.test(o) ? 'VOSS' : (d.os || '').split(' ')[0]; }
+  /** The model it runs as: its persona's, else the plain VM (EXOS-VM, VOSS-VM). */
+  modelOf(d: LabDevice) { return d.persona?.slots?.[0]?.model || (this.osOf(d) ? this.osOf(d) + '-VM' : d.model); }
   async saveConsoleLog(d: LabDevice) {
     try {
       const path = await this.backend.chooseSaveFile(tr('Save Console Log'), d.hostname + '-console-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.log', [{ displayName: 'Log', pattern: '*.log;*.txt' }]);
@@ -914,7 +978,7 @@ export class LabWorkspace implements OnDestroy {
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
   }
   async copyDock() {
-    const text = this.dock() === 'inv' ? ['host,switch,state,console,management,cpu %,memory MB,ram MB', ...this.inventory().flatMap(g => g.devs.map(d => [g.host, d.hostname, d.state || (d.running ? 'running' : 'stopped'), g.host + ':' + d.console, d.ssh ?? '', (d.cpu ?? 0).toFixed(0), d.memUsed ?? '', d.ram ?? ''].join(',')))].join('\n') : this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + (e.host ? this.hname(e.host) : '-') + '  ' + e.name + '  ' + e.level.toUpperCase() + '  ' + e.text).join('\n') : this.tail();
+    const text = this.dock() === 'inv' ? ['host,switch,state,console,management,cpu %,memory MB,ram MB', ...this.inventory().flatMap(g => g.devs.map(d => [g.host, d.hostname, d.state || (d.running ? 'running' : 'stopped'), g.host + ':' + d.console, d.ssh ?? '', (d.cpu ?? 0).toFixed(0), d.memUsed ?? '', d.ram ?? ''].join(',')))].join('\n') : this.dock() === 'clog' ? this.clog() : this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + (e.host ? this.hname(e.host) : '-') + '  ' + e.name + '  ' + e.level.toUpperCase() + '  ' + e.text).join('\n') : this.tail();
     try { await navigator.clipboard.writeText(text); this.ui.toast(tr('Copied'), 'success'); } catch { this.ui.error(tr('Could not copy')); }
   }
   async clearEvents() { try { this.lab.emu.set(await this.backend.emuClearEvents()); } catch { /* ignore */ } }
@@ -1108,6 +1172,7 @@ export class LabWorkspace implements OnDestroy {
     this.moved();
     let w = 900, h = 600;
     for (const d of this.devs()) { const p = this.pos(d); w = Math.max(w, p.x + 200); h = Math.max(h, p.y + 160); }
+    for (const c of this.clouds()) { w = Math.max(w, c.x + 160); h = Math.max(h, c.y + 120); }
     for (const m of this.moves()) { w = Math.max(w, m.x2 + 200); h = Math.max(h, m.y2 + 160); } // where moving switches go
     return { w, h };
   });
@@ -1258,7 +1323,7 @@ export class LabWorkspace implements OnDestroy {
   }
   zoomBy(d: number) { this.zoom.set(Math.min(2, Math.max(0.4, +(this.zoom() + d).toFixed(1)))); }
   fit(cv: HTMLElement) { const a = this.area(); this.zoom.set(Math.max(0.4, Math.min(1.5, +Math.min(cv.clientWidth / a.w, cv.clientHeight / a.h).toFixed(2)))); }
-  select(d: LabDevice) { this.sel.set(d.id); this.tail.set(''); if (this.dock() === 'console') void this.loadTail(); }
+  select(d: LabDevice) { this.sel.set(d.id); this.tail.set(''); this.clog.set(''); if (this.dock() === 'console') void this.loadTail(); if (this.dock() === 'clog') void this.loadClog(); }
   selectId(id: string) { const d = this.devs().find(x => x.id === id); if (d) this.select(d); }
   clickNode(d: LabDevice, ev: MouseEvent) {
     ev.stopPropagation(); this.menu.set(null);

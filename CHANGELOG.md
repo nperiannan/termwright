@@ -4,6 +4,13 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, the Topology menu opens again when no topology has been saved yet (it got nothing to show and stayed shut).
+- Emulated lab, console logins no longer lock a switch out: the console is listened to before Enter wakes it, and a password asked for an empty user name gets one Enter, not three (Fabric Engine counts each as a failed login: "Access denied : length 0 not allowed", then "Lock out for 60 seconds").
+- Emulated lab, **Console Log** tab in the bottom pane next to the live console: everything the selected switch's console showed since it started, with its Events - Refresh, Copy and Save….
+- Emulated lab, canvas: under each switch its model and software - "5520-24T · EXOS 33.6.1.14" with a persona, "EXOS-VM 32.6.3.126" or "VOSS-VM 9.4.0.0" without - instead of the model twice and a "persona ✓" badge (a persona that failed still shows).
+- Emulated lab, **Cloud** on the canvas: a host's own network as a node; Add Link from a switch port to it puts that port on the host's network (when the switch starts), drawn as a cable with its port; drag it where you like. *Add Cloud* in the tool dock adds one before any port is on it.
+- Emulated lab, icon styles: Classic diagram symbols and Line icons are no longer offered (switches drawn with them keep them until changed).
+
 - Termwright connector (MCP) for AI agents, the emulated lab end to end: **lab_images**, **lab_add_switches**, **lab_cable** (connect or remove a list), **lab_power** (start, stop, restart, shut down), **lab_wait** (until booted and configured), **lab_console** (log in on a switch's console and type configuration or show commands, outputs back), **lab_check_cabling** (LLDP against the cables), **lab_move** (live, copy or image) and **lab_events**, next to show_lab. Each change is approved by the user in Termwright, a whole list at once; outputs have secrets removed.
 
 - Emulated lab, live moves between hosts with different CPUs: a switch started with its host's own CPU used instructions the other host lacks after a live move, and its programs crashed there (EXOS: the login service, so the address step was refused). With more than one host, switches now start with a CPU every host has (Westmere: Intel since 2010, AMD alike), and a live move of one started with its host's own CPU to a host with another CPU is refused with what to do (restart it once, or Save, Copy and Resume, which then boots it there). A login refused because the switch's login service (AAA) did not answer is tried again for a few minutes, and says so instead of asking for a password.
