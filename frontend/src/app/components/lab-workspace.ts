@@ -725,6 +725,7 @@ export class LabWorkspace implements OnDestroy {
     const opts = d.running
       ? [...(live ? [{ label: tr('Live (No Downtime)'), value: 'live', primary: true }] : []), { label: tr('Save, Copy and Resume'), value: 'copy', primary: !live }, { label: tr('From Its Image'), value: 'image' }]
       : [{ label: tr('Copy Its Disk'), value: 'copy', primary: true }, { label: tr('From Its Image'), value: 'image' }];
+    if (kvmOf(this.hostOfDev(d)) && !kvmOf(host)) items.unshift(tr('⚠ {0} has no KVM: switches there run in software emulation, 5 to 10 times slower, and some images do not boot well that way', to));
     const how = await this.ui.choose(tr('Move {0} to {1}', d.hostname, to), tr('Its cables to switches on other hosts become UDP tunnels. The first move to a host copies the image there first, which can take some minutes: the canvas shows it moving and the Events say each step.'), items, opts);
     if (!how) return;
     this.dock.set('events');

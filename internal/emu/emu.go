@@ -57,6 +57,7 @@ type Image struct {
 	LagCmd          string              `json:"lagCmd,omitempty"`          // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
 	LagSet          map[string][]string `json:"lagSet,omitempty"`          // CLI commands that make a LAG, per mode ("lacp", "static"): {id} {name} {ports} {master} {first} {last}
 	LagDel          []string            `json:"lagDel,omitempty"`          // CLI commands that remove a LAG (the same names)
+	TCGCPU          string              `json:"tcgCpu,omitempty"`          // the CPU model it gets on a host without KVM (for example Nehalem, for an image that wants an Intel CPU); "" = QEMU's default
 	BootAnswers     []Answer            `json:"bootAnswers,omitempty"`     // menus the image may stop at while it boots (the end of its console log), and what to type
 	NotReady        []string            `json:"notReady,omitempty"`        // console text that means its login is not ready yet ("(pending-AAA)"): nothing is typed until it is gone
 	NeighborCmd     string              `json:"neighborCmd,omitempty"`     // a CLI command that lists the LLDP neighbours ("show lldp neighbors")
@@ -566,6 +567,9 @@ func (l *Lab) Args(v VM, im *Image) []string {
 		a = append(a, "-enable-kvm", "-cpu", "host")
 	} else {
 		a = append(a, "-accel", "tcg")
+		if im.TCGCPU != "" {
+			a = append(a, "-cpu", im.TCGCPU)
+		}
 	}
 	// disks: the VM's layer on the image, then its layers on more disks (hdb…)
 	type hd struct{ file, bus string }

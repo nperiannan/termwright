@@ -2355,6 +2355,9 @@ func (a *App) emuStart(host string, ids []string) {
 			emuEv(v.ID, "info", "starting on "+host+" from its saved state")
 		} else {
 			emuEv(v.ID, "info", "starting on "+host)
+			if !l.KVM {
+				emuEv(v.ID, "warn", "no KVM on "+host[strings.LastIndex(host, "/")+1:]+": it runs in software emulation, 5 to 10 times slower - a switch can take 10 minutes or more to boot, and one that checks its own timing may restart. Turn on nested virtualization for that VM (VMware: Expose hardware assisted virtualization to the guest OS) for full speed")
+			}
 			delete(emuLab.pcheck, v.ID) // the persona is checked again on this boot
 		}
 		delete(emuLab.ready, v.ID) // its console log starts empty
@@ -4601,6 +4604,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			}
 			if len(im.LagSet) == 0 && len(p.LagSet) > 0 {
 				im.LagSet, im.LagDel, changed = p.LagSet, p.LagDel, true
+			}
+			if im.TCGCPU == "" && p.TCGCPU != "" {
+				im.TCGCPU, changed = p.TCGCPU, true
 			}
 			if len(im.BootAnswers) == 0 && len(p.BootAnswers) > 0 {
 				im.BootAnswers, changed = p.BootAnswers, true

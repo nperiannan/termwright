@@ -53,6 +53,7 @@ const PAGE = `
   .meter { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 6px 0 2px; i { display: block; height: 100%; background: var(--accent); } }
   .big3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; .card { margin: 0; } b { font-size: 20px; } }
   .chk { display: grid; grid-template-columns: 22px 170px minmax(0, 1fr); gap: 6px 8px; align-items: start; font-size: 12.5px; .y { color: var(--success, #1fa45a); font-weight: 700; } .n { color: var(--warning, #e39b17); font-weight: 700; } .x { color: var(--danger); font-weight: 700; } }
+  .stp { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 10px 0 8px; } .log.full { height: 260px; } .setupc { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
   .log { font: 11px/1.55 var(--mono, monospace); background: #111722; color: #cfd6e4; border-radius: 9px; padding: 10px; height: 170px; overflow: auto; white-space: pre-wrap; margin: 0; }
   i.d { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; } i.d.ok { background: var(--success, #1fa45a); } i.d.wa { background: var(--warning, #e39b17); } i.d.bad { background: var(--danger); }
   ta, textarea { font: 12px/1.5 var(--mono, monospace); }
@@ -734,7 +735,22 @@ export class LabImages implements OnInit {
         @if (cur(); as h) {
           <div class="row2" style="justify-content: flex-start"><div style="flex: 1"><b style="font-size: 15px">{{ h.name || h.session }}</b> <span class="badge">{{ state(h) }}</span>
             <div class="muted small">{{ h.info.user }} · {{ h.info.os }} · {{ tr('kernel') }} {{ h.info.kernel }} · {{ h.info.arch }} · {{ isVM(h) ? tr('VM ({0})', h.info.virt ?? '') : tr('hardware') }}@if (h.checked) { · {{ tr('checked {0}', h.checked) }} }</div></div>
-            <button type="button" (click)="lab.checkHost(h.session)" [disabled]="lab.busy()">{{ tr('Check Again') }}</button></div>
+            <button type="button" (click)="lab.checkHost(h.session)" [disabled]="lab.busy() || (!!setupHere() && !setupHere()!.done)">{{ tr('Check Again') }}</button>
+            @if ((h.info.canSetup || !h.info.sudo) && !setupHere()) { <button type="button" class="primary" (click)="setupOpen.set(!setupOpen())">{{ tr('Set Up…') }}</button> }</div>
+          @if (setupOpen() || setupHere()) {
+            <div class="card setupc" style="margin-top: 14px"><div class="row2" style="justify-content: flex-start"><b style="flex: none">{{ tr('Set Up the Host') }}</b><span class="muted small">{{ tr('installs what is missing, as root on the host') }}</span><span class="sp"></span>
+                @if (!setupHere() || setupHere()!.done) { <a class="muted" (click)="setupOpen.set(false); lab.setup.set(null)">✕</a> }</div>
+              @if (setupHere(); as s) {
+                <div class="stp">@for (st of steps; track st) { <span class="small" [class]="'small ' + stepCls(s, st)">{{ stepMark(s, st) }} {{ tr(stepLabel(st)) }}</span> }
+                  <span class="sp"></span><b class="small" [class.r]="!!s.error" [class.g]="s.done && !s.error">{{ s.done ? (s.error ? tr('Set-up failed') + ': ' + s.error : tr('Set up') + ' ✓ · ' + tr('checked again')) : tr('Setting up…') }}</b></div>
+                <pre class="log full">{{ s.lines.join('\n') }}</pre>
+              } @else {
+                <ul class="small">@for (p of h.info.plan ?? []; track p) { <li>{{ p }}</li> }</ul>
+                <div class="row2" style="justify-content: flex-start">@if (!h.info.sudo) { <input type="password" [(ngModel)]="pw" name="spw" [placeholder]="tr('sudo password of {0}', h.info.user)" autocomplete="off" style="max-width: 260px" /> }
+                  <button type="button" class="primary" (click)="setup(h)" [disabled]="!h.info.sudo && !pw">{{ tr('Set Up') }}</button></div>
+              }
+            </div>
+          }
           <div class="big3" style="margin-top: 14px">
             <div class="card"><span class="muted small">vCPU</span><div><b>{{ h.info.cpus }}</b> <span class="muted">{{ tr('cores · load {0}', h.info.load) }}</span></div><div class="meter"><i [style.width.%]="pct(h.info.load, h.info.cpus)"></i></div></div>
             <div class="card"><span class="muted small">{{ tr('Memory') }}</span><div><b>{{ gb(h.info.memFree) }}</b> <span class="muted">{{ tr('free of {0}', gb(h.info.memTotal)) }}</span></div><div class="meter"><i [style.width.%]="pct(h.info.memTotal - h.info.memFree, h.info.memTotal)"></i></div></div>
@@ -742,11 +758,11 @@ export class LabImages implements OnInit {
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px">
             <div class="card"><b>{{ tr('What the host has') }}</b><div class="chk" style="margin-top: 8px">
-              <span [class]="h.info.qemu ? 'y' : 'x'">{{ h.info.qemu ? '✓' : '✕' }}</span><span>QEMU</span><span class="muted">{{ h.info.qemu || tr('not installed') }}{{ h.info.qemuImg ? ' · qemu-img ✓' : '' }}</span>
-              <span [class]="h.info.kvm === 'yes' ? 'y' : h.info.kvm === 'none' && !h.info.vt ? 'n' : 'x'">{{ h.info.kvm === 'yes' ? '✓' : '!' }}</span><span>KVM</span><span class="muted">{{ h.info.kvm === 'yes' ? tr('/dev/kvm usable') : h.info.kvm === 'noaccess' ? tr('no access to /dev/kvm') : tr('no /dev/kvm: software emulation, slow') }}</span>
-              <span [class]="h.info.sudo ? 'y' : 'n'">{{ h.info.sudo ? '✓' : '!' }}</span><span>{{ tr('sudo without password') }}</span><span class="muted">{{ h.info.sudo ? tr('taps, bridges, NAT') : tr('only port forwarding') }}</span>
-              <span [class]="h.info.guestfs ? 'y' : 'x'">{{ h.info.guestfs ? '✓' : '✕' }}</span><span>libguestfs</span><span class="muted">{{ tr('writes persona files') }}</span>
-              <span [class]="h.info.nat ? 'y' : 'x'">{{ h.info.nat ? '✓' : '✕' }}</span><span>{{ tr('NAT network') }}</span><span class="muted">{{ h.info.nat ? 'virbr0 ' + h.info.nat : tr('libvirt’s virbr0 with DHCP') }}</span>
+              <span [class]="lv('packages', h.info.qemu ? 'y' : 'x')">{{ lm('packages', h.info.qemu ? '✓' : '✕') }}</span><span>QEMU</span><span class="muted">{{ lt('packages') || (h.info.qemu || tr('not installed')) + (h.info.qemuImg ? ' · qemu-img ✓' : '') }}</span>
+              <span [class]="h.info.kvm === 'none' && !h.info.vt ? 'n' : lv('group', h.info.kvm === 'yes' ? 'y' : 'x')">{{ h.info.kvm === 'none' && !h.info.vt ? '!' : lm('group', h.info.kvm === 'yes' ? '✓' : '!') }}</span><span>KVM</span><span class="muted">{{ h.info.kvm === 'yes' ? tr('/dev/kvm usable') : h.info.kvm === 'noaccess' ? tr('no access to /dev/kvm') : tr('no /dev/kvm: software emulation, slow') }}</span>
+              <span [class]="lv('sudo', h.info.sudo ? 'y' : 'n')">{{ lm('sudo', h.info.sudo ? '✓' : '!') }}</span><span>{{ tr('sudo without password') }}</span><span class="muted">{{ lt('sudo') || (h.info.sudo ? tr('taps, bridges, NAT') : tr('only port forwarding')) }}</span>
+              <span [class]="lv('packages', h.info.guestfs ? 'y' : 'x')">{{ lm('packages', h.info.guestfs ? '✓' : '✕') }}</span><span>libguestfs</span><span class="muted">{{ lt('packages') || tr('writes persona files') }}</span>
+              <span [class]="lv('nat', h.info.nat ? 'y' : 'x')">{{ lm('nat', h.info.nat ? '✓' : '✕') }}</span><span>{{ tr('NAT network') }}</span><span class="muted">{{ lt('nat') || (h.info.nat ? 'virbr0 ' + h.info.nat : tr('libvirt’s virbr0 with DHCP')) }}</span>
             </div>
             @for (p of h.info.problems ?? []; track p) { <p class="r small" style="margin: 8px 0 0">{{ p }}</p> }</div>
             <div class="card"><b>{{ tr('Management of the switches') }}</b><div class="chk" style="margin-top: 8px">
@@ -757,22 +773,6 @@ export class LabImages implements OnInit {
               <span class="y">✓</span><span>{{ tr('Port forwarding on the host') }}</span><span class="muted">{{ tr('always works') }}</span>
             </div>@for (n of h.info.notes ?? []; track n) { <p class="muted small" style="margin: 8px 0 0">{{ n }}</p> }</div>
           </div>
-          @if (h.info.canSetup || setupHere()) {
-            <div class="card" style="margin-top: 14px"><div class="row2" style="justify-content: flex-start"><b style="flex: none">{{ tr('Set Up QEMU/KVM') }}</b><span class="muted small">{{ tr('installs what is missing, as root on the host') }}</span><span class="sp"></span></div>
-              @if (setupHere(); as s) {
-                <div style="display: grid; grid-template-columns: 260px 1fr; gap: 16px; margin-top: 8px">
-                  <div>@for (st of steps; track st) { <div class="small" style="padding: 4px 0"><span [class]="stepCls(s, st)">{{ stepMark(s, st) }}</span> {{ tr(stepLabel(st)) }}</div> }
-                    <p class="small" [class.r]="!!s.error" [class.g]="s.done && !s.error">{{ s.done ? (s.error ? tr('Set-up failed') + ': ' + s.error : tr('Set up') + ' ✓') : tr('Setting up…') }}</p></div>
-                  <pre class="log">{{ s.lines.join('\n') }}</pre>
-                </div>
-                @if (s.done) { <button type="button" class="sm" (click)="lab.setup.set(null)">{{ tr('Close') }}</button> }
-              } @else {
-                <ul class="small">@for (p of h.info.plan ?? []; track p) { <li>{{ p }}</li> }</ul>
-                <div class="row2" style="justify-content: flex-start">@if (!h.info.sudo) { <input type="password" [(ngModel)]="pw" name="spw" [placeholder]="tr('sudo password of {0}', h.info.user)" autocomplete="off" style="max-width: 260px" /> }
-                  <button type="button" class="primary" (click)="setup(h)" [disabled]="!h.info.sudo && !pw">{{ tr('Set Up') }}</button></div>
-              }
-            </div>
-          }
         } @else { <p class="muted">{{ tr('Add a host on the left.') }}</p> }
       </div>
     </div>
@@ -792,7 +792,17 @@ export class LabHosts {
   protected cur = computed(() => this.hosts().find(h => h.session === this.sel()) ?? this.hosts()[0] ?? null);
   protected pick = '';
   protected pw = '';
-  protected steps = ['packages', 'nat', 'kvm', 'group'];
+  protected steps = ['packages', 'nat', 'kvm', 'sudo', 'group'];
+  protected setupOpen = signal(false);
+  /** While Set Up runs, a row of What the host has ticks when its step is done (… while it runs); then the host is checked again. */
+  private live(st: string): '' | 'run' | 'done' {
+    const s = this.setupHere(); if (!s || s.done) return '';
+    const i = this.steps.indexOf(s.step), j = this.steps.indexOf(st);
+    return j < i ? 'done' : j === i ? 'run' : '';
+  }
+  lv(st: string, cls: string) { const l = this.live(st); return l === 'done' ? 'y' : l === 'run' ? 'w' : cls; }
+  lt(st: string) { const l = this.live(st); return l === 'done' ? tr('set up - checked again at the end') : l === 'run' ? tr('setting up…') : ''; }
+  lm(st: string, mark: string) { const l = this.live(st); return l === 'done' ? '✓' : l === 'run' ? '…' : mark; }
   constructor() { effect(() => { const s = this.sshSessions(); if (!this.pick && s.length) this.pick = s[0]; }); }
   protected sshSessions = computed(() => {
     const out: string[] = [], skip = [this.lab.emu()?.folder, this.lab.sim()?.folder].filter(Boolean) as string[];
@@ -811,7 +821,7 @@ export class LabHosts {
   async add() { const h = await this.lab.checkHost(this.pick); if (h) { this.sel.set(this.pick); this.pick = ''; } }
   async setup(h: EmuHost) { const pw = this.pw; this.pw = ''; await this.lab.setupHost(h.session, pw); }
   async remove(h: EmuHost) { if (await this.ui.confirm(tr('Remove Host'), tr('Forget {0} as a KVM host? Nothing on it is changed.', h.name || h.session), tr('Remove'), true)) await this.lab.removeHost(h.session); }
-  stepLabel(s: string) { return ({ packages: 'Packages', nat: 'NAT network (libvirt, virbr0)', kvm: 'KVM module', group: 'KVM group' } as Record<string, string>)[s] ?? s; }
+  stepLabel(s: string) { return ({ packages: 'Packages', nat: 'NAT network (libvirt, virbr0)', kvm: 'KVM module', sudo: 'Network commands without a password', group: 'KVM group' } as Record<string, string>)[s] ?? s; }
   private stepIdx(s: { step: string; done: boolean }, st: string) { const i = this.steps.indexOf(s.step), j = this.steps.indexOf(st); return { i, j }; }
   stepMark(s: { step: string; done: boolean; error: string }, st: string) { const { i, j } = this.stepIdx(s, st); return s.done && !s.error ? '✓' : j < i ? '✓' : j === i ? (s.error ? '✕' : '…') : '○'; }
   stepCls(s: { step: string; done: boolean; error: string }, st: string) { const m = this.stepMark(s, st); return m === '✓' ? 'g' : m === '✕' ? 'r' : m === '…' ? 'w' : 'muted'; }

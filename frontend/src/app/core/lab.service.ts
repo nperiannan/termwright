@@ -50,6 +50,7 @@ export class LabService {
     this.backend.on('emu:setup:done', (d: EmuSetupDone) => {
       const s = this.setup(); if (!s || s.run !== d.run) return;
       this.setup.set({ ...s, done: true, error: d.error });
+      const e = this.emu(); if (d.host && e?.hosts) this.emu.set({ ...e, hosts: e.hosts.map(h => h.session === d.host!.session ? d.host! : h) }); // its checks at once
       if (d.error) this.ui.error(d.error); else this.ui.toast('The host is set up', 'success');
       void this.refresh();
     });
