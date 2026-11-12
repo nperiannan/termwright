@@ -2664,6 +2664,8 @@ const ru: Record<string, string> = {
   'Delete and Remove': 'Удалить',
   '{0} is removed': '{0} удалён',
   'Nothing is missing. Set Up runs every step again - packages, the NAT network, KVM, the sudo rule and the kvm group - which is safe to repeat, for example after something changed on the host.': 'Всё на месте. Настройка снова выполнит все шаги — пакеты, сеть NAT, KVM, правило sudo и группу kvm; повторять безопасно, например после изменений на хосте.',
+  'Everything Termwright put on this host': 'Всё, что Termwright разместил на этом хосте',
+  'its images, the switches’ disks and what Set Up did - or tick only some below': 'его образы, диски коммутаторов и то, что сделала настройка, — или отметьте только часть ниже',
   'Boxes': 'Блоки',
   'Isometric hardware': 'Изометрическое оборудование',
   'Classic diagram symbols': 'Классические символы схем',

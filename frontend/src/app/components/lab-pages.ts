@@ -53,7 +53,7 @@ const PAGE = `
   .meter { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 6px 0 2px; i { display: block; height: 100%; background: var(--accent); } }
   .big3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; .card { margin: 0; } b { font-size: 20px; } }
   .chk { display: grid; grid-template-columns: 22px 170px minmax(0, 1fr); gap: 6px 8px; align-items: start; font-size: 12.5px; .y { color: var(--success, #1fa45a); font-weight: 700; } .n { color: var(--warning, #e39b17); font-weight: 700; } .x { color: var(--danger); font-weight: 700; } }
-  .rmc { border-color: color-mix(in srgb, var(--danger, #e5484d) 45%, var(--line)); } .rmg { display: grid; gap: 7px; margin-top: 8px; label { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; } code { font-size: 11.5px; } }
+  .rmc { border-color: color-mix(in srgb, var(--danger, #e5484d) 45%, var(--line)); } .rmg { display: grid; gap: 7px; margin-top: 8px; label.all { padding-bottom: 6px; border-bottom: 1px solid var(--line); } label { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; } code { font-size: 11.5px; } }
   .stp { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 10px 0 8px; } .log.full { height: 260px; } .setupc { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
   .log { font: 11px/1.55 var(--mono, monospace); background: #111722; color: #cfd6e4; border-radius: 9px; padding: 10px; height: 170px; overflow: auto; white-space: pre-wrap; margin: 0; }
   i.d { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; } i.d.ok { background: var(--success, #1fa45a); } i.d.wa { background: var(--warning, #e39b17); } i.d.bad { background: var(--danger); }
@@ -744,6 +744,7 @@ export class LabImages implements OnInit {
               @else {
                 @if (r.switches) { <p class="small r">{{ tr('{0} switches of this topology run here: move or remove them first.', r.switches) }}</p> }
                 <div class="rmg">
+                  <label class="all"><input type="checkbox" [ngModel]="allOn(r)" (ngModelChange)="setAll(r, $event)" name="rall" /> <b>{{ tr('Everything Termwright put on this host') }}</b> <span class="muted">· {{ tr('its images, the switches’ disks and what Set Up did - or tick only some below') }}</span></label>
                   <b class="small">{{ tr('Files') }}</b>
                   <label><input type="checkbox" [(ngModel)]="ro.images" name="rimg" [disabled]="!r.imagesBytes" /> {{ tr('Delete its images') }} <span class="muted">· {{ gb2(r.imagesBytes) }}@if (r.imagesDir) { {{ tr('in') }} <code>{{ r.imagesDir }}</code> }</span></label>
                   <label><input type="checkbox" [(ngModel)]="ro.labs" name="rlab" [disabled]="!r.labDirs" /> {{ tr('Delete the switches’ own disks') }} <span class="muted">· {{ tr('{0} topologies, {1} - their configurations go with them', r.labDirs, gb2(r.labBytes)) }}</span></label>
@@ -769,8 +770,8 @@ export class LabImages implements OnInit {
               } @else {
                 @if ((h.info.plan ?? []).length) { <ul class="small">@for (p of h.info.plan ?? []; track p) { <li>{{ p }}</li> }</ul> }
                 @else { <p class="small muted">{{ tr('Nothing is missing. Set Up runs every step again - packages, the NAT network, KVM, the sudo rule and the kvm group - which is safe to repeat, for example after something changed on the host.') }}</p> }
-                <div class="row2" style="justify-content: flex-start">@if (!h.info.sudo) { <input type="password" [(ngModel)]="pw" name="spw" [placeholder]="tr('sudo password of {0}', h.info.user)" autocomplete="off" style="max-width: 260px" /> }
-                  <button type="button" class="primary" (click)="setup(h)" [disabled]="!h.info.sudo && !pw">{{ tr('Set Up') }}</button></div>
+                <div class="row2" style="justify-content: flex-start">@if (!h.info.sudoAll) { <input type="password" [(ngModel)]="pw" name="spw" [placeholder]="tr('sudo password of {0}', h.info.user)" autocomplete="off" style="max-width: 260px" /> }
+                  <button type="button" class="primary" (click)="setup(h)" [disabled]="!h.info.sudoAll && !pw">{{ tr('Set Up') }}</button></div>
               }
             </div>
           }
@@ -853,6 +854,8 @@ export class LabHosts {
     this.ro = { images: false, labs: false, sudoRule: true, group: false, pkgs: false, password: '' };
     try { this.rm.set(await this.backend.emuRemoveHostInfo(h.session)); } catch (e) { this.ui.error(errText(e)); } finally { this.loadingRm.set(false); }
   }
+  allOn(r: EmuRemoveInfo) { const o = this.ro; return (!r.imagesBytes || o.images) && (!r.labDirs || o.labs) && (!r.sudoRule || o.sudoRule) && (!r.group || o.group) && (!(r.pkgs ?? []).length || o.pkgs); }
+  setAll(r: EmuRemoveInfo, on: boolean) { this.ro = { ...this.ro, images: on && !!r.imagesBytes, labs: on && !!r.labDirs, sudoRule: on && r.sudoRule, group: on && r.group, pkgs: on && !!(r.pkgs ?? []).length }; }
   removeLabel(r: EmuRemoveInfo) { const o = this.ro; return r.error ? tr('Forget the Host') : o.images || o.labs || (o.sudoRule && r.sudoRule) || (o.group && r.group) || (o.pkgs && (r.pkgs ?? []).length) ? tr('Remove and Clean Up') : tr('Remove, Keep Everything There'); }
   async removeNow(h: EmuHost, r: EmuRemoveInfo) {
     const o = this.ro, what = [o.images ? tr('its images ({0})', this.gb2(r.imagesBytes)) : '', o.labs ? tr('the switches’ disks ({0})', this.gb2(r.labBytes)) : ''].filter(Boolean);

@@ -4062,8 +4062,8 @@ func (a *App) emuSetup(host, password string, emit func(kind, text string)) erro
 	if err != nil {
 		return err
 	}
-	s.Stderr = s.Stdout
-	if err := s.Start(emu.SetupCommand(password != "")); err != nil {
+	// its errors (sudo's among them) into the same stream: StdoutPipe leaves Stderr unset
+	if err := s.Start("exec 2>&1; " + emu.SetupCommand(password != "")); err != nil {
 		return err
 	}
 	failed, done, sudoAsk := "", false, false

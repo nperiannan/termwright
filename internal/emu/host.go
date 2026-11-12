@@ -21,7 +21,8 @@ type HostInfo struct {
 	MemTotal int64    `json:"memTotal"` // MB
 	MemFree  int64    `json:"memFree"`  // MB
 	DiskFree int64    `json:"diskFree"` // MB, in the lab folder
-	Sudo     bool     `json:"sudo"`     // password-less sudo (bridge mode)
+	Sudo     bool     `json:"sudo"`     // password-less sudo for the network commands (bridge mode)
+	SudoAll  bool     `json:"sudoAll"`  // password-less sudo for anything (Set Up runs without asking for the password)
 	Dir      string   `json:"dir"`
 	OSID     string   `json:"osId"`     // ID and ID_LIKE of /etc/os-release
 	Pkg      string   `json:"pkg"`      // the package manager Set Up uses (apt, dnf, dnf-fedora, zypper, pacman)
@@ -54,6 +55,7 @@ echo "cpus=$(nproc 2>/dev/null)"; echo "load=$(cut -d' ' -f1 /proc/loadavg 2>/de
 awk '/^MemTotal:/{print "memtotal="int($2/1024)} /^MemAvailable:/{print "memfree="int($2/1024)}' /proc/meminfo 2>/dev/null
 mkdir -p ` + Q(dir) + ` 2>/dev/null && echo "diskfree=$(df -Pk ` + Q(dir) + ` | awk 'NR==2{print int($4/1024)}')"
 { sudo -n true 2>/dev/null || sudo -n ip -V >/dev/null 2>&1; } && echo sudo=yes
+sudo -n true 2>/dev/null && echo sudoall=yes
 command -v base64 >/dev/null 2>&1 || echo nobase64=yes
 command -v guestfish >/dev/null 2>&1 && echo guestfs=yes
 command -v virsh >/dev/null 2>&1 && echo libvirt=yes
@@ -104,6 +106,8 @@ func ParseProbe(out, dir string) HostInfo {
 			h.DiskFree, _ = strconv.ParseInt(v, 10, 64)
 		case "sudo":
 			h.Sudo = true
+		case "sudoall":
+			h.SudoAll = true
 		case "virt":
 			h.Virt = v
 		case "guestfs":
