@@ -235,10 +235,61 @@ func emuEv(id, level, text string) {
 			name = v.Name
 		}
 	}
-	emuLab.events = append(emuLab.events, EmuEvent{At: time.Now(), VM: id, Name: name, Level: level, Text: text})
+	e := EmuEvent{At: time.Now(), VM: id, Name: name, Level: level, Text: text}
+	emuLab.events = append(emuLab.events, e)
 	if n := len(emuLab.events); n > 400 {
 		emuLab.events = append([]EmuEvent(nil), emuLab.events[n-300:]...)
 	}
+	emuEvKeep(e)
+}
+
+// emuEventsFile keeps the Events log on disk (one JSON line each), so it is
+// still there after Termwright starts again ("" = not kept, before the lab is loaded).
+var emuEventsFile string
+
+func emuEvKeep(e EmuEvent) {
+	if emuEventsFile == "" {
+		return
+	}
+	b, err := json.Marshal(e)
+	if err != nil {
+		return
+	}
+	f, err := os.OpenFile(emuEventsFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	_, _ = f.Write(append(b, '\n'))
+	_ = f.Close()
+}
+
+// emuEventsLoad reads the kept Events log (its last 300), and shortens the file when it has grown long.
+func emuEventsLoad(path string) []EmuEvent {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	var out []EmuEvent
+	for _, ln := range lines {
+		var e EmuEvent
+		if json.Unmarshal([]byte(ln), &e) == nil && !e.At.IsZero() {
+			out = append(out, e)
+		}
+	}
+	if len(out) > 300 {
+		out = out[len(out)-300:]
+	}
+	if len(lines) > 1000 {
+		var w strings.Builder
+		for _, e := range out {
+			if j, err := json.Marshal(e); err == nil {
+				w.Write(append(j, '\n'))
+			}
+		}
+		_ = os.WriteFile(path, []byte(w.String()), 0o600)
+	}
+	return out
 }
 
 // emuEvent adds to the Events log.
@@ -338,6 +389,9 @@ func (a *App) emuLoad() {
 	if emuLab.f.Folder == "" {
 		emuLab.f.Folder = "Emulated Lab"
 	}
+	_ = os.MkdirAll(a.labDir(), 0o700)
+	emuEventsFile = filepath.Join(a.labDir(), "events.jsonl")
+	emuLab.events = append(emuEventsLoad(emuEventsFile), emuLab.events...)
 }
 
 // emuSave writes the file (lock held).
@@ -814,6 +868,9 @@ func (a *App) emuImportAppliance(b []byte, dir string, source ...string) (EmuVie
 func (a *App) EmuClearEvents() (EmuView, error) {
 	emuLab.mu.Lock()
 	emuLab.events = nil
+	if emuEventsFile != "" {
+		_ = os.WriteFile(emuEventsFile, nil, 0o600)
+	}
 	emuLab.mu.Unlock()
 	return a.EmuState()
 }

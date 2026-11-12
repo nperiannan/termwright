@@ -75,6 +75,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 * **Fixed: a switch moved to a host without KVM did not start** ("Could not access KVM kernel module"): each host now uses its own acceleration, and a live move between a KVM host and one without it is refused (use Save, Copy and Resume).
 * **Emulated lab: Boxes icon style, the new default** (the first lab look: a rounded box with a small faceplate), and **cables now run to the edge of each drawing** in every style instead of stopping short of it.
 * **Fixed: switches did not start when an old cable relay was cleaned up** (the clean-up matched its own start script).
+* **Emulated lab: short problems in the side panel.** A persona problem shows in three lines at most, in plain words (*The switch did not take the persona: it does not show 5720-48MW*); the whole text is in its tooltip and **Details in Events ›** opens the Events log.
+* **Emulated lab: the Events log is kept** (its last 300 entries) when Termwright starts again or is updated; **Clear** empties it.
 
 ## 0.34.1 (2026-11-10)
 

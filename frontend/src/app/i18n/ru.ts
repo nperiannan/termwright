@@ -2462,6 +2462,8 @@ const ru: Record<string, string> = {
   'this image': 'этот образ',
   'How devices are drawn (Draw As on a switch changes its kind only)': 'Как рисуются устройства (Рисовать как на коммутаторе меняет только его тип)',
   'How devices are drawn:': 'Как рисуются устройства:',
+  'Details in Events': 'Подробнее в Событиях',
+  'All of it is in the Events log.': 'Полностью — в журнале событий.',
   'Boxes': 'Блоки',
   'Isometric hardware': 'Изометрическое оборудование',
   'Classic diagram symbols': 'Классические символы схем',

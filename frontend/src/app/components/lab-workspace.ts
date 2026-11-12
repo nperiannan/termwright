@@ -229,8 +229,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="card"><div class="kv">
             <span>{{ tr('Device') }}</span><b>{{ d.persona?.slots?.[0]?.model || d.model }}@if (d.version) { · {{ d.version }} }</b>
             <span>{{ tr('State') }}</span><span [class]="warnOf(d) ? 'w' : stateOf(d)">{{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span>
-            @if (d.persona) { <span>{{ tr('Persona') }}</span><span [class.r]="!!d.personaError" [class.g]="!d.personaError && d.personaOk">{{ d.personaError || (d.personaOk ? '✓ ' + tr('in the switch') : d.personaInfo ? tr(d.personaInfo) : tr('not written yet')) }}</span> }
-            @if (d.personaInfo) { <span></span><span class="mono xs">{{ d.personaInfo }}</span> }
+            @if (d.persona) { <span>{{ tr('Persona') }}</span>
+              @if (d.personaError) { <span class="r"><span class="clamp" [title]="d.personaError + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.personaError) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a></span> }
+              @else { <span [class.g]="d.personaOk">{{ d.personaOk ? '✓ ' + tr('in the switch') : d.personaInfo ? tr(brief(d.personaInfo)) : tr('not written yet') }}</span> } }
+            @if (d.personaInfo && !d.personaError) { <span></span><span class="mono xs clamp" [title]="d.personaInfo">{{ d.personaInfo }}</span> }
             <span>{{ tr('Serial') }}</span><span class="mono">{{ d.serial || '-' }}</span>
             <span>MAC</span><span class="mono">{{ d.mac || '-' }}</span>
             <span>{{ tr('Management') }}</span><span class="mono">{{ emu() ? d.ssh : d.mgmtIp }}</span>
@@ -414,6 +416,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .side { border-left: 1px solid var(--line); background: var(--surface); padding: 12px; overflow: auto;
       h3 { margin: 4px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); } }
     .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; background: var(--surface); }
+    .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .evl { display: block; margin-top: 2px; font-size: 11.5px; color: var(--accent); cursor: pointer; }
     .kv { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 4px 8px; font-size: 12px; > span:nth-child(odd) { color: var(--muted); } span { overflow-wrap: anywhere; } }
     .xs { font-size: 11px; color: var(--muted); } .btns { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .tbl { padding: 4px 8px; } table { width: 100%; border-collapse: collapse; font-size: 12px; } td { padding: 4px 2px; border-bottom: 1px solid var(--line); cursor: pointer; } tr:last-child td { border: 0; } tr.on td { color: var(--accent); }
@@ -677,6 +680,12 @@ export class LabWorkspace implements OnDestroy {
     return 'boot';
   }
   /** The problem of a switch that is up ("" = none): it stays green, with a "!". */
+  /** A message cut to its first part: what happened, not the switch's output after it (the whole text is in the tooltip and the Events log). */
+  brief(t: string) {
+    let s = t.replace(/\s*\([^()]*\)/g, '').replace(/:\s*"[^"]*"\s+(does|did|is|was|has)\b/, ': it $1').replace(/\s+-\s+(it printed|see|back to|read|the switch printed).*$/i, '');
+    const cut = s.search(/\s+-\s+|;\s/); if (cut > 30) s = s.slice(0, cut);
+    s = s.trim(); return s ? s[0].toUpperCase() + s.slice(1) : t;
+  }
   warnOf(d: LabDevice) { return this.emu() && d.running && d.state !== 'failed' ? (d.personaError || d.error || '') : ''; }
   subOf(d: LabDevice) {
     if (!this.emu()) return d.running ? d.mgmtIp.split('/')[0] : tr('stopped');

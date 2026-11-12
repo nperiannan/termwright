@@ -974,3 +974,28 @@ func TestEmuIcons(t *testing.T) {
 		t.Fatal("unknown style")
 	}
 }
+
+// The Events log is kept on disk: it is back after Termwright starts again, and Clear empties it there too.
+func TestEmuEventsKept(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	defer func() { emuLab.loaded, emuLab.f, emuLab.events, emuEventsFile = false, emuFile{}, nil, "" }()
+	emuLab.loaded, emuLab.f, emuLab.events = false, emuFile{}, nil
+	a.emuLoad()
+	emuEv("", "error", "persona not written: long reason")
+	emuLab.loaded, emuLab.events = false, nil // Termwright starts again
+	a.emuLoad()
+	if len(emuLab.events) != 1 || emuLab.events[0].Text != "persona not written: long reason" {
+		t.Fatalf("%+v", emuLab.events)
+	}
+	if _, err := a.EmuClearEvents(); err != nil {
+		t.Fatal(err)
+	}
+	emuLab.loaded, emuLab.events = false, nil
+	a.emuLoad()
+	if len(emuLab.events) != 0 {
+		t.Fatalf("cleared: %+v", emuLab.events)
+	}
+}
