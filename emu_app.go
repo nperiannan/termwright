@@ -2355,9 +2355,7 @@ func (a *App) emuStart(host string, ids []string) {
 			emuEv(v.ID, "info", "starting on "+host+" from its saved state")
 		} else {
 			emuEv(v.ID, "info", "starting on "+host)
-			if !l.KVM {
-				emuEv(v.ID, "warn", "no KVM on "+host[strings.LastIndex(host, "/")+1:]+": it runs in software emulation, 5 to 10 times slower - a switch can take 10 minutes or more to boot, and one that checks its own timing may restart. Turn on nested virtualization for that VM (VMware: Expose hardware assisted virtualization to the guest OS) for full speed")
-			}
+
 			delete(emuLab.pcheck, v.ID) // the persona is checked again on this boot
 		}
 		delete(emuLab.ready, v.ID) // its console log starts empty
@@ -2380,6 +2378,20 @@ func (a *App) emuStart(host string, ids []string) {
 			if f[0] == "resumed" {
 				emuLab.ready[f[1]], emuLab.resumed[f[1]] = true, true
 				emuEv(f[1], "ok", "resumed from its saved state - configuration, address and sessions as they were")
+			}
+		}
+		if g := strings.Fields(strings.TrimSpace(line)); len(g) == 3 && g[0] == "accel" {
+			kvm := g[1] == "kvm"
+			if kvm != l.KVM { // the host's KVM changed since it was checked: what it has now counts
+				for i := range emuLab.f.Hosts {
+					if emuLab.f.Hosts[i].Session == host {
+						emuLab.f.Hosts[i].Info.KVM = map[bool]string{true: "yes", false: "none"}[kvm]
+						_ = a.emuSave()
+					}
+				}
+			}
+			if !kvm {
+				emuEv(g[2], "warn", "no KVM on "+host[strings.LastIndex(host, "/")+1:]+" (no usable /dev/kvm): it runs in software emulation, 5 to 10 times slower - a switch can take 10 minutes or more to boot, and one that checks its own timing may restart. Turn on nested virtualization for that VM (VMware: Expose hardware assisted virtualization to the guest OS), then Hosts → Check Again")
 			}
 		}
 		if len(f) >= 2 && f[0] == "fail" {

@@ -696,3 +696,18 @@ func TestNoQuit(t *testing.T) {
 		t.Fatalf("sent %q", got)
 	}
 }
+
+// KVM is chosen when the VM starts: /dev/kvm usable or not, whatever the host check said.
+func TestStartAccel(t *testing.T) {
+	for _, kvm := range []bool{true, false} {
+		l := &Lab{ID: "a1", Dir: "termwright-lab", Mgmt: "forward", Base: 20000, KVM: kvm, VMs: []VM{{ID: "v1", Name: "s1", Image: "i1"}}}
+		im := &Image{ID: "i1", FileName: "x.qcow2", RAM: 512, NICs: 2, TCGCPU: "Nehalem"}
+		s := l.StartScript(l.VMs, map[string]*Image{"i1": im})
+		if !strings.Contains(s, `acc="-enable-kvm -cpu host"; echo 'accel kvm v1'; else acc="-accel tcg -cpu Nehalem"`) || !strings.Contains(s, "qemu-system-x86_64 $acc ") && !strings.Contains(s, " $acc ") {
+			t.Errorf("kvm %v:\n%s", kvm, s)
+		}
+		if strings.Contains(s, "-enable-kvm -cpu host -") || strings.Contains(s, "-accel tcg -cpu Nehalem -") {
+			t.Errorf("kvm %v: the fixed accel is still in the command", kvm)
+		}
+	}
+}

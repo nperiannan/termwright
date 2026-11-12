@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, KVM is chosen when a switch starts, from what the host has at that moment: a host where KVM was turned on (or off) since it was checked runs its switches right away, without Check Again, and its host entry follows. A start in software emulation says so in the Events.
+
 - Emulated lab, Hosts: **Set Up Again…** is always there for a host that has everything, to run every step again (safe to repeat, for example after something changed on the host). Set Up now writes down what it adds (packages it installed, its sudo rule, the user put in the kvm group) in /var/lib/termwright/setup.
 - Emulated lab, **Remove Host…** first reads the host and asks what to do there: delete its images (with their size and folder), delete the switches' own disks, remove Set Up's sudo rule, take the user out of the kvm group, uninstall the packages Set Up installed (only those it wrote down) - each one a choice, with the sudo password when needed, and a last confirmation before anything is deleted. "Remove, Keep Everything There" only forgets the host; a host that cannot be reached can only be forgotten. Refused while switches of the open topology run there.
 

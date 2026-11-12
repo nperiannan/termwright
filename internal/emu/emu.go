@@ -559,6 +559,14 @@ func (im *Image) DataPorts() int {
 	return im.NICs - 1
 }
 
+// tcgCPU is the image's CPU model for software emulation, when it is a plain model name (with its +feature options).
+func (im *Image) tcgCPU() string {
+	if regexp.MustCompile(`^[A-Za-z0-9_.,=+-]+$`).MatchString(im.TCGCPU) {
+		return im.TCGCPU
+	}
+	return ""
+}
+
 // Args are the qemu-system-x86_64 options for a VM.
 func (l *Lab) Args(v VM, im *Image) []string {
 	dir := l.VMDir()
@@ -567,8 +575,8 @@ func (l *Lab) Args(v VM, im *Image) []string {
 		a = append(a, "-enable-kvm", "-cpu", "host")
 	} else {
 		a = append(a, "-accel", "tcg")
-		if im.TCGCPU != "" {
-			a = append(a, "-cpu", im.TCGCPU)
+		if c := im.tcgCPU(); c != "" {
+			a = append(a, "-cpu", c)
 		}
 	}
 	// disks: the VM's layer on the image, then its layers on more disks (hdb…)
@@ -757,6 +765,17 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 			fmt.Fprintf(&b, " lv=; for d in %s; do [ -f \"$d\" ] && qemu-img snapshot -l \"$d\" 2>/dev/null | grep -q ' %s ' && qemu-img snapshot -d %s \"$d\" 2>/dev/null; done\n", l.disks(v.ID), FastSnap, FastSnap)
 		}
 		q := "qemu-system-x86_64 " + joinArgs(l.Args(v, im))
+		// KVM as the host has it now (turned on or off since it was checked): -enable-kvm when /dev/kvm is usable, else software emulation
+		kvmA, tcgA := "-enable-kvm -cpu host", "-accel tcg"
+		if c := im.tcgCPU(); c != "" {
+			tcgA += " -cpu " + c
+		}
+		if l.KVM {
+			q = strings.Replace(q, kvmA, "$acc", 1)
+		} else {
+			q = strings.Replace(q, tcgA, "$acc", 1)
+		}
+		fmt.Fprintf(&b, " if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then acc=%q; echo 'accel kvm %s'; else acc=%q; echo 'accel tcg %s'; fi\n", kvmA, v.ID, tcgA, v.ID)
 		// full paths to its disks: QEMU opens them again after -daemonize went to "/" (a live move, giving up
 		// write access when its state leaves)
 		q = strings.ReplaceAll(q, "file="+l.Dir+"/", "file=$HOME/"+l.Dir+"/")

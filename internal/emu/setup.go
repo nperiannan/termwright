@@ -120,7 +120,6 @@ func SetupCommand(password bool) string {
 	return `TWUSER=$(id -un); export TWUSER; if [ "$(id -u)" = 0 ]; then sh -c ` + Q(SetupScript()) + `; else ` + sudo + ` env TWUSER="$TWUSER" sh -c ` + Q(SetupScript()) + `; fi`
 }
 
-
 // UndoScript is the root part of Remove Host: it takes back what Set Up wrote
 // down (/var/lib/termwright/setup) - its sudo rule, the user in the kvm group,
 // the packages it installed - as chosen. Prints "@@note …", "@@done".
