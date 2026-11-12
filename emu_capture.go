@@ -1,7 +1,6 @@
 package main
 
 import (
-	"slices"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -12,6 +11,7 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"time"
