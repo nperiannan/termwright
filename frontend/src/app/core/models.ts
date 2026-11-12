@@ -394,3 +394,10 @@ export interface EmuRemoveInfo { switches: number; imagesBytes: number; imagesDi
 export interface EmuRemoveHostReq { host: string; images: boolean; labs: boolean; sudoRule: boolean; group: boolean; pkgs: boolean; password: string; forgetOff: boolean; }
 export interface EmuCapture { key: string; vm: string; switch: string; port: string; peer: string; host: string; file: string; started: string; running: boolean; size: number; }
 export interface EmuPacket { no: number; time: number; src: string; dst: string; proto: string; len: number; info: string; }
+
+/** A test port of the traffic generator: a sender and counter on a switch's free port. */
+export interface EmuTester { id: string; name: string; vm: string; port: number; portName?: string; mac: string; ip?: string; gw?: string; vlan?: number; x?: number; y?: number; }
+/** A stream of frames between test ports. */
+export interface EmuStream { id: string; name: string; from: string; to?: string; kind: 'udp' | 'icmp' | 'tcp' | 'arp' | 'raw'; vlan?: number; prio?: number; dstMac?: string; srcIp?: string; dstIp?: string; dport?: number; size: number; pps: number; seconds?: number; count?: number; maxLoss: number; maxLatency?: number; off?: boolean; }
+export interface EmuStreamResult { id: string; tx: number; rx: number; expected: number; other: number; loss: number; latAvg: number; latMax: number; running: boolean; result: '' | 'pass' | 'fail'; why?: string; }
+export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; }

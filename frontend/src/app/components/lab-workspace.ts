@@ -2,7 +2,7 @@ import { Component, ElementRef, HostListener, OnDestroy, computed, effect, injec
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { EmuCapture, EmuPacket, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
+import { EmuCapture, EmuPacket, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -169,6 +169,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <g class="lk cll"><title>{{ tr('{0} {1} is on the host’s network ({2})', u.name, u.port, c.name) }}</title><path class="ln up" [attr.d]="'M' + u.x + ' ' + u.y + ' L' + c.x + ' ' + c.y" />
                   @if (showPorts()) { <rect class="pb" [attr.x]="u.lx - 18" [attr.y]="u.ly - 9" width="36" height="18" rx="5" /><text class="pt" [attr.x]="u.lx" [attr.y]="u.ly + 4">{{ u.port.split('/').pop() }}</text> }</g>
               } }
+              @for (t of tps(); track t.t.id) { <g class="lk tpl"><path class="ln" [attr.d]="'M' + t.dx + ' ' + t.dy + ' L' + t.x + ' ' + t.y" />@if (showPorts()) { <rect class="pb" [attr.x]="t.lx - 18" [attr.y]="t.ly - 9" width="36" height="18" rx="5" /><text class="pt" [attr.x]="t.lx" [attr.y]="t.ly + 4">{{ t.port }}</text> }</g> }
               @for (k of lines(); track k.key) {
                 <g class="lk" [class.cap]="!!capOf(k.link)" [class.dimk]="linkDim(k.link)" [class.tun]="k.tun" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
                   <title>{{ k.tip }}</title>
@@ -186,6 +187,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <div class="node ghost mv" [style.left.px]="m.x2 - 75" [style.top.px]="m.y2 - BH / 2" [title]="tr('Moving to {0}: {1}', m.to, m.step) + (m.rest ? ' · ' + m.pct + ' % · ' + m.rest : '')">
                 <div class="nbox"><app-dev-icon [role]="m.role" [look]="m.look" [size]="100" state="boot" /></div>
                 <div class="nn">{{ m.name }} <span class="muted">→ {{ m.to }}</span></div><div class="nm"><i class="spin"></i> {{ m.step }}</div>@if (m.pct >= 0) { <div class="mvp"><i [style.width.%]="m.pct"></i></div><div class="mvr">{{ m.pct }} % · {{ m.rest }}</div> }</div>
+            }
+            @for (t of tps(); track t.t.id) {
+              <div class="node tpn" [style.left.px]="t.x - 56" [style.top.px]="t.y - 18" (pointerdown)="tpGrab($event, t.t)" (click)="$event.stopPropagation(); dock.set('traffic'); loadTraf()" (contextmenu)="tpMenu(t.t, $event)" [title]="t.t.name + ' · ' + t.where + (t.t.ip ? ' · ' + t.t.ip : '') + ' · ' + t.t.mac">
+                <div class="tpb">⇄ {{ t.t.name }}</div><div class="nm">{{ t.t.ip || t.where }}</div></div>
             }
             @for (c of clouds(); track c.host) {
               <div class="node cloud" [class.pick]="linkMode() && !!linkA()?.port" [style.left.px]="c.x - 75" [style.top.px]="c.y - 44" (pointerdown)="cloudGrab($event, c.host)" (click)="cloudClick(c.host, $event)"
@@ -251,6 +256,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (emu()) { <a (click)="uplink(d)" [title]="tr('Like a cloud node on a data port: the port joins the host’s network (applies when the switch starts)')">{{ tr('Port on the Host’s Network…') }}</a>
                 @for (u of d.uplinks ?? []; track u) { <a (click)="setUplink(d, u, false)">{{ tr('Take {0} off the Host’s Network', u) }}</a> } }
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
+              @if (emu()) { <a (click)="menu.set(null); newTester(d)">⇄ {{ tr('Add Test Port…') }}</a> }
               @if (emu()) { <hr /><a (click)="drawAs.set(d); menu.set(null); $event.stopPropagation()" [title]="tr('For every {0} in this topology, new ones too', kindOf(d))"><app-dev-icon class="dai" [role]="roleOfDev(d)" [look]="lookOf(d)" [size]="22" state="idle" />{{ tr('Draw As…') }} <small class="muted">{{ tr('all {0}', kindOf(d)) }}</small></a> }
               @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [title]="d.running ? tr('Live: it keeps running while it moves') : tr('It takes its disk along: its configuration and day 0 stay')">→ {{ o.name || hname(o.session) }}</a> } }
               <hr />
@@ -360,13 +366,17 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <a [class.on]="dock() === 'events'" (click)="dock.set('events')">{{ tr('Events') }}@if (problems()) { <span class="cnt">{{ problems() }}</span> }</a>
         @if (emu()) { <a [class.on]="dock() === 'inv'" (click)="dock.set('inv')">{{ tr('Inventory') }}</a> }
         @if (emu()) { <a [class.on]="dock() === 'cap'" (click)="dock.set('cap'); loadCaps()">{{ tr('Captures') }}@if (capsRunning()) { <span class="cnt rec">{{ capsRunning() }}</span> }</a> }
+        @if (emu()) { <a [class.on]="dock() === 'traffic'" (click)="dock.set('traffic'); loadTraf()" [title]="tr('Test ports on switch ports and streams of frames between them, with pass or fail')">{{ tr('Traffic') }}@if (traf()?.running) { <span class="cnt run">▶</span> } @else if (traf()?.streams?.length) { <span class="cnt n">{{ traf()!.streams.length }}</span> }</a> }
         @if (emu()) { <a [class.on]="dock() === 'log'" (click)="dock.set('log'); loadLog()" [title]="tr('The emulator’s own log: everything the lab does, at the level you choose')">{{ tr('Log') }}</a> }
         @if (emu() && selDev(); as d) { <a [class.on]="dock() === 'console'" (click)="dock.set('console'); loadTail()">{{ tr('{0} console', d.hostname) }}</a><a [class.on]="dock() === 'clog'" (click)="dock.set('clog'); loadClog()" [title]="tr('Everything its console showed since it started, with its Events')">{{ tr('Console Log') }}</a> }
-        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'cap' ? tr('Both ways on the port, as the switch sends and gets it') : dock() === 'log' ? tr('The emulator’s own log') : dock() === 'clog' ? tr('Its console since it started, with its Events') : dock() === 'inv' ? tr('Every switch under its host: console, management, what it uses now') : dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
+        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'traffic' ? tr('Test ports send and count frames on switch ports') : dock() === 'cap' ? tr('Both ways on the port, as the switch sends and gets it') : dock() === 'log' ? tr('The emulator’s own log') : dock() === 'clog' ? tr('Its console since it started, with its Events') : dock() === 'inv' ? tr('Every switch under its host: console, management, what it uses now') : dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
         @if (dock() === 'console' && dockTab(); as t) { <button type="button" class="sm" (click)="undock()" [title]="tr('Close the connection to its console')">{{ tr('Disconnect') }}</button> }
         @if (dock() === 'inv' && inventory().length > 1) { <button type="button" class="sm" (click)="flipAll()">{{ invClosed().size === inventory().length ? tr('Expand All') : tr('Collapse All') }}</button> }
         @else { <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button> }
         @if (dock() === 'events' && emu()) { <button type="button" class="sm" (click)="clearEvents()">{{ tr('Clear') }}</button> }
+        @if (dock() === 'traffic') { <button type="button" class="sm" (click)="newStream()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button><button type="button" class="sm" (click)="newTester()">＋ {{ tr('Test Port') }}</button>
+          @if (traf()?.running) { <button type="button" class="sm" (click)="trafStop()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="sm primary" (click)="trafStart([])" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
+          <button type="button" class="sm" (click)="trafReport()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
         @if (dock() === 'cap' && capCur(); as c) { <input class="sm capf" [ngModel]="capFilter()" (ngModelChange)="capFilter.set($event)" [placeholder]="tr('Filter: ICMP, 10.0.0.1, LLDP…')" />@if (c.running) { <button type="button" class="sm" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (!c.running) { <button type="button" class="sm" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> }@if (stoppedCaps().length > 1) { <button type="button" class="sm" (click)="delCaps(stoppedCaps())">{{ tr('Delete All Stopped') }}</button> } }
         @if (dock() === 'log') { <select class="sm" [ngModel]="elog()?.level || 'info'" (ngModelChange)="setLogLevel($event)" [title]="tr('How much the log keeps: info by default; debug adds each command run on a host, verbose also what it printed')"><option value="error">{{ tr('Errors') }}</option><option value="warn">{{ tr('Warnings') }}</option><option value="info">{{ tr('Info') }}</option><option value="debug">{{ tr('Debug') }}</option><option value="verbose">{{ tr('Verbose') }}</option></select><button type="button" class="sm" (click)="loadLog()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveLog()">{{ tr('Save…') }}</button> }
         @if (dock() === 'clog' && selDev(); as d) { <button type="button" class="sm" (click)="loadClog()" [disabled]="clogBusy()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveConsoleLog(d)">{{ tr('Save…') }}</button> }
@@ -398,6 +408,46 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="evh"><span>{{ tr('Time') }}</span><span>{{ tr('Host') }}</span><span>{{ tr('Switch') }}</span><span>{{ tr('Level') }}</span><span>{{ tr('Trigger') }}</span><span>{{ tr('Message') }}</span></div>
           @for (e of events(); track $index) { <div [class]="'lv-' + e.level"><span class="t">{{ time(e.at) }}</span><span class="eh" [title]="e.host || tr('this computer')">@if (e.host) { <i [style.background]="hcol(e.host)"></i>{{ hname(e.host) }} } @else { <span class="muted">{{ tr('this computer') }}</span> }</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span class="lv">{{ lvName(e.level) }}</span><span class="by" [title]="byTitle(e.by)">{{ (e.by || 'system').toUpperCase() }}</span><span class="tx">{{ e.text }}</span></div> }
           @empty { <div><span class="t"></span><span></span><b></b><span></span><span></span><span class="muted">{{ emu() ? tr('Nothing yet - start a switch.') : tr('Simulated switches start at once; their state is on the canvas.') }}</span></div> }
+        </div>
+      } @else if (dock() === 'traffic') {
+        <div class="trw" [class.ed]="!!sEd() || !!tEd()">
+          <div class="trt">
+            @if (traf()?.note) { <p class="trn">⚠ {{ traf()!.note }}</p> }
+            <table><tr><th>{{ tr('Stream') }}</th><th>{{ tr('From → To') }}</th><th>{{ tr('Frame') }}</th><th>{{ tr('Rate') }}</th><th>{{ tr('Sent') }}</th><th>{{ tr('Received') }}</th><th>{{ tr('Loss') }}</th><th>{{ tr('Latency') }}</th><th>{{ tr('Result') }}</th><th></th></tr>
+              @for (x of traf()?.streams ?? []; track x.id) { @let r = resOf(x.id);
+                <tr [class.on]="sEd()?.id === x.id" (click)="editStream(x)"><td><b>{{ x.name }}</b></td><td class="mono">{{ tpName(x.from) }} → {{ x.to ? tpName(x.to) : (x.dstIp || tr('all')) }}</td>
+                  <td class="mono">{{ x.kind.toUpperCase() }}@if (x.vlan) { · VLAN {{ x.vlan }} } · {{ x.size }} B</td><td class="mono">{{ x.pps }} pps · {{ x.count ? x.count + ' ' + tr('frames') : (x.seconds || 10) + ' s' }}</td>
+                  <td class="mono">{{ r?.tx ?? '-' }}</td><td class="mono">{{ r ? r.rx : '-' }}@if (r?.other) { <span class="muted" [title]="tr('Arrived at a test port it was not for (flooded)')"> +{{ r!.other }}</span> }</td>
+                  <td class="mono" [class.bad]="(r?.loss ?? 0) > x.maxLoss">{{ r?.expected ? r!.loss.toFixed(1) + ' %' : '-' }}</td><td class="mono">{{ r && r.latAvg >= 0 ? r.latAvg.toFixed(2) + ' ms' : '-' }}</td>
+                  <td>@if (r?.running) { <span class="pill ru">{{ tr('running') }}</span> } @else if (r?.result === 'pass') { <span class="pill ok">PASS</span> } @else if (r?.result === 'fail') { <span class="pill er" [title]="r!.why || ''">FAIL</span> <span class="muted small">{{ r!.why }}</span> }</td>
+                  <td class="ra"><a (click)="$event.stopPropagation(); trafStart([x.id])" [title]="tr('Run only this one')">▶</a><a (click)="$event.stopPropagation(); delStream(x)" [title]="tr('Delete')">✕</a></td></tr>
+              } @empty { <tr><td colspan="10" class="muted">{{ (traf()?.testers?.length ?? 0) ? tr('No stream yet: ＋ Stream.') : tr('No test port yet: ＋ Test Port, or right-click a switch → Add Test Port.') }}</td></tr> }
+            </table>
+          </div>
+          @if (sEd(); as e) {
+            <div class="tre"><div class="treh"><b>{{ e.id ? e.name : tr('New stream') }}</b><span class="sp"></span><a (click)="sEd.set(null)">✕</a></div>
+              <label><span>{{ tr('Name') }}</span><input [(ngModel)]="e.name" [placeholder]="tr('stream-1')" /></label>
+              <label><span>{{ tr('From') }}</span><select [(ngModel)]="e.from">@for (t of traf()?.testers ?? []; track t.id) { <option [value]="t.id">{{ t.name }} · {{ tpWhere(t) }}</option> }</select></label>
+              <label><span>{{ tr('To') }}</span><select [(ngModel)]="e.to"><option value="">{{ tr('every other test port, or an address') }}</option>@for (t of traf()?.testers ?? []; track t.id) { @if (t.id !== e.from) { <option [value]="t.id">{{ t.name }} · {{ tpWhere(t) }}</option> } }</select></label>
+              @if (!e.to) { <label><span>{{ tr('To address') }}</span><input [(ngModel)]="e.dstIp" placeholder="10.10.0.254" /></label> }
+              <label><span>{{ tr('Type') }}</span><div class="seg">@for (k of kinds; track k) { <i [class.on]="e.kind === k" (click)="e.kind = k">{{ k === 'tcp' ? 'TCP SYN' : k === 'raw' ? 'Raw L2' : k.toUpperCase() }}</i> }</div></label>
+              <label><span>VLAN</span><input type="number" min="0" max="4094" [(ngModel)]="e.vlan" [placeholder]="tr('untagged')" /></label>
+              <label><span>{{ tr('Frame size') }}</span><input type="number" min="60" max="9000" [(ngModel)]="e.size" /></label>
+              <label><span>{{ tr('Rate (pps)') }}</span><input type="number" min="1" max="100000" [(ngModel)]="e.pps" /></label>
+              <label><span>{{ tr('For') }}</span><div class="two"><input type="number" min="0" [(ngModel)]="e.seconds" [placeholder]="tr('seconds')" /><input type="number" min="0" [(ngModel)]="e.count" [placeholder]="tr('or frames')" /></div></label>
+              <label><span>{{ tr('Pass when') }}</span><div class="two"><input type="number" min="0" max="100" step="0.1" [(ngModel)]="e.maxLoss" [title]="tr('Loss at most, %')" /><input type="number" min="0" step="0.1" [(ngModel)]="e.maxLatency" [placeholder]="tr('latency ms')" [title]="tr('Average latency at most, ms (0: not checked)')" /></div></label>
+              <div class="trb"><button type="button" class="primary" (click)="saveStream(e)">{{ tr('Save') }}</button>@if (e.id) { <button type="button" (click)="saveStream(e, true)">▶ {{ tr('Save and Run') }}</button> }</div>
+            </div>
+          } @else if (tEd(); as t) {
+            <div class="tre"><div class="treh"><b>{{ tr('New test port') }}</b><span class="sp"></span><a (click)="tEd.set(null)">✕</a></div>
+              <label><span>{{ tr('Switch') }}</span><select [ngModel]="t.vm" (ngModelChange)="tpSwitch($event)">@for (d of devs(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select></label>
+              <label><span>{{ tr('Port') }}</span><select [(ngModel)]="t.port">@for (p of t.free; track p) { <option [value]="p">{{ p }}</option> } @empty { <option value="">{{ tr('no free port') }}</option> }</select></label>
+              <label><span>{{ tr('Address') }}</span><input [(ngModel)]="t.ip" placeholder="10.10.0.1/24" [title]="tr('It answers ARP and ping there; streams use it as their source')" /></label>
+              <label><span>{{ tr('Gateway') }}</span><input [(ngModel)]="t.gw" [placeholder]="tr('for streams to another network')" /></label>
+              <p class="muted small">{{ tr('A sender and counter on the host where the switch runs (no VM): tens of thousands of frames a second - for forwarding, VLANs, LAGs, ACLs and failover, not line rate.') }}</p>
+              <div class="trb"><button type="button" class="primary" (click)="addTester(t)" [disabled]="!t.port">{{ tr('Add') }}</button></div>
+            </div>
+          }
         </div>
       } @else if (dock() === 'cap') {
         <div class="capw">
@@ -596,6 +646,15 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .lk.down .pb { stroke: var(--danger); } .lk.down .pt { fill: var(--danger); }
     .mvl { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; line { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 6; animation: mvdash 1s linear infinite; } }
     @keyframes mvdash { to { stroke-dashoffset: -12; } } @media (prefers-reduced-motion: reduce) { .mvl line { animation: none; } }
+    .trw { display: grid; grid-template-columns: minmax(0, 1fr); height: 100%; min-height: 0; } .trw.ed { grid-template-columns: minmax(0, 1fr) 340px; }
+    .trt { overflow: auto; table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 5px 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; } td { padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr { cursor: pointer; } tr.on td { background: var(--accent-soft); } td.bad { color: var(--danger); } td.ra a { margin-left: 10px; color: var(--muted); } td.ra a:hover { color: var(--text); } }
+    .trn { margin: 6px 10px; color: var(--warning, #e39b17); font-size: 12px; }
+    .pill { font: 600 10.5px var(--mono, monospace); padding: 1px 7px; border-radius: 9px; } .pill.ok { color: var(--success, #1fa45a); background: color-mix(in srgb, var(--success, #1fa45a) 14%, transparent); } .pill.er { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); } .pill.ru { color: var(--accent); background: var(--accent-soft); }
+    .tre { border-left: 1px solid var(--line); padding: 8px 12px; overflow: auto; display: grid; gap: 7px; align-content: start; background: var(--surface-2); font-size: 12px;
+      .treh { display: flex; align-items: center; a { cursor: pointer; color: var(--muted); } } label { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: center; gap: 8px; > span { color: var(--muted); } } input, select { height: 26px; min-width: 0; } .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+      .seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; i { font-style: normal; padding: 3px 7px; cursor: pointer; color: var(--muted); font-size: 11px; } i.on { background: var(--accent-soft); color: var(--text); } } .trb { display: flex; gap: 8px; } p { margin: 0; } }
+    .node.tpn { cursor: grab; width: 112px; text-align: center; .tpb { height: 30px; border-radius: 9px; border: 1.5px solid #e08a2e; background: color-mix(in srgb, #e08a2e 12%, var(--surface)); color: #e9a55a; display: flex; align-items: center; justify-content: center; font: 600 11.5px var(--font, Inter, sans-serif); white-space: nowrap; } }
+    .tpl .ln { stroke: #e08a2e; stroke-dasharray: 5 4; stroke-width: 2; fill: none; }
     .capw { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; .capl { border-right: 1px solid var(--line); overflow: auto; } .ci { display: grid; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid var(--line); b { font-size: 12.5px; display: flex; align-items: center; gap: 6px; } } .ci.on { background: var(--accent-soft); } .cx { margin-left: auto; color: var(--muted); font-weight: 400; padding: 0 2px; } .cx:hover { color: var(--danger); } .capt { overflow: auto; table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 4px 8px; } td { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr.pp.icmp td, tr.pp.icmpv6 td { color: #9cc3ff; } tr.pp.lldp td, tr.pp.stp td, tr.pp.lacp td { color: var(--muted); } tr.pp.arp td { color: #e5c07b; } } }
     .recd { width: 8px; height: 8px; border-radius: 50%; background: var(--danger, #e5484d); animation: icblink 1.2s ease-in-out infinite; } .cnt.rec { background: var(--danger, #e5484d); } .capf { width: 200px; }
     .lk.cap .ln { stroke: var(--danger, #e5484d) !important; stroke-dasharray: 6 4; } @keyframes icblink { 50% { opacity: .3; } }
@@ -644,7 +703,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .ev div { user-select: text; } .tail { user-select: text; }
     .dtabs { display: flex; align-items: center; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line);
       a { padding: 6px 12px; color: var(--muted); font-weight: 500; cursor: pointer; } a.on { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
-      .cnt { margin-left: 6px; background: var(--danger); color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; } }
+      .cnt { margin-left: 6px; background: var(--danger); color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; } .cnt.run { background: var(--accent); } .cnt.n { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); } }
     .ev { padding: 6px 14px; overflow: auto; div { display: grid; grid-template-columns: 64px 120px 120px 44px 58px 1fr; gap: 10px; padding: 2px 0; font-size: 12px; } .eh { display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); i { width: 7px; height: 7px; border-radius: 50%; flex: none; } } .t { color: var(--muted); } b { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .evh { position: sticky; top: -6px; z-index: 1; background: var(--surface); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
       .lv, .by { font: 600 11px/18px var(--mono, monospace); letter-spacing: .03em; } .by { color: var(--text); opacity: .75; }
@@ -673,7 +732,7 @@ export class LabWorkspace implements OnDestroy {
   protected selDev = computed(() => this.devs().find(d => d.id === this.sel()) ?? null);
   protected selLink = signal('');
   protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink } | null>(null);
-  protected dock = signal<'events' | 'console' | 'inv' | 'clog' | 'log' | 'cap'>('events');
+  protected dock = signal<'events' | 'console' | 'inv' | 'clog' | 'log' | 'cap' | 'traffic'>('events');
   protected caps = signal<EmuCapture[]>([]);
   protected capSel = signal('');
   protected capStarted = signal('');
@@ -687,6 +746,82 @@ export class LabWorkspace implements OnDestroy {
   async loadCaps() { try { this.caps.set((await this.backend.emuCaptures()) ?? []); if (!this.capSel() && this.caps().length) this.capSel.set(this.caps()[0].key); await this.loadPackets(); } catch { /* none */ } }
   async loadPackets() { const c = this.capCur(); if (!c) { this.packets.set([]); return; } try { this.packets.set((await this.backend.emuCapturePackets(c.file, 2000)) ?? []); } catch (e) { this.packets.set([]); void e; } }
   async startCap(k: LabLink) { try { this.caps.set((await this.backend.emuCaptureStart(k.a, k.aPort)) ?? []); const c = this.caps().find(x => x.running && x.vm === k.a && x.port === k.aPort); if (c) { this.capSel.set(c.key); this.capStarted.set(c.started); } this.dock.set('cap'); await this.loadPackets(); } catch (e) { this.ui.error(e); } }
+  // ---- traffic generator
+  protected traf = signal<EmuTrafficView | null>(null);
+  protected sEd = signal<EmuStream | null>(null);
+  protected tEd = signal<{ vm: string; port: string; ip: string; gw: string; free: string[] } | null>(null);
+  protected tpAt = signal<Record<string, { x: number; y: number }>>({});
+  protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw'];
+  private trafTimer: ReturnType<typeof setInterval> | null = null;
+  private trafTick = 0;
+  async loadTraf() {
+    try { this.traf.set(await this.backend.emuTraffic()); } catch { /* no lab */ }
+    const run = !!this.traf()?.running;
+    if (run && !this.trafTimer) this.trafTimer = setInterval(() => void this.loadTraf(), 1000);
+    if (!run && this.trafTimer) { clearInterval(this.trafTimer); this.trafTimer = null; }
+  }
+  resOf(id: string): EmuStreamResult | undefined { return this.traf()?.results?.find(r => r.id === id); }
+  tpName(id: string) { return this.traf()?.testers.find(t => t.id === id)?.name ?? '?'; }
+  tpWhere(t: EmuTester) { const d = this.devs().find(x => x.id === t.vm); return (d?.hostname ?? '?') + ' ' + (t.portName || t.port); }
+  /** The test ports on the canvas: under their switch unless moved. */
+  protected tps = computed(() => {
+    const out: { t: EmuTester; x: number; y: number; dx: number; dy: number; lx: number; ly: number; port: string; where: string }[] = [];
+    const per: Record<string, number> = {};
+    this.moved();
+    for (const t of this.traf()?.testers ?? []) {
+      const d = this.devs().find(x => x.id === t.vm); if (!d) continue;
+      const p = this.pos(d), k = per[t.vm] = (per[t.vm] ?? -1) + 1;
+      const at = this.tpAt()[t.id] ?? (t.x || t.y ? { x: t.x!, y: t.y! } : { x: p.x - 70 + 140 * (k % 2), y: p.y + 150 + 60 * Math.floor(k / 2) });
+      const port = t.portName || String(t.port);
+      out.push({ t, x: at.x, y: at.y, dx: p.x, dy: p.y, lx: p.x + (at.x - p.x) * 0.35, ly: p.y + (at.y - p.y) * 0.35, port, where: d.hostname + ' ' + port });
+    }
+    return out;
+  });
+  tpGrab(ev: PointerEvent, t: EmuTester) {
+    if (this.linkMode() || ev.button !== 0) return;
+    ev.stopPropagation();
+    const c = this.tps().find(x => x.t.id === t.id); if (!c) return;
+    const x0 = ev.clientX, y0 = ev.clientY, z = this.zoom();
+    let at = { x: c.x, y: c.y };
+    const mv = (e: PointerEvent) => { at = { x: Math.round(c.x + (e.clientX - x0) / z), y: Math.round(c.y + (e.clientY - y0) / z) }; this.tpAt.set({ ...this.tpAt(), [t.id]: at }); };
+    const up = async () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); if (at.x !== c.x || at.y !== c.y) { try { this.traf.set(await this.backend.emuTesterSet({ ...t, x: at.x, y: at.y })); } catch (e) { this.ui.error(e); } } };
+    addEventListener('pointermove', mv); addEventListener('pointerup', up);
+  }
+  async tpMenu(t: EmuTester, ev: MouseEvent) {
+    ev.preventDefault(); ev.stopPropagation();
+    if (!(await this.ui.confirm(tr('Remove {0}?', t.name), tr('Its streams go too.'), tr('Remove')))) return;
+    try { this.traf.set(await this.backend.emuTesterRemove(t.id)); } catch (e) { this.ui.error(e); }
+  }
+  async newTester(d?: LabDevice) {
+    this.dock.set('traffic'); this.sEd.set(null); void this.loadTraf();
+    const dev = d ?? this.selDev() ?? this.devs()[0]; if (!dev) { this.ui.toast(tr('Add a switch first')); return; }
+    this.tEd.set({ vm: dev.id, port: '', ip: '', gw: '', free: [] });
+    await this.tpSwitch(dev.id);
+  }
+  async tpSwitch(id: string) {
+    let free: string[] = [];
+    try { free = (await this.backend.emuFreePorts(id)) ?? []; } catch { /* none */ }
+    const n = (this.traf()?.testers.length ?? 0) + 1;
+    const t = this.tEd(); if (t) this.tEd.set({ ...t, vm: id, free, port: free[0] ?? '', ip: t.ip || `10.10.0.${n}/24` });
+  }
+  async addTester(t: { vm: string; port: string; ip: string; gw: string }) {
+    try { const v = await this.backend.emuTesterAdd(t.vm, t.port, t.ip.trim(), t.gw.trim(), 0); this.traf.set(v); this.tEd.set(null); if (v.note) this.ui.toast(v.note); } catch (e) { this.ui.error(e); }
+  }
+  newStream() {
+    const ts = this.traf()?.testers ?? []; if (!ts.length) return;
+    this.tEd.set(null);
+    this.sEd.set({ id: '', name: '', from: ts[0].id, to: ts[1]?.id ?? '', kind: 'udp', size: 512, pps: 1000, seconds: 30, maxLoss: 1, maxLatency: 0 });
+  }
+  editStream(x: EmuStream) { this.tEd.set(null); this.sEd.set({ ...x, to: x.to ?? '' }); }
+  async saveStream(e: EmuStream, run = false) {
+    try { const v = await this.backend.emuStreamSave({ ...e, vlan: +(e.vlan || 0), size: +e.size, pps: +e.pps, seconds: +(e.seconds || 0), count: +(e.count || 0), maxLoss: +(e.maxLoss || 0), maxLatency: +(e.maxLatency || 0) }); this.traf.set(v); this.sEd.set(null); if (run) await this.trafStart([e.id]); } catch (err) { this.ui.error(err); }
+  }
+  async delStream(x: EmuStream) { try { this.traf.set(await this.backend.emuStreamRemove(x.id)); if (this.sEd()?.id === x.id) this.sEd.set(null); } catch (e) { this.ui.error(e); } }
+  async trafStart(ids: string[]) { try { this.traf.set(await this.backend.emuTrafficStart(ids)); await this.loadTraf(); } catch (e) { this.ui.error(e); } }
+  async trafStop() { try { this.traf.set(await this.backend.emuTrafficStop()); await this.loadTraf(); } catch (e) { this.ui.error(e); } }
+  async trafReport() {
+    try { const p = await this.backend.chooseSaveFile(tr('Save the Traffic Report'), 'traffic-report.html', [{ displayName: 'HTML', pattern: '*.html' }, { displayName: 'CSV', pattern: '*.csv' }]); if (!p) return; await this.backend.emuTrafficReport(p); this.ui.toast(tr('Saved'), 'success'); } catch (e) { this.ui.error(e); }
+  }
   protected stoppedCaps = computed(() => this.caps().filter(c => !c.running));
   async delCaps(cs: EmuCapture[]) {
     if (!cs.length) return;
@@ -1100,7 +1235,7 @@ export class LabWorkspace implements OnDestroy {
 
   constructor() {
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
-    this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); }, 3000);
+    this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
   }
   @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); } }
   /** A click on the empty canvas: nothing selected (the side panel shows the whole topology). */
@@ -1109,7 +1244,7 @@ export class LabWorkspace implements OnDestroy {
     if (this.linkMode() || t.closest('.node, .lk, .tdock, .vbar, .mini, .hleg, .menu, .bar2, .zone .zh')) return;
     this.sel.set(''); this.selLink.set('');
   }
-  ngOnDestroy() { clearInterval(this.timer); this.lab.watch('ws-' + this.tab().id, false); for (const id of Object.values(this.docked())) void this.tabs.close(id); }
+  ngOnDestroy() { clearInterval(this.timer); if (this.trafTimer) clearInterval(this.trafTimer); this.lab.watch('ws-' + this.tab().id, false); for (const id of Object.values(this.docked())) void this.tabs.close(id); }
 
   protected hostName = computed(() => (this.st()?.host ?? '').split('/').pop() ?? '');
   protected running = computed(() => this.devs().filter(d => d.running).length);

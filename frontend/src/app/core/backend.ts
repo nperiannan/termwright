@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, EmuCapture, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo } from './models';
+  AccountInfo, EmuCapture, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -112,6 +112,15 @@ export class Backend {
   emuCaptureStart(id: string, port: string) { return this.call<EmuCapture[]>('EmuCaptureStart', id, port); }
   emuCaptureStop(key: string) { return this.call<EmuCapture[]>('EmuCaptureStop', key); }
   emuCaptureDelete(files: string[]) { return this.call<EmuCapture[]>('EmuCaptureDelete', files); }
+  emuTraffic() { return this.call<EmuTrafficView>('EmuTraffic'); }
+  emuTesterAdd(vm: string, port: string, ip: string, gw: string, vlan: number) { return this.call<EmuTrafficView>('EmuTesterAdd', vm, port, ip, gw, vlan); }
+  emuTesterSet(t: EmuTester) { return this.call<EmuTrafficView>('EmuTesterSet', t); }
+  emuTesterRemove(id: string) { return this.call<EmuTrafficView>('EmuTesterRemove', id); }
+  emuStreamSave(s: EmuStream) { return this.call<EmuTrafficView>('EmuStreamSave', s); }
+  emuStreamRemove(id: string) { return this.call<EmuTrafficView>('EmuStreamRemove', id); }
+  emuTrafficStart(ids: string[]) { return this.call<EmuTrafficView>('EmuTrafficStart', ids); }
+  emuTrafficStop() { return this.call<EmuTrafficView>('EmuTrafficStop'); }
+  emuTrafficReport(path: string) { return this.call<void>('EmuTrafficReport', path); }
   emuCaptures() { return this.call<EmuCapture[]>('EmuCaptures'); }
   emuCapturePackets(key: string, last: number) { return this.call<EmuPacket[]>('EmuCapturePackets', key, last); }
   emuCaptureSave(key: string, path: string) { return this.call<void>('EmuCaptureSave', key, path); }

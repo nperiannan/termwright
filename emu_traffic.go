@@ -50,6 +50,7 @@ var emuTraf struct {
 	started time.Time
 	on      map[string]bool
 	last    []EmuStreamResult
+	final   bool // the last run's counters are final (not read from the hosts again)
 }
 
 func emuTesterName(l *emu.Lab) string {
@@ -130,6 +131,13 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 		return EmuTrafficView{Testers: []emu.Tester{}, Streams: []emu.Stream{}, Results: []EmuStreamResult{}}, nil
 	}
 	v := EmuTrafficView{Testers: append([]emu.Tester{}, l.Testers...), Streams: append([]emu.Stream{}, l.Streams...)}
+	for i, t := range v.Testers {
+		if vm := l.VMByID(t.VM); vm != nil {
+			if im := emuImage(vm.Image); im != nil {
+				v.Testers[i].PortName = im.PortNameOf(t.Port)
+			}
+		}
+	}
 	var hosts []string
 	for _, t := range l.Testers {
 		if vm := l.VMByID(t.VM); vm != nil && !slices.Contains(hosts, emuHostOf(*vm)) {
@@ -138,6 +146,12 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 	}
 	dir := l.VMDir()
 	run := emuTraf.run
+	if run != 0 && emuTraf.final {
+		v.Results = emuTrafCached(v.Streams)
+		v.Started = emuTraf.started.Format(time.RFC3339)
+		emuLab.mu.Unlock()
+		return v, nil
+	}
 	emuLab.mu.Unlock()
 	type stats struct {
 		Run   uint32               `json:"run"`
@@ -216,12 +230,27 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 	if run != 0 {
 		v.Running = slices.ContainsFunc(v.Results, func(r EmuStreamResult) bool { return r.Running }) || time.Since(emuTraf.started) < 3*time.Second
 		v.Started = emuTraf.started.Format(time.RFC3339)
-		if !v.Running && time.Since(emuTraf.started) > 3*time.Second {
-			emuTraf.last = v.Results
+		if !v.Running && time.Since(emuTraf.started) > 5*time.Second {
+			emuTraf.last, emuTraf.final = v.Results, true // frames still on their way have arrived
 		}
 	}
 	emuLab.mu.Unlock()
 	return v, nil
+}
+
+// emuTrafCached: the last run's results for the streams there are now (emuLab.mu held).
+func emuTrafCached(ss []emu.Stream) []EmuStreamResult {
+	out := []EmuStreamResult{}
+	for _, s := range ss {
+		r := EmuStreamResult{ID: s.ID, LatAvg: -1}
+		for _, x := range emuTraf.last {
+			if x.ID == s.ID {
+				r = x
+			}
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // EmuTesterAdd puts a test port on a free port of a switch.
@@ -399,7 +428,7 @@ func (a *App) EmuTrafficStart(ids []string) (EmuTrafficView, error) {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("no such stream")
 	}
-	emuTraf.run, emuTraf.started, emuTraf.on, emuTraf.last = uint32(time.Now().Unix()), time.Now(), on, nil
+	emuTraf.run, emuTraf.started, emuTraf.on, emuTraf.last, emuTraf.final = uint32(time.Now().Unix()), time.Now(), on, nil, false
 	emuEv("", "info", "traffic started: "+strings.Join(names, ", "))
 	emuLab.mu.Unlock()
 	if err := a.emuTrafficPush(); err != nil {

@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **traffic generator**: put a **test port** on any free switch port (right-click a switch → *Add Test Port…*, or Traffic → ＋ Test Port) - a sender and counter on the host where the switch runs, no VM; it has a MAC and an address and answers ARP and ping there. **Streams** between test ports (or to every other one, or to an address): UDP, ICMP, TCP SYN, ARP or raw L2, with a VLAN tag, frame size, packets per second and seconds or a count; each passes when its loss (and average latency, when both ends are on one host) stays within its limits. The **Traffic** tab shows sent, received, loss, latency and PASS/FAIL live; *Report…* saves HTML or CSV; the connector has **lab_traffic** for AI agents (add ports and streams, start, stop, report). Ports without a cable now have a socket a test port can use (a switch started before this needs one restart for its test ports).
+- Emulated lab, **Captures**: delete a stopped capture (✕ or *Delete*, also *Delete All Stopped*) - its pcap file on the host goes too; two captures of one port each show their own packets; the vendor discovery protocol (EDP) is named as such.
+
 - Emulated lab, boot menus: a menu that takes one key gets the key alone (Enter only if the menu then still waits); the Enter that used to follow stayed in the buffer and opened the next stop of the boot. The device pack's boot answers and facts patterns now follow the pack as it improves them.
 
 - Emulated lab, hover card: the state (● running) sits at the top right, apart from the name; *Management* no longer says "planned, not on the switch yet" for a switch that took its address before Termwright restarted or that resumed from a fast start (the address it took is kept); the serial number read from the switch follows the device pack's newest pattern (an image keeps up with the pack's).

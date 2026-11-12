@@ -16,16 +16,17 @@ var TrafficPy string
 
 // Tester is a test port: a sender and counter on a switch's data port (no VM).
 type Tester struct {
-	ID   string  `json:"id"`
-	Name string  `json:"name"`
-	VM   string  `json:"vm"`
-	Port int     `json:"port"`
-	MAC  string  `json:"mac"`
-	IP   string  `json:"ip,omitempty"` // with its prefix (10.10.0.1/24): it answers ARP and ping there
-	GW   string  `json:"gw,omitempty"` // for streams to another network
-	VLAN int     `json:"vlan,omitempty"`
-	X    float64 `json:"x,omitempty"` // on the canvas
-	Y    float64 `json:"y,omitempty"`
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	VM       string  `json:"vm"`
+	Port     int     `json:"port"`
+	MAC      string  `json:"mac"`
+	IP       string  `json:"ip,omitempty"` // with its prefix (10.10.0.1/24): it answers ARP and ping there
+	GW       string  `json:"gw,omitempty"` // for streams to another network
+	VLAN     int     `json:"vlan,omitempty"`
+	PortName string  `json:"portName,omitempty"` // as the switch names it (filled in for the screens)
+	X        float64 `json:"x,omitempty"`        // on the canvas
+	Y        float64 `json:"y,omitempty"`
 }
 
 // Stream is frames from one test port to another (or to all).

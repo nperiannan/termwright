@@ -61,6 +61,27 @@ var mcpLabTools = []mcpTool{
 			"host":   map[string]any{"type": "string", "description": "KVM host name or session path"},
 			"how":    map[string]any{"type": "string", "enum": []string{"live", "copy", "image"}},
 		}, "switch", "host", "how")},
+	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss and latency). Changes and starts are asked in Termwright first.",
+		mcpSchema(map[string]any{
+			"action":      map[string]any{"type": "string", "enum": []string{"list", "add_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report"}},
+			"switch":      map[string]any{"type": "string", "description": "add_port: the switch"},
+			"port":        map[string]any{"type": "string", "description": "add_port: its free port; remove_port: the test port's name"},
+			"ip":          map[string]any{"type": "string", "description": "add_port: the test port's address with prefix (10.10.0.1/24)"},
+			"gateway":     map[string]any{"type": "string", "description": "add_port: for streams to another network"},
+			"name":        map[string]any{"type": "string", "description": "add_stream: its name; remove_stream: the stream"},
+			"from":        map[string]any{"type": "string", "description": "add_stream: test port name"},
+			"to":          map[string]any{"type": "string", "description": "add_stream: test port name; empty = every other test port (broadcast) or dst_ip"},
+			"kind":        map[string]any{"type": "string", "enum": []string{"udp", "icmp", "tcp", "arp", "raw"}},
+			"dst_ip":      map[string]any{"type": "string", "description": "add_stream: an address that is not a test port (icmp: its replies are counted)"},
+			"vlan":        map[string]any{"type": "integer"},
+			"size":        map[string]any{"type": "integer", "description": "frame bytes (60-9000, default 128)"},
+			"pps":         map[string]any{"type": "integer", "description": "packets per second (default 100, at most 100000)"},
+			"seconds":     map[string]any{"type": "integer"},
+			"count":       map[string]any{"type": "integer"},
+			"max_loss":    map[string]any{"type": "number", "description": "% for a pass (default 0)"},
+			"max_latency": map[string]any{"type": "number", "description": "ms for a pass (0 = not checked)"},
+			"streams":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "start: the streams (none = all)"},
+		}, "action")},
 	{"lab_capture", "Packet capture on a switch port of the emulated lab (its cable, both ways; the switch keeps running): start, stop, or read the packets (number, time, source, destination, protocol, length, info). Start and stop are asked in Termwright first.",
 		mcpSchema(map[string]any{
 			"action": map[string]any{"type": "string", "enum": []string{"start", "stop", "read", "list"}},
@@ -364,6 +385,101 @@ func (a *App) emuMCP(name string, args map[string]any) (string, error) {
 			return "", err
 		}
 		return "Moving " + d.Hostname + " - lab_events shows each step; lab_wait until it is ready.", nil
+	case "lab_traffic":
+		tv, err := a.EmuTraffic()
+		if err != nil {
+			return "", err
+		}
+		tester := func(name string) string {
+			for _, t := range tv.Testers {
+				if strings.EqualFold(t.Name, name) || t.ID == name {
+					return t.ID
+				}
+			}
+			return ""
+		}
+		switch argStr(args, "action") {
+		case "list":
+			var b strings.Builder
+			for _, t := range emuSortedTesters(tv.Testers) {
+				sw := t.VM
+				if d, err := emuMCPID(v, t.VM); err == nil {
+					sw = d.Hostname
+				}
+				fmt.Fprintf(&b, "- test port %s on %s port %d, MAC %s, IP %s\n", t.Name, sw, t.Port, t.MAC, orStr(t.IP, "none"))
+			}
+			if rep, _ := a.EmuTrafficReportText(); len(tv.Streams) > 0 {
+				b.WriteString("Streams:\n" + rep)
+			}
+			if b.Len() == 0 {
+				return "No test port yet: add_port puts one on a free switch port.", nil
+			}
+			return b.String(), nil
+		case "add_port":
+			d, err := emuMCPID(v, argStr(args, "switch"))
+			if err != nil {
+				return "", err
+			}
+			if err := ask("Claude wants to add a test port", fmt.Sprintf("Claude (through the Termwright connector) asks to put a test port on %s %s (%s).", d.Hostname, argStr(args, "port"), orStr(argStr(args, "ip"), "no address")), false); err != nil {
+				return "", err
+			}
+			r, err := a.EmuTesterAdd(d.ID, argStr(args, "port"), argStr(args, "ip"), argStr(args, "gateway"), argInt(args, "vlan", 0, 4094))
+			if err != nil {
+				return "", err
+			}
+			t := r.Testers[len(r.Testers)-1]
+			return fmt.Sprintf("%s on %s %s, MAC %s, IP %s. %s", t.Name, d.Hostname, argStr(args, "port"), t.MAC, orStr(t.IP, "none"), r.Note), nil
+		case "remove_port":
+			id := tester(argStr(args, "port"))
+			if id == "" {
+				return "", errors.New("no such test port")
+			}
+			if err := ask("Claude wants to remove a test port", "Claude (through the Termwright connector) asks to remove "+argStr(args, "port")+" and its streams.", true); err != nil {
+				return "", err
+			}
+			_, err := a.EmuTesterRemove(id)
+			return "Removed.", err
+		case "add_stream":
+			st := emu.Stream{Name: argStr(args, "name"), From: tester(argStr(args, "from")), Kind: argStr(args, "kind"), DstIP: argStr(args, "dst_ip"), VLAN: argInt(args, "vlan", 0, 4094), Size: argInt(args, "size", 128, 9000), PPS: argInt(args, "pps", 100, 100000), Seconds: argInt(args, "seconds", 0, 86400), Count: argInt(args, "count", 0, 100000000)}
+			if to := argStr(args, "to"); to != "" {
+				if st.To = tester(to); st.To == "" {
+					return "", errors.New("no test port " + to)
+				}
+			}
+			if f, ok := args["max_loss"].(float64); ok {
+				st.MaxLoss = f
+			}
+			if f, ok := args["max_latency"].(float64); ok {
+				st.MaxLatency = f
+			}
+			if _, err := a.EmuStreamSave(st); err != nil {
+				return "", err
+			}
+			return "Stream added; lab_traffic start runs it.", nil
+		case "remove_stream":
+			for _, s := range tv.Streams {
+				if s.Name == argStr(args, "name") || s.ID == argStr(args, "name") {
+					_, err := a.EmuStreamRemove(s.ID)
+					return "Removed.", err
+				}
+			}
+			return "", errors.New("no such stream")
+		case "start":
+			names := argStrs(args, "streams")
+			if err := ask("Claude wants to start traffic", "Claude (through the Termwright connector) asks to start "+orStr(strings.Join(names, ", "), "every stream")+" on the lab's test ports.", false); err != nil {
+				return "", err
+			}
+			if _, err := a.EmuTrafficStart(names); err != nil {
+				return "", err
+			}
+			return "Started; lab_traffic report shows the counters (final when no stream is running).", nil
+		case "stop":
+			_, err := a.EmuTrafficStop()
+			return "Stopped; the counters stay for the report.", err
+		case "report":
+			return a.EmuTrafficReportText()
+		}
+		return "", errors.New("action is list, add_port, remove_port, add_stream, remove_stream, start, stop or report")
 	case "lab_capture":
 		act := argStr(args, "action")
 		if act == "list" {
