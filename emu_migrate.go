@@ -234,6 +234,7 @@ func (a *App) EmuMigrate(id, to string, live bool) (EmuView, error) {
 		return EmuView{}, errors.New("one host has KVM and the other does not: a running switch cannot change that - use Save, Copy and Resume instead")
 	}
 	emuLab.state[id] = "moving: to " + to[strings.LastIndex(to, "/")+1:]
+	emuLab.moveTo[id] = to
 	emuLab.mu.Unlock()
 	go func() {
 		var err error
@@ -244,6 +245,7 @@ func (a *App) EmuMigrate(id, to string, live bool) (EmuView, error) {
 		}
 		emuLab.mu.Lock()
 		delete(emuLab.state, id)
+		delete(emuLab.moveTo, id)
 		if err != nil {
 			emuEv(id, "error", "not moved to "+to[strings.LastIndex(to, "/")+1:]+": "+err.Error())
 		}

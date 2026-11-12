@@ -132,6 +132,7 @@ var emuLab struct {
 	ready            map[string]bool    // the console showed the ready text since the VM started (it may scroll out of the log's end later)
 	bootAns          map[string]time.Time // when a boot menu was last answered
 	addrOK           map[string]bool      // the switch showed its management address (since it started)
+	moveTo           map[string]string    // switches moving to another host: that host
 	personaAfterBoot map[string]bool    // the persona file is written once the VM has booted (its folder did not exist yet)
 	perr             map[string]string  // why the persona file could not be written
 	packProfiles     []emu.Image        // the device pack's image profiles (refreshed by EmuState)
@@ -175,6 +176,7 @@ type EmuDevice struct {
 	Role         string       `json:"role,omitempty"`      // drawn as (set by the user, for its kind of device)
 	IconStyle    string       `json:"iconStyle,omitempty"` // its kind's icon style in this topology ("" = the default)
 	Uplinks      []string     `json:"uplinks,omitempty"`   // its data ports on the host's network
+	MovingTo     string       `json:"movingTo,omitempty"`  // the host it is moving to (session path), while it moves
 	Cores        float64      `json:"cores"`               // host cores it uses now
 	CPUs         int          `json:"cpus"`
 	RAM          int          `json:"ram"`
@@ -332,6 +334,43 @@ func imOrNil(im *emu.Image) *emu.Image {
 	return im
 }
 
+// EmuConsoleLog is everything a switch's console showed since it started (from
+// its log on the host), with what Termwright did to it: to keep, or to send
+// for a boot or login that went wrong.
+func (a *App) EmuConsoleLog(id string) (string, error) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	var v *emu.VM
+	if l != nil {
+		v = l.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return "", errors.New("no such switch")
+	}
+	vv, host := *v, emuHostOf(*v)
+	dir := a.emuFor(host).VMDir()
+	im := emuImage(vv.Image)
+	var ev []string
+	for _, e := range emuLab.events {
+		if e.VM == id {
+			ev = append(ev, e.At.Format("2006-01-02 15:04:05")+"  "+strings.ToUpper(e.Level)+"  "+e.Text)
+		}
+	}
+	emuLab.mu.Unlock()
+	out, err := a.emuRun(host, "tail -c 4000000 "+emu.Q(dir+"/"+id+".log")+" 2>/dev/null", 2*time.Minute)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Termwright emulated lab - console of %s\nHost: %s\nImage: ", vv.Name, host)
+	if im != nil {
+		fmt.Fprintf(&b, "%s (%s)", im.Name, im.FileName)
+	}
+	fmt.Fprintf(&b, "\nSaved: %s\n\n===== Events =====\n%s\n\n===== Console =====\n%s\n", time.Now().Format(time.RFC1123), strings.Join(ev, "\n"), emu.CleanConsole(out))
+	return b.String(), nil
+}
+
 // EmuDay0Again types a running switch's day 0 (its address, persona check) again,
 // after it failed: its disk and configuration stay.
 func (a *App) EmuDay0Again(id string) (EmuView, error) {
@@ -437,7 +476,7 @@ func (a *App) emuLoad() {
 	emuLab.loaded = true
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
 	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
-	emuLab.personaTried, emuLab.perr, emuLab.bootAns, emuLab.addrOK = map[string]bool{}, map[string]string{}, map[string]time.Time{}, map[string]bool{}
+	emuLab.personaTried, emuLab.perr, emuLab.bootAns, emuLab.addrOK, emuLab.moveTo = map[string]bool{}, map[string]string{}, map[string]time.Time{}, map[string]bool{}, map[string]string{}
 	emuLab.pinfo, emuLab.pcheck, emuLab.resumed, emuLab.lldp = map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]string{}
 	emuLab.download = map[string]string{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
@@ -3163,6 +3202,7 @@ func (a *App) emuView() EmuView {
 		d.Cores = emuLab.cpu[vm.ID]
 		d.MemUsed = st.RSS[vm.ID]
 		d.Serial = vm.Serial
+		d.MovingTo = emuLab.moveTo[vm.ID]
 		switch s := emuLab.state[vm.ID]; {
 		case s == "uploading":
 			d.State, d.StateText = "uploading", "copying the image"

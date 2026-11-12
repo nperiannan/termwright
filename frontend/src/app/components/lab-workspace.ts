@@ -167,6 +167,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (rubber(); as r) { <line class="rb" [attr.x1]="r.x1" [attr.y1]="r.y1" [attr.x2]="r.x2" [attr.y2]="r.y2" /> }
             </svg>
             @for (g of ghosts(); track g.name) { <div class="node ghost" [style.left.px]="g.x - 75" [style.top.px]="g.y - BH / 2"><div class="nbox"><app-dev-icon role="access" [look]="defLook()" [size]="100" state="idle" /></div><div class="nn">{{ g.name }}</div><div class="nm">{{ tr('new') }}</div></div> }
+            @for (m of moves(); track m.id) {
+              <svg class="mvl" [attr.width]="area().w" [attr.height]="area().h"><line [attr.x1]="m.x1" [attr.y1]="m.y1" [attr.x2]="m.x2" [attr.y2]="m.y2" /></svg>
+              <div class="node ghost mv" [style.left.px]="m.x2 - 75" [style.top.px]="m.y2 - BH / 2" [title]="tr('Moving to {0}: {1}', m.to, m.step)">
+                <div class="nbox"><app-dev-icon [role]="m.role" [look]="m.look" [size]="100" state="boot" /></div>
+                <div class="nn">{{ m.name }} <span class="muted">→ {{ m.to }}</span></div><div class="nm"><i class="spin"></i> {{ m.step }}</div></div>
+            }
             @for (d of devs(); track d.id) {
               <div class="node" [class.dimn]="dimOf(d)" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
                    (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)" (mouseenter)="hov.set(d.id)" (mouseleave)="hov.set('')">
@@ -216,6 +222,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <a (click)="mdo('ssh', d)" [class.off]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }} <kbd>{{ emu() ? d.ssh : '127.0.0.1:' + d.port }}</kbd></a>
               <hr />
               <a (click)="mdo('configure', d)">{{ tr('Configure…') }}</a>
+              @if (emu()) { <a (click)="menu.set(null); saveConsoleLog(d)">{{ tr('Save Console Log…') }}</a> }
               @if (emu()) { <a (click)="mdo('lags', d)" [class.off]="!d.running">{{ tr('Read Its LAGs') }}</a> }
               <a (click)="mdo('link', d)">{{ tr('Add Link from Here') }}</a>
               @if (emu()) { <a (click)="uplink(d)" [title]="tr('Like a cloud node on a data port: the port joins the host’s network (applies when the switch starts)')">{{ tr('Port on the Host’s Network…') }}</a>
@@ -270,8 +277,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <button type="button" class="sm" [class.on]="miniOn()" (click)="flip(miniOn, 'tw.lab.mini')" [title]="tr('A small map of the whole topology')">{{ tr('Map') }}</button>
         </div>
         @if (hostMode() === 'tags') {
-          <div class="hleg" (click)="$event.stopPropagation()"><span class="muted small">{{ tr('Hosts · click one to focus') }}</span>
-            @for (r of mgRows(); track r.host) { <a [class.on]="focusHost() === r.host" [class.off]="!!focusHost() && focusHost() !== r.host" (click)="focusHost.set(focusHost() === r.host ? '' : r.host)"><i [style.background]="r.c"></i><b>{{ r.name }}</b><span class="muted">{{ r.kvm }} · {{ r.switches }}</span></a> }
+          <div class="hleg" (click)="$event.stopPropagation()"><a class="hlh" (click)="flip(legOpen, 'tw.lab.leg')" [title]="tr('Show or hide the host list')">{{ legOpen() ? '▾' : '▸' }} {{ tr('Hosts · click one to focus') }}</a>
+            @if (legOpen()) { @for (r of mgRows(); track r.host) { <a [class.on]="focusHost() === r.host" [class.off]="!!focusHost() && focusHost() !== r.host" (click)="focusHost.set(focusHost() === r.host ? '' : r.host)"><i [style.background]="r.c"></i><b>{{ r.name }}</b><span class="muted">{{ r.kvm }} · {{ r.switches }}</span></a> } }
           </div>
         }
         @if (miniOn(); as _) { @if (mini(); as mm) {
@@ -303,7 +310,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             @if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
           </div>
           <div class="btns">@if (emu()) { <button type="button" class="primary sm" (click)="console(d)" [disabled]="!d.running">{{ tr('Console') }}</button> }
-            <button type="button" class="sm" (click)="ssh(d)" [disabled]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }}</button><button type="button" class="sm" (click)="configure(d)">{{ tr('Configure…') }}</button></div></div>
+            <button type="button" class="sm" (click)="ssh(d)" [disabled]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }}</button><button type="button" class="sm" (click)="configure(d)">{{ tr('Configure…') }}</button>@if (emu()) { <button type="button" class="sm" (click)="saveConsoleLog(d)" [title]="tr('Everything its console showed since it started, with its Events - to keep, or to send when a boot or login went wrong')">{{ tr('Save Console Log…') }}</button> }</div></div>
         }
         <h3>{{ tr('Topology summary') }}</h3>
         <div class="card tbl"><table>
@@ -413,7 +420,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       button { white-space: nowrap; flex: none; } button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } select { height: 26px; font-size: 12px; flex: none; } > span { white-space: nowrap; } }
     .hleg { position: absolute; top: 58px; left: 242px; z-index: 6; display: flex; flex-direction: column; gap: 4px; max-height: 50%; overflow: auto;
       a { display: flex; align-items: center; gap: 7px; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 12px; white-space: nowrap; }
-      a.on { border-color: var(--accent); } a.off { opacity: .5; } i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } }
+      a.on { border-color: var(--accent); } a.off { opacity: .5; } a.hlh { border: 0; background: none; padding: 2px 4px; color: var(--muted); font-size: 11.5px; } i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } }
     .mini { position: absolute; right: 312px; bottom: 66px; z-index: 6; padding: 6px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer; line-height: 0;
       svg { background: var(--bg); border-radius: 6px; } .vp { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 1.2; } }
     .dabg { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
@@ -527,6 +534,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .pb.lb { stroke: var(--accent); } .lk.warn .pb.lb { stroke: var(--warning, #e39b17); }
     .pb { fill: var(--surface); stroke: var(--line); } .pt { font: 600 10px var(--mono, monospace); fill: var(--muted); text-anchor: middle; }
     .lk.down .pb { stroke: var(--danger); } .lk.down .pt { fill: var(--danger); }
+    .mvl { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; line { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 6; animation: mvdash 1s linear infinite; } }
+    @keyframes mvdash { to { stroke-dashoffset: -12; } } @media (prefers-reduced-motion: reduce) { .mvl line { animation: none; } }
+    .node.ghost.mv { opacity: .9; pointer-events: auto; .nbox { border: 1.5px dashed var(--accent); background: var(--accent-soft); } .nm { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--accent); } }
     .gl { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 5; opacity: .7; } .node.ghost { opacity: .55; pointer-events: none; .nbox { border-style: dashed; border-color: var(--accent); } }
     .main { position: relative; }
     .rb { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 8 5; }
@@ -722,6 +732,7 @@ export class LabWorkspace implements OnDestroy {
   protected hostView = signal<'auto' | 'areas' | 'tags' | 'off'>(this.lsGet('tw.lab.hostView', 'auto') as 'auto');
   protected showPorts = signal(this.lsGet('tw.lab.ports', '1') === '1');
   protected showAddr = signal(this.lsGet('tw.lab.addr', '1') === '1');
+  protected legOpen = signal(this.lsGet('tw.lab.leg', '1') === '1');
   protected miniOn = signal(this.lsGet('tw.lab.mini', '1') === '1');
   protected onlyProblems = signal(false);
   protected focusHost = signal('');
@@ -738,6 +749,43 @@ export class LabWorkspace implements OnDestroy {
     return this.onlyProblems() && !(k.up === false || (a && this.problem(a)) || (b && this.problem(b)));
   }
   protected zsel = signal('');
+  async saveConsoleLog(d: LabDevice) {
+    try {
+      const path = await this.backend.chooseSaveFile(tr('Save Console Log'), d.hostname + '-console-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.log', [{ displayName: 'Log', pattern: '*.log;*.txt' }]);
+      if (!path) return;
+      const text = await this.backend.emuConsoleLog(d.id);
+      await this.backend.saveTextFile(path, text);
+      this.ui.toast(tr('Saved the console log of {0}', d.hostname), 'success');
+    } catch (e) { this.ui.error(e); }
+  }
+  /** Switches moving to another host: drawn where they go, with the step, until the move is done. */
+  private moveSpot = new Map<string, { to: string; x: number; y: number }>();
+  protected moves = computed(() => {
+    this.moved();
+    const out: { id: string; name: string; to: string; step: string; role: DevRole; look: IconStyle; x1: number; y1: number; x2: number; y2: number }[] = [];
+    for (const d of this.devs()) {
+      if (!d.movingTo) continue;
+      const p = this.pos(d);
+      let at = this.moveSpot.get(d.id);
+      if (!at || at.to !== d.movingTo) {
+        const there = this.devs().filter(x => x.id !== d.id && this.hostOfDev(x) === d.movingTo).map(x => this.pos(x));
+        at = there.length ? { to: d.movingTo, x: Math.max(...there.map(q => q.x)) + 180, y: there.reduce((a, q) => a + q.y, 0) / there.length } : { to: d.movingTo, x: p.x + 240, y: p.y };
+        this.moveSpot.set(d.id, at);
+      }
+      out.push({ id: d.id, name: d.hostname, to: this.hname(d.movingTo), step: (d.stateText || '').replace(/^moving · /, ''), role: this.roleOfDev(d), look: this.lookOf(d), x1: p.x, y1: p.y, x2: at.x, y2: at.y });
+    }
+    return out;
+  });
+  /** A move that ended: the switch takes the place its new copy had (on success). */
+  private moveEnd = effect(() => {
+    const ds = this.devs();
+    for (const [id, at] of [...this.moveSpot]) {
+      const d = ds.find(x => x.id === id);
+      if (d?.movingTo) continue;
+      this.moveSpot.delete(id);
+      if (d && this.hostOfDev(d) === at.to) { this.moved.update(m => new Map(m).set(id, { x: at.x, y: at.y })); this.lab.place(id, at.x - 75, at.y - BH / 2); }
+    }
+  });
   /** Draw As: the device whose kind is being drawn differently, and the preview's background. */
   protected drawAs = signal<LabDevice | null>(null);
   protected drawBg = signal<'dark' | 'light'>('dark');
@@ -1030,6 +1078,7 @@ export class LabWorkspace implements OnDestroy {
     this.moved();
     let w = 900, h = 600;
     for (const d of this.devs()) { const p = this.pos(d); w = Math.max(w, p.x + 200); h = Math.max(h, p.y + 160); }
+    for (const m of this.moves()) { w = Math.max(w, m.x2 + 200); h = Math.max(h, m.y2 + 160); } // where moving switches go
     return { w, h };
   });
   /**
