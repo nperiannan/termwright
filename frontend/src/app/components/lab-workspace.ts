@@ -72,25 +72,31 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <button type="button" class="mgb" (click)="mgOpen.set(!mgOpen()); $event.stopPropagation()" [title]="tr('The hosts of this topology: their use, and how the switches’ first port (management) is connected')">@if (multi()) { @for (r of mgRows(); track r.host) { <i class="hd" [style.background]="r.c"></i> } }<span class="mgt">{{ mgSummary() }}</span> ▾</button>
           @if (mgOpen()) {
             <div class="mgp" (click)="$event.stopPropagation()">
-              <b>{{ tr('Hosts of this topology') }}</b>
-              <p class="muted small">{{ tr('What each host gives the switches, and how their first port (management) is connected. A management change applies when the switches start; running ones are stopped and started again.') }}</p>
+              <div class="mgh"><b>{{ tr('Hosts') }}</b><span class="muted small">{{ tr('The computers your switches run on') }}</span><span class="sp"></span>
+                <span class="help" [title]="tr('Management is how each switch’s first port is connected, so you can reach it. A change applies when the switches start; running ones are stopped and started again.')">?</span></div>
               @for (r of mgRows(); track r.host) {
-                <div class="mgr"><span class="mgn">@if (multi()) { <i class="hd" [style.background]="r.c"></i> }{{ r.name }}<small class="muted">{{ r.kvm }}</small></span>
-                  <select [attr.data-h]="r.host" [ngModel]="r.mgmt" (ngModelChange)="mgHost.set(r.host); setMgmt($event)" [disabled]="lab.busy()">
-                    <option value="cloud">{{ tr('The host’s network, routed (cloud)') }}</option>
-                    <option value="lan">{{ tr('The host’s network (bridged)') }}</option>
-                    <option value="nat">{{ tr('The host’s NAT network') }}</option>
-                    <option value="bridge">{{ tr('Lab bridge on the host') }}</option>
-                    <option value="forward">{{ tr('Port forwarding on the host') }}</option>
-                  </select>
-                  @if (r.mgmt === 'cloud' || r.mgmt === 'lan') { <button type="button" class="sm" (click)="mgHost.set(r.host); openCloud(r.mgmt)" [title]="tr('Addresses of the switches on the host’s network')">{{ r.addr }}…</button> } @else { <span></span> }
+                <div class="hc" [style.border-left-color]="r.c">
+                  <div class="hc1"><b>{{ r.name }}</b>
+                    @if (r.kvm === 'KVM') { <span class="tag ok" [title]="tr('Hardware acceleration: switches run at full speed')">✓ {{ tr('Fast (KVM)') }}</span> }
+                    @else { <span class="tag warn" [title]="tr('No hardware acceleration here: switches run 5 to 10 times slower')">{{ tr('Slow (no KVM)') }}</span> }
+                    <span class="sp"></span><span class="muted">{{ tr('{0} of {1} running', r.running, r.switches) }}</span></div>
+                  @if (r.cpus) {
+                    <div class="hc2">
+                      <div [title]="tr('vCPUs given to its switches, of the host’s CPUs; load {0}', r.load)"><div class="lb"><span>CPU</span><span>{{ tr('{0} of {1}', r.vcpus, r.cpus) }}</span></div><div class="meter"><i [style.width.%]="pct(r.vcpus, r.cpus)" [style.background]="r.c"></i></div></div>
+                      <div [title]="tr('{0} free', gb(r.memFree))"><div class="lb"><span>{{ tr('Memory') }}</span><span>{{ tr('{0} of {1}', gb(r.memTotal - r.memFree), gb(r.memTotal)) }}</span></div><div class="meter"><i [style.width.%]="pct(r.memTotal - r.memFree, r.memTotal)" [style.background]="r.c"></i></div></div>
+                    </div>
+                  }
+                  <div class="hc3"><span class="muted">{{ tr('Management') }}</span>
+                    <select [attr.data-h]="r.host" [ngModel]="r.mgmt" (ngModelChange)="mgHost.set(r.host); setMgmt($event)" [disabled]="lab.busy()" [title]="tr('How you reach the switches on this host')">
+                      <option value="lan">{{ tr('Host network, bridged') }}</option>
+                      <option value="cloud">{{ tr('Host network, routed') }}</option>
+                      <option value="nat">{{ tr('NAT behind the host') }}</option>
+                      <option value="bridge">{{ tr('Lab bridge') }}</option>
+                      <option value="forward">{{ tr('Port forwarding') }}</option>
+                    </select>
+                    @if (r.mgmt === 'cloud' || r.mgmt === 'lan') { <button type="button" class="sm" (click)="mgHost.set(r.host); openCloud(r.mgmt)" [title]="tr('Addresses of the switches on the host’s network')">{{ r.addr }}…</button> }
+                  </div>
                 </div>
-                @if (r.cpus) {
-                  <div class="hu"><span>{{ tr('{0} switches · {1} running', r.switches, r.running) }}</span>
-                    <span>vCPU {{ r.vcpus }} / {{ r.cpus }}<span class="meter"><i [style.width.%]="pct(r.vcpus, r.cpus)" [style.background]="r.c"></i></span></span>
-                    <span>RAM {{ gb(r.ram) }} / {{ gb(r.memTotal) }}<span class="meter"><i [style.width.%]="pct(r.memTotal - r.memFree, r.memTotal)" [style.background]="r.c"></i></span></span>
-                    <span class="muted">{{ tr('load') }} {{ r.load }} · {{ tr('{0} free', gb(r.memFree)) }}</span></div>
-                }
               }
           @if (cloudF(); as f) {
             <div class="cloudf" (click)="$event.stopPropagation()">
@@ -110,11 +116,15 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <div class="row2"><span class="sp"></span><button type="button" (click)="cloudF.set(null); revertMgmt()">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="applyCloud()" [disabled]="(f.mode === 'cloud' || f.fixed) && !f.addr.trim()">{{ tr('Use') }}</button></div>
             </div>
           }
-              @if (multi()) { <div class="mgt2"><b>{{ tr('Cables between hosts') }}</b> <span class="muted">{{ tunnels() }} · {{ tr('UDP tunnels: the hosts must reach each other on UDP 20000-29999') }}</span>
-                @for (r of hostLinks(); track $index) { <div class="small" [class.okt]="r.ok" [class.badt]="!r.ok">{{ r.ok ? '✓' : '✗' }} {{ r.from }} → {{ r.to }}@if (!r.ok) { <span class="muted"> · {{ r.text }}</span> }</div> }</div> }
-              <div class="row2"><button type="button" class="sm" (click)="wizard(); mgOpen.set(false)" [title]="tr('Add Switches: pick another host for them')">+ {{ tr('Add a Host to this Topology') }}</button>
-                @if (multi()) { <button type="button" class="sm" (click)="checkTunnels()" [disabled]="checkingT()">{{ checkingT() ? tr('Checking…') : tr('Check UDP Between Hosts') }}</button> }
-                <span class="sp"></span><button type="button" class="sm" (click)="page.set('hosts'); mgOpen.set(false)">{{ tr('All Hosts…') }}</button></div>
+              @if (multi()) {
+                <div class="hcab"><div class="hc1"><b>{{ tr('Cables between hosts') }}</b><span class="muted">· {{ tunnels() }}</span><span class="sp"></span>
+                  <a (click)="checkTunnels()" [class.dis]="checkingT()">{{ checkingT() ? tr('Checking…') : tr('Check now') }}</a></div>
+                  @if (!hostLinks().length) { <div class="muted small">{{ tr('The hosts must reach each other on UDP 20000-29999. Not checked yet.') }}</div> }
+                  @else if (hostLinks().every(x => x.ok)) { <div class="small okt">✓ {{ tr('The hosts reach each other') }}</div> }
+                  @else { @for (r of hostLinks(); track $index) { @if (!r.ok) { <div class="small badt">✗ {{ r.from }} → {{ r.to }}: {{ tr('blocked') }} <span class="muted">({{ tr('open UDP 20000-29999 on both hosts') }})</span></div> } } }
+                </div>
+              }
+              <div class="hact"><a (click)="wizard(); mgOpen.set(false)">+ {{ tr('Add a Host…') }}</a><span class="sp"></span><a (click)="page.set('hosts'); mgOpen.set(false)">{{ tr('All Hosts…') }}</a></div>
             </div>
           }
         </span>
@@ -362,7 +372,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         </table></div>
       } @else if (dock() === 'events') {
         <div class="ev">
-          @for (e of events(); track $index) { <div [class]="e.level"><span class="t">{{ time(e.at) }}</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span>{{ e.text }}</span></div> }
+          @for (e of events(); track $index) { <div [class]="e.level"><span class="t">{{ time(e.at) }}</span><span class="eh" [title]="e.host || tr('this computer')">@if (e.host) { <i [style.background]="hcol(e.host)"></i>{{ hname(e.host) }} } @else { <span class="muted">{{ tr('this computer') }}</span> }</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span>{{ e.text }}</span></div> }
           @empty { <div><span class="t"></span><b></b><span class="muted">{{ emu() ? tr('Nothing yet - start a switch.') : tr('Simulated switches start at once; their state is on the canvas.') }}</span></div> }
         </div>
       } @else if (dockTab(); as t) {
@@ -447,6 +457,15 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       i { display: block; } i.on { background: var(--success, #1fa45a); } i.boot { background: var(--warning, #e39b17); } i.bad { background: var(--danger); } i.off { background: var(--muted); opacity: .5; } }
     .jobs { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--text); font-size: 12px; cursor: pointer; min-width: 110px; max-width: 360px; flex: 0 1 auto;
       span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } b { color: var(--accent); font-weight: 600; } }
+    .mgp { width: 440px !important; max-width: calc(100vw - 24px); gap: 10px !important; box-sizing: border-box; overflow-x: hidden; grid-template-columns: minmax(0, 1fr) !important; > * { min-width: 0; } }
+    .mgh { display: flex; align-items: baseline; gap: 8px; b { font-size: 14px; } .help { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: var(--muted); cursor: help; } }
+    .hc { min-width: 0; box-sizing: border-box; border: 1px solid var(--line); border-left: 4px solid; border-radius: 10px; padding: 10px 12px; display: grid; gap: 9px; background: var(--surface-2); }
+    .hc1 { display: flex; align-items: center; gap: 8px; font-size: 12.5px; b { font-size: 13px; } a { color: var(--accent); cursor: pointer; } a.dis { opacity: .6; pointer-events: none; } }
+    .tag { font-size: 11px; padding: 1px 7px; border-radius: 9px; border: 1px solid var(--line); } .tag.ok { color: var(--success, #1fa45a); border-color: color-mix(in srgb, var(--success, #1fa45a) 45%, transparent); } .tag.warn { color: var(--warning, #e39b17); border-color: color-mix(in srgb, var(--warning, #e39b17) 45%, transparent); }
+    .hc2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; .lb { display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 4px; span:first-child { color: var(--muted); } } .meter { margin: 0; } }
+    .hc3 { display: flex; align-items: center; gap: 8px; font-size: 12px; min-width: 0; select { flex: 1; min-width: 0; width: auto; height: 28px; } button { flex: none; max-width: 130px; overflow: hidden; text-overflow: ellipsis; } }
+    .hcab { display: grid; gap: 5px; padding: 2px 2px 0; }
+    .hact { display: flex; align-items: center; gap: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12.5px; a { color: var(--accent); cursor: pointer; } }
     .mgw { position: relative; min-width: 90px; flex: 0 1 auto; } .htx { overflow: hidden; text-overflow: ellipsis; }
     .si.fs { cursor: pointer; input { margin: 0; } } .mgb { max-width: 300px; width: 100%; display: inline-flex; align-items: center; gap: 6px; } .mgt { overflow: hidden; text-overflow: ellipsis; }
     .mgp { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 540px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); white-space: normal; display: grid; gap: 8px;
@@ -580,7 +599,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .dtabs { display: flex; align-items: center; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line);
       a { padding: 6px 12px; color: var(--muted); font-weight: 500; cursor: pointer; } a.on { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
       .cnt { margin-left: 6px; background: var(--danger); color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; } }
-    .ev { padding: 6px 14px; overflow: auto; div { display: grid; grid-template-columns: 64px 120px 1fr; gap: 10px; padding: 2px 0; font-size: 12px; } .t { color: var(--muted); } b { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ev { padding: 6px 14px; overflow: auto; div { display: grid; grid-template-columns: 64px 120px 120px 1fr; gap: 10px; padding: 2px 0; font-size: 12px; } .eh { display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); i { width: 7px; height: 7px; border-radius: 50%; flex: none; } } .t { color: var(--muted); } b { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ok span:last-child { color: var(--success, #1fa45a); } .error span:last-child { color: var(--danger); } .warn span:last-child { color: var(--warning, #e39b17); } }
     .tail { margin: 0; padding: 8px 14px; overflow: auto; font: 11.5px/1.45 var(--mono, monospace); white-space: pre-wrap; }
     .tailw { position: relative; min-height: 0; overflow: hidden; display: flex; cursor: text; .tail { flex: 1; } .typ { position: absolute; right: 14px; bottom: 10px; } }
@@ -696,14 +715,18 @@ export class LabWorkspace implements OnDestroy {
   async moveTo(d: LabDevice, host: string) {
     this.menu.set(null);
     const to = this.hname(host);
+    const kvmOf = (h: string) => this.mgRows().find(r => r.host === h)?.kvm === 'KVM';
+    const live = d.running && kvmOf(this.hostOfDev(d)) === kvmOf(host); // a running switch cannot change between KVM and no KVM
     const items = d.running
-      ? [tr('Live: it keeps running, its memory and disk go across; a ping or two may be lost'), tr('Save, Copy and Resume: it is saved, its disk is copied and it resumes there (a minute or so off)'), tr('From Its Image: it boots there from day 0, its configuration stays behind')]
+      ? [...(live ? [tr('Live: it keeps running, its memory and disk go across; a ping or two may be lost')] : [tr('Live is not offered: one host has KVM and the other does not, so a running switch cannot go across as it is')]),
+        tr('Save, Copy and Resume: it is saved, its disk is copied and it resumes there (a minute or so off)'), tr('From Its Image: it boots there from day 0, its configuration stays behind')]
       : [tr('Copy Its Disk: its configuration (and saved state) go along'), tr('From Its Image: it boots there from day 0, its configuration stays behind')];
     const opts = d.running
-      ? [{ label: tr('Live (No Downtime)'), value: 'live', primary: true }, { label: tr('Save, Copy and Resume'), value: 'copy' }, { label: tr('From Its Image'), value: 'image' }]
+      ? [...(live ? [{ label: tr('Live (No Downtime)'), value: 'live', primary: true }] : []), { label: tr('Save, Copy and Resume'), value: 'copy', primary: !live }, { label: tr('From Its Image'), value: 'image' }]
       : [{ label: tr('Copy Its Disk'), value: 'copy', primary: true }, { label: tr('From Its Image'), value: 'image' }];
-    const how = await this.ui.choose(tr('Move {0} to {1}', d.hostname, to), tr('Its cables to switches on other hosts become UDP tunnels.'), items, opts);
+    const how = await this.ui.choose(tr('Move {0} to {1}', d.hostname, to), tr('Its cables to switches on other hosts become UDP tunnels. The first move to a host copies the image there first, which can take some minutes: the canvas shows it moving and the Events say each step.'), items, opts);
     if (!how) return;
+    this.dock.set('events');
     if (how === 'image') await this.lab.moveVM(d.id, host);
     else await this.lab.migrate(d.id, host, how === 'live');
   }
@@ -884,7 +907,7 @@ export class LabWorkspace implements OnDestroy {
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
   }
   async copyDock() {
-    const text = this.dock() === 'inv' ? ['host,switch,state,console,management,cpu %,memory MB,ram MB', ...this.inventory().flatMap(g => g.devs.map(d => [g.host, d.hostname, d.state || (d.running ? 'running' : 'stopped'), g.host + ':' + d.console, d.ssh ?? '', (d.cpu ?? 0).toFixed(0), d.memUsed ?? '', d.ram ?? ''].join(',')))].join('\n') : this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + e.name + '  ' + e.level.toUpperCase() + '  ' + e.text).join('\n') : this.tail();
+    const text = this.dock() === 'inv' ? ['host,switch,state,console,management,cpu %,memory MB,ram MB', ...this.inventory().flatMap(g => g.devs.map(d => [g.host, d.hostname, d.state || (d.running ? 'running' : 'stopped'), g.host + ':' + d.console, d.ssh ?? '', (d.cpu ?? 0).toFixed(0), d.memUsed ?? '', d.ram ?? ''].join(',')))].join('\n') : this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + (e.host ? this.hname(e.host) : '-') + '  ' + e.name + '  ' + e.level.toUpperCase() + '  ' + e.text).join('\n') : this.tail();
     try { await navigator.clipboard.writeText(text); this.ui.toast(tr('Copied'), 'success'); } catch { this.ui.error(tr('Could not copy')); }
   }
   async clearEvents() { try { this.lab.emu.set(await this.backend.emuClearEvents()); } catch { /* ignore */ } }

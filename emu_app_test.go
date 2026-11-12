@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"context"
 	"net"
 	"os"
@@ -997,5 +998,29 @@ func TestEmuEventsKept(t *testing.T) {
 	a.emuLoad()
 	if len(emuLab.events) != 0 {
 		t.Fatalf("cleared: %+v", emuLab.events)
+	}
+}
+
+func TestEmuCopyWhy(t *testing.T) {
+	for _, c := range []struct {
+		err   string
+		why   string
+		retry bool
+	}{
+		{"sftp: write: no space left on device", "the host's disk is full", false},
+		{"connection lost", "the connection to the host dropped", true},
+		{"unexpected EOF", "the connection to the host dropped", true},
+		{"open x: permission denied", "the host user may not write to the lab folder", false},
+	} {
+		e := errors.New(c.err)
+		if g := emuCopyWhy(e); g != c.why {
+			t.Errorf("%q: %q", c.err, g)
+		}
+		if emuCopyRetry(e) != c.retry {
+			t.Errorf("%q: retry %v", c.err, !c.retry)
+		}
+	}
+	if emuBytes(3<<30) != "3.0 GB" || emuBytes(5<<20) != "5 MB" {
+		t.Error(emuBytes(3<<30), emuBytes(5<<20))
 	}
 }

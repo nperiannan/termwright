@@ -205,6 +205,16 @@ func slices_contains(l []string, s string) bool {
 // EmuMigrate moves a switch to another host keeping everything it has: live
 // (no downtime, it must run) or by saving, copying and resuming it.
 func (a *App) EmuMigrate(id, to string, live bool) (EmuView, error) {
+	v, err := a.emuMigrate(id, to, live)
+	if err != nil { // a refused move is in the Events too, not only in a message that goes away
+		emuLab.mu.Lock()
+		emuEv(id, "error", "not moved to "+to[strings.LastIndex(to, "/")+1:]+": "+err.Error())
+		emuLab.mu.Unlock()
+	}
+	return v, err
+}
+
+func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 	st := a.emuPollFresh()
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
@@ -235,6 +245,7 @@ func (a *App) EmuMigrate(id, to string, live bool) (EmuView, error) {
 	}
 	emuLab.state[id] = "moving: to " + to[strings.LastIndex(to, "/")+1:]
 	emuLab.moveTo[id] = to
+	emuEv(id, "info", "moving to "+to[strings.LastIndex(to, "/")+1:]+map[bool]string{true: " live", false: " with its disk"}[live])
 	emuLab.mu.Unlock()
 	go func() {
 		var err error

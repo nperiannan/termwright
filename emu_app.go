@@ -128,24 +128,24 @@ var emuLab struct {
 	starting         map[string]time.Time
 	ticks            map[string]float64 // CPU ticks at the last poll
 	ticksAt          time.Time
-	cpu              map[string]float64 // CPU use now, in cores (1 = one core busy)
-	ready            map[string]bool    // the console showed the ready text since the VM started (it may scroll out of the log's end later)
+	cpu              map[string]float64   // CPU use now, in cores (1 = one core busy)
+	ready            map[string]bool      // the console showed the ready text since the VM started (it may scroll out of the log's end later)
 	bootAns          map[string]time.Time // when a boot menu was last answered
 	addrOK           map[string]bool      // the switch showed its management address (since it started)
 	moveTo           map[string]string    // switches moving to another host: that host
-	personaAfterBoot map[string]bool    // the persona file is written once the VM has booted (its folder did not exist yet)
-	perr             map[string]string  // why the persona file could not be written
-	packProfiles     []emu.Image        // the device pack's image profiles (refreshed by EmuState)
-	personaTried     map[string]bool    // that was tried once already (no second round)
-	pinfo            map[string]string  // where the persona file went, or what the check after boot saw
-	pcheck           map[string]bool    // the persona was checked on the CLI since the VM started
-	resumed          map[string]bool    // it started from its saved running state (no boot, no day 0)
-	lldp             map[string]string  // cable → what the last cabling check found (LLDP)
-	events           []EmuEvent         // the Events log, newest last
-	download         map[string]string  // image → download progress ("waiting", "41 %")
-	dlQueue          []string           // images waiting to download, in order
-	dlCur            string             // the image downloading now
-	dlCancel         context.CancelFunc // stops it
+	personaAfterBoot map[string]bool      // the persona file is written once the VM has booted (its folder did not exist yet)
+	perr             map[string]string    // why the persona file could not be written
+	packProfiles     []emu.Image          // the device pack's image profiles (refreshed by EmuState)
+	personaTried     map[string]bool      // that was tried once already (no second round)
+	pinfo            map[string]string    // where the persona file went, or what the check after boot saw
+	pcheck           map[string]bool      // the persona was checked on the CLI since the VM started
+	resumed          map[string]bool      // it started from its saved running state (no boot, no day 0)
+	lldp             map[string]string    // cable → what the last cabling check found (LLDP)
+	events           []EmuEvent           // the Events log, newest last
+	download         map[string]string    // image → download progress ("waiting", "41 %")
+	dlQueue          []string             // images waiting to download, in order
+	dlCur            string               // the image downloading now
+	dlCancel         context.CancelFunc   // stops it
 	dlRunning        bool
 }
 
@@ -229,17 +229,24 @@ type EmuEvent struct {
 	Name  string    `json:"name"`
 	Level string    `json:"level"` // "info", "ok", "warn", "error"
 	Text  string    `json:"text"`
+	Host  string    `json:"host,omitempty"` // the host it happened on (when it happened: a switch may move later)
 }
 
 // emuEv adds to the Events log (emuLab.mu held).
-func emuEv(id, level, text string) {
+func emuEv(id, level, text string) { emuEvOn("", id, level, text) }
+
+// emuEvOn adds to the Events log for a host ("" = the switch's own host).
+func emuEvOn(host, id, level, text string) {
 	name := orStr(id, "images")
 	if l := emuLab.f.Lab; l != nil {
 		if v := l.VMByID(id); v != nil {
 			name = v.Name
+			if host == "" {
+				host = emuHostOf(*v)
+			}
 		}
 	}
-	e := EmuEvent{At: time.Now(), VM: id, Name: name, Level: level, Text: text}
+	e := EmuEvent{At: time.Now(), VM: id, Name: name, Level: level, Text: text, Host: host}
 	emuLab.events = append(emuLab.events, e)
 	if n := len(emuLab.events); n > 400 {
 		emuLab.events = append([]EmuEvent(nil), emuLab.events[n-300:]...)
@@ -1454,6 +1461,10 @@ func emuDiskName(slot string) string {
 
 func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha string, size int64, dir, slot string) error {
 	remote := dir + "/images/" + fileName
+	// one copy of a file to a host at a time: a second start waits for the first copy, then finds the file there
+	mu, _ := emuCopyLocks.LoadOrStore(host+"|"+remote, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
 	// the same file on the host already: its checksum (written when it was copied), else its size when the checksum is not known here
 	out, _ := a.emuRun(host, "cat "+emu.Q(remote+".sha256")+" 2>/dev/null; echo; stat -c 'size=%s' "+emu.Q(remote)+" 2>/dev/null", 30*time.Second)
 	there := regexp.MustCompile(`\b[0-9a-f]{64}\b`).FindString(out)
@@ -1466,7 +1477,7 @@ func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha strin
 		why = "the file on the host is a different one"
 	}
 	emuLab.mu.Lock()
-	emuEv("", "info", fmt.Sprintf("copying %s to %s: %s", fileName, host[strings.LastIndex(host, "/")+1:], why))
+	emuEvOn(host, "", "info", fmt.Sprintf("copying %s to %s: %s", fileName, host[strings.LastIndex(host, "/")+1:], why))
 	emuLab.mu.Unlock()
 	if file == "" {
 		if slot != "" {
@@ -1477,39 +1488,66 @@ func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha strin
 	im.File, im.SHA256, im.Size = file, sha, size
 	src, err := os.Open(im.File)
 	if err != nil {
-		return fmt.Errorf("image %s: %w", im.Name, err)
+		return fmt.Errorf("image %s: the file on this computer could not be opened: %w", im.Name, err)
 	}
 	defer src.Close()
-	cl, err := a.emuClient(context.Background(), host)
-	if err != nil {
-		return err
+	if st, err := src.Stat(); err == nil && im.Size <= 0 {
+		im.Size = st.Size()
 	}
-	sc, err := sftp.NewClient(cl, sftp.UseConcurrentWrites(true))
-	if err != nil {
-		return fmt.Errorf("SFTP to the host: %w", err)
-	}
-	defer sc.Close()
-	_ = sc.MkdirAll(dir + "/images")
 	tmp := remote + ".part"
-	dst, err := sc.Create(tmp)
-	if err != nil {
-		return fmt.Errorf("could not write %s on the host: %w", tmp, err)
+	// room on the host first: a full disk is the most common reason a copy fails half way
+	if out, err := a.emuRun(host, "mkdir -p "+emu.Q(dir+"/images")+" && df -Pk "+emu.Q(dir+"/images")+" | tail -1; stat -c 'part=%s' "+emu.Q(tmp)+" 2>/dev/null", 30*time.Second); err == nil {
+		have := int64(0)
+		if m := regexp.MustCompile(`part=(\d+)`).FindStringSubmatch(out); m != nil {
+			have, _ = strconv.ParseInt(m[1], 10, 64)
+		}
+		if f := strings.Fields(strings.SplitN(out, "\n", 2)[0]); len(f) >= 4 {
+			if kb, err := strconv.ParseInt(f[3], 10, 64); err == nil && im.Size > 0 && kb*1024 < im.Size-have+64<<20 {
+				return fmt.Errorf("copying %s to the host: not enough disk space in %s (%s free, %s needed); free some space on the host or set another lab folder for it in Hosts", im.Name, dir, emuBytes(kb*1024), emuBytes(im.Size-have))
+			}
+		}
 	}
-	pw := &progressWriter{w: dst, total: im.Size, fn: func(pct int) {
-		emuLab.mu.Lock()
-		emuLab.upload[im.ID] = strconv.Itoa(pct) + " %"
-		emuLab.mu.Unlock()
-	}}
-	_, err = io.Copy(pw, src)
-	if cerr := dst.Close(); err == nil {
-		err = cerr
+	var lastErr error
+	for try := 1; try <= 4; try++ {
+		if try > 1 {
+			emuLab.mu.Lock()
+			emuEvOn(host, "", "warn", fmt.Sprintf("copying %s to %s: %s; trying again (%d of 4), going on where it stopped", fileName, host[strings.LastIndex(host, "/")+1:], emuCopyWhy(lastErr), try))
+			emuLab.mu.Unlock()
+			time.Sleep(time.Duration(try*3) * time.Second)
+		}
+		lastErr = a.emuCopyOnce(host, im, src, tmp, dir)
+		if lastErr == nil {
+			break
+		}
+		if !emuCopyRetry(lastErr) {
+			break
+		}
 	}
 	emuLab.mu.Lock()
 	delete(emuLab.upload, im.ID)
 	emuLab.mu.Unlock()
+	if lastErr != nil {
+		return fmt.Errorf("copying %s to the host failed: %s (%v)", im.Name, emuCopyWhy(lastErr), lastErr)
+	}
+	cl, err := a.emuClient(context.Background(), host)
 	if err != nil {
+		return err
+	}
+	sc, err := sftp.NewClient(cl)
+	if err != nil {
+		return fmt.Errorf("SFTP to the host: %w", err)
+	}
+	defer sc.Close()
+	if fi, err := sc.Stat(tmp); err == nil && im.Size > 0 && fi.Size() != im.Size {
 		_ = sc.Remove(tmp)
-		return fmt.Errorf("copying %s to the host: %w", im.Name, err)
+		return fmt.Errorf("copying %s to the host failed: the copy on the host has %s, not %s; it was removed, Start again to copy it anew", im.Name, emuBytes(fi.Size()), emuBytes(im.Size))
+	}
+	if im.SHA256 != "" { // the copy checked on the host, so a damaged one is never used
+		out, err := a.emuRun(host, "sha256sum "+emu.Q(tmp)+" 2>/dev/null || shasum -a 256 "+emu.Q(tmp), 10*time.Minute)
+		if got := regexp.MustCompile(`\b[0-9a-f]{64}\b`).FindString(out); err == nil && got != "" && got != im.SHA256 {
+			_ = sc.Remove(tmp)
+			return fmt.Errorf("copying %s to the host failed: the copy on the host is damaged (its checksum differs); it was removed, Start again to copy it anew", im.Name)
+		}
 	}
 	_ = sc.Remove(remote)
 	_ = sc.Remove(remote + emu.BootedSuffix) // the booted copy of the old file
@@ -1521,6 +1559,100 @@ func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha strin
 		_ = f.Close()
 	}
 	return nil
+}
+
+var emuCopyLocks sync.Map
+
+// emuCopyOnce copies src to tmp on the host, going on from what an earlier try left there.
+func (a *App) emuCopyOnce(host string, im emu.Image, src *os.File, tmp, dir string) error {
+	cl, err := a.emuClient(context.Background(), host)
+	if err != nil {
+		return err
+	}
+	sc, err := sftp.NewClient(cl, sftp.UseConcurrentWrites(true))
+	if err != nil {
+		return fmt.Errorf("SFTP to the host: %w", err)
+	}
+	defer sc.Close()
+	_ = sc.MkdirAll(dir + "/images")
+	off := int64(0)
+	if fi, err := sc.Stat(tmp); err == nil && fi.Size() < im.Size {
+		off = fi.Size() &^ (1<<20 - 1) // whole MiB, so a half written block is written again
+	}
+	dst, err := sc.OpenFile(tmp, os.O_WRONLY|os.O_CREATE)
+	if err != nil {
+		return fmt.Errorf("could not write %s on the host: %w", tmp, err)
+	}
+	if off == 0 {
+		_ = dst.Truncate(0)
+	}
+	if _, err := dst.Seek(off, io.SeekStart); err != nil {
+		off = 0
+		_ = dst.Truncate(0)
+		_, _ = dst.Seek(0, io.SeekStart)
+	}
+	if _, err := src.Seek(off, io.SeekStart); err != nil {
+		_ = dst.Close()
+		return err
+	}
+	pw := &progressWriter{w: dst, n: off, total: im.Size, fn: func(pct int) {
+		emuLab.mu.Lock()
+		emuLab.upload[im.ID] = strconv.Itoa(pct) + " %"
+		emuLab.mu.Unlock()
+	}}
+	_, err = io.Copy(pw, src)
+	if cerr := dst.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		emuLab.mu.Lock()
+		if c := emuLab.conns[host]; c != nil {
+			c.close()
+			delete(emuLab.conns, host)
+		}
+		emuLab.mu.Unlock()
+	}
+	return err
+}
+
+// emuCopyRetry: a dropped connection is worth another try, a full disk or a refused write is not.
+func emuCopyRetry(err error) bool {
+	m := strings.ToLower(err.Error())
+	for _, k := range []string{"no space", "quota", "permission denied", "read-only", "could not open", "not an ssh", "session"} {
+		if strings.Contains(m, k) {
+			return false
+		}
+	}
+	return true
+}
+
+// emuCopyWhy says in plain words why a copy to a host failed.
+func emuCopyWhy(err error) string {
+	m := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(m, "no space") || strings.Contains(m, "quota"):
+		return "the host's disk is full"
+	case strings.Contains(m, "permission denied"):
+		return "the host user may not write to the lab folder"
+	case strings.Contains(m, "read-only"):
+		return "the lab folder on the host is read-only"
+	case strings.Contains(m, "eof") || strings.Contains(m, "connection") || strings.Contains(m, "broken pipe") || strings.Contains(m, "closed") || strings.Contains(m, "timeout") || strings.Contains(m, "timed out"):
+		return "the connection to the host dropped"
+	case strings.Contains(m, "log in"):
+		return "could not log in to the host"
+	}
+	return "an error on the host"
+}
+
+// emuBytes is a size in plain units.
+func emuBytes(n int64) string {
+	switch {
+	case n >= 1<<30:
+		return fmt.Sprintf("%.1f GB", float64(n)/(1<<30))
+	case n >= 1<<20:
+		return fmt.Sprintf("%d MB", n>>20)
+	}
+	return fmt.Sprintf("%d KB", n>>10)
 }
 
 type progressWriter struct {
@@ -2070,6 +2202,7 @@ func (a *App) emuStart(host string, ids []string) {
 		for _, v := range vms {
 			delete(emuLab.state, v.ID)
 			emuLab.errs[v.ID] = err.Error()
+			emuEvOn(host, v.ID, "error", "did not start: "+err.Error())
 		}
 		emuLab.mu.Unlock()
 		a.emuNotify(err, "")
@@ -5105,6 +5238,16 @@ func (a *App) EmuDeleteTopology(name string) error {
 // with that host's management; cables to switches on other hosts become UDP
 // tunnels between the hosts.
 func (a *App) EmuMoveVM(id, host string) (EmuView, error) {
+	v, err := a.emuMoveVM(id, host)
+	if err != nil {
+		emuLab.mu.Lock()
+		emuEv(id, "error", "not moved to "+host[strings.LastIndex(host, "/")+1:]+": "+err.Error())
+		emuLab.mu.Unlock()
+	}
+	return v, err
+}
+
+func (a *App) emuMoveVM(id, host string) (EmuView, error) {
 	emuLab.mu.Lock()
 	a.emuLoad()
 	l := emuLab.f.Lab
