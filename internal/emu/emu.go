@@ -1005,6 +1005,30 @@ func (l *Lab) gatewayPrefix() string {
 }
 
 // Address gives VM index i its management address and gateway.
+// FreeAddress is the management address a VM gets: its slot's, or the next one
+// no other VM of the lab on the same host network has (a switch removed or moved
+// earlier leaves the others' addresses as they were).
+func (l *Lab) FreeAddress(v VM) (string, string) {
+	i := l.Slot(v)
+	ip, gw := l.Address(i)
+	if ip == "" || ip == "10.0.2.15/24" {
+		return ip, gw
+	}
+	used := map[string]bool{}
+	for _, o := range l.VMs {
+		if o.ID != v.ID && o.MgmtIP != "" {
+			if _, far := l.remote[o.ID]; !far {
+				used[o.MgmtIP] = true
+			}
+		}
+	}
+	for k := 0; used[ip] && k < 250; k++ {
+		i++
+		ip, gw = l.Address(i)
+	}
+	return ip, gw
+}
+
 func (l *Lab) Address(i int) (string, string) {
 	if l.Mgmt == "lan" && !l.LanFixed || l.Mgmt == "nat" {
 		return "", "" // from the network's DHCP; learned from the switch or the host's DHCP leases

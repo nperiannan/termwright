@@ -24,3 +24,16 @@ func TestBootStop(t *testing.T) {
 		t.Fatal("no answers, no stop")
 	}
 }
+
+// A new switch never gets an address another switch on the host already has
+// (b kept .147 from before a switch was removed; c's slot gives .147 too).
+func TestFreeAddress(t *testing.T) {
+	l := (&Lab{Mgmt: "lan", LanFixed: true, MgmtNet: "10.234.179.146/24", CloudGw: "10.234.179.1",
+		VMs: []VM{{ID: "a", Index: 0, MgmtIP: "10.234.179.146/24"}, {ID: "b", Index: 2, MgmtIP: "10.234.179.147/24"}, {ID: "c", Index: 1}}}).For("", "")
+	if ip, _ := l.FreeAddress(l.VMs[2]); ip != "10.234.179.148/24" {
+		t.Fatal(ip)
+	}
+	if ip, _ := l.FreeAddress(l.VMs[0]); ip != "10.234.179.146/24" {
+		t.Fatal("a keeps its own", ip)
+	}
+}

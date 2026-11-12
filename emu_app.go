@@ -1390,9 +1390,20 @@ func emuDiskName(slot string) string {
 
 func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha string, size int64, dir, slot string) error {
 	remote := dir + "/images/" + fileName
-	if out, _ := a.emuRun(host, "cat "+emu.Q(remote+".sha256")+" 2>/dev/null", 30*time.Second); strings.TrimSpace(out) == sha && sha != "" {
+	// the same file on the host already: its checksum (written when it was copied), else its size when the checksum is not known here
+	out, _ := a.emuRun(host, "cat "+emu.Q(remote+".sha256")+" 2>/dev/null; echo; stat -c 'size=%s' "+emu.Q(remote)+" 2>/dev/null", 30*time.Second)
+	there := regexp.MustCompile(`\b[0-9a-f]{64}\b`).FindString(out)
+	m := regexp.MustCompile(`size=(\d+)`).FindStringSubmatch(out)
+	if sha != "" && there == sha || sha == "" && m != nil && size > 0 && m[1] == strconv.FormatInt(size, 10) {
 		return nil
 	}
+	why := "it is not on the host yet"
+	if m != nil {
+		why = "the file on the host is a different one"
+	}
+	emuLab.mu.Lock()
+	emuEv("", "info", fmt.Sprintf("copying %s to %s: %s", fileName, host[strings.LastIndex(host, "/")+1:], why))
+	emuLab.mu.Unlock()
 	if file == "" {
 		if slot != "" {
 			return fmt.Errorf("the %s file of the image %s (%s) is not chosen yet: Images → Download or Choose", emuDiskName(slot), im.Name, fileName)
@@ -1661,7 +1672,7 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 					v.Persona = &emu.Persona{Slots: []emu.Slot{{Num: 1, Model: tp.Model, Serial: v.Serial, Module: tp.Module, Master: true}}, Values: tp.Values}
 				}
 			}
-			v.MgmtIP, v.Gateway = lv.Address(lv.Slot(v))
+			v.MgmtIP, v.Gateway = lv.FreeAddress(v)
 			lv.VMs = append(lv.VMs, v)
 			next++
 			k++
@@ -1960,6 +1971,23 @@ func (a *App) emuStart(host string, ids []string) {
 	}
 	imgs := map[string]emu.Image{}
 	var vms []emu.VM
+	for _, id := range ids { // two switches with one address (from before addresses skipped the ones in use): this one moves on
+		if v := l.VMByID(id); v != nil && v.MgmtIP != "" && v.MgmtIP != "10.0.2.15/24" {
+			for _, o := range l.VMs {
+				if o.ID != v.ID && o.MgmtIP == v.MgmtIP && emuHostOf(o) == emuHostOf(*v) {
+					was := v.MgmtIP
+					v.MgmtIP, v.Gateway = l.FreeAddress(*v)
+					v.Direct = false
+					if im := emuImage(v.Image); im != nil && strings.Contains(strings.Join(im.Day0, "\n"), "{mgmt") {
+						v.Day0Done = false
+					}
+					emuEv(v.ID, "warn", fmt.Sprintf("its management address %s was %s's too: it gets %s", strings.Split(was, "/")[0], o.Name, strings.Split(v.MgmtIP, "/")[0]))
+					_ = a.emuSave()
+					break
+				}
+			}
+		}
+	}
 	for _, id := range ids {
 		if v := l.VMByID(id); v != nil {
 			vms = append(vms, *v)
@@ -2595,13 +2623,19 @@ func (a *App) EmuSetHostMgmt(host, mgmt, mgmtNet string) (EmuView, error) {
 	l.Mgmt, l.LanIf, l.LanKind = mgmt, info.LanIf, info.LanKind
 	l0.SetNet(host, emuLab.f.Host, l.Net("", ""))
 	var vms []emu.VM
+	for i := range l0.VMs { // all of this host's addresses afresh, in order
+		if emuHostOf(l0.VMs[i]) == host {
+			l0.VMs[i].MgmtIP = ""
+		}
+	}
 	for i := range l0.VMs {
 		v := &l0.VMs[i] // the lab's own VMs
 		if emuHostOf(*v) != host {
 			continue
 		}
 		v.Direct = false // checked again once it has its address
-		v.MgmtIP, v.Gateway = l.Address(l.Slot(*v))
+		l.VMs = l0.VMs
+		v.MgmtIP, v.Gateway = l.FreeAddress(*v)
 		if old != mgmt {
 			if im := emuImage(v.Image); im != nil && (strings.Contains(strings.Join(im.Day0, "\n"), "{mgmt") || strings.Contains(strings.Join(im.Day0, "\n"), "{gateway}")) {
 				v.Day0Done = false // its address is part of day 0
@@ -5053,7 +5087,7 @@ func (a *App) EmuMoveVM(id, host string) (EmuView, error) {
 		v.Persona.Applied = ""
 	}
 	lv := a.emuFor(host)
-	v.MgmtIP, v.Gateway = lv.Address(lv.Slot(*v))
+	v.MgmtIP, v.Gateway = lv.FreeAddress(*v)
 	emuEv(id, "info", "moved to "+host[strings.LastIndex(host, "/")+1:]+": it starts there from the image")
 	vv := *v
 	err := a.emuSave()
@@ -5202,7 +5236,7 @@ func (a *App) emuRemap(m map[string]string) ([]emu.VM, error) {
 	for i := range l.VMs {
 		if v := &l.VMs[i]; moved[v.ID] {
 			lv := a.emuFor(orStr(v.Host, newMain))
-			v.MgmtIP, v.Gateway = lv.Address(lv.Slot(*v))
+			v.MgmtIP, v.Gateway = lv.FreeAddress(*v)
 			out = append(out, *v)
 		}
 	}
