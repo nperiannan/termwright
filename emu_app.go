@@ -333,12 +333,31 @@ func (a *App) emuBootAnswer(host string, v emu.VM, ans emu.Answer) {
 	c := emu.NewConsole(conn)
 	defer c.Close()
 	time.Sleep(300 * time.Millisecond)
-	if err := c.Send(ans.Send); err != nil {
+	typed := orStr(ans.Send, "Enter")
+	if ans.Key && ans.Send != "" {
+		// one key: an Enter after it would stay in the buffer and open the next
+		// stop of the boot (EXOS: its BusyBox shell); Enter only if the menu waits for a line
+		n := len(c.Text())
+		if err := c.Key(ans.Send); err != nil {
+			say("warn", "boot menu: "+err.Error())
+			return
+		}
+		time.Sleep(3 * time.Second)
+		if after := c.Text()[min(n, len(c.Text())):]; len(strings.TrimSpace(after)) <= len(ans.Send)+4 { // only its echo: the menu wants Enter
+			if err := c.Send(""); err != nil {
+				say("warn", "boot menu: "+err.Error())
+				return
+			}
+			typed += " and Enter"
+		} else {
+			typed += " (one key, no Enter)"
+		}
+	} else if err := c.Send(ans.Send); err != nil {
 		say("warn", "boot menu: "+err.Error())
 		return
 	}
 	time.Sleep(500 * time.Millisecond)
-	say("info", fmt.Sprintf("its boot stopped at %q - typed %s so it goes on booting", ans.Match, orStr(ans.Send, "Enter")))
+	say("info", fmt.Sprintf("its boot stopped at %q - typed %s so it goes on booting", ans.Match, typed))
 }
 
 func imOrNil(im *emu.Image) *emu.Image {
@@ -4811,7 +4830,7 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			if im.TCGCPU == "" && p.TCGCPU != "" {
 				im.TCGCPU, changed = p.TCGCPU, true
 			}
-			if len(im.BootAnswers) == 0 && len(p.BootAnswers) > 0 {
+			if len(p.BootAnswers) > 0 && !slices.Equal(im.BootAnswers, p.BootAnswers) { // the pack's, as it improves them
 				im.BootAnswers, changed = p.BootAnswers, true
 			}
 			if im.NeighborCmd == "" && p.NeighborCmd != "" {

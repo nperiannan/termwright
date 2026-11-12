@@ -138,6 +138,7 @@ func (im *Image) BootStop(log string) (Answer, bool) {
 type Answer struct {
 	Match  string `json:"match"`
 	Send   string `json:"send"`
+	Key    bool   `json:"key,omitempty"` // a boot menu that takes one key: typed without Enter (Enter follows only when the menu waits for it)
 	secret bool
 }
 

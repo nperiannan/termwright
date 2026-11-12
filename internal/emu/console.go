@@ -133,6 +133,13 @@ func (c *Console) Send(text string) error {
 	return err
 }
 
+// Key types text alone, without Enter (a menu that takes one key: an Enter
+// after it stays in the buffer and reaches the next prompt of the boot).
+func (c *Console) Key(text string) error {
+	_, err := c.rw.Write([]byte(text))
+	return err
+}
+
 // Text is everything the console showed.
 func (c *Console) Text() string {
 	c.mu.Lock()

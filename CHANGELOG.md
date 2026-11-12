@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, boot menus: a menu that takes one key gets the key alone (Enter only if the menu then still waits); the Enter that used to follow stayed in the buffer and opened the next stop of the boot. The device pack's boot answers and facts patterns now follow the pack as it improves them.
+
 - Emulated lab, hover card: the state (● running) sits at the top right, apart from the name; *Management* no longer says "planned, not on the switch yet" for a switch that took its address before Termwright restarted or that resumed from a fast start (the address it took is kept); the serial number read from the switch follows the device pack's newest pattern (an image keeps up with the pack's).
 
 - Emulated lab, **Events** has columns: time, host, switch, **Level** (OK in green, INFO, WARN in yellow, FAIL in red - the message in the same colour, no more boxed rows) and **Trigger** - USER (you, in Termwright), AI (an agent through the connector) or SYSTEM (Termwright on its own: watching the switches, retrying a copy). Copy includes both.
