@@ -32,6 +32,9 @@ func SetupPlan(h HostInfo) []string {
 	if h.KVM != "yes" {
 		p = append(p, "add "+orStr(h.User, "the user")+" to the kvm group (usermod -aG kvm) and let the group use /dev/kvm")
 	}
+	if !h.Sudo {
+		p = append(p, "let "+orStr(h.User, "the user")+" run the network commands the switches need (ip, iptables, sysctl, virsh, arping, and chown of /dev/tap*) with sudo without a password - only these, in /etc/sudoers.d/termwright")
+	}
 	return p
 }
 
@@ -81,6 +84,16 @@ if [ ! -e /dev/kvm ]; then
  if grep -q vmx /proc/cpuinfo; then modprobe kvm_intel; elif grep -q svm /proc/cpuinfo; then modprobe kvm_amd; fi
 fi
 if [ ! -e /dev/kvm ]; then echo "@@note No /dev/kvm: CPU virtualization is off (BIOS/UEFI, or nested virtualization for a VM). The switches will run in software emulation, many times slower."; fi
+echo "@@step sudo"
+# only the network commands the switches need, without a password (checked with visudo before it is used)
+if [ -n "$TWUSER" ] && [ "$TWUSER" != root ] && [ ! -f /etc/sudoers.d/termwright ]; then
+ cmds=""; for c in ip iptables sysctl virsh arping; do p=$(command -v $c 2>/dev/null || ls /usr/sbin/$c /sbin/$c 2>/dev/null | head -1); [ -n "$p" ] && cmds="$cmds${cmds:+, }$p"; done
+ ch=$(command -v chown); cmds="$cmds, $ch $TWUSER /dev/tap*"
+ [ -d /var/lib/libvirt/dnsmasq ] && cmds="$cmds, $(command -v cat) /var/lib/libvirt/dnsmasq/*"
+ t=$(mktemp); printf '# Termwright: the network commands of its emulated switches\n%s ALL=(root) NOPASSWD: %s\n' "$TWUSER" "$cmds" > "$t"
+ if visudo -cf "$t" >/dev/null 2>&1; then install -m 0440 "$t" /etc/sudoers.d/termwright && echo "@@note $TWUSER may run $cmds with sudo without a password (/etc/sudoers.d/termwright)"; else echo "@@note the sudo rule did not pass visudo: not written"; fi
+ rm -f "$t"
+fi
 echo "@@step group"
 getent group kvm >/dev/null 2>&1 || groupadd -r kvm
 if [ -n "$TWUSER" ] && [ "$TWUSER" != root ]; then usermod -aG kvm "$TWUSER" || { echo "@@fail usermod failed"; exit 1; }; fi

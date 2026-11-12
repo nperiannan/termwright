@@ -53,7 +53,7 @@ command -v qemu-img >/dev/null 2>&1 && echo qemuimg=yes
 echo "cpus=$(nproc 2>/dev/null)"; echo "load=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null)"
 awk '/^MemTotal:/{print "memtotal="int($2/1024)} /^MemAvailable:/{print "memfree="int($2/1024)}' /proc/meminfo 2>/dev/null
 mkdir -p ` + Q(dir) + ` 2>/dev/null && echo "diskfree=$(df -Pk ` + Q(dir) + ` | awk 'NR==2{print int($4/1024)}')"
-sudo -n true 2>/dev/null && echo sudo=yes
+{ sudo -n true 2>/dev/null || sudo -n ip -V >/dev/null 2>&1; } && echo sudo=yes
 command -v base64 >/dev/null 2>&1 || echo nobase64=yes
 command -v guestfish >/dev/null 2>&1 && echo guestfs=yes
 command -v virsh >/dev/null 2>&1 && echo libvirt=yes
@@ -180,13 +180,13 @@ func ParseProbe(out, dir string) HostInfo {
 	if !h.Guestfs && h.QEMU != "" {
 		h.Notes = append(h.Notes, "libguestfs-tools is not installed: persona files (a device model and serial number for the image) cannot be written. Set Up installs it.")
 	}
-	needs := !h.Guestfs || h.Nat == "" || h.QEMU == "" || !h.QemuImg || h.KVM == "noaccess" || h.KVM == "none" && h.VT
+	needs := !h.Guestfs || h.Nat == "" || h.QEMU == "" || !h.QemuImg || h.KVM == "noaccess" || h.KVM == "none" && h.VT || !h.Sudo
 	if needs && h.Arch == "x86_64" || needs && h.Arch == "" {
 		h.CanSetup = h.Pkg != "" || h.QEMU != ""
 		h.Plan = SetupPlan(h)
 	}
 	if !h.Sudo {
-		h.Notes = append(h.Notes, "No password-less sudo: management by port forwarding on the host. With sudo, switches can get their own addresses on a bridge.")
+		h.Notes = append(h.Notes, "No password-less sudo: management by port forwarding on the host. Set Up (with the sudo password) lets the user run only the network commands the switches need without a password; then switches get their own addresses on a bridge or the host's network.")
 	}
 	return h
 }
