@@ -829,7 +829,7 @@ func (l *Lab) diskCmd(v VM, im *Image) string {
 			pick = "[ -f \"$b" + BootedSuffix + "\" ] && b=\"$b" + BootedSuffix + "\"; "
 		}
 		// when it cannot be made, say why in plain words; a damaged image loses its .sha256 so the next Start copies it again
-		return fmt.Sprintf(" [ -f %s ] || { b=\"$HOME/%s/%s\"; %sif [ ! -f \"$b\" ]; then echo 'fail %s could not make its disk: the image %s is not on this host (copy it again: Start)'; else f=$(qemu-img info \"$b\" 2>/dev/null | sed -n 's/^file format: //p' | head -1); [ -n \"$f\" ] || rm -f \"$HOME/%s/%s.sha256\"; e=$(qemu-img create -q -f qcow2 -F \"${f:-qcow2}\" -b \"$b\" %s 2>&1) || echo \"fail %s could not make its disk from %s: $(echo $e | tr '\\n' ' ' | cut -c1-200)$( [ -n \"$f\" ] || echo ' (the image on this host is damaged: Start again to copy it anew)')\"; fi; }\n", Q(dst), l.ImageDir(), base, pick, v.ID, base, l.ImageDir(), base, Q(dst), v.ID, base)
+		return fmt.Sprintf(" [ -f %s ] || { b=\"$HOME/%s/%s\"; %sif [ ! -f \"$b\" ]; then rm -f \"$b.sha256\"; echo 'fail %s could not make its disk: the image %s is not on this host (Start copies it again)'; else f=$(qemu-img info \"$b\" 2>/dev/null | sed -n 's/^file format: //p' | head -1); [ -n \"$f\" ] || rm -f \"$HOME/%s/%s.sha256\"; e=$(qemu-img create -q -f qcow2 -F \"${f:-qcow2}\" -b \"$b\" %s 2>&1) || echo \"fail %s could not make its disk from %s: $(echo $e | tr '\\n' ' ' | cut -c1-200)$( [ -n \"$f\" ] || echo ' (the image on this host is damaged: Start again to copy it anew)')\"; fi; }\n", Q(dst), l.ImageDir(), base, pick, v.ID, base, l.ImageDir(), base, Q(dst), v.ID, base)
 	}
 	s := layer(disk, im.FileName, im.Persona != nil)
 	for _, d := range im.Disks {

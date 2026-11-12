@@ -1469,11 +1469,15 @@ func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha strin
 	out, _ := a.emuRun(host, "cat "+emu.Q(remote+".sha256")+" 2>/dev/null; echo; stat -c 'size=%s' "+emu.Q(remote)+" 2>/dev/null", 30*time.Second)
 	there := regexp.MustCompile(`\b[0-9a-f]{64}\b`).FindString(out)
 	m := regexp.MustCompile(`size=(\d+)`).FindStringSubmatch(out)
-	if sha != "" && there == sha || sha == "" && m != nil && size > 0 && m[1] == strconv.FormatInt(size, 10) {
+	// the file itself must be there too (with its size, when known): a checksum file alone is not an image
+	sized := m != nil && (size <= 0 || m[1] == strconv.FormatInt(size, 10))
+	if sized && (sha != "" && there == sha || sha == "" && size > 0) {
 		return nil
 	}
 	why := "it is not on the host yet"
-	if m != nil {
+	if m == nil && there != "" {
+		why = "only its checksum file is on the host, the image itself is missing"
+	} else if m != nil {
 		why = "the file on the host is a different one"
 	}
 	emuLab.mu.Lock()
@@ -1549,6 +1553,7 @@ func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha strin
 			return fmt.Errorf("copying %s to the host failed: the copy on the host is damaged (its checksum differs); it was removed, Start again to copy it anew", im.Name)
 		}
 	}
+	_ = sc.Remove(remote + ".sha256") // first: never a checksum file without its image
 	_ = sc.Remove(remote)
 	_ = sc.Remove(remote + emu.BootedSuffix) // the booted copy of the old file
 	if err := sc.Rename(tmp, remote); err != nil {
