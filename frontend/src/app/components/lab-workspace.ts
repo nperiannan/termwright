@@ -68,11 +68,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       <span class="sp"></span>
       @if (emu() && devs().length) {
         <span class="mgw">
-          <button type="button" class="mgb" (click)="mgOpen.set(!mgOpen()); $event.stopPropagation()" [title]="tr('How the switches’ first port (management) is connected, on each host')">@if (multi()) { @for (r of mgRows(); track r.host) { <i class="hd" [style.background]="r.c"></i> } }<span class="mgt"><span class="mgl">{{ tr('Management') }}: </span>{{ mgSummary() }}</span> ▾</button>
+          <button type="button" class="mgb" (click)="mgOpen.set(!mgOpen()); $event.stopPropagation()" [title]="tr('The hosts of this topology: their use, and how the switches’ first port (management) is connected')">@if (multi()) { @for (r of mgRows(); track r.host) { <i class="hd" [style.background]="r.c"></i> } }<span class="mgt">{{ mgSummary() }}</span> ▾</button>
           @if (mgOpen()) {
             <div class="mgp" (click)="$event.stopPropagation()">
-              <b>{{ tr('Management of the switches’ first port') }}</b>
-              <p class="muted small">{{ tr('Each host has its own. A change applies when the switches start; running ones are stopped and started again.') }}</p>
+              <b>{{ tr('Hosts of this topology') }}</b>
+              <p class="muted small">{{ tr('What each host gives the switches, and how their first port (management) is connected. A management change applies when the switches start; running ones are stopped and started again.') }}</p>
               @for (r of mgRows(); track r.host) {
                 <div class="mgr"><span class="mgn">@if (multi()) { <i class="hd" [style.background]="r.c"></i> }{{ r.name }}<small class="muted">{{ r.kvm }}</small></span>
                   <select [attr.data-h]="r.host" [ngModel]="r.mgmt" (ngModelChange)="mgHost.set(r.host); setMgmt($event)" [disabled]="lab.busy()">
@@ -84,6 +84,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                   </select>
                   @if (r.mgmt === 'cloud' || r.mgmt === 'lan') { <button type="button" class="sm" (click)="mgHost.set(r.host); openCloud(r.mgmt)" [title]="tr('Addresses of the switches on the host’s network')">{{ r.addr }}…</button> } @else { <span></span> }
                 </div>
+                @if (r.cpus) {
+                  <div class="hu"><span>{{ tr('{0} switches · {1} running', r.switches, r.running) }}</span>
+                    <span>vCPU {{ r.vcpus }} / {{ r.cpus }}<span class="meter"><i [style.width.%]="pct(r.vcpus, r.cpus)" [style.background]="r.c"></i></span></span>
+                    <span>RAM {{ gb(r.ram) }} / {{ gb(r.memTotal) }}<span class="meter"><i [style.width.%]="pct(r.memTotal - r.memFree, r.memTotal)" [style.background]="r.c"></i></span></span>
+                    <span class="muted">{{ tr('load') }} {{ r.load }} · {{ tr('{0} free', gb(r.memFree)) }}</span></div>
+                }
               }
           @if (cloudF(); as f) {
             <div class="cloudf" (click)="$event.stopPropagation()">
@@ -103,6 +109,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <div class="row2"><span class="sp"></span><button type="button" (click)="cloudF.set(null); revertMgmt()">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="applyCloud()" [disabled]="(f.mode === 'cloud' || f.fixed) && !f.addr.trim()">{{ tr('Use') }}</button></div>
             </div>
           }
+              @if (multi()) { <div class="mgt2"><b>{{ tr('Cables between hosts') }}</b> <span class="muted">{{ tunnels() }} · {{ tr('UDP tunnels: the hosts must reach each other on UDP 20000-29999') }}</span>
+                @for (r of hostLinks(); track $index) { <div class="small" [class.okt]="r.ok" [class.badt]="!r.ok">{{ r.ok ? '✓' : '✗' }} {{ r.from }} → {{ r.to }}@if (!r.ok) { <span class="muted"> · {{ r.text }}</span> }</div> }</div> }
+              <div class="row2"><button type="button" class="sm" (click)="wizard(); mgOpen.set(false)" [title]="tr('Add Switches: pick another host for them')">+ {{ tr('Add a Host to this Topology') }}</button>
+                @if (multi()) { <button type="button" class="sm" (click)="checkTunnels()" [disabled]="checkingT()">{{ checkingT() ? tr('Checking…') : tr('Check UDP Between Hosts') }}</button> }
+                <span class="sp"></span><button type="button" class="sm" (click)="page.set('hosts'); mgOpen.set(false)">{{ tr('All Hosts…') }}</button></div>
             </div>
           }
         </span>
@@ -269,26 +280,6 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           @for (d of devs(); track d.id) { <tr [class.on]="sel() === d.id" (click)="select(d)"><td><i class="d" [class]="'d ' + stateOf(d)"></i>{{ d.hostname }}</td><td class="mono">{{ emu() ? ':' + d.console : ':' + d.port }}</td><td class="mono">{{ addrOf(d) }}</td></tr> }
           @empty { <tr><td class="muted">{{ tr('No switches yet') }}</td></tr> }
         </table></div>
-        @if (emu() && multi()) {
-          @for (u of hostUse(); track u.host) {
-            <h3><i class="hd" [style.background]="hcol(u.host)"></i>{{ tr('Host') }} · {{ u.name }}@if (u.main) { <span class="muted small"> · {{ tr('the lab’s host') }}</span> }</h3>
-            <div class="card">
-              <div class="mr"><span>{{ tr('{0} switches · {1} running', u.switches, u.running) }}</span><span class="muted">{{ mgName(u) }}</span></div>
-              <div class="mr"><span>vCPU {{ u.vcpus }} / {{ u.cpus || '?' }}</span><span class="muted">{{ tr('load') }} {{ u.load }}</span></div><div class="meter"><i [style.width.%]="pct(u.vcpus, u.cpus)" [style.background]="hcol(u.host)"></i></div>
-              <div class="mr"><span>RAM {{ gb(u.ram) }} / {{ gb(u.memTotal) }}</span><span class="muted">{{ tr('{0} free', gb(u.memFree)) }}</span></div><div class="meter"><i [style.width.%]="pct(u.memTotal - u.memFree, u.memTotal)" [style.background]="hcol(u.host)"></i></div>
-            </div>
-          }
-          @if (tunnels(); as n) { <div class="card"><div class="mr"><b>{{ tr('Cables between hosts') }}</b><span class="muted">{{ n }}</span></div><div class="muted small">{{ tr('UDP tunnels: the hosts must reach each other on UDP 20000-29999') }}</div>
-            @for (r of hostLinks(); track $index) { <div class="small" [class.okt]="r.ok" [class.badt]="!r.ok">{{ r.ok ? '✓' : '✗' }} {{ r.from }} → {{ r.to }}@if (!r.ok) { <span class="muted"> · {{ r.text }}</span> }</div> }
-            <button type="button" class="sm" (click)="checkTunnels()" [disabled]="checkingT()">{{ checkingT() ? tr('Checking…') : tr('Check UDP Between Hosts') }}</button></div> }
-          <button type="button" class="sm addh" (click)="wizard()" [title]="tr('Add Switches: pick another host for them')">+ {{ tr('Add a Host to this Topology') }}</button>
-        } @else if (emu() && st()?.usage; as u) {
-          <h3>{{ tr('Host') }} · {{ hostName() }}</h3>
-          <div class="card">
-            <div class="mr"><span>vCPU {{ u.vcpus }} / {{ u.hostCpus || '?' }}</span><span class="muted">{{ tr('load') }} {{ u.load }}</span></div><div class="meter"><i [style.width.%]="pct(u.vcpus, u.hostCpus)"></i></div>
-            <div class="mr"><span>RAM {{ gb(u.ram) }} / {{ gb(u.hostMemTotal) }}</span><span class="muted">{{ tr('{0} free', gb(u.hostMemFree)) }}</span></div><div class="meter"><i [style.width.%]="pct(u.hostMemTotal - u.hostMemFree, u.hostMemTotal)"></i></div>
-          </div>
-        }
       </div>
     </div>
 
@@ -373,6 +364,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .mgp { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 540px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); white-space: normal; display: grid; gap: 8px;
       p { margin: 0; } .cloudf { position: static; width: auto; box-shadow: none; margin-top: 4px; } }
     .mgr { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 8px; align-items: center; select { width: 100%; } }
+    .hu { grid-column: 1 / -1; display: grid; grid-template-columns: 1.1fr 1fr 1fr 1fr; gap: 10px; align-items: center; font-size: 11.5px; margin: -2px 0 6px; padding-bottom: 8px; border-bottom: 1px dashed var(--line);
+      > span { display: flex; flex-direction: column; gap: 3px; } .meter { display: block; margin: 0; } }
+    .mgt2 { display: grid; gap: 4px; font-size: 12px; } .mgp .row2 { display: flex; gap: 8px; align-items: center; }
     .mgn { display: flex; align-items: center; gap: 4px; overflow: hidden; small { margin-left: 4px; } }
     .tdw { position: absolute; left: 230px; right: 300px; bottom: 14px; display: flex; justify-content: center; pointer-events: none; z-index: 6; container-type: inline-size; }
     .tdock { pointer-events: auto; display: flex; align-items: center; gap: 2px; padding: 5px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 10px 28px rgba(0,0,0,.35); max-width: calc(100% - 24px); overflow-x: auto;
@@ -640,11 +634,14 @@ export class LabWorkspace implements OnDestroy {
     return rows.map(u => {
       const info = u.host === main ? v?.hostInfo : (v?.hosts ?? []).find(x => x.session === u.host)?.info;
       const kvm = (u.host === main ? !!v?.kvm : info?.kvm === 'yes') ? 'KVM' : tr('no KVM');
-      return { host: u.host, name: u.name || this.hname(u.host), c: this.hcol(u.host), mgmt: u.mgmt, kvm, short: short[u.mgmt] ?? u.mgmt, long: this.mgName(u),
+      const us = this.st()?.usage, one = !this.hostUse().length;
+      return { host: u.host, name: u.name || this.hname(u.host), c: this.hcol(u.host), mgmt: u.mgmt, kvm,
+        switches: one ? this.devs().length : u.switches, running: one ? this.running() : u.running, vcpus: one ? us?.vcpus ?? 0 : u.vcpus, cpus: one ? us?.hostCpus ?? 0 : u.cpus,
+        ram: one ? us?.ram ?? 0 : u.ram, memTotal: one ? us?.hostMemTotal ?? 0 : u.memTotal, memFree: one ? us?.hostMemFree ?? 0 : u.memFree, load: one ? us?.load ?? 0 : u.load, short: short[u.mgmt] ?? u.mgmt, long: this.mgName(u),
         addr: u.mgmt === 'lan' && !u.lanFixed ? 'DHCP' : (u.mgmtNet || '').split('/')[0] || tr('Addresses') };
     });
   });
-  protected mgSummary = computed(() => { const r = this.mgRows(); return !r.length ? '' : r.every(x => x.mgmt === r[0].mgmt) ? r[0].short : tr('{0} hosts', r.length); });
+  protected mgSummary = computed(() => { const r = this.mgRows(); if (!r.length) return ''; if (r.length === 1) return r[0].name + ' · ' + r[0].short; const t = this.totals(); return tr('{0} hosts', r.length) + (t?.c ? ' · ' + tr('{0} % vCPU', Math.round(100 * t.v / t.c)) : ''); });
   /** What is going on now, for the status bar: the first busy switch (and how many more). */
   protected busyLine = computed(() => {
     const b = this.devs().filter(d => /moving|starting|booting|saving|copying|resuming|stopping/i.test(d.stateText || d.state || ''));

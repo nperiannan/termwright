@@ -130,6 +130,7 @@ var emuLab struct {
 	ticksAt          time.Time
 	cpu              map[string]float64 // CPU use now, in cores (1 = one core busy)
 	ready            map[string]bool    // the console showed the ready text since the VM started (it may scroll out of the log's end later)
+	bootAns          map[string]time.Time // when a boot menu was last answered
 	personaAfterBoot map[string]bool    // the persona file is written once the VM has booted (its folder did not exist yet)
 	perr             map[string]string  // why the persona file could not be written
 	packProfiles     []emu.Image        // the device pack's image profiles (refreshed by EmuState)
@@ -292,6 +293,37 @@ func emuEventsLoad(path string) []EmuEvent {
 	return out
 }
 
+// emuBootAnswer types a boot menu's answer on a switch's console (its boot stopped there).
+func (a *App) emuBootAnswer(host string, v emu.VM, ans emu.Answer) {
+	emuLab.mu.Lock()
+	port := a.emuFor(host).ConsolePort(v)
+	emuLab.mu.Unlock()
+	say := func(level, text string) {
+		emuLab.mu.Lock()
+		emuEv(v.ID, level, text)
+		emuLab.mu.Unlock()
+	}
+	cl, err := a.emuClient(context.Background(), host)
+	if err != nil {
+		say("warn", fmt.Sprintf("its boot stopped at %q: type %s on its console", ans.Match, orStr(ans.Send, "Enter")))
+		return
+	}
+	conn, err := cl.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		say("warn", fmt.Sprintf("its boot stopped at %q: type %s in its console (it is open elsewhere)", ans.Match, orStr(ans.Send, "Enter")))
+		return
+	}
+	c := emu.NewConsole(conn)
+	defer c.Close()
+	time.Sleep(300 * time.Millisecond)
+	if err := c.Send(ans.Send); err != nil {
+		say("warn", "boot menu: "+err.Error())
+		return
+	}
+	time.Sleep(500 * time.Millisecond)
+	say("info", fmt.Sprintf("its boot stopped at %q - typed %s so it goes on booting", ans.Match, orStr(ans.Send, "Enter")))
+}
+
 // emuEvent adds to the Events log.
 func emuEvent(id, level, text string) {
 	emuLab.mu.Lock()
@@ -380,7 +412,7 @@ func (a *App) emuLoad() {
 	emuLab.loaded = true
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
 	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
-	emuLab.personaTried, emuLab.perr = map[string]bool{}, map[string]string{}
+	emuLab.personaTried, emuLab.perr, emuLab.bootAns = map[string]bool{}, map[string]string{}, map[string]time.Time{}
 	emuLab.pinfo, emuLab.pcheck, emuLab.resumed, emuLab.lldp = map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]string{}
 	emuLab.download = map[string]string{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
@@ -2892,6 +2924,12 @@ func (a *App) emuPoll(force bool) emu.Status {
 		} else if im := emuImage(v.Image); im != nil && !emuLab.ready[v.ID] && (im.ReadyIn(m.Log[v.ID]) || m.Ready[v.ID]) {
 			emuLab.ready[v.ID] = true
 			emuEv(v.ID, "ok", "booted - the console shows "+orStr(im.Ready, "its prompt"))
+		} else if im != nil && !emuLab.ready[v.ID] {
+			// a menu the boot stopped at (a key reached it early): its answer, once in a while
+			if ans, ok := im.BootStop(m.Log[v.ID]); ok && time.Since(emuLab.bootAns[v.ID]) > 30*time.Second {
+				emuLab.bootAns[v.ID] = time.Now()
+				go a.emuBootAnswer(emuHostOf(v), v, ans)
+			}
 		}
 	}
 	for _, h := range hosts {
@@ -4248,6 +4286,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			}
 			if len(im.LagSet) == 0 && len(p.LagSet) > 0 {
 				im.LagSet, im.LagDel, changed = p.LagSet, p.LagDel, true
+			}
+			if len(im.BootAnswers) == 0 && len(p.BootAnswers) > 0 {
+				im.BootAnswers, changed = p.BootAnswers, true
 			}
 			if im.NeighborCmd == "" && p.NeighborCmd != "" {
 				im.NeighborCmd, changed = p.NeighborCmd, true

@@ -57,6 +57,7 @@ type Image struct {
 	LagCmd          string              `json:"lagCmd,omitempty"`          // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
 	LagSet          map[string][]string `json:"lagSet,omitempty"`          // CLI commands that make a LAG, per mode ("lacp", "static"): {id} {name} {ports} {master} {first} {last}
 	LagDel          []string            `json:"lagDel,omitempty"`          // CLI commands that remove a LAG (the same names)
+	BootAnswers     []Answer            `json:"bootAnswers,omitempty"`     // menus the image may stop at while it boots (the end of its console log), and what to type
 	NeighborCmd     string              `json:"neighborCmd,omitempty"`     // a CLI command that lists the LLDP neighbours ("show lldp neighbors")
 	Persona         *PersonaDef         `json:"persona,omitempty"`         // a file that makes the image act as a given device
 	Version         string              `json:"version"`                   // the software version of the image (for the lists)
@@ -98,6 +99,21 @@ func (im *Image) HasFiles() bool {
 // Answer: when the console shows Match (plain text), Send is typed (and Enter).
 // "{password}" in Send is the image's password (a first login that asks for a
 // new one); such an answer is not shown in the events.
+// BootStop is the boot answer the end of a console log waits for ("" when none).
+func (im *Image) BootStop(log string) (Answer, bool) {
+	tail := log
+	if len(tail) > 400 {
+		tail = tail[len(tail)-400:]
+	}
+	tail = strings.TrimRight(tail, " \r\n")
+	for _, a := range im.BootAnswers {
+		if a.Match != "" && strings.Contains(tail, a.Match) {
+			return a, true
+		}
+	}
+	return Answer{}, false
+}
+
 type Answer struct {
 	Match  string `json:"match"`
 	Send   string `json:"send"`
