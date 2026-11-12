@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, a live move to a host on another network works: the switch goes across running, then gets an address of the new host's network typed on its console (the old one removed first) and its SSH session follows - it keeps running throughout. Before, it was refused with "a live move keeps it".
+
 - Emulated lab, KVM turned on at a host shows at once: a host without KVM is looked at again each minute, Move to Host looks at both hosts' /dev/kvm before it offers anything (Live and the "no KVM" warning were from the last check, and from the topology's hosts only), and the Events say "KVM is on now on …".
 
 - Emulated lab, Set Up on a host whose user has only Termwright's network commands without a password asked for no password and stopped with "Process exited with status 1" and an empty log: the host check now tells that apart from sudo for anything, Set Up asks for the sudo password then, and sudo's own messages reach the log.

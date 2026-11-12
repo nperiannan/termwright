@@ -282,10 +282,6 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, err
 	}
-	if live && readdr {
-		emuLab.mu.Unlock()
-		return EmuView{}, fmt.Errorf("its address %s does not work on %s's network, and a live move keeps it: use Save, Copy and Resume - it gets an address there", strings.Split(v.MgmtIP, "/")[0], to[strings.LastIndex(to, "/")+1:])
-	}
 	if live && a.emuFor(emuHostOf(*v)).KVM != a.emuFor(to).KVM {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("one host has KVM and the other does not: a running switch cannot change that - use Save, Copy and Resume instead")
@@ -297,7 +293,9 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 	go func() {
 		var err error
 		if live {
-			err = a.emuMoveLive(id, to)
+			if err = a.emuMoveLive(id, to); err == nil && readdr {
+				a.emuReaddress(id, to, true)
+			}
 		} else {
 			err = a.emuMoveCopy(id, to, up, readdr)
 		}
@@ -312,6 +310,34 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 	}()
 	time.Sleep(50 * time.Millisecond)
 	return a.EmuState()
+}
+
+// emuReaddress gives a moved switch an address of its new host's network (its old one does not work there).
+// A running one (a live move) gets it typed on its console now - it keeps running; else when it starts.
+func (a *App) emuReaddress(id, to string, running bool) {
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	v := emuLab.f.Lab.VMByID(id)
+	if v == nil {
+		return
+	}
+	was := strings.Split(v.MgmtIP, "/")[0]
+	v.MgmtIP, v.Gateway = a.emuFor(to).FreeAddress(*v)
+	v.Direct = false
+	delete(emuLab.addrOK, id)
+	when := "typed when it starts"
+	if running {
+		emuLab.day0[id] = true // the console step types the new address (the old one removed first), as at a start
+		when = "typed on its console now - it keeps running"
+	}
+	emuEv(id, "info", fmt.Sprintf("its address %s does not work on %s's network: it gets %s there (%s)", was, to[strings.LastIndex(to, "/")+1:], strings.Split(v.MgmtIP, "/")[0], when))
+	_ = a.emuSave()
+	vv := *v
+	if running {
+		go a.emuDay0(to, vv) // its address step (day 0 is done already)
+	} else {
+		go a.emuRetarget(vv)
+	}
 }
 
 // emuMoveProgress shows a move's copy with how far it is, its speed and the time left.
@@ -684,20 +710,7 @@ func (a *App) emuMoveCopy(id, to string, running, readdr bool) error {
 	}
 	a.emuMoved(id, from, to, lf, vOld, fast)
 	if readdr {
-		emuLab.mu.Lock()
-		if v := emuLab.f.Lab.VMByID(id); v != nil {
-			was := strings.Split(v.MgmtIP, "/")[0]
-			v.MgmtIP, v.Gateway = a.emuFor(to).FreeAddress(*v)
-			v.Direct = false
-			delete(emuLab.addrOK, id)
-			emuEv(id, "info", fmt.Sprintf("its address %s does not work on %s's network: it gets %s there (typed when it starts)", was, to[strings.LastIndex(to, "/")+1:], strings.Split(v.MgmtIP, "/")[0]))
-			_ = a.emuSave()
-			vv := *v
-			emuLab.mu.Unlock()
-			a.emuRetarget(vv)
-		} else {
-			emuLab.mu.Unlock()
-		}
+		a.emuReaddress(id, to, false)
 	}
 	if running {
 		a.emuMoveStep(id, map[bool]string{true: "resuming it on the new host", false: "starting it on the new host"}[saved])
