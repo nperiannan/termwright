@@ -686,7 +686,11 @@ func TestEmuTwoHosts(t *testing.T) {
 	signer, _ := ssh.ParsePrivateKey(kb)
 	old := emuDial
 	emuDial = func(a *App, ctx context.Context, s session.Session) (*ssh.Client, func(), error) {
-		c, err := ssh.Dial("tcp", s.Hostname+":2299", &ssh.ClientConfig{User: "root", Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)}, HostKeyCallback: ssh.InsecureIgnoreHostKey(), Timeout: 10 * time.Second})
+		user := "root"
+		if u := os.Getenv("TW_EMU_HOSTB_USER"); u != "" && s.Hostname == "10.77.0.6" {
+			user = u // a home of its own, as a second machine has (needed to move a switch between them)
+		}
+		c, err := ssh.Dial("tcp", s.Hostname+":2299", &ssh.ClientConfig{User: user, Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)}, HostKeyCallback: ssh.InsecureIgnoreHostKey(), Timeout: 10 * time.Second})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -779,6 +783,45 @@ func TestEmuTwoHosts(t *testing.T) {
 	if err != nil || len(hl) != 2 || !hl[0].OK || !hl[1].OK {
 		t.Errorf("tunnel check: %v %+v", err, hl)
 	}
+	if os.Getenv("TW_EMU_HOSTB_USER") == "" {
+		return // moving a switch needs the hosts' own homes (as two machines have)
+	}
+	// b-1 moves live to kvm-a and keeps running; the cable to a-1 keeps working (a relay on kvm-b)
+	vb := v.Devices[1].ID
+	moved := func(what string) {
+		for end := time.Now().Add(6 * time.Minute); time.Now().Before(end); time.Sleep(2 * time.Second) {
+			emuLab.mu.Lock()
+			busy := emuLab.state[vb]
+			emuLab.mu.Unlock()
+			if busy == "" {
+				break
+			}
+		}
+		v, _ = a.EmuState()
+		var evs []string
+		for _, e := range v.Events {
+			evs = append(evs, e.Name+": "+e.Text)
+		}
+		if j := strings.Join(evs, "\n"); !strings.Contains(j, what) {
+			t.Fatalf("not moved (%s):\n%s", what, j)
+		}
+		out, err := emu.Ask(ctx, c, &im, "x ping -c 3 -W 2 10.9.9.2")
+		if err != nil || !strings.Contains(out, " 0% packet loss") && !strings.Contains(out, "3 packets received") {
+			t.Fatalf("no traffic after the move (%s): %v\n%s", what, err, out)
+		}
+	}
+	if _, err := a.EmuMigrate(vb, ha.Path, true); err != nil {
+		t.Fatal(err)
+	}
+	moved("moved live to kvm-a")
+	if v.Devices[1].Host != ha.Path || !v.Devices[1].Running {
+		t.Fatalf("after the live move: %+v", v.Devices[1])
+	}
+	// and back to kvm-b by saving, copying and resuming it
+	if _, err := a.EmuMigrate(vb, hb.Path, false); err != nil {
+		t.Fatal(err)
+	}
+	moved("it resumed there")
 }
 
 // A newer pack gives existing images its factory password and its later ready text.
@@ -921,7 +964,7 @@ func TestEmuIcons(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Devices[1].Role != "core" || v.Devices[1].IconStyle != "line" || v.Devices[2].Role != "" || v.IconStyle != "blue" {
+	if v.Devices[1].Role != "core" || v.Devices[1].IconStyle != "line" || v.Devices[2].Role != "" || v.IconStyle != "box" {
 		t.Fatalf("%+v", v.Devices)
 	}
 	if v, _ = a.EmuSetIconStyle("", "classic"); v.IconStyle != "classic" {

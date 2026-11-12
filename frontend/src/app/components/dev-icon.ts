@@ -202,15 +202,76 @@ function front(k: string, c: string): string {
  return `<svg width="120" height="96" viewBox="0 0 120 96">${s}</svg>`;
 }
 
+// ---------- Style 0: boxes (the first look: a rounded box with a small faceplate) ----------
+function box(k: string, lit: boolean): string {
+ let s=`<rect x="-3" y="19" width="126" height="60" rx="13" fill="var(--surface, #fff)" stroke="var(--line, #c9d0da)" stroke-width="2"/>`;
+ const fx=18.5, fy=32, fw=83, fh=34, on=lit?'#8fd18f':'var(--ic-off)';
+ const plate=(c: string)=>`<rect x="${fx}" y="${fy}" width="${fw}" height="${fh}" rx="6.5" fill="${c}"/>`;
+ const lights=(y: number,col=on,x0=fx+6.5)=>{let r='';for(let x=x0;x+4<=fx+fw-6.5;x+=6.5)r+=`<rect class="pl" x="${x.toFixed(1)}" y="${y}" width="4" height="6.5" fill="${col}"/>`;return r};
+ switch(k){
+  case 'core': s+=plate('#323b4c')+lights(fy+8)+lights(fy+19); break;
+  case 'router': s+=plate('#2c4a4a')+`<circle cx="${fx+12}" cy="${fy+fh/2}" r="7.5" fill="none" stroke="#7fd6cb" stroke-width="2"/><path d="M${fx+12} ${fy+11}v12M${fx+6} ${fy+17}h12" stroke="#7fd6cb" stroke-width="1.6"/>`+lights(fy+14,on,fx+26); break;
+  case 'fw': s+=plate('#b9531a')+`<path d="M${fx} ${fy+12}h${fw}M${fx} ${fy+23}h${fw}" stroke="#7a2a19" stroke-width="1.4"/>`+lights(fy+3.5,'#ffd2b8')+lights(fy+15)+lights(fy+26,'#ffd2b8'); break;
+  case 'ap': s+=plate('#5a4fc6')+`<circle cx="60" cy="${fy+fh/2}" r="9" fill="none" stroke="#c9c2ff" stroke-width="2"/><circle cx="60" cy="${fy+fh/2}" r="3" fill="${lit?'#c9c2ff':'var(--ic-off)'}"/>`; break;
+  case 'server': case 'host': s+=plate('#d0661c')+`<text x="${fx+fw/2}" y="${fy+fh/2+6}" text-anchor="middle" fill="#fff" font-family="monospace" font-weight="700" font-size="17">&gt;_</text>`; break;
+  case 'cloud': s+=`<path transform="translate(26 18) scale(2.85)" d="${G.cloud}" fill="#d9e9fb" stroke="#2a6cc0" stroke-width=".7"/>`; break;
+  default: s+=plate('#323b4c')+lights(fy+14);
+ }
+ return s;
+}
+
 /** The look of the device drawings. */
-export type IconStyle = 'iso' | 'classic' | 'blue' | 'line' | 'front';
+export type IconStyle = 'box' | 'iso' | 'classic' | 'blue' | 'line' | 'front';
 export const ICON_STYLES: { k: IconStyle; name: string }[] = [
-  { k: 'iso', name: 'Isometric hardware' }, { k: 'classic', name: 'Classic diagram symbols' }, { k: 'blue', name: 'Classic 3-D (diagram blue)' },
+  { k: 'box', name: 'Boxes' }, { k: 'iso', name: 'Isometric hardware' }, { k: 'classic', name: 'Classic diagram symbols' }, { k: 'blue', name: 'Classic 3-D (diagram blue)' },
   { k: 'line', name: 'Line icons' }, { k: 'front', name: 'Front panels' },
 ];
 const strip = (svg: string) => svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
 
 const cache = new Map<string, string>();
+
+/** The drawing of a device (the inside of its svg; viewBox '0 0 130 98' for iso, else '-5 0 130 98'). */
+export function iconSvg(look: IconStyle, role: DevRole, c: string, lit: boolean): string {
+  return look === 'box' ? box(role, lit) : look === 'classic' ? strip(classic(role, c)) : look === 'blue' ? strip(blue3d(role, c)) : look === 'line' ? strip(line(role, c)) : look === 'front' ? strip(front(role, c))
+    : '<defs><filter id="icsh" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter></defs>' + draw(role, c, lit);
+}
+
+const reach = new Map<string, number[] | null>();
+/** How far the drawing reaches from (cx, cy) (drawing units), every 5 degrees from the x axis
+ *  (clockwise, y down): where a cable meets it. Measured once per look and role; null when the
+ *  browser cannot tell. */
+export function iconReach(look: IconStyle, role: DevRole, cx: number, cy: number): number[] | null {
+  const key = look + role + cx + ',' + cy;
+  if (reach.has(key)) return reach.get(key)!;
+  let out: number[] | null = null;
+  const NS = 'http://www.w3.org/2000/svg', vx = look === 'iso' ? 0 : -5;
+  const svg = document.createElementNS(NS, 'svg') as SVGSVGElement;
+  svg.setAttribute('width', '130'); svg.setAttribute('height', '98');
+  svg.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none';
+  svg.innerHTML = `<g transform="translate(${-vx} 0)">${iconSvg(look, role, ROLE_COLOR[role], true)}</g>`;
+  document.body.appendChild(svg);
+  try {
+    const els = [...svg.querySelectorAll<SVGGeometryElement>('path,rect,circle,ellipse,polygon,polyline,line')]
+      .filter(e => !e.closest('defs,[filter]') && typeof e.isPointInFill === 'function');
+    const parts = els.map(e => { const st = getComputedStyle(e); return { e, m: e.getCTM()?.inverse(), fill: st.fill !== 'none', stroke: st.stroke !== 'none' && parseFloat(st.strokeWidth) > 0 }; }).filter(p => p.m);
+    if (parts.length) {
+      const pt = svg.createSVGPoint();
+      const hit = (x: number, y: number) => parts.some(p => { pt.x = x - vx; pt.y = y; const q = pt.matrixTransform(p.m!); return (p.fill && p.e.isPointInFill(q)) || (p.stroke && p.e.isPointInStroke(q)); });
+      out = [];
+      for (let a = 0; a < 72; a++) {
+        const t = a * Math.PI / 36, ux = Math.cos(t), uy = Math.sin(t);
+        let r = 80;
+        while (r > 0 && !hit(cx + ux * r, cy + uy * r)) r -= 1.5;
+        if (r > 0) while (hit(cx + ux * (r + .5), cy + uy * (r + .5))) r += .5;
+        out.push(r);
+      }
+      if (!out.some(r => r > 0)) out = null;
+    }
+  } catch { out = null; }
+  svg.remove();
+  reach.set(key, out);
+  return out;
+}
 
 @Component({
   selector: 'app-dev-icon',
@@ -234,15 +295,11 @@ export class DevIcon {
   readonly state = input<'run' | 'boot' | 'off' | 'idle'>('run');
   readonly size = input(104);
   readonly color = input('');
-  readonly look = input<IconStyle>('blue');
+  readonly look = input<IconStyle>('box');
   readonly body = computed(() => {
     const role = this.role(), c = this.color() || ROLE_COLOR[role], lit = this.state() === 'run' || this.state() === 'boot', look = this.look(), key = look + role + c + lit;
     let s = cache.get(key);
-    if (!s) {
-      s = look === 'classic' ? strip(classic(role, c)) : look === 'blue' ? strip(blue3d(role, c)) : look === 'line' ? strip(line(role, c)) : look === 'front' ? strip(front(role, c))
-        : '<defs><filter id="icsh" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter></defs>' + draw(role, c, lit);
-      cache.set(key, s);
-    }
+    if (!s) { s = iconSvg(look, role, c, lit); cache.set(key, s); }
     return this.san.bypassSecurityTrustHtml(s);
   });
 }

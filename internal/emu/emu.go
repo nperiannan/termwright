@@ -152,6 +152,8 @@ type VM struct {
 	Persona  *Persona `json:"persona,omitempty"`
 	FastKey  string   `json:"fastKey,omitempty"` // its running state was saved in its disk with this setup (FastKey): it resumes from it
 	Uplinks  []int    `json:"uplinks,omitempty"` // data ports on the host's network (its bridge, or macvtap on its port)
+	Relayed  bool     `json:"relayed,omitempty"` // moved while running: its cables listen on all addresses (relays on its old host forward to it)
+	Incoming string   `json:"-"`                 // started to receive a live migration ("tcp:0.0.0.0:port")
 	Role     string   `json:"role,omitempty"`    // what it is drawn as ("access", "core", "router"…; "" = from its model)
 	X        int      `json:"x"`
 	Y        int      `json:"y"`
@@ -353,6 +355,67 @@ func (l *Lab) MAC(v VM, n int) string {
 // tap is the management interface name in bridge mode (at most 15 characters).
 func (l *Lab) tap(v VM) string { return fmt.Sprintf("tw%s%dm", l.ID, v.Index) }
 
+// mgmtAddr is the switch's management address (the one typed on it; else from its slot).
+func (l *Lab) mgmtAddr(v VM) string {
+	ip := v.MgmtIP
+	if ip == "" {
+		ip, _ = l.Address(l.Slot(v))
+	}
+	return strings.Split(ip, "/")[0]
+}
+
+// relayKill ends the relays on this host that hold v's cable ports (a
+// relay left by a switch that moved away while running).
+func (l *Lab) relayKill(v VM, im *Image) string {
+	var b strings.Builder
+	for n := 1; n < max(im.NICs, 2); n++ {
+		fmt.Fprintf(&b, " pkill -f '[t]w-relay-%s .*-%d-' 2>/dev/null\n", l.ID, l.udpPort(v, n))
+	}
+	return b.String()
+}
+
+// RelayScript runs on the host a switch left while running: for each of its
+// cables, what its peers still send there goes on to the switch on its new
+// host (newAddr), and for a peer on this host what the switch sends back
+// comes to the peer's loopback port. It lasts until those switches restart.
+func (l *Lab) RelayScript(v VM, here, newAddr string) string {
+	var b strings.Builder
+	code := `import socket,select,sys
+a=sys.argv[2:]
+socks={}
+for i in range(0,len(a),4):
+    bind,port,dst,dport=a[i],int(a[i+1].strip('-')),a[i+2],int(a[i+3])
+    s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);s.bind((bind,port));socks[s]=(dst,dport)
+out=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+while True:
+    r,_,_=select.select(list(socks),[],[])
+    for s in r:
+        d,_=s.recvfrom(65536);s.sendto(d,socks[s])`
+	for _, c := range l.Cables {
+		var n, m int
+		var o *VM
+		switch {
+		case c.A == v.ID:
+			n, m, o = c.APort, c.BPort, l.VMByID(c.B)
+		case c.B == v.ID:
+			n, m, o = c.BPort, c.APort, l.VMByID(c.A)
+		default:
+			continue
+		}
+		if o == nil {
+			continue
+		}
+		pv, po := l.udpPort(v, n), l.udpPort(*o, m)
+		args := fmt.Sprintf("0.0.0.0 -%d- %s %d", pv, newAddr, pv) // the peer → the switch on its new host
+		if _, far := l.remote[o.ID]; !far && here != "" {          // a peer on this host listens on its loopback: the switch sends to this host
+			args += fmt.Sprintf(" %s -%d- 127.0.0.1 %d", here, po, po)
+		}
+		fmt.Fprintf(&b, "nohup python3 -c %s tw-relay-%s %s >/dev/null 2>&1 &\n", Q(code), l.ID, args)
+	}
+	b.WriteString("sleep 0.5; echo relays\n")
+	return b.String()
+}
+
 // upTap is the host's interface for data port n of v on the host's network.
 func (l *Lab) upTap(v VM, n int) string { return fmt.Sprintf("tw%s%du%d", l.ID, v.Index, n) }
 
@@ -524,6 +587,13 @@ func (l *Lab) Args(v VM, im *Image) []string {
 			}
 		}
 	}
+	if v.Relayed { // its peers may still send to its old host (a relay there forwards): listen on all addresses
+		for n, at := range peerAt {
+			if at == "" {
+				peerAt[n] = "127.0.0.1" // the other end on this host
+			}
+		}
+	}
 	for n := 1; n < im.NICs; n++ {
 		if slices.Contains(v.Uplinks, n) && l.LanIf != "" { // on the host's network (like a cloud node on a data port)
 			if l.LanKind == "macvtap" {
@@ -551,6 +621,9 @@ func (l *Lab) Args(v VM, im *Image) []string {
 		"-serial", "chardev:con0",
 		"-monitor", fmt.Sprintf("telnet:127.0.0.1:%d,server,nowait", l.MonitorPort(v)),
 		"-display", "none", "-daemonize", "-pidfile", dir+"/"+v.ID+".pid")
+	if v.Incoming != "" {
+		a = append(a, "-incoming", v.Incoming)
+	}
 	if im.Extra != "" {
 		a = append(a, splitArgs(im.Extra)...)
 	}
@@ -593,8 +666,8 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		fmt.Fprintf(&b, "sudo -n sysctl -qw net.ipv4.ip_forward=1 net.ipv4.conf.%s.proxy_arp=1 net.ipv4.conf.%s.proxy_arp=1 net.ipv4.conf.%s.rp_filter=0 >/dev/null\n", br, l.CloudIf, br)
 		fmt.Fprintf(&b, "if command -v iptables >/dev/null 2>&1; then for d in -i -o; do sudo -n iptables -C FORWARD $d %s -j ACCEPT 2>/dev/null || sudo -n iptables -I FORWARD $d %s -j ACCEPT; done; fi\n", br, br)
 		for _, v := range vms {
-			if ip, _ := l.Address(l.Slot(v)); ip != "" {
-				fmt.Fprintf(&b, "sudo -n ip route replace %s/32 dev %s\n", strings.Split(ip, "/")[0], br)
+			if ip := l.mgmtAddr(v); ip != "" {
+				fmt.Fprintf(&b, "sudo -n ip route replace %s/32 dev %s\n", ip, br)
 			}
 		}
 	}
@@ -632,13 +705,19 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 			redir += r
 		}
 		fmt.Fprintf(&b, " : > %s/%s.log\n", Q(dir), v.ID)
+		b.WriteString(l.relayKill(v, im))
 		// its saved running state, while what it depends on is the same; else it boots (and the old state goes)
-		if v.FastKey != "" && v.FastKey == l.FastKey(v, im) {
+		if v.Incoming != "" {
+			b.WriteString(" lv=\n") // it receives its running state from its old host
+		} else if v.FastKey != "" && v.FastKey == l.FastKey(v, im) {
 			fmt.Fprintf(&b, " lv=; qemu-img snapshot -l %s/%s.qcow2 2>/dev/null | grep -q ' %s ' && lv='-loadvm %s'\n", Q(dir), v.ID, FastSnap, FastSnap)
 		} else {
 			fmt.Fprintf(&b, " lv=; for d in %s; do [ -f \"$d\" ] && qemu-img snapshot -l \"$d\" 2>/dev/null | grep -q ' %s ' && qemu-img snapshot -d %s \"$d\" 2>/dev/null; done\n", l.disks(v.ID), FastSnap, FastSnap)
 		}
 		q := "qemu-system-x86_64 " + joinArgs(l.Args(v, im))
+		// full paths to its disks: QEMU opens them again after -daemonize went to "/" (a live move, giving up
+		// write access when its state leaves)
+		q = strings.ReplaceAll(q, "file="+l.Dir+"/", "file=$HOME/"+l.Dir+"/")
 		fmt.Fprintf(&b, " if out=$(%s $lv%s 2>&1); then if [ -n \"$lv\" ]; then echo 'resumed %s'; else echo 'started %s'; fi\n", q, redir, v.ID, v.ID)
 		// a saved state that does not load (another QEMU, another CPU): it boots instead
 		fmt.Fprintf(&b, " elif [ -n \"$lv\" ] && for d in %s; do [ -f \"$d\" ] && qemu-img snapshot -d %s \"$d\" 2>/dev/null; done; out2=$(%s%s 2>&1); then echo 'started %s'\n", l.disks(v.ID), FastSnap, q, redir, v.ID)
@@ -758,8 +837,8 @@ func (l *Lab) StopScript(ids []string) string {
 		if l.Mgmt != "forward" && l.Mgmt != "" {
 			if v := l.VMByID(id); v != nil {
 				fmt.Fprintf(&b, "sleep 0.3; sudo -n ip link del %s 2>/dev/null\n", l.tap(*v))
-				if ip, _ := l.Address(l.Slot(*v)); l.Mgmt == "cloud" && ip != "" {
-					fmt.Fprintf(&b, "sudo -n ip route del %s/32 dev %s 2>/dev/null\n", strings.Split(ip, "/")[0], l.Bridge())
+				if ip := l.mgmtAddr(*v); l.Mgmt == "cloud" && ip != "" {
+					fmt.Fprintf(&b, "sudo -n ip route del %s/32 dev %s 2>/dev/null\n", ip, l.Bridge())
 				}
 			}
 		}

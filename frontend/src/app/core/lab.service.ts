@@ -117,6 +117,7 @@ export class LabService {
   setLink(id: string, port: string, up: boolean) { return this.run(() => this.backend.emuSetLink(id, port, up)); }
   setHostMgmt(host: string, mgmt: string, mgmtNet = '') { return this.run(() => this.backend.emuSetHostMgmt(host, mgmt, mgmtNet), 'Management changed - it applies when the switches start'); }
   moveVM(id: string, host: string) { return this.run(() => this.backend.emuMoveVM(id, host), 'Moved - it starts there from its image (day 0)'); }
+  migrate(id: string, host: string, live: boolean) { return this.run(() => this.backend.emuMigrate(id, host, live), live ? 'Moving live - see the Events' : 'Moving with its disk - see the Events'); }
   setLag(vm: string, name: string, mode: string, ports: string[]) { return this.run(() => this.backend.emuSetLag(vm, name, mode, ports)); }
   saveTopology(name: string) { return this.run(() => this.backend.emuSaveTopology(name), 'Topology saved'); }
   openTopology(name: string, start: boolean, hosts: Record<string, string> | null = null) { return this.run(() => (hosts ? this.backend.emuOpenTopologyOn(name, start, hosts) : this.backend.emuOpenTopology(name, start)), start ? 'Opened - the switches start' : 'Opened'); }

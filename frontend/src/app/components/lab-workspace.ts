@@ -8,7 +8,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabConfigure, LabHosts, LabImages, LabNew } from './lab-pages';
 import { TerminalView } from './terminal-view';
-import { DevIcon, DevRole, ICON_STYLES, IconStyle, ROLES, roleOf } from './dev-icon';
+import { DevIcon, DevRole, ICON_STYLES, IconStyle, ROLES, iconReach, roleOf } from './dev-icon';
 
 const BW = 104, BH = 64;
 type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
@@ -198,7 +198,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
               @if (emu()) { <hr /><span class="mh2" [title]="tr('For every {0} in this topology, new ones too', kindOf(d))">{{ tr('Draw As') }} · <small>{{ tr('all {0}', kindOf(d)) }}</small></span><div class="roles">@for (r of roles; track r.k) { <a [class.on]="roleOfDev(d) === r.k" (click)="setRole(d, r.k)" [title]="tr(r.name)"><app-dev-icon [role]="r.k" [look]="lookOf(d)" [size]="34" state="idle" /></a> }</div>
                 <div class="roles looks">@for (st of looks; track st.k) { <a [class.on]="lookOf(d) === st.k" (click)="setLook(d, st.k)" [title]="tr(st.name)"><app-dev-icon [role]="roleOfDev(d)" [look]="st.k" [size]="34" state="idle" /></a> }</div> }
-              @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [class.off]="d.running" [title]="d.running ? tr('Stop it first') : tr('It starts there from its image (day 0); its cables to this host become UDP tunnels')">→ {{ o.name || hname(o.session) }}</a> } }
+              @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [title]="d.running ? tr('Live: it keeps running while it moves') : tr('It takes its disk along: its configuration and day 0 stay')">→ {{ o.name || hname(o.session) }}</a> } }
               <hr />
               <a class="r" (click)="mdo('remove', d)">{{ tr('Delete') }}</a>
             }
@@ -533,10 +533,20 @@ export class LabWorkspace implements OnDestroy {
   hcol(h: string) { const i = this.hostUse().findIndex(u => u.host === h); return ['#3b8cf6', '#a46cf0', '#1fb5a5', '#e3842a', '#d65db1', '#8fb339'][Math.max(0, i) % 6]; }
   /** Hosts the switch could move to: the checked hosts without problems. */
   otherHosts(d: LabDevice) { return (this.st()?.hosts ?? []).filter(h => h.session !== this.hostOfDev(d) && !(h.info.problems ?? []).length); }
+  /** Moves a switch to another host: live (running, no downtime), with its disk (saved state and configuration), or from its image. */
   async moveTo(d: LabDevice, host: string) {
-    if (d.running) return;
     this.menu.set(null);
-    if (await this.ui.confirm(tr('Move {0} to {1}', d.hostname, this.hname(host)), tr('It starts on that host from its image (day 0, its saved configuration is not taken along) with that host’s management. Its cables to switches on other hosts become UDP tunnels.'), tr('Move'))) await this.lab.moveVM(d.id, host);
+    const to = this.hname(host);
+    const items = d.running
+      ? [tr('Live: it keeps running, its memory and disk go across; a ping or two may be lost'), tr('Save, Copy and Resume: it is saved, its disk is copied and it resumes there (a minute or so off)'), tr('From Its Image: it boots there from day 0, its configuration stays behind')]
+      : [tr('Copy Its Disk: its configuration (and saved state) go along'), tr('From Its Image: it boots there from day 0, its configuration stays behind')];
+    const opts = d.running
+      ? [{ label: tr('Live (No Downtime)'), value: 'live', primary: true }, { label: tr('Save, Copy and Resume'), value: 'copy' }, { label: tr('From Its Image'), value: 'image' }]
+      : [{ label: tr('Copy Its Disk'), value: 'copy', primary: true }, { label: tr('From Its Image'), value: 'image' }];
+    const how = await this.ui.choose(tr('Move {0} to {1}', d.hostname, to), tr('Its cables to switches on other hosts become UDP tunnels.'), items, opts);
+    if (!how) return;
+    if (how === 'image') await this.lab.moveVM(d.id, host);
+    else await this.lab.migrate(d.id, host, how === 'live');
   }
   protected tunnels = computed(() => this.lines().filter(k => k.tun).length);
   protected hostLinks = signal<{ from: string; to: string; ok: boolean; text: string }[]>([]);
@@ -637,7 +647,7 @@ export class LabWorkspace implements OnDestroy {
   protected problems = computed(() => (this.st()?.events ?? []).filter(e => e.level === 'error').length);
   protected readonly roles = ROLES;
   protected readonly looks = ICON_STYLES;
-  protected defLook = computed(() => (this.st()?.iconStyle || 'blue') as IconStyle);
+  protected defLook = computed(() => (this.st()?.iconStyle || 'box') as IconStyle);
   lookOf(d: LabDevice): IconStyle { return (d.iconStyle || this.defLook()) as IconStyle; }
   kindOf(d: LabDevice) { return d.persona?.slots?.[0]?.model || d.model || tr('this image'); }
   async setLook(d: LabDevice, k: IconStyle) { this.menu.set(null); try { await this.backend.emuSetIconStyle(d.id, k === this.defLook() ? '' : k); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
@@ -787,8 +797,18 @@ export class LabWorkspace implements OnDestroy {
     const lw = (t: string) => t.length * 6.2 + 10;
     for (const { p, q, ls } of pairs.values()) {
       const pa = this.pos(p), pb = this.pos(q), tun = this.multi() && this.hostOfDev(p) !== this.hostOfDev(q);
-      const A = this.edge(pa, pb), B = this.edge(pb, pa);
+      // the layout (fan, labels, rings) keeps to the boxes; the cables go on to where the drawings are
+      const A0 = this.edge(pa, pb), B0 = this.edge(pb, pa), A1 = this.edge(pa, pb, p), B1 = this.edge(pb, pa, q);
+      const out1 = (c: { x: number; y: number }, x: { x: number; y: number }, y: { x: number; y: number }) => Math.hypot(x.x - c.x, x.y - c.y) >= Math.hypot(y.x - c.x, y.y - c.y);
+      const A = out1(pa, A1, A0) ? A1 : A0, B = out1(pb, B1, B0) ? B1 : B0;
+      const dA = Math.hypot(A.x - A1.x, A.y - A1.y), dB = Math.hypot(B.x - B1.x, B.y - B1.y);
       const L = Math.hypot(B.x - A.x, B.y - A.y) || 1, u = { x: (B.x - A.x) / L, y: (B.y - A.y) / L }, n = { x: -u.y, y: u.x };
+      const reach = (d: string) => {
+        const m = /^M(-?[\d.]+) (-?[\d.]+)/.exec(d), z = /(-?[\d.]+) (-?[\d.]+)$/.exec(d);
+        if (m && dA) { const x = +m[1], y = +m[2]; if (Math.abs((x - A.x) * u.x + (y - A.y) * u.y) < .6) d = 'M' + P({ x: x - u.x * dA, y: y - u.y * dA }) + ' L' + d.slice(1); }
+        if (z && dB) { const x = +z[1], y = +z[2]; if (Math.abs((x - B.x) * u.x + (y - B.y) * u.y) < .6) d += ' L' + P({ x: x + u.x * dB, y: y + u.y * dB }); }
+        return d;
+      };
       const at = (o: { x: number; y: number }, along: number, side: number) => ({ x: o.x + u.x * along + n.x * side, y: o.y + u.y * along + n.y * side });
       // tracks: a LAG (by its names at both ends) is one, every other cable its own
       const tracks: (typeof ls)[] = [];
@@ -845,14 +865,26 @@ export class LabWorkspace implements OnDestroy {
           item.tip = (lp ? p.hostname + ' ' + lp.name + ' (' + lp.mode + ')' : p.hostname + ' no LAG') + ' ⇄ ' + (lq ? q.hostname + ' ' + lq.name + ' (' + lq.mode + ')' : q.hostname + ' no LAG') + ' · ' + tk.map(l => l.pp + '-' + l.qp).join(', ')
             + (!lp || !lq ? ' - ' + tr('the LAG is set on one side only') : lp.mode !== lq.mode ? ' - ' + tr('static on one side, LACP on the other') : '');
         }
+        item.paths.forEach(x => x.d = reach(x.d));
         if (tun) item.tip = tr('UDP tunnel {0} ⇄ {1}', this.hname(this.hostOfDev(p)), this.hname(this.hostOfDev(q))) + ' · ' + item.tip;
         out.push(item);
       });
     }
     return out;
   });
-  private edge(p: { x: number; y: number }, q: { x: number; y: number }) {
-    const dx = q.x - p.x, dy = q.y - p.y; const s = Math.min(Math.abs((BW / 2 + 4) / (dx || 1e-6)), Math.abs((BH / 2 + 4) / (dy || 1e-6)));
+  /** Where a cable from p towards q meets the device drawn at p: its outline (measured per look and role), else its box. */
+  private edge(p: { x: number; y: number }, q: { x: number; y: number }, d?: LabDevice) {
+    const dx = q.x - p.x, dy = q.y - p.y, L = Math.hypot(dx, dy) || 1;
+    const look = d ? this.lookOf(d) : null;
+    // the icon (size 100, so 100/130 px a unit) sits at the bottom of its box, 6 px lower: the node's centre in drawing units
+    const prof = look ? iconReach(look, this.roleOfDev(d!), look === 'iso' ? 65 : 60, 48.6) : null;
+    if (prof) {
+      const deg = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360, i = Math.floor(deg / 5), f = deg / 5 - i;
+      const r = (prof[i % 72] * (1 - f) + prof[(i + 1) % 72] * f) * 100 / 130 - 1;
+      const s = Math.min(Math.max(r, 0) / L, 1);
+      return { x: p.x + dx * s, y: p.y + dy * s };
+    }
+    const s = Math.min(Math.abs((BW / 2 + 4) / (dx || 1e-6)), Math.abs((BH / 2 + 4) / (dy || 1e-6)));
     return { x: p.x + dx * Math.min(s, 1), y: p.y + dy * Math.min(s, 1) };
   }
   protected rubber = computed(() => {
@@ -885,7 +917,6 @@ export class LabWorkspace implements OnDestroy {
     const d = this.devs().find(x => x.id === id); if (!d || !this.multi()) return;
     const z = this.zones().find(z => z.host !== this.hostOfDev(d) && p.x >= z.x && p.x <= z.x + z.w && p.y >= z.y && p.y <= z.y + z.h);
     if (!z) return;
-    if (d.running) { this.ui.toast(tr('Stop {0} first: a switch moves to another host while it is off', d.hostname), 'error'); return; }
     void this.moveTo(d, z.host);
   }
   zoomBy(d: number) { this.zoom.set(Math.min(2, Math.max(0.4, +(this.zoom() + d).toFixed(1)))); }

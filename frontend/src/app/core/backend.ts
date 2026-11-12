@@ -101,6 +101,7 @@ export class Backend {
   emuSetFast(on: boolean) { return this.call<LabView>('EmuSetFast', on); }
   emuSetMgmt(mgmt: string, mgmtNet: string) { return this.call<LabView>('EmuSetMgmt', mgmt, mgmtNet); }
   emuSetHostMgmt(host: string, mgmt: string, mgmtNet: string) { return this.call<LabView>('EmuSetHostMgmt', host, mgmt, mgmtNet); }
+  emuMigrate(id: string, host: string, live: boolean) { return this.call<LabView>('EmuMigrate', id, host, live); }
   emuMoveVM(id: string, host: string) { return this.call<LabView>('EmuMoveVM', id, host); }
   emuSetLag(vm: string, name: string, mode: string, ports: string[]) { return this.call<LabView>('EmuSetLag', vm, name, mode, ports); }
   emuLagCommands(vm: string, name: string, remove: boolean) { return this.call<string[]>('EmuLagCommands', vm, name, remove); }

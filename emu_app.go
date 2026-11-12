@@ -62,7 +62,7 @@ type emuFile struct {
 	Sessions  map[string]string `json:"sessions"`            // VM → its SSH session
 	Consoles  map[string]string `json:"consoles"`            // VM → its console session
 	Topology  string            `json:"topology,omitempty"`  // the name the open lab is saved under ("" = not saved yet)
-	IconStyle string            `json:"iconStyle,omitempty"` // how devices are drawn ("" = classic 3-D)
+	IconStyle string            `json:"iconStyle,omitempty"` // how devices are drawn ("" = boxes)
 }
 
 // emuTopo is a saved topology: a lab with its switches, cables, management
@@ -1618,7 +1618,14 @@ func (a *App) emuFor(host string) *emu.Lab {
 			l.Addrs[h.Session] = ip
 		}
 	}
-	return l.For(host, emuLab.f.Host)
+	c := l.For(host, emuLab.f.Host)
+	// each host its own acceleration: one without KVM emulates in software
+	for _, h := range emuLab.f.Hosts {
+		if h.Session == host && h.Info.KVM != "" {
+			c.KVM = h.Info.KVM == "yes"
+		}
+	}
+	return c
 }
 
 // emuHostOf is the host a VM runs on (mu held).
@@ -2942,7 +2949,7 @@ func (a *App) emuView() EmuView {
 		return v
 	}
 	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw, v.LanFixed, v.Fast = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw, l.LanFixed, !l.NoFast
-	v.IconStyle = orStr(f.IconStyle, "blue")
+	v.IconStyle = orStr(f.IconStyle, "box")
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
 	for _, h := range l.Hosts(f.Host) {
@@ -3007,6 +3014,8 @@ func (a *App) emuView() EmuView {
 			d.State, d.StateText, d.Running = "day0", "checking its persona", true
 		case strings.HasPrefix(s, "day0"):
 			d.State, d.StateText, d.Running = "day0", "day-0 config "+strings.TrimPrefix(strings.TrimPrefix(s, "day0"), " "), true
+		case strings.HasPrefix(s, "moving"):
+			d.State, d.StateText, d.Running = "day0", "moving · "+strings.TrimPrefix(s, "moving: "), up
 		case s == "saving":
 			d.State, d.StateText, d.Running = "day0", "saving its running state", true
 		case !up:
@@ -4970,7 +4979,7 @@ func (a *App) EmuSetRole(id, role string) (EmuView, error) {
 // ("" = the default), or with id "" the default style for all.
 func (a *App) EmuSetIconStyle(id, style string) (EmuView, error) {
 	switch style {
-	case "", "iso", "classic", "blue", "line", "front":
+	case "", "box", "iso", "classic", "blue", "line", "front":
 	default:
 		return EmuView{}, fmt.Errorf("no icon style %q", style)
 	}
