@@ -167,6 +167,20 @@ type Cable struct {
 }
 
 // HostNet is how a host's switches are managed (the fields of Lab for its own host).
+// IconPick is how a kind of device is drawn: its role and the icon style ("" = the defaults).
+type IconPick struct {
+	Role  string `json:"role,omitempty"`
+	Style string `json:"style,omitempty"`
+}
+
+// IconKey is the kind of device a VM is, for its drawing: its persona model, else its image.
+func IconKey(v VM) string {
+	if v.Persona != nil && len(v.Persona.Slots) > 0 && v.Persona.Slots[0].Model != "" {
+		return "model:" + v.Persona.Slots[0].Model
+	}
+	return "image:" + v.Image
+}
+
 type HostNet struct {
 	Mgmt     string `json:"mgmt"`
 	LanIf    string `json:"lanIf,omitempty"`
@@ -297,6 +311,8 @@ type Lab struct {
 	// Addrs: each host's address the others send cable traffic to.
 	Nets  map[string]HostNet `json:"nets,omitempty"`
 	Addrs map[string]string  `json:"addrs,omitempty"`
+	// Icons: how each kind of device is drawn in this topology (model or image → role and style)
+	Icons map[string]IconPick `json:"icons,omitempty"`
 	// set on a host's view (For): VMs elsewhere with their host's address
 	remote map[string]string
 }

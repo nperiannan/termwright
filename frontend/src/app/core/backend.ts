@@ -128,6 +128,7 @@ export class Backend {
   emuImportTopology(path: string) { return this.call<EmuTopoInfo[]>('EmuImportTopology', path); }
   emuCheckTunnels() { return this.call<{ from: string; to: string; ok: boolean; text: string }[]>('EmuCheckTunnels'); }
   emuSetUplink(id: string, port: string, on: boolean) { return this.call<LabView>('EmuSetUplink', id, port, on); }
+  emuSetIconStyle(id: string, style: string) { return this.call<LabView>('EmuSetIconStyle', id, style); }
   emuAgentText() { return this.call<string>('EmuAgentText'); }
   emuConsoleTail(id: string) { return this.call<string>('EmuConsoleTail', id); }
   labAdd(r: LabRequest) { return this.call<LabView>('LabAdd', r); }

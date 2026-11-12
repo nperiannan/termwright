@@ -901,3 +901,33 @@ func TestEmuTopologyCopies(t *testing.T) {
 		t.Fatal(names)
 	}
 }
+
+// Draw As goes for every switch of the same kind in the topology.
+func TestEmuIcons(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = true, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	t.Setenv("HOME", dir)
+	emuLab.f.Images = []emu.Image{{ID: "i1", Name: "EXOS-VM"}}
+	five := &emu.Persona{Slots: []emu.Slot{{Model: "5720-48MW"}}}
+	emuLab.f.Lab = &emu.Lab{ID: "a1", VMs: []emu.VM{{ID: "v1", Image: "i1", Persona: five}, {ID: "v2", Image: "i1", Index: 1, Persona: five}, {ID: "v3", Image: "i1", Index: 2}}}
+	if _, err := a.EmuSetRole("v1", "core"); err != nil {
+		t.Fatal(err)
+	}
+	v, err := a.EmuSetIconStyle("v2", "line")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Devices[1].Role != "core" || v.Devices[1].IconStyle != "line" || v.Devices[2].Role != "" || v.IconStyle != "blue" {
+		t.Fatalf("%+v", v.Devices)
+	}
+	if v, _ = a.EmuSetIconStyle("", "classic"); v.IconStyle != "classic" {
+		t.Fatal(v.IconStyle)
+	}
+	if _, err := a.EmuSetIconStyle("v1", "nope"); err == nil {
+		t.Fatal("unknown style")
+	}
+}

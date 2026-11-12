@@ -2444,6 +2444,16 @@ const ru: Record<string, string> = {
   '{0} {1} goes on the host’s network when it starts (or restarts)': '{0} {1} подключится к сети хоста при запуске (или перезапуске)',
   '{0} {1} comes off the host’s network when it restarts': '{0} {1} отключится от сети хоста при перезапуске',
   'Saved states now: about {0} on the hosts’ disks.': 'Сохранённые состояния сейчас: около {0} на дисках хостов.',
+  'For every {0} in this topology, new ones too': 'Для всех {0} в этой топологии, включая новые',
+  'all {0}': 'все {0}',
+  'this image': 'этот образ',
+  'How devices are drawn (Draw As on a switch changes its kind only)': 'Как рисуются устройства (Рисовать как на коммутаторе меняет только его тип)',
+  'How devices are drawn:': 'Как рисуются устройства:',
+  'Isometric hardware': 'Изометрическое оборудование',
+  'Classic diagram symbols': 'Классические символы схем',
+  'Classic 3-D (diagram blue)': 'Классические 3D (синие)',
+  'Line icons': 'Контурные значки',
+  'Front panels': 'Передние панели',
 };
 
 export default ru;

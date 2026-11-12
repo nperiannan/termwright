@@ -59,9 +59,10 @@ type emuFile struct {
 	Host      string            `json:"host"` // the lab's host (session path)
 	Folder    string            `json:"folder"`
 	Lab       *emu.Lab          `json:"lab"`
-	Sessions  map[string]string `json:"sessions"`           // VM → its SSH session
-	Consoles  map[string]string `json:"consoles"`           // VM → its console session
-	Topology  string            `json:"topology,omitempty"` // the name the open lab is saved under ("" = not saved yet)
+	Sessions  map[string]string `json:"sessions"`            // VM → its SSH session
+	Consoles  map[string]string `json:"consoles"`            // VM → its console session
+	Topology  string            `json:"topology,omitempty"`  // the name the open lab is saved under ("" = not saved yet)
+	IconStyle string            `json:"iconStyle,omitempty"` // how devices are drawn ("" = classic 3-D)
 }
 
 // emuTopo is a saved topology: a lab with its switches, cables, management
@@ -166,12 +167,13 @@ type EmuDevice struct {
 	Y            int          `json:"y"`
 	State        string       `json:"state"` // stopped, uploading, booting, day0, running, failed
 	StateText    string       `json:"stateText"`
-	CPU          float64      `json:"cpu"`               // % of its vCPUs, now
-	MemUsed      int64        `json:"memUsed"`           // MB its VM uses now (resident)
-	Saved        bool         `json:"saved,omitempty"`   // stopped with its running state saved: it starts in seconds
-	Role         string       `json:"role,omitempty"`    // drawn as (set by the user)
-	Uplinks      []string     `json:"uplinks,omitempty"` // its data ports on the host's network
-	Cores        float64      `json:"cores"`             // host cores it uses now
+	CPU          float64      `json:"cpu"`                 // % of its vCPUs, now
+	MemUsed      int64        `json:"memUsed"`             // MB its VM uses now (resident)
+	Saved        bool         `json:"saved,omitempty"`     // stopped with its running state saved: it starts in seconds
+	Role         string       `json:"role,omitempty"`      // drawn as (set by the user, for its kind of device)
+	IconStyle    string       `json:"iconStyle,omitempty"` // its kind's icon style in this topology ("" = the default)
+	Uplinks      []string     `json:"uplinks,omitempty"`   // its data ports on the host's network
+	Cores        float64      `json:"cores"`               // host cores it uses now
 	CPUs         int          `json:"cpus"`
 	RAM          int          `json:"ram"`
 	Console      int          `json:"console"`
@@ -273,7 +275,8 @@ type EmuView struct {
 	Templates     []emu.Template    `json:"templates"`
 	Usage         EmuUsage          `json:"usage"`
 	HostUse       []EmuHostUse      `json:"hostUse"`
-	Fast          bool              `json:"fast"` // Fast start: Stop saves the switches' running state // every host of the lab: its management and what it gives the switches
+	Fast          bool              `json:"fast"`      // Fast start: Stop saves the switches' running state
+	IconStyle     string            `json:"iconStyle"` // how devices are drawn by default // every host of the lab: its management and what it gives the switches
 	DeviceTypes   []EmuDeviceType   `json:"deviceTypes"`
 }
 
@@ -2939,6 +2942,7 @@ func (a *App) emuView() EmuView {
 		return v
 	}
 	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw, v.LanFixed, v.Fast = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw, l.LanFixed, !l.NoFast
+	v.IconStyle = orStr(f.IconStyle, "blue")
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
 	for _, h := range l.Hosts(f.Host) {
@@ -3029,6 +3033,9 @@ func (a *App) emuView() EmuView {
 		}
 		d.DiskGB, d.Template, d.Persona, d.PersonaError, d.PersonaInfo = vm.DiskGB, vm.Template, vm.Persona, emuLab.perr[vm.ID], emuLab.pinfo[vm.ID]
 		d.Role = vm.Role
+		if p, ok := l.Icons[emu.IconKey(vm)]; ok {
+			d.Role, d.IconStyle = orStr(p.Role, d.Role), p.Style
+		}
 		if im != nil {
 			for _, n := range vm.Uplinks {
 				d.Uplinks = append(d.Uplinks, im.PortNameOf(n))
@@ -4948,19 +4955,62 @@ func (a *App) EmuMoveVM(id, host string) (EmuView, error) {
 	return a.EmuState()
 }
 
-// EmuSetRole sets what a switch is drawn as in the topology ("" = from its model).
+// EmuSetRole sets what a kind of device is drawn as in this topology (every
+// switch of that model or image, new ones too; "" = from its model).
 func (a *App) EmuSetRole(id, role string) (EmuView, error) {
 	switch role {
 	case "", "access", "core", "router", "fw", "ap", "server", "host", "cloud":
 	default:
 		return EmuView{}, fmt.Errorf("no role %q", role)
 	}
+	return a.emuSetIcon(id, func(p *emu.IconPick) { p.Role = role })
+}
+
+// EmuSetIconStyle sets the icon style of a kind of device in this topology
+// ("" = the default), or with id "" the default style for all.
+func (a *App) EmuSetIconStyle(id, style string) (EmuView, error) {
+	switch style {
+	case "", "iso", "classic", "blue", "line", "front":
+	default:
+		return EmuView{}, fmt.Errorf("no icon style %q", style)
+	}
+	if id == "" {
+		emuLab.mu.Lock()
+		a.emuLoad()
+		emuLab.f.IconStyle = style
+		err := a.emuSave()
+		emuLab.mu.Unlock()
+		if err != nil {
+			return EmuView{}, err
+		}
+		return a.EmuState()
+	}
+	return a.emuSetIcon(id, func(p *emu.IconPick) { p.Style = style })
+}
+
+func (a *App) emuSetIcon(id string, set func(*emu.IconPick)) (EmuView, error) {
 	emuLab.mu.Lock()
 	var err error
 	if l := emuLab.f.Lab; l == nil || l.VMByID(id) == nil {
 		err = errors.New("no such switch")
 	} else {
-		l.VMByID(id).Role = role
+		v := l.VMByID(id)
+		k := emu.IconKey(*v)
+		if l.Icons == nil {
+			l.Icons = map[string]emu.IconPick{}
+		}
+		p := l.Icons[k]
+		set(&p)
+		if p.Role == "" && p.Style == "" {
+			delete(l.Icons, k)
+		} else {
+			l.Icons[k] = p
+		}
+		for i := range l.VMs { // the old per-switch choice gives way to the kind's
+			if emu.IconKey(l.VMs[i]) == k {
+				l.VMs[i].Role = ""
+			}
+		}
 		err = a.emuSave()
 	}
 	emuLab.mu.Unlock()

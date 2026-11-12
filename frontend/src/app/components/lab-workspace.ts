@@ -8,7 +8,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabConfigure, LabHosts, LabImages, LabNew } from './lab-pages';
 import { TerminalView } from './terminal-view';
-import { DevIcon, DevRole, ROLES, roleOf } from './dev-icon';
+import { DevIcon, DevRole, ICON_STYLES, IconStyle, ROLES, roleOf } from './dev-icon';
 
 const BW = 104, BH = 64;
 type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
@@ -108,7 +108,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="grp"><span>{{ g.name }}</span><span>{{ g.ver }}</span></div>
           @for (p of g.items; track p.key) {
             <div class="dev" draggable="true" (dragstart)="dragPal($event, p)" (dblclick)="addAt(p, null)" [title]="tr('Drag onto the canvas, or double-click to add one')">
-              <app-dev-icon class="pico" [role]="palRole(p)" [size]="46" state="idle" /><div><span>{{ p.name }}</span>@if (p.sub) { <small>{{ p.sub }}</small> }</div></div>
+              <app-dev-icon class="pico" [role]="palRole(p)" [look]="defLook()" [size]="46" state="idle" /><div><span>{{ p.name }}</span>@if (p.sub) { <small>{{ p.sub }}</small> }</div></div>
           }
         } @empty {
           @if (emu()) { <p class="muted small">{{ tr('No images yet: Images → Add Image.') }}</p> }
@@ -121,7 +121,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
            (contextmenu)="$event.preventDefault()">
         @if (linkMode()) { <div class="bar2">⟷ {{ linkText() }} <span class="k2">Esc</span> <a (click)="cancelLink(); $event.stopPropagation()">{{ tr('Cancel') }}</a></div> }
         @if (!devs().length && !ghosts().length) {
-          <div class="empty"><b>{{ emu() ? tr('No switches yet') : tr('No simulated switches yet') }}</b><span>{{ tr('Drag a device from the left, or') }} <a (click)="wizard()">{{ tr('make a lab') }}</a>.</span></div>
+          <div class="empty"><b>{{ emu() ? tr('No switches yet') : tr('No simulated switches yet') }}</b><span>{{ tr('Drag a device from the left, or') }} <a (click)="wizard()">{{ tr('make a lab') }}</a>.</span>
+            @if (emu()) { <span class="muted small">{{ tr('How devices are drawn:') }}</span><div class="lookcards">@for (st of looks; track st.k) { <a [class.on]="defLook() === st.k" (click)="setDefLook(st.k)"><app-dev-icon role="router" [look]="st.k" [size]="54" state="idle" /><span>{{ tr(st.name) }}</span></a> }</div> }</div>
         }
         <div class="inner" [style.width.px]="area().w * zoom()" [style.height.px]="area().h * zoom()">
           <div class="scale" [style.transform]="'scale(' + zoom() + ')'" [style.width.px]="area().w" [style.height.px]="area().h">
@@ -141,11 +142,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @for (g of ghostLines(); track $index) { <line class="gl" [attr.x1]="g.x1" [attr.y1]="g.y1" [attr.x2]="g.x2" [attr.y2]="g.y2" /> }
               @if (rubber(); as r) { <line class="rb" [attr.x1]="r.x1" [attr.y1]="r.y1" [attr.x2]="r.x2" [attr.y2]="r.y2" /> }
             </svg>
-            @for (g of ghosts(); track g.name) { <div class="node ghost" [style.left.px]="g.x - 75" [style.top.px]="g.y - BH / 2"><div class="nbox"><app-dev-icon role="access" [size]="100" state="idle" /></div><div class="nn">{{ g.name }}</div><div class="nm">{{ tr('new') }}</div></div> }
+            @for (g of ghosts(); track g.name) { <div class="node ghost" [style.left.px]="g.x - 75" [style.top.px]="g.y - BH / 2"><div class="nbox"><app-dev-icon role="access" [look]="defLook()" [size]="100" state="idle" /></div><div class="nn">{{ g.name }}</div><div class="nm">{{ tr('new') }}</div></div> }
             @for (d of devs(); track d.id) {
               <div class="node" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
                    (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)" (mouseenter)="hov.set(d.id)" (mouseleave)="hov.set('')">
-                <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
+                <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [look]="lookOf(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nn">{{ d.hostname }}</div>
                 <div class="nm">{{ d.persona?.slots?.[0]?.model || d.model }} · {{ subOf(d) }}</div>
                 @if (d.uplinks?.length) { <span class="badge up" [title]="tr('On the host’s network: {0}', d.uplinks!.join(', '))">⇡ {{ d.uplinks!.join(',') }}</span> }
@@ -195,7 +196,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (emu()) { <a (click)="uplink(d)" [title]="tr('Like a cloud node on a data port: the port joins the host’s network (applies when the switch starts)')">{{ tr('Port on the Host’s Network…') }}</a>
                 @for (u of d.uplinks ?? []; track u) { <a (click)="setUplink(d, u, false)">{{ tr('Take {0} off the Host’s Network', u) }}</a> } }
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
-              @if (emu()) { <hr /><span class="mh2">{{ tr('Draw As') }}</span><div class="roles">@for (r of roles; track r.k) { <a [class.on]="roleOfDev(d) === r.k" (click)="setRole(d, r.k)" [title]="tr(r.name)"><app-dev-icon [role]="r.k" [size]="34" state="idle" /></a> }</div> }
+              @if (emu()) { <hr /><span class="mh2" [title]="tr('For every {0} in this topology, new ones too', kindOf(d))">{{ tr('Draw As') }} · <small>{{ tr('all {0}', kindOf(d)) }}</small></span><div class="roles">@for (r of roles; track r.k) { <a [class.on]="roleOfDev(d) === r.k" (click)="setRole(d, r.k)" [title]="tr(r.name)"><app-dev-icon [role]="r.k" [look]="lookOf(d)" [size]="34" state="idle" /></a> }</div>
+                <div class="roles looks">@for (st of looks; track st.k) { <a [class.on]="lookOf(d) === st.k" (click)="setLook(d, st.k)" [title]="tr(st.name)"><app-dev-icon [role]="roleOfDev(d)" [look]="st.k" [size]="34" state="idle" /></a> }</div> }
               @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [class.off]="d.running" [title]="d.running ? tr('Stop it first') : tr('It starts there from its image (day 0); its cables to this host become UDP tunnels')">→ {{ o.name || hname(o.session) }}</a> } }
               <hr />
               <a class="r" (click)="mdo('remove', d)">{{ tr('Delete') }}</a>
@@ -217,7 +219,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             }
           </div>
         }
-        <div class="zoom"><button type="button" class="sm" (click)="zoomBy(-0.1)">−</button><button type="button" class="sm" (click)="zoom.set(1)">{{ (zoom() * 100).toFixed(0) }} %</button><button type="button" class="sm" (click)="zoomBy(0.1)">+</button><button type="button" class="sm" (click)="fit(cv)">{{ tr('Fit') }}</button></div>
+        <div class="zoom"><button type="button" class="sm" (click)="zoomBy(-0.1)">−</button><button type="button" class="sm" (click)="zoom.set(1)">{{ (zoom() * 100).toFixed(0) }} %</button><button type="button" class="sm" (click)="zoomBy(0.1)">+</button><button type="button" class="sm" (click)="fit(cv)">{{ tr('Fit') }}</button>
+          @if (emu()) { <select class="looksel" [ngModel]="defLook()" (ngModelChange)="setDefLook($event)" name="looksel" [title]="tr('How devices are drawn (Draw As on a switch changes its kind only)')">@for (st of looks; track st.k) { <option [value]="st.k">{{ tr(st.name) }}</option> }</select> }</div>
       </div>
 
       <div class="side">
@@ -360,6 +363,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .remap { border: 1px solid var(--accent); border-radius: 10px; padding: 10px; margin: 6px 0 8px; background: var(--accent-soft); display: grid; gap: 6px; }
     .remap p { margin: 0; } .rmr { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr); gap: 8px; align-items: center; } .rmr select { min-width: 0; width: 100%; } .remap .row2 { margin: 2px 0 0; }
     .badge.up { border-color: var(--accent); color: var(--accent); }
+    .menu .roles.looks { grid-template-columns: repeat(5, 40px); border-top: 1px dashed var(--line); padding-top: 6px; }
+    .looksel { margin-left: 6px; font-size: 12px; max-width: 170px; }
+    .lookcards { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; pointer-events: auto;
+      a { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 92px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; font-size: 11px; cursor: pointer; text-align: center; }
+      a.on { border-color: var(--accent); background: var(--accent-soft); } }
     .menu .roles { display: grid; grid-template-columns: repeat(4, 40px); gap: 2px; padding: 2px 8px 6px; }
     .menu .roles a { padding: 2px; border-radius: 6px; text-align: center; } .menu .roles a.on { background: var(--accent-soft); outline: 1px solid var(--accent); }
     .menu .mh2 { display: block; padding: 4px 12px 2px; font-size: 11px; color: var(--muted); }
@@ -628,6 +636,12 @@ export class LabWorkspace implements OnDestroy {
   protected events = computed(() => [...(this.st()?.events ?? [])].reverse());
   protected problems = computed(() => (this.st()?.events ?? []).filter(e => e.level === 'error').length);
   protected readonly roles = ROLES;
+  protected readonly looks = ICON_STYLES;
+  protected defLook = computed(() => (this.st()?.iconStyle || 'blue') as IconStyle);
+  lookOf(d: LabDevice): IconStyle { return (d.iconStyle || this.defLook()) as IconStyle; }
+  kindOf(d: LabDevice) { return d.persona?.slots?.[0]?.model || d.model || tr('this image'); }
+  async setLook(d: LabDevice, k: IconStyle) { this.menu.set(null); try { await this.backend.emuSetIconStyle(d.id, k === this.defLook() ? '' : k); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
+  async setDefLook(k: string) { try { await this.backend.emuSetIconStyle('', k); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
   async uplink(d: LabDevice) {
     this.menu.set(null);
     let free: string[] = [];
