@@ -606,9 +606,12 @@ func (a *App) emuMoveLive(id, to string) error {
 		if tot, rem := kb(out, "total ram"), kb(out, "remaining ram"); tot > 0 && rem >= 0 {
 			dt, dr := kb(out, "total disk"), kb(out, "remaining disk")
 			t := ""
-			if dt > 0 && dr >= 0 {
-				t = emuRate(tot-rem+dt-dr, tot+dt, 0, liveStart) + fmt.Sprintf(" · disk %s of %s, memory %s of %s", emuBytes(dt-dr), emuBytes(dt), emuBytes(tot-rem), emuBytes(tot))
-			} else {
+			switch {
+			case dt > 0 && dr > 0: // QEMU counts the disk at its full size; only the parts the switch wrote travel, the rest goes by fast
+				t = emuRate(tot-rem+dt-dr, tot+dt, 0, liveStart) + fmt.Sprintf(" · disk %s of %s (its size: only what the switch wrote travels), memory %s of %s", emuBytes(dt-dr), emuBytes(dt), emuBytes(tot-rem), emuBytes(tot))
+			case dt > 0: // the disk is across: the memory is what is left
+				t = emuRate(tot-rem, tot, 0, liveStart) + " · disk across, now its memory"
+			default:
 				t = emuRate(tot-rem, tot, 0, liveStart)
 			}
 			if m := regexp.MustCompile(`(?m)^cpu throttle percentage: (\d+)`).FindStringSubmatch(out); m != nil && m[1] != "0" {

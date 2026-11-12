@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, live move progress: QEMU counts the disk at its full size (only what the switch wrote travels), which made the total jump from the memory's 2 GB to 6 GB; once the disk is across the progress counts the memory alone, and the disk line says it is counted at its size.
+
 - Emulated lab, a live move cut off earlier (Termwright closed in the middle) left a copy of the switch waiting on the new host, and the next move failed with "could not wait on the new host: <nil> up …": that leftover is now stopped first. A process is taken for a switch only when it is QEMU (a pid file left from before a host restarted could name another process). Live moves also work with newer QEMU, which dropped the -d option of migrate.
 
 - Emulated lab, live moves finish: no bandwidth cap, a switch that writes its memory faster than it goes over is slowed down until it can finish (auto-converge), and the last pause may take up to a second. The progress counts its disk too (QEMU up to 9.0 sends it with the memory) - "99 % · about 2 s left" for minutes was the memory done and the disk still going - and says when the switch is being slowed.
