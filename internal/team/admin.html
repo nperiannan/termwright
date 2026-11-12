@@ -777,7 +777,7 @@ const PAGES = { overview, reports, inventory, approvals, discover, members, sso,
 function wire() {
   const on = (sel, ev, fn) => $$(sel).forEach(e => e[ev] = fn);
   on('[data-go]', 'onclick', e => go(e.currentTarget.dataset.go));
-  on('[data-theme]', 'onclick', e => setTheme(e.currentTarget.dataset.theme));
+  on('button[data-theme], a[data-theme]', 'onclick', e => setTheme(e.currentTarget.dataset.theme));
   on('[data-basis]', 'onclick', e => { ui.basis = e.currentTarget.dataset.basis; store.set('tw.basis', ui.basis); render(); });
   on('[data-days]', 'onclick', e => { ui.days = Number(e.currentTarget.dataset.days); store.set('tw.days', ui.days); usage = null; load(true); });
   on('#out', 'onclick', async () => { await api('POST', '/api/admin/signout').catch(() => {}); gate('Signed out.'); });
