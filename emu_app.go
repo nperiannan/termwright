@@ -65,7 +65,8 @@ type emuFile struct {
 	IconStyle string            `json:"iconStyle,omitempty"` // how devices are drawn ("" = boxes)
 	SyncAll   bool              `json:"syncAll,omitempty"`   // copy new images to every host
 	NoKeep20  bool              `json:"noKeep20,omitempty"`  // copy even when a host would keep less than a fifth of its disk free
-	LogLevel  string            `json:"logLevel,omitempty"`  // the emulator log's level ("" = info)
+	LogLevel  string            `json:"logLevel,omitempty"`
+	Captures  []EmuCapture      `json:"captures,omitempty"` // packet captures, running and done (files on the hosts)  // the emulator log's level ("" = info)
 }
 
 // emuTopo is a saved topology: a lab with its switches, cables, management

@@ -61,6 +61,14 @@ var mcpLabTools = []mcpTool{
 			"host":   map[string]any{"type": "string", "description": "KVM host name or session path"},
 			"how":    map[string]any{"type": "string", "enum": []string{"live", "copy", "image"}},
 		}, "switch", "host", "how")},
+	{"lab_capture", "Packet capture on a switch port of the emulated lab (its cable, both ways; the switch keeps running): start, stop, or read the packets (number, time, source, destination, protocol, length, info). Start and stop are asked in Termwright first.",
+		mcpSchema(map[string]any{
+			"action": map[string]any{"type": "string", "enum": []string{"start", "stop", "read", "list"}},
+			"switch": map[string]any{"type": "string"},
+			"port":   map[string]any{"type": "string"},
+			"filter": map[string]any{"type": "string", "description": "read: only packets whose source, destination, protocol or info contains this (e.g. ICMP, LLDP, 10.0.0.1)"},
+			"last":   map[string]any{"type": "integer", "description": "read: how many of the newest packets (default 100, at most 2000)"},
+		}, "action")},
 	{"lab_events", "Read the emulated lab's Events log: what Termwright did to each switch (started, booted, day 0, persona, moves, errors), newest last.",
 		mcpSchema(map[string]any{"last": map[string]any{"type": "integer", "description": "how many lines (default 60, at most 300)"}})},
 }
@@ -355,6 +363,66 @@ func (a *App) emuMCP(name string, args map[string]any) (string, error) {
 			return "", err
 		}
 		return "Moving " + d.Hostname + " - lab_events shows each step; lab_wait until it is ready.", nil
+	case "lab_capture":
+		act := argStr(args, "action")
+		if act == "list" {
+			var b strings.Builder
+			for _, c := range a.EmuCaptures() {
+				fmt.Fprintf(&b, "- %s %s%s on %s: %s, %d bytes, started %s\n", c.Switch, c.Port, map[bool]string{true: " (cable to " + c.Peer + ")", false: ""}[c.Peer != ""], c.Host[strings.LastIndex(c.Host, "/")+1:], map[bool]string{true: "running", false: "stopped"}[c.Running], c.Size, c.Started)
+			}
+			if b.Len() == 0 {
+				return "No capture yet.", nil
+			}
+			return b.String(), nil
+		}
+		d, err := emuMCPID(v, argStr(args, "switch"))
+		if err != nil {
+			return "", err
+		}
+		port := argStr(args, "port")
+		if port == "" {
+			return "", errors.New("give the port")
+		}
+		key := d.ID + "|" + port
+		switch act {
+		case "start":
+			if err := ask("Claude wants to capture packets", fmt.Sprintf("Claude (through the Termwright connector) asks to capture %s %s (both ways; it keeps running).", d.Hostname, port), false); err != nil {
+				return "", err
+			}
+			if _, err := a.EmuCaptureStart(d.ID, port); err != nil {
+				return "", err
+			}
+			return "Capturing " + d.Hostname + " " + port + " - generate the traffic, then lab_capture read.", nil
+		case "stop":
+			if _, err := a.EmuCaptureStop(key); err != nil {
+				return "", err
+			}
+			return "Stopped; the pcap file stays on the host (lab_capture read still works).", nil
+		case "read":
+			ps, err := a.EmuCapturePackets(key, 0)
+			if err != nil {
+				return "", err
+			}
+			f := strings.ToLower(argStr(args, "filter"))
+			var keep []EmuPacket
+			for _, p := range ps {
+				if f == "" || strings.Contains(strings.ToLower(p.Src+" "+p.Dst+" "+p.Proto+" "+p.Info), f) {
+					keep = append(keep, p)
+				}
+			}
+			n := argInt(args, "last", 100, 2000)
+			total := len(keep)
+			if len(keep) > n {
+				keep = keep[len(keep)-n:]
+			}
+			var b strings.Builder
+			fmt.Fprintf(&b, "%d packets match (%d in the capture); the last %d:\n", total, len(ps), len(keep))
+			for _, p := range keep {
+				fmt.Fprintf(&b, "%d %.3f %s -> %s %s %d %s\n", p.No, p.Time, p.Src, p.Dst, p.Proto, p.Len, p.Info)
+			}
+			return b.String(), nil
+		}
+		return "", errors.New("action is start, stop, read or list")
 	case "lab_events":
 		n := argInt(args, "last", 60, 300)
 		ev := v.Events

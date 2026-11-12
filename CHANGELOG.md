@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **packet capture**: right-click a cable → *Capture Packets* records it both ways at one end while the switches keep running (QEMU writes a pcap file on the host; the cable turns red and dashed). The **Captures** tab lists the captures and shows each one's packets live - number, time, source, destination, protocol (Ethernet, VLAN, ARP, IPv4/IPv6, ICMP, TCP, UDP, DHCP, DNS, LLDP, STP, LACP, OSPF, BGP, VRRP…), length and info - with a filter, *Stop*, *Save .pcap…* and *Wireshark* (opens it in Wireshark on this computer, live while it captures). The connector has **lab_capture** (start, stop, read with a filter, list) for AI agents.
+- Emulated lab, the hover card moves to the left of a switch near the canvas's right edge instead of running off it.
+
 - Emulated lab, the software version and serial number come from the switch: after it boots, Termwright reads them on its CLI (an image profile's facts commands - EXOS: show version, IMG:; Fabric Engine: show software detail and show sys-info) and shows them on the canvas, in the hover card and the side panel (the serial Termwright gave shows until the switch reported its own). The firmware was empty before. Serial numbers in a persona file can be made SIMxxxx-xxxx, the only form some images take (device pack 1.5.7).
 - Emulated lab, the status bar no longer repeats the topology name and the hosts (they are in the header and the Hosts menu).
 

@@ -2,7 +2,7 @@ import { Component, ElementRef, HostListener, OnDestroy, computed, effect, injec
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
+import { EmuCapture, EmuPacket, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -170,7 +170,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                   @if (showPorts()) { <rect class="pb" [attr.x]="u.lx - 18" [attr.y]="u.ly - 9" width="36" height="18" rx="5" /><text class="pt" [attr.x]="u.lx" [attr.y]="u.ly + 4">{{ u.port.split('/').pop() }}</text> }</g>
               } }
               @for (k of lines(); track k.key) {
-                <g class="lk" [class.dimk]="linkDim(k.link)" [class.tun]="k.tun" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
+                <g class="lk" [class.cap]="!!capOf(k.link)" [class.dimk]="linkDim(k.link)" [class.tun]="k.tun" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
                   <title>{{ k.tip }}</title>
                   @for (m of k.paths; track $index) { <path class="hit" [attr.d]="m.d" /><path class="ln" [attr.d]="m.d" [class.up]="m.up" [class.dn]="m.down" [class.thick]="m.thick" /> }
                   @for (r of k.rings; track $index) { <circle class="ring" [attr.cx]="r.x" [attr.cy]="r.y" r="11" /> }
@@ -208,7 +208,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               </div>
             }
             @if (hovDev(); as h) {
-              <div class="ntip" [style.left.px]="pos(h).x + 82" [style.top.px]="pos(h).y - 34">
+              <div class="ntip" [style.left.px]="tipX(h)" [style.top.px]="pos(h).y - 34">
                 <div class="th"><b>{{ h.hostname }}</b> <span [class]="stateOf(h)">● {{ tr(h.stateText || (h.running ? 'running' : 'stopped')) }}</span> </div>
                 <table>
                   @if (emu()) { <tr><td>{{ tr('Type') }}</td><td><b>{{ osOf(h) }}</b></td></tr>
@@ -257,7 +257,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <a class="r" (click)="mdo('remove', d)">{{ tr('Delete') }}</a>
             }
             @if (m.link; as k) {
-              @if (emu()) { <a (click)="ldo('pull', k)">{{ k.down ? tr('Plug In') : tr('Pull') }}</a> }
+              @if (emu()) { <a (click)="ldo('pull', k)">{{ k.down ? tr('Plug In') : tr('Pull') }}</a>
+                @if (capOf(k); as c) { <a (click)="menu.set(null); stopCap(c.key)">◼ {{ tr('Stop the Capture') }}</a><a (click)="menu.set(null); dock.set('cap'); capSel.set(c.key); loadCaps()">{{ tr('Show the Packets') }}</a> }
+                @else { <a (click)="menu.set(null); startCap(k)" [title]="tr('Both ways, at {0} {1}; the switch keeps running', nameOf(k.a), k.aPort)">● {{ tr('Capture Packets') }}</a> } }
               @if (emu() && pairOf(k); as pr) {
                 <hr />
                 <a (click)="lag(pr, 'lacp', 'both')">{{ tr('LAG the {0} cables to {1}: LACP on both', pr.n, nameOf(pr.b)) }}</a>
@@ -357,13 +359,15 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       <div class="dtabs">
         <a [class.on]="dock() === 'events'" (click)="dock.set('events')">{{ tr('Events') }}@if (problems()) { <span class="cnt">{{ problems() }}</span> }</a>
         @if (emu()) { <a [class.on]="dock() === 'inv'" (click)="dock.set('inv')">{{ tr('Inventory') }}</a> }
+        @if (emu()) { <a [class.on]="dock() === 'cap'" (click)="dock.set('cap'); loadCaps()">{{ tr('Captures') }}@if (capsRunning()) { <span class="cnt rec">{{ capsRunning() }}</span> }</a> }
         @if (emu()) { <a [class.on]="dock() === 'log'" (click)="dock.set('log'); loadLog()" [title]="tr('The emulator’s own log: everything the lab does, at the level you choose')">{{ tr('Log') }}</a> }
         @if (emu() && selDev(); as d) { <a [class.on]="dock() === 'console'" (click)="dock.set('console'); loadTail()">{{ tr('{0} console', d.hostname) }}</a><a [class.on]="dock() === 'clog'" (click)="dock.set('clog'); loadClog()" [title]="tr('Everything its console showed since it started, with its Events')">{{ tr('Console Log') }}</a> }
-        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'inv' ? tr('Every switch under its host: console, management, what it uses now') : dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
+        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'cap' ? tr('Both ways on the port, as the switch sends and gets it') : dock() === 'log' ? tr('The emulator’s own log') : dock() === 'clog' ? tr('Its console since it started, with its Events') : dock() === 'inv' ? tr('Every switch under its host: console, management, what it uses now') : dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
         @if (dock() === 'console' && dockTab(); as t) { <button type="button" class="sm" (click)="undock()" [title]="tr('Close the connection to its console')">{{ tr('Disconnect') }}</button> }
         @if (dock() === 'inv' && inventory().length > 1) { <button type="button" class="sm" (click)="flipAll()">{{ invClosed().size === inventory().length ? tr('Expand All') : tr('Collapse All') }}</button> }
         @else { <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button> }
         @if (dock() === 'events' && emu()) { <button type="button" class="sm" (click)="clearEvents()">{{ tr('Clear') }}</button> }
+        @if (dock() === 'cap' && capCur(); as c) { <input class="sm capf" [ngModel]="capFilter()" (ngModelChange)="capFilter.set($event)" [placeholder]="tr('Filter: ICMP, 10.0.0.1, LLDP…')" />@if (c.running) { <button type="button" class="sm" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.key)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button> }
         @if (dock() === 'log') { <select class="sm" [ngModel]="elog()?.level || 'info'" (ngModelChange)="setLogLevel($event)" [title]="tr('How much the log keeps: info by default; debug adds each command run on a host, verbose also what it printed')"><option value="error">{{ tr('Errors') }}</option><option value="warn">{{ tr('Warnings') }}</option><option value="info">{{ tr('Info') }}</option><option value="debug">{{ tr('Debug') }}</option><option value="verbose">{{ tr('Verbose') }}</option></select><button type="button" class="sm" (click)="loadLog()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveLog()">{{ tr('Save…') }}</button> }
         @if (dock() === 'clog' && selDev(); as d) { <button type="button" class="sm" (click)="loadClog()" [disabled]="clogBusy()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveConsoleLog(d)">{{ tr('Save…') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
@@ -393,6 +397,20 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <div class="ev">
           @for (e of events(); track $index) { <div [class]="e.level"><span class="t">{{ time(e.at) }}</span><span class="eh" [title]="e.host || tr('this computer')">@if (e.host) { <i [style.background]="hcol(e.host)"></i>{{ hname(e.host) }} } @else { <span class="muted">{{ tr('this computer') }}</span> }</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span>{{ e.text }}</span></div> }
           @empty { <div><span class="t"></span><b></b><span class="muted">{{ emu() ? tr('Nothing yet - start a switch.') : tr('Simulated switches start at once; their state is on the canvas.') }}</span></div> }
+        </div>
+      } @else if (dock() === 'cap') {
+        <div class="capw">
+          <div class="capl">
+            @for (c of caps(); track c.key + c.started) { <a class="ci" [class.on]="capCur()?.started === c.started" (click)="capSel.set(c.key); capStarted.set(c.started); loadPackets()">
+              <b>@if (c.running) { <i class="recd"></i> }{{ c.switch }} {{ c.port }}</b><span class="muted small">{{ c.peer ? '↔ ' + c.peer + ' · ' : '' }}{{ hname(c.host) }} · {{ gb2(c.size) }} · {{ time(c.started) }}</span></a> }
+            @empty { <p class="muted small" style="padding: 8px 12px">{{ tr('No capture yet: right-click a cable → Capture Packets.') }}</p> }
+          </div>
+          <div class="capt">
+            <table><tr><th>#</th><th>{{ tr('Time') }}</th><th>{{ tr('Source') }}</th><th>{{ tr('Destination') }}</th><th>{{ tr('Protocol') }}</th><th>{{ tr('Length') }}</th><th>{{ tr('Info') }}</th></tr>
+              @for (p of packetsShown(); track p.no) { <tr [class]="'pp ' + p.proto.toLowerCase()"><td>{{ p.no }}</td><td>{{ p.time.toFixed(3) }}</td><td class="mono">{{ p.src }}</td><td class="mono">{{ p.dst }}</td><td><b>{{ p.proto }}</b></td><td>{{ p.len }}</td><td>{{ p.info }}</td></tr> }
+              @empty { <tr><td colspan="7" class="muted">{{ capCur() ? tr('No packets yet.') : tr('Choose a capture on the left.') }}</td></tr> }
+            </table>
+          </div>
         </div>
       } @else if (dock() === 'log') {
         <div class="tailw"><pre class="tail">{{ elog()?.tail || tr('Nothing in the log yet.') }}</pre>@if (elog()?.path) { <div class="muted small" style="padding: 2px 14px">{{ elog()!.path }}</div> }</div>
@@ -576,6 +594,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .lk.down .pb { stroke: var(--danger); } .lk.down .pt { fill: var(--danger); }
     .mvl { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; line { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 6; animation: mvdash 1s linear infinite; } }
     @keyframes mvdash { to { stroke-dashoffset: -12; } } @media (prefers-reduced-motion: reduce) { .mvl line { animation: none; } }
+    .capw { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; .capl { border-right: 1px solid var(--line); overflow: auto; } .ci { display: grid; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid var(--line); b { font-size: 12.5px; display: flex; align-items: center; gap: 6px; } } .ci.on { background: var(--accent-soft); } .capt { overflow: auto; table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 4px 8px; } td { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr.pp.icmp td, tr.pp.icmpv6 td { color: #9cc3ff; } tr.pp.lldp td, tr.pp.stp td, tr.pp.lacp td { color: var(--muted); } tr.pp.arp td { color: #e5c07b; } } }
+    .recd { width: 8px; height: 8px; border-radius: 50%; background: var(--danger, #e5484d); animation: icblink 1.2s ease-in-out infinite; } .cnt.rec { background: var(--danger, #e5484d); } .capf { width: 200px; }
+    .lk.cap .ln { stroke: var(--danger, #e5484d) !important; stroke-dasharray: 6 4; } @keyframes icblink { 50% { opacity: .3; } }
     .nlbl { cursor: move; display: inline-block; padding: 1px 6px; border-radius: 6px; background: color-mix(in srgb, var(--bg, #0d0e11) 82%, transparent); position: relative; z-index: 1; }
     .node.cloud { cursor: grab; .cbox { height: 56px; display: flex; align-items: flex-end; justify-content: center; } } .node.cloud.pick .cbox svg path { stroke-width: 3; } .cll .ln { stroke-dasharray: 3 4; }
     .node.ghost.mv { opacity: .9; pointer-events: auto; .mvp { width: 150px; height: 4px; margin: 4px auto 2px; border-radius: 2px; background: var(--line); overflow: hidden; i { display: block; height: 100%; background: var(--accent); transition: width .5s; } } .mvr { font-size: 10.5px; color: var(--muted); white-space: nowrap; } .nbox { border: 1.5px dashed var(--accent); background: var(--accent-soft); } .nm { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--accent); } }
@@ -648,7 +669,24 @@ export class LabWorkspace implements OnDestroy {
   protected selDev = computed(() => this.devs().find(d => d.id === this.sel()) ?? null);
   protected selLink = signal('');
   protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink } | null>(null);
-  protected dock = signal<'events' | 'console' | 'inv' | 'clog' | 'log'>('events');
+  protected dock = signal<'events' | 'console' | 'inv' | 'clog' | 'log' | 'cap'>('events');
+  protected caps = signal<EmuCapture[]>([]);
+  protected capSel = signal('');
+  protected capStarted = signal('');
+  protected capFilter = signal('');
+  protected packets = signal<EmuPacket[]>([]);
+  protected capsRunning = computed(() => this.caps().filter(c => c.running).length);
+  protected capCur = computed(() => { const l = this.caps(); return l.find(c => c.key === this.capSel() && (!this.capStarted() || c.started === this.capStarted())) ?? null; });
+  protected packetsShown = computed(() => { const f = this.capFilter().trim().toLowerCase(); const l = this.packets(); return f ? l.filter(p => `${p.src} ${p.dst} ${p.proto} ${p.info}`.toLowerCase().includes(f)) : l; });
+  /** The running capture on a cable (at either end). */
+  capOf(k: LabLink) { const p = this.caps().find(c => c.running && (c.vm === k.a && c.port === k.aPort || c.vm === k.b && c.port === k.bPort)); return p ?? null; }
+  async loadCaps() { try { this.caps.set((await this.backend.emuCaptures()) ?? []); if (!this.capSel() && this.caps().length) this.capSel.set(this.caps()[0].key); await this.loadPackets(); } catch { /* none */ } }
+  async loadPackets() { const c = this.capCur(); if (!c) { this.packets.set([]); return; } try { this.packets.set((await this.backend.emuCapturePackets(c.key, 2000)) ?? []); } catch (e) { this.packets.set([]); void e; } }
+  async startCap(k: LabLink) { try { this.caps.set((await this.backend.emuCaptureStart(k.a, k.aPort)) ?? []); const c = this.caps().find(x => x.running && x.vm === k.a && x.port === k.aPort); if (c) { this.capSel.set(c.key); this.capStarted.set(c.started); } this.dock.set('cap'); await this.loadPackets(); } catch (e) { this.ui.error(e); } }
+  async stopCap(key: string) { try { this.caps.set((await this.backend.emuCaptureStop(key)) ?? []); await this.loadPackets(); } catch (e) { this.ui.error(e); } }
+  async wireshark(key: string) { try { await this.backend.emuCaptureWireshark(key); this.ui.toast(tr('Opening Wireshark…')); } catch (e) { this.ui.error(e); } }
+  async saveCap(c: EmuCapture) { try { const p = await this.backend.chooseSaveFile(tr('Save the Capture'), c.file.split('/').pop() || 'capture.pcap', [{ displayName: 'pcap', pattern: '*.pcap' }]); if (!p) return; await this.backend.emuCaptureSave(c.key, p); this.ui.toast(tr('Saved'), 'success'); } catch (e) { this.ui.error(e); } }
+  gb2(n: number) { return !n || n < 0 ? '0 KB' : n >= 2 ** 20 ? (n / 2 ** 20).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
   protected elog = signal<{ level: string; path: string; tail: string } | null>(null);
   async loadLog() { try { this.elog.set(await this.backend.emuLog(1500)); } catch (e) { this.ui.error(e); } }
   async setLogLevel(l: string) { try { this.elog.set(await this.backend.emuSetLogLevel(l)); } catch (e) { this.ui.error(e); } }
@@ -913,6 +951,12 @@ export class LabWorkspace implements OnDestroy {
     this.zsel.set('x'); setTimeout(() => this.zsel.set(''));
   }
   fill(cv: HTMLElement) { const a = this.area(); this.zoom.set(Math.max(0.4, Math.min(2, +(cv.clientWidth / a.w).toFixed(2)))); }
+  /** The hover card goes to the left of a switch when the right side would leave the visible canvas. */
+  protected tipX(d: LabDevice) {
+    const x = this.pos(d).x, cv = document.querySelector('.cv') as HTMLElement | null, z = this.zoom();
+    const right = cv ? (cv.scrollLeft + cv.clientWidth) / z : this.area().w;
+    return x + 82 + 290 / z > right ? Math.max(4, x - 300 / z) : x + 82;
+  }
   onScroll(cv: HTMLElement) { this.scrollAt.set({ x: cv.scrollLeft, y: cv.scrollTop, w: cv.clientWidth, h: cv.clientHeight }); }
   /** The small map: every switch as a dot in its host's colour, the hosts' areas, and the part in view. */
   protected mini = computed(() => {
@@ -1001,7 +1045,7 @@ export class LabWorkspace implements OnDestroy {
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
   }
   async copyDock() {
-    const text = this.dock() === 'inv' ? ['host,switch,state,console,management,cpu %,memory MB,ram MB', ...this.inventory().flatMap(g => g.devs.map(d => [g.host, d.hostname, d.state || (d.running ? 'running' : 'stopped'), g.host + ':' + d.console, d.ssh ?? '', (d.cpu ?? 0).toFixed(0), d.memUsed ?? '', d.ram ?? ''].join(',')))].join('\n') : this.dock() === 'clog' ? this.clog() : this.dock() === 'log' ? (this.elog()?.tail ?? '') : this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + (e.host ? this.hname(e.host) : '-') + '  ' + e.name + '  ' + e.level.toUpperCase() + '  ' + e.text).join('\n') : this.tail();
+    const text = this.dock() === 'inv' ? ['host,switch,state,console,management,cpu %,memory MB,ram MB', ...this.inventory().flatMap(g => g.devs.map(d => [g.host, d.hostname, d.state || (d.running ? 'running' : 'stopped'), g.host + ':' + d.console, d.ssh ?? '', (d.cpu ?? 0).toFixed(0), d.memUsed ?? '', d.ram ?? ''].join(',')))].join('\n') : this.dock() === 'clog' ? this.clog() : this.dock() === 'log' ? (this.elog()?.tail ?? '') : this.dock() === 'cap' ? this.packetsShown().map(p => [p.no, p.time.toFixed(3), p.src, p.dst, p.proto, p.len, p.info].join('\t')).join('\n') : this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + (e.host ? this.hname(e.host) : '-') + '  ' + e.name + '  ' + e.level.toUpperCase() + '  ' + e.text).join('\n') : this.tail();
     try { await navigator.clipboard.writeText(text); this.ui.toast(tr('Copied'), 'success'); } catch { this.ui.error(tr('Could not copy')); }
   }
   async clearEvents() { try { this.lab.emu.set(await this.backend.emuClearEvents()); } catch { /* ignore */ } }
@@ -1042,7 +1086,7 @@ export class LabWorkspace implements OnDestroy {
 
   constructor() {
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
-    this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); }, 3000);
+    this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); }, 3000);
   }
   @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); } }
   /** A click on the empty canvas: nothing selected (the side panel shows the whole topology). */

@@ -776,6 +776,35 @@ func TestEmuTwoHosts(t *testing.T) {
 	if err != nil || !strings.Contains(out, " 0% packet loss") && !strings.Contains(out, "3 packets received") {
 		t.Fatalf("no traffic over the tunnel: %v\n%s", err, out)
 	}
+	// packet capture on the cable's end, while the switches run: the pings are in it
+	if len(v.Links) > 0 {
+		k := v.Links[0]
+		var capName string
+		for _, d := range v.Devices {
+			if d.ID == k.A {
+				capName = d.Hostname
+			}
+		}
+		cs, err := a.EmuCaptureStart(k.A, k.APort)
+		if err != nil || len(cs) == 0 || !cs[0].Running {
+			t.Fatalf("capture start: %v %+v", err, cs)
+		}
+		if _, err := emu.Ask(ctx, c, &im, "x ping -c 3 -W 2 10.9.9.2"); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Second)
+		ps, err := a.EmuCapturePackets(cs[0].Key, 100)
+		got := false
+		for _, p := range ps {
+			got = got || p.Proto == "ICMP" && strings.Contains(p.Info, "echo")
+		}
+		if err != nil || !got {
+			t.Errorf("capture of %s %s: %v %+v", capName, k.APort, err, ps)
+		}
+		if cs, err = a.EmuCaptureStop(cs[0].Key); err != nil || cs[0].Running || cs[0].Size <= 24 {
+			t.Errorf("capture stop: %v %+v", err, cs)
+		}
+	}
 	if v, _ = a.EmuState(); v.HostUse[0].Running+v.HostUse[1].Running != 2 {
 		t.Errorf("host use %+v", v.HostUse)
 	}

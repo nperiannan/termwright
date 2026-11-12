@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo } from './models';
+  AccountInfo, EmuCapture, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -109,6 +109,12 @@ export class Backend {
   emuHostKVM(host: string) { return this.call<boolean>('EmuHostKVM', host); }
   emuLog(lines: number) { return this.call<{ level: string; path: string; tail: string }>('EmuLog', lines); }
   emuSetLogLevel(level: string) { return this.call<{ level: string; path: string; tail: string }>('EmuSetLogLevel', level); }
+  emuCaptureStart(id: string, port: string) { return this.call<EmuCapture[]>('EmuCaptureStart', id, port); }
+  emuCaptureStop(key: string) { return this.call<EmuCapture[]>('EmuCaptureStop', key); }
+  emuCaptures() { return this.call<EmuCapture[]>('EmuCaptures'); }
+  emuCapturePackets(key: string, last: number) { return this.call<EmuPacket[]>('EmuCapturePackets', key, last); }
+  emuCaptureSave(key: string, path: string) { return this.call<void>('EmuCaptureSave', key, path); }
+  emuCaptureWireshark(key: string) { return this.call<void>('EmuCaptureWireshark', key); }
   emuImageMatrix() { return this.call<EmuMatrix>('EmuImageMatrix'); }
   emuSyncImages(hosts: string[], images: string[], force: boolean) { return this.call<EmuMatrix>('EmuSyncImages', hosts, images, force); }
   emuSyncSettings(syncAll: boolean, keep20: boolean) { return this.call<EmuMatrix>('EmuSyncSettings', syncAll, keep20); }

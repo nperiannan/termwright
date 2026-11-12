@@ -392,3 +392,5 @@ export interface EmuReach { from: string; to: string; udp: string; tcp: string; 
 export interface EmuMatrix { hosts: EmuMatrixHost[] | null; images: EmuMatrixImage[] | null; cells: Record<string, Record<string, string>> | null; reach: EmuReach[] | null; busy: boolean; checking: boolean; syncAll: boolean; keep20: boolean; }
 export interface EmuRemoveInfo { switches: number; imagesBytes: number; imagesDir: string; labBytes: number; labDirs: number; sudoRule: boolean; group: boolean; pkgs: string[] | null; fullSudo: boolean; error: string; }
 export interface EmuRemoveHostReq { host: string; images: boolean; labs: boolean; sudoRule: boolean; group: boolean; pkgs: boolean; password: string; forgetOff: boolean; }
+export interface EmuCapture { key: string; vm: string; switch: string; port: string; peer: string; host: string; file: string; started: string; running: boolean; size: number; }
+export interface EmuPacket { no: number; time: number; src: string; dst: string; proto: string; len: number; info: string; }
