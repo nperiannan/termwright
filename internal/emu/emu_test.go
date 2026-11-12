@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -666,5 +667,32 @@ func TestLoginPendingAAA(t *testing.T) {
 	}
 	if got := <-typed; strings.Join(got, "|") != "|||admin" {
 		t.Fatalf("typed %q", got)
+	}
+}
+
+// A question that would end the session takes no, whatever its default
+// (after a first-login questionnaire: "quit this shell session ? (Y/n)").
+func TestNoQuit(t *testing.T) {
+	a, b := net.Pipe()
+	sent := make(chan string, 1)
+	go func() {
+		_, _ = b.Write([]byte("Do you wish to save your configuration changes to primary.cfg? (y/N) "))
+		buf := make([]byte, 16)
+		n, _ := b.Read(buf)
+		first := string(buf[:n])
+		_, _ = b.Write([]byte("No\r\nAre you sure you want to quit this shell session ? (Y/n) "))
+		n, _ = b.Read(buf)
+		sent <- first + "|" + string(buf[:n])
+		_, _ = b.Write([]byte("No\r\nX440G2 # "))
+	}()
+	c := NewConsole(a)
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := c.Wait(ctx, 4*time.Second, nil, regexp.MustCompile(`# $`)); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-sent; got != "n\r|n\r" {
+		t.Fatalf("sent %q", got)
 	}
 }

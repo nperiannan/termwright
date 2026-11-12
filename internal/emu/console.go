@@ -31,6 +31,17 @@ type Console struct {
 	Confirm bool
 }
 
+// leave: a question whose yes would end the session or the switch's run (it takes no).
+var leave = regexp.MustCompile(`(?i)\b(quit|exit|log ?out|logout|reboot|reload|shut ?down|power ?off)\b`)
+
+func lastLineOf(s string) string {
+	s = strings.TrimRight(s, " \t\r\n")
+	if k := strings.LastIndexAny(s, "\r\n"); k >= 0 {
+		return s[k+1:]
+	}
+	return s
+}
+
 // yesNo is a yes/no question waiting at the end of the console.
 var yesNo = regexp.MustCompile(`(?i)[(\[]\s*(y/n|yes/no)\s*[)\]]\s*[:?]?\s*$`)
 
@@ -193,8 +204,8 @@ func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Ans
 				send = "n"
 				if c.Confirm {
 					send = "y"
-				} else if q := tail[loc[0]:loc[1]]; strings.Contains(q, "Y/") || strings.Contains(q, "Yes/") {
-					send = "y"
+				} else if q := tail[loc[0]:loc[1]]; (strings.Contains(q, "Y/") || strings.Contains(q, "Yes/")) && !leave.MatchString(lastLineOf(tail)) {
+					send = "y" // its default - but never to leave the session ("quit this shell session? (Y/n)")
 				}
 			}
 			if loc != nil && send != "" {
