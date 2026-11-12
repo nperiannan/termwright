@@ -158,11 +158,13 @@ func (a *App) emuDisksOn(host string, l *emu.Lab, id string) ([]emuDiskInfo, err
 }
 
 // emuMoveTarget checks that a switch can move to a host keeping its address.
-func (a *App) emuMoveTarget(v emu.VM, to string) error {
+// emuMoveTarget checks a move to another host; readdr: its management address
+// does not work there, so it gets one of the new host's (typed when it starts there).
+func (a *App) emuMoveTarget(v emu.VM, to string) (readdr bool, err error) {
 	l, main := emuLab.f.Lab, emuLab.f.Host
 	from := l.HostOf(v, main)
 	if to == from {
-		return errors.New("it runs there already")
+		return false, errors.New("it runs there already")
 	}
 	var info *emu.HostInfo
 	for i := range emuLab.f.Hosts {
@@ -171,26 +173,41 @@ func (a *App) emuMoveTarget(v emu.VM, to string) error {
 		}
 	}
 	if info == nil || len(info.Problems) > 0 {
-		return errors.New("that host is not ready: check it under Hosts")
+		return false, errors.New("that host is not ready: check it under Hosts")
 	}
+	name := to[strings.LastIndex(to, "/")+1:]
 	nf := l.Net(from, main)
-	if !slices_contains(l.Hosts(main), to) { // a host new to the lab gets the same management
+	onNet := func(n emu.HostNet) bool { // the host is on the network the addresses come from
+		pf, e1 := netip.ParsePrefix(n.MgmtNet)
+		ha, e2 := netip.ParsePrefix(info.LanAddr)
+		return e1 != nil || e2 != nil || pf.Masked().Contains(ha.Addr())
+	}
+	hostNet := func(n emu.HostNet) bool { return n.Mgmt == "cloud" || n.Mgmt == "lan" && n.LanFixed }
+	if !slices_contains(l.Hosts(main), to) { // a host new to the lab: the same management when it can work there
 		n := nf
 		n.LanIf, n.LanKind, n.HostIP, n.CloudIf = info.LanIf, info.LanKind, info.LanAddr, info.LanIf
+		if hostNet(n) && !onNet(n) { // another network: its own lab bridge (addresses typed at start) - change it in Hosts
+			n = emu.HostNet{Mgmt: "bridge", LanIf: info.LanIf, LanKind: info.LanKind, MgmtNet: "10.99.0.0/24"}
+			if !info.Sudo {
+				n.Mgmt = "forward"
+			}
+		}
 		l.SetNet(to, main, n)
 	}
 	nt := l.Net(to, main)
-	if nt.Mgmt != nf.Mgmt {
-		return fmt.Errorf("the hosts manage their switches differently (%s here, %s there): its address would not work there - set the same management on both, or use Move from Its Image", nf.Mgmt, nt.Mgmt)
+	lt := *l
+	lt.Mgmt, lt.MgmtNet, lt.LanFixed = nt.Mgmt, nt.MgmtNet, nt.LanFixed
+	ff := nf.Mgmt == "bridge" || hostNet(nf) // fixed address here (in its configuration)
+	same := nt.Mgmt == nf.Mgmt && nt.MgmtNet == nf.MgmtNet && (!hostNet(nt) || onNet(nt))
+	switch {
+	case same:
+		return false, nil
+	case lt.Fixed(): // the new host types its own address at each start
+		return true, nil
+	case ff:
+		return false, fmt.Errorf("its fixed address %s does not work on %s, which gives addresses by %s: in Hosts set %s's management to Lab bridge or Host network, routed (then it gets an address there), or use From Its Image", strings.Split(v.MgmtIP, "/")[0], name, map[string]string{"nat": "NAT", "forward": "port forwarding", "lan": "DHCP"}[nt.Mgmt], name)
 	}
-	if nf.Mgmt == "cloud" || nf.Mgmt == "lan" && nf.LanFixed {
-		pf, e1 := netip.ParsePrefix(nf.MgmtNet)
-		ha, e2 := netip.ParsePrefix(info.LanAddr)
-		if e1 == nil && e2 == nil && !pf.Masked().Contains(ha.Addr()) {
-			return fmt.Errorf("%s is not on the network of its address (%s)", to[strings.LastIndex(to, "/")+1:], pf.Masked())
-		}
-	}
-	return nil
+	return false, nil // DHCP here and there
 }
 
 func slices_contains(l []string, s string) bool {
@@ -235,9 +252,14 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, fmt.Errorf("it is busy (%s)", s)
 	}
-	if err := a.emuMoveTarget(*v, to); err != nil {
+	readdr, err := a.emuMoveTarget(*v, to)
+	if err != nil {
 		emuLab.mu.Unlock()
 		return EmuView{}, err
+	}
+	if live && readdr {
+		emuLab.mu.Unlock()
+		return EmuView{}, fmt.Errorf("its address %s does not work on %s's network, and a live move keeps it: use Save, Copy and Resume - it gets an address there", strings.Split(v.MgmtIP, "/")[0], to[strings.LastIndex(to, "/")+1:])
 	}
 	if live && a.emuFor(emuHostOf(*v)).KVM != a.emuFor(to).KVM {
 		emuLab.mu.Unlock()
@@ -252,7 +274,7 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 		if live {
 			err = a.emuMoveLive(id, to)
 		} else {
-			err = a.emuMoveCopy(id, to, up)
+			err = a.emuMoveCopy(id, to, up, readdr)
 		}
 		emuLab.mu.Lock()
 		delete(emuLab.state, id)
@@ -546,12 +568,12 @@ func mb(b string) string {
 }
 
 // emuMoveCopy: save its running state (when it runs), copy its disk, resume it there.
-func (a *App) emuMoveCopy(id, to string, running bool) error {
+func (a *App) emuMoveCopy(id, to string, running, readdr bool) error {
 	emuLab.mu.Lock()
 	from := emuHostOf(*emuLab.f.Lab.VMByID(id))
 	emuLab.mu.Unlock()
 	saved := false
-	if running {
+	if running && !readdr { // with a new address it boots there: no state to save
 		a.emuMoveStep(id, "saving its running state")
 		emuLab.mu.Lock()
 		lf := a.emuFor(from)
@@ -563,6 +585,15 @@ func (a *App) emuMoveCopy(id, to string, running bool) error {
 			emuLab.mu.Lock()
 			emuEv(id, "warn", "its running state was not saved: it boots on the new host")
 			emuLab.mu.Unlock()
+		}
+	}
+	if running && readdr {
+		a.emuMoveStep(id, "stopping it (it starts there with its new address)")
+		emuLab.mu.Lock()
+		stop := a.emuFor(from).StopScript([]string{id})
+		emuLab.mu.Unlock()
+		if _, err := a.emuRun(from, stop, 2*time.Minute); err != nil {
+			return fmt.Errorf("stopping it on the old host: %w", err)
 		}
 	}
 	vOld, im, lf, disks, bases, err := a.emuMovePrep(id, from, to)
@@ -579,7 +610,7 @@ func (a *App) emuMoveCopy(id, to string, running bool) error {
 		}
 	}
 	fast := ""
-	if saved {
+	if saved && !readdr { // with a new address it boots there (its address is typed at the start)
 		emuLab.mu.Lock()
 		vNew := vOld
 		vNew.Host = to
@@ -600,8 +631,24 @@ func (a *App) emuMoveCopy(id, to string, running bool) error {
 		emuLab.mu.Unlock()
 	}
 	a.emuMoved(id, from, to, lf, vOld, fast)
+	if readdr {
+		emuLab.mu.Lock()
+		if v := emuLab.f.Lab.VMByID(id); v != nil {
+			was := strings.Split(v.MgmtIP, "/")[0]
+			v.MgmtIP, v.Gateway = a.emuFor(to).FreeAddress(*v)
+			v.Direct = false
+			delete(emuLab.addrOK, id)
+			emuEv(id, "info", fmt.Sprintf("its address %s does not work on %s's network: it gets %s there (typed when it starts)", was, to[strings.LastIndex(to, "/")+1:], strings.Split(v.MgmtIP, "/")[0]))
+			_ = a.emuSave()
+			vv := *v
+			emuLab.mu.Unlock()
+			a.emuRetarget(vv)
+		} else {
+			emuLab.mu.Unlock()
+		}
+	}
 	if running {
-		a.emuMoveStep(id, "resuming it on the new host")
+		a.emuMoveStep(id, map[bool]string{true: "resuming it on the new host", false: "starting it on the new host"}[saved])
 		emuLab.mu.Lock()
 		delete(emuLab.state, id)
 		emuLab.mu.Unlock()

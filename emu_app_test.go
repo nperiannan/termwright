@@ -1,8 +1,8 @@
 package main
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"net"
 	"os"
 	"os/exec"
@@ -1022,5 +1022,32 @@ func TestEmuCopyWhy(t *testing.T) {
 	}
 	if emuBytes(3<<30) != "3.0 GB" || emuBytes(5<<20) != "5 MB" {
 		t.Error(emuBytes(3<<30), emuBytes(5<<20))
+	}
+}
+
+// A switch with an address on one host's network moves to a host on another network: it gets an address there.
+func TestEmuMoveTargetNetwork(t *testing.T) {
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	saved := emuLab.f
+	defer func() { emuLab.f = saved }()
+	emuLab.f.Host = "B/teams"
+	emuLab.f.Lab = &emu.Lab{ID: "x", Dir: "termwright-lab", Mgmt: "cloud", MgmtNet: "10.234.179.146/24", HostIP: "10.234.179.144/24", VMs: []emu.VM{{ID: "v1", Name: "s1", MgmtIP: "10.234.179.149/24"}}}
+	emuLab.f.Hosts = []EmuHost{{Session: "B/other", Info: emu.HostInfo{LanAddr: "10.127.25.68/24", Sudo: true}}, {Session: "B/same", Info: emu.HostInfo{LanAddr: "10.234.179.20/24", Sudo: true}}}
+	a := &App{}
+	v := emuLab.f.Lab.VMs[0]
+	if r, err := a.emuMoveTarget(v, "B/same"); err != nil || r {
+		t.Errorf("same network: %v %v", r, err)
+	}
+	if r, err := a.emuMoveTarget(v, "B/other"); err != nil || !r {
+		t.Errorf("other network: %v %v", r, err)
+	}
+	if n := emuLab.f.Lab.Net("B/other", "B/teams"); n.Mgmt != "bridge" {
+		t.Errorf("the new host's management: %+v", n)
+	}
+	emuLab.f.Lab.VMs = append(emuLab.f.Lab.VMs, emu.VM{ID: "v2", Host: "B/other"})
+	emuLab.f.Lab.SetNet("B/other", "B/teams", emu.HostNet{Mgmt: "forward"})
+	if _, err := a.emuMoveTarget(v, "B/other"); err == nil || !strings.Contains(err.Error(), "port forwarding") {
+		t.Errorf("fixed to port forwarding: %v", err)
 	}
 }
