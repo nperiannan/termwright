@@ -2926,8 +2926,8 @@ func (a *App) emuPoll(force bool) emu.Status {
 			emuEv(v.ID, "ok", "booted - the console shows "+orStr(im.Ready, "its prompt"))
 		} else if im != nil && !emuLab.ready[v.ID] {
 			// a menu the boot stopped at (a key reached it early): its answer, once in a while
-			if ans, ok := im.BootStop(m.Log[v.ID]); ok && time.Since(emuLab.bootAns[v.ID]) > 30*time.Second {
-				emuLab.bootAns[v.ID] = time.Now()
+			if ans, ok := im.BootStop(m.Log[v.ID]); ok && time.Since(emuLab.bootAns[v.ID+"|"+ans.Match]) > 30*time.Second {
+				emuLab.bootAns[v.ID+"|"+ans.Match] = time.Now() // each menu once in a while (one leads to the next)
 				go a.emuBootAnswer(emuHostOf(v), v, ans)
 			}
 		}
