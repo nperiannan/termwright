@@ -30,3 +30,12 @@ func TestPersona(t *testing.T) {
 		t.Fatal(sc)
 	}
 }
+
+// A serial number longer than the image takes keeps its last characters.
+func TestPersonaSerialMax(t *testing.T) {
+	d := &PersonaDef{Template: "{{range .Slots}}serial-number: {{.Serial}}{{end}}", SerialMax: 11}
+	out, err := d.Render(VM{}, &Persona{Slots: []Slot{{Model: "5520-48T", Serial: "SB042352G-00260"}}})
+	if err != nil || out != "serial-number: 2352G-00260" {
+		t.Fatalf("%q %v", out, err)
+	}
+}

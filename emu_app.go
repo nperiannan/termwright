@@ -4306,6 +4306,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			if strings.EqualFold(im.Ready, "login:") && p.Ready != "" && !strings.EqualFold(p.Ready, "login:") { // the pack waits for a later sign of a finished boot
 				im.Ready, changed = p.Ready, true
 			}
+			if p.Persona != nil && im.Persona != nil && im.Persona.SerialMax == 0 && p.Persona.SerialMax > 0 {
+				im.Persona.SerialMax, changed = p.Persona.SerialMax, true
+			}
 			if p.Persona != nil && im.Persona != nil && len(im.Persona.FSHas) == 0 && len(p.Persona.FSHas) > 0 {
 				im.Persona.FSHas, changed = p.Persona.FSHas, true
 			}

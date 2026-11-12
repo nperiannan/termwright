@@ -20,16 +20,25 @@ import (
 
 // PersonaDef is an image's persona file.
 type PersonaDef struct {
-	Name     string         `json:"name"`     // what it is called ("Lab identity")
-	File     string         `json:"file"`     // its path in the VM (/scratch/config.yaml)
-	Template string         `json:"template"` // Go text/template over PersonaData
-	Models   []PersonaModel `json:"models"`
-	Values   []PersonaValue `json:"values"`          // more fields, the same for all slots
-	Stack    bool           `json:"stack"`           // the persona can be a stack of several slots
-	Modules  string         `json:"modules"`         // what a module is called ("VIM")
-	OSName   string         `json:"osName"`          // what the image is called as such a device (shown after the model)
-	FSHas    []string       `json:"fsHas,omitempty"` // names at the top of the filesystem the file goes on, when the image mounts it from its own scripts
-	Check    string         `json:"check"`           // a CLI command whose output names the model once the persona took ("show version")
+	Name      string         `json:"name"`     // what it is called ("Lab identity")
+	File      string         `json:"file"`     // its path in the VM (/scratch/config.yaml)
+	Template  string         `json:"template"` // Go text/template over PersonaData
+	Models    []PersonaModel `json:"models"`
+	Values    []PersonaValue `json:"values"`              // more fields, the same for all slots
+	Stack     bool           `json:"stack"`               // the persona can be a stack of several slots
+	Modules   string         `json:"modules"`             // what a module is called ("VIM")
+	OSName    string         `json:"osName"`              // what the image is called as such a device (shown after the model)
+	FSHas     []string       `json:"fsHas,omitempty"`     // names at the top of the filesystem the file goes on, when the image mounts it from its own scripts
+	Check     string         `json:"check"`               // a CLI command whose output names the model once the persona took ("show version")
+	SerialMax int            `json:"serialMax,omitempty"` // the longest serial number the image takes: a longer one keeps its last characters
+}
+
+// SerialFor is a slot's serial number as the image takes it.
+func (d *PersonaDef) SerialFor(s string) string {
+	if d != nil && d.SerialMax > 0 && len(s) > d.SerialMax {
+		return s[len(s)-d.SerialMax:]
+	}
+	return s
 }
 
 // PersonaModel is a model a VM can be, with the modules it can take.
@@ -102,6 +111,7 @@ func (d *PersonaDef) Render(vm VM, p *Persona) (string, error) {
 		if slots[i].Num == 0 {
 			slots[i].Num = i + 1
 		}
+		slots[i].Serial = d.SerialFor(slots[i].Serial)
 		master = master || slots[i].Master
 	}
 	if !master {
