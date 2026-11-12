@@ -150,7 +150,7 @@ var ErrTimeout = errors.New("timed out")
 // Each answer whose text shows up meanwhile is typed once per appearance.
 // builtinAnswers are questions any image may ask at the first login, after
 // the image's own answers: "[y/N/q]" questionnaires quit with the defaults.
-var builtinAnswers = []Answer{{Match: "[y/N/q]:", Send: "q"}}
+var builtinAnswers = []Answer{{Match: "[y/N/q]:", Send: ""}}
 
 func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Answer, res ...*regexp.Regexp) (int, error) {
 	t := time.NewTimer(timeout)
@@ -292,7 +292,8 @@ func Login(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 		if p, err = login1(ctx, c, im); err == nil {
 			return p, nil
 		}
-		if !strings.Contains(err.Error(), "refused") || im.Password == "" && !im.NotReadyIn(c.LastLine()) {
+		loggedOut := leave.MatchString(c.Tail(300)) // the questionnaire logged it out: log in again
+		if !strings.Contains(err.Error(), "refused") || im.Password == "" && !im.NotReadyIn(c.LastLine()) && !loggedOut {
 			break // without a password it is refused again (unless its login was not ready)
 		}
 		wait := 10 * time.Second

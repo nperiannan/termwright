@@ -142,6 +142,11 @@ func (im *Image) answers() []Answer {
 	out := make([]Answer, len(im.Answers))
 	for i, a := range im.Answers {
 		out[i] = a
+		if a.Match == "[y/N/q]:" && a.Send == "q" {
+			// q leaves such a questionnaire by logging out (the switch then asks to save
+			// and to quit the session): its default, Enter, ends it at the prompt
+			out[i].Send = ""
+		}
 		if strings.Contains(a.Send, "{password}") {
 			out[i].Send, out[i].secret = strings.ReplaceAll(a.Send, "{password}", im.Password), true
 		}

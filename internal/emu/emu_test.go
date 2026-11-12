@@ -402,7 +402,7 @@ func TestLoginDefaultAnswer(t *testing.T) {
 	if err != nil || !strings.Contains(out, "5520-24T") {
 		t.Fatal(err, out)
 	}
-	if g := <-got; g != "q|n|show switch" {
+	if g := <-got; g != "|n|show switch" { // the questionnaire takes its defaults (Enter), never q (it logs out)
 		t.Fatalf("%q", g)
 	}
 }
