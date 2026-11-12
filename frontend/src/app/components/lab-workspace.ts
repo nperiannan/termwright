@@ -140,7 +140,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <div class="hint">{{ tr('Drag a device onto the canvas to add it.') }}</div>
       </div>
 
-      <div class="cv" #cv (scroll)="onScroll(cv)" (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
+      <div class="cv" #cv (scroll)="onScroll(cv)" (wheel)="wheelZoom($event)" (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
            (contextmenu)="$event.preventDefault()">
         @if (linkMode()) { <div class="bar2">⟷ {{ linkText() }} <span class="k2">Esc</span> <a (click)="cancelLink(); $event.stopPropagation()">{{ tr('Cancel') }}</a></div> }
         @if (!devs().length && !ghosts().length) {
@@ -251,13 +251,16 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (emu()) { <button type="button" (click)="sel() && lab.restart([sel()])" [disabled]="!selDev()?.running || lab.busy()" [title]="selDev() ? tr('Restart {0}', selDev()!.hostname) : tr('Select a running switch to restart it')">⟳<span>{{ tr('Restart') }}</span></button> }
         <button type="button" (click)="consoleAll()" [disabled]="!running()" [title]="tr('Open the console of every running switch')">⌨<span>{{ emu() ? tr('Console All') : tr('Open All') }}</span></button>
         @if (emu() && links().length) { <button type="button" (click)="lab.checkCabling()" [disabled]="lab.busy() || !running()" [title]="tr('Asks the running switches for their LLDP neighbours and marks each cable: as drawn, or not')">✓<span>{{ tr('Check Cabling') }}</span></button> }
-        <i class="dsep"></i>
-        <button type="button" class="z" (click)="zoomBy(-0.1)" [attr.aria-label]="tr('Zoom out')">−</button><button type="button" class="z pct" (click)="zoom.set(1)" [title]="tr('Back to 100 %')">{{ (zoom() * 100).toFixed(0) }} %</button><button type="button" class="z" (click)="zoomBy(0.1)" [attr.aria-label]="tr('Zoom in')">+</button>
         @if (emu()) { <select class="looksel" [ngModel]="defLook()" (ngModelChange)="setDefLook($event)" name="looksel" [title]="tr('How devices are drawn (Draw As on a switch changes its kind only)')">@for (st of looks; track st.k) { <option [value]="st.k">{{ tr(st.name) }}</option> }</select> }
       </div></div> }
       @if (page() !== 'new' && devs().length) {
         <div class="vbar" (click)="$event.stopPropagation()">
-          <button type="button" class="sm" (click)="fit(cv)" [title]="tr('The whole topology in view')">{{ tr('Fit') }}</button><button type="button" class="sm" (click)="fill(cv)" [title]="tr('As wide as the canvas')">{{ tr('Fill') }}</button><button type="button" class="sm" (click)="zoom.set(1)">100 %</button>
+          <span class="zg"><button type="button" class="sm" (click)="zoomBy(-0.1)" [attr.aria-label]="tr('Zoom out')" [title]="tr('Zoom out')">−</button>
+            <select class="sm zsel" [ngModel]="zsel()" (ngModelChange)="zoomPick($event, cv)" name="zsel" [title]="tr('Zoom')">
+              <option value="" hidden>{{ (zoom() * 100).toFixed(0) }} %</option>
+              <option value="fit">{{ tr('Fit - the whole topology') }}</option><option value="fill">{{ tr('Fill - as wide as the canvas') }}</option>
+              @for (z of [50, 75, 100, 125, 150, 200]; track z) { <option [value]="z">{{ z }} %</option> }
+            </select><button type="button" class="sm" (click)="zoomBy(0.1)" [attr.aria-label]="tr('Zoom in')" [title]="tr('Zoom in')">+</button></span>
           <i class="dsep"></i>
           @if (multi()) { <span class="muted small">{{ tr('Hosts') }}</span><select class="sm" [ngModel]="hostView()" (ngModelChange)="setHostView($event)" name="hview" [title]="tr('How each switch’s host is shown')"><option value="auto">{{ tr('Auto') }}</option><option value="areas">{{ tr('Areas') }}</option><option value="tags">{{ tr('Tags') }}</option><option value="off">{{ tr('Off') }}</option></select>
             <button type="button" class="sm" (click)="arrangeByHost()" [title]="tr('Put each host’s switches together')">⊞ {{ tr('Arrange by Host') }}</button><i class="dsep"></i> }
@@ -396,6 +399,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       a.on { border-color: var(--accent); } a.off { opacity: .5; } i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } }
     .mini { position: absolute; right: 312px; bottom: 66px; z-index: 6; padding: 6px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer; line-height: 0;
       svg { background: var(--bg); border-radius: 6px; } .vp { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 1.2; } }
+    .zg { display: inline-flex; align-items: center; gap: 0; button { border-radius: 0; } button:first-child { border-radius: 7px 0 0 7px; } button:last-child { border-radius: 0 7px 7px 0; } .zsel { border-radius: 0; width: 86px; min-width: 0; flex: none; height: 26px; margin: 0 -1px; text-align: center; } }
     .node.dimn { opacity: .28; } .lk.dimk { opacity: .18; }
     .htg { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--muted); i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; } }
     .ptabs { display: flex; align-self: stretch; margin: -8px 0 -8px 4px; flex: none;
@@ -699,6 +703,13 @@ export class LabWorkspace implements OnDestroy {
     const a = this.devs().find(x => x.id === k.a), b = this.devs().find(x => x.id === k.b);
     if (this.focusHost() && !(a && this.hostOfDev(a) === this.focusHost()) && !(b && this.hostOfDev(b) === this.focusHost())) return true;
     return this.onlyProblems() && !(k.up === false || (a && this.problem(a)) || (b && this.problem(b)));
+  }
+  protected zsel = signal('');
+  /** Ctrl or ⌘ with the wheel (or a trackpad pinch) zooms the canvas. */
+  wheelZoom(ev: WheelEvent) { if (!ev.ctrlKey && !ev.metaKey) return; ev.preventDefault(); this.zoomBy(ev.deltaY < 0 ? 0.1 : -0.1); }
+  zoomPick(v: string, cv: HTMLElement) {
+    if (v === 'fit') this.fit(cv); else if (v === 'fill') this.fill(cv); else if (+v) this.zoom.set(+v / 100);
+    this.zsel.set('x'); setTimeout(() => this.zsel.set(''));
   }
   fill(cv: HTMLElement) { const a = this.area(); this.zoom.set(Math.max(0.4, Math.min(2, +(cv.clientWidth / a.w).toFixed(2)))); }
   onScroll(cv: HTMLElement) { this.scrollAt.set({ x: cv.scrollLeft, y: cv.scrollTop, w: cv.clientWidth, h: cv.clientHeight }); }
