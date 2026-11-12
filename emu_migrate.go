@@ -282,6 +282,18 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, err
 	}
+	from, vcpu := emuHostOf(*v), v.CPU
+	emuLab.mu.Unlock()
+	// started with its host's own CPU: on a host with another CPU its running state crashes (instructions it lacks)
+	cpuDiff := false
+	if (vcpu == "" || vcpu == "host") && up {
+		f, t := a.emuCPUName(from), a.emuCPUName(to)
+		cpuDiff = f != "" && t != "" && f != t
+		if cpuDiff && live {
+			return EmuView{}, fmt.Errorf("it runs with %s's own CPU (%s), and %s has another (%s): it would crash there. Restart it once - with more than one host, switches start with a CPU every host has (%s) and move live anywhere - or use Save, Copy and Resume (it then boots there)", from[strings.LastIndex(from, "/")+1:], f, to[strings.LastIndex(to, "/")+1:], t, emu.CommonCPU)
+		}
+	}
+	emuLab.mu.Lock()
 	if live && a.emuFor(emuHostOf(*v)).KVM != a.emuFor(to).KVM {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("one host has KVM and the other does not: a running switch cannot change that - use Save, Copy and Resume instead")
@@ -297,7 +309,7 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 				a.emuReaddress(id, to, true)
 			}
 		} else {
-			err = a.emuMoveCopy(id, to, up, readdr)
+			err = a.emuMoveCopy(id, to, up, readdr, cpuDiff)
 		}
 		emuLab.mu.Lock()
 		delete(emuLab.state, id)
@@ -310,6 +322,15 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 	}()
 	time.Sleep(50 * time.Millisecond)
 	return a.EmuState()
+}
+
+// emuCPUName is the model name of a host's CPU ("" = not known).
+func (a *App) emuCPUName(host string) string {
+	out, err := a.emuRun(host, "grep -m1 '^model name' /proc/cpuinfo | cut -d: -f2-", 20*time.Second)
+	if err != nil {
+		return ""
+	}
+	return strings.Join(strings.Fields(out), " ")
 }
 
 // emuReaddress gives a moved switch an address of its new host's network (its old one does not work there).
@@ -456,6 +477,13 @@ func (a *App) emuMoveLive(id, to string) error {
 	emuLab.f.Lab = &tmp
 	lt := a.emuFor(to)
 	emuLab.f.Lab = real
+	switch vNew.CPU { // it receives the running switch with the CPU it was started with
+	case "", "host":
+		lt.CPU = ""
+	case "tcg":
+	default:
+		lt.CPU = vNew.CPU
+	}
 	monPort := lt.MonitorPort(vNew)
 	emuLab.mu.Unlock()
 	if toIP == "" {
@@ -678,12 +706,13 @@ func mb(b string) string {
 }
 
 // emuMoveCopy: save its running state (when it runs), copy its disk, resume it there.
-func (a *App) emuMoveCopy(id, to string, running, readdr bool) error {
+func (a *App) emuMoveCopy(id, to string, running, readdr, cpuDiff bool) error {
+	boot := readdr || cpuDiff // it boots there: a new address, or another CPU its saved state would crash on
 	emuLab.mu.Lock()
 	from := emuHostOf(*emuLab.f.Lab.VMByID(id))
 	emuLab.mu.Unlock()
 	saved := false
-	if running && !readdr { // with a new address it boots there: no state to save
+	if running && !boot { // it boots there: no state to save
 		a.emuMoveStep(id, "saving its running state")
 		emuLab.mu.Lock()
 		lf := a.emuFor(from)
@@ -697,8 +726,8 @@ func (a *App) emuMoveCopy(id, to string, running, readdr bool) error {
 			emuLab.mu.Unlock()
 		}
 	}
-	if running && readdr {
-		a.emuMoveStep(id, "stopping it (it starts there with its new address)")
+	if running && boot {
+		a.emuMoveStep(id, "stopping it (it boots there)")
 		emuLab.mu.Lock()
 		stop := a.emuFor(from).StopScript([]string{id})
 		emuLab.mu.Unlock()
@@ -721,7 +750,7 @@ func (a *App) emuMoveCopy(id, to string, running, readdr bool) error {
 		}
 	}
 	fast := ""
-	if saved && !readdr { // with a new address it boots there (its address is typed at the start)
+	if saved && !boot {
 		emuLab.mu.Lock()
 		vNew := vOld
 		vNew.Host = to

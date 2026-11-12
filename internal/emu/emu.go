@@ -193,6 +193,7 @@ type VM struct {
 	Uplinks  []int    `json:"uplinks,omitempty"` // data ports on the host's network (its bridge, or macvtap on its port)
 	Relayed  bool     `json:"relayed,omitempty"` // moved while running: its cables listen on all addresses (relays on its old host forward to it)
 	Incoming string   `json:"-"`                 // started to receive a live migration ("tcp:0.0.0.0:port")
+	CPU      string   `json:"cpu,omitempty"`     // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
 	Role     string   `json:"role,omitempty"`    // what it is drawn as ("access", "core", "router"…; "" = from its model)
 	X        int      `json:"x"`
 	Y        int      `json:"y"`
@@ -345,6 +346,7 @@ type Lab struct {
 	HostIP   string  `json:"hostIp"`             // cloud: the host's own address there
 	Base     int     `json:"base"`               // first TCP/UDP port on the host's 127.0.0.1
 	KVM      bool    `json:"kvm"`                // false: software emulation (slow, for tests)
+	CPU      string  `json:"-"`                  // the CPU model its switches get with KVM ("" = the host's own); set per host by the app
 	VMs      []VM    `json:"vms"`
 	Cables   []Cable `json:"cables"`
 	Lags     []Lag   `json:"lags,omitempty"`
@@ -559,6 +561,14 @@ func (im *Image) DataPorts() int {
 	return im.NICs - 1
 }
 
+// CommonCPU is the CPU model switches get when a topology can spread over several hosts: one every
+// x86-64 host has (Intel since 2010, AMD alike), so a running switch can move live between hosts whose
+// CPUs differ - with the host's own CPU it would use instructions the other host lacks, and crash there.
+const CommonCPU = "Westmere"
+
+// kvmCPU is the CPU model with KVM.
+func (l *Lab) kvmCPU() string { return orStr(l.CPU, "host") }
+
 // tcgCPU is the image's CPU model for software emulation, when it is a plain model name (with its +feature options).
 func (im *Image) tcgCPU() string {
 	if regexp.MustCompile(`^[A-Za-z0-9_.,=+-]+$`).MatchString(im.TCGCPU) {
@@ -572,7 +582,7 @@ func (l *Lab) Args(v VM, im *Image) []string {
 	dir := l.VMDir()
 	a := []string{"-name", v.Name, "-m", strconv.Itoa(orInt(v.RAM, im.RAM, 1024)), "-smp", strconv.Itoa(orInt(v.CPUs, im.CPUs, 1))}
 	if l.KVM {
-		a = append(a, "-enable-kvm", "-cpu", "host")
+		a = append(a, "-enable-kvm", "-cpu", l.kvmCPU())
 	} else {
 		a = append(a, "-accel", "tcg")
 		if c := im.tcgCPU(); c != "" {
@@ -766,7 +776,7 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		}
 		q := "qemu-system-x86_64 " + joinArgs(l.Args(v, im))
 		// KVM as the host has it now (turned on or off since it was checked): -enable-kvm when /dev/kvm is usable, else software emulation
-		kvmA, tcgA := "-enable-kvm -cpu host", "-accel tcg"
+		kvmA, tcgA := "-enable-kvm -cpu "+l.kvmCPU(), "-accel tcg"
 		if c := im.tcgCPU(); c != "" {
 			tcgA += " -cpu " + c
 		}
@@ -800,7 +810,7 @@ func (l *Lab) FastKey(v VM, im *Image) string {
 		pa = v.Persona.Applied
 	}
 	return Hash(fmt.Sprint(im.ID, im.FileName, im.NICs, im.NIC, im.Disk, im.Extra, orInt(v.CPUs, im.CPUs, 1), orInt(v.RAM, im.RAM, 1024), v.DiskGB,
-		v.Serial, v.BaseMAC, pa, v.Host, l.Mgmt, l.MgmtNet, l.LanFixed, l.LanIf, v.MgmtIP, v.Uplinks))[:12]
+		v.Serial, v.BaseMAC, pa, v.Host, l.Mgmt, l.MgmtNet, l.LanFixed, l.LanIf, v.MgmtIP, v.Uplinks)+l.CPU)[:12] // its saved state loads with the same CPU only
 }
 
 // disks lists a VM's disk files on the host.

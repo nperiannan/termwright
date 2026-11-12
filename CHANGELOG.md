@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, live moves between hosts with different CPUs: a switch started with its host's own CPU used instructions the other host lacks after a live move, and its programs crashed there (EXOS: the login service, so the address step was refused). With more than one host, switches now start with a CPU every host has (Westmere: Intel since 2010, AMD alike), and a live move of one started with its host's own CPU to a host with another CPU is refused with what to do (restart it once, or Save, Copy and Resume, which then boots it there). A login refused because the switch's login service (AAA) did not answer is tried again for a few minutes, and says so instead of asking for a password.
+
 - Emulated lab, live move progress: QEMU counts the disk at its full size (only what the switch wrote travels), which made the total jump from the memory's 2 GB to 6 GB; once the disk is across the progress counts the memory alone, and the disk line says it is counted at its size.
 
 - Emulated lab, a live move cut off earlier (Termwright closed in the middle) left a copy of the switch waiting on the new host, and the next move failed with "could not wait on the new host: <nil> up …": that leftover is now stopped first. A process is taken for a switch only when it is QEMU (a pid file left from before a host restarted could name another process). Live moves also work with newer QEMU, which dropped the -d option of migrate.

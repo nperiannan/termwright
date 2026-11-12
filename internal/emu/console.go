@@ -287,16 +287,25 @@ var lockOut = regexp.MustCompile(`(?i)lock(?:ed)? ?out for (\d+) sec`)
 // refuse the first one); the error ends with what the console showed.
 func Login(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 	var err error
-	for try := 0; try < 3; try++ {
+	authDowns := 0
+	for try := 0; try < 3+authDowns; try++ {
 		var p *regexp.Regexp
 		if p, err = login1(ctx, c, im); err == nil {
 			return p, nil
 		}
 		loggedOut := leave.MatchString(c.Tail(300)) // the questionnaire logged it out: log in again
-		if !strings.Contains(err.Error(), "refused") || im.Password == "" && !im.NotReadyIn(c.LastLine()) && !loggedOut {
+		// its login service did not answer (still starting, or slowed by a live move): not a wrong password
+		authDown := authDown.MatchString(c.Tail(400)) && authDowns < 6
+		if authDown {
+			authDowns++
+		}
+		if !strings.Contains(err.Error(), "refused") || im.Password == "" && !im.NotReadyIn(c.LastLine()) && !loggedOut && !authDown {
 			break // without a password it is refused again (unless its login was not ready)
 		}
 		wait := 10 * time.Second
+		if authDown {
+			wait = authDownWait
+		}
 		if m := lockOut.FindStringSubmatch(c.Tail(600)); m != nil { // too many attempts: the console is locked for a while
 			n, _ := strconv.Atoi(m[1])
 			wait = time.Duration(n+5) * time.Second
@@ -307,8 +316,17 @@ func Login(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 		case <-time.After(wait):
 		}
 	}
+	if authDown.MatchString(c.Tail(400)) {
+		return nil, fmt.Errorf("the switch's login service (AAA) did not answer for a few minutes - it may still be starting, or slowed down: Type Day 0 Again in a minute - the console showed: %s", c.Tail(220))
+	}
 	return nil, fmt.Errorf("%w - the console showed: %s", err, c.Tail(220))
 }
+
+// authDown: a switch whose login service is not answering yet (EXOS: "Failed to connect to authentication service").
+var authDown = regexp.MustCompile(`(?i)failed to connect to authentication service|failed to send AAA authentication request|AAA did not respond`)
+
+// authDownWait: how long a login is left alone when the switch's login service did not answer.
+var authDownWait = 15 * time.Second
 
 // notReadyWait: how long a login that is not ready yet is left alone before Enter is typed again.
 var notReadyWait = 10 * time.Second

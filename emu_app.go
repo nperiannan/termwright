@@ -2023,6 +2023,9 @@ func (a *App) emuFor(host string) *emu.Lab {
 		}
 	}
 	c := l.For(host, emuLab.f.Host)
+	if len(emuLab.f.Hosts) > 1 { // switches can move between hosts: a CPU every host has
+		c.CPU = emu.CommonCPU
+	}
 	// each host its own acceleration: one without KVM emulates in software
 	for _, h := range emuLab.f.Hosts {
 		if h.Session == host && h.Info.KVM != "" {
@@ -2421,6 +2424,13 @@ func (a *App) emuStart(host string, ids []string) {
 			kvm := g[1] == "kvm"
 			if kvm != l.KVM { // the host's KVM changed since it was checked: what it has now counts
 				a.emuSetKVM(host, kvm)
+			}
+			if vv := emuLab.f.Lab.VMByID(g[2]); vv != nil { // the CPU it runs with (a live move needs it on the other host too)
+				vv.CPU = "tcg"
+				if kvm {
+					vv.CPU = orStr(l.CPU, "host")
+				}
+				_ = a.emuSave()
 			}
 			if !kvm {
 				emuEv(g[2], "warn", "no KVM on "+host[strings.LastIndex(host, "/")+1:]+" (no usable /dev/kvm): it runs in software emulation, 5 to 10 times slower - a switch can take 10 minutes or more to boot, and one that checks its own timing may restart. Turn on nested virtualization for that VM (VMware: Expose hardware assisted virtualization to the guest OS), then Hosts → Check Again")

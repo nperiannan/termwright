@@ -1,9 +1,11 @@
 package emu
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net"
 	"regexp"
 	"strings"
@@ -709,5 +711,47 @@ func TestStartAccel(t *testing.T) {
 		if strings.Contains(s, "-enable-kvm -cpu host -") || strings.Contains(s, "-accel tcg -cpu Nehalem -") {
 			t.Errorf("kvm %v: the fixed accel is still in the command", kvm)
 		}
+	}
+}
+
+// A login refused because the switch's AAA did not answer is tried again, also without a password.
+func TestLoginAAADown(t *testing.T) {
+	old := authDownWait
+	authDownWait = 20 * time.Millisecond
+	defer func() { authDownWait = old }()
+	a, b := net.Pipe()
+	c := NewConsole(a)
+	defer c.Close()
+	go func() {
+		r := bufio.NewReader(b)
+		_ = r
+		state, fails := 0, 0
+		for {
+			l, err := r.ReadString('\r')
+			if err != nil {
+				return
+			}
+			l = strings.TrimSpace(l)
+			switch {
+			case state == 0 && l == "admin":
+				_, _ = b.Write([]byte("password: "))
+				state = 1
+			case state == 0:
+				_, _ = b.Write([]byte("\r\nlogin: "))
+			case fails == 0:
+				fails++
+				state = 0
+				_, _ = b.Write([]byte("\r\nFailed to connect to authentication service (AAA did not respond within the timeout)! Login incorrect\r\n\r\nlogin: "))
+			default:
+				_, _ = b.Write([]byte("\r\nsw1 # "))
+				go func() { _, _ = io.Copy(io.Discard, r) }()
+				return
+			}
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	if _, err := Login(ctx, c, &Image{Login: "admin", Prompt: `# $`}); err != nil {
+		t.Fatal(err)
 	}
 }
