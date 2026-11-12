@@ -76,7 +76,9 @@ var mcpTools = []mcpTool{
 }
 
 const mcpInstructions = "Termwright is the user's terminal for network devices (switches, routers, firewalls) and servers. " +
-	"Start with list_tabs and read_tab to see what the user is looking at. send_command and open_session need the user's approval in Termwright each time."
+	"Start with list_tabs and read_tab to see what the user is looking at. send_command and open_session need the user's approval in Termwright each time. " +
+	"Its emulated lab runs real switch images on KVM hosts: show_lab and lab_images to see it; for a test case build the topology (lab_add_switches, lab_cable), start it (lab_power) and lab_wait, " +
+	"configure and verify with lab_console (the switches' own CLI), check the cabling with lab_check_cabling, and read lab_events when something fails. Each change is approved by the user in Termwright."
 
 // ---- the server in the app ----
 
@@ -219,7 +221,7 @@ func mcpStatic(req rpcReq) (rpcResp, bool) {
 	case "ping":
 		resp.Result = map[string]any{}
 	case "tools/list":
-		resp.Result = map[string]any{"tools": mcpTools}
+		resp.Result = map[string]any{"tools": append(append([]mcpTool(nil), mcpTools...), mcpLabTools...)}
 	default:
 		return resp, false
 	}
@@ -494,6 +496,9 @@ func (a *App) mcpCall(_ context.Context, name string, args map[string]any) (stri
 			note = "\n[the device is paging - turn paging off and run it again]"
 		}
 		return red + note, nil
+	}
+	if strings.HasPrefix(name, "lab_") {
+		return a.emuMCP(name, args)
 	}
 	return "", fmt.Errorf("unknown tool %s", name)
 }

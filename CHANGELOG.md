@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Termwright connector (MCP) for AI agents, the emulated lab end to end: **lab_images**, **lab_add_switches**, **lab_cable** (connect or remove a list), **lab_power** (start, stop, restart, shut down), **lab_wait** (until booted and configured), **lab_console** (log in on a switch's console and type configuration or show commands, outputs back), **lab_check_cabling** (LLDP against the cables), **lab_move** (live, copy or image) and **lab_events**, next to show_lab. Each change is approved by the user in Termwright, a whole list at once; outputs have secrets removed.
+
 - Emulated lab, live moves between hosts with different CPUs: a switch started with its host's own CPU used instructions the other host lacks after a live move, and its programs crashed there (EXOS: the login service, so the address step was refused). With more than one host, switches now start with a CPU every host has (Westmere: Intel since 2010, AMD alike), and a live move of one started with its host's own CPU to a host with another CPU is refused with what to do (restart it once, or Save, Copy and Resume, which then boots it there). A login refused because the switch's login service (AAA) did not answer is tried again for a few minutes, and says so instead of asking for a password.
 
 - Emulated lab, live move progress: QEMU counts the disk at its full size (only what the switch wrote travels), which made the total jump from the memory's 2 GB to 6 GB; once the disk is across the progress counts the memory alone, and the disk line says it is counted at its size.

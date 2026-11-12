@@ -850,6 +850,16 @@ func TestEmuTwoHosts(t *testing.T) {
 		t.Fatal(err)
 	}
 	moved("it resumed there")
+	// the AI connector's console tool: logs in and types on a switch's console
+	if out, err := a.emuConsoleRun(vb, []string{"x echo tw-console-ok"}, time.Minute); err != nil || !strings.Contains(out, "tw-console-ok") {
+		t.Errorf("console run: %v\n%s", err, out)
+	}
+	if out, err := a.emuMCP("lab_events", map[string]any{"last": float64(5)}); err != nil || out == "" {
+		t.Errorf("lab_events: %v %q", err, out)
+	}
+	if out, err := a.emuMCP("lab_images", map[string]any{}); err != nil || !strings.Contains(out, "Images (id") {
+		t.Errorf("lab_images: %v %q", err, out)
+	}
 	// Remove Host: what it can take back or wipe; refused while switches of the topology run there
 	ri, err := a.EmuRemoveHostInfo(hb.Path)
 	if err != nil || ri.Error != "" || ri.ImagesBytes == 0 || ri.LabDirs == 0 || ri.Switches == 0 {

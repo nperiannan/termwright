@@ -782,6 +782,8 @@ Termwright can also work the other way round: as a **connector** (an MCP server)
 
 What Claude can do: **list the open tabs** and **the saved sessions**, **read a tab** (the end of its screen and scrollback - passwords, keys and SNMP communities removed), and - only when you allow it in Termwright - **open a session** and **type a command**, getting the output back. *Commands: Never* keeps Claude to reading. Every command shows in Termwright first; *Allow in This Tab for 15 Minutes* saves asking again for read-only commands, and commands that may change the device (configure, delete, reboot, save…) are always asked, with a warning:
 
+**The emulated lab from Claude.** Claude can also run a test case on the emulated lab from start to end: see the lab and its images (*show_lab*, *lab_images*), add switches and connect cables (*lab_add_switches*, *lab_cable*), start them and wait until they are ready (*lab_power*, *lab_wait*), type configuration and show commands on a switch's console and get the output (*lab_console*), check the cabling against LLDP (*lab_check_cabling*), move a switch to another host (*lab_move*) and read the Events (*lab_events*). Every change is asked in Termwright first, a whole list at once - for example *"build two 5520s with two cables between them as a LACP LAG, configure it, and show me that both ports are in the LAG"*.
+
 ![Claude asks before it types](screenshots/ai-approve.png)
 
 The connector listens only on this computer (127.0.0.1) with a random key kept in Termwright's data folder for your user only; web pages cannot reach it.

@@ -45,7 +45,7 @@ func TestMCPBridgeWithoutApp(t *testing.T) {
 	if l[0]["result"].(map[string]any)["serverInfo"].(map[string]any)["name"] != "termwright" {
 		t.Fatalf("initialize: %v", l[0])
 	}
-	if n := len(l[1]["result"].(map[string]any)["tools"].([]any)); n != len(mcpTools) {
+	if n := len(l[1]["result"].(map[string]any)["tools"].([]any)); n != len(mcpTools)+len(mcpLabTools) {
 		t.Fatalf("tools: %d", n)
 	}
 	r := l[2]["result"].(map[string]any)
