@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -804,6 +805,12 @@ func TestEmuTwoHosts(t *testing.T) {
 		if cs, err = a.EmuCaptureStop(cs[0].Key); err != nil || cs[0].Running || cs[0].Size <= 24 {
 			t.Errorf("capture stop: %v %+v", err, cs)
 		}
+		f, fh := cs[0].File, cs[0].Host
+		if cs, err = a.EmuCaptureDelete([]string{f}); err != nil || len(cs) != 0 {
+			t.Errorf("capture delete: %v %+v", err, cs)
+		} else if out, _ := a.emuRun(fh, "cd && ls "+f+" 2>&1", 10*time.Second); !strings.Contains(out, "No such file") {
+			t.Errorf("the pcap file stayed: %s", out)
+		}
 	}
 	if v, _ = a.EmuState(); v.HostUse[0].Running+v.HostUse[1].Running != 2 {
 		t.Errorf("host use %+v", v.HostUse)
@@ -882,6 +889,52 @@ func TestEmuTwoHosts(t *testing.T) {
 	// the AI connector's console tool: logs in and types on a switch's console
 	if out, err := a.emuConsoleRun(vb, []string{"x echo tw-console-ok"}, time.Minute); err != nil || !strings.Contains(out, "tw-console-ok") {
 		t.Errorf("console run: %v\n%s", err, out)
+	}
+	// traffic: a test port on a free port of a running switch; the switch has an address there and
+	// answers the test port's pings, and pings the test port back (it answers ARP and ping)
+	{
+		free := a.EmuFreePorts(vb)
+		emuLab.mu.Lock()
+		im := emuImage(emuLab.f.Lab.VMByID(vb).Image)
+		emuLab.mu.Unlock()
+		pn := emuPort(im, free[0])
+		if tv, err := a.EmuTesterAdd(vb, free[0], "10.66.0.2/24", "", 0); err != nil || len(tv.Testers) != 1 || tv.Note != "" {
+			t.Fatalf("test port: %v %+v", err, tv)
+		}
+		if slices.Contains(a.EmuFreePorts(vb), free[0]) {
+			t.Error("the test port's port is still free")
+		}
+		if out, err := a.emuConsoleRun(vb, []string{fmt.Sprintf("x ip addr add 10.66.0.1/24 dev eth%d", pn), fmt.Sprintf("x ip link set eth%d up", pn), "x ping -c 3 -W 2 10.66.0.2"}, 2*time.Minute); err != nil || !strings.Contains(out, "3 packets received") {
+			t.Errorf("the switch pings the test port: %v %s", err, out)
+		}
+		tv, _ := a.EmuTraffic()
+		if _, err := a.EmuStreamSave(emu.Stream{Name: "ping-sw", From: tv.Testers[0].ID, Kind: "icmp", DstIP: "10.66.0.1", Size: 100, PPS: 20, Count: 40, MaxLoss: 5}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := a.EmuTrafficStart(nil); err != nil {
+			t.Fatal(err)
+		}
+		var r EmuStreamResult
+		for end := time.Now().Add(30 * time.Second); time.Now().Before(end); time.Sleep(time.Second) {
+			if tv, _ = a.EmuTraffic(); len(tv.Results) == 1 {
+				if r = tv.Results[0]; r.Result != "" {
+					break
+				}
+			}
+		}
+		if r.Result != "pass" || r.TX != 40 || r.RX < 38 || r.LatAvg < 0 {
+			t.Errorf("ping stream: %+v", r)
+		}
+		rep, _ := a.EmuTrafficReportText()
+		if !strings.Contains(rep, "ping-sw") || !strings.Contains(rep, "PASS") {
+			t.Errorf("report: %s", rep)
+		}
+		if _, err := a.EmuTrafficStop(); err != nil {
+			t.Error(err)
+		}
+		if tv, err := a.EmuTesterRemove(tv.Testers[0].ID); err != nil || len(tv.Testers) != 0 || len(tv.Streams) != 0 {
+			t.Errorf("remove: %v %+v", err, tv)
+		}
 	}
 	if out, err := a.emuMCP("lab_events", map[string]any{"last": float64(5)}); err != nil || out == "" {
 		t.Errorf("lab_events: %v %q", err, out)

@@ -111,6 +111,7 @@ export class Backend {
   emuSetLogLevel(level: string) { return this.call<{ level: string; path: string; tail: string }>('EmuSetLogLevel', level); }
   emuCaptureStart(id: string, port: string) { return this.call<EmuCapture[]>('EmuCaptureStart', id, port); }
   emuCaptureStop(key: string) { return this.call<EmuCapture[]>('EmuCaptureStop', key); }
+  emuCaptureDelete(files: string[]) { return this.call<EmuCapture[]>('EmuCaptureDelete', files); }
   emuCaptures() { return this.call<EmuCapture[]>('EmuCaptures'); }
   emuCapturePackets(key: string, last: number) { return this.call<EmuPacket[]>('EmuCapturePackets', key, last); }
   emuCaptureSave(key: string, path: string) { return this.call<void>('EmuCaptureSave', key, path); }

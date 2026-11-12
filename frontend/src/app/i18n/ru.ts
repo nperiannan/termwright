@@ -2726,6 +2726,11 @@ const ru: Record<string, string> = {
   'Level': 'Уровень',
   'Trigger': 'Кто',
   'The hosts have different QEMU versions ({0}). A running switch moves live only to the same or a newer QEMU; a move with its disk to another version boots it there. The same version on every host moves anywhere.': 'На хостах разные версии QEMU ({0}). Работающий коммутатор переносится вживую только на ту же или более новую версию QEMU; перенос с диском на другую версию загружает его там заново. С одной версией на всех хостах перенос возможен куда угодно.',
+  'Deletes its pcap file on the host': 'Удаляет его файл pcap на хосте',
+  'Delete All Stopped': 'Удалить все остановленные',
+  '{0} stopped captures': '{0} остановленных захватов',
+  'Delete {0}?': 'Удалить {0}?',
+  'The pcap files are deleted on the hosts; this cannot be undone.': 'Файлы pcap удаляются на хостах; это нельзя отменить.',
 };
 
 export default ru;

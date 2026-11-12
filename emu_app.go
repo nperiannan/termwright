@@ -135,6 +135,7 @@ var emuLab struct {
 	cpu              map[string]float64   // CPU use now, in cores (1 = one core busy)
 	ready            map[string]bool      // the console showed the ready text since the VM started (it may scroll out of the log's end later)
 	bootAns          map[string]time.Time // when a boot menu was last answered
+	trafHosts        map[string]bool      // hosts traffic.py runs on (or ran on: told to end)
 	addrOK           map[string]bool      // the switch showed its management address (since it started)
 	moveTo           map[string]string    // switches moving to another host: that host
 	personaAfterBoot map[string]bool      // the persona file is written once the VM has booted (its folder did not exist yet)
@@ -512,6 +513,7 @@ func (a *App) emuLoad() {
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
 	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
 	emuLab.personaTried, emuLab.perr, emuLab.bootAns, emuLab.addrOK, emuLab.moveTo = map[string]bool{}, map[string]string{}, map[string]time.Time{}, map[string]bool{}, map[string]string{}
+	emuLab.trafHosts = map[string]bool{}
 	emuLab.pinfo, emuLab.pcheck, emuLab.resumed, emuLab.lldp = map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]string{}
 	emuLab.download = map[string]string{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
@@ -4008,6 +4010,10 @@ func (a *App) EmuConnect(k EmuLinkView) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("a port is on the host's network: take it off first")
 	}
+	if l.TesterOn(k.A, pa) != nil || l.TesterOn(k.B, pb) != nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("a port has a test port: remove it first (Traffic)")
+	}
 	if pa == 0 || pb == 0 {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("unknown port")
@@ -4126,6 +4132,11 @@ func (a *App) EmuFreePorts(id string) []string {
 	emuLab.mu.Lock()
 	defer emuLab.mu.Unlock()
 	a.emuLoad()
+	return a.emuFreePortsLocked(id)
+}
+
+// emuFreePortsLocked: EmuFreePorts with emuLab.mu held.
+func (a *App) emuFreePortsLocked(id string) []string {
 	l := emuLab.f.Lab
 	if l == nil {
 		return nil
@@ -4141,6 +4152,11 @@ func (a *App) EmuFreePorts(id string) []string {
 	used := map[int]bool{}
 	for _, n := range v.Uplinks {
 		used[n] = true
+	}
+	for _, t := range l.Testers {
+		if t.VM == id {
+			used[t.Port] = true
+		}
 	}
 	for _, c := range l.Cables {
 		if c.A == id {
@@ -4794,6 +4810,17 @@ func (a *App) emuPackProfiles() []emu.Image {
 	return pf.Images
 }
 
+// emuSubseq: every line of a is in b, in the same order.
+func emuSubseq(a, b []string) bool {
+	i := 0
+	for _, x := range b {
+		if i < len(a) && a[i] == x {
+			i++
+		}
+	}
+	return i == len(a)
+}
+
 // emuTopUp gives images made from a pack profile what a newer pack adds to
 // it: console answers and the persona check (what the user set stays).
 func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
@@ -4812,7 +4839,7 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 					im.Answers, changed = append(im.Answers, pa), true
 				}
 			}
-			if len(p.Day0) > len(im.Day0) && slices.Equal(im.Day0, p.Day0[:len(im.Day0)]) { // the pack's day-0 grew (save configuration added)
+			if len(p.Day0) > len(im.Day0) && emuSubseq(im.Day0, p.Day0) { // the pack's day-0 grew (save configuration, LLDP on): the user's own lines would not be in it
 				im.Day0, changed = p.Day0, true
 			}
 			if im.LagCmd == "" && p.LagCmd != "" {

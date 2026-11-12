@@ -29,7 +29,7 @@ func TestArgsAndWiring(t *testing.T) {
 	a := strings.Join(l.Args(l.VMs[0], imgs["i1"]), " ")
 	for _, want := range []string{"-enable-kvm", "-m 512", "file=termwright-lab/lab-a1/v1.qcow2,if=ide", "hostfwd=tcp:127.0.0.1:20000-:22",
 		"socket,id=n1,udp=127.0.0.1:24065,localaddr=127.0.0.1:24001", "port=20001,server=on,wait=off,telnet=on,logfile=termwright-lab/lab-a1/v1.log",
-		"telnet:127.0.0.1:20002,server,nowait", "-daemonize", "e1000,id=nic3,mac=52:54:a1:00:00:03"} {
+		"telnet:127.0.0.1:20002,server,nowait", "-daemonize", "e1000,id=nic3,netdev=n3,mac=52:54:a1:00:00:03", "socket,id=n3,udp=127.0.0.1:32003,localaddr=127.0.0.1:24003"} {
 		if !strings.Contains(a, want) {
 			t.Errorf("args lack %q:\n%s", want, a)
 		}
@@ -249,7 +249,7 @@ func TestDownLinks(t *testing.T) {
 	if got != "n2 nic3" {
 		t.Fatal(got)
 	}
-	if a := strings.Join(l.Args(l.VMs[0], imgs["i1"]), " "); !strings.Contains(a, "e1000,id=nic3,mac=") {
+	if a := strings.Join(l.Args(l.VMs[0], imgs["i1"]), " "); !strings.Contains(a, "e1000,id=nic3,netdev=n3,mac=") {
 		t.Fatal(a)
 	}
 }
@@ -792,5 +792,23 @@ func TestQemuVersions(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(l.Args(VM{ID: "v1", Name: "s"}, &Image{}), " "), "-machine") {
 		t.Fatal("-machine without a pin")
+	}
+}
+
+func TestTesterConfig(t *testing.T) {
+	l, imgs := testLab()
+	_ = imgs
+	l.Testers = []Tester{{ID: "t1", VM: "v1", Port: 3, MAC: "02:74:77:00:00:01", IP: "10.10.0.1/24", GW: "10.10.0.254"}, {ID: "t2", VM: "v2", Port: 3, MAC: "02:74:77:00:00:02", IP: "10.10.0.2/24"}}
+	l.Streams = []Stream{{ID: "s1", From: "t1", To: "t2", Kind: "udp", Size: 128, PPS: 10}, {ID: "s2", From: "t1", Kind: "udp", DstIP: "10.20.0.9", Size: 128, PPS: 10}}
+	if got := strings.Join(l.DownLinks(l.VMs[0], imgs["i1"]), " "); strings.Contains(got, "nic3") {
+		t.Fatal("a port with a test port is down: " + got)
+	}
+	b, n := l.TrafficConfig(func(v VM) bool { return v.ID == "v1" }, 7, map[string]bool{"s1": true})
+	s := string(b)
+	if n != 1 || !strings.Contains(s, `"listen":32003`) || !strings.Contains(s, `"send":24003`) || !strings.Contains(s, `"toMac":"02:74:77:00:00:02"`) || !strings.Contains(s, `"dstIp":"10.10.0.2"`) || !strings.Contains(s, `"routed":true,"gwIp":"10.10.0.254"`) || !strings.Contains(s, `"run":7`) {
+		t.Fatal(s)
+	}
+	if !strings.Contains(l.TrafficScript(b), "nohup python3 tw-traffic.py") {
+		t.Fatal("no start")
 	}
 }

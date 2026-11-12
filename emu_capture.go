@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -208,6 +209,50 @@ func (a *App) EmuCaptureStop(key string) ([]EmuCapture, error) {
 	_ = a.emuSave()
 	emuEv(cc.VM, "info", "capture of "+cc.Port+" stopped ("+cc.File+")")
 	emuLab.mu.Unlock()
+	return a.EmuCaptures(), nil
+}
+
+// EmuCaptureDelete deletes stopped captures (by their files): the pcap files on their hosts and the list entries.
+func (a *App) EmuCaptureDelete(files []string) ([]EmuCapture, error) {
+	defer emuAs("user")()
+	emuLab.mu.Lock()
+	var del []EmuCapture
+	for _, c := range emuLab.f.Captures {
+		if slices.Contains(files, c.File) {
+			if c.Running {
+				emuLab.mu.Unlock()
+				return nil, errors.New("stop the capture of " + c.Switch + " " + c.Port + " first")
+			}
+			del = append(del, c)
+		}
+	}
+	emuLab.mu.Unlock()
+	byHost := map[string][]string{}
+	for _, c := range del {
+		byHost[c.Host] = append(byHost[c.Host], emu.Q(c.File))
+	}
+	var errs []string
+	failed := map[string]bool{}
+	for h, fs := range byHost {
+		if _, err := a.emuRun(h, "cd && rm -f -- "+strings.Join(fs, " "), 20*time.Second); err != nil {
+			errs = append(errs, h[strings.LastIndex(h, "/")+1:]+": "+err.Error())
+			failed[h] = true
+		}
+	}
+	emuLab.mu.Lock()
+	emuLab.f.Captures = slices.DeleteFunc(emuLab.f.Captures, func(c EmuCapture) bool {
+		return !c.Running && slices.Contains(files, c.File) && !failed[c.Host]
+	})
+	_ = a.emuSave()
+	for _, c := range del {
+		if !failed[c.Host] {
+			emuEv(c.VM, "info", "capture of "+c.Port+" deleted ("+c.File+")")
+		}
+	}
+	emuLab.mu.Unlock()
+	if len(errs) > 0 {
+		return a.EmuCaptures(), errors.New("could not delete on " + strings.Join(errs, "; "))
+	}
 	return a.EmuCaptures(), nil
 }
 
@@ -427,6 +472,8 @@ func emuDecodeFrame(f []byte) EmuPacket {
 	case et < 0x0600: // 802.3 length: LLC (STP and friends)
 		if strings.HasPrefix(p.Dst, "01:80:c2:00:00:00") {
 			p.Proto, p.Info = "STP", "spanning tree BPDU"
+		} else if p.Dst == "00:e0:2b:00:00:00" && len(pl) >= 8 && pl[0] == 0xaa && pl[3] == 0 && pl[4] == 0xe0 && pl[5] == 0x2b { // SNAP, the vendor's discovery protocol
+			p.Proto, p.Info = "EDP", "discovery protocol advertisement (not LLDP)"
 		} else {
 			p.Proto, p.Info = "LLC", fmt.Sprintf("802.3 length %d", et)
 		}
