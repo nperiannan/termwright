@@ -187,6 +187,8 @@ termwright-team://HOST:PORT/?k=OWNER-CODE&fp=FINGERPRINT
 
 **Update from Termwright** (recommended): when a team server is older than your Termwright, owners and co-owners get a notice (*Later* skips that version for a week) and **Options → Teams…** shows *Version X is available for the team server* → **Update Server…**. Pick the SSH session of the host (Termwright suggests the one it was set up with, or one that logs in to the team's address) and *Download* or *Copy over SSH*. Termwright gets the new image there and starts the team's container again with the same name, port, network, data volume and settings; the team, its members, inventory, usage history, certificate and invite stay. Only the container whose certificate is the team's is touched, so a wrong host or another team's server on the same host is never changed. The old container is kept stopped until the new one answers with the new version (90 seconds at most), and is started again if it does not. Its environment, restart policy, memory and CPU limits and labels are kept; a server from Docker Compose is updated with Compose (*pull* and *up -d*); a server installed with systemd is updated by hand (below). Members are told when the server is older, and everyone when it is newer than their Termwright. The admin page shows the server's version at the bottom left.
 
+**Reinstall or Update…**: when the server already runs your Termwright's version, owners can still install the *Nightly build* (the newest build of main) or the *Latest release* from the team's row in Options → Teams; it works like an update.
+
 | A newer version for the team server | Update Server |
 |---|---|
 | ![Update available](screenshots/team-update.png) | ![Updating the team server](screenshots/team-update-run.png) |

@@ -30,6 +30,7 @@ type TeamUpdateRequest struct {
 	TeamID      string `json:"teamId"`
 	SessionPath string `json:"sessionPath"`
 	Image       string `json:"image"`
+	Channel     string `json:"channel,omitempty"` // "" = this Termwright's version, "nightly" or "release" (also when the server runs the same version: a reinstall)
 }
 
 // TeamUpdateServer starts updating a team server and returns the run id;
@@ -135,7 +136,7 @@ func (a *App) teamUpdate(ctx context.Context, id string, t config.TeamConn, r Te
 		return failf("find", "Could not read how %s runs: %s", name, firstLine(spec+errText(err)))
 	}
 	c := parseContainer(spec)
-	tag := teamImageTag()
+	tag := teamTagFor(r.Channel)
 
 	// a server from Docker Compose is updated by Compose
 	if c.compose.project != "" {
@@ -168,7 +169,7 @@ func (a *App) teamUpdate(ctx context.Context, id string, t config.TeamConn, r Te
 		return failf("find", "%s keeps its data inside the container (no volume at /data): a new container would lose the team. Back it up and set it up with a volume (see the team server guide).", name)
 	}
 
-	ref, err := a.teamImage(ctx, out, dk, r.Image, emit, failf)
+	ref, err := a.teamImage(ctx, out, dk, r.Image, tag, emit, failf)
 	if err != nil {
 		return err
 	}

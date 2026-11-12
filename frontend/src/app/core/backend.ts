@@ -222,7 +222,7 @@ export class Backend {
   teamLeave(id: string, force: boolean) { return this.call<void>('TeamLeave', id, force); }
   teamSetUp(r: { sessionPath: string; name: string; port: number; image: string; hostNetwork: boolean }) { return this.call<string>('TeamSetUp', r); }
   teamSetUpCancel(run: string) { return this.call<void>('TeamSetUpCancel', run); }
-  teamUpdateServer(r: { teamId: string; sessionPath: string; image: string }) { return this.call<string>('TeamUpdateServer', r); }
+  teamUpdateServer(r: { teamId: string; sessionPath: string; image: string; channel?: string }) { return this.call<string>('TeamUpdateServer', r); }
   teamPushDevices(paths: string[], base: string) { return this.call<TeamPushItem[]>('TeamPushDevices', paths, base); }
   teamCheck(id: string, items: TeamPushItem[]) { return this.call<TeamPushResult[]>('TeamCheck', id, items); }
   teamPush(id: string, items: TeamPushItem[]) { return this.call<TeamPushResult[]>('TeamPush', id, items); }
