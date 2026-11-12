@@ -767,3 +767,13 @@ func TestMgmtMAC(t *testing.T) {
 		t.Error(m)
 	}
 }
+
+func TestSerialSIM(t *testing.T) {
+	d := &PersonaDef{SerialSIM: true}
+	if s := d.SerialFor("SB072152G-00355"); s != "SIM52G0-0355" {
+		t.Error(s)
+	}
+	if s := d.SerialFor("SIM32AF-9600"); s != "SIM32AF-9600" {
+		t.Error(s)
+	}
+}

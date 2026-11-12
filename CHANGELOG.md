@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, the software version and serial number come from the switch: after it boots, Termwright reads them on its CLI (an image profile's facts commands - EXOS: show version, IMG:; Fabric Engine: show software detail and show sys-info) and shows them on the canvas, in the hover card and the side panel (the serial Termwright gave shows until the switch reported its own). The firmware was empty before. Serial numbers in a persona file can be made SIMxxxx-xxxx, the only form some images take (device pack 1.5.7).
+- Emulated lab, the status bar no longer repeats the topology name and the hosts (they are in the header and the Hosts menu).
+
 - Emulated lab, three new icon styles, neutral with colour only for the status lights: **Slate tiles** (a slate tile with a white symbol per role), **Steel isometric** (grey hardware in 3-D with its ports) and **Rack front (1U)** (the front of the box as it sits in a rack: ears, port blocks, LEDs). Pick them in the tool dock (all switches) or per switch (Draw As…).
 
 - Emulated lab, **Log** tab in the bottom pane: the emulator's own log (emulator.log in the lab folder, three files of 5 MB) with everything the lab does, at a level you choose - Errors, Warnings, Info (default), Debug (each command run on a host, how long it took and how it ended, what day 0 typed) or Verbose (also the commands' text and output, secrets removed). Refresh, Copy and Save….

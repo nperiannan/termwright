@@ -159,7 +159,8 @@ type EmuDevice struct {
 	OS           string       `json:"os"` // device type
 	Model        string       `json:"model"`
 	Image        string       `json:"image"`
-	Version      string       `json:"version"`
+	Version      string       `json:"version"`  // the software it runs: as it reports it, else the image's
+	HWSerial     string       `json:"hwSerial"` // the serial number it reports
 	Serial       string       `json:"serial"`
 	MAC          string       `json:"mac"`
 	Hostname     string       `json:"hostname"`
@@ -2707,6 +2708,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		emuLab.mu.Unlock()
 	}
 	a.emuCheckPersona(ctx, c, &im, v)
+	a.emuReadFacts(ctx, c, &im, v)
 	if im.LagCmd != "" { // its LAGs, for the topology
 		if out, err := emu.Ask(ctx, c, &im, im.LagCmd); err == nil {
 			a.emuKeepLags(v, &im, emu.ParseLags(emu.CleanConsole(out)))
@@ -3110,6 +3112,55 @@ func emuWithTail(err error, c *emu.Console) error {
 	return fmt.Errorf("%w - the console showed: %s", err, c.Tail(220))
 }
 
+// emuReadFacts reads the software version and serial number the switch reports (the image's facts commands).
+func (a *App) emuReadFacts(ctx context.Context, c *emu.Console, im *emu.Image, v emu.VM) {
+	if len(im.Facts) == 0 {
+		return
+	}
+	fw, sn := "", ""
+	for _, f := range im.Facts {
+		var out string
+		for _, cmd := range strings.Split(f.Cmd, "\n") {
+			if cmd = strings.TrimSpace(cmd); cmd != "" {
+				o, err := emu.Ask(ctx, c, im, cmd)
+				if err != nil {
+					emuLogf(emuLvDebug, emuHostOfID0(v), v.Name, "facts: %s: %v", cmd, err)
+					break
+				}
+				out += o
+			}
+		}
+		out = emu.CleanConsole(out)
+		grab := func(re string) string {
+			if re == "" {
+				return ""
+			}
+			r, err := regexp.Compile(re)
+			if err != nil {
+				return ""
+			}
+			if m := r.FindStringSubmatch(out); len(m) > 1 {
+				return strings.TrimSpace(m[1])
+			}
+			return ""
+		}
+		fw, sn = orStr(fw, grab(f.Version)), orStr(sn, grab(f.Serial))
+	}
+	if fw == "" && sn == "" {
+		return
+	}
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	if cur := emuLab.f.Lab.VMByID(v.ID); cur != nil && (cur.FW != fw || cur.HWSerial != sn) {
+		cur.FW, cur.HWSerial = orStr(fw, cur.FW), orStr(sn, cur.HWSerial)
+		_ = a.emuSave()
+		emuEv(v.ID, "info", fmt.Sprintf("it reports software %s, serial number %s", orStr(cur.FW, "?"), orStr(cur.HWSerial, "?")))
+	}
+}
+
+// emuHostOfID0 is a VM's host for the log (no lock needed: the name only).
+func emuHostOfID0(v emu.VM) string { return v.Host }
+
 // emuCheckPersona asks the switch, on its CLI, which model it is (the
 // profile's check command) once per boot: a switch that booted as the plain
 // image shows a persona error.
@@ -3502,7 +3553,10 @@ func (a *App) emuView() EmuView {
 		d.CPU = emuLab.cpu[vm.ID] * 100 / float64(orInt(vm.CPUs, 1))
 		d.Cores = emuLab.cpu[vm.ID]
 		d.MemUsed = st.RSS[vm.ID]
-		d.Serial = vm.Serial
+		d.Serial, d.HWSerial = vm.Serial, vm.HWSerial
+		if im != nil {
+			d.Version = orStr(vm.FW, im.Version)
+		}
 		d.MovingTo = emuLab.moveTo[vm.ID]
 		switch s := emuLab.state[vm.ID]; {
 		case s == "uploading":
@@ -4697,6 +4751,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			}
 			if len(im.LagSet) == 0 && len(p.LagSet) > 0 {
 				im.LagSet, im.LagDel, changed = p.LagSet, p.LagDel, true
+			}
+			if len(im.Facts) == 0 && len(p.Facts) > 0 {
+				im.Facts, changed = p.Facts, true
 			}
 			if im.MgmtMACAlign == 0 && p.MgmtMACAlign > 0 {
 				im.MgmtMACAlign, im.MgmtMACOffset, changed = p.MgmtMACAlign, p.MgmtMACOffset, true

@@ -89,7 +89,7 @@ export interface SessionNode {
 export interface LabModel { sku: string; family: string; os: string[]; osName: Record<string, string>; ports: number; layout: string; }
 export interface LabPack { id: string; name: string; version: string; vendor: string; description: string; license: string; hash: string; os: string[]; models: number; file?: string; accepted?: string; error?: string; }
 export interface LabOS { name: string; short: string; configCommand: string; }
-export interface LabDevice { id: string; os: string; model: string; version: string; serial: string; mac: string; hostname: string; mgmtIp: string; port: number; ports: number; running: boolean; logins: number; unsaved: boolean; x: number; y: number;
+export interface LabDevice { id: string; os: string; model: string; version: string; serial: string; hwSerial?: string; mac: string; hostname: string; mgmtIp: string; port: number; ports: number; running: boolean; logins: number; unsaved: boolean; x: number; y: number;
   /** Emulated lab only. */
   state?: string; stateText?: string; cpu?: number; cores?: number; diskGb?: number; template?: string; persona?: EmuPersona | null; personaOk?: boolean; personaError?: string; personaInfo?: string; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; memUsed?: number; host?: string; saved?: boolean; role?: string; uplinks?: string[] | null; iconStyle?: string; movingTo?: string; }
 export interface LabEvent { at: string; vm: string; name: string; level: 'info' | 'ok' | 'warn' | 'error'; text: string; host?: string; }

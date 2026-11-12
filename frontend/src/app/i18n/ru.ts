@@ -2694,6 +2694,8 @@ const ru: Record<string, string> = {
   'Slate tiles': 'Сланцевые плитки',
   'Steel isometric': 'Стальная изометрия',
   'Rack front (1U)': 'Лицевая панель в стойке (1U)',
+  'As the switch reports it': 'Как его сообщает коммутатор',
+  'Given by Termwright; the switch has not reported its own yet': 'Задан Termwright; коммутатор ещё не сообщил свой',
   'Boxes': 'Блоки',
   'Isometric hardware': 'Изометрическое оборудование',
   'Classic diagram symbols': 'Классические символы схем',

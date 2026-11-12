@@ -219,7 +219,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                   <tr><td>{{ tr('Management') }}</td><td class="mono">{{ emu() ? (h.ssh || '-') : addrOf(h) + ':' + h.port }}</td></tr>
                   @if (emu() && h.running) { <tr><td>CPU</td><td>{{ (h.cpu ?? 0).toFixed(0) }} % {{ tr('of {0} vCPU', h.cpus ?? 1) }}</td></tr>
                     <tr><td>{{ tr('Memory') }}</td><td>{{ h.memUsed ? gb(h.memUsed) + ' / ' : '' }}{{ gb(h.ram) }}</td></tr> }
-                  <tr><td>{{ tr('Serial') }} · MAC</td><td class="mono">{{ h.serial || '-' }} · {{ h.mac || '-' }}</td></tr>
+                  <tr><td>{{ tr('Serial') }} · MAC</td><td class="mono" [title]="h.hwSerial ? tr('As the switch reports it') : tr('Given by Termwright; the switch has not reported its own yet')">{{ h.hwSerial || h.serial || '-' }} · {{ h.mac || '-' }}</td></tr>
                   <tr><td>{{ tr('Cables') }}</td><td>{{ cablesOf(h.id) }}</td></tr>
                 </table>
               </div>
@@ -326,7 +326,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (d.personaError) { <span class="r"><span class="clamp" [title]="d.personaError + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.personaError) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a></span> }
               @else { <span [class.g]="d.personaOk">{{ d.personaOk ? '✓ ' + tr('in the switch') : d.personaInfo ? tr(brief(d.personaInfo)) : tr('not written yet') }}</span> } }
             @if (d.personaInfo && !d.personaError) { <span></span><span class="mono xs clamp" [title]="d.personaInfo">{{ d.personaInfo }}</span> }
-            <span>{{ tr('Serial') }}</span><span class="mono">{{ d.serial || '-' }}</span>
+            <span>{{ tr('Serial') }}</span><span class="mono" [title]="d.hwSerial ? tr('As the switch reports it') : tr('Given by Termwright; the switch has not reported its own yet')">{{ d.hwSerial || d.serial || '-' }}</span>
+            @if (d.version) { <span>{{ tr('Firmware') }}</span><span class="mono">{{ d.version }}</span> }
             <span>MAC</span><span class="mono">{{ d.mac || '-' }}</span>
             <span>{{ tr('Management') }}</span><span class="mono">{{ emu() ? d.ssh : d.mgmtIp }}</span>
             @if (emu()) { <span>{{ tr('Console') }}</span><span class="mono">telnet :{{ d.console }}</span>
@@ -407,8 +408,6 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     </div>
     <div class="sbar">
       @if (emu()) {
-        <span class="si top">⬢ {{ st()?.topology || tr('Untitled') }}</span>
-        @for (r of mgRows(); track r.host) { <a class="si" (click)="mgOpen.set(true); $event.stopPropagation()" [title]="r.name + ' · ' + r.long"><i class="hd" [style.background]="r.c"></i>{{ r.name }}<span class="muted">{{ r.kvm }} · {{ r.short }}</span></a> }
         @if (busyLine(); as b) { <a class="si job" (click)="dock.set('events')" [title]="tr('See the Events')"><i class="spin"></i>{{ b }}</a> }
         <span class="sp"></span>
         @if ((st()?.downloadQueue ?? []).length) { <a class="si" (click)="page.set('images')">↓ {{ tr('{0} images downloading or waiting', st()!.downloadQueue!.length) }}</a> }

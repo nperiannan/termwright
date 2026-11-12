@@ -58,6 +58,7 @@ type Image struct {
 	LagSet          map[string][]string `json:"lagSet,omitempty"`          // CLI commands that make a LAG, per mode ("lacp", "static"): {id} {name} {ports} {master} {first} {last}
 	LagDel          []string            `json:"lagDel,omitempty"`          // CLI commands that remove a LAG (the same names)
 	TCGCPU          string              `json:"tcgCpu,omitempty"`
+	Facts           []Fact              `json:"facts,omitempty"`         // CLI commands that read the switch's software version and serial number after it booted
 	MgmtMACAlign    int                 `json:"mgmtMacAlign,omitempty"`  // the OS takes its management MAC from its first NIC's address rounded down to this block (a power of two; 0 = it uses the NIC's address)
 	MgmtMACOffset   int                 `json:"mgmtMacOffset,omitempty"` // … plus this (Fabric Engine: block 1024, OOB at +0x81 = 129)          // the CPU model it gets on a host without KVM (for example Nehalem, for an image that wants an Intel CPU); "" = QEMU's default
 	BootAnswers     []Answer            `json:"bootAnswers,omitempty"`   // menus the image may stop at while it boots (the end of its console log), and what to type
@@ -191,12 +192,14 @@ type VM struct {
 	DiskGB   int      `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
 	Template string   `json:"template,omitempty"`
 	Persona  *Persona `json:"persona,omitempty"`
-	FastKey  string   `json:"fastKey,omitempty"` // its running state was saved in its disk with this setup (FastKey): it resumes from it
-	Uplinks  []int    `json:"uplinks,omitempty"` // data ports on the host's network (its bridge, or macvtap on its port)
-	Relayed  bool     `json:"relayed,omitempty"` // moved while running: its cables listen on all addresses (relays on its old host forward to it)
-	Incoming string   `json:"-"`                 // started to receive a live migration ("tcp:0.0.0.0:port")
-	CPU      string   `json:"cpu,omitempty"`     // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
-	Role     string   `json:"role,omitempty"`    // what it is drawn as ("access", "core", "router"…; "" = from its model)
+	FastKey  string   `json:"fastKey,omitempty"`  // its running state was saved in its disk with this setup (FastKey): it resumes from it
+	Uplinks  []int    `json:"uplinks,omitempty"`  // data ports on the host's network (its bridge, or macvtap on its port)
+	Relayed  bool     `json:"relayed,omitempty"`  // moved while running: its cables listen on all addresses (relays on its old host forward to it)
+	Incoming string   `json:"-"`                  // started to receive a live migration ("tcp:0.0.0.0:port")
+	FW       string   `json:"fw,omitempty"`       // the software version the switch reports (its CLI, after it booted)
+	HWSerial string   `json:"hwSerial,omitempty"` // the serial number the switch reports
+	CPU      string   `json:"cpu,omitempty"`      // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
+	Role     string   `json:"role,omitempty"`     // what it is drawn as ("access", "core", "router"…; "" = from its model)
 	X        int      `json:"x"`
 	Y        int      `json:"y"`
 }
@@ -586,6 +589,14 @@ const CommonCPU = "Westmere"
 
 // kvmCPU is the CPU model with KVM.
 func (l *Lab) kvmCPU() string { return orStr(l.CPU, "host") }
+
+// Fact is a CLI command (lines: several in turn, "enable" first) and the regular expressions that read
+// the software version and the serial number from what it printed (their first group).
+type Fact struct {
+	Cmd     string `json:"cmd"`
+	Version string `json:"version,omitempty"`
+	Serial  string `json:"serial,omitempty"`
+}
 
 // tcgCPU is the image's CPU model for software emulation, when it is a plain model name (with its +feature options).
 func (im *Image) tcgCPU() string {

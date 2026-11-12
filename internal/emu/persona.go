@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -31,10 +32,26 @@ type PersonaDef struct {
 	FSHas     []string       `json:"fsHas,omitempty"`     // names at the top of the filesystem the file goes on, when the image mounts it from its own scripts
 	Check     string         `json:"check"`               // a CLI command whose output names the model once the persona took ("show version")
 	SerialMax int            `json:"serialMax,omitempty"` // the longest serial number the image takes: a longer one keeps its last characters
+	SerialSIM bool           `json:"serialSim,omitempty"` // the image takes only SIMxxxx-xxxx: any serial becomes that, from its last 8 letters and digits
 }
+
+var simSerial = regexp.MustCompile(`^SIM[0-9A-Z]{4}-[0-9A-Z]{4}$`)
 
 // SerialFor is a slot's serial number as the image takes it.
 func (d *PersonaDef) SerialFor(s string) string {
+	if d != nil && d.SerialSIM && !simSerial.MatchString(s) {
+		var b []byte
+		for _, c := range strings.ToUpper(s) {
+			if c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' {
+				b = append(b, byte(c))
+			}
+		}
+		for len(b) < 8 {
+			b = append([]byte{'0'}, b...)
+		}
+		b = b[len(b)-8:]
+		return "SIM" + string(b[:4]) + "-" + string(b[4:])
+	}
 	if d != nil && d.SerialMax > 0 && len(s) > d.SerialMax {
 		return s[len(s)-d.SerialMax:]
 	}
