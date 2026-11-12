@@ -3056,7 +3056,10 @@ func (a *App) EmuState() (EmuView, error) {
 	has := emuLab.f.Lab != nil && len(emuLab.f.Lab.VMs) > 0
 	emuLab.mu.Unlock()
 	if has {
-		a.emuPoll(false)
+		// the switches' state comes from the hosts over SSH (seconds with a slow
+		// host): it is fetched in the background, the view answers at once with
+		// the last one, and the next refresh shows the new
+		go a.emuPoll(false)
 	}
 	emuLab.mu.Lock()
 	defer emuLab.mu.Unlock()
