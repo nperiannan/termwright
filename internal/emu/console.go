@@ -247,6 +247,17 @@ func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Ans
 // DefaultPrompt matches a CLI prompt at the end of the output.
 const DefaultPrompt = `[>#$%]\s*$`
 
+// LastLine is the console's last line with text (a prompt waits there).
+func (c *Console) LastLine() string {
+	ls := strings.Split(strings.ReplaceAll(CleanConsole(c.Text()), "\r", "\n"), "\n")
+	for i := len(ls) - 1; i >= 0; i-- {
+		if t := strings.TrimSpace(ls[i]); t != "" {
+			return t
+		}
+	}
+	return ""
+}
+
 // Tail is the end of what the console showed (n characters, one line).
 func (c *Console) Tail(n int) string {
 	t := strings.Join(strings.Fields(CleanConsole(c.Text())), " ")
@@ -270,8 +281,8 @@ func Login(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 		if p, err = login1(ctx, c, im); err == nil {
 			return p, nil
 		}
-		if !strings.Contains(err.Error(), "refused") || im.Password == "" {
-			break // without a password it is refused again
+		if !strings.Contains(err.Error(), "refused") || im.Password == "" && !im.NotReadyIn(c.LastLine()) {
+			break // without a password it is refused again (unless its login was not ready)
 		}
 		wait := 10 * time.Second
 		if m := lockOut.FindStringSubmatch(c.Tail(600)); m != nil { // too many attempts: the console is locked for a while
@@ -286,6 +297,9 @@ func Login(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 	}
 	return nil, fmt.Errorf("%w - the console showed: %s", err, c.Tail(220))
 }
+
+// notReadyWait: how long a login that is not ready yet is left alone before Enter is typed again.
+var notReadyWait = 10 * time.Second
 
 func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 	prompt, err := regexp.Compile(orStr(im.Prompt, DefaultPrompt))
@@ -310,6 +324,22 @@ func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) 
 	}
 	if i == 2 {
 		return nil, errors.New("the console asks for a password but shows no login prompt")
+	}
+	// a login prompt that is not ready yet ("(pending-AAA) login:"): wait, then look again
+	for try := 0; i == 0 && im.NotReadyIn(c.LastLine()) && try < 30; try++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(notReadyWait):
+		}
+		_ = c.Send("")
+		var err error
+		if i, err = c.Wait(ctx, 60*time.Second, im.answers(), login, prompt, pass); err != nil {
+			return nil, errors.New("no login prompt on the console: " + err.Error())
+		}
+	}
+	if i == 0 && im.NotReadyIn(c.LastLine()) {
+		return nil, errors.New("its login did not get ready in 5 minutes (still " + c.Tail(80) + ")")
 	}
 	if i == 0 {
 		_ = c.Send(orStr(im.Login, "admin"))

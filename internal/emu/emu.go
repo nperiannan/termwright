@@ -57,7 +57,8 @@ type Image struct {
 	LagCmd          string              `json:"lagCmd,omitempty"`          // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
 	LagSet          map[string][]string `json:"lagSet,omitempty"`          // CLI commands that make a LAG, per mode ("lacp", "static"): {id} {name} {ports} {master} {first} {last}
 	LagDel          []string            `json:"lagDel,omitempty"`          // CLI commands that remove a LAG (the same names)
-	BootAnswers     []Answer            `json:"bootAnswers,omitempty"`     // menus the image may stop at while it boots (the end of its console log), and what to type
+	BootAnswers     []Answer            `json:"bootAnswers,omitempty"` // menus the image may stop at while it boots (the end of its console log), and what to type
+	NotReady        []string            `json:"notReady,omitempty"`    // console text that means its login is not ready yet ("(pending-AAA)"): nothing is typed until it is gone
 	NeighborCmd     string              `json:"neighborCmd,omitempty"`     // a CLI command that lists the LLDP neighbours ("show lldp neighbors")
 	Persona         *PersonaDef         `json:"persona,omitempty"`         // a file that makes the image act as a given device
 	Version         string              `json:"version"`                   // the software version of the image (for the lists)
@@ -99,6 +100,22 @@ func (im *Image) HasFiles() bool {
 // Answer: when the console shows Match (plain text), Send is typed (and Enter).
 // "{password}" in Send is the image's password (a first login that asks for a
 // new one); such an answer is not shown in the events.
+// builtinNotReady: login prompts that are not ready yet on any image.
+var builtinNotReady = []string{"(pending-AAA)"}
+
+// NotReadyIn says whether the end of the console says its login is not ready yet.
+func (im *Image) NotReadyIn(tail string) bool {
+	if len(tail) > 160 {
+		tail = tail[len(tail)-160:]
+	}
+	for _, m := range append(append([]string(nil), im.NotReady...), builtinNotReady...) {
+		if m != "" && strings.Contains(tail, m) {
+			return true
+		}
+	}
+	return false
+}
+
 // BootStop is the boot answer the end of a console log waits for ("" when none).
 func (im *Image) BootStop(log string) (Answer, bool) {
 	tail := log

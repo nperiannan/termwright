@@ -297,7 +297,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             <span>{{ tr('Management') }}</span><span class="mono">{{ emu() ? d.ssh : d.mgmtIp }}</span>
             @if (emu()) { <span>{{ tr('Console') }}</span><span class="mono">telnet :{{ d.console }}</span>
               <span>{{ tr('Resources') }}</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }@if (d.running && d.cpu !== undefined) { · CPU {{ d.cpu!.toFixed(0) }} % }</span> }
-            @if (d.error) { <span>{{ tr('Problem') }}</span><span class="r">{{ d.error }}</span> }
+            @if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a></span> }
           </div>
           <div class="btns">@if (emu()) { <button type="button" class="primary sm" (click)="console(d)" [disabled]="!d.running">{{ tr('Console') }}</button> }
             <button type="button" class="sm" (click)="ssh(d)" [disabled]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }}</button><button type="button" class="sm" (click)="configure(d)">{{ tr('Configure…') }}</button></div></div>
@@ -868,7 +868,7 @@ export class LabWorkspace implements OnDestroy {
   /** The problem of a switch that is up ("" = none): it stays green, with a "!". */
   /** A message cut to its first part: what happened, not the switch's output after it (the whole text is in the tooltip and the Events log). */
   brief(t: string) {
-    let s = t.replace(/\s*\([^()]*\)/g, '').replace(/:\s*"[^"]*"\s+(does|did|is|was|has)\b/, ': it $1').replace(/\s+-\s+(it printed|see|back to|read|the switch printed).*$/i, '');
+    let s = t.replace(/\s*\([^()]*\)/g, '').replace(/:\s*"[^"]*"\s+(does|did|is|was|has)\b/, ': it $1').replace(/\s+-\s+(it printed|see|back to|read|the switch printed|the console showed).*$/i, '');
     const cut = s.search(/\s+-\s+|;\s/); if (cut > 30) s = s.slice(0, cut);
     s = s.trim(); return s ? s[0].toUpperCase() + s.slice(1) : t;
   }
