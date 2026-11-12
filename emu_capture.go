@@ -63,6 +63,7 @@ func (a *App) emuHome(host string) (string, error) {
 
 // EmuCaptureStart starts capturing a switch port (its cable) while it runs.
 func (a *App) EmuCaptureStart(id, port string) ([]EmuCapture, error) {
+	defer emuAs("user")()
 	st := a.emuPollFresh()
 	emuLab.mu.Lock()
 	a.emuLoad()
@@ -170,6 +171,7 @@ func emuPeerText(id string, n int) string {
 
 // EmuCaptureStop stops a capture (its file stays on the host).
 func (a *App) EmuCaptureStop(key string) ([]EmuCapture, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	var c *EmuCapture
 	for i := range emuLab.f.Captures {
@@ -299,6 +301,7 @@ func (a *App) EmuCapturePackets(key string, last int) ([]EmuPacket, error) {
 
 // EmuCaptureSave copies a capture's pcap file to this computer.
 func (a *App) EmuCaptureSave(key, local string) error {
+	defer emuAs("user")()
 	c, ok := emuCaptureByKey(key)
 	if !ok {
 		return errors.New("no such capture")
@@ -325,6 +328,7 @@ func emuWireshark() string {
 
 // EmuCaptureWireshark opens a capture in Wireshark on this computer: live (the file followed as it grows) while it runs.
 func (a *App) EmuCaptureWireshark(key string) error {
+	defer emuAs("user")()
 	c, ok := emuCaptureByKey(key)
 	if !ok {
 		return errors.New("no such capture")

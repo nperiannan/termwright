@@ -198,6 +198,7 @@ type VM struct {
 	Incoming string   `json:"-"`                  // started to receive a live migration ("tcp:0.0.0.0:port")
 	FW       string   `json:"fw,omitempty"`       // the software version the switch reports (its CLI, after it booted)
 	HWSerial string   `json:"hwSerial,omitempty"` // the serial number the switch reports
+	Machine  string   `json:"machine,omitempty"`  // the QEMU machine type it runs as, when pinned (a live move between QEMU versions: "pc" is each version's own)
 	CPU      string   `json:"cpu,omitempty"`      // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
 	Role     string   `json:"role,omitempty"`     // what it is drawn as ("access", "core", "router"…; "" = from its model)
 	X        int      `json:"x"`
@@ -610,6 +611,9 @@ func (im *Image) tcgCPU() string {
 func (l *Lab) Args(v VM, im *Image) []string {
 	dir := l.VMDir()
 	a := []string{"-name", v.Name, "-m", strconv.Itoa(orInt(v.RAM, im.RAM, 1024)), "-smp", strconv.Itoa(orInt(v.CPUs, im.CPUs, 1))}
+	if v.Machine != "" {
+		a = append(a, "-machine", v.Machine)
+	}
 	if l.KVM {
 		a = append(a, "-enable-kvm", "-cpu", l.kvmCPU())
 	} else {
@@ -841,7 +845,7 @@ func (l *Lab) FastKey(v VM, im *Image) string {
 		pa = v.Persona.Applied
 	}
 	return Hash(fmt.Sprint(im.ID, im.FileName, im.NICs, im.NIC, im.Disk, im.Extra, orInt(v.CPUs, im.CPUs, 1), orInt(v.RAM, im.RAM, 1024), v.DiskGB,
-		v.Serial, v.BaseMAC, pa, v.Host, l.Mgmt, l.MgmtNet, l.LanFixed, l.LanIf, v.MgmtIP, v.Uplinks) + l.CPU)[:12] // its saved state loads with the same CPU only
+		v.Serial, v.BaseMAC, pa, v.Host, l.Mgmt, l.MgmtNet, l.LanFixed, l.LanIf, v.MgmtIP, v.Uplinks) + l.CPU + v.Machine)[:12] // its saved state loads with the same CPU only
 }
 
 // disks lists a VM's disk files on the host.
@@ -1322,3 +1326,27 @@ func NextMAC(start string, i int) string {
 	x += uint64(i) * 64
 	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", byte(x>>40), byte(x>>32), byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
 }
+
+// QemuMM is a QEMU version's major.minor ("8.2.2 (Debian…)" or "QEMU emulator version 8.2.2" → "8.2"); "" when not one.
+func QemuMM(ver string) string {
+	m := regexp.MustCompile(`(\d+)\.(\d+)(?:\.\d+)?`).FindStringSubmatch(ver)
+	if m == nil {
+		return ""
+	}
+	return m[1] + "." + m[2]
+}
+
+// QemuOlder: version a is older than b (major.minor; false when either is not known).
+func QemuOlder(a, b string) bool {
+	x, y := QemuMM(a), QemuMM(b)
+	if x == "" || y == "" {
+		return false
+	}
+	var a1, a2, b1, b2 int
+	fmt.Sscanf(x, "%d.%d", &a1, &a2)
+	fmt.Sscanf(y, "%d.%d", &b1, &b2)
+	return a1 < b1 || a1 == b1 && a2 < b2
+}
+
+// QemuMin is the oldest QEMU Termwright's lab works with (filter-dump captures, migration settings, NBD disk mirroring).
+const QemuMin = "4.2"

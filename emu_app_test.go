@@ -1171,3 +1171,24 @@ func TestEmuLog(t *testing.T) {
 		t.Errorf("%s", b)
 	}
 }
+
+func TestEmuTrigger(t *testing.T) {
+	if emuWho() != "system" {
+		t.Fatal("no mark is the system")
+	}
+	done := emuAs("ai")
+	if r := emuAs("user"); emuWho() != "ai" {
+		t.Fatal("a user mark replaced the AI's")
+	} else {
+		r()
+	}
+	ch := make(chan string)
+	emuGo(func() { ch <- emuWho() })
+	if w := <-ch; w != "ai" {
+		t.Fatalf("a goroutine it starts is %q", w)
+	}
+	done()
+	if emuWho() != "system" {
+		t.Fatal("the mark stayed")
+	}
+}

@@ -2720,6 +2720,12 @@ const ru: Record<string, string> = {
   'Classic 3-D (diagram blue)': 'Классические 3D (синие)',
   'Line icons': 'Контурные значки',
   'Front panels': 'Передние панели',
+  'You did it in Termwright': 'Это сделали вы в Termwright',
+  'An AI agent did it through the Termwright connector': 'Это сделал ИИ-агент через коннектор Termwright',
+  'Termwright did it on its own (watching the switches, retrying, checking)': 'Termwright сделал это сам (наблюдение за коммутаторами, повторы, проверки)',
+  'Level': 'Уровень',
+  'Trigger': 'Кто',
+  'The hosts have different QEMU versions ({0}). A running switch moves live only to the same or a newer QEMU; a move with its disk to another version boots it there. The same version on every host moves anywhere.': 'На хостах разные версии QEMU ({0}). Работающий коммутатор переносится вживую только на ту же или более новую версию QEMU; перенос с диском на другую версию загружает его там заново. С одной версией на всех хостах перенос возможен куда угодно.',
 };
 
 export default ru;

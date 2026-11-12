@@ -64,6 +64,7 @@ func emuJudge(seen, peer, peerPort string, names []string) string {
 // EmuCheckCabling asks the running switches for their LLDP neighbours and
 // compares them with the cables: each cable shows ok, wrong or none.
 func (a *App) EmuCheckCabling() (EmuView, error) {
+	defer emuAs("user")()
 	st := a.emuPollFresh()
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
@@ -158,6 +159,7 @@ type EmuHostLink struct {
 // EmuCheckTunnels sends UDP from each host of the lab to each other one, as
 // the cables between hosts do, and says which arrive.
 func (a *App) EmuCheckTunnels() ([]EmuHostLink, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
 	if l == nil {

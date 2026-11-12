@@ -777,3 +777,20 @@ func TestSerialSIM(t *testing.T) {
 		t.Error(s)
 	}
 }
+
+func TestQemuVersions(t *testing.T) {
+	if QemuMM("QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.4)") != "8.2" || QemuMM("6.2.0") != "6.2" || QemuMM("") != "" {
+		t.Fatal("major.minor")
+	}
+	if !QemuOlder("6.2.0", "8.2.2") || QemuOlder("8.2.2", "6.2.0") || QemuOlder("8.2.1", "8.2.2") || QemuOlder("", "8.2") || !QemuOlder("4.1", QemuMin) || !QemuOlder("10.1", "11.0") {
+		t.Fatal("older")
+	}
+	l := &Lab{}
+	a := strings.Join(l.Args(VM{ID: "v1", Name: "s", Machine: "pc-i440fx-6.2"}, &Image{}), " ")
+	if !strings.Contains(a, "-machine pc-i440fx-6.2") {
+		t.Fatal("no -machine: " + a)
+	}
+	if strings.Contains(strings.Join(l.Args(VM{ID: "v1", Name: "s"}, &Image{}), " "), "-machine") {
+		t.Fatal("-machine without a pin")
+	}
+}

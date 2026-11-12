@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **Events** has columns: time, host, switch, **Level** (OK in green, INFO, WARN in yellow, FAIL in red - the message in the same colour, no more boxed rows) and **Trigger** - USER (you, in Termwright), AI (an agent through the connector) or SYSTEM (Termwright on its own: watching the switches, retrying a copy). Copy includes both.
+- Emulated lab, **QEMU versions**: a live move keeps the machine type the switch runs as (QEMU's default is each version's and each distribution's own), so it moves live to a host with the same or a newer QEMU; to an older QEMU it is refused with the reason, and a move with its disk to another version boots it there instead of resuming a state that would not load. *On the Hosts* warns when the hosts' QEMU versions differ, and a host check flags a QEMU older than 4.2.
+
 - Emulated lab, **packet capture**: right-click a cable → *Capture Packets* records it both ways at one end while the switches keep running (QEMU writes a pcap file on the host; the cable turns red and dashed). The **Captures** tab lists the captures and shows each one's packets live - number, time, source, destination, protocol (Ethernet, VLAN, ARP, IPv4/IPv6, ICMP, TCP, UDP, DHCP, DNS, LLDP, STP, LACP, OSPF, BGP, VRRP…), length and info - with a filter, *Stop*, *Save .pcap…* and *Wireshark* (opens it in Wireshark on this computer, live while it captures). The connector has **lab_capture** (start, stop, read with a filter, list) for AI agents.
 - Emulated lab, the hover card moves to the left of a switch near the canvas's right edge instead of running off it.
 

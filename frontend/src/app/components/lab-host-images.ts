@@ -23,6 +23,7 @@ import { tr } from '../core/i18n';
         <button type="button" (click)="load()" [disabled]="loading()">↻ {{ loading() ? tr('Checking…') : tr('Check Again') }}</button>
         <button type="button" class="primary" (click)="sync([], [], false)" [disabled]="!missing().n">⇉ {{ tr('Make All Hosts the Same') }}</button>
       </div>
+      @if (qemuMix(); as q) { <p class="qmix">⚠ {{ tr('The hosts have different QEMU versions ({0}). A running switch moves live only to the same or a newer QEMU; a move with its disk to another version boots it there. The same version on every host moves anywhere.', q) }}</p> }
       @if (!m() && loading()) { <p class="muted pad">{{ tr('Reading the hosts…') }}</p> }
       @else if (!hosts().length) { <p class="muted pad">{{ tr('No host yet: add one under Hosts.') }}</p> }
       @else {
@@ -106,6 +107,7 @@ import { tr } from '../core/i18n';
   </div>
   `,
   styles: [`
+    .qmix { margin: 0 18px 10px; padding: 8px 12px; border-radius: 8px; color: var(--warning, #e39b17); background: color-mix(in srgb, var(--warning, #e39b17) 10%, transparent); font-size: 12.5px; }
     :host { display: block; min-height: 0; overflow: hidden; }
     .wrap { display: grid; grid-template-columns: minmax(0, 1fr); height: 100%; min-height: 0; }
     .wrap.withp { grid-template-columns: minmax(0, 1fr) 380px; }
@@ -157,6 +159,11 @@ export class LabHostImages implements OnInit, OnDestroy {
   protected ports = signal('');
   private timer: ReturnType<typeof setTimeout> | null = null;
   protected hosts = computed(() => this.m()?.hosts ?? []);
+  /** "teams-vm 8.2, ubuntu-dev 6.2" when the hosts' QEMU versions (major.minor) differ, else "". */
+  protected qemuMix = computed(() => {
+    const hs = this.hosts().filter(h => h.qemu).map(h => ({ n: h.name, v: (h.qemu.match(/\d+\.\d+/) ?? [''])[0] }));
+    return new Set(hs.map(h => h.v)).size > 1 ? hs.map(h => h.n + ' ' + h.v).join(', ') : '';
+  });
   protected images = computed(() => this.m()?.images ?? []);
   protected cur = computed(() => this.hosts().find(h => h.session === this.sel()) ?? null);
   protected missing = computed(() => {

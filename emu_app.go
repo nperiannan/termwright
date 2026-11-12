@@ -235,6 +235,7 @@ type EmuEvent struct {
 	Level string    `json:"level"` // "info", "ok", "warn", "error"
 	Text  string    `json:"text"`
 	Host  string    `json:"host,omitempty"` // the host it happened on (when it happened: a switch may move later)
+	By    string    `json:"by,omitempty"`   // who caused it: user, ai, system
 }
 
 // emuEv adds to the Events log (emuLab.mu held).
@@ -251,7 +252,7 @@ func emuEvOn(host, id, level, text string) {
 			}
 		}
 	}
-	e := EmuEvent{At: time.Now(), VM: id, Name: name, Level: level, Text: text, Host: host}
+	e := EmuEvent{At: time.Now(), VM: id, Name: name, Level: level, Text: text, Host: host, By: emuWho()}
 	emuLogf(emuLevel(level), host, name, "%s", text)
 	emuLab.events = append(emuLab.events, e)
 	if n := len(emuLab.events); n > 400 {
@@ -387,6 +388,7 @@ func (a *App) EmuConsoleLog(id string) (string, error) {
 // EmuDay0Again types a running switch's day 0 (its address, persona check) again,
 // after it failed: its disk and configuration stay.
 func (a *App) EmuDay0Again(id string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	if emuLab.f.Lab == nil || emuLab.f.Lab.VMByID(id) == nil {
 		emuLab.mu.Unlock()
@@ -625,7 +627,7 @@ func (a *App) emuRun0(host, script string, timeout time.Duration) (string, error
 		s.Stdin = strings.NewReader(script)
 		done := make(chan struct{})
 		var out []byte
-		go func() { out, err = s.CombinedOutput("sh -s"); close(done) }()
+		emuGo(func() { out, err = s.CombinedOutput("sh -s"); close(done) })
 		select {
 		case <-done:
 		case <-ctx.Done():
@@ -643,6 +645,7 @@ func (a *App) emuRun0(host, script string, timeout time.Duration) (string, error
 
 // EmuCheckHost checks a KVM host (an SSH session) and keeps it in the list.
 func (a *App) EmuCheckHost(sessionPath string) (EmuHost, error) {
+	defer emuAs("user")()
 	if err := a.ready(); err != nil {
 		return EmuHost{}, err
 	}
@@ -678,6 +681,7 @@ func (a *App) EmuCheckHost(sessionPath string) (EmuHost, error) {
 
 // EmuRemoveHost forgets a host (not the lab's own).
 func (a *App) EmuRemoveHost(sessionPath string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	if emuLab.f.Host == sessionPath && emuLab.f.Lab != nil && len(emuLab.f.Lab.VMs) > 0 {
@@ -713,6 +717,7 @@ func fileSHA256(p string) (string, int64, error) {
 
 // EmuAddImage adds a VM image file of this computer (with a profile to edit).
 func (a *App) EmuAddImage(p string) (EmuView, error) {
+	defer emuAs("user")()
 	sum, size, err := fileSHA256(p)
 	if err != nil {
 		return EmuView{}, err
@@ -752,6 +757,7 @@ func guessDeviceType(name string) string {
 // EmuImportAppliance reads a GNS3 appliance file: one image per version it
 // lists, with its file when that lies next to the appliance file.
 func (a *App) EmuImportAppliance(p string) (EmuView, error) {
+	defer emuAs("user")()
 	b, err := os.ReadFile(p)
 	if err != nil {
 		return EmuView{}, err
@@ -832,6 +838,7 @@ func (a *App) EmuCatalog() []EmuCatalogItem {
 
 // EmuAddFromCatalog fetches a public appliance from the GNS3 registry and adds its versions.
 func (a *App) EmuAddFromCatalog(file string) (EmuView, error) {
+	defer emuAs("user")()
 	var item *EmuCatalogItem
 	for i := range emuCatalog {
 		if emuCatalog[i].File == file {
@@ -863,6 +870,7 @@ func (a *App) EmuAddFromCatalog(file string) (EmuView, error) {
 // the list (refused while switches use one), stops their downloads and, with
 // files, deletes the files Termwright downloaded for them (not ones chosen elsewhere).
 func (a *App) EmuRemoveFromCatalog(file string, files bool) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	src := "GNS3 registry " + file
@@ -999,6 +1007,7 @@ func (a *App) emuImportAppliance(b []byte, dir string, source ...string) (EmuVie
 
 // EmuClearEvents empties the Events log.
 func (a *App) EmuClearEvents() (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	emuLab.events = nil
 	if emuEventsFile != "" {
@@ -1015,6 +1024,7 @@ func (a *App) emuDownloadDir() string { return filepath.Join(a.labDir(), "images
 // GNS3 appliance) to this computer, one after the other, and checks their MD5
 // sums; each becomes the image's file. Progress shows on the images.
 func (a *App) EmuDownload(ids []string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	for _, id := range ids {
@@ -1029,7 +1039,7 @@ func (a *App) EmuDownload(ids []string) (EmuView, error) {
 	}
 	emuLab.mu.Unlock()
 	if start {
-		go a.emuDownloadWorker()
+		emuGo(func() { a.emuDownloadWorker() })
 	}
 	return a.EmuState()
 }
@@ -1074,7 +1084,7 @@ func (a *App) emuDownloadWorker() {
 			emuEv("", "error", cp.Name+" "+cp.Version+": download failed: "+err.Error())
 		default:
 			emuEv("", "ok", cp.Name+" "+cp.Version+": downloaded and checked ("+cp.FileName+")")
-			go a.emuSyncAfter(cp.ID)
+			emuGo(func() { a.emuSyncAfter(cp.ID) })
 		}
 		emuLab.mu.Unlock()
 		if !stopped {
@@ -1085,6 +1095,7 @@ func (a *App) emuDownloadWorker() {
 
 // EmuDownloadStop stops an image's download, or takes it out of the queue.
 func (a *App) EmuDownloadStop(id string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	if emuLab.dlCur == id && emuLab.dlCancel != nil {
 		emuLab.dlCancel()
@@ -1098,6 +1109,7 @@ func (a *App) EmuDownloadStop(id string) (EmuView, error) {
 
 // EmuDownloadMove moves a waiting download: "first", "up", "down" or "last".
 func (a *App) EmuDownloadMove(id, where string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	q := emuLab.dlQueue
 	i := slices.Index(q, id)
@@ -1341,6 +1353,7 @@ func unzipOne(zipFile, name, dst string) error {
 
 // EmuSetDiskFile gives an image's other disk (hdb…, cdrom, bios) its file.
 func (a *App) EmuSetDiskFile(id, slot, p string) (EmuView, error) {
+	defer emuAs("user")()
 	sum, size, err := fileSHA256(p)
 	if err != nil {
 		return EmuView{}, err
@@ -1373,6 +1386,7 @@ func (a *App) EmuSetDiskFile(id, slot, p string) (EmuView, error) {
 
 // EmuSetImageFile gives an image (from an appliance) its file.
 func (a *App) EmuSetImageFile(id, p string) (EmuView, error) {
+	defer emuAs("user")()
 	sum, size, err := fileSHA256(p)
 	if err != nil {
 		return EmuView{}, err
@@ -1399,6 +1413,7 @@ func (a *App) EmuSetImageFile(id, p string) (EmuView, error) {
 // EmuSaveImage saves an image's profile; its password goes to the keychain
 // ("" keeps the saved one, clearPassword removes it).
 func (a *App) EmuSaveImage(im emu.Image, clearPassword bool) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	cur := emuImage(im.ID)
@@ -1438,6 +1453,7 @@ func (a *App) EmuSaveImage(im emu.Image, clearPassword bool) (EmuView, error) {
 
 // EmuRemoveImage forgets an image that no switch uses (its copy on the hosts stays).
 func (a *App) EmuRemoveImage(id string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	if l := emuLab.f.Lab; l != nil {
@@ -1813,6 +1829,7 @@ func (p *progressWriter) Write(b []byte) (int, error) {
 
 // EmuUpload copies an image to the lab's host now (in the background).
 func (a *App) EmuUpload(id, host string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	im := emuImage(id)
@@ -1830,13 +1847,13 @@ func (a *App) EmuUpload(id, host string) (EmuView, error) {
 	cp := *im
 	emuLab.upload[id] = "0 %"
 	emuLab.mu.Unlock()
-	go func() {
+	emuGo(func() {
 		err := a.emuUpload(host, cp, dir)
 		emuLab.mu.Lock()
 		delete(emuLab.upload, id)
 		emuLab.mu.Unlock()
 		a.emuNotify(err, "Image "+cp.Name+" is on the host")
-	}()
+	})
 	return a.EmuState()
 }
 
@@ -1853,6 +1870,7 @@ func (a *App) emuNotify(err error, ok string) {
 
 // EmuAdd makes the emulated lab on a host, or adds VMs to it.
 func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
+	defer emuAs("user")()
 	if err := a.ready(); err != nil {
 		return EmuView{}, err
 	}
@@ -2489,7 +2507,7 @@ func (a *App) emuStart(host string, ids []string) {
 		_, _ = a.emuRun(host, l.ResetScript(gone), time.Minute)
 	}
 	a.emuLinksDown(host, vms, ptrs)
-	go a.emuWatch(host, ids)
+	emuGo(func() { a.emuWatch(host, ids) })
 }
 
 // emuLinksDown takes the link of ports without a cable (and of pulled
@@ -2578,7 +2596,7 @@ func (a *App) emuWatch(host string, ids []string) {
 			}
 			if emuLab.personaAfterBoot[id] {
 				delete(emuLab.personaAfterBoot, id)
-				go a.emuPersonaReboot(host, id)
+				emuGo(func() { a.emuPersonaReboot(host, id) })
 				continue
 			}
 			needDay0 := !v.Day0Done && len(im.Day0) > 0
@@ -2590,7 +2608,7 @@ func (a *App) emuWatch(host string, ids []string) {
 		}
 		emuLab.mu.Unlock()
 		for _, v := range day0 {
-			go a.emuDay0(host, v)
+			emuGo(func() { a.emuDay0(host, v) })
 		}
 	}
 }
@@ -2911,6 +2929,7 @@ func emuMgmtOK(info *emu.HostInfo, mgmt string) error {
 // EmuSetMgmt changes how the lab's switches are managed (the switches must
 // be stopped; it applies when they start): "lan", "nat", "bridge" or "forward".
 func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	host := emuLab.f.Host
 	emuLab.mu.Unlock()
@@ -2919,6 +2938,7 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 
 // EmuSetHostMgmt changes how one host's switches are managed (they are off).
 func (a *App) EmuSetHostMgmt(host, mgmt, mgmtNet string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
 	if l == nil {
@@ -3372,7 +3392,7 @@ func (a *App) emuPoll(force bool) emu.Status {
 			// a menu the boot stopped at (a key reached it early): its answer, once in a while
 			if ans, ok := im.BootStop(m.Log[v.ID]); ok && time.Since(emuLab.bootAns[v.ID+"|"+ans.Match]) > 30*time.Second {
 				emuLab.bootAns[v.ID+"|"+ans.Match] = time.Now() // each menu once in a while (one leads to the next)
-				go a.emuBootAnswer(emuHostOf(v), v, ans)
+				emuGo(func() { a.emuBootAnswer(emuHostOf(v), v, ans) })
 			}
 		}
 	}
@@ -3439,11 +3459,11 @@ func (a *App) EmuState() (EmuView, error) {
 					vs = append(vs, v)
 				}
 			}
-			go func() {
+			emuGo(func() {
 				for _, v := range vs {
 					a.emuLogins(v)
 				}
-			}()
+			})
 		}
 	}
 	has := emuLab.f.Lab != nil && len(emuLab.f.Lab.VMs) > 0
@@ -3452,7 +3472,7 @@ func (a *App) EmuState() (EmuView, error) {
 		// the switches' state comes from the hosts over SSH (seconds with a slow
 		// host): it is fetched in the background, the view answers at once with
 		// the last one, and the next refresh shows the new
-		go a.emuPoll(false)
+		emuGo(func() { a.emuPoll(false) })
 	}
 	emuLab.mu.Lock()
 	defer emuLab.mu.Unlock()
@@ -3691,6 +3711,7 @@ func (a *App) emuIDs(ids []string) (string, []string) {
 
 // EmuStart starts VMs (all when ids is empty).
 func (a *App) EmuStart(ids []string) (EmuView, error) {
+	defer emuAs("user")()
 	host, ids := a.emuIDs(ids)
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
@@ -3708,7 +3729,7 @@ func (a *App) EmuStart(ids []string) (EmuView, error) {
 	}
 	hosts, by := a.emuGroups(ids)
 	for _, h := range hosts { // each host starts its switches
-		go a.emuStart(h, by[h])
+		emuGo(func() { a.emuStart(h, by[h]) })
 	}
 	time.Sleep(50 * time.Millisecond)
 	return a.EmuState()
@@ -3718,11 +3739,13 @@ func (a *App) EmuStart(ids []string) (EmuView, error) {
 // done) has its running state saved into its disk first, unless the lab has
 // Fast start off: it then starts again in seconds. The others: like pulling the power.
 func (a *App) EmuStop(ids []string) (EmuView, error) {
+	defer emuAs("user")()
 	return a.emuStop(ids, true)
 }
 
 // EmuShutDown stops VMs without saving their state: they boot next time.
 func (a *App) EmuShutDown(ids []string) (EmuView, error) {
+	defer emuAs("user")()
 	return a.emuStop(ids, false)
 }
 
@@ -3792,6 +3815,7 @@ func (a *App) emuStop(ids []string, save bool) (EmuView, error) {
 // EmuSetFast turns Fast start on or off for the lab: off, Stop shuts the
 // switches down and the saved states go (they boot each time).
 func (a *App) EmuSetFast(on bool) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
 	if l == nil {
@@ -3814,6 +3838,7 @@ func (a *App) EmuSetFast(on bool) (EmuView, error) {
 
 // EmuRestart stops and starts VMs (a changed cable needs this).
 func (a *App) EmuRestart(ids []string) (EmuView, error) {
+	defer emuAs("user")()
 	if _, err := a.EmuShutDown(ids); err != nil { // a real boot
 		return EmuView{}, err
 	}
@@ -3822,6 +3847,7 @@ func (a *App) EmuRestart(ids []string) (EmuView, error) {
 
 // EmuReset stops VMs, throws their disks away and boots them as new: day 0 is typed again.
 func (a *App) EmuReset(ids []string) (EmuView, error) {
+	defer emuAs("user")()
 	host, ids := a.emuIDs(ids)
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
@@ -3856,6 +3882,7 @@ func (a *App) EmuReset(ids []string) (EmuView, error) {
 // EmuRemove removes VMs from the lab: they stop, their disks on the host are
 // deleted, and their sessions too when sessions is set.
 func (a *App) EmuRemove(ids []string, sessions bool) (EmuView, error) {
+	defer emuAs("user")()
 	host, ids := a.emuIDs(ids)
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
@@ -3930,6 +3957,7 @@ func emuPort(im *emu.Image, name string) int {
 
 // EmuConnect adds a cable; running VMs get it when they restart.
 func (a *App) EmuConnect(k EmuLinkView) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	l := emuLab.f.Lab
@@ -3968,6 +3996,7 @@ func (a *App) EmuConnect(k EmuLinkView) (EmuView, error) {
 
 // EmuDisconnect removes the cable on a port.
 func (a *App) EmuDisconnect(id, port string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	l := emuLab.f.Lab
@@ -3998,6 +4027,7 @@ func (a *App) EmuDisconnect(id, port string) (EmuView, error) {
 
 // EmuSetLink pulls a cable (up=false) or plugs it in again, on running VMs at once (QEMU monitor).
 func (a *App) EmuSetLink(id, port string, up bool) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	l := emuLab.f.Lab
@@ -4051,6 +4081,7 @@ func (a *App) EmuSetLink(id, port string, up bool) (EmuView, error) {
 
 // EmuPlace keeps where a VM is drawn.
 func (a *App) EmuPlace(id string, x, y int) error {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	defer emuLab.mu.Unlock()
 	a.emuLoad()
@@ -4142,6 +4173,7 @@ type EmuSetupDone struct {
 // password when sudo asks for one ("" = sudo without a password). Its lines
 // come as "emu:setup" events, the end as "emu:setup:done".
 func (a *App) EmuSetupHost(sessionPath, password string) (string, error) {
+	defer emuAs("user")()
 	if err := a.ready(); err != nil {
 		return "", err
 	}
@@ -4154,7 +4186,7 @@ func (a *App) EmuSetupHost(sessionPath, password string) (string, error) {
 			wruntime.EventsEmit(a.ctx, "emu:setup", EmuSetupLine{Run: id, Kind: kind, Text: text})
 		}
 	}
-	go func() {
+	emuGo(func() {
 		err := a.emuSetup(sessionPath, password, emit)
 		// the kvm group counts for new logins only
 		emuLab.mu.Lock()
@@ -4175,7 +4207,7 @@ func (a *App) EmuSetupHost(sessionPath, password string) (string, error) {
 		if a.ctx != nil {
 			wruntime.EventsEmit(a.ctx, "emu:setup:done", done)
 		}
-	}()
+	})
 	return id, nil
 }
 
@@ -4261,6 +4293,7 @@ func (a *App) emuSetup(host, password string, emit func(kind, text string)) erro
 // EmuSetIdentity changes a VM's serial number (its SMBIOS serial) and base MAC
 // address ("" mac = from the lab); the VM gets them when it starts next.
 func (a *App) EmuSetIdentity(id, serial, mac string) (EmuView, error) {
+	defer emuAs("user")()
 	mac = strings.ToLower(strings.TrimSpace(mac))
 	if mac != "" {
 		if hw, err := net.ParseMAC(mac); err != nil || len(hw) != 6 || hw[0]&1 == 1 {
@@ -4293,6 +4326,7 @@ func (a *App) EmuSetIdentity(id, serial, mac string) (EmuView, error) {
 // EmuSetSerials gives VMs serial numbers from a list, in order (empty
 // lines skipped); fromFormat makes new ones in each image's serial format instead.
 func (a *App) EmuSetSerials(ids []string, serials []string, fromFormat bool) (EmuView, error) {
+	defer emuAs("user")()
 	var list []string
 	seen := map[string]bool{}
 	for _, s := range serials {
@@ -4394,6 +4428,7 @@ func (a *App) emuPersonaReboot(host, id string) {
 
 // EmuApplyPersona writes the switches' persona files: running ones are powered off for it and started again.
 func (a *App) EmuApplyPersona(ids []string) (EmuView, error) {
+	defer emuAs("user")()
 	host, ids := a.emuIDs(ids)
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
@@ -4408,9 +4443,9 @@ func (a *App) EmuApplyPersona(ids []string) (EmuView, error) {
 		}
 		emuLab.mu.Unlock()
 		if _, up := st.Up[id]; up {
-			go a.emuPersonaReboot(h, id)
+			emuGo(func() { a.emuPersonaReboot(h, id) })
 		} else {
-			go a.emuStart(h, []string{id})
+			emuGo(func() { a.emuStart(h, []string{id}) })
 		}
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -4420,6 +4455,7 @@ func (a *App) EmuApplyPersona(ids []string) (EmuView, error) {
 // EmuSetPersona keeps a switch's persona (model, serial numbers, modules, stack
 // members); it is written into its disk on the next start or EmuApplyPersona.
 func (a *App) EmuSetPersona(id string, p emu.Persona) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	l := emuLab.f.Lab
@@ -4475,6 +4511,7 @@ func (a *App) EmuPersonaPreview(id string, p emu.Persona) (string, error) {
 // EmuSetResources changes a switch's vCPUs, memory (MB) and disk size (GB, it
 // only grows); it gets them when it starts next.
 func (a *App) EmuSetResources(id string, cpus, ram, diskGB int) (EmuView, error) {
+	defer emuAs("user")()
 	if cpus < 1 || ram < 128 || diskGB < 0 {
 		return EmuView{}, errors.New("at least 1 vCPU and 128 MB")
 	}
@@ -4504,6 +4541,7 @@ func (a *App) EmuSetResources(id string, cpus, ram, diskGB int) (EmuView, error)
 
 // EmuSaveTemplate adds or changes a template (no ID = a new one).
 func (a *App) EmuSaveTemplate(t emu.Template) (EmuView, error) {
+	defer emuAs("user")()
 	if strings.TrimSpace(t.Name) == "" {
 		return EmuView{}, errors.New("give the template a name")
 	}
@@ -4535,6 +4573,7 @@ func (a *App) EmuSaveTemplate(t emu.Template) (EmuView, error) {
 
 // EmuRemoveTemplate forgets a template (switches made from it stay).
 func (a *App) EmuRemoveTemplate(id string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	var keep []emu.Template
@@ -4562,6 +4601,7 @@ type emuProfiles struct {
 // and templates from a JSON file. A profile whose file name matches an image
 // already added updates it (its file stays); others are added without a file.
 func (a *App) EmuImportProfiles(p string) (EmuView, error) {
+	defer emuAs("user")()
 	b, err := os.ReadFile(p)
 	if err != nil {
 		return EmuView{}, err
@@ -4628,6 +4668,7 @@ func (a *App) EmuImportProfiles(p string) (EmuView, error) {
 
 // EmuSetMACs gives switches base MAC addresses from start, a block of 64 each.
 func (a *App) EmuSetMACs(ids []string, start string) (EmuView, error) {
+	defer emuAs("user")()
 	if emu.NextMAC(start, 0) == "" {
 		return EmuView{}, fmt.Errorf("%q is not a MAC address", start)
 	}
@@ -4971,6 +5012,7 @@ func macBlock(mac string) string {
 // (by name), "lacp" or "static"; no ports removes it. The ports leave other
 // LAGs set in Termwright on that switch.
 func (a *App) EmuSetLag(vm, name, mode string, portNames []string) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	l := emuLab.f.Lab
@@ -5145,6 +5187,7 @@ func emuLagOf(vm, name string) (emu.Lag, *emu.Image, error) {
 // EmuApplyLag types a LAG of the topology on its switch (or removes it from
 // the switch) on the console, then reads the switch's LAGs back.
 func (a *App) EmuApplyLag(vm, name string, remove bool) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	g, im, err := emuLagOf(vm, name)
 	var cmds []string
@@ -5298,6 +5341,7 @@ func (a *App) EmuTopologies() []EmuTopoInfo {
 
 // EmuSaveTopology saves the open lab under a name (and keeps it there as it changes).
 func (a *App) EmuSaveTopology(name string) (EmuView, error) {
+	defer emuAs("user")()
 	name, err := emuTopoName(name)
 	if err != nil {
 		return EmuView{}, err
@@ -5351,6 +5395,7 @@ func (a *App) emuSwitchTo(t emuTopo) {
 // EmuOpenTopology opens a saved topology (the open one is kept as it is) and,
 // with start, starts all its switches. Running switches are stopped first.
 func (a *App) EmuOpenTopology(name string, start bool) (EmuView, error) {
+	defer emuAs("user")()
 	return a.EmuOpenTopologyOn(name, start, nil)
 }
 
@@ -5358,6 +5403,7 @@ func (a *App) EmuOpenTopology(name string, start bool) (EmuView, error) {
 // new host session): its switches on a replaced host start there from their
 // image, with that host's best management.
 func (a *App) EmuOpenTopologyOn(name string, start bool, hosts map[string]string) (EmuView, error) {
+	defer emuAs("user")()
 	b, err := os.ReadFile(a.emuTopoPath(name))
 	if err != nil {
 		return EmuView{}, fmt.Errorf("no topology named %q", name)
@@ -5424,6 +5470,7 @@ func (a *App) EmuOpenTopologyOn(name string, start bool, hosts map[string]string
 // EmuNewTopology starts an empty lab under a name (the open one is kept);
 // running switches are stopped first.
 func (a *App) EmuNewTopology(name string) (EmuView, error) {
+	defer emuAs("user")()
 	name, err := emuTopoName(name)
 	if err != nil {
 		return EmuView{}, err
@@ -5456,6 +5503,7 @@ func (a *App) EmuNewTopology(name string) (EmuView, error) {
 // EmuDeleteTopology forgets a saved topology that is not open (its switches'
 // sessions and disks on the host stay until removed in it).
 func (a *App) EmuDeleteTopology(name string) error {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	open := emuLab.f.Topology
 	emuLab.mu.Unlock()
@@ -5470,6 +5518,7 @@ func (a *App) EmuDeleteTopology(name string) error {
 // with that host's management; cables to switches on other hosts become UDP
 // tunnels between the hosts.
 func (a *App) EmuMoveVM(id, host string) (EmuView, error) {
+	defer emuAs("user")()
 	v, err := a.emuMoveVM(id, host)
 	if err != nil {
 		emuLab.mu.Lock()
@@ -5553,6 +5602,7 @@ func (a *App) emuMoveVM(id, host string) (EmuView, error) {
 // EmuSetRole sets what a kind of device is drawn as in this topology (every
 // switch of that model or image, new ones too; "" = from its model).
 func (a *App) EmuSetRole(id, role string) (EmuView, error) {
+	defer emuAs("user")()
 	switch role {
 	case "", "access", "core", "router", "fw", "ap", "server", "host", "cloud":
 	default:
@@ -5564,6 +5614,7 @@ func (a *App) EmuSetRole(id, role string) (EmuView, error) {
 // EmuSetIconStyle sets the icon style of a kind of device in this topology
 // ("" = the default), or with id "" the default style for all.
 func (a *App) EmuSetIconStyle(id, style string) (EmuView, error) {
+	defer emuAs("user")()
 	switch style {
 	case "", "box", "iso", "classic", "blue", "line", "front", "slate", "steel", "rack":
 	default:
@@ -5757,6 +5808,7 @@ func (a *App) emuFreeTopoName(name string) string {
 // EmuDuplicateTopology saves a copy of a topology under another name: a lab
 // of its own (its switches boot from their images, sessions of their own).
 func (a *App) EmuDuplicateTopology(name, newName string) ([]EmuTopoInfo, error) {
+	defer emuAs("user")()
 	newName, err := emuTopoName(newName)
 	if err != nil {
 		return nil, err
@@ -5778,6 +5830,7 @@ func (a *App) EmuDuplicateTopology(name, newName string) ([]EmuTopoInfo, error) 
 
 // EmuRenameTopology gives a saved topology another name (the open one too).
 func (a *App) EmuRenameTopology(name, newName string) ([]EmuTopoInfo, error) {
+	defer emuAs("user")()
 	newName, err := emuTopoName(newName)
 	if err != nil {
 		return nil, err
@@ -5814,6 +5867,7 @@ func (a *App) EmuRenameTopology(name, newName string) ([]EmuTopoInfo, error) {
 
 // EmuExportTopology writes a topology to a file (.twlab) to open on another computer.
 func (a *App) EmuExportTopology(name, path string) error {
+	defer emuAs("user")()
 	t, err := a.emuReadTopo(name)
 	if err != nil {
 		return err
@@ -5832,6 +5886,7 @@ func (a *App) EmuExportTopology(name, path string) error {
 // EmuImportTopology adds a topology from a .twlab file (a lab of its own; when
 // its hosts are not yours, Open asks which of yours to use).
 func (a *App) EmuImportTopology(path string) ([]EmuTopoInfo, error) {
+	defer emuAs("user")()
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -5855,6 +5910,7 @@ func (a *App) EmuImportTopology(path string) ([]EmuTopoInfo, error) {
 // cloud node on that port: the host's bridge, or macvtap on its network port),
 // or takes it off; it applies when the switch starts.
 func (a *App) EmuSetUplink(id, port string, on bool) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
 	var v *emu.VM

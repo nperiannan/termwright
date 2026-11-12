@@ -114,6 +114,7 @@ func (a *App) EmuLog(lines int) (EmuLogInfo, error) {
 
 // EmuSetLogLevel sets how much the emulator's log keeps: error, warn, info, debug or verbose.
 func (a *App) EmuSetLogLevel(level string) (EmuLogInfo, error) {
+	defer emuAs("user")()
 	lv := -1
 	for i, n := range emuLvNames {
 		if n == strings.ToLower(level) {

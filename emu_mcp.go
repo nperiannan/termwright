@@ -112,6 +112,7 @@ func argStrs(m map[string]any, k string) []string {
 
 // emuMCP runs a lab_ tool.
 func (a *App) emuMCP(name string, args map[string]any) (string, error) {
+	defer emuAs("ai")()
 	v, err := a.EmuState()
 	if err != nil {
 		return "", err

@@ -144,6 +144,8 @@ func ParseProbe(out, dir string) HostInfo {
 	}
 	if h.QEMU == "" {
 		h.Problems = append(h.Problems, "QEMU is not installed: install qemu-system-x86 and qemu-utils (apt) or qemu-kvm (dnf).")
+	} else if QemuOlder(h.QEMU, QemuMin) {
+		h.Problems = append(h.Problems, "QEMU "+QemuMM(h.QEMU)+" is too old (the lab needs "+QemuMin+" or newer): update it with the host's package manager (apt upgrade qemu-system-x86, or dnf upgrade qemu-kvm).")
 	} else if !h.QemuImg {
 		h.Problems = append(h.Problems, "qemu-img is missing: install qemu-utils (apt) or qemu-img (dnf).")
 	}

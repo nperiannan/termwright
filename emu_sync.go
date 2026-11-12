@@ -289,6 +289,7 @@ func (a *App) EmuImageMatrix() (EmuMatrix, error) {
 // Unless force, a copy that would leave less than a fifth of the host's disk
 // free is held back (when Keep 20 % is on) and its cell says so.
 func (a *App) EmuSyncImages(hosts, images []string, force bool) (EmuMatrix, error) {
+	defer emuAs("user")()
 	m, err := a.EmuImageMatrix()
 	if err != nil {
 		return m, err
@@ -357,7 +358,7 @@ func (a *App) EmuSyncImages(hosts, images []string, force bool) (EmuMatrix, erro
 	dir := emuLabDir()
 	emuLab.mu.Unlock()
 	for _, js := range byHost { // one image after another per host, the hosts side by side
-		go func(js []job) {
+		emuGo(func() {
 			defer func() { emuSync.Lock(); emuSync.busy--; emuSync.Unlock() }()
 			for _, j := range js {
 				err := a.emuSyncOne(j.host, j.id, j.from, dir)
@@ -374,7 +375,7 @@ func (a *App) EmuSyncImages(hosts, images []string, force bool) (EmuMatrix, erro
 					emuLab.mu.Unlock()
 				}
 			}
-		}(js)
+		})
 	}
 	time.Sleep(100 * time.Millisecond)
 	return a.EmuImageMatrix()
@@ -414,6 +415,7 @@ func (a *App) emuSyncOne(host, id, from, dir string) error {
 
 // EmuSyncSettings sets: copy new images to every host, and keep a fifth of each disk free.
 func (a *App) EmuSyncSettings(syncAll, keep20 bool) (EmuMatrix, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	emuLab.f.SyncAll, emuLab.f.NoKeep20 = syncAll, !keep20
@@ -436,13 +438,14 @@ func (a *App) emuSyncAfter(id string) {
 	on := emuLab.f.SyncAll
 	emuLab.mu.Unlock()
 	if on {
-		go func() { _, _ = a.EmuSyncImages(nil, []string{id}, false) }()
+		emuGo(func() { _, _ = a.EmuSyncImages(nil, []string{id}, false) })
 	}
 }
 
 // EmuCheckReach checks every pair of hosts, both ways and side by side: UDP as
 // the cables between hosts use it, and TCP as a live move does.
 func (a *App) EmuCheckReach() (EmuMatrix, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	hosts := emuMatrixHosts()
@@ -457,7 +460,7 @@ func (a *App) EmuCheckReach() (EmuMatrix, error) {
 	}
 	emuSync.checking = true
 	emuSync.Unlock()
-	go func() {
+	emuGo(func() {
 		defer func() { emuSync.Lock(); emuSync.checking = false; emuSync.Unlock() }()
 		var wg sync.WaitGroup
 		k := 0
@@ -487,7 +490,7 @@ func (a *App) EmuCheckReach() (EmuMatrix, error) {
 		}
 		emuSync.Unlock()
 		emuLab.mu.Unlock()
-	}()
+	})
 	time.Sleep(100 * time.Millisecond)
 	return a.EmuImageMatrix()
 }
@@ -515,7 +518,7 @@ while time.time()<end and len(got)<2:
 print('got',' '.join(sorted(got)) or 'none')
 " 2>&1 || echo nothing`, p+1, p)
 	done := make(chan string, 1)
-	go func() { o, err := a.emuRun(t.Session, recv, 20*time.Second); done <- o + errText(err) }()
+	emuGo(func() { o, err := a.emuRun(t.Session, recv, 20*time.Second); done <- o + errText(err) })
 	time.Sleep(2 * time.Second)
 	_, _ = a.emuRun(f.Session, fmt.Sprintf("bash -c 'for i in 1 2 3 4 5 6; do echo tw > /dev/udp/%s/%d; (exec 3<>/dev/tcp/%s/%d) 2>/dev/null; sleep 0.5; done' 2>/dev/null; true", to, p+1, to, p), 15*time.Second)
 	got := <-done
@@ -548,6 +551,7 @@ print('got',' '.join(sorted(got)) or 'none')
 // EmuSetImagesDir moves a host's images to another folder there (a bigger
 // disk) and leaves a link in their old place, so everything finds them.
 func (a *App) EmuSetImagesDir(host, to string) (EmuMatrix, error) {
+	defer emuAs("user")()
 	to = strings.TrimSpace(to)
 	if to == "" || strings.ContainsAny(to, "'\"`$\\\n;|&<>") {
 		return EmuMatrix{}, errors.New("a folder path without quotes or shell characters")
@@ -688,6 +692,7 @@ type EmuRemoveHostReq struct {
 
 // EmuRemoveHostWith takes back or wipes what was chosen on the host, then forgets it.
 func (a *App) EmuRemoveHostWith(r EmuRemoveHostReq) (EmuView, error) {
+	defer emuAs("user")()
 	emuLab.mu.Lock()
 	a.emuLoad()
 	dir := emuLabDir()

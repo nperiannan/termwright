@@ -395,8 +395,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         </table></div>
       } @else if (dock() === 'events') {
         <div class="ev">
-          @for (e of events(); track $index) { <div [class]="e.level"><span class="t">{{ time(e.at) }}</span><span class="eh" [title]="e.host || tr('this computer')">@if (e.host) { <i [style.background]="hcol(e.host)"></i>{{ hname(e.host) }} } @else { <span class="muted">{{ tr('this computer') }}</span> }</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span>{{ e.text }}</span></div> }
-          @empty { <div><span class="t"></span><b></b><span class="muted">{{ emu() ? tr('Nothing yet - start a switch.') : tr('Simulated switches start at once; their state is on the canvas.') }}</span></div> }
+          <div class="evh"><span>{{ tr('Time') }}</span><span>{{ tr('Host') }}</span><span>{{ tr('Switch') }}</span><span>{{ tr('Level') }}</span><span>{{ tr('Trigger') }}</span><span>{{ tr('Message') }}</span></div>
+          @for (e of events(); track $index) { <div [class]="'lv-' + e.level"><span class="t">{{ time(e.at) }}</span><span class="eh" [title]="e.host || tr('this computer')">@if (e.host) { <i [style.background]="hcol(e.host)"></i>{{ hname(e.host) }} } @else { <span class="muted">{{ tr('this computer') }}</span> }</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span class="lv">{{ lvName(e.level) }}</span><span class="by" [title]="byTitle(e.by)">{{ (e.by || 'system').toUpperCase() }}</span><span class="tx">{{ e.text }}</span></div> }
+          @empty { <div><span class="t"></span><span></span><b></b><span></span><span></span><span class="muted">{{ emu() ? tr('Nothing yet - start a switch.') : tr('Simulated switches start at once; their state is on the canvas.') }}</span></div> }
         </div>
       } @else if (dock() === 'cap') {
         <div class="capw">
@@ -643,8 +644,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .dtabs { display: flex; align-items: center; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line);
       a { padding: 6px 12px; color: var(--muted); font-weight: 500; cursor: pointer; } a.on { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
       .cnt { margin-left: 6px; background: var(--danger); color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; } }
-    .ev { padding: 6px 14px; overflow: auto; div { display: grid; grid-template-columns: 64px 120px 120px 1fr; gap: 10px; padding: 2px 0; font-size: 12px; } .eh { display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); i { width: 7px; height: 7px; border-radius: 50%; flex: none; } } .t { color: var(--muted); } b { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .ok span:last-child { color: var(--success, #1fa45a); } .error span:last-child { color: var(--danger); } .warn span:last-child { color: var(--warning, #e39b17); } }
+    .ev { padding: 6px 14px; overflow: auto; div { display: grid; grid-template-columns: 64px 120px 120px 44px 58px 1fr; gap: 10px; padding: 2px 0; font-size: 12px; } .eh { display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); i { width: 7px; height: 7px; border-radius: 50%; flex: none; } } .t { color: var(--muted); } b { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .evh { position: sticky; top: -6px; z-index: 1; background: var(--surface); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+      .lv, .by { font: 600 11px/18px var(--mono, monospace); letter-spacing: .03em; } .by { color: var(--text); opacity: .75; }
+      .lv-ok :is(.lv, .tx) { color: var(--success, #1fa45a); } .lv-error :is(.lv, .tx) { color: var(--danger); } .lv-warn :is(.lv, .tx) { color: var(--warning, #e39b17); } }
     .tail { margin: 0; padding: 8px 14px; overflow: auto; font: 11.5px/1.45 var(--mono, monospace); white-space: pre-wrap; }
     .tailw { position: relative; min-height: 0; overflow: hidden; display: flex; cursor: text; .tail { flex: 1; } .typ { position: absolute; right: 14px; bottom: 10px; } }
     .dterm { position: relative; min-height: 0; overflow: hidden; padding: 4px 6px; display: flex; > * { flex: 1; min-width: 0; } }
@@ -952,6 +955,9 @@ export class LabWorkspace implements OnDestroy {
   }
   fill(cv: HTMLElement) { const a = this.area(); this.zoom.set(Math.max(0.4, Math.min(2, +(cv.clientWidth / a.w).toFixed(2)))); }
   /** The hover card goes to the left of a switch when the right side would leave the visible canvas. */
+  /** The Events level column: OK, INFO, WARN, FAIL. */
+  protected lvName(l: string) { return ({ ok: 'OK', warn: 'WARN', error: 'FAIL' } as Record<string, string>)[l] ?? 'INFO'; }
+  protected byTitle(b?: string) { return this.tr(b === 'user' ? 'You did it in Termwright' : b === 'ai' ? 'An AI agent did it through the Termwright connector' : 'Termwright did it on its own (watching the switches, retrying, checking)'); }
   protected tipX(d: LabDevice) {
     const x = this.pos(d).x, cv = document.querySelector('.cv') as HTMLElement | null, z = this.zoom();
     const right = cv ? (cv.scrollLeft + cv.clientWidth) / z : this.area().w;
@@ -1045,7 +1051,7 @@ export class LabWorkspace implements OnDestroy {
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
   }
   async copyDock() {
-    const text = this.dock() === 'inv' ? ['host,switch,state,console,management,cpu %,memory MB,ram MB', ...this.inventory().flatMap(g => g.devs.map(d => [g.host, d.hostname, d.state || (d.running ? 'running' : 'stopped'), g.host + ':' + d.console, d.ssh ?? '', (d.cpu ?? 0).toFixed(0), d.memUsed ?? '', d.ram ?? ''].join(',')))].join('\n') : this.dock() === 'clog' ? this.clog() : this.dock() === 'log' ? (this.elog()?.tail ?? '') : this.dock() === 'cap' ? this.packetsShown().map(p => [p.no, p.time.toFixed(3), p.src, p.dst, p.proto, p.len, p.info].join('\t')).join('\n') : this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + (e.host ? this.hname(e.host) : '-') + '  ' + e.name + '  ' + e.level.toUpperCase() + '  ' + e.text).join('\n') : this.tail();
+    const text = this.dock() === 'inv' ? ['host,switch,state,console,management,cpu %,memory MB,ram MB', ...this.inventory().flatMap(g => g.devs.map(d => [g.host, d.hostname, d.state || (d.running ? 'running' : 'stopped'), g.host + ':' + d.console, d.ssh ?? '', (d.cpu ?? 0).toFixed(0), d.memUsed ?? '', d.ram ?? ''].join(',')))].join('\n') : this.dock() === 'clog' ? this.clog() : this.dock() === 'log' ? (this.elog()?.tail ?? '') : this.dock() === 'cap' ? this.packetsShown().map(p => [p.no, p.time.toFixed(3), p.src, p.dst, p.proto, p.len, p.info].join('\t')).join('\n') : this.dock() === 'events' ? [...(this.st()?.events ?? [])].map(e => this.time(e.at) + '  ' + (e.host ? this.hname(e.host) : '-') + '  ' + e.name + '  ' + this.lvName(e.level) + '  ' + (e.by || 'system').toUpperCase() + '  ' + e.text).join('\n') : this.tail();
     try { await navigator.clipboard.writeText(text); this.ui.toast(tr('Copied'), 'success'); } catch { this.ui.error(tr('Could not copy')); }
   }
   async clearEvents() { try { this.lab.emu.set(await this.backend.emuClearEvents()); } catch { /* ignore */ } }

@@ -247,6 +247,7 @@ func slices_contains(l []string, s string) bool {
 // EmuMigrate moves a switch to another host keeping everything it has: live
 // (no downtime, it must run) or by saving, copying and resuming it.
 func (a *App) EmuMigrate(id, to string, live bool) (EmuView, error) {
+	defer emuAs("user")()
 	v, err := a.emuMigrate(id, to, live)
 	if err != nil { // a refused move is in the Events too, not only in a message that goes away
 		emuLab.mu.Lock()
@@ -293,7 +294,22 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 			return EmuView{}, fmt.Errorf("it runs with %s's own CPU (%s), and %s has another (%s): it would crash there. Restart it once - with more than one host, switches start with a CPU every host has (%s) and move live anywhere - or use Save, Copy and Resume (it then boots there)", from[strings.LastIndex(from, "/")+1:], f, to[strings.LastIndex(to, "/")+1:], t, emu.CommonCPU)
 		}
 	}
+	// another QEMU on the new host: its running state needs the same machine type there
+	// (QEMU's "pc" is each version's own), which an older QEMU does not have
+	if up {
+		fq, tq := a.emuQemuVer(from), a.emuQemuVer(to)
+		fn, tn := from[strings.LastIndex(from, "/")+1:], to[strings.LastIndex(to, "/")+1:]
+		if live && emu.QemuOlder(tq, fq) {
+			return EmuView{}, fmt.Errorf("%s has an older QEMU (%s) than %s (%s): a running switch moves live only to the same or a newer QEMU. Move it with its disk (it boots there), or update QEMU on %s", tn, emu.QemuMM(tq), fn, emu.QemuMM(fq), tn)
+		}
+		if !live && fq != "" && tq != "" && emu.QemuMM(fq) != emu.QemuMM(tq) {
+			cpuDiff = true // its saved state is for the old host's QEMU: it boots there
+		}
+	}
 	emuLab.mu.Lock()
+	if !live && (!up || cpuDiff) {
+		v.Machine = "" // it boots there: as the new host's QEMU has it
+	}
 	if live && a.emuFor(emuHostOf(*v)).KVM != a.emuFor(to).KVM {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("one host has KVM and the other does not: a running switch cannot change that - use Save, Copy and Resume instead")
@@ -302,7 +318,7 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 	emuLab.moveTo[id] = to
 	emuEv(id, "info", "moving to "+to[strings.LastIndex(to, "/")+1:]+map[bool]string{true: " live", false: " with its disk"}[live])
 	emuLab.mu.Unlock()
-	go func() {
+	emuGo(func() {
 		var err error
 		if live {
 			if err = a.emuMoveLive(id, to); err == nil && readdr {
@@ -319,12 +335,21 @@ func (a *App) emuMigrate(id, to string, live bool) (EmuView, error) {
 		}
 		emuLab.mu.Unlock()
 		emuLab.statusAt = time.Time{}
-	}()
+	})
 	time.Sleep(50 * time.Millisecond)
 	return a.EmuState()
 }
 
 // emuCPUName is the model name of a host's CPU ("" = not known).
+// emuQemuVer is the host's QEMU version ("8.2.2"; "" when not known).
+func (a *App) emuQemuVer(host string) string {
+	out, err := a.emuRun(host, "qemu-system-x86_64 --version 2>/dev/null | head -1", 20*time.Second)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(out), "QEMU emulator version"))
+}
+
 func (a *App) emuCPUName(host string) string {
 	out, err := a.emuRun(host, "grep -m1 '^model name' /proc/cpuinfo | cut -d: -f2-", 20*time.Second)
 	if err != nil {
@@ -355,9 +380,9 @@ func (a *App) emuReaddress(id, to string, running bool) {
 	_ = a.emuSave()
 	vv := *v
 	if running {
-		go a.emuDay0(to, vv) // its address step (day 0 is done already)
+		emuGo(func() { a.emuDay0(to, vv) }) // its address step (day 0 is done already)
 	} else {
-		go a.emuRetarget(vv)
+		emuGo(func() { a.emuRetarget(vv) })
 	}
 }
 
@@ -501,6 +526,23 @@ func (a *App) emuMoveLive(id, to string) error {
 	}
 	if out, err := a.emuRun(to, mk.String(), time.Minute); err != nil || strings.Contains(out, "fail") {
 		return fmt.Errorf("its disk on the new host: %v %s", err, out)
+	}
+	// the same machine type on both hosts: QEMU's "pc" is its own version's, and the
+	// running state loads only into the machine type it was made with
+	if vNew.Machine == "" {
+		if c, err := a.emuMonitor(from, lf.MonitorPort(vOld)); err == nil {
+			tree, _ := c.do("info qom-tree", 10*time.Second) // "/machine (pc-i440fx-8.2-machine)": the type it really is (distributions have their own default)
+			c.close()
+			if m := regexp.MustCompile(`/machine \(([\w.-]+)-machine\)`).FindStringSubmatch(tree); m != nil {
+				vNew.Machine = m[1]
+			}
+		}
+	}
+	if vNew.Machine != "" {
+		out, _ := a.emuRun(to, "qemu-system-x86_64 -machine help 2>/dev/null | awk '{print $1}' | grep -qx '"+vNew.Machine+"' && echo has-machine", 20*time.Second)
+		if !strings.Contains(out, "has-machine") {
+			return fmt.Errorf("the new host's QEMU (%s) does not have the machine type it runs as (%s): move it with its disk (it boots there), or bring the hosts to the same QEMU", orStr(a.emuQemuVer(to), "?"), vNew.Machine)
+		}
 	}
 	a.emuMoveStep(id, "starting it on the new host to receive it")
 	vIn := vNew
@@ -683,6 +725,13 @@ func (a *App) emuMoveLive(id, to string) error {
 	_, _ = tgt.do("announce_self", 10*time.Second) // its MAC addresses on the network, from the new place
 	a.emuMgmtFollow(id, to, lt, vNew)
 	_, _ = a.emuRun(from, lf.StopScript([]string{id}), time.Minute) // its old interfaces and routes
+	if vNew.Machine != "" {                                         // it keeps the machine type it runs as (its saved state needs it)
+		emuLab.mu.Lock()
+		if v := emuLab.f.Lab.VMByID(id); v != nil {
+			v.Machine = vNew.Machine
+		}
+		emuLab.mu.Unlock()
+	}
 	a.emuMoved(id, from, to, lf, vOld, "")
 	emuLab.mu.Lock()
 	emuLab.ready[id] = true
