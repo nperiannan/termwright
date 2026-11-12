@@ -2326,34 +2326,10 @@ func (a *App) emuDay0(host string, v emu.VM) {
 	defer c.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	if doDay0 {
-		err = emu.Day0(ctx, c, &im, v, v.Index+1, func(i int, cmd string) {
-			emuLab.mu.Lock()
-			emuLab.state[v.ID] = fmt.Sprintf("day0 %d/%d", i+1, len(im.Day0))
-			emuLab.mu.Unlock()
-		})
-		if err != nil {
-			fail(emuWithTail(err, c))
-			return
-		}
-		emuLab.mu.Lock()
-		if vv := l.VMByID(v.ID); vv != nil {
-			vv.Day0Done = true
-		}
-		delete(emuLab.errs, v.ID)
-		emuEv(v.ID, "ok", "day-0 typed: "+strings.Join(im.Day0, " · "))
-		_ = a.emuSave()
-		emuLab.mu.Unlock()
-	}
-	a.emuCheckPersona(ctx, c, &im, v)
-	if im.LagCmd != "" { // its LAGs, for the topology
-		if out, err := emu.Ask(ctx, c, &im, im.LagCmd); err == nil {
-			a.emuKeepLags(v, &im, emu.ParseLags(emu.CleanConsole(out)))
-		}
-	}
 	if fixed {
 		// the management address is fixed: typed at each start (the switch's own
-		// configuration need not be saved for it)
+		// configuration need not be saved for it), before day 0, whose commands
+		// may need it (SSH, NTP, a saved configuration with it)
 		emuLab.mu.Lock()
 		emuLab.state[v.ID] = "address"
 		emuLab.mu.Unlock()
@@ -2381,6 +2357,31 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		emuEv(v.ID, "ok", "has the address "+strings.Split(v.MgmtIP, "/")[0]+" (gateway "+orStr(v.Gateway, "none")+") - its SSH session points there")
 		emuLab.mu.Unlock()
 		a.emuRetarget(v)
+	}
+	if doDay0 {
+		err = emu.Day0(ctx, c, &im, v, v.Index+1, func(i int, cmd string) {
+			emuLab.mu.Lock()
+			emuLab.state[v.ID] = fmt.Sprintf("day0 %d/%d", i+1, len(im.Day0))
+			emuLab.mu.Unlock()
+		})
+		if err != nil {
+			fail(emuWithTail(err, c))
+			return
+		}
+		emuLab.mu.Lock()
+		if vv := l.VMByID(v.ID); vv != nil {
+			vv.Day0Done = true
+		}
+		delete(emuLab.errs, v.ID)
+		emuEv(v.ID, "ok", "day-0 typed: "+strings.Join(im.Day0, " · "))
+		_ = a.emuSave()
+		emuLab.mu.Unlock()
+	}
+	a.emuCheckPersona(ctx, c, &im, v)
+	if im.LagCmd != "" { // its LAGs, for the topology
+		if out, err := emu.Ask(ctx, c, &im, im.LagCmd); err == nil {
+			a.emuKeepLags(v, &im, emu.ParseLags(emu.CleanConsole(out)))
+		}
 	}
 	if lan {
 		// the management port is on the host's network: its address comes from DHCP
