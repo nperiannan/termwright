@@ -2702,6 +2702,10 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		}
 		emuLab.mu.Lock()
 		emuLab.addrOK[v.ID] = true
+		if cur := emuLab.f.Lab.VMByID(v.ID); cur != nil && cur.AddrOn != v.MgmtIP {
+			cur.AddrOn = v.MgmtIP // kept: after a restart of Termwright, or a fast start, it still has it
+			_ = a.emuSave()
+		}
 		emuEv(v.ID, "ok", "has the address "+strings.Split(v.MgmtIP, "/")[0]+" (gateway "+orStr(v.Gateway, "none")+") - its SSH session points there")
 		emuLab.mu.Unlock()
 		a.emuRetarget(v)
@@ -3160,8 +3164,11 @@ func (a *App) emuReadFacts(ctx context.Context, c *emu.Console, im *emu.Image, v
 			if err != nil {
 				return ""
 			}
-			if m := r.FindStringSubmatch(out); len(m) > 1 {
-				return strings.TrimSpace(m[1])
+			m := r.FindStringSubmatch(out)
+			for _, g := range m[min(1, len(m)):] { // the first group that matched (a pattern can have alternatives)
+				if g = strings.TrimSpace(g); g != "" {
+					return g
+				}
 			}
 			return ""
 		}
@@ -3262,7 +3269,7 @@ func (a *App) emuSetAddress(id, addr string) {
 	path := emuLab.f.Sessions[id]
 	if l != nil {
 		if v := l.VMByID(id); v != nil {
-			v.MgmtIP = addr
+			v.MgmtIP, v.AddrOn = addr, addr
 		}
 	}
 	delete(emuLab.errs, id)
@@ -3567,7 +3574,7 @@ func (a *App) emuView() EmuView {
 		}
 		_, up := st.Up[vm.ID]
 		// a fixed address is set by day 0: until then the switch does not have it
-		if up && vl.Fixed() && len(imOrNil(im).AddrSet) > 0 && !emuLab.addrOK[vm.ID] {
+		if up && vl.Fixed() && len(imOrNil(im).AddrSet) > 0 && !emuLab.addrOK[vm.ID] && vm.AddrOn != vm.MgmtIP {
 			d.SSH += " · " + "planned, not on the switch yet"
 		}
 		// % of its vCPUs; QEMU's own threads (disk, network, emulation) can add a little more
@@ -3860,7 +3867,8 @@ func (a *App) EmuReset(ids []string) (EmuView, error) {
 		for _, id := range by[h] {
 			if v := emuLab.f.Lab.VMByID(id); v != nil {
 				// a new disk from the image: its persona file is written again (before its first boot), nothing saved
-				v.Day0Done, v.Direct, v.FastKey = false, false, ""
+				v.Day0Done, v.Direct, v.FastKey, v.AddrOn = false, false, "", ""
+				delete(emuLab.addrOK, id)
 				if v.Persona != nil {
 					v.Persona.Applied, v.Persona.Took, v.Persona.Fail = "", "", ""
 				}
@@ -4794,7 +4802,7 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			if len(im.LagSet) == 0 && len(p.LagSet) > 0 {
 				im.LagSet, im.LagDel, changed = p.LagSet, p.LagDel, true
 			}
-			if len(im.Facts) == 0 && len(p.Facts) > 0 {
+			if len(p.Facts) > 0 && !slices.Equal(im.Facts, p.Facts) { // the pack's, as it improves them
 				im.Facts, changed = p.Facts, true
 			}
 			if im.MgmtMACAlign == 0 && p.MgmtMACAlign > 0 {

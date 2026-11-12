@@ -209,7 +209,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             }
             @if (hovDev(); as h) {
               <div class="ntip" [style.left.px]="tipX(h)" [style.top.px]="pos(h).y - 34">
-                <div class="th"><b>{{ h.hostname }}</b> <span [class]="stateOf(h)">● {{ tr(h.stateText || (h.running ? 'running' : 'stopped')) }}</span> </div>
+                <div class="th"><b>{{ h.hostname }}</b><span class="tst" [class]="'tst ' + stateOf(h)">● {{ tr(h.stateText || (h.running ? 'running' : 'stopped')) }}</span> </div>
                 <table>
                   @if (emu()) { <tr><td>{{ tr('Type') }}</td><td><b>{{ osOf(h) }}</b></td></tr>
                     <tr><td>{{ tr('Model') }}</td><td>{{ modelOf(h) }}@if (!h.persona?.slots?.[0]?.model) { <span class="muted"> ({{ tr('no persona') }})</span> }</td></tr>
@@ -577,7 +577,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .menu .roles a { padding: 2px; border-radius: 6px; text-align: center; } .menu .roles a.on { background: var(--accent-soft); outline: 1px solid var(--accent); }
     .menu .mh2 { display: block; padding: 4px 12px 2px; font-size: 11px; color: var(--muted); }
     .ntip { position: absolute; z-index: 9; min-width: 250px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); pointer-events: none; font-size: 12px;
-      .th { margin-bottom: 6px; white-space: nowrap; } table { border-collapse: collapse; } td { padding: 2px 10px 2px 0; white-space: nowrap; } td:first-child { color: var(--muted); } }
+      .th { display: flex; align-items: center; gap: 16px; margin-bottom: 6px; white-space: nowrap; b { flex: 1; overflow: hidden; text-overflow: ellipsis; } }
+      .tst { position: static; font-size: 11.5px; margin: 0; } .tst.on { color: var(--success, #1fa45a); } table { border-collapse: collapse; } td { padding: 2px 10px 2px 0; white-space: nowrap; } td:first-child { color: var(--muted); } }
     .inv { overflow: auto; padding: 0 14px 10px; table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); font-size: 12px; white-space: nowrap; }
       th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--surface); z-index: 1; }
       tr.h { cursor: pointer; } tr.h td { background: var(--surface-2); font-size: 12.5px; padding-top: 7px; padding-bottom: 7px; border-top: 6px solid var(--surface); } tr.h:hover td { background: color-mix(in srgb, var(--accent) 8%, var(--surface-2)); }

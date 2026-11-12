@@ -198,6 +198,7 @@ type VM struct {
 	Incoming string   `json:"-"`                  // started to receive a live migration ("tcp:0.0.0.0:port")
 	FW       string   `json:"fw,omitempty"`       // the software version the switch reports (its CLI, after it booted)
 	HWSerial string   `json:"hwSerial,omitempty"` // the serial number the switch reports
+	AddrOn   string   `json:"addrOn,omitempty"`   // the management address the switch was seen to take (its day 0 checked it)
 	Machine  string   `json:"machine,omitempty"`  // the QEMU machine type it runs as, when pinned (a live move between QEMU versions: "pc" is each version's own)
 	CPU      string   `json:"cpu,omitempty"`      // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
 	Role     string   `json:"role,omitempty"`     // what it is drawn as ("access", "core", "router"…; "" = from its model)
