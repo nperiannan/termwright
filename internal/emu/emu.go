@@ -732,7 +732,7 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 			fmt.Fprintf(&b, "echo 'fail %s no image'\n", v.ID)
 			continue
 		}
-		fmt.Fprintf(&b, "if [ -f %s/%s.pid ] && kill -0 \"$(cat %s/%s.pid)\" 2>/dev/null; then echo 'up %s'; else\n", Q(dir), v.ID, Q(dir), v.ID, v.ID)
+		fmt.Fprintf(&b, "if %s; then echo 'up %s'; else\n", qemuUp(Q(dir)+"/"+v.ID+".pid"), v.ID)
 		b.WriteString(l.diskCmd(v, im))
 		t, redir := l.tap(v), ""
 		switch {
@@ -821,7 +821,7 @@ func (l *Lab) SaveScript(ids []string) string {
 			continue
 		}
 		// the monitor: stop, save, and list the snapshots - its row (with a date) shows it is done
-		fmt.Fprintf(&b, "if [ -f %s/%s.pid ] && kill -0 \"$(cat %s/%s.pid)\" 2>/dev/null; then\n", dir, id, dir, id)
+		fmt.Fprintf(&b, "if %s; then\n", qemuUp(dir+"/"+id+".pid"))
 		fmt.Fprintf(&b, " r=$(timeout 900 bash -c 'exec 3<>/dev/tcp/127.0.0.1/%d || exit 1; printf \"stop\\r\\nsavevm %s\\r\\ninfo snapshots\\r\\n\" >&3; while IFS= read -r -t 900 l <&3; do case \"$l\" in *%s*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*) echo ok; break;; *rror*) echo \"err $l\"; break;; esac; done; printf \"quit\\r\\n\" >&3; sleep 1' 2>&1 | tr -d '\\r' | tail -1)\n", l.MonitorPort(*v), FastSnap, FastSnap)
 		fmt.Fprintf(&b, " for i in 1 2 3 4 5 6 7 8 9 10; do kill -0 \"$(cat %s/%s.pid)\" 2>/dev/null || break; sleep 0.5; done\n", dir, id)
 		fmt.Fprintf(&b, " case \"$r\" in ok*) echo 'saved %s';; *) echo \"fail %s ${r:-no answer from its monitor}\";; esac\nfi\n", id, id)
@@ -897,7 +897,7 @@ func (l *Lab) StopScript(ids []string) string {
 	var b strings.Builder
 	dir := l.VMDir()
 	for _, id := range ids {
-		fmt.Fprintf(&b, "if [ -f %s/%s.pid ]; then kill \"$(cat %s/%s.pid)\" 2>/dev/null; rm -f %s/%s.pid; fi\n", Q(dir), id, Q(dir), id, Q(dir), id)
+		fmt.Fprintf(&b, "if %s; then kill \"$p\" 2>/dev/null; fi; rm -f %s/%s.pid\n", qemuUp(Q(dir)+"/"+id+".pid"), Q(dir), id)
 		if l.Mgmt != "forward" && l.Mgmt != "" {
 			if v := l.VMByID(id); v != nil {
 				fmt.Fprintf(&b, "sleep 0.3; sudo -n ip link del %s 2>/dev/null\n", l.tap(*v))
@@ -934,7 +934,7 @@ func (l *Lab) ResetScript(ids []string) string {
 func (l *Lab) StatusScript(tails []string, ready ...map[string]string) string {
 	dir := Q(l.VMDir())
 	s := "cd " + dir + " 2>/dev/null || exit 0\necho \"clk $(getconf CLK_TCK 2>/dev/null || echo 100)\"\nawk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print \"mem \" int(t/1024) \" \" int(a/1024)}' /proc/meminfo\necho \"cores $(nproc) $(cut -d' ' -f1 /proc/loadavg)\"\nfor p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
-		" if kill -0 \"$pid\" 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null) $(awk '/^VmRSS:/{print $2}' /proc/$pid/status 2>/dev/null)\"; else echo \"down $n\"; fi; done\n"
+		" if kill -0 \"$pid\" 2>/dev/null && grep -q qemu /proc/$pid/comm 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null) $(awk '/^VmRSS:/{print $2}' /proc/$pid/status 2>/dev/null)\"; else echo \"down $n\"; fi; done\n"
 	if l.Mgmt == "nat" { // the DHCP leases of the NAT network (libvirt), then the host's neighbours
 		br := Q(l.NatBridge())
 		s += fmt.Sprintf("f=/var/lib/libvirt/dnsmasq/%s.status; { cat $f 2>/dev/null || sudo -n cat $f 2>/dev/null; } | awk -F'\"' '/\"ip-address\"/{ip=$4} /\"mac-address\"/{mac=$4} /}/{if(ip!=\"\"&&mac!=\"\")print \"lease\",mac,ip; ip=\"\";mac=\"\"}'\n", l.NatBridge())
@@ -1197,6 +1197,12 @@ func Q(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// qemuUp is a shell test: the process in a pid file is alive and is QEMU (a pid file left from before a
+// reboot, or from another machine sharing the home folder, can name some other process).
+func qemuUp(pidfile string) string {
+	return `{ p=$(cat ` + pidfile + ` 2>/dev/null) && [ -n "$p" ] && grep -q qemu /proc/$p/comm 2>/dev/null; }`
 }
 
 func joinArgs(a []string) string {

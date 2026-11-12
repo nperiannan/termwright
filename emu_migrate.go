@@ -464,6 +464,9 @@ func (a *App) emuMoveLive(id, to string) error {
 	migPort, nbdPort := 29400+vOld.Index%300, 29700+vOld.Index%300
 	// its disks there, empty layers on the same bases; then it starts, waiting
 	var mk strings.Builder
+	// a copy of it left on the new host by a move that was cut off (Termwright closed meanwhile) goes first:
+	// the switch runs on the old host, so one there is never the real one
+	mk.WriteString(lt.StopScript([]string{id}))
 	fmt.Fprintf(&mk, "mkdir -p %s\n", lt.VMDir())
 	for _, d := range disks {
 		fmt.Fprintf(&mk, "rm -f %s; qemu-img create -q -f qcow2 -F qcow2 -b \"$HOME/%s/%s\" %s %d || echo fail\n", d.Path, lt.ImageDir(), bases[d.Backing], d.Path, d.Size)
@@ -475,7 +478,11 @@ func (a *App) emuMoveLive(id, to string) error {
 	vIn := vNew
 	vIn.Incoming = fmt.Sprintf("tcp:0.0.0.0:%d", migPort)
 	if out, err := a.emuRun(to, lt.StartScript([]emu.VM{vIn}, map[string]*emu.Image{im.ID: &im}), 2*time.Minute); err != nil || !strings.Contains(out, "started "+id) {
-		return fmt.Errorf("it could not wait on the new host: %v %s", err, strings.TrimSpace(out))
+		why := strings.TrimSpace(out)
+		if err != nil {
+			why = err.Error() + " " + why
+		}
+		return fmt.Errorf("it could not start on the new host to receive it: %s", strings.TrimSpace(why))
 	}
 	undo := func() { // the old one keeps running; the new one goes
 		_, _ = a.emuRun(to, lt.StopScript([]string{id})+fmt.Sprintf("rm -f %s/%s.qcow2 %s/%s-hd?.qcow2\n", lt.VMDir(), id, lt.VMDir(), id), time.Minute)
@@ -497,9 +504,14 @@ func (a *App) emuMoveLive(id, to string) error {
 	help, _ := src.do("help migrate", 10*time.Second)
 	inc := strings.Contains(help, "-i")
 	cancelJobs := func() {}
-	migFlags := "-d -i"
+	// -d (detach) went away in newer QEMU, where a migration always runs in the background
+	det := ""
+	if strings.Contains(help, "-d") {
+		det = "-d "
+	}
+	migFlags := det + "-i"
 	if !inc {
-		migFlags = "-d"
+		migFlags = strings.TrimSpace(det)
 		// which drives: the qcow2 disks in its folder
 		blk, _ := src.do("info block", 10*time.Second)
 		var drives []string

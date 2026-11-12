@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, a live move cut off earlier (Termwright closed in the middle) left a copy of the switch waiting on the new host, and the next move failed with "could not wait on the new host: <nil> up …": that leftover is now stopped first. A process is taken for a switch only when it is QEMU (a pid file left from before a host restarted could name another process). Live moves also work with newer QEMU, which dropped the -d option of migrate.
+
 - Emulated lab, live moves finish: no bandwidth cap, a switch that writes its memory faster than it goes over is slowed down until it can finish (auto-converge), and the last pause may take up to a second. The progress counts its disk too (QEMU up to 9.0 sends it with the memory) - "99 % · about 2 s left" for minutes was the memory done and the disk still going - and says when the switch is being slowed.
 
 - Emulated lab, a live move to a host on another network works: the switch goes across running, then gets an address of the new host's network typed on its console (the old one removed first) and its SSH session follows - it keeps running throughout. Before, it was refused with "a live move keeps it".

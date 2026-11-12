@@ -223,7 +223,7 @@ func (l *Lab) ShutdownScript(ids []string, secs int) string {
 		fmt.Fprintf(&b, "(printf 'system_powerdown\\r\\n'; sleep 1) | timeout 5 sh -c 'exec 3<>/dev/tcp/127.0.0.1/%d 2>/dev/null && cat >&3' 2>/dev/null || true\n", l.MonitorPort(*v))
 		_ = dir
 	}
-	fmt.Fprintf(&b, "for i in $(seq %d); do alive=0; for id in %s; do [ -f %s/$id.pid ] && kill -0 \"$(cat %s/$id.pid)\" 2>/dev/null && alive=1; done; [ $alive = 0 ] && break; sleep 1; done\n",
+	fmt.Fprintf(&b, "for i in $(seq %d); do alive=0; for id in %s; do p=$(cat %s/$id.pid 2>/dev/null) && [ -n \"$p\" ] && grep -q qemu /proc/$p/comm 2>/dev/null && alive=1; done; : %s; [ $alive = 0 ] && break; sleep 1; done\n",
 		secs, strings.Join(ids, " "), Q(dir), Q(dir))
 	b.WriteString(l.StopScript(ids))
 	return b.String()
