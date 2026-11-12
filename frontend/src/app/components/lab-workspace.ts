@@ -22,7 +22,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
   <div class="ws" (click)="menu.set(null); topos.set(null); mgOpen.set(false)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
-      @if (emu()) { <span class="topo" (click)="openTopos(); $event.stopPropagation()" [title]="tr('Topologies: save, open, new')"><span class="muted">{{ tr('Topology') }}</span> <b>{{ st()?.topology || tr('Untitled') }}</b> ▾</span>
+      @if (emu()) { <span class="topo" (click)="openTopos(); $event.stopPropagation()" [title]="tr('Topologies: save, open, new')"><span class="muted tl">{{ tr('Topology') }}</span> <b>{{ st()?.topology || tr('Untitled') }}</b> ▾</span>
         @if (topos(); as tl) {
           <div class="topos" (click)="$event.stopPropagation()">
             <div class="row2"><b>{{ tr('Topologies') }}</b><span class="sp"></span>
@@ -65,6 +65,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <span class="htx"><span class="g">{{ tr('{0} up', counts().on) }}</span>@if (counts().boot) { <span class="w">· {{ tr('{0} booting', counts().boot) }}</span> }@if (counts().warn + counts().bad) { <span class="r">· {{ tr('{0} with a problem', counts().warn + counts().bad) }}</span> }@if (counts().off) { <span class="muted">· {{ tr('{0} off', counts().off) }}</span> }</span>
         </span>
       }
+      @if (jobs().length) { <a class="jobs" (click)="dock.set('events'); $event.stopPropagation()" [title]="jobsTip()"><i class="spin"></i><span>{{ jobs()[0] }}</span>@if (jobs().length > 1) { <b>+{{ jobs().length - 1 }}</b> }</a> }
       <span class="sp"></span>
       @if (emu() && devs().length) {
         <span class="mgw">
@@ -140,7 +141,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <div class="hint">{{ tr('Drag a device onto the canvas to add it.') }}</div>
       </div>
 
-      <div class="cv" #cv (scroll)="onScroll(cv)" (wheel)="wheelZoom($event)" (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
+      <div class="cv" #cv (click)="canvasClick($event)" (scroll)="onScroll(cv)" (wheel)="wheelZoom($event)" (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
            (contextmenu)="$event.preventDefault()">
         @if (linkMode()) { <div class="bar2">⟷ {{ linkText() }} <span class="k2">Esc</span> <a (click)="cancelLink(); $event.stopPropagation()">{{ tr('Cancel') }}</a></div> }
         @if (!devs().length && !ghosts().length) {
@@ -220,8 +221,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (emu()) { <a (click)="uplink(d)" [title]="tr('Like a cloud node on a data port: the port joins the host’s network (applies when the switch starts)')">{{ tr('Port on the Host’s Network…') }}</a>
                 @for (u of d.uplinks ?? []; track u) { <a (click)="setUplink(d, u, false)">{{ tr('Take {0} off the Host’s Network', u) }}</a> } }
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
-              @if (emu()) { <hr /><span class="mh2" [title]="tr('For every {0} in this topology, new ones too', kindOf(d))">{{ tr('Draw As') }} · <small>{{ tr('all {0}', kindOf(d)) }}</small></span><div class="roles">@for (r of roles; track r.k) { <a [class.on]="roleOfDev(d) === r.k" (click)="setRole(d, r.k)" [title]="tr(r.name)"><app-dev-icon [role]="r.k" [look]="lookOf(d)" [size]="34" state="idle" /></a> }</div>
-                <div class="roles looks">@for (st of looks; track st.k) { <a [class.on]="lookOf(d) === st.k" (click)="setLook(d, st.k)" [title]="tr(st.name)"><app-dev-icon [role]="roleOfDev(d)" [look]="st.k" [size]="34" state="idle" /></a> }</div> }
+              @if (emu()) { <hr /><a (click)="drawAs.set(d); menu.set(null); $event.stopPropagation()" [title]="tr('For every {0} in this topology, new ones too', kindOf(d))"><app-dev-icon class="dai" [role]="roleOfDev(d)" [look]="lookOf(d)" [size]="22" state="idle" />{{ tr('Draw As…') }} <small class="muted">{{ tr('all {0}', kindOf(d)) }}</small></a> }
               @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [title]="d.running ? tr('Live: it keeps running while it moves') : tr('It takes its disk along: its configuration and day 0 stay')">→ {{ o.name || hname(o.session) }}</a> } }
               <hr />
               <a class="r" (click)="mdo('remove', d)">{{ tr('Delete') }}</a>
@@ -287,7 +287,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
 
       <div class="side">
         @if (selDev(); as d) {
-          <h3>{{ d.hostname }}</h3>
+          <h3 class="selh">{{ d.hostname }}<a class="clr" (click)="sel.set('')" [title]="tr('Nothing selected: the whole topology (Esc, or a click on the empty canvas)')">✕</a></h3>
           <div class="card"><div class="kv">
             <span>{{ tr('Device') }}</span><b>{{ d.persona?.slots?.[0]?.model || d.model }}@if (d.version) { · {{ d.version }} }</b>
             <span>{{ tr('State') }}</span><span [class]="warnOf(d) ? 'w' : stateOf(d)">{{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span>
@@ -381,6 +381,22 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <span class="sp"></span><span class="si">{{ tr('{0} running', counts().on) }} · {{ tr('{0} stopped', counts().off) }}</span>
       }
     </div>
+    @if (drawDev(); as d) {
+      <div class="dabg" (click)="drawAs.set(null)">
+        <div class="dadlg" (click)="$event.stopPropagation()" role="dialog" [attr.aria-label]="tr('Draw As')">
+          <div class="dah"><div><b>{{ tr('Draw As') }}</b><div class="muted small">{{ tr('For every {0} in this topology, new ones too', kindOf(d)) }}</div></div><span class="sp"></span>
+            <div class="seg2"><a [class.on]="drawBg() === 'dark'" (click)="drawBg.set('dark')">{{ tr('Dark') }}</a><a [class.on]="drawBg() === 'light'" (click)="drawBg.set('light')">{{ tr('Light') }}</a></div>
+            <button type="button" class="sm" (click)="drawAs.set(null)" [attr.aria-label]="tr('Close')">✕</button></div>
+          <div class="daprev" [class.light]="drawBg() === 'light'">
+            <div class="dacap">{{ tr('What it is') }}</div>
+            <div class="dagrid">@for (r of roles; track r.k) { <a [class.on]="roleOfDev(d) === r.k" (click)="setRole(d, r.k)"><app-dev-icon [role]="r.k" [look]="lookOf(d)" [size]="86" state="run" /><span>{{ tr(r.name) }}</span></a> }</div>
+            <div class="dacap">{{ tr('Style') }}</div>
+            <div class="dagrid">@for (st of looks; track st.k) { <a [class.on]="lookOf(d) === st.k" (click)="setLook(d, st.k)"><app-dev-icon [role]="roleOfDev(d)" [look]="st.k" [size]="86" state="run" /><span>{{ tr(st.name) }}</span></a> }</div>
+          </div>
+          <div class="daf"><span class="muted small">{{ tr('The style for all devices is in the menu at the bottom of the canvas.') }}</span><span class="sp"></span><button type="button" class="primary" (click)="drawAs.set(null)">{{ tr('Done') }}</button></div>
+        </div>
+      </div>
+    }
   </div>`,
   styles: [`
     :host { display: block; height: 100%; }
@@ -388,7 +404,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .tb { position: relative; display: flex; flex-wrap: nowrap; min-width: 0; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); white-space: nowrap;
       button { height: 30px; white-space: nowrap; } button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } }
       .lname { margin-right: 4px; font-size: 14px; } .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; flex: none; } .sp { flex: 1; }
-    .tb { container-type: inline-size; } .tb > button { flex: none; } .tb > .topo { flex: 0 1 auto; min-width: 80px; } .lname { flex: none; }
+    .tb { container-type: inline-size; } .tb > button { flex: none; } .tb > .topo { flex: none; max-width: 240px; } .tb > .topo b { overflow: hidden; text-overflow: ellipsis; } .mgb .hd { flex: none; } .lname { flex: none; }
+    @container (max-width: 1250px) { .tb .tl { display: none; } }
     @container (max-width: 1050px) { .lname, .mgl { display: none; } .health .htx { display: none; } }
     .htx > span + span { margin-left: 4px; }
     @container (max-width: 820px) { .ptabs a { padding: 0 7px; } .ptabs small { display: none; } }
@@ -399,6 +416,20 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       a.on { border-color: var(--accent); } a.off { opacity: .5; } i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } }
     .mini { position: absolute; right: 312px; bottom: 66px; z-index: 6; padding: 6px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer; line-height: 0;
       svg { background: var(--bg); border-radius: 6px; } .vp { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 1.2; } }
+    .dabg { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
+    .dadlg { width: min(860px, calc(100vw - 40px)); max-height: calc(100vh - 60px); overflow: auto; background: var(--surface); border: 1px solid var(--border, var(--line)); border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.45); display: flex; flex-direction: column; }
+    .dah { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); b { font-size: 15px; } }
+    .seg2 { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; a { padding: 5px 12px; cursor: pointer; font-size: 12px; } a.on { background: var(--accent-soft); color: var(--accent); } }
+    .daprev { padding: 14px 18px 18px; background: #0f1114; --surface: #17181c; --line: #3a3d46; color: #e9eaed; transition: background .15s;
+      &.light { background: #f4f6f9; --surface: #ffffff; --line: #c9d0da; color: #1d2330; } }
+    .dacap { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .65; margin: 6px 0 8px; }
+    .selh { display: flex; align-items: center; .clr { margin-left: auto; cursor: pointer; color: var(--muted); padding: 0 4px; border-radius: 5px; } .clr:hover { color: var(--text); background: var(--surface-2); } }
+    .dagrid { a.on span { color: inherit; } }
+    .dagrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; margin-bottom: 8px;
+      a { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px 8px; border: 1.5px solid transparent; border-radius: 12px; cursor: pointer; font-size: 12px; text-align: center; }
+      a:hover { border-color: var(--line); } a.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); color: inherit; } }
+    .daf { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--line); }
+    .dai { margin-right: 6px; vertical-align: middle; }
     .zg { display: inline-flex; align-items: center; gap: 0; button { border-radius: 0; } button:first-child { border-radius: 7px 0 0 7px; } button:last-child { border-radius: 0 7px 7px 0; } .zsel { border-radius: 0; width: 86px; min-width: 0; flex: none; height: 26px; margin: 0 -1px; text-align: center; } }
     .node.dimn { opacity: .28; } .lk.dimk { opacity: .18; }
     .htg { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--muted); i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; } }
@@ -407,6 +438,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .health { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); font-size: 12px; min-width: 0; overflow: hidden; }
     .hbar { display: flex; width: 60px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--line); flex: none; margin-right: 3px;
       i { display: block; } i.on { background: var(--success, #1fa45a); } i.boot { background: var(--warning, #e39b17); } i.bad { background: var(--danger); } i.off { background: var(--muted); opacity: .5; } }
+    .jobs { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--text); font-size: 12px; cursor: pointer; min-width: 110px; max-width: 360px; flex: 0 1 auto;
+      span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } b { color: var(--accent); font-weight: 600; } }
     .mgw { position: relative; min-width: 90px; flex: 0 1 auto; } .htx { overflow: hidden; text-overflow: ellipsis; }
     .si.fs { cursor: pointer; input { margin: 0; } } .mgb { max-width: 300px; width: 100%; display: inline-flex; align-items: center; gap: 6px; } .mgt { overflow: hidden; text-overflow: ellipsis; }
     .mgp { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 540px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); white-space: normal; display: grid; gap: 8px;
@@ -705,6 +738,10 @@ export class LabWorkspace implements OnDestroy {
     return this.onlyProblems() && !(k.up === false || (a && this.problem(a)) || (b && this.problem(b)));
   }
   protected zsel = signal('');
+  /** Draw As: the device whose kind is being drawn differently, and the preview's background. */
+  protected drawAs = signal<LabDevice | null>(null);
+  protected drawBg = signal<'dark' | 'light'>('dark');
+  protected drawDev = computed(() => { const a = this.drawAs(); return a ? this.devs().find(x => x.id === a.id) ?? null : null; });
   /** Ctrl or ⌘ with the wheel (or a trackpad pinch) zooms the canvas. */
   wheelZoom(ev: WheelEvent) { if (!ev.ctrlKey && !ev.metaKey) return; ev.preventDefault(); this.zoomBy(ev.deltaY < 0 ? 0.1 : -0.1); }
   zoomPick(v: string, cv: HTMLElement) {
@@ -762,6 +799,15 @@ export class LabWorkspace implements OnDestroy {
     const b = this.devs().filter(d => /moving|starting|booting|saving|copying|resuming|stopping/i.test(d.stateText || d.state || ''));
     return b.length ? b[0].hostname + ': ' + tr(b[0].stateText || b[0].state || '') + (b.length > 1 ? ' · ' + tr('{0} more', b.length - 1) : '') : '';
   });
+  /** What is under way now, for the header: moves first, then copies, boots and the rest. */
+  protected jobs = computed(() => {
+    const out: string[] = [], busy = (d: LabDevice) => (d.stateText || d.state || '');
+    for (const d of this.devs()) if (/^moving/i.test(busy(d))) out.push('⇄ ' + d.hostname + ': ' + busy(d).replace(/^moving · /i, ''));
+    for (const d of this.devs()) if (/copying|uploading|saving|resuming/i.test(busy(d)) && !/^moving/i.test(busy(d))) out.push(d.hostname + ': ' + tr(busy(d)));
+    const q = (this.st()?.downloadQueue ?? []).length; if (q) out.push(tr('{0} images downloading or waiting', q));
+    return out;
+  });
+  jobsTip() { return this.jobs().join('\n') + '\n\n' + tr('Click for the Events'); }
   protected totals = computed(() => {
     const u = this.hostUse(); if (!u.length) return null;
     return { v: u.reduce((a, x) => a + (x.vcpus || 0), 0), c: u.reduce((a, x) => a + (x.cpus || 0), 0), r: u.reduce((a, x) => a + (x.ram || 0), 0), m: u.reduce((a, x) => a + (x.memTotal || 0), 0) };
@@ -833,7 +879,13 @@ export class LabWorkspace implements OnDestroy {
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
     this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); }, 3000);
   }
-  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else { this.cancelLink(); this.menu.set(null); } }
+  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); } }
+  /** A click on the empty canvas: nothing selected (the side panel shows the whole topology). */
+  canvasClick(ev: MouseEvent) {
+    const t = ev.target as HTMLElement;
+    if (this.linkMode() || t.closest('.node, .lk, .tdock, .vbar, .mini, .hleg, .menu, .bar2, .zone .zh')) return;
+    this.sel.set(''); this.selLink.set('');
+  }
   ngOnDestroy() { clearInterval(this.timer); this.lab.watch('ws-' + this.tab().id, false); for (const id of Object.values(this.docked())) void this.tabs.close(id); }
 
   protected hostName = computed(() => (this.st()?.host ?? '').split('/').pop() ?? '');
