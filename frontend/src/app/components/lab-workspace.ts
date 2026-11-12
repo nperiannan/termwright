@@ -140,7 +140,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <div class="hint">{{ tr('Drag a device onto the canvas to add it.') }}</div>
       </div>
 
-      <div class="cv" #cv (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
+      <div class="cv" #cv (scroll)="onScroll(cv)" (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
            (contextmenu)="$event.preventDefault()">
         @if (linkMode()) { <div class="bar2">⟷ {{ linkText() }} <span class="k2">Esc</span> <a (click)="cancelLink(); $event.stopPropagation()">{{ tr('Cancel') }}</a></div> }
         @if (!devs().length && !ghosts().length) {
@@ -149,17 +149,17 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         }
         <div class="inner" [style.width.px]="area().w * zoom()" [style.height.px]="area().h * zoom()">
           <div class="scale" [style.transform]="'scale(' + zoom() + ')'" [style.width.px]="area().w" [style.height.px]="area().h">
-            @for (z of zones(); track z.host) {
+            @for (z of (hostMode() === 'areas' ? zones() : []); track z.host) {
               <div class="zone" [style.left.px]="z.x" [style.top.px]="z.y" [style.width.px]="z.w" [style.height.px]="z.h" [style.border-color]="z.c" [style.background]="z.c + '0f'">
                 <div class="zh"><i [style.background]="z.c"></i><b>{{ z.name }}</b><span class="muted">{{ z.text }}</span></div></div>
             }
             <svg class="links" [attr.width]="area().w" [attr.height]="area().h">
               @for (k of lines(); track k.key) {
-                <g class="lk" [class.tun]="k.tun" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
+                <g class="lk" [class.dimk]="linkDim(k.link)" [class.tun]="k.tun" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
                   <title>{{ k.tip }}</title>
                   @for (m of k.paths; track $index) { <path class="hit" [attr.d]="m.d" /><path class="ln" [attr.d]="m.d" [class.up]="m.up" [class.dn]="m.down" [class.thick]="m.thick" /> }
                   @for (r of k.rings; track $index) { <circle class="ring" [attr.cx]="r.x" [attr.cy]="r.y" r="11" /> }
-                  @for (lb of k.labels; track $index) { <rect class="pb" [class.lb]="lb.lag" [attr.x]="lb.x - lb.w / 2" [attr.y]="lb.y - 9" [attr.width]="lb.w" height="18" rx="5" /><text class="pt" [attr.x]="lb.x" [attr.y]="lb.y + 4">{{ lb.t }}</text> }
+                  @for (lb of k.labels; track $index) { @if (lb.lag || showPorts()) { <rect class="pb" [class.lb]="lb.lag" [attr.x]="lb.x - lb.w / 2" [attr.y]="lb.y - 9" [attr.width]="lb.w" height="18" rx="5" /><text class="pt" [attr.x]="lb.x" [attr.y]="lb.y + 4">{{ lb.t }}</text> } }
                 </g>
               }
               @for (g of ghostLines(); track $index) { <line class="gl" [attr.x1]="g.x1" [attr.y1]="g.y1" [attr.x2]="g.x2" [attr.y2]="g.y2" /> }
@@ -167,11 +167,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             </svg>
             @for (g of ghosts(); track g.name) { <div class="node ghost" [style.left.px]="g.x - 75" [style.top.px]="g.y - BH / 2"><div class="nbox"><app-dev-icon role="access" [look]="defLook()" [size]="100" state="idle" /></div><div class="nn">{{ g.name }}</div><div class="nm">{{ tr('new') }}</div></div> }
             @for (d of devs(); track d.id) {
-              <div class="node" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
+              <div class="node" [class.dimn]="dimOf(d)" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
                    (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)" (mouseenter)="hov.set(d.id)" (mouseleave)="hov.set('')">
                 <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [look]="lookOf(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nn">{{ d.hostname }}</div>
-                <div class="nm">{{ d.persona?.slots?.[0]?.model || d.model }} · {{ subOf(d) }}</div>
+                <div class="nm">{{ d.persona?.slots?.[0]?.model || d.model }}@if (showAddr()) { · {{ subOf(d) }} }</div>
+                @if (hostMode() === 'tags') { <div class="htg"><i [style.background]="hcol(hostOfDev(d))"></i>{{ hname(hostOfDev(d)) }}</div> }
                 @if (d.uplinks?.length) { <span class="badge up" [title]="tr('On the host’s network: {0}', d.uplinks!.join(', '))">⇡ {{ d.uplinks!.join(',') }}</span> }
                 @if (d.personaError) { <span class="badge r" [title]="d.personaError">{{ tr('no persona') }}</span> }
                 @else if (d.persona && d.personaOk) { <span class="badge">{{ tr('persona') }} ✓</span> }
@@ -251,9 +252,35 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <button type="button" (click)="consoleAll()" [disabled]="!running()" [title]="tr('Open the console of every running switch')">⌨<span>{{ emu() ? tr('Console All') : tr('Open All') }}</span></button>
         @if (emu() && links().length) { <button type="button" (click)="lab.checkCabling()" [disabled]="lab.busy() || !running()" [title]="tr('Asks the running switches for their LLDP neighbours and marks each cable: as drawn, or not')">✓<span>{{ tr('Check Cabling') }}</span></button> }
         <i class="dsep"></i>
-        <button type="button" class="z" (click)="zoomBy(-0.1)" [attr.aria-label]="tr('Zoom out')">−</button><button type="button" class="z pct" (click)="zoom.set(1)" [title]="tr('Back to 100 %')">{{ (zoom() * 100).toFixed(0) }} %</button><button type="button" class="z" (click)="zoomBy(0.1)" [attr.aria-label]="tr('Zoom in')">+</button><button type="button" class="z" (click)="fit(cv)" [title]="tr('Fit')">⤢</button>
+        <button type="button" class="z" (click)="zoomBy(-0.1)" [attr.aria-label]="tr('Zoom out')">−</button><button type="button" class="z pct" (click)="zoom.set(1)" [title]="tr('Back to 100 %')">{{ (zoom() * 100).toFixed(0) }} %</button><button type="button" class="z" (click)="zoomBy(0.1)" [attr.aria-label]="tr('Zoom in')">+</button>
         @if (emu()) { <select class="looksel" [ngModel]="defLook()" (ngModelChange)="setDefLook($event)" name="looksel" [title]="tr('How devices are drawn (Draw As on a switch changes its kind only)')">@for (st of looks; track st.k) { <option [value]="st.k">{{ tr(st.name) }}</option> }</select> }
       </div></div> }
+      @if (page() !== 'new' && devs().length) {
+        <div class="vbar" (click)="$event.stopPropagation()">
+          <button type="button" class="sm" (click)="fit(cv)" [title]="tr('The whole topology in view')">{{ tr('Fit') }}</button><button type="button" class="sm" (click)="fill(cv)" [title]="tr('As wide as the canvas')">{{ tr('Fill') }}</button><button type="button" class="sm" (click)="zoom.set(1)">100 %</button>
+          <i class="dsep"></i>
+          @if (multi()) { <span class="muted small">{{ tr('Hosts') }}</span><select class="sm" [ngModel]="hostView()" (ngModelChange)="setHostView($event)" name="hview" [title]="tr('How each switch’s host is shown')"><option value="auto">{{ tr('Auto') }}</option><option value="areas">{{ tr('Areas') }}</option><option value="tags">{{ tr('Tags') }}</option><option value="off">{{ tr('Off') }}</option></select>
+            <button type="button" class="sm" (click)="arrangeByHost()" [title]="tr('Put each host’s switches together')">⊞ {{ tr('Arrange by Host') }}</button><i class="dsep"></i> }
+          <button type="button" class="sm" [class.on]="showPorts()" (click)="flip(showPorts, 'tw.lab.ports')" [title]="tr('Port names on the cables')">{{ tr('Ports') }}</button>
+          <button type="button" class="sm" [class.on]="showAddr()" (click)="flip(showAddr, 'tw.lab.addr')" [title]="tr('Addresses under the switches')">{{ tr('Addresses') }}</button>
+          <button type="button" class="sm" [class.on]="onlyProblems()" (click)="onlyProblems.set(!onlyProblems())" [title]="tr('Dim everything that is fine')">{{ tr('Only problems') }}</button>
+          <button type="button" class="sm" [class.on]="miniOn()" (click)="flip(miniOn, 'tw.lab.mini')" [title]="tr('A small map of the whole topology')">{{ tr('Map') }}</button>
+        </div>
+        @if (hostMode() === 'tags') {
+          <div class="hleg" (click)="$event.stopPropagation()"><span class="muted small">{{ tr('Hosts · click one to focus') }}</span>
+            @for (r of mgRows(); track r.host) { <a [class.on]="focusHost() === r.host" [class.off]="!!focusHost() && focusHost() !== r.host" (click)="focusHost.set(focusHost() === r.host ? '' : r.host)"><i [style.background]="r.c"></i><b>{{ r.name }}</b><span class="muted">{{ r.kvm }} · {{ r.switches }}</span></a> }
+          </div>
+        }
+        @if (miniOn(); as _) { @if (mini(); as mm) {
+          <div class="mini" (click)="miniGo($event, cv)" [title]="tr('Click to go there')">
+            <svg [attr.width]="mm.w" [attr.height]="mm.h">
+              @for (z of mm.zones; track z.host) { <rect [attr.x]="z.x" [attr.y]="z.y" [attr.width]="z.w" [attr.height]="z.h" rx="3" fill="none" [attr.stroke]="z.c" stroke-width="1" opacity=".7" /> }
+              @for (p of mm.dots; track p.id) { <rect [attr.x]="p.x - 3" [attr.y]="p.y - 2" width="6" height="4" rx="1" [attr.fill]="p.c" /> }
+              <rect class="vp" [attr.x]="mm.vx" [attr.y]="mm.vy" [attr.width]="mm.vw" [attr.height]="mm.vh" rx="2" />
+            </svg>
+          </div>
+        } }
+      }
 
       <div class="side">
         @if (selDev(); as d) {
@@ -354,6 +381,15 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     @container (max-width: 1050px) { .lname, .mgl { display: none; } .health .htx { display: none; } }
     .htx > span + span { margin-left: 4px; }
     @container (max-width: 820px) { .ptabs a { padding: 0 7px; } .ptabs small { display: none; } }
+    .vbar { position: absolute; top: 10px; right: 312px; z-index: 6; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); max-width: calc(100% - 560px); overflow-x: auto;
+      button { white-space: nowrap; flex: none; } button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } select { height: 26px; font-size: 12px; flex: none; } > span { white-space: nowrap; } }
+    .hleg { position: absolute; top: 58px; left: 242px; z-index: 6; display: flex; flex-direction: column; gap: 4px; max-height: 50%; overflow: auto;
+      a { display: flex; align-items: center; gap: 7px; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 12px; white-space: nowrap; }
+      a.on { border-color: var(--accent); } a.off { opacity: .5; } i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } }
+    .mini { position: absolute; right: 312px; bottom: 66px; z-index: 6; padding: 6px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer; line-height: 0;
+      svg { background: var(--bg); border-radius: 6px; } .vp { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 1.2; } }
+    .node.dimn { opacity: .28; } .lk.dimk { opacity: .18; }
+    .htg { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--muted); i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; } }
     .ptabs { display: flex; align-self: stretch; margin: -8px 0 -8px 4px; flex: none;
       a { display: flex; align-items: center; gap: 5px; padding: 0 11px; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; } a.on { color: var(--text); border-color: var(--accent); } small { font-size: 11px; color: var(--muted); } }
     .health { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); font-size: 12px; min-width: 0; overflow: hidden; }
@@ -626,6 +662,57 @@ export class LabWorkspace implements OnDestroy {
     return out;
   });
   protected mgOpen = signal(false);
+  // the view of the topology: how hosts show, what labels show, the map
+  private lsGet(k: string, d: string) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }
+  private lsPut(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* not kept */ } }
+  protected hostView = signal<'auto' | 'areas' | 'tags' | 'off'>(this.lsGet('tw.lab.hostView', 'auto') as 'auto');
+  protected showPorts = signal(this.lsGet('tw.lab.ports', '1') === '1');
+  protected showAddr = signal(this.lsGet('tw.lab.addr', '1') === '1');
+  protected miniOn = signal(this.lsGet('tw.lab.mini', '1') === '1');
+  protected onlyProblems = signal(false);
+  protected focusHost = signal('');
+  protected scrollAt = signal({ x: 0, y: 0, w: 900, h: 600 });
+  /** Areas round each host's switches for a few hosts, colour tags when there are more. */
+  protected hostMode = computed(() => !this.multi() ? 'off' : this.hostView() === 'auto' ? (this.hostUse().length <= 3 ? 'areas' : 'tags') : this.hostView());
+  setHostView(v: 'auto' | 'areas' | 'tags' | 'off') { this.hostView.set(v); this.lsPut('tw.lab.hostView', v); if (v !== 'tags') this.focusHost.set(''); }
+  flip(sig: { (): boolean; set(v: boolean): void }, key: string) { sig.set(!sig()); this.lsPut(key, sig() ? '1' : '0'); }
+  problem(d: LabDevice) { const s = this.stateOf(d); return s === 'bad' || s === 'boot' || !!this.warnOf(d) || !!d.personaError; }
+  dimOf(d: LabDevice) { return (!!this.focusHost() && this.hostOfDev(d) !== this.focusHost()) || (this.onlyProblems() && !this.problem(d)); }
+  linkDim(k: LabLink) {
+    const a = this.devs().find(x => x.id === k.a), b = this.devs().find(x => x.id === k.b);
+    if (this.focusHost() && !(a && this.hostOfDev(a) === this.focusHost()) && !(b && this.hostOfDev(b) === this.focusHost())) return true;
+    return this.onlyProblems() && !(k.up === false || (a && this.problem(a)) || (b && this.problem(b)));
+  }
+  fill(cv: HTMLElement) { const a = this.area(); this.zoom.set(Math.max(0.4, Math.min(2, +(cv.clientWidth / a.w).toFixed(2)))); }
+  onScroll(cv: HTMLElement) { this.scrollAt.set({ x: cv.scrollLeft, y: cv.scrollTop, w: cv.clientWidth, h: cv.clientHeight }); }
+  /** The small map: every switch as a dot in its host's colour, the hosts' areas, and the part in view. */
+  protected mini = computed(() => {
+    const a = this.area(), z = this.zoom(), v = this.scrollAt(), W = 180, s = W / a.w, H = Math.max(60, Math.min(130, a.h * s));
+    const k = Math.min(s, H / a.h);
+    this.moved();
+    return { w: W, h: H,
+      dots: this.devs().map(d => { const p = this.pos(d); return { id: d.id, x: p.x * k, y: p.y * k, c: this.multi() ? this.hcol(this.hostOfDev(d)) : this.problem(d) ? '#f07a3a' : '#8f94a0' }; }),
+      zones: this.hostMode() === 'areas' ? this.zones().map(q => ({ host: q.host, x: q.x * k, y: q.y * k, w: q.w * k, h: q.h * k, c: q.c })) : [],
+      vx: v.x / z * k, vy: v.y / z * k, vw: Math.min(W, v.w / z * k), vh: Math.min(H, v.h / z * k) };
+  });
+  miniGo(ev: MouseEvent, cv: HTMLElement) {
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(), a = this.area(), k = Math.min(180 / a.w, (this.mini().h) / a.h);
+    cv.scrollTo({ left: ((ev.clientX - r.left - 6) / k) * this.zoom() - cv.clientWidth / 2, top: ((ev.clientY - r.top - 6) / k) * this.zoom() - cv.clientHeight / 2, behavior: 'smooth' });
+  }
+  /** Each host's switches together, hosts side by side (three to a row). */
+  async arrangeByHost() {
+    if (!(await this.ui.confirm(tr('Arrange by Host'), tr('Each host’s switches are put together, the hosts side by side. Cables stay as they are.'), tr('Arrange')))) return;
+    const hosts = this.hostUse().map(u => u.host); let bx = 0, by = 0, rowH = 0, col = 0;
+    const m = new Map(this.moved());
+    for (const h of hosts) {
+      const ds = this.devs().filter(d => this.hostOfDev(d) === h); if (!ds.length) continue;
+      const cols = Math.max(1, Math.ceil(Math.sqrt(ds.length))), rows = Math.ceil(ds.length / cols);
+      ds.forEach((d, i) => { const p = { x: 140 + bx + (i % cols) * 180, y: 130 + by + Math.floor(i / cols) * 160 }; m.set(d.id, p); this.lab.place(d.id, p.x - 75, p.y - BH / 2); });
+      bx += cols * 180 + 120; rowH = Math.max(rowH, rows * 160); col++;
+      if (col === 3) { col = 0; bx = 0; by += rowH + 110; rowH = 0; }
+    }
+    this.moved.set(m);
+  }
   /** Each host's management, for the header menu and the status bar. */
   protected mgRows = computed(() => {
     const v = this.st(), main = v?.host ?? '';
