@@ -426,6 +426,7 @@ func (a *App) emuConsoleRun(id string, cmds []string, timeout time.Duration) (st
 	}
 	var b strings.Builder
 	for _, cmd := range cmds {
+		emuLogf(emuLvInfo, host, v.Name, "console (AI connector) types: %s", cmd)
 		out, err := emu.Run(ctx, c, &im, prompt, cmd)
 		fmt.Fprintf(&b, "%s\n%s\n", cmd, strings.TrimRight(out, "\r\n "))
 		if err != nil {

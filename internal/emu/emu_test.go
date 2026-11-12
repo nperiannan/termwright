@@ -755,3 +755,15 @@ func TestLoginAAADown(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Fabric Engine answers on its OOB port with its MAC block's address + 0x81: macvtap gets that one.
+func TestMgmtMAC(t *testing.T) {
+	l := &Lab{ID: "a1"}
+	v := VM{BaseMAC: "ac:ed:32:af:96:00"}
+	if m := l.MgmtMAC(v, &Image{MgmtMACAlign: 1024, MgmtMACOffset: 0x81}); m != "ac:ed:32:af:94:81" {
+		t.Error(m)
+	}
+	if m := l.MgmtMAC(v, &Image{}); m != "ac:ed:32:af:96:00" {
+		t.Error(m)
+	}
+}

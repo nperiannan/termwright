@@ -57,18 +57,20 @@ type Image struct {
 	LagCmd          string              `json:"lagCmd,omitempty"`          // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
 	LagSet          map[string][]string `json:"lagSet,omitempty"`          // CLI commands that make a LAG, per mode ("lacp", "static"): {id} {name} {ports} {master} {first} {last}
 	LagDel          []string            `json:"lagDel,omitempty"`          // CLI commands that remove a LAG (the same names)
-	TCGCPU          string              `json:"tcgCpu,omitempty"`          // the CPU model it gets on a host without KVM (for example Nehalem, for an image that wants an Intel CPU); "" = QEMU's default
-	BootAnswers     []Answer            `json:"bootAnswers,omitempty"`     // menus the image may stop at while it boots (the end of its console log), and what to type
-	NotReady        []string            `json:"notReady,omitempty"`        // console text that means its login is not ready yet ("(pending-AAA)"): nothing is typed until it is gone
-	NeighborCmd     string              `json:"neighborCmd,omitempty"`     // a CLI command that lists the LLDP neighbours ("show lldp neighbors")
-	Persona         *PersonaDef         `json:"persona,omitempty"`         // a file that makes the image act as a given device
-	Version         string              `json:"version"`                   // the software version of the image (for the lists)
-	Match           string              `json:"match,omitempty"`           // profiles: a regexp on the file name that picks this profile; a "version" group gives the version
-	Serial          string              `json:"serial"`                    // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
-	URL             string              `json:"url,omitempty"`             // where the image file can be downloaded (from a GNS3 appliance)
-	MD5             string              `json:"md5,omitempty"`             // its MD5 sum, to check a download
-	Page            string              `json:"page,omitempty"`            // a web page where it can be had (an account may be needed)
-	Disks           []Disk              `json:"disks,omitempty"`           // more files the VM needs: a second disk, a CD-ROM, a BIOS
+	TCGCPU          string              `json:"tcgCpu,omitempty"`
+	MgmtMACAlign    int                 `json:"mgmtMacAlign,omitempty"`  // the OS takes its management MAC from its first NIC's address rounded down to this block (a power of two; 0 = it uses the NIC's address)
+	MgmtMACOffset   int                 `json:"mgmtMacOffset,omitempty"` // … plus this (Fabric Engine: block 1024, OOB at +0x81 = 129)          // the CPU model it gets on a host without KVM (for example Nehalem, for an image that wants an Intel CPU); "" = QEMU's default
+	BootAnswers     []Answer            `json:"bootAnswers,omitempty"`   // menus the image may stop at while it boots (the end of its console log), and what to type
+	NotReady        []string            `json:"notReady,omitempty"`      // console text that means its login is not ready yet ("(pending-AAA)"): nothing is typed until it is gone
+	NeighborCmd     string              `json:"neighborCmd,omitempty"`   // a CLI command that lists the LLDP neighbours ("show lldp neighbors")
+	Persona         *PersonaDef         `json:"persona,omitempty"`       // a file that makes the image act as a given device
+	Version         string              `json:"version"`                 // the software version of the image (for the lists)
+	Match           string              `json:"match,omitempty"`         // profiles: a regexp on the file name that picks this profile; a "version" group gives the version
+	Serial          string              `json:"serial"`                  // serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
+	URL             string              `json:"url,omitempty"`           // where the image file can be downloaded (from a GNS3 appliance)
+	MD5             string              `json:"md5,omitempty"`           // its MD5 sum, to check a download
+	Page            string              `json:"page,omitempty"`          // a web page where it can be had (an account may be needed)
+	Disks           []Disk              `json:"disks,omitempty"`         // more files the VM needs: a second disk, a CD-ROM, a BIOS
 }
 
 // Disk is another file an image boots with: "hdb", "hdc", "hdd" (more disks,
@@ -391,6 +393,22 @@ func (l *Lab) MAC(v VM, n int) string {
 	}
 	id, _ := strconv.ParseUint(l.ID, 16, 64)
 	return fmt.Sprintf("52:54:%02x:%02x:%02x:%02x", byte(id), byte(v.Index>>8), byte(v.Index), byte(n))
+}
+
+// MgmtMAC is the MAC address the switch's OS uses on its management port: its first NIC's, unless the
+// image derives it (Fabric Engine: the NIC's address rounded down to its MAC block, plus 0x81 for the OOB port).
+func (l *Lab) MgmtMAC(v VM, im *Image) string {
+	m := l.MAC(v, 0)
+	if im == nil || im.MgmtMACAlign <= 0 {
+		return m
+	}
+	hw, err := net.ParseMAC(m)
+	if err != nil || len(hw) != 6 {
+		return m
+	}
+	x := uint64(hw[0])<<40 | uint64(hw[1])<<32 | uint64(hw[2])<<24 | uint64(hw[3])<<16 | uint64(hw[4])<<8 | uint64(hw[5])
+	x = x&^uint64(im.MgmtMACAlign-1) + uint64(im.MgmtMACOffset)
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", byte(x>>40), byte(x>>32), byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
 }
 
 // tap is the management interface name in bridge mode (at most 15 characters).
@@ -747,7 +765,9 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		t, redir := l.tap(v), ""
 		switch {
 		case l.Mgmt == "lan" && l.LanKind == "macvtap":
-			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip link add link %s name %s address %s type macvtap mode bridge; sudo -n ip link set %s up\n", t, Q(l.LanIf), t, l.MAC(v, 0), t)
+			// macvtap passes only frames for its own MAC: the one the switch's OS answers with on its management port
+			mm := l.MgmtMAC(v, im)
+			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip link add link %s name %s address %s type macvtap mode bridge; [ \"$(cat /sys/class/net/%s/address)\" = %s ] || { sudo -n ip link set %s down; sudo -n ip link set %s address %s; }; sudo -n ip link set %s up\n", t, Q(l.LanIf), t, mm, t, mm, t, t, mm, t)
 			fmt.Fprintf(&b, " idx=$(cat /sys/class/net/%s/ifindex); for i in 1 2 3 4 5 6 7 8 9 10; do [ -e /dev/tap$idx ] && break; sleep 0.2; done; sudo -n chown \"$(id -un)\" /dev/tap$idx\n", t)
 			redir = " 3<>/dev/tap$idx"
 		case l.tapped():
@@ -810,7 +830,7 @@ func (l *Lab) FastKey(v VM, im *Image) string {
 		pa = v.Persona.Applied
 	}
 	return Hash(fmt.Sprint(im.ID, im.FileName, im.NICs, im.NIC, im.Disk, im.Extra, orInt(v.CPUs, im.CPUs, 1), orInt(v.RAM, im.RAM, 1024), v.DiskGB,
-		v.Serial, v.BaseMAC, pa, v.Host, l.Mgmt, l.MgmtNet, l.LanFixed, l.LanIf, v.MgmtIP, v.Uplinks)+l.CPU)[:12] // its saved state loads with the same CPU only
+		v.Serial, v.BaseMAC, pa, v.Host, l.Mgmt, l.MgmtNet, l.LanFixed, l.LanIf, v.MgmtIP, v.Uplinks) + l.CPU)[:12] // its saved state loads with the same CPU only
 }
 
 // disks lists a VM's disk files on the host.

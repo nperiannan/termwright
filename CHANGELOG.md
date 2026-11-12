@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **Log** tab in the bottom pane: the emulator's own log (emulator.log in the lab folder, three files of 5 MB) with everything the lab does, at a level you choose - Errors, Warnings, Info (default), Debug (each command run on a host, how long it took and how it ended, what day 0 typed) or Verbose (also the commands' text and output, secrets removed). Refresh, Copy and Save….
+- Emulated lab, Fabric Engine on the host's network (macvtap): it answers on its OOB port with its own MAC (its MAC block + 0x81), not the NIC's, so nothing reached it by SSH; the port now gets the MAC the switch uses (an image profile setting: mgmtMacAlign/mgmtMacOffset, in the device pack 1.5.6), and NAT leases are found by it too.
+- Emulated lab, the hover card shows the switch's type (EXOS/VOSS), model (or "no persona") and firmware; the name under a switch can be dragged away from a cable (double-click puts it back) and has a backdrop so a cable does not run through it.
+
 - Emulated lab, the Topology menu opens again when no topology has been saved yet (it got nothing to show and stayed shut).
 - Emulated lab, console logins no longer lock a switch out: the console is listened to before Enter wakes it, and a password asked for an empty user name gets one Enter, not three (Fabric Engine counts each as a failed login: "Access denied : length 0 not allowed", then "Lock out for 60 seconds").
 - Emulated lab, **Console Log** tab in the bottom pane next to the live console: everything the selected switch's console showed since it started, with its Events - Refresh, Copy and Save….

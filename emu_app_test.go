@@ -1126,3 +1126,19 @@ func TestEmuSetKVM(t *testing.T) {
 		t.Errorf("%+v", e)
 	}
 }
+
+// The emulator log: lines at the level chosen, nothing below it.
+func TestEmuLog(t *testing.T) {
+	d := t.TempDir()
+	emuLog.Lock()
+	op, ol := emuLog.path, emuLog.level
+	emuLog.path, emuLog.level = d+"/emulator.log", emuLvInfo
+	emuLog.Unlock()
+	defer func() { emuLog.Lock(); emuLog.path, emuLog.level = op, ol; emuLog.Unlock() }()
+	emuLogf(emuLvInfo, "B/teams-vm", "sw1", "booted")
+	emuLogf(emuLvDebug, "B/teams-vm", "", "ran something")
+	b, _ := os.ReadFile(d + "/emulator.log")
+	if !strings.Contains(string(b), "INFO    teams-vm") || !strings.Contains(string(b), "booted") || strings.Contains(string(b), "ran something") {
+		t.Errorf("%s", b)
+	}
+}

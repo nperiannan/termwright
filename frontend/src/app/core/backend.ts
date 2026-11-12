@@ -107,6 +107,8 @@ export class Backend {
   emuRemoveHostInfo(host: string) { return this.call<EmuRemoveInfo>('EmuRemoveHostInfo', host); }
   emuRemoveHostWith(r: EmuRemoveHostReq) { return this.call<LabView>('EmuRemoveHostWith', r); }
   emuHostKVM(host: string) { return this.call<boolean>('EmuHostKVM', host); }
+  emuLog(lines: number) { return this.call<{ level: string; path: string; tail: string }>('EmuLog', lines); }
+  emuSetLogLevel(level: string) { return this.call<{ level: string; path: string; tail: string }>('EmuSetLogLevel', level); }
   emuImageMatrix() { return this.call<EmuMatrix>('EmuImageMatrix'); }
   emuSyncImages(hosts: string[], images: string[], force: boolean) { return this.call<EmuMatrix>('EmuSyncImages', hosts, images, force); }
   emuSyncSettings(syncAll: boolean, keep20: boolean) { return this.call<EmuMatrix>('EmuSyncSettings', syncAll, keep20); }

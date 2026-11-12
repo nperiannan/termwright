@@ -65,6 +65,7 @@ type emuFile struct {
 	IconStyle string            `json:"iconStyle,omitempty"` // how devices are drawn ("" = boxes)
 	SyncAll   bool              `json:"syncAll,omitempty"`   // copy new images to every host
 	NoKeep20  bool              `json:"noKeep20,omitempty"`  // copy even when a host would keep less than a fifth of its disk free
+	LogLevel  string            `json:"logLevel,omitempty"`  // the emulator log's level ("" = info)
 }
 
 // emuTopo is a saved topology: a lab with its switches, cables, management
@@ -249,6 +250,7 @@ func emuEvOn(host, id, level, text string) {
 		}
 	}
 	e := EmuEvent{At: time.Now(), VM: id, Name: name, Level: level, Text: text, Host: host}
+	emuLogf(emuLevel(level), host, name, "%s", text)
 	emuLab.events = append(emuLab.events, e)
 	if n := len(emuLab.events); n > 400 {
 		emuLab.events = append([]EmuEvent(nil), emuLab.events[n-300:]...)
@@ -483,6 +485,7 @@ func (a *App) emuLoad() {
 		return
 	}
 	emuLab.loaded = true
+	defer a.emuLogSetup()
 	emuLab.conns, emuLab.state, emuLab.errs, emuLab.day0, emuLab.upload, emuLab.starting = map[string]*emuConn{}, map[string]string{}, map[string]string{}, map[string]bool{}, map[string]string{}, map[string]time.Time{}
 	emuLab.ticks, emuLab.cpu, emuLab.ready, emuLab.personaAfterBoot = map[string]float64{}, map[string]float64{}, map[string]bool{}, map[string]bool{}
 	emuLab.personaTried, emuLab.perr, emuLab.bootAns, emuLab.addrOK, emuLab.moveTo = map[string]bool{}, map[string]string{}, map[string]time.Time{}, map[string]bool{}, map[string]string{}
@@ -576,7 +579,30 @@ func (a *App) emuClient(ctx context.Context, host string) (*ssh.Client, error) {
 }
 
 // emuRun runs a shell script on a host and returns what it printed.
-func (a *App) emuRun(host, script string, timeout time.Duration) (string, error) {
+func (a *App) emuRun(host, script string, timeout time.Duration) (out string, err error) {
+	if emuLogOn(emuLvDebug) {
+		t0 := time.Now()
+		defer func() {
+			first := strings.TrimSpace(strings.SplitN(strings.TrimSpace(script), "\n", 2)[0])
+			if len(first) > 160 {
+				first = first[:160] + "…"
+			}
+			res := "ok"
+			if err != nil {
+				res = "failed: " + err.Error()
+			}
+			emuLogf(emuLvDebug, host, "", "ran %q (%d lines) in %.1fs: %s", first, strings.Count(script, "\n")+1, time.Since(t0).Seconds(), res)
+			if emuLogOn(emuLvVerbose) {
+				red, _ := aiRedact(script, false)
+				ro, _ := aiRedact(out, false)
+				emuLogf(emuLvVerbose, host, "", "script:\n%s\noutput:\n%s", red, ro)
+			}
+		}()
+	}
+	return a.emuRun0(host, script, timeout)
+}
+
+func (a *App) emuRun0(host, script string, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	for try := 0; ; try++ {
@@ -2620,6 +2646,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		if sent == "" {
 			sent = "Enter"
 		}
+		emuLogf(emuLvVerbose, host, v.Name, "console: %q answered with %s", q, sent)
 		emuLab.mu.Lock()
 		emuEv(v.ID, "info", fmt.Sprintf("answered %q with %s", q, sent))
 		emuLab.mu.Unlock()
@@ -2661,6 +2688,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 	}
 	if doDay0 {
 		err = emu.Day0(ctx, c, &im, v, v.Index+1, func(i int, cmd string) {
+			emuLogf(emuLvDebug, host, v.Name, "day 0 types: %s", cmd)
 			emuLab.mu.Lock()
 			emuLab.state[v.ID] = fmt.Sprintf("day0 %d/%d", i+1, len(im.Day0))
 			emuLab.mu.Unlock()
@@ -3310,7 +3338,11 @@ func (a *App) emuPoll(force bool) emu.Status {
 			if _, up := st.Up[v.ID]; !up || l.HostOf(*v, main) != h {
 				continue
 			}
-			if ip := st.Leases[strings.ToLower(l.MAC(*v, 0))]; ip != "" && v.MgmtIP != ip+"/"+bits {
+			ip := st.Leases[strings.ToLower(l.MAC(*v, 0))]
+			if ip == "" { // an OS that answers with its own management MAC
+				ip = st.Leases[strings.ToLower(l.MgmtMAC(*v, emuImage(v.Image)))]
+			}
+			if ip != "" && v.MgmtIP != ip+"/"+bits {
 				v.Gateway, v.MgmtIP = strings.Split(st.NatNet, "/")[0], ip+"/"+bits
 				go func(id, name, addr, host string) {
 					a.emuSetAddress(id, addr)
@@ -4665,6 +4697,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			}
 			if len(im.LagSet) == 0 && len(p.LagSet) > 0 {
 				im.LagSet, im.LagDel, changed = p.LagSet, p.LagDel, true
+			}
+			if im.MgmtMACAlign == 0 && p.MgmtMACAlign > 0 {
+				im.MgmtMACAlign, im.MgmtMACOffset, changed = p.MgmtMACAlign, p.MgmtMACOffset, true
 			}
 			if im.TCGCPU == "" && p.TCGCPU != "" {
 				im.TCGCPU, changed = p.TCGCPU, true
