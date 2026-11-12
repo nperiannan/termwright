@@ -124,7 +124,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                   @else { @for (r of hostLinks(); track $index) { @if (!r.ok) { <div class="small badt">✗ {{ r.from }} → {{ r.to }}: {{ tr('blocked') }} <span class="muted">({{ tr('open UDP 20000-29999 on both hosts') }})</span></div> } } }
                 </div>
               }
-              <div class="hact"><a (click)="wizard(); mgOpen.set(false)">+ {{ tr('Add a Host…') }}</a><span class="sp"></span><a (click)="page.set('hosts'); mgOpen.set(false)">{{ tr('All Hosts…') }}</a></div>
+              <div class="hact"><a (click)="wizard(); mgOpen.set(false)">+ {{ tr('Add a Host…') }}</a><span class="sp"></span><a (click)="page.set('onhosts'); mgOpen.set(false)">{{ tr('Images on the Hosts…') }}</a><a (click)="page.set('hosts'); mgOpen.set(false)">{{ tr('All Hosts…') }}</a></div>
             </div>
           }
         </span>
@@ -332,9 +332,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
 
     @switch (page()) {
       @case ('configure') { <app-lab-configure [devId]="cfgId()" [emu]="emu()" (closed)="page.set('')" (images)="page.set('images')" /> }
-      @case ('images') { <app-lab-images start="images" (closed)="page.set('')" /> }
+      @case ('images') { <app-lab-images start="images" (closed)="page.set('')" (hostsPage)="hostPick.set($event); page.set('hosts')" /> }
+      @case ('onhosts') { <app-lab-images start="onhosts" (closed)="page.set('')" (hostsPage)="hostPick.set($event); page.set('hosts')" /> }
       @case ('templates') { <app-lab-images start="templates" (closed)="page.set('')" /> }
-      @case ('hosts') { <app-lab-hosts (closed)="page.set('')" /> }
+      @case ('hosts') { <app-lab-hosts [select]="hostPick()" (closed)="page.set(''); hostPick.set('')" /> }
     }
     <div class="dock">
       <div class="grip" (pointerdown)="gripDown($event)" [title]="tr('Drag to make the pane taller or shorter')"></div>
@@ -896,7 +897,8 @@ export class LabWorkspace implements OnDestroy {
   protected linkMode = signal(false);
   protected linkA = signal<{ id: string; port: string } | null>(null);
   protected portPick = signal<{ id: string; ports: string[]; all: { name: string; short: string; peer: string }[]; x: number; y: number; side: 'a' | 'b' } | null>(null);
-  protected page = signal<'' | 'configure' | 'images' | 'templates' | 'hosts' | 'new'>('');
+  protected page = signal<'' | 'configure' | 'images' | 'templates' | 'hosts' | 'new' | 'onhosts'>('');
+  protected hostPick = signal('');
   protected cfgId = signal('');
   protected dockH = signal(this.savedDockH());
   private savedDockH() { try { return Math.min(700, Math.max(90, +(localStorage.getItem('tw.lab.dockH') ?? '') || 190)); } catch { return 190; } }

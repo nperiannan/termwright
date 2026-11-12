@@ -784,6 +784,33 @@ func TestEmuTwoHosts(t *testing.T) {
 	if err != nil || len(hl) != 2 || !hl[0].OK || !hl[1].OK {
 		t.Errorf("tunnel check: %v %+v", err, hl)
 	}
+	// the Images on the Hosts page: both hosts have the image; they reach each other on UDP and TCP
+	mx, err := a.EmuImageMatrix()
+	if err != nil || len(mx.Hosts) != 2 || len(mx.Images) == 0 {
+		t.Fatalf("matrix: %v %+v", err, mx)
+	}
+	for _, h := range mx.Hosts {
+		if h.Error != "" || h.CPUs == 0 || h.MemTotal == 0 || h.DiskTotal == 0 || h.ImagesDir == "" {
+			t.Errorf("host in the matrix: %+v", h)
+		}
+		if st := mx.Cells[h.Session][mx.Images[0].ID]; st != "ok" {
+			t.Errorf("%s: %s", h.Name, st)
+		}
+	}
+	if _, err := a.EmuCheckReach(); err != nil {
+		t.Fatal(err)
+	}
+	for end := time.Now().Add(40 * time.Second); time.Now().Before(end); time.Sleep(time.Second) {
+		if mx, _ = a.EmuImageMatrix(); !mx.Checking {
+			break
+		}
+	}
+	if len(mx.Reach) != 2 || mx.Reach[0].UDP != "ok" || mx.Reach[0].TCP != "ok" || mx.Reach[1].UDP != "ok" {
+		t.Errorf("reach: %+v", mx.Reach)
+	}
+	if _, err := a.EmuSyncImages(nil, nil, false); err == nil || !strings.Contains(err.Error(), "already") {
+		t.Errorf("sync with all there: %v", err)
+	}
 	if os.Getenv("TW_EMU_HOSTB_USER") == "" {
 		return // moving a switch needs the hosts' own homes (as two machines have)
 	}

@@ -756,10 +756,12 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		// full paths to its disks: QEMU opens them again after -daemonize went to "/" (a live move, giving up
 		// write access when its state leaves)
 		q = strings.ReplaceAll(q, "file="+l.Dir+"/", "file=$HOME/"+l.Dir+"/")
-		fmt.Fprintf(&b, " if out=$(%s $lv%s 2>&1); then if [ -n \"$lv\" ]; then echo 'resumed %s'; else echo 'started %s'; fi\n", q, redir, v.ID, v.ID)
+		// in a group, so a port it cannot open (/dev/tapN) is in its message too
+		fmt.Fprintf(&b, " if out=$( { %s $lv%s; } 2>&1); then if [ -n \"$lv\" ]; then echo 'resumed %s'; else echo 'started %s'; fi\n", q, redir, v.ID, v.ID)
 		// a saved state that does not load (another QEMU, another CPU): it boots instead
-		fmt.Fprintf(&b, " elif [ -n \"$lv\" ] && for d in %s; do [ -f \"$d\" ] && qemu-img snapshot -d %s \"$d\" 2>/dev/null; done; out2=$(%s%s 2>&1); then echo 'started %s'\n", l.disks(v.ID), FastSnap, q, redir, v.ID)
-		fmt.Fprintf(&b, " else echo \"fail %s $(echo $out $out2 | tr '\\n' ' ')\"; fi\nfi\n", v.ID)
+		fmt.Fprintf(&b, " elif [ -n \"$lv\" ] && for d in %s; do [ -f \"$d\" ] && qemu-img snapshot -d %s \"$d\" 2>/dev/null; done; out2=$( { %s%s; } 2>&1); then echo 'started %s'\n", l.disks(v.ID), FastSnap, q, redir, v.ID)
+		// QEMU's own log when it said nothing
+		fmt.Fprintf(&b, " else m=$(echo $out $out2 | tr '\\n' ' '); [ -n \"$m\" ] || m=$(tail -c 400 %s/%s.log 2>/dev/null | tr '\\n' ' '); echo \"fail %s ${m:-QEMU stopped at once and said nothing}\"; fi\nfi\n", Q(dir), v.ID, v.ID)
 	}
 	return b.String()
 }

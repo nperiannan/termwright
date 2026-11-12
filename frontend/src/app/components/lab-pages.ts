@@ -5,6 +5,7 @@ import { Backend, errText } from '../core/backend';
 import { EmuDeviceType, EmuHost, EmuImage, EmuPersonaDef, EmuSlot, EmuTemplate, LabDevice, SessionNode } from '../core/models';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
+import { LabHostImages } from './lab-host-images';
 
 /** Shared look of the lab pages (Configure, New Lab, Images, Hosts). */
 const PAGE = `
@@ -440,12 +441,12 @@ export class LabNew implements OnInit {
 // ---------------------------------------------------------------- Images and Templates
 @Component({
   selector: 'app-lab-images',
-  imports: [FormsModule],
+  imports: [FormsModule, LabHostImages],
   template: `
   <div class="ov" (click)="closed.emit()"></div>
   <div class="mdl">
     <div class="mh"><div><h2>{{ tr('Images and Templates') }}</h2><div class="muted small">{{ tr('The switch images Termwright can boot, what it knows about each, and the devices made from them') }}</div></div><span class="sp"></span><button type="button" class="sm" (click)="closed.emit()">✕</button></div>
-    <div class="mt"><a [class.on]="tab() === 'images'" (click)="tab.set('images')">{{ tr('Images ({0})', images().length) }}</a><a [class.on]="tab() === 'templates'" (click)="tab.set('templates')">{{ tr('Templates ({0})', templates().length) }}</a><a [class.on]="tab() === 'profiles'" (click)="tab.set('profiles')">{{ tr('Profiles from the device pack') }}</a><a [class.on]="tab() === 'public'" (click)="openPublic()">{{ tr('Public appliances') }}</a></div>
+    <div class="mt"><a [class.on]="tab() === 'images'" (click)="tab.set('images')">{{ tr('Images ({0})', images().length) }}</a><a [class.on]="tab() === 'templates'" (click)="tab.set('templates')">{{ tr('Templates ({0})', templates().length) }}</a><a [class.on]="tab() === 'profiles'" (click)="tab.set('profiles')">{{ tr('Profiles from the device pack') }}</a><a [class.on]="tab() === 'onhosts'" (click)="tab.set('onhosts')">{{ tr('On the Hosts') }}</a><a [class.on]="tab() === 'public'" (click)="openPublic()">{{ tr('Public appliances') }}</a></div>
     <div class="mb" style="display: grid; grid-template-columns: 320px minmax(0, 1fr)">
       @switch (tab()) {
         @case ('images') {
@@ -551,6 +552,7 @@ export class LabNew implements OnInit {
             } @else { <p class="muted">{{ tr('A template is an image with resources, the model it acts as and where serial numbers and MACs start.') }}</p> }
           </div>
         }
+        @case ('onhosts') { <app-lab-host-images style="grid-column: 1 / -1; min-height: 0" (hostsPage)="hostsPage.emit($event)" /> }
         @case ('public') {
           <div class="lst">
             <p class="muted small">{{ tr('Ready-made settings from the public GNS3 registry, with their second disks, CD-ROMs and BIOS files. Add one: its versions join the image list; then download the files (or choose them when the maker wants you to sign in).') }}</p>
@@ -592,13 +594,14 @@ export class LabNew implements OnInit {
   styles: [PAGE],
 })
 export class LabImages implements OnInit {
-  readonly start = input<'images' | 'templates'>('images');
+  readonly start = input<'images' | 'templates' | 'onhosts'>('images');
   readonly closed = output<void>();
+  readonly hostsPage = output<string>();
   protected lab = inject(LabService);
   private backend = inject(Backend);
   private ui = inject(Ui);
   protected tr = tr;
-  protected tab = signal<'images' | 'templates' | 'profiles' | 'public'>('images');
+  protected tab = signal<'images' | 'templates' | 'profiles' | 'public' | 'onhosts'>('images');
   protected cat = signal<{ file: string; name: string; group: string; note: string; added: boolean; count: number }[]>([]);
   protected queue = computed(() => (this.lab.emu()?.downloadQueue ?? []).map(id => { const im = this.images().find(i => i.id === id); return { id, name: im?.name ?? id, version: im?.version ?? '', state: im ? this.dl(im) : '' }; }));
   async move(id: string, where: string) { try { this.lab.emu.set(await this.backend.emuDownloadMove(id, where)); } catch (e) { this.ui.error(errText(e)); } }
@@ -783,7 +786,9 @@ export class LabHosts {
   private ui = inject(Ui);
   protected tr = tr;
   protected hosts = computed<EmuHost[]>(() => this.lab.emu()?.hosts ?? []);
+  readonly pick0 = input('', { alias: 'select' });
   protected sel = signal('');
+  ngOnInit() { if (this.pick0()) this.sel.set(this.pick0()); }
   protected cur = computed(() => this.hosts().find(h => h.session === this.sel()) ?? this.hosts()[0] ?? null);
   protected pick = '';
   protected pw = '';

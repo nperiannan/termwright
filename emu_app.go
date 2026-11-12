@@ -63,6 +63,8 @@ type emuFile struct {
 	Consoles  map[string]string `json:"consoles"`            // VM → its console session
 	Topology  string            `json:"topology,omitempty"`  // the name the open lab is saved under ("" = not saved yet)
 	IconStyle string            `json:"iconStyle,omitempty"` // how devices are drawn ("" = boxes)
+	SyncAll   bool              `json:"syncAll,omitempty"`   // copy new images to every host
+	NoKeep20  bool              `json:"noKeep20,omitempty"`  // copy even when a host would keep less than a fifth of its disk free
 }
 
 // emuTopo is a saved topology: a lab with its switches, cables, management
@@ -1044,6 +1046,7 @@ func (a *App) emuDownloadWorker() {
 			emuEv("", "error", cp.Name+" "+cp.Version+": download failed: "+err.Error())
 		default:
 			emuEv("", "ok", cp.Name+" "+cp.Version+": downloaded and checked ("+cp.FileName+")")
+			go a.emuSyncAfter(cp.ID)
 		}
 		emuLab.mu.Unlock()
 		if !stopped {
@@ -1660,6 +1663,19 @@ func emuCopyWhy(err error) string {
 	return "an error on the host"
 }
 
+// emuStartWhy adds what to do to a start failure QEMU (or the shell) reported.
+func emuStartWhy(m string) string {
+	switch {
+	case strings.Contains(m, "/dev/tap"):
+		return m + " - its port on the host's network (macvtap) could not be made: the host needs sudo without a password for ip link (Hosts → Set Up), or choose another management for it"
+	case strings.Contains(m, "Could not access KVM") || strings.Contains(m, "/dev/kvm"):
+		return m + " - the host user may not use KVM: add it to the kvm group (Hosts → Set Up), then log in again"
+	case strings.Contains(m, "Could not open") && strings.Contains(m, "backing"):
+		return m + " - the image under its disk is missing on this host: Images → On the Hosts copies it"
+	}
+	return m
+}
+
 // emuBytes is a size in plain units.
 func emuBytes(n int64) string {
 	switch {
@@ -2267,6 +2283,7 @@ func (a *App) emuStart(host string, ids []string) {
 			failAll(err)
 			return
 		}
+		a.emuSyncAfter(im.ID)
 	}
 	emuLab.mu.Lock()
 	ptrs := map[string]*emu.Image{}
@@ -2370,7 +2387,7 @@ func (a *App) emuStart(host string, ids []string) {
 				}
 				continue
 			}
-			emuLab.errs[f[1]] = strings.TrimSpace(strings.Join(f[2:], " "))
+			emuLab.errs[f[1]] = emuStartWhy(strings.TrimSpace(strings.Join(f[2:], " ")))
 			emuEv(f[1], "error", "did not start: "+emuLab.errs[f[1]])
 		}
 	}

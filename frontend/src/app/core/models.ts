@@ -385,3 +385,8 @@ export interface IperfInfo { path: string; running: boolean; port: number; last?
 export interface FirewallState { name: string; on: 'on' | 'off' | 'unknown'; app: 'allowed' | 'blocked' | 'ask' | 'unknown'; notes: string[] | null; fix: string; canFix: boolean; program: string; }
 export interface AIStatus { provider: string; model: string; hasKey: boolean; ready: boolean; }
 export interface AIAnswer { text: string; commands: string[]; sent: string; removed: number; model: string; usage?: { in: number; out: number; model?: string } | null; }
+
+export interface EmuMatrixHost { session: string; name: string; addr: string; kvm: string; vt: boolean; virt: string; qemu: string; qemuImg: boolean; guestfs: boolean; sudo: boolean; canSetup: boolean; problems: string[] | null; cpus: number; load: number; memTotal: number; memFree: number; diskTotal: number; diskFree: number; imagesDir: string; error: string; }
+export interface EmuMatrixImage { id: string; name: string; version: string; fileName: string; size: number; local: boolean; switches: number; }
+export interface EmuReach { from: string; to: string; udp: string; tcp: string; text: string; at: string; }
+export interface EmuMatrix { hosts: EmuMatrixHost[] | null; images: EmuMatrixImage[] | null; cells: Record<string, Record<string, string>> | null; reach: EmuReach[] | null; busy: boolean; checking: boolean; syncAll: boolean; keep20: boolean; }

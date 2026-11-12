@@ -217,6 +217,9 @@ func (a *App) emuMoveTarget(v emu.VM, to string) (readdr bool, err error) {
 		l.SetNet(to, main, n)
 	}
 	nt := l.Net(to, main)
+	if nt.Mgmt != "forward" && !info.Sudo {
+		return false, fmt.Errorf("%s gives its switches their management through sudo (%s), and its user has no sudo without a password: run Set Up for it under Hosts, or set its management to Port forwarding", name, map[string]string{"lan": "the host's network", "cloud": "the host's network, routed", "nat": "NAT", "bridge": "a lab bridge"}[nt.Mgmt])
+	}
 	lt := *l
 	lt.Mgmt, lt.MgmtNet, lt.LanFixed = nt.Mgmt, nt.MgmtNet, nt.LanFixed
 	ff := nf.Mgmt == "bridge" || hostNet(nf) // fixed address here (in its configuration)
@@ -712,7 +715,11 @@ func (a *App) emuMoveCopy(id, to string, running, readdr bool) error {
 		a.emuMgmtFollow(id, to, lt, v)
 	}
 	emuLab.mu.Lock()
-	emuEv(id, "ok", "moved to "+to[strings.LastIndex(to, "/")+1:]+" with its disk"+map[bool]string{true: " and running state: it resumed there", false: ""}[saved])
+	if e := emuLab.errs[id]; running && e != "" { // moved, but it did not start there: say so, not "resumed"
+		emuEv(id, "error", "moved to "+to[strings.LastIndex(to, "/")+1:]+" with its disk, but it did not start there: "+e)
+	} else {
+		emuEv(id, "ok", "moved to "+to[strings.LastIndex(to, "/")+1:]+" with its disk"+map[bool]string{true: " and running state: it resumed there", false: ""}[saved])
+	}
 	emuLab.mu.Unlock()
 	return nil
 }
