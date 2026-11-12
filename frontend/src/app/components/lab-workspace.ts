@@ -324,6 +324,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (emu() && selDev(); as d) { <a [class.on]="dock() === 'console'" (click)="dock.set('console'); loadTail()">{{ tr('{0} console', d.hostname) }}</a> }
         <span class="sp"></span><span class="muted small hint2">{{ dock() === 'inv' ? tr('Every switch under its host: console, management, what it uses now') : dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
         @if (dock() === 'console' && dockTab(); as t) { <button type="button" class="sm" (click)="undock()" [title]="tr('Close the connection to its console')">{{ tr('Disconnect') }}</button> }
+        @if (dock() === 'inv' && inventory().length > 1) { <button type="button" class="sm" (click)="flipAll()">{{ invClosed().size === inventory().length ? tr('Expand All') : tr('Collapse All') }}</button> }
         @else { <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button> }
         @if (dock() === 'events' && emu()) { <button type="button" class="sm" (click)="clearEvents()">{{ tr('Clear') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
@@ -332,14 +333,21 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <div class="inv"><table>
           <tr><th>{{ tr('Switch') }}</th><th>{{ tr('State') }}</th><th>{{ tr('Console') }}</th><th>{{ tr('Management') }}</th><th>CPU</th><th>{{ tr('Memory') }}</th></tr>
           @for (g of inventory(); track g.host) {
-            <tr class="h"><td colspan="4">@if (multi()) { <i class="hd" [style.background]="hcol(g.id)"></i> }<b>{{ g.host }}</b>@if (g.addr) { <span class="muted"> · {{ g.addr }}</span> }<span class="muted"> · {{ g.mgmt }} · {{ tr('{0} switches · {1} running', g.devs.length, g.running) }}</span></td>
+            <tbody>
+            <tr class="h" (click)="flipHost(g.id)" [title]="invClosed().has(g.id) ? tr('Show its switches') : tr('Hide its switches')">
+              <td colspan="4"><span class="chev">{{ invClosed().has(g.id) ? '▸' : '▾' }}</span><i class="hd" [style.background]="hcol(g.id)"></i><b>{{ g.host }}</b>
+                @if (g.kvm) { <span class="pill">{{ g.kvm }}</span> }@if (g.addr) { <span class="muted">{{ g.addr }}</span> }<span class="muted"> · {{ g.mgmt }}</span>
+                <span class="pill">{{ tr('{0} switches · {1} running', g.devs.length, g.running) }}</span></td>
               <td><span class="mtr"><i [style.width.%]="g.cpuPct"></i></span>{{ g.cpuText }}</td><td><span class="mtr"><i [style.width.%]="g.memPct"></i></span>{{ g.memText }}</td></tr>
-            @for (d of g.devs; track d.id) {
-              <tr [class.on]="sel() === d.id" (click)="select(d)"><td>{{ d.hostname }}</td><td [class]="stateOf(d)">● {{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</td>
-                <td class="mono">{{ g.host }}:{{ d.console }}</td><td class="mono">{{ d.ssh || '-' }}</td>
-                <td>@if (d.running) { <span class="mtr"><i [style.width.%]="d.cpu ?? 0"></i></span>{{ (d.cpu ?? 0).toFixed(0) }} % }</td>
-                <td>@if (d.running) { <span class="mtr"><i [style.width.%]="pct(d.memUsed ?? 0, d.ram ?? 0)"></i></span>{{ d.memUsed ? gb(d.memUsed) + ' / ' : '' }}{{ gb(d.ram) }} }</td></tr>
+            @if (!invClosed().has(g.id)) {
+              @for (d of g.devs; track d.id) {
+                <tr class="d" [class.on]="sel() === d.id" (click)="select(d)"><td><span class="guide" [style.border-color]="hcol(g.id)"></span>{{ d.hostname }}</td><td [class]="stateOf(d)">● {{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</td>
+                  <td class="mono" [title]="g.host + ':' + d.console">:{{ d.console }}</td><td class="mono">{{ d.ssh || '-' }}</td>
+                  <td>@if (d.running) { <span class="mtr"><i [style.width.%]="d.cpu ?? 0"></i></span>{{ (d.cpu ?? 0).toFixed(0) }} % }</td>
+                  <td>@if (d.running) { <span class="mtr"><i [style.width.%]="pct(d.memUsed ?? 0, d.ram ?? 0)"></i></span>{{ d.memUsed ? gb(d.memUsed) + ' / ' : '' }}{{ gb(d.ram) }} }</td></tr>
+              } @empty { <tr class="d"><td colspan="6" class="muted"><span class="guide" [style.border-color]="hcol(g.id)"></span>{{ tr('No switches on this host') }}</td></tr> }
             }
+            </tbody>
           }
         </table></div>
       } @else if (dock() === 'events') {
@@ -468,7 +476,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .ntip { position: absolute; z-index: 9; min-width: 250px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); pointer-events: none; font-size: 12px;
       .th { margin-bottom: 6px; white-space: nowrap; } table { border-collapse: collapse; } td { padding: 2px 10px 2px 0; white-space: nowrap; } td:first-child { color: var(--muted); } }
     .inv { overflow: auto; padding: 0 14px 10px; table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); font-size: 12px; white-space: nowrap; }
-      th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--surface); } tr.h td { background: var(--surface-2); } tr.on td { background: var(--accent-soft); } tr:not(.h) { cursor: pointer; }
+      th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+      tr.h { cursor: pointer; } tr.h td { background: var(--surface-2); font-size: 12.5px; padding-top: 7px; padding-bottom: 7px; border-top: 6px solid var(--surface); } tr.h:hover td { background: color-mix(in srgb, var(--accent) 8%, var(--surface-2)); }
+      tr.h .hd { margin: 0 6px 0 2px; } tr.h b { margin-right: 6px; } .chev { display: inline-block; width: 14px; color: var(--muted); }
+      .pill { display: inline-block; margin: 0 6px 0 2px; padding: 0 7px; border-radius: 9px; border: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+      tr.d { cursor: pointer; } tr.d td:first-child { padding-left: 28px; position: relative; } .guide { position: absolute; left: 16px; top: 0; bottom: 0; border-left: 2px solid; opacity: .6; }
+      tr.on td { background: var(--accent-soft); }
       .mtr { display: inline-block; width: 60px; height: 5px; border-radius: 3px; background: var(--line); vertical-align: middle; margin-right: 6px; i { display: block; height: 100%; border-radius: 3px; background: var(--accent); } } }
     .lk .ln { fill: none; } .lk .hit { fill: none; } .lk .ln.dn { stroke: var(--danger); stroke-dasharray: 6 5; }
     .lk .ln.thick { stroke-width: 7; stroke-linecap: round; } .lk.selk .ln.thick { stroke-width: 9; }
@@ -602,15 +615,19 @@ export class LabWorkspace implements OnDestroy {
     return ls.length + (lag ? ' (' + tr('{0} in a LAG', lag) + ')' : '');
   }
   /** The switches under their host, with what the host and each switch use now. */
+  /** Hosts whose switches the Inventory hides (all shown at first). */
+  protected invClosed = signal(new Set<string>());
+  flipHost(id: string) { const n = new Set(this.invClosed()); n.has(id) ? n.delete(id) : n.add(id); this.invClosed.set(n); }
+  flipAll() { this.invClosed.set(this.invClosed().size === this.inventory().length ? new Set() : new Set(this.inventory().map(g => g.id))); }
   protected inventory = computed(() => {
     const v = this.st(), u = v?.usage, devs = this.devs();
     if (this.multi()) return this.hostUse().map(h => {
       const ds = devs.filter(d => this.hostOfDev(d) === h.host), used = h.memTotal - h.memFree;
-      return { id: h.host, host: h.name, addr: (h.addr || '').split('/')[0], mgmt: this.mgName(h), devs: ds, running: ds.filter(d => d.running).length,
+      return { id: h.host, host: h.name, kvm: this.mgRows().find(r => r.host === h.host)?.kvm ?? '', addr: (h.addr || '').split('/')[0], mgmt: this.mgName(h), devs: ds, running: ds.filter(d => d.running).length,
         cpuPct: this.pct(h.cores, h.cpus), cpuText: h.cores.toFixed(1) + ' / ' + (h.cpus || '?') + ' ' + tr('cores'), memPct: this.pct(used, h.memTotal), memText: this.gb(used) + ' / ' + this.gb(h.memTotal) };
     });
     const used = (u?.hostMemTotal ?? 0) - (u?.hostMemFree ?? 0);
-    return [{ id: v?.host ?? '', host: this.hostName(), addr: v?.hostInfo?.lanAddr?.split('/')[0] ?? '', mgmt: this.mgName({ mgmt: v?.mgmt ?? '', mgmtNet: v?.mgmtNet ?? '', lanFixed: v?.lanFixed }), devs, running: devs.filter(d => d.running).length,
+    return [{ id: v?.host ?? '', host: this.hostName(), kvm: v?.kvm ? 'KVM' : tr('no KVM'), addr: v?.hostInfo?.lanAddr?.split('/')[0] ?? '', mgmt: this.mgName({ mgmt: v?.mgmt ?? '', mgmtNet: v?.mgmtNet ?? '', lanFixed: v?.lanFixed }), devs, running: devs.filter(d => d.running).length,
       cpuPct: this.pct(u?.cores ?? 0, u?.hostCpus ?? 0), cpuText: (u?.cores ?? 0).toFixed(1) + ' / ' + (u?.hostCpus ?? '?') + ' ' + tr('cores'),
       memPct: this.pct(used, u?.hostMemTotal ?? 0), memText: this.gb(used) + ' / ' + this.gb(u?.hostMemTotal) }];
   });
