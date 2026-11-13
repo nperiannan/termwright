@@ -86,6 +86,8 @@ class Fake(BaseHTTPRequestHandler):
             return self.reply(200, {"result": "Installs (id | name | mode | stage | now | image):\n- ab12 | alp | alpine | %s | boot | %s\n" % (stage, "img1" if stage == "done" else "-")})
         if path == "/tools/install_finish":
             return self.reply(200, {"result": "Saving"})
+        if path in ("/tools/dns", "/tools/images"):
+            return self.reply(200, {"result": "ok"})
         if path == "/tools/history":
             return self.reply(200, {"result": "Changes, newest first"})
         if path == "/tools/wait":
@@ -146,6 +148,16 @@ class ClientTest(unittest.TestCase):
         self.lab.revert("ab12")
         self.assertEqual(Fake.state["calls"][-1][1], "/api/v1/lab/tools/history")
         self.assertEqual(Fake.state["calls"][-1][2], {"action": "revert", "id": "ab12"})
+
+    def test_dns_and_images(self):
+        self.lab.dns("10.0.0.53", "9.9.9.9")
+        self.assertEqual(Fake.state["calls"][-1][1:], ("/api/v1/lab/tools/dns", {"servers": ["10.0.0.53", "9.9.9.9"]}))
+        self.lab.dns(default=True)
+        self.assertEqual(Fake.state["calls"][-1][2], {"servers": []})
+        self.lab.dns()
+        self.assertEqual(Fake.state["calls"][-1][2], {})
+        self.lab.images(type="EXOS")
+        self.assertEqual(Fake.state["calls"][-1][1:], ("/api/v1/lab/tools/images", {"type": "EXOS"}))
 
     def test_install_wait_raises_on_failure(self):
         self.lab.install_iso("/x/a.iso")

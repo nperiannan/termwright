@@ -375,12 +375,19 @@ func ParsePortShow(out string, macs map[int]string) CompNet {
 // LinuxDNS gives a Linux computer name servers when it has none (an Alpine installed with a static
 // address, a cloud image without DHCP): without them it reaches the Internet by address only, and its
 // day 0 cannot install iperf3. A DNS server set for the computer (lab_computer dns) is typed later.
-const LinuxDNS = "grep -q '^nameserver' /etc/resolv.conf 2>/dev/null || printf 'nameserver 8.8.8.8\\nnameserver 1.1.1.1\\n' > /etc/resolv.conf"
+const LinuxDNS = "grep -q '^nameserver' /etc/resolv.conf 2>/dev/null || printf 'nameserver %s\\n' {dnsList} > /etc/resolv.conf"
 
-// AddLinuxDNS puts LinuxDNS into an older Linux image's day 0, before its iperf3 install (it reports
-// whether it changed the image).
+// linuxDNSFixed is LinuxDNS as it was before the lab's DNS setting (images keep it in their day 0).
+const linuxDNSFixed = "grep -q '^nameserver' /etc/resolv.conf 2>/dev/null || printf 'nameserver 8.8.8.8\\nnameserver 1.1.1.1\\n' > /etc/resolv.conf"
+
+// AddLinuxDNS puts LinuxDNS into an older Linux image's day 0, before its iperf3 install, or turns the
+// fixed servers of an older LinuxDNS into the lab's (it reports whether it changed the image).
 func AddLinuxDNS(im *Image) bool {
-	for _, c := range im.Day0 {
+	for i, c := range im.Day0 {
+		if c == linuxDNSFixed { // from before the lab's DNS setting: it takes the lab's servers now
+			im.Day0[i] = LinuxDNS
+			return true
+		}
 		if strings.Contains(c, "resolv.conf") {
 			return false
 		}

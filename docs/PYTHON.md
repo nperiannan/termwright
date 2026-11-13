@@ -50,6 +50,8 @@ Test ports and streams are as in the API; the keyword arguments are the API's fi
 | `convergence(name, src, dst, switch, port, action="pull", at=5, hold=10)` | Traffic while a cable is pulled or a switch stops or restarts; the rows hold the frames lost and the outage in ms |
 | `iperf(name, server, client, server_ip, proto="tcp", parallel=4)` | iperf3 between two computers of the lab |
 | `rows(run)` | The result rows of a run |
+| `dns(*servers, default=False)` | The lab's name servers; with servers, sets them (at most three); `default=True` goes back to 8.8.8.8 1.1.1.1 |
+| `images(name=None, type=None)` | Images and templates, filtered by part of a name and by device type |
 | `pps_for(rate, size)` | Frames per second for a rate in Mbps, as hardware testers count it (20 bytes of preamble and gap per frame) |
 
 `scripts/python/example_traffic.py` is a complete run. With pytest or unittest, `assert_pass` is the check. `scripts/python/example_two_computers.py pc-1 pc-2 10.20.0.11/24 10.20.0.12/24` is the two-computer test: an address on each computer's first data port, ping and iperf3 both ways, PASS or FAIL per step (exit 1 when one fails).

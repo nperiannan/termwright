@@ -102,7 +102,7 @@ export class LabService {
     try {
       const v = await f();
       (v?.kind === 'emu' ? this.emu : this.sim).set(v);
-      if (ok) this.ui.toast(ok, 'success');
+      if (ok) this.ui.toast(tr(ok), 'success');
       return true;
     } catch (e) {
       this.ui.error(errText(e));
@@ -128,6 +128,7 @@ export class LabService {
   setFast(on: boolean) { return this.run(() => this.backend.emuSetFast(on), on ? 'Fast start on - Stop saves the switches’ running state' : 'Fast start off - the switches boot each time'); }
   stop(ids: string[] = []) { return this.run(() => (this.e ? this.backend.emuStop(ids) : this.backend.labStop(ids))); }
   restart(ids: string[]) { return this.run(() => this.backend.emuRestart(ids)); }
+  setDNS(servers: string[]) { return this.run(() => this.backend.emuSetDNS(servers), 'Name servers set - devices get them when they start'); }
   setMgmt(mgmt: string, mgmtNet = '') { return this.run(() => this.backend.emuSetMgmt(mgmt, mgmtNet), 'Management changed - it applies when the switches start'); }
   reset(ids: string[]) { return this.run(() => this.backend.emuReset(ids), 'Back to day 0: the switches boot as new'); }
   async remove(ids: string[], sessions: boolean) {

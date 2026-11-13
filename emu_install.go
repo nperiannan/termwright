@@ -455,7 +455,13 @@ func (a *App) emuInstallRun(ctx context.Context, id string) {
 			}
 		}
 	})
-	err = emu.InstallAlpine(ctx, c, emu.AlpineOpts{Hostname: "alpine", Password: pw}, func(step, msg string) { a.emuInstallStep(id, step, msg) })
+	dns := emu.DefaultDNS[0]
+	emuLab.mu.Lock()
+	if emuLab.f.Lab != nil {
+		dns = emuLab.f.Lab.DNSServers()[0]
+	}
+	emuLab.mu.Unlock()
+	err = emu.InstallAlpine(ctx, c, emu.AlpineOpts{Hostname: "alpine", Password: pw, DNS: dns}, func(step, msg string) { a.emuInstallStep(id, step, msg) })
 	close(stop)
 	_ = c.Close()
 	if err != nil {

@@ -437,7 +437,10 @@ func (a *App) emuReconcile(before *emu.Lab, running []string, apply bool) []stri
 			do("remove the stream "+s.Name+" (added since)", func() error { _, err := a.EmuStreamRemove(s.ID); return err })
 		}
 	}
-	// positions on the canvas: put back as they were
+	if !slices.Equal(before.DNS, now.DNS) {
+		do("set the lab's name servers back to "+orStr(strings.Join(before.DNS, " "), "the default"), func() error { _, err := a.EmuSetDNS(before.DNS); return err })
+	}
+		// positions on the canvas: put back as they were
 	if apply {
 		emuLab.mu.Lock()
 		if l := emuLab.f.Lab; l != nil {

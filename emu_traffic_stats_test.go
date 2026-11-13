@@ -46,3 +46,35 @@ func TestTrafficStatsMath(t *testing.T) {
 		t.Fatal("no line")
 	}
 }
+
+// The lab's name servers: checked, filled into day 0 ({dns} {dns2} {dnsList}, a computer's own first), and what a restart changes.
+func TestLabDNSAndRestartNeed(t *testing.T) {
+	v := emu.VM{Name: "pc", LabDNS: []string{"10.0.0.53", "9.9.9.9"}}
+	if got := emu.Fill("{dns} {dns2} [{dnsList}]", v, 1); got != "10.0.0.53 9.9.9.9 [10.0.0.53 9.9.9.9]" {
+		t.Fatalf("fill %q", got)
+	}
+	v.DNS = "9.9.9.9"
+	if got := emu.Fill("{dnsList}", v, 1); got != "9.9.9.9 10.0.0.53" {
+		t.Fatalf("own first %q", got)
+	}
+	if got := emu.Fill("{dns}", emu.VM{}, 1); got != "8.8.8.8" {
+		t.Fatalf("default %q", got)
+	}
+	im := emu.Image{Day0: []string{"hostname x", "grep -q '^nameserver' /etc/resolv.conf 2>/dev/null || printf 'nameserver 8.8.8.8\\nnameserver 1.1.1.1\\n' > /etc/resolv.conf"}}
+	if !emu.AddLinuxDNS(&im) || im.Day0[1] != emu.LinuxDNS {
+		t.Fatalf("old day 0 not moved to the lab's servers: %q", im.Day0)
+	}
+	if s := emuRestartNeed([3]int{2, 2048, 0}, emu.VM{CPUs: 4, RAM: 4096}); s != "vCPU 2 → 4 · RAM 2 GB → 4 GB" {
+		t.Fatalf("restart %q", s)
+	}
+	if s := emuRestartNeed([3]int{}, emu.VM{CPUs: 4}); s != "" {
+		t.Fatalf("unknown start %q", s)
+	}
+	a := &App{}
+	if _, err := a.EmuSetDNS([]string{"10.0.0.1, nope"}); err == nil || !strings.Contains(err.Error(), "nope") {
+		t.Fatalf("bad address: %v", err)
+	}
+	if _, err := a.EmuSetDNS([]string{"1.1.1.1 2.2.2.2 3.3.3.3 4.4.4.4"}); err == nil {
+		t.Fatal("four servers taken")
+	}
+}

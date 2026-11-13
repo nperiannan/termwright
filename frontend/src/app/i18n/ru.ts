@@ -3253,6 +3253,15 @@ const ru: Record<string, string> = {
   'The test port it goes to sends each frame back: the latency is the round trip, measured on one clock - so also between test ports on two hosts': 'Тестовый порт назначения отправляет каждый кадр обратно: задержка измеряется туда и обратно по одним часам - поэтому и между тестовыми портами на двух хостах',
   'Line rate': 'Скорость линии',
   'Mbit/s: streams with a rate in % of line rate use it': 'Мбит/с: её используют потоки со скоростью в % от линии',
+  'No latency yet: it is measured when both test ports are on one host, or with Round trip': 'Задержки пока нет: она измеряется, когда оба тестовых порта на одном хосте, или с «Туда и обратно»',
+  'Name servers': 'DNS-серверы',
+  'The lab’s DNS servers (up to three): its computers that have none get them when they start, and day 0 fills {dns} with them. Empty: 8.8.8.8 and 1.1.1.1': 'DNS-серверы лаборатории (до трёх): их получают при запуске компьютеры, у которых своих нет, и ими заполняется {dns} в day 0. Пусто: 8.8.8.8 и 1.1.1.1',
+  'Set': 'Задать',
+  'Restart needed: {0}': 'Нужен перезапуск: {0}',
+  'restart needed': 'нужен перезапуск',
+  'Restart needed': 'Нужен перезапуск',
+  'It runs with its old settings until it restarts: {0}': 'До перезапуска работает со старыми настройками: {0}',
+  'Name servers set - devices get them when they start': 'DNS-серверы заданы - устройства получат их при запуске',
 };
 
 export default ru;

@@ -36,6 +36,7 @@ const PAGE = `
   .f { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px 14px; align-items: center; margin-bottom: 14px; > label { color: var(--muted); } }
   .f3 { display: grid; grid-template-columns: 130px minmax(0, 1fr) 130px minmax(0, 1fr); gap: 8px 12px; align-items: center; > label { color: var(--muted); font-size: 12px; } .wide { grid-column: 2 / span 3; } }
   input, select, textarea { min-width: 0; } .row2 { display: flex; gap: 8px; align-items: center; > * { flex: 1; } > button, > .pill, > .badge { flex: none; } }
+  input.nb { width: 110px; max-width: 110px; justify-self: start; } .row2 > input.nb { flex: none; }
   .sec { font-weight: 600; margin: 16px 0 8px; display: flex; justify-content: space-between; align-items: baseline; span { font-weight: 400; } }
   .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; background: var(--surface); }
   .runh { grid-column: 1 / -1; .rr { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); margin-top: 6px; } }
@@ -666,8 +667,8 @@ export class LabNew implements OnInit {
                   <label>{{ tr('Image name') }}</label><input [(ngModel)]="isoNm" name="isonm" [placeholder]="isoNamePh()" />
                   <label>{{ tr('Root password') }}</label><div><input [(ngModel)]="isoPw" name="isopw" autocomplete="off" style="width: 100%; box-sizing: border-box" /><div class="muted small" style="margin-top: 4px">{{ isoMode === 'alpine' ? tr('The new system’s root password; Termwright logs in with it.') : tr('The password you set during the install (optional): Termwright logs in with it.') }}</div></div>
                   <label>{{ tr('Disk') }}</label><div><div class="row2" style="justify-content: flex-start; gap: 6px"><input type="number" min="1" [(ngModel)]="isoSize" name="isogb" style="width: 110px; flex: none" /><select [(ngModel)]="isoUnit" (ngModelChange)="isoUnitChanged($event)" name="isounit" style="width: 76px; flex: none"><option value="MB">MB</option><option value="GB">GB</option></select></div><div class="muted small" style="margin-top: 4px">{{ tr('The new disk’s largest size, not the space it takes: the qcow2 file grows only as the system is written, so the saved image stays small (a small Alpine system takes a few hundred MB). In MB or GB; at least 100 MB.') }}</div></div>
-                  <label>{{ tr('Memory') }}</label><div class="row2"><input type="number" min="256" step="256" [(ngModel)]="isoRam" name="isoram" /><span class="unit">MB</span></div>
-                  <label>vCPU</label><input type="number" min="1" max="64" [(ngModel)]="isoCpus" name="isocpu" />
+                  <label>{{ tr('Memory') }}</label><div class="row2"><input type="number" min="256" step="256" [(ngModel)]="isoRam" name="isoram" class="nb" /><span class="unit">MB</span></div>
+                  <label>vCPU</label><input type="number" min="1" max="64" [(ngModel)]="isoCpus" name="isocpu" class="nb" />
                   <label>{{ tr('Run on') }}</label><select [(ngModel)]="isoHost" name="isohost">@for (h of hosts(); track h.session) { <option [value]="h.session">{{ h.name }}</option> }</select>
                 </div>
                 <button type="button" class="primary" (click)="startIso()" [disabled]="!isoPath || lab.busy() || (isoMode === 'alpine' && !isoPw)">{{ tr('Start install') }}</button>
@@ -691,7 +692,7 @@ export class LabNew implements OnInit {
               <div class="sec">{{ tr('Boot') }}</div>
               <div class="f3">
                 <label>{{ tr('Name') }}</label><input [(ngModel)]="im.name" name="iname" /><label>{{ tr('Version') }}</label><input [(ngModel)]="im.version" name="iver" />
-                <label>vCPU</label><input type="number" min="1" [(ngModel)]="im.cpus" name="icpu" /><label>{{ tr('Memory') }}</label><div class="row2"><input type="number" min="256" step="256" [(ngModel)]="im.ram" name="iram" /><span class="unit">MB = {{ gb(im.ram) }}</span></div>
+                <label>vCPU</label><input type="number" min="1" [(ngModel)]="im.cpus" name="icpu" class="nb" /><label>{{ tr('Memory') }}</label><div class="row2"><input type="number" min="256" step="256" [(ngModel)]="im.ram" name="iram" class="nb" /><span class="unit">MB = {{ gb(im.ram) }}</span></div>
                 <label>{{ tr('Disk type') }}</label><select [(ngModel)]="im.disk" name="idisk">@for (b of buses(im.disk); track b.v) { <option [value]="b.v">{{ b.l }}</option> }</select>
                 <label>{{ tr('Disk size') }}</label><span class="muted small">{{ tr('the image’s own size; a template or a switch can make it bigger') }}</span>
                 <label>{{ tr('Network ports') }}</label><input type="number" min="1" [(ngModel)]="im.nics" name="inics" /><label>{{ tr('Adapter type') }}</label><select [(ngModel)]="im.nic" name="inic">@for (n of nics(im.nic); track n) { <option [value]="n">{{ n }}</option> }</select>

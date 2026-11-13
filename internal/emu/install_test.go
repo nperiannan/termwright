@@ -283,12 +283,12 @@ func TestLinuxDNS(t *testing.T) {
 	}
 	f := filepath.Join(home, "resolv.conf")
 	_ = os.WriteFile(f, nil, 0o644)
-	run(strings.ReplaceAll(LinuxDNS, "/etc/resolv.conf", f))
+	run(strings.ReplaceAll(Fill(LinuxDNS, VM{}, 1), "/etc/resolv.conf", f))
 	if b, _ := os.ReadFile(f); string(b) != "nameserver 8.8.8.8\nnameserver 1.1.1.1\n" {
 		t.Fatalf("an empty resolv.conf became %q", b)
 	}
 	_ = os.WriteFile(f, []byte("nameserver 10.1.1.1\n"), 0o644)
-	run(strings.ReplaceAll(LinuxDNS, "/etc/resolv.conf", f))
+	run(strings.ReplaceAll(Fill(LinuxDNS, VM{}, 1), "/etc/resolv.conf", f))
 	if b, _ := os.ReadFile(f); string(b) != "nameserver 10.1.1.1\n" {
 		t.Fatalf("a resolv.conf with a server was changed: %q", b)
 	}

@@ -139,6 +139,7 @@ var emuLab struct {
 	ticksAt          time.Time
 	cpu              map[string]float64        // CPU use now, in cores (1 = one core busy)
 	cpuHist          map[string][]emuCPUSample // CPU use and throttling over the last hour
+	runWith          map[string][3]int         // the vCPUs, memory (MB) and disk (GB) a switch was started with (to tell what a restart would change)
 	cpuWarned        map[string]time.Time      // when the Events last said a limit held it back
 	ready            map[string]bool           // the console showed the ready text since the VM started (it may scroll out of the log's end later)
 	bootAns          map[string]time.Time      // when a boot menu was last answered
@@ -198,6 +199,7 @@ type EmuDevice struct {
 	SSH          string         `json:"ssh"` // how its management is reached, as text
 	Error        string         `json:"error"`
 	DiskGB       int            `json:"diskGb"`
+	Restart      string         `json:"restart,omitempty"` // running with other vCPUs, memory or disk than it is set to: what a restart changes ("vCPU 2 → 4")
 	Template     string         `json:"template"`
 	Persona      *emu.Persona   `json:"persona"`
 	PersonaOK    bool           `json:"personaOk"` // the persona file in its disk is the current one
@@ -607,6 +609,8 @@ type EmuView struct {
 	Running       bool              `json:"running"`
 	Folder        string            `json:"folder"`
 	MgmtNet       string            `json:"mgmtNet"`
+	DNS           []string          `json:"dns"` // the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
+	DNSSet        bool              `json:"dnsSet,omitempty"` // they were set (not the default)
 	Topology      string            `json:"topology,omitempty"` // the name the open lab is saved under
 	CloudGw       string            `json:"cloudGw,omitempty"`  // cloud: the gateway the switches use
 	LanFixed      bool              `json:"lanFixed,omitempty"` // lan: fixed addresses (no DHCP)
@@ -2734,6 +2738,10 @@ func (a *App) emuStart(host string, ids []string) {
 				imgs[im.ID] = *im
 			}
 			emuLab.state[id] = "uploading"
+			if emuLab.runWith == nil {
+				emuLab.runWith = map[string][3]int{}
+			}
+			emuLab.runWith[id] = [3]int{v.CPUs, v.RAM, v.DiskGB}
 			delete(emuLab.errs, id)
 			delete(emuLab.addrOK, id)
 		}
@@ -3037,6 +3045,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 	if cur != nil {
 		v = *cur // its address as it is now
 	}
+	v.LabDNS = l.DNSServers()
 	macs := emuPortMACs(l, v, im0)
 	if doDay0 {
 		emuLab.state[v.ID] = "day0"
@@ -3351,6 +3360,42 @@ func (a *App) EmuSetMgmt(mgmt, mgmtNet string) (EmuView, error) {
 	host := emuLab.f.Host
 	emuLab.mu.Unlock()
 	return a.EmuSetHostMgmt(host, mgmt, mgmtNet)
+}
+
+// EmuSetDNS sets the lab's name servers (at most three addresses; none = the default 8.8.8.8 and 1.1.1.1).
+// Computers without a name server get them when they start (day 0), and images' day 0 fills {dns},
+// {dns2} and {dnsList} with them; ISO installs of Alpine use the first. Running ones keep theirs until they restart.
+func (a *App) EmuSetDNS(servers []string) (EmuView, error) {
+	defer emuAs("user")()
+	var ds []string
+	for _, x := range servers {
+		for _, f := range strings.FieldsFunc(x, func(r rune) bool { return r == ',' || r == ' ' || r == ';' }) {
+			ip, err := netip.ParseAddr(f)
+			if err != nil {
+				return EmuView{}, fmt.Errorf("%s is not an IP address", f)
+			}
+			if !slices.Contains(ds, ip.String()) {
+				ds = append(ds, ip.String())
+			}
+		}
+	}
+	if len(ds) > 3 {
+		return EmuView{}, errors.New("at most three name servers")
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	l := emuLab.f.Lab
+	if l == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	l.DNS = ds
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
 }
 
 // EmuSetHostMgmt changes how one host's switches are managed (they are off).
@@ -3961,6 +4006,7 @@ func (a *App) emuView() EmuView {
 		return v
 	}
 	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw, v.LanFixed, v.Fast = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw, l.LanFixed, !l.NoFast
+	v.DNS, v.DNSSet = l.DNSServers(), len(l.DNS) > 0
 	v.IconStyle = orStr(f.IconStyle, "box")
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
@@ -4100,6 +4146,7 @@ func (a *App) emuView() EmuView {
 		}
 		if d.Running { // (its state is known only here)
 			d.CPUStats = emuCPUStatsOf(emuLab.cpuHist[vm.ID], d.CPUReq)
+			d.Restart = emuRestartNeed(emuLab.runWith[vm.ID], vm)
 		}
 		v.Devices = append(v.Devices, d)
 	}
@@ -6973,4 +7020,30 @@ func (a *App) EmuSetCPUReq(id string, req, lim int) (EmuView, error) {
 		}
 	}
 	return a.EmuState()
+}
+
+// emuRestartNeed: what a restart would change for a running switch (it runs with was: vCPUs, MB, disk GB); "" when nothing, or not known.
+func emuRestartNeed(was [3]int, v emu.VM) string {
+	if was == [3]int{} {
+		return ""
+	}
+	var ch []string
+	if was[0] != v.CPUs {
+		ch = append(ch, fmt.Sprintf("vCPU %d → %d", was[0], v.CPUs))
+	}
+	if was[1] != v.RAM {
+		ch = append(ch, "RAM "+emuMemText(was[1])+" → "+emuMemText(v.RAM))
+	}
+	if was[2] != v.DiskGB && v.DiskGB > 0 {
+		ch = append(ch, fmt.Sprintf("disk %d → %d GB", was[2], v.DiskGB))
+	}
+	return strings.Join(ch, " · ")
+}
+
+// emuMemText writes memory: 512 MB, 2 GB, 1.5 GB.
+func emuMemText(mb int) string {
+	if mb >= 1024 && mb%512 == 0 {
+		return strconv.FormatFloat(float64(mb)/1024, 'f', -1, 64) + " GB"
+	}
+	return fmt.Sprintf("%d MB", mb)
 }

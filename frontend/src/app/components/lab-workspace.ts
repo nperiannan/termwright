@@ -1,8 +1,9 @@
 import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
-import { ChartSeries, TrafficChart } from './traffic-chart';
+import { ChartSeries } from './traffic-chart';
 import { StreamDetail } from './stream-detail';
+import { TrafficPage } from './traffic-page';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
 import { EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
@@ -24,7 +25,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, TrafficChart, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail],
+  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" /> }
@@ -107,6 +108,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                   </div>
                 </div>
               }
+              <div class="dnsr"><span class="muted">{{ tr('Name servers') }}</span><input class="mono" [ngModel]="dnsDraft() ?? (st()?.dnsSet ? (st()?.dns ?? []).join(' ') : '')" (ngModelChange)="dnsDraft.set($event)" placeholder="8.8.8.8 1.1.1.1" [title]="tr('The lab’s DNS servers (up to three): its computers that have none get them when they start, and day 0 fills {dns} with them. Empty: 8.8.8.8 and 1.1.1.1')" (keydown.enter)="saveDNS()" />
+                <button type="button" class="sm" (click)="saveDNS()" [disabled]="dnsDraft() === null || lab.busy()">{{ tr('Set') }}</button></div>
           @if (cloudF(); as f) {
             <div class="cloudf" (click)="$event.stopPropagation()">
               @if (f.mode === 'cloud') {
@@ -145,41 +148,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
 
     <div class="main">
       @if (page() === 'traffic') {
-        <section class="tpg" [attr.aria-label]="tr('Traffic')">
-          <header class="tph">
-            <div class="tpt"><h2>{{ tr('Traffic generator') }}</h2><span class="muted small">{{ tr('Test ports send and count frames on switch ports: streams with live rates, loss and latency, and RFC 2544 tests') }}</span></div>
-            <span class="seg2 tv"><a [class.on]="trafView() === 'streams'" (click)="trafView.set('streams')">{{ tr('Streams') }}</a><a [class.on]="trafView() === 'tests'" (click)="trafView.set('tests')">{{ tr('Tests') }}</a></span>
-            <span class="sp"></span>
-            @if (trafView() === 'tests') { <button type="button" (click)="ttests()?.newTest()">＋ {{ tr('Test') }}</button> }
-            <button type="button" (click)="newTester(); trafView.set('streams')">＋ {{ tr('Test Port') }}</button>
-            @if (trafView() === 'streams') { <button type="button" (click)="newStream()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button>
-              @if (traf()?.running) { <button type="button" (click)="trafStop()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="primary" (click)="trafStart([])" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
-              <button type="button" (click)="trafReport()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
-          </header>
-          <div class="kpis">@for (k of trafKpis(); track k.label) { <div class="kpi" [class.warn]="k.warn" [class.good]="k.good"><span>{{ k.label }}</span><b>{{ k.value }}</b><small>{{ k.sub }}</small></div> }</div>
-          @if (trafView() === 'tests') { <div class="tpx"><app-traffic-tests [testers]="traf()?.testers ?? []" [devs]="devs()" /></div> }
-          @else {
-            <div class="tpb">
-              <aside class="tpl">
-                <div class="sec2">{{ tr('Test ports') }}<span class="muted">{{ traf()?.testers?.length ?? 0 }}</span></div>
-                @for (t of traf()?.testers ?? []; track t.id) {
-                  <div class="tpc" [class.sel]="tEd()?.id === t.id" (click)="editTester(t)" [title]="tr('Its settings')"><div class="r1"><b>⇄ {{ t.name }}</b><a class="x" (click)="tpRemove(t); $event.stopPropagation()" [title]="tr('Remove')" [attr.aria-label]="tr('Remove {0}?', t.name)">✕</a></div>
-                    <div class="small">{{ tpWhere(t) }}</div>
-                    <div class="mono small">{{ t.dhcp ? (t.lease || 'DHCP…') : (t.ip || '-') }}@if (t.ip6 || t.slaac) { · {{ t.slaac ? (t.lease6 || 'SLAAC…') : t.ip6 }} }</div>
-                    <div class="mono small muted">{{ t.mac }}@if (t.vlan) { · VLAN {{ t.vlan }} }</div></div>
-                } @empty { <p class="muted small">{{ tr('No test port yet: ＋ Test Port, or right-click a switch on the canvas → Add Test Port.') }}</p> }
-              </aside>
-              <div class="tpm">
-                <div class="tcs">
-                  <app-tchart [title]="tr('Throughput')" unit="pps" [series]="trafThroughput()" [fmt]="fmtPps" />
-                  <app-tchart [title]="tr('Loss so far')" unit="%" [series]="trafLoss()" [fmt]="fmtPct" />
-                  <app-tchart [title]="tr('Latency')" unit="ms" [series]="trafLat()" [fmt]="fmtMs" [empty]="tr('No latency yet: it is measured when both test ports are on one host')" />
-                </div>
-                <ng-container [ngTemplateOutlet]="trafBody" />
-              </div>
-            </div>
-          }
-        </section>
+        <app-traffic-page [traf]="traf()" [view]="trafView()" (viewChange)="trafView.set($event)" [kpis]="trafKpis()" [cards]="tpCards()" [selected]="tEd()?.id ?? ''"
+          [throughput]="trafThroughput()" [loss]="trafLoss()" [latency]="trafLat()" [fmtPps]="fmtPps" [fmtPct]="fmtPct" [fmtMs]="fmtMs"
+          (newTest)="ttests()?.newTest()" (newTester)="newTester(); trafView.set('streams')" (newStream)="newStream()" (start)="trafStart([])" (stop)="trafStop()" (report)="trafReport()"
+          (editTester)="editTester($event)" (removeTester)="tpRemove($event)">
+          @if (trafView() === 'tests') { <app-traffic-tests [testers]="traf()?.testers ?? []" [devs]="devs()" /> } @else { <ng-container [ngTemplateOutlet]="trafBody" /> }
+        </app-traffic-page>
       }
       @if (page() === 'new') { <app-lab-new [emu]="emu()" [preset]="preset()" (closed)="page.set(''); ghost.set(null)" (changed)="ghost.set($event)" (hostsPage)="page.set('hosts')" (made)="ui.refreshTree()" /> }
       <div class="pal">
@@ -252,7 +226,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                    (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)" (mouseenter)="hov.set(d.id)" (mouseleave)="hov.set('')">
                 <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [look]="lookOf(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nlbl" [style.transform]="'translate(' + (lblAt()[d.id]?.x ?? 0) + 'px,' + (lblAt()[d.id]?.y ?? 0) + 'px)'" (pointerdown)="lblGrab($event, d.id)" (dblclick)="lblReset(d.id, $event)" [title]="tr('Drag the name to move it; double-click puts it back')">
-                <div class="nn">{{ d.hostname }}</div>
+                <div class="nn">{{ d.hostname }}@if (d.restart) { <span class="rsn" [title]="tr('Restart needed: {0}', d.restart)">↻</span> }</div>
                 @if (d.computer) { <div class="nm">PC · {{ (d.model || '').split(' ')[0] }}@if (showAddr() && !dataAddr(d)) { · {{ subOf(d) }} }</div> } @else { <div class="nm" [title]="d.persona?.slots?.[0]?.model ? tr('Persona: it runs as a {0}', d.persona!.slots![0].model) : tr('The image as it is (no persona)')">{{ d.persona?.slots?.[0]?.model ? modelOf(d) + ' · ' + osOf(d) : modelOf(d) }} {{ d.version }}@if (showAddr()) { · {{ subOf(d) }} }</div> }@if (d.computer && dataAddr(d)) { <div class="nm da" [title]="tr('Its data-port address')">{{ dataAddr(d) }}</div> }</div>
                 @if (hostMode() === 'tags') { <div class="htg"><i [style.background]="hcol(hostOfDev(d))"></i>{{ hname(hostOfDev(d)) }}</div> }
                 @if (d.uplinks?.length) { <span class="badge up" [title]="tr('On the host’s network: {0}', d.uplinks!.join(', '))">⇡ {{ d.uplinks!.join(',') }}</span> }
@@ -423,11 +397,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="card"><p class="muted small" style="margin: 0">{{ tr('Drag one to move them all · Delete removes them (you are asked first) · Shift or ⌘/Ctrl-click adds or removes one · ⌘/Ctrl+A selects all.') }}</p>
             <div class="btns" style="margin-top: 8px"><button type="button" class="sm danger-ghost" (click)="removeMany([...ms()])" [disabled]="lab.busy()">{{ tr('Remove…') }}</button></div></div>
         } @else if (selDev(); as d) {
-          <h3 class="selh"><span class="nm" [title]="d.hostname">{{ d.hostname }}</span><span class="tst" [class]="'tst ' + stateOf(d)"><i class="sd">●</i>{{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span><a class="clr" (click)="sel.set('')" [title]="tr('Nothing selected: the whole topology (Esc, or a click on the empty canvas)')">✕</a></h3>
+          <h3 class="selh"><span class="nm" [title]="d.hostname">{{ d.hostname }}</span><span class="tst" [class]="'tst ' + stateOf(d)"><i class="sd">●</i>{{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span>@if (d.restart) { <span class="rsb" [title]="tr('Restart needed: {0}', d.restart)">↻ {{ tr('restart needed') }}</span> }<a class="clr" (click)="sel.set('')" [title]="tr('Nothing selected: the whole topology (Esc, or a click on the empty canvas)')">✕</a></h3>
           <div class="card dp">
             <div class="sub">{{ d.persona?.slots?.[0]?.model || d.model }}@if (d.version) { · {{ d.version }} }@if (d.persona?.slots?.length && d.personaOk && !d.personaError) { · <span class="ok">✓ {{ tr('in the switch') }}</span> }</div>
             <div class="btns act">@if (emu()) { <button type="button" class="sm" (click)="lab.restart([d.id])" [disabled]="!d.running || lab.busy()">{{ tr('Restart') }}</button> }@else { <button type="button" class="primary sm" (click)="ssh(d)" [disabled]="!d.running">{{ tr('Open Session') }}</button> }
               <button type="button" class="sm" (click)="configure(d)">{{ tr('Configure…') }}</button>@if (emu() && d.computer) { <button type="button" class="sm" (click)="pcWin.set(d.id)">{{ tr('Open Desktop') }}</button> }</div>
+            @if (d.restart) { <div class="rsbox"><span>↻ <b>{{ tr('Restart needed') }}</b> {{ tr('It runs with its old settings until it restarts: {0}', d.restart) }}</span></div> }
             @if (d.error || d.personaError) { <div class="kv alert">@if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
               @if (d.personaError) { <span>{{ tr('Persona') }}</span><span class="r"><span class="clamp" [title]="d.personaError + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.personaError) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a></span> }</div> }
             <details class="sec" [open]="isOpen('details')" (toggle)="setOpen('details', $any($event.target).open)"><summary>{{ tr('Details') }}</summary><div class="kv">
@@ -443,7 +418,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (!d.personaOk && !d.personaError && d.persona) { <span>{{ tr('Persona') }}</span><span>{{ d.personaInfo ? tr(brief(d.personaInfo)) : tr('not written yet') }}</span> }
               @if (d.personaInfo && !d.personaError) { <span></span><span class="mono xs clamp" [title]="d.personaInfo">{{ d.personaInfo }}</span> }</div></details>
             @if (emu()) { <details class="sec" [open]="isOpen('res')" (toggle)="setOpen('res', $any($event.target).open)"><summary>{{ tr('Resources') }}</summary><div class="kv">
-              <span>vCPU · RAM</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }<small class="rnote">↻ {{ tr('changed in Configure…, used from the next start') }}</small></span></div>
+              <span>vCPU · RAM</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }@if (!d.restart) { <small class="rnote">↻ {{ tr('changed in Configure…, used from the next start') }}</small> }</span></div>
               <div class="cpuv">
                 <div class="cph"><b>CPU</b><span class="mono">@if (d.running) { {{ mc(nowM(d)) }} {{ tr('now') }} } @else { {{ tr('not running') }} }</span></div>
                 <div class="cbar" [title]="tr('Used now, against its vCPUs ({0}): the tick is the request, the end mark the limit', mc(capM(d)))"><i class="use" [class.hot]="!!limM(d) && nowM(d) >= limM(d) * 0.95" [style.width.%]="cpuPos(d, nowM(d))"></i>
@@ -784,22 +759,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .main { display: grid; grid-template-columns: 230px 1fr 300px; min-height: 0; position: relative; }
     :host { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; }
     :host-context(.light) { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948; }
-    .tpg {
-      position: absolute; inset: 0; z-index: 25; background: var(--bg); overflow: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
-    .tph { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; h2 { margin: 0; font-size: 17px; } .tpt { display: flex; flex-direction: column; gap: 2px; } .sp { flex: 1; } }
-    .kpis { display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); gap: 10px; }
-    .kpi { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 9px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0;
-      span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; } b { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } small { font-size: 11px; color: var(--muted); }
-      &.warn { border-color: var(--warning, #e39b17); b::before { content: '⚠ '; font-size: 14px; color: var(--warning, #e39b17); } } &.good { b::before { content: '✓ '; font-size: 14px; color: var(--success, #1fa45a); } } }
-    .tpb { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; }
-    .tpl { display: flex; flex-direction: column; gap: 8px; .sec2 { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); } }
-    .tpc { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; &:hover { border-color: var(--muted); } &.sel { border-color: var(--accent); background: var(--accent-soft); } .r1 { display: flex; align-items: center; b { flex: 1; color: var(--warning, #e39b17); font-size: 12.5px; } } .x { cursor: pointer; color: var(--muted); } .x:hover { color: var(--danger); } }
-    .tpm { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-    .tcs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-    .tpx { flex: 1; min-height: 0; }
-    .tpm .trw td:nth-child(-n+3), .tpm .trw th:nth-child(-n+3) { white-space: normal; } .tpm .trw td:nth-child(2), .tpm .trw td:nth-child(3) { min-width: 130px; } .nw { white-space: nowrap; }
+    app-traffic-page .trw td:nth-child(-n+3), app-traffic-page .trw th:nth-child(-n+3) { white-space: normal; } app-traffic-page .trw td:nth-child(2), app-traffic-page .trw td:nth-child(3) { min-width: 130px; } .nw { white-space: nowrap; }
     .ptabs small.run { color: var(--success, #1fa45a); }
-    @media (max-width: 1300px) { .kpis { grid-template-columns: repeat(4, minmax(120px, 1fr)); } .tcs { grid-template-columns: 1fr; } }
     .pal { border-right: 1px solid var(--line); background: var(--surface); padding: 10px; overflow: auto; }
     .srch { width: 100%; height: 30px; margin-bottom: 6px; }
     .grp { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 12px 2px 6px; display: flex; justify-content: space-between; }
@@ -881,6 +842,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .pill { font: 600 10.5px var(--mono, monospace); padding: 1px 7px; border-radius: 9px; } .pill.ok { color: var(--success, #1fa45a); background: color-mix(in srgb, var(--success, #1fa45a) 14%, transparent); } .pill.er { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); } .pill.ru { color: var(--accent); background: var(--accent-soft); }
     .mods { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; > span { color: var(--muted); padding-top: 4px; } .mod { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 54px 14px; gap: 4px; align-items: center; margin-bottom: 4px; a { cursor: pointer; color: var(--muted); } } }
     .trt td b { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+    .dnsr { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); > span { flex: none; } input { flex: 1; min-width: 0; } }
+    .rsn { color: var(--warning, #e39b17); font-size: 12px; margin-left: 3px; } .rsb { flex: none; font: 600 10px var(--mono, monospace); color: var(--warning, #e39b17); border: 1px solid color-mix(in srgb, var(--warning, #e39b17) 45%, transparent); border-radius: 9px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
+    .rsbox { display: flex; align-items: center; gap: 8px; margin: 6px 0; padding: 7px 9px; border-radius: 8px; font-size: 11.5px; background: color-mix(in srgb, var(--warning, #e39b17) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warning, #e39b17) 40%, transparent); span { flex: 1; } b { color: var(--warning, #e39b17); } }
     .rhint { margin: -3px 0 0 94px; color: var(--muted); font-size: 11px; &.bad { color: var(--warning, #e39b17); } } .two.ru { grid-template-columns: minmax(0, 1fr) 104px; }
     .cbx { height: auto !important; justify-self: start; } td.spk { white-space: nowrap; svg { vertical-align: middle; margin-right: 4px; } polyline { fill: none; stroke-width: 1.5; } .stx { stroke: var(--s1); } .srx { stroke: var(--s2); } }
     .tre { border-left: 1px solid var(--line); padding: 8px 12px; overflow: auto; display: grid; gap: 7px; align-content: start; background: var(--surface-2); font-size: 12px;
@@ -1149,6 +1113,7 @@ export class LabWorkspace implements OnDestroy {
     } catch (e) { this.ui.error(e); }
   }
   protected trafView = signal<'streams' | 'tests'>('streams');
+  protected tpCards = computed(() => (this.traf()?.testers ?? []).map(t => ({ t, where: this.tpWhere(t) })));
   // the lab's change history (what Claude and the API changed, each with Revert)
   protected changes = signal<EmuChange[]>([]);
   async loadChanges() { try { this.changes.set((await this.backend.emuChanges()) ?? []); } catch { /* no lab */ } }
@@ -2323,6 +2288,8 @@ export class LabWorkspace implements OnDestroy {
   }
   /** Shows the lab's management in the menu again (a change not made). */
   protected revertMgmt() { const h = this.mg().host; const el = [...this.host.nativeElement.querySelectorAll<HTMLSelectElement>('select[data-h]')].find(x => x.dataset['h'] === h); if (el) el.value = this.mg().mgmt; }
+  protected dnsDraft = signal<string | null>(null);
+  async saveDNS() { const d = this.dnsDraft(); if (d === null) return; if (await this.lab.setDNS(d.split(/[\s,;]+/).filter(Boolean))) this.dnsDraft.set(null); }
   async setMgmt(m: string, net: string | null = null) {
     const g = this.mg(), was = g.mgmt, set = (m: string, n: string) => g.main ? this.lab.setMgmt(m, n) : this.lab.setHostMgmt(g.host, m, n);
     if ((m === 'cloud' || m === 'lan') && net === null) { this.revertMgmt(); this.openCloud(m); return; } // their addresses first

@@ -222,6 +222,7 @@ type VM struct {
 	Persona   *Persona       `json:"persona,omitempty"`
 	FastKey   string         `json:"fastKey,omitempty"`   // its running state was saved in its disk with this setup (FastKey): it resumes from it
 	Uplinks   []int          `json:"uplinks,omitempty"`   // data ports on the host's network (its bridge, or macvtap on its port)
+	LabDNS    []string       `json:"-"`                   // the lab's name servers, for {dns} in its day 0 (set when it starts)
 	Relayed   bool           `json:"relayed,omitempty"`   // moved while running: its cables listen on all addresses (relays on its old host forward to it)
 	Incoming  string         `json:"-"`                   // started to receive a live migration ("tcp:0.0.0.0:port")
 	FW        string         `json:"fw,omitempty"`        // the software version the switch reports (its CLI, after it booted)
@@ -396,6 +397,7 @@ type Lab struct {
 	Cables   []Cable         `json:"cables"`
 	Lags     []Lag           `json:"lags,omitempty"`
 	Testers  []Tester        `json:"testers,omitempty"` // test ports of the traffic generator
+	DNS      []string        `json:"dns,omitempty"`     // the lab's name servers: computers without one get them, day 0 fills {dns} {dns2} {dnsList} (default 8.8.8.8 1.1.1.1)
 	Streams  []Stream        `json:"streams,omitempty"`
 	Tests    []TrafficTest   `json:"tests,omitempty"` // saved traffic tests (RFC 2544, learning, convergence)
 	// Nets: the management of the lab's other hosts (its own host's is above);
@@ -1442,6 +1444,17 @@ func (l *Lab) addLag(vm, mode string, ports []int) {
 	l.Lags = append(l.Lags, Lag{VM: vm, Name: name, Mode: mode, Ports: slices.Sorted(slices.Values(ports)), Source: "user"})
 }
 
+// DefaultDNS: the name servers when the lab has none set.
+var DefaultDNS = []string{"8.8.8.8", "1.1.1.1"}
+
+// DNSServers: the lab's name servers (its own, or DefaultDNS).
+func (l *Lab) DNSServers() []string {
+	if len(l.DNS) > 0 {
+		return l.DNS
+	}
+	return DefaultDNS
+}
+
 // Fill puts a VM's values into a day-0 command.
 func Fill(cmd string, v VM, n int) string {
 	addr, bits := v.MgmtIP, ""
@@ -1453,7 +1466,19 @@ func Fill(cmd string, v VM, n int) string {
 		m := uint32(0xffffffff) << (32 - b)
 		mask = fmt.Sprintf("%d.%d.%d.%d", m>>24, m>>16&255, m>>8&255, m&255)
 	}
-	r := strings.NewReplacer("{hostname}", v.Name, "{mgmtIp}", v.MgmtIP, "{mgmtAddr}", addr, "{mgmtBits}", bits, "{mgmtMask}", mask, "{gateway}", v.Gateway, "{n}", strconv.Itoa(n))
+	dns := v.LabDNS
+	if len(dns) == 0 {
+		dns = DefaultDNS
+	}
+	if v.DNS != "" { // a computer's own comes first
+		dns = append([]string{v.DNS}, slices.DeleteFunc(slices.Clone(dns), func(x string) bool { return x == v.DNS })...)
+	}
+	dns2 := dns[len(dns)-1]
+	if len(dns) > 1 {
+		dns2 = dns[1]
+	}
+	r := strings.NewReplacer("{hostname}", v.Name, "{mgmtIp}", v.MgmtIP, "{mgmtAddr}", addr, "{mgmtBits}", bits, "{mgmtMask}", mask, "{gateway}", v.Gateway, "{n}", strconv.Itoa(n),
+		"{dnsList}", strings.Join(dns, " "), "{dns2}", dns2, "{dns}", dns[0])
 	return r.Replace(cmd)
 }
 

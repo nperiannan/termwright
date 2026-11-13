@@ -1417,6 +1417,44 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/dns:
+        post:
+            operationId: tool_dns
+            tags:
+                - Tools
+            summary: The emulated lab's name servers
+            description: 'The emulated lab''s name servers: computers without one get them when they start, images'' day 0 fills {dns} {dns2} {dnsList} with them, Alpine ISO installs use the first. Without servers it says what they are; with servers it sets them (at most three addresses; an empty list = the default 8.8.8.8 1.1.1.1). Running devices keep theirs until they restart. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                servers:
+                                    description: the name servers to set (IPv4 or IPv6 addresses)
+                                    items:
+                                        type: string
+                                    type: array
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/events:
         post:
             operationId: tool_events
@@ -1506,14 +1544,20 @@ paths:
             tags:
                 - Tools
             summary: List the images and templates the emulated lab can make switches from
-            description: 'List the images and templates the emulated lab can make switches from: id, name, software version, device type, port naming, and whether the image file is there. Through the API it runs without asking.'
+            description: 'List the images and templates the emulated lab can make switches from: id, name, software version, device type, port naming, and whether the image file is there. Filter by name and device type to keep the answer short. Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
                     application/json:
                         schema:
                             type: object
-                            properties: {}
+                            properties:
+                                name:
+                                    description: only images and templates whose name, id or version contains this (any case)
+                                    type: string
+                                type:
+                                    description: only this device type (EXOS, VOSS, Linux, Windows …; any case)
+                                    type: string
             responses:
                 200:
                     description: What it did or found, as text.
@@ -2381,6 +2425,9 @@ components:
                     type: string
                 diskGb:
                     type: integer
+                restart:
+                    description: 'running with other vCPUs, memory or disk than it is set to: what a restart changes ("vCPU 2 → 4")'
+                    type: string
                 template:
                     type: string
                 persona:
@@ -3508,6 +3555,16 @@ components:
                     type: string
                 mgmtNet:
                     type: string
+                dns:
+                    description: the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                dnsSet:
+                    description: they were set (not the default)
+                    type: boolean
                 topology:
                     description: the name the open lab is saved under
                     type: string
@@ -3617,6 +3674,7 @@ components:
                 - running
                 - folder
                 - mgmtNet
+                - dns
                 - mgmt
                 - devices
                 - links

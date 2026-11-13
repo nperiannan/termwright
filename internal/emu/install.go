@@ -188,6 +188,7 @@ type AlpineOpts struct {
 	Hostname string
 	Password string // root's
 	Disk     string // the disk to install to ("/dev/vda")
+	DNS      string // its name server (default DefaultDNS[0])
 }
 
 // AlpineAnswers is the answer file of setup-alpine as one shell command that writes it to /tmp/ans.
@@ -198,7 +199,7 @@ func AlpineAnswers(o AlpineOpts) string {
 		`KEYMAPOPTS="us us"`,
 		`HOSTNAMEOPTS="-n ` + host + `"`,
 		`INTERFACESOPTS="auto lo\niface lo inet loopback\n\nauto eth0\niface eth0 inet dhcp\n"`,
-		`DNSOPTS="-d lab -n 8.8.8.8"`, // setup-dns takes the server after -n (one: setup-alpine splits the words)
+		`DNSOPTS="-d lab -n ` + orStr(o.DNS, DefaultDNS[0]) + `"`, // setup-dns takes the server after -n (one: setup-alpine splits the words)
 		`TIMEZONEOPTS="-z UTC"`,
 		`PROXYOPTS="none"`,
 		`APKREPOSOPTS="-1"`,

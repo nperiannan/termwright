@@ -228,6 +228,17 @@ class Lab:
         """CPU request and limit in millicores (250 = 250m; 0 = none); without them, the report of the last hour."""
         return self.tool("cpu", switches=list(switches), request_m=request_m, limit_m=limit_m, max_cores=max_cores, share=share)
 
+    def dns(self, *servers: str, default: bool = False) -> str:
+        """The lab's name servers; with servers, sets them (at most three); default=True goes back to 8.8.8.8 1.1.1.1.
+        Computers without one get them when they start; day 0 fills {dns} {dns2} {dnsList}."""
+        if servers or default:
+            return self.tool("dns", servers=list(servers))
+        return self.tool("dns")
+
+    def images(self, name: Optional[str] = None, type: Optional[str] = None) -> str:
+        """The images and templates, filtered by part of a name and by device type (EXOS, VOSS, Linux…)."""
+        return self.tool("images", name=name, type=type)
+
     def capture(self, **args) -> str:
         return self.tool("capture", **args)
 

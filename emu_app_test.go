@@ -966,6 +966,9 @@ func TestEmuTwoHosts(t *testing.T) {
 	if out, err := a.emuMCP("lab_images", map[string]any{}); err != nil || !strings.Contains(out, "Images (id") {
 		t.Errorf("lab_images: %v %q", err, out)
 	}
+	if out, err := a.emuMCP("lab_images", map[string]any{"type": "no-such-type"}); err != nil || !strings.HasPrefix(out, "No image or template matches") {
+		t.Errorf("lab_images filtered: %v %q", err, out)
+	}
 	// another topology: the open one's switches go on running in the background, and show as running
 	{
 		emuRunCache.mu.Lock()

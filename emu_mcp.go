@@ -25,7 +25,12 @@ import (
 // (automated tests must not wait); each is kept in the lab's change history.
 
 var mcpLabTools = []mcpTool{
-	{"lab_images", "List the images and templates the emulated lab can make switches from: id, name, software version, device type, port naming, and whether the image file is there.", mcpSchema(map[string]any{})},
+	{"lab_dns", "The emulated lab's name servers: computers without one get them when they start, images' day 0 fills {dns} {dns2} {dnsList} with them, Alpine ISO installs use the first. Without servers it says what they are; with servers it sets them (at most three addresses; an empty list = the default 8.8.8.8 1.1.1.1). Running devices keep theirs until they restart.",
+		mcpSchema(map[string]any{"servers": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "the name servers to set (IPv4 or IPv6 addresses)"}})},
+	{"lab_images", "List the images and templates the emulated lab can make switches from: id, name, software version, device type, port naming, and whether the image file is there. Filter by name and device type to keep the answer short.", mcpSchema(map[string]any{
+		"name": map[string]any{"type": "string", "description": "only images and templates whose name, id or version contains this (any case)"},
+		"type": map[string]any{"type": "string", "description": "only this device type (EXOS, VOSS, Linux, Windows …; any case)"},
+	})},
 	{"lab_install_iso", "Make an image from an ISO file on the computer Termwright runs on: the ISO is copied to a KVM host and installed on a blank disk there, then the disk becomes an image (lab_images lists it). mode alpine installs Alpine Linux by itself (give the root password); mode manual starts the installer and waits for the user to install on its console, then lab_install_finish saves it. Returns at once; follow it with lab_install_status. It is not asked; it is kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
 			"iso_path": map[string]any{"type": "string", "description": "path of the .iso file on the Termwright computer"},
@@ -313,21 +318,48 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		return out, shown, nil
 	}
 	switch name {
+	case "lab_dns":
+		if _, ok := args["servers"]; ok {
+			nv, err := a.EmuSetDNS(argStrs(args, "servers"))
+			if err != nil {
+				return "", err
+			}
+			return "The lab's name servers are now " + strings.Join(nv.DNS, ", ") + map[bool]string{true: "", false: " (the default)"}[nv.DNSSet] + ". Devices get them when they start.", nil
+		}
+		return "The lab's name servers: " + strings.Join(v.DNS, ", ") + map[bool]string{true: "", false: " (the default)"}[v.DNSSet] + ".", nil
 	case "lab_images":
 		var b strings.Builder
+		q, typ := strings.ToLower(argStr(args, "name")), argStr(args, "type")
+		hit := func(s ...string) bool {
+			return q == "" || slices.ContainsFunc(s, func(x string) bool { return strings.Contains(strings.ToLower(x), q) })
+		}
+		shown, typeOK := 0, map[string]bool{}
+		for _, im := range v.Images {
+			typeOK[im.ID] = typ == "" || strings.EqualFold(im.DeviceType, typ)
+		}
 		b.WriteString("Images (id | name | version | device type | ports | file):\n")
 		for _, im := range v.Images {
+			if !typeOK[im.ID] || !hit(im.ID, im.Name, im.Version) {
+				continue
+			}
+			shown++
 			file := "missing: download or choose it in Termwright"
 			if im.File != "" {
 				file = "there"
 			}
 			fmt.Fprintf(&b, "- %s | %s | %s | %s | %d ports named %s | %s\n", im.ID, im.Name, im.Version, orDash(im.DeviceType), max(im.NICs-1, 0), orDash(im.PortName), file)
 		}
-		if len(v.Templates) > 0 {
-			b.WriteString("Templates (id | name | image):\n")
-			for _, t := range v.Templates {
-				fmt.Fprintf(&b, "- %s | %s | %s\n", t.ID, t.Name, t.Image)
+		var ts []string
+		for _, t := range v.Templates {
+			if (typ == "" || typeOK[t.Image]) && hit(t.ID, t.Name) {
+				ts = append(ts, fmt.Sprintf("- %s | %s | %s\n", t.ID, t.Name, t.Image))
 			}
+		}
+		if len(ts) > 0 {
+			b.WriteString("Templates (id | name | image):\n" + strings.Join(ts, ""))
+		}
+		if shown == 0 && len(ts) == 0 && (q != "" || typ != "") {
+			return fmt.Sprintf("No image or template matches (of %d images, %d templates).", len(v.Images), len(v.Templates)), nil
 		}
 		return b.String(), nil
 	case "lab_install_status":
