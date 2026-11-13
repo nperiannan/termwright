@@ -52,7 +52,7 @@ Test ports and streams are as in the API; the keyword arguments are the API's fi
 | `rows(run)` | The result rows of a run |
 | `pps_for(rate, size)` | Frames per second for a rate in Mbps, as hardware testers count it (20 bytes of preamble and gap per frame) |
 
-`scripts/python/example_traffic.py` is a complete run. With pytest or unittest, `assert_pass` is the check.
+`scripts/python/example_traffic.py` is a complete run. With pytest or unittest, `assert_pass` is the check. `scripts/python/example_two_computers.py pc-1 pc-2 10.20.0.11/24 10.20.0.12/24` is the two-computer test: an address on each computer's first data port, ping and iperf3 both ways, PASS or FAIL per step (exit 1 when one fails).
 
 ## Tests of the client
 

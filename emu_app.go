@@ -3993,9 +3993,6 @@ func (a *App) emuView() EmuView {
 				d.Addrs, d.Addrs6, d.DataGw, d.DataGw6, d.DNS, d.AddrsSeen, d.Net = vm.Addrs, vm.Addrs6, vm.DataGw, vm.DataGw6, vm.DNS, seen.Addrs, &seen
 			}
 			d.CPUMax, d.CPUWeight, d.CPUReq, d.CPULim = vm.CPUMax, vm.CPUWeight, vm.CPUReqM(), vm.CPULimM()
-			if d.Running {
-				d.CPUStats = emuCPUStatsOf(emuLab.cpuHist[vm.ID], d.CPUReq)
-			}
 			onHost[im.ID] = true
 		}
 		vl := a.emuFor(emuHostOf(vm)) // its host's management
@@ -4100,6 +4097,9 @@ func (a *App) emuView() EmuView {
 		v.Usage.DiskGB += vm.DiskGB
 		if d.Running {
 			v.Running = true
+		}
+		if d.Running { // (its state is known only here)
+			d.CPUStats = emuCPUStatsOf(emuLab.cpuHist[vm.ID], d.CPUReq)
 		}
 		v.Devices = append(v.Devices, d)
 	}
