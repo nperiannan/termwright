@@ -2986,6 +2986,38 @@ components:
                 - libvirt
                 - problems
                 - notes
+        EmuNote:
+            type: object
+            properties:
+                id:
+                    type: string
+                kind:
+                    description: note, area
+                    type: string
+                text:
+                    description: a note's text, an area's label
+                    type: string
+                x:
+                    description: its top left corner on the canvas
+                    type: number
+                y:
+                    type: number
+                w:
+                    description: its size
+                    type: number
+                h:
+                    type: number
+                color:
+                    description: '0-7: the palette''s colours (s1-s8)'
+                    type: integer
+            required:
+                - id
+                - kind
+                - text
+                - x
+                - "y"
+                - w
+                - h
         EmuPersona:
             type: object
             properties:
@@ -3760,6 +3792,13 @@ components:
                 dnsSet:
                     description: they were set (not the default)
                     type: boolean
+                notes:
+                    description: notes and areas on the canvas
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuNote'
                 autoCheckpoints:
                     description: a checkpoint of a switch before typed commands (Revert undoes them)
                     type: boolean

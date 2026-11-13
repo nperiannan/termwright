@@ -615,6 +615,7 @@ type EmuView struct {
 	MgmtNet         string            `json:"mgmtNet"`
 	DNS             []string          `json:"dns"`                // the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
 	DNSSet          bool              `json:"dnsSet,omitempty"`   // they were set (not the default)
+	Notes           []emu.Note        `json:"notes,omitempty"`    // notes and areas on the canvas
 	AutoCheckpoints bool              `json:"autoCheckpoints"`    // a checkpoint of a switch before typed commands (Revert undoes them)
 	Topology        string            `json:"topology,omitempty"` // the name the open lab is saved under
 	CloudGw         string            `json:"cloudGw,omitempty"`  // cloud: the gateway the switches use
@@ -4018,6 +4019,7 @@ func (a *App) emuView() EmuView {
 	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw, v.LanFixed, v.Fast = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw, l.LanFixed, !l.NoFast
 	v.DNS, v.DNSSet = l.DNSServers(), len(l.DNS) > 0
 	v.AutoCheckpoints = !l.NoCheckpoints
+	v.Notes = l.Notes
 	v.IconStyle = orStr(f.IconStyle, "box")
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load

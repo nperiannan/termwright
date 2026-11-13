@@ -88,3 +88,15 @@ func (l *Lab) PatchScript(pairs [][4]int) string {
 	b.WriteString("echo patch-ok\n")
 	return b.String()
 }
+
+// Note is a note or an area on the lab's canvas: text where it is put, or a labelled rectangle behind the devices.
+type Note struct {
+	ID    string  `json:"id"`
+	Kind  string  `json:"kind"` // note, area
+	Text  string  `json:"text"` // a note's text, an area's label
+	X     float64 `json:"x"`    // its top left corner on the canvas
+	Y     float64 `json:"y"`
+	W     float64 `json:"w"` // its size
+	H     float64 `json:"h"`
+	Color int     `json:"color,omitempty"` // 0-7: the palette's colours (s1-s8)
+}

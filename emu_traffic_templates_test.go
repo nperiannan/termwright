@@ -91,6 +91,19 @@ func TestTrafficTemplatesAndPcap(t *testing.T) {
 	if _, err := a.EmuStreamSave(emu.Stream{Name: "ng", From: "t1", Kind: "pcap", Pcap: f}); err == nil || !strings.Contains(err.Error(), "pcapng") {
 		t.Fatalf("pcapng: %v", err)
 	}
+	// notes and areas on the canvas
+	v, err := a.EmuNoteSave(emu.Note{Kind: "area", Text: "Site A\n", X: 10, Y: 20, W: 5, H: 5, Color: 12})
+	if err != nil || len(v.Notes) != 1 || v.Notes[0].Text != "Site A" || v.Notes[0].W != 80 || v.Notes[0].H != 40 || v.Notes[0].Color != 7 || v.Notes[0].ID == "" {
+		t.Fatalf("note: %v %+v", err, v.Notes)
+	}
+	n := v.Notes[0]
+	n.Kind, n.Text = "weird", "x"
+	if v, err = a.EmuNoteSave(n); err != nil || len(v.Notes) != 1 || v.Notes[0].Kind != "note" {
+		t.Fatalf("change: %v %+v", err, v.Notes)
+	}
+	if v, err = a.EmuNoteRemove(n.ID); err != nil || len(v.Notes) != 0 {
+		t.Fatalf("remove: %v %+v", err, v.Notes)
+	}
 	cfgB, _ := emuLab.f.Lab.TrafficConfig(func(emu.VM) bool { return true }, 1, map[string]bool{})
 	if !strings.Contains(string(cfgB), `"pcapId":"`+s.PcapID+`"`) || !strings.Contains(string(cfgB), `"toMac":"02:74:77:00:00:02"`) {
 		t.Fatalf("config: %s", cfgB)

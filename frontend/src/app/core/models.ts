@@ -100,7 +100,7 @@ export interface EmuCompNetSeen { addrs?: Record<string, string> | null; linkLoc
 /** A computer's IP configuration for one port, with its gateways and DNS server. */
 export interface EmuCompNet { port: number; ipv4: string; ipv6: string; gw: string; gw6: string; dns: string; }
 export interface LabLink { a: string; aPort: string; b: string; bPort: string; up?: boolean; down?: boolean; lagA?: LabLag | null; lagB?: LabLag | null; lldp?: string; }
-export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; dns?: string[] | null; dnsSet?: boolean; autoCheckpoints?: boolean; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
+export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; dns?: string[] | null; dnsSet?: boolean; autoCheckpoints?: boolean; notes?: LabNote[] | null; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
   /** Emulated lab only. */
   kind?: 'emu'; topology?: string; cloudGw?: string; lanFixed?: boolean; events?: LabEvent[] | null; downloadDir?: string; downloadQueue?: string[] | null; mgmt?: string; consoles?: Record<string, string> | null; host?: string; hostInfo?: EmuHostInfo | null; hosts?: EmuHost[] | null; images?: EmuImage[] | null; kvm?: boolean; templates?: EmuTemplate[] | null; usage?: EmuUsage; deviceTypes?: EmuDeviceType[] | null; installs?: EmuInstall[] | null; hostUse?: EmuHostUse[] | null; fast?: boolean; iconStyle?: string; }
 /** An install of an ISO file on a KVM host: running, waiting for the user, or finished. */
@@ -434,3 +434,6 @@ export interface EmuChange { id: string; at: string; who: string; tool: string; 
 
 /** A ready test of the traffic generator: streams and saved tests between test ports named by role (A, B, C…). */
 export interface EmuTrafficTemplate { id: string; name: string; desc?: string; builtin?: boolean; ports: number; roles?: string[] | null; streams?: EmuStream[] | null; tests?: EmuTest[] | null; saved?: string; }
+
+/** A note or an area on the lab's canvas. */
+export interface LabNote { id: string; kind: 'note' | 'area'; text: string; x: number; y: number; w: number; h: number; color?: number; }

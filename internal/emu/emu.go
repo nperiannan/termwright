@@ -398,6 +398,7 @@ type Lab struct {
 	Cables        []Cable         `json:"cables"`
 	Lags          []Lag           `json:"lags,omitempty"`
 	Testers       []Tester        `json:"testers,omitempty"`       // test ports of the traffic generator
+	Notes         []Note          `json:"notes,omitempty"`         // notes and areas drawn on the canvas
 	NoCheckpoints bool            `json:"noCheckpoints,omitempty"` // no checkpoint of a switch before typed commands (Revert cannot undo them)
 	DNS           []string        `json:"dns,omitempty"`           // the lab's name servers: computers without one get them, day 0 fills {dns} {dns2} {dnsList} (default 8.8.8.8 1.1.1.1)
 	Streams       []Stream        `json:"streams,omitempty"`

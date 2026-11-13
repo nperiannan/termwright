@@ -6,6 +6,9 @@ import { StreamDetail } from './stream-detail';
 import { TrafficPage } from './traffic-page';
 import { TrafficLibrary } from './traffic-library';
 import { VmScreen } from './vm-screen';
+import { LabOverview, OverviewAct } from './lab-overview';
+import { CmdPalette, PaletteCmd } from './cmd-palette';
+import type { LabNote } from '../core/models';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
 import { EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
@@ -27,7 +30,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary, VmScreen],
+  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary, VmScreen, LabOverview, CmdPalette],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" /> }
@@ -64,7 +67,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <button type="button" (click)="loadPack()">{{ st()?.pack ? tr('Load Another Pack…') : tr('Load Device Pack (.vm)…') }}</button> }
       @if (emu()) {
         <nav class="ptabs">
-          <a [class.on]="page() !== 'hosts' && page() !== 'images' && page() !== 'templates' && page() !== 'traffic'" (click)="page.set('')">{{ tr('Canvas') }}</a>
+          <a [class.on]="page() !== 'hosts' && page() !== 'images' && page() !== 'templates' && page() !== 'traffic' && page() !== 'overview'" (click)="page.set('')">{{ tr('Canvas') }}</a>
+          @if (emu()) { <a [class.on]="page() === 'overview'" (click)="page.set('overview')" [title]="tr('Every device in one table')">{{ tr('Overview') }}@if (devs().length) { <small>{{ devs().length }}</small> }</a> }
           <a [class.on]="page() === 'traffic'" (click)="openTraffic()" [title]="tr('Test ports, streams, live charts and RFC 2544 tests')">{{ tr('Traffic') }}@if (traf()?.running) { <small class="run">▶</small> } @else if (traf()?.streams?.length) { <small>{{ traf()!.streams.length }}</small> }</a>
           <a [class.on]="page() === 'hosts'" (click)="page.set('hosts')">{{ tr('Hosts') }}@if ((st()?.hosts ?? []).length) { <small>{{ st()!.hosts!.length }}</small> }</a>
           <a [class.on]="page() === 'images'" (click)="page.set('images')">{{ tr('Images') }}@if ((st()?.images ?? []).length) { <small>{{ st()!.images!.length }}</small> }</a>
@@ -158,6 +162,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         </app-traffic-page>
         @if (libOpen()) { <app-traffic-library [testers]="traf()?.testers ?? []" (closed)="libOpen.set(false)" (applied)="traf.set($event); libOpen.set(false)" /> }
       }
+      @if (page() === 'overview') { <app-lab-overview [devs]="devs()" [links]="links()" [hostNames]="ovHosts()" (act)="ovAct($event.what, $event.dev)" /> }
+      @if (palOpen()) { <app-cmd-palette [cmds]="palCmds()" (closed)="palOpen.set(false)" /> }
       @if (screenDev(); as sd) { <app-vm-screen kind="vm" [id]="sd.id" [name]="sd.hostname" (closed)="screenDev.set(null)" /> }
       @if (page() === 'new') { <app-lab-new [emu]="emu()" [preset]="preset()" (closed)="page.set(''); ghost.set(null)" (changed)="ghost.set($event)" (hostsPage)="page.set('hosts')" (made)="ui.refreshTree()" /> }
       <div class="pal">
@@ -189,6 +195,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <div class="zone" [style.left.px]="z.x" [style.top.px]="z.y" [style.width.px]="z.w" [style.height.px]="z.h" [style.border-color]="z.c" [style.background]="z.c + '0f'">
                 <div class="zh"><i [style.background]="z.c"></i><b>{{ z.name }}</b><span class="muted">{{ z.text }}</span></div></div>
             }
+            @for (n of notesOf('area'); track n.id) { <ng-container [ngTemplateOutlet]="noteT" [ngTemplateOutletContext]="{ $implicit: n }" /> }
             <svg class="links" [attr.width]="area().w" [attr.height]="area().h">
               @for (c of clouds(); track c.host) { @for (u of c.links; track u.dev + u.port) {
                 <g class="lk cll"><title>{{ tr('{0} {1} is on the host’s network ({2})', u.name, u.port, c.name) }}</title><path class="ln up" [attr.d]="'M' + u.x + ' ' + u.y + ' L' + c.x + ' ' + c.y" />
@@ -255,6 +262,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 </table>
               </div>
             }
+            @for (n of notesOf('note'); track n.id) { <ng-container [ngTemplateOutlet]="noteT" [ngTemplateOutletContext]="{ $implicit: n }" /> }
           </div>
         </div>
         @if (portPick(); as pp) {
@@ -332,6 +340,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <symbol id="tw-restart" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/></symbol>
           <symbol id="tw-con" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m7 10 3 2-3 2M12 15h5"/></symbol>
           <symbol id="tw-chk" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+          <symbol id="tw-note" viewBox="0 0 24 24"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8.5 9h7M8.5 12.5h4"/></symbol>
+          <symbol id="tw-area" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2" stroke-dasharray="3 2.2"/><path d="M6.5 8.5h5"/></symbol>
           <symbol id="tw-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 9.3h16M4 14.6h16M9.3 4v16M14.6 4v16"/></symbol>
           <symbol id="tw-port" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="11" rx="1.5"/><path d="M9 7V4.5h6V7M9 12h.01M12 12h.01M15 12h.01"/></symbol>
           <symbol id="tw-addr" viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/><circle cx="18" cy="16" r="2.5"/></symbol>
@@ -357,6 +367,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 @for (z of [50, 75, 100, 125, 150, 200]; track z) { <option [value]="z">{{ z }} %</option> }
               </select><button type="button" class="sm" (click)="zoomBy(0.1)" [attr.aria-label]="tr('Zoom in')" [title]="tr('Zoom in')">+</button></span>
             <i class="dsep"></i>
+            @if (emu()) { <button type="button" class="cb" (click)="addNote('note')" [title]="tr('A note on the canvas (double-click it to write)')"><svg><use href="#tw-note"/></svg><span class="ll">{{ tr('Note') }}</span><span class="sl">{{ tr('Note') }}</span></button>
+              <button type="button" class="cb" (click)="addNote('area')" [title]="tr('An area behind devices, with a name: a site, a rack, a test bed')"><svg><use href="#tw-area"/></svg><span class="ll">{{ tr('Area') }}</span><span class="sl">{{ tr('Area') }}</span></button><i class="dsep"></i> }
             <button type="button" class="cb" [class.on]="showGrid()" (click)="flip(showGrid, 'tw.lab.grid')" [title]="tr('Grid lines; switches you move snap to them')"><svg><use href="#tw-grid"/></svg><span class="ll">{{ tr('Grid') }}</span><span class="sl">{{ tr('Grid') }}</span></button>
             <button type="button" class="cb" [class.on]="showPorts()" (click)="flip(showPorts, 'tw.lab.ports')" [title]="tr('Port names on the cables')"><svg><use href="#tw-port"/></svg><span class="ll">{{ tr('Ports') }}</span><span class="sl">{{ tr('Ports') }}</span></button>
             <button type="button" class="cb" [class.on]="showAddr()" (click)="flip(showAddr, 'tw.lab.addr')" [title]="tr('Addresses under the switches')"><svg><use href="#tw-addr"/></svg><span class="ll">{{ tr('Addresses') }}</span><span class="sl">{{ tr('Addresses') }}</span></button>
@@ -620,6 +632,18 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       </div>
     }
   </div>
+  <ng-template #noteT let-n>
+    <div class="nt" [class.area]="n.kind === 'area'" [class.sel]="selNote() === n.id" [style.left.px]="noteAt(n).x" [style.top.px]="noteAt(n).y" [style.width.px]="noteAt(n).w" [style.height.px]="noteAt(n).h" [style.--nc]="noteColor(n)"
+      (click)="$event.stopPropagation(); selNote.set(n.id)" (pointerdown)="$event.stopPropagation()">
+      <div class="nh" (pointerdown)="noteGrab($event, n, 'move')" (dblclick)="editNote.set(n.id)">
+        @if (n.kind === 'area') { @if (editNote() === n.id) { <input class="ni" [ngModel]="n.text" (ngModelChange)="noteDraft = $event" (keydown.enter)="saveNoteText(n)" (blur)="saveNoteText(n)" (pointerdown)="$event.stopPropagation()" [placeholder]="tr('Area name')" /> } @else { <b>{{ n.text || tr('Area') }}</b> } }
+        <span class="sp"></span>
+        @if (selNote() === n.id) { <span class="ncs">@for (c of [0,1,2,3,4,5,6,7]; track c) { <i [style.background]="'var(--s' + (c + 1) + ')'" [class.on]="(n.color ?? 0) === c" (pointerdown)="$event.stopPropagation()" (click)="setNoteColor(n, c)"></i> }</span><a (pointerdown)="$event.stopPropagation()" (click)="delNote(n)" [title]="tr('Delete')">✕</a> }
+      </div>
+      @if (n.kind === 'note') { @if (editNote() === n.id) { <textarea class="nx" [ngModel]="n.text" (ngModelChange)="noteDraft = $event" (blur)="saveNoteText(n)" (pointerdown)="$event.stopPropagation()" (keydown.escape)="editNote.set('')"></textarea> } @else { <div class="nb" (dblclick)="editNote.set(n.id); noteDraft = n.text">{{ n.text || tr('Double-click to write') }}</div> } }
+      <i class="rz" (pointerdown)="noteGrab($event, n, 'size')"></i>
+    </div>
+  </ng-template>
   <ng-template #trafBody>
         <div class="trw" [class.ed]="!!sEd() || !!tEd()">
           <div class="trt">
@@ -801,7 +825,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .inner { position: relative; } .scale { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
     .empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--muted); pointer-events: none;
       b { font-size: 15px; color: var(--text); } a { pointer-events: auto; color: var(--accent); cursor: pointer; } }
-    svg.links { position: absolute; left: 0; top: 0; overflow: visible; }
+    svg.links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; } svg.links g.lk { pointer-events: visiblePainted; }
     .lk { cursor: pointer; } .lk .hit { stroke: transparent; stroke-width: 12; } .lk .ln { stroke: var(--muted); stroke-width: 2.2; stroke-dasharray: 2 5; } .lk .ln.up { stroke: var(--success, #1fa45a); stroke-dasharray: none; }
     .lk.down .ln { stroke: var(--danger); stroke-dasharray: 6 5; } .lk.selk .ln { stroke-width: 3.5; }
     .topo { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; background: var(--accent-soft); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
@@ -868,6 +892,14 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .trt td b { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
     .cks { display: grid; gap: 4px; padding: 4px 0; .ck { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 8px; align-items: center; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); } .cn { grid-column: 1 / -1; color: var(--muted); font-size: 11px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } a { cursor: pointer; color: var(--muted); } > button { justify-self: start; margin-top: 4px; } }
     .ckt { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
+    .nt { position: absolute; display: flex; flex-direction: column; border-radius: 10px; border: 1.5px solid color-mix(in srgb, var(--nc) 70%, transparent); background: color-mix(in srgb, var(--nc) 16%, var(--surface)); box-shadow: 0 6px 16px rgba(0,0,0,.25); font-size: 12.5px; cursor: default;
+      &.area { border-style: dashed; background: color-mix(in srgb, var(--nc) 7%, transparent); box-shadow: none; border-radius: 14px; }
+      &.sel { outline: 2px solid color-mix(in srgb, var(--nc) 55%, transparent); outline-offset: 2px; }
+      .nh { display: flex; align-items: center; gap: 6px; padding: 5px 8px; cursor: grab; min-height: 22px; b { color: var(--nc); font-size: 12.5px; } a { cursor: pointer; color: var(--muted); } }
+      .ncs { display: flex; gap: 3px; i { width: 11px; height: 11px; border-radius: 50%; cursor: pointer; opacity: .75; } i.on { outline: 2px solid var(--text); outline-offset: 1px; opacity: 1; } }
+      .nb { flex: 1; padding: 0 10px 8px; white-space: pre-wrap; overflow: auto; color: var(--text); line-height: 1.4; } .nb:empty { color: var(--muted); }
+      .nx { flex: 1; margin: 0 8px 8px; resize: none; font: inherit; } .ni { height: 22px; font-size: 12px; width: 60%; }
+      .rz { position: absolute; right: 2px; bottom: 2px; width: 12px; height: 12px; cursor: nwse-resize; border-right: 2px solid var(--nc); border-bottom: 2px solid var(--nc); border-radius: 0 0 4px 0; opacity: .6; } }
     .dnsr { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); > span { flex: none; } input { flex: 1; min-width: 0; } }
     .tre .seg { flex-wrap: wrap; i { flex: 1; text-align: center; padding: 3px 4px; } }
     .two.pc { grid-template-columns: minmax(0, 1fr) auto; align-items: center; } .pcn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; } .cbl { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
@@ -1043,6 +1075,89 @@ export class LabWorkspace implements OnDestroy {
   protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw', 'pcap'];
   protected libOpen = signal(false);
   protected screenDev = signal<LabDevice | null>(null);
+  protected palOpen = signal(false);
+  protected ovHosts = computed(() => ({ '': this.hname(this.st()?.host ?? '') || '-' }));
+  // ---- notes and areas on the canvas ----
+  protected selNote = signal('');
+  protected editNote = signal('');
+  protected noteDraft = '';
+  private noteLive = signal<Record<string, { x: number; y: number; w: number; h: number }>>({});
+  protected notesOf(kind: 'note' | 'area') { return (this.st()?.notes ?? []).filter(n => n.kind === kind); }
+  protected noteAt(n: LabNote) { return this.noteLive()[n.id] ?? n; }
+  protected noteColor(n: LabNote) { return 'var(--s' + ((n.color ?? (n.kind === 'note' ? 3 : 0)) + 1) + ')'; }
+  private async saveNote(n: LabNote) { try { const v = await this.backend.emuNoteSave(n); this.lab.emu.set(v); } catch (e) { this.ui.error(e); } }
+  async addNote(kind: 'note' | 'area') {
+    this.page.set('');
+    const cv = document.querySelector('app-lab-workspace .cv') as HTMLElement | null, z = this.zoom();
+    const cx = cv ? (cv.scrollLeft + cv.clientWidth / 2) / z : 400, cy = cv ? (cv.scrollTop + cv.clientHeight / 2) / z : 300;
+    const w = kind === 'area' ? 420 : 220, h = kind === 'area' ? 280 : 120;
+    try {
+      const v = await this.backend.emuNoteSave({ id: '', kind, text: kind === 'area' ? tr('Area') : '', x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), w, h, color: kind === 'note' ? 3 : 0 });
+      this.lab.emu.set(v);
+      const made = (v.notes ?? [])[(v.notes ?? []).length - 1];
+      if (made) { this.selNote.set(made.id); this.editNote.set(made.id); this.noteDraft = made.text; }
+    } catch (e) { this.ui.error(e); }
+  }
+  noteGrab(ev: PointerEvent, n: LabNote, mode: 'move' | 'size') {
+    if (ev.button !== 0 || this.editNote() === n.id && mode === 'move' && (ev.target as HTMLElement).closest('input')) return;
+    ev.stopPropagation(); ev.preventDefault();
+    if (this.editNote() && this.editNote() !== n.id || mode === 'size') this.endNoteEdit();
+    this.selNote.set(n.id);
+    const x0 = ev.clientX, y0 = ev.clientY, z = this.zoom(), g = this.showGrid() ? this.GRID : 1;
+    const snap = (v: number) => Math.round(v / g) * g;
+    let at = { x: n.x, y: n.y, w: n.w, h: n.h };
+    const mv = (e: PointerEvent) => {
+      const dx = (e.clientX - x0) / z, dy = (e.clientY - y0) / z;
+      at = mode === 'move' ? { ...at, x: snap(n.x + dx), y: snap(n.y + dy) } : { ...at, w: Math.max(80, snap(n.w + dx)), h: Math.max(40, snap(n.h + dy)) };
+      this.noteLive.set({ ...this.noteLive(), [n.id]: at });
+    };
+    const up = async () => {
+      removeEventListener('pointermove', mv); removeEventListener('pointerup', up);
+      if (at.x !== n.x || at.y !== n.y || at.w !== n.w || at.h !== n.h) await this.saveNote({ ...n, ...at });
+      const live = { ...this.noteLive() }; delete live[n.id]; this.noteLive.set(live);
+    };
+    addEventListener('pointermove', mv); addEventListener('pointerup', up);
+  }
+  /** Ends writing a note or an area's name, keeping what was written. */
+  private endNoteEdit() { const n = (this.st()?.notes ?? []).find(x => x.id === this.editNote()); if (n) void this.saveNoteText(n); else this.editNote.set(''); }
+  async saveNoteText(n: LabNote) { if (this.editNote() !== n.id) return; this.editNote.set(''); if (this.noteDraft !== n.text) await this.saveNote({ ...n, text: this.noteDraft }); }
+  async setNoteColor(n: LabNote, c: number) { await this.saveNote({ ...n, color: c }); }
+  async delNote(n: LabNote) { try { this.lab.emu.set(await this.backend.emuNoteRemove(n.id)); this.selNote.set(''); } catch (e) { this.ui.error(e); } }
+  protected ovAct(what: OverviewAct, d: LabDevice) {
+    switch (what) {
+      case 'select': this.page.set(''); this.select(d); break;
+      case 'console': this.console(d); break;
+      case 'screen': this.screenDev.set(d); break;
+      case 'restart': void this.lab.restart([d.id]); break;
+      case 'start': void this.lab.start([d.id]); break;
+      case 'stop': void this.lab.stop([d.id]); break;
+    }
+  }
+  /** The command palette's commands: pages, the lab's actions, and each device and what can be done to it. */
+  protected palCmds = computed<PaletteCmd[]>(() => {
+    const go = (p: '' | 'overview' | 'traffic' | 'hosts' | 'images' | 'templates') => () => (p === 'traffic' ? this.openTraffic() : this.page.set(p));
+    const cmds: PaletteCmd[] = [
+      { id: 'p-canvas', label: tr('Canvas'), group: 'Pages', run: go('') }, { id: 'p-ov', label: tr('Overview'), group: 'Pages', run: go('overview') },
+      { id: 'p-traf', label: tr('Traffic'), group: 'Pages', run: go('traffic') }, { id: 'p-hosts', label: tr('Hosts'), group: 'Pages', run: go('hosts') },
+      { id: 'p-img', label: tr('Images'), group: 'Pages', run: go('images') }, { id: 'p-tpl', label: tr('Templates'), group: 'Pages', run: go('templates') },
+      { id: 'a-start', label: tr('Start All'), group: 'Lab', run: () => void this.lab.start([]) },
+      { id: 'a-note', label: tr('Add a Note'), group: 'Lab', run: () => void this.addNote('note') }, { id: 'a-area', label: tr('Add an Area'), group: 'Lab', run: () => void this.addNote('area') },
+      { id: 'a-stream', label: tr('New Stream'), group: 'Traffic', run: () => { this.openTraffic(); setTimeout(() => this.newStream(), 300); } },
+      { id: 'a-lib', label: tr('Test library'), group: 'Traffic', run: () => { this.openTraffic(); this.libOpen.set(true); } },
+      { id: 'a-chg', label: tr('Changes'), hint: tr('what Claude and the API changed, with Revert'), group: 'Lab', run: () => { this.page.set(''); this.dock.set('changes'); void this.loadChanges(); } },
+      { id: 'a-ev', label: tr('Events'), group: 'Lab', run: () => { this.page.set(''); this.dock.set('events'); } },
+    ];
+    for (const d of this.devs()) {
+      cmds.push({ id: 'd-' + d.id, label: d.hostname, hint: [d.model, (d.mgmtIp || '').split('/')[0], tr(d.running ? 'running' : 'stopped')].filter(Boolean).join(' · '), group: 'Devices', run: () => { this.page.set(''); this.select(d); } });
+      if (d.running) {
+        cmds.push({ id: 'c-' + d.id, label: tr('Console') + ' · ' + d.hostname, group: 'Device actions', run: () => this.console(d) },
+          { id: 's-' + d.id, label: tr('Screen…') + ' · ' + d.hostname, group: 'Device actions', run: () => this.screenDev.set(d) },
+          { id: 'k-' + d.id, label: tr('Checkpoint Now') + ' · ' + d.hostname, group: 'Device actions', run: () => void this.lab.checkpoint(d.id) },
+          { id: 'r-' + d.id, label: tr('Restart') + ' · ' + d.hostname, group: 'Device actions', run: () => void this.lab.restart([d.id]) });
+      } else cmds.push({ id: 'g-' + d.id, label: tr('Start') + ' · ' + d.hostname, group: 'Device actions', run: () => void this.lab.start([d.id]) });
+    }
+    return cmds;
+  });
   protected hm(at: string) { const d = new Date(at); if (isNaN(+d)) return at; return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
   protected setKind(e: EmuStream, k: EmuStream['kind']) { if (k === 'pcap' && e.kind !== 'pcap' && e.seconds === 30 && !e.id) e.seconds = 0; e.kind = k; }
   protected fileName(p: string) { return p.split(/[\\/]/).pop() ?? p; }
@@ -1618,7 +1733,7 @@ export class LabWorkspace implements OnDestroy {
   protected linkA = signal<{ id: string; port: string } | null>(null);
   protected readonly GRID = 40;
   protected portPick = signal<{ id: string; ports: string[]; all: { name: string; short: string; peer: string }[]; x: number; y: number; side: 'a' | 'b' } | null>(null);
-  protected page = signal<'' | 'configure' | 'images' | 'templates' | 'hosts' | 'new' | 'onhosts' | 'traffic'>('');
+  protected page = signal<'' | 'configure' | 'images' | 'templates' | 'hosts' | 'new' | 'onhosts' | 'traffic' | 'overview'>('');
   protected hostPick = signal('');
   protected cfgId = signal('');
   protected dockH = signal(this.savedDockH());
@@ -1675,17 +1790,20 @@ export class LabWorkspace implements OnDestroy {
     this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && (this.dock() === 'changes' || ++this.chTick % 10 === 1)) void this.loadChanges(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && this.dock() !== 'cap' && ++this.capTick % 5 === 1) void this.backend.emuCaptures().then(c => this.caps.set(c ?? []), () => undefined); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || this.page() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
   }
   @HostListener('document:keydown', ['$event']) onDelKey(e: KeyboardEvent) {
+    if (this.visible() && (e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey) && !(e.target as HTMLElement)?.closest?.('.xterm')) { e.preventDefault(); this.palOpen.set(!this.palOpen()); return; }
     if (!this.visible() || (e.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable], .xterm')) return;
     if ((e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey) && this.devs().length > 1) { e.preventDefault(); this.sel.set(''); this.ms.set(new Set(this.devs().map(d => d.id))); return; }
     if (e.key !== 'Delete' && e.key !== 'Backspace') return;
     const ids = this.ms().size > 1 ? [...this.ms()] : this.sel() ? [this.sel()] : [];
     if (ids.length) { e.preventDefault(); void this.removeMany(ids); return; }
+    const sn = (this.st()?.notes ?? []).find(n => n.id === this.selNote());
+    if (sn) { e.preventDefault(); void this.delNote(sn); return; }
     if (!this.selCloud()) return;
     e.preventDefault(); void this.removeCloud(this.selCloud());
   }
   @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); this.ms.set(new Set()); } }
   /** A click on the empty canvas: nothing selected (the side panel shows the whole topology). */
-  canvasClick(ev: MouseEvent) {
+  canvasClick(ev: MouseEvent) { this.endNoteEdit(); this.selNote.set('');
     const t = ev.target as HTMLElement;
     if (this.linkMode() || t.closest('.node, .lk, .ctb, .mini, .hleg, .menu, .bar2, .zone .zh')) return;
     if (this.bandMoved) { this.bandMoved = false; return; }
