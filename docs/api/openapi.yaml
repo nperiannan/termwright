@@ -1332,8 +1332,8 @@ paths:
             operationId: tool_cpu
             tags:
                 - Tools
-            summary: CPU limits and shares of the emulated lab's switches and computers on their KVM hosts (a cgroup each; a running one gets them at once, a stopped one when it starts)
-            description: CPU limits and shares of the emulated lab's switches and computers on their KVM hosts (a cgroup each; a running one gets them at once, a stopped one when it starts). Without max_cores and share it lists them. Use it to keep a busy switch from slowing the others, or to give a switch under test more of the host. Through the API it runs without asking.
+            summary: CPU requests and limits of the emulated lab's switches and computers, in millicores as kubectl counts them (1000m = one host core)
+            description: 'CPU requests and limits of the emulated lab''s switches and computers, in millicores as kubectl counts them (1000m = one host core): the request is its share when the host is busy (nothing is reserved; it may use more when the host is free), the limit the most it may use. They apply at once, no restart (a cgroup on its host). Without request_m and limit_m it reports each device''s use over the last hour: average, p95, peak, how often it went above its request, how many times its limit held it back, and advice. Use it to keep a busy switch from slowing the others, or to give a switch under test more of the host. Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1341,11 +1341,17 @@ paths:
                         schema:
                             type: object
                             properties:
+                                limit_m:
+                                    description: its CPU limit in millicores (1500 = one and a half cores; 0 = no limit)
+                                    type: integer
                                 max_cores:
-                                    description: at most this many host cores (0.5 = half of one core; 0 = no limit)
+                                    description: 'older form of the limit: host cores (0.5 = half of one)'
                                     type: number
+                                request_m:
+                                    description: its CPU request in millicores (250 = 250m = a quarter of a core; 0 = none)
+                                    type: integer
                                 share:
-                                    description: 'its share when they compete for the host''s CPU: 100 is the default, 50 half as much, 400 four times (1-10000)'
+                                    description: 'older form of the request: 100 = 1000m'
                                     type: integer
                                 switches:
                                     description: names (none = all)
@@ -2151,6 +2157,42 @@ components:
                 result:
                     type: string
                     description: What the tool did or found, as text.
+        CPUStats:
+            type: object
+            properties:
+                mins:
+                    description: the minutes the numbers cover (at most 60)
+                    type: integer
+                avg:
+                    description: average use
+                    type: number
+                p95:
+                    description: 95 % of the time it used at most this
+                    type: number
+                peak:
+                    description: the most it used
+                    type: number
+                over:
+                    description: '% of the time it used more than its request'
+                    type: integer
+                overN:
+                    description: how many times it went above its request
+                    type: integer
+                thr:
+                    description: times its limit held it back (cgroup periods throttled)
+                    type: integer
+                thrS:
+                    description: seconds it was held back
+                    type: number
+            required:
+                - mins
+                - avg
+                - p95
+                - peak
+                - over
+                - overN
+                - thr
+                - thrS
         Cable:
             type: object
             description: A cable between two switch ports, with the LAGs on its ends.
@@ -2334,6 +2376,17 @@ components:
                 cpuWeight:
                     description: its CPU share when VMs compete (100 = as the others; 0 = 100)
                     type: integer
+                cpuReq:
+                    description: its CPU request, millicores (its share when the host is busy; nothing is reserved)
+                    type: integer
+                cpuLim:
+                    description: its CPU limit, millicores (0 = none)
+                    type: integer
+                cpuStats:
+                    description: its CPU over the last hour (while it runs)
+                    anyOf:
+                        - $ref: '#/components/schemas/CPUStats'
+                        - type: "null"
             required:
                 - host
                 - id

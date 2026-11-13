@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"net"
 	"path/filepath"
 	"slices"
@@ -158,11 +159,13 @@ var mcpLabTools = []mcpTool{
 			"switch":  map[string]any{"type": "string"},
 			"seconds": map[string]any{"type": "integer", "description": "5-120 (default 30)"},
 		}, "switch")},
-	{"lab_cpu", "CPU limits and shares of the emulated lab's switches and computers on their KVM hosts (a cgroup each; a running one gets them at once, a stopped one when it starts). Without max_cores and share it lists them. Use it to keep a busy switch from slowing the others, or to give a switch under test more of the host.",
+	{"lab_cpu", "CPU requests and limits of the emulated lab's switches and computers, in millicores as kubectl counts them (1000m = one host core): the request is its share when the host is busy (nothing is reserved; it may use more when the host is free), the limit the most it may use. They apply at once, no restart (a cgroup on its host). Without request_m and limit_m it reports each device's use over the last hour: average, p95, peak, how often it went above its request, how many times its limit held it back, and advice. Use it to keep a busy switch from slowing the others, or to give a switch under test more of the host.",
 		mcpSchema(map[string]any{
 			"switches":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "names (none = all)"},
-			"max_cores": map[string]any{"type": "number", "description": "at most this many host cores (0.5 = half of one core; 0 = no limit)"},
-			"share":     map[string]any{"type": "integer", "description": "its share when they compete for the host's CPU: 100 is the default, 50 half as much, 400 four times (1-10000)"},
+			"request_m": map[string]any{"type": "integer", "description": "its CPU request in millicores (250 = 250m = a quarter of a core; 0 = none)"},
+			"limit_m":   map[string]any{"type": "integer", "description": "its CPU limit in millicores (1500 = one and a half cores; 0 = no limit)"},
+			"max_cores": map[string]any{"type": "number", "description": "older form of the limit: host cores (0.5 = half of one)"},
+			"share":     map[string]any{"type": "integer", "description": "older form of the request: 100 = 1000m"},
 		})},
 	{"lab_computer", "A Linux computer of the emulated lab, like a PC on a desk: set one data port's IP configuration (IPv4 address/bits or dhcp, IPv6 address/bits or auto, default gateways, DNS server; typed on its console now and at each start), or run one of its apps and read what it printed: ping, ping6, traceroute, web (a page's text), dns (nslookup), iperf-server, iperf (5 s to a server).",
 		mcpSchema(map[string]any{
@@ -871,12 +874,41 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		}
 		mx, hasMax := args["max_cores"].(float64)
 		sh, hasShare := args["share"].(float64)
-		if !hasMax && !hasShare {
+		rq, hasReq := args["request_m"].(float64)
+		lm, hasLim := args["limit_m"].(float64)
+		if !hasMax && !hasShare && !hasReq && !hasLim {
 			var b strings.Builder
-			for _, d := range v.Devices {
-				if slices.Contains(list, d.ID) {
-					fmt.Fprintf(&b, "- %s: %d vCPU, limit %s, share %d, uses %.2f cores now\n", d.Hostname, d.CPUs, map[bool]string{true: strconv.FormatFloat(d.CPUMax, 'f', -1, 64) + " cores", false: "none"}[d.CPUMax > 0], orInt(d.CPUWeight, 100), d.Cores)
+			b.WriteString("Device | vCPU | request | limit | now | last hour: avg / p95 / peak | above request | held back by the limit | advice\n")
+			mc := func(m float64, none string) string {
+				if m <= 0 {
+					return none
 				}
+				return strconv.Itoa(int(math.Round(m))) + "m"
+			}
+			for _, d := range v.Devices {
+				if !slices.Contains(list, d.ID) {
+					continue
+				}
+				hour, over, thr, adv := "-", "-", "-", "fine"
+				if s := d.CPUStats; s != nil {
+					hour = fmt.Sprintf("%s / %s / %s (%d min)", mc(s.Avg, "0m"), mc(s.P95, "0m"), mc(s.Peak, "0m"), s.Mins)
+					if d.CPUReq > 0 {
+						over = fmt.Sprintf("%d %% of the time, %d times", s.Over, s.OverN)
+					}
+					if d.CPULim > 0 {
+						thr = fmt.Sprintf("%d times, %.1f s", s.Thr, s.ThrS)
+					}
+					if d.CPULim > 0 && (s.Thr >= 10 || s.ThrS >= 1) {
+						adv = fmt.Sprintf("raise the limit (to about %s)", mc(math.Ceil(max(float64(d.CPULim)*1.5, s.P95*1.25)/100)*100, ""))
+					} else if d.CPUReq > 0 && s.Avg > float64(d.CPUReq)*1.5 {
+						adv = fmt.Sprintf("raise the request (to about %s)", mc(math.Ceil(s.P95/100)*100, ""))
+					}
+				}
+				now := "-"
+				if d.Running {
+					now = mc(d.Cores*1000, "0m")
+				}
+				fmt.Fprintf(&b, "- %s | %d | %s | %s | %s | %s | %s | %s | %s\n", d.Hostname, d.CPUs, mc(float64(d.CPUReq), "none"), mc(float64(d.CPULim), "none"), now, hour, over, thr, adv)
 			}
 			return b.String(), nil
 		}
@@ -885,14 +917,20 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		}
 		for _, id := range list {
 			d, _ := emuMCPID(v, id)
-			m, w := d.CPUMax, d.CPUWeight
-			if hasMax {
-				m = mx
-			}
+			req, lim := d.CPUReq, d.CPULim
 			if hasShare {
-				w = int(sh)
+				req = int(sh) * 10
 			}
-			if _, err := a.EmuSetCPU(id, m, w); err != nil {
+			if hasMax {
+				lim = int(math.Round(mx * 1000))
+			}
+			if hasReq {
+				req = int(rq)
+			}
+			if hasLim {
+				lim = int(lm)
+			}
+			if _, err := a.EmuSetCPUReq(id, req, lim); err != nil {
 				return "", err
 			}
 		}

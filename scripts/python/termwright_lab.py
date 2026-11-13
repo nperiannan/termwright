@@ -210,8 +210,10 @@ class Lab:
         return self.tool("computer", action="set", computer=computer, port=port, ipv4=ipv4, ipv6=ipv6,
                          gateway=gateway, gateway6=gateway6, dns=dns)
 
-    def cpu(self, *switches: str, max_cores: Optional[float] = None, share: Optional[int] = None) -> str:
-        return self.tool("cpu", switches=list(switches), max_cores=max_cores, share=share)
+    def cpu(self, *switches: str, request_m: Optional[int] = None, limit_m: Optional[int] = None,
+            max_cores: Optional[float] = None, share: Optional[int] = None) -> str:
+        """CPU request and limit in millicores (250 = 250m; 0 = none); without them, the report of the last hour."""
+        return self.tool("cpu", switches=list(switches), request_m=request_m, limit_m=limit_m, max_cores=max_cores, share=share)
 
     def capture(self, **args) -> str:
         return self.tool("capture", **args)

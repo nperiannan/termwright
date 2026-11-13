@@ -137,26 +137,28 @@ var emuLab struct {
 	starting         map[string]time.Time
 	ticks            map[string]float64 // CPU ticks at the last poll
 	ticksAt          time.Time
-	cpu              map[string]float64     // CPU use now, in cores (1 = one core busy)
-	ready            map[string]bool        // the console showed the ready text since the VM started (it may scroll out of the log's end later)
-	bootAns          map[string]time.Time   // when a boot menu was last answered
-	trafHosts        map[string]bool        // hosts traffic.py runs on (or ran on: told to end)
-	addrOK           map[string]bool        // the switch showed its management address (since it started)
-	moveTo           map[string]string      // switches moving to another host: that host
-	personaAfterBoot map[string]bool        // the persona file is written once the VM has booted (its folder did not exist yet)
-	perr             map[string]string      // why the persona file could not be written
-	packProfiles     []emu.Image            // the device pack's image profiles (refreshed by EmuState)
-	personaTried     map[string]bool        // that was tried once already (no second round)
-	pinfo            map[string]string      // where the persona file went, or what the check after boot saw
-	pcheck           map[string]bool        // the persona was checked on the CLI since the VM started
-	resumed          map[string]bool        // it started from its saved running state (no boot, no day 0)
-	lldp             map[string]string      // cable → what the last cabling check found (LLDP)
-	portSeen         map[string]emu.CompNet // computer → its network as read on its console
-	events           []EmuEvent             // the Events log, newest last
-	download         map[string]string      // image → download progress ("waiting", "41 %")
-	dlQueue          []string               // images waiting to download, in order
-	dlCur            string                 // the image downloading now
-	dlCancel         context.CancelFunc     // stops it
+	cpu              map[string]float64        // CPU use now, in cores (1 = one core busy)
+	cpuHist          map[string][]emuCPUSample // CPU use and throttling over the last hour
+	cpuWarned        map[string]time.Time      // when the Events last said a limit held it back
+	ready            map[string]bool           // the console showed the ready text since the VM started (it may scroll out of the log's end later)
+	bootAns          map[string]time.Time      // when a boot menu was last answered
+	trafHosts        map[string]bool           // hosts traffic.py runs on (or ran on: told to end)
+	addrOK           map[string]bool           // the switch showed its management address (since it started)
+	moveTo           map[string]string         // switches moving to another host: that host
+	personaAfterBoot map[string]bool           // the persona file is written once the VM has booted (its folder did not exist yet)
+	perr             map[string]string         // why the persona file could not be written
+	packProfiles     []emu.Image               // the device pack's image profiles (refreshed by EmuState)
+	personaTried     map[string]bool           // that was tried once already (no second round)
+	pinfo            map[string]string         // where the persona file went, or what the check after boot saw
+	pcheck           map[string]bool           // the persona was checked on the CLI since the VM started
+	resumed          map[string]bool           // it started from its saved running state (no boot, no day 0)
+	lldp             map[string]string         // cable → what the last cabling check found (LLDP)
+	portSeen         map[string]emu.CompNet    // computer → its network as read on its console
+	events           []EmuEvent                // the Events log, newest last
+	download         map[string]string         // image → download progress ("waiting", "41 %")
+	dlQueue          []string                  // images waiting to download, in order
+	dlCur            string                    // the image downloading now
+	dlCancel         context.CancelFunc        // stops it
 	dlRunning        bool
 }
 
@@ -211,6 +213,65 @@ type EmuDevice struct {
 	Net          *emu.CompNet   `json:"net,omitempty"`       // its network as last read on its console
 	CPUMax       float64        `json:"cpuMax,omitempty"`    // at most this many host cores (0 = no limit)
 	CPUWeight    int            `json:"cpuWeight,omitempty"` // its CPU share when VMs compete (100 = as the others; 0 = 100)
+	CPUReq       int            `json:"cpuReq,omitempty"`    // its CPU request, millicores (its share when the host is busy; nothing is reserved)
+	CPULim       int            `json:"cpuLim,omitempty"`    // its CPU limit, millicores (0 = none)
+	CPUStats     *EmuCPUStats   `json:"cpuStats,omitempty"`  // its CPU over the last hour (while it runs)
+}
+
+// EmuCPUStats is a device's CPU over the last minutes, in millicores (1000m = one host core busy).
+type EmuCPUStats struct {
+	Mins  int     `json:"mins"`  // the minutes the numbers cover (at most 60)
+	Avg   float64 `json:"avg"`   // average use
+	P95   float64 `json:"p95"`   // 95 % of the time it used at most this
+	Peak  float64 `json:"peak"`  // the most it used
+	Over  int     `json:"over"`  // % of the time it used more than its request
+	OverN int     `json:"overN"` // how many times it went above its request
+	Thr   int     `json:"thr"`   // times its limit held it back (cgroup periods throttled)
+	ThrS  float64 `json:"thrS"`  // seconds it was held back
+}
+
+// emuCPUSample is one poll of a device's CPU: use (millicores) and its cgroup's throttling counters so far.
+type emuCPUSample struct {
+	at       time.Time
+	m        float64
+	thr, thU float64
+}
+
+// emuCPUWindow: how far back the CPU numbers look.
+var emuCPUWindow = time.Hour
+
+// emuCPUStatsOf sums up a device's samples (nil with fewer than two).
+func emuCPUStatsOf(h []emuCPUSample, req int) *EmuCPUStats {
+	if len(h) < 2 {
+		return nil
+	}
+	sorted := make([]float64, len(h))
+	sum, over, overN, was := 0.0, 0, 0, false
+	for i, s := range h {
+		sorted[i] = s.m
+		sum += s.m
+		o := req > 0 && s.m > float64(req)
+		if o {
+			over++
+			if !was {
+				overN++
+			}
+		}
+		was = o
+	}
+	sort.Float64s(sorted)
+	thr, us := 0.0, 0.0
+	for i := 1; i < len(h); i++ { // counters start again when it restarts
+		if d := h[i].thr - h[i-1].thr; d > 0 {
+			thr += d
+		}
+		if d := h[i].thU - h[i-1].thU; d > 0 {
+			us += d
+		}
+	}
+	p95 := sorted[max(0, int(math.Ceil(0.95*float64(len(sorted))))-1)]
+	return &EmuCPUStats{Mins: max(1, int(math.Round(h[len(h)-1].at.Sub(h[0].at).Minutes()))), Avg: math.Round(sum / float64(len(h))), P95: math.Round(p95), Peak: math.Round(sorted[len(sorted)-1]),
+		Over: over * 100 / len(h), OverN: overN, Thr: int(thr), ThrS: math.Round(us/1e5) / 10}
 }
 
 // EmuLinkView is a cable, with port names.
@@ -3709,6 +3770,9 @@ func (a *App) emuPoll(force bool) emu.Status {
 		}
 		for id, t := range st.Up {
 			ticks[id] = t
+			if c, ok := emuLab.cpu[id]; ok {
+				a.emuCPUSample(id, now, c, st.Thr[id])
+			}
 		}
 		emuLab.hostStatus[h] = st
 	}
@@ -3920,7 +3984,10 @@ func (a *App) emuView() EmuView {
 				seen := emuLab.portSeen[vm.ID]
 				d.Addrs, d.Addrs6, d.DataGw, d.DataGw6, d.DNS, d.AddrsSeen, d.Net = vm.Addrs, vm.Addrs6, vm.DataGw, vm.DataGw6, vm.DNS, seen.Addrs, &seen
 			}
-			d.CPUMax, d.CPUWeight = vm.CPUMax, vm.CPUWeight
+			d.CPUMax, d.CPUWeight, d.CPUReq, d.CPULim = vm.CPUMax, vm.CPUWeight, vm.CPUReqM(), vm.CPULimM()
+			if d.Running {
+				d.CPUStats = emuCPUStatsOf(emuLab.cpuHist[vm.ID], d.CPUReq)
+			}
 			onHost[im.ID] = true
 		}
 		vl := a.emuFor(emuHostOf(vm)) // its host's management
@@ -6813,4 +6880,89 @@ func emuNameList(s string) []string {
 		}
 	}
 	return out
+}
+
+// emuCPUSample keeps a poll of a device's CPU (the last hour of them) and tells the Events, at most every ten
+// minutes, when its limit held it back (emuLab.mu is held).
+func (a *App) emuCPUSample(id string, now time.Time, cores float64, thr [2]float64) {
+	if emuLab.cpuHist == nil {
+		emuLab.cpuHist, emuLab.cpuWarned = map[string][]emuCPUSample{}, map[string]time.Time{}
+	}
+	h := append(emuLab.cpuHist[id], emuCPUSample{at: now, m: cores * 1000, thr: thr[0], thU: thr[1]})
+	k := 0
+	for k < len(h) && now.Sub(h[k].at) > emuCPUWindow {
+		k++
+	}
+	h = h[k:]
+	emuLab.cpuHist[id] = h
+	if len(h) < 2 || h[len(h)-1].thr <= h[len(h)-2].thr || now.Sub(emuLab.cpuWarned[id]) < 10*time.Minute || emuLab.f.Lab == nil {
+		return
+	}
+	v := emuLab.f.Lab.VMByID(id)
+	if v == nil || v.CPULimM() == 0 {
+		return
+	}
+	k = 0
+	for k < len(h) && now.Sub(h[k].at) > 10*time.Minute {
+		k++
+	}
+	if st := emuCPUStatsOf(h[max(0, k-1):], v.CPUReqM()); st != nil && st.Thr > 0 {
+		emuLab.cpuWarned[id] = now
+		emuEv(id, "warn", fmt.Sprintf("its CPU limit (%dm) held it back %d times in the last %d minutes (%.1f s; it used up to %.0fm) - raise the limit in its panel or the CPU tab", v.CPULimM(), st.Thr, st.Mins, st.ThrS, st.Peak))
+	}
+}
+
+// EmuSetCPUReq sets a device's CPU request and limit in millicores (0 = none), as kubectl counts them: the
+// request is its share when the host is busy (nothing is reserved), the limit the most it may use. A running
+// device gets them at once, no restart.
+func (a *App) EmuSetCPUReq(id string, req, lim int) (EmuView, error) {
+	defer emuAs("user")()
+	if req < 0 || lim < 0 || req > 256000 || lim > 256000 {
+		return EmuView{}, errors.New("the request and the limit are 0 (none) to 256000m (256 cores)")
+	}
+	if lim > 0 && lim < 10 {
+		return EmuView{}, errors.New("a limit under 10m would stop it: use at least 10m, or none")
+	}
+	if lim > 0 && req > lim {
+		return EmuView{}, fmt.Errorf("the request (%dm) cannot be more than the limit (%dm)", req, lim)
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	var v *emu.VM
+	if emuLab.f.Lab != nil {
+		v = emuLab.f.Lab.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such device")
+	}
+	v.SetCPUReq(req, lim)
+	say := func(m int, none string) string {
+		if m == 0 {
+			return none
+		}
+		return strconv.Itoa(m) + "m"
+	}
+	emuEv(v.ID, "info", fmt.Sprintf("CPU: request %s, limit %s (applies at once)", say(req, "none"), say(lim, "none")))
+	err := a.emuSave()
+	host, script := emuHostOf(*v), ""
+	if l := a.emuFor(host); l != nil {
+		script = l.CPUScript(*v)
+	}
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	if script != "" {
+		if out, err := a.emuRun(host, script, 30*time.Second); err == nil {
+			emuLab.mu.Lock()
+			for _, line := range strings.Split(out, "\n") {
+				if g := strings.Fields(line); len(g) >= 3 && g[0] == "cpu" {
+					emuCPUEvent(g[1], g[2], strings.Join(g[3:], " "))
+				}
+			}
+			emuLab.mu.Unlock()
+		}
+	}
+	return a.EmuState()
 }

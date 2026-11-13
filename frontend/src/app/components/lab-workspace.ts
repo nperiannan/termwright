@@ -403,11 +403,24 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (!d.personaOk && !d.personaError && d.persona) { <span>{{ tr('Persona') }}</span><span>{{ d.personaInfo ? tr(brief(d.personaInfo)) : tr('not written yet') }}</span> }
               @if (d.personaInfo && !d.personaError) { <span></span><span class="mono xs clamp" [title]="d.personaInfo">{{ d.personaInfo }}</span> }</div></details>
             @if (emu()) { <details class="sec" [open]="isOpen('res')" (toggle)="setOpen('res', $any($event.target).open)"><summary>{{ tr('Resources') }}</summary><div class="kv">
-              <span>vCPU · RAM</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }@if (d.running && d.cpu !== undefined) { · CPU {{ d.cpu!.toFixed(0) }} % }</span>
-
-              <span>{{ tr('CPU share') }}</span><span class="seg2 cpus" [title]="tr('Its share of the host CPU when switches compete: Low 50, Normal 100, High 400')">@for (w of cpuShares; track w.v) { <a [class.on]="(d.cpuWeight || 100) === w.v" (click)="setCPU(d, d.cpuMax || 0, w.v)">{{ tr(w.name) }}</a> }</span>
-
-              <span>{{ tr('CPU limit') }}</span><span><select [ngModel]="d.cpuMax || 0" (ngModelChange)="setCPU(d, +$event, d.cpuWeight || 100)" [title]="tr('At most this many host cores (a cgroup on its host)')">@for (c of cpuLimits(d); track c) { <option [ngValue]="c">{{ c ? c + ' ' + tr(c === 1 ? 'core' : 'cores') : tr('No limit') }}</option> }</select></span></div></details> }
+              <span>vCPU · RAM</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }<small class="rnote">↻ {{ tr('changed in Configure…, used from the next start') }}</small></span></div>
+              <div class="cpuv">
+                <div class="cph"><b>CPU</b><span class="mono">@if (d.running) { {{ mc(nowM(d)) }} {{ tr('now') }} } @else { {{ tr('not running') }} }</span></div>
+                <div class="cbar" [title]="tr('Used now, against its vCPUs ({0}): the tick is the request, the end mark the limit', mc(capM(d)))"><i class="use" [class.hot]="!!limM(d) && nowM(d) >= limM(d) * 0.95" [style.width.%]="cpuPos(d, nowM(d))"></i>
+                  @if (reqM(d)) { <b class="req" [style.left.%]="cpuPos(d, reqM(d))"></b> }@if (limM(d)) { <b class="lim" [style.left.%]="cpuPos(d, limM(d))"></b> }</div>
+                <div class="csc"><span>0</span><span>{{ mc(capM(d)) }} = {{ d.cpus }} vCPU</span></div>
+                <div class="kv">
+                  <span>{{ tr('Request') }}</span><span class="cin"><input [ngModel]="reqM(d) ? mc(reqM(d)) : ''" (change)="setReq(d, $any($event.target).value)" [placeholder]="tr('none')" spellcheck="false" [attr.aria-label]="tr('CPU request')" /><small>{{ tr('its share when the host is busy - nothing is reserved') }}</small></span>
+                  <span>{{ tr('Limit') }}</span><span class="cin"><input [ngModel]="limM(d) ? mc(limM(d)) : ''" (change)="setLim(d, $any($event.target).value)" [placeholder]="tr('none')" spellcheck="false" [attr.aria-label]="tr('CPU limit')" /><small>{{ limM(d) ? tr('the most it may use; above it, it is slowed down') : tr('none: it may use all its vCPUs when the host is free') }}</small></span>
+                  @if (d.cpuStats; as s) {
+                    <span>{{ tr('Last {0} min', s.mins) }}</span><span class="mono">avg {{ mc(s.avg) }} · p95 {{ mc(s.p95) }} · peak {{ mc(s.peak) }}</span>
+                    @if (reqM(d)) { <span>{{ tr('Over request') }}</span><span>{{ tr('{0} % of the time · {1} times', s.over, s.overN) }}</span> }
+                    @if (limM(d)) { <span>{{ tr('Throttled') }}</span><span [class.w]="s.thr > 0">{{ s.thr ? tr('{0} times · {1} s held back', s.thr, s.thrS) : tr('never') }}</span> }
+                  }
+                </div>
+                @if (cpuAdvice(d); as a) { <div class="cadv"><span>⚠ {{ a.text }}</span><button type="button" class="sm" (click)="a.apply()">{{ a.button }}</button></div> }
+                <div class="rnote ok">✓ {{ tr('Request and limit apply at once - no restart.') }}</div>
+              </div></details> }
             @if (emu() && d.computer) { <details class="sec dpc" [open]="isOpen('net', true)" (toggle)="setOpen('net', $any($event.target).open)"><summary>{{ tr('Network') }}</summary><div class="kv">
               @for (p of netPorts(d); track p) { <span>{{ tr('Port {0}', p) }}</span><span class="mono">{{ portSum(d, p) }}@if (d.running && d.net?.addrs?.[p]) { <span class="ok" [title]="tr('Read on its console: {0}', d.net!.addrs![p])"> ✓</span> }</span> }
             @if (d.dataGw || d.net?.gw) { <span>{{ tr('Gateway') }}</span><span class="mono">{{ d.dataGw || d.net?.gw }}</span> }</div></details> }
@@ -444,6 +457,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       <div class="dtabs">
         <a [class.on]="dock() === 'events'" (click)="dock.set('events')">{{ tr('Events') }}@if (problems()) { <span class="cnt">{{ problems() }}</span> }</a>
         @if (emu()) { <a [class.on]="dock() === 'inv'" (click)="dock.set('inv')">{{ tr('Inventory') }}</a> }
+        @if (emu()) { <a [class.on]="dock() === 'cpu'" (click)="dock.set('cpu')" [title]="tr('CPU requests, limits and use of every device, and how often a limit held one back')">CPU@if (cpuHeld()) { <span class="cnt run">{{ cpuHeld() }}</span> }</a> }
         @if (emu()) { <a [class.on]="dock() === 'cap'" (click)="dock.set('cap'); loadCaps()">{{ tr('Captures') }}@if (capsRunning()) { <span class="cnt rec">{{ capsRunning() }}</span> }</a> }
         @if (emu()) { <a [class.on]="dock() === 'traffic'" (click)="dock.set('traffic'); loadTraf()" [title]="tr('Test ports on switch ports and streams of frames between them, with pass or fail')">{{ tr('Traffic') }}@if (traf()?.running) { <span class="cnt run">▶</span> } @else if (traf()?.streams?.length) { <span class="cnt n">{{ traf()!.streams.length }}</span> }</a> }
         @if (emu()) { <a [class.on]="dock() === 'log'" (click)="dock.set('log'); loadLog()" [title]="tr('The emulator’s own log: everything the lab does, at the level you choose')">{{ tr('Log') }}</a> }
@@ -462,7 +476,21 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (dock() === 'clog' && selDev(); as d) { <button type="button" class="sm" (click)="loadClog()" [disabled]="clogBusy()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveConsoleLog(d)">{{ tr('Save…') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
       </div>
-      @if (dock() === 'inv') {
+      @if (dock() === 'cpu') {
+        <div class="inv cpur">
+          <div class="cpus2">@for (h of cpuHosts(); track h.id) { <span class="pill"><b>{{ h.host }}</b> · {{ tr('requests {0} of {1}', mc(h.req), mc(h.cap)) }} · {{ tr('limits {0}', mc(h.lim)) }} · {{ tr('in use {0}', mc(h.use)) }}@if (h.cap && h.req > h.cap) { <span class="w"> · {{ tr('more asked for than the host has') }}</span> }</span> }</div>
+          <app-tv-bar [tv]="cpuView" />
+          <table>
+            <tr><th tvh [tv]="cpuView" key="dev" filter="text">{{ tr('Device') }}</th><th tvh [tv]="cpuView" key="host">{{ tr('Host') }}</th><th tvh [tv]="cpuView" key="vcpu" filter="none">vCPU</th><th tvh [tv]="cpuView" key="req" filter="none">{{ tr('Request') }}</th><th tvh [tv]="cpuView" key="lim" filter="none">{{ tr('Limit') }}</th><th tvh [tv]="cpuView" key="now" filter="none">{{ tr('Now') }}</th><th tvh [tv]="cpuView" key="avg" filter="none">{{ tr('Average') }}</th><th tvh [tv]="cpuView" key="p95" filter="none">p95</th><th tvh [tv]="cpuView" key="peak" filter="none">{{ tr('Peak') }}</th><th tvh [tv]="cpuView" key="over" filter="none">{{ tr('Over request') }}</th><th tvh [tv]="cpuView" key="thr" filter="none">{{ tr('Throttled') }}</th><th tvh [tv]="cpuView" key="adv">{{ tr('Advice') }}</th></tr>
+            @for (r of cpuView.rows(); track r.d.id) {
+              <tr (click)="sel.set(r.d.id)" [class.on]="sel() === r.d.id"><td><b>{{ r.d.hostname }}</b></td><td>{{ r.host }}</td><td>{{ r.d.cpus }}</td><td class="mono">{{ reqM(r.d) ? mc(reqM(r.d)) : '-' }}</td><td class="mono">{{ limM(r.d) ? mc(limM(r.d)) : tr('none') }}</td>
+                <td class="mono">{{ r.d.running ? mc(nowM(r.d)) : '-' }}</td><td class="mono">{{ r.d.cpuStats ? mc(r.d.cpuStats.avg) : '-' }}</td><td class="mono">{{ r.d.cpuStats ? mc(r.d.cpuStats.p95) : '-' }}</td><td class="mono">{{ r.d.cpuStats ? mc(r.d.cpuStats.peak) : '-' }}</td>
+                <td>{{ r.d.cpuStats && reqM(r.d) ? r.d.cpuStats.over + ' % · ' + r.d.cpuStats.overN + '×' : '-' }}</td><td [class.w]="!!r.d.cpuStats?.thr">{{ r.d.cpuStats?.thr ? tr('{0} times · {1} s', r.d.cpuStats.thr, r.d.cpuStats.thrS) : '-' }}</td>
+                <td>@if (cpuAdvice(r.d); as a) { <span class="w">{{ a.short }}</span> <a class="lnk" (click)="a.apply(); $event.stopPropagation()">{{ a.button }}</a> } @else { <span class="muted">{{ tr('fine') }}</span> }</td></tr>
+            } @empty { <tr><td colspan="12" class="muted">{{ devs().length ? tr('No device matches') : tr('No devices yet') }}</td></tr> }
+          </table>
+        </div>
+      } @else if (dock() === 'inv') {
         <div class="inv"><app-tv-bar [tv]="invView" /><table>
           <tr><th tvh [tv]="invView" key="switch" filter="text">{{ tr('Switch') }}</th><th tvh [tv]="invView" key="state">{{ tr('State') }}</th><th tvh [tv]="invView" key="console" filter="text">{{ tr('Console') }}</th><th tvh [tv]="invView" key="mgmt" filter="text">{{ tr('Management') }}</th><th tvh [tv]="invView" key="cpu" filter="none">CPU</th><th tvh [tv]="invView" key="mem" filter="none">{{ tr('Memory') }}</th></tr>
           @for (g of inventory(); track g.host) {
@@ -737,6 +765,14 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .ntip { position: absolute; z-index: 9; min-width: 250px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35); pointer-events: none; font-size: 12px;
       .th { display: flex; align-items: center; gap: 16px; margin-bottom: 6px; white-space: nowrap; b { flex: 1; overflow: hidden; text-overflow: ellipsis; } }
       .tst { position: static; font-size: 11.5px; margin: 0; } .tst.on { color: var(--success, #1fa45a); } table { border-collapse: collapse; } td { padding: 2px 10px 2px 0; white-space: nowrap; } td:first-child { color: var(--muted); } }
+    .cpuv { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); .cph { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; margin-bottom: 5px; }
+      .cbar { position: relative; height: 8px; border-radius: 5px; background: var(--surface-2); overflow: visible; i.use { display: block; height: 100%; border-radius: 5px; background: var(--accent); transition: width .6s; } i.use.hot { background: var(--warning, #e39b17); }
+        b { position: absolute; top: -3px; bottom: -3px; width: 2px; border-radius: 1px; } b.req { background: var(--text); opacity: .65; } b.lim { background: var(--danger); } }
+      .csc { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin: 3px 0 6px; }
+      .cin { display: flex; flex-direction: column; gap: 2px; input { width: 92px; box-sizing: border-box; font: 12px var(--mono, monospace); padding: 3px 7px; } small { color: var(--muted); font-size: 11px; line-height: 1.35; } }
+      .cadv { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px; padding: 7px 9px; border-radius: 8px; background: color-mix(in srgb, var(--warning, #e39b17) 14%, transparent); font-size: 11.5px; button { flex: none; } } }
+    .rnote { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; } .rnote.ok { color: var(--success, #1fa45a); margin-top: 8px; }
+    .cpur .cpus2 { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 0 2px; .pill { font-size: 11.5px; } } .cpur .lnk { margin-left: 10px; cursor: pointer; color: var(--accent); }
     .inv { overflow: auto; padding: 0 14px 10px; table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); font-size: 12px; white-space: nowrap; }
       th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--surface); z-index: 1; }
       tr.h { cursor: pointer; } tr.h td { background: var(--surface-2); font-size: 12.5px; padding-top: 7px; padding-bottom: 7px; border-top: 6px solid var(--surface); } tr.h:hover td { background: color-mix(in srgb, var(--accent) 8%, var(--surface-2)); }
@@ -875,7 +911,7 @@ export class LabWorkspace implements OnDestroy {
   protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink; cloud?: string; tp?: EmuTester } | null>(null);
   protected selCloud = signal('');
   protected imgPick = signal(''); // Images opens on this image (from a switch's Configure)
-  protected dock = signal<'events' | 'console' | 'inv' | 'clog' | 'log' | 'cap' | 'traffic'>('events');
+  protected dock = signal<'events' | 'console' | 'inv' | 'clog' | 'log' | 'cap' | 'traffic' | 'cpu'>('events');
   protected caps = signal<EmuCapture[]>([]);
   protected capSel = signal('');
   protected capStarted = signal('');
@@ -1118,11 +1154,11 @@ export class LabWorkspace implements OnDestroy {
     const v = this.st(), u = v?.usage, devs = this.devs();
     if (this.multi()) return this.hostUse().map(h => {
       const ds = devs.filter(d => this.hostOfDev(d) === h.host), used = h.memTotal - h.memFree;
-      return { id: h.host, host: h.name, kvm: this.mgRows().find(r => r.host === h.host)?.kvm ?? '', addr: (h.addr || '').split('/')[0], mgmt: this.mgName(h), devs: ds, running: ds.filter(d => d.running).length,
+      return { id: h.host, cap: h.cpus, host: h.name, kvm: this.mgRows().find(r => r.host === h.host)?.kvm ?? '', addr: (h.addr || '').split('/')[0], mgmt: this.mgName(h), devs: ds, running: ds.filter(d => d.running).length,
         cpuPct: this.pct(h.cores, h.cpus), cpuText: h.cores.toFixed(1) + ' / ' + (h.cpus || '?') + ' ' + tr('cores'), memPct: this.pct(used, h.memTotal), memText: this.gb(used) + ' / ' + this.gb(h.memTotal) };
     });
     const used = (u?.hostMemTotal ?? 0) - (u?.hostMemFree ?? 0);
-    return [{ id: v?.host ?? '', host: this.hostName(), kvm: v?.kvm ? 'KVM' : tr('no KVM'), addr: v?.hostInfo?.lanAddr?.split('/')[0] ?? '', mgmt: this.mgName({ mgmt: v?.mgmt ?? '', mgmtNet: v?.mgmtNet ?? '', lanFixed: v?.lanFixed }), devs, running: devs.filter(d => d.running).length,
+    return [{ id: v?.host ?? '', cap: u?.hostCpus ?? 0, host: this.hostName(), kvm: v?.kvm ? 'KVM' : tr('no KVM'), addr: v?.hostInfo?.lanAddr?.split('/')[0] ?? '', mgmt: this.mgName({ mgmt: v?.mgmt ?? '', mgmtNet: v?.mgmtNet ?? '', lanFixed: v?.lanFixed }), devs, running: devs.filter(d => d.running).length,
       cpuPct: this.pct(u?.cores ?? 0, u?.hostCpus ?? 0), cpuText: (u?.cores ?? 0).toFixed(1) + ' / ' + (u?.hostCpus ?? '?') + ' ' + tr('cores'),
       memPct: this.pct(used, u?.hostMemTotal ?? 0), memText: this.gb(used) + ' / ' + this.gb(u?.hostMemTotal) }];
   });
@@ -1574,8 +1610,61 @@ export class LabWorkspace implements OnDestroy {
     return m;
   }
   pcCapture(d: LabDevice, p: number) { this.pcWin.set(''); void this.startCap({ a: d.id, aPort: String(p), b: '', bPort: '' }); this.dock.set('cap'); }
-  readonly cpuShares = [{ v: 50, name: 'Low' }, { v: 100, name: 'Normal' }, { v: 400, name: 'High' }];
-  cpuLimits(d: LabDevice) { const l = [0, 0.25, 0.5, 1, 2, 4, 8, 16].filter(c => c <= Math.max(d.cpus || 1, 1)); if (d.cpuMax && !l.includes(d.cpuMax)) l.push(d.cpuMax); return l.sort((a, b) => a - b); }
+  // CPU as kubectl counts it: millicores (1000m = one host core). The request is its share when the host is busy
+  // (a cgroup weight: nothing is reserved), the limit the most it may use (cgroup cpu.max); both apply at once.
+  reqM(d: LabDevice) { return d.cpuReq ?? 0; }
+  limM(d: LabDevice) { return d.cpuLim ?? (d.cpuMax ? Math.round(d.cpuMax * 1000) : 0); }
+  nowM(d: LabDevice) { return d.running ? Math.round((d.cores ?? 0) * 1000) : 0; }
+  capM(d: LabDevice) { return Math.max(1, d.cpus || 1) * 1000; }
+  cpuPos(d: LabDevice, m: number) { return Math.min(100, (100 * m) / this.capM(d)); }
+  mc(m: number) { return Math.round(m) + 'm'; }
+  /** "250m", "250", "0.5", "1.5 cores" → millicores; "" or "none" → 0; null when it cannot be read. */
+  parseM(t: string): number | null {
+    const s = (t ?? '').trim().toLowerCase();
+    if (!s || s === 'none' || s === '-') return 0;
+    const m = /^(\d+(?:\.\d+)?)\s*(m|cores?|c)?$/.exec(s);
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    return m[2] === 'm' || (!m[2] && n >= 10) ? Math.round(n) : Math.round(n * 1000);
+  }
+  async setReq(d: LabDevice, t: string) { const m = this.parseM(t); if (m === null) { this.ui.error(tr('Write millicores (250m) or cores (0.5); empty for none')); return; } await this.setCPUReq(d, m, this.limM(d)); }
+  async setLim(d: LabDevice, t: string) { const m = this.parseM(t); if (m === null) { this.ui.error(tr('Write millicores (500m) or cores (1.5); empty for no limit')); return; } await this.setCPUReq(d, this.reqM(d), m); }
+  async setCPUReq(d: LabDevice, req: number, lim: number) {
+    if (lim && req > lim) { this.ui.error(tr('The request ({0}) cannot be more than the limit ({1})', this.mc(req), this.mc(lim))); return; }
+    try { await this.backend.emuSetCPUReq(d.id, req, lim); await this.lab.refresh(); } catch (e) { this.ui.error(e); }
+  }
+  /** What to change when a device is held back by its limit, or uses more than it asks for. */
+  cpuAdvice(d: LabDevice): { text: string; short: string; button: string; apply: () => void } | null {
+    const s = d.cpuStats, lim = this.limM(d), req = this.reqM(d);
+    if (!s) return null;
+    const up = (m: number) => Math.min(this.capM(d), Math.ceil(m / 100) * 100);
+    if (lim && (s.thr >= 10 || s.thrS >= 1)) {
+      const to = up(Math.max(lim * 1.5, s.p95 * 1.25));
+      if (to > lim) return { text: tr('Held back by its limit {0} times in {1} min: raise the limit to {2}.', s.thr, s.mins, this.mc(to)), short: tr('held back {0} times', s.thr), button: tr('Limit {0}', this.mc(to)), apply: () => void this.setCPUReq(d, req, to) };
+    }
+    if (req && s.avg > req * 1.5) {
+      const to = up(s.p95);
+      return { text: tr('Uses {0} on average but asks for {1}: raise the request to {2} so it keeps that share when the host is busy.', this.mc(s.avg), this.mc(req), this.mc(to)), short: tr('asks for too little'), button: tr('Request {0}', this.mc(to)), apply: () => void this.setCPUReq(d, to, lim) };
+    }
+    return null;
+  }
+  /** How many devices a limit held back (the CPU tab's badge). */
+  protected cpuHeld = computed(() => this.devs().filter(d => !!this.cpuAdvice(d) && !!d.cpuStats?.thr).length);
+  protected cpuHosts = computed(() => this.inventory().map(g => ({ id: g.id, host: g.host, cap: (g.cap ?? 0) * 1000, req: g.devs.reduce((a, d) => a + this.reqM(d), 0), lim: g.devs.reduce((a, d) => a + (this.limM(d) || this.capM(d)), 0), use: g.devs.reduce((a, d) => a + this.nowM(d), 0) })));
+  protected cpuView = new TableView<{ host: string; d: LabDevice }>(() => this.inventory().flatMap(g => g.devs.map(d => ({ host: g.host, d }))), [
+    { key: 'dev', label: 'Device', get: r => r.d.hostname },
+    { key: 'host', label: 'Host', get: r => r.host },
+    { key: 'vcpu', label: 'vCPU', get: r => r.d.cpus, kind: 'num' },
+    { key: 'req', label: 'Request', get: r => this.reqM(r.d) || null, kind: 'num' },
+    { key: 'lim', label: 'Limit', get: r => this.limM(r.d) || null, kind: 'num' },
+    { key: 'now', label: 'Now', get: r => (r.d.running ? this.nowM(r.d) : null), kind: 'num' },
+    { key: 'avg', label: 'Average', get: r => r.d.cpuStats?.avg ?? null, kind: 'num' },
+    { key: 'p95', label: 'p95', get: r => r.d.cpuStats?.p95 ?? null, kind: 'num' },
+    { key: 'peak', label: 'Peak', get: r => r.d.cpuStats?.peak ?? null, kind: 'num' },
+    { key: 'over', label: 'Over request', get: r => (this.reqM(r.d) ? r.d.cpuStats?.over ?? null : null), kind: 'num' },
+    { key: 'thr', label: 'Throttled', get: r => r.d.cpuStats?.thr ?? null, kind: 'num' },
+    { key: 'adv', label: 'Advice', get: r => this.cpuAdvice(r.d)?.short ?? tr('fine') },
+  ]);
   async setCPU(d: LabDevice, max: number, w: number) { try { await this.backend.emuSetCPU(d.id, max, w); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
   async addComputer() { try { await this.backend.emuAddComputer('', false); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
   iconState(d: LabDevice): 'run' | 'boot' | 'off' | 'idle' { const s = this.stateOf(d); return s === 'on' ? 'run' : s === 'boot' ? 'boot' : 'off'; }

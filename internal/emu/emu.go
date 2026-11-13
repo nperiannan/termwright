@@ -236,6 +236,8 @@ type VM struct {
 	DNS       string         `json:"dns,omitempty"`       // its DNS server (computers)
 	CPUMax    float64        `json:"cpuMax,omitempty"`    // at most this many host cores (0.5 = half of one; 0 = no limit), by a cgroup on its host
 	CPUWeight int            `json:"cpuWeight,omitempty"` // its share of the host's CPU when they compete (cgroup cpu.weight 1-10000; 0 = 100, as the others)
+	CPUReq    int            `json:"cpuReq,omitempty"`    // its CPU request in millicores (kubectl's 250m): its share when the host is busy (cpu.weight = request/10); nothing is reserved
+	CPULim    int            `json:"cpuLim,omitempty"`    // its CPU limit in millicores (0 = none): the most it may use (cpu.max)
 	Addrs     map[int]string `json:"addrs,omitempty"`     // data-port addresses typed on its console at each start (port number → address/bits, or "dhcp"), when its image has port address commands (Linux computers)
 	X         int            `json:"x"`
 	Y         int            `json:"y"`
@@ -1053,7 +1055,7 @@ func (l *Lab) ResetScript(ids []string) string {
 func (l *Lab) StatusScript(tails []string, ready ...map[string]string) string {
 	dir := Q(l.VMDir())
 	s := "cd " + dir + " 2>/dev/null || exit 0\necho \"clk $(getconf CLK_TCK 2>/dev/null || echo 100)\"\nawk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print \"mem \" int(t/1024) \" \" int(a/1024)}' /proc/meminfo\necho \"cores $(nproc) $(cut -d' ' -f1 /proc/loadavg)\"\nfor p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
-		" if kill -0 \"$pid\" 2>/dev/null && grep -q qemu /proc/$pid/comm 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null) $(awk '/^VmRSS:/{print $2}' /proc/$pid/status 2>/dev/null)\"; else echo \"down $n\"; fi; done\n"
+		" if kill -0 \"$pid\" 2>/dev/null && grep -q qemu /proc/$pid/comm 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null) $(awk '/^VmRSS:/{print $2}' /proc/$pid/status 2>/dev/null)\"; c=/sys/fs/cgroup/termwright/$n/cpu.stat; [ -r \"$c\" ] && echo \"thr $n $(awk '/^nr_throttled/{a=$2} /^throttled_usec/{b=$2} END{print a+0, b+0}' \"$c\")\"; else echo \"down $n\"; fi; done\n"
 	if l.Mgmt == "nat" { // the DHCP leases of the NAT network (libvirt), then the host's neighbours
 		br := Q(l.NatBridge())
 		s += fmt.Sprintf("f=/var/lib/libvirt/dnsmasq/%s.status; { cat $f 2>/dev/null || sudo -n cat $f 2>/dev/null; } | awk -F'\"' '/\"ip-address\"/{ip=$4} /\"mac-address\"/{mac=$4} /}/{if(ip!=\"\"&&mac!=\"\")print \"lease\",mac,ip; ip=\"\";mac=\"\"}'\n", l.NatBridge())
@@ -1075,17 +1077,18 @@ func (l *Lab) StatusScript(tails []string, ready ...map[string]string) string {
 
 // Status is what StatusScript found.
 type Status struct {
-	Clk      float64            // CPU ticks per second
-	MemTotal int64              // the host's memory, MB
-	MemFree  int64              // available now, MB
-	Cores    int                // the host's CPU cores
-	Load     float64            // its load average
-	Up       map[string]float64 // running VMs and the CPU ticks they used
-	RSS      map[string]int64   // their memory in use (resident), MB
-	Log      map[string]string  // console log ends
-	Ready    map[string]bool    // the console log shows the image's ready text
-	Leases   map[string]string  // nat: MAC address → IPv4 address on the NAT network
-	NatNet   string             // nat: the host's address on it (192.168.122.1/24)
+	Clk      float64               // CPU ticks per second
+	MemTotal int64                 // the host's memory, MB
+	MemFree  int64                 // available now, MB
+	Cores    int                   // the host's CPU cores
+	Load     float64               // its load average
+	Up       map[string]float64    // running VMs and the CPU ticks they used
+	Thr      map[string][2]float64 // its cgroup's throttling so far: times held back by its CPU limit, and microseconds
+	RSS      map[string]int64      // their memory in use (resident), MB
+	Log      map[string]string     // console log ends
+	Ready    map[string]bool       // the console log shows the image's ready text
+	Leases   map[string]string     // nat: MAC address → IPv4 address on the NAT network
+	NatNet   string                // nat: the host's address on it (192.168.122.1/24)
 }
 
 // ParseStatus reads StatusScript's output.
@@ -1094,6 +1097,13 @@ func ParseStatus(out string, b64 func(string) ([]byte, error)) Status {
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Fields(line)
 		switch {
+		case len(f) == 4 && f[0] == "thr":
+			n, _ := strconv.ParseFloat(f[2], 64)
+			us, _ := strconv.ParseFloat(f[3], 64)
+			if st.Thr == nil {
+				st.Thr = map[string][2]float64{}
+			}
+			st.Thr[f[1]] = [2]float64{n, us}
 		case len(f) == 3 && f[0] == "mem":
 			st.MemTotal, _ = strconv.ParseInt(f[1], 10, 64)
 			st.MemFree, _ = strconv.ParseInt(f[2], 10, 64)
@@ -1591,6 +1601,32 @@ elif [ %[4]s = max ] && [ %[5]d -le 100 ]; then renice -n %[6]d -p $p >/dev/null
 else echo "cpu %[2]s fail a CPU limit needs cgroup v2 and sudo without a password on the host"
 fi
 `, Q(l.VMDir()), v.ID, g, quota, w, nice)
+}
+
+// CPUReqM is its CPU request in millicores (from the older share when it has none: weight 50 = 500m).
+func (v VM) CPUReqM() int {
+	if v.CPUReq > 0 {
+		return v.CPUReq
+	}
+	return v.CPUWeight * 10
+}
+
+// CPULimM is its CPU limit in millicores (0 = none).
+func (v VM) CPULimM() int {
+	if v.CPULim > 0 {
+		return v.CPULim
+	}
+	return int(v.CPUMax*1000 + 0.5)
+}
+
+// SetCPUReq sets its request and limit (millicores, 0 = none) and the cgroup values they give.
+func (v *VM) SetCPUReq(req, lim int) {
+	v.CPUReq, v.CPULim = req, lim
+	v.CPUMax = float64(lim) / 1000
+	v.CPUWeight = 0
+	if req > 0 {
+		v.CPUWeight = min(10000, max(1, (req+5)/10))
+	}
 }
 
 // HasNet says whether a computer has data-port addresses, gateways or a DNS server to type.

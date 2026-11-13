@@ -170,6 +170,8 @@ export class Backend {
   emuSetComputerNet(id: string, n: EmuCompNet) { return this.call<LabView>('EmuSetComputerNet', id, n); }
   emuComputerRun(id: string, app: string, target: string) { return this.call<string>('EmuComputerRun', id, app, target); }
   emuSetCPU(id: string, maxCores: number, weight: number) { return this.call<LabView>('EmuSetCPU', id, maxCores, weight); }
+  /** A device's CPU request and limit in millicores (0 = none); they apply at once. */
+  emuSetCPUReq(id: string, requestM: number, limitM: number) { return this.call<LabView>('EmuSetCPUReq', id, requestM, limitM); }
   emuAddComputer(host: string, start: boolean) { return this.call<LabView>('EmuAddComputer', host, start); }
   emuSetPortAddr(id: string, port: number, addr: string) { return this.call<LabView>('EmuSetPortAddr', id, port, addr); }
   emuOpenTopologyOn(name: string, start: boolean, hosts: Record<string, string>) { return this.call<LabView>('EmuOpenTopologyOn', name, start, hosts); }
