@@ -499,7 +499,7 @@ type EmuGroup struct {
 type EmuRequest struct {
 	Host    string     `json:"host"` // session path
 	Groups  []EmuGroup `json:"groups"`
-	Cabling string     `json:"cabling"` // leaf-spine, full-mesh, star, line (chain), ring, none
+	Cabling string     `json:"cabling"`           // leaf-spine, full-mesh, star, line (chain), ring, none
 	PerPair int        `json:"perPair,omitempty"` // cables between two switches (2+ = a LAG)
 	LagMode string     `json:"lagMode,omitempty"` // lacp, static (with PerPair 2+)
 	Mgmt    string     `json:"mgmt"`              // auto, forward, bridge

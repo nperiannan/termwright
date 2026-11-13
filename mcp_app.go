@@ -112,7 +112,7 @@ type mcpEndpoint struct {
 
 // mcpApply starts or stops the server to match the settings.
 func (a *App) mcpApply() {
-	on := a.cfg.Get().AI.MCP
+	on := a.cfg.Get().AI.MCP || a.cfg.Get().AI.API
 	mcpMu.Lock()
 	defer mcpMu.Unlock()
 	if on == (mcpCur != nil) {
@@ -133,6 +133,7 @@ func (a *App) mcpApply() {
 	s := &mcpServer{token: hex.EncodeToString(b), url: "http://" + ln.Addr().String() + "/mcp"}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) { a.mcpHTTP(s, w, r) })
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { a.apiHTTP(s, w, r) })
 	s.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go s.srv.Serve(ln)
 	mcpCur = s
@@ -178,6 +179,10 @@ func (a *App) mcpHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if subtle.ConstantTimeCompare([]byte(tok), []byte(s.token)) != 1 {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !a.cfg.Get().AI.MCP {
+		http.Error(w, "the Claude connector is off (Settings → AI Assistant)", http.StatusForbidden)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -544,6 +549,8 @@ type MCPInfo struct {
 	CodeCmd    string `json:"codeCmd"`    // the claude mcp add command
 	DesktopCfg string `json:"desktopCfg"` // Claude Desktop's settings file
 	InDesktop  bool   `json:"inDesktop"`
+	APIURL     string `json:"apiUrl,omitempty"`  // the local API, when it runs
+	KeyFile    string `json:"keyFile,omitempty"` // where its key is (mcp.json: url and token)
 }
 
 func claudeDesktopConfig() string {
@@ -564,8 +571,15 @@ func (a *App) MCPState() MCPInfo {
 	exe, _ := os.Executable()
 	mcpMu.Lock()
 	running := mcpCur != nil
+	api := ""
+	if running {
+		api = strings.TrimSuffix(mcpCur.url, "/mcp") + "/api/v1/lab"
+	}
 	mcpMu.Unlock()
-	info := MCPInfo{Running: running, Command: exe, DesktopCfg: claudeDesktopConfig()}
+	info := MCPInfo{Running: running, Command: exe, DesktopCfg: claudeDesktopConfig(), APIURL: api}
+	if a.cfg != nil {
+		info.KeyFile = mcpFile(a.cfg.DataDir())
+	}
 	info.CodeCmd = "claude mcp add --scope user termwright -- " + shellQuoteArg(exe) + " mcp"
 	if b, err := os.ReadFile(info.DesktopCfg); err == nil {
 		var c struct {
@@ -576,6 +590,16 @@ func (a *App) MCPState() MCPInfo {
 		}
 	}
 	return info
+}
+
+// APIKey is the local API's key, for Settings to copy to the clipboard (it is never shown).
+func (a *App) APIKey() string {
+	mcpMu.Lock()
+	defer mcpMu.Unlock()
+	if mcpCur == nil {
+		return ""
+	}
+	return mcpCur.token
 }
 
 func shellQuoteArg(s string) string {

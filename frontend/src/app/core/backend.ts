@@ -289,6 +289,7 @@ export class Backend {
   textReply(id: string, text: string, total: number) { return this.call<void>('TextReply', id, text, total); }
   claudeCodeFind(path: string) { return this.call<string>('ClaudeCodeFind', path); }
   mcpState() { return this.call<MCPInfo>('MCPState'); }
+  apiKey() { return this.call<string>('APIKey'); }
   mcpAddToDesktop() { return this.call<void>('MCPAddToDesktop'); }
   mcpAddToClaudeCode() { return this.call<string>('MCPAddToClaudeCode'); }
   aiState() { return this.call<AIStatus>('AIState'); }

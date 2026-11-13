@@ -63,16 +63,28 @@ var mcpLabTools = []mcpTool{
 		}, "switch", "host", "how")},
 	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss and latency). Changes and starts are asked in Termwright first.",
 		mcpSchema(map[string]any{
-			"action":      map[string]any{"type": "string", "enum": []string{"list", "add_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report"}},
+			"action":      map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report"}},
 			"switch":      map[string]any{"type": "string", "description": "add_port: the switch"},
 			"port":        map[string]any{"type": "string", "description": "add_port: its free port; remove_port: the test port's name"},
 			"ip":          map[string]any{"type": "string", "description": "add_port: the test port's address with prefix (10.10.0.1/24)"},
 			"gateway":     map[string]any{"type": "string", "description": "add_port: for streams to another network"},
+			"ip6":         map[string]any{"type": "string", "description": "add_port, set_port: an IPv6 address with prefix (fd00::1/64)"},
+			"groups":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "add_port, set_port: multicast groups it joins (239.1.1.1, ff0e::1)"},
+			"dscp":        map[string]any{"type": "integer", "description": "add_stream: IP DSCP 0-63"},
+			"pcp":         map[string]any{"type": "integer", "description": "add_stream: 802.1p priority 0-7 (with vlan)"},
+			"size_mode":   map[string]any{"type": "string", "enum": []string{"fixed", "inc", "random", "imix"}, "description": "add_stream: frame sizes (inc/random: size to size_max)"},
+			"size_max":    map[string]any{"type": "integer"},
+			"burst":       map[string]any{"type": "integer", "description": "add_stream: frames sent back to back (the rate stays the average)"},
+			"mods":        map[string]any{"type": "array", "description": "add_stream: fields that change per frame: {field: srcMac|dstMac|srcIp|dstIp|vlan|sport|dport, mode: inc|random, count, step}", "items": map[string]any{"type": "object"}},
+			"max_jitter":  map[string]any{"type": "number", "description": "ms for a pass (0 = not checked)"},
+			"dst_mac":     map[string]any{"type": "string"},
+			"src_ip":      map[string]any{"type": "string"},
+			"dport":       map[string]any{"type": "integer"},
 			"name":        map[string]any{"type": "string", "description": "add_stream: its name; remove_stream: the stream"},
 			"from":        map[string]any{"type": "string", "description": "add_stream: test port name"},
 			"to":          map[string]any{"type": "string", "description": "add_stream: test port name; empty = every other test port (broadcast) or dst_ip"},
 			"kind":        map[string]any{"type": "string", "enum": []string{"udp", "icmp", "tcp", "arp", "raw"}},
-			"dst_ip":      map[string]any{"type": "string", "description": "add_stream: an address that is not a test port (icmp: its replies are counted)"},
+			"dst_ip":      map[string]any{"type": "string", "description": "add_stream: an address that is not a test port (icmp: its replies are counted), or a multicast group (received by the test ports that joined it)"},
 			"vlan":        map[string]any{"type": "integer"},
 			"size":        map[string]any{"type": "integer", "description": "frame bytes (60-9000, default 128)"},
 			"pps":         map[string]any{"type": "integer", "description": "packets per second (default 100, at most 100000)"},
@@ -153,7 +165,12 @@ type emuAsker func(title, msg string, danger, light bool) error
 
 // emuMCPWith runs a lab_ tool; asker is called before each change and stops it with an error.
 func (a *App) emuMCPWith(name string, args map[string]any, asker emuAsker) (string, error) {
-	defer emuAs("ai")()
+	return a.emuMCPRun("ai", name, args, asker)
+}
+
+// emuMCPRun runs a lab_ tool for who (ai, api: what the Events show as the trigger).
+func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (string, error) {
+	defer emuAs(who)()
 	v, err := a.EmuState()
 	if err != nil {
 		return "", err
@@ -449,7 +466,44 @@ func (a *App) emuMCPWith(name string, args map[string]any, asker emuAsker) (stri
 				return "", err
 			}
 			t := r.Testers[len(r.Testers)-1]
+			if ip6, gs := argStr(args, "ip6"), argStrs(args, "groups"); ip6 != "" || len(gs) > 0 {
+				t.IP6, t.Groups = ip6, gs
+				if r, err = a.EmuTesterSet(t); err != nil {
+					return "", err
+				}
+			}
 			return fmt.Sprintf("%s on %s %s, MAC %s, IP %s. %s", t.Name, d.Hostname, argStr(args, "port"), t.MAC, orStr(t.IP, "none"), r.Note), nil
+		case "set_port":
+			id := tester(argStr(args, "port"))
+			var t *emu.Tester
+			for i := range tv.Testers {
+				if tv.Testers[i].ID == id {
+					t = &tv.Testers[i]
+				}
+			}
+			if t == nil {
+				return "", errors.New("no test port " + argStr(args, "port"))
+			}
+			if err := light("Claude wants to change a test port", "Claude (through the Termwright connector) asks to change "+t.Name+"."); err != nil {
+				return "", err
+			}
+			if _, ok := args["ip"]; ok {
+				t.IP = argStr(args, "ip")
+			}
+			if _, ok := args["ip6"]; ok {
+				t.IP6 = argStr(args, "ip6")
+			}
+			if _, ok := args["gateway"]; ok {
+				t.GW = argStr(args, "gateway")
+			}
+			if _, ok := args["vlan"]; ok {
+				t.VLAN = argInt(args, "vlan", 0, 4094)
+			}
+			if _, ok := args["groups"]; ok {
+				t.Groups = argStrs(args, "groups")
+			}
+			_, err := a.EmuTesterSet(*t)
+			return "Changed " + t.Name + ".", err
 		case "remove_port":
 			id := tester(argStr(args, "port"))
 			if id == "" {
@@ -472,6 +526,18 @@ func (a *App) emuMCPWith(name string, args map[string]any, asker emuAsker) (stri
 			}
 			if f, ok := args["max_latency"].(float64); ok {
 				st.MaxLatency = f
+			}
+			if f, ok := args["max_jitter"].(float64); ok {
+				st.MaxJitter = f
+			}
+			st.DSCP, st.SizeMode, st.SizeMax, st.Burst = argInt(args, "dscp", 0, 63), strings.TrimPrefix(argStr(args, "size_mode"), "fixed"), argInt(args, "size_max", 0, 9000), argInt(args, "burst", 0, 10000)
+			st.DstMAC, st.SrcIP, st.DPort, st.Prio = argStr(args, "dst_mac"), argStr(args, "src_ip"), argInt(args, "dport", 0, 65535), argInt(args, "pcp", 0, 7)
+			if ms, ok := args["mods"].([]any); ok {
+				for _, x := range ms {
+					if m, ok := x.(map[string]any); ok {
+						st.Mods = append(st.Mods, emu.Mod{Field: argStr(m, "field"), Mode: orStr(argStr(m, "mode"), "inc"), Count: argInt(m, "count", 1, 1<<24), Step: argInt(m, "step", 1, 1<<20)})
+					}
+				}
 			}
 			if err := light("Claude wants to add a stream", fmt.Sprintf("Claude (through the Termwright connector) asks to add the stream %s: %s from %s to %s.", orStr(st.Name, "(no name)"), orStr(st.Kind, "udp"), argStr(args, "from"), orStr(argStr(args, "to"), orStr(st.DstIP, "every other test port")))); err != nil {
 				return "", err
@@ -509,7 +575,7 @@ func (a *App) emuMCPWith(name string, args map[string]any, asker emuAsker) (stri
 		case "report":
 			return a.EmuTrafficReportText()
 		}
-		return "", errors.New("action is list, add_port, remove_port, add_stream, remove_stream, start, stop or report")
+		return "", errors.New("action is list, add_port, set_port, remove_port, add_stream, remove_stream, start, stop or report")
 	case "lab_capture":
 		act := argStr(args, "action")
 		if act == "list" {

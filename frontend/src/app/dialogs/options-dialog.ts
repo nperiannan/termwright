@@ -568,6 +568,19 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   }
                 </div>
                 <div class="gf">{{ mcpMsg() || 'Every command Claude wants to type is shown in Termwright first. The connector listens on this computer only, with a random key.' }}</div>
+
+                <div class="gt">Local API and command line</div>
+                <div class="list">
+                  <div class="li"><span class="l">Emulated lab for scripts<small>A REST API on this computer and <code>termwright lab …</code>: switches, cables, consoles, traffic tests, captures - without asking first</small></span>
+                    @if (s.ai?.api) { <span class="pill" [class.ok]="mcp()?.running"><i></i>{{ mcp()?.running ? 'Running' : 'Starts on Save' }}</span> }
+                    <span class="sw"><input type="checkbox" name="api" [ngModel]="!!s.ai?.api" (ngModelChange)="setAI({ api: $event })" aria-label="Local API" /></span></div>
+                  @if (s.ai?.api && mcp()?.apiUrl) {
+                    <div class="mrow li"><span>Address</span><code>{{ mcp()?.apiUrl }}</code><button type="button" (click)="copyText(mcp()?.apiUrl ?? '')">Copy</button></div>
+                    <div class="mrow li"><span>Key</span><code>Authorization: Bearer ••••••••</code><button type="button" (click)="copyApiKey()">Copy Key</button></div>
+                    <div class="mrow li"><span>Command line</span><code>{{ mcp()?.command }} lab help</code><button type="button" (click)="copyText((mcp()?.command ?? '') + ' lab help')">Copy</button></div>
+                  }
+                </div>
+                <div class="gf">For test frameworks and CI on this computer: a new random key each time Termwright starts, kept with the address in {{ mcp()?.keyFile || 'mcp.json in the data folder' }}. Changes made through it are not asked first and show as API in the Events.</div>
               </div>
             }
             @case ('cards') {
@@ -1030,6 +1043,7 @@ export class OptionsDialog implements OnInit {
     return { cls: '', text: tr('Not tested') };
   }
   readonly mcpMsg = signal('');
+  async copyApiKey() { try { const k = await this.backend.apiKey(); if (k) { await navigator.clipboard.writeText(k); this.ui.toast('Key copied', 'success'); } } catch (e) { this.ui.error(e); } }
   async mcpDesktop() {
     try { await this.backend.mcpAddToDesktop(); this.mcpMsg.set(tr('Added to Claude Desktop - restart Claude Desktop, then look for Termwright under its connectors.')); this.loadAI(); }
     catch (e) { this.mcpMsg.set(errText(e)); }

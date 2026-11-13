@@ -30,6 +30,12 @@ type EmuStreamResult struct {
 	Loss     float64 `json:"loss"`     // %
 	LatAvg   float64 `json:"latAvg"`   // ms (-1 = not measured: the ends on different hosts)
 	LatMax   float64 `json:"latMax"`
+	LatMin   float64 `json:"latMin,omitempty"`
+	Jitter   float64 `json:"jitter,omitempty"` // ms, the mean change of latency between frames
+	OOO      int     `json:"ooo,omitempty"`    // frames that arrived after a later one
+	Dup      int     `json:"dup,omitempty"`    // frames that arrived twice (counted once)
+	TxRate   float64 `json:"txRate"`           // frames per second, now
+	RxRate   float64 `json:"rxRate"`
 	Running  bool    `json:"running"`
 	Result   string  `json:"result"` // "", pass, fail
 	Why      string  `json:"why,omitempty"`
@@ -43,6 +49,8 @@ type EmuTrafficView struct {
 	Running bool              `json:"running"`
 	Started string            `json:"started,omitempty"`
 	Note    string            `json:"note,omitempty"` // something to do (restart a switch for its test port)
+	// History: per stream, the rates of the run so far ([seconds since the start, tx/s, rx/s]), for the graphs.
+	History map[string][][3]float64 `json:"history,omitempty"`
 }
 
 var emuTraf struct {
@@ -50,7 +58,9 @@ var emuTraf struct {
 	started time.Time
 	on      map[string]bool
 	last    []EmuStreamResult
-	final   bool // the last run's counters are final (not read from the hosts again)
+	final   bool                  // the last run's counters are final (not read from the hosts again)
+	prev    map[string][3]float64 // per stream: when, tx and rx at the last read (for the rates)
+	hist    map[string][][3]float64
 }
 
 func emuTesterName(l *emu.Lab) string {
@@ -148,7 +158,7 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 	run := emuTraf.run
 	if run != 0 && emuTraf.final {
 		v.Results = emuTrafCached(v.Streams)
-		v.Started = emuTraf.started.Format(time.RFC3339)
+		v.Started, v.History = emuTraf.started.Format(time.RFC3339), emuTraf.hist
 		emuLab.mu.Unlock()
 		return v, nil
 	}
@@ -161,8 +171,11 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 		Lat   map[string][]float64 `json:"lat"`
 		Err   map[string]string    `json:"err"`
 		Busy  map[string]bool      `json:"busy"`
+		OOO   map[string]int       `json:"ooo"`
+		Dup   map[string]int       `json:"dup"`
+		Jit   map[string][]float64 `json:"jit"`
 	}
-	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}}
+	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}, OOO: map[string]int{}, Dup: map[string]int{}, Jit: map[string][]float64{}}
 	if run != 0 || emuTraf.last != nil {
 		for _, h := range hosts {
 			out, err := a.emuRun(h, "cat "+emu.Q(dir)+"/traffic-stats.json 2>/dev/null", 15*time.Second)
@@ -180,13 +193,32 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 				sum.Other[k] += n
 			}
 			for k, x := range st.Lat {
-				if len(x) == 3 {
+				if len(x) >= 3 {
 					s := sum.Lat[k]
 					if s == nil {
-						s = []float64{0, 0, 0}
+						s = []float64{0, 0, 0, math.Inf(1)}
 					}
 					s[0], s[1], s[2] = s[0]+x[0], math.Max(s[1], x[1]), s[2]+x[2]
+					if len(x) > 3 {
+						s[3] = math.Min(s[3], x[3])
+					}
 					sum.Lat[k] = s
+				}
+			}
+			for k, n := range st.OOO {
+				sum.OOO[k] += n
+			}
+			for k, n := range st.Dup {
+				sum.Dup[k] += n
+			}
+			for k, x := range st.Jit {
+				if len(x) == 2 {
+					j := sum.Jit[k]
+					if j == nil {
+						j = []float64{0, 0}
+					}
+					j[0], j[1] = j[0]+x[0], j[1]+x[1]
+					sum.Jit[k] = j
 				}
 			}
 			for k, e := range st.Err {
@@ -198,17 +230,31 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 		}
 	}
 	for _, s := range v.Streams {
-		r := EmuStreamResult{ID: s.ID, TX: sum.TX[s.ID], RX: sum.RX[s.ID], Other: sum.Other[s.ID], Running: sum.Busy[s.ID] && run != 0, LatAvg: -1}
+		r := EmuStreamResult{ID: s.ID, TX: sum.TX[s.ID], RX: sum.RX[s.ID], Other: sum.Other[s.ID], Running: sum.Busy[s.ID] && run != 0, LatAvg: -1, OOO: sum.OOO[s.ID], Dup: sum.Dup[s.ID]}
 		recv := 1
-		if s.To == "" && s.Kind != "icmp" { // a broadcast reaches every other test port; a ping to an address comes back
+		switch {
+		case s.To == "" && emu.IsMulticast(s.DstIP): // the test ports that joined the group
+			recv = 0
+			for _, t := range v.Testers {
+				if t.ID != s.From && slices.ContainsFunc(t.Groups, func(g string) bool { return g == s.DstIP }) {
+					recv++
+				}
+			}
+		case s.To == "" && s.Kind != "icmp": // a broadcast reaches every other test port; a ping to an address comes back
 			recv = max(0, len(v.Testers)-1)
 		}
 		r.Expected = r.TX * recv
 		if r.Expected > 0 {
 			r.Loss = math.Max(0, float64(r.Expected-r.RX)*100/float64(r.Expected))
 		}
-		if x := sum.Lat[s.ID]; len(x) == 3 && x[2] > 0 {
+		if x := sum.Lat[s.ID]; len(x) >= 3 && x[2] > 0 {
 			r.LatAvg, r.LatMax = x[0]/x[2], x[1]
+			if len(x) > 3 && !math.IsInf(x[3], 1) {
+				r.LatMin = x[3]
+			}
+		}
+		if j := sum.Jit[s.ID]; len(j) == 2 && j[1] > 0 {
+			r.Jitter = j[0] / j[1]
 		}
 		switch e := sum.Err[s.ID]; {
 		case e != "":
@@ -218,6 +264,8 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 			r.Result, r.Why = "fail", fmt.Sprintf("loss %.1f %% > %.1f %%", r.Loss, s.MaxLoss)
 		case s.MaxLatency > 0 && r.LatAvg > s.MaxLatency:
 			r.Result, r.Why = "fail", fmt.Sprintf("latency %.2f ms > %.2f ms", r.LatAvg, s.MaxLatency)
+		case s.MaxJitter > 0 && r.Jitter > s.MaxJitter:
+			r.Result, r.Why = "fail", fmt.Sprintf("jitter %.2f ms > %.2f ms", r.Jitter, s.MaxJitter)
 		default:
 			r.Result = "pass"
 		}
@@ -228,6 +276,8 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 	}
 	emuLab.mu.Lock()
 	if run != 0 {
+		emuTrafRates(v.Results, time.Since(emuTraf.started).Seconds())
+		v.History = emuTraf.hist
 		v.Running = slices.ContainsFunc(v.Results, func(r EmuStreamResult) bool { return r.Running }) || time.Since(emuTraf.started) < 3*time.Second
 		v.Started = emuTraf.started.Format(time.RFC3339)
 		if !v.Running && time.Since(emuTraf.started) > 5*time.Second {
@@ -236,6 +286,29 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 	}
 	emuLab.mu.Unlock()
 	return v, nil
+}
+
+// emuTrafRates works out each stream's rates since the last read and keeps them for the graphs (emuLab.mu held).
+func emuTrafRates(rs []EmuStreamResult, at float64) {
+	if emuTraf.prev == nil {
+		emuTraf.prev, emuTraf.hist = map[string][3]float64{}, map[string][][3]float64{}
+	}
+	for i := range rs {
+		r := &rs[i]
+		p, ok := emuTraf.prev[r.ID]
+		if ok && at-p[0] >= 0.5 {
+			dt := at - p[0]
+			r.TxRate, r.RxRate = math.Max(0, (float64(r.TX)-p[1])/dt), math.Max(0, (float64(r.RX)-p[2])/dt)
+			h := append(emuTraf.hist[r.ID], [3]float64{math.Round(at*10) / 10, math.Round(r.TxRate), math.Round(r.RxRate)})
+			if len(h) > 300 {
+				h = h[len(h)-300:]
+			}
+			emuTraf.hist[r.ID] = h
+		} else if ok {
+			continue
+		}
+		emuTraf.prev[r.ID] = [3]float64{at, float64(r.TX), float64(r.RX)}
+	}
 }
 
 // emuTrafCached: the last run's results for the streams there are now (emuLab.mu held).
@@ -369,7 +442,7 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("an IP stream needs a destination test port or address")
 	}
-	if s.Kind != "arp" && s.Kind != "raw" && (l.TesterByID(s.From).IP == "" && s.SrcIP == "") {
+	if f := l.TesterByID(s.From); s.Kind != "arp" && s.Kind != "raw" && s.SrcIP == "" && (f.IP == "" && !strings.Contains(s.DstIP, ":") || strings.Contains(s.DstIP, ":") && f.IP6 == "") {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("give the test port it goes from an IP address (or the stream a source address)")
 	}
@@ -379,6 +452,22 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 		s.Seconds = 10
 	}
 	s.VLAN, s.Prio = min(4094, max(0, s.VLAN)), min(7, max(0, s.Prio))
+	s.DSCP, s.Burst = min(63, max(0, s.DSCP)), max(0, s.Burst)
+	switch s.SizeMode {
+	case "", "imix":
+	case "inc", "random":
+		s.SizeMax = min(9000, max(s.Size, s.SizeMax))
+	default:
+		emuLab.mu.Unlock()
+		return EmuTrafficView{}, errors.New("the sizes are fixed, inc, random or imix")
+	}
+	for i, m := range s.Mods {
+		if !slices.Contains([]string{"srcMac", "dstMac", "srcIp", "dstIp", "vlan", "sport", "dport"}, m.Field) {
+			emuLab.mu.Unlock()
+			return EmuTrafficView{}, fmt.Errorf("a changing field is srcMac, dstMac, srcIp, dstIp, vlan, sport or dport, not %q", m.Field)
+		}
+		s.Mods[i].Mode, s.Mods[i].Count, s.Mods[i].Step = orStr(m.Mode, "inc"), max(1, m.Count), orInt(m.Step, 1)
+	}
 	if s.ID == "" {
 		s.ID = "s" + randHex(3)
 		s.Name = orStr(strings.TrimSpace(s.Name), fmt.Sprintf("stream-%d", len(l.Streams)+1))
@@ -429,6 +518,7 @@ func (a *App) EmuTrafficStart(ids []string) (EmuTrafficView, error) {
 		return EmuTrafficView{}, errors.New("no such stream")
 	}
 	emuTraf.run, emuTraf.started, emuTraf.on, emuTraf.last, emuTraf.final = uint32(time.Now().Unix()), time.Now(), on, nil, false
+	emuTraf.prev, emuTraf.hist = nil, nil
 	emuEv("", "info", "traffic started: "+strings.Join(names, ", "))
 	emuLab.mu.Unlock()
 	if err := a.emuTrafficPush(); err != nil {
@@ -469,14 +559,23 @@ func emuTrafficRows(v EmuTrafficView) [][]string {
 	for _, r := range v.Results {
 		res[r.ID] = r
 	}
-	rows := [][]string{{"stream", "from", "to", "kind", "vlan", "size", "pps", "sent", "expected", "received", "loss %", "latency avg ms", "latency max ms", "result", "why"}}
+	rows := [][]string{{"stream", "from", "to", "kind", "vlan", "size", "pps", "sent", "expected", "received", "loss %", "latency avg ms", "latency max ms", "result", "why", "latency min ms", "jitter ms", "out of order", "duplicates", "dscp", "sizes"}}
 	for _, s := range v.Streams {
 		r := res[s.ID]
-		lat, latMax := "-", "-"
+		lat, latMax, latMin, jit := "-", "-", "-", "-"
 		if r.LatAvg >= 0 {
-			lat, latMax = fmt.Sprintf("%.3f", r.LatAvg), fmt.Sprintf("%.3f", r.LatMax)
+			lat, latMax, latMin, jit = fmt.Sprintf("%.3f", r.LatAvg), fmt.Sprintf("%.3f", r.LatMax), fmt.Sprintf("%.3f", r.LatMin), fmt.Sprintf("%.3f", r.Jitter)
 		}
-		rows = append(rows, []string{s.Name, name[s.From], orStr(name[s.To], "all"), s.Kind, fmt.Sprint(s.VLAN), fmt.Sprint(s.Size), fmt.Sprint(s.PPS), fmt.Sprint(r.TX), fmt.Sprint(r.Expected), fmt.Sprint(r.RX), fmt.Sprintf("%.2f", r.Loss), lat, latMax, orStr(strings.ToUpper(r.Result), "-"), r.Why})
+		sizes := fmt.Sprint(s.Size)
+		switch s.SizeMode {
+		case "imix":
+			sizes = "IMIX"
+		case "inc", "random":
+			sizes = fmt.Sprintf("%d-%d %s", s.Size, s.SizeMax, s.SizeMode)
+		}
+		to := orStr(name[s.To], orStr(s.DstIP, "all"))
+		rows = append(rows, []string{s.Name, name[s.From], to, s.Kind, fmt.Sprint(s.VLAN), fmt.Sprint(s.Size), fmt.Sprint(s.PPS), fmt.Sprint(r.TX), fmt.Sprint(r.Expected), fmt.Sprint(r.RX), fmt.Sprintf("%.2f", r.Loss), lat, latMax, orStr(strings.ToUpper(r.Result), "-"), r.Why,
+			latMin, jit, fmt.Sprint(r.OOO), fmt.Sprint(r.Dup), fmt.Sprint(s.DSCP), sizes})
 	}
 	return rows
 }
@@ -495,7 +594,7 @@ func (a *App) EmuTrafficReportText() (string, error) {
 		if i == 0 {
 			continue
 		}
-		fmt.Fprintf(&b, "- %s (%s → %s, %s, VLAN %s, %s B, %s pps): sent %s, received %s of %s, loss %s %%, latency %s ms avg / %s max: %s %s\n", r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[9], r[8], r[10], r[11], r[12], r[13], r[14])
+		fmt.Fprintf(&b, "- %s (%s → %s, %s, VLAN %s, DSCP %s, %s B, %s pps): sent %s, received %s of %s, loss %s %%, latency %s ms min / %s avg / %s max, jitter %s ms, %s out of order, %s duplicates: %s %s\n", r[0], r[1], r[2], r[3], r[4], r[19], r[20], r[6], r[7], r[9], r[8], r[10], r[15], r[11], r[12], r[16], r[17], r[18], r[13], r[14])
 	}
 	if b.Len() == 0 {
 		return "No stream yet.", nil
@@ -505,13 +604,30 @@ func (a *App) EmuTrafficReportText() (string, error) {
 
 // EmuTrafficReport saves the report on this computer: .csv, or .html (anything else).
 func (a *App) EmuTrafficReport(path string) error {
-	v, err := a.EmuTraffic()
+	b, _, err := a.emuTrafficReportAs(map[bool]string{true: "csv", false: "html"}[strings.EqualFold(filepath.Ext(path), ".csv")])
 	if err != nil {
 		return err
 	}
+	return os.WriteFile(path, b, 0o644)
+}
+
+// emuTrafficReportAs is the report as csv, html, json (the streams and their results) or text, and its media type.
+func (a *App) emuTrafficReportAs(format string) ([]byte, string, error) {
+	if format == "text" {
+		t, err := a.EmuTrafficReportText()
+		return []byte(t), "text/plain; charset=utf-8", err
+	}
+	v, err := a.EmuTraffic()
+	if err != nil {
+		return nil, "", err
+	}
+	if format == "json" {
+		j, err := json.MarshalIndent(v, "", "  ")
+		return j, "application/json", err
+	}
 	rows := emuTrafficRows(v)
 	var b strings.Builder
-	if strings.EqualFold(filepath.Ext(path), ".csv") {
+	if format == "csv" {
 		for _, r := range rows {
 			for i := range r {
 				if strings.ContainsAny(r[i], ",\"\n") {
@@ -546,7 +662,7 @@ func (a *App) EmuTrafficReport(path string) error {
 		}
 		b.WriteString("</table>")
 	}
-	return os.WriteFile(path, []byte(b.String()), 0o644)
+	return []byte(b.String()), map[bool]string{true: "text/csv; charset=utf-8", false: "text/html; charset=utf-8"}[format == "csv"], nil
 }
 
 // emuSortedTesters is for the connector: test ports by name.

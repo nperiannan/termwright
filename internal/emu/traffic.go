@@ -16,17 +16,19 @@ var TrafficPy string
 
 // Tester is a test port: a sender and counter on a switch's data port (no VM).
 type Tester struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	VM       string  `json:"vm"`
-	Port     int     `json:"port"`
-	MAC      string  `json:"mac"`
-	IP       string  `json:"ip,omitempty"` // with its prefix (10.10.0.1/24): it answers ARP and ping there
-	GW       string  `json:"gw,omitempty"` // for streams to another network
-	VLAN     int     `json:"vlan,omitempty"`
-	PortName string  `json:"portName,omitempty"` // as the switch names it (filled in for the screens)
-	X        float64 `json:"x,omitempty"`        // on the canvas
-	Y        float64 `json:"y,omitempty"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	VM       string   `json:"vm"`
+	Port     int      `json:"port"`
+	MAC      string   `json:"mac"`
+	IP       string   `json:"ip,omitempty"`     // with its prefix (10.10.0.1/24): it answers ARP and ping there
+	IP6      string   `json:"ip6,omitempty"`    // an IPv6 address with its prefix: it answers neighbour solicitations and ping there
+	Groups   []string `json:"groups,omitempty"` // multicast groups it joins (IGMP / MLD reports), to receive multicast streams
+	GW       string   `json:"gw,omitempty"`     // for streams to another network
+	VLAN     int      `json:"vlan,omitempty"`
+	PortName string   `json:"portName,omitempty"` // as the switch names it (filled in for the screens)
+	X        float64  `json:"x,omitempty"`        // on the canvas
+	Y        float64  `json:"y,omitempty"`
 }
 
 // Stream is frames from one test port to another (or to all).
@@ -49,6 +51,26 @@ type Stream struct {
 	MaxLoss    float64 `json:"maxLoss"`              // % for a pass
 	MaxLatency float64 `json:"maxLatency,omitempty"` // ms; 0 = not checked
 	Off        bool    `json:"off,omitempty"`        // left out of Start All
+	DSCP       int     `json:"dscp,omitempty"`       // IP DSCP (0-63)
+	SizeMode   string  `json:"sizeMode,omitempty"`   // "" fixed, inc (Size..SizeMax, one more each frame), random, imix (64/594/1518 7:4:1)
+	SizeMax    int     `json:"sizeMax,omitempty"`
+	Burst      int     `json:"burst,omitempty"`     // frames sent back to back (the rate is kept on average)
+	Mods       []Mod   `json:"mods,omitempty"`      // fields that change from frame to frame
+	MaxJitter  float64 `json:"maxJitter,omitempty"` // ms for a pass (0 = not checked)
+}
+
+// Mod changes a field of a stream's frames: the value plus 0, step, 2·step… (count values, then again), or one of them at random.
+type Mod struct {
+	Field string `json:"field"` // srcMac, dstMac, srcIp, dstIp, vlan, sport, dport
+	Mode  string `json:"mode"`  // inc, random
+	Count int    `json:"count"`
+	Step  int    `json:"step,omitempty"`
+}
+
+// IsMulticast: an IPv4 or IPv6 multicast address.
+func IsMulticast(ip string) bool {
+	a := net.ParseIP(strings.Split(ip, "/")[0])
+	return a != nil && a.IsMulticast()
 }
 
 // TesterPorts: where a switch port's QEMU socket sends (the test port listens) and listens (the test port sends).
@@ -80,13 +102,15 @@ func (l *Lab) TesterOn(vm string, port int) *Tester {
 // (frames carry the stream's index) and the run (0 = stopped).
 func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) ([]byte, int) {
 	type tc struct {
-		ID     string `json:"id"`
-		MAC    string `json:"mac"`
-		IP     string `json:"ip,omitempty"`
-		GW     string `json:"gw,omitempty"`
-		VLAN   int    `json:"vlan,omitempty"`
-		Listen int    `json:"listen"`
-		Send   int    `json:"send"`
+		ID     string   `json:"id"`
+		MAC    string   `json:"mac"`
+		IP     string   `json:"ip,omitempty"`
+		IP6    string   `json:"ip6,omitempty"`
+		Groups []string `json:"groups,omitempty"`
+		GW     string   `json:"gw,omitempty"`
+		VLAN   int      `json:"vlan,omitempty"`
+		Listen int      `json:"listen"`
+		Send   int      `json:"send"`
 	}
 	type sc struct {
 		Stream
@@ -102,26 +126,33 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 			continue
 		}
 		li, se := l.TesterPorts(*v, t.Port)
-		ts = append(ts, tc{t.ID, t.MAC, t.IP, t.GW, t.VLAN, li, se})
+		ts = append(ts, tc{t.ID, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se})
 	}
 	var ss []sc
 	for _, s := range l.Streams {
 		x := sc{Stream: s, On: on[s.ID]}
 		if f, to := l.TesterByID(s.From), l.TesterByID(s.To); f != nil {
+			v6 := strings.Contains(x.DstIP, ":") || x.DstIP == "" && to != nil && to.IP == "" && to.IP6 != ""
+			pick := func(t *Tester) string {
+				if v6 {
+					return strings.Split(t.IP6, "/")[0]
+				}
+				return strings.Split(t.IP, "/")[0]
+			}
 			if x.SrcIP == "" {
-				x.SrcIP = strings.Split(f.IP, "/")[0]
+				x.SrcIP = pick(f)
 			}
 			if to != nil && x.DstIP == "" {
-				x.DstIP = strings.Split(to.IP, "/")[0]
+				x.DstIP = pick(to)
 			}
-			if x.DstMAC == "" && x.Kind != "arp" {
-				if SameNet(f.IP, x.DstIP) || f.GW == "" {
-					if to != nil {
-						x.ToMAC = to.MAC
-					}
-				} else {
-					x.Routed, x.GwIP = true, f.GW
+			switch {
+			case x.DstMAC != "" || x.Kind == "arp" || IsMulticast(x.DstIP):
+			case v6 || SameNet(f.IP, x.DstIP) || f.GW == "": // IPv6: on the test ports' own network
+				if to != nil {
+					x.ToMAC = to.MAC
 				}
+			default:
+				x.Routed, x.GwIP = true, f.GW
 			}
 		}
 		ss = append(ss, x)

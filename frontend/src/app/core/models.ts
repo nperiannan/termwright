@@ -367,8 +367,8 @@ export interface TeamPushResult { status: 'new' | 'added' | 'exists' | 'pending'
 export interface SyncStatus { folder: string; last: string; peers: string[] | null; took: number; error: string; }
 
 /** The AI assistant (optional): the provider and model; the API key is in the OS keychain. */
-export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; agentPerm?: '' | 'every' | 'readonly' | 'auto'; effort?: string; agentToolsOff?: string[]; }
-export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; }
+export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; api?: boolean; agentPerm?: '' | 'every' | 'readonly' | 'auto'; effort?: string; agentToolsOff?: string[]; }
+export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; apiUrl?: string; keyFile?: string; }
 export interface FileServersSettings { folder: string; address: string; tftpPort: number; ftpPort: number; httpPort: number; tftpWrite: boolean; ftpWrite: boolean;
   ftpUser: string; idleMinutes: number; commands?: ServerCommand[] | null; }
 export interface ServerCommand { deviceType: string; protocol: string; put?: boolean; text: string; }
@@ -399,13 +399,15 @@ export interface EmuField { name: string; value?: string; off: number; n: number
 export interface EmuPacketDetail extends EmuPacket { at: string; hex: string; fields: EmuField[] | null; total: number; }
 
 /** A test port of the traffic generator: a sender and counter on a switch's free port. */
-export interface EmuTester { id: string; name: string; vm: string; port: number; portName?: string; mac: string; ip?: string; gw?: string; vlan?: number; x?: number; y?: number; }
+export interface EmuTester { id: string; name: string; vm: string; port: number; portName?: string; mac: string; ip?: string; ip6?: string; groups?: string[] | null; gw?: string; vlan?: number; x?: number; y?: number; }
 /** A stream of frames between test ports. */
-export interface EmuStream { id: string; name: string; from: string; to?: string; kind: 'udp' | 'icmp' | 'tcp' | 'arp' | 'raw'; vlan?: number; prio?: number; dstMac?: string; srcIp?: string; dstIp?: string; dport?: number; size: number; pps: number; seconds?: number; count?: number; maxLoss: number; maxLatency?: number; off?: boolean; }
-export interface EmuStreamResult { id: string; tx: number; rx: number; expected: number; other: number; loss: number; latAvg: number; latMax: number; running: boolean; result: '' | 'pass' | 'fail'; why?: string; }
+export interface EmuStream { id: string; name: string; from: string; to?: string; kind: 'udp' | 'icmp' | 'tcp' | 'arp' | 'raw'; vlan?: number; prio?: number; dstMac?: string; srcIp?: string; dstIp?: string; dport?: number; size: number; pps: number; seconds?: number; count?: number; maxLoss: number; maxLatency?: number; off?: boolean; dscp?: number; sizeMode?: '' | 'inc' | 'random' | 'imix'; sizeMax?: number; burst?: number; mods?: EmuMod[] | null; maxJitter?: number; }
+/** A field of a stream's frames that changes from frame to frame. */
+export interface EmuMod { field: 'srcMac' | 'dstMac' | 'srcIp' | 'dstIp' | 'vlan' | 'sport' | 'dport'; mode: 'inc' | 'random'; count: number; step?: number; }
+export interface EmuStreamResult { id: string; tx: number; rx: number; expected: number; other: number; loss: number; latAvg: number; latMax: number; latMin?: number; jitter?: number; ooo?: number; dup?: number; txRate: number; rxRate: number; running: boolean; result: '' | 'pass' | 'fail'; why?: string; }
 /** A lab tool the AI chat called: done (out), or to be asked first. */
 export interface EmuToolStep { ask?: boolean; title?: string; text?: string; danger?: boolean; out?: string; }
-export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; }
+export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; history?: Record<string, [number, number, number][]> | null; }
 
 /** Switches running on a host, of one topology (open or in the background). */
 export interface EmuRunRow { host: string; topology: string; open: boolean; switches: string[]; }
