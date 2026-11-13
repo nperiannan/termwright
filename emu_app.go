@@ -698,6 +698,9 @@ func (a *App) emuLoad() {
 	for i := range emuLab.f.Images { // Linux computers made before day 0 gave them name servers
 		if strings.EqualFold(emuLab.f.Images[i].DeviceType, "Linux") {
 			emu.AddLinuxDNS(&emuLab.f.Images[i]) // kept with the next save
+			if emuLab.f.Images[i].NICs < 3 {     // a Linux image from the registry with one network card: a computer needs data ports to be cabled
+				emu.LinuxHost(&emuLab.f.Images[i])
+			}
 		}
 	}
 	for i := range emuLab.f.Images { // Linux computers added before Termwright configured them
@@ -6911,7 +6914,7 @@ func (a *App) emuCPUSample(id string, now time.Time, cores float64, thr [2]float
 	for k < len(h) && now.Sub(h[k].at) > 10*time.Minute {
 		k++
 	}
-	if st := emuCPUStatsOf(h[max(0, k-1):], v.CPUReqM()); st != nil && st.Thr > 0 {
+	if st := emuCPUStatsOf(h[max(0, k-1):], v.CPUReqM()); st != nil && (st.Thr >= 10 || st.ThrS >= 1) { // a few short holds are normal
 		emuLab.cpuWarned[id] = now
 		emuEv(id, "warn", fmt.Sprintf("its CPU limit (%dm) held it back %d times in the last %d minutes (%.1f s; it used up to %.0fm) - raise the limit in its panel or the CPU tab", v.CPULimM(), st.Thr, st.Mins, st.ThrS, st.Peak))
 	}

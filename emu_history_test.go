@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -103,5 +106,27 @@ func TestEmuAgentChange(t *testing.T) {
 	cs := a.EmuChanges()
 	if len(cs) != 1 || cs[0].Who != "AI agent" || cs[0].Tool != "lab_stop" || cs[0].What != "Lab stop core-1" || !cs[0].Revertible || cs[0].Result != "ok" {
 		t.Fatalf("%+v", cs)
+	}
+}
+
+// A Linux image with one network card (from the registry) gets data ports when Termwright starts.
+func TestEmuLinuxImageGetsPorts(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	a := &App{cfg: cfg}
+	f := emuFile{Images: []emu.Image{{ID: "i1", Name: "Alpine Linux Virt", DeviceType: "LINUX", NICs: 1, Day0: []string{"hostname {hostname}"}}}}
+	b, _ := json.Marshal(f)
+	_ = os.MkdirAll(a.labDir(), 0o700)
+	if err := os.WriteFile(filepath.Join(a.labDir(), "emu.json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	emuLab.mu.Lock()
+	emuLab.loaded, emuLab.f = false, emuFile{}
+	a.emuLoad()
+	im := emuLab.f.Images
+	emuLab.loaded, emuLab.f = false, emuFile{}
+	emuLab.mu.Unlock()
+	if len(im) != 1 || im[0].NICs != 3 || im[0].DataPorts() != 2 {
+		t.Fatalf("%+v", im)
 	}
 }
