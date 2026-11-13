@@ -1,6 +1,7 @@
 package emu
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -203,5 +204,132 @@ func TestTrafficPyMore(t *testing.T) {
 	}
 	if st.RX["s1"] != 600 {
 		t.Fatalf("a duplicate is not counted as received: %v", st.RX)
+	}
+}
+
+// A test port's own protocols: it takes an address by DHCP and one by SLAAC, and announces
+// itself with gratuitous ARP and LLDP (the "switch" here is a DHCP server and an IPv6 router).
+func TestTrafficPyProtocols(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644)
+	c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 43011})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	to := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 43001}
+	var mu sync.Mutex
+	seen := map[string]bool{}
+	csum := func(b []byte) uint16 {
+		var s uint32
+		for i := 0; i+1 < len(b); i += 2 {
+			s += uint32(b[i])<<8 | uint32(b[i+1])
+		}
+		if len(b)%2 == 1 {
+			s += uint32(b[len(b)-1]) << 8
+		}
+		for s>>16 != 0 {
+			s = s&0xffff + s>>16
+		}
+		return ^uint16(s)
+	}
+	srvMAC := []byte{2, 0, 0, 0, 0, 0xfe}
+	dhcpReply := func(req []byte, kind byte) []byte {
+		// Ethernet + IPv4 + UDP + BOOTP from the server 10.20.0.1 giving 10.20.0.50/24, router 10.20.0.1
+		bp := make([]byte, 240)
+		bp[0], bp[1], bp[2] = 2, 1, 6
+		copy(bp[4:8], req[14+20+8+4:14+20+8+8]) // xid
+		copy(bp[16:20], []byte{10, 20, 0, 50})
+		copy(bp[28:34], req[6:12])
+		copy(bp[236:240], []byte{0x63, 0x82, 0x53, 0x63})
+		bp = append(bp, 53, 1, kind, 54, 4, 10, 20, 0, 1, 1, 4, 255, 255, 255, 0, 3, 4, 10, 20, 0, 1, 51, 4, 0, 0, 0x0e, 0x10, 255)
+		udp := append([]byte{0, 67, 0, 68, byte((8 + len(bp)) >> 8), byte(8 + len(bp)), 0, 0}, bp...)
+		ip := []byte{0x45, 0, byte((20 + len(udp)) >> 8), byte(20 + len(udp)), 0, 0, 0, 0, 64, 17, 0, 0, 10, 20, 0, 1, 255, 255, 255, 255}
+		cs := csum(ip)
+		ip[10], ip[11] = byte(cs>>8), byte(cs)
+		return append(append(append(append([]byte{}, req[6:12]...), srvMAC...), 0x08, 0x00), append(ip, udp...)...)
+	}
+	ra := func(to6 []byte, dstMAC []byte) []byte {
+		src := []byte{0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xfe, 0, 0, 1}
+		p := []byte{134, 0, 0, 0, 64, 0, 0x07, 0x08, 0, 0, 0, 0, 0, 0, 0, 0}
+		pio := []byte{3, 4, 64, 0xc0, 0, 0, 0x0e, 0x10, 0, 0, 0x0e, 0x10, 0, 0, 0, 0, 0xfd, 0, 0, 0x99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+		p = append(p, pio...)
+		ph := append(append(append([]byte{}, src...), to6...), 0, 0, 0, byte(len(p)), 0, 0, 0, 58)
+		cs := csum(append(ph, p...))
+		p[2], p[3] = byte(cs>>8), byte(cs)
+		ip := append([]byte{0x60, 0, 0, 0, 0, byte(len(p)), 58, 255}, append(src, to6...)...)
+		return append(append(append(append([]byte{}, dstMAC...), srvMAC...), 0x86, 0xdd), append(ip, p...)...)
+	}
+	go func() {
+		buf := make([]byte, 65536)
+		for {
+			n, _, err := c.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			f := append([]byte(nil), buf[:n]...)
+			mu.Lock()
+			switch {
+			case n > 14 && f[12] == 0x88 && f[13] == 0xcc:
+				seen["lldp"] = bytes.Contains(f, []byte("Termwright Test port 1"))
+			case n > 14 && f[12] == 0x08 && f[13] == 0x06 && bytes.Equal(f[14+14:14+18], f[14+24:14+28]):
+				seen["garp "+net.IP(f[14+14:14+18]).String()] = true
+			case n > 14+20+8+240 && f[12] == 0x08 && f[13] == 0 && f[23] == 17 && f[14+20+3] == 67:
+				for i := 14 + 20 + 8 + 240; i+2 < n; i += 2 + int(f[i+1]) {
+					if f[i] == 53 {
+						if f[i+2] == 1 {
+							seen["discover"] = true
+							_, _ = c.WriteToUDP(dhcpReply(f, 2), to)
+						} else if f[i+2] == 3 {
+							seen["request"] = true
+							_, _ = c.WriteToUDP(dhcpReply(f, 5), to)
+						}
+						break
+					}
+				}
+			case n > 54 && f[12] == 0x86 && f[13] == 0xdd && f[20] == 58 && f[54] == 133:
+				seen["rs"] = true
+				_, _ = c.WriteToUDP(ra(f[22:38], f[6:12]), to)
+			}
+			mu.Unlock()
+		}
+	}()
+	cfg := map[string]any{"run": 0, "testers": []map[string]any{{"id": "t1", "name": "Test port 1", "mac": "02:74:77:00:00:01", "dhcp": true, "slaac": true, "lldp": true, "listen": 43001, "send": 43011}}}
+	j, _ := json.Marshal(cfg)
+	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir)
+	out, _ := os.Create(filepath.Join(dir, "log"))
+	cmd.Stdout, cmd.Stderr = out, out
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var st struct {
+		Lease  map[string]map[string]string
+		Lease6 map[string]map[string]string
+	}
+	for end := time.Now().Add(8 * time.Second); time.Now().Before(end); time.Sleep(300 * time.Millisecond) {
+		b, err := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+		mu.Lock()
+		done := seen["garp 10.20.0.50"] && seen["lldp"]
+		mu.Unlock()
+		if err == nil && json.Unmarshal(b, &st) == nil && st.Lease["t1"]["ip"] != "" && st.Lease6["t1"]["ip"] != "" && done {
+			break
+		}
+	}
+	lg, _ := os.ReadFile(filepath.Join(dir, "log"))
+	mu.Lock()
+	defer mu.Unlock()
+	if st.Lease["t1"]["ip"] != "10.20.0.50/24" || st.Lease["t1"]["gw"] != "10.20.0.1" || !seen["discover"] || !seen["request"] {
+		t.Fatalf("DHCP: %v %v\n%s", st.Lease, seen, lg)
+	}
+	if st.Lease6["t1"]["ip"] != "fd00:99::74:77ff:fe00:1/64" || !seen["rs"] {
+		t.Fatalf("SLAAC: %v %v", st.Lease6, seen)
+	}
+	if !seen["garp 10.20.0.50"] || !seen["lldp"] {
+		t.Fatalf("gratuitous ARP after the lease, LLDP: %v", seen)
 	}
 }

@@ -12,6 +12,7 @@ const KINDS: { k: EmuTest['kind']; name: string; what: string }[] = [
   { k: 'back-to-back', name: 'Back-to-back', what: 'RFC 2544: the longest burst at the top rate without loss' },
   { k: 'learning', name: 'MAC learning', what: 'RFC 2889: how many source MACs the switches learn before they flood (a third test port watches)' },
   { k: 'convergence', name: 'Convergence', what: 'Traffic while a cable is pulled or a switch stops or restarts: frames lost and the outage in ms' },
+  { k: 'iperf', name: 'iperf3 between hosts', what: 'iperf3 between two host VMs of the lab (Alpine, Debian…), typed on their consoles: TCP or UDP rate, retransmits, jitter and loss' },
 ];
 
 /** The Traffic tab's tests: saved RFC 2544, learning and convergence tests, their runs and results. */
@@ -25,7 +26,7 @@ const KINDS: { k: EmuTest['kind']; name: string; what: string }[] = [
         <tr><th>{{ tr('Test') }}</th><th>{{ tr('Kind') }}</th><th>{{ tr('Ports') }}</th><th>{{ tr('Last run') }}</th><th></th></tr>
         @for (t of tests(); track t.id) { @let r = lastOf(t.id);
           <tr [class.on]="ed()?.id === t.id || shown()?.test === t.id" (click)="show(t)"><td><b>{{ t.name }}</b></td><td>{{ tr(kindName(t.kind)) }}</td>
-            <td class="mono">{{ pn(t.from) }} {{ t.both ? '⇄' : '→' }} {{ pn(t.to) }}@if (t.monitor) { · {{ pn(t.monitor) }} }</td>
+            <td class="mono">@if (t.kind === 'iperf') { {{ dn(t.client) }} {{ t.reverse ? '←' : '→' }} {{ dn(t.server) }} } @else { {{ pn(t.from) }} {{ t.both ? '⇄' : '→' }} {{ pn(t.to) }}@if (t.monitor) { · {{ pn(t.monitor) }} } }</td>
             <td>@if (r) { <span class="pill" [class]="'pill ' + r.status">{{ tr(r.status) }}</span> <span class="muted small">{{ time(r.started) }}</span> }</td>
             <td class="ra"><a (click)="$event.stopPropagation(); run(t)" [class.off]="!!running()" [title]="tr('Run')">▶</a><a (click)="$event.stopPropagation(); edit(t)" [title]="tr('Edit')">✎</a><a (click)="$event.stopPropagation(); remove(t)" [title]="tr('Delete')">✕</a></td></tr>
         } @empty { <tr><td colspan="5" class="muted">{{ testers().length < 2 ? tr('Add two test ports first (＋ Test Port).') : tr('No test yet: ＋ Test.') }}</td></tr> }
@@ -48,9 +49,18 @@ const KINDS: { k: EmuTest['kind']; name: string; what: string }[] = [
     </div>
     @if (ed(); as e) {
       <div class="te"><div class="teh"><b>{{ e.id ? e.name : tr('New test') }}</b><span class="sp"></span><a (click)="ed.set(null)">✕</a></div>
-        <label><span>{{ tr('Kind') }}</span><select [(ngModel)]="e.kind">@for (k of kinds; track k.k) { <option [value]="k.k">{{ tr(k.name) }}</option> }</select></label>
+        <label><span>{{ tr('Kind') }}</span><select [ngModel]="e.kind" (ngModelChange)="setKind(e, $event)">@for (k of kinds; track k.k) { <option [value]="k.k">{{ tr(k.name) }}</option> }</select></label>
         <p class="muted small">{{ tr(kindWhat(e.kind)) }}</p>
         <label><span>{{ tr('Name') }}</span><input [(ngModel)]="e.name" [placeholder]="e.kind + '-1'" /></label>
+        @if (e.kind === 'iperf') {
+          <label><span>{{ tr('Client') }}</span><select [(ngModel)]="e.client">@for (d of devs(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select></label>
+          <label><span>{{ tr('Server') }}</span><select [(ngModel)]="e.server">@for (d of devs(); track d.id) { @if (d.id !== e.client) { <option [value]="d.id">{{ d.hostname }}</option> } }</select></label>
+          <label><span>{{ tr('Server address') }}</span><input [(ngModel)]="e.serverIp" [placeholder]="tr('its management address')" [title]="tr('The address on its data port, for traffic through the switches')" /></label>
+          <label><span>{{ tr('Protocol') }}</span><div class="two"><select [(ngModel)]="e.proto"><option value="tcp">TCP</option><option value="udp">UDP</option></select><input [(ngModel)]="e.bandwidth" [placeholder]="e.proto === 'udp' ? '1M' : tr('no limit')" [title]="tr('Target rate: 100M, 1G')" /></div></label>
+          <label><span>{{ tr('Streams') }}</span><div class="two"><input type="number" min="1" [(ngModel)]="e.parallel" placeholder="1" [title]="tr('Parallel streams (iperf3 -P)')" /><input type="number" min="1" [(ngModel)]="e.seconds" placeholder="10 s" [title]="tr('How long it runs')" /></div></label>
+          <label><span>{{ tr('Reverse') }}</span><input type="checkbox" class="cbx" [(ngModel)]="e.reverse" [title]="tr('The server sends (iperf3 -R)')" /></label>
+          <p class="muted small">{{ tr('Both need iperf3 (Alpine: apk add iperf3). Close their console tabs while it runs: a console takes one connection.') }}</p>
+        } @else {
         <label><span>{{ tr('From') }}</span><select [(ngModel)]="e.from">@for (t of testers(); track t.id) { <option [value]="t.id">{{ t.name }}</option> }</select></label>
         <label><span>{{ tr('To') }}</span><select [(ngModel)]="e.to">@for (t of testers(); track t.id) { @if (t.id !== e.from) { <option [value]="t.id">{{ t.name }}</option> } }</select></label>
         @if (e.kind === 'learning') { <label><span>{{ tr('Monitor') }}</span><select [(ngModel)]="e.monitor" [title]="tr('A third test port: frames flooded to it mean an address was not learned')"><option value="">-</option>@for (t of testers(); track t.id) { @if (t.id !== e.from && t.id !== e.to) { <option [value]="t.id">{{ t.name }}</option> } }</select></label> }
@@ -67,6 +77,7 @@ const KINDS: { k: EmuTest['kind']; name: string; what: string }[] = [
           <label><span>{{ tr('Switch') }}</span><select [(ngModel)]="e.switch">@for (d of devs(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select></label>
           @if (e.action === 'pull') { <label><span>{{ tr('Port') }}</span><input [(ngModel)]="e.port" placeholder="1" [title]="tr('The port whose cable is pulled (a LAG member for a LAG failover)')" /></label> }
           <label><span>{{ tr('Timing') }}</span><div class="two"><input type="number" min="1" [(ngModel)]="e.at" [placeholder]="tr('at 5 s')" [title]="tr('Seconds after the traffic starts')" /><input type="number" min="0" [(ngModel)]="e.hold" [placeholder]="tr('back after')" [title]="tr('Seconds until the cable is plugged in or the switch started again (0: not)')" /><input type="number" min="5" [(ngModel)]="e.seconds" [placeholder]="tr('30 s')" [title]="tr('How long the traffic runs')" /></div></label>
+        }
         }
         <div class="teb"><button type="button" class="primary" (click)="saveTest(e)">{{ tr('Save') }}</button><button type="button" (click)="saveTest(e, true)" [disabled]="!!running()">▶ {{ tr('Save and Run') }}</button></div>
       </div>
@@ -113,11 +124,21 @@ export class TrafficTests implements OnInit, OnDestroy {
   kindName(k: string) { return KINDS.find(x => x.k === k)?.name ?? k; }
   kindWhat(k: string) { return KINDS.find(x => x.k === k)?.what ?? ''; }
   pn(id?: string) { return this.testers().find(t => t.id === id)?.name ?? id ?? ''; }
+  dn(id?: string) { return this.devs().find(d => d.id === id)?.hostname ?? id ?? ''; }
   time(s?: string) { return s ? new Date(s).toLocaleTimeString() : ''; }
   show(t: EmuTest) { this.sel.set(t.id); }
   newTest() {
-    const ts = this.testers(); if (ts.length < 2) { this.ui.toast(tr('Add two test ports first (＋ Test Port).')); return; }
-    this.ed.set({ id: '', name: '', kind: 'throughput', from: ts[0].id, to: ts[1].id, both: true, monitor: ts[2]?.id ?? '', sizes: [64, 128, 256, 512, 1024, 1280, 1518], action: 'pull', switch: this.devs()[0]?.id ?? '' });
+    const ts = this.testers();
+    const ds = this.devs();
+    this.ed.set({ id: '', name: '', kind: ts.length < 2 ? 'iperf' : 'throughput', from: ts[0]?.id ?? '', to: ts[1]?.id ?? '', both: true, monitor: ts[2]?.id ?? '', sizes: [64, 128, 256, 512, 1024, 1280, 1518], action: 'pull', switch: ds[0]?.id ?? '', client: ds[0]?.id ?? '', server: ds[1]?.id ?? '', proto: 'tcp' });
+  }
+  /** A kind chosen: the fields it needs get defaults when they have none. */
+  setKind(e: EmuTest, k: EmuTest['kind']) {
+    const ds = this.devs(), ts = this.testers();
+    e.kind = k;
+    e.client ||= ds[0]?.id ?? ''; e.server ||= ds.find(d => d.id !== e.client)?.id ?? ''; e.proto ||= 'tcp';
+    e.switch ||= ds[0]?.id ?? ''; e.action ||= 'pull';
+    e.from ||= ts[0]?.id ?? ''; e.to ||= ts[1]?.id ?? ''; e.monitor ||= ts[2]?.id ?? '';
   }
   edit(t: EmuTest) { this.ed.set({ ...t, sizes: [...(t.sizes ?? [])] }); }
   sizesText() { return (this.ed()?.sizes ?? []).join(', '); }
@@ -125,7 +146,8 @@ export class TrafficTests implements OnInit, OnDestroy {
   async saveTest(e: EmuTest, run = false) {
     const num = (v: unknown) => +(v as number) || 0;
     const t: EmuTest = { ...e, name: (e.name || '').trim(), trial: num(e.trial), maxPps: num(e.maxPps), rate: num(e.rate), loss: num(e.loss), max: num(e.max), at: num(e.at), hold: num(e.hold), seconds: num(e.seconds), vlan: num(e.vlan),
-      monitor: e.kind === 'learning' ? e.monitor : '', action: e.kind === 'convergence' ? e.action : '', switch: e.kind === 'convergence' ? e.switch : '', port: e.kind === 'convergence' && e.action === 'pull' ? e.port : '' };
+      monitor: e.kind === 'learning' ? e.monitor : '', parallel: num(e.parallel), from: e.kind === 'iperf' ? '' : e.from, to: e.kind === 'iperf' ? '' : e.to,
+      server: e.kind === 'iperf' ? e.server : '', client: e.kind === 'iperf' ? e.client : '', serverIp: e.kind === 'iperf' ? (e.serverIp ?? '').trim() : '', proto: e.kind === 'iperf' ? e.proto : undefined, bandwidth: e.kind === 'iperf' ? (e.bandwidth ?? '').trim() : '', reverse: e.kind === 'iperf' && !!e.reverse, action: e.kind === 'convergence' ? e.action : '', switch: e.kind === 'convergence' ? e.switch : '', port: e.kind === 'convergence' && e.action === 'pull' ? e.port : '' };
     try {
       const list = (await this.backend.emuTestSave(t)) ?? [];
       this.tests.set(list); this.ed.set(null);
@@ -150,6 +172,7 @@ export class TrafficTests implements OnInit, OnDestroy {
       case 'frame-loss': return [{ k: 'load', name: 'Load %' }, { k: 'pps', name: 'Rate (pps)' }, { k: 'loss', name: 'Loss %' }];
       case 'back-to-back': return [{ k: 'burst', name: 'Burst (frames)' }, { k: 'trials', name: 'Trials' }];
       case 'learning': return [{ k: 'addresses', name: 'Addresses' }, { k: 'trials', name: 'Trials' }];
+      case 'iperf': return [{ k: 'mbps', name: 'Mbit/s' }, { k: 'retrans', name: 'Retransmits' }, { k: 'jitter', name: 'Jitter ms' }, { k: 'loss', name: 'Loss %' }];
       default: return [{ k: 'pps', name: 'Rate (pps)' }, { k: 'lost', name: 'Lost' }, { k: 'outageMs', name: 'Outage ms' }, { k: 'loss', name: 'Loss %' }];
     }
   }

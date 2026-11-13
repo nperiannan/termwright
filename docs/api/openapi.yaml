@@ -222,10 +222,14 @@ paths:
                                     description: 'Its name (default: Test port n).'
                                 ip:
                                     type: string
-                                    description: IPv4 address with prefix; /24 when it has none.
+                                    description: 'IPv4 address with prefix (/24 when it has none), or dhcp: it takes one from a DHCP server (the lease shows in TestPort.lease).'
                                 ip6:
                                     type: string
-                                    description: IPv6 address with prefix; /64 when it has none.
+                                    description: 'IPv6 address with prefix (/64 when it has none), or slaac: it takes one from router advertisements.'
+                                lldp:
+                                    type: boolean
+                                    default: true
+                                    description: Announce it by LLDP every 30 s, so the switch sees Termwright <name> on its port.
                                 gateway:
                                     type: string
                                     description: Gateway for streams to another network.
@@ -255,6 +259,13 @@ paths:
                                     ip6: fd00::2/64
                                     groups:
                                         - 239.1.1.1
+                            dhcp:
+                                summary: 'Addresses from the network: DHCP and SLAAC'
+                                value:
+                                    switch: access-1
+                                    port: "12"
+                                    ip: dhcp
+                                    ip6: slaac
             responses:
                 201:
                     description: Added; the traffic view with it.
@@ -312,6 +323,8 @@ paths:
                                     type: array
                                     items:
                                         type: string
+                                lldp:
+                                    type: boolean
                         example:
                             groups:
                                 - 239.1.1.1
@@ -614,6 +627,17 @@ paths:
                                     port: "1"
                                     at: 5
                                     hold: 10
+                            iperf:
+                                summary: iperf3 TCP between two Alpine hosts, 4 streams
+                                value:
+                                    name: host-tcp
+                                    kind: iperf
+                                    server: host-2
+                                    client: host-1
+                                    serverIp: 10.10.0.12
+                                    proto: tcp
+                                    parallel: 4
+                                    seconds: 20
                             learning:
                                 summary: RFC 2889 address caching, up to 8192 MACs
                                 value:
@@ -692,6 +716,17 @@ paths:
                                     port: "1"
                                     at: 5
                                     hold: 10
+                            iperf:
+                                summary: iperf3 TCP between two Alpine hosts, 4 streams
+                                value:
+                                    name: host-tcp
+                                    kind: iperf
+                                    server: host-2
+                                    client: host-1
+                                    serverIp: 10.10.0.12
+                                    proto: tcp
+                                    parallel: 4
+                                    seconds: 20
                             learning:
                                 summary: RFC 2889 address caching, up to 8192 MACs
                                 value:
@@ -1418,7 +1453,7 @@ paths:
             tags:
                 - Tools
             summary: Traffic tests on the emulated lab's test ports, run by Termwright as a series of trials
-            description: 'Traffic tests on the emulated lab''s test ports, run by Termwright as a series of trials: RFC 2544 throughput (the highest rate without loss per frame size), latency (at that rate), frame-loss (loss from 100 % down to 10 % of the top rate) and back-to-back (the longest burst without loss), RFC 2889 learning (how many source MACs a switch learns before it floods; needs a third test port as monitor), and convergence (traffic while a cable is pulled or a switch stops or restarts: the frames lost and the outage in ms). Actions: list (saved tests and the latest runs), add, remove, run (in the background), stop, results (of a run; the latest when no run is given). Adding, running and stopping are asked in Termwright first. Through the API it runs without asking.'
+            description: 'Traffic tests on the emulated lab''s test ports, run by Termwright as a series of trials: RFC 2544 throughput (the highest rate without loss per frame size), latency (at that rate), frame-loss (loss from 100 % down to 10 % of the top rate) and back-to-back (the longest burst without loss), RFC 2889 learning (how many source MACs a switch learns before it floods; needs a third test port as monitor), convergence (traffic while a cable is pulled or a switch stops or restarts: the frames lost and the outage in ms), and iperf (iperf3 between two host VMs of the lab, on their consoles: TCP or UDP rate, retransmits, jitter, loss). Actions: list (saved tests and the latest runs), add, remove, run (in the background), stop, results (of a run; the latest when no run is given). Adding, running and stopping are asked in Termwright first. Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1438,9 +1473,15 @@ paths:
                                 at:
                                     description: 'add, convergence: seconds after the start (default 5)'
                                     type: integer
+                                bandwidth:
+                                    description: 'add, iperf: target rate (100M, 1G; udp default 1M)'
+                                    type: string
                                 both:
                                     description: 'add: both ways at the same time'
                                     type: boolean
+                                client:
+                                    description: 'add, iperf: the host VM that runs iperf3 -c'
+                                    type: string
                                 from:
                                     description: 'add: the test port the frames go from (name)'
                                     type: string
@@ -1455,6 +1496,7 @@ paths:
                                         - back-to-back
                                         - learning
                                         - convergence
+                                        - iperf
                                     type: string
                                 loss:
                                     description: 'add: loss % that still counts as none (default 0)'
@@ -1471,8 +1513,17 @@ paths:
                                 name:
                                     description: 'add: its name; remove, run: the test'
                                     type: string
+                                parallel:
+                                    description: 'add, iperf: parallel streams'
+                                    type: integer
                                 port:
                                     description: 'add, convergence pull: the port whose cable is pulled'
+                                    type: string
+                                proto:
+                                    description: add, iperf
+                                    enum:
+                                        - tcp
+                                        - udp
                                     type: string
                                 rate:
                                     description: 'add: latency, frame-loss, convergence: the rate (pps)'
@@ -1480,12 +1531,21 @@ paths:
                                 resolution:
                                     description: 'add: search resolution, % (default 2)'
                                     type: number
+                                reverse:
+                                    description: 'add, iperf: the server sends'
+                                    type: boolean
                                 run:
                                     description: 'results: the run id (default the latest)'
                                     type: string
                                 seconds:
                                     description: 'add, convergence: how long the traffic runs (default 30)'
                                     type: integer
+                                server:
+                                    description: 'add, iperf: the host VM that runs iperf3 -s'
+                                    type: string
+                                server_ip:
+                                    description: 'add, iperf: the server''s address (on its data port; default its management address)'
+                                    type: string
                                 sizes:
                                     description: 'add: frame sizes (default 64, 128, 256, 512, 1024, 1280, 1518)'
                                     items:
@@ -1583,10 +1643,10 @@ paths:
                                         type: string
                                     type: array
                                 ip:
-                                    description: 'add_port: the test port''s address with prefix (10.10.0.1/24)'
+                                    description: 'add_port, set_port: the test port''s address with prefix (10.10.0.1/24), or dhcp (from a DHCP server)'
                                     type: string
                                 ip6:
-                                    description: 'add_port, set_port: an IPv6 address with prefix (fd00::1/64)'
+                                    description: 'add_port, set_port: an IPv6 address with prefix (fd00::1/64), or slaac (from router advertisements)'
                                     type: string
                                 kind:
                                     enum:
@@ -1596,6 +1656,9 @@ paths:
                                         - arp
                                         - raw
                                     type: string
+                                lldp:
+                                    description: 'add_port, set_port: announce it by LLDP (default on)'
+                                    type: boolean
                                 max_jitter:
                                     description: ms for a pass (0 = not checked)
                                     type: number
@@ -3108,6 +3171,21 @@ components:
                         - "null"
                     items:
                         type: string
+                dhcp:
+                    description: it takes its IPv4 address (and gateway) from a DHCP server
+                    type: boolean
+                slaac:
+                    description: it takes its IPv6 address from router advertisements
+                    type: boolean
+                lldp:
+                    description: it announces itself by LLDP every 30 s (the switch sees "Termwright <name>")
+                    type: boolean
+                lease:
+                    description: the address it got by DHCP, and its gateway (filled in for the screens)
+                    type: string
+                lease6:
+                    description: the IPv6 address it got by SLAAC (filled in for the screens)
+                    type: string
                 gw:
                     description: for streams to another network
                     type: string
@@ -3175,6 +3253,9 @@ components:
                 outageMs:
                     description: 'convergence: lost frames ÷ rate, in ms'
                     type: number
+                retrans:
+                    description: 'iperf TCP: retransmitted segments'
+                    type: integer
                 trials:
                     description: trials it took
                     type: integer
@@ -3261,7 +3342,7 @@ components:
                 - args
         TrafficTest:
             type: object
-            description: 'A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts).'
+            description: 'A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts); or iperf3 between two host VMs of the lab.'
             properties:
                 id:
                     description: its id (made by Termwright)
@@ -3270,7 +3351,7 @@ components:
                     description: its name (unique)
                     type: string
                 kind:
-                    description: throughput, latency, frame-loss, back-to-back (RFC 2544), learning (RFC 2889 address caching), convergence
+                    description: throughput, latency, frame-loss, back-to-back (RFC 2544), learning (RFC 2889 address caching), convergence, iperf (iperf3 between two host VMs)
                     type: string
                 from:
                     description: the test port the frames go from (id; the API takes a name too)
@@ -3328,14 +3409,33 @@ components:
                     description: 'convergence: seconds until the cable is plugged in or the switch started again (0 = not)'
                     type: integer
                 seconds:
-                    description: 'convergence: how long the traffic runs (default 30)'
+                    description: 'convergence, iperf: how long the traffic runs (default 30, iperf 10)'
                     type: integer
+                server:
+                    description: 'iperf: the host VM (name or id) that runs iperf3 -s'
+                    type: string
+                client:
+                    description: 'iperf: the host VM that runs iperf3 -c'
+                    type: string
+                serverIp:
+                    description: 'iperf: the server''s address the client connects to (on its data port; default its management address)'
+                    type: string
+                proto:
+                    description: 'iperf: tcp (default) or udp'
+                    type: string
+                bandwidth:
+                    description: 'iperf: target rate (iperf3 -b: 100M, 1G; udp default 1M)'
+                    type: string
+                parallel:
+                    description: 'iperf: parallel streams (iperf3 -P)'
+                    type: integer
+                reverse:
+                    description: 'iperf: the server sends (iperf3 -R)'
+                    type: boolean
             required:
                 - id
                 - name
                 - kind
-                - from
-                - to
         TrafficView:
             type: object
             description: 'The traffic generator: its test ports, streams and their results now (live while a run goes on).'
@@ -3515,13 +3615,13 @@ components:
             additionalProperties: false
         TestInput:
             type: object
-            description: A test to add or to replace one with. kind, from and to are needed (monitor for learning; action, switch and port for convergence); from, to and monitor can be test port names. Unknown fields are refused.
+            description: A test to add or to replace one with. kind is needed, and from and to (test port names or ids) for every kind but iperf; monitor for learning; action, switch and port for convergence; server and client (host VM names) for iperf. Unknown fields are refused.
             properties:
                 name:
                     description: its name (unique)
                     type: string
                 kind:
-                    description: throughput, latency, frame-loss, back-to-back (RFC 2544), learning (RFC 2889 address caching), convergence
+                    description: throughput, latency, frame-loss, back-to-back (RFC 2544), learning (RFC 2889 address caching), convergence, iperf (iperf3 between two host VMs)
                     type: string
                 from:
                     description: the test port the frames go from (id; the API takes a name too)
@@ -3579,12 +3679,31 @@ components:
                     description: 'convergence: seconds until the cable is plugged in or the switch started again (0 = not)'
                     type: integer
                 seconds:
-                    description: 'convergence: how long the traffic runs (default 30)'
+                    description: 'convergence, iperf: how long the traffic runs (default 30, iperf 10)'
                     type: integer
+                server:
+                    description: 'iperf: the host VM (name or id) that runs iperf3 -s'
+                    type: string
+                client:
+                    description: 'iperf: the host VM that runs iperf3 -c'
+                    type: string
+                serverIp:
+                    description: 'iperf: the server''s address the client connects to (on its data port; default its management address)'
+                    type: string
+                proto:
+                    description: 'iperf: tcp (default) or udp'
+                    type: string
+                bandwidth:
+                    description: 'iperf: target rate (iperf3 -b: 100M, 1G; udp default 1M)'
+                    type: string
+                parallel:
+                    description: 'iperf: parallel streams (iperf3 -P)'
+                    type: integer
+                reverse:
+                    description: 'iperf: the server sends (iperf3 -R)'
+                    type: boolean
             required:
                 - kind
-                - from
-                - to
             additionalProperties: false
     responses:
         BadRequest:

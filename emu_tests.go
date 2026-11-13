@@ -41,6 +41,7 @@ type EmuTestRow struct {
 	Addresses int     `json:"addresses,omitempty"` // learning: the most source MACs learned without flooding
 	Lost      int     `json:"lost,omitempty"`      // convergence: frames lost
 	OutageMs  float64 `json:"outageMs,omitempty"`  // convergence: lost frames ÷ rate, in ms
+	Retrans   int     `json:"retrans,omitempty"`   // iperf TCP: retransmitted segments
 	Trials    int     `json:"trials,omitempty"`    // trials it took
 	Note      string  `json:"note,omitempty"`      // what happened (convergence: the action), or why there is no number
 }
@@ -67,7 +68,7 @@ var emuTests struct {
 	runs   []EmuTestRun // the last ones, newest last
 }
 
-var emuTestKinds = []string{"throughput", "latency", "frame-loss", "back-to-back", "learning", "convergence"}
+var emuTestKinds = []string{"throughput", "latency", "frame-loss", "back-to-back", "learning", "convergence", "iperf"}
 
 // EmuTests lists the saved tests.
 func (a *App) EmuTests() []emu.TrafficTest {
@@ -92,7 +93,23 @@ func (a *App) EmuTestSave(t emu.TrafficTest) ([]emu.TrafficTest, error) {
 	if l == nil {
 		return nil, errors.New("there is no emulated lab")
 	}
-	if l.TesterByID(t.From) == nil || l.TesterByID(t.To) == nil || t.From == t.To {
+	vmID := func(n string) string {
+		for _, v := range l.VMs {
+			if v.ID == n || strings.EqualFold(v.Name, n) {
+				return v.ID
+			}
+		}
+		return ""
+	}
+	if t.Kind == "iperf" {
+		t.Server, t.Client = vmID(t.Server), vmID(t.Client)
+		if t.Server == "" || t.Client == "" || t.Server == t.Client {
+			return nil, errors.New("an iperf test needs two host VMs of the lab (with iperf3): the server and the client")
+		}
+		if t.Proto != "" && t.Proto != "tcp" && t.Proto != "udp" {
+			return nil, errors.New("proto is tcp or udp")
+		}
+	} else if l.TesterByID(t.From) == nil || l.TesterByID(t.To) == nil || t.From == t.To {
 		return nil, errors.New("choose two test ports: the one the frames go from and the one they go to")
 	}
 	if t.Kind == "learning" && (l.TesterByID(t.Monitor) == nil || t.Monitor == t.From || t.Monitor == t.To) {
@@ -493,6 +510,8 @@ func (a *App) emuTestDo(ctx context.Context, t emu.TrafficTest) error {
 			return err
 		}
 		emuTestRow(EmuTestRow{Dir: dirName(dirs[0]), Size: size, Addresses: best, Trials: trials, Note: "learned without flooding to " + names[t.Monitor]})
+	case "iperf":
+		return a.emuIperf(ctx, t)
 	case "convergence":
 		rate := orInt(t.Rate, 1000)
 		secs := orInt(t.Seconds, 30)
@@ -554,6 +573,116 @@ func (a *App) emuTestDo(ctx context.Context, t emu.TrafficTest) error {
 		}
 	}
 	return nil
+}
+
+// emuIperf runs iperf3 between two host VMs of the lab, on their consoles.
+func (a *App) emuIperf(ctx context.Context, t emu.TrafficTest) error {
+	emuLab.mu.Lock()
+	var srv, cli emu.VM
+	if l := emuLab.f.Lab; l != nil {
+		if v := l.VMByID(t.Server); v != nil {
+			srv = *v
+		}
+		if v := l.VMByID(t.Client); v != nil {
+			cli = *v
+		}
+	}
+	emuLab.mu.Unlock()
+	if srv.ID == "" || cli.ID == "" {
+		return errors.New("the server or client VM is gone")
+	}
+	ip := orStr(t.ServerIP, strings.Split(srv.MgmtIP, "/")[0])
+	if ip == "" {
+		return errors.New("give the server's address (serverIp): " + srv.Name + " has no management address")
+	}
+	secs := orInt(t.Seconds, 10)
+	missing := func(out, name string) error {
+		if strings.Contains(out, "not found") || strings.Contains(out, "No such file") {
+			return fmt.Errorf("iperf3 is not on %s: install it there (Alpine: apk add iperf3, Debian/Ubuntu: apt install iperf3)", name)
+		}
+		return nil
+	}
+	emuTestStep("starting the iperf3 server on %s", srv.Name)
+	out, err := a.emuConsoleRun(srv.ID, []string{"pkill iperf3; iperf3 -s -D -1 && echo tw-iperf-ok"}, 90*time.Second)
+	if e := missing(out, srv.Name); e != nil {
+		return e
+	}
+	if err != nil {
+		return fmt.Errorf("%s: %w", srv.Name, err)
+	}
+	cmd := fmt.Sprintf("iperf3 -c %s -t %d -i 0 -J", ip, secs)
+	if t.Proto == "udp" {
+		cmd += " -u -b " + orStr(t.Bandwidth, "1M")
+	} else if t.Bandwidth != "" {
+		cmd += " -b " + t.Bandwidth
+	}
+	if t.Parallel > 1 {
+		cmd += " -P " + strconv.Itoa(t.Parallel)
+	}
+	if t.Reverse {
+		cmd += " -R"
+	}
+	emuTestStep("%s on %s", cmd, cli.Name)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	out, err = a.emuConsoleRun(cli.ID, []string{cmd}, time.Duration(secs+90)*time.Second)
+	if e := missing(out, cli.Name); e != nil {
+		return e
+	}
+	if err != nil {
+		return fmt.Errorf("%s: %w", cli.Name, err)
+	}
+	r, err := emuIperfParse(out)
+	if err != nil {
+		return err
+	}
+	dir := cli.Name + " → " + srv.Name
+	if t.Reverse {
+		dir = srv.Name + " → " + cli.Name
+	}
+	r.Dir, r.Note = dir, strings.ToUpper(orStr(t.Proto, "tcp"))+" to "+ip
+	emuTestRow(r)
+	return nil
+}
+
+// emuIperfParse reads iperf3 -J output (as a console showed it) into a result row.
+func emuIperfParse(out string) (EmuTestRow, error) {
+	i, j := strings.Index(out, "{"), strings.LastIndex(out, "}")
+	if i < 0 || j < i {
+		return EmuTestRow{}, fmt.Errorf("iperf3 printed no result: %s", strings.TrimSpace(emu.CleanConsole(out)))
+	}
+	type sum struct {
+		BitsPerSecond float64 `json:"bits_per_second"`
+		Retransmits   float64 `json:"retransmits"`
+		JitterMs      float64 `json:"jitter_ms"`
+		LostPercent   float64 `json:"lost_percent"`
+		LostPackets   int     `json:"lost_packets"`
+		Packets       int     `json:"packets"`
+	}
+	var r struct {
+		Error string `json:"error"`
+		End   struct {
+			SumSent     sum `json:"sum_sent"`
+			SumReceived sum `json:"sum_received"`
+			Sum         sum `json:"sum"`
+		} `json:"end"`
+	}
+	raw := strings.NewReplacer("\r\n", "\n", "\r", "").Replace(out[i : j+1])
+	if err := json.Unmarshal([]byte(raw), &r); err != nil {
+		return EmuTestRow{}, fmt.Errorf("iperf3's result could not be read: %w", err)
+	}
+	if r.Error != "" {
+		return EmuTestRow{}, errors.New("iperf3: " + r.Error)
+	}
+	row := EmuTestRow{}
+	if r.End.Sum.JitterMs > 0 || r.End.Sum.Packets > 0 { // udp
+		row.Mbps, row.Jitter, row.Loss, row.Lost = r.End.Sum.BitsPerSecond/1e6, r.End.Sum.JitterMs, r.End.Sum.LostPercent, r.End.Sum.LostPackets
+	} else {
+		row.Mbps, row.Retrans = r.End.SumReceived.BitsPerSecond/1e6, int(r.End.SumSent.Retransmits)
+	}
+	row.Mbps = math.Round(row.Mbps*100) / 100
+	return row, nil
 }
 
 // emuSearch finds the highest n in [1, top] for which try passes, by halving the gap until it is

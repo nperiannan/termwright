@@ -193,8 +193,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="nn">{{ m.name }} <span class="muted">→ {{ m.to }}</span></div><div class="nm"><i class="spin"></i> {{ m.step }}</div>@if (m.pct >= 0) { <div class="mvp"><i [style.width.%]="m.pct"></i></div><div class="mvr">{{ m.pct }} % · {{ m.rest }}</div> }</div>
             }
             @for (t of tps(); track t.t.id) {
-              <div class="node tpn" [style.left.px]="t.x - 56" [style.top.px]="t.y - 18" (pointerdown)="tpGrab($event, t.t)" (click)="$event.stopPropagation(); dock.set('traffic'); loadTraf()" (contextmenu)="tpMenuOpen(t.t, $event)" [title]="t.t.name + ' · ' + t.where + (t.t.ip ? ' · ' + t.t.ip : '') + ' · ' + t.t.mac">
-                <div class="tpb">⇄ {{ t.t.name }}</div><div class="nm">{{ t.t.ip || t.where }}</div></div>
+              <div class="node tpn" [style.left.px]="t.x - 56" [style.top.px]="t.y - 18" (pointerdown)="tpGrab($event, t.t)" (click)="$event.stopPropagation(); dock.set('traffic'); loadTraf()" (contextmenu)="tpMenuOpen(t.t, $event)" [title]="t.t.name + ' · ' + t.where + ' · ' + tpAddr(t.t) + ' · ' + t.t.mac">
+                <div class="tpb">⇄ {{ t.t.name }}</div><div class="nm">{{ tpAddr(t.t) || t.where }}</div></div>
             }
             @for (c of clouds(); track c.host) {
               <div class="node cloud" [class.sel]="selCloud() === c.host" (contextmenu)="cloudMenu(c.host, $event)" [class.pick]="linkMode() && !!linkA()?.port" [style.left.px]="c.x - 75" [style.top.px]="c.y - 44" (pointerdown)="cloudGrab($event, c.host)" (click)="cloudClick(c.host, $event)"
@@ -503,9 +503,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             <div class="tre"><div class="treh"><b>{{ tr('New test port') }}</b><span class="sp"></span><a (click)="tEd.set(null)">✕</a></div>
               <label><span>{{ tr('Switch') }}</span><select [ngModel]="t.vm" (ngModelChange)="tpSwitch($event)">@for (d of devs(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select></label>
               <label><span>{{ tr('Port') }}</span><select [(ngModel)]="t.port">@for (p of t.free; track p) { <option [value]="p">{{ p }}</option> } @empty { <option value="">{{ tr('no free port') }}</option> }</select></label>
-              <label><span>{{ tr('Address') }}</span><input [(ngModel)]="t.ip" placeholder="10.10.0.1/24" [title]="tr('It answers ARP and ping there; streams use it as their source')" /></label>
+              <label><span>{{ tr('Address') }}</span><input [(ngModel)]="t.ip" [placeholder]="tr('10.10.0.1/24, or dhcp')" [title]="tr('It answers ARP and ping there; streams use it as their source. dhcp: it takes one from a DHCP server')" /></label>
               <label><span>{{ tr('Gateway') }}</span><input [(ngModel)]="t.gw" [placeholder]="tr('for streams to another network')" /></label>
-              <label><span>IPv6</span><input [(ngModel)]="t.ip6" placeholder="fd00::1/64" [title]="tr('It answers neighbour solicitations and ping there; IPv6 streams use it')" /></label>
+              <label><span>IPv6</span><input [(ngModel)]="t.ip6" [placeholder]="tr('fd00::1/64, or slaac')" [title]="tr('It answers neighbour solicitations and ping there; IPv6 streams use it. slaac: it takes one from router advertisements')" /></label>
+              <label><span>LLDP</span><input type="checkbox" class="cbx" [(ngModel)]="t.lldp" [title]="tr('Announce it by LLDP, so the switch sees Termwright and its name on the port')" /></label>
               <label><span>{{ tr('Multicast') }}</span><input [(ngModel)]="t.groups" placeholder="239.1.1.1, ff0e::1" [title]="tr('Groups it joins (IGMP / MLD reports), to receive multicast streams')" /></label>
               <p class="muted small">{{ tr('A sender and counter on the host where the switch runs (no VM): tens of thousands of frames a second - for forwarding, VLANs, LAGs, ACLs and failover, not line rate.') }}</p>
               <div class="trb"><button type="button" class="primary" (click)="addTester(t)" [disabled]="!t.port">{{ tr('Add') }}</button></div>
@@ -863,7 +864,7 @@ export class LabWorkspace implements OnDestroy {
   // ---- traffic generator
   protected traf = signal<EmuTrafficView | null>(null);
   protected sEd = signal<EmuStream | null>(null);
-  protected tEd = signal<{ vm: string; port: string; ip: string; gw: string; ip6?: string; groups?: string; free: string[] } | null>(null);
+  protected tEd = signal<{ vm: string; port: string; ip: string; gw: string; ip6?: string; groups?: string; lldp?: boolean; free: string[] } | null>(null);
   protected tpAt = signal<Record<string, { x: number; y: number }>>({});
   protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw'];
   private trafTimer: ReturnType<typeof setInterval> | null = null;
@@ -927,7 +928,7 @@ export class LabWorkspace implements OnDestroy {
   async newTester(d?: LabDevice) {
     this.dock.set('traffic'); this.sEd.set(null); void this.loadTraf();
     const dev = d ?? this.selDev() ?? this.devs()[0]; if (!dev) { this.ui.toast(tr('Add a switch first')); return; }
-    this.tEd.set({ vm: dev.id, port: '', ip: '', gw: '', ip6: '', groups: '', free: [] });
+    this.tEd.set({ vm: dev.id, port: '', ip: '', gw: '', ip6: '', groups: '', lldp: true, free: [] });
     await this.tpSwitch(dev.id);
   }
   async tpSwitch(id: string) {
@@ -936,11 +937,17 @@ export class LabWorkspace implements OnDestroy {
     const n = (this.traf()?.testers.length ?? 0) + 1;
     const t = this.tEd(); if (t) this.tEd.set({ ...t, vm: id, free, port: free[0] ?? '', ip: t.ip || `10.10.0.${n}/24` });
   }
-  async addTester(t: { vm: string; port: string; ip: string; gw: string; ip6?: string; groups?: string }) {
+  /** A test port's addresses as shown: fixed, or what it got by DHCP and SLAAC. */
+  tpAddr(t: EmuTester) {
+    const v4 = t.dhcp ? 'DHCP ' + (t.lease ? t.lease.split(' ')[0] : tr('(waiting)')) : t.ip ?? '';
+    const v6 = t.slaac ? 'SLAAC ' + (t.lease6 || tr('(waiting)')) : t.ip6 ?? '';
+    return [v4, v6].filter(Boolean).join(' · ');
+  }
+  async addTester(t: { vm: string; port: string; ip: string; gw: string; ip6?: string; groups?: string; lldp?: boolean }) {
     try {
       let v = await this.backend.emuTesterAdd(t.vm, t.port, t.ip.trim(), t.gw.trim(), 0);
       const groups = (t.groups ?? '').split(/[\s,]+/).filter(Boolean), nt = v.testers[v.testers.length - 1];
-      if (nt && ((t.ip6 ?? '').trim() || groups.length)) v = await this.backend.emuTesterSet({ ...nt, ip6: (t.ip6 ?? '').trim(), groups });
+      if (nt && ((t.ip6 ?? '').trim() || groups.length || t.lldp === false)) v = await this.backend.emuTesterSet({ ...nt, ip6: (t.ip6 ?? '').trim(), groups, lldp: t.lldp !== false });
       this.traf.set(v); this.tEd.set(null); if (v.note) this.ui.toast(v.note);
     } catch (e) { this.ui.error(e); }
   }

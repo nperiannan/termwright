@@ -62,6 +62,7 @@ var emuTraf struct {
 	final   bool                  // the last run's counters are final (not read from the hosts again)
 	prev    map[string][3]float64 // per stream: when, tx and rx at the last read (for the rates)
 	hist    map[string][][3]float64
+	leases  map[string][2]string // test port → the address it got by DHCP ("ip/len via gw"), by SLAAC
 }
 
 func emuTesterName(l *emu.Lab) string {
@@ -85,6 +86,15 @@ func (a *App) emuTrafficPush() error {
 	var jobs []job
 	for _, h := range l.Hosts(emuLab.f.Host) {
 		lh := a.emuFor(h)
+		lh.Testers = slices.Clone(lh.Testers)
+		for i, t := range lh.Testers {
+			if l := emuTraf.leases[t.ID]; t.DHCP && l[0] != "" {
+				lh.Testers[i].IP = strings.Split(l[0], " ")[0]
+			}
+			if l := emuTraf.leases[t.ID]; t.SLAAC && l[1] != "" {
+				lh.Testers[i].IP6 = l[1]
+			}
+		}
 		cfg, n := lh.TrafficConfig(func(v emu.VM) bool { return emuHostOf(v) == h }, emuTraf.run, emuTraf.on)
 		if n == 0 && !emuLab.trafHosts[h] {
 			continue
@@ -189,11 +199,16 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		Err   map[string]string    `json:"err"`
 		Busy  map[string]bool      `json:"busy"`
 		OOO   map[string]int       `json:"ooo"`
+		Lease map[string]struct {
+			IP, GW, Server string
+		} `json:"lease"`
+		Lease6 map[string]struct{ IP, GW string } `json:"lease6"`
 		Dup   map[string]int       `json:"dup"`
 		Jit   map[string][]float64 `json:"jit"`
 	}
 	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}, OOO: map[string]int{}, Dup: map[string]int{}, Jit: map[string][]float64{}}
-	if run != 0 || emuTraf.last != nil {
+	dyn := slices.ContainsFunc(v.Testers, func(t emu.Tester) bool { return t.DHCP || t.SLAAC })
+	if run != 0 || emuTraf.last != nil || dyn {
 		for _, h := range hosts {
 			out, err := a.emuRun(h, "cat "+emu.Q(dir)+"/traffic-stats.json 2>/dev/null", 15*time.Second)
 			var st stats
@@ -222,6 +237,21 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 					sum.Lat[k] = s
 				}
 			}
+			emuLab.mu.Lock()
+			if emuTraf.leases == nil {
+				emuTraf.leases = map[string][2]string{}
+			}
+			for k, x := range st.Lease {
+				l := emuTraf.leases[k]
+				l[0] = x.IP + map[bool]string{true: " via " + x.GW, false: ""}[x.GW != ""]
+				emuTraf.leases[k] = l
+			}
+			for k, x := range st.Lease6 {
+				l := emuTraf.leases[k]
+				l[1] = x.IP
+				emuTraf.leases[k] = l
+			}
+			emuLab.mu.Unlock()
 			for k, n := range st.OOO {
 				sum.OOO[k] += n
 			}
@@ -291,6 +321,13 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 	if v.Results == nil {
 		v.Results = []EmuStreamResult{}
 	}
+	emuLab.mu.Lock()
+	for i := range v.Testers {
+		if l, ok := emuTraf.leases[v.Testers[i].ID]; ok {
+			v.Testers[i].Lease, v.Testers[i].Lease6 = l[0], l[1]
+		}
+	}
+	emuLab.mu.Unlock()
 	emuLab.mu.Lock()
 	if run != 0 {
 		emuTrafRates(v.Results, time.Since(emuTraf.started).Seconds())
@@ -368,10 +405,14 @@ func (a *App) EmuTesterAdd(vmID, port, ip, gw string, vlan int) (EmuTrafficView,
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, fmt.Errorf("%s %s is in use (a cable, the host's network or a test port)", v.Name, port)
 	}
+	dhcp := strings.EqualFold(ip, "dhcp")
+	if dhcp {
+		ip = ""
+	}
 	if ip != "" && !strings.Contains(ip, "/") {
 		ip += "/24"
 	}
-	t := emu.Tester{ID: "t" + randHex(3), Name: emuTesterName(l), VM: vmID, Port: n, MAC: "02:74:77:" + randHex(1) + ":" + randHex(1) + ":" + randHex(1), IP: ip, GW: gw, VLAN: vlan}
+	t := emu.Tester{ID: "t" + randHex(3), Name: emuTesterName(l), VM: vmID, Port: n, MAC: "02:74:77:" + randHex(1) + ":" + randHex(1) + ":" + randHex(1), IP: ip, GW: gw, VLAN: vlan, DHCP: dhcp, LLDP: true}
 	t.MAC = strings.ToLower(t.MAC)
 	l.Testers = append(l.Testers, t)
 	_ = a.emuSave()
@@ -397,6 +438,12 @@ func (a *App) EmuTesterSet(t emu.Tester) (EmuTrafficView, error) {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("no such test port")
 	}
+	if strings.EqualFold(t.IP, "dhcp") {
+		t.IP, t.DHCP = "", true
+	}
+	if strings.EqualFold(t.IP6, "slaac") {
+		t.IP6, t.SLAAC = "", true
+	}
 	if t.IP != "" && !strings.Contains(t.IP, "/") {
 		t.IP += "/24"
 	}
@@ -411,7 +458,16 @@ func (a *App) EmuTesterSet(t emu.Tester) (EmuTrafficView, error) {
 		}
 	}
 	cur.Name, cur.IP, cur.GW, cur.VLAN, cur.X, cur.Y = orStr(strings.TrimSpace(t.Name), cur.Name), t.IP, t.GW, t.VLAN, t.X, t.Y
-	cur.IP6, cur.Groups = t.IP6, t.Groups
+	cur.IP6, cur.Groups, cur.DHCP, cur.SLAAC, cur.LLDP = t.IP6, t.Groups, t.DHCP && t.IP == "", t.SLAAC && t.IP6 == "", t.LLDP
+	if l := emuTraf.leases[cur.ID]; emuTraf.leases != nil {
+		if !cur.DHCP {
+			l[0] = ""
+		}
+		if !cur.SLAAC {
+			l[1] = ""
+		}
+		emuTraf.leases[cur.ID] = l
+	}
 	_ = a.emuSave()
 	emuLab.mu.Unlock()
 	if !moved {
@@ -469,7 +525,7 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("an IP stream needs a destination test port or address")
 	}
-	if f := l.TesterByID(s.From); s.Kind != "arp" && s.Kind != "raw" && s.SrcIP == "" && (f.IP == "" && !strings.Contains(s.DstIP, ":") || strings.Contains(s.DstIP, ":") && f.IP6 == "") {
+	if f := l.TesterByID(s.From); s.Kind != "arp" && s.Kind != "raw" && s.SrcIP == "" && (f.IP == "" && !f.DHCP && !strings.Contains(s.DstIP, ":") || strings.Contains(s.DstIP, ":") && f.IP6 == "" && !f.SLAAC) {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("give the test port it goes from an IP address (or the stream a source address)")
 	}

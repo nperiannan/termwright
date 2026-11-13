@@ -349,8 +349,11 @@ func (a *App) apiPortAdd(b map[string]any) (EmuTrafficView, error) {
 		return tv, err
 	}
 	t := tv.Testers[len(tv.Testers)-1]
-	if ip6, gs := argStr(b, "ip6"), argStrs(b, "groups"); ip6 != "" || len(gs) > 0 || argStr(b, "name") != "" {
+	if ip6, gs := argStr(b, "ip6"), argStrs(b, "groups"); ip6 != "" || len(gs) > 0 || argStr(b, "name") != "" || b["lldp"] != nil {
 		t.IP6, t.Groups, t.Name = ip6, gs, orStr(argStr(b, "name"), t.Name)
+		if x, ok := b["lldp"].(bool); ok {
+			t.LLDP = x
+		}
 		note := tv.Note
 		tv, err = a.EmuTesterSet(t)
 		tv.Note = note
@@ -382,8 +385,10 @@ func (a *App) apiPortSet(id string, b map[string]any) (EmuTrafficView, error) {
 			t.VLAN = argInt(b, k, 0, 4094)
 		case "groups":
 			t.Groups = argStrs(b, k)
+		case "lldp":
+			t.LLDP, _ = b[k].(bool)
 		default:
-			return tv, fmt.Errorf("a test port has no %q to change (name, ip, ip6, gateway, vlan, groups)", k)
+			return tv, fmt.Errorf("a test port has no %q to change (name, ip, ip6, gateway, vlan, groups, lldp)", k)
 		}
 	}
 	return a.EmuTesterSet(t)

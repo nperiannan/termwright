@@ -255,7 +255,7 @@ var oasTypeDocs = map[string]string{
 	"FieldChange":  "A field of a stream's frames that changes from frame to frame: its value plus 0, step, 2·step… (count values, then again), or one of them at random.",
 	"StreamResult": "A stream's counters, added up over every KVM host, and its verdict.",
 	"Tool":         "A lab tool: the same tools the Claude connector and the in-app AI agent use.",
-	"TrafficTest":  "A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts).",
+	"TrafficTest":  "A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts); or iperf3 between two host VMs of the lab.",
 	"TestRun":      "A run of a test: its progress while it runs, then its results.",
 	"TestRow":      "A line of a test run's results: per frame size and direction (and load, for frame-loss).",
 }
@@ -369,20 +369,22 @@ func openAPIDoc(t *testing.T) om {
 		{"switch", om{{"type", "string"}, {"description", "The switch's name (or id)."}}},
 		{"port", om{{"type", "string"}, {"description", "A free data port, named as the switch names it (1, 1/5, …)."}}},
 		{"name", om{{"type", "string"}, {"description", "Its name (default: Test port n)."}}},
-		{"ip", om{{"type", "string"}, {"description", "IPv4 address with prefix; /24 when it has none."}}},
-		{"ip6", om{{"type", "string"}, {"description", "IPv6 address with prefix; /64 when it has none."}}},
+		{"ip", om{{"type", "string"}, {"description", "IPv4 address with prefix (/24 when it has none), or dhcp: it takes one from a DHCP server (the lease shows in TestPort.lease)."}}},
+		{"ip6", om{{"type", "string"}, {"description", "IPv6 address with prefix (/64 when it has none), or slaac: it takes one from router advertisements."}}},
+		{"lldp", om{{"type", "boolean"}, {"default", true}, {"description", "Announce it by LLDP every 30 s, so the switch sees Termwright <name> on its port."}}},
 		{"gateway", om{{"type", "string"}, {"description", "Gateway for streams to another network."}}},
 		{"vlan", om{{"type", "integer"}, {"minimum", 0}, {"maximum", 4094}, {"description", "Tags its own frames (ARP and ping answers) with this VLAN."}}},
 		{"groups", om{{"type", "array"}, {"items", om{{"type", "string"}}}, {"description", "Multicast groups it joins (IGMPv2 / MLDv1 reports every 10 s and on a query)."}}},
 	}}}
 	portPatch := om{{"type", "object"}, {"minProperties", 1}, {"additionalProperties", false}, {"description", "Only the fields given change."}, {"properties", om{
 		{"name", om{{"type", "string"}}}, {"ip", om{{"type", "string"}}}, {"ip6", om{{"type", "string"}}}, {"gateway", om{{"type", "string"}}},
-		{"vlan", om{{"type", "integer"}, {"minimum", 0}, {"maximum", 4094}}}, {"groups", om{{"type", "array"}, {"items", om{{"type", "string"}}}}}}}}
+		{"vlan", om{{"type", "integer"}, {"minimum", 0}, {"maximum", 4094}}}, {"groups", om{{"type", "array"}, {"items", om{{"type", "string"}}}}}, {"lldp", om{{"type", "boolean"}}}}}}
 	testParam := om{{"name", "test"}, {"in", "path"}, {"required", true}, {"description", "The test's name or id."}, {"schema", om{{"type", "string"}}}}
 	runParam := om{{"name", "run"}, {"in", "path"}, {"required", true}, {"description", "The run's id (from runTest or listRuns), or latest."}, {"schema", om{{"type", "string"}}}}
 	testEx := om{
 		{"throughput", ex("RFC 2544 throughput, both ways, three frame sizes", om{{"name", "uplink-throughput"}, {"kind", "throughput"}, {"from", "Test port 1"}, {"to", "Test port 2"}, {"both", true}, {"sizes", []int{64, 512, 1518}}, {"maxPps", 20000}, {"trial", 5}})},
 		{"convergence", ex("Pull a LAG member at 5 s, plug it in at 15 s", om{{"name", "lag-failover"}, {"kind", "convergence"}, {"from", "Test port 1"}, {"to", "Test port 2"}, {"both", true}, {"rate", 1000}, {"seconds", 30}, {"action", "pull"}, {"switch", "leaf-1"}, {"port", "1"}, {"at", 5}, {"hold", 10}})},
+		{"iperf", ex("iperf3 TCP between two Alpine hosts, 4 streams", om{{"name", "host-tcp"}, {"kind", "iperf"}, {"server", "host-2"}, {"client", "host-1"}, {"serverIp", "10.10.0.12"}, {"proto", "tcp"}, {"parallel", 4}, {"seconds", 20}})},
 		{"learning", ex("RFC 2889 address caching, up to 8192 MACs", om{{"name", "mac-table"}, {"kind", "learning"}, {"from", "Test port 1"}, {"to", "Test port 2"}, {"monitor", "Test port 3"}, {"max", 8192}})},
 	}
 	portParam := om{{"name", "port"}, {"in", "path"}, {"required", true}, {"description", "The test port's name (Test port 1) or id."}, {"schema", om{{"type", "string"}}}}
@@ -409,7 +411,8 @@ func openAPIDoc(t *testing.T) om {
 		{"/lab/traffic/ports", om{{"post", op("addTestPort", "Traffic ports", "Add a test port", "Puts a test port on a free port of a switch. A running switch takes it when it restarts (the result's note says so).",
 			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", portSchema}, {"examples", om{
 				{"v4", ex("An IPv4 test port", om{{"switch", "leaf-1"}, {"port", "5"}, {"ip", "10.10.0.1/24"}})},
-				{"dual", ex("IPv4 and IPv6, in a multicast group", om{{"switch", "leaf-2"}, {"port", "5"}, {"ip", "10.10.0.2/24"}, {"ip6", "fd00::2/64"}, {"groups", []string{"239.1.1.1"}}})}}}}}}}}},
+				{"dual", ex("IPv4 and IPv6, in a multicast group", om{{"switch", "leaf-2"}, {"port", "5"}, {"ip", "10.10.0.2/24"}, {"ip6", "fd00::2/64"}, {"groups", []string{"239.1.1.1"}}})},
+				{"dhcp", ex("Addresses from the network: DHCP and SLAAC", om{{"switch", "access-1"}, {"port", "12"}, {"ip", "dhcp"}, {"ip6", "slaac"}})}}}}}}}}},
 			kv{"responses", append(om{{"201", resp("Added; the traffic view with it.", "TrafficView")}}, append(errs("400", "422"), std...)...)})}}},
 		{"/lab/traffic/ports/{port}", om{{"parameters", []om{portParam}},
 			{"patch", op("changeTestPort", "Traffic ports", "Change a test port", "Changes its name, addresses, gateway, VLAN or multicast groups.",
@@ -525,7 +528,7 @@ func openAPIDoc(t *testing.T) om {
 	for _, x := range g.comps["TrafficTest"] {
 		switch x.k {
 		case "description":
-			tin = append(tin, kv{"description", "A test to add or to replace one with. kind, from and to are needed (monitor for learning; action, switch and port for convergence); from, to and monitor can be test port names. Unknown fields are refused."})
+			tin = append(tin, kv{"description", "A test to add or to replace one with. kind is needed, and from and to (test port names or ids) for every kind but iperf; monitor for learning; action, switch and port for convergence; server and client (host VM names) for iperf. Unknown fields are refused."})
 		case "properties":
 			var ps om
 			for _, p := range x.v.(om) {
@@ -535,7 +538,7 @@ func openAPIDoc(t *testing.T) om {
 			}
 			tin = append(tin, kv{"properties", ps})
 		case "required":
-			tin = append(tin, kv{"required", []string{"kind", "from", "to"}}, kv{"additionalProperties", false})
+			tin = append(tin, kv{"required", []string{"kind"}}, kv{"additionalProperties", false})
 		default:
 			tin = append(tin, x)
 		}

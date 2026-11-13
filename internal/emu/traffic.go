@@ -24,6 +24,11 @@ type Tester struct {
 	IP       string   `json:"ip,omitempty"`       // with its prefix (10.10.0.1/24): it answers ARP and ping there
 	IP6      string   `json:"ip6,omitempty"`      // an IPv6 address with its prefix: it answers neighbour solicitations and ping there
 	Groups   []string `json:"groups,omitempty"`   // multicast groups it joins (IGMP / MLD reports), to receive multicast streams
+	DHCP     bool     `json:"dhcp,omitempty"`     // it takes its IPv4 address (and gateway) from a DHCP server
+	SLAAC    bool     `json:"slaac,omitempty"`    // it takes its IPv6 address from router advertisements
+	LLDP     bool     `json:"lldp,omitempty"`     // it announces itself by LLDP every 30 s (the switch sees "Termwright <name>")
+	Lease    string   `json:"lease,omitempty"`    // the address it got by DHCP, and its gateway (filled in for the screens)
+	Lease6   string   `json:"lease6,omitempty"`   // the IPv6 address it got by SLAAC (filled in for the screens)
 	GW       string   `json:"gw,omitempty"`       // for streams to another network
 	VLAN     int      `json:"vlan,omitempty"`     // it tags its own frames (ARP and ping answers) with this VLAN
 	PortName string   `json:"portName,omitempty"` // as the switch names it (filled in for the screens)
@@ -65,9 +70,9 @@ type Stream struct {
 type TrafficTest struct {
 	ID         string  `json:"id"`                   // its id (made by Termwright)
 	Name       string  `json:"name"`                 // its name (unique)
-	Kind       string  `json:"kind"`                 // throughput, latency, frame-loss, back-to-back (RFC 2544), learning (RFC 2889 address caching), convergence
-	From       string  `json:"from"`                 // the test port the frames go from (id; the API takes a name too)
-	To         string  `json:"to"`                   // the test port they go to
+	Kind       string  `json:"kind"`                 // throughput, latency, frame-loss, back-to-back (RFC 2544), learning (RFC 2889 address caching), convergence, iperf (iperf3 between two host VMs)
+	From       string  `json:"from,omitempty"`       // the test port the frames go from (id; the API takes a name too)
+	To         string  `json:"to,omitempty"`         // the test port they go to
 	Both       bool    `json:"both,omitempty"`       // also the other way, at the same time (throughput, latency, frame-loss, convergence)
 	Monitor    string  `json:"monitor,omitempty"`    // learning: a third test port that sees frames flooded to it
 	VLAN       int     `json:"vlan,omitempty"`       // 802.1Q tag on the test frames
@@ -83,7 +88,14 @@ type TrafficTest struct {
 	Port       string  `json:"port,omitempty"`       // convergence, pull: the port whose cable is pulled
 	At         int     `json:"at,omitempty"`         // convergence: seconds after the start (default 5)
 	Hold       int     `json:"hold,omitempty"`       // convergence: seconds until the cable is plugged in or the switch started again (0 = not)
-	Seconds    int     `json:"seconds,omitempty"`    // convergence: how long the traffic runs (default 30)
+	Seconds    int     `json:"seconds,omitempty"`    // convergence, iperf: how long the traffic runs (default 30, iperf 10)
+	Server     string  `json:"server,omitempty"`     // iperf: the host VM (name or id) that runs iperf3 -s
+	Client     string  `json:"client,omitempty"`     // iperf: the host VM that runs iperf3 -c
+	ServerIP   string  `json:"serverIp,omitempty"`   // iperf: the server's address the client connects to (on its data port; default its management address)
+	Proto      string  `json:"proto,omitempty"`      // iperf: tcp (default) or udp
+	Bandwidth  string  `json:"bandwidth,omitempty"`  // iperf: target rate (iperf3 -b: 100M, 1G; udp default 1M)
+	Parallel   int     `json:"parallel,omitempty"`   // iperf: parallel streams (iperf3 -P)
+	Reverse    bool    `json:"reverse,omitempty"`    // iperf: the server sends (iperf3 -R)
 }
 
 // Mod changes a field of a stream's frames: the value plus 0, step, 2·step… (count values, then again), or one of them at random.
@@ -130,6 +142,10 @@ func (l *Lab) TesterOn(vm string, port int) *Tester {
 func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) ([]byte, int) {
 	type tc struct {
 		ID     string   `json:"id"`
+		Name   string   `json:"name"`
+		DHCP   bool     `json:"dhcp,omitempty"`
+		SLAAC  bool     `json:"slaac,omitempty"`
+		LLDP   bool     `json:"lldp,omitempty"`
 		MAC    string   `json:"mac"`
 		IP     string   `json:"ip,omitempty"`
 		IP6    string   `json:"ip6,omitempty"`
@@ -153,7 +169,7 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 			continue
 		}
 		li, se := l.TesterPorts(*v, t.Port)
-		ts = append(ts, tc{t.ID, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se})
+		ts = append(ts, tc{t.ID, t.Name, t.DHCP, t.SLAAC, t.LLDP, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se})
 	}
 	var ss []sc
 	for _, s := range l.Streams {

@@ -48,7 +48,7 @@ Settings, and turning one on does not turn on the other.
 | `DELETE /lab/traffic/streams/{stream}` | Removes a stream | 204 |
 | `POST /lab/traffic/start` | Starts the given streams (`{"streams": [...]}`), or every stream not marked off | 200 `TrafficView` |
 | `POST /lab/traffic/stop` | Stops sending. The counters stay, and are final a moment later | 200 `TrafficView` |
-| `GET /lab/traffic/tests` | The saved tests (RFC 2544, RFC 2889 learning, convergence) | 200 `TrafficTest[]` |
+| `GET /lab/traffic/tests` | The saved tests (RFC 2544, RFC 2889 learning, convergence, iperf3 between hosts) | 200 `TrafficTest[]` |
 | `POST /lab/traffic/tests` | Saves a test | 201 `TrafficTest[]` |
 | `PUT /lab/traffic/tests/{test}` | Replaces a test | 200 `TrafficTest[]` |
 | `DELETE /lab/traffic/tests/{test}` | Removes a test | 204 |

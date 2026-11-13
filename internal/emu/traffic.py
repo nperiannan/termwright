@@ -8,6 +8,9 @@
 # tag, PCP and DSCP, fixed / stepped / IMIX sizes, bursts, and fields that change
 # per frame (MACs, addresses, VLAN, ports: incrementing or random). Multicast
 # streams reach the test ports that joined the group (they send IGMP/MLD reports).
+# Test ports can take their address by DHCP (and IPv6 by SLAAC from router
+# advertisements), announce themselves with gratuitous ARP and LLDP, and answer
+# ARP, neighbour solicitations and ping.
 # Each frame carries a signature: stream, run, sequence and send time, so the
 # receiver counts loss, out-of-order and duplicate frames, latency and jitter.
 import json, os, random, socket, struct, sys, time, select
@@ -83,9 +86,20 @@ def arp(op, smac, sip, tmac, tip):
     return struct.pack("!HHBBH6s4s6s4s", 1, 0x0800, 6, 4, op, smac, sip, tmac, tip)
 
 
+def eui64(mac):
+    return bytes([mac[0] ^ 2]) + mac[1:3] + b"\xff\xfe" + mac[3:6]
+
+
+def prefix_len(mask):
+    return bin(int.from_bytes(mask, "big")).count("1")
+
+
 class Tester:
     def __init__(s, t):
         s.id, s.listen = t["id"], t["listen"]
+        s.xid = random.randrange(1 << 32)
+        s.dhcp_state, s.dhcp_at, s.lease, s.server, s.offer = "", 0, None, None, None
+        s.rs_at, s.lldp_at, s.garp_at = 0, 0, 0
         s.to = ("127.0.0.1", t["send"])
         s.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
@@ -96,11 +110,17 @@ class Tester:
         s.set(t)
 
     def set(s, t):
-        s.mac, s.ip, s.vlan = mac_b(t["mac"]), ip_b(t.get("ip", "")), t.get("vlan", 0)
-        s.ip6 = ip_b(t["ip6"]) if t.get("ip6") else None
-        s.gw = ip_b(t.get("gw", "")) if t.get("gw") else None
+        s.name = t.get("name", t["id"])
+        s.mac, s.vlan = mac_b(t["mac"]), t.get("vlan", 0)
+        s.dhcp, s.slaac, s.lldp = t.get("dhcp", False), t.get("slaac", False), t.get("lldp", False)
+        if not s.dhcp or not s.lease:
+            s.ip = ip_b(t.get("ip", ""))
+            s.gw = ip_b(t.get("gw", "")) if t.get("gw") else None
+        if not s.slaac or not getattr(s, "ip6", None):
+            s.ip6 = ip_b(t["ip6"]) if t.get("ip6") else None
+        s.ll = b"\xfe\x80" + b"\0" * 6 + eui64(s.mac)  # its IPv6 link-local address
         s.groups = [ip_b(g) for g in t.get("groups") or []]
-        s.last_join = 0
+        s.last_join, s.garp_at = 0, 0
 
     def send(s, frame):
         if len(frame) < 60:
@@ -112,6 +132,56 @@ class Tester:
 
     def ask(s, ip):  # ARP request
         s.send(l2(BC, s.mac, s.vlan, 0, 0x0806) + arp(1, s.mac, s.ip, b"\0" * 6, ip))
+
+    def garp(s):  # gratuitous ARP: the switch learns where it is
+        if s.ip != b"\0\0\0\0":
+            s.send(l2(BC, s.mac, s.vlan, 0, 0x0806) + arp(1, s.mac, s.ip, b"\0" * 6, s.ip))
+
+    def dhcp_send(s, kind):  # DISCOVER (1) or REQUEST (3), broadcast
+        opts = bytes([53, 1, kind, 61, 7, 1]) + s.mac + bytes([55, 3, 1, 3, 6, 12, len(s.name[:30])]) + s.name[:30].encode()
+        if kind == 3 and s.offer:
+            opts += bytes([50, 4]) + s.offer[0] + bytes([54, 4]) + s.offer[1]
+        bootp = struct.pack("!BBBBIHH4s4s4s4s16s64s128s4s", 1, 1, 6, 0, s.xid, 0, 0x8000, b"\0" * 4, b"\0" * 4, b"\0" * 4, b"\0" * 4, s.mac + b"\0" * 10, b"\0" * 64, b"\0" * 128, b"\x63\x82\x53\x63") + opts + b"\xff"
+        p = struct.pack("!HHHH", 68, 67, 8 + len(bootp), 0) + bootp
+        src, dst = b"\0" * 4, b"\xff" * 4
+        p = p[:6] + struct.pack("!H", l4sum(src, dst, 17, p) or 0xFFFF) + p[8:]
+        s.send(l2(BC, s.mac, s.vlan, 0, 0x0800) + ipv4(src, dst, 17, p, 0, 64))
+
+    def rs(s):  # a router solicitation, for SLAAC
+        p = struct.pack("!BBHI", 133, 0, 0, 0) + b"\x01\x01" + s.mac
+        dst = socket.inet_pton(socket.AF_INET6, "ff02::2")
+        p = p[:2] + struct.pack("!H", l4sum(s.ll, dst, 58, p)) + p[4:]
+        s.send(l2(b"\x33\x33\x00\x00\x00\x02", s.mac, s.vlan, 0, 0x86DD) + ipv6(s.ll, dst, 58, p, 0, 255))
+
+    def lldp_send(s):  # LLDP: the switch sees "Termwright <name>" on its port
+        def tlv(t, v):
+            return struct.pack("!H", (t << 9) | len(v)) + v
+        name = ("Termwright " + s.name).encode()[:200]
+        f = tlv(1, b"\x04" + s.mac) + tlv(2, b"\x07" + s.name.encode()[:200]) + tlv(3, struct.pack("!H", 120)) + tlv(4, b"test port") + tlv(5, name)
+        if s.ip != b"\0\0\0\0":
+            f += tlv(8, bytes([5, 1]) + s.ip + b"\x02\x00\x00\x00\x00\x00")
+        s.send(b"\x01\x80\xc2\x00\x00\x0e" + s.mac + b"\x88\xcc" + f + tlv(0, b""))
+
+    def tick(s, now):  # its own protocols: DHCP, SLAAC, gratuitous ARP, LLDP
+        if s.dhcp:
+            if s.dhcp_state in ("", "discover") and now - s.dhcp_at > 4:
+                s.dhcp_state, s.dhcp_at = "discover", now
+                s.dhcp_send(1)
+            elif s.dhcp_state == "request" and now - s.dhcp_at > 4:
+                s.dhcp_state, s.dhcp_at = "discover", now
+                s.dhcp_send(1)
+            elif s.dhcp_state == "bound" and now > s.lease_end:
+                s.dhcp_state, s.dhcp_at = "request", now
+                s.dhcp_send(3)
+        if s.slaac and not s.ip6 and now - s.rs_at > 8:
+            s.rs_at = now
+            s.rs()
+        if s.lldp and now - s.lldp_at > 30:
+            s.lldp_at = now
+            s.lldp_send()
+        if s.garp_at == 0 and s.ip != b"\0\0\0\0":
+            s.garp_at = now
+            s.garp()
 
     def join(s):  # IGMPv2 / MLDv1 reports for the groups it is in
         for g in s.groups:
@@ -166,6 +236,8 @@ class Stream:
         k = x.get("kind", "udp")
         src_ip = ip_b(x["srcIp"]) if x.get("srcIp") else tp.ip
         dst_ip = ip_b(x.get("dstIp") or "")
+        if dst_ip == b"\0\0\0\0" and x.get("to") in testers:  # an address it took by DHCP
+            dst_ip = testers[x["to"]].ip
         if len(dst_ip) == 16 and len(src_ip) != 16:
             src_ip = tp.ip6 or b"\0" * 16
         src_mac, dst = tp.mac, s.dst or BC
@@ -329,16 +401,60 @@ def handle(tp, f):
         icmp[2:4] = b"\0\0"
         icmp[2:4] = struct.pack("!H", csum(bytes(icmp)))
         tp.send(l2(f[6:12], tp.mac, vlan, 0, 0x0800) + ipv4(tp.ip, b[12:16], 1, bytes(icmp)))
+    elif et == 0x0800 and len(b) >= 28 + 240 and b[9] == 17 and tp.dhcp:  # a DHCP reply for it?
+        ihl = (b[0] & 15) * 4
+        u = b[ihl:]
+        if struct.unpack("!H", u[2:4])[0] == 68 and len(u) >= 8 + 240:
+            bp = u[8:]
+            op, xid, yi = bp[0], struct.unpack("!I", bp[4:8])[0], bp[16:20]
+            if op == 2 and xid == tp.xid and bp[236:240] == b"\x63\x82\x53\x63":
+                o, i2 = {}, 240
+                while i2 < len(bp) and bp[i2] != 255:
+                    if bp[i2] == 0:
+                        i2 += 1
+                        continue
+                    if i2 + 1 >= len(bp):
+                        break
+                    o[bp[i2]] = bp[i2 + 2:i2 + 2 + bp[i2 + 1]]
+                    i2 += 2 + bp[i2 + 1]
+                kind = o.get(53, b"\0")[0]
+                if kind == 2 and tp.dhcp_state == "discover":  # OFFER: ask for it
+                    tp.offer = (yi, o.get(54, b"\0" * 4))
+                    tp.dhcp_state, tp.dhcp_at = "request", time.time()
+                    tp.dhcp_send(3)
+                elif kind == 5:  # ACK: it is ours
+                    mask = o.get(1, b"\xff\xff\xff\0")
+                    tp.ip, tp.dhcp_state = yi, "bound"
+                    if o.get(3):
+                        tp.gw = o[3][:4]
+                    lt = struct.unpack("!I", o[51])[0] if len(o.get(51, b"")) == 4 else 3600
+                    tp.lease_end = time.time() + max(30, lt // 2)
+                    tp.lease = {"ip": socket.inet_ntoa(yi) + "/" + str(prefix_len(mask)), "gw": socket.inet_ntoa(tp.gw) if tp.gw else "", "server": socket.inet_ntoa(o.get(54, b"\0" * 4))}
+                    tp.garp_at = 0
+                elif kind == 6:  # NAK: start again
+                    tp.dhcp_state, tp.dhcp_at, tp.offer = "", 0, None
     elif et == 0x0800 and len(b) >= 24 and b[9] == 2:  # an IGMP query: report the groups again
         ihl = (b[0] & 15) * 4
         if len(b) > ihl and b[ihl] == 0x11:
             tp.last_join = 0
-    elif et == 0x86DD and len(b) >= 48 and b[6] == 58 and tp.ip6:
+    elif et == 0x86DD and len(b) >= 48 and b[6] == 58 and (tp.ip6 or tp.slaac):
         t, src, dst = b[40], b[8:24], b[24:40]
-        if t == 135 and len(b) >= 64 and b[48:64] == tp.ip6:  # neighbour solicitation for its address: advertise
-            p = struct.pack("!BBHI16s", 136, 0, 0, 0x60000000, tp.ip6) + b"\x02\x01" + tp.mac
-            p = p[:2] + struct.pack("!H", l4sum(tp.ip6, src, 58, p)) + p[4:]
-            tp.send(l2(f[6:12], tp.mac, vlan, 0, 0x86DD) + ipv6(tp.ip6, src, 58, p, 0, 255))
+        if t == 134 and tp.slaac and not tp.ip6:  # a router advertisement: an address from its prefix
+            i2 = 56
+            while i2 + 8 <= len(b):
+                ot, ol = b[i2], b[i2 + 1] * 8
+                if ol == 0:
+                    break
+                if ot == 3 and ol == 32 and b[i2 + 3] & 0x40 and b[i2 + 2] == 64:  # prefix information, autonomous, /64
+                    tp.ip6 = b[i2 + 16:i2 + 24] + eui64(tp.mac)
+                    tp.lease6 = socket.inet_ntop(socket.AF_INET6, tp.ip6) + "/64"
+                    tp.gw6 = socket.inet_ntop(socket.AF_INET6, src)
+                i2 += ol
+        elif t == 135 and len(b) >= 64 and (b[48:64] == tp.ip6 or b[48:64] == tp.ll):  # neighbour solicitation for its address: advertise
+            me = b[48:64]
+            p = struct.pack("!BBHI16s", 136, 0, 0, 0x60000000, me) + b"\x02\x01" + tp.mac
+            p = p[:2] + struct.pack("!H", l4sum(me, src, 58, p)) + p[4:]
+            tp.send(l2(f[6:12], tp.mac, vlan, 0, 0x86DD) + ipv6(me, src, 58, p, 0, 255))
         elif t == 128 and dst == tp.ip6:  # echo request: reply
             p = bytearray(b[40:])
             p[0], p[2:4] = 129, b"\0\0"
@@ -360,6 +476,7 @@ while True:
         break
     now = time.time()
     for t in testers.values():
+        t.tick(now)
         if t.groups and now - t.last_join > 10:
             t.last_join = now
             t.join()
@@ -413,7 +530,8 @@ while True:
     if now - last_st > 0.5:
         last_st = now
         st = {"run": run, "at": now, "tx": tx, "rx": rx, "other": other, "lat": lat, "err": err, "ooo": ooo, "dup": dup, "jit": jit,
-              "busy": {s.x["id"]: s.seq < s.count for s in streams}, "testers": sorted(testers)}
+              "busy": {s.x["id"]: s.seq < s.count for s in streams}, "testers": sorted(testers),
+              "lease": {t.id: t.lease for t in testers.values() if t.lease}, "lease6": {t.id: {"ip": t.lease6, "gw": t.gw6} for t in testers.values() if getattr(t, "lease6", None)}}
         try:
             with open(st_path + ".tmp", "w") as fh:
                 json.dump(st, fh)

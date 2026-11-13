@@ -66,9 +66,10 @@ var mcpLabTools = []mcpTool{
 			"action":      map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report"}},
 			"switch":      map[string]any{"type": "string", "description": "add_port: the switch"},
 			"port":        map[string]any{"type": "string", "description": "add_port: its free port; remove_port: the test port's name"},
-			"ip":          map[string]any{"type": "string", "description": "add_port: the test port's address with prefix (10.10.0.1/24)"},
+			"ip":          map[string]any{"type": "string", "description": "add_port, set_port: the test port's address with prefix (10.10.0.1/24), or dhcp (from a DHCP server)"},
 			"gateway":     map[string]any{"type": "string", "description": "add_port: for streams to another network"},
-			"ip6":         map[string]any{"type": "string", "description": "add_port, set_port: an IPv6 address with prefix (fd00::1/64)"},
+			"ip6":         map[string]any{"type": "string", "description": "add_port, set_port: an IPv6 address with prefix (fd00::1/64), or slaac (from router advertisements)"},
+			"lldp":        map[string]any{"type": "boolean", "description": "add_port, set_port: announce it by LLDP (default on)"},
 			"groups":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "add_port, set_port: multicast groups it joins (239.1.1.1, ff0e::1)"},
 			"dscp":        map[string]any{"type": "integer", "description": "add_stream: IP DSCP 0-63"},
 			"pcp":         map[string]any{"type": "integer", "description": "add_stream: 802.1p priority 0-7 (with vlan)"},
@@ -94,11 +95,18 @@ var mcpLabTools = []mcpTool{
 			"max_latency": map[string]any{"type": "number", "description": "ms for a pass (0 = not checked)"},
 			"streams":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "start: the streams (none = all)"},
 		}, "action")},
-	{"lab_test", "Traffic tests on the emulated lab's test ports, run by Termwright as a series of trials: RFC 2544 throughput (the highest rate without loss per frame size), latency (at that rate), frame-loss (loss from 100 % down to 10 % of the top rate) and back-to-back (the longest burst without loss), RFC 2889 learning (how many source MACs a switch learns before it floods; needs a third test port as monitor), and convergence (traffic while a cable is pulled or a switch stops or restarts: the frames lost and the outage in ms). Actions: list (saved tests and the latest runs), add, remove, run (in the background), stop, results (of a run; the latest when no run is given). Adding, running and stopping are asked in Termwright first.",
+	{"lab_test", "Traffic tests on the emulated lab's test ports, run by Termwright as a series of trials: RFC 2544 throughput (the highest rate without loss per frame size), latency (at that rate), frame-loss (loss from 100 % down to 10 % of the top rate) and back-to-back (the longest burst without loss), RFC 2889 learning (how many source MACs a switch learns before it floods; needs a third test port as monitor), convergence (traffic while a cable is pulled or a switch stops or restarts: the frames lost and the outage in ms), and iperf (iperf3 between two host VMs of the lab, on their consoles: TCP or UDP rate, retransmits, jitter, loss). Actions: list (saved tests and the latest runs), add, remove, run (in the background), stop, results (of a run; the latest when no run is given). Adding, running and stopping are asked in Termwright first.",
 		mcpSchema(map[string]any{
 			"action":      map[string]any{"type": "string", "enum": []string{"list", "add", "remove", "run", "stop", "results"}},
 			"name":        map[string]any{"type": "string", "description": "add: its name; remove, run: the test"},
-			"kind":        map[string]any{"type": "string", "enum": []string{"throughput", "latency", "frame-loss", "back-to-back", "learning", "convergence"}},
+			"kind":        map[string]any{"type": "string", "enum": []string{"throughput", "latency", "frame-loss", "back-to-back", "learning", "convergence", "iperf"}},
+			"server":      map[string]any{"type": "string", "description": "add, iperf: the host VM that runs iperf3 -s"},
+			"client":      map[string]any{"type": "string", "description": "add, iperf: the host VM that runs iperf3 -c"},
+			"server_ip":   map[string]any{"type": "string", "description": "add, iperf: the server's address (on its data port; default its management address)"},
+			"proto":       map[string]any{"type": "string", "enum": []string{"tcp", "udp"}, "description": "add, iperf"},
+			"bandwidth":   map[string]any{"type": "string", "description": "add, iperf: target rate (100M, 1G; udp default 1M)"},
+			"parallel":    map[string]any{"type": "integer", "description": "add, iperf: parallel streams"},
+			"reverse":     map[string]any{"type": "boolean", "description": "add, iperf: the server sends"},
 			"from":        map[string]any{"type": "string", "description": "add: the test port the frames go from (name)"},
 			"to":          map[string]any{"type": "string", "description": "add: the test port they go to"},
 			"both":        map[string]any{"type": "boolean", "description": "add: both ways at the same time"},
@@ -469,7 +477,14 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				if d, err := emuMCPID(v, t.VM); err == nil {
 					sw = d.Hostname
 				}
-				fmt.Fprintf(&b, "- test port %s on %s port %d, MAC %s, IP %s\n", t.Name, sw, t.Port, t.MAC, orStr(t.IP, "none"))
+				ip := orStr(t.IP, "none")
+				if t.DHCP {
+					ip = "DHCP " + orStr(t.Lease, "(no lease yet)")
+				}
+				if t.IP6 != "" || t.SLAAC {
+					ip += ", IPv6 " + orStr(t.IP6, orStr(t.Lease6, "SLAAC (none yet)"))
+				}
+				fmt.Fprintf(&b, "- test port %s on %s port %d, MAC %s, IP %s\n", t.Name, sw, t.Port, t.MAC, ip)
 			}
 			if rep, _ := a.EmuTrafficReportText(); len(tv.Streams) > 0 {
 				b.WriteString("Streams:\n" + rep)
@@ -491,8 +506,11 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				return "", err
 			}
 			t := r.Testers[len(r.Testers)-1]
-			if ip6, gs := argStr(args, "ip6"), argStrs(args, "groups"); ip6 != "" || len(gs) > 0 {
+			if ip6, gs := argStr(args, "ip6"), argStrs(args, "groups"); ip6 != "" || len(gs) > 0 || args["lldp"] != nil {
 				t.IP6, t.Groups = ip6, gs
+				if x, ok := args["lldp"].(bool); ok {
+					t.LLDP = x
+				}
 				if r, err = a.EmuTesterSet(t); err != nil {
 					return "", err
 				}
@@ -526,6 +544,9 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			}
 			if _, ok := args["groups"]; ok {
 				t.Groups = argStrs(args, "groups")
+			}
+			if x, ok := args["lldp"].(bool); ok {
+				t.LLDP = x
 			}
 			_, err := a.EmuTesterSet(*t)
 			return "Changed " + t.Name + ".", err
@@ -638,7 +659,9 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		case "add":
 			t := emu.TrafficTest{Name: argStr(args, "name"), Kind: argStr(args, "kind"), From: port(argStr(args, "from")), To: port(argStr(args, "to")), Monitor: port(argStr(args, "monitor")),
 				VLAN: argInt(args, "vlan", 0, 4094), Trial: argInt(args, "trial", 0, 600), MaxPPS: argInt(args, "max_pps", 0, 100000), Rate: argInt(args, "rate", 0, 100000), Max: argInt(args, "max", 0, 1000000),
-				Action: argStr(args, "test_action"), Switch: argStr(args, "switch"), Port: argStr(args, "port"), At: argInt(args, "at", 0, 3600), Hold: argInt(args, "hold", 0, 3600), Seconds: argInt(args, "seconds", 0, 86400)}
+				Action: argStr(args, "test_action"), Switch: argStr(args, "switch"), Port: argStr(args, "port"), At: argInt(args, "at", 0, 3600), Hold: argInt(args, "hold", 0, 3600), Seconds: argInt(args, "seconds", 0, 86400),
+				Server: argStr(args, "server"), Client: argStr(args, "client"), ServerIP: argStr(args, "server_ip"), Proto: argStr(args, "proto"), Bandwidth: argStr(args, "bandwidth"), Parallel: argInt(args, "parallel", 0, 128)}
+			t.Reverse, _ = args["reverse"].(bool)
 			t.Both, _ = args["both"].(bool)
 			t.Loss, _ = args["loss"].(float64)
 			t.Resolution, _ = args["resolution"].(float64)
