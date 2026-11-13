@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab: a device pack can change an image's default network card - images still on the pack's old card take the new one once, a card chosen by the user stays. (The device pack moves EXOS-VM to rtl8139, as GNS3 runs it: on QEMU's e1000 cards its LAGs flapped.)
+
 - Emulated lab: *Configure → Edit in Images…* opens Images on that switch's own image (it opened on the first one).
 
 - Emulated lab, Images: **Port MAC addresses** - the data ports' network cards take the switch's base MAC plus the port number (as before), or a range of their own apart from the switch's addresses, as GNS3 gives them.

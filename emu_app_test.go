@@ -1319,3 +1319,17 @@ func TestEmuTrigger(t *testing.T) {
 		t.Fatal("the mark stayed")
 	}
 }
+
+// A newer pack's network card reaches the images on its old one once; a card the user chose stays.
+func TestEmuTopUpNIC(t *testing.T) {
+	prof := []emu.Image{{Name: "EXOS-VM", NIC: "rtl8139"}}
+	imgs := []emu.Image{{Name: "EXOS-VM", NIC: "e1000"}, {Name: "EXOS-VM", NIC: "virtio-net-pci"}}
+	if up, _ := emuTopUp(imgs, prof); !up || imgs[0].NIC != "rtl8139" || imgs[1].NIC != "virtio-net-pci" {
+		t.Fatalf("%+v", imgs)
+	}
+	imgs[0].NIC = "e1000" // the user goes back to e1000: it stays
+	emuTopUp(imgs, prof)
+	if imgs[0].NIC != "e1000" {
+		t.Fatal("the user's card was replaced")
+	}
+}

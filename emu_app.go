@@ -4884,6 +4884,12 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			if im.TCGCPU == "" && p.TCGCPU != "" {
 				im.TCGCPU, changed = p.TCGCPU, true
 			}
+			if p.NIC != "" && p.NIC != im.PackNIC { // the pack's card changed: images on its old one (not chosen by the user) take the new one
+				if im.NIC == im.PackNIC || im.PackNIC == "" && im.NIC == "e1000" {
+					im.NIC = p.NIC
+				}
+				im.PackNIC, changed = p.NIC, true
+			}
 			if len(p.BootFail) > 0 && !slices.Equal(im.BootFail, p.BootFail) {
 				im.BootFail, changed = p.BootFail, true
 			}

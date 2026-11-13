@@ -60,6 +60,7 @@ type Image struct {
 	TCGCPU          string              `json:"tcgCpu,omitempty"`
 	Facts           []Fact              `json:"facts,omitempty"`         // CLI commands that read the switch's software version and serial number after it booted
 	MgmtMACAlign    int                 `json:"mgmtMacAlign,omitempty"`  // the OS takes its management MAC from its first NIC's address rounded down to this block (a power of two; 0 = it uses the NIC's address)
+	PackNIC         string              `json:"packNic,omitempty"`       // the device pack's network card the image last took (a newer pack's default replaces it once; the user's own choice stays)
 	PortMACs        string              `json:"portMacs,omitempty"`      // data ports' MAC addresses: "" = the switch's base MAC + port number, "own" = a range of their own (as GNS3 gives)
 	MgmtMACOffset   int                 `json:"mgmtMacOffset,omitempty"` // … plus this (Fabric Engine: block 1024, OOB at +0x81 = 129)          // the CPU model it gets on a host without KVM (for example Nehalem, for an image that wants an Intel CPU); "" = QEMU's default
 	BootAnswers     []Answer            `json:"bootAnswers,omitempty"`   // menus the image may stop at while it boots (the end of its console log), and what to type
