@@ -130,3 +130,22 @@ func TestEmuLinuxImageGetsPorts(t *testing.T) {
 		t.Fatalf("%+v", im)
 	}
 }
+
+// lab_wait (and Python's wait) took no running device as ready: a running device's state text is "running".
+func TestEmuReadyForTests(t *testing.T) {
+	for _, c := range []struct {
+		d    EmuDevice
+		want bool
+	}{
+		{EmuDevice{Running: true, State: "running", StateText: "running"}, true},
+		{EmuDevice{Running: true, State: "running", StateText: "running · no persona"}, true},
+		{EmuDevice{Running: true, State: "booting", StateText: "booting · 1m"}, false},
+		{EmuDevice{Running: true, State: "day0", StateText: "checking its persona"}, false},
+		{EmuDevice{Running: true, State: "running", StateText: "running · day-0 failed", Error: "Day-0 configuration: …"}, false},
+		{EmuDevice{Running: false, State: "stopped"}, false},
+	} {
+		if got := emuReadyForTests(c.d); got != c.want {
+			t.Errorf("%+v: %v", c.d, got)
+		}
+	}
+}

@@ -492,7 +492,7 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				if len(names) > 0 && !slicesContainsFold(names, d.Hostname) {
 					continue
 				}
-				ready := d.Running && d.StateText == "" && d.Error == ""
+				ready := emuReadyForTests(d)
 				all = all && (ready || d.Error != "")
 				st := map[bool]string{true: "running", false: "stopped"}[d.Running]
 				if d.StateText != "" {
@@ -1183,4 +1183,11 @@ func (a *App) emuConsoleRun(id string, cmds []string, timeout time.Duration) (st
 		}
 	}
 	return b.String(), nil
+}
+
+// emuReadyForTests says whether a device is up for a test: running with nothing left to do (not booting,
+// not typing its day 0, not moving) and no problem. A running device's state text says "running" (or
+// "running · no persona"), so the state decides, not whether the text is empty.
+func emuReadyForTests(d EmuDevice) bool {
+	return d.Running && d.State == "running" && d.Error == ""
 }
