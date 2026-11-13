@@ -358,26 +358,27 @@ func (l *Lab) LagOf(vm string, port int) *Lag {
 
 // Lab is what a host runs.
 type Lab struct {
-	ID       string   `json:"id"`                 // short, part of the folder and interface names
-	Dir      string   `json:"dir"`                // on the host, relative to the home folder
-	Mgmt     string   `json:"mgmt"`               // "lan" (the host's network, DHCP), "cloud" (the host's network, routed by the host: fixed addresses), "nat" (the host's NAT network, DHCP), "bridge" (a lab bridge on the host) or "forward"
-	LanIf    string   `json:"lanIf"`              // lan: the host's bridge (tap on it) or network port (macvtap on it)
-	NatBr    string   `json:"natBr"`              // nat: the host's NAT bridge with a DHCP server (libvirt's virbr0)
-	LanKind  string   `json:"lanKind"`            // lan: "bridge" or "macvtap"
-	MgmtNet  string   `json:"mgmtNet"`            // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.234.179.146/24)
-	CloudGw  string   `json:"cloudGw"`            // cloud (and lan with fixed addresses): the host's network's gateway
-	LanFixed bool     `json:"lanFixed,omitempty"` // lan: fixed addresses from MgmtNet on (a network without DHCP)
-	NoFast   bool     `json:"noFast,omitempty"`   // Stop shuts the switches down (no saved running state: they boot each time)
-	CloudIf  string   `json:"cloudIf"`            // cloud: the host's port on its network
-	HostIP   string   `json:"hostIp"`             // cloud: the host's own address there
-	Base     int      `json:"base"`               // first TCP/UDP port on the host's 127.0.0.1
-	KVM      bool     `json:"kvm"`                // false: software emulation (slow, for tests)
-	CPU      string   `json:"-"`                  // the CPU model its switches get with KVM ("" = the host's own); set per host by the app
-	VMs      []VM     `json:"vms"`
-	Cables   []Cable  `json:"cables"`
-	Lags     []Lag    `json:"lags,omitempty"`
-	Testers  []Tester `json:"testers,omitempty"` // test ports of the traffic generator
-	Streams  []Stream `json:"streams,omitempty"`
+	ID       string          `json:"id"`                 // short, part of the folder and interface names
+	Dir      string          `json:"dir"`                // on the host, relative to the home folder
+	Mgmt     string          `json:"mgmt"`               // "lan" (the host's network, DHCP), "cloud" (the host's network, routed by the host: fixed addresses), "nat" (the host's NAT network, DHCP), "bridge" (a lab bridge on the host) or "forward"
+	LanIf    string          `json:"lanIf"`              // lan: the host's bridge (tap on it) or network port (macvtap on it)
+	NatBr    string          `json:"natBr"`              // nat: the host's NAT bridge with a DHCP server (libvirt's virbr0)
+	LanKind  string          `json:"lanKind"`            // lan: "bridge" or "macvtap"
+	MgmtNet  string          `json:"mgmtNet"`            // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.234.179.146/24)
+	CloudGw  string          `json:"cloudGw"`            // cloud (and lan with fixed addresses): the host's network's gateway
+	LanFixed bool            `json:"lanFixed,omitempty"` // lan: fixed addresses from MgmtNet on (a network without DHCP)
+	NoFast   bool            `json:"noFast,omitempty"`   // Stop shuts the switches down (no saved running state: they boot each time)
+	CloudIf  string          `json:"cloudIf"`            // cloud: the host's port on its network
+	HostIP   string          `json:"hostIp"`             // cloud: the host's own address there
+	Base     int             `json:"base"`               // first TCP/UDP port on the host's 127.0.0.1
+	KVM      bool            `json:"kvm"`                // false: software emulation (slow, for tests)
+	CPU      string          `json:"-"`                  // the CPU model its switches get with KVM ("" = the host's own); set per host by the app
+	Taken    map[string]bool `json:"-"`                  // management addresses other topologies have (they may run at the same time); set by the app
+	VMs      []VM            `json:"vms"`
+	Cables   []Cable         `json:"cables"`
+	Lags     []Lag           `json:"lags,omitempty"`
+	Testers  []Tester        `json:"testers,omitempty"` // test ports of the traffic generator
+	Streams  []Stream        `json:"streams,omitempty"`
 	// Nets: the management of the lab's other hosts (its own host's is above);
 	// Addrs: each host's address the others send cable traffic to.
 	Nets  map[string]HostNet `json:"nets,omitempty"`
@@ -1157,6 +1158,9 @@ func (l *Lab) FreeAddress(v VM) (string, string) {
 				used[o.MgmtIP] = true
 			}
 		}
+	}
+	for a := range l.Taken {
+		used[a] = true
 	}
 	for k := 0; used[ip] && k < 250; k++ {
 		i++

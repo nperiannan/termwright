@@ -93,7 +93,7 @@ export interface LabDevice { id: string; os: string; model: string; version: str
   /** Emulated lab only. */
   state?: string; stateText?: string; cpu?: number; cores?: number; diskGb?: number; template?: string; persona?: EmuPersona | null; personaOk?: boolean; personaError?: string; personaInfo?: string; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; memUsed?: number; host?: string; saved?: boolean; role?: string; uplinks?: string[] | null; iconStyle?: string; movingTo?: string; }
 export interface LabEvent { at: string; vm: string; name: string; level: 'info' | 'ok' | 'warn' | 'error'; text: string; host?: string; by?: string; }
-export interface EmuTopoInfo { name: string; saved: string; hosts: string[] | null; switches: number; open: boolean; }
+export interface EmuTopoInfo { name: string; saved: string; hosts: string[] | null; switches: number; open: boolean; running?: number; runOn?: string[]; }
 export interface LabLag { name: string; mode: string; source: string; }
 export interface LabLink { a: string; aPort: string; b: string; bPort: string; up?: boolean; down?: boolean; lagA?: LabLag | null; lagB?: LabLag | null; lldp?: string; }
 export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
@@ -401,3 +401,6 @@ export interface EmuTester { id: string; name: string; vm: string; port: number;
 export interface EmuStream { id: string; name: string; from: string; to?: string; kind: 'udp' | 'icmp' | 'tcp' | 'arp' | 'raw'; vlan?: number; prio?: number; dstMac?: string; srcIp?: string; dstIp?: string; dport?: number; size: number; pps: number; seconds?: number; count?: number; maxLoss: number; maxLatency?: number; off?: boolean; }
 export interface EmuStreamResult { id: string; tx: number; rx: number; expected: number; other: number; loss: number; latAvg: number; latMax: number; running: boolean; result: '' | 'pass' | 'fail'; why?: string; }
 export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; }
+
+/** Switches running on a host, of one topology (open or in the background). */
+export interface EmuRunRow { host: string; topology: string; open: boolean; switches: string[]; }

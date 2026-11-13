@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, EmuCapture, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView } from './models';
+  AccountInfo, EmuCapture, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, EmuRunRow } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -112,6 +112,7 @@ export class Backend {
   emuCaptureStart(id: string, port: string) { return this.call<EmuCapture[]>('EmuCaptureStart', id, port); }
   emuCaptureStop(key: string) { return this.call<EmuCapture[]>('EmuCaptureStop', key); }
   emuCaptureDelete(files: string[]) { return this.call<EmuCapture[]>('EmuCaptureDelete', files); }
+  emuRunning() { return this.call<EmuRunRow[]>('EmuRunning'); }
   emuQemuCommand(id: string) { return this.call<string>('EmuQemuCommand', id); }
   emuLinkCheck(id: string, seconds: number) { return this.call<string>('EmuLinkCheck', id, seconds); }
   emuTraffic() { return this.call<EmuTrafficView>('EmuTraffic'); }

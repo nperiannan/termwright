@@ -109,6 +109,8 @@ type EmuTopoInfo struct {
 	Hosts    []string `json:"hosts"`
 	Switches int      `json:"switches"`
 	Open     bool     `json:"open"`
+	Running  int      `json:"running"` // its switches running now (also when it is not open)
+	RunOn    []string `json:"runOn,omitempty"`
 }
 
 type emuConn struct {
@@ -1932,7 +1934,8 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 			emuLab.mu.Unlock()
 			return EmuView{}, err
 		}
-		l = &emu.Lab{ID: randHex(1), Dir: "termwright-lab", Mgmt: mgmt, LanIf: info.LanIf, LanKind: info.LanKind, MgmtNet: orStr(r.MgmtNet, "10.99.0.0/24"), Base: 20000 + int(randByte())%40*100, KVM: info.KVM == "yes"}
+		oth := a.emuOthers() // a folder, ports and a bridge network no other topology has: they may run at the same time
+		l = &emu.Lab{ID: emuFreeLabID(oth), Dir: "termwright-lab", Mgmt: mgmt, LanIf: info.LanIf, LanKind: info.LanKind, MgmtNet: orStr(r.MgmtNet, emuFreeBridgeNet(oth)), Base: emuFreeBase(oth), KVM: info.KVM == "yes"}
 		if mgmt == "cloud" || mgmt == "lan" && strings.TrimSpace(r.MgmtNet) != "" {
 			if err := emuCloud(l, info, r.MgmtNet); err != nil {
 				emuLab.mu.Unlock()
@@ -2093,6 +2096,7 @@ func (a *App) emuFor(host string) *emu.Lab {
 	if len(emuLab.f.Hosts) > 1 { // switches can move between hosts: a CPU every host has
 		c.CPU = emu.CommonCPU
 	}
+	c.Taken = a.emuOthers().addrs // other topologies' switches may run at the same time
 	// each host its own acceleration: one without KVM emulates in software
 	for _, h := range emuLab.f.Hosts {
 		if h.Session == host && h.Info.KVM != "" {
@@ -2348,7 +2352,7 @@ func (a *App) emuStart(host string, ids []string) {
 	for _, id := range ids { // two switches with one address (from before addresses skipped the ones in use): this one moves on
 		if v := l.VMByID(id); v != nil && v.MgmtIP != "" && v.MgmtIP != "10.0.2.15/24" {
 			for _, o := range l.VMs {
-				if o.ID != v.ID && o.MgmtIP == v.MgmtIP && emuHostOf(o) == emuHostOf(*v) {
+				if o.ID != v.ID && o.MgmtIP == v.MgmtIP && emuHostOf(o) == emuHostOf(*v) || o.ID == v.ID && l.Taken[v.MgmtIP] {
 					was := v.MgmtIP
 					v.MgmtIP, v.Gateway = l.FreeAddress(*v)
 					v.Direct = false
@@ -5416,6 +5420,14 @@ func (a *App) EmuTopologies() []EmuTopoInfo {
 		out = append(out, info)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Saved > out[j].Saved })
+	for _, r := range a.EmuRunning() { // running now, also in the background
+		for i := range out {
+			if out[i].Name == r.Topology {
+				out[i].Running += len(r.Switches)
+				out[i].RunOn = append(out[i].RunOn, r.Host[strings.LastIndex(r.Host, "/")+1:])
+			}
+		}
+	}
 	return out
 }
 
@@ -5472,8 +5484,8 @@ func (a *App) emuSwitchTo(t emuTopo) {
 	emuLab.status, emuLab.statusAt = emu.Status{}, time.Time{}
 }
 
-// EmuOpenTopology opens a saved topology (the open one is kept as it is) and,
-// with start, starts all its switches. Running switches are stopped first.
+// EmuOpenTopology opens a saved topology (the open one is kept as it is; its
+// running switches go on running) and, with start, starts all its switches.
 func (a *App) EmuOpenTopology(name string, start bool) (EmuView, error) {
 	defer emuAs("user")()
 	return a.EmuOpenTopologyOn(name, start, nil)
@@ -5496,11 +5508,7 @@ func (a *App) EmuOpenTopologyOn(name string, start bool, hosts map[string]string
 	a.emuLoad()
 	same := emuLab.f.Topology == t.Name
 	emuLab.mu.Unlock()
-	if !same && a.emuRunningAny() {
-		if _, err := a.EmuStop(nil); err != nil {
-			return EmuView{}, err
-		}
-	}
+	// the open topology's running switches keep running in the background (Hosts and the topology list show them)
 	emuLab.mu.Lock()
 	if !same {
 		if emuLab.f.Topology != "" {
@@ -5547,8 +5555,8 @@ func (a *App) EmuOpenTopologyOn(name string, start bool, hosts map[string]string
 	return a.EmuState()
 }
 
-// EmuNewTopology starts an empty lab under a name (the open one is kept);
-// running switches are stopped first.
+// EmuNewTopology starts an empty lab under a name (the open one is kept; its
+// running switches go on running).
 func (a *App) EmuNewTopology(name string) (EmuView, error) {
 	defer emuAs("user")()
 	name, err := emuTopoName(name)
@@ -5557,11 +5565,6 @@ func (a *App) EmuNewTopology(name string) (EmuView, error) {
 	}
 	if _, err := os.Stat(a.emuTopoPath(name)); err == nil {
 		return EmuView{}, fmt.Errorf("a topology named %q is there already: open it, or pick another name", name)
-	}
-	if a.emuRunningAny() {
-		if _, err := a.EmuStop(nil); err != nil {
-			return EmuView{}, err
-		}
 	}
 	emuLab.mu.Lock()
 	a.emuLoad()
@@ -5857,9 +5860,12 @@ func (a *App) emuPutTopo(t emuTopo) error {
 
 // emuFresh makes a topology a new lab of its own: its own disks on the hosts
 // (switches boot from their images), its own sessions folder.
-func emuFresh(t *emuTopo) {
+func emuFresh(t *emuTopo, o emuOther) {
 	l := *t.Lab
-	l.ID = randHex(1)
+	l.ID, l.Base = emuFreeLabID(o), emuFreeBase(o) // it may run beside the one it came from
+	if l.Mgmt == "bridge" && o.nets[l.MgmtNet] {
+		l.MgmtNet = emuFreeBridgeNet(o)
+	}
 	l.VMs = append([]emu.VM(nil), l.VMs...)
 	for i := range l.VMs {
 		v := &l.VMs[i]
@@ -5901,7 +5907,10 @@ func (a *App) EmuDuplicateTopology(name, newName string) ([]EmuTopoInfo, error) 
 		return nil, err
 	}
 	t.Name = newName
-	emuFresh(&t)
+	emuLab.mu.Lock()
+	oth := a.emuOthers()
+	emuLab.mu.Unlock()
+	emuFresh(&t, oth)
 	if err := a.emuPutTopo(t); err != nil {
 		return nil, err
 	}
@@ -5979,7 +5988,10 @@ func (a *App) EmuImportTopology(path string) ([]EmuTopoInfo, error) {
 		return nil, err
 	}
 	t.Name = a.emuFreeTopoName(t.Name)
-	emuFresh(&t)
+	emuLab.mu.Lock()
+	oth := a.emuOthers()
+	emuLab.mu.Unlock()
+	emuFresh(&t, oth)
 	if err := a.emuPutTopo(t); err != nil {
 		return nil, err
 	}

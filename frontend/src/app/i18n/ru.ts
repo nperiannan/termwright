@@ -2788,6 +2788,11 @@ const ru: Record<string, string> = {
   'The command QEMU runs it with (read from its host), copied to the clipboard': 'Команда, с которой QEMU его запускает (прочитана на его хосте), скопирована в буфер обмена',
   'QEMU Command Line…': 'Командная строка QEMU…',
   'QEMU Command Line: {0} (copied)': 'Командная строка QEMU: {0} (скопирована)',
+  '{0} running on {1}': '{0} работают на {1}',
+  'in the background': 'в фоне',
+  'Its running switches go on running in the background; the topology list shows them': 'Его работающие коммутаторы продолжают работать в фоне; список топологий показывает их',
+  'Running here': 'Работает здесь',
+  'No switch runs here.': 'Здесь не работает ни один коммутатор.',
 };
 
 export default ru;

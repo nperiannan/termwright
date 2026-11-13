@@ -966,6 +966,56 @@ func TestEmuTwoHosts(t *testing.T) {
 	if out, err := a.emuMCP("lab_images", map[string]any{}); err != nil || !strings.Contains(out, "Images (id") {
 		t.Errorf("lab_images: %v %q", err, out)
 	}
+	// another topology: the open one's switches go on running in the background, and show as running
+	{
+		emuRunCache.mu.Lock()
+		emuRunCache.at = time.Time{}
+		emuRunCache.mu.Unlock()
+		before := 0
+		for _, r := range a.EmuRunning() {
+			before += len(r.Switches)
+		}
+		if before == 0 {
+			t.Fatal("nothing running")
+		}
+		emuLab.mu.Lock()
+		oldID := emuLab.f.Lab.ID
+		emuLab.mu.Unlock()
+		if _, err := a.EmuNewTopology("bg-test"); err != nil {
+			t.Fatal(err)
+		}
+		emuRunCache.mu.Lock()
+		emuRunCache.at = time.Time{}
+		emuRunCache.mu.Unlock()
+		after, bgName := 0, ""
+		for _, r := range a.EmuRunning() {
+			after += len(r.Switches)
+			bgName = r.Topology
+			if r.Open {
+				t.Errorf("a background topology shows as open: %+v", r)
+			}
+		}
+		if after != before {
+			t.Errorf("running before %d, after another topology %d", before, after)
+		}
+		ok := false
+		for _, ti := range a.EmuTopologies() {
+			if ti.Name == bgName && ti.Running == before {
+				ok = true
+			}
+		}
+		if !ok {
+			t.Errorf("the topology list does not show %s running: %+v", bgName, a.EmuTopologies())
+		}
+		emuLab.mu.Lock()
+		if o := a.emuOthers(); !o.ids[oldID] {
+			t.Error("the other topology's lab is not taken")
+		}
+		emuLab.mu.Unlock()
+		if _, err := a.EmuOpenTopology(bgName, false); err != nil {
+			t.Fatal(err)
+		}
+	}
 	// Remove Host: what it can take back or wipe; refused while switches of the topology run there
 	ri, err := a.EmuRemoveHostInfo(hb.Path)
 	if err != nil || ri.Error != "" || ri.ImagesBytes == 0 || ri.LabDirs == 0 || ri.Switches == 0 {

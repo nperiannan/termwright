@@ -39,7 +39,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               </div>
             }
             @for (t of tl; track t.name) {
-              <div class="ti" [class.cur]="t.open"><div class="tn"><b>{{ t.name }}</b><small class="muted">{{ tr('{0} switches', t.switches) }}@if (t.hosts?.length) { · {{ hostLabel(t.hosts![0]) }} } · {{ when(t.saved) }}</small></div>
+              <div class="ti" [class.cur]="t.open"><div class="tn"><b>{{ t.name }}</b><small class="muted">{{ tr('{0} switches', t.switches) }}@if (t.hosts?.length) { · {{ hostLabel(t.hosts![0]) }} } · {{ when(t.saved) }}</small>@if (t.running) { <small class="trun">● {{ tr('{0} running on {1}', t.running, (t.runOn ?? []).join(', ')) }}@if (!t.open) { · {{ tr('in the background') }} }</small> }</div>
                 <button type="button" class="sm x" (click)="dupTopo(t.name)" [title]="tr('Duplicate')">⧉</button><button type="button" class="sm x" (click)="renTopo(t.name)" [title]="tr('Rename')">✎</button><button type="button" class="sm x" (click)="exportTopo(t.name)" [title]="tr('Export (.twlab)')">⇪</button>
                 @if (t.open) { <span class="muted small">{{ tr('open') }}</span> }
                 @else { <button type="button" class="sm" (click)="openTopo(t.name, false)">{{ tr('Open') }}</button><button type="button" class="sm primary" (click)="openTopo(t.name, true)" [disabled]="!t.switches">▶ {{ tr('Open and Start All') }}</button>
@@ -617,6 +617,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .lk { cursor: pointer; } .lk .hit { stroke: transparent; stroke-width: 12; } .lk .ln { stroke: var(--muted); stroke-width: 2.2; stroke-dasharray: 2 5; } .lk .ln.up { stroke: var(--success, #1fa45a); stroke-dasharray: none; }
     .lk.down .ln { stroke: var(--danger); stroke-dasharray: 6 5; } .lk.selk .ln { stroke-width: 3.5; }
     .topo { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; background: var(--accent-soft); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+    .trun { display: block; color: var(--success, #1fa45a); font-size: 11.5px; }
     .topos { position: absolute; top: 46px; left: 12px; z-index: 30; width: 600px; max-width: calc(100vw - 40px); white-space: normal; max-height: 60vh; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 10px 30px rgba(0,0,0,.35);
       .row2 { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; } .sp { flex: 1; }
       .ti { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; &.cur { border-color: var(--accent); }
@@ -892,7 +893,7 @@ export class LabWorkspace implements OnDestroy {
   async saveTopo() { const n = await this.ui.input(tr('Save Topology'), tr('Name'), this.st()?.topology || ''); if (n && await this.lab.saveTopology(n)) await this.reTopos(); }
   async newTopo() {
     const n = await this.ui.input(tr('New Topology'), tr('Name')); if (!n) return;
-    if (this.running() && !(await this.ui.confirm(tr('New Topology'), tr('The running switches of this topology are stopped first; it stays saved.'), tr('Stop and Continue')))) return;
+    if (this.running()) this.ui.toast(tr('Its running switches go on running in the background; the topology list shows them'));
     if (await this.lab.newTopology(n)) { this.topos.set(null); void this.ui.refreshTree(); }
   }
   async openTopo(name: string, start: boolean) {
@@ -903,7 +904,7 @@ export class LabWorkspace implements OnDestroy {
       this.remap.set({ name, start, rows: (t?.hosts ?? []).map(h => ({ from: h, to: mine.has(h) ? h : best })) });
       return;
     }
-    if (this.running() && !(await this.ui.confirm(tr('Open {0}', name), tr('The running switches of this topology are stopped first; it stays saved.'), tr('Stop and Open')))) return;
+    if (this.running()) this.ui.toast(tr('Its running switches go on running in the background; the topology list shows them'));
     if (await this.lab.openTopology(name, start)) { this.topos.set(null); void this.ui.refreshTree(); }
   }
   protected remap = signal<{ name: string; start: boolean; rows: { from: string; to: string }[] } | null>(null);
@@ -914,7 +915,7 @@ export class LabWorkspace implements OnDestroy {
     const rm = this.remap(); if (!rm) return;
     const map: Record<string, string> = {};
     for (const r of rm.rows) if (r.to && r.to !== r.from) map[r.from] = r.to;
-    if (this.running() && !(await this.ui.confirm(tr('Open {0}', rm.name), tr('The running switches of this topology are stopped first; it stays saved.'), tr('Stop and Open')))) return;
+    if (this.running()) this.ui.toast(tr('Its running switches go on running in the background; the topology list shows them'));
     if (await this.lab.openTopology(rm.name, rm.start, map)) { this.remap.set(null); this.topos.set(null); void this.ui.refreshTree(); }
   }
   async dupTopo(name: string) {

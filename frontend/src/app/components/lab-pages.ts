@@ -1,8 +1,8 @@
-import { Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend, errText } from '../core/backend';
-import { EmuDeviceType, EmuHost, EmuRemoveInfo, EmuImage, EmuPersonaDef, EmuSlot, EmuTemplate, LabDevice, SessionNode } from '../core/models';
+import { EmuDeviceType, EmuHost, EmuRunRow, EmuRemoveInfo, EmuImage, EmuPersonaDef, EmuSlot, EmuTemplate, LabDevice, SessionNode } from '../core/models';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabHostImages } from './lab-host-images';
@@ -34,6 +34,7 @@ const PAGE = `
   input, select, textarea { min-width: 0; } .row2 { display: flex; gap: 8px; align-items: center; > * { flex: 1; } > button, > .pill, > .badge { flex: none; } }
   .sec { font-weight: 600; margin: 16px 0 8px; display: flex; justify-content: space-between; align-items: baseline; span { font-weight: 400; } }
   .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; background: var(--surface); }
+  .runh { grid-column: 1 / -1; .rr { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); margin-top: 6px; } }
   .soft { background: var(--surface-2); }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; a { padding: 6px 14px; cursor: pointer; } a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; } }
   table.t { width: 100%; border-collapse: collapse; font-size: 12px; th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--line); } th { color: var(--muted); font-weight: 600; background: var(--surface-2); } input, select { height: 26px; width: 100%; } }
@@ -783,6 +784,10 @@ export class LabImages implements OnInit {
             <div class="card"><span class="muted small">{{ tr('Disk in ~/{0}', h.info.dir) }}</span><div><b>{{ gb(h.info.diskFree) }}</b> <span class="muted">{{ tr('free') }}</span></div></div>
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px">
+            <div class="card runh"><b>{{ tr('Running here') }}</b>
+              @for (r of runOn(h.session); track r.topology) { <div class="rr"><span><b>{{ r.topology }}</b>@if (r.open) { <span class="muted"> · {{ tr('open') }}</span> } @else { <span class="muted"> · {{ tr('in the background') }}</span> }<br /><span class="muted small">{{ r.switches.join(', ') }}</span></span>@if (!r.open && !r.topology.includes('(')) { <button type="button" class="sm" (click)="openTopo(r.topology)">{{ tr('Open') }}</button> }</div> }
+              @empty { <p class="muted small" style="margin: 6px 0 0">{{ running() ? tr('No switch runs here.') : tr('Reading…') }}</p> }
+            </div>
             <div class="card"><b>{{ tr('What the host has') }}</b><div class="chk" style="margin-top: 8px">
               <span [class]="lv('packages', h.info.qemu ? 'y' : 'x')">{{ lm('packages', h.info.qemu ? '✓' : '✕') }}</span><span>QEMU</span><span class="muted">{{ lt('packages') || (h.info.qemu || tr('not installed')) + (h.info.qemuImg ? ' · qemu-img ✓' : '') }}</span>
               <span [class]="h.info.kvm === 'none' && !h.info.vt ? 'n' : lv('group', h.info.kvm === 'yes' ? 'y' : 'x')">{{ h.info.kvm === 'none' && !h.info.vt ? '!' : lm('group', h.info.kvm === 'yes' ? '✓' : '!') }}</span><span>KVM</span><span class="muted">{{ h.info.kvm === 'yes' ? tr('/dev/kvm usable') : h.info.kvm === 'noaccess' ? tr('no access to /dev/kvm') : tr('no /dev/kvm: software emulation, slow') }}</span>
@@ -806,7 +811,7 @@ export class LabImages implements OnInit {
   </div>`,
   styles: [PAGE],
 })
-export class LabHosts {
+export class LabHosts implements OnDestroy {
   readonly closed = output<void>();
   protected lab = inject(LabService);
   private backend = inject(Backend);
@@ -815,8 +820,15 @@ export class LabHosts {
   protected hosts = computed<EmuHost[]>(() => this.lab.emu()?.hosts ?? []);
   readonly pick0 = input('', { alias: 'select' });
   protected sel = signal('');
-  ngOnInit() { if (this.pick0()) this.sel.set(this.pick0()); }
+  ngOnInit() { if (this.pick0()) this.sel.set(this.pick0()); void this.loadRunning(); }
+  ngOnDestroy() { clearInterval(this.runTimer); }
   protected cur = computed(() => this.hosts().find(h => h.session === this.sel()) ?? this.hosts()[0] ?? null);
+  /** Every running switch on the hosts, by topology (also those running in the background). */
+  protected running = signal<EmuRunRow[] | null>(null);
+  protected runOn(h: string) { return (this.running() ?? []).filter(r => r.host === h); }
+  private runTimer = setInterval(() => void this.loadRunning(), 10000);
+  async loadRunning() { try { this.running.set((await this.backend.emuRunning()) ?? []); } catch { this.running.set([]); } }
+  async openTopo(name: string) { try { await this.backend.emuOpenTopology(name, false); await this.lab.refresh(); this.closed.emit(); } catch (e) { this.ui.error(e); } }
   protected pick = '';
   protected pw = '';
   protected steps = ['packages', 'nat', 'kvm', 'sudo', 'group'];
