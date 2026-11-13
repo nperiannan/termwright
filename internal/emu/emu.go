@@ -60,6 +60,7 @@ type Image struct {
 	TCGCPU          string              `json:"tcgCpu,omitempty"`
 	Facts           []Fact              `json:"facts,omitempty"`         // CLI commands that read the switch's software version and serial number after it booted
 	MgmtMACAlign    int                 `json:"mgmtMacAlign,omitempty"`  // the OS takes its management MAC from its first NIC's address rounded down to this block (a power of two; 0 = it uses the NIC's address)
+	PortMACs        string              `json:"portMacs,omitempty"`      // data ports' MAC addresses: "" = the switch's base MAC + port number, "own" = a range of their own (as GNS3 gives)
 	MgmtMACOffset   int                 `json:"mgmtMacOffset,omitempty"` // … plus this (Fabric Engine: block 1024, OOB at +0x81 = 129)          // the CPU model it gets on a host without KVM (for example Nehalem, for an image that wants an Intel CPU); "" = QEMU's default
 	BootAnswers     []Answer            `json:"bootAnswers,omitempty"`   // menus the image may stop at while it boots (the end of its console log), and what to type
 	BootFail        []string            `json:"bootFail,omitempty"`      // console lines (regular expressions) that say its boot failed: they go to Events
@@ -422,6 +423,16 @@ func (l *Lab) MAC(v VM, n int) string {
 	return fmt.Sprintf("52:54:%02x:%02x:%02x:%02x", byte(id), byte(v.Index>>8), byte(v.Index), byte(n))
 }
 
+// PortMAC is a data port's NIC MAC address (n ≥ 1): its base MAC + n, or with the image's "own" a
+// range apart from the switch's own addresses (0c:<lab>:<switch>:00:<port>, like GNS3's).
+func (l *Lab) PortMAC(v VM, im *Image, n int) string {
+	if im == nil || im.PortMACs != "own" || n == 0 {
+		return l.MAC(v, n)
+	}
+	id, _ := strconv.ParseUint(l.ID, 16, 64)
+	return fmt.Sprintf("0c:%02x:%02x:%02x:00:%02x", byte(id), byte(v.Index>>8), byte(v.Index), byte(n))
+}
+
 // MgmtMAC is the MAC address the switch's OS uses on its management port: its first NIC's, unless the
 // image derives it (Fabric Engine: the NIC's address rounded down to its MAC block, plus 0x81 for the OOB port).
 func (l *Lab) MgmtMAC(v VM, im *Image) string {
@@ -522,7 +533,7 @@ func (l *Lab) upScript(v VM, im *Image) (string, string) {
 		}
 		t := l.upTap(v, n)
 		if l.LanKind == "macvtap" {
-			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip link add link %s name %s address %s type macvtap mode bridge; sudo -n ip link set %s up\n", t, Q(l.LanIf), t, l.MAC(v, n), t)
+			fmt.Fprintf(&b, " ip link show %s >/dev/null 2>&1 || sudo -n ip link add link %s name %s address %s type macvtap mode bridge; sudo -n ip link set %s up\n", t, Q(l.LanIf), t, l.PortMAC(v, im, n), t)
 			fmt.Fprintf(&b, " i%d=$(cat /sys/class/net/%s/ifindex); for i in 1 2 3 4 5 6 7 8 9 10; do [ -e /dev/tap$i%d ] && break; sleep 0.2; done; sudo -n chown \"$(id -un)\" /dev/tap$i%d\n", n, t, n, n)
 			redir += fmt.Sprintf(" %d<>/dev/tap$i%d", upFD+n, n)
 		} else {
@@ -717,17 +728,17 @@ func (l *Lab) Args(v VM, im *Image) []string {
 			} else {
 				a = append(a, "-netdev", fmt.Sprintf("tap,id=n%d,ifname=%s,script=no,downscript=no", n, l.upTap(v, n)))
 			}
-			a = append(a, "-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.MAC(v, n)))
+			a = append(a, "-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.PortMAC(v, im, n)))
 		} else if p, ok := peer[n]; ok && peerAt[n] != "" { // the other end on another host: a UDP tunnel between the hosts
 			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,udp=%s:%d,localaddr=0.0.0.0:%d", n, peerAt[n], p, l.udpPort(v, n)),
-				"-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.MAC(v, n)))
+				"-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.PortMAC(v, im, n)))
 		} else if ok {
 			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,udp=127.0.0.1:%d,localaddr=127.0.0.1:%d", n, p, l.udpPort(v, n)),
-				"-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.MAC(v, n)))
+				"-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.PortMAC(v, im, n)))
 		} else { // no cable: a socket a test port can use (its link is down until then)
 			li, se := l.TesterPorts(v, n)
 			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,udp=127.0.0.1:%d,localaddr=127.0.0.1:%d", n, li, se),
-				"-device", fmt.Sprintf("%s,id=nic%d,netdev=n%d,mac=%s", nic, n, n, l.MAC(v, n)))
+				"-device", fmt.Sprintf("%s,id=nic%d,netdev=n%d,mac=%s", nic, n, n, l.PortMAC(v, im, n)))
 		}
 	}
 	if v.Serial != "" {
@@ -888,7 +899,7 @@ func (l *Lab) FastKey(v VM, im *Image) string {
 	if v.Persona != nil {
 		pa = v.Persona.Applied
 	}
-	return Hash(fmt.Sprint(im.ID, im.FileName, im.NICs, im.NIC, im.Disk, im.Extra, orInt(v.CPUs, im.CPUs, 1), orInt(v.RAM, im.RAM, 1024), v.DiskGB,
+	return Hash(fmt.Sprint(im.ID, im.FileName, im.NICs, im.NIC, im.Disk, im.Extra, im.PortMACs, orInt(v.CPUs, im.CPUs, 1), orInt(v.RAM, im.RAM, 1024), v.DiskGB,
 		v.Serial, v.BaseMAC, pa, v.Host, l.Mgmt, l.MgmtNet, l.LanFixed, l.LanIf, v.MgmtIP, v.Uplinks) + l.CPU + v.Machine)[:12] // its saved state loads with the same CPU only
 }
 

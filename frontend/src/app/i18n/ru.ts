@@ -2793,6 +2793,10 @@ const ru: Record<string, string> = {
   'Its running switches go on running in the background; the topology list shows them': 'Его работающие коммутаторы продолжают работать в фоне; список топологий показывает их',
   'Running here': 'Работает здесь',
   'No switch runs here.': 'Здесь не работает ни один коммутатор.',
+  'Port MAC addresses': 'MAC-адреса портов',
+  'The data ports’ network cards: from the switch’s base MAC (port 1 = base + 1), or a range of their own apart from the switch’s addresses, as GNS3 gives them': 'Сетевые карты портов данных: от базового MAC коммутатора (порт 1 = база + 1) или собственный диапазон отдельно от адресов коммутатора, как в GNS3',
+  'base MAC + port number': 'базовый MAC + номер порта',
+  'their own range (like GNS3)': 'собственный диапазон (как в GNS3)',
 };
 
 export default ru;

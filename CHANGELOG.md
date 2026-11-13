@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, Images: **Port MAC addresses** - the data ports' network cards take the switch's base MAC plus the port number (as before), or a range of their own apart from the switch's addresses, as GNS3 gives them.
+
 - Emulated lab, **topologies side by side**: opening another topology (or a new one) no longer stops the open one's switches - they go on running in the background. The topology list shows each one's running switches and hosts; *Hosts* shows what runs on each host, by topology, with *Open*. A new, duplicated or imported topology gets its own folder, ports and bridge network, and its switches skip management addresses the other topologies use, so several can run at once.
 
 - Emulated lab, **boot failures in Events**: an image can name console lines that mean its boot failed (the device pack does for EXOS: a persona file it rejects, its fail-safe configuration, a reboot by its process manager, an illegal instruction, a kernel panic); Termwright puts them in Events as FAIL instead of showing "booting" for ever - an illegal instruction with a hint about the CPU model.

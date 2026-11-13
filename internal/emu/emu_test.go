@@ -812,3 +812,17 @@ func TestTesterConfig(t *testing.T) {
 		t.Fatal("no start")
 	}
 }
+
+func TestPortMACs(t *testing.T) {
+	l, imgs := testLab()
+	im := *imgs["i1"]
+	a := strings.Join(l.Args(l.VMs[0], &im), " ")
+	if !strings.Contains(a, "mac="+l.MAC(l.VMs[0], 1)) {
+		t.Fatal("default: base MAC + port")
+	}
+	im.PortMACs = "own"
+	a = strings.Join(l.Args(l.VMs[0], &im), " ")
+	if !strings.Contains(a, "mac=0c:a1:00:00:00:01") || !strings.Contains(a, "mac="+l.MAC(l.VMs[0], 0)) {
+		t.Fatal("own: " + a)
+	}
+}
