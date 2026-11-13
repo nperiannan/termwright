@@ -2829,6 +2829,16 @@ const ru: Record<string, string> = {
   'Show the Management Packets': 'Показать пакеты порта управления',
   'Its management port, both ways (SSH, SNMP, DHCP, the cloud connection…); the switch keeps running': 'Его порт управления в обе стороны (SSH, SNMP, DHCP, облачное подключение…); коммутатор продолжает работать',
   'Capture the Management Port': 'Захватить порт управления',
+  'Link': 'Связь',
+  'Consoles': 'Консоли',
+  'Only Problems': 'Только проблемы',
+  'Problems': 'Проблемы',
+  'More: the toolbar, the mini-map, hosts': 'Ещё: панель инструментов, мини-карта, хосты',
+  'Toolbar': 'Панель инструментов',
+  'Icons and text': 'Значки и текст',
+  'Icons only': 'Только значки',
+  'Icons with labels': 'Значки с подписями',
+  'Mini-map': 'Мини-карта',
 };
 
 export default ru;

@@ -20,7 +20,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
   selector: 'app-lab-workspace',
   imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow],
   template: `
-  <div class="ws" (click)="menu.set(null); topos.set(null); mgOpen.set(false)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
+  <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
       @if (emu()) { <span class="topo" (click)="openTopos(); $event.stopPropagation()" [title]="tr('Topologies: save, open, new')"><span class="muted tl">{{ tr('Topology') }}</span> <b>{{ st()?.topology || tr('Untitled') }}</b> ▾</span>
@@ -301,33 +301,61 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           </div>
         }
       </div>
-      @if (page() !== 'new') { <div class="tdw"><div class="tdock" (click)="$event.stopPropagation()">
-        <button type="button" (click)="wizard()" [title]="devs().length ? tr('Add switches to this lab') : tr('Make a lab')">＋<span>{{ devs().length ? tr('Add Switches') : tr('New Lab') }}</span></button>
-        <button type="button" [class.on]="linkMode()" (click)="toggleLink(); $event.stopPropagation()" [disabled]="devs().length < 2 && !clouds().length" [title]="tr('Draw a cable between two switches')">⟷<span>{{ tr('Add Link') }}</span></button>
-        @if (emu()) { <button type="button" (click)="addCloud(); $event.stopPropagation()" [disabled]="!devs().length" [title]="tr('A cloud: the host’s own network, to cable switch ports to (Add Link from a port to the cloud)')">☁<span>{{ tr('Add Cloud') }}</span></button> }
-        <i class="dsep"></i>
-        @if (emu()) { <button type="button" (click)="sel() && lab.restart([sel()])" [disabled]="!selDev()?.running || lab.busy()" [title]="selDev() ? tr('Restart {0}', selDev()!.hostname) : tr('Select a running switch to restart it')">⟳<span>{{ tr('Restart') }}</span></button> }
-        <button type="button" (click)="consoleAll()" [disabled]="!running()" [title]="tr('Open the console of every running switch')">⌨<span>{{ emu() ? tr('Console All') : tr('Open All') }}</span></button>
-        @if (emu() && links().length) { <button type="button" (click)="lab.checkCabling()" [disabled]="lab.busy() || !running()" [title]="tr('Asks the running switches for their LLDP neighbours and marks each cable: as drawn, or not')">✓<span>{{ tr('Check Cabling') }}</span></button> }
-        @if (emu()) { <select class="looksel" [ngModel]="defLook()" (ngModelChange)="setDefLook($event)" name="looksel" [title]="tr('How devices are drawn (Draw As on a switch changes its kind only)')">@for (st of looks; track st.k) { <option [value]="st.k">{{ tr(st.name) }}</option> }</select> }
-      </div></div> }
-      @if (page() !== 'new' && devs().length) {
-        <div class="vbar" (click)="$event.stopPropagation()">
-          <span class="zg"><button type="button" class="sm" (click)="zoomBy(-0.1)" [attr.aria-label]="tr('Zoom out')" [title]="tr('Zoom out')">−</button>
-            <select class="sm zsel" [ngModel]="zsel()" (ngModelChange)="zoomPick($event, cv)" name="zsel" [title]="tr('Zoom')">
-              <option value="" hidden>{{ (zoom() * 100).toFixed(0) }} %</option>
-              <option value="fit">{{ tr('Fit - the whole topology') }}</option><option value="fill">{{ tr('Fill - as wide as the canvas') }}</option>
-              @for (z of [50, 75, 100, 125, 150, 200]; track z) { <option [value]="z">{{ z }} %</option> }
-            </select><button type="button" class="sm" (click)="zoomBy(0.1)" [attr.aria-label]="tr('Zoom in')" [title]="tr('Zoom in')">+</button></span>
+      @if (page() !== 'new') {
+        <svg class="ics" aria-hidden="true"><defs>
+          <symbol id="tw-add" viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M19.5 9v6M16.5 12h6"/></symbol>
+          <symbol id="tw-link" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><path d="M7.2 12h9.6"/></symbol>
+          <symbol id="tw-cloud" viewBox="0 0 24 24"><path d="M7.5 18.5h9.8a3.7 3.7 0 0 0 .4-7.4 5.6 5.6 0 0 0-10.9 1.2 3.1 3.1 0 0 0 .7 6.2z"/></symbol>
+          <symbol id="tw-restart" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/></symbol>
+          <symbol id="tw-con" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m7 10 3 2-3 2M12 15h5"/></symbol>
+          <symbol id="tw-chk" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+          <symbol id="tw-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 9.3h16M4 14.6h16M9.3 4v16M14.6 4v16"/></symbol>
+          <symbol id="tw-port" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="11" rx="1.5"/><path d="M9 7V4.5h6V7M9 12h.01M12 12h.01M15 12h.01"/></symbol>
+          <symbol id="tw-addr" viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/><circle cx="18" cy="16" r="2.5"/></symbol>
+          <symbol id="tw-warn" viewBox="0 0 24 24"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/></symbol>
+          <symbol id="tw-look" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 10h1M9 10h1M12 10h1M15 10h1M6 14h12"/></symbol>
+          <symbol id="tw-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
+        </defs></svg>
+        <div [class]="'ctb tm-' + tbMode()" (click)="$event.stopPropagation()" role="toolbar" [attr.aria-label]="tr('Canvas')">
+          <button type="button" class="cb" (click)="wizard()" [title]="devs().length ? tr('Add switches to this lab') : tr('Make a lab')"><svg><use href="#tw-add"/></svg><span class="ll">{{ devs().length ? tr('Add Switches') : tr('New Lab') }}</span><span class="sl">{{ devs().length ? tr('Switches') : tr('New Lab') }}</span></button>
+          <button type="button" class="cb" [class.on]="linkMode()" (click)="toggleLink(); $event.stopPropagation()" [disabled]="devs().length < 2 && !clouds().length" [title]="tr('Draw a cable between two switches')"><svg><use href="#tw-link"/></svg><span class="ll">{{ tr('Add Link') }}</span><span class="sl">{{ tr('Link') }}</span></button>
+          @if (emu()) { <button type="button" class="cb" (click)="addCloud(); $event.stopPropagation()" [disabled]="!devs().length" [title]="tr('A cloud: the host’s own network, to cable switch ports to (Add Link from a port to the cloud)')"><svg><use href="#tw-cloud"/></svg><span class="ll">{{ tr('Add Cloud') }}</span><span class="sl">{{ tr('Cloud') }}</span></button> }
           <i class="dsep"></i>
-          @if (multi()) { <span class="muted small">{{ tr('Hosts') }}</span><select class="sm" [ngModel]="hostView()" (ngModelChange)="setHostView($event)" name="hview" [title]="tr('How each switch’s host is shown')"><option value="auto">{{ tr('Auto') }}</option><option value="areas">{{ tr('Areas') }}</option><option value="tags">{{ tr('Tags') }}</option><option value="off">{{ tr('Off') }}</option></select>
-            <button type="button" class="sm" (click)="arrangeByHost()" [title]="tr('Put each host’s switches together')">⊞ {{ tr('Arrange by Host') }}</button><i class="dsep"></i> }
-          <button type="button" class="sm" [class.on]="showGrid()" (click)="flip(showGrid, 'tw.lab.grid')" [title]="tr('Grid lines; switches you move snap to them')">⊞ {{ tr('Grid') }}</button>
-          <button type="button" class="sm" [class.on]="showPorts()" (click)="flip(showPorts, 'tw.lab.ports')" [title]="tr('Port names on the cables')">{{ tr('Ports') }}</button>
-          <button type="button" class="sm" [class.on]="showAddr()" (click)="flip(showAddr, 'tw.lab.addr')" [title]="tr('Addresses under the switches')">{{ tr('Addresses') }}</button>
-          <button type="button" class="sm" [class.on]="onlyProblems()" (click)="onlyProblems.set(!onlyProblems())" [title]="tr('Dim everything that is fine')">{{ tr('Only problems') }}</button>
-          <button type="button" class="sm" [class.on]="miniOn()" (click)="flip(miniOn, 'tw.lab.mini')" [title]="tr('A small map of the whole topology')">{{ tr('Map') }}</button>
+          @if (emu()) { <button type="button" class="cb" (click)="sel() && lab.restart([sel()])" [disabled]="!selDev()?.running || lab.busy()" [title]="selDev() ? tr('Restart {0}', selDev()!.hostname) : tr('Select a running switch to restart it')"><svg><use href="#tw-restart"/></svg><span class="ll">{{ tr('Restart') }}</span><span class="sl">{{ tr('Restart') }}</span></button> }
+          <button type="button" class="cb" (click)="consoleAll()" [disabled]="!running()" [title]="tr('Open the console of every running switch')"><svg><use href="#tw-con"/></svg><span class="ll">{{ emu() ? tr('Console All') : tr('Open All') }}</span><span class="sl">{{ emu() ? tr('Consoles') : tr('Open All') }}</span></button>
+          @if (emu() && links().length) { <button type="button" class="cb" (click)="lab.checkCabling()" [disabled]="lab.busy() || !running()" [title]="tr('Asks the running switches for their LLDP neighbours and marks each cable: as drawn, or not')"><svg><use href="#tw-chk"/></svg><span class="ll">{{ tr('Check Cabling') }}</span><span class="sl">{{ tr('Cabling') }}</span></button> }
+          <span class="sp"></span>
+          @if (devs().length) {
+            <span class="zg"><button type="button" class="sm" (click)="zoomBy(-0.1)" [attr.aria-label]="tr('Zoom out')" [title]="tr('Zoom out')">−</button>
+              <select class="sm zsel" [ngModel]="zsel()" (ngModelChange)="zoomPick($event, cv)" name="zsel" [title]="tr('Zoom')">
+                <option value="" hidden>{{ (zoom() * 100).toFixed(0) }} %</option>
+                <option value="fit">{{ tr('Fit - the whole topology') }}</option><option value="fill">{{ tr('Fill - as wide as the canvas') }}</option>
+                @for (z of [50, 75, 100, 125, 150, 200]; track z) { <option [value]="z">{{ z }} %</option> }
+              </select><button type="button" class="sm" (click)="zoomBy(0.1)" [attr.aria-label]="tr('Zoom in')" [title]="tr('Zoom in')">+</button></span>
+            <i class="dsep"></i>
+            <button type="button" class="cb" [class.on]="showGrid()" (click)="flip(showGrid, 'tw.lab.grid')" [title]="tr('Grid lines; switches you move snap to them')"><svg><use href="#tw-grid"/></svg><span class="ll">{{ tr('Grid') }}</span><span class="sl">{{ tr('Grid') }}</span></button>
+            <button type="button" class="cb" [class.on]="showPorts()" (click)="flip(showPorts, 'tw.lab.ports')" [title]="tr('Port names on the cables')"><svg><use href="#tw-port"/></svg><span class="ll">{{ tr('Ports') }}</span><span class="sl">{{ tr('Ports') }}</span></button>
+            <button type="button" class="cb" [class.on]="showAddr()" (click)="flip(showAddr, 'tw.lab.addr')" [title]="tr('Addresses under the switches')"><svg><use href="#tw-addr"/></svg><span class="ll">{{ tr('Addresses') }}</span><span class="sl">{{ tr('Addresses') }}</span></button>
+            <button type="button" class="cb" [class.on]="onlyProblems()" (click)="onlyProblems.set(!onlyProblems())" [title]="tr('Dim everything that is fine')"><svg><use href="#tw-warn"/></svg><span class="ll">{{ tr('Only Problems') }}</span><span class="sl">{{ tr('Problems') }}</span></button>
+            <i class="dsep"></i>
+          }
+          @if (emu()) { <label class="cb" [title]="tr('How devices are drawn (Draw As on a switch changes its kind only)')"><svg><use href="#tw-look"/></svg><span class="ll">{{ lookName() }} ▾</span><span class="sl">{{ tr('Style') }}</span>
+            <select class="lkhid" [ngModel]="defLook()" (ngModelChange)="setDefLook($event)" name="looksel" [attr.aria-label]="tr('Style')">@for (st of looks; track st.k) { <option [value]="st.k">{{ tr(st.name) }}</option> }</select></label> }
+          <button type="button" class="cb" [class.on]="moreOpen()" (click)="moreAt($event)" [title]="tr('More: the toolbar, the mini-map, hosts')"><svg><use href="#tw-more"/></svg><span class="sl">{{ tr('More') }}</span></button>
         </div>
+        @if (moreOpen(); as mp) {
+          <div class="menu more" [style.left.px]="mp.x" [style.top.px]="mp.y" (click)="$event.stopPropagation()">
+            <span class="mh2">{{ tr('Toolbar') }}</span>
+            @for (m of tbModes; track m.k) { <a [class.cur]="tbMode() === m.k" (click)="setTbMode(m.k)">{{ tbMode() === m.k ? '✓ ' : '' }}{{ tr(m.name) }}</a> }
+            <hr /><span class="mh2">{{ tr('Canvas') }}</span>
+            <a (click)="flip(miniOn, 'tw.lab.mini')">{{ miniOn() ? '✓ ' : '' }}{{ tr('Mini-map') }}</a>
+            @if (multi()) { <a (click)="moreOpen.set(null); arrangeByHost()">{{ tr('Arrange by Host') }}</a>
+              <hr /><span class="mh2">{{ tr('Hosts') }}</span>
+              @for (h of hostViews; track h.k) { <a [class.cur]="hostView() === h.k" (click)="setHostView(h.k)">{{ hostView() === h.k ? '✓ ' : '' }}{{ tr(h.name) }}</a> } }
+          </div>
+        }
+      }
+      @if (page() !== 'new' && devs().length) {
         @if (hostMode() === 'tags') {
           <div class="hleg" (click)="$event.stopPropagation()"><a class="hlh" (click)="flip(legOpen, 'tw.lab.leg')" [title]="tr('Show or hide the host list')">{{ legOpen() ? '▾' : '▸' }} {{ tr('Hosts · click one to focus') }}</a>
             @if (legOpen()) { @for (r of mgRows(); track r.host) { <a [class.on]="focusHost() === r.host" [class.off]="!!focusHost() && focusHost() !== r.host" (click)="focusHost.set(focusHost() === r.host ? '' : r.host)"><i [style.background]="r.c"></i><b>{{ r.name }}</b><span class="muted">{{ r.kvm }} · {{ r.switches }}</span></a> } }
@@ -541,10 +569,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     @container (max-width: 820px) { .ptabs a { padding: 0 7px; } .ptabs small { display: none; } }
     .vbar { position: absolute; top: 10px; right: 312px; z-index: 6; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); max-width: calc(100% - 560px); overflow-x: auto;
       button { white-space: nowrap; flex: none; } button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } select { height: 26px; font-size: 12px; flex: none; } > span { white-space: nowrap; } }
-    .hleg { position: absolute; top: 58px; left: 242px; z-index: 6; display: flex; flex-direction: column; gap: 4px; max-height: 50%; overflow: auto;
+    .hleg { position: absolute; top: calc(var(--ctbh) + 12px); left: 242px; z-index: 6; display: flex; flex-direction: column; gap: 4px; max-height: 50%; overflow: auto;
       a { display: flex; align-items: center; gap: 7px; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 12px; white-space: nowrap; }
       a.on { border-color: var(--accent); } a.off { opacity: .5; } a.hlh { border: 0; background: none; padding: 2px 4px; color: var(--muted); font-size: 11.5px; } i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } }
-    .mini { position: absolute; right: 312px; bottom: 66px; z-index: 6; padding: 6px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer; line-height: 0;
+    .mini { position: absolute; right: 312px; bottom: 14px; z-index: 6; padding: 6px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer; line-height: 0;
       svg { background: var(--bg); border-radius: 6px; } .vp { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 1.2; } }
     .dabg { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
     .dadlg { width: min(860px, calc(100vw - 40px)); max-height: calc(100vh - 60px); overflow: auto; background: var(--surface); border: 1px solid var(--border, var(--line)); border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.45); display: flex; flex-direction: column; }
@@ -588,6 +616,15 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       > span { display: flex; flex-direction: column; gap: 3px; } .meter { display: block; margin: 0; } }
     .mgt2 { display: grid; gap: 4px; font-size: 12px; } .mgp .row2 { display: flex; gap: 8px; align-items: center; }
     .mgn { display: flex; align-items: center; gap: 4px; overflow: hidden; small { margin-left: 4px; } }
+    .ctb { position: absolute; top: 0; left: 230px; right: 300px; height: var(--ctbh); z-index: 7; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--surface); border-bottom: 1px solid var(--line); overflow-x: auto;
+      .cb { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 9px; border: 1px solid transparent; background: none; border-radius: 8px; white-space: nowrap; font-size: 12.5px; color: var(--text); cursor: pointer; flex: none; }
+      .cb:hover:not(:disabled) { background: var(--surface-2); } .cb.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } .cb:disabled { opacity: .45; cursor: default; }
+      svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+      .sl { display: none; } .sp { flex: 1; } .zg { display: inline-flex; align-items: center; gap: 2px; flex: none; } .zsel { height: 26px; font-size: 12px; } .lkhid { position: absolute; inset: 0; opacity: 0; cursor: pointer; } }
+    .ctb.tm-icons { .ll { display: none; } .cb { padding: 0 7px; } }
+    .ctb.tm-labels { .ll { display: none; } .sl { display: block; font-size: 11px; } .cb { flex-direction: column; justify-content: center; gap: 2px; height: 46px; padding: 0 8px; } }
+    .ics { position: absolute; width: 0; height: 0; } .menu.more { min-width: 190px; } .menu .cur { color: var(--accent); }
+    .main > .cv { margin-top: var(--ctbh); }
     .tdw { position: absolute; left: 230px; right: 300px; bottom: 14px; display: flex; justify-content: center; pointer-events: none; z-index: 6; container-type: inline-size; }
     .tdock { pointer-events: auto; display: flex; align-items: center; gap: 2px; padding: 5px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 10px 28px rgba(0,0,0,.35); max-width: calc(100% - 24px); overflow-x: auto;
       button { height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; background: none; border-radius: 8px; white-space: nowrap; font-size: 12.5px; }
@@ -1055,7 +1092,19 @@ export class LabWorkspace implements OnDestroy {
   protected showGrid = signal(this.lsGet('tw.lab.grid', '0') === '1');
   protected showAddr = signal(this.lsGet('tw.lab.addr', '1') === '1');
   protected legOpen = signal(this.lsGet('tw.lab.leg', '1') === '1');
-  protected miniOn = signal(this.lsGet('tw.lab.mini', '1') === '1');
+  protected miniOn = signal(this.lsGet('tw.lab.mini', '0') === '1');
+  /** The canvas toolbar: icons and text, icons only, or icons with short labels under them. */
+  protected tbMode = signal<'text' | 'icons' | 'labels'>((['text', 'icons', 'labels'].includes(this.lsGet('tw.lab.tb', '')) ? this.lsGet('tw.lab.tb', '') : 'labels') as 'text' | 'icons' | 'labels');
+  protected readonly tbModes = [{ k: 'text' as const, name: 'Icons and text' }, { k: 'icons' as const, name: 'Icons only' }, { k: 'labels' as const, name: 'Icons with labels' }];
+  protected readonly hostViews = [{ k: 'auto' as const, name: 'Auto' }, { k: 'areas' as const, name: 'Areas' }, { k: 'tags' as const, name: 'Tags' }, { k: 'off' as const, name: 'Off' }];
+  protected moreOpen = signal<{ x: number; y: number } | null>(null);
+  moreAt(ev: MouseEvent) {
+    if (this.moreOpen()) { this.moreOpen.set(null); return; }
+    const t = ev.currentTarget as HTMLElement, b = t.getBoundingClientRect(), r = (t.closest('.main') ?? t).getBoundingClientRect();
+    this.moreOpen.set({ x: b.right - r.left - 260, y: b.bottom - r.top + 4 });
+  }
+  setTbMode(m: 'text' | 'icons' | 'labels') { this.tbMode.set(m); this.lsPut('tw.lab.tb', m); }
+  protected lookName = computed(() => tr(this.looks.find(l => l.k === this.defLook())?.name ?? ''));
   protected onlyProblems = signal(false);
   protected focusHost = signal('');
   protected scrollAt = signal({ x: 0, y: 0, w: 900, h: 600 });
@@ -1327,7 +1376,7 @@ export class LabWorkspace implements OnDestroy {
   /** A click on the empty canvas: nothing selected (the side panel shows the whole topology). */
   canvasClick(ev: MouseEvent) {
     const t = ev.target as HTMLElement;
-    if (this.linkMode() || t.closest('.node, .lk, .tdock, .vbar, .mini, .hleg, .menu, .bar2, .zone .zh')) return;
+    if (this.linkMode() || t.closest('.node, .lk, .ctb, .mini, .hleg, .menu, .bar2, .zone .zh')) return;
     this.sel.set(''); this.selLink.set(''); this.selCloud.set('');
   }
   ngOnDestroy() { clearInterval(this.timer); if (this.trafTimer) clearInterval(this.trafTimer); this.lab.watch('ws-' + this.tab().id, false); for (const id of Object.values(this.docked())) void this.tabs.close(id); }
