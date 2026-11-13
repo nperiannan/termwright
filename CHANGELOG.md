@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **search, filter and sort on tables** (asked for): a search box above the **Events**, **Inventory** and **Traffic** tables (any column, with "N of M"), click a column title to sort (ascending, descending, off; Shift-click adds a second key; numbers sort as numbers), and the ⏷ beside a title to show only some values (Level, Switch, Host, Trigger, State, Result) or rows that contain some text; the active filters show as chips with one *Clear filters*. In **Events** the Level is a small coloured pill and the Message is in the normal font, coloured only for failures.
+
 - Emulated and simulated lab, **select several devices on the canvas** (asked for): drag a rectangle on the empty canvas (or Shift/⌘/Ctrl-click, or ⌘/Ctrl+A) to select devices, drag one to move them all, and press **Delete** to remove them after one question that names them. Delete now works for one selected device too (it only worked for a Cloud).
 
 - Images and Templates, **the buttons stay at the bottom**: *Add Image…*, *GNS3 Appliance…* and *Import Profiles…* no longer sit at the end of the image list (so you had to scroll down to reach them); the list scrolls above them.

@@ -3063,6 +3063,14 @@ const ru: Record<string, string> = {
   'Drag one to move them all · Delete removes them (you are asked first) · Shift or ⌘/Ctrl-click adds or removes one · ⌘/Ctrl+A selects all.': 'Перетащите одно, чтобы двигать все · Delete удаляет их (сначала будет вопрос) · Shift или ⌘/Ctrl-щелчок добавляет или убирает одно · ⌘/Ctrl+A выбирает все.',
   'Remove…': 'Удалить…',
   'Remove {0} switches?': 'Удалить коммутаторы ({0})?',
+  'Clear filters': 'Сбросить фильтры',
+  'Remove this filter': 'Убрать этот фильтр',
+  'Sort': 'Сортировка',
+  'Filter': 'Фильтр',
+  'Show only': 'Показать только',
+  'Nothing yet': 'Пока ничего',
+  'Contains': 'Содержит',
+  'No switch here matches': 'Здесь нет подходящих коммутаторов',
 };
 
 export default ru;

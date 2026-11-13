@@ -7,6 +7,7 @@ import { EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, Emu
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
+import { TableView, TvBar, TvHead } from '../core/table-view';
 import { LabConfigure, LabHosts, LabImages, LabNew } from './lab-pages';
 import { PcWindow } from './pc-window';
 import { TerminalView } from './terminal-view';
@@ -21,7 +22,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow],
+  imports: [FormsModule, DecimalPipe, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" /> }
@@ -454,8 +455,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
       </div>
       @if (dock() === 'inv') {
-        <div class="inv"><table>
-          <tr><th>{{ tr('Switch') }}</th><th>{{ tr('State') }}</th><th>{{ tr('Console') }}</th><th>{{ tr('Management') }}</th><th>CPU</th><th>{{ tr('Memory') }}</th></tr>
+        <div class="inv"><app-tv-bar [tv]="invView" /><table>
+          <tr><th tvh [tv]="invView" key="switch" filter="text">{{ tr('Switch') }}</th><th tvh [tv]="invView" key="state">{{ tr('State') }}</th><th tvh [tv]="invView" key="console" filter="text">{{ tr('Console') }}</th><th tvh [tv]="invView" key="mgmt" filter="text">{{ tr('Management') }}</th><th tvh [tv]="invView" key="cpu" filter="none">CPU</th><th tvh [tv]="invView" key="mem" filter="none">{{ tr('Memory') }}</th></tr>
           @for (g of inventory(); track g.host) {
             <tbody>
             <tr class="h" (click)="flipHost(g.id)" [title]="invClosed().has(g.id) ? tr('Show its switches') : tr('Hide its switches')">
@@ -464,20 +465,21 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <span class="pill">{{ tr('{0} switches · {1} running', g.devs.length, g.running) }}</span></td>
               <td><span class="mtr"><i [style.width.%]="g.cpuPct"></i></span>{{ g.cpuText }}</td><td><span class="mtr"><i [style.width.%]="g.memPct"></i></span>{{ g.memText }}</td></tr>
             @if (!invClosed().has(g.id)) {
-              @for (d of g.devs; track d.id) {
+              @for (d of invDevs(g.id); track d.id) {
                 <tr class="d" [class.on]="sel() === d.id" (click)="select(d)"><td><span class="guide" [style.border-color]="hcol(g.id)"></span>{{ d.hostname }}</td><td [class]="stateOf(d)">● {{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</td>
                   <td class="mono" [title]="g.host + ':' + d.console">:{{ d.console }}</td><td class="mono">{{ d.ssh || '-' }}</td>
                   <td>@if (d.running) { <span class="mtr"><i [style.width.%]="d.cpu ?? 0"></i></span>{{ (d.cpu ?? 0).toFixed(0) }} % }</td>
                   <td>@if (d.running) { <span class="mtr"><i [style.width.%]="pct(d.memUsed ?? 0, d.ram ?? 0)"></i></span>{{ d.memUsed ? gb(d.memUsed) + ' / ' : '' }}{{ gb(d.ram) }} }</td></tr>
-              } @empty { <tr class="d"><td colspan="6" class="muted"><span class="guide" [style.border-color]="hcol(g.id)"></span>{{ tr('No switches on this host') }}</td></tr> }
+              } @empty { <tr class="d"><td colspan="6" class="muted"><span class="guide" [style.border-color]="hcol(g.id)"></span>{{ g.devs.length ? tr('No switch here matches') : tr('No switches on this host') }}</td></tr> }
             }
             </tbody>
           }
         </table></div>
       } @else if (dock() === 'events') {
         <div class="ev">
-          <div class="evh"><span>{{ tr('Time') }}</span><span>{{ tr('Host') }}</span><span>{{ tr('Switch') }}</span><span>{{ tr('Level') }}</span><span>{{ tr('Trigger') }}</span><span>{{ tr('Message') }}</span></div>
-          @for (e of events(); track $index) { <div [class]="'lv-' + e.level"><span class="t">{{ time(e.at) }}</span><span class="eh" [title]="e.host || tr('this computer')">@if (e.host) { <i [style.background]="hcol(e.host)"></i>{{ hname(e.host) }} } @else { <span class="muted">{{ tr('this computer') }}</span> }</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span class="lv">{{ lvName(e.level) }}</span><span class="by" [title]="byTitle(e.by)">{{ (e.by || 'system').toUpperCase() }}</span><span class="tx">{{ e.text }}</span></div> }
+          <app-tv-bar [tv]="evView" />
+          <div class="evh"><span tvh [tv]="evView" key="time" filter="text">{{ tr('Time') }}</span><span tvh [tv]="evView" key="host">{{ tr('Host') }}</span><span tvh [tv]="evView" key="switch">{{ tr('Switch') }}</span><span tvh [tv]="evView" key="level">{{ tr('Level') }}</span><span tvh [tv]="evView" key="trigger">{{ tr('Trigger') }}</span><span tvh [tv]="evView" key="message" filter="text">{{ tr('Message') }}</span></div>
+          @for (e of evView.rows(); track $index) { <div [class]="'lv-' + e.level"><span class="t">{{ time(e.at) }}</span><span class="eh" [title]="e.host || tr('this computer')">@if (e.host) { <i [style.background]="hcol(e.host)"></i>{{ hname(e.host) }} } @else { <span class="muted">{{ tr('this computer') }}</span> }</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span class="lv">{{ lvName(e.level) }}</span><span class="by" [title]="byTitle(e.by)">{{ (e.by || 'system').toUpperCase() }}</span><span class="tx">{{ e.text }}</span></div> }
           @empty { <div><span class="t"></span><span></span><b></b><span></span><span></span><span class="muted">{{ emu() ? tr('Nothing yet - start a switch.') : tr('Simulated switches start at once; their state is on the canvas.') }}</span></div> }
         </div>
       } @else if (dock() === 'traffic' && trafView() === 'tests') {
@@ -486,8 +488,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <div class="trw" [class.ed]="!!sEd() || !!tEd()">
           <div class="trt">
             @if (traf()?.note) { <p class="trn">⚠ {{ traf()!.note }}</p> }
-            <table><tr><th>{{ tr('Stream') }}</th><th>{{ tr('From → To') }}</th><th>{{ tr('Frame') }}</th><th>{{ tr('Rate') }}</th><th>{{ tr('Sent') }}</th><th>{{ tr('Received') }}</th><th>{{ tr('Loss') }}</th><th>{{ tr('Latency') }}</th><th>{{ tr('Order') }}</th><th>{{ tr('Now') }}</th><th>{{ tr('Result') }}</th><th></th></tr>
-              @for (x of traf()?.streams ?? []; track x.id) { @let r = resOf(x.id);
+            <app-tv-bar [tv]="stView" /><table><tr><th tvh [tv]="stView" key="stream" filter="text">{{ tr('Stream') }}</th><th tvh [tv]="stView" key="path" filter="text">{{ tr('From → To') }}</th><th tvh [tv]="stView" key="frame" filter="text">{{ tr('Frame') }}</th><th tvh [tv]="stView" key="rate" filter="none">{{ tr('Rate') }}</th><th tvh [tv]="stView" key="sent" filter="none">{{ tr('Sent') }}</th><th tvh [tv]="stView" key="recv" filter="none">{{ tr('Received') }}</th><th tvh [tv]="stView" key="loss" filter="none">{{ tr('Loss') }}</th><th tvh [tv]="stView" key="lat" filter="none">{{ tr('Latency') }}</th><th tvh [tv]="stView" key="order" filter="none">{{ tr('Order') }}</th><th>{{ tr('Now') }}</th><th tvh [tv]="stView" key="result">{{ tr('Result') }}</th><th></th></tr>
+              @for (x of stView.rows(); track x.id) { @let r = resOf(x.id);
                 <tr [class.on]="sEd()?.id === x.id" (click)="editStream(x)"><td><b>{{ x.name }}</b></td><td class="mono">{{ tpName(x.from) }} → {{ x.to ? tpName(x.to) : (x.dstIp || tr('all')) }}</td>
                   <td class="mono">{{ x.kind.toUpperCase() }}@if (x.dstIp?.includes(':')) { v6 }@if (x.vlan) { · VLAN {{ x.vlan }} }@if (x.dscp) { · DSCP {{ x.dscp }} } · {{ x.sizeMode === 'imix' ? 'IMIX' : x.sizeMode ? x.size + '-' + x.sizeMax + ' B' : x.size + ' B' }}@if (x.mods?.length) { <span class="muted" [title]="modText(x)"> · ±{{ x.mods!.length }}</span> }</td><td class="mono">{{ x.pps }} pps · {{ x.count ? x.count + ' ' + tr('frames') : (x.seconds || 10) + ' s' }}</td>
                   <td class="mono">{{ r?.tx ?? '-' }}</td><td class="mono">{{ r ? r.rx : '-' }}@if (r?.other) { <span class="muted" [title]="tr('Arrived at a test port it was not for (flooded)')"> +{{ r!.other }}</span> }</td>
@@ -814,10 +816,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .dtabs { display: flex; align-items: center; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line);
       a { padding: 6px 12px; color: var(--muted); font-weight: 500; cursor: pointer; } a.on { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
       .cnt { margin-left: 6px; background: var(--danger); color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; } .cnt.run { background: var(--accent); } .cnt.n { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); } }
-    .ev { padding: 6px 14px; overflow: auto; div { display: grid; grid-template-columns: 64px 120px 120px 44px 58px 1fr; gap: 10px; padding: 2px 0; font-size: 12px; } .eh { display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); i { width: 7px; height: 7px; border-radius: 50%; flex: none; } } .t { color: var(--muted); } b { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ev { padding: 6px 14px; overflow: auto; div { display: grid; grid-template-columns: 74px 130px 130px 66px 84px 1fr; gap: 10px; padding: 2px 0; font-size: 12px; } .eh { display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); i { width: 7px; height: 7px; border-radius: 50%; flex: none; } } .t { color: var(--muted); } b { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .evh { position: sticky; top: -6px; z-index: 1; background: var(--surface); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
-      .lv, .by { font: 600 11px/18px var(--mono, monospace); letter-spacing: .03em; } .by { color: var(--text); opacity: .75; }
-      .lv-ok :is(.lv, .tx) { color: var(--success, #1fa45a); } .lv-error :is(.lv, .tx) { color: var(--danger); } .lv-warn :is(.lv, .tx) { color: var(--warning, #e39b17); } }
+      .by { font: 600 11px/18px var(--mono, monospace); letter-spacing: .03em; color: var(--text); opacity: .75; }
+      .lv { font-weight: 600; font-size: 10.5px; line-height: 16px; letter-spacing: .04em; text-align: center; border-radius: 9px; padding: 1px 0; align-self: center; color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent); }
+      .lv-ok .lv { color: var(--success, #1fa45a); background: color-mix(in srgb, var(--success, #1fa45a) 14%, transparent); } .lv-error .lv { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); } .lv-warn .lv { color: var(--warning, #e39b17); background: color-mix(in srgb, var(--warning, #e39b17) 14%, transparent); }
+      .lv-error .tx { color: var(--danger); } }
     .tail { margin: 0; padding: 8px 14px; overflow: auto; font: 11.5px/1.45 var(--mono, monospace); white-space: pre-wrap; }
     .tailw { position: relative; min-height: 0; overflow: hidden; display: flex; cursor: text; .tail { flex: 1; } .typ { position: absolute; right: 14px; bottom: 10px; } }
     .dterm { position: relative; min-height: 0; overflow: hidden; padding: 4px 6px; display: flex; > * { flex: 1; min-width: 0; } }
@@ -1471,7 +1475,38 @@ export class LabWorkspace implements OnDestroy {
     for (const d of this.devs()) { c[this.stateOf(d)]++; if (this.warnOf(d)) c.warn++; }
     return c;
   });
+  /** The inventory's search, filters and sort: every switch with the host it is on. */
+  protected invView = new TableView<{ hid: string; host: string; d: LabDevice }>(() => this.inventory().flatMap(g => g.devs.map(d => ({ hid: g.id, host: g.host, d }))), [
+    { key: 'switch', label: 'Switch', get: r => r.d.hostname },
+    { key: 'state', label: 'State', get: r => tr(r.d.stateText || (r.d.running ? 'running' : 'stopped')) },
+    { key: 'console', label: 'Console', get: r => ':' + r.d.console },
+    { key: 'mgmt', label: 'Management', get: r => r.d.ssh || '' },
+    { key: 'cpu', label: 'CPU', get: r => (r.d.running ? r.d.cpu ?? 0 : null), kind: 'num' },
+    { key: 'mem', label: 'Memory', get: r => (r.d.running ? r.d.memUsed ?? 0 : null), kind: 'num' },
+  ]);
+  protected invDevs(hid: string): LabDevice[] { return this.invView.rows().filter(r => r.hid === hid).map(r => r.d); }
+  /** The traffic streams' search, filters and sort. */
+  protected stView = new TableView<EmuStream>(() => this.traf()?.streams ?? [], [
+    { key: 'stream', label: 'Stream', get: x => x.name },
+    { key: 'path', label: 'From → To', get: x => this.tpName(x.from) + ' → ' + (x.to ? this.tpName(x.to) : x.dstIp || tr('all')) },
+    { key: 'frame', label: 'Frame', get: x => x.kind.toUpperCase() + ' ' + (x.sizeMode === 'imix' ? 'IMIX' : x.size) },
+    { key: 'rate', label: 'Rate', get: x => x.pps, kind: 'num' },
+    { key: 'sent', label: 'Sent', get: x => this.resOf(x.id)?.tx ?? null, kind: 'num' },
+    { key: 'recv', label: 'Received', get: x => this.resOf(x.id)?.rx ?? null, kind: 'num' },
+    { key: 'loss', label: 'Loss', get: x => { const r = this.resOf(x.id); return r?.expected ? r.loss : null; }, kind: 'num' },
+    { key: 'lat', label: 'Latency', get: x => { const r = this.resOf(x.id); return r && r.latAvg >= 0 ? r.latAvg : null; }, kind: 'num' },
+    { key: 'order', label: 'Order', get: x => { const r = this.resOf(x.id); return r?.tx ? (r.ooo ?? 0) + (r.dup ?? 0) : null; }, kind: 'num' },
+    { key: 'result', label: 'Result', get: x => { const r = this.resOf(x.id); return r?.running ? tr('running') : r?.result === 'pass' ? 'PASS' : r?.result === 'fail' ? 'FAIL' : ''; } },
+  ]);
   protected events = computed(() => [...(this.st()?.events ?? [])].reverse());
+  protected evView = new TableView<any>(() => this.events(), [
+    { key: 'time', label: 'Time', get: e => Date.parse(e.at) || 0, kind: 'num' },
+    { key: 'host', label: 'Host', get: e => (e.host ? this.hname(e.host) : tr('this computer')) },
+    { key: 'switch', label: 'Switch', get: e => e.name },
+    { key: 'level', label: 'Level', get: e => this.lvName(e.level) },
+    { key: 'trigger', label: 'Trigger', get: e => (e.by || 'system').toUpperCase() },
+    { key: 'message', label: 'Message', get: e => e.text },
+  ]);
   protected problems = computed(() => (this.st()?.events ?? []).filter(e => e.level === 'error').length);
   protected readonly roles = ROLES;
   protected readonly looks = ICON_STYLES;
