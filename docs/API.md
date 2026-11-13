@@ -89,6 +89,8 @@ curl -s -H "$AUTH" "$API/traffic/runs/latest?format=text"     # until its status
 
 ## The same in Python (pytest)
 
+`scripts/python/termwright_lab.py` is a ready client (standard library only, with RFC 2544, convergence and iperf3 in one call each); see [the Python guide](PYTHON.md). Without it, the same with `requests`:
+
 ```python
 import json, os, pathlib, platform, time, requests
 
