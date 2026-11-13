@@ -692,7 +692,7 @@ export class LabImages implements OnInit {
   imageOf(id: string) { return this.images().find(i => i.id === id); }
   diskName(b?: string) { return ({ ide: 'IDE', sata: 'SATA', scsi: 'SCSI', virtio: 'virtio', sd: 'SD' } as Record<string, string>)[b || 'ide'] ?? (b || 'IDE'); }
   buses(cur?: string) { const l = ['ide', 'sata', 'scsi', 'virtio']; if (cur && !l.includes(cur)) l.push(cur); return l.map(v => ({ v, l: this.diskName(v) + (v === 'ide' ? ' (' + tr('most network images') + ')' : v === 'virtio' ? ' (' + tr('fastest, needs drivers') + ')' : '') })); }
-  nics(cur?: string) { const l = ['e1000', 'virtio-net-pci', 'vmxnet3', 'rtl8139', 'e1000e', 'i82559er']; if (cur && !l.includes(cur)) l.push(cur); return l; }
+  nics(cur?: string) { const l = ['e1000', 'e1000-82545em', 'virtio-net-pci', 'vmxnet3', 'rtl8139', 'e1000e', 'i82559er']; if (cur && !l.includes(cur)) l.push(cur); return l; }
   async suggestTpl(serial: boolean, mac: boolean) {
     const t = this.tpl(); if (!t) return;
     const s = await this.backend.emuSuggest(t.model || this.imageOf(t.image)?.name || '').catch(() => null);
