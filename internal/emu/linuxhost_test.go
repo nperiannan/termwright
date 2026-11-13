@@ -14,6 +14,9 @@ func TestLinuxHost(t *testing.T) {
 	if im.Login != "alpine" || im.DeviceType != "Linux" || len(im.Day0) != 2 || len(im.PortAddr) != 1 || len(im.PortDHCP) != 1 || len(im.AddrSet) != 1 {
 		t.Fatalf("%+v", im)
 	}
+	if im.NICs != 3 || im.PortName != "eth{n}" || !strings.Contains(im.Elevate, "sudo -s") || im.DataPorts() != 2 {
+		t.Fatalf("a computer needs data ports and root: %+v", im)
+	}
 	c := FillPort(im.PortAddr[0], "0C:01:03:00:00:02", "10.0.0.5/24")
 	if !strings.Contains(c, "/0c:01:03:00:00:02/") || !strings.Contains(c, "ip addr add 10.0.0.5/24 dev") {
 		t.Fatal(c)

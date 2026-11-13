@@ -633,7 +633,7 @@ func (a *App) emuLoad() {
 		emuLab.f.Folder = "Emulated Lab"
 	}
 	for i := range emuLab.f.Images { // Linux computers added before Termwright configured them
-		if im := &emuLab.f.Images[i]; strings.HasPrefix(im.Source, "GNS3 appliance ") && len(im.PortAddr) == 0 && emu.IsLinuxAppliance(im.Name, "") {
+		if im := &emuLab.f.Images[i]; strings.HasPrefix(im.Source, "GNS3 appliance ") && emu.IsLinuxAppliance(im.Name, "") {
 			emu.LinuxHost(im)
 		}
 	}
@@ -6009,6 +6009,12 @@ func (a *App) EmuAddComputer(host string, start bool) (EmuView, error) {
 			continue
 		}
 		alp := strings.Contains(strings.ToLower(im.Name), "alpine")
+		if pick != nil && im.HasFiles() != pick.HasFiles() { // one whose file is here, rather than one still to download
+			if im.HasFiles() {
+				pick = im
+			}
+			continue
+		}
 		if pick == nil || alp && !strings.Contains(strings.ToLower(pick.Name), "alpine") || alp == strings.Contains(strings.ToLower(pick.Name), "alpine") && im.Size < pick.Size {
 			pick = im
 		}

@@ -59,6 +59,7 @@ type Image struct {
 	PortAddr6       []string            `json:"portAddr6,omitempty"`       // commands that give a data port a fixed IPv6 address ({mac} {addr})
 	PortAuto6       []string            `json:"portAuto6,omitempty"`       // commands that make a data port take its IPv6 address from router advertisements ({mac})
 	RouteSet        []string            `json:"routeSet,omitempty"`        // commands that set the default gateways and DNS server ({gw} {gw6} {dns})
+	Elevate         string              `json:"elevate,omitempty"`         // typed after each login to become root when the console logs in as a plain user (Tiny Core: tc)
 	PortDHCP        []string            `json:"portDhcp,omitempty"`        // commands that make a data port ask DHCP for its address ({mac}), for the ports set to dhcp
 	LagCmd          string              `json:"lagCmd,omitempty"`          // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
 	LagSet          map[string][]string `json:"lagSet,omitempty"`          // CLI commands that make a LAG, per mode ("lacp", "static"): {id} {name} {ports} {master} {first} {last}

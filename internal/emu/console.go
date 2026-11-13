@@ -298,6 +298,11 @@ func Login(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 	for try := 0; try < 3+authDowns; try++ {
 		var p *regexp.Regexp
 		if p, err = login1(ctx, c, im); err == nil {
+			if im.Elevate != "" { // a console that logs in as a plain user: become root
+				if _, e := Run(ctx, c, im, p, im.Elevate); e != nil {
+					return nil, fmt.Errorf("becoming root (%s): %w", im.Elevate, e)
+				}
+			}
 			return p, nil
 		}
 		loggedOut := leave.MatchString(c.Tail(300)) // the questionnaire logged it out: log in again

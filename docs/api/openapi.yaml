@@ -2936,6 +2936,9 @@ components:
                         - "null"
                     items:
                         type: string
+                elevate:
+                    description: 'typed after each login to become root when the console logs in as a plain user (Tiny Core: tc)'
+                    type: string
                 portDhcp:
                     description: commands that make a data port ask DHCP for its address ({mac}), for the ports set to dhcp
                     type:

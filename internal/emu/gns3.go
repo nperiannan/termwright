@@ -259,10 +259,19 @@ func LinuxHost(im *Image) {
 	if im.Prompt == "" {
 		im.Prompt = `[#$]\s*$`
 	}
+	if im.NICs < 3 { // a computer needs data ports to be cabled: the management port and two more (GNS3's Linux appliances have one network card)
+		im.NICs = 3
+	}
+	if im.PortName == "" {
+		im.PortName = "eth{n}"
+	}
+	if im.Elevate == "" { // Tiny Core logs in as tc: commands that change the network need root
+		im.Elevate = `[ "$(id -u)" = 0 ] || exec sudo -s`
+	}
 	if len(im.Day0) == 0 {
 		im.Day0 = []string{
 			"hostname {hostname}; echo {hostname} > /etc/hostname",
-			"(command -v iperf3 || apk add -q iperf3 || (apt-get update -q && apt-get install -y -q iperf3) || dnf install -y -q iperf3) >/dev/null 2>&1 &",
+			"(command -v iperf3 || apk add -q iperf3 || (apt-get update -q && apt-get install -y -q iperf3) || dnf install -y -q iperf3 || tce-load -wi iperf3) >/dev/null 2>&1 &",
 		}
 	}
 	if len(im.AddrSet) == 0 {

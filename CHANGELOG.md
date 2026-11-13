@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **Linux computers found by a first test on a real host**: GNS3's Linux images (Alpine, Tiny Core…) have one network card, so a computer had no data port to cable; they now get three (management and two data ports, named eth1, eth2) - images added before are corrected when Termwright starts. A console that logs in as a plain user (Tiny Core's tc) is made root right after the login (the image's *elevate* command, `sudo -s`), and Tiny Core gets iperf3 from its own package loader. *Add Computer* now prefers a Linux image whose file is here over one that still has to be downloaded.
+
 - **Settings → AI Assistant → Claude connector**: *Claude Code* showed *Not added* every time Settings was opened, even after *Add* worked, because the page never asked. It now reads Claude Code's own settings file (`~/.claude.json`, or `CLAUDE_CONFIG_DIR`) and shows *Added* when Termwright is in it.
 
 - Emulated lab, **a switch that was running when Termwright started** (VOSS 5520 stuck at its login with "planned, not on the switch yet"): nothing watched its start, so its day 0 and its fixed management address were never typed after a restart of Termwright, and *Type Day 0 Again* only cleared its flags. Now a running switch whose day 0 or fixed address was never typed is found at the first look and typed on its console (Events: "found running without its configuration typed"), and *Type Day 0 Again* really types it. **lab_debug** says so (a DIAGNOSIS line), names the address typed to it, and ends with the emulator log lines of that switch.
