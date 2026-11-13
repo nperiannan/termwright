@@ -1371,6 +1371,46 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/debug:
+        post:
+            operationId: tool_debug
+            tags:
+                - Tools
+            summary: Everything to find why a switch or computer of the emulated lab is stuck (booting, day 0, address, login)
+            description: 'Everything to find why a switch or computer of the emulated lab is stuck (booting, day 0, address, login): its state and the step Termwright is on, its error, addresses, the image''s login and ready settings (never its password), its Events and the end of its console since it started. Passwords and keys are hidden. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                lines:
+                                    description: console lines from the end (default 200, at most 3000)
+                                    type: integer
+                                switch:
+                                    type: string
+                            required:
+                                - switch
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/events:
         post:
             operationId: tool_events

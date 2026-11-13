@@ -129,6 +129,7 @@ termwright lab help
 termwright lab show                                   # GET /lab
 termwright lab power action=start switches=leaf-1,leaf-2
 termwright lab wait timeout=900
+termwright lab debug switch=leaf-1 lines=300 > leaf-1-debug.txt
 termwright lab cpu switches=leaf-1 max_cores=1 share=50
 termwright lab address action=set switch=pc-1 port=1 address=10.10.0.11/24
 termwright lab traffic add_port switch=leaf-1 port=5 ip=10.10.0.1/24

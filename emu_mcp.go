@@ -170,6 +170,11 @@ var mcpLabTools = []mcpTool{
 		}, "action")},
 	{"lab_qemu_command", "The QEMU command line a switch of the emulated lab runs with now (read on its KVM host), or the one it starts with when it is not running: network cards, CPU, machine, memory.",
 		mcpSchema(map[string]any{"switch": map[string]any{"type": "string"}}, "switch")},
+	{"lab_debug", "Everything to find why a switch or computer of the emulated lab is stuck (booting, day 0, address, login): its state and the step Termwright is on, its error, addresses, the image's login and ready settings (never its password), its Events and the end of its console since it started. Passwords and keys are hidden.",
+		mcpSchema(map[string]any{
+			"switch": map[string]any{"type": "string"},
+			"lines":  map[string]any{"type": "integer", "description": "console lines from the end (default 200, at most 3000)"},
+		}, "switch")},
 	{"lab_events", "Read the emulated lab's Events log: what Termwright did to each switch (started, booted, day 0, persona, moves, errors), newest last.",
 		mcpSchema(map[string]any{"last": map[string]any{"type": "integer", "description": "how many lines (default 60, at most 300)"}})},
 }
@@ -919,6 +924,17 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			return a.EmuQemuCommand(d.ID)
 		}
 		return a.emuLinkCheck(d.ID, argInt(args, "seconds", 30, 120))
+	case "lab_debug":
+		d, err := emuMCPID(v, argStr(args, "switch"))
+		if err != nil {
+			return "", err
+		}
+		out, err := a.emuDebug(d.ID, argInt(args, "lines", 200, 3000))
+		if err != nil {
+			return "", err
+		}
+		out, _ = aiRedact(out, false)
+		return out, nil
 	case "lab_events":
 		n := argInt(args, "last", 60, 300)
 		ev := v.Events

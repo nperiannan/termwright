@@ -420,6 +420,61 @@ func (a *App) EmuConsoleLog(id string) (string, error) {
 	return b.String(), nil
 }
 
+// emuRunning says whether a VM's QEMU runs, as the last status read saw it (lock held).
+func emuRunning(id string) bool {
+	_, up := emuLab.status.Up[id]
+	return up
+}
+
+// emuDebug is what tells why a switch is stuck: its state, the step Termwright
+// is on, its image's login settings (no password), its Events and the end of
+// its console.
+func (a *App) emuDebug(id string, lines int) (string, error) {
+	emuLab.mu.Lock()
+	var v *emu.VM
+	if emuLab.f.Lab != nil {
+		v = emuLab.f.Lab.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return "", errors.New("no such switch")
+	}
+	vv, host := *v, emuHostOf(*v)
+	var b strings.Builder
+	fmt.Fprintf(&b, "===== %s =====\nhost: %s\nQEMU running: %v · step: %s · ready (login seen): %v · day 0 being typed: %v · day 0 done: %v · resumed: %v\nerror: %s\nmanagement: %s (gateway %s) · address it was seen to take: %s\nfirmware: %s · serial: %s · vCPU %d · RAM %d MB",
+		vv.Name, host, emuRunning(id), orStr(emuLab.state[id], "-"), emuLab.ready[id], emuLab.day0[id], vv.Day0Done, emuLab.resumed[id], orStr(emuLab.errs[id], "-"),
+		orStr(vv.MgmtIP, "none"), orStr(vv.Gateway, "-"), orStr(vv.AddrOn, "-"), orStr(vv.FW, "-"), orStr(vv.HWSerial, "-"), vv.CPUs, vv.RAM)
+	if l := a.emuFor(host); l != nil {
+		fmt.Fprintf(&b, "\nlab management: %s %s · fixed addresses: %v", l.Mgmt, l.MgmtNet, l.Fixed())
+	}
+	if im := emuImage(vv.Image); im != nil {
+		pw := "none set"
+		if emuImageHasPassword(im.ID) {
+			pw = "set (hidden)"
+		} else if im.DefaultPassword != "" {
+			pw = "the factory default (hidden)"
+		}
+		fmt.Fprintf(&b, "\nimage: %s %s (%s) · type %s\nready text: %q · not ready: %q · login: %q · password: %s · prompt: %q\nday 0: %d commands · set address: %d commands · address command: %q",
+			im.Name, im.Version, im.FileName, orStr(im.DeviceType, "-"), im.Ready, im.NotReady, im.Login, pw, orStr(im.Prompt, `[>#$]\s*$ (default)`), len(im.Day0), len(im.AddrSet), im.AddrCmd)
+	}
+	emuLab.mu.Unlock()
+	log, err := a.EmuConsoleLog(id)
+	if err != nil {
+		return b.String() + "\n\n(console log: " + err.Error() + ")", nil
+	}
+	if i := strings.Index(log, "===== Events ====="); i >= 0 {
+		log = log[i:]
+	}
+	if ev, con, ok := strings.Cut(log, "===== Console ====="); ok {
+		cl := strings.Split(strings.TrimRight(con, "\n"), "\n")
+		if len(cl) > lines {
+			cl = cl[len(cl)-lines:]
+		}
+		log = ev + fmt.Sprintf("===== Console (last %d lines) =====", len(cl)) + strings.Join(cl, "\n")
+	}
+	return b.String() + "\n\n" + log, nil
+}
+
 // EmuDay0Again types a running switch's day 0 (its address, persona check) again,
 // after it failed: its disk and configuration stay.
 func (a *App) EmuDay0Again(id string) (EmuView, error) {
