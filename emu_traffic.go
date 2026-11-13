@@ -50,8 +50,8 @@ type EmuTrafficView struct {
 	Running bool              `json:"running"`           // a run is going on
 	Started string            `json:"started,omitempty"` // when the run started (RFC 3339)
 	Note    string            `json:"note,omitempty"`    // something to do (restart a switch for its test port)
-	// History: per stream, the rates of the run so far ([seconds since the start, tx/s, rx/s]), for the graphs.
-	History map[string][][3]float64 `json:"history,omitempty"`
+	// History: per stream, the run so far ([seconds since the start, tx/s, rx/s, loss % so far, average latency ms (-1: not measured)]), for the graphs.
+	History map[string][][5]float64 `json:"history,omitempty"`
 }
 
 var emuTraf struct {
@@ -61,7 +61,7 @@ var emuTraf struct {
 	last    []EmuStreamResult
 	final   bool                  // the last run's counters are final (not read from the hosts again)
 	prev    map[string][3]float64 // per stream: when, tx and rx at the last read (for the rates)
-	hist    map[string][][3]float64
+	hist    map[string][][5]float64
 	leases  map[string][2]string // test port → the address it got by DHCP ("ip/len via gw"), by SLAAC
 }
 
@@ -153,7 +153,7 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 	v.Streams = slices.DeleteFunc(v.Streams, func(s emu.Stream) bool { test[s.ID] = s.Test != ""; return s.Test != "" })
 	v.Results = slices.DeleteFunc(v.Results, func(r EmuStreamResult) bool { return test[r.ID] })
 	if len(test) > 0 && v.History != nil {
-		maps.DeleteFunc(v.History, func(id string, _ [][3]float64) bool { return test[id] })
+		maps.DeleteFunc(v.History, func(id string, _ [][5]float64) bool { return test[id] })
 	}
 	return v, nil
 }
@@ -345,7 +345,7 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 // emuTrafRates works out each stream's rates since the last read and keeps them for the graphs (emuLab.mu held).
 func emuTrafRates(rs []EmuStreamResult, at float64) {
 	if emuTraf.prev == nil {
-		emuTraf.prev, emuTraf.hist = map[string][3]float64{}, map[string][][3]float64{}
+		emuTraf.prev, emuTraf.hist = map[string][3]float64{}, map[string][][5]float64{}
 	}
 	for i := range rs {
 		r := &rs[i]
@@ -353,7 +353,7 @@ func emuTrafRates(rs []EmuStreamResult, at float64) {
 		if ok && at-p[0] >= 0.5 {
 			dt := at - p[0]
 			r.TxRate, r.RxRate = math.Max(0, (float64(r.TX)-p[1])/dt), math.Max(0, (float64(r.RX)-p[2])/dt)
-			h := append(emuTraf.hist[r.ID], [3]float64{math.Round(at*10) / 10, math.Round(r.TxRate), math.Round(r.RxRate)})
+			h := append(emuTraf.hist[r.ID], [5]float64{math.Round(at*10) / 10, math.Round(r.TxRate), math.Round(r.RxRate), math.Round(r.Loss*100) / 100, math.Round(r.LatAvg*1000) / 1000})
 			if len(h) > 300 {
 				h = h[len(h)-300:]
 			}

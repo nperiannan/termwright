@@ -4089,7 +4089,7 @@ components:
                     description: something to do (restart a switch for its test port)
                     type: string
                 history:
-                    description: 'History: per stream, the rates of the run so far ([seconds since the start, tx/s, rx/s]), for the graphs.'
+                    description: 'History: per stream, the run so far ([seconds since the start, tx/s, rx/s, loss % so far, average latency ms (-1: not measured)]), for the graphs.'
                     type:
                         - object
                         - "null"
@@ -4101,8 +4101,8 @@ components:
                             type: array
                             items:
                                 type: number
-                            minItems: 3
-                            maxItems: 3
+                            minItems: 5
+                            maxItems: 5
             required:
                 - testers
                 - streams

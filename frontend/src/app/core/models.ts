@@ -418,7 +418,7 @@ export interface EmuMod { field: 'srcMac' | 'dstMac' | 'srcIp' | 'dstIp' | 'vlan
 export interface EmuStreamResult { id: string; tx: number; rx: number; expected: number; other: number; loss: number; latAvg: number; latMax: number; latMin?: number; jitter?: number; ooo?: number; dup?: number; txRate: number; rxRate: number; running: boolean; result: '' | 'pass' | 'fail'; why?: string; }
 /** A lab tool the AI chat called: done (out), or to be asked first. */
 export interface EmuToolStep { ask?: boolean; title?: string; text?: string; danger?: boolean; out?: string; }
-export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; history?: Record<string, [number, number, number][]> | null; }
+export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; history?: Record<string, [number, number, number, number?, number?][]> | null; }
 
 /** Switches running on a host, of one topology (open or in the background). */
 export interface EmuRunRow { host: string; topology: string; open: boolean; switches: string[]; }
