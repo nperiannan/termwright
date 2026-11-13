@@ -695,6 +695,11 @@ func (a *App) emuLoad() {
 	if emuLab.f.Folder == "" {
 		emuLab.f.Folder = "Emulated Lab"
 	}
+	for i := range emuLab.f.Images { // Linux computers made before day 0 gave them name servers
+		if strings.EqualFold(emuLab.f.Images[i].DeviceType, "Linux") {
+			emu.AddLinuxDNS(&emuLab.f.Images[i]) // kept with the next save
+		}
+	}
 	for i := range emuLab.f.Images { // Linux computers added before Termwright configured them
 		if im := &emuLab.f.Images[i]; strings.HasPrefix(im.Source, "GNS3 appliance ") && emu.IsLinuxAppliance(im.Name, "") {
 			emu.LinuxHost(im)

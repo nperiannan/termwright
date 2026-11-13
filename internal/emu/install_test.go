@@ -259,3 +259,37 @@ func TestReadyInSeesAnAutologinShell(t *testing.T) {
 		t.Error("the Alpine ready text does not match its welcome")
 	}
 }
+
+// A Linux computer gets name servers in its day 0 (before iperf3 is installed), and older images get them too.
+func TestLinuxDNS(t *testing.T) {
+	im := Image{}
+	LinuxHost(&im)
+	if len(im.Day0) != 3 || im.Day0[1] != LinuxDNS || !strings.Contains(im.Day0[2], "iperf3") {
+		t.Fatalf("day 0: %q", im.Day0)
+	}
+	old := Image{Day0: []string{"hostname {hostname}", "(command -v iperf3 || apk add -q iperf3) &"}}
+	if !AddLinuxDNS(&old) || old.Day0[1] != LinuxDNS || AddLinuxDNS(&old) || len(old.Day0) != 3 {
+		t.Fatalf("older image: %q", old.Day0)
+	}
+	if !strings.Contains(AlpineAnswers(AlpineOpts{}), `DNSOPTS="-d lab -n 8.8.8.8"`) {
+		t.Fatal("setup-dns needs -n before the server")
+	}
+	home := t.TempDir()
+	run := func(script string) string {
+		cmd := exec.Command("sh", "-c", script)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, _ := cmd.CombinedOutput()
+		return string(out)
+	}
+	f := filepath.Join(home, "resolv.conf")
+	_ = os.WriteFile(f, nil, 0o644)
+	run(strings.ReplaceAll(LinuxDNS, "/etc/resolv.conf", f))
+	if b, _ := os.ReadFile(f); string(b) != "nameserver 8.8.8.8\nnameserver 1.1.1.1\n" {
+		t.Fatalf("an empty resolv.conf became %q", b)
+	}
+	_ = os.WriteFile(f, []byte("nameserver 10.1.1.1\n"), 0o644)
+	run(strings.ReplaceAll(LinuxDNS, "/etc/resolv.conf", f))
+	if b, _ := os.ReadFile(f); string(b) != "nameserver 10.1.1.1\n" {
+		t.Fatalf("a resolv.conf with a server was changed: %q", b)
+	}
+}

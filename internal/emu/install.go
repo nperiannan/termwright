@@ -198,7 +198,7 @@ func AlpineAnswers(o AlpineOpts) string {
 		`KEYMAPOPTS="us us"`,
 		`HOSTNAMEOPTS="-n ` + host + `"`,
 		`INTERFACESOPTS="auto lo\niface lo inet loopback\n\nauto eth0\niface eth0 inet dhcp\n"`,
-		`DNSOPTS="-d lab 1.1.1.1 8.8.8.8"`,
+		`DNSOPTS="-d lab -n 8.8.8.8"`, // setup-dns takes the server after -n (one: setup-alpine splits the words)
 		`TIMEZONEOPTS="-z UTC"`,
 		`PROXYOPTS="none"`,
 		`APKREPOSOPTS="-1"`,

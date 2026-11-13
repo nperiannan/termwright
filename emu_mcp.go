@@ -21,12 +21,12 @@ import (
 // a test case from a topology to a result - see the images, build switches and
 // cables, start them and wait until they are ready, type configuration and
 // show commands on their consoles, check the cabling against LLDP, move a
-// switch to another host, and read the Events. Each change is asked in
-// Termwright first, a whole list at once.
+// switch to another host, and read the Events. Lab changes are not asked
+// (automated tests must not wait); each is kept in the lab's change history.
 
 var mcpLabTools = []mcpTool{
 	{"lab_images", "List the images and templates the emulated lab can make switches from: id, name, software version, device type, port naming, and whether the image file is there.", mcpSchema(map[string]any{})},
-	{"lab_install_iso", "Make an image from an ISO file on the computer Termwright runs on: the ISO is copied to a KVM host and installed on a blank disk there, then the disk becomes an image (lab_images lists it). mode alpine installs Alpine Linux by itself (give the root password); mode manual starts the installer and waits for the user to install on its console, then lab_install_finish saves it. Returns at once; follow it with lab_install_status. The user is asked first.",
+	{"lab_install_iso", "Make an image from an ISO file on the computer Termwright runs on: the ISO is copied to a KVM host and installed on a blank disk there, then the disk becomes an image (lab_images lists it). mode alpine installs Alpine Linux by itself (give the root password); mode manual starts the installer and waits for the user to install on its console, then lab_install_finish saves it. Returns at once; follow it with lab_install_status. It is not asked; it is kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
 			"iso_path": map[string]any{"type": "string", "description": "path of the .iso file on the Termwright computer"},
 			"name":     map[string]any{"type": "string", "description": "the new image's name (default: the ISO's name)"},
@@ -39,9 +39,9 @@ var mcpLabTools = []mcpTool{
 			"host":     map[string]any{"type": "string", "description": "KVM host name or session path (default: the lab's host)"},
 		}, "iso_path", "mode")},
 	{"lab_install_status", "Show the installs from ISO files: id, name, stage (copying, starting, installing, waiting, saving, fetching, done, failed, cancelled), what it does now, the end of the installer's console, the image it made.", mcpSchema(map[string]any{})},
-	{"lab_install_finish", "End a manual install (stage waiting): the machine is shut down and its disk becomes an image. The user is asked first.",
+	{"lab_install_finish", "End a manual install (stage waiting): the machine is shut down and its disk becomes an image. It is not asked; it is kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{"id": map[string]any{"type": "string", "description": "the install's id (lab_install_status)"}}, "id")},
-	{"lab_add_switches", "Add switches to the emulated lab from an image or a template (ids from lab_images), optionally on a given KVM host and started. The user is asked in Termwright first.",
+	{"lab_add_switches", "Add switches to the emulated lab from an image or a template (ids from lab_images), optionally on a given KVM host and started. It is not asked; it is kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
 			"image":    map[string]any{"type": "string", "description": "image id (or give template)"},
 			"template": map[string]any{"type": "string", "description": "template id (its image, resources and persona)"},
@@ -57,7 +57,7 @@ var mcpLabTools = []mcpTool{
 				"a": map[string]any{"type": "string"}, "a_port": map[string]any{"type": "string"}, "b": map[string]any{"type": "string"}, "b_port": map[string]any{"type": "string"}}}},
 			"remove": map[string]any{"type": "boolean", "description": "remove these cables instead"},
 		}, "cables")},
-	{"lab_power", "Start, stop, restart or shut down switches of the emulated lab (names, or all). The user is asked first.",
+	{"lab_power", "Start, stop, restart or shut down switches of the emulated lab (names, or all). It is not asked; it is kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
 			"switches": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "switch names; empty = all"},
 			"action":   map[string]any{"type": "string", "enum": []string{"start", "stop", "restart", "shutdown"}},
@@ -67,20 +67,20 @@ var mcpLabTools = []mcpTool{
 			"switches": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "switch names; empty = all"},
 			"timeout":  map[string]any{"type": "integer", "description": "seconds (default 600, at most 1800)"},
 		})},
-	{"lab_console", "Type commands on a switch's serial console (Termwright logs in with the image's login) and return each one's output: configuration or show commands, in the switch's own CLI. The user is asked first, with the whole list. Close the switch's console tab first.",
+	{"lab_console", "Type commands on a switch's serial console (Termwright logs in with the image's login) and return each one's output: configuration or show commands, in the switch's own CLI. It is not asked; it is kept in the lab's change history (lab_history). Close the switch's console tab first.",
 		mcpSchema(map[string]any{
 			"switch":   map[string]any{"type": "string"},
 			"commands": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "command lines, in order"},
 			"timeout":  map[string]any{"type": "integer", "description": "seconds for all of them (default 180, at most 900)"},
 		}, "switch", "commands")},
 	{"lab_check_cabling", "Compare the switches' LLDP neighbours with the cables of the emulated lab (the switches must be running): each cable ok, wrong (what the port sees) or without a neighbour.", mcpSchema(map[string]any{})},
-	{"lab_move", "Move a switch of the emulated lab to another KVM host: live (it keeps running), copy (saved, its disk copied, resumed) or image (boots there from day 0). The user is asked first.",
+	{"lab_move", "Move a switch of the emulated lab to another KVM host: live (it keeps running), copy (saved, its disk copied, resumed) or image (boots there from day 0). It is not asked; it is kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
 			"switch": map[string]any{"type": "string"},
 			"host":   map[string]any{"type": "string", "description": "KVM host name or session path"},
 			"how":    map[string]any{"type": "string", "enum": []string{"live", "copy", "image"}},
 		}, "switch", "host", "how")},
-	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss and latency). Changes and starts are asked in Termwright first.",
+	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss and latency). Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
 			"action":      map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report"}},
 			"switch":      map[string]any{"type": "string", "description": "add_port: the switch"},
@@ -146,7 +146,7 @@ var mcpLabTools = []mcpTool{
 			"seconds":     map[string]any{"type": "integer", "description": "add, convergence: how long the traffic runs (default 30)"},
 			"run":         map[string]any{"type": "string", "description": "results: the run id (default the latest)"},
 		}, "action")},
-	{"lab_capture", "Packet capture on a switch port of the emulated lab (its cable, both ways; the switch keeps running): start, stop, or read the packets (number, time, source, destination, protocol, length, info). Start and stop are asked in Termwright first.",
+	{"lab_capture", "Packet capture on a switch port of the emulated lab (its cable, both ways; the switch keeps running): start, stop, or read the packets (number, time, source, destination, protocol, length, info). Start and stop are not asked; they are kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
 			"action": map[string]any{"type": "string", "enum": []string{"start", "stop", "read", "list"}},
 			"switch": map[string]any{"type": "string"},

@@ -281,6 +281,7 @@ func LinuxHost(im *Image) {
 	if len(im.Day0) == 0 {
 		im.Day0 = []string{
 			"hostname {hostname}; echo {hostname} > /etc/hostname",
+			LinuxDNS,
 			"(command -v iperf3 || apk add -q iperf3 || (apt-get update -q && apt-get install -y -q iperf3) || dnf install -y -q iperf3 || tce-load -wi iperf3) >/dev/null 2>&1 &",
 		}
 	}
@@ -369,4 +370,26 @@ func ParsePortShow(out string, macs map[int]string) CompNet {
 		m[p] += f[2]
 	}
 	return r
+}
+
+// LinuxDNS gives a Linux computer name servers when it has none (an Alpine installed with a static
+// address, a cloud image without DHCP): without them it reaches the Internet by address only, and its
+// day 0 cannot install iperf3. A DNS server set for the computer (lab_computer dns) is typed later.
+const LinuxDNS = "grep -q '^nameserver' /etc/resolv.conf 2>/dev/null || printf 'nameserver 8.8.8.8\\nnameserver 1.1.1.1\\n' > /etc/resolv.conf"
+
+// AddLinuxDNS puts LinuxDNS into an older Linux image's day 0, before its iperf3 install (it reports
+// whether it changed the image).
+func AddLinuxDNS(im *Image) bool {
+	for _, c := range im.Day0 {
+		if strings.Contains(c, "resolv.conf") {
+			return false
+		}
+	}
+	for i, c := range im.Day0 {
+		if strings.Contains(c, "apk add -q iperf3") {
+			im.Day0 = append(im.Day0[:i], append([]string{LinuxDNS}, im.Day0[i:]...)...)
+			return true
+		}
+	}
+	return false
 }

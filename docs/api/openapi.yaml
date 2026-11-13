@@ -974,7 +974,7 @@ paths:
             tags:
                 - Tools
             summary: Add switches to the emulated lab from an image or a template (ids from lab_images), optionally on a given KVM host and started
-            description: Add switches to the emulated lab from an image or a template (ids from lab_images), optionally on a given KVM host and started. The user is asked in Termwright first. Through the API it runs without asking.
+            description: Add switches to the emulated lab from an image or a template (ids from lab_images), optionally on a given KVM host and started. It is not asked; it is kept in the lab's change history (lab_history). Through the API it runs without asking.
             requestBody:
                 required: false
                 content:
@@ -1129,7 +1129,7 @@ paths:
             tags:
                 - Tools
             summary: Packet capture on a switch port of the emulated lab (its cable, both ways; the switch keeps running)
-            description: 'Packet capture on a switch port of the emulated lab (its cable, both ways; the switch keeps running): start, stop, or read the packets (number, time, source, destination, protocol, length, info). Start and stop are asked in Termwright first. Through the API it runs without asking.'
+            description: 'Packet capture on a switch port of the emulated lab (its cable, both ways; the switch keeps running): start, stop, or read the packets (number, time, source, destination, protocol, length, info). Start and stop are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1287,7 +1287,7 @@ paths:
             tags:
                 - Tools
             summary: Type commands on a switch's serial console (Termwright logs in with the image's login) and return each one's output
-            description: 'Type commands on a switch''s serial console (Termwright logs in with the image''s login) and return each one''s output: configuration or show commands, in the switch''s own CLI. The user is asked first, with the whole list. Close the switch''s console tab first. Through the API it runs without asking.'
+            description: 'Type commands on a switch''s serial console (Termwright logs in with the image''s login) and return each one''s output: configuration or show commands, in the switch''s own CLI. It is not asked; it is kept in the lab''s change history (lab_history). Close the switch''s console tab first. Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1539,7 +1539,7 @@ paths:
             tags:
                 - Tools
             summary: End a manual install (stage waiting)
-            description: 'End a manual install (stage waiting): the machine is shut down and its disk becomes an image. The user is asked first. Through the API it runs without asking.'
+            description: 'End a manual install (stage waiting): the machine is shut down and its disk becomes an image. It is not asked; it is kept in the lab''s change history (lab_history). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1577,7 +1577,7 @@ paths:
             tags:
                 - Tools
             summary: Make an image from an ISO file on the computer Termwright runs on
-            description: 'Make an image from an ISO file on the computer Termwright runs on: the ISO is copied to a KVM host and installed on a blank disk there, then the disk becomes an image (lab_images lists it). mode alpine installs Alpine Linux by itself (give the root password); mode manual starts the installer and waits for the user to install on its console, then lab_install_finish saves it. Returns at once; follow it with lab_install_status. The user is asked first. Through the API it runs without asking.'
+            description: 'Make an image from an ISO file on the computer Termwright runs on: the ISO is copied to a KVM host and installed on a blank disk there, then the disk becomes an image (lab_images lists it). mode alpine installs Alpine Linux by itself (give the root password); mode manual starts the installer and waits for the user to install on its console, then lab_install_finish saves it. Returns at once; follow it with lab_install_status. It is not asked; it is kept in the lab''s change history (lab_history). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1716,7 +1716,7 @@ paths:
             tags:
                 - Tools
             summary: Move a switch of the emulated lab to another KVM host
-            description: 'Move a switch of the emulated lab to another KVM host: live (it keeps running), copy (saved, its disk copied, resumed) or image (boots there from day 0). The user is asked first. Through the API it runs without asking.'
+            description: 'Move a switch of the emulated lab to another KVM host: live (it keeps running), copy (saved, its disk copied, resumed) or image (boots there from day 0). It is not asked; it is kept in the lab''s change history (lab_history). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1764,7 +1764,7 @@ paths:
             tags:
                 - Tools
             summary: Start, stop, restart or shut down switches of the emulated lab (names, or all)
-            description: Start, stop, restart or shut down switches of the emulated lab (names, or all). The user is asked first. Through the API it runs without asking.
+            description: Start, stop, restart or shut down switches of the emulated lab (names, or all). It is not asked; it is kept in the lab's change history (lab_history). Through the API it runs without asking.
             requestBody:
                 required: false
                 content:
@@ -1991,7 +1991,7 @@ paths:
             tags:
                 - Tools
             summary: The emulated lab's traffic generator
-            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss and latency). Changes and starts are asked in Termwright first. Through the API it runs without asking.'
+            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss and latency). Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:

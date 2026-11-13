@@ -11,7 +11,7 @@ func TestLinuxHost(t *testing.T) {
 	}
 	im := Image{Login: "alpine"}
 	LinuxHost(&im)
-	if im.Login != "alpine" || im.DeviceType != "Linux" || len(im.Day0) != 2 || len(im.PortAddr) != 1 || len(im.PortDHCP) != 1 || len(im.AddrSet) != 1 {
+	if im.Login != "alpine" || im.DeviceType != "Linux" || len(im.Day0) != 3 || len(im.PortAddr) != 1 || len(im.PortDHCP) != 1 || len(im.AddrSet) != 1 {
 		t.Fatalf("%+v", im)
 	}
 	if im.NICs != 3 || im.PortName != "eth{n}" || !strings.Contains(im.Elevate, "sudo -s") || im.DataPorts() != 2 {
