@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { DomSanitizer } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend, errText } from '../core/backend';
@@ -6,6 +7,7 @@ import { EmuDeviceType, EmuHost, EmuRunRow, EmuRemoveInfo, EmuImage, EmuPersonaD
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabHostImages } from './lab-host-images';
+import { roleOf } from './dev-icon';
 
 /** Shared look of the lab pages (Configure, New Lab, Images, Hosts). */
 const PAGE = `
@@ -243,82 +245,127 @@ export class LabConfigure implements OnInit {
   }
 }
 
-// ---------------------------------------------------------------- New Lab / Add Switches (side panel)
-interface NRow { key: string; count: number; names: string; module: string; serial: string; mac: string; }
-/** New Lab and Add Switches as a side panel; the canvas shows what it makes. */
+// ---------------------------------------------------------------- New Topology / Add Switches
+interface NRow { key: string; count: number; names: string; module: string; serial: string; mac: string; image: string; role: 'spine' | 'leaf'; }
+type Shape = 'leaf-spine' | 'ring' | 'full-mesh' | 'star' | 'line' | 'none';
+/** New Topology and Add Switches on one page: devices picked by model from a catalog, their roles, the cabling's shape, a preview, and where it runs. */
 @Component({
   selector: 'app-lab-new',
   imports: [FormsModule],
   template: `
-  <div class="dockp">
-    <div class="mh"><div><h2>{{ exists() ? tr('Add Switches') : tr('New Lab') }}</h2><div class="muted small">{{ tr('Choices here, the lab on the canvas') }}</div></div><span class="sp"></span><button type="button" class="sm" (click)="closed.emit()">✕</button></div>
-    <div class="body">
-      @if (emu()) {
-        <div class="sec">{{ tr('Runs on') }}@if (exists()) { <span class="muted small"> · {{ tr('another host: its cables to this lab become UDP tunnels') }}</span> } <a class="lnk small" (click)="hostsPage.emit()">+ {{ tr('Add a host') }}</a></div>
-        @for (h of shownHosts(); track h.session) {
-          <div class="hc" [class.on]="host === h.session" [class.off]="!!h.info.problems?.length" (click)="!h.info.problems?.length && pickHost(h.session)">
-            <div class="row2"><i class="d" [class]="'d ' + ((h.info.problems ?? []).length ? 'bad' : 'ok')"></i><b>{{ h.name || h.session }}</b><span class="muted small">{{ isVM(h) ? tr('VM ({0})', h.info.virt ?? '') : tr('hardware') }}{{ h.info.kvm === 'yes' ? ' · KVM' : ' · ' + tr('no KVM') }}</span>@if (inLab(h.session)) { <span class="badge">{{ tr('in the lab') }}</span> }@if (host === h.session) { <span class="badge g">{{ tr('chosen') }}</span> }</div>
-            <div class="res"><span>vCPU <b>{{ h.info.cpus }}</b> <small>{{ tr('load {0}', h.info.load) }}</small></span><span>RAM <b>{{ gb(h.info.memFree) }}</b> <small>{{ tr('free of {0}', gb(h.info.memTotal)) }}</small></span><span>{{ tr('Disk') }} <b>{{ gb(h.info.diskFree) }}</b> <small>{{ tr('free') }}</small></span></div>
-            <div class="meter"><i [style.width.%]="pct(h.info.memTotal - h.info.memFree, h.info.memTotal)"></i></div>
-            @if ((h.info.problems ?? []).length) { <span class="r small">{{ h.info.problems![0] }}</span> }
+  <div class="ov" (click)="closed.emit()"></div>
+  <div class="mdl np">
+    <div class="mh"><div><h2>{{ exists() ? tr('Add Switches') : tr('New Topology') }}</h2><div class="muted small">{{ emu() ? tr('Pick devices by model - Termwright picks the image and makes each one look like that hardware') : tr('Pick the simulated switches and how they are cabled') }}</div></div><span class="sp"></span><button type="button" class="sm" (click)="closed.emit()" [attr.aria-label]="tr('Close')">✕</button></div>
+    <div class="cols">
+      <div class="mcat">
+        <input class="srch" [ngModel]="q()" (ngModelChange)="q.set($event)" name="nq" [placeholder]="tr('Search models: 5520, 7520, VOSS…')" />
+        @for (g of groups(); track g.name) {
+          <div class="grp">
+            <a class="gh" (click)="toggle(g.name)"><span>{{ shut().has(g.name) ? '▸' : '▾' }}</span><b>{{ g.name }}</b><span class="c">@if (g.picked) { {{ tr('{0} picked', g.picked) }} } @else { {{ g.items.length }} }</span></a>
+            @if (!shut().has(g.name)) { @for (o of g.items; track o.key) {
+              <div class="it" (click)="pick(o.key)" [title]="tr('Add one')"><span class="m"><span class="mn">{{ o.name }}</span><small>{{ o.sub }}</small></span>
+                @if (countOf(o.key); as n) { <span class="add on">{{ n }}</span> } @else { <span class="add">+</span> }</div>
+            } }
           </div>
-        } @empty { <a class="lnk" (click)="hostsPage.emit()">+ {{ tr('Add a KVM host first') }}</a> }
-      }
-      @if (emu() && (!exists() || !inLab(host))) {
-        <div class="f" style="margin-top: 10px">
-          <label>{{ tr('Management') }}</label>
-          <select [(ngModel)]="mgmt" name="nm">
-            <option value="cloud" [disabled]="!info()?.sudo || !info()?.lanAddr">{{ tr('The host’s network, routed (cloud)') }}</option>
-            <option value="nat" [disabled]="!info()?.sudo || (!info()?.nat && !info()?.libvirt)">{{ tr('The host’s NAT network') }}{{ best() === 'nat' ? ' ✓' : '' }}</option>
-            <option value="lan" [disabled]="!info()?.sudo || !info()?.lanKind">{{ tr('The host’s network (bridged)') }}{{ best() === 'lan' ? ' ✓' : '' }}</option>
-            <option value="bridge" [disabled]="!info()?.sudo">{{ tr('Lab bridge on the host') }}{{ best() === 'bridge' ? ' ✓' : '' }}</option>
-            <option value="forward">{{ tr('Port forwarding on the host') }}{{ best() === 'forward' ? ' ✓' : '' }}</option>
-          </select>
+        } @empty { <p class="muted small">{{ emu() ? tr('No images yet: Images → Add Image.') : tr('Load a device pack first.') }}</p> }
+        @if (emu()) { <p class="muted small">{{ tr('Models come from the device pack (its personas); a model whose image is not on this computer yet shows in Images.') }}</p> }
+      </div>
+      <div class="mid">
+        <div class="sec">{{ tr('Your devices') }}</div>
+        @if (rows().length) {
+          <table class="dv"><tr><th>{{ tr('Model') }}</th>@if (emu()) { <th>{{ tr('Software') }}</th> }<th>{{ tr('How many') }}</th><th>{{ tr('Names') }}</th>@if (roles()) { <th>{{ tr('Role') }}</th> }<th></th></tr>
+            @for (r of rows(); track $index; let i = $index) {
+              <tr><td><b>{{ label(r.key) }}</b>@if (modules(r.key).length) { <select class="sm" [ngModel]="r.module" (ngModelChange)="patch(i, { module: $event })" [name]="'nx' + i"><option value="">{{ tr('no module') }}</option>@for (m of modules(r.key); track m) { <option [value]="m">{{ m }}</option> }</select> }</td>
+                @if (emu()) { <td><select class="sm" [ngModel]="r.image" (ngModelChange)="patch(i, { image: $event })" [name]="'ni' + i">@for (im of imagesOf(r.key); track im.id) { <option [value]="im.id">{{ im.label }}</option> }</select></td> }
+                <td><span class="cnt"><button type="button" class="sm" (click)="patch(i, { count: Math.max(1, r.count - 1) })">−</button><b>{{ r.count }}</b><button type="button" class="sm" (click)="patch(i, { count: r.count + 1 })">+</button></span></td>
+                <td><input class="sm nm" [ngModel]="r.names" (ngModelChange)="patch(i, { names: $event })" [name]="'nn' + i" [title]="tr('Names: {n} is the number')" /></td>
+                @if (roles()) { <td><span class="seg2"><a [class.on]="r.role === 'spine'" (click)="patch(i, { role: 'spine' })">{{ shape() === 'star' ? tr('Hub') : tr('Spine') }}</a><a [class.on]="r.role === 'leaf'" (click)="patch(i, { role: 'leaf' })">{{ tr('Leaf') }}</a></span></td> }
+                <td><a class="x" (click)="drop(i)" [title]="tr('Remove')">✕</a></td></tr>
+              @if (emu()) { <tr class="det"><td [attr.colspan]="roles() ? 6 : 5"><details><summary class="muted small">{{ tr('Serial and MAC from') }}: <span class="mono">{{ r.serial || '-' }} · {{ r.mac || '-' }}</span></summary>
+                <div class="row2"><span class="lb">{{ tr('Serial from') }}</span><input class="mono sm" [ngModel]="r.serial" (ngModelChange)="patch(i, { serial: $event })" [name]="'ns' + i" /><span class="lb">{{ tr('MAC from') }}</span><input class="mono sm" [ngModel]="r.mac" (ngModelChange)="patch(i, { mac: $event })" [name]="'nm' + i" /><button type="button" class="sm" (click)="suggest(i)" [title]="tr('New in the model’s format')">↻</button></div></details></td></tr> }
+            }
+          </table>
+          @if (emu() && hasPersona()) { <div class="note">{{ tr('Each switch gets its own persona from its model: model and part number, a serial and a base MAC in the model’s format, its ports and modules - written to its disk before the first boot, so it shows as that model. Change one later: Configure → Persona.') }}</div> }
+        } @else { <p class="muted">{{ tr('Click a model on the left to add it.') }}</p> }
+        <div class="sec">{{ tr('Cabling') }}</div>
+        <div class="shapes">@for (c of cablings(); track c.v) {
+          <a class="sh" [class.on]="shape() === c.v" (click)="setShape(c.v)"><span class="shi" [innerHTML]="c.svg"></span>{{ tr(c.label) }}</a> }</div>
+        @if (shapeNote(); as n) { <div class="note" [class.warn]="n.warn">{{ n.text }}</div> }
+        <div class="opts">
+          @if (emu() && shape() !== 'none') { <label>{{ tr('Cables per pair') }} <select class="sm" [ngModel]="per()" (ngModelChange)="per.set(+$event); emitPlan()" name="nper"><option [value]="1">1</option><option [value]="2">2</option><option [value]="4">4</option></select></label>
+            @if (per() > 1) { <label>{{ tr('as a LAG') }} <select class="sm" [ngModel]="lagMode()" (ngModelChange)="lagMode.set($event)" name="nlag"><option value="lacp">LACP</option><option value="static">{{ tr('static') }}</option><option value="">{{ tr('no LAG') }}</option></select></label> } }
+          <span class="muted small">{{ tr('Ports: the next free ones') }}</span>
         </div>
-        <p class="muted small hint">{{ mgmtText() }}</p>
-        @if (mgmt === 'cloud' || mgmt === 'lan') {
-          <div class="f"><label>{{ tr('First switch’s address') }}</label><input class="mono" [(ngModel)]="cloudAddr" name="nca" [placeholder]="mgmt === 'lan' ? tr('empty: from a DHCP server') : info()?.lanAddr?.split('/')?.[0] ?? ''" /></div>
-          <div class="f"><label>{{ tr('Gateway') }}</label><input class="mono" [(ngModel)]="cloudGw" name="ncg" [placeholder]="info()?.gateway ?? ''" /></div>
-        }
-      }
-      <div class="sec">{{ tr('Switches') }}</div>
-      @for (r of rows(); track $index; let i = $index) {
-        <div class="card">
-          <div class="row2"><select [ngModel]="r.key" (ngModelChange)="patch(i, { key: $event, module: '', names: nameFor($event) }); suggest(i)" [name]="'nk' + i">@for (o of options(); track o.key) { <option [value]="o.key">{{ o.label }}</option> }</select>
-            <span class="cnt"><button type="button" class="sm" (click)="patch(i, { count: Math.max(0, r.count - 1) })">−</button><b>{{ r.count }}</b><button type="button" class="sm" (click)="patch(i, { count: r.count + 1 })">+</button></span>
-            <a class="x" (click)="drop(i)" [title]="tr('Remove')">✕</a></div>
-          <div class="row2" style="margin-top: 6px"><input [ngModel]="r.names" (ngModelChange)="patch(i, { names: $event })" [name]="'nn' + i" [title]="tr('Names: {n} is the number')" />
-            @if (modules(r.key).length) { <select [ngModel]="r.module" (ngModelChange)="patch(i, { module: $event })" [name]="'nx' + i"><option value="">{{ tr('no module') }}</option>@for (m of modules(r.key); track m) { <option [value]="m">{{ m }}</option> }</select> }</div>
-          @if (emu()) {
-            <div class="row2 sm2" style="margin-top: 6px"><span class="lb">{{ tr('Serial from') }}</span><input class="mono" [ngModel]="r.serial" (ngModelChange)="patch(i, { serial: $event })" [name]="'ns' + i" /><button type="button" class="sm" (click)="suggest(i)" [title]="tr('New in the model’s format')">↻</button></div>
-            <div class="row2 sm2" style="margin-top: 4px"><span class="lb">{{ tr('MAC from') }}</span><input class="mono" [ngModel]="r.mac" (ngModelChange)="patch(i, { mac: $event })" [name]="'nm' + i" /><button type="button" class="sm" (click)="suggest(i)" [title]="tr('New')">↻</button></div>
+      </div>
+      <div class="rt">
+        <div class="sec">{{ tr('Preview') }}</div>
+        <svg class="pv" viewBox="0 0 360 250">
+          @for (e of preview().edges; track $index) { <line [attr.x1]="e.x1" [attr.y1]="e.y1" [attr.x2]="e.x2" [attr.y2]="e.y2" [attr.stroke-width]="per() > 1 ? 3 : 1.5" /> }
+          @for (n of preview().nodes; track $index) { <g [attr.transform]="'translate(' + n.x + ' ' + n.y + ')'"><rect x="-24" y="-9" width="48" height="18" rx="4" [class.sp]="n.spine" /><text [attr.y]="n.spine ? -14 : 22">{{ n.name }}</text></g> }
+          @if (preview().more) { <text x="350" y="244" class="mr">+{{ preview().more }}</text> }
+        </svg>
+        <div class="sec">{{ tr('What it needs') }}</div>
+        <div class="small need">{{ tr('{0} switches · {1} cables', total(), cableCount()) }}@if (emu()) { <br />vCPU {{ need().cpus }} · RAM {{ gb(need().ram) }} }
+          @if (emu() && info(); as h) { <br /><span [class.r]="need().ram > h.memFree">{{ need().ram > h.memFree ? tr('More memory than the host has free ({0})', gb(h.memFree)) : tr('The host has {0} free', gb(h.memFree)) }}</span> }</div>
+        @if (emu()) {
+          <div class="sec">{{ tr('Runs on') }} <a class="lnk small" (click)="hostsPage.emit()">+ {{ tr('Add a host') }}</a></div>
+          @for (h of shownHosts(); track h.session) {
+            <div class="hc" [class.on]="host === h.session" [class.off]="!!h.info.problems?.length" (click)="!h.info.problems?.length && pickHost(h.session)">
+              <div class="row2"><b>{{ h.name || h.session }}</b><span class="muted small">vCPU {{ h.info.cpus }} · {{ gb(h.info.memFree) }} {{ tr('free') }}</span></div>
+              @if ((h.info.problems ?? []).length) { <span class="r small">{{ h.info.problems![0] }}</span> }
+            </div>
+          } @empty { <a class="lnk" (click)="hostsPage.emit()">+ {{ tr('Add a KVM host first') }}</a> }
+          @if (!exists() || !inLab(host)) {
+            <div class="f"><label>{{ tr('Management') }}</label>
+              <select [(ngModel)]="mgmt" name="nm">
+                <option value="cloud" [disabled]="!info()?.sudo || !info()?.lanAddr">{{ tr('The host’s network, routed (cloud)') }}</option>
+                <option value="nat" [disabled]="!info()?.sudo || (!info()?.nat && !info()?.libvirt)">{{ tr('The host’s NAT network') }}{{ best() === 'nat' ? ' ✓' : '' }}</option>
+                <option value="lan" [disabled]="!info()?.sudo || !info()?.lanKind">{{ tr('The host’s network (bridged)') }}{{ best() === 'lan' ? ' ✓' : '' }}</option>
+                <option value="bridge" [disabled]="!info()?.sudo">{{ tr('Lab bridge on the host') }}{{ best() === 'bridge' ? ' ✓' : '' }}</option>
+                <option value="forward">{{ tr('Port forwarding on the host') }}{{ best() === 'forward' ? ' ✓' : '' }}</option>
+              </select></div>
+            <p class="muted small">{{ mgmtText() }}</p>
+            @if (mgmt === 'cloud' || mgmt === 'lan') {
+              <div class="f"><label>{{ tr('First switch’s address') }}</label><input class="mono" [(ngModel)]="cloudAddr" name="nca" [placeholder]="mgmt === 'lan' ? tr('empty: from a DHCP server') : info()?.lanAddr?.split('/')?.[0] ?? ''" /></div>
+              <div class="f"><label>{{ tr('Gateway') }}</label><input class="mono" [(ngModel)]="cloudGw" name="ncg" [placeholder]="info()?.gateway ?? ''" /></div>
+            }
           }
-        </div>
-      }
-      <button type="button" class="wide" (click)="more()" [disabled]="!options().length">+ {{ tr('Add a device') }}</button>
-      @if (!options().length) { <p class="muted small">{{ emu() ? tr('No images yet: Images → Add Image.') : tr('Load a device pack first.') }}</p> }
-      <div class="sec">{{ tr('Cabling') }}</div>
-      <span class="seg">@for (c of cablings; track c.v) { <a [class.on]="cable === c.v" (click)="cable = c.v; changed.emit(plan())">{{ tr(c.label) }}</a> }</span>
-      @if (emu() && info(); as h) {
-        <div class="card soft" style="margin-top: 16px"><div class="row2" style="justify-content: space-between"><span>vCPU {{ need().cpus }} / {{ h.cpus }}</span><span>RAM {{ gb(need().ram) }} / {{ gb(h.memFree) }} {{ tr('free') }}</span></div>
-          <div class="meter"><i [style.width.%]="pct(need().ram, h.memFree)" [style.background]="need().ram > h.memFree ? 'var(--danger)' : ''"></i></div>
-          @if (need().ram > h.memFree) { <span class="r small">{{ tr('The switches need more memory than the host has free.') }}</span> }</div>
-      }
+        }
+      </div>
     </div>
     <div class="mf"><label class="small"><input type="checkbox" [(ngModel)]="start" name="nst" /> {{ tr('Start now') }}</label><span class="sp"></span>
       <button type="button" (click)="closed.emit()">{{ tr('Cancel') }}</button>
-      <button type="button" class="primary" (click)="create()" [disabled]="!total() || lab.busy() || (emu() && !host)">{{ tr('Create {0} Switches', total()) }}</button></div>
+      <button type="button" class="primary" (click)="create()" [disabled]="!total() || lab.busy() || (emu() && !host) || !!shapeNote()?.block">{{ exists() ? tr('Add {0} Switches', total()) : tr('Create Topology ({0} switches)', total()) }}</button></div>
   </div>`,
   styles: [PAGE + `
-    :host { position: absolute; right: 0; top: 0; bottom: 0; width: 420px; z-index: 20; }
-    .dockp { position: absolute; inset: 0; background: var(--surface); border-left: 1px solid var(--line); box-shadow: -12px 0 30px rgba(0,0,0,.1); z-index: 20; display: grid; grid-template-rows: 64px minmax(0, 1fr) 60px; }
-    .body { padding: 14px 18px; overflow: auto; } .f { grid-template-columns: 100px minmax(0, 1fr); } .hint { margin: -6px 0 6px; }
-    .cnt { flex: none !important; display: inline-flex; align-items: center; gap: 8px; b { min-width: 18px; text-align: center; } }
-    .x { flex: none !important; cursor: pointer; color: var(--muted); padding: 0 4px; } .wide { width: 100%; } .lnk { color: var(--accent); cursor: pointer; font-weight: 400; }
-    .hc { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; background: var(--surface);
-      &.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); } &.off:not(.on) { opacity: .55; cursor: default; } .row2 > * { flex: none; } .row2 > b { flex: 1; }
-      .res { display: flex; gap: 14px; margin-top: 6px; font-size: 12px; small { color: var(--muted); } } }
-    .sm2 .lb { flex: none; width: 76px; font-size: 12px; color: var(--muted); } .sm2 input { height: 26px; font-size: 12px; }
+    .np { grid-template-rows: 64px minmax(0, 1fr) 60px; width: min(1400px, 96vw); }
+    .cols { display: grid; grid-template-columns: 300px minmax(0, 1fr) 360px; min-height: 0; > div { overflow: auto; padding: 12px 16px; min-height: 0; } .mcat, .mid { border-right: 1px solid var(--line); } }
+    .srch { width: 100%; box-sizing: border-box; margin-bottom: 8px; }
+    .grp { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; overflow: hidden; }
+    .gh { display: flex; align-items: center; gap: 6px; padding: 7px 9px; background: var(--surface-2); cursor: pointer; color: var(--text); white-space: nowrap; b { overflow: hidden; text-overflow: ellipsis; } .c { margin-left: auto; color: var(--muted); font-size: 12px; flex: none; } }
+    .it { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-top: 1px solid var(--line); cursor: pointer; color: var(--text); &:hover { background: var(--surface-2); } .m { flex: 1; min-width: 0; } .mn { display: block; } small { display: block; color: var(--muted); font-size: 11px; } }
+    .add { border: 1px solid var(--line); border-radius: 6px; padding: 0 8px; color: var(--accent); min-width: 12px; text-align: center; } .add.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .sec { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; font-weight: 600; } .cols > div > .sec:first-child { margin-top: 2px; }
+    table.dv { width: 100%; border-collapse: collapse; th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; padding: 4px 6px; } td { padding: 5px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+      tr.det td { border-top: 0; padding-top: 0; } select.sm { height: 26px; font-size: 12px; max-width: 170px; } .nm { width: 120px; height: 26px; } td b { display: block; } }
+    details summary { cursor: pointer; } details .row2 { display: flex; gap: 6px; align-items: center; margin-top: 4px; .lb { color: var(--muted); font-size: 12px; } input { width: 150px; height: 24px; } }
+    .cnt { display: inline-flex; align-items: center; gap: 6px; b { min-width: 16px; text-align: center; } }
+    .seg2 { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; a { padding: 2px 9px; font-size: 12px; cursor: pointer; } a.on { background: var(--accent); color: #fff; } }
+    .x { cursor: pointer; color: var(--muted); }
+    .note { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-top: 8px; line-height: 1.5; }
+    .note.warn { background: color-mix(in srgb, var(--warning, #e39b17) 14%, transparent); border-color: var(--warning, #e39b17); }
+    .shapes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+    .sh { border: 1px solid var(--line); border-radius: 9px; padding: 8px 4px 6px; text-align: center; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text);
+      &.on { border-color: var(--accent); background: var(--accent-soft); } .shi { line-height: 0; } ::ng-deep .shi svg { stroke: var(--success, #1fa45a); fill: none; } }
+    .opts { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12.5px; label { display: inline-flex; gap: 6px; align-items: center; } select { height: 26px; } }
+    .pv { width: 100%; height: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+      line { stroke: var(--success, #1fa45a); } rect { fill: var(--surface-2); stroke: var(--line); } rect.sp { stroke: var(--accent); stroke-width: 1.5; }
+      text { font-size: 9.5px; fill: var(--muted); text-anchor: middle; } text.mr { text-anchor: end; } }
+    .need { line-height: 1.7; } .r { color: var(--danger); }
+    .hc { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; margin-bottom: 6px; cursor: pointer;
+      &.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); } &.off:not(.on) { opacity: .55; cursor: default; } .row2 { display: flex; gap: 8px; align-items: center; } .row2 > b { flex: 1; } }
+    .d { width: 8px; height: 8px; border-radius: 50%; background: var(--success, #1fa45a); flex: none; } .d.bad { background: var(--danger); }
+    .f { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; select, input { width: 100%; box-sizing: border-box; } }
   `],
 })
 export class LabNew implements OnInit {
@@ -335,41 +382,77 @@ export class LabNew implements OnInit {
   private ui = inject(Ui);
   protected tr = tr;
   protected Math = Math;
-  protected cablings = [{ v: 'leaf-spine', label: 'Leaf-spine' }, { v: 'chain', label: 'Chain' }, { v: 'ring', label: 'Ring' }, { v: 'none', label: 'None' }];
+  private readonly SHAPES: { v: Shape; label: string; svg: string; sim?: string }[] = [
+    { v: 'leaf-spine', label: 'Leaf-spine', sim: 'leaf-spine', svg: '<g stroke-width="1.3"><path d="M27 12 12 40M27 12 42 40M27 12 72 40M57 12 12 40M57 12 42 40M57 12 72 40"/></g><g stroke="none" fill="#2f6fed"><rect x="19" y="6" width="16" height="10" rx="2"/><rect x="49" y="6" width="16" height="10" rx="2"/></g><g stroke="none" fill="#8b93a3"><rect x="4" y="36" width="16" height="10" rx="2"/><rect x="34" y="36" width="16" height="10" rx="2"/><rect x="64" y="36" width="16" height="10" rx="2"/></g>' },
+    { v: 'ring', label: 'Ring', sim: 'ring', svg: '<circle cx="42" cy="25" r="18" fill="none" stroke-width="1.3"/><g stroke="none" fill="#8b93a3"><rect x="34" y="2" width="16" height="10" rx="2"/><rect x="56" y="30" width="16" height="10" rx="2"/><rect x="12" y="30" width="16" height="10" rx="2"/></g>' },
+    { v: 'full-mesh', label: 'Full mesh', svg: '<path d="M18 9h48M18 41h48M18 9v32M66 9v32M18 9l48 32M66 9 18 41" stroke-width="1.1" fill="none"/><g stroke="none" fill="#8b93a3"><rect x="10" y="4" width="16" height="10" rx="2"/><rect x="58" y="4" width="16" height="10" rx="2"/><rect x="10" y="36" width="16" height="10" rx="2"/><rect x="58" y="36" width="16" height="10" rx="2"/></g>' },
+    { v: 'star', label: 'Star', svg: '<path d="M42 25 12 8M42 25 72 8M42 25 12 42M42 25 72 42" stroke-width="1.3"/><rect x="34" y="20" width="16" height="10" rx="2" stroke="none" fill="#2f6fed"/><g stroke="none" fill="#8b93a3"><rect x="4" y="3" width="16" height="10" rx="2"/><rect x="64" y="3" width="16" height="10" rx="2"/><rect x="4" y="37" width="16" height="10" rx="2"/><rect x="64" y="37" width="16" height="10" rx="2"/></g>' },
+    { v: 'line', label: 'Line', sim: 'chain', svg: '<path d="M8 25h68" stroke-width="1.3"/><g stroke="none" fill="#8b93a3"><rect x="2" y="20" width="16" height="10" rx="2"/><rect x="34" y="20" width="16" height="10" rx="2"/><rect x="66" y="20" width="16" height="10" rx="2"/></g>' },
+    { v: 'none', label: 'No links', sim: 'none', svg: '<g stroke="none" fill="#8b93a3"><rect x="6" y="20" width="16" height="10" rx="2"/><rect x="34" y="20" width="16" height="10" rx="2"/><rect x="62" y="20" width="16" height="10" rx="2"/></g>' },
+  ];
+  private san = inject(DomSanitizer);
+  protected cablings = computed(() => this.SHAPES.filter(c => this.emu() || c.sim).map(c => ({ ...c, svg: this.san.bypassSecurityTrustHtml('<svg width="84" height="50" viewBox="0 0 84 50">' + c.svg + '</svg>') })));
   protected st = computed(() => (this.emu() ? this.lab.emu() : this.lab.sim()));
   protected exists = computed(() => (this.st()?.devices ?? []).length > 0);
   protected hosts = computed<EmuHost[]>(() => this.lab.emu()?.hosts ?? []);
   protected host = '';
   protected mgmt = 'forward'; protected cloudAddr = ''; protected cloudGw = '';
-  protected cable = 'leaf-spine';
+  protected shape = signal<Shape>('leaf-spine');
+  protected per = signal(1);
+  protected lagMode = signal('lacp');
   protected start = true;
   protected rows = signal<NRow[]>([]);
+  protected q = signal('');
+  protected shut = signal(new Set<string>());
   protected info = computed(() => this.hostsInfo());
   private hostsInfo = signal<EmuHost['info'] | null>(null);
+  /** What can be picked: a device type (a model of an image, or a plain image), or a simulated model. */
   protected options = computed(() => {
-    if (!this.emu()) return (this.lab.sim()?.models ?? []).map(m => ({ key: m.sku + '|' + m.os[0], label: m.sku + ' · ' + this.lab.osShort(m.os[0]) }));
+    if (!this.emu()) return (this.lab.sim()?.models ?? []).map(m => ({ key: m.sku + '|' + m.os[0], name: m.sku, group: this.lab.osShort(m.os[0]), sub: this.lab.osShort(m.os[0]), core: roleOf(m.sku, m.os[0]) === 'core' }));
     const ims = this.lab.emu()?.images ?? [];
-    return (this.lab.emu()?.deviceTypes ?? []).filter(d => d.images?.length).map(d => { const im = ims.find(i => i.id === d.images[0]); return { key: d.key, label: (d.model || im?.name || d.kind) + (d.osName ? ' · ' + d.osName : '') + (im?.version ? ' ' + im.version : '') }; });
+    return (this.lab.emu()?.deviceTypes ?? []).filter(d => d.images?.length).map(d => {
+      const im = ims.find(i => i.id === d.images[0]), core = !!d.model && roleOf(d.model, d.osName) === 'core';
+      return { key: d.key, name: d.model || im?.name || d.kind, group: d.model ? tr('Switches · {0}', d.osName || d.kind) : tr('Plain images (no persona)'), sub: [d.osName, im?.version, core ? tr('core-capable') : ''].filter(Boolean).join(' · '), core };
+    });
+  });
+  protected groups = computed(() => {
+    const q = this.q().trim().toLowerCase(), m = new Map<string, { name: string; items: ReturnType<LabNew['options']>; picked: number }>();
+    for (const o of this.options()) {
+      if (q && !(o.name + ' ' + o.sub + ' ' + o.group).toLowerCase().includes(q)) continue;
+      const g = m.get(o.group) ?? { name: o.group, items: [], picked: 0 };
+      g.items.push(o); g.picked += this.countOf(o.key); m.set(o.group, g);
+    }
+    return [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
   });
   ngOnInit() {
     const ok = this.hosts().filter(h => !(h.info.problems ?? []).length).sort((a, b) => (b.info.memFree || 0) - (a.info.memFree || 0));
     this.host = this.exists() ? this.lab.emu()?.host ?? '' : (ok.find(h => h.session === this.lab.emu()?.host) ?? ok[0])?.session ?? '';
     this.pickMgmt();
-    if (this.exists()) this.cable = 'chain';
+    if (this.exists()) this.shape.set('line');
     const pre = this.options().find(o => o.key === this.preset());
-    const first = pre ? [pre] : this.options().slice(0, this.exists() ? 1 : 2);
-    this.rows.set(first.map((o, i) => ({ key: o.key, count: pre || this.exists() ? 1 : i === 0 ? 2 : 3, names: this.nameFor(o.key), module: '', serial: '', mac: '' })));
-    this.rows().forEach((_, i) => void this.suggest(i));
-    this.changed.emit(this.plan());
+    if (pre) this.pick(pre.key);
+    this.emitPlan();
   }
-  protected shownHosts = computed(() => {
-    const l = [...this.hosts()];
-    return l.sort((a, b) => (b.info.memFree || 0) - (a.info.memFree || 0)); // most free memory first
-  });
-  isVM(h: EmuHost) { return !!h.info.virt && h.info.virt !== 'none' && h.info.virt !== 'unknown'; }
+  protected shownHosts = computed(() => [...this.hosts()].sort((a, b) => (b.info.memFree || 0) - (a.info.memFree || 0)));
   /** The host runs switches of the lab already (its management is set). */
   inLab(s: string) { const v = this.lab.emu(); return !!v?.exists && (s === v.host || (v.hostUse ?? []).some(u => u.host === s && u.switches > 0)); }
   pickHost(s: string) { this.host = s; this.pickMgmt(); }
+  toggle(g: string) { this.shut.update(s => { const n = new Set(s); if (n.has(g)) n.delete(g); else n.add(g); return n; }); }
+  countOf(key: string) { return this.rows().filter(r => r.key === key).reduce((n, r) => n + r.count, 0); }
+  label(key: string) { return this.options().find(o => o.key === key)?.name ?? key; }
+  /** A model clicked in the catalog: one more of it. */
+  pick(key: string) {
+    const i = this.rows().findIndex(r => r.key === key);
+    if (i >= 0) { this.patch(i, { count: this.rows()[i].count + 1 }); return; }
+    const o = this.options().find(x => x.key === key);
+    this.rows.set([...this.rows(), { key, count: 1, names: this.nameFor(key), module: '', serial: '', mac: '', image: this.dt(key)?.images[0] ?? '', role: o?.core ? 'spine' : 'leaf' }]);
+    void this.suggest(this.rows().length - 1);
+    this.emitPlan();
+  }
+  imagesOf(key: string) {
+    const ims = this.lab.emu()?.images ?? [];
+    return (this.dt(key)?.images ?? []).map(id => { const im = ims.find(x => x.id === id); return { id, label: (im?.version || im?.name || id) + (im?.missing ? ' · ' + tr('missing') : '') }; });
+  }
   async suggest(i: number) {
     const r = this.rows()[i]; if (!r || !this.emu()) return;
     const d = this.dt(r.key);
@@ -397,44 +480,92 @@ export class LabNew implements OnInit {
   }
   dt(key: string): EmuDeviceType | undefined { return (this.lab.emu()?.deviceTypes ?? []).find(d => d.key === key); }
   modules(key: string) { return this.emu() ? this.dt(key)?.modules ?? [] : []; }
+  hasPersona = computed(() => this.rows().some(r => !!this.dt(r.key)?.model));
   nameFor(key: string) {
     const base = this.emu() ? (this.dt(key)?.model || this.dt(key)?.kind || 'sw') : key.split('|')[0];
     return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-{n}';
   }
-  patch(i: number, p: Partial<NRow>) { this.rows.set(this.rows().map((r, j) => (j === i ? { ...r, ...p } : r))); this.changed.emit(this.plan()); }
-  more() { const o = this.options()[0]; if (o) { this.rows.set([...this.rows(), { key: o.key, count: 1, names: this.nameFor(o.key), module: '', serial: '', mac: '' }]); void this.suggest(this.rows().length - 1); this.changed.emit(this.plan()); } }
-  drop(i: number) { this.rows.set(this.rows().filter((_, j) => j !== i)); this.changed.emit(this.plan()); }
+  patch(i: number, p: Partial<NRow>) { this.rows.set(this.rows().map((r, j) => (j === i ? { ...r, ...p } : r))); this.emitPlan(); }
+  drop(i: number) { this.rows.set(this.rows().filter((_, j) => j !== i)); this.emitPlan(); }
+  setShape(s: Shape) { this.shape.set(s); this.emitPlan(); }
+  /** Roles matter for leaf-spine (spines) and star (the hub), on the emulated lab. */
+  protected roles = computed(() => this.emu() && (this.shape() === 'leaf-spine' || this.shape() === 'star'));
   protected total = computed(() => this.rows().reduce((n, r) => n + r.count, 0));
+  private spineCount = computed(() => this.rows().filter(r => r.role === 'spine').reduce((n, r) => n + r.count, 0));
+  protected shapeNote = computed(() => {
+    const s = this.shape(), sp = this.spineCount(), t = this.total();
+    if (!this.emu() || !t) return null;
+    if (s === 'leaf-spine') {
+      if (!sp) return { warn: true, block: true, text: tr('Leaf-spine needs spines: mark at least one row as Spine (the core-capable models are spines by themselves).') };
+      if (sp === t) return { warn: true, block: true, text: tr('Every device is a spine: mark the access switches as Leaf.') };
+      return { warn: false, block: false, text: tr('{0} spines, {1} leaves: every leaf is cabled to every spine; the spines are not cabled to each other.', sp, t - sp) };
+    }
+    if (s === 'star') return { warn: false, block: false, text: tr('The hub is the first device marked Hub (or the first device); every other device is cabled to it.') };
+    if (s === 'ring' || s === 'line') return { warn: false, block: false, text: tr('In the order of the list.') };
+    if (s === 'full-mesh' && t > 8) return { warn: true, block: false, text: tr('{0} devices in a full mesh take {1} cables and many ports each.', t, t * (t - 1) / 2) };
+    return null;
+  });
+  /** The devices and cables it makes, as the preview shows them (the backend cables the same way). */
+  private plan2 = computed(() => {
+    const names = this.planNames();
+    const nodes = names.map(n => ({ name: n.name, spine: n.spine }));
+    const edges: [number, number][] = [], s = this.shape(), N = nodes.length;
+    const sp = nodes.map((n, i) => n.spine ? i : -1).filter(i => i >= 0), lf = nodes.map((n, i) => n.spine ? -1 : i).filter(i => i >= 0);
+    if (s === 'leaf-spine') { const spi = this.emu() ? sp : [0, 1].filter(i => i < N), lfi = this.emu() ? lf : nodes.map((_, i) => i).slice(2); for (const l of lfi) for (const p of spi) edges.push([p, l]); if (!this.emu() && N > 1) edges.push([0, 1]); }
+    else if (s === 'full-mesh') { for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) edges.push([i, j]); }
+    else if (s === 'star') { const hub = sp[0] ?? 0; for (let i = 0; i < N; i++) if (i !== hub) edges.push([hub, i]); }
+    else if (s === 'ring' || s === 'line') { for (let i = 0; i + 1 < N; i++) edges.push([i, i + 1]); if (s === 'ring' && N > 2) edges.push([N - 1, 0]); }
+    return { nodes, edges };
+  });
+  protected cableCount = computed(() => this.plan2().edges.length * (this.emu() ? this.per() : 1));
+  protected preview = computed(() => {
+    const p = this.plan2(), MAX = 24, nodes = p.nodes.slice(0, MAX), N = nodes.length, s = this.shape(), W = 360, H = 250;
+    const pos: { x: number; y: number }[] = [];
+    const circle = (ids: number[], cx: number, cy: number, r: number) => ids.forEach((id, k) => { const a = 2 * Math.PI * k / ids.length - Math.PI / 2; pos[id] = { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }; });
+    if (s === 'leaf-spine') {
+      const sp = nodes.map((n, i) => (this.emu() ? n.spine : i < 2) ? i : -1).filter(i => i >= 0), lf = nodes.map((_, i) => i).filter(i => !sp.includes(i));
+      sp.forEach((id, k) => pos[id] = { x: (k + 1) * W / (sp.length + 1), y: 40 });
+      lf.forEach((id, k) => pos[id] = { x: (k + 1) * W / (lf.length + 1), y: 190 });
+    } else if (s === 'ring' || s === 'full-mesh') circle(nodes.map((_, i) => i), W / 2, H / 2 - 8, 88);
+    else if (s === 'star') { const hub = Math.max(0, nodes.findIndex(n => n.spine)); pos[hub] = { x: W / 2, y: H / 2 - 8 }; circle(nodes.map((_, i) => i).filter(i => i !== hub), W / 2, H / 2 - 8, 92); }
+    else { const per = Math.min(6, Math.max(1, N)), rowsN = Math.ceil(N / per); nodes.forEach((_, i) => pos[i] = { x: ((i % per) + 1) * W / (per + 1), y: (Math.floor(i / per) + 1) * (H - 20) / (rowsN + 1) }); }
+    const edges = p.edges.filter(([a, b]) => a < N && b < N).map(([a, b]) => ({ x1: pos[a].x, y1: pos[a].y, x2: pos[b].x, y2: pos[b].y }));
+    return { nodes: nodes.map((n, i) => ({ ...n, x: pos[i].x, y: pos[i].y })), edges, more: p.nodes.length - N };
+  });
   protected need = computed(() => {
     let cpus = 0, ram = 0;
     for (const r of this.rows()) { const d = this.dt(r.key); cpus += (d?.cpus || 1) * r.count; ram += (d?.ram || 1024) * r.count; }
     return { cpus, ram };
   });
   gb(mb?: number) { return !mb ? '-' : mb >= 1024 ? (mb / 1024).toFixed(mb % 1024 ? 1 : 0) + ' GB' : mb + ' MB'; }
-  pct(a: number, b: number) { return b ? Math.min(100, (a / b) * 100) : 0; }
-  plan() {
-    const used = new Set((this.st()?.devices ?? []).map(d => d.hostname.toLowerCase())), names: string[] = [];
+  /** The names it makes, in order, with their role. */
+  private planNames() {
+    const used = new Set((this.st()?.devices ?? []).map(d => d.hostname.toLowerCase())), out: { name: string; spine: boolean }[] = [];
     for (const r of this.rows()) {
       let n = 1;
-      for (let k = 0; k < Math.min(r.count, 24); k++) {
+      for (let k = 0; k < Math.min(r.count, 64); k++) {
         let name = '';
         do { name = r.names.includes('{n}') ? r.names.replace('{n}', String(n)) : r.names + '-' + n; n++; } while (used.has(name.toLowerCase()));
-        used.add(name.toLowerCase()); names.push(name);
+        used.add(name.toLowerCase()); out.push({ name, spine: this.emu() && r.role === 'spine' });
       }
     }
-    return { names, cable: this.cable };
+    return out;
   }
+  private simCable() { return this.SHAPES.find(c => c.v === this.shape())?.sim ?? 'none'; }
+  emitPlan() { this.changed.emit({ names: this.planNames().map(n => n.name), cable: this.emu() ? (this.shape() === 'line' ? 'chain' : this.shape()) : this.simCable() }); }
   async create() {
     let ok = false;
+    const roles = this.roles();
     if (this.emu()) {
       const groups = [];
       for (const r of this.rows().filter(x => x.count > 0)) {
         const d = this.dt(r.key); if (!d) continue;
-        groups.push({ image: d.images[0], model: d.model, module: r.module, count: r.count, names: r.names, serialStart: r.serial.trim(), macStart: r.mac.trim(), cpus: d.cpus, ram: d.ram });
+        groups.push({ image: r.image || d.images[0], model: d.model, module: r.module, count: r.count, names: r.names, serialStart: r.serial.trim(), macStart: r.mac.trim(), cpus: d.cpus, ram: d.ram, role: roles ? r.role : '' });
       }
-      ok = await this.lab.addEmu({ host: this.host, groups, cabling: this.cable, mgmt: this.exists() && this.inLab(this.host) ? '' : this.mgmt, mgmtNet: this.mgmt === 'cloud' || (this.mgmt === 'lan' && this.cloudAddr.trim()) ? (this.cloudAddr.trim() + ' ' + (this.cloudGw.trim() || this.hostsInfo()?.gateway || '')).trim() : '', start: this.start });
+      ok = await this.lab.addEmu({ host: this.host, groups, cabling: this.shape() === 'none' ? '' : this.shape(), perPair: this.per(), lagMode: this.per() > 1 ? this.lagMode() : '', mgmt: this.exists() && this.inLab(this.host) ? '' : this.mgmt, mgmtNet: this.mgmt === 'cloud' || (this.mgmt === 'lan' && this.cloudAddr.trim()) ? (this.cloudAddr.trim() + ' ' + (this.cloudGw.trim() || this.hostsInfo()?.gateway || '')).trim() : '', start: this.start });
     } else {
-      ok = await this.lab.add({ groups: this.rows().filter(x => x.count > 0).map(r => { const [model, os] = r.key.split('|'); return { os, model, count: r.count, names: r.names }; }), mgmtNet: '', cabling: this.cable, password: '', start: this.start });
+      const c = this.simCable();
+      ok = await this.lab.add({ groups: this.rows().filter(x => x.count > 0).map(r => { const [model, os] = r.key.split('|'); return { os, model, count: r.count, names: r.names }; }), mgmtNet: '', cabling: c === 'none' ? '' : c, password: '', start: this.start });
     }
     if (ok) { this.made.emit(); this.closed.emit(); }
     void this.ui;

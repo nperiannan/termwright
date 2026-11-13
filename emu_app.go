@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/netip"
@@ -491,14 +492,17 @@ type EmuGroup struct {
 	CPUs        int    `json:"cpus"`
 	RAM         int    `json:"ram"`
 	DiskGB      int    `json:"diskGb"`
+	Role        string `json:"role,omitempty"` // spine, leaf ("" = as the cabling decides)
 }
 
 // EmuRequest makes the emulated lab (or adds VMs to it).
 type EmuRequest struct {
 	Host    string     `json:"host"` // session path
 	Groups  []EmuGroup `json:"groups"`
-	Cabling string     `json:"cabling"`
-	Mgmt    string     `json:"mgmt"` // auto, forward, bridge
+	Cabling string     `json:"cabling"` // leaf-spine, full-mesh, star, line (chain), ring, none
+	PerPair int        `json:"perPair,omitempty"` // cables between two switches (2+ = a LAG)
+	LagMode string     `json:"lagMode,omitempty"` // lacp, static (with PerPair 2+)
+	Mgmt    string     `json:"mgmt"`              // auto, forward, bridge
 	MgmtNet string     `json:"mgmtNet"`
 	Start   bool       `json:"start"`
 }
@@ -2022,6 +2026,7 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 		names[v.Name] = true
 	}
 	var add []emu.VM
+	spines := map[string]bool{}
 	for _, g := range r.Groups {
 		var tp *emu.Template
 		if g.Template != "" {
@@ -2080,15 +2085,26 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 				}
 			}
 			v.MgmtIP, v.Gateway = lv.FreeAddress(v)
+			switch g.Role {
+			case "spine":
+				v.Role, spines[v.ID] = "core", true
+			case "leaf":
+				v.Role = "access"
+			}
 			lv.VMs = append(lv.VMs, v)
 			next++
 			k++
 			add = append(add, v)
 		}
 	}
-	l.VMs = append(l.VMs, add...)
-	emuPlace(add, l.VMs)
-	l.Wire(add, r.Cabling, imgs)
+	if len(l.VMs) == 0 {
+		emuLayout(add, r.Cabling, spines)
+		l.VMs = append(l.VMs, add...)
+	} else {
+		l.VMs = append(l.VMs, add...)
+		emuPlace(add, l.VMs)
+	}
+	l.WireWith(add, emu.WireOpts{Kind: r.Cabling, Spines: spines, Per: r.PerPair, LagMode: r.LagMode}, imgs)
 	if err := a.emuSave(); err != nil {
 		emuLab.mu.Unlock()
 		return EmuView{}, err
@@ -2207,6 +2223,64 @@ func orInt(v ...int) int {
 }
 
 // emuPlace: the first two VMs of a lab on top, the others below.
+// emuLayout places a new topology's switches by its shape: spines above leaves, a ring or mesh
+// on a circle, a star around its hub, a line in rows.
+func emuLayout(vs []emu.VM, kind string, spines map[string]bool) {
+	n := len(vs)
+	circle := func(list []emu.VM, cx, cy, r float64) {
+		for i := range list {
+			a := 2*math.Pi*float64(i)/float64(len(list)) - math.Pi/2
+			for j := range vs {
+				if vs[j].ID == list[i].ID {
+					vs[j].X, vs[j].Y = int(cx+r*math.Cos(a)), int(cy+r*math.Sin(a))
+				}
+			}
+		}
+	}
+	switch kind {
+	case "leaf-spine":
+		var sp, lf []int
+		for i, v := range vs {
+			if spines[v.ID] || (len(spines) == 0 && i < 2) {
+				sp = append(sp, i)
+			} else {
+				lf = append(lf, i)
+			}
+		}
+		w := max(len(sp), len(lf)) * 220
+		for k, i := range sp {
+			vs[i].X, vs[i].Y = 40+(w-len(sp)*220)/2+k*220, 60
+		}
+		for k, i := range lf {
+			vs[i].X, vs[i].Y = 40+(w-len(lf)*220)/2+k*220, 330
+		}
+	case "ring", "full-mesh":
+		r := math.Max(180, float64(n)*220/(2*math.Pi))
+		circle(vs, 60+r, 40+r, r)
+	case "star":
+		hub := 0
+		for i, v := range vs {
+			if spines[v.ID] {
+				hub = i
+				break
+			}
+		}
+		var rest []emu.VM
+		for i, v := range vs {
+			if i != hub {
+				rest = append(rest, v)
+			}
+		}
+		r := math.Max(220, float64(len(rest))*220/(2*math.Pi))
+		vs[hub].X, vs[hub].Y = int(60+r), int(40+r)
+		circle(rest, 60+r, 40+r, r)
+	default: // a line, or no cables: rows of six
+		for i := range vs {
+			vs[i].X, vs[i].Y = 40+(i%6)*220, 60+(i/6)*240
+		}
+	}
+}
+
 func emuPlace(add, all []emu.VM) {
 	top, bottom := 40, 40
 	for _, v := range all {

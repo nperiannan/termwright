@@ -113,8 +113,8 @@ export interface EmuHost { session: string; name: string; info: EmuHostInfo; che
 export interface EmuAnswer { match: string; send: string; }
 export interface EmuImage { id: string; name: string; file: string; fileName: string; size: number; sha256: string; deviceType: string; cpus: number; ram: number; nics: number; nic: string; portMacs?: string; disk: string; portName: string; ready: string; login: string; password?: string; prompt: string; day0: string[] | null; answers: EmuAnswer[] | null; extra: string; source: string; serial: string; addrCmd: string; addrSet?: string[] | null; persona?: EmuPersonaDef | null; version?: string;
   hasPassword?: boolean; onHost?: boolean; upload?: string; missing?: boolean;  url?: string; md5?: string; page?: string; download?: string; disks?: { slot: string; fileName: string; file: string; sha256: string; size: number; url?: string; md5?: string; page?: string; bus?: string }[] | null; }
-export interface EmuGroup { template?: string; diskGb?: number; model?: string; module?: string; serialStart?: string; macStart?: string; image: string; count: number; names: string; cpus?: number; ram?: number; }
-export interface EmuRequest { host: string; groups: EmuGroup[]; cabling: string; mgmt: string; mgmtNet: string; start: boolean; }
+export interface EmuGroup { template?: string; diskGb?: number; model?: string; module?: string; serialStart?: string; macStart?: string; image: string; count: number; names: string; cpus?: number; ram?: number; role?: string; }
+export interface EmuRequest { host: string; groups: EmuGroup[]; cabling: string; mgmt: string; mgmtNet: string; start: boolean; perPair?: number; lagMode?: string; }
 export interface LabOutput { os: string; command: string; text: string; }
 export interface LabGroup { os?: string; model: string; count: number; names: string; }
 export interface LabRequest { groups: LabGroup[]; mgmtNet: string; cabling: string; password: string; start: boolean; }

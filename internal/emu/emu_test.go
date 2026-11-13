@@ -829,3 +829,50 @@ func TestPortMACs(t *testing.T) {
 		t.Fatal("own: " + a)
 	}
 }
+
+// New topologies: leaf-spine with chosen spines, full mesh, star around a spine, two cables per pair as a LAG.
+func TestWireWith(t *testing.T) {
+	im := &Image{ID: "i", NICs: 9}
+	imgs := map[string]*Image{"i": im}
+	mk := func(n int) []VM {
+		var vs []VM
+		for i := range n {
+			vs = append(vs, VM{ID: string(rune('a' + i)), Image: "i", Index: i})
+		}
+		return vs
+	}
+	count := func(l *Lab, a, b string) int {
+		n := 0
+		for _, c := range l.Cables {
+			if c.A == a && c.B == b || c.A == b && c.B == a {
+				n++
+			}
+		}
+		return n
+	}
+	l := &Lab{VMs: mk(5)}
+	l.WireWith(l.VMs, WireOpts{Kind: "leaf-spine", Spines: map[string]bool{"d": true, "e": true}}, imgs)
+	if len(l.Cables) != 6 || count(l, "d", "a") != 1 || count(l, "e", "c") != 1 || count(l, "d", "e") != 0 {
+		t.Fatalf("leaf-spine %+v", l.Cables)
+	}
+	l = &Lab{VMs: mk(4)}
+	l.WireWith(l.VMs, WireOpts{Kind: "full-mesh"}, imgs)
+	if len(l.Cables) != 6 {
+		t.Fatalf("mesh %d", len(l.Cables))
+	}
+	l = &Lab{VMs: mk(4)}
+	l.WireWith(l.VMs, WireOpts{Kind: "star", Spines: map[string]bool{"c": true}}, imgs)
+	if len(l.Cables) != 3 || count(l, "c", "a") != 1 || count(l, "a", "b") != 0 {
+		t.Fatalf("star %+v", l.Cables)
+	}
+	l = &Lab{VMs: mk(3)}
+	l.WireWith(l.VMs, WireOpts{Kind: "ring", Per: 2, LagMode: "lacp"}, imgs)
+	if len(l.Cables) != 6 || len(l.Lags) != 6 || l.Lags[0].Name != "LAG 1" || len(l.Lags[0].Ports) != 2 {
+		t.Fatalf("ring of LAGs %+v %+v", l.Cables, l.Lags)
+	}
+	l = &Lab{VMs: mk(3)}
+	l.WireWith(l.VMs, WireOpts{Kind: "none"}, imgs)
+	if len(l.Cables) != 0 {
+		t.Fatal("none")
+	}
+}

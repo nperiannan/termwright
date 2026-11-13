@@ -1299,6 +1299,110 @@ func (l *Lab) Wire(add []VM, kind string, imgs map[string]*Image) {
 	}
 }
 
+// WireOpts says how new VMs are cabled: the shape, which are spines (Leaf-spine)
+// or the hub (Star: the first spine), how many cables per pair (2 or more make a
+// LAG on both ends, in LagMode).
+type WireOpts struct {
+	Kind    string          // leaf-spine, full-mesh, star, line (chain), ring, "" or none
+	Spines  map[string]bool // VM ids
+	Per     int
+	LagMode string // lacp, static ("" = cables only)
+}
+
+// WireWith cables new VMs (see WireOpts). Leaf-spine without spines is Wire's (the lab's first two are the cores).
+func (l *Lab) WireWith(add []VM, o WireOpts, imgs map[string]*Image) {
+	kind := o.Kind
+	if kind == "line" {
+		kind = "chain"
+	}
+	if len(o.Spines) == 0 && o.Per <= 1 && (kind == "leaf-spine" || kind == "chain" || kind == "ring") {
+		l.Wire(add, kind, imgs)
+		return
+	}
+	per := max(1, o.Per)
+	link := func(a, b VM) {
+		var pa, pb []int
+		for range per {
+			x, y := l.FreeDataPort(a, imgs[a.Image]), l.FreeDataPort(b, imgs[b.Image])
+			if x == 0 || y == 0 {
+				break
+			}
+			l.Cables = append(l.Cables, Cable{A: a.ID, APort: x, B: b.ID, BPort: y})
+			pa, pb = append(pa, x), append(pb, y)
+		}
+		if len(pa) > 1 && o.LagMode != "" {
+			l.addLag(a.ID, o.LagMode, pa)
+			l.addLag(b.ID, o.LagMode, pb)
+		}
+	}
+	var spines, leaves []VM
+	for _, v := range add {
+		if o.Spines[v.ID] {
+			spines = append(spines, v)
+		} else {
+			leaves = append(leaves, v)
+		}
+	}
+	switch kind {
+	case "leaf-spine":
+		if len(spines) == 0 { // the lab's own spines (added to a lab)
+			for _, v := range l.VMs {
+				if o.Spines[v.ID] || v.Role == "core" {
+					spines = append(spines, v)
+				}
+			}
+		}
+		for _, lf := range leaves {
+			for _, sp := range spines {
+				link(sp, lf)
+			}
+		}
+	case "full-mesh":
+		for i := range add {
+			for j := i + 1; j < len(add); j++ {
+				link(add[i], add[j])
+			}
+		}
+	case "star":
+		if len(add) < 2 {
+			return
+		}
+		hub := add[0]
+		if len(spines) > 0 {
+			hub = spines[0]
+		}
+		for _, v := range add {
+			if v.ID != hub.ID {
+				link(hub, v)
+			}
+		}
+	case "chain", "ring":
+		for i := 0; i+1 < len(add); i++ {
+			link(add[i], add[i+1])
+		}
+		if kind == "ring" && len(add) > 2 {
+			link(add[len(add)-1], add[0])
+		}
+	}
+}
+
+// addLag marks a LAG of ports on a VM (named LAG 1, LAG 2… on that VM).
+func (l *Lab) addLag(vm, mode string, ports []int) {
+	used := map[string]bool{}
+	for _, g := range l.Lags {
+		if g.VM == vm {
+			used[g.Name] = true
+		}
+	}
+	name := ""
+	for n := 1; ; n++ {
+		if name = "LAG " + strconv.Itoa(n); !used[name] {
+			break
+		}
+	}
+	l.Lags = append(l.Lags, Lag{VM: vm, Name: name, Mode: mode, Ports: slices.Sorted(slices.Values(ports)), Source: "user"})
+}
+
 // Fill puts a VM's values into a day-0 command.
 func Fill(cmd string, v VM, n int) string {
 	addr, bits := v.MgmtIP, ""
