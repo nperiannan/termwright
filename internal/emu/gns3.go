@@ -230,11 +230,21 @@ func cleanOptions(o string) string {
 	return strings.Join(keep, " ")
 }
 
+// NoSerialConsole says whether an image is known to have no serial console (Tiny Core boots to a
+// screen only), so Termwright cannot log in to it or type its network setup.
+func NoSerialConsole(name string) bool {
+	n := strings.ToLower(name)
+	return strings.Contains(n, "tiny core") || strings.Contains(n, "tinycore")
+}
+
 // IsLinuxAppliance says whether a GNS3 appliance is a Linux computer (a guest
 // whose console is a Linux shell), which Termwright configures as a host.
 func IsLinuxAppliance(name, category string) bool {
 	n := strings.ToLower(name)
-	for _, d := range []string{"alpine", "debian", "ubuntu", "fedora", "almalinux", "rocky", "centos", "kali", "tiny core", "tinycore", "linux"} {
+	if NoSerialConsole(name) {
+		return false
+	}
+	for _, d := range []string{"alpine", "debian", "ubuntu", "fedora", "almalinux", "rocky", "centos", "kali", "linux"} {
 		if strings.Contains(n, d) {
 			return category == "" || category == "guest"
 		}

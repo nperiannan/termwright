@@ -38,3 +38,12 @@ func TestArgsEscapeCommaInName(t *testing.T) {
 		t.Fatalf("%v", a[:2])
 	}
 }
+
+func TestTinyCoreIsNotAComputer(t *testing.T) {
+	if !NoSerialConsole("Tiny Core Linux") || NoSerialConsole("Alpine Linux Virt") {
+		t.Fatal("serial console detection")
+	}
+	if IsLinuxAppliance("Tiny Core Linux", "guest") || !IsLinuxAppliance("Alpine Linux Virt", "guest") {
+		t.Fatal("IsLinuxAppliance")
+	}
+}

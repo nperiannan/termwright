@@ -6012,7 +6012,7 @@ func (a *App) EmuAddComputer(host string, start bool) (EmuView, error) {
 	var pick *emu.Image
 	for i := range emuLab.f.Images {
 		im := &emuLab.f.Images[i]
-		if len(im.PortAddr) == 0 {
+		if len(im.PortAddr) == 0 || emu.NoSerialConsole(im.Name) {
 			continue
 		}
 		alp := strings.Contains(strings.ToLower(im.Name), "alpine")
@@ -6033,7 +6033,7 @@ func (a *App) EmuAddComputer(host string, start bool) (EmuView, error) {
 	}
 	emuLab.mu.Unlock()
 	if id == "" {
-		return EmuView{}, errors.New("there is no Linux image yet: add Alpine Linux from Images → catalog (Linux and test tools), then add the computer")
+		return EmuView{}, errors.New("there is no Linux image yet: add Alpine Linux from Images → catalog (Linux and test tools), then add the computer (Tiny Core has no serial console, so Termwright cannot configure it)")
 	}
 	if host == "" {
 		return EmuView{}, errors.New("the lab has no KVM host yet: make a lab first")
