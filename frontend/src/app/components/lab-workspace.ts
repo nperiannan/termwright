@@ -189,11 +189,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="nn">{{ m.name }} <span class="muted">→ {{ m.to }}</span></div><div class="nm"><i class="spin"></i> {{ m.step }}</div>@if (m.pct >= 0) { <div class="mvp"><i [style.width.%]="m.pct"></i></div><div class="mvr">{{ m.pct }} % · {{ m.rest }}</div> }</div>
             }
             @for (t of tps(); track t.t.id) {
-              <div class="node tpn" [style.left.px]="t.x - 56" [style.top.px]="t.y - 18" (pointerdown)="tpGrab($event, t.t)" (click)="$event.stopPropagation(); dock.set('traffic'); loadTraf()" (contextmenu)="tpMenu(t.t, $event)" [title]="t.t.name + ' · ' + t.where + (t.t.ip ? ' · ' + t.t.ip : '') + ' · ' + t.t.mac">
+              <div class="node tpn" [style.left.px]="t.x - 56" [style.top.px]="t.y - 18" (pointerdown)="tpGrab($event, t.t)" (click)="$event.stopPropagation(); dock.set('traffic'); loadTraf()" (contextmenu)="tpMenuOpen(t.t, $event)" [title]="t.t.name + ' · ' + t.where + (t.t.ip ? ' · ' + t.t.ip : '') + ' · ' + t.t.mac">
                 <div class="tpb">⇄ {{ t.t.name }}</div><div class="nm">{{ t.t.ip || t.where }}</div></div>
             }
             @for (c of clouds(); track c.host) {
-              <div class="node cloud" [class.pick]="linkMode() && !!linkA()?.port" [style.left.px]="c.x - 75" [style.top.px]="c.y - 44" (pointerdown)="cloudGrab($event, c.host)" (click)="cloudClick(c.host, $event)"
+              <div class="node cloud" [class.sel]="selCloud() === c.host" (contextmenu)="cloudMenu(c.host, $event)" [class.pick]="linkMode() && !!linkA()?.port" [style.left.px]="c.x - 75" [style.top.px]="c.y - 44" (pointerdown)="cloudGrab($event, c.host)" (click)="cloudClick(c.host, $event)"
                    [title]="tr('The network of {0} ({1}): a switch port cabled here is on it, like a cloud node. Add Link from a switch port to here; right-click a switch to take a port off.', c.name, c.lan)">
                 <div class="cbox"><svg viewBox="0 0 64 40" width="76" height="48"><path d="M18 34h30a10 10 0 0 0 1-20 14 14 0 0 0-26-4A11 11 0 0 0 18 34z" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="2"/></svg></div>
                 <div class="nn">{{ tr('Cloud') }}</div><div class="nm">{{ c.name }} · {{ c.lan || tr('host network') }}</div>
@@ -261,6 +261,19 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [title]="d.running ? tr('Live: it keeps running while it moves') : tr('It takes its disk along: its configuration and day 0 stay')">→ {{ o.name || hname(o.session) }}</a> } }
               <hr />
               <a class="r" (click)="mdo('remove', d)">{{ tr('Delete') }}</a>
+            }
+            @if (m.cloud; as h) {
+              @for (c of clouds(); track c.host) { @if (c.host === h) {
+                <span class="mh2">{{ tr('Cloud') }} · {{ c.name }}</span>
+                <a (click)="menu.set(null); toggleLink()">⟷ {{ tr('Add Link to It') }}</a>
+                @for (u of c.links; track u.dev + u.port) { <a (click)="menu.set(null); takeOff(u.dev, u.port)">{{ tr('Take {0} {1} off', u.name, u.port) }}</a> }
+                <hr /><a class="r" (click)="menu.set(null); removeCloud(h)">{{ tr('Remove Cloud') }}</a>
+              } }
+            }
+            @if (m.tp; as t) {
+              <span class="mh2">{{ t.name }} · {{ tpWhere(t) }}</span>
+              <a (click)="menu.set(null); dock.set('traffic'); loadTraf(); newStream()">＋ {{ tr('Stream from Here') }}</a>
+              <hr /><a class="r" (click)="menu.set(null); tpRemove(t)">{{ tr('Remove Test Port') }}</a>
             }
             @if (m.link; as k) {
               @if (emu()) { <a (click)="ldo('pull', k)">{{ k.down ? tr('Plug In') : tr('Pull') }}</a>
@@ -457,6 +470,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             @empty { <p class="muted small" style="padding: 8px 12px">{{ tr('No capture yet: right-click a cable → Capture Packets.') }}</p> }
           </div>
           <div class="capt">
+            @if (capSum().length) { <div class="capsum">@for (x of capSum(); track x.k) { <span [class]="'cs ' + x.p.toLowerCase()" (click)="capFilter.set(x.p)" [title]="tr('Show only these')"><b>{{ x.p }}</b> {{ x.src }} <i>{{ x.n }}</i></span> }</div> }
             <table><tr><th>#</th><th>{{ tr('Time') }}</th><th>{{ tr('Source') }}</th><th>{{ tr('Destination') }}</th><th>{{ tr('Protocol') }}</th><th>{{ tr('Length') }}</th><th>{{ tr('Info') }}</th></tr>
               @for (p of packetsShown(); track p.no) { <tr [class]="'pp ' + p.proto.toLowerCase()"><td>{{ p.no }}</td><td>{{ p.time.toFixed(3) }}</td><td class="mono">{{ p.src }}</td><td class="mono">{{ p.dst }}</td><td><b>{{ p.proto }}</b></td><td>{{ p.len }}</td><td>{{ p.info }}</td></tr> }
               @empty { <tr><td colspan="7" class="muted">{{ capCur() ? tr('No packets yet.') : tr('Choose a capture on the left.') }}</td></tr> }
@@ -655,10 +669,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       .seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; i { font-style: normal; padding: 3px 7px; cursor: pointer; color: var(--muted); font-size: 11px; } i.on { background: var(--accent-soft); color: var(--text); } } .trb { display: flex; gap: 8px; } p { margin: 0; } }
     .node.tpn { cursor: grab; width: 112px; text-align: center; .tpb { height: 30px; border-radius: 9px; border: 1.5px solid #e08a2e; background: color-mix(in srgb, #e08a2e 12%, var(--surface)); color: #e9a55a; display: flex; align-items: center; justify-content: center; font: 600 11.5px var(--font, Inter, sans-serif); white-space: nowrap; } }
     .tpl .ln { stroke: #e08a2e; stroke-dasharray: 5 4; stroke-width: 2; fill: none; }
+    .capsum { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); .cs { font-size: 11.5px; border: 1px solid var(--line); border-radius: 8px; padding: 1px 7px; cursor: pointer; font-family: var(--mono, monospace); i { font-style: normal; color: var(--muted); margin-left: 4px; } } .cs.lldp, .cs.lacp, .cs.stp { border-color: var(--accent); } }
     .capw { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; .capl { border-right: 1px solid var(--line); overflow: auto; } .ci { display: grid; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid var(--line); b { font-size: 12.5px; display: flex; align-items: center; gap: 6px; } } .ci.on { background: var(--accent-soft); } .cx { margin-left: auto; color: var(--muted); font-weight: 400; padding: 0 2px; } .cx:hover { color: var(--danger); } .capt { overflow: auto; table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 4px 8px; } td { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr.pp.icmp td, tr.pp.icmpv6 td { color: #9cc3ff; } tr.pp.lldp td, tr.pp.stp td, tr.pp.lacp td { color: var(--muted); } tr.pp.arp td { color: #e5c07b; } } }
     .recd { width: 8px; height: 8px; border-radius: 50%; background: var(--danger, #e5484d); animation: icblink 1.2s ease-in-out infinite; } .cnt.rec { background: var(--danger, #e5484d); } .capf { width: 200px; }
     .lk.cap .ln { stroke: var(--danger, #e5484d) !important; stroke-dasharray: 6 4; } @keyframes icblink { 50% { opacity: .3; } }
     .nlbl { cursor: move; display: inline-block; padding: 1px 6px; border-radius: 6px; background: color-mix(in srgb, var(--bg, #0d0e11) 82%, transparent); position: relative; z-index: 1; }
+    .node.cloud.sel .cbox svg path { stroke-width: 3.5; filter: drop-shadow(0 0 6px var(--accent)); } .node.cloud.sel .nn { color: var(--accent); }
     .node.cloud { cursor: grab; .cbox { height: 56px; display: flex; align-items: flex-end; justify-content: center; } } .node.cloud.pick .cbox svg path { stroke-width: 3; } .cll .ln { stroke-dasharray: 3 4; }
     .node.ghost.mv { opacity: .9; pointer-events: auto; .mvp { width: 150px; height: 4px; margin: 4px auto 2px; border-radius: 2px; background: var(--line); overflow: hidden; i { display: block; height: 100%; background: var(--accent); transition: width .5s; } } .mvr { font-size: 10.5px; color: var(--muted); white-space: nowrap; } .nbox { border: 1.5px dashed var(--accent); background: var(--accent-soft); } .nm { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--accent); } }
     .gl { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 5; opacity: .7; } .node.ghost { opacity: .55; pointer-events: none; .nbox { border-style: dashed; border-color: var(--accent); } }
@@ -731,7 +747,8 @@ export class LabWorkspace implements OnDestroy {
   protected sel = signal('');
   protected selDev = computed(() => this.devs().find(d => d.id === this.sel()) ?? null);
   protected selLink = signal('');
-  protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink } | null>(null);
+  protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink; cloud?: string; tp?: EmuTester } | null>(null);
+  protected selCloud = signal('');
   protected dock = signal<'events' | 'console' | 'inv' | 'clog' | 'log' | 'cap' | 'traffic'>('events');
   protected caps = signal<EmuCapture[]>([]);
   protected capSel = signal('');
@@ -740,6 +757,13 @@ export class LabWorkspace implements OnDestroy {
   protected packets = signal<EmuPacket[]>([]);
   protected capsRunning = computed(() => this.caps().filter(c => c.running).length);
   protected capCur = computed(() => { const l = this.caps(); return l.find(c => c.key === this.capSel() && (!this.capStarted() || c.started === this.capStarted())) ?? null; });
+  /** What the capture holds, per protocol and sender (control protocols first): one look shows which end sends LLDP, LACP, STP… */
+  protected capSum = computed(() => {
+    const m = new Map<string, { k: string; p: string; src: string; n: number }>();
+    for (const p of this.packets()) { const k = p.proto + '|' + p.src; const x = m.get(k) ?? { k, p: p.proto, src: p.src, n: 0 }; x.n++; m.set(k, x); }
+    const ctl = ['LLDP', 'LACP', 'STP', 'EDP', 'LLC', 'OSPF', 'VRRP', 'ARP'];
+    return [...m.values()].sort((a, b) => ((ctl.indexOf(a.p) + 1 || 99) - (ctl.indexOf(b.p) + 1 || 99)) || b.n - a.n).slice(0, 14);
+  });
   protected packetsShown = computed(() => { const f = this.capFilter().trim().toLowerCase(); const l = this.packets(); return f ? l.filter(p => `${p.src} ${p.dst} ${p.proto} ${p.info}`.toLowerCase().includes(f)) : l; });
   /** The running capture on a cable (at either end). */
   capOf(k: LabLink) { const p = this.caps().find(c => c.running && (c.vm === k.a && c.port === k.aPort || c.vm === k.b && c.port === k.bPort)); return p ?? null; }
@@ -787,8 +811,19 @@ export class LabWorkspace implements OnDestroy {
     const up = async () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); if (at.x !== c.x || at.y !== c.y) { try { this.traf.set(await this.backend.emuTesterSet({ ...t, x: at.x, y: at.y })); } catch (e) { this.ui.error(e); } } };
     addEventListener('pointermove', mv); addEventListener('pointerup', up);
   }
-  async tpMenu(t: EmuTester, ev: MouseEvent) {
-    ev.preventDefault(); ev.stopPropagation();
+  tpMenuOpen(t: EmuTester, ev: MouseEvent) { ev.preventDefault(); ev.stopPropagation(); this.menu.set({ ...this.menuAt(ev), tp: t }); }
+  cloudMenu(h: string, ev: MouseEvent) { ev.preventDefault(); ev.stopPropagation(); this.selCloud.set(h); this.menu.set({ ...this.menuAt(ev), cloud: h }); }
+  async takeOff(id: string, port: string) { const d = this.devs().find(x => x.id === id); if (d) await this.setUplink(d, port, false); }
+  /** Remove a cloud: the ports on it come off the host's network (at their next restart). */
+  async removeCloud(h: string) {
+    const c = this.clouds().find(x => x.host === h); if (!c) return;
+    if (c.links.length && !(await this.ui.confirm(tr('Remove the Cloud?'), tr('{0} come off the host’s network when their switches restart.', c.links.map(u => u.name + ' ' + u.port).join(', ')), tr('Remove')))) return;
+    for (const u of c.links) { const d = this.devs().find(x => x.id === u.dev); if (d) { try { await this.backend.emuSetUplink(d.id, u.port, false); } catch (e) { this.ui.error(e); return; } } }
+    const on = new Set(this.cloudOn()); on.delete(h); this.cloudOn.set(on); this.selCloud.set('');
+    try { localStorage.setItem('tw.clouds', JSON.stringify([...on])); } catch { /* per viewer only */ }
+    await this.lab.refresh();
+  }
+  async tpRemove(t: EmuTester) {
     if (!(await this.ui.confirm(tr('Remove {0}?', t.name), tr('Its streams go too.'), tr('Remove')))) return;
     try { this.traf.set(await this.backend.emuTesterRemove(t.id)); } catch (e) { this.ui.error(e); }
   }
@@ -1037,7 +1072,7 @@ export class LabWorkspace implements OnDestroy {
   /** Add Link: a switch port, then the cloud - the port goes on the host's network. */
   async cloudClick(h: string, ev: MouseEvent) {
     ev.stopPropagation();
-    if (!this.linkMode()) return;
+    if (!this.linkMode()) { this.selCloud.set(this.selCloud() === h ? '' : h); this.sel.set(''); this.selLink.set(''); return; }
     const a = this.linkA(), d = a && this.devs().find(x => x.id === a.id);
     if (!d || !a?.port) { this.ui.toast(tr('First click a switch and pick its port, then the cloud')); return; }
     if ((this.hostOfDev(d) || this.st()?.host) !== h) { this.ui.error(tr('{0} runs on another host: cable it to that host’s cloud', d.hostname)); return; }
@@ -1237,12 +1272,17 @@ export class LabWorkspace implements OnDestroy {
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
     this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
   }
+  @HostListener('document:keydown', ['$event']) onDelKey(e: KeyboardEvent) {
+    if (!this.visible() || !this.selCloud() || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
+    if ((e.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable], .xterm')) return;
+    e.preventDefault(); void this.removeCloud(this.selCloud());
+  }
   @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); } }
   /** A click on the empty canvas: nothing selected (the side panel shows the whole topology). */
   canvasClick(ev: MouseEvent) {
     const t = ev.target as HTMLElement;
     if (this.linkMode() || t.closest('.node, .lk, .tdock, .vbar, .mini, .hleg, .menu, .bar2, .zone .zh')) return;
-    this.sel.set(''); this.selLink.set('');
+    this.sel.set(''); this.selLink.set(''); this.selCloud.set('');
   }
   ngOnDestroy() { clearInterval(this.timer); if (this.trafTimer) clearInterval(this.trafTimer); this.lab.watch('ws-' + this.tab().id, false); for (const id of Object.values(this.docked())) void this.tabs.close(id); }
 

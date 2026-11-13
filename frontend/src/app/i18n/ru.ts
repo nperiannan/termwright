@@ -2773,6 +2773,14 @@ const ru: Record<string, string> = {
   'Its streams go too.': 'Его потоки тоже удаляются.',
   'Add a switch first': 'Сначала добавьте коммутатор',
   'Save the Traffic Report': 'Сохранить отчёт о трафике',
+  'Add Link to It': 'Добавить связь к нему',
+  'Take {0} {1} off': 'Снять {0} {1}',
+  'Remove Cloud': 'Удалить облако',
+  'Stream from Here': 'Поток отсюда',
+  'Remove Test Port': 'Удалить тестовый порт',
+  'Remove the Cloud?': 'Удалить облако?',
+  '{0} come off the host’s network when their switches restart.': '{0} отключаются от сети хоста при перезапуске их коммутаторов.',
+  'Show only these': 'Показать только эти',
 };
 
 export default ru;

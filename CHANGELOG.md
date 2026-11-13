@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **clouds** can be selected (click) and have a right-click menu: *Add Link to It*, take a port off, *Remove Cloud* (Delete also removes a selected one; the ports on it come off the host's network at their next restart). Test ports have a right-click menu too (*Stream from Here*, *Remove Test Port*).
+- Emulated lab, **Captures** sum up what a capture holds per protocol and sender (LLDP, LACP, STP, EDP… first): one look shows which end sends which control protocol; click one to filter.
+
 - Emulated lab, **traffic generator**: put a **test port** on any free switch port (right-click a switch → *Add Test Port…*, or Traffic → ＋ Test Port) - a sender and counter on the host where the switch runs, no VM; it has a MAC and an address and answers ARP and ping there. **Streams** between test ports (or to every other one, or to an address): UDP, ICMP, TCP SYN, ARP or raw L2, with a VLAN tag, frame size, packets per second and seconds or a count; each passes when its loss (and average latency, when both ends are on one host) stays within its limits. The **Traffic** tab shows sent, received, loss, latency and PASS/FAIL live; *Report…* saves HTML or CSV; the connector has **lab_traffic** for AI agents (add ports and streams, start, stop, report). Ports without a cable now have a socket a test port can use (a switch started before this needs one restart for its test ports).
 - Emulated lab, **Captures**: delete a stopped capture (✕ or *Delete*, also *Delete All Stopped*) - its pcap file on the host goes too; two captures of one port each show their own packets; the vendor discovery protocol (EDP) is named as such.
 
