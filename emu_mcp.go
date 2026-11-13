@@ -86,7 +86,7 @@ var mcpLabTools = []mcpTool{
 		mcpSchema(map[string]any{
 			"action": map[string]any{"type": "string", "enum": []string{"start", "stop", "read", "list"}},
 			"switch": map[string]any{"type": "string"},
-			"port":   map[string]any{"type": "string"},
+			"port":   map[string]any{"type": "string", "description": "a data port, or mgmt for the switch's management port"},
 			"filter": map[string]any{"type": "string", "description": "read: only packets whose source, destination, protocol or info contains this (e.g. ICMP, LLDP, 10.0.0.1)"},
 			"last":   map[string]any{"type": "integer", "description": "read: how many of the newest packets (default 100, at most 2000)"},
 		}, "action")},

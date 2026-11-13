@@ -2825,6 +2825,10 @@ const ru: Record<string, string> = {
   'Save Selected as .pcap…': 'Сохранить выбранные как .pcap…',
   'The packet in a window of its own (or double-click it)': 'Пакет в отдельном окне (или двойной щелчок)',
   'Open Packet': 'Открыть пакет',
+  'Stop the Management Capture': 'Остановить захват порта управления',
+  'Show the Management Packets': 'Показать пакеты порта управления',
+  'Its management port, both ways (SSH, SNMP, DHCP, the cloud connection…); the switch keeps running': 'Его порт управления в обе стороны (SSH, SNMP, DHCP, облачное подключение…); коммутатор продолжает работать',
+  'Capture the Management Port': 'Захватить порт управления',
 };
 
 export default ru;

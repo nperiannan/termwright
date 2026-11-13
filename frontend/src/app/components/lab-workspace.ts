@@ -259,6 +259,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 @for (u of d.uplinks ?? []; track u) { <a (click)="setUplink(d, u, false)">{{ tr('Take {0} off the Host’s Network', u) }}</a> } }
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
               @if (emu()) { <a (click)="menu.set(null); newTester(d)">⇄ {{ tr('Add Test Port…') }}</a> }
+              @if (emu()) { @if (mgmtCap(d); as c) { <a (click)="menu.set(null); stopCap(c.key)">◼ {{ tr('Stop the Management Capture') }}</a><a (click)="menu.set(null); dock.set('cap'); capSel.set(c.key); capStarted.set(c.started); loadCaps()">{{ tr('Show the Management Packets') }}</a> }
+                @else { <a (click)="menu.set(null); startCapMgmt(d)" [class.off]="!d.running" [title]="tr('Its management port, both ways (SSH, SNMP, DHCP, the cloud connection…); the switch keeps running')">● {{ tr('Capture the Management Port') }}</a> } }
               @if (emu()) { <a (click)="menu.set(null); qemuCmd(d)" [title]="tr('The command QEMU runs it with (read from its host), copied to the clipboard')">{{ tr('QEMU Command Line…') }}</a> }
               @if (emu() && d.running) { <a (click)="menu.set(null); linkCheck(d)" [title]="tr('Watches its network cards in QEMU for 30 s: whether the emulation takes links down or drops frames, or the switch itself does')">{{ tr('Check Its Links (30 s)') }}</a> }
               @if (emu()) { <hr /><a (click)="drawAs.set(d); menu.set(null); $event.stopPropagation()" [title]="tr('For every {0} in this topology, new ones too', kindOf(d))"><app-dev-icon class="dai" [role]="roleOfDev(d)" [look]="lookOf(d)" [size]="22" state="idle" />{{ tr('Draw As…') }} <small class="muted">{{ tr('all {0}', kindOf(d)) }}</small></a> }
@@ -802,6 +804,8 @@ export class LabWorkspace implements OnDestroy {
   async loadCaps() { try { this.caps.set((await this.backend.emuCaptures()) ?? []); if (!this.capSel() && this.caps().length) this.capSel.set(this.caps()[0].key); await this.loadPackets(); } catch { /* none */ } }
   async loadPackets() { const c = this.capCur(); this.pktReset(c?.file ?? ''); if (!c) { this.packets.set([]); return; } try { this.packets.set((await this.backend.emuCapturePackets(c.file, 2000)) ?? []); } catch (e) { this.packets.set([]); void e; } }
   async startCap(k: LabLink) { try { this.caps.set((await this.backend.emuCaptureStart(k.a, k.aPort)) ?? []); const c = this.caps().find(x => x.running && x.vm === k.a && x.port === k.aPort); if (c) { this.capSel.set(c.key); this.capStarted.set(c.started); } this.dock.set('cap'); await this.loadPackets(); } catch (e) { this.ui.error(e); } }
+  mgmtCap(d: LabDevice) { return this.caps().find(c => c.running && c.vm === d.id && c.port === 'mgmt') ?? null; }
+  async startCapMgmt(d: LabDevice) { try { this.caps.set((await this.backend.emuCaptureStart(d.id, 'mgmt')) ?? []); const c = this.mgmtCap(d); if (c) { this.capSel.set(c.key); this.capStarted.set(c.started); } this.dock.set('cap'); await this.loadPackets(); } catch (e) { this.ui.error(e); } }
   // ---- traffic generator
   protected traf = signal<EmuTrafficView | null>(null);
   protected sEd = signal<EmuStream | null>(null);
@@ -1164,7 +1168,7 @@ export class LabWorkspace implements OnDestroy {
   });
   /** Draw As: the device whose kind is being drawn differently, and the preview's background. */
   protected drawAs = signal<LabDevice | null>(null);
-  protected drawBg = signal<'dark' | 'light'>('dark');
+  protected drawBg = signal<'dark' | 'light'>(document.documentElement.classList.contains('light') ? 'light' : 'dark');
   protected drawDev = computed(() => { const a = this.drawAs(); return a ? this.devs().find(x => x.id === a.id) ?? null : null; });
   /** Ctrl or ⌘ with the wheel (or a trackpad pinch) zooms the canvas. */
   wheelZoom(ev: WheelEvent) { if (!ev.ctrlKey && !ev.metaKey) return; ev.preventDefault(); this.zoomBy(ev.deltaY < 0 ? 0.1 : -0.1); }

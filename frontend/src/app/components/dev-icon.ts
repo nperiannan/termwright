@@ -233,28 +233,28 @@ const GL: Record<string, string> = { // 24-unit glyphs, stroked
 };
 const gl = (k: string, col: string, w = 1.5) => `<g fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${GL[k] ?? GL['access']}</g>`;
 const CLOUD = '<path d="M19 46h27a9 9 0 0 0 1-18 13 13 0 0 0-25 3 7.5 7.5 0 0 0-3 15z" fill="url(#twcl)"/>';
-const DEFS5 = '<defs><linearGradient id="twsl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a4252"/><stop offset="1" stop-color="#232833"/></linearGradient>'
-  + '<filter id="twsh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".4"/></filter>'
-  + '<linearGradient id="twst" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6b7587"/><stop offset="1" stop-color="#4a5262"/></linearGradient>'
-  + '<linearGradient id="twrk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a5262"/><stop offset="1" stop-color="#2c323d"/></linearGradient>'
+const DEFS5 = '<defs><linearGradient id="twsl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--sl-a)"/><stop offset="1" style="stop-color:var(--sl-b)"/></linearGradient>'
+  + '<filter id="twsh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".4" style="flood-opacity:var(--sh-o)"/></filter>'
+  + '<linearGradient id="twst" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--st-a)"/><stop offset="1" style="stop-color:var(--st-b)"/></linearGradient>'
+  + '<linearGradient id="twrk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--rk-a)"/><stop offset="1" style="stop-color:var(--rk-b)"/></linearGradient>'
   + '<radialGradient id="twap" cx=".5" cy=".35" r=".7"><stop offset="0" stop-color="#f3f5f8"/><stop offset="1" stop-color="#b9c1cd"/></radialGradient>'
   + '<linearGradient id="twcl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9eef6"/><stop offset="1" stop-color="#aab6c6"/></linearGradient></defs>';
 /** A 64-unit drawing placed in the 120 x 96 icon. */
 const fit = (inner: string, z = 1.5, dy = 0) => `<svg width="120" height="96" viewBox="0 0 120 96">${DEFS5}<g transform="translate(${60 - 32 * z} ${dy}) scale(${z})">${inner}</g></svg>`;
 function slate(k: string): string {
-  return fit(`<rect x="8" y="8" width="48" height="48" rx="11" fill="url(#twsl)" filter="url(#twsh)"/><rect x="8.5" y="8.5" width="47" height="47" rx="10.5" fill="none" stroke="#fff" stroke-opacity=".1"/><g transform="translate(15.2 15.2) scale(1.4)">${gl(k, '#e8ecf3')}</g>`);
+  return fit(`<rect x="8" y="8" width="48" height="48" rx="11" fill="url(#twsl)" filter="url(#twsh)"/><rect x="8.5" y="8.5" width="47" height="47" rx="10.5" fill="none" stroke="#fff" stroke-opacity=".1"/><g transform="translate(15.2 15.2) scale(1.4)">${gl(k, 'var(--sl-g)')}</g>`);
 }
 function steel(k: string, lit: boolean): string {
   const led = lit ? '#34c77b' : 'var(--ic-off)';
-  let top = '<path d="M32 14 54 25 32 36 10 25z" fill="url(#twst)"/>', left = '<path d="M10 25v12l22 11V36z" fill="#3b4250"/>', right = '<path d="M54 25v12L32 48V36z" fill="#2a303b"/>', det = '';
+  let top = '<path d="M32 14 54 25 32 36 10 25z" fill="url(#twst)"/>', left = '<path d="M10 25v12l22 11V36z" style="fill:var(--st-l)"/>', right = '<path d="M54 25v12L32 48V36z" style="fill:var(--st-r)"/>', det = '';
   switch (k) {
     case 'core': case 'access': { const n = k === 'core' ? 8 : 6; for (let i = 0; i < n; i++) det += `<path d="M${13 + i * 2.4} ${29.6 + i * 1.2}l1.6.8v1.6l-1.6-.8z" fill="#9fb3c8"/>`; det += `<circle cx="49.5" cy="33" r="1" fill="${led}"/>`; break; }
-    case 'router': top = '<ellipse cx="32" cy="25" rx="22" ry="11" fill="url(#twst)"/>'; left = '<path d="M10 25v10c0 6 10 11 22 11s22-5 22-11V25c0 6-10 11-22 11S10 31 10 25z" fill="#323946"/>'; right = '';
-      det = `<path d="M24 25h16m-3-2 3 2-3 2M27 22l-3 3 3 3" stroke="#e8ecf3" stroke-width="1.3" fill="none" stroke-linecap="round"/><circle cx="32" cy="41" r="1" fill="${led}"/>`; break;
+    case 'router': top = '<ellipse cx="32" cy="25" rx="22" ry="11" fill="url(#twst)"/>'; left = '<path d="M10 25v10c0 6 10 11 22 11s22-5 22-11V25c0 6-10 11-22 11S10 31 10 25z" style="fill:var(--st-l)"/>'; right = '';
+      det = `<path d="M24 25h16m-3-2 3 2-3 2M27 22l-3 3 3 3" style="stroke:var(--sl-g)" stroke-width="1.3" fill="none" stroke-linecap="round"/><circle cx="32" cy="41" r="1" fill="${led}"/>`; break;
     case 'fw': for (let c = 0; c < 3; c++) for (let r = 0; r < 2; r++) det += `<path d="M${12 + c * 7} ${28.5 + c * 3.5 + r * 4}l5 2.5" stroke="#c96a6a" stroke-width="1.2"/>`; det += `<circle cx="49.5" cy="33" r="1" fill="${led}"/>`; break;
-    case 'server': case 'host': top = '<path d="M32 8 46 15 32 22 18 15z" fill="url(#twst)"/>'; left = '<path d="M18 15v28l14 7V22z" fill="#3b4250"/>'; right = '<path d="M46 15v28l-14 7V22z" fill="#2a303b"/>';
+    case 'server': case 'host': top = '<path d="M32 8 46 15 32 22 18 15z" fill="url(#twst)"/>'; left = '<path d="M18 15v28l14 7V22z" style="fill:var(--st-l)"/>'; right = '<path d="M46 15v28l-14 7V22z" style="fill:var(--st-r)"/>';
       for (let i = 0; i < 3; i++) det += `<path d="M21 ${22 + i * 7}l8 4" stroke="#9fb3c8" stroke-width="1.2"/>`; det += `<circle cx="29" cy="44" r="1" fill="${led}"/>`; break;
-    case 'ap': top = '<ellipse cx="32" cy="32" rx="20" ry="9" fill="url(#twst)"/>'; left = '<path d="M12 32v3c0 5 9 9 20 9s20-4 20-9v-3c0 5-9 9-20 9s-20-4-20-9z" fill="#323946"/>'; right = '';
+    case 'ap': top = '<ellipse cx="32" cy="32" rx="20" ry="9" fill="url(#twst)"/>'; left = '<path d="M12 32v3c0 5 9 9 20 9s20-4 20-9v-3c0 5-9 9-20 9s-20-4-20-9z" style="fill:var(--st-l)"/>'; right = '';
       det = `<circle cx="32" cy="31" r="2" fill="${led}"/><path d="M26 25a8 8 0 0 1 12 0M22.5 21.5a13 13 0 0 1 19 0" stroke="#9fb3c8" stroke-width="1.4" fill="none" stroke-linecap="round"/>`; break;
     case 'cloud': return fit(CLOUD);
   }
@@ -262,15 +262,15 @@ function steel(k: string, lit: boolean): string {
 }
 function rack(k: string, lit: boolean): string {
   const led = lit ? '#34c77b' : 'var(--ic-off)', amber = lit ? '#e5a93b' : 'var(--ic-off)';
-  const unit = (y: number, h: number) => `<rect x="4" y="${y}" width="56" height="${h}" rx="2.5" fill="url(#twrk)"/><rect x="4" y="${y}" width="56" height="${h}" rx="2.5" fill="none" stroke="#fff" stroke-opacity=".12"/><rect x="1.5" y="${y + 1.5}" width="3.5" height="${h - 3}" rx="1" fill="#59606d"/><rect x="59" y="${y + 1.5}" width="3.5" height="${h - 3}" rx="1" fill="#59606d"/>`;
+  const unit = (y: number, h: number) => `<rect x="4" y="${y}" width="56" height="${h}" rx="2.5" fill="url(#twrk)"/><rect x="4" y="${y}" width="56" height="${h}" rx="2.5" fill="none" stroke="#fff" stroke-opacity=".12"/><rect x="1.5" y="${y + 1.5}" width="3.5" height="${h - 3}" rx="1" style="fill:var(--rk-e)"/><rect x="59" y="${y + 1.5}" width="3.5" height="${h - 3}" rx="1" style="fill:var(--rk-e)"/>`;
   let s = '';
   switch (k) {
-    case 'core': case 'access': { const n = k === 'core' ? 12 : 8; s = unit(22, 20); for (let i = 0; i < n; i++) s += `<rect x="${14 + i * 3.5}" y="26" width="2.8" height="2.6" rx=".4" fill="#0d1016"/><rect x="${14 + i * 3.5}" y="31" width="2.8" height="2.6" rx=".4" fill="#0d1016"/>`;
-      if (k === 'core') s += '<rect x="14" y="36" width="9" height="3" rx=".5" fill="#0d1016"/><rect x="25" y="36" width="9" height="3" rx=".5" fill="#0d1016"/>';
+    case 'core': case 'access': { const n = k === 'core' ? 12 : 8; s = unit(22, 20); for (let i = 0; i < n; i++) s += `<rect x="${14 + i * 3.5}" y="26" width="2.8" height="2.6" rx=".4" style="fill:var(--rk-h)"/><rect x="${14 + i * 3.5}" y="31" width="2.8" height="2.6" rx=".4" style="fill:var(--rk-h)"/>`;
+      if (k === 'core') s += '<rect x="14" y="36" width="9" height="3" rx=".5" style="fill:var(--rk-h)"/><rect x="25" y="36" width="9" height="3" rx=".5" style="fill:var(--rk-h)"/>';
       s += `<circle cx="9" cy="28" r="1.1" fill="${led}"/><circle cx="9" cy="32" r="1.1" fill="${amber}" opacity=".85"/>`; break; }
-    case 'router': s = unit(22, 20) + `<circle cx="9" cy="28" r="1.1" fill="${led}"/>`; for (let i = 0; i < 4; i++) s += `<rect x="${20 + i * 6}" y="27" width="4.5" height="4" rx=".6" fill="#0d1016"/>`; s += '<rect x="46" y="26" width="9" height="6" rx="1" fill="#1b2230" stroke="#4b5566"/>'; break;
-    case 'fw': s = unit(22, 20) + `<circle cx="9" cy="28" r="1.1" fill="${led}"/><circle cx="9" cy="32" r="1.1" fill="${lit ? '#e5484d' : 'var(--ic-off)'}"/>`; for (let i = 0; i < 6; i++) s += `<rect x="${18 + i * 5}" y="27" width="3.6" height="3.2" rx=".4" fill="#0d1016"/>`; s += '<rect x="48" y="26" width="8" height="12" rx="1" fill="#141922" stroke="#4b5566"/>'; break;
-    case 'server': case 'host': s = unit(14, 15) + unit(31, 15); for (const y of [17, 34]) for (let i = 0; i < 5; i++) s += `<rect x="${12 + i * 7}" y="${y}" width="5.5" height="9" rx=".8" fill="#1b2029" stroke="#4b5566" stroke-width=".6"/>`; s += `<circle cx="51" cy="21.5" r="1.1" fill="${led}"/><circle cx="51" cy="38.5" r="1.1" fill="${led}"/>`; break;
+    case 'router': s = unit(22, 20) + `<circle cx="9" cy="28" r="1.1" fill="${led}"/>`; for (let i = 0; i < 4; i++) s += `<rect x="${20 + i * 6}" y="27" width="4.5" height="4" rx=".6" style="fill:var(--rk-h)"/>`; s += '<rect x="46" y="26" width="9" height="6" rx="1" style="fill:var(--rk-m)" stroke="#4b5566"/>'; break;
+    case 'fw': s = unit(22, 20) + `<circle cx="9" cy="28" r="1.1" fill="${led}"/><circle cx="9" cy="32" r="1.1" fill="${lit ? '#e5484d' : 'var(--ic-off)'}"/>`; for (let i = 0; i < 6; i++) s += `<rect x="${18 + i * 5}" y="27" width="3.6" height="3.2" rx=".4" style="fill:var(--rk-h)"/>`; s += '<rect x="48" y="26" width="8" height="12" rx="1" style="fill:var(--rk-m)" stroke="#4b5566"/>'; break;
+    case 'server': case 'host': s = unit(14, 15) + unit(31, 15); for (const y of [17, 34]) for (let i = 0; i < 5; i++) s += `<rect x="${12 + i * 7}" y="${y}" width="5.5" height="9" rx=".8" style="fill:var(--rk-m)" stroke="#4b5566" stroke-width=".6"/>`; s += `<circle cx="51" cy="21.5" r="1.1" fill="${led}"/><circle cx="51" cy="38.5" r="1.1" fill="${led}"/>`; break;
     case 'ap': s = `<ellipse cx="32" cy="35" rx="22" ry="11" fill="#7d8796"/><ellipse cx="32" cy="32" rx="22" ry="11" fill="url(#twap)"/><circle cx="32" cy="32" r="2.2" fill="${led}"/>`; break;
     case 'cloud': return fit(CLOUD);
   }
@@ -337,8 +337,10 @@ export function iconReach(look: IconStyle, role: DevRole, cx: number, cy: number
   template: `<svg [attr.width]="size()" [attr.height]="size() * 98 / 130" [attr.viewBox]="look() === 'iso' ? '0 0 130 98' : '-5 0 130 98'" [class]="'st-' + state()" aria-hidden="true" [innerHTML]="body()"></svg>`,
   styles: [`
     :host { display: inline-block; line-height: 0;
-      --ic-top: #3a4252; --ic-fr: #262c37; --ic-sd: #1c2129; --ic-ed: #4b5466; --ic-off: #4f5968; --ic-ear: #3d4554; --ic-sfp: #b8c2d0; --ic-led: #2fbf71; }
-    :host-context(.light) { --ic-top: #eef1f5; --ic-fr: #d3d9e2; --ic-sd: #bcc5d1; --ic-ed: #98a3b3; --ic-off: #aab3c0; --ic-ear: #c6cdd8; --ic-led: #22a35e; }
+      --ic-top: #3a4252; --ic-fr: #262c37; --ic-sd: #1c2129; --ic-ed: #4b5466; --ic-off: #4f5968; --ic-ear: #3d4554; --ic-sfp: #b8c2d0; --ic-led: #2fbf71;
+      --sl-a: #3a4252; --sl-b: #232833; --sl-g: #e8ecf3; --sh-o: .4; --st-a: #6b7587; --st-b: #4a5262; --st-l: #3b4250; --st-r: #2a303b; --rk-a: #4a5262; --rk-b: #2c323d; --rk-e: #59606d; --rk-h: #0d1016; --rk-m: #1b2230; }
+    :host-context(.light) { --ic-top: #eef1f5; --ic-fr: #d3d9e2; --ic-sd: #bcc5d1; --ic-ed: #98a3b3; --ic-off: #aab3c0; --ic-ear: #c6cdd8; --ic-led: #22a35e;
+      --sl-a: #ffffff; --sl-b: #e4e9f0; --sl-g: #3a4252; --sh-o: .18; --st-a: #f1f4f8; --st-b: #d6dce5; --st-l: #c3cbd6; --st-r: #a9b3c1; --rk-a: #f1f4f8; --rk-b: #d6dce5; --rk-e: #b9c2ce; --rk-h: #5b6575; --rk-m: #c9d0da; }
     svg { overflow: visible; }
     svg.st-off { opacity: .5; filter: grayscale(1); }
     svg.st-boot :is(.pl) { animation: icblink 1.1s ease-in-out infinite; }

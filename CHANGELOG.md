@@ -8,6 +8,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 - Emulated lab, Captures: the *Stop* button of a running capture is red. A cable being captured keeps its colour (it turned red and looked down): blue dashes run along it and a blue dot pulses at the captured port; captures started earlier show on the canvas without opening the Captures tab.
 
+- Emulated lab, **capture the management port**: right-click a running switch → *Capture the Management Port* records its management traffic (SSH, SNMP, DHCP, its cloud connection…) both ways, in the Captures tab like a cable's; the connector's *lab_capture* takes port `mgmt` too.
+
+- Emulated lab, light theme: the *Slate tiles*, *Steel isometric* and *Rack front* drawings have light versions, and *Draw As* opens on the background of the theme.
+
 - Emulated lab, Captures, **packet details**: click a packet for its fields (Ethernet, VLAN, ARP, IPv4/IPv6, ICMP, UDP, TCP, LLDP TLVs, STP BPDU, LACP actor/partner, EDP) and its bytes in hex with ASCII under the list; clicking a field marks its bytes, clicking a byte finds its field. Tick packets (or Shift-/⌘-click) for **Copy Selected** and **Save Selected as .pcap**; double-click (or *Open Packet*) opens one in a window with ◀ ▶ through the capture, *Copy as Text*, *Copy as Hex* and *Save as .pcap*.
 
 - Emulated lab, **faster**: the lab's view no longer reads every image's password from the system keychain on each refresh (with many images that took seconds after every change, such as a new cable).

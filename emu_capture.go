@@ -72,13 +72,14 @@ func (a *App) EmuCaptureStart(id, port string) ([]EmuCapture, error) {
 	var v *emuVMRef
 	if l != nil {
 		if vm := l.VMByID(id); vm != nil {
-			im := emuImage(vm.Image)
-			if im != nil {
-				v = &emuVMRef{vm: *vm, n: emuPort(im, port), name: im.PortNameOf(emuPort(im, port))}
+			if im := emuImage(vm.Image); im != nil {
+				if n, name, ok := emuCapPort(im, port); ok {
+					v = &emuVMRef{vm: *vm, n: n, name: name, mgmt: n == 0}
+				}
 			}
 		}
 	}
-	if v == nil || v.n == 0 {
+	if v == nil {
 		emuLab.mu.Unlock()
 		return nil, errors.New("no such switch or port")
 	}
@@ -106,7 +107,7 @@ func (a *App) EmuCaptureStart(id, port string) ([]EmuCapture, error) {
 	if _, ok := st.Up[id]; !ok {
 		return nil, errors.New("start the switch first: a running switch is captured")
 	}
-	if !cabled && !up {
+	if !cabled && !up && !v.mgmt {
 		return nil, fmt.Errorf("%s has no cable: there is nothing on it to capture", v.name)
 	}
 	home, err := a.emuHome(host)
@@ -138,6 +139,9 @@ func (a *App) EmuCaptureStart(id, port string) ([]EmuCapture, error) {
 	c := EmuCapture{Key: key, VM: id, Switch: v.vm.Name, Port: v.name, Host: host, File: rel, Started: time.Now().Format(time.RFC3339), Running: true}
 	emuLab.mu.Lock()
 	c.Peer = emuPeerText(id, v.n)
+	if v.mgmt {
+		c.Peer = "management network"
+	}
 	emuLab.f.Captures = append(emuLab.f.Captures, c)
 	_ = a.emuSave()
 	emuEv(id, "info", fmt.Sprintf("capturing %s%s into %s on %s", v.name, map[bool]string{true: " (the cable to " + c.Peer + ")", false: ""}[c.Peer != ""], rel, host[strings.LastIndex(host, "/")+1:]))
@@ -149,6 +153,22 @@ type emuVMRef struct {
 	vm   emu.VM
 	n    int
 	name string
+	mgmt bool
+}
+
+// emuMgmtPort names a switch's management port in captures (its QEMU network n0).
+const emuMgmtPort = "mgmt"
+
+// emuCapPort is the QEMU network a capture's port is on: a data port (1…), or the management port (0).
+func emuCapPort(im *emu.Image, port string) (int, string, bool) {
+	if strings.EqualFold(port, emuMgmtPort) {
+		return 0, emuMgmtPort, true
+	}
+	if im == nil {
+		return 0, "", false
+	}
+	n := emuPort(im, port)
+	return n, im.PortNameOf(n), n > 0
 }
 
 // emuPeerText is the other end of a port's cable (emuLab.mu held).
@@ -190,11 +210,11 @@ func (a *App) EmuCaptureStop(key string) ([]EmuCapture, error) {
 	if l != nil {
 		if vm := l.VMByID(cc.VM); vm != nil {
 			mon = a.emuFor(cc.Host).MonitorPort(*vm)
-			n = emuPort(emuImage(vm.Image), cc.Port)
+			n, _, _ = emuCapPort(emuImage(vm.Image), cc.Port)
 		}
 	}
 	emuLab.mu.Unlock()
-	if mon > 0 && n > 0 {
+	if mon > 0 && (n > 0 || cc.Port == emuMgmtPort) {
 		if h, err := a.emuMonitor(cc.Host, mon); err == nil { // a stopped switch has no capture left anyway
 			_, _ = h.do("object_del "+emuCapID(n), 10*time.Second)
 			h.close()
