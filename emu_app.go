@@ -3427,6 +3427,17 @@ func (a *App) emuPoll(force bool) emu.Status {
 			emuLab.ready[v.ID] = true
 			emuEv(v.ID, "ok", "booted - the console shows "+orStr(im.Ready, "its prompt"))
 		} else if im != nil && !emuLab.ready[v.ID] {
+			// what the console says went wrong (once in a while each): the switch reboots on its own and seems to be booting for ever
+			for _, f := range im.BootFailIn(m.Log[v.ID]) {
+				if k := v.ID + "|fail|" + f; time.Since(emuLab.bootAns[k]) > 10*time.Minute {
+					emuLab.bootAns[k] = time.Now()
+					hint := ""
+					if strings.Contains(f, "Illegal instruction") {
+						hint = " - its CPU model lacks an instruction the image uses (a -cpu in the image's More QEMU options?)"
+					}
+					emuEv(v.ID, "error", "its boot failed: "+f+hint)
+				}
+			}
 			// a menu the boot stopped at (a key reached it early): its answer, once in a while
 			if ans, ok := im.BootStop(m.Log[v.ID]); ok && time.Since(emuLab.bootAns[v.ID+"|"+ans.Match]) > 30*time.Second {
 				emuLab.bootAns[v.ID+"|"+ans.Match] = time.Now() // each menu once in a while (one leads to the next)
@@ -4866,6 +4877,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			}
 			if im.TCGCPU == "" && p.TCGCPU != "" {
 				im.TCGCPU, changed = p.TCGCPU, true
+			}
+			if len(p.BootFail) > 0 && !slices.Equal(im.BootFail, p.BootFail) {
+				im.BootFail, changed = p.BootFail, true
 			}
 			if len(p.BootAnswers) > 0 && !slices.Equal(im.BootAnswers, p.BootAnswers) { // the pack's, as it improves them
 				im.BootAnswers, changed = p.BootAnswers, true

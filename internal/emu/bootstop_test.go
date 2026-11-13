@@ -37,3 +37,15 @@ func TestFreeAddress(t *testing.T) {
 		t.Fatal("a keeps its own", ip)
 	}
 }
+
+func TestBootFail(t *testing.T) {
+	im := &Image{BootFail: []string{`Data Error: .*`, `EPM: Error - .*rebooting.*`, `Illegal instruction`}}
+	log := "init started\r\nError: Unable to load configuration from file:\r\nData Error: [Slot 1] \"serial-number\" (SIMSB072152G-00355) is too long\r\nFailSafe\r\nIllegal instruction\r\nEPM: Error - Node Down timed out - rebooting (hal failed)\r\n"
+	got := im.BootFailIn(log)
+	if len(got) != 3 || !strings.Contains(got[0], "is too long") || got[1] != "EPM: Error - Node Down timed out - rebooting (hal failed)" {
+		t.Fatalf("%q", got)
+	}
+	if len(im.BootFailIn("login: ")) != 0 {
+		t.Fatal("a good boot failed")
+	}
+}

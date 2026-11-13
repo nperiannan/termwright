@@ -62,6 +62,7 @@ type Image struct {
 	MgmtMACAlign    int                 `json:"mgmtMacAlign,omitempty"`  // the OS takes its management MAC from its first NIC's address rounded down to this block (a power of two; 0 = it uses the NIC's address)
 	MgmtMACOffset   int                 `json:"mgmtMacOffset,omitempty"` // … plus this (Fabric Engine: block 1024, OOB at +0x81 = 129)          // the CPU model it gets on a host without KVM (for example Nehalem, for an image that wants an Intel CPU); "" = QEMU's default
 	BootAnswers     []Answer            `json:"bootAnswers,omitempty"`   // menus the image may stop at while it boots (the end of its console log), and what to type
+	BootFail        []string            `json:"bootFail,omitempty"`      // console lines (regular expressions) that say its boot failed: they go to Events
 	NotReady        []string            `json:"notReady,omitempty"`      // console text that means its login is not ready yet ("(pending-AAA)"): nothing is typed until it is gone
 	NeighborCmd     string              `json:"neighborCmd,omitempty"`   // a CLI command that lists the LLDP neighbours ("show lldp neighbors")
 	Persona         *PersonaDef         `json:"persona,omitempty"`       // a file that makes the image act as a given device
@@ -133,6 +134,23 @@ func (im *Image) BootStop(log string) (Answer, bool) {
 		}
 	}
 	return Answer{}, false
+}
+
+// BootFailIn are the lines of a console log that say the boot failed (the image's patterns).
+func (im *Image) BootFailIn(log string) []string {
+	var out []string
+	for _, p := range im.BootFail {
+		r, err := regexp.Compile(p)
+		if err != nil {
+			continue
+		}
+		for _, m := range r.FindAllString(log, 3) {
+			if m = strings.TrimSpace(m); m != "" && !slices.Contains(out, m) {
+				out = append(out, m)
+			}
+		}
+	}
+	return out
 }
 
 type Answer struct {
