@@ -174,3 +174,19 @@ func TestMCPAddToDesktop(t *testing.T) {
 		t.Fatal("not seen as added")
 	}
 }
+
+// The settings page shows whether Claude Code has the connector from its own settings file.
+func TestClaudeCodeHas(t *testing.T) {
+	dir := t.TempDir()
+	if claudeCodeHas(dir) {
+		t.Fatal("no file: not added")
+	}
+	_ = os.WriteFile(filepath.Join(dir, ".claude.json"), []byte(`{"mcpServers":{"other":{"command":"x"}}}`), 0o600)
+	if claudeCodeHas(dir) {
+		t.Fatal("another connector only: not added")
+	}
+	_ = os.WriteFile(filepath.Join(dir, ".claude.json"), []byte(`{"projects":{},"mcpServers":{"termwright":{"command":"/x/termwright","args":["mcp"]}}}`), 0o600)
+	if !claudeCodeHas(dir) {
+		t.Fatal("termwright listed: added")
+	}
+}

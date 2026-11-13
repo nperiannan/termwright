@@ -372,7 +372,7 @@ export interface SyncStatus { folder: string; last: string; peers: string[] | nu
 
 /** The AI assistant (optional): the provider and model; the API key is in the OS keychain. */
 export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; api?: boolean; agentPerm?: '' | 'every' | 'readonly' | 'auto'; effort?: string; agentToolsOff?: string[]; }
-export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; apiUrl?: string; keyFile?: string; }
+export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; inCode?: boolean; apiUrl?: string; keyFile?: string; }
 export interface FileServersSettings { folder: string; address: string; tftpPort: number; ftpPort: number; httpPort: number; tftpWrite: boolean; ftpWrite: boolean;
   ftpUser: string; idleMinutes: number; commands?: ServerCommand[] | null; }
 export interface ServerCommand { deviceType: string; protocol: string; put?: boolean; text: string; }

@@ -549,6 +549,7 @@ type MCPInfo struct {
 	CodeCmd    string `json:"codeCmd"`    // the claude mcp add command
 	DesktopCfg string `json:"desktopCfg"` // Claude Desktop's settings file
 	InDesktop  bool   `json:"inDesktop"`
+	InCode     bool   `json:"inCode"`            // Claude Code has it (user scope, in its .claude.json)
 	APIURL     string `json:"apiUrl,omitempty"`  // the local API, when it runs
 	KeyFile    string `json:"keyFile,omitempty"` // where its key is (mcp.json: url and token)
 }
@@ -581,6 +582,7 @@ func (a *App) MCPState() MCPInfo {
 		info.KeyFile = mcpFile(a.cfg.DataDir())
 	}
 	info.CodeCmd = "claude mcp add --scope user termwright -- " + shellQuoteArg(exe) + " mcp"
+	info.InCode = claudeCodeHas(os.Getenv("CLAUDE_CONFIG_DIR"))
 	if b, err := os.ReadFile(info.DesktopCfg); err == nil {
 		var c struct {
 			MCPServers map[string]json.RawMessage `json:"mcpServers"`
@@ -590,6 +592,31 @@ func (a *App) MCPState() MCPInfo {
 		}
 	}
 	return info
+}
+
+// claudeCodeHas says whether Claude Code has a "termwright" connector for the user: its
+// .claude.json (in the home folder, or in CLAUDE_CONFIG_DIR) lists it under mcpServers.
+func claudeCodeHas(configDir string) bool {
+	home, _ := os.UserHomeDir()
+	files := []string{filepath.Join(home, ".claude.json"), filepath.Join(home, ".claude", ".claude.json")}
+	if configDir != "" {
+		files = []string{filepath.Join(configDir, ".claude.json")}
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		var c struct {
+			MCPServers map[string]json.RawMessage `json:"mcpServers"`
+		}
+		if json.Unmarshal(b, &c) == nil {
+			if _, ok := c.MCPServers["termwright"]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // APIKey is the local API's key, for Settings to copy to the clipboard (it is never shown).

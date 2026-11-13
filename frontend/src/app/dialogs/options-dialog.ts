@@ -560,8 +560,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                       <span class="pill" [class.ok]="mcp()?.inDesktop" [class.warn]="!mcp()?.inDesktop"><i></i>{{ mcp()?.inDesktop ? 'Added' : 'Not added' }}</span>
                       <button type="button" [class.primary]="!mcp()?.inDesktop" (click)="mcpDesktop()">{{ mcp()?.inDesktop ? 'Add Again' : 'Add' }}</button></div>
                     <div class="li"><span class="l">Claude Code<small>claude mcp add, for your user</small></span>
-                      <span class="pill" [class.ok]="codeAdded()" [class.warn]="!codeAdded()"><i></i>{{ codeAdded() ? 'Added' : 'Not added' }}</span>
-                      <button type="button" [class.primary]="!codeAdded()" (click)="mcpCode()">{{ codeAdded() ? 'Add Again' : 'Add' }}</button></div>
+                      <span class="pill" [class.ok]="codeIn()" [class.warn]="!codeIn()"><i></i>{{ codeIn() ? 'Added' : 'Not added' }}</span>
+                      <button type="button" [class.primary]="!codeIn()" (click)="mcpCode()">{{ codeIn() ? 'Add Again' : 'Add' }}</button></div>
                     <details class="li man"><summary class="l">Set up by hand</summary>
                       <div class="mrow"><span>Claude Code</span><code>{{ mcp()?.codeCmd }}</code><button type="button" (click)="copyText(mcp()?.codeCmd ?? '')">Copy</button></div>
                       <div class="mrow"><span>Claude Desktop</span><code>{{ mcp()?.command }} mcp</code><button type="button" (click)="copyText(mcp()?.command ?? '')">Copy</button></div></details>
@@ -1031,6 +1031,8 @@ export class OptionsDialog implements OnInit {
   readonly mcp = signal<MCPInfo | null>(null);
   readonly aiCheck = signal<boolean | null>(null); // the last Test: worked / failed
   readonly codeAdded = signal(false);
+  /** Claude Code has Termwright: what its settings file says, or what was just added. */
+  codeIn() { return this.codeAdded() || !!this.mcp()?.inCode; }
   /** The status pill: the last Test, else what the saved settings say. */
   aiStatus(): { cls: string; text: string } {
     const p = this.s?.ai?.provider ?? '';
@@ -1050,7 +1052,7 @@ export class OptionsDialog implements OnInit {
   }
   async mcpCode() {
     this.mcpMsg.set(tr('Adding…'));
-    try { await this.backend.mcpAddToClaudeCode(); this.codeAdded.set(true); this.mcpMsg.set(tr('Added to Claude Code - start a new claude session and type /mcp to see it.')); }
+    try { await this.backend.mcpAddToClaudeCode(); this.codeAdded.set(true); this.loadAI(); this.mcpMsg.set(tr('Added to Claude Code - start a new claude session and type /mcp to see it.')); }
     catch (e) { this.mcpMsg.set(errText(e)); }
   }
   async copyText(t: string) { if (t) { await this.backend.clipboardSet(t); this.ui.toast(tr('Copied'), 'success'); } }

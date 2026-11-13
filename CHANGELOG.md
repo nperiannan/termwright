@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- **Settings → AI Assistant → Claude connector**: *Claude Code* showed *Not added* every time Settings was opened, even after *Add* worked, because the page never asked. It now reads Claude Code's own settings file (`~/.claude.json`, or `CLAUDE_CONFIG_DIR`) and shows *Added* when Termwright is in it.
+
 - Emulated lab, **a switch that was running when Termwright started** (VOSS 5520 stuck at its login with "planned, not on the switch yet"): nothing watched its start, so its day 0 and its fixed management address were never typed after a restart of Termwright, and *Type Day 0 Again* only cleared its flags. Now a running switch whose day 0 or fixed address was never typed is found at the first look and typed on its console (Events: "found running without its configuration typed"), and *Type Day 0 Again* really types it. **lab_debug** says so (a DIAGNOSIS line), names the address typed to it, and ends with the emulator log lines of that switch.
 
 - Emulated lab, **lab_debug**: one switch's state, the step Termwright is on, its error and addresses, its image's login and ready settings (never the password), its Events and the end of its console, in one answer for the Claude connector, the API and `termwright lab debug switch=<name> lines=300`. Passwords and keys are hidden.
