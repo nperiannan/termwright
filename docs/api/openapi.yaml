@@ -1,0 +1,2922 @@
+# The Termwright local API, OpenAPI 3.2.1. Made by: go test -run TestOpenAPIDoc -update (do not edit by hand).
+openapi: 3.2.1
+info:
+    title: Termwright local API
+    summary: The emulated lab of Termwright for scripts, test frameworks and CI on this computer.
+    description: |-
+        The emulated lab of Termwright (switch VMs on KVM hosts) for your own scripts, test frameworks and CI, on this computer only.
+
+        **Turn it on:** Settings → AI Assistant → Local API. The address and the key are there (*Copy Key*), and in `mcp.json` in Termwright's data folder (`url` and `token`), which a script can read. The key changes each time Termwright starts.
+
+        **Send the key** as `Authorization: Bearer <key>`. Requests from web pages (with an Origin header) are refused.
+
+        **Nothing is asked first**: unlike the Claude connector, the API is your own automation. Its changes show as *API* in the lab's Events.
+
+        **Errors** are RFC 9457 problem details (`application/problem+json`): 400 a bad request, 401 no or a wrong key, 403 the API is off, 404 no such thing, 405 a wrong method (see Allow), 422 the lab could not do it.
+
+        **The same from a terminal:** `termwright lab help`, for example `termwright lab traffic start voice` or `termwright lab traffic report --csv`.
+
+        A typical test: add test ports (POST /lab/traffic/ports), add streams (POST /lab/traffic/streams), start (POST /lab/traffic/start), poll GET /lab/traffic until running is false, then GET /lab/traffic/report.
+    version: 1.0.0
+    license:
+        name: Apache 2.0
+        identifier: Apache-2.0
+servers:
+    - url: http://127.0.0.1:{port}/api/v1
+      description: Termwright on this computer (its address is in mcp.json in the data folder, and in Settings → AI Assistant → Local API).
+      variables:
+        port:
+            default: "8080"
+            description: Chosen when Termwright starts.
+security:
+    - bearerAuth: []
+tags:
+    - name: Lab
+      description: The open topology.
+    - name: Tools
+      description: 'The lab tools: switches, cables, power, consoles, cabling check, moves, captures, link check, Events and the traffic generator as one tool.'
+    - name: Traffic
+      description: 'The traffic generator: runs, live results and the report.'
+    - name: Traffic ports
+      summary: Test ports
+      parent: Traffic
+      description: Test ports on switch ports.
+    - name: Traffic streams
+      summary: Streams
+      parent: Traffic
+      description: Streams between test ports.
+    - name: API
+      description: This description.
+paths:
+    /openapi.json:
+        get:
+            operationId: getOpenAPI
+            tags:
+                - API
+            summary: This description, as JSON
+            description: The OpenAPI document of this API (as JSON; /openapi.yaml as YAML). It needs no key.
+            security:
+                - {}
+            responses:
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+                200:
+                    description: The OpenAPI document.
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+    /openapi.yaml:
+        get:
+            operationId: getOpenAPIYaml
+            tags:
+                - API
+            summary: This description, as YAML
+            description: The OpenAPI document of this API as YAML. It needs no key.
+            security:
+                - {}
+            responses:
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+                200:
+                    description: The OpenAPI document.
+                    content:
+                        application/yaml:
+                            schema:
+                                type: string
+    /lab:
+        get:
+            operationId: getLab
+            tags:
+                - Lab
+            summary: The lab
+            description: 'The open topology: its switches with their state, management addresses and consoles, the cables and LAGs, the KVM hosts, images and the latest Events.'
+            responses:
+                200:
+                    description: The lab.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Lab'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools:
+        get:
+            operationId: listTools
+            tags:
+                - Tools
+            summary: The lab tools
+            description: Every lab tool with its arguments (JSON Schema). Each one is POST /lab/tools/{name}.
+            responses:
+                200:
+                    description: The tools.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/Tool'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic:
+        get:
+            operationId: getTraffic
+            tags:
+                - Traffic
+            summary: Test ports, streams and results
+            description: The traffic generator now. While a run goes on, the results are live (counters, rates and the rate history for graphs); after it, they are final.
+            responses:
+                200:
+                    description: The traffic generator.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TrafficView'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/report:
+        get:
+            operationId: getTrafficReport
+            tags:
+                - Traffic
+            summary: The report
+            description: 'The last (or running) run''s report: a pass or fail per stream with its counters, loss, latency, jitter, order and the reason of a fail.'
+            parameters:
+                - name: format
+                  in: query
+                  required: false
+                  description: json (the traffic view), csv, html or text.
+                  schema:
+                    type: string
+                    enum:
+                        - json
+                        - csv
+                        - html
+                        - text
+                    default: json
+            responses:
+                200:
+                    description: The report.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TrafficView'
+                        text/csv:
+                            schema:
+                                type: string
+                        text/html:
+                            schema:
+                                type: string
+                        text/plain:
+                            schema:
+                                type: string
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/ports:
+        post:
+            operationId: addTestPort
+            tags:
+                - Traffic ports
+            summary: Add a test port
+            description: Puts a test port on a free port of a switch. A running switch takes it when it restarts (the result's note says so).
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required:
+                                - switch
+                                - port
+                            properties:
+                                switch:
+                                    type: string
+                                    description: The switch's name (or id).
+                                port:
+                                    type: string
+                                    description: A free data port, named as the switch names it (1, 1/5, …).
+                                name:
+                                    type: string
+                                    description: 'Its name (default: Test port n).'
+                                ip:
+                                    type: string
+                                    description: IPv4 address with prefix; /24 when it has none.
+                                ip6:
+                                    type: string
+                                    description: IPv6 address with prefix; /64 when it has none.
+                                gateway:
+                                    type: string
+                                    description: Gateway for streams to another network.
+                                vlan:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 4094
+                                    description: Tags its own frames (ARP and ping answers) with this VLAN.
+                                groups:
+                                    type: array
+                                    items:
+                                        type: string
+                                    description: Multicast groups it joins (IGMPv2 / MLDv1 reports every 10 s and on a query).
+                        examples:
+                            v4:
+                                summary: An IPv4 test port
+                                value:
+                                    switch: leaf-1
+                                    port: "5"
+                                    ip: 10.10.0.1/24
+                            dual:
+                                summary: IPv4 and IPv6, in a multicast group
+                                value:
+                                    switch: leaf-2
+                                    port: "5"
+                                    ip: 10.10.0.2/24
+                                    ip6: fd00::2/64
+                                    groups:
+                                        - 239.1.1.1
+            responses:
+                201:
+                    description: Added; the traffic view with it.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TrafficView'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/ports/{port}:
+        parameters:
+            - name: port
+              in: path
+              required: true
+              description: The test port's name (Test port 1) or id.
+              schema:
+                type: string
+        patch:
+            operationId: changeTestPort
+            tags:
+                - Traffic ports
+            summary: Change a test port
+            description: Changes its name, addresses, gateway, VLAN or multicast groups.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            minProperties: 1
+                            additionalProperties: false
+                            description: Only the fields given change.
+                            properties:
+                                name:
+                                    type: string
+                                ip:
+                                    type: string
+                                ip6:
+                                    type: string
+                                gateway:
+                                    type: string
+                                vlan:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 4094
+                                groups:
+                                    type: array
+                                    items:
+                                        type: string
+                        example:
+                            groups:
+                                - 239.1.1.1
+                                - 239.1.1.2
+            responses:
+                200:
+                    description: Changed; the traffic view.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TrafficView'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        delete:
+            operationId: removeTestPort
+            tags:
+                - Traffic ports
+            summary: Remove a test port
+            description: Removes the test port and its streams.
+            responses:
+                204:
+                    description: Removed.
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/streams:
+        post:
+            operationId: addStream
+            tags:
+                - Traffic streams
+            summary: Add a stream
+            description: 'Adds a stream. from and to can be test port names or ids. Without to: every other test port (broadcast), dstIp, or a multicast group in dstIp.'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/StreamInput'
+                        examples:
+                            voice:
+                                summary: Voice-like UDP with DSCP EF
+                                value:
+                                    name: voice
+                                    from: Test port 1
+                                    to: Test port 2
+                                    kind: udp
+                                    size: 200
+                                    pps: 1000
+                                    seconds: 30
+                                    dscp: 46
+                                    maxLoss: 0.1
+                                    maxLatency: 5
+                                    maxJitter: 1
+                            imixFlows:
+                                summary: IMIX with 100 source addresses (for LAG / ECMP hashing)
+                                value:
+                                    name: imix-100
+                                    from: Test port 1
+                                    to: Test port 2
+                                    kind: udp
+                                    size: 64
+                                    sizeMode: imix
+                                    pps: 5000
+                                    seconds: 60
+                                    maxLoss: 0
+                                    mods:
+                                        - field: srcIp
+                                          mode: inc
+                                          count: 100
+                            multicast:
+                                summary: Multicast to the test ports that joined 239.1.1.1
+                                value:
+                                    name: mcast
+                                    from: Test port 1
+                                    kind: udp
+                                    dstIp: 239.1.1.1
+                                    size: 512
+                                    pps: 500
+                                    seconds: 20
+                                    maxLoss: 0
+                            ipv6:
+                                summary: IPv6 ping between two test ports
+                                value:
+                                    name: v6-ping
+                                    from: Test port 1
+                                    to: Test port 2
+                                    kind: icmp
+                                    dstIp: fd00::2
+                                    size: 100
+                                    pps: 100
+                                    count: 500
+                                    maxLoss: 0
+            responses:
+                201:
+                    description: Added; the traffic view with it.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TrafficView'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/streams/{stream}:
+        parameters:
+            - name: stream
+              in: path
+              required: true
+              description: The stream's name or id.
+              schema:
+                type: string
+        put:
+            operationId: replaceStream
+            tags:
+                - Traffic streams
+            summary: Replace a stream
+            description: Replaces the stream with the one given (its id stays).
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/StreamInput'
+                        examples:
+                            voice:
+                                summary: Voice-like UDP with DSCP EF
+                                value:
+                                    name: voice
+                                    from: Test port 1
+                                    to: Test port 2
+                                    kind: udp
+                                    size: 200
+                                    pps: 1000
+                                    seconds: 30
+                                    dscp: 46
+                                    maxLoss: 0.1
+                                    maxLatency: 5
+                                    maxJitter: 1
+                            imixFlows:
+                                summary: IMIX with 100 source addresses (for LAG / ECMP hashing)
+                                value:
+                                    name: imix-100
+                                    from: Test port 1
+                                    to: Test port 2
+                                    kind: udp
+                                    size: 64
+                                    sizeMode: imix
+                                    pps: 5000
+                                    seconds: 60
+                                    maxLoss: 0
+                                    mods:
+                                        - field: srcIp
+                                          mode: inc
+                                          count: 100
+                            multicast:
+                                summary: Multicast to the test ports that joined 239.1.1.1
+                                value:
+                                    name: mcast
+                                    from: Test port 1
+                                    kind: udp
+                                    dstIp: 239.1.1.1
+                                    size: 512
+                                    pps: 500
+                                    seconds: 20
+                                    maxLoss: 0
+                            ipv6:
+                                summary: IPv6 ping between two test ports
+                                value:
+                                    name: v6-ping
+                                    from: Test port 1
+                                    to: Test port 2
+                                    kind: icmp
+                                    dstIp: fd00::2
+                                    size: 100
+                                    pps: 100
+                                    count: 500
+                                    maxLoss: 0
+            responses:
+                200:
+                    description: Replaced; the traffic view.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TrafficView'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        delete:
+            operationId: removeStream
+            tags:
+                - Traffic streams
+            summary: Remove a stream
+            description: Removes the stream.
+            responses:
+                204:
+                    description: Removed.
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/start:
+        post:
+            operationId: startTraffic
+            tags:
+                - Traffic
+            summary: Start a run
+            description: Starts the streams given, or every stream that is not marked off. A new run resets the counters. Poll GET /lab/traffic for live results; the run ends by itself when every stream has sent its frames.
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                streams:
+                                    type: array
+                                    items:
+                                        type: string
+                                    description: Stream names or ids; none = all.
+                        example:
+                            streams:
+                                - voice
+                                - imix-100
+            responses:
+                200:
+                    description: Started; the traffic view.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TrafficView'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/stop:
+        post:
+            operationId: stopTraffic
+            tags:
+                - Traffic
+            summary: Stop the run
+            description: Stops sending. The counters stay; a moment later (frames on their way) they are final.
+            responses:
+                200:
+                    description: Stopped; the traffic view.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TrafficView'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/add_switches:
+        post:
+            operationId: tool_add_switches
+            tags:
+                - Tools
+            summary: Add switches to the emulated lab from an image or a template (ids from lab_images), optionally on a given KVM host and started
+            description: Add switches to the emulated lab from an image or a template (ids from lab_images), optionally on a given KVM host and started. The user is asked in Termwright first. Through the API it runs without asking.
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                count:
+                                    description: how many (default 1, at most 32)
+                                    type: integer
+                                host:
+                                    description: 'KVM host name or session path (default: the lab''s host)'
+                                    type: string
+                                image:
+                                    description: image id (or give template)
+                                    type: string
+                                model:
+                                    description: persona model of the image, e.g. 5520-24T (optional)
+                                    type: string
+                                names:
+                                    description: their names, comma separated, or a pattern like leaf-{n} (optional)
+                                    type: string
+                                start:
+                                    description: start them at once
+                                    type: boolean
+                                template:
+                                    description: template id (its image, resources and persona)
+                                    type: string
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/cable:
+        post:
+            operationId: tool_cable
+            tags:
+                - Tools
+            summary: Connect (or remove) cables between switches of the emulated lab
+            description: 'Connect (or remove) cables between switches of the emulated lab: switch names and port names as the switches call them (show_lab). A whole list at once; the user is asked first. New cables work once both switches have restarted. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                cables:
+                                    description: 'cables: {a, a_port, b, b_port}; for remove only a and a_port'
+                                    items:
+                                        properties:
+                                            a:
+                                                type: string
+                                            a_port:
+                                                type: string
+                                            b:
+                                                type: string
+                                            b_port:
+                                                type: string
+                                        type: object
+                                    type: array
+                                remove:
+                                    description: remove these cables instead
+                                    type: boolean
+                            required:
+                                - cables
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/capture:
+        post:
+            operationId: tool_capture
+            tags:
+                - Tools
+            summary: Packet capture on a switch port of the emulated lab (its cable, both ways; the switch keeps running)
+            description: 'Packet capture on a switch port of the emulated lab (its cable, both ways; the switch keeps running): start, stop, or read the packets (number, time, source, destination, protocol, length, info). Start and stop are asked in Termwright first. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - start
+                                        - stop
+                                        - read
+                                        - list
+                                    type: string
+                                filter:
+                                    description: 'read: only packets whose source, destination, protocol or info contains this (e.g. ICMP, LLDP, 10.0.0.1)'
+                                    type: string
+                                last:
+                                    description: 'read: how many of the newest packets (default 100, at most 2000)'
+                                    type: integer
+                                port:
+                                    description: a data port, or mgmt for the switch's management port
+                                    type: string
+                                switch:
+                                    type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/check_cabling:
+        post:
+            operationId: tool_check_cabling
+            tags:
+                - Tools
+            summary: Compare the switches' LLDP neighbours with the cables of the emulated lab (the switches must be running)
+            description: 'Compare the switches'' LLDP neighbours with the cables of the emulated lab (the switches must be running): each cable ok, wrong (what the port sees) or without a neighbour. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties: {}
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/console:
+        post:
+            operationId: tool_console
+            tags:
+                - Tools
+            summary: Type commands on a switch's serial console (Termwright logs in with the image's login) and return each one's output
+            description: 'Type commands on a switch''s serial console (Termwright logs in with the image''s login) and return each one''s output: configuration or show commands, in the switch''s own CLI. The user is asked first, with the whole list. Close the switch''s console tab first. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                commands:
+                                    description: command lines, in order
+                                    items:
+                                        type: string
+                                    type: array
+                                switch:
+                                    type: string
+                                timeout:
+                                    description: seconds for all of them (default 180, at most 900)
+                                    type: integer
+                            required:
+                                - switch
+                                - commands
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/events:
+        post:
+            operationId: tool_events
+            tags:
+                - Tools
+            summary: Read the emulated lab's Events log
+            description: 'Read the emulated lab''s Events log: what Termwright did to each switch (started, booted, day 0, persona, moves, errors), newest last. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                last:
+                                    description: how many lines (default 60, at most 300)
+                                    type: integer
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/images:
+        post:
+            operationId: tool_images
+            tags:
+                - Tools
+            summary: List the images and templates the emulated lab can make switches from
+            description: 'List the images and templates the emulated lab can make switches from: id, name, software version, device type, port naming, and whether the image file is there. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties: {}
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/link_check:
+        post:
+            operationId: tool_link_check
+            tags:
+                - Tools
+            summary: Watch a running switch's e1000/e1000e network cards in QEMU for some seconds (QEMU's own trace events) and say what QEMU did
+            description: 'Watch a running switch''s e1000/e1000e network cards in QEMU for some seconds (QEMU''s own trace events) and say what QEMU did: links taken down for auto-negotiation the switch restarted, receivers the switch turned off, frames dropped. Tells a link flap of the emulation from one of the switch''s software. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                seconds:
+                                    description: 5-120 (default 30)
+                                    type: integer
+                                switch:
+                                    type: string
+                            required:
+                                - switch
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/move:
+        post:
+            operationId: tool_move
+            tags:
+                - Tools
+            summary: Move a switch of the emulated lab to another KVM host
+            description: 'Move a switch of the emulated lab to another KVM host: live (it keeps running), copy (saved, its disk copied, resumed) or image (boots there from day 0). The user is asked first. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                host:
+                                    description: KVM host name or session path
+                                    type: string
+                                how:
+                                    enum:
+                                        - live
+                                        - copy
+                                        - image
+                                    type: string
+                                switch:
+                                    type: string
+                            required:
+                                - switch
+                                - host
+                                - how
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/power:
+        post:
+            operationId: tool_power
+            tags:
+                - Tools
+            summary: Start, stop, restart or shut down switches of the emulated lab (names, or all)
+            description: Start, stop, restart or shut down switches of the emulated lab (names, or all). The user is asked first. Through the API it runs without asking.
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - start
+                                        - stop
+                                        - restart
+                                        - shutdown
+                                    type: string
+                                switches:
+                                    description: switch names; empty = all
+                                    items:
+                                        type: string
+                                    type: array
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/qemu_command:
+        post:
+            operationId: tool_qemu_command
+            tags:
+                - Tools
+            summary: The QEMU command line a switch of the emulated lab runs with now (read on its KVM host), or the one it starts with when it is not running
+            description: 'The QEMU command line a switch of the emulated lab runs with now (read on its KVM host), or the one it starts with when it is not running: network cards, CPU, machine, memory. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                switch:
+                                    type: string
+                            required:
+                                - switch
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/traffic:
+        post:
+            operationId: tool_traffic
+            tags:
+                - Tools
+            summary: The emulated lab's traffic generator
+            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss and latency). Changes and starts are asked in Termwright first. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - list
+                                        - add_port
+                                        - set_port
+                                        - remove_port
+                                        - add_stream
+                                        - remove_stream
+                                        - start
+                                        - stop
+                                        - report
+                                    type: string
+                                burst:
+                                    description: 'add_stream: frames sent back to back (the rate stays the average)'
+                                    type: integer
+                                count:
+                                    type: integer
+                                dport:
+                                    type: integer
+                                dscp:
+                                    description: 'add_stream: IP DSCP 0-63'
+                                    type: integer
+                                dst_ip:
+                                    description: 'add_stream: an address that is not a test port (icmp: its replies are counted), or a multicast group (received by the test ports that joined it)'
+                                    type: string
+                                dst_mac:
+                                    type: string
+                                from:
+                                    description: 'add_stream: test port name'
+                                    type: string
+                                gateway:
+                                    description: 'add_port: for streams to another network'
+                                    type: string
+                                groups:
+                                    description: 'add_port, set_port: multicast groups it joins (239.1.1.1, ff0e::1)'
+                                    items:
+                                        type: string
+                                    type: array
+                                ip:
+                                    description: 'add_port: the test port''s address with prefix (10.10.0.1/24)'
+                                    type: string
+                                ip6:
+                                    description: 'add_port, set_port: an IPv6 address with prefix (fd00::1/64)'
+                                    type: string
+                                kind:
+                                    enum:
+                                        - udp
+                                        - icmp
+                                        - tcp
+                                        - arp
+                                        - raw
+                                    type: string
+                                max_jitter:
+                                    description: ms for a pass (0 = not checked)
+                                    type: number
+                                max_latency:
+                                    description: ms for a pass (0 = not checked)
+                                    type: number
+                                max_loss:
+                                    description: '% for a pass (default 0)'
+                                    type: number
+                                mods:
+                                    description: 'add_stream: fields that change per frame: {field: srcMac|dstMac|srcIp|dstIp|vlan|sport|dport, mode: inc|random, count, step}'
+                                    items:
+                                        type: object
+                                    type: array
+                                name:
+                                    description: 'add_stream: its name; remove_stream: the stream'
+                                    type: string
+                                pcp:
+                                    description: 'add_stream: 802.1p priority 0-7 (with vlan)'
+                                    type: integer
+                                port:
+                                    description: 'add_port: its free port; remove_port: the test port''s name'
+                                    type: string
+                                pps:
+                                    description: packets per second (default 100, at most 100000)
+                                    type: integer
+                                seconds:
+                                    type: integer
+                                size:
+                                    description: frame bytes (60-9000, default 128)
+                                    type: integer
+                                size_max:
+                                    type: integer
+                                size_mode:
+                                    description: 'add_stream: frame sizes (inc/random: size to size_max)'
+                                    enum:
+                                        - fixed
+                                        - inc
+                                        - random
+                                        - imix
+                                    type: string
+                                src_ip:
+                                    type: string
+                                streams:
+                                    description: 'start: the streams (none = all)'
+                                    items:
+                                        type: string
+                                    type: array
+                                switch:
+                                    description: 'add_port: the switch'
+                                    type: string
+                                to:
+                                    description: 'add_stream: test port name; empty = every other test port (broadcast) or dst_ip'
+                                    type: string
+                                vlan:
+                                    type: integer
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/wait:
+        post:
+            operationId: tool_wait
+            tags:
+                - Tools
+            summary: Wait until switches of the emulated lab are booted and configured (running, no step left), or the time is up; returns each one's state and problem
+            description: Wait until switches of the emulated lab are booted and configured (running, no step left), or the time is up; returns each one's state and problem. Through the API it runs without asking.
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                switches:
+                                    description: switch names; empty = all
+                                    items:
+                                        type: string
+                                    type: array
+                                timeout:
+                                    description: seconds (default 600, at most 1800)
+                                    type: integer
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+components:
+    schemas:
+        Problem:
+            type: object
+            description: An error, as RFC 9457 problem details.
+            required:
+                - type
+                - title
+                - status
+                - detail
+            properties:
+                type:
+                    type: string
+                    format: uri
+                    description: What kind of problem (a link into docs/API.md).
+                title:
+                    type: string
+                    description: The HTTP status text.
+                status:
+                    type: integer
+                    description: The HTTP status code.
+                detail:
+                    type: string
+                    description: What went wrong, for a person.
+        ToolResult:
+            type: object
+            required:
+                - result
+            properties:
+                result:
+                    type: string
+                    description: What the tool did or found, as text.
+        Cable:
+            type: object
+            description: A cable between two switch ports, with the LAGs on its ends.
+            properties:
+                a:
+                    type: string
+                aPort:
+                    type: string
+                b:
+                    type: string
+                bPort:
+                    type: string
+                up:
+                    type: boolean
+                down:
+                    type: boolean
+                lagA:
+                    description: the LAG its port on A is in
+                    anyOf:
+                        - $ref: '#/components/schemas/LagView'
+                        - type: "null"
+                lagB:
+                    anyOf:
+                        - $ref: '#/components/schemas/LagView'
+                        - type: "null"
+                lldp:
+                    description: 'the last cabling check: "ok …", "wrong: …" or "none: …"'
+                    type: string
+            required:
+                - a
+                - aPort
+                - b
+                - bPort
+                - up
+                - down
+        Device:
+            type: object
+            description: A switch (VM) of the lab and its state.
+            properties:
+                host:
+                    description: the KVM host it runs on (session path)
+                    type: string
+                id:
+                    type: string
+                os:
+                    description: device type
+                    type: string
+                model:
+                    type: string
+                image:
+                    type: string
+                version:
+                    description: 'the software it runs: as it reports it, else the image''s'
+                    type: string
+                hwSerial:
+                    description: the serial number it reports
+                    type: string
+                serial:
+                    type: string
+                mac:
+                    type: string
+                hostname:
+                    type: string
+                mgmtIp:
+                    type: string
+                port:
+                    type: integer
+                ports:
+                    type: integer
+                running:
+                    type: boolean
+                logins:
+                    type: integer
+                unsaved:
+                    type: boolean
+                x:
+                    type: integer
+                y:
+                    type: integer
+                state:
+                    description: stopped, uploading, booting, day0, running, failed
+                    type: string
+                stateText:
+                    type: string
+                cpu:
+                    description: '% of its vCPUs, now'
+                    type: number
+                memUsed:
+                    description: MB its VM uses now (resident)
+                    type: integer
+                saved:
+                    description: 'stopped with its running state saved: it starts in seconds'
+                    type: boolean
+                role:
+                    description: drawn as (set by the user, for its kind of device)
+                    type: string
+                iconStyle:
+                    description: its kind's icon style in this topology ("" = the default)
+                    type: string
+                uplinks:
+                    description: its data ports on the host's network
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                movingTo:
+                    description: the host it is moving to (session path), while it moves
+                    type: string
+                cores:
+                    description: host cores it uses now
+                    type: number
+                cpus:
+                    type: integer
+                ram:
+                    type: integer
+                console:
+                    type: integer
+                ssh:
+                    description: how its management is reached, as text
+                    type: string
+                error:
+                    type: string
+                diskGb:
+                    type: integer
+                template:
+                    type: string
+                persona:
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuPersona'
+                        - type: "null"
+                personaOk:
+                    description: the persona file in its disk is the current one
+                    type: boolean
+                personaError:
+                    type: string
+                personaInfo:
+                    description: where the file was written, what the CLI showed after boot
+                    type: string
+            required:
+                - host
+                - id
+                - os
+                - model
+                - image
+                - version
+                - hwSerial
+                - serial
+                - mac
+                - hostname
+                - mgmtIp
+                - port
+                - ports
+                - running
+                - logins
+                - unsaved
+                - x
+                - "y"
+                - state
+                - stateText
+                - cpu
+                - memUsed
+                - cores
+                - cpus
+                - ram
+                - console
+                - ssh
+                - error
+                - diskGb
+                - template
+                - persona
+                - personaOk
+                - personaError
+                - personaInfo
+        DeviceType:
+            type: object
+            properties:
+                key:
+                    description: '"<kind>|<model>"'
+                    type: string
+                model:
+                    description: '"" = the image as it is'
+                    type: string
+                kind:
+                    description: the image kind (its profile name, e.g. what the pack calls it)
+                    type: string
+                osName:
+                    description: shown after the model
+                    type: string
+                modules:
+                    description: modules it can take
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                modName:
+                    description: what a module is called
+                    type: string
+                images:
+                    description: image ids, newest version first
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                cpus:
+                    type: integer
+                ram:
+                    type: integer
+                values:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+            required:
+                - key
+                - model
+                - kind
+                - osName
+                - modules
+                - modName
+                - images
+                - cpus
+                - ram
+                - values
+        EmuAnswer:
+            type: object
+            properties:
+                match:
+                    type: string
+                send:
+                    type: string
+                key:
+                    description: 'a boot menu that takes one key: typed without Enter (Enter follows only when the menu waits for it)'
+                    type: boolean
+            required:
+                - match
+                - send
+        EmuDisk:
+            type: object
+            properties:
+                slot:
+                    type: string
+                fileName:
+                    description: its name on the hosts
+                    type: string
+                file:
+                    description: on this computer
+                    type: string
+                sha256:
+                    type: string
+                size:
+                    type: integer
+                url:
+                    type: string
+                md5:
+                    type: string
+                page:
+                    type: string
+                bus:
+                    description: 'hdb…: ide, sata, scsi, virtio ("" = the image''s)'
+                    type: string
+            required:
+                - slot
+                - fileName
+                - file
+                - sha256
+                - size
+        EmuFact:
+            type: object
+            properties:
+                cmd:
+                    type: string
+                version:
+                    type: string
+                serial:
+                    type: string
+            required:
+                - cmd
+        EmuHostInfo:
+            type: object
+            properties:
+                user:
+                    type: string
+                os:
+                    type: string
+                kernel:
+                    type: string
+                arch:
+                    type: string
+                kvm:
+                    description: yes, noaccess, none
+                    type: string
+                vt:
+                    description: the CPU has virtualization on
+                    type: boolean
+                qemu:
+                    type: string
+                qemuImg:
+                    type: boolean
+                cpus:
+                    type: integer
+                load:
+                    type: number
+                memTotal:
+                    description: MB
+                    type: integer
+                memFree:
+                    description: MB
+                    type: integer
+                diskFree:
+                    description: MB, in the lab folder
+                    type: integer
+                sudo:
+                    description: password-less sudo for the network commands (bridge mode)
+                    type: boolean
+                sudoAll:
+                    description: password-less sudo for anything (Set Up runs without asking for the password)
+                    type: boolean
+                dir:
+                    type: string
+                osId:
+                    description: ID and ID_LIKE of /etc/os-release
+                    type: string
+                pkg:
+                    description: the package manager Set Up uses (apt, dnf, dnf-fedora, zypper, pacman)
+                    type: string
+                plan:
+                    description: what Set Up would do
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                canSetup:
+                    description: Set Up can fix the problems
+                    type: boolean
+                uplink:
+                    description: the port of the default route
+                    type: string
+                lanAddr:
+                    description: the host's address on it (10.234.179.20/24)
+                    type: string
+                gateway:
+                    description: the default route's gateway
+                    type: string
+                bridges:
+                    description: the host's bridges with a network port in them
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                wifi:
+                    description: the uplink is Wi-Fi
+                    type: boolean
+                lanIf:
+                    description: 'where switches join the host''s network: a bridge, or the uplink (macvtap)'
+                    type: string
+                lanKind:
+                    description: '"bridge" or "macvtap" ("" = not possible)'
+                    type: string
+                guestfs:
+                    description: libguestfs is there (persona files)
+                    type: boolean
+                virt:
+                    description: 'the host is itself a VM: vmware, kvm, microsoft… ("none" = hardware)'
+                    type: string
+                nat:
+                    description: the host's address on libvirt's NAT network virbr0 (192.168.122.1/24), "" = none
+                    type: string
+                libvirt:
+                    description: virsh is there
+                    type: boolean
+                problems:
+                    description: what stops VMs from running
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                notes:
+                    description: what works, but differently
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+            required:
+                - user
+                - os
+                - kernel
+                - arch
+                - kvm
+                - vt
+                - qemu
+                - qemuImg
+                - cpus
+                - load
+                - memTotal
+                - memFree
+                - diskFree
+                - sudo
+                - sudoAll
+                - dir
+                - osId
+                - pkg
+                - plan
+                - canSetup
+                - uplink
+                - lanAddr
+                - gateway
+                - bridges
+                - wifi
+                - lanIf
+                - lanKind
+                - guestfs
+                - virt
+                - nat
+                - libvirt
+                - problems
+                - notes
+        EmuPersona:
+            type: object
+            properties:
+                slots:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuSlot'
+                values:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                applied:
+                    description: hash of the file last written into its disk
+                    type: string
+                took:
+                    description: Applied when the switch showed the model on its CLI
+                    type: string
+                fail:
+                    description: why the check after boot found another model (for Applied)
+                    type: string
+            required:
+                - slots
+                - values
+        EmuPersonaDef:
+            type: object
+            properties:
+                name:
+                    description: what it is called ("Lab identity")
+                    type: string
+                file:
+                    description: its path in the VM (/scratch/config.yaml)
+                    type: string
+                template:
+                    description: Go text/template over PersonaData
+                    type: string
+                models:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuPersonaModel'
+                values:
+                    description: more fields, the same for all slots
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuPersonaValue'
+                stack:
+                    description: the persona can be a stack of several slots
+                    type: boolean
+                modules:
+                    description: what a module is called ("VIM")
+                    type: string
+                osName:
+                    description: what the image is called as such a device (shown after the model)
+                    type: string
+                fsHas:
+                    description: names at the top of the filesystem the file goes on, when the image mounts it from its own scripts
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                check:
+                    description: a CLI command whose output names the model once the persona took ("show version")
+                    type: string
+                serialMax:
+                    description: 'the longest serial number the image takes: a longer one keeps its last characters'
+                    type: integer
+                serialSim:
+                    description: 'the image takes only SIMxxxx-xxxx: any serial becomes that, from its last 8 letters and digits'
+                    type: boolean
+            required:
+                - name
+                - file
+                - template
+                - models
+                - values
+                - stack
+                - modules
+                - osName
+                - check
+        EmuPersonaModel:
+            type: object
+            properties:
+                name:
+                    type: string
+                modules:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+            required:
+                - name
+                - modules
+        EmuPersonaValue:
+            type: object
+            properties:
+                key:
+                    type: string
+                label:
+                    type: string
+                default:
+                    type: string
+            required:
+                - key
+                - label
+                - default
+        EmuPortMap:
+            type: object
+            properties:
+                port:
+                    type: integer
+                vif:
+                    type: integer
+            required:
+                - port
+                - vif
+        EmuSlot:
+            type: object
+            properties:
+                num:
+                    type: integer
+                model:
+                    type: string
+                serial:
+                    type: string
+                module:
+                    type: string
+                master:
+                    type: boolean
+                ports:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuPortMap'
+            required:
+                - num
+                - model
+                - serial
+                - module
+                - master
+                - ports
+        EmuTemplate:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                image:
+                    type: string
+                cpus:
+                    type: integer
+                ram:
+                    description: MB
+                    type: integer
+                diskGb:
+                    description: 0 = the image's size
+                    type: integer
+                model:
+                    description: persona model ("" = none)
+                    type: string
+                module:
+                    type: string
+                values:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                serialStart:
+                    description: the first serial number; the next switches count up from it
+                    type: string
+                macStart:
+                    description: the first switch's base MAC; the next ones follow
+                    type: string
+            required:
+                - id
+                - name
+                - image
+                - cpus
+                - ram
+                - diskGb
+                - model
+                - module
+                - values
+                - serialStart
+                - macStart
+        Event:
+            type: object
+            description: A line of the lab's Events log.
+            properties:
+                at:
+                    type: string
+                    format: date-time
+                vm:
+                    type: string
+                name:
+                    type: string
+                level:
+                    description: '"info", "ok", "warn", "error"'
+                    type: string
+                text:
+                    type: string
+                host:
+                    description: 'the host it happened on (when it happened: a switch may move later)'
+                    type: string
+                by:
+                    description: 'who caused it: user, ai, system'
+                    type: string
+            required:
+                - at
+                - vm
+                - name
+                - level
+                - text
+        FieldChange:
+            type: object
+            description: 'A field of a stream''s frames that changes from frame to frame: its value plus 0, step, 2·step… (count values, then again), or one of them at random.'
+            properties:
+                field:
+                    description: srcMac, dstMac, srcIp, dstIp, vlan, sport, dport
+                    type: string
+                mode:
+                    description: inc, random
+                    type: string
+                count:
+                    description: how many values (then again from the first)
+                    type: integer
+                step:
+                    description: how far apart they are (default 1)
+                    type: integer
+            required:
+                - field
+                - mode
+                - count
+        Host:
+            type: object
+            properties:
+                session:
+                    type: string
+                name:
+                    type: string
+                info:
+                    $ref: '#/components/schemas/EmuHostInfo'
+                checked:
+                    type: string
+            required:
+                - session
+                - name
+                - info
+                - checked
+        HostUse:
+            type: object
+            properties:
+                host:
+                    description: session path
+                    type: string
+                name:
+                    type: string
+                addr:
+                    type: string
+                mgmt:
+                    type: string
+                mgmtNet:
+                    type: string
+                cloudGw:
+                    type: string
+                lanFixed:
+                    type: boolean
+                cpus:
+                    description: the host's cores
+                    type: integer
+                memTotal:
+                    type: integer
+                memFree:
+                    type: integer
+                load:
+                    type: number
+                cores:
+                    description: what its switches use now
+                    type: number
+                vcpus:
+                    description: given to its switches
+                    type: integer
+                ram:
+                    type: integer
+                switches:
+                    type: integer
+                running:
+                    type: integer
+                main:
+                    type: boolean
+            required:
+                - host
+                - name
+                - addr
+                - mgmt
+                - mgmtNet
+                - cloudGw
+                - lanFixed
+                - cpus
+                - memTotal
+                - memFree
+                - load
+                - cores
+                - vcpus
+                - ram
+                - switches
+                - running
+                - main
+        ImageView:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                file:
+                    description: the image on this computer
+                    type: string
+                fileName:
+                    description: its name on the hosts
+                    type: string
+                size:
+                    description: bytes
+                    type: integer
+                sha256:
+                    description: of the file, to know it is on a host already
+                    type: string
+                deviceType:
+                    description: the sessions' device type (Linux, Cisco IOS…)
+                    type: string
+                cpus:
+                    type: integer
+                ram:
+                    description: MB
+                    type: integer
+                nics:
+                    description: network ports, the first one is management
+                    type: integer
+                nic:
+                    description: e1000, virtio-net-pci, vmxnet3…
+                    type: string
+                disk:
+                    description: virtio, ide, sata, scsi
+                    type: string
+                portName:
+                    description: 'data port n as the OS calls it: "{n}" or "1/{n}"'
+                    type: string
+                ready:
+                    description: console text when it can be logged in to ("login:")
+                    type: string
+                login:
+                    type: string
+                password:
+                    description: in the keychain, never in the lab file
+                    type: string
+                defaultPassword:
+                    description: the factory password from the vendor's guide, used while none is set
+                    type: string
+                prompt:
+                    description: regexp of the CLI prompt (default [>#$]\s*$)
+                    type: string
+                day0:
+                    description: first-boot commands, with {hostname} {mgmtIp} …
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                addrSet:
+                    description: commands that give the management port a fixed address ({mgmtAddr} {mgmtBits} {mgmtMask} {gateway}), typed at each start when the lab's management has fixed addresses
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                answers:
+                    description: questions on the console and what to answer
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuAnswer'
+                extra:
+                    description: more qemu options
+                    type: string
+                source:
+                    description: where the profile came from (a GNS3 appliance…)
+                    type: string
+                addrCmd:
+                    description: a CLI command that prints the management address (host's network mode)
+                    type: string
+                lagCmd:
+                    description: a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
+                    type: string
+                lagSet:
+                    description: 'CLI commands that make a LAG, per mode ("lacp", "static"): {id} {name} {ports} {master} {first} {last}'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type:
+                            - array
+                            - "null"
+                        items:
+                            type: string
+                lagDel:
+                    description: CLI commands that remove a LAG (the same names)
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                tcgCpu:
+                    type: string
+                facts:
+                    description: CLI commands that read the switch's software version and serial number after it booted
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuFact'
+                mgmtMacAlign:
+                    description: the OS takes its management MAC from its first NIC's address rounded down to this block (a power of two; 0 = it uses the NIC's address)
+                    type: integer
+                packNic:
+                    description: the device pack's network card the image last took (a newer pack's default replaces it once; the user's own choice stays)
+                    type: string
+                portMacs:
+                    description: 'data ports'' MAC addresses: "" = the switch''s base MAC + port number, "own" = a range of their own (as GNS3 gives)'
+                    type: string
+                mgmtMacOffset:
+                    description: '… plus this (Fabric Engine: block 1024, OOB at +0x81 = 129) // the CPU model it gets on a host without KVM (for example Nehalem, for an image that wants an Intel CPU); "" = QEMU''s default'
+                    type: integer
+                bootAnswers:
+                    description: menus the image may stop at while it boots (the end of its console log), and what to type
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuAnswer'
+                bootFail:
+                    description: 'console lines (regular expressions) that say its boot failed: they go to Events'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                notReady:
+                    description: 'console text that means its login is not ready yet ("(pending-AAA)"): nothing is typed until it is gone'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                neighborCmd:
+                    description: a CLI command that lists the LLDP neighbours ("show lldp neighbors")
+                    type: string
+                persona:
+                    description: a file that makes the image act as a given device
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuPersonaDef'
+                        - type: "null"
+                version:
+                    description: the software version of the image (for the lists)
+                    type: string
+                match:
+                    description: 'profiles: a regexp on the file name that picks this profile; a "version" group gives the version'
+                    type: string
+                serial:
+                    description: serial number format for new switches ({N:5} {A:2} {YY} {WW} …; "" = none)
+                    type: string
+                url:
+                    description: where the image file can be downloaded (from a GNS3 appliance)
+                    type: string
+                md5:
+                    description: its MD5 sum, to check a download
+                    type: string
+                page:
+                    description: a web page where it can be had (an account may be needed)
+                    type: string
+                disks:
+                    description: 'more files the VM needs: a second disk, a CD-ROM, a BIOS'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuDisk'
+                hasPassword:
+                    type: boolean
+                onHost:
+                    type: boolean
+                upload:
+                    type: string
+                download:
+                    description: 'download to this computer: "41 %"…'
+                    type: string
+                missing:
+                    description: the file is not on this computer (any more)
+                    type: boolean
+            required:
+                - id
+                - name
+                - file
+                - fileName
+                - size
+                - sha256
+                - deviceType
+                - cpus
+                - ram
+                - nics
+                - nic
+                - disk
+                - portName
+                - ready
+                - login
+                - prompt
+                - day0
+                - answers
+                - extra
+                - source
+                - addrCmd
+                - version
+                - serial
+                - hasPassword
+                - onHost
+                - upload
+                - download
+                - missing
+        Lab:
+            type: object
+            description: 'The emulated lab as Termwright shows it: its switches, cables, KVM hosts, images and Events. The open topology only; topologies in the background are not in it.'
+            properties:
+                kind:
+                    description: '"emu"'
+                    type: string
+                events:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Event'
+                downloadDir:
+                    description: where image downloads go on this computer
+                    type: string
+                downloadQueue:
+                    description: the image downloading now, then the waiting ones in order
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                exists:
+                    type: boolean
+                running:
+                    type: boolean
+                folder:
+                    type: string
+                mgmtNet:
+                    type: string
+                topology:
+                    description: the name the open lab is saved under
+                    type: string
+                cloudGw:
+                    description: 'cloud: the gateway the switches use'
+                    type: string
+                lanFixed:
+                    description: 'lan: fixed addresses (no DHCP)'
+                    type: boolean
+                mgmt:
+                    type: string
+                devices:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Device'
+                links:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Cable'
+                sessions:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                consoles:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                models:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/LabModel'
+                os:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        $ref: '#/components/schemas/LabOS'
+                host:
+                    type: string
+                hostInfo:
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuHostInfo'
+                        - type: "null"
+                hosts:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Host'
+                images:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/ImageView'
+                kvm:
+                    type: boolean
+                templates:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuTemplate'
+                usage:
+                    $ref: '#/components/schemas/Usage'
+                hostUse:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HostUse'
+                fast:
+                    description: 'Fast start: Stop saves the switches'' running state'
+                    type: boolean
+                iconStyle:
+                    description: 'how devices are drawn by default // every host of the lab: its management and what it gives the switches'
+                    type: string
+                deviceTypes:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/DeviceType'
+            required:
+                - kind
+                - events
+                - downloadDir
+                - downloadQueue
+                - exists
+                - running
+                - folder
+                - mgmtNet
+                - mgmt
+                - devices
+                - links
+                - sessions
+                - consoles
+                - models
+                - os
+                - host
+                - hostInfo
+                - hosts
+                - images
+                - kvm
+                - templates
+                - usage
+                - hostUse
+                - fast
+                - iconStyle
+                - deviceTypes
+        LabModel:
+            type: object
+            properties:
+                sku:
+                    type: string
+                family:
+                    type: string
+                os:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                osName:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                ports:
+                    type: integer
+                layout:
+                    description: '"16 2.5G multirate PoE, 8 1G copper"'
+                    type: string
+            required:
+                - sku
+                - family
+                - os
+                - osName
+                - ports
+                - layout
+        LabOS:
+            type: object
+            properties:
+                name:
+                    type: string
+                short:
+                    type: string
+                configCommand:
+                    type: string
+            required:
+                - name
+                - short
+                - configCommand
+        LagView:
+            type: object
+            properties:
+                name:
+                    type: string
+                mode:
+                    type: string
+                source:
+                    type: string
+            required:
+                - name
+                - mode
+                - source
+        Stream:
+            type: object
+            description: Frames from one test port to another, to every other one (broadcast), to an address or to a multicast group.
+            properties:
+                id:
+                    description: its id (made by Termwright)
+                    type: string
+                name:
+                    description: its name (unique; the API and command line find it by it)
+                    type: string
+                from:
+                    description: the test port it is sent from (id; the API takes a name too)
+                    type: string
+                to:
+                    description: a test port; "" = every other one (broadcast)
+                    type: string
+                kind:
+                    description: udp, icmp, tcp (SYN), arp, raw
+                    type: string
+                vlan:
+                    description: 802.1Q tag; 0 = untagged
+                    type: integer
+                prio:
+                    description: 802.1p priority (0-7) in its VLAN tag
+                    type: integer
+                dstMac:
+                    description: '"" = the destination test port''s (or the gateway''s, or broadcast)'
+                    type: string
+                srcIp:
+                    description: '"" = the test ports'''
+                    type: string
+                dstIp:
+                    description: '"" = the destination test port''s; an address that is not a test port (icmp: its replies are counted); a multicast group; IPv6 makes it an IPv6 stream'
+                    type: string
+                dport:
+                    description: UDP or TCP destination port (default 5001 for UDP, 80 for TCP)
+                    type: integer
+                size:
+                    description: frame bytes (60-9000; the smallest with sizeMode inc or random)
+                    type: integer
+                pps:
+                    description: frames per second (1-100000)
+                    type: integer
+                seconds:
+                    description: 'how long it sends (with pps: seconds × pps frames)'
+                    type: integer
+                count:
+                    description: how many frames (instead of seconds)
+                    type: integer
+                maxLoss:
+                    description: '% for a pass'
+                    type: number
+                maxLatency:
+                    description: ms; 0 = not checked
+                    type: number
+                off:
+                    description: left out of Start All
+                    type: boolean
+                dscp:
+                    description: IP DSCP (0-63)
+                    type: integer
+                sizeMode:
+                    description: '"" fixed, inc (Size..SizeMax, one more each frame), random, imix (64/594/1518 7:4:1)'
+                    type: string
+                sizeMax:
+                    description: the largest frame with sizeMode inc or random
+                    type: integer
+                burst:
+                    description: frames sent back to back (the rate is kept on average)
+                    type: integer
+                mods:
+                    description: fields that change from frame to frame
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/FieldChange'
+                maxJitter:
+                    description: ms for a pass (0 = not checked)
+                    type: number
+            required:
+                - id
+                - name
+                - from
+                - kind
+                - size
+                - pps
+                - maxLoss
+        StreamResult:
+            type: object
+            description: A stream's counters, added up over every KVM host, and its verdict.
+            properties:
+                id:
+                    description: the stream
+                    type: string
+                tx:
+                    description: frames sent
+                    type: integer
+                rx:
+                    description: frames received at the test ports it is for (a duplicate counts once)
+                    type: integer
+                expected:
+                    description: frames that should arrive (to every other test port for a broadcast)
+                    type: integer
+                other:
+                    description: arrived at a test port it was not for (flooded)
+                    type: integer
+                loss:
+                    description: '%'
+                    type: number
+                latAvg:
+                    description: 'ms (-1 = not measured: the ends on different hosts)'
+                    type: number
+                latMax:
+                    description: ms
+                    type: number
+                latMin:
+                    description: ms
+                    type: number
+                jitter:
+                    description: ms, the mean change of latency between frames
+                    type: number
+                ooo:
+                    description: frames that arrived after a later one
+                    type: integer
+                dup:
+                    description: frames that arrived twice (counted once)
+                    type: integer
+                txRate:
+                    description: frames per second, now
+                    type: number
+                rxRate:
+                    description: frames per second, now
+                    type: number
+                running:
+                    description: it is still sending
+                    type: boolean
+                result:
+                    description: '"", pass, fail'
+                    type: string
+                why:
+                    description: why it failed
+                    type: string
+            required:
+                - id
+                - tx
+                - rx
+                - expected
+                - other
+                - loss
+                - latAvg
+                - latMax
+                - txRate
+                - rxRate
+                - running
+                - result
+        TestPort:
+            type: object
+            description: 'A test port: a sender and counter on a free switch port (no VM). It answers ARP, neighbour solicitations and ping at its addresses.'
+            properties:
+                id:
+                    description: its id (made by Termwright)
+                    type: string
+                name:
+                    description: its name (Test port 1, …)
+                    type: string
+                vm:
+                    description: the switch (its id) it is on
+                    type: string
+                port:
+                    description: the switch port number it is on
+                    type: integer
+                mac:
+                    description: its MAC address
+                    type: string
+                ip:
+                    description: 'with its prefix (10.10.0.1/24): it answers ARP and ping there'
+                    type: string
+                ip6:
+                    description: 'an IPv6 address with its prefix: it answers neighbour solicitations and ping there'
+                    type: string
+                groups:
+                    description: multicast groups it joins (IGMP / MLD reports), to receive multicast streams
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                gw:
+                    description: for streams to another network
+                    type: string
+                vlan:
+                    description: it tags its own frames (ARP and ping answers) with this VLAN
+                    type: integer
+                portName:
+                    description: as the switch names it (filled in for the screens)
+                    type: string
+                x:
+                    description: on the canvas
+                    type: number
+                y:
+                    description: on the canvas
+                    type: number
+            required:
+                - id
+                - name
+                - vm
+                - port
+                - mac
+        Tool:
+            type: object
+            description: 'A lab tool: the same tools the Claude connector and the in-app AI agent use.'
+            properties:
+                name:
+                    type: string
+                description:
+                    type: string
+                args:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties: {}
+                required:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+            required:
+                - name
+                - description
+                - args
+        TrafficView:
+            type: object
+            description: 'The traffic generator: its test ports, streams and their results now (live while a run goes on).'
+            properties:
+                testers:
+                    description: the test ports
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/TestPort'
+                streams:
+                    description: the streams
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Stream'
+                results:
+                    description: 'per stream: its counters and verdict (the last run''s, or the running one''s)'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/StreamResult'
+                running:
+                    description: a run is going on
+                    type: boolean
+                started:
+                    description: when the run started (RFC 3339)
+                    type: string
+                note:
+                    description: something to do (restart a switch for its test port)
+                    type: string
+                history:
+                    description: 'History: per stream, the rates of the run so far ([seconds since the start, tx/s, rx/s]), for the graphs.'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type:
+                            - array
+                            - "null"
+                        items:
+                            type: array
+                            items:
+                                type: number
+                            minItems: 3
+                            maxItems: 3
+            required:
+                - testers
+                - streams
+                - results
+                - running
+        Usage:
+            type: object
+            properties:
+                hostCpus:
+                    type: integer
+                hostMemTotal:
+                    description: MB
+                    type: integer
+                hostMemFree:
+                    description: MB, available now
+                    type: integer
+                load:
+                    type: number
+                running:
+                    type: integer
+                vcpus:
+                    description: of the running switches
+                    type: integer
+                ram:
+                    description: MB, of the running switches
+                    type: integer
+                cores:
+                    description: host cores they use now
+                    type: number
+                diskGb:
+                    type: integer
+                saved:
+                    description: MB, about what the saved running states take on the hosts' disks
+                    type: integer
+            required:
+                - hostCpus
+                - hostMemTotal
+                - hostMemFree
+                - load
+                - running
+                - vcpus
+                - ram
+                - cores
+                - diskGb
+                - saved
+        StreamInput:
+            type: object
+            description: A stream to add or to replace one with. Only from is needed; the rest has defaults (udp, 128 bytes, 100 pps, 10 s, no loss allowed). from and to can be test port names or ids. Unknown fields are refused.
+            properties:
+                name:
+                    description: its name (unique; the API and command line find it by it)
+                    type: string
+                from:
+                    description: the test port it is sent from (id; the API takes a name too)
+                    type: string
+                to:
+                    description: a test port; "" = every other one (broadcast)
+                    type: string
+                kind:
+                    description: udp, icmp, tcp (SYN), arp, raw
+                    type: string
+                vlan:
+                    description: 802.1Q tag; 0 = untagged
+                    type: integer
+                prio:
+                    description: 802.1p priority (0-7) in its VLAN tag
+                    type: integer
+                dstMac:
+                    description: '"" = the destination test port''s (or the gateway''s, or broadcast)'
+                    type: string
+                srcIp:
+                    description: '"" = the test ports'''
+                    type: string
+                dstIp:
+                    description: '"" = the destination test port''s; an address that is not a test port (icmp: its replies are counted); a multicast group; IPv6 makes it an IPv6 stream'
+                    type: string
+                dport:
+                    description: UDP or TCP destination port (default 5001 for UDP, 80 for TCP)
+                    type: integer
+                size:
+                    description: frame bytes (60-9000; the smallest with sizeMode inc or random)
+                    type: integer
+                pps:
+                    description: frames per second (1-100000)
+                    type: integer
+                seconds:
+                    description: 'how long it sends (with pps: seconds × pps frames)'
+                    type: integer
+                count:
+                    description: how many frames (instead of seconds)
+                    type: integer
+                maxLoss:
+                    description: '% for a pass'
+                    type: number
+                maxLatency:
+                    description: ms; 0 = not checked
+                    type: number
+                off:
+                    description: left out of Start All
+                    type: boolean
+                dscp:
+                    description: IP DSCP (0-63)
+                    type: integer
+                sizeMode:
+                    description: '"" fixed, inc (Size..SizeMax, one more each frame), random, imix (64/594/1518 7:4:1)'
+                    type: string
+                sizeMax:
+                    description: the largest frame with sizeMode inc or random
+                    type: integer
+                burst:
+                    description: frames sent back to back (the rate is kept on average)
+                    type: integer
+                mods:
+                    description: fields that change from frame to frame
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/FieldChange'
+                maxJitter:
+                    description: ms for a pass (0 = not checked)
+                    type: number
+            required:
+                - from
+            additionalProperties: false
+    responses:
+        BadRequest:
+            description: 'The request is not right: not JSON, an unknown field or format.'
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: '#/components/schemas/Problem'
+        Unauthorized:
+            description: No key, or a wrong one.
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: '#/components/schemas/Problem'
+        Forbidden:
+            description: The local API is off, or the request came from a web page.
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: '#/components/schemas/Problem'
+        NotFound:
+            description: No such path, test port, stream or tool.
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: '#/components/schemas/Problem'
+        MethodNotAllowed:
+            description: Not this method here (the Allow header lists the ones that are).
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: '#/components/schemas/Problem'
+        Unprocessable:
+            description: 'The lab could not do it: the reason is in detail (no such switch, a port in use, no stream to start…).'
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: '#/components/schemas/Problem'
+    securitySchemes:
+        bearerAuth:
+            type: http
+            scheme: bearer
+            description: The key from Settings → AI Assistant → Local API → Copy Key (or token in mcp.json). A new one each time Termwright starts.

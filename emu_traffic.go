@@ -22,33 +22,33 @@ import (
 
 // EmuStreamResult is a stream's counters (all hosts added up) and its verdict.
 type EmuStreamResult struct {
-	ID       string  `json:"id"`
-	TX       int     `json:"tx"`
-	RX       int     `json:"rx"`
-	Expected int     `json:"expected"` // frames that should arrive (to every other test port for a broadcast)
-	Other    int     `json:"other"`    // arrived at a test port it was not for (flooded)
-	Loss     float64 `json:"loss"`     // %
-	LatAvg   float64 `json:"latAvg"`   // ms (-1 = not measured: the ends on different hosts)
-	LatMax   float64 `json:"latMax"`
-	LatMin   float64 `json:"latMin,omitempty"`
+	ID       string  `json:"id"`               // the stream
+	TX       int     `json:"tx"`               // frames sent
+	RX       int     `json:"rx"`               // frames received at the test ports it is for (a duplicate counts once)
+	Expected int     `json:"expected"`         // frames that should arrive (to every other test port for a broadcast)
+	Other    int     `json:"other"`            // arrived at a test port it was not for (flooded)
+	Loss     float64 `json:"loss"`             // %
+	LatAvg   float64 `json:"latAvg"`           // ms (-1 = not measured: the ends on different hosts)
+	LatMax   float64 `json:"latMax"`           // ms
+	LatMin   float64 `json:"latMin,omitempty"` // ms
 	Jitter   float64 `json:"jitter,omitempty"` // ms, the mean change of latency between frames
 	OOO      int     `json:"ooo,omitempty"`    // frames that arrived after a later one
 	Dup      int     `json:"dup,omitempty"`    // frames that arrived twice (counted once)
 	TxRate   float64 `json:"txRate"`           // frames per second, now
-	RxRate   float64 `json:"rxRate"`
-	Running  bool    `json:"running"`
-	Result   string  `json:"result"` // "", pass, fail
-	Why      string  `json:"why,omitempty"`
+	RxRate   float64 `json:"rxRate"`           // frames per second, now
+	Running  bool    `json:"running"`          // it is still sending
+	Result   string  `json:"result"`           // "", pass, fail
+	Why      string  `json:"why,omitempty"`    // why it failed
 }
 
 // EmuTrafficView is the Traffic tab.
 type EmuTrafficView struct {
-	Testers []emu.Tester      `json:"testers"`
-	Streams []emu.Stream      `json:"streams"`
-	Results []EmuStreamResult `json:"results"`
-	Running bool              `json:"running"`
-	Started string            `json:"started,omitempty"`
-	Note    string            `json:"note,omitempty"` // something to do (restart a switch for its test port)
+	Testers []emu.Tester      `json:"testers"`           // the test ports
+	Streams []emu.Stream      `json:"streams"`           // the streams
+	Results []EmuStreamResult `json:"results"`           // per stream: its counters and verdict (the last run's, or the running one's)
+	Running bool              `json:"running"`           // a run is going on
+	Started string            `json:"started,omitempty"` // when the run started (RFC 3339)
+	Note    string            `json:"note,omitempty"`    // something to do (restart a switch for its test port)
 	// History: per stream, the rates of the run so far ([seconds since the start, tx/s, rx/s]), for the graphs.
 	History map[string][][3]float64 `json:"history,omitempty"`
 }
@@ -384,7 +384,17 @@ func (a *App) EmuTesterSet(t emu.Tester) (EmuTrafficView, error) {
 		t.IP += "/24"
 	}
 	moved := cur.X != t.X || cur.Y != t.Y
+	if t.IP6 != "" && !strings.Contains(t.IP6, "/") {
+		t.IP6 += "/64"
+	}
+	for _, g := range t.Groups {
+		if !emu.IsMulticast(g) {
+			emuLab.mu.Unlock()
+			return EmuTrafficView{}, fmt.Errorf("%s is not a multicast group", g)
+		}
+	}
 	cur.Name, cur.IP, cur.GW, cur.VLAN, cur.X, cur.Y = orStr(strings.TrimSpace(t.Name), cur.Name), t.IP, t.GW, t.VLAN, t.X, t.Y
+	cur.IP6, cur.Groups = t.IP6, t.Groups
 	_ = a.emuSave()
 	emuLab.mu.Unlock()
 	if !moved {

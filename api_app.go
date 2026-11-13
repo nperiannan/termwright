@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/subtle"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,149 +14,301 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/termwright/termwright/internal/config"
 	"github.com/termwright/termwright/internal/emu"
+	"gopkg.in/yaml.v3"
 )
 
 // The local API (Settings → AI Assistant → Local API): the emulated lab for
 // scripts and test frameworks, on this computer only, with the same random key
 // as the Claude connector (in mcp.json in the data folder). No change is asked
 // first - the scripts are the user's own. "termwright lab …" is its command line.
-//
-//	GET    /api/v1/lab                      the lab (switches, cables, hosts)
-//	GET    /api/v1/lab/tools                the lab tools and their arguments
-//	POST   /api/v1/lab/{tool}               run a tool: {"action": …, …} → {"result": text}
-//	GET    /api/v1/lab/traffic              test ports, streams and live results (JSON)
-//	GET    /api/v1/lab/traffic/report       ?format=json|csv|html|text
-//	POST   /api/v1/lab/traffic/ports        {switch, port, ip, ip6, gateway, vlan, groups}
-//	DELETE /api/v1/lab/traffic/ports/{name}
-//	POST   /api/v1/lab/traffic/streams      a stream (as in GET …/traffic); with "id" it is changed
-//	DELETE /api/v1/lab/traffic/streams/{name}
-//	POST   /api/v1/lab/traffic/start        {"streams": [names]} (none = every stream that is not off)
-//	POST   /api/v1/lab/traffic/stop
+// The OpenAPI 3.2 document (api_openapi.go, docs/api/openapi.yaml) describes it;
+// errors are RFC 9457 problem details.
 
 func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Origin") != "" { // never a web page
-		http.Error(w, "forbidden", http.StatusForbidden)
+		apiProblem(w, http.StatusForbidden, "forbidden", "Requests from web pages are refused.")
+		return
+	}
+	path := "/" + strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1"), "/")
+	if path == "/openapi.json" || path == "/openapi.yaml" { // the description is public (no secrets in it)
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			apiProblem(w, http.StatusMethodNotAllowed, "method-not-allowed", r.Method+" is not allowed on "+path+"; use GET.")
+			return
+		}
+		b, ct := apiOpenAPIDoc(strings.HasSuffix(path, ".yaml"))
+		w.Header().Set("Content-Type", ct)
+		_, _ = w.Write(b)
 		return
 	}
 	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if subtle.ConstantTimeCompare([]byte(tok), []byte(s.token)) != 1 {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		w.Header().Set("WWW-Authenticate", `Bearer realm="termwright"`)
+		apiProblem(w, http.StatusUnauthorized, "unauthorized", "Send the key as Authorization: Bearer <key> (Settings → AI Assistant → Local API → Copy Key).")
 		return
 	}
 	if !a.cfg.Get().AI.API {
-		apiErr(w, http.StatusForbidden, errors.New("the local API is off (Settings → AI Assistant → Local API)"))
+		apiProblem(w, http.StatusForbidden, "api-off", "The local API is off: Settings → AI Assistant → Local API.")
 		return
 	}
 	defer emuAs("api")()
-	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/"), "/")
-	parts := strings.Split(path, "/")
-	body := map[string]any{}
-	if r.Method == http.MethodPost || r.Method == http.MethodPut {
+	var body map[string]any
+	if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
 		b, _ := io.ReadAll(io.LimitReader(r.Body, 4<<20))
+		body = map[string]any{}
 		if len(bytes.TrimSpace(b)) > 0 {
 			if err := json.Unmarshal(b, &body); err != nil {
-				apiErr(w, http.StatusBadRequest, fmt.Errorf("the body is not a JSON object: %w", err))
+				apiProblem(w, http.StatusBadRequest, "bad-json", "The body is not a JSON object: "+err.Error())
 				return
 			}
 		}
 	}
-	if parts[0] != "lab" {
-		apiErr(w, http.StatusNotFound, errors.New("the API is /api/v1/lab…"))
+	seg := strings.Split(strings.Trim(path, "/"), "/")
+	route, arg := path, ""
+	if len(seg) == 4 && seg[0] == "lab" && seg[1] == "traffic" && (seg[2] == "ports" || seg[2] == "streams") {
+		route, arg = "/lab/traffic/"+seg[2]+"/{id}", seg[3]
+	} else if len(seg) == 3 && seg[0] == "lab" && seg[1] == "tools" {
+		route, arg = "/lab/tools/{tool}", seg[2]
+	}
+	ms, ok := apiRoutes[route]
+	if !ok {
+		apiProblem(w, http.StatusNotFound, "not-found", "No "+path+" in the API (GET /api/v1/openapi.json describes it).")
 		return
 	}
-	key := r.Method + " " + strings.Join(parts[1:], "/")
-	switch {
-	case key == "GET ":
+	if !slices.Contains(ms, r.Method) {
+		w.Header().Set("Allow", strings.Join(ms, ", "))
+		apiProblem(w, http.StatusMethodNotAllowed, "method-not-allowed", r.Method+" is not allowed on "+path+"; use "+strings.Join(ms, " or ")+".")
+		return
+	}
+	switch route {
+	case "/lab":
 		v, err := a.EmuState()
-		apiOut(w, v, err)
-	case key == "GET tools":
-		apiOut(w, apiTools(), nil)
-	case key == "GET traffic":
+		apiOut(w, http.StatusOK, v, err)
+	case "/lab/tools":
+		apiOut(w, http.StatusOK, apiTools(), nil)
+	case "/lab/tools/{tool}":
+		a.apiTool(w, "lab_"+arg, body)
+	case "/lab/traffic":
 		v, err := a.EmuTraffic()
-		apiOut(w, v, err)
-	case key == "GET traffic/report":
+		apiOut(w, http.StatusOK, v, err)
+	case "/lab/traffic/report":
 		f := orStr(r.URL.Query().Get("format"), "json")
 		if !slices.Contains([]string{"json", "csv", "html", "text"}, f) {
-			apiErr(w, http.StatusBadRequest, errors.New("format is json, csv, html or text"))
+			apiProblem(w, http.StatusBadRequest, "bad-format", "format is json, csv, html or text.")
 			return
 		}
 		b, ct, err := a.emuTrafficReportAs(f)
 		if err != nil {
-			apiErr(w, http.StatusInternalServerError, err)
+			apiProblem(w, http.StatusInternalServerError, "report", err.Error())
 			return
 		}
 		w.Header().Set("Content-Type", ct)
 		_, _ = w.Write(b)
-	case key == "POST traffic/ports":
-		body["action"] = "add_port"
-		a.apiTool(w, "lab_traffic", body)
-	case len(parts) == 4 && r.Method == http.MethodDelete && parts[1] == "traffic" && parts[2] == "ports":
-		a.apiTool(w, "lab_traffic", map[string]any{"action": "remove_port", "port": parts[3]})
-	case key == "POST traffic/streams":
+	case "/lab/traffic/start":
+		v, err := a.EmuTrafficStart(a.apiStreamIDs(argStrs(body, "streams")))
+		apiOut(w, http.StatusOK, v, err)
+	case "/lab/traffic/stop":
+		v, err := a.EmuTrafficStop()
+		apiOut(w, http.StatusOK, v, err)
+	case "/lab/traffic/ports":
+		v, err := a.apiPortAdd(body)
+		apiOut(w, http.StatusCreated, v, err)
+	case "/lab/traffic/ports/{id}":
+		id, ok := a.apiFind(arg, true)
+		if !ok {
+			apiProblem(w, http.StatusNotFound, "no-port", "No test port "+arg+".")
+			return
+		}
+		if r.Method == http.MethodDelete {
+			_, err := a.EmuTesterRemove(id)
+			apiOut(w, http.StatusNoContent, nil, err)
+			return
+		}
+		v, err := a.apiPortSet(id, body)
+		apiOut(w, http.StatusOK, v, err)
+	case "/lab/traffic/streams":
 		var st emu.Stream
-		b, _ := json.Marshal(body)
-		if err := json.Unmarshal(b, &st); err != nil {
-			apiErr(w, http.StatusBadRequest, err)
+		if err := apiDecode(body, &st); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-stream", err.Error())
 			return
 		}
-		if err := a.apiStreamRefs(&st); err != nil {
-			apiErr(w, http.StatusBadRequest, err)
-			return
-		}
+		st.ID = ""
+		a.apiStreamRefs(&st)
 		v, err := a.EmuStreamSave(st)
-		apiOut(w, v, err)
-	case len(parts) == 4 && r.Method == http.MethodDelete && parts[1] == "traffic" && parts[2] == "streams":
-		a.apiTool(w, "lab_traffic", map[string]any{"action": "remove_stream", "name": parts[3]})
-	case key == "POST traffic/start", key == "POST traffic/stop":
-		body["action"] = parts[2]
-		a.apiTool(w, "lab_traffic", body)
-	case len(parts) == 2 && r.Method == http.MethodPost:
-		a.apiTool(w, "lab_"+parts[1], body)
-	default:
-		apiErr(w, http.StatusNotFound, fmt.Errorf("no %s /api/v1/%s (GET /api/v1/lab/tools lists the tools)", r.Method, path))
+		apiOut(w, http.StatusCreated, v, err)
+	case "/lab/traffic/streams/{id}":
+		id, ok := a.apiFind(arg, false)
+		if !ok {
+			apiProblem(w, http.StatusNotFound, "no-stream", "No stream "+arg+".")
+			return
+		}
+		if r.Method == http.MethodDelete {
+			_, err := a.EmuStreamRemove(id)
+			apiOut(w, http.StatusNoContent, nil, err)
+			return
+		}
+		var st emu.Stream
+		if err := apiDecode(body, &st); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-stream", err.Error())
+			return
+		}
+		st.ID = id
+		a.apiStreamRefs(&st)
+		v, err := a.EmuStreamSave(st)
+		apiOut(w, http.StatusOK, v, err)
 	}
 }
 
-// apiStreamRefs lets a stream name its test ports by name (from, to) as well as by id.
-func (a *App) apiStreamRefs(st *emu.Stream) error {
+// apiRoutes: the API's paths (under /api/v1) and their methods.
+var apiRoutes = map[string][]string{
+	"/lab": {"GET"}, "/lab/tools": {"GET"}, "/lab/tools/{tool}": {"POST"},
+	"/lab/traffic": {"GET"}, "/lab/traffic/report": {"GET"}, "/lab/traffic/start": {"POST"}, "/lab/traffic/stop": {"POST"},
+	"/lab/traffic/ports": {"POST"}, "/lab/traffic/ports/{id}": {"PATCH", "DELETE"},
+	"/lab/traffic/streams": {"POST"}, "/lab/traffic/streams/{id}": {"PUT", "DELETE"},
+}
+
+//go:embed docs/api/openapi.yaml
+var apiOpenAPIYAML []byte
+
+// apiOpenAPIDoc is the OpenAPI document, as YAML or JSON.
+func apiOpenAPIDoc(asYAML bool) ([]byte, string) {
+	if asYAML {
+		return apiOpenAPIYAML, "application/yaml"
+	}
+	apiJSONOnce.Do(func() {
+		var n yaml.Node
+		if yaml.Unmarshal(apiOpenAPIYAML, &n) == nil {
+			var v any
+			if n.Decode(&v) == nil {
+				apiJSON, _ = json.MarshalIndent(v, "", "  ")
+			}
+		}
+	})
+	return apiJSON, "application/json"
+}
+
+var (
+	apiJSONOnce sync.Once
+	apiJSON     []byte
+)
+
+func apiDecode(m map[string]any, v any) error {
+	b, _ := json.Marshal(m)
+	d := json.NewDecoder(bytes.NewReader(b))
+	d.DisallowUnknownFields()
+	return d.Decode(v)
+}
+
+// apiFind finds a test port (or stream) by its id or name.
+func (a *App) apiFind(n string, port bool) (string, bool) {
 	tv, err := a.EmuTraffic()
 	if err != nil {
-		return err
+		return "", false
 	}
-	find := func(n string) string {
+	if port {
 		for _, t := range tv.Testers {
 			if t.ID == n || strings.EqualFold(t.Name, n) {
-				return t.ID
+				return t.ID, true
 			}
 		}
-		return n
+		return "", false
 	}
-	st.From, st.To = find(st.From), find(st.To)
-	if st.ID != "" {
-		for _, s := range tv.Streams {
-			if s.Name == st.ID {
-				st.ID = s.ID
-			}
+	for _, s := range tv.Streams {
+		if s.ID == n || strings.EqualFold(s.Name, n) {
+			return s.ID, true
 		}
 	}
-	return nil
+	return "", false
+}
+
+func (a *App) apiStreamIDs(names []string) []string {
+	var out []string
+	for _, n := range names {
+		if id, ok := a.apiFind(n, false); ok {
+			out = append(out, id)
+		} else {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// apiStreamRefs lets a stream name its test ports by name (from, to) as well as by id.
+func (a *App) apiStreamRefs(st *emu.Stream) {
+	if id, ok := a.apiFind(st.From, true); ok {
+		st.From = id
+	}
+	if id, ok := a.apiFind(st.To, true); ok {
+		st.To = id
+	}
+}
+
+func (a *App) apiPortAdd(b map[string]any) (EmuTrafficView, error) {
+	v, err := a.EmuState()
+	if err != nil {
+		return EmuTrafficView{}, err
+	}
+	d, err := emuMCPID(v, argStr(b, "switch"))
+	if err != nil {
+		return EmuTrafficView{}, err
+	}
+	tv, err := a.EmuTesterAdd(d.ID, argStr(b, "port"), argStr(b, "ip"), argStr(b, "gateway"), argInt(b, "vlan", 0, 4094))
+	if err != nil {
+		return tv, err
+	}
+	t := tv.Testers[len(tv.Testers)-1]
+	if ip6, gs := argStr(b, "ip6"), argStrs(b, "groups"); ip6 != "" || len(gs) > 0 || argStr(b, "name") != "" {
+		t.IP6, t.Groups, t.Name = ip6, gs, orStr(argStr(b, "name"), t.Name)
+		note := tv.Note
+		tv, err = a.EmuTesterSet(t)
+		tv.Note = note
+	}
+	return tv, err
+}
+
+func (a *App) apiPortSet(id string, b map[string]any) (EmuTrafficView, error) {
+	tv, err := a.EmuTraffic()
+	if err != nil {
+		return tv, err
+	}
+	i := slices.IndexFunc(tv.Testers, func(t emu.Tester) bool { return t.ID == id })
+	if i < 0 {
+		return tv, errors.New("no such test port")
+	}
+	t := tv.Testers[i]
+	for k := range b {
+		switch k {
+		case "name":
+			t.Name = argStr(b, k)
+		case "ip":
+			t.IP = argStr(b, k)
+		case "ip6":
+			t.IP6 = argStr(b, k)
+		case "gateway":
+			t.GW = argStr(b, k)
+		case "vlan":
+			t.VLAN = argInt(b, k, 0, 4094)
+		case "groups":
+			t.Groups = argStrs(b, k)
+		default:
+			return tv, fmt.Errorf("a test port has no %q to change (name, ip, ip6, gateway, vlan, groups)", k)
+		}
+	}
+	return a.EmuTesterSet(t)
 }
 
 func (a *App) apiTool(w http.ResponseWriter, tool string, args map[string]any) {
 	if !slices.ContainsFunc(mcpLabTools, func(t mcpTool) bool { return t.Name == tool }) {
-		apiErr(w, http.StatusNotFound, fmt.Errorf("no lab tool %s (GET /api/v1/lab/tools lists them)", strings.TrimPrefix(tool, "lab_")))
+		apiProblem(w, http.StatusNotFound, "no-tool", "No lab tool "+strings.TrimPrefix(tool, "lab_")+" (GET /api/v1/lab/tools lists them).")
 		return
 	}
 	out, err := a.emuMCPRun("api", tool, args, func(string, string, bool, bool) error { return nil })
-	if err != nil {
-		apiErr(w, http.StatusBadRequest, err)
-		return
-	}
-	apiOut(w, map[string]string{"result": out}, nil)
+	apiOut(w, http.StatusOK, map[string]string{"result": out}, err)
 }
 
 // apiToolInfo is a lab tool for the API's callers.
@@ -163,32 +316,40 @@ type apiToolInfo struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
 	Args        map[string]any `json:"args"`
+	Required    []string       `json:"required,omitempty"`
 }
 
 func apiTools() []apiToolInfo {
 	var out []apiToolInfo
 	for _, t := range mcpLabTools {
 		p, _ := t.InputSchema["properties"].(map[string]any)
-		out = append(out, apiToolInfo{strings.TrimPrefix(t.Name, "lab_"), t.Description, p})
+		req, _ := t.InputSchema["required"].([]string)
+		out = append(out, apiToolInfo{strings.TrimPrefix(t.Name, "lab_"), t.Description, p, req})
 	}
 	return out
 }
 
-func apiOut(w http.ResponseWriter, v any, err error) {
+func apiOut(w http.ResponseWriter, code int, v any, err error) {
 	if err != nil {
-		apiErr(w, http.StatusBadRequest, err)
+		apiProblem(w, http.StatusUnprocessableEntity, "lab", err.Error())
+		return
+	}
+	if code == http.StatusNoContent {
+		w.WriteHeader(code)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(v)
 }
 
-func apiErr(w http.ResponseWriter, code int, err error) {
-	w.Header().Set("Content-Type", "application/json")
+// apiProblem answers with an RFC 9457 problem detail.
+func apiProblem(w http.ResponseWriter, code int, kind, detail string) {
+	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+	_ = json.NewEncoder(w).Encode(map[string]any{"type": "https://github.com/nperiannan/termwright/blob/main/docs/API.md#" + kind, "title": http.StatusText(code), "status": code, "detail": detail})
 }
 
 // ---- the command line: termwright lab <tool> [action] [name=value …]
@@ -302,7 +463,7 @@ func labCLIRequest(args []string) (method, path string, body map[string]any, acc
 	if len(pos) > 0 && body["action"] == nil {
 		body["action"] = pos[0]
 	}
-	return http.MethodPost, "/" + tool, body, ""
+	return http.MethodPost, "/tools/" + tool, body, ""
 }
 
 // labCLIValue: name=value as the tool's argument wants it (numbers, true/false, lists split at commas, JSON as it is).
