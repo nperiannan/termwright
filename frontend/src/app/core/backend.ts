@@ -112,6 +112,7 @@ export class Backend {
   emuCaptureStart(id: string, port: string) { return this.call<EmuCapture[]>('EmuCaptureStart', id, port); }
   emuCaptureStop(key: string) { return this.call<EmuCapture[]>('EmuCaptureStop', key); }
   emuCaptureDelete(files: string[]) { return this.call<EmuCapture[]>('EmuCaptureDelete', files); }
+  emuLinkCheck(id: string, seconds: number) { return this.call<string>('EmuLinkCheck', id, seconds); }
   emuTraffic() { return this.call<EmuTrafficView>('EmuTraffic'); }
   emuTesterAdd(vm: string, port: string, ip: string, gw: string, vlan: number) { return this.call<EmuTrafficView>('EmuTesterAdd', vm, port, ip, gw, vlan); }
   emuTesterSet(t: EmuTester) { return this.call<EmuTrafficView>('EmuTesterSet', t); }

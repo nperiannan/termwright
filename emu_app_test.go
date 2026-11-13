@@ -890,6 +890,26 @@ func TestEmuTwoHosts(t *testing.T) {
 	if out, err := a.emuConsoleRun(vb, []string{"x echo tw-console-ok"}, time.Minute); err != nil || !strings.Contains(out, "tw-console-ok") {
 		t.Errorf("console run: %v\n%s", err, out)
 	}
+	// the link check: the switch takes a port down and up (its driver restarts auto-negotiation); QEMU's trace shows it
+	{
+		got := make(chan string, 1)
+		go func() {
+			r, err := a.EmuLinkCheck(vb, 20)
+			if err != nil {
+				r = "error: " + err.Error()
+			}
+			got <- r
+		}()
+		time.Sleep(4 * time.Second)
+		if out, err := a.emuConsoleRun(vb, []string{"x ip link set eth1 down", "x ip link set eth1 up"}, time.Minute); err != nil {
+			t.Errorf("link down/up: %v %s", err, out)
+		}
+		if r := <-got; !strings.Contains(r, "restarted auto-negotiation") {
+			t.Errorf("link check: %s", r)
+		} else {
+			t.Log(r)
+		}
+	}
 	// traffic: a test port on a free port of a running switch; the switch has an address there and
 	// answers the test port's pings, and pings the test port back (it answers ARP and ping)
 	{

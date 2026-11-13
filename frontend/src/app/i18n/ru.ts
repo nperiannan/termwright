@@ -2781,6 +2781,10 @@ const ru: Record<string, string> = {
   'Remove the Cloud?': 'Удалить облако?',
   '{0} come off the host’s network when their switches restart.': '{0} отключаются от сети хоста при перезапуске их коммутаторов.',
   'Show only these': 'Показать только эти',
+  'Watches its network cards in QEMU for 30 s: whether the emulation takes links down or drops frames, or the switch itself does': 'Наблюдает за его сетевыми картами в QEMU 30 с: отключает ли эмуляция связи или теряет кадры, или это делает сам коммутатор',
+  'Check Its Links (30 s)': 'Проверить его связи (30 с)',
+  'Watching the network cards of {0} in QEMU for 30 s…': 'Наблюдение за сетевыми картами {0} в QEMU 30 с…',
+  'Link Check: {0}': 'Проверка связей: {0}',
 };
 
 export default ru;

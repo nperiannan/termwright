@@ -257,6 +257,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 @for (u of d.uplinks ?? []; track u) { <a (click)="setUplink(d, u, false)">{{ tr('Take {0} off the Host’s Network', u) }}</a> } }
               @if (emu()) { <a (click)="mdo('reset', d)">{{ tr('Back to Day 0') }}</a> }
               @if (emu()) { <a (click)="menu.set(null); newTester(d)">⇄ {{ tr('Add Test Port…') }}</a> }
+              @if (emu() && d.running) { <a (click)="menu.set(null); linkCheck(d)" [title]="tr('Watches its network cards in QEMU for 30 s: whether the emulation takes links down or drops frames, or the switch itself does')">{{ tr('Check Its Links (30 s)') }}</a> }
               @if (emu()) { <hr /><a (click)="drawAs.set(d); menu.set(null); $event.stopPropagation()" [title]="tr('For every {0} in this topology, new ones too', kindOf(d))"><app-dev-icon class="dai" [role]="roleOfDev(d)" [look]="lookOf(d)" [size]="22" state="idle" />{{ tr('Draw As…') }} <small class="muted">{{ tr('all {0}', kindOf(d)) }}</small></a> }
               @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [title]="d.running ? tr('Live: it keeps running while it moves') : tr('It takes its disk along: its configuration and day 0 stay')">→ {{ o.name || hname(o.session) }}</a> } }
               <hr />
@@ -826,6 +827,10 @@ export class LabWorkspace implements OnDestroy {
   async tpRemove(t: EmuTester) {
     if (!(await this.ui.confirm(tr('Remove {0}?', t.name), tr('Its streams go too.'), tr('Remove')))) return;
     try { this.traf.set(await this.backend.emuTesterRemove(t.id)); } catch (e) { this.ui.error(e); }
+  }
+  async linkCheck(d: LabDevice) {
+    this.ui.toast(tr('Watching the network cards of {0} in QEMU for 30 s…', d.hostname));
+    try { const r = await this.backend.emuLinkCheck(d.id, 30); await this.ui.confirm(tr('Link Check: {0}', d.hostname), r, tr('OK')); } catch (e) { this.ui.error(e); }
   }
   async newTester(d?: LabDevice) {
     this.dock.set('traffic'); this.sEd.set(null); void this.loadTraf();

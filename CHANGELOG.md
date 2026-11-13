@@ -4,6 +4,9 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **link check**: right-click a running switch → *Check Its Links (30 s)* turns on QEMU's own trace of its e1000 network cards for 30 seconds and says what happened - whether QEMU took links down (the switch restarted auto-negotiation), the switch turned a receiver off, or frames were dropped (link down, multicast filter, overrun). It tells a problem of the emulation from one inside the switch's software.
+- Emulated lab: e1000-82545em in the image NIC choices.
+
 - Emulated lab, **clouds** can be selected (click) and have a right-click menu: *Add Link to It*, take a port off, *Remove Cloud* (Delete also removes a selected one; the ports on it come off the host's network at their next restart). Test ports have a right-click menu too (*Stream from Here*, *Remove Test Port*).
 - Emulated lab, **Captures** sum up what a capture holds per protocol and sender (LLDP, LACP, STP, EDP… first): one look shows which end sends which control protocol; click one to filter.
 
