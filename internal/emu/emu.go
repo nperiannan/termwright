@@ -56,6 +56,9 @@ type Image struct {
 	AddrCmd         string              `json:"addrCmd"`                   // a CLI command that prints the management address (host's network mode)
 	PortAddr        []string            `json:"portAddr,omitempty"`        // commands that give a data port a fixed address ({mac} its MAC, {addr} address/bits), typed at each start for the ports given one (Linux computers)
 	PortShow        string              `json:"portShow,omitempty"`        // a command that prints "PA <mac> <address/bits>" for each address of each port (Linux computers)
+	PortAddr6       []string            `json:"portAddr6,omitempty"`       // commands that give a data port a fixed IPv6 address ({mac} {addr})
+	PortAuto6       []string            `json:"portAuto6,omitempty"`       // commands that make a data port take its IPv6 address from router advertisements ({mac})
+	RouteSet        []string            `json:"routeSet,omitempty"`        // commands that set the default gateways and DNS server ({gw} {gw6} {dns})
 	PortDHCP        []string            `json:"portDhcp,omitempty"`        // commands that make a data port ask DHCP for its address ({mac}), for the ports set to dhcp
 	LagCmd          string              `json:"lagCmd,omitempty"`          // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
 	LagSet          map[string][]string `json:"lagSet,omitempty"`          // CLI commands that make a LAG, per mode ("lacp", "static"): {id} {name} {ports} {master} {first} {last}
@@ -226,6 +229,10 @@ type VM struct {
 	Machine   string         `json:"machine,omitempty"`   // the QEMU machine type it runs as, when pinned (a live move between QEMU versions: "pc" is each version's own)
 	CPU       string         `json:"cpu,omitempty"`       // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
 	Role      string         `json:"role,omitempty"`      // what it is drawn as ("access", "core", "router"…; "" = from its model)
+	Addrs6    map[int]string `json:"addrs6,omitempty"`    // IPv6 of its data ports: "auto" (SLAAC) or address/bits (computers)
+	DataGw    string         `json:"dataGw,omitempty"`    // its default gateway through a data port (computers; it replaces the management one)
+	DataGw6   string         `json:"dataGw6,omitempty"`   // its IPv6 default gateway (computers)
+	DNS       string         `json:"dns,omitempty"`       // its DNS server (computers)
 	CPUMax    float64        `json:"cpuMax,omitempty"`    // at most this many host cores (0.5 = half of one; 0 = no limit), by a cgroup on its host
 	CPUWeight int            `json:"cpuWeight,omitempty"` // its share of the host's CPU when they compete (cgroup cpu.weight 1-10000; 0 = 100, as the others)
 	Addrs     map[int]string `json:"addrs,omitempty"`     // data-port addresses typed on its console at each start (port number → address/bits, or "dhcp"), when its image has port address commands (Linux computers)
@@ -1572,4 +1579,9 @@ elif [ %[4]s = max ] && [ %[5]d -le 100 ]; then renice -n %[6]d -p $p >/dev/null
 else echo "cpu %[2]s fail a CPU limit needs cgroup v2 and sudo without a password on the host"
 fi
 `, Q(l.VMDir()), v.ID, g, quota, w, nice)
+}
+
+// HasNet says whether a computer has data-port addresses, gateways or a DNS server to type.
+func (v VM) HasNet() bool {
+	return len(v.Addrs) > 0 || len(v.Addrs6) > 0 || v.DataGw != "" || v.DataGw6 != "" || v.DNS != ""
 }

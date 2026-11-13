@@ -40,7 +40,7 @@ export const AGENT_TOOLS = [
 const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 25;
 /** lab lines with words; the connector's lab tools take JSON (lab traffic {...}). */
 const LAB_VERBS = ['start', 'stop', 'shutdown', 'cable', 'uncable', 'pull', 'plug', 'lag', 'nolag', 'readlags', 'setlag', 'unsetlag', 'checkcabling', 'uplink'];
-const LAB_TOOLS = ['images', 'add_switches', 'cable', 'power', 'wait', 'console', 'check_cabling', 'move', 'traffic', 'capture', 'link_check', 'qemu_command', 'address', 'cpu', 'events'];
+const LAB_TOOLS = ['images', 'add_switches', 'cable', 'power', 'wait', 'console', 'check_cabling', 'move', 'traffic', 'capture', 'link_check', 'qemu_command', 'address', 'computer', 'cpu', 'events'];
 
 /** What the agent may do on its own, from "Read only" (white) to fully autonomous (orange). */
 export type AgentPerm = '' | 'every' | 'readonly' | 'auto';

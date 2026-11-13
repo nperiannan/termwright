@@ -136,26 +136,26 @@ var emuLab struct {
 	starting         map[string]time.Time
 	ticks            map[string]float64 // CPU ticks at the last poll
 	ticksAt          time.Time
-	cpu              map[string]float64        // CPU use now, in cores (1 = one core busy)
-	ready            map[string]bool           // the console showed the ready text since the VM started (it may scroll out of the log's end later)
-	bootAns          map[string]time.Time      // when a boot menu was last answered
-	trafHosts        map[string]bool           // hosts traffic.py runs on (or ran on: told to end)
-	addrOK           map[string]bool           // the switch showed its management address (since it started)
-	moveTo           map[string]string         // switches moving to another host: that host
-	personaAfterBoot map[string]bool           // the persona file is written once the VM has booted (its folder did not exist yet)
-	perr             map[string]string         // why the persona file could not be written
-	packProfiles     []emu.Image               // the device pack's image profiles (refreshed by EmuState)
-	personaTried     map[string]bool           // that was tried once already (no second round)
-	pinfo            map[string]string         // where the persona file went, or what the check after boot saw
-	pcheck           map[string]bool           // the persona was checked on the CLI since the VM started
-	resumed          map[string]bool           // it started from its saved running state (no boot, no day 0)
-	lldp             map[string]string         // cable → what the last cabling check found (LLDP)
-	portSeen         map[string]map[int]string // computer → its data ports' addresses as read on its console
-	events           []EmuEvent                // the Events log, newest last
-	download         map[string]string         // image → download progress ("waiting", "41 %")
-	dlQueue          []string                  // images waiting to download, in order
-	dlCur            string                    // the image downloading now
-	dlCancel         context.CancelFunc        // stops it
+	cpu              map[string]float64     // CPU use now, in cores (1 = one core busy)
+	ready            map[string]bool        // the console showed the ready text since the VM started (it may scroll out of the log's end later)
+	bootAns          map[string]time.Time   // when a boot menu was last answered
+	trafHosts        map[string]bool        // hosts traffic.py runs on (or ran on: told to end)
+	addrOK           map[string]bool        // the switch showed its management address (since it started)
+	moveTo           map[string]string      // switches moving to another host: that host
+	personaAfterBoot map[string]bool        // the persona file is written once the VM has booted (its folder did not exist yet)
+	perr             map[string]string      // why the persona file could not be written
+	packProfiles     []emu.Image            // the device pack's image profiles (refreshed by EmuState)
+	personaTried     map[string]bool        // that was tried once already (no second round)
+	pinfo            map[string]string      // where the persona file went, or what the check after boot saw
+	pcheck           map[string]bool        // the persona was checked on the CLI since the VM started
+	resumed          map[string]bool        // it started from its saved running state (no boot, no day 0)
+	lldp             map[string]string      // cable → what the last cabling check found (LLDP)
+	portSeen         map[string]emu.CompNet // computer → its network as read on its console
+	events           []EmuEvent             // the Events log, newest last
+	download         map[string]string      // image → download progress ("waiting", "41 %")
+	dlQueue          []string               // images waiting to download, in order
+	dlCur            string                 // the image downloading now
+	dlCancel         context.CancelFunc     // stops it
 	dlRunning        bool
 }
 
@@ -203,6 +203,11 @@ type EmuDevice struct {
 	Computer     bool           `json:"computer,omitempty"`  // a Linux computer: Termwright gives its data ports addresses
 	Addrs        map[int]string `json:"addrs,omitempty"`     // its data ports' addresses (port → address/bits, or "dhcp")
 	AddrsSeen    map[int]string `json:"addrsSeen,omitempty"` // the addresses its data ports have, as read on its console after they were set (DHCP leases too)
+	Addrs6       map[int]string `json:"addrs6,omitempty"`    // its data ports' IPv6 ("auto" or address/bits)
+	DataGw       string         `json:"dataGw,omitempty"`    // its default gateway on a data port
+	DataGw6      string         `json:"dataGw6,omitempty"`   // its IPv6 default gateway
+	DNS          string         `json:"dns,omitempty"`       // its DNS server
+	Net          *emu.CompNet   `json:"net,omitempty"`       // its network as last read on its console
 	CPUMax       float64        `json:"cpuMax,omitempty"`    // at most this many host cores (0 = no limit)
 	CPUWeight    int            `json:"cpuWeight,omitempty"` // its CPU share when VMs compete (100 = as the others; 0 = 100)
 }
@@ -529,7 +534,7 @@ func (a *App) emuLoad() {
 	emuLab.trafHosts = map[string]bool{}
 	emuLab.pinfo, emuLab.pcheck, emuLab.resumed, emuLab.lldp = map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]string{}
 	emuLab.download = map[string]string{}
-	emuLab.portSeen = map[string]map[int]string{}
+	emuLab.portSeen = map[string]emu.CompNet{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
 		_ = json.Unmarshal(b, &emuLab.f)
 	}
@@ -2762,7 +2767,7 @@ func (a *App) emuWatch(host string, ids []string) {
 			}
 			needDay0 := !v.Day0Done && len(im.Day0) > 0
 			needCheck := im.Persona != nil && im.Persona.Check != "" && v.Persona != nil && v.Persona.Applied != "" && !emuLab.pcheck[id]
-			ports := len(v.Addrs) > 0 && len(im.PortAddr) > 0
+			ports := v.HasNet() && len(im.PortAddr) > 0
 			if (needDay0 || needCheck || ports || l.Mgmt == "lan" && !l.LanFixed || l.Fixed() && len(im.AddrSet) > 0) && !emuLab.day0[id] {
 				day0 = append(day0, *v)
 				emuLab.day0[id] = true
@@ -2896,7 +2901,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		_ = a.emuSave()
 		emuLab.mu.Unlock()
 	}
-	if len(v.Addrs) > 0 && len(im.PortAddr) > 0 {
+	if v.HasNet() && len(im.PortAddr) > 0 {
 		emuLab.mu.Lock()
 		emuLab.state[v.ID] = "address"
 		emuLab.mu.Unlock()
@@ -3740,7 +3745,10 @@ func (a *App) emuView() EmuView {
 			Console: l.ConsolePort(vm), Port: l.SSHPort(vm), Error: emuLab.errs[vm.ID]}
 		if im != nil {
 			d.Model, d.OS, d.Ports = im.Name, orStr(im.DeviceType, "VM"), im.DataPorts()
-			d.Computer, d.Addrs, d.AddrsSeen = len(im.PortAddr) > 0, vm.Addrs, emuLab.portSeen[vm.ID]
+			if d.Computer = len(im.PortAddr) > 0; d.Computer {
+				seen := emuLab.portSeen[vm.ID]
+				d.Addrs, d.Addrs6, d.DataGw, d.DataGw6, d.DNS, d.AddrsSeen, d.Net = vm.Addrs, vm.Addrs6, vm.DataGw, vm.DataGw6, vm.DNS, seen.Addrs, &seen
+			}
 			d.CPUMax, d.CPUWeight = vm.CPUMax, vm.CPUWeight
 			onHost[im.ID] = true
 		}
@@ -5925,7 +5933,10 @@ func (a *App) EmuAddComputer(host string, start bool) (EmuView, error) {
 // emuPortMACs is a VM's MAC addresses: 0 its management port, then its data ports (lock held).
 func emuPortMACs(l *emu.Lab, v emu.VM, im *emu.Image) map[int]string {
 	m := map[int]string{0: l.MgmtMAC(v, im)}
-	for p := range v.Addrs {
+	for _, p := range append(slices.Collect(maps.Keys(v.Addrs)), slices.Collect(maps.Keys(v.Addrs6))...) {
+		m[p] = l.PortMAC(v, im, p)
+	}
+	for p := 1; p <= im.DataPorts() && p <= 16; p++ { // the others too: what they have shows in its Desktop
 		m[p] = l.PortMAC(v, im, p)
 	}
 	return m
@@ -5936,23 +5947,42 @@ func emuPortAddrs(ctx context.Context, c *emu.Console, im emu.Image, v emu.VM, m
 	set := im
 	set.Day0 = nil
 	var said []string
-	for _, p := range slices.Sorted(maps.Keys(v.Addrs)) {
-		cmds := im.PortAddr
-		if strings.EqualFold(v.Addrs[p], "dhcp") {
-			cmds = im.PortDHCP
-		}
+	add := func(cmds []string, p int, addr string) {
 		for _, cmd := range cmds {
-			set.Day0 = append(set.Day0, emu.FillPort(cmd, macs[p], v.Addrs[p]))
+			set.Day0 = append(set.Day0, emu.FillPort(cmd, macs[p], addr))
+		}
+	}
+	for _, p := range slices.Sorted(maps.Keys(v.Addrs)) {
+		if strings.EqualFold(v.Addrs[p], "dhcp") {
+			add(im.PortDHCP, p, "")
+		} else {
+			add(im.PortAddr, p, v.Addrs[p])
 		}
 		said = append(said, fmt.Sprintf("%d %s", p, v.Addrs[p]))
 	}
-	if err := emu.Day0(ctx, c, &set, v, v.Index+1, nil); err != nil {
-		return err
+	for _, p := range slices.Sorted(maps.Keys(v.Addrs6)) {
+		if v.Addrs6[p] == "auto" {
+			add(im.PortAuto6, p, "")
+		} else {
+			add(im.PortAddr6, p, v.Addrs6[p])
+		}
+		said = append(said, fmt.Sprintf("%d IPv6 %s", p, v.Addrs6[p]))
 	}
-	seen := map[int]string{}
+	if v.DataGw != "" || v.DataGw6 != "" || v.DNS != "" {
+		for _, cmd := range im.RouteSet {
+			set.Day0 = append(set.Day0, emu.FillRoute(cmd, v))
+		}
+		said = append(said, "gateway "+orStr(strings.Trim(v.DataGw+" "+v.DataGw6, " "), "-")+", DNS "+orStr(v.DNS, "-"))
+	}
+	if len(set.Day0) > 0 {
+		if err := emu.Day0(ctx, c, &set, v, v.Index+1, nil); err != nil {
+			return err
+		}
+	}
+	var seen emu.CompNet
 	if im.PortShow != "" {
-		if slices.Contains(slices.Collect(maps.Values(v.Addrs)), "dhcp") {
-			select { // a lease takes a moment
+		if slices.Contains(slices.Collect(maps.Values(v.Addrs)), "dhcp") || slices.Contains(slices.Collect(maps.Values(v.Addrs6)), "auto") {
+			select { // a lease or a router advertisement takes a moment
 			case <-ctx.Done():
 			case <-time.After(6 * time.Second):
 			}
@@ -5963,7 +5993,9 @@ func emuPortAddrs(ctx context.Context, c *emu.Console, im emu.Image, v emu.VM, m
 	}
 	emuLab.mu.Lock()
 	emuLab.portSeen[v.ID] = seen
-	emuEv(v.ID, "ok", "data ports: "+strings.Join(said, " · "))
+	if len(said) > 0 {
+		emuEv(v.ID, "ok", "network: "+strings.Join(said, " · "))
+	}
 	emuLab.mu.Unlock()
 	return nil
 }
@@ -6025,39 +6057,210 @@ func (a *App) EmuSetPortAddr(id string, port int, addr string) (EmuView, error) 
 	return a.EmuState()
 }
 
-// emuTypePorts logs in to a running computer's console and types its data-port addresses.
+// emuTypePorts logs in to a running computer's console and types its network.
 func (a *App) emuTypePorts(host string, v emu.VM) {
+	err := a.emuOnVMConsole(host, v, 3*time.Minute, func(ctx context.Context, c *emu.Console, im emu.Image, macs map[int]string) error {
+		return emuPortAddrs(ctx, c, im, v, macs)
+	})
+	if err != nil {
+		emuLab.mu.Lock()
+		emuEv(v.ID, "error", "giving it its network: "+err.Error())
+		emuLab.mu.Unlock()
+	}
+}
+
+// emuOnVMConsole opens a running VM's console (with its image and password) for fn.
+func (a *App) emuOnVMConsole(host string, v emu.VM, d time.Duration, fn func(ctx context.Context, c *emu.Console, im emu.Image, macs map[int]string) error) error {
 	emuLab.mu.Lock()
 	l := a.emuFor(host)
 	im0 := emuImage(v.Image)
 	if l == nil || im0 == nil {
 		emuLab.mu.Unlock()
-		return
+		return errors.New("it is not in the lab")
 	}
 	im, port, macs := *im0, l.ConsolePort(v), emuPortMACs(l, v, im0)
 	emuLab.mu.Unlock()
 	im.Password, _ = secrets.Lookup(emuImageKey(im.ID))
 	im.Password = orStr(im.Password, im.DefaultPassword)
-	err := func() error {
-		cl, err := a.emuClient(context.Background(), host)
-		if err != nil {
-			return err
-		}
-		conn, err := cl.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
-		if err != nil {
-			return fmt.Errorf("console: %w (is the console open in a tab?)", err)
-		}
-		c := emu.NewConsole(conn)
-		defer c.Close()
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		defer cancel()
-		return emuPortAddrs(ctx, c, im, v, macs)
-	}()
+	cl, err := a.emuClient(context.Background(), host)
 	if err != nil {
-		emuLab.mu.Lock()
-		emuEv(v.ID, "error", "giving its data ports addresses: "+err.Error())
-		emuLab.mu.Unlock()
+		return err
 	}
+	conn, err := cl.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		return fmt.Errorf("console: %w (is its console open in a tab? close it)", err)
+	}
+	c := emu.NewConsole(conn)
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
+	return fn(ctx, c, im, macs)
+}
+
+// EmuCompNet is a computer's IP configuration for one data port, and its
+// gateways and DNS server.
+type EmuCompNet struct {
+	Port int    `json:"port"`           // the data port (1 = the first)
+	IPv4 string `json:"ipv4"`           // address/bits, "dhcp", or "" for none
+	IPv6 string `json:"ipv6,omitempty"` // address/bits, "auto" (router advertisements), or "" for none
+	Gw   string `json:"gw,omitempty"`   // its default gateway ("" = the management network's)
+	Gw6  string `json:"gw6,omitempty"`  // its IPv6 default gateway
+	DNS  string `json:"dns,omitempty"`  // its DNS server
+}
+
+// EmuSetComputerNet sets a Linux computer's IP configuration: one data port's
+// IPv4 and IPv6, and its gateways and DNS server. It is typed on its console at
+// each start, and now when it runs.
+func (a *App) EmuSetComputerNet(id string, n EmuCompNet) (EmuView, error) {
+	defer emuAs("user")()
+	n.IPv4, n.IPv6 = strings.ToLower(strings.TrimSpace(n.IPv4)), strings.ToLower(strings.TrimSpace(n.IPv6))
+	pre := func(s string, v6 bool, kw string) (string, error) {
+		if s == "" || s == kw {
+			return s, nil
+		}
+		p, err := netip.ParsePrefix(s)
+		if err != nil || p.Addr().Is6() != v6 {
+			return "", fmt.Errorf("%q is not an %s address/bits or %s", s, map[bool]string{true: "IPv6", false: "IPv4"}[v6], kw)
+		}
+		return p.String(), nil
+	}
+	var err error
+	if n.IPv4, err = pre(n.IPv4, false, "dhcp"); err != nil {
+		return EmuView{}, err
+	}
+	if n.IPv6, err = pre(n.IPv6, true, "auto"); err != nil {
+		return EmuView{}, err
+	}
+	for _, x := range []struct {
+		s  string
+		v6 bool
+	}{{n.Gw, false}, {n.Gw6, true}, {n.DNS, false}} {
+		if x.s == "" {
+			continue
+		}
+		if ad, err := netip.ParseAddr(x.s); err != nil || ad.Is6() != x.v6 && !(x.s == n.DNS && ad.Is6()) {
+			return EmuView{}, fmt.Errorf("%q is not an address", x.s)
+		}
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	var v *emu.VM
+	if emuLab.f.Lab != nil {
+		v = emuLab.f.Lab.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such device")
+	}
+	im := emuImage(v.Image)
+	if im == nil || len(im.PortAddr) == 0 {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New(v.Name + " is not a Linux computer")
+	}
+	if n.Port < 1 || n.Port > im.DataPorts() {
+		emuLab.mu.Unlock()
+		return EmuView{}, fmt.Errorf("%s has data ports 1 to %d", v.Name, im.DataPorts())
+	}
+	set := func(m map[int]string, val string) map[int]string {
+		if m == nil {
+			m = map[int]string{}
+		}
+		if val == "" {
+			delete(m, n.Port)
+		} else {
+			m[n.Port] = val
+		}
+		if len(m) == 0 {
+			return nil
+		}
+		return m
+	}
+	v.Addrs, v.Addrs6 = set(v.Addrs, n.IPv4), set(v.Addrs6, n.IPv6)
+	v.DataGw, v.DataGw6, v.DNS = n.Gw, n.Gw6, n.DNS
+	emuEv(v.ID, "info", fmt.Sprintf("port %d: IPv4 %s, IPv6 %s; gateway %s, DNS %s", n.Port, orStr(n.IPv4, "none"), orStr(n.IPv6, "none"), orStr(strings.Trim(n.Gw+" "+n.Gw6, " "), "the management one"), orStr(n.DNS, "as it is")))
+	err = a.emuSave()
+	host, vv, ready := emuHostOf(*v), *v, emuLab.ready[v.ID] && !emuLab.day0[v.ID]
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	if ready {
+		a.emuTypePorts(host, vv) // the Desktop shows what it reads back
+	}
+	return a.EmuState()
+}
+
+// EmuComputerRun runs one of a computer's Desktop apps on its console and
+// returns what it printed: ping, ping6, traceroute, web (a page's text), dns,
+// iperf-server, iperf (5 s to a server), or net (its network read again).
+func (a *App) EmuComputerRun(id, app, target string) (string, error) {
+	defer emuAs("user")()
+	target = strings.TrimSpace(target)
+	host := regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.:%_-]*$`).MatchString(target)
+	var cmd string
+	switch app {
+	case "ping", "ping6", "traceroute", "dns", "iperf":
+		if !host {
+			return "", errors.New("give an address or a host name")
+		}
+	case "web":
+		if !strings.Contains(target, "://") {
+			target = "http://" + target
+		}
+		if u, err := url.Parse(target); err != nil || u.Host == "" || u.Scheme != "http" && u.Scheme != "https" {
+			return "", errors.New("give a web address (http://10.10.0.12)")
+		}
+	}
+	switch app {
+	case "ping":
+		cmd = "ping -c 4 -W 2 " + target
+	case "ping6":
+		cmd = "ping -6 -c 4 -W 2 " + target
+	case "traceroute":
+		cmd = "traceroute -n -w 2 -q 1 -m 15 " + target
+	case "dns":
+		cmd = "nslookup " + target
+	case "web":
+		cmd = "wget -q -T 8 -O - " + emu.Q(target) + " 2>&1 | head -c 6000; echo"
+	case "iperf-server":
+		cmd = "pkill iperf3; iperf3 -s -D -1 && echo 'iperf3 server is waiting for one test on port 5201'"
+	case "iperf":
+		cmd = "iperf3 -c " + target + " -t 5"
+	case "net":
+	default:
+		return "", fmt.Errorf("no app %q", app)
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	var v *emu.VM
+	if emuLab.f.Lab != nil {
+		v = emuLab.f.Lab.VMByID(id)
+	}
+	if v == nil || !emuLab.ready[id] {
+		emuLab.mu.Unlock()
+		return "", errors.New("it is not running and ready")
+	}
+	if emuLab.day0[id] {
+		emuLab.mu.Unlock()
+		return "", errors.New("Termwright is typing its configuration: try again in a moment")
+	}
+	vv, h := *v, emuHostOf(*v)
+	emuLab.mu.Unlock()
+	if app == "net" {
+		a.emuTypePorts(h, emu.VM{ID: vv.ID, Name: vv.Name, Image: vv.Image, Index: vv.Index, BaseMAC: vv.BaseMAC, Host: vv.Host}) // nothing to type: it reads its network again
+		return "", nil
+	}
+	var out string
+	err := a.emuOnVMConsole(h, vv, 90*time.Second, func(ctx context.Context, c *emu.Console, im emu.Image, _ map[int]string) error {
+		o, err := emu.Ask(ctx, c, &im, cmd)
+		out = emu.CleanConsole(o)
+		return err
+	})
+	if _, rest, ok := strings.Cut(out, "\n"); ok { // the echoed command
+		out = rest
+	}
+	out = vv.Name + ":~# " + cmd + "\n" + strings.TrimRight(out, "\n ")
+	return out, err
 }
 
 // EmuSetRole sets what a kind of device is drawn as in this topology (every

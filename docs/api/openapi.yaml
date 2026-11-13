@@ -1209,6 +1209,78 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/computer:
+        post:
+            operationId: tool_computer
+            tags:
+                - Tools
+            summary: A Linux computer of the emulated lab, like a PC on a desk
+            description: 'A Linux computer of the emulated lab, like a PC on a desk: set one data port''s IP configuration (IPv4 address/bits or dhcp, IPv6 address/bits or auto, default gateways, DNS server; typed on its console now and at each start), or run one of its apps and read what it printed: ping, ping6, traceroute, web (a page''s text), dns (nslookup), iperf-server, iperf (5 s to a server). Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - set
+                                        - run
+                                    type: string
+                                app:
+                                    enum:
+                                        - ping
+                                        - ping6
+                                        - traceroute
+                                        - web
+                                        - dns
+                                        - iperf-server
+                                        - iperf
+                                    type: string
+                                computer:
+                                    type: string
+                                dns:
+                                    type: string
+                                gateway:
+                                    description: 'set: its default gateway (none = the management network''s)'
+                                    type: string
+                                gateway6:
+                                    type: string
+                                ipv4:
+                                    description: 'set: address/bits, dhcp, or none'
+                                    type: string
+                                ipv6:
+                                    description: 'set: address/bits, auto, or none'
+                                    type: string
+                                port:
+                                    description: 'set: the data port (1 = the first)'
+                                    type: integer
+                                target:
+                                    description: 'run: the address, host name or web address'
+                                    type: string
+                            required:
+                                - action
+                                - computer
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/console:
         post:
             operationId: tool_console
@@ -2058,6 +2130,27 @@ components:
                         - "null"
                     additionalProperties:
                         type: string
+                addrs6:
+                    description: its data ports' IPv6 ("auto" or address/bits)
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                dataGw:
+                    description: its default gateway on a data port
+                    type: string
+                dataGw6:
+                    description: its IPv6 default gateway
+                    type: string
+                dns:
+                    description: its DNS server
+                    type: string
+                net:
+                    description: its network as last read on its console
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuCompNet'
+                        - type: "null"
                 cpuMax:
                     description: at most this many host cores (0 = no limit)
                     type: number
@@ -2165,6 +2258,27 @@ components:
             required:
                 - match
                 - send
+        EmuCompNet:
+            type: object
+            properties:
+                addrs:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                linkLocal:
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
+                gw:
+                    type: string
+                gw6:
+                    type: string
+                dns:
+                    type: string
         EmuDisk:
             type: object
             properties:
@@ -2761,6 +2875,27 @@ components:
                 portShow:
                     description: a command that prints "PA <mac> <address/bits>" for each address of each port (Linux computers)
                     type: string
+                portAddr6:
+                    description: commands that give a data port a fixed IPv6 address ({mac} {addr})
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                portAuto6:
+                    description: commands that make a data port take its IPv6 address from router advertisements ({mac})
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                routeSet:
+                    description: commands that set the default gateways and DNS server ({gw} {gw6} {dns})
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
                 portDhcp:
                     description: commands that make a data port ask DHCP for its address ({mac}), for the ports set to dhcp
                     type:

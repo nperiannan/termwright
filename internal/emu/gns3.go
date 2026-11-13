@@ -3,6 +3,7 @@ package emu
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"strings"
 )
 
@@ -274,7 +275,16 @@ func LinuxHost(im *Image) {
 		im.PortAddr = []string{portIf + `; ip link set "$i" up; ip -4 addr flush dev "$i"; ip addr add {addr} dev "$i"`}
 	}
 	if im.PortShow == "" {
-		im.PortShow = `for d in /sys/class/net/*; do n=${d##*/}; for a in $(ip -o addr show dev "$n" scope global | awk '{print $4}'); do echo "PA $(cat "$d/address") $a"; done; done`
+		im.PortShow = `for d in /sys/class/net/*; do n=${d##*/}; m=$(cat "$d/address"); for a in $(ip -o addr show dev "$n" scope global | awk '{print $4}'); do echo "PA $m $a"; done; for a in $(ip -o -6 addr show dev "$n" scope link | awk '{print $4}'); do echo "LL $m $a"; done; done; ip route show default | awk '{print "GW", $3; exit}'; ip -6 route show default | awk '{print "GW6", $3; exit}'; awk '/^nameserver/ {print "DNS", $2; exit}' /etc/resolv.conf`
+	}
+	if len(im.PortAddr6) == 0 {
+		im.PortAddr6 = []string{portIf + `; ip link set "$i" up; ip -6 addr flush dev "$i" scope global; ip -6 addr add {addr} dev "$i"`}
+	}
+	if len(im.PortAuto6) == 0 {
+		im.PortAuto6 = []string{portIf + `; echo 2 > /proc/sys/net/ipv6/conf/"$i"/accept_ra; echo 1 > /proc/sys/net/ipv6/conf/"$i"/autoconf; ip link set "$i" down; ip link set "$i" up`}
+	}
+	if len(im.RouteSet) == 0 {
+		im.RouteSet = []string{`[ -z "{gw}" ] || ip route replace default via {gw}; [ -z "{gw6}" ] || ip -6 route replace default via {gw6}; [ -z "{dns}" ] || echo "nameserver {dns}" > /etc/resolv.conf`}
 	}
 	if len(im.PortDHCP) == 0 {
 		im.PortDHCP = []string{portIf + `; ip link set "$i" up; (udhcpc -i "$i" -b -q || dhclient -nw "$i" || dhcpcd -b "$i") >/dev/null 2>&1`}
@@ -286,27 +296,58 @@ func FillPort(cmd, mac, addr string) string {
 	return strings.NewReplacer("{mac}", strings.ToLower(mac), "{addr}", addr).Replace(cmd)
 }
 
-// ParsePortShow reads the output of an image's PortShow ("PA <mac> <address/bits>"
-// lines) into the addresses of each port (port → addresses), from its MACs (port → MAC).
-func ParsePortShow(out string, macs map[int]string) map[int]string {
+// FillRoute puts a computer's gateways and DNS server into a command.
+func FillRoute(cmd string, v VM) string {
+	return strings.NewReplacer("{gw}", v.DataGw, "{gw6}", v.DataGw6, "{dns}", v.DNS).Replace(cmd)
+}
+
+// CompNet is what a computer's console showed of its network: the addresses of
+// its data ports (port → "a/b, c/d"), their IPv6 link-local addresses, its
+// default gateways and DNS server.
+type CompNet struct {
+	Addrs     map[int]string `json:"addrs,omitempty"`
+	LinkLocal map[int]string `json:"linkLocal,omitempty"`
+	GW        string         `json:"gw,omitempty"`
+	GW6       string         `json:"gw6,omitempty"`
+	DNS       string         `json:"dns,omitempty"`
+}
+
+// ParsePortShow reads the output of an image's PortShow ("PA|LL <mac> <address/bits>",
+// "GW|GW6|DNS <address>" lines), with the MACs of its ports (port → MAC).
+func ParsePortShow(out string, macs map[int]string) CompNet {
 	port := map[string]int{}
 	for p, m := range macs {
 		port[strings.ToLower(m)] = p
 	}
-	r := map[int]string{}
+	r := CompNet{Addrs: map[int]string{}, LinkLocal: map[int]string{}}
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.Fields(line)
-		if len(f) != 3 || f[0] != "PA" {
+		if len(f) == 2 && net.ParseIP(f[1]) != nil {
+			switch f[0] {
+			case "GW":
+				r.GW = f[1]
+			case "GW6":
+				r.GW6 = f[1]
+			case "DNS":
+				r.DNS = f[1]
+			}
+			continue
+		}
+		if len(f) != 3 || f[0] != "PA" && f[0] != "LL" {
 			continue
 		}
 		p, ok := port[strings.ToLower(f[1])]
 		if !ok || p == 0 {
 			continue
 		}
-		if r[p] != "" {
-			r[p] += ", "
+		m := r.Addrs
+		if f[0] == "LL" {
+			m = r.LinkLocal
 		}
-		r[p] += f[2]
+		if m[p] != "" {
+			m[p] += ", "
+		}
+		m[p] += f[2]
 	}
 	return r
 }

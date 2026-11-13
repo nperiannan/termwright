@@ -148,6 +148,19 @@ var mcpLabTools = []mcpTool{
 			"max_cores": map[string]any{"type": "number", "description": "at most this many host cores (0.5 = half of one core; 0 = no limit)"},
 			"share":     map[string]any{"type": "integer", "description": "its share when they compete for the host's CPU: 100 is the default, 50 half as much, 400 four times (1-10000)"},
 		})},
+	{"lab_computer", "A Linux computer of the emulated lab, like a PC on a desk: set one data port's IP configuration (IPv4 address/bits or dhcp, IPv6 address/bits or auto, default gateways, DNS server; typed on its console now and at each start), or run one of its apps and read what it printed: ping, ping6, traceroute, web (a page's text), dns (nslookup), iperf-server, iperf (5 s to a server).",
+		mcpSchema(map[string]any{
+			"action":   map[string]any{"type": "string", "enum": []string{"set", "run"}},
+			"computer": map[string]any{"type": "string"},
+			"port":     map[string]any{"type": "integer", "description": "set: the data port (1 = the first)"},
+			"ipv4":     map[string]any{"type": "string", "description": "set: address/bits, dhcp, or none"},
+			"ipv6":     map[string]any{"type": "string", "description": "set: address/bits, auto, or none"},
+			"gateway":  map[string]any{"type": "string", "description": "set: its default gateway (none = the management network's)"},
+			"gateway6": map[string]any{"type": "string"},
+			"dns":      map[string]any{"type": "string"},
+			"app":      map[string]any{"type": "string", "enum": []string{"ping", "ping6", "traceroute", "web", "dns", "iperf-server", "iperf"}},
+			"target":   map[string]any{"type": "string", "description": "run: the address, host name or web address"},
+		}, "action", "computer")},
 	{"lab_address", "Addresses of the data ports of Linux computers in the emulated lab (Alpine, Debian, Ubuntu… added from the catalog or a GNS3 appliance): list them, or set one (typed on the computer's console now when it runs, and at each start). Switches' ports are set on their own CLI (lab_console).",
 		mcpSchema(map[string]any{
 			"action":  map[string]any{"type": "string", "enum": []string{"list", "set"}},
@@ -821,6 +834,46 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			}
 		}
 		return "Set for " + strings.Join(shown, ", ") + " (lab_events says how each took it).", nil
+	case "lab_computer":
+		d, err := emuMCPID(v, argStr(args, "computer"))
+		if err != nil {
+			return "", err
+		}
+		if argStr(args, "action") == "run" {
+			if err := light("Claude wants to run an app on a computer", fmt.Sprintf("Claude (through the Termwright connector) asks to run %s %s on %s.", argStr(args, "app"), argStr(args, "target"), d.Hostname)); err != nil {
+				return "", err
+			}
+			return a.EmuComputerRun(d.ID, argStr(args, "app"), argStr(args, "target"))
+		}
+		none := func(k string) string {
+			if x := argStr(args, k); !strings.EqualFold(x, "none") {
+				return x
+			}
+			return ""
+		}
+		n := EmuCompNet{Port: argInt(args, "port", 0, 4096), IPv4: none("ipv4"), IPv6: none("ipv6"), Gw: none("gateway"), Gw6: none("gateway6"), DNS: none("dns")}
+		if _, ok := args["gateway"]; !ok {
+			n.Gw = d.DataGw
+		}
+		if _, ok := args["gateway6"]; !ok {
+			n.Gw6 = d.DataGw6
+		}
+		if _, ok := args["dns"]; !ok {
+			n.DNS = d.DNS
+		}
+		if err := light("Claude wants to set a computer's addresses", fmt.Sprintf("Claude (through the Termwright connector) asks to set %s port %d: IPv4 %s, IPv6 %s, gateway %s, DNS %s.", d.Hostname, n.Port, orStr(n.IPv4, "none"), orStr(n.IPv6, "none"), orStr(n.Gw, "-"), orStr(n.DNS, "-"))); err != nil {
+			return "", err
+		}
+		nv, err := a.EmuSetComputerNet(d.ID, n)
+		if err != nil {
+			return "", err
+		}
+		for _, x := range nv.Devices {
+			if x.ID == d.ID && x.Net != nil {
+				return fmt.Sprintf("Set. Its console shows: port %d %s; gateway %s; DNS %s", n.Port, orStr(x.Net.Addrs[n.Port], "no address"), orStr(x.Net.GW, "-"), orStr(x.Net.DNS, "-")), nil
+			}
+		}
+		return "Set (typed when it starts).", nil
 	case "lab_address":
 		if argStr(args, "action") == "set" {
 			d, err := emuMCPID(v, argStr(args, "switch"))
