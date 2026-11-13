@@ -660,7 +660,7 @@ func (im *Image) tcgCPU() string {
 // Args are the qemu-system-x86_64 options for a VM.
 func (l *Lab) Args(v VM, im *Image) []string {
 	dir := l.VMDir()
-	a := []string{"-name", v.Name, "-m", strconv.Itoa(orInt(v.RAM, im.RAM, 1024)), "-smp", strconv.Itoa(orInt(v.CPUs, im.CPUs, 1))}
+	a := []string{"-name", strings.ReplaceAll(v.Name, ",", ",,"), "-m", strconv.Itoa(orInt(v.RAM, im.RAM, 1024)), "-smp", strconv.Itoa(orInt(v.CPUs, im.CPUs, 1))}
 	if v.Machine != "" {
 		a = append(a, "-machine", v.Machine)
 	}

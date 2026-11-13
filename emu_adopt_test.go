@@ -32,3 +32,11 @@ func TestEmuNeedsConsole(t *testing.T) {
 		}
 	}
 }
+
+func TestEmuNameList(t *testing.T) {
+	for in, want := range map[string]int{"tc-1,tc-2": 2, " a , b ,": 2, "pc-{n}": 1, "": 0} {
+		if got := emuNameList(in); len(got) != want {
+			t.Errorf("%q: %v", in, got)
+		}
+	}
+}

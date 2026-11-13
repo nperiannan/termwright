@@ -30,3 +30,11 @@ func TestLinuxHost(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestArgsEscapeCommaInName(t *testing.T) {
+	l := &Lab{}
+	a := l.Args(VM{ID: "v1", Name: "tc-1,tc-2-1", Index: 1}, &Image{ID: "i", Name: "x"})
+	if len(a) < 2 || a[0] != "-name" || a[1] != "tc-1,,tc-2-1" {
+		t.Fatalf("%v", a[:2])
+	}
+}

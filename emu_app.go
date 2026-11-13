@@ -2162,10 +2162,17 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 			return EmuView{}, errors.New("unknown image")
 		}
 		names2 := orStr(g.Names, "sw-{n}")
+		list := emuNameList(names2)
+		if len(list) > 1 {
+			names2 = list[len(list)-1]
+		}
 		for i, k := 1, 0; k < g.Count; i++ {
 			name := strings.ReplaceAll(names2, "{n}", strconv.Itoa(i))
 			if !strings.Contains(names2, "{n}") && (g.Count > 1 || names[names2]) {
 				name = names2 + "-" + strconv.Itoa(i)
+			}
+			if k < len(list) && len(list) > 1 {
+				name = strings.ReplaceAll(list[k], "{n}", strconv.Itoa(i))
 			}
 			if names[name] {
 				continue
@@ -6729,4 +6736,15 @@ func (a *App) EmuSetUplink(id, port string, on bool) (EmuView, error) {
 		return EmuView{}, err
 	}
 	return a.EmuState()
+}
+
+// emuNameList splits "tc-1, tc-2" into its names; one name (or a pattern) gives a list of one.
+func emuNameList(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

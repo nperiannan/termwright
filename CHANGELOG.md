@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **names with a comma** (found on the first real test of two computers): `tc-1,tc-2` was taken as one name, and QEMU read the comma in `-name` as an option separator, so both machines failed to start ("Invalid parameter"). A comma-separated list of names now names the machines one by one (Claude's `lab_add_switches` and the New Lab dialog), and a comma in a name is escaped for QEMU.
+
 - **Python client for the lab and the traffic generator** (`scripts/python/termwright_lab.py`, standard library only, with a guide in `docs/PYTHON.md` and an example): the lab tools, test ports, streams (speed in Mbps or percent of line rate, or packets per second), `run_streams` with `assert_pass`, saved tests (`rfc2544`, `convergence`, `iperf`), and reports in JSON, CSV, HTML or text; it finds the address and key itself. Tested against a fake API and against every path and field in the OpenAPI document.
 
 - Emulated lab, **Linux computers found by a first test on a real host**: GNS3's Linux images (Alpine, Tiny Core…) have one network card, so a computer had no data port to cable; they now get three (management and two data ports, named eth1, eth2) - images added before are corrected when Termwright starts. A console that logs in as a plain user (Tiny Core's tc) is made root right after the login (the image's *elevate* command, `sudo -s`), and Tiny Core gets iperf3 from its own package loader. *Add Computer* now prefers a Linux image whose file is here over one that still has to be downloaded.
