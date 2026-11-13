@@ -391,7 +391,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             <span>MAC</span><span class="mono">{{ d.mac || '-' }}</span>
             <span>{{ tr('Management') }}</span><span class="mono">{{ emu() ? d.ssh : d.mgmtIp }}</span>
             @if (emu()) { <span>{{ tr('Console') }}</span><span class="mono">telnet :{{ d.console }}</span>
-              <span>{{ tr('Resources') }}</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }@if (d.running && d.cpu !== undefined) { · CPU {{ d.cpu!.toFixed(0) }} % }</span> }
+              <span>{{ tr('Resources') }}</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }@if (d.running && d.cpu !== undefined) { · CPU {{ d.cpu!.toFixed(0) }} % }</span>
+              <span>{{ tr('CPU share') }}</span><span class="seg2 cpus" [title]="tr('Its share of the host CPU when switches compete: Low 50, Normal 100, High 400')">@for (w of cpuShares; track w.v) { <a [class.on]="(d.cpuWeight || 100) === w.v" (click)="setCPU(d, d.cpuMax || 0, w.v)">{{ tr(w.name) }}</a> }</span>
+              <span>{{ tr('CPU limit') }}</span><span><select [ngModel]="d.cpuMax || 0" (ngModelChange)="setCPU(d, +$event, d.cpuWeight || 100)" [title]="tr('At most this many host cores (a cgroup on its host)')">@for (c of cpuLimits(d); track c) { <option [ngValue]="c">{{ c ? c + ' ' + tr(c === 1 ? 'core' : 'cores') : tr('No limit') }}</option> }</select></span> }
             @if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
           </div>
           @if (emu() && d.computer) { <div class="card dpc"><div class="dph">{{ tr('Data ports') }}</div>
@@ -784,6 +786,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       h3 { margin: 4px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); } }
     .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; background: var(--surface); }
     .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .evl { display: block; margin-top: 2px; font-size: 11.5px; color: var(--accent); cursor: pointer; }
+    .seg2.cpus a { padding: 2px 9px; }
     .dpc .dph { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
     .dpr { display: grid; grid-template-columns: 14px 70px minmax(0, 1fr) 12px; gap: 6px; align-items: center; margin: 3px 0; font-size: 12px; input, select { min-width: 0; font-size: 12px; } }
     .dpa { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dpr .ok { color: var(--ok, #2fa46a); }
@@ -1485,6 +1488,9 @@ export class LabWorkspace implements OnDestroy {
     }
     return '';
   }
+  readonly cpuShares = [{ v: 50, name: 'Low' }, { v: 100, name: 'Normal' }, { v: 400, name: 'High' }];
+  cpuLimits(d: LabDevice) { const l = [0, 0.25, 0.5, 1, 2, 4, 8, 16].filter(c => c <= Math.max(d.cpus || 1, 1)); if (d.cpuMax && !l.includes(d.cpuMax)) l.push(d.cpuMax); return l.sort((a, b) => a - b); }
+  async setCPU(d: LabDevice, max: number, w: number) { try { await this.backend.emuSetCPU(d.id, max, w); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
   async addComputer() { try { await this.backend.emuAddComputer('', false); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
   iconState(d: LabDevice): 'run' | 'boot' | 'off' | 'idle' { const s = this.stateOf(d); return s === 'on' ? 'run' : s === 'boot' ? 'boot' : 'off'; }
   stateOf(d: LabDevice): 'on' | 'boot' | 'bad' | 'off' {

@@ -163,6 +163,7 @@ export class Backend {
   emuPlace(id: string, x: number, y: number) { return this.call<void>('EmuPlace', id, x, y); }
   emuFreePorts(id: string) { return this.call<string[] | null>('EmuFreePorts', id); }
   emuSetRole(id: string, role: string) { return this.call<LabView>('EmuSetRole', id, role); }
+  emuSetCPU(id: string, maxCores: number, weight: number) { return this.call<LabView>('EmuSetCPU', id, maxCores, weight); }
   emuAddComputer(host: string, start: boolean) { return this.call<LabView>('EmuAddComputer', host, start); }
   emuSetPortAddr(id: string, port: number, addr: string) { return this.call<LabView>('EmuSetPortAddr', id, port, addr); }
   emuOpenTopologyOn(name: string, start: boolean, hosts: Record<string, string>) { return this.call<LabView>('EmuOpenTopologyOn', name, start, hosts); }
