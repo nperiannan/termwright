@@ -3,7 +3,8 @@ import { DomSanitizer } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend, errText } from '../core/backend';
-import { EmuDeviceType, EmuHost, EmuRunRow, EmuRemoveInfo, EmuImage, EmuPersonaDef, EmuSlot, EmuTemplate, LabDevice, SessionNode } from '../core/models';
+import { EmuDeviceType, EmuHost, EmuInstall, EmuRunRow, EmuRemoveInfo, EmuImage, EmuPersonaDef, EmuSlot, EmuTemplate, LabDevice, SessionNode } from '../core/models';
+import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabHostImages } from './lab-host-images';
@@ -604,6 +605,10 @@ export class LabNew implements OnInit {
             @else if (toDownload().length) { <button type="button" class="primary" style="width: 100%; margin-bottom: 6px" (click)="lab.download(toDownload())" [disabled]="lab.busy()">⤓ {{ tr('Download All ({0})', toDownload().length) }}</button> }
             @else if (downloaded()) { <button type="button" class="dlb done" style="width: 100%; margin-bottom: 6px" disabled>✓ {{ tr('All downloaded ({0})', downloaded()) }}</button> }
             @if (images().some(i => i.url)) { <p class="muted small" style="margin: 0 0 6px">{{ tr('Downloads go to {0}', lab.emu()?.downloadDir ?? '') }}</p> }
+            @if (installs().length) {
+              <div class="grp">{{ tr('Installs from ISO') }}</div>
+              <div class="it" [class.on]="iso()" (click)="openIso()"><div><span>{{ tr('{0} install(s)', installs().length) }}</span><small [class.w]="installsBusy()">{{ installsLine() }}</small></div></div>
+            }
             @for (g of groups(); track g.name) {
               <div class="grp">{{ g.name }}</div>
               @for (im of g.items; track im.id) {
@@ -614,9 +619,41 @@ export class LabNew implements OnInit {
             </div><div class="lsf">
             <div class="drop" (click)="addImage()"><b style="color: var(--text)">+ {{ tr('Add Image…') }}</b><br />.qcow2 / .img / .vmdk / .raw · {{ tr('recognised by its name with the device pack’s patterns') }}</div>
             <div class="row2" style="margin-top: 8px"><button type="button" class="sm" (click)="importAppliance()">{{ tr('GNS3 Appliance…') }}</button><button type="button" class="sm" (click)="importProfiles()">{{ tr('Import Profiles…') }}</button></div>
+            <button type="button" class="sm" style="width: 100%; margin-top: 8px" (click)="openIso()">{{ tr('Install from ISO…') }}</button>
           </div></div>
           <div class="pad" style="overflow: auto">
-            @if (edit(); as im) {
+            @if (iso()) {
+              @if (installs().length) { <div class="sec" style="margin-top: 0">{{ tr('Installs') }}</div> }
+              @for (j of installs(); track j.id) {
+                <div class="card" style="max-width: 780px">
+                  <div class="row2" style="justify-content: flex-start"><div style="flex: 1; min-width: 0"><b>{{ j.name }}</b> <span class="muted small">· {{ j.isoName }} · {{ j.gb }} GB · {{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</span>
+                      <div class="small" [class.r]="j.stage === 'failed'" [class.g]="j.stage === 'done'" [class.w]="isoBusy(j)">{{ isoText(j) }}</div></div>
+                    @if (j.stage === 'waiting' && j.console) { <button type="button" class="sm" (click)="isoConsole(j)">{{ tr('Open console') }}</button> }
+                    @if (j.stage === 'waiting') { <button type="button" class="sm primary" (click)="isoFinish(j)">{{ tr('Finish and save as image') }}</button> }
+                    @if (j.stage === 'done' && j.image) { <button type="button" class="sm" (click)="isoShow(j)">{{ tr('Show image') }}</button> }
+                    @if (isoBusy(j) || j.stage === 'waiting') { <button type="button" class="sm danger-ghost" (click)="isoCancel(j)">{{ tr('Cancel') }}</button> }
+                    @if (!isoBusy(j) && j.stage !== 'waiting') { <button type="button" class="sm" (click)="isoRemove(j)">{{ tr('Remove') }}</button> }
+                  </div>
+                  @if (j.tail && isoBusy(j)) { <pre class="yaml" style="max-height: 130px; margin: 8px 0 0">{{ j.tail }}</pre> }
+                </div>
+              }
+              <div style="max-width: 780px">
+                <b style="font-size: 15px">{{ tr('Install from an ISO file') }}</b>
+                <p class="muted small" style="margin: 4px 0 14px">{{ tr('Some distributions are published only as an installer ISO. Termwright runs the installer on a KVM host with a blank disk and keeps the installed disk as a new image.') }}</p>
+                <div class="f">
+                  <label>{{ tr('ISO file') }}</label><div class="row2"><input [(ngModel)]="isoPath" name="isop" readonly [placeholder]="tr('Choose the .iso file')" /><button type="button" class="sm" (click)="chooseIso()">{{ tr('Choose…') }}</button></div>
+                  <label>{{ tr('Install') }}</label><div><span class="seg"><a [class.on]="isoMode === 'alpine'" (click)="isoMode = 'alpine'">{{ tr('Alpine Linux, automatic') }}</a><a [class.on]="isoMode === 'manual'" (click)="isoMode = 'manual'">{{ tr('Other, on its console') }}</a></span>
+                    <div class="muted small" style="margin-top: 6px">{{ isoMode === 'alpine' ? tr('Termwright types the Alpine install on the installer’s console and sets the root password below.') : tr('The installer starts and its console opens as a session: you install by hand, then press Finish. It must be an installer that talks on a serial console.') }}</div></div>
+                  <label>{{ tr('Image name') }}</label><input [(ngModel)]="isoNm" name="isonm" [placeholder]="isoNamePh()" />
+                  <label>{{ tr('Root password') }}</label><div><input [(ngModel)]="isoPw" name="isopw" autocomplete="off" style="width: 100%; box-sizing: border-box" /><div class="muted small" style="margin-top: 4px">{{ isoMode === 'alpine' ? tr('The new system’s root password; Termwright logs in with it.') : tr('The password you set during the install (optional): Termwright logs in with it.') }}</div></div>
+                  <label>{{ tr('Disk') }}</label><div class="row2"><input type="number" min="1" max="512" [(ngModel)]="isoGb" name="isogb" /><span class="unit">GB</span></div>
+                  <label>{{ tr('Memory') }}</label><div class="row2"><input type="number" min="256" step="256" [(ngModel)]="isoRam" name="isoram" /><span class="unit">MB</span></div>
+                  <label>vCPU</label><input type="number" min="1" max="64" [(ngModel)]="isoCpus" name="isocpu" />
+                  <label>{{ tr('Run on') }}</label><select [(ngModel)]="isoHost" name="isohost">@for (h of hosts(); track h.session) { <option [value]="h.session">{{ h.name }}</option> }</select>
+                </div>
+                <button type="button" class="primary" (click)="startIso()" [disabled]="!isoPath || lab.busy() || (isoMode === 'alpine' && !isoPw)">{{ tr('Start install') }}</button>
+              </div>
+            } @else if (edit(); as im) {
               <div class="row2" style="justify-content: flex-start"><div style="flex: 1"><b style="font-size: 15px">{{ im.name }}@if (im.version) { · {{ im.version }} }</b><div class="muted small mono">{{ im.fileName }} · {{ mb(im.size) }}@if (im.sha256) { · sha256 {{ im.sha256.slice(0, 4) }}…{{ im.sha256.slice(-4) }} }</div></div>
                 @if (hasLinks(im)) {
                   @if (!needs(live(im))) { <button type="button" class="dlb done" disabled>✓ {{ tr('Downloaded') }}</button> }
@@ -762,6 +799,44 @@ export class LabImages implements OnInit {
   showAdded(file: string) { const im = this.images().find(i => (i as EmuImage).source === 'GNS3 registry ' + file); this.tab.set('images'); if (im) this.pick(im.id); }
   openPage(u: string) { this.backend.openURL(u); }
   protected images = computed(() => this.lab.emu()?.images ?? []);
+  protected hosts = computed<EmuHost[]>(() => this.lab.emu()?.hosts ?? []);
+  private tabs = inject(Tabs);
+  // Install from ISO
+  protected iso = signal(false);
+  protected installs = computed<EmuInstall[]>(() => this.lab.emu()?.installs ?? []);
+  protected isoPath = ''; protected isoNm = ''; protected isoPw = 'termwright'; protected isoMode: 'alpine' | 'manual' = 'alpine'; protected isoGb = 8; protected isoRam = 1024; protected isoCpus = 2; protected isoHost = '';
+  private static readonly running = ['copying', 'starting', 'installing', 'saving', 'fetching'];
+  isoBusy(j: EmuInstall) { return LabImages.running.includes(j.stage); }
+  installsBusy() { return this.installs().some(j => this.isoBusy(j) || j.stage === 'waiting'); }
+  installsLine() { const j = this.installs().find(x => this.isoBusy(x) || x.stage === 'waiting') ?? this.installs()[this.installs().length - 1]; return j ? j.name + ': ' + this.isoText(j) : ''; }
+  isoText(j: EmuInstall) {
+    switch (j.stage) {
+      case 'done': return tr('Done: the image is in the list.');
+      case 'failed': return j.err || tr('Failed');
+      case 'cancelled': return tr('Cancelled');
+      default: return j.msg || j.stage;
+    }
+  }
+  isoNamePh() { const b = (this.isoPath.split(/[\\/]/).pop() ?? '').replace(/\.iso$/i, ''); return b || tr('from the ISO’s name'); }
+  openIso() { this.edit.set(null); this.iso.set(true); if (!this.isoHost) this.isoHost = this.lab.emu()?.host || this.hosts()[0]?.session || ''; }
+  async chooseIso() { const p = await this.backend.chooseOpenFile(tr('Choose the ISO file'), [{ displayName: tr('ISO files'), pattern: '*.iso' }]).catch(() => ''); if (p) { this.isoPath = p; if (/alpine/i.test(p)) this.isoMode = 'alpine'; } }
+  async startIso() {
+    try {
+      this.lab.emu.set(await this.backend.emuInstallStart({ name: this.isoNm.trim(), iso: this.isoPath, mode: this.isoMode, gb: +this.isoGb || 8, ram: +this.isoRam || 1024, cpus: +this.isoCpus || 2, host: this.isoHost, password: this.isoPw }));
+      this.isoPath = ''; this.isoNm = ''; this.ui.toast(tr('The install started'), 'success'); void this.lab.refresh();
+    } catch (e) { this.ui.error(errText(e)); }
+  }
+  isoConsole(j: EmuInstall) { if (j.console) void this.tabs.openSession(j.console); }
+  async isoFinish(j: EmuInstall) {
+    if (!(await this.ui.confirm(tr('Finish {0}', j.name), tr('The machine is shut down and its disk becomes an image. Be sure the installer has finished and shut the system down or rebooted into the installed system.'), tr('Finish and save')))) return;
+    try { this.lab.emu.set(await this.backend.emuInstallFinish(j.id)); void this.lab.refresh(); } catch (e) { this.ui.error(errText(e)); }
+  }
+  async isoCancel(j: EmuInstall) {
+    if (!(await this.ui.confirm(tr('Cancel {0}', j.name), tr('The installer is stopped and its disk is thrown away. The ISO stays on the host.'), tr('Cancel install')))) return;
+    try { this.lab.emu.set(await this.backend.emuInstallCancel(j.id)); } catch (e) { this.ui.error(errText(e)); }
+  }
+  async isoRemove(j: EmuInstall) { try { this.lab.emu.set(await this.backend.emuInstallRemove(j.id)); } catch (e) { this.ui.error(errText(e)); } }
+  isoShow(j: EmuInstall) { if (j.image) { this.iso.set(false); this.pick(j.image); } }
   protected templates = computed(() => this.lab.emu()?.templates ?? []);
   protected edit = signal<EmuImage | null>(null);
   protected tpl = signal<EmuTemplate | null>(null);
@@ -787,6 +862,7 @@ export class LabImages implements OnInit {
   mods(p: EmuPersonaDef) { return [...new Set((p.models ?? []).flatMap(m => m.modules ?? []))]; }
   pick(id: string) {
     const im = this.images().find(i => i.id === id); if (!im) return;
+    this.iso.set(false);
     this.edit.set({ ...im, persona: im.persona ? { ...im.persona } : im.persona }); this.password = '';
     this.day0 = (im.day0 ?? []).join('\n'); this.addrSet = (im.addrSet ?? []).join('\n'); this.answers = (im.answers ?? []).map(a => a.match + ' => ' + a.send).join('\n');
   }

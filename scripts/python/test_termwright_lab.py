@@ -77,6 +77,15 @@ class Fake(BaseHTTPRequestHandler):
             return self.reply(200, {"result": "started %s" % ",".join(body["switches"])})
         if path == "/tools/console":
             return self.reply(200, {"result": "ok"})
+        if path == "/tools/install_iso":
+            st["inst"] = 0
+            return self.reply(200, {"result": "Install started (id ab12): follow it with lab_install_status."})
+        if path == "/tools/install_status":
+            st["inst"] = st.get("inst", 0) + 1
+            stage = "installing" if st["inst"] < 2 else st.get("inst_end", "done")
+            return self.reply(200, {"result": "Installs (id | name | mode | stage | now | image):\n- ab12 | alp | alpine | %s | boot | %s\n" % (stage, "img1" if stage == "done" else "-")})
+        if path == "/tools/install_finish":
+            return self.reply(200, {"result": "Saving"})
         if path == "/tools/wait":
             return self.reply(200, {"result": "all ready"})
         self.reply(404, {"title": "Not found", "status": 404, "detail": path}, "application/problem+json")
@@ -118,6 +127,20 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(calls["/api/v1/lab/tools/power"], {"action": "start", "switches": ["a", "b"]})
         self.assertEqual(calls["/api/v1/lab/tools/console"]["timeout"], 30)
         self.assertEqual(calls["/api/v1/lab/tools/wait"], {"switches": ["a"], "timeout": 5})
+
+    def test_install_calls_and_wait(self):
+        self.assertIn("ab12", self.lab.install_iso("/x/alpine.iso", "alpine", password="pw", disk_gb=4))
+        self.assertIn("done", self.lab.wait_install("ab12", timeout=10, poll=0.01))
+        calls = {p: b for _, p, b in Fake.state["calls"]}
+        self.assertEqual(calls["/api/v1/lab/tools/install_iso"], {"iso_path": "/x/alpine.iso", "mode": "alpine", "password": "pw", "disk_gb": 4})
+        self.lab.install_finish("ab12")
+        self.assertEqual(Fake.state["calls"][-1][2], {"id": "ab12"})
+
+    def test_install_wait_raises_on_failure(self):
+        self.lab.install_iso("/x/a.iso")
+        Fake.state["inst_end"] = "failed"
+        with self.assertRaises(RuntimeError):
+            self.lab.wait_install("ab12", timeout=10, poll=0.01)
 
     def test_pps_for(self):
         self.assertEqual(tw.pps_for(1000, 64), 1488095)

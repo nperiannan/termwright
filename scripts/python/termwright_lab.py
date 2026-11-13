@@ -136,7 +136,7 @@ class Lab:
     def tools(self) -> list:
         return self.request("GET", "/tools")
 
-    def tool(self, name: str, **args) -> str:
+    def tool(self, name: str, /, **args) -> str:
         """Run a lab tool (power, cable, console, wait, capture, address, cpu, computer, debug, ...). Its
         arguments are the ones in the OpenAPI document; "timeout" is also how long to wait for the answer."""
         body = {k: v for k, v in args.items() if v is not None}
@@ -164,6 +164,35 @@ class Lab:
     def debug(self, switch: str, lines: int = 200) -> str:
         """Everything about why a switch or computer is stuck: state, step, error, Events, console end."""
         return self.tool("debug", switch=switch, lines=lines)
+
+    def install_iso(self, iso_path: str, mode: str = "manual", name: Optional[str] = None, password: Optional[str] = None,
+                    disk_gb: Optional[int] = None, ram_mb: Optional[int] = None, cpus: Optional[int] = None,
+                    host: Optional[str] = None) -> str:
+        """Make an image from an ISO file of the Termwright computer: mode "alpine" installs Alpine Linux by itself
+        (password = root's), "manual" waits for you to install on the installer's console (then install_finish)."""
+        return self.tool("install_iso", iso_path=iso_path, mode=mode, name=name, password=password,
+                         disk_gb=disk_gb, ram_mb=ram_mb, cpus=cpus, host=host)
+
+    def install_status(self) -> str:
+        return self.tool("install_status")
+
+    def install_finish(self, install_id: str) -> str:
+        return self.tool("install_finish", id=install_id)
+
+    def wait_install(self, install_id: str, timeout: float = 1800, poll: float = 5.0) -> str:
+        """Block until the install is done (returns its row); raises when it failed, was cancelled or took too long."""
+        end = time.time() + timeout
+        while True:
+            for row in self.install_status().splitlines():
+                f = [x.strip() for x in row.lstrip("- ").split("|")]
+                if len(f) >= 6 and f[0] == install_id:
+                    if f[3] == "done":
+                        return row
+                    if f[3] in ("failed", "cancelled"):
+                        raise RuntimeError("install %s %s: %s" % (install_id, f[3], f[4]))
+            if time.time() > end:
+                raise TimeoutError("install %s was not done after %s s" % (install_id, timeout))
+            time.sleep(poll)
 
     def events(self, last: int = 60) -> str:
         return self.tool("events", last=last)

@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal, untracked } from '@angular/core';
 import { Backend, errText } from './backend';
 import { EmuImage, EmuRunRow, EmuPersona, EmuTemplate, EmuRequest, EmuSetupDone, EmuSetupLine, LabDevice, LabLink, LabOutput, LabRequest, LabView } from './models';
 import { Ui } from './ui.service';
@@ -84,8 +84,11 @@ export class LabService {
 
   private schedule() {
     if (this.timer) clearTimeout(this.timer);
-    const live = this.watching() || (this.sim()?.running ?? false) || (this.emu()?.running ?? false);
-    if (live) this.timer = setTimeout(() => void this.refresh(), this.watching() ? 2500 : 8000);
+    const watching = this.watching();
+    // an install of an ISO shows its progress: polled every few seconds (read untracked: schedule also runs inside effects)
+    const busy = !watching && untracked(() => (this.emu()?.installs ?? []).some(j => ['copying', 'starting', 'installing', 'saving', 'fetching'].includes(j.stage)));
+    const live = watching || (this.sim()?.running ?? false) || (this.emu()?.running ?? false) || busy;
+    if (live) this.timer = setTimeout(() => void this.refresh(), watching || busy ? 2500 : 8000);
   }
 
   /** The simulated switch behind a session (127.0.0.1 on a lab port), or the emulated one (by its path). */

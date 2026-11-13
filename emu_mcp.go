@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"net"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -24,6 +25,20 @@ import (
 
 var mcpLabTools = []mcpTool{
 	{"lab_images", "List the images and templates the emulated lab can make switches from: id, name, software version, device type, port naming, and whether the image file is there.", mcpSchema(map[string]any{})},
+	{"lab_install_iso", "Make an image from an ISO file on the computer Termwright runs on: the ISO is copied to a KVM host and installed on a blank disk there, then the disk becomes an image (lab_images lists it). mode alpine installs Alpine Linux by itself (give the root password); mode manual starts the installer and waits for the user to install on its console, then lab_install_finish saves it. Returns at once; follow it with lab_install_status. The user is asked first.",
+		mcpSchema(map[string]any{
+			"iso_path": map[string]any{"type": "string", "description": "path of the .iso file on the Termwright computer"},
+			"name":     map[string]any{"type": "string", "description": "the new image's name (default: the ISO's name)"},
+			"mode":     map[string]any{"type": "string", "enum": []string{"alpine", "manual"}, "description": "alpine = typed by Termwright; manual = the user installs"},
+			"password": map[string]any{"type": "string", "description": "root password for the new system (alpine: required)"},
+			"disk_gb":  map[string]any{"type": "integer", "description": "disk size in GB (default 8)"},
+			"ram_mb":   map[string]any{"type": "integer", "description": "memory for the installer (default 1024)"},
+			"cpus":     map[string]any{"type": "integer", "description": "CPUs for the installer (default 2)"},
+			"host":     map[string]any{"type": "string", "description": "KVM host name or session path (default: the lab's host)"},
+		}, "iso_path", "mode")},
+	{"lab_install_status", "Show the installs from ISO files: id, name, stage (copying, starting, installing, waiting, saving, fetching, done, failed, cancelled), what it does now, the end of the installer's console, the image it made.", mcpSchema(map[string]any{})},
+	{"lab_install_finish", "End a manual install (stage waiting): the machine is shut down and its disk becomes an image. The user is asked first.",
+		mcpSchema(map[string]any{"id": map[string]any{"type": "string", "description": "the install's id (lab_install_status)"}}, "id")},
 	{"lab_add_switches", "Add switches to the emulated lab from an image or a template (ids from lab_images), optionally on a given KVM host and started. The user is asked in Termwright first.",
 		mcpSchema(map[string]any{
 			"image":    map[string]any{"type": "string", "description": "image id (or give template)"},
@@ -278,6 +293,45 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			}
 		}
 		return b.String(), nil
+	case "lab_install_status":
+		if len(v.Installs) == 0 {
+			return "No installs from ISO files.", nil
+		}
+		var b strings.Builder
+		b.WriteString("Installs (id | name | mode | stage | now | image):\n")
+		for _, j := range v.Installs {
+			fmt.Fprintf(&b, "- %s | %s | %s | %s | %s | %s\n", j.ID, j.Name, j.Mode, j.Stage, orStr(j.Err, j.Msg, "-"), orDash(j.Image))
+			if j.Tail != "" && emuInstallRunning(j.Stage) {
+				fmt.Fprintf(&b, "  console: ...%s\n", strings.ReplaceAll(strings.TrimSpace(j.Tail[max(0, len(j.Tail)-200):]), "\n", " / "))
+			}
+		}
+		return b.String(), nil
+	case "lab_install_iso":
+		r := EmuInstallRequest{ISO: argStr(args, "iso_path"), Name: argStr(args, "name"), Mode: argStr(args, "mode"), Password: argStr(args, "password"), GB: argInt(args, "disk_gb", 8, 512), RAM: argInt(args, "ram_mb", 1024, 65536), CPUs: argInt(args, "cpus", 2, 64)}
+		if r.ISO == "" {
+			return "", errors.New("give iso_path")
+		}
+		var err error
+		if r.Host, err = emuMCPHost(argStr(args, "host")); err != nil {
+			return "", err
+		}
+		if err := ask("Claude wants to install from an ISO", fmt.Sprintf("Claude (through the Termwright connector) asks to copy %s to a KVM host and install it on a new %d GB disk (%s), then keep the disk as the image %q.", r.ISO, r.GB, map[string]string{"alpine": "Alpine Linux, typed by Termwright", "manual": "you install on its console"}[r.Mode], orStr(r.Name, filepath.Base(r.ISO))), false); err != nil {
+			return "", err
+		}
+		nv, err := a.EmuInstallStart(r)
+		if err != nil {
+			return "", err
+		}
+		return "Install started (id " + nv.Installs[len(nv.Installs)-1].ID + "): follow it with lab_install_status.", nil
+	case "lab_install_finish":
+		id := argStr(args, "id")
+		if err := ask("Claude wants to finish an install", "Claude (through the Termwright connector) asks to shut the installer machine down and keep its disk as an image (install "+id+").", false); err != nil {
+			return "", err
+		}
+		if _, err := a.EmuInstallFinish(id); err != nil {
+			return "", err
+		}
+		return "Saving the disk as an image: follow it with lab_install_status.", nil
 	case "lab_add_switches":
 		host, err := emuMCPHost(argStr(args, "host"))
 		if err != nil {

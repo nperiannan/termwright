@@ -1480,6 +1480,140 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/install_finish:
+        post:
+            operationId: tool_install_finish
+            tags:
+                - Tools
+            summary: End a manual install (stage waiting)
+            description: 'End a manual install (stage waiting): the machine is shut down and its disk becomes an image. The user is asked first. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                id:
+                                    description: the install's id (lab_install_status)
+                                    type: string
+                            required:
+                                - id
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/install_iso:
+        post:
+            operationId: tool_install_iso
+            tags:
+                - Tools
+            summary: Make an image from an ISO file on the computer Termwright runs on
+            description: 'Make an image from an ISO file on the computer Termwright runs on: the ISO is copied to a KVM host and installed on a blank disk there, then the disk becomes an image (lab_images lists it). mode alpine installs Alpine Linux by itself (give the root password); mode manual starts the installer and waits for the user to install on its console, then lab_install_finish saves it. Returns at once; follow it with lab_install_status. The user is asked first. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                cpus:
+                                    description: CPUs for the installer (default 2)
+                                    type: integer
+                                disk_gb:
+                                    description: disk size in GB (default 8)
+                                    type: integer
+                                host:
+                                    description: 'KVM host name or session path (default: the lab''s host)'
+                                    type: string
+                                iso_path:
+                                    description: path of the .iso file on the Termwright computer
+                                    type: string
+                                mode:
+                                    description: alpine = typed by Termwright; manual = the user installs
+                                    enum:
+                                        - alpine
+                                        - manual
+                                    type: string
+                                name:
+                                    description: 'the new image''s name (default: the ISO''s name)'
+                                    type: string
+                                password:
+                                    description: 'root password for the new system (alpine: required)'
+                                    type: string
+                                ram_mb:
+                                    description: memory for the installer (default 1024)
+                                    type: integer
+                            required:
+                                - iso_path
+                                - mode
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/install_status:
+        post:
+            operationId: tool_install_status
+            tags:
+                - Tools
+            summary: Show the installs from ISO files
+            description: 'Show the installs from ISO files: id, name, stage (copying, starting, installing, waiting, saving, fetching, done, failed, cancelled), what it does now, the end of the installer''s console, the image it made. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties: {}
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/link_check:
         post:
             operationId: tool_link_check
@@ -3083,6 +3217,75 @@ components:
                 - upload
                 - download
                 - missing
+        Install:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    description: the image's name
+                    type: string
+                host:
+                    description: the KVM host (a session path)
+                    type: string
+                mode:
+                    description: '"alpine" (typed by Termwright) or "manual" (the user installs on the console)'
+                    type: string
+                iso:
+                    description: the ISO on this computer
+                    type: string
+                isoName:
+                    type: string
+                sha256:
+                    type: string
+                size:
+                    type: integer
+                gb:
+                    type: integer
+                ram:
+                    type: integer
+                cpus:
+                    type: integer
+                dir:
+                    description: the lab's folder on the host
+                    type: string
+                port:
+                    description: the installer's console on the host (127.0.0.1)
+                    type: integer
+                stage:
+                    type: string
+                msg:
+                    type: string
+                err:
+                    type: string
+                image:
+                    description: the image it made
+                    type: string
+                console:
+                    description: the console session (manual installs)
+                    type: string
+                started:
+                    type: string
+                tail:
+                    description: the end of the installer's console (while it runs; not saved)
+                    type: string
+            required:
+                - id
+                - name
+                - host
+                - mode
+                - iso
+                - isoName
+                - sha256
+                - size
+                - gb
+                - ram
+                - cpus
+                - dir
+                - port
+                - stage
+                - msg
+                - started
         Lab:
             type: object
             description: 'The emulated lab as Termwright shows it: its switches, cables, KVM hosts, images and Events. The open topology only; topologies in the background are not in it.'
@@ -3207,6 +3410,13 @@ components:
                         - "null"
                     items:
                         $ref: '#/components/schemas/DeviceType'
+                installs:
+                    description: 'installs of ISO files: running, waiting for the user, done'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Install'
             required:
                 - kind
                 - events
@@ -3234,6 +3444,7 @@ components:
                 - fast
                 - iconStyle
                 - deviceTypes
+                - installs
         LabModel:
             type: object
             properties:

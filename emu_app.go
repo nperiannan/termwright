@@ -69,6 +69,7 @@ type emuFile struct {
 	NoKeep20  bool              `json:"noKeep20,omitempty"`  // copy even when a host would keep less than a fifth of its disk free
 	LogLevel  string            `json:"logLevel,omitempty"`
 	Captures  []EmuCapture      `json:"captures,omitempty"` // packet captures, running and done (files on the hosts)  // the emulator log's level ("" = info)
+	Installs  []EmuInstall      `json:"installs,omitempty"` // installs of ISO files, running and done
 }
 
 // emuTopo is a saved topology: a lab with its switches, cables, management
@@ -566,6 +567,7 @@ type EmuView struct {
 	Fast          bool              `json:"fast"`      // Fast start: Stop saves the switches' running state
 	IconStyle     string            `json:"iconStyle"` // how devices are drawn by default // every host of the lab: its management and what it gives the switches
 	DeviceTypes   []EmuDeviceType   `json:"deviceTypes"`
+	Installs      []EmuInstall      `json:"installs"` // installs of ISO files: running, waiting for the user, done
 }
 
 // EmuUsage is what the lab takes of its host now (stopped switches take nothing).
@@ -637,6 +639,7 @@ func (a *App) emuLoad() {
 			emu.LinuxHost(im)
 		}
 	}
+	emuInstallsLoaded()
 	if l := emuLab.f.Lab; l != nil { // a test's trial streams left by a stop of Termwright in the middle
 		l.Streams = slices.DeleteFunc(l.Streams, func(s emu.Stream) bool { return s.Test != "" })
 	}
@@ -941,6 +944,7 @@ type EmuCatalogItem struct {
 	Added bool   `json:"added"` // images of it are in the list already
 	Count int    `json:"count"` // how many images of it are in the list
 	json  string // a built-in appliance (not in the GNS3 registry)
+	seed  bool   // a cloud image: Termwright makes its cloud-init CD-ROM (root / termwright)
 }
 
 // emuSonicVS: SONiC's virtual switch, which the GNS3 registry has no file
@@ -955,10 +959,56 @@ const emuSonicVS = `{"name": "SONiC-VS", "category": "multilayer_switch", "regis
   {"filename": "sonic-vs-202411.img", "version": "202411", "direct_download_url": "https://sonic-build.azurewebsites.net/api/sonic/artifacts?branchName=202411&platform=vs&target=target/sonic-vs.img.gz", "download_url": "https://sonic-build.azurewebsites.net/ui/sonic/pipelines"}],
  "versions": [{"name": "202411", "images": {"hda_disk_image": "sonic-vs-202411.img"}}, {"name": "master", "images": {"hda_disk_image": "sonic-vs-master.img"}}]}`
 
+// emuCloudJSON writes a built-in appliance for a distribution's own cloud image (versions: name, file, link):
+// a Linux with a serial console, root / termwright from the cloud-init CD-ROM Termwright makes for it.
+func emuCloudJSON(name string, vers [][3]string) string {
+	var imgs, vs []map[string]any
+	for _, v := range vers {
+		imgs = append(imgs, map[string]any{"filename": v[1], "version": v[0], "direct_download_url": v[2], "download_url": v[2]})
+		vs = append(vs, map[string]any{"name": v[0], "images": map[string]string{"hda_disk_image": v[1]}})
+	}
+	b, _ := json.Marshal(map[string]any{"name": name, "category": "guest", "registry_version": 3, "default_username": "root", "default_password": emuSeedPassword,
+		"usage":  "Login root / " + emuSeedPassword + " (set by the cloud-init CD-ROM Termwright makes). The first boot takes a minute while cloud-init runs.",
+		"qemu":   map[string]any{"adapter_type": "virtio-net-pci", "adapters": 3, "ram": 1024, "cpus": 1, "hda_disk_interface": "virtio", "arch": "x86_64", "console_type": "telnet"},
+		"images": imgs, "versions": vs})
+	return string(b)
+}
+
+// emuSeedPassword is the root password the cloud-init CD-ROM sets on cloud images.
+const emuSeedPassword = "termwright"
+
+// emuSeedDisk makes the cloud-init CD-ROM (an ISO labelled cidata) in the download folder and describes it as a disk of an image.
+func (a *App) emuSeedDisk(seed emu.Seed) (emu.Disk, error) {
+	img, err := emu.ISO9660("cidata", emu.SeedFiles(seed))
+	if err != nil {
+		return emu.Disk{}, err
+	}
+	sum := sha256.Sum256(img)
+	name := "termwright-seed-" + hex.EncodeToString(sum[:4]) + ".iso"
+	p := filepath.Join(a.emuDownloadDir(), name)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return emu.Disk{}, err
+	}
+	if err := os.WriteFile(p, img, 0o600); err != nil {
+		return emu.Disk{}, err
+	}
+	return emu.Disk{Slot: "cdrom", FileName: name, File: p, SHA256: hex.EncodeToString(sum[:]), Size: int64(len(img))}, nil
+}
+
 // emuCatalog: QEMU appliances of the public GNS3 registry (disks, CD-ROMs
 // and BIOS files; container appliances cannot run on a KVM host).
 var emuCatalog = []EmuCatalogItem{
 	{File: "sonic-vs", Name: "SONiC-VS", Group: "Data-centre switches", Note: "Open source data-centre switch OS (virtual switch build). Free download from the SONiC build server; login admin / YourPaSsWoRd.", json: emuSonicVS},
+	{File: "tw-debian-cloud", Name: "Debian (cloud image)", Group: "Linux and test tools", Note: "Debian's own cloud image (13 and 12) with a cloud-init CD-ROM that Termwright makes: login root / termwright. Free download.", seed: true, json: emuCloudJSON("Debian cloud image", [][3]string{
+		{"13 (trixie)", "debian-13-genericcloud-amd64.qcow2", "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2"},
+		{"12 (bookworm)", "debian-12-genericcloud-amd64.qcow2", "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2"}})},
+	{File: "tw-ubuntu-cloud", Name: "Ubuntu (cloud image)", Group: "Linux and test tools", Note: "Ubuntu's own cloud image (24.04 and 22.04) with a cloud-init CD-ROM that Termwright makes: login root / termwright. Free download.", seed: true, json: emuCloudJSON("Ubuntu cloud image", [][3]string{
+		{"24.04 (noble)", "ubuntu-24.04-cloudimg-amd64.img", "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"},
+		{"22.04 (jammy)", "ubuntu-22.04-cloudimg-amd64.img", "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"}})},
+	{File: "tw-rocky-cloud", Name: "Rocky Linux (cloud image)", Group: "Linux and test tools", Note: "Rocky Linux 9 cloud image with a cloud-init CD-ROM that Termwright makes: login root / termwright. Free download.", seed: true, json: emuCloudJSON("Rocky Linux cloud image", [][3]string{
+		{"9", "Rocky-9-GenericCloud-Base.latest.x86_64.qcow2", "https://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2"}})},
+	{File: "tw-almalinux-cloud", Name: "AlmaLinux (cloud image)", Group: "Linux and test tools", Note: "AlmaLinux 9 cloud image with a cloud-init CD-ROM that Termwright makes: login root / termwright. Free download.", seed: true, json: emuCloudJSON("AlmaLinux cloud image", [][3]string{
+		{"9", "AlmaLinux-9-GenericCloud-latest.x86_64.qcow2", "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2"}})},
 	{File: "vyos", Name: "VyOS", Group: "Routers and firewalls", Note: "Open source router. Stable images need a (free) account at the project's site; rolling builds are free."},
 	{File: "frr", Name: "FRR (FRRouting)", Group: "Routers and firewalls", Note: "Open source routing suite on Alpine Linux. Free download."},
 	{File: "bird", Name: "BIRD", Group: "Routers and firewalls", Note: "Open source routing daemon. Free download."},
@@ -1016,7 +1066,11 @@ func (a *App) EmuAddFromCatalog(file string) (EmuView, error) {
 		return EmuView{}, errors.New("not in the list: " + file)
 	}
 	if item.json != "" {
-		return a.emuImportAppliance([]byte(item.json), "", "GNS3 registry "+file)
+		var seed *emu.Seed
+		if item.seed {
+			seed = &emu.Seed{User: "root", Password: emuSeedPassword}
+		}
+		return a.emuImportAppliance2([]byte(item.json), "", seed, "GNS3 registry "+file)
 	}
 	resp, err := http.Get("https://raw.githubusercontent.com/GNS3/gns3-registry/master/appliances/" + file + ".gns3a")
 	if err != nil {
@@ -1113,6 +1167,11 @@ func (a *App) EmuRemoveFromCatalog(file string, files bool) (EmuView, error) {
 // emuImportAppliance adds an appliance's versions as images (dir: where its
 // image files may lie; source: what the images say they came from).
 func (a *App) emuImportAppliance(b []byte, dir string, source ...string) (EmuView, error) {
+	return a.emuImportAppliance2(b, dir, nil, source...)
+}
+
+// emuImportAppliance2 is emuImportAppliance with a cloud-init CD-ROM made for each image (a cloud image).
+func (a *App) emuImportAppliance2(b []byte, dir string, seed *emu.Seed, source ...string) (EmuView, error) {
 	ap, err := emu.ParseAppliance(b)
 	if err != nil {
 		return EmuView{}, err
@@ -1137,6 +1196,13 @@ func (a *App) emuImportAppliance(b []byte, dir string, source ...string) (EmuVie
 		if ap.Password != "" {
 			emuPwChanged(pr.ID)
 			_ = secrets.Set(emuImageKey(pr.ID), ap.Password)
+		}
+		if seed != nil {
+			d, err := a.emuSeedDisk(*seed)
+			if err != nil {
+				return EmuView{}, err
+			}
+			pr.Disks = append(pr.Disks, d)
 		}
 		for i := range pr.Disks {
 			for _, d := range []string{dir, a.emuDownloadDir()} {
@@ -3784,7 +3850,7 @@ func (a *App) EmuState() (EmuView, error) {
 
 func (a *App) emuView() EmuView {
 	f := &emuLab.f
-	v := EmuView{Kind: "emu", DownloadDir: a.emuDownloadDir(), DownloadQueue: slices.DeleteFunc(append([]string{emuLab.dlCur}, emuLab.dlQueue...), func(x string) bool { return x == "" }), Events: append([]EmuEvent(nil), emuLab.events[max(0, len(emuLab.events)-200):]...), DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}, Topology: f.Topology}
+	v := EmuView{Kind: "emu", DownloadDir: a.emuDownloadDir(), DownloadQueue: slices.DeleteFunc(append([]string{emuLab.dlCur}, emuLab.dlQueue...), func(x string) bool { return x == "" }), Events: append([]EmuEvent(nil), emuLab.events[max(0, len(emuLab.events)-200):]...), DeviceTypes: a.emuDeviceTypes(emuLab.packProfiles), Installs: emuInstallViews(), Templates: f.Templates, Folder: f.Folder, Host: f.Host, Hosts: f.Hosts, Sessions: f.Sessions, Consoles: f.Consoles, OS: map[string]LabOS{}, Topology: f.Topology}
 	for i := range f.Hosts {
 		if f.Hosts[i].Session == f.Host {
 			v.HostInfo = &f.Hosts[i].Info
