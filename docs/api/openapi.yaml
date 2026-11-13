@@ -1453,6 +1453,53 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/history:
+        post:
+            operationId: tool_history
+            tags:
+                - Tools
+            summary: The emulated lab's change history
+            description: 'The emulated lab''s change history: every change Claude or the API made (lab changes are not asked, so each is kept with the lab as it was before). Actions: list (newest first, with ids), plan (what revert would do for a change id), revert (bring the lab back to how it was before that change: devices added since are removed, cables, CPU, computers'' addresses, test ports and streams set back, devices started or stopped as they were; commands typed on consoles are not undone). Use revert when a test went wrong. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - list
+                                        - plan
+                                        - revert
+                                    type: string
+                                id:
+                                    description: 'plan, revert: the change''s id (from list)'
+                                    type: string
+                                last:
+                                    description: 'list: how many (default 20)'
+                                    type: integer
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/images:
         post:
             operationId: tool_images

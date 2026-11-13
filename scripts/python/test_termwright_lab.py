@@ -86,6 +86,8 @@ class Fake(BaseHTTPRequestHandler):
             return self.reply(200, {"result": "Installs (id | name | mode | stage | now | image):\n- ab12 | alp | alpine | %s | boot | %s\n" % (stage, "img1" if stage == "done" else "-")})
         if path == "/tools/install_finish":
             return self.reply(200, {"result": "Saving"})
+        if path == "/tools/history":
+            return self.reply(200, {"result": "Changes, newest first"})
         if path == "/tools/wait":
             return self.reply(200, {"result": "all ready"})
         self.reply(404, {"title": "Not found", "status": 404, "detail": path}, "application/problem+json")
@@ -137,6 +139,13 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(Fake.state["calls"][-1][2], {"iso_path": "/x/a.iso", "mode": "manual", "disk_mb": 512})
         self.lab.install_finish("ab12")
         self.assertEqual(Fake.state["calls"][-1][2], {"id": "ab12"})
+
+    def test_history_and_revert(self):
+        self.lab.history(5)
+        self.assertEqual(Fake.state["calls"][-1][2], {"action": "list", "last": 5})
+        self.lab.revert("ab12")
+        self.assertEqual(Fake.state["calls"][-1][1], "/api/v1/lab/tools/history")
+        self.assertEqual(Fake.state["calls"][-1][2], {"action": "revert", "id": "ab12"})
 
     def test_install_wait_raises_on_failure(self):
         self.lab.install_iso("/x/a.iso")

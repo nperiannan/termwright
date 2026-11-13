@@ -425,3 +425,6 @@ export interface EmuRunRow { host: string; topology: string; open: boolean; swit
 
 /** A device's CPU over the last minutes (millicores, as kubectl counts: 1000m = one host core). */
 export interface EmuCpuStats { mins: number; avg: number; peak: number; p95: number; over: number; overN: number; thr: number; thrS: number; }
+
+/** A change Claude or the API made to the emulated lab, kept with the lab as it was before (Revert). */
+export interface EmuChange { id: string; at: string; who: string; tool: string; what: string; result: string; revertible: boolean; note?: string; reverted?: string; }

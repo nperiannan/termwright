@@ -465,8 +465,16 @@ func (a *App) mcpCall(_ context.Context, name string, args map[string]any) (stri
 		if err != nil {
 			return "", fmt.Errorf("no saved session %q (list_sessions)", p)
 		}
-		if err := a.mcpAsk("", "Claude wants to connect", "Claude (through the Termwright connector) asks to open "+s.Path+" ("+s.Hostname+").", false, false); err != nil {
-			return "", err
+		switch {
+		case a.mcpLabPath(s.Path): // a device of Termwright's own lab: not asked
+		case s.Environment == "production":
+			if err := a.mcpAsk("", "Claude wants to connect to a PRODUCTION device", "Claude (through the Termwright connector) asks to open "+s.Path+" ("+s.Hostname+").\n\nThis session is marked production.", true, false); err != nil {
+				return "", err
+			}
+		default:
+			if err := a.mcpAsk("", "Claude wants to connect", "Claude (through the Termwright connector) asks to open "+s.Path+" ("+s.Hostname+").", false, false); err != nil {
+				return "", err
+			}
 		}
 		emitter{a}.Emit("mcp:open", s.Path)
 		return "Opening " + s.Path + " in a new tab - call list_tabs in a few seconds, then read_tab.", nil
@@ -487,8 +495,23 @@ func (a *App) mcpCall(_ context.Context, name string, args map[string]any) (stri
 		if danger {
 			msg += "\nThis command may change the device or interrupt traffic."
 		}
-		if err := a.mcpAsk(t.ID, "Claude wants to run a command", msg, danger, true); err != nil {
-			return "", err
+		lab := a.mcpLabPath(t.Session.Path)
+		switch {
+		case lab: // a device of Termwright's own lab: not asked (automated tests), kept in the change history
+			if a.cfg.Get().AI.MCPCommands == "never" {
+				return "", errors.New("the user does not let Claude type in Termwright (Settings → AI Assistant) - tell the user the command instead")
+			}
+		case t.Session.Environment == "production": // always asked, every command, never "for 15 minutes"
+			if err := a.mcpAsk(t.ID, "Claude wants to run a command on a PRODUCTION device", msg+"\nThis session is marked production.", true, false); err != nil {
+				return "", err
+			}
+		default:
+			if err := a.mcpAsk(t.ID, "Claude wants to run a command", msg, danger, true); err != nil {
+				return "", err
+			}
+		}
+		if lab {
+			a.emuChangeNote("ai", "send_command", "Typed `"+cmd+"` on "+t.Title, "ok", "commands typed on a console are not undone")
 		}
 		before, _ := a.tabText(t.ID, 1)
 		if err := a.terms.Write(t.ID, []byte(cmd+"\r")); err != nil {

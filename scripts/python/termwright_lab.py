@@ -173,6 +173,19 @@ class Lab:
         return self.tool("install_iso", iso_path=iso_path, mode=mode, name=name, password=password,
                          disk_gb=disk_gb, disk_mb=disk_mb, ram_mb=ram_mb, cpus=cpus, host=host)
 
+    def history(self, last: int = 20) -> str:
+        """What Claude and the API changed in the lab, newest first, with ids for revert()."""
+        return self.tool("history", action="list", last=last)
+
+    def revert_plan(self, change_id: str) -> str:
+        """What revert() would do to bring the lab back to before a change."""
+        return self.tool("history", action="plan", id=change_id)
+
+    def revert(self, change_id: str) -> str:
+        """Bring the lab back to how it was before a change (devices added since are removed, cables, CPU,
+        addresses, test ports and streams set back, devices started or stopped as they were)."""
+        return self.tool("history", action="revert", id=change_id)
+
     def install_status(self) -> str:
         return self.tool("install_status")
 

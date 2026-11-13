@@ -4,7 +4,7 @@ import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { ChartSeries, TrafficChart } from './traffic-chart';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
+import { EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -496,12 +496,13 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       <div class="dtabs">
         <a [class.on]="dock() === 'events'" (click)="dock.set('events')">{{ tr('Events') }}@if (problems()) { <span class="cnt">{{ problems() }}</span> }</a>
         @if (emu()) { <a [class.on]="dock() === 'inv'" (click)="dock.set('inv')">{{ tr('Inventory') }}</a> }
+        @if (emu()) { <a [class.on]="dock() === 'changes'" (click)="dock.set('changes'); loadChanges()" [title]="tr('What Claude and the API changed in the lab, each with Revert')">{{ tr('Changes') }}@if (changes().length) { <span class="cnt n">{{ changes().length }}</span> }</a> }
         @if (emu()) { <a [class.on]="dock() === 'cpu'" (click)="dock.set('cpu')" [title]="tr('CPU requests, limits and use of every device, and how often a limit held one back')">CPU@if (cpuHeld()) { <span class="cnt run">{{ cpuHeld() }}</span> }</a> }
         @if (emu()) { <a [class.on]="dock() === 'cap'" (click)="dock.set('cap'); loadCaps()">{{ tr('Captures') }}@if (capsRunning()) { <span class="cnt rec">{{ capsRunning() }}</span> }</a> }
         @if (emu() && page() !== 'traffic') { <a [class.on]="dock() === 'traffic'" (click)="dock.set('traffic'); loadTraf()" [title]="tr('Test ports on switch ports and streams of frames between them, with pass or fail')">{{ tr('Traffic') }}@if (traf()?.running) { <span class="cnt run">▶</span> } @else if (traf()?.streams?.length) { <span class="cnt n">{{ traf()!.streams.length }}</span> }</a> }
         @if (emu()) { <a [class.on]="dock() === 'log'" (click)="dock.set('log'); loadLog()" [title]="tr('The emulator’s own log: everything the lab does, at the level you choose')">{{ tr('Log') }}</a> }
         @if (emu() && selDev(); as d) { <a [class.on]="dock() === 'console'" (click)="dock.set('console'); loadTail()">{{ tr('{0} console', d.hostname) }}</a><a [class.on]="dock() === 'clog'" (click)="dock.set('clog'); loadClog()" [title]="tr('Everything its console showed since it started, with its Events')">{{ tr('Console Log') }}</a> }
-        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'traffic' ? tr('Test ports send and count frames on switch ports') : dock() === 'cap' ? tr('Both ways on the port, as the switch sends and gets it') : dock() === 'log' ? tr('The emulator’s own log') : dock() === 'clog' ? tr('Its console since it started, with its Events') : dock() === 'inv' ? tr('Every switch under its host: console, management, what it uses now') : dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
+        <span class="sp"></span><span class="muted small hint2">{{ dock() === 'changes' ? tr('What Claude and the API changed, each with Revert') : dock() === 'cpu' ? tr('CPU requests, limits and use of every device') : dock() === 'traffic' ? tr('Test ports send and count frames on switch ports') : dock() === 'cap' ? tr('Both ways on the port, as the switch sends and gets it') : dock() === 'log' ? tr('The emulator’s own log') : dock() === 'clog' ? tr('Its console since it started, with its Events') : dock() === 'inv' ? tr('Every switch under its host: console, management, what it uses now') : dock() === 'events' ? tr('Everything Termwright does to a switch shows here') : (dockTab() ? tr('Live console - day-0 and checks wait while it is connected') : tr('The end of its console; click it to type')) }}</span>
         @if (dock() === 'console' && dockTab(); as t) { <button type="button" class="sm" (click)="undock()" [title]="tr('Close the connection to its console')">{{ tr('Disconnect') }}</button> }
         @if (dock() === 'inv' && inventory().length > 1) { <button type="button" class="sm" (click)="flipAll()">{{ invClosed().size === inventory().length ? tr('Expand All') : tr('Collapse All') }}</button> }
         @else { <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button> }
@@ -515,7 +516,20 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (dock() === 'clog' && selDev(); as d) { <button type="button" class="sm" (click)="loadClog()" [disabled]="clogBusy()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveConsoleLog(d)">{{ tr('Save…') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
       </div>
-      @if (dock() === 'cpu') {
+      @if (dock() === 'changes') {
+        <div class="inv chg">
+          <p class="chn">{{ tr('Claude (the Termwright connector) and the API change the lab without asking, so automated tests never wait for a person. Each change is kept here with the lab as it was before: Revert brings the lab back to that point. Commands typed on consoles are listed but not undone. Real sessions are still asked, and sessions marked production are asked for every command.') }}</p>
+          <app-tv-bar [tv]="chView" />
+          <table>
+            <tr><th tvh [tv]="chView" key="at" filter="none">{{ tr('Time') }}</th><th tvh [tv]="chView" key="who">{{ tr('By') }}</th><th tvh [tv]="chView" key="tool">{{ tr('Tool') }}</th><th tvh [tv]="chView" key="what" filter="text">{{ tr('What changed') }}</th><th tvh [tv]="chView" key="result" filter="text">{{ tr('Result') }}</th><th tvh [tv]="chView" key="state">{{ tr('Revert') }}</th></tr>
+            @for (c of chView.rows(); track c.id) {
+              <tr [class.rv]="!!c.reverted"><td class="mono">{{ hhmmss(c.at) }}</td><td>{{ c.who }}</td><td class="mono">{{ c.tool.replace('lab_', '') }}</td><td class="wht">{{ c.what }}@if (c.note) { <span class="muted small"> · {{ tr(c.note) }}</span> }</td>
+                <td [class.r]="c.result !== 'ok' && !c.result.startsWith('Set') && c.result.toLowerCase().includes('fail')" class="small">{{ c.result }}</td>
+                <td>@if (c.reverted) { <span class="muted small">↶ {{ tr('reverted {0}', hhmmss(c.reverted)) }}</span> } @else if (c.revertible) { <button type="button" class="sm" (click)="revert(c)">↶ {{ tr('Revert to before') }}</button> } @else { <span class="muted small">{{ tr('cannot be undone') }}</span> }</td></tr>
+            } @empty { <tr><td colspan="6" class="muted">{{ tr('No changes yet: what Claude or the API changes in the lab shows here.') }}</td></tr> }
+          </table>
+        </div>
+      } @else if (dock() === 'cpu') {
         <div class="inv cpur">
           <div class="cpus2">@for (h of cpuHosts(); track h.id) { <span class="pill"><b>{{ h.host }}</b> · {{ tr('requests {0} of {1}', mc(h.req), mc(h.cap)) }} · {{ tr('limits {0}', mc(h.lim)) }} · {{ tr('in use {0}', mc(h.use)) }}@if (h.cap && h.req > h.cap) { <span class="w"> · {{ tr('more asked for than the host has') }}</span> }</span> }</div>
           <app-tv-bar [tv]="cpuView" />
@@ -837,6 +851,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       .cin { display: flex; flex-direction: column; gap: 2px; input { width: 92px; box-sizing: border-box; font: 12px var(--mono, monospace); padding: 3px 7px; } small { color: var(--muted); font-size: 11px; line-height: 1.35; } }
       .cadv { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px; padding: 7px 9px; border-radius: 8px; background: color-mix(in srgb, var(--warning, #e39b17) 14%, transparent); font-size: 11.5px; button { flex: none; } } }
     .rnote { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; } .rnote.ok { color: var(--success, #1fa45a); margin-top: 8px; }
+    .chg .chn { margin: 6px 0 2px; color: var(--muted); font-size: 11.5px; max-width: 980px; } .chg td.wht { white-space: normal; min-width: 280px; } .chg tr.rv td { opacity: .6; }
     .cpur .cpus2 { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 0 2px; .pill { font-size: 11.5px; } } .cpur .lnk { margin-left: 10px; cursor: pointer; color: var(--accent); }
     .inv { overflow: auto; padding: 0 14px 10px; table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); font-size: 12px; white-space: nowrap; }
       th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--surface); z-index: 1; }
@@ -976,7 +991,7 @@ export class LabWorkspace implements OnDestroy {
   protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink; cloud?: string; tp?: EmuTester } | null>(null);
   protected selCloud = signal('');
   protected imgPick = signal(''); // Images opens on this image (from a switch's Configure)
-  protected dock = signal<'events' | 'console' | 'inv' | 'clog' | 'log' | 'cap' | 'traffic' | 'cpu'>('events');
+  protected dock = signal<'events' | 'console' | 'inv' | 'clog' | 'log' | 'cap' | 'traffic' | 'cpu' | 'changes'>('events');
   protected caps = signal<EmuCapture[]>([]);
   protected capSel = signal('');
   protected capStarted = signal('');
@@ -1029,6 +1044,7 @@ export class LabWorkspace implements OnDestroy {
   protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw'];
   private trafTimer: ReturnType<typeof setInterval> | null = null;
   private trafTick = 0;
+  private chTick = 0;
   async loadTraf() {
     try { this.traf.set(await this.backend.emuTraffic()); } catch { /* no lab */ }
     const run = !!this.traf()?.running;
@@ -1126,6 +1142,25 @@ export class LabWorkspace implements OnDestroy {
     } catch (e) { this.ui.error(e); }
   }
   protected trafView = signal<'streams' | 'tests'>('streams');
+  // the lab's change history (what Claude and the API changed, each with Revert)
+  protected changes = signal<EmuChange[]>([]);
+  async loadChanges() { try { this.changes.set((await this.backend.emuChanges()) ?? []); } catch { /* no lab */ } }
+  protected chView = new TableView<EmuChange>(() => this.changes(), [
+    { key: 'at', label: 'Time', get: c => c.at },
+    { key: 'who', label: 'By', get: c => c.who },
+    { key: 'tool', label: 'Tool', get: c => c.tool.replace('lab_', '') },
+    { key: 'what', label: 'What changed', get: c => c.what },
+    { key: 'result', label: 'Result', get: c => c.result },
+    { key: 'state', label: 'Revert', get: c => (c.reverted ? tr('reverted') : c.revertible ? tr('can be reverted') : tr('cannot be undone')) },
+  ]);
+  hhmmss(at: string) { const d = new Date(at); return isNaN(+d) ? at : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+  async revert(c: EmuChange) {
+    let plan: string[] = [];
+    try { plan = (await this.backend.emuRevertPlan(c.id)) ?? []; } catch (e) { this.ui.error(e); return; }
+    if (!(await this.ui.confirm(tr('Revert to before: {0}', c.what), tr('The lab goes back to how it was before this change (and the ones after it):') + '\n\n• ' + plan.join('\n• '), tr('Revert'), true))) return;
+    try { const done = (await this.backend.emuRevert(c.id)) ?? []; this.ui.toast(tr('Reverted: {0}', done.join('; ')), 'success'); } catch (e) { this.ui.error(e); }
+    await this.loadChanges(); await this.lab.refresh(); void this.loadTraf();
+  }
   /** The Traffic page (next to Canvas); its streams are not shown in the bottom pane at the same time. */
   openTraffic() { if (this.dock() === 'traffic') this.dock.set('events'); this.page.set('traffic'); void this.loadTraf(); }
   // the Traffic page's charts: the validated categorical palette (--s1 … --s8), a colour per stream in the streams' order
@@ -1617,7 +1652,7 @@ export class LabWorkspace implements OnDestroy {
 
   constructor() {
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
-    this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && this.dock() !== 'cap' && ++this.capTick % 5 === 1) void this.backend.emuCaptures().then(c => this.caps.set(c ?? []), () => undefined); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || this.page() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
+    this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && (this.dock() === 'changes' || ++this.chTick % 10 === 1)) void this.loadChanges(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && this.dock() !== 'cap' && ++this.capTick % 5 === 1) void this.backend.emuCaptures().then(c => this.caps.set(c ?? []), () => undefined); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || this.page() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
   }
   @HostListener('document:keydown', ['$event']) onDelKey(e: KeyboardEvent) {
     if (!this.visible() || (e.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable], .xterm')) return;

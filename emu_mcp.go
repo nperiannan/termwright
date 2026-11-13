@@ -196,6 +196,12 @@ var mcpLabTools = []mcpTool{
 		}, "switch")},
 	{"lab_events", "Read the emulated lab's Events log: what Termwright did to each switch (started, booted, day 0, persona, moves, errors), newest last.",
 		mcpSchema(map[string]any{"last": map[string]any{"type": "integer", "description": "how many lines (default 60, at most 300)"}})},
+	{"lab_history", "The emulated lab's change history: every change Claude or the API made (lab changes are not asked, so each is kept with the lab as it was before). Actions: list (newest first, with ids), plan (what revert would do for a change id), revert (bring the lab back to how it was before that change: devices added since are removed, cables, CPU, computers' addresses, test ports and streams set back, devices started or stopped as they were; commands typed on consoles are not undone). Use revert when a test went wrong.",
+		mcpSchema(map[string]any{
+			"action": map[string]any{"type": "string", "enum": []string{"list", "plan", "revert"}},
+			"id":     map[string]any{"type": "string", "description": "plan, revert: the change's id (from list)"},
+			"last":   map[string]any{"type": "integer", "description": "list: how many (default 20)"},
+		}, "action")},
 }
 
 // emuMCPID finds a switch by its name (or id).
@@ -235,13 +241,15 @@ func argStrs(m map[string]any, k string) []string {
 	return out
 }
 
-// emuMCP runs a lab_ tool for the connector: changes are asked in a Termwright dialog (light ones are not).
+// emuMCP runs a lab_ tool for the connector. Lab changes are not asked - automated tests must not wait
+// for a person - but each one is kept in the lab's change history with the lab as it was before, so it
+// can be undone (Changes tab, lab_history). Only "Never" in Settings → AI Assistant stops them.
 func (a *App) emuMCP(name string, args map[string]any) (string, error) {
 	return a.emuMCPWith(name, args, func(title, msg string, danger, light bool) error {
-		if light {
-			return nil
+		if a.cfg.Get().AI.MCPCommands == "never" {
+			return errors.New("the user does not let Claude change Termwright (Settings → AI Assistant)")
 		}
-		return a.mcpAsk("", title, msg, danger, false)
+		return nil
 	})
 }
 
@@ -253,9 +261,30 @@ func (a *App) emuMCPWith(name string, args map[string]any, asker emuAsker) (stri
 	return a.emuMCPRun("ai", name, args, asker)
 }
 
-// emuMCPRun runs a lab_ tool for who (ai, api: what the Events show as the trigger).
-func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (string, error) {
+// emuMCPRun runs a lab_ tool for who (ai, api: what the Events show as the trigger). A change it makes
+// is kept in the lab's change history (with the lab as it was before) when it was let through.
+func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (out string, err error) {
 	defer emuAs(who)()
+	var rec *emuChangeRec
+	refused := false
+	if name != "lab_history" {
+		inner := asker
+		asker = func(title, msg string, danger, light bool) error {
+			if rec == nil {
+				rec = a.emuChangeBegin(who, name, title, msg)
+			}
+			if e := inner(title, msg, danger, light); e != nil {
+				refused = true
+				return e
+			}
+			return nil
+		}
+		defer func() {
+			if rec != nil && !refused {
+				a.emuChangeEnd(rec, out, err)
+			}
+		}()
+	}
 	v, err := a.EmuState()
 	if err != nil {
 		return "", err
@@ -1031,6 +1060,50 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		}
 		out, _ = aiRedact(out, false)
 		return out, nil
+	case "lab_history":
+		switch argStr(args, "action") {
+		case "plan", "revert":
+			id := argStr(args, "id")
+			if id == "" {
+				return "", errors.New("give the id of the change (lab_history action=list)")
+			}
+			if argStr(args, "action") == "plan" {
+				steps, err := a.EmuRevertPlan(id)
+				if err != nil {
+					return "", err
+				}
+				return "Revert would:\n- " + strings.Join(steps, "\n- "), nil
+			}
+			steps, err := a.emuRevertAs(id, emuWhoName(who))
+			if err != nil {
+				return "", err
+			}
+			return "Reverted:\n- " + strings.Join(steps, "\n- "), nil
+		}
+		cs := a.EmuChanges()
+		if len(cs) == 0 {
+			return "No changes yet.", nil
+		}
+		n := argInt(args, "last", 20, 200)
+		var b strings.Builder
+		b.WriteString("Changes, newest first (id | time | who | tool | what | result):\n")
+		for i, c := range cs {
+			if i >= n {
+				break
+			}
+			t, _ := time.Parse(time.RFC3339, c.At)
+			fmt.Fprintf(&b, "- %s | %s | %s | %s | %s | %s", c.ID, t.Format("15:04:05"), c.Who, c.Tool, c.What, c.Result)
+			if c.Reverted != "" {
+				b.WriteString(" | reverted")
+			}
+			if !c.Revertible {
+				b.WriteString(" | cannot be undone")
+			} else if c.Note != "" {
+				b.WriteString(" | " + c.Note)
+			}
+			b.WriteString("\n")
+		}
+		return b.String(), nil
 	case "lab_events":
 		n := argInt(args, "last", 60, 300)
 		ev := v.Events
