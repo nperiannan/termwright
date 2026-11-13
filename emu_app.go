@@ -140,6 +140,7 @@ var emuLab struct {
 	cpu              map[string]float64        // CPU use now, in cores (1 = one core busy)
 	cpuHist          map[string][]emuCPUSample // CPU use and throttling over the last hour
 	runWith          map[string][3]int         // the vCPUs, memory (MB) and disk (GB) a switch was started with (to tell what a restart would change)
+	pcapUp           map[string]bool           // captures streams replay that are on a host already (host|lab folder|capture)
 	cpuWarned        map[string]time.Time      // when the Events last said a limit held it back
 	ready            map[string]bool           // the console showed the ready text since the VM started (it may scroll out of the log's end later)
 	bootAns          map[string]time.Time      // when a boot menu was last answered

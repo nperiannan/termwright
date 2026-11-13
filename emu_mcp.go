@@ -85,43 +85,50 @@ var mcpLabTools = []mcpTool{
 			"host":   map[string]any{"type": "string", "description": "KVM host name or session path"},
 			"how":    map[string]any{"type": "string", "enum": []string{"live", "copy", "image"}},
 		}, "switch", "host", "how")},
-	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
+	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file's frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab's streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
-			"action":      map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report"}},
-			"switch":      map[string]any{"type": "string", "description": "add_port: the switch"},
-			"port":        map[string]any{"type": "string", "description": "add_port: its free port; remove_port: the test port's name"},
-			"ip":          map[string]any{"type": "string", "description": "add_port, set_port: the test port's address with prefix (10.10.0.1/24), or dhcp (from a DHCP server)"},
-			"gateway":     map[string]any{"type": "string", "description": "add_port: for streams to another network"},
-			"ip6":         map[string]any{"type": "string", "description": "add_port, set_port: an IPv6 address with prefix (fd00::1/64), or slaac (from router advertisements)"},
-			"lldp":        map[string]any{"type": "boolean", "description": "add_port, set_port: announce it by LLDP (default on)"},
-			"groups":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "add_port, set_port: multicast groups it joins (239.1.1.1, ff0e::1)"},
-			"dscp":        map[string]any{"type": "integer", "description": "add_stream: IP DSCP 0-63"},
-			"pcp":         map[string]any{"type": "integer", "description": "add_stream: 802.1p priority 0-7 (with vlan)"},
-			"size_mode":   map[string]any{"type": "string", "enum": []string{"fixed", "inc", "random", "imix"}, "description": "add_stream: frame sizes (inc/random: size to size_max)"},
-			"size_max":    map[string]any{"type": "integer"},
-			"burst":       map[string]any{"type": "integer", "description": "add_stream: frames sent back to back (the rate stays the average)"},
-			"mods":        map[string]any{"type": "array", "description": "add_stream: fields that change per frame: {field: srcMac|dstMac|srcIp|dstIp|vlan|sport|dport, mode: inc|random, count, step}", "items": map[string]any{"type": "object"}},
-			"max_jitter":  map[string]any{"type": "number", "description": "ms for a pass (0 = not checked)"},
-			"dst_mac":     map[string]any{"type": "string"},
-			"src_ip":      map[string]any{"type": "string"},
-			"dport":       map[string]any{"type": "integer"},
-			"name":        map[string]any{"type": "string", "description": "add_stream: its name; remove_stream: the stream"},
-			"from":        map[string]any{"type": "string", "description": "add_stream: test port name"},
-			"to":          map[string]any{"type": "string", "description": "add_stream: test port name; empty = every other test port (broadcast) or dst_ip"},
-			"kind":        map[string]any{"type": "string", "enum": []string{"udp", "icmp", "tcp", "arp", "raw"}},
-			"dst_ip":      map[string]any{"type": "string", "description": "add_stream: an address that is not a test port (icmp: its replies are counted), or a multicast group (received by the test ports that joined it)"},
-			"vlan":        map[string]any{"type": "integer"},
-			"size":        map[string]any{"type": "integer", "description": "frame bytes (60-9000, default 128)"},
-			"pps":         map[string]any{"type": "integer", "description": "packets per second (default 100, at most 100000)"},
-			"rate":        map[string]any{"type": "number", "description": "add_stream: the rate in rate_unit (instead of pps)"},
-			"rate_unit":   map[string]any{"type": "string", "enum": []string{"pps", "mbps", "pct"}, "description": "add_stream: pps, mbps (Mbit/s on the wire, with preamble and gap) or pct (% of the sending test port's line rate)"},
-			"round_trip":  map[string]any{"type": "boolean", "description": "add_stream: the test port it goes to sends each frame back; latency is the round trip (works between test ports on two hosts)"},
-			"speed":       map[string]any{"type": "integer", "description": "add_port, set_port: the test port's line rate in Mbit/s, for rates in % of it (default 1000)"},
-			"seconds":     map[string]any{"type": "integer"},
-			"count":       map[string]any{"type": "integer"},
-			"max_loss":    map[string]any{"type": "number", "description": "% for a pass (default 0)"},
-			"max_latency": map[string]any{"type": "number", "description": "ms for a pass (0 = not checked)"},
-			"streams":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "start: the streams (none = all)"},
+			"action":       map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report", "templates", "apply_template", "save_template", "remove_template"}},
+			"template":     map[string]any{"type": "string", "description": "apply_template, remove_template: the template (name or id); save_template: its name"},
+			"ports":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "apply_template: the test ports (names) for its roles A, B, C… in order"},
+			"description":  map[string]any{"type": "string", "description": "save_template: what it checks"},
+			"pcap":         map[string]any{"type": "string", "description": "add_stream kind pcap: the capture file on this computer (classic pcap)"},
+			"pcap_timing":  map[string]any{"type": "boolean", "description": "add_stream kind pcap: keep the capture's own gaps between frames (else the pps rate)"},
+			"loops":        map[string]any{"type": "integer", "description": "add_stream kind pcap: times through the capture (default 1)"},
+			"rewrite_macs": map[string]any{"type": "boolean", "description": "add_stream kind pcap: send from this test port's MAC to the destination test port's"},
+			"switch":       map[string]any{"type": "string", "description": "add_port: the switch"},
+			"port":         map[string]any{"type": "string", "description": "add_port: its free port; remove_port: the test port's name"},
+			"ip":           map[string]any{"type": "string", "description": "add_port, set_port: the test port's address with prefix (10.10.0.1/24), or dhcp (from a DHCP server)"},
+			"gateway":      map[string]any{"type": "string", "description": "add_port: for streams to another network"},
+			"ip6":          map[string]any{"type": "string", "description": "add_port, set_port: an IPv6 address with prefix (fd00::1/64), or slaac (from router advertisements)"},
+			"lldp":         map[string]any{"type": "boolean", "description": "add_port, set_port: announce it by LLDP (default on)"},
+			"groups":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "add_port, set_port: multicast groups it joins (239.1.1.1, ff0e::1)"},
+			"dscp":         map[string]any{"type": "integer", "description": "add_stream: IP DSCP 0-63"},
+			"pcp":          map[string]any{"type": "integer", "description": "add_stream: 802.1p priority 0-7 (with vlan)"},
+			"size_mode":    map[string]any{"type": "string", "enum": []string{"fixed", "inc", "random", "imix"}, "description": "add_stream: frame sizes (inc/random: size to size_max)"},
+			"size_max":     map[string]any{"type": "integer"},
+			"burst":        map[string]any{"type": "integer", "description": "add_stream: frames sent back to back (the rate stays the average)"},
+			"mods":         map[string]any{"type": "array", "description": "add_stream: fields that change per frame: {field: srcMac|dstMac|srcIp|dstIp|vlan|sport|dport, mode: inc|random, count, step}", "items": map[string]any{"type": "object"}},
+			"max_jitter":   map[string]any{"type": "number", "description": "ms for a pass (0 = not checked)"},
+			"dst_mac":      map[string]any{"type": "string"},
+			"src_ip":       map[string]any{"type": "string"},
+			"dport":        map[string]any{"type": "integer"},
+			"name":         map[string]any{"type": "string", "description": "add_stream: its name; remove_stream: the stream"},
+			"from":         map[string]any{"type": "string", "description": "add_stream: test port name"},
+			"to":           map[string]any{"type": "string", "description": "add_stream: test port name; empty = every other test port (broadcast) or dst_ip"},
+			"kind":         map[string]any{"type": "string", "enum": []string{"udp", "icmp", "tcp", "arp", "raw", "pcap"}},
+			"dst_ip":       map[string]any{"type": "string", "description": "add_stream: an address that is not a test port (icmp: its replies are counted), or a multicast group (received by the test ports that joined it)"},
+			"vlan":         map[string]any{"type": "integer"},
+			"size":         map[string]any{"type": "integer", "description": "frame bytes (60-9000, default 128)"},
+			"pps":          map[string]any{"type": "integer", "description": "packets per second (default 100, at most 100000)"},
+			"rate":         map[string]any{"type": "number", "description": "add_stream: the rate in rate_unit (instead of pps)"},
+			"rate_unit":    map[string]any{"type": "string", "enum": []string{"pps", "mbps", "pct"}, "description": "add_stream: pps, mbps (Mbit/s on the wire, with preamble and gap) or pct (% of the sending test port's line rate)"},
+			"round_trip":   map[string]any{"type": "boolean", "description": "add_stream: the test port it goes to sends each frame back; latency is the round trip (works between test ports on two hosts)"},
+			"speed":        map[string]any{"type": "integer", "description": "add_port, set_port: the test port's line rate in Mbit/s, for rates in % of it (default 1000)"},
+			"seconds":      map[string]any{"type": "integer"},
+			"count":        map[string]any{"type": "integer"},
+			"max_loss":     map[string]any{"type": "number", "description": "% for a pass (default 0)"},
+			"max_latency":  map[string]any{"type": "number", "description": "ms for a pass (0 = not checked)"},
+			"streams":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "start: the streams (none = all)"},
 		}, "action")},
 	{"lab_test", "Traffic tests on the emulated lab's test ports, run by Termwright as a series of trials: RFC 2544 throughput (the highest rate without loss per frame size), latency (at that rate), frame-loss (loss from 100 % down to 10 % of the top rate) and back-to-back (the longest burst without loss), RFC 2889 learning (how many source MACs a switch learns before it floods; needs a third test port as monitor), convergence (traffic while a cable is pulled or a switch stops or restarts: the frames lost and the outage in ms), and iperf (iperf3 between two host VMs of the lab, on their consoles: TCP or UDP rate, retransmits, jitter, loss). Actions: list (saved tests and the latest runs), add, remove, run (in the background), stop, results (of a run; the latest when no run is given). Adding, running and stopping are asked in Termwright first.",
 		mcpSchema(map[string]any{
@@ -744,6 +751,9 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				st.PPS = int(f)
 			}
 			st.RTT, _ = args["round_trip"].(bool)
+			st.Pcap, st.Loops = argStr(args, "pcap"), argInt(args, "loops", 0, 1000000)
+			st.PcapTiming, _ = args["pcap_timing"].(bool)
+			st.RewriteMAC, _ = args["rewrite_macs"].(bool)
 			st.DSCP, st.SizeMode, st.SizeMax, st.Burst = argInt(args, "dscp", 0, 63), strings.TrimPrefix(argStr(args, "size_mode"), "fixed"), argInt(args, "size_max", 0, 9000), argInt(args, "burst", 0, 10000)
 			st.DstMAC, st.SrcIP, st.DPort, st.Prio = argStr(args, "dst_mac"), argStr(args, "src_ip"), argInt(args, "dport", 0, 65535), argInt(args, "pcp", 0, 7)
 			if ms, ok := args["mods"].([]any); ok {
@@ -760,6 +770,31 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				return "", err
 			}
 			return "Stream added; lab_traffic start runs it.", nil
+		case "templates":
+			var b strings.Builder
+			b.WriteString("Templates (name | test ports | what it checks):\n")
+			for _, t := range a.EmuTrafficTemplates() {
+				own := ""
+				if !t.Builtin && t.Saved != "" {
+					own = " (yours)"
+				}
+				fmt.Fprintf(&b, "- %s%s | %d (%s) | %s\n", t.Name, own, t.Ports, strings.Join(t.Roles, ", "), t.Desc)
+			}
+			return b.String() + "apply_template with template and ports (one per role, in order) adds its streams and tests.", nil
+		case "apply_template":
+			nv, err := a.EmuTrafficTemplateApply(argStr(args, "template"), argStrs(args, "ports"))
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Applied %s: the lab has %d streams and %d saved tests now; lab_traffic start runs the streams, lab_test runs the tests.", argStr(args, "template"), len(nv.Streams), len(a.EmuTests())), nil
+		case "save_template":
+			t, err := a.EmuTrafficTemplateSave(argStr(args, "template"), argStr(args, "description"), nil)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Saved the template %s: %d streams, %d tests, %d test ports.", t.Name, len(t.Streams), len(t.Tests), t.Ports), nil
+		case "remove_template":
+			return "Removed.", a.EmuTrafficTemplateRemove(argStr(args, "template"))
 		case "remove_stream":
 			for _, s := range tv.Streams {
 				if s.Name == argStr(args, "name") || s.ID == argStr(args, "name") {

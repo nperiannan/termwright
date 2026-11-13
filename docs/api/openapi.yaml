@@ -2035,7 +2035,7 @@ paths:
             tags:
                 - Tools
             summary: The emulated lab's traffic generator
-            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
+            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file''s frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab''s streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -2054,12 +2054,19 @@ paths:
                                         - start
                                         - stop
                                         - report
+                                        - templates
+                                        - apply_template
+                                        - save_template
+                                        - remove_template
                                     type: string
                                 burst:
                                     description: 'add_stream: frames sent back to back (the rate stays the average)'
                                     type: integer
                                 count:
                                     type: integer
+                                description:
+                                    description: 'save_template: what it checks'
+                                    type: string
                                 dport:
                                     type: integer
                                 dscp:
@@ -2094,10 +2101,14 @@ paths:
                                         - tcp
                                         - arp
                                         - raw
+                                        - pcap
                                     type: string
                                 lldp:
                                     description: 'add_port, set_port: announce it by LLDP (default on)'
                                     type: boolean
+                                loops:
+                                    description: 'add_stream kind pcap: times through the capture (default 1)'
+                                    type: integer
                                 max_jitter:
                                     description: ms for a pass (0 = not checked)
                                     type: number
@@ -2115,12 +2126,23 @@ paths:
                                 name:
                                     description: 'add_stream: its name; remove_stream: the stream'
                                     type: string
+                                pcap:
+                                    description: 'add_stream kind pcap: the capture file on this computer (classic pcap)'
+                                    type: string
+                                pcap_timing:
+                                    description: 'add_stream kind pcap: keep the capture''s own gaps between frames (else the pps rate)'
+                                    type: boolean
                                 pcp:
                                     description: 'add_stream: 802.1p priority 0-7 (with vlan)'
                                     type: integer
                                 port:
                                     description: 'add_port: its free port; remove_port: the test port''s name'
                                     type: string
+                                ports:
+                                    description: 'apply_template: the test ports (names) for its roles A, B, C… in order'
+                                    items:
+                                        type: string
+                                    type: array
                                 pps:
                                     description: packets per second (default 100, at most 100000)
                                     type: integer
@@ -2134,6 +2156,9 @@ paths:
                                         - mbps
                                         - pct
                                     type: string
+                                rewrite_macs:
+                                    description: 'add_stream kind pcap: send from this test port''s MAC to the destination test port''s'
+                                    type: boolean
                                 round_trip:
                                     description: 'add_stream: the test port it goes to sends each frame back; latency is the round trip (works between test ports on two hosts)'
                                     type: boolean
@@ -2164,6 +2189,9 @@ paths:
                                     type: array
                                 switch:
                                     description: 'add_port: the switch'
+                                    type: string
+                                template:
+                                    description: 'apply_template, remove_template: the template (name or id); save_template: its name'
                                     type: string
                                 to:
                                     description: 'add_stream: test port name; empty = every other test port (broadcast) or dst_ip'
@@ -3800,7 +3828,7 @@ components:
                     description: a test port; "" = every other one (broadcast)
                     type: string
                 kind:
-                    description: udp, icmp, tcp (SYN), arp, raw
+                    description: udp, icmp, tcp (SYN), arp, raw, pcap (a capture's frames, replayed)
                     type: string
                 vlan:
                     description: 802.1Q tag; 0 = untagged
@@ -3874,6 +3902,27 @@ components:
                     type: number
                 rtt:
                     description: 'round trip: the test port it goes to sends each frame back, and the latency is the round trip (measured on one clock, so also between test ports on two hosts)'
+                    type: boolean
+                pcap:
+                    description: 'pcap: the capture file on this computer (classic pcap; Wireshark: Save As pcap)'
+                    type: string
+                pcapId:
+                    description: 'pcap: the capture as Termwright keeps it (its contents'' hash; set when saved)'
+                    type: string
+                pcapFrames:
+                    description: 'pcap: frames in the capture (set when saved)'
+                    type: integer
+                pcapSecs:
+                    description: 'pcap: how long the capture lasts, s (set when saved)'
+                    type: number
+                pcapTiming:
+                    description: 'pcap: send with the capture''s own gaps between frames (else at the rate)'
+                    type: boolean
+                loops:
+                    description: 'pcap: times through the capture (default 1; count or seconds instead)'
+                    type: integer
+                rewriteMacs:
+                    description: 'pcap: frames go from this test port''s MAC to the destination test port''s (else as captured)'
                     type: boolean
             required:
                 - id
@@ -4401,7 +4450,7 @@ components:
                     description: a test port; "" = every other one (broadcast)
                     type: string
                 kind:
-                    description: udp, icmp, tcp (SYN), arp, raw
+                    description: udp, icmp, tcp (SYN), arp, raw, pcap (a capture's frames, replayed)
                     type: string
                 vlan:
                     description: 802.1Q tag; 0 = untagged
@@ -4475,6 +4524,27 @@ components:
                     type: number
                 rtt:
                     description: 'round trip: the test port it goes to sends each frame back, and the latency is the round trip (measured on one clock, so also between test ports on two hosts)'
+                    type: boolean
+                pcap:
+                    description: 'pcap: the capture file on this computer (classic pcap; Wireshark: Save As pcap)'
+                    type: string
+                pcapId:
+                    description: 'pcap: the capture as Termwright keeps it (its contents'' hash; set when saved)'
+                    type: string
+                pcapFrames:
+                    description: 'pcap: frames in the capture (set when saved)'
+                    type: integer
+                pcapSecs:
+                    description: 'pcap: how long the capture lasts, s (set when saved)'
+                    type: number
+                pcapTiming:
+                    description: 'pcap: send with the capture''s own gaps between frames (else at the rate)'
+                    type: boolean
+                loops:
+                    description: 'pcap: times through the capture (default 1; count or seconds instead)'
+                    type: integer
+                rewriteMacs:
+                    description: 'pcap: frames go from this test port''s MAC to the destination test port''s (else as captured)'
                     type: boolean
             required:
                 - from

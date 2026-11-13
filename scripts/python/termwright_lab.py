@@ -280,7 +280,8 @@ class Traffic:
         """A stream from test port src to dst (empty: every other port, or dst_ip). Fields as in the API,
         in snake_case: kind, size, pps, seconds, count, vlan, pcp (prio), dscp, size_mode, size_max, burst,
         max_loss, max_latency, max_jitter, mods, dst_ip, dst_mac, dport, rtt (round trip: the far test port
-        sends each frame back; latency is the round trip). rate= gives the speed in Mbit/s on the wire, or with
+        sends each frame back; latency is the round trip). kind="pcap" replays a capture: pcap (its file on
+        this computer), pcap_timing (its own gaps), loops, rewrite_macs. rate= gives the speed in Mbit/s on the wire, or with
         rate_unit="pct" in % of the sending test port's line rate (set_port(speed=...), default 1000 Mbit/s;
         line_mbps= works it out here instead) - in place of pps."""
         if rate is not None:
@@ -300,6 +301,22 @@ class Traffic:
         body = _body(dict(name=name, from_=src, to=dst, **fields))
         body.setdefault("size", 128)
         return self.lab.request("POST", "/traffic/streams", body)
+
+    # ---- the template library ----
+    def templates(self) -> str:
+        """The library of ready tests (Termwright's and yours): name, test ports it needs, what it checks."""
+        return self.lab.tool("traffic", action="templates")
+
+    def apply_template(self, template: str, *ports: str) -> str:
+        """Put a template's streams and tests on the test ports given for its roles A, B, C… in order."""
+        return self.lab.tool("traffic", action="apply_template", template=template, ports=list(ports))
+
+    def save_template(self, name: str, description: str = "") -> str:
+        """Keep the lab's streams and saved tests as a template of yours (their test ports become roles A, B, …)."""
+        return self.lab.tool("traffic", action="save_template", template=name, description=description)
+
+    def remove_template(self, name: str) -> str:
+        return self.lab.tool("traffic", action="remove_template", template=name)
 
     def replace_stream(self, name: str, **fields) -> dict:
         return self.lab.request("PUT", "/traffic/streams/" + urllib.parse.quote(name, safe=""), _body(fields))

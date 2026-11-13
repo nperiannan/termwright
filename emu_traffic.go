@@ -94,6 +94,7 @@ func (a *App) emuTrafficPush() error {
 	}
 	type job struct{ host, script string }
 	var jobs []job
+	var pcaps [][3]string // host, lab folder, capture
 	for _, h := range l.Hosts(emuLab.f.Host) {
 		lh := a.emuFor(h)
 		lh.Testers = slices.Clone(lh.Testers)
@@ -111,9 +112,19 @@ func (a *App) emuTrafficPush() error {
 		}
 		emuLab.trafHosts[h] = n > 0
 		jobs = append(jobs, job{h, lh.TrafficScript(cfg)})
+		for _, s := range l.Streams {
+			if s.Kind == "pcap" && s.PcapID != "" && n > 0 {
+				pcaps = append(pcaps, [3]string{h, lh.Dir, s.PcapID})
+			}
+		}
 	}
 	emuLab.mu.Unlock()
 	var errs []string
+	for _, p := range pcaps { // the captures the streams replay, on each host with test ports
+		if err := a.emuPcapUpload(p[0], p[1], p[2]); err != nil {
+			errs = append(errs, p[0][strings.LastIndex(p[0], "/")+1:]+": "+err.Error())
+		}
+	}
 	for _, j := range jobs {
 		out, err := a.emuRun(j.host, j.script, 30*time.Second)
 		if err != nil || !strings.Contains(out, "traffic-ok") {
@@ -584,15 +595,23 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 		return EmuTrafficView{}, errors.New("choose the test port it goes from, and the one it goes to")
 	}
 	s.Kind = orStr(s.Kind, "udp")
-	if !slices.Contains([]string{"udp", "icmp", "tcp", "arp", "raw"}, s.Kind) {
+	if !slices.Contains([]string{"udp", "icmp", "tcp", "arp", "raw", "pcap"}, s.Kind) {
 		emuLab.mu.Unlock()
-		return EmuTrafficView{}, errors.New("the kind is udp, icmp, tcp, arp or raw")
+		return EmuTrafficView{}, errors.New("the kind is udp, icmp, tcp, arp, raw or pcap")
 	}
-	if s.Kind != "arp" && s.Kind != "raw" && s.To == "" && s.DstIP == "" {
+	if s.Kind == "pcap" {
+		if err := a.emuPcapKeep(&s); err != nil {
+			emuLab.mu.Unlock()
+			return EmuTrafficView{}, err
+		}
+	} else {
+		s.Pcap, s.PcapID, s.PcapFrames, s.PcapSecs, s.PcapTiming, s.Loops, s.RewriteMAC = "", "", 0, 0, false, 0, false
+	}
+	if s.Kind != "arp" && s.Kind != "raw" && s.Kind != "pcap" && s.To == "" && s.DstIP == "" {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("an IP stream needs a destination test port or address")
 	}
-	if f := l.TesterByID(s.From); s.Kind != "arp" && s.Kind != "raw" && s.SrcIP == "" && (f.IP == "" && !f.DHCP && !strings.Contains(s.DstIP, ":") || strings.Contains(s.DstIP, ":") && f.IP6 == "" && !f.SLAAC) {
+	if f := l.TesterByID(s.From); s.Kind != "arp" && s.Kind != "raw" && s.Kind != "pcap" && s.SrcIP == "" && (f.IP == "" && !f.DHCP && !strings.Contains(s.DstIP, ":") || strings.Contains(s.DstIP, ":") && f.IP6 == "" && !f.SLAAC) {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("give the test port it goes from an IP address (or the stream a source address)")
 	}

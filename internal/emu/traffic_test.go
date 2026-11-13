@@ -2,12 +2,14 @@ package emu
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -414,4 +416,106 @@ func TestTrafficPyFlows(t *testing.T) {
 	if l := st.Lat["s2"]; len(l) < 3 || l[2] != 100 || st.RX["s2"] != 100 {
 		t.Fatalf("round trip: lat %v rx %v", l, st.RX)
 	}
+}
+
+// A pcap stream replays a capture's frames (at a rate, then with the capture's own timing) and the
+// receiving test port counts them by their contents, with a VLAN tag the "switch" added.
+func TestTrafficPyPcap(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// a capture of 3 frames, 10 ms apart: two UDP-ish frames and a short one (padded when sent)
+	var pc bytes.Buffer
+	le := func(v ...uint32) {
+		for _, x := range v {
+			_ = binaryWrite(&pc, x)
+		}
+	}
+	pc.Write([]byte{0xd4, 0xc3, 0xb2, 0xa1, 2, 0, 4, 0})
+	le(0, 0, 65535, 1)
+	for i, fr := range [][]byte{bytes.Repeat([]byte{0xaa}, 100), bytes.Repeat([]byte{0xbb}, 80), append(bytes.Repeat([]byte{0xcc}, 20), 0, 0)} {
+		fr = append([]byte{2, 0, 0, 0, 0, 9, 2, 0, 0, 0, 0, 8, 0x08, 0x00}, fr...)
+		le(uint32(1000), uint32(i*10000), uint32(len(fr)), uint32(len(fr)))
+		pc.Write(fr)
+	}
+	_ = os.MkdirAll(filepath.Join(dir, "pcap"), 0o755)
+	if err := os.WriteFile(filepath.Join(dir, "pcap", "cap1.pcap"), pc.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// the "switch" tags what it forwards to test port 2 with VLAN 20
+	c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 41211})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	go func() {
+		buf := make([]byte, 65536)
+		for {
+			n, _, err := c.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			f := append(append(append([]byte{}, buf[:12]...), 0x81, 0x00, 0x00, 20), buf[12:n]...)
+			_, _ = c.WriteToUDP(f, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 41202})
+		}
+	}()
+	cfg := map[string]any{"run": 9, "testers": []map[string]any{
+		{"id": "t1", "mac": "02:74:77:00:00:01", "listen": 41201, "send": 41211},
+		{"id": "t2", "mac": "02:74:77:00:00:02", "listen": 41202, "send": 41212}},
+		"streams": []map[string]any{
+			{"id": "p1", "from": "t1", "to": "t2", "kind": "pcap", "pcapId": "cap1", "loops": 4, "pps": 300, "size": 64, "on": true, "toMac": "02:74:77:00:00:02", "rewriteMacs": true},
+			{"id": "p2", "from": "t1", "kind": "pcap", "pcapId": "cap1", "pcapTiming": true, "count": 6, "size": 64, "pps": 1, "on": false}}}
+	j, _ := json.Marshal(cfg)
+	if err := os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir)
+	out, _ := os.Create(filepath.Join(dir, "log"))
+	cmd.Stdout, cmd.Stderr = out, out
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var st struct {
+		TX, RX map[string]int
+		QoS    map[string]map[string]int `json:"qos"`
+		Err    map[string]string
+	}
+	read := func(ok func() bool) {
+		for end := time.Now().Add(6 * time.Second); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+			b, err := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+			if err == nil && json.Unmarshal(b, &st) == nil && ok() {
+				return
+			}
+		}
+	}
+	read(func() bool { return st.RX["p1"] == 12 })
+	tagged := 0
+	for k, n := range st.QoS["p1"] {
+		if strings.HasPrefix(k, "20/") {
+			tagged += n
+		}
+	}
+	if st.TX["p1"] != 12 || st.RX["p1"] != 12 || tagged != 12 {
+		lg, _ := os.ReadFile(filepath.Join(dir, "log"))
+		t.Fatalf("replay: tx %v rx %v qos %v err %v\n%s", st.TX, st.RX, st.QoS, st.Err, lg)
+	}
+	// the capture's own timing: 6 frames over two passes of ~30 ms each
+	cfg["run"] = 10
+	cfg["streams"].([]map[string]any)[1]["on"] = true
+	j, _ = json.Marshal(cfg)
+	time.Sleep(50 * time.Millisecond) // a new modification time
+	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+	read(func() bool { return st.TX["p2"] == 6 })
+	if st.TX["p2"] != 6 {
+		t.Fatalf("timing: tx %v", st.TX)
+	}
+}
+
+func binaryWrite(b *bytes.Buffer, v uint32) error {
+	return binary.Write(b, binary.LittleEndian, v)
 }

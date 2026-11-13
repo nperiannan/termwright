@@ -956,6 +956,33 @@ func TestEmuTwoHosts(t *testing.T) {
 		if _, err := a.EmuTrafficStop(); err != nil {
 			t.Error(err)
 		}
+		// the test library: a ready test on two test ports, the lab's streams kept as a template and put in again
+		if len(free) > 1 {
+			tv2, err := a.EmuTesterAdd(vb, free[1], "10.66.0.3/24", "", 0)
+			if err != nil || len(tv2.Testers) != 2 {
+				t.Fatalf("second test port: %v %+v", err, tv2)
+			}
+			ids := []string{tv2.Testers[0].ID, tv2.Testers[1].ID}
+			if tv3, err := a.EmuTrafficTemplateApply("Unicast both ways", ids); err != nil || len(tv3.Streams) != 3 || tv3.Streams[1].RateUnit != "pct" || tv3.Streams[1].PPS != 2350 || tv3.Streams[1].From != ids[0] || tv3.Streams[2].From != ids[1] {
+				t.Fatalf("apply: %v %+v", err, tv3.Streams)
+			}
+			if _, err := a.EmuTrafficTemplateApply("b-flood", ids); err == nil || !strings.Contains(err.Error(), "needs 3 test ports") {
+				t.Errorf("three roles on two ports: %v", err)
+			}
+			tp, err := a.EmuTrafficTemplateSave("my both ways", "", nil)
+			if err != nil || tp.Ports != 2 || len(tp.Streams) != 3 || tp.Streams[0].From != "A" || tp.Streams[2].From != "B" {
+				t.Fatalf("save: %v %+v", err, tp)
+			}
+			if tv3, err := a.EmuTrafficTemplateApply("my both ways", []string{ids[1], ids[0]}); err != nil || len(tv3.Streams) != 6 || tv3.Streams[4].Name != "A to B (2)" || tv3.Streams[4].From != ids[1] {
+				t.Fatalf("apply mine: %v %+v", err, tv3.Streams)
+			}
+			if err := a.EmuTrafficTemplateRemove("my both ways"); err != nil || a.EmuTrafficTemplateRemove("b-unicast") == nil {
+				t.Errorf("remove: %v", err)
+			}
+			if _, err := a.EmuTesterRemove(ids[1]); err != nil {
+				t.Error(err)
+			}
+		}
 		if tv, err := a.EmuTesterRemove(tv.Testers[0].ID); err != nil || len(tv.Testers) != 0 || len(tv.Streams) != 0 {
 			t.Errorf("remove: %v %+v", err, tv)
 		}

@@ -17,7 +17,11 @@
 # fields), and the VLAN, priority and DSCP the frames arrived with. A round-trip
 # stream's frames are sent back by the test port they reach: its latency is the
 # round trip, measured on one clock (so also between test ports on two hosts).
-import json, math, os, random, socket, struct, sys, time, select
+# A pcap stream replays the frames of a capture (pcap/<id>.pcap, written by Termwright in
+# classic little-endian pcap) at a rate or with the capture's own timing; the receiving
+# test ports count its frames by their contents (from the EtherType on, any VLAN tags
+# left out), so they are counted on switched paths, not routed ones.
+import bisect, json, math, os, random, socket, struct, sys, time, select
 
 d = sys.argv[1]
 cfg_path, st_path = os.path.join(d, "traffic.json"), os.path.join(d, "traffic-stats.json")
@@ -227,6 +231,18 @@ class Stream:
         s.rnd = random.Random(idx * 7919 + run)
         s.nflows = math.prod(max(1, m.get("count", 1)) for m in s.mods) if s.mods else 0
         s.flow, s.ftx, s.flab = 0, {}, {}
+        s.pkts, s.offs, s.timing, s.dur = [], [], False, 0
+        if x.get("kind") == "pcap":
+            s.pkts, s.offs = read_pcap(os.path.join(d, "pcap", x.get("pcapId", "") + ".pcap"))
+            n = len(s.pkts)
+            if n == 0:
+                err[x["id"]] = "the capture is not on this host, or has no frames"
+            s.timing = bool(x.get("pcapTiming")) and n > 1
+            s.dur = s.offs[-1] + s.offs[-1] / (n - 1) if n > 1 else 0
+            if not x.get("count") and not (x.get("seconds") and not s.timing):
+                s.count = n * max(1, x.get("loops", 1))
+            if n == 0:
+                s.count = 0
 
     def k(s, m):  # which of its values this frame's field takes (0 .. count-1)
         n = max(1, m.get("count", 1))
@@ -244,6 +260,11 @@ class Stream:
 
     def frame(s, now):
         x, tp = s.x, s.tp
+        if s.pkts:  # a capture's frame, as it was (or from this test port to the one it goes to)
+            f = s.pkts[s.seq % len(s.pkts)]
+            if x.get("rewriteMacs"):
+                f = (s.dst or f[:6]) + tp.mac + f[12:]
+            return f
         k = x.get("kind", "udp")
         src_ip = ip_b(x["srcIp"]) if x.get("srcIp") else tp.ip
         dst_ip = ip_b(x.get("dstIp") or "")
@@ -351,6 +372,11 @@ def load():
         else:
             testers[tid].set(t)
     cfg = c
+    phash.clear()
+    for x in c.get("streams", []):
+        if x.get("kind") == "pcap" and x.get("on") and x.get("pcapId"):
+            for f in read_pcap(os.path.join(d, "pcap", x["pcapId"] + ".pcap"))[0]:
+                phash[l3key(f)] = x
     if not c.get("run"):  # stopped: no more sending, the counts stay
         streams = []
     elif c["run"] != run:
@@ -411,6 +437,48 @@ def got(sid, tp, seq, ts, flow=0xFFFF, mark=""):
         latency(sid, flow, ts, st)
 
 
+PCAPS = {}  # path -> (frames, offsets in seconds from the first)
+
+
+def read_pcap(path):
+    """The frames of a classic pcap file and when each was captured (seconds after the first)."""
+    if path in PCAPS:
+        return PCAPS[path]
+    frames, offs = [], []
+    try:
+        b = open(path, "rb").read()
+    except OSError:
+        b = b""
+    if len(b) >= 24:
+        m = b[:4]
+        bo = "<" if m in (b"\xd4\xc3\xb2\xa1", b"\x4d\x3c\xb2\xa1") else ">"
+        div = 1e9 if m in (b"\x4d\x3c\xb2\xa1", b"\xa1\xb2\x3c\x4d") else 1e6
+        i, t0 = 24, None
+        while i + 16 <= len(b):
+            sec, sub, incl, _ = struct.unpack(bo + "IIII", b[i:i + 16])
+            data = b[i + 16:i + 16 + incl]
+            i += 16 + incl
+            if len(data) < 14:
+                continue
+            t = sec + sub / div
+            t0 = t if t0 is None else t0
+            frames.append(data + b"\0" * max(0, 60 - len(data)))
+            offs.append(max(0.0, t - t0))
+    PCAPS[path] = (frames, offs)
+    return frames, offs
+
+
+def l3key(f):
+    """A frame's contents from its EtherType on (VLAN tags left out, padding too): how a replayed frame is known."""
+    o = 12
+    while f[o:o + 2] in (b"\x81\x00", b"\x88\xa8", b"\x91\x00"):
+        o += 4
+    return hash(f[o:].rstrip(b"\0"))
+
+
+phash = {}  # pcap streams' frames: l3key -> stream
+
+
 def reflect(tp, f, o, et):
     """A round-trip stream's frame goes back where it came from: MACs, addresses and ports swapped (the
     checksums stay right: their sums do not change)."""
@@ -462,6 +530,19 @@ def handle(tp, f):
                     if rtt:
                         reflect(tp, f, o, et)
         return
+    if phash:
+        x = phash.get(l3key(f))
+        if x is not None and x["from"] != tp.id:
+            sid = x["id"]
+            if x.get("to") and x["to"] != tp.id:
+                other[sid] = other.get(sid, 0) + 1
+            else:
+                rx[sid] = rx.get(sid, 0) + 1
+                dscp = b[1] >> 2 if et == 0x0800 and len(b) > 1 else ((b[0] & 15) << 4 | b[1] >> 4) >> 2 if et == 0x86DD and len(b) > 1 else -1
+                q = qos.setdefault(sid, {})
+                mk = "%d/%d/%d" % (vlan, prio, dscp)
+                q[mk] = q.get(mk, 0) + 1
+            return
     if et == 0x0806 and len(b) >= 28:
         op, smac, sip, tip = struct.unpack("!6xH6s4s6x4s", b[:28])
         if sip != b"\0\0\0\0":
@@ -575,7 +656,7 @@ while True:
         if s.tp is None or s.seq >= s.count:
             continue
         x = s.x
-        if s.dst is None and x.get("routed") and x.get("kind") != "arp":
+        if s.dst is None and x.get("routed") and x.get("kind") not in ("arp", "pcap"):
             gw = s.tp.gw
             mac = s.tp.arp.get(gw) if gw else None
             if not mac:
@@ -592,7 +673,12 @@ while True:
             s.dst = mac_b(x["toMac"])
         if s.start is None:
             s.start = now
-        due = min(s.count, int((now - s.start) * s.pps) + 1)
+        if s.timing:  # the capture's own gaps, over and over
+            el = now - s.start
+            lp = int(el // s.dur)
+            due = min(s.count, lp * len(s.pkts) + bisect.bisect_right(s.offs, el - lp * s.dur))
+        else:
+            due = min(s.count, int((now - s.start) * s.pps) + 1)
         if s.burst > 1:  # whole bursts, as often as the rate allows
             due = min(s.count, ((due + s.burst - 1) // s.burst) * s.burst)
         n = 0

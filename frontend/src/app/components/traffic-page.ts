@@ -20,6 +20,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
         <span class="seg2 tv"><a [class.on]="view() === 'streams'" (click)="viewChange.emit('streams')">{{ tr('Streams') }}</a><a [class.on]="view() === 'tests'" (click)="viewChange.emit('tests')">{{ tr('Tests') }}</a></span>
         <span class="sp"></span>
         @if (view() === 'tests') { <button type="button" (click)="newTest.emit()">＋ {{ tr('Test') }}</button> }
+        <button type="button" (click)="library.emit()" [title]="tr('Ready tests: unicast, IMIX, QoS classes, MAC table fill, round trip, RFC 2544 and 2889 - and yours')">{{ tr('Library…') }}</button>
         <button type="button" (click)="newTester.emit()">＋ {{ tr('Test Port') }}</button>
         @if (view() === 'streams') { <button type="button" (click)="newStream.emit()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button>
           @if (traf()?.running) { <button type="button" (click)="stop.emit()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="primary" (click)="start.emit()" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
@@ -89,6 +90,7 @@ export class TrafficPage {
   readonly start = output<void>();
   readonly stop = output<void>();
   readonly report = output<void>();
+  readonly library = output<void>();
   readonly editTester = output<EmuTester>();
   readonly removeTester = output<EmuTester>();
   protected tr = tr;

@@ -39,34 +39,41 @@ type Tester struct {
 
 // Stream is frames from one test port to another (or to all).
 type Stream struct {
-	ID         string  `json:"id"`                   // its id (made by Termwright)
-	Name       string  `json:"name"`                 // its name (unique; the API and command line find it by it)
-	From       string  `json:"from"`                 // the test port it is sent from (id; the API takes a name too)
-	To         string  `json:"to,omitempty"`         // a test port; "" = every other one (broadcast)
-	Kind       string  `json:"kind"`                 // udp, icmp, tcp (SYN), arp, raw
-	VLAN       int     `json:"vlan,omitempty"`       // 802.1Q tag; 0 = untagged
-	Prio       int     `json:"prio,omitempty"`       // 802.1p priority (0-7) in its VLAN tag
-	DstMAC     string  `json:"dstMac,omitempty"`     // "" = the destination test port's (or the gateway's, or broadcast)
-	SrcIP      string  `json:"srcIp,omitempty"`      // "" = the test ports'
-	DstIP      string  `json:"dstIp,omitempty"`      // "" = the destination test port's; an address that is not a test port (icmp: its replies are counted); a multicast group; IPv6 makes it an IPv6 stream
-	DPort      int     `json:"dport,omitempty"`      // UDP or TCP destination port (default 5001 for UDP, 80 for TCP)
-	Size       int     `json:"size"`                 // frame bytes (60-9000; the smallest with sizeMode inc or random)
-	PPS        int     `json:"pps"`                  // frames per second (1-100000)
-	Seconds    int     `json:"seconds,omitempty"`    // how long it sends (with pps: seconds × pps frames)
-	Count      int     `json:"count,omitempty"`      // how many frames (instead of seconds)
-	MaxLoss    float64 `json:"maxLoss"`              // % for a pass
-	MaxLatency float64 `json:"maxLatency,omitempty"` // ms; 0 = not checked
-	Off        bool    `json:"off,omitempty"`        // left out of Start All
-	DSCP       int     `json:"dscp,omitempty"`       // IP DSCP (0-63)
-	SizeMode   string  `json:"sizeMode,omitempty"`   // "" fixed, inc (Size..SizeMax, one more each frame), random, imix (64/594/1518 7:4:1)
-	SizeMax    int     `json:"sizeMax,omitempty"`    // the largest frame with sizeMode inc or random
-	Burst      int     `json:"burst,omitempty"`      // frames sent back to back (the rate is kept on average)
-	Mods       []Mod   `json:"mods,omitempty"`       // fields that change from frame to frame
-	MaxJitter  float64 `json:"maxJitter,omitempty"`  // ms for a pass (0 = not checked)
-	Test       string  `json:"test,omitempty"`       // made by a test run for one of its trials (not one of the user's streams)
-	RateUnit   string  `json:"rateUnit,omitempty"`   // how the rate was given: "" frames per second (pps), mbps (Mbit/s on the wire), pct (% of the sending test port's line rate)
-	Rate       float64 `json:"rate,omitempty"`       // the rate in that unit (pps is worked out from it)
-	RTT        bool    `json:"rtt,omitempty"`        // round trip: the test port it goes to sends each frame back, and the latency is the round trip (measured on one clock, so also between test ports on two hosts)
+	ID         string  `json:"id"`                    // its id (made by Termwright)
+	Name       string  `json:"name"`                  // its name (unique; the API and command line find it by it)
+	From       string  `json:"from"`                  // the test port it is sent from (id; the API takes a name too)
+	To         string  `json:"to,omitempty"`          // a test port; "" = every other one (broadcast)
+	Kind       string  `json:"kind"`                  // udp, icmp, tcp (SYN), arp, raw, pcap (a capture's frames, replayed)
+	VLAN       int     `json:"vlan,omitempty"`        // 802.1Q tag; 0 = untagged
+	Prio       int     `json:"prio,omitempty"`        // 802.1p priority (0-7) in its VLAN tag
+	DstMAC     string  `json:"dstMac,omitempty"`      // "" = the destination test port's (or the gateway's, or broadcast)
+	SrcIP      string  `json:"srcIp,omitempty"`       // "" = the test ports'
+	DstIP      string  `json:"dstIp,omitempty"`       // "" = the destination test port's; an address that is not a test port (icmp: its replies are counted); a multicast group; IPv6 makes it an IPv6 stream
+	DPort      int     `json:"dport,omitempty"`       // UDP or TCP destination port (default 5001 for UDP, 80 for TCP)
+	Size       int     `json:"size"`                  // frame bytes (60-9000; the smallest with sizeMode inc or random)
+	PPS        int     `json:"pps"`                   // frames per second (1-100000)
+	Seconds    int     `json:"seconds,omitempty"`     // how long it sends (with pps: seconds × pps frames)
+	Count      int     `json:"count,omitempty"`       // how many frames (instead of seconds)
+	MaxLoss    float64 `json:"maxLoss"`               // % for a pass
+	MaxLatency float64 `json:"maxLatency,omitempty"`  // ms; 0 = not checked
+	Off        bool    `json:"off,omitempty"`         // left out of Start All
+	DSCP       int     `json:"dscp,omitempty"`        // IP DSCP (0-63)
+	SizeMode   string  `json:"sizeMode,omitempty"`    // "" fixed, inc (Size..SizeMax, one more each frame), random, imix (64/594/1518 7:4:1)
+	SizeMax    int     `json:"sizeMax,omitempty"`     // the largest frame with sizeMode inc or random
+	Burst      int     `json:"burst,omitempty"`       // frames sent back to back (the rate is kept on average)
+	Mods       []Mod   `json:"mods,omitempty"`        // fields that change from frame to frame
+	MaxJitter  float64 `json:"maxJitter,omitempty"`   // ms for a pass (0 = not checked)
+	Test       string  `json:"test,omitempty"`        // made by a test run for one of its trials (not one of the user's streams)
+	RateUnit   string  `json:"rateUnit,omitempty"`    // how the rate was given: "" frames per second (pps), mbps (Mbit/s on the wire), pct (% of the sending test port's line rate)
+	Rate       float64 `json:"rate,omitempty"`        // the rate in that unit (pps is worked out from it)
+	RTT        bool    `json:"rtt,omitempty"`         // round trip: the test port it goes to sends each frame back, and the latency is the round trip (measured on one clock, so also between test ports on two hosts)
+	Pcap       string  `json:"pcap,omitempty"`        // pcap: the capture file on this computer (classic pcap; Wireshark: Save As pcap)
+	PcapID     string  `json:"pcapId,omitempty"`      // pcap: the capture as Termwright keeps it (its contents' hash; set when saved)
+	PcapFrames int     `json:"pcapFrames,omitempty"`  // pcap: frames in the capture (set when saved)
+	PcapSecs   float64 `json:"pcapSecs,omitempty"`    // pcap: how long the capture lasts, s (set when saved)
+	PcapTiming bool    `json:"pcapTiming,omitempty"`  // pcap: send with the capture's own gaps between frames (else at the rate)
+	Loops      int     `json:"loops,omitempty"`       // pcap: times through the capture (default 1; count or seconds instead)
+	RewriteMAC bool    `json:"rewriteMacs,omitempty"` // pcap: frames go from this test port's MAC to the destination test port's (else as captured)
 }
 
 // IMIXMean is the mean size of an IMIX frame (64, 594 and 1518 bytes, 7:4:1).
@@ -229,6 +236,10 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 				x.DstIP = pick(to)
 			}
 			switch {
+			case x.Kind == "pcap":
+				if to != nil {
+					x.ToMAC = to.MAC
+				}
 			case x.DstMAC != "" || x.Kind == "arp" || IsMulticast(x.DstIP):
 			case v6 || SameNet(f.IP, x.DstIP) || f.GW == "": // IPv6: on the test ports' own network
 				if to != nil {

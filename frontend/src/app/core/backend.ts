@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange } from './models';
+  AccountInfo, EmuTrafficTemplate, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -132,6 +132,10 @@ export class Backend {
   emuTesterSet(t: EmuTester) { return this.call<EmuTrafficView>('EmuTesterSet', t); }
   emuTesterRemove(id: string) { return this.call<EmuTrafficView>('EmuTesterRemove', id); }
   emuStreamSave(s: EmuStream) { return this.call<EmuTrafficView>('EmuStreamSave', s); }
+  emuTrafficTemplates() { return this.call<EmuTrafficTemplate[]>('EmuTrafficTemplates'); }
+  emuTrafficTemplateApply(id: string, ports: string[]) { return this.call<EmuTrafficView>('EmuTrafficTemplateApply', id, ports); }
+  emuTrafficTemplateSave(name: string, desc: string, ids: string[]) { return this.call<EmuTrafficTemplate>('EmuTrafficTemplateSave', name, desc, ids); }
+  emuTrafficTemplateRemove(id: string) { return this.call<void>('EmuTrafficTemplateRemove', id); }
   emuStreamRemove(id: string) { return this.call<EmuTrafficView>('EmuStreamRemove', id); }
   emuTrafficStart(ids: string[]) { return this.call<EmuTrafficView>('EmuTrafficStart', ids); }
   emuTrafficStop() { return this.call<EmuTrafficView>('EmuTrafficStop'); }
