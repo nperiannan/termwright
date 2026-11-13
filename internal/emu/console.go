@@ -411,7 +411,7 @@ func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) 
 				if im.Password == "" {
 					return nil, errors.New("the login was refused without a password: set the image's password (Images → the image → Login)")
 				}
-				return nil, errors.New("the login or password was refused")
+				return nil, errors.New("the login or password was refused (if the switch's password was changed on its console, set the same in Images → the image → Login, then Type Day 0 Again in the switch's details)")
 			}
 		}
 	}
