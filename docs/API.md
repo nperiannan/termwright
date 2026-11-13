@@ -48,6 +48,14 @@ Settings, and turning one on does not turn on the other.
 | `DELETE /lab/traffic/streams/{stream}` | Removes a stream | 204 |
 | `POST /lab/traffic/start` | Starts the given streams (`{"streams": [...]}`), or every stream not marked off | 200 `TrafficView` |
 | `POST /lab/traffic/stop` | Stops sending. The counters stay, and are final a moment later | 200 `TrafficView` |
+| `GET /lab/traffic/tests` | The saved tests (RFC 2544, RFC 2889 learning, convergence) | 200 `TrafficTest[]` |
+| `POST /lab/traffic/tests` | Saves a test | 201 `TrafficTest[]` |
+| `PUT /lab/traffic/tests/{test}` | Replaces a test | 200 `TrafficTest[]` |
+| `DELETE /lab/traffic/tests/{test}` | Removes a test | 204 |
+| `POST /lab/traffic/tests/{test}/run` | Starts it in the background; `Location` is the run | 202 `TestRun` |
+| `GET /lab/traffic/runs` | The running test and the last 20 runs | 200 `TestRun[]` |
+| `GET /lab/traffic/runs/{run}?format=json\|csv\|html\|text` | A run's progress and results (`latest` for the newest) | 200 |
+| `POST /lab/traffic/runs/stop` | Stops the running test | 200 |
 
 `{port}` and `{stream}` take a name (`Test port 1`, `voice`) or an id. In a
 stream, `from` and `to` take names too. The OpenAPI document has every field,
@@ -68,6 +76,15 @@ curl -s -H "$AUTH" -H 'Content-Type: application/json' -X POST $API/traffic/stre
 curl -s -H "$AUTH" -X POST $API/traffic/start -d '{"streams":["voice"]}'
 sleep 35
 curl -s -H "$AUTH" "$API/traffic/report?format=text"
+```
+
+## A convergence test
+
+```sh
+curl -s -H "$AUTH" -H 'Content-Type: application/json' -X POST $API/traffic/tests \
+  -d '{"name":"lag-failover","kind":"convergence","from":"Test port 1","to":"Test port 2","both":true,"rate":1000,"seconds":30,"action":"pull","switch":"leaf-1","port":"1","at":5,"hold":10}'
+curl -s -H "$AUTH" -X POST $API/traffic/tests/lag-failover/run
+curl -s -H "$AUTH" "$API/traffic/runs/latest?format=text"     # until its status is done
 ```
 
 ## The same in Python (pytest)
@@ -159,6 +176,15 @@ Every error has the body
 
 ### no-stream
 404: there is no stream with that name or id.
+
+### bad-test
+400: the test is not a `TestInput`: an unknown field, or a value of the wrong type.
+
+### no-test
+404: there is no saved test with that name or id.
+
+### no-run
+404: there is no run with that id (the runs are kept in memory until Termwright restarts).
 
 ### no-tool
 404: there is no lab tool with that name. `GET /api/v1/lab/tools` lists them.

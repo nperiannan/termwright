@@ -381,6 +381,7 @@ type Lab struct {
 	Lags     []Lag           `json:"lags,omitempty"`
 	Testers  []Tester        `json:"testers,omitempty"` // test ports of the traffic generator
 	Streams  []Stream        `json:"streams,omitempty"`
+	Tests    []TrafficTest   `json:"tests,omitempty"` // saved traffic tests (RFC 2544, learning, convergence)
 	// Nets: the management of the lab's other hosts (its own host's is above);
 	// Addrs: each host's address the others send cable traffic to.
 	Nets  map[string]HostNet `json:"nets,omitempty"`

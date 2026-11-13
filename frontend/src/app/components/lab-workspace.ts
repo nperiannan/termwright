@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe } from '@angular/common';
 import { LabService } from '../core/lab.service';
@@ -11,6 +11,7 @@ import { LabConfigure, LabHosts, LabImages, LabNew } from './lab-pages';
 import { TerminalView } from './terminal-view';
 import { DevIcon, DevRole, ICON_STYLES, IconStyle, ROLES, iconReach, roleOf } from './dev-icon';
 import { PacketView, PacketWindow } from './packet-view';
+import { TrafficTests } from './traffic-tests';
 
 const BW = 104, BH = 64;
 type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
@@ -19,7 +20,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow],
+  imports: [FormsModule, DecimalPipe, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
     <div class="tb">
@@ -423,7 +424,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (dock() === 'inv' && inventory().length > 1) { <button type="button" class="sm" (click)="flipAll()">{{ invClosed().size === inventory().length ? tr('Expand All') : tr('Collapse All') }}</button> }
         @else { <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button> }
         @if (dock() === 'events' && emu()) { <button type="button" class="sm" (click)="clearEvents()">{{ tr('Clear') }}</button> }
-        @if (dock() === 'traffic') { <button type="button" class="sm" (click)="newStream()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button><button type="button" class="sm" (click)="newTester()">＋ {{ tr('Test Port') }}</button>
+        @if (dock() === 'traffic') { <span class="seg2 tv"><a [class.on]="trafView() === 'streams'" (click)="trafView.set('streams')">{{ tr('Streams') }}</a><a [class.on]="trafView() === 'tests'" (click)="trafView.set('tests')">{{ tr('Tests') }}</a></span>@if (trafView() === 'tests') { <button type="button" class="sm" (click)="ttests()?.newTest()">＋ {{ tr('Test') }}</button><button type="button" class="sm" (click)="newTester(); trafView.set('streams')">＋ {{ tr('Test Port') }}</button> } }
+        @if (dock() === 'traffic' && trafView() === 'streams') { <button type="button" class="sm" (click)="newStream()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button><button type="button" class="sm" (click)="newTester()">＋ {{ tr('Test Port') }}</button>
           @if (traf()?.running) { <button type="button" class="sm" (click)="trafStop()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="sm primary" (click)="trafStart([])" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
           <button type="button" class="sm" (click)="trafReport()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
         @if (dock() === 'cap' && capCur(); as c) { @if (pktChk().size) { <button type="button" class="sm" (click)="copyPkts()" [title]="tr('The ticked rows as text')">{{ tr('Copy Selected ({0})', pktChk().size) }}</button><button type="button" class="sm" (click)="savePkts(c)">{{ tr('Save Selected as .pcap…') }}</button> }@if (pktNo()) { <button type="button" class="sm" (click)="pktWin.set(pktNo())" [title]="tr('The packet in a window of its own (or double-click it)')">{{ tr('Open Packet') }} ↗</button> }<input class="sm capf" [ngModel]="capFilter()" (ngModelChange)="capFilter.set($event)" [placeholder]="tr('Filter: ICMP, 10.0.0.1, LLDP…')" />@if (c.running) { <button type="button" class="sm capstop" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (!c.running) { <button type="button" class="sm" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> }@if (stoppedCaps().length > 1) { <button type="button" class="sm" (click)="delCaps(stoppedCaps())">{{ tr('Delete All Stopped') }}</button> } }
@@ -458,6 +460,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           @for (e of events(); track $index) { <div [class]="'lv-' + e.level"><span class="t">{{ time(e.at) }}</span><span class="eh" [title]="e.host || tr('this computer')">@if (e.host) { <i [style.background]="hcol(e.host)"></i>{{ hname(e.host) }} } @else { <span class="muted">{{ tr('this computer') }}</span> }</span><b (click)="selectId(e.vm)">{{ e.name }}</b><span class="lv">{{ lvName(e.level) }}</span><span class="by" [title]="byTitle(e.by)">{{ (e.by || 'system').toUpperCase() }}</span><span class="tx">{{ e.text }}</span></div> }
           @empty { <div><span class="t"></span><span></span><b></b><span></span><span></span><span class="muted">{{ emu() ? tr('Nothing yet - start a switch.') : tr('Simulated switches start at once; their state is on the canvas.') }}</span></div> }
         </div>
+      } @else if (dock() === 'traffic' && trafView() === 'tests') {
+        <app-traffic-tests [testers]="traf()?.testers ?? []" [devs]="devs()" />
       } @else if (dock() === 'traffic') {
         <div class="trw" [class.ed]="!!sEd() || !!tEd()">
           <div class="trt">
@@ -731,7 +735,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .node.tpn { cursor: grab; width: 112px; text-align: center; .tpb { height: 30px; border-radius: 9px; border: 1.5px solid #e08a2e; background: color-mix(in srgb, #e08a2e 12%, var(--surface)); color: #e9a55a; display: flex; align-items: center; justify-content: center; font: 600 11.5px var(--font, Inter, sans-serif); white-space: nowrap; } }
     .tpl .ln { stroke: #e08a2e; stroke-dasharray: 5 4; stroke-width: 2; fill: none; }
     .capsum { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); .cs { font-size: 11.5px; border: 1px solid var(--line); border-radius: 8px; padding: 1px 7px; cursor: pointer; font-family: var(--mono, monospace); i { font-style: normal; color: var(--muted); margin-left: 4px; } } .cs.lldp, .cs.lacp, .cs.stp { border-color: var(--accent); } }
-    .capw { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; .capl { border-right: 1px solid var(--line); overflow: auto; } .ci { display: grid; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid var(--line); b { font-size: 12.5px; display: flex; align-items: center; gap: 6px; } } .ci.on { background: var(--accent-soft); } .cx { margin-left: auto; color: var(--muted); font-weight: 400; padding: 0 2px; } .cx:hover { color: var(--danger); } .capt { display: flex; flex-direction: column; min-height: 0; overflow: hidden; } .ptab { flex: 1; min-height: 72px; overflow: auto; } .dtabs button.sm { white-space: nowrap; } .pdet { height: 48%; flex: none; border-top: 1px solid var(--line); } .capt { tr.sel td { background: var(--accent-soft); } table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 4px 8px; } td { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr.pp.icmp td, tr.pp.icmpv6 td { color: #9cc3ff; } tr.pp.lldp td, tr.pp.stp td, tr.pp.lacp td { color: var(--muted); } tr.pp.arp td { color: #e5c07b; } } }
+    .capw { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; .capl { border-right: 1px solid var(--line); overflow: auto; } .ci { display: grid; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid var(--line); b { font-size: 12.5px; display: flex; align-items: center; gap: 6px; } } .ci.on { background: var(--accent-soft); } .cx { margin-left: auto; color: var(--muted); font-weight: 400; padding: 0 2px; } .cx:hover { color: var(--danger); } .capt { display: flex; flex-direction: column; min-height: 0; overflow: hidden; } .ptab { flex: 1; min-height: 72px; overflow: auto; } .dtabs button.sm { white-space: nowrap; } .seg2.tv { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-right: 6px; a { padding: 2px 9px; font-size: 12px; cursor: pointer; } a.on { background: var(--accent); color: #fff; } } .pdet { height: 48%; flex: none; border-top: 1px solid var(--line); } .capt { tr.sel td { background: var(--accent-soft); } table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 4px 8px; } td { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr.pp.icmp td, tr.pp.icmpv6 td { color: #9cc3ff; } tr.pp.lldp td, tr.pp.stp td, tr.pp.lacp td { color: var(--muted); } tr.pp.arp td { color: #e5c07b; } } }
     .recd { width: 8px; height: 8px; border-radius: 50%; background: var(--danger, #e5484d); animation: icblink 1.2s ease-in-out infinite; } .cnt.rec { background: var(--danger, #e5484d); } .capf { width: 200px; } button.capstop{background:var(--danger);border-color:var(--danger);color:#fff}
 .capm{fill:none;stroke:#7fb2ff;stroke-width:2.5;stroke-dasharray:8 6;animation:ca .8s linear infinite;pointer-events:none}.capm.thick{stroke-width:3.5}@keyframes ca{to{stroke-dashoffset:-28}}
     .capd{pointer-events:none}.cpc{fill:#2f6fed;stroke:#fff;stroke-width:1.5}.cpi{fill:#fff}.cpr{fill:none;stroke:#7fb2ff;stroke-width:2;animation:cp 1.4s ease-out infinite}@keyframes cp{from{r:7px;opacity:.9}to{r:17px;opacity:0}} @keyframes icblink { 50% { opacity: .3; } }
@@ -940,6 +944,8 @@ export class LabWorkspace implements OnDestroy {
       this.traf.set(v); this.tEd.set(null); if (v.note) this.ui.toast(v.note);
     } catch (e) { this.ui.error(e); }
   }
+  protected trafView = signal<'streams' | 'tests'>('streams');
+  protected ttests = viewChild(TrafficTests);
   protected readonly modFields = [{ k: 'srcIp', name: 'source address' }, { k: 'dstIp', name: 'destination address' }, { k: 'srcMac', name: 'source MAC' }, { k: 'dstMac', name: 'destination MAC' }, { k: 'vlan', name: 'VLAN' }, { k: 'sport', name: 'source port' }, { k: 'dport', name: 'destination port' }];
   modText(x: EmuStream) { return (x.mods ?? []).map(m => `${m.field} ${m.mode} ×${m.count}`).join(', '); }
   v6Of(id: string) { return ((this.traf()?.testers ?? []).find(t => t.id === id)?.ip6 ?? '').split('/')[0] || 'fd00::'; }

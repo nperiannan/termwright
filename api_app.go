@@ -70,7 +70,11 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 	}
 	seg := strings.Split(strings.Trim(path, "/"), "/")
 	route, arg := path, ""
-	if len(seg) == 4 && seg[0] == "lab" && seg[1] == "traffic" && (seg[2] == "ports" || seg[2] == "streams") {
+	if len(seg) == 5 && seg[0] == "lab" && seg[1] == "traffic" && seg[2] == "tests" && seg[4] == "run" {
+		route, arg = "/lab/traffic/tests/{id}/run", seg[3]
+	} else if len(seg) == 4 && seg[0] == "lab" && seg[1] == "traffic" && seg[2] == "runs" && seg[3] == "stop" {
+		route = path
+	} else if len(seg) == 4 && seg[0] == "lab" && seg[1] == "traffic" && (seg[2] == "ports" || seg[2] == "streams" || seg[2] == "tests" || seg[2] == "runs") {
 		route, arg = "/lab/traffic/"+seg[2]+"/{id}", seg[3]
 	} else if len(seg) == 3 && seg[0] == "lab" && seg[1] == "tools" {
 		route, arg = "/lab/tools/{tool}", seg[2]
@@ -131,6 +135,69 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		}
 		v, err := a.apiPortSet(id, body)
 		apiOut(w, http.StatusOK, v, err)
+	case "/lab/traffic/tests":
+		if r.Method == http.MethodGet {
+			apiOut(w, http.StatusOK, a.EmuTests(), nil)
+			return
+		}
+		var t emu.TrafficTest
+		if err := apiDecode(body, &t); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-test", err.Error())
+			return
+		}
+		t.ID = ""
+		a.apiTestRefs(&t)
+		v, err := a.EmuTestSave(t)
+		apiOut(w, http.StatusCreated, v, err)
+	case "/lab/traffic/tests/{id}", "/lab/traffic/tests/{id}/run":
+		id, ok := a.apiFindTest(arg)
+		if !ok {
+			apiProblem(w, http.StatusNotFound, "no-test", "No test "+arg+".")
+			return
+		}
+		switch {
+		case strings.HasSuffix(route, "/run"):
+			run, err := a.EmuTestRun(id)
+			if err == nil {
+				w.Header().Set("Location", "/api/v1/lab/traffic/runs/"+run.ID)
+			}
+			apiOut(w, http.StatusAccepted, run, err)
+		case r.Method == http.MethodDelete:
+			_, err := a.EmuTestRemove(id)
+			apiOut(w, http.StatusNoContent, nil, err)
+		default:
+			var t emu.TrafficTest
+			if err := apiDecode(body, &t); err != nil {
+				apiProblem(w, http.StatusBadRequest, "bad-test", err.Error())
+				return
+			}
+			t.ID = id
+			a.apiTestRefs(&t)
+			v, err := a.EmuTestSave(t)
+			apiOut(w, http.StatusOK, v, err)
+		}
+	case "/lab/traffic/runs":
+		apiOut(w, http.StatusOK, a.EmuTestRuns(), nil)
+	case "/lab/traffic/runs/stop":
+		apiOut(w, http.StatusOK, map[string]string{"result": "stopped"}, a.EmuTestStop())
+	case "/lab/traffic/runs/{id}":
+		f := orStr(r.URL.Query().Get("format"), "json")
+		if !slices.Contains([]string{"json", "csv", "html", "text"}, f) {
+			apiProblem(w, http.StatusBadRequest, "bad-format", "format is json, csv, html or text.")
+			return
+		}
+		if arg == "latest" {
+			if rs := a.EmuTestRuns(); len(rs) > 0 {
+				arg = rs[0].ID
+			}
+		}
+		b, ct, err := a.EmuTestRunReport(arg, f)
+		if err != nil {
+			apiProblem(w, http.StatusNotFound, "no-run", "No run "+arg+".")
+			return
+		}
+		w.Header().Set("Content-Type", ct)
+		_, _ = w.Write(b)
 	case "/lab/traffic/streams":
 		var st emu.Stream
 		if err := apiDecode(body, &st); err != nil {
@@ -170,6 +237,8 @@ var apiRoutes = map[string][]string{
 	"/lab/traffic": {"GET"}, "/lab/traffic/report": {"GET"}, "/lab/traffic/start": {"POST"}, "/lab/traffic/stop": {"POST"},
 	"/lab/traffic/ports": {"POST"}, "/lab/traffic/ports/{id}": {"PATCH", "DELETE"},
 	"/lab/traffic/streams": {"POST"}, "/lab/traffic/streams/{id}": {"PUT", "DELETE"},
+	"/lab/traffic/tests": {"GET", "POST"}, "/lab/traffic/tests/{id}": {"PUT", "DELETE"}, "/lab/traffic/tests/{id}/run": {"POST"},
+	"/lab/traffic/runs": {"GET"}, "/lab/traffic/runs/{id}": {"GET"}, "/lab/traffic/runs/stop": {"POST"},
 }
 
 //go:embed docs/api/openapi.yaml
@@ -245,6 +314,24 @@ func (a *App) apiStreamRefs(st *emu.Stream) {
 	}
 	if id, ok := a.apiFind(st.To, true); ok {
 		st.To = id
+	}
+}
+
+func (a *App) apiFindTest(n string) (string, bool) {
+	for _, t := range a.EmuTests() {
+		if t.ID == n || strings.EqualFold(t.Name, n) {
+			return t.ID, true
+		}
+	}
+	return "", false
+}
+
+// apiTestRefs lets a test name its test ports by name.
+func (a *App) apiTestRefs(t *emu.TrafficTest) {
+	for _, p := range []*string{&t.From, &t.To, &t.Monitor} {
+		if id, ok := a.apiFind(*p, true); ok {
+			*p = id
+		}
 	}
 }
 

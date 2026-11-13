@@ -94,6 +94,31 @@ var mcpLabTools = []mcpTool{
 			"max_latency": map[string]any{"type": "number", "description": "ms for a pass (0 = not checked)"},
 			"streams":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "start: the streams (none = all)"},
 		}, "action")},
+	{"lab_test", "Traffic tests on the emulated lab's test ports, run by Termwright as a series of trials: RFC 2544 throughput (the highest rate without loss per frame size), latency (at that rate), frame-loss (loss from 100 % down to 10 % of the top rate) and back-to-back (the longest burst without loss), RFC 2889 learning (how many source MACs a switch learns before it floods; needs a third test port as monitor), and convergence (traffic while a cable is pulled or a switch stops or restarts: the frames lost and the outage in ms). Actions: list (saved tests and the latest runs), add, remove, run (in the background), stop, results (of a run; the latest when no run is given). Adding, running and stopping are asked in Termwright first.",
+		mcpSchema(map[string]any{
+			"action":      map[string]any{"type": "string", "enum": []string{"list", "add", "remove", "run", "stop", "results"}},
+			"name":        map[string]any{"type": "string", "description": "add: its name; remove, run: the test"},
+			"kind":        map[string]any{"type": "string", "enum": []string{"throughput", "latency", "frame-loss", "back-to-back", "learning", "convergence"}},
+			"from":        map[string]any{"type": "string", "description": "add: the test port the frames go from (name)"},
+			"to":          map[string]any{"type": "string", "description": "add: the test port they go to"},
+			"both":        map[string]any{"type": "boolean", "description": "add: both ways at the same time"},
+			"monitor":     map[string]any{"type": "string", "description": "add, learning: a third test port that sees flooded frames"},
+			"vlan":        map[string]any{"type": "integer"},
+			"sizes":       map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "add: frame sizes (default 64, 128, 256, 512, 1024, 1280, 1518)"},
+			"trial":       map[string]any{"type": "integer", "description": "add: seconds per trial (default 5)"},
+			"max_pps":     map[string]any{"type": "integer", "description": "add: the highest rate tried (default 10000)"},
+			"rate":        map[string]any{"type": "integer", "description": "add: latency, frame-loss, convergence: the rate (pps)"},
+			"loss":        map[string]any{"type": "number", "description": "add: loss % that still counts as none (default 0)"},
+			"resolution":  map[string]any{"type": "number", "description": "add: search resolution, % (default 2)"},
+			"max":         map[string]any{"type": "integer", "description": "add: back-to-back the longest burst, learning the most addresses tried"},
+			"test_action": map[string]any{"type": "string", "enum": []string{"pull", "stop", "restart"}, "description": "add, convergence: what happens during the traffic"},
+			"switch":      map[string]any{"type": "string", "description": "add, convergence: the switch"},
+			"port":        map[string]any{"type": "string", "description": "add, convergence pull: the port whose cable is pulled"},
+			"at":          map[string]any{"type": "integer", "description": "add, convergence: seconds after the start (default 5)"},
+			"hold":        map[string]any{"type": "integer", "description": "add, convergence: seconds until the cable is plugged in / the switch started again (0 = not)"},
+			"seconds":     map[string]any{"type": "integer", "description": "add, convergence: how long the traffic runs (default 30)"},
+			"run":         map[string]any{"type": "string", "description": "results: the run id (default the latest)"},
+		}, "action")},
 	{"lab_capture", "Packet capture on a switch port of the emulated lab (its cable, both ways; the switch keeps running): start, stop, or read the packets (number, time, source, destination, protocol, length, info). Start and stop are asked in Termwright first.",
 		mcpSchema(map[string]any{
 			"action": map[string]any{"type": "string", "enum": []string{"start", "stop", "read", "list"}},
@@ -576,6 +601,92 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			return a.EmuTrafficReportText()
 		}
 		return "", errors.New("action is list, add_port, set_port, remove_port, add_stream, remove_stream, start, stop or report")
+	case "lab_test":
+		tv, _ := a.EmuTraffic()
+		port := func(n string) string {
+			for _, t := range tv.Testers {
+				if strings.EqualFold(t.Name, n) || t.ID == n {
+					return t.ID
+				}
+			}
+			return n
+		}
+		test := func(n string) string {
+			for _, t := range a.EmuTests() {
+				if strings.EqualFold(t.Name, n) || t.ID == n {
+					return t.ID
+				}
+			}
+			return n
+		}
+		switch argStr(args, "action") {
+		case "list":
+			var b strings.Builder
+			for _, t := range a.EmuTests() {
+				fmt.Fprintf(&b, "- %s: %s, %s → %s\n", t.Name, t.Kind, t.From, t.To)
+			}
+			for i, r := range a.EmuTestRuns() {
+				if i == 0 {
+					b.WriteString("Runs (newest first):\n")
+				}
+				fmt.Fprintf(&b, "- %s %s: %s %s%s\n", r.ID, r.Name, r.Status, r.Started, map[bool]string{true: " - " + r.Step, false: ""}[r.Step != ""])
+			}
+			if b.Len() == 0 {
+				return "No test yet: add one.", nil
+			}
+			return b.String(), nil
+		case "add":
+			t := emu.TrafficTest{Name: argStr(args, "name"), Kind: argStr(args, "kind"), From: port(argStr(args, "from")), To: port(argStr(args, "to")), Monitor: port(argStr(args, "monitor")),
+				VLAN: argInt(args, "vlan", 0, 4094), Trial: argInt(args, "trial", 0, 600), MaxPPS: argInt(args, "max_pps", 0, 100000), Rate: argInt(args, "rate", 0, 100000), Max: argInt(args, "max", 0, 1000000),
+				Action: argStr(args, "test_action"), Switch: argStr(args, "switch"), Port: argStr(args, "port"), At: argInt(args, "at", 0, 3600), Hold: argInt(args, "hold", 0, 3600), Seconds: argInt(args, "seconds", 0, 86400)}
+			t.Both, _ = args["both"].(bool)
+			t.Loss, _ = args["loss"].(float64)
+			t.Resolution, _ = args["resolution"].(float64)
+			if xs, ok := args["sizes"].([]any); ok {
+				for _, x := range xs {
+					if f, ok := x.(float64); ok {
+						t.Sizes = append(t.Sizes, int(f))
+					}
+				}
+			}
+			if err := light("Claude wants to add a test", "Claude (through the Termwright connector) asks to add the "+t.Kind+" test "+orStr(t.Name, "(no name)")+"."); err != nil {
+				return "", err
+			}
+			if _, err := a.EmuTestSave(t); err != nil {
+				return "", err
+			}
+			return "Added; lab_test run starts it.", nil
+		case "remove":
+			if err := light("Claude wants to remove a test", "Claude (through the Termwright connector) asks to remove the test "+argStr(args, "name")+"."); err != nil {
+				return "", err
+			}
+			_, err := a.EmuTestRemove(test(argStr(args, "name")))
+			return "Removed.", err
+		case "run":
+			if err := ask("Claude wants to run a test", "Claude (through the Termwright connector) asks to run the test "+argStr(args, "name")+" (traffic on the lab's test ports; a convergence test pulls a cable or stops a switch).", false); err != nil {
+				return "", err
+			}
+			r, err := a.EmuTestRun(test(argStr(args, "name")))
+			if err != nil {
+				return "", err
+			}
+			return "Running as " + r.ID + " - lab_test results shows its progress and results.", nil
+		case "stop":
+			if err := light("Claude wants to stop the test", "Claude (through the Termwright connector) asks to stop the running test."); err != nil {
+				return "", err
+			}
+			return "Stopped.", a.EmuTestStop()
+		case "results":
+			id := argStr(args, "run")
+			if id == "" {
+				if rs := a.EmuTestRuns(); len(rs) > 0 {
+					id = rs[0].ID
+				}
+			}
+			b, _, err := a.EmuTestRunReport(id, "text")
+			return string(b), err
+		}
+		return "", errors.New("action is list, add, remove, run, stop or results")
 	case "lab_capture":
 		act := argStr(args, "action")
 		if act == "list" {

@@ -528,6 +528,9 @@ func (a *App) emuLoad() {
 	if emuLab.f.Folder == "" {
 		emuLab.f.Folder = "Emulated Lab"
 	}
+	if l := emuLab.f.Lab; l != nil { // a test's trial streams left by a stop of Termwright in the middle
+		l.Streams = slices.DeleteFunc(l.Streams, func(s emu.Stream) bool { return s.Test != "" })
+	}
 	_ = os.MkdirAll(a.labDir(), 0o700)
 	emuEventsFile = filepath.Join(a.labDir(), "events.jsonl")
 	emuLab.events = append(emuEventsLoad(emuEventsFile), emuLab.events...)

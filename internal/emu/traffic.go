@@ -57,6 +57,33 @@ type Stream struct {
 	Burst      int     `json:"burst,omitempty"`      // frames sent back to back (the rate is kept on average)
 	Mods       []Mod   `json:"mods,omitempty"`       // fields that change from frame to frame
 	MaxJitter  float64 `json:"maxJitter,omitempty"`  // ms for a pass (0 = not checked)
+	Test       string  `json:"test,omitempty"`       // made by a test run for one of its trials (not one of the user's streams)
+}
+
+// TrafficTest is a saved test: an RFC 2544 benchmark, an address learning test or a convergence test,
+// run as a series of trials by Termwright.
+type TrafficTest struct {
+	ID         string  `json:"id"`                   // its id (made by Termwright)
+	Name       string  `json:"name"`                 // its name (unique)
+	Kind       string  `json:"kind"`                 // throughput, latency, frame-loss, back-to-back (RFC 2544), learning (RFC 2889 address caching), convergence
+	From       string  `json:"from"`                 // the test port the frames go from (id; the API takes a name too)
+	To         string  `json:"to"`                   // the test port they go to
+	Both       bool    `json:"both,omitempty"`       // also the other way, at the same time (throughput, latency, frame-loss, convergence)
+	Monitor    string  `json:"monitor,omitempty"`    // learning: a third test port that sees frames flooded to it
+	VLAN       int     `json:"vlan,omitempty"`       // 802.1Q tag on the test frames
+	Sizes      []int   `json:"sizes,omitempty"`      // frame sizes (default 64, 128, 256, 512, 1024, 1280, 1518)
+	Trial      int     `json:"trial,omitempty"`      // seconds per trial (default 5)
+	MaxPPS     int     `json:"maxPps,omitempty"`     // the highest rate tried, frames per second (default 10000)
+	Rate       int     `json:"rate,omitempty"`       // latency, frame-loss, convergence: the rate (default: latency the throughput found at that size, else 1000)
+	Loss       float64 `json:"loss,omitempty"`       // loss % that still counts as none (default 0)
+	Resolution float64 `json:"resolution,omitempty"` // throughput, back-to-back, learning: the search stops when the step is below this % (default 2)
+	Max        int     `json:"max,omitempty"`        // back-to-back: the longest burst tried (frames, default 10000); learning: the most addresses tried (default 4096)
+	Action     string  `json:"action,omitempty"`     // convergence: pull (a cable or LAG member), stop (a switch), restart (a switch)
+	Switch     string  `json:"switch,omitempty"`     // convergence: the switch (name or id)
+	Port       string  `json:"port,omitempty"`       // convergence, pull: the port whose cable is pulled
+	At         int     `json:"at,omitempty"`         // convergence: seconds after the start (default 5)
+	Hold       int     `json:"hold,omitempty"`       // convergence: seconds until the cable is plugged in or the switch started again (0 = not)
+	Seconds    int     `json:"seconds,omitempty"`    // convergence: how long the traffic runs (default 30)
 }
 
 // Mod changes a field of a stream's frames: the value plus 0, step, 2·step… (count values, then again), or one of them at random.

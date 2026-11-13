@@ -3,11 +3,11 @@ package emu
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )

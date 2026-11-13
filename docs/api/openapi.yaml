@@ -45,6 +45,10 @@ tags:
       summary: Streams
       parent: Traffic
       description: Streams between test ports.
+    - name: Traffic tests
+      summary: Tests
+      parent: Traffic
+      description: RFC 2544, RFC 2889 learning and convergence tests, and their runs.
     - name: API
       description: This description.
 paths:
@@ -538,6 +542,329 @@ paths:
                     description: Removed.
                 404:
                     $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/tests:
+        get:
+            operationId: listTests
+            tags:
+                - Traffic tests
+            summary: The saved tests
+            description: The saved traffic tests of the open topology.
+            responses:
+                200:
+                    description: The tests.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/TrafficTest'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        post:
+            operationId: addTest
+            tags:
+                - Traffic tests
+            summary: Add a test
+            description: Saves a test with the topology. from, to and monitor can be test port names. Run it with POST /lab/traffic/tests/{test}/run.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TestInput'
+                        examples:
+                            throughput:
+                                summary: RFC 2544 throughput, both ways, three frame sizes
+                                value:
+                                    name: uplink-throughput
+                                    kind: throughput
+                                    from: Test port 1
+                                    to: Test port 2
+                                    both: true
+                                    sizes:
+                                        - 64
+                                        - 512
+                                        - 1518
+                                    maxPps: 20000
+                                    trial: 5
+                            convergence:
+                                summary: Pull a LAG member at 5 s, plug it in at 15 s
+                                value:
+                                    name: lag-failover
+                                    kind: convergence
+                                    from: Test port 1
+                                    to: Test port 2
+                                    both: true
+                                    rate: 1000
+                                    seconds: 30
+                                    action: pull
+                                    switch: leaf-1
+                                    port: "1"
+                                    at: 5
+                                    hold: 10
+                            learning:
+                                summary: RFC 2889 address caching, up to 8192 MACs
+                                value:
+                                    name: mac-table
+                                    kind: learning
+                                    from: Test port 1
+                                    to: Test port 2
+                                    monitor: Test port 3
+                                    max: 8192
+            responses:
+                201:
+                    description: Added; the saved tests.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/TrafficTest'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/tests/{test}:
+        parameters:
+            - name: test
+              in: path
+              required: true
+              description: The test's name or id.
+              schema:
+                type: string
+        put:
+            operationId: replaceTest
+            tags:
+                - Traffic tests
+            summary: Replace a test
+            description: Replaces the test with the one given (its id stays).
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TestInput'
+                        examples:
+                            throughput:
+                                summary: RFC 2544 throughput, both ways, three frame sizes
+                                value:
+                                    name: uplink-throughput
+                                    kind: throughput
+                                    from: Test port 1
+                                    to: Test port 2
+                                    both: true
+                                    sizes:
+                                        - 64
+                                        - 512
+                                        - 1518
+                                    maxPps: 20000
+                                    trial: 5
+                            convergence:
+                                summary: Pull a LAG member at 5 s, plug it in at 15 s
+                                value:
+                                    name: lag-failover
+                                    kind: convergence
+                                    from: Test port 1
+                                    to: Test port 2
+                                    both: true
+                                    rate: 1000
+                                    seconds: 30
+                                    action: pull
+                                    switch: leaf-1
+                                    port: "1"
+                                    at: 5
+                                    hold: 10
+                            learning:
+                                summary: RFC 2889 address caching, up to 8192 MACs
+                                value:
+                                    name: mac-table
+                                    kind: learning
+                                    from: Test port 1
+                                    to: Test port 2
+                                    monitor: Test port 3
+                                    max: 8192
+            responses:
+                200:
+                    description: Replaced; the saved tests.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/TrafficTest'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        delete:
+            operationId: removeTest
+            tags:
+                - Traffic tests
+            summary: Remove a test
+            description: Removes the saved test (its past runs stay in /lab/traffic/runs).
+            responses:
+                204:
+                    description: Removed.
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/tests/{test}/run:
+        parameters:
+            - name: test
+              in: path
+              required: true
+              description: The test's name or id.
+              schema:
+                type: string
+        post:
+            operationId: runTest
+            tags:
+                - Traffic tests
+            summary: Run a test
+            description: 'Starts the test in the background and answers at once (202, Location: the run). Poll GET /lab/traffic/runs/{run} until status is not running. One test runs at a time, and not while other traffic runs.'
+            responses:
+                202:
+                    description: Started.
+                    headers:
+                        Location:
+                            description: 'The run: /api/v1/lab/traffic/runs/{run}'
+                            schema:
+                                type: string
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TestRun'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/runs:
+        get:
+            operationId: listRuns
+            tags:
+                - Traffic tests
+            summary: The test runs
+            description: The running test (first) and the last 20 runs, newest first.
+            responses:
+                200:
+                    description: The runs.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/TestRun'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/runs/{run}:
+        parameters:
+            - name: run
+              in: path
+              required: true
+              description: The run's id (from runTest or listRuns), or latest.
+              schema:
+                type: string
+        get:
+            operationId: getRun
+            tags:
+                - Traffic tests
+            summary: A test run
+            description: A run's progress and results; with format, its results as CSV, HTML or text.
+            parameters:
+                - name: format
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                    enum:
+                        - json
+                        - csv
+                        - html
+                        - text
+                    default: json
+            responses:
+                200:
+                    description: The run.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TestRun'
+                        text/csv:
+                            schema:
+                                type: string
+                        text/html:
+                            schema:
+                                type: string
+                        text/plain:
+                            schema:
+                                type: string
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/runs/stop:
+        post:
+            operationId: stopRun
+            tags:
+                - Traffic tests
+            summary: Stop the running test
+            description: Stops the running test and its traffic; a pulled cable is plugged in again.
+            responses:
+                200:
+                    description: Stopped.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
                 422:
                     $ref: '#/components/responses/Unprocessable'
                 401:
@@ -1066,6 +1393,124 @@ paths:
                                     type: string
                             required:
                                 - switch
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/test:
+        post:
+            operationId: tool_test
+            tags:
+                - Tools
+            summary: Traffic tests on the emulated lab's test ports, run by Termwright as a series of trials
+            description: 'Traffic tests on the emulated lab''s test ports, run by Termwright as a series of trials: RFC 2544 throughput (the highest rate without loss per frame size), latency (at that rate), frame-loss (loss from 100 % down to 10 % of the top rate) and back-to-back (the longest burst without loss), RFC 2889 learning (how many source MACs a switch learns before it floods; needs a third test port as monitor), and convergence (traffic while a cable is pulled or a switch stops or restarts: the frames lost and the outage in ms). Actions: list (saved tests and the latest runs), add, remove, run (in the background), stop, results (of a run; the latest when no run is given). Adding, running and stopping are asked in Termwright first. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - list
+                                        - add
+                                        - remove
+                                        - run
+                                        - stop
+                                        - results
+                                    type: string
+                                at:
+                                    description: 'add, convergence: seconds after the start (default 5)'
+                                    type: integer
+                                both:
+                                    description: 'add: both ways at the same time'
+                                    type: boolean
+                                from:
+                                    description: 'add: the test port the frames go from (name)'
+                                    type: string
+                                hold:
+                                    description: 'add, convergence: seconds until the cable is plugged in / the switch started again (0 = not)'
+                                    type: integer
+                                kind:
+                                    enum:
+                                        - throughput
+                                        - latency
+                                        - frame-loss
+                                        - back-to-back
+                                        - learning
+                                        - convergence
+                                    type: string
+                                loss:
+                                    description: 'add: loss % that still counts as none (default 0)'
+                                    type: number
+                                max:
+                                    description: 'add: back-to-back the longest burst, learning the most addresses tried'
+                                    type: integer
+                                max_pps:
+                                    description: 'add: the highest rate tried (default 10000)'
+                                    type: integer
+                                monitor:
+                                    description: 'add, learning: a third test port that sees flooded frames'
+                                    type: string
+                                name:
+                                    description: 'add: its name; remove, run: the test'
+                                    type: string
+                                port:
+                                    description: 'add, convergence pull: the port whose cable is pulled'
+                                    type: string
+                                rate:
+                                    description: 'add: latency, frame-loss, convergence: the rate (pps)'
+                                    type: integer
+                                resolution:
+                                    description: 'add: search resolution, % (default 2)'
+                                    type: number
+                                run:
+                                    description: 'results: the run id (default the latest)'
+                                    type: string
+                                seconds:
+                                    description: 'add, convergence: how long the traffic runs (default 30)'
+                                    type: integer
+                                sizes:
+                                    description: 'add: frame sizes (default 64, 128, 256, 512, 1024, 1280, 1518)'
+                                    items:
+                                        type: integer
+                                    type: array
+                                switch:
+                                    description: 'add, convergence: the switch'
+                                    type: string
+                                test_action:
+                                    description: 'add, convergence: what happens during the traffic'
+                                    enum:
+                                        - pull
+                                        - stop
+                                        - restart
+                                    type: string
+                                to:
+                                    description: 'add: the test port they go to'
+                                    type: string
+                                trial:
+                                    description: 'add: seconds per trial (default 5)'
+                                    type: integer
+                                vlan:
+                                    type: integer
+                            required:
+                                - action
             responses:
                 200:
                     description: What it did or found, as text.
@@ -2552,6 +2997,9 @@ components:
                 maxJitter:
                     description: ms for a pass (0 = not checked)
                     type: number
+                test:
+                    description: made by a test run for one of its trials (not one of the user's streams)
+                    type: string
             required:
                 - id
                 - name
@@ -2681,6 +3129,113 @@ components:
                 - vm
                 - port
                 - mac
+        TestRow:
+            type: object
+            description: 'A line of a test run''s results: per frame size and direction (and load, for frame-loss).'
+            properties:
+                dir:
+                    description: the direction (From → To), when the test runs both ways
+                    type: string
+                size:
+                    description: frame bytes
+                    type: integer
+                pps:
+                    description: 'throughput: the highest rate without loss; frame-loss: the rate tried'
+                    type: number
+                mbps:
+                    description: the rate in Mbit/s of frames (pps × size × 8)
+                    type: number
+                load:
+                    description: 'frame-loss: % of the top rate'
+                    type: number
+                loss:
+                    description: '% lost'
+                    type: number
+                latMin:
+                    description: ms
+                    type: number
+                latAvg:
+                    description: ms
+                    type: number
+                latMax:
+                    description: ms
+                    type: number
+                jitter:
+                    description: ms
+                    type: number
+                burst:
+                    description: 'back-to-back: the longest burst without loss (frames)'
+                    type: integer
+                addresses:
+                    description: 'learning: the most source MACs learned without flooding'
+                    type: integer
+                lost:
+                    description: 'convergence: frames lost'
+                    type: integer
+                outageMs:
+                    description: 'convergence: lost frames ÷ rate, in ms'
+                    type: number
+                trials:
+                    description: trials it took
+                    type: integer
+                note:
+                    description: 'what happened (convergence: the action), or why there is no number'
+                    type: string
+            required:
+                - loss
+        TestRun:
+            type: object
+            description: 'A run of a test: its progress while it runs, then its results.'
+            properties:
+                id:
+                    description: the run
+                    type: string
+                test:
+                    description: the test's id
+                    type: string
+                name:
+                    description: the test's name
+                    type: string
+                kind:
+                    description: the test's kind
+                    type: string
+                status:
+                    description: running, done, failed, stopped
+                    type: string
+                step:
+                    description: what it does now
+                    type: string
+                started:
+                    description: RFC 3339
+                    type: string
+                ended:
+                    description: RFC 3339
+                    type: string
+                rows:
+                    description: the results so far
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/TestRow'
+                log:
+                    description: every trial and its outcome
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                error:
+                    description: why it failed
+                    type: string
+            required:
+                - id
+                - test
+                - name
+                - kind
+                - status
+                - started
+                - rows
         Tool:
             type: object
             description: 'A lab tool: the same tools the Claude connector and the in-app AI agent use.'
@@ -2704,6 +3259,83 @@ components:
                 - name
                 - description
                 - args
+        TrafficTest:
+            type: object
+            description: 'A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts).'
+            properties:
+                id:
+                    description: its id (made by Termwright)
+                    type: string
+                name:
+                    description: its name (unique)
+                    type: string
+                kind:
+                    description: throughput, latency, frame-loss, back-to-back (RFC 2544), learning (RFC 2889 address caching), convergence
+                    type: string
+                from:
+                    description: the test port the frames go from (id; the API takes a name too)
+                    type: string
+                to:
+                    description: the test port they go to
+                    type: string
+                both:
+                    description: also the other way, at the same time (throughput, latency, frame-loss, convergence)
+                    type: boolean
+                monitor:
+                    description: 'learning: a third test port that sees frames flooded to it'
+                    type: string
+                vlan:
+                    description: 802.1Q tag on the test frames
+                    type: integer
+                sizes:
+                    description: frame sizes (default 64, 128, 256, 512, 1024, 1280, 1518)
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: integer
+                trial:
+                    description: seconds per trial (default 5)
+                    type: integer
+                maxPps:
+                    description: the highest rate tried, frames per second (default 10000)
+                    type: integer
+                rate:
+                    description: 'latency, frame-loss, convergence: the rate (default: latency the throughput found at that size, else 1000)'
+                    type: integer
+                loss:
+                    description: loss % that still counts as none (default 0)
+                    type: number
+                resolution:
+                    description: 'throughput, back-to-back, learning: the search stops when the step is below this % (default 2)'
+                    type: number
+                max:
+                    description: 'back-to-back: the longest burst tried (frames, default 10000); learning: the most addresses tried (default 4096)'
+                    type: integer
+                action:
+                    description: 'convergence: pull (a cable or LAG member), stop (a switch), restart (a switch)'
+                    type: string
+                switch:
+                    description: 'convergence: the switch (name or id)'
+                    type: string
+                port:
+                    description: 'convergence, pull: the port whose cable is pulled'
+                    type: string
+                at:
+                    description: 'convergence: seconds after the start (default 5)'
+                    type: integer
+                hold:
+                    description: 'convergence: seconds until the cable is plugged in or the switch started again (0 = not)'
+                    type: integer
+                seconds:
+                    description: 'convergence: how long the traffic runs (default 30)'
+                    type: integer
+            required:
+                - id
+                - name
+                - kind
+                - from
+                - to
         TrafficView:
             type: object
             description: 'The traffic generator: its test ports, streams and their results now (live while a run goes on).'
@@ -2875,8 +3507,84 @@ components:
                 maxJitter:
                     description: ms for a pass (0 = not checked)
                     type: number
+                test:
+                    description: made by a test run for one of its trials (not one of the user's streams)
+                    type: string
             required:
                 - from
+            additionalProperties: false
+        TestInput:
+            type: object
+            description: A test to add or to replace one with. kind, from and to are needed (monitor for learning; action, switch and port for convergence); from, to and monitor can be test port names. Unknown fields are refused.
+            properties:
+                name:
+                    description: its name (unique)
+                    type: string
+                kind:
+                    description: throughput, latency, frame-loss, back-to-back (RFC 2544), learning (RFC 2889 address caching), convergence
+                    type: string
+                from:
+                    description: the test port the frames go from (id; the API takes a name too)
+                    type: string
+                to:
+                    description: the test port they go to
+                    type: string
+                both:
+                    description: also the other way, at the same time (throughput, latency, frame-loss, convergence)
+                    type: boolean
+                monitor:
+                    description: 'learning: a third test port that sees frames flooded to it'
+                    type: string
+                vlan:
+                    description: 802.1Q tag on the test frames
+                    type: integer
+                sizes:
+                    description: frame sizes (default 64, 128, 256, 512, 1024, 1280, 1518)
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: integer
+                trial:
+                    description: seconds per trial (default 5)
+                    type: integer
+                maxPps:
+                    description: the highest rate tried, frames per second (default 10000)
+                    type: integer
+                rate:
+                    description: 'latency, frame-loss, convergence: the rate (default: latency the throughput found at that size, else 1000)'
+                    type: integer
+                loss:
+                    description: loss % that still counts as none (default 0)
+                    type: number
+                resolution:
+                    description: 'throughput, back-to-back, learning: the search stops when the step is below this % (default 2)'
+                    type: number
+                max:
+                    description: 'back-to-back: the longest burst tried (frames, default 10000); learning: the most addresses tried (default 4096)'
+                    type: integer
+                action:
+                    description: 'convergence: pull (a cable or LAG member), stop (a switch), restart (a switch)'
+                    type: string
+                switch:
+                    description: 'convergence: the switch (name or id)'
+                    type: string
+                port:
+                    description: 'convergence, pull: the port whose cable is pulled'
+                    type: string
+                at:
+                    description: 'convergence: seconds after the start (default 5)'
+                    type: integer
+                hold:
+                    description: 'convergence: seconds until the cable is plugged in or the switch started again (0 = not)'
+                    type: integer
+                seconds:
+                    description: 'convergence: how long the traffic runs (default 30)'
+                    type: integer
+            required:
+                - kind
+                - from
+                - to
             additionalProperties: false
     responses:
         BadRequest:

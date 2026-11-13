@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, EmuCapture, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, EmuRunRow, EmuToolStep, EmuPacketDetail } from './models';
+  AccountInfo, EmuCapture, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -115,6 +115,13 @@ export class Backend {
   emuRunning() { return this.call<EmuRunRow[]>('EmuRunning'); }
   emuQemuCommand(id: string) { return this.call<string>('EmuQemuCommand', id); }
   emuLinkCheck(id: string, seconds: number) { return this.call<string>('EmuLinkCheck', id, seconds); }
+  emuTests() { return this.call<EmuTest[]>('EmuTests'); }
+  emuTestSave(t: EmuTest) { return this.call<EmuTest[]>('EmuTestSave', t); }
+  emuTestRemove(id: string) { return this.call<EmuTest[]>('EmuTestRemove', id); }
+  emuTestRun(id: string) { return this.call<EmuTestRun>('EmuTestRun', id); }
+  emuTestStop() { return this.call<void>('EmuTestStop'); }
+  emuTestRuns() { return this.call<EmuTestRun[]>('EmuTestRuns'); }
+  emuTestReportSave(id: string, path: string) { return this.call<void>('EmuTestReportSave', id, path); }
   emuTraffic() { return this.call<EmuTrafficView>('EmuTraffic'); }
   emuTesterAdd(vm: string, port: string, ip: string, gw: string, vlan: number) { return this.call<EmuTrafficView>('EmuTesterAdd', vm, port, ip, gw, vlan); }
   emuTesterSet(t: EmuTester) { return this.call<EmuTrafficView>('EmuTesterSet', t); }

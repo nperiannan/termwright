@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -133,6 +134,22 @@ func (a *App) emuTesterLink(vmID string, port int, up bool) string {
 
 // EmuTraffic is the Traffic tab: test ports, streams and their counters now.
 func (a *App) EmuTraffic() (EmuTrafficView, error) {
+	v, err := a.emuTrafficAll()
+	if err != nil {
+		return v, err
+	}
+	// a test's trial streams are its own (EmuTestRuns shows the test)
+	test := map[string]bool{}
+	v.Streams = slices.DeleteFunc(v.Streams, func(s emu.Stream) bool { test[s.ID] = s.Test != ""; return s.Test != "" })
+	v.Results = slices.DeleteFunc(v.Results, func(r EmuStreamResult) bool { return test[r.ID] })
+	if len(test) > 0 && v.History != nil {
+		maps.DeleteFunc(v.History, func(id string, _ [][3]float64) bool { return test[id] })
+	}
+	return v, nil
+}
+
+// emuTrafficAll is EmuTraffic with the test runs' streams.
+func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 	emuLab.mu.Lock()
 	a.emuLoad()
 	l := emuLab.f.Lab
@@ -158,7 +175,7 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 	run := emuTraf.run
 	if run != 0 && emuTraf.final {
 		v.Results = emuTrafCached(v.Streams)
-		v.Started, v.History = emuTraf.started.Format(time.RFC3339), emuTraf.hist
+		v.Started, v.History = emuTraf.started.Format(time.RFC3339), maps.Clone(emuTraf.hist)
 		emuLab.mu.Unlock()
 		return v, nil
 	}
@@ -277,7 +294,7 @@ func (a *App) EmuTraffic() (EmuTrafficView, error) {
 	emuLab.mu.Lock()
 	if run != 0 {
 		emuTrafRates(v.Results, time.Since(emuTraf.started).Seconds())
-		v.History = emuTraf.hist
+		v.History = maps.Clone(emuTraf.hist)
 		v.Running = slices.ContainsFunc(v.Results, func(r EmuStreamResult) bool { return r.Running }) || time.Since(emuTraf.started) < 3*time.Second
 		v.Started = emuTraf.started.Format(time.RFC3339)
 		if !v.Running && time.Since(emuTraf.started) > 5*time.Second {
@@ -509,6 +526,21 @@ func (a *App) EmuStreamRemove(id string) (EmuTrafficView, error) {
 // EmuTrafficStart starts streams (none named: every one not left out) with fresh counters.
 func (a *App) EmuTrafficStart(ids []string) (EmuTrafficView, error) {
 	defer emuAs("user")()
+	emuTests.Lock()
+	busy := emuTests.cur != nil
+	emuTests.Unlock()
+	if busy {
+		return EmuTrafficView{}, errors.New("a test is running: stop it first")
+	}
+	return a.emuTrafficStart(ids, false)
+}
+
+// emuTrafficStartQuiet starts a test's trial (not logged in the Events).
+func (a *App) emuTrafficStartQuiet(ids []string) (EmuTrafficView, error) {
+	return a.emuTrafficStart(ids, true)
+}
+
+func (a *App) emuTrafficStart(ids []string, quiet bool) (EmuTrafficView, error) {
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
 	if l == nil || len(l.Streams) == 0 {
@@ -527,9 +559,11 @@ func (a *App) EmuTrafficStart(ids []string) (EmuTrafficView, error) {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("no such stream")
 	}
-	emuTraf.run, emuTraf.started, emuTraf.on, emuTraf.last, emuTraf.final = uint32(time.Now().Unix()), time.Now(), on, nil, false
+	emuTraf.run, emuTraf.started, emuTraf.on, emuTraf.last, emuTraf.final = max(emuTraf.run+1, uint32(time.Now().Unix())), time.Now(), on, nil, false
 	emuTraf.prev, emuTraf.hist = nil, nil
-	emuEv("", "info", "traffic started: "+strings.Join(names, ", "))
+	if !quiet {
+		emuEv("", "info", "traffic started: "+strings.Join(names, ", "))
+	}
 	emuLab.mu.Unlock()
 	if err := a.emuTrafficPush(); err != nil {
 		return EmuTrafficView{}, err

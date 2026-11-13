@@ -124,7 +124,7 @@ func fieldDocs(t *testing.T) map[string]string {
 var oasNames = map[string]string{
 	"main.EmuView": "Lab", "main.EmuDevice": "Device", "main.EmuLinkView": "Cable", "main.EmuEvent": "Event",
 	"main.EmuTrafficView": "TrafficView", "main.EmuStreamResult": "StreamResult", "emu.Tester": "TestPort", "emu.Stream": "Stream", "emu.Mod": "FieldChange",
-	"main.apiToolInfo": "Tool",
+	"main.apiToolInfo": "Tool", "emu.TrafficTest": "TrafficTest", "main.EmuTestRun": "TestRun", "main.EmuTestRow": "TestRow",
 }
 
 type schemaGen struct {
@@ -255,6 +255,9 @@ var oasTypeDocs = map[string]string{
 	"FieldChange":  "A field of a stream's frames that changes from frame to frame: its value plus 0, step, 2·step… (count values, then again), or one of them at random.",
 	"StreamResult": "A stream's counters, added up over every KVM host, and its verdict.",
 	"Tool":         "A lab tool: the same tools the Claude connector and the in-app AI agent use.",
+	"TrafficTest":  "A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts).",
+	"TestRun":      "A run of a test: its progress while it runs, then its results.",
+	"TestRow":      "A line of a test run's results: per frame size and direction (and load, for frame-loss).",
 }
 
 func TestOpenAPIDoc(t *testing.T) {
@@ -293,7 +296,10 @@ func TestOpenAPIDoc(t *testing.T) {
 		if strings.Contains(route, "{tool}") {
 			continue
 		}
-		p := strings.NewReplacer("{id}", map[bool]string{true: "{port}", false: "{stream}"}[strings.Contains(route, "ports")]).Replace(route)
+		p := route
+		for _, k := range []string{"ports", "streams", "tests", "runs"} {
+			p = strings.Replace(p, "/"+k+"/{id}", "/"+k+"/{"+strings.TrimSuffix(k, "s")+"}", 1)
+		}
 		for _, m := range ms {
 			if d.Paths[p][strings.ToLower(m)] == nil {
 				t.Fatalf("%s %s is not in the document", m, p)
@@ -302,7 +308,7 @@ func TestOpenAPIDoc(t *testing.T) {
 	}
 	// every field of what the traffic API sends and takes is described
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
-	for _, ty := range []reflect.Type{reflect.TypeOf(emu.Stream{}), reflect.TypeOf(emu.Tester{}), reflect.TypeOf(emu.Mod{}), reflect.TypeOf(EmuStreamResult{}), reflect.TypeOf(EmuTrafficView{})} {
+	for _, ty := range []reflect.Type{reflect.TypeOf(emu.Stream{}), reflect.TypeOf(emu.Tester{}), reflect.TypeOf(emu.Mod{}), reflect.TypeOf(EmuStreamResult{}), reflect.TypeOf(EmuTrafficView{}), reflect.TypeOf(emu.TrafficTest{}), reflect.TypeOf(EmuTestRun{}), reflect.TypeOf(EmuTestRow{})} {
 		tn := strings.TrimPrefix(ty.String(), "main.")
 		for i := 0; i < ty.NumField(); i++ {
 			name := strings.Split(ty.Field(i).Tag.Get("json"), ",")[0]
@@ -348,7 +354,7 @@ func op(id, tag, summary, desc string, extra ...kv) om {
 
 func openAPIDoc(t *testing.T) om {
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
-	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}} {
+	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}, emu.TrafficTest{}, EmuTestRun{}} {
 		g.schema(reflect.TypeOf(ty))
 	}
 	std := append([]kv{}, errs("401", "403", "405")...)
@@ -372,6 +378,13 @@ func openAPIDoc(t *testing.T) om {
 	portPatch := om{{"type", "object"}, {"minProperties", 1}, {"additionalProperties", false}, {"description", "Only the fields given change."}, {"properties", om{
 		{"name", om{{"type", "string"}}}, {"ip", om{{"type", "string"}}}, {"ip6", om{{"type", "string"}}}, {"gateway", om{{"type", "string"}}},
 		{"vlan", om{{"type", "integer"}, {"minimum", 0}, {"maximum", 4094}}}, {"groups", om{{"type", "array"}, {"items", om{{"type", "string"}}}}}}}}
+	testParam := om{{"name", "test"}, {"in", "path"}, {"required", true}, {"description", "The test's name or id."}, {"schema", om{{"type", "string"}}}}
+	runParam := om{{"name", "run"}, {"in", "path"}, {"required", true}, {"description", "The run's id (from runTest or listRuns), or latest."}, {"schema", om{{"type", "string"}}}}
+	testEx := om{
+		{"throughput", ex("RFC 2544 throughput, both ways, three frame sizes", om{{"name", "uplink-throughput"}, {"kind", "throughput"}, {"from", "Test port 1"}, {"to", "Test port 2"}, {"both", true}, {"sizes", []int{64, 512, 1518}}, {"maxPps", 20000}, {"trial", 5}})},
+		{"convergence", ex("Pull a LAG member at 5 s, plug it in at 15 s", om{{"name", "lag-failover"}, {"kind", "convergence"}, {"from", "Test port 1"}, {"to", "Test port 2"}, {"both", true}, {"rate", 1000}, {"seconds", 30}, {"action", "pull"}, {"switch", "leaf-1"}, {"port", "1"}, {"at", 5}, {"hold", 10}})},
+		{"learning", ex("RFC 2889 address caching, up to 8192 MACs", om{{"name", "mac-table"}, {"kind", "learning"}, {"from", "Test port 1"}, {"to", "Test port 2"}, {"monitor", "Test port 3"}, {"max", 8192}})},
+	}
 	portParam := om{{"name", "port"}, {"in", "path"}, {"required", true}, {"description", "The test port's name (Test port 1) or id."}, {"schema", om{{"type", "string"}}}}
 	streamParam := om{{"name", "stream"}, {"in", "path"}, {"required", true}, {"description", "The stream's name or id."}, {"schema", om{{"type", "string"}}}}
 
@@ -413,6 +426,33 @@ func openAPIDoc(t *testing.T) om {
 				kv{"responses", append(om{{"200", resp("Replaced; the traffic view.", "TrafficView")}}, append(errs("400", "404", "422"), std...)...)})},
 			{"delete", op("removeStream", "Traffic streams", "Remove a stream", "Removes the stream.",
 				kv{"responses", append(om{{"204", om{{"description", "Removed."}}}}, append(errs("404", "422"), std...)...)})}}},
+		{"/lab/traffic/tests", om{
+			{"get", op("listTests", "Traffic tests", "The saved tests", "The saved traffic tests of the open topology.",
+				kv{"responses", append(om{{"200", om{{"description", "The tests."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/TrafficTest"}}}}}}}}}}}}, std...)})},
+			{"post", op("addTest", "Traffic tests", "Add a test", "Saves a test with the topology. from, to and monitor can be test port names. Run it with POST /lab/traffic/tests/{test}/run.",
+				kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/TestInput"}}}, {"examples", testEx}}}}}}},
+				kv{"responses", append(om{{"201", om{{"description", "Added; the saved tests."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/TrafficTest"}}}}}}}}}}}}, append(errs("400", "422"), std...)...)})}}},
+		{"/lab/traffic/tests/{test}", om{{"parameters", []om{testParam}},
+			{"put", op("replaceTest", "Traffic tests", "Replace a test", "Replaces the test with the one given (its id stays).",
+				kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/TestInput"}}}, {"examples", testEx}}}}}}},
+				kv{"responses", append(om{{"200", om{{"description", "Replaced; the saved tests."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/TrafficTest"}}}}}}}}}}}}, append(errs("400", "404", "422"), std...)...)})},
+			{"delete", op("removeTest", "Traffic tests", "Remove a test", "Removes the saved test (its past runs stay in /lab/traffic/runs).",
+				kv{"responses", append(om{{"204", om{{"description", "Removed."}}}}, append(errs("404", "422"), std...)...)})}}},
+		{"/lab/traffic/tests/{test}/run", om{{"parameters", []om{testParam}},
+			{"post", op("runTest", "Traffic tests", "Run a test", "Starts the test in the background and answers at once (202, Location: the run). Poll GET /lab/traffic/runs/{run} until status is not running. One test runs at a time, and not while other traffic runs.",
+				kv{"responses", append(om{{"202", om{{"description", "Started."}, {"headers", om{{"Location", om{{"description", "The run: /api/v1/lab/traffic/runs/{run}"}, {"schema", om{{"type", "string"}}}}}}}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/TestRun"}}}}}}}}}}, append(errs("404", "422"), std...)...)})}}},
+		{"/lab/traffic/runs", om{{"get", op("listRuns", "Traffic tests", "The test runs", "The running test (first) and the last 20 runs, newest first.",
+			kv{"responses", append(om{{"200", om{{"description", "The runs."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/TestRun"}}}}}}}}}}}}, std...)})}}},
+		{"/lab/traffic/runs/{run}", om{{"parameters", []om{runParam}},
+			{"get", op("getRun", "Traffic tests", "A test run", "A run's progress and results; with format, its results as CSV, HTML or text.",
+				kv{"parameters", []om{{{"name", "format"}, {"in", "query"}, {"required", false}, {"schema", om{{"type", "string"}, {"enum", []string{"json", "csv", "html", "text"}}, {"default", "json"}}}}}},
+				kv{"responses", append(om{{"200", om{{"description", "The run."}, {"content", om{
+					{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/TestRun"}}}}},
+					{"text/csv", om{{"schema", om{{"type", "string"}}}}},
+					{"text/html", om{{"schema", om{{"type", "string"}}}}},
+					{"text/plain", om{{"schema", om{{"type", "string"}}}}}}}}}}, append(errs("400", "404"), std...)...)})}}},
+		{"/lab/traffic/runs/stop", om{{"post", op("stopRun", "Traffic tests", "Stop the running test", "Stops the running test and its traffic; a pulled cable is plugged in again.",
+			kv{"responses", append(om{{"200", resp("Stopped.", "ToolResult")}}, append(errs("422"), std...)...)})}}},
 		{"/lab/traffic/start", om{{"post", op("startTraffic", "Traffic", "Start a run", "Starts the streams given, or every stream that is not marked off. A new run resets the counters. Poll GET /lab/traffic for live results; the run ends by itself when every stream has sent its frames.",
 			kv{"requestBody", om{{"required", false}, {"content", om{{"application/json", om{{"schema", om{{"type", "object"}, {"properties", om{{"streams", om{{"type", "array"}, {"items", om{{"type", "string"}}}, {"description", "Stream names or ids; none = all."}}}}}}}, {"example", om{{"streams", []string{"voice", "imix-100"}}}}}}}}}},
 			kv{"responses", append(om{{"200", resp("Started; the traffic view.", "TrafficView")}}, append(errs("422"), std...)...)})}}},
@@ -481,6 +521,26 @@ func openAPIDoc(t *testing.T) om {
 		}
 	}
 	schemas = append(schemas, kv{"StreamInput", in})
+	var tin om
+	for _, x := range g.comps["TrafficTest"] {
+		switch x.k {
+		case "description":
+			tin = append(tin, kv{"description", "A test to add or to replace one with. kind, from and to are needed (monitor for learning; action, switch and port for convergence); from, to and monitor can be test port names. Unknown fields are refused."})
+		case "properties":
+			var ps om
+			for _, p := range x.v.(om) {
+				if p.k != "id" {
+					ps = append(ps, p)
+				}
+			}
+			tin = append(tin, kv{"properties", ps})
+		case "required":
+			tin = append(tin, kv{"required", []string{"kind", "from", "to"}}, kv{"additionalProperties", false})
+		default:
+			tin = append(tin, x)
+		}
+	}
+	schemas = append(schemas, kv{"TestInput", tin})
 	prob := func(desc string) om { return problemRef(desc) }
 	return om{
 		{"openapi", "3.2.1"},
@@ -499,6 +559,7 @@ func openAPIDoc(t *testing.T) om {
 			{{"name", "Traffic"}, {"description", "The traffic generator: runs, live results and the report."}},
 			{{"name", "Traffic ports"}, {"summary", "Test ports"}, {"parent", "Traffic"}, {"description", "Test ports on switch ports."}},
 			{{"name", "Traffic streams"}, {"summary", "Streams"}, {"parent", "Traffic"}, {"description", "Streams between test ports."}},
+			{{"name", "Traffic tests"}, {"summary", "Tests"}, {"parent", "Traffic"}, {"description", "RFC 2544, RFC 2889 learning and convergence tests, and their runs."}},
 			{{"name", "API"}, {"description", "This description."}}}},
 		{"paths", paths},
 		{"components", om{
