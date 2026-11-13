@@ -553,6 +553,34 @@ func (a *App) emuSave() error {
 
 func emuImageKey(id string) string { return "emu-image:" + id }
 
+// Whether an image has a password in the keychain, remembered: each keychain read runs a program
+// (macOS), and the view asks for every image every refresh - 135 images took seconds.
+var emuHasPw = struct {
+	sync.Mutex
+	m map[string]bool
+}{m: map[string]bool{}}
+
+func emuImageHasPassword(id string) bool {
+	emuHasPw.Lock()
+	has, ok := emuHasPw.m[id]
+	emuHasPw.Unlock()
+	if ok {
+		return has
+	}
+	pw, _ := secrets.Lookup(emuImageKey(id))
+	emuHasPw.Lock()
+	emuHasPw.m[id] = pw != ""
+	emuHasPw.Unlock()
+	return pw != ""
+}
+
+// emuPwChanged forgets what emuImageHasPassword knew of an image.
+func emuPwChanged(id string) {
+	emuHasPw.Lock()
+	delete(emuHasPw.m, id)
+	emuHasPw.Unlock()
+}
+
 func emuImage(id string) *emu.Image {
 	for i := range emuLab.f.Images {
 		if emuLab.f.Images[i].ID == id {
@@ -931,6 +959,7 @@ func (a *App) EmuRemoveFromCatalog(file string, files bool) (EmuView, error) {
 			keep = append(keep, im)
 			continue
 		}
+		emuPwChanged(im.ID)
 		_ = secrets.Delete(emuImageKey(im.ID))
 		gone = append(gone, im.File)
 		for _, d := range im.Disks {
@@ -990,6 +1019,7 @@ func (a *App) emuImportAppliance(b []byte, dir string, source ...string) (EmuVie
 			pr.Login = ap.User
 		}
 		if ap.Password != "" {
+			emuPwChanged(pr.ID)
 			_ = secrets.Set(emuImageKey(pr.ID), ap.Password)
 		}
 		for i := range pr.Disks {
@@ -1445,8 +1475,10 @@ func (a *App) EmuSaveImage(im emu.Image, clearPassword bool) (EmuView, error) {
 		return EmuView{}, errors.New("no such image")
 	}
 	if im.Password != "" {
+		emuPwChanged(im.ID)
 		_ = secrets.Set(emuImageKey(im.ID), im.Password)
 	} else if clearPassword {
+		emuPwChanged(im.ID)
 		_ = secrets.Delete(emuImageKey(im.ID))
 	}
 	im.Password = ""
@@ -1494,6 +1526,7 @@ func (a *App) EmuRemoveImage(id string) (EmuView, error) {
 		}
 	}
 	emuLab.f.Images = keep
+	emuPwChanged(id)
 	_ = secrets.Delete(emuImageKey(id))
 	err := a.emuSave()
 	emuLab.mu.Unlock()
@@ -3547,9 +3580,7 @@ func (a *App) emuView() EmuView {
 		}
 		iv := EmuImageView{Image: im, Upload: emuLab.upload[im.ID], Download: emuLab.download[im.ID]}
 		iv.Password = ""
-		if pw, _ := secrets.Lookup(emuImageKey(im.ID)); pw != "" {
-			iv.HasPassword = true
-		}
+		iv.HasPassword = emuImageHasPassword(im.ID)
 		if im.File != "" {
 			if _, err := os.Stat(im.File); err != nil {
 				iv.Missing = true

@@ -2801,6 +2801,12 @@ const ru: Record<string, string> = {
   'Do this and the next lab changes of this chat without asking (not the ones that may interrupt traffic)': 'Выполнить это и следующие изменения лаборатории в этом чате без вопросов (кроме тех, что могут прервать трафик)',
   'The arguments are not JSON': 'Аргументы не в формате JSON',
   'Sees the emulated lab (switches, cables, LAGs, KVM hosts, events), adds and starts switches, cables, configures them on their consoles, runs traffic tests, captures packets and checks links': 'Видит эмулируемую лабораторию (коммутаторы, кабели, LAG, KVM-хосты, события), добавляет и запускает коммутаторы, подключает кабели, настраивает их через консоль, запускает тесты трафика, захватывает пакеты и проверяет каналы',
+  '{0} running on {1} · {2} (open)': '{0} работают на {1} · {2} (открыта)',
+  '{0} running on {1} · {2} (in the background)': '{0} работают на {1} · {2} (в фоне)',
+  'Grid lines; switches you move snap to them': 'Линии сетки; перемещаемые коммутаторы привязываются к ним',
+  'Change Port': 'Сменить порт',
+  '{0} has no free port': 'У {0} нет свободных портов',
+  'Add Link · 2 of 2: click the switch at the other end of {0} {1} (Alt-click to pick its port)': 'Добавить связь · 2 из 2: щёлкните коммутатор на другом конце {0} {1} (Alt-щелчок — выбрать его порт)',
 };
 
 export default ru;

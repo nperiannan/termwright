@@ -1,7 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Backend, errText } from './backend';
-import { EmuImage, EmuPersona, EmuTemplate, EmuRequest, EmuSetupDone, EmuSetupLine, LabDevice, LabLink, LabOutput, LabRequest, LabView } from './models';
+import { EmuImage, EmuRunRow, EmuPersona, EmuTemplate, EmuRequest, EmuSetupDone, EmuSetupLine, LabDevice, LabLink, LabOutput, LabRequest, LabView } from './models';
 import { Ui } from './ui.service';
+import { tr } from './i18n';
 
 /** The labs for the Lab window and the Session Manager, refreshed while they run:
  *  the simulated lab (switches from a device pack, on this computer) and the
@@ -38,11 +39,29 @@ export class LabService {
   readonly running = computed(() => this.devices().filter(d => d.running).length);
   readonly emuRunning = computed(() => (this.emu()?.devices ?? []).filter(d => d.state === 'running').length);
   readonly simRunning = computed(() => (this.sim()?.devices ?? []).filter(d => d.running).length);
+  /** Switches running on the KVM hosts, every topology (read from the hosts every 30 s). */
+  readonly runRows = signal<EmuRunRow[]>([]);
+  /** The toolbar's Lab button: running switches (all hosts and topologies) and the open topology's ones that need a look. */
+  readonly badge = computed(() => {
+    const rows = this.runRows(), devs = this.emu()?.devices ?? [];
+    const n = Math.max(rows.reduce((t, r) => t + r.switches.length, 0), this.emuRunning());
+    const look = devs.filter(d => d.state === 'failed' || (d.state && d.state !== 'running' && d.state !== 'stopped') || (d.running && (d.error || d.personaError)));
+    const lines = rows.map(r => '● ' + tr(r.open ? '{0} running on {1} · {2} (open)' : '{0} running on {1} · {2} (in the background)', r.switches.length, r.host.split('/').pop() ?? '', r.topology));
+    for (const d of look) lines.push(`▲ ${d.hostname}: ${d.state === 'running' ? (d.error || d.personaError) : (d.stateText || d.state)}`);
+    return { n, look: look.length, tip: [tr('Emulated lab'), ...lines].join('\n') };
+  });
+  async refreshRunning() {
+    const e = this.emu();
+    if (!e?.host && !(e?.hosts ?? []).length) { this.runRows.set([]); return; }
+    try { this.runRows.set((await this.backend.emuRunning()) ?? []); } catch { /* hosts not reachable */ }
+  }
 
   constructor() {
     void this.refresh();
+    setTimeout(() => void this.refreshRunning(), 4000);
+    setInterval(() => void this.refreshRunning(), 30000);
     this.backend.on('emu:error', (m: string) => this.ui.error(m));
-    this.backend.on('emu:done', (m: string) => { this.ui.toast(m, 'success'); void this.refresh(); });
+    this.backend.on('emu:done', (m: string) => { this.ui.toast(m, 'success'); void this.refresh(); setTimeout(() => void this.refreshRunning(), 6000); });
     this.backend.on('emu:setup', (l: EmuSetupLine) => {
       const s = this.setup(); if (!s || s.run !== l.run) return;
       this.setup.set({ ...s, step: l.kind === 'step' ? l.text : s.step, lines: [...s.lines, (l.kind === 'line' ? '' : l.kind === 'step' ? '▸ ' : l.kind === 'fail' ? '✕ ' : '! ') + l.text].slice(-300) });
@@ -113,7 +132,12 @@ export class LabService {
     if (ok) await this.ui.refreshTree();
     return ok;
   }
-  connect(l: LabLink) { return this.run(() => (this.e ? this.backend.emuConnect(l) : this.backend.labConnect(l))); }
+  connect(l: LabLink) {
+    // drawn at once; the lab's answer replaces it (or the error takes it away again)
+    const sig = this.e ? this.emu : this.sim, v = sig();
+    if (v) sig.set({ ...v, links: [...(v.links ?? []), { ...l, up: false }] });
+    return this.run(() => (this.e ? this.backend.emuConnect(l) : this.backend.labConnect(l)));
+  }
   disconnect(id: string, port: string) { return this.run(() => (this.e ? this.backend.emuDisconnect(id, port) : this.backend.labDisconnect(id, port))); }
   setLink(id: string, port: string, up: boolean) { return this.run(() => this.backend.emuSetLink(id, port, up)); }
   setHostMgmt(host: string, mgmt: string, mgmtNet = '') { return this.run(() => this.backend.emuSetHostMgmt(host, mgmt, mgmtNet), 'Management changed - it applies when the switches start'); }

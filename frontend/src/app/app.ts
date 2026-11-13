@@ -82,6 +82,7 @@ import { FactTeach } from './dialogs/fact-teach';
 export class App implements OnInit {
   protected ui = inject(Ui);
   private labs = inject(LabService);
+  protected labBadge = computed(() => this.labs.badge());
   openLab(k: 'sim' | 'emu') { this.labs.kind.set(k); void this.tabs.openLab(k); }
   private a11y = inject(A11y); // Escape, Tab and screen reader support in dialogs
   protected teamStatus = inject(TeamStatusService);

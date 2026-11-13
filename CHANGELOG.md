@@ -6,7 +6,15 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 - AI chat, **the whole emulated lab for the agent**: with the *Emulated lab* tool the in-app agent now has every lab tool of the Claude connector - add switches from images or templates, cables, power, wait until ready, type on a switch's console, check the cabling, move a switch, traffic test ports and streams with their pass/fail report, packet capture, the link check, the QEMU command line and the Events. Reads run at once; each change is asked in the chat with what it does, with **Allow for This Chat** to stop asking for the rest of that chat (not for changes that may interrupt traffic). Connector: new *lab_link_check* and *lab_qemu_command*.
 
-- Emulated lab, Captures: the *Stop* button of a running capture is red.
+- Emulated lab, Captures: the *Stop* button of a running capture is red. A cable being captured keeps its colour (it turned red and looked down): blue dashes run along it and a blue dot pulses at the captured port; captures started earlier show on the canvas without opening the Captures tab.
+
+- Emulated lab, **faster**: the lab's view no longer reads every image's password from the system keychain on each refresh (with many images that took seconds after every change, such as a new cable).
+
+- Emulated lab, **Add Link in two clicks**: each click takes the switch's next free port and the cable is drawn at once; *Change Port* (or Alt-click) picks the port instead. Cables of a LAG reach the switch drawing at both ends (there was a gap at one end in some looks).
+
+- Emulated lab, **Grid**: a Grid button beside Ports shows grid lines, and switches you move snap to them.
+
+- Toolbar: the **Emulated lab button counts running switches** - every host and topology, the ones in the background too (blue), or the switches that need a look - booting, failed, a problem (yellow). Hover lists them by host and topology.
 
 - Emulated lab: a device pack can change an image's default network card - images still on the pack's old card take the new one once, a card chosen by the user stays. (The device pack moves EXOS-VM to rtl8139, as GNS3 runs it: on QEMU's e1000 cards its LAGs flapped.)
 

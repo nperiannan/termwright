@@ -232,6 +232,9 @@ app-command-window { flex: none; }
 
 /* the AI button: a small amber dot while no AI service is set up */
 .ab.ai, .tb.ai { position: relative; }
+.ab.lab-emu { position: relative; }
+.lbdg { position: absolute; top: 1px; right: -2px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: #2f6fed; color: #fff; font-size: 10px; font-weight: 700; line-height: 11px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg, #0f1115); box-sizing: border-box; pointer-events: none; }
+.lbdg.warn { background: #e5a50a; color: #1a1300; }
 .aidot { position: absolute; right: 5px; top: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--chrome); pointer-events: none; }
 
 /* start page cards: quick actions on hover (Connect, SFTP, Copy, More) - no tooltip over the next card */

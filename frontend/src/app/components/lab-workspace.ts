@@ -151,9 +151,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <div class="hint">{{ tr('Drag a device onto the canvas to add it.') }}</div>
       </div>
 
-      <div class="cv" #cv (click)="canvasClick($event)" (scroll)="onScroll(cv)" (wheel)="wheelZoom($event)" (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
+      <div class="cv" #cv [class.grid]="showGrid()" [style.background-size]="showGrid() ? (GRID * zoom()) + 'px ' + (GRID * zoom()) + 'px' : null" (click)="canvasClick($event)" (scroll)="onScroll(cv)" (wheel)="wheelZoom($event)" (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
            (contextmenu)="$event.preventDefault()">
-        @if (linkMode()) { <div class="bar2">⟷ {{ linkText() }} <span class="k2">Esc</span> <a (click)="cancelLink(); $event.stopPropagation()">{{ tr('Cancel') }}</a></div> }
+        @if (linkMode()) { <div class="bar2">⟷ {{ linkText() }}@if (linkA()?.port) { <a (click)="changeLinkPort(); $event.stopPropagation()">{{ tr('Change Port') }}</a> } <span class="k2">Esc</span> <a (click)="cancelLink(); $event.stopPropagation()">{{ tr('Cancel') }}</a></div> }
         @if (!devs().length && !ghosts().length) {
           <div class="empty"><b>{{ emu() ? tr('No switches yet') : tr('No simulated switches yet') }}</b><span>{{ tr('Drag a device from the left, or') }} <a (click)="wizard()">{{ tr('make a lab') }}</a>.</span>
             @if (emu()) { <span class="muted small">{{ tr('How devices are drawn:') }}</span><div class="lookcards">@for (st of looks; track st.k) { <a [class.on]="defLook() === st.k" (click)="setDefLook(st.k)"><app-dev-icon role="router" [look]="st.k" [size]="54" state="idle" /><span>{{ tr(st.name) }}</span></a> }</div> }</div>
@@ -171,9 +171,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               } }
               @for (t of tps(); track t.t.id) { <g class="lk tpl"><path class="ln" [attr.d]="'M' + t.dx + ' ' + t.dy + ' L' + t.x + ' ' + t.y" />@if (showPorts()) { <rect class="pb" [attr.x]="t.lx - 18" [attr.y]="t.ly - 9" width="36" height="18" rx="5" /><text class="pt" [attr.x]="t.lx" [attr.y]="t.ly + 4">{{ t.port }}</text> }</g> }
               @for (k of lines(); track k.key) {
-                <g class="lk" [class.cap]="!!capOf(k.link)" [class.dimk]="linkDim(k.link)" [class.tun]="k.tun" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
+                <g class="lk" [class.cap]="k.caps.length > 0" [class.dimk]="linkDim(k.link)" [class.tun]="k.tun" [class.down]="k.down" [class.warn]="k.warn" [class.selk]="selLink() === k.key" (click)="pickLink(k.link, $event)" (contextmenu)="linkMenu(k.link, $event)">
                   <title>{{ k.tip }}</title>
-                  @for (m of k.paths; track $index) { <path class="hit" [attr.d]="m.d" /><path class="ln" [attr.d]="m.d" [class.up]="m.up" [class.dn]="m.down" [class.thick]="m.thick" /> }
+                  @for (m of k.paths; track $index) { <path class="hit" [attr.d]="m.d" /><path class="ln" [attr.d]="m.d" [class.up]="m.up" [class.dn]="m.down" [class.thick]="m.thick" />@if (m.cap) { <path class="capm" [attr.d]="m.d" [class.thick]="m.thick" /> } }
+                  @for (c of k.caps; track $index) { <g class="capd" [attr.transform]="'translate(' + c.x + ' ' + c.y + ')'"><circle class="cpr" r="7" /><circle class="cpc" r="6" /><circle class="cpi" r="2.2" /></g> }
                   @for (r of k.rings; track $index) { <circle class="ring" [attr.cx]="r.x" [attr.cy]="r.y" r="11" /> }
                   @for (lb of k.labels; track $index) { @if (lb.lag || showPorts()) { <rect class="pb" [class.lb]="lb.lag" [attr.x]="lb.x - lb.w / 2" [attr.y]="lb.y - 9" [attr.width]="lb.w" height="18" rx="5" /><text class="pt" [attr.x]="lb.x" [attr.y]="lb.y + 4">{{ lb.t }}</text> } }
                 </g>
@@ -318,6 +319,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <i class="dsep"></i>
           @if (multi()) { <span class="muted small">{{ tr('Hosts') }}</span><select class="sm" [ngModel]="hostView()" (ngModelChange)="setHostView($event)" name="hview" [title]="tr('How each switch’s host is shown')"><option value="auto">{{ tr('Auto') }}</option><option value="areas">{{ tr('Areas') }}</option><option value="tags">{{ tr('Tags') }}</option><option value="off">{{ tr('Off') }}</option></select>
             <button type="button" class="sm" (click)="arrangeByHost()" [title]="tr('Put each host’s switches together')">⊞ {{ tr('Arrange by Host') }}</button><i class="dsep"></i> }
+          <button type="button" class="sm" [class.on]="showGrid()" (click)="flip(showGrid, 'tw.lab.grid')" [title]="tr('Grid lines; switches you move snap to them')">⊞ {{ tr('Grid') }}</button>
           <button type="button" class="sm" [class.on]="showPorts()" (click)="flip(showPorts, 'tw.lab.ports')" [title]="tr('Port names on the cables')">{{ tr('Ports') }}</button>
           <button type="button" class="sm" [class.on]="showAddr()" (click)="flip(showAddr, 'tw.lab.addr')" [title]="tr('Addresses under the switches')">{{ tr('Addresses') }}</button>
           <button type="button" class="sm" [class.on]="onlyProblems()" (click)="onlyProblems.set(!onlyProblems())" [title]="tr('Dim everything that is fine')">{{ tr('Only problems') }}</button>
@@ -610,6 +612,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .ico.s { background: linear-gradient(#6c5fd6, #4c41b0); }
     .hint { margin-top: 12px; padding: 9px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: 12px; }
     .cv { position: relative; overflow: auto; background-color: var(--bg); background-image: radial-gradient(var(--line) 1.2px, transparent 1.2px); background-size: 18px 18px; }
+    .cv.grid{background-image:linear-gradient(90deg,var(--line) 1px,transparent 1px),linear-gradient(var(--line) 1px,transparent 1px)}
     .inner { position: relative; } .scale { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
     .empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--muted); pointer-events: none;
       b { font-size: 15px; color: var(--text); } a { pointer-events: auto; color: var(--accent); cursor: pointer; } }
@@ -674,8 +677,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .tpl .ln { stroke: #e08a2e; stroke-dasharray: 5 4; stroke-width: 2; fill: none; }
     .capsum { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); .cs { font-size: 11.5px; border: 1px solid var(--line); border-radius: 8px; padding: 1px 7px; cursor: pointer; font-family: var(--mono, monospace); i { font-style: normal; color: var(--muted); margin-left: 4px; } } .cs.lldp, .cs.lacp, .cs.stp { border-color: var(--accent); } }
     .capw { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; .capl { border-right: 1px solid var(--line); overflow: auto; } .ci { display: grid; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid var(--line); b { font-size: 12.5px; display: flex; align-items: center; gap: 6px; } } .ci.on { background: var(--accent-soft); } .cx { margin-left: auto; color: var(--muted); font-weight: 400; padding: 0 2px; } .cx:hover { color: var(--danger); } .capt { overflow: auto; table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 4px 8px; } td { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr.pp.icmp td, tr.pp.icmpv6 td { color: #9cc3ff; } tr.pp.lldp td, tr.pp.stp td, tr.pp.lacp td { color: var(--muted); } tr.pp.arp td { color: #e5c07b; } } }
-    .recd { width: 8px; height: 8px; border-radius: 50%; background: var(--danger, #e5484d); animation: icblink 1.2s ease-in-out infinite; } .cnt.rec { background: var(--danger, #e5484d); } .capf { width: 200px; } button.capstop { background: var(--danger, #e5484d); border-color: var(--danger, #e5484d); color: #fff; } button.capstop:hover { filter: brightness(1.1); }
-    .lk.cap .ln { stroke: var(--danger, #e5484d) !important; stroke-dasharray: 6 4; } @keyframes icblink { 50% { opacity: .3; } }
+    .recd { width: 8px; height: 8px; border-radius: 50%; background: var(--danger, #e5484d); animation: icblink 1.2s ease-in-out infinite; } .cnt.rec { background: var(--danger, #e5484d); } .capf { width: 200px; } button.capstop{background:var(--danger);border-color:var(--danger);color:#fff}
+.capm{fill:none;stroke:#7fb2ff;stroke-width:2.5;stroke-dasharray:8 6;animation:ca .8s linear infinite;pointer-events:none}.capm.thick{stroke-width:3.5}@keyframes ca{to{stroke-dashoffset:-28}}
+    .capd{pointer-events:none}.cpc{fill:#2f6fed;stroke:#fff;stroke-width:1.5}.cpi{fill:#fff}.cpr{fill:none;stroke:#7fb2ff;stroke-width:2;animation:cp 1.4s ease-out infinite}@keyframes cp{from{r:7px;opacity:.9}to{r:17px;opacity:0}} @keyframes icblink { 50% { opacity: .3; } }
     .nlbl { cursor: move; display: inline-block; padding: 1px 6px; border-radius: 6px; background: color-mix(in srgb, var(--bg, #0d0e11) 82%, transparent); position: relative; z-index: 1; }
     .node.cloud.sel .cbox svg path { stroke-width: 3.5; filter: drop-shadow(0 0 6px var(--accent)); } .node.cloud.sel .nn { color: var(--accent); }
     .node.cloud { cursor: grab; .cbox { height: 56px; display: flex; align-items: flex-end; justify-content: center; } } .node.cloud.pick .cbox svg path { stroke-width: 3; } .cll .ln { stroke-dasharray: 3 4; }
@@ -771,6 +775,7 @@ export class LabWorkspace implements OnDestroy {
   protected packetsShown = computed(() => { const f = this.capFilter().trim().toLowerCase(); const l = this.packets(); return f ? l.filter(p => `${p.src} ${p.dst} ${p.proto} ${p.info}`.toLowerCase().includes(f)) : l; });
   /** The running capture on a cable (at either end). */
   capOf(k: LabLink) { const p = this.caps().find(c => c.running && (c.vm === k.a && c.port === k.aPort || c.vm === k.b && c.port === k.bPort)); return p ?? null; }
+  private capTick = 0;
   async loadCaps() { try { this.caps.set((await this.backend.emuCaptures()) ?? []); if (!this.capSel() && this.caps().length) this.capSel.set(this.caps()[0].key); await this.loadPackets(); } catch { /* none */ } }
   async loadPackets() { const c = this.capCur(); if (!c) { this.packets.set([]); return; } try { this.packets.set((await this.backend.emuCapturePackets(c.file, 2000)) ?? []); } catch (e) { this.packets.set([]); void e; } }
   async startCap(k: LabLink) { try { this.caps.set((await this.backend.emuCaptureStart(k.a, k.aPort)) ?? []); const c = this.caps().find(x => x.running && x.vm === k.a && x.port === k.aPort); if (c) { this.capSel.set(c.key); this.capStarted.set(c.started); } this.dock.set('cap'); await this.loadPackets(); } catch (e) { this.ui.error(e); } }
@@ -1019,6 +1024,8 @@ export class LabWorkspace implements OnDestroy {
   private lsPut(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* not kept */ } }
   protected hostView = signal<'auto' | 'areas' | 'tags' | 'off'>(this.lsGet('tw.lab.hostView', 'auto') as 'auto');
   protected showPorts = signal(this.lsGet('tw.lab.ports', '1') === '1');
+  /** Grid: lines on the canvas, and switches dropped snap to them. */
+  protected showGrid = signal(this.lsGet('tw.lab.grid', '0') === '1');
   protected showAddr = signal(this.lsGet('tw.lab.addr', '1') === '1');
   protected legOpen = signal(this.lsGet('tw.lab.leg', '1') === '1');
   protected miniOn = signal(this.lsGet('tw.lab.mini', '1') === '1');
@@ -1226,6 +1233,7 @@ export class LabWorkspace implements OnDestroy {
   protected zoom = signal(1);
   protected linkMode = signal(false);
   protected linkA = signal<{ id: string; port: string } | null>(null);
+  protected readonly GRID = 40;
   protected portPick = signal<{ id: string; ports: string[]; all: { name: string; short: string; peer: string }[]; x: number; y: number; side: 'a' | 'b' } | null>(null);
   protected page = signal<'' | 'configure' | 'images' | 'templates' | 'hosts' | 'new' | 'onhosts'>('');
   protected hostPick = signal('');
@@ -1281,7 +1289,7 @@ export class LabWorkspace implements OnDestroy {
 
   constructor() {
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
-    this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
+    this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && this.dock() !== 'cap' && ++this.capTick % 5 === 1) void this.backend.emuCaptures().then(c => this.caps.set(c ?? []), () => undefined); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
   }
   @HostListener('document:keydown', ['$event']) onDelKey(e: KeyboardEvent) {
     if (!this.visible() || !this.selCloud() || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
@@ -1461,7 +1469,7 @@ export class LabWorkspace implements OnDestroy {
       if (!pairs.has(id)) pairs.set(id, { p: flip ? b : a, q: flip ? a : b, ls: [] });
       pairs.get(id)!.ls.push(flip ? { k, pp: k.bPort, qp: k.aPort, lp: k.lagB ?? null, lq: k.lagA ?? null } : { k, pp: k.aPort, qp: k.bPort, lp: k.lagA ?? null, lq: k.lagB ?? null });
     }
-    const out: { key: string; link: Lk; tip: string; tun: boolean; down: boolean; warn: boolean; paths: { d: string; up: boolean; down: boolean; thick: boolean }[]; rings: { x: number; y: number }[]; labels: { x: number; y: number; t: string; w: number; lag: boolean }[] }[] = [];
+    const out: { key: string; link: Lk; tip: string; tun: boolean; down: boolean; warn: boolean; paths: { d: string; up: boolean; down: boolean; thick: boolean; cap?: boolean }[]; caps: { x: number; y: number }[]; rings: { x: number; y: number }[]; labels: { x: number; y: number; t: string; w: number; lag: boolean }[] }[] = [];
     const P = (v: { x: number; y: number }) => v.x.toFixed(1) + ' ' + v.y.toFixed(1);
     const lw = (t: string) => t.length * 6.2 + 10;
     for (const { p, q, ls } of pairs.values()) {
@@ -1495,11 +1503,11 @@ export class LabWorkspace implements OnDestroy {
       tracks.forEach((tk, i) => {
         const o = (i - (tracks.length - 1) / 2) * gap;
         const first = tk[0], up = tk.every(l => !!l.k.up), down = tk.every(l => !!l.k.down);
-        const item = { key: first.k.key, link: first.k, tip: '', tun, down, warn: false, paths: [] as { d: string; up: boolean; down: boolean; thick: boolean }[], rings: [] as { x: number; y: number }[], labels: [] as { x: number; y: number; t: string; w: number; lag: boolean }[] };
+        const item = { key: first.k.key, link: first.k, tip: '', tun, down, warn: false, paths: [] as { d: string; up: boolean; down: boolean; thick: boolean; cap?: boolean }[], caps: [] as { x: number; y: number }[], rings: [] as { x: number; y: number }[], labels: [] as { x: number; y: number; t: string; w: number; lag: boolean }[] };
         const S = at(A, fan, o), E = at(B, -fan, o);
         if (tk.length === 1 && !first.lp && !first.lq) { // a single cable
           const l = first;
-          item.paths.push({ d: o === 0 ? 'M' + P(A) + ' L' + P(B) : curve(A, B, S, E), up: !!l.k.up, down: !!l.k.down, thick: false });
+          item.paths.push({ d: o === 0 ? 'M' + P(A) + ' L' + P(B) : curve(A, B, S, E), up: !!l.k.up, down: !!l.k.down, thick: false, cap: !!this.capOf(l.k) });
           const lp = at(A, Math.min(L * 0.2, fan + 14), o), lq = at(B, -Math.min(L * 0.2, fan + 14), o);
           item.labels.push({ ...lp, t: l.pp, w: lw(l.pp), lag: false }, { ...lq, t: l.qp, w: lw(l.qp), lag: false });
           item.tip = p.hostname + ' ' + l.pp + ' ⇄ ' + q.hostname + ' ' + l.qp + (l.k.lldp ? ' · LLDP ' + l.k.lldp : '');
@@ -1508,12 +1516,13 @@ export class LabWorkspace implements OnDestroy {
           const lp = first.lp, lq = first.lq;
           item.warn = !lp || !lq || (lp.mode !== lq.mode);
           const s0 = lp ? S : at(A, L * 0.42, o), e0 = lq ? E : at(B, -L * 0.42, o);
-          item.paths.push({ d: 'M' + P(s0) + ' L' + P(e0), up, down, thick: true });
+          item.paths.push({ d: 'M' + P(s0) + ' L' + P(e0), up, down, thick: true, cap: tk.some(l => !!this.capOf(l.k)) });
           const side = (end: 'p' | 'q') => {
             const o0 = end === 'p' ? A : B, ring = end === 'p' ? S : E, lag = end === 'p' ? lp : lq, dir = end === 'p' ? 1 : -1;
             if (lag) {
               item.rings.push(ring);
-              tk.forEach((l, j) => { const st = at(o0, 0, (j - (tk.length - 1) / 2) * 5); item.paths.push({ d: 'M' + P(st) + ' L' + P(ring), up: !!l.k.up, down: !!l.k.down, thick: false }); });
+              // drawn towards the switch at the q end: reach() runs the cable on to where the drawing is
+              tk.forEach((l, j) => { const st = at(o0, 0, (j - (tk.length - 1) / 2) * 5); item.paths.push({ d: end === 'p' ? 'M' + P(st) + ' L' + P(ring) : 'M' + P(ring) + ' L' + P(st), up: !!l.k.up, down: !!l.k.down, thick: false, cap: !!this.capOf(l.k) }); });
               const ports = tk.map(l => end === 'p' ? l.pp : l.qp).join(',');
               const t = (lag.mode === 'static' ? 'static ' : 'LACP ') + ports;
               item.labels.push({ ...at(ring, dir * 8, (o >= 0 ? 1 : -1) * 22), t, w: lw(t), lag: true });
@@ -1522,7 +1531,7 @@ export class LabWorkspace implements OnDestroy {
               tk.forEach((l, j) => {
                 const so = o + (j - (tk.length - 1) / 2) * gap * 0.8, mid = at(o0, dir * fan, so);
                 item.paths.push({ d: end === 'p' ? 'M' + P(o0) + ' C' + P(at(o0, fan * 0.5, 0)) + ' ' + P(at(mid, -fan * 0.4, 0)) + ' ' + P(mid) + ' L' + P(from)
-                  : 'M' + P(from) + ' L' + P(mid) + ' C' + P(at(mid, fan * 0.4, 0)) + ' ' + P(at(o0, -fan * 0.5, 0)) + ' ' + P(o0), up: !!l.k.up, down: !!l.k.down, thick: false });
+                  : 'M' + P(from) + ' L' + P(mid) + ' C' + P(at(mid, fan * 0.4, 0)) + ' ' + P(at(o0, -fan * 0.5, 0)) + ' ' + P(o0), up: !!l.k.up, down: !!l.k.down, thick: false, cap: !!this.capOf(l.k) });
                 const t = end === 'p' ? l.pp : l.qp;
                 item.labels.push({ ...at(o0, dir * Math.min(L * 0.2, fan + 14), so), t, w: lw(t), lag: false });
               });
@@ -1534,6 +1543,8 @@ export class LabWorkspace implements OnDestroy {
           item.tip = (lp ? p.hostname + ' ' + lp.name + ' (' + lp.mode + ')' : p.hostname + ' no LAG') + ' ⇄ ' + (lq ? q.hostname + ' ' + lq.name + ' (' + lq.mode + ')' : q.hostname + ' no LAG') + ' · ' + tk.map(l => l.pp + '-' + l.qp).join(', ')
             + (!lp || !lq ? ' - ' + tr('the LAG is set on one side only') : lp.mode !== lq.mode ? ' - ' + tr('static on one side, LACP on the other') : '');
         }
+        // a running capture: a pulsing dot just off the captured switch, on its side of the cable
+        tk.forEach((l, j) => { const c = this.capOf(l.k); if (!c) return; const sd = tk.length > 1 && (c.vm === p.id ? first.lp : first.lq) ? (j - (tk.length - 1) / 2) * 5 : o; item.caps.push(c.vm === p.id ? at(A, 16, sd) : at(B, -16, sd)); });
         item.paths.forEach(x => x.d = reach(x.d));
         if (tun) item.tip = tr('UDP tunnel {0} ⇄ {1}', this.hname(this.hostOfDev(p)), this.hname(this.hostOfDev(q))) + ' · ' + item.tip;
         out.push(item);
@@ -1579,6 +1590,7 @@ export class LabWorkspace implements OnDestroy {
   }
   up() {
     const g = this.dragging; this.dragging = null;
+    if (g?.moved && this.showGrid()) { const q = this.moved().get(g.id)!, G = this.GRID; this.moved.update(m => new Map(m).set(g.id, { x: Math.max(80, Math.round(q.x / G) * G), y: Math.max(40, Math.round(q.y / G) * G) })); }
     if (g?.moved) { const p = this.moved().get(g.id)!; this.lab.place(g.id, p.x - 75, p.y - BH / 2); this.dropOnHost(g.id, p); }
   }
   /** A switch dropped in another host's area moves there (when it is stopped). */
@@ -1658,21 +1670,36 @@ export class LabWorkspace implements OnDestroy {
   ldo(what: string, k: LabLink) { this.menu.set(null); void (what === 'pull' ? this.lab.setLink(k.a, k.aPort, !!k.down) : this.lab.disconnect(k.a, k.aPort)); }
 
   // links: first switch → its port → second switch → its port
-  toggleLink() { if (this.linkMode()) this.cancelLink(); else { this.linkMode.set(true); this.linkA.set(null); } }
+  toggleLink() { if (this.linkMode()) this.cancelLink(); else { this.linkMode.set(true); this.linkA.set(null); this.prefetchFree(); } }
   cancelLink() { this.linkMode.set(false); this.linkA.set(null); this.portPick.set(null); this.mouse.set(null); }
-  startLinkFrom(d: LabDevice) { this.linkMode.set(true); this.linkA.set(null); void this.askPorts(d, 'a', null); }
+  startLinkFrom(d: LabDevice) { this.linkMode.set(true); this.linkA.set(null); this.prefetchFree(); void this.askPorts(d, 'a', null); }
   protected linkText() {
     const a = this.linkA();
     if (!a) return tr('Add Link · 1 of 2: click the first switch');
     if (!a.port) return tr('Add Link · pick a port on {0}', this.nameOf(a.id));
-    return tr('Add Link · 2 of 2: click the switch at the other end of {0} {1}', this.nameOf(a.id), a.port);
+    return tr('Add Link · 2 of 2: click the switch at the other end of {0} {1} (Alt-click to pick its port)', this.nameOf(a.id), a.port);
   }
+  /** Add Link: each click takes the switch's next free port at once; Alt-click (or Change Port) picks the port. */
   private async linkClick(d: LabDevice, ev: MouseEvent) {
     const a = this.linkA();
-    if (!a || !a.port) { await this.askPorts(d, 'a', ev); return; }
-    if (a.id === d.id) return;
-    await this.askPorts(d, 'b', ev);
+    const side = !a || !a.port ? 'a' : 'b';
+    if (side === 'b' && a!.id === d.id) return;
+    if (ev.altKey) { await this.askPorts(d, side, ev); return; }
+    const free = await this.freeNow(d.id);
+    if (!free.length) { this.ui.toast(tr('{0} has no free port', d.hostname), 'error'); return; }
+    if (side === 'a') { this.linkA.set({ id: d.id, port: free[0] }); return; }
+    this.portPick.set({ id: d.id, ports: free, all: [], side: 'b', x: 0, y: 0 });
+    await this.portChosen(free[0]);
   }
+  /** Free ports by switch, read when Add Link starts (so a click answers at once) and after each cable. */
+  private freeCache = new Map<string, string[]>();
+  private async freeNow(id: string): Promise<string[]> {
+    const c = this.freeCache.get(id); if (c) return c;
+    const f = (await this.lab.freePorts(id)) ?? []; this.freeCache.set(id, f); return f;
+  }
+  private prefetchFree() { this.freeCache.clear(); for (const d of this.devs()) void this.freeNow(d.id); }
+  /** Change the port Add Link took on the first switch. */
+  changeLinkPort() { const a = this.linkA(); const d = a && this.devs().find(x => x.id === a.id); if (d) void this.askPorts(d, 'a', null); }
   private async askPorts(d: LabDevice, side: 'a' | 'b', ev: MouseEvent | null) {
     if (side === 'a') this.linkA.set({ id: d.id, port: '' });
     const ports = await this.lab.freePorts(d.id);
@@ -1689,8 +1716,10 @@ export class LabWorkspace implements OnDestroy {
     this.portPick.set(null);
     if (pp.side === 'a') { this.linkA.set({ id: pp.id, port }); return; }
     const a = this.linkA()!;
-    if (await this.lab.connect({ a: a.id, aPort: a.port, b: pp.id, bPort: port })) {
-      this.linkA.set(null);
+    this.linkA.set(null);
+    this.freeCache.delete(a.id); this.freeCache.delete(pp.id);
+    if (!await this.lab.connect({ a: a.id, aPort: a.port, b: pp.id, bPort: port })) this.linkA.set(a);
+    else {
       if (this.emu() && (this.devs().find(d => d.id === a.id)?.running || this.devs().find(d => d.id === pp.id)?.running)) this.ui.toast(tr('The cable works when both switches start next (Reload)'), 'info');
     }
   }
