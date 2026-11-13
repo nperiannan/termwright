@@ -890,6 +890,10 @@ func TestEmuTwoHosts(t *testing.T) {
 	if out, err := a.emuConsoleRun(vb, []string{"x echo tw-console-ok"}, time.Minute); err != nil || !strings.Contains(out, "tw-console-ok") {
 		t.Errorf("console run: %v\n%s", err, out)
 	}
+	// its QEMU command line, read from the host
+	if c, err := a.EmuQemuCommand(vb); err != nil || !strings.Contains(c, "Running on") || !strings.Contains(c, "-netdev socket") {
+		t.Errorf("command line: %v %s", err, c)
+	}
 	// the link check: the switch takes a port down and up (its driver restarts auto-negotiation); QEMU's trace shows it
 	{
 		got := make(chan string, 1)

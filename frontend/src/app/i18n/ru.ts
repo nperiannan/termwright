@@ -2785,6 +2785,9 @@ const ru: Record<string, string> = {
   'Check Its Links (30 s)': 'Проверить его связи (30 с)',
   'Watching the network cards of {0} in QEMU for 30 s…': 'Наблюдение за сетевыми картами {0} в QEMU 30 с…',
   'Link Check: {0}': 'Проверка связей: {0}',
+  'The command QEMU runs it with (read from its host), copied to the clipboard': 'Команда, с которой QEMU его запускает (прочитана на его хосте), скопирована в буфер обмена',
+  'QEMU Command Line…': 'Командная строка QEMU…',
+  'QEMU Command Line: {0} (copied)': 'Командная строка QEMU: {0} (скопирована)',
 };
 
 export default ru;

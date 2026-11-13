@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **QEMU command line**: each start writes the exact command QEMU runs a switch with (read from the host) to the emulator log at info level; right-click a switch → *QEMU Command Line…* shows it and copies it. A switch's CPU is taken from that command, so an image's own `-cpu` (More QEMU options) also holds on a live move.
+
 - Emulated lab, Images: the *Downloading %* button moves on with the download (it showed the percentage of when the image was opened).
 
 - Emulated lab, **link check**: right-click a running switch → *Check Its Links (30 s)* turns on QEMU's own trace of its e1000 or e1000e network cards for 30 seconds and says what happened - whether QEMU took links down (the switch restarted auto-negotiation), the switch turned a receiver off, or frames were dropped (link down, multicast filter, overrun). It tells a problem of the emulation from one inside the switch's software.

@@ -112,3 +112,28 @@ func (a *App) EmuLinkCheck(id string, seconds int) (string, error) {
 	emuEvent(id, "info", "link check: "+strings.ReplaceAll(res, "\n", " "))
 	return res, nil
 }
+
+// EmuQemuCommand is the QEMU command line a switch runs with now (read from the host), or the one it
+// starts with when it is not running.
+func (a *App) EmuQemuCommand(id string) (string, error) {
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	var v *emu.VM
+	if l != nil {
+		v = l.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return "", errors.New("no such switch")
+	}
+	host, lh, vv := emuHostOf(*v), a.emuFor(emuHostOf(*v)), *v
+	im := emuImage(v.Image)
+	emuLab.mu.Unlock()
+	if out, err := a.emuRun(host, lh.CmdLineScript(id), 20*time.Second); err == nil && strings.Contains(out, "qemu") {
+		return "Running on " + host[strings.LastIndex(host, "/")+1:] + ":\n" + strings.TrimSpace(out), nil
+	}
+	if im == nil {
+		return "", errors.New("its image is gone")
+	}
+	return "Not running; it starts with (the CPU as the host has KVM):\nqemu-system-x86_64 " + strings.Join(lh.Args(vv, im), " "), nil
+}

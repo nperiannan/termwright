@@ -836,8 +836,27 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		fmt.Fprintf(&b, " elif [ -n \"$lv\" ] && for d in %s; do [ -f \"$d\" ] && qemu-img snapshot -d %s \"$d\" 2>/dev/null; done; out2=$( { %s%s; } 2>&1); then echo 'started %s'\n", l.disks(v.ID), FastSnap, q, redir, v.ID)
 		// QEMU's own log when it said nothing
 		fmt.Fprintf(&b, " else m=$(echo $out $out2 | tr '\\n' ' '); [ -n \"$m\" ] || m=$(tail -c 400 %s/%s.log 2>/dev/null | tr '\\n' ' '); echo \"fail %s ${m:-QEMU stopped at once and said nothing}\"; fi\nfi\n", Q(dir), v.ID, v.ID)
+		// the command line it really runs with (for the log, and the CPU a live move needs)
+		fmt.Fprintf(&b, "p=$(cat %s/%s.pid 2>/dev/null); [ -n \"$p\" ] && [ -r /proc/$p/cmdline ] && echo \"cmd %s $(tr '\\000' ' ' < /proc/$p/cmdline)\"\n", Q(dir), v.ID, v.ID)
 	}
 	return b.String()
+}
+
+// CmdLineScript prints a running VM's QEMU command line ("" when it is not running).
+func (l *Lab) CmdLineScript(id string) string {
+	return fmt.Sprintf("p=$(cat %s/%s.pid 2>/dev/null); [ -n \"$p\" ] && grep -q qemu /proc/$p/comm 2>/dev/null && tr '\\000' ' ' < /proc/$p/cmdline", Q(l.VMDir()), id)
+}
+
+// CPUOf is the CPU model in a QEMU command line (the last -cpu; "" when none: QEMU's default).
+func CPUOf(cmd string) string {
+	f := strings.Fields(cmd)
+	cpu := ""
+	for i := 0; i+1 < len(f); i++ {
+		if f[i] == "-cpu" {
+			cpu = strings.Split(f[i+1], ",")[0]
+		}
+	}
+	return cpu
 }
 
 // FastSnap is the snapshot in a VM's disk that holds its saved running state.

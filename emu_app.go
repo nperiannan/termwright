@@ -2487,6 +2487,16 @@ func (a *App) emuStart(host string, ids []string) {
 				emuEv(f[1], "ok", "resumed from its saved state - configuration, address and sessions as they were")
 			}
 		}
+		if g := strings.Fields(strings.TrimSpace(line)); len(g) > 3 && g[0] == "cmd" {
+			cmd := strings.Join(g[2:], " ")
+			if vv := emuLab.f.Lab.VMByID(g[1]); vv != nil {
+				emuLogf(emuLvInfo, host, vv.Name, "QEMU runs it with: %s", cmd)
+				if c := emu.CPUOf(cmd); c != "" && vv.CPU != "tcg" { // the CPU it really has (an image's own -cpu wins): a live move gives the same one
+					vv.CPU = c
+					_ = a.emuSave()
+				}
+			}
+		}
 		if g := strings.Fields(strings.TrimSpace(line)); len(g) == 3 && g[0] == "accel" {
 			kvm := g[1] == "kvm"
 			if kvm != l.KVM { // the host's KVM changed since it was checked: what it has now counts
