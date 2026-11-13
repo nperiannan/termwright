@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **a cleaner device panel** (asked for): the selected device's panel has its state at the top with *Console*, *SSH*, *Restart* and *Configure…* buttons, then four folding sections - *Details* (open), *Resources*, *Runs on* (with *Move to another host…* as a link) and *Cables* - and a computer's *Network*; one value per line. Which sections are open is remembered while Termwright is open.
+
+- Emulated lab, **the toolbar above the canvas** sat 8 px too high and 8 px too wide on each side in the glass style, so it overlapped the title row, the left pane's scroll bar and the right pane. It now sits between the panes, and all its buttons have the same size (Grid, Ports and the others).
+
 - Emulated lab, **search, filter and sort on tables** (asked for): a search box above the **Events**, **Inventory** and **Traffic** tables (any column, with "N of M"), click a column title to sort (ascending, descending, off; Shift-click adds a second key; numbers sort as numbers), and the ⏷ beside a title to show only some values (Level, Switch, Host, Trigger, State, Result) or rows that contain some text; the active filters show as chips with one *Clear filters*. In **Events** the Level is a small coloured pill and the Message is in the normal font, coloured only for failures.
 
 - Emulated and simulated lab, **select several devices on the canvas** (asked for): drag a rectangle on the empty canvas (or Shift/⌘/Ctrl-click, or ⌘/Ctrl+A) to select devices, drag one to move them all, and press **Delete** to remove them after one question that names them. Delete now works for one selected device too (it only worked for a Cloud).

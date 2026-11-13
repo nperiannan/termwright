@@ -383,38 +383,46 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="card"><p class="muted small" style="margin: 0">{{ tr('Drag one to move them all · Delete removes them (you are asked first) · Shift or ⌘/Ctrl-click adds or removes one · ⌘/Ctrl+A selects all.') }}</p>
             <div class="btns" style="margin-top: 8px"><button type="button" class="sm danger-ghost" (click)="removeMany([...ms()])" [disabled]="lab.busy()">{{ tr('Remove…') }}</button></div></div>
         } @else if (selDev(); as d) {
-          <h3 class="selh">{{ d.hostname }}<a class="clr" (click)="sel.set('')" [title]="tr('Nothing selected: the whole topology (Esc, or a click on the empty canvas)')">✕</a></h3>
-          <div class="card"><div class="kv">
-            <span>{{ tr('Device') }}</span><b>{{ d.persona?.slots?.[0]?.model || d.model }}@if (d.version) { · {{ d.version }} }</b>
-            <span>{{ tr('State') }}</span><span [class]="warnOf(d) ? 'w' : stateOf(d)">{{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span>
-            @if (d.persona) { <span>{{ tr('Persona') }}</span>
-              @if (d.personaError) { <span class="r"><span class="clamp" [title]="d.personaError + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.personaError) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a></span> }
-              @else { <span [class.g]="d.personaOk">{{ d.personaOk ? '✓ ' + tr('in the switch') : d.personaInfo ? tr(brief(d.personaInfo)) : tr('not written yet') }}</span> } }
-            @if (d.personaInfo && !d.personaError) { <span></span><span class="mono xs clamp" [title]="d.personaInfo">{{ d.personaInfo }}</span> }
-            <span>{{ tr('Serial') }}</span><span class="mono" [title]="d.hwSerial ? tr('As the switch reports it') : tr('Given by Termwright; the switch has not reported its own yet')">{{ d.hwSerial || d.serial || '-' }}</span>
-            @if (d.version) { <span>{{ tr('Firmware') }}</span><span class="mono">{{ d.version }}</span> }
-            <span>MAC</span><span class="mono">{{ d.mac || '-' }}</span>
-            <span>{{ tr('Management') }}</span><span class="mono">{{ emu() ? d.ssh : d.mgmtIp }}</span>
-            @if (emu()) { <span>{{ tr('Console') }}</span><span class="mono">telnet :{{ d.console }}</span>
-              <span>{{ tr('Resources') }}</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }@if (d.running && d.cpu !== undefined) { · CPU {{ d.cpu!.toFixed(0) }} % }</span>
+          <h3 class="selh">{{ d.hostname }}<span class="tst" [class]="'tst ' + stateOf(d)">● {{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span><a class="clr" (click)="sel.set('')" [title]="tr('Nothing selected: the whole topology (Esc, or a click on the empty canvas)')">✕</a></h3>
+          <div class="card dp">
+            <div class="sub">{{ d.persona?.slots?.[0]?.model || d.model }}@if (d.version) { · {{ d.version }} }@if (d.persona?.slots?.length && d.personaOk && !d.personaError) { · <span class="ok">✓ {{ tr('in the switch') }}</span> }</div>
+            <div class="btns act">@if (emu()) { <button type="button" class="primary sm" (click)="console(d)" [disabled]="!d.running">{{ tr('Console') }}</button><button type="button" class="sm" (click)="ssh(d)" [disabled]="d.state !== 'running'">SSH</button><button type="button" class="sm" (click)="lab.restart([d.id])" [disabled]="!d.running || lab.busy()">{{ tr('Restart') }}</button> }@else { <button type="button" class="primary sm" (click)="ssh(d)" [disabled]="!d.running">{{ tr('Open Session') }}</button> }
+              <button type="button" class="sm" (click)="configure(d)">{{ tr('Configure…') }}</button>@if (emu() && d.computer) { <button type="button" class="sm" (click)="pcWin.set(d.id)">{{ tr('Open Desktop') }}</button> }</div>
+            @if (d.error || d.personaError) { <div class="kv alert">@if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
+              @if (d.personaError) { <span>{{ tr('Persona') }}</span><span class="r"><span class="clamp" [title]="d.personaError + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.personaError) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a></span> }</div> }
+            <details class="sec" [open]="isOpen('details')" (toggle)="setOpen('details', $any($event.target).open)"><summary>{{ tr('Details') }}</summary><div class="kv">
+              <span>{{ tr('Serial') }}</span><span class="mono" [title]="d.hwSerial ? tr('As the switch reports it') : tr('Given by Termwright; the switch has not reported its own yet')">{{ d.hwSerial || d.serial || '-' }}</span>
+
+              @if (d.version) { <span>{{ tr('Firmware') }}</span><span class="mono">{{ d.version }}</span> }
+              <span>MAC</span><span class="mono">{{ d.mac || '-' }}</span>
+
+              <span>{{ tr('Management') }}</span><span class="mono">{{ emu() ? d.ssh : d.mgmtIp }}</span>
+
+              @if (emu()) { <span>{{ tr('Console') }}</span><span class="mono">telnet :{{ d.console }}</span>
+ }
+              @if (!d.personaOk && !d.personaError && d.persona) { <span>{{ tr('Persona') }}</span><span>{{ d.personaInfo ? tr(brief(d.personaInfo)) : tr('not written yet') }}</span> }
+              @if (d.personaInfo && !d.personaError) { <span></span><span class="mono xs clamp" [title]="d.personaInfo">{{ d.personaInfo }}</span> }</div></details>
+            @if (emu()) { <details class="sec" [open]="isOpen('res')" (toggle)="setOpen('res', $any($event.target).open)"><summary>{{ tr('Resources') }}</summary><div class="kv">
+              <span>vCPU · RAM</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }@if (d.running && d.cpu !== undefined) { · CPU {{ d.cpu!.toFixed(0) }} % }</span>
+
               <span>{{ tr('CPU share') }}</span><span class="seg2 cpus" [title]="tr('Its share of the host CPU when switches compete: Low 50, Normal 100, High 400')">@for (w of cpuShares; track w.v) { <a [class.on]="(d.cpuWeight || 100) === w.v" (click)="setCPU(d, d.cpuMax || 0, w.v)">{{ tr(w.name) }}</a> }</span>
-              <span>{{ tr('CPU limit') }}</span><span><select [ngModel]="d.cpuMax || 0" (ngModelChange)="setCPU(d, +$event, d.cpuWeight || 100)" [title]="tr('At most this many host cores (a cgroup on its host)')">@for (c of cpuLimits(d); track c) { <option [ngValue]="c">{{ c ? c + ' ' + tr(c === 1 ? 'core' : 'cores') : tr('No limit') }}</option> }</select></span> }
-            @if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
-          </div>
-          @if (emu() && d.computer) { <div class="card dpc"><div class="dph">{{ tr('Network') }}</div><div class="kv">
-            @for (p of netPorts(d); track p) { <span>{{ tr('Port {0}', p) }}</span><span class="mono">{{ portSum(d, p) }}@if (d.running && d.net?.addrs?.[p]) { <span class="ok" [title]="tr('Read on its console: {0}', d.net!.addrs![p])"> ✓</span> }</span> }
-            @if (d.dataGw || d.net?.gw) { <span>{{ tr('Gateway') }}</span><span class="mono">{{ d.dataGw || d.net?.gw }}</span> }</div>
-            <div class="btns"><button type="button" class="primary sm" (click)="pcWin.set(d.id)">{{ tr('Open Desktop') }}</button></div></div> }
-          @if (emu()) { @let hu = useOf(d); <div class="card runs"><div class="dph">{{ tr('Runs on') }}</div><div class="kv">
-            <span>{{ tr('Host') }}</span><b>{{ hu?.name || hname(hostOfDev(d)) }}</b>
+
+              <span>{{ tr('CPU limit') }}</span><span><select [ngModel]="d.cpuMax || 0" (ngModelChange)="setCPU(d, +$event, d.cpuWeight || 100)" [title]="tr('At most this many host cores (a cgroup on its host)')">@for (c of cpuLimits(d); track c) { <option [ngValue]="c">{{ c ? c + ' ' + tr(c === 1 ? 'core' : 'cores') : tr('No limit') }}</option> }</select></span></div></details> }
+            @if (emu() && d.computer) { <details class="sec dpc" [open]="isOpen('net', true)" (toggle)="setOpen('net', $any($event.target).open)"><summary>{{ tr('Network') }}</summary><div class="kv">
+              @for (p of netPorts(d); track p) { <span>{{ tr('Port {0}', p) }}</span><span class="mono">{{ portSum(d, p) }}@if (d.running && d.net?.addrs?.[p]) { <span class="ok" [title]="tr('Read on its console: {0}', d.net!.addrs![p])"> ✓</span> }</span> }
+            @if (d.dataGw || d.net?.gw) { <span>{{ tr('Gateway') }}</span><span class="mono">{{ d.dataGw || d.net?.gw }}</span> }</div></details> }
+            @if (emu()) { @let hu = useOf(d); <details class="sec runs" [open]="isOpen('runs')" (toggle)="setOpen('runs', $any($event.target).open)"><summary>{{ tr('Runs on') }}</summary><div class="kv">
+              <span>{{ tr('Host') }}</span><b>{{ hu?.name || hname(hostOfDev(d)) }}</b>
             <span>{{ tr('Session') }}</span><span class="clamp" [title]="hostOfDev(d)">{{ hostOfDev(d).split('/').join(' / ') }}</span>
             <span>{{ tr('Address') }}</span><span class="mono">{{ addrOfHost(hostOfDev(d)) || '-' }}</span>
             @if (hu) { <span>{{ tr('Management') }}</span><span>{{ hu.mgmt }}@if (hu.mgmtNet) { · <span class="mono">{{ hu.mgmtNet }}</span> }</span>
               <span>{{ tr('Host load') }}</span><span>{{ tr('{0} cores · {1} vCPU given · RAM {2} / {3}', hu.cpus, hu.vcpus, gb(hu.memTotal - hu.memFree), gb(hu.memTotal)) }}</span> }</div>
-            @if (otherHosts(d).length) { <div class="dph mv">{{ tr('Move to another host') }}</div>
-              <div class="mvr"><select [(ngModel)]="moveSel">@for (o of otherHosts(d); track o.session) { <option [value]="o.session">{{ o.name || hname(o.session) }}@if (addrOfHost(o.session)) { · {{ addrOfHost(o.session) }} }</option> }</select><button type="button" class="sm" (click)="moveTo(d, moveSel || otherHosts(d)[0].session)" [disabled]="!!d.movingTo">{{ tr('Move…') }}</button></div>
-              <p class="muted xs">{{ d.running ? tr('Live keeps it running while it moves; you choose how next.') : tr('Its disk goes along: its configuration stays.') }}</p> }</div> }
-          <div class="btns"><button type="button" class="primary sm" (click)="configure(d)">{{ tr('Configure…') }}</button>@if (!emu()) { <button type="button" class="sm" (click)="ssh(d)" [disabled]="!d.running">{{ tr('Open Session') }}</button> }</div></div>
+              @if (otherHosts(d).length) { <a class="lnk" (click)="moveOpen.set(!moveOpen())">{{ tr('Move to another host…') }}</a>
+              @if (moveOpen()) { <div class="mvr"><select [(ngModel)]="moveSel">@for (o of otherHosts(d); track o.session) { <option [value]="o.session">{{ o.name || hname(o.session) }}@if (addrOfHost(o.session)) { · {{ addrOfHost(o.session) }} }</option> }</select><button type="button" class="sm" (click)="moveTo(d, moveSel || otherHosts(d)[0].session)" [disabled]="!!d.movingTo">{{ tr('Move…') }}</button></div>
+              <p class="muted xs">{{ d.running ? tr('Live keeps it running while it moves; you choose how next.') : tr('Its disk goes along: its configuration stays.') }}</p> } }</details> }
+            @if (cableRows(d); as cr) { <details class="sec" [open]="isOpen('cab')" (toggle)="setOpen('cab', $any($event.target).open)"><summary>{{ tr('Cables') }} ({{ cr.length }})</summary><div class="kv">
+              @for (c of cr; track c.port) { <span class="mono">{{ c.port }}</span><span>{{ c.peer }}@if (c.lag) { · {{ tr('LAG') }} }</span> } @empty { <span class="muted">{{ tr('none') }}</span><span></span> }</div></details> }
+          </div>
         }
         <h3>{{ tr('Topology summary') }}</h3>
         <div class="card tbl"><table>
@@ -654,13 +662,13 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       > span { display: flex; flex-direction: column; gap: 3px; } .meter { display: block; margin: 0; } }
     .mgt2 { display: grid; gap: 4px; font-size: 12px; } .mgp .row2 { display: flex; gap: 8px; align-items: center; }
     .mgn { display: flex; align-items: center; gap: 4px; overflow: hidden; small { margin-left: 4px; } }
-    .ctb { position: absolute; top: 0; left: 230px; right: 300px; height: var(--ctbh); z-index: 7; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--surface); border-bottom: 1px solid var(--line); overflow-x: auto;
+    .ctb { position: absolute; top: var(--mp, 0px); left: calc(230px + var(--mp, 0px)); right: calc(300px + var(--mp, 0px)); height: var(--ctbh); z-index: 7; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--surface); border-bottom: 1px solid var(--line); overflow-x: auto;
       .cb { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 9px; border: 1px solid transparent; background: none; border-radius: 8px; white-space: nowrap; font-size: 12.5px; color: var(--text); cursor: pointer; flex: none; }
       .cb:hover:not(:disabled) { background: var(--surface-2); } .cb.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } .cb:disabled { opacity: .45; cursor: default; }
       svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
       .sl { display: none; } .sp { flex: 1; } .zg { display: inline-flex; align-items: center; gap: 2px; flex: none; } .zsel { height: 26px; font-size: 12px; } .lkhid { position: absolute; inset: 0; opacity: 0; cursor: pointer; } }
-    .ctb.tm-icons { .ll { display: none; } .cb { padding: 0 7px; } }
-    .ctb.tm-labels { .ll { display: none; } .sl { display: block; font-size: 11px; } .cb { flex-direction: column; justify-content: center; gap: 2px; height: 46px; padding: 0 8px; } }
+    .ctb.tm-icons { .ll { display: none; } .cb { width: 34px; padding: 0; justify-content: center; } }
+    .ctb.tm-labels { .ll { display: none; } .sl { display: block; font-size: 11px; } .cb { flex-direction: column; justify-content: center; gap: 2px; height: 46px; width: 58px; padding: 0; } }
     .ics { position: absolute; width: 0; height: 0; } .menu.more { min-width: 190px; } .menu .cur { color: var(--accent); }
     .main > .cv { margin-top: var(--ctbh); }
     .tdw { position: absolute; left: 230px; right: 300px; bottom: 14px; display: flex; justify-content: center; pointer-events: none; z-index: 6; container-type: inline-size; }
@@ -679,7 +687,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .g, .on { color: var(--success, #1fa45a); } .w, .boot { color: var(--warning, #e39b17); } .r, .bad { color: var(--danger); }
     i.d { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; flex: none; }
     i.d.ok, i.d.on { background: var(--success, #1fa45a); } i.d.boot { background: var(--warning, #e39b17); } i.d.bad, i.d.off { background: var(--danger); }
-    .main { display: grid; grid-template-columns: 230px 1fr 300px; min-height: 0; }
+    .main { display: grid; grid-template-columns: 230px 1fr 300px; min-height: 0; position: relative; }
     .pal { border-right: 1px solid var(--line); background: var(--surface); padding: 10px; overflow: auto; }
     .srch { width: 100%; height: 30px; margin-bottom: 6px; }
     .grp { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 12px 2px 6px; display: flex; justify-content: space-between; }
@@ -767,7 +775,6 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .node.cloud { cursor: grab; .cbox { height: 56px; display: flex; align-items: flex-end; justify-content: center; } } .node.cloud.pick .cbox svg path { stroke-width: 3; } .cll .ln { stroke-dasharray: 3 4; }
     .node.ghost.mv { opacity: .9; pointer-events: auto; .mvp { width: 150px; height: 4px; margin: 4px auto 2px; border-radius: 2px; background: var(--line); overflow: hidden; i { display: block; height: 100%; background: var(--accent); transition: width .5s; } } .mvr { font-size: 10.5px; color: var(--muted); white-space: nowrap; } .nbox { border: 1.5px dashed var(--accent); background: var(--accent-soft); } .nm { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--accent); } }
     .gl { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 5; opacity: .7; } .node.ghost { opacity: .55; pointer-events: none; .nbox { border-style: dashed; border-color: var(--accent); } }
-    .main { position: relative; }
     .rb { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 8 5; }
     .band { position: absolute; z-index: 6; border: 1px dashed var(--accent); background: var(--accent-soft); border-radius: 3px; pointer-events: none; }
     .node { position: absolute; width: 150px; text-align: center; cursor: pointer; user-select: none; }
@@ -800,11 +807,13 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; background: var(--surface); }
     .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .evl { display: block; margin-top: 2px; font-size: 11.5px; color: var(--accent); cursor: pointer; }
     .seg2.cpus a { padding: 2px 9px; }
-    .runs .dph.mv { margin-top: 10px; } .mvr { display: flex; gap: 6px; select { flex: 1; min-width: 0; } }
-    .runs .dph, .dpc .dph { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
-    .dpr { display: grid; grid-template-columns: 14px 70px minmax(0, 1fr) 12px; gap: 6px; align-items: center; margin: 3px 0; font-size: 12px; input, select { min-width: 0; font-size: 12px; } }
-    .dpa { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dpr .ok { color: var(--ok, #2fa46a); }
+    .mvr { display: flex; gap: 6px; margin-bottom: 4px; select { flex: 1; min-width: 0; } }
     .node .nm.da { color: var(--accent); font-family: var(--mono, monospace); }
+    .selh .tst { margin: 0 8px 0 auto; font-size: 12px; font-weight: 500; }
+    .dp { padding: 12px; .sub { color: var(--muted); font-size: 12px; margin: -2px 0 8px; } .kv.alert { margin-bottom: 8px; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--danger) 10%, transparent); }
+      details.sec { border-top: 1px solid var(--line); padding: 8px 0 2px; > summary { cursor: pointer; list-style: none; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; &::-webkit-details-marker { display: none; } &::before { content: '▸ '; } }
+        &[open] > summary::before { content: '▾ '; } .kv { padding-bottom: 8px; } }
+      .lnk { display: inline-block; color: var(--accent); cursor: pointer; margin-bottom: 6px; } }
     .kv { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 4px 8px; font-size: 12px; > span:nth-child(odd) { color: var(--muted); } span { overflow-wrap: anywhere; } }
     .xs { font-size: 11px; color: var(--muted); } .btns { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .tbl { padding: 4px 8px; } table { width: 100%; border-collapse: collapse; font-size: 12px; } td { padding: 4px 2px; border-bottom: 1px solid var(--line); cursor: pointer; } tr:last-child td { border: 0; } tr.on td { color: var(--accent); }
@@ -843,6 +852,16 @@ export class LabWorkspace implements OnDestroy {
   protected devs = computed(() => this.st()?.devices ?? []);
   protected links = computed(() => this.st()?.links ?? []);
   protected sel = signal('');
+  /** The device panel's folding sections: Details open at first, the rest closed (a computer's Network too). */
+  protected secs = signal<Record<string, boolean>>({});
+  protected moveOpen = signal(false);
+  protected isOpen(k: string, dflt = false) { const v = this.secs()[k]; return v === undefined ? (k === 'details' || dflt) : v; }
+  protected setOpen(k: string, o: boolean) { if (this.isOpen(k, k === 'net') !== o) this.secs.update(m => ({ ...m, [k]: o })); }
+  /** A device's cables for its panel: its port, what is on the other end, and whether it is in a LAG. */
+  protected cableRows(d: LabDevice) {
+    return this.links().filter(k => k.a === d.id || k.b === d.id).map(k => k.a === d.id
+      ? { port: k.aPort, peer: this.nameOf(k.b) + ' ' + k.bPort, lag: !!k.lagA } : { port: k.bPort, peer: this.nameOf(k.a) + ' ' + k.aPort, lag: !!k.lagB });
+  }
   /** The devices of a multi-selection (two or more); sel is one device. */
   protected ms = signal<Set<string>>(new Set());
   protected band = signal<{ x0: number; y0: number; x1: number; y1: number } | null>(null);

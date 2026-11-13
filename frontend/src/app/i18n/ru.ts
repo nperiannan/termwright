@@ -3071,6 +3071,9 @@ const ru: Record<string, string> = {
   'Nothing yet': 'Пока ничего',
   'Contains': 'Содержит',
   'No switch here matches': 'Здесь нет подходящих коммутаторов',
+  'Details': 'Сведения',
+  'Move to another host…': 'Перенести на другой хост…',
+  'LAG': 'LAG',
 };
 
 export default ru;

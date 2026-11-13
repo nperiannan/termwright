@@ -82,7 +82,7 @@
 :root.glacier {
   .titlebar, .status.modern { background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); border-color: var(--g-edge); }
   .titlebar { box-shadow: 0 1px 0 var(--g-hi) inset; }
-  .main { padding: 8px 8px 0; gap: 0; }
+  .main { padding: 8px 8px 0; gap: 0; --mp: 8px; }
   .main > .tree { margin: 0 2px 8px 0; border: 1px solid var(--g-edge) !important; border-radius: 14px; overflow: hidden;
     background: linear-gradient(180deg, var(--g-glass-2), var(--g-glass)); box-shadow: var(--g-lift); }
   .main.tree-right > .tree { margin: 0 0 8px 2px; }
