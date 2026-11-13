@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -140,6 +142,13 @@ var mcpLabTools = []mcpTool{
 			"switch":  map[string]any{"type": "string"},
 			"seconds": map[string]any{"type": "integer", "description": "5-120 (default 30)"},
 		}, "switch")},
+	{"lab_address", "Addresses of the data ports of Linux computers in the emulated lab (Alpine, Debian, Ubuntu… added from the catalog or a GNS3 appliance): list them, or set one (typed on the computer's console now when it runs, and at each start). Switches' ports are set on their own CLI (lab_console).",
+		mcpSchema(map[string]any{
+			"action":  map[string]any{"type": "string", "enum": []string{"list", "set"}},
+			"switch":  map[string]any{"type": "string", "description": "set: the computer"},
+			"port":    map[string]any{"type": "integer", "description": "set: its data port (1 = eth1 on most images; eth0 is management)"},
+			"address": map[string]any{"type": "string", "description": "set: address/bits (10.0.0.5/24, 2001:db8::5/64), dhcp, or none to remove it"},
+		}, "action")},
 	{"lab_qemu_command", "The QEMU command line a switch of the emulated lab runs with now (read on its KVM host), or the one it starts with when it is not running: network cards, CPU, machine, memory.",
 		mcpSchema(map[string]any{"switch": map[string]any{"type": "string"}}, "switch")},
 	{"lab_events", "Read the emulated lab's Events log: what Termwright did to each switch (started, booted, day 0, persona, moves, errors), newest last.",
@@ -773,6 +782,42 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			return b.String(), nil
 		}
 		return "", errors.New("action is start, stop, read or list")
+	case "lab_address":
+		if argStr(args, "action") == "set" {
+			d, err := emuMCPID(v, argStr(args, "switch"))
+			if err != nil {
+				return "", err
+			}
+			addr, port := argStr(args, "address"), argInt(args, "port", 0, 4096)
+			if strings.EqualFold(addr, "none") {
+				addr = ""
+			}
+			if err := light("Claude wants to set an address", fmt.Sprintf("Claude (through the Termwright connector) asks to give %s port %d the address %s.", d.Hostname, port, orStr(addr, "none"))); err != nil {
+				return "", err
+			}
+			if _, err := a.EmuSetPortAddr(d.ID, port, addr); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("%s port %d: %s (typed on its console when it runs; lab_events shows it)", d.Hostname, port, orStr(addr, "no address")), nil
+		}
+		var b strings.Builder
+		for _, d := range v.Devices {
+			if !d.Computer {
+				continue
+			}
+			fmt.Fprintf(&b, "- %s (management %s):", d.Hostname, orStr(d.MgmtIP, "none yet"))
+			if len(d.Addrs) == 0 {
+				b.WriteString(" no data-port addresses")
+			}
+			for _, p := range slices.Sorted(maps.Keys(d.Addrs)) {
+				fmt.Fprintf(&b, " port %d %s;", p, d.Addrs[p])
+			}
+			b.WriteString("\n")
+		}
+		if b.Len() == 0 {
+			return "There are no Linux computers in the lab (add one from Add → Linux and test tools).", nil
+		}
+		return b.String(), nil
 	case "lab_link_check", "lab_qemu_command":
 		d, err := emuMCPID(v, argStr(args, "switch"))
 		if err != nil {

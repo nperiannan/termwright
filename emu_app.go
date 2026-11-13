@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"net"
 	"net/http"
@@ -159,45 +160,47 @@ var emuLab struct {
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
 type EmuDevice struct {
-	Host         string       `json:"host"` // the KVM host it runs on (session path)
-	ID           string       `json:"id"`
-	OS           string       `json:"os"` // device type
-	Model        string       `json:"model"`
-	Image        string       `json:"image"`
-	Version      string       `json:"version"`  // the software it runs: as it reports it, else the image's
-	HWSerial     string       `json:"hwSerial"` // the serial number it reports
-	Serial       string       `json:"serial"`
-	MAC          string       `json:"mac"`
-	Hostname     string       `json:"hostname"`
-	MgmtIP       string       `json:"mgmtIp"`
-	Port         int          `json:"port"`
-	Ports        int          `json:"ports"`
-	Running      bool         `json:"running"`
-	Logins       int          `json:"logins"`
-	Unsaved      bool         `json:"unsaved"`
-	X            int          `json:"x"`
-	Y            int          `json:"y"`
-	State        string       `json:"state"` // stopped, uploading, booting, day0, running, failed
-	StateText    string       `json:"stateText"`
-	CPU          float64      `json:"cpu"`                 // % of its vCPUs, now
-	MemUsed      int64        `json:"memUsed"`             // MB its VM uses now (resident)
-	Saved        bool         `json:"saved,omitempty"`     // stopped with its running state saved: it starts in seconds
-	Role         string       `json:"role,omitempty"`      // drawn as (set by the user, for its kind of device)
-	IconStyle    string       `json:"iconStyle,omitempty"` // its kind's icon style in this topology ("" = the default)
-	Uplinks      []string     `json:"uplinks,omitempty"`   // its data ports on the host's network
-	MovingTo     string       `json:"movingTo,omitempty"`  // the host it is moving to (session path), while it moves
-	Cores        float64      `json:"cores"`               // host cores it uses now
-	CPUs         int          `json:"cpus"`
-	RAM          int          `json:"ram"`
-	Console      int          `json:"console"`
-	SSH          string       `json:"ssh"` // how its management is reached, as text
-	Error        string       `json:"error"`
-	DiskGB       int          `json:"diskGb"`
-	Template     string       `json:"template"`
-	Persona      *emu.Persona `json:"persona"`
-	PersonaOK    bool         `json:"personaOk"` // the persona file in its disk is the current one
-	PersonaError string       `json:"personaError"`
-	PersonaInfo  string       `json:"personaInfo"` // where the file was written, what the CLI showed after boot
+	Host         string         `json:"host"` // the KVM host it runs on (session path)
+	ID           string         `json:"id"`
+	OS           string         `json:"os"` // device type
+	Model        string         `json:"model"`
+	Image        string         `json:"image"`
+	Version      string         `json:"version"`  // the software it runs: as it reports it, else the image's
+	HWSerial     string         `json:"hwSerial"` // the serial number it reports
+	Serial       string         `json:"serial"`
+	MAC          string         `json:"mac"`
+	Hostname     string         `json:"hostname"`
+	MgmtIP       string         `json:"mgmtIp"`
+	Port         int            `json:"port"`
+	Ports        int            `json:"ports"`
+	Running      bool           `json:"running"`
+	Logins       int            `json:"logins"`
+	Unsaved      bool           `json:"unsaved"`
+	X            int            `json:"x"`
+	Y            int            `json:"y"`
+	State        string         `json:"state"` // stopped, uploading, booting, day0, running, failed
+	StateText    string         `json:"stateText"`
+	CPU          float64        `json:"cpu"`                 // % of its vCPUs, now
+	MemUsed      int64          `json:"memUsed"`             // MB its VM uses now (resident)
+	Saved        bool           `json:"saved,omitempty"`     // stopped with its running state saved: it starts in seconds
+	Role         string         `json:"role,omitempty"`      // drawn as (set by the user, for its kind of device)
+	IconStyle    string         `json:"iconStyle,omitempty"` // its kind's icon style in this topology ("" = the default)
+	Uplinks      []string       `json:"uplinks,omitempty"`   // its data ports on the host's network
+	MovingTo     string         `json:"movingTo,omitempty"`  // the host it is moving to (session path), while it moves
+	Cores        float64        `json:"cores"`               // host cores it uses now
+	CPUs         int            `json:"cpus"`
+	RAM          int            `json:"ram"`
+	Console      int            `json:"console"`
+	SSH          string         `json:"ssh"` // how its management is reached, as text
+	Error        string         `json:"error"`
+	DiskGB       int            `json:"diskGb"`
+	Template     string         `json:"template"`
+	Persona      *emu.Persona   `json:"persona"`
+	PersonaOK    bool           `json:"personaOk"` // the persona file in its disk is the current one
+	PersonaError string         `json:"personaError"`
+	PersonaInfo  string         `json:"personaInfo"`        // where the file was written, what the CLI showed after boot
+	Computer     bool           `json:"computer,omitempty"` // a Linux computer: Termwright gives its data ports addresses
+	Addrs        map[int]string `json:"addrs,omitempty"`    // its data ports' addresses (port → address/bits, or "dhcp")
 }
 
 // EmuLinkView is a cable, with port names.
@@ -527,6 +530,11 @@ func (a *App) emuLoad() {
 	}
 	if emuLab.f.Folder == "" {
 		emuLab.f.Folder = "Emulated Lab"
+	}
+	for i := range emuLab.f.Images { // Linux computers added before Termwright configured them
+		if im := &emuLab.f.Images[i]; strings.HasPrefix(im.Source, "GNS3 appliance ") && len(im.PortAddr) == 0 && emu.IsLinuxAppliance(im.Name, "") {
+			emu.LinuxHost(im)
+		}
 	}
 	if l := emuLab.f.Lab; l != nil { // a test's trial streams left by a stop of Termwright in the middle
 		l.Streams = slices.DeleteFunc(l.Streams, func(s emu.Stream) bool { return s.Test != "" })
@@ -2746,7 +2754,8 @@ func (a *App) emuWatch(host string, ids []string) {
 			}
 			needDay0 := !v.Day0Done && len(im.Day0) > 0
 			needCheck := im.Persona != nil && im.Persona.Check != "" && v.Persona != nil && v.Persona.Applied != "" && !emuLab.pcheck[id]
-			if (needDay0 || needCheck || l.Mgmt == "lan" && !l.LanFixed || l.Fixed() && len(im.AddrSet) > 0) && !emuLab.day0[id] {
+			ports := len(v.Addrs) > 0 && len(im.PortAddr) > 0
+			if (needDay0 || needCheck || ports || l.Mgmt == "lan" && !l.LanFixed || l.Fixed() && len(im.AddrSet) > 0) && !emuLab.day0[id] {
 				day0 = append(day0, *v)
 				emuLab.day0[id] = true
 			}
@@ -2782,6 +2791,7 @@ func (a *App) emuDay0(host string, v emu.VM) {
 	if cur != nil {
 		v = *cur // its address as it is now
 	}
+	macs := emuPortMACs(l, v, im0)
 	if doDay0 {
 		emuLab.state[v.ID] = "day0"
 	} else {
@@ -2827,7 +2837,10 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		emuLab.state[v.ID] = "address"
 		emuLab.mu.Unlock()
 		set := im
-		set.Day0 = im.AddrSet
+		set.Day0 = nil
+		for _, cmd := range im.AddrSet {
+			set.Day0 = append(set.Day0, emu.FillPort(cmd, macs[0], ""))
+		}
 		if err := emu.Day0(ctx, c, &set, v, v.Index+1, nil); err != nil {
 			fail(emuWithTail(fmt.Errorf("setting its address %s: %w", v.MgmtIP, err), c))
 			return
@@ -2874,6 +2887,15 @@ func (a *App) emuDay0(host string, v emu.VM) {
 		emuEv(v.ID, "ok", "day-0 typed: "+strings.Join(im.Day0, " · "))
 		_ = a.emuSave()
 		emuLab.mu.Unlock()
+	}
+	if len(v.Addrs) > 0 && len(im.PortAddr) > 0 {
+		emuLab.mu.Lock()
+		emuLab.state[v.ID] = "address"
+		emuLab.mu.Unlock()
+		if err := emuPortAddrs(ctx, c, im, v, macs); err != nil {
+			fail(emuWithTail(fmt.Errorf("giving its data ports addresses: %w", err), c))
+			return
+		}
 	}
 	a.emuCheckPersona(ctx, c, &im, v)
 	a.emuReadFacts(ctx, c, &im, v)
@@ -3710,6 +3732,7 @@ func (a *App) emuView() EmuView {
 			Console: l.ConsolePort(vm), Port: l.SSHPort(vm), Error: emuLab.errs[vm.ID]}
 		if im != nil {
 			d.Model, d.OS, d.Ports = im.Name, orStr(im.DeviceType, "VM"), im.DataPorts()
+			d.Computer, d.Addrs = len(im.PortAddr) > 0, vm.Addrs
 			onHost[im.ID] = true
 		}
 		vl := a.emuFor(emuHostOf(vm)) // its host's management
@@ -5795,6 +5818,131 @@ func (a *App) emuMoveVM(id, host string) (EmuView, error) {
 	}
 	a.emuRetarget(vv)
 	return a.EmuState()
+}
+
+// emuPortMACs is a VM's MAC addresses: 0 its management port, then its data ports (lock held).
+func emuPortMACs(l *emu.Lab, v emu.VM, im *emu.Image) map[int]string {
+	m := map[int]string{0: l.MgmtMAC(v, im)}
+	for p := range v.Addrs {
+		m[p] = l.PortMAC(v, im, p)
+	}
+	return m
+}
+
+// emuPortAddrs types a computer's data-port addresses on its console.
+func emuPortAddrs(ctx context.Context, c *emu.Console, im emu.Image, v emu.VM, macs map[int]string) error {
+	set := im
+	set.Day0 = nil
+	var said []string
+	for _, p := range slices.Sorted(maps.Keys(v.Addrs)) {
+		cmds := im.PortAddr
+		if strings.EqualFold(v.Addrs[p], "dhcp") {
+			cmds = im.PortDHCP
+		}
+		for _, cmd := range cmds {
+			set.Day0 = append(set.Day0, emu.FillPort(cmd, macs[p], v.Addrs[p]))
+		}
+		said = append(said, fmt.Sprintf("%d %s", p, v.Addrs[p]))
+	}
+	if err := emu.Day0(ctx, c, &set, v, v.Index+1, nil); err != nil {
+		return err
+	}
+	emuLab.mu.Lock()
+	emuEv(v.ID, "ok", "data ports: "+strings.Join(said, " · "))
+	emuLab.mu.Unlock()
+	return nil
+}
+
+// EmuSetPortAddr gives a Linux computer's data port an address ("10.0.0.5/24",
+// "2001:db8::5/64", "dhcp", or "" for none). It is typed on its console at each
+// start, and now when it is running.
+func (a *App) EmuSetPortAddr(id string, port int, addr string) (EmuView, error) {
+	defer emuAs("user")()
+	addr = strings.TrimSpace(addr)
+	if addr != "" && !strings.EqualFold(addr, "dhcp") {
+		p, err := netip.ParsePrefix(addr)
+		if err != nil {
+			return EmuView{}, fmt.Errorf("%q is not an address/bits (10.0.0.5/24) or dhcp", addr)
+		}
+		addr = p.String()
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	l := emuLab.f.Lab
+	var v *emu.VM
+	if l != nil {
+		v = l.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such device")
+	}
+	im := emuImage(v.Image)
+	if im == nil || len(im.PortAddr) == 0 {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New(v.Name + " is not a Linux computer: Termwright gives addresses only to their data ports (a switch's are set on its CLI)")
+	}
+	if port < 1 || port > im.DataPorts() {
+		emuLab.mu.Unlock()
+		return EmuView{}, fmt.Errorf("%s has data ports 1 to %d", v.Name, im.DataPorts())
+	}
+	if addr == "" {
+		delete(v.Addrs, port)
+	} else {
+		if v.Addrs == nil {
+			v.Addrs = map[int]string{}
+		}
+		v.Addrs[port] = strings.ToLower(addr)
+	}
+	if len(v.Addrs) == 0 {
+		v.Addrs = nil
+	}
+	emuEv(v.ID, "info", fmt.Sprintf("data port %d: %s", port, orStr(addr, "no address")))
+	err := a.emuSave()
+	host, vv, ready := emuHostOf(*v), *v, emuLab.ready[v.ID] && !emuLab.day0[v.ID]
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	if ready && addr != "" {
+		emuGo(func() { a.emuTypePorts(host, vv) })
+	}
+	return a.EmuState()
+}
+
+// emuTypePorts logs in to a running computer's console and types its data-port addresses.
+func (a *App) emuTypePorts(host string, v emu.VM) {
+	emuLab.mu.Lock()
+	l := a.emuFor(host)
+	im0 := emuImage(v.Image)
+	if l == nil || im0 == nil {
+		emuLab.mu.Unlock()
+		return
+	}
+	im, port, macs := *im0, l.ConsolePort(v), emuPortMACs(l, v, im0)
+	emuLab.mu.Unlock()
+	im.Password, _ = secrets.Lookup(emuImageKey(im.ID))
+	im.Password = orStr(im.Password, im.DefaultPassword)
+	err := func() error {
+		cl, err := a.emuClient(context.Background(), host)
+		if err != nil {
+			return err
+		}
+		conn, err := cl.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		if err != nil {
+			return fmt.Errorf("console: %w (is the console open in a tab?)", err)
+		}
+		c := emu.NewConsole(conn)
+		defer c.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		return emuPortAddrs(ctx, c, im, v, macs)
+	}()
+	if err != nil {
+		emuLab.mu.Lock()
+		emuEv(v.ID, "error", "giving its data ports addresses: "+err.Error())
+		emuLab.mu.Unlock()
+	}
 }
 
 // EmuSetRole sets what a kind of device is drawn as in this topology (every

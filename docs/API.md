@@ -37,7 +37,7 @@ Settings, and turning one on does not turn on the other.
 |---|---|---|
 | `GET /lab` | The open topology: switches, state, addresses, consoles, cables, LAGs, hosts, images, Events | 200 `Lab` |
 | `GET /lab/tools` | Every lab tool and its arguments (JSON Schema) | 200 `Tool[]` |
-| `POST /lab/tools/{tool}` | Runs a tool (`power`, `cable`, `console`, `wait`, `move`, `capture`, `link_check`, `traffic`, …). The body holds its arguments | 200 `{"result": text}` |
+| `POST /lab/tools/{tool}` | Runs a tool (`power`, `cable`, `console`, `wait`, `move`, `capture`, `link_check`, `address`, `traffic`, …). The body holds its arguments | 200 `{"result": text}` |
 | `GET /lab/traffic` | Test ports, streams and results. Results are live while a run goes on, with rates and rate history | 200 `TrafficView` |
 | `GET /lab/traffic/report?format=json\|csv\|html\|text` | The run's report: pass or fail per stream, with its counters | 200 |
 | `POST /lab/traffic/ports` | Adds a test port on a free switch port | 201 `TrafficView` |
@@ -129,6 +129,7 @@ termwright lab help
 termwright lab show                                   # GET /lab
 termwright lab power action=start switches=leaf-1,leaf-2
 termwright lab wait timeout=900
+termwright lab address action=set switch=pc-1 port=1 address=10.10.0.11/24
 termwright lab traffic add_port switch=leaf-1 port=5 ip=10.10.0.1/24
 termwright lab traffic add_stream name=voice from="Test port 1" to="Test port 2" pps=1000 seconds=30 dscp=46
 termwright lab traffic start voice

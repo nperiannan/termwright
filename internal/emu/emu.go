@@ -54,6 +54,8 @@ type Image struct {
 	Extra           string              `json:"extra"`                     // more qemu options
 	Source          string              `json:"source"`                    // where the profile came from (a GNS3 appliance…)
 	AddrCmd         string              `json:"addrCmd"`                   // a CLI command that prints the management address (host's network mode)
+	PortAddr        []string            `json:"portAddr,omitempty"`        // commands that give a data port a fixed address ({mac} its MAC, {addr} address/bits), typed at each start for the ports given one (Linux computers)
+	PortDHCP        []string            `json:"portDhcp,omitempty"`        // commands that make a data port ask DHCP for its address ({mac}), for the ports set to dhcp
 	LagCmd          string              `json:"lagCmd,omitempty"`          // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
 	LagSet          map[string][]string `json:"lagSet,omitempty"`          // CLI commands that make a LAG, per mode ("lacp", "static"): {id} {name} {ports} {master} {first} {last}
 	LagDel          []string            `json:"lagDel,omitempty"`          // CLI commands that remove a LAG (the same names)
@@ -197,34 +199,35 @@ type Template struct {
 
 // VM is one switch of the lab.
 type VM struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"` // hostname, also the session name
-	Image    string   `json:"image"`
-	Index    int      `json:"index"` // its number in the lab: ports and MACs come from it
-	CPUs     int      `json:"cpus"`
-	RAM      int      `json:"ram"`
-	MgmtIP   string   `json:"mgmtIp"` // address/bits it gets on day 0
-	Gateway  string   `json:"gateway"`
-	Day0Done bool     `json:"day0Done"`
-	Host     string   `json:"host,omitempty"`    // the KVM host it runs on (a session path; "" = the lab's own host)
-	Direct   bool     `json:"direct,omitempty"`  // its management address answers this computer straight (no jump host)
-	Serial   string   `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
-	BaseMAC  string   `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
-	DiskGB   int      `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
-	Template string   `json:"template,omitempty"`
-	Persona  *Persona `json:"persona,omitempty"`
-	FastKey  string   `json:"fastKey,omitempty"`  // its running state was saved in its disk with this setup (FastKey): it resumes from it
-	Uplinks  []int    `json:"uplinks,omitempty"`  // data ports on the host's network (its bridge, or macvtap on its port)
-	Relayed  bool     `json:"relayed,omitempty"`  // moved while running: its cables listen on all addresses (relays on its old host forward to it)
-	Incoming string   `json:"-"`                  // started to receive a live migration ("tcp:0.0.0.0:port")
-	FW       string   `json:"fw,omitempty"`       // the software version the switch reports (its CLI, after it booted)
-	HWSerial string   `json:"hwSerial,omitempty"` // the serial number the switch reports
-	AddrOn   string   `json:"addrOn,omitempty"`   // the management address the switch was seen to take (its day 0 checked it)
-	Machine  string   `json:"machine,omitempty"`  // the QEMU machine type it runs as, when pinned (a live move between QEMU versions: "pc" is each version's own)
-	CPU      string   `json:"cpu,omitempty"`      // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
-	Role     string   `json:"role,omitempty"`     // what it is drawn as ("access", "core", "router"…; "" = from its model)
-	X        int      `json:"x"`
-	Y        int      `json:"y"`
+	ID       string         `json:"id"`
+	Name     string         `json:"name"` // hostname, also the session name
+	Image    string         `json:"image"`
+	Index    int            `json:"index"` // its number in the lab: ports and MACs come from it
+	CPUs     int            `json:"cpus"`
+	RAM      int            `json:"ram"`
+	MgmtIP   string         `json:"mgmtIp"` // address/bits it gets on day 0
+	Gateway  string         `json:"gateway"`
+	Day0Done bool           `json:"day0Done"`
+	Host     string         `json:"host,omitempty"`    // the KVM host it runs on (a session path; "" = the lab's own host)
+	Direct   bool           `json:"direct,omitempty"`  // its management address answers this computer straight (no jump host)
+	Serial   string         `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
+	BaseMAC  string         `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
+	DiskGB   int            `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
+	Template string         `json:"template,omitempty"`
+	Persona  *Persona       `json:"persona,omitempty"`
+	FastKey  string         `json:"fastKey,omitempty"`  // its running state was saved in its disk with this setup (FastKey): it resumes from it
+	Uplinks  []int          `json:"uplinks,omitempty"`  // data ports on the host's network (its bridge, or macvtap on its port)
+	Relayed  bool           `json:"relayed,omitempty"`  // moved while running: its cables listen on all addresses (relays on its old host forward to it)
+	Incoming string         `json:"-"`                  // started to receive a live migration ("tcp:0.0.0.0:port")
+	FW       string         `json:"fw,omitempty"`       // the software version the switch reports (its CLI, after it booted)
+	HWSerial string         `json:"hwSerial,omitempty"` // the serial number the switch reports
+	AddrOn   string         `json:"addrOn,omitempty"`   // the management address the switch was seen to take (its day 0 checked it)
+	Machine  string         `json:"machine,omitempty"`  // the QEMU machine type it runs as, when pinned (a live move between QEMU versions: "pc" is each version's own)
+	CPU      string         `json:"cpu,omitempty"`      // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
+	Role     string         `json:"role,omitempty"`     // what it is drawn as ("access", "core", "router"…; "" = from its model)
+	Addrs    map[int]string `json:"addrs,omitempty"`    // data-port addresses typed on its console at each start (port number → address/bits, or "dhcp"), when its image has port address commands (Linux computers)
+	X        int            `json:"x"`
+	Y        int            `json:"y"`
 }
 
 // Cable joins data port APort of A to BPort of B (port numbers from 1).

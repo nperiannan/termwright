@@ -203,8 +203,8 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 			IP, GW, Server string
 		} `json:"lease"`
 		Lease6 map[string]struct{ IP, GW string } `json:"lease6"`
-		Dup   map[string]int       `json:"dup"`
-		Jit   map[string][]float64 `json:"jit"`
+		Dup    map[string]int                     `json:"dup"`
+		Jit    map[string][]float64               `json:"jit"`
 	}
 	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}, OOO: map[string]int{}, Dup: map[string]int{}, Jit: map[string][]float64{}}
 	dyn := slices.ContainsFunc(v.Testers, func(t emu.Tester) bool { return t.DHCP || t.SLAAC })

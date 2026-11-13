@@ -1022,6 +1022,55 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/address:
+        post:
+            operationId: tool_address
+            tags:
+                - Tools
+            summary: Addresses of the data ports of Linux computers in the emulated lab (Alpine, Debian, Ubuntu… added from the catalog or a GNS3 appliance)
+            description: 'Addresses of the data ports of Linux computers in the emulated lab (Alpine, Debian, Ubuntu… added from the catalog or a GNS3 appliance): list them, or set one (typed on the computer''s console now when it runs, and at each start). Switches'' ports are set on their own CLI (lab_console). Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - list
+                                        - set
+                                    type: string
+                                address:
+                                    description: 'set: address/bits (10.0.0.5/24, 2001:db8::5/64), dhcp, or none to remove it'
+                                    type: string
+                                port:
+                                    description: 'set: its data port (1 = eth1 on most images; eth0 is management)'
+                                    type: integer
+                                switch:
+                                    description: 'set: the computer'
+                                    type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/cable:
         post:
             operationId: tool_cable
@@ -1948,6 +1997,16 @@ components:
                 personaInfo:
                     description: where the file was written, what the CLI showed after boot
                     type: string
+                computer:
+                    description: 'a Linux computer: Termwright gives its data ports addresses'
+                    type: boolean
+                addrs:
+                    description: its data ports' addresses (port → address/bits, or "dhcp")
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
             required:
                 - host
                 - id
@@ -2635,6 +2694,20 @@ components:
                 addrCmd:
                     description: a CLI command that prints the management address (host's network mode)
                     type: string
+                portAddr:
+                    description: commands that give a data port a fixed address ({mac} its MAC, {addr} address/bits), typed at each start for the ports given one (Linux computers)
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                portDhcp:
+                    description: commands that make a data port ask DHCP for its address ({mac}), for the ports set to dhcp
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
                 lagCmd:
                     description: a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
                     type: string
@@ -3418,7 +3491,7 @@ components:
                     description: 'iperf: the host VM that runs iperf3 -c'
                     type: string
                 serverIp:
-                    description: 'iperf: the server''s address the client connects to (on its data port; default its management address)'
+                    description: 'iperf: the server''s address the client connects to (default: its first data port with a fixed address, else its management address)'
                     type: string
                 proto:
                     description: 'iperf: tcp (default) or udp'
@@ -3688,7 +3761,7 @@ components:
                     description: 'iperf: the host VM that runs iperf3 -c'
                     type: string
                 serverIp:
-                    description: 'iperf: the server''s address the client connects to (on its data port; default its management address)'
+                    description: 'iperf: the server''s address the client connects to (default: its first data port with a fixed address, else its management address)'
                     type: string
                 proto:
                     description: 'iperf: tcp (default) or udp'

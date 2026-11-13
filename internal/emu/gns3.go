@@ -152,6 +152,9 @@ func ParseAppliance(data []byte) (Appliance, error) {
 		if im.NIC == "" {
 			im.NIC = "e1000"
 		}
+		if IsLinuxAppliance(a.Name, a.Category) {
+			LinuxHost(&im)
+		}
 		return im
 	}
 	base := mk(*def)
@@ -224,4 +227,58 @@ func cleanOptions(o string) string {
 		keep = append(keep, a[i])
 	}
 	return strings.Join(keep, " ")
+}
+
+// IsLinuxAppliance says whether a GNS3 appliance is a Linux computer (a guest
+// whose console is a Linux shell), which Termwright configures as a host.
+func IsLinuxAppliance(name, category string) bool {
+	n := strings.ToLower(name)
+	for _, d := range []string{"alpine", "debian", "ubuntu", "fedora", "almalinux", "rocky", "centos", "kali", "tiny core", "tinycore", "linux"} {
+		if strings.Contains(n, d) {
+			return category == "" || category == "guest"
+		}
+	}
+	return false
+}
+
+// portIf is a shell line that finds the interface with a MAC address ({mac}) in $i.
+const portIf = `i=$(ip -o link | awk -F': ' 'tolower($0) ~ /{mac}/ {sub(/@.*/, "", $2); print $2; exit}')`
+
+// LinuxHost gives an image the console setup of a Linux computer: its host
+// name on day 0 (and iperf3 when its package manager can get it), a fixed
+// management address when the lab has them, and the data ports' addresses.
+// It keeps what the image already has.
+func LinuxHost(im *Image) {
+	if im.DeviceType == "" {
+		im.DeviceType = "Linux"
+	}
+	if im.Login == "" {
+		im.Login = "root"
+	}
+	if im.Prompt == "" {
+		im.Prompt = `[#$]\s*$`
+	}
+	if len(im.Day0) == 0 {
+		im.Day0 = []string{
+			"hostname {hostname}; echo {hostname} > /etc/hostname",
+			"(command -v iperf3 || apk add -q iperf3 || (apt-get update -q && apt-get install -y -q iperf3) || dnf install -y -q iperf3) >/dev/null 2>&1 &",
+		}
+	}
+	if len(im.AddrSet) == 0 {
+		im.AddrSet = []string{portIf + `; ip link set "$i" up; ip -4 addr flush dev "$i"; ip addr add {mgmtIp} dev "$i"; [ -z "{gateway}" ] || ip route replace default via {gateway}`}
+	}
+	if im.AddrCmd == "" {
+		im.AddrCmd = "ip -4 -o addr show scope global"
+	}
+	if len(im.PortAddr) == 0 {
+		im.PortAddr = []string{portIf + `; ip link set "$i" up; ip -4 addr flush dev "$i"; ip addr add {addr} dev "$i"`}
+	}
+	if len(im.PortDHCP) == 0 {
+		im.PortDHCP = []string{portIf + `; ip link set "$i" up; (udhcpc -i "$i" -b -q || dhclient -nw "$i" || dhcpcd -b "$i") >/dev/null 2>&1`}
+	}
+}
+
+// FillPort puts a data port's MAC address and address into a command.
+func FillPort(cmd, mac, addr string) string {
+	return strings.NewReplacer("{mac}", strings.ToLower(mac), "{addr}", addr).Replace(cmd)
 }

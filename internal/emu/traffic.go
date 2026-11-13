@@ -91,7 +91,7 @@ type TrafficTest struct {
 	Seconds    int     `json:"seconds,omitempty"`    // convergence, iperf: how long the traffic runs (default 30, iperf 10)
 	Server     string  `json:"server,omitempty"`     // iperf: the host VM (name or id) that runs iperf3 -s
 	Client     string  `json:"client,omitempty"`     // iperf: the host VM that runs iperf3 -c
-	ServerIP   string  `json:"serverIp,omitempty"`   // iperf: the server's address the client connects to (on its data port; default its management address)
+	ServerIP   string  `json:"serverIp,omitempty"`   // iperf: the server's address the client connects to (default: its first data port with a fixed address, else its management address)
 	Proto      string  `json:"proto,omitempty"`      // iperf: tcp (default) or udp
 	Bandwidth  string  `json:"bandwidth,omitempty"`  // iperf: target rate (iperf3 -b: 100M, 1G; udp default 1M)
 	Parallel   int     `json:"parallel,omitempty"`   // iperf: parallel streams (iperf3 -P)

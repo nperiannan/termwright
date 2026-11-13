@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -591,7 +592,13 @@ func (a *App) emuIperf(ctx context.Context, t emu.TrafficTest) error {
 	if srv.ID == "" || cli.ID == "" {
 		return errors.New("the server or client VM is gone")
 	}
-	ip := orStr(t.ServerIP, strings.Split(srv.MgmtIP, "/")[0])
+	ip := t.ServerIP
+	for _, p := range slices.Sorted(maps.Keys(srv.Addrs)) { // across the switches: its first data port with a fixed address
+		if a := srv.Addrs[p]; ip == "" && a != "dhcp" {
+			ip = strings.Split(a, "/")[0]
+		}
+	}
+	ip = orStr(ip, strings.Split(srv.MgmtIP, "/")[0])
 	if ip == "" {
 		return errors.New("give the server's address (serverIp): " + srv.Name + " has no management address")
 	}
