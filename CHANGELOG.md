@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated and simulated lab, **select several devices on the canvas** (asked for): drag a rectangle on the empty canvas (or Shift/⌘/Ctrl-click, or ⌘/Ctrl+A) to select devices, drag one to move them all, and press **Delete** to remove them after one question that names them. Delete now works for one selected device too (it only worked for a Cloud).
+
+- Images and Templates, **the buttons stay at the bottom**: *Add Image…*, *GNS3 Appliance…* and *Import Profiles…* no longer sit at the end of the image list (so you had to scroll down to reach them); the list scrolls above them.
+
 - Emulated lab, **Tiny Core is not a computer** (first real test: two Tiny Core machines ran but their console stayed blank, so Termwright could not log in or type an address): Tiny Core boots to a screen only and has no serial console. *Add Computer* now skips it and takes Alpine (or another image with a serial console); a GNS3 Tiny Core appliance is no longer set up as a Linux host.
 
 - Emulated lab, **names with a comma** (found on the first real test of two computers): `tc-1,tc-2` was taken as one name, and QEMU read the comma in `-name` as an option separator, so both machines failed to start ("Invalid parameter"). A comma-separated list of names now names the machines one by one (Claude's `lab_add_switches` and the New Lab dialog), and a comma in a name is escaped for QEMU.

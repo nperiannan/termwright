@@ -156,7 +156,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <div class="hint">{{ tr('Drag a device onto the canvas to add it.') }}</div>
       </div>
 
-      <div class="cv" #cv [class.grid]="showGrid()" [style.background-size]="showGrid() ? (GRID * zoom()) + 'px ' + (GRID * zoom()) + 'px' : null" (click)="canvasClick($event)" (scroll)="onScroll(cv)" (wheel)="wheelZoom($event)" (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
+      <div class="cv" #cv [class.grid]="showGrid()" [style.background-size]="showGrid() ? (GRID * zoom()) + 'px ' + (GRID * zoom()) + 'px' : null" (click)="canvasClick($event)" (pointerdown)="bandDown($event, cv)" (scroll)="onScroll(cv)" (wheel)="wheelZoom($event)" (dragover)="$event.preventDefault()" (drop)="dropPal($event, cv)" (pointermove)="move($event, cv)" (pointerup)="up()" (pointerleave)="up()"
            (contextmenu)="$event.preventDefault()">
         @if (linkMode()) { <div class="bar2">⟷ {{ linkText() }}@if (linkA()?.port) { <a (click)="changeLinkPort(); $event.stopPropagation()">{{ tr('Change Port') }}</a> } <span class="k2">Esc</span> <a (click)="cancelLink(); $event.stopPropagation()">{{ tr('Cancel') }}</a></div> }
         @if (!devs().length && !ghosts().length) {
@@ -165,6 +165,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         }
         <div class="inner" [style.width.px]="area().w * zoom()" [style.height.px]="area().h * zoom()">
           <div class="scale" [style.transform]="'scale(' + zoom() + ')'" [style.width.px]="area().w" [style.height.px]="area().h">
+            @if (band(); as b) { <div class="band" [style.left.px]="Math.min(b.x0, b.x1)" [style.top.px]="Math.min(b.y0, b.y1)" [style.width.px]="Math.abs(b.x1 - b.x0)" [style.height.px]="Math.abs(b.y1 - b.y0)"></div> }
             @for (z of (hostMode() === 'areas' ? zones() : []); track z.host) {
               <div class="zone" [style.left.px]="z.x" [style.top.px]="z.y" [style.width.px]="z.w" [style.height.px]="z.h" [style.border-color]="z.c" [style.background]="z.c + '0f'">
                 <div class="zh"><i [style.background]="z.c"></i><b>{{ z.name }}</b><span class="muted">{{ z.text }}</span></div></div>
@@ -206,7 +207,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               </div>
             }
             @for (d of devs(); track d.id) {
-              <div class="node" [class.dimn]="dimOf(d)" [class.sel]="sel() === d.id" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
+              <div class="node" [class.dimn]="dimOf(d)" [class.sel]="sel() === d.id || ms().has(d.id)" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
                    (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)" (mouseenter)="hov.set(d.id)" (mouseleave)="hov.set('')">
                 <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [look]="lookOf(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nlbl" [style.transform]="'translate(' + (lblAt()[d.id]?.x ?? 0) + 'px,' + (lblAt()[d.id]?.y ?? 0) + 'px)'" (pointerdown)="lblGrab($event, d.id)" (dblclick)="lblReset(d.id, $event)" [title]="tr('Drag the name to move it; double-click puts it back')">
@@ -376,7 +377,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       }
 
       <div class="side">
-        @if (selDev(); as d) {
+        @if (ms().size > 1) {
+          <h3 class="selh">{{ tr('{0} devices selected', ms().size) }}<a class="clr" (click)="clearMs()" [title]="tr('Clear the selection (Esc, or a click on the empty canvas)')">✕</a></h3>
+          <div class="card"><p class="muted small" style="margin: 0">{{ tr('Drag one to move them all · Delete removes them (you are asked first) · Shift or ⌘/Ctrl-click adds or removes one · ⌘/Ctrl+A selects all.') }}</p>
+            <div class="btns" style="margin-top: 8px"><button type="button" class="sm danger-ghost" (click)="removeMany([...ms()])" [disabled]="lab.busy()">{{ tr('Remove…') }}</button></div></div>
+        } @else if (selDev(); as d) {
           <h3 class="selh">{{ d.hostname }}<a class="clr" (click)="sel.set('')" [title]="tr('Nothing selected: the whole topology (Esc, or a click on the empty canvas)')">✕</a></h3>
           <div class="card"><div class="kv">
             <span>{{ tr('Device') }}</span><b>{{ d.persona?.slots?.[0]?.model || d.model }}@if (d.version) { · {{ d.version }} }</b>
@@ -762,6 +767,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .gl { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 5; opacity: .7; } .node.ghost { opacity: .55; pointer-events: none; .nbox { border-style: dashed; border-color: var(--accent); } }
     .main { position: relative; }
     .rb { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 8 5; }
+    .band { position: absolute; z-index: 6; border: 1px dashed var(--accent); background: var(--accent-soft); border-radius: 3px; pointer-events: none; }
     .node { position: absolute; width: 150px; text-align: center; cursor: pointer; user-select: none; }
     .nbox { margin: 0 auto; width: ${BW}px; height: ${BH}px; border-radius: 12px; border: 1.5px solid transparent; display: flex; align-items: flex-end; justify-content: center; position: relative;
       app-dev-icon { margin-bottom: -6px; } }
@@ -833,6 +839,14 @@ export class LabWorkspace implements OnDestroy {
   protected devs = computed(() => this.st()?.devices ?? []);
   protected links = computed(() => this.st()?.links ?? []);
   protected sel = signal('');
+  /** The devices of a multi-selection (two or more); sel is one device. */
+  protected ms = signal<Set<string>>(new Set());
+  protected band = signal<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  private bandStart: { x: number; y: number; add: boolean } | null = null;
+  private bandMoved = false;
+  private groupMoved = false;
+  protected Math = Math;
+  protected clearMs() { this.ms.set(new Set()); }
   protected selDev = computed(() => this.devs().find(d => d.id === this.sel()) ?? null);
   protected selLink = signal('');
   protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink; cloud?: string; tp?: EmuTester } | null>(null);
@@ -1423,7 +1437,7 @@ export class LabWorkspace implements OnDestroy {
   });
   protected mouse = signal<{ x: number; y: number } | null>(null);
   private moved = signal(new Map<string, { x: number; y: number }>());
-  private dragging: { id: string; dx: number; dy: number; moved: boolean } | null = null;
+  private dragging: { id: string; dx: number; dy: number; moved: boolean; q0: { x: number; y: number }; grp: { id: string; x: number; y: number }[] } | null = null;
   private palDrag: Pal | null = null;
   private timer: ReturnType<typeof setInterval>;
 
@@ -1432,16 +1446,21 @@ export class LabWorkspace implements OnDestroy {
     this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && this.dock() !== 'cap' && ++this.capTick % 5 === 1) void this.backend.emuCaptures().then(c => this.caps.set(c ?? []), () => undefined); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
   }
   @HostListener('document:keydown', ['$event']) onDelKey(e: KeyboardEvent) {
-    if (!this.visible() || !this.selCloud() || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
-    if ((e.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable], .xterm')) return;
+    if (!this.visible() || (e.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable], .xterm')) return;
+    if ((e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey) && this.devs().length > 1) { e.preventDefault(); this.sel.set(''); this.ms.set(new Set(this.devs().map(d => d.id))); return; }
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    const ids = this.ms().size > 1 ? [...this.ms()] : this.sel() ? [this.sel()] : [];
+    if (ids.length) { e.preventDefault(); void this.removeMany(ids); return; }
+    if (!this.selCloud()) return;
     e.preventDefault(); void this.removeCloud(this.selCloud());
   }
-  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); } }
+  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); this.ms.set(new Set()); } }
   /** A click on the empty canvas: nothing selected (the side panel shows the whole topology). */
   canvasClick(ev: MouseEvent) {
     const t = ev.target as HTMLElement;
     if (this.linkMode() || t.closest('.node, .lk, .ctb, .mini, .hleg, .menu, .bar2, .zone .zh')) return;
-    this.sel.set(''); this.selLink.set(''); this.selCloud.set('');
+    if (this.bandMoved) { this.bandMoved = false; return; }
+    this.sel.set(''); this.selLink.set(''); this.selCloud.set(''); this.ms.set(new Set());
   }
   ngOnDestroy() { clearInterval(this.timer); if (this.trafTimer) clearInterval(this.trafTimer); this.lab.watch('ws-' + this.tab().id, false); for (const id of Object.values(this.docked())) void this.tabs.close(id); }
 
@@ -1748,17 +1767,22 @@ export class LabWorkspace implements OnDestroy {
   grab(ev: PointerEvent, d: LabDevice, cv: HTMLElement) {
     if (ev.button !== 0 || this.linkMode()) return;
     const p = this.toCanvas(ev, cv), q = this.pos(d);
-    this.dragging = { id: d.id, dx: p.x - q.x, dy: p.y - q.y, moved: false };
+    const grp = this.ms().has(d.id) && this.ms().size > 1 ? this.devs().filter(x => this.ms().has(x.id) && x.id !== d.id).map(x => ({ id: x.id, ...this.pos(x) })) : [];
+    this.dragging = { id: d.id, dx: p.x - q.x, dy: p.y - q.y, moved: false, q0: { x: q.x, y: q.y }, grp };
   }
   move(ev: PointerEvent, cv: HTMLElement) {
     const p = this.toCanvas(ev, cv);
     if (this.linkMode()) this.mouse.set(p);
+    if (this.bandStart) { this.bandTo(p); return; }
     const g = this.dragging; if (!g) return;
     g.moved = true;
-    this.moved.update(m => new Map(m).set(g.id, { x: Math.max(80, p.x - g.dx), y: Math.max(40, p.y - g.dy) }));
+    const nx = Math.max(80, p.x - g.dx), ny = Math.max(40, p.y - g.dy);
+    this.moved.update(m => { const n = new Map(m).set(g.id, { x: nx, y: ny }); for (const o of g.grp) n.set(o.id, { x: Math.max(80, o.x + nx - g.q0.x), y: Math.max(40, o.y + ny - g.q0.y) }); return n; });
   }
   up() {
+    if (this.bandStart) { this.bandEnd(); return; }
     const g = this.dragging; this.dragging = null;
+    if (g?.moved && g.grp.length) { this.groupMoved = true; setTimeout(() => this.groupMoved = false); for (const o of g.grp) { const q = this.moved().get(o.id)!; this.lab.place(o.id, q.x - 75, q.y - BH / 2); } }
     if (g?.moved && this.showGrid()) { const q = this.moved().get(g.id)!, G = this.GRID; this.moved.update(m => new Map(m).set(g.id, { x: Math.max(80, Math.round(q.x / G) * G), y: Math.max(40, Math.round(q.y / G) * G) })); }
     if (g?.moved) { const p = this.moved().get(g.id)!; this.lab.place(g.id, p.x - 75, p.y - BH / 2); this.dropOnHost(g.id, p); }
   }
@@ -1776,7 +1800,41 @@ export class LabWorkspace implements OnDestroy {
   clickNode(d: LabDevice, ev: MouseEvent) {
     ev.stopPropagation(); this.menu.set(null);
     if (this.linkMode()) { void this.linkClick(d, ev); return; }
+    if (this.groupMoved && this.ms().has(d.id)) return;
+    if (ev.shiftKey || ev.metaKey || ev.ctrlKey) { // add or remove one device of the selection
+      const s = new Set(this.ms()); if (this.sel()) { s.add(this.sel()); this.sel.set(''); }
+      s.has(d.id) ? s.delete(d.id) : s.add(d.id);
+      this.ms.set(s.size > 1 ? s : new Set()); if (s.size === 1) this.select(this.devs().find(x => x.id === [...s][0])!);
+      return;
+    }
+    if (this.ms().size) this.ms.set(new Set());
     this.select(d);
+  }
+  /** A rectangle dragged on the empty canvas selects the devices it touches. */
+  bandDown(ev: PointerEvent, cv: HTMLElement) {
+    const t = ev.target as HTMLElement;
+    if (ev.button !== 0 || this.linkMode() || this.dragging || t.closest('.node, .lk, .ctb, .mini, .hleg, .menu, .bar2, .zone .zh, .side, .tpn')) return;
+    const p = this.toCanvas(ev, cv);
+    this.bandStart = { ...p, add: ev.shiftKey || ev.metaKey || ev.ctrlKey }; this.bandMoved = false;
+  }
+  private bandTo(p: { x: number; y: number }) {
+    const b = this.bandStart!; if (!this.bandMoved && Math.hypot(p.x - b.x, p.y - b.y) < 4) return;
+    this.bandMoved = true; this.band.set({ x0: b.x, y0: b.y, x1: p.x, y1: p.y });
+  }
+  private bandEnd() {
+    const b = this.band(), st = this.bandStart; this.bandStart = null; this.band.set(null);
+    if (!b || !st) return;
+    const x0 = Math.min(b.x0, b.x1), x1 = Math.max(b.x0, b.x1), y0 = Math.min(b.y0, b.y1), y1 = Math.max(b.y0, b.y1);
+    const hit = this.devs().filter(d => { const q = this.pos(d); return q.x + 75 >= x0 && q.x - 75 <= x1 && q.y + BH / 2 >= y0 && q.y - BH / 2 <= y1; }).map(d => d.id);
+    const s = new Set(st.add ? [...this.ms(), ...(this.sel() ? [this.sel()] : []), ...hit] : hit);
+    this.selLink.set(''); this.selCloud.set('');
+    if (s.size > 1) { this.ms.set(s); this.sel.set(''); } else { this.ms.set(new Set()); if (s.size === 1) this.select(this.devs().find(x => x.id === [...s][0])!); else this.sel.set(''); }
+  }
+  async removeMany(ids: string[]) {
+    const ds = this.devs().filter(d => ids.includes(d.id)); if (!ds.length) return;
+    const names = ds.map(d => d.hostname).join(', ');
+    const msg = (this.emu() ? tr('Remove {0} emulated switches? They stop, their disks on the host and their sessions are deleted.', ds.length) : tr('Remove {0} simulated switches and their sessions? Their configuration is lost.', ds.length)) + '\n\n' + names;
+    if (await this.ui.confirm(ds.length === 1 ? tr('Remove {0}?', ds[0].hostname) : tr('Remove {0} switches?', ds.length), msg, tr('Remove'), true) && await this.lab.remove(ds.map(d => d.id), true)) { this.ms.set(new Set()); if (ids.includes(this.sel())) this.sel.set(''); }
   }
   open(d: LabDevice) { if (this.linkMode()) return; if (this.emu() && d.computer) this.pcWin.set(d.id); else if (this.emu()) this.console(d); else this.ssh(d); }
   nodeMenu(d: LabDevice, ev: MouseEvent) { ev.preventDefault(); ev.stopPropagation(); this.select(d); this.menu.set({ ...this.menuAt(ev), dev: d }); }

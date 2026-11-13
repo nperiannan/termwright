@@ -3058,6 +3058,11 @@ const ru: Record<string, string> = {
   'Reverse': 'Обратно',
   'The server sends (iperf3 -R)': 'Отправляет сервер (iperf3 -R)',
   'Both need iperf3 (Alpine: apk add iperf3). Close their console tabs while it runs: a console takes one connection.': 'Обоим нужен iperf3 (Alpine: apk add iperf3). Закройте их консольные вкладки на время теста: консоль допускает одно подключение.',
+  '{0} devices selected': 'Выбрано устройств: {0}',
+  'Clear the selection (Esc, or a click on the empty canvas)': 'Снять выбор (Esc или щелчок по пустому холсту)',
+  'Drag one to move them all · Delete removes them (you are asked first) · Shift or ⌘/Ctrl-click adds or removes one · ⌘/Ctrl+A selects all.': 'Перетащите одно, чтобы двигать все · Delete удаляет их (сначала будет вопрос) · Shift или ⌘/Ctrl-щелчок добавляет или убирает одно · ⌘/Ctrl+A выбирает все.',
+  'Remove…': 'Удалить…',
+  'Remove {0} switches?': 'Удалить коммутаторы ({0})?',
 };
 
 export default ru;

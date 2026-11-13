@@ -46,6 +46,7 @@ const PAGE = `
   .okb.bad { background: color-mix(in srgb, var(--danger) 10%, transparent); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
   .okb.wait { background: var(--surface-2); border-color: var(--line); }
   .two { display: grid; grid-template-columns: minmax(0, 1fr) 360px; height: 100%; > .side { border-left: 1px solid var(--line); background: var(--surface-2); padding: 16px; overflow: auto; } }
+  .lst:has(> .lsc) { padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 0; .lsc { flex: 1; min-height: 0; overflow: auto; padding: 12px; } .lsf { flex: none; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--surface-2); } }
   .lst { border-right: 1px solid var(--line); background: var(--surface-2); padding: 12px; overflow: auto;
     .grp { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 12px 2px 6px; }
     .it { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 9px; border: 1px solid transparent; margin-bottom: 3px; cursor: pointer; small { display: block; color: var(--muted); font-size: 11.5px; } }
@@ -581,10 +582,10 @@ export class LabNew implements OnInit {
   <div class="mdl">
     <div class="mh"><div><h2>{{ tr('Images and Templates') }}</h2><div class="muted small">{{ tr('The switch images Termwright can boot, what it knows about each, and the devices made from them') }}</div></div><span class="sp"></span><button type="button" class="sm" (click)="closed.emit()">✕</button></div>
     <div class="mt"><a [class.on]="tab() === 'images'" (click)="tab.set('images')">{{ tr('Images ({0})', images().length) }}</a><a [class.on]="tab() === 'templates'" (click)="tab.set('templates')">{{ tr('Templates ({0})', templates().length) }}</a><a [class.on]="tab() === 'profiles'" (click)="tab.set('profiles')">{{ tr('Profiles from the device pack') }}</a><a [class.on]="tab() === 'onhosts'" (click)="tab.set('onhosts')">{{ tr('On the Hosts') }}</a><a [class.on]="tab() === 'public'" (click)="openPublic()">{{ tr('Public appliances') }}</a></div>
-    <div class="mb" style="display: grid; grid-template-columns: 320px minmax(0, 1fr)">
+    <div class="mb" style="display: grid; grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr)">
       @switch (tab()) {
         @case ('images') {
-          <div class="lst">
+          <div class="lst"><div class="lsc">
             @if (queue().length) {
               <div class="dq">
                 <div class="dqh"><b>{{ tr('Downloads') }}</b><span class="muted small">{{ tr('{0} waiting', queue().length - 1) }}</span><span class="sp"></span>@if (queue().length > 1) { <a class="lnk small" (click)="stopAll()">{{ tr('Stop all') }}</a> }</div>
@@ -610,9 +611,10 @@ export class LabNew implements OnInit {
                   <small class="mono">{{ im.fileName || tr('no file chosen') }}</small><small>{{ im.cpus }} vCPU · {{ gb(im.ram) }} RAM · {{ diskName(im.disk) }} · {{ mb(im.size) }}</small><small [class.w]="uploading(im) || !!dl(im)" [class.r]="!im.file && !im.url" [class.g]="!!im.file && !!im.url && !dl(im) && !uploading(im)">{{ dl(im) ? (dl(im) === 'waiting' ? tr('waiting to download') : tr('downloading {0}', dl(im))) : !im.file && im.url ? tr('not downloaded yet') : (im.url ? '✓ ' + tr('downloaded') + ' · ' : '') + where(im) }}</small>@if (dl(im) && dl(im) !== 'waiting') { <div class="meter"><i [style.width]="pctOf(dl(im)) + '%'"></i></div> }</div></div>
               }
             } @empty { <p class="muted small">{{ tr('No images yet.') }}</p> }
+            </div><div class="lsf">
             <div class="drop" (click)="addImage()"><b style="color: var(--text)">+ {{ tr('Add Image…') }}</b><br />.qcow2 / .img / .vmdk / .raw · {{ tr('recognised by its name with the device pack’s patterns') }}</div>
             <div class="row2" style="margin-top: 8px"><button type="button" class="sm" (click)="importAppliance()">{{ tr('GNS3 Appliance…') }}</button><button type="button" class="sm" (click)="importProfiles()">{{ tr('Import Profiles…') }}</button></div>
-          </div>
+          </div></div>
           <div class="pad" style="overflow: auto">
             @if (edit(); as im) {
               <div class="row2" style="justify-content: flex-start"><div style="flex: 1"><b style="font-size: 15px">{{ im.name }}@if (im.version) { · {{ im.version }} }</b><div class="muted small mono">{{ im.fileName }} · {{ mb(im.size) }}@if (im.sha256) { · sha256 {{ im.sha256.slice(0, 4) }}…{{ im.sha256.slice(-4) }} }</div></div>
