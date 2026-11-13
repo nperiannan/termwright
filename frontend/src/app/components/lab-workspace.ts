@@ -14,7 +14,7 @@ import { PacketView, PacketWindow } from './packet-view';
 import { TrafficTests } from './traffic-tests';
 
 const BW = 104, BH = 64;
-type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
+type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; pc?: boolean; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
 
 /** The lab as a workspace tab: device palette, canvas with cables, the
  *  selected switch, the topology summary and the Events log. */
@@ -209,7 +209,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [look]="lookOf(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nlbl" [style.transform]="'translate(' + (lblAt()[d.id]?.x ?? 0) + 'px,' + (lblAt()[d.id]?.y ?? 0) + 'px)'" (pointerdown)="lblGrab($event, d.id)" (dblclick)="lblReset(d.id, $event)" [title]="tr('Drag the name to move it; double-click puts it back')">
                 <div class="nn">{{ d.hostname }}</div>
-                <div class="nm" [title]="d.persona?.slots?.[0]?.model ? tr('Persona: it runs as a {0}', d.persona!.slots![0].model) : tr('The image as it is (no persona)')">{{ d.persona?.slots?.[0]?.model ? modelOf(d) + ' · ' + osOf(d) : modelOf(d) }} {{ d.version }}@if (showAddr()) { · {{ subOf(d) }} }</div></div>
+                <div class="nm" [title]="d.persona?.slots?.[0]?.model ? tr('Persona: it runs as a {0}', d.persona!.slots![0].model) : tr('The image as it is (no persona)')">{{ d.persona?.slots?.[0]?.model ? modelOf(d) + ' · ' + osOf(d) : modelOf(d) }} {{ d.version }}@if (showAddr()) { · {{ subOf(d) }} }</div>@if (d.computer && dataAddr(d)) { <div class="nm da" [title]="tr('Its data-port address')">{{ dataAddr(d) }}</div> }</div>
                 @if (hostMode() === 'tags') { <div class="htg"><i [style.background]="hcol(hostOfDev(d))"></i>{{ hname(hostOfDev(d)) }}</div> }
                 @if (d.uplinks?.length) { <span class="badge up" [title]="tr('On the host’s network: {0}', d.uplinks!.join(', '))">⇡ {{ d.uplinks!.join(',') }}</span> }
                 @if (d.personaError) { <span class="badge r" [title]="d.personaError">{{ tr('no persona') }}</span> }
@@ -305,6 +305,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       </div>
       @if (page() !== 'new') {
         <svg class="ics" aria-hidden="true"><defs>
+          <symbol id="tw-pc" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="12" rx="1.5"/><path d="M9 20h6M12 16v4M7 8l2.5 2L7 12M11.5 12.5h4"/></symbol>
           <symbol id="tw-add" viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M19.5 9v6M16.5 12h6"/></symbol>
           <symbol id="tw-link" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><path d="M7.2 12h9.6"/></symbol>
           <symbol id="tw-cloud" viewBox="0 0 24 24"><path d="M7.5 18.5h9.8a3.7 3.7 0 0 0 .4-7.4 5.6 5.6 0 0 0-10.9 1.2 3.1 3.1 0 0 0 .7 6.2z"/></symbol>
@@ -320,6 +321,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         </defs></svg>
         <div [class]="'ctb tm-' + tbMode()" (click)="$event.stopPropagation()" role="toolbar" [attr.aria-label]="tr('Canvas')">
           <button type="button" class="cb" (click)="wizard()" [title]="devs().length ? tr('Add switches to this lab') : tr('Make a lab')"><svg><use href="#tw-add"/></svg><span class="ll">{{ devs().length ? tr('Add Switches') : tr('New Lab') }}</span><span class="sl">{{ devs().length ? tr('Switches') : tr('New Lab') }}</span></button>
+          @if (emu() && devs().length) { <button type="button" class="cb" (click)="addComputer()" [title]="tr('Add a Linux computer (Alpine first): Termwright logs in, names it, installs iperf3 and sets its port addresses')"><svg><use href="#tw-pc"/></svg><span class="ll">{{ tr('Add Computer') }}</span><span class="sl">{{ tr('Computer') }}</span></button> }
           <button type="button" class="cb" [class.on]="linkMode()" (click)="toggleLink(); $event.stopPropagation()" [disabled]="devs().length < 2 && !clouds().length" [title]="tr('Draw a cable between two switches')"><svg><use href="#tw-link"/></svg><span class="ll">{{ tr('Add Link') }}</span><span class="sl">{{ tr('Link') }}</span></button>
           @if (emu()) { <button type="button" class="cb" (click)="addCloud(); $event.stopPropagation()" [disabled]="!devs().length" [title]="tr('A cloud: the host’s own network, to cable switch ports to (Add Link from a port to the cloud)')"><svg><use href="#tw-cloud"/></svg><span class="ll">{{ tr('Add Cloud') }}</span><span class="sl">{{ tr('Cloud') }}</span></button> }
           <i class="dsep"></i>
@@ -392,6 +394,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <span>{{ tr('Resources') }}</span><span>{{ d.cpus }} vCPU · {{ gb(d.ram) }}@if (d.diskGb) { · {{ d.diskGb }} GB }@if (d.running && d.cpu !== undefined) { · CPU {{ d.cpu!.toFixed(0) }} % }</span> }
             @if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
           </div>
+          @if (emu() && d.computer) { <div class="card dpc"><div class="dph">{{ tr('Data ports') }}</div>
+            @for (p of portsOf(d); track p) { <div class="dpr"><span class="mono">{{ p }}</span>
+              <select [ngModel]="pmode(d, p)" (ngModelChange)="setPMode(d, p, $event)"><option value="">{{ tr('None') }}</option><option value="fixed">{{ tr('Fixed') }}</option><option value="dhcp">DHCP</option></select>
+              @if (pmode(d, p) === 'fixed') { <input class="mono" [ngModel]="d.addrs?.[p] ?? ''" placeholder="10.10.0.11/24" (change)="setPAddr(d, p, $any($event.target).value)" (keydown.enter)="$any($event.target).blur()" /> } @else { <span class="mono muted dpa">{{ pmode(d, p) === 'dhcp' ? (d.running && d.addrsSeen?.[p] || tr('asks DHCP at start')) : '-' }}</span> }
+              <span class="dpo">@if (d.running && d.addrsSeen?.[p]) { <span class="ok" [title]="tr('Read on its console: {0}', d.addrsSeen![p])">✓</span> }</span></div> }
+            <p class="muted xs">{{ tr('Typed on its console now and at each start. IPv6 works too (2001:db8::11/64).') }}</p></div> }
           <div class="btns">@if (emu()) { <button type="button" class="primary sm" (click)="console(d)" [disabled]="!d.running">{{ tr('Console') }}</button> }
             <button type="button" class="sm" (click)="ssh(d)" [disabled]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }}</button><button type="button" class="sm" (click)="configure(d)">{{ tr('Configure…') }}</button>@if (emu()) { <button type="button" class="sm" (click)="saveConsoleLog(d)" [title]="tr('Everything its console showed since it started, with its Events - to keep, or to send when a boot or login went wrong')">{{ tr('Save Console Log…') }}</button> }</div></div>
         }
@@ -776,6 +784,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       h3 { margin: 4px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); } }
     .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; background: var(--surface); }
     .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .evl { display: block; margin-top: 2px; font-size: 11.5px; color: var(--accent); cursor: pointer; }
+    .dpc .dph { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
+    .dpr { display: grid; grid-template-columns: 14px 70px minmax(0, 1fr) 12px; gap: 6px; align-items: center; margin: 3px 0; font-size: 12px; input, select { min-width: 0; font-size: 12px; } }
+    .dpa { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dpr .ok { color: var(--ok, #2fa46a); }
+    .node .nm.da { color: var(--accent); font-family: var(--mono, monospace); }
     .kv { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 4px 8px; font-size: 12px; > span:nth-child(odd) { color: var(--muted); } span { overflow-wrap: anywhere; } }
     .xs { font-size: 11px; color: var(--muted); } .btns { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .tbl { padding: 4px 8px; } table { width: 100%; border-collapse: collapse; font-size: 12px; } td { padding: 4px 2px; border-bottom: 1px solid var(--line); cursor: pointer; } tr:last-child td { border: 0; } tr.on td { color: var(--accent); }
@@ -1449,10 +1461,31 @@ export class LabWorkspace implements OnDestroy {
     this.menu.set(null);
     try { await this.backend.emuSetUplink(d.id, port, on); await this.lab.refresh(); this.ui.toast(on ? tr('{0} {1} goes on the host’s network when it starts (or restarts)', d.hostname, port) : tr('{0} {1} comes off the host’s network when it restarts', d.hostname, port)); } catch (e) { this.ui.error(e); }
   }
-  palRole(p: Pal): DevRole { return p.cls === 'l' ? 'server' : roleOf((p.tpl?.model || '') + ' ' + p.name, p.os); }
-  async setRole(d: LabDevice, r: DevRole) { this.menu.set(null); try { await this.backend.emuSetRole(d.id, r === roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? '') ? '' : r); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
+  palRole(p: Pal): DevRole { return p.pc ? 'pc' : p.cls === 'l' ? 'server' : roleOf((p.tpl?.model || '') + ' ' + p.name, p.os); }
+  async setRole(d: LabDevice, r: DevRole) { this.menu.set(null); try { await this.backend.emuSetRole(d.id, r === this.defRole(d) ? '' : r); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
   /** What the switch is drawn as: the role chosen in Configure…, else one from its model. */
-  roleOfDev(d: LabDevice): DevRole { return (d.role as DevRole) || roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? ''); }
+  roleOfDev(d: LabDevice): DevRole { return (d.role as DevRole) || this.defRole(d); }
+  defRole(d: LabDevice): DevRole { return d.computer ? 'pc' : roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? ''); }
+  /** A computer's data ports shown in its details (at most 8). */
+  portsOf(d: LabDevice) { return Array.from({ length: Math.min(d.ports || 1, 8) }, (_, i) => i + 1); }
+  private pmodeSet = signal<Record<string, string>>({});
+  pmode(d: LabDevice, p: number) { const a = d.addrs?.[p] ?? ''; return this.pmodeSet()[d.id + '|' + p] ?? (a === 'dhcp' ? 'dhcp' : a ? 'fixed' : ''); }
+  async setPMode(d: LabDevice, p: number, m: string) {
+    this.pmodeSet.update(x => ({ ...x, [d.id + '|' + p]: m }));
+    if (m !== 'fixed') await this.setPAddr(d, p, m);
+  }
+  async setPAddr(d: LabDevice, p: number, a: string) {
+    try { await this.backend.emuSetPortAddr(d.id, p, a.trim()); this.pmodeSet.update(x => { const y = { ...x }; delete y[d.id + '|' + p]; return y; }); await this.lab.refresh(); } catch (e) { this.ui.error(e); }
+  }
+  /** The address shown under a computer's name: its first data-port address. */
+  dataAddr(d: LabDevice) {
+    for (const p of Object.keys(d.addrs ?? {}).map(Number).sort((a, b) => a - b)) {
+      const a = (d.running && d.addrsSeen?.[p]) || d.addrs![p];
+      if (a && a !== 'dhcp') return a.split(',')[0].split('/')[0];
+    }
+    return '';
+  }
+  async addComputer() { try { await this.backend.emuAddComputer('', false); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
   iconState(d: LabDevice): 'run' | 'boot' | 'off' | 'idle' { const s = this.stateOf(d); return s === 'on' ? 'run' : s === 'boot' ? 'boot' : 'off'; }
   stateOf(d: LabDevice): 'on' | 'boot' | 'bad' | 'off' {
     if (!this.emu()) return d.running ? 'on' : 'off';
@@ -1488,7 +1521,7 @@ export class LabWorkspace implements OnDestroy {
       for (const dt of this.st()?.deviceTypes ?? []) {
         if (!dt.images?.length) continue;
         const im = (this.st()?.images ?? []).find(i => i.id === dt.images[0]);
-        items.push({ key: dt.key, name: dt.model || im?.name || dt.kind, sub: dt.modules?.length ? (dt.modName || 'VIM') + ' ' + dt.modules.map(m => m.replace(/^\d+-VIM-/, '')).join(' / ') : (dt.model ? '' : im?.fileName ?? ''),
+        items.push({ key: dt.key, pc: !!im?.portAddr?.length, name: dt.model || im?.name || dt.kind, sub: dt.modules?.length ? (dt.modName || 'VIM') + ' ' + dt.modules.map(m => m.replace(/^\d+-VIM-/, '')).join(' / ') : (dt.model ? '' : im?.fileName ?? ''),
           group: dt.osName || dt.kind || tr('Other images'), ver: im?.version ?? '', os: dt.kind, cls: /voss|fabric/i.test(dt.kind + dt.osName + (im?.fileName ?? '') + (im?.deviceType ?? '')) ? 'v' : /linux|ubuntu|debian|centos|alpine|cloudimg/i.test(dt.kind + (im?.fileName ?? '') + (im?.deviceType ?? '')) ? 'l' : '', dt });
       }
       // templates (an image with resources and a persona model) are device types too

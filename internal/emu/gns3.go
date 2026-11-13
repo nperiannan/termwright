@@ -273,6 +273,9 @@ func LinuxHost(im *Image) {
 	if len(im.PortAddr) == 0 {
 		im.PortAddr = []string{portIf + `; ip link set "$i" up; ip -4 addr flush dev "$i"; ip addr add {addr} dev "$i"`}
 	}
+	if im.PortShow == "" {
+		im.PortShow = `for d in /sys/class/net/*; do n=${d##*/}; for a in $(ip -o addr show dev "$n" scope global | awk '{print $4}'); do echo "PA $(cat "$d/address") $a"; done; done`
+	}
 	if len(im.PortDHCP) == 0 {
 		im.PortDHCP = []string{portIf + `; ip link set "$i" up; (udhcpc -i "$i" -b -q || dhclient -nw "$i" || dhcpcd -b "$i") >/dev/null 2>&1`}
 	}
@@ -281,4 +284,29 @@ func LinuxHost(im *Image) {
 // FillPort puts a data port's MAC address and address into a command.
 func FillPort(cmd, mac, addr string) string {
 	return strings.NewReplacer("{mac}", strings.ToLower(mac), "{addr}", addr).Replace(cmd)
+}
+
+// ParsePortShow reads the output of an image's PortShow ("PA <mac> <address/bits>"
+// lines) into the addresses of each port (port → addresses), from its MACs (port → MAC).
+func ParsePortShow(out string, macs map[int]string) map[int]string {
+	port := map[string]int{}
+	for p, m := range macs {
+		port[strings.ToLower(m)] = p
+	}
+	r := map[int]string{}
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) != 3 || f[0] != "PA" {
+			continue
+		}
+		p, ok := port[strings.ToLower(f[1])]
+		if !ok || p == 0 {
+			continue
+		}
+		if r[p] != "" {
+			r[p] += ", "
+		}
+		r[p] += f[2]
+	}
+	return r
 }

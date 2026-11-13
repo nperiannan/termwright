@@ -22,4 +22,8 @@ func TestLinuxHost(t *testing.T) {
 	if err != nil || len(a.Profiles[0].PortAddr) != 1 || a.Profiles[0].Login != "root" {
 		t.Fatal(err, a.Profiles)
 	}
+	got := ParsePortShow("for d in ...; echo \"PA $m $a\"\nPA 52:54:01:00:03:00 192.168.122.31/24\nPA 0c:01:03:00:00:01 10.10.0.11/24\nPA 0c:01:03:00:00:01 2001:db8::11/64\nPA 0c:01:03:00:00:02 10.20.0.57/24\n", map[int]string{0: "52:54:01:00:03:00", 1: "0C:01:03:00:00:01", 2: "0c:01:03:00:00:02"})
+	if len(got) != 2 || got[1] != "10.10.0.11/24, 2001:db8::11/64" || got[2] != "10.20.0.57/24" {
+		t.Fatal(got)
+	}
 }

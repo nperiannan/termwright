@@ -136,25 +136,26 @@ var emuLab struct {
 	starting         map[string]time.Time
 	ticks            map[string]float64 // CPU ticks at the last poll
 	ticksAt          time.Time
-	cpu              map[string]float64   // CPU use now, in cores (1 = one core busy)
-	ready            map[string]bool      // the console showed the ready text since the VM started (it may scroll out of the log's end later)
-	bootAns          map[string]time.Time // when a boot menu was last answered
-	trafHosts        map[string]bool      // hosts traffic.py runs on (or ran on: told to end)
-	addrOK           map[string]bool      // the switch showed its management address (since it started)
-	moveTo           map[string]string    // switches moving to another host: that host
-	personaAfterBoot map[string]bool      // the persona file is written once the VM has booted (its folder did not exist yet)
-	perr             map[string]string    // why the persona file could not be written
-	packProfiles     []emu.Image          // the device pack's image profiles (refreshed by EmuState)
-	personaTried     map[string]bool      // that was tried once already (no second round)
-	pinfo            map[string]string    // where the persona file went, or what the check after boot saw
-	pcheck           map[string]bool      // the persona was checked on the CLI since the VM started
-	resumed          map[string]bool      // it started from its saved running state (no boot, no day 0)
-	lldp             map[string]string    // cable → what the last cabling check found (LLDP)
-	events           []EmuEvent           // the Events log, newest last
-	download         map[string]string    // image → download progress ("waiting", "41 %")
-	dlQueue          []string             // images waiting to download, in order
-	dlCur            string               // the image downloading now
-	dlCancel         context.CancelFunc   // stops it
+	cpu              map[string]float64        // CPU use now, in cores (1 = one core busy)
+	ready            map[string]bool           // the console showed the ready text since the VM started (it may scroll out of the log's end later)
+	bootAns          map[string]time.Time      // when a boot menu was last answered
+	trafHosts        map[string]bool           // hosts traffic.py runs on (or ran on: told to end)
+	addrOK           map[string]bool           // the switch showed its management address (since it started)
+	moveTo           map[string]string         // switches moving to another host: that host
+	personaAfterBoot map[string]bool           // the persona file is written once the VM has booted (its folder did not exist yet)
+	perr             map[string]string         // why the persona file could not be written
+	packProfiles     []emu.Image               // the device pack's image profiles (refreshed by EmuState)
+	personaTried     map[string]bool           // that was tried once already (no second round)
+	pinfo            map[string]string         // where the persona file went, or what the check after boot saw
+	pcheck           map[string]bool           // the persona was checked on the CLI since the VM started
+	resumed          map[string]bool           // it started from its saved running state (no boot, no day 0)
+	lldp             map[string]string         // cable → what the last cabling check found (LLDP)
+	portSeen         map[string]map[int]string // computer → its data ports' addresses as read on its console
+	events           []EmuEvent                // the Events log, newest last
+	download         map[string]string         // image → download progress ("waiting", "41 %")
+	dlQueue          []string                  // images waiting to download, in order
+	dlCur            string                    // the image downloading now
+	dlCancel         context.CancelFunc        // stops it
 	dlRunning        bool
 }
 
@@ -198,9 +199,10 @@ type EmuDevice struct {
 	Persona      *emu.Persona   `json:"persona"`
 	PersonaOK    bool           `json:"personaOk"` // the persona file in its disk is the current one
 	PersonaError string         `json:"personaError"`
-	PersonaInfo  string         `json:"personaInfo"`        // where the file was written, what the CLI showed after boot
-	Computer     bool           `json:"computer,omitempty"` // a Linux computer: Termwright gives its data ports addresses
-	Addrs        map[int]string `json:"addrs,omitempty"`    // its data ports' addresses (port → address/bits, or "dhcp")
+	PersonaInfo  string         `json:"personaInfo"`         // where the file was written, what the CLI showed after boot
+	Computer     bool           `json:"computer,omitempty"`  // a Linux computer: Termwright gives its data ports addresses
+	Addrs        map[int]string `json:"addrs,omitempty"`     // its data ports' addresses (port → address/bits, or "dhcp")
+	AddrsSeen    map[int]string `json:"addrsSeen,omitempty"` // the addresses its data ports have, as read on its console after they were set (DHCP leases too)
 }
 
 // EmuLinkView is a cable, with port names.
@@ -525,6 +527,7 @@ func (a *App) emuLoad() {
 	emuLab.trafHosts = map[string]bool{}
 	emuLab.pinfo, emuLab.pcheck, emuLab.resumed, emuLab.lldp = map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]string{}
 	emuLab.download = map[string]string{}
+	emuLab.portSeen = map[string]map[int]string{}
 	if b, err := os.ReadFile(a.emuFilePath()); err == nil {
 		_ = json.Unmarshal(b, &emuLab.f)
 	}
@@ -3732,7 +3735,7 @@ func (a *App) emuView() EmuView {
 			Console: l.ConsolePort(vm), Port: l.SSHPort(vm), Error: emuLab.errs[vm.ID]}
 		if im != nil {
 			d.Model, d.OS, d.Ports = im.Name, orStr(im.DeviceType, "VM"), im.DataPorts()
-			d.Computer, d.Addrs = len(im.PortAddr) > 0, vm.Addrs
+			d.Computer, d.Addrs, d.AddrsSeen = len(im.PortAddr) > 0, vm.Addrs, emuLab.portSeen[vm.ID]
 			onHost[im.ID] = true
 		}
 		vl := a.emuFor(emuHostOf(vm)) // its host's management
@@ -5820,6 +5823,38 @@ func (a *App) emuMoveVM(id, host string) (EmuView, error) {
 	return a.EmuState()
 }
 
+// EmuAddComputer adds a Linux computer to the lab (pc-1, pc-2…) from the
+// Linux image there is (Alpine first, then the smallest), on the lab's host.
+func (a *App) EmuAddComputer(host string, start bool) (EmuView, error) {
+	defer emuAs("user")()
+	emuLab.mu.Lock()
+	a.emuLoad()
+	var pick *emu.Image
+	for i := range emuLab.f.Images {
+		im := &emuLab.f.Images[i]
+		if len(im.PortAddr) == 0 {
+			continue
+		}
+		alp := strings.Contains(strings.ToLower(im.Name), "alpine")
+		if pick == nil || alp && !strings.Contains(strings.ToLower(pick.Name), "alpine") || alp == strings.Contains(strings.ToLower(pick.Name), "alpine") && im.Size < pick.Size {
+			pick = im
+		}
+	}
+	host = orStr(host, emuLab.f.Host)
+	id := ""
+	if pick != nil {
+		id = pick.ID
+	}
+	emuLab.mu.Unlock()
+	if id == "" {
+		return EmuView{}, errors.New("there is no Linux image yet: add Alpine Linux from Images → catalog (Linux and test tools), then add the computer")
+	}
+	if host == "" {
+		return EmuView{}, errors.New("the lab has no KVM host yet: make a lab first")
+	}
+	return a.EmuAdd(EmuRequest{Host: host, Groups: []EmuGroup{{Image: id, Count: 1, Names: "pc-{n}"}}, Start: start})
+}
+
 // emuPortMACs is a VM's MAC addresses: 0 its management port, then its data ports (lock held).
 func emuPortMACs(l *emu.Lab, v emu.VM, im *emu.Image) map[int]string {
 	m := map[int]string{0: l.MgmtMAC(v, im)}
@@ -5847,7 +5882,20 @@ func emuPortAddrs(ctx context.Context, c *emu.Console, im emu.Image, v emu.VM, m
 	if err := emu.Day0(ctx, c, &set, v, v.Index+1, nil); err != nil {
 		return err
 	}
+	seen := map[int]string{}
+	if im.PortShow != "" {
+		if slices.Contains(slices.Collect(maps.Values(v.Addrs)), "dhcp") {
+			select { // a lease takes a moment
+			case <-ctx.Done():
+			case <-time.After(6 * time.Second):
+			}
+		}
+		if out, err := emu.Ask(ctx, c, &im, im.PortShow); err == nil {
+			seen = emu.ParsePortShow(emu.CleanConsole(out), macs)
+		}
+	}
 	emuLab.mu.Lock()
+	emuLab.portSeen[v.ID] = seen
 	emuEv(v.ID, "ok", "data ports: "+strings.Join(said, " · "))
 	emuLab.mu.Unlock()
 	return nil
@@ -5950,7 +5998,7 @@ func (a *App) emuTypePorts(host string, v emu.VM) {
 func (a *App) EmuSetRole(id, role string) (EmuView, error) {
 	defer emuAs("user")()
 	switch role {
-	case "", "access", "core", "router", "fw", "ap", "server", "host", "cloud":
+	case "", "access", "core", "router", "fw", "ap", "server", "host", "cloud", "pc":
 	default:
 		return EmuView{}, fmt.Errorf("no role %q", role)
 	}

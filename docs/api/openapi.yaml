@@ -2007,6 +2007,13 @@ components:
                         - "null"
                     additionalProperties:
                         type: string
+                addrsSeen:
+                    description: the addresses its data ports have, as read on its console after they were set (DHCP leases too)
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: string
             required:
                 - host
                 - id
@@ -2701,6 +2708,9 @@ components:
                         - "null"
                     items:
                         type: string
+                portShow:
+                    description: a command that prints "PA <mac> <address/bits>" for each address of each port (Linux computers)
+                    type: string
                 portDhcp:
                     description: commands that make a data port ask DHCP for its address ({mac}), for the ports set to dhcp
                     type:

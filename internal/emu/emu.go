@@ -55,6 +55,7 @@ type Image struct {
 	Source          string              `json:"source"`                    // where the profile came from (a GNS3 appliance…)
 	AddrCmd         string              `json:"addrCmd"`                   // a CLI command that prints the management address (host's network mode)
 	PortAddr        []string            `json:"portAddr,omitempty"`        // commands that give a data port a fixed address ({mac} its MAC, {addr} address/bits), typed at each start for the ports given one (Linux computers)
+	PortShow        string              `json:"portShow,omitempty"`        // a command that prints "PA <mac> <address/bits>" for each address of each port (Linux computers)
 	PortDHCP        []string            `json:"portDhcp,omitempty"`        // commands that make a data port ask DHCP for its address ({mac}), for the ports set to dhcp
 	LagCmd          string              `json:"lagCmd,omitempty"`          // a CLI command that lists the LAGs ("show sharing" on EXOS, "show mlt" on VOSS)
 	LagSet          map[string][]string `json:"lagSet,omitempty"`          // CLI commands that make a LAG, per mode ("lacp", "static"): {id} {name} {ports} {master} {first} {last}
