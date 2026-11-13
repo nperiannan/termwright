@@ -9,6 +9,7 @@ import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabHostImages } from './lab-host-images';
 import { roleOf } from './dev-icon';
+import { TableView, TvBar, TvSorts } from '../core/table-view';
 
 /** Shared look of the lab pages (Configure, New Lab, Images, Hosts). */
 const PAGE = `
@@ -47,7 +48,7 @@ const PAGE = `
   .okb.bad { background: color-mix(in srgb, var(--danger) 10%, transparent); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
   .okb.wait { background: var(--surface-2); border-color: var(--line); }
   .two { display: grid; grid-template-columns: minmax(0, 1fr) 360px; height: 100%; > .side { border-left: 1px solid var(--line); background: var(--surface-2); padding: 16px; overflow: auto; } }
-  .lst:has(> .lsc) { padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 0; .lsc { flex: 1; min-height: 0; overflow: auto; padding: 12px; } .lsf { flex: none; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--surface-2); } }
+  .lst:has(> .lsc) { padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 0; .lsh { flex: none; padding: 10px 12px 0; border-bottom: 1px solid var(--line); } .lsc { flex: 1; min-height: 0; overflow: auto; padding: 12px; } .lsf { flex: none; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--surface-2); } }
   .lst { border-right: 1px solid var(--line); background: var(--surface-2); padding: 12px; overflow: auto;
     .grp { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 12px 2px 6px; }
     .it { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 9px; border: 1px solid transparent; margin-bottom: 3px; cursor: pointer; small { display: block; color: var(--muted); font-size: 11.5px; } }
@@ -579,7 +580,7 @@ export class LabNew implements OnInit {
 // ---------------------------------------------------------------- Images and Templates
 @Component({
   selector: 'app-lab-images',
-  imports: [FormsModule, LabHostImages],
+  imports: [FormsModule, LabHostImages, TvBar, TvSorts],
   template: `
   <div class="ov" (click)="closed.emit()"></div>
   <div class="mdl">
@@ -588,7 +589,7 @@ export class LabNew implements OnInit {
     <div class="mb" style="display: grid; grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr)">
       @switch (tab()) {
         @case ('images') {
-          <div class="lst"><div class="lsc">
+          <div class="lst"><div class="lsh"><app-tv-bar [tv]="imView" /><app-tv-sorts [tv]="imView" [keys]="imKeys" /></div><div class="lsc">
             @if (queue().length) {
               <div class="dq">
                 <div class="dqh"><b>{{ tr('Downloads') }}</b><span class="muted small">{{ tr('{0} waiting', queue().length - 1) }}</span><span class="sp"></span>@if (queue().length > 1) { <a class="lnk small" (click)="stopAll()">{{ tr('Stop all') }}</a> }</div>
@@ -617,7 +618,7 @@ export class LabNew implements OnInit {
                 <div class="it" [class.on]="edit()?.id === im.id" (click)="pick(im.id)"><div><span>{{ im.version || im.name }}</span>@if (im.persona) { <span class="badge g">{{ tr('persona') }}</span> }
                   <small class="mono">{{ im.fileName || tr('no file chosen') }}</small><small>{{ im.cpus }} vCPU · {{ gb(im.ram) }} RAM · {{ diskName(im.disk) }} · {{ mb(im.size) }}</small><small [class.w]="uploading(im) || !!dl(im)" [class.r]="!im.file && !im.url" [class.g]="!!im.file && !!im.url && !dl(im) && !uploading(im)">{{ dl(im) ? (dl(im) === 'waiting' ? tr('waiting to download') : tr('downloading {0}', dl(im))) : !im.file && im.url ? tr('not downloaded yet') : (im.url ? '✓ ' + tr('downloaded') + ' · ' : '') + where(im) }}</small>@if (dl(im) && dl(im) !== 'waiting') { <div class="meter"><i [style.width]="pctOf(dl(im)) + '%'"></i></div> }</div></div>
               }
-            } @empty { <p class="muted small">{{ tr('No images yet.') }}</p> }
+            } @empty { <p class="muted small">{{ images().length ? tr('No image matches the search or the filters.') : tr('No images yet.') }}</p> }
             </div><div class="lsf">
             <div class="drop" (click)="addImage()"><b style="color: var(--text)">+ {{ tr('Add Image…') }}</b><br />.qcow2 / .img / .vmdk / .raw · {{ tr('recognised by its name with the device pack’s patterns') }}</div>
             <div class="row2" style="margin-top: 8px"><button type="button" class="sm" (click)="importAppliance()">{{ tr('GNS3 Appliance…') }}</button><button type="button" class="sm" (click)="importProfiles()">{{ tr('Import Profiles…') }}</button></div>
@@ -719,11 +720,11 @@ export class LabNew implements OnInit {
           </div>
         }
         @case ('templates') {
-          <div class="lst">
-            @for (t of templates(); track t.id) { <div class="it" [class.on]="tpl()?.id === t.id" (click)="pickTpl(t)"><div><span>{{ t.name }}</span><small>{{ imageName(t.image) }}</small><small>{{ t.cpus }} vCPU · {{ gb(t.ram) }} RAM · {{ t.diskGb ? t.diskGb + ' GB ' + tr('disk') : tr('disk of the image') }}@if (t.module) { · {{ t.module }} }</small></div></div> }
-            @empty { <p class="muted small">{{ tr('No templates yet.') }}</p> }
+          <div class="lst"><div class="lsh"><app-tv-bar [tv]="tplView" /><app-tv-sorts [tv]="tplView" [keys]="tplKeys" /></div><div class="lsc">
+            @for (t of tplView.rows(); track t.id) { <div class="it" [class.on]="tpl()?.id === t.id" (click)="pickTpl(t)"><div><span>{{ t.name }}</span><small>{{ imageName(t.image) }}</small><small>{{ t.cpus }} vCPU · {{ gb(t.ram) }} RAM · {{ t.diskGb ? t.diskGb + ' GB ' + tr('disk') : tr('disk of the image') }}@if (t.module) { · {{ t.module }} }</small></div></div> }
+            @empty { <p class="muted small">{{ templates().length ? tr('No template matches the search or the filters.') : tr('No templates yet.') }}</p> }
             <button type="button" class="primary" style="width: 100%; margin-top: 10px" (click)="newTpl()" [disabled]="!images().length">+ {{ tr('New Template') }}</button>
-          </div>
+          </div></div>
           <div class="pad">
             @if (tpl(); as t) {
               <div class="f">
@@ -917,15 +918,38 @@ export class LabImages implements OnInit, OnDestroy {
   ngOnInit() { this.tab.set(this.start()); const im = this.images().find(x => x.id === this.image0()) ?? this.images()[0]; if (im) this.pick(im.id); if (this.image0()) setTimeout(() => document.querySelector('app-lab-images .it.on')?.scrollIntoView({ block: 'center' }), 60); }
   protected groups = computed(() => {
     const out: { name: string; items: EmuImage[] }[] = [];
-    for (const im of this.images()) {
-      const n = im.persona?.osName || im.deviceType || tr('Other');
+    const kind = (im: EmuImage) => im.persona?.osName || im.deviceType || tr('Other');
+    for (const im of this.imView.rows()) {
+      const n = kind(im);
       let g = out.find(x => x.name === n); if (!g) out.push(g = { name: n, items: [] });
       g.items.push(im);
     }
-    return out;
+    // the groups keep their place whatever the sort (it orders the images inside each group)
+    const at = [...new Set(this.images().map(kind))];
+    return out.sort((a, b) => at.indexOf(a.name) - at.indexOf(b.name));
   });
   mb(b: number) { return !b ? '-' : b >= 1 << 30 ? (b / (1 << 30)).toFixed(1) + ' GB' : Math.round(b / (1 << 20)) + ' MB'; }
   gb(mb?: number) { return !mb ? '-' : mb >= 1024 ? (mb / 1024).toFixed(mb % 1024 ? 1 : 0) + ' GB' : mb + ' MB'; }
+  // search, sort and filters of the image and template lists
+  protected imView = new TableView<EmuImage>(() => this.images(), [
+    { key: 'name', label: 'Name', get: im => im.name },
+    { key: 'version', label: 'Version', get: im => im.version, kind: 'ver' },
+    { key: 'type', label: 'Type', get: im => im.persona?.osName || im.deviceType || tr('Other') },
+    { key: 'state', label: 'State', get: im => this.imState(im) },
+    { key: 'size', label: 'Size', get: im => im.size, kind: 'num' },
+    { key: 'file', label: 'File', get: im => im.fileName },
+  ]);
+  protected imKeys = [{ key: 'name', filter: 'text' as const }, { key: 'type' }, { key: 'state' }, { key: 'size', filter: 'none' as const }];
+  /** Where an image's file is, in a word or two (for the State filter). */
+  imState(im: EmuImage) { const x = im as EmuImage & { onHost?: boolean; missing?: boolean }; return x.missing ? tr('file missing') : !im.file ? (im.url ? tr('not downloaded') : tr('no file')) : x.onHost ? tr('on the host') : tr('on this computer'); }
+  protected tplView = new TableView<EmuTemplate>(() => this.templates(), [
+    { key: 'name', label: 'Name', get: t => t.name },
+    { key: 'image', label: 'Image', get: t => this.imageName(t.image) },
+    { key: 'model', label: 'Model', get: t => t.model || '-' },
+    { key: 'cpus', label: 'vCPU', get: t => t.cpus, kind: 'num' },
+    { key: 'ram', label: 'RAM', get: t => t.ram, kind: 'num' },
+  ]);
+  protected tplKeys = [{ key: 'name', filter: 'text' as const }, { key: 'image' }, { key: 'model' }, { key: 'cpus', filter: 'none' as const }, { key: 'ram', filter: 'none' as const }];
   where(im: EmuImage) { const x = im as EmuImage & { onHost?: boolean; upload?: string; missing?: boolean }; return x.missing ? tr('the file is missing') : x.upload ? tr('copying to the host {0}', x.upload) : x.onHost ? tr('on the host') : tr('copied when a switch first starts'); }
   uploading(im: EmuImage) { return !!(im as EmuImage & { upload?: string }).upload; }
   usedBy(id: string) { return this.lab.devices().filter(d => d.image === id).length; }
@@ -1003,22 +1027,22 @@ export class LabImages implements OnInit, OnDestroy {
 // ---------------------------------------------------------------- KVM hosts
 @Component({
   selector: 'app-lab-hosts',
-  imports: [FormsModule],
+  imports: [FormsModule, TvBar, TvSorts],
   template: `
   <div class="ov" (click)="closed.emit()"></div>
   <div class="mdl" style="grid-template-rows: 64px 0 minmax(0, 1fr) 60px">
     <div class="mh"><div><h2>{{ tr('KVM Hosts') }}</h2><div class="muted small">{{ tr('Linux machines the switches run on - reached with their SSH sessions') }}</div></div><span class="sp"></span><button type="button" class="sm" (click)="closed.emit()">✕</button></div>
     <div></div>
     <div class="mb" style="display: grid; grid-template-columns: 300px minmax(0, 1fr)">
-      <div class="lst">
-        @for (h of hosts(); track h.session) {
+      <div class="lst"><div class="lsh"><app-tv-bar [tv]="hostView" /><app-tv-sorts [tv]="hostView" [keys]="hostKeys" /></div><div class="lsc">
+        @for (h of hostView.rows(); track h.session) {
           <div class="it" [class.on]="cur()?.session === h.session" (click)="sel.set(h.session)"><i class="d" [class]="'d ' + dot(h)"></i><div><span>{{ h.name || h.session }}</span><small>{{ h.session }}</small><small>{{ h.info.os || '?' }} · {{ isVM(h) ? tr('VM ({0})', h.info.virt ?? '') : tr('hardware') }} · {{ state(h) }}</small></div></div>
-        } @empty { <p class="muted small">{{ tr('No KVM host yet.') }}</p> }
+        } @empty { <p class="muted small">{{ hosts().length ? tr('No host matches the search or the filters.') : tr('No KVM host yet.') }}</p> }
         <div class="card" style="margin-top: 10px"><b>+ {{ tr('Add a Host') }}</b>
           <select [(ngModel)]="pick" name="hpick" style="width: 100%; margin: 8px 0">@for (s of sshSessions(); track s) { <option [value]="s">{{ s }}</option> }</select>
           <button type="button" class="primary" style="width: 100%" (click)="add()" [disabled]="!pick || lab.busy()">{{ lab.busy() ? tr('Logging in and checking…') : tr('Check and Add') }}</button>
           <p class="muted small" style="margin: 6px 0 0">{{ tr('An SSH session of a Linux machine; make one in the Session Manager first.') }}</p></div>
-      </div>
+      </div></div>
       <div class="pad" style="overflow: auto">
         @if (cur(); as h) {
           <div class="row2" style="justify-content: flex-start"><div style="flex: 1"><b style="font-size: 15px">{{ h.name || h.session }}</b> <span class="badge">{{ state(h) }}</span>
@@ -1102,6 +1126,14 @@ export class LabHosts implements OnDestroy {
   private ui = inject(Ui);
   protected tr = tr;
   protected hosts = computed<EmuHost[]>(() => this.lab.emu()?.hosts ?? []);
+  protected hostView = new TableView<EmuHost>(() => this.hosts(), [
+    { key: 'name', label: 'Name', get: h => h.name || h.session },
+    { key: 'state', label: 'State', get: h => this.state(h) },
+    { key: 'os', label: 'OS', get: h => h.info.os || '?' },
+    { key: 'kind', label: 'Machine', get: h => this.isVM(h) ? tr('VM') : tr('hardware') },
+    { key: 'session', label: 'Session', get: h => h.session },
+  ]);
+  protected hostKeys = [{ key: 'name', filter: 'text' as const }, { key: 'state' }, { key: 'os' }, { key: 'kind' }];
   readonly pick0 = input('', { alias: 'select' });
   protected sel = signal('');
   ngOnInit() { if (this.pick0()) this.sel.set(this.pick0()); void this.loadRunning(); }

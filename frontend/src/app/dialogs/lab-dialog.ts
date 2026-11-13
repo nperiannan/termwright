@@ -7,13 +7,14 @@ import { Ui } from '../core/ui.service';
 import { Tabs } from '../core/tabs.service';
 import { tr } from '../core/i18n';
 import { Icon } from '../components/icon';
+import { TableView, TvBar, TvHead } from '../core/table-view';
 
 const NW = 150, NH = 46;
 
 /** The simulated lab: its switches (list and topology), cables, start / stop. */
 @Component({
   selector: 'app-lab-dialog',
-  imports: [FormsModule, Icon],
+  imports: [FormsModule, Icon, TvBar, TvHead],
   template: `
   <div class="modal-backdrop" (click)="ui.close()">
     <div class="modal labw" (click)="$event.stopPropagation()">
@@ -129,11 +130,12 @@ const NW = 150, NH = 46;
           @switch (tab()) {
             @case ('list') {
               @if (emu()) {
+              <app-tv-bar [tv]="emuView" />
               <div class="tbl"><table>
                 <thead><tr><th class="c"><input type="checkbox" [checked]="allSel()" (change)="selAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th>
-                  <th>{{ tr('Switch') }}</th><th>{{ tr('Image') }}</th><th>{{ tr('Model') }}</th><th>{{ tr('Serial') }}</th><th>vCPU · RAM · {{ tr('Disk') }}</th><th>{{ tr('SSH (management)') }}</th><th>{{ tr('Console') }}</th><th>{{ tr('State') }}</th><th>CPU</th><th></th></tr></thead>
+                  <th tvh [tv]="emuView" key="sw" filter="text">{{ tr('Switch') }}</th><th tvh [tv]="emuView" key="image">{{ tr('Image') }}</th><th tvh [tv]="emuView" key="model">{{ tr('Model') }}</th><th tvh [tv]="emuView" key="serial" filter="text">{{ tr('Serial') }}</th><th tvh [tv]="emuView" key="res" filter="none">vCPU · RAM · {{ tr('Disk') }}</th><th tvh [tv]="emuView" key="ssh" filter="text">{{ tr('SSH (management)') }}</th><th tvh [tv]="emuView" key="con" filter="none">{{ tr('Console') }}</th><th tvh [tv]="emuView" key="state">{{ tr('State') }}</th><th tvh [tv]="emuView" key="cpu" filter="none">CPU</th><th></th></tr></thead>
                 <tbody>
-                @for (d of lab.devices(); track d.id) {
+                @for (d of emuView.rows(); track d.id) {
                   <tr [class.sel]="sel().has(d.id)" [class.foc]="focus() === d.id" (click)="focusOn(d)">
                     <td class="c"><input type="checkbox" [checked]="sel().has(d.id)" (change)="toggleSel(d.id)" (click)="$event.stopPropagation()" /></td>
                     <td><b>{{ d.hostname }}</b></td><td><span class="os">{{ lab.osShort(d.os) }}</span> {{ d.model }}</td><td>{{ d.persona?.slots?.[0]?.model ?? '-' }}@if ((d.persona?.slots?.length ?? 0) > 1) { <span class="pill b">{{ tr('stack of {0}', d.persona!.slots.length) }}</span> }@if (d.personaError) { <span class="bad" [title]="d.personaError"> ⚠</span> } @else if (d.persona && !d.personaOk) { <span class="pendm" [title]="tr('Not written into the switch yet: Apply')"> ●</span> }</td>
@@ -145,7 +147,7 @@ const NW = 150, NH = 46;
                       <button type="button" class="sm" (click)="connect(d); $event.stopPropagation()" [disabled]="d.state !== 'running'">SSH</button>
                       <button type="button" class="sm" (click)="d.running || d.state === 'booting' ? lab.stop([d.id]) : lab.start([d.id]); $event.stopPropagation()">{{ d.running || d.state === 'booting' ? tr('Stop') : tr('Start') }}</button></td>
                   </tr>
-                } @empty { <tr><td colspan="11" class="muted">{{ tr('No switches yet: New Lab… makes them from your templates.') }}</td></tr> }
+                } @empty { <tr><td colspan="11" class="muted">{{ lab.devices().length ? tr('No switch here matches') : tr('No switches yet: New Lab… makes them from your templates.') }}</td></tr> }
                 </tbody></table></div>
               @if (focused(); as d) { @if (d.error) { <p class="err small">{{ d.error }}</p> }
                 <div class="devpanel">
@@ -183,11 +185,12 @@ const NW = 150, NH = 46;
               @else { <p class="muted small note">{{ tr('The real operating system runs in each VM on the KVM host. Termwright boots it, waits for the console to be ready and types the image’s day-0 commands once. Click a switch for its console.') }}</p> }
               @if (!lab.devices().length) { <div class="btns" style="margin-top:10px"><button type="button" class="primary" (click)="wizard(false)" [disabled]="!images().length">{{ tr('New Lab…') }}</button></div> }
               } @else {
+              <app-tv-bar [tv]="simView" />
               <div class="tbl"><table>
                 <thead><tr><th class="c"><input type="checkbox" [checked]="allSel()" (change)="selAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th>
-                  <th>{{ tr('Switch') }}</th><th>OS</th><th>{{ tr('Model') }}</th><th>{{ tr('Serial') }}</th><th>{{ tr('Management') }}</th><th>SSH</th><th>{{ tr('State') }}</th><th>{{ tr('Logins') }}</th><th></th></tr></thead>
+                  <th tvh [tv]="simView" key="sw" filter="text">{{ tr('Switch') }}</th><th tvh [tv]="simView" key="os">OS</th><th tvh [tv]="simView" key="model">{{ tr('Model') }}</th><th tvh [tv]="simView" key="serial" filter="text">{{ tr('Serial') }}</th><th tvh [tv]="simView" key="mgmt" filter="text">{{ tr('Management') }}</th><th tvh [tv]="simView" key="ssh" filter="none">SSH</th><th tvh [tv]="simView" key="state">{{ tr('State') }}</th><th tvh [tv]="simView" key="logins" filter="none">{{ tr('Logins') }}</th><th></th></tr></thead>
                 <tbody>
-                @for (d of lab.devices(); track d.id) {
+                @for (d of simView.rows(); track d.id) {
                   <tr [class.sel]="sel().has(d.id)" (click)="focus.set(d.id)">
                     <td class="c"><input type="checkbox" [checked]="sel().has(d.id)" (change)="toggleSel(d.id)" (click)="$event.stopPropagation()" /></td>
                     <td><b>{{ d.hostname }}</b>@if (d.unsaved) { <span class="muted" [title]="tr('Changes not saved on the switch')"> *</span> }</td>
@@ -542,7 +545,31 @@ export class LabDialog implements OnInit, OnDestroy {
     return tr('{0} switches · {1} running', ds.length, this.lab.running()) + (down ? ' · ' + tr('{0} cables down', down) : '');
   });
   protected focused = computed(() => this.lab.devices().find(d => d.id === this.focus()));
-  protected allSel = computed(() => this.lab.devices().length > 0 && this.lab.devices().every(d => this.sel().has(d.id)));
+  // search, sort and filters of the switch list (the emulated lab's columns and the simulated lab's)
+  protected emuView = new TableView<LabDevice>(() => this.lab.devices(), [
+    { key: 'sw', label: 'Switch', get: d => d.hostname },
+    { key: 'image', label: 'Image', get: d => (this.lab.osShort(d.os) + ' ' + (d.model ?? '')).trim() },
+    { key: 'model', label: 'Model', get: d => d.persona?.slots?.[0]?.model ?? '-' },
+    { key: 'serial', label: 'Serial', get: d => d.serial },
+    { key: 'res', label: 'vCPU', get: d => d.cpus, kind: 'num' },
+    { key: 'ssh', label: 'SSH (management)', get: d => d.ssh },
+    { key: 'con', label: 'Console', get: d => d.console, kind: 'num' },
+    { key: 'state', label: 'State', get: d => tr(d.stateText || d.state || '') },
+    { key: 'cpu', label: 'CPU', get: d => d.running ? d.cores ?? 0 : null, kind: 'num' },
+  ]);
+  protected simView = new TableView<LabDevice>(() => this.lab.devices(), [
+    { key: 'sw', label: 'Switch', get: d => d.hostname },
+    { key: 'os', label: 'OS', get: d => this.lab.osShort(d.os) },
+    { key: 'model', label: 'Model', get: d => d.model },
+    { key: 'serial', label: 'Serial', get: d => d.serial },
+    { key: 'mgmt', label: 'Management', get: d => d.mgmtIp },
+    { key: 'ssh', label: 'SSH', get: d => d.port, kind: 'num' },
+    { key: 'state', label: 'State', get: d => d.running ? tr('running') : tr('stopped') },
+    { key: 'logins', label: 'Logins', get: d => d.logins ?? 0, kind: 'num' },
+  ]);
+  /** The switches the list shows now (search and filters applied). */
+  protected shownDevs = computed(() => (this.emu() ? this.emuView : this.simView).rows());
+  protected allSel = computed(() => this.shownDevs().length > 0 && this.shownDevs().every(d => this.sel().has(d.id)));
   protected openable = computed(() => this.lab.devices().filter(d => (d.state ? d.state === 'running' : d.running) && (this.sel().size ? this.sel().has(d.id) : true)));
   protected box = computed(() => {
     let w = 900, h = 420;
@@ -732,7 +759,8 @@ export class LabDialog implements OnInit, OnDestroy {
   }
 
   toggleSel(id: string) { const s = new Set(this.sel()); s.has(id) ? s.delete(id) : s.add(id); this.sel.set(s); }
-  selAll(on: boolean) { this.sel.set(on ? new Set(this.lab.devices().map(d => d.id)) : new Set()); }
+  /** Select all ticks the switches shown (a search or filter narrows it); unticking leaves the hidden ones as they were. */
+  selAll(on: boolean) { const s = new Set(this.sel()); for (const d of this.shownDevs()) { if (on) s.add(d.id); else s.delete(d.id); } this.sel.set(s); }
 
   // identity
   protected idEdit = signal(false);

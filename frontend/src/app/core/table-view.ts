@@ -113,7 +113,7 @@ export class TableView<T> {
     </div>`,
   styles: [`
     .tvb { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0 6px; font-size: 12px; }
-    .srch { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 7px; padding: 2px 9px; min-width: 200px; background: var(--surface); color: var(--muted); }
+    .srch { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 7px; padding: 2px 9px; flex: 0 1 320px; min-width: 180px; background: var(--surface); color: var(--muted); }
     .srch:focus-within { border-color: var(--accent); }
     .srch input { all: unset; flex: 1; color: var(--text); min-width: 0; }
     .chip { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); color: var(--accent); border-radius: 12px; padding: 1px 9px; }
@@ -177,4 +177,27 @@ export class TvHead {
   }
   @HostListener('document:click', ['$event']) away(ev: MouseEvent) { if (this.open() && !this.el.nativeElement.contains(ev.target as Node)) this.open.set(false); }
   @HostListener('document:keydown.escape') esc() { this.open.set(false); }
+}
+
+/**
+ * Sort and filter chips for a list without column titles (Images, Hosts, Templates): each chip sorts on
+ * click (again: the other way) and opens its filter with ⏷, like a column title of a table.
+ */
+@Component({
+  selector: 'app-tv-sorts',
+  imports: [TvHead],
+  template: `<div class="tvs" role="toolbar" [attr.aria-label]="tr('Sort and filter')"><span class="lb" [title]="tr('Sort and filter')" aria-hidden="true">⇅</span>
+    @for (k of keys(); track k.key) { <span class="ch" [class.on]="!!tv().dirOf(k.key) || tv().filtered(k.key)" tvh [tv]="tv()" [key]="k.key" [filter]="k.filter ?? 'values'">{{ label(k.key) }}</span> }</div>`,
+  styles: [`
+    .tvs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding: 0 0 8px; font-size: 11px; color: var(--muted); }
+    .lb { margin-right: 1px; font-size: 12px; }
+    .ch { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 11px; padding: 1px 7px; background: var(--surface); color: var(--muted); transition: border-color .15s, color .15s; }
+    .ch:hover { color: var(--text); border-color: var(--muted); }
+    .ch.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }`],
+})
+export class TvSorts {
+  readonly tv = input.required<TableView<any>>();
+  readonly keys = input.required<{ key: string; filter?: 'values' | 'text' | 'none' }[]>();
+  protected tr = tr;
+  protected label(key: string) { const c = this.tv().cols.find(c => c.key === key); return tr(c?.label ?? key); }
 }
