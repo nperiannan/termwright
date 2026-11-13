@@ -8,6 +8,7 @@ import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabConfigure, LabHosts, LabImages, LabNew } from './lab-pages';
+import { PcWindow } from './pc-window';
 import { TerminalView } from './terminal-view';
 import { DevIcon, DevRole, ICON_STYLES, IconStyle, ROLES, iconReach, roleOf } from './dev-icon';
 import { PacketView, PacketWindow } from './packet-view';
@@ -20,9 +21,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests],
+  imports: [FormsModule, DecimalPipe, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
+        @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" /> }
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
       @if (emu()) { <span class="topo" (click)="openTopos(); $event.stopPropagation()" [title]="tr('Topologies: save, open, new')"><span class="muted tl">{{ tr('Topology') }}</span> <b>{{ st()?.topology || tr('Untitled') }}</b> ▾</span>
@@ -209,7 +211,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [look]="lookOf(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
                 <div class="nlbl" [style.transform]="'translate(' + (lblAt()[d.id]?.x ?? 0) + 'px,' + (lblAt()[d.id]?.y ?? 0) + 'px)'" (pointerdown)="lblGrab($event, d.id)" (dblclick)="lblReset(d.id, $event)" [title]="tr('Drag the name to move it; double-click puts it back')">
                 <div class="nn">{{ d.hostname }}</div>
-                <div class="nm" [title]="d.persona?.slots?.[0]?.model ? tr('Persona: it runs as a {0}', d.persona!.slots![0].model) : tr('The image as it is (no persona)')">{{ d.persona?.slots?.[0]?.model ? modelOf(d) + ' · ' + osOf(d) : modelOf(d) }} {{ d.version }}@if (showAddr()) { · {{ subOf(d) }} }</div>@if (d.computer && dataAddr(d)) { <div class="nm da" [title]="tr('Its data-port address')">{{ dataAddr(d) }}</div> }</div>
+                @if (d.computer) { <div class="nm">PC · {{ (d.model || '').split(' ')[0] }}@if (showAddr() && !dataAddr(d)) { · {{ subOf(d) }} }</div> } @else { <div class="nm" [title]="d.persona?.slots?.[0]?.model ? tr('Persona: it runs as a {0}', d.persona!.slots![0].model) : tr('The image as it is (no persona)')">{{ d.persona?.slots?.[0]?.model ? modelOf(d) + ' · ' + osOf(d) : modelOf(d) }} {{ d.version }}@if (showAddr()) { · {{ subOf(d) }} }</div> }@if (d.computer && dataAddr(d)) { <div class="nm da" [title]="tr('Its data-port address')">{{ dataAddr(d) }}</div> }</div>
                 @if (hostMode() === 'tags') { <div class="htg"><i [style.background]="hcol(hostOfDev(d))"></i>{{ hname(hostOfDev(d)) }}</div> }
                 @if (d.uplinks?.length) { <span class="badge up" [title]="tr('On the host’s network: {0}', d.uplinks!.join(', '))">⇡ {{ d.uplinks!.join(',') }}</span> }
                 @if (d.personaError) { <span class="badge r" [title]="d.personaError">{{ tr('no persona') }}</span> }
@@ -253,8 +255,6 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (emu()) { <a (click)="mdo('console', d)" [class.off]="!d.running">{{ tr('Console') }} <kbd>telnet :{{ d.console }}</kbd></a> }
               <a (click)="mdo('ssh', d)" [class.off]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }} <kbd>{{ emu() ? d.ssh : '127.0.0.1:' + d.port }}</kbd></a>
               <hr />
-              <a (click)="mdo('configure', d)">{{ tr('Configure…') }}</a>
-              @if (emu()) { <a (click)="menu.set(null); saveConsoleLog(d)">{{ tr('Save Console Log…') }}</a> }
               @if (emu()) { <a (click)="mdo('lags', d)" [class.off]="!d.running">{{ tr('Read Its LAGs') }}</a> }
               <a (click)="mdo('link', d)">{{ tr('Add Link from Here') }}</a>
               @if (emu()) { <a (click)="uplink(d)" [title]="tr('Like a cloud node on a data port: the port joins the host’s network (applies when the switch starts)')">{{ tr('Port on the Host’s Network…') }}</a>
@@ -266,7 +266,6 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (emu()) { <a (click)="menu.set(null); qemuCmd(d)" [title]="tr('The command QEMU runs it with (read from its host), copied to the clipboard')">{{ tr('QEMU Command Line…') }}</a> }
               @if (emu() && d.running) { <a (click)="menu.set(null); linkCheck(d)" [title]="tr('Watches its network cards in QEMU for 30 s: whether the emulation takes links down or drops frames, or the switch itself does')">{{ tr('Check Its Links (30 s)') }}</a> }
               @if (emu()) { <hr /><a (click)="drawAs.set(d); menu.set(null); $event.stopPropagation()" [title]="tr('For every {0} in this topology, new ones too', kindOf(d))"><app-dev-icon class="dai" [role]="roleOfDev(d)" [look]="lookOf(d)" [size]="22" state="idle" />{{ tr('Draw As…') }} <small class="muted">{{ tr('all {0}', kindOf(d)) }}</small></a> }
-              @if (emu() && otherHosts(d).length) { <hr /><span class="mh2">{{ tr('Move to Host') }}</span>@for (o of otherHosts(d); track o.session) { <a (click)="moveTo(d, o.session)" [title]="d.running ? tr('Live: it keeps running while it moves') : tr('It takes its disk along: its configuration and day 0 stay')">→ {{ o.name || hname(o.session) }}</a> } }
               <hr />
               <a class="r" (click)="mdo('remove', d)">{{ tr('Delete') }}</a>
             }
@@ -396,14 +395,20 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <span>{{ tr('CPU limit') }}</span><span><select [ngModel]="d.cpuMax || 0" (ngModelChange)="setCPU(d, +$event, d.cpuWeight || 100)" [title]="tr('At most this many host cores (a cgroup on its host)')">@for (c of cpuLimits(d); track c) { <option [ngValue]="c">{{ c ? c + ' ' + tr(c === 1 ? 'core' : 'cores') : tr('No limit') }}</option> }</select></span> }
             @if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
           </div>
-          @if (emu() && d.computer) { <div class="card dpc"><div class="dph">{{ tr('Data ports') }}</div>
-            @for (p of portsOf(d); track p) { <div class="dpr"><span class="mono">{{ p }}</span>
-              <select [ngModel]="pmode(d, p)" (ngModelChange)="setPMode(d, p, $event)"><option value="">{{ tr('None') }}</option><option value="fixed">{{ tr('Fixed') }}</option><option value="dhcp">DHCP</option></select>
-              @if (pmode(d, p) === 'fixed') { <input class="mono" [ngModel]="d.addrs?.[p] ?? ''" placeholder="10.10.0.11/24" (change)="setPAddr(d, p, $any($event.target).value)" (keydown.enter)="$any($event.target).blur()" /> } @else { <span class="mono muted dpa">{{ pmode(d, p) === 'dhcp' ? (d.running && d.addrsSeen?.[p] || tr('asks DHCP at start')) : '-' }}</span> }
-              <span class="dpo">@if (d.running && d.addrsSeen?.[p]) { <span class="ok" [title]="tr('Read on its console: {0}', d.addrsSeen![p])">✓</span> }</span></div> }
-            <p class="muted xs">{{ tr('Typed on its console now and at each start. IPv6 works too (2001:db8::11/64).') }}</p></div> }
-          <div class="btns">@if (emu()) { <button type="button" class="primary sm" (click)="console(d)" [disabled]="!d.running">{{ tr('Console') }}</button> }
-            <button type="button" class="sm" (click)="ssh(d)" [disabled]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }}</button><button type="button" class="sm" (click)="configure(d)">{{ tr('Configure…') }}</button>@if (emu()) { <button type="button" class="sm" (click)="saveConsoleLog(d)" [title]="tr('Everything its console showed since it started, with its Events - to keep, or to send when a boot or login went wrong')">{{ tr('Save Console Log…') }}</button> }</div></div>
+          @if (emu() && d.computer) { <div class="card dpc"><div class="dph">{{ tr('Network') }}</div><div class="kv">
+            @for (p of netPorts(d); track p) { <span>{{ tr('Port {0}', p) }}</span><span class="mono">{{ portSum(d, p) }}@if (d.running && d.net?.addrs?.[p]) { <span class="ok" [title]="tr('Read on its console: {0}', d.net!.addrs![p])"> ✓</span> }</span> }
+            @if (d.dataGw || d.net?.gw) { <span>{{ tr('Gateway') }}</span><span class="mono">{{ d.dataGw || d.net?.gw }}</span> }</div>
+            <div class="btns"><button type="button" class="primary sm" (click)="pcWin.set(d.id)">{{ tr('Open Desktop') }}</button></div></div> }
+          @if (emu()) { @let hu = useOf(d); <div class="card runs"><div class="dph">{{ tr('Runs on') }}</div><div class="kv">
+            <span>{{ tr('Host') }}</span><b>{{ hu?.name || hname(hostOfDev(d)) }}</b>
+            <span>{{ tr('Session') }}</span><span class="clamp" [title]="hostOfDev(d)">{{ hostOfDev(d).split('/').join(' / ') }}</span>
+            <span>{{ tr('Address') }}</span><span class="mono">{{ addrOfHost(hostOfDev(d)) || '-' }}</span>
+            @if (hu) { <span>{{ tr('Management') }}</span><span>{{ hu.mgmt }}@if (hu.mgmtNet) { · <span class="mono">{{ hu.mgmtNet }}</span> }</span>
+              <span>{{ tr('Host load') }}</span><span>{{ tr('{0} cores · {1} vCPU given · RAM {2} / {3}', hu.cpus, hu.vcpus, gb(hu.memTotal - hu.memFree), gb(hu.memTotal)) }}</span> }</div>
+            @if (otherHosts(d).length) { <div class="dph mv">{{ tr('Move to another host') }}</div>
+              <div class="mvr"><select [(ngModel)]="moveSel">@for (o of otherHosts(d); track o.session) { <option [value]="o.session">{{ o.name || hname(o.session) }}@if (addrOfHost(o.session)) { · {{ addrOfHost(o.session) }} }</option> }</select><button type="button" class="sm" (click)="moveTo(d, moveSel || otherHosts(d)[0].session)" [disabled]="!!d.movingTo">{{ tr('Move…') }}</button></div>
+              <p class="muted xs">{{ d.running ? tr('Live keeps it running while it moves; you choose how next.') : tr('Its disk goes along: its configuration stays.') }}</p> }</div> }
+          <div class="btns"><button type="button" class="primary sm" (click)="configure(d)">{{ tr('Configure…') }}</button>@if (!emu()) { <button type="button" class="sm" (click)="ssh(d)" [disabled]="!d.running">{{ tr('Open Session') }}</button> }</div></div>
         }
         <h3>{{ tr('Topology summary') }}</h3>
         <div class="card tbl"><table>
@@ -787,7 +792,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; background: var(--surface); }
     .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .evl { display: block; margin-top: 2px; font-size: 11.5px; color: var(--accent); cursor: pointer; }
     .seg2.cpus a { padding: 2px 9px; }
-    .dpc .dph { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
+    .runs .dph.mv { margin-top: 10px; } .mvr { display: flex; gap: 6px; select { flex: 1; min-width: 0; } }
+    .runs .dph, .dpc .dph { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
     .dpr { display: grid; grid-template-columns: 14px 70px minmax(0, 1fr) 12px; gap: 6px; align-items: center; margin: 3px 0; font-size: 12px; input, select { min-width: 0; font-size: 12px; } }
     .dpa { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dpr .ok { color: var(--ok, #2fa46a); }
     .node .nm.da { color: var(--accent); font-family: var(--mono, monospace); }
@@ -1096,6 +1102,8 @@ export class LabWorkspace implements OnDestroy {
   addrOfHost(h: string) { const u = this.hostUse().find(x => x.host === h); return (u?.addr || (h === this.st()?.host ? this.st()?.hostInfo?.lanAddr ?? '' : '')).split('/')[0]; }
   hcol(h: string) { const i = this.hostUse().findIndex(u => u.host === h); return ['#3b8cf6', '#a46cf0', '#1fb5a5', '#e3842a', '#d65db1', '#8fb339'][Math.max(0, i) % 6]; }
   /** Hosts the switch could move to: the checked hosts without problems. */
+  protected moveSel = '';
+  useOf(d: LabDevice) { return this.hostUse().find(u => u.host === this.hostOfDev(d)); }
   otherHosts(d: LabDevice) { return (this.st()?.hosts ?? []).filter(h => h.session !== this.hostOfDev(d) && !(h.info.problems ?? []).length); }
   /** Moves a switch to another host: live (running, no downtime), with its disk (saved state and configuration), or from its image. */
   async moveTo(d: LabDevice, host: string) {
@@ -1469,25 +1477,30 @@ export class LabWorkspace implements OnDestroy {
   /** What the switch is drawn as: the role chosen in Configure…, else one from its model. */
   roleOfDev(d: LabDevice): DevRole { return (d.role as DevRole) || this.defRole(d); }
   defRole(d: LabDevice): DevRole { return d.computer ? 'pc' : roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? ''); }
-  /** A computer's data ports shown in its details (at most 8). */
-  portsOf(d: LabDevice) { return Array.from({ length: Math.min(d.ports || 1, 8) }, (_, i) => i + 1); }
-  private pmodeSet = signal<Record<string, string>>({});
-  pmode(d: LabDevice, p: number) { const a = d.addrs?.[p] ?? ''; return this.pmodeSet()[d.id + '|' + p] ?? (a === 'dhcp' ? 'dhcp' : a ? 'fixed' : ''); }
-  async setPMode(d: LabDevice, p: number, m: string) {
-    this.pmodeSet.update(x => ({ ...x, [d.id + '|' + p]: m }));
-    if (m !== 'fixed') await this.setPAddr(d, p, m);
-  }
-  async setPAddr(d: LabDevice, p: number, a: string) {
-    try { await this.backend.emuSetPortAddr(d.id, p, a.trim()); this.pmodeSet.update(x => { const y = { ...x }; delete y[d.id + '|' + p]; return y; }); await this.lab.refresh(); } catch (e) { this.ui.error(e); }
-  }
   /** The address shown under a computer's name: its first data-port address. */
   dataAddr(d: LabDevice) {
-    for (const p of Object.keys(d.addrs ?? {}).map(Number).sort((a, b) => a - b)) {
-      const a = (d.running && d.addrsSeen?.[p]) || d.addrs![p];
-      if (a && a !== 'dhcp') return a.split(',')[0].split('/')[0];
+    for (const p of Object.keys({ ...(d.addrs ?? {}), ...(d.running ? d.net?.addrs ?? {} : {}) }).map(Number).sort((a, b) => a - b)) {
+      const a = (d.running && d.addrsSeen?.[p]) || d.addrs?.[p];
+      if (a && a !== 'dhcp') return a.split(',')[0].trim();
     }
     return '';
   }
+  protected pcWin = signal('');
+  protected pcDev = computed(() => this.devs().find(x => x.id === this.pcWin()));
+  /** The ports of a computer with an address set, or port 1. */
+  netPorts(d: LabDevice) { const p = [...new Set([...Object.keys(d.addrs ?? {}), ...Object.keys(d.addrs6 ?? {})].map(Number))].sort((a, b) => a - b); return p.length ? p : [1]; }
+  portSum(d: LabDevice, p: number) {
+    const a = d.addrs?.[p], a6 = d.addrs6?.[p], seen = d.running ? d.net?.addrs?.[p] : '';
+    const v4 = a === 'dhcp' ? 'DHCP' + (seen ? ' · ' + seen.split(',')[0] : '') : a || '';
+    return [v4, a6 === 'auto' ? 'IPv6 auto' : a6 || ''].filter(Boolean).join(' · ') || tr('no address');
+  }
+  /** What a computer's ports are cabled to (port → "leaf-1 5"). */
+  pcLinks(d: LabDevice) {
+    const m: Record<number, string> = {};
+    for (const k of this.st()?.links ?? []) { if (k.a === d.id) m[+k.aPort] = this.nameOf(k.b) + ' ' + k.bPort; else if (k.b === d.id) m[+k.bPort] = this.nameOf(k.a) + ' ' + k.aPort; }
+    return m;
+  }
+  pcCapture(d: LabDevice, p: number) { this.pcWin.set(''); void this.startCap({ a: d.id, aPort: String(p), b: '', bPort: '' }); this.dock.set('cap'); }
   readonly cpuShares = [{ v: 50, name: 'Low' }, { v: 100, name: 'Normal' }, { v: 400, name: 'High' }];
   cpuLimits(d: LabDevice) { const l = [0, 0.25, 0.5, 1, 2, 4, 8, 16].filter(c => c <= Math.max(d.cpus || 1, 1)); if (d.cpuMax && !l.includes(d.cpuMax)) l.push(d.cpuMax); return l.sort((a, b) => a - b); }
   async setCPU(d: LabDevice, max: number, w: number) { try { await this.backend.emuSetCPU(d.id, max, w); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
@@ -1765,7 +1778,7 @@ export class LabWorkspace implements OnDestroy {
     if (this.linkMode()) { void this.linkClick(d, ev); return; }
     this.select(d);
   }
-  open(d: LabDevice) { if (this.linkMode()) return; if (this.emu()) this.console(d); else this.ssh(d); }
+  open(d: LabDevice) { if (this.linkMode()) return; if (this.emu() && d.computer) this.pcWin.set(d.id); else if (this.emu()) this.console(d); else this.ssh(d); }
   nodeMenu(d: LabDevice, ev: MouseEvent) { ev.preventDefault(); ev.stopPropagation(); this.select(d); this.menu.set({ ...this.menuAt(ev), dev: d }); }
   linkMenu(k: LabLink, ev: MouseEvent) { ev.preventDefault(); ev.stopPropagation(); this.selLink.set(k.a + '/' + k.aPort); this.menu.set({ ...this.menuAt(ev), link: k }); }
   pickLink(k: LabLink, ev: MouseEvent) { ev.stopPropagation(); this.selLink.set(k.a + '/' + k.aPort); }

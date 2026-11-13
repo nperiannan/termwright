@@ -91,10 +91,14 @@ export interface LabPack { id: string; name: string; version: string; vendor: st
 export interface LabOS { name: string; short: string; configCommand: string; }
 export interface LabDevice { id: string; os: string; model: string; version: string; serial: string; hwSerial?: string; mac: string; hostname: string; mgmtIp: string; port: number; ports: number; running: boolean; logins: number; unsaved: boolean; x: number; y: number;
   /** Emulated lab only. */
-  state?: string; stateText?: string; cpu?: number; cores?: number; diskGb?: number; template?: string; persona?: EmuPersona | null; personaOk?: boolean; personaError?: string; personaInfo?: string; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; memUsed?: number; host?: string; saved?: boolean; role?: string; uplinks?: string[] | null; iconStyle?: string; movingTo?: string; computer?: boolean; addrs?: Record<string, string> | null; addrsSeen?: Record<string, string> | null; cpuMax?: number; cpuWeight?: number; }
+  state?: string; stateText?: string; cpu?: number; cores?: number; diskGb?: number; template?: string; persona?: EmuPersona | null; personaOk?: boolean; personaError?: string; personaInfo?: string; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; memUsed?: number; host?: string; saved?: boolean; role?: string; uplinks?: string[] | null; iconStyle?: string; movingTo?: string; computer?: boolean; addrs?: Record<string, string> | null; addrsSeen?: Record<string, string> | null; cpuMax?: number; cpuWeight?: number; addrs6?: Record<string, string> | null; dataGw?: string; dataGw6?: string; dns?: string; net?: EmuCompNetSeen | null; }
 export interface LabEvent { at: string; vm: string; name: string; level: 'info' | 'ok' | 'warn' | 'error'; text: string; host?: string; by?: string; }
 export interface EmuTopoInfo { name: string; saved: string; hosts: string[] | null; switches: number; open: boolean; running?: number; runOn?: string[]; }
 export interface LabLag { name: string; mode: string; source: string; }
+/** A computer's network as its console showed it. */
+export interface EmuCompNetSeen { addrs?: Record<string, string> | null; linkLocal?: Record<string, string> | null; gw?: string; gw6?: string; dns?: string; }
+/** A computer's IP configuration for one port, with its gateways and DNS server. */
+export interface EmuCompNet { port: number; ipv4: string; ipv6: string; gw: string; gw6: string; dns: string; }
 export interface LabLink { a: string; aPort: string; b: string; bPort: string; up?: boolean; down?: boolean; lagA?: LabLag | null; lagB?: LabLag | null; lldp?: string; }
 export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
   /** Emulated lab only. */

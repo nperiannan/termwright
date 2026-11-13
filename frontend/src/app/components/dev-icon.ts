@@ -116,7 +116,7 @@ function draw(role: DevRole, c: string, lit: boolean): string {
       const W = 56, D = 34, H = 47, P = frame(W, D, H); let s = shadow(P, W, D) + box(P, 16, 12, 0, 24, 16, 3) + box(P, 25, 18, 3, 6, 4, 10);
       s += box(P, 0, 22, 13, W, 5, 34) + fq(P, 27, 3, 16, 53, 44, 'fill="#0f1724" stroke="var(--ic-ed)" stroke-width=".5"');
       s += fq(P, 27, 7, 38, 9.5, 36.5, `fill="${LED}"`, 'pl') + fq(P, 27, 9.5, 36.5, 12, 35, `fill="${LED}"`, 'pl') + fq(P, 27, 14, 33, 22, 31.5, `fill="${LED}"`, 'pl');
-      return s + fq(P, 27, 44, 14.5, 50, 15.5, `fill="${c}"`);
+      return s + fq(P, 27, 44, 14.5, 50, 15.5, `fill="${c}"`) + box(P, 62, 10, 0, 12, 22, 30) + fq(P, 32, 64, 26, 72, 24.5, `fill="${LED}"`, 'pl') + fq(P, 32, 64, 22, 72, 20.5, 'fill="var(--ic-sd)"');
     }
     case 'cloud': {
       const W = 66, D = 44, H = 4, P = frame(W, D, H + 18, 4); let s = shadow(P, W, D) + box(P, 0, 0, 0, W, D, H);
@@ -150,7 +150,7 @@ function classic(k: string, c: string, o: { mono?: number } = {}): string {
   case 'server': s=`<rect x="40" y="10" width="40" height="76" rx="5" fill="${fill}"/>`; for(let i=0;i<4;i++)s+=`<rect x="46" y="${18+i*12}" width="28" height="7" rx="2" fill="none" stroke="${W}" stroke-width="1.5"/><circle cx="70" cy="${21.5+i*12}" r="1.4" fill="${W}"/>`; s+=`<circle cx="60" cy="74" r="3" fill="none" stroke="${W}" stroke-width="1.5"/>`; break;
   case 'host': s=`<rect x="24" y="14" width="72" height="68" rx="7" fill="${fill}"/>`; ([[32,22],[62,22],[32,50],[62,50]] as [number,number][]).forEach(([x,y],i)=>s+=`<rect x="${x}" y="${y}" width="26" height="24" rx="4" fill="${W}" fill-opacity="${i?.85:1}"/><text x="${x+13}" y="${y+16}" font-size="10" font-weight="700" text-anchor="middle" fill="${fill}" font-family="Inter,sans-serif">VM</text>`); break;
   case 'cloud': s=`<path transform="translate(14 0) scale(3.9)" d="${G.cloud}" fill="${o.mono?fill:'#7cc3ef'}"/>`; break;
-  case 'pc': s=`<rect x="22" y="12" width="76" height="54" rx="6" fill="${fill}"/><rect x="22" y="12" width="76" height="54" rx="6" fill="url(#gl)"/><rect x="28" y="18" width="64" height="42" rx="3" fill="#0f1724" fill-opacity=".85"/><path d="M36 32l8 6-8 6M50 46h14" stroke="#7ef0b4" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="54" y="66" width="12" height="9" fill="${fill}"/><rect x="40" y="75" width="40" height="6" rx="2" fill="${fill}"/>`; break;
+  case 'pc': s=`<g transform="translate(-12 4) scale(.92)"><rect x="22" y="12" width="76" height="54" rx="6" fill="${fill}"/><rect x="22" y="12" width="76" height="54" rx="6" fill="url(#gl)"/><rect x="28" y="18" width="64" height="42" rx="3" fill="#0f1724" fill-opacity=".85"/><path d="M36 32l8 6-8 6M50 46h14" stroke="#7ef0b4" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="54" y="66" width="12" height="9" fill="${fill}"/><rect x="40" y="75" width="40" height="6" rx="2" fill="${fill}"/></g><rect x="86" y="22" width="22" height="58" rx="4" fill="${fill}"/><rect x="86" y="22" width="22" height="58" rx="4" fill="url(#gl)"/><rect x="91" y="30" width="12" height="3" rx="1" fill="#7ef0b4"/><rect x="91" y="36" width="12" height="3" rx="1" fill="#fff" fill-opacity=".5"/><circle cx="97" cy="70" r="2.5" fill="#7ef0b4"/>`; break;
  }
  return `<svg width="120" height="96" viewBox="0 0 120 96"><defs><linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#000" stop-opacity=".12"/></linearGradient></defs>${s}</svg>`;
 }
@@ -172,7 +172,7 @@ function blue3d(k: string, c: string): string {
   case 'server':{const f=P(26,40,52,6);s=bx(f,26,40,52);for(let i=0;i<5;i++)s+=`<polygon points="${pts(f,[[3,40,47-i*8],[23,40,47-i*8],[23,40,43-i*8],[3,40,43-i*8]])}" fill="none" stroke="#9cc3ff" stroke-width=".8"/>`;break}
   case 'host':{const f=P(56,44,16,10);s=bx(f,56,44,16);([[6,6,'#16a39a'],[30,6,'#8b5cf6'],[6,24,'#e0603a'],[30,24,'#f2b52e']] as [number,number,string][]).forEach(([x,y,cc])=>{const C={top:cc,fr:cc+'cc',sd:cc+'99',ed:'#174178'};s+=`<g>${bx((a: number,b2: number,z: number)=>f(a+x,b2+y,z),14,14,12,C,18)}</g>`});break}
   case 'cloud':{s=`<path transform="translate(16 2) scale(3.7)" d="${G.cloud}" fill="#d9e9fb" stroke="#2a6cc0" stroke-width=".55"/>`;break}
-  case 'pc':{const f=P(56,34,47),o=(dx: number,dy: number)=>(a: number,b2: number,z: number)=>f(a+dx,b2+dy,z);s=bx(o(16,12),24,16,3)+bx(o(25,18),6,4,10,B,3)+bx(o(0,22),56,5,34,B,13)+`<polygon points="${pts(f,[[3,27,16],[53,27,16],[53,27,44],[3,27,44]])}" fill="#0f2a4a" stroke="#174178" stroke-width=".6"/><polyline points="${pts(f,[[7,27,39],[11,27,36],[7,27,33]])}" fill="none" stroke="#9cc3ff" stroke-width="1.4"/><polyline points="${pts(f,[[14,27,32],[22,27,32]])}" stroke="#9cc3ff" stroke-width="1.4"/>`;break}
+  case 'pc':{const f=P(56,34,47),o=(dx: number,dy: number)=>(a: number,b2: number,z: number)=>f(a+dx,b2+dy,z);s=bx(o(16,12),24,16,3)+bx(o(25,18),6,4,10,B,3)+bx(o(0,22),56,5,34,B,13)+`<polygon points="${pts(f,[[3,27,16],[53,27,16],[53,27,44],[3,27,44]])}" fill="#0f2a4a" stroke="#174178" stroke-width=".6"/><polyline points="${pts(f,[[7,27,39],[11,27,36],[7,27,33]])}" fill="none" stroke="#9cc3ff" stroke-width="1.4"/><polyline points="${pts(f,[[14,27,32],[22,27,32]])}" stroke="#9cc3ff" stroke-width="1.4"/>`+bx(o(62,10),12,22,30);break}
  }
  return `<svg width="120" height="96" viewBox="0 0 120 96">${s}</svg>`;
 }
@@ -190,7 +190,7 @@ function line(k: string, c: string, o: { ink?: string } = {}): string {
   case 'server': s=`<rect x="40" y="12" width="40" height="74" rx="5" ${st}/><path d="M48 26h24M48 38h24M48 50h24" ${st}/><circle cx="60" cy="72" r="3" ${st}/>`; break;
   case 'host': s=`<rect x="24" y="16" width="72" height="64" rx="7" ${st}/><rect x="34" y="26" width="22" height="18" rx="3" ${st}/><rect x="64" y="26" width="22" height="18" rx="3" ${st}/><rect x="34" y="52" width="22" height="18" rx="3" ${st}/><rect x="64" y="52" width="22" height="18" rx="3" ${st}/>`; break;
   case 'cloud': s=g(G.cloud,14,0,3.9,.55); break;
-  case 'pc': s=`<rect x="22" y="12" width="76" height="54" rx="6" ${st}/><path d="M36 32l8 6-8 6M50 46h14" ${st}/><path d="M60 66v10M42 80h36" ${st}/>`; break;
+  case 'pc': s=`<g transform="translate(-12 4) scale(.92)"><rect x="22" y="12" width="76" height="54" rx="6" ${st}/><path d="M36 32l8 6-8 6M50 46h14" ${st}/><path d="M60 66v10M42 80h36" ${st}/></g><rect x="86" y="22" width="22" height="58" rx="4" ${st}/><path d="M91 32h12M91 38h12" ${st}/><circle cx="97" cy="70" r="2.5" fill="${col}"/>`; break;
  }
  return `<svg width="120" height="96" viewBox="0 0 120 96">${s}</svg>`;
 }
@@ -207,7 +207,7 @@ function front(k: string, c: string): string {
   case 'server': s=unit(26,44); for(let r=0;r<2;r++)for(let i=0;i<6;i++)s+=`<rect x="${14+i*13}" y="${31+r*18}" width="11" height="15" rx="1.5" fill="#1b1f27" stroke="${ln}"/><rect x="${18+i*13}" y="${33+r*18}" width="3" height="2" fill="${led}"/>`; s+=`<rect x="96" y="32" width="10" height="4" fill="${c}"/>`; break;
   case 'host': s=unit(26,44)+`<rect x="14" y="31" width="60" height="34" rx="3" fill="#1b1f27" stroke="${ln}"/>`; ([['#3b8cf6',18],['#8b5cf6',32],['#16a39a',46],['#e0603a',60]] as [string,number][]).forEach(([cc,x])=>s+=`<rect x="${x}" y="40" width="11" height="16" rx="2" fill="${cc}"/>`); s+=`<rect x="80" y="34" width="26" height="4" fill="${led}"/>`; break;
   case 'cloud': s=`<path transform="translate(16 2) scale(3.7)" d="${G.cloud}" fill="${c}" fill-opacity=".22" stroke="${c}" stroke-width=".5"/>`; break;
-  case 'pc': s=`<rect x="20" y="10" width="80" height="56" rx="5" fill="${body}" stroke="${ln}"/><rect x="26" y="16" width="68" height="44" rx="2" fill="#1b1f27"/><path d="M33 30l7 5-7 5M45 42h12" stroke="${led}" stroke-width="2.4" fill="none" stroke-linecap="round"/><rect x="84" y="61" width="10" height="2.5" fill="${c}"/><rect x="54" y="66" width="12" height="9" fill="var(--ic-ear)"/><rect x="38" y="75" width="44" height="6" rx="2" fill="${body}" stroke="${ln}"/>`; break;
+  case 'pc': s=`<g transform="translate(-12 4) scale(.92)"><rect x="20" y="10" width="80" height="56" rx="5" fill="${body}" stroke="${ln}"/><rect x="26" y="16" width="68" height="44" rx="2" fill="#1b1f27"/><path d="M33 30l7 5-7 5M45 42h12" stroke="${led}" stroke-width="2.4" fill="none" stroke-linecap="round"/><rect x="84" y="61" width="10" height="2.5" fill="${c}"/><rect x="54" y="66" width="12" height="9" fill="var(--ic-ear)"/><rect x="38" y="75" width="44" height="6" rx="2" fill="${body}" stroke="${ln}"/></g><rect x="86" y="22" width="22" height="58" rx="3" fill="${body}" stroke="${ln}"/><rect x="90" y="28" width="14" height="4" fill="#1b1f27"/><rect x="90" y="35" width="14" height="4" fill="#1b1f27"/><circle cx="97" cy="70" r="2.5" fill="${led}"/>`; break;
  }
  return `<svg width="120" height="96" viewBox="0 0 120 96">${s}</svg>`;
 }
@@ -240,7 +240,7 @@ const GL: Record<string, string> = { // 24-unit glyphs, stroked
   server: '<rect x="5" y="3.5" width="14" height="7.5" rx="1.5"/><rect x="5" y="13" width="14" height="7.5" rx="1.5"/><path d="M8.5 7.2h.01M8.5 16.7h.01M12 7.2h4M12 16.7h4"/>',
   host: '<rect x="3.5" y="4.5" width="17" height="12" rx="1.5"/><path d="M9 20h6M12 16.5V20M7 8.5h4v4H7zM13 8.5h4v4h-4z"/>',
   ap: '<path d="M7.8 12.8a6 6 0 0 1 8.4 0M5.2 10.2a9.6 9.6 0 0 1 13.6 0"/><circle cx="12" cy="16.2" r="1.6"/>',
-  pc: '<rect x="3.5" y="4" width="17" height="12" rx="1.5"/><path d="M9 20h6M12 16v4M7 8l2.5 2L7 12M11.5 12.5h4"/>',
+  pc: '<rect x="2" y="4" width="14" height="10.5" rx="1.5"/><path d="M6 19h6M9 14.5V19M5.5 7.5l2 1.8-2 1.8M9.5 11h3"/><rect x="17.5" y="5" width="4.5" height="14" rx="1"/><path d="M19 8h1.5M19 16.5h.01"/>',
   cloud: '<path d="M7.5 18.5h9.8a3.7 3.7 0 0 0 .4-7.4 5.6 5.6 0 0 0-10.9 1.2 3.1 3.1 0 0 0 .7 6.2z"/>',
 };
 const gl = (k: string, col: string, w = 1.5) => `<g fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${GL[k] ?? GL['access']}</g>`;
@@ -270,7 +270,7 @@ function steel(k: string, lit: boolean): string {
       det = `<circle cx="32" cy="31" r="2" fill="${led}"/><path d="M26 25a8 8 0 0 1 12 0M22.5 21.5a13 13 0 0 1 19 0" stroke="#9fb3c8" stroke-width="1.4" fill="none" stroke-linecap="round"/>`; break;
     case 'cloud': return fit(CLOUD);
     case 'pc': top = '<path d="M12 14l4-2 26 13-4 2z" fill="url(#twst)"/>'; left = '<path d="M12 14 38 27v18L12 32z" style="fill:var(--st-l)"/>'; right = '<path d="M38 27l4-2v18l-4 2z" style="fill:var(--st-r)"/>';
-      det = `<path d="M15 18.5l20 10v12.5l-20-10z" fill="#1b2433"/><path d="M18 23.5l3 3.2-3 .8M23 29l5 2.5" stroke="${led}" stroke-width="1.1" fill="none" stroke-linecap="round"/><path d="M26 39v7l3 1.5v-7z" style="fill:var(--st-r)"/><path d="M20 47l8-4 10 5-8 4z" fill="url(#twst)"/>`; break;
+      det = `<path d="M15 18.5l20 10v12.5l-20-10z" fill="#1b2433"/><path d="M18 23.5l3 3.2-3 .8M23 29l5 2.5" stroke="${led}" stroke-width="1.1" fill="none" stroke-linecap="round"/><path d="M26 39v7l3 1.5v-7z" style="fill:var(--st-r)"/><path d="M20 47l8-4 10 5-8 4z" fill="url(#twst)"/><path d="M46 26l6-3 6 3v18l-6 3-6-3z" style="fill:var(--st-l)"/><path d="M52 29l6-3v18l-6 3z" style="fill:var(--st-r)"/><path d="M46 26l6-3 6 3-6 3z" fill="url(#twst)"/><circle cx="49" cy="41" r=".9" fill="${led}"/>`; break;
   }
   return fit(`<ellipse cx="32" cy="52" rx="20" ry="4" fill="#000" opacity=".3"/>${left}${right}${top}${det}`, 1.8, -12);
 }
@@ -287,7 +287,7 @@ function rack(k: string, lit: boolean): string {
     case 'server': case 'host': s = unit(14, 15) + unit(31, 15); for (const y of [17, 34]) for (let i = 0; i < 5; i++) s += `<rect x="${12 + i * 7}" y="${y}" width="5.5" height="9" rx=".8" style="fill:var(--rk-m)" stroke="#4b5566" stroke-width=".6"/>`; s += `<circle cx="51" cy="21.5" r="1.1" fill="${led}"/><circle cx="51" cy="38.5" r="1.1" fill="${led}"/>`; break;
     case 'ap': s = `<ellipse cx="32" cy="35" rx="22" ry="11" fill="#7d8796"/><ellipse cx="32" cy="32" rx="22" ry="11" fill="url(#twap)"/><circle cx="32" cy="32" r="2.2" fill="${led}"/>`; break;
     case 'cloud': return fit(CLOUD);
-    case 'pc': s = `<rect x="10" y="12" width="44" height="30" rx="2.5" fill="url(#twrk)"/><rect x="10" y="12" width="44" height="30" rx="2.5" fill="none" stroke="#fff" stroke-opacity=".12"/><rect x="13" y="15" width="38" height="24" rx="1" style="fill:var(--rk-m)"/><path d="M17 22l3 2.5-3 2.5M23 29h6" stroke="${led}" stroke-width="1.3" fill="none" stroke-linecap="round"/><rect x="29" y="42" width="6" height="5" style="fill:var(--rk-e)"/><rect x="22" y="47" width="20" height="3" rx="1" style="fill:var(--rk-e)"/>`; break;
+    case 'pc': s = `<rect x="47" y="18" width="13" height="32" rx="2" fill="url(#twrk)"/><rect x="49.5" y="22" width="8" height="2" style="fill:var(--rk-m)"/><rect x="49.5" y="26" width="8" height="2" style="fill:var(--rk-m)"/><circle cx="53.5" cy="45" r="1.2" fill="${led}"/><g transform="translate(-6 2)"><rect x="10" y="12" width="44" height="30" rx="2.5" fill="url(#twrk)"/><rect x="10" y="12" width="44" height="30" rx="2.5" fill="none" stroke="#fff" stroke-opacity=".12"/><rect x="13" y="15" width="38" height="24" rx="1" style="fill:var(--rk-m)"/><path d="M17 22l3 2.5-3 2.5M23 29h6" stroke="${led}" stroke-width="1.3" fill="none" stroke-linecap="round"/><rect x="29" y="42" width="6" height="5" style="fill:var(--rk-e)"/><rect x="22" y="47" width="20" height="3" rx="1" style="fill:var(--rk-e)"/></g>`; break;
   }
   return fit(s, 1.8, -10);
 }
