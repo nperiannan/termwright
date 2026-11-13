@@ -76,3 +76,32 @@ func TestEmuHistoryRecordAndPlan(t *testing.T) {
 		t.Fatalf("lab_history was recorded: %+v", cs)
 	}
 }
+
+// The AI panel's own lab commands are kept with the lab before them.
+func TestEmuAgentChange(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.mu.Lock()
+	emuLab.loaded, emuLab.f = true, emuFile{Lab: &emu.Lab{VMs: []emu.VM{{ID: "v1", Name: "core-1"}}}}
+	emuLab.mu.Unlock()
+	emuHist.mu.Lock()
+	emuHist.loaded, emuHist.list = false, nil
+	emuHist.mu.Unlock()
+	defer func() {
+		emuLab.mu.Lock()
+		emuLab.loaded, emuLab.f = false, emuFile{}
+		emuLab.mu.Unlock()
+		emuHist.mu.Lock()
+		emuHist.loaded, emuHist.list = false, nil
+		emuHist.mu.Unlock()
+	}()
+	id := a.EmuAgentChangeBegin("lab stop core-1", "stop")
+	a.EmuAgentChangeEnd(id, "ok")
+	a.EmuAgentChangeEnd(id, "ok") // twice: kept once
+	cs := a.EmuChanges()
+	if len(cs) != 1 || cs[0].Who != "AI agent" || cs[0].Tool != "lab_stop" || cs[0].What != "Lab stop core-1" || !cs[0].Revertible || cs[0].Result != "ok" {
+		t.Fatalf("%+v", cs)
+	}
+}

@@ -174,7 +174,7 @@ func emuAgentTools() string {
 		}
 		fmt.Fprintf(&b, "lab %s {%s} - %s\n", strings.TrimPrefix(t.Name, "lab_"), strings.Join(ks, ", "), t.Description)
 	}
-	b.WriteString(`For example: lab traffic {"action":"add_port","switch":"leaf1","port":"5","ip":"10.10.0.1/24"} or lab capture {"action":"read","switch":"leaf1","port":"1","filter":"LLDP"}. Each change is asked of the user first; results come back in the next message.`)
+	b.WriteString(`For example: lab traffic {"action":"add_port","switch":"leaf1","port":"5","ip":"10.10.0.1/24"} or lab capture {"action":"read","switch":"leaf1","port":"1","filter":"LLDP"}. Lab changes are not asked (each is kept in the lab's change history, which the user can revert); results come back in the next message.`)
 	return b.String()
 }
 
@@ -189,8 +189,10 @@ type EmuToolStep struct {
 
 var errEmuAsk = errors.New("ask first")
 
-// EmuAgentTool runs a lab tool for the in-app AI chat. Not approved: a change stops before it is
-// made and comes back as Ask (the chat asks the user, then calls again approved); reads just run.
+// EmuAgentTool runs a lab tool for the in-app AI chat. The chat calls it approved (lab changes are not
+// asked - automated tests must not wait for a person - and each is kept in the lab's change history,
+// so it can be reverted), or not approved in Read only: then a change stops before it is made and
+// comes back as Ask, and the chat refuses it.
 func (a *App) EmuAgentTool(name string, args map[string]any, approved bool) (EmuToolStep, error) {
 	if !strings.HasPrefix(name, "lab_") {
 		name = "lab_" + name
@@ -202,7 +204,7 @@ func (a *App) EmuAgentTool(name string, args map[string]any, approved bool) (Emu
 		args = map[string]any{}
 	}
 	var need *EmuToolStep
-	out, err := a.emuMCPWith(name, args, func(title, msg string, danger, _ bool) error {
+	out, err := a.emuMCPRun("agent", name, args, func(title, msg string, danger, _ bool) error {
 		if approved {
 			return nil
 		}

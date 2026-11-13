@@ -173,6 +173,9 @@ export class Backend {
   /** A device's CPU request and limit in millicores (0 = none); they apply at once. */
   /** The lab's change history (newest first), what Revert would do, and Revert. */
   emuChanges() { return this.call<EmuChange[]>('EmuChanges'); }
+  /** The AI panel's own lab commands: the lab is kept before one runs, and the change goes to the history after. */
+  emuAgentChangeBegin(what: string, verb: string) { return this.call<string>('EmuAgentChangeBegin', what, verb); }
+  emuAgentChangeEnd(id: string, result: string) { return this.call<void>('EmuAgentChangeEnd', id, result); }
   emuRevertPlan(id: string) { return this.call<string[]>('EmuRevertPlan', id); }
   emuRevert(id: string) { return this.call<string[]>('EmuRevert', id); }
   emuSetCPUReq(id: string, requestM: number, limitM: number) { return this.call<LabView>('EmuSetCPUReq', id, requestM, limitM); }

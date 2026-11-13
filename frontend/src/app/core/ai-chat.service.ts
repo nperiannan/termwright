@@ -151,7 +151,6 @@ export class AIChat {
   /** Approvals waiting for the user, by step. */
   private waits = new Map<Step, (r: { go: 'run' | 'skip' | 'stop' | 'chat'; command?: string }) => void>();
   /** Chats where the user allowed every lab change (not the dangerous ones) without asking. */
-  private labOK = new Set<string>();
 
   readonly current = computed(() => this.chats().find(c => c.id === this.currentId()) ?? null);
 
@@ -431,9 +430,11 @@ export class AIChat {
       if (verb !== 'readlags' && verb !== 'checkcabling') {
         const perm = this.perm();
         if (perm === 'readonly') { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `${line}: not done - the user allows only read-only actions. Tell the user what to do instead.`; }
-        if (perm !== 'auto' && !this.labOK.has(chatId)) { const r = await this.ask(s, chatId); if (r.go === 'chat') this.labOK.add(chatId); else if (r.go !== 'run') return this.refusal(s, r.go); }
+        // lab changes are not asked (automated tests must not wait): each is kept in the lab's Changes history, with Revert
+        s.auto = true;
       }
       s.state = 'running'; this.touch(chatId);
+      const chg = verb !== 'readlags' && verb !== 'checkcabling' ? await this.backend.emuAgentChangeBegin(line, verb).catch(() => '') : '';
       let out: LabView;
       switch (verb) {
         case 'start': out = await this.backend.emuStart(one); break;
@@ -465,6 +466,7 @@ export class AIChat {
         }
         default: out = await this.backend.emuReadLags(one);
       }
+      if (chg) void this.backend.emuAgentChangeEnd(chg, 'ok');
       void this.ui.refreshTree();
       const names = one.map(id => devs.find(d => d.id === id)?.hostname ?? id);
       const after = (out.devices ?? []).filter(d => one.includes(d.id)).map(d => `${d.hostname}: ${d.stateText || d.state}`).join(', ');
@@ -476,7 +478,7 @@ export class AIChat {
     }
   }
 
-  /** A lab tool with JSON arguments (the connector's: traffic, capture, console, link_check...): reads run, changes are asked first. */
+  /** A lab tool with JSON arguments (the connector's: traffic, capture, console, link_check...): reads and changes run (changes go to the lab's Changes history); Read only refuses changes. */
   private async labTool(s: Step, chatId: string, verb: string, json: string): Promise<string> {
     const line = `lab ${s.command}`;
     let args: Record<string, unknown> = {};
@@ -485,19 +487,10 @@ export class AIChat {
       catch { s.state = 'error'; s.note = tr('The arguments are not JSON'); return `${line}: not done - give the arguments as one JSON object on the same line.`; }
     }
     s.state = 'running'; this.touch(chatId);
-    let r = await this.backend.emuAgentTool(verb, args, false);
-    if (r.ask) {
-      s.ask = r.text; s.danger = !!r.danger;
-      const perm = this.perm();
-      if (perm === 'readonly') { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `${line}: not done - the user allows only read-only actions. Tell the user what to do instead.`; }
-      if (!(perm === 'auto' && !r.danger) && !(this.labOK.has(chatId) && !r.danger)) {
-        const g = await this.ask(s, chatId);
-        if (g.go === 'chat') this.labOK.add(chatId); else if (g.go !== 'run') return this.refusal(s, g.go);
-      }
-      s.state = 'running'; this.touch(chatId);
-      r = await this.backend.emuAgentTool(verb, args, true);
-      void this.ui.refreshTree();
-    } else s.auto = true;
+    // lab changes are not asked (automated tests must not wait; each is kept in the lab's Changes history with Revert); Read only stops them
+    const r = await this.backend.emuAgentTool(verb, args, this.perm() !== 'readonly');
+    if (r.ask) { s.ask = r.text; s.danger = !!r.danger; s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `${line}: not done - the user allows only read-only actions. Tell the user what to do instead.`; }
+    s.auto = true; void this.ui.refreshTree();
     const out = r.out ?? '';
     s.state = 'done'; s.output = out || tr('Done');
     return `${line}:\n${out.length > MAX_OUT ? '…\n' + out.slice(-MAX_OUT) : out}`;

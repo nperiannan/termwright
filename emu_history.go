@@ -127,6 +127,8 @@ func emuWhoName(who string) string {
 		return "API"
 	case "ai":
 		return "Claude"
+	case "agent":
+		return "AI agent"
 	}
 	return orStr(who, "Claude")
 }
@@ -505,4 +507,28 @@ func (a *App) mcpLabPath(path string) bool {
 	simLab.mu.Unlock()
 	in := func(f string) bool { return f != "" && (path == f || strings.HasPrefix(path, f+"/")) }
 	return in(ef) || in(sf)
+}
+
+// emuPending: changes the AI panel began with its own lab commands (start, cable, LAG…), until they end.
+var emuPending sync.Map
+
+// EmuAgentChangeBegin keeps the lab as it is before the AI panel runs one of its own lab commands
+// (they are not asked); EmuAgentChangeEnd puts the change in the history. It returns the change's id.
+func (a *App) EmuAgentChangeBegin(what, verb string) string {
+	r := a.emuChangeBegin("agent", "lab_"+verb, "", what)
+	emuPending.Store(r.ID, r)
+	return r.ID
+}
+
+// EmuAgentChangeEnd keeps a change the AI panel began ("ok", or what went wrong).
+func (a *App) EmuAgentChangeEnd(id, result string) {
+	v, ok := emuPending.LoadAndDelete(id)
+	if !ok {
+		return
+	}
+	var err error
+	if result != "" && result != "ok" {
+		err = errors.New(result)
+	}
+	a.emuChangeEnd(v.(*emuChangeRec), "", err)
 }

@@ -1334,7 +1334,7 @@ func TestEmuTopUpNIC(t *testing.T) {
 	}
 }
 
-// The in-app AI chat runs the connector's lab tools: reads at once, changes come back to be asked first.
+// The in-app AI chat runs the connector's lab tools: reads and changes at once (changes are kept in the history).
 func TestEmuAgentTool(t *testing.T) {
 	dir := t.TempDir()
 	cfg, _ := config.Load(dir)
@@ -1353,16 +1353,21 @@ func TestEmuAgentTool(t *testing.T) {
 	if err != nil || r.Ask || !strings.Contains(r.Out, "EXOS-VM") {
 		t.Fatalf("a read: %+v %v", r, err)
 	}
+	emuHist.mu.Lock()
+	emuHist.loaded, emuHist.list = false, nil
+	emuHist.mu.Unlock()
+	defer func() { emuHist.mu.Lock(); emuHist.loaded, emuHist.list = false, nil; emuHist.mu.Unlock() }()
+	// a lab change is not asked (automated tests must not wait): it runs and is kept in the history
 	r, err = a.EmuAgentTool("power", map[string]any{"action": "stop", "switches": []any{"core-1"}}, false)
-	if err != nil || !r.Ask || !r.Danger || !strings.Contains(r.Text, "The AI asks") || !strings.Contains(r.Text, "core-1") {
-		t.Fatalf("a change was not asked: %+v %v", r, err)
+	if err != nil || !r.Ask || !strings.Contains(r.Text, "core-1") || len(a.EmuChanges()) != 0 {
+		t.Fatalf("read only: a change must stop before it is made: %+v %v", r, err)
 	}
-	r, err = a.EmuAgentTool("traffic", map[string]any{"action": "add_stream", "name": "s1", "from": "tp1"}, false)
-	if err != nil || !r.Ask || r.Danger {
-		t.Fatalf("a light change was not asked: %+v %v", r, err)
+	r, err = a.EmuAgentTool("cpu", map[string]any{"switches": []any{"core-1"}, "request_m": float64(250)}, true)
+	if err != nil || r.Ask || emuLab.f.Lab.VMs[0].CPUReq != 250 {
+		t.Fatalf("a change: %+v %v", r, err)
 	}
-	if len(emuLab.f.Lab.Streams) != 0 {
-		t.Fatal("the stream was added before the user allowed it")
+	if cs := a.EmuChanges(); len(cs) != 1 || cs[0].Who != "AI agent" || cs[0].Tool != "lab_cpu" || !cs[0].Revertible {
+		t.Fatalf("history %+v", cs)
 	}
 	if got := a.emuAgentLab(); !strings.Contains(got, "lab traffic {") || !strings.Contains(got, "lab link_check {") {
 		t.Fatalf("the rules miss the tools:\n%s", got)
