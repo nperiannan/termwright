@@ -369,8 +369,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     </div>
 
     @switch (page()) {
-      @case ('configure') { <app-lab-configure [devId]="cfgId()" [emu]="emu()" (closed)="page.set('')" (images)="page.set('images')" /> }
-      @case ('images') { <app-lab-images start="images" (closed)="page.set('')" (hostsPage)="hostPick.set($event); page.set('hosts')" /> }
+      @case ('configure') { <app-lab-configure [devId]="cfgId()" [emu]="emu()" (closed)="page.set('')" (images)="imgPick.set($event); page.set('images')" /> }
+      @case ('images') { <app-lab-images start="images" [image]="imgPick()" (closed)="page.set(''); imgPick.set('')" (hostsPage)="hostPick.set($event); page.set('hosts')" /> }
       @case ('onhosts') { <app-lab-images start="onhosts" (closed)="page.set('')" (hostsPage)="hostPick.set($event); page.set('hosts')" /> }
       @case ('templates') { <app-lab-images start="templates" (closed)="page.set('')" /> }
       @case ('hosts') { <app-lab-hosts [select]="hostPick()" (closed)="page.set(''); hostPick.set('')" /> }
@@ -752,6 +752,7 @@ export class LabWorkspace implements OnDestroy {
   protected selLink = signal('');
   protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink; cloud?: string; tp?: EmuTester } | null>(null);
   protected selCloud = signal('');
+  protected imgPick = signal(''); // Images opens on this image (from a switch's Configure)
   protected dock = signal<'events' | 'console' | 'inv' | 'clog' | 'log' | 'cap' | 'traffic'>('events');
   protected caps = signal<EmuCapture[]>([]);
   protected capSel = signal('');

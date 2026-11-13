@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab: *Configure → Edit in Images…* opens Images on that switch's own image (it opened on the first one).
+
 - Emulated lab, Images: **Port MAC addresses** - the data ports' network cards take the switch's base MAC plus the port number (as before), or a range of their own apart from the switch's addresses, as GNS3 gives them.
 
 - Emulated lab, **topologies side by side**: opening another topology (or a new one) no longer stops the open one's switches - they go on running in the background. The topology list shows each one's running switches and hosts; *Hosts* shows what runs on each host, by topology, with *Open*. A new, duplicated or imported topology gets its own folder, ports and bridge network, and its switches skip management addresses the other topologies use, so several can run at once.

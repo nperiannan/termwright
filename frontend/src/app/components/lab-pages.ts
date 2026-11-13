@@ -150,7 +150,7 @@ const PAGE = `
               <label>{{ tr('Day 0') }}</label><pre class="mono" style="margin: 0">{{ (im.day0 ?? []).join('\n') || '-' }}</pre>
               <label>{{ tr('Address command') }}</label><span class="mono">{{ im.addrCmd || '-' }}</span>
               <label>{{ tr('More QEMU options') }}</label><span class="mono">{{ im.extra || '-' }}</span>
-            </div><p class="muted small">{{ tr('These belong to the image and apply to all its switches.') }} <a (click)="images.emit()" style="color: var(--accent); cursor: pointer">{{ tr('Edit in Images…') }}</a></p></div>
+            </div><p class="muted small">{{ tr('These belong to the image and apply to all its switches.') }} <a (click)="images.emit(dev()?.image ?? '')" style="color: var(--accent); cursor: pointer">{{ tr('Edit in Images…') }}</a></p></div>
           }
         }
       }
@@ -168,7 +168,7 @@ export class LabConfigure implements OnInit {
   readonly devId = input.required<string>();
   readonly emu = input(true);
   readonly closed = output<void>();
-  readonly images = output<void>();
+  readonly images = output<string>(); // the image of the switch: Images opens on it
   protected lab = inject(LabService);
   private backend = inject(Backend);
   private ui = inject(Ui);
@@ -599,6 +599,7 @@ export class LabNew implements OnInit {
 })
 export class LabImages implements OnInit {
   readonly start = input<'images' | 'templates' | 'onhosts'>('images');
+  readonly image0 = input('', { alias: 'image' }); // open on this image
   readonly closed = output<void>();
   readonly hostsPage = output<string>();
   protected lab = inject(LabService);
@@ -632,7 +633,7 @@ export class LabImages implements OnInit {
   protected edit = signal<EmuImage | null>(null);
   protected tpl = signal<EmuTemplate | null>(null);
   protected password = ''; protected day0 = ''; protected answers = ''; protected addrSet = '';
-  ngOnInit() { this.tab.set(this.start()); const im = this.images()[0]; if (im) this.pick(im.id); }
+  ngOnInit() { this.tab.set(this.start()); const im = this.images().find(x => x.id === this.image0()) ?? this.images()[0]; if (im) this.pick(im.id); if (this.image0()) setTimeout(() => document.querySelector('app-lab-images .it.on')?.scrollIntoView({ block: 'center' }), 60); }
   protected groups = computed(() => {
     const out: { name: string; items: EmuImage[] }[] = [];
     for (const im of this.images()) {
