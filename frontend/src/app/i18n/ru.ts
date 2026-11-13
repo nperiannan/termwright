@@ -2797,6 +2797,10 @@ const ru: Record<string, string> = {
   'The data ports’ network cards: from the switch’s base MAC (port 1 = base + 1), or a range of their own apart from the switch’s addresses, as GNS3 gives them': 'Сетевые карты портов данных: от базового MAC коммутатора (порт 1 = база + 1) или собственный диапазон отдельно от адресов коммутатора, как в GNS3',
   'base MAC + port number': 'базовый MAC + номер порта',
   'their own range (like GNS3)': 'собственный диапазон (как в GNS3)',
+  'Allow for This Chat': 'Разрешить в этом чате',
+  'Do this and the next lab changes of this chat without asking (not the ones that may interrupt traffic)': 'Выполнить это и следующие изменения лаборатории в этом чате без вопросов (кроме тех, что могут прервать трафик)',
+  'The arguments are not JSON': 'Аргументы не в формате JSON',
+  'Sees the emulated lab (switches, cables, LAGs, KVM hosts, events), adds and starts switches, cables, configures them on their consoles, runs traffic tests, captures packets and checks links': 'Видит эмулируемую лабораторию (коммутаторы, кабели, LAG, KVM-хосты, события), добавляет и запускает коммутаторы, подключает кабели, настраивает их через консоль, запускает тесты трафика, захватывает пакеты и проверяет каналы',
 };
 
 export default ru;

@@ -145,9 +145,11 @@ function spans(t: string): Span[] {
                 <div class="appr" [class.danger]="s.danger"><div class="q"><app-icon name="alert" [size]="15" /><div>
                   <b>{{ s.kind === 'open' ? tr('Connect to {0}?', s.tab) : s.kind === 'lab' ? tr('Change the emulated lab?') : tr('Run on {0}?', s.tab) }}</b>@if (s.prod) { <span class="prodb">PROD</span> }
                   @if (s.prod) { <div class="hint">{{ tr('Production session: Termwright asks before every command and connection, whatever the agent may do.') }}</div> }
-                  <div class="hint">{{ s.danger ? tr('This may change the device or interrupt traffic.') : s.kind === 'open' ? tr('Opens the session in a new tab.') : s.kind === 'lab' ? 'lab ' + s.command : tr('Check the command - it is typed in the tab as it is.') }}</div></div></div>
+                  <div class="hint">{{ s.danger ? tr('This may change the device or interrupt traffic.') : s.kind === 'open' ? tr('Opens the session in a new tab.') : s.kind === 'lab' ? 'lab ' + s.command : tr('Check the command - it is typed in the tab as it is.') }}</div>
+                  @if (s.ask) { <div class="hint lask">{{ s.ask }}</div> }</div></div>
                   @if (s.kind === 'run') { <input class="mono" [(ngModel)]="edits[$index + '-' + m.id]" [placeholder]="s.command" [attr.aria-label]="tr('Command')" (focus)="seed(m.id, $index, s)" /> }
                   <div class="btns"><button type="button" class="primary" [class.danger]="s.danger" (click)="ai.decide(s, 'run', edits[$index + '-' + m.id])">{{ s.kind === 'open' ? tr('Connect') : s.kind === 'lab' ? tr('Do It') : tr('Run') }}</button>
+                    @if (s.kind === 'lab' && !s.danger) { <button type="button" (click)="ai.decide(s, 'chat')" [title]="tr('Do this and the next lab changes of this chat without asking (not the ones that may interrupt traffic)')">{{ tr('Allow for This Chat') }}</button> }
                     <button type="button" (click)="ai.decide(s, 'skip')">Skip</button><button type="button" (click)="ai.decide(s, 'stop')">Stop</button></div></div>
               } @else {
                 <details class="step" [class]="'step ' + s.state + (s.failed ? ' failed' : '')"><summary class="sh">
@@ -248,6 +250,7 @@ function spans(t: string): Span[] {
     .av.u { background: #7c5cff; color: #fff; } .av.a { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
     .when, .hint { color: var(--muted); font-weight: 400; font-size: calc(11px * var(--ui-scale, 1)); }
     .hint { white-space: nowrap; flex: none; } .send { flex: none; }
+    .appr .lask { white-space: pre-wrap; color: var(--text); margin-top: 3px; }
     .ub { margin-left: 29px; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); line-height: 1.5; min-width: 0; }
     .ut { white-space: pre-wrap; overflow-wrap: anywhere; }
     .ctx { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }

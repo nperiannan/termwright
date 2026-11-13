@@ -90,6 +90,13 @@ var mcpLabTools = []mcpTool{
 			"filter": map[string]any{"type": "string", "description": "read: only packets whose source, destination, protocol or info contains this (e.g. ICMP, LLDP, 10.0.0.1)"},
 			"last":   map[string]any{"type": "integer", "description": "read: how many of the newest packets (default 100, at most 2000)"},
 		}, "action")},
+	{"lab_link_check", "Watch a running switch's e1000/e1000e network cards in QEMU for some seconds (QEMU's own trace events) and say what QEMU did: links taken down for auto-negotiation the switch restarted, receivers the switch turned off, frames dropped. Tells a link flap of the emulation from one of the switch's software.",
+		mcpSchema(map[string]any{
+			"switch":  map[string]any{"type": "string"},
+			"seconds": map[string]any{"type": "integer", "description": "5-120 (default 30)"},
+		}, "switch")},
+	{"lab_qemu_command", "The QEMU command line a switch of the emulated lab runs with now (read on its KVM host), or the one it starts with when it is not running: network cards, CPU, machine, memory.",
+		mcpSchema(map[string]any{"switch": map[string]any{"type": "string"}}, "switch")},
 	{"lab_events", "Read the emulated lab's Events log: what Termwright did to each switch (started, booted, day 0, persona, moves, errors), newest last.",
 		mcpSchema(map[string]any{"last": map[string]any{"type": "integer", "description": "how many lines (default 60, at most 300)"}})},
 }
@@ -131,14 +138,28 @@ func argStrs(m map[string]any, k string) []string {
 	return out
 }
 
-// emuMCP runs a lab_ tool.
+// emuMCP runs a lab_ tool for the connector: changes are asked in a Termwright dialog (light ones are not).
 func (a *App) emuMCP(name string, args map[string]any) (string, error) {
+	return a.emuMCPWith(name, args, func(title, msg string, danger, light bool) error {
+		if light {
+			return nil
+		}
+		return a.mcpAsk("", title, msg, danger, false)
+	})
+}
+
+// emuAsker asks the user before a change (light: a small one the connector does without asking).
+type emuAsker func(title, msg string, danger, light bool) error
+
+// emuMCPWith runs a lab_ tool; asker is called before each change and stops it with an error.
+func (a *App) emuMCPWith(name string, args map[string]any, asker emuAsker) (string, error) {
 	defer emuAs("ai")()
 	v, err := a.EmuState()
 	if err != nil {
 		return "", err
 	}
-	ask := func(title, msg string, danger bool) error { return a.mcpAsk("", title, msg, danger, false) }
+	ask := func(title, msg string, danger bool) error { return asker(title, msg, danger, false) }
+	light := func(title, msg string) error { return asker(title, msg, false, true) }
 	ids := func(names []string) ([]string, []string, error) {
 		var out, shown []string
 		if len(names) == 0 {
@@ -452,6 +473,9 @@ func (a *App) emuMCP(name string, args map[string]any) (string, error) {
 			if f, ok := args["max_latency"].(float64); ok {
 				st.MaxLatency = f
 			}
+			if err := light("Claude wants to add a stream", fmt.Sprintf("Claude (through the Termwright connector) asks to add the stream %s: %s from %s to %s.", orStr(st.Name, "(no name)"), orStr(st.Kind, "udp"), argStr(args, "from"), orStr(argStr(args, "to"), orStr(st.DstIP, "every other test port")))); err != nil {
+				return "", err
+			}
 			if _, err := a.EmuStreamSave(st); err != nil {
 				return "", err
 			}
@@ -459,6 +483,9 @@ func (a *App) emuMCP(name string, args map[string]any) (string, error) {
 		case "remove_stream":
 			for _, s := range tv.Streams {
 				if s.Name == argStr(args, "name") || s.ID == argStr(args, "name") {
+					if err := light("Claude wants to remove a stream", "Claude (through the Termwright connector) asks to remove the stream "+s.Name+"."); err != nil {
+						return "", err
+					}
 					_, err := a.EmuStreamRemove(s.ID)
 					return "Removed.", err
 				}
@@ -474,6 +501,9 @@ func (a *App) emuMCP(name string, args map[string]any) (string, error) {
 			}
 			return "Started; lab_traffic report shows the counters (final when no stream is running).", nil
 		case "stop":
+			if err := light("Claude wants to stop traffic", "Claude (through the Termwright connector) asks to stop the traffic on the lab's test ports."); err != nil {
+				return "", err
+			}
 			_, err := a.EmuTrafficStop()
 			return "Stopped; the counters stay for the report.", err
 		case "report":
@@ -511,6 +541,9 @@ func (a *App) emuMCP(name string, args map[string]any) (string, error) {
 			}
 			return "Capturing " + d.Hostname + " " + port + " - generate the traffic, then lab_capture read.", nil
 		case "stop":
+			if err := light("Claude wants to stop a capture", "Claude (through the Termwright connector) asks to stop capturing "+d.Hostname+" "+port+"."); err != nil {
+				return "", err
+			}
 			if _, err := a.EmuCaptureStop(key); err != nil {
 				return "", err
 			}
@@ -540,6 +573,15 @@ func (a *App) emuMCP(name string, args map[string]any) (string, error) {
 			return b.String(), nil
 		}
 		return "", errors.New("action is start, stop, read or list")
+	case "lab_link_check", "lab_qemu_command":
+		d, err := emuMCPID(v, argStr(args, "switch"))
+		if err != nil {
+			return "", err
+		}
+		if name == "lab_qemu_command" {
+			return a.EmuQemuCommand(d.ID)
+		}
+		return a.emuLinkCheck(d.ID, argInt(args, "seconds", 30, 120))
 	case "lab_events":
 		n := argInt(args, "last", 60, 300)
 		ev := v.Events

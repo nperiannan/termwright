@@ -1,7 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 )
 
@@ -152,13 +155,77 @@ lab checkcabling                          (compare the switches' LLDP neighbours
 lab uplink <switch> <port> on|off         (put a data port on the KVM host's network, like a cloud node; applies when the switch starts)
 To configure a switch, open its saved session (the first quoted name; its console session when its management does not answer) and run commands there, in that switch's own CLI syntax. A LAG has to be set on the switches themselves (and both ends must match: static or LACP, the same ports): mark it with lab lag on each end, then lab setlag on each end (or configure it in the switch's session yourself), then lab readlags so the topology shows it. New cables work once both switches restart (lab stop, then lab start). Starting a switch takes minutes unless it resumes from a saved state; a switch is ready when its state is running. Never stop, restart or remove switches the user did not ask about.`
 
+// emuAgentTools: the connector's lab tools as JSON lines for the chat agent ("lab traffic {...}").
+func emuAgentTools() string {
+	var b strings.Builder
+	b.WriteString("\nThe lab's other tools take their arguments as JSON after the name (one line; omit what you do not need):\n")
+	for _, t := range mcpLabTools {
+		props, _ := t.InputSchema["properties"].(map[string]any)
+		var ks []string
+		for k := range props {
+			ks = append(ks, k)
+		}
+		sort.Strings(ks)
+		for i, k := range ks {
+			p, _ := props[k].(map[string]any)
+			if e, ok := p["enum"].([]string); ok {
+				ks[i] = k + ": " + strings.Join(e, "|")
+			}
+		}
+		fmt.Fprintf(&b, "lab %s {%s} - %s\n", strings.TrimPrefix(t.Name, "lab_"), strings.Join(ks, ", "), t.Description)
+	}
+	b.WriteString(`For example: lab traffic {"action":"add_port","switch":"leaf1","port":"5","ip":"10.10.0.1/24"} or lab capture {"action":"read","switch":"leaf1","port":"1","filter":"LLDP"}. Each change is asked of the user first; results come back in the next message.`)
+	return b.String()
+}
+
+// EmuToolStep is a chat agent's lab tool call: done (Out), or to be asked first (Ask, with what to ask).
+type EmuToolStep struct {
+	Ask    bool   `json:"ask,omitempty"`
+	Title  string `json:"title,omitempty"`
+	Text   string `json:"text,omitempty"`
+	Danger bool   `json:"danger,omitempty"`
+	Out    string `json:"out,omitempty"`
+}
+
+var errEmuAsk = errors.New("ask first")
+
+// EmuAgentTool runs a lab tool for the in-app AI chat. Not approved: a change stops before it is
+// made and comes back as Ask (the chat asks the user, then calls again approved); reads just run.
+func (a *App) EmuAgentTool(name string, args map[string]any, approved bool) (EmuToolStep, error) {
+	if !strings.HasPrefix(name, "lab_") {
+		name = "lab_" + name
+	}
+	if !slices.ContainsFunc(mcpLabTools, func(t mcpTool) bool { return t.Name == name }) {
+		return EmuToolStep{}, fmt.Errorf("no lab tool %s", strings.TrimPrefix(name, "lab_"))
+	}
+	if args == nil {
+		args = map[string]any{}
+	}
+	var need *EmuToolStep
+	out, err := a.emuMCPWith(name, args, func(title, msg string, danger, _ bool) error {
+		if approved {
+			return nil
+		}
+		r := strings.NewReplacer("Claude (through the Termwright connector) asks", "The AI asks", "Claude wants", "The AI wants")
+		need = &EmuToolStep{Ask: true, Title: r.Replace(title), Text: r.Replace(msg), Danger: danger}
+		return errEmuAsk
+	})
+	if need != nil {
+		return *need, nil
+	}
+	if err != nil {
+		return EmuToolStep{}, err
+	}
+	return EmuToolStep{Out: out}, nil
+}
+
 // emuAgentLab is what AIChat adds to the system prompt when the agent may use the lab.
 func (a *App) emuAgentLab() string {
 	t := a.emuAgentText()
 	if t == "" {
-		return "\n\nEMULATED LAB: the user has no emulated lab (or it has no switches yet)."
+		return emuAgentRules + emuAgentTools() + "\nThe lab has no switches yet: lab images lists what lab add_switches can make them from."
 	}
-	return emuAgentRules + "\n" + t
+	return emuAgentRules + emuAgentTools() + "\n" + t
 }
 
 // EmuAgentText is the lab as the AI agent sees it (lab show).

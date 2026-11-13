@@ -33,6 +33,10 @@ var emuLinkEvents = map[string]string{
 // EmuLinkCheck watches a running switch's network cards in QEMU for some seconds and says what happened.
 func (a *App) EmuLinkCheck(id string, seconds int) (string, error) {
 	defer emuAs("user")()
+	return a.emuLinkCheck(id, seconds)
+}
+
+func (a *App) emuLinkCheck(id string, seconds int) (string, error) {
 	seconds = min(120, max(5, seconds))
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab

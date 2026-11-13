@@ -1333,3 +1333,38 @@ func TestEmuTopUpNIC(t *testing.T) {
 		t.Fatal("the user's card was replaced")
 	}
 }
+
+// The in-app AI chat runs the connector's lab tools: reads at once, changes come back to be asked first.
+func TestEmuAgentTool(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(dir + "/Sessions")
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = true, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	t.Setenv("HOME", dir)
+	emuLab.f.Host = "Lab/kvm-1"
+	emuLab.f.Images = []emu.Image{{ID: "i1", Name: "EXOS-VM", DeviceType: "EXOS", Version: "33.6", NICs: 9, PortName: "1/{n}"}}
+	emuLab.f.Lab = &emu.Lab{ID: "a1", VMs: []emu.VM{{ID: "v1", Name: "core-1", Image: "i1"}}}
+	if _, err := a.EmuAgentTool("format_disk", nil, false); err == nil {
+		t.Fatal("an unknown tool ran")
+	}
+	r, err := a.EmuAgentTool("images", nil, false)
+	if err != nil || r.Ask || !strings.Contains(r.Out, "EXOS-VM") {
+		t.Fatalf("a read: %+v %v", r, err)
+	}
+	r, err = a.EmuAgentTool("power", map[string]any{"action": "stop", "switches": []any{"core-1"}}, false)
+	if err != nil || !r.Ask || !r.Danger || !strings.Contains(r.Text, "The AI asks") || !strings.Contains(r.Text, "core-1") {
+		t.Fatalf("a change was not asked: %+v %v", r, err)
+	}
+	r, err = a.EmuAgentTool("traffic", map[string]any{"action": "add_stream", "name": "s1", "from": "tp1"}, false)
+	if err != nil || !r.Ask || r.Danger {
+		t.Fatalf("a light change was not asked: %+v %v", r, err)
+	}
+	if len(emuLab.f.Lab.Streams) != 0 {
+		t.Fatal("the stream was added before the user allowed it")
+	}
+	if got := a.emuAgentLab(); !strings.Contains(got, "lab traffic {") || !strings.Contains(got, "lab link_check {") {
+		t.Fatalf("the rules miss the tools:\n%s", got)
+	}
+}

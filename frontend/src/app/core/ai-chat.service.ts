@@ -18,7 +18,7 @@ export interface Ctx { id: number; kind: CtxKind; tabId?: string; label: string;
 export interface Img { name: string; mediaType: string; data: string; url: string; }
 export type StepState = 'ask' | 'running' | 'done' | 'skipped' | 'error' | 'refused';
 export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab';
-export interface Step { kind: StepKind; tab: string; command: string; output?: string; state: StepState; auto?: boolean; danger?: boolean; note?: string; failed?: boolean; prod?: boolean; }
+export interface Step { kind: StepKind; tab: string; command: string; output?: string; state: StepState; auto?: boolean; danger?: boolean; note?: string; failed?: boolean; prod?: boolean; ask?: string; }
 export interface ChatMsg {
   id: number; role: 'user' | 'assistant'; text: string; time: string;
   ctx?: { label: string; detail: string }[]; images?: Img[]; wire?: string; hidden?: boolean;
@@ -35,9 +35,12 @@ export const AGENT_TOOLS = [
   { k: 'open', name: 'Connect to saved sessions', what: 'Finds saved sessions by folder, name or address and connects with their saved login' },
   { k: 'log', name: 'Logger', what: 'Logs a tab to a file in the log folder - also in Read only' },
   { k: 'record', name: 'Recorder', what: 'Records a tab with a marker for each command - also in Read only' },
-  { k: 'lab', name: 'Emulated lab', what: 'Sees the emulated lab (switches, cables, LAGs, KVM hosts), starts and stops switches, adds cables and marks LAGs' },
+  { k: 'lab', name: 'Emulated lab', what: 'Sees the emulated lab (switches, cables, LAGs, KVM hosts, events), adds and starts switches, cables, configures them on their consoles, runs traffic tests, captures packets and checks links' },
 ] as const;
 const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 25;
+/** lab lines with words; the connector's lab tools take JSON (lab traffic {...}). */
+const LAB_VERBS = ['start', 'stop', 'shutdown', 'cable', 'uncable', 'pull', 'plug', 'lag', 'nolag', 'readlags', 'setlag', 'unsetlag', 'checkcabling', 'uplink'];
+const LAB_TOOLS = ['images', 'add_switches', 'cable', 'power', 'wait', 'console', 'check_cabling', 'move', 'traffic', 'capture', 'link_check', 'qemu_command', 'events'];
 
 /** What the agent may do on its own, from "Read only" (white) to fully autonomous (orange). */
 export type AgentPerm = '' | 'every' | 'readonly' | 'auto';
@@ -146,7 +149,9 @@ export class AIChat {
   }
   private stopping = false;
   /** Approvals waiting for the user, by step. */
-  private waits = new Map<Step, (r: { go: 'run' | 'skip' | 'stop'; command?: string }) => void>();
+  private waits = new Map<Step, (r: { go: 'run' | 'skip' | 'stop' | 'chat'; command?: string }) => void>();
+  /** Chats where the user allowed every lab change (not the dangerous ones) without asking. */
+  private labOK = new Set<string>();
 
   readonly current = computed(() => this.chats().find(c => c.id === this.currentId()) ?? null);
 
@@ -270,7 +275,7 @@ export class AIChat {
   stop() { this.stopping = true; for (const [, r] of this.waits) r({ go: 'stop' }); }
 
   /** Answers an approval card. */
-  decide(s: Step, go: 'run' | 'skip' | 'stop', command?: string) { this.waits.get(s)?.({ go, command }); }
+  decide(s: Step, go: 'run' | 'skip' | 'stop' | 'chat', command?: string) { this.waits.get(s)?.({ go, command }); }
 
   private async run(chatId: string) {
     this.busy.set(true); this.stopping = false;
@@ -406,6 +411,8 @@ export class AIChat {
     const verb = (verb0 ?? '').toLowerCase();
     s.tab = tr('Emulated lab');
     try {
+      const json = s.command.trim().slice((verb0 ?? '').length).trim();
+      if (LAB_TOOLS.includes(verb) && (json.startsWith('{') || !LAB_VERBS.includes(verb))) return await this.labTool(s, chatId, verb, json);
       if (verb === 'show' || verb === '') {
         const t = await this.backend.emuAgentText();
         s.state = 'done'; s.auto = true; s.output = t;
@@ -416,8 +423,7 @@ export class AIChat {
       const dev = (n?: string) => devs.find(d => d.hostname.toLowerCase() === (n ?? '').toLowerCase() || d.id === n);
       const ids = (n?: string) => (n ?? '').toLowerCase() === 'all' ? devs.map(d => d.id) : (dev(n) ? [dev(n)!.id] : null);
       const bad = (why: string) => { s.state = 'error'; s.note = why; return `${line}: not done - ${why}.`; };
-      const known = ['start', 'stop', 'shutdown', 'cable', 'uncable', 'pull', 'plug', 'lag', 'nolag', 'readlags', 'setlag', 'unsetlag', 'checkcabling', 'uplink'];
-      if (!known.includes(verb)) return bad(`unknown lab command; use ${['show', ...known].join(', ')}`);
+      if (!LAB_VERBS.includes(verb)) return bad(`unknown lab command; use ${['show', ...LAB_VERBS, ...LAB_TOOLS].join(', ')}`);
       if (!v.exists || !devs.length) return bad('there is no emulated lab with switches');
       const one = verb === 'checkcabling' ? devs.map(d => d.id) : verb === 'start' || verb === 'stop' ? ids(args[0]) : dev(args[0]) ? [dev(args[0])!.id] : null;
       if (!one) return bad(`no switch is called ${args[0] ?? ''} (lab show lists them)`);
@@ -425,7 +431,7 @@ export class AIChat {
       if (verb !== 'readlags' && verb !== 'checkcabling') {
         const perm = this.perm();
         if (perm === 'readonly') { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `${line}: not done - the user allows only read-only actions. Tell the user what to do instead.`; }
-        if (perm !== 'auto') { const r = await this.ask(s, chatId); if (r.go !== 'run') return this.refusal(s, r.go); }
+        if (perm !== 'auto' && !this.labOK.has(chatId)) { const r = await this.ask(s, chatId); if (r.go === 'chat') this.labOK.add(chatId); else if (r.go !== 'run') return this.refusal(s, r.go); }
       }
       s.state = 'running'; this.touch(chatId);
       let out: LabView;
@@ -470,12 +476,39 @@ export class AIChat {
     }
   }
 
-  private ask(s: Step, chatId: string) {
-    s.state = 'ask'; this.touch(chatId);
-    return new Promise<{ go: 'run' | 'skip' | 'stop'; command?: string }>(res => this.waits.set(s, r => { this.waits.delete(s); res(r); }));
+  /** A lab tool with JSON arguments (the connector's: traffic, capture, console, link_check...): reads run, changes are asked first. */
+  private async labTool(s: Step, chatId: string, verb: string, json: string): Promise<string> {
+    const line = `lab ${s.command}`;
+    let args: Record<string, unknown> = {};
+    if (json) {
+      try { const a = JSON.parse(json); if (a && typeof a === 'object' && !Array.isArray(a)) args = a; else throw new Error(); }
+      catch { s.state = 'error'; s.note = tr('The arguments are not JSON'); return `${line}: not done - give the arguments as one JSON object on the same line.`; }
+    }
+    s.state = 'running'; this.touch(chatId);
+    let r = await this.backend.emuAgentTool(verb, args, false);
+    if (r.ask) {
+      s.ask = r.text; s.danger = !!r.danger;
+      const perm = this.perm();
+      if (perm === 'readonly') { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `${line}: not done - the user allows only read-only actions. Tell the user what to do instead.`; }
+      if (!(perm === 'auto' && !r.danger) && !(this.labOK.has(chatId) && !r.danger)) {
+        const g = await this.ask(s, chatId);
+        if (g.go === 'chat') this.labOK.add(chatId); else if (g.go !== 'run') return this.refusal(s, g.go);
+      }
+      s.state = 'running'; this.touch(chatId);
+      r = await this.backend.emuAgentTool(verb, args, true);
+      void this.ui.refreshTree();
+    } else s.auto = true;
+    const out = r.out ?? '';
+    s.state = 'done'; s.output = out || tr('Done');
+    return `${line}:\n${out.length > MAX_OUT ? '…\n' + out.slice(-MAX_OUT) : out}`;
   }
 
-  private refusal(s: Step, go: 'skip' | 'stop' | 'run') {
+  private ask(s: Step, chatId: string) {
+    s.state = 'ask'; this.touch(chatId);
+    return new Promise<{ go: 'run' | 'skip' | 'stop' | 'chat'; command?: string }>(res => this.waits.set(s, r => { this.waits.delete(s); res(r); }));
+  }
+
+  private refusal(s: Step, go: 'skip' | 'stop' | 'run' | 'chat') {
     if (go === 'stop') { this.stopping = true; s.state = 'skipped'; s.note = tr('Stopped'); return `${s.kind} ${s.tab}: ${s.command} - the user stopped the agent.`; }
     s.state = 'skipped'; s.note = tr('Skipped'); return `${s.kind} ${s.tab}: ${s.command} - the user chose not to run it.`;
   }

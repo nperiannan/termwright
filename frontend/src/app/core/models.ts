@@ -400,6 +400,8 @@ export interface EmuTester { id: string; name: string; vm: string; port: number;
 /** A stream of frames between test ports. */
 export interface EmuStream { id: string; name: string; from: string; to?: string; kind: 'udp' | 'icmp' | 'tcp' | 'arp' | 'raw'; vlan?: number; prio?: number; dstMac?: string; srcIp?: string; dstIp?: string; dport?: number; size: number; pps: number; seconds?: number; count?: number; maxLoss: number; maxLatency?: number; off?: boolean; }
 export interface EmuStreamResult { id: string; tx: number; rx: number; expected: number; other: number; loss: number; latAvg: number; latMax: number; running: boolean; result: '' | 'pass' | 'fail'; why?: string; }
+/** A lab tool the AI chat called: done (out), or to be asked first. */
+export interface EmuToolStep { ask?: boolean; title?: string; text?: string; danger?: boolean; out?: string; }
 export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; }
 
 /** Switches running on a host, of one topology (open or in the background). */

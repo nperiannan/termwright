@@ -4,6 +4,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- AI chat, **the whole emulated lab for the agent**: with the *Emulated lab* tool the in-app agent now has every lab tool of the Claude connector - add switches from images or templates, cables, power, wait until ready, type on a switch's console, check the cabling, move a switch, traffic test ports and streams with their pass/fail report, packet capture, the link check, the QEMU command line and the Events. Reads run at once; each change is asked in the chat with what it does, with **Allow for This Chat** to stop asking for the rest of that chat (not for changes that may interrupt traffic). Connector: new *lab_link_check* and *lab_qemu_command*.
+
+- Emulated lab, Captures: the *Stop* button of a running capture is red.
+
 - Emulated lab: a device pack can change an image's default network card - images still on the pack's old card take the new one once, a card chosen by the user stays. (The device pack moves EXOS-VM to rtl8139, as GNS3 runs it: on QEMU's e1000 cards its LAGs flapped.)
 
 - Emulated lab: *Configure → Edit in Images…* opens Images on that switch's own image (it opened on the first one).
