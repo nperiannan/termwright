@@ -8,6 +8,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 - Emulated lab, Captures: the *Stop* button of a running capture is red. A cable being captured keeps its colour (it turned red and looked down): blue dashes run along it and a blue dot pulses at the captured port; captures started earlier show on the canvas without opening the Captures tab.
 
+- Emulated lab: right-clicking a switch closes its hover card, so the menu stands alone.
+
 - Emulated lab, **New Topology page**: pick devices by model from a catalog grouped by operating system (search, collapsible groups; a click adds one more) - Termwright picks the image and writes each switch's persona (model, serial and MAC in the model's format) before the first boot; the software version, count, names and role are per row. Cabling: **Leaf-spine** (the core-capable models are spines by themselves, the others leaves; every leaf to every spine), **Ring**, **Full mesh**, **Star** (around the hub), **Line** or **No links**, with 1, 2 or 4 cables per pair (two or more as a LACP or static LAG on both ends), a live preview, what it needs and where it runs. The switches are laid out by the shape.
 
 - Emulated lab, **one canvas toolbar at the top**: the floating bar at the bottom and the view bar are one bar under the tabs, with icons and short labels; *More* (⋯) switches it to icons only or icons and text, and has the mini-map (off now; the Map button is gone), *Arrange by Host* and how hosts are shown.

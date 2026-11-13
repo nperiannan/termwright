@@ -214,7 +214,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 @else if (d.error) { <span class="badge r" [title]="d.error">{{ tr('problem') }}</span> }
               </div>
             }
-            @if (hovDev(); as h) {
+            @if (!menu() && hovDev(); as h) {
               <div class="ntip" [style.left.px]="tipX(h)" [style.top.px]="pos(h).y - 34">
                 <div class="th"><b>{{ h.hostname }}</b><span class="tst" [class]="'tst ' + stateOf(h)">● {{ tr(h.stateText || (h.running ? 'running' : 'stopped')) }}</span> </div>
                 <table>
