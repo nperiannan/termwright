@@ -162,7 +162,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <aside class="tpl">
                 <div class="sec2">{{ tr('Test ports') }}<span class="muted">{{ traf()?.testers?.length ?? 0 }}</span></div>
                 @for (t of traf()?.testers ?? []; track t.id) {
-                  <div class="tpc"><div class="r1"><b>⇄ {{ t.name }}</b><a class="x" (click)="tpRemove(t)" [title]="tr('Remove')" [attr.aria-label]="tr('Remove {0}?', t.name)">✕</a></div>
+                  <div class="tpc" [class.sel]="tEd()?.id === t.id" (click)="editTester(t)" [title]="tr('Its settings')"><div class="r1"><b>⇄ {{ t.name }}</b><a class="x" (click)="tpRemove(t); $event.stopPropagation()" [title]="tr('Remove')" [attr.aria-label]="tr('Remove {0}?', t.name)">✕</a></div>
                     <div class="small">{{ tpWhere(t) }}</div>
                     <div class="mono small">{{ t.dhcp ? (t.lease || 'DHCP…') : (t.ip || '-') }}@if (t.ip6 || t.slaac) { · {{ t.slaac ? (t.lease6 || 'SLAAC…') : t.ip6 }} }</div>
                     <div class="mono small muted">{{ t.mac }}@if (t.vlan) { · VLAN {{ t.vlan }} }</div></div>
@@ -236,7 +236,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="nn">{{ m.name }} <span class="muted">→ {{ m.to }}</span></div><div class="nm"><i class="spin"></i> {{ m.step }}</div>@if (m.pct >= 0) { <div class="mvp"><i [style.width.%]="m.pct"></i></div><div class="mvr">{{ m.pct }} % · {{ m.rest }}</div> }</div>
             }
             @for (t of tps(); track t.t.id) {
-              <div class="node tpn" [style.left.px]="t.x - 56" [style.top.px]="t.y - 18" (pointerdown)="tpGrab($event, t.t)" (click)="$event.stopPropagation(); dock.set('traffic'); loadTraf()" (contextmenu)="tpMenuOpen(t.t, $event)" [title]="t.t.name + ' · ' + t.where + ' · ' + tpAddr(t.t) + ' · ' + t.t.mac">
+              <div class="node tpn" [style.left.px]="t.x - 56" [style.top.px]="t.y - 18" (pointerdown)="tpGrab($event, t.t)" (click)="$event.stopPropagation(); editTester(t.t)" (contextmenu)="tpMenuOpen(t.t, $event)" [title]="t.t.name + ' · ' + t.where + ' · ' + tpAddr(t.t) + ' · ' + t.t.mac">
                 <div class="tpb">⇄ {{ t.t.name }}</div><div class="nm">{{ tpAddr(t.t) || t.where }}</div></div>
             }
             @for (c of clouds(); track c.host) {
@@ -422,7 +422,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="card"><p class="muted small" style="margin: 0">{{ tr('Drag one to move them all · Delete removes them (you are asked first) · Shift or ⌘/Ctrl-click adds or removes one · ⌘/Ctrl+A selects all.') }}</p>
             <div class="btns" style="margin-top: 8px"><button type="button" class="sm danger-ghost" (click)="removeMany([...ms()])" [disabled]="lab.busy()">{{ tr('Remove…') }}</button></div></div>
         } @else if (selDev(); as d) {
-          <h3 class="selh">{{ d.hostname }}<span class="tst" [class]="'tst ' + stateOf(d)">● {{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span><a class="clr" (click)="sel.set('')" [title]="tr('Nothing selected: the whole topology (Esc, or a click on the empty canvas)')">✕</a></h3>
+          <h3 class="selh"><span class="nm" [title]="d.hostname">{{ d.hostname }}</span><span class="tst" [class]="'tst ' + stateOf(d)"><i class="sd">●</i>{{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</span><a class="clr" (click)="sel.set('')" [title]="tr('Nothing selected: the whole topology (Esc, or a click on the empty canvas)')">✕</a></h3>
           <div class="card dp">
             <div class="sub">{{ d.persona?.slots?.[0]?.model || d.model }}@if (d.version) { · {{ d.version }} }@if (d.persona?.slots?.length && d.personaOk && !d.personaError) { · <span class="ok">✓ {{ tr('in the switch') }}</span> }</div>
             <div class="btns act">@if (emu()) { <button type="button" class="sm" (click)="lab.restart([d.id])" [disabled]="!d.running || lab.busy()">{{ tr('Restart') }}</button> }@else { <button type="button" class="primary sm" (click)="ssh(d)" [disabled]="!d.running">{{ tr('Open Session') }}</button> }
@@ -638,7 +638,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             </table>
           </div>
           @if (sEd(); as e) {
-            <div class="tre"><div class="treh"><b>{{ e.id ? e.name : tr('New stream') }}</b><span class="sp"></span><a (click)="sEd.set(null)">✕</a></div>
+            <div class="tre"><div class="treh"><b>{{ e.id ? e.name : tr('New stream') }}</b><span class="sp"></span>@if (e.id) { <button type="button" class="sm" (click)="saveStream(e, true)">▶ {{ tr('Save and Run') }}</button> }<button type="button" class="sm primary" (click)="saveStream(e)">{{ tr('Save') }}</button><a (click)="sEd.set(null)" [title]="tr('Close')">✕</a></div>
               <label><span>{{ tr('Name') }}</span><input [(ngModel)]="e.name" [placeholder]="tr('stream-1')" /></label>
               <label><span>{{ tr('From') }}</span><select [(ngModel)]="e.from">@for (t of traf()?.testers ?? []; track t.id) { <option [value]="t.id">{{ t.name }} · {{ tpWhere(t) }}</option> }</select></label>
               <label><span>{{ tr('To') }}</span><select [(ngModel)]="e.to"><option value="">{{ tr('every other test port, or an address') }}</option>@for (t of traf()?.testers ?? []; track t.id) { @if (t.id !== e.from) { <option [value]="t.id">{{ t.name }} · {{ tpWhere(t) }}</option> } }</select></label>
@@ -655,19 +655,24 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <a class="lnk small" (click)="e.mods = [...(e.mods ?? []), { field: 'srcIp', mode: 'inc', count: 10, step: 1 }]">＋ {{ tr('A field that changes per frame') }}</a></div></div>
               <label><span>{{ tr('For') }}</span><div class="two"><input type="number" min="0" [(ngModel)]="e.seconds" [placeholder]="tr('seconds')" /><input type="number" min="0" [(ngModel)]="e.count" [placeholder]="tr('or frames')" /></div></label>
               <label><span>{{ tr('Pass when') }}</span><div class="two"><input type="number" min="0" max="100" step="0.1" [(ngModel)]="e.maxLoss" [title]="tr('Loss at most, %')" /><input type="number" min="0" step="0.1" [(ngModel)]="e.maxLatency" [placeholder]="tr('latency ms')" [title]="tr('Average latency at most, ms (0: not checked)')" /><input type="number" min="0" step="0.1" [(ngModel)]="e.maxJitter" [placeholder]="tr('jitter ms')" [title]="tr('Jitter at most, ms (0: not checked)')" /></div></label>
-              <div class="trb"><button type="button" class="primary" (click)="saveStream(e)">{{ tr('Save') }}</button>@if (e.id) { <button type="button" (click)="saveStream(e, true)">▶ {{ tr('Save and Run') }}</button> }</div>
             </div>
           } @else if (tEd(); as t) {
-            <div class="tre"><div class="treh"><b>{{ tr('New test port') }}</b><span class="sp"></span><a (click)="tEd.set(null)">✕</a></div>
-              <label><span>{{ tr('Switch') }}</span><select [ngModel]="t.vm" (ngModelChange)="tpSwitch($event)">@for (d of devs(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select></label>
-              <label><span>{{ tr('Port') }}</span><select [(ngModel)]="t.port">@for (p of t.free; track p) { <option [value]="p">{{ p }}</option> } @empty { <option value="">{{ tr('no free port') }}</option> }</select></label>
+            <div class="tre"><div class="treh"><b>{{ t.id ? t.name : tr('New test port') }}</b><span class="sp"></span>
+                @if (t.id) { <button type="button" class="sm primary" (click)="saveTester(t)">{{ tr('Save') }}</button> } @else { <button type="button" class="sm primary" (click)="addTester(t)" [disabled]="!t.port">{{ tr('Add') }}</button> }<a (click)="tEd.set(null)" [title]="tr('Close')">✕</a></div>
+              @if (t.id) {
+                <label><span>{{ tr('Name') }}</span><input [(ngModel)]="t.name" /></label>
+                <label><span>{{ tr('On') }}</span><span class="mono">{{ t.where }}</span></label>
+              } @else {
+                <label><span>{{ tr('Switch') }}</span><select [ngModel]="t.vm" (ngModelChange)="tpSwitch($event)">@for (d of devs(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select></label>
+                <label><span>{{ tr('Port') }}</span><select [(ngModel)]="t.port">@for (p of t.free; track p) { <option [value]="p">{{ p }}</option> } @empty { <option value="">{{ tr('no free port') }}</option> }</select></label>
+              }
               <label><span>{{ tr('Address') }}</span><input [(ngModel)]="t.ip" [placeholder]="tr('10.10.0.1/24, or dhcp')" [title]="tr('It answers ARP and ping there; streams use it as their source. dhcp: it takes one from a DHCP server')" /></label>
               <label><span>{{ tr('Gateway') }}</span><input [(ngModel)]="t.gw" [placeholder]="tr('for streams to another network')" /></label>
+              <label><span>VLAN</span><input type="number" min="0" max="4094" [(ngModel)]="t.vlan" [placeholder]="tr('untagged')" [title]="tr('Its frames carry this VLAN tag (0: untagged)')" /></label>
               <label><span>IPv6</span><input [(ngModel)]="t.ip6" [placeholder]="tr('fd00::1/64, or slaac')" [title]="tr('It answers neighbour solicitations and ping there; IPv6 streams use it. slaac: it takes one from router advertisements')" /></label>
               <label><span>LLDP</span><input type="checkbox" class="cbx" [(ngModel)]="t.lldp" [title]="tr('Announce it by LLDP, so the switch sees Termwright and its name on the port')" /></label>
               <label><span>{{ tr('Multicast') }}</span><input [(ngModel)]="t.groups" placeholder="239.1.1.1, ff0e::1" [title]="tr('Groups it joins (IGMP / MLD reports), to receive multicast streams')" /></label>
               <p class="muted small">{{ tr('A sender and counter on the host where the switch runs (no VM): tens of thousands of frames a second - for forwarding, VLANs, LAGs, ACLs and failover, not line rate.') }}</p>
-              <div class="trb"><button type="button" class="primary" (click)="addTester(t)" [disabled]="!t.port">{{ tr('Add') }}</button></div>
             </div>
           }
         </div>
@@ -734,7 +739,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .mgn { display: flex; align-items: center; gap: 4px; overflow: hidden; small { margin-left: 4px; } }
     .ctb { position: absolute; top: var(--mp, 0px); left: calc(230px + var(--mp, 0px)); right: calc(300px + var(--mp, 0px)); height: var(--ctbh); z-index: 7; display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--surface); border-bottom: 1px solid var(--line); overflow-x: auto;
       .cb { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 9px; border: 1px solid transparent; background: none; border-radius: 8px; white-space: nowrap; font-size: 12.5px; color: var(--text); cursor: pointer; flex: none; }
-      .cb:hover:not(:disabled) { background: var(--surface-2); } .cb.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } .cb:disabled { opacity: .45; cursor: default; }
+      .cb:hover:not(:disabled) { background: var(--surface-2); } .cb.on { color: var(--accent); } .cb:disabled { opacity: .45; cursor: default; }
       svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
       .sl { display: none; } .sp { flex: 1; } .zg { display: inline-flex; align-items: center; gap: 2px; flex: none; } .zsel { height: 26px; font-size: 12px; } .lkhid { position: absolute; inset: 0; opacity: 0; cursor: pointer; } }
     .ctb.tm-icons { .ll { display: none; } .cb { width: 34px; padding: 0; justify-content: center; } }
@@ -758,9 +763,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     i.d { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; flex: none; }
     i.d.ok, i.d.on { background: var(--success, #1fa45a); } i.d.boot { background: var(--warning, #e39b17); } i.d.bad, i.d.off { background: var(--danger); }
     .main { display: grid; grid-template-columns: 230px 1fr 300px; min-height: 0; position: relative; }
-    .tpg { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    :host { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; }
+    :host-context(.light) { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948; }
+    .tpg {
       position: absolute; inset: 0; z-index: 25; background: var(--bg); overflow: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
-    :host-context(.light) .tpg { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948; }
     .tph { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; h2 { margin: 0; font-size: 17px; } .tpt { display: flex; flex-direction: column; gap: 2px; } .sp { flex: 1; } }
     .kpis { display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); gap: 10px; }
     .kpi { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 9px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0;
@@ -768,7 +774,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       &.warn { border-color: var(--warning, #e39b17); b::before { content: '⚠ '; font-size: 14px; color: var(--warning, #e39b17); } } &.good { b::before { content: '✓ '; font-size: 14px; color: var(--success, #1fa45a); } } }
     .tpb { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; }
     .tpl { display: flex; flex-direction: column; gap: 8px; .sec2 { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); } }
-    .tpc { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; .r1 { display: flex; align-items: center; b { flex: 1; color: var(--warning, #e39b17); font-size: 12.5px; } } .x { cursor: pointer; color: var(--muted); } .x:hover { color: var(--danger); } }
+    .tpc { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; &:hover { border-color: var(--muted); } &.sel { border-color: var(--accent); background: var(--accent-soft); } .r1 { display: flex; align-items: center; b { flex: 1; color: var(--warning, #e39b17); font-size: 12.5px; } } .x { cursor: pointer; color: var(--muted); } .x:hover { color: var(--danger); } }
     .tpm { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
     .tcs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
     .tpx { flex: 1; min-height: 0; }
@@ -854,9 +860,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .trn { margin: 6px 10px; color: var(--warning, #e39b17); font-size: 12px; }
     .pill { font: 600 10.5px var(--mono, monospace); padding: 1px 7px; border-radius: 9px; } .pill.ok { color: var(--success, #1fa45a); background: color-mix(in srgb, var(--success, #1fa45a) 14%, transparent); } .pill.er { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); } .pill.ru { color: var(--accent); background: var(--accent-soft); }
     .mods { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; > span { color: var(--muted); padding-top: 4px; } .mod { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 54px 14px; gap: 4px; align-items: center; margin-bottom: 4px; a { cursor: pointer; color: var(--muted); } } }
-    .cbx { height: auto !important; justify-self: start; } td.spk { white-space: nowrap; svg { vertical-align: middle; margin-right: 4px; } polyline { fill: none; stroke-width: 1.4; } .stx { stroke: var(--muted); } .srx { stroke: var(--accent); } }
+    .cbx { height: auto !important; justify-self: start; } td.spk { white-space: nowrap; svg { vertical-align: middle; margin-right: 4px; } polyline { fill: none; stroke-width: 1.5; } .stx { stroke: var(--s1); } .srx { stroke: var(--s2); } }
     .tre { border-left: 1px solid var(--line); padding: 8px 12px; overflow: auto; display: grid; gap: 7px; align-content: start; background: var(--surface-2); font-size: 12px;
-      .treh { display: flex; align-items: center; a { cursor: pointer; color: var(--muted); } } label { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: center; gap: 8px; > span { color: var(--muted); } } input, select { height: 26px; min-width: 0; } .two { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+      .treh { display: flex; align-items: center; gap: 6px; position: sticky; top: -8px; z-index: 1; background: var(--surface-2); padding: 4px 0; margin-top: -4px; b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } a { cursor: pointer; color: var(--muted); padding: 0 2px; } } label { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: center; gap: 8px; > span { color: var(--muted); } } input, select { height: 26px; min-width: 0; } .two { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
       .seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; i { font-style: normal; padding: 3px 7px; cursor: pointer; color: var(--muted); font-size: 11px; } i.on { background: var(--accent-soft); color: var(--text); } } .trb { display: flex; gap: 8px; } p { margin: 0; } }
     .node.tpn { cursor: grab; width: 112px; text-align: center; .tpb { height: 30px; border-radius: 9px; border: 1.5px solid #e08a2e; background: color-mix(in srgb, #e08a2e 12%, var(--surface)); color: #e9a55a; display: flex; align-items: center; justify-content: center; font: 600 11.5px var(--font, Inter, sans-serif); white-space: nowrap; } }
     .tpl .ln { stroke: #e08a2e; stroke-dasharray: 5 4; stroke-width: 2; fill: none; }
@@ -904,7 +910,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .seg2.cpus a { padding: 2px 9px; }
     .mvr { display: flex; gap: 6px; margin-bottom: 4px; select { flex: 1; min-width: 0; } }
     .node .nm.da { color: var(--accent); font-family: var(--mono, monospace); }
-    .selh .tst { margin: 0 8px 0 auto; font-size: 12px; font-weight: 500; }
+    .selh .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .selh .tst { flex: none; margin: 0 2px 0 8px; font-size: 10px; font-weight: 500; letter-spacing: .05em; .sd { font-style: normal; font-size: 7px; margin-right: 4px; vertical-align: 1px; } }
     .dp { padding: 12px; .sub { color: var(--muted); font-size: 12px; margin: -2px 0 8px; } .kv.alert { margin-bottom: 8px; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--danger) 10%, transparent); }
       details.sec { border-top: 1px solid var(--line); padding: 8px 0 2px; > summary { cursor: pointer; list-style: none; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; &::-webkit-details-marker { display: none; } &::before { content: '▸ '; } }
         &[open] > summary::before { content: '▾ '; } .kv { padding-bottom: 8px; } }
@@ -1017,7 +1023,8 @@ export class LabWorkspace implements OnDestroy {
   // ---- traffic generator
   protected traf = signal<EmuTrafficView | null>(null);
   protected sEd = signal<EmuStream | null>(null);
-  protected tEd = signal<{ vm: string; port: string; ip: string; gw: string; ip6?: string; groups?: string; lldp?: boolean; free: string[] } | null>(null);
+  /** The test port editor: a new one (vm, port), or one that exists (id, its name and where it is). */
+  protected tEd = signal<{ id?: string; name?: string; where?: string; vm: string; port: string; ip: string; gw: string; vlan?: number | null; ip6?: string; groups?: string; lldp?: boolean; free: string[] } | null>(null);
   protected tpAt = signal<Record<string, { x: number; y: number }>>({});
   protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw'];
   private trafTimer: ReturnType<typeof setInterval> | null = null;
@@ -1030,7 +1037,7 @@ export class LabWorkspace implements OnDestroy {
   }
   resOf(id: string): EmuStreamResult | undefined { return this.traf()?.results?.find(r => r.id === id); }
   tpName(id: string) { return this.traf()?.testers.find(t => t.id === id)?.name ?? '?'; }
-  tpWhere(t: EmuTester) { const d = this.devs().find(x => x.id === t.vm); return (d?.hostname ?? '?') + ' ' + (t.portName || t.port); }
+  tpWhere(t: EmuTester) { const d = this.devs().find(x => x.id === t.vm); return (d?.hostname ?? '?') + ' · ' + tr('port {0}', t.portName || t.port); }
   /** The test ports on the canvas: under their switch unless moved. */
   protected tps = computed(() => {
     const out: { t: EmuTester; x: number; y: number; dx: number; dy: number; lx: number; ly: number; port: string; where: string }[] = [];
@@ -1096,9 +1103,23 @@ export class LabWorkspace implements OnDestroy {
     const v6 = t.slaac ? 'SLAAC ' + (t.lease6 || tr('(waiting)')) : t.ip6 ?? '';
     return [v4, v6].filter(Boolean).join(' · ');
   }
-  async addTester(t: { vm: string; port: string; ip: string; gw: string; ip6?: string; groups?: string; lldp?: boolean }) {
+  /** Opens a test port's settings (a click on it on the canvas, or its card on the Traffic page). */
+  editTester(x: EmuTester) {
+    this.sEd.set(null);
+    if (this.page() !== 'traffic') this.dock.set('traffic');
+    void this.loadTraf();
+    this.tEd.set({ id: x.id, name: x.name, where: this.tpWhere(x), vm: x.vm, port: String(x.port), ip: x.dhcp ? 'dhcp' : x.ip ?? '', gw: x.gw ?? '', vlan: x.vlan || null, ip6: x.slaac ? 'slaac' : x.ip6 ?? '', groups: (x.groups ?? []).join(', '), lldp: x.lldp !== false, free: [] });
+  }
+  async saveTester(t: NonNullable<ReturnType<typeof this.tEd>>) {
+    const cur = this.traf()?.testers.find(x => x.id === t.id); if (!cur) return;
     try {
-      let v = await this.backend.emuTesterAdd(t.vm, t.port, t.ip.trim(), t.gw.trim(), 0);
+      const v = await this.backend.emuTesterSet({ ...cur, name: (t.name ?? '').trim() || cur.name, ip: t.ip.trim(), gw: t.gw.trim(), vlan: +(t.vlan ?? 0) || 0, ip6: (t.ip6 ?? '').trim(), groups: (t.groups ?? '').split(/[\s,]+/).filter(Boolean), lldp: t.lldp !== false, dhcp: false, slaac: false });
+      this.traf.set(v); this.tEd.set(null); this.ui.toast(tr('{0} saved', cur.name), 'success'); if (v.note) this.ui.toast(v.note);
+    } catch (e) { this.ui.error(e); }
+  }
+  async addTester(t: { vm: string; port: string; ip: string; gw: string; vlan?: number | null; ip6?: string; groups?: string; lldp?: boolean }) {
+    try {
+      let v = await this.backend.emuTesterAdd(t.vm, t.port, t.ip.trim(), t.gw.trim(), +(t.vlan ?? 0) || 0);
       const groups = (t.groups ?? '').split(/[\s,]+/).filter(Boolean), nt = v.testers[v.testers.length - 1];
       if (nt && ((t.ip6 ?? '').trim() || groups.length || t.lldp === false)) v = await this.backend.emuTesterSet({ ...nt, ip6: (t.ip6 ?? '').trim(), groups, lldp: t.lldp !== false });
       this.traf.set(v); this.tEd.set(null); if (v.note) this.ui.toast(v.note);

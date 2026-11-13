@@ -3111,6 +3111,10 @@ const ru: Record<string, string> = {
   'Choose the ISO file': 'Выберите ISO-файл',
   'ISO files': 'ISO-файлы',
   // the Traffic page
+  '{0} saved': '{0} сохранён',
+  'Its settings': 'Его настройки',
+  'Its frames carry this VLAN tag (0: untagged)': 'Его кадры несут эту метку VLAN (0 - без метки)',
+  'port {0}': 'порт {0}',
   'Traffic generator': 'Генератор трафика',
   'Test ports send and count frames on switch ports: streams with live rates, loss and latency, and RFC 2544 tests': 'Тестовые порты отправляют и считают кадры на портах коммутаторов: потоки с живой скоростью, потерями и задержкой и тесты RFC 2544',
   'Test ports, streams, live charts and RFC 2544 tests': 'Тестовые порты, потоки, живые графики и тесты RFC 2544',
