@@ -998,9 +998,36 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		if err != nil {
 			return "", err
 		}
+		if !d.Running {
+			return fmt.Sprintf("Saved: %s is not running; it is typed on its console when it starts.", d.Hostname), nil
+		}
+		// it is typed on the console, then read back: wait for the reading (a few seconds), so the answer is
+		// what the computer has now, not what it had before
+		want := strings.Split(n.IPv4, "/")[0]
+		shows := func(x EmuDevice) string {
+			return fmt.Sprintf("port %d %s; gateway %s; DNS %s", n.Port, orStr(x.Net.Addrs[n.Port], "no address"), orStr(x.Net.GW, "-"), orStr(x.Net.DNS, "-"))
+		}
+		for end := time.Now().Add(25 * time.Second); ; {
+			for _, x := range nv.Devices {
+				if x.ID != d.ID || x.Net == nil {
+					continue
+				}
+				got := x.Net.Addrs[n.Port]
+				if strings.EqualFold(n.IPv4, "dhcp") && got != "" || want == "" && got == "" || want != "" && !strings.EqualFold(n.IPv4, "dhcp") && strings.HasPrefix(got, want+"/") {
+					return "Set. Its console shows: " + shows(x), nil
+				}
+			}
+			if time.Now().After(end) {
+				break
+			}
+			time.Sleep(time.Second)
+			if nv, err = a.EmuState(); err != nil {
+				return "", err
+			}
+		}
 		for _, x := range nv.Devices {
 			if x.ID == d.ID && x.Net != nil {
-				return fmt.Sprintf("Set. Its console shows: port %d %s; gateway %s; DNS %s", n.Port, orStr(x.Net.Addrs[n.Port], "no address"), orStr(x.Net.GW, "-"), orStr(x.Net.DNS, "-")), nil
+				return "Typed, but its console has not shown the new address yet (it may still be applying it; lab_debug shows the console). It shows: " + shows(x), nil
 			}
 		}
 		return "Set (typed when it starts).", nil
