@@ -203,6 +203,8 @@ type EmuDevice struct {
 	Computer     bool           `json:"computer,omitempty"`  // a Linux computer: Termwright gives its data ports addresses
 	Addrs        map[int]string `json:"addrs,omitempty"`     // its data ports' addresses (port → address/bits, or "dhcp")
 	AddrsSeen    map[int]string `json:"addrsSeen,omitempty"` // the addresses its data ports have, as read on its console after they were set (DHCP leases too)
+	CPUMax       float64        `json:"cpuMax,omitempty"`    // at most this many host cores (0 = no limit)
+	CPUWeight    int            `json:"cpuWeight,omitempty"` // its CPU share when VMs compete (100 = as the others; 0 = 100)
 }
 
 // EmuLinkView is a cable, with port names.
@@ -2622,6 +2624,9 @@ func (a *App) emuStart(host string, ids []string) {
 				}
 			}
 		}
+		if g := strings.Fields(strings.TrimSpace(line)); len(g) >= 3 && g[0] == "cpu" {
+			emuCPUEvent(g[1], g[2], strings.Join(g[3:], " "))
+		}
 		if g := strings.Fields(strings.TrimSpace(line)); len(g) == 3 && g[0] == "accel" {
 			kvm := g[1] == "kvm"
 			if kvm != l.KVM { // the host's KVM changed since it was checked: what it has now counts
@@ -3736,6 +3741,7 @@ func (a *App) emuView() EmuView {
 		if im != nil {
 			d.Model, d.OS, d.Ports = im.Name, orStr(im.DeviceType, "VM"), im.DataPorts()
 			d.Computer, d.Addrs, d.AddrsSeen = len(im.PortAddr) > 0, vm.Addrs, emuLab.portSeen[vm.ID]
+			d.CPUMax, d.CPUWeight = vm.CPUMax, vm.CPUWeight
 			onHost[im.ID] = true
 		}
 		vl := a.emuFor(emuHostOf(vm)) // its host's management
@@ -5820,6 +5826,67 @@ func (a *App) emuMoveVM(id, host string) (EmuView, error) {
 		return EmuView{}, err
 	}
 	a.emuRetarget(vv)
+	return a.EmuState()
+}
+
+// emuCPUEvent says in the Events how a VM's CPU limit and share were applied (lock held).
+func emuCPUEvent(id, how, why string) {
+	switch how {
+	case "cgroup":
+		emuEv(id, "ok", "CPU limit and share in effect (cgroup termwright/"+id+" on its host)")
+	case "nice":
+		emuEv(id, "ok", "CPU share in effect as a lower priority (nice): the host has no cgroup v2 with sudo")
+	case "fail":
+		emuEv(id, "error", "CPU limit: "+why)
+	}
+}
+
+// EmuSetCPU sets a VM's CPU limit (host cores, 0 = none) and share (cgroup
+// weight 1-10000, 0 = the default 100). A running VM gets them at once.
+func (a *App) EmuSetCPU(id string, maxCores float64, weight int) (EmuView, error) {
+	defer emuAs("user")()
+	if maxCores < 0 || maxCores > 256 || weight < 0 || weight > 10000 {
+		return EmuView{}, errors.New("the limit is 0 (none) to 256 cores, the share 0 (default) to 10000")
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	var v *emu.VM
+	if emuLab.f.Lab != nil {
+		v = emuLab.f.Lab.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such device")
+	}
+	if weight == 100 {
+		weight = 0
+	}
+	v.CPUMax, v.CPUWeight = maxCores, weight
+	lim := "no limit"
+	if maxCores > 0 {
+		lim = strconv.FormatFloat(maxCores, 'f', -1, 64) + " cores at most"
+	}
+	emuEv(v.ID, "info", fmt.Sprintf("CPU: %s, share %d", lim, orInt(weight, 100)))
+	err := a.emuSave()
+	host, script := emuHostOf(*v), ""
+	if l := a.emuFor(host); l != nil {
+		script = l.CPUScript(*v)
+	}
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	if script != "" {
+		if out, err := a.emuRun(host, script, 30*time.Second); err == nil {
+			emuLab.mu.Lock()
+			for _, line := range strings.Split(out, "\n") {
+				if g := strings.Fields(line); len(g) >= 3 && g[0] == "cpu" {
+					emuCPUEvent(g[1], g[2], strings.Join(g[3:], " "))
+				}
+			}
+			emuLab.mu.Unlock()
+		}
+	}
 	return a.EmuState()
 }
 

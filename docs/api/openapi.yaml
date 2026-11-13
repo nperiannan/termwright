@@ -1255,6 +1255,50 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/cpu:
+        post:
+            operationId: tool_cpu
+            tags:
+                - Tools
+            summary: CPU limits and shares of the emulated lab's switches and computers on their KVM hosts (a cgroup each; a running one gets them at once, a stopped one when it starts)
+            description: CPU limits and shares of the emulated lab's switches and computers on their KVM hosts (a cgroup each; a running one gets them at once, a stopped one when it starts). Without max_cores and share it lists them. Use it to keep a busy switch from slowing the others, or to give a switch under test more of the host. Through the API it runs without asking.
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                max_cores:
+                                    description: at most this many host cores (0.5 = half of one core; 0 = no limit)
+                                    type: number
+                                share:
+                                    description: 'its share when they compete for the host''s CPU: 100 is the default, 50 half as much, 400 four times (1-10000)'
+                                    type: integer
+                                switches:
+                                    description: names (none = all)
+                                    items:
+                                        type: string
+                                    type: array
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/events:
         post:
             operationId: tool_events
@@ -2014,6 +2058,12 @@ components:
                         - "null"
                     additionalProperties:
                         type: string
+                cpuMax:
+                    description: at most this many host cores (0 = no limit)
+                    type: number
+                cpuWeight:
+                    description: its CPU share when VMs compete (100 = as the others; 0 = 100)
+                    type: integer
             required:
                 - host
                 - id

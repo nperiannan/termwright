@@ -200,35 +200,37 @@ type Template struct {
 
 // VM is one switch of the lab.
 type VM struct {
-	ID       string         `json:"id"`
-	Name     string         `json:"name"` // hostname, also the session name
-	Image    string         `json:"image"`
-	Index    int            `json:"index"` // its number in the lab: ports and MACs come from it
-	CPUs     int            `json:"cpus"`
-	RAM      int            `json:"ram"`
-	MgmtIP   string         `json:"mgmtIp"` // address/bits it gets on day 0
-	Gateway  string         `json:"gateway"`
-	Day0Done bool           `json:"day0Done"`
-	Host     string         `json:"host,omitempty"`    // the KVM host it runs on (a session path; "" = the lab's own host)
-	Direct   bool           `json:"direct,omitempty"`  // its management address answers this computer straight (no jump host)
-	Serial   string         `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
-	BaseMAC  string         `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
-	DiskGB   int            `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
-	Template string         `json:"template,omitempty"`
-	Persona  *Persona       `json:"persona,omitempty"`
-	FastKey  string         `json:"fastKey,omitempty"`  // its running state was saved in its disk with this setup (FastKey): it resumes from it
-	Uplinks  []int          `json:"uplinks,omitempty"`  // data ports on the host's network (its bridge, or macvtap on its port)
-	Relayed  bool           `json:"relayed,omitempty"`  // moved while running: its cables listen on all addresses (relays on its old host forward to it)
-	Incoming string         `json:"-"`                  // started to receive a live migration ("tcp:0.0.0.0:port")
-	FW       string         `json:"fw,omitempty"`       // the software version the switch reports (its CLI, after it booted)
-	HWSerial string         `json:"hwSerial,omitempty"` // the serial number the switch reports
-	AddrOn   string         `json:"addrOn,omitempty"`   // the management address the switch was seen to take (its day 0 checked it)
-	Machine  string         `json:"machine,omitempty"`  // the QEMU machine type it runs as, when pinned (a live move between QEMU versions: "pc" is each version's own)
-	CPU      string         `json:"cpu,omitempty"`      // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
-	Role     string         `json:"role,omitempty"`     // what it is drawn as ("access", "core", "router"…; "" = from its model)
-	Addrs    map[int]string `json:"addrs,omitempty"`    // data-port addresses typed on its console at each start (port number → address/bits, or "dhcp"), when its image has port address commands (Linux computers)
-	X        int            `json:"x"`
-	Y        int            `json:"y"`
+	ID        string         `json:"id"`
+	Name      string         `json:"name"` // hostname, also the session name
+	Image     string         `json:"image"`
+	Index     int            `json:"index"` // its number in the lab: ports and MACs come from it
+	CPUs      int            `json:"cpus"`
+	RAM       int            `json:"ram"`
+	MgmtIP    string         `json:"mgmtIp"` // address/bits it gets on day 0
+	Gateway   string         `json:"gateway"`
+	Day0Done  bool           `json:"day0Done"`
+	Host      string         `json:"host,omitempty"`    // the KVM host it runs on (a session path; "" = the lab's own host)
+	Direct    bool           `json:"direct,omitempty"`  // its management address answers this computer straight (no jump host)
+	Serial    string         `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
+	BaseMAC   string         `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
+	DiskGB    int            `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
+	Template  string         `json:"template,omitempty"`
+	Persona   *Persona       `json:"persona,omitempty"`
+	FastKey   string         `json:"fastKey,omitempty"`   // its running state was saved in its disk with this setup (FastKey): it resumes from it
+	Uplinks   []int          `json:"uplinks,omitempty"`   // data ports on the host's network (its bridge, or macvtap on its port)
+	Relayed   bool           `json:"relayed,omitempty"`   // moved while running: its cables listen on all addresses (relays on its old host forward to it)
+	Incoming  string         `json:"-"`                   // started to receive a live migration ("tcp:0.0.0.0:port")
+	FW        string         `json:"fw,omitempty"`        // the software version the switch reports (its CLI, after it booted)
+	HWSerial  string         `json:"hwSerial,omitempty"`  // the serial number the switch reports
+	AddrOn    string         `json:"addrOn,omitempty"`    // the management address the switch was seen to take (its day 0 checked it)
+	Machine   string         `json:"machine,omitempty"`   // the QEMU machine type it runs as, when pinned (a live move between QEMU versions: "pc" is each version's own)
+	CPU       string         `json:"cpu,omitempty"`       // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
+	Role      string         `json:"role,omitempty"`      // what it is drawn as ("access", "core", "router"…; "" = from its model)
+	CPUMax    float64        `json:"cpuMax,omitempty"`    // at most this many host cores (0.5 = half of one; 0 = no limit), by a cgroup on its host
+	CPUWeight int            `json:"cpuWeight,omitempty"` // its share of the host's CPU when they compete (cgroup cpu.weight 1-10000; 0 = 100, as the others)
+	Addrs     map[int]string `json:"addrs,omitempty"`     // data-port addresses typed on its console at each start (port number → address/bits, or "dhcp"), when its image has port address commands (Linux computers)
+	X         int            `json:"x"`
+	Y         int            `json:"y"`
 }
 
 // Cable joins data port APort of A to BPort of B (port numbers from 1).
@@ -874,6 +876,9 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		fmt.Fprintf(&b, " else m=$(echo $out $out2 | tr '\\n' ' '); [ -n \"$m\" ] || m=$(tail -c 400 %s/%s.log 2>/dev/null | tr '\\n' ' '); echo \"fail %s ${m:-QEMU stopped at once and said nothing}\"; fi\nfi\n", Q(dir), v.ID, v.ID)
 		// the command line it really runs with (for the log, and the CPU a live move needs)
 		fmt.Fprintf(&b, "p=$(cat %s/%s.pid 2>/dev/null); [ -n \"$p\" ] && [ -r /proc/$p/cmdline ] && echo \"cmd %s $(tr '\\000' ' ' < /proc/$p/cmdline)\"\n", Q(dir), v.ID, v.ID)
+		if v.CPUMax > 0 || v.CPUWeight > 0 {
+			b.WriteString(l.CPUScript(v))
+		}
 	}
 	return b.String()
 }
@@ -1537,3 +1542,34 @@ func QemuOlder(a, b string) bool {
 
 // QemuMin is the oldest QEMU Termwright's lab works with (filter-dump captures, migration settings, NBD disk mirroring).
 const QemuMin = "4.2"
+
+// CPUScript puts a running VM's QEMU in its CPU limit and share: a cgroup of
+// its own under /sys/fs/cgroup/termwright (cgroup v2, with sudo), or, without
+// them, a lower priority (nice) for a share under 100. It prints
+// "cpu <id> cgroup|nice|none|fail <why>".
+func (l *Lab) CPUScript(v VM) string {
+	quota := "max"
+	if v.CPUMax > 0 {
+		quota = strconv.Itoa(max(1000, int(v.CPUMax*100000)))
+	}
+	w := v.CPUWeight
+	if w <= 0 {
+		w = 100
+	}
+	w = min(w, 10000)
+	nice := 0
+	if w < 100 {
+		nice = 10
+	}
+	g := "/sys/fs/cgroup/termwright"
+	return fmt.Sprintf(`p=$(cat %[1]s/%[2]s.pid 2>/dev/null)
+if [ -z "$p" ] || ! [ -d /proc/$p ]; then echo "cpu %[2]s none not running"
+elif [ -f /sys/fs/cgroup/cgroup.controllers ] && grep -qw cpu /sys/fs/cgroup/cgroup.controllers && sudo -n true 2>/dev/null; then
+ sudo -n mkdir -p %[3]s/%[2]s && { grep -qw cpu %[3]s/cgroup.subtree_control || echo +cpu | sudo -n tee %[3]s/cgroup.subtree_control >/dev/null; } &&
+ echo "%[4]s 100000" | sudo -n tee %[3]s/%[2]s/cpu.max >/dev/null && echo %[5]d | sudo -n tee %[3]s/%[2]s/cpu.weight >/dev/null &&
+ echo $p | sudo -n tee %[3]s/%[2]s/cgroup.procs >/dev/null && echo "cpu %[2]s cgroup" || echo "cpu %[2]s fail could not use the cgroup %[3]s/%[2]s"
+elif [ %[4]s = max ] && [ %[5]d -le 100 ]; then renice -n %[6]d -p $p >/dev/null 2>&1; echo "cpu %[2]s nice"
+else echo "cpu %[2]s fail a CPU limit needs cgroup v2 and sudo without a password on the host"
+fi
+`, Q(l.VMDir()), v.ID, g, quota, w, nice)
+}

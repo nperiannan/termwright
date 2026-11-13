@@ -78,7 +78,7 @@ var mcpTools = []mcpTool{
 const mcpInstructions = "Termwright is the user's terminal for network devices (switches, routers, firewalls) and servers. " +
 	"Start with list_tabs and read_tab to see what the user is looking at. send_command and open_session need the user's approval in Termwright each time. " +
 	"Its emulated lab runs real switch images on KVM hosts: show_lab and lab_images to see it; for a test case build the topology (lab_add_switches, lab_cable), start it (lab_power) and lab_wait, " +
-	"configure and verify with lab_console (the switches' own CLI), check the cabling with lab_check_cabling, give Linux computers data-port addresses with lab_address, run traffic between test ports with lab_traffic (a pass/fail report) and capture a port's packets with lab_capture to verify it, and read lab_events when something fails (lab_link_check and lab_qemu_command for link flaps). Each change is approved by the user in Termwright."
+	"configure and verify with lab_console (the switches' own CLI), check the cabling with lab_check_cabling, give Linux computers data-port addresses with lab_address, limit or share the hosts' CPU with lab_cpu, run traffic between test ports with lab_traffic (a pass/fail report) and capture a port's packets with lab_capture to verify it, and read lab_events when something fails (lab_link_check and lab_qemu_command for link flaps). Each change is approved by the user in Termwright."
 
 // ---- the server in the app ----
 

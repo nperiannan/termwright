@@ -142,6 +142,12 @@ var mcpLabTools = []mcpTool{
 			"switch":  map[string]any{"type": "string"},
 			"seconds": map[string]any{"type": "integer", "description": "5-120 (default 30)"},
 		}, "switch")},
+	{"lab_cpu", "CPU limits and shares of the emulated lab's switches and computers on their KVM hosts (a cgroup each; a running one gets them at once, a stopped one when it starts). Without max_cores and share it lists them. Use it to keep a busy switch from slowing the others, or to give a switch under test more of the host.",
+		mcpSchema(map[string]any{
+			"switches":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "names (none = all)"},
+			"max_cores": map[string]any{"type": "number", "description": "at most this many host cores (0.5 = half of one core; 0 = no limit)"},
+			"share":     map[string]any{"type": "integer", "description": "its share when they compete for the host's CPU: 100 is the default, 50 half as much, 400 four times (1-10000)"},
+		})},
 	{"lab_address", "Addresses of the data ports of Linux computers in the emulated lab (Alpine, Debian, Ubuntu… added from the catalog or a GNS3 appliance): list them, or set one (typed on the computer's console now when it runs, and at each start). Switches' ports are set on their own CLI (lab_console).",
 		mcpSchema(map[string]any{
 			"action":  map[string]any{"type": "string", "enum": []string{"list", "set"}},
@@ -782,6 +788,39 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			return b.String(), nil
 		}
 		return "", errors.New("action is start, stop, read or list")
+	case "lab_cpu":
+		list, shown, err := ids(argStrs(args, "switches"))
+		if err != nil {
+			return "", err
+		}
+		mx, hasMax := args["max_cores"].(float64)
+		sh, hasShare := args["share"].(float64)
+		if !hasMax && !hasShare {
+			var b strings.Builder
+			for _, d := range v.Devices {
+				if slices.Contains(list, d.ID) {
+					fmt.Fprintf(&b, "- %s: %d vCPU, limit %s, share %d, uses %.2f cores now\n", d.Hostname, d.CPUs, map[bool]string{true: strconv.FormatFloat(d.CPUMax, 'f', -1, 64) + " cores", false: "none"}[d.CPUMax > 0], orInt(d.CPUWeight, 100), d.Cores)
+				}
+			}
+			return b.String(), nil
+		}
+		if err := light("Claude wants to change CPU limits", fmt.Sprintf("Claude (through the Termwright connector) asks to set the CPU of %s.", strings.Join(shown, ", "))); err != nil {
+			return "", err
+		}
+		for _, id := range list {
+			d, _ := emuMCPID(v, id)
+			m, w := d.CPUMax, d.CPUWeight
+			if hasMax {
+				m = mx
+			}
+			if hasShare {
+				w = int(sh)
+			}
+			if _, err := a.EmuSetCPU(id, m, w); err != nil {
+				return "", err
+			}
+		}
+		return "Set for " + strings.Join(shown, ", ") + " (lab_events says how each took it).", nil
 	case "lab_address":
 		if argStr(args, "action") == "set" {
 			d, err := emuMCPID(v, argStr(args, "switch"))
