@@ -394,6 +394,9 @@ export interface EmuRemoveInfo { switches: number; imagesBytes: number; imagesDi
 export interface EmuRemoveHostReq { host: string; images: boolean; labs: boolean; sudoRule: boolean; group: boolean; pkgs: boolean; password: string; forgetOff: boolean; }
 export interface EmuCapture { key: string; vm: string; switch: string; port: string; peer: string; host: string; file: string; started: string; running: boolean; size: number; }
 export interface EmuPacket { no: number; time: number; src: string; dst: string; proto: string; len: number; info: string; }
+/** A decoded field of a packet: off and n are its bytes. */
+export interface EmuField { name: string; value?: string; off: number; n: number; kids?: EmuField[] | null; }
+export interface EmuPacketDetail extends EmuPacket { at: string; hex: string; fields: EmuField[] | null; total: number; }
 
 /** A test port of the traffic generator: a sender and counter on a switch's free port. */
 export interface EmuTester { id: string; name: string; vm: string; port: number; portName?: string; mac: string; ip?: string; gw?: string; vlan?: number; x?: number; y?: number; }

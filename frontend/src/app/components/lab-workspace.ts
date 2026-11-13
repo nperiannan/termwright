@@ -2,13 +2,14 @@ import { Component, ElementRef, HostListener, OnDestroy, computed, effect, injec
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { EmuCapture, EmuPacket, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
+import { EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabConfigure, LabHosts, LabImages, LabNew } from './lab-pages';
 import { TerminalView } from './terminal-view';
 import { DevIcon, DevRole, ICON_STYLES, IconStyle, ROLES, iconReach, roleOf } from './dev-icon';
+import { PacketView, PacketWindow } from './packet-view';
 
 const BW = 104, BH = 64;
 type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
@@ -17,7 +18,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon],
+  imports: [FormsModule, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow],
   template: `
   <div class="ws" (click)="menu.set(null); topos.set(null); mgOpen.set(false)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
     <div class="tb">
@@ -394,7 +395,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (dock() === 'traffic') { <button type="button" class="sm" (click)="newStream()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button><button type="button" class="sm" (click)="newTester()">＋ {{ tr('Test Port') }}</button>
           @if (traf()?.running) { <button type="button" class="sm" (click)="trafStop()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="sm primary" (click)="trafStart([])" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
           <button type="button" class="sm" (click)="trafReport()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
-        @if (dock() === 'cap' && capCur(); as c) { <input class="sm capf" [ngModel]="capFilter()" (ngModelChange)="capFilter.set($event)" [placeholder]="tr('Filter: ICMP, 10.0.0.1, LLDP…')" />@if (c.running) { <button type="button" class="sm capstop" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (!c.running) { <button type="button" class="sm" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> }@if (stoppedCaps().length > 1) { <button type="button" class="sm" (click)="delCaps(stoppedCaps())">{{ tr('Delete All Stopped') }}</button> } }
+        @if (dock() === 'cap' && capCur(); as c) { @if (pktChk().size) { <button type="button" class="sm" (click)="copyPkts()" [title]="tr('The ticked rows as text')">{{ tr('Copy Selected ({0})', pktChk().size) }}</button><button type="button" class="sm" (click)="savePkts(c)">{{ tr('Save Selected as .pcap…') }}</button> }@if (pktNo()) { <button type="button" class="sm" (click)="pktWin.set(pktNo())" [title]="tr('The packet in a window of its own (or double-click it)')">{{ tr('Open Packet') }} ↗</button> }<input class="sm capf" [ngModel]="capFilter()" (ngModelChange)="capFilter.set($event)" [placeholder]="tr('Filter: ICMP, 10.0.0.1, LLDP…')" />@if (c.running) { <button type="button" class="sm capstop" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (!c.running) { <button type="button" class="sm" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> }@if (stoppedCaps().length > 1) { <button type="button" class="sm" (click)="delCaps(stoppedCaps())">{{ tr('Delete All Stopped') }}</button> } }
         @if (dock() === 'log') { <select class="sm" [ngModel]="elog()?.level || 'info'" (ngModelChange)="setLogLevel($event)" [title]="tr('How much the log keeps: info by default; debug adds each command run on a host, verbose also what it printed')"><option value="error">{{ tr('Errors') }}</option><option value="warn">{{ tr('Warnings') }}</option><option value="info">{{ tr('Info') }}</option><option value="debug">{{ tr('Debug') }}</option><option value="verbose">{{ tr('Verbose') }}</option></select><button type="button" class="sm" (click)="loadLog()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveLog()">{{ tr('Save…') }}</button> }
         @if (dock() === 'clog' && selDev(); as d) { <button type="button" class="sm" (click)="loadClog()" [disabled]="clogBusy()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveConsoleLog(d)">{{ tr('Save…') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
@@ -467,6 +468,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           }
         </div>
       } @else if (dock() === 'cap') {
+        @if (pktWin() && capCur(); as c) { <app-packet-window [cap]="c.file" [start]="pktWin()" [title]="c.switch + ' ' + c.port" (closed)="pktWin.set(0)" /> }
         <div class="capw">
           <div class="capl">
             @for (c of caps(); track c.key + c.started) { <a class="ci" [class.on]="capCur()?.started === c.started" (click)="capSel.set(c.key); capStarted.set(c.started); loadPackets()">
@@ -475,10 +477,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           </div>
           <div class="capt">
             @if (capSum().length) { <div class="capsum">@for (x of capSum(); track x.k) { <span [class]="'cs ' + x.p.toLowerCase()" (click)="capFilter.set(x.p)" [title]="tr('Show only these')"><b>{{ x.p }}</b> {{ x.src }} <i>{{ x.n }}</i></span> }</div> }
-            <table><tr><th>#</th><th>{{ tr('Time') }}</th><th>{{ tr('Source') }}</th><th>{{ tr('Destination') }}</th><th>{{ tr('Protocol') }}</th><th>{{ tr('Length') }}</th><th>{{ tr('Info') }}</th></tr>
-              @for (p of packetsShown(); track p.no) { <tr [class]="'pp ' + p.proto.toLowerCase()"><td>{{ p.no }}</td><td>{{ p.time.toFixed(3) }}</td><td class="mono">{{ p.src }}</td><td class="mono">{{ p.dst }}</td><td><b>{{ p.proto }}</b></td><td>{{ p.len }}</td><td>{{ p.info }}</td></tr> }
-              @empty { <tr><td colspan="7" class="muted">{{ capCur() ? tr('No packets yet.') : tr('Choose a capture on the left.') }}</td></tr> }
-            </table>
+            <div class="ptab"><table><tr><th><input type="checkbox" [checked]="packetsShown().length > 0 && pktChk().size === packetsShown().length" (change)="chkAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th><th>#</th><th>{{ tr('Time') }}</th><th>{{ tr('Source') }}</th><th>{{ tr('Destination') }}</th><th>{{ tr('Protocol') }}</th><th>{{ tr('Length') }}</th><th>{{ tr('Info') }}</th></tr>
+              @for (p of packetsShown(); track p.no) { <tr [class]="'pp ' + p.proto.toLowerCase()" [class.sel]="pktNo() === p.no" (click)="pktClick(p.no, $event)" (dblclick)="pktWin.set(p.no)"><td (click)="$event.stopPropagation()"><input type="checkbox" [checked]="pktChk().has(p.no)" (change)="chk(p.no)" [attr.aria-label]="tr('Select packet {0}', p.no)" /></td><td>{{ p.no }}</td><td>{{ p.time.toFixed(3) }}</td><td class="mono">{{ p.src }}</td><td class="mono">{{ p.dst }}</td><td><b>{{ p.proto }}</b></td><td>{{ p.len }}</td><td>{{ p.info }}</td></tr> }
+              @empty { <tr><td colspan="8" class="muted">{{ capCur() ? tr('No packets yet.') : tr('Choose a capture on the left.') }}</td></tr> }
+            </table></div>
+            @if (pktNo()) { <app-packet-view class="pdet" [pkt]="pkt()" /> }
           </div>
         </div>
       } @else if (dock() === 'log') {
@@ -676,7 +679,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .node.tpn { cursor: grab; width: 112px; text-align: center; .tpb { height: 30px; border-radius: 9px; border: 1.5px solid #e08a2e; background: color-mix(in srgb, #e08a2e 12%, var(--surface)); color: #e9a55a; display: flex; align-items: center; justify-content: center; font: 600 11.5px var(--font, Inter, sans-serif); white-space: nowrap; } }
     .tpl .ln { stroke: #e08a2e; stroke-dasharray: 5 4; stroke-width: 2; fill: none; }
     .capsum { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); .cs { font-size: 11.5px; border: 1px solid var(--line); border-radius: 8px; padding: 1px 7px; cursor: pointer; font-family: var(--mono, monospace); i { font-style: normal; color: var(--muted); margin-left: 4px; } } .cs.lldp, .cs.lacp, .cs.stp { border-color: var(--accent); } }
-    .capw { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; .capl { border-right: 1px solid var(--line); overflow: auto; } .ci { display: grid; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid var(--line); b { font-size: 12.5px; display: flex; align-items: center; gap: 6px; } } .ci.on { background: var(--accent-soft); } .cx { margin-left: auto; color: var(--muted); font-weight: 400; padding: 0 2px; } .cx:hover { color: var(--danger); } .capt { overflow: auto; table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 4px 8px; } td { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr.pp.icmp td, tr.pp.icmpv6 td { color: #9cc3ff; } tr.pp.lldp td, tr.pp.stp td, tr.pp.lacp td { color: var(--muted); } tr.pp.arp td { color: #e5c07b; } } }
+    .capw { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; .capl { border-right: 1px solid var(--line); overflow: auto; } .ci { display: grid; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid var(--line); b { font-size: 12.5px; display: flex; align-items: center; gap: 6px; } } .ci.on { background: var(--accent-soft); } .cx { margin-left: auto; color: var(--muted); font-weight: 400; padding: 0 2px; } .cx:hover { color: var(--danger); } .capt { display: flex; flex-direction: column; min-height: 0; overflow: hidden; } .ptab { flex: 1; min-height: 72px; overflow: auto; } .dtabs button.sm { white-space: nowrap; } .pdet { height: 48%; flex: none; border-top: 1px solid var(--line); } .capt { tr.sel td { background: var(--accent-soft); } table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 4px 8px; } td { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr.pp.icmp td, tr.pp.icmpv6 td { color: #9cc3ff; } tr.pp.lldp td, tr.pp.stp td, tr.pp.lacp td { color: var(--muted); } tr.pp.arp td { color: #e5c07b; } } }
     .recd { width: 8px; height: 8px; border-radius: 50%; background: var(--danger, #e5484d); animation: icblink 1.2s ease-in-out infinite; } .cnt.rec { background: var(--danger, #e5484d); } .capf { width: 200px; } button.capstop{background:var(--danger);border-color:var(--danger);color:#fff}
 .capm{fill:none;stroke:#7fb2ff;stroke-width:2.5;stroke-dasharray:8 6;animation:ca .8s linear infinite;pointer-events:none}.capm.thick{stroke-width:3.5}@keyframes ca{to{stroke-dashoffset:-28}}
     .capd{pointer-events:none}.cpc{fill:#2f6fed;stroke:#fff;stroke-width:1.5}.cpi{fill:#fff}.cpr{fill:none;stroke:#7fb2ff;stroke-width:2;animation:cp 1.4s ease-out infinite}@keyframes cp{from{r:7px;opacity:.9}to{r:17px;opacity:0}} @keyframes icblink { 50% { opacity: .3; } }
@@ -776,8 +779,28 @@ export class LabWorkspace implements OnDestroy {
   /** The running capture on a cable (at either end). */
   capOf(k: LabLink) { const p = this.caps().find(c => c.running && (c.vm === k.a && c.port === k.aPort || c.vm === k.b && c.port === k.bPort)); return p ?? null; }
   private capTick = 0;
+  /** The packet shown below the list, the ticked ones, and the one in a window. */
+  protected pktNo = signal(0);
+  protected pkt = signal<EmuPacketDetail | null>(null);
+  protected pktChk = signal(new Set<number>());
+  protected pktWin = signal(0);
+  private pktOf = '';
+  private pktReset(file: string) { if (file === this.pktOf) return; this.pktOf = file; this.pktNo.set(0); this.pkt.set(null); this.pktChk.set(new Set()); this.pktWin.set(0); }
+  async pktClick(no: number, ev: MouseEvent) {
+    if (ev.metaKey || ev.ctrlKey) { this.chk(no); return; }
+    if (ev.shiftKey && this.pktNo()) { const a = Math.min(no, this.pktNo()), b = Math.max(no, this.pktNo()); this.pktChk.set(new Set(this.packetsShown().filter(p => p.no >= a && p.no <= b).map(p => p.no))); return; }
+    this.pktNo.set(no); const c = this.capCur(); if (!c) return;
+    try { const d = await this.backend.emuCapturePacket(c.file, no); if (this.pktNo() === no) this.pkt.set(d); } catch (e) { this.ui.error(e); }
+  }
+  chk(no: number) { this.pktChk.update(s => { const n = new Set(s); if (n.has(no)) n.delete(no); else n.add(no); return n; }); }
+  chkAll(on: boolean) { this.pktChk.set(on ? new Set(this.packetsShown().map(p => p.no)) : new Set()); }
+  async copyPkts() { const s = this.pktChk(); try { await navigator.clipboard.writeText(this.packets().filter(p => s.has(p.no)).map(p => [p.no, p.time.toFixed(3), p.src, p.dst, p.proto, p.len, p.info].join('\t')).join('\n')); this.ui.toast(tr('Copied'), 'success'); } catch (e) { this.ui.error(e); } }
+  async savePkts(c: EmuCapture) {
+    try { const f = await this.backend.chooseSaveFile(tr('Save the Packets'), (c.file.split('/').pop() || 'capture.pcap').replace(/\.pcap$/, '') + '-selected.pcap', [{ displayName: 'pcap', pattern: '*.pcap' }]); if (!f) return;
+      await this.backend.emuCaptureSavePackets(c.file, [...this.pktChk()].sort((a, b) => a - b), f); this.ui.toast(tr('Saved'), 'success'); } catch (e) { this.ui.error(e); }
+  }
   async loadCaps() { try { this.caps.set((await this.backend.emuCaptures()) ?? []); if (!this.capSel() && this.caps().length) this.capSel.set(this.caps()[0].key); await this.loadPackets(); } catch { /* none */ } }
-  async loadPackets() { const c = this.capCur(); if (!c) { this.packets.set([]); return; } try { this.packets.set((await this.backend.emuCapturePackets(c.file, 2000)) ?? []); } catch (e) { this.packets.set([]); void e; } }
+  async loadPackets() { const c = this.capCur(); this.pktReset(c?.file ?? ''); if (!c) { this.packets.set([]); return; } try { this.packets.set((await this.backend.emuCapturePackets(c.file, 2000)) ?? []); } catch (e) { this.packets.set([]); void e; } }
   async startCap(k: LabLink) { try { this.caps.set((await this.backend.emuCaptureStart(k.a, k.aPort)) ?? []); const c = this.caps().find(x => x.running && x.vm === k.a && x.port === k.aPort); if (c) { this.capSel.set(c.key); this.capStarted.set(c.started); } this.dock.set('cap'); await this.loadPackets(); } catch (e) { this.ui.error(e); } }
   // ---- traffic generator
   protected traf = signal<EmuTrafficView | null>(null);
