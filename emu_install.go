@@ -61,6 +61,11 @@ type EmuInstall struct {
 	Part int64   `json:"part,omitempty"` // the image being made: bytes so far
 	Pct  float64 `json:"pct,omitempty"`  // the conversion to the image: percent
 	Idle int     `json:"idle,omitempty"` // seconds since the installer's console showed anything
+	// The verification boot: the image made is booted once (on a throwaway layer) to see it comes up.
+	NoVerify   bool   `json:"noVerify,omitempty"`
+	VerifyPort int    `json:"verifyPort,omitempty"` // its console on the host (its monitor is the next port)
+	Verified   string `json:"verified,omitempty"`   // what the verification boot found ("login prompt in 42 s")
+	VerifyErr  string `json:"verifyErr,omitempty"`  // why it is not verified (the image is kept all the same)
 }
 
 // EmuInstallMark is the time an install began a step.
@@ -73,7 +78,7 @@ type EmuInstallMark struct {
 // install: copy, start, boot, login, install, poweroff, convert, fetch; of a
 // manual one: copy, start, console, shutdown, convert, fetch.
 var emuInstallStage = map[string]string{"copy": instCopying, "start": instStarting, "boot": instInstalling, "login": instInstalling, "install": instInstalling,
-	"poweroff": instInstalling, "console": instWaiting, "shutdown": instSaving, "convert": instSaving, "fetch": instFetching}
+	"poweroff": instInstalling, "console": instWaiting, "shutdown": instSaving, "convert": instSaving, "fetch": instFetching, "verify": instVerifying}
 
 // markStep moves a job to a step (the caller holds emuLab.mu).
 func (j *EmuInstall) markStep(step string) {
@@ -94,6 +99,7 @@ const (
 	instWaiting    = "waiting"
 	instSaving     = "saving"
 	instFetching   = "fetching"
+	instVerifying  = "verifying"
 	instDone       = "done"
 	instFailed     = "failed"
 	instCancelled  = "cancelled"
@@ -110,6 +116,7 @@ type EmuInstallRequest struct {
 	CPUs     int    `json:"cpus"`
 	Host     string `json:"host"`
 	Password string `json:"password"` // root's: set by the Alpine install; in a manual install the one the user sets (kept with the image)
+	NoVerify bool   `json:"noVerify,omitempty"` // do not boot the image once at the end to check it comes up
 }
 
 // emuInstallPowerWait: how long a manual install's machine gets to shut down by itself before it is stopped.
@@ -163,7 +170,7 @@ func emuInstance(id string) *EmuInstall {
 // emuInstallRunning says a job is busy on its own (no user turn).
 func emuInstallRunning(stage string) bool {
 	switch stage {
-	case instCopying, instStarting, instInstalling, instSaving, instFetching:
+	case instCopying, instStarting, instInstalling, instSaving, instFetching, instVerifying:
 		return true
 	}
 	return false
@@ -274,7 +281,7 @@ func (a *App) EmuInstallStart(r EmuInstallRequest) (EmuView, error) {
 			return EmuView{}, fmt.Errorf("the install of %s is still running on this host; wait for it or cancel it", j.Name)
 		}
 	}
-	j := EmuInstall{ID: randHex(4), Name: r.Name, Host: host, Mode: r.Mode, ISO: r.ISO, ISOName: emuNonName.ReplaceAllString(base, "_"), Size: st.Size(), GB: r.GB, MB: r.MB, RAM: r.RAM, CPUs: r.CPUs, Dir: dir,
+	j := EmuInstall{ID: randHex(4), Name: r.Name, Host: host, Mode: r.Mode, ISO: r.ISO, ISOName: emuNonName.ReplaceAllString(base, "_"), Size: st.Size(), GB: r.GB, MB: r.MB, RAM: r.RAM, CPUs: r.CPUs, Dir: dir, NoVerify: r.NoVerify,
 		Stage: instCopying, Msg: "checking the ISO file", Started: time.Now().Format(time.RFC3339)}
 	j.markStep("copy")
 	if r.Password != "" {
@@ -617,12 +624,17 @@ func (a *App) emuInstallSave(ctx context.Context, id string) {
 	}
 	_ = secrets.Delete(emuInstKey(id))
 	emuLab.mu.Unlock()
+	verified, verr := "", ""
+	if !j.NoVerify && ctx.Err() == nil {
+		verified, verr = a.emuInstallVerify(ctx, id, j, fn)
+	}
 	_, _ = a.emuRun(j.Host, j.spec().CleanScript(), time.Minute)
 	if j.Console != "" {
 		_ = a.store.Delete(j.Console)
 	}
 	a.emuInstallSet(id, func(x *EmuInstall) {
 		x.Stage, x.Msg, x.Image, x.Console, x.Err, x.File = instDone, "", im.ID, "", "", ""
+		x.Verified, x.VerifyErr, x.VerifyPort = verified, verr, 0
 		x.Step = "done"
 		x.Marks = append(x.Marks, EmuInstallMark{Step: "done", At: time.Now().Format(time.RFC3339)})
 	})
@@ -783,4 +795,49 @@ func emuInstallReady(mode string) string {
 		return "login:|Welcome to Alpine"
 	}
 	return "login:"
+}
+
+// emuInstallVerifyWait: how long the verification boot gets to show a login prompt.
+var emuInstallVerifyWait = 5 * time.Minute
+
+// emuInstallVerify boots the image made once, on a throwaway layer, and waits for its login prompt (the text
+// that tells it is up). It returns what it found, or why it is not verified (the image is kept either way).
+func (a *App) emuInstallVerify(ctx context.Context, id string, j EmuInstall, fileName string) (string, string) {
+	a.emuInstallStep(id, "verify", "booting the new image once to check it comes up")
+	sp := j.spec()
+	out, err := a.emuRun(j.Host, sp.VerifyScript(fileName), 2*time.Minute)
+	_, port, fail := emu.ParseInstall(out + "\nstarted")
+	if err != nil || fail != "" || port == 0 {
+		return "", "the verification boot did not start: " + orStr(fail, strings.TrimSpace(out+" "+errText(err)))
+	}
+	defer func() { _, _ = a.emuRun(j.Host, sp.VerifyStopScript(), time.Minute) }()
+	a.emuInstallSet(id, func(x *EmuInstall) { x.VerifyPort = port })
+	cl, err := a.emuClient(ctx, j.Host)
+	if err != nil {
+		return "", err.Error()
+	}
+	var conn net.Conn
+	for try := 0; try < 20; try++ {
+		if conn, err = cl.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port))); err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil {
+		return "", "its console: " + err.Error()
+	}
+	c := emu.NewConsole(conn)
+	defer c.Close()
+	start := time.Now()
+	re := regexp.MustCompile(emuInstallReady(j.Mode))
+	for time.Since(start) < emuInstallVerifyWait && ctx.Err() == nil {
+		if re.MatchString(c.Lines(40, 200)) {
+			return fmt.Sprintf("it booted to its login prompt in %d s", int(time.Since(start).Seconds())), ""
+		}
+		emuInst.mu.Lock()
+		emuInstLive(id).console = c.Lines(12, 160)
+		emuInst.mu.Unlock()
+		time.Sleep(2 * time.Second)
+	}
+	return "", fmt.Sprintf("no login prompt within %d minutes of booting it (it may still be fine: try it in a lab)", int(emuInstallVerifyWait.Minutes()))
 }

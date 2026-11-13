@@ -130,6 +130,36 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/screen/{id}:
+        get:
+            operationId: getScreen
+            tags:
+                - Lab
+            summary: A device's screen
+            description: 'A picture of what a lab device''s display shows now (its VGA screen: installers and systems without a serial console), as PNG. id: the device''s name or id, or install:{id} for an installer. Type on it with the lab_keys tool.'
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  description: The device (name or id), or install:{install id}.
+                  schema:
+                    type: string
+            responses:
+                200:
+                    description: The screen.
+                    content:
+                        image/png:
+                            schema:
+                                type: string
+                                format: binary
+                409:
+                    $ref: '#/components/responses/'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/traffic:
         get:
             operationId: getTraffic
@@ -1747,6 +1777,54 @@ paths:
                         schema:
                             type: object
                             properties: {}
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/keys:
+        post:
+            operationId: tool_keys
+            tags:
+                - Tools
+            summary: Type on the keyboard of a lab device's screen (VGA display
+            description: 'Type on the keyboard of a lab device''s screen (VGA display: installers and systems without a serial console), or a line on an installer''s serial console. switch: the device; install: an install''s id (lab_install_status) instead. text is typed as keys (then Enter with enter); keys are QEMU key names (ret, esc, tab, up, down, f2, ctrl-alt-delete …). console: true types the line on the installer''s serial console instead of its keyboard. The screen itself: GET /api/v1/lab/screen/{device} (or install:{id}) gives a PNG. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                console:
+                                    description: 'install: the serial console, not the keyboard'
+                                    type: boolean
+                                enter:
+                                    type: boolean
+                                install:
+                                    type: string
+                                keys:
+                                    items:
+                                        type: string
+                                    type: array
+                                switch:
+                                    type: string
+                                text:
+                                    type: string
             responses:
                 200:
                     description: What it did or found, as text.
@@ -3600,6 +3678,18 @@ components:
                 idle:
                     description: seconds since the installer's console showed anything
                     type: integer
+                noVerify:
+                    description: 'The verification boot: the image made is booted once (on a throwaway layer) to see it comes up.'
+                    type: boolean
+                verifyPort:
+                    description: its console on the host (its monitor is the next port)
+                    type: integer
+                verified:
+                    description: what the verification boot found ("login prompt in 42 s")
+                    type: string
+                verifyErr:
+                    description: why it is not verified (the image is kept all the same)
+                    type: string
             required:
                 - id
                 - name

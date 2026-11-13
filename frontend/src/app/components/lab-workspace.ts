@@ -5,6 +5,7 @@ import { ChartSeries } from './traffic-chart';
 import { StreamDetail } from './stream-detail';
 import { TrafficPage } from './traffic-page';
 import { TrafficLibrary } from './traffic-library';
+import { VmScreen } from './vm-screen';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
 import { EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
@@ -26,7 +27,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary],
+  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary, VmScreen],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" /> }
@@ -157,6 +158,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         </app-traffic-page>
         @if (libOpen()) { <app-traffic-library [testers]="traf()?.testers ?? []" (closed)="libOpen.set(false)" (applied)="traf.set($event); libOpen.set(false)" /> }
       }
+      @if (screenDev(); as sd) { <app-vm-screen kind="vm" [id]="sd.id" [name]="sd.hostname" (closed)="screenDev.set(null)" /> }
       @if (page() === 'new') { <app-lab-new [emu]="emu()" [preset]="preset()" (closed)="page.set(''); ghost.set(null)" (changed)="ghost.set($event)" (hostsPage)="page.set('hosts')" (made)="ui.refreshTree()" /> }
       <div class="pal">
         <input class="srch" [(ngModel)]="q" name="pq" [placeholder]="tr('Search devices')" spellcheck="false" />
@@ -271,6 +273,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (emu()) { <a (click)="mdo('restart', d)" [class.off]="!d.running">⟳ {{ tr('Reload') }}</a> }
               <hr />
               @if (emu()) { <a (click)="mdo('console', d)" [class.off]="!d.running">{{ tr('Console') }} <kbd>telnet :{{ d.console }}</kbd></a> }
+              @if (emu()) { <a (click)="mdo('screen', d)" [class.off]="!d.running" [title]="tr('What its display shows, and its keyboard')">{{ tr('Screen…') }}</a> }
               <a (click)="mdo('ssh', d)" [class.off]="!d.running">{{ emu() ? 'SSH' : tr('Open Session') }} <kbd>{{ emu() ? d.ssh : '127.0.0.1:' + d.port }}</kbd></a>
               <hr />
               @if (emu()) { <a (click)="mdo('lags', d)" [class.off]="!d.running">{{ tr('Read Its LAGs') }}</a> }
@@ -1039,6 +1042,7 @@ export class LabWorkspace implements OnDestroy {
   protected tpAt = signal<Record<string, { x: number; y: number }>>({});
   protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw', 'pcap'];
   protected libOpen = signal(false);
+  protected screenDev = signal<LabDevice | null>(null);
   protected hm(at: string) { const d = new Date(at); if (isNaN(+d)) return at; return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
   protected setKind(e: EmuStream, k: EmuStream['kind']) { if (k === 'pcap' && e.kind !== 'pcap' && e.seconds === 30 && !e.id) e.seconds = 0; e.kind = k; }
   protected fileName(p: string) { return p.split(/[\\/]/).pop() ?? p; }
@@ -2161,6 +2165,7 @@ export class LabWorkspace implements OnDestroy {
       case 'shutdown': void this.lab.shutDown([d.id]); break;
       case 'restart': void this.lab.restart([d.id]); break;
       case 'console': this.console(d); break;
+      case 'screen': this.screenDev.set(d); break;
       case 'ssh': this.ssh(d); break;
       case 'configure': this.configure(d); break;
       case 'lags': void this.lab.readLags([d.id]); break;

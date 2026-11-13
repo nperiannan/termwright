@@ -35,6 +35,15 @@ var mcpLabTools = []mcpTool{
 			"note":   map[string]any{"type": "string", "description": "take: why"},
 			"on":     map[string]any{"type": "boolean", "description": "auto: on or off"},
 		})},
+	{"lab_keys", "Type on the keyboard of a lab device's screen (VGA display: installers and systems without a serial console), or a line on an installer's serial console. switch: the device; install: an install's id (lab_install_status) instead. text is typed as keys (then Enter with enter); keys are QEMU key names (ret, esc, tab, up, down, f2, ctrl-alt-delete …). console: true types the line on the installer's serial console instead of its keyboard. The screen itself: GET /api/v1/lab/screen/{device} (or install:{id}) gives a PNG.",
+		mcpSchema(map[string]any{
+			"switch":  map[string]any{"type": "string"},
+			"install": map[string]any{"type": "string"},
+			"text":    map[string]any{"type": "string"},
+			"enter":   map[string]any{"type": "boolean"},
+			"keys":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"console": map[string]any{"type": "boolean", "description": "install: the serial console, not the keyboard"},
+		})},
 	{"lab_images", "List the images and templates the emulated lab can make switches from: id, name, software version, device type, port naming, and whether the image file is there. Filter by name and device type to keep the answer short.", mcpSchema(map[string]any{
 		"name": map[string]any{"type": "string", "description": "only images and templates whose name, id or version contains this (any case)"},
 		"type": map[string]any{"type": "string", "description": "only this device type (EXOS, VOSS, Linux, Windows …; any case)"},
@@ -388,6 +397,31 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			return "Removed.", err
 		}
 		return "", errors.New("action is list, take, restore, remove or auto")
+	case "lab_keys":
+		enter, _ := args["enter"].(bool)
+		if inst := argStr(args, "install"); inst != "" {
+			if c, _ := args["console"].(bool); c {
+				if err := a.EmuInstallType(inst, argStr(args, "text"), enter); err != nil {
+					return "", err
+				}
+				return "Typed on the installer's console.", nil
+			}
+			if err := a.EmuScreenKeys("install", inst, argStr(args, "text"), enter, argStrs(args, "keys")); err != nil {
+				return "", err
+			}
+			return "Typed on the installer's keyboard.", nil
+		}
+		d, err := emuMCPID(v, argStr(args, "switch"))
+		if err != nil {
+			return "", err
+		}
+		if err := light("Claude types on a screen", "Claude (through the Termwright connector) types on the keyboard of "+d.Hostname+"."); err != nil {
+			return "", err
+		}
+		if err := a.EmuScreenKeys("vm", d.ID, argStr(args, "text"), enter, argStrs(args, "keys")); err != nil {
+			return "", err
+		}
+		return "Typed on " + d.Hostname + "'s keyboard.", nil
 	case "lab_dns":
 		if _, ok := args["servers"]; ok {
 			nv, err := a.EmuSetDNS(argStrs(args, "servers"))

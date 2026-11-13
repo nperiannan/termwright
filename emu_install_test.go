@@ -129,9 +129,9 @@ func TestEmuInstallManual(t *testing.T) {
 		return c, func() { _ = c.Close() }, nil
 	}
 	defer func() { emuDial = old }()
-	oldWait := emuInstallPowerWait
-	emuInstallPowerWait = 4 * time.Second
-	defer func() { emuInstallPowerWait = oldWait }()
+	oldWait, oldVerify := emuInstallPowerWait, emuInstallVerifyWait
+	emuInstallPowerWait, emuInstallVerifyWait = 4*time.Second, 3*time.Second
+	defer func() { emuInstallPowerWait, emuInstallVerifyWait = oldWait, oldVerify }()
 
 	dir := t.TempDir()
 	cfg, _ := config.Load(dir)
@@ -199,12 +199,28 @@ func TestEmuInstallManual(t *testing.T) {
 	if err != nil || cs.Protocol != session.ProtoTelnet || cs.Port != j.Port || cs.JumpSession != host.Path {
 		t.Fatalf("console session %+v %v", cs, err)
 	}
+	// its screen, its keyboard, and a line on its serial console
+	if sc, err := a.EmuScreen("install", id); err != nil || !strings.HasPrefix(sc.PNG, "data:image/png;base64,") || sc.W < 100 {
+		t.Errorf("screen: %v %d×%d", err, sc.W, sc.H)
+	}
+	if err := a.EmuScreenKeys("install", id, "ls -l /", true, []string{"esc"}); err != nil {
+		t.Errorf("keys: %v", err)
+	}
+	if err := a.EmuScreenKeys("install", id, "", false, []string{"rm; reboot"}); err == nil {
+		t.Error("a key name with a command in it was taken")
+	}
+	if err := a.EmuInstallType(id, "echo typed", true); err != nil {
+		t.Errorf("type: %v", err)
+	}
 	if _, err := a.EmuInstallFinish(id); err != nil {
 		t.Fatal(err)
 	}
 	j = wait(instDone, 120*time.Second)
-	if got := instSteps(j); got != "copy,start,console,shutdown,convert,fetch,done" {
+	if got := instSteps(j); got != "copy,start,console,shutdown,convert,fetch,verify,done" {
 		t.Errorf("steps %s", got)
+	}
+	if j.Verified == "" && j.VerifyErr == "" {
+		t.Error("the verification boot said nothing")
 	}
 	v, _ = a.EmuState()
 	var im *emu.Image
@@ -292,6 +308,9 @@ while True:
 // TW_EMU_FAKE_BIN is a folder that is in front of qemu in the SSH server's PATH (the fake is put there
 // for the test and removed).
 func TestEmuInstallAlpineFake(t *testing.T) {
+	oldVerify := emuInstallVerifyWait
+	emuInstallVerifyWait = 3 * time.Second
+	defer func() { emuInstallVerifyWait = oldVerify }()
 	addr, keyFile, bin := os.Getenv("TW_EMU_SSH"), os.Getenv("TW_EMU_SSH_KEY"), os.Getenv("TW_EMU_FAKE_BIN")
 	if addr == "" || keyFile == "" || bin == "" {
 		t.Skip("TW_EMU_SSH / TW_EMU_SSH_KEY / TW_EMU_FAKE_BIN not set")
@@ -354,9 +373,10 @@ func TestEmuInstallAlpineFake(t *testing.T) {
 	if j.Stage != instDone {
 		t.Fatalf("stage %s: %s %s", j.Stage, j.Msg, j.Err)
 	}
-	if got := instSteps(j); got != "copy,start,boot,login,install,poweroff,convert,fetch,done" {
+	if got := instSteps(j); got != "copy,start,boot,login,install,poweroff,convert,fetch,verify,done" {
 		t.Errorf("steps %s", got)
 	}
+	t.Logf("verification: %q %q", j.Verified, j.VerifyErr)
 	var im *emu.Image
 	for i := range emuLab.f.Images {
 		if emuLab.f.Images[i].ID == j.Image {

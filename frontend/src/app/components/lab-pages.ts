@@ -10,6 +10,7 @@ import { tr } from '../core/i18n';
 import { LabHostImages } from './lab-host-images';
 import { roleOf } from './dev-icon';
 import { TableView, TvBar, TvSorts } from '../core/table-view';
+import { VmScreen } from './vm-screen';
 
 /** Shared look of the lab pages (Configure, New Lab, Images, Hosts). */
 const PAGE = `
@@ -36,7 +37,7 @@ const PAGE = `
   .f { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px 14px; align-items: center; margin-bottom: 14px; > label { color: var(--muted); } }
   .f3 { display: grid; grid-template-columns: 130px minmax(0, 1fr) 130px minmax(0, 1fr); gap: 8px 12px; align-items: center; > label { color: var(--muted); font-size: 12px; } .wide { grid-column: 2 / span 3; } }
   input, select, textarea { min-width: 0; } .row2 { display: flex; gap: 8px; align-items: center; > * { flex: 1; } > button, > .pill, > .badge { flex: none; } }
-  input.nb { width: 110px; max-width: 110px; justify-self: start; } .row2 > input.nb { flex: none; }
+  input.nb { width: 110px; max-width: 110px; justify-self: start; } .ckl { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); } .row2 > input.nb { flex: none; }
   .sec { font-weight: 600; margin: 16px 0 8px; display: flex; justify-content: space-between; align-items: baseline; span { font-weight: 400; } }
   .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; background: var(--surface); }
   .runh { grid-column: 1 / -1; .rr { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); margin-top: 6px; } }
@@ -581,7 +582,7 @@ export class LabNew implements OnInit {
 // ---------------------------------------------------------------- Images and Templates
 @Component({
   selector: 'app-lab-images',
-  imports: [FormsModule, LabHostImages, TvBar, TvSorts],
+  imports: [FormsModule, LabHostImages, TvBar, TvSorts, VmScreen],
   template: `
   <div class="ov" (click)="closed.emit()"></div>
   <div class="mdl">
@@ -631,7 +632,9 @@ export class LabNew implements OnInit {
               @for (j of installs(); track j.id) {
                 <div class="card" style="max-width: 780px">
                   <div class="row2" style="justify-content: flex-start"><div style="flex: 1; min-width: 0"><b>{{ j.name }}</b> <span class="muted small">· {{ j.isoName }} · {{ diskText(j) }} · {{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</span>
-                      <div class="small" [class.r]="j.stage === 'failed'" [class.g]="j.stage === 'done'" [class.w]="isoBusy(j)">{{ isoText(j) }}</div></div>
+                      <div class="small" [class.r]="j.stage === 'failed'" [class.g]="j.stage === 'done'" [class.w]="isoBusy(j)">{{ isoText(j) }}</div>
+                      @if (j.stage === 'done' && (j.verified || j.verifyErr)) { <div class="small" [class.g]="!!j.verified" [class.w]="!!j.verifyErr">{{ j.verified ? '✓ ' + tr('Verified: {0}', tr(j.verified)) : '⚠ ' + tr('Not verified: {0}', tr(j.verifyErr || '')) }}</div> }</div>
+                    @if (isoBusy(j) && j.stage !== 'copying' || j.stage === 'waiting') { <button type="button" class="sm" (click)="screenOf.set(j)" [title]="tr('What its display shows, and its keyboard')">{{ tr('Screen…') }}</button> }
                     @if (j.stage === 'waiting' && j.console) { <button type="button" class="sm" (click)="isoConsole(j)">{{ tr('Open console') }}</button> }
                     @if (j.stage === 'waiting') { <button type="button" class="sm primary" (click)="isoFinish(j)">{{ tr('Finish and save as image') }}</button> }
                     @if (j.stage === 'done' && j.image) { <button type="button" class="sm" (click)="isoShow(j)">{{ tr('Show image') }}</button> }
@@ -669,6 +672,7 @@ export class LabNew implements OnInit {
                   <label>{{ tr('Disk') }}</label><div><div class="row2" style="justify-content: flex-start; gap: 6px"><input type="number" min="1" [(ngModel)]="isoSize" name="isogb" style="width: 110px; flex: none" /><select [(ngModel)]="isoUnit" (ngModelChange)="isoUnitChanged($event)" name="isounit" style="width: 76px; flex: none"><option value="MB">MB</option><option value="GB">GB</option></select></div><div class="muted small" style="margin-top: 4px">{{ tr('The new disk’s largest size, not the space it takes: the qcow2 file grows only as the system is written, so the saved image stays small (a small Alpine system takes a few hundred MB). In MB or GB; at least 100 MB.') }}</div></div>
                   <label>{{ tr('Memory') }}</label><div class="row2"><input type="number" min="256" step="256" [(ngModel)]="isoRam" name="isoram" class="nb" /><span class="unit">MB</span></div>
                   <label>vCPU</label><input type="number" min="1" max="64" [(ngModel)]="isoCpus" name="isocpu" class="nb" />
+                  <label>{{ tr('Check') }}</label><label class="ckl"><input type="checkbox" [(ngModel)]="isoVerify" name="isover" /> {{ tr('Boot the new image once at the end to see it comes up (on a throwaway copy)') }}</label>
                   <label>{{ tr('Run on') }}</label><select [(ngModel)]="isoHost" name="isohost">@for (h of hosts(); track h.session) { <option [value]="h.session">{{ h.name }}</option> }</select>
                 </div>
                 <button type="button" class="primary" (click)="startIso()" [disabled]="!isoPath || lab.busy() || (isoMode === 'alpine' && !isoPw)">{{ tr('Start install') }}</button>
@@ -784,7 +788,8 @@ export class LabNew implements OnInit {
         <span class="sp"></span><span class="muted small">{{ tr('Changes apply to switches when they start next') }}</span><button type="button" (click)="pick(im.id)">{{ tr('Revert') }}</button><button type="button" class="primary" (click)="saveImage()" [disabled]="lab.busy()">{{ tr('Save') }}</button>
       } @else { <span class="sp"></span><button type="button" class="primary" (click)="closed.emit()">{{ tr('Close') }}</button> }
     </div>
-  </div>`,
+  </div>
+    @if (screenOf(); as j) { <app-vm-screen kind="install" [id]="j.id" [name]="j.name" (closed)="screenOf.set(null)" /> }`,
   styles: [PAGE],
 })
 export class LabImages implements OnInit, OnDestroy {
@@ -880,6 +885,8 @@ export class LabImages implements OnInit, OnDestroy {
     }
     return l.filter(x => x).join(' · ');
   }
+  protected isoVerify = true;
+  protected screenOf = signal<EmuInstall | null>(null);
   isoText(j: EmuInstall) {
     switch (j.stage) {
       case 'done': return tr('Done: the image is in the list.');
@@ -897,7 +904,7 @@ export class LabImages implements OnInit, OnDestroy {
   async startIso() {
     const mb = Math.round((+this.isoSize || (this.isoUnit === 'GB' ? 8 : 8192)) * (this.isoUnit === 'GB' ? 1024 : 1));
     try {
-      this.lab.emu.set(await this.backend.emuInstallStart({ name: this.isoNm.trim(), iso: this.isoPath, mode: this.isoMode, gb: Math.max(1, Math.ceil(mb / 1024)), mb, ram: +this.isoRam || 1024, cpus: +this.isoCpus || 2, host: this.isoHost, password: this.isoPw }));
+      this.lab.emu.set(await this.backend.emuInstallStart({ name: this.isoNm.trim(), iso: this.isoPath, mode: this.isoMode, gb: Math.max(1, Math.ceil(mb / 1024)), mb, ram: +this.isoRam || 1024, cpus: +this.isoCpus || 2, host: this.isoHost, password: this.isoPw, noVerify: !this.isoVerify }));
       this.isoPath = ''; this.isoNm = ''; this.ui.toast(tr('The install started'), 'success'); void this.lab.refresh();
     } catch (e) { this.ui.error(errText(e)); }
   }

@@ -100,7 +100,7 @@ class Lab:
         self.traffic = Traffic(self)
 
     # ---- plain requests ----
-    def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, **params):
+    def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False, **params):
         url = self.api + "/lab" + path
         q = {k: v for k, v in params.items() if v is not None}
         if q:
@@ -112,6 +112,8 @@ class Lab:
             req.add_header("Content-Type", "application/json")
         try:
             with urllib.request.urlopen(req, timeout=timeout or self.timeout) as r:
+                if binary:
+                    return r.read()
                 text = r.read().decode()
         except urllib.error.HTTPError as e:
             try:
@@ -227,6 +229,22 @@ class Lab:
             max_cores: Optional[float] = None, share: Optional[int] = None) -> str:
         """CPU request and limit in millicores (250 = 250m; 0 = none); without them, the report of the last hour."""
         return self.tool("cpu", switches=list(switches), request_m=request_m, limit_m=limit_m, max_cores=max_cores, share=share)
+
+    def screen(self, device: str, path: Optional[str] = None) -> bytes:
+        """A PNG of what a device's display shows now (install:<id> for an installer); saved to path when given."""
+        png = self.request("GET", "/screen/" + urllib.parse.quote(device, safe=":"), binary=True)
+        if path:
+            with open(path, "wb") as f:
+                f.write(png)
+        return png
+
+    def keys(self, device: str, text: str = "", enter: bool = False, keys: Optional[list] = None) -> str:
+        """Type on a device's keyboard: text, then Enter; keys are QEMU key names (esc, tab, f2, ctrl-alt-delete…)."""
+        return self.tool("keys", switch=device, text=text, enter=enter, keys=keys)
+
+    def install_type(self, install_id: str, line: str, console: bool = True) -> str:
+        """Type a line (and Enter) into a running install: on its serial console, or (console=False) its keyboard."""
+        return self.tool("keys", install=install_id, text=line, enter=True, console=console)
 
     def checkpoint(self, switch: str, note: str = "") -> str:
         """Keep a running switch's whole state now (it pauses for a moment); lists its checkpoints."""

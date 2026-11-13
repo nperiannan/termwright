@@ -86,7 +86,13 @@ class Fake(BaseHTTPRequestHandler):
             return self.reply(200, {"result": "Installs (id | name | mode | stage | now | image):\n- ab12 | alp | alpine | %s | boot | %s\n" % (stage, "img1" if stage == "done" else "-")})
         if path == "/tools/install_finish":
             return self.reply(200, {"result": "Saving"})
-        if path in ("/tools/dns", "/tools/images", "/tools/checkpoint"):
+        if path.startswith("/screen/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.end_headers()
+            self.wfile.write(b"\x89PNG fake")
+            return
+        if path in ("/tools/dns", "/tools/images", "/tools/checkpoint", "/tools/keys"):
             return self.reply(200, {"result": "ok"})
         if path == "/tools/history":
             return self.reply(200, {"result": "Changes, newest first"})
@@ -160,6 +166,10 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(Fake.state["calls"][-1][1:], ("/api/v1/lab/tools/checkpoint", {"action": "restore", "switch": "sw1", "tag": "tw-ck-a1"}))
         self.lab.auto_checkpoints(False)
         self.assertEqual(Fake.state["calls"][-1][2], {"action": "auto", "on": False})
+        self.assertEqual(self.lab.screen("install:ab12"), b"\x89PNG fake")
+        self.assertEqual(Fake.state["calls"][-1][1], "/api/v1/lab/screen/install:ab12")
+        self.lab.install_type("ab12", "root")
+        self.assertEqual(Fake.state["calls"][-1][2], {"install": "ab12", "text": "root", "enter": True, "console": True})
         self.lab.images(type="EXOS")
         self.assertEqual(Fake.state["calls"][-1][1:], ("/api/v1/lab/tools/images", {"type": "EXOS"}))
 

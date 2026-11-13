@@ -272,3 +272,56 @@ func InstallAlpine(ctx context.Context, c *Console, o AlpineOpts, note func(step
 	note("poweroff", "installed; powering off")
 	return c.Send("poweroff")
 }
+
+// VerifyScript boots a made image once, on a throwaway layer (-snapshot: the image file is not changed), with
+// its console on a free port; it prints "port N" or "fail …". VerifyStopScript ends it.
+func (s InstallSpec) VerifyScript(fileName string) string {
+	d, id := Q(s.InstallDir()), s.ID+"-verify"
+	var b strings.Builder
+	fmt.Fprintf(&b, "mkdir -p %s || exit 1\n", d)
+	b.WriteString("p=24950; while { ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null; } | grep -qE \":($p|$((p+1)))[[:space:]]\"; do p=$((p+2)); done\n")
+	b.WriteString("acc='-accel tcg'; [ -w /dev/kvm ] && acc='-enable-kvm -cpu host'\n")
+	fmt.Fprintf(&b, ": > %s/%s.log; echo $p > %s/%s.port\n", d, id, d, id)
+	fmt.Fprintf(&b, "out=$(qemu-system-x86_64 -name twver-%s -m %d -smp %d $acc -snapshot -drive file=%s,if=virtio,format=qcow2 "+
+		"-netdev user,id=n0 -device virtio-net-pci,netdev=n0 "+
+		"-chardev socket,id=con0,host=127.0.0.1,port=$p,server=on,wait=off,telnet=on,logfile=%s/%s.log -serial chardev:con0 "+
+		"-monitor telnet:127.0.0.1:$((p+1)),server,nowait -display none -daemonize -pidfile %s/%s.pid 2>&1) || { echo \"fail $(echo $out | tr '\\n' ' ' | cut -c1-300)\"; exit 0; }\n",
+		id, s.RAM, s.CPUs, Q(s.Dir+"/images/"+fileName), d, id, d, id)
+	b.WriteString("echo \"port $p\"\n")
+	return b.String()
+}
+
+// VerifyStopScript ends the verification boot.
+func (s InstallSpec) VerifyStopScript() string {
+	d := Q(s.InstallDir())
+	return fmt.Sprintf("if %s; then kill \"$p\" 2>/dev/null; sleep 1; fi; rm -f %s/%s-verify.pid\necho stopped\n", qemuUp(d+"/"+s.ID+"-verify.pid"), d, s.ID)
+}
+
+// keyNames: the QEMU key (sendkey) for a character, and whether it is typed with shift.
+var keyNames = func() map[rune]string {
+	m := map[rune]string{' ': "spc", '\n': "ret", '\t': "tab", '-': "minus", '=': "equal", '[': "bracket_left", ']': "bracket_right", '\\': "backslash",
+		';': "semicolon", '\'': "apostrophe", '`': "grave_accent", ',': "comma", '.': "dot", '/': "slash"}
+	for c := 'a'; c <= 'z'; c++ {
+		m[c] = string(c)
+		m[c-'a'+'A'] = "shift-" + string(c)
+	}
+	for c := '0'; c <= '9'; c++ {
+		m[c] = string(c)
+	}
+	for c, k := range map[rune]string{'!': "1", '@': "2", '#': "3", '$': "4", '%': "5", '^': "6", '&': "7", '*': "8", '(': "9", ')': "0", '_': "minus", '+': "equal",
+		'{': "bracket_left", '}': "bracket_right", '|': "backslash", ':': "semicolon", '"': "apostrophe", '~': "grave_accent", '<': "comma", '>': "dot", '?': "slash"} {
+		m[c] = "shift-" + k
+	}
+	return m
+}()
+
+// SendKeys: the monitor's sendkey commands that type a text on a VM's keyboard (characters it has no key for are left out).
+func SendKeys(text string) []string {
+	var out []string
+	for _, c := range text {
+		if k, ok := keyNames[c]; ok {
+			out = append(out, "sendkey "+k+" 40")
+		}
+	}
+	return out
+}

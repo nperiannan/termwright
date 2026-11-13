@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/subtle"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -78,6 +79,8 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		route, arg = "/lab/traffic/"+seg[2]+"/{id}", seg[3]
 	} else if len(seg) == 3 && seg[0] == "lab" && seg[1] == "tools" {
 		route, arg = "/lab/tools/{tool}", seg[2]
+	} else if len(seg) == 3 && seg[0] == "lab" && seg[1] == "screen" {
+		route, arg = "/lab/screen/{id}", seg[2]
 	}
 	ms, ok := apiRoutes[route]
 	if !ok {
@@ -97,6 +100,21 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		apiOut(w, http.StatusOK, apiTools(), nil)
 	case "/lab/tools/{tool}":
 		a.apiTool(w, "lab_"+arg, body)
+	case "/lab/screen/{id}":
+		kind, id := "vm", arg
+		if x, ok := strings.CutPrefix(arg, "install:"); ok {
+			kind, id = "install", x
+		} else if d, err := emuMCPIDView(a, arg); err == nil {
+			id = d
+		}
+		sc, err := a.EmuScreen(kind, id)
+		if err != nil {
+			apiProblem(w, http.StatusConflict, "no-screen", err.Error())
+			return
+		}
+		b, _ := base64.StdEncoding.DecodeString(strings.TrimPrefix(sc.PNG, "data:image/png;base64,"))
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(b)
 	case "/lab/traffic":
 		v, err := a.EmuTraffic()
 		apiOut(w, http.StatusOK, v, err)
@@ -233,7 +251,7 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 
 // apiRoutes: the API's paths (under /api/v1) and their methods.
 var apiRoutes = map[string][]string{
-	"/lab": {"GET"}, "/lab/tools": {"GET"}, "/lab/tools/{tool}": {"POST"},
+	"/lab": {"GET"}, "/lab/tools": {"GET"}, "/lab/tools/{tool}": {"POST"}, "/lab/screen/{id}": {"GET"},
 	"/lab/traffic": {"GET"}, "/lab/traffic/report": {"GET"}, "/lab/traffic/start": {"POST"}, "/lab/traffic/stop": {"POST"},
 	"/lab/traffic/ports": {"POST"}, "/lab/traffic/ports/{id}": {"PATCH", "DELETE"},
 	"/lab/traffic/streams": {"POST"}, "/lab/traffic/streams/{id}": {"PUT", "DELETE"},

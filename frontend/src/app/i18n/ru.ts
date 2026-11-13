@@ -3322,6 +3322,20 @@ const ru: Record<string, string> = {
   'Checkpoint a switch before Claude or the API types on it (at most every 2 minutes; not while traffic runs)': 'Делать контрольную точку коммутатора перед тем, как Claude или API набирают на нём команды (не чаще раза в 2 минуты; не во время трафика)',
   'Checkpoint taken': 'Контрольная точка сделана',
   'Restored to the checkpoint': 'Восстановлено к контрольной точке',
+  'Screen of {0}': 'Экран {0}',
+  'Screen': 'Экран',
+  'updated {0}': 'обновлено {0}',
+  'Live': 'Вживую',
+  'Reading its screen…': 'Читается его экран…',
+  'a line for its serial console': 'строка для его последовательной консоли',
+  'type here, Enter sends it with Enter': 'введите здесь; Enter отправит строку с Enter',
+  'Type ⏎': 'Ввести ⏎',
+  'Type on the installer’s serial console instead of its keyboard': 'Вводить в последовательную консоль установщика вместо его клавиатуры',
+  'Verified: {0}': 'Проверено: {0}',
+  'Not verified: {0}': 'Не проверено: {0}',
+  'What its display shows, and its keyboard': 'Что показывает его экран, и его клавиатура',
+  'Screen…': 'Экран…',
+  'Boot the new image once at the end to see it comes up (on a throwaway copy)': 'В конце один раз загрузить новый образ, чтобы убедиться, что он запускается (на одноразовой копии)',
 };
 
 export default ru;

@@ -56,7 +56,7 @@ const ROLES = ['A', 'B', 'C', 'D', 'E', 'F'];
       </div>
     </div>`,
   styles: [`
-    .ov { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45); display: grid; place-items: center; }
+    .ov { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.45); display: grid; place-items: center; }
     .dl { width: min(1000px, 94vw); height: min(640px, 88vh); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.45); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; font-size: 13px; }
     .dh { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); b { font-size: 15px; } .x { cursor: pointer; color: var(--muted); } }
     .sp { flex: 1; } .muted { color: var(--muted); } .small { font-size: 11.5px; } .mono { font-family: var(--mono, monospace); font-size: 11.5px; }

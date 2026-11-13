@@ -109,6 +109,9 @@ export class Backend {
   emuCheckpointRestore(id: string, tag: string) { return this.call<LabView>('EmuCheckpointRestore', id, tag); }
   emuCheckpointRemove(id: string, tag: string) { return this.call<LabView>('EmuCheckpointRemove', id, tag); }
   emuSetCheckpoints(on: boolean) { return this.call<LabView>('EmuSetCheckpoints', on); }
+  emuScreen(kind: 'vm' | 'install', id: string) { return this.call<{ png: string; w: number; h: number; at: string }>('EmuScreen', kind, id); }
+  emuScreenKeys(kind: 'vm' | 'install', id: string, text: string, enter: boolean, keys: string[]) { return this.call<void>('EmuScreenKeys', kind, id, text, enter, keys); }
+  emuInstallType(id: string, line: string, enter: boolean) { return this.call<void>('EmuInstallType', id, line, enter); }
   emuSetHostMgmt(host: string, mgmt: string, mgmtNet: string) { return this.call<LabView>('EmuSetHostMgmt', host, mgmt, mgmtNet); }
   emuConsoleLog(id: string) { return this.call<string>('EmuConsoleLog', id); }
   emuDay0Again(id: string) { return this.call<LabView>('EmuDay0Again', id); }
