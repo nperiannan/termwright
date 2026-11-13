@@ -248,6 +248,9 @@ func TestReadyInSeesAnAutologinShell(t *testing.T) {
 	if !im.ReadyIn("alpine login: ") {
 		t.Error("the login prompt is not seen")
 	}
+	if up := (Image{Ready: "login:", DeviceType: "LINUX", Prompt: `[#$]\s*$`}); !up.ReadyIn(boot) {
+		t.Error("type LINUX (from a device pack) is a Linux computer too")
+	}
 	sw := Image{Ready: "login:", DeviceType: "EXOS", Prompt: `[#>]\s*$`}
 	if sw.ReadyIn("boot # ") {
 		t.Error("a switch is ready only by its ready text")

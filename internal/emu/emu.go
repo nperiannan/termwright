@@ -1179,7 +1179,7 @@ func (im *Image) ReadyIn(log string) bool {
 	}
 	// a Linux computer that logs in by itself shows no login prompt (an installed Alpine
 	// gives root a shell on the serial console): a shell prompt waiting at the end of the console is as good
-	if im.DeviceType == "Linux" && im.Prompt != "" && log != "" {
+	if (strings.EqualFold(im.DeviceType, "Linux") || len(im.PortAddr) > 0) && im.Prompt != "" && log != "" { // "LINUX" when its type came from a device pack
 		tail := log
 		if len(tail) > 200 {
 			tail = tail[len(tail)-200:]
