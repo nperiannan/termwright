@@ -1045,7 +1045,11 @@ func (l *Lab) StatusScript(tails []string, ready ...map[string]string) string {
 	for _, id := range tails {
 		s += fmt.Sprintf("[ -f %s.log ] && echo \"log %s $(tail -c 4000 %s.log | base64 | tr -d '\\n')\"\n", id, id, id)
 		if len(ready) > 0 && ready[0][id] != "" {
-			s += fmt.Sprintf("grep -qaF -- %s %s.log 2>/dev/null && echo \"ready %s\"\n", Q(ready[0][id]), id, id)
+			var e []string
+			for _, r := range ReadyTexts(ready[0][id]) {
+				e = append(e, "-e "+Q(r))
+			}
+			s += fmt.Sprintf("grep -qaF %s %s.log 2>/dev/null && echo \"ready %s\"\n", strings.Join(e, " "), id, id)
 		}
 	}
 	return s
@@ -1137,11 +1141,26 @@ func CleanConsole(s string) string {
 
 // Ready says whether the console log shows the image's ready text.
 func (im *Image) ReadyIn(log string) bool {
-	r := im.Ready
-	if r == "" {
+	if im.Ready == "" {
 		return true
 	}
-	return strings.Contains(log, r)
+	for _, r := range ReadyTexts(im.Ready) {
+		if strings.Contains(log, r) {
+			return true
+		}
+	}
+	return false
+}
+
+// ReadyTexts: an image's ready text can name several, separated by | (any of them means booted).
+func ReadyTexts(r string) []string {
+	var out []string
+	for _, x := range strings.Split(r, "|") {
+		if x = strings.TrimSpace(x); x != "" {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 // gatewayPrefix: the bridge's own address (the network's first) with its bits.

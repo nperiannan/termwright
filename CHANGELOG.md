@@ -8,6 +8,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 - Emulated lab, Captures: the *Stop* button of a running capture is red. A cable being captured keeps its colour (it turned red and looked down): blue dashes run along it and a blue dot pulses at the captured port; captures started earlier show on the canvas without opening the Captures tab.
 
+- Emulated lab, **one canvas toolbar at the top**: the floating bar at the bottom and the view bar are one bar under the tabs, with icons and short labels; *More* (⋯) switches it to icons only or icons and text, and has the mini-map (off now; the Map button is gone), *Arrange by Host* and how hosts are shown.
+
+- Emulated lab: an image's ready text can name several signs of a finished boot, separated by `|` (any of them counts) - the device pack 1.7.1 counts VOSS as booted at its `Login:` prompt too, so a VOSS switch whose console never prints "Boot sequence successful" no longer stays *booting*.
+
 - Emulated lab, **capture the management port**: right-click a running switch → *Capture the Management Port* records its management traffic (SSH, SNMP, DHCP, its cloud connection…) both ways, in the Captures tab like a cable's; the connector's *lab_capture* takes port `mgmt` too.
 
 - Emulated lab, light theme: the *Slate tiles*, *Steel isometric* and *Rack front* drawings have light versions, and *Draw As* opens on the background of the theme.

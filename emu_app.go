@@ -4940,7 +4940,8 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 				im.DefaultPassword, changed = p.DefaultPassword, true
 				pw = append(pw, im.ID)
 			}
-			if strings.EqualFold(im.Ready, "login:") && p.Ready != "" && !strings.EqualFold(p.Ready, "login:") { // the pack waits for a later sign of a finished boot
+			// the pack waits for a later sign of a finished boot, or names more signs than the image has
+			if p.Ready != "" && im.Ready != p.Ready && (strings.EqualFold(im.Ready, "login:") || slices.Contains(emu.ReadyTexts(p.Ready), im.Ready)) {
 				im.Ready, changed = p.Ready, true
 			}
 			if p.Persona != nil && im.Persona != nil && im.Persona.SerialMax == 0 && p.Persona.SerialMax > 0 {

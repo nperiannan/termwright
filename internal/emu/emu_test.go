@@ -572,9 +572,12 @@ func TestLoginNewPassword(t *testing.T) {
 // only its end (a login and show commands push it out).
 func TestStatusReady(t *testing.T) {
 	l := &Lab{Dir: "lab"}
-	s := l.StatusScript([]string{"v1", "v2"}, map[string]string{"v1": "login:"})
-	if !strings.Contains(s, "grep -qaF -- login: v1.log") || strings.Contains(s, "v2.log 2>/dev/null && echo") {
+	s := l.StatusScript([]string{"v1", "v2"}, map[string]string{"v1": "Boot sequence successful|Login:"})
+	if !strings.Contains(s, "grep -qaF -e 'Boot sequence successful' -e Login: v1.log") || strings.Contains(s, "v2.log 2>/dev/null && echo") {
 		t.Fatal(s)
+	}
+	if im := (&Image{Ready: "Boot sequence successful|Login:"}); !im.ReadyIn("...\nLogin: ") || im.ReadyIn("booting") {
+		t.Fatal("either ready text")
 	}
 	if st := ParseStatus("up v1 5\nready v1\n", nil); !st.Ready["v1"] || st.Ready["v2"] {
 		t.Fatal(st.Ready)
