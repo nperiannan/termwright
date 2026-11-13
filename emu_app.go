@@ -420,6 +420,18 @@ func (a *App) EmuConsoleLog(id string) (string, error) {
 	return b.String(), nil
 }
 
+// emuNeedsConsole says whether a running switch still needs Termwright to type on its
+// console: its day 0 was never typed, or its fixed management address was never set.
+func emuNeedsConsole(l *emu.Lab, v emu.VM, im *emu.Image) bool {
+	if l == nil || im == nil {
+		return false
+	}
+	if !v.Day0Done && len(im.Day0) > 0 {
+		return true
+	}
+	return l.Fixed() && len(im.AddrSet) > 0 && v.MgmtIP != "" && v.AddrOn != v.MgmtIP
+}
+
 // emuRunning says whether a VM's QEMU runs, as the last status read saw it (lock held).
 func emuRunning(id string) bool {
 	_, up := emuLab.status.Up[id]
@@ -441,7 +453,7 @@ func (a *App) emuDebug(id string, lines int) (string, error) {
 	}
 	vv, host := *v, emuHostOf(*v)
 	var b strings.Builder
-	fmt.Fprintf(&b, "===== %s =====\nhost: %s\nQEMU running: %v · step: %s · ready (login seen): %v · day 0 being typed: %v · day 0 done: %v · resumed: %v\nerror: %s\nmanagement: %s (gateway %s) · address it was seen to take: %s\nfirmware: %s · serial: %s · vCPU %d · RAM %d MB",
+	fmt.Fprintf(&b, "===== %s =====\nhost: %s\nQEMU running: %v · step: %s · ready (login seen): %v · day 0 being typed: %v · day 0 done: %v · resumed: %v\nerror: %s\nmanagement: %s (gateway %s) · address typed to it: %s\nfirmware: %s · serial: %s · vCPU %d · RAM %d MB",
 		vv.Name, host, emuRunning(id), orStr(emuLab.state[id], "-"), emuLab.ready[id], emuLab.day0[id], vv.Day0Done, emuLab.resumed[id], orStr(emuLab.errs[id], "-"),
 		orStr(vv.MgmtIP, "none"), orStr(vv.Gateway, "-"), orStr(vv.AddrOn, "-"), orStr(vv.FW, "-"), orStr(vv.HWSerial, "-"), vv.CPUs, vv.RAM)
 	if l := a.emuFor(host); l != nil {
@@ -457,10 +469,31 @@ func (a *App) emuDebug(id string, lines int) (string, error) {
 		fmt.Fprintf(&b, "\nimage: %s %s (%s) · type %s\nready text: %q · not ready: %q · login: %q · password: %s · prompt: %q\nday 0: %d commands · set address: %d commands · address command: %q",
 			im.Name, im.Version, im.FileName, orStr(im.DeviceType, "-"), im.Ready, im.NotReady, im.Login, pw, orStr(im.Prompt, `[>#$]\s*$ (default)`), len(im.Day0), len(im.AddrSet), im.AddrCmd)
 	}
+	if im := emuImage(vv.Image); im != nil {
+		switch {
+		case emuRunning(id) && emuLab.ready[id] && emuLab.state[id] == "" && !emuLab.day0[id] && emuNeedsConsole(a.emuFor(host), vv, im):
+			b.WriteString("\nDIAGNOSIS: it runs but Termwright has not typed its day 0 or its fixed address on its console (nothing watches it): Type Day 0 Again in its details")
+		case emuLab.errs[id] != "":
+			b.WriteString("\nDIAGNOSIS: the last console step failed (see the error above and the end of the console)")
+		}
+	}
 	emuLab.mu.Unlock()
+	var elog string
+	if info, err := a.EmuLog(5000); err == nil {
+		var ls []string
+		for _, ln := range strings.Split(info.Tail, "\n") {
+			if strings.Contains(ln, vv.Name) {
+				ls = append(ls, ln)
+			}
+		}
+		if len(ls) > 40 {
+			ls = ls[len(ls)-40:]
+		}
+		elog = fmt.Sprintf("\n\n===== Emulator log of %s (level %s, last %d lines) =====\n%s", vv.Name, info.Level, len(ls), strings.Join(ls, "\n"))
+	}
 	log, err := a.EmuConsoleLog(id)
 	if err != nil {
-		return b.String() + "\n\n(console log: " + err.Error() + ")", nil
+		return b.String() + elog + "\n\n(console log: " + err.Error() + ")", nil
 	}
 	if i := strings.Index(log, "===== Events ====="); i >= 0 {
 		log = log[i:]
@@ -472,7 +505,7 @@ func (a *App) emuDebug(id string, lines int) (string, error) {
 		}
 		log = ev + fmt.Sprintf("===== Console (last %d lines) =====", len(cl)) + strings.Join(cl, "\n")
 	}
-	return b.String() + "\n\n" + log, nil
+	return b.String() + elog + "\n\n" + log, nil
 }
 
 // EmuDay0Again types a running switch's day 0 (its address, persona check) again,
@@ -487,9 +520,12 @@ func (a *App) EmuDay0Again(id string) (EmuView, error) {
 	delete(emuLab.day0, id)
 	delete(emuLab.errs, id)
 	delete(emuLab.pcheck, id)
+	delete(emuLab.resumed, id)
+	host := emuHostOf(*emuLab.f.Lab.VMByID(id))
 	emuEv(id, "info", "typing day 0 again")
 	emuLab.statusAt = time.Time{}
 	emuLab.mu.Unlock()
+	emuGo(func() { a.emuWatch(host, []string{id}) }) // the watch of its start ended long ago: this one types it
 	return a.EmuState()
 }
 
@@ -3630,6 +3666,13 @@ func (a *App) emuPoll(force bool) emu.Status {
 		} else if im := emuImage(v.Image); im != nil && !emuLab.ready[v.ID] && (im.ReadyIn(m.Log[v.ID]) || m.Ready[v.ID]) {
 			emuLab.ready[v.ID] = true
 			emuEv(v.ID, "ok", "booted - the console shows "+orStr(im.Ready, "its prompt"))
+			// found running (Termwright was restarted, the switch kept running): nobody watches its
+			// start, so its day 0 or its fixed address, if never typed, is typed now
+			if emuLab.starting[v.ID].IsZero() && !emuLab.resumed[v.ID] && !emuLab.day0[v.ID] && emuNeedsConsole(a.emuFor(emuHostOf(v)), v, im) {
+				host, id := emuHostOf(v), v.ID
+				emuEv(id, "info", "found running without its configuration typed: typing it now")
+				emuGo(func() { a.emuWatch(host, []string{id}) })
+			}
 		} else if im != nil && !emuLab.ready[v.ID] {
 			// what the console says went wrong (once in a while each): the switch reboots on its own and seems to be booting for ever
 			for _, f := range im.BootFailIn(m.Log[v.ID]) {
