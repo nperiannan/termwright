@@ -11,13 +11,20 @@
 # Test ports can take their address by DHCP (and IPv6 by SLAAC from router
 # advertisements), announce themselves with gratuitous ARP and LLDP, and answer
 # ARP, neighbour solicitations and ping.
-# Each frame carries a signature: stream, run, sequence and send time, so the
-# receiver counts loss, out-of-order and duplicate frames, latency and jitter.
-import json, os, random, socket, struct, sys, time, select
+# Each frame carries a signature: stream, run, sequence, send time and flow, so the
+# receiver counts loss, out-of-order and duplicate frames, latency (a histogram for
+# its percentiles) and jitter, per stream and per flow (the values of its changing
+# fields), and the VLAN, priority and DSCP the frames arrived with. A round-trip
+# stream's frames are sent back by the test port they reach: its latency is the
+# round trip, measured on one clock (so also between test ports on two hosts).
+import json, math, os, random, socket, struct, sys, time, select
 
 d = sys.argv[1]
 cfg_path, st_path = os.path.join(d, "traffic.json"), os.path.join(d, "traffic-stats.json")
 MAGIC = b"TWTG"
+SIG = "!HIIdH"  # stream, run, sequence, send time, flow
+SIGN = struct.calcsize(SIG)
+MAXF = 1024  # flows counted one by one (a stream with more is counted as a whole)
 BC = b"\xff" * 6
 IMIX = [64] * 7 + [594] * 4 + [1518]
 
@@ -35,6 +42,10 @@ def ip_b(a):
         return b"\0\0\0\0"
     a = a.split("/")[0]
     return socket.inet_pton(socket.AF_INET6, a) if is6(a) else socket.inet_aton(a)
+
+
+def ip_s(b):
+    return socket.inet_ntop(socket.AF_INET6 if len(b) == 16 else socket.AF_INET, b)
 
 
 def csum(b):
@@ -214,11 +225,12 @@ class Stream:
         s.dst = mac_b(x["dstMac"]) if x.get("dstMac") else None
         s.mods = x.get("mods") or []
         s.rnd = random.Random(idx * 7919 + run)
+        s.nflows = math.prod(max(1, m.get("count", 1)) for m in s.mods) if s.mods else 0
+        s.flow, s.ftx, s.flab = 0, {}, {}
 
-    def val(s, m):  # how far this frame's field moves (0 .. count-1, times step)
+    def k(s, m):  # which of its values this frame's field takes (0 .. count-1)
         n = max(1, m.get("count", 1))
-        k = s.rnd.randrange(n) if m.get("mode") == "random" else s.seq % n
-        return k * m.get("step", 1)
+        return s.rnd.randrange(n) if m.get("mode") == "random" else s.seq % n
 
     def frame_size(s):
         m = s.x.get("sizeMode", "")
@@ -232,7 +244,6 @@ class Stream:
 
     def frame(s, now):
         x, tp = s.x, s.tp
-        sig = MAGIC + struct.pack("!HIId", s.idx, s.run, s.seq, now)
         k = x.get("kind", "udp")
         src_ip = ip_b(x["srcIp"]) if x.get("srcIp") else tp.ip
         dst_ip = ip_b(x.get("dstIp") or "")
@@ -244,8 +255,11 @@ class Stream:
         if s.dst is None and is_mcast(dst_ip):
             dst = mcast_mac(dst_ip)
         vlan, prio, sport, dport = x.get("vlan", 0), x.get("prio", 0), 49152 + s.idx, x.get("dport", 5001 if k != "tcp" else 80)
+        flow, mult, lab = 0, 1, []
         for m in s.mods:
-            v, f = s.val(m), m.get("field")
+            kk, f = s.k(m), m.get("field")
+            v = kk * m.get("step", 1)
+            flow, mult = flow + kk * mult, mult * max(1, m.get("count", 1))
             if f == "srcMac":
                 src_mac = bump(src_mac, v)
             elif f == "dstMac":
@@ -262,6 +276,15 @@ class Stream:
                 sport = (sport + v) & 0xFFFF
             elif f == "dport":
                 dport = (dport + v) & 0xFFFF
+        if 0 < s.nflows <= MAXF:
+            s.ftx[flow] = s.ftx.get(flow, 0) + 1
+            if flow not in s.flab:
+                show = {"srcMac": lambda: src_mac.hex(":"), "dstMac": lambda: dst.hex(":"), "srcIp": lambda: ip_s(src_ip), "dstIp": lambda: ip_s(dst_ip),
+                        "vlan": lambda: str(vlan), "sport": lambda: str(sport), "dport": lambda: str(dport)}
+                s.flab[flow] = " ".join(m.get("field", "") + " " + show.get(m.get("field"), lambda: "?")() for m in s.mods)
+        else:
+            flow = 0xFFFF
+        sig = MAGIC + struct.pack(SIG, s.idx, s.run, s.seq, now, flow)
         size, tos = s.frame_size(), x.get("dscp", 0) << 2
         if k == "arp":
             f = l2(BC if not s.dst else s.dst, src_mac, vlan, prio, 0x0806) + arp(1, src_mac, src_ip, b"\0" * 6, dst_ip) + sig
@@ -295,12 +318,17 @@ class Stream:
 cfg_m, cfg = 0, {}
 testers, streams, run = {}, [], 0
 tx, rx, other, lat, err, ooo, dup, jit, seen = {}, {}, {}, {}, {}, {}, {}, {}, {}
+hist, frx, qos = {}, {}, {}  # latency histogram, per-flow receive counters, what the frames arrived with
+ftx, flab = {}, {}  # per flow: frames sent, its field values
 last_st = 0
 
 
 def reset():
-    global tx, rx, other, lat, err, ooo, dup, jit, seen
+    global tx, rx, other, lat, err, ooo, dup, jit, seen, hist, frx, qos
     tx, rx, other, lat, err, ooo, dup, jit, seen = {}, {}, {}, {}, {}, {}, {}, {}, {}
+    hist, frx, qos = {}, {}, {}
+    ftx.clear()
+    flab.clear()
 
 
 def load():
@@ -331,8 +359,32 @@ def load():
         streams = [Stream(x, i, testers, run) for i, x in enumerate(c.get("streams", [])) if x.get("on") and x["from"] in testers]
 
 
-def got(sid, tp, seq, ts):
-    """A frame of a stream arrived at a test port: counts, order, latency, jitter."""
+def latency(sid, flow, ts, st):
+    """A frame's latency (ms, from its send time): average, min, max, its histogram bucket (a quarter of an
+    octave of microseconds, for the percentiles), jitter, and per flow."""
+    dl = (time.time() - ts) * 1000
+    l = lat.setdefault(sid, [0.0, 0.0, 0, 1e9])
+    l[0] += dl
+    l[1] = max(l[1], dl)
+    l[2] += 1
+    l[3] = min(l[3], dl)
+    b = str(min(120, max(0, int(4 * math.log2(max(dl * 1000, 1))))))
+    h = hist.setdefault(sid, {})
+    h[b] = h.get(b, 0) + 1
+    if flow != 0xFFFF:
+        fr = frx.setdefault(sid, {}).setdefault(flow, [0, 0.0, 0.0, 0])
+        fr[1] += dl
+        fr[2] = max(fr[2], dl)
+        fr[3] += 1
+    if st[2] is not None:
+        j = jit.setdefault(sid, [0.0, 0])
+        j[0] += abs(dl - st[2])
+        j[1] += 1
+    st[2] = dl
+
+
+def got(sid, tp, seq, ts, flow=0xFFFF, mark=""):
+    """A frame of a stream arrived at a test port: counts, order, latency, jitter, per flow, how it was marked."""
     rx[sid] = rx.get(sid, 0) + 1
     k = (sid, tp.id)
     st = seen.get(k)
@@ -350,43 +402,65 @@ def got(sid, tp, seq, ts):
         ooo[sid] = ooo.get(sid, 0) + 1
     else:
         st[0] = seq
+    if mark:
+        q = qos.setdefault(sid, {})
+        q[mark] = q.get(mark, 0) + 1
+    if flow != 0xFFFF:
+        frx.setdefault(sid, {}).setdefault(flow, [0, 0.0, 0.0, 0])[0] += 1
     if ts > 0:
-        dl = (time.time() - ts) * 1000
-        l = lat.setdefault(sid, [0.0, 0.0, 0, 1e9])
-        l[0] += dl
-        l[1] = max(l[1], dl)
-        l[2] += 1
-        l[3] = min(l[3], dl)
-        if st[2] is not None:
-            j = jit.setdefault(sid, [0.0, 0])
-            j[0] += abs(dl - st[2])
-            j[1] += 1
-        st[2] = dl
+        latency(sid, flow, ts, st)
+
+
+def reflect(tp, f, o, et):
+    """A round-trip stream's frame goes back where it came from: MACs, addresses and ports swapped (the
+    checksums stay right: their sums do not change)."""
+    b = bytearray(f[6:12] + tp.mac + f[12:])
+    i = o + 2
+    if et == 0x0800 and len(b) >= i + 20:
+        ihl = (b[i] & 15) * 4
+        b[i + 12:i + 16], b[i + 16:i + 20] = b[i + 16:i + 20], b[i + 12:i + 16]
+        l4, proto = i + ihl, b[i + 9]
+    elif et == 0x86DD and len(b) >= i + 40:
+        b[i + 8:i + 24], b[i + 24:i + 40] = b[i + 24:i + 40], b[i + 8:i + 24]
+        l4, proto = i + 40, b[i + 6]
+    else:
+        l4, proto = 0, 0
+    if proto in (6, 17) and len(b) >= l4 + 4:
+        b[l4:l4 + 2], b[l4 + 2:l4 + 4] = b[l4 + 2:l4 + 4], b[l4:l4 + 2]
+    tp.send(bytes(b))
 
 
 def handle(tp, f):
     o = 12
-    vlan = 0
+    vlan = prio = 0
     if f[o:o + 2] == b"\x81\x00":
-        vlan = struct.unpack("!H", f[o + 2:o + 4])[0] & 0xFFF
+        tci = struct.unpack("!H", f[o + 2:o + 4])[0]
+        vlan, prio = tci & 0xFFF, tci >> 13
         o += 4
     et = struct.unpack("!H", f[o:o + 2])[0]
     b = f[o + 2:]
     i = f.find(MAGIC)
-    if i >= 0 and len(f) >= i + 22:
-        idx, r, seq, ts = struct.unpack("!HIId", f[i + 4:i + 22])
+    if i >= 0 and len(f) >= i + 4 + SIGN:
+        idx, r, seq, ts, flow = struct.unpack(SIG, f[i + 4:i + 4 + SIGN])
         if r == run and idx < len(cfg.get("streams", [])):
             x = cfg["streams"][idx]
             sid = x["id"]
             echo = x["from"] == tp.id and not x.get("to") and x.get("kind") == "icmp"  # the address answered
-            if x.get("to") and x["to"] != tp.id:
+            if x.get("rtt") and x["from"] == tp.id and x.get("to"):  # its own frame, sent back: the round trip
+                k = (sid, "rtt")
+                latency(sid, flow, ts, seen.setdefault(k, [-1, set(), None]))
+            elif x.get("to") and x["to"] != tp.id:
                 other[sid] = other.get(sid, 0) + 1
             elif x["from"] != tp.id or echo:
                 dst = ip_b(x.get("dstIp") or "")
                 if is_mcast(dst) and not x.get("mods") and dst not in tp.groups:
                     other[sid] = other.get(sid, 0) + 1  # flooded to a port that did not join
                 else:
-                    got(sid, tp, seq, ts if x["from"] in testers else 0)
+                    dscp = b[1] >> 2 if et == 0x0800 and len(b) > 1 else ((b[0] & 15) << 4 | b[1] >> 4) >> 2 if et == 0x86DD and len(b) > 1 else -1
+                    rtt = x.get("rtt") and x.get("to") == tp.id
+                    got(sid, tp, seq, ts if x["from"] in testers and not rtt else 0, flow, "%d/%d/%d" % (vlan, prio, dscp))
+                    if rtt:
+                        reflect(tp, f, o, et)
         return
     if et == 0x0806 and len(b) >= 28:
         op, smac, sip, tip = struct.unpack("!6xH6s4s6x4s", b[:28])
@@ -527,10 +601,13 @@ while True:
             s.seq += 1
             n += 1
         tx[x["id"]] = s.seq
+        if s.ftx:
+            ftx[x["id"]], flab[x["id"]] = s.ftx, s.flab
     if now - last_st > 0.5:
         last_st = now
         st = {"run": run, "at": now, "tx": tx, "rx": rx, "other": other, "lat": lat, "err": err, "ooo": ooo, "dup": dup, "jit": jit,
               "busy": {s.x["id"]: s.seq < s.count for s in streams}, "testers": sorted(testers),
+              "hist": hist, "frx": frx, "qos": qos, "ftx": ftx, "flab": flab,
               "lease": {t.id: t.lease for t in testers.values() if t.lease}, "lease6": {t.id: {"ip": t.lease6, "gw": t.gw6} for t in testers.values() if getattr(t, "lease6", None)}}
         try:
             with open(st_path + ".tmp", "w") as fh:

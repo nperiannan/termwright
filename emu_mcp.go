@@ -80,7 +80,7 @@ var mcpLabTools = []mcpTool{
 			"host":   map[string]any{"type": "string", "description": "KVM host name or session path"},
 			"how":    map[string]any{"type": "string", "enum": []string{"live", "copy", "image"}},
 		}, "switch", "host", "how")},
-	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss and latency). Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
+	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
 			"action":      map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report"}},
 			"switch":      map[string]any{"type": "string", "description": "add_port: the switch"},
@@ -108,6 +108,10 @@ var mcpLabTools = []mcpTool{
 			"vlan":        map[string]any{"type": "integer"},
 			"size":        map[string]any{"type": "integer", "description": "frame bytes (60-9000, default 128)"},
 			"pps":         map[string]any{"type": "integer", "description": "packets per second (default 100, at most 100000)"},
+			"rate":        map[string]any{"type": "number", "description": "add_stream: the rate in rate_unit (instead of pps)"},
+			"rate_unit":   map[string]any{"type": "string", "enum": []string{"pps", "mbps", "pct"}, "description": "add_stream: pps, mbps (Mbit/s on the wire, with preamble and gap) or pct (% of the sending test port's line rate)"},
+			"round_trip":  map[string]any{"type": "boolean", "description": "add_stream: the test port it goes to sends each frame back; latency is the round trip (works between test ports on two hosts)"},
+			"speed":       map[string]any{"type": "integer", "description": "add_port, set_port: the test port's line rate in Mbit/s, for rates in % of it (default 1000)"},
 			"seconds":     map[string]any{"type": "integer"},
 			"count":       map[string]any{"type": "integer"},
 			"max_loss":    map[string]any{"type": "number", "description": "% for a pass (default 0)"},
@@ -629,8 +633,8 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				return "", err
 			}
 			t := r.Testers[len(r.Testers)-1]
-			if ip6, gs := argStr(args, "ip6"), argStrs(args, "groups"); ip6 != "" || len(gs) > 0 || args["lldp"] != nil {
-				t.IP6, t.Groups = ip6, gs
+			if ip6, gs := argStr(args, "ip6"), argStrs(args, "groups"); ip6 != "" || len(gs) > 0 || args["lldp"] != nil || args["speed"] != nil {
+				t.IP6, t.Groups, t.Speed = ip6, gs, argInt(args, "speed", 0, 400000)
 				if x, ok := args["lldp"].(bool); ok {
 					t.LLDP = x
 				}
@@ -671,6 +675,9 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			if x, ok := args["lldp"].(bool); ok {
 				t.LLDP = x
 			}
+			if _, ok := args["speed"]; ok {
+				t.Speed = argInt(args, "speed", 0, 400000)
+			}
 			_, err := a.EmuTesterSet(*t)
 			return "Changed " + t.Name + ".", err
 		case "remove_port":
@@ -699,6 +706,12 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			if f, ok := args["max_jitter"].(float64); ok {
 				st.MaxJitter = f
 			}
+			if f, ok := args["rate"].(float64); ok && argStr(args, "rate_unit") != "" && argStr(args, "rate_unit") != "pps" {
+				st.RateUnit, st.Rate = argStr(args, "rate_unit"), f
+			} else if ok {
+				st.PPS = int(f)
+			}
+			st.RTT, _ = args["round_trip"].(bool)
 			st.DSCP, st.SizeMode, st.SizeMax, st.Burst = argInt(args, "dscp", 0, 63), strings.TrimPrefix(argStr(args, "size_mode"), "fixed"), argInt(args, "size_max", 0, 9000), argInt(args, "burst", 0, 10000)
 			st.DstMAC, st.SrcIP, st.DPort, st.Prio = argStr(args, "dst_mac"), argStr(args, "src_ip"), argInt(args, "dport", 0, 65535), argInt(args, "pcp", 0, 7)
 			if ms, ok := args["mods"].([]any); ok {

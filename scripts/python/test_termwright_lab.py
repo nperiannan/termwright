@@ -165,7 +165,10 @@ class ClientTest(unittest.TestCase):
         self.assertEqual((a, b), ("Test port 1", "Test port 2"))
         t.add_stream("v", a, b, rate=8.0, size=200, max_loss=0.1, dscp=46, pcp=5)
         body = Fake.state["calls"][-1][2]
-        self.assertEqual(body, {"name": "v", "from": a, "to": b, "size": 200, "pps": 4545, "maxLoss": 0.1, "dscp": 46, "prio": 5})
+        self.assertEqual(body, {"name": "v", "from": a, "to": b, "size": 200, "rateUnit": "mbps", "rate": 8.0, "maxLoss": 0.1, "dscp": 46, "prio": 5})
+        t.add_stream("w", a, b, rate=10, rate_unit="pct", line_mbps=100, size=1518, rtt=True)
+        body = Fake.state["calls"][-1][2]
+        self.assertEqual((body["pps"], body["rtt"]), (812, True))
         with self.assertRaises(ValueError):
             t.add_stream("x", a, b, rate=1, pps=5)
         with self.assertRaises(tw.ApiError) as c:

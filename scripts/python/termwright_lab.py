@@ -265,18 +265,25 @@ class Traffic:
 
     # ---- streams ----
     def add_stream(self, name: str, src: str, dst: Optional[str] = None, rate: Optional[float] = None,
-                   rate_unit: str = "mbps", line_mbps: float = 1000.0, **fields) -> dict:
+                   rate_unit: str = "mbps", line_mbps: Optional[float] = None, **fields) -> dict:
         """A stream from test port src to dst (empty: every other port, or dst_ip). Fields as in the API,
         in snake_case: kind, size, pps, seconds, count, vlan, pcp (prio), dscp, size_mode, size_max, burst,
-        max_loss, max_latency, max_jitter, mods, dst_ip, dst_mac, dport. rate= gives the speed in Mbps (or
-        rate_unit="pct" of line_mbps) instead of pps."""
+        max_loss, max_latency, max_jitter, mods, dst_ip, dst_mac, dport, rtt (round trip: the far test port
+        sends each frame back; latency is the round trip). rate= gives the speed in Mbit/s on the wire, or with
+        rate_unit="pct" in % of the sending test port's line rate (set_port(speed=...), default 1000 Mbit/s;
+        line_mbps= works it out here instead) - in place of pps."""
         if rate is not None:
             if "pps" in fields:
                 raise ValueError("give pps or rate, not both")
-            size = int(fields.get("size") or 128)
-            if fields.get("size_mode") == "imix":
-                size = 362
-            fields["pps"] = pps_for(rate, size, rate_unit, line_mbps)
+            if rate_unit == "pps":
+                fields["pps"] = int(rate)
+            elif line_mbps is not None:
+                size = int(fields.get("size") or 128)
+                if fields.get("size_mode") == "imix":
+                    size = 362
+                fields["pps"] = pps_for(rate, size, rate_unit, line_mbps)
+            else:
+                fields["rate_unit"], fields["rate"] = rate_unit, rate
         if "pcp" in fields:
             fields["prio"] = fields.pop("pcp")
         body = _body(dict(name=name, from_=src, to=dst, **fields))

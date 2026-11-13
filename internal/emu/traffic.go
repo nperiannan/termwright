@@ -31,6 +31,7 @@ type Tester struct {
 	Lease6   string   `json:"lease6,omitempty"`   // the IPv6 address it got by SLAAC (filled in for the screens)
 	GW       string   `json:"gw,omitempty"`       // for streams to another network
 	VLAN     int      `json:"vlan,omitempty"`     // it tags its own frames (ARP and ping answers) with this VLAN
+	Speed    int      `json:"speed,omitempty"`    // its line rate, Mbit/s, for rates given as % of it (default 1000)
 	PortName string   `json:"portName,omitempty"` // as the switch names it (filled in for the screens)
 	X        float64  `json:"x,omitempty"`        // on the canvas
 	Y        float64  `json:"y,omitempty"`        // on the canvas
@@ -63,6 +64,45 @@ type Stream struct {
 	Mods       []Mod   `json:"mods,omitempty"`       // fields that change from frame to frame
 	MaxJitter  float64 `json:"maxJitter,omitempty"`  // ms for a pass (0 = not checked)
 	Test       string  `json:"test,omitempty"`       // made by a test run for one of its trials (not one of the user's streams)
+	RateUnit   string  `json:"rateUnit,omitempty"`   // how the rate was given: "" frames per second (pps), mbps (Mbit/s on the wire), pct (% of the sending test port's line rate)
+	Rate       float64 `json:"rate,omitempty"`       // the rate in that unit (pps is worked out from it)
+	RTT        bool    `json:"rtt,omitempty"`        // round trip: the test port it goes to sends each frame back, and the latency is the round trip (measured on one clock, so also between test ports on two hosts)
+}
+
+// IMIXMean is the mean size of an IMIX frame (64, 594 and 1518 bytes, 7:4:1).
+const IMIXMean = (7*64 + 4*594 + 1518) / 12.0
+
+// LineMbps is a test port's line rate (Mbit/s).
+func (t Tester) LineMbps() int {
+	if t.Speed > 0 {
+		return t.Speed
+	}
+	return 1000
+}
+
+// MeanSize is a stream's mean frame size (bytes).
+func (s Stream) MeanSize() float64 {
+	switch s.SizeMode {
+	case "imix":
+		return IMIXMean
+	case "inc", "random":
+		return float64(s.Size+max(s.Size, s.SizeMax)) / 2
+	}
+	return float64(s.Size)
+}
+
+// WireBits is how many bits a frame of the stream takes on the wire, with its preamble and the gap after it (20 bytes), as a line rate counts them.
+func (s Stream) WireBits() float64 { return (s.MeanSize() + 20) * 8 }
+
+// PPSFor is the frames per second for a rate in Mbit/s or % of a line rate (Mbit/s); 0 for a rate in pps.
+func (s Stream) PPSFor(lineMbps int) float64 {
+	switch s.RateUnit {
+	case "mbps":
+		return s.Rate * 1e6 / s.WireBits()
+	case "pct":
+		return s.Rate / 100 * float64(lineMbps) * 1e6 / s.WireBits()
+	}
+	return 0
 }
 
 // TrafficTest is a saved test: an RFC 2544 benchmark, an address learning test or a convergence test,

@@ -23,23 +23,33 @@ import (
 
 // EmuStreamResult is a stream's counters (all hosts added up) and its verdict.
 type EmuStreamResult struct {
-	ID       string  `json:"id"`               // the stream
-	TX       int     `json:"tx"`               // frames sent
-	RX       int     `json:"rx"`               // frames received at the test ports it is for (a duplicate counts once)
-	Expected int     `json:"expected"`         // frames that should arrive (to every other test port for a broadcast)
-	Other    int     `json:"other"`            // arrived at a test port it was not for (flooded)
-	Loss     float64 `json:"loss"`             // %
-	LatAvg   float64 `json:"latAvg"`           // ms (-1 = not measured: the ends on different hosts)
-	LatMax   float64 `json:"latMax"`           // ms
-	LatMin   float64 `json:"latMin,omitempty"` // ms
-	Jitter   float64 `json:"jitter,omitempty"` // ms, the mean change of latency between frames
-	OOO      int     `json:"ooo,omitempty"`    // frames that arrived after a later one
-	Dup      int     `json:"dup,omitempty"`    // frames that arrived twice (counted once)
-	TxRate   float64 `json:"txRate"`           // frames per second, now
-	RxRate   float64 `json:"rxRate"`           // frames per second, now
-	Running  bool    `json:"running"`          // it is still sending
-	Result   string  `json:"result"`           // "", pass, fail
-	Why      string  `json:"why,omitempty"`    // why it failed
+	ID       string          `json:"id"`                   // the stream
+	TX       int             `json:"tx"`                   // frames sent
+	RX       int             `json:"rx"`                   // frames received at the test ports it is for (a duplicate counts once)
+	Expected int             `json:"expected"`             // frames that should arrive (to every other test port for a broadcast)
+	Other    int             `json:"other"`                // arrived at a test port it was not for (flooded)
+	Loss     float64         `json:"loss"`                 // %
+	LatAvg   float64         `json:"latAvg"`               // ms (-1 = not measured: the ends on different hosts)
+	LatMax   float64         `json:"latMax"`               // ms
+	LatMin   float64         `json:"latMin,omitempty"`     // ms
+	Jitter   float64         `json:"jitter,omitempty"`     // ms, the mean change of latency between frames
+	OOO      int             `json:"ooo,omitempty"`        // frames that arrived after a later one
+	Dup      int             `json:"dup,omitempty"`        // frames that arrived twice (counted once)
+	TxRate   float64         `json:"txRate"`               // frames per second, now
+	RxRate   float64         `json:"rxRate"`               // frames per second, now
+	Running  bool            `json:"running"`              // it is still sending
+	Result   string          `json:"result"`               // "", pass, fail
+	Why      string          `json:"why,omitempty"`        // why it failed
+	P50      float64         `json:"p50,omitempty"`        // latency percentiles, ms (from a histogram of quarter octaves: within 10 %)
+	P95      float64         `json:"p95,omitempty"`        // ms: 95 % of the frames were faster
+	P99      float64         `json:"p99,omitempty"`        // ms: 99 % of the frames were faster
+	Hist     []EmuLatBin     `json:"hist,omitempty"`       // the latency histogram, an octave a bar
+	Flows    []EmuFlowResult `json:"flows,omitempty"`      // a stream with changing fields: its flows, the most lossy first (at most 32)
+	FlowsN   int             `json:"flowsN,omitempty"`     // how many flows it has sent
+	FlowsBad int             `json:"flowsLossy,omitempty"` // how many of them lost frames
+	Marks    []EmuMark       `json:"marks,omitempty"`      // the VLAN, priority and DSCP its frames arrived with
+	TxMbps   float64         `json:"txMbps,omitempty"`     // Mbit/s on the wire, now
+	RxMbps   float64         `json:"rxMbps,omitempty"`     // Mbit/s on the wire received, now
 }
 
 // EmuTrafficView is the Traffic tab.
@@ -205,8 +215,14 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		Lease6 map[string]struct{ IP, GW string } `json:"lease6"`
 		Dup    map[string]int                     `json:"dup"`
 		Jit    map[string][]float64               `json:"jit"`
+		Hist   map[string]map[string]int          `json:"hist"`
+		FRX    map[string]map[string][]float64    `json:"frx"`
+		FTX    map[string]map[string]int          `json:"ftx"`
+		FLab   map[string]map[string]string       `json:"flab"`
+		QoS    map[string]map[string]int          `json:"qos"`
 	}
-	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}, OOO: map[string]int{}, Dup: map[string]int{}, Jit: map[string][]float64{}}
+	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}, OOO: map[string]int{}, Dup: map[string]int{}, Jit: map[string][]float64{},
+		Hist: map[string]map[string]int{}, FRX: map[string]map[string][]float64{}, FTX: map[string]map[string]int{}, FLab: map[string]map[string]string{}, QoS: map[string]map[string]int{}}
 	dyn := slices.ContainsFunc(v.Testers, func(t emu.Tester) bool { return t.DHCP || t.SLAAC })
 	if run != 0 || emuTraf.last != nil || dyn {
 		for _, h := range hosts {
@@ -271,6 +287,30 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 			for k, e := range st.Err {
 				sum.Err[k] = e
 			}
+			emuAddCounts(sum.Hist, st.Hist)
+			emuAddCounts(sum.FTX, st.FTX)
+			emuAddCounts(sum.QoS, st.QoS)
+			for sid, m := range st.FLab {
+				if sum.FLab[sid] == nil {
+					sum.FLab[sid] = map[string]string{}
+				}
+				maps.Copy(sum.FLab[sid], m)
+			}
+			for sid, m := range st.FRX {
+				if sum.FRX[sid] == nil {
+					sum.FRX[sid] = map[string][]float64{}
+				}
+				for k, x := range m {
+					if len(x) != 4 {
+						continue
+					}
+					if y := sum.FRX[sid][k]; y != nil {
+						y[0], y[1], y[2], y[3] = y[0]+x[0], y[1]+x[1], math.Max(y[2], x[2]), y[3]+x[3]
+					} else {
+						sum.FRX[sid][k] = slices.Clone(x)
+					}
+				}
+			}
 			for k, b := range st.Busy {
 				sum.Busy[k] = sum.Busy[k] || b
 			}
@@ -303,6 +343,20 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		if j := sum.Jit[s.ID]; len(j) == 2 && j[1] > 0 {
 			r.Jitter = j[0] / j[1]
 		}
+		if h := sum.Hist[s.ID]; len(h) > 0 {
+			r.P50, r.P95, r.P99 = emuLatPct(h, 0.5), emuLatPct(h, 0.95), emuLatPct(h, 0.99)
+			if r.LatMin > 0 { // within the bucket: never outside what was seen
+				r.P50, r.P95, r.P99 = max(r.P50, r.LatMin), max(r.P95, r.LatMin), max(r.P99, r.LatMin)
+			}
+			r.P50, r.P95, r.P99 = min(r.P50, r.LatMax), min(r.P95, r.LatMax), min(r.P99, r.LatMax)
+			r.Hist = emuLatBins(h)
+		}
+		if ftx := sum.FTX[s.ID]; len(ftx) > 0 {
+			r.Flows, r.FlowsBad = emuFlowResults(ftx, sum.FRX[s.ID], sum.FLab[s.ID], recv)
+			r.FlowsN = len(r.Flows)
+			r.Flows = r.Flows[:min(len(r.Flows), emuFlowsShown)]
+		}
+		r.Marks = emuMarks(sum.QoS[s.ID])
 		switch e := sum.Err[s.ID]; {
 		case e != "":
 			r.Result, r.Why = "fail", e
@@ -330,7 +384,11 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 	emuLab.mu.Unlock()
 	emuLab.mu.Lock()
 	if run != 0 {
-		emuTrafRates(v.Results, time.Since(emuTraf.started).Seconds())
+		wire := map[string]float64{}
+		for _, s := range v.Streams {
+			wire[s.ID] = s.WireBits()
+		}
+		emuTrafRates(v.Results, time.Since(emuTraf.started).Seconds(), wire)
 		v.History = maps.Clone(emuTraf.hist)
 		v.Running = slices.ContainsFunc(v.Results, func(r EmuStreamResult) bool { return r.Running }) || time.Since(emuTraf.started) < 3*time.Second
 		v.Started = emuTraf.started.Format(time.RFC3339)
@@ -343,7 +401,7 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 }
 
 // emuTrafRates works out each stream's rates since the last read and keeps them for the graphs (emuLab.mu held).
-func emuTrafRates(rs []EmuStreamResult, at float64) {
+func emuTrafRates(rs []EmuStreamResult, at float64, wire map[string]float64) {
 	if emuTraf.prev == nil {
 		emuTraf.prev, emuTraf.hist = map[string][3]float64{}, map[string][][5]float64{}
 	}
@@ -353,6 +411,9 @@ func emuTrafRates(rs []EmuStreamResult, at float64) {
 		if ok && at-p[0] >= 0.5 {
 			dt := at - p[0]
 			r.TxRate, r.RxRate = math.Max(0, (float64(r.TX)-p[1])/dt), math.Max(0, (float64(r.RX)-p[2])/dt)
+			if b := wire[r.ID]; b > 0 {
+				r.TxMbps, r.RxMbps = math.Round(r.TxRate*b/1e4)/100, math.Round(r.RxRate*b/1e4)/100
+			}
 			h := append(emuTraf.hist[r.ID], [5]float64{math.Round(at*10) / 10, math.Round(r.TxRate), math.Round(r.RxRate), math.Round(r.Loss*100) / 100, math.Round(r.LatAvg*1000) / 1000})
 			if len(h) > 300 {
 				h = h[len(h)-300:]
@@ -459,6 +520,12 @@ func (a *App) EmuTesterSet(t emu.Tester) (EmuTrafficView, error) {
 	}
 	cur.Name, cur.IP, cur.GW, cur.VLAN, cur.X, cur.Y = orStr(strings.TrimSpace(t.Name), cur.Name), t.IP, t.GW, t.VLAN, t.X, t.Y
 	cur.IP6, cur.Groups, cur.DHCP, cur.SLAAC, cur.LLDP = t.IP6, t.Groups, t.DHCP && t.IP == "", t.SLAAC && t.IP6 == "", t.LLDP
+	cur.Speed = min(400000, max(0, t.Speed))
+	for i, x := range l.Streams { // rates in % of its line rate follow it
+		if x.From == cur.ID && x.RateUnit == "pct" {
+			l.Streams[i].PPS = min(100000, max(1, int(math.Round(x.PPSFor(cur.LineMbps())))))
+		}
+	}
 	if l := emuTraf.leases[cur.ID]; emuTraf.leases != nil {
 		if !cur.DHCP {
 			l[0] = ""
@@ -530,6 +597,22 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 		return EmuTrafficView{}, errors.New("give the test port it goes from an IP address (or the stream a source address)")
 	}
 	s.Size = min(9000, max(60, orInt(s.Size, 128)))
+	switch s.RateUnit {
+	case "":
+		s.Rate = 0
+	case "mbps", "pct":
+		if s.Rate <= 0 || s.RateUnit == "pct" && s.Rate > 100 {
+			emuLab.mu.Unlock()
+			return EmuTrafficView{}, errors.New("the rate is more than 0 (and at most 100 % of the line rate)")
+		}
+		if s.SizeMode == "inc" || s.SizeMode == "random" {
+			s.SizeMax = min(9000, max(s.Size, s.SizeMax))
+		}
+		s.PPS = int(math.Round(s.PPSFor(l.TesterByID(s.From).LineMbps())))
+	default:
+		emuLab.mu.Unlock()
+		return EmuTrafficView{}, errors.New("the rate unit is pps, mbps or pct")
+	}
 	s.PPS = min(100000, max(1, orInt(s.PPS, 100)))
 	if s.Seconds <= 0 && s.Count <= 0 {
 		s.Seconds = 10
@@ -659,12 +742,15 @@ func emuTrafficRows(v EmuTrafficView) [][]string {
 	for _, r := range v.Results {
 		res[r.ID] = r
 	}
-	rows := [][]string{{"stream", "from", "to", "kind", "vlan", "size", "pps", "sent", "expected", "received", "loss %", "latency avg ms", "latency max ms", "result", "why", "latency min ms", "jitter ms", "out of order", "duplicates", "dscp", "sizes"}}
+	rows := [][]string{{"stream", "from", "to", "kind", "vlan", "size", "pps", "sent", "expected", "received", "loss %", "latency avg ms", "latency max ms", "result", "why", "latency min ms", "jitter ms", "out of order", "duplicates", "dscp", "sizes", "latency p50 ms", "latency p95 ms", "latency p99 ms", "latency", "flows", "flows with loss"}}
 	for _, s := range v.Streams {
 		r := res[s.ID]
-		lat, latMax, latMin, jit := "-", "-", "-", "-"
+		lat, latMax, latMin, jit, p50, p95, p99 := "-", "-", "-", "-", "-", "-", "-"
 		if r.LatAvg >= 0 {
 			lat, latMax, latMin, jit = fmt.Sprintf("%.3f", r.LatAvg), fmt.Sprintf("%.3f", r.LatMax), fmt.Sprintf("%.3f", r.LatMin), fmt.Sprintf("%.3f", r.Jitter)
+		}
+		if r.P50 > 0 {
+			p50, p95, p99 = fmt.Sprintf("%.3f", r.P50), fmt.Sprintf("%.3f", r.P95), fmt.Sprintf("%.3f", r.P99)
 		}
 		sizes := fmt.Sprint(s.Size)
 		switch s.SizeMode {
@@ -675,7 +761,7 @@ func emuTrafficRows(v EmuTrafficView) [][]string {
 		}
 		to := orStr(name[s.To], orStr(s.DstIP, "all"))
 		rows = append(rows, []string{s.Name, name[s.From], to, s.Kind, fmt.Sprint(s.VLAN), fmt.Sprint(s.Size), fmt.Sprint(s.PPS), fmt.Sprint(r.TX), fmt.Sprint(r.Expected), fmt.Sprint(r.RX), fmt.Sprintf("%.2f", r.Loss), lat, latMax, orStr(strings.ToUpper(r.Result), "-"), r.Why,
-			latMin, jit, fmt.Sprint(r.OOO), fmt.Sprint(r.Dup), fmt.Sprint(s.DSCP), sizes})
+			latMin, jit, fmt.Sprint(r.OOO), fmt.Sprint(r.Dup), fmt.Sprint(s.DSCP), sizes, p50, p95, p99, map[bool]string{true: "round trip", false: "one way"}[s.RTT], fmt.Sprint(r.FlowsN), fmt.Sprint(r.FlowsBad)})
 	}
 	return rows
 }
@@ -694,7 +780,11 @@ func (a *App) EmuTrafficReportText() (string, error) {
 		if i == 0 {
 			continue
 		}
-		fmt.Fprintf(&b, "- %s (%s → %s, %s, VLAN %s, DSCP %s, %s B, %s pps): sent %s, received %s of %s, loss %s %%, latency %s ms min / %s avg / %s max, jitter %s ms, %s out of order, %s duplicates: %s %s\n", r[0], r[1], r[2], r[3], r[4], r[19], r[20], r[6], r[7], r[9], r[8], r[10], r[15], r[11], r[12], r[16], r[17], r[18], r[13], r[14])
+		fmt.Fprintf(&b, "- %s (%s → %s, %s, VLAN %s, DSCP %s, %s B, %s pps): sent %s, received %s of %s, loss %s %%, latency (%s) %s ms min / %s avg / %s p50 / %s p95 / %s p99 / %s max, jitter %s ms, %s out of order, %s duplicates", r[0], r[1], r[2], r[3], r[4], r[19], r[20], r[6], r[7], r[9], r[8], r[10], r[24], r[15], r[11], r[21], r[22], r[23], r[12], r[16], r[17], r[18])
+		if r[25] != "0" {
+			fmt.Fprintf(&b, ", %s flows (%s with loss)", r[25], r[26])
+		}
+		fmt.Fprintf(&b, ": %s %s\n", r[13], r[14])
 	}
 	if b.Len() == 0 {
 		return "No stream yet.", nil
@@ -745,7 +835,7 @@ func (a *App) emuTrafficReportAs(format string) ([]byte, string, error) {
 			pass += map[bool]int{true: 1}[r.Result == "pass"]
 			fail += map[bool]int{true: 1}[r.Result == "fail"]
 		}
-		fmt.Fprintf(&b, "<!doctype html><meta charset=utf-8><title>Traffic report - %s</title><style>body{font:14px system-ui,sans-serif;margin:24px;color:#222}table{border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px 10px;text-align:left;white-space:nowrap}th{color:#666;font-weight:500}.pass{color:#1a7f37;font-weight:600}.fail{color:#cf222e;font-weight:600}</style>", html.EscapeString(topo))
+		fmt.Fprintf(&b, "<!doctype html><meta charset=utf-8><title>Traffic report - %s</title><style>body{font:14px system-ui,sans-serif;margin:24px;color:#222}table{border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px 10px;text-align:left;white-space:nowrap}th{color:#666;font-weight:500}.pass{color:#1a7f37;font-weight:600}.fail{color:#cf222e;font-weight:600}.g{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0}figure{margin:0;border:1px solid #e3e3e3;border-radius:10px;padding:10px 12px}figcaption{font-size:12.5px;margin-bottom:4px;color:#555}figcaption b{color:#222}figcaption i{display:inline-block;width:12px;height:2px;margin:0 4px 3px 10px}h3{margin:24px 0 4px}</style>", html.EscapeString(topo))
 		fmt.Fprintf(&b, "<h2>Traffic report - %s</h2><p>%s · %d passed, %d failed, %d streams · Termwright emulated lab</p><table>", html.EscapeString(topo), time.Now().Format("2006-01-02 15:04"), pass, fail, len(v.Streams))
 		for i, r := range rows {
 			b.WriteString("<tr>")
@@ -761,6 +851,7 @@ func (a *App) emuTrafficReportAs(format string) ([]byte, string, error) {
 			b.WriteString("</tr>")
 		}
 		b.WriteString("</table>")
+		b.WriteString(emuReportGraphs(v))
 	}
 	return []byte(b.String()), map[bool]string{true: "text/csv; charset=utf-8", false: "text/html; charset=utf-8"}[format == "csv"], nil
 }

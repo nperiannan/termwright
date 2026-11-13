@@ -2,6 +2,7 @@ import { Component, ElementRef, HostListener, OnDestroy, computed, effect, injec
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { ChartSeries, TrafficChart } from './traffic-chart';
+import { StreamDetail } from './stream-detail';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
 import { EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
@@ -23,7 +24,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, TrafficChart, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead],
+  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, TrafficChart, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" /> }
@@ -640,16 +641,17 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             @if (traf()?.note) { <p class="trn">⚠ {{ traf()!.note }}</p> }
             <app-tv-bar [tv]="stView" /><table><tr><th tvh [tv]="stView" key="stream" filter="text">{{ tr('Stream') }}</th><th tvh [tv]="stView" key="path" filter="text">{{ tr('From → To') }}</th><th tvh [tv]="stView" key="frame" filter="text">{{ tr('Frame') }}</th><th tvh [tv]="stView" key="rate" filter="none">{{ tr('Rate') }}</th><th tvh [tv]="stView" key="sent" filter="none">{{ tr('Sent') }}</th><th tvh [tv]="stView" key="recv" filter="none">{{ tr('Received') }}</th><th tvh [tv]="stView" key="loss" filter="none">{{ tr('Loss') }}</th><th tvh [tv]="stView" key="lat" filter="none">{{ tr('Latency') }}</th><th tvh [tv]="stView" key="order" filter="none">{{ tr('Order') }}</th><th>{{ tr('Now') }}</th><th tvh [tv]="stView" key="result">{{ tr('Result') }}</th><th></th></tr>
               @for (x of stView.rows(); track x.id) { @let r = resOf(x.id);
-                <tr [class.on]="sEd()?.id === x.id" (click)="editStream(x)"><td><b>{{ x.name }}</b></td><td class="mono">{{ tpName(x.from) }} → {{ x.to ? tpName(x.to) : (x.dstIp || tr('all')) }}</td>
+                <tr [class.on]="sEd()?.id === x.id" (click)="editStream(x)"><td><b>{{ x.name }}</b></td><td class="mono"><span class="nw">{{ tpName(x.from) }} → </span><span class="nw">{{ x.to ? tpName(x.to) : (x.dstIp || tr('all')) }}</span></td>
                   <td class="mono">{{ x.kind.toUpperCase() }}@if (x.dstIp?.includes(':')) { v6 }@if (x.vlan) { · VLAN {{ x.vlan }} }@if (x.dscp) { · DSCP {{ x.dscp }} } · {{ x.sizeMode === 'imix' ? 'IMIX' : x.sizeMode ? x.size + '-' + x.sizeMax + ' B' : x.size + ' B' }}@if (x.mods?.length) { <span class="muted" [title]="modText(x)"> · ±{{ x.mods!.length }}</span> }</td><td class="mono">{{ x.pps }} pps · {{ x.count ? x.count + ' ' + tr('frames') : (x.seconds || 10) + ' s' }}</td>
                   <td class="mono">{{ r?.tx ?? '-' }}</td><td class="mono">{{ r ? r.rx : '-' }}@if (r?.other) { <span class="muted" [title]="tr('Arrived at a test port it was not for (flooded)')"> +{{ r!.other }}</span> }</td>
-                  <td class="mono" [class.bad]="(r?.loss ?? 0) > x.maxLoss">{{ r?.expected ? r!.loss.toFixed(1) + ' %' : '-' }}</td><td class="mono" [title]="r && r.latAvg >= 0 ? tr('min {0} · avg {1} · max {2} ms · jitter {3} ms', (r.latMin ?? 0).toFixed(3), r.latAvg.toFixed(3), r.latMax.toFixed(3), (r.jitter ?? 0).toFixed(3)) : ''">{{ r && r.latAvg >= 0 ? r.latAvg.toFixed(2) + ' ms' : '-' }}@if (r?.jitter) { <span class="muted"> ±{{ r!.jitter!.toFixed(2) }}</span> }</td>
+                  <td class="mono" [class.bad]="(r?.loss ?? 0) > x.maxLoss">{{ r?.expected ? r!.loss.toFixed(1) + ' %' : '-' }}</td><td class="mono" [title]="r && r.latAvg >= 0 ? tr('min {0} · avg {1} · p95 {2} · p99 {3} · max {4} ms · jitter {5} ms', (r.latMin ?? 0).toFixed(3), r.latAvg.toFixed(3), (r.p95 ?? r.latAvg).toFixed(3), (r.p99 ?? r.latMax).toFixed(3), r.latMax.toFixed(3), (r.jitter ?? 0).toFixed(3)) : ''">{{ r && r.latAvg >= 0 ? r.latAvg.toFixed(2) + ' ms' : '-' }}@if (r?.jitter) { <span class="muted"> ±{{ r!.jitter!.toFixed(2) }}</span> }</td>
                   <td class="mono" [class.bad]="!!r?.ooo || !!r?.dup" [title]="tr('Out of order · duplicates')">{{ r?.tx ? (r!.ooo ?? 0) + ' · ' + (r!.dup ?? 0) : '-' }}</td>
                   <td class="spk">@if (spark(x.id); as sp) { <svg width="90" height="22" viewBox="0 0 90 22"><polyline [attr.points]="sp.tx" class="stx" /><polyline [attr.points]="sp.rx" class="srx" /></svg><span class="mono small">{{ r?.running ? (r!.rxRate | number: '1.0-0') + '/s' : '' }}</span> }</td>
                   <td>@if (r?.running) { <span class="pill ru">{{ tr('running') }}</span> } @else if (r?.result === 'pass') { <span class="pill ok">PASS</span> } @else if (r?.result === 'fail') { <span class="pill er" [title]="r!.why || ''">FAIL</span> <span class="muted small">{{ r!.why }}</span> }</td>
                   <td class="ra"><a (click)="$event.stopPropagation(); trafStart([x.id])" [title]="tr('Run only this one')">▶</a><a (click)="$event.stopPropagation(); delStream(x)" [title]="tr('Delete')">✕</a></td></tr>
               } @empty { <tr><td colspan="12" class="muted">{{ (traf()?.testers?.length ?? 0) ? tr('No stream yet: ＋ Stream.') : tr('No test port yet: ＋ Test Port, or right-click a switch → Add Test Port.') }}</td></tr> }
             </table>
+            @if (sEd()?.id && resOf(sEd()!.id)?.tx) { <app-stream-detail [stream]="sEd()!" [res]="resOf(sEd()!.id)!" /> }
           </div>
           @if (sEd(); as e) {
             <div class="tre"><div class="treh"><b>{{ e.id ? e.name : tr('New stream') }}</b><span class="sp"></span>@if (e.id) { <button type="button" class="sm" (click)="saveStream(e, true)">▶ {{ tr('Save and Run') }}</button> }<button type="button" class="sm primary" (click)="saveStream(e)">{{ tr('Save') }}</button><a (click)="sEd.set(null)" [title]="tr('Close')">✕</a></div>
@@ -662,7 +664,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <label><span>VLAN</span><input type="number" min="0" max="4094" [(ngModel)]="e.vlan" [placeholder]="tr('untagged')" /></label>
               <label><span>{{ tr('Frame size') }}</span><div class="two"><select [(ngModel)]="e.sizeMode"><option value="">{{ tr('fixed') }}</option><option value="inc">{{ tr('stepping') }}</option><option value="random">{{ tr('random') }}</option><option value="imix">IMIX</option></select>@if (e.sizeMode !== 'imix') { <input type="number" min="60" max="9000" [(ngModel)]="e.size" /> }@if (e.sizeMode === 'inc' || e.sizeMode === 'random') { <input type="number" min="60" max="9000" [(ngModel)]="e.sizeMax" [placeholder]="tr('to')" /> }</div></label>
               <label><span>{{ tr('QoS') }}</span><div class="two"><input type="number" min="0" max="63" [(ngModel)]="e.dscp" placeholder="DSCP" [title]="tr('IP DSCP 0-63 (EF = 46)')" />@if (e.vlan) { <input type="number" min="0" max="7" [(ngModel)]="e.prio" placeholder="PCP" [title]="tr('802.1p priority 0-7')" /> }</div></label>
-              <label><span>{{ tr('Rate (pps)') }}</span><input type="number" min="1" max="100000" [(ngModel)]="e.pps" /></label>
+              <label><span>{{ tr('Rate') }}</span><div class="two ru">@if (e.rateUnit) { <input type="number" min="0" step="any" [(ngModel)]="e.rate" /> } @else { <input type="number" min="1" max="100000" [(ngModel)]="e.pps" /> }<select class="unit" [ngModel]="e.rateUnit || ''" (ngModelChange)="setRateUnit(e, $event)"><option value="">pps</option><option value="mbps">Mbit/s</option><option value="pct">{{ tr('% of line') }}</option></select></div></label>
+              @if (e.rateUnit) { <p class="rhint" [class.bad]="ppsOf(e) > 100000">{{ tr('≈ {0} pps at {1} B on a {2} Mbit/s line', (ppsOf(e) | number: '1.0-0') ?? '', (meanSize(e) | number: '1.0-0') ?? '', lineOf(e)) }}@if (ppsOf(e) > 100000) { · {{ tr('a test port sends at most 100,000') }} }</p> }
+              @if (e.to) { <label><span>{{ tr('Round trip') }}</span><input type="checkbox" class="cbx" [(ngModel)]="e.rtt" [title]="tr('The test port it goes to sends each frame back: the latency is the round trip, measured on one clock - so also between test ports on two hosts')" /></label> }
               <label><span>{{ tr('Burst') }}</span><input type="number" min="0" [(ngModel)]="e.burst" [placeholder]="tr('frames back to back')" [title]="tr('Frames sent back to back; the rate stays the average')" /></label>
               <div class="mods"><span>{{ tr('Changing fields') }}</span><div>
                 @for (m of e.mods ?? []; track $index; let i = $index) { <div class="mod"><select [(ngModel)]="m.field">@for (f of modFields; track f.k) { <option [value]="f.k">{{ tr(f.name) }}</option> }</select><select [(ngModel)]="m.mode"><option value="inc">{{ tr('stepping') }}</option><option value="random">{{ tr('random') }}</option></select><input type="number" min="1" [(ngModel)]="m.count" [title]="tr('How many values')" /><a (click)="e.mods!.splice(i, 1)">✕</a></div> }
@@ -684,6 +688,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <label><span>{{ tr('Gateway') }}</span><input [(ngModel)]="t.gw" [placeholder]="tr('for streams to another network')" /></label>
               <label><span>VLAN</span><input type="number" min="0" max="4094" [(ngModel)]="t.vlan" [placeholder]="tr('untagged')" [title]="tr('Its frames carry this VLAN tag (0: untagged)')" /></label>
               <label><span>IPv6</span><input [(ngModel)]="t.ip6" [placeholder]="tr('fd00::1/64, or slaac')" [title]="tr('It answers neighbour solicitations and ping there; IPv6 streams use it. slaac: it takes one from router advertisements')" /></label>
+              <label><span>{{ tr('Line rate') }}</span><input type="number" min="0" [(ngModel)]="t.speed" placeholder="1000" [title]="tr('Mbit/s: streams with a rate in % of line rate use it')" /></label>
               <label><span>LLDP</span><input type="checkbox" class="cbx" [(ngModel)]="t.lldp" [title]="tr('Announce it by LLDP, so the switch sees Termwright and its name on the port')" /></label>
               <label><span>{{ tr('Multicast') }}</span><input [(ngModel)]="t.groups" placeholder="239.1.1.1, ff0e::1" [title]="tr('Groups it joins (IGMP / MLD reports), to receive multicast streams')" /></label>
               <p class="muted small">{{ tr('A sender and counter on the host where the switch runs (no VM): tens of thousands of frames a second - for forwarding, VLANs, LAGs, ACLs and failover, not line rate.') }}</p>
@@ -792,7 +797,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .tpm { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
     .tcs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
     .tpx { flex: 1; min-height: 0; }
-    .tpm .trw td:nth-child(-n+3), .tpm .trw th:nth-child(-n+3) { white-space: normal; }
+    .tpm .trw td:nth-child(-n+3), .tpm .trw th:nth-child(-n+3) { white-space: normal; } .tpm .trw td:nth-child(2), .tpm .trw td:nth-child(3) { min-width: 130px; } .nw { white-space: nowrap; }
     .ptabs small.run { color: var(--success, #1fa45a); }
     @media (max-width: 1300px) { .kpis { grid-template-columns: repeat(4, minmax(120px, 1fr)); } .tcs { grid-template-columns: 1fr; } }
     .pal { border-right: 1px solid var(--line); background: var(--surface); padding: 10px; overflow: auto; }
@@ -875,6 +880,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .trn { margin: 6px 10px; color: var(--warning, #e39b17); font-size: 12px; }
     .pill { font: 600 10.5px var(--mono, monospace); padding: 1px 7px; border-radius: 9px; } .pill.ok { color: var(--success, #1fa45a); background: color-mix(in srgb, var(--success, #1fa45a) 14%, transparent); } .pill.er { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); } .pill.ru { color: var(--accent); background: var(--accent-soft); }
     .mods { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; > span { color: var(--muted); padding-top: 4px; } .mod { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 54px 14px; gap: 4px; align-items: center; margin-bottom: 4px; a { cursor: pointer; color: var(--muted); } } }
+    .trt td b { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+    .rhint { margin: -3px 0 0 94px; color: var(--muted); font-size: 11px; &.bad { color: var(--warning, #e39b17); } } .two.ru { grid-template-columns: minmax(0, 1fr) 104px; }
     .cbx { height: auto !important; justify-self: start; } td.spk { white-space: nowrap; svg { vertical-align: middle; margin-right: 4px; } polyline { fill: none; stroke-width: 1.5; } .stx { stroke: var(--s1); } .srx { stroke: var(--s2); } }
     .tre { border-left: 1px solid var(--line); padding: 8px 12px; overflow: auto; display: grid; gap: 7px; align-content: start; background: var(--surface-2); font-size: 12px;
       .treh { display: flex; align-items: center; gap: 6px; position: sticky; top: -8px; z-index: 1; background: var(--surface-2); padding: 4px 0; margin-top: -4px; b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } a { cursor: pointer; color: var(--muted); padding: 0 2px; } } label { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: center; gap: 8px; > span { color: var(--muted); } } input, select { height: 26px; min-width: 0; } .two { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
@@ -1039,7 +1046,7 @@ export class LabWorkspace implements OnDestroy {
   protected traf = signal<EmuTrafficView | null>(null);
   protected sEd = signal<EmuStream | null>(null);
   /** The test port editor: a new one (vm, port), or one that exists (id, its name and where it is). */
-  protected tEd = signal<{ id?: string; name?: string; where?: string; vm: string; port: string; ip: string; gw: string; vlan?: number | null; ip6?: string; groups?: string; lldp?: boolean; free: string[] } | null>(null);
+  protected tEd = signal<{ id?: string; name?: string; where?: string; vm: string; port: string; ip: string; gw: string; vlan?: number | null; ip6?: string; groups?: string; lldp?: boolean; speed?: number | null; free: string[] } | null>(null);
   protected tpAt = signal<Record<string, { x: number; y: number }>>({});
   protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw'];
   private trafTimer: ReturnType<typeof setInterval> | null = null;
@@ -1124,12 +1131,12 @@ export class LabWorkspace implements OnDestroy {
     this.sEd.set(null);
     if (this.page() !== 'traffic') this.dock.set('traffic');
     void this.loadTraf();
-    this.tEd.set({ id: x.id, name: x.name, where: this.tpWhere(x), vm: x.vm, port: String(x.port), ip: x.dhcp ? 'dhcp' : x.ip ?? '', gw: x.gw ?? '', vlan: x.vlan || null, ip6: x.slaac ? 'slaac' : x.ip6 ?? '', groups: (x.groups ?? []).join(', '), lldp: x.lldp !== false, free: [] });
+    this.tEd.set({ id: x.id, name: x.name, where: this.tpWhere(x), vm: x.vm, port: String(x.port), ip: x.dhcp ? 'dhcp' : x.ip ?? '', gw: x.gw ?? '', vlan: x.vlan || null, ip6: x.slaac ? 'slaac' : x.ip6 ?? '', groups: (x.groups ?? []).join(', '), lldp: x.lldp !== false, speed: x.speed || null, free: [] });
   }
   async saveTester(t: NonNullable<ReturnType<typeof this.tEd>>) {
     const cur = this.traf()?.testers.find(x => x.id === t.id); if (!cur) return;
     try {
-      const v = await this.backend.emuTesterSet({ ...cur, name: (t.name ?? '').trim() || cur.name, ip: t.ip.trim(), gw: t.gw.trim(), vlan: +(t.vlan ?? 0) || 0, ip6: (t.ip6 ?? '').trim(), groups: (t.groups ?? '').split(/[\s,]+/).filter(Boolean), lldp: t.lldp !== false, dhcp: false, slaac: false });
+      const v = await this.backend.emuTesterSet({ ...cur, name: (t.name ?? '').trim() || cur.name, ip: t.ip.trim(), gw: t.gw.trim(), vlan: +(t.vlan ?? 0) || 0, ip6: (t.ip6 ?? '').trim(), groups: (t.groups ?? '').split(/[\s,]+/).filter(Boolean), lldp: t.lldp !== false, speed: +(t.speed ?? 0) || 0, dhcp: false, slaac: false });
       this.traf.set(v); this.tEd.set(null); this.ui.toast(tr('{0} saved', cur.name), 'success'); if (v.note) this.ui.toast(v.note);
     } catch (e) { this.ui.error(e); }
   }
@@ -1212,9 +1219,23 @@ export class LabWorkspace implements OnDestroy {
     this.tEd.set(null);
     this.sEd.set({ id: '', name: '', from: ts[0].id, to: ts[1]?.id ?? '', kind: 'udp', size: 512, pps: 1000, seconds: 30, maxLoss: 1, maxLatency: 0 });
   }
-  editStream(x: EmuStream) { this.tEd.set(null); this.sEd.set({ ...x, to: x.to ?? '', mods: (x.mods ?? []).map(m => ({ ...m })) }); }
+  /** Rates in Mbit/s or % of line: what they come to in frames per second, the mean frame size, the line rate. */
+  protected meanSize(e: EmuStream) { return e.sizeMode === 'imix' ? 4342 / 12 : e.sizeMode === 'inc' || e.sizeMode === 'random' ? (+e.size + Math.max(+e.size, +(e.sizeMax || 0))) / 2 : +e.size || 128; }
+  protected lineOf(e: EmuStream) { return this.traf()?.testers.find(t => t.id === e.from)?.speed || 1000; }
+  protected ppsOf(e: EmuStream) {
+    const bits = (this.meanSize(e) + 20) * 8, r = +(e.rate || 0);
+    return e.rateUnit === 'mbps' ? (r * 1e6) / bits : e.rateUnit === 'pct' ? ((r / 100) * this.lineOf(e) * 1e6) / bits : +e.pps;
+  }
+  protected setRateUnit(e: EmuStream, u: '' | 'mbps' | 'pct') {
+    const pps = this.ppsOf(e), bits = (this.meanSize(e) + 20) * 8, round = (v: number) => Math.round(v * 100) / 100;
+    e.rateUnit = u;
+    if (u === 'mbps') e.rate = round((pps * bits) / 1e6);
+    else if (u === 'pct') e.rate = round(((pps * bits) / (this.lineOf(e) * 1e6)) * 100);
+    else { e.pps = Math.min(100000, Math.max(1, Math.round(pps))); e.rate = 0; }
+  }
+  editStream(x: EmuStream) { this.tEd.set(null); this.sEd.set({ ...x, to: x.to ?? '', sizeMode: x.sizeMode ?? '', rateUnit: x.rateUnit ?? '', mods: (x.mods ?? []).map(m => ({ ...m })) }); }
   async saveStream(e: EmuStream, run = false) {
-    try { const v = await this.backend.emuStreamSave({ ...e, vlan: +(e.vlan || 0), size: +e.size, pps: +e.pps, seconds: +(e.seconds || 0), count: +(e.count || 0), maxLoss: +(e.maxLoss || 0), maxLatency: +(e.maxLatency || 0), maxJitter: +(e.maxJitter || 0), dscp: +(e.dscp || 0), prio: +(e.prio || 0), burst: +(e.burst || 0), sizeMax: +(e.sizeMax || 0), sizeMode: e.sizeMode || '', mods: (e.mods ?? []).map(m => ({ ...m, count: +m.count || 1, step: +(m.step || 1) })) }); this.traf.set(v); this.sEd.set(null); if (run) await this.trafStart([e.id]); } catch (err) { this.ui.error(err); }
+    try { const v = await this.backend.emuStreamSave({ ...e, vlan: +(e.vlan || 0), size: +e.size, pps: +e.pps, rate: e.rateUnit ? +(e.rate || 0) : 0, rateUnit: e.rateUnit || '', rtt: !!e.rtt && !!e.to, seconds: +(e.seconds || 0), count: +(e.count || 0), maxLoss: +(e.maxLoss || 0), maxLatency: +(e.maxLatency || 0), maxJitter: +(e.maxJitter || 0), dscp: +(e.dscp || 0), prio: +(e.prio || 0), burst: +(e.burst || 0), sizeMax: +(e.sizeMax || 0), sizeMode: e.sizeMode || '', mods: (e.mods ?? []).map(m => ({ ...m, count: +m.count || 1, step: +(m.step || 1) })) }); this.traf.set(v); this.sEd.set(null); if (run) await this.trafStart([e.id]); } catch (err) { this.ui.error(err); }
   }
   async delStream(x: EmuStream) { try { this.traf.set(await this.backend.emuStreamRemove(x.id)); if (this.sEd()?.id === x.id) this.sEd.set(null); } catch (e) { this.ui.error(e); } }
   async trafStart(ids: string[]) { try { this.traf.set(await this.backend.emuTrafficStart(ids)); await this.loadTraf(); } catch (e) { this.ui.error(e); } }

@@ -1991,7 +1991,7 @@ paths:
             tags:
                 - Tools
             summary: The emulated lab's traffic generator
-            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss and latency). Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
+            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -2080,6 +2080,19 @@ paths:
                                 pps:
                                     description: packets per second (default 100, at most 100000)
                                     type: integer
+                                rate:
+                                    description: 'add_stream: the rate in rate_unit (instead of pps)'
+                                    type: number
+                                rate_unit:
+                                    description: 'add_stream: pps, mbps (Mbit/s on the wire, with preamble and gap) or pct (% of the sending test port''s line rate)'
+                                    enum:
+                                        - pps
+                                        - mbps
+                                        - pct
+                                    type: string
+                                round_trip:
+                                    description: 'add_stream: the test port it goes to sends each frame back; latency is the round trip (works between test ports on two hosts)'
+                                    type: boolean
                                 seconds:
                                     type: integer
                                 size:
@@ -2095,6 +2108,9 @@ paths:
                                         - random
                                         - imix
                                     type: string
+                                speed:
+                                    description: 'add_port, set_port: the test port''s line rate in Mbit/s, for rates in % of it (default 1000)'
+                                    type: integer
                                 src_ip:
                                     type: string
                                 streams:
@@ -2984,6 +3000,38 @@ components:
                 - field
                 - mode
                 - count
+        FlowResult:
+            type: object
+            properties:
+                flow:
+                    description: its number (0 = every field at its first value)
+                    type: integer
+                name:
+                    description: its field values (dport 5002, srcIp 10.0.0.3)
+                    type: string
+                tx:
+                    description: frames sent
+                    type: integer
+                rx:
+                    description: frames received
+                    type: integer
+                loss:
+                    description: '%'
+                    type: number
+                latAvg:
+                    description: ms (-1 = not measured)
+                    type: number
+                latMax:
+                    description: ms
+                    type: number
+            required:
+                - flow
+                - name
+                - tx
+                - rx
+                - loss
+                - latAvg
+                - latMax
         Host:
             type: object
             properties:
@@ -3645,6 +3693,38 @@ components:
                 - name
                 - mode
                 - source
+        LatBin:
+            type: object
+            properties:
+                lo:
+                    description: ms
+                    type: number
+                hi:
+                    description: ms
+                    type: number
+                n:
+                    description: frames
+                    type: integer
+            required:
+                - lo
+                - hi
+                - "n"
+        Mark:
+            type: object
+            properties:
+                vlan:
+                    type: integer
+                prio:
+                    type: integer
+                dscp:
+                    type: integer
+                n:
+                    type: integer
+            required:
+                - vlan
+                - prio
+                - dscp
+                - "n"
         Stream:
             type: object
             description: Frames from one test port to another, to every other one (broadcast), to an address or to a multicast group.
@@ -3728,6 +3808,15 @@ components:
                 test:
                     description: made by a test run for one of its trials (not one of the user's streams)
                     type: string
+                rateUnit:
+                    description: 'how the rate was given: "" frames per second (pps), mbps (Mbit/s on the wire), pct (% of the sending test port''s line rate)'
+                    type: string
+                rate:
+                    description: the rate in that unit (pps is worked out from it)
+                    type: number
+                rtt:
+                    description: 'round trip: the test port it goes to sends each frame back, and the latency is the round trip (measured on one clock, so also between test ports on two hosts)'
+                    type: boolean
             required:
                 - id
                 - name
@@ -3791,6 +3880,48 @@ components:
                 why:
                     description: why it failed
                     type: string
+                p50:
+                    description: 'latency percentiles, ms (from a histogram of quarter octaves: within 10 %)'
+                    type: number
+                p95:
+                    description: 'ms: 95 % of the frames were faster'
+                    type: number
+                p99:
+                    description: 'ms: 99 % of the frames were faster'
+                    type: number
+                hist:
+                    description: the latency histogram, an octave a bar
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/LatBin'
+                flows:
+                    description: 'a stream with changing fields: its flows, the most lossy first (at most 32)'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/FlowResult'
+                flowsN:
+                    description: how many flows it has sent
+                    type: integer
+                flowsLossy:
+                    description: how many of them lost frames
+                    type: integer
+                marks:
+                    description: the VLAN, priority and DSCP its frames arrived with
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Mark'
+                txMbps:
+                    description: Mbit/s on the wire, now
+                    type: number
+                rxMbps:
+                    description: Mbit/s on the wire received, now
+                    type: number
             required:
                 - id
                 - tx
@@ -3856,6 +3987,9 @@ components:
                     type: string
                 vlan:
                     description: it tags its own frames (ARP and ping answers) with this VLAN
+                    type: integer
+                speed:
+                    description: its line rate, Mbit/s, for rates given as % of it (default 1000)
                     type: integer
                 portName:
                     description: as the switch names it (filled in for the screens)
@@ -4275,6 +4409,15 @@ components:
                 test:
                     description: made by a test run for one of its trials (not one of the user's streams)
                     type: string
+                rateUnit:
+                    description: 'how the rate was given: "" frames per second (pps), mbps (Mbit/s on the wire), pct (% of the sending test port''s line rate)'
+                    type: string
+                rate:
+                    description: the rate in that unit (pps is worked out from it)
+                    type: number
+                rtt:
+                    description: 'round trip: the test port it goes to sends each frame back, and the latency is the round trip (measured on one clock, so also between test ports on two hosts)'
+                    type: boolean
             required:
                 - from
             additionalProperties: false

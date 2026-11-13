@@ -333,3 +333,85 @@ func TestTrafficPyProtocols(t *testing.T) {
 		t.Fatalf("gratuitous ARP after the lease, LLDP: %v", seen)
 	}
 }
+
+// Per-flow counters, the latency histogram, the marks frames arrive with, and a round-trip stream
+// (the far test port sends its frames back; the sender measures the latency).
+func TestTrafficPyFlows(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sw := func(in, out int) *net.UDPConn {
+		c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: in})
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			buf := make([]byte, 65536)
+			for {
+				n, _, err := c.ReadFromUDP(buf)
+				if err != nil {
+					return
+				}
+				_, _ = c.WriteToUDP(buf[:n], &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: out})
+			}
+		}()
+		return c
+	}
+	a, b := sw(41111, 41102), sw(41112, 41101)
+	defer a.Close()
+	defer b.Close()
+	cfg := map[string]any{"run": 7, "testers": []map[string]any{
+		{"id": "t1", "mac": "02:74:77:00:00:01", "ip": "10.10.0.1/24", "listen": 41101, "send": 41111},
+		{"id": "t2", "mac": "02:74:77:00:00:02", "ip": "10.10.0.2/24", "listen": 41102, "send": 41112}},
+		"streams": []map[string]any{
+			{"id": "s1", "from": "t1", "to": "t2", "kind": "udp", "vlan": 10, "prio": 5, "dscp": 46, "size": 128, "pps": 400, "count": 200, "on": true, "toMac": "02:74:77:00:00:02", "srcIp": "10.10.0.1", "dstIp": "10.10.0.2",
+				"mods": []map[string]any{{"field": "dport", "mode": "inc", "count": 4}}},
+			{"id": "s2", "from": "t1", "to": "t2", "kind": "udp", "rtt": true, "size": 100, "pps": 200, "count": 100, "on": true, "toMac": "02:74:77:00:00:02", "srcIp": "10.10.0.1", "dstIp": "10.10.0.2"}}}
+	j, _ := json.Marshal(cfg)
+	if err := os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir)
+	out, _ := os.Create(filepath.Join(dir, "log"))
+	cmd.Stdout, cmd.Stderr = out, out
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var st struct {
+		RX   map[string]int
+		Lat  map[string][]float64
+		Hist map[string]map[string]int
+		FRX  map[string]map[string][]float64 `json:"frx"`
+		FTX  map[string]map[string]int       `json:"ftx"`
+		FLab map[string]map[string]string    `json:"flab"`
+		QoS  map[string]map[string]int       `json:"qos"`
+	}
+	for end := time.Now().Add(8 * time.Second); time.Now().Before(end); time.Sleep(300 * time.Millisecond) {
+		b, err := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+		if err == nil && json.Unmarshal(b, &st) == nil && st.RX["s1"] == 200 && st.RX["s2"] == 100 && len(st.Lat["s2"]) > 2 && st.Lat["s2"][2] == 100 {
+			break
+		}
+	}
+	if st.RX["s1"] != 200 || len(st.FRX["s1"]) != 4 || st.FRX["s1"]["3"][0] != 50 || st.FTX["s1"]["0"] != 50 || st.FLab["s1"]["1"] != "dport 5002" {
+		lg, _ := os.ReadFile(filepath.Join(dir, "log"))
+		t.Fatalf("flows: rx %v frx %v ftx %v lab %v\n%s", st.RX, st.FRX, st.FTX, st.FLab, lg)
+	}
+	if st.QoS["s1"]["10/5/46"] != 200 || st.QoS["s2"]["0/0/0"] != 100 {
+		t.Fatalf("marks %v", st.QoS)
+	}
+	n := 0
+	for _, c := range st.Hist["s1"] {
+		n += c
+	}
+	if n != 200 {
+		t.Fatalf("histogram %v", st.Hist)
+	}
+	if l := st.Lat["s2"]; len(l) < 3 || l[2] != 100 || st.RX["s2"] != 100 {
+		t.Fatalf("round trip: lat %v rx %v", l, st.RX)
+	}
+}

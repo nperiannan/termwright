@@ -40,7 +40,7 @@ Test ports and streams are as in the API; the keyword arguments are the API's fi
 | Call | What it does |
 |---|---|
 | `add_port(switch, port, ip=…)` | A test port on a free switch port; returns its name. `ip6`, `gateway`, `vlan`, `groups`, `lldp` as in the API |
-| `add_stream(name, src, dst, …)` | A stream. `rate=` gives the speed in Mbps at layer 1 (or `rate_unit="pct"` of `line_mbps`) in place of `pps=`; `pcp=` is the VLAN priority; `size_mode="imix"`, `mods=[…]` for flows |
+| `add_stream(name, src, dst, …)` | A stream. `rate=` gives the speed in Mbit/s on the wire, or with `rate_unit="pct"` in % of the sending test port's line rate (`set_port(name, speed=10000)`; `line_mbps=` works it out in Python instead), in place of `pps=`; `rtt=True` measures round-trip latency (also between hosts); `pcp=` is the VLAN priority; `size_mode="imix"`, `mods=[…]` for flows. Results carry `p50`, `p95`, `p99`, `hist`, `flows`, `marks` |
 | `start(*names)`, `stop()`, `wait_done()` | Send, stop, wait; `wait_done` returns the results by stream name |
 | `run_streams([…])` | Add, send, wait, return the results, and remove the streams again (`keep=True` leaves them) |
 | `assert_pass(results)` | Raises `AssertionError` naming each stream that failed and why |
