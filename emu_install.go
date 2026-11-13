@@ -39,7 +39,8 @@ type EmuInstall struct {
 	ISOName string `json:"isoName"`
 	SHA256  string `json:"sha256"`
 	Size    int64  `json:"size"`
-	GB      int    `json:"gb"`
+	GB      int    `json:"gb"` // the disk, rounded up to whole GB
+	MB      int    `json:"mb"` // the disk in MB (exact)
 	RAM     int    `json:"ram"`
 	CPUs    int    `json:"cpus"`
 	Dir     string `json:"dir"`  // the lab's folder on the host
@@ -50,7 +51,39 @@ type EmuInstall struct {
 	Image   string `json:"image,omitempty"`   // the image it made
 	Console string `json:"console,omitempty"` // the console session (manual installs)
 	Started string `json:"started"`
-	Tail    string `json:"tail,omitempty"` // the end of the installer's console (while it runs; not saved)
+	// Step is the one the install is on (see emuInstallStage); Marks tell when each began, so the window can show how long each took.
+	Step  string           `json:"step"`
+	Marks []EmuInstallMark `json:"marks,omitempty"`
+	File  string           `json:"file,omitempty"` // the image file being made on the host
+	// What follows is read from the host while the install runs (filled in for the window, not saved).
+	Tail string  `json:"tail,omitempty"` // the last lines of the installer's console
+	Disk int64   `json:"disk,omitempty"` // the installer's disk on the host: bytes written so far (the file grows as the system is installed)
+	Part int64   `json:"part,omitempty"` // the image being made: bytes so far
+	Pct  float64 `json:"pct,omitempty"`  // the conversion to the image: percent
+	Idle int     `json:"idle,omitempty"` // seconds since the installer's console showed anything
+}
+
+// EmuInstallMark is the time an install began a step.
+type EmuInstallMark struct {
+	Step string `json:"step"`
+	At   string `json:"at"`
+}
+
+// emuInstallStage is the stage each step belongs to. The steps of an automatic
+// install: copy, start, boot, login, install, poweroff, convert, fetch; of a
+// manual one: copy, start, console, shutdown, convert, fetch.
+var emuInstallStage = map[string]string{"copy": instCopying, "start": instStarting, "boot": instInstalling, "login": instInstalling, "install": instInstalling,
+	"poweroff": instInstalling, "console": instWaiting, "shutdown": instSaving, "convert": instSaving, "fetch": instFetching}
+
+// markStep moves a job to a step (the caller holds emuLab.mu).
+func (j *EmuInstall) markStep(step string) {
+	if st := emuInstallStage[step]; st != "" {
+		j.Stage = st
+	}
+	if j.Step != step {
+		j.Step = step
+		j.Marks = append(j.Marks, EmuInstallMark{Step: step, At: time.Now().Format(time.RFC3339)})
+	}
 }
 
 // Install stages. Running ones: copying, starting, installing, saving, fetching; waiting is the user's turn.
@@ -70,8 +103,9 @@ const (
 type EmuInstallRequest struct {
 	Name     string `json:"name"`
 	ISO      string `json:"iso"`
-	Mode     string `json:"mode"` // "alpine" or "manual"
-	GB       int    `json:"gb"`
+	Mode     string `json:"mode"`         // "alpine" or "manual"
+	GB       int    `json:"gb"`           // the disk in GB; MB wins when it is set
+	MB       int    `json:"mb,omitempty"` // the disk in MB (for sizes that are not whole GB)
 	RAM      int    `json:"ram"`
 	CPUs     int    `json:"cpus"`
 	Host     string `json:"host"`
@@ -84,13 +118,37 @@ var emuInstallPowerWait = 90 * time.Second
 var emuInst struct {
 	mu     sync.Mutex
 	cancel map[string]context.CancelFunc
-	tail   map[string]string
+	live   map[string]*instLive
+}
+
+// instLive is what is read from the host while an install runs.
+type instLive struct {
+	console, log string // the last lines: of the console Termwright types on, of the host's log of it
+	disk, part   int64
+	pct          float64
+	idle         int
+}
+
+// emuInstInit makes the maps (emuInst.mu is held).
+func emuInstInit() {
+	if emuInst.cancel == nil {
+		emuInst.cancel, emuInst.live = map[string]context.CancelFunc{}, map[string]*instLive{}
+	}
+}
+
+// emuInstLive is the live part of a job (emuInst.mu is held).
+func emuInstLive(id string) *instLive {
+	emuInstInit()
+	if emuInst.live[id] == nil {
+		emuInst.live[id] = &instLive{}
+	}
+	return emuInst.live[id]
 }
 
 func emuInstKey(id string) string { return "emu-install:" + id }
 
 func (j *EmuInstall) spec() emu.InstallSpec {
-	return emu.InstallSpec{ID: j.ID, Dir: j.Dir, ISO: j.ISOName, GB: j.GB, RAM: j.RAM, CPUs: j.CPUs}
+	return emu.InstallSpec{ID: j.ID, Dir: j.Dir, ISO: j.ISOName, GB: j.GB, MB: j.MB, RAM: j.RAM, CPUs: j.CPUs}
 }
 
 func emuInstance(id string) *EmuInstall {
@@ -136,7 +194,9 @@ func emuInstallViews() []EmuInstall {
 	emuInst.mu.Lock()
 	defer emuInst.mu.Unlock()
 	for i := range out {
-		out[i].Tail = emuInst.tail[out[i].ID]
+		if l := emuInst.live[out[i].ID]; l != nil && (emuInstallRunning(out[i].Stage) || out[i].Stage == instWaiting) {
+			out[i].Tail, out[i].Disk, out[i].Part, out[i].Pct, out[i].Idle = orStr(l.console, l.log), l.disk, l.part, l.pct, l.idle
+		}
 		if out[i].Stage == instCopying {
 			if p := emuLab.upload[out[i].ID]; p != "" {
 				out[i].Msg = "copying the ISO to the host: " + p
@@ -171,12 +231,22 @@ func (a *App) EmuInstallStart(r EmuInstallRequest) (EmuView, error) {
 	if r.Name == "" {
 		r.Name = strings.TrimSuffix(base, filepath.Ext(base))
 	}
-	if r.GB < 1 {
-		r.GB = 8
+	if r.MB < 0 {
+		return EmuView{}, errors.New("the disk size must not be negative")
 	}
-	if r.GB > 512 {
+	if r.MB == 0 {
+		if r.GB < 1 {
+			r.GB = 8
+		}
+		r.MB = r.GB * 1024
+	}
+	if r.MB < 100 {
+		return EmuView{}, errors.New("the disk must be at least 100 MB")
+	}
+	if r.MB > 512*1024 {
 		return EmuView{}, errors.New("the disk must be at most 512 GB")
 	}
+	r.GB = (r.MB + 1023) / 1024
 	if r.RAM < 256 {
 		r.RAM = 1024
 	}
@@ -204,8 +274,9 @@ func (a *App) EmuInstallStart(r EmuInstallRequest) (EmuView, error) {
 			return EmuView{}, fmt.Errorf("the install of %s is still running on this host; wait for it or cancel it", j.Name)
 		}
 	}
-	j := EmuInstall{ID: randHex(4), Name: r.Name, Host: host, Mode: r.Mode, ISO: r.ISO, ISOName: emuNonName.ReplaceAllString(base, "_"), Size: st.Size(), GB: r.GB, RAM: r.RAM, CPUs: r.CPUs, Dir: dir,
+	j := EmuInstall{ID: randHex(4), Name: r.Name, Host: host, Mode: r.Mode, ISO: r.ISO, ISOName: emuNonName.ReplaceAllString(base, "_"), Size: st.Size(), GB: r.GB, MB: r.MB, RAM: r.RAM, CPUs: r.CPUs, Dir: dir,
 		Stage: instCopying, Msg: "checking the ISO file", Started: time.Now().Format(time.RFC3339)}
+	j.markStep("copy")
 	if r.Password != "" {
 		_ = secrets.Set(emuInstKey(j.ID), r.Password)
 	}
@@ -219,9 +290,7 @@ func (a *App) EmuInstallStart(r EmuInstallRequest) (EmuView, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	emuInst.mu.Lock()
-	if emuInst.cancel == nil {
-		emuInst.cancel, emuInst.tail = map[string]context.CancelFunc{}, map[string]string{}
-	}
+	emuInstInit()
 	emuInst.cancel[j.ID] = cancel
 	emuInst.mu.Unlock()
 	emuGo(func() { a.emuInstallRun(ctx, j.ID) })
@@ -261,6 +330,47 @@ func (a *App) emuInstallMsg(id, stage, msg string) {
 	})
 }
 
+// emuInstallStep moves a job to a step, with the message to show.
+func (a *App) emuInstallStep(id, step, msg string) {
+	a.emuInstallSet(id, func(j *EmuInstall) {
+		if j.Stage == instCancelled {
+			return
+		}
+		j.markStep(step)
+		j.Msg = msg
+	})
+}
+
+// emuInstallWatch reads the installer's progress on its host every few seconds
+// while the job runs: how much of the disk is written, the conversion's
+// percent, how long the console has been quiet, the end of the console.
+func (a *App) emuInstallWatch(id string) {
+	for {
+		emuLab.mu.Lock()
+		var j EmuInstall
+		if jp := emuInstance(id); jp != nil {
+			j = *jp
+		}
+		emuLab.mu.Unlock()
+		switch j.Stage {
+		case instStarting, instInstalling, instWaiting, instSaving:
+		default:
+			emuInst.mu.Lock()
+			delete(emuInst.live, id)
+			emuInst.mu.Unlock()
+			return
+		}
+		if out, err := a.emuRun(j.Host, j.spec().ProgressScript(j.File), 30*time.Second); err == nil {
+			p := emu.ParseProgress(out)
+			emuInst.mu.Lock()
+			l := emuInstLive(id)
+			l.disk, l.part, l.pct, l.idle, l.log = p.Disk, p.Part, p.Pct, p.Idle, emu.LastLines(p.Log, 12, 160)
+			emuInst.mu.Unlock()
+		}
+		time.Sleep(4 * time.Second)
+	}
+}
+
 // emuInstallRun copies the ISO, starts the installer and, for Alpine, types the install.
 func (a *App) emuInstallRun(ctx context.Context, id string) {
 	emuLab.mu.Lock()
@@ -288,7 +398,7 @@ func (a *App) emuInstallRun(ctx context.Context, id string) {
 	if ctx.Err() != nil {
 		return
 	}
-	a.emuInstallMsg(id, instStarting, "starting the installer on the host")
+	a.emuInstallStep(id, "start", "starting the installer on the host")
 	out, err := a.emuRun(j.Host, j.spec().StartScript(), 2*time.Minute)
 	_, port, fail := emu.ParseInstall(out)
 	if err != nil || fail != "" || port == 0 {
@@ -300,15 +410,20 @@ func (a *App) emuInstallRun(ctx context.Context, id string) {
 	}
 	a.emuInstallSet(id, func(j *EmuInstall) { j.Port = port })
 	j.Port = port
+	emuGo(func() { a.emuInstallWatch(id) })
 	if j.Mode == "manual" {
 		sp := a.emuInstallSession(j)
 		a.emuInstallSet(id, func(j *EmuInstall) {
-			j.Stage, j.Console = instWaiting, sp
+			if j.Stage == instCancelled {
+				return
+			}
+			j.markStep("console")
+			j.Console = sp
 			j.Msg = "the installer runs: open its console and install; press Finish when it is done"
 		})
 		return
 	}
-	a.emuInstallMsg(id, instInstalling, "waiting for the installer to boot")
+	a.emuInstallStep(id, "boot", "waiting for the installer to boot")
 	pw, _ := secrets.Lookup(emuInstKey(id))
 	cl, err := a.emuClient(ctx, j.Host)
 	if err != nil {
@@ -333,14 +448,14 @@ func (a *App) emuInstallRun(ctx context.Context, id string) {
 			select {
 			case <-stop:
 				return
-			case <-time.After(3 * time.Second):
+			case <-time.After(2 * time.Second):
 				emuInst.mu.Lock()
-				emuInst.tail[id] = emu.CleanConsole(c.Tail(600))
+				emuInstLive(id).console = c.Lines(12, 160)
 				emuInst.mu.Unlock()
 			}
 		}
 	})
-	err = emu.InstallAlpine(ctx, c, emu.AlpineOpts{Hostname: "alpine", Password: pw}, func(s string) { a.emuInstallMsg(id, instInstalling, s) })
+	err = emu.InstallAlpine(ctx, c, emu.AlpineOpts{Hostname: "alpine", Password: pw}, func(step, msg string) { a.emuInstallStep(id, step, msg) })
 	close(stop)
 	_ = c.Close()
 	if err != nil {
@@ -350,7 +465,7 @@ func (a *App) emuInstallRun(ctx context.Context, id string) {
 		return
 	}
 	// the machine powers itself off: wait for it
-	a.emuInstallMsg(id, instInstalling, "waiting for the installer to power off")
+	a.emuInstallStep(id, "poweroff", "waiting for the installer to power off")
 	if !a.emuInstallWaitDown(ctx, j, 5*time.Minute) {
 		if ctx.Err() == nil {
 			_, _ = a.emuRun(j.Host, j.spec().StopScript(), time.Minute)
@@ -414,15 +529,14 @@ func (a *App) EmuInstallFinish(id string) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, fmt.Errorf("this install is not waiting for you (it is %s)", st)
 	}
-	j.Stage, j.Msg = instSaving, "shutting the machine down"
+	j.markStep("shutdown")
+	j.Msg = "shutting the machine down"
 	jc := *j
 	_ = a.emuSave()
 	emuLab.mu.Unlock()
 	ctx, cancel := context.WithCancel(context.Background())
 	emuInst.mu.Lock()
-	if emuInst.cancel == nil {
-		emuInst.cancel, emuInst.tail = map[string]context.CancelFunc{}, map[string]string{}
-	}
+	emuInstInit()
 	emuInst.cancel[id] = cancel
 	emuInst.mu.Unlock()
 	emuGo(func() {
@@ -458,11 +572,12 @@ func (a *App) emuInstallSave(ctx context.Context, id string) {
 		taken[im.FileName] = true
 	}
 	emuLab.mu.Unlock()
-	a.emuInstallMsg(id, instSaving, "making the image file on the host")
 	fn := emuNonName.ReplaceAllString(j.Name, "_") + ".qcow2"
 	for n := 2; taken[fn]; n++ {
 		fn = emuNonName.ReplaceAllString(j.Name, "_") + "-" + strconv.Itoa(n) + ".qcow2"
 	}
+	a.emuInstallSet(id, func(x *EmuInstall) { x.File = fn })
+	a.emuInstallStep(id, "convert", "making the image file on the host (compressing the disk)")
 	out, err := a.emuRun(j.Host, j.spec().SaveScript(fn), 15*time.Minute)
 	var size int64
 	var sum string
@@ -485,7 +600,7 @@ func (a *App) emuInstallSave(ctx context.Context, id string) {
 		return
 	}
 	pw, _ := secrets.Lookup(emuInstKey(id))
-	im := emu.Image{ID: randHex(4), Name: j.Name, File: local, FileName: fn, Size: size, SHA256: sum, DeviceType: "Linux", CPUs: 1, RAM: j.RAM, NICs: 3, NIC: "virtio-net-pci", Disk: "virtio", Ready: "login:", Login: "root",
+	im := emu.Image{ID: randHex(4), Name: j.Name, File: local, FileName: fn, Size: size, SHA256: sum, DeviceType: "Linux", CPUs: 1, RAM: j.RAM, NICs: 3, NIC: "virtio-net-pci", Disk: "virtio", Ready: emuInstallReady(j.Mode), Login: "root",
 		Version: versionIn(j.ISOName), Source: "installed from " + j.ISOName}
 	emu.LinuxHost(&im)
 	emuLab.mu.Lock()
@@ -500,7 +615,11 @@ func (a *App) emuInstallSave(ctx context.Context, id string) {
 	if j.Console != "" {
 		_ = a.store.Delete(j.Console)
 	}
-	a.emuInstallSet(id, func(x *EmuInstall) { x.Stage, x.Msg, x.Image, x.Console, x.Err = instDone, "", im.ID, "", "" })
+	a.emuInstallSet(id, func(x *EmuInstall) {
+		x.Stage, x.Msg, x.Image, x.Console, x.Err, x.File = instDone, "", im.ID, "", "", ""
+		x.Step = "done"
+		x.Marks = append(x.Marks, EmuInstallMark{Step: "done", At: time.Now().Format(time.RFC3339)})
+	})
 	emuLab.mu.Lock()
 	emuEvOn(j.Host, "", "ok", fmt.Sprintf("install %s done: the image %s (%s) is ready", j.Name, im.Name, emuBytes(size)))
 	emuLab.mu.Unlock()
@@ -509,7 +628,7 @@ func (a *App) emuInstallSave(ctx context.Context, id string) {
 
 // emuInstallFetch copies a file of the host (relative to the home folder) to this computer and checks its sum.
 func (a *App) emuInstallFetch(ctx context.Context, j EmuInstall, remote, local string, size int64, sum string) error {
-	a.emuInstallMsg(j.ID, instFetching, "copying the image to this computer")
+	a.emuInstallStep(j.ID, "fetch", "copying the image to this computer")
 	cl, err := a.emuClient(ctx, j.Host)
 	if err != nil {
 		return err
@@ -631,4 +750,31 @@ func (a *App) EmuInstallRemove(id string) (EmuView, error) {
 	}
 	emuGo(func() { a.emuInstallClean(jc) })
 	return a.EmuState()
+}
+
+// emuInstallProgress describes what is read from the host: " - disk written 142.0 MB, console quiet for 7 s" (for the connector's status and the log).
+func emuInstallProgress(j EmuInstall) string {
+	var parts []string
+	if j.Disk > 0 && j.Step != "convert" && j.Step != "fetch" {
+		parts = append(parts, "installer disk written "+emuBytes(j.Disk))
+	}
+	if j.Step == "convert" {
+		parts = append(parts, fmt.Sprintf("image %.0f %% (%s)", j.Pct, emuBytes(j.Part)))
+	}
+	if j.Idle >= 10 && (j.Step == "boot" || j.Step == "login" || j.Step == "install" || j.Step == "console") {
+		parts = append(parts, fmt.Sprintf("console quiet for %d s", j.Idle))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " - " + strings.Join(parts, ", ")
+}
+
+// emuInstallReady is the text that tells an installed system has booted: a login prompt, or - an installed
+// Alpine gives root a shell on the serial console at once - its welcome text.
+func emuInstallReady(mode string) string {
+	if mode == "alpine" {
+		return "login:|Welcome to Alpine"
+	}
+	return "login:"
 }

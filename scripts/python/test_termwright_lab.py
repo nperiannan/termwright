@@ -133,6 +133,8 @@ class ClientTest(unittest.TestCase):
         self.assertIn("done", self.lab.wait_install("ab12", timeout=10, poll=0.01))
         calls = {p: b for _, p, b in Fake.state["calls"]}
         self.assertEqual(calls["/api/v1/lab/tools/install_iso"], {"iso_path": "/x/alpine.iso", "mode": "alpine", "password": "pw", "disk_gb": 4})
+        self.lab.install_iso("/x/a.iso", disk_mb=512)
+        self.assertEqual(Fake.state["calls"][-1][2], {"iso_path": "/x/a.iso", "mode": "manual", "disk_mb": 512})
         self.lab.install_finish("ab12")
         self.assertEqual(Fake.state["calls"][-1][2], {"id": "ab12"})
 

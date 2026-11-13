@@ -29,7 +29,26 @@ type Console struct {
 	// Confirm answers yes/no questions with y (while typing day-0 commands:
 	// the user asked for them, so their confirmations are answered).
 	Confirm bool
+	carry   string    // the start of an escape sequence that the next read completes
+	lastRx  time.Time // when the console last showed something
 }
+
+// Idle is how long the console has shown nothing (0 before its first text).
+func (c *Console) Idle() time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.lastRx.IsZero() {
+		return 0
+	}
+	return time.Since(c.lastRx)
+}
+
+// Lines are the last n lines of the console that show something, each cut to
+// width characters: what a person would read on a screen.
+func (c *Console) Lines(n, width int) string { return LastLines(CleanConsole(c.Text()), n, width) }
+
+// openEscape is the start of an escape sequence that has not ended yet.
+var openEscape = regexp.MustCompile(`\x1b(\[[0-9;?]*|\][^\x07\x1b]*|[()])?$`)
 
 // leave: a question whose yes would end the session or the switch's run (it takes no).
 var leave = regexp.MustCompile(`(?i)\b(quit|exit|log ?out|logout|reboot|reload|shut ?down|power ?off)\b`)
@@ -105,11 +124,18 @@ func (c *Console) read() {
 			}
 		}
 		if len(text) > 0 {
-			t := CleanConsole(string(text))
+			// an escape sequence cut in two by the reads ("\x1b" | "[97m") is cleaned as one
+			raw := c.carry + string(text)
+			c.carry = ""
+			if loc := openEscape.FindStringIndex(raw); loc != nil && len(raw)-loc[0] < 64 {
+				raw, c.carry = raw[:loc[0]], raw[loc[0]:]
+			}
+			t := CleanConsole(raw)
 			c.mu.Lock()
 			c.buf.WriteString(t)
+			c.lastRx = time.Now()
 			c.mu.Unlock()
-			if c.OnText != nil {
+			if t != "" && c.OnText != nil {
 				c.OnText(t)
 			}
 			select {

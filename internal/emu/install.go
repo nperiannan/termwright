@@ -2,9 +2,11 @@ package emu
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -17,8 +19,17 @@ type InstallSpec struct {
 	Dir  string // the lab's folder on the host (relative to the home folder)
 	ISO  string // the ISO's file name in Dir/images
 	GB   int    // the disk
+	MB   int    // the disk in MB, when it is not a whole number of GB (then GB is not used)
 	RAM  int    // MB
 	CPUs int
+}
+
+// DiskSize is the disk's size as qemu-img takes it ("8G", "512M").
+func (s InstallSpec) DiskSize() string {
+	if s.MB > 0 {
+		return fmt.Sprintf("%dM", s.MB)
+	}
+	return fmt.Sprintf("%dG", s.GB)
 }
 
 // InstallDir is the folder of the installers' disks and logs on a host.
@@ -35,7 +46,7 @@ func (s InstallSpec) StartScript() string {
 	fmt.Fprintf(&b, "mkdir -p %s || exit 1\n", d)
 	fmt.Fprintf(&b, "if %s; then echo \"port $(cat %s/%s.port)\"; echo started; exit 0; fi\n", qemuUp(d+"/"+id+".pid"), d, id)
 	fmt.Fprintf(&b, "[ -f %s/%s ] || { echo 'fail the ISO is not on the host'; exit 0; }\n", Q(s.Dir+"/images"), Q(s.ISO))
-	fmt.Fprintf(&b, "[ -f %s ] || e=$(qemu-img create -q -f qcow2 %s %dG 2>&1) || { echo \"fail could not make the disk: $e\"; exit 0; }\n", Q(s.InstallDisk()), Q(s.InstallDisk()), s.GB)
+	fmt.Fprintf(&b, "[ -f %s ] || e=$(qemu-img create -q -f qcow2 %s %s 2>&1) || { echo \"fail could not make the disk: $e\"; exit 0; }\n", Q(s.InstallDisk()), Q(s.InstallDisk()), s.DiskSize())
 	// a free port pair for the console and the monitor
 	b.WriteString("p=24900; while { ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null; } | grep -qE \":($p|$((p+1)))[[:space:]]\"; do p=$((p+2)); done\n")
 	b.WriteString("acc='-accel tcg'; [ -w /dev/kvm ] && acc='-enable-kvm -cpu host'\n")
@@ -62,20 +73,98 @@ func (s InstallSpec) StopScript() string {
 	return fmt.Sprintf("if %s; then kill \"$p\" 2>/dev/null; sleep 1; fi; rm -f %s/%s.pid\necho stopped\n", qemuUp(d+"/"+s.ID+".pid"), d, s.ID)
 }
 
+// ProgFile is where the conversion of the disk writes its progress.
+func (s InstallSpec) ProgFile() string { return s.InstallDir() + "/" + s.ID + ".prog" }
+
 // SaveScript turns the installed disk into an image file (one file, no
 // backing file, compressed) in the images folder, with its checksum; it
-// prints "saved SIZE SHA" or "fail …".
+// prints "saved SIZE SHA" or "fail …". The conversion's progress goes to
+// ProgFile (ProgressScript reads it).
 func (s InstallSpec) SaveScript(fileName string) string {
 	dst := Q(s.Dir + "/images/" + fileName)
-	return fmt.Sprintf("mkdir -p %s; e=$(qemu-img convert -c -O qcow2 %s %s.part 2>&1) || { rm -f %s.part; echo \"fail $(echo $e | tr '\\n' ' ' | cut -c1-300)\"; exit 0; }\n"+
+	pg := Q(s.ProgFile())
+	return fmt.Sprintf("mkdir -p %s; qemu-img convert -p -c -O qcow2 %s %s.part > %s 2>&1 || { e=$(tr '\\r' '\\n' < %s | grep -v '/100%%' | tr '\\n' ' ' | cut -c1-300); rm -f %s.part; echo \"fail $e\"; exit 0; }\n"+
 		"mv -f %s.part %s && h=$(sha256sum %s | cut -d' ' -f1) && echo \"$h\" > %s.sha256 && echo \"saved $(stat -c %%s %s) $h\"\n",
-		Q(s.Dir+"/images"), Q(s.InstallDisk()), dst, dst, dst, dst, dst, dst, dst)
+		Q(s.Dir+"/images"), Q(s.InstallDisk()), dst, pg, pg, dst, dst, dst, dst, dst, dst)
+}
+
+// ProgressScript prints how far the install is: "disk N" (the installer's
+// disk on the host, in bytes: it grows as the system is written), "part N"
+// (the image being made, bytes), "pct P" (the conversion, percent), "idle S"
+// (seconds since the installer's console showed anything) and "log BASE64"
+// (the end of the console). fileName is the image being made ("" before).
+func (s InstallSpec) ProgressScript(fileName string) string {
+	d, id := Q(s.InstallDir()), s.ID
+	var b strings.Builder
+	fmt.Fprintf(&b, "echo \"disk $(stat -c %%s %s/%s.qcow2 2>/dev/null || echo 0)\"\n", d, id)
+	if fileName != "" {
+		fmt.Fprintf(&b, "echo \"part $(stat -c %%s %s.part 2>/dev/null || echo 0)\"\n", Q(s.Dir+"/images/"+fileName))
+	}
+	fmt.Fprintf(&b, "echo \"pct $(tr '\\r' '\\n' < %s 2>/dev/null | grep -o '[0-9.]*/100%%' | tail -1 | cut -d/ -f1)\"\n", Q(s.ProgFile()))
+	fmt.Fprintf(&b, "echo \"idle $(( $(date +%%s) - $(stat -c %%Y %s/%s.log 2>/dev/null || date +%%s) ))\"\n", d, id)
+	fmt.Fprintf(&b, "echo \"log $(tail -c 3000 %s/%s.log 2>/dev/null | base64 | tr -d '\\n')\"\n", d, id)
+	return b.String()
+}
+
+// Progress is what ProgressScript printed.
+type Progress struct {
+	Disk, Part int64
+	Pct        float64
+	Idle       int
+	Log        string // the end of the console, cleaned
+}
+
+// ParseProgress reads what ProgressScript printed.
+func ParseProgress(out string) Progress {
+	var p Progress
+	for _, ln := range strings.Split(out, "\n") {
+		k, v, _ := strings.Cut(strings.TrimSpace(ln), " ")
+		switch k {
+		case "disk":
+			p.Disk, _ = strconv.ParseInt(v, 10, 64)
+		case "part":
+			p.Part, _ = strconv.ParseInt(v, 10, 64)
+		case "pct":
+			p.Pct, _ = strconv.ParseFloat(v, 64)
+		case "idle":
+			p.Idle, _ = strconv.Atoi(v)
+		case "log":
+			if raw, err := base64.StdEncoding.DecodeString(v); err == nil {
+				t := string(raw)
+				if i := strings.IndexByte(t, '\n'); i >= 0 && len(raw) >= 3000 {
+					t = t[i+1:] // the cut start of a line
+				}
+				p.Log = CleanConsole(t)
+			}
+		}
+	}
+	return p
+}
+
+// LastLines are the last n lines of console text that show something, each cut to width.
+func LastLines(s string, n, width int) string {
+	ls := strings.Split(s, "\n")
+	var out []string
+	for i := len(ls) - 1; i >= 0 && len(out) < n; i-- {
+		t := strings.TrimRight(ls[i], " \t")
+		if strings.TrimSpace(t) == "" {
+			continue
+		}
+		if r := []rune(t); len(r) > width {
+			t = string(r[:width]) + "…"
+		}
+		out = append(out, t)
+	}
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return strings.Join(out, "\n")
 }
 
 // CleanScript removes the installer's disk, log and files (not the ISO).
 func (s InstallSpec) CleanScript() string {
 	d := Q(s.InstallDir())
-	return fmt.Sprintf("rm -f %s/%s.qcow2 %s/%s.log %s/%s.port %s/%s.pid\n", d, s.ID, d, s.ID, d, s.ID, d, s.ID)
+	return fmt.Sprintf("rm -f %s/%s.qcow2 %s/%s.log %s/%s.port %s/%s.pid %s/%s.prog\n", d, s.ID, d, s.ID, d, s.ID, d, s.ID, d, s.ID)
 }
 
 // ParseInstall reads what StartScript or StatusScript printed.
@@ -113,6 +202,7 @@ func AlpineAnswers(o AlpineOpts) string {
 		`TIMEZONEOPTS="-z UTC"`,
 		`PROXYOPTS="none"`,
 		`APKREPOSOPTS="-1"`,
+		`USEROPTS="none"`,
 		`SSHDOPTS="none"`,
 		`NTPOPTS="none"`,
 		`DISKOPTS="-m sys ` + disk + `"`,
@@ -134,12 +224,12 @@ var (
 // with it (the disk is erased and installed with the ISO's own packages), then
 // powers the machine off. note is told what it does. The caller waits for the
 // machine to stop.
-func InstallAlpine(ctx context.Context, c *Console, o AlpineOpts, note func(string)) error {
+func InstallAlpine(ctx context.Context, c *Console, o AlpineOpts, note func(step, msg string)) error {
 	if o.Password == "" {
 		return errors.New("the root password must not be empty")
 	}
 	c.Confirm = true // "Erase the above disk(s) and continue? [y/N]" is answered y: the disk is the blank one
-	note("waiting for the installer to boot")
+	note("boot", "waiting for the installer to boot")
 	deadline := time.Now().Add(15 * time.Minute)
 	for {
 		if _, err := c.Wait(ctx, 20*time.Second, nil, alpineLogin); err == nil {
@@ -152,7 +242,7 @@ func InstallAlpine(ctx context.Context, c *Console, o AlpineOpts, note func(stri
 		}
 		_ = c.Send("")
 	}
-	note("logging in")
+	note("login", "logging in")
 	if err := c.Send("root"); err != nil {
 		return err
 	}
@@ -165,8 +255,9 @@ func InstallAlpine(ctx context.Context, c *Console, o AlpineOpts, note func(stri
 	if _, err := c.Wait(ctx, 30*time.Second, nil, alpineRoot); err != nil {
 		return fmt.Errorf("the answer file was not written: %w - the console showed: %s", err, c.Tail(200))
 	}
-	note("running setup-alpine (installing to the disk)")
-	pw := []Answer{{Match: "New password:", Send: o.Password, secret: true}, {Match: "Retype password:", Send: o.Password, secret: true}}
+	note("install", "running setup-alpine (installing to the disk)")
+	pw := []Answer{{Match: "New password:", Send: o.Password, secret: true}, {Match: "Retype password:", Send: o.Password, secret: true},
+		{Match: "[no]", Send: "no"}} // "Setup a user? (enter a lower-case loginname, or 'no') [no]": an Alpine that asks although the answer file says none
 	if err := c.Send("setup-alpine -f /tmp/ans; echo TWEND-$?"); err != nil {
 		return err
 	}
@@ -177,6 +268,6 @@ func InstallAlpine(ctx context.Context, c *Console, o AlpineOpts, note func(stri
 	if i == 1 {
 		return fmt.Errorf("setup-alpine failed - the console showed: %s", c.Tail(400))
 	}
-	note("installed; powering off")
+	note("poweroff", "installed; powering off")
 	return c.Send("poweroff")
 }

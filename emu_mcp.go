@@ -32,6 +32,7 @@ var mcpLabTools = []mcpTool{
 			"mode":     map[string]any{"type": "string", "enum": []string{"alpine", "manual"}, "description": "alpine = typed by Termwright; manual = the user installs"},
 			"password": map[string]any{"type": "string", "description": "root password for the new system (alpine: required)"},
 			"disk_gb":  map[string]any{"type": "integer", "description": "disk size in GB (default 8)"},
+			"disk_mb":  map[string]any{"type": "integer", "description": "disk size in MB, for a size that is not whole GB (used instead of disk_gb)"},
 			"ram_mb":   map[string]any{"type": "integer", "description": "memory for the installer (default 1024)"},
 			"cpus":     map[string]any{"type": "integer", "description": "CPUs for the installer (default 2)"},
 			"host":     map[string]any{"type": "string", "description": "KVM host name or session path (default: the lab's host)"},
@@ -301,13 +302,16 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		b.WriteString("Installs (id | name | mode | stage | now | image):\n")
 		for _, j := range v.Installs {
 			fmt.Fprintf(&b, "- %s | %s | %s | %s | %s | %s\n", j.ID, j.Name, j.Mode, j.Stage, orStr(j.Err, j.Msg, "-"), orDash(j.Image))
+			if emuInstallRunning(j.Stage) || j.Stage == instWaiting {
+				fmt.Fprintf(&b, "  step %s%s\n", j.Step, emuInstallProgress(j))
+			}
 			if j.Tail != "" && emuInstallRunning(j.Stage) {
 				fmt.Fprintf(&b, "  console: ...%s\n", strings.ReplaceAll(strings.TrimSpace(j.Tail[max(0, len(j.Tail)-200):]), "\n", " / "))
 			}
 		}
 		return b.String(), nil
 	case "lab_install_iso":
-		r := EmuInstallRequest{ISO: argStr(args, "iso_path"), Name: argStr(args, "name"), Mode: argStr(args, "mode"), Password: argStr(args, "password"), GB: argInt(args, "disk_gb", 8, 512), RAM: argInt(args, "ram_mb", 1024, 65536), CPUs: argInt(args, "cpus", 2, 64)}
+		r := EmuInstallRequest{ISO: argStr(args, "iso_path"), Name: argStr(args, "name"), Mode: argStr(args, "mode"), Password: argStr(args, "password"), GB: argInt(args, "disk_gb", 8, 512), MB: argInt(args, "disk_mb", 0, 512*1024), RAM: argInt(args, "ram_mb", 1024, 65536), CPUs: argInt(args, "cpus", 2, 64)}
 		if r.ISO == "" {
 			return "", errors.New("give iso_path")
 		}
@@ -315,7 +319,7 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		if r.Host, err = emuMCPHost(argStr(args, "host")); err != nil {
 			return "", err
 		}
-		if err := ask("Claude wants to install from an ISO", fmt.Sprintf("Claude (through the Termwright connector) asks to copy %s to a KVM host and install it on a new %d GB disk (%s), then keep the disk as the image %q.", r.ISO, r.GB, map[string]string{"alpine": "Alpine Linux, typed by Termwright", "manual": "you install on its console"}[r.Mode], orStr(r.Name, filepath.Base(r.ISO))), false); err != nil {
+		if err := ask("Claude wants to install from an ISO", fmt.Sprintf("Claude (through the Termwright connector) asks to copy %s to a KVM host and install it on a new %s disk (%s), then keep the disk as the image %q.", r.ISO, map[bool]string{true: fmt.Sprintf("%d MB", r.MB), false: fmt.Sprintf("%d GB", r.GB)}[r.MB > 0], map[string]string{"alpine": "Alpine Linux, typed by Termwright", "manual": "you install on its console"}[r.Mode], orStr(r.Name, filepath.Base(r.ISO))), false); err != nil {
 			return "", err
 		}
 		nv, err := a.EmuInstallStart(r)

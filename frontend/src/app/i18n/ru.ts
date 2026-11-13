@@ -3110,6 +3110,27 @@ const ru: Record<string, string> = {
   'Cancel install': 'Отменить установку',
   'Choose the ISO file': 'Выберите ISO-файл',
   'ISO files': 'ISO-файлы',
+  // progress of an install
+  '{0} since the start': '{0} с начала',
+  '{0} written to the new disk': '{0} записано на новый диск',
+  'The installer’s console (last lines)': 'Консоль установщика (последние строки)',
+  'The installer’s console has shown nothing for {0}. It may be busy (slow without KVM) or waiting for an answer: read the last line above.': 'Консоль установщика ничего не показывает уже {0}. Возможно, он занят (медленно без KVM) или ждёт ответа: прочитайте последнюю строку выше.',
+  'The new disk’s largest size, not the space it takes: the qcow2 file grows only as the system is written, so the saved image stays small (a small Alpine system takes a few hundred MB). In MB or GB; at least 100 MB.': 'Наибольший размер нового диска, а не занимаемое место: qcow2-файл растёт только по мере записи системы, поэтому сохранённый образ остаётся небольшим (небольшая система Alpine занимает несколько сотен МБ). В МБ или ГБ; не меньше 100 МБ.',
+  'Copy the ISO to the host': 'Скопировать ISO на хост',
+  'Start the installer': 'Запустить установщик',
+  'Boot the installer': 'Загрузить установщик',
+  'Log in on its console': 'Войти на его консоли',
+  'Install the system on the new disk': 'Установить систему на новый диск',
+  'Power the installer off': 'Выключить установщик',
+  'You install on the console': 'Вы устанавливаете на консоли',
+  'Shut the machine down': 'Выключить машину',
+  'Make the qcow2 file on the host': 'Создать qcow2-файл на хосте',
+  'Copy the qcow2 file to this computer': 'Скопировать qcow2-файл на этот компьютер',
+  '{0} s': '{0} с',
+  '{0} % done': '{0} % готово',
+  '{0} written': '{0} записано',
+  'console quiet for {0}': 'консоль молчит {0}',
+  'step {0} of {1}': 'шаг {0} из {1}',
 };
 
 export default ru;

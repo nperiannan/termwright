@@ -167,11 +167,11 @@ class Lab:
 
     def install_iso(self, iso_path: str, mode: str = "manual", name: Optional[str] = None, password: Optional[str] = None,
                     disk_gb: Optional[int] = None, ram_mb: Optional[int] = None, cpus: Optional[int] = None,
-                    host: Optional[str] = None) -> str:
+                    host: Optional[str] = None, disk_mb: Optional[int] = None) -> str:
         """Make an image from an ISO file of the Termwright computer: mode "alpine" installs Alpine Linux by itself
         (password = root's), "manual" waits for you to install on the installer's console (then install_finish)."""
         return self.tool("install_iso", iso_path=iso_path, mode=mode, name=name, password=password,
-                         disk_gb=disk_gb, ram_mb=ram_mb, cpus=cpus, host=host)
+                         disk_gb=disk_gb, disk_mb=disk_mb, ram_mb=ram_mb, cpus=cpus, host=host)
 
     def install_status(self) -> str:
         return self.tool("install_status")

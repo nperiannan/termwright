@@ -81,6 +81,9 @@ func TestEmuInstallStartChecks(t *testing.T) {
 		{EmuInstallRequest{ISO: iso, Mode: "alpine"}, "root password"},
 		{EmuInstallRequest{ISO: iso, Mode: "alpine", Password: "a'b"}, "must not contain"},
 		{EmuInstallRequest{ISO: iso, Mode: "manual", GB: 1000}, "at most 512"},
+		{EmuInstallRequest{ISO: iso, Mode: "manual", MB: 50}, "at least 100 MB"},
+		{EmuInstallRequest{ISO: iso, Mode: "manual", MB: 600000}, "at most 512"},
+		{EmuInstallRequest{ISO: iso, Mode: "manual", MB: -5}, "must not be negative"},
 		{EmuInstallRequest{ISO: filepath.Join(dir, "none.iso"), Mode: "manual"}, "no such file"},
 		{EmuInstallRequest{ISO: iso, Mode: "manual"}, "no KVM host"},
 	} {
@@ -178,6 +181,20 @@ func TestEmuInstallManual(t *testing.T) {
 	if j.Port < 24900 || j.Console == "" {
 		t.Fatalf("waiting job: %+v", j)
 	}
+	// the window is told how much of the disk is written (read from the host while the install waits)
+	var seen EmuInstall
+	for end := time.Now().Add(30 * time.Second); time.Now().Before(end) && seen.Disk == 0; time.Sleep(500 * time.Millisecond) {
+		emuLab.mu.Lock()
+		for _, x := range emuInstallViews() {
+			if x.ID == id {
+				seen = x
+			}
+		}
+		emuLab.mu.Unlock()
+	}
+	if seen.Disk == 0 || !strings.Contains(emuInstallProgress(seen), "installer disk written") {
+		t.Errorf("no progress read from the host: %+v", seen)
+	}
 	cs, err := st.Get(j.Console)
 	if err != nil || cs.Protocol != session.ProtoTelnet || cs.Port != j.Port || cs.JumpSession != host.Path {
 		t.Fatalf("console session %+v %v", cs, err)
@@ -186,6 +203,9 @@ func TestEmuInstallManual(t *testing.T) {
 		t.Fatal(err)
 	}
 	j = wait(instDone, 120*time.Second)
+	if got := instSteps(j); got != "copy,start,console,shutdown,convert,fetch,done" {
+		t.Errorf("steps %s", got)
+	}
 	v, _ = a.EmuState()
 	var im *emu.Image
 	for i := range v.Images {
@@ -209,6 +229,15 @@ func TestEmuInstallManual(t *testing.T) {
 	if !strings.Contains(out, "my-distro.qcow2.sha256") || strings.Contains(out, ".qcow2\n") && strings.Contains(out, j.ID+".qcow2") {
 		t.Errorf("host files after the install:\n%s", out)
 	}
+}
+
+// instSteps lists the steps a job went through, in order.
+func instSteps(j EmuInstall) string {
+	var l []string
+	for _, m := range j.Marks {
+		l = append(l, m.Step)
+	}
+	return strings.Join(l, ",")
 }
 
 // fakeQemu stands in for qemu-system-x86_64 on the host: it serves the serial console of a live Alpine
@@ -325,13 +354,16 @@ func TestEmuInstallAlpineFake(t *testing.T) {
 	if j.Stage != instDone {
 		t.Fatalf("stage %s: %s %s", j.Stage, j.Msg, j.Err)
 	}
+	if got := instSteps(j); got != "copy,start,boot,login,install,poweroff,convert,fetch,done" {
+		t.Errorf("steps %s", got)
+	}
 	var im *emu.Image
 	for i := range emuLab.f.Images {
 		if emuLab.f.Images[i].ID == j.Image {
 			im = &emuLab.f.Images[i]
 		}
 	}
-	if im == nil || im.Name != "alpine-test" || im.Version == "" || im.File == "" || !strings.HasSuffix(im.Source, "alpine-virt-3.22.1-x86_64.iso") {
+	if im == nil || im.Name != "alpine-test" || im.Version == "" || im.File == "" || im.Ready != "login:|Welcome to Alpine" || !strings.HasSuffix(im.Source, "alpine-virt-3.22.1-x86_64.iso") {
 		t.Fatalf("image %+v", im)
 	}
 	if pw, _ := secrets.Lookup(emuImageKey(im.ID)); pw != "s3cretpw" {

@@ -1538,6 +1538,9 @@ paths:
                                 disk_gb:
                                     description: disk size in GB (default 8)
                                     type: integer
+                                disk_mb:
+                                    description: disk size in MB, for a size that is not whole GB (used instead of disk_gb)
+                                    type: integer
                                 host:
                                     description: 'KVM host name or session path (default: the lab''s host)'
                                     type: string
@@ -3241,6 +3244,10 @@ components:
                 size:
                     type: integer
                 gb:
+                    description: the disk, rounded up to whole GB
+                    type: integer
+                mb:
+                    description: the disk in MB (exact)
                     type: integer
                 ram:
                     type: integer
@@ -3266,9 +3273,33 @@ components:
                     type: string
                 started:
                     type: string
-                tail:
-                    description: the end of the installer's console (while it runs; not saved)
+                step:
+                    description: Step is the one the install is on (see emuInstallStage); Marks tell when each began, so the window can show how long each took.
                     type: string
+                marks:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/InstallMark'
+                file:
+                    description: the image file being made on the host
+                    type: string
+                tail:
+                    description: the last lines of the installer's console
+                    type: string
+                disk:
+                    description: 'the installer''s disk on the host: bytes written so far (the file grows as the system is installed)'
+                    type: integer
+                part:
+                    description: 'the image being made: bytes so far'
+                    type: integer
+                pct:
+                    description: 'the conversion to the image: percent'
+                    type: number
+                idle:
+                    description: seconds since the installer's console showed anything
+                    type: integer
             required:
                 - id
                 - name
@@ -3279,6 +3310,7 @@ components:
                 - sha256
                 - size
                 - gb
+                - mb
                 - ram
                 - cpus
                 - dir
@@ -3286,6 +3318,17 @@ components:
                 - stage
                 - msg
                 - started
+                - step
+        InstallMark:
+            type: object
+            properties:
+                step:
+                    type: string
+                at:
+                    type: string
+            required:
+                - step
+                - at
         Lab:
             type: object
             description: 'The emulated lab as Termwright shows it: its switches, cables, KVM hosts, images and Events. The open topology only; topologies in the background are not in it.'

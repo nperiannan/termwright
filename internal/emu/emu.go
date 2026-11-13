@@ -1134,7 +1134,7 @@ func ParseStatus(out string, b64 func(string) ([]byte, error)) Status {
 	return st
 }
 
-var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][A-Z0-9]|\r`)
+var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][A-Z0-9]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\r`)
 
 // CleanConsole removes terminal escape sequences and telnet bytes from console text.
 func CleanConsole(s string) string {
@@ -1164,6 +1164,17 @@ func (im *Image) ReadyIn(log string) bool {
 	}
 	for _, r := range ReadyTexts(im.Ready) {
 		if strings.Contains(log, r) {
+			return true
+		}
+	}
+	// a Linux computer that logs in by itself shows no login prompt (an installed Alpine
+	// gives root a shell on the serial console): a shell prompt waiting at the end of the console is as good
+	if im.DeviceType == "Linux" && im.Prompt != "" && log != "" {
+		tail := log
+		if len(tail) > 200 {
+			tail = tail[len(tail)-200:]
+		}
+		if re, err := regexp.Compile(im.Prompt); err == nil && re.MatchString(tail) {
 			return true
 		}
 	}

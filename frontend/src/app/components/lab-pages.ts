@@ -55,7 +55,9 @@ const PAGE = `
   .badge { display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); margin-left: 4px; }
   .badge.g { border-color: var(--success, #1fa45a); } .pill { display: inline-block; padding: 2px 8px; border-radius: 9px; font-size: 11.5px; margin: 0 4px 4px 0; background: var(--surface-2); border: 1px solid var(--line); }
   .drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 12px; text-align: center; color: var(--muted); font-size: 12px; margin-top: 10px; cursor: pointer; }
-  .meter { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 6px 0 2px; i { display: block; height: 100%; background: var(--accent); } }
+  .meter { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 6px 0 2px; i { display: block; height: 100%; background: var(--accent); transition: width .6s; } }
+  .stl { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 3px; li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 12.5px; color: var(--muted); small { grid-column: 2 / 4; font-size: 11.5px; font-weight: 400; color: var(--muted); } .tm { font-size: 11.5px; font-variant-numeric: tabular-nums; } &.d { color: var(--text); } &.n { color: var(--text); font-weight: 600; .mk { animation: stp 1.2s ease-in-out infinite; } } } }
+  @keyframes stp { 50% { opacity: .35; } } .yaml.wrap { white-space: pre-wrap; word-break: break-all; max-height: 200px; margin: 4px 0 0; }
   .big3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; .card { margin: 0; } b { font-size: 20px; } }
   .chk { display: grid; grid-template-columns: 22px 170px minmax(0, 1fr); gap: 6px 8px; align-items: start; font-size: 12.5px; .y { color: var(--success, #1fa45a); font-weight: 700; } .n { color: var(--warning, #e39b17); font-weight: 700; } .x { color: var(--danger); font-weight: 700; } }
   .rmc { border-color: color-mix(in srgb, var(--danger, #e5484d) 45%, var(--line)); } .rmg { display: grid; gap: 7px; margin-top: 8px; label.all { padding-bottom: 6px; border-bottom: 1px solid var(--line); } label { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; } code { font-size: 11.5px; } }
@@ -626,7 +628,7 @@ export class LabNew implements OnInit {
               @if (installs().length) { <div class="sec" style="margin-top: 0">{{ tr('Installs') }}</div> }
               @for (j of installs(); track j.id) {
                 <div class="card" style="max-width: 780px">
-                  <div class="row2" style="justify-content: flex-start"><div style="flex: 1; min-width: 0"><b>{{ j.name }}</b> <span class="muted small">· {{ j.isoName }} · {{ j.gb }} GB · {{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</span>
+                  <div class="row2" style="justify-content: flex-start"><div style="flex: 1; min-width: 0"><b>{{ j.name }}</b> <span class="muted small">· {{ j.isoName }} · {{ diskText(j) }} · {{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</span>
                       <div class="small" [class.r]="j.stage === 'failed'" [class.g]="j.stage === 'done'" [class.w]="isoBusy(j)">{{ isoText(j) }}</div></div>
                     @if (j.stage === 'waiting' && j.console) { <button type="button" class="sm" (click)="isoConsole(j)">{{ tr('Open console') }}</button> }
                     @if (j.stage === 'waiting') { <button type="button" class="sm primary" (click)="isoFinish(j)">{{ tr('Finish and save as image') }}</button> }
@@ -634,7 +636,23 @@ export class LabNew implements OnInit {
                     @if (isoBusy(j) || j.stage === 'waiting') { <button type="button" class="sm danger-ghost" (click)="isoCancel(j)">{{ tr('Cancel') }}</button> }
                     @if (!isoBusy(j) && j.stage !== 'waiting') { <button type="button" class="sm" (click)="isoRemove(j)">{{ tr('Remove') }}</button> }
                   </div>
-                  @if (j.tail && isoBusy(j)) { <pre class="yaml" style="max-height: 130px; margin: 8px 0 0">{{ j.tail }}</pre> }
+                  @if (isoBusy(j) || j.stage === 'waiting') {
+                    <div class="meter"><i [style.width]="overall(j) + '%'"></i></div>
+                    <div class="small muted">{{ tr('Step {0} of {1}', stepNo(j), stepKeys(j).length) }} · {{ tr('{0} since the start', dur(secs(j.started))) }}</div>
+                    <ol class="stl">
+                      @for (k of stepKeys(j); track k) {
+                        <li [class.d]="stepState(j, k) === 'done'" [class.n]="stepState(j, k) === 'now'">
+                          <span class="mk" [class.g]="stepState(j, k) === 'done'" [class.w]="stepState(j, k) === 'now'">{{ stepState(j, k) === 'done' ? '✓' : stepState(j, k) === 'now' ? '▶' : '○' }}</span><span>{{ stepLabel(k) }}</span><span class="tm">{{ stepTime(j, k) }}</span>
+                          @if (stepState(j, k) === 'now' && stepNote(j)) { <small>{{ stepNote(j) }}</small> }
+                        </li>
+                      }
+                    </ol>
+                    @if (j.tail) {
+                      <div class="small muted" style="margin-top: 8px">{{ tr('The installer’s console (last lines)') }}</div>
+                      <pre class="yaml wrap">{{ j.tail }}</pre>
+                    }
+                    @if ((j.idle ?? 0) >= 90 && j.step !== 'convert') { <div class="small w" style="margin-top: 6px">{{ tr('The installer’s console has shown nothing for {0}. It may be busy (slow without KVM) or waiting for an answer: read the last line above.', dur(j.idle ?? 0)) }}</div> }
+                  }
                 </div>
               }
               <div style="max-width: 780px">
@@ -646,7 +664,7 @@ export class LabNew implements OnInit {
                     <div class="muted small" style="margin-top: 6px">{{ isoMode === 'alpine' ? tr('Termwright types the Alpine install on the installer’s console and sets the root password below.') : tr('The installer starts and its console opens as a session: you install by hand, then press Finish. It must be an installer that talks on a serial console.') }}</div></div>
                   <label>{{ tr('Image name') }}</label><input [(ngModel)]="isoNm" name="isonm" [placeholder]="isoNamePh()" />
                   <label>{{ tr('Root password') }}</label><div><input [(ngModel)]="isoPw" name="isopw" autocomplete="off" style="width: 100%; box-sizing: border-box" /><div class="muted small" style="margin-top: 4px">{{ isoMode === 'alpine' ? tr('The new system’s root password; Termwright logs in with it.') : tr('The password you set during the install (optional): Termwright logs in with it.') }}</div></div>
-                  <label>{{ tr('Disk') }}</label><div class="row2"><input type="number" min="1" max="512" [(ngModel)]="isoGb" name="isogb" /><span class="unit">GB</span></div>
+                  <label>{{ tr('Disk') }}</label><div><div class="row2" style="justify-content: flex-start; gap: 6px"><input type="number" min="1" [(ngModel)]="isoSize" name="isogb" style="width: 110px; flex: none" /><select [(ngModel)]="isoUnit" (ngModelChange)="isoUnitChanged($event)" name="isounit" style="width: 76px; flex: none"><option value="MB">MB</option><option value="GB">GB</option></select></div><div class="muted small" style="margin-top: 4px">{{ tr('The new disk’s largest size, not the space it takes: the qcow2 file grows only as the system is written, so the saved image stays small (a small Alpine system takes a few hundred MB). In MB or GB; at least 100 MB.') }}</div></div>
                   <label>{{ tr('Memory') }}</label><div class="row2"><input type="number" min="256" step="256" [(ngModel)]="isoRam" name="isoram" /><span class="unit">MB</span></div>
                   <label>vCPU</label><input type="number" min="1" max="64" [(ngModel)]="isoCpus" name="isocpu" />
                   <label>{{ tr('Run on') }}</label><select [(ngModel)]="isoHost" name="isohost">@for (h of hosts(); track h.session) { <option [value]="h.session">{{ h.name }}</option> }</select>
@@ -767,7 +785,7 @@ export class LabNew implements OnInit {
   </div>`,
   styles: [PAGE],
 })
-export class LabImages implements OnInit {
+export class LabImages implements OnInit, OnDestroy {
   readonly start = input<'images' | 'templates' | 'onhosts'>('images');
   readonly image0 = input('', { alias: 'image' }); // open on this image
   readonly closed = output<void>();
@@ -804,11 +822,62 @@ export class LabImages implements OnInit {
   // Install from ISO
   protected iso = signal(false);
   protected installs = computed<EmuInstall[]>(() => this.lab.emu()?.installs ?? []);
-  protected isoPath = ''; protected isoNm = ''; protected isoPw = 'termwright'; protected isoMode: 'alpine' | 'manual' = 'alpine'; protected isoGb = 8; protected isoRam = 1024; protected isoCpus = 2; protected isoHost = '';
+  protected isoPath = ''; protected isoNm = ''; protected isoPw = 'termwright'; protected isoMode: 'alpine' | 'manual' = 'alpine'; protected isoSize = 8; protected isoUnit: 'MB' | 'GB' = 'GB'; protected isoRam = 1024; protected isoCpus = 2; protected isoHost = '';
   private static readonly running = ['copying', 'starting', 'installing', 'saving', 'fetching'];
   isoBusy(j: EmuInstall) { return LabImages.running.includes(j.stage); }
   installsBusy() { return this.installs().some(j => this.isoBusy(j) || j.stage === 'waiting'); }
-  installsLine() { const j = this.installs().find(x => this.isoBusy(x) || x.stage === 'waiting') ?? this.installs()[this.installs().length - 1]; return j ? j.name + ': ' + this.isoText(j) : ''; }
+  installsLine() { const j = this.installs().find(x => this.isoBusy(x) || x.stage === 'waiting') ?? this.installs()[this.installs().length - 1]; return !j ? '' : this.isoBusy(j) || j.stage === 'waiting' ? j.name + ': ' + tr('step {0} of {1}', this.stepNo(j), this.stepKeys(j).length) + ' · ' + this.stepLabel(j.step ?? '') : j.name + ': ' + this.isoText(j); }
+  protected now = signal(Date.now());
+  private readonly tick = setInterval(() => { if (this.iso() && this.installsBusy()) this.now.set(Date.now()); }, 1000);
+  ngOnDestroy() { clearInterval(this.tick); }
+  // the steps of an install (the same keys as the app's: copy, start, boot, login, install, poweroff, console, shutdown, convert, fetch)
+  private static readonly stepsAuto = ['copy', 'start', 'boot', 'login', 'install', 'poweroff', 'convert', 'fetch'];
+  private static readonly stepsHand = ['copy', 'start', 'console', 'shutdown', 'convert', 'fetch'];
+  stepKeys(j: EmuInstall) { return j.mode === 'alpine' ? LabImages.stepsAuto : LabImages.stepsHand; }
+  stepIdx(j: EmuInstall) { return Math.max(0, this.stepKeys(j).indexOf(j.step ?? '')); }
+  stepNo(j: EmuInstall) { return this.stepIdx(j) + 1; }
+  stepState(j: EmuInstall, k: string) { const a = this.stepKeys(j).indexOf(k), b = this.stepIdx(j); return a < b ? 'done' : a === b ? 'now' : 'todo'; }
+  stepLabel(k: string) {
+    switch (k) {
+      case 'copy': return tr('Copy the ISO to the host');
+      case 'start': return tr('Start the installer');
+      case 'boot': return tr('Boot the installer');
+      case 'login': return tr('Log in on its console');
+      case 'install': return tr('Install the system on the new disk');
+      case 'poweroff': return tr('Power the installer off');
+      case 'console': return tr('You install on the console');
+      case 'shutdown': return tr('Shut the machine down');
+      case 'convert': return tr('Make the qcow2 file on the host');
+      default: return tr('Copy the qcow2 file to this computer');
+    }
+  }
+  secs(at: string) { const t = Date.parse(at); return t ? Math.max(0, Math.round((this.now() - t) / 1000)) : 0; }
+  dur(s: number) { return s < 60 ? tr('{0} s', s) : s < 3600 ? tr('{0} min {1} s', Math.floor(s / 60), s % 60) : tr('{0} h {1} min', Math.floor(s / 3600), Math.floor(s % 3600 / 60)); }
+  /** How long a step took (or has taken so far); '' for the ones not reached. */
+  stepTime(j: EmuInstall, k: string) {
+    const ms = j.marks ?? [], i = ms.findIndex(m => m.step === k);
+    if (i < 0) return '';
+    const from = Date.parse(ms[i].at), to = i + 1 < ms.length ? Date.parse(ms[i + 1].at) : this.now();
+    return this.dur(Math.max(0, Math.round((to - from) / 1000)));
+  }
+  /** The share of the current step that is known (0 to 1), or -1. */
+  stepFrac(j: EmuInstall) {
+    if (j.step === 'convert') return (j.pct ?? 0) / 100;
+    const m = j.step === 'copy' || j.step === 'fetch' ? /(\d+) %/.exec(j.msg) : null;
+    return m ? +m[1] / 100 : -1;
+  }
+  overall(j: EmuInstall) { return Math.round(100 * (this.stepIdx(j) + Math.max(0, this.stepFrac(j))) / this.stepKeys(j).length); }
+  /** What the current step shows besides its name: the message, the percent, the size written, how long the console has been quiet. */
+  stepNote(j: EmuInstall) {
+    const l: string[] = [];
+    if (j.step === 'copy' || j.step === 'fetch') { const f = this.stepFrac(j); if (f >= 0) l.push(tr('{0} % done', Math.round(f * 100))); }
+    else if (j.step === 'convert') l.push(tr('{0} % done', Math.round(j.pct ?? 0)), tr('{0} written', this.mb(j.part ?? 0)));
+    else if (j.step === 'boot' || j.step === 'login' || j.step === 'install' || j.step === 'poweroff' || j.step === 'console') {
+      if (j.disk) l.push(tr('{0} written to the new disk', this.mb(j.disk)));
+      if ((j.idle ?? 0) >= 10) l.push(tr('console quiet for {0}', this.dur(j.idle ?? 0)));
+    }
+    return l.filter(x => x).join(' · ');
+  }
   isoText(j: EmuInstall) {
     switch (j.stage) {
       case 'done': return tr('Done: the image is in the list.');
@@ -820,9 +889,13 @@ export class LabImages implements OnInit {
   isoNamePh() { const b = (this.isoPath.split(/[\\/]/).pop() ?? '').replace(/\.iso$/i, ''); return b || tr('from the ISO’s name'); }
   openIso() { this.edit.set(null); this.iso.set(true); if (!this.isoHost) this.isoHost = this.lab.emu()?.host || this.hosts()[0]?.session || ''; }
   async chooseIso() { const p = await this.backend.chooseOpenFile(tr('Choose the ISO file'), [{ displayName: tr('ISO files'), pattern: '*.iso' }]).catch(() => ''); if (p) { this.isoPath = p; if (/alpine/i.test(p)) this.isoMode = 'alpine'; } }
+  diskText(j: EmuInstall) { return j.mb ? (j.mb % 1024 === 0 ? j.mb / 1024 + ' GB' : j.mb + ' MB') : j.gb + ' GB'; }
+  /** The number is turned into the other unit, so the disk stays the size it was. */
+  isoUnitChanged(u: string) { this.isoSize = u === 'MB' ? Math.round(this.isoSize * 1024) : Math.max(1, Math.round(this.isoSize / 1024)); }
   async startIso() {
+    const mb = Math.round((+this.isoSize || (this.isoUnit === 'GB' ? 8 : 8192)) * (this.isoUnit === 'GB' ? 1024 : 1));
     try {
-      this.lab.emu.set(await this.backend.emuInstallStart({ name: this.isoNm.trim(), iso: this.isoPath, mode: this.isoMode, gb: +this.isoGb || 8, ram: +this.isoRam || 1024, cpus: +this.isoCpus || 2, host: this.isoHost, password: this.isoPw }));
+      this.lab.emu.set(await this.backend.emuInstallStart({ name: this.isoNm.trim(), iso: this.isoPath, mode: this.isoMode, gb: Math.max(1, Math.ceil(mb / 1024)), mb, ram: +this.isoRam || 1024, cpus: +this.isoCpus || 2, host: this.isoHost, password: this.isoPw }));
       this.isoPath = ''; this.isoNm = ''; this.ui.toast(tr('The install started'), 'success'); void this.lab.refresh();
     } catch (e) { this.ui.error(errText(e)); }
   }
