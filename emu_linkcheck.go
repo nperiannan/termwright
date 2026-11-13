@@ -49,8 +49,8 @@ func (a *App) EmuLinkCheck(id string, seconds int) (string, error) {
 	mon, dir := lh.MonitorPort(*v), lh.VMDir()
 	nic := orStr(emuImage(v.Image).NIC, "e1000")
 	emuLab.mu.Unlock()
-	if !strings.HasPrefix(nic, "e1000") || nic == "e1000e" {
-		return "", fmt.Errorf("the link check reads the e1000 card's events; %s uses %s", name, nic)
+	if !strings.HasPrefix(nic, "e1000") {
+		return "", fmt.Errorf("the link check reads e1000 and e1000e cards' events; %s uses %s (it has no auto-negotiation that takes links down)", name, nic)
 	}
 	home, err := a.emuHome(host)
 	if err != nil {
@@ -62,7 +62,7 @@ func (a *App) EmuLinkCheck(id string, seconds int) (string, error) {
 		return "", errors.New(name + " is not running")
 	}
 	_, _ = a.emuRun(host, ": > "+emu.Q(file), 10*time.Second)
-	for _, c := range []string{"logfile " + file, "trace-event e1000x_* on", "trace-event e1000_receiver_overrun on"} {
+	for _, c := range []string{"logfile " + file, "trace-event e1000x_* on", "trace-event e1000_receiver_overrun on", "trace-event e1000e_core_ctrl_*_reset on"} {
 		if out, err := h.do(c, 10*time.Second); err != nil || strings.Contains(strings.ToLower(out), "error") || strings.Contains(out, "not found") {
 			h.close()
 			return "", fmt.Errorf("QEMU did not start the check (%s): %v %s", c, err, strings.TrimSpace(out))
@@ -70,11 +70,11 @@ func (a *App) EmuLinkCheck(id string, seconds int) (string, error) {
 	}
 	emuEvent(id, "info", fmt.Sprintf("link check: watching its network cards in QEMU for %d s", seconds))
 	time.Sleep(time.Duration(seconds) * time.Second)
-	for _, c := range []string{"trace-event e1000x_* off", "trace-event e1000_receiver_overrun off", "logfile /dev/null"} {
+	for _, c := range []string{"trace-event e1000x_* off", "trace-event e1000_receiver_overrun off", "trace-event e1000e_core_ctrl_*_reset off", "logfile /dev/null"} {
 		_, _ = h.do(c, 10*time.Second)
 	}
 	h.close()
-	out, err := a.emuRun(host, "grep -ao 'e1000x\\?_[a-z_]*' "+emu.Q(file)+" | sort | uniq -c; rm -f "+emu.Q(file), 20*time.Second)
+	out, err := a.emuRun(host, "grep -ao 'e1000[ex]\\?_[a-z_]*' "+emu.Q(file)+" | sort | uniq -c; rm -f "+emu.Q(file), 20*time.Second)
 	if err != nil {
 		return "", err
 	}

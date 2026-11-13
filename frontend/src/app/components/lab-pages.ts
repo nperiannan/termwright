@@ -485,8 +485,8 @@ export class LabNew implements OnInit {
             @if (edit(); as im) {
               <div class="row2" style="justify-content: flex-start"><div style="flex: 1"><b style="font-size: 15px">{{ im.name }}@if (im.version) { · {{ im.version }} }</b><div class="muted small mono">{{ im.fileName }} · {{ mb(im.size) }}@if (im.sha256) { · sha256 {{ im.sha256.slice(0, 4) }}…{{ im.sha256.slice(-4) }} }</div></div>
                 @if (hasLinks(im)) {
-                  @if (!needs(im)) { <button type="button" class="dlb done" disabled>✓ {{ tr('Downloaded') }}</button> }
-                  @else if (dl(im)) { <button type="button" class="dlb busy" disabled [style.--p]="pctOf(dl(im)) + '%'"><span>{{ dl(im) === 'waiting' ? tr('Waiting…') : tr('Downloading {0}', dl(im)) }}</span></button> }
+                  @if (!needs(live(im))) { <button type="button" class="dlb done" disabled>✓ {{ tr('Downloaded') }}</button> }
+                  @else if (dl(live(im))) { <button type="button" class="dlb busy" disabled [style.--p]="pctOf(dl(live(im))) + '%'"><span>{{ dl(live(im)) === 'waiting' ? tr('Waiting…') : tr('Downloading {0}', dl(live(im))) }}</span></button> }
                   @else { <button type="button" class="primary" (click)="lab.download([im.id])" [disabled]="lab.busy()">⤓ {{ tr('Download ({0})', mb(dlSize(im))) }}</button> }
                 }
                 <span class="pill">{{ tr('Used by {0} switches · {1} templates', usedBy(im.id), tplBy(im.id)) }}</span></div>
@@ -688,6 +688,8 @@ export class LabImages implements OnInit {
     return { n: all.length, at: Math.min(all.length, doneN + 1), pct: act ? this.pctOf(this.dl(act)) : 0 };
   });
   protected downloaded = computed(() => this.images().filter(i => this.hasLinks(i) && !this.needs(i)).length);
+  /** The image as the lab has it now (the form holds a copy; its download moves on in the list). */
+  live(im: EmuImage) { return this.images().find(x => x.id === im.id) ?? im; }
   dl(im: EmuImage) { return ((im as EmuImage & { download?: string }).download ?? '').replace('unpacking', this.tr('unpacking')); }
   imageOf(id: string) { return this.images().find(i => i.id === id); }
   diskName(b?: string) { return ({ ide: 'IDE', sata: 'SATA', scsi: 'SCSI', virtio: 'virtio', sd: 'SD' } as Record<string, string>)[b || 'ide'] ?? (b || 'IDE'); }
