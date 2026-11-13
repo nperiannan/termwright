@@ -204,44 +204,45 @@ type Template struct {
 
 // VM is one switch of the lab.
 type VM struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"` // hostname, also the session name
-	Image     string         `json:"image"`
-	Index     int            `json:"index"` // its number in the lab: ports and MACs come from it
-	CPUs      int            `json:"cpus"`
-	RAM       int            `json:"ram"`
-	MgmtIP    string         `json:"mgmtIp"` // address/bits it gets on day 0
-	Gateway   string         `json:"gateway"`
-	Day0Done  bool           `json:"day0Done"`
-	Host      string         `json:"host,omitempty"`    // the KVM host it runs on (a session path; "" = the lab's own host)
-	Direct    bool           `json:"direct,omitempty"`  // its management address answers this computer straight (no jump host)
-	Serial    string         `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
-	BaseMAC   string         `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
-	DiskGB    int            `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
-	Template  string         `json:"template,omitempty"`
-	Persona   *Persona       `json:"persona,omitempty"`
-	FastKey   string         `json:"fastKey,omitempty"`   // its running state was saved in its disk with this setup (FastKey): it resumes from it
-	Uplinks   []int          `json:"uplinks,omitempty"`   // data ports on the host's network (its bridge, or macvtap on its port)
-	LabDNS    []string       `json:"-"`                   // the lab's name servers, for {dns} in its day 0 (set when it starts)
-	Relayed   bool           `json:"relayed,omitempty"`   // moved while running: its cables listen on all addresses (relays on its old host forward to it)
-	Incoming  string         `json:"-"`                   // started to receive a live migration ("tcp:0.0.0.0:port")
-	FW        string         `json:"fw,omitempty"`        // the software version the switch reports (its CLI, after it booted)
-	HWSerial  string         `json:"hwSerial,omitempty"`  // the serial number the switch reports
-	AddrOn    string         `json:"addrOn,omitempty"`    // the management address the switch was seen to take (its day 0 checked it)
-	Machine   string         `json:"machine,omitempty"`   // the QEMU machine type it runs as, when pinned (a live move between QEMU versions: "pc" is each version's own)
-	CPU       string         `json:"cpu,omitempty"`       // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
-	Role      string         `json:"role,omitempty"`      // what it is drawn as ("access", "core", "router"…; "" = from its model)
-	Addrs6    map[int]string `json:"addrs6,omitempty"`    // IPv6 of its data ports: "auto" (SLAAC) or address/bits (computers)
-	DataGw    string         `json:"dataGw,omitempty"`    // its default gateway through a data port (computers; it replaces the management one)
-	DataGw6   string         `json:"dataGw6,omitempty"`   // its IPv6 default gateway (computers)
-	DNS       string         `json:"dns,omitempty"`       // its DNS server (computers)
-	CPUMax    float64        `json:"cpuMax,omitempty"`    // at most this many host cores (0.5 = half of one; 0 = no limit), by a cgroup on its host
-	CPUWeight int            `json:"cpuWeight,omitempty"` // its share of the host's CPU when they compete (cgroup cpu.weight 1-10000; 0 = 100, as the others)
-	CPUReq    int            `json:"cpuReq,omitempty"`    // its CPU request in millicores (kubectl's 250m): its share when the host is busy (cpu.weight = request/10); nothing is reserved
-	CPULim    int            `json:"cpuLim,omitempty"`    // its CPU limit in millicores (0 = none): the most it may use (cpu.max)
-	Addrs     map[int]string `json:"addrs,omitempty"`     // data-port addresses typed on its console at each start (port number → address/bits, or "dhcp"), when its image has port address commands (Linux computers)
-	X         int            `json:"x"`
-	Y         int            `json:"y"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"` // hostname, also the session name
+	Image       string         `json:"image"`
+	Index       int            `json:"index"` // its number in the lab: ports and MACs come from it
+	CPUs        int            `json:"cpus"`
+	RAM         int            `json:"ram"`
+	MgmtIP      string         `json:"mgmtIp"` // address/bits it gets on day 0
+	Gateway     string         `json:"gateway"`
+	Day0Done    bool           `json:"day0Done"`
+	Host        string         `json:"host,omitempty"`    // the KVM host it runs on (a session path; "" = the lab's own host)
+	Direct      bool           `json:"direct,omitempty"`  // its management address answers this computer straight (no jump host)
+	Serial      string         `json:"serial,omitempty"`  // given to the VM as its SMBIOS serial number ("" = the VM's own)
+	BaseMAC     string         `json:"baseMac,omitempty"` // port 0's MAC, the others follow ("" = from the lab)
+	DiskGB      int            `json:"diskGb,omitempty"`  // grow its disk to this size (0 = the image's)
+	Template    string         `json:"template,omitempty"`
+	Persona     *Persona       `json:"persona,omitempty"`
+	FastKey     string         `json:"fastKey,omitempty"`     // its running state was saved in its disk with this setup (FastKey): it resumes from it
+	Uplinks     []int          `json:"uplinks,omitempty"`     // data ports on the host's network (its bridge, or macvtap on its port)
+	LabDNS      []string       `json:"-"`                     // the lab's name servers, for {dns} in its day 0 (set when it starts)
+	Checkpoints []Checkpoint   `json:"checkpoints,omitempty"` // its running state kept in its disk, newest last (restored with RestoreScript)
+	Relayed     bool           `json:"relayed,omitempty"`     // moved while running: its cables listen on all addresses (relays on its old host forward to it)
+	Incoming    string         `json:"-"`                     // started to receive a live migration ("tcp:0.0.0.0:port")
+	FW          string         `json:"fw,omitempty"`          // the software version the switch reports (its CLI, after it booted)
+	HWSerial    string         `json:"hwSerial,omitempty"`    // the serial number the switch reports
+	AddrOn      string         `json:"addrOn,omitempty"`      // the management address the switch was seen to take (its day 0 checked it)
+	Machine     string         `json:"machine,omitempty"`     // the QEMU machine type it runs as, when pinned (a live move between QEMU versions: "pc" is each version's own)
+	CPU         string         `json:"cpu,omitempty"`         // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
+	Role        string         `json:"role,omitempty"`        // what it is drawn as ("access", "core", "router"…; "" = from its model)
+	Addrs6      map[int]string `json:"addrs6,omitempty"`      // IPv6 of its data ports: "auto" (SLAAC) or address/bits (computers)
+	DataGw      string         `json:"dataGw,omitempty"`      // its default gateway through a data port (computers; it replaces the management one)
+	DataGw6     string         `json:"dataGw6,omitempty"`     // its IPv6 default gateway (computers)
+	DNS         string         `json:"dns,omitempty"`         // its DNS server (computers)
+	CPUMax      float64        `json:"cpuMax,omitempty"`      // at most this many host cores (0.5 = half of one; 0 = no limit), by a cgroup on its host
+	CPUWeight   int            `json:"cpuWeight,omitempty"`   // its share of the host's CPU when they compete (cgroup cpu.weight 1-10000; 0 = 100, as the others)
+	CPUReq      int            `json:"cpuReq,omitempty"`      // its CPU request in millicores (kubectl's 250m): its share when the host is busy (cpu.weight = request/10); nothing is reserved
+	CPULim      int            `json:"cpuLim,omitempty"`      // its CPU limit in millicores (0 = none): the most it may use (cpu.max)
+	Addrs       map[int]string `json:"addrs,omitempty"`       // data-port addresses typed on its console at each start (port number → address/bits, or "dhcp"), when its image has port address commands (Linux computers)
+	X           int            `json:"x"`
+	Y           int            `json:"y"`
 }
 
 // Cable joins data port APort of A to BPort of B (port numbers from 1).
@@ -377,29 +378,30 @@ func (l *Lab) LagOf(vm string, port int) *Lag {
 
 // Lab is what a host runs.
 type Lab struct {
-	ID       string          `json:"id"`                 // short, part of the folder and interface names
-	Dir      string          `json:"dir"`                // on the host, relative to the home folder
-	Mgmt     string          `json:"mgmt"`               // "lan" (the host's network, DHCP), "cloud" (the host's network, routed by the host: fixed addresses), "nat" (the host's NAT network, DHCP), "bridge" (a lab bridge on the host) or "forward"
-	LanIf    string          `json:"lanIf"`              // lan: the host's bridge (tap on it) or network port (macvtap on it)
-	NatBr    string          `json:"natBr"`              // nat: the host's NAT bridge with a DHCP server (libvirt's virbr0)
-	LanKind  string          `json:"lanKind"`            // lan: "bridge" or "macvtap"
-	MgmtNet  string          `json:"mgmtNet"`            // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.234.179.146/24)
-	CloudGw  string          `json:"cloudGw"`            // cloud (and lan with fixed addresses): the host's network's gateway
-	LanFixed bool            `json:"lanFixed,omitempty"` // lan: fixed addresses from MgmtNet on (a network without DHCP)
-	NoFast   bool            `json:"noFast,omitempty"`   // Stop shuts the switches down (no saved running state: they boot each time)
-	CloudIf  string          `json:"cloudIf"`            // cloud: the host's port on its network
-	HostIP   string          `json:"hostIp"`             // cloud: the host's own address there
-	Base     int             `json:"base"`               // first TCP/UDP port on the host's 127.0.0.1
-	KVM      bool            `json:"kvm"`                // false: software emulation (slow, for tests)
-	CPU      string          `json:"-"`                  // the CPU model its switches get with KVM ("" = the host's own); set per host by the app
-	Taken    map[string]bool `json:"-"`                  // management addresses other topologies have (they may run at the same time); set by the app
-	VMs      []VM            `json:"vms"`
-	Cables   []Cable         `json:"cables"`
-	Lags     []Lag           `json:"lags,omitempty"`
-	Testers  []Tester        `json:"testers,omitempty"` // test ports of the traffic generator
-	DNS      []string        `json:"dns,omitempty"`     // the lab's name servers: computers without one get them, day 0 fills {dns} {dns2} {dnsList} (default 8.8.8.8 1.1.1.1)
-	Streams  []Stream        `json:"streams,omitempty"`
-	Tests    []TrafficTest   `json:"tests,omitempty"` // saved traffic tests (RFC 2544, learning, convergence)
+	ID            string          `json:"id"`                 // short, part of the folder and interface names
+	Dir           string          `json:"dir"`                // on the host, relative to the home folder
+	Mgmt          string          `json:"mgmt"`               // "lan" (the host's network, DHCP), "cloud" (the host's network, routed by the host: fixed addresses), "nat" (the host's NAT network, DHCP), "bridge" (a lab bridge on the host) or "forward"
+	LanIf         string          `json:"lanIf"`              // lan: the host's bridge (tap on it) or network port (macvtap on it)
+	NatBr         string          `json:"natBr"`              // nat: the host's NAT bridge with a DHCP server (libvirt's virbr0)
+	LanKind       string          `json:"lanKind"`            // lan: "bridge" or "macvtap"
+	MgmtNet       string          `json:"mgmtNet"`            // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.234.179.146/24)
+	CloudGw       string          `json:"cloudGw"`            // cloud (and lan with fixed addresses): the host's network's gateway
+	LanFixed      bool            `json:"lanFixed,omitempty"` // lan: fixed addresses from MgmtNet on (a network without DHCP)
+	NoFast        bool            `json:"noFast,omitempty"`   // Stop shuts the switches down (no saved running state: they boot each time)
+	CloudIf       string          `json:"cloudIf"`            // cloud: the host's port on its network
+	HostIP        string          `json:"hostIp"`             // cloud: the host's own address there
+	Base          int             `json:"base"`               // first TCP/UDP port on the host's 127.0.0.1
+	KVM           bool            `json:"kvm"`                // false: software emulation (slow, for tests)
+	CPU           string          `json:"-"`                  // the CPU model its switches get with KVM ("" = the host's own); set per host by the app
+	Taken         map[string]bool `json:"-"`                  // management addresses other topologies have (they may run at the same time); set by the app
+	VMs           []VM            `json:"vms"`
+	Cables        []Cable         `json:"cables"`
+	Lags          []Lag           `json:"lags,omitempty"`
+	Testers       []Tester        `json:"testers,omitempty"`       // test ports of the traffic generator
+	NoCheckpoints bool            `json:"noCheckpoints,omitempty"` // no checkpoint of a switch before typed commands (Revert cannot undo them)
+	DNS           []string        `json:"dns,omitempty"`           // the lab's name servers: computers without one get them, day 0 fills {dns} {dns2} {dnsList} (default 8.8.8.8 1.1.1.1)
+	Streams       []Stream        `json:"streams,omitempty"`
+	Tests         []TrafficTest   `json:"tests,omitempty"` // saved traffic tests (RFC 2544, learning, convergence)
 	// Nets: the management of the lab's other hosts (its own host's is above);
 	// Addrs: each host's address the others send cable traffic to.
 	Nets  map[string]HostNet `json:"nets,omitempty"`
@@ -414,6 +416,10 @@ type Lab struct {
 func (l *Lab) SSHPort(v VM) int     { return l.Base + v.Index*4 }
 func (l *Lab) ConsolePort(v VM) int { return l.Base + v.Index*4 + 1 }
 func (l *Lab) MonitorPort(v VM) int { return l.Base + v.Index*4 + 2 }
+
+// UDPPort is the UDP port a switch port listens on when it started with its cable on this host.
+func (l *Lab) UDPPort(v VM, n int) int { return l.udpPort(v, n) }
+
 func (l *Lab) udpPort(v VM, n int) int {
 	return l.Base + 4000 + v.Index*64 + n
 }

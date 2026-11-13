@@ -114,7 +114,7 @@ func (a *App) emuTrafficPush() error {
 		jobs = append(jobs, job{h, lh.TrafficScript(cfg)})
 		for _, s := range l.Streams {
 			if s.Kind == "pcap" && s.PcapID != "" && n > 0 {
-				pcaps = append(pcaps, [3]string{h, lh.Dir, s.PcapID})
+				pcaps = append(pcaps, [3]string{h, lh.VMDir(), s.PcapID}) // where tw-traffic.py runs
 			}
 		}
 	}

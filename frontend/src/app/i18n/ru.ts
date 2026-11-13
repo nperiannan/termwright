@@ -3129,7 +3129,7 @@ const ru: Record<string, string> = {
   'What Claude and the API changed in the lab, each with Revert': 'Что Claude и API изменили в лаборатории, с возможностью вернуть',
   'What Claude and the API changed, each with Revert': 'Что изменили Claude и API, с возможностью вернуть',
   'CPU requests, limits and use of every device': 'Запросы, лимиты и загрузка ЦП каждого устройства',
-  'Claude (the Termwright connector) and the API change the lab without asking, so automated tests never wait for a person. Each change is kept here with the lab as it was before: Revert brings the lab back to that point. Commands typed on consoles are listed but not undone. Real sessions are still asked, and sessions marked production are asked for every command.': 'Claude (коннектор Termwright) и API меняют лабораторию без вопросов, чтобы автоматические тесты не ждали человека. Каждое изменение хранится здесь вместе с состоянием лаборатории до него: «Вернуть» возвращает лабораторию к этой точке. Команды, введённые в консолях, показаны, но не отменяются. Для настоящих сессий вопрос остаётся, а для сессий с пометкой production - на каждую команду.',
+  'Claude (the Termwright connector) and the API change the lab without asking, so automated tests never wait for a person. Each change is kept here with the lab as it was before: Revert brings the lab back to that point. Commands typed on a switch are undone by restoring the checkpoint it got before them. Real sessions are still asked, and sessions marked production are asked for every command.': 'Claude (коннектор Termwright) и API меняют лабораторию без вопросов, чтобы автоматические тесты не ждали человека. Каждое изменение хранится здесь вместе с состоянием лаборатории до него: «Вернуть» возвращает лабораторию к этой точке. Команды, набранные на коммутаторе, отменяются восстановлением контрольной точки, сделанной перед ними. Для настоящих сессий вопрос остаётся, а для сессий с пометкой production - на каждую команду.',
   // the Traffic page
   '{0} saved': '{0} сохранён',
   'Its settings': 'Его настройки',
@@ -3313,6 +3313,15 @@ const ru: Record<string, string> = {
   'receiver': 'получатель',
   'sender (the MACs)': 'отправитель (MAC-адреса)',
   'reflector': 'отражатель',
+  'Checkpoints': 'Контрольные точки',
+  'Bring it back to this moment: its configuration, tables and sessions': 'Вернуть его к этому моменту: конфигурацию, таблицы и сеансы',
+  'Restore': 'Восстановить',
+  'None: one is taken before Claude or the API types on it, and Revert in Changes restores it.': 'Нет: точка делается перед тем, как Claude или API набирают на нём команды, а «Откатить» в «Изменениях» её восстанавливает.',
+  'Keep its whole running state now (it pauses for a moment); the oldest beyond three goes': 'Сохранить всё его рабочее состояние сейчас (на мгновение приостанавливается); сверх трёх удаляется самая старая',
+  'Checkpoint Now': 'Контрольная точка сейчас',
+  'Checkpoint a switch before Claude or the API types on it (at most every 2 minutes; not while traffic runs)': 'Делать контрольную точку коммутатора перед тем, как Claude или API набирают на нём команды (не чаще раза в 2 минуты; не во время трафика)',
+  'Checkpoint taken': 'Контрольная точка сделана',
+  'Restored to the checkpoint': 'Восстановлено к контрольной точке',
 };
 
 export default ru;

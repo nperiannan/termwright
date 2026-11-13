@@ -452,6 +452,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <p class="muted xs">{{ d.running ? tr('Live keeps it running while it moves; you choose how next.') : tr('Its disk goes along: its configuration stays.') }}</p> } }</details> }
             @if (cableRows(d); as cr) { <details class="sec" [open]="isOpen('cab')" (toggle)="setOpen('cab', $any($event.target).open)"><summary>{{ tr('Cables') }} ({{ cr.length }})</summary><div class="kv">
               @for (c of cr; track c.port) { <span class="mono">{{ c.port }}</span><span>{{ c.peer }}@if (c.lag) { · {{ tr('LAG') }} }</span> } @empty { <span class="muted">{{ tr('none') }}</span><span></span> }</div></details> }
+            @if (emu()) { <details class="sec" [open]="isOpen('ck')" (toggle)="setOpen('ck', $any($event.target).open)"><summary>{{ tr('Checkpoints') }} ({{ d.checkpoints?.length ?? 0 }})</summary>
+              <div class="cks">@for (c of (d.checkpoints ?? []).slice().reverse(); track c.tag) { <div class="ck"><span class="mono">{{ hm(c.at) }}</span><button type="button" class="sm" (click)="lab.restoreCheckpoint(d.id, c.tag)" [disabled]="!d.running || lab.busy()" [title]="tr('Bring it back to this moment: its configuration, tables and sessions')">{{ tr('Restore') }}</button><a (click)="lab.removeCheckpoint(d.id, c.tag)" [title]="tr('Delete')">✕</a><span class="cn" [title]="c.note || ''">{{ c.note || c.tag }}</span></div> }
+                @empty { <p class="muted small">{{ tr('None: one is taken before Claude or the API types on it, and Revert in Changes restores it.') }}</p> }
+                <button type="button" class="sm" (click)="lab.checkpoint(d.id)" [disabled]="!d.running || lab.busy()" [title]="tr('Keep its whole running state now (it pauses for a moment); the oldest beyond three goes')">＋ {{ tr('Checkpoint Now') }}</button></div></details> }
           </div>
         }
         <h3>{{ tr('Topology summary') }}</h3>
@@ -496,7 +500,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       </div>
       @if (dock() === 'changes') {
         <div class="inv chg">
-          <p class="chn">{{ tr('Claude (the Termwright connector) and the API change the lab without asking, so automated tests never wait for a person. Each change is kept here with the lab as it was before: Revert brings the lab back to that point. Commands typed on consoles are listed but not undone. Real sessions are still asked, and sessions marked production are asked for every command.') }}</p>
+          <p class="chn">{{ tr('Claude (the Termwright connector) and the API change the lab without asking, so automated tests never wait for a person. Each change is kept here with the lab as it was before: Revert brings the lab back to that point. Commands typed on a switch are undone by restoring the checkpoint it got before them. Real sessions are still asked, and sessions marked production are asked for every command.') }}
+            <label class="ckt"><input type="checkbox" [ngModel]="st()?.autoCheckpoints !== false" (ngModelChange)="lab.setCheckpoints($event)" /> {{ tr('Checkpoint a switch before Claude or the API types on it (at most every 2 minutes; not while traffic runs)') }}</label></p>
           <app-tv-bar [tv]="chView" />
           <table>
             <tr><th tvh [tv]="chView" key="at" filter="none">{{ tr('Time') }}</th><th tvh [tv]="chView" key="who">{{ tr('By') }}</th><th tvh [tv]="chView" key="tool">{{ tr('Tool') }}</th><th tvh [tv]="chView" key="what" filter="text">{{ tr('What changed') }}</th><th tvh [tv]="chView" key="result" filter="text">{{ tr('Result') }}</th><th tvh [tv]="chView" key="state">{{ tr('Revert') }}</th></tr>
@@ -858,6 +863,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .pill { font: 600 10.5px var(--mono, monospace); padding: 1px 7px; border-radius: 9px; } .pill.ok { color: var(--success, #1fa45a); background: color-mix(in srgb, var(--success, #1fa45a) 14%, transparent); } .pill.er { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); } .pill.ru { color: var(--accent); background: var(--accent-soft); }
     .mods { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; > span { color: var(--muted); padding-top: 4px; } .mod { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 54px 14px; gap: 4px; align-items: center; margin-bottom: 4px; a { cursor: pointer; color: var(--muted); } } }
     .trt td b { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+    .cks { display: grid; gap: 4px; padding: 4px 0; .ck { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 8px; align-items: center; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); } .cn { grid-column: 1 / -1; color: var(--muted); font-size: 11px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } a { cursor: pointer; color: var(--muted); } > button { justify-self: start; margin-top: 4px; } }
+    .ckt { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
     .dnsr { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); > span { flex: none; } input { flex: 1; min-width: 0; } }
     .tre .seg { flex-wrap: wrap; i { flex: 1; text-align: center; padding: 3px 4px; } }
     .two.pc { grid-template-columns: minmax(0, 1fr) auto; align-items: center; } .pcn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; } .cbl { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
@@ -1032,6 +1039,7 @@ export class LabWorkspace implements OnDestroy {
   protected tpAt = signal<Record<string, { x: number; y: number }>>({});
   protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw', 'pcap'];
   protected libOpen = signal(false);
+  protected hm(at: string) { const d = new Date(at); if (isNaN(+d)) return at; return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
   protected setKind(e: EmuStream, k: EmuStream['kind']) { if (k === 'pcap' && e.kind !== 'pcap' && e.seconds === 30 && !e.id) e.seconds = 0; e.kind = k; }
   protected fileName(p: string) { return p.split(/[\\/]/).pop() ?? p; }
   async choosePcap(e: EmuStream) { try { const p = await this.backend.chooseOpenFile(tr('The capture to replay'), [{ displayName: 'pcap', pattern: '*.pcap;*.cap;*.dmp' }]); if (p) { e.pcap = p; e.pcapId = ''; e.pcapFrames = 0; this.sEd.set({ ...e }); } } catch (err) { this.ui.error(err); } }

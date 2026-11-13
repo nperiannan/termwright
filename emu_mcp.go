@@ -27,6 +27,14 @@ import (
 var mcpLabTools = []mcpTool{
 	{"lab_dns", "The emulated lab's name servers: computers without one get them when they start, images' day 0 fills {dns} {dns2} {dnsList} with them, Alpine ISO installs use the first. Without servers it says what they are; with servers it sets them (at most three addresses; an empty list = the default 8.8.8.8 1.1.1.1). Running devices keep theirs until they restart.",
 		mcpSchema(map[string]any{"servers": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "the name servers to set (IPv4 or IPv6 addresses)"}})},
+	{"lab_checkpoint", "Checkpoints of a running switch: its whole state (configuration, tables, sessions) kept in its disk, restored in seconds - like a snapshot, while it runs. Actions: list (a switch's checkpoints), take (now; note says why), restore (tag: back to that moment), remove (tag), auto (on: Termwright takes one before Claude or the API types on a switch, so lab_history revert undoes typed commands; off: none). Taking one pauses the switch for a moment.",
+		mcpSchema(map[string]any{
+			"action": map[string]any{"type": "string", "enum": []string{"list", "take", "restore", "remove", "auto"}},
+			"switch": map[string]any{"type": "string"},
+			"tag":    map[string]any{"type": "string", "description": "restore, remove: the checkpoint (from list)"},
+			"note":   map[string]any{"type": "string", "description": "take: why"},
+			"on":     map[string]any{"type": "boolean", "description": "auto: on or off"},
+		})},
 	{"lab_images", "List the images and templates the emulated lab can make switches from: id, name, software version, device type, port naming, and whether the image file is there. Filter by name and device type to keep the answer short.", mcpSchema(map[string]any{
 		"name": map[string]any{"type": "string", "description": "only images and templates whose name, id or version contains this (any case)"},
 		"type": map[string]any{"type": "string", "description": "only this device type (EXOS, VOSS, Linux, Windows …; any case)"},
@@ -56,7 +64,7 @@ var mcpLabTools = []mcpTool{
 			"host":     map[string]any{"type": "string", "description": "KVM host name or session path (default: the lab's host)"},
 			"start":    map[string]any{"type": "boolean", "description": "start them at once"},
 		})},
-	{"lab_cable", "Connect (or remove) cables between switches of the emulated lab: switch names and port names as the switches call them (show_lab). A whole list at once; the user is asked first. New cables work once both switches have restarted.",
+	{"lab_cable", "Connect (or remove) cables between switches of the emulated lab: switch names and port names as the switches call them (show_lab). A whole list at once; the user is asked first. New cables work at once between running switches on one host (between two hosts, once both have restarted); removed ones are pulled at once.",
 		mcpSchema(map[string]any{
 			"cables": map[string]any{"type": "array", "description": "cables: {a, a_port, b, b_port}; for remove only a and a_port", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"a": map[string]any{"type": "string"}, "a_port": map[string]any{"type": "string"}, "b": map[string]any{"type": "string"}, "b_port": map[string]any{"type": "string"}}}},
@@ -212,7 +220,7 @@ var mcpLabTools = []mcpTool{
 		}, "switch")},
 	{"lab_events", "Read the emulated lab's Events log: what Termwright did to each switch (started, booted, day 0, persona, moves, errors), newest last.",
 		mcpSchema(map[string]any{"last": map[string]any{"type": "integer", "description": "how many lines (default 60, at most 300)"}})},
-	{"lab_history", "The emulated lab's change history: every change Claude or the API made (lab changes are not asked, so each is kept with the lab as it was before). Actions: list (newest first, with ids), plan (what revert would do for a change id), revert (bring the lab back to how it was before that change: devices added since are removed, cables, CPU, computers' addresses, test ports and streams set back, devices started or stopped as they were; commands typed on consoles are not undone). Use revert when a test went wrong.",
+	{"lab_history", "The emulated lab's change history: every change Claude or the API made (lab changes are not asked, so each is kept with the lab as it was before). Actions: list (newest first, with ids), plan (what revert would do for a change id), revert (bring the lab back to how it was before that change: devices added since are removed, cables, CPU, computers' addresses, test ports and streams set back, devices started or stopped as they were; commands typed on a switch are undone by restoring the checkpoint it got before them - Termwright takes one before typing, at most every 2 minutes per switch, none while traffic runs). Use revert when a test went wrong. lab_checkpoint takes, lists and restores checkpoints by hand.",
 		mcpSchema(map[string]any{
 			"action": map[string]any{"type": "string", "enum": []string{"list", "plan", "revert"}},
 			"id":     map[string]any{"type": "string", "description": "plan, revert: the change's id (from list)"},
@@ -288,6 +296,9 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		asker = func(title, msg string, danger, light bool) error {
 			if rec == nil {
 				rec = a.emuChangeBegin(who, name, title, msg)
+				if args != nil {
+					args["_change"] = rec.ID // a checkpoint taken for it says so
+				}
 			}
 			if e := inner(title, msg, danger, light); e != nil {
 				refused = true
@@ -297,6 +308,11 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		}
 		defer func() {
 			if rec != nil && !refused {
+				if ck, ok := args["_ck"].(map[string]string); ok && len(ck) > 0 { // typed commands, undone by a checkpoint
+					rec.Checkpoints, rec.Note, rec.Revertible = ck, "", true
+				} else if w, ok := args["_ckwhy"].(string); ok && w != "" {
+					rec.Note = "the commands typed are not undone: " + w
+				}
 				a.emuChangeEnd(rec, out, err)
 			}
 		}()
@@ -325,6 +341,53 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		return out, shown, nil
 	}
 	switch name {
+	case "lab_checkpoint":
+		if argStr(args, "action") == "auto" {
+			on, _ := args["on"].(bool)
+			if _, err := a.EmuSetCheckpoints(on); err != nil {
+				return "", err
+			}
+			return map[bool]string{true: "Checkpoints before typed commands are on.", false: "Checkpoints before typed commands are off: Revert does not undo typed commands."}[on], nil
+		}
+		d, err := emuMCPID(v, argStr(args, "switch"))
+		if err != nil {
+			return "", err
+		}
+		switch argStr(args, "action") {
+		case "take":
+			if _, err := a.emuCheckpoint(d.ID, orStr(argStr(args, "note"), "taken by Claude"), argStr(args, "_change")); err != nil {
+				return "", err
+			}
+			fallthrough
+		case "list", "":
+			emuLab.mu.Lock()
+			var cks []emu.Checkpoint
+			if vm := emuLab.f.Lab.VMByID(d.ID); vm != nil {
+				cks = slices.Clone(vm.Checkpoints)
+			}
+			emuLab.mu.Unlock()
+			if len(cks) == 0 {
+				return d.Hostname + " has no checkpoint.", nil
+			}
+			var b strings.Builder
+			b.WriteString(d.Hostname + "'s checkpoints (tag | when | why), newest last:\n")
+			for _, c := range cks {
+				fmt.Fprintf(&b, "- %s | %s | %s\n", c.Tag, c.At, c.Note)
+			}
+			return b.String(), nil
+		case "restore":
+			if err := light("Claude restores a checkpoint", "Claude (through the Termwright connector) restores "+d.Hostname+" to its checkpoint "+argStr(args, "tag")+"."); err != nil {
+				return "", err
+			}
+			if err := a.emuRestore(d.ID, argStr(args, "tag")); err != nil {
+				return "", err
+			}
+			return "Restored " + d.Hostname + " to " + argStr(args, "tag") + ".", nil
+		case "remove":
+			_, err := a.EmuCheckpointRemove(d.ID, argStr(args, "tag"))
+			return "Removed.", err
+		}
+		return "", errors.New("action is list, take, restore, remove or auto")
 	case "lab_dns":
 		if _, ok := args["servers"]; ok {
 			nv, err := a.EmuSetDNS(argStrs(args, "servers"))
@@ -573,6 +636,11 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		}
 		if err := ask("Claude wants to type on a console", "Claude (through the Termwright connector) asks to type on the console of "+d.Hostname+":\n\n    "+strings.Join(cmds, "\n    "), danger); err != nil {
 			return "", err
+		}
+		if tag, why := a.emuAutoCheckpoint(d.ID, "typing "+strings.Join(cmds, "; "), argStr(args, "_change")); tag != "" {
+			args["_ck"] = map[string]string{d.ID: tag}
+		} else {
+			args["_ckwhy"] = why
 		}
 		out, err := a.emuConsoleRun(d.ID, cmds, time.Duration(argInt(args, "timeout", 180, 900))*time.Second)
 		red, _ := aiRedact(out, false)

@@ -1077,7 +1077,7 @@ paths:
             tags:
                 - Tools
             summary: Connect (or remove) cables between switches of the emulated lab
-            description: 'Connect (or remove) cables between switches of the emulated lab: switch names and port names as the switches call them (show_lab). A whole list at once; the user is asked first. New cables work once both switches have restarted. Through the API it runs without asking.'
+            description: 'Connect (or remove) cables between switches of the emulated lab: switch names and port names as the switches call them (show_lab). A whole list at once; the user is asked first. New cables work at once between running switches on one host (between two hosts, once both have restarted); removed ones are pulled at once. Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1190,6 +1190,58 @@ paths:
                         schema:
                             type: object
                             properties: {}
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/checkpoint:
+        post:
+            operationId: tool_checkpoint
+            tags:
+                - Tools
+            summary: Checkpoints of a running switch
+            description: 'Checkpoints of a running switch: its whole state (configuration, tables, sessions) kept in its disk, restored in seconds - like a snapshot, while it runs. Actions: list (a switch''s checkpoints), take (now; note says why), restore (tag: back to that moment), remove (tag), auto (on: Termwright takes one before Claude or the API types on a switch, so lab_history revert undoes typed commands; off: none). Taking one pauses the switch for a moment. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - list
+                                        - take
+                                        - restore
+                                        - remove
+                                        - auto
+                                    type: string
+                                note:
+                                    description: 'take: why'
+                                    type: string
+                                on:
+                                    description: 'auto: on or off'
+                                    type: boolean
+                                switch:
+                                    type: string
+                                tag:
+                                    description: 'restore, remove: the checkpoint (from list)'
+                                    type: string
             responses:
                 200:
                     description: What it did or found, as text.
@@ -1497,7 +1549,7 @@ paths:
             tags:
                 - Tools
             summary: The emulated lab's change history
-            description: 'The emulated lab''s change history: every change Claude or the API made (lab changes are not asked, so each is kept with the lab as it was before). Actions: list (newest first, with ids), plan (what revert would do for a change id), revert (bring the lab back to how it was before that change: devices added since are removed, cables, CPU, computers'' addresses, test ports and streams set back, devices started or stopped as they were; commands typed on consoles are not undone). Use revert when a test went wrong. Through the API it runs without asking.'
+            description: 'The emulated lab''s change history: every change Claude or the API made (lab changes are not asked, so each is kept with the lab as it was before). Actions: list (newest first, with ids), plan (what revert would do for a change id), revert (bring the lab back to how it was before that change: devices added since are removed, cables, CPU, computers'' addresses, test ports and streams set back, devices started or stopped as they were; commands typed on a switch are undone by restoring the checkpoint it got before them - Termwright takes one before typing, at most every 2 minutes per switch, none while traffic runs). Use revert when a test went wrong. lab_checkpoint takes, lists and restores checkpoints by hand. Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -2453,6 +2505,13 @@ components:
                     type: string
                 diskGb:
                     type: integer
+                checkpoints:
+                    description: its running state kept in its disk (restore brings it back)
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuCheckpoint'
                 restart:
                     description: 'running with other vCPUs, memory or disk than it is set to: what a restart changes ("vCPU 2 → 4")'
                     type: string
@@ -2626,6 +2685,24 @@ components:
             required:
                 - match
                 - send
+        EmuCheckpoint:
+            type: object
+            properties:
+                tag:
+                    description: the snapshot's name in its disk (tw-ck-…)
+                    type: string
+                at:
+                    description: when (RFC 3339)
+                    type: string
+                note:
+                    description: why it was taken
+                    type: string
+                change:
+                    description: the change of the lab's history it was taken before
+                    type: string
+            required:
+                - tag
+                - at
         EmuCompNet:
             type: object
             properties:
@@ -3593,6 +3670,9 @@ components:
                 dnsSet:
                     description: they were set (not the default)
                     type: boolean
+                autoCheckpoints:
+                    description: a checkpoint of a switch before typed commands (Revert undoes them)
+                    type: boolean
                 topology:
                     description: the name the open lab is saved under
                     type: string
@@ -3703,6 +3783,7 @@ components:
                 - folder
                 - mgmtNet
                 - dns
+                - autoCheckpoints
                 - mgmt
                 - devices
                 - links

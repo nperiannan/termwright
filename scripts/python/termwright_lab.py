@@ -228,6 +228,21 @@ class Lab:
         """CPU request and limit in millicores (250 = 250m; 0 = none); without them, the report of the last hour."""
         return self.tool("cpu", switches=list(switches), request_m=request_m, limit_m=limit_m, max_cores=max_cores, share=share)
 
+    def checkpoint(self, switch: str, note: str = "") -> str:
+        """Keep a running switch's whole state now (it pauses for a moment); lists its checkpoints."""
+        return self.tool("checkpoint", action="take", switch=switch, note=note or None)
+
+    def checkpoints(self, switch: str) -> str:
+        return self.tool("checkpoint", action="list", switch=switch)
+
+    def restore(self, switch: str, tag: str) -> str:
+        """Bring a running switch back to a checkpoint (its configuration, tables and sessions)."""
+        return self.tool("checkpoint", action="restore", switch=switch, tag=tag)
+
+    def auto_checkpoints(self, on: bool = True) -> str:
+        """A checkpoint before typed commands (so history revert undoes them), or none."""
+        return self.tool("checkpoint", action="auto", on=on)
+
     def dns(self, *servers: str, default: bool = False) -> str:
         """The lab's name servers; with servers, sets them (at most three); default=True goes back to 8.8.8.8 1.1.1.1.
         Computers without one get them when they start; day 0 fills {dns} {dns2} {dnsList}."""

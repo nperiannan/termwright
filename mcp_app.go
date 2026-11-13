@@ -511,7 +511,16 @@ func (a *App) mcpCall(_ context.Context, name string, args map[string]any) (stri
 			}
 		}
 		if lab {
-			a.emuChangeNote("ai", "send_command", "Typed `"+cmd+"` on "+t.Title, "ok", "commands typed on a console are not undone")
+			id, ck, note := randHex(4), map[string]string{}, "commands typed on a console are not undone"
+			if vm := emuVMOfSession(t.Session.Path); vm != "" {
+				tag, why := a.emuAutoCheckpoint(vm, "Claude typed `"+cmd+"`", id)
+				if tag != "" {
+					ck[vm], note = tag, ""
+				} else if why != "" {
+					note = "not undone: " + why
+				}
+			}
+			a.emuChangeNoteCk(id, "ai", "send_command", "Typed `"+cmd+"` on "+t.Title, "ok", note, ck)
 		}
 		before, _ := a.tabText(t.ID, 1)
 		if err := a.terms.Write(t.ID, []byte(cmd+"\r")); err != nil {

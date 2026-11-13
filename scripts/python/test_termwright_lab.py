@@ -86,7 +86,7 @@ class Fake(BaseHTTPRequestHandler):
             return self.reply(200, {"result": "Installs (id | name | mode | stage | now | image):\n- ab12 | alp | alpine | %s | boot | %s\n" % (stage, "img1" if stage == "done" else "-")})
         if path == "/tools/install_finish":
             return self.reply(200, {"result": "Saving"})
-        if path in ("/tools/dns", "/tools/images"):
+        if path in ("/tools/dns", "/tools/images", "/tools/checkpoint"):
             return self.reply(200, {"result": "ok"})
         if path == "/tools/history":
             return self.reply(200, {"result": "Changes, newest first"})
@@ -156,6 +156,10 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(Fake.state["calls"][-1][2], {"servers": []})
         self.lab.dns()
         self.assertEqual(Fake.state["calls"][-1][2], {})
+        self.lab.restore("sw1", "tw-ck-a1")
+        self.assertEqual(Fake.state["calls"][-1][1:], ("/api/v1/lab/tools/checkpoint", {"action": "restore", "switch": "sw1", "tag": "tw-ck-a1"}))
+        self.lab.auto_checkpoints(False)
+        self.assertEqual(Fake.state["calls"][-1][2], {"action": "auto", "on": False})
         self.lab.images(type="EXOS")
         self.assertEqual(Fake.state["calls"][-1][1:], ("/api/v1/lab/tools/images", {"type": "EXOS"}))
 

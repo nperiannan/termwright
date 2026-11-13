@@ -64,7 +64,7 @@ func (a *App) emuPcapKeep(s *emu.Stream) error {
 	return nil
 }
 
-// emuPcapUpload puts a kept capture into the lab's folder on a host (once).
+// emuPcapUpload puts a kept capture into the folder where the lab runs on a host (dir: its VMDir; once).
 func (a *App) emuPcapUpload(host, dir, id string) error {
 	emuLab.mu.Lock()
 	done := emuLab.pcapUp[host+"|"+dir+"|"+id]

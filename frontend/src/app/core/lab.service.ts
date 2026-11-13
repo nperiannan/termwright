@@ -128,6 +128,10 @@ export class LabService {
   setFast(on: boolean) { return this.run(() => this.backend.emuSetFast(on), on ? 'Fast start on - Stop saves the switches’ running state' : 'Fast start off - the switches boot each time'); }
   stop(ids: string[] = []) { return this.run(() => (this.e ? this.backend.emuStop(ids) : this.backend.labStop(ids))); }
   restart(ids: string[]) { return this.run(() => this.backend.emuRestart(ids)); }
+  checkpoint(id: string, note = '') { return this.run(() => this.backend.emuCheckpoint(id, note), 'Checkpoint taken'); }
+  restoreCheckpoint(id: string, tag: string) { return this.run(() => this.backend.emuCheckpointRestore(id, tag), 'Restored to the checkpoint'); }
+  removeCheckpoint(id: string, tag: string) { return this.run(() => this.backend.emuCheckpointRemove(id, tag)); }
+  setCheckpoints(on: boolean) { return this.run(() => this.backend.emuSetCheckpoints(on)); }
   setDNS(servers: string[]) { return this.run(() => this.backend.emuSetDNS(servers), 'Name servers set - devices get them when they start'); }
   setMgmt(mgmt: string, mgmtNet = '') { return this.run(() => this.backend.emuSetMgmt(mgmt, mgmtNet), 'Management changed - it applies when the switches start'); }
   reset(ids: string[]) { return this.run(() => this.backend.emuReset(ids), 'Back to day 0: the switches boot as new'); }

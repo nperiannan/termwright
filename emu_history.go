@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +22,7 @@ import (
 // tests must not wait for a person); instead each one can be undone: Revert brings the lab back to
 // how it was before a change - devices added since are removed, cables, CPU, computers' addresses,
 // test ports and streams are set back, devices are started or stopped as they were. Commands typed on
-// consoles are listed but not undone.
+// consoles are undone by restoring the checkpoint the switch got before them (emu_checkpoint.go).
 
 // EmuChange is one change, for the window and the tools.
 type EmuChange struct {
@@ -39,8 +40,9 @@ type EmuChange struct {
 // emuChangeRec is a change as kept on disk: with the lab before it and the devices that ran.
 type emuChangeRec struct {
 	EmuChange
-	Before  *emu.Lab `json:"before,omitempty"`
-	Running []string `json:"running,omitempty"`
+	Before      *emu.Lab          `json:"before,omitempty"`
+	Running     []string          `json:"running,omitempty"`
+	Checkpoints map[string]string `json:"checkpoints,omitempty"` // switch → the checkpoint taken before commands typed on it
 }
 
 // emuHistMax: how many changes are kept.
@@ -164,7 +166,12 @@ func (a *App) emuChangeEnd(r *emuChangeRec, out string, err error) {
 
 // emuChangeNote records a change that cannot be undone (a command typed on a lab device's console).
 func (a *App) emuChangeNote(who, tool, what, result, note string) {
-	r := &emuChangeRec{EmuChange: EmuChange{ID: randHex(4), At: time.Now().Format(time.RFC3339), Who: emuWhoName(who), Tool: tool, What: what, Note: note}}
+	a.emuChangeNoteCk(randHex(4), who, tool, what, result, note, nil)
+}
+
+// emuChangeNoteCk keeps a change made of typed commands, with the checkpoints that undo it (switch → checkpoint).
+func (a *App) emuChangeNoteCk(id, who, tool, what, result, note string, ck map[string]string) {
+	r := &emuChangeRec{EmuChange: EmuChange{ID: id, At: time.Now().Format(time.RFC3339), Who: emuWhoName(who), Tool: tool, What: what, Note: note, Revertible: len(ck) > 0}, Checkpoints: ck}
 	var err error
 	if result != "ok" {
 		err = errors.New(result)
@@ -203,10 +210,46 @@ func (a *App) EmuRevertPlan(id string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.Before == nil {
+	if r.Before == nil && len(r.Checkpoints) == 0 {
 		return nil, errors.New("this change cannot be undone: " + orStr(r.Note, "the lab before it was not kept"))
 	}
-	return a.emuReconcile(r.Before, r.Running, false), nil
+	var steps []string
+	if r.Before != nil {
+		steps = a.emuReconcile(r.Before, r.Running, false)
+		if len(r.Checkpoints) > 0 && len(steps) == 1 && strings.HasPrefix(steps[0], "nothing to change") {
+			steps = nil
+		}
+	}
+	return append(steps, a.emuCkSteps(r)...), nil
+}
+
+// emuCkSteps: restoring the checkpoints a change has, as Revert says it.
+func (a *App) emuCkSteps(r emuChangeRec) []string {
+	var out []string
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	for id, tag := range r.Checkpoints {
+		name, at := id, ""
+		if l := emuLab.f.Lab; l != nil {
+			if v := l.VMByID(id); v != nil {
+				name = v.Name
+				for _, c := range v.Checkpoints {
+					if c.Tag == tag {
+						if t, err := time.Parse(time.RFC3339, c.At); err == nil {
+							at = " of " + t.Local().Format("15:04:05")
+						}
+					}
+				}
+				if at == "" {
+					out = append(out, "cannot restore "+name+": its checkpoint is gone (a newer one replaced it, or its disk)")
+					continue
+				}
+			}
+		}
+		out = append(out, "restore "+name+" to its checkpoint"+at+": what was typed on it since is undone (and anything else it did since)")
+	}
+	sort.Strings(out)
+	return out
 }
 
 // EmuRevert brings the lab back to how it was before a change; it returns what it did.
@@ -219,12 +262,28 @@ func (a *App) emuRevertAs(id, who string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.Before == nil {
+	if r.Before == nil && len(r.Checkpoints) == 0 {
 		return nil, errors.New("this change cannot be undone: " + orStr(r.Note, "the lab before it was not kept"))
 	}
 	rec := a.emuChangeBegin("user", "revert", "", "Back to before: "+r.What)
 	rec.Who = who
-	done := a.emuReconcile(r.Before, r.Running, true)
+	var done []string
+	if r.Before != nil {
+		done = a.emuReconcile(r.Before, r.Running, true)
+	}
+	for id, tag := range r.Checkpoints {
+		emuLab.mu.Lock()
+		name := id
+		if v := emuLab.f.Lab.VMByID(id); v != nil {
+			name = v.Name
+		}
+		emuLab.mu.Unlock()
+		if err := a.emuRestore(id, tag); err != nil {
+			done = append(done, "could not restore "+name+": "+err.Error())
+		} else {
+			done = append(done, "restored "+name+" to its checkpoint")
+		}
+	}
 	emuHist.mu.Lock()
 	for i := range emuHist.list {
 		if emuHist.list[i].ID == id {
@@ -440,7 +499,7 @@ func (a *App) emuReconcile(before *emu.Lab, running []string, apply bool) []stri
 	if !slices.Equal(before.DNS, now.DNS) {
 		do("set the lab's name servers back to "+orStr(strings.Join(before.DNS, " "), "the default"), func() error { _, err := a.EmuSetDNS(before.DNS); return err })
 	}
-		// positions on the canvas: put back as they were
+	// positions on the canvas: put back as they were
 	if apply {
 		emuLab.mu.Lock()
 		if l := emuLab.f.Lab; l != nil {

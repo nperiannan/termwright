@@ -141,6 +141,8 @@ var emuLab struct {
 	cpuHist          map[string][]emuCPUSample // CPU use and throttling over the last hour
 	runWith          map[string][3]int         // the vCPUs, memory (MB) and disk (GB) a switch was started with (to tell what a restart would change)
 	pcapUp           map[string]bool           // captures streams replay that are on a host already (host|lab folder|capture)
+	runCables        map[string]map[int]string // per running switch: its cables when it started (port → the other end), to know which ones the patch panel joins
+	patchHosts       map[string]bool           // hosts whose patch panel runs
 	cpuWarned        map[string]time.Time      // when the Events last said a limit held it back
 	ready            map[string]bool           // the console showed the ready text since the VM started (it may scroll out of the log's end later)
 	bootAns          map[string]time.Time      // when a boot menu was last answered
@@ -166,59 +168,60 @@ var emuLab struct {
 
 // EmuDevice is a VM as the Lab window shows it (the fields of a simulated switch, and more).
 type EmuDevice struct {
-	Host         string         `json:"host"` // the KVM host it runs on (session path)
-	ID           string         `json:"id"`
-	OS           string         `json:"os"` // device type
-	Model        string         `json:"model"`
-	Image        string         `json:"image"`
-	Version      string         `json:"version"`  // the software it runs: as it reports it, else the image's
-	HWSerial     string         `json:"hwSerial"` // the serial number it reports
-	Serial       string         `json:"serial"`
-	MAC          string         `json:"mac"`
-	Hostname     string         `json:"hostname"`
-	MgmtIP       string         `json:"mgmtIp"`
-	Port         int            `json:"port"`
-	Ports        int            `json:"ports"`
-	Running      bool           `json:"running"`
-	Logins       int            `json:"logins"`
-	Unsaved      bool           `json:"unsaved"`
-	X            int            `json:"x"`
-	Y            int            `json:"y"`
-	State        string         `json:"state"` // stopped, uploading, booting, day0, running, failed
-	StateText    string         `json:"stateText"`
-	CPU          float64        `json:"cpu"`                 // % of its vCPUs, now
-	MemUsed      int64          `json:"memUsed"`             // MB its VM uses now (resident)
-	Saved        bool           `json:"saved,omitempty"`     // stopped with its running state saved: it starts in seconds
-	Role         string         `json:"role,omitempty"`      // drawn as (set by the user, for its kind of device)
-	IconStyle    string         `json:"iconStyle,omitempty"` // its kind's icon style in this topology ("" = the default)
-	Uplinks      []string       `json:"uplinks,omitempty"`   // its data ports on the host's network
-	MovingTo     string         `json:"movingTo,omitempty"`  // the host it is moving to (session path), while it moves
-	Cores        float64        `json:"cores"`               // host cores it uses now
-	CPUs         int            `json:"cpus"`
-	RAM          int            `json:"ram"`
-	Console      int            `json:"console"`
-	SSH          string         `json:"ssh"` // how its management is reached, as text
-	Error        string         `json:"error"`
-	DiskGB       int            `json:"diskGb"`
-	Restart      string         `json:"restart,omitempty"` // running with other vCPUs, memory or disk than it is set to: what a restart changes ("vCPU 2 → 4")
-	Template     string         `json:"template"`
-	Persona      *emu.Persona   `json:"persona"`
-	PersonaOK    bool           `json:"personaOk"` // the persona file in its disk is the current one
-	PersonaError string         `json:"personaError"`
-	PersonaInfo  string         `json:"personaInfo"`         // where the file was written, what the CLI showed after boot
-	Computer     bool           `json:"computer,omitempty"`  // a Linux computer: Termwright gives its data ports addresses
-	Addrs        map[int]string `json:"addrs,omitempty"`     // its data ports' addresses (port → address/bits, or "dhcp")
-	AddrsSeen    map[int]string `json:"addrsSeen,omitempty"` // the addresses its data ports have, as read on its console after they were set (DHCP leases too)
-	Addrs6       map[int]string `json:"addrs6,omitempty"`    // its data ports' IPv6 ("auto" or address/bits)
-	DataGw       string         `json:"dataGw,omitempty"`    // its default gateway on a data port
-	DataGw6      string         `json:"dataGw6,omitempty"`   // its IPv6 default gateway
-	DNS          string         `json:"dns,omitempty"`       // its DNS server
-	Net          *emu.CompNet   `json:"net,omitempty"`       // its network as last read on its console
-	CPUMax       float64        `json:"cpuMax,omitempty"`    // at most this many host cores (0 = no limit)
-	CPUWeight    int            `json:"cpuWeight,omitempty"` // its CPU share when VMs compete (100 = as the others; 0 = 100)
-	CPUReq       int            `json:"cpuReq,omitempty"`    // its CPU request, millicores (its share when the host is busy; nothing is reserved)
-	CPULim       int            `json:"cpuLim,omitempty"`    // its CPU limit, millicores (0 = none)
-	CPUStats     *EmuCPUStats   `json:"cpuStats,omitempty"`  // its CPU over the last hour (while it runs)
+	Host         string           `json:"host"` // the KVM host it runs on (session path)
+	ID           string           `json:"id"`
+	OS           string           `json:"os"` // device type
+	Model        string           `json:"model"`
+	Image        string           `json:"image"`
+	Version      string           `json:"version"`  // the software it runs: as it reports it, else the image's
+	HWSerial     string           `json:"hwSerial"` // the serial number it reports
+	Serial       string           `json:"serial"`
+	MAC          string           `json:"mac"`
+	Hostname     string           `json:"hostname"`
+	MgmtIP       string           `json:"mgmtIp"`
+	Port         int              `json:"port"`
+	Ports        int              `json:"ports"`
+	Running      bool             `json:"running"`
+	Logins       int              `json:"logins"`
+	Unsaved      bool             `json:"unsaved"`
+	X            int              `json:"x"`
+	Y            int              `json:"y"`
+	State        string           `json:"state"` // stopped, uploading, booting, day0, running, failed
+	StateText    string           `json:"stateText"`
+	CPU          float64          `json:"cpu"`                 // % of its vCPUs, now
+	MemUsed      int64            `json:"memUsed"`             // MB its VM uses now (resident)
+	Saved        bool             `json:"saved,omitempty"`     // stopped with its running state saved: it starts in seconds
+	Role         string           `json:"role,omitempty"`      // drawn as (set by the user, for its kind of device)
+	IconStyle    string           `json:"iconStyle,omitempty"` // its kind's icon style in this topology ("" = the default)
+	Uplinks      []string         `json:"uplinks,omitempty"`   // its data ports on the host's network
+	MovingTo     string           `json:"movingTo,omitempty"`  // the host it is moving to (session path), while it moves
+	Cores        float64          `json:"cores"`               // host cores it uses now
+	CPUs         int              `json:"cpus"`
+	RAM          int              `json:"ram"`
+	Console      int              `json:"console"`
+	SSH          string           `json:"ssh"` // how its management is reached, as text
+	Error        string           `json:"error"`
+	DiskGB       int              `json:"diskGb"`
+	Checkpoints  []emu.Checkpoint `json:"checkpoints,omitempty"` // its running state kept in its disk (restore brings it back)
+	Restart      string           `json:"restart,omitempty"`     // running with other vCPUs, memory or disk than it is set to: what a restart changes ("vCPU 2 → 4")
+	Template     string           `json:"template"`
+	Persona      *emu.Persona     `json:"persona"`
+	PersonaOK    bool             `json:"personaOk"` // the persona file in its disk is the current one
+	PersonaError string           `json:"personaError"`
+	PersonaInfo  string           `json:"personaInfo"`         // where the file was written, what the CLI showed after boot
+	Computer     bool             `json:"computer,omitempty"`  // a Linux computer: Termwright gives its data ports addresses
+	Addrs        map[int]string   `json:"addrs,omitempty"`     // its data ports' addresses (port → address/bits, or "dhcp")
+	AddrsSeen    map[int]string   `json:"addrsSeen,omitempty"` // the addresses its data ports have, as read on its console after they were set (DHCP leases too)
+	Addrs6       map[int]string   `json:"addrs6,omitempty"`    // its data ports' IPv6 ("auto" or address/bits)
+	DataGw       string           `json:"dataGw,omitempty"`    // its default gateway on a data port
+	DataGw6      string           `json:"dataGw6,omitempty"`   // its IPv6 default gateway
+	DNS          string           `json:"dns,omitempty"`       // its DNS server
+	Net          *emu.CompNet     `json:"net,omitempty"`       // its network as last read on its console
+	CPUMax       float64          `json:"cpuMax,omitempty"`    // at most this many host cores (0 = no limit)
+	CPUWeight    int              `json:"cpuWeight,omitempty"` // its CPU share when VMs compete (100 = as the others; 0 = 100)
+	CPUReq       int              `json:"cpuReq,omitempty"`    // its CPU request, millicores (its share when the host is busy; nothing is reserved)
+	CPULim       int              `json:"cpuLim,omitempty"`    // its CPU limit, millicores (0 = none)
+	CPUStats     *EmuCPUStats     `json:"cpuStats,omitempty"`  // its CPU over the last hour (while it runs)
 }
 
 // EmuCPUStats is a device's CPU over the last minutes, in millicores (1000m = one host core busy).
@@ -602,38 +605,39 @@ func emuEvent(id, level, text string) {
 }
 
 type EmuView struct {
-	Kind          string            `json:"kind"` // "emu"
-	Events        []EmuEvent        `json:"events"`
-	DownloadDir   string            `json:"downloadDir"`   // where image downloads go on this computer
-	DownloadQueue []string          `json:"downloadQueue"` // the image downloading now, then the waiting ones in order
-	Exists        bool              `json:"exists"`
-	Running       bool              `json:"running"`
-	Folder        string            `json:"folder"`
-	MgmtNet       string            `json:"mgmtNet"`
-	DNS           []string          `json:"dns"` // the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
-	DNSSet        bool              `json:"dnsSet,omitempty"` // they were set (not the default)
-	Topology      string            `json:"topology,omitempty"` // the name the open lab is saved under
-	CloudGw       string            `json:"cloudGw,omitempty"`  // cloud: the gateway the switches use
-	LanFixed      bool              `json:"lanFixed,omitempty"` // lan: fixed addresses (no DHCP)
-	Mgmt          string            `json:"mgmt"`
-	Devices       []EmuDevice       `json:"devices"`
-	Links         []EmuLinkView     `json:"links"`
-	Sessions      map[string]string `json:"sessions"`
-	Consoles      map[string]string `json:"consoles"`
-	Models        []LabModel        `json:"models"`
-	OS            map[string]LabOS  `json:"os"`
-	Host          string            `json:"host"`
-	HostInfo      *emu.HostInfo     `json:"hostInfo"`
-	Hosts         []EmuHost         `json:"hosts"`
-	Images        []EmuImageView    `json:"images"`
-	KVM           bool              `json:"kvm"`
-	Templates     []emu.Template    `json:"templates"`
-	Usage         EmuUsage          `json:"usage"`
-	HostUse       []EmuHostUse      `json:"hostUse"`
-	Fast          bool              `json:"fast"`      // Fast start: Stop saves the switches' running state
-	IconStyle     string            `json:"iconStyle"` // how devices are drawn by default // every host of the lab: its management and what it gives the switches
-	DeviceTypes   []EmuDeviceType   `json:"deviceTypes"`
-	Installs      []EmuInstall      `json:"installs"` // installs of ISO files: running, waiting for the user, done
+	Kind            string            `json:"kind"` // "emu"
+	Events          []EmuEvent        `json:"events"`
+	DownloadDir     string            `json:"downloadDir"`   // where image downloads go on this computer
+	DownloadQueue   []string          `json:"downloadQueue"` // the image downloading now, then the waiting ones in order
+	Exists          bool              `json:"exists"`
+	Running         bool              `json:"running"`
+	Folder          string            `json:"folder"`
+	MgmtNet         string            `json:"mgmtNet"`
+	DNS             []string          `json:"dns"`                // the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
+	DNSSet          bool              `json:"dnsSet,omitempty"`   // they were set (not the default)
+	AutoCheckpoints bool              `json:"autoCheckpoints"`    // a checkpoint of a switch before typed commands (Revert undoes them)
+	Topology        string            `json:"topology,omitempty"` // the name the open lab is saved under
+	CloudGw         string            `json:"cloudGw,omitempty"`  // cloud: the gateway the switches use
+	LanFixed        bool              `json:"lanFixed,omitempty"` // lan: fixed addresses (no DHCP)
+	Mgmt            string            `json:"mgmt"`
+	Devices         []EmuDevice       `json:"devices"`
+	Links           []EmuLinkView     `json:"links"`
+	Sessions        map[string]string `json:"sessions"`
+	Consoles        map[string]string `json:"consoles"`
+	Models          []LabModel        `json:"models"`
+	OS              map[string]LabOS  `json:"os"`
+	Host            string            `json:"host"`
+	HostInfo        *emu.HostInfo     `json:"hostInfo"`
+	Hosts           []EmuHost         `json:"hosts"`
+	Images          []EmuImageView    `json:"images"`
+	KVM             bool              `json:"kvm"`
+	Templates       []emu.Template    `json:"templates"`
+	Usage           EmuUsage          `json:"usage"`
+	HostUse         []EmuHostUse      `json:"hostUse"`
+	Fast            bool              `json:"fast"`      // Fast start: Stop saves the switches' running state
+	IconStyle       string            `json:"iconStyle"` // how devices are drawn by default // every host of the lab: its management and what it gives the switches
+	DeviceTypes     []EmuDeviceType   `json:"deviceTypes"`
+	Installs        []EmuInstall      `json:"installs"` // installs of ISO files: running, waiting for the user, done
 }
 
 // EmuUsage is what the lab takes of its host now (stopped switches take nothing).
@@ -2743,6 +2747,10 @@ func (a *App) emuStart(host string, ids []string) {
 				emuLab.runWith = map[string][3]int{}
 			}
 			emuLab.runWith[id] = [3]int{v.CPUs, v.RAM, v.DiskGB}
+			if emuLab.runCables == nil {
+				emuLab.runCables = map[string]map[int]string{}
+			}
+			emuLab.runCables[id] = emuCablesOf(l, id) // its own cables from now; the patch panel lets go of them
 			delete(emuLab.errs, id)
 			delete(emuLab.addrOK, id)
 		}
@@ -2848,6 +2856,7 @@ func (a *App) emuStart(host string, ids []string) {
 		failAll(err)
 		return
 	}
+	emuGo(func() { time.Sleep(2 * time.Second); a.emuPatchSync(a.emuPollFresh().Up) }) // cables they now have themselves leave the patch panel
 	emuLab.mu.Lock()
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.SplitN(strings.TrimSpace(line), " ", 3)
@@ -4008,6 +4017,7 @@ func (a *App) emuView() EmuView {
 	}
 	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw, v.LanFixed, v.Fast = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw, l.LanFixed, !l.NoFast
 	v.DNS, v.DNSSet = l.DNSServers(), len(l.DNS) > 0
+	v.AutoCheckpoints = !l.NoCheckpoints
 	v.IconStyle = orStr(f.IconStyle, "box")
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
@@ -4149,6 +4159,7 @@ func (a *App) emuView() EmuView {
 			d.CPUStats = emuCPUStatsOf(emuLab.cpuHist[vm.ID], d.CPUReq)
 			d.Restart = emuRestartNeed(emuLab.runWith[vm.ID], vm)
 		}
+		d.Checkpoints = vm.Checkpoints
 		v.Devices = append(v.Devices, d)
 	}
 	for _, c := range l.Cables {
@@ -4451,7 +4462,7 @@ func emuPort(im *emu.Image, name string) int {
 	return 0
 }
 
-// EmuConnect adds a cable; running VMs get it when they restart.
+// EmuConnect adds a cable; between running switches on one host it works at once (the patch panel), between two hosts when they restart.
 func (a *App) EmuConnect(k EmuLinkView) (EmuView, error) {
 	defer emuAs("user")()
 	emuLab.mu.Lock()
@@ -4485,11 +4496,21 @@ func (a *App) EmuConnect(k EmuLinkView) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("unknown port")
 	}
-	l.Cables = append(l.Cables, emu.Cable{A: k.A, APort: pa, B: k.B, BPort: pb})
+	emuLab.mu.Unlock()
+	up := a.emuPoll(false).Up // (a status of the last 2 s will do)
+	emuLab.mu.Lock()
+	emuCablesSeen(l, up) // (before the new cable: running switches did not start with it)
+	c := emu.Cable{A: k.A, APort: pa, B: k.B, BPort: pb}
+	l.Cables = append(l.Cables, c)
 	err := a.emuSave()
 	emuLab.mu.Unlock()
 	if err != nil {
 		return EmuView{}, err
+	}
+	if note := a.emuHotCable(c, true, up); note != "" {
+		emuLab.mu.Lock()
+		emuEv(k.A, "warn", note)
+		emuLab.mu.Unlock()
 	}
 	return a.EmuState()
 }
@@ -4510,10 +4531,16 @@ func (a *App) EmuDisconnect(id, port string) (EmuView, error) {
 		return EmuView{}, errors.New("no such switch")
 	}
 	p := emuPort(emuImage(v.Image), port)
-	var keep []emu.Cable
+	emuLab.mu.Unlock()
+	up := a.emuPoll(false).Up // (a status of the last 2 s will do)
+	emuLab.mu.Lock()
+	emuCablesSeen(l, up)
+	var keep, gone []emu.Cable
 	for _, c := range l.Cables {
 		if !(c.A == id && c.APort == p || c.B == id && c.BPort == p) {
 			keep = append(keep, c)
+		} else {
+			gone = append(gone, c)
 		}
 	}
 	l.Cables = keep
@@ -4521,6 +4548,9 @@ func (a *App) EmuDisconnect(id, port string) (EmuView, error) {
 	emuLab.mu.Unlock()
 	if err != nil {
 		return EmuView{}, err
+	}
+	for _, c := range gone { // pulled at once on running switches
+		a.emuHotCable(c, false, up)
 	}
 	return a.EmuState()
 }
