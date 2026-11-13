@@ -3429,7 +3429,7 @@ func (a *App) emuPoll(force bool) emu.Status {
 		} else if im != nil && !emuLab.ready[v.ID] {
 			// what the console says went wrong (once in a while each): the switch reboots on its own and seems to be booting for ever
 			for _, f := range im.BootFailIn(m.Log[v.ID]) {
-				if k := v.ID + "|fail|" + f; time.Since(emuLab.bootAns[k]) > 10*time.Minute {
+				if k := v.ID + "|fail|" + emuDigits.ReplaceAllString(f, "#"); time.Since(emuLab.bootAns[k]) > 10*time.Minute { // the same line with other numbers (seconds, addresses) once
 					emuLab.bootAns[k] = time.Now()
 					hint := ""
 					if strings.Contains(f, "Illegal instruction") {
@@ -4830,6 +4830,8 @@ func (a *App) emuPackProfiles() []emu.Image {
 	}
 	return pf.Images
 }
+
+var emuDigits = regexp.MustCompile(`[0-9a-fx]*[0-9][0-9a-fx]*`)
 
 // emuSubseq: every line of a is in b, in the same order.
 func emuSubseq(a, b []string) bool {
