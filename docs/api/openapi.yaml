@@ -2911,6 +2911,14 @@ components:
                 computer:
                     description: 'a Linux computer: Termwright gives its data ports addresses'
                     type: boolean
+                desktop:
+                    description: a computer with a desktop and Firefox on its screen
+                    type: boolean
+                routing:
+                    description: a computer as a route generator
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuRouting'
+                        - type: "null"
                 addrs:
                     description: its data ports' addresses (port → address/bits, or "dhcp")
                     type:
@@ -3549,6 +3557,38 @@ components:
             required:
                 - port
                 - vif
+        EmuRouting:
+            type: object
+            properties:
+                proto:
+                    description: ospf or bgp
+                    type: string
+                port:
+                    description: the data port it speaks on (1 = the first)
+                    type: integer
+                routes:
+                    description: how many prefixes it advertises (1-10000)
+                    type: integer
+                prefix:
+                    description: the first one with its length (100.64.0.0/24); the others follow it
+                    type: string
+                area:
+                    description: 'OSPF: the area (default 0.0.0.0)'
+                    type: string
+                as:
+                    description: 'BGP: its AS (default 65001)'
+                    type: integer
+                peer:
+                    description: 'BGP: the switch''s address on that port'
+                    type: string
+                peerAs:
+                    description: 'BGP: the switch''s AS (default 65000)'
+                    type: integer
+            required:
+                - proto
+                - port
+                - routes
+                - prefix
         EmuSTP:
             type: object
             properties:

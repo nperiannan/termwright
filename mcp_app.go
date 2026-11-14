@@ -743,6 +743,14 @@ func runMCPBridge(in io.Reader, out io.Writer, dataDir string) error {
 		if len(req.ID) == 0 || string(req.ID) == "null" {
 			continue // notification
 		}
+		if req.Method == "tools/list" { // the running Termwright's own list when it answers (this program may be an older copy)
+			if resp, err := mcpForward(&http.Client{Timeout: 5 * time.Second}, dataDir, line); err == nil && bytes.Contains(resp, []byte(`"tools"`)) {
+				if _, err := out.Write(append(bytes.TrimSpace(resp), '\n')); err != nil {
+					return err
+				}
+				continue
+			}
+		}
 		if r, ok := mcpStatic(req); ok {
 			_ = enc.Encode(r)
 			continue

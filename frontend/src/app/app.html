@@ -71,7 +71,7 @@
             } @else if (t.kind === 'rdp' || t.kind === 'vnc') {
               <app-remote-view [tab]="t" />
             } @else if (t.kind === 'lab') {
-              <app-lab-workspace [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" />
+              @defer (on immediate) { <app-lab-workspace [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading the lab…</div> }
             } @else if (t.kind === 'player') {
               <app-player-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" />
             } @else if (t.filesPanel && t.session.protocol === 'SSH2') {

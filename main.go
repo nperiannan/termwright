@@ -45,6 +45,7 @@ func main() {
 	}
 	// "Termwright lab …": the emulated lab from the command line (through the running app's local API)
 	if len(os.Args) > 1 && os.Args[1] == "lab" {
+		attachConsole()
 		os.Exit(labCLIMain(os.Args[2:]))
 	}
 	discover.RaiseFileLimit()

@@ -2354,10 +2354,12 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 				}
 			}
 			v.MgmtIP, v.Gateway = lv.FreeAddress(v)
-			switch g.Role {
-			case "spine":
+			switch {
+			case len(im.PortAddr) > 0 || g.Role == "host": // a computer: an end user on an edge switch
+				v.Role = "pc"
+			case g.Role == "spine":
 				v.Role, spines[v.ID] = "core", true
-			case "leaf":
+			case g.Role == "leaf":
 				v.Role = "access"
 			}
 			lv.VMs = append(lv.VMs, v)
@@ -2494,7 +2496,32 @@ func orInt(v ...int) int {
 // emuPlace: the first two VMs of a lab on top, the others below.
 // emuLayout places a new topology's switches by its shape: spines above leaves, a ring or mesh
 // on a circle, a star around its hub, a line in rows.
-func emuLayout(vs []emu.VM, kind string, spines map[string]bool) {
+func emuLayout(all []emu.VM, kind string, spines map[string]bool) {
+	var vs []emu.VM // the switches by the shape; hosts in a row below them
+	var hi []int
+	for i, v := range all {
+		if v.Role == "host" || v.Role == "pc" {
+			hi = append(hi, i)
+		} else {
+			vs = append(vs, v)
+		}
+	}
+	defer func() {
+		bottom := 60
+		for _, v := range vs {
+			bottom = max(bottom, v.Y)
+		}
+		for j := range vs {
+			for i := range all {
+				if all[i].ID == vs[j].ID {
+					all[i].X, all[i].Y = vs[j].X, vs[j].Y
+				}
+			}
+		}
+		for k, i := range hi {
+			all[i].X, all[i].Y = 40+k*200, bottom+260
+		}
+	}()
 	n := len(vs)
 	circle := func(list []emu.VM, cx, cy, r float64) {
 		for i := range list {
@@ -2673,7 +2700,8 @@ func (a *App) emuLoginPassword(path string, v emu.VM) {
 
 func (a *App) emuSessions(v emu.VM) {
 	emuLab.mu.Lock()
-	l, folder := emuLab.f.Lab, emuLab.f.Folder
+	l := emuLab.f.Lab
+	folder, cf := emuSessionFolders()
 	host := emuHostOf(v)
 	if l != nil {
 		l = a.emuFor(host)
@@ -2704,7 +2732,6 @@ func (a *App) emuSessions(v emu.VM) {
 		emuLab.f.Sessions[v.ID] = saved.Path
 		emuLab.mu.Unlock()
 	}
-	cf := session.JoinPath(folder, "Consoles")
 	cs := session.Session{Name: free(cf, v.Name+" console"), Folder: cf, Protocol: session.ProtoTelnet, Hostname: "127.0.0.1", Port: conPort, Username: login, OwnLogin: true, SavePassword: true, DeviceType: dt, JumpSession: host,
 		Description: []string{"Serial console of the emulated switch " + v.Name}}
 	if saved, err := a.store.Save(cs, ""); err == nil {

@@ -1371,6 +1371,45 @@ func (l *Lab) WireWith(add []VM, o WireOpts, imgs map[string]*Image) {
 	if kind == "line" {
 		kind = "chain"
 	}
+	// hosts (Linux computers) are end users: each goes on one edge switch, not into the shape
+	var hosts, sws []VM
+	for _, v := range add {
+		if im := imgs[v.Image]; v.Role == "host" || v.Role == "pc" || im != nil && len(im.PortAddr) > 0 {
+			hosts = append(hosts, v)
+		} else {
+			sws = append(sws, v)
+		}
+	}
+	if len(hosts) > 0 && kind != "" && kind != "none" {
+		l.WireWith(sws, o, imgs)
+		var edge []VM
+		for _, v := range sws {
+			if !o.Spines[v.ID] || kind == "full-mesh" || kind == "chain" || kind == "ring" {
+				edge = append(edge, v)
+			}
+		}
+		if len(edge) == 0 && kind == "star" {
+			edge = sws
+		}
+		if len(edge) == 0 { // added to a lab: its own access switches, else any switch
+			for _, v := range l.VMs {
+				if im := imgs[v.Image]; v.Role != "host" && v.Role != "pc" && v.Role != "core" && (im == nil || len(im.PortAddr) == 0) && !slices.ContainsFunc(add, func(x VM) bool { return x.ID == v.ID }) {
+					edge = append(edge, v)
+				}
+			}
+		}
+		for i, h := range hosts {
+			if len(edge) == 0 {
+				break
+			}
+			sw := edge[i%len(edge)]
+			x, y := l.FreeDataPort(sw, imgs[sw.Image]), l.FreeDataPort(h, imgs[h.Image])
+			if x != 0 && y != 0 {
+				l.Cables = append(l.Cables, Cable{A: sw.ID, APort: x, B: h.ID, BPort: y})
+			}
+		}
+		return
+	}
 	if len(o.Spines) == 0 && o.Per <= 1 && (kind == "leaf-spine" || kind == "chain" || kind == "ring") {
 		l.Wire(add, kind, imgs)
 		return

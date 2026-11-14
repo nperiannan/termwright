@@ -549,7 +549,8 @@ func (a *App) emuHubSync() {
 // emuHubSessions makes an L2 switch's console (telnet) and SSH sessions, through its host.
 func (a *App) emuHubSessions(h emu.Hub) {
 	emuLab.mu.Lock()
-	l, folder := emuLab.f.Lab, emuLab.f.Folder
+	l := emuLab.f.Lab
+	folder, cf := emuSessionFolders()
 	if l == nil {
 		emuLab.mu.Unlock()
 		return
@@ -558,7 +559,6 @@ func (a *App) emuHubSessions(h emu.Hub) {
 	hl := a.emuFor(host)
 	con, ssh := hl.HubConsolePort(h), hl.HubSSHPort(h)
 	emuLab.mu.Unlock()
-	cf := session.JoinPath(folder, "Consoles")
 	cs := session.Session{Name: h.Name + " console", Folder: cf, Protocol: session.ProtoTelnet, Hostname: "127.0.0.1", Port: con, JumpSession: host, DeviceType: "L2 switch",
 		Description: []string{"Command line of the lab's L2 switch " + h.Name + " (hub.py on its KVM host)"}}
 	ss := session.Session{Name: h.Name, Folder: folder, Protocol: session.ProtoSSH2, Hostname: "127.0.0.1", Port: ssh, Username: "admin", JumpSession: host, DeviceType: "L2 switch",
@@ -632,4 +632,11 @@ func (a *App) EmuSetCloudPorts(host string, n int) (EmuView, error) {
 		return EmuView{}, err
 	}
 	return a.EmuState()
+}
+
+// emuSessionFolders is where a topology's sessions go in the Session Manager: <lab folder>/<topology>/Mgmt
+// (SSH and telnet to the management addresses) and <lab folder>/<topology>/Console (mu held).
+func emuSessionFolders() (mgmt, console string) {
+	base := session.JoinPath(emuLab.f.Folder, orStr(strings.TrimSpace(emuLab.f.Topology), "Untitled"))
+	return session.JoinPath(base, "Mgmt"), session.JoinPath(base, "Console")
 }

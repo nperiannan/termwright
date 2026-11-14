@@ -244,26 +244,26 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="nn">{{ m.name }} <span class="muted">→ {{ m.to }}</span></div><div class="nm"><i class="spin"></i> {{ m.step }}</div>@if (m.pct >= 0) { <div class="mvp"><i [style.width.%]="m.pct"></i></div><div class="mvr">{{ m.pct }} % · {{ m.rest }}</div> }</div>
             }
             @for (t of tps(); track t.t.id) {
-              <div class="node tpn" [style.left.px]="t.x - 56" [style.top.px]="t.y - 18" (pointerdown)="tpGrab($event, t.t)" (click)="$event.stopPropagation(); editTester(t.t)" (contextmenu)="tpMenuOpen(t.t, $event)" [title]="t.t.name + ' · ' + t.where + ' · ' + tpAddr(t.t) + ' · ' + t.t.mac">
+              <div class="node tpn" [class.msel]="msX().tp.has(t.t.id)" [style.left.px]="t.x - 56" [style.top.px]="t.y - 18" (pointerdown)="tpGrab($event, t.t)" (click)="$event.stopPropagation(); editTester(t.t)" (contextmenu)="tpMenuOpen(t.t, $event)" [title]="t.t.name + ' · ' + t.where + ' · ' + tpAddr(t.t) + ' · ' + t.t.mac">
                 <div class="tpb">⇄ {{ t.t.name }}</div><div class="nm">{{ tpAddr(t.t) || t.where }}</div></div>
             }
             @for (h of hubs(); track h.h.id) {
-              <div class="node hubn" [class.sel]="selHub() === h.h.id" [style.--hc]="h.c" [style.left.px]="h.x - 75" [style.top.px]="h.y - 24" (pointerdown)="hubGrab($event, h.h)" (click)="pickHub(h.h.id, $event)" [title]="h.h.name + ' · ' + tr(h.h.kind === 'switch' ? 'L2 switch' : 'Hub') + ' · ' + tr('{0} of {1} ports in use', h.h.legs.length, h.h.ports)">
+              <div class="node hubn" [class.sel]="selHub() === h.h.id || msX().hub.has(h.h.id)" [style.--hc]="h.c" [style.left.px]="h.x - 75" [style.top.px]="h.y - 24" (pointerdown)="hubGrab($event, h.h)" (click)="pickHub(h.h.id, $event)" [title]="h.h.name + ' · ' + tr(h.h.kind === 'switch' ? 'L2 switch' : 'Hub') + ' · ' + tr('{0} of {1} ports in use', h.h.legs.length, h.h.ports)">
                 <div class="hb"><ng-container *ngTemplateOutlet="bicon; context: { k: h.h.kind, c: h.c, w: h.h.kind === 'switch' ? 78 : 72, h: h.h.kind === 'switch' ? 50 : 44 }" /></div>
                 <div class="nn">{{ h.h.name }}</div>
                 <div class="nm">@if (h.h.kind === 'switch') { {{ tr('L2 switch') }} · {{ tr('{0} ports', h.h.ports) }}@if (h.h.cfg?.mgmtIp) { · {{ h.h.cfg!.mgmtIp!.split('/')[0] }} } } @else { {{ tr('Hub') }} · {{ tr('{0}/{1} ports', h.h.legs.length, h.h.ports) }} }</div></div>
             }
             @for (c of clouds(); track c.host) {
-              <div class="node cloud" [class.sel]="selCloud() === c.host" (contextmenu)="cloudMenu(c.host, $event)" [class.pick]="linkMode() && !!linkA()?.port" [style.left.px]="c.x - 75" [style.top.px]="c.y - 44" (pointerdown)="cloudGrab($event, c.host)" (click)="cloudClick(c.host, $event)"
+              <div class="node cloud" [class.sel]="selCloud() === c.host || msX().cloud.has(c.host)" (contextmenu)="cloudMenu(c.host, $event)" [class.pick]="linkMode() && !!linkA()?.port" [style.left.px]="c.x - 75" [style.top.px]="c.y - 44" (pointerdown)="cloudGrab($event, c.host)" (click)="cloudClick(c.host, $event)"
                    [title]="tr('The network of {0} ({1}): a switch port cabled here is on it, like a cloud node. Add Link from a switch port to here; right-click a switch to take a port off.', c.name, c.lan)">
-                <div class="cbox"><ng-container *ngTemplateOutlet="bicon; context: { k: 'cloud', c: 'var(--s4)', w: 84, h: 62 }" /></div>
+                <div class="cbox"><ng-container *ngTemplateOutlet="bicon; context: { k: 'cloud', c: 'var(--cloudc)', w: 84, h: 62 }" /></div>
                 <div class="nn">{{ tr('Cloud') }} · {{ c.name }}</div><div class="nm">{{ tr('{0}/{1} ports', c.links.length, c.ports) }} · {{ c.lan || tr('host network') }}</div>
               </div>
             }
             @for (d of devs(); track d.id) {
               <div class="node" [class.dimn]="dimOf(d)" [class.sel]="sel() === d.id || ms().has(d.id)" [class.pick]="linkA()?.id === d.id" [style.left.px]="pos(d).x - 75" [style.top.px]="pos(d).y - BH / 2"
                    (pointerdown)="grab($event, d, cv)" (click)="clickNode(d, $event)" (dblclick)="open(d)" (contextmenu)="nodeMenu(d, $event)" (mouseenter)="hov.set(d.id)" (mouseleave)="hov.set('')">
-                <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [look]="lookOf(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }</div>
+                <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [look]="lookOf(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }@if (emu() && mgmtCap(d)) { <i class="mcap" (click)="$event.stopPropagation(); dock.set('cap'); capSel.set(mgmtCap(d)!.key); capStarted.set(mgmtCap(d)!.started); loadCaps()" [title]="tr('Capturing its management port: click for the packets')"><i class="recd"></i>mgmt</i> }</div>
                 <div class="nlbl" [style.transform]="'translate(' + (lblAt()[d.id]?.x ?? 0) + 'px,' + (lblAt()[d.id]?.y ?? 0) + 'px)'" (pointerdown)="lblGrab($event, d.id)" (dblclick)="lblReset(d.id, $event)" [title]="tr('Drag the name to move it; double-click puts it back')">
                 <div class="nn">{{ d.hostname }}@if (d.restart) { <span class="rsn" [title]="tr('Restart needed: {0}', d.restart)">↻</span> }</div>
                 @if (d.computer) { <div class="nm">PC · {{ (d.model || '').split(' ')[0] }}@if (showAddr() && !dataAddr(d)) { · {{ subOf(d) }} }</div> } @else { <div class="nm" [title]="d.persona?.slots?.[0]?.model ? tr('Persona: it runs as a {0}', d.persona!.slots![0].model) : tr('The image as it is (no persona)')">{{ d.persona?.slots?.[0]?.model ? modelOf(d) + ' · ' + osOf(d) : modelOf(d) }} {{ d.version }}@if (showAddr()) { · {{ subOf(d) }} }</div> }@if (d.computer && dataAddr(d)) { <div class="nm da" [title]="tr('Its data-port address')">{{ dataAddr(d) }}</div> }</div>
@@ -409,7 +409,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         </div>
         @if (moreOpen(); as mp) {
           <div class="menu more" [style.left.px]="mp.x" [style.top.px]="mp.y" (click)="$event.stopPropagation()">
-            <span class="mh2">{{ tr('Toolbar') }}</span>
+            <span class="mh2">{{ tr('This toolbar') }}</span>
             @for (m of tbModes; track m.k) { <a [class.cur]="tbMode() === m.k" (click)="setTbMode(m.k)">{{ tbMode() === m.k ? '✓ ' : '' }}{{ tr(m.name) }}</a> }
             <hr /><span class="mh2">{{ tr('Canvas') }}</span>
             <a (click)="flip(miniOn, 'tw.lab.mini')">{{ miniOn() ? '✓ ' : '' }}{{ tr('Mini-map') }}</a>
@@ -437,8 +437,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       }
 
       <div class="side">
-        @if (ms().size > 1) {
-          <h3 class="selh">{{ tr('{0} devices selected', ms().size) }}<a class="clr" (click)="clearMs()" [title]="tr('Clear the selection (Esc, or a click on the empty canvas)')">✕</a></h3>
+        @if (msCount() > 1) {
+          <h3 class="selh">{{ msText() }}<a class="clr" (click)="clearMs()" [title]="tr('Clear the selection (Esc, or a click on the empty canvas)')">✕</a></h3>
           <div class="card"><p class="muted small" style="margin: 0">{{ tr('Drag one to move them all · Delete removes them (you are asked first) · Shift or ⌘/Ctrl-click adds or removes one · ⌘/Ctrl+A selects all.') }}</p>
             <div class="btns" style="margin-top: 8px"><button type="button" class="sm danger-ghost" (click)="removeMany([...ms()])" [disabled]="lab.busy()">{{ tr('Remove…') }}</button></div></div>
         } @else if (selDev(); as d) {
@@ -604,7 +604,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (dock() === 'traffic' && trafView() === 'streams') { <button type="button" class="sm" (click)="newStream()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button><button type="button" class="sm" (click)="newTester()">＋ {{ tr('Test Port') }}</button>
           @if (traf()?.running) { <button type="button" class="sm" (click)="trafStop()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="sm primary" (click)="trafStart([])" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
           <button type="button" class="sm" (click)="trafReport()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
-        @if (dock() === 'cap' && capCur(); as c) { @if (pktChk().size) { <button type="button" class="sm" (click)="copyPkts()" [title]="tr('The ticked rows as text')">{{ tr('Copy Selected ({0})', pktChk().size) }}</button><button type="button" class="sm" (click)="savePkts(c)">{{ tr('Save Selected as .pcap…') }}</button> }@if (pktNo()) { <button type="button" class="sm" (click)="pktWin.set(pktNo())" [title]="tr('The packet in a window of its own (or double-click it)')">{{ tr('Open Packet') }} ↗</button> }<input class="sm capf" [ngModel]="capFilter()" (ngModelChange)="capFilter.set($event)" [placeholder]="tr('Filter: ICMP, 10.0.0.1, LLDP…')" />@if (c.running) { <button type="button" class="sm capstop" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (!c.running) { <button type="button" class="sm" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> }@if (stoppedCaps().length > 1) { <button type="button" class="sm" (click)="delCaps(stoppedCaps())">{{ tr('Delete All Stopped') }}</button> } }
+        @if (dock() === 'cap' && capCur(); as c) { @if (pktChk().size) { <button type="button" class="sm" (click)="copyPkts()" [title]="tr('The ticked rows as text')">{{ tr('Copy Selected ({0})', pktChk().size) }}</button><button type="button" class="sm" (click)="savePkts(c)">{{ tr('Save Selected as .pcap…') }}</button> }@if (pktNo()) { <button type="button" class="sm" (click)="pktWin.set(pktNo())" [title]="tr('The packet in a window of its own (or double-click it)')">{{ tr('Open Packet') }} ↗</button> }@if (c.running) { <button type="button" class="sm capstop" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (!c.running) { <button type="button" class="sm" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> }@if (stoppedCaps().length > 1) { <button type="button" class="sm" (click)="delCaps(stoppedCaps())">{{ tr('Delete All Stopped') }}</button> } }
         @if (dock() === 'log') { <select class="sm" [ngModel]="elog()?.level || 'info'" (ngModelChange)="setLogLevel($event)" [title]="tr('How much the log keeps: info by default; debug adds each command run on a host, verbose also what it printed')"><option value="error">{{ tr('Errors') }}</option><option value="warn">{{ tr('Warnings') }}</option><option value="info">{{ tr('Info') }}</option><option value="debug">{{ tr('Debug') }}</option><option value="verbose">{{ tr('Verbose') }}</option></select><button type="button" class="sm" (click)="loadLog()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveLog()">{{ tr('Save…') }}</button> }
         @if (dock() === 'clog' && selDev(); as d) { <button type="button" class="sm" (click)="loadClog()" [disabled]="clogBusy()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveConsoleLog(d)">{{ tr('Save…') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
@@ -678,7 +678,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             @empty { <p class="muted small" style="padding: 8px 12px">{{ tr('No capture yet: right-click a cable → Capture Packets.') }}</p> }
           </div>
           <div class="capt">
-            @if (capSum().length) { <div class="capsum">@for (x of capSum(); track x.k) { <span [class]="'cs ' + x.p.toLowerCase()" (click)="capFilter.set(x.p)" [title]="tr('Show only these')"><b>{{ x.p }}</b> {{ x.src }} <i>{{ x.n }}</i></span> }</div> }
+            @if (capSum().length) { <div class="capsum">@for (x of capSum(); track x.k) { <span [class]="'cs ' + x.p.toLowerCase()" (click)="pktView.q.set(x.p)" [title]="tr('Show only these')"><b>{{ x.p }}</b> {{ x.src }} <i>{{ x.n }}</i></span> }</div> }
+            <app-tv-bar class="pbar" [tv]="pktView" />
             <div class="ptab"><table><tr><th><input type="checkbox" [checked]="packetsShown().length > 0 && pktChk().size === packetsShown().length" (change)="chkAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th><th>#</th><th>{{ tr('Time') }}</th><th>{{ tr('Source') }}</th><th>{{ tr('Destination') }}</th><th>{{ tr('Protocol') }}</th><th>{{ tr('Length') }}</th><th>{{ tr('Info') }}</th></tr>
               @for (p of packetsShown(); track p.no) { <tr [class]="'pp ' + p.proto.toLowerCase()" [class.sel]="pktNo() === p.no" (click)="pktClick(p.no, $event)" (dblclick)="pktWin.set(p.no)"><td (click)="$event.stopPropagation()"><input type="checkbox" [checked]="pktChk().has(p.no)" (change)="chk(p.no)" [attr.aria-label]="tr('Select packet {0}', p.no)" /></td><td>{{ p.no }}</td><td>{{ p.time.toFixed(3) }}</td><td class="mono">{{ p.src }}</td><td class="mono">{{ p.dst }}</td><td><b>{{ p.proto }}</b></td><td>{{ p.len }}</td><td>{{ p.info }}</td></tr> }
               @empty { <tr><td colspan="8" class="muted">{{ capCur() ? tr('No packets yet.') : tr('Choose a capture on the left.') }}</td></tr> }
@@ -687,7 +688,13 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           </div>
         </div>
       } @else if (dock() === 'log') {
-        <div class="tailw"><pre class="tail">{{ elog()?.tail || tr('Nothing in the log yet.') }}</pre>@if (elog()?.path) { <div class="muted small" style="padding: 2px 14px">{{ elog()!.path }}</div> }</div>
+        <div class="ev elg">
+          <app-tv-bar [tv]="logView" />
+          <div class="evh"><span tvh [tv]="logView" key="time" filter="text">{{ tr('Time') }}</span><span tvh [tv]="logView" key="level">{{ tr('Level') }}</span><span tvh [tv]="logView" key="host">{{ tr('Host') }}</span><span tvh [tv]="logView" key="switch">{{ tr('Switch') }}</span><span tvh [tv]="logView" key="message" filter="text">{{ tr('Message') }}</span></div>
+          @for (e of logView.rows(); track $index) { <div [class]="'lv-' + e.lvl"><span class="t mono">{{ e.time }}</span><span class="lv">{{ e.level }}</span><span class="eh">{{ e.host }}</span><b>{{ e.sw }}</b><span class="tx">{{ e.text }}</span></div> }
+          @empty { <div><span></span><span></span><span></span><span></span><span class="muted">{{ tr('Nothing in the log yet.') }}</span></div> }
+          @if (elog()?.path) { <p class="muted small" style="margin: 6px 0 0">{{ elog()!.path }}</p> }
+        </div>
       } @else if (dock() === 'clog') {
         <div class="tailw"><pre class="tail">{{ clogBusy() && !clog() ? tr('Reading the log…') : clog() || tr('No console output yet.') }}</pre></div>
       } @else if (dockTab(); as t) {
@@ -833,7 +840,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         </div>
   </ng-template>`,
   styles: [`
-    :host { display: block; height: 100%; }
+    :host { display: block; height: 100%; --cloudc: #a9b7c8; }
+    :host-context(.light) { --cloudc: #7d8da3; }
     .ws { height: 100%; display: grid; background: var(--bg); color: var(--text); font-size: 13px; }
     .tb { position: relative; display: flex; flex-wrap: nowrap; min-width: 0; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); white-space: nowrap;
       button { height: 30px; white-space: nowrap; } button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } }
@@ -1005,17 +1013,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .trt td b { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
     .cks { display: grid; gap: 4px; padding: 4px 0; .ck { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 8px; align-items: center; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); } .cn { grid-column: 1 / -1; color: var(--muted); font-size: 11px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } a { cursor: pointer; color: var(--muted); } > button { justify-self: start; margin-top: 4px; } }
     .ckt { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
-    .hico { width: 46px; height: 46px; flex: none; rect { fill: color-mix(in srgb, var(--hc) 16%, var(--surface)); stroke: var(--hc); stroke-width: 1.6; } .hp { fill: var(--hc); stroke: none; } path { stroke: var(--hc); stroke-width: 1.4; stroke-dasharray: 2 2; } }
     .node.hubn { width: 150px; cursor: grab; text-align: center; .hb { height: 54px; display: flex; align-items: flex-end; justify-content: center; } .nn { font-weight: 600; font-size: 12.5px; margin-top: 2px; } .nm { font-size: 10.5px; color: var(--muted); white-space: normal; overflow: visible; }
       &.sel .hb .bico { filter: drop-shadow(0 0 6px var(--hc)); } &.sel .nn { color: var(--hc); } }
     .hbl .ln { stroke: var(--hc); stroke-width: 2; fill: none; stroke-dasharray: none; }
     .bico { flex: none; > rect, > path:not(.l) { fill: color-mix(in srgb, var(--hc) 16%, var(--surface)); stroke: var(--hc); stroke-width: 1.6; } .f { fill: var(--hc); stroke: none; } .l { fill: none; stroke: var(--hc); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; } .thin { stroke-width: 1.1; opacity: .7; } }
-    .hubpanel .kv { grid-template-columns: 96px minmax(0, 1fr); align-items: center; } .hubpanel .kv .lnk { margin-left: 8px; } .hpt .vl, .hpt td:nth-child(3) { white-space: nowrap; } .hn2 { height: 26px; width: 100%; font-weight: 600; }
-    .step { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; vertical-align: middle; i { font-style: normal; padding: 2px 9px; background: var(--surface-2); cursor: pointer; user-select: none; &.dis { opacity: .4; pointer-events: none; } } b { padding: 2px 10px; font-variant-numeric: tabular-nums; } }
-    .mge { display: inline-flex; gap: 4px; align-items: center; input { height: 24px; } input.mono { width: 120px; } input[type=number] { width: 58px; } a { cursor: pointer; color: var(--muted); } }
-    .hpt { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 6px; th { text-align: left; color: var(--muted); font-weight: 500; font-size: 10.5px; padding: 4px 6px; border-bottom: 1px solid var(--line); } td { padding: 5px 6px; border-bottom: 1px solid var(--line); } .up { color: var(--success, #1fa45a); } .x { cursor: pointer; color: var(--muted); } .x:hover { color: var(--danger); } .vl { cursor: pointer; border-bottom: 1px dashed var(--muted); }
-      tr.gap td { color: var(--muted); cursor: pointer; } tr.ped td { background: var(--surface-2); } .pedr { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; select, input { height: 24px; } input { width: 70px; } label { display: inline-flex; gap: 4px; align-items: center; } a { cursor: pointer; color: var(--muted); } } }
-    .hubports .ha { display: grid; grid-template-columns: minmax(0, 1fr) 90px auto; gap: 6px; margin-top: 8px; } .hubports code { font-size: 11px; }
     .nt { position: absolute; display: flex; flex-direction: column; border-radius: 10px; border: 1.5px solid color-mix(in srgb, var(--nc) 70%, transparent); background: color-mix(in srgb, var(--nc) 16%, var(--surface)); box-shadow: 0 6px 16px rgba(0,0,0,.25); font-size: 12.5px; cursor: default;
       &.area { border-style: dashed; background: color-mix(in srgb, var(--nc) 7%, transparent); box-shadow: none; border-radius: 14px; }
       &.sel { outline: 2px solid color-mix(in srgb, var(--nc) 55%, transparent); outline-offset: 2px; }
@@ -1034,20 +1035,17 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .rhint a { color: var(--accent); cursor: pointer; } .rhint.ok a { color: var(--accent); }
     .sfx { display: flex; align-items: center; gap: 4px; input { flex: 1; min-width: 0; } i { font-style: normal; color: var(--muted); } }
     .tsec { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-    .cliov { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.45); display: grid; place-items: center; }
-    .clidl { width: min(760px, 94vw); height: min(560px, 86vh); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.45); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden;
-      .clih { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); b { font-size: 15px; } a { cursor: pointer; color: var(--muted); } }
-      .clit { overflow: auto; p { padding: 8px 16px; } }
-      .clir { display: grid; grid-template-columns: 48px 150px 150px minmax(0, 1fr); gap: 10px; padding: 5px 16px; border-bottom: 1px solid var(--line); font-size: 12px; &.h { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-size: 11px; } .up { color: var(--success, #1fa45a); } .dn { color: var(--danger); } } } .two.ru { grid-template-columns: minmax(0, 1fr) 104px; }
     .cbx { height: auto !important; justify-self: start; } td.spk { white-space: nowrap; svg { vertical-align: middle; margin-right: 4px; } polyline { fill: none; stroke-width: 1.5; } .stx { stroke: var(--s1); } .srx { stroke: var(--s2); } }
     .tre { border-left: 1px solid var(--line); padding: 8px 12px; overflow: auto; display: grid; gap: 7px; align-content: start; background: var(--surface-2); font-size: 12px;
       .treh { display: flex; align-items: center; gap: 6px; position: sticky; top: -8px; z-index: 1; background: var(--surface-2); padding: 4px 0; margin-top: -4px; b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } a { cursor: pointer; color: var(--muted); padding: 0 2px; } } label { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: center; gap: 8px; > span { color: var(--muted); } } input, select { height: 26px; min-width: 0; } .two { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
       .seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; i { font-style: normal; padding: 3px 7px; cursor: pointer; color: var(--muted); font-size: 11px; } i.on { background: var(--accent-soft); color: var(--text); } } .trb { display: flex; gap: 8px; } p { margin: 0; } }
+    .node.tpn.msel .tpb { box-shadow: 0 0 0 2px var(--accent); }
     .node.tpn { cursor: grab; width: 112px; text-align: center; .tpb { height: 30px; border-radius: 9px; border: 1.5px solid #e08a2e; background: color-mix(in srgb, #e08a2e 12%, var(--surface)); color: #e9a55a; display: flex; align-items: center; justify-content: center; font: 600 11.5px var(--font, Inter, sans-serif); white-space: nowrap; } }
     .tpl .ln { stroke: #e08a2e; stroke-dasharray: 5 4; stroke-width: 2; fill: none; }
     .capsum { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); .cs { font-size: 11.5px; border: 1px solid var(--line); border-radius: 8px; padding: 1px 7px; cursor: pointer; font-family: var(--mono, monospace); i { font-style: normal; color: var(--muted); margin-left: 4px; } } .cs.lldp, .cs.lacp, .cs.stp { border-color: var(--accent); } }
     .capw { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; .capl { border-right: 1px solid var(--line); overflow: auto; } .ci { display: grid; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid var(--line); b { font-size: 12.5px; display: flex; align-items: center; gap: 6px; } } .ci.on { background: var(--accent-soft); } .cx { margin-left: auto; color: var(--muted); font-weight: 400; padding: 0 2px; } .cx:hover { color: var(--danger); } .capt { display: flex; flex-direction: column; min-height: 0; overflow: hidden; } .ptab { flex: 1; min-height: 72px; overflow: auto; } .dtabs button.sm { white-space: nowrap; } .seg2.tv { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-right: 6px; a { padding: 2px 9px; font-size: 12px; cursor: pointer; } a.on { background: var(--accent); color: #fff; } } .pdet { height: 48%; flex: none; border-top: 1px solid var(--line); } .capt { tr.sel td { background: var(--accent-soft); } table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 4px 8px; } td { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr.pp.icmp td, tr.pp.icmpv6 td { color: #9cc3ff; } tr.pp.lldp td, tr.pp.stp td, tr.pp.lacp td { color: var(--muted); } tr.pp.arp td { color: #e5c07b; } } }
-    .recd { width: 8px; height: 8px; border-radius: 50%; background: var(--danger, #e5484d); animation: icblink 1.2s ease-in-out infinite; } .cnt.rec { background: var(--danger, #e5484d); } .capf { width: 200px; } button.capstop{background:var(--danger);border-color:var(--danger);color:#fff}
+    .mcap { position: absolute; left: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 4px; font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 6px 1px 4px; border-radius: 8px; background: color-mix(in srgb, var(--danger, #e5484d) 18%, var(--surface)); color: var(--danger, #e5484d); border: 1px solid color-mix(in srgb, var(--danger, #e5484d) 55%, transparent); cursor: pointer; z-index: 2; .recd { width: 7px; height: 7px; } }
+    .recd { width: 8px; height: 8px; border-radius: 50%; background: var(--danger, #e5484d); animation: icblink 1.2s ease-in-out infinite; } .cnt.rec { background: var(--danger, #e5484d); } button.capstop{background:var(--danger);border-color:var(--danger);color:#fff}
 .capm{fill:none;stroke:#7fb2ff;stroke-width:2.5;stroke-dasharray:8 6;animation:ca .8s linear infinite;pointer-events:none}.capm.thick{stroke-width:3.5}@keyframes ca{to{stroke-dashoffset:-28}}
     .capd{pointer-events:none}.cpc{fill:#2f6fed;stroke:#fff;stroke-width:1.5}.cpi{fill:#fff}.cpr{fill:none;stroke:#7fb2ff;stroke-width:2;animation:cp 1.4s ease-out infinite}@keyframes cp{from{r:7px;opacity:.9}to{r:17px;opacity:0}} @keyframes icblink { 50% { opacity: .3; } }
     .nlbl { cursor: move; display: inline-block; padding: 1px 6px; border-radius: 6px; background: color-mix(in srgb, var(--bg, #0d0e11) 82%, transparent); position: relative; z-index: 1; }
@@ -1106,6 +1104,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       a { padding: 6px 12px; color: var(--muted); font-weight: 500; cursor: pointer; } a.on { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
       .cnt { margin-left: 6px; background: var(--danger); color: #fff; border-radius: 9px; padding: 0 6px; font-size: 11px; } .cnt.run { background: var(--accent); } .cnt.n { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); } }
     .ev { padding: 6px 14px; overflow: auto; div { display: grid; grid-template-columns: 74px 130px 130px 66px 84px 1fr; gap: 10px; padding: 2px 0; font-size: 12px; } .eh { display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); i { width: 7px; height: 7px; border-radius: 50%; flex: none; } } .t { color: var(--muted); } b { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      &.elg div { grid-template-columns: 92px 66px 130px 130px 1fr; } &.elg .tx { white-space: pre-wrap; font-family: var(--mono, monospace); font-size: 11.5px; }
       .evh { position: sticky; top: -6px; z-index: 1; background: var(--surface); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
       .by { font: 600 11px/18px var(--mono, monospace); letter-spacing: .03em; color: var(--text); opacity: .75; }
       .lv { font-weight: 600; font-size: 10.5px; line-height: 16px; letter-spacing: .04em; text-align: center; border-radius: 9px; padding: 1px 0; align-self: center; color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent); }
@@ -1149,7 +1148,14 @@ export class LabWorkspace implements OnDestroy {
   private bandMoved = false;
   private groupMoved = false;
   protected Math = Math;
-  protected clearMs() { this.ms.set(new Set()); }
+  protected clearMs() { this.ms.set(new Set()); this.msX.set({ tp: new Set(), cloud: new Set(), hub: new Set() }); }
+  /** Test ports, clouds and hubs in a rectangle selection (with the devices in ms). */
+  protected msX = signal<{ tp: Set<string>; cloud: Set<string>; hub: Set<string> }>({ tp: new Set(), cloud: new Set(), hub: new Set() });
+  protected msCount = computed(() => this.ms().size + this.msX().tp.size + this.msX().cloud.size + this.msX().hub.size);
+  protected msText = computed(() => {
+    const x = this.msX(), parts = [[this.ms().size, '{0} devices', '1 device'], [x.tp.size, '{0} test ports', '1 test port'], [x.hub.size, '{0} hubs or L2 switches', '1 hub or L2 switch'], [x.cloud.size, '{0} clouds', '1 cloud']] as [number, string, string][];
+    return tr('{0} selected', parts.filter(p => p[0]).map(p => p[0] === 1 ? tr(p[2]) : tr(p[1], p[0])).join(', '));
+  });
   protected selDev = computed(() => this.devs().find(d => d.id === this.sel()) ?? null);
   protected selLink = signal('');
   protected menu = signal<{ x: number; y: number; dev?: LabDevice; link?: LabLink; cloud?: string; tp?: EmuTester } | null>(null);
@@ -1159,7 +1165,14 @@ export class LabWorkspace implements OnDestroy {
   protected caps = signal<EmuCapture[]>([]);
   protected capSel = signal('');
   protected capStarted = signal('');
-  protected capFilter = signal('');
+  /** The packets of a capture with the shared search bar (ICMP, 10.0.0.1, LLDP …). */
+  protected pktView = new TableView<EmuPacket>(() => this.packets(), [
+    { key: 'no', label: '#', get: p => p.no, kind: 'num' },
+    { key: 'src', label: 'Source', get: p => p.src },
+    { key: 'dst', label: 'Destination', get: p => p.dst },
+    { key: 'proto', label: 'Protocol', get: p => p.proto },
+    { key: 'info', label: 'Info', get: p => p.info },
+  ]);
   protected packets = signal<EmuPacket[]>([]);
   protected capsRunning = computed(() => this.caps().filter(c => c.running).length);
   protected capCur = computed(() => { const l = this.caps(); return l.find(c => c.key === this.capSel() && (!this.capStarted() || c.started === this.capStarted())) ?? null; });
@@ -1170,7 +1183,7 @@ export class LabWorkspace implements OnDestroy {
     const ctl = ['LLDP', 'LACP', 'STP', 'EDP', 'LLC', 'OSPF', 'VRRP', 'ARP'];
     return [...m.values()].sort((a, b) => ((ctl.indexOf(a.p) + 1 || 99) - (ctl.indexOf(b.p) + 1 || 99)) || b.n - a.n).slice(0, 14);
   });
-  protected packetsShown = computed(() => { const f = this.capFilter().trim().toLowerCase(); const l = this.packets(); return f ? l.filter(p => `${p.src} ${p.dst} ${p.proto} ${p.info}`.toLowerCase().includes(f)) : l; });
+  protected packetsShown = computed(() => this.pktView.rows());
   /** The running capture on a cable (at either end). */
   capOf(k: LabLink) { const p = this.caps().find(c => c.running && (c.vm === k.a && c.port === k.aPort || c.vm === k.b && c.port === k.bPort)); return p ?? null; }
   private capTick = 0;
@@ -1219,7 +1232,7 @@ export class LabWorkspace implements OnDestroy {
     { k: 'pc' as const, name: 'PC', sub: 'Linux computer · ping, iperf3', tip: 'A Linux computer (Alpine first): Termwright logs in, names it and installs iperf3. Drag it onto the canvas, or double-click', c: 'var(--s1)' },
     { k: 'switch' as const, name: 'L2 Switch', sub: '8-24 ports · mgmt · console', tip: 'An L2 switch: 8-24 ports, VLANs (access and trunk), a management address and a command line on its console. Drag it onto the canvas, or double-click', c: 'var(--s7)' },
     { k: 'hub' as const, name: 'Hub', sub: '8 ports · every frame to every port', tip: 'A hub: 8 ports, no management; what comes in on a port goes out of every other one. Drag it onto the canvas, or double-click', c: 'var(--s3)' },
-    { k: 'cloud' as const, name: 'Cloud', sub: 'the host’s network · 1-8 ports', tip: 'The host’s network: switch ports cabled to it are on it. One cloud per host, 1-8 ports. Drag it onto the canvas, or double-click', c: 'var(--s4)' }];
+    { k: 'cloud' as const, name: 'Cloud', sub: 'the host’s network · 1-8 ports', tip: 'The host’s network: switch ports cabled to it are on it. One cloud per host, 1-8 ports. Drag it onto the canvas, or double-click', c: 'var(--cloudc)' }];
   protected hubDrag: 'hub' | 'switch' | 'pc' | 'cloud' | null = null;
   /** A built-in node from the palette: a PC, an L2 switch, a hub or the host's cloud. */
   async addBuiltin(k: 'hub' | 'switch' | 'pc' | 'cloud', at: { x: number; y: number } | null) {
@@ -1286,7 +1299,7 @@ export class LabWorkspace implements OnDestroy {
   protected selHub = signal('');
   protected hubPort = { vm: '', port: '' };
   protected hubFreePorts = signal<string[]>([]);
-  private hubLive = signal<Record<string, { x: number; y: number }>>({});
+  protected hubLive = signal<Record<string, { x: number; y: number }>>({});
   protected hubs = computed(() => (this.st()?.hubs ?? []).map((h, i) => {
     this.moved();
     const at = this.hubLive()[h.id] ?? (h.x || h.y ? { x: h.x, y: h.y } : { x: 200 + 180 * i, y: 120 });
@@ -1774,7 +1787,7 @@ export class LabWorkspace implements OnDestroy {
   protected miniOn = signal(this.lsGet('tw.lab.mini', '0') === '1');
   /** The canvas toolbar: icons and text, icons only, or icons with short labels under them. */
   protected tbMode = signal<'text' | 'icons' | 'labels'>((['text', 'icons', 'labels'].includes(this.lsGet('tw.lab.tb', '')) ? this.lsGet('tw.lab.tb', '') : 'labels') as 'text' | 'icons' | 'labels');
-  protected readonly tbModes = [{ k: 'text' as const, name: 'Icons and text' }, { k: 'icons' as const, name: 'Icons only' }, { k: 'labels' as const, name: 'Icons with labels' }];
+  protected readonly tbModes = [{ k: 'text' as const, name: 'Buttons with text' }, { k: 'icons' as const, name: 'Buttons as icons only' }, { k: 'labels' as const, name: 'Buttons with labels below' }];
   protected readonly hostViews = [{ k: 'auto' as const, name: 'Auto' }, { k: 'areas' as const, name: 'Areas' }, { k: 'tags' as const, name: 'Tags' }, { k: 'off' as const, name: 'Off' }];
   protected moreOpen = signal<{ x: number; y: number } | null>(null);
   moreAt(ev: MouseEvent) {
@@ -2038,7 +2051,7 @@ export class LabWorkspace implements OnDestroy {
   });
   protected mouse = signal<{ x: number; y: number } | null>(null);
   private moved = signal(new Map<string, { x: number; y: number }>());
-  private dragging: { id: string; dx: number; dy: number; moved: boolean; q0: { x: number; y: number }; grp: { id: string; x: number; y: number }[] } | null = null;
+  private dragging: { id: string; dx: number; dy: number; moved: boolean; q0: { x: number; y: number }; grp: { id: string; x: number; y: number }[]; ext: { tp: { t: EmuTester; x: number; y: number }[]; cloud: { h: string; x: number; y: number }[]; hub: { h: LabHub; x: number; y: number }[] } | null } | null = null;
   private palDrag: Pal | null = null;
   private timer: ReturnType<typeof setInterval>;
 
@@ -2051,20 +2064,20 @@ export class LabWorkspace implements OnDestroy {
     if (!this.visible() || (e.target as HTMLElement)?.closest?.('input, textarea, select, [contenteditable], .xterm')) return;
     if ((e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey) && this.devs().length > 1) { e.preventDefault(); this.sel.set(''); this.ms.set(new Set(this.devs().map(d => d.id))); return; }
     if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-    const ids = this.ms().size > 1 ? [...this.ms()] : this.sel() ? [this.sel()] : [];
-    if (ids.length) { e.preventDefault(); void this.removeMany(ids); return; }
+    const ids = this.msCount() > 1 ? [...this.ms()] : this.sel() ? [this.sel()] : [];
+    if (ids.length || this.msCount() > 1) { e.preventDefault(); void this.removeMany(ids); return; }
     const sn = (this.st()?.notes ?? []).find(n => n.id === this.selNote());
     if (sn) { e.preventDefault(); void this.delNote(sn); return; }
     if (!this.selCloud()) return;
     e.preventDefault(); void this.removeCloud(this.selCloud());
   }
-  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); this.ms.set(new Set()); } }
+  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); this.clearMs(); } }
   /** A click on the empty canvas: nothing selected (the side panel shows the whole topology). */
   canvasClick(ev: MouseEvent) { this.endNoteEdit(); this.selNote.set(''); this.selHub.set('');
     const t = ev.target as HTMLElement;
     if (this.linkMode() || t.closest('.node, .lk, .ctb, .mini, .hleg, .menu, .bar2, .zone .zh')) return;
     if (this.bandMoved) { this.bandMoved = false; return; }
-    this.sel.set(''); this.selLink.set(''); this.selCloud.set(''); this.ms.set(new Set());
+    this.sel.set(''); this.selLink.set(''); this.selCloud.set(''); this.clearMs();
   }
   ngOnDestroy() { clearInterval(this.timer); if (this.trafTimer) clearInterval(this.trafTimer); this.lab.watch('ws-' + this.tab().id, false); for (const id of Object.values(this.docked())) void this.tabs.close(id); }
 
@@ -2099,6 +2112,23 @@ export class LabWorkspace implements OnDestroy {
     { key: 'result', label: 'Result', get: x => { const r = this.resOf(x.id); return r?.running ? tr('running') : r?.result === 'pass' ? 'PASS' : r?.result === 'fail' ? 'FAIL' : ''; } },
   ]);
   protected events = computed(() => [...(this.st()?.events ?? [])].reverse());
+  /** The emulator's log, line by line (time, level, host, switch, message; continued lines joined). */
+  protected logRows = computed(() => {
+    const out: { time: string; at: string; level: string; lvl: string; host: string; sw: string; text: string }[] = [];
+    for (const l of (this.elog()?.tail ?? '').split('\n')) {
+      const m = /^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d\.\d+) (\S+)\s+(\S+)\s+(\S+)\s+(.*)$/.exec(l);
+      if (m) { const lv = m[3].toLowerCase(); out.push({ time: m[2], at: m[1] + ' ' + m[2], level: m[3], lvl: lv === 'warn' ? 'warn' : lv === 'error' ? 'error' : 'info', host: m[4] === '-' ? '' : this.hname(m[4]) || m[4], sw: m[5] === '-' ? '' : m[5], text: m[6] }); }
+      else if (out.length && l.trim()) out[out.length - 1].text += '\n' + l.trim();
+    }
+    return out.reverse();
+  });
+  protected logView = new TableView<{ time: string; at: string; level: string; lvl: string; host: string; sw: string; text: string }>(() => this.logRows(), [
+    { key: 'time', label: 'Time', get: e => e.at },
+    { key: 'level', label: 'Level', get: e => e.level },
+    { key: 'host', label: 'Host', get: e => e.host },
+    { key: 'switch', label: 'Switch', get: e => e.sw },
+    { key: 'message', label: 'Message', get: e => e.text },
+  ]);
   protected evView = new TableView<any>(() => this.events(), [
     { key: 'time', label: 'Time', get: e => Date.parse(e.at) || 0, kind: 'num' },
     { key: 'host', label: 'Host', get: e => (e.host ? this.hname(e.host) : tr('this computer')) },
@@ -2456,8 +2486,10 @@ export class LabWorkspace implements OnDestroy {
   grab(ev: PointerEvent, d: LabDevice, cv: HTMLElement) {
     if (ev.button !== 0 || this.linkMode()) return;
     const p = this.toCanvas(ev, cv), q = this.pos(d);
-    const grp = this.ms().has(d.id) && this.ms().size > 1 ? this.devs().filter(x => this.ms().has(x.id) && x.id !== d.id).map(x => ({ id: x.id, ...this.pos(x) })) : [];
-    this.dragging = { id: d.id, dx: p.x - q.x, dy: p.y - q.y, moved: false, q0: { x: q.x, y: q.y }, grp };
+    const inGrp = this.ms().has(d.id) && this.msCount() > 1;
+    const grp = inGrp ? this.devs().filter(x => this.ms().has(x.id) && x.id !== d.id).map(x => ({ id: x.id, ...this.pos(x) })) : [];
+    const x = this.msX(), ext = inGrp ? { tp: this.tps().filter(t => x.tp.has(t.t.id)).map(t => ({ t: t.t, x: t.x, y: t.y })), cloud: this.clouds().filter(c => x.cloud.has(c.host)).map(c => ({ h: c.host, x: c.x, y: c.y })), hub: this.hubs().filter(h => x.hub.has(h.h.id)).map(h => ({ h: h.h, x: h.x, y: h.y })) } : null;
+    this.dragging = { id: d.id, dx: p.x - q.x, dy: p.y - q.y, moved: false, q0: { x: q.x, y: q.y }, grp, ext };
   }
   move(ev: PointerEvent, cv: HTMLElement) {
     const p = this.toCanvas(ev, cv);
@@ -2467,13 +2499,25 @@ export class LabWorkspace implements OnDestroy {
     g.moved = true;
     const nx = Math.max(80, p.x - g.dx), ny = Math.max(40, p.y - g.dy);
     this.moved.update(m => { const n = new Map(m).set(g.id, { x: nx, y: ny }); for (const o of g.grp) n.set(o.id, { x: Math.max(80, o.x + nx - g.q0.x), y: Math.max(40, o.y + ny - g.q0.y) }); return n; });
+    if (g.ext) { const dx = nx - g.q0.x, dy = ny - g.q0.y;
+      if (g.ext.tp.length) this.tpAt.set({ ...this.tpAt(), ...Object.fromEntries(g.ext.tp.map(t => [t.t.id, { x: Math.round(t.x + dx), y: Math.round(t.y + dy) }])) });
+      if (g.ext.cloud.length) this.cloudAt.set({ ...this.cloudAt(), ...Object.fromEntries(g.ext.cloud.map(c => [c.h, { x: Math.round(c.x + dx), y: Math.round(c.y + dy) }])) });
+      if (g.ext.hub.length) this.hubLive.set({ ...this.hubLive(), ...Object.fromEntries(g.ext.hub.map(h => [h.h.id, { x: Math.round(h.x + dx), y: Math.round(h.y + dy) }])) }); }
   }
   up() {
     if (this.bandStart) { this.bandEnd(); return; }
     const g = this.dragging; this.dragging = null;
     if (g?.moved && g.grp.length) { this.groupMoved = true; setTimeout(() => this.groupMoved = false); for (const o of g.grp) { const q = this.moved().get(o.id)!; this.lab.place(o.id, q.x - 75, q.y - BH / 2); } }
+    if (g?.moved && g.ext) void this.saveExt(g.ext);
     if (g?.moved && this.showGrid()) { const q = this.moved().get(g.id)!, G = this.GRID; this.moved.update(m => new Map(m).set(g.id, { x: Math.max(80, Math.round(q.x / G) * G), y: Math.max(40, Math.round(q.y / G) * G) })); }
     if (g?.moved) { const p = this.moved().get(g.id)!; this.lab.place(g.id, p.x - 75, p.y - BH / 2); this.dropOnHost(g.id, p); }
+  }
+  /** Test ports, clouds and hubs moved with a group: kept where they are now. */
+  private async saveExt(ext: { tp: { t: EmuTester }[]; cloud: { h: string }[]; hub: { h: LabHub }[] }) {
+    this.groupMoved = true; setTimeout(() => this.groupMoved = false);
+    try { localStorage.setItem('tw.cloudAt', JSON.stringify(this.cloudAt())); } catch { /* per viewer only */ }
+    for (const t of ext.tp) { const at = this.tpAt()[t.t.id]; if (at) { try { this.traf.set(await this.backend.emuTesterSet({ ...t.t, x: at.x, y: at.y })); } catch { /* it stays drawn there */ } } }
+    for (const h of ext.hub) { const at = this.hubLive()[h.h.id]; if (at) { try { this.lab.emu.set(await this.backend.emuHubSet(h.h.id, '', at.x, at.y)); } catch { /* next time */ } const live = { ...this.hubLive() }; delete live[h.h.id]; this.hubLive.set(live); } }
   }
   /** A switch dropped in another host's area moves there (when it is stopped). */
   private dropOnHost(id: string, p: { x: number; y: number }) {
@@ -2496,7 +2540,7 @@ export class LabWorkspace implements OnDestroy {
       this.ms.set(s.size > 1 ? s : new Set()); if (s.size === 1) this.select(this.devs().find(x => x.id === [...s][0])!);
       return;
     }
-    if (this.ms().size) this.ms.set(new Set());
+    if (this.msCount()) this.clearMs();
     this.select(d);
   }
   /** A rectangle dragged on the empty canvas selects the devices it touches. */
@@ -2516,10 +2560,24 @@ export class LabWorkspace implements OnDestroy {
     const x0 = Math.min(b.x0, b.x1), x1 = Math.max(b.x0, b.x1), y0 = Math.min(b.y0, b.y1), y1 = Math.max(b.y0, b.y1);
     const hit = this.devs().filter(d => { const q = this.pos(d); return q.x + 75 >= x0 && q.x - 75 <= x1 && q.y + BH / 2 >= y0 && q.y - BH / 2 <= y1; }).map(d => d.id);
     const s = new Set(st.add ? [...this.ms(), ...(this.sel() ? [this.sel()] : []), ...hit] : hit);
-    this.selLink.set(''); this.selCloud.set('');
-    if (s.size > 1) { this.ms.set(s); this.sel.set(''); } else { this.ms.set(new Set()); if (s.size === 1) this.select(this.devs().find(x => x.id === [...s][0])!); else this.sel.set(''); }
+    const inR = (x: number, y: number, w: number, h: number) => x + w >= x0 && x - w <= x1 && y + h >= y0 && y - h <= y1;
+    const prev = st.add ? this.msX() : { tp: new Set<string>(), cloud: new Set<string>(), hub: new Set<string>() };
+    const ext = { tp: new Set([...prev.tp, ...this.tps().filter(t => inR(t.x, t.y, 56, 18)).map(t => t.t.id)]), cloud: new Set([...prev.cloud, ...this.clouds().filter(c => inR(c.x, c.y, 60, 30)).map(c => c.host)]), hub: new Set([...prev.hub, ...this.hubs().filter(h => inR(h.x, h.y, 60, 24)).map(h => h.h.id)]) };
+    this.selLink.set(''); this.selCloud.set(''); this.selHub.set('');
+    this.msX.set(ext);
+    const n = s.size + ext.tp.size + ext.cloud.size + ext.hub.size;
+    if (n > 1) { this.ms.set(s); this.sel.set(''); } else { this.ms.set(new Set()); this.msX.set({ tp: new Set(), cloud: new Set(), hub: new Set() }); if (s.size === 1) this.select(this.devs().find(x => x.id === [...s][0])!); else if (ext.tp.size) { const t = this.tps().find(x => ext.tp.has(x.t.id)); if (t) this.editTester(t.t); } else if (ext.cloud.size) this.selCloud.set([...ext.cloud][0]); else if (ext.hub.size) this.selHub.set([...ext.hub][0]); else this.sel.set(''); }
   }
   async removeMany(ids: string[]) {
+    const x = this.msX(), extra = this.msCount() > 1 ? x.tp.size + x.hub.size : 0;
+    if (extra) { // test ports and hubs of a rectangle selection go too (clouds stay: their cables come off with the devices)
+      const what = [...this.tps().filter(t => x.tp.has(t.t.id)).map(t => t.t.name), ...this.hubs().filter(h => x.hub.has(h.h.id)).map(h => h.h.name), ...this.devs().filter(d => ids.includes(d.id)).map(d => d.hostname)];
+      if (!(await this.ui.confirm(tr('Remove {0}?', tr('{0} items', what.length)), what.join(', '), tr('Remove'), true))) return;
+      for (const id of x.tp) { try { this.traf.set(await this.backend.emuTesterRemove(id)); } catch (e) { this.ui.error(e); } }
+      for (const id of x.hub) { try { this.lab.emu.set(await this.backend.emuHubRemove(id)); } catch (e) { this.ui.error(e); } }
+      if (ids.length && await this.lab.remove(ids, true)) { /* removed */ }
+      this.clearMs(); this.sel.set(''); return;
+    }
     const ds = this.devs().filter(d => ids.includes(d.id)); if (!ds.length) return;
     const names = ds.map(d => d.hostname).join(', ');
     const msg = (this.emu() ? tr('Remove {0} emulated switches? They stop, their disks on the host and their sessions are deleted.', ds.length) : tr('Remove {0} simulated switches and their sessions? Their configuration is lost.', ds.length)) + '\n\n' + names;

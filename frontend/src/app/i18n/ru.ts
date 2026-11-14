@@ -3562,6 +3562,21 @@ const ru: Record<string, string> = {
   'Desktop set up: restart it once for its mouse, then Open Screen': 'Рабочий стол настроен: перезапустите один раз для мыши, затем «Открыть экран»',
   'The desktop is off': 'Рабочий стол выключен',
   'Clicks go to its mouse (a computer with its desktop)': 'Щелчки идут его мыши (компьютер с рабочим столом)',
+  'Capturing its management port: click for the packets': 'Идёт захват на порту управления: щёлкните, чтобы увидеть пакеты',
+  'This toolbar': 'Эта панель',
+  '{0} selected': 'Выбрано: {0}',
+  'A computer: an end user, cabled to an edge switch (a leaf)': 'Компьютер: конечный пользователь, подключён к коммутатору доступа (leaf)',
+  'Device icons': 'Значки устройств',
+  'how this topology draws its devices (Style on the canvas changes it later)': 'как эта топология рисует устройства (позже можно изменить кнопкой «Стиль» на холсте)',
+  'Buttons with text': 'Кнопки с текстом',
+  'Buttons as icons only': 'Только значки',
+  'Buttons with labels below': 'Кнопки с подписями снизу',
+  '1 device': '1 устройство',
+  '1 test port': '1 тестовый порт',
+  '{0} hubs or L2 switches': 'концентраторов или L2-коммутаторов: {0}',
+  '1 hub or L2 switch': '1 концентратор или L2-коммутатор',
+  '{0} clouds': 'облаков: {0}',
+  '1 cloud': '1 облако',
 };
 
 export default ru;

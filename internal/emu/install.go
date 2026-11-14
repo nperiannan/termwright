@@ -204,8 +204,8 @@ func AlpineAnswers(o AlpineOpts) string {
 		`PROXYOPTS="none"`,
 		`APKREPOSOPTS="-1"`,
 		`USEROPTS="none"`,
-		`SSHDOPTS="none"`,
-		`NTPOPTS="none"`,
+		`SSHDOPTS="-c none"`, // setup-sshd takes the choice after -c (a bare "none" is ignored and openssh goes in)
+		`NTPOPTS="-c none"`,
 		`DISKOPTS="-m sys ` + disk + `"`,
 		`LBUOPTS="none"`,
 		`APKCACHEOPTS="none"`,

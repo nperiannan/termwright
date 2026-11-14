@@ -49,3 +49,21 @@ func TestRoutingPlanAndScript(t *testing.T) {
 		t.Errorf("bgp down %q %v", st, up)
 	}
 }
+
+// Hosts (Linux computers) of a new leaf-spine go on the leaves, one each in turn, not on the spines.
+func TestWireHostsOnEdge(t *testing.T) {
+	sw, pc := &Image{ID: "s", NICs: 9}, &Image{ID: "p", NICs: 3, PortAddr: []string{"ip addr add {addr} dev {port}"}}
+	imgs := map[string]*Image{"s": sw, "p": pc}
+	l := &Lab{}
+	add := []VM{{ID: "sp1", Image: "s"}, {ID: "sp2", Image: "s", Index: 1}, {ID: "lf1", Image: "s", Index: 2}, {ID: "lf2", Image: "s", Index: 3}, {ID: "h1", Image: "p", Index: 4}, {ID: "h2", Image: "p", Index: 5}, {ID: "h3", Image: "p", Index: 6}}
+	l.VMs = add
+	l.WireWith(add, WireOpts{Kind: "leaf-spine", Spines: map[string]bool{"sp1": true, "sp2": true}}, imgs)
+	peer := map[string][]string{}
+	for _, c := range l.Cables {
+		peer[c.A] = append(peer[c.A], c.B)
+		peer[c.B] = append(peer[c.B], c.A)
+	}
+	if len(l.Cables) != 4+3 || strings.Join(peer["h1"], ",") != "lf1" || strings.Join(peer["h2"], ",") != "lf2" || strings.Join(peer["h3"], ",") != "lf1" || len(peer["sp1"]) != 2 {
+		t.Fatalf("cables %+v", l.Cables)
+	}
+}

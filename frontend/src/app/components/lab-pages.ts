@@ -8,7 +8,7 @@ import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { LabHostImages } from './lab-host-images';
-import { roleOf } from './dev-icon';
+import { DevIcon, ICON_STYLES, IconStyle, roleOf } from './dev-icon';
 import { TableView, TvBar, TvSorts } from '../core/table-view';
 import { VmScreen } from './vm-screen';
 
@@ -258,7 +258,7 @@ type Shape = 'leaf-spine' | 'ring' | 'full-mesh' | 'star' | 'line' | 'none';
 /** New Topology and Add Switches on one page: devices picked by model from a catalog, their roles, the cabling's shape, a preview, and where it runs. */
 @Component({
   selector: 'app-lab-new',
-  imports: [FormsModule],
+  imports: [FormsModule, DevIcon],
   template: `
   <div class="ov" (click)="closed.emit()"></div>
   <div class="mdl np">
@@ -286,7 +286,8 @@ type Shape = 'leaf-spine' | 'ring' | 'full-mesh' | 'star' | 'line' | 'none';
                 @if (emu()) { <td><select class="sm" [ngModel]="r.image" (ngModelChange)="patch(i, { image: $event })" [name]="'ni' + i">@for (im of imagesOf(r.key); track im.id) { <option [value]="im.id">{{ im.label }}</option> }</select></td> }
                 <td><span class="cnt"><button type="button" class="sm" (click)="patch(i, { count: Math.max(1, r.count - 1) })">−</button><b>{{ r.count }}</b><button type="button" class="sm" (click)="patch(i, { count: r.count + 1 })">+</button></span></td>
                 <td><input class="sm nm" [ngModel]="r.names" (ngModelChange)="patch(i, { names: $event })" [name]="'nn' + i" [title]="tr('Names: {n} is the number')" /></td>
-                @if (roles()) { <td><span class="seg2"><a [class.on]="r.role === 'spine'" (click)="patch(i, { role: 'spine' })">{{ shape() === 'star' ? tr('Hub') : tr('Spine') }}</a><a [class.on]="r.role === 'leaf'" (click)="patch(i, { role: 'leaf' })">{{ tr('Leaf') }}</a></span></td> }
+                @if (roles() && isHost(r.key)) { <td><span class="hostp" [title]="tr('A computer: an end user, cabled to an edge switch (a leaf)')">{{ tr('Host') }}</span></td> }
+                @else if (roles()) { <td><span class="seg2"><a [class.on]="r.role === 'spine'" (click)="patch(i, { role: 'spine' })">{{ shape() === 'star' ? tr('Hub') : tr('Spine') }}</a><a [class.on]="r.role === 'leaf'" (click)="patch(i, { role: 'leaf' })">{{ tr('Leaf') }}</a></span></td> }
                 <td><a class="x" (click)="drop(i)" [title]="tr('Remove')">✕</a></td></tr>
               @if (emu()) { <tr class="det"><td [attr.colspan]="roles() ? 6 : 5"><details><summary class="muted small">{{ tr('Serial and MAC from') }}: <span class="mono">{{ r.serial || '-' }} · {{ r.mac || '-' }}</span></summary>
                 <div class="row2"><span class="lb">{{ tr('Serial from') }}</span><input class="mono sm" [ngModel]="r.serial" (ngModelChange)="patch(i, { serial: $event })" [name]="'ns' + i" /><span class="lb">{{ tr('MAC from') }}</span><input class="mono sm" [ngModel]="r.mac" (ngModelChange)="patch(i, { mac: $event })" [name]="'nm' + i" /><button type="button" class="sm" (click)="suggest(i)" [title]="tr('New in the model’s format')">↻</button></div></details></td></tr> }
@@ -298,6 +299,10 @@ type Shape = 'leaf-spine' | 'ring' | 'full-mesh' | 'star' | 'line' | 'none';
         <div class="shapes">@for (c of cablings(); track c.v) {
           <a class="sh" [class.on]="shape() === c.v" (click)="setShape(c.v)"><span class="shi" [innerHTML]="c.svg"></span>{{ tr(c.label) }}</a> }</div>
         @if (shapeNote(); as n) { <div class="note" [class.warn]="n.warn">{{ n.text }}</div> }
+        @if (emu() && !exists()) {
+          <div class="sec">{{ tr('Device icons') }}<span class="muted small">{{ tr('how this topology draws its devices (Style on the canvas changes it later)') }}</span></div>
+          <div class="looks">@for (st of looks; track st.k) { <a class="lk" [class.on]="(look || 'box') === st.k" (click)="look = st.k" [title]="tr(st.name)"><app-dev-icon role="access" [look]="st.k" [size]="46" state="idle" /><span>{{ tr(st.name) }}</span></a> }</div>
+        }
         <div class="opts">
           @if (emu() && shape() !== 'none') { <label>{{ tr('Cables per pair') }} <select class="sm" [ngModel]="per()" (ngModelChange)="per.set(+$event); emitPlan()" name="nper"><option [value]="1">1</option><option [value]="2">2</option><option [value]="4">4</option></select></label>
             @if (per() > 1) { <label>{{ tr('as a LAG') }} <select class="sm" [ngModel]="lagMode()" (ngModelChange)="lagMode.set($event)" name="nlag"><option value="lacp">LACP</option><option value="static">{{ tr('static') }}</option><option value="">{{ tr('no LAG') }}</option></select></label> } }
@@ -362,6 +367,8 @@ type Shape = 'leaf-spine' | 'ring' | 'full-mesh' | 'star' | 'line' | 'none';
     .note { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-top: 8px; line-height: 1.5; }
     .note.warn { background: color-mix(in srgb, var(--warning, #e39b17) 14%, transparent); border-color: var(--warning, #e39b17); }
     .shapes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+    .looks { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; .lk { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: 11.5px; &:hover { border-color: var(--muted); } &.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); } } }
+    .hostp { font-size: 11px; padding: 2px 9px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--s1, #3987e5) 55%, transparent); color: var(--s1, #3987e5); }
     .sh { border: 1px solid var(--line); border-radius: 9px; padding: 8px 4px 6px; text-align: center; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text);
       &.on { border-color: var(--accent); background: var(--accent-soft); } .shi { line-height: 0; } ::ng-deep .shi svg { stroke: var(--success, #1fa45a); fill: none; } }
     .opts { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12.5px; label { display: inline-flex; gap: 6px; align-items: center; } select { height: 26px; } }
@@ -497,6 +504,10 @@ export class LabNew implements OnInit {
   setShape(s: Shape) { this.shape.set(s); this.emitPlan(); }
   /** Roles matter for leaf-spine (spines) and star (the hub), on the emulated lab. */
   protected roles = computed(() => this.emu() && (this.shape() === 'leaf-spine' || this.shape() === 'star'));
+  /** A Linux computer (its image sets port addresses): a host, cabled to an edge switch. */
+  isHost(key: string) { const d = this.dt(key); const im = d && (this.st()?.images ?? []).find(i => i.id === d.images[0]); return !!im && (im.portAddr ?? []).length > 0; }
+  protected look: IconStyle | '' = '';
+  protected readonly looks = ICON_STYLES;
   protected total = computed(() => this.rows().reduce((n, r) => n + r.count, 0));
   private spineCount = computed(() => this.rows().filter(r => r.role === 'spine').reduce((n, r) => n + r.count, 0));
   protected shapeNote = computed(() => {
@@ -515,28 +526,35 @@ export class LabNew implements OnInit {
   /** The devices and cables it makes, as the preview shows them (the backend cables the same way). */
   private plan2 = computed(() => {
     const names = this.planNames();
-    const nodes = names.map(n => ({ name: n.name, spine: n.spine }));
-    const edges: [number, number][] = [], s = this.shape(), N = nodes.length;
-    const sp = nodes.map((n, i) => n.spine ? i : -1).filter(i => i >= 0), lf = nodes.map((n, i) => n.spine ? -1 : i).filter(i => i >= 0);
+    const all = names.map(n => ({ name: n.name, spine: n.spine, host: n.host }));
+    const nodes = [...all.filter(n => !n.host), ...all.filter(n => n.host)]; // switches first, the hosts after them
+    const edges: [number, number][] = [], s = this.shape(), N = nodes.filter(n => !n.host).length;
+    const sp = nodes.map((n, i) => n.spine && !n.host ? i : -1).filter(i => i >= 0), lf = nodes.map((n, i) => n.spine || n.host ? -1 : i).filter(i => i >= 0);
     if (s === 'leaf-spine') { const spi = this.emu() ? sp : [0, 1].filter(i => i < N), lfi = this.emu() ? lf : nodes.map((_, i) => i).slice(2); for (const l of lfi) for (const p of spi) edges.push([p, l]); if (!this.emu() && N > 1) edges.push([0, 1]); }
     else if (s === 'full-mesh') { for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) edges.push([i, j]); }
     else if (s === 'star') { const hub = sp[0] ?? 0; for (let i = 0; i < N; i++) if (i !== hub) edges.push([hub, i]); }
     else if (s === 'ring' || s === 'line') { for (let i = 0; i + 1 < N; i++) edges.push([i, i + 1]); if (s === 'ring' && N > 2) edges.push([N - 1, 0]); }
+    if (s !== 'none') { // each host on one edge switch, in turn (leaves; not the hub of a star)
+      const edge = s === 'leaf-spine' ? lf : s === 'star' ? lf.filter(i => i !== (sp[0] ?? 0)) : nodes.map((_, i) => i).slice(0, N);
+      const ed = edge.length ? edge : nodes.map((_, i) => i).slice(0, N);
+      nodes.forEach((n, i) => { if (n.host && ed.length) edges.push([ed[(i - N) % ed.length], i]); });
+    }
     return { nodes, edges };
   });
   protected cableCount = computed(() => this.plan2().edges.length * (this.emu() ? this.per() : 1));
   protected preview = computed(() => {
-    const p = this.plan2(), MAX = 24, nodes = p.nodes.slice(0, MAX), N = nodes.length, s = this.shape(), W = 360, H = 250;
+    const p = this.plan2(), MAX = 24, nodes = p.nodes.slice(0, MAX), N = nodes.length, s = this.shape(), W = 360, hosts = nodes.map((n, i) => n.host ? i : -1).filter(i => i >= 0), H = hosts.length ? 300 : 250, SH = hosts.length ? 230 : H;
     const pos: { x: number; y: number }[] = [];
     const circle = (ids: number[], cx: number, cy: number, r: number) => ids.forEach((id, k) => { const a = 2 * Math.PI * k / ids.length - Math.PI / 2; pos[id] = { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }; });
     if (s === 'leaf-spine') {
-      const sp = nodes.map((n, i) => (this.emu() ? n.spine : i < 2) ? i : -1).filter(i => i >= 0), lf = nodes.map((_, i) => i).filter(i => !sp.includes(i));
+      const sp = nodes.map((n, i) => (this.emu() ? n.spine : i < 2) ? i : -1).filter(i => i >= 0), lf = nodes.map((_, i) => i).filter(i => !sp.includes(i) && !nodes[i].host);
       sp.forEach((id, k) => pos[id] = { x: (k + 1) * W / (sp.length + 1), y: 40 });
-      lf.forEach((id, k) => pos[id] = { x: (k + 1) * W / (lf.length + 1), y: 190 });
-    } else if (s === 'ring' || s === 'full-mesh') circle(nodes.map((_, i) => i), W / 2, H / 2 - 8, 88);
-    else if (s === 'star') { const hub = Math.max(0, nodes.findIndex(n => n.spine)); pos[hub] = { x: W / 2, y: H / 2 - 8 }; circle(nodes.map((_, i) => i).filter(i => i !== hub), W / 2, H / 2 - 8, 92); }
+      lf.forEach((id, k) => pos[id] = { x: (k + 1) * W / (lf.length + 1), y: hosts.length ? 150 : 190 });
+    } else if (s === 'ring' || s === 'full-mesh') circle(nodes.map((_, i) => i).filter(i => !nodes[i].host), W / 2, SH / 2 - 8, hosts.length ? 72 : 88);
+    else if (s === 'star') { const hub = Math.max(0, nodes.findIndex(n => n.spine)); pos[hub] = { x: W / 2, y: SH / 2 - 8 }; circle(nodes.map((_, i) => i).filter(i => i !== hub && !nodes[i].host), W / 2, SH / 2 - 8, hosts.length ? 76 : 92); }
     else { const per = Math.min(6, Math.max(1, N)), rowsN = Math.ceil(N / per); nodes.forEach((_, i) => pos[i] = { x: ((i % per) + 1) * W / (per + 1), y: (Math.floor(i / per) + 1) * (H - 20) / (rowsN + 1) }); }
-    const edges = p.edges.filter(([a, b]) => a < N && b < N).map(([a, b]) => ({ x1: pos[a].x, y1: pos[a].y, x2: pos[b].x, y2: pos[b].y }));
+    if (hosts.length) hosts.forEach((id, k) => pos[id] = { x: (k + 1) * W / (hosts.length + 1), y: H - 26 }); // the hosts in a row below the shape
+    const edges = p.edges.filter(([a, b]) => a < N && b < N && pos[a] && pos[b]).map(([a, b]) => ({ x1: pos[a].x, y1: pos[a].y, x2: pos[b].x, y2: pos[b].y }));
     return { nodes: nodes.map((n, i) => ({ ...n, x: pos[i].x, y: pos[i].y })), edges, more: p.nodes.length - N };
   });
   protected need = computed(() => {
@@ -547,13 +565,14 @@ export class LabNew implements OnInit {
   gb(mb?: number) { return !mb ? '-' : mb >= 1024 ? (mb / 1024).toFixed(mb % 1024 ? 1 : 0) + ' GB' : mb + ' MB'; }
   /** The names it makes, in order, with their role. */
   private planNames() {
-    const used = new Set((this.st()?.devices ?? []).map(d => d.hostname.toLowerCase())), out: { name: string; spine: boolean }[] = [];
+    const used = new Set((this.st()?.devices ?? []).map(d => d.hostname.toLowerCase())), out: { name: string; spine: boolean; host: boolean }[] = [];
     for (const r of this.rows()) {
       let n = 1;
       for (let k = 0; k < Math.min(r.count, 64); k++) {
         let name = '';
         do { name = r.names.includes('{n}') ? r.names.replace('{n}', String(n)) : r.names + '-' + n; n++; } while (used.has(name.toLowerCase()));
-        used.add(name.toLowerCase()); out.push({ name, spine: this.emu() && r.role === 'spine' });
+        const host = this.emu() && this.isHost(r.key);
+        used.add(name.toLowerCase()); out.push({ name, spine: this.emu() && !host && r.role === 'spine', host });
       }
     }
     return out;
@@ -567,13 +586,14 @@ export class LabNew implements OnInit {
       const groups = [];
       for (const r of this.rows().filter(x => x.count > 0)) {
         const d = this.dt(r.key); if (!d) continue;
-        groups.push({ image: r.image || d.images[0], model: d.model, module: r.module, count: r.count, names: r.names, serialStart: r.serial.trim(), macStart: r.mac.trim(), cpus: d.cpus, ram: d.ram, role: roles ? r.role : '' });
+        groups.push({ image: r.image || d.images[0], model: d.model, module: r.module, count: r.count, names: r.names, serialStart: r.serial.trim(), macStart: r.mac.trim(), cpus: d.cpus, ram: d.ram, role: this.isHost(r.key) ? 'host' : roles ? r.role : '' });
       }
       ok = await this.lab.addEmu({ host: this.host, groups, cabling: this.shape() === 'none' ? '' : this.shape(), perPair: this.per(), lagMode: this.per() > 1 ? this.lagMode() : '', mgmt: this.exists() && this.inLab(this.host) ? '' : this.mgmt, mgmtNet: this.mgmt === 'cloud' || (this.mgmt === 'lan' && this.cloudAddr.trim()) ? (this.cloudAddr.trim() + ' ' + (this.cloudGw.trim() || this.hostsInfo()?.gateway || '')).trim() : '', start: this.start });
     } else {
       const c = this.simCable();
       ok = await this.lab.add({ groups: this.rows().filter(x => x.count > 0).map(r => { const [model, os] = r.key.split('|'); return { os, model, count: r.count, names: r.names }; }), mgmtNet: '', cabling: c === 'none' ? '' : c, password: '', start: this.start });
     }
+    if (ok && this.emu() && this.look && !this.exists()) { try { await this.backend.emuSetIconStyle('', this.look); await this.lab.refresh(); } catch { /* the default look */ } }
     if (ok) { this.made.emit(); this.closed.emit(); }
     void this.ui;
   }
