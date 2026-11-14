@@ -1067,6 +1067,12 @@ func TestEmuTopUp(t *testing.T) {
 	if up, _ := emuTopUp(imgs, prof); up {
 		t.Fatal("topped up twice")
 	}
+	// a pack that learned how to turn DHCP on gives it to images without; the user's own stays
+	prof[1].DHCPOn = []string{"dhcp on", "save"}
+	imgs = append(imgs, emu.Image{ID: "c", Name: "EXOS", Ready: "login:", DHCPOn: []string{"mine"}})
+	if up, _ := emuTopUp(imgs, prof); !up || strings.Join(imgs[1].DHCPOn, "|") != "dhcp on|save" || strings.Join(imgs[2].DHCPOn, "|") != "mine" {
+		t.Fatal(imgs[1].DHCPOn, imgs[2].DHCPOn)
+	}
 }
 
 // The AI agent sees the lab: switches with their sessions, cables with LAGs and tunnels, the hosts.

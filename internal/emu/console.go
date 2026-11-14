@@ -372,6 +372,9 @@ var quietWait = 2 * time.Second
 // notReadyWait: how long a login that is not ready yet is left alone before Enter is typed again.
 var notReadyWait = 10 * time.Second
 
+// loginNudge is how long a login that was not ready gets to show a prompt after an Enter, before another Enter.
+var loginNudge = 20 * time.Second
+
 func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) {
 	prompt, err := regexp.Compile(orStr(im.Prompt, DefaultPrompt))
 	if err != nil {
@@ -415,9 +418,17 @@ func login1(ctx context.Context, c *Console, im *Image) (*regexp.Regexp, error) 
 		case <-time.After(notReadyWait):
 		}
 		_ = c.Send("")
-		var err error
-		if i, err = c.Wait(ctx, 60*time.Second, im.answers(), login, prompt, pass); err != nil {
-			return nil, errors.New("no login prompt on the console: " + err.Error())
+		// the switch may drop that Enter while its login gets ready, then say so without a new
+		// prompt ("… is now available for login."): Enter again, up to three times
+		for k := 0; ; k++ {
+			var err error
+			if i, err = c.Wait(ctx, loginNudge, im.answers(), login, prompt, pass); err == nil {
+				break
+			}
+			if !errors.Is(err, ErrTimeout) || k == 2 {
+				return nil, errors.New("no login prompt on the console: " + err.Error())
+			}
+			_ = c.Send("")
 		}
 	}
 	if i == 0 && im.NotReadyIn(c.LastLine()) {

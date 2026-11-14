@@ -675,6 +675,56 @@ func TestLoginPendingAAA(t *testing.T) {
 	}
 }
 
+// The Enter typed at a login that is not ready may be dropped, and the switch then only says its login is ready
+// ("… is now available for login.") without a new prompt: Termwright types Enter again instead of giving up.
+func TestLoginPendingAAADroppedEnter(t *testing.T) {
+	oldW, oldN := notReadyWait, loginNudge
+	notReadyWait, loginNudge = 50*time.Millisecond, 300*time.Millisecond
+	defer func() { notReadyWait, loginNudge = oldW, oldN }()
+	a, b := net.Pipe()
+	typed := make(chan []string, 1)
+	go func() {
+		w := func(s string) { _, _ = b.Write([]byte(s)) }
+		buf := make([]byte, 64)
+		read := func() string {
+			var s strings.Builder
+			for {
+				n, err := b.Read(buf)
+				if err != nil {
+					return s.String()
+				}
+				for _, ch := range buf[:n] {
+					if ch == '\r' {
+						return s.String()
+					}
+					s.WriteByte(ch)
+				}
+			}
+		}
+		var got []string
+		got = append(got, read())
+		w("\r\n(pending-AAA) login: ")
+		got = append(got, read()) // dropped: no prompt comes back
+		w("\r\n\r\nAuthentication Service (AAA) on the master node is now available for login.\r\n")
+		got = append(got, read())
+		w("\r\nlogin: ")
+		got = append(got, read())
+		w("\r\nX440G2-24t-10G4.1 # ")
+		typed <- got
+	}()
+	c := NewConsole(a)
+	defer c.Close()
+	im := &Image{Login: "admin", NotReady: []string{"(pending-AAA)"}}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := Login(ctx, c, im); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-typed; strings.Join(got, "|") != "|||admin" {
+		t.Fatalf("typed %q", got)
+	}
+}
+
 // A question that would end the session takes no, whatever its default
 // (after a first-login questionnaire: "quit this shell session ? (Y/n)").
 func TestNoQuit(t *testing.T) {

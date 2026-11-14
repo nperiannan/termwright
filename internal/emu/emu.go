@@ -54,6 +54,7 @@ type Image struct {
 	Extra           string              `json:"extra"`                     // more qemu options
 	Source          string              `json:"source"`                    // where the profile came from (a GNS3 appliance…)
 	AddrCmd         string              `json:"addrCmd"`                   // a CLI command that prints the management address (host's network mode)
+	DHCPOn          []string            `json:"dhcpOn,omitempty"`          // commands that make the management port ask DHCP for its address, typed when it has none on the host's network (a first-boot wizard may have turned DHCP off)
 	PortAddr        []string            `json:"portAddr,omitempty"`        // commands that give a data port a fixed address ({mac} its MAC, {addr} address/bits), typed at each start for the ports given one (Linux computers)
 	PortShow        string              `json:"portShow,omitempty"`        // a command that prints "PA <mac> <address/bits>" for each address of each port (Linux computers)
 	PortAddr6       []string            `json:"portAddr6,omitempty"`       // commands that give a data port a fixed IPv6 address ({mac} {addr})

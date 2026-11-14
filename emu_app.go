@@ -537,8 +537,8 @@ func (a *App) emuDebug(id string, lines int) (string, error) {
 		} else if im.DefaultPassword != "" {
 			pw = "the factory default (hidden)"
 		}
-		fmt.Fprintf(&b, "\nimage: %s %s (%s) · type %s\nready text: %q · not ready: %q · login: %q · password: %s · prompt: %q\nday 0: %d commands · set address: %d commands · address command: %q",
-			im.Name, im.Version, im.FileName, orStr(im.DeviceType, "-"), im.Ready, im.NotReady, im.Login, pw, orStr(im.Prompt, `[>#$]\s*$ (default)`), len(im.Day0), len(im.AddrSet), im.AddrCmd)
+		fmt.Fprintf(&b, "\nimage: %s %s (%s) · type %s\nready text: %q · not ready: %q · login: %q · password: %s · prompt: %q\nday 0: %d commands · set address: %d commands · address command: %q · DHCP on: %q",
+			im.Name, im.Version, im.FileName, orStr(im.DeviceType, "-"), im.Ready, im.NotReady, im.Login, pw, orStr(im.Prompt, `[>#$]\s*$ (default)`), len(im.Day0), len(im.AddrSet), im.AddrCmd, im.DHCPOn)
 	}
 	if im := emuImage(vv.Image); im != nil {
 		switch {
@@ -3219,18 +3219,32 @@ func (a *App) emuDay0(host string, v emu.VM) {
 			return
 		}
 		var addr string
+		dhcpOn := false
 		for try := 0; try < 12 && ctx.Err() == nil; try++ {
 			if addr, err = emu.AskAddress(ctx, c, &im); err == nil {
 				break
+			}
+			if try == 0 && len(im.DHCPOn) > 0 {
+				// no address yet: its management port may not ask DHCP at all (a first-boot wizard
+				// can turn the DHCP client off), so the image's commands turn it on
+				on := im
+				on.Day0 = im.DHCPOn
+				if derr := emu.Day0(ctx, c, &on, v, v.Index+1, nil); derr == nil {
+					dhcpOn = true
+					emuEv(v.ID, "info", "no address yet - typed "+strings.Join(im.DHCPOn, " · ")+" so its management port asks DHCP")
+				}
 			}
 			time.Sleep(10 * time.Second)
 		}
 		if addr == "" {
 			hint := " Check that a DHCP server serves the host's network."
+			if !dhcpOn {
+				hint = " Check that its management port asks DHCP (the image's DHCP commands) and that a DHCP server serves the host's network."
+			}
 			emuLab.mu.Lock()
 			for _, h := range emuLab.f.Hosts {
 				if h.Session == host && h.Info.Virt != "" && h.Info.Virt != "none" && h.Info.Virt != "unknown" {
-					hint = " The host is itself a VM (" + h.Info.Virt + "): its virtual switch must let the switches' MAC addresses through (VMware: Promiscuous mode, MAC address changes and Forged transmits on its port group)."
+					hint += " The host is itself a VM (" + h.Info.Virt + "): its virtual switch must also let the switches' MAC addresses through (VMware: Promiscuous mode, MAC address changes and Forged transmits on its port group)."
 				}
 			}
 			emuLab.mu.Unlock()
@@ -5426,6 +5440,9 @@ func emuTopUp(imgs []emu.Image, prof []emu.Image) (changed bool, pw []string) {
 			}
 			if im.NeighborCmd == "" && p.NeighborCmd != "" {
 				im.NeighborCmd, changed = p.NeighborCmd, true
+			}
+			if len(im.DHCPOn) == 0 && len(p.DHCPOn) > 0 {
+				im.DHCPOn, changed = p.DHCPOn, true
 			}
 			if len(p.AddrSet) > len(im.AddrSet) && (len(im.AddrSet) == 0 || slices.Equal(im.AddrSet, p.AddrSet[len(p.AddrSet)-len(im.AddrSet):])) {
 				im.AddrSet, changed = p.AddrSet, true // the pack's commands grew (an old address is removed first)

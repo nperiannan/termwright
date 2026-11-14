@@ -4012,6 +4012,13 @@ components:
                 addrCmd:
                     description: a CLI command that prints the management address (host's network mode)
                     type: string
+                dhcpOn:
+                    description: commands that make the management port ask DHCP for its address, typed when it has none on the host's network (a first-boot wizard may have turned DHCP off)
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
                 portAddr:
                     description: commands that give a data port a fixed address ({mac} its MAC, {addr} address/bits), typed at each start for the ports given one (Linux computers)
                     type:
