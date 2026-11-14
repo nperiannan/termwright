@@ -3751,6 +3751,12 @@ const ru: Record<string, string> = {
   'Turn on Dictation in System Settings → Keyboard, then press the microphone key (or Fn twice) in the message box.': 'Включите диктовку в Системных настройках → Клавиатура, затем нажмите клавишу микрофона (или дважды Fn) в поле сообщения.',
   'Press Windows+H in the message box for voice typing.': 'Нажмите Windows+H в поле сообщения для голосового ввода.',
   'This system has no dictation Termwright can start; a dictation tool of your desktop types into the message box too.': 'В этой системе нет диктовки, которую Termwright может запустить; инструмент диктовки вашего рабочего стола тоже вводит текст в поле сообщения.',
+  'Deletes the ticked captures’ pcap files on the hosts': 'Удаляет pcap-файлы отмеченных захватов на хостах',
+  'Delete ({0})': 'Удалить ({0})',
+  'More than one vCPU’s worth: QEMU’s own threads count too': 'Больше одного vCPU: учитываются и собственные потоки QEMU',
+  'Stop it first to delete it': 'Сначала остановите, чтобы удалить',
+  'Tick to delete': 'Отметьте, чтобы удалить',
+  '{0} captures': 'захватов: {0}',
 };
 
 export default ru;

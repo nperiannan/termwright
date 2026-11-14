@@ -80,8 +80,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       }
       @if (devs().length) {
         <span class="health" [title]="tr('{0} running', counts().on) + ' · ' + tr('{0} booting', counts().boot) + ' · ' + tr('{0} with a problem', counts().warn + counts().bad) + ' · ' + tr('{0} stopped', counts().off)">
-          <span class="hbar"><i class="on" [style.flex]="counts().on"></i><i class="boot" [style.flex]="counts().boot"></i><i class="bad" [style.flex]="counts().warn + counts().bad"></i><i class="off" [style.flex]="counts().off"></i></span>
-          <span class="htx"><span class="g">{{ tr('{0} up', counts().on) }}</span>@if (counts().boot) { <span class="w">· {{ tr('{0} booting', counts().boot) }}</span> }@if (counts().warn + counts().bad) { <span class="r">· {{ tr('{0} with a problem', counts().warn + counts().bad) }}</span> }@if (counts().off) { <span class="muted">· {{ tr('{0} off', counts().off) }}</span> }</span>
+          <span class="hcnt on"><b>{{ counts().on }}</b>{{ tr('up') }}</span>
+          @if (counts().boot) { <span class="hcnt boot"><b>{{ counts().boot }}</b>{{ tr('booting') }}</span> }
+          @if (counts().warn + counts().bad) { <span class="hcnt bad"><b>{{ counts().warn + counts().bad }}</b>{{ tr('problem') }}</span> }
+          @if (counts().off) { <span class="hcnt off"><b>{{ counts().off }}</b>{{ tr('off') }}</span> }
         </span>
       }
       @if (jobs().length) { <a class="jobs" (click)="dock.set('events'); $event.stopPropagation()" [title]="jobsTip()"><i class="spin"></i><span>{{ jobs()[0] }}</span>@if (jobs().length > 1) { <b>+{{ jobs().length - 1 }}</b> }</a> }
@@ -275,8 +277,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 @else if (d.error) { <span class="badge r" [title]="d.error">{{ tr('problem') }}</span> }
               </div>
             }
-            @if (!menu() && hovDev(); as h) {
-              <div class="ntip" [style.left.px]="tipX(h)" [style.top.px]="pos(h).y - 34">
+            @if (!menu() && hovDev(); as h) { @let tp = tipPos(h);
+              <div class="ntip" [style.left.px]="tp.x" [style.top.px]="tp.y">
                 <div class="th"><b>{{ h.hostname }}</b><span class="tst" [class]="'tst ' + stateOf(h)">● {{ tr(h.stateText || (h.running ? 'running' : 'stopped')) }}</span> </div>
                 <table>
                   @if (emu()) { <tr><td>{{ tr('Type') }}</td><td><b>{{ osOf(h) }}</b></td></tr>
@@ -603,7 +605,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (dock() === 'traffic' && trafView() !== 'tests') { <button type="button" class="sm" (click)="newStream()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button><button type="button" class="sm" (click)="newTester()">＋ {{ tr('Test Port') }}</button>
           @if (traf()?.running) { <button type="button" class="sm" (click)="trafStop()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="sm primary" (click)="trafStart([])" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
           <button type="button" class="sm" (click)="trafReport()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
-        @if (dock() === 'cap' && capCur(); as c) { @if (pktChk().size) { <button type="button" class="sm" (click)="copyPkts()" [title]="tr('The ticked rows as text')">{{ tr('Copy Selected ({0})', pktChk().size) }}</button><button type="button" class="sm" (click)="savePkts(c)">{{ tr('Save Selected as .pcap…') }}</button> }@if (pktNo()) { <button type="button" class="sm" (click)="pktWin.set(pktNo())" [title]="tr('The packet in a window of its own (or double-click it)')">{{ tr('Open Packet') }} ↗</button> }@if (c.running) { <button type="button" class="sm capstop" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (!c.running) { <button type="button" class="sm" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> }@if (stoppedCaps().length > 1) { <button type="button" class="sm" (click)="delCaps(stoppedCaps())">{{ tr('Delete All Stopped') }}</button> } }
+        @if (dock() === 'cap' && capCur(); as c) { @if (pktChk().size) { <button type="button" class="sm" (click)="copyPkts()" [title]="tr('The ticked rows as text')">{{ tr('Copy Selected ({0})', pktChk().size) }}</button><button type="button" class="sm" (click)="savePkts(c)">{{ tr('Save Selected as .pcap…') }}</button> }@if (pktNo()) { <button type="button" class="sm" (click)="pktWin.set(pktNo())" [title]="tr('The packet in a window of its own (or double-click it)')">{{ tr('Open Packet') }} ↗</button> }@if (c.running) { <button type="button" class="sm capstop" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (capChk().size) { <button type="button" class="sm danger" (click)="delCaps(checkedCaps())" [title]="tr('Deletes the ticked captures’ pcap files on the hosts')">{{ tr('Delete ({0})', capChk().size) }}</button> } @else if (!c.running) { <button type="button" class="sm danger" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> } }
         @if (dock() === 'log') { <select class="sm" [ngModel]="elog()?.level || 'info'" (ngModelChange)="setLogLevel($event)" [title]="tr('How much the log keeps: info by default; debug adds each command run on a host, verbose also what it printed')"><option value="error">{{ tr('Errors') }}</option><option value="warn">{{ tr('Warnings') }}</option><option value="info">{{ tr('Info') }}</option><option value="debug">{{ tr('Debug') }}</option><option value="verbose">{{ tr('Verbose') }}</option></select><button type="button" class="sm" (click)="loadLog()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveLog()">{{ tr('Save…') }}</button> }
         @if (dock() === 'clog' && selDev(); as d) { <button type="button" class="sm" (click)="loadClog()" [disabled]="clogBusy()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveConsoleLog(d)">{{ tr('Save…') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
@@ -650,7 +652,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @for (d of invDevs(g.id); track d.id) {
                 <tr class="d" [class.on]="sel() === d.id" (click)="select(d)"><td><span class="guide" [style.border-color]="hcol(g.id)"></span>{{ d.hostname }}</td><td [class]="stateOf(d)">● {{ tr(d.stateText || (d.running ? 'running' : 'stopped')) }}</td>
                   <td class="mono" [title]="g.host + ':' + d.console">:{{ d.console }}</td><td class="mono">{{ d.ssh || '-' }}</td>
-                  <td>@if (d.running) { <span class="mtr"><i [style.width.%]="d.cpu ?? 0"></i></span>{{ (d.cpu ?? 0).toFixed(0) }} % }</td>
+                  <td>@if (d.running) { <span class="mtr" [title]="(d.cpu ?? 0) > 100 ? tr('More than one vCPU’s worth: QEMU’s own threads count too') : ''"><i [style.width.%]="pct(d.cpu ?? 0, 100)" [class.hot]="(d.cpu ?? 0) > 100"></i></span>{{ (d.cpu ?? 0).toFixed(0) }} % }</td>
                   <td>@if (d.running) { <span class="mtr"><i [style.width.%]="pct(d.memUsed ?? 0, d.ram ?? 0)"></i></span>{{ d.memUsed ? gb(d.memUsed) + ' / ' : '' }}{{ gb(d.ram) }} }</td></tr>
               } @empty { <tr class="d"><td colspan="6" class="muted"><span class="guide" [style.border-color]="hcol(g.id)"></span>{{ g.devs.length ? tr('No switch here matches') : tr('No switches on this host') }}</td></tr> }
             }
@@ -674,8 +676,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (pktWin() && capCur(); as c) { <app-packet-window [cap]="c.file" [start]="pktWin()" [title]="c.switch + ' ' + c.port" (closed)="pktWin.set(0)" /> }
         <div class="capw">
           <div class="capl">
+            @if (stoppedCaps().length) { <label class="caph"><input type="checkbox" [checked]="capChk().size === stoppedCaps().length" [indeterminate]="capChk().size > 0 && capChk().size < stoppedCaps().length" (change)="chkAllCaps($any($event.target).checked)" />{{ tr('Select all') }}<span class="muted">{{ capChk().size ? tr('{0} of {1}', capChk().size, stoppedCaps().length) : stoppedCaps().length }}</span></label> }
             @for (c of caps(); track c.key + c.started) { <a class="ci" [class.on]="capCur()?.started === c.started" (click)="capSel.set(c.key); capStarted.set(c.started); loadPackets()">
-              <b>@if (c.running) { <i class="recd"></i> }{{ c.switch }} {{ c.port }}@if (!c.running) { <span class="cx" (click)="$event.stopPropagation(); delCaps([c])" [title]="tr('Delete')">✕</span> }</b><span class="muted small">{{ c.peer ? '↔ ' + c.peer + ' · ' : '' }}{{ hname(c.host) }} · {{ gb2(c.size) }} · {{ time(c.started) }}</span></a> }
+              <b><input type="checkbox" class="cck" [checked]="capChk().has(c.file)" [disabled]="c.running" [title]="c.running ? tr('Stop it first to delete it') : tr('Tick to delete')" (click)="$event.stopPropagation()" (change)="chkCap(c.file, $any($event.target).checked)" />@if (c.running) { <i class="recd"></i> }{{ c.switch }} {{ c.port }}</b><span class="muted small">{{ c.peer ? '↔ ' + c.peer + ' · ' : '' }}{{ hname(c.host) }} · {{ gb2(c.size) }} · {{ time(c.started) }}</span></a> }
             @empty { <p class="muted small" style="padding: 8px 12px">{{ tr('No capture yet: right-click a cable → Capture Packets.') }}</p> }
           </div>
           <div class="capt">
@@ -881,9 +884,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .htg { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--muted); i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; } }
     .ptabs { display: flex; align-self: stretch; margin: -8px 0 -8px 4px; flex: none;
       a { display: flex; align-items: center; gap: 5px; padding: 0 11px; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; } a.on { color: var(--text); border-color: var(--accent); } small { font-size: 11px; color: var(--muted); } }
-    .health { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); font-size: 12px; min-width: 0; overflow: hidden; }
-    .hbar { display: flex; width: 60px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--line); flex: none; margin-right: 3px;
-      i { display: block; } i.on { background: var(--success, #1fa45a); } i.boot { background: var(--warning, #e39b17); } i.bad { background: var(--danger); } i.off { background: var(--muted); opacity: .5; } }
+    .health { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 12px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); font-size: 12px; min-width: 0; overflow: hidden; }
     .jobs { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--text); font-size: 12px; cursor: pointer; min-width: 110px; max-width: 360px; flex: 0 1 auto;
       span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } b { color: var(--accent); font-weight: 600; } }
     .mgp { width: 440px !important; max-width: calc(100vw - 24px); gap: 10px !important; box-sizing: border-box; overflow-x: hidden; grid-template-columns: minmax(0, 1fr) !important; > * { min-width: 0; } }
@@ -1048,7 +1049,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .tpl .ln { stroke: #e08a2e; stroke-dasharray: 5 4; stroke-width: 2; fill: none; }
     .capsum { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); .cs { font-size: 11.5px; border: 1px solid var(--line); border-radius: 8px; padding: 1px 7px; cursor: pointer; font-family: var(--mono, monospace); i { font-style: normal; color: var(--muted); margin-left: 4px; } } .cs.lldp, .cs.lacp, .cs.stp { border-color: var(--accent); } }
     .capw { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; min-height: 0; .capl { border-right: 1px solid var(--line); overflow: auto; } .ci { display: grid; padding: 6px 12px; cursor: pointer; border-bottom: 1px solid var(--line); b { font-size: 12.5px; display: flex; align-items: center; gap: 6px; } } .ci.on { background: var(--accent-soft); } .cx { margin-left: auto; color: var(--muted); font-weight: 400; padding: 0 2px; } .cx:hover { color: var(--danger); } .capt { display: flex; flex-direction: column; min-height: 0; overflow: hidden; } .ptab { flex: 1; min-height: 72px; overflow: auto; } .dtabs button.sm { white-space: nowrap; } .seg2.tv { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-right: 6px; a { padding: 2px 9px; font-size: 12px; cursor: pointer; } a.on { background: var(--accent); color: #fff; } } .pdet { height: 48%; flex: none; border-top: 1px solid var(--line); } .capt { tr.sel td { background: var(--accent-soft); } table { width: 100%; border-collapse: collapse; font-size: 12px; } th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 500; padding: 4px 8px; } td { padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; } tr.pp.icmp td, tr.pp.icmpv6 td { color: #9cc3ff; } tr.pp.lldp td, tr.pp.stp td, tr.pp.lacp td { color: var(--muted); } tr.pp.arp td { color: #e5c07b; } } }
-    .mcap { position: absolute; left: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 4px; font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 6px 1px 4px; border-radius: 8px; background: color-mix(in srgb, var(--danger, #e5484d) 18%, var(--surface)); color: var(--danger, #e5484d); border: 1px solid color-mix(in srgb, var(--danger, #e5484d) 55%, transparent); cursor: pointer; z-index: 2; .recd { width: 7px; height: 7px; } }
+    .mcap { position: absolute; left: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 4px; font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 6px 1px 4px; border-radius: 8px; background: color-mix(in srgb, #3b8cf6 18%, var(--surface)); color: #3b8cf6; border: 1px solid color-mix(in srgb, #3b8cf6 55%, transparent); cursor: pointer; z-index: 2; .recd { width: 7px; height: 7px; background: #3b8cf6; } }
     .recd { width: 8px; height: 8px; border-radius: 50%; background: var(--danger, #e5484d); animation: icblink 1.2s ease-in-out infinite; } .cnt.rec { background: var(--danger, #e5484d); } button.capstop{background:var(--danger);border-color:var(--danger);color:#fff}
 .capm{fill:none;stroke:#7fb2ff;stroke-width:2.5;stroke-dasharray:8 6;animation:ca .8s linear infinite;pointer-events:none}.capm.thick{stroke-width:3.5}@keyframes ca{to{stroke-dashoffset:-28}}
     .capd{pointer-events:none}.cpc{fill:#2f6fed;stroke:#fff;stroke-width:1.5}.cpi{fill:#fff}.cpr{fill:none;stroke:#7fb2ff;stroke-width:2;animation:cp 1.4s ease-out infinite}@keyframes cp{from{r:7px;opacity:.9}to{r:17px;opacity:0}} @keyframes icblink { 50% { opacity: .3; } }
@@ -1649,11 +1650,16 @@ export class LabWorkspace implements OnDestroy {
     try { const p = await this.backend.chooseSaveFile(tr('Save the Traffic Report'), 'traffic-report.html', [{ displayName: 'HTML', pattern: '*.html' }, { displayName: 'CSV', pattern: '*.csv' }]); if (!p) return; await this.backend.emuTrafficReport(p); this.ui.toast(tr('Saved'), 'success'); } catch (e) { this.ui.error(e); }
   }
   protected stoppedCaps = computed(() => this.caps().filter(c => !c.running));
+  /** The ticked captures (stopped ones only; a capture that is gone is untick'd). */
+  protected capChk = signal(new Set<string>());
+  protected checkedCaps = computed(() => this.stoppedCaps().filter(c => this.capChk().has(c.file)));
+  chkCap(f: string, on: boolean) { const s = new Set(this.capChk()); if (on) s.add(f); else s.delete(f); this.capChk.set(s); }
+  chkAllCaps(on: boolean) { this.capChk.set(new Set(on ? this.stoppedCaps().map(c => c.file) : [])); }
   async delCaps(cs: EmuCapture[]) {
     if (!cs.length) return;
-    const what = cs.length === 1 ? cs[0].switch + ' ' + cs[0].port + ' · ' + this.time(cs[0].started) : tr('{0} stopped captures', cs.length);
-    if (!(await this.ui.confirm(tr('Delete {0}?', what), tr('The pcap files are deleted on the hosts; this cannot be undone.'), tr('Delete')))) return;
-    try { this.caps.set((await this.backend.emuCaptureDelete(cs.map(c => c.file))) ?? []); if (!this.capCur()) { this.capSel.set(this.caps()[0]?.key ?? ''); this.capStarted.set(this.caps()[0]?.started ?? ''); } await this.loadPackets(); } catch (e) { this.ui.error(e); }
+    const what = cs.length === 1 ? cs[0].switch + ' ' + cs[0].port + ' · ' + this.time(cs[0].started) : tr('{0} captures', cs.length);
+    if (!(await this.ui.confirm(tr('Delete {0}?', what), tr('The pcap files are deleted on the hosts; this cannot be undone.'), tr('Delete'), true))) return;
+    try { this.caps.set((await this.backend.emuCaptureDelete(cs.map(c => c.file))) ?? []); this.capChk.set(new Set([...this.capChk()].filter(f => this.caps().some(c => c.file === f && !c.running)))); if (!this.capCur()) { this.capSel.set(this.caps()[0]?.key ?? ''); this.capStarted.set(this.caps()[0]?.started ?? ''); } await this.loadPackets(); } catch (e) { this.ui.error(e); }
   }
   async stopCap(key: string) { try { this.caps.set((await this.backend.emuCaptureStop(key)) ?? []); await this.loadPackets(); } catch (e) { this.ui.error(e); } }
   async wireshark(key: string) { try { await this.backend.emuCaptureWireshark(key); this.ui.toast(tr('Opening Wireshark…')); } catch (e) { this.ui.error(e); } }
@@ -1945,10 +1951,17 @@ export class LabWorkspace implements OnDestroy {
   /** The Events level column: OK, INFO, WARN, FAIL. */
   protected lvName(l: string) { return ({ ok: 'OK', warn: 'WARN', error: 'FAIL' } as Record<string, string>)[l] ?? 'INFO'; }
   protected byTitle(b?: string) { return this.tr(b === 'user' ? 'You did it in Termwright' : b === 'ai' ? 'An AI agent did it through the Termwright connector' : 'Termwright did it on its own (watching the switches, retrying, checking)'); }
-  protected tipX(d: LabDevice) {
-    const x = this.pos(d).x, cv = document.querySelector('.cv') as HTMLElement | null, z = this.zoom();
-    const right = cv ? (cv.scrollLeft + cv.clientWidth) / z : this.area().w;
-    return x + 82 + 290 / z > right ? Math.max(4, x - 300 / z) : x + 82;
+  /** Where the hover card goes: beside the switch (right, then left), else below or above it - wherever it fits in
+   *  the part of the canvas in view, never over the switch itself. */
+  protected tipPos(d: LabDevice): { x: number; y: number } {
+    const p = this.pos(d), z = this.zoom(), cv = document.querySelector('.cv') as HTMLElement | null, el = document.querySelector('.ntip') as HTMLElement | null;
+    const L = cv ? cv.scrollLeft / z : 0, T = cv ? cv.scrollTop / z : 0, R = cv ? (cv.scrollLeft + cv.clientWidth) / z : this.area().w, B = cv ? (cv.scrollTop + cv.clientHeight) / z : this.area().h;
+    const w = el?.offsetWidth || 290, h = el?.offsetHeight || 290, g = 12, m = 6;
+    const box = { l: p.x - 75, r: p.x + 75, t: p.y - BH / 2, b: p.y + BH / 2 + 34 };
+    const cy = (y: number) => Math.max(T + m, Math.min(y, B - h - m)), cx = (x: number) => Math.max(L + m, Math.min(x, R - w - m));
+    const opts = [{ x: box.r + g, y: cy(box.t - 10) }, { x: box.l - g - w, y: cy(box.t - 10) }, { x: cx(p.x - w / 2), y: box.b + g }, { x: cx(p.x - w / 2), y: box.t - g - h }];
+    const room = (o: { x: number; y: number }) => Math.max(0, Math.min(o.x + w, R) - Math.max(o.x, L)) * Math.max(0, Math.min(o.y + h, B) - Math.max(o.y, T));
+    return opts.find(o => room(o) >= w * h - 1) ?? opts.reduce((a, o) => (room(o) > room(a) ? o : a));
   }
   onScroll(cv: HTMLElement) { this.scrollAt.set({ x: cv.scrollLeft, y: cv.scrollTop, w: cv.clientWidth, h: cv.clientHeight }); }
   /** The small map: every switch as a dot in its host's colour, the hosts' areas, and the part in view. */

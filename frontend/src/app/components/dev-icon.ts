@@ -331,8 +331,9 @@ export function iconReach(look: IconStyle, role: DevRole, cx: number, cy: number
     :host { display: inline-block; line-height: 0;
       --ic-top: #3a4252; --ic-fr: #262c37; --ic-sd: #1c2129; --ic-ed: #4b5466; --ic-off: #4f5968; --ic-ear: #3d4554; --ic-sfp: #b8c2d0; --ic-led: #2fbf71;
       --sl-a: #3a4252; --sl-b: #232833; --sl-g: #e8ecf3; --sh-o: .4; --st-a: #6b7587; --st-b: #4a5262; --st-l: #3b4250; --st-r: #2a303b; --rk-a: #4a5262; --rk-b: #2c323d; --rk-e: #59606d; --rk-h: #0d1016; --rk-m: #1b2230; }
-    :host-context(.light) { --ic-top: #eef1f5; --ic-fr: #d3d9e2; --ic-sd: #bcc5d1; --ic-ed: #98a3b3; --ic-off: #aab3c0; --ic-ear: #c6cdd8; --ic-led: #22a35e;
-      --sl-a: #ffffff; --sl-b: #e4e9f0; --sl-g: #3a4252; --sh-o: .18; --st-a: #f1f4f8; --st-b: #d6dce5; --st-l: #c3cbd6; --st-r: #a9b3c1; --rk-a: #f1f4f8; --rk-b: #d6dce5; --rk-e: #b9c2ce; --rk-h: #5b6575; --rk-m: #c9d0da; }
+    /* light theme: dark silver, so the devices stand out from a light canvas (not white on white) */
+    :host-context(.light) { --ic-top: #c3cad5; --ic-fr: #a7b0bd; --ic-sd: #919bab; --ic-ed: #758091; --ic-off: #8a94a3; --ic-ear: #a2acb9; --ic-led: #1f9a57;
+      --sl-a: #cfd5de; --sl-b: #a9b2bf; --sl-g: #2a303b; --sh-o: .22; --st-a: #c5ccd6; --st-b: #a3acb9; --st-l: #959fad; --st-r: #7e8998; --rk-a: #c9cfd8; --rk-b: #a3acb9; --rk-e: #8a94a3; --rk-h: #3a4250; --rk-m: #8f99a7; }
     svg { overflow: visible; }
     svg.st-off { opacity: .5; filter: grayscale(1); }
     svg.st-boot :is(.pl) { animation: icblink 1.1s ease-in-out infinite; }
