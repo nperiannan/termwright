@@ -4,7 +4,14 @@ import { Backend } from '../core/backend';
 import { Ui } from '../core/ui.service';
 import { Tabs } from '../core/tabs.service';
 import { Icon } from './icon';
-import { AGENT_PERMS, AGENT_TOOLS, AgentPerm, AIChat, ChatMsg, EFFORTS, Img, Step, modelChoices, nice } from '../core/ai-chat.service';
+import { AGENT_PERMS, AGENT_TOOLS, AgentPerm, AIChat, AiMode, ChatMsg, EFFORTS, Img, PlanItem, Step, modelChoices, nice } from '../core/ai-chat.service';
+
+/** The chat's modes, as VS Code's chat has them: Agent (the default), Plan, Ask. */
+const MODES: { k: AiMode; name: string; what: string }[] = [
+  { k: 'agent', name: 'Agent', what: 'Plans a task of several steps as a checklist, then runs it in your tabs - asking as your permissions say' },
+  { k: 'plan', name: 'Plan', what: 'Looks with read-only commands and writes the plan; nothing changes until you press Run the Plan' },
+  { k: 'ask', name: 'Ask', what: 'Answers and explains; runs nothing' },
+];
 import { AIStatus } from '../core/models';
 import { tr } from '../core/i18n';
 
@@ -51,26 +58,6 @@ function spans(t: string): Span[] {
   <span class="grip" (mousedown)="resize($event)" title="Drag to resize"></span>
   <header class="hd" (mousedown)="move($event)">
     <span class="sp"><app-icon name="sparkles" [size]="16" /></span><span class="t">AI Assistant</span>
-    <span class="modw"><button type="button" class="chipm" [class.on]="mmenu()" (click)="openModels()" [title]="provider() + ' - ' + tr('click to choose the model')" aria-haspopup="menu" [attr.aria-expanded]="mmenu()">{{ service() }}<app-icon name="chevron-down" [size]="11" /></button>
-      @if (mmenu()) {
-        <div class="menu models" role="menu" (click)="$event.stopPropagation()">
-          <div class="mh">{{ tr('AI model') }}<small>{{ provider() }}</small></div>
-          @if (isCC()) {
-            <div class="grp">{{ tr('Effort') }}</div>
-            <div class="effs" role="radiogroup" [attr.aria-label]="tr('Effort')">@for (e of efforts; track e.k) {
-              <button type="button" role="radio" class="eff" [class.on]="(ui.settings()?.ai?.effort || '') === e.k" [attr.aria-checked]="(ui.settings()?.ai?.effort || '') === e.k" (click)="setEffort(e.k)" [title]="e.k ? tr(e.name) : tr('Default of the model')">{{ tr(e.name) }}</button> }</div>
-          }
-          <div class="grp">{{ tr('Model') }}</div>
-          <button type="button" role="menuitemradio" [attr.aria-checked]="!st()?.model" (click)="setModel('')"><span class="ck">@if (!st()?.model) { <app-icon name="check" [size]="12" /> }</span>{{ tr('Default') }}<small>{{ lastModel() ? nice(lastModel()) : tr('the newest') }}</small></button>
-          @if (models() === null) { <div class="mf">{{ tr('Loading the models…') }}</div> }
-          @for (o of choices(); track o.value; let i = $index) {
-            @if (o.group && o.group !== choices()[i - 1]?.group) { <div class="grp">{{ o.group }}</div> }
-            <button type="button" role="menuitemradio" [attr.aria-checked]="st()?.model === o.value" (click)="setModel(o.value)"><span class="ck">@if (st()?.model === o.value) { <app-icon name="check" [size]="12" /> }</span>{{ o.label }}@if (o.hint) { <small class="mono">{{ o.hint }}</small> }</button>
-          }
-          @if (modelErr()) { <div class="mf">{{ modelErr() }}</div> }
-          <button type="button" class="foot" (click)="mmenu.set(false); ui.openOptions('ai')"><app-icon name="options" [size]="12" />{{ tr('AI settings…') }}</button>
-        </div>
-      }</span>
     <span class="grow"></span>
     <button type="button" class="ib" [class.on]="ai.view() === 'history'" title="Chats" aria-label="Chats" (click)="ai.view.set(ai.view() === 'history' ? 'chat' : 'history')"><app-icon name="history" [size]="15" /></button>
     <span class="sep"></span>
@@ -107,19 +94,17 @@ function spans(t: string): Span[] {
       }
       @for (m of msgs(); track m.id) {
         @if (m.role === 'user') {
-          <div class="msg"><div class="who"><span class="av u" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="9.2" r="4.4" /><path d="M2.8 24c0-5.4 4.1-9 9.2-9s9.2 3.6 9.2 9z" /></svg></span>{{ tr('You') }} <span class="when">{{ time(m.time) }}</span>
-            <span class="grow"></span><button type="button" class="mc" (click)="copy(m.text)" [title]="tr('Copy what you asked')" [attr.aria-label]="tr('Copy what you asked')"><app-icon name="copy" [size]="12" /></button></div>
+          <div class="msg u">
             <div class="ub">
               @for (i of m.images ?? []; track $index) { @if (i.url) { <img class="img" [src]="i.url" [alt]="i.name" /> } @else { <span class="cx"><app-icon name="image" [size]="12" />{{ i.name }}</span> } }
               @if (m.ctx?.length) { <div class="ctx">@for (c of m.ctx!; track $index) { <span class="cx"><app-icon name="shell" [size]="12" /><b>{{ c.label }}</b> · {{ c.detail }}</span> }</div> }
-              <div class="ut">{{ m.text }}</div></div></div>
+              <div class="ut">{{ m.text }}</div></div>
+            <div class="mft"><span class="when">{{ time(m.time) }}</span><button type="button" class="mc" (click)="copy(m.text)" [title]="tr('Copy what you asked')" [attr.aria-label]="tr('Copy what you asked')"><app-icon name="copy" [size]="12" /></button></div></div>
         } @else {
-          <div class="msg"><div class="who"><span class="av a"><app-icon name="sparkles" [size]="12" /></span>AI Assistant
-            @if (m.model) { <span class="when" [title]="m.model">{{ nice(m.model) }}{{ m.secs ? ' · ' + m.secs + ' s' : '' }}</span> }
-            @if (m.usage) { <span class="when tok" [title]="tr('Tokens as the AI service counted them: {0} sent (the chat so far and the instructions), {1} in the answer', m.usage.in.toLocaleString(), m.usage.out.toLocaleString())">↑ {{ k(m.usage.in) }} ↓ {{ k(m.usage.out) }}</span> }
-            @if (m.text) { <span class="grow"></span><button type="button" class="mc" (click)="copy(m.text)" [title]="tr('Copy the answer')" [attr.aria-label]="tr('Copy the answer')"><app-icon name="copy" [size]="12" /></button> }</div>
+          <div class="msg a">
             @if (m.error) { <div class="ab err">{{ m.error }}</div>
               @if (isSignIn(m.error)) { <div class="sib"><button type="button" class="b p" (click)="runSignIn()" [title]="tr('Opens a Local Shell tab and runs it there; sign in, then ask again')"><app-icon name="shell" [size]="12" />{{ tr('Run it in a Termwright tab') }}</button><button type="button" class="b" (click)="copySignIn()"><app-icon name="copy" [size]="12" />{{ tr('Copy the command') }}</button></div> } }
+            @if (m.plan?.length && m.plan !== ai.plan()) { <div class="pold"><app-icon name="checklist" [size]="11" />{{ tr('Plan: {0} of {1} done', done(m.plan!), m.plan!.length) }}</div> }
             @if (m.text) {
               <div class="ab">
                 @for (b of render(m); track $index) {
@@ -137,36 +122,43 @@ function spans(t: string): Span[] {
                 }
               </div>
             }
-            @if (m.steps?.length) { <div class="used"><app-icon name="wrench" [size]="12" />{{ tr('Tools used') }}: {{ toolsUsed(m) }}</div> }
-            @if (devices(m); as ds) { @if (ds.length) {
-              <div class="devs" [attr.aria-label]="tr('Devices')">@for (d of ds; track d.tab) {
-                <span class="dv" [class]="'dv ' + d.state" [title]="tr('{0}: {1} commands run, {2} with an error', d.tab, d.ok + d.err, d.err)"><i></i>{{ d.tab }}
-                  @if (d.state === 'ask') { <small>{{ tr('waiting') }}</small> } @else if (d.state === 'running') { <small>{{ tr('working') }}</small> } @else if (!d.runs) { <small>{{ d.err ? tr('not connected') : tr('connected') }}</small> } @else { <small>✓{{ d.ok }}@if (d.err) { · ✗{{ d.err }} }</small> }</span> }</div>
+            @if (worked(m)) {
+              <details class="work" [open]="busyMsg(m)"><summary><app-icon name="chevron-down" [size]="11" /><span class="wl">@if (busyMsg(m)) { <span class="spin"></span> }{{ workLine(m) }}</span></summary>
+                @if (devices(m); as ds) { @if (ds.length) {
+                  <div class="devs" [attr.aria-label]="tr('Devices')">@for (d of ds; track d.tab) {
+                    <span class="dv" [class]="'dv ' + d.state" [title]="tr('{0}: {1} commands run, {2} with an error', d.tab, d.ok + d.err, d.err)"><i></i>{{ d.tab }}
+                      @if (d.state === 'ask') { <small>{{ tr('waiting') }}</small> } @else if (d.state === 'running') { <small>{{ tr('working') }}</small> } @else if (!d.runs) { <small>{{ d.err ? tr('not connected') : tr('connected') }}</small> } @else { <small>✓{{ d.ok }}@if (d.err) { · ✗{{ d.err }} }</small> }</span> }</div>
+                } }
+                @for (s of m.steps ?? []; track $index) { @if (s.state !== 'ask') {
+                  <details class="step" [class]="'step ' + s.state + (s.failed ? ' failed' : '')"><summary class="sh">
+                    <span class="si">@switch (s.state) { @case ('done') { <app-icon [name]="s.failed ? 'alert' : 'check'" [size]="13" /> } @case ('running') { <span class="spin"></span> } @default { <app-icon name="x" [size]="13" /> } }</span>
+                    <span class="grow">@switch (s.kind) {
+                      @case ('open') { {{ tr('Connect to') }} <b>{{ s.tab }}</b> }
+                      @case ('find') { <app-icon name="search" [size]="11" /> {{ tr('Find sessions') }} <b>{{ s.tab }}</b> }
+                      @case ('log') { <app-icon name="log" [size]="11" /> {{ tr('Logger') }} {{ s.command }} · <b>{{ s.tab }}</b> }
+                      @case ('lab') { <app-icon name="cube" [size]="11" /> {{ tr('Emulated lab') }} <code>{{ s.command }}</code> }
+                      @case ('record') { <app-icon name="record" [size]="11" /> {{ tr('Recorder') }} {{ s.command }} · <b>{{ s.tab }}</b> }
+                      @default { <code>{{ s.command }}</code> {{ tr('on') }} <b>{{ s.tab }}</b> } }</span>
+                    <span class="hint">{{ s.note || (s.auto ? tr('auto') : s.state === 'done' ? tr('allowed') : '') }}</span></summary>
+                    @if (s.output) { <div class="so"><button type="button" class="mc" (click)="copy(s.output)" [title]="tr('Copy the output')" [attr.aria-label]="tr('Copy the output')"><app-icon name="copy" [size]="12" /></button><pre>{{ s.output }}</pre></div> }</details>
+                } }
+              </details>
+            }
+            @for (s of m.steps ?? []; track $index) { @if (s.state === 'ask') {
+              <div class="appr" [class.danger]="s.danger"><div class="q"><app-icon name="alert" [size]="15" /><div>
+                <b>{{ s.kind === 'open' ? tr('Connect to {0}?', s.tab) : s.kind === 'lab' ? tr('Change the emulated lab?') : tr('Run on {0}?', s.tab) }}</b>@if (s.prod) { <span class="prodb">PROD</span> }
+                @if (s.prod) { <div class="hint">{{ tr('Production session: Termwright asks before every command and connection, whatever the agent may do.') }}</div> }
+                <div class="hint">{{ s.danger ? tr('This may change the device or interrupt traffic.') : s.kind === 'open' ? tr('Opens the session in a new tab.') : s.kind === 'lab' ? 'lab ' + s.command : tr('Check the command - it is typed in the tab as it is.') }}</div>
+                @if (s.ask) { <div class="hint lask">{{ s.ask }}</div> }</div></div>
+                @if (s.kind === 'run') { <input class="mono" [(ngModel)]="edits[$index + '-' + m.id]" [placeholder]="s.command" [attr.aria-label]="tr('Command')" (focus)="seed(m.id, $index, s)" /> }
+                <div class="btns"><button type="button" class="primary" [class.danger]="s.danger" (click)="ai.decide(s, 'run', edits[$index + '-' + m.id])">{{ s.kind === 'open' ? tr('Connect') : s.kind === 'lab' ? tr('Do It') : tr('Run') }}</button>
+                  @if (s.kind === 'lab' && !s.danger) { <button type="button" (click)="ai.decide(s, 'chat')" [title]="tr('Do this and the next lab changes of this chat without asking (not the ones that may interrupt traffic)')">{{ tr('Allow for This Chat') }}</button> }
+                  <button type="button" (click)="ai.decide(s, 'skip')">Skip</button><button type="button" (click)="ai.decide(s, 'stop')">Stop</button></div></div>
             } }
-            @for (s of m.steps ?? []; track $index) {
-              @if (s.state === 'ask') {
-                <div class="appr" [class.danger]="s.danger"><div class="q"><app-icon name="alert" [size]="15" /><div>
-                  <b>{{ s.kind === 'open' ? tr('Connect to {0}?', s.tab) : s.kind === 'lab' ? tr('Change the emulated lab?') : tr('Run on {0}?', s.tab) }}</b>@if (s.prod) { <span class="prodb">PROD</span> }
-                  @if (s.prod) { <div class="hint">{{ tr('Production session: Termwright asks before every command and connection, whatever the agent may do.') }}</div> }
-                  <div class="hint">{{ s.danger ? tr('This may change the device or interrupt traffic.') : s.kind === 'open' ? tr('Opens the session in a new tab.') : s.kind === 'lab' ? 'lab ' + s.command : tr('Check the command - it is typed in the tab as it is.') }}</div>
-                  @if (s.ask) { <div class="hint lask">{{ s.ask }}</div> }</div></div>
-                  @if (s.kind === 'run') { <input class="mono" [(ngModel)]="edits[$index + '-' + m.id]" [placeholder]="s.command" [attr.aria-label]="tr('Command')" (focus)="seed(m.id, $index, s)" /> }
-                  <div class="btns"><button type="button" class="primary" [class.danger]="s.danger" (click)="ai.decide(s, 'run', edits[$index + '-' + m.id])">{{ s.kind === 'open' ? tr('Connect') : s.kind === 'lab' ? tr('Do It') : tr('Run') }}</button>
-                    @if (s.kind === 'lab' && !s.danger) { <button type="button" (click)="ai.decide(s, 'chat')" [title]="tr('Do this and the next lab changes of this chat without asking (not the ones that may interrupt traffic)')">{{ tr('Allow for This Chat') }}</button> }
-                    <button type="button" (click)="ai.decide(s, 'skip')">Skip</button><button type="button" (click)="ai.decide(s, 'stop')">Stop</button></div></div>
-              } @else {
-                <details class="step" [class]="'step ' + s.state + (s.failed ? ' failed' : '')"><summary class="sh">
-                  <span class="si">@switch (s.state) { @case ('done') { <app-icon [name]="s.failed ? 'alert' : 'check'" [size]="13" /> } @case ('running') { <span class="spin"></span> } @default { <app-icon name="x" [size]="13" /> } }</span>
-                  <span class="grow">@switch (s.kind) {
-                    @case ('open') { {{ tr('Connect to') }} <b>{{ s.tab }}</b> }
-                    @case ('find') { <app-icon name="search" [size]="11" /> {{ tr('Find sessions') }} <b>{{ s.tab }}</b> }
-                    @case ('log') { <app-icon name="log" [size]="11" /> {{ tr('Logger') }} {{ s.command }} · <b>{{ s.tab }}</b> }
-                    @case ('lab') { <app-icon name="cube" [size]="11" /> {{ tr('Emulated lab') }} <code>{{ s.command }}</code> }
-                    @case ('record') { <app-icon name="record" [size]="11" /> {{ tr('Recorder') }} {{ s.command }} · <b>{{ s.tab }}</b> }
-                    @default { <code>{{ s.command }}</code> {{ tr('on') }} <b>{{ s.tab }}</b> } }</span>
-                  <span class="hint">{{ s.note || (s.auto ? tr('auto') : s.state === 'done' ? tr('allowed') : '') }}</span></summary>
-                  @if (s.output) { <div class="so"><button type="button" class="mc" (click)="copy(s.output)" [title]="tr('Copy the output')" [attr.aria-label]="tr('Copy the output')"><app-icon name="copy" [size]="12" /></button><pre>{{ s.output }}</pre></div> }</details>
-              }
+            @if (m.text || m.model) {
+              <div class="mft"><button type="button" class="mc" (click)="copy(m.text)" [disabled]="!m.text" [title]="tr('Copy the answer')" [attr.aria-label]="tr('Copy the answer')"><app-icon name="copy" [size]="12" /></button>
+                @if (m.model) { <span class="when" [title]="m.model">{{ nice(m.model) }}{{ m.secs ? ' · ' + m.secs + ' s' : '' }}</span> }
+                @if (m.usage) { <span class="when tok" [title]="tr('Tokens as the AI service counted them: {0} sent (the chat so far and the instructions), {1} in the answer', m.usage.in.toLocaleString(), m.usage.out.toLocaleString())">↑ {{ k(m.usage.in) }} ↓ {{ k(m.usage.out) }}</span> }</div>
             }
           </div>
         }
@@ -174,12 +166,26 @@ function spans(t: string): Span[] {
       @if (ai.busy()) { <div class="working"><span class="typing"><i></i><i></i><i></i></span>{{ waiting() ? tr('Waiting for you') : tr('Working…') }}</div> }
     </div>
 
+    @if (ai.plan(); as p) {
+      <div class="plan" [class.open]="planOpen()">
+        <button type="button" class="ph" (click)="planOpen.set(!planOpen())" [attr.aria-expanded]="planOpen()"><app-icon name="chevron-down" [size]="11" [class.shut]="!planOpen()" /><b>{{ tr('Plan') }}</b><span class="hint">{{ tr('{0} of {1} done', done(p), p.length) }}</span><span class="pbar"><i [style.width.%]="(100 * done(p)) / p.length"></i></span></button>
+        @if (planOpen()) { <ol>@for (it of p; track $index) { <li [class]="it.s === 'x' ? 'dn' : it.s === '~' ? 'on' : ''"><span class="pk">@if (it.s === 'x') { <app-icon name="check" [size]="11" /> } @else if (it.s === '~') { <span class="spin"></span> }</span><span>{{ it.t }}</span></li> }</ol> }
+        @if (ai.mode() === 'plan' && !ai.busy() && done(p) < p.length) { <div class="pa"><button type="button" class="primary" (click)="ai.runPlan()"><app-icon name="play" [size]="11" />{{ tr('Run the Plan') }}</button><span class="hint">{{ tr('Switches to Agent and carries it out, asking as your permissions say') }}</span></div> }
+      </div>
+    }
     <div class="comp" (dragover)="$event.preventDefault()" (drop)="drop($event)">
       <div class="box" [class.busy]="ai.busy()">
-        <div class="ctx">
-          @for (c of ai.ctxs(); track c.id) { <span class="cx"><app-icon [name]="c.kind === 'clipboard' ? 'paste' : c.kind === 'file' ? 'file' : 'shell'" [size]="12" /><b>{{ c.label }}</b> · {{ c.detail }}
-            <button type="button" class="x" [attr.aria-label]="tr('Remove')" (click)="ai.removeCtx(c.id)"><app-icon name="x" [size]="10" /></button></span> }
-          <span class="addw"><button type="button" class="cx add" (click)="menu.set(!menu())" aria-haspopup="menu" [attr.aria-expanded]="menu()"><app-icon name="plus" [size]="11" />{{ tr('Add context') }}</button>
+        @if (ai.ctxs().length || ai.images().length) {
+          <div class="ctx">
+            @for (c of ai.ctxs(); track c.id) { <span class="cx"><app-icon [name]="c.kind === 'clipboard' ? 'paste' : c.kind === 'file' ? 'file' : 'shell'" [size]="12" /><b>{{ c.label }}</b> · {{ c.detail }}
+              <button type="button" class="x" [attr.aria-label]="tr('Remove')" (click)="ai.removeCtx(c.id)"><app-icon name="x" [size]="10" /></button></span> }
+            @for (i of ai.images(); track $index) { <span class="att"><img [src]="i.url" [alt]="i.name" /><button type="button" class="rm" [attr.aria-label]="tr('Remove')" (click)="ai.removeImage(i)"><app-icon name="x" [size]="10" /></button></span> }
+          </div>
+        }
+        <textarea #ta [(ngModel)]="text" (ngModelChange)="grow(); at($event)" (keydown)="key($event)" (paste)="pasteIn($event)" (tw-paste-picture)="pastePicture($any($event).detail)" data-paste-pictures rows="2" spellcheck="false"
+          [placeholder]="ai.mode() === 'ask' ? tr('Ask about the output… (paste a picture with ⌘V, @ adds a tab)') : tr('Describe what you want to do, or ask… (paste a picture with ⌘V, @ adds a tab)')" [attr.aria-label]="tr('Message')"></textarea>
+        <div class="bar">
+          <span class="addw"><button type="button" class="ib" [class.on]="menu()" (click)="menu.set(!menu())" aria-haspopup="menu" [attr.aria-expanded]="menu()" [title]="tr('Add context: selected text, a tab, a picture or a file')" [attr.aria-label]="tr('Add context')"><app-icon name="plus" [size]="15" /></button>
             @if (menu()) {
               <div class="menu" role="menu" (click)="$event.stopPropagation()">
                 <button type="button" role="menuitem" (click)="pick('sel')"><app-icon name="shell" [size]="13" />{{ tr('Selected text') }}</button>
@@ -189,25 +195,33 @@ function spans(t: string): Span[] {
                 <button type="button" role="menuitem" (click)="pick('file')"><app-icon name="image" [size]="13" />{{ tr('Picture or file…') }}<small>⌘V</small></button>
               </div>
             }</span>
-        </div>
-        @if (ai.images().length) { <div class="atts">@for (i of ai.images(); track $index) { <span class="att"><img [src]="i.url" [alt]="i.name" /><button type="button" class="rm" [attr.aria-label]="tr('Remove')" (click)="ai.removeImage(i)"><app-icon name="x" [size]="10" /></button></span> }</div> }
-        <textarea #ta [(ngModel)]="text" (ngModelChange)="grow(); at($event)" (keydown)="key($event)" (paste)="pasteIn($event)" (tw-paste-picture)="pastePicture($any($event).detail)" data-paste-pictures rows="3" spellcheck="false"
-          [placeholder]="tr('Ask about the output, or describe what you want to do… (paste a picture with ⌘V, @ adds a tab)')" [attr.aria-label]="tr('Message')"></textarea>
-        <div class="bar">
-          <select class="sel" [ngModel]="ai.mode()" (ngModelChange)="ai.mode.set($event)" [attr.aria-label]="tr('Mode')" [title]="tr('Ask: answers only. Agent: the AI may run commands in your tabs.')"><option value="ask">Ask</option><option value="agent">Agent</option></select>
-          @if (ai.mode() === 'agent') {
-            <span class="permw"><button type="button" class="sel perm" [class]="'sel perm ' + permTone()" (click)="pmenu.set(!pmenu())" aria-haspopup="menu" [attr.aria-expanded]="pmenu()" [attr.aria-label]="tr('Agent permissions')" [title]="tr('What the agent may do without asking')"><i class="pd"></i><span>{{ tr(permName()) }}</span><app-icon name="chevron-down" [size]="11" /></button>
-              @if (pmenu()) {
-                <div class="menu perms" role="menu" (click)="$event.stopPropagation()">
-                  <div class="mh">{{ tr('What the agent may do') }}</div>
-                  @for (o of perms; track o.k) {
-                    <button type="button" role="menuitemradio" [class]="'prow ' + o.tone" [attr.aria-checked]="ai.perm() === o.k" (click)="setPerm(o.k)"><i class="pd"></i><span class="pt"><b>{{ tr(o.name) }}</b><small>{{ tr(o.what) }}</small></span><span class="ck">@if (ai.perm() === o.k) { <app-icon name="check" [size]="13" /> }</span></button>
-                  }
-                  <div class="mf"><app-icon name="shield" [size]="11" /> {{ tr('Production sessions always ask before every command and connection - except in Read only, where nothing that changes anything runs.') }}</div>
-                </div>
-              }</span>
+          <span class="modew"><button type="button" class="pick" [class.on]="omenu()" (click)="omenu.set(!omenu())" aria-haspopup="menu" [attr.aria-expanded]="omenu()" [attr.aria-label]="tr('Mode')" [title]="tr(modeOf(ai.mode()).what)">{{ tr(modeOf(ai.mode()).name) }}<app-icon name="chevron-down" [size]="11" /></button>
+            @if (omenu()) {
+              <div class="menu modes" role="menu" (click)="$event.stopPropagation()">
+                @for (o of modes; track o.k) { <button type="button" role="menuitemradio" [attr.aria-checked]="ai.mode() === o.k" (click)="ai.setMode(o.k); omenu.set(false)"><span class="pt"><b>{{ tr(o.name) }}</b><small>{{ tr(o.what) }}</small></span><span class="ck">@if (ai.mode() === o.k) { <app-icon name="check" [size]="13" /> }</span></button> }
+              </div>
+            }</span>
+          <span class="modw"><button type="button" class="pick" [class.on]="mmenu()" (click)="openModels()" [title]="provider() + ' - ' + tr('click to choose the model')" aria-haspopup="menu" [attr.aria-expanded]="mmenu()"><span class="ell">{{ service() }}</span><app-icon name="chevron-down" [size]="11" /></button>
+      @if (mmenu()) {
+        <div class="menu models" role="menu" (click)="$event.stopPropagation()">
+          <div class="mh">{{ tr('AI model') }}<small>{{ provider() }}</small></div>
+          @if (isCC()) {
+            <div class="grp">{{ tr('Effort') }}</div>
+            <div class="effs" role="radiogroup" [attr.aria-label]="tr('Effort')">@for (e of efforts; track e.k) {
+              <button type="button" role="radio" class="eff" [class.on]="(ui.settings()?.ai?.effort || '') === e.k" [attr.aria-checked]="(ui.settings()?.ai?.effort || '') === e.k" (click)="setEffort(e.k)" [title]="e.k ? tr(e.name) : tr('Default of the model')">{{ tr(e.name) }}</button> }</div>
           }
-          @if (ai.mode() === 'agent') {
+          <div class="grp">{{ tr('Model') }}</div>
+          <button type="button" role="menuitemradio" [attr.aria-checked]="!st()?.model" (click)="setModel('')"><span class="ck">@if (!st()?.model) { <app-icon name="check" [size]="12" /> }</span>{{ tr('Default') }}<small>{{ lastModel() ? nice(lastModel()) : tr('the newest') }}</small></button>
+          @if (models() === null) { <div class="mf">{{ tr('Loading the models…') }}</div> }
+          @for (o of choices(); track o.value; let i = $index) {
+            @if (o.group && o.group !== choices()[i - 1]?.group) { <div class="grp">{{ o.group }}</div> }
+            <button type="button" role="menuitemradio" [attr.aria-checked]="st()?.model === o.value" (click)="setModel(o.value)"><span class="ck">@if (st()?.model === o.value) { <app-icon name="check" [size]="12" /> }</span>{{ o.label }}@if (o.hint) { <small class="mono">{{ o.hint }}</small> }</button>
+          }
+          @if (modelErr()) { <div class="mf">{{ modelErr() }}</div> }
+          <button type="button" class="foot" (click)="mmenu.set(false); ui.openOptions('ai')"><app-icon name="options" [size]="12" />{{ tr('AI settings…') }}</button>
+        </div>
+          }</span>
+          @if (ai.mode() !== 'ask') {
             <span class="toolw"><button type="button" class="ib tl" [class.on]="tmenu()" [title]="tr('Tools the agent may use')" [attr.aria-label]="tr('Tools')" (click)="tmenu.set(!tmenu())"><app-icon name="wrench" [size]="14" /><span class="cnt">{{ toolCount() }}</span></button>
               @if (tmenu()) {
                 <div class="menu tools" role="dialog" [attr.aria-label]="tr('Agent tools')" (click)="$event.stopPropagation()">
@@ -219,13 +233,29 @@ function spans(t: string): Span[] {
                 </div>
               }</span>
           }
+          <span class="grow"></span>
           <button type="button" class="ib" [title]="tr('Attach a picture or a text file')" [attr.aria-label]="tr('Attach')" (click)="file.click()"><app-icon name="clip" [size]="14" /></button>
           <input #file type="file" hidden multiple accept="image/*,.txt,.log,.cfg,.conf,.csv,.json,.xml,.yaml,.yml" (change)="files($any($event.target).files); $any($event.target).value = ''" />
-          <span class="grow"></span>
-          @if (canSend()) { <span class="hint" [title]="tr('About how many tokens this question sends: the chat so far, what goes with it and your question')">≈ {{ k(ai.estimate(text)) }} {{ tr('tokens') }}</span> }
           @if (ai.busy()) { <button type="button" class="send stop" [title]="tr('Stop (Esc)')" [attr.aria-label]="tr('Stop')" (click)="ai.stop()"><span class="sq"></span></button> }
           @else { <button type="button" class="send" [title]="tr('Send (Enter) - Shift+Enter for a new line')" [attr.aria-label]="tr('Send')" (click)="go()" [disabled]="!canSend()"><app-icon name="up" [size]="15" /></button> }
         </div>
+      </div>
+      <div class="under">
+        @if (ai.mode() === 'agent') {
+          <span class="permw"><button type="button" class="pick perm" [class]="'pick perm ' + permTone()" (click)="pmenu.set(!pmenu())" aria-haspopup="menu" [attr.aria-expanded]="pmenu()" [attr.aria-label]="tr('Agent permissions')" [title]="tr('What the agent may do without asking')"><i class="pd"></i><span>{{ tr(permName()) }}</span><app-icon name="chevron-down" [size]="10" /></button>
+            @if (pmenu()) {
+              <div class="menu perms" role="menu" (click)="$event.stopPropagation()">
+                <div class="mh">{{ tr('What the agent may do') }}</div>
+                @for (o of perms; track o.k) {
+                  <button type="button" role="menuitemradio" [class]="'prow ' + o.tone" [attr.aria-checked]="ai.perm() === o.k" (click)="setPerm(o.k)"><i class="pd"></i><span class="pt"><b>{{ tr(o.name) }}</b><small>{{ tr(o.what) }}</small></span><span class="ck">@if (ai.perm() === o.k) { <app-icon name="check" [size]="13" /> }</span></button>
+                }
+                <div class="mf"><app-icon name="shield" [size]="11" /> {{ tr('Production sessions always ask before every command and connection - except in Read only, where nothing that changes anything runs.') }}</div>
+              </div>
+            }</span>
+        } @else if (ai.mode() === 'plan') { <span class="hint"><app-icon name="shield" [size]="11" /> {{ tr('Plan: looks with read-only commands, then waits for Run the Plan') }}</span> }
+        @else { <span class="hint">{{ tr('Ask: answers only - runs nothing') }}</span> }
+        <span class="grow"></span>
+        @if (canSend()) { <span class="hint" [title]="tr('About how many tokens this question sends: the chat so far, what goes with it and your question')">≈ {{ k(ai.estimate(text)) }} {{ tr('tokens') }}</span> }
       </div>
       @if (ai.heavy()) {
         <div class="warn"><app-icon name="alert" [size]="13" /><span>{{ tr('About {0} tokens - that uses much more of your AI allowance. Keep the last', ai.tokens().toLocaleString()) }}
@@ -251,7 +281,7 @@ function spans(t: string): Span[] {
     .who { display: flex; align-items: center; gap: 7px; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; .grow { flex: 1; } }
     .mc { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .12s;
       &:hover { background: var(--surface-2); color: var(--text); } &:focus-visible { opacity: 1; } }
-    .msg:hover .who .mc, .so:hover .mc { opacity: 1; }
+    .msg:hover .mc, .so:hover .mc { opacity: 1; }
     .ub, .ab, .ut { user-select: text; -webkit-user-select: text; }
     .so { position: relative; .mc { position: absolute; top: 4px; right: 6px; background: var(--surface); } }
     .av { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; flex: none; }
@@ -259,13 +289,13 @@ function spans(t: string): Span[] {
     .when, .hint { color: var(--muted); font-weight: 400; font-size: calc(11px * var(--ui-scale, 1)); }
     .hint { white-space: nowrap; flex: none; } .send { flex: none; }
     .appr .lask { white-space: pre-wrap; color: var(--text); margin-top: 3px; }
-    .ub { margin-left: 29px; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); line-height: 1.5; min-width: 0; }
+    .ub { margin-left: 15%; max-width: 85%; padding: 8px 12px; border-radius: 14px 14px 4px 14px; background: color-mix(in srgb, var(--accent) 13%, var(--surface-2)); border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)); .ctx { margin-bottom: 4px; } } .ub { line-height: 1.5; min-width: 0; }
     .ut { white-space: pre-wrap; overflow-wrap: anywhere; }
     .ctx { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
     .cx { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); max-width: 100%; height: auto; }
     .cx b { color: var(--text); font-weight: 500; } .cx .x { border: 0; background: none; padding: 0; height: auto; color: var(--muted); display: inline-flex; }
     .cx.add { border-style: dashed; color: var(--accent); cursor: pointer; }
-    .ab { margin-left: 29px; line-height: 1.55; min-width: 0; overflow-wrap: anywhere; } .ab p { margin: 0 0 8px; } .ab .li { display: flex; margin: 2px 0 2px 4px; }
+    .ab { line-height: 1.55; min-width: 0; overflow-wrap: anywhere; } .ab p { margin: 0 0 8px; } .ab .li { display: flex; margin: 2px 0 2px 4px; }
     .ab.err { color: var(--danger); white-space: pre-wrap; }
     .sib { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
     code.i { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); padding: 0 4px; border-radius: 4px; background: var(--surface-2); }
@@ -282,7 +312,7 @@ function spans(t: string): Span[] {
     .si { display: inline-flex; flex: none; } .step.done .si { color: var(--ok); } .step.error .si, .step.refused .si { color: var(--danger); } .step.skipped .si { color: var(--muted); }
     .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .appr { margin-left: 29px; border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--warn) 8%, var(--surface)); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .appr { border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--warn) 8%, var(--surface)); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
     .appr.danger { border-color: color-mix(in srgb, var(--danger) 60%, var(--line)); background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
     .appr .q { display: flex; gap: 8px; align-items: flex-start; app-icon { color: var(--warn); margin-top: 2px; } } .appr.danger .q app-icon { color: var(--danger); }
     .appr input { width: 100%; font-family: var(--mono); }
@@ -303,16 +333,39 @@ function spans(t: string): Span[] {
     .att { position: relative; display: inline-block; } .att img { height: 54px; border-radius: 6px; border: 1px solid var(--line); display: block; }
     .att .rm { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; }
     textarea { display: block; width: 100%; min-height: 72px; max-height: 260px; resize: none; border: 0; outline: 0; background: transparent; padding: 8px 12px; line-height: 1.5; font: inherit; color: var(--text); box-shadow: none !important; }
-    .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px 8px 10px; }
+    .bar { display: flex; align-items: center; gap: 4px; padding: 2px 8px 7px 6px; }
+    .msg.u { align-items: flex-end; gap: 3px; } .msg.a { gap: 6px; }
+    .mft { display: flex; align-items: center; gap: 6px; min-height: 22px; .when { font-size: calc(11px * var(--ui-scale, 1)); } }
+    .msg.u .mft { opacity: 0; transition: opacity .12s; } .msg.u:hover .mft { opacity: 1; }
+    .msg.a .mft .mc { opacity: .75; } .msg.a .mft .mc:hover { opacity: 1; }
+    details.work { min-width: 0; > summary { list-style: none; display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); padding: 2px 0; width: fit-content; max-width: 100%;
+        app-icon { flex: none; transition: transform .12s; } .wl { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+      > summary::-webkit-details-marker { display: none; } > summary:hover { color: var(--text); } > summary app-icon { transform: rotate(-90deg); } &[open] > summary app-icon { transform: none; }
+      > .step { margin-left: 17px; } }
+    .pold { display: flex; align-items: center; gap: 6px; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); }
+    .pick { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 7px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; min-width: 0; cursor: pointer;
+      .ell { overflow: hidden; text-overflow: ellipsis; } &:hover, &.on { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); } }
+    .modew { position: relative; display: inline-flex; flex: none; } .modew .pick { color: var(--text); font-weight: 600; }
+    .menu.modes { width: 290px; gap: 2px; button { align-items: flex-start; padding: 7px 8px; } .pt { display: flex; flex-direction: column; gap: 1px; flex: 1; } b { font-weight: 600; } small { margin: 0; color: var(--muted); line-height: 1.35; white-space: normal; } .ck { color: var(--accent); width: 14px; flex: none; } }
+    .under { display: flex; align-items: center; gap: 8px; padding: 5px 2px 0; min-height: 26px; font-size: calc(11.5px * var(--ui-scale, 1)); .hint { display: inline-flex; align-items: center; gap: 5px; } .pick { height: 22px; padding: 0 6px; font-size: calc(11.5px * var(--ui-scale, 1)); } }
+    .plan { margin: 0 12px; border: 1px solid var(--line); border-bottom: 0; border-radius: 10px 10px 0 0; background: var(--panel); padding: 6px 10px 8px; font-size: calc(12px * var(--ui-scale, 1));
+      .ph { app-icon { transition: transform .12s; } app-icon.shut { transform: rotate(-90deg); } display: flex; align-items: center; gap: 7px; width: 100%; height: auto; padding: 2px 0; border: 0; background: none; cursor: pointer; color: var(--text); b { font-weight: 600; } }
+      .pbar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-left: 4px; i { display: block; height: 100%; background: var(--success, #1fa45a); transition: width .3s; } }
+      ol { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; max-height: 180px; overflow: auto; }
+      li { display: flex; align-items: flex-start; gap: 8px; line-height: 1.4; color: var(--text); } li.dn { color: var(--muted); span:last-child { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); } } li.on { font-weight: 600; }
+      .pk { width: 14px; height: 14px; margin-top: 2px; flex: none; border-radius: 50%; border: 1.5px solid var(--muted); display: inline-flex; align-items: center; justify-content: center; }
+      li.dn .pk { border-color: var(--success, #1fa45a); background: var(--success, #1fa45a); color: #fff; } li.on .pk { border-color: var(--accent); .spin { width: 8px; height: 8px; } }
+      .pa { display: flex; align-items: center; gap: 10px; margin-top: 8px; button { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; flex: none; } .hint { min-width: 0; line-height: 1.35; } } }
+    .plan + .comp { border-top-color: var(--line); }
     .sel { width: auto; height: 26px; padding: 0 6px; font-size: calc(12px * var(--ui-scale, 1)); border-radius: 6px; }
     :host { --orange: #f5862e; --tone-ask: var(--warn); } :host-context(:root.light) { --orange: #d2600a; --tone-ask: #a87808; }
-    .permw { position: relative; display: inline-flex; flex: 0 1 190px; min-width: 64px; }
+    .permw { position: relative; display: inline-flex; min-width: 0; .menu.perms { bottom: calc(100% + 6px); } }
     button.sel.perm { display: inline-flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 0 7px; border: 1px solid var(--line); background: var(--input-bg, var(--bg)); color: var(--text);
       span { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
     .pd { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
     .auto { --tone: var(--orange); } .ask { --tone: var(--tone-ask); } .ro { --tone: var(--text); }
-    button.sel.perm.auto, button.sel.perm.ask { color: var(--tone); border-color: color-mix(in srgb, var(--tone) 45%, var(--line)); }
-    button.sel.perm.auto { background: color-mix(in srgb, var(--orange) 10%, var(--input-bg, var(--bg))); }
+    button.pick.perm.auto, button.pick.perm.ask { color: var(--tone); border-color: color-mix(in srgb, var(--tone) 45%, var(--line)); }
+    button.pick.perm.auto { background: color-mix(in srgb, var(--orange) 10%, var(--input-bg, var(--bg))); }
     .auto .pd, .ask .pd { background: var(--tone); } .ro .pd { background: transparent; border: 1.5px solid var(--text); }
     .menu.perms { width: 300px; gap: 2px; max-height: none; }
     .menu .prow { align-items: flex-start; padding: 7px 8px; .pd { margin-top: 5px; } .pt { display: flex; flex-direction: column; gap: 1px; flex: 1; } b { font-weight: 600; color: var(--tone); } small { margin: 0; color: var(--muted); line-height: 1.35; } .ck { color: var(--accent); } }
@@ -323,9 +376,9 @@ function spans(t: string): Span[] {
     .effs { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 6px 6px; }
     .menu .eff { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: calc(11.5px * var(--ui-scale, 1)); height: auto; }
     .menu .eff.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
-    .menu.models { top: calc(100% + 6px); bottom: auto; left: 0; width: 290px; max-height: min(520px, calc(100vh - 140px)); z-index: 8; .mh { display: flex; justify-content: space-between; small { margin: 0; font-weight: 400; } } .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); } .foot { border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; margin-top: 4px; color: var(--muted); } }
+    .menu.models { bottom: calc(100% + 6px); top: auto; left: -40px; width: 290px; max-height: min(520px, calc(100vh - 140px)); z-index: 8; .mh { display: flex; justify-content: space-between; small { margin: 0; font-weight: 400; } } .mono { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); } .foot { border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; margin-top: 4px; color: var(--muted); } }
     .prodb { margin-left: 6px; padding: 0 5px; border-radius: 4px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .03em; vertical-align: 1px; }
-    .devs { margin-left: 29px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .devs { padding: 2px 0 6px 17px; display: flex; flex-wrap: wrap; gap: 6px; }
     .dv { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: calc(11.5px * var(--ui-scale, 1)); font-weight: 500;
       i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); } small { color: var(--muted); font-weight: 400; } }
     .dv.err i { background: var(--warn); } .dv.ask i { background: var(--warn); } .dv.running i { background: var(--accent); animation: blink 1.2s infinite; }
@@ -347,7 +400,7 @@ function spans(t: string): Span[] {
     .newc { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; height: 24px; font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; border-radius: 6px; }
     .newc.wide { justify-content: center; margin-bottom: 8px; height: 30px; }
     .tok { font-variant-numeric: tabular-nums; }
-    .used { margin-left: 29px; display: flex; align-items: center; gap: 6px; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); }
+    .used { display: flex; align-items: center; gap: 6px; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); }
     .toolw { position: relative; display: inline-flex; }
     .ib.tl { width: auto; padding: 0 6px; gap: 3px; } .cnt { font-size: 10.5px; font-weight: 600; }
     .menu.tools { width: 280px; left: auto; right: -80px; gap: 2px; }
@@ -374,6 +427,26 @@ export class AIPanel implements OnInit {
   readonly tmenu = signal(false);
   readonly pmenu = signal(false);
   readonly mmenu = signal(false);
+  readonly omenu = signal(false);
+  readonly planOpen = signal(true);
+  protected readonly modes = MODES;
+  modeOf(k: AiMode) { return MODES.find(m => m.k === k) ?? MODES[0]; }
+  done(p: PlanItem[]) { return p.filter(i => i.s === 'x').length; }
+  /** The answer whose steps are still going (its work line stays open). */
+  worked(m: ChatMsg) { return (m.steps ?? []).some(s => s.state !== 'ask'); }
+  busyMsg(m: ChatMsg) { return (m.steps ?? []).some(s => s.state === 'running' || s.state === 'ask'); }
+  /** One line for what the agent did, like VS Code's "Ran 3 commands": open it for the steps. */
+  workLine(m: ChatMsg) {
+    const ss = m.steps ?? [], cur = ss.find(s => s.state === 'running');
+    if (cur) return cur.kind === 'run' ? tr('Running {0} on {1}…', cur.command, cur.tab) : cur.kind === 'open' ? tr('Connecting to {0}…', cur.tab) : tr('Working…');
+    const runs = ss.filter(s => s.kind === 'run').length, opens = ss.filter(s => s.kind === 'open').length, labs = ss.filter(s => s.kind === 'lab').length, finds = ss.filter(s => s.kind === 'find').length;
+    const bad = ss.filter(s => s.failed || s.state === 'error' || s.state === 'refused' || s.state === 'skipped').length;
+    const tabs = [...new Set(ss.filter(s => s.kind === 'run' || s.kind === 'open').map(s => s.tab))];
+    const parts = [runs ? (runs === 1 ? tr('Ran 1 command') : tr('Ran {0} commands', runs)) : '', opens ? (opens === 1 ? tr('connected to 1 session') : tr('connected to {0} sessions', opens)) : '',
+      labs ? (labs === 1 ? tr('1 lab step') : tr('{0} lab steps', labs)) : '', finds ? tr('searched the sessions') : ''].filter(Boolean);
+    const on = tabs.length ? ' ' + tr('on {0}', tabs.length > 3 ? tabs.slice(0, 3).join(', ') + ' +' + (tabs.length - 3) : tabs.join(', ')) : '';
+    return parts.join(', ').replace(/^./, c => c.toUpperCase()) + on + (bad ? ' · ' + tr('{0} not done', bad) : '');
+  }
   readonly models = signal<string[] | null>(null);
   readonly modelErr = signal('');
   protected readonly perms = AGENT_PERMS;
@@ -561,5 +634,6 @@ export class AIPanel implements OnInit {
     if (this.tmenu() && !t.closest('.toolw')) this.tmenu.set(false);
     if (this.pmenu() && !t.closest('.permw')) this.pmenu.set(false);
     if (this.mmenu() && !t.closest('.modw')) this.mmenu.set(false);
+    if (this.omenu() && !t.closest('.modew')) this.omenu.set(false);
   }
 }

@@ -18,16 +18,19 @@ export interface Ctx { id: number; kind: CtxKind; tabId?: string; label: string;
 export interface Img { name: string; mediaType: string; data: string; url: string; }
 export type StepState = 'ask' | 'running' | 'done' | 'skipped' | 'error' | 'refused';
 export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab';
+/** A step of the agent's plan: to do, being done, done. */
+export interface PlanItem { t: string; s: ' ' | '~' | 'x'; }
+export type AiMode = 'ask' | 'agent' | 'plan';
 export interface Step { kind: StepKind; tab: string; command: string; output?: string; state: StepState; auto?: boolean; danger?: boolean; note?: string; failed?: boolean; prod?: boolean; ask?: string; }
 export interface ChatMsg {
   id: number; role: 'user' | 'assistant'; text: string; time: string;
   ctx?: { label: string; detail: string }[]; images?: Img[]; wire?: string; hidden?: boolean;
-  model?: string; secs?: number; steps?: Step[]; error?: string; usage?: { in: number; out: number } | null;
+  model?: string; secs?: number; steps?: Step[]; error?: string; usage?: { in: number; out: number } | null; plan?: PlanItem[];
 }
 export interface Chat { id: string; title: string; device: string; updated: string; msgs: ChatMsg[]; }
 export type Dock = 'right' | 'left' | 'float';
 
-const KEY_CHATS = 'tw.ai.chats', KEY_DOCK = 'tw.ai.dock', KEY_W = 'tw.ai.width', KEY_TOOLS = 'tw.ai.tools';
+const KEY_CHATS = 'tw.ai.chats', KEY_DOCK = 'tw.ai.dock', KEY_W = 'tw.ai.width', KEY_TOOLS = 'tw.ai.tools', KEY_MODE = 'tw.ai.mode';
 
 /** What the agent may do. */
 export const AGENT_TOOLS = [
@@ -124,7 +127,13 @@ export class AIChat {
   readonly currentId = signal<string>('');
   readonly view = signal<'chat' | 'history'>('chat');
   readonly busy = signal(false);
-  readonly mode = signal<'ask' | 'agent'>('ask');
+  /** Agent (it plans a task of several steps, then runs it) by default; Plan only plans; Ask only answers. */
+  readonly mode = signal<AiMode>((['ask', 'agent', 'plan'].includes(store(KEY_MODE)) ? store(KEY_MODE) : 'agent') as AiMode);
+  setMode(m: AiMode) { this.mode.set(m); save(KEY_MODE, m); }
+  /** The chat's plan: the last one the AI gave. */
+  readonly plan = computed(() => { const m = [...(this.current()?.msgs ?? [])].reverse().find(x => x.role === 'assistant' && x.plan?.length); return m?.plan ?? null; });
+  /** Plan mode, after the plan: carry it out in Agent mode. */
+  runPlan() { if (this.busy()) return; this.setMode('agent'); void this.send('Go ahead with the plan.'); }
   readonly ctxs = signal<Ctx[]>([]);
   readonly images = signal<Img[]>([]);
   readonly keep = signal(0); // whole terminal: the last N lines (0 = all)
@@ -278,7 +287,7 @@ export class AIChat {
 
   private async run(chatId: string) {
     this.busy.set(true); this.stopping = false;
-    const agent = this.mode() === 'agent';
+    const agent = this.mode() !== 'ask', planOnly = this.mode() === 'plan';
     try {
       for (let step = 0; step < MAX_STEPS; step++) {
         const chat = this.chats().find(c => c.id === chatId);
@@ -290,10 +299,10 @@ export class AIChat {
           deviceType: t?.session?.deviceType ?? '', protocol: t?.session?.protocol ?? '', agent,
           tabs: agent ? this.tabs.tabs().filter(x => x.kind === 'terminal').map(x => `${x.title} (${x.session.deviceType || 'unknown'}, ${x.state})`) : [],
           tools: Object.entries(this.tools()).filter(([, on]) => on).map(([k]) => k).concat(['none']),
-          folders: agent ? folders(this.ui.tree()) : [], perm: this.perm(),
+          folders: agent ? folders(this.ui.tree()) : [], perm: planOnly ? 'readonly' : this.perm(), plan: planOnly ? 'only' : agent ? 'list' : '',
         });
-        const { text, actions } = parseActions(ans.text);
-        const msg: ChatMsg = { id: ++nid, role: 'assistant', text, time: now(), wire: ans.text, model: ans.model, secs: Math.round((Date.now() - started) / 1000), steps: [], usage: ans.usage ?? null };
+        const { text, actions, plan } = parseActions(ans.text);
+        const msg: ChatMsg = { id: ++nid, role: 'assistant', text, time: now(), wire: ans.text, model: ans.model, secs: Math.round((Date.now() - started) / 1000), steps: [], usage: ans.usage ?? null, ...(plan.length ? { plan } : {}) };
         this.push(chatId, msg);
         if (!agent || !actions.length || this.stopping) break;
         const results: string[] = [];
@@ -318,7 +327,7 @@ export class AIChat {
 
   /** One agent step: open a session or run a command, asking when the rules say so. */
   private async act(s: Step, chatId: string): Promise<string> {
-    const perm = this.perm();
+    const perm = this.mode() === 'plan' ? 'readonly' : this.perm();
     if (s.kind === 'find') {
       const hits = findSessions(this.ui.tree(), s.tab);
       s.state = 'done'; s.auto = true;
@@ -431,7 +440,7 @@ export class AIChat {
       if (!one) return bad(`no switch is called ${args[0] ?? ''} (lab show lists them)`);
       // reading the switch's LAGs changes nothing; the rest change the lab
       if (verb !== 'readlags' && verb !== 'checkcabling') {
-        const perm = this.perm();
+        const perm = this.mode() === 'plan' ? 'readonly' : this.perm();
         if (perm === 'readonly') { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `${line}: not done - the user allows only read-only actions. Tell the user what to do instead.`; }
         // lab changes are not asked (automated tests must not wait): each is kept in the lab's Changes history, with Revert
         s.auto = true;
@@ -545,11 +554,13 @@ export class AIChat {
 }
 
 /** The answer's text without its termwright block, and the actions in it. */
-export function parseActions(text: string): { text: string; actions: { kind: StepKind; tab: string; command: string }[] } {
-  const actions: { kind: StepKind; tab: string; command: string }[] = [];
+export function parseActions(text: string): { text: string; actions: { kind: StepKind; tab: string; command: string }[]; plan: PlanItem[] } {
+  const actions: { kind: StepKind; tab: string; command: string }[] = [], plan: PlanItem[] = [];
   const out = text.replace(/```termwright[^\n]*\n([\s\S]*?)```/g, (_, body: string) => {
     for (const raw of body.split('\n')) {
       const l = raw.trim();
+      const p = /^plan\s*\[\s*([xX~ ]?)\s*\]\s*(.+)$/.exec(l);
+      if (p) { plan.push({ t: p[2].trim(), s: p[1].toLowerCase() === 'x' ? 'x' : p[1] === '~' ? '~' : ' ' }); continue; }
       let m = /^run\s+(.+?)\s*:\s*(.+)$/i.exec(l);
       if (m) { actions.push({ kind: 'run', tab: m[1].trim(), command: m[2].trim() }); continue; }
       m = /^(log|record)\s+(.+?)\s*:\s*(.+)$/i.exec(l);
@@ -561,7 +572,7 @@ export function parseActions(text: string): { text: string; actions: { kind: Ste
     }
     return '';
   });
-  return { text: out.trim(), actions };
+  return { text: out.trim(), actions, plan };
 }
 
 function findTab(tabs: TabView[], name: string) {

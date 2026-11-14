@@ -40,10 +40,11 @@ type AIChatRequest struct {
 	DeviceType string   `json:"deviceType"`
 	Protocol   string   `json:"protocol"`
 	Agent      bool     `json:"agent"`
-	Tabs       []string `json:"tabs"`    // agent: the open tabs, "name (device type, state)"
-	Tools      []string `json:"tools"`   // agent: what it may do - "run" (commands in tabs), "open" (find and connect to saved sessions), "log", "record", "lab" (the emulated lab)
-	Folders    []string `json:"folders"` // agent: the saved-session folders
-	Perm       string   `json:"perm"`    // agent: "" changes ask first, "every", "readonly", "auto" (fully autonomous)
+	Tabs       []string `json:"tabs"`           // agent: the open tabs, "name (device type, state)"
+	Tools      []string `json:"tools"`          // agent: what it may do - "run" (commands in tabs), "open" (find and connect to saved sessions), "log", "record", "lab" (the emulated lab)
+	Folders    []string `json:"folders"`        // agent: the saved-session folders
+	Perm       string   `json:"perm"`           // agent: "" changes ask first, "every", "readonly", "auto" (fully autonomous)
+	Plan       string   `json:"plan,omitempty"` // agent: "list" (a task of several steps gets a checklist plan first), "only" (Plan mode: look, plan, run nothing that changes)
 }
 
 const aiMaxImages = 4
@@ -189,6 +190,14 @@ Saved sessions log in with the credentials stored in Termwright: never ask for, 
 	if on["log"] || on["record"] {
 		out += `
 To keep evidence, turn on log (and record, when it helps to replay the session) on each tab before you debug or change it, and turn them off when you finish; Termwright tells you the file names - tell the user.`
+	}
+	switch r.Plan {
+	case "list":
+		out += `
+PLAN. For a task of three or more steps, put your plan first in the block, a line per step (at most 8, each a few words): plan [ ] <step>. In each later answer repeat all the plan lines, [x] for the steps done and [~] for the one you are doing now, until they are all [x]. A question or a single step needs no plan.`
+	case "only":
+		out += `
+PLAN MODE. Look before you plan: only find, open and read-only commands run now (anything else is refused). Then give the plan in the block, a line per step (at most 8): plan [ ] <step>, and above the block what each step does and the commands it will use - then stop. The user reads it and presses Run the Plan; then carry it out step by step, repeating the plan lines with [x] for the steps done and [~] for the one you are doing.`
 	}
 	switch r.Perm {
 	case "auto":
