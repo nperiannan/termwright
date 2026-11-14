@@ -42,7 +42,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
                 @if (t.clients?.n) { @let cs = t.clientState;
                   <div class="small" [class.up]="cs && cs.failed === 0 && (t.clients?.dot1x ? cs.auth : cs.bound) === cs.n" [class.dn]="!!cs?.failed" [title]="tr('Clients behind this test port')">{{ tr('{0} clients', t.clients!.n) }}@if (cs) { · @if (t.clients?.dot1x) { {{ tr('{0} in', cs.auth) }} }@else if (t.clients?.dhcp) { {{ tr('{0} with an address', cs.bound) }} }@if (cs.failed) { · {{ tr('{0} refused', cs.failed) }} } }</div> }
                 @if (t.stp?.mode) { <div class="small" [class.up]="t.stpState?.rootIsUs" [title]="tr('Spanning tree')">{{ t.stp!.mode.toUpperCase() }} · {{ t.stpState?.rootIsUs ? tr('root') : t.stpState?.got ? tr('not root') : tr('no BPDU yet') }}</div> }</div>
-            } @empty { <p class="muted small">{{ tr('No test port yet: ＋ Test Port, or right-click a switch on the canvas → Add Test Port.') }}</p> }
+            } @empty { <p class="muted small tpe">{{ tr('No test port yet: ＋ Test Port, or right-click a switch on the canvas → Add Test Port.') }}</p> }
           </aside>
         }
         <div class="tpm">
@@ -67,7 +67,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
       span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; } b { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } small { font-size: 11px; color: var(--muted); }
       &.warn { border-color: var(--warning, #e39b17); b::before { content: '⚠ '; font-size: 14px; color: var(--warning, #e39b17); } } &.good { b::before { content: '✓ '; font-size: 14px; color: var(--success, #1fa45a); } } }
     .tpb { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; }
-    .tpl { display: flex; flex-direction: column; gap: 8px; .sec2 { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); } }
+    .tpl { display: flex; flex-direction: column; gap: 8px; padding-top: 11px; .tpe { margin: 0; border: 1px dashed var(--line); border-radius: 10px; padding: 16px 14px; text-align: center; line-height: 1.5; } .sec2 { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); } }
     .tpc { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; &:hover { border-color: var(--muted); } &.sel { border-color: var(--accent); background: var(--accent-soft); } .r1 { display: flex; align-items: center; b { flex: 1; color: var(--warning, #e39b17); font-size: 12.5px; } } .x { cursor: pointer; color: var(--muted); } .x:hover { color: var(--danger); } }
     .tpm { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
     .tcs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }

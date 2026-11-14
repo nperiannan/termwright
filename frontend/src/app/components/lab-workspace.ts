@@ -931,7 +931,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     app-traffic-page .trw td:nth-child(-n+3), app-traffic-page .trw th:nth-child(-n+3) { white-space: normal; } app-traffic-page .trw td:nth-child(2), app-traffic-page .trw td:nth-child(3) { min-width: 130px; } .nw { white-space: nowrap; }
     .ptabs small.run { color: var(--success, #1fa45a); }
     .pal { border-right: 1px solid var(--line); background: var(--surface); padding: 10px; overflow: auto; }
-    .srch { width: 100%; height: 30px; margin-bottom: 6px; }
+    .srch { width: 100%; height: 30px; margin-bottom: 6px; position: sticky; top: 0; z-index: 4; box-shadow: 0 -10px 0 10px var(--surface), 0 6px 0 0 var(--surface); background: linear-gradient(var(--input-bg, transparent), var(--input-bg, transparent)), var(--surface); }
     .grp { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 12px 2px 6px; display: flex; justify-content: space-between; }
     .dev { display: flex; align-items: center; gap: 9px; padding: 6px 7px; border-radius: 8px; border: 1px solid transparent; cursor: grab; user-select: none;
       &:hover { background: var(--surface-2); border-color: var(--line); } small { display: block; color: var(--muted); font-size: 11px; } }
@@ -944,7 +944,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .cv { position: relative; overflow: auto; background-color: var(--bg); background-image: radial-gradient(var(--line) 1.2px, transparent 1.2px); background-size: 18px 18px; }
     .cv.grid{background-image:linear-gradient(90deg,var(--line) 1px,transparent 1px),linear-gradient(var(--line) 1px,transparent 1px)}
     .inner { position: relative; } .scale { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-    .empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--muted); pointer-events: none;
+    .empty { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--muted); pointer-events: none;
       b { font-size: 15px; color: var(--text); } a { pointer-events: auto; color: var(--accent); cursor: pointer; } }
     svg.links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; } svg.links g.lk { pointer-events: visiblePainted; }
     .lk { cursor: pointer; } .lk .hit { stroke: transparent; stroke-width: 12; } .lk .ln { stroke: var(--muted); stroke-width: 2.2; stroke-dasharray: 2 5; } .lk .ln.up { stroke: var(--success, #1fa45a); stroke-dasharray: none; }

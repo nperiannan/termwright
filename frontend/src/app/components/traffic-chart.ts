@@ -15,7 +15,7 @@ const W = 560, H = 150, L = 46, R = 10, T = 10, B = 22;
   template: `
     <div class="tc">
       <div class="th"><b>{{ title() }}</b><span class="u">{{ unit() }}</span></div>
-      @if (series().length > 1) { <div class="lg">@for (s of series(); track s.name) { <span><i [style.background]="s.color"></i>{{ s.name }}</span> }</div> }
+      <div class="lg">@if (series().length > 1) { @for (s of series(); track s.name) { <span><i [style.background]="s.color"></i>{{ s.name }}</span> } }</div>
       @if (box(); as b) {
         <div class="plot">
         @for (g of b.grid; track g.y) { <span class="yl" [style.top.%]="(g.y / H) * 100" [style.width.%]="((L - 6) / W) * 100">{{ g.label }}</span> }
@@ -36,9 +36,9 @@ const W = 560, H = 150, L = 46, R = 10, T = 10, B = 22;
     </div>`,
   styles: [`
     :host { display: block; min-width: 0; }
-    .tc { position: relative; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 10px 12px 6px; }
+    .tc { position: relative; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 10px 12px 6px; }
     .th { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; margin-bottom: 2px; .u { color: var(--muted); font-size: 11.5px; } }
-    .lg { display: flex; gap: 4px 12px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; span { display: inline-flex; align-items: center; gap: 5px; } i { width: 12px; height: 2px; border-radius: 1px; display: inline-block; } }
+    .lg { display: flex; gap: 4px 12px; flex-wrap: wrap; min-height: 16px; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; span { display: inline-flex; align-items: center; gap: 5px; } i { width: 12px; height: 2px; border-radius: 1px; display: inline-block; } }
     .plot { position: relative; }
     .yl { position: absolute; left: 0; transform: translateY(-50%); text-align: right; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1; }
     .xl { position: absolute; bottom: 2px; transform: translateX(-50%); font-size: 10px; color: var(--muted); line-height: 1; &.l { transform: none; } &.r { transform: translateX(-100%); } }
@@ -49,7 +49,7 @@ const W = 560, H = 150, L = 46, R = 10, T = 10, B = 22;
     .dot { stroke: var(--surface); stroke-width: 2; vector-effect: non-scaling-stroke; }
     .tip { position: absolute; top: 34px; transform: translateX(12px); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.25); padding: 6px 9px; font-size: 11.5px; pointer-events: none; white-space: nowrap; z-index: 2;
       &.left { transform: translateX(calc(-100% - 12px)); } .tt { color: var(--muted); margin-bottom: 2px; } div { display: flex; align-items: center; gap: 6px; } i { width: 8px; height: 8px; border-radius: 50%; } b { margin-left: auto; padding-left: 10px; font-variant-numeric: tabular-nums; } }
-    .em { height: 150px; display: grid; place-items: center; color: var(--muted); font-size: 12px; }`],
+    .em { flex: 1; min-height: 150px; display: grid; place-items: center; padding: 0 16px 16px; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.5; }`],
 })
 export class TrafficChart {
   readonly title = input.required<string>();

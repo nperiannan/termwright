@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- **Canvas and Traffic touch-ups** (from the user's screenshots): on an empty canvas every drawing style can be chosen (Slate tiles, Steel isometric and Rack front sat under the canvas and took no clicks); the device list's search box stays at the top while the list scrolls; the Traffic page's three chart cards have one height, their empty messages are centred, and the test port column lines up with them (its empty note is a dashed card).
+
 - **Toolbar shows what is active** (asked for): the AI icon turns blue while the AI panel is open or working, the cube while VMs run on any KVM host, the flask while simulated switches run (blue stays under the pointer). In the AI chat your messages show a solid grey person avatar instead of a purple "Me".
 
 - **AI chat: copy buttons** (asked for): what you asked, each answer and each command's output have a copy button (it shows when the pointer is over them), as in VS Code.
