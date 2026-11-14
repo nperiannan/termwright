@@ -107,7 +107,7 @@ function spans(t: string): Span[] {
       }
       @for (m of msgs(); track m.id) {
         @if (m.role === 'user') {
-          <div class="msg"><div class="who"><span class="av u">{{ initials }}</span>{{ tr('You') }} <span class="when">{{ time(m.time) }}</span>
+          <div class="msg"><div class="who"><span class="av u" aria-hidden="true"><app-icon name="user" [size]="13" /></span>{{ tr('You') }} <span class="when">{{ time(m.time) }}</span>
             <span class="grow"></span><button type="button" class="mc" (click)="copy(m.text)" [title]="tr('Copy what you asked')" [attr.aria-label]="tr('Copy what you asked')"><app-icon name="copy" [size]="12" /></button></div>
             <div class="ub">
               @for (i of m.images ?? []; track $index) { @if (i.url) { <img class="img" [src]="i.url" [alt]="i.name" /> } @else { <span class="cx"><app-icon name="image" [size]="12" />{{ i.name }}</span> } }
@@ -254,7 +254,7 @@ function spans(t: string): Span[] {
     .ub, .ab, .ut { user-select: text; -webkit-user-select: text; }
     .so { position: relative; .mc { position: absolute; top: 4px; right: 6px; background: var(--surface); } }
     .av { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; flex: none; }
-    .av.u { background: #7c5cff; color: #fff; } .av.a { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+    .av.u { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); box-sizing: border-box; } .av.a { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
     .when, .hint { color: var(--muted); font-weight: 400; font-size: calc(11px * var(--ui-scale, 1)); }
     .hint { white-space: nowrap; flex: none; } .send { flex: none; }
     .appr .lask { white-space: pre-wrap; color: var(--text); margin-top: 3px; }

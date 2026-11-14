@@ -109,7 +109,7 @@ app-command-window { flex: none; }
   .ab { width: 32px; height: 32px; padding: 0; flex: none; display: inline-flex; align-items: center; justify-content: center;
     border: 0; border-radius: var(--r); background: transparent; color: var(--muted);
     &:hover:not(:disabled) { background: var(--hover); color: var(--text); }
-    &.on { color: var(--accent); }
+    &.on, &.on:hover:not(:disabled) { color: var(--accent); }
     &:disabled { opacity: .35; } }
   .side-toggle { margin-right: var(--sp-1); color: var(--muted); &.on { color: var(--muted); } &:hover { color: var(--text); } }
   .ptabs { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-1); overflow-x: auto; overflow-y: hidden; height: 100%;
