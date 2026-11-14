@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange } from './models';
+  AccountInfo, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -196,6 +196,11 @@ export class Backend {
   emuSetRole(id: string, role: string) { return this.call<LabView>('EmuSetRole', id, role); }
   emuSetComputerNet(id: string, n: EmuCompNet) { return this.call<LabView>('EmuSetComputerNet', id, n); }
   emuComputerRun(id: string, app: string, target: string) { return this.call<string>('EmuComputerRun', id, app, target); }
+  emuSetDesktop(id: string, on: boolean, home: string) { return this.call<LabView>('EmuSetDesktop', id, on, home); }
+  emuScreenClick(kind: 'vm' | 'install', id: string, x: number, y: number, button: string, double: boolean) { return this.call<void>('EmuScreenClick', kind, id, x, y, button, double); }
+  emuSetRouting(id: string, r: EmuRouting | { proto: '' }) { return this.call<EmuRoutingView>('EmuSetRouting', id, r); }
+  emuRouting(id: string) { return this.call<EmuRoutingView>('EmuRouting', id); }
+  emuRoutingStream(id: string, from: string, pps: number) { return this.call<EmuTrafficView>('EmuRoutingStream', id, from, pps); }
   emuSetCPU(id: string, maxCores: number, weight: number) { return this.call<LabView>('EmuSetCPU', id, maxCores, weight); }
   /** A device's CPU request and limit in millicores (0 = none); they apply at once. */
   /** The lab's change history (newest first), what Revert would do, and Revert. */

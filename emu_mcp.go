@@ -674,7 +674,7 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			if err := light("Claude adds a stream", "Claude (through the Termwright connector) adds an ICMP stream to the routes of "+d.Hostname+"."); err != nil {
 				return "", err
 			}
-			nv, err := a.emuRoutingStream(d.ID, from, argInt(args, "pps", 1000, 100000))
+			nv, err := a.EmuRoutingStream(d.ID, from, argInt(args, "pps", 1000, 100000))
 			if err != nil {
 				return "", err
 			}

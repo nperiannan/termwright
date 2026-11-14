@@ -155,9 +155,9 @@ func (a *App) EmuRouting(id string) (EmuRoutingView, error) {
 	return rv, nil
 }
 
-// emuRoutingStream adds an ICMP stream from a test port to every advertised prefix (one address in each, in
+// EmuRoutingStream adds an ICMP stream from a test port to every advertised prefix (one address in each, in
 // turn): its replies show the switch forwards to the routes.
-func (a *App) emuRoutingStream(id, from string, pps int) (EmuTrafficView, error) {
+func (a *App) EmuRoutingStream(id, from string, pps int) (EmuTrafficView, error) {
 	rv, err := a.EmuRouting(id)
 	if err != nil && rv.First == "" {
 		return EmuTrafficView{}, err

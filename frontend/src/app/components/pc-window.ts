@@ -3,10 +3,10 @@ import { FormsModule } from '@angular/forms';
 import { Backend } from '../core/backend';
 import { LabService } from '../core/lab.service';
 import { Ui } from '../core/ui.service';
-import { LabDevice } from '../core/models';
+import { EmuRoutingView, LabDevice } from '../core/models';
 import { tr } from '../core/i18n';
 
-type App = 'ip' | 'ping' | 'traceroute' | 'iperf' | 'web' | 'dns' | 'capture';
+type App = 'ip' | 'ping' | 'traceroute' | 'iperf' | 'web' | 'dns' | 'capture' | 'routes';
 
 /** A Linux computer of the emulated lab as a PC on a desk: its Desktop apps, its configuration and its ports. */
 @Component({
@@ -46,8 +46,33 @@ type App = 'ip' | 'ping' | 'traceroute' | 'iperf' | 'web' | 'dns' | 'capture';
                     @if (dev().running) { <a class="lnk" (click)="run('net', '')">↻ {{ tr('Read Again') }}</a> }</div>
                   @if (msg()) { <p class="err">{{ msg() }}</p> }
                 }
+                @case ('routes') {
+                  <div class="ph"><b>{{ tr('Route Generator') }}</b><span class="muted">{{ tr('OSPF or BGP with the switch, advertising many routes (FRR)') }}</span></div>
+                  <div class="f"><span>{{ tr('Protocol') }}</span><span class="r">@for (pr of ['ospf', 'bgp']; track pr) { <label><input type="radio" name="rproto" [value]="pr" [(ngModel)]="rt.proto" /> {{ pr.toUpperCase() }}</label> }</span>
+                    <span>{{ tr('Interface') }}</span><select [(ngModel)]="rt.port">@for (p of ports(); track p) { <option [ngValue]="p">{{ tr('Port {0}', p) }}@if (dev().addrs?.[p]; as a) { · {{ a }} }@if (linkOf(p)) { → {{ linkOf(p) }} }</option> }</select>
+                    <span>{{ tr('Routes') }}</span><input type="number" min="1" max="10000" [(ngModel)]="rt.routes" [title]="tr('Prefixes it advertises (1-10000)')" />
+                    <span>{{ tr('First prefix') }}</span><input class="mono" [(ngModel)]="rt.prefix" placeholder="100.64.0.0/24" [title]="tr('The others follow it: 100.64.1.0/24, 100.64.2.0/24 …')" />
+                    @if (rt.proto === 'ospf') { <span>{{ tr('Area') }}</span><input class="mono" [(ngModel)]="rt.area" placeholder="0.0.0.0" /> }
+                    @else { <span>{{ tr('Neighbour') }}</span><input class="mono" [(ngModel)]="rt.peer" placeholder="10.20.0.1" [title]="tr('The switch’s address on that port')" />
+                      <span>{{ tr('Its AS / the switch’s') }}</span><span class="two"><input type="number" [(ngModel)]="rt.as" placeholder="65001" /><input type="number" [(ngModel)]="rt.peerAs" placeholder="65000" /></span> }</div>
+                  <div class="act"><button type="button" class="primary sm" (click)="setRoutes()" [disabled]="busy() || !dev().running">{{ busy() ? tr('Installing FRR…') : dev().routing ? tr('Apply') : tr('Start') }}</button>
+                    @if (dev().routing) { <button type="button" class="sm" (click)="readRoutes()" [disabled]="busy()">↻ {{ tr('Read Again') }}</button><button type="button" class="sm danger-ghost" (click)="stopRoutes()" [disabled]="busy()">{{ tr('Stop') }}</button> }</div>
+                  @if (rv(); as v) {
+                    <div class="rst" [class.ok]="v.up"><b>{{ v.up ? '✓ ' : '' }}{{ v.proto.toUpperCase() }}: {{ v.state }}</b><span>{{ tr('{0} prefixes from {1}', v.prefixes || v.routes, v.prefix) }}</span></div>
+                    <div class="go"><span class="muted">{{ tr('Traffic to every route: an ICMP stream from') }}</span><select [(ngModel)]="rtFrom"><option value="">{{ tr('a test port') }}</option>@for (t of testers(); track t.id) { <option [value]="t.id">{{ t.name }}</option> }</select>
+                      <button type="button" class="sm" (click)="routeStream()" [disabled]="!rtFrom || busy()">＋ {{ tr('Stream') }}</button></div>
+                  }
+                  @if (msg()) { <p class="err">{{ msg() }}</p> }
+                  <p class="muted xs">{{ tr('Its port needs a fixed address and the computer internet (to install FRR). The switch needs OSPF on that network, or the BGP neighbour, and a route back to the test port. The computer answers ping on every address of the routes.') }}</p>
+                }
                 @case ('web') {
                   <div class="ph"><b>{{ tr('Web Browser') }}</b><span class="muted">{{ tr('the page as this computer gets it') }}</span></div>
+                  <div class="dsk"><svg viewBox="0 0 30 26" stroke="#7fb2ff"><path d="M3 4h24v16H3zM11 24h8M15 20v4"/></svg>
+                    @if (dev().desktop) { <div><b>{{ tr('Firefox on its screen') }}</b><span class="muted">{{ dev().restart ? tr('restart it once for its mouse') : tr('click and type on its screen') }}</span></div><span class="sp"></span>
+                      <button type="button" class="primary sm" (click)="screen.emit()" [disabled]="!dev().running">{{ tr('Open Screen…') }}</button><button type="button" class="sm danger-ghost" (click)="setDesktop(false)" [disabled]="busy()">{{ tr('Turn Off') }}</button> }
+                    @else { <div><b>{{ tr('A real browser on its screen') }}</b><span class="muted">{{ tr('Firefox with a desktop: switch web interfaces as the computer sees them (needs internet and 1 GB)') }}</span></div><span class="sp"></span>
+                      <input class="mono home" [(ngModel)]="home" [placeholder]="tr('first page')" /><button type="button" class="sm" (click)="setDesktop(true)" [disabled]="busy() || !dev().running">{{ busy() ? tr('Installing…') : tr('Set Up') }}</button> }
+                  </div>
                   <div class="go"><input class="mono" [(ngModel)]="target" placeholder="http://10.10.0.12" (keydown.enter)="run('web', target)" /><button type="button" class="primary sm" (click)="run('web', target)" [disabled]="busy() || !dev().running">{{ tr('Go') }}</button>
                     <a class="lnk" (click)="src.set(!src())">{{ src() ? tr('Page') : tr('Source') }}</a></div>
                   @if (out()) { <div class="page" [class.mono]="src()">{{ src() ? out() : pageText() }}</div> }
@@ -110,6 +135,11 @@ type App = 'ip' | 'ping' | 'traceroute' | 'iperf' | 'web' | 'dns' | 'capture';
     .sec { margin: 14px 0 6px; font-weight: 600; font-size: 12px; }
     .act { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; } .rb { font-size: 12px; }
     .go { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; input.mono { flex: 1; min-width: 160px; } }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .xs { font-size: 11px; margin: 10px 0 0; line-height: 1.45; }
+    .rst { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 8px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); font-size: 12.5px; span { color: var(--muted); font-size: 11.5px; }
+      &.ok { border-color: color-mix(in srgb, var(--success, #1fa45a) 55%, transparent); b { color: var(--success, #1fa45a); } } }
+    .dsk { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, transparent);
+      svg { width: 30px; height: 26px; fill: none; stroke-width: 1.8; flex: none; } button { white-space: nowrap; flex: none; } div { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; span { font-size: 11.5px; } } .sp { flex: 1; } input.home { width: 170px; height: 28px; } }
     .term { background: #05080d; color: #b9f6ca; border-radius: 8px; padding: 10px; font: 12px/1.5 var(--mono, monospace); white-space: pre-wrap; margin-top: 12px; max-height: 360px; overflow: auto; }
     .page { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--surface); white-space: pre-wrap; max-height: 380px; overflow: auto; font-size: 12.5px; }
     .caps { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
@@ -126,6 +156,8 @@ export class PcWindow {
   readonly closed = output<void>();
   readonly console = output<void>();
   readonly capture = output<number>();
+  readonly screen = output<void>();
+  readonly testers = input<{ id: string; name: string }[]>([]);
   private backend = inject(Backend);
   private lab = inject(LabService);
   private ui = inject(Ui);
@@ -139,7 +171,12 @@ export class PcWindow {
     { k: 'web', name: 'Web Browser', tip: 'A web page as this computer gets it', c: '#7fb2ff', d: 'M6 13a9 9 0 1 0 18 0a9 9 0 1 0-18 0M6 13h18M15 4c4 4 4 14 0 18M15 4c-4 4-4 14 0 18' },
     { k: 'dns', name: 'DNS Lookup', tip: 'A name through its DNS server', c: '#9aa8bd', d: 'M7 12a6 6 0 1 0 12 0a6 6 0 1 0-12 0M18 17l6 6' },
     { k: 'capture', name: 'Capture', tip: 'Its packets on a port', c: '#e0603a', d: 'M3 13h5l3-7 4 14 3-7h9' },
+    { k: 'routes', name: 'Route Generator', tip: 'OSPF or BGP with the switch, advertising many routes (FRR)', c: '#3ecf8e', d: 'M5 20h4v-4H5zM13 8h4V4h-4zM21 20h4v-4h-4zM7 16l7-8M23 16l-7-8' },
   ];
+  protected rt: { proto: 'ospf' | 'bgp'; port: number; routes: number; prefix: string; area: string; peer: string; as: number | null; peerAs: number | null } = { proto: 'ospf', port: 1, routes: 1000, prefix: '100.64.0.0/24', area: '0.0.0.0', peer: '', as: null, peerAs: null };
+  protected rv = signal<EmuRoutingView | null>(null);
+  protected rtFrom = '';
+  protected home = '';
   protected readonly v4modes = ['dhcp', 'static', 'off'];
   protected readonly v6modes = ['auto', 'static', 'off'];
   protected tab = signal('desktop');
@@ -183,7 +220,30 @@ export class PcWindow {
     this.gw = d.dataGw ?? ''; this.gw6 = d.dataGw6 ?? ''; this.dns = d.dns ?? '';
   }
   linkOf(p: number) { return this.links()[p] ?? ''; }
-  pick(a: App) { this.app.set(a); this.out.set(''); this.msg.set(''); }
+  pick(a: App) {
+    this.app.set(a); this.out.set(''); this.msg.set('');
+    const r = this.dev().routing;
+    if (a === 'routes' && r) { this.rt = { proto: r.proto, port: r.port, routes: r.routes, prefix: r.prefix, area: r.area || '0.0.0.0', peer: r.peer ?? '', as: r.as || null, peerAs: r.peerAs || null }; void this.readRoutes(); }
+  }
+  async setRoutes() {
+    this.msg.set(''); this.busy.set(true);
+    const r = this.rt;
+    try { this.rv.set(await this.backend.emuSetRouting(this.dev().id, { proto: r.proto, port: +r.port, routes: +r.routes, prefix: r.prefix.trim(), area: r.proto === 'ospf' ? r.area.trim() : '', as: +(r.as ?? 0) || 0, peer: r.proto === 'bgp' ? r.peer.trim() : '', peerAs: +(r.peerAs ?? 0) || 0 })); await this.lab.refresh(); }
+    catch (e) { this.msg.set(String((e as Error)?.message ?? e)); } finally { this.busy.set(false); }
+  }
+  async readRoutes() { try { this.rv.set(await this.backend.emuRouting(this.dev().id)); } catch (e) { this.msg.set(String((e as Error)?.message ?? e)); } }
+  async stopRoutes() {
+    this.busy.set(true);
+    try { await this.backend.emuSetRouting(this.dev().id, { proto: '' }); this.rv.set(null); await this.lab.refresh(); } catch (e) { this.msg.set(String((e as Error)?.message ?? e)); } finally { this.busy.set(false); }
+  }
+  async routeStream() {
+    try { await this.backend.emuRoutingStream(this.dev().id, this.rtFrom, 1000); this.ui.toast(tr('Stream added on the Traffic page'), 'success'); } catch (e) { this.ui.error(e); }
+  }
+  async setDesktop(on: boolean) {
+    this.busy.set(true);
+    try { this.lab.emu.set(await this.backend.emuSetDesktop(this.dev().id, on, this.home.trim())); this.ui.toast(on ? tr('Desktop set up: restart it once for its mouse, then Open Screen') : tr('The desktop is off'), 'success'); }
+    catch (e) { this.ui.error(e); } finally { this.busy.set(false); }
+  }
   cmdOf() { return this.app() === 'ping' && this.six ? 'ping6' : this.app(); }
   async apply() {
     this.msg.set('');

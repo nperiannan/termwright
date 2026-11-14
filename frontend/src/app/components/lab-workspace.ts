@@ -35,7 +35,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
   imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
-        @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" /> }
+        @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" [testers]="traf()?.testers ?? []" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" (screen)="pcWin.set(''); screenDev.set(d)" /> }
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
       @if (emu()) { <span class="topo" (click)="openTopos(); $event.stopPropagation()" [title]="tr('Topologies: save, open, new')"><span class="muted tl">{{ tr('Topology') }}</span> <b>{{ st()?.topology || tr('Untitled') }}</b> ▾</span>
