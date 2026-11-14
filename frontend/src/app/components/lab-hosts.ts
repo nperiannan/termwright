@@ -29,9 +29,10 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
           <div class="khsc">
             @for (h of shown(); track h.session) { @let u = use(h);
               <div class="hi" [class.on]="cur()?.session === h.session" (click)="pickHost(h.session)">
-                <div class="t"><i class="d" [class]="'d ' + dot(h)"></i><b>{{ h.name || h.session }}</b><span class="sp"></span><span class="pill" [class]="'pill ' + pill(h).cls">{{ pill(h).text }}</span></div>
+                <div class="t"><i class="d" [class]="'d ' + dot(h)"></i><b>{{ h.name || h.session }}</b><span class="sp"></span><span class="pill" [class]="'pill ' + pill(h).cls">{{ pill(h).text }}</span>@let k = cnt(h);
+                  @if (k.run) { <span class="nb g" [title]="tr('{0} running', k.run)">{{ k.run }}</span> }@if (k.boot) { <span class="nb o" [title]="tr('{0} booting', k.boot)">{{ k.boot }}</span> }@if (k.bad) { <span class="nb r" [title]="tr('{0} failed', k.bad)">{{ k.bad }}</span> }</div>
                 <div class="muted small ell">{{ folder(h) }}{{ folder(h) ? ' · ' : '' }}{{ h.info.os || '?' }} · {{ isVM(h) ? tr('VM') : tr('bare metal') }}</div>
-                <div class="m"><div><span>CPU <em>{{ u.cpu }}</em></span><div class="bar"><i [style.width.%]="u.cpuPct"></i></div></div><div><span>RAM <em>{{ u.ram }}</em></span><div class="bar m"><i [style.width.%]="u.ramPct"></i></div></div></div>
+                <div class="m"><div><span>CPU <em>{{ u.cpu }}</em></span><div class="bar"><i [style.width.%]="u.cpuPct"></i></div></div><div><span>RAM <em>{{ u.ram }}</em></span><div class="bar mem"><i [style.width.%]="u.ramPct"></i></div></div></div>
               </div>
             } @empty { <p class="muted small" style="padding: 4px 12px">{{ hosts().length ? tr('No host matches the search.') : tr('No KVM host yet: ＋ Add below.') }}</p> }
           </div>
@@ -70,7 +71,8 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
                   @if (!setupHere()) { <button type="button" [class.primary]="h.info.canSetup || !h.info.sudo" (click)="setupOpen.set(!setupOpen()); rm.set(null)" [title]="h.info.canSetup || !h.info.sudo ? tr('Install and set up what is missing') : tr('Everything is there: run every step again, for example after a change on the host')">{{ h.info.canSetup || !h.info.sudo ? tr('Set Up…') : tr('Set Up Again…') }}</button> }</div></div>
               @if (setupOpen() || setupHere()) {
                 <div class="card setupc"><div class="row2" style="justify-content: flex-start"><b style="flex: none">{{ tr('Set Up the Host') }}</b><span class="muted small">{{ tr('installs what is missing, as root on the host') }}</span><span class="sp"></span>
-                    @if (!setupHere() || setupHere()!.done) { <a class="muted" (click)="setupOpen.set(false); lab.setup.set(null)">✕</a> }</div>
+                    @if (setupHere()?.lines?.length) { <button type="button" class="sm" (click)="copySetup()" [title]="tr('Copy the set-up output')">⧉ {{ tr('Copy Log') }}</button> }
+                    @if (!setupHere() || setupHere()!.done) { <button type="button" class="sm" (click)="setupOpen.set(false); lab.setup.set(null)">{{ tr('Close') }}</button> }</div>
                   @if (setupHere(); as s) {
                     <div class="stp">@for (st of steps; track st) { <span class="small" [class]="'small ' + stepCls(s, st)">{{ stepMark(s, st) }} {{ tr(stepLabel(st)) }}</span> }
                       <span class="sp"></span><b class="small" [class.r]="!!s.error" [class.g]="s.done && !s.error">{{ s.done ? (s.error ? tr('Set-up failed') + ': ' + s.error : tr('Set up') + ' ✓ · ' + tr('checked again')) : tr('Setting up…') }}</b></div>
@@ -86,7 +88,7 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
               @let u = use(h); @let run = runOn(h.session);
               <div class="kpis">
                 <div class="kpi"><span>vCPU</span><b>{{ u.vcpus }} <small>{{ tr('of {0} · load {1}', h.info.cpus, h.info.load) }}</small></b><div class="bar"><i [style.width.%]="u.cpuPct"></i></div></div>
-                <div class="kpi"><span>{{ tr('Memory') }}</span><b>{{ gb(h.info.memFree) }} <small>{{ tr('free of {0}', gbN(h.info.memTotal)) }}</small></b><div class="bar m"><i [style.width.%]="pct(h.info.memTotal - h.info.memFree, h.info.memTotal)"></i></div></div>
+                <div class="kpi"><span>{{ tr('Memory') }}</span><b>{{ gb(h.info.memFree) }} <small>{{ tr('free of {0}', gbN(h.info.memTotal)) }}</small></b><div class="bar mem"><i [style.width.%]="pct(h.info.memTotal - h.info.memFree, h.info.memTotal)"></i></div></div>
                 <div class="kpi"><span>{{ tr('Disk · ~/{0}', h.info.dir) }}</span><b>{{ gb(h.info.diskFree) }} <small>{{ tr('free') }}</small></b><div class="bar"><i [style.width.%]="diskPct(h)" style="background: var(--s3, #199e70)"></i></div></div>
                 <div class="kpi"><span>{{ tr('Running here') }}</span><b>{{ runN(run) }} <small>{{ run.length === 1 ? tr('devices · 1 topology') : tr('devices · {0} topologies', run.length) }}</small></b><div class="bar"><i [style.width.%]="runN(run) ? 100 : 0" style="background: var(--success, #1fa45a)"></i></div></div>
               </div>
@@ -216,10 +218,14 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
     &:hover { background: var(--surface); } &.on { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
     .t { display: flex; align-items: center; gap: 8px; b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
     .m { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 7px; span { font-size: 10.5px; color: var(--muted); display: flex; justify-content: space-between; margin-bottom: 2px; em { font-style: normal; } } } }
+  .setupc .row2 > .muted { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nb { flex: none; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; color: #fff; line-height: 1;
+    &.g { background: var(--success, #1fa45a); } &.o { background: var(--warning, #e39b17); } &.r { background: var(--danger, #d64545); } }
+  .t .nb { margin-left: -2px; }
   .d { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--success, #1fa45a); &.wa { background: var(--warning, #e39b17); } &.bad { background: var(--danger); } }
-  .bar { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--muted) 22%, transparent); overflow: hidden; i { display: block; height: 100%; background: var(--s1, #3987e5); transition: width .6s; } &.m i { background: var(--s7, #9085e9); } }
-  .pill { font-size: 10.5px; padding: 1px 8px; border-radius: 9px; font-weight: 600; white-space: nowrap; background: color-mix(in srgb, var(--success, #1fa45a) 16%, transparent); color: var(--success, #1fa45a);
-    &.run { background: color-mix(in srgb, var(--s1, #3987e5) 18%, transparent); color: var(--s1, #3987e5); } &.wr { background: color-mix(in srgb, var(--warning, #e39b17) 16%, transparent); color: var(--warning, #e39b17); } &.bad { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); } }
+  .bar { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--muted) 22%, transparent); overflow: hidden; i { display: block; height: 100%; background: var(--s1, #3987e5); transition: width .6s; } &.mem i { background: var(--s7, #9085e9); } }
+  .pill { font-size: 10.5px; line-height: 16px; padding: 0 7px; border-radius: 4px; font-weight: 600; white-space: nowrap; flex: none; background: color-mix(in srgb, var(--success, #1fa45a) 16%, transparent); color: var(--success, #1fa45a);
+    &.wr { background: color-mix(in srgb, var(--warning, #e39b17) 16%, transparent); color: var(--warning, #e39b17); } &.bad { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); } }
   .khd { overflow: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; .card { margin: 0; } }
   .hd { display: flex; align-items: flex-start; gap: 12px; .f1 { flex: 1; min-width: 0; } h3 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; } }
   .mt4 { margin-top: 4px !important; }
@@ -313,10 +319,19 @@ export class LabHosts implements OnInit, OnDestroy {
     return { vcpus, cpu: `${vcpus}/${cpus || '?'}`, cpuPct: this.pct(vcpus, cpus), ram: `${this.gbN(ram)}/${this.gbN(memMB)} GB`, ramPct: this.pct(ram, memMB) };
   }
   protected pill(h: EmuHost) {
-    const n = this.runN(this.runOn(h.session));
-    if (n) return { text: tr('{0} running', n), cls: 'run' };
     const p = (h.info.problems ?? []).length;
     return p ? { text: tr('{0} to fix', p), cls: 'bad' } : h.info.canSetup || !h.info.sudo ? { text: tr('needs set up'), cls: 'wr' } : { text: tr('ready'), cls: '' };
+  }
+  /** Its switches by state: the open topology's as they are (a running switch with a problem counts as failed), the other topologies' as running. */
+  protected cnt(h: EmuHost) {
+    const k = { run: 0, boot: 0, bad: 0 };
+    const v = this.lab.emu();
+    for (const d of v?.devices ?? []) {
+      if ((d.host || (v as { host?: string } | null)?.host) !== h.session || !d.state || d.state === 'stopped') continue;
+      if (d.state === 'failed' || d.error) k.bad++; else if (d.state === 'running') k.run++; else k.boot++;
+    }
+    for (const r of this.runOn(h.session)) if (!r.open) k.run += r.switches.length;
+    return k;
   }
   isVM(h: EmuHost) { return !!h.info.virt && h.info.virt !== 'none' && h.info.virt !== 'unknown'; }
   best(h: EmuHost) { const i = h.info; return i.sudo && i.lanKind && !this.isVM(h) ? 'lan' : i.sudo && i.nat ? 'nat' : i.sudo && i.lanKind ? 'lan' : i.sudo ? 'bridge' : 'forward'; }
@@ -332,6 +347,7 @@ export class LabHosts implements OnInit, OnDestroy {
   // running here
   async loadRunning() { try { this.running.set((await this.backend.emuRunning()) ?? []); } catch { this.running.set([]); } }
   protected runOn(h: string) { return (this.running() ?? []).filter(r => r.host === h); }
+  async copySetup() { try { await this.backend.clipboardSet((this.setupHere()?.lines ?? []).join('\n')); this.ui.toast(tr('Copied'), 'success', 1500); } catch (e) { this.ui.error(e); } }
   protected runN(rows: EmuRunRow[]) { return rows.reduce((a, r) => a + r.switches.length, 0); }
   protected runSummary(rows: EmuRunRow[]) { return rows.map(r => r.topology + (r.open ? ' · ' + tr('open') : '')).join(', '); }
   async openTopo(name: string) { try { await this.backend.emuOpenTopology(name, false); await this.lab.refresh(); this.closed.emit(); } catch (e) { this.ui.error(e); } }

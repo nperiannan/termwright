@@ -3577,6 +3577,8 @@ const ru: Record<string, string> = {
   '1 hub or L2 switch': '1 концентратор или L2-коммутатор',
   '{0} clouds': 'облаков: {0}',
   '1 cloud': '1 облако',
+  'Copy Log': 'Копировать журнал',
+  'Copy the set-up output': 'Скопировать вывод настройки',
 };
 
 export default ru;
