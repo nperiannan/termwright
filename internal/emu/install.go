@@ -262,7 +262,7 @@ func InstallAlpine(ctx context.Context, c *Console, o AlpineOpts, note func(step
 	note("install", "running setup-alpine (installing to the disk)")
 	pw := []Answer{{Match: "New password:", Send: o.Password, secret: true}, {Match: "Retype password:", Send: o.Password, secret: true},
 		{Match: "[no]", Send: "no"}} // "Setup a user? (enter a lower-case loginname, or 'no') [no]": an Alpine that asks although the answer file says none
-	if err := c.Send("setup-alpine -f /tmp/ans; echo TWEND-$?"); err != nil {
+	if err := c.Send("SWAP_SIZE=0 setup-alpine -f /tmp/ans; echo TWEND-$?"); err != nil {
 		return err
 	}
 	i, err := c.Wait(ctx, 25*time.Minute, pw, alpineDone, alpineFailed)

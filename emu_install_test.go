@@ -82,7 +82,7 @@ func TestEmuInstallStartChecks(t *testing.T) {
 		{EmuInstallRequest{ISO: iso, Mode: "alpine", Password: "a'b"}, "must not contain"},
 		{EmuInstallRequest{ISO: iso, Mode: "manual", GB: 1000}, "at most 512"},
 		{EmuInstallRequest{ISO: iso, Mode: "manual", MB: 50}, "at least 100 MB"},
-		{EmuInstallRequest{ISO: iso, Mode: "alpine", MB: 100, Password: "pw"}, "at least 512 MB"},
+		{EmuInstallRequest{ISO: iso, Mode: "alpine", MB: 100, Password: "pw"}, "at least 1024 MB"},
 		{EmuInstallRequest{ISO: iso, Mode: "manual", MB: 600000}, "at most 512"},
 		{EmuInstallRequest{ISO: iso, Mode: "manual", MB: -5}, "must not be negative"},
 		{EmuInstallRequest{ISO: filepath.Join(dir, "none.iso"), Mode: "manual"}, "no such file"},
@@ -290,7 +290,7 @@ def serve(c):
         if l == "root": w("\r\nWelcome to Alpine!\r\nlocalhost:~# ")
         elif l.startswith("printf ") or l.startswith("r=$(grep"):
             open(pidfile + ".ans", "w").write(l); w("\r\nlocalhost:~# ")
-        elif l.startswith("setup-alpine"):
+        elif l.startswith("SWAP_SIZE=0 setup-alpine"):
             w("\r\nWARNING: The following disk(s) will be erased:\r\n  vda   (0.1 GB 0x1af4 )\r\nWARNING: Erase the above disk(s) and continue? (y/n) [n] ")
             if line() != "y": w("Aborted\r\n"); continue
             w("Installing system on /dev/vda:\r\nNew password: "); p1 = line()

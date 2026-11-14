@@ -92,7 +92,7 @@ func fakeAlpine(t *testing.T, conn net.Conn, setupExit int, got chan<- string) {
 		case strings.HasPrefix(l, "printf ") || strings.HasPrefix(l, "r=$(grep"):
 			got <- l
 			w("\r\nlocalhost:~# ")
-		case strings.HasPrefix(l, "setup-alpine"):
+		case strings.HasPrefix(l, "SWAP_SIZE=0 setup-alpine"): // no swap partition: the disk is for the system
 			w("\r\nWARNING: Erase the above disk(s) and continue? [y/N]: ")
 			if read() != "y" {
 				w("Aborted\r\n")

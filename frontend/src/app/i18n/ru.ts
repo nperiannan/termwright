@@ -3213,7 +3213,7 @@ const ru: Record<string, string> = {
   '{0} written to the new disk': '{0} записано на новый диск',
   'The installer’s console (last lines)': 'Консоль установщика (последние строки)',
   'The installer’s console has shown nothing for {0}. It may be busy (slow without KVM) or waiting for an answer: read the last line above.': 'Консоль установщика ничего не показывает уже {0}. Возможно, он занят (медленно без KVM) или ждёт ответа: прочитайте последнюю строку выше.',
-  'The new disk’s largest size, not the space it takes: the qcow2 file grows only as the system is written, so the saved image stays small (a small Alpine system takes a few hundred MB). In MB or GB; at least 100 MB.': 'Наибольший размер нового диска, а не занимаемое место: qcow2-файл растёт только по мере записи системы, поэтому сохранённый образ остаётся небольшим (небольшая система Alpine занимает несколько сотен МБ). В МБ или ГБ; не меньше 100 МБ.',
+  'The new disk’s largest size, not the space it takes: the qcow2 file grows only as the system is written, so the saved image stays small. An automatic Alpine install needs at least 1 GB (its boot partition alone takes about 300 MB); other installs at least 100 MB.': 'Наибольший размер нового диска, а не занимаемое место: qcow2-файл растёт только по мере записи системы, поэтому сохранённый образ остаётся небольшим. Автоматической установке Alpine нужен диск не меньше 1 ГБ (один её загрузочный раздел занимает около 300 МБ); другим установкам - не меньше 100 МБ.',
   'Copy the ISO to the host': 'Скопировать ISO на хост',
   'Start the installer': 'Запустить установщик',
   'Boot the installer': 'Загрузить установщик',
