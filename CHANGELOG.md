@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- **Session properties → Jump Host / Proxy**: with a jump host or proxy set but turned off, a small square showed on the left of its switch (the greyed section also greyed the switch's hidden check box, making it visible). Fixed.
 - **Open Web Interface on a switch that serves only HTTP**: the address is offered as https://, but an EXOS switch serves only HTTP (port 80) until HTTPS is turned on (`show management`: "Web access: Enabled (tcp port 80)"), so the page would not connect. Termwright now checks the route first: when port 443 does not answer and port 80 does, it opens http:// and says why.
 - AI chat finished: a **microphone** in the message box starts the system's dictation there (macOS Dictation, Windows voice typing with Windows+H; elsewhere a hint); the empty chat explains Agent and Ask; the old layout's leftovers are gone.
 - **Session properties: side panel or full window** (issue 5; pictures for approval): the welcome screen asks where a session's properties open, with a picture of each - *A side panel* (the everyday fields, *More Options…* for the rest) or *A full window* (every page at once); Settings → General → *Session properties* changes it later.

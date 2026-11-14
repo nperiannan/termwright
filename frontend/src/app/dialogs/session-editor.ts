@@ -759,7 +759,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
   styles: [`
     .rt { border: 1px solid var(--line, var(--border)); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;
       .rth { display: flex; gap: 12px; align-items: center; } .tx { flex: 1; display: flex; flex-direction: column; line-height: 1.4; small { color: var(--muted); } }
-      &.off { border-color: color-mix(in srgb, #f59e0b 55%, transparent); select, input, .grid { opacity: .6; } } }
+      &.off { border-color: color-mix(in srgb, #f59e0b 55%, transparent); select, input:not(.tgl input), .grid { opacity: .6; } } } /* not the switch's own (hidden) check box */
     .tgl { position: relative; width: 34px; height: 20px; flex: none; cursor: pointer;
       input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
       .knob { position: absolute; inset: 0; border-radius: 10px; background: var(--border); transition: background .15s;
