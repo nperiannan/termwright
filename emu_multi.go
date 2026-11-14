@@ -2,10 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -103,6 +106,8 @@ type EmuRunRow struct {
 	Topology string   `json:"topology"`
 	Open     bool     `json:"open"`
 	Switches []string `json:"switches"`
+	Lab      string   `json:"lab"`              // its lab ID on the host (termwright-lab/lab-<id>)
+	Orphan   bool     `json:"orphan,omitempty"` // no saved topology has it: left running when its topology went
 }
 
 var emuRunCache struct {
@@ -187,7 +192,7 @@ func (a *App) EmuRunning() []EmuRunRow {
 				}
 				r := by[tname]
 				if r == nil {
-					r = &EmuRunRow{Host: h, Topology: tname, Open: known && tp.name == orStr(open, "Untitled")}
+					r = &EmuRunRow{Host: h, Topology: tname, Open: known && tp.name == orStr(open, "Untitled"), Lab: lab, Orphan: !known}
 					by[tname] = r
 				}
 				r.Switches = append(r.Switches, name)
@@ -204,4 +209,43 @@ func (a *App) EmuRunning() []EmuRunRow {
 	slices.SortFunc(rows, func(x, y EmuRunRow) int { return strings.Compare(x.Host+"|"+x.Topology, y.Host+"|"+y.Topology) })
 	emuRunCache.at, emuRunCache.rows = time.Now(), rows
 	return rows
+}
+
+// emuLabIDRe is a lab ID as its folder on a host names it.
+var emuLabIDRe = regexp.MustCompile(`^[0-9a-z]{1,16}$`)
+
+// emuStopLabScript switches off every running switch of a lab on a host (its QEMU processes): what runs in the
+// background for a topology that is not open, or for none any more.
+func emuStopLabScript(lab string) string {
+	return `cd && n=0; for f in termwright-lab/lab-` + lab + `/*.pid; do [ -f "$f" ] || continue; p=$(cat "$f" 2>/dev/null); if [ -n "$p" ] && grep -q qemu /proc/$p/comm 2>/dev/null; then kill "$p" 2>/dev/null && n=$((n+1)); fi; done; ` +
+		`for i in 1 2 3 4 5 6 7 8 9 10; do a=0; for f in termwright-lab/lab-` + lab + `/*.pid; do [ -f "$f" ] || continue; p=$(cat "$f" 2>/dev/null); [ -n "$p" ] && grep -q qemu /proc/$p/comm 2>/dev/null && [ "$(cut -d' ' -f3 /proc/$p/stat 2>/dev/null)" != Z ] && a=1; done; [ $a = 0 ] && break; sleep 1; done; echo "@@stopped $n"`
+}
+
+// EmuStopBackground switches off the switches of a lab that runs on a host in the background - a topology that is
+// not open, or one no saved topology has any more (deleted while it ran). The open topology's are stopped as usual.
+func (a *App) EmuStopBackground(host, lab string) (int, error) {
+	defer emuAs("user")()
+	if !emuLabIDRe.MatchString(lab) {
+		return 0, fmt.Errorf("%q is not a lab", lab)
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	open := emuLab.f.Lab != nil && emuLab.f.Lab.ID == lab
+	emuLab.mu.Unlock()
+	if open {
+		return 0, errors.New("that is the open topology: stop its switches with Stop All")
+	}
+	out, err := a.emuRun(host, emuStopLabScript(lab), time.Minute)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	if i := strings.Index(out, "@@stopped "); i >= 0 {
+		n, _ = strconv.Atoi(strings.TrimSpace(strings.Fields(out[i+10:])[0]))
+	}
+	emuRunCache.mu.Lock()
+	emuRunCache.rows = nil
+	emuRunCache.mu.Unlock()
+	emuEvOn(host, "", "info", fmt.Sprintf("switched off %d switches of lab-%s running in the background", n, lab))
+	return n, nil
 }

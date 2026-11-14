@@ -436,7 +436,7 @@ export interface EmuToolStep { ask?: boolean; title?: string; text?: string; dan
 export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; history?: Record<string, [number, number, number, number?, number?][]> | null; }
 
 /** Switches running on a host, of one topology (open or in the background). */
-export interface EmuRunRow { host: string; topology: string; open: boolean; switches: string[]; }
+export interface EmuRunRow { host: string; topology: string; open: boolean; switches: string[]; lab?: string; orphan?: boolean; }
 
 /** A device's CPU over the last minutes (millicores, as kubectl counts: 1000m = one host core). */
 export interface EmuCpuStats { mins: number; avg: number; peak: number; p95: number; over: number; overN: number; thr: number; thrS: number; }

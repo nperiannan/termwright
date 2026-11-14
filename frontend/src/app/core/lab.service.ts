@@ -46,7 +46,7 @@ export class LabService {
     const rows = this.runRows(), devs = this.emu()?.devices ?? [];
     const n = Math.max(rows.reduce((t, r) => t + r.switches.length, 0), this.emuRunning());
     const look = devs.filter(d => d.state === 'failed' || (d.state && d.state !== 'running' && d.state !== 'stopped') || (d.running && (d.error || d.personaError)));
-    const lines = rows.map(r => '● ' + tr(r.open ? '{0} running on {1} · {2} (open)' : '{0} running on {1} · {2} (in the background)', r.switches.length, r.host.split('/').pop() ?? '', r.topology));
+    const lines = rows.map(r => '● ' + tr(r.open ? '{0} running on {1} · {2} (open)' : r.orphan ? '{0} running on {1} · {2} - stop them in Hosts' : '{0} running on {1} · {2} (in the background)', r.switches.length, r.host.split('/').pop() ?? '', r.topology));
     for (const d of look) lines.push(`▲ ${d.hostname}: ${d.state === 'running' ? (d.error || d.personaError) : (d.stateText || d.state)}`);
     return { n, look: look.length, tip: [tr('Emulated lab'), ...lines].join('\n') };
   });

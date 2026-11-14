@@ -1707,7 +1707,7 @@ export class LabWorkspace implements OnDestroy {
   async importTopo() {
     try { const p = await this.backend.chooseOpenFile(tr('Import Topology'), [{ displayName: 'Termwright lab topology', pattern: '*.twlab;*.json' }]); if (!p) return; this.topos.set(await this.backend.emuImportTopology(p)); } catch (e) { this.ui.error(e); }
   }
-  async delTopo(name: string) { if (await this.ui.confirm(tr('Delete {0}', name), tr('Forget this saved topology? Its sessions stay in the Session Manager.'), tr('Delete'), true)) { try { await this.backend.emuDeleteTopology(name); } catch (e) { this.ui.error(e); } await this.reTopos(); } }
+  async delTopo(name: string) { if (await this.ui.confirm(tr('Delete {0}', name), tr('Forget this saved topology? Its switches that still run in the background are switched off first; its sessions stay in the Session Manager.'), tr('Delete'), true)) { try { await this.backend.emuDeleteTopology(name); } catch (e) { this.ui.error(e); } await this.reTopos(); } }
   hostLabel(p: string) { return p.split('/').pop() ?? p; }
   when(iso: string) { const d = new Date(iso); return isNaN(+d) ? '' : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
   protected hovDev = computed(() => this.devs().find(d => d.id === this.hov()) ?? null);

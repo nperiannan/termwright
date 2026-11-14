@@ -3645,6 +3645,14 @@ const ru: Record<string, string> = {
   'copying {0}': 'копируется {0}',
   'to download': 'скачать',
   'The images the switches and computers boot, and the templates made from them': 'Образы, с которых загружаются коммутаторы и компьютеры, и шаблоны на их основе',
+  '{0} running on {1} · {2} - stop them in Hosts': '{0} работают на {1} · {2} - остановите их в «Хосты»',
+  'No saved topology has these switches any more (it was deleted while they ran): nothing else stops them': 'Ни одна сохранённая топология больше не содержит эти коммутаторы (её удалили, пока они работали): больше ничто их не остановит',
+  'left running': 'остались работать',
+  'Stop…': 'Остановить…',
+  'Stop {0}': 'Остановить {0}',
+  'Switch off its {0} switches on {1}? They run in the background; what they did since their last save is lost.': 'Выключить её коммутаторы ({0}) на {1}? Они работают в фоне; всё, что они сделали после последнего сохранения, будет потеряно.',
+  '{0} switches switched off on {1}': 'Выключено коммутаторов на {1}: {0}',
+  'Forget this saved topology? Its switches that still run in the background are switched off first; its sessions stay in the Session Manager.': 'Забыть эту сохранённую топологию? Её коммутаторы, которые ещё работают в фоне, сначала выключаются; её сессии остаются в менеджере сессий.',
 };
 
 export default ru;

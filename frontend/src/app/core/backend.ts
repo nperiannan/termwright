@@ -141,6 +141,8 @@ export class Backend {
   emuCaptureStop(key: string) { return this.call<EmuCapture[]>('EmuCaptureStop', key); }
   emuCaptureDelete(files: string[]) { return this.call<EmuCapture[]>('EmuCaptureDelete', files); }
   emuRunning() { return this.call<EmuRunRow[]>('EmuRunning'); }
+  /** Switches off a lab's switches that run in the background on a host (a topology not open, or none any more). */
+  emuStopBackground(host: string, lab: string) { return this.call<number>('EmuStopBackground', host, lab); }
   emuQemuCommand(id: string) { return this.call<string>('EmuQemuCommand', id); }
   emuLinkCheck(id: string, seconds: number) { return this.call<string>('EmuLinkCheck', id, seconds); }
   emuTests() { return this.call<EmuTest[]>('EmuTests'); }

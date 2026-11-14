@@ -1,6 +1,12 @@
 package main
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/termwright/termwright/internal/emu"
@@ -63,5 +69,52 @@ func TestEmuLook(t *testing.T) {
 		if got := emuLook(in); got != want {
 			t.Errorf("%q: %q, want %q", in, got, want)
 		}
+	}
+}
+
+// Stopping a lab in the background switches off its QEMU processes only - not another lab's, not other programs.
+func TestEmuStopLabScript(t *testing.T) {
+	if _, err := os.Stat("/proc/self/comm"); err != nil {
+		t.Skip("needs /proc")
+	}
+	home := t.TempDir()
+	fake := filepath.Join(home, "qemu-system-x86_64")
+	sl, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("no sleep")
+	}
+	b, _ := os.ReadFile(sl)
+	if err := os.WriteFile(fake, b, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	start := func(lab, id string, prog string) *exec.Cmd {
+		c := exec.Command(prog, "60")
+		if err := c.Start(); err != nil {
+			t.Fatal(err)
+		}
+		d := filepath.Join(home, "termwright-lab", "lab-"+lab)
+		_ = os.MkdirAll(d, 0o755)
+		_ = os.WriteFile(filepath.Join(d, id+".pid"), []byte(strconv.Itoa(c.Process.Pid)), 0o644)
+		return c
+	}
+	a1, a2 := start("ab12", "v1", fake), start("ab12", "v2", fake)
+	other, notQemu := start("cd34", "v1", fake), start("ab12", "v3", sl)
+	defer func() { _ = other.Process.Kill(); _ = notQemu.Process.Kill() }()
+	cmd := exec.Command("bash", "-c", emuStopLabScript("ab12"))
+	cmd.Env = append(os.Environ(), "HOME="+home)
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "@@stopped 2") {
+		t.Fatalf("%v %s", err, out)
+	}
+	for _, c := range []*exec.Cmd{a1, a2} {
+		if err := c.Wait(); err == nil {
+			t.Error("a switch of the lab still ran")
+		}
+	}
+	if other.Process.Signal(syscall.Signal(0)) != nil || notQemu.Process.Signal(syscall.Signal(0)) != nil {
+		t.Error("another lab's switch, or a program that is not QEMU, was stopped")
+	}
+	if emuLabIDRe.MatchString("ab12; rm -rf ~") || !emuLabIDRe.MatchString("c8") {
+		t.Error("lab ID check")
 	}
 }

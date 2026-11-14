@@ -94,7 +94,7 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
               </div>
               <div class="card"><h4>{{ tr('Running here') }} @if (run.length) { <span class="muted small">{{ runSummary(run) }}</span> }</h4>
                 @for (r of run; track r.topology) {
-                  <div class="run"><b>{{ r.topology }}</b>@for (s of r.switches; track s) { <span class="dev">{{ s }}</span> }<span class="sp"></span>@if (!r.open && !r.topology.includes('(')) { <button type="button" class="sm" (click)="openTopo(r.topology)">{{ tr('Open') }}</button> }</div>
+                  <div class="run"><b>{{ r.topology }}</b>@if (r.orphan) { <span class="orph" [title]="tr('No saved topology has these switches any more (it was deleted while they ran): nothing else stops them')">{{ tr('left running') }}</span> }@for (s of r.switches; track s) { <span class="dev">{{ s }}</span> }<span class="sp"></span>@if (!r.open && !r.orphan) { <button type="button" class="sm" (click)="openTopo(r.topology)">{{ tr('Open') }}</button> }@if (!r.open && r.lab) { <button type="button" class="sm danger-ghost" (click)="stopBg(r)" [disabled]="lab.busy()">{{ tr('Stop…') }}</button> }</div>
                 } @empty { <p class="muted small" style="margin: 0">{{ running() ? tr('No switch runs here.') : tr('Reading…') }}</p> }
               </div>
               <div class="grid2">
@@ -234,7 +234,7 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
   .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
   .kpi { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); > span { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; } b { display: block; font-size: 20px; margin: 2px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; small { font-size: 12px; color: var(--muted); font-weight: 400; } } }
   h4 { margin: 0 0 8px; font-size: 12.5px; display: flex; align-items: center; gap: 8px; .muted { font-weight: 400; } }
-  .run { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); &:first-of-type { border-top: 0; } .dev { font-size: 11px; border: 1px solid var(--line); border-radius: 7px; padding: 1px 7px; color: var(--muted); } }
+  .run { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); &:first-of-type { border-top: 0; } .orph { font-size: 10.5px; font-weight: 600; padding: 0 7px; line-height: 17px; border-radius: 4px; background: color-mix(in srgb, var(--warning, #e39b17) 16%, transparent); color: var(--warning, #e39b17); } .dev { font-size: 11px; border: 1px solid var(--line); border-radius: 7px; padding: 1px 7px; color: var(--muted); } }
   .grid2 { display: grid; grid-template-columns: 1fr 1.25fr; gap: 12px; }
   .ck { display: grid; grid-template-columns: 18px 110px minmax(0, 1fr); gap: 6px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 12px; &:first-of-type { border-top: 0; } }
   .ok { color: var(--success, #1fa45a); font-weight: 700; } .wr { color: var(--warning, #e39b17); font-weight: 700; } .bad { color: var(--danger); font-weight: 700; } .run2 { color: var(--accent); }
@@ -348,6 +348,13 @@ export class LabHosts implements OnInit, OnDestroy {
   async loadRunning() { try { this.running.set((await this.backend.emuRunning()) ?? []); } catch { this.running.set([]); } }
   protected runOn(h: string) { return (this.running() ?? []).filter(r => r.host === h); }
   async copySetup() { try { await this.backend.clipboardSet((this.setupHere()?.lines ?? []).join('\n')); this.ui.toast(tr('Copied'), 'success', 1500); } catch (e) { this.ui.error(e); } }
+  /** Switches off what runs here in the background (another topology, or one that was deleted while it ran). */
+  async stopBg(r: EmuRunRow) {
+    const host = r.host.split('/').pop() ?? r.host;
+    if (!(await this.ui.confirm(tr('Stop {0}', r.topology), tr('Switch off its {0} switches on {1}? They run in the background; what they did since their last save is lost.', r.switches.length, host), tr('Stop'), true))) return;
+    try { const n = await this.backend.emuStopBackground(r.host, r.lab ?? ''); this.ui.toast(tr('{0} switches switched off on {1}', n, host), 'success'); await this.loadRunning(); void this.lab.refreshRunning(); }
+    catch (e) { this.ui.error(e); }
+  }
   protected runN(rows: EmuRunRow[]) { return rows.reduce((a, r) => a + r.switches.length, 0); }
   protected runSummary(rows: EmuRunRow[]) { return rows.map(r => r.topology + (r.open ? ' · ' + tr('open') : '')).join(', '); }
   async openTopo(name: string) { try { await this.backend.emuOpenTopology(name, false); await this.lab.refresh(); this.closed.emit(); } catch (e) { this.ui.error(e); } }

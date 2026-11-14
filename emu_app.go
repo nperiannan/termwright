@@ -6169,8 +6169,8 @@ func (a *App) EmuNewTopology(name string) (EmuView, error) {
 	return a.EmuState()
 }
 
-// EmuDeleteTopology forgets a saved topology that is not open (its switches'
-// sessions and disks on the host stay until removed in it).
+// EmuDeleteTopology forgets a saved topology that is not open. Its switches that still run in the background are
+// switched off first (else they ran on, with no topology to stop them from); their disks on the host stay.
 func (a *App) EmuDeleteTopology(name string) error {
 	defer emuAs("user")()
 	emuLab.mu.Lock()
@@ -6178,6 +6178,28 @@ func (a *App) EmuDeleteTopology(name string) error {
 	emuLab.mu.Unlock()
 	if name == open {
 		return errors.New("that topology is open: open another one first")
+	}
+	if b, err := os.ReadFile(a.emuTopoPath(name)); err == nil {
+		var t emuTopo
+		if json.Unmarshal(b, &t) == nil && t.Lab != nil && emuLabIDRe.MatchString(t.Lab.ID) {
+			hosts := map[string]bool{}
+			if t.Host != "" {
+				hosts[t.Host] = true
+			}
+			for _, v := range t.Lab.VMs {
+				if v.Host != "" {
+					hosts[v.Host] = true
+				}
+			}
+			for h := range hosts {
+				if _, err := a.emuRun(h, emuStopLabScript(t.Lab.ID), time.Minute); err != nil {
+					emuEvOn(h, "", "warn", fmt.Sprintf("deleting the topology %s: its switches on this host could not be switched off (%v) - stop them in Hosts", name, err))
+				}
+			}
+			emuRunCache.mu.Lock()
+			emuRunCache.rows = nil
+			emuRunCache.mu.Unlock()
+		}
 	}
 	return os.Remove(a.emuTopoPath(name))
 }
