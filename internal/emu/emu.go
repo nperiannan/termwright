@@ -83,6 +83,8 @@ type Image struct {
 	MD5             string              `json:"md5,omitempty"`           // its MD5 sum, to check a download
 	Page            string              `json:"page,omitempty"`          // a web page where it can be had (an account may be needed)
 	Disks           []Disk              `json:"disks,omitempty"`         // more files the VM needs: a second disk, a CD-ROM, a BIOS
+	Board           string              `json:"board,omitempty"`         // a microcontroller's firmware (esp32s3, esp32c3…): the file is its flash image, run by Espressif's QEMU
+	FlashMB         int                 `json:"flashMb,omitempty"`       // a microcontroller's flash size (the file is that size)
 }
 
 // Disk is another file an image boots with: "hdb", "hdc", "hdd" (more disks,
@@ -230,6 +232,7 @@ type VM struct {
 	FW          string         `json:"fw,omitempty"`          // the software version the switch reports (its CLI, after it booted)
 	HWSerial    string         `json:"hwSerial,omitempty"`    // the serial number the switch reports
 	AddrOn      string         `json:"addrOn,omitempty"`      // the management address the switch was seen to take (its day 0 checked it)
+	GDB         bool           `json:"gdb,omitempty"`         // a microcontroller: its GDB server is on (the spare port of its slot)
 	Machine     string         `json:"machine,omitempty"`     // the QEMU machine type it runs as, when pinned (a live move between QEMU versions: "pc" is each version's own)
 	CPU         string         `json:"cpu,omitempty"`         // the CPU model it was started with ("host" = its host's own: a live move only to a host with the same CPU)
 	Role        string         `json:"role,omitempty"`        // what it is drawn as ("access", "core", "router"…; "" = from its model)
@@ -845,6 +848,10 @@ func (l *Lab) StartScript(vms []VM, imgs map[string]*Image) string {
 		im := imgs[v.Image]
 		if im == nil {
 			fmt.Fprintf(&b, "echo 'fail %s no image'\n", v.ID)
+			continue
+		}
+		if bd := BoardOf(im.Board); bd != nil { // a microcontroller: Espressif's QEMU on its flash image
+			b.WriteString(l.mcuStart(v, im, bd))
 			continue
 		}
 		fmt.Fprintf(&b, "if %s; then echo 'up %s'; else\n", qemuUp(Q(dir)+"/"+v.ID+".pid"), v.ID)

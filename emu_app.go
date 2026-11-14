@@ -2747,6 +2747,16 @@ func (a *App) emuSessions(v emu.VM) {
 			n = name + " (" + strconv.Itoa(i) + ")"
 		}
 	}
+	if bd := emu.BoardOf(im.Board); bd != nil { // a microcontroller: only its UART, no login
+		cs := session.Session{Name: free(cf, v.Name+" console"), Folder: cf, Protocol: session.ProtoTelnet, Hostname: "127.0.0.1", Port: conPort, DeviceType: dt, JumpSession: host,
+			Description: []string{"Serial console (UART) of the emulated " + bd.Name + " " + v.Name}}
+		if saved, err := a.store.Save(cs, ""); err == nil {
+			emuLab.mu.Lock()
+			emuLab.f.Consoles[v.ID] = saved.Path
+			emuLab.mu.Unlock()
+		}
+		return
+	}
 	ss := session.Session{Name: free(folder, v.Name), Folder: folder, Protocol: session.ProtoSSH2, Hostname: hostname, Port: port, Username: login, OwnLogin: true, SavePassword: true, DeviceType: dt, JumpSession: jump,
 		Description: []string{fmt.Sprintf("Emulated %s (Termwright lab) on its KVM host - management %s", nm, v.MgmtIP)}}
 	if saved, err := a.store.Save(ss, ""); err == nil {
@@ -4361,7 +4371,13 @@ func (a *App) emuStop(ids []string, save bool) (EmuView, error) {
 		var keep, cold []string
 		for _, id := range by[h] {
 			_, up := st.Up[id]
-			if save && !emuLab.f.Lab.NoFast && up && emuLab.ready[id] && !emuLab.day0[id] && emuLab.state[id] == "" {
+			mcu := false // a microcontroller has no disk to keep its running state in: it stops (its flash keeps what it wrote)
+			if v := emuLab.f.Lab.VMByID(id); v != nil {
+				if im := emuImage(v.Image); im != nil && emu.BoardOf(im.Board) != nil {
+					mcu = true
+				}
+			}
+			if save && !mcu && !emuLab.f.Lab.NoFast && up && emuLab.ready[id] && !emuLab.day0[id] && emuLab.state[id] == "" {
 				keep = append(keep, id)
 				emuLab.state[id] = "saving"
 			} else {

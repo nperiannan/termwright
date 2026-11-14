@@ -4157,6 +4157,12 @@ components:
                         - "null"
                     items:
                         $ref: '#/components/schemas/EmuDisk'
+                board:
+                    description: 'a microcontroller''s firmware (esp32s3, esp32c3…): the file is its flash image, run by Espressif''s QEMU'
+                    type: string
+                flashMb:
+                    description: a microcontroller's flash size (the file is that size)
+                    type: integer
                 hasPassword:
                     type: boolean
                 onHost:
