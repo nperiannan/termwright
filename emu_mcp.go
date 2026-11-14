@@ -45,6 +45,13 @@ var mcpLabTools = []mcpTool{
 			"keys":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"console": map[string]any{"type": "boolean", "description": "install: the serial console, not the keyboard"},
 		})},
+	{"lab_host_images", "Which KVM host has which image (a switch runs or moves only where its image is), copying images to hosts and removing one from a host. Actions: matrix (images × hosts: ok, copying %, missing), copy (image; hosts - none = every host without it; runs in the background), remove (image, host; refused while a switch there uses it).",
+		mcpSchema(map[string]any{
+			"action": map[string]any{"type": "string", "enum": []string{"matrix", "copy", "remove"}},
+			"image":  map[string]any{"type": "string", "description": "the image: its name (with the version when two share a name) or id"},
+			"hosts":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "copy: host names"},
+			"host":   map[string]any{"type": "string", "description": "remove: the host"},
+		})},
 	{"lab_radius", "The lab's built-in RADIUS server, for 802.1X and MAC logins on the switches: it runs on every host of the lab and answers the switches there (EAP-MD5, PAP, MAC authentication; accepted users get their VLAN as Tunnel-Private-Group-Id). Actions: show (settings, where the switches reach it, counts), log (the last logins), set (on, port, secret, mab, mab_vlan), add_user (user - a name or a pattern like user* - password, vlan), remove_user (user). Secrets and passwords are left out unless reveal is true (for typing them into a switch's configuration, not for the chat).",
 		mcpSchema(map[string]any{
 			"action":   map[string]any{"type": "string", "enum": []string{"show", "log", "set", "add_user", "remove_user"}},
@@ -489,6 +496,99 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			return "", err
 		}
 		return "Typed on " + d.Hostname + "'s keyboard.", nil
+	case "lab_host_images":
+		m, err := a.EmuImageMatrix()
+		if err != nil {
+			return "", err
+		}
+		hostOf := func(n string) (string, error) {
+			for _, h := range m.Hosts {
+				if strings.EqualFold(h.Name, n) || h.Session == n {
+					return h.Session, nil
+				}
+			}
+			return "", errors.New("no KVM host " + n)
+		}
+		imgOf := func(n string) (EmuMatrixImage, error) {
+			var hit []EmuMatrixImage
+			for _, im := range m.Images {
+				if im.ID == n || strings.EqualFold(im.Name+" "+im.Version, n) || strings.EqualFold(im.Name, n) || strings.EqualFold(im.FileName, n) {
+					hit = append(hit, im)
+				}
+			}
+			if len(hit) != 1 {
+				return EmuMatrixImage{}, fmt.Errorf("%d images match %q: give the name with its version", len(hit), n)
+			}
+			return hit[0], nil
+		}
+		show := func(m EmuMatrix) string {
+			var b strings.Builder
+			for _, im := range m.Images {
+				fmt.Fprintf(&b, "- %s %s (%s):", im.Name, im.Version, emuBytes(im.Size))
+				for _, h := range m.Hosts {
+					st := m.Cells[h.Session][im.ID]
+					if st == "" {
+						st = "missing"
+					}
+					fmt.Fprintf(&b, " %s %s;", h.Name, st)
+				}
+				b.WriteString("\n")
+			}
+			return orStr(b.String(), "No image yet.")
+		}
+		switch argStr(args, "action") {
+		case "matrix", "":
+			return show(m), nil
+		case "copy":
+			im, err := imgOf(argStr(args, "image"))
+			if err != nil {
+				return "", err
+			}
+			var hs []string
+			for _, n := range argStrs(args, "hosts") {
+				h, err := hostOf(n)
+				if err != nil {
+					return "", err
+				}
+				hs = append(hs, h)
+			}
+			if len(hs) == 0 {
+				for _, h := range m.Hosts {
+					if st := m.Cells[h.Session][im.ID]; h.Error == "" && st != "ok" && !strings.HasPrefix(st, "copying") && st != "queued" {
+						hs = append(hs, h.Session)
+					}
+				}
+				if len(hs) == 0 {
+					return "Every host has " + im.Name + " already.", nil
+				}
+			}
+			if err := light("Claude copies an image", "Claude (through the Termwright connector) copies "+im.Name+" to "+strconv.Itoa(len(hs))+" hosts."); err != nil {
+				return "", err
+			}
+			nm, err := a.EmuSyncImages(hs, []string{im.ID}, false)
+			if err != nil {
+				return "", err
+			}
+			return "Copying in the background (matrix shows how far):\n" + show(nm), nil
+		case "remove":
+			im, err := imgOf(argStr(args, "image"))
+			if err != nil {
+				return "", err
+			}
+			h, err := hostOf(argStr(args, "host"))
+			if err != nil {
+				return "", err
+			}
+			if err := ask("Claude wants to remove an image from a host", "Claude (through the Termwright connector) asks to delete "+im.Name+" "+im.Version+" on "+argStr(args, "host")+".", true); err != nil {
+				return "", err
+			}
+			nm, err := a.EmuRemoveImageFrom(h, im.ID)
+			if err != nil {
+				return "", err
+			}
+			return "Removed.\n" + show(nm), nil
+		}
+		return "", errors.New("unknown action")
 	case "lab_radius":
 		r, err := a.EmuRadius()
 		if err != nil {

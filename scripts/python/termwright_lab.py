@@ -246,6 +246,11 @@ class Lab:
         """Type a line (and Enter) into a running install: on its serial console, or (console=False) its keyboard."""
         return self.tool("keys", install=install_id, text=line, enter=True, console=console)
 
+    def host_images(self, action: str = "matrix", **args) -> str:
+        """Which KVM host has which image: action matrix, copy (image, hosts=[...] - none: every host without it),
+        remove (image, host)."""
+        return self.tool("host_images", action=action, **args)
+
     def radius(self, action: str = "show", **args) -> str:
         """The lab's RADIUS server (802.1X and MAC logins): action show, log, set (on, port, secret, mab, mab_vlan),
         add_user (user - a name or a pattern like user* - password, vlan), remove_user (user). reveal=True shows the

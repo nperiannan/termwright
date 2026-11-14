@@ -767,3 +767,51 @@ func emuNotes(out string) []string {
 	}
 	return n
 }
+
+// EmuRemoveImageFrom deletes an image's file on one host. It refuses while a
+// switch there uses it (of the open topology, or a disk of another topology on
+// that host that is based on it); the image stays in the list and on the other hosts.
+func (a *App) EmuRemoveImageFrom(host, id string) (EmuMatrix, error) {
+	defer emuAs("user")()
+	emuLab.mu.Lock()
+	a.emuLoad()
+	ip := emuImage(id)
+	if ip == nil {
+		emuLab.mu.Unlock()
+		return EmuMatrix{}, errors.New("no such image")
+	}
+	fn := ip.FileName
+	if l := emuLab.f.Lab; l != nil {
+		for _, v := range l.VMs {
+			if v.Image == id && emuHostOf(v) == host {
+				emuLab.mu.Unlock()
+				return EmuMatrix{}, fmt.Errorf("%s on that host uses it: remove it or move it to another host first", v.Name)
+			}
+		}
+	}
+	dir := emuLabDir()
+	emuLab.mu.Unlock()
+	if fn == "" || strings.ContainsAny(fn, "/\\") {
+		return EmuMatrix{}, errors.New("the image has no file name")
+	}
+	f := dir + "/images/" + fn
+	script := "f=" + emu.Q(f) + "; n=" + emu.Q(fn) + "; [ -e \"$f\" ] || { echo removed; exit 0; }\n" +
+		"for o in $(find " + emu.Q(dir) + " -maxdepth 4 -name '*.qcow2' 2>/dev/null); do [ \"$o\" = \"$f\" ] && continue; head -c 65536 \"$o\" 2>/dev/null | grep -qaF \"$n\" && { echo \"inuse $o\"; exit 0; }; done\n" +
+		"rm -f \"$f\" \"$f.sha256\" && echo removed\n"
+	out, err := a.emuRun(host, script, 60*time.Second)
+	switch {
+	case err != nil:
+		return EmuMatrix{}, err
+	case strings.HasPrefix(strings.TrimSpace(out), "inuse "):
+		return EmuMatrix{}, fmt.Errorf("a switch disk on that host is based on it (%s): remove that topology's switches there first", strings.TrimPrefix(strings.TrimSpace(out), "inuse "))
+	case !strings.Contains(out, "removed"):
+		return EmuMatrix{}, errors.New("could not remove it: " + strings.TrimSpace(out))
+	}
+	emuSync.Lock()
+	delete(emuSync.state, emuSyncKey(host, id))
+	emuSync.Unlock()
+	emuLab.mu.Lock()
+	emuEv("", "info", fmt.Sprintf("%s removed from %s", ip.Name, host[strings.LastIndex(host, "/")+1:]))
+	emuLab.mu.Unlock()
+	return a.EmuImageMatrix()
+}

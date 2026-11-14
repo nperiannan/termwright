@@ -52,6 +52,7 @@ Test ports and streams are as in the API; the keyword arguments are the API's fi
 | `rows(run)` | The result rows of a run |
 | `traffic.templates()`, `traffic.apply_template(name, *ports)`, `traffic.save_template(name, description)`, `traffic.remove_template(name)` | The test library: list it, put a template on test ports (one per role A, B…), keep the lab's streams and tests as yours |
 | `screen(device, path=None)`, `keys(device, text, enter, keys)`, `install_type(install_id, line)` | A PNG of a device's display (`install:<id>` for an installer); typing on its keyboard; a line on an installer's serial console |
+| `host_images(action, **args)` | Which KVM host has which image: `matrix`, `copy` (image, hosts), `remove` (image, host) |
 | `radius(action, **args)` | The lab's RADIUS server: `show`, `log`, `set` (on, port, secret, mab, mab_vlan), `add_user` (user, password, vlan), `remove_user` (user); `reveal=True` shows the secret and passwords |
 | `traffic.clients(name)` | How a test port's clients are doing: `n`, `bound`, `auth`, `failed`, `list` |
 | `hub(action, **args)` | Hubs and L2 switches: `list`, `add` (kind, name), `connect` / `disconnect` (hub, switch, port), `remove` (hub) |

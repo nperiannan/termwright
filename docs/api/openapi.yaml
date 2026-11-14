@@ -1620,6 +1620,56 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/host_images:
+        post:
+            operationId: tool_host_images
+            tags:
+                - Tools
+            summary: Which KVM host has which image (a switch runs or moves only where its image is), copying images to hosts and removing one from a host
+            description: 'Which KVM host has which image (a switch runs or moves only where its image is), copying images to hosts and removing one from a host. Actions: matrix (images × hosts: ok, copying %, missing), copy (image; hosts - none = every host without it; runs in the background), remove (image, host; refused while a switch there uses it). Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - matrix
+                                        - copy
+                                        - remove
+                                    type: string
+                                host:
+                                    description: 'remove: the host'
+                                    type: string
+                                hosts:
+                                    description: 'copy: host names'
+                                    items:
+                                        type: string
+                                    type: array
+                                image:
+                                    description: 'the image: its name (with the version when two share a name) or id'
+                                    type: string
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/hub:
         post:
             operationId: tool_hub

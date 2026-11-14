@@ -164,6 +164,7 @@ export class Backend {
   emuCaptureWireshark(key: string) { return this.call<void>('EmuCaptureWireshark', key); }
   emuImageMatrix() { return this.call<EmuMatrix>('EmuImageMatrix'); }
   emuSyncImages(hosts: string[], images: string[], force: boolean) { return this.call<EmuMatrix>('EmuSyncImages', hosts, images, force); }
+  emuRemoveImageFrom(host: string, id: string) { return this.call<EmuMatrix>('EmuRemoveImageFrom', host, id); }
   emuSyncSettings(syncAll: boolean, keep20: boolean) { return this.call<EmuMatrix>('EmuSyncSettings', syncAll, keep20); }
   emuCheckReach() { return this.call<EmuMatrix>('EmuCheckReach'); }
   emuSetImagesDir(host: string, dir: string) { return this.call<EmuMatrix>('EmuSetImagesDir', host, dir); }
