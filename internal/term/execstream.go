@@ -140,3 +140,14 @@ func ShellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''
 
 // CanExec reports whether Exec can run a command (the tunnel goes through a jump host).
 func (tu *Tunnel) CanExec() bool { return tu.jc != nil }
+
+// Client logs in to session s (like ExecOn) and returns the SSH connection
+// itself - for commands, file copies and connections through it - and a
+// function that closes it.
+func (m *Manager) Client(ctx context.Context, tabID string, s session.Session) (*ssh.Client, func(), error) {
+	client, _, cleanup, err := m.sshClient(ctx, &Tab{id: tabID, sess: s}, s, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, func() { _ = client.Close(); cleanup() }, nil
+}

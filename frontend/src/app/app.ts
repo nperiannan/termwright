@@ -42,6 +42,7 @@ import { Collect } from './dialogs/collect';
 import { Recordings } from './dialogs/recordings';
 import { Moved } from './dialogs/moved';
 import { PlayerView } from './components/player-view';
+import { LabWorkspace } from './components/lab-workspace';
 import { ConsolePorts } from './dialogs/console-ports';
 import { HistoryDialog } from './dialogs/history';
 import { KeySetupDialog } from './dialogs/key-setup-dialog';
@@ -49,6 +50,9 @@ import { TeamsDialog } from './dialogs/teams-dialog';
 import { FileServersDialog } from './dialogs/file-servers-dialog';
 import { NetCheckDialog } from './dialogs/net-check-dialog';
 import { NameAfterDialog } from './dialogs/name-after-dialog';
+import { LabDialog } from './dialogs/lab-dialog';
+import { LabService } from './core/lab.service';
+import { LabWizard } from './dialogs/lab-wizard';
 import { AIPanel } from './components/ai-panel';
 import { AIChat } from './core/ai-chat.service';
 import { ServersIndicator } from './components/servers-indicator';
@@ -71,12 +75,17 @@ import { FactTeach } from './dialogs/fact-teach';
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App implements OnInit {
   protected ui = inject(Ui);
+  private labs = inject(LabService);
+  protected labBadge = computed(() => this.labs.badge());
+  /** Simulated switches running: the flask turns blue. */
+  protected labSim = computed(() => this.labs.simRunning());
+  openLab(k: 'sim' | 'emu') { this.labs.kind.set(k); void this.tabs.openLab(k); }
   private a11y = inject(A11y); // Escape, Tab and screen reader support in dialogs
   protected teamStatus = inject(TeamStatusService);
   protected tabs = inject(Tabs);
@@ -118,7 +127,7 @@ export class App implements OnInit {
   tabEnv(t: TabView) { return envInfo(envOf(t.session?.path ?? '', t.session?.environment, this.settings()?.folderDefaults)); }
   readonly tiled = computed(() => this.tabs.layout() !== 'tabs');
   readonly gridCols = computed(() => {
-    const n = this.tabs.tabs().length;
+    const n = this.tabs.shown().length;
     const l = this.tabs.layout();
     return l === 'grid' ? Math.max(1, Math.ceil(Math.sqrt(n))) : n;
   });
@@ -505,6 +514,7 @@ export class App implements OnInit {
       case 'teams': this.ui.open('teams'); break;
       case 'file-servers': this.ui.open('fileServers'); break;
       case 'net-check': this.ui.open('netCheck'); break;
+      case 'sim-lab': void this.tabs.openLab(this.labs.kind()); break;
       case 'ai-assistant': void this.openAI(); break;
       case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
       case 'checklists': this.ui.open('checklists'); break;
@@ -646,6 +656,8 @@ export class App implements OnInit {
     if (op === 'select-all') { el.select(); return true; }
     const [a, b] = [el.selectionStart ?? 0, el.selectionEnd ?? 0];
     const text = el.value.slice(a, b);
+    // nothing selected in the box that has the focus: the text selected on the page (an AI reply) is copied instead
+    if (op === 'copy' && !text && (window.getSelection()?.toString() ?? '').trim()) return false;
     if (text) void this.backend.clipboardSet(text);
     if (op === 'cut' && text) {
       el.setRangeText('', a, b, 'start');
@@ -658,6 +670,11 @@ export class App implements OnInit {
     const el = this.focusedInput();
     if (!el) return false;
     const text = await this.backend.clipboardGet();
+    // a picture (a screenshot): the box that takes pictures (the AI chat's) gets it as an event
+    if (!text && el.dataset['pastePictures'] !== undefined) {
+      const img = await this.backend.clipboardImage().catch(e => { this.ui.error(e); return null; });
+      if (img?.data) { el.dispatchEvent(new CustomEvent('tw-paste-picture', { detail: img })); return true; }
+    }
     el.setRangeText(text, el.selectionStart ?? 0, el.selectionEnd ?? 0, 'end');
     el.dispatchEvent(new Event('input', { bubbles: true }));
     return true;

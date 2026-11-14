@@ -43,6 +43,11 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "mcp" {
 		os.Exit(mcpBridgeMain())
 	}
+	// "Termwright lab …": the emulated lab from the command line (through the running app's local API)
+	if len(os.Args) > 1 && os.Args[1] == "lab" {
+		attachConsole()
+		os.Exit(labCLIMain(os.Args[2:]))
+	}
 	discover.RaiseFileLimit()
 	app := NewApp()
 	width, height, start := 1280, 820, options.Normal
@@ -246,6 +251,7 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	xfer.AddSeparator()
 	add(xfer, "File Servers (TFTP, FTP, HTTP)...", "file-servers")
 	add(xfer, "Network Check (Reachability, iPerf3)...", "net-check")
+	add(xfer, "Labs (Simulated, Emulated)...", "sim-lab")
 
 	script := m.AddSubmenu(t("Script"))
 	add(script, "Command Library...", "command-library")

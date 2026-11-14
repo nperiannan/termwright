@@ -35,7 +35,9 @@ type WebBrowser struct {
 // WebOpened tells what was opened.
 type WebOpened struct {
 	Browser string `json:"browser"`
-	Via     string `json:"via"` // "" = directly (no proxy needed)
+	Via     string `json:"via"`            // "" = directly (no proxy needed)
+	URL     string `json:"url,omitempty"`  // the address opened, when Termwright changed it
+	Note    string `json:"note,omitempty"` // why it changed it
 }
 
 var (
@@ -110,11 +112,43 @@ func (a *App) OpenWebPage(tabID string, s session.Session, through, rawURL, brow
 		return WebOpened{}, errors.New("enter a web address that starts with http:// or https://")
 	}
 	s = a.withFolderDefaults(s)
+	if through != "device" && s.DeviceType != "" { // its type's SSH server does not pass connections on
+		dt := session.DeviceType{Name: s.DeviceType}
+		if a.terms != nil && a.terms.DeviceType != nil {
+			if d, ok := a.terms.DeviceType(s.DeviceType); ok {
+				dt = d
+			}
+		}
+		if !dt.Tunnels() {
+			return WebOpened{}, fmt.Errorf("%s is a %s device: its SSH server does not pass connections on, so no page can be opened through it - use Open Web Interface for its own pages, or a Linux session on its network (Tunnel in Global Options → Device Types)", orStr(s.Name, s.Hostname), s.DeviceType)
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	wp, err := a.terms.OpenWebProxy(ctx, tabID, s, tabID, through == "device")
 	if err != nil {
 		return WebOpened{}, err
+	}
+	// through a session: the page must be reachable from there, else the browser opens on nothing - why not, now
+	if wp != nil && through != "device" {
+		port := u.Port()
+		if port == "" {
+			port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
+		}
+		if err := wp.Reach(net.JoinHostPort(u.Hostname(), port), 15*time.Second); err != nil {
+			wp.Close()
+			return WebOpened{}, webThroughError(wp.Via, u.Hostname(), err)
+		}
+	}
+	// A device's web interface asked for as https:// with no port: many switches serve only HTTP until HTTPS
+	// is turned on (EXOS: "Web access: Enabled (tcp port 80)"). Check which port answers on the route.
+	var changed, note string
+	if wp != nil && through == "device" && u.Scheme == "https" && u.Port() == "" {
+		h := u.Hostname()
+		if !wp.Probe(net.JoinHostPort(h, "443"), 6*time.Second) && wp.Probe(net.JoinHostPort(h, "80"), 6*time.Second) {
+			u.Scheme = "http"
+			changed, note = u.String(), "the device answers on HTTP (port 80), not HTTPS (443) - turn HTTPS on in the device to use it"
+		}
 	}
 	if wp == nil { // reached directly: the default browser
 		if err := openWithSystem(u.String()); err != nil {
@@ -131,6 +165,13 @@ func (a *App) OpenWebPage(tabID string, s session.Session, through, rawURL, brow
 				break
 			}
 		}
+	}
+	if br == nil && wp.Direct { // no browser that takes a proxy: the default one, through the system's settings
+		wp.Close()
+		if err := openWithSystem(u.String()); err != nil {
+			return WebOpened{}, err
+		}
+		return WebOpened{Browser: "the default browser"}, nil
 	}
 	if br == nil {
 		wp.Close()
@@ -208,7 +249,11 @@ func (a *App) OpenWebPage(tabID string, s session.Session, through, rawURL, brow
 			emitter{a}.Emit("web:bypassed", map[string]string{"browser": name, "url": u.String()})
 		}
 	}(br.Name)
-	return WebOpened{Browser: br.Name, Via: wp.Via}, nil
+	via := wp.Via
+	if wp.Direct {
+		via = "this computer (directly, like its SSH session)"
+	}
+	return WebOpened{Browser: br.Name, Via: via, URL: changed, Note: note}, nil
 }
 
 // closeWebPages ends every browser window opened through a session (at quit).
@@ -247,4 +292,24 @@ func webStopped(id string) bool {
 	defer webMu.Unlock()
 	_, ok := webRuns[id]
 	return !ok
+}
+
+// webThroughError says why a page cannot be reached through a session, and what to do.
+func webThroughError(via, host string, err error) error {
+	m := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(m, "prohibited") || strings.Contains(m, "forwarding") || strings.Contains(m, "unknown channel type") || strings.Contains(m, "not supported"):
+		return fmt.Errorf("%s does not pass connections on: its SSH server has TCP forwarding off (%v). Switches such as EXOS and VOSS do not forward; open the page through a Linux session or jump host instead", via, err)
+	case nameError(err):
+		return fmt.Errorf("%s cannot find %s, and this computer cannot either (%v)", via, host, err)
+	case strings.Contains(m, "no answer") || strings.Contains(m, "timed out") || strings.Contains(m, "timeout"):
+		return fmt.Errorf("%s did not reach %s: %v - can it reach the internet (or that network) itself?", via, host, err)
+	}
+	return fmt.Errorf("%s could not open a connection to %s: %v", via, host, err)
+}
+
+// nameError: a name the far end (or this computer) could not resolve.
+func nameError(err error) bool {
+	m := strings.ToLower(err.Error())
+	return strings.Contains(m, "resolv") || strings.Contains(m, "unknown host") || strings.Contains(m, "name or service") || strings.Contains(m, "getaddrinfo") || strings.Contains(m, "no such host") || strings.Contains(m, "nodename")
 }

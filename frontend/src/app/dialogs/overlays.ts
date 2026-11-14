@@ -110,7 +110,7 @@ import { ENV_COLORS, envFg, envList } from '../core/env';
       }
     </div>
   `,
-  styles: [`.field { display: flex; flex-direction: column; gap: 6px; } .pre { white-space: pre-wrap; margin: 0; }
+  styles: [`.field { display: flex; flex-direction: column; gap: 6px; white-space: pre-wrap; overflow-wrap: anywhere; } .pre { white-space: pre-wrap; margin: 0; }
     .modal.choice { width: min(520px, calc(100vw - 32px)); max-width: none; }
     .choice-foot { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
     .choice-foot .spacer { display: none; }
@@ -146,7 +146,7 @@ export class Overlays {
   /** The button names what it does: Create, Rename, Save… */
   okFor(title: string) {
     const t = title.toLowerCase();
-    return /^(new|create)\b/.test(t) ? 'Create' : /^rename\b/.test(t) ? 'Rename' : /^add\b/.test(t) ? 'Add' : /bookmark|save/.test(t) ? 'Save' : 'OK';
+    return /^(new|create)\b/.test(t) ? 'Create' : /^rename\b/.test(t) ? 'Rename' : /^add\b/.test(t) ? 'Add' : /^allow\b/.test(t) ? 'Allow' : /bookmark|save/.test(t) ? 'Save' : 'OK';
   }
   inputIcon(title: string, secret?: boolean) {
     const t = title.toLowerCase();

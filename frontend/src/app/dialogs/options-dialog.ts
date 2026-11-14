@@ -5,7 +5,7 @@ import { LANGUAGES, previewLanguages, tr } from '../core/i18n';
 import { EFFORTS, modelChoices, readOnlyList } from '../core/ai-chat.service';
 import { Combo, ComboOption } from '../components/combo';
 import { Backend, errText } from '../core/backend';
-import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, MCPInfo, comboOf, FACT_NAMES } from '../core/models';
+import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, MCPInfo, comboOf, FACT_NAMES, dtTunnels } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
@@ -106,6 +106,11 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <div>
                   <div class="seg w3"><button type="button" [class.on]="!s.folderColors" (click)="s.folderColors = ''">Soft</button><button type="button" [class.on]="s.folderColors === 'vivid'" (click)="s.folderColors = 'vivid'">Vivid</button><button type="button" [class.on]="s.folderColors === 'steel'" (click)="s.folderColors = 'steel'">Steel blue</button></div>
                   <div class="hint">Folders by level, and the environment tags (PROD, LAB…): soft tones with tinted tags, bright colours with solid tags, or blue-grey with outlined tags.</div>
+                </div></div>
+                <div class="f"><label>Session properties</label>
+                <div>
+                  <div class="seg w2"><button type="button" [class.on]="!s.sessionEditor" (click)="s.sessionEditor = ''">Side panel</button><button type="button" [class.on]="s.sessionEditor === 'window'" (click)="s.sessionEditor = 'window'">Full window</button></div>
+                  <div class="hint">Where a session's properties open. The side panel shows the main settings, with More Options… for every page; the full window shows every page at once.</div>
                 </div></div>
                 <div class="f"><label>Start page buttons</label>
                 <div>
@@ -417,6 +422,16 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label>Backup commands</label>
                   <textarea name="dtbk" class="mono" rows="2" [(ngModel)]="d.backupCommands"
                     [placeholder]="backupDefault(d.name) || 'Commands that print the configuration, one per line, e.g. show running-config'"></textarea>
+                  <label>Web server</label>
+                  <div class="webd">
+                    <textarea name="dtwc" class="mono" rows="1" [(ngModel)]="d.webCheck" [placeholder]="webDefault(d.name, 'check') || 'A command that shows the web server, e.g. show web-server'" title="Open Web Interface runs it in the background to see whether HTTP and HTTPS are on"></textarea>
+                    <div class="row2"><input name="dtwh" class="mono" [(ngModel)]="d.webHttp" [placeholder]="webDefault(d.name, 'http') || 'HTTP on (regex)'" title="Matches the check's output while HTTP is on" /><input name="dtws" class="mono" [(ngModel)]="d.webHttps" [placeholder]="webDefault(d.name, 'https') || 'HTTPS on (regex)'" title="Matches the check's output while HTTPS is on" /></div>
+                    <textarea name="dtwo" class="mono" rows="2" [(ngModel)]="d.webOn" [placeholder]="webDefault(d.name, 'on') || 'Commands that turn HTTP and HTTPS on, one per line ({name} = the session)'" title="Turn On HTTP and HTTPS… in Open Web Interface runs these, after showing them"></textarea>
+                    <input name="dtwv" class="mono" [(ngModel)]="d.webSave" [placeholder]="webDefault(d.name, 'save') || 'Command that saves the configuration'" />
+                  </div>
+                  <label>Tunnel</label>
+                  <select name="dttn" [(ngModel)]="d.tunnel" title="Open Web Page Through This Session needs its SSH server to pass connections on (TCP forwarding); EXOS, VOSS and Cisco IOS do not">
+                    <option [ngValue]="undefined">{{ tunnelDefault(d.name) }}</option><option value="on">Its SSH server forwards connections</option><option value="off">No forwarding (Open Web Page Through This Session is off)</option></select>
                   <label>AI agent: read-only</label>
                   <textarea name="dtro" class="mono" rows="2" [(ngModel)]="d.aiReadOnly" [placeholder]="readOnlyDefault(d.name)"
                     title="The AI agent runs commands that begin with these without asking (except on production); everything else asks first. One per line."></textarea>
@@ -560,14 +575,27 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                       <span class="pill" [class.ok]="mcp()?.inDesktop" [class.warn]="!mcp()?.inDesktop"><i></i>{{ mcp()?.inDesktop ? 'Added' : 'Not added' }}</span>
                       <button type="button" [class.primary]="!mcp()?.inDesktop" (click)="mcpDesktop()">{{ mcp()?.inDesktop ? 'Add Again' : 'Add' }}</button></div>
                     <div class="li"><span class="l">Claude Code<small>claude mcp add, for your user</small></span>
-                      <span class="pill" [class.ok]="codeAdded()" [class.warn]="!codeAdded()"><i></i>{{ codeAdded() ? 'Added' : 'Not added' }}</span>
-                      <button type="button" [class.primary]="!codeAdded()" (click)="mcpCode()">{{ codeAdded() ? 'Add Again' : 'Add' }}</button></div>
+                      <span class="pill" [class.ok]="codeIn()" [class.warn]="!codeIn()"><i></i>{{ codeIn() ? 'Added' : 'Not added' }}</span>
+                      <button type="button" [class.primary]="!codeIn()" (click)="mcpCode()">{{ codeIn() ? 'Add Again' : 'Add' }}</button></div>
                     <details class="li man"><summary class="l">Set up by hand</summary>
                       <div class="mrow"><span>Claude Code</span><code>{{ mcp()?.codeCmd }}</code><button type="button" (click)="copyText(mcp()?.codeCmd ?? '')">Copy</button></div>
                       <div class="mrow"><span>Claude Desktop</span><code>{{ mcp()?.command }} mcp</code><button type="button" (click)="copyText(mcp()?.command ?? '')">Copy</button></div></details>
                   }
                 </div>
                 <div class="gf">{{ mcpMsg() || 'Every command Claude wants to type is shown in Termwright first. The connector listens on this computer only, with a random key.' }}</div>
+
+                <div class="gt">Local API and command line</div>
+                <div class="list">
+                  <div class="li"><span class="l">Emulated lab for scripts<small>A REST API on this computer and <code>termwright lab …</code>: switches, cables, consoles, traffic tests, captures - without asking first</small></span>
+                    @if (s.ai?.api) { <span class="pill" [class.ok]="mcp()?.running"><i></i>{{ mcp()?.running ? 'Running' : 'Starts on Save' }}</span> }
+                    <span class="sw"><input type="checkbox" name="api" [ngModel]="!!s.ai?.api" (ngModelChange)="setAI({ api: $event })" aria-label="Local API" /></span></div>
+                  @if (s.ai?.api && mcp()?.apiUrl) {
+                    <div class="mrow li"><span>Address</span><code>{{ mcp()?.apiUrl }}</code><button type="button" (click)="copyText(mcp()?.apiUrl ?? '')">Copy</button></div>
+                    <div class="mrow li"><span>Key</span><code>Authorization: Bearer ••••••••</code><button type="button" (click)="copyApiKey()">Copy Key</button></div>
+                    <div class="mrow li"><span>Command line</span><code>{{ mcp()?.command }} lab help</code><button type="button" (click)="copyText((mcp()?.command ?? '') + ' lab help')">Copy</button></div>
+                  }
+                </div>
+                <div class="gf">For test frameworks and CI on this computer: a new random key each time Termwright starts, kept with the address in {{ mcp()?.keyFile || 'mcp.json in the data folder' }}. Changes made through it are not asked first and show as API in the Events.</div>
               </div>
             }
             @case ('cards') {
@@ -680,6 +708,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
   </div>
   }`,
   styles: [`
+    .webd { display: flex; flex-direction: column; gap: 6px; min-width: 0; .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } }
     .glist { max-width: 760px;
       .gt { font-size: calc(11px * var(--ui-scale, 1)); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 4px 0 6px 4px; }
       .list { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
@@ -740,6 +769,16 @@ export class OptionsDialog implements OnInit {
   readonly page = signal<Page>((this.ui.optionsPage() || 'general') as Page);
   /** Built-in backup command shown when a device type has none of its own. */
   readOnlyDefault(name: string) { return 'Runs without asking (one per line; empty = ' + readOnlyList(name, '').join(', ') + ')'; }
+  /** The built-in web server commands of EXOS and VOSS, shown as placeholders (an empty field uses them). */
+  tunnelDefault(name: string) { return dtTunnels([], name) ? 'Default: forwards connections' : 'Default: no forwarding (' + name + ')'; }
+  webDefault(name: string, k: 'check' | 'http' | 'https' | 'on' | 'save') {
+    const d: Record<string, Record<string, string>> = {
+      exos: { check: 'show management', http: 'web access : enabled (tcp', https: 'enabled (ssl port', on: 'enable web http · ssl certificate · enable web https', save: 'save configuration' },
+      voss: { check: 'show web-server', http: 'status enabled, secure-only disabled', https: 'status : enabled', on: 'web-server enable · no web-server secure-only', save: 'save config' },
+    };
+    const c = d[name.toLowerCase()]?.[k];
+    return c ? c + '  (built-in)' : '';
+  }
   backupDefault(name: string) {
     const d: Record<string, string> = { exos: 'show configuration', voss: 'show running-config', 'cisco ios': 'show running-config' };
     const c = d[name.toLowerCase()];
@@ -1018,6 +1057,8 @@ export class OptionsDialog implements OnInit {
   readonly mcp = signal<MCPInfo | null>(null);
   readonly aiCheck = signal<boolean | null>(null); // the last Test: worked / failed
   readonly codeAdded = signal(false);
+  /** Claude Code has Termwright: what its settings file says, or what was just added. */
+  codeIn() { return this.codeAdded() || !!this.mcp()?.inCode; }
   /** The status pill: the last Test, else what the saved settings say. */
   aiStatus(): { cls: string; text: string } {
     const p = this.s?.ai?.provider ?? '';
@@ -1030,13 +1071,14 @@ export class OptionsDialog implements OnInit {
     return { cls: '', text: tr('Not tested') };
   }
   readonly mcpMsg = signal('');
+  async copyApiKey() { try { const k = await this.backend.apiKey(); if (k) { await navigator.clipboard.writeText(k); this.ui.toast('Key copied', 'success'); } } catch (e) { this.ui.error(e); } }
   async mcpDesktop() {
     try { await this.backend.mcpAddToDesktop(); this.mcpMsg.set(tr('Added to Claude Desktop - restart Claude Desktop, then look for Termwright under its connectors.')); this.loadAI(); }
     catch (e) { this.mcpMsg.set(errText(e)); }
   }
   async mcpCode() {
     this.mcpMsg.set(tr('Adding…'));
-    try { await this.backend.mcpAddToClaudeCode(); this.codeAdded.set(true); this.mcpMsg.set(tr('Added to Claude Code - start a new claude session and type /mcp to see it.')); }
+    try { await this.backend.mcpAddToClaudeCode(); this.codeAdded.set(true); this.loadAI(); this.mcpMsg.set(tr('Added to Claude Code - start a new claude session and type /mcp to see it.')); }
     catch (e) { this.mcpMsg.set(errText(e)); }
   }
   async copyText(t: string) { if (t) { await this.backend.clipboardSet(t); this.ui.toast(tr('Copied'), 'success'); } }

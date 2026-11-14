@@ -1,4 +1,5 @@
 import { isAddressName } from '../core/device-name';
+import { LabService } from '../core/lab.service';
 import { tr } from '../core/i18n';
 import { DeviceState, TeamStatusService, isNetworkDevice } from '../core/team-status.service';
 import { RemoteDesktopSetup } from '../core/remote-desktop-setup.service';
@@ -7,7 +8,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { followJump } from '../core/jump-refs';
 import { Backend } from '../core/backend';
-import { SessionNode } from '../core/models';
+import { SessionNode, dtTunnels } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { MenuItem, Ui } from '../core/ui.service';
 import { Icon } from './icon';
@@ -128,6 +129,7 @@ export function sessionAddr(n: SessionNode): string {
                  <app-folder-icon [depth]="r.depth ?? 0" [env]="folderEnv(n.path)" [open]="expanded().has(n.path)" [size]="roomy() ? 22 : 16" /> 
                 <span class="name">{{ n.name }}</span>
                 @if (env(n); as e) { <span class="env envtag" [style.background]="e.color" [style.color]="e.fg" [title]="e.label + ' (folder)'">{{ e.short }}</span> }
+                @if (labFolder(n)) { @let lp = labPill(n); <span class="labpill" [class.on]="lp.on > 0" [title]="lp.title">{{ lp.text }}</span> }
                  <span class="count">{{ counts().get(n.path) ?? 0 }}</span> 
               } @else {
                 <span class="twisty"></span>
@@ -165,10 +167,12 @@ export function sessionAddr(n: SessionNode): string {
         @if (n.protocol === 'WOL') { <span [class]="wolDot(n)" [title]="wolTitle(n)"></span> }
         @else if (reach() && inReach(n.path)) { <span class="dot" [class]="dotClass(n)"></span> }
         @else if (liveState().get(n.path); as st) { <span class="dot" [class]="'dot ' + (st === 'connected' ? 'up' : st === 'error' ? 'down' : 'unk')" [title]="'Open in a tab - ' + st"></span> }
+        @else if (labDot(n); as d) { <span class="dot" [class]="'dot ' + d.cls" [title]="d.title"></span> }
       } @else {
         <app-session-icon [kind]="protoIcon(n)" [via]="!!n.hopTarget || n.protocol === 'Console'" />
         @if (n.protocol === 'WOL') { <span [class]="wolDot(n)" [title]="wolTitle(n)"></span> }
         @else if (reach() && inReach(n.path)) { <span class="dot" [class]="dotClass(n)"></span> }
+        @else if (labDot(n); as d) { <span class="dot" [class]="'dot ' + d.cls" [title]="d.title"></span> }
         <span class="name">{{ n.name }}</span>
         @if (isFav(n.path)) { <span class="star" title="Favourite">★</span> }
         @if (env(n); as e) { <span class="env envtag" [style.background]="e.color" [style.color]="e.fg" [title]="e.label">{{ e.short }}</span> }
@@ -176,10 +180,10 @@ export function sessionAddr(n: SessionNode): string {
       }
     </ng-template>
     @if (roomy()) {
-      <div class="sm-foot">
-        <button class="primary" title="New session in the selected folder" (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" [size]="14" /> New</button>
-        <button title="Import sessions from another terminal program or a file" (click)="ui.open('import')"><app-icon name="import" [size]="14" /> Import</button>
-        <button title="Discover devices on a network" (click)="ui.open('discover')"><app-icon name="radar" [size]="14" /> Scan</button>
+      <div class="sm-foot qa qs-slab sm-qa">
+        <button type="button" class="n" title="New session in the selected folder" (click)="ui.newSession(ui.currentFolder())"><app-icon name="plus" [size]="15" /><span class="nm">New</span></button>
+        <button type="button" class="s" title="Local Shell: a terminal on this computer" (click)="tabs.openLocalShell()"><app-icon name="shell" [size]="15" /><span class="nm">Shell</span></button>
+        <button type="button" class="d" title="Discover devices on a network" (click)="ui.open('discover')"><app-icon name="radar" [size]="15" /><span class="nm">Scan</span></button>
       </div>
     }
 
@@ -239,9 +243,44 @@ export function sessionAddr(n: SessionNode): string {
 export class SessionTree implements AfterViewInit, OnDestroy {
   protected ui = inject(Ui);
   protected teamStatus = inject(TeamStatusService);
-  private tabs = inject(Tabs);
+  protected tabs = inject(Tabs);
   private remoteDesktop = inject(RemoteDesktopSetup);
   protected wol = inject(Wol);
+  protected lab = inject(LabService);
+
+  /** A session of a lab: running, starting or stopped. */
+  labDot(n: SessionNode): { cls: string; title: string } | null {
+    const d = this.lab.deviceOf(n.hostname, n.port, n.path);
+    if (!d) return null;
+    if (d.state) return d.state === 'running' ? { cls: 'up', title: 'Emulated switch - running' } : d.state === 'stopped' ? { cls: 'unk', title: 'Emulated switch - stopped' }
+      : d.state === 'failed' ? { cls: 'down', title: 'Emulated switch - ' + (d.error || 'failed') } : { cls: 'warn', title: 'Emulated switch - ' + (d.stateText || d.state) };
+    return d.running ? { cls: 'up', title: 'Simulated switch - running' + (d.logins ? ', ' + d.logins + ' login' + (d.logins > 1 ? 's' : '') : '') } : { cls: 'unk', title: 'Simulated switch - stopped' };
+  }
+  /** The lab whose folder this is ('' = none). */
+  labKind(n: SessionNode): '' | 'sim' | 'emu' {
+    if (!n.isFolder) return '';
+    if (this.lab.sim()?.exists && n.path === this.lab.sim()!.folder) return 'sim';
+    if (this.lab.emu()?.exists && n.path === this.lab.emu()!.folder) return 'emu';
+    return '';
+  }
+  labFolder(n: SessionNode) { return this.labKind(n) !== ''; }
+  labPill(n: SessionNode) {
+    const k = this.labKind(n), v = k === 'emu' ? this.lab.emu() : this.lab.sim();
+    const on = k === 'emu' ? this.lab.emuRunning() : this.lab.simRunning();
+    return { on, text: on + ' / ' + (v?.devices?.length ?? 0) + (k === 'emu' ? ' ready' : ' running'), title: k === 'emu' ? 'Emulated lab - right-click to start or stop' : 'Simulated lab - right-click to start or stop' };
+  }
+  /** Start / Stop / Restart for the session of a lab switch (or its console). */
+  private switchItems(n: SessionNode): MenuItem[] {
+    const d = this.lab.deviceOf(n.hostname, n.port, n.path);
+    if (!d) return [];
+    const emu = !!d.state, kind = emu ? 'emu' : 'sim';
+    const run = (f: () => unknown) => { this.lab.kind.set(kind); void f(); };
+    const items: MenuItem[] = d.running
+      ? [{ label: 'Stop Switch', action: () => run(() => this.lab.stop([d.id])) }, ...(emu ? [{ label: 'Restart Switch', action: () => run(() => this.lab.restart([d.id])) }] : [])]
+      : [{ label: 'Start Switch', action: () => run(() => this.lab.start([d.id])) }];
+    return [...items, { separator: true }];
+  }
+  private labDo(n: SessionNode, f: () => unknown) { const k = this.labKind(n); if (k) this.lab.kind.set(k); void f(); }
   protected ops = inject(SessionOps);
   private backend = inject(Backend);
   private async wake(path: string, then: 'none' | 'connect') {
@@ -782,6 +821,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'Edit All Sessions in Folder...', action: () => this.bulkEdit(this.pathsIn(n)) },
           { label: 'Back Up Configurations', action: () => this.backUp([n.path + '/']) },
           { label: 'Name After Devices...', action: () => this.nameAfter(this.pathsIn(n), n.path) },
+          ...(this.labFolder(n) ? [{ separator: true }, { label: 'Start Lab', action: () => this.labDo(n, () => this.lab.start()) }, { label: 'Stop Lab', action: () => this.labDo(n, () => this.lab.stop()) },
+            { label: 'Open Lab Window...', action: () => this.labDo(n, () => this.ui.open('lab')) }, { label: 'Add Switches...', action: () => this.labDo(n, () => { this.ui.labWizard.set({ add: true }); this.ui.open('labWizard'); }) }, { separator: true }] : []),
           { label: 'Change Checklist...', action: () => this.checklist([n.path + '/']) },
           { label: 'Run and Collect...', action: () => this.collect([n.path + '/']) },
           ...this.pushItems(this.pathsIn(n), n.path),
@@ -801,6 +842,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'Folder Defaults...', action: () => { this.ui.folderDefaultsFor.set(n.path); this.ui.open('folderDefaults'); } },
         ]
       : [
+          ...this.switchItems(n),
           ...(n.protocol === 'SSH2' ? [
             { label: 'Connect Terminal', action: () => void this.tabs.openSession(n.path, 'terminal') },
             ...(n.hopTarget ? [
@@ -809,7 +851,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
             ] : [{ label: 'Connect SFTP Session', action: () => void this.tabs.openSession(n.path, 'sftp') }]),
           ] : n.protocol === 'WOL' ? [] : [{ label: 'Connect', action: () => this.connect(n) }]),
           ...(n.hostname && n.protocol !== 'RDP' && n.protocol !== 'VNC' ? [
-            ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', action: () => void this.openWeb(n.path, 'session') }] : []),
+            ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', disabled: !dtTunnels(this.ui.settings()?.deviceTypes, n.deviceType), hint: dtTunnels(this.ui.settings()?.deviceTypes, n.deviceType) ? undefined : 'no forwarding', action: () => void this.openWeb(n.path, 'session') }] : []),
             ...(n.protocol === 'SSH2' ? [{ label: 'Set Up Remote Desktop...', action: () => void this.remoteDesktop.openFor(n.path) }] : []),
             ...(n.protocol === 'SSH2' ? [{ label: 'Diagnose Remote Desktop...', action: () => this.ui.openRemoteDiag(n.path, n.name, 'SSH2') }] : []),
             { label: 'Open Web Interface...', action: () => void this.openWeb(n.path, 'device') },

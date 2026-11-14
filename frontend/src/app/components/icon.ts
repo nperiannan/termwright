@@ -12,6 +12,8 @@ const PATHS: Record<string, string> = {
   clip: 'M20 11l-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7',
   sparkles: 'M11 3l1.8 5.2L18 10l-5.2 1.8L11 17l-1.8-5.2L4 10l5.2-1.8zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z',
   server: 'M4 4.5h16v6.5H4zM4 13h16v6.5H4zM7 7.75h.01M7 16.25h.01M10 7.75h7M10 16.25h7',
+  flask: 'M9 3h6M10 3v6.5L4.6 18.4A1.7 1.7 0 0 0 6.1 21h11.8a1.7 1.7 0 0 0 1.5-2.6L14 9.5V3M7.2 15h9.6',
+  cube: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5',
   rows: 'M4 4.5h16v6.5H4zM4 13h16v6.5H4zM7 7h7M7 9h4M7 15.5h7M7 17.5h4',
   // theme switch: sun (light), moon (dark), screen with a half-lit circle (follow the system)
   sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4',
@@ -81,6 +83,7 @@ const PATHS: Record<string, string> = {
   bulk: 'M4 6h10M4 12h10M4 18h10M16 8l2 2 3-3M16 16l2 2 3-3',
   compare: 'M4 4h7v16H4zM13 4h7v16h-7zM6.5 9h2M15.5 9h2M6.5 13h2M15.5 13h2',
   play: 'M7 5v14l11-7z',
+  mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7',
   'file-plus': 'M14 3H6v18h12V7zM14 3v4h4M12 11v6M9 14h6',
   globe: 'M12 3a9 9 0 100 18 9 9 0 000-18zM3.5 9h17M3.5 15h17M12 3c2.4 2.6 3.6 5.6 3.6 9s-1.2 6.4-3.6 9M12 3C9.6 5.6 8.4 8.6 8.4 12s1.2 6.4 3.6 9',
   upload: 'M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v4h16v-4',

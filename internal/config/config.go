@@ -46,6 +46,8 @@ type AISettings struct {
 	// Termwright as a connector (MCP server) for Claude Desktop and Claude Code
 	MCP         bool   `json:"mcp,omitempty"`
 	MCPCommands string `json:"mcpCommands,omitempty"` // "" = ask before typing a command or connecting, "never" = read only
+	// API: the local REST API and the command line (termwright lab …) for the emulated lab
+	API bool `json:"api,omitempty"`
 	// the AI panel's Agent mode: "" = changes ask first, "every" = ask before every
 	// command, "readonly" = only read-only commands, "auto" = fully autonomous
 	AgentPerm string `json:"agentPerm,omitempty"`
@@ -140,6 +142,7 @@ type Settings struct {
 	Language             string                       `json:"language"`                  // interface language: "" = English, "ru" = Russian (partial)
 	IconStyle            string                       `json:"iconStyle"`                 // device and session icons: "" = coloured tiles, "glyph" = the symbol only
 	QuickButtons         string                       `json:"quickButtons,omitempty"`    // start page buttons: "" = raised slabs, "keycap", "glow"
+	SessionEditor        string                       `json:"sessionEditor,omitempty"`   // session properties: "" = the side panel (More Options for every page), "window" = the full window
 	FolderColors         string                       `json:"folderColors,omitempty"`    // folder and environment colours: "" = soft, "vivid", "steel"
 	NameAfterDevice      string                       `json:"nameAfterDevice,omitempty"` // a session named by its address, after connecting: "" = suggest the device's name, "auto" = rename (with Undo), "off"
 	NameFormat           string                       `json:"nameFormat,omitempty"`      // Name After Devices: "" = hostname, "model" = hostname (model), "octet" = hostname · last octet

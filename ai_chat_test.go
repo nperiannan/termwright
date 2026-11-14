@@ -138,3 +138,19 @@ func TestClaudeCodeModelsAndEffort(t *testing.T) {
 		t.Fatal("an unknown effort is not passed on")
 	}
 }
+
+// Agent mode asks for a checklist plan for a task of several steps; Plan mode only looks and plans; Ask has neither.
+func TestAIChatSystemPlan(t *testing.T) {
+	r := AIChatRequest{Agent: true, Tools: []string{"run"}, Plan: "list"}
+	if s := aiChatSystem(r); !strings.Contains(s, "plan [ ] <step>") || strings.Contains(s, "PLAN MODE") {
+		t.Fatal("agent: no plan instructions")
+	}
+	r.Plan = "only"
+	if s := aiChatSystem(r); !strings.Contains(s, "PLAN MODE") || !strings.Contains(s, "Run the Plan") {
+		t.Fatal("plan mode")
+	}
+	r.Agent = false
+	if s := aiChatSystem(r); strings.Contains(s, "plan [ ]") {
+		t.Fatal("ask mode has no plan")
+	}
+}

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {
-  AccountInfo, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName } from './models';
+  EmuServer, EmuServerView,
+  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -18,6 +19,9 @@ declare global {
 /** Typed wrapper around the Go backend bound by Wails. */
 export type SftpMode = '' | 'jump' | 'target';
 
+/** A device's own web server, read by its device type. */
+export interface WebServerState { known: boolean; http: boolean; https: boolean; output?: string; on?: string[] | null; save?: string[] | null; }
+
 @Injectable({ providedIn: 'root' })
 export class Backend {
   get available(): boolean { return !!window.go?.main?.App; }
@@ -32,6 +36,10 @@ export class Backend {
     return window.runtime ? window.runtime.EventsOn(event, cb) : () => {};
   }
 
+  /** A picture on the system clipboard (base64 PNG), or null: the app's Paste reaches the page as text only. */
+  clipboardImage() { return this.call<{ data: string; type: string } | null>('ClipboardImage'); }
+  /** What to type in a terminal to sign Claude Code in on this computer (its path when the terminal would not find it). */
+  claudeCodeSignIn() { return this.call<string>('ClaudeCodeSignIn'); }
   clipboardGet(): Promise<string> {
     return window.runtime ? window.runtime.ClipboardGetText() : navigator.clipboard.readText();
   }
@@ -59,6 +67,200 @@ export class Backend {
   saveSession(s: Session, oldPath: string) { return this.call<Session>('SaveSession', s, oldPath); }
   setNoCursorReport(path: string, on: boolean) { return this.call<void>('SetNoCursorReport', path, on); }
   deleteSession(path: string) { return this.call<void>('DeleteSession', path); }
+  labState() { return this.call<LabView>('LabState'); }
+  labPackInfo(path: string) { return this.call<LabPack>('LabPackInfo', path); }
+  labPackAccept(path: string, hash: string) { return this.call<LabView>('LabPackAccept', path, hash); }
+  labPackRemove() { return this.call<LabView>('LabPackRemove'); }
+  emuState() { return this.call<LabView>('EmuState'); }
+  emuCatalog() { return this.call<{ file: string; name: string; group: string; note: string; added: boolean; count: number }[]>('EmuCatalog'); }
+  emuAddFromCatalog(file: string) { return this.call<LabView>('EmuAddFromCatalog', file); }
+  emuSetDiskFile(id: string, slot: string, path: string) { return this.call<LabView>('EmuSetDiskFile', id, slot, path); }
+  emuDownloadStop(id: string) { return this.call<LabView>('EmuDownloadStop', id); }
+  emuDownloadMove(id: string, where: string) { return this.call<LabView>('EmuDownloadMove', id, where); }
+  emuRemoveFromCatalog(file: string, files: boolean) { return this.call<LabView>('EmuRemoveFromCatalog', file, files); }
+  emuClearEvents() { return this.call<LabView>('EmuClearEvents'); }
+  emuDownload(ids: string[]) { return this.call<LabView>('EmuDownload', ids); }
+  emuPersonaPreview(id: string, p: EmuPersona) { return this.call<string>('EmuPersonaPreview', id, p); }
+  emuSuggest(model: string) { return this.call<{ serial: string; mac: string }>('EmuSuggest', model); }
+  emuSaveTemplate(t: EmuTemplate) { return this.call<LabView>('EmuSaveTemplate', t); }
+  emuRemoveTemplate(id: string) { return this.call<LabView>('EmuRemoveTemplate', id); }
+  emuImportProfiles(path: string) { return this.call<LabView>('EmuImportProfiles', path); }
+  emuSetPersona(id: string, p: EmuPersona) { return this.call<LabView>('EmuSetPersona', id, p); }
+  emuApplyPersona(ids: string[]) { return this.call<LabView>('EmuApplyPersona', ids); }
+  emuSetResources(id: string, cpus: number, ram: number, diskGb: number) { return this.call<LabView>('EmuSetResources', id, cpus, ram, diskGb); }
+  emuSetMACs(ids: string[], start: string) { return this.call<LabView>('EmuSetMACs', ids, start); }
+  labSetMACs(ids: string[], start: string) { return this.call<LabView>('LabSetMACs', ids, start); }
+  emuSetIdentity(id: string, serial: string, mac: string) { return this.call<LabView>('EmuSetIdentity', id, serial, mac); }
+  emuSetSerials(ids: string[], serials: string[], fromFormat: boolean) { return this.call<LabView>('EmuSetSerials', ids, serials, fromFormat); }
+  labNewSerials(ids: string[]) { return this.call<LabView>('LabNewSerials', ids); }
+  emuSetupHost(session: string, password: string) { return this.call<string>('EmuSetupHost', session, password); }
+  emuCheckHost(session: string) { return this.call<EmuHost>('EmuCheckHost', session); }
+  emuRemoveHost(session: string) { return this.call<LabView>('EmuRemoveHost', session); }
+  emuAddImage(path: string) { return this.call<LabView>('EmuAddImage', path); }
+  /** The microcontrollers there are, and a firmware for one: a flash image (.bin) or an ESP-IDF build folder. */
+  emuBoards() { return this.call<EmuBoard[]>('EmuBoards'); }
+  emuAddFirmware(board: string, path: string, name: string, flashMb: number) { return this.call<LabView>('EmuAddFirmware', board, path, name, flashMb); }
+  emuSampleFirmware(board: string) { return this.call<LabView>('EmuSampleFirmware', board); }
+  emuAddServer(host: string, start: boolean) { return this.call<LabView>('EmuAddServer', host, start); }
+  emuServerState(id: string) { return this.call<EmuServerView>('EmuServerState', id); }
+  emuSetServer(id: string, s: EmuServer) { return this.call<LabView>('EmuSetServer', id, s); }
+  emuServerPassword(id: string) { return this.call<string>('EmuServerPassword', id); }
+  emuServerUpload(id: string, files: string[], dir: string) { return this.call<EmuServerView>('EmuServerUpload', id, files, dir); }
+  emuServerDownload(id: string, name: string, to: string) { return this.call<void>('EmuServerDownload', id, name, to); }
+  emuServerDelete(id: string, names: string[]) { return this.call<EmuServerView>('EmuServerDelete', id, names); }
+  emuServerMkdir(id: string, name: string) { return this.call<EmuServerView>('EmuServerMkdir', id, name); }
+  /** A microcontroller gets another firmware of its board (its flash is made again) and starts again. */
+  emuFlashFirmware(id: string, imageId: string) { return this.call<LabView>('EmuFlashFirmware', id, imageId); }
+  emuSetGdb(id: string, on: boolean) { return this.call<LabView>('EmuSetGDB', id, on); }
+  emuInstallStart(r: EmuInstallRequest) { return this.call<LabView>('EmuInstallStart', r); }
+  emuInstallFinish(id: string) { return this.call<LabView>('EmuInstallFinish', id); }
+  emuInstallCancel(id: string) { return this.call<LabView>('EmuInstallCancel', id); }
+  emuInstallRemove(id: string) { return this.call<LabView>('EmuInstallRemove', id); }
+  emuImportAppliance(path: string) { return this.call<LabView>('EmuImportAppliance', path); }
+  emuSetImageFile(id: string, path: string) { return this.call<LabView>('EmuSetImageFile', id, path); }
+  emuSaveImage(im: EmuImage, clearPassword: boolean) { return this.call<LabView>('EmuSaveImage', im, clearPassword); }
+  emuRemoveImage(id: string) { return this.call<LabView>('EmuRemoveImage', id); }
+  emuUpload(id: string, host: string) { return this.call<LabView>('EmuUpload', id, host); }
+  emuAdd(r: EmuRequest) { return this.call<LabView>('EmuAdd', r); }
+  emuStart(ids: string[]) { return this.call<LabView>('EmuStart', ids); }
+  emuStop(ids: string[]) { return this.call<LabView>('EmuStop', ids); }
+  emuShutDown(ids: string[]) { return this.call<LabView>('EmuShutDown', ids); }
+  emuSetFast(on: boolean) { return this.call<LabView>('EmuSetFast', on); }
+  emuSetMgmt(mgmt: string, mgmtNet: string) { return this.call<LabView>('EmuSetMgmt', mgmt, mgmtNet); }
+  emuSetDNS(servers: string[]) { return this.call<LabView>('EmuSetDNS', servers); }
+  emuCheckpoint(id: string, note: string) { return this.call<LabView>('EmuCheckpoint', id, note); }
+  emuCheckpointRestore(id: string, tag: string) { return this.call<LabView>('EmuCheckpointRestore', id, tag); }
+  emuCheckpointRemove(id: string, tag: string) { return this.call<LabView>('EmuCheckpointRemove', id, tag); }
+  emuSetCheckpoints(on: boolean) { return this.call<LabView>('EmuSetCheckpoints', on); }
+  emuNoteSave(n: LabNote) { return this.call<LabView>('EmuNoteSave', n); }
+  emuNoteRemove(id: string) { return this.call<LabView>('EmuNoteRemove', id); }
+  emuHubAdd(kind: 'hub' | 'switch', name: string, x: number, y: number) { return this.call<LabView>('EmuHubAdd', kind, name, x, y); }
+  emuHubSet(id: string, name: string, x: number, y: number) { return this.call<LabView>('EmuHubSet', id, name, x, y); }
+  emuHubConnect(id: string, vm: string, port: string) { return this.call<LabView>('EmuHubConnect', id, vm, port); }
+  emuHubDisconnect(id: string, vm: string, port: number) { return this.call<LabView>('EmuHubDisconnect', id, vm, port); }
+  emuHubRemove(id: string) { return this.call<LabView>('EmuHubRemove', id); }
+  emuHubSetPorts(id: string, n: number) { return this.call<LabView>('EmuHubSetPorts', id, n); }
+  emuHubPortSet(id: string, port: number, mode: string, vlan: number, vlans: number[]) { return this.call<LabView>('EmuHubPortSet', id, port, mode, vlan, vlans); }
+  emuHubSetMgmt(id: string, ip: string, vlan: number) { return this.call<LabView>('EmuHubSetMgmt', id, ip, vlan); }
+  emuHubDetail(id: string) { return this.call<LabHubDetail>('EmuHubDetail', id); }
+  emuSetCloudPorts(host: string, n: number) { return this.call<LabView>('EmuSetCloudPorts', host, n); }
+  emuScreen(kind: 'vm' | 'install', id: string) { return this.call<{ png: string; w: number; h: number; at: string }>('EmuScreen', kind, id); }
+  emuScreenKeys(kind: 'vm' | 'install', id: string, text: string, enter: boolean, keys: string[]) { return this.call<void>('EmuScreenKeys', kind, id, text, enter, keys); }
+  emuInstallType(id: string, line: string, enter: boolean) { return this.call<void>('EmuInstallType', id, line, enter); }
+  emuSetHostMgmt(host: string, mgmt: string, mgmtNet: string) { return this.call<LabView>('EmuSetHostMgmt', host, mgmt, mgmtNet); }
+  emuConsoleLog(id: string) { return this.call<string>('EmuConsoleLog', id); }
+  emuDay0Again(id: string) { return this.call<LabView>('EmuDay0Again', id); }
+  emuMigrate(id: string, host: string, live: boolean) { return this.call<LabView>('EmuMigrate', id, host, live); }
+  emuRemoveHostInfo(host: string) { return this.call<EmuRemoveInfo>('EmuRemoveHostInfo', host); }
+  emuRemoveHostWith(r: EmuRemoveHostReq) { return this.call<LabView>('EmuRemoveHostWith', r); }
+  emuHostKVM(host: string) { return this.call<boolean>('EmuHostKVM', host); }
+  emuLog(lines: number) { return this.call<{ level: string; path: string; tail: string }>('EmuLog', lines); }
+  emuSetLogLevel(level: string) { return this.call<{ level: string; path: string; tail: string }>('EmuSetLogLevel', level); }
+  emuCaptureStart(id: string, port: string) { return this.call<EmuCapture[]>('EmuCaptureStart', id, port); }
+  emuCaptureStop(key: string) { return this.call<EmuCapture[]>('EmuCaptureStop', key); }
+  emuCaptureDelete(files: string[]) { return this.call<EmuCapture[]>('EmuCaptureDelete', files); }
+  emuRunning() { return this.call<EmuRunRow[]>('EmuRunning'); }
+  /** Switches off a lab's switches that run in the background on a host (a topology not open, or none any more). */
+  emuStopBackground(host: string, lab: string) { return this.call<number>('EmuStopBackground', host, lab); }
+  emuQemuCommand(id: string) { return this.call<string>('EmuQemuCommand', id); }
+  emuLinkCheck(id: string, seconds: number) { return this.call<string>('EmuLinkCheck', id, seconds); }
+  emuTests() { return this.call<EmuTest[]>('EmuTests'); }
+  emuTestSave(t: EmuTest) { return this.call<EmuTest[]>('EmuTestSave', t); }
+  emuTestRemove(id: string) { return this.call<EmuTest[]>('EmuTestRemove', id); }
+  emuTestRun(id: string) { return this.call<EmuTestRun>('EmuTestRun', id); }
+  emuTestStop() { return this.call<void>('EmuTestStop'); }
+  emuTestRuns() { return this.call<EmuTestRun[]>('EmuTestRuns'); }
+  emuTestReportSave(id: string, path: string) { return this.call<void>('EmuTestReportSave', id, path); }
+  emuTraffic() { return this.call<EmuTrafficView>('EmuTraffic'); }
+  emuTesterAdd(vm: string, port: string, ip: string, gw: string, vlan: number) { return this.call<EmuTrafficView>('EmuTesterAdd', vm, port, ip, gw, vlan); }
+  emuTesterSet(t: EmuTester) { return this.call<EmuTrafficView>('EmuTesterSet', t); }
+  emuRadius() { return this.call<EmuRadiusView>('EmuRadius'); }
+  emuRadiusSet(r: Omit<EmuRadiusView, 'hosts'>) { return this.call<EmuRadiusView>('EmuRadiusSet', r); }
+  emuTesterRemove(id: string) { return this.call<EmuTrafficView>('EmuTesterRemove', id); }
+  emuStreamSave(s: EmuStream) { return this.call<EmuTrafficView>('EmuStreamSave', s); }
+  emuTrafficTemplates() { return this.call<EmuTrafficTemplate[]>('EmuTrafficTemplates'); }
+  emuTrafficTemplateApply(id: string, ports: string[]) { return this.call<EmuTrafficView>('EmuTrafficTemplateApply', id, ports); }
+  emuTrafficTemplateSave(name: string, desc: string, ids: string[]) { return this.call<EmuTrafficTemplate>('EmuTrafficTemplateSave', name, desc, ids); }
+  emuTrafficTemplateRemove(id: string) { return this.call<void>('EmuTrafficTemplateRemove', id); }
+  emuStreamRemove(id: string) { return this.call<EmuTrafficView>('EmuStreamRemove', id); }
+  emuTrafficStart(ids: string[]) { return this.call<EmuTrafficView>('EmuTrafficStart', ids); }
+  emuTrafficStop() { return this.call<EmuTrafficView>('EmuTrafficStop'); }
+  emuTrafficReport(path: string) { return this.call<void>('EmuTrafficReport', path); }
+  emuCaptures() { return this.call<EmuCapture[]>('EmuCaptures'); }
+  emuCapturePackets(key: string, last: number) { return this.call<EmuPacket[]>('EmuCapturePackets', key, last); }
+  emuCapturePacket(key: string, no: number) { return this.call<EmuPacketDetail>('EmuCapturePacket', key, no); }
+  emuCaptureSavePackets(key: string, nos: number[], path: string) { return this.call<void>('EmuCaptureSavePackets', key, nos, path); }
+  emuCaptureSave(key: string, path: string) { return this.call<void>('EmuCaptureSave', key, path); }
+  emuCaptureWireshark(key: string) { return this.call<void>('EmuCaptureWireshark', key); }
+  emuImageMatrix() { return this.call<EmuMatrix>('EmuImageMatrix'); }
+  emuSyncImages(hosts: string[], images: string[], force: boolean) { return this.call<EmuMatrix>('EmuSyncImages', hosts, images, force); }
+  emuRemoveImageFrom(host: string, id: string) { return this.call<EmuMatrix>('EmuRemoveImageFrom', host, id); }
+  emuSyncSettings(syncAll: boolean, keep20: boolean) { return this.call<EmuMatrix>('EmuSyncSettings', syncAll, keep20); }
+  emuCheckReach() { return this.call<EmuMatrix>('EmuCheckReach'); }
+  emuSetImagesDir(host: string, dir: string) { return this.call<EmuMatrix>('EmuSetImagesDir', host, dir); }
+  emuOpenPortsText(host: string) { return this.call<string>('EmuOpenPortsText', host); }
+  emuMoveVM(id: string, host: string) { return this.call<LabView>('EmuMoveVM', id, host); }
+  emuSetLag(vm: string, name: string, mode: string, ports: string[]) { return this.call<LabView>('EmuSetLag', vm, name, mode, ports); }
+  emuLagCommands(vm: string, name: string, remove: boolean) { return this.call<string[]>('EmuLagCommands', vm, name, remove); }
+  emuApplyLag(vm: string, name: string, remove: boolean) { return this.call<LabView>('EmuApplyLag', vm, name, remove); }
+  emuCheckCabling() { return this.call<LabView>('EmuCheckCabling'); }
+  emuReadLags(ids: string[]) { return this.call<LabView>('EmuReadLags', ids); }
+  emuTopologies() { return this.call<EmuTopoInfo[]>('EmuTopologies'); }
+  emuSaveTopology(name: string) { return this.call<LabView>('EmuSaveTopology', name); }
+  emuOpenTopology(name: string, start: boolean) { return this.call<LabView>('EmuOpenTopology', name, start); }
+  emuNewTopology(name: string) { return this.call<LabView>('EmuNewTopology', name); }
+  emuDeleteTopology(name: string) { return this.call<void>('EmuDeleteTopology', name); }
+  emuRestart(ids: string[]) { return this.call<LabView>('EmuRestart', ids); }
+  emuReset(ids: string[]) { return this.call<LabView>('EmuReset', ids); }
+  emuRemove(ids: string[], sessions: boolean) { return this.call<LabView>('EmuRemove', ids, sessions); }
+  emuConnect(l: LabLink) { return this.call<LabView>('EmuConnect', l); }
+  emuDisconnect(id: string, port: string) { return this.call<LabView>('EmuDisconnect', id, port); }
+  emuSetLink(id: string, port: string, up: boolean) { return this.call<LabView>('EmuSetLink', id, port, up); }
+  emuPlace(id: string, x: number, y: number) { return this.call<void>('EmuPlace', id, x, y); }
+  emuFreePorts(id: string) { return this.call<string[] | null>('EmuFreePorts', id); }
+  emuSetRole(id: string, role: string) { return this.call<LabView>('EmuSetRole', id, role); }
+  emuSetComputerNet(id: string, n: EmuCompNet) { return this.call<LabView>('EmuSetComputerNet', id, n); }
+  emuComputerRun(id: string, app: string, target: string) { return this.call<string>('EmuComputerRun', id, app, target); }
+  emuSetDesktop(id: string, on: boolean, home: string) { return this.call<LabView>('EmuSetDesktop', id, on, home); }
+  emuScreenClick(kind: 'vm' | 'install', id: string, x: number, y: number, button: string, double: boolean) { return this.call<void>('EmuScreenClick', kind, id, x, y, button, double); }
+  emuSetRouting(id: string, r: EmuRouting | { proto: '' }) { return this.call<EmuRoutingView>('EmuSetRouting', id, r); }
+  emuRouting(id: string) { return this.call<EmuRoutingView>('EmuRouting', id); }
+  emuRoutingStream(id: string, from: string, pps: number) { return this.call<EmuTrafficView>('EmuRoutingStream', id, from, pps); }
+  emuSetCPU(id: string, maxCores: number, weight: number) { return this.call<LabView>('EmuSetCPU', id, maxCores, weight); }
+  /** A device's CPU request and limit in millicores (0 = none); they apply at once. */
+  /** The lab's change history (newest first), what Revert would do, and Revert. */
+  emuChanges() { return this.call<EmuChange[]>('EmuChanges'); }
+  /** The AI panel's own lab commands: the lab is kept before one runs, and the change goes to the history after. */
+  emuAgentChangeBegin(what: string, verb: string) { return this.call<string>('EmuAgentChangeBegin', what, verb); }
+  emuAgentChangeEnd(id: string, result: string) { return this.call<void>('EmuAgentChangeEnd', id, result); }
+  emuRevertPlan(id: string) { return this.call<string[]>('EmuRevertPlan', id); }
+  emuRevert(id: string) { return this.call<string[]>('EmuRevert', id); }
+  emuSetCPUReq(id: string, requestM: number, limitM: number) { return this.call<LabView>('EmuSetCPUReq', id, requestM, limitM); }
+  emuAddComputer(host: string, start: boolean) { return this.call<LabView>('EmuAddComputer', host, start); }
+  emuSetPortAddr(id: string, port: number, addr: string) { return this.call<LabView>('EmuSetPortAddr', id, port, addr); }
+  emuOpenTopologyOn(name: string, start: boolean, hosts: Record<string, string>) { return this.call<LabView>('EmuOpenTopologyOn', name, start, hosts); }
+  emuDuplicateTopology(name: string, newName: string) { return this.call<EmuTopoInfo[]>('EmuDuplicateTopology', name, newName); }
+  emuRenameTopology(name: string, newName: string) { return this.call<EmuTopoInfo[]>('EmuRenameTopology', name, newName); }
+  emuExportTopology(name: string, path: string) { return this.call<void>('EmuExportTopology', name, path); }
+  emuImportTopology(path: string) { return this.call<EmuTopoInfo[]>('EmuImportTopology', path); }
+  emuCheckTunnels() { return this.call<{ from: string; to: string; ok: boolean; text: string }[]>('EmuCheckTunnels'); }
+  emuSetUplink(id: string, port: string, on: boolean) { return this.call<LabView>('EmuSetUplink', id, port, on); }
+  emuSetIconStyle(id: string, style: string) { return this.call<LabView>('EmuSetIconStyle', id, style); }
+  emuAgentText() { return this.call<string>('EmuAgentText'); }
+  emuAgentTool(name: string, args: Record<string, unknown>, approved: boolean) { return this.call<EmuToolStep>('EmuAgentTool', name, args, approved); }
+  emuConsoleTail(id: string) { return this.call<string>('EmuConsoleTail', id); }
+  labAdd(r: LabRequest) { return this.call<LabView>('LabAdd', r); }
+  labStart(ids: string[]) { return this.call<LabView>('LabStart', ids); }
+  labStop(ids: string[]) { return this.call<LabView>('LabStop', ids); }
+  labRemove(ids: string[], sessions: boolean) { return this.call<LabView>('LabRemove', ids, sessions); }
+  labConnect(l: LabLink) { return this.call<LabView>('LabConnect', l); }
+  labDisconnect(id: string, port: string) { return this.call<LabView>('LabDisconnect', id, port); }
+  labPlace(id: string, x: number, y: number) { return this.call<void>('LabPlace', id, x, y); }
+  labFreePorts(id: string) { return this.call<string[] | null>('LabFreePorts', id); }
+  labSetIdentity(id: string, serial: string, mac: string) { return this.call<LabView>('LabSetIdentity', id, serial, mac); }
+  labSetSerials(ids: string[], serials: string[]) { return this.call<LabView>('LabSetSerials', ids, serials); }
+  labSetOutputs(o: LabOutput[]) { return this.call<LabView>('LabSetOutputs', o); }
+  labShow(id: string, cmd: string) { return this.call<string>('LabShow', id, cmd); }
   readDeviceNames(paths: string[]) { return this.call<DeviceName[]>('ReadDeviceNames', paths); }
   renameSessions(items: { path: string; name: string }[]) { return this.call<{ old: string; path: string; error?: string }[]>('RenameSessions', items); }
   refreshFacts(path: string, all: boolean) { return this.call<Record<string, string> | null>('RefreshFacts', path, all); }
@@ -137,7 +339,7 @@ export class Backend {
   teamLeave(id: string, force: boolean) { return this.call<void>('TeamLeave', id, force); }
   teamSetUp(r: { sessionPath: string; name: string; port: number; image: string; hostNetwork: boolean }) { return this.call<string>('TeamSetUp', r); }
   teamSetUpCancel(run: string) { return this.call<void>('TeamSetUpCancel', run); }
-  teamUpdateServer(r: { teamId: string; sessionPath: string; image: string }) { return this.call<string>('TeamUpdateServer', r); }
+  teamUpdateServer(r: { teamId: string; sessionPath: string; image: string; channel?: string }) { return this.call<string>('TeamUpdateServer', r); }
   teamPushDevices(paths: string[], base: string) { return this.call<TeamPushItem[]>('TeamPushDevices', paths, base); }
   teamCheck(id: string, items: TeamPushItem[]) { return this.call<TeamPushResult[]>('TeamCheck', id, items); }
   teamPush(id: string, items: TeamPushItem[]) { return this.call<TeamPushResult[]>('TeamPush', id, items); }
@@ -159,8 +361,10 @@ export class Backend {
   iperfServerStart(port: number) { return this.call<IperfInfo>('IperfServerStart', port); }
   iperfServerStop() { return this.call<void>('IperfServerStop'); }
   iperfClient(host: string, seconds: number, both: boolean) { return this.call<IperfTest[]>('IperfClient', host, seconds, both); }
-  firewallCheck() { return this.call<FirewallState>('FirewallCheck'); }
-  firewallAllow() { return this.call<FirewallState>('FirewallAllow'); }
+  /** The firewall for the ports typed (saved or not; 0 = the saved one). */
+  firewallCheck(tftp = 0, ftp = 0, http = 0) { return this.call<FirewallState>('FirewallCheckPorts', tftp, ftp, http); }
+  /** Allows them: with a sudo password through sudo, without one through the system's own password prompt. */
+  firewallAllow(tftp = 0, ftp = 0, http = 0, sudoPw = '') { return this.call<FirewallState>('FirewallAllowWith', tftp, ftp, http, sudoPw); }
   fileServersPassword() { return this.call<string>('FileServersPassword'); }
   fileServersNewPassword() { return this.call<string>('FileServersNewPassword'); }
   fileServersChooseFolder() { return this.call<string>('FileServersChooseFolder'); }
@@ -169,12 +373,13 @@ export class Backend {
   textReply(id: string, text: string, total: number) { return this.call<void>('TextReply', id, text, total); }
   claudeCodeFind(path: string) { return this.call<string>('ClaudeCodeFind', path); }
   mcpState() { return this.call<MCPInfo>('MCPState'); }
+  apiKey() { return this.call<string>('APIKey'); }
   mcpAddToDesktop() { return this.call<void>('MCPAddToDesktop'); }
   mcpAddToClaudeCode() { return this.call<string>('MCPAddToClaudeCode'); }
   aiState() { return this.call<AIStatus>('AIState'); }
   aiSetKey(provider: string, key: string) { return this.call<void>('AISetKey', provider, key); }
   aiModels(s: AISettings) { return this.call<string[]>('AIModels', s); }
-  aiChat(r: { messages: { role: string; text: string; images?: { name: string; mediaType: string; data: string }[] }[]; deviceType: string; protocol: string; agent: boolean; tabs: string[]; tools: string[]; folders: string[]; perm: string }) { return this.call<AIAnswer>('AIChat', r); }
+  aiChat(r: { messages: { role: string; text: string; images?: { name: string; mediaType: string; data: string }[] }[]; deviceType: string; protocol: string; agent: boolean; tabs: string[]; tools: string[]; folders: string[]; perm: string; plan?: string }) { return this.call<AIAnswer>('AIChat', r); }
   aiAsk(r: { kind: string; text: string; deviceType: string; protocol: string; question?: string }) { return this.call<AIAnswer>('AIAsk', r); }
   syncNow() { return this.call<SyncStatus>('SyncNow'); }
   syncState() { return this.call<SyncStatus>('SyncState'); }
@@ -248,8 +453,12 @@ export class Backend {
     return this.call<{ sent: string[]; via: string; target: string; awake: boolean; waited: number }>('WakeSession', tabId, s, wait);
   }
   webBrowsers() { return this.call<{ id: string; name: string }[] | null>('WebBrowsers'); }
+  /** The device's own web server (its device type says how to read it): HTTP and HTTPS on or off. */
+  webServerCheck(s: Session) { return this.call<WebServerState>('WebServerCheck', s); }
+  /** Turns the device's web server on for HTTP and HTTPS (and saves the configuration when save is set). */
+  webServerEnable(s: Session, save: boolean) { return this.call<WebServerState>('WebServerEnable', s, save); }
   openWebPage(tabId: string, s: Session, through: 'session' | 'device', url: string, browser: string) {
-    return this.call<{ browser: string; via: string }>('OpenWebPage', tabId, s, through, url, browser);
+    return this.call<{ browser: string; via: string; url?: string; note?: string }>('OpenWebPage', tabId, s, through, url, browser);
   }
   /** Files panel: copy a remote file to a temporary folder and open it with the system's program. */
   sftpOpenFile(id: string, remote: string) { return this.call<{ local: string; mod: number }>('SFTPOpenFile', id, remote); }
@@ -289,6 +498,8 @@ export class Backend {
   backupConfig() { return this.call<string>('BackupConfig'); }
   restoreConfig(path: string) { return this.call<{ files: number; sessions: number; before: string }>('RestoreConfig', path); }
   aiChatsLoad() { return this.call<string>('AIChatsLoad'); }
+  /** The system's dictation in the focused field: '' when it started, else a hint. */
+  startDictation() { return this.call<string>('StartDictation'); }
   aiChatsSave(data: string) { return this.call<void>('AIChatsSave', data); }
   downloadUpdate(url: string, name: string) { return this.call<string>('DownloadUpdate', url, name); }
   openUpdate(path: string) { return this.call<void>('OpenUpdate', path); }

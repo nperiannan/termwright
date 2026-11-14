@@ -1,0 +1,6 @@
+{"images": [
+ {"name": "Demo VM", "match": "(?i)^demo-vm-(?P<version>\\d+\\.\\d+\\.\\d+)", "deviceType": "Demo", "cpus": 1, "ram": 512, "nics": 4, "nic": "e1000", "disk": "ide", "portName": "{n}", "ready": "login:", "login": "admin", "addrCmd": "show ip",
+  "persona": {"name": "Persona", "file": "/data/persona.yaml", "osName": "Demo OS", "modules": "Module", "stack": false,
+   "template": "model: {{(index .Slots 0).Model}}\nserial: {{(index .Slots 0).Serial}}\n",
+   "models": [{"name": "D100-24T-4X", "modules": ["D-MOD-2"]}, {"name": "D200-8T", "modules": []}], "values": []}}
+]}

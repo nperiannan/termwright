@@ -62,7 +62,7 @@ const SUPPORTED_OS: [string, string][] = [['ubuntu', '22.04'], ['ubuntu', '24.04
             <button type="button" (click)="setup.cancel()">Cancel setup</button><span class="spacer"></span>
             <button type="button" class="primary" (click)="ui.close()" title="The setup goes on; you are told when it is done">Hide</button>
           } @else {
-            @if (r.phase !== 'done' || r.check) { <button type="button" (click)="setup.reset()">{{ r.phase === 'done' ? 'Set Up…' : 'Back' }}</button> }
+            <button type="button" (click)="setup.reset()">{{ r.phase === 'done' ? (r.check ? 'Set Up…' : 'Set Up Again…') : 'Back' }}</button>
             <span class="spacer"></span>
             @if (r.made.rdp) { <button type="button" (click)="open(r.made.rdp!)">Open RDP</button> }
             @if (r.made.vnc) { <button type="button" (click)="open(r.made.vnc!)">Open VNC</button> }

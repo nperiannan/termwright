@@ -15,6 +15,8 @@ export interface Session {
   logonActions: LogonAction[];
   triggers: Trigger[]; portForwards: PortForward[];
   jumpSession: string; proxyType: '' | 'socks5' | 'http'; proxyHost: string; proxyPort: number; proxyUser: string;
+  /** A turned-off jump host / proxy is kept (offJump / offProxy) but not used. */
+  jumpOff?: boolean; offJump?: string; proxyOff?: boolean; offProxy?: { type: '' | 'socks5' | 'http'; host: string; port: number; user: string } | null;
   autoReconnect: boolean; x11Forward: boolean; agentForward: boolean;
   consoleServer?: string; consolePort?: number; consoleMethod?: string; consoleUser?: string; consoleBase?: number; consoleProtocol?: string;
   environment?: string; rdpDomain?: string; rdpFullScreen?: boolean; rdpSize?: string; vncViewOnly?: boolean; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
@@ -28,7 +30,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; aiReadOnly?: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
   facts?: FactRule[] | null;
 }
 /** A value read from command output after connecting: the first group of regex. every = at each connect. */
@@ -83,6 +85,58 @@ export interface SessionNode {
   deviceType?: string; environment?: string; jump?: string; proxy?: boolean; console?: string; mac?: string; wolPing?: number; wolNetwork?: string; account?: string; team?: string;
 }
 
+/** Simulated lab (internal/sim). */
+export interface LabModel { sku: string; family: string; os: string[]; osName: Record<string, string>; ports: number; layout: string; }
+export interface LabPack { id: string; name: string; version: string; vendor: string; description: string; license: string; hash: string; os: string[]; models: number; file?: string; accepted?: string; error?: string; }
+export interface LabOS { name: string; short: string; configCommand: string; }
+export interface LabDevice { id: string; os: string; model: string; version: string; serial: string; hwSerial?: string; mac: string; hostname: string; mgmtIp: string; port: number; ports: number; running: boolean; logins: number; unsaved: boolean; x: number; y: number;
+  /** Emulated lab only. */
+  state?: string; stateText?: string; cpu?: number; cores?: number; diskGb?: number; template?: string; persona?: EmuPersona | null; personaOk?: boolean; personaError?: string; personaInfo?: string; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; memUsed?: number; host?: string; saved?: boolean; role?: string; uplinks?: string[] | null; iconStyle?: string; movingTo?: string; computer?: boolean; board?: string; flashMb?: number; gdb?: number; server?: EmuServer | null; desktop?: boolean; routing?: EmuRouting | null; addrs?: Record<string, string> | null; addrsSeen?: Record<string, string> | null; cpuMax?: number; cpuWeight?: number; cpuReq?: number; cpuLim?: number; cpuStats?: EmuCpuStats | null; restart?: string; checkpoints?: { tag: string; at: string; note?: string; change?: string }[] | null; addrs6?: Record<string, string> | null; dataGw?: string; dataGw6?: string; dns?: string; net?: EmuCompNetSeen | null; }
+export interface LabEvent { at: string; vm: string; name: string; level: 'info' | 'ok' | 'warn' | 'error'; text: string; host?: string; by?: string; }
+export interface EmuTopoInfo { name: string; saved: string; hosts: string[] | null; switches: number; open: boolean; running?: number; runOn?: string[]; }
+export interface LabLag { name: string; mode: string; source: string; }
+/** A computer's network as its console showed it. */
+export interface EmuCompNetSeen { addrs?: Record<string, string> | null; linkLocal?: Record<string, string> | null; gw?: string; gw6?: string; dns?: string; }
+/** A computer's IP configuration for one port, with its gateways and DNS server. */
+export interface EmuCompNet { port: number; ipv4: string; ipv6: string; gw: string; gw6: string; dns: string; }
+export interface LabLink { a: string; aPort: string; b: string; bPort: string; up?: boolean; down?: boolean; lagA?: LabLag | null; lagB?: LabLag | null; lldp?: string; }
+export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; dns?: string[] | null; dnsSet?: boolean; serverImage?: '' | 'ready' | 'making'; autoCheckpoints?: boolean; notes?: LabNote[] | null; hubs?: LabHub[] | null; cloudPorts?: Record<string, number> | null; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
+  /** Emulated lab only. */
+  kind?: 'emu'; topology?: string; cloudGw?: string; lanFixed?: boolean; events?: LabEvent[] | null; downloadDir?: string; downloadQueue?: string[] | null; mgmt?: string; consoles?: Record<string, string> | null; host?: string; hostInfo?: EmuHostInfo | null; hosts?: EmuHost[] | null; images?: EmuImage[] | null; kvm?: boolean; templates?: EmuTemplate[] | null; usage?: EmuUsage; deviceTypes?: EmuDeviceType[] | null; installs?: EmuInstall[] | null; hostUse?: EmuHostUse[] | null; fast?: boolean; iconStyle?: string; }
+/** An install of an ISO file on a KVM host: running, waiting for the user, or finished. */
+export interface EmuInstall { id: string; name: string; host: string; mode: 'alpine' | 'manual'; isoName: string; gb: number; mb?: number; ram: number; cpus: number; port: number; stage: 'copying' | 'starting' | 'installing' | 'waiting' | 'saving' | 'fetching' | 'verifying' | 'done' | 'failed' | 'cancelled'; msg: string; err?: string; image?: string; console?: string; started: string; step?: string; marks?: { step: string; at: string }[]; file?: string; tail?: string; disk?: number; part?: number; pct?: number; idle?: number; noVerify?: boolean; verifyPort?: number; verified?: string; verifyErr?: string; }
+export interface EmuInstallRequest { name: string; iso: string; mode: 'alpine' | 'manual'; gb: number; mb?: number; ram: number; cpus: number; host: string; password: string; noVerify?: boolean; }
+export interface EmuHostUse { host: string; name: string; addr: string; mgmt: string; mgmtNet: string; cloudGw?: string; lanFixed?: boolean; cpus: number; memTotal: number; memFree: number; load: number; cores: number; vcpus: number; ram: number; switches: number; running: number; main: boolean; }
+export interface EmuPersonaDef { name: string; file: string; template: string; models: { name: string; modules: string[] | null }[] | null; values: { key: string; label: string; default: string }[] | null; stack: boolean; modules: string; osName?: string; check?: string; }
+export interface EmuSlot { num: number; model: string; serial: string; module: string; master: boolean; ports: { port: number; vif: number }[] | null; }
+export interface EmuPersona { slots: EmuSlot[]; values: Record<string, string> | null; applied?: string; }
+export interface EmuTemplate { id: string; name: string; image: string; cpus: number; ram: number; diskGb: number; model: string; module: string; values: Record<string, string> | null; serialStart: string; macStart: string; }
+export interface EmuDeviceType { key: string; model: string; kind: string; osName: string; modules: string[] | null; modName: string; images: string[]; cpus: number; ram: number; values: Record<string, string> | null; }
+export interface EmuUsage { hostCpus: number; hostMemTotal: number; hostMemFree: number; load: number; running: number; vcpus: number; ram: number; cores: number; diskGb: number; saved?: number; }
+export interface EmuHostInfo { sudoAll?: boolean; user: string; os: string; kernel: string; arch: string; kvm: string; vt: boolean; qemu: string; qemuImg: boolean; cpus: number; load: number; memTotal: number; memFree: number; diskFree: number; sudo: boolean; dir: string; problems: string[] | null; notes: string[] | null; osId: string; pkg: string; plan: string[] | null; canSetup: boolean; uplink: string; bridges: string[] | null; wifi: boolean; lanIf: string; lanKind: string; lanAddr?: string; gateway?: string; virt?: string; guestfs?: boolean; nat?: string; libvirt?: boolean; }
+export interface EmuSetupLine { run: string; kind: string; text: string; }
+export interface EmuSetupDone { run: string; error: string; host: EmuHost | null; }
+export interface EmuHost { session: string; name: string; info: EmuHostInfo; checked: string; }
+export interface EmuAnswer { match: string; send: string; }
+/** A microcontroller Termwright emulates (Espressif's QEMU). */
+/** A lab server's settings (internal/emu/server.go). */
+export interface EmuServer { http: boolean; httpPort?: number; ftp: boolean; ftpPort?: number; tftp: boolean; tftpWrite: boolean; dhcp: boolean; dhcpPort?: number;
+  from?: string; to?: string; gateway?: string; dns?: string; lease?: number; bootFile?: string; bootFrom?: string; user?: string; installed?: boolean; }
+export interface EmuServerFile { path: string; size: number; mod: string; dir?: boolean; }
+export interface EmuServerLease { mac: string; ip: string; name: string; expires: string; }
+export interface EmuServerView { settings: EmuServer; addr: string; mgmt: string; status: { on: string[] | null; leases: EmuServerLease[] | null; diskKb: number; freeKb: number };
+  files: EmuServerFile[] | null; image: '' | 'server' | 'making'; error?: string; }
+export interface EmuBoard { key: string; name: string; arch: string; machine: string; cpu: string; flash: number[]; defMb: number; psram?: number[] | null; sample?: string; }
+/** The host key of this computer: it runs microcontrollers only (Espressif's QEMU, macOS or Linux). */
+export const LOCAL_HOST = '@this-computer';
+export interface EmuImage { id: string; name: string; file: string; fileName: string; size: number; sha256: string; deviceType: string; board?: string; flashMb?: number; cpus: number; ram: number; nics: number; nic: string; portMacs?: string; disk: string; portName: string; ready: string; login: string; password?: string; prompt: string; day0: string[] | null; answers: EmuAnswer[] | null; extra: string; source: string; serial: string; addrCmd: string; dhcpOn?: string[] | null; portAddr?: string[] | null; addrSet?: string[] | null; persona?: EmuPersonaDef | null; version?: string;
+  hasPassword?: boolean; onHost?: boolean; upload?: string; missing?: boolean;  url?: string; md5?: string; page?: string; download?: string; disks?: { slot: string; fileName: string; file: string; sha256: string; size: number; url?: string; md5?: string; page?: string; bus?: string }[] | null; }
+export interface EmuGroup { template?: string; diskGb?: number; model?: string; module?: string; serialStart?: string; macStart?: string; image: string; count: number; names: string; cpus?: number; ram?: number; role?: string; }
+export interface EmuRequest { host: string; groups: EmuGroup[]; cabling: string; mgmt: string; mgmtNet: string; start: boolean; perPair?: number; lagMode?: string; }
+export interface LabOutput { os: string; command: string; text: string; }
+export interface LabGroup { os?: string; model: string; count: number; names: string; }
+export interface LabRequest { groups: LabGroup[]; mgmtNet: string; cabling: string; password: string; start: boolean; }
+
 /** What Name After Devices found for one session (state: read, nologin, norule, notfound, failed, team). */
 export interface DeviceName { path: string; name: string; host: string; hostname: string; model: string; team: boolean; state: string; detail: string; }
 
@@ -93,7 +147,7 @@ export interface Settings {
   sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; lineHeight?: number; theme: string; uiFont?: string; uiFontSize?: number;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
-  language?: string; layout?: string; style?: string; iconFinish?: '' | 'glacier' | 'flat'; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; quickButtons?: '' | 'keycap' | 'glow'; folderColors?: '' | 'vivid' | 'steel'; nameAfterDevice?: '' | 'auto' | 'off'; nameFormat?: '' | 'model' | 'octet'; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
+  sessionEditor?: '' | 'window'; language?: string; layout?: string; style?: string; iconFinish?: '' | 'glacier' | 'flat'; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; quickButtons?: '' | 'keycap' | 'glow'; folderColors?: '' | 'vivid' | 'steel'; nameAfterDevice?: '' | 'auto' | 'off'; nameFormat?: '' | 'model' | 'octet'; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean; reachFolder?: string;
@@ -242,7 +296,7 @@ export const ACTIONS: Record<string, string> = {
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',
   'xmodem': 'Send XMODEM...', 'xmodem-receive': 'Receive XMODEM...', 'scp-upload': 'SCP Upload File...', 'scp-upload-folder': 'SCP Upload Folder...', 'scp-download': 'SCP Download...',
-  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'workspaces': 'Workspaces...',
+  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'workspaces': 'Workspaces...',
   'save-workspace': 'Save Workspace...', 'compare': 'Compare Outputs...',
   'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out', 'global-options': 'Global Options', 'session-options': 'Session Options',
 };
@@ -331,8 +385,8 @@ export interface TeamPushResult { status: 'new' | 'added' | 'exists' | 'pending'
 export interface SyncStatus { folder: string; last: string; peers: string[] | null; took: number; error: string; }
 
 /** The AI assistant (optional): the provider and model; the API key is in the OS keychain. */
-export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; agentPerm?: '' | 'every' | 'readonly' | 'auto'; effort?: string; agentToolsOff?: string[]; }
-export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; }
+export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; api?: boolean; agentPerm?: '' | 'every' | 'readonly' | 'auto'; effort?: string; agentToolsOff?: string[]; }
+export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; inCode?: boolean; apiUrl?: string; keyFile?: string; }
 export interface FileServersSettings { folder: string; address: string; tftpPort: number; ftpPort: number; httpPort: number; tftpWrite: boolean; ftpWrite: boolean;
   ftpUser: string; idleMinutes: number; commands?: ServerCommand[] | null; }
 export interface ServerCommand { deviceType: string; protocol: string; put?: boolean; text: string; }
@@ -346,6 +400,83 @@ export interface ServedFile { name: string; size: number; }
 export interface NCResult { target: string; address: string; state: 'ok' | 'bad' | 'warn' | 'na'; summary: string; ms: number; detail: string; }
 export interface IperfTest { peer: string; seconds: number; sentBps: number; receivedBps: number; retransmits: number; time: string; }
 export interface IperfInfo { path: string; running: boolean; port: number; last?: IperfTest | null; error?: string; }
-export interface FirewallState { name: string; on: 'on' | 'off' | 'unknown'; app: 'allowed' | 'blocked' | 'ask' | 'unknown'; notes: string[] | null; fix: string; canFix: boolean; program: string; }
+export interface FirewallState { name: string; on: 'on' | 'off' | 'unknown'; app: 'allowed' | 'blocked' | 'ask' | 'unknown'; notes: string[] | null; fix: string; canFix: boolean; program: string; sudo?: boolean; }
 export interface AIStatus { provider: string; model: string; hasKey: boolean; ready: boolean; }
 export interface AIAnswer { text: string; commands: string[]; sent: string; removed: number; model: string; usage?: { in: number; out: number; model?: string } | null; }
+
+export interface EmuMatrixHost { session: string; name: string; addr: string; kvm: string; vt: boolean; virt: string; qemu: string; qemuImg: boolean; guestfs: boolean; sudo: boolean; canSetup: boolean; problems: string[] | null; cpus: number; load: number; memTotal: number; memFree: number; diskTotal: number; diskFree: number; imagesDir: string; error: string; }
+export interface EmuMatrixImage { id: string; name: string; version: string; fileName: string; size: number; local: boolean; switches: number; }
+export interface EmuReach { from: string; to: string; udp: string; tcp: string; text: string; at: string; }
+export interface EmuMatrix { hosts: EmuMatrixHost[] | null; images: EmuMatrixImage[] | null; cells: Record<string, Record<string, string>> | null; reach: EmuReach[] | null; busy: boolean; checking: boolean; syncAll: boolean; keep20: boolean; }
+export interface EmuRemoveInfo { switches: number; imagesBytes: number; imagesDir: string; labBytes: number; labDirs: number; sudoRule: boolean; group: boolean; pkgs: string[] | null; fullSudo: boolean; error: string; }
+export interface EmuRemoveHostReq { host: string; images: boolean; labs: boolean; sudoRule: boolean; group: boolean; pkgs: boolean; password: string; forgetOff: boolean; }
+export interface EmuCapture { key: string; vm: string; switch: string; port: string; peer: string; host: string; file: string; started: string; running: boolean; size: number; }
+export interface EmuPacket { no: number; time: number; src: string; dst: string; proto: string; len: number; info: string; }
+/** A decoded field of a packet: off and n are its bytes. */
+export interface EmuField { name: string; value?: string; off: number; n: number; kids?: EmuField[] | null; }
+export interface EmuPacketDetail extends EmuPacket { at: string; hex: string; fields: EmuField[] | null; total: number; }
+
+/** A test port of the traffic generator: a sender and counter on a switch's free port. */
+export interface EmuTester { id: string; name: string; vm: string; port: number; portName?: string; mac: string; ip?: string; ip6?: string; groups?: string[] | null; dhcp?: boolean; slaac?: boolean; lldp?: boolean; lease?: string; lease6?: string; gw?: string; vlan?: number; speed?: number; lag?: string; lacpFast?: boolean; lacpUp?: string; neighbor?: string; x?: number; y?: number;
+  clients?: EmuClients | null; stp?: EmuSTP | null; clientState?: EmuClientState | null; stpState?: EmuSTPState | null; }
+/** Many hosts behind a test port (802.1X, DHCP, multicast). */
+export interface EmuClients { n: number; mac?: string; rate?: number; dhcp?: boolean; groups?: string[] | null; dot1x?: { user?: string; password?: string } | null; }
+export interface EmuClientState { n: number; bound: number; auth: number; failed: number; list?: string[][] | null; }
+/** Spanning tree on a test port. */
+export interface EmuSTP { mode: 'stp' | 'rstp'; prio?: number; tc?: number; }
+export interface EmuSTPState { sent: number; got: number; root?: string; bridge?: string; cost?: number; role?: string; rootIsUs?: boolean; tc?: boolean; }
+/** The lab's RADIUS server. */
+export interface EmuRadiusUser { user: string; password: string; vlan?: string; }
+export interface EmuRadiusLogin { at: number; switch: string; user: string; how: string; result: string; vlan?: string; }
+export interface EmuRadiusHost { host: string; address: string; running: boolean; err?: string; accept: number; reject: number; challenge: number; acct: number; logins: EmuRadiusLogin[]; }
+export interface EmuRadiusView { on: boolean; port: number; secret?: string; users?: EmuRadiusUser[] | null; mab?: string[] | null; mabVlan?: string; hosts: EmuRadiusHost[]; }
+/** A stream of frames between test ports. */
+export interface EmuStream { id: string; name: string; from: string; to?: string; kind: 'udp' | 'icmp' | 'tcp' | 'arp' | 'raw' | 'pcap'; vlan?: number; prio?: number; dstMac?: string; srcIp?: string; dstIp?: string; dport?: number; size: number; pps: number; seconds?: number; count?: number; maxLoss: number; maxLatency?: number; off?: boolean; dscp?: number; sizeMode?: '' | 'inc' | 'random' | 'imix'; sizeMax?: number; burst?: number; mods?: EmuMod[] | null; maxJitter?: number; rateUnit?: '' | 'mbps' | 'pct'; rate?: number; rtt?: boolean; pcap?: string; pcapId?: string; pcapFrames?: number; pcapSecs?: number; pcapTiming?: boolean; loops?: number; rewriteMacs?: boolean; }
+/** A saved traffic test (RFC 2544, RFC 2889 learning, convergence). */
+export interface EmuTest { id: string; name: string; kind: 'throughput' | 'latency' | 'frame-loss' | 'back-to-back' | 'learning' | 'convergence' | 'iperf'; from: string; to: string; both?: boolean; monitor?: string; vlan?: number; sizes?: number[] | null; trial?: number; maxPps?: number; rate?: number; loss?: number; resolution?: number; max?: number; action?: '' | 'pull' | 'stop' | 'restart'; switch?: string; port?: string; at?: number; hold?: number; seconds?: number; server?: string; client?: string; serverIp?: string; proto?: 'tcp' | 'udp'; bandwidth?: string; parallel?: number; reverse?: boolean; }
+export interface EmuTestRow { dir?: string; size?: number; pps?: number; mbps?: number; load?: number; loss: number; latMin?: number; latAvg?: number; latMax?: number; jitter?: number; burst?: number; addresses?: number; lost?: number; outageMs?: number; retrans?: number; trials?: number; note?: string; }
+export interface EmuTestRun { id: string; test: string; name: string; kind: string; status: 'running' | 'done' | 'failed' | 'stopped'; step?: string; started: string; ended?: string; rows: EmuTestRow[]; log?: string[] | null; error?: string; }
+/** A field of a stream's frames that changes from frame to frame. */
+export interface EmuMod { field: 'srcMac' | 'dstMac' | 'srcIp' | 'dstIp' | 'vlan' | 'sport' | 'dport'; mode: 'inc' | 'random'; count: number; step?: number; }
+export interface EmuStreamResult { id: string; tx: number; rx: number; expected: number; other: number; loss: number; latAvg: number; latMax: number; latMin?: number; jitter?: number; ooo?: number; dup?: number; txRate: number; rxRate: number; running: boolean; result: '' | 'pass' | 'fail'; why?: string;
+  p50?: number; p95?: number; p99?: number; hist?: { lo: number; hi: number; n: number }[]; flows?: EmuFlowResult[]; flowsN?: number; flowsLossy?: number; marks?: { vlan: number; prio: number; dscp: number; n: number }[]; txMbps?: number; rxMbps?: number; }
+/** One flow of a stream with changing fields: one combination of their values. */
+export interface EmuFlowResult { flow: number; name: string; tx: number; rx: number; loss: number; latAvg: number; latMax: number; }
+/** A lab tool the AI chat called: done (out), or to be asked first. */
+export interface EmuToolStep { ask?: boolean; title?: string; text?: string; danger?: boolean; out?: string; }
+export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; history?: Record<string, [number, number, number, number?, number?][]> | null;
+  ports?: EmuPortResult[] | null; portHistory?: Record<string, [number, number, number][]> | null; }
+/** A test port's statistics over the run: all its frames each way, its streams' frames that were for it, their loss and latency. */
+export interface EmuPortResult { id: string; tx: number; rx: number; txBytes: number; rxBytes: number; txRate: number; rxRate: number; txMbps: number; rxMbps: number; expected: number; got: number; loss: number; latAvg: number; latMax: number; errors: number; streams?: Record<string, number> | null; }
+
+/** Switches running on a host, of one topology (open or in the background). */
+export interface EmuRunRow { host: string; topology: string; open: boolean; switches: string[]; lab?: string; orphan?: boolean; }
+
+/** A device's CPU over the last minutes (millicores, as kubectl counts: 1000m = one host core). */
+export interface EmuCpuStats { mins: number; avg: number; peak: number; p95: number; over: number; overN: number; thr: number; thrS: number; }
+
+/** A change Claude or the API made to the emulated lab, kept with the lab as it was before (Revert). */
+export interface EmuChange { id: string; at: string; who: string; tool: string; what: string; result: string; revertible: boolean; note?: string; reverted?: string; }
+
+/** A ready test of the traffic generator: streams and saved tests between test ports named by role (A, B, C…). */
+export interface EmuTrafficTemplate { id: string; name: string; desc?: string; builtin?: boolean; ports: number; roles?: string[] | null; streams?: EmuStream[] | null; tests?: EmuTest[] | null; saved?: string; }
+
+/** A note or an area on the lab's canvas. */
+export interface LabNote { id: string; kind: 'note' | 'area'; text: string; x: number; y: number; w: number; h: number; color?: number; }
+
+/** A hub or an L2 switch of the emulated lab (no VM): the switch ports on it. */
+export interface LabHub { id: string; name: string; kind: 'hub' | 'switch'; x: number; y: number; legs: { vm: string; port: number; at: number; name: string; portName: string }[]; ports: number; cfg?: LabHubCfg | null; console?: string; ssh?: string; conPort?: number; }
+export interface EmuRouting { proto: 'ospf' | 'bgp'; port: number; routes: number; prefix: string; area?: string; as?: number; peer?: string; peerAs?: number; }
+export interface EmuRoutingView extends EmuRouting { state: string; up: boolean; prefixes: number; first: string; step: number; raw: string; }
+export interface LabHubPort { mode: 'access' | 'trunk'; vlan?: number; vlans?: number[] | null; }
+export interface LabHubCfg { rev: number; ports?: Record<string, LabHubPort> | null; mgmtIp?: string; mgmtVlan?: number; }
+export interface LabHubDetail { id: string; running: boolean; in: number[]; macs: { mac: string; vlan: number; port: number; age: number }[]; cfg?: LabHubCfg | null; sshOk: boolean; error?: string; }
+
+/** Device types whose SSH server does not pass connections on (TCP forwarding) unless their setting says it does. */
+const NO_TUNNEL = ['exos', 'voss', 'cisco ios'];
+/** Whether a session of this device type can open a web page through its SSH server (Open Web Page Through This Session). */
+export function dtTunnels(types: DeviceType[] | null | undefined, name: string | undefined): boolean {
+  if (!name) return true;
+  const t = (types ?? []).find(d => d.name.toLowerCase() === name.toLowerCase())?.tunnel?.toLowerCase() ?? '';
+  return t === 'on' || (t !== 'off' && !NO_TUNNEL.includes(name.toLowerCase()));
+}

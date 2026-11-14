@@ -69,6 +69,8 @@ const (
 	kProxyHost    = "Termwright Proxy Host"
 	kProxyPort    = "Termwright Proxy Port"
 	kProxyUser    = "Termwright Proxy User"
+	kJumpOff      = "Termwright Jump Off"
+	kProxyOff     = "Termwright Proxy Off"
 	kFontFamily   = "Termwright Font"
 	kFontSize     = "Termwright Font Size"
 	kBackspace    = "Termwright Backspace"
@@ -184,67 +186,73 @@ type Session struct {
 	MACs              string `json:"macs"`
 	HostKeyAlgorithms string `json:"hostKeyAlgorithms"`
 
-	Emulation        string        `json:"emulation"`
-	TermType         string        `json:"termType"`
-	NoCursorReport   bool          `json:"noCursorReport"` // do not answer the device's cursor position requests (ESC[6n)
-	Description      []string      `json:"description"`
-	Rows             int           `json:"rows"`
-	Cols             int           `json:"cols"`
-	Scrollback       int           `json:"scrollback"`
-	Keepalive        bool          `json:"keepalive"`
-	KeepaliveSec     int           `json:"keepaliveSec"`
-	ComPort          string        `json:"comPort"`
-	BaudRate         int           `json:"baudRate"`
-	DataBits         int           `json:"dataBits"`
-	StopBits         int           `json:"stopBits"` // 0 = 1, 1 = 1.5, 2 = 2
-	Parity           int           `json:"parity"`   // 0 none, 1 odd, 2 even, 3 mark, 4 space
-	LogFile          string        `json:"logFile"`
-	LogOnConnect     bool          `json:"logOnConnect"`
-	LogAppend        bool          `json:"logAppend"`
-	LogEachLine      string        `json:"logEachLine"`
-	LogRaw           bool          `json:"logRaw"`
-	RecordSession    bool          `json:"recordSession"` // record every connection (asciinema .cast)
-	SavePassword     bool          `json:"savePassword"`
-	LocalCommand     string        `json:"localCommand"`
-	LocalDir         string        `json:"localDir"`
-	ColorScheme      string        `json:"colorScheme"`
-	LogonActions     []LogonAction `json:"logonActions"`
-	Triggers         []Trigger     `json:"triggers"`
-	PortForwards     []PortForward `json:"portForwards"`
-	JumpSession      string        `json:"jumpSession"` // path of a session used as jump host
-	ProxyType        string        `json:"proxyType"`   // "" | socks5 | http
-	ProxyHost        string        `json:"proxyHost"`
-	ProxyPort        int           `json:"proxyPort"`
-	ProxyUser        string        `json:"proxyUser"`
-	AutoReconnect    bool          `json:"autoReconnect"`
-	X11Forward       bool          `json:"x11Forward"`
-	AgentForward     bool          `json:"agentForward"`
-	KeywordSet       string        `json:"keywordSet"`
-	FontFamily       string        `json:"fontFamily"`
-	FontSize         int           `json:"fontSize"`
-	Backspace        string        `json:"backspace"`   // "" (DEL, default) | "bs" (Ctrl+H)
-	LogonScript      string        `json:"logonScript"` // JavaScript file run after connecting
-	LogonArgs        string        `json:"logonArgs"`   // arguments for the logon script (scriptArgs)
-	AutomateLogon    bool          `json:"automateLogon"`
-	InitialCR        bool          `json:"initialCr"`  // send Enter right after connecting
-	LoginAgain       bool          `json:"loginAgain"` // log in again when the login prompt comes back by itself (restart, crash, idle logout)
-	UseLogonScript   bool          `json:"useLogonScript"`
-	RemoteCommand    string        `json:"remoteCommand"` // SSH2: run this instead of a login shell
-	UseRemoteCommand bool          `json:"useRemoteCommand"`
-	OpenAs           string        `json:"openAs"`          // SSH2: "" = terminal, "sftp" = SFTP browser only
-	DeviceType       string        `json:"deviceType"`      // name of a device type (login profile)
-	OwnLogin         bool          `json:"ownLogin"`        // with a device type: use this session's username/password instead of the device type's
-	Account          string        `json:"account"`         // who logs in: "" = default (folder, then device type), "-" = this session's own username and password, else a saved account
-	RDPDomain        string        `json:"rdpDomain"`       // RDP: Windows domain of the user
-	RDPFullScreen    bool          `json:"rdpFullScreen"`   // RDP: open full screen
-	RDPSize          string        `json:"rdpSize"`         // RDP: window size such as "1600x900" ("" = the client's default)
-	VNCViewOnly      bool          `json:"vncViewOnly"`     // VNC: watch only, no keyboard or mouse
-	ConsoleServer    string        `json:"consoleServer"`   // Console: the console server's session path
-	ConsolePort      int           `json:"consolePort"`     // Console: port (line) number on the console server
-	ConsoleMethod    string        `json:"consoleMethod"`   // Console: how ports are reached (see console.go)
-	ConsoleUser      string        `json:"consoleUser"`     // Console, custom: user name template ({user}, {port}, {nn})
-	ConsoleBase      int           `json:"consoleBase"`     // Console, custom: TCP port = base + port number (0 = the server's port)
-	ConsoleProtocol  string        `json:"consoleProtocol"` // Console, custom: SSH2 or Telnet
+	Emulation      string        `json:"emulation"`
+	TermType       string        `json:"termType"`
+	NoCursorReport bool          `json:"noCursorReport"` // do not answer the device's cursor position requests (ESC[6n)
+	Description    []string      `json:"description"`
+	Rows           int           `json:"rows"`
+	Cols           int           `json:"cols"`
+	Scrollback     int           `json:"scrollback"`
+	Keepalive      bool          `json:"keepalive"`
+	KeepaliveSec   int           `json:"keepaliveSec"`
+	ComPort        string        `json:"comPort"`
+	BaudRate       int           `json:"baudRate"`
+	DataBits       int           `json:"dataBits"`
+	StopBits       int           `json:"stopBits"` // 0 = 1, 1 = 1.5, 2 = 2
+	Parity         int           `json:"parity"`   // 0 none, 1 odd, 2 even, 3 mark, 4 space
+	LogFile        string        `json:"logFile"`
+	LogOnConnect   bool          `json:"logOnConnect"`
+	LogAppend      bool          `json:"logAppend"`
+	LogEachLine    string        `json:"logEachLine"`
+	LogRaw         bool          `json:"logRaw"`
+	RecordSession  bool          `json:"recordSession"` // record every connection (asciinema .cast)
+	SavePassword   bool          `json:"savePassword"`
+	LocalCommand   string        `json:"localCommand"`
+	LocalDir       string        `json:"localDir"`
+	ColorScheme    string        `json:"colorScheme"`
+	LogonActions   []LogonAction `json:"logonActions"`
+	Triggers       []Trigger     `json:"triggers"`
+	PortForwards   []PortForward `json:"portForwards"`
+	JumpSession    string        `json:"jumpSession"` // path of a session used as jump host
+	ProxyType      string        `json:"proxyType"`   // "" | socks5 | http
+	ProxyHost      string        `json:"proxyHost"`
+	ProxyPort      int           `json:"proxyPort"`
+	ProxyUser      string        `json:"proxyUser"`
+	// JumpOff / ProxyOff: the jump host / proxy is kept (OffJump / OffProxy)
+	// but not used until it is turned on again.
+	JumpOff          bool   `json:"jumpOff,omitempty"`
+	OffJump          string `json:"offJump,omitempty"`
+	ProxyOff         bool   `json:"proxyOff,omitempty"`
+	OffProxy         *Proxy `json:"offProxy,omitempty"`
+	AutoReconnect    bool   `json:"autoReconnect"`
+	X11Forward       bool   `json:"x11Forward"`
+	AgentForward     bool   `json:"agentForward"`
+	KeywordSet       string `json:"keywordSet"`
+	FontFamily       string `json:"fontFamily"`
+	FontSize         int    `json:"fontSize"`
+	Backspace        string `json:"backspace"`   // "" (DEL, default) | "bs" (Ctrl+H)
+	LogonScript      string `json:"logonScript"` // JavaScript file run after connecting
+	LogonArgs        string `json:"logonArgs"`   // arguments for the logon script (scriptArgs)
+	AutomateLogon    bool   `json:"automateLogon"`
+	InitialCR        bool   `json:"initialCr"`  // send Enter right after connecting
+	LoginAgain       bool   `json:"loginAgain"` // log in again when the login prompt comes back by itself (restart, crash, idle logout)
+	UseLogonScript   bool   `json:"useLogonScript"`
+	RemoteCommand    string `json:"remoteCommand"` // SSH2: run this instead of a login shell
+	UseRemoteCommand bool   `json:"useRemoteCommand"`
+	OpenAs           string `json:"openAs"`          // SSH2: "" = terminal, "sftp" = SFTP browser only
+	DeviceType       string `json:"deviceType"`      // name of a device type (login profile)
+	OwnLogin         bool   `json:"ownLogin"`        // with a device type: use this session's username/password instead of the device type's
+	Account          string `json:"account"`         // who logs in: "" = default (folder, then device type), "-" = this session's own username and password, else a saved account
+	RDPDomain        string `json:"rdpDomain"`       // RDP: Windows domain of the user
+	RDPFullScreen    bool   `json:"rdpFullScreen"`   // RDP: open full screen
+	RDPSize          string `json:"rdpSize"`         // RDP: window size such as "1600x900" ("" = the client's default)
+	VNCViewOnly      bool   `json:"vncViewOnly"`     // VNC: watch only, no keyboard or mouse
+	ConsoleServer    string `json:"consoleServer"`   // Console: the console server's session path
+	ConsolePort      int    `json:"consolePort"`     // Console: port (line) number on the console server
+	ConsoleMethod    string `json:"consoleMethod"`   // Console: how ports are reached (see console.go)
+	ConsoleUser      string `json:"consoleUser"`     // Console, custom: user name template ({user}, {port}, {nn})
+	ConsoleBase      int    `json:"consoleBase"`     // Console, custom: TCP port = base + port number (0 = the server's port)
+	ConsoleProtocol  string `json:"consoleProtocol"` // Console, custom: SSH2 or Telnet
 	// Set when connecting (not saved): the SSH login to a console server uses
 	// this user and the saved password of this session path, while Username
 	// and the device type log in to the device behind the port.
@@ -453,6 +461,13 @@ func FromFile(path string, f *sessionfile.File) Session {
 	s.ProxyHost = f.Str(kProxyHost, "")
 	s.ProxyPort = int(f.DWord(kProxyPort, 0))
 	s.ProxyUser = f.Str(kProxyUser, "")
+	if s.JumpOff = f.Bool(kJumpOff, false); s.JumpOff {
+		s.OffJump, s.JumpSession = s.JumpSession, ""
+	}
+	if s.ProxyOff = f.Bool(kProxyOff, false); s.ProxyOff {
+		s.OffProxy = &Proxy{Type: s.ProxyType, Host: s.ProxyHost, Port: s.ProxyPort, User: s.ProxyUser}
+		s.ProxyType, s.ProxyHost, s.ProxyPort, s.ProxyUser = "", "", 0, ""
+	}
 	s.AutoReconnect = f.Bool(kAutoReconn, false)
 	s.X11Forward = f.Bool(kX11, false)
 	s.AgentForward = f.Bool(kAgentFwd, false)
@@ -669,19 +684,28 @@ func (s Session) Apply(f *sessionfile.File) {
 	} else {
 		f.Delete(kForwards)
 	}
-	if s.JumpSession != "" {
-		f.SetStr(kFirewall, "Session:"+s.JumpSession)
+	jump, r := s.JumpSession, Proxy{Type: s.ProxyType, Host: s.ProxyHost, Port: s.ProxyPort, User: s.ProxyUser}
+	if s.JumpOff && jump == "" { // a jump host set while off counts as the kept one
+		jump = s.OffJump
+	}
+	if s.ProxyOff && r.Type == "" && s.OffProxy != nil {
+		r = *s.OffProxy
+	}
+	if jump != "" {
+		f.SetStr(kFirewall, "Session:"+jump)
 	} else if strings.HasPrefix(f.Str(kFirewall, ""), "Session:") {
 		f.SetStr(kFirewall, "None")
 	}
-	setOptStr(f, kProxyType, s.ProxyType)
-	setOptStr(f, kProxyHost, s.ProxyHost)
-	if s.ProxyPort > 0 {
-		f.SetDWord(kProxyPort, uint32(s.ProxyPort))
+	setOptStr(f, kProxyType, r.Type)
+	setOptStr(f, kProxyHost, r.Host)
+	if r.Port > 0 {
+		f.SetDWord(kProxyPort, uint32(r.Port))
 	} else {
 		f.Delete(kProxyPort)
 	}
-	setOptStr(f, kProxyUser, s.ProxyUser)
+	setOptStr(f, kProxyUser, r.User)
+	setOptBool(f, kJumpOff, s.JumpOff)
+	setOptBool(f, kProxyOff, s.ProxyOff)
 	if s.AutoReconnect || f.Get(kAutoReconn) != nil {
 		f.SetBool(kAutoReconn, s.AutoReconnect)
 	}
@@ -781,6 +805,14 @@ func (s Session) Apply(f *sessionfile.File) {
 	setOptBool(f, kMosh, s.Mosh)
 	setOptBool(f, kTelnetTLS, s.TelnetTLS)
 	setOptBool(f, kTLSAnyCert, s.TLSAnyCert)
+}
+
+// Proxy is a session's SOCKS5 or HTTP proxy.
+type Proxy struct {
+	Type string `json:"type"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
+	User string `json:"user"`
 }
 
 func setOptStr(f *sessionfile.File, k, v string) {

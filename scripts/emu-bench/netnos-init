@@ -1,0 +1,30 @@
+#!/bin/sh
+export PATH=/bin
+mount -t proc proc /proc
+mount -t devtmpfs dev /dev 2>/dev/null
+mount -t sysfs sys /sys
+mkdir -p /dev/pts; mount -t devpts devpts /dev/pts
+insmod /lib/e1000.ko 2>/dev/null
+exec </dev/ttyS0 >/dev/ttyS0 2>&1
+echo "Net NOS 1.0 booting"
+ip link set lo up; ip link set eth0 up
+telnetd -p 23 -l /bin/sh
+httpd -p 80 -h /www
+(while true; do echo "SSH-2.0-NetNOS" | nc -l -p 22 >/dev/null 2>&1; done) &
+udhcpc -s /usr/share/udhcpc/default.script -i eth0 -b -q -t 20 -T 2 >/dev/null 2>&1 &
+sleep 1
+while true; do
+ printf "netnos login: "; read u
+ printf "Password: "; read p
+ [ "$u" = admin ] && break
+ echo "Login incorrect"
+done
+while true; do printf "netnos # "; read c a b
+ case "$c" in
+  show) ip addr show dev eth0 | grep "inet " | awk '{print "Mgmt " $2}' ;;
+  x) eval "$a $b" ;;
+  setip) killall udhcpc 2>/dev/null; ip addr flush dev eth0; ip addr add $a dev eth0; [ -n "$b" ] && ip route replace default via $b; echo "address $a gateway $b" ;;
+  "") ;;
+  *) echo "ran: $c $a $b" ;;
+ esac
+done

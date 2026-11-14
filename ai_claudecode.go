@@ -293,7 +293,7 @@ func claudeCodeRun(ctx context.Context, path, model, effort, sys, user, picDir s
 		}
 		low := strings.ToLower(msg)
 		if strings.Contains(low, "login") || strings.Contains(low, "log in") || strings.Contains(low, "not authenticated") || strings.Contains(low, "/login") {
-			return "", nil, errors.New("Claude Code is not signed in - run claude in a terminal once and sign in with your Claude account")
+			return "", nil, errors.New("Claude Code is not signed in. " + claudeSignInHint(runtime.GOOS, bin, os.Getenv("PATH")))
 		}
 		if len(msg) > 400 {
 			msg = msg[:400] + "…"
@@ -311,6 +311,50 @@ func claudeCodeRun(ctx context.Context, path, model, effort, sys, user, picDir s
 		return "", nil, errors.New("Claude Code gave no answer")
 	}
 	return text, usage, nil
+}
+
+// claudeSignInCommand is what to type in a terminal to sign Claude Code in, on this computer's system: "claude" when
+// the terminal finds it on its PATH, else its whole path (quoted when it has spaces; PowerShell runs a quoted path with &).
+func claudeSignInCommand(goos, bin, path string) string {
+	sep, list := ":", path
+	if goos == "windows" {
+		sep = ";"
+	}
+	dir := filepath.Dir(bin)
+	for _, d := range strings.Split(list, sep) {
+		if d != "" && filepath.Clean(d) == filepath.Clean(dir) {
+			return "claude"
+		}
+	}
+	if goos == "windows" {
+		return "& '" + strings.ReplaceAll(bin, "'", "''") + "'"
+	}
+	if strings.ContainsAny(bin, " '\"$") {
+		return "'" + strings.ReplaceAll(bin, "'", `'\''`) + "'"
+	}
+	return bin
+}
+
+// claudeSignInHint says where to type it, in this system's words.
+func claudeSignInHint(goos, bin, path string) string {
+	cmd := claudeSignInCommand(goos, bin, path)
+	switch goos {
+	case "darwin":
+		return "Open Terminal and run: " + cmd + " - it asks you to sign in with your Claude account once."
+	case "windows":
+		return "Open PowerShell and run: " + cmd + " - it asks you to sign in with your Claude account once."
+	default:
+		return "Open a terminal and run: " + cmd + " - it asks you to sign in with your Claude account once."
+	}
+}
+
+// ClaudeCodeSignIn is the command that signs Claude Code in on this computer (for the AI panel's Run it button).
+func (a *App) ClaudeCodeSignIn() (string, error) {
+	bin, err := claudeCodePath(a.cfg.Get().AI.BaseURL)
+	if err != nil {
+		return "", err
+	}
+	return claudeSignInCommand(runtime.GOOS, bin, os.Getenv("PATH")), nil
 }
 
 func runQuiet(ctx context.Context, bin string, args ...string) error {

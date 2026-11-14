@@ -26,6 +26,17 @@ type FirewallState struct {
 	Fix     string   `json:"fix"`     // the command that allows Termwright (shown, and run by FirewallAllow)
 	CanFix  bool     `json:"canFix"`  // FirewallAllow can run it here (with the system's password prompt)
 	Program string   `json:"program"` // what is allowed: the app (macOS, Windows) or ports (Linux)
+	Sudo    bool     `json:"sudo"`    // it runs as root with sudo: a sudo password can be typed (empty = the system's own prompt)
+	run     []string // the commands as root runs them (Fix shows them with sudo)
+}
+
+// sudoFix: the commands as typed in a terminal, one per line, each with sudo.
+func sudoFix(cmds []string) string {
+	out := make([]string, len(cmds))
+	for i, c := range cmds {
+		out[i] = "sudo " + c
+	}
+	return strings.Join(out, "\n")
 }
 
 // fwRun runs a command and returns its output (tests replace it).
@@ -46,10 +57,21 @@ func macBundle(exe string) string {
 }
 
 // FirewallCheck looks at the firewall for the servers' ports (UDP for TFTP, TCP for the others).
-func (a *App) FirewallCheck() FirewallState {
+func (a *App) FirewallCheck() FirewallState { return a.FirewallCheckPorts(0, 0, 0) }
+
+// FirewallCheckPorts is FirewallCheck for the ports typed in the File Servers window, saved or not (0 = the saved one):
+// the command to allow them follows each change at once.
+func (a *App) FirewallCheckPorts(tftp, ftp, http int) FirewallState {
 	s := a.fsSettings()
 	exe, _ := os.Executable()
-	return firewallCheck(runtime.GOOS, exe, s.TFTPPort, s.FTPPort, s.HTTPPort)
+	return firewallCheck(runtime.GOOS, exe, fwPort(tftp, s.TFTPPort), fwPort(ftp, s.FTPPort), fwPort(http, s.HTTPPort))
+}
+
+func fwPort(p, saved int) int {
+	if p >= 1 && p <= 65535 {
+		return p
+	}
+	return saved
 }
 
 func firewallCheck(goos, exe string, tftp, ftp, http int) FirewallState {
@@ -86,8 +108,8 @@ func firewallCheck(goos, exe string, tftp, ftp, http int) FirewallState {
 				st.App = "ask" // not in the list: macOS asks when a server starts
 			}
 		}
-		st.Fix = sf + " --add '" + app + "'\n" + sf + " --unblockapp '" + app + "'"
-		st.CanFix = true
+		st.run = []string{sf + " --add '" + app + "'", sf + " --unblockapp '" + app + "'"}
+		st.Fix, st.CanFix, st.Sudo = sudoFix(st.run), true, true
 		return st
 	case "windows":
 		st := FirewallState{Name: "Windows Defender Firewall", On: "unknown", App: "unknown", Program: exe}
@@ -163,7 +185,12 @@ func firewallCheck(goos, exe string, tftp, ftp, http int) FirewallState {
 			out, _ := fwRun("firewall-cmd", "--state")
 			if strings.TrimSpace(out) == "running" {
 				st.On = "on"
-				st.Fix = fmt.Sprintf("firewall-cmd --add-service=tftp --add-port=%d/tcp --add-port=%d/tcp", ftp, http)
+				// the tftp service (port 69) follows each transfer's extra UDP ports; another port is opened as it is
+				add := fmt.Sprintf("--add-port=%d/udp --add-port=%d/tcp --add-port=%d/tcp", tftp, ftp, http)
+				if tftp == 69 {
+					add = fmt.Sprintf("--add-service=tftp --add-port=%d/tcp --add-port=%d/tcp", ftp, http)
+				}
+				st.run = []string{"firewall-cmd " + add, "firewall-cmd --permanent " + add} // now, and after a restart
 				st.Notes = append(st.Notes, "firewalld's tftp service follows the extra UDP ports of each transfer; FTP passive ports may need a range too.")
 			} else {
 				st.On, st.App = "off", "allowed"
@@ -174,7 +201,7 @@ func firewallCheck(goos, exe string, tftp, ftp, http int) FirewallState {
 			out, _ := fwRun("systemctl", "is-active", "ufw")
 			if strings.TrimSpace(out) == "active" {
 				st.On = "on"
-				st.Fix = fmt.Sprintf("ufw allow %d/udp && ufw allow %d/tcp && ufw allow %d/tcp", tftp, ftp, http)
+				st.run = []string{fmt.Sprintf("ufw allow %d/udp", tftp), fmt.Sprintf("ufw allow %d/tcp", ftp), fmt.Sprintf("ufw allow %d/tcp", http)}
 				st.Notes = append(st.Notes, tftpNote+" With ufw, allow the devices' network instead (ufw allow from <network>) if TFTP transfers stop after the first packet.")
 			} else {
 				st.On, st.App = "off", "allowed"
@@ -184,29 +211,45 @@ func firewallCheck(goos, exe string, tftp, ftp, http int) FirewallState {
 			return st // no firewall program found: nothing to check
 		}
 		_, pk := fwLook("pkexec")
-		st.CanFix = pk == nil
+		_, su := fwLook("sudo")
+		st.Fix, st.Sudo = sudoFix(st.run), su == nil
+		st.CanFix = pk == nil || su == nil
 		return st
 	}
 }
 
 // FirewallAllow runs the command FirewallCheck showed; the system asks for an
 // administrator password itself.
-func (a *App) FirewallAllow() (FirewallState, error) {
-	st := a.FirewallCheck()
+func (a *App) FirewallAllow() (FirewallState, error) { return a.FirewallAllowWith(0, 0, 0, "") }
+
+// FirewallAllowWith runs the command for the ports typed in the File Servers window (0 = the saved one). With a sudo
+// password (macOS, Linux) it runs with sudo, the password on its standard input; without one the system asks for an
+// administrator password itself (macOS's prompt, polkit's on Linux).
+func (a *App) FirewallAllowWith(tftp, ftp, http int, sudoPw string) (FirewallState, error) {
+	st := a.FirewallCheckPorts(tftp, ftp, http)
 	if !st.CanFix || st.Fix == "" {
 		return st, errors.New("this firewall cannot be changed from Termwright - run the command shown as an administrator")
 	}
 	var err error
 	var out string
-	switch runtime.GOOS {
-	case "darwin":
-		script := "do shell script " + appleQuote(strings.ReplaceAll(st.Fix, "\n", " && ")) + " with administrator privileges"
-		out, err = fwRun("osascript", "-e", script)
-	case "windows":
+	root := strings.Join(st.run, " && ")
+	switch {
+	case runtime.GOOS == "windows":
 		arg := "-NoProfile -Command " + st.Fix
 		out, err = fwRun("powershell", "-NoProfile", "-Command", "Start-Process powershell -Verb RunAs -Wait -ArgumentList "+psQuote(arg))
+	case sudoPw != "" && st.Sudo:
+		out, err = fwSudo(sudoPw, root)
+		if low := strings.ToLower(out); err != nil && (strings.Contains(low, "incorrect password") || strings.Contains(low, "sorry, try again")) {
+			return st, errors.New("the sudo password was not accepted - nothing was changed")
+		}
+	case runtime.GOOS == "darwin":
+		script := "do shell script " + appleQuote(root) + " with administrator privileges"
+		out, err = fwRun("osascript", "-e", script)
 	default:
-		out, err = fwRun("pkexec", "sh", "-c", st.Fix)
+		if _, perr := fwLook("pkexec"); perr != nil {
+			return st, errors.New("type your sudo password: this computer has no system password prompt (pkexec)")
+		}
+		out, err = fwRun("pkexec", "sh", "-c", root)
 	}
 	if err != nil {
 		msg := strings.TrimSpace(out)
@@ -218,7 +261,18 @@ func (a *App) FirewallAllow() (FirewallState, error) {
 		}
 		return st, errors.New("the firewall was not changed: " + msg)
 	}
-	return a.FirewallCheck(), nil
+	return a.FirewallCheckPorts(tftp, ftp, http), nil
+}
+
+// fwSudo runs a shell command as root with sudo, the password on its standard input (never on a command line).
+var fwSudo = func(pw, cmd string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	c := exec.CommandContext(ctx, "sudo", "-S", "-p", "", "sh", "-c", cmd)
+	hideWindow(c)
+	c.Stdin = strings.NewReader(pw + "\n")
+	out, err := c.CombinedOutput()
+	return string(out), err
 }
 
 func appleQuote(s string) string {

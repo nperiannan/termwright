@@ -405,6 +405,18 @@ func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) 
 
 // teamImageTag: the release's version, or "nightly" for nightly and development
 // builds (the nightly build publishes the server too).
+// teamTagFor is the image tag an update installs: this Termwright's own, or the
+// channel an owner picked ("nightly": the newest build of main, "release": the latest release).
+func teamTagFor(channel string) string {
+	switch channel {
+	case "nightly":
+		return "nightly"
+	case "release":
+		return "latest"
+	}
+	return teamImageTag()
+}
+
 func teamImageTag() string {
 	if strings.ContainsAny(Version, "-~+") || Version == "" {
 		return "nightly"
@@ -535,7 +547,7 @@ func (a *App) teamSetUp(ctx context.Context, id string, r TeamSetUpRequest, host
 	emit("port", "ok", fmt.Sprintf("Port %d free%s", port, note))
 
 	// the image: downloaded by the host, or copied over SSH and built there
-	ref, err := a.teamImage(ctx, out, dk, r.Image, emit, failf)
+	ref, err := a.teamImage(ctx, out, dk, r.Image, teamImageTag(), emit, failf)
 	if err != nil {
 		return config.TeamConn{}, "", err
 	}
@@ -623,9 +635,8 @@ func teamDocker(out remoteRun, emit func(step, state, text string), failf func(s
 // teamImage gets the team server's image for this Termwright onto the host:
 // downloaded by the host ("download", falling back to copying), or copied over
 // SSH and built there ("copy"). It returns the image's name.
-func (a *App) teamImage(ctx context.Context, out remoteRun, dk, mode string, emit func(step, state, text string),
+func (a *App) teamImage(ctx context.Context, out remoteRun, dk, mode, tag string, emit func(step, state, text string),
 	failf func(step, f string, v ...any) error) (string, error) {
-	tag := teamImageTag()
 	owner := strings.ToLower(strings.SplitN(a.cfg.Get().UpdateRepo, "/", 2)[0])
 	if owner == "" {
 		owner = "nperiannan"
@@ -791,6 +802,8 @@ func (a *App) teamServerBinary(ctx context.Context, arch, tag string) ([]byte, e
 	u := "https://github.com/" + repo + "/releases/download/v" + tag + "/" + file
 	if tag == "nightly" {
 		u = "https://github.com/" + repo + "/releases/download/nightly/" + file
+	} else if tag == "latest" {
+		u = "https://github.com/" + repo + "/releases/latest/download/" + file
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {

@@ -51,3 +51,7 @@
   &:hover { box-shadow: 0 24px 30px -18px color-mix(in srgb, var(--c) 45%, rgba(22, 24, 28, .4)), 0 1px 0 #fff inset; } }
 .qa button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .qa button, .qa button:hover, .qa button:active { transform: none; transition: none; } }
+
+/* the Session Manager's own row (New, Shell, Scan): the same slabs, smaller */
+.qa.sm-qa { margin: 0; flex-wrap: nowrap; gap: 8px;
+  button { flex: 1 1 0; height: 34px; gap: 6px; padding: 0 8px; border-radius: 10px; font-size: calc(12.5px * var(--ui-scale, 1)); } }

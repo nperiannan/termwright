@@ -1,0 +1,60 @@
+@switch a model=D100-24T-4X os=demo name=sw1 serial=DM2601-00001
+@switch b model=D200-8T os=demo name=sw2 mgmt=10.99.0.12/24
+@cable a 25 b 8
+@prompt sw1>
+> show system
+Name    : sw1
+Model   : D100-24T-4X (100-0001)
+Serial  : DM2601-00001
+Ports   : 28
+VLAN 1 Default - untagged=1-28 tagged=
+> show serial
+DM2601-00001 SUB-~
+> config
+    ^ bad
+> enable
+> config
+@prompt sw1(cfg)#
+> vlan 10 name blue
+> vlan 10 ports 25 tagged
+> vlan 10 ports 1-2 untagged
+> vlan 10 address 10.1.1.1/24
+> vlan 11 ports 1 untagged
+no vlan #11
+> route 0.0.0.0/0 10.1.1.254
+> ntp server time.example.com
+> spanning-tree enable
+> no spanning-tree enable
+> lldp enable
+> show system
+...
+VLAN 10 blue 10.1.1.1/24 untagged=1-2 tagged=25
+route 0.0.0.0/0 via 10.1.1.254
+kept lldp enable
+ntp server time.example.com
+> sh
+incomplete
+> show s
+ambiguous: show s
+> exit
+@prompt *sw1#
+> save
+> y
+saved
+@prompt sw1#
+> ping 10.99.0.12 vr mgmt
+10.99.0.12 answers (management)
+> ping 10.1.1.2
+10.1.1.2 does not answer
+> ping 10.5.5.5
+no route to 10.5.5.5
+@on b
+> enable
+> config
+> vlan 10 name blue
+> vlan 10 ports 8 tagged
+> vlan 10 address 10.1.1.2/24
+> exit
+@on a
+> ping 10.1.1.2
+10.1.1.2 answers

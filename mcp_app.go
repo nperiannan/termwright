@@ -62,6 +62,7 @@ var mcpTools = []mcpTool{
 			"tab":   map[string]any{"type": "string", "description": "the tab id or name (from list_tabs); empty = the tab the user has open"},
 			"lines": map[string]any{"type": "integer", "description": "how many lines from the end (default 200, at most 3000)"},
 		})},
+	{"show_lab", "Show Termwright's emulated lab: its switches (model, software, state, KVM host, management address, console, the saved sessions to open), the cables between them with LAGs, and the KVM hosts with their CPU and memory. To configure a switch, open its saved session and send commands.", mcpSchema(map[string]any{})},
 	{"list_sessions", "List the saved sessions (devices) in Termwright's Session Manager: path, address, protocol and device type.",
 		mcpSchema(map[string]any{"filter": map[string]any{"type": "string", "description": "only sessions whose path, address or device type contains this"}})},
 	{"open_session", "Connect to a saved session in a new Termwright tab. The user is asked in Termwright first.",
@@ -75,7 +76,9 @@ var mcpTools = []mcpTool{
 }
 
 const mcpInstructions = "Termwright is the user's terminal for network devices (switches, routers, firewalls) and servers. " +
-	"Start with list_tabs and read_tab to see what the user is looking at. send_command and open_session need the user's approval in Termwright each time."
+	"Start with list_tabs and read_tab to see what the user is looking at. send_command and open_session need the user's approval in Termwright each time. " +
+	"Its emulated lab runs real switch images on KVM hosts: show_lab and lab_images to see it; for a test case build the topology (lab_add_switches, lab_cable), start it (lab_power) and lab_wait, " +
+	"configure and verify with lab_console (the switches' own CLI), check the cabling with lab_check_cabling, add a server (HTTP, FTP, TFTP, DHCP, SFTP) and put files on it with lab_server, put ESP32 microcontrollers in the lab (on this computer too) with lab_microcontrollers and type on their MicroPython console with lab_console, set up Linux computers (addresses, gateway, DNS) and run ping, traceroute or a web request on them with lab_computer, limit or share the hosts' CPU with lab_cpu, run traffic between test ports with lab_traffic (a pass/fail report) and capture a port's packets with lab_capture to verify it, and read lab_events and lab_debug (state, Events and console of one switch) when something fails (lab_link_check and lab_qemu_command for link flaps). Each change is approved by the user in Termwright."
 
 // ---- the server in the app ----
 
@@ -109,7 +112,7 @@ type mcpEndpoint struct {
 
 // mcpApply starts or stops the server to match the settings.
 func (a *App) mcpApply() {
-	on := a.cfg.Get().AI.MCP
+	on := a.cfg.Get().AI.MCP || a.cfg.Get().AI.API
 	mcpMu.Lock()
 	defer mcpMu.Unlock()
 	if on == (mcpCur != nil) {
@@ -130,6 +133,7 @@ func (a *App) mcpApply() {
 	s := &mcpServer{token: hex.EncodeToString(b), url: "http://" + ln.Addr().String() + "/mcp"}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) { a.mcpHTTP(s, w, r) })
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { a.apiHTTP(s, w, r) })
 	s.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go s.srv.Serve(ln)
 	mcpCur = s
@@ -177,6 +181,10 @@ func (a *App) mcpHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	if !a.cfg.Get().AI.MCP {
+		http.Error(w, "the Claude connector is off (Settings → AI Assistant)", http.StatusForbidden)
+		return
+	}
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
 		http.Error(w, "POST JSON-RPC messages here", http.StatusMethodNotAllowed)
@@ -218,7 +226,7 @@ func mcpStatic(req rpcReq) (rpcResp, bool) {
 	case "ping":
 		resp.Result = map[string]any{}
 	case "tools/list":
-		resp.Result = map[string]any{"tools": mcpTools}
+		resp.Result = map[string]any{"tools": append(append([]mcpTool(nil), mcpTools...), mcpLabTools...)}
 	default:
 		return resp, false
 	}
@@ -424,6 +432,9 @@ func (a *App) mcpCall(_ context.Context, name string, args map[string]any) (stri
 		}
 		out, _ := aiRedact(txt.Text, false)
 		return fmt.Sprintf("%s (%s, %s) - the last %d of %d lines:\n%s", t.Title, orDash(t.Session.DeviceType), t.State, min(n, txt.Total), txt.Total, out), nil
+	case "show_lab":
+		out, _ := aiRedact(a.EmuAgentText(), false)
+		return out, nil
 	case "list_sessions":
 		f := strings.ToLower(argStr(args, "filter"))
 		paths, _ := a.store.AllSessions(nil)
@@ -454,8 +465,16 @@ func (a *App) mcpCall(_ context.Context, name string, args map[string]any) (stri
 		if err != nil {
 			return "", fmt.Errorf("no saved session %q (list_sessions)", p)
 		}
-		if err := a.mcpAsk("", "Claude wants to connect", "Claude (through the Termwright connector) asks to open "+s.Path+" ("+s.Hostname+").", false, false); err != nil {
-			return "", err
+		switch {
+		case a.mcpLabPath(s.Path): // a device of Termwright's own lab: not asked
+		case s.Environment == "production":
+			if err := a.mcpAsk("", "Claude wants to connect to a PRODUCTION device", "Claude (through the Termwright connector) asks to open "+s.Path+" ("+s.Hostname+").\n\nThis session is marked production.", true, false); err != nil {
+				return "", err
+			}
+		default:
+			if err := a.mcpAsk("", "Claude wants to connect", "Claude (through the Termwright connector) asks to open "+s.Path+" ("+s.Hostname+").", false, false); err != nil {
+				return "", err
+			}
 		}
 		emitter{a}.Emit("mcp:open", s.Path)
 		return "Opening " + s.Path + " in a new tab - call list_tabs in a few seconds, then read_tab.", nil
@@ -476,8 +495,32 @@ func (a *App) mcpCall(_ context.Context, name string, args map[string]any) (stri
 		if danger {
 			msg += "\nThis command may change the device or interrupt traffic."
 		}
-		if err := a.mcpAsk(t.ID, "Claude wants to run a command", msg, danger, true); err != nil {
-			return "", err
+		lab := a.mcpLabPath(t.Session.Path)
+		switch {
+		case lab: // a device of Termwright's own lab: not asked (automated tests), kept in the change history
+			if a.cfg.Get().AI.MCPCommands == "never" {
+				return "", errors.New("the user does not let Claude type in Termwright (Settings → AI Assistant) - tell the user the command instead")
+			}
+		case t.Session.Environment == "production": // always asked, every command, never "for 15 minutes"
+			if err := a.mcpAsk(t.ID, "Claude wants to run a command on a PRODUCTION device", msg+"\nThis session is marked production.", true, false); err != nil {
+				return "", err
+			}
+		default:
+			if err := a.mcpAsk(t.ID, "Claude wants to run a command", msg, danger, true); err != nil {
+				return "", err
+			}
+		}
+		if lab {
+			id, ck, note := randHex(4), map[string]string{}, "commands typed on a console are not undone"
+			if vm := emuVMOfSession(t.Session.Path); vm != "" {
+				tag, why := a.emuAutoCheckpoint(vm, "Claude typed `"+cmd+"`", id)
+				if tag != "" {
+					ck[vm], note = tag, ""
+				} else if why != "" {
+					note = "not undone: " + why
+				}
+			}
+			a.emuChangeNoteCk(id, "ai", "send_command", "Typed `"+cmd+"` on "+t.Title, "ok", note, ck)
 		}
 		before, _ := a.tabText(t.ID, 1)
 		if err := a.terms.Write(t.ID, []byte(cmd+"\r")); err != nil {
@@ -490,6 +533,9 @@ func (a *App) mcpCall(_ context.Context, name string, args map[string]any) (stri
 			note = "\n[the device is paging - turn paging off and run it again]"
 		}
 		return red + note, nil
+	}
+	if strings.HasPrefix(name, "lab_") {
+		return a.emuMCP(name, args)
 	}
 	return "", fmt.Errorf("unknown tool %s", name)
 }
@@ -535,6 +581,9 @@ type MCPInfo struct {
 	CodeCmd    string `json:"codeCmd"`    // the claude mcp add command
 	DesktopCfg string `json:"desktopCfg"` // Claude Desktop's settings file
 	InDesktop  bool   `json:"inDesktop"`
+	InCode     bool   `json:"inCode"`            // Claude Code has it (user scope, in its .claude.json)
+	APIURL     string `json:"apiUrl,omitempty"`  // the local API, when it runs
+	KeyFile    string `json:"keyFile,omitempty"` // where its key is (mcp.json: url and token)
 }
 
 func claudeDesktopConfig() string {
@@ -555,9 +604,17 @@ func (a *App) MCPState() MCPInfo {
 	exe, _ := os.Executable()
 	mcpMu.Lock()
 	running := mcpCur != nil
+	api := ""
+	if running {
+		api = strings.TrimSuffix(mcpCur.url, "/mcp") + "/api/v1/lab"
+	}
 	mcpMu.Unlock()
-	info := MCPInfo{Running: running, Command: exe, DesktopCfg: claudeDesktopConfig()}
+	info := MCPInfo{Running: running, Command: exe, DesktopCfg: claudeDesktopConfig(), APIURL: api}
+	if a.cfg != nil {
+		info.KeyFile = mcpFile(a.cfg.DataDir())
+	}
 	info.CodeCmd = "claude mcp add --scope user termwright -- " + shellQuoteArg(exe) + " mcp"
+	info.InCode = claudeCodeHas(os.Getenv("CLAUDE_CONFIG_DIR"))
 	if b, err := os.ReadFile(info.DesktopCfg); err == nil {
 		var c struct {
 			MCPServers map[string]json.RawMessage `json:"mcpServers"`
@@ -567,6 +624,41 @@ func (a *App) MCPState() MCPInfo {
 		}
 	}
 	return info
+}
+
+// claudeCodeHas says whether Claude Code has a "termwright" connector for the user: its
+// .claude.json (in the home folder, or in CLAUDE_CONFIG_DIR) lists it under mcpServers.
+func claudeCodeHas(configDir string) bool {
+	home, _ := os.UserHomeDir()
+	files := []string{filepath.Join(home, ".claude.json"), filepath.Join(home, ".claude", ".claude.json")}
+	if configDir != "" {
+		files = []string{filepath.Join(configDir, ".claude.json")}
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		var c struct {
+			MCPServers map[string]json.RawMessage `json:"mcpServers"`
+		}
+		if json.Unmarshal(b, &c) == nil {
+			if _, ok := c.MCPServers["termwright"]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// APIKey is the local API's key, for Settings to copy to the clipboard (it is never shown).
+func (a *App) APIKey() string {
+	mcpMu.Lock()
+	defer mcpMu.Unlock()
+	if mcpCur == nil {
+		return ""
+	}
+	return mcpCur.token
 }
 
 func shellQuoteArg(s string) string {
@@ -650,6 +742,14 @@ func runMCPBridge(in io.Reader, out io.Writer, dataDir string) error {
 		}
 		if len(req.ID) == 0 || string(req.ID) == "null" {
 			continue // notification
+		}
+		if req.Method == "tools/list" { // the running Termwright's own list when it answers (this program may be an older copy)
+			if resp, err := mcpForward(&http.Client{Timeout: 5 * time.Second}, dataDir, line); err == nil && bytes.Contains(resp, []byte(`"tools"`)) {
+				if _, err := out.Write(append(bytes.TrimSpace(resp), '\n')); err != nil {
+					return err
+				}
+				continue
+			}
 		}
 		if r, ok := mcpStatic(req); ok {
 			_ = enc.Encode(r)

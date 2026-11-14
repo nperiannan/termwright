@@ -36,7 +36,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X main.Version=x.y.z".
-var Version = "0.34.1-dev"
+var Version = "0.35.0-dev"
 
 // App is the object bound to the frontend. Every exported method is callable
 // from TypeScript as window.go.main.App.<Method>.
@@ -76,6 +76,7 @@ func (a *App) startup(ctx context.Context) {
 	go a.watchSessions(ctx)
 	go a.startTeamSync()
 	go a.syncLoop(ctx)
+	go a.labAutoStart(ctx)
 }
 
 func (a *App) init() error {
@@ -178,6 +179,8 @@ func (a *App) shutdown(context.Context) {
 	closeWebPages()
 	fsMgr.StopAll()
 	a.IperfServerStop()
+	a.labShutdown()
+	a.emuShutdown()
 	a.mcpStop()
 	if a.terms != nil {
 		a.terms.CloseAll()

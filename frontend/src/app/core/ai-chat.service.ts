@@ -2,7 +2,7 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { Backend, errText } from './backend';
 import { Ui } from './ui.service';
 import { Tabs, TabView } from './tabs.service';
-import { SessionNode } from './models';
+import { LabView, SessionNode } from './models';
 import { envInfo, envOf } from './env';
 import { tr } from './i18n';
 
@@ -17,17 +17,20 @@ export type CtxKind = 'selection' | 'clipboard' | 'terminal' | 'tab' | 'file';
 export interface Ctx { id: number; kind: CtxKind; tabId?: string; label: string; detail: string; text: string; }
 export interface Img { name: string; mediaType: string; data: string; url: string; }
 export type StepState = 'ask' | 'running' | 'done' | 'skipped' | 'error' | 'refused';
-export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record';
-export interface Step { kind: StepKind; tab: string; command: string; output?: string; state: StepState; auto?: boolean; danger?: boolean; note?: string; failed?: boolean; prod?: boolean; }
+export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab';
+/** A step of the agent's plan: to do, being done, done. */
+export interface PlanItem { t: string; s: ' ' | '~' | 'x'; }
+export type AiMode = 'ask' | 'agent' | 'plan';
+export interface Step { kind: StepKind; tab: string; command: string; output?: string; state: StepState; auto?: boolean; danger?: boolean; note?: string; failed?: boolean; prod?: boolean; ask?: string; }
 export interface ChatMsg {
   id: number; role: 'user' | 'assistant'; text: string; time: string;
   ctx?: { label: string; detail: string }[]; images?: Img[]; wire?: string; hidden?: boolean;
-  model?: string; secs?: number; steps?: Step[]; error?: string; usage?: { in: number; out: number } | null;
+  model?: string; secs?: number; steps?: Step[]; error?: string; usage?: { in: number; out: number } | null; plan?: PlanItem[];
 }
 export interface Chat { id: string; title: string; device: string; updated: string; msgs: ChatMsg[]; }
 export type Dock = 'right' | 'left' | 'float';
 
-const KEY_CHATS = 'tw.ai.chats', KEY_DOCK = 'tw.ai.dock', KEY_W = 'tw.ai.width', KEY_TOOLS = 'tw.ai.tools';
+const KEY_CHATS = 'tw.ai.chats', KEY_DOCK = 'tw.ai.dock', KEY_W = 'tw.ai.width', KEY_TOOLS = 'tw.ai.tools', KEY_MODE = 'tw.ai.mode';
 
 /** What the agent may do. */
 export const AGENT_TOOLS = [
@@ -35,8 +38,12 @@ export const AGENT_TOOLS = [
   { k: 'open', name: 'Connect to saved sessions', what: 'Finds saved sessions by folder, name or address and connects with their saved login' },
   { k: 'log', name: 'Logger', what: 'Logs a tab to a file in the log folder - also in Read only' },
   { k: 'record', name: 'Recorder', what: 'Records a tab with a marker for each command - also in Read only' },
+  { k: 'lab', name: 'Emulated lab', what: 'Sees the emulated lab (switches, cables, LAGs, KVM hosts, events), adds and starts switches, cables, configures them on their consoles, runs traffic tests, captures packets and checks links' },
 ] as const;
 const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 25;
+/** lab lines with words; the connector's lab tools take JSON (lab traffic {...}). */
+const LAB_VERBS = ['start', 'stop', 'shutdown', 'cable', 'uncable', 'pull', 'plug', 'lag', 'nolag', 'readlags', 'setlag', 'unsetlag', 'checkcabling', 'uplink'];
+const LAB_TOOLS = ['images', 'add_switches', 'cable', 'power', 'wait', 'console', 'check_cabling', 'move', 'traffic', 'capture', 'link_check', 'qemu_command', 'address', 'computer', 'cpu', 'debug', 'events'];
 
 /** What the agent may do on its own, from "Read only" (white) to fully autonomous (orange). */
 export type AgentPerm = '' | 'every' | 'readonly' | 'auto';
@@ -44,7 +51,7 @@ export const AGENT_PERMS: { k: AgentPerm; name: string; what: string; tone: 'aut
   { k: 'auto', name: 'Fully autonomous', what: 'Runs commands and changes without asking. Production sessions and reboot / erase still ask.', tone: 'auto' },
   { k: '', name: 'Changes ask first', what: 'Read-only commands run by themselves; changes wait for you.', tone: 'ask' },
   { k: 'every', name: 'Ask before every command', what: 'Every command and connection waits for you.', tone: 'ask' },
-  { k: 'readonly', name: 'Read only', what: 'Only read-only commands; changes are given to you as text.', tone: 'ro' },
+  { k: 'readonly', name: 'Read only', what: 'Read-only commands run without asking, production sessions too; changes are given to you as text.', tone: 'ro' },
 ];
 
 const NET_RO = ['show', 'sh', 'display', 'dis', 'ping', 'traceroute', 'tracert', 'trace'];
@@ -120,7 +127,13 @@ export class AIChat {
   readonly currentId = signal<string>('');
   readonly view = signal<'chat' | 'history'>('chat');
   readonly busy = signal(false);
-  readonly mode = signal<'ask' | 'agent'>('ask');
+  /** Agent (it plans a task of several steps, then runs it) by default; Plan only plans; Ask only answers. */
+  readonly mode = signal<AiMode>((['ask', 'agent', 'plan'].includes(store(KEY_MODE)) ? store(KEY_MODE) : 'agent') as AiMode);
+  setMode(m: AiMode) { this.mode.set(m); save(KEY_MODE, m); }
+  /** The chat's plan: the last one the AI gave. */
+  readonly plan = computed(() => { const m = [...(this.current()?.msgs ?? [])].reverse().find(x => x.role === 'assistant' && x.plan?.length); return m?.plan ?? null; });
+  /** Plan mode, after the plan: carry it out in Agent mode. */
+  runPlan() { if (this.busy()) return; this.setMode('agent'); void this.send('Go ahead with the plan.'); }
   readonly ctxs = signal<Ctx[]>([]);
   readonly images = signal<Img[]>([]);
   readonly keep = signal(0); // whole terminal: the last N lines (0 = all)
@@ -145,7 +158,8 @@ export class AIChat {
   }
   private stopping = false;
   /** Approvals waiting for the user, by step. */
-  private waits = new Map<Step, (r: { go: 'run' | 'skip' | 'stop'; command?: string }) => void>();
+  private waits = new Map<Step, (r: { go: 'run' | 'skip' | 'stop' | 'chat'; command?: string }) => void>();
+  /** Chats where the user allowed every lab change (not the dangerous ones) without asking. */
 
   readonly current = computed(() => this.chats().find(c => c.id === this.currentId()) ?? null);
 
@@ -269,11 +283,11 @@ export class AIChat {
   stop() { this.stopping = true; for (const [, r] of this.waits) r({ go: 'stop' }); }
 
   /** Answers an approval card. */
-  decide(s: Step, go: 'run' | 'skip' | 'stop', command?: string) { this.waits.get(s)?.({ go, command }); }
+  decide(s: Step, go: 'run' | 'skip' | 'stop' | 'chat', command?: string) { this.waits.get(s)?.({ go, command }); }
 
   private async run(chatId: string) {
     this.busy.set(true); this.stopping = false;
-    const agent = this.mode() === 'agent';
+    const agent = this.mode() !== 'ask', planOnly = this.mode() === 'plan';
     try {
       for (let step = 0; step < MAX_STEPS; step++) {
         const chat = this.chats().find(c => c.id === chatId);
@@ -285,10 +299,10 @@ export class AIChat {
           deviceType: t?.session?.deviceType ?? '', protocol: t?.session?.protocol ?? '', agent,
           tabs: agent ? this.tabs.tabs().filter(x => x.kind === 'terminal').map(x => `${x.title} (${x.session.deviceType || 'unknown'}, ${x.state})`) : [],
           tools: Object.entries(this.tools()).filter(([, on]) => on).map(([k]) => k).concat(['none']),
-          folders: agent ? folders(this.ui.tree()) : [], perm: this.perm(),
+          folders: agent ? folders(this.ui.tree()) : [], perm: planOnly ? 'readonly' : this.perm(), plan: planOnly ? 'only' : agent ? 'list' : '',
         });
-        const { text, actions } = parseActions(ans.text);
-        const msg: ChatMsg = { id: ++nid, role: 'assistant', text, time: now(), wire: ans.text, model: ans.model, secs: Math.round((Date.now() - started) / 1000), steps: [], usage: ans.usage ?? null };
+        const { text, actions, plan } = parseActions(ans.text);
+        const msg: ChatMsg = { id: ++nid, role: 'assistant', text, time: now(), wire: ans.text, model: ans.model, secs: Math.round((Date.now() - started) / 1000), steps: [], usage: ans.usage ?? null, ...(plan.length ? { plan } : {}) };
         this.push(chatId, msg);
         if (!agent || !actions.length || this.stopping) break;
         const results: string[] = [];
@@ -313,7 +327,7 @@ export class AIChat {
 
   /** One agent step: open a session or run a command, asking when the rules say so. */
   private async act(s: Step, chatId: string): Promise<string> {
-    const perm = this.perm();
+    const perm = this.mode() === 'plan' ? 'readonly' : this.perm();
     if (s.kind === 'find') {
       const hits = findSessions(this.ui.tree(), s.tab);
       s.state = 'done'; s.auto = true;
@@ -330,8 +344,10 @@ export class AIChat {
       const open = this.tabs.tabs().find(x => x.kind === 'terminal' && x.session?.path === node.path && x.state === 'connected');
       if (open) { s.state = 'done'; s.auto = true; s.output = tr('Already connected'); return `open ${node.name}: already connected; the tab is called ${open.title}.`; }
       s.prod = prod;
-      if (perm === 'every' || prod) { const r = await this.ask(s, chatId); if (r.go !== 'run') return this.refusal(s, r.go); }
-      s.state = 'running'; s.auto = perm !== 'every' && !prod; this.touch(chatId);
+      // Read only connects without asking: it then runs only commands that change nothing
+      const askOpen = perm !== 'readonly' && (perm === 'every' || prod);
+      if (askOpen) { const r = await this.ask(s, chatId); if (r.go !== 'run') return this.refusal(s, r.go); }
+      s.state = 'running'; s.auto = !askOpen; this.touch(chatId);
       await this.tabs.openSession(node.path);
       const before = new Set(this.tabs.tabs().map(x => x.id));
       const t = await waitFor(() => this.tabs.tabs().find(x => x.session?.path === node.path && (x.state === 'connected' || (!before.has(x.id) && (x.state === 'error' || x.state === 'disconnected')))), 60000);
@@ -343,6 +359,7 @@ export class AIChat {
       s.state = 'done'; s.output = tr('Connected'); return `open ${node.name}: connected; the tab is called ${t.title}.`;
     }
     if (s.kind === 'log' || s.kind === 'record') return this.evidence(s);
+    if (s.kind === 'lab') return this.labStep(s, chatId);
     const t = findTab(this.tabs.tabs(), s.tab);
     if (!t) { s.state = 'error'; s.note = tr('No open tab is called {0}', s.tab); return `run ${s.tab}: no open tab has that name - open it first.`; }
     s.tab = t.title;
@@ -354,7 +371,8 @@ export class AIChat {
     const destroy = DESTRUCTIVE.test(s.command);
     s.prod = prod; s.danger = s.danger || destroy;
     if (perm === 'readonly' && !ro) { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `run ${t.title}: ${s.command} - not run: the user allows only read-only commands. Tell the user the command instead.`; }
-    if (perm === 'auto' ? (prod || destroy) : (!ro || prod || perm === 'every')) {
+    // Read only never asks: what is left changes nothing (production sessions too)
+    if (perm === 'readonly' ? false : perm === 'auto' ? (prod || destroy) : (!ro || prod || perm === 'every')) {
       const r = await this.ask(s, chatId);
       if (r.go !== 'run') return this.refusal(s, r.go);
       if (r.command && r.command.trim() !== s.command) s.command = r.command.trim();
@@ -397,12 +415,105 @@ export class AIChat {
     } catch (e) { s.state = 'error'; s.note = errText(e); return `${s.kind} ${t.title}: ${errText(e)}`; }
   }
 
-  private ask(s: Step, chatId: string) {
-    s.state = 'ask'; this.touch(chatId);
-    return new Promise<{ go: 'run' | 'skip' | 'stop'; command?: string }>(res => this.waits.set(s, r => { this.waits.delete(s); res(r); }));
+  /** A lab line: lab show (read), or a change to the emulated lab (asked like a configuration change). */
+  private async labStep(s: Step, chatId: string): Promise<string> {
+    const line = `lab ${s.command}`;
+    const [verb0, ...args] = s.command.trim().split(/\s+/);
+    const verb = (verb0 ?? '').toLowerCase();
+    s.tab = tr('Emulated lab');
+    try {
+      const json = s.command.trim().slice((verb0 ?? '').length).trim();
+      if (LAB_TOOLS.includes(verb) && (json.startsWith('{') || !LAB_VERBS.includes(verb))) return await this.labTool(s, chatId, verb, json);
+      if (verb === 'show' || verb === '') {
+        const t = await this.backend.emuAgentText();
+        s.state = 'done'; s.auto = true; s.output = t;
+        return `${line}:\n${t}`;
+      }
+      const v: LabView = await this.backend.emuState();
+      const devs = v.devices ?? [];
+      const dev = (n?: string) => devs.find(d => d.hostname.toLowerCase() === (n ?? '').toLowerCase() || d.id === n);
+      const ids = (n?: string) => (n ?? '').toLowerCase() === 'all' ? devs.map(d => d.id) : (dev(n) ? [dev(n)!.id] : null);
+      const bad = (why: string) => { s.state = 'error'; s.note = why; return `${line}: not done - ${why}.`; };
+      if (!LAB_VERBS.includes(verb)) return bad(`unknown lab command; use ${['show', ...LAB_VERBS, ...LAB_TOOLS].join(', ')}`);
+      if (!v.exists || !devs.length) return bad('there is no emulated lab with switches');
+      const one = verb === 'checkcabling' ? devs.map(d => d.id) : verb === 'start' || verb === 'stop' ? ids(args[0]) : dev(args[0]) ? [dev(args[0])!.id] : null;
+      if (!one) return bad(`no switch is called ${args[0] ?? ''} (lab show lists them)`);
+      // reading the switch's LAGs changes nothing; the rest change the lab
+      if (verb !== 'readlags' && verb !== 'checkcabling') {
+        const perm = this.mode() === 'plan' ? 'readonly' : this.perm();
+        if (perm === 'readonly') { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `${line}: not done - the user allows only read-only actions. Tell the user what to do instead.`; }
+        // lab changes are not asked (automated tests must not wait): each is kept in the lab's Changes history, with Revert
+        s.auto = true;
+      }
+      s.state = 'running'; this.touch(chatId);
+      const chg = verb !== 'readlags' && verb !== 'checkcabling' ? await this.backend.emuAgentChangeBegin(line, verb).catch(() => '') : '';
+      let out: LabView;
+      switch (verb) {
+        case 'start': out = await this.backend.emuStart(one); break;
+        case 'stop': out = await this.backend.emuStop(one); break;
+        case 'shutdown': out = await this.backend.emuShutDown(one); break;
+        case 'cable': {
+          const b = dev(args[2]);
+          if (!b || !args[1] || !args[3]) return bad('give lab cable <switch> <port> <switch> <port>');
+          out = await this.backend.emuConnect({ a: one[0], aPort: args[1], b: b.id, bPort: args[3] });
+          break;
+        }
+        case 'uncable': if (!args[1]) return bad('give the port'); out = await this.backend.emuDisconnect(one[0], args[1]); break;
+        case 'pull': case 'plug': if (!args[1]) return bad('give the port'); out = await this.backend.emuSetLink(one[0], args[1], verb === 'plug'); break;
+        case 'lag': {
+          const mode = (args[2] ?? '').toLowerCase();
+          const ports = (args.slice(3).join(',')).split(',').map(p => p.trim()).filter(Boolean);
+          if (!args[1] || (mode !== 'lacp' && mode !== 'static') || !ports.length) return bad('give lab lag <switch> <name> lacp|static <port,port>');
+          out = await this.backend.emuSetLag(one[0], args[1], mode, ports);
+          break;
+        }
+        case 'nolag': if (!args[1]) return bad('give the LAG name'); out = await this.backend.emuSetLag(one[0], args[1], '', []); break;
+        case 'uplink': if (!args[1] || !/^(on|off)$/i.test(args[2] ?? '')) return bad('give lab uplink <switch> <port> on|off'); out = await this.backend.emuSetUplink(one[0], args[1], args[2].toLowerCase() === 'on'); break;
+        case 'setlag': case 'unsetlag': if (!args[1]) return bad('give the LAG name (lab show lists them)'); out = await this.backend.emuApplyLag(one[0], args.slice(1).join(' '), verb === 'unsetlag'); break;
+        case 'checkcabling': {
+          out = await this.backend.emuCheckCabling();
+          const name = (id: string) => (out.devices ?? []).find(d => d.id === id)?.hostname ?? id;
+          const res = (out.links ?? []).map(k => `${name(k.a)} ${k.aPort} <-> ${name(k.b)} ${k.bPort}: ${k.lldp || 'not checked'}`).join('\n');
+          s.state = 'done'; s.output = res; return `${line}:\n${res}`;
+        }
+        default: out = await this.backend.emuReadLags(one);
+      }
+      if (chg) void this.backend.emuAgentChangeEnd(chg, 'ok');
+      void this.ui.refreshTree();
+      const names = one.map(id => devs.find(d => d.id === id)?.hostname ?? id);
+      const after = (out.devices ?? []).filter(d => one.includes(d.id)).map(d => `${d.hostname}: ${d.stateText || d.state}`).join(', ');
+      s.state = 'done'; s.output = after || tr('Done');
+      return `${line}: done for ${names.join(', ')}` + (after ? ` - now ${after}` : '') + '. Use lab show to see the lab again.';
+    } catch (e) {
+      s.state = 'error'; s.note = errText(e).slice(0, 160);
+      return `${line}: failed - ${errText(e)}`;
+    }
   }
 
-  private refusal(s: Step, go: 'skip' | 'stop' | 'run') {
+  /** A lab tool with JSON arguments (the connector's: traffic, capture, console, link_check...): reads and changes run (changes go to the lab's Changes history); Read only refuses changes. */
+  private async labTool(s: Step, chatId: string, verb: string, json: string): Promise<string> {
+    const line = `lab ${s.command}`;
+    let args: Record<string, unknown> = {};
+    if (json) {
+      try { const a = JSON.parse(json); if (a && typeof a === 'object' && !Array.isArray(a)) args = a; else throw new Error(); }
+      catch { s.state = 'error'; s.note = tr('The arguments are not JSON'); return `${line}: not done - give the arguments as one JSON object on the same line.`; }
+    }
+    s.state = 'running'; this.touch(chatId);
+    // lab changes are not asked (automated tests must not wait; each is kept in the lab's Changes history with Revert); Read only stops them
+    const r = await this.backend.emuAgentTool(verb, args, this.perm() !== 'readonly');
+    if (r.ask) { s.ask = r.text; s.danger = !!r.danger; s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `${line}: not done - the user allows only read-only actions. Tell the user what to do instead.`; }
+    s.auto = true; void this.ui.refreshTree();
+    const out = r.out ?? '';
+    s.state = 'done'; s.output = out || tr('Done');
+    return `${line}:\n${out.length > MAX_OUT ? '…\n' + out.slice(-MAX_OUT) : out}`;
+  }
+
+  private ask(s: Step, chatId: string) {
+    s.state = 'ask'; this.touch(chatId);
+    return new Promise<{ go: 'run' | 'skip' | 'stop' | 'chat'; command?: string }>(res => this.waits.set(s, r => { this.waits.delete(s); res(r); }));
+  }
+
+  private refusal(s: Step, go: 'skip' | 'stop' | 'run' | 'chat') {
     if (go === 'stop') { this.stopping = true; s.state = 'skipped'; s.note = tr('Stopped'); return `${s.kind} ${s.tab}: ${s.command} - the user stopped the agent.`; }
     s.state = 'skipped'; s.note = tr('Skipped'); return `${s.kind} ${s.tab}: ${s.command} - the user chose not to run it.`;
   }
@@ -443,21 +554,25 @@ export class AIChat {
 }
 
 /** The answer's text without its termwright block, and the actions in it. */
-export function parseActions(text: string): { text: string; actions: { kind: StepKind; tab: string; command: string }[] } {
-  const actions: { kind: StepKind; tab: string; command: string }[] = [];
+export function parseActions(text: string): { text: string; actions: { kind: StepKind; tab: string; command: string }[]; plan: PlanItem[] } {
+  const actions: { kind: StepKind; tab: string; command: string }[] = [], plan: PlanItem[] = [];
   const out = text.replace(/```termwright[^\n]*\n([\s\S]*?)```/g, (_, body: string) => {
     for (const raw of body.split('\n')) {
       const l = raw.trim();
+      const p = /^plan\s*\[\s*([xX~ ]?)\s*\]\s*(.+)$/.exec(l);
+      if (p) { plan.push({ t: p[2].trim(), s: p[1].toLowerCase() === 'x' ? 'x' : p[1] === '~' ? '~' : ' ' }); continue; }
       let m = /^run\s+(.+?)\s*:\s*(.+)$/i.exec(l);
       if (m) { actions.push({ kind: 'run', tab: m[1].trim(), command: m[2].trim() }); continue; }
       m = /^(log|record)\s+(.+?)\s*:\s*(.+)$/i.exec(l);
       if (m) { actions.push({ kind: m[1].toLowerCase() as StepKind, tab: m[2].trim(), command: m[3].trim() }); continue; }
+      m = /^lab(?:\s+(.*))?$/i.exec(l);
+      if (m) { actions.push({ kind: 'lab', tab: 'lab', command: (m[1] ?? 'show').trim() }); continue; }
       m = /^(open|find)\s+(.+)$/i.exec(l);
       if (m) actions.push({ kind: m[1].toLowerCase() as StepKind, tab: m[2].trim(), command: '' });
     }
     return '';
   });
-  return { text: out.trim(), actions };
+  return { text: out.trim(), actions, plan };
 }
 
 function findTab(tabs: TabView[], name: string) {

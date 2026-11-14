@@ -67,6 +67,15 @@ func fakeSwitchOpt(t *testing.T, password string, privileged bool, got chan<- st
 						_, _ = c.Write([]byte("sw1:1#"))
 					case "terminal more disable":
 						_, _ = c.Write([]byte("sw1:1#"))
+					case "save config":
+						_, _ = c.Write([]byte("Save the configuration to the primary file? (y/N) "))
+						ans := line()
+						_, _ = c.Write([]byte(ans + "\r\n"))
+						if ans == "y" {
+							_, _ = c.Write([]byte("Saved.\r\nsw1:1#"))
+						} else {
+							_, _ = c.Write([]byte("Not saved.\r\nsw1:1#"))
+						}
 					case "config terminal":
 						_, _ = c.Write([]byte("Enter configuration commands, one per line.  End with CNTL/Z.\r\nsw1:1(config)#"))
 					case "show running-config":
@@ -209,5 +218,25 @@ func TestCaptureConfigModePrompt(t *testing.T) {
 	out, err := m.Capture(ctx, s, []string{"show running-config"}, `:\d+[>#] ?$`) // the old pattern
 	if err != nil || !strings.Contains(out, "vlan members add 10 1/1") || strings.Contains(out, "(config)#") {
 		t.Fatalf("%q %v", out, err)
+	}
+}
+
+// CaptureYes answers a yes/no question with y, once.
+func TestCaptureYes(t *testing.T) {
+	addr := fakeSwitch(t, "secret")
+	host, port, _ := net.SplitHostPort(addr)
+	p, _ := strconv.Atoi(port)
+	m := captureManager()
+	m.DevicePassword = func(string) (string, bool) { return "secret", true }
+	s := session.Defaults()
+	s.Name, s.Protocol, s.Hostname, s.Port, s.DeviceType = "sw1", session.ProtoRaw, host, p, "VOSS"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	outs, err := m.CaptureYes(ctx, s, []string{"save config", "show running-config"}, `:\d+[>#] ?$`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outs) != 2 || !strings.Contains(outs[0], "Saved.") || !strings.Contains(outs[1], "vlan create 10") {
+		t.Fatalf("got %q", outs)
 	}
 }

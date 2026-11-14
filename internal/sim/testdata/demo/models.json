@@ -1,0 +1,4 @@
+{"models": [
+ {"sku": "D100-24T-4X", "family": "Demo", "os": ["demo"], "version": {"demo": "1.2.3"}, "serial": "DM{YY}{WW}-{N:5}", "mac": "02:00:00:{h:2}:{h:2}:{h:2}", "fields": {"part": "100-0001", "subSerial": "SUB-{N:4}"}},
+ {"sku": "D200-8T", "family": "Demo", "os": ["demo"], "version": {"demo": "2.0"}, "serial": "DM{N:4}", "mac": "02:00:01:{h:2}:{h:2}:{h:2}", "fields": {"part": "100-0002"}}
+]}

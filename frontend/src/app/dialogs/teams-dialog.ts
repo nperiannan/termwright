@@ -25,7 +25,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
         <span class="mh-t">{{ view() === 'setup' ? 'Set Up a Team Server' : view() === 'join' ? 'Join a Team' : view() === 'update' ? 'Update the Team Server' : 'Teams' }}
           <span class="mh-s">{{ view() === 'setup' ? 'A small Docker container on a Linux host of your lab - your team connects to it'
             : view() === 'join' ? 'Paste the invite the team\\'s owner sent you'
-            : view() === 'update' ? (upd()?.name + ' runs ' + (upd()?.version || '?') + ' - this Termwright brings it to ' + upd()?.update)
+            : view() === 'update' ? (upd()?.name + ' runs ' + (upd()?.version || '?') + ' - ' + (channel === 'nightly' ? 'install the nightly build' : channel === 'release' ? 'install the latest release' : 'this Termwright brings it to ' + upd()?.update))
             : 'Who uses which device - shared with your team servers only' }}</span></span></div>
 
       @switch (view()) {
@@ -52,6 +52,9 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
                     <a (click)="$event.stopPropagation(); toUpdate(t)">Update Server…</a> }
                   @else { <span>The team server runs {{ t.version || 'an older version' }}, older than this Termwright. Its owner can update it from Termwright.</span> }
                 </div>
+              }
+              @if (t.reachable && !t.update && t.role !== 'member') {
+                <div class="upd re"><span>Server {{ t.version || '?' }}</span><a (click)="$event.stopPropagation(); toUpdate(t)" title="Install the newest nightly build or the latest release on the team server, also when it runs this version">Reinstall or Update…</a></div>
               }
               @if (t.reachable && t.newer) {
                 <div class="upd new"><app-icon name="alert" [size]="13" /><span>The team server runs {{ t.version }}, newer than this Termwright - update Termwright (Help → Check for Updates).</span></div>
@@ -141,6 +144,13 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
         @if (hostAddr() && !host && !run()) {
           <p class="hint warnh">No SSH session logs in to {{ hostAddr() }}. Pick the session of that host above, or create one (File → New Session…, address {{ hostAddr() }}, a user who may use Docker there) and come back.</p>
         }
+        <div class="lbl">Version</div>
+        <div class="seg">
+          @if (upd()?.update) { <button type="button" [class.on]="channel === ''" (click)="channel = ''" [disabled]="!!run()">This Termwright's ({{ upd()?.update }})</button> }
+          <button type="button" [class.on]="channel === 'nightly'" (click)="channel = 'nightly'" [disabled]="!!run()">Nightly build</button>
+          <button type="button" [class.on]="channel === 'release'" (click)="channel = 'release'" [disabled]="!!run()">Latest release</button>
+        </div>
+        <span class="muted small"> {{ channel === 'nightly' ? 'the newest build of main: fixes before they are released' : channel === 'release' ? 'the latest published release' : 'the team server of this Termwright' }}</span>
         <div class="lbl">Container image</div>
         <div class="seg">
           <button type="button" [class.on]="image === 'download'" (click)="image = 'download'" [disabled]="!!run()">Download (GitHub)</button>
@@ -159,7 +169,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
           @else { <div class="found"><app-icon name="check" [size]="14" /> {{ upd()?.name }} is up to date. Members reconnect by themselves.</div> }
         }
         @if (!run() && !done()) {
-          <p class="hint">Termwright logs in to the host, gets the team server {{ upd()?.update }} there and starts the team's container again with the same name, port, network and data volume.
+          <p class="hint">Termwright logs in to the host, gets the team server ({{ channel === 'nightly' ? 'nightly build' : channel === 'release' ? 'latest release' : upd()?.update }}) there and starts the team's container again with the same name, port, network and data volume.
             The team, its members, inventory, usage history, certificate and invite stay. The team is offline for a few seconds; if the new version does not answer within 90 seconds, the old one is started again.
             Only the container whose certificate is this team's is touched; a server from Docker Compose is updated with Compose.</p>
         }
@@ -258,6 +268,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
     .upd { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 5px 9px; border-radius: 7px; font-size: calc(12px * var(--ui-scale, 1));
       background: color-mix(in srgb, var(--accent) 10%, transparent); app-icon { color: var(--accent); flex: none; }
       span { flex: 1; } a { color: var(--accent); cursor: pointer; font-weight: 600; white-space: nowrap; } }
+    .upd.re { background: none; padding: 0 2px; color: var(--muted); a { margin-left: auto; } }
     .upd.new { background: color-mix(in srgb, var(--text) 6%, transparent); app-icon { color: var(--muted); } }
     .sso { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; flex-wrap: wrap; button app-icon { margin-right: 4px; } }
     .found { display: flex; align-items: center; gap: 6px; margin: 10px 0 6px; app-icon { color: #22c55e; } }
@@ -272,6 +283,8 @@ export class TeamsDialog implements OnInit, OnDestroy {
   readonly view = signal<'list' | 'join' | 'setup' | 'update'>('list');
   /** the team whose server is updated */
   readonly upd = signal<TeamView | null>(null);
+  /** Update Server…: '' = this Termwright's version, 'nightly' or 'release'. */
+  channel: '' | 'nightly' | 'release' = '';
   /** the team's host address when no SSH session logs in to it */
   readonly hostAddr = signal('');
   readonly teams = signal<TeamView[]>([]);
@@ -435,7 +448,7 @@ export class TeamsDialog implements OnInit, OnDestroy {
 
   /** Update Server…: the host's session is the one it was set up with, or one that logs in to its address. */
   toUpdate(t: TeamView) {
-    this.error.set(''); this.steps.set([]); this.done.set(null); this.upd.set(t);
+    this.error.set(''); this.steps.set([]); this.done.set(null); this.upd.set(t); this.channel = t.update ? '' : 'nightly';
     const ssh = this.sshSessions(), addr = t.address.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
     const byAddr: string[] = [];
     const walk = (n: SessionNode) => (n.children ?? []).forEach(c => c.isFolder ? walk(c) : c.protocol === 'SSH2' && (c.hostname ?? '').toLowerCase() === addr && byAddr.push(c.path));
@@ -451,7 +464,7 @@ export class TeamsDialog implements OnInit, OnDestroy {
     this.error.set(''); this.steps.set([]); this.done.set(null);
     try {
       this.run.set('pending');
-      const id = await this.backend.teamUpdateServer({ teamId: t.id, sessionPath: this.host, image: this.image });
+      const id = await this.backend.teamUpdateServer({ teamId: t.id, sessionPath: this.host, image: this.image, channel: this.channel });
       if (this.run() === 'pending') this.run.set(id);
     } catch (e) { this.run.set(''); this.error.set(errText(e)); }
   }
