@@ -30,7 +30,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; aiReadOnly?: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
   facts?: FactRule[] | null;
 }
 /** A value read from command output after connecting: the first group of regex. every = at each connect. */

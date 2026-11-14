@@ -422,6 +422,13 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <label>Backup commands</label>
                   <textarea name="dtbk" class="mono" rows="2" [(ngModel)]="d.backupCommands"
                     [placeholder]="backupDefault(d.name) || 'Commands that print the configuration, one per line, e.g. show running-config'"></textarea>
+                  <label>Web server</label>
+                  <div class="webd">
+                    <textarea name="dtwc" class="mono" rows="1" [(ngModel)]="d.webCheck" [placeholder]="webDefault(d.name, 'check') || 'A command that shows the web server, e.g. show web-server'" title="Open Web Interface runs it in the background to see whether HTTP and HTTPS are on"></textarea>
+                    <div class="row2"><input name="dtwh" class="mono" [(ngModel)]="d.webHttp" [placeholder]="webDefault(d.name, 'http') || 'HTTP on (regex)'" title="Matches the check's output while HTTP is on" /><input name="dtws" class="mono" [(ngModel)]="d.webHttps" [placeholder]="webDefault(d.name, 'https') || 'HTTPS on (regex)'" title="Matches the check's output while HTTPS is on" /></div>
+                    <textarea name="dtwo" class="mono" rows="2" [(ngModel)]="d.webOn" [placeholder]="webDefault(d.name, 'on') || 'Commands that turn HTTP and HTTPS on, one per line ({name} = the session)'" title="Turn On HTTP and HTTPS… in Open Web Interface runs these, after showing them"></textarea>
+                    <input name="dtwv" class="mono" [(ngModel)]="d.webSave" [placeholder]="webDefault(d.name, 'save') || 'Command that saves the configuration'" />
+                  </div>
                   <label>AI agent: read-only</label>
                   <textarea name="dtro" class="mono" rows="2" [(ngModel)]="d.aiReadOnly" [placeholder]="readOnlyDefault(d.name)"
                     title="The AI agent runs commands that begin with these without asking (except on production); everything else asks first. One per line."></textarea>
@@ -698,6 +705,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
   </div>
   }`,
   styles: [`
+    .webd { display: flex; flex-direction: column; gap: 6px; min-width: 0; .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } }
     .glist { max-width: 760px;
       .gt { font-size: calc(11px * var(--ui-scale, 1)); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 4px 0 6px 4px; }
       .list { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
@@ -758,6 +766,15 @@ export class OptionsDialog implements OnInit {
   readonly page = signal<Page>((this.ui.optionsPage() || 'general') as Page);
   /** Built-in backup command shown when a device type has none of its own. */
   readOnlyDefault(name: string) { return 'Runs without asking (one per line; empty = ' + readOnlyList(name, '').join(', ') + ')'; }
+  /** The built-in web server commands of EXOS and VOSS, shown as placeholders (an empty field uses them). */
+  webDefault(name: string, k: 'check' | 'http' | 'https' | 'on' | 'save') {
+    const d: Record<string, Record<string, string>> = {
+      exos: { check: 'show management', http: 'web access : enabled (tcp', https: 'enabled (ssl port', on: 'enable web http · ssl certificate · enable web https', save: 'save configuration' },
+      voss: { check: 'show web-server', http: 'status enabled, secure-only disabled', https: 'status : enabled', on: 'web-server enable · no web-server secure-only', save: 'save config' },
+    };
+    const c = d[name.toLowerCase()]?.[k];
+    return c ? c + '  (built-in)' : '';
+  }
   backupDefault(name: string) {
     const d: Record<string, string> = { exos: 'show configuration', voss: 'show running-config', 'cisco ios': 'show running-config' };
     const c = d[name.toLowerCase()];

@@ -18,6 +18,9 @@ declare global {
 /** Typed wrapper around the Go backend bound by Wails. */
 export type SftpMode = '' | 'jump' | 'target';
 
+/** A device's own web server, read by its device type. */
+export interface WebServerState { known: boolean; http: boolean; https: boolean; output?: string; on?: string[] | null; save?: string[] | null; }
+
 @Injectable({ providedIn: 'root' })
 export class Backend {
   get available(): boolean { return !!window.go?.main?.App; }
@@ -434,6 +437,10 @@ export class Backend {
     return this.call<{ sent: string[]; via: string; target: string; awake: boolean; waited: number }>('WakeSession', tabId, s, wait);
   }
   webBrowsers() { return this.call<{ id: string; name: string }[] | null>('WebBrowsers'); }
+  /** The device's own web server (its device type says how to read it): HTTP and HTTPS on or off. */
+  webServerCheck(s: Session) { return this.call<WebServerState>('WebServerCheck', s); }
+  /** Turns the device's web server on for HTTP and HTTPS (and saves the configuration when save is set). */
+  webServerEnable(s: Session, save: boolean) { return this.call<WebServerState>('WebServerEnable', s, save); }
   openWebPage(tabId: string, s: Session, through: 'session' | 'device', url: string, browser: string) {
     return this.call<{ browser: string; via: string; url?: string; note?: string }>('OpenWebPage', tabId, s, through, url, browser);
   }

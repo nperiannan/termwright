@@ -28,6 +28,14 @@ type DeviceType struct {
 	// command per line (e.g. "show running-config"); empty = the built-in
 	// default for the device type's name, if any.
 	BackupCommands string `json:"backupCommands"`
+	// The device's web server, for Open Web Interface (each empty = the built-in one for the type's name):
+	// WebCheck prints its state, WebHTTP and WebHTTPS match that output while each is on, WebOn turns both
+	// on and WebSave keeps it after a restart (commands one per line; {name} is the session's name).
+	WebCheck string `json:"webCheck,omitempty"`
+	WebHTTP  string `json:"webHttp,omitempty"`
+	WebHTTPS string `json:"webHttps,omitempty"`
+	WebOn    string `json:"webOn,omitempty"`
+	WebSave  string `json:"webSave,omitempty"`
 	// AIReadOnly: commands the AI agent may run without asking (beginnings,
 	// one per line, e.g. "show"); empty = the built-in list (show, display,
 	// ping, traceroute… - or the usual read-only commands for Linux).
@@ -112,6 +120,37 @@ func (d DeviceType) Backup() []string {
 	return out
 }
 
+// Web is how to see and turn on the device's web server: the commands that print its state, the patterns that
+// match while HTTP and HTTPS are on, the commands that turn both on and the ones that save it. ok is false when
+// the type has none.
+func (d DeviceType) Web() (check []string, http, https string, on, save []string, ok bool) {
+	pick := func(own string, f func(DeviceType) string) string {
+		if strings.TrimSpace(own) != "" {
+			return own
+		}
+		for _, b := range BuiltinDeviceTypes() {
+			if strings.EqualFold(b.Name, d.Name) {
+				return f(b)
+			}
+		}
+		return ""
+	}
+	lines := func(src string) []string {
+		var out []string
+		for _, l := range strings.Split(src, "\n") {
+			if l = strings.TrimSpace(l); l != "" {
+				out = append(out, l)
+			}
+		}
+		return out
+	}
+	check = lines(pick(d.WebCheck, func(b DeviceType) string { return b.WebCheck }))
+	http, https = pick(d.WebHTTP, func(b DeviceType) string { return b.WebHTTP }), pick(d.WebHTTPS, func(b DeviceType) string { return b.WebHTTPS })
+	on = lines(pick(d.WebOn, func(b DeviceType) string { return b.WebOn }))
+	save = lines(pick(d.WebSave, func(b DeviceType) string { return b.WebSave }))
+	return check, http, https, on, save, len(check) > 0 && http != "" && https != "" && len(on) > 0
+}
+
 // Steps returns the logon actions for a connection over protocol.
 func (d DeviceType) Steps(protocol string) []LogonAction {
 	return append(d.LoginOnly(protocol), d.fill(d.AfterLogin)...)
@@ -151,10 +190,18 @@ func BuiltinDeviceTypes() []DeviceType {
 	list := []DeviceType{
 		{Name: "EXOS", Protocol: ProtoSSH2, Prompt: `[#>] ?$`, BackupCommands: "show configuration",
 			LoginSteps: []LogonAction{step("login:", `\s`, false), step("password:", `\w`, true)},
-			AfterLogin: []LogonAction{step("#", "disable clipaging", false)}},
+			AfterLogin: []LogonAction{step("#", "disable clipaging", false)},
+			// "Web access : Enabled (tcp port 80)", and "Enabled (SSL port 443)" once HTTPS is on (it needs a certificate)
+			WebCheck: "show management", WebHTTP: `(?i)web access\s*:\s*enabled\s*\(tcp`, WebHTTPS: `(?i)enabled\s*\(\s*ssl\s+port`,
+			WebOn:   "enable web http\nconfigure ssl certificate privkeylen 2048 country US organization Lab common-name {name}\nenable web https",
+			WebSave: "save configuration"},
 		{Name: "VOSS", Protocol: ProtoSSH2, Prompt: `:\d+(\([^)]*\))?[>#] ?$`, BackupCommands: "show running-config",
 			LoginSteps: []LogonAction{step("Login:", `\s`, false), step("Password:", `\w`, true)},
-			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal more disable", false)}},
+			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal more disable", false)},
+			// the web server serves HTTPS when it is on; "secure-only" turns HTTP off
+			WebCheck: "show web-server", WebHTTP: `(?is)status\s*:\s*enabled.*secure[ -]?only\s*:\s*disabled`, WebHTTPS: `(?i)status\s*:\s*enabled`,
+			WebOn:   "configure terminal\nweb-server enable\nno web-server secure-only\nend",
+			WebSave: "save config"},
 		{Name: "Cisco IOS", Protocol: ProtoSSH2, Prompt: `[>#] ?$`, BackupCommands: "show running-config",
 			LoginSteps: []LogonAction{step("Username:", `\s`, false), step("Password:", `\w`, true)},
 			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal length 0", false)}},

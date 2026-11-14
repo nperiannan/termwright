@@ -37,22 +37,35 @@ var reMore = regexp.MustCompile(`(?i)(--+ ?more ?--+|<--- more --->|press any ke
 // echo and the prompts. Nothing is asked: when the device needs a password
 // or a host key decision that is not saved, it fails with ErrNeedsInput.
 func (m *Manager) Capture(ctx context.Context, s session.Session, commands []string, prompt string) (string, error) {
-	outs, err := m.CaptureEach(ctx, s, commands, prompt)
+	outs, err := m.captureEach(ctx, s, commands, prompt, false)
 	return strings.Join(outs, ""), err
 }
 
 // CaptureEach is Capture with the output of each command separately (empty
 // commands are skipped and have no entry).
 func (m *Manager) CaptureEach(ctx context.Context, s session.Session, commands []string, prompt string) ([]string, error) {
+	return m.captureEach(ctx, s, commands, prompt, false)
+}
+
+// CaptureYes is CaptureEach that answers yes to a device's yes/no question ("(y/N)") - for commands that change
+// the device and ask first, like saving its configuration. Only for commands the user approved.
+func (m *Manager) CaptureYes(ctx context.Context, s session.Session, commands []string, prompt string) ([]string, error) {
+	return m.captureEach(ctx, s, commands, prompt, true)
+}
+
+func (m *Manager) captureEach(ctx context.Context, s session.Session, commands []string, prompt string, yes bool) ([]string, error) {
 	var transcript func() string
-	outs, err := m.capture(ctx, s, commands, prompt, &transcript)
+	outs, err := m.capture(ctx, s, commands, prompt, &transcript, yes)
 	if err != nil && transcript != nil {
 		return nil, &CaptureError{Err: err, Transcript: transcript()}
 	}
 	return outs, err
 }
 
-func (m *Manager) capture(ctx context.Context, s session.Session, commands []string, prompt string, transcript *func() string) ([]string, error) {
+// reYesNo is a yes/no question at the end of a line: "(y/N)", "[y/n]", "(yes/no)".
+var reYesNo = regexp.MustCompile(`(?i)[(\[]\s*(y/n|yes/no)\s*[)\]]\s*[:?]?\s*$`)
+
+func (m *Manager) capture(ctx context.Context, s session.Session, commands []string, prompt string, transcript *func() string, yes bool) ([]string, error) {
 	if prompt == "" {
 		prompt = DefaultPrompt
 	}
@@ -98,6 +111,7 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 	// prompt the device showed after the after-login steps.
 	defRe := regexp.MustCompile(DefaultPrompt)
 	loose, exact := false, ""
+	answered := 0 // the output length when a yes/no question was last answered
 	// atPrompt: the output ends with the prompt and has been quiet for a moment
 	atPrompt := func(from int, quiet time.Duration) (bool, string) {
 		txt, idle := snapshot()
@@ -112,6 +126,11 @@ func (m *Manager) capture(ctx context.Context, s session.Session, commands []str
 		lastLine := lines[len(lines)-1]
 		if reMore.MatchString(lastLine) {
 			_ = m.Write(id, []byte(" "))
+			return false, ""
+		}
+		if yes && reYesNo.MatchString(lastLine) && len(txt) > answered { // once per question
+			answered = len(txt)
+			_ = m.Write(id, []byte("y\r"))
 			return false, ""
 		}
 		ok := re.MatchString(lastLine) || (loose && defRe.MatchString(lastLine)) || (exact != "" && strings.TrimSpace(lastLine) == exact)
