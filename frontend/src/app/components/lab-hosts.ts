@@ -2,7 +2,7 @@ import { Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, inp
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
 import { Backend, errText } from '../core/backend';
-import { EmuHost, EmuMatrix, EmuMatrixImage, EmuRemoveInfo, EmuRunRow, SessionNode } from '../core/models';
+import { EmuHost, EmuMatrix, EmuMatrixImage, EmuRemoveInfo, EmuRunRow, LOCAL_HOST, SessionNode } from '../core/models';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { PAGE, emuLinuxType } from './lab-pages';
@@ -193,6 +193,9 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
         <div class="ph"><b>{{ tr('Add hosts') }}</b><div class="muted small">{{ tr('Your Linux SSH sessions, as in the Session Manager. Search by name or IP address.') }}</div></div>
         <div class="as"><span class="mg">⌕</span><input #aqi [(ngModel)]="aq" [placeholder]="tr('Name or IP address')" [attr.aria-label]="tr('Name or IP address')" /><span class="k">{{ tr('{0} of {1}', addShownN(), addAll().length) }}</span></div>
         <div class="tree">
+          <div class="fo">▾ <span class="fi"></span>{{ tr('This computer') }}<span class="n">{{ tr('microcontrollers') }}</span></div>
+          <label class="se loc" [class.on]="picked().has(LOCAL)" [class.dis]="haveLocal()"><input type="checkbox" [checked]="picked().has(LOCAL)" [disabled]="haveLocal()" (change)="togglePick(LOCAL)" /><span class="ic">⌂</span>
+            <span class="ell">{{ tr('This computer') }}</span><span class="muted small ell">{{ tr('ESP32 only, no KVM') }}</span><span class="muted small">{{ haveLocal() ? tr('in the lab') : '' }}</span></label>
           @for (f of addTree(); track f.path) {
             <div class="fo">▾ <span class="fi"></span>{{ f.name }}<span class="n">{{ tr('{0} Linux', f.rows.length) }}</span></div>
             @for (s of f.rows; track s.path) {
@@ -426,6 +429,8 @@ export class LabHosts implements OnInit, OnDestroy {
     if (i < s.length) out.push({ t: s.slice(i), m: false });
     return out;
   }
+  protected readonly LOCAL = LOCAL_HOST;
+  protected haveLocal = computed(() => this.hosts().some(h => h.session === LOCAL_HOST));
   protected togglePick(p: string) { const s = new Set(this.picked()); if (s.has(p)) s.delete(p); else s.add(p); this.picked.set(s); }
   async addPicked() {
     const list = [...this.picked()]; let last = '';

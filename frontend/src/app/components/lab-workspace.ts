@@ -13,7 +13,7 @@ import { CmdPalette, PaletteCmd } from './cmd-palette';
 import type { LabHub, LabNote } from '../core/models';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { LabHubDetail, EmuBoard, EmuClientState, EmuSTPState, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
+import { LOCAL_HOST, LabHubDetail, EmuBoard, EmuClientState, EmuSTPState, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -28,7 +28,7 @@ import { PacketView, PacketWindow } from './packet-view';
 import { TrafficTests } from './traffic-tests';
 
 const BW = 104, BH = 64;
-type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; pc?: boolean; board?: string; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
+type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; pc?: boolean; board?: string; sample?: boolean; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
 
 /** The lab as a workspace tab: device palette, canvas with cables, the
  *  selected switch, the topology summary and the Events log. */
@@ -2234,6 +2234,7 @@ export class LabWorkspace implements OnDestroy {
   /** GDB's server listens on the host itself: an SSH tunnel to it, then target remote. */
   copyGdb(d: LabDevice) {
     const h = this.hostOfDev(d), port = d.gdb ?? 0, addr = this.addrOfHost(h) || this.hname(h);
+    if (h === LOCAL_HOST) { void this.backend.clipboardSet(`target remote localhost:${port}`).then(() => this.ui.toast(tr('Copied: the GDB line'), 'success')); return; } // on this computer: no tunnel
     void this.backend.clipboardSet(`ssh -N -L ${port}:127.0.0.1:${port} ${addr}\n# then, in GDB:\ntarget remote localhost:${port}`).then(() => this.ui.toast(tr('Copied: the SSH tunnel and the GDB line'), 'success'));
   }
   roleOfDev(d: LabDevice): DevRole { return (d.role as DevRole) || this.defRole(d); }
@@ -2359,6 +2360,8 @@ export class LabWorkspace implements OnDestroy {
         items.push({ key: dt.key, pc: !!im?.portAddr?.length, name: dt.model || im?.name || dt.kind, sub: dt.modules?.length ? (dt.modName || 'VIM') + ' ' + dt.modules.map(m => m.replace(/^\d+-VIM-/, '')).join(' / ') : (dt.model ? '' : im?.fileName ?? ''),
           group: dt.osName || dt.kind || tr('Other images'), ver: im?.version ?? '', os: dt.kind, cls: /voss|fabric/i.test(dt.kind + dt.osName + (im?.fileName ?? '') + (im?.deviceType ?? '')) ? 'v' : /linux|ubuntu|debian|centos|alpine|cloudimg/i.test(dt.kind + (im?.fileName ?? '') + (im?.deviceType ?? '')) ? 'l' : '', dt });
       }
+      // a board without a firmware yet: MicroPython, downloaded when it is first put on the canvas
+      for (const b of this.boards()) if (b.sample && !items.some(x => x.board === b.key)) items.push({ key: 'mp:' + b.key, board: b.key, sample: true, name: b.name, sub: tr('MicroPython · downloaded on first use'), group: tr('Microcontrollers'), ver: '', os: b.name, cls: 'm' });
       // templates (an image with resources and a persona model) are device types too
       for (const t of this.st()?.templates ?? []) {
         const im = (this.st()?.images ?? []).find(i => i.id === t.image);
@@ -2386,14 +2389,23 @@ export class LabWorkspace implements OnDestroy {
     if (p) void this.addAt(p, this.toCanvas(ev, cv));
   }
   async addAt(p: Pal, at: { x: number; y: number } | null) {
+    if (p.sample) { // its firmware first: MicroPython from micropython.org
+      this.ui.toast(tr('Downloading MicroPython for the {0}…', p.name), 'info');
+      try { this.lab.emu.set(await this.backend.emuSampleFirmware(p.board!)); } catch (e) { this.ui.error(e); return; }
+      const got = this.groups().flatMap(g => g.items).find(x => x.board === p.board && !x.sample);
+      if (!got) return;
+      p = got;
+    }
     const before = new Set(this.devs().map(d => d.id));
     let ok = false;
     if (this.emu()) {
       const e = this.lab.emu();
+      // a microcontroller goes to this computer when it is a host here; switches never do
+      const local = p.board ? (e?.hosts ?? []).find(h => h.session === LOCAL_HOST && !(h.info.problems ?? []).length)?.session ?? '' : '';
       if (!this.devs().length) {
         // a new lab: straight away on the only host (or the lab's), else the New Lab panel with this device
-        const good = (e?.hosts ?? []).filter(h => !(h.info.problems ?? []).length);
-        const host = good.find(h => h.session === e?.host)?.session ?? (good.length === 1 ? good[0].session : '');
+        const good = (e?.hosts ?? []).filter(h => !(h.info.problems ?? []).length && (p.board || h.session !== LOCAL_HOST));
+        const host = local || (good.find(h => h.session === e?.host)?.session ?? (good.length === 1 ? good[0].session : ''));
         if (!host) { this.preset.set(p.key); this.page.set('new'); return; }
         const s0 = await this.backend.emuSuggest(p.dt?.model || p.dt?.kind || '').catch(() => null);
         const n0 = (p.dt?.model || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-{n}';
@@ -2409,7 +2421,7 @@ export class LabWorkspace implements OnDestroy {
       if (!e?.host) { this.preset.set(p.key); this.page.set('new'); return; }
       const s = await this.backend.emuSuggest(p.dt?.model || p.dt?.kind || '').catch(() => null);
       const names = (p.dt?.model || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-{n}';
-      ok = await this.lab.addEmu({ host: e.host, groups: [{ image: p.dt!.images[0], model: p.dt!.model, module: p.tpl?.module ?? '', template: p.tpl?.id, diskGb: p.tpl?.diskGb, count: 1, names, serialStart: s?.serial ?? '', macStart: s?.mac ?? '', cpus: p.dt!.cpus, ram: p.dt!.ram }], cabling: 'none', mgmt: '', mgmtNet: '', start: false });
+      ok = await this.lab.addEmu({ host: local || e.host, groups: [{ image: p.dt!.images[0], model: p.dt!.model, module: p.tpl?.module ?? '', template: p.tpl?.id, diskGb: p.tpl?.diskGb, count: 1, names, serialStart: s?.serial ?? '', macStart: s?.mac ?? '', cpus: p.dt!.cpus, ram: p.dt!.ram }], cabling: 'none', mgmt: '', mgmtNet: '', start: false });
     } else {
       if (!this.lab.sim()?.pack) { this.dialog('list'); return; }
       ok = await this.lab.add({ groups: [{ os: p.os, model: p.name, count: 1, names: '' }], mgmtNet: '', cabling: 'none', password: '', start: false });

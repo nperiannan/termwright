@@ -99,6 +99,7 @@ export class Backend {
   /** The microcontrollers there are, and a firmware for one: a flash image (.bin) or an ESP-IDF build folder. */
   emuBoards() { return this.call<EmuBoard[]>('EmuBoards'); }
   emuAddFirmware(board: string, path: string, name: string, flashMb: number) { return this.call<LabView>('EmuAddFirmware', board, path, name, flashMb); }
+  emuSampleFirmware(board: string) { return this.call<LabView>('EmuSampleFirmware', board); }
   /** A microcontroller gets another firmware of its board (its flash is made again) and starts again. */
   emuFlashFirmware(id: string, imageId: string) { return this.call<LabView>('EmuFlashFirmware', id, imageId); }
   emuSetGdb(id: string, on: boolean) { return this.call<LabView>('EmuSetGDB', id, on); }

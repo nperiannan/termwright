@@ -283,6 +283,8 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
         <label>{{ tr('Board') }}</label><div class="seg fwb">@for (b of fwBoards(); track b.key) { <a [class.on]="f.board === b.key" (click)="fwSet({ board: b.key, mb: b.defMb })">{{ b.name }}</a> }</div>
         <label>{{ tr('Firmware') }}</label><div><div class="row2"><input [value]="f.path" readonly [placeholder]="tr('A flash image (.bin) or an ESP-IDF build folder')" /><button type="button" class="sm" (click)="fwFile()">{{ tr('File…') }}</button><button type="button" class="sm" (click)="fwFolder()">{{ tr('Build Folder…') }}</button></div>
           <div class="hint">{{ tr('A merged image (esptool merge_bin) from offset 0, or the build folder of an ESP-IDF project after idf.py build (its flash_args says where each part goes).') }}</div></div>
+        <label>{{ tr('Sample') }}</label><div><button type="button" class="sm" (click)="fwSample()" [disabled]="!fwBoard()?.sample || fwBusy()">⤓ {{ tr('Get MicroPython') }}</button>
+          <div class="hint">{{ fwBoard()?.sample ? tr('Its newest release for the {0}, from micropython.org - Python on the console, no build needed.', fwBoard()!.name) : tr('MicroPython has no build for the {0}: give a firmware of your own.', fwBoard()?.name ?? '') }}</div></div>
         <label>{{ tr('Name') }}</label><input [value]="f.name" (input)="fwSet({ name: $any($event.target).value })" [placeholder]="tr('from the file or folder')" />
         <label>{{ tr('Flash') }}</label><div><select [value]="f.mb" (change)="fwSet({ mb: +$any($event.target).value })">@for (m of fwBoard()?.flash ?? []; track m) { <option [value]="m" [selected]="m === f.mb">{{ m }} MB</option> }</select>
           <div class="hint">{{ tr('A smaller image is padded (erased) to this size; the firmware’s own settings are kept in it.') }}</div></div>
@@ -381,6 +383,13 @@ export class LabAppliances extends LabImages {
   fwSet(p: Partial<{ board: string; path: string; name: string; mb: number }>) { const f = this.fw(); if (f) this.fw.set({ ...f, ...p }); }
   async fwFile() { const p = await this.backend.chooseOpenFile(tr('Choose the Flash Image'), [{ displayName: tr('Flash image'), pattern: '*.bin' }]).catch(() => ''); if (p) this.fwSet({ path: p }); }
   async fwFolder() { const p = await this.backend.chooseDirectory(tr('Choose the ESP-IDF Build Folder')).catch(() => ''); if (p) this.fwSet({ path: p }); }
+  async fwSample() {
+    const f = this.fw(); if (!f) return;
+    this.fwBusy.set(true); this.fwErr.set('');
+    try { this.lab.emu.set(await this.backend.emuSampleFirmware(f.board)); this.fw.set(null); this.ui.toast(tr('MicroPython added: drag it onto the canvas from Microcontrollers'), 'success'); void this.lab.refresh(); }
+    catch (e) { this.fwErr.set(errText(e)); }
+    finally { this.fwBusy.set(false); }
+  }
   async fwAdd() {
     const f = this.fw(); if (!f?.path) return;
     this.fwBusy.set(true); this.fwErr.set('');

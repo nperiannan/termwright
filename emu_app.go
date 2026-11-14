@@ -24,6 +24,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -37,6 +38,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/termwright/termwright/internal/emu"
+	"github.com/termwright/termwright/internal/localssh"
 	"github.com/termwright/termwright/internal/secrets"
 	"github.com/termwright/termwright/internal/session"
 	"github.com/termwright/termwright/internal/sim"
@@ -115,6 +117,9 @@ type EmuTopoInfo struct {
 	Running  int      `json:"running"` // its switches running now (also when it is not open)
 	RunOn    []string `json:"runOn,omitempty"`
 }
+
+// errLocalMCU: this computer runs microcontrollers only.
+var errLocalMCU = errors.New("this computer runs microcontrollers only: switches and computers need a KVM host")
 
 type emuConn struct {
 	c     *ssh.Client
@@ -737,6 +742,9 @@ func (a *App) emuLoad() {
 		emuLab.f.Folder = "Emulated Lab"
 	}
 	for i := range emuLab.f.Images { // Linux computers made before day 0 gave them name servers
+		if emuLab.f.Images[i].Board != "" && emuLab.f.Images[i].NICs < 2 { // a firmware added before microcontrollers had Ethernet
+			emuLab.f.Images[i].NICs = 2
+		}
 		if strings.EqualFold(emuLab.f.Images[i].DeviceType, "Linux") {
 			emu.AddLinuxDNS(&emuLab.f.Images[i]) // kept with the next save
 			if emuLab.f.Images[i].NICs < 3 {     // a Linux image from the registry with one network card: a computer needs data ports to be cabled
@@ -844,6 +852,23 @@ func (a *App) emuClient(ctx context.Context, host string) (*ssh.Client, error) {
 		}
 		c.close()
 	}
+	if host == emu.LocalHost { // this computer: an SSH connection inside Termwright (no port, no login)
+		if runtime.GOOS == "windows" {
+			return nil, errors.New("microcontrollers run on this computer on macOS and Linux; on Windows, use a KVM host")
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		cl, err := localssh.Dial(home)
+		if err != nil {
+			return nil, err
+		}
+		emuLab.mu.Lock()
+		emuLab.conns[host] = &emuConn{c: cl, close: func() { cl.Close() }}
+		emuLab.mu.Unlock()
+		return cl, nil
+	}
 	s, err := a.store.Get(host)
 	if err != nil {
 		return nil, fmt.Errorf("KVM host session %q: %w", host, err)
@@ -936,15 +961,21 @@ func (a *App) EmuCheckHost(sessionPath string) (EmuHost, error) {
 		dir = l.Dir
 	}
 	emuLab.mu.Unlock()
-	out, err := a.emuRun(sessionPath, emu.ProbeScript(dir), 60*time.Second)
+	probe, parse := emu.ProbeScript, emu.ParseProbe
+	if sessionPath == emu.LocalHost { // this computer: microcontrollers only
+		probe, parse = emu.LocalProbeScript, emu.ParseLocalProbe
+	}
+	out, err := a.emuRun(sessionPath, probe(dir), 60*time.Second)
 	if err != nil {
 		return EmuHost{}, err
 	}
 	name := sessionPath
-	if s, err := a.store.Get(sessionPath); err == nil {
+	if sessionPath == emu.LocalHost {
+		name = "This computer"
+	} else if s, err := a.store.Get(sessionPath); err == nil {
 		name = s.Name
 	}
-	h := EmuHost{Session: sessionPath, Name: name, Info: emu.ParseProbe(out, dir), Checked: time.Now().Format(time.RFC3339)}
+	h := EmuHost{Session: sessionPath, Name: name, Info: parse(out, dir), Checked: time.Now().Format(time.RFC3339)}
 	emuLab.mu.Lock()
 	defer emuLab.mu.Unlock()
 	found := false
@@ -1861,7 +1892,7 @@ func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha strin
 	mu.(*sync.Mutex).Lock()
 	defer mu.(*sync.Mutex).Unlock()
 	// the same file on the host already: its checksum (written when it was copied), else its size when the checksum is not known here
-	out, _ := a.emuRun(host, "cat "+emu.Q(remote+".sha256")+" 2>/dev/null; echo; stat -c 'size=%s' "+emu.Q(remote)+" 2>/dev/null", 30*time.Second)
+	out, _ := a.emuRun(host, "cat "+emu.Q(remote+".sha256")+" 2>/dev/null; echo; { stat -c 'size=%s' "+emu.Q(remote)+" 2>/dev/null || stat -f 'size=%z' "+emu.Q(remote)+" 2>/dev/null; }", 30*time.Second)
 	there := regexp.MustCompile(`\b[0-9a-f]{64}\b`).FindString(out)
 	m := regexp.MustCompile(`size=(\d+)`).FindStringSubmatch(out)
 	// the file itself must be there too (with its size, when known): a checksum file alone is not an image
@@ -1895,7 +1926,7 @@ func (a *App) emuUploadFile(host string, im emu.Image, fileName, file, sha strin
 	}
 	tmp := remote + ".part"
 	// room on the host first: a full disk is the most common reason a copy fails half way
-	if out, err := a.emuRun(host, "mkdir -p "+emu.Q(dir+"/images")+" && df -Pk "+emu.Q(dir+"/images")+" | tail -1; stat -c 'part=%s' "+emu.Q(tmp)+" 2>/dev/null", 30*time.Second); err == nil {
+	if out, err := a.emuRun(host, "mkdir -p "+emu.Q(dir+"/images")+" && df -Pk "+emu.Q(dir+"/images")+" | tail -1; { stat -c 'part=%s' "+emu.Q(tmp)+" 2>/dev/null || stat -f 'part=%z' "+emu.Q(tmp)+" 2>/dev/null; }", 30*time.Second); err == nil {
 		have := int64(0)
 		if m := regexp.MustCompile(`part=(\d+)`).FindStringSubmatch(out); m != nil {
 			have, _ = strconv.ParseInt(m[1], 10, 64)
@@ -2337,6 +2368,10 @@ func (a *App) EmuAdd(r EmuRequest) (EmuView, error) {
 			emuLab.mu.Unlock()
 			return EmuView{}, errors.New("unknown image")
 		}
+		if r.Host == emu.LocalHost && im.Board == "" {
+			emuLab.mu.Unlock()
+			return EmuView{}, errLocalMCU
+		}
 		names2 := orStr(g.Names, "sw-{n}")
 		list := emuNameList(names2)
 		if len(list) > 1 {
@@ -2751,7 +2786,11 @@ func (a *App) emuSessions(v emu.VM) {
 		}
 	}
 	if bd := emu.BoardOf(im.Board); bd != nil { // a microcontroller: only its UART, no login
-		cs := session.Session{Name: free(cf, v.Name+" console"), Folder: cf, Protocol: session.ProtoTelnet, Hostname: "127.0.0.1", Port: conPort, DeviceType: dt, JumpSession: host,
+		jumpVia := host
+		if host == emu.LocalHost { // on this computer: its port is here
+			jumpVia = ""
+		}
+		cs := session.Session{Name: free(cf, v.Name+" console"), Folder: cf, Protocol: session.ProtoTelnet, Hostname: "127.0.0.1", Port: conPort, DeviceType: dt, JumpSession: jumpVia,
 			Description: []string{"Serial console (UART) of the emulated " + bd.Name + " " + v.Name}}
 		if saved, err := a.store.Save(cs, ""); err == nil {
 			emuLab.mu.Lock()
@@ -2903,6 +2942,18 @@ func (a *App) emuStart(host string, ids []string) {
 				vms[i] = *vv
 			}
 		}
+	}
+	mcu := false
+	for _, v := range vms {
+		mcu = mcu || ptrs[v.Image] != nil && ptrs[v.Image].Board != ""
+	}
+	if host == emu.LocalHost && mcu { // this computer: Termwright gets Espressif's QEMU itself (no python3 or sha256sum needed)
+		emuLab.mu.Unlock()
+		if err := a.emuMCUToolsLocal(dir); err != nil {
+			failAll(err)
+			return
+		}
+		emuLab.mu.Lock()
 	}
 	script := l.StartScript(vms, ptrs)
 	for _, v := range vms {
@@ -4843,6 +4894,9 @@ type EmuSetupDone struct {
 // come as "emu:setup" events, the end as "emu:setup:done".
 func (a *App) EmuSetupHost(sessionPath, password string) (string, error) {
 	defer emuAs("user")()
+	if sessionPath == emu.LocalHost {
+		return "", errors.New("this computer needs no set up: Termwright downloads Espressif's QEMU when a microcontroller first starts here")
+	}
 	if err := a.ready(); err != nil {
 		return "", err
 	}
@@ -6264,6 +6318,10 @@ func (a *App) emuMoveVM(id, host string) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("add that host first (Hosts)")
 	}
+	if im := emuImage(v.Image); host == emu.LocalHost && (im == nil || im.Board == "") {
+		emuLab.mu.Unlock()
+		return EmuView{}, errLocalMCU
+	}
 	from := emuHostOf(*v)
 	if from == host {
 		emuLab.mu.Unlock()
@@ -6380,6 +6438,9 @@ func (a *App) EmuSetCPU(id string, maxCores float64, weight int) (EmuView, error
 // Linux image there is (Alpine first, then the smallest), on the lab's host.
 func (a *App) EmuAddComputer(host string, start bool) (EmuView, error) {
 	defer emuAs("user")()
+	if host == emu.LocalHost {
+		return EmuView{}, errLocalMCU
+	}
 	emuLab.mu.Lock()
 	a.emuLoad()
 	var pick *emu.Image

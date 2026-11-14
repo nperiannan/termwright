@@ -737,26 +737,7 @@ func (l *Lab) Args(v VM, im *Image) []string {
 	}
 	a = append(a, "-device", nic+",netdev=n0,mac="+l.MAC(v, 0))
 	// data ports: cabled ones get a UDP socket to the other end
-	peer, peerAt := map[int]int{}, map[int]string{}
-	for _, c := range l.Cables {
-		if c.A == v.ID {
-			if o := l.VMByID(c.B); o != nil {
-				peer[c.APort], peerAt[c.APort] = l.udpPort(*o, c.BPort), l.remote[o.ID]
-			}
-		}
-		if c.B == v.ID {
-			if o := l.VMByID(c.A); o != nil {
-				peer[c.BPort], peerAt[c.BPort] = l.udpPort(*o, c.APort), l.remote[o.ID]
-			}
-		}
-	}
-	if v.Relayed { // its peers may still send to its old host (a relay there forwards): listen on all addresses
-		for n, at := range peerAt {
-			if at == "" {
-				peerAt[n] = "127.0.0.1" // the other end on this host
-			}
-		}
-	}
+	peer, peerAt := l.peersOf(v)
 	for n := 1; n < im.NICs; n++ {
 		if slices.Contains(v.Uplinks, n) && l.LanIf != "" { // on the host's network (like a cloud node on a data port)
 			if l.LanKind == "macvtap" {
@@ -765,15 +746,11 @@ func (l *Lab) Args(v VM, im *Image) []string {
 				a = append(a, "-netdev", fmt.Sprintf("tap,id=n%d,ifname=%s,script=no,downscript=no", n, l.upTap(v, n)))
 			}
 			a = append(a, "-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.PortMAC(v, im, n)))
-		} else if p, ok := peer[n]; ok && peerAt[n] != "" { // the other end on another host: a UDP tunnel between the hosts
-			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,udp=%s:%d,localaddr=0.0.0.0:%d", n, peerAt[n], p, l.udpPort(v, n)),
-				"-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.PortMAC(v, im, n)))
-		} else if ok {
-			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,udp=127.0.0.1:%d,localaddr=127.0.0.1:%d", n, p, l.udpPort(v, n)),
+		} else if _, ok := peer[n]; ok {
+			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,%s", n, l.dataSocket(v, n, peer, peerAt)),
 				"-device", fmt.Sprintf("%s,netdev=n%d,mac=%s", nic, n, l.PortMAC(v, im, n)))
 		} else { // no cable: a socket a test port can use (its link is down until then)
-			li, se := l.TesterPorts(v, n)
-			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,udp=127.0.0.1:%d,localaddr=127.0.0.1:%d", n, li, se),
+			a = append(a, "-netdev", fmt.Sprintf("socket,id=n%d,%s", n, l.dataSocket(v, n, peer, peerAt)),
 				"-device", fmt.Sprintf("%s,id=nic%d,netdev=n%d,mac=%s", nic, n, n, l.PortMAC(v, im, n)))
 		}
 	}
@@ -1079,8 +1056,8 @@ func (l *Lab) ResetScript(ids []string) string {
 // the end alone loses it once the switch printed more (a login, show commands).
 func (l *Lab) StatusScript(tails []string, ready ...map[string]string) string {
 	dir := Q(l.VMDir())
-	s := "cd " + dir + " 2>/dev/null || exit 0\necho \"clk $(getconf CLK_TCK 2>/dev/null || echo 100)\"\nawk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print \"mem \" int(t/1024) \" \" int(a/1024)}' /proc/meminfo\necho \"cores $(nproc) $(cut -d' ' -f1 /proc/loadavg)\"\nfor p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
-		" if kill -0 \"$pid\" 2>/dev/null && grep -q qemu /proc/$pid/comm 2>/dev/null; then echo \"up $n $(awk '{print $14+$15}' /proc/$pid/stat 2>/dev/null) $(awk '/^VmRSS:/{print $2}' /proc/$pid/status 2>/dev/null)\"; c=/sys/fs/cgroup/termwright/$n/cpu.stat; [ -r \"$c\" ] && echo \"thr $n $(awk '/^nr_throttled/{a=$2} /^throttled_usec/{b=$2} END{print a+0, b+0}' \"$c\")\"; else echo \"down $n\"; fi; done\n"
+	s := "cd " + dir + " 2>/dev/null || exit 0\nclk=$(getconf CLK_TCK 2>/dev/null || echo 100); echo \"clk $clk\"\n" + statusHost + "for p in *.pid; do [ -e \"$p\" ] || continue; n=${p%.pid}; pid=$(cat \"$p\")\n" +
+		" if tw_up \"$pid\"; then echo \"up $n $(tw_use \"$pid\")\"; c=/sys/fs/cgroup/termwright/$n/cpu.stat; [ -r \"$c\" ] && echo \"thr $n $(awk '/^nr_throttled/{a=$2} /^throttled_usec/{b=$2} END{print a+0, b+0}' \"$c\")\"; else echo \"down $n\"; fi; done\n"
 	if l.Mgmt == "nat" { // the DHCP leases of the NAT network (libvirt), then the host's neighbours
 		br := Q(l.NatBridge())
 		s += fmt.Sprintf("f=/var/lib/libvirt/dnsmasq/%s.status; { cat $f 2>/dev/null || sudo -n cat $f 2>/dev/null; } | awk -F'\"' '/\"ip-address\"/{ip=$4} /\"mac-address\"/{mac=$4} /}/{if(ip!=\"\"&&mac!=\"\")print \"lease\",mac,ip; ip=\"\";mac=\"\"}'\n", l.NatBridge())
@@ -1554,9 +1531,65 @@ func Q(s string) string {
 
 // qemuUp is a shell test: the process in a pid file is alive and is QEMU (a pid file left from before a
 // reboot, or from another machine sharing the home folder, can name some other process).
-func qemuUp(pidfile string) string {
-	return `{ p=$(cat ` + pidfile + ` 2>/dev/null) && [ -n "$p" ] && grep -q qemu /proc/$p/comm 2>/dev/null; }`
+// peersOf is where a VM's cabled data ports send: the other end's UDP port by port, and its host's address
+// ("" = this host).
+func (l *Lab) peersOf(v VM) (peer map[int]int, peerAt map[int]string) {
+	peer, peerAt = map[int]int{}, map[int]string{}
+	for _, c := range l.Cables {
+		if c.A == v.ID {
+			if o := l.VMByID(c.B); o != nil {
+				peer[c.APort], peerAt[c.APort] = l.udpPort(*o, c.BPort), l.remote[o.ID]
+			}
+		}
+		if c.B == v.ID {
+			if o := l.VMByID(c.A); o != nil {
+				peer[c.BPort], peerAt[c.BPort] = l.udpPort(*o, c.APort), l.remote[o.ID]
+			}
+		}
+	}
+	if v.Relayed { // its peers may still send to its old host (a relay there forwards): listen on all addresses
+		for n, at := range peerAt {
+			if at == "" {
+				peerAt[n] = "127.0.0.1" // the other end on this host
+			}
+		}
+	}
+	return peer, peerAt
 }
+
+// dataSocket is the UDP socket of a data port (QEMU's socket netdev options): to the other end of its cable (on
+// another host: a tunnel between the hosts), or, without a cable, one a test port can use (its link is down until then).
+func (l *Lab) dataSocket(v VM, n int, peer map[int]int, peerAt map[int]string) string {
+	p, ok := peer[n]
+	switch {
+	case ok && peerAt[n] != "":
+		return fmt.Sprintf("udp=%s:%d,localaddr=0.0.0.0:%d", peerAt[n], p, l.udpPort(v, n))
+	case ok:
+		return fmt.Sprintf("udp=127.0.0.1:%d,localaddr=127.0.0.1:%d", p, l.udpPort(v, n))
+	}
+	li, se := l.TesterPorts(v, n)
+	return fmt.Sprintf("udp=127.0.0.1:%d,localaddr=127.0.0.1:%d", li, se)
+}
+
+func qemuUp(pidfile string) string {
+	return `{ p=$(cat ` + pidfile + ` 2>/dev/null) && [ -n "$p" ] && { grep -q qemu /proc/$p/comm 2>/dev/null || { [ ! -d /proc/self ] && ps -p "$p" -o comm= 2>/dev/null | grep -q qemu; }; }; }`
+}
+
+// statusHost is the status script's part for the host itself (memory, cores, load) and its helpers tw_up (a pid
+// is a running QEMU) and tw_use (its CPU ticks and resident KB): from /proc on Linux, from sysctl, vm_stat and
+// ps on a Mac (microcontrollers run on this computer).
+const statusHost = `if [ -d /proc/self ]; then
+awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print "mem " int(t/1024) " " int(a/1024)}' /proc/meminfo
+echo "cores $(nproc) $(cut -d' ' -f1 /proc/loadavg)"
+tw_up() { kill -0 "$1" 2>/dev/null && grep -q qemu /proc/$1/comm 2>/dev/null; }
+tw_use() { echo "$(awk '{print $14+$15}' /proc/$1/stat 2>/dev/null) $(awk '/^VmRSS:/{print $2}' /proc/$1/status 2>/dev/null)"; }
+else
+echo "mem $(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576 )) $(vm_stat 2>/dev/null | awk '/page size of/{s=$8} /^Pages (free|inactive|speculative)/{f+=$NF} END{print int(f*s/1048576)}')"
+echo "cores $(sysctl -n hw.ncpu 2>/dev/null) $(sysctl -n vm.loadavg 2>/dev/null | awk '{print $2}')"
+tw_up() { kill -0 "$1" 2>/dev/null && ps -p "$1" -o comm= 2>/dev/null | grep -q qemu; }
+tw_use() { ps -p "$1" -o time=,rss= 2>/dev/null | awk -v k="$clk" '{t=$1; d=0; if (index(t, "-")) { split(t, x, "-"); d=x[1]; t=x[2] } n=split(t, a, ":"); s=0; for (i=1; i<=n; i++) s=s*60+a[i]; print int((s+d*86400)*k), $2}'; }
+fi
+`
 
 func joinArgs(a []string) string {
 	q := make([]string, len(a))

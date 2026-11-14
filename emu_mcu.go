@@ -2,10 +2,17 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	neturl "net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -78,7 +85,7 @@ func (a *App) EmuAddFirmware(board, p, name string, flashMB int) (EmuView, error
 	if err != nil {
 		return EmuView{}, err
 	}
-	im := emu.Image{ID: randHex(4), Name: name, File: file, FileName: fn, Size: size, SHA256: sum, DeviceType: b.Name, CPUs: 1, NICs: 0,
+	im := emu.Image{ID: randHex(4), Name: name, File: file, FileName: fn, Size: size, SHA256: sum, DeviceType: b.Name, CPUs: 1, NICs: 2, // port 1: its Ethernet
 		Board: b.Key, FlashMB: mb, Version: versionIn(base), Source: "firmware " + base}
 	emuLab.mu.Lock()
 	a.emuLoad()
@@ -173,4 +180,161 @@ func (a *App) EmuSetGDB(id string, on bool) (EmuView, error) {
 		return EmuView{}, err
 	}
 	return a.EmuState()
+}
+
+// Downloads for microcontrollers (tests point them at their own server).
+var (
+	emuMCUReleaseURL  = "https://api.github.com/repos/espressif/qemu/releases/latest"
+	emuMicroPythonURL = "https://micropython.org/download/"
+	emuMCUHTTP        = &http.Client{Timeout: 10 * time.Minute}
+)
+
+// emuGet downloads a URL to w (at most max bytes), returning its SHA-256.
+func emuGet(url string, w io.Writer, max int64) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "Termwright")
+	resp, err := emuMCUHTTP.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("%s: %s", url, resp.Status)
+	}
+	h := sha256.New()
+	n, err := io.Copy(io.MultiWriter(w, h), io.LimitReader(resp.Body, max+1))
+	if err != nil {
+		return "", err
+	}
+	if n > max {
+		return "", fmt.Errorf("%s is larger than expected", url)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// emuMCUToolsLocal gets Espressif's QEMU for this computer when it is not there yet: the newest release's two
+// builds for this system and CPU (github.com/espressif/qemu), each checked against the release's SHA-256,
+// unpacked into the lab's tools folder in the home folder ("current" points at it). On a KVM host the start
+// script does the same.
+func (a *App) emuMCUToolsLocal(labDir string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Join(home, emu.MCUTools(labDir))
+	have := func() bool {
+		for _, arch := range []string{"xtensa", "riscv32"} {
+			if st, err := os.Stat(filepath.Join(dir, "current", "bin", "qemu-system-"+arch)); err != nil || st.Mode()&0o111 == 0 {
+				return false
+			}
+		}
+		return true
+	}
+	if have() {
+		return nil
+	}
+	var rel bytes.Buffer
+	if _, err := emuGet(emuMCUReleaseURL, &rel, 4<<20); err != nil {
+		return fmt.Errorf("Espressif's QEMU could not be found: %w", err)
+	}
+	tag, assets, err := emu.MCUAssets(rel.Bytes(), runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return err
+	}
+	if strings.ContainsAny(tag, "/\\") || tag == "." || tag == ".." {
+		return errors.New("unexpected release name " + tag)
+	}
+	emuLab.mu.Lock()
+	emuEvOn(emu.LocalHost, "", "info", "downloading Espressif's QEMU "+tag+" for this computer (once)")
+	emuLab.mu.Unlock()
+	to := filepath.Join(dir, tag)
+	if err := os.MkdirAll(to, 0o755); err != nil {
+		return err
+	}
+	for _, as := range assets {
+		f := filepath.Join(dir, filepath.Base(as.URL))
+		out, err := os.Create(f)
+		if err != nil {
+			return err
+		}
+		sum, err := emuGet(as.URL, out, 1<<30)
+		out.Close()
+		if err == nil && as.SHA256 != "" && !strings.EqualFold(sum, as.SHA256) {
+			err = fmt.Errorf("%s does not match its SHA-256", filepath.Base(as.URL))
+		}
+		if err == nil {
+			if o, e := exec.Command("tar", "-xf", f, "-C", to, "--strip-components=1").CombinedOutput(); e != nil {
+				err = fmt.Errorf("could not unpack %s: %s", filepath.Base(as.URL), strings.TrimSpace(string(o)))
+			}
+		}
+		_ = os.Remove(f) // the download itself: unpacked (or not usable)
+		if err != nil {
+			return err
+		}
+	}
+	cur := filepath.Join(dir, "current")
+	_ = os.Remove(cur)
+	if err := os.Symlink(tag, cur); err != nil {
+		return err
+	}
+	if !have() {
+		return errors.New("Espressif's QEMU was unpacked but its programs are not where expected")
+	}
+	emuLab.mu.Lock()
+	emuEvOn(emu.LocalHost, "", "ok", "Espressif's QEMU "+tag+" is on this computer")
+	emuLab.mu.Unlock()
+	return nil
+}
+
+// EmuSampleFirmware adds MicroPython as a board's firmware: its newest release from micropython.org (the
+// generic build of the S3, C3 or C6; there is none for the H2), downloaded once - the next time it is there.
+func (a *App) EmuSampleFirmware(board string) (EmuView, error) {
+	b := emu.BoardOf(board)
+	if b == nil {
+		return EmuView{}, fmt.Errorf("unknown microcontroller %q", board)
+	}
+	if b.Sample == "" {
+		return EmuView{}, fmt.Errorf("MicroPython has no build for the %s: add a firmware of your own (Add Firmware)", b.Name)
+	}
+	emuLab.mu.Lock()
+	a.emuLoad()
+	for _, im := range emuLab.f.Images {
+		if im.Board == b.Key && strings.HasPrefix(im.Source, "firmware "+b.Sample+"-") {
+			emuLab.mu.Unlock()
+			return a.EmuState()
+		}
+	}
+	emuLab.mu.Unlock()
+	var page bytes.Buffer
+	if _, err := emuGet(emuMicroPythonURL+b.Sample+"/", &page, 4<<20); err != nil {
+		return EmuView{}, fmt.Errorf("MicroPython's download page could not be read: %w", err)
+	}
+	url, ver := emu.MicroPythonLatest(page.String(), b.Sample)
+	if url == "" {
+		return EmuView{}, fmt.Errorf("micropython.org lists no release for %s", b.Sample)
+	}
+	if strings.HasPrefix(url, "/") { // a path on the site
+		if u, err := neturl.Parse(emuMicroPythonURL); err == nil {
+			url = u.Scheme + "://" + u.Host + url
+		}
+	}
+	if strings.HasPrefix(emuMicroPythonURL, "https://") && !strings.HasPrefix(url, "https://micropython.org/") {
+		return EmuView{}, errors.New("unexpected download address " + url)
+	}
+	var bin bytes.Buffer
+	if _, err := emuGet(url, &bin, 16<<20); err != nil {
+		return EmuView{}, fmt.Errorf("MicroPython could not be downloaded: %w", err)
+	}
+	dir := a.emuDownloadDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return EmuView{}, err
+	}
+	file := filepath.Join(dir, filepath.Base(url)) // as micropython.org names it (the firmware's name comes from it)
+	if err := os.WriteFile(file, bin.Bytes(), 0o644); err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuAddFirmware(b.Key, file, "MicroPython "+ver, 0)
 }

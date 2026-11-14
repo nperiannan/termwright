@@ -119,7 +119,9 @@ export interface EmuSetupDone { run: string; error: string; host: EmuHost | null
 export interface EmuHost { session: string; name: string; info: EmuHostInfo; checked: string; }
 export interface EmuAnswer { match: string; send: string; }
 /** A microcontroller Termwright emulates (Espressif's QEMU). */
-export interface EmuBoard { key: string; name: string; arch: string; machine: string; cpu: string; flash: number[]; defMb: number; psram?: number[] | null; }
+export interface EmuBoard { key: string; name: string; arch: string; machine: string; cpu: string; flash: number[]; defMb: number; psram?: number[] | null; sample?: string; }
+/** The host key of this computer: it runs microcontrollers only (Espressif's QEMU, macOS or Linux). */
+export const LOCAL_HOST = '@this-computer';
 export interface EmuImage { id: string; name: string; file: string; fileName: string; size: number; sha256: string; deviceType: string; board?: string; flashMb?: number; cpus: number; ram: number; nics: number; nic: string; portMacs?: string; disk: string; portName: string; ready: string; login: string; password?: string; prompt: string; day0: string[] | null; answers: EmuAnswer[] | null; extra: string; source: string; serial: string; addrCmd: string; dhcpOn?: string[] | null; portAddr?: string[] | null; addrSet?: string[] | null; persona?: EmuPersonaDef | null; version?: string;
   hasPassword?: boolean; onHost?: boolean; upload?: string; missing?: boolean;  url?: string; md5?: string; page?: string; download?: string; disks?: { slot: string; fileName: string; file: string; sha256: string; size: number; url?: string; md5?: string; page?: string; bus?: string }[] | null; }
 export interface EmuGroup { template?: string; diskGb?: number; model?: string; module?: string; serialStart?: string; macStart?: string; image: string; count: number; names: string; cpus?: number; ram?: number; role?: string; }

@@ -3787,6 +3787,16 @@ const ru: Record<string, string> = {
   'The newest packets at the top (else at the bottom, followed while it captures)': 'Новые пакеты сверху (иначе снизу, с прокруткой за ними во время захвата)',
   'Newest First': 'Новые сверху',
   'Newest Last': 'Новые снизу',
+  'microcontrollers': 'микроконтроллеры',
+  'ESP32 only, no KVM': 'только ESP32, без KVM',
+  'Sample': 'Пример',
+  'Get MicroPython': 'Скачать MicroPython',
+  'Its newest release for the {0}, from micropython.org - Python on the console, no build needed.': 'Последний выпуск для {0} с micropython.org - Python в консоли, сборка не нужна.',
+  'MicroPython has no build for the {0}: give a firmware of your own.': 'У MicroPython нет сборки для {0}: укажите свою прошивку.',
+  'MicroPython added: drag it onto the canvas from Microcontrollers': 'MicroPython добавлен: перетащите его на холст из раздела «Микроконтроллеры»',
+  'MicroPython · downloaded on first use': 'MicroPython · скачивается при первом использовании',
+  'Downloading MicroPython for the {0}…': 'Скачивание MicroPython для {0}…',
+  'Copied: the GDB line': 'Скопировано: строка для GDB',
 };
 
 export default ru;
