@@ -68,8 +68,8 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
                   <div class="chips"><span>{{ h.info.user }}&#64;{{ addr(h) }}</span><span>{{ h.info.os || '?' }}</span>@if (h.info.kernel) { <span>{{ tr('kernel') }} {{ h.info.kernel }}</span> }@if (h.info.arch) { <span>{{ h.info.arch }}</span> }<span>{{ isVM(h) ? tr('VM ({0})', h.info.virt ?? '') : tr('bare metal') }}</span>@if (h.checked) { <span>{{ tr('checked {0}', h.checked) }}</span> }</div></div>
                 <div class="acts"><button type="button" (click)="openImages()" [title]="tr('The images on this host')">▤ {{ tr('Images') }} @if (m()) { <span class="muted">{{ haveN(h.session) }}</span> }</button>
                   <button type="button" (click)="lab.checkHost(h.session)" [disabled]="lab.busy() || (!!setupHere() && !setupHere()!.done)">{{ tr('Check Again') }}</button>
-                  @if (!setupHere()) { <button type="button" [class.primary]="h.info.canSetup || !h.info.sudo" (click)="setupOpen.set(!setupOpen()); rm.set(null)" [title]="h.info.canSetup || !h.info.sudo ? tr('Install and set up what is missing') : tr('Everything is there: run every step again, for example after a change on the host')">{{ h.info.canSetup || !h.info.sudo ? tr('Set Up…') : tr('Set Up Again…') }}</button> }</div></div>
-              @if (setupOpen() || setupHere()) {
+                  @if (!setupHere() && !isLocal(h)) { <button type="button" [class.primary]="h.info.canSetup || !h.info.sudo" (click)="setupOpen.set(!setupOpen()); rm.set(null)" [title]="h.info.canSetup || !h.info.sudo ? tr('Install and set up what is missing') : tr('Everything is there: run every step again, for example after a change on the host')">{{ h.info.canSetup || !h.info.sudo ? tr('Set Up…') : tr('Set Up Again…') }}</button> }</div></div>
+              @if ((setupOpen() || setupHere()) && !isLocal(h)) {
                 <div class="card setupc"><div class="row2" style="justify-content: flex-start"><b style="flex: none">{{ tr('Set Up the Host') }}</b><span class="muted small">{{ tr('installs what is missing, as root on the host') }}</span><span class="sp"></span>
                     @if (setupHere()?.lines?.length) { <button type="button" class="sm" (click)="copySetup()" [title]="tr('Copy the set-up output')">⧉ {{ tr('Copy Log') }}</button> }
                     @if (!setupHere() || setupHere()!.done) { <button type="button" class="sm" (click)="setupOpen.set(false); lab.setup.set(null)">{{ tr('Close') }}</button> }</div>
@@ -97,6 +97,15 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
                   <div class="run"><b>{{ r.topology }}</b>@if (r.orphan) { <span class="orph" [title]="tr('No saved topology has these switches any more (it was deleted while they ran): nothing else stops them')">{{ tr('left running') }}</span> }@for (s of r.switches; track s) { <span class="dev">{{ s }}</span> }<span class="sp"></span>@if (!r.open && !r.orphan) { <button type="button" class="sm" (click)="openTopo(r.topology)">{{ tr('Open') }}</button> }@if (!r.open && r.lab) { <button type="button" class="sm danger-ghost" (click)="stopBg(r)" [disabled]="lab.busy()">{{ tr('Stop…') }}</button> }</div>
                 } @empty { <p class="muted small" style="margin: 0">{{ running() ? tr('No switch runs here.') : tr('Reading…') }}</p> }
               </div>
+              @if (isLocal(h)) {
+                <div class="card mcuc"><h4>{{ tr('Microcontrollers on this computer') }} @if ((h.info.problems ?? []).length) { <span class="tag wr">{{ tr('{0} to fix', (h.info.problems ?? []).length) }}</span> } @else { <span class="tag">{{ tr('ready') }}</span> }</h4>
+                  <div class="ck"><span [class]="h.info.qemu ? 'ok' : 'wr'">{{ h.info.qemu ? '✓' : '⤓' }}</span><b>{{ tr('Espressif QEMU') }}</b><span class="muted">{{ h.info.qemu || tr('downloaded at the first start of a microcontroller, checked against its SHA-256') }}</span></div>
+                  @if (isMac(h)) { <div class="ck"><span class="wr">!</span><b>Homebrew</b><span class="muted">{{ tr('Espressif’s QEMU uses its libraries: brew install libgcrypt glib pixman sdl2 libslirp (a start without them says so)') }}</span></div> }
+                  <div class="ck"><span class="ok">✓</span><b>{{ tr('No set up') }}</b><span class="muted">{{ tr('no KVM, sudo or network changes: Termwright talks to its own folder ~/termwright-lab, and no port is opened') }}</span></div>
+                  <div class="ck"><span class="ok">✓</span><b>{{ tr('Switches') }}</b><span class="muted">{{ tr('run on the KVM hosts: this computer takes microcontrollers only') }}</span></div>
+                  @for (p of h.info.problems ?? []; track p) { <p class="r small" style="margin: 8px 0 0">{{ p }}</p> }
+                </div>
+              } @else {
               <div class="grid2">
                 <div class="card"><h4>{{ tr('Ready to run switches') }} @if (fixN(h)) { <span class="tag wr">{{ tr('{0} to fix', fixN(h)) }}</span> } @else { <span class="tag">{{ tr('all set') }}</span> }</h4>
                   <div class="ck"><span [class]="lv('packages', h.info.qemu ? 'ok' : 'bad')">{{ lm('packages', h.info.qemu ? '✓' : '✕') }}</span><b>QEMU</b><span class="muted">{{ lt('packages') || (h.info.qemu || tr('not installed')) + (h.info.qemuImg ? ' · qemu-img' : '') }}</span></div>
@@ -116,6 +125,7 @@ interface AddRow { path: string; name: string; hostname: string; have: boolean; 
                   @for (n of h.info.notes ?? []; track n) { <div class="note">{{ n }}</div> }
                 </div>
               </div>
+              }
             } @else { <p class="muted">{{ tr('No KVM host yet: ＋ Add below.') }}</p> }
           }
           @case ('images') {
@@ -321,8 +331,11 @@ export class LabHosts implements OnInit, OnDestroy {
     const vcpus = u?.vcpus ?? 0, ram = u?.ram ?? Math.max(0, memMB - (h.info.memFree || 0));
     return { vcpus, cpu: `${vcpus}/${cpus || '?'}`, cpuPct: this.pct(vcpus, cpus), ram: `${this.gbN(ram)}/${this.gbN(memMB)} GB`, ramPct: this.pct(ram, memMB) };
   }
+  protected isLocal(h: EmuHost) { return h.session === LOCAL_HOST; }
+  protected isMac(h: EmuHost) { return /^macos/i.test(h.info.os ?? ''); }
   protected pill(h: EmuHost) {
     const p = (h.info.problems ?? []).length;
+    if (this.isLocal(h)) return p ? { text: tr('{0} to fix', p), cls: 'bad' } : { text: tr('microcontrollers'), cls: '' };
     return p ? { text: tr('{0} to fix', p), cls: 'bad' } : h.info.canSetup || !h.info.sudo ? { text: tr('needs set up'), cls: 'wr' } : { text: tr('ready'), cls: '' };
   }
   /** Its switches by state: the open topology's as they are (a running switch with a problem counts as failed), the other topologies' as running. */

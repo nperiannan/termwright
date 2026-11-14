@@ -29,14 +29,16 @@ type Board struct {
 	Flash   []int  `json:"flash"`   // flash sizes it takes, MB (the image is padded to one of them)
 	DefMB   int    `json:"defMb"`   // the default flash size
 	PSRAM   []int  `json:"psram"`   // PSRAM sizes it takes, MB (0 = none)
-	Sample  string `json:"sample"`  // MicroPython's board name on micropython.org ("" = none for it)
+	Sample  string `json:"sample"`  // MicroPython's board name on micropython.org ("" = none that runs in the emulator)
 }
 
-// Boards are the microcontrollers there are (the C6 and H2 have initial support in Espressif's QEMU).
+// Boards are the microcontrollers there are (the C6 and H2 have initial support in Espressif's QEMU). MicroPython
+// is the sample of the C3 only: its builds for the S3 and C6 (1.29) stop right after their bootloader in
+// Espressif's QEMU 9.2.2, waiting for hardware it does not emulate; the H2 has none.
 var Boards = []Board{
-	{Key: "esp32s3", Name: "ESP32-S3", Arch: "xtensa", Machine: "esp32s3", CPU: "Xtensa LX7 ×2, 240 MHz", Flash: []int{2, 4, 8, 16, 32}, DefMB: 8, PSRAM: []int{0, 2, 4, 8}, Sample: "ESP32_GENERIC_S3"},
+	{Key: "esp32s3", Name: "ESP32-S3", Arch: "xtensa", Machine: "esp32s3", CPU: "Xtensa LX7 ×2, 240 MHz", Flash: []int{2, 4, 8, 16, 32}, DefMB: 8, PSRAM: []int{0, 2, 4, 8}},
 	{Key: "esp32c3", Name: "ESP32-C3", Arch: "riscv32", Machine: "esp32c3", CPU: "RISC-V, 160 MHz", Flash: []int{2, 4, 8, 16}, DefMB: 4, Sample: "ESP32_GENERIC_C3"},
-	{Key: "esp32c6", Name: "ESP32-C6", Arch: "riscv32", Machine: "esp32c6", CPU: "RISC-V, 160 MHz", Flash: []int{2, 4, 8, 16}, DefMB: 4, Sample: "ESP32_GENERIC_C6"},
+	{Key: "esp32c6", Name: "ESP32-C6", Arch: "riscv32", Machine: "esp32c6", CPU: "RISC-V, 160 MHz", Flash: []int{2, 4, 8, 16}, DefMB: 4},
 	{Key: "esp32h2", Name: "ESP32-H2", Arch: "riscv32", Machine: "esp32h2", CPU: "RISC-V, 96 MHz", Flash: []int{2, 4, 8, 16}, DefMB: 4},
 }
 
@@ -69,8 +71,9 @@ func MCUQemu(labDir string, b *Board) string {
 }
 
 // MCUArgs is the QEMU command line of a microcontroller (its flash is a copy of the image of its own, so
-// what the firmware writes to it stays; its UART is the console port, its monitor the monitor port, and the
-// spare port of its slot is the GDB server when asked for). Port 1 is its Ethernet: the OpenCores MAC
+// what the firmware writes to it stays; its UART is the slot's first port, its monitor the monitor port, and the
+// spare port of its slot is the GDB server when asked for). It starts paused: Termwright connects to its UART
+// first, then continues it. Port 1 is its Ethernet: the OpenCores MAC
 // Espressif's QEMU has (ESP-IDF's openeth driver), cabled as a switch's data port.
 func (l *Lab) MCUArgs(v VM, im *Image, b *Board) []string {
 	dir := l.VMDir()
@@ -84,8 +87,10 @@ func (l *Lab) MCUArgs(v VM, im *Image, b *Board) []string {
 		a = append(a, "-nic", "socket,model=open_eth,mac="+l.PortMAC(v, im, 1)+","+l.dataSocket(v, 1, peer, peerAt))
 	}
 	a = append(a,
-		"-chardev", fmt.Sprintf("socket,id=con0,host=127.0.0.1,port=%d,server=on,wait=off,telnet=on,logfile=%s/%s.log", l.ConsolePort(v), dir, v.ID),
-		"-serial", "chardev:con0",
+		// its UART on the slot's first port (a microcontroller has no SSH), raw: Termwright stays connected to it
+		// (Espressif's UART drops output while nothing is) and passes the console on at the console port
+		"-chardev", fmt.Sprintf("socket,id=con0,host=127.0.0.1,port=%d,server=on,wait=off,logfile=%s/%s.log", l.SSHPort(v), dir, v.ID),
+		"-serial", "chardev:con0", "-S", // paused until Termwright is connected to its UART (then "cont")
 		"-monitor", fmt.Sprintf("telnet:127.0.0.1:%d,server,nowait", l.MonitorPort(v)),
 		"-display", "none", "-daemonize", "-pidfile", dir+"/"+v.ID+".pid")
 	if v.GDB {
@@ -108,6 +113,8 @@ func (l *Lab) mcuStart(v VM, im *Image, b *Board) string {
 	fmt.Fprintf(&s, " q=%s; [ -x \"$q\" ] || { %s; }\n", Q(MCUQemu(l.Dir, b)), MCUToolScript(l.Dir))
 	fmt.Fprintf(&s, " if [ ! -x \"$q\" ]; then echo 'fail %s no Espressif QEMU on this host: it could not be downloaded (see the log)'; else\n", v.ID)
 	fmt.Fprintf(&s, " : > %s/%s.log\n", dir, v.ID)
+	// a Mac: QEMU's Homebrew libraries where this Homebrew keeps them, when it is not in /opt/homebrew
+	s.WriteString(" [ \"$(uname -s)\" = Darwin ] && { hb=$(brew --prefix 2>/dev/null); export DYLD_FALLBACK_LIBRARY_PATH=\"${hb:+$hb/lib:}/opt/homebrew/lib:/usr/local/lib:/usr/lib\"; }\n")
 	q := "\"$q\" " + joinArgs(l.MCUArgs(v, im, b))
 	q = strings.ReplaceAll(q, "file="+l.Dir+"/", "file=$HOME/"+l.Dir+"/")
 	fmt.Fprintf(&s, " if out=$( { %s; } 2>&1); then echo 'started %s'; else m=$(echo $out | tr '\\n' ' '); case \"$m\" in *'Library not loaded'*) m=\"$m - Espressif's QEMU on a Mac needs Homebrew's libraries: brew install libgcrypt glib pixman sdl2 libslirp\";; esac; echo \"fail %s ${m:-QEMU stopped at once and said nothing}\"; fi\n fi\nfi\n", q, v.ID, v.ID)

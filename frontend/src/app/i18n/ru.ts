@@ -3792,11 +3792,18 @@ const ru: Record<string, string> = {
   'Sample': 'Пример',
   'Get MicroPython': 'Скачать MicroPython',
   'Its newest release for the {0}, from micropython.org - Python on the console, no build needed.': 'Последний выпуск для {0} с micropython.org - Python в консоли, сборка не нужна.',
-  'MicroPython has no build for the {0}: give a firmware of your own.': 'У MicroPython нет сборки для {0}: укажите свою прошивку.',
   'MicroPython added: drag it onto the canvas from Microcontrollers': 'MicroPython добавлен: перетащите его на холст из раздела «Микроконтроллеры»',
   'MicroPython · downloaded on first use': 'MicroPython · скачивается при первом использовании',
   'Downloading MicroPython for the {0}…': 'Скачивание MicroPython для {0}…',
   'Copied: the GDB line': 'Скопировано: строка для GDB',
+  'Microcontrollers on this computer': 'Микроконтроллеры на этом компьютере',
+  'Espressif QEMU': 'QEMU от Espressif',
+  'downloaded at the first start of a microcontroller, checked against its SHA-256': 'скачивается при первом запуске микроконтроллера и проверяется по SHA-256',
+  'Espressif’s QEMU uses its libraries: brew install libgcrypt glib pixman sdl2 libslirp (a start without them says so)': 'QEMU от Espressif использует его библиотеки: brew install libgcrypt glib pixman sdl2 libslirp (без них запуск сообщит об этом)',
+  'No set up': 'Без настройки',
+  'no KVM, sudo or network changes: Termwright talks to its own folder ~/termwright-lab, and no port is opened': 'без KVM, sudo и изменений сети: Termwright работает со своей папкой ~/termwright-lab, порты не открываются',
+  'run on the KVM hosts: this computer takes microcontrollers only': 'работают на хостах KVM: этот компьютер принимает только микроконтроллеры',
+  'No MicroPython sample for the {0}: only the ESP32-C3’s runs in Espressif’s QEMU. Give a firmware of your own.': 'Нет примера MicroPython для {0}: в QEMU от Espressif работает только сборка для ESP32-C3. Укажите свою прошивку.',
 };
 
 export default ru;

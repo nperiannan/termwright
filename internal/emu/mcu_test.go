@@ -56,7 +56,7 @@ func TestMCUArgsAndStart(t *testing.T) {
 	im := &Image{ID: "fw", FileName: "micropython-s3.bin", Board: "esp32s3", FlashMB: 8, NICs: 2}
 	a := strings.Join(l.MCUArgs(v, im, BoardOf("esp32s3")), " ")
 	li, se := l.TesterPorts(v, 1)
-	for _, w := range []string{"-machine esp32s3", "file=termwright-lab/lab-ab/m1.flash.bin,if=mtd,format=raw", "-m 8M", "port=20009", "telnet:127.0.0.1:20010", "-gdb tcp:127.0.0.1:20011", "-daemonize",
+	for _, w := range []string{"-machine esp32s3", "file=termwright-lab/lab-ab/m1.flash.bin,if=mtd,format=raw", "-m 8M", "port=20008,", " -S ", "telnet:127.0.0.1:20010", "-gdb tcp:127.0.0.1:20011", "-daemonize",
 		fmt.Sprintf("-nic socket,model=open_eth,mac=%s,udp=127.0.0.1:%d,localaddr=127.0.0.1:%d", l.PortMAC(v, im, 1), li, se)} {
 		if !strings.Contains(a, w) {
 			t.Errorf("args lack %q: %s", w, a)

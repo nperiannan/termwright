@@ -44,11 +44,11 @@ func TestEmuSampleFirmware(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gets.Add(1)
 		switch r.URL.Path {
-		case "/download/ESP32_GENERIC_S3/":
-			fmt.Fprint(w, `<a href="/resources/firmware/ESP32_GENERIC_S3-20250101-v1.24.1.bin">old</a>
-<a href="/resources/firmware/ESP32_GENERIC_S3-20251101-v1.27.0-preview.5.gabc.bin">preview</a>
-<a href="/resources/firmware/ESP32_GENERIC_S3-20250415-v1.25.0.bin">new</a>`)
-		case "/resources/firmware/ESP32_GENERIC_S3-20250415-v1.25.0.bin":
+		case "/download/ESP32_GENERIC_C3/":
+			fmt.Fprint(w, `<a href="/resources/firmware/ESP32_GENERIC_C3-20250101-v1.24.1.bin">old</a>
+<a href="/resources/firmware/ESP32_GENERIC_C3-20251101-v1.27.0-preview.5.gabc.bin">preview</a>
+<a href="/resources/firmware/ESP32_GENERIC_C3-20250415-v1.25.0.bin">new</a>`)
+		case "/resources/firmware/ESP32_GENERIC_C3-20250415-v1.25.0.bin":
 			_, _ = w.Write(fw)
 		default:
 			http.NotFound(w, r)
@@ -58,28 +58,27 @@ func TestEmuSampleFirmware(t *testing.T) {
 	old := emuMicroPythonURL
 	emuMicroPythonURL = srv.URL + "/download/"
 	defer func() { emuMicroPythonURL = old }()
-	v, err := a.EmuSampleFirmware("esp32s3")
+	v, err := a.EmuSampleFirmware("esp32c3")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var im *EmuImageView
 	for i := range v.Images {
-		if v.Images[i].Board == "esp32s3" {
+		if v.Images[i].Board == "esp32c3" {
 			im = &v.Images[i]
 		}
 	}
-	if im == nil || im.Name != "MicroPython 1.25.0" || im.FlashMB != 8 || im.NICs != 2 || im.Source != "firmware ESP32_GENERIC_S3-20250415-v1.25.0.bin" {
+	if im == nil || im.Name != "MicroPython 1.25.0" || im.FlashMB != 8 || im.NICs != 2 || im.Source != "firmware ESP32_GENERIC_C3-20250415-v1.25.0.bin" {
 		t.Fatalf("image: %+v", im)
 	}
 	n := gets.Load()
-	if _, err := a.EmuSampleFirmware("esp32s3"); err != nil || gets.Load() != n {
+	if _, err := a.EmuSampleFirmware("esp32c3"); err != nil || gets.Load() != n {
 		t.Fatalf("the second time it is there: %v, %d requests", err, gets.Load()-n)
 	}
-	if _, err := a.EmuSampleFirmware("esp32h2"); err == nil || !strings.Contains(err.Error(), "no build") {
-		t.Fatalf("h2: %v", err)
-	}
-	if _, err := a.EmuSampleFirmware("esp32c3"); err == nil { // the page is not there
-		t.Fatal("c3 without a page")
+	for _, b := range []string{"esp32h2", "esp32s3", "esp32c6"} { // none, or builds that stop in the emulator
+		if _, err := a.EmuSampleFirmware(b); err == nil || !strings.Contains(err.Error(), "no MicroPython sample") {
+			t.Fatalf("%s: %v", b, err)
+		}
 	}
 }
 
@@ -186,6 +185,7 @@ func TestEmuLocalHost(t *testing.T) {
 // fakeEspQemu stands in for Espressif's QEMU: it stays in the background (its pid in the pid file) and serves a
 // MicroPython banner on the console port, as the firmware's UART would.
 const fakeEspQemu = `#!/bin/sh
+[ "$1" = --version ] && { echo "QEMU emulator version 9.2.2 (fake)"; exit 0; }
 pid= port= all="$*"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -210,7 +210,7 @@ def h(c):
         c.sendall((line+"\r\n"+out+">>> ").encode())
       elif 32<=ch<127: buf+=bytes([ch])
 while True:
-  c,_=s.accept(); threading.Thread(target=h,args=(c,),daemon=True).start()' "$port" & while :; do sleep 1; done ) >/dev/null 2>&1 &
+  c,_=s.accept(); threading.Thread(target=h,args=(c,),daemon=True).start()' "$port" & echo $! > "$pid.py"; while :; do sleep 1; done ) >/dev/null 2>&1 &
 echo $! > "$pid"
 `
 
@@ -224,7 +224,7 @@ func TestEmuLocalMCURuns(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	defer func() {
-		_ = exec.Command("pkill", "-f", filepath.Join(home, "termwright-lab")).Run()
+		emuKillLab(home)
 		if c := emuLab.conns[emu.LocalHost]; c != nil {
 			c.close()
 			delete(emuLab.conns, emu.LocalHost)
@@ -296,10 +296,88 @@ func TestEmuLocalMCURuns(t *testing.T) {
 	if out, err := a.emuMCP("lab_microcontrollers", map[string]any{"action": "add", "board": "ESP32-S3", "names": "esp-b"}); err != nil || out != "Added on this computer: esp-b - not started (lab_power start)" {
 		t.Fatalf("add: %v %q", err, out)
 	}
-	if _, err := a.emuMCP("lab_microcontrollers", map[string]any{"action": "add", "board": "h2"}); err == nil || !strings.Contains(err.Error(), "MicroPython has none") {
+	if _, err := a.emuMCP("lab_microcontrollers", map[string]any{"action": "add", "board": "h2"}); err == nil || !strings.Contains(err.Error(), "no MicroPython sample") {
 		t.Fatalf("h2 without a firmware: %v", err)
 	}
 	if _, err := a.EmuStop([]string{id}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// With Espressif's real QEMU and a real firmware (TW_ESP_QEMU = its unpacked folder, TW_ESP_C3_FW = MicroPython's
+// ESP32-C3 .bin): it starts paused, Termwright keeps its console from the first instruction, the console shows
+// the boot, and Python answers.
+func TestEmuLocalRealQEMU(t *testing.T) {
+	qd, fwFile := os.Getenv("TW_ESP_QEMU"), os.Getenv("TW_ESP_C3_FW")
+	if qd == "" || fwFile == "" {
+		t.Skip("TW_ESP_QEMU / TW_ESP_C3_FW not set")
+	}
+	a := emuTestApp(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	defer func() {
+		emuKillLab(home)
+		if c := emuLab.conns[emu.LocalHost]; c != nil {
+			c.close()
+			delete(emuLab.conns, emu.LocalHost)
+		}
+	}()
+	tools := filepath.Join(home, "termwright-lab/tools/qemu-esp")
+	_ = os.MkdirAll(tools, 0o755)
+	_ = os.Symlink(qd, filepath.Join(tools, "current"))
+	v, err := a.EmuAddFirmware("esp32c3", fwFile, "MicroPython", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.EmuAdd(EmuRequest{Host: emu.LocalHost, Groups: []EmuGroup{{Image: v.Images[0].ID, Count: 1, Names: "c3-{n}"}}, Cabling: "none"}); err != nil {
+		t.Fatal(err)
+	}
+	emuLab.mu.Lock()
+	vm := emuLab.f.Lab.VMs[0]
+	l := a.emuFor(emu.LocalHost)
+	emuLab.mu.Unlock()
+	a.emuStart(emu.LocalHost, []string{vm.ID})
+	if e := emuLab.errs[vm.ID]; e != "" {
+		t.Fatalf("start: %s", e)
+	}
+	out, err := a.emuMCP("lab_console", map[string]any{"switch": "c3-1", "commands": []any{"print(6*7)"}, "timeout": 60})
+	if err != nil || !strings.Contains(out, "print(6*7)\n42\n") {
+		t.Fatalf("console: %v\n%q", err, out)
+	}
+	// a console session (the relay) gets the boot from the first line, then Python
+	c, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(l.ConsolePort(vm)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	_, _ = c.Write([]byte("print('hi', 1+1)\r"))
+	var got []byte
+	buf := make([]byte, 65536)
+	for end := time.Now().Add(10 * time.Second); time.Now().Before(end) && !strings.Contains(string(got), "hi 2"); {
+		_ = c.SetReadDeadline(time.Now().Add(time.Second))
+		n, _ := c.Read(buf)
+		got = append(got, buf[:n]...)
+	}
+	s := string(got)
+	if !strings.Contains(s, "ESP-ROM:esp32c3") || !strings.Contains(s, "MicroPython v") || !strings.Contains(s, "hi 2") {
+		t.Fatalf("relay: %q", s)
+	}
+	if log, _ := os.ReadFile(filepath.Join(home, l.VMDir(), vm.ID+".log")); !strings.Contains(string(log), "ESP-ROM:esp32c3") {
+		t.Fatalf("its log: %q", log)
+	}
+}
+
+// emuKillLab stops what a test started in a lab folder: the processes in its pid files.
+func emuKillLab(home string) {
+	_ = filepath.WalkDir(filepath.Join(home, "termwright-lab"), func(p string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && (strings.HasSuffix(p, ".pid") || strings.HasSuffix(p, ".pid.py")) {
+			if b, err := os.ReadFile(p); err == nil {
+				if pid, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil && pid > 1 {
+					_ = exec.Command("pkill", "-P", strconv.Itoa(pid)).Run()
+					_ = exec.Command("kill", strconv.Itoa(pid)).Run()
+				}
+			}
+		}
+		return nil
+	})
 }

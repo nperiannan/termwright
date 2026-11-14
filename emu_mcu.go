@@ -289,15 +289,15 @@ func (a *App) emuMCUToolsLocal(labDir string) error {
 	return nil
 }
 
-// EmuSampleFirmware adds MicroPython as a board's firmware: its newest release from micropython.org (the
-// generic build of the S3, C3 or C6; there is none for the H2), downloaded once - the next time it is there.
+// EmuSampleFirmware adds MicroPython as a board's firmware: its newest release from micropython.org, downloaded
+// once - the next time it is there. The ESP32-C3's only: the S3 and C6 builds (1.29) stop in Espressif's QEMU.
 func (a *App) EmuSampleFirmware(board string) (EmuView, error) {
 	b := emu.BoardOf(board)
 	if b == nil {
 		return EmuView{}, fmt.Errorf("unknown microcontroller %q", board)
 	}
 	if b.Sample == "" {
-		return EmuView{}, fmt.Errorf("MicroPython has no build for the %s: add a firmware of your own (Add Firmware)", b.Name)
+		return EmuView{}, fmt.Errorf("there is no MicroPython sample for the %s (MicroPython's builds for the S3 and C6 stop right after their bootloader in Espressif's QEMU; the H2 has none): add a firmware of your own (Add Firmware), or use an ESP32-C3", b.Name)
 	}
 	emuLab.mu.Lock()
 	a.emuLoad()

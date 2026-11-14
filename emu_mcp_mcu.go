@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"net"
 	"regexp"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/termwright/termwright/internal/emu"
@@ -16,7 +14,7 @@ import (
 // lab_microcontrollers: the emulated lab's ESP32 boards through the connector (the GUI's Add Firmware, Get
 // MicroPython, Hosts → This computer and the palette's boards).
 
-var mcpMCUTool = mcpTool{"lab_microcontrollers", "Microcontrollers (ESP32-S3, -C3, -C6, -H2) in the emulated lab, run by Espressif's QEMU on a KVM host or on this computer (the one Termwright runs on; macOS or Linux, microcontrollers only). Actions: list (boards, firmwares, this computer as a host, the microcontrollers in the lab), this_computer (add this computer as a host), sample (get MicroPython's newest release for a board from micropython.org as a firmware; none for the H2), add (put microcontrollers of a board in the lab: its newest firmware, or MicroPython downloaded first; on this computer when it is a host), flash (give one another firmware of its board: its flash is made again). Type on their console (the UART: MicroPython's >>> prompt) with lab_console; start and stop them with lab_power; cable their port 1 (Ethernet) with lab_cable. Changes are asked in Termwright first.",
+var mcpMCUTool = mcpTool{"lab_microcontrollers", "Microcontrollers (ESP32-S3, -C3, -C6, -H2) in the emulated lab, run by Espressif's QEMU on a KVM host or on this computer (the one Termwright runs on; macOS or Linux, microcontrollers only). Actions: list (boards, firmwares, this computer as a host, the microcontrollers in the lab), this_computer (add this computer as a host), sample (get MicroPython's newest release from micropython.org as a firmware: the ESP32-C3 only - the S3 and C6 builds stop in Espressif's QEMU, the H2 has none), add (put microcontrollers of a board in the lab: its newest firmware, or MicroPython downloaded first; on this computer when it is a host), flash (give one another firmware of its board: its flash is made again). Type on their console (the UART: MicroPython's >>> prompt) with lab_console; start and stop them with lab_power; cable their port 1 (Ethernet) with lab_cable. Changes are asked in Termwright first.",
 	mcpSchema(map[string]any{
 		"action":   map[string]any{"type": "string", "enum": []string{"list", "this_computer", "sample", "add", "flash"}},
 		"board":    map[string]any{"type": "string", "description": "sample, add: esp32s3, esp32c3, esp32c6 or esp32h2 (or ESP32-S3 …)"},
@@ -162,7 +160,7 @@ func (a *App) emuMCPMCU(args map[string]any, v EmuView, ask func(string, string,
 			if l := fwOf(bd.Key); len(l) > 0 {
 				fw = l[len(l)-1].ID
 			} else if bd.Sample == "" {
-				return "", fmt.Errorf("the %s has no firmware yet and MicroPython has none for it: add one in Termwright (Appliances → Add Firmware)", bd.Name)
+				return "", fmt.Errorf("the %s has no firmware yet and there is no MicroPython sample for it (only the ESP32-C3's runs in Espressif's QEMU): add one in Termwright (Appliances → Add Firmware)", bd.Name)
 			}
 		}
 		host := argStr(args, "host")
@@ -259,56 +257,65 @@ func emuHostName(host string) string {
 // reMCUPrompt is MicroPython's prompt (and its continuation) at the end of what the UART printed.
 var reMCUPrompt = regexp.MustCompile(`(>>> |\.\.\. )$`)
 
-// emuMCUConsoleRun types lines on a microcontroller's UART: no login. Ctrl-C first stops a running program;
-// a line's output ends at MicroPython's prompt, or after 2 s without output (a firmware without a REPL).
+// emuMCUConsoleRun types lines on a microcontroller's UART (through Termwright's console keeper): no login. Ctrl-C
+// first stops a running program; a line's output ends at MicroPython's prompt, or after 2 s without output (a
+// firmware without a REPL).
 func (a *App) emuMCUConsoleRun(id string, cmds []string, timeout time.Duration) (string, error) {
-	emuLab.mu.Lock()
-	l := emuLab.f.Lab
-	var v *emu.VM
-	if l != nil {
-		v = l.VMByID(id)
-	}
-	if v == nil {
-		emuLab.mu.Unlock()
-		return "", errors.New("no such microcontroller")
-	}
-	host := emuHostOf(*v)
-	port := a.emuFor(host).ConsolePort(*v)
-	name := v.Name
-	emuLab.mu.Unlock()
-	cl, err := a.emuClient(context.Background(), host)
+	k, err := a.emuMCUKeep(id)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("its console: %w (is it running?)", err)
 	}
-	conn, err := cl.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
-	if err != nil {
-		return "", fmt.Errorf("its console: %w (is it running, and its console tab closed?)", err)
+	_, ch, stop := k.watch()
+	defer stop()
+	var (
+		mu   sync.Mutex
+		text strings.Builder
+		last time.Time
+	)
+	go func() {
+		for b := range ch {
+			mu.Lock()
+			text.Write(b)
+			last = time.Now()
+			mu.Unlock()
+		}
+	}()
+	get := func() (string, time.Time) {
+		mu.Lock()
+		defer mu.Unlock()
+		return text.String(), last
 	}
-	c := emu.NewConsole(conn)
-	defer c.Close()
 	deadline := time.Now().Add(timeout)
 	settle := func(max time.Duration) string { // until the prompt, or quiet
-		from := len(c.Text())
+		cur, _ := get()
+		from := len(cur)
 		end := time.Now().Add(max)
 		if end.After(deadline) {
 			end = deadline
 		}
 		for time.Now().Before(end) {
 			time.Sleep(50 * time.Millisecond)
-			t := c.Text()[from:]
-			if reMCUPrompt.MatchString(strings.TrimRight(t, "\x00")) || len(t) > 0 && c.Idle() > 2*time.Second {
+			all, at := get()
+			t := all[from:]
+			if reMCUPrompt.MatchString(t) || len(t) > 0 && time.Since(at) > 2*time.Second {
 				break
 			}
 		}
-		return c.Text()[from:]
+		all, _ := get()
+		return all[from:]
 	}
-	_ = c.Key("\x03")
-	_ = c.Send("")
+	emuLab.mu.Lock()
+	host, name := "", id
+	if v := emuLab.f.Lab.VMByID(id); v != nil {
+		host, name = emuHostOf(*v), v.Name
+	}
+	emuLab.mu.Unlock()
+	_, _ = k.Write([]byte{3, '\r'})
 	settle(5 * time.Second)
 	var b strings.Builder
 	for _, cmd := range cmds {
 		emuLogf(emuLvInfo, host, name, "console (AI connector) types: %s", cmd)
-		if err := c.Send(cmd); err != nil {
+		if _, err := k.Write([]byte(cmd + "\r")); err != nil {
 			return b.String(), err
 		}
 		out := emu.CleanConsole(settle(60 * time.Second))
@@ -316,7 +323,7 @@ func (a *App) emuMCUConsoleRun(id string, cmds []string, timeout time.Duration) 
 		out = strings.TrimRight(reMCUPrompt.ReplaceAllString(strings.TrimRight(out, " "), ""), "\r\n ")
 		fmt.Fprintf(&b, "%s\n%s\n", cmd, strings.Trim(out, "\r\n"))
 		if time.Now().After(deadline) {
-			return b.String(), errors.New("timed out")
+			return b.String(), errors.New("timed out: no answer on its console")
 		}
 	}
 	return b.String(), nil

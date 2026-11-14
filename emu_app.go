@@ -2786,11 +2786,8 @@ func (a *App) emuSessions(v emu.VM) {
 		}
 	}
 	if bd := emu.BoardOf(im.Board); bd != nil { // a microcontroller: only its UART, no login
-		jumpVia := host
-		if host == emu.LocalHost { // on this computer: its port is here
-			jumpVia = ""
-		}
-		cs := session.Session{Name: free(cf, v.Name+" console"), Folder: cf, Protocol: session.ProtoTelnet, Hostname: "127.0.0.1", Port: conPort, DeviceType: dt, JumpSession: jumpVia,
+		// Termwright's console relay on this computer (emu_mcu_console.go), wherever the board runs
+		cs := session.Session{Name: free(cf, v.Name+" console"), Folder: cf, Protocol: session.ProtoTelnet, Hostname: "127.0.0.1", Port: conPort, DeviceType: dt,
 			Description: []string{"Serial console (UART) of the emulated " + bd.Name + " " + v.Name}}
 		if saved, err := a.store.Save(cs, ""); err == nil {
 			emuLab.mu.Lock()
@@ -2975,6 +2972,22 @@ func (a *App) emuStart(host string, ids []string) {
 	if err != nil {
 		failAll(err)
 		return
+	}
+	for _, line := range strings.Split(out, "\n") { // a microcontroller waits paused until Termwright keeps its console
+		if f := strings.Fields(line); len(f) == 2 && f[0] == "started" {
+			for _, v := range vms {
+				if v.ID == f[1] && ptrs[v.Image] != nil && ptrs[v.Image].Board != "" {
+					id := v.ID
+					emuGo(func() {
+						if _, err := a.emuMCUKeep(id); err != nil {
+							emuLab.mu.Lock()
+							emuEv(id, "error", "its console could not be kept: "+err.Error())
+							emuLab.mu.Unlock()
+						}
+					})
+				}
+			}
+		}
 	}
 	emuGo(func() {
 		time.Sleep(2 * time.Second)
@@ -4209,6 +4222,8 @@ func (a *App) emuView() EmuView {
 		vl := a.emuFor(emuHostOf(vm)) // its host's management
 		d.Host = emuHostOf(vm)
 		switch {
+		case im != nil && im.Board != "": // a microcontroller: no management, its UART only
+			d.SSH = ""
 		case (vl.Mgmt == "lan" || vl.Mgmt == "nat") && vm.MgmtIP == "":
 			d.SSH = "DHCP (not known yet)"
 		case vl.Mgmt == "nat":
@@ -4317,6 +4332,10 @@ func (a *App) emuView() EmuView {
 			d.Restart = emuRestartNeed(emuLab.runWith[vm.ID], vm)
 		}
 		d.Checkpoints = vm.Checkpoints
+		if d.Board != "" && d.Running && emuMCUKeeper(d.ID) == nil && d.State != "starting" && d.State != "uploading" { // found running (Termwright started again): it keeps its console again
+			id := d.ID
+			emuGo(func() { _, _ = a.emuMCUKeep(id) })
+		}
 		v.Devices = append(v.Devices, d)
 	}
 	for _, c := range l.Cables {
