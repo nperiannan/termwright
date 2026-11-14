@@ -3379,6 +3379,8 @@ const ru: Record<string, string> = {
   'fast': 'быстро',
   'not up': 'не поднят',
   'What the switch says on LLDP': 'Что коммутатор сообщает по LLDP',
+  'SSH sessions whose device type is Linux.': 'SSH-сеансы с типом устройства Linux.',
+  'No Linux SSH session yet: make one in the Session Manager (device type Linux).': 'SSH-сеансов Linux пока нет: создайте сеанс в Диспетчере сеансов (тип устройства Linux).',
 };
 
 export default ru;

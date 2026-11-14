@@ -1033,6 +1033,9 @@ export class LabImages implements OnInit, OnDestroy {
 }
 
 // ---------------------------------------------------------------- KVM hosts
+/** A session's device type that is a Linux machine (KVM hosts are Linux): Linux, or a distribution's name. */
+export function emuLinuxType(t?: string) { return /linux|ubuntu|debian|red ?hat|rhel|centos|rocky|alma|fedora|suse|arch/i.test(t ?? ''); }
+
 @Component({
   selector: 'app-lab-hosts',
   imports: [FormsModule, TvBar, TvSorts],
@@ -1049,7 +1052,7 @@ export class LabImages implements OnInit, OnDestroy {
         <div class="card" style="margin-top: 10px"><b>+ {{ tr('Add a Host') }}</b>
           <select [(ngModel)]="pick" name="hpick" style="width: 100%; margin: 8px 0">@for (s of sshSessions(); track s) { <option [value]="s">{{ s }}</option> }</select>
           <button type="button" class="primary" style="width: 100%" (click)="add()" [disabled]="!pick || lab.busy()">{{ lab.busy() ? tr('Logging in and checking…') : tr('Check and Add') }}</button>
-          <p class="muted small" style="margin: 6px 0 0">{{ tr('An SSH session of a Linux machine; make one in the Session Manager first.') }}</p></div>
+          <p class="muted small" style="margin: 6px 0 0">{{ sshSessions().length ? tr('SSH sessions whose device type is Linux.') : tr('No Linux SSH session yet: make one in the Session Manager (device type Linux).') }}</p></div>
       </div></div>
       <div class="pad" style="overflow: auto">
         @if (cur(); as h) {
@@ -1123,7 +1126,7 @@ export class LabImages implements OnInit, OnDestroy {
         } @else { <p class="muted">{{ tr('Add a host on the left.') }}</p> }
       </div>
     </div>
-    <div class="mf">@if (cur(); as h) { <button type="button" class="danger-ghost" (click)="remove(h)" [disabled]="loadingRm()">{{ loadingRm() ? tr('Reading the host…') : tr('Remove Host…') }}</button> }<span class="sp"></span><button type="button" class="primary" (click)="closed.emit()">{{ tr('Close') }}</button></div>
+    <div class="mf">@if (cur(); as h) { <button type="button" class="danger" (click)="remove(h)" [disabled]="loadingRm()">{{ loadingRm() ? tr('Reading the host…') : tr('Remove Host…') }}</button> }<span class="sp"></span><button type="button" class="primary" (click)="closed.emit()">{{ tr('Close') }}</button></div>
   </div>`,
   styles: [PAGE],
 })
@@ -1170,7 +1173,7 @@ export class LabHosts implements OnDestroy {
   protected sshSessions = computed(() => {
     const out: string[] = [], skip = [this.lab.emu()?.folder, this.lab.sim()?.folder].filter(Boolean) as string[];
     const have = new Set(this.hosts().map(h => h.session));
-    const walk = (n: SessionNode | null | undefined) => n?.children?.forEach(c => { if (c.isFolder) { if (!skip.some(f => c.path === f || c.path.startsWith(f + '/'))) walk(c); } else if (c.protocol === 'SSH2' && !have.has(c.path)) out.push(c.path); });
+    const walk = (n: SessionNode | null | undefined) => n?.children?.forEach(c => { if (c.isFolder) { if (!skip.some(f => c.path === f || c.path.startsWith(f + '/'))) walk(c); } else if (c.protocol === 'SSH2' && !have.has(c.path) && emuLinuxType(c.deviceType)) out.push(c.path); });
     walk(this.ui.tree());
     return out;
   });
