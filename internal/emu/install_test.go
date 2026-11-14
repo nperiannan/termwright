@@ -49,6 +49,21 @@ func TestAlpineAnswers(t *testing.T) {
 	if strings.Contains(cmd, "\n") {
 		t.Fatal("the answer file must be one line to type")
 	}
+	// the ISO's own packages first: it installs without internet
+	sh := exec.Command("sh", "-c", strings.NewReplacer("/etc/apk/repositories", "$TWR", "/etc/alpine-release", "$TWV", "> /tmp/ans", "").Replace(cmd))
+	sh.Env = append(os.Environ(), "TWR="+writeTemp(t, "/media/cdrom/apks\n"), "TWV="+writeTemp(t, "3.24.4\n"))
+	out, err := sh.Output()
+	if err != nil || !strings.Contains(string(out), `APKREPOSOPTS="/media/cdrom/apks https://dl-cdn.alpinelinux.org/alpine/v3.24/main https://dl-cdn.alpinelinux.org/alpine/v3.24/community"`) {
+		t.Fatalf("%v %s", err, out)
+	}
+}
+
+func writeTemp(t *testing.T, s string) string {
+	p := filepath.Join(t.TempDir(), "f")
+	if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
 }
 
 // fakeAlpine plays the live ISO on a serial console: login, a shell, setup-alpine's questions.
@@ -74,7 +89,7 @@ func fakeAlpine(t *testing.T, conn net.Conn, setupExit int, got chan<- string) {
 		switch {
 		case l == "root":
 			w("\r\nWelcome to Alpine!\r\nlocalhost:~# ")
-		case strings.HasPrefix(l, "printf "):
+		case strings.HasPrefix(l, "printf ") || strings.HasPrefix(l, "r=$(grep"):
 			got <- l
 			w("\r\nlocalhost:~# ")
 		case strings.HasPrefix(l, "setup-alpine"):

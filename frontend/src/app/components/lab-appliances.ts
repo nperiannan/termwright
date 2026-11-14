@@ -124,9 +124,9 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
                       <div class="hint">{{ isoMode === 'alpine' ? tr('Termwright types the Alpine install on the installer’s console and sets the root password below.') : tr('The installer starts and its console opens as a session: you install by hand, then press Finish. It must be an installer that talks on a serial console.') }}</div></div>
                     <label>{{ tr('Image name') }}</label><input [(ngModel)]="isoNm" name="isonm" [placeholder]="isoNamePh()" />
                     <label>{{ tr('Root password') }}</label><div><input [(ngModel)]="isoPw" name="isopw" autocomplete="off" /><div class="hint">{{ isoMode === 'alpine' ? tr('The new system’s root password; Termwright logs in with it.') : tr('The password you set during the install (optional): Termwright logs in with it.') }}</div></div>
-                    <label>{{ tr('Disk') }}</label><div><div class="row2 nar"><input type="number" min="1" [(ngModel)]="isoSize" name="isogb" /><select [(ngModel)]="isoUnit" (ngModelChange)="isoUnitChanged($event)" name="isounit"><option value="MB">MB</option><option value="GB">GB</option></select></div><div class="hint">{{ tr('The new disk’s largest size, not the space it takes: the qcow2 file grows only as the system is written, so the saved image stays small (a small Alpine system takes a few hundred MB). In MB or GB; at least 100 MB.') }}</div></div>
-                    <label>{{ tr('Memory') }}</label><div class="row2 nar"><input type="number" min="256" step="256" [(ngModel)]="isoRam" name="isoram" /><span class="unit">MB</span></div>
-                    <label>vCPU</label><div class="row2 nar"><input type="number" min="1" max="64" [(ngModel)]="isoCpus" name="isocpu" /><span></span></div>
+                    <label>{{ tr('Disk') }}</label><div><div class="nu"><input type="number" min="1" [(ngModel)]="isoSize" name="isogb" /><select [(ngModel)]="isoUnit" (ngModelChange)="isoUnitChanged($event)" name="isounit"><option value="MB">MB</option><option value="GB">GB</option></select></div><div class="hint">{{ tr('The new disk’s largest size, not the space it takes: the qcow2 file grows only as the system is written, so the saved image stays small (a small Alpine system takes a few hundred MB). In MB or GB; at least 100 MB.') }}</div></div>
+                    <label>{{ tr('Memory') }}</label><div class="nu"><input type="number" [min]="ramUnit === 'GB' ? 0.25 : 256" [step]="ramUnit === 'GB' ? 0.5 : 256" [(ngModel)]="ramVal" name="isoram" /><select [(ngModel)]="ramUnit" name="isoramu"><option value="MB">MB</option><option value="GB">GB</option></select></div>
+                    <label>vCPU</label><div class="nu"><input type="number" min="1" max="64" [(ngModel)]="isoCpus" name="isocpu" /></div>
                     <label>{{ tr('Check') }}</label><label class="ckl"><input type="checkbox" [(ngModel)]="isoVerify" name="isover" /> {{ tr('Boot the new image once at the end to see it comes up (on a throwaway copy)') }}</label>
                     <label>{{ tr('Run on') }}</label><select [(ngModel)]="isoHost" name="isohost">@for (h of hosts(); track h.session) { <option [value]="h.session">{{ h.name }}</option> }</select>
                   </div>
@@ -265,7 +265,7 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
         <div class="full">
           <p class="muted small">{{ tr('An image file you add is recognised by its name; New Lab offers these devices.') }} {{ tr('The device pack is loaded or changed in the Simulated Lab tab (the flask at the top right): Load Device Pack.') }}</p>
           <div class="card tcard"><table class="t"><thead><tr><th>{{ tr('Device') }}</th><th>{{ tr('OS') }}</th><th>{{ tr('Modules') }}</th><th>{{ tr('Images') }}</th></tr></thead><tbody>
-            @for (d of lab.state()?.deviceTypes ?? []; track d.key) { <tr><td>{{ d.model || d.kind }}</td><td>{{ d.osName || d.kind }}</td><td class="small">{{ (d.modules ?? []).join(', ') || '-' }}</td><td>{{ d.images.length || tr('no image yet') }}</td></tr> }
+            @for (d of packTypes(); track d.key) { <tr><td>{{ d.model || d.kind }}</td><td>{{ d.osName || d.kind }}</td><td class="small">{{ (d.modules ?? []).join(', ') || '-' }}</td><td [class.muted]="!d.images?.length">{{ d.images?.length || tr('no image yet') }}</td></tr> }
           </tbody></table></div>
         </div>
       }
@@ -310,8 +310,11 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
     .dscroll { flex: 1; min-height: 0; overflow: auto; padding: 14px 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-content: start; &.one { grid-template-columns: minmax(0, 1fr); max-width: 900px; } }
     .card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); padding: 12px 14px; min-width: 0; &.w2 { grid-column: 1 / -1; }
       h4 { margin: 0 0 10px; font-size: 12.5px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; small { color: var(--muted); font-weight: 400; } .sp { flex: 1; } } }
-    .fg { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 8px 10px; align-items: center; > label { color: var(--muted); font-size: 12px; } input, select, textarea { width: 100%; box-sizing: border-box; min-width: 0; } textarea { resize: vertical; } }
+    .fg { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 8px 10px; align-items: center; > label { color: var(--muted); font-size: 12px; align-self: start; padding-top: 6px; } > label.ckl { padding-top: 0; align-self: center; } input, select, textarea { width: 100%; box-sizing: border-box; min-width: 0; } textarea { resize: vertical; } }
     textarea.big { width: 100%; box-sizing: border-box; resize: vertical; }
+    .nu { display: flex; gap: 8px; align-items: center; input { width: 120px !important; flex: none; } select { width: 80px !important; flex: none; } }
+    .fg input[type=checkbox] { width: auto; flex: none; margin: 0; }
+    .seg:not(.av) { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; a { padding: 5px 12px; color: var(--muted); cursor: pointer; white-space: nowrap; border-right: 1px solid var(--line); &:last-child { border-right: 0; } } a.on { background: var(--accent-soft); color: var(--accent); } }
     .row2 { display: flex; gap: 8px; align-items: center; > * { flex: 1; min-width: 0; } > button, > .unit { flex: none; } &.nar { max-width: 260px; } } .unit { color: var(--muted); font-size: 12px; white-space: nowrap; }
     .mono { font-family: var(--mono, monospace); font-size: 12px; }
     .hint { color: var(--muted); font-size: 11.5px; margin-top: 8px; line-height: 1.45; }
@@ -327,7 +330,7 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
     .tcard { padding: 0; overflow: hidden; table { width: 100%; border-collapse: collapse; } th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 8px 12px; border-bottom: 1px solid var(--line); } td { padding: 6px 12px; border-bottom: 1px solid var(--line); } }
     .stl { list-style: none; padding: 0; margin: 8px 0 0; li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 6px; padding: 2px 0; color: var(--muted); &.d, &.n { color: var(--text); } small { grid-column: 2 / 4; color: var(--muted); } } .tm { font-size: 11px; color: var(--muted); } }
     pre.yaml { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--bg); font-size: 11.5px; max-height: 220px; overflow: auto; white-space: pre-wrap; }
-    .ckl { display: flex; gap: 6px; align-items: center; color: var(--text) !important; }
+    .fg > label.ckl { display: flex; gap: 8px; align-items: center; color: var(--text); font-size: 12.5px; }
     .dlb { white-space: nowrap; &.busy { background: linear-gradient(90deg, var(--accent-soft) var(--p, 0%), transparent var(--p, 0%)); } }
     @media (max-width: 1250px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dscroll { grid-template-columns: minmax(0, 1fr); } }
   `],
@@ -339,6 +342,12 @@ export class LabAppliances extends LabImages {
     effect(() => { const v = this.start(); const id = this.image0(); untracked(() => { this.tab.set(v); if (id) this.pick(id); }); });
   }
   protected readonly imp = signal(false);
+  /** The install's memory in the unit chosen beside it, like its disk (kept in MB). */
+  protected ramUnit: 'MB' | 'GB' = 'GB';
+  get ramVal() { return this.ramUnit === 'GB' ? +(this.isoRam / 1024).toFixed(2) : this.isoRam; }
+  set ramVal(v: number) { this.isoRam = Math.max(256, Math.round((+v || 0) * (this.ramUnit === 'GB' ? 1024 : 1))); }
+  /** The device pack's devices that have a name (a pack's empty entries are not shown). */
+  protected packTypes = computed(() => (this.lab.state()?.deviceTypes ?? []).filter(d => (d.model || d.kind || '').trim()));
   protected readonly qf = signal<Quick>('all');
   protected readonly quicks: { k: Quick; name: string }[] = [
     { k: 'all', name: 'All' }, { k: 'here', name: 'On this computer' }, { k: 'todo', name: 'To download' }, { k: 'host', name: 'On the host' }, { k: 'used', name: 'In use' },

@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { ChartSeries } from './traffic-chart';
@@ -35,7 +35,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
   selector: 'app-lab-workspace',
   imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
   template: `
-  <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
+  <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + (dockLow() ? 40 : dockH()) + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" [testers]="traf()?.testers ?? []" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" (screen)="pcWin.set(''); screenDev.set(d)" /> }
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
@@ -584,7 +584,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     }
     <div class="dock">
       <div class="grip" (pointerdown)="gripDown($event)" [title]="tr('Drag to make the pane taller or shorter')"></div>
-      <div class="dtabs">
+      <div class="dtabs" (click)="dockPeek.set(true)">
         <a [class.on]="dock() === 'events'" (click)="dock.set('events')">{{ tr('Events') }}@if (problems()) { <span class="cnt">{{ problems() }}</span> }</a>
         @if (emu()) { <a [class.on]="dock() === 'inv'" (click)="dock.set('inv')">{{ tr('Inventory') }}</a> }
         @if (emu()) { <a [class.on]="dock() === 'changes'" (click)="dock.set('changes'); loadChanges()" [title]="tr('What Claude and the API changed in the lab, each with Revert')">{{ tr('Changes') }}@if (changes().length) { <span class="cnt n">{{ changes().length }}</span> }</a> }
@@ -2023,7 +2023,12 @@ export class LabWorkspace implements OnDestroy {
   protected cfgId = signal('');
   protected dockH = signal(this.savedDockH());
   private savedDockH() { try { return Math.min(700, Math.max(90, +(localStorage.getItem('tw.lab.dockH') ?? '') || 190)); } catch { return 190; } }
+  /** The Appliances page has nothing in the bottom pane: it keeps only its tabs (dragging or a tab opens it again). */
+  protected dockPeek = signal(false);
+  protected dockLow = computed(() => this.isAppl() && !this.dockPeek());
+  private readonly dockPeekReset = effect(() => { this.page(); untracked(() => this.dockPeek.set(false)); });
   gripDown(ev: PointerEvent) {
+    this.dockPeek.set(true);
     ev.preventDefault();
     const y0 = ev.clientY, h0 = this.dockH();
     const mv = (e: PointerEvent) => this.dockH.set(Math.min(Math.round(window.innerHeight * 0.75), Math.max(90, h0 + (y0 - e.clientY))));

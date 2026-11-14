@@ -191,7 +191,8 @@ type AlpineOpts struct {
 	DNS      string // its name server (default DefaultDNS[0])
 }
 
-// AlpineAnswers is the answer file of setup-alpine as one shell command that writes it to /tmp/ans.
+// AlpineAnswers is the answer file of setup-alpine as one shell command that writes it to /tmp/ans (it reads the
+// ISO's package folder and release first).
 func AlpineAnswers(o AlpineOpts) string {
 	host := orStr(o.Hostname, "alpine")
 	disk := orStr(o.Disk, "/dev/vda")
@@ -202,7 +203,9 @@ func AlpineAnswers(o AlpineOpts) string {
 		`DNSOPTS="-d lab -n ` + orStr(o.DNS, DefaultDNS[0]) + `"`, // setup-dns takes the server after -n (one: setup-alpine splits the words)
 		`TIMEZONEOPTS="-z UTC"`,
 		`PROXYOPTS="none"`,
-		`APKREPOSOPTS="-1"`,
+		// the ISO's own packages first (the install works without internet: the installer's network may have no
+		// DNS), then the release's mirror for later packages (apk skips it while it is out of reach)
+		`APKREPOSOPTS="'"$r"' https://dl-cdn.alpinelinux.org/alpine/v'"$v"'/main https://dl-cdn.alpinelinux.org/alpine/v'"$v"'/community"`,
 		`USEROPTS="none"`,
 		`SSHDOPTS="-c none"`, // setup-sshd takes the choice after -c (a bare "none" is ignored and openssh goes in)
 		`NTPOPTS="-c none"`,
@@ -210,7 +213,7 @@ func AlpineAnswers(o AlpineOpts) string {
 		`LBUOPTS="none"`,
 		`APKCACHEOPTS="none"`,
 	}
-	return "printf '" + strings.Join(lines, `\n`) + `\n' > /tmp/ans`
+	return `r=$(grep -m1 '^/media' /etc/apk/repositories); v=$(cut -d. -f1,2 /etc/alpine-release); printf '` + strings.Join(lines, `\n`) + `\n' > /tmp/ans`
 }
 
 var (

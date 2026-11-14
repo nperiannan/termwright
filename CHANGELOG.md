@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **Appliances touch-ups** (from the user's screenshots): the bottom pane keeps only its tabs while the Appliances page shows (a click on its tabs or dragging it opens it again; other pages get its height back); the install from ISO form shows its two kinds of install as a switch (they ran together as text), Memory has its MB / GB choice like Disk, Disk, Memory and vCPU boxes are one width, the Check box sits with its text, and labels line up with the top of their fields; the device pack view leaves out the pack's empty entries. **Alpine from ISO without internet**: the install takes the ISO's own packages first and the release's mirror after them (it failed with "unable to select packages: syslinux" when the installer could not resolve the mirror's name).
+
 - Emulated lab, **switches left running** (found by the user: the lab icon counted 7 with 3 running): deleting a saved topology now switches off its switches that still run in the background (before, they ran on with no topology to stop them from). Hosts → *Running here* marks such switches *left running* and has **Stop…** for every lab running in the background (asked first); the lab icon's tip says to stop them in Hosts.
 
 - **AI chat: Claude Code sign-in** (asked for): when Claude Code is not signed in, the message says what to type on this computer - *Open Terminal and run: …* on macOS, *Open PowerShell and run: & '…'* on Windows, *Open a terminal and run: …* on Linux, with `claude` or its whole path when the terminal would not find it - and offers **Run it in a Termwright tab** (a Local Shell with the command typed) and **Copy the command**.
