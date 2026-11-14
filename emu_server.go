@@ -143,11 +143,14 @@ func (a *App) emuServerSetup(ctx context.Context, c *emu.Console, im emu.Image, 
 	emuLab.mu.Lock()
 	emuLab.state[v.ID] = "server"
 	emuLab.mu.Unlock()
-	out, err := emuConsoleScript(ctx, c, im, emu.ServerScript(*v.Server, pw, macs[orInt(v.Server.DHCPPort, 1)]), 20)
+	emuLab.mu.Lock()
+	dns := emuLab.f.Lab.DNSServers()
+	emuLab.mu.Unlock()
+	out, err := emuConsoleScript(ctx, c, im, emu.ServerScript(*v.Server, pw, macs[orInt(v.Server.DHCPPort, 1)], dns), 20)
 	emuLab.mu.Lock()
 	defer emuLab.mu.Unlock()
 	if err == nil && !strings.Contains(out, "tw-server-ok") {
-		err = errors.New(strings.TrimSpace(strings.TrimPrefix(lastLine(out), "tw-server-fail ")))
+		err = emuServerFail(out)
 	}
 	if err != nil {
 		emuLab.errs[v.ID] = "server: " + err.Error()
@@ -176,6 +179,20 @@ func (a *App) emuServerSetup(ctx context.Context, c *emu.Console, im emu.Image, 
 }
 
 var emuServerImageMaking bool // (mu held)
+
+// emuServerFail is why the set-up script stopped: its tw-server-fail line, else the end of what it printed.
+func emuServerFail(out string) error {
+	for _, line := range strings.Split(out, "\n") {
+		if r, ok := strings.CutPrefix(strings.TrimSpace(line), "tw-server-fail "); ok {
+			return errors.New(r)
+		}
+	}
+	t := strings.TrimSpace(out)
+	if len(t) > 300 {
+		t = "…" + t[len(t)-300:]
+	}
+	return errors.New("the set-up did not finish: " + orStr(t, "no output"))
+}
 
 func emuHasServerImage() bool {
 	for _, im := range emuLab.f.Images {
@@ -427,9 +444,12 @@ func (a *App) EmuSetServer(id string, s emu.Server) (EmuView, error) {
 	}
 	if running {
 		pw, _ := secrets.Lookup(emuServerKey(id))
-		out, err := a.emuComputerScript(id, emu.ServerScript(s, pw, mac), 10*time.Minute)
+		emuLab.mu.Lock()
+		dns := emuLab.f.Lab.DNSServers()
+		emuLab.mu.Unlock()
+		out, err := a.emuComputerScript(id, emu.ServerScript(s, pw, mac, dns), 10*time.Minute)
 		if err == nil && !strings.Contains(out, "tw-server-ok") {
-			err = errors.New(strings.TrimSpace(strings.TrimPrefix(lastLine(out), "tw-server-fail ")))
+			err = emuServerFail(out)
 		}
 		if err != nil {
 			return EmuView{}, fmt.Errorf("applying it: %w", err)

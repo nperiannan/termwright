@@ -126,13 +126,14 @@ func ipToInt(ip net.IP) uint32 {
 // needs internet once: a Server image has them), its user and password, the shared folder, and a start script
 // (/etc/local.d) that starts the services it has on at every boot - then runs it. It prints tw-server-ok. mac is
 // its DHCP port's MAC address (its interface is found by it).
-func ServerScript(s Server, password, mac string) string {
+// dns are the lab's name servers: they take the place of one that does not answer before the packages are installed.
+func ServerScript(s Server, password, mac string, dns []string) string {
 	user := s.User
 	if user == "" {
 		user = "lab"
 	}
 	ifc := "eth" + strconv.Itoa(orPort(s.DHCPPort, 1)) // when its MAC is not found
-	var st strings.Builder // the start script
+	var st strings.Builder                             // the start script
 	st.WriteString("#!/bin/sh\n# Termwright: the server's services (written by Termwright; changes in Termwright)\n")
 	st.WriteString(serverStop)
 	// an applet from busybox-extras, else from busybox
@@ -174,6 +175,9 @@ func ServerScript(s Server, password, mac string) string {
 	var b strings.Builder
 	b.WriteString("set -e\n")
 	fmt.Fprintf(&b, "for p in %s; do apk info -e $p >/dev/null 2>&1 || need=1; done\n", ServerPackages)
+	if len(dns) > 0 { // a name server that does not answer (QEMU's user network one in an image built with it): the lab's
+		fmt.Fprintf(&b, "if [ -n \"$need\" ] && ! nslookup dl-cdn.alpinelinux.org >/dev/null 2>&1; then printf 'nameserver %%s\\n' %s > /etc/resolv.conf; fi\n", strings.Join(qAll(dns), " "))
+	}
 	fmt.Fprintf(&b, "if [ -n \"$need\" ]; then apk add -q %s >/dev/null 2>&1 || { echo 'tw-server-fail its packages could not be installed (it needs internet once: %s)'; exit 1; }; fi\n", ServerPackages, ServerPackages)
 	fmt.Fprintf(&b, "id %s >/dev/null 2>&1 || adduser -D -h /srv -s /bin/sh %s\n", user, user)
 	fmt.Fprintf(&b, "printf '%%s:%%s\\n' %s %s | chpasswd >/dev/null\n", Q(user), Q(password))
@@ -244,4 +248,12 @@ func ParseServerStatus(out string) ServerStatus {
 		return ipToInt(net.ParseIP(st.Leases[i].IP)) < ipToInt(net.ParseIP(st.Leases[j].IP))
 	})
 	return st
+}
+
+func qAll(l []string) []string {
+	out := make([]string, len(l))
+	for i, x := range l {
+		out[i] = Q(x)
+	}
+	return out
 }

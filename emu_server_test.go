@@ -80,7 +80,9 @@ func fakeDropbear(t *testing.T, ln net.Listener, user, pw, root string) {
 // fsRoot serves a folder as the root of an sftp server.
 type fsRoot string
 
-func (f fsRoot) p(r *sftp.Request) string { return filepath.Join(string(f), filepath.FromSlash(r.Filepath)) }
+func (f fsRoot) p(r *sftp.Request) string {
+	return filepath.Join(string(f), filepath.FromSlash(r.Filepath))
+}
 func (f fsRoot) Fileread(r *sftp.Request) (io.ReaderAt, error) {
 	return os.Open(f.p(r))
 }

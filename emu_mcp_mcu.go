@@ -319,7 +319,7 @@ func (a *App) emuMCUConsoleRun(id string, cmds []string, timeout time.Duration) 
 			return b.String(), err
 		}
 		out := emu.CleanConsole(settle(60 * time.Second))
-		out = strings.TrimPrefix(strings.TrimLeft(out, "\r\n"), cmd) // its echo
+		out = strings.TrimPrefix(strings.TrimLeft(out, "\r\n"), cmd)                                       // its echo
 		out = strings.TrimSuffix(strings.TrimRight(reMCUPrompt.ReplaceAllString(out, ""), "\r\n "), ">>>") // its prompt
 		out = strings.TrimRight(out, "\r\n ")
 		fmt.Fprintf(&b, "%s\n%s\n", cmd, strings.Trim(out, "\r\n"))

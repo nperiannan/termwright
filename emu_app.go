@@ -648,16 +648,16 @@ type EmuView struct {
 	Running         bool              `json:"running"`
 	Folder          string            `json:"folder"`
 	MgmtNet         string            `json:"mgmtNet"`
-	DNS             []string          `json:"dns"`                  // the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
-	DNSSet          bool              `json:"dnsSet,omitempty"`     // they were set (not the default)
+	DNS             []string          `json:"dns"`                   // the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
+	DNSSet          bool              `json:"dnsSet,omitempty"`      // they were set (not the default)
 	ServerImage     string            `json:"serverImage,omitempty"` // the Server image: "ready", "making" or "" (none yet: the first server makes it)
-	Notes           []emu.Note        `json:"notes,omitempty"`      // notes and areas on the canvas
-	Hubs            []EmuHubView      `json:"hubs,omitempty"`       // hubs and L2 switches
-	CloudPorts      map[string]int    `json:"cloudPorts,omitempty"` // host → ports of its cloud (1-8)
-	AutoCheckpoints bool              `json:"autoCheckpoints"`      // a checkpoint of a switch before typed commands (Revert undoes them)
-	Topology        string            `json:"topology,omitempty"`   // the name the open lab is saved under
-	CloudGw         string            `json:"cloudGw,omitempty"`    // cloud: the gateway the switches use
-	LanFixed        bool              `json:"lanFixed,omitempty"`   // lan: fixed addresses (no DHCP)
+	Notes           []emu.Note        `json:"notes,omitempty"`       // notes and areas on the canvas
+	Hubs            []EmuHubView      `json:"hubs,omitempty"`        // hubs and L2 switches
+	CloudPorts      map[string]int    `json:"cloudPorts,omitempty"`  // host → ports of its cloud (1-8)
+	AutoCheckpoints bool              `json:"autoCheckpoints"`       // a checkpoint of a switch before typed commands (Revert undoes them)
+	Topology        string            `json:"topology,omitempty"`    // the name the open lab is saved under
+	CloudGw         string            `json:"cloudGw,omitempty"`     // cloud: the gateway the switches use
+	LanFixed        bool              `json:"lanFixed,omitempty"`    // lan: fixed addresses (no DHCP)
 	Mgmt            string            `json:"mgmt"`
 	Devices         []EmuDevice       `json:"devices"`
 	Links           []EmuLinkView     `json:"links"`
