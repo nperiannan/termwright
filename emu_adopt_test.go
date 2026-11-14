@@ -43,3 +43,16 @@ func TestEmuNameList(t *testing.T) {
 		}
 	}
 }
+
+// Start All powers on what is off: running and booting switches (their QEMU up) are left alone.
+func TestEmuNotRunning(t *testing.T) {
+	emuLab.mu.Lock()
+	old := emuLab.status
+	emuLab.status.Up = map[string]float64{"v1": 12, "v3": 1}
+	got := emuNotRunning([]string{"v1", "v2", "v3", "v4"})
+	emuLab.status = old
+	emuLab.mu.Unlock()
+	if len(got) != 2 || got[0] != "v2" || got[1] != "v4" {
+		t.Fatal(got)
+	}
+}

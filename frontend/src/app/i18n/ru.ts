@@ -3586,6 +3586,10 @@ const ru: Record<string, string> = {
   'Copy what you asked': 'Скопировать вопрос',
   'Copy the answer': 'Скопировать ответ',
   'Copy the output': 'Скопировать вывод',
+  'Starts the {0} stopped switches; the others stay as they are': 'Запускает остановленные коммутаторы ({0}); остальные остаются как есть',
+  'Nothing is stopped': 'Остановленных нет',
+  'Stop all {0} switches that run or start now?': 'Остановить все коммутаторы, которые работают или запускаются ({0})?',
+  'Fast start keeps their state, so Start resumes them in seconds.': 'Быстрый запуск сохраняет их состояние, и «Запустить» возобновит их за секунды.',
 };
 
 export default ru;

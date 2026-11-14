@@ -506,6 +506,17 @@ func emuNeedsConsole(l *emu.Lab, v emu.VM, im *emu.Image) bool {
 	return l.Fixed() && len(im.AddrSet) > 0 && v.MgmtIP != "" && v.AddrOn != v.MgmtIP
 }
 
+// emuNotRunning keeps the switches whose QEMU does not run (lock held).
+func emuNotRunning(ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		if !emuRunning(id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // emuRunning says whether a VM's QEMU runs, as the last status read saw it (lock held).
 func emuRunning(id string) bool {
 	_, up := emuLab.status.Up[id]
@@ -4285,6 +4296,12 @@ func (a *App) EmuStart(ids []string) (EmuView, error) {
 	host, ids := a.emuIDs(ids)
 	if host == "" {
 		return EmuView{}, errors.New("there is no emulated lab")
+	}
+	emuLab.mu.Lock()
+	ids = emuNotRunning(ids) // Start powers on what is off: a running or booting switch is left alone (Restart restarts)
+	emuLab.mu.Unlock()
+	if len(ids) == 0 {
+		return a.EmuState()
 	}
 	emuLab.mu.Lock()
 	var vs []emu.VM

@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- Emulated lab, **Start All and Stop All** (asked for): Start All is on only while a switch is stopped, and it starts only the stopped ones - running, booting and failed switches stay as they are (Start never restarts a running switch now, also through the connector and the API; Restart does that). Stop All asks first.
+
 - **Canvas and Traffic touch-ups** (from the user's screenshots): on an empty canvas every drawing style can be chosen (Slate tiles, Steel isometric and Rack front sat under the canvas and took no clicks); the device list's search box stays at the top while the list scrolls; the Traffic page's three chart cards have one height, their empty messages are centred, and the test port column lines up with them (its empty note is a dashed card). The device list keeps room for its scroll bar and never scrolls sideways, and the canvas column never grows with what it shows, so a drawing style no longer moves the toolbar. In the side pane only one of a switch's sections is open at a time (Details at first: opening another closes it), and Restart / Configure… sit clear of the line below them.
 
 - **Toolbar shows what is active** (asked for): the AI icon turns blue while the AI panel is open or working, the cube while VMs run on any KVM host, the flask while simulated switches run (blue stays under the pointer). In the AI chat your messages show a solid grey person avatar instead of a purple "Me".

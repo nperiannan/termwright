@@ -150,8 +150,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         </span>
       }
       @if (!emu()) { <button type="button" (click)="dialog('list')">{{ tr('Switch List and Outputs') }}</button> }
-      <button type="button" class="primary" (click)="lab.start([])" [disabled]="!devs().length || lab.busy()">▶ {{ tr('Start All') }}</button>
-      <button type="button" (click)="lab.stop([])" [disabled]="!running() || lab.busy()">■ {{ tr('Stop All') }}</button>
+      <button type="button" class="primary" (click)="startStopped()" [disabled]="!stoppedIds().length || lab.busy()" [title]="stoppedIds().length ? tr('Starts the {0} stopped switches; the others stay as they are', stoppedIds().length) : tr('Nothing is stopped')">▶ {{ tr('Start All') }}</button>
+      <button type="button" (click)="stopAll()" [disabled]="!running() || lab.busy()">■ {{ tr('Stop All') }}</button>
     </div>
 
     <div class="main">
@@ -1136,6 +1136,15 @@ export class LabWorkspace implements OnDestroy {
   protected moveOpen = signal(false);
   /** The switch's sections in the side pane: one open at a time (Details at first), so a long topology keeps its room. */
   private static readonly SECS = ['details', 'res', 'net', 'runs', 'cab', 'ck'];
+  /** The stopped switches only (not failed, booting or running ones): what Start All starts. */
+  protected stoppedIds = computed(() => this.devs().filter(d => this.stateOf(d) === 'off').map(d => d.id));
+  async startStopped() { const ids = this.stoppedIds(); if (ids.length) await this.lab.start(ids); }
+  async stopAll() {
+    const n = this.devs().filter(d => this.stateOf(d) !== 'off').length;
+    const fast = this.emu() && !!this.st()?.fast;
+    if (!(await this.ui.confirm(tr('Stop All'), tr('Stop all {0} switches that run or start now?', n) + (fast ? ' ' + tr('Fast start keeps their state, so Start resumes them in seconds.') : ''), tr('Stop All'), true))) return;
+    await this.lab.stop([]);
+  }
   protected isOpen(k: string) { const v = this.secs()[k]; return v === undefined ? k === 'details' : v; }
   protected setOpen(k: string, o: boolean) {
     if (this.isOpen(k) === o) return;
@@ -1402,7 +1411,7 @@ export class LabWorkspace implements OnDestroy {
       { id: 'p-canvas', label: tr('Canvas'), group: 'Pages', run: go('') }, { id: 'p-ov', label: tr('Overview'), group: 'Pages', run: go('overview') },
       { id: 'p-traf', label: tr('Traffic'), group: 'Pages', run: go('traffic') }, { id: 'p-hosts', label: tr('Hosts'), group: 'Pages', run: go('hosts') },
       { id: 'p-img', label: tr('Images'), group: 'Pages', run: go('images') }, { id: 'p-tpl', label: tr('Templates'), group: 'Pages', run: go('templates') },
-      { id: 'a-start', label: tr('Start All'), group: 'Lab', run: () => void this.lab.start([]) },
+      { id: 'a-start', label: tr('Start All'), group: 'Lab', run: () => void this.startStopped() },
       { id: 'a-note', label: tr('Add a Note'), group: 'Lab', run: () => void this.addNote('note') }, { id: 'a-area', label: tr('Add an Area'), group: 'Lab', run: () => void this.addNote('area') },
       { id: 'a-stream', label: tr('New Stream'), group: 'Traffic', run: () => { this.openTraffic(); setTimeout(() => this.newStream(), 300); } },
       { id: 'a-lib', label: tr('Test library'), group: 'Traffic', run: () => { this.openTraffic(); this.libOpen.set(true); } },
