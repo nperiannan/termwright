@@ -219,6 +219,7 @@ type EmuDevice struct {
 	Board        string           `json:"board,omitempty"`     // a microcontroller (esp32s3…): its firmware runs in Espressif's QEMU
 	FlashMB      int              `json:"flashMb,omitempty"`   // a microcontroller's flash size
 	GDB          int              `json:"gdb,omitempty"`       // a microcontroller's GDB server port on its host (0 = off)
+	Server       *emu.Server      `json:"server,omitempty"`    // a server's settings (its services)
 	Desktop      bool             `json:"desktop,omitempty"`   // a computer with a desktop and Firefox on its screen
 	Routing      *emu.Routing     `json:"routing,omitempty"`   // a computer as a route generator
 	Addrs        map[int]string   `json:"addrs,omitempty"`     // its data ports' addresses (port → address/bits, or "dhcp")
@@ -649,6 +650,7 @@ type EmuView struct {
 	MgmtNet         string            `json:"mgmtNet"`
 	DNS             []string          `json:"dns"`                  // the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
 	DNSSet          bool              `json:"dnsSet,omitempty"`     // they were set (not the default)
+	ServerImage     string            `json:"serverImage,omitempty"` // the Server image: "ready", "making" or "" (none yet: the first server makes it)
 	Notes           []emu.Note        `json:"notes,omitempty"`      // notes and areas on the canvas
 	Hubs            []EmuHubView      `json:"hubs,omitempty"`       // hubs and L2 switches
 	CloudPorts      map[string]int    `json:"cloudPorts,omitempty"` // host → ports of its cloud (1-8)
@@ -3300,6 +3302,9 @@ func (a *App) emuDay0(host string, v emu.VM) {
 			return
 		}
 	}
+	if v.Server != nil && len(im.PortAddr) > 0 { // a server: its services (and its packages the first time)
+		a.emuServerSetup(ctx, c, im, v, macs)
+	}
 	a.emuCheckPersona(ctx, c, &im, v)
 	a.emuReadFacts(ctx, c, &im, v)
 	if im.LagCmd != "" { // its LAGs, for the topology
@@ -4171,6 +4176,12 @@ func (a *App) emuView() EmuView {
 	}
 	v.Mgmt, v.MgmtNet, v.KVM, v.CloudGw, v.LanFixed, v.Fast = l.Mgmt, l.MgmtNet, l.KVM, l.CloudGw, l.LanFixed, !l.NoFast
 	v.DNS, v.DNSSet = l.DNSServers(), len(l.DNS) > 0
+	switch {
+	case emuServerImageMaking:
+		v.ServerImage = "making"
+	case emuHasServerImage():
+		v.ServerImage = "ready"
+	}
 	v.AutoCheckpoints = !l.NoCheckpoints
 	v.Notes = l.Notes
 	v.Hubs = emuHubViews(l)
@@ -4206,6 +4217,10 @@ func (a *App) emuView() EmuView {
 		if im != nil {
 			d.Model, d.OS, d.Ports = im.Name, orStr(im.DeviceType, "VM"), im.DataPorts()
 			d.Desktop, d.Routing = vm.Desktop, vm.Routing
+			if vm.Server != nil {
+				sv := *vm.Server
+				d.Server = &sv
+			}
 			if emu.BoardOf(im.Board) != nil {
 				d.Board, d.FlashMB = im.Board, im.FlashMB
 				if vm.GDB {
@@ -6462,23 +6477,7 @@ func (a *App) EmuAddComputer(host string, start bool) (EmuView, error) {
 	}
 	emuLab.mu.Lock()
 	a.emuLoad()
-	var pick *emu.Image
-	for i := range emuLab.f.Images {
-		im := &emuLab.f.Images[i]
-		if len(im.PortAddr) == 0 || emu.NoSerialConsole(im.Name) {
-			continue
-		}
-		alp := strings.Contains(strings.ToLower(im.Name), "alpine")
-		if pick != nil && im.HasFiles() != pick.HasFiles() { // one whose file is here, rather than one still to download
-			if im.HasFiles() {
-				pick = im
-			}
-			continue
-		}
-		if pick == nil || alp && !strings.Contains(strings.ToLower(pick.Name), "alpine") || alp == strings.Contains(strings.ToLower(pick.Name), "alpine") && im.Size < pick.Size {
-			pick = im
-		}
-	}
+	pick := emuComputerImage(false)
 	host = orStr(host, emuLab.f.Host)
 	id := ""
 	if pick != nil {
@@ -6492,6 +6491,36 @@ func (a *App) EmuAddComputer(host string, start bool) (EmuView, error) {
 		return EmuView{}, errors.New("the lab has no KVM host yet: make a lab first")
 	}
 	return a.EmuAdd(EmuRequest{Host: host, Groups: []EmuGroup{{Image: id, Count: 1, Names: "pc-{n}"}}, Start: start})
+}
+
+// emuComputerImage is the image a new computer is made from (lock held): Alpine first, one whose file is here
+// rather than one still to download, the smallest. server: a Server image when there is one.
+func emuComputerImage(server bool) *emu.Image {
+	if server {
+		for i := range emuLab.f.Images {
+			if im := &emuLab.f.Images[i]; im.ServerImage && len(im.PortAddr) > 0 {
+				return im
+			}
+		}
+	}
+	var pick *emu.Image
+	for i := range emuLab.f.Images {
+		im := &emuLab.f.Images[i]
+		if len(im.PortAddr) == 0 || emu.NoSerialConsole(im.Name) || im.ServerImage {
+			continue
+		}
+		alp := strings.Contains(strings.ToLower(im.Name), "alpine")
+		if pick != nil && im.HasFiles() != pick.HasFiles() { // one whose file is here, rather than one still to download
+			if im.HasFiles() {
+				pick = im
+			}
+			continue
+		}
+		if pick == nil || alp && !strings.Contains(strings.ToLower(pick.Name), "alpine") || alp == strings.Contains(strings.ToLower(pick.Name), "alpine") && im.Size < pick.Size {
+			pick = im
+		}
+	}
+	return pick
 }
 
 // emuPortMACs is a VM's MAC addresses: 0 its management port, then its data ports (lock held).

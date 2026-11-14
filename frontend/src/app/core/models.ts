@@ -91,7 +91,7 @@ export interface LabPack { id: string; name: string; version: string; vendor: st
 export interface LabOS { name: string; short: string; configCommand: string; }
 export interface LabDevice { id: string; os: string; model: string; version: string; serial: string; hwSerial?: string; mac: string; hostname: string; mgmtIp: string; port: number; ports: number; running: boolean; logins: number; unsaved: boolean; x: number; y: number;
   /** Emulated lab only. */
-  state?: string; stateText?: string; cpu?: number; cores?: number; diskGb?: number; template?: string; persona?: EmuPersona | null; personaOk?: boolean; personaError?: string; personaInfo?: string; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; memUsed?: number; host?: string; saved?: boolean; role?: string; uplinks?: string[] | null; iconStyle?: string; movingTo?: string; computer?: boolean; board?: string; flashMb?: number; gdb?: number; desktop?: boolean; routing?: EmuRouting | null; addrs?: Record<string, string> | null; addrsSeen?: Record<string, string> | null; cpuMax?: number; cpuWeight?: number; cpuReq?: number; cpuLim?: number; cpuStats?: EmuCpuStats | null; restart?: string; checkpoints?: { tag: string; at: string; note?: string; change?: string }[] | null; addrs6?: Record<string, string> | null; dataGw?: string; dataGw6?: string; dns?: string; net?: EmuCompNetSeen | null; }
+  state?: string; stateText?: string; cpu?: number; cores?: number; diskGb?: number; template?: string; persona?: EmuPersona | null; personaOk?: boolean; personaError?: string; personaInfo?: string; cpus?: number; ram?: number; console?: number; ssh?: string; error?: string; image?: string; memUsed?: number; host?: string; saved?: boolean; role?: string; uplinks?: string[] | null; iconStyle?: string; movingTo?: string; computer?: boolean; board?: string; flashMb?: number; gdb?: number; server?: EmuServer | null; desktop?: boolean; routing?: EmuRouting | null; addrs?: Record<string, string> | null; addrsSeen?: Record<string, string> | null; cpuMax?: number; cpuWeight?: number; cpuReq?: number; cpuLim?: number; cpuStats?: EmuCpuStats | null; restart?: string; checkpoints?: { tag: string; at: string; note?: string; change?: string }[] | null; addrs6?: Record<string, string> | null; dataGw?: string; dataGw6?: string; dns?: string; net?: EmuCompNetSeen | null; }
 export interface LabEvent { at: string; vm: string; name: string; level: 'info' | 'ok' | 'warn' | 'error'; text: string; host?: string; by?: string; }
 export interface EmuTopoInfo { name: string; saved: string; hosts: string[] | null; switches: number; open: boolean; running?: number; runOn?: string[]; }
 export interface LabLag { name: string; mode: string; source: string; }
@@ -100,7 +100,7 @@ export interface EmuCompNetSeen { addrs?: Record<string, string> | null; linkLoc
 /** A computer's IP configuration for one port, with its gateways and DNS server. */
 export interface EmuCompNet { port: number; ipv4: string; ipv6: string; gw: string; gw6: string; dns: string; }
 export interface LabLink { a: string; aPort: string; b: string; bPort: string; up?: boolean; down?: boolean; lagA?: LabLag | null; lagB?: LabLag | null; lldp?: string; }
-export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; dns?: string[] | null; dnsSet?: boolean; autoCheckpoints?: boolean; notes?: LabNote[] | null; hubs?: LabHub[] | null; cloudPorts?: Record<string, number> | null; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
+export interface LabView { exists: boolean; running: boolean; folder: string; mgmtNet: string; dns?: string[] | null; dnsSet?: boolean; serverImage?: '' | 'ready' | 'making'; autoCheckpoints?: boolean; notes?: LabNote[] | null; hubs?: LabHub[] | null; cloudPorts?: Record<string, number> | null; devices: LabDevice[] | null; links: LabLink[] | null; sessions: Record<string, string> | null; models: LabModel[] | null; outputs: LabOutput[] | null; pack?: LabPack | null; waiting?: number; os: Record<string, LabOS> | null;
   /** Emulated lab only. */
   kind?: 'emu'; topology?: string; cloudGw?: string; lanFixed?: boolean; events?: LabEvent[] | null; downloadDir?: string; downloadQueue?: string[] | null; mgmt?: string; consoles?: Record<string, string> | null; host?: string; hostInfo?: EmuHostInfo | null; hosts?: EmuHost[] | null; images?: EmuImage[] | null; kvm?: boolean; templates?: EmuTemplate[] | null; usage?: EmuUsage; deviceTypes?: EmuDeviceType[] | null; installs?: EmuInstall[] | null; hostUse?: EmuHostUse[] | null; fast?: boolean; iconStyle?: string; }
 /** An install of an ISO file on a KVM host: running, waiting for the user, or finished. */
@@ -119,6 +119,13 @@ export interface EmuSetupDone { run: string; error: string; host: EmuHost | null
 export interface EmuHost { session: string; name: string; info: EmuHostInfo; checked: string; }
 export interface EmuAnswer { match: string; send: string; }
 /** A microcontroller Termwright emulates (Espressif's QEMU). */
+/** A lab server's settings (internal/emu/server.go). */
+export interface EmuServer { http: boolean; httpPort?: number; ftp: boolean; ftpPort?: number; tftp: boolean; tftpWrite: boolean; dhcp: boolean; dhcpPort?: number;
+  from?: string; to?: string; gateway?: string; dns?: string; lease?: number; bootFile?: string; bootFrom?: string; user?: string; installed?: boolean; }
+export interface EmuServerFile { path: string; size: number; mod: string; dir?: boolean; }
+export interface EmuServerLease { mac: string; ip: string; name: string; expires: string; }
+export interface EmuServerView { settings: EmuServer; addr: string; mgmt: string; status: { on: string[] | null; leases: EmuServerLease[] | null; diskKb: number; freeKb: number };
+  files: EmuServerFile[] | null; image: '' | 'server' | 'making'; error?: string; }
 export interface EmuBoard { key: string; name: string; arch: string; machine: string; cpu: string; flash: number[]; defMb: number; psram?: number[] | null; sample?: string; }
 /** The host key of this computer: it runs microcontrollers only (Espressif's QEMU, macOS or Linux). */
 export const LOCAL_HOST = '@this-computer';

@@ -41,26 +41,33 @@ func (a *App) emuComputerScript(id, script string, d time.Duration) (string, err
 	}
 	vv, h := *v, emuHostOf(*v)
 	emuLab.mu.Unlock()
-	enc := base64.StdEncoding.EncodeToString([]byte(script))
 	var out string
 	err := a.emuOnVMConsole(h, vv, d, func(ctx context.Context, c *emu.Console, im emu.Image, _ map[int]string) error {
-		prompt, err := emu.Login(ctx, c, &im)
-		if err != nil {
-			return err
-		}
-		if _, err := emu.Run(ctx, c, &im, prompt, ": > /tmp/tw.b64"); err != nil {
-			return err
-		}
-		for i := 0; i < len(enc); i += 300 {
-			if _, err := emu.Run(ctx, c, &im, prompt, "printf %s "+enc[i:min(len(enc), i+300)]+" >> /tmp/tw.b64"); err != nil {
-				return err
-			}
-		}
-		o, err := emu.Run(ctx, c, &im, prompt, "base64 -d /tmp/tw.b64 > /tmp/tw.sh && sh /tmp/tw.sh 2>&1 | tail -n 20")
-		out = emu.CleanConsole(o)
+		o, err := emuConsoleScript(ctx, c, im, script, 20)
+		out = o
 		return err
 	})
 	return out, err
+}
+
+// emuConsoleScript logs in on a computer's console and runs a shell script there (typed in pieces, base64): the
+// last lines lines of what it printed.
+func emuConsoleScript(ctx context.Context, c *emu.Console, im emu.Image, script string, lines int) (string, error) {
+	enc := base64.StdEncoding.EncodeToString([]byte(script))
+	prompt, err := emu.Login(ctx, c, &im)
+	if err != nil {
+		return "", err
+	}
+	if _, err := emu.Run(ctx, c, &im, prompt, ": > /tmp/tw.b64"); err != nil {
+		return "", err
+	}
+	for i := 0; i < len(enc); i += 300 {
+		if _, err := emu.Run(ctx, c, &im, prompt, "printf %s "+enc[i:min(len(enc), i+300)]+" >> /tmp/tw.b64"); err != nil {
+			return "", err
+		}
+	}
+	o, err := emu.Run(ctx, c, &im, prompt, fmt.Sprintf("base64 -d /tmp/tw.b64 > /tmp/tw.sh && sh /tmp/tw.sh 2>&1 | tail -n %d", lines))
+	return emu.CleanConsole(o), err
 }
 
 // EmuSetRouting makes a Linux computer a route generator (or stops it: proto "").

@@ -13,7 +13,7 @@ import { CmdPalette, PaletteCmd } from './cmd-palette';
 import type { LabHub, LabNote } from '../core/models';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { LOCAL_HOST, LabHubDetail, EmuBoard, EmuClientState, EmuSTPState, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
+import { LOCAL_HOST, EmuServer, LabHubDetail, EmuBoard, EmuClientState, EmuSTPState, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -32,9 +32,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
 
 /** The lab as a workspace tab: device palette, canvas with cables, the
  *  selected switch, the topology summary and the Events log. */
+import { LabServer } from './lab-server';
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficStats, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
+  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabServer, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficStats, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + (dockLow() ? 40 : dockH()) + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" [testers]="traf()?.testers ?? []" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" (screen)="pcWin.set(''); screenDev.set(d)" /> }
@@ -270,7 +271,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="nbox" [class.dim]="stateOf(d) === 'off'"><app-dev-icon [role]="roleOfDev(d)" [look]="lookOf(d)" [state]="iconState(d)" [size]="100" /><i class="st" [class]="'st ' + stateOf(d)" [title]="tr(d.stateText || (d.running ? 'running' : 'stopped'))"></i>@if (warnOf(d)) { <i class="wn" [title]="warnOf(d)">!</i> }@if (emu() && mgmtCap(d)) { <i class="mcap" (click)="$event.stopPropagation(); dock.set('cap'); capSel.set(mgmtCap(d)!.key); capStarted.set(mgmtCap(d)!.started); loadCaps()" [title]="tr('Capturing its management port: click for the packets')"><i class="recd"></i>mgmt</i> }</div>
                 <div class="nlbl" [style.transform]="'translate(' + (lblAt()[d.id]?.x ?? 0) + 'px,' + (lblAt()[d.id]?.y ?? 0) + 'px)'" (pointerdown)="lblGrab($event, d.id)" (dblclick)="lblReset(d.id, $event)" [title]="tr('Drag the name to move it; double-click puts it back')">
                 <div class="nn">{{ d.hostname }}@if (d.restart) { <span class="rsn" [title]="tr('Restart needed: {0}', d.restart)">↻</span> }</div>
-                @if (d.computer) { <div class="nm">PC · {{ (d.model || '').split(' ')[0] }}@if (showAddr() && !dataAddr(d)) { · {{ subOf(d) }} }</div> } @else { <div class="nm" [title]="d.persona?.slots?.[0]?.model ? tr('Persona: it runs as a {0}', d.persona!.slots![0].model) : tr('The image as it is (no persona)')">{{ d.persona?.slots?.[0]?.model ? modelOf(d) + ' · ' + osOf(d) : modelOf(d) }} {{ d.version }}@if (showAddr()) { · {{ subOf(d) }} }</div> }@if (d.computer && dataAddr(d)) { <div class="nm da" [title]="tr('Its data-port address')">{{ dataAddr(d) }}</div> }</div>
+                @if (d.server; as sv) { <div class="nm">{{ tr('Server') }}@if (showAddr()) { · {{ dataAddr(d) || subOf(d) }} }</div><div class="svc">@for (x of svcOf(sv); track x.n) { <span [class.off]="!x.on">{{ x.n }}</span> }</div> } @else if (d.computer) { <div class="nm">PC · {{ (d.model || '').split(' ')[0] }}@if (showAddr() && !dataAddr(d)) { · {{ subOf(d) }} }</div> } @else { <div class="nm" [title]="d.persona?.slots?.[0]?.model ? tr('Persona: it runs as a {0}', d.persona!.slots![0].model) : tr('The image as it is (no persona)')">{{ d.persona?.slots?.[0]?.model ? modelOf(d) + ' · ' + osOf(d) : modelOf(d) }} {{ d.version }}@if (showAddr()) { · {{ subOf(d) }} }</div> }@if (d.computer && dataAddr(d)) { <div class="nm da" [title]="tr('Its data-port address')">{{ dataAddr(d) }}</div> }</div>
                 @if (hostMode() === 'tags') { <div class="htg"><i [style.background]="hcol(hostOfDev(d))"></i>{{ hname(hostOfDev(d)) }}</div> }
                 @if (d.uplinks?.length) { <span class="badge up" [title]="tr('On the host’s network: {0}', d.uplinks!.join(', '))">⇡ {{ d.uplinks!.join(',') }}</span> }
                 @if (d.personaError) { <span class="badge r" [title]="d.personaError">{{ tr('no persona') }}</span> }
@@ -463,6 +464,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               </div>
               <p class="muted xs mcun">{{ tr('No Wi-Fi or Bluetooth in the emulator: the firmware talks on its console (UART). GDB and a new firmware apply from its next start.') }}</p>
             }
+            @if (emu() && d.server) { <app-lab-server [dev]="d" /> }
             <details class="sec" [open]="isOpen('details')" (toggle)="setOpen('details', $any($event.target).open)"><summary>{{ tr('Details') }}</summary><div class="kv">
               <span>{{ tr('Serial') }}</span><span class="mono" [title]="d.hwSerial ? tr('As the switch reports it') : tr('Given by Termwright; the switch has not reported its own yet')">{{ d.hwSerial || d.serial || '-' }}</span>
 
@@ -587,6 +589,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @case ('pc') { <svg class="bico" viewBox="0 0 46 46" [attr.width]="w" [attr.height]="h" [style.--hc]="c"><rect x="7" y="9" width="32" height="21" rx="2.5"/><path class="l" d="M18 36h10M23 30v6"/><path class="l thin" d="M11 14h12"/></svg> }
         @case ('switch') { <svg class="bico" viewBox="0 0 46 46" [attr.width]="w" [attr.height]="h" [style.--hc]="c"><rect x="4" y="13" width="38" height="20" rx="3.5"/>@for (i of [0,1,2,3]; track i) { <rect class="f" [attr.x]="8 + i * 6" y="17.5" width="4" height="4" rx=".8"/> }<circle class="f" cx="10" cy="27.5" r="1.4"/><path class="l" d="M32 17.5l4 3-4 3M36 24.5l-4 3 4 3"/></svg> }
         @case ('hub') { <svg class="bico" viewBox="0 0 46 46" [attr.width]="w" [attr.height]="h" [style.--hc]="c"><rect x="6" y="16" width="34" height="15" rx="7.5"/>@for (i of [0,1,2,3]; track i) { <circle class="f" [attr.cx]="14 + i * 6" cy="23.5" r="2"/> }<path class="l" d="M17 11l2 3M23 9v4M29 11l-2 3"/></svg> }
+        @case ('server') { <svg class="bico" viewBox="0 0 46 46" [attr.width]="w" [attr.height]="h" [style.--hc]="c"><rect x="13" y="5" width="20" height="36" rx="3"/>@for (i of [0,1,2]; track i) { <path class="l thin" [attr.d]="'M17 ' + (11 + i * 6) + 'h12'"/> }<circle class="f" cx="18" cy="34" r="1.6"/><circle class="f" cx="23" cy="34" r="1.6"/></svg> }
         @case ('cloud') { <svg class="bico" viewBox="0 0 46 46" [attr.width]="w" [attr.height]="h" [style.--hc]="c"><path d="M14 33h20a7 7 0 0 0 1-13.9A10 10 0 0 0 16 17a8 8 0 0 0-2 16z"/>@for (i of [0,1,2]; track i) { <circle class="f" [attr.cx]="18 + i * 5" cy="27" r="1.6"/> }</svg> }
       }
     </ng-template>
@@ -1273,10 +1276,11 @@ export class LabWorkspace implements OnDestroy {
     { k: 'pc' as const, name: 'PC', sub: 'Linux computer · ping, iperf3', tip: 'A Linux computer (Alpine first): Termwright logs in, names it and installs iperf3. Drag it onto the canvas, or double-click', c: 'var(--s1)' },
     { k: 'switch' as const, name: 'L2 Switch', sub: '8-24 ports · mgmt · console', tip: 'An L2 switch: 8-24 ports, VLANs (access and trunk), a management address and a command line on its console. Drag it onto the canvas, or double-click', c: 'var(--s7)' },
     { k: 'hub' as const, name: 'Hub', sub: '8 ports · every frame to every port', tip: 'A hub: 8 ports, no management; what comes in on a port goes out of every other one. Drag it onto the canvas, or double-click', c: 'var(--s3)' },
+    { k: 'server' as const, name: 'Server', sub: 'HTTP · FTP · TFTP · DHCP', tip: 'A Linux server (Alpine): HTTP, FTP and TFTP from one shared folder, DHCP on its port 1, SSH/SFTP for files from this computer. The first one becomes the Server image. Drag it onto the canvas, or double-click', c: '#8b6cf0' },
     { k: 'cloud' as const, name: 'Cloud', sub: 'the host’s network · 1-8 ports', tip: 'The host’s network: switch ports cabled to it are on it. One cloud per host, 1-8 ports. Drag it onto the canvas, or double-click', c: 'var(--cloudc)' }];
-  protected hubDrag: 'hub' | 'switch' | 'pc' | 'cloud' | null = null;
+  protected hubDrag: 'hub' | 'switch' | 'pc' | 'server' | 'cloud' | null = null;
   /** A built-in node from the palette: a PC, an L2 switch, a hub or the host's cloud. */
-  async addBuiltin(k: 'hub' | 'switch' | 'pc' | 'cloud', at: { x: number; y: number } | null) {
+  async addBuiltin(k: 'hub' | 'switch' | 'pc' | 'server' | 'cloud', at: { x: number; y: number } | null) {
     if (k === 'hub' || k === 'switch') { await this.addHub(k, at); return; }
     if (k === 'cloud') {
       this.addCloud();
@@ -1286,7 +1290,8 @@ export class LabWorkspace implements OnDestroy {
     }
     const before = new Set(this.devs().map(d => d.id));
     try {
-      await this.backend.emuAddComputer('', false); await this.lab.refresh();
+      if (k === 'server') await this.backend.emuAddServer('', false); else await this.backend.emuAddComputer('', false);
+      await this.lab.refresh();
       const nd = this.devs().find(d => !before.has(d.id));
       if (nd && at) this.lab.place(nd.id, at.x, at.y);
       if (nd) this.select(nd);
@@ -2237,8 +2242,9 @@ export class LabWorkspace implements OnDestroy {
     if (h === LOCAL_HOST) { void this.backend.clipboardSet(`target remote localhost:${port}`).then(() => this.ui.toast(tr('Copied: the GDB line'), 'success')); return; } // on this computer: no tunnel
     void this.backend.clipboardSet(`ssh -N -L ${port}:127.0.0.1:${port} ${addr}\n# then, in GDB:\ntarget remote localhost:${port}`).then(() => this.ui.toast(tr('Copied: the SSH tunnel and the GDB line'), 'success'));
   }
+  svcOf(s: EmuServer) { return [{ n: 'HTTP', on: s.http }, { n: 'FTP', on: s.ftp }, { n: 'TFTP', on: s.tftp }, { n: 'DHCP', on: s.dhcp }]; }
   roleOfDev(d: LabDevice): DevRole { return (d.role as DevRole) || this.defRole(d); }
-  defRole(d: LabDevice): DevRole { return d.board ? 'mcu' : d.computer ? 'pc' : roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? ''); }
+  defRole(d: LabDevice): DevRole { return d.board ? 'mcu' : d.server ? 'server' : d.computer ? 'pc' : roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? ''); }
   /** The address shown under a computer's name: its first data-port address. */
   dataAddr(d: LabDevice) {
     for (const p of Object.keys({ ...(d.addrs ?? {}), ...(d.running ? d.net?.addrs ?? {} : {}) }).map(Number).sort((a, b) => a - b)) {

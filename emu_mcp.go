@@ -297,6 +297,7 @@ var mcpLabTools = []mcpTool{
 			"last":   map[string]any{"type": "integer", "description": "list: how many (default 20)"},
 		}, "action")},
 	mcpMCUTool,
+	mcpServerTool,
 }
 
 // emuMCPID finds a switch by its name (or id).
@@ -1184,6 +1185,8 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		return red, nil
 	case "lab_microcontrollers":
 		return a.emuMCPMCU(args, v, ask)
+	case "lab_server":
+		return a.emuMCPServer(args, v, ask)
 	case "lab_check_cabling":
 		nv, err := a.EmuCheckCabling()
 		if err != nil {

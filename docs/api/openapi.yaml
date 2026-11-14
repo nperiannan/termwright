@@ -2366,6 +2366,95 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/server:
+        post:
+            operationId: tool_server
+            tags:
+                - Tools
+            summary: Servers in the emulated lab
+            description: 'Servers in the emulated lab: an Alpine Linux computer with HTTP, FTP and TFTP from one shared folder (/srv), DHCP on its data port 1 and SSH/SFTP for files (BusyBox and Dropbear). Its services answer on its management address too, so a switch can fetch a file over its management VR (EXOS: download url http://<server>/<file> vr VR-Mgmt). Actions: add (a new server, on a KVM host), show (its settings, services, files, DHCP leases and how to reach it), set (change settings: http, ftp, tftp, tftp_write, dhcp, from, to, gateway, dns, lease_min, boot_file, boot_from), upload (files from this computer into its shared folder), delete (files or folders of the shared folder). Changes are asked in Termwright first. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - add
+                                        - show
+                                        - set
+                                        - upload
+                                        - delete
+                                    type: string
+                                boot_file:
+                                    description: 'DHCP option 67: a file of the shared folder'
+                                    type: string
+                                boot_from:
+                                    description: 'DHCP: the TFTP server it names (default itself)'
+                                    type: string
+                                dhcp:
+                                    type: boolean
+                                dir:
+                                    description: 'upload: a folder in the shared folder (default its top)'
+                                    type: string
+                                dns:
+                                    type: string
+                                files:
+                                    description: 'upload: paths on this computer; delete: paths in the shared folder'
+                                    items:
+                                        type: string
+                                    type: array
+                                from:
+                                    description: 'DHCP: the first address it gives'
+                                    type: string
+                                ftp:
+                                    type: boolean
+                                gateway:
+                                    type: string
+                                host:
+                                    description: 'add: the KVM host (default the lab''s)'
+                                    type: string
+                                http:
+                                    type: boolean
+                                lease_min:
+                                    type: integer
+                                server:
+                                    description: the server (show, set, upload, delete)
+                                    type: string
+                                start:
+                                    description: 'add: start it at once'
+                                    type: boolean
+                                tftp:
+                                    type: boolean
+                                tftp_write:
+                                    description: uploads by TFTP (a switch saving its configuration)
+                                    type: boolean
+                                to:
+                                    description: 'DHCP: the last'
+                                    type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/test:
         post:
             operationId: tool_test
@@ -2985,6 +3074,11 @@ components:
                 gdb:
                     description: a microcontroller's GDB server port on its host (0 = off)
                     type: integer
+                server:
+                    description: a server's settings (its services)
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuServer'
+                        - type: "null"
                 desktop:
                     description: a computer with a desktop and Firefox on its screen
                     type: boolean
@@ -3709,6 +3803,63 @@ components:
             required:
                 - sent
                 - got
+        EmuServer:
+            type: object
+            properties:
+                http:
+                    type: boolean
+                httpPort:
+                    description: 0 = 80
+                    type: integer
+                ftp:
+                    type: boolean
+                ftpPort:
+                    description: 0 = 21
+                    type: integer
+                tftp:
+                    type: boolean
+                tftpWrite:
+                    description: uploads by TFTP (a switch saving its configuration)
+                    type: boolean
+                dhcp:
+                    description: on DHCPPort
+                    type: boolean
+                dhcpPort:
+                    description: the data port it serves (0 = 1)
+                    type: integer
+                from:
+                    description: the first address it gives
+                    type: string
+                to:
+                    description: the last
+                    type: string
+                gateway:
+                    description: option router ("" = none)
+                    type: string
+                dns:
+                    description: option dns ("" = none)
+                    type: string
+                lease:
+                    description: seconds (0 = 3600)
+                    type: integer
+                bootFile:
+                    description: option 67 (a file in the shared folder)
+                    type: string
+                bootFrom:
+                    description: the TFTP server it names (siaddr, option 66; "" = itself)
+                    type: string
+                user:
+                    description: the FTP and SSH user ("" = lab); its password is kept in the keychain
+                    type: string
+                installed:
+                    description: its packages are in its disk
+                    type: boolean
+            required:
+                - http
+                - ftp
+                - tftp
+                - tftpWrite
+                - dhcp
         EmuSlot:
             type: object
             properties:
@@ -4022,6 +4173,9 @@ components:
                 sha256:
                     description: of the file, to know it is on a host already
                     type: string
+                serverImage:
+                    description: 'a Server image: a Linux computer image with the server''s packages in it (server.go)'
+                    type: boolean
                 deviceType:
                     description: the sessions' device type (Linux, Cisco IOS…)
                     type: string
@@ -4439,6 +4593,9 @@ components:
                 dnsSet:
                     description: they were set (not the default)
                     type: boolean
+                serverImage:
+                    description: 'the Server image: "ready", "making" or "" (none yet: the first server makes it)'
+                    type: string
                 notes:
                     description: notes and areas on the canvas
                     type:

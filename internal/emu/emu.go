@@ -32,11 +32,12 @@ import (
 type Image struct {
 	ID              string              `json:"id"`
 	Name            string              `json:"name"`
-	File            string              `json:"file"`       // the image on this computer
-	FileName        string              `json:"fileName"`   // its name on the hosts
-	Size            int64               `json:"size"`       // bytes
-	SHA256          string              `json:"sha256"`     // of the file, to know it is on a host already
-	DeviceType      string              `json:"deviceType"` // the sessions' device type (Linux, Cisco IOS…)
+	File            string              `json:"file"`                  // the image on this computer
+	FileName        string              `json:"fileName"`              // its name on the hosts
+	Size            int64               `json:"size"`                  // bytes
+	SHA256          string              `json:"sha256"`                // of the file, to know it is on a host already
+	ServerImage     bool                `json:"serverImage,omitempty"` // a Server image: a Linux computer image with the server's packages in it (server.go)
+	DeviceType      string              `json:"deviceType"`            // the sessions' device type (Linux, Cisco IOS…)
 	CPUs            int                 `json:"cpus"`
 	RAM             int                 `json:"ram"`      // MB
 	NICs            int                 `json:"nics"`     // network ports, the first one is management
@@ -247,6 +248,7 @@ type VM struct {
 	Addrs       map[int]string `json:"addrs,omitempty"`       // data-port addresses typed on its console at each start (port number → address/bits, or "dhcp"), when its image has port address commands (Linux computers)
 	Routing     *Routing       `json:"routing,omitempty"`     // a Linux computer as a route generator (OSPF or BGP with FRR)
 	Desktop     bool           `json:"desktop,omitempty"`     // a Linux computer with a desktop and a web browser on its screen (a USB tablet for the mouse)
+	Server      *Server        `json:"server,omitempty"`      // a Linux computer as a server: HTTP, FTP, TFTP and DHCP for the lab (server.go)
 	X           int            `json:"x"`
 	Y           int            `json:"y"`
 }

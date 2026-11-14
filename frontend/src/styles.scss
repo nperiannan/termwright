@@ -281,6 +281,8 @@ details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top
 
 /* the lab canvas: the panels of hubs, L2 switches and clouds, the clients list (kept here: the workspace's own styles are at their budget) */
 app-lab-workspace {
+  .svc { display: flex; gap: 3px; justify-content: center; margin-top: 3px; span { font-size: 9px; font-weight: 700; letter-spacing: .03em; padding: 0 4px; border-radius: 4px; line-height: 14px;
+    background: color-mix(in srgb, var(--success, #1fa45a) 16%, transparent); color: var(--success, #1fa45a); &.off { background: var(--surface-2); color: var(--muted); } } }
   /* meters never run past their track (a switch can use more than 100 % of one vCPU); over 100 % turns amber */
   /* a microcontroller in the side pane: its board, firmware, console and debugger */
   .kv.mcu { margin-top: 8px; select { width: 100%; } label.ck { display: inline-flex; align-items: center; gap: 5px; } a { color: var(--accent); cursor: pointer; } a.off { opacity: .45; pointer-events: none; } }
@@ -314,3 +316,33 @@ app-lab-workspace {
 
 @keyframes twslowpulse { 50% { opacity: .55; box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger, #e5484d) 30%, transparent); } }
 @media (prefers-reduced-motion: reduce) { app-lab-workspace button.capstop { animation: none; } }
+
+/* a lab server in the side pane (lab-server.ts) */
+app-lab-server {
+  display: block; margin-top: 8px;
+  .srv { display: flex; flex-direction: column; gap: 5px; }
+  .sh { display: flex; align-items: center; gap: 6px; margin-top: 8px; b { font-size: 12px; } small { font-size: 11px; } .sp { flex: 1; } }
+  .sh:first-child { margin-top: 0; }
+  .sv { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 3px 6px; align-items: center; font-size: 12px; padding: 5px 0; border-top: 1px solid var(--line);
+    .d { grid-column: 2 / -1; color: var(--muted); font-size: 11.5px; line-height: 1.6; code { color: var(--text); } a { color: var(--accent); cursor: pointer; } }
+    a.l { color: var(--accent); cursor: pointer; white-space: nowrap; font-size: 11.5px; } }
+  .sw { position: relative; width: 28px; height: 16px; display: inline-block;
+    input { opacity: 0; position: absolute; inset: 0; margin: 0; cursor: pointer; z-index: 1; }
+    i { position: absolute; inset: 0; border-radius: 8px; background: #6b6e76; transition: background .15s;
+      &::after { content: ''; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: left .15s; } }
+    input:checked + i { background: var(--success, #1fa45a); &::after { left: 14px; } } }
+  input.pn { width: 58px; height: 22px; padding: 0 4px; font-size: 11.5px; }
+  .ck { display: inline-flex; gap: 4px; align-items: center; }
+  .dh { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 4px 8px; align-items: center; font-size: 11.5px; padding: 2px 0 4px 38px;
+    > span:nth-child(odd) { color: var(--muted); } input, select { height: 24px; font-size: 11.5px; min-width: 0; }
+    .rg { display: flex; gap: 4px; align-items: center; input { flex: 1; min-width: 0; } } }
+  .acc { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 4px 8px; font-size: 11.5px; > span:nth-child(odd) { color: var(--muted); } a { color: var(--accent); cursor: pointer; margin-left: 4px; } }
+  .ftab { border: 1px solid var(--line); border-radius: 8px; max-height: 220px; overflow-y: auto; }
+  .fr { display: grid; grid-template-columns: 18px minmax(0, 1fr) 62px; gap: 6px; align-items: center; padding: 4px 8px; font-size: 11.5px; border-top: 1px solid var(--line);
+    &:first-child { border-top: 0; } &.fh { background: var(--surface-2); color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
+    &.ls { grid-template-columns: 82px minmax(0, 1fr) 62px; } .n { text-align: right; color: var(--muted); white-space: nowrap; } }
+  label.fr { cursor: pointer; }
+  .fb { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; .sp { flex: 1; } }
+  .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .err { color: var(--danger); margin: 2px 0; }
+}

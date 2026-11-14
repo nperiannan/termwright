@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import {
+  EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
@@ -100,6 +101,14 @@ export class Backend {
   emuBoards() { return this.call<EmuBoard[]>('EmuBoards'); }
   emuAddFirmware(board: string, path: string, name: string, flashMb: number) { return this.call<LabView>('EmuAddFirmware', board, path, name, flashMb); }
   emuSampleFirmware(board: string) { return this.call<LabView>('EmuSampleFirmware', board); }
+  emuAddServer(host: string, start: boolean) { return this.call<LabView>('EmuAddServer', host, start); }
+  emuServerState(id: string) { return this.call<EmuServerView>('EmuServerState', id); }
+  emuSetServer(id: string, s: EmuServer) { return this.call<LabView>('EmuSetServer', id, s); }
+  emuServerPassword(id: string) { return this.call<string>('EmuServerPassword', id); }
+  emuServerUpload(id: string, files: string[], dir: string) { return this.call<EmuServerView>('EmuServerUpload', id, files, dir); }
+  emuServerDownload(id: string, name: string, to: string) { return this.call<void>('EmuServerDownload', id, name, to); }
+  emuServerDelete(id: string, names: string[]) { return this.call<EmuServerView>('EmuServerDelete', id, names); }
+  emuServerMkdir(id: string, name: string) { return this.call<EmuServerView>('EmuServerMkdir', id, name); }
   /** A microcontroller gets another firmware of its board (its flash is made again) and starts again. */
   emuFlashFirmware(id: string, imageId: string) { return this.call<LabView>('EmuFlashFirmware', id, imageId); }
   emuSetGdb(id: string, on: boolean) { return this.call<LabView>('EmuSetGDB', id, on); }
