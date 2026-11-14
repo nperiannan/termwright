@@ -775,6 +775,42 @@ func TestLoginPendingAAADroppedEnter(t *testing.T) {
 	}
 }
 
+// A yes/no question with its default after it ("(y/n) [n]", as Alpine's installer asks before erasing the disk) is
+// answered: yes while day 0 or an install confirms, else its default.
+func TestYesNoWithDefaultAfter(t *testing.T) {
+	for _, c := range []struct {
+		q       string
+		confirm bool
+		want    string
+	}{
+		{"WARNING: Erase the above disk(s) and continue? (y/n) [n] ", true, "y"},
+		{"Erase the above disk(s) and continue? (y/n) [n] ", false, "n"},
+		{"Keep the old configuration? (y/n) [y] ", false, "y"},
+	} {
+		a, b := net.Pipe()
+		got := make(chan string, 1)
+		go func() {
+			_, _ = b.Write([]byte("\r\n" + c.q))
+			buf := make([]byte, 8)
+			n, _ := b.Read(buf)
+			got <- strings.TrimSpace(string(buf[:n]))
+			_, _ = b.Write([]byte("\r\nsw # "))
+		}()
+		con := NewConsole(a)
+		con.Confirm = c.confirm
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_, err := con.Wait(ctx, 3*time.Second, nil, regexp.MustCompile(`# $`))
+		cancel()
+		if err != nil {
+			t.Fatalf("%q: %v", c.q, err)
+		}
+		if g := <-got; g != c.want {
+			t.Errorf("%q (confirm %v): typed %q, want %q", c.q, c.confirm, g, c.want)
+		}
+		con.Close()
+	}
+}
+
 // A question that would end the session takes no, whatever its default
 // (after a first-login questionnaire: "quit this shell session ? (Y/n)").
 func TestNoQuit(t *testing.T) {

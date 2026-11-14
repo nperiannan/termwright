@@ -287,10 +287,10 @@ def serve(c):
         l = line()
         if l is None: return
         if l == "root": w("\r\nWelcome to Alpine!\r\nlocalhost:~# ")
-        elif l.startswith("printf "):
+        elif l.startswith("printf ") or l.startswith("r=$(grep"):
             open(pidfile + ".ans", "w").write(l); w("\r\nlocalhost:~# ")
         elif l.startswith("setup-alpine"):
-            w("\r\nWARNING: Erase the above disk(s) and continue? [y/N]: ")
+            w("\r\nWARNING: The following disk(s) will be erased:\r\n  vda   (0.1 GB 0x1af4 )\r\nWARNING: Erase the above disk(s) and continue? (y/n) [n] ")
             if line() != "y": w("Aborted\r\n"); continue
             w("Installing system on /dev/vda:\r\nNew password: "); p1 = line()
             w("\r\nRetype password: "); p2 = line()

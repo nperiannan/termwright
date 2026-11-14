@@ -62,7 +62,10 @@ func lastLineOf(s string) string {
 }
 
 // yesNo is a yes/no question waiting at the end of the console.
-var yesNo = regexp.MustCompile(`(?i)[(\[]\s*(y/n|yes/no)\s*[)\]]\s*[:?]?\s*$`)
+// yesDefault: a question whose default, after it, is yes ("(y/n) [y]").
+var yesDefault = regexp.MustCompile(`(?i)\[\s*(y|yes)\s*\]\s*[:?]?\s*$`)
+
+var yesNo = regexp.MustCompile(`(?i)[(\[]\s*(y/n|yes/no)\s*[)\]]\s*(\[\s*(y|n|yes|no)\s*\])?\s*[:?]?\s*$`) // "(y/n) [n]": its default after it
 
 // rePrompt: how long a command may show no prompt before Enter is typed.
 var rePrompt = 15 * time.Second
@@ -245,7 +248,7 @@ func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Ans
 				send = "n"
 				if c.Confirm {
 					send = "y"
-				} else if q := tail[loc[0]:loc[1]]; (strings.Contains(q, "Y/") || strings.Contains(q, "Yes/")) && !leave.MatchString(lastLineOf(tail)) {
+				} else if q := tail[loc[0]:loc[1]]; (strings.Contains(q, "Y/") || strings.Contains(q, "Yes/") || yesDefault.MatchString(q)) && !leave.MatchString(lastLineOf(tail)) {
 					send = "y" // its default - but never to leave the session ("quit this shell session? (Y/n)")
 				}
 			}
