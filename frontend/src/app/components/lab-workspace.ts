@@ -481,7 +481,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 @if (cpuAdvice(d); as a) { <div class="cadv"><span>⚠ {{ a.text }}</span><button type="button" class="sm" (click)="a.apply()">{{ a.button }}</button></div> }
                 <div class="rnote ok">✓ {{ tr('Request and limit apply at once - no restart.') }}</div>
               </div></details> }
-            @if (emu() && d.computer) { <details class="sec dpc" [open]="isOpen('net', true)" (toggle)="setOpen('net', $any($event.target).open)"><summary>{{ tr('Network') }}</summary><div class="kv">
+            @if (emu() && d.computer) { <details class="sec dpc" [open]="isOpen('net')" (toggle)="setOpen('net', $any($event.target).open)"><summary>{{ tr('Network') }}</summary><div class="kv">
               @for (p of netPorts(d); track p) { <span>{{ tr('Port {0}', p) }}</span><span class="mono">{{ portSum(d, p) }}@if (d.running && d.net?.addrs?.[p]) { <span class="ok" [title]="tr('Read on its console: {0}', d.net!.addrs![p])"> ✓</span> }</span> }
             @if (d.dataGw || d.net?.gw) { <span>{{ tr('Gateway') }}</span><span class="mono">{{ d.dataGw || d.net?.gw }}</span> }</div></details> }
             @if (emu()) { @let hu = useOf(d); <details class="sec runs" [open]="isOpen('runs')" (toggle)="setOpen('runs', $any($event.target).open)"><summary>{{ tr('Runs on') }}</summary><div class="kv">
@@ -925,12 +925,12 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .g, .on { color: var(--success, #1fa45a); } .w, .boot { color: var(--warning, #e39b17); } .r, .bad { color: var(--danger); }
     i.d { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; flex: none; }
     i.d.ok, i.d.on { background: var(--success, #1fa45a); } i.d.boot { background: var(--warning, #e39b17); } i.d.bad, i.d.off { background: var(--danger); }
-    .main { display: grid; grid-template-columns: 230px 1fr 300px; min-height: 0; position: relative; }
+    .main { display: grid; grid-template-columns: 230px minmax(0, 1fr) 300px; min-height: 0; position: relative; }
     :host { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; }
     :host-context(.light) { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948; }
     app-traffic-page .trw td:nth-child(-n+3), app-traffic-page .trw th:nth-child(-n+3) { white-space: normal; } app-traffic-page .trw td:nth-child(2), app-traffic-page .trw td:nth-child(3) { min-width: 130px; } .nw { white-space: nowrap; }
     .ptabs small.run { color: var(--success, #1fa45a); }
-    .pal { border-right: 1px solid var(--line); background: var(--surface); padding: 10px; overflow: auto; }
+    .pal { border-right: 1px solid var(--line); background: var(--surface); padding: 10px; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; min-width: 0; }
     .srch { width: 100%; height: 30px; margin-bottom: 6px; position: sticky; top: 0; z-index: 4; box-shadow: 0 -10px 0 10px var(--surface), 0 6px 0 0 var(--surface); background: linear-gradient(var(--input-bg, transparent), var(--input-bg, transparent)), var(--surface); }
     .grp { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 12px 2px 6px; display: flex; justify-content: space-between; }
     .dev { display: flex; align-items: center; gap: 9px; padding: 6px 7px; border-radius: 8px; border: 1px solid transparent; cursor: grab; user-select: none;
@@ -1088,7 +1088,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .mvr { display: flex; gap: 6px; margin-bottom: 4px; select { flex: 1; min-width: 0; } }
     .node .nm.da { color: var(--accent); font-family: var(--mono, monospace); }
     .selh .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .selh .tst { flex: none; margin: 0 2px 0 8px; font-size: 10px; font-weight: 500; letter-spacing: .05em; .sd { font-style: normal; font-size: 7px; margin-right: 4px; vertical-align: 1px; } }
-    .dp { padding: 12px; .sub { color: var(--muted); font-size: 12px; margin: -2px 0 8px; } .kv.alert { margin-bottom: 8px; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--danger) 10%, transparent); }
+    .dp { padding: 12px; .sub { color: var(--muted); font-size: 12px; margin: -2px 0 10px; } .btns.act { margin: 0 0 12px; } .rsbox, .kv.alert { margin-bottom: 12px; } .kv.alert { margin-bottom: 8px; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--danger) 10%, transparent); }
       details.sec { border-top: 1px solid var(--line); padding: 8px 0 2px; > summary { cursor: pointer; list-style: none; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; &::-webkit-details-marker { display: none; } &::before { content: '▸ '; } }
         &[open] > summary::before { content: '▾ '; } .kv { padding-bottom: 8px; } }
       .lnk { display: inline-block; color: var(--accent); cursor: pointer; margin-bottom: 6px; } }
@@ -1134,8 +1134,13 @@ export class LabWorkspace implements OnDestroy {
   /** The device panel's folding sections: Details open at first, the rest closed (a computer's Network too). */
   protected secs = signal<Record<string, boolean>>({});
   protected moveOpen = signal(false);
-  protected isOpen(k: string, dflt = false) { const v = this.secs()[k]; return v === undefined ? (k === 'details' || dflt) : v; }
-  protected setOpen(k: string, o: boolean) { if (this.isOpen(k, k === 'net') !== o) this.secs.update(m => ({ ...m, [k]: o })); }
+  /** The switch's sections in the side pane: one open at a time (Details at first), so a long topology keeps its room. */
+  private static readonly SECS = ['details', 'res', 'net', 'runs', 'cab', 'ck'];
+  protected isOpen(k: string) { const v = this.secs()[k]; return v === undefined ? k === 'details' : v; }
+  protected setOpen(k: string, o: boolean) {
+    if (this.isOpen(k) === o) return;
+    this.secs.update(m => o ? Object.fromEntries(LabWorkspace.SECS.map(x => [x, x === k])) : { ...m, [k]: false });
+  }
   /** A device's cables for its panel: its port, what is on the other end, and whether it is in a LAG. */
   protected cableRows(d: LabDevice) {
     return this.links().filter(k => k.a === d.id || k.b === d.id).map(k => k.a === d.id
