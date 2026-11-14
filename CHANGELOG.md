@@ -4,6 +4,8 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
+- **AI chat: copy buttons** (asked for): what you asked, each answer and each command's output have a copy button (it shows when the pointer is over them), as in VS Code.
+
 - **Fixes from the user's list, part 2**: *Set Up Remote Desktop* opened on the last result for good, so a desktop could not be set up again - not the other one (VNC after RDP) and not after its sessions were deleted; the dialog now opens on its form, and a finished setup offers *Set Up Again…*. The AI agent's *Read only* never asks: read-only commands run by themselves, production sessions too (nothing that changes anything runs in it). A screenshot on the clipboard pastes into the AI chat with the app's own Paste (⌘V / Ctrl+V, which reached the chat as text only); text selected in an answer is copied with Copy even while the message box has the focus. File Servers' firewall: the command to allow the servers has `sudo` on each line and follows the ports as they are typed (it needed Save, close and reopen); *Allow Termwright…* takes your sudo password on macOS and Linux (empty: the system's own password prompt), and firewalld opens a TFTP port other than 69 by number, now and after a restart.
 
 - Emulated lab, **KVM Hosts page touch-ups** (asked for): each host shows its state as a square badge (*ready*, *needs set up*, *N to fix*) and its switches as round counts with a white number - green running, orange booting, red failed (a running switch with a problem counts as failed; switches of other topologies count as running); the CPU and RAM meters sit on one line; the set-up output has *Copy Log* and a real *Close* button.

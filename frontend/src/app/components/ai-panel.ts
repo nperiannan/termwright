@@ -107,7 +107,8 @@ function spans(t: string): Span[] {
       }
       @for (m of msgs(); track m.id) {
         @if (m.role === 'user') {
-          <div class="msg"><div class="who"><span class="av u">{{ initials }}</span>{{ tr('You') }} <span class="when">{{ time(m.time) }}</span></div>
+          <div class="msg"><div class="who"><span class="av u">{{ initials }}</span>{{ tr('You') }} <span class="when">{{ time(m.time) }}</span>
+            <span class="grow"></span><button type="button" class="mc" (click)="copy(m.text)" [title]="tr('Copy what you asked')" [attr.aria-label]="tr('Copy what you asked')"><app-icon name="copy" [size]="12" /></button></div>
             <div class="ub">
               @for (i of m.images ?? []; track $index) { @if (i.url) { <img class="img" [src]="i.url" [alt]="i.name" /> } @else { <span class="cx"><app-icon name="image" [size]="12" />{{ i.name }}</span> } }
               @if (m.ctx?.length) { <div class="ctx">@for (c of m.ctx!; track $index) { <span class="cx"><app-icon name="shell" [size]="12" /><b>{{ c.label }}</b> · {{ c.detail }}</span> }</div> }
@@ -115,7 +116,8 @@ function spans(t: string): Span[] {
         } @else {
           <div class="msg"><div class="who"><span class="av a"><app-icon name="sparkles" [size]="12" /></span>AI Assistant
             @if (m.model) { <span class="when" [title]="m.model">{{ nice(m.model) }}{{ m.secs ? ' · ' + m.secs + ' s' : '' }}</span> }
-            @if (m.usage) { <span class="when tok" [title]="tr('Tokens as the AI service counted them: {0} sent (the chat so far and the instructions), {1} in the answer', m.usage.in.toLocaleString(), m.usage.out.toLocaleString())">↑ {{ k(m.usage.in) }} ↓ {{ k(m.usage.out) }}</span> }</div>
+            @if (m.usage) { <span class="when tok" [title]="tr('Tokens as the AI service counted them: {0} sent (the chat so far and the instructions), {1} in the answer', m.usage.in.toLocaleString(), m.usage.out.toLocaleString())">↑ {{ k(m.usage.in) }} ↓ {{ k(m.usage.out) }}</span> }
+            @if (m.text) { <span class="grow"></span><button type="button" class="mc" (click)="copy(m.text)" [title]="tr('Copy the answer')" [attr.aria-label]="tr('Copy the answer')"><app-icon name="copy" [size]="12" /></button> }</div>
             @if (m.error) { <div class="ab err">{{ m.error }}</div> }
             @if (m.text) {
               <div class="ab">
@@ -162,7 +164,7 @@ function spans(t: string): Span[] {
                     @case ('record') { <app-icon name="record" [size]="11" /> {{ tr('Recorder') }} {{ s.command }} · <b>{{ s.tab }}</b> }
                     @default { <code>{{ s.command }}</code> {{ tr('on') }} <b>{{ s.tab }}</b> } }</span>
                   <span class="hint">{{ s.note || (s.auto ? tr('auto') : s.state === 'done' ? tr('allowed') : '') }}</span></summary>
-                  @if (s.output) { <pre>{{ s.output }}</pre> }</details>
+                  @if (s.output) { <div class="so"><button type="button" class="mc" (click)="copy(s.output)" [title]="tr('Copy the output')" [attr.aria-label]="tr('Copy the output')"><app-icon name="copy" [size]="12" /></button><pre>{{ s.output }}</pre></div> }</details>
               }
             }
           </div>
@@ -245,8 +247,12 @@ function spans(t: string): Span[] {
     .ib:hover { color: var(--text); background: var(--hover); } .ib.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); } .ib.sm { width: 24px; height: 24px; }
     .conv { flex: 1; overflow: auto; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
     .msg { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-    .who { display: flex; align-items: center; gap: 7px; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; }
+    .who { display: flex; align-items: center; gap: 7px; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; .grow { flex: 1; } }
+    .mc { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .12s;
+      &:hover { background: var(--surface-2); color: var(--text); } &:focus-visible { opacity: 1; } }
+    .msg:hover .who .mc, .so:hover .mc { opacity: 1; }
     .ub, .ab, .ut { user-select: text; -webkit-user-select: text; }
+    .so { position: relative; .mc { position: absolute; top: 4px; right: 6px; background: var(--surface); } }
     .av { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; flex: none; }
     .av.u { background: #7c5cff; color: #fff; } .av.a { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
     .when, .hint { color: var(--muted); font-weight: 400; font-size: calc(11px * var(--ui-scale, 1)); }
