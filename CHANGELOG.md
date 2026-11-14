@@ -2,6 +2,10 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **Team server: model, serial number and MAC on Inventory.** The admin page's Inventory has **Model**, **Serial #** and **MAC** columns (searched and exported to CSV too). The team server reads them itself: it logs in to EXOS, VOSS and Cisco IOS devices over SSH (or Telnet), turns paging off, runs the show commands and logs out, with the **Device logins** on Discover - one per kind of device, the factory defaults until an owner or co-owner sets others (EXOS *admin* with no password, VOSS *rwa*). Devices are read when they are added (from a scan, *+ Add device* or Import CSV; can be turned off), and any time with **Read Device Facts** for the selected devices. A refused login shows as *login failed* on the device, with the reason on hover. The logins stay on the team server; members never get them. Members' Termwright also sends the serial number and base MAC (with the hostname and model) when it reads them, so devices are filled in without the logins too. A grey MAC was only seen on the network; the device's own base MAC replaces it once read.
+
 ## 0.35.0 (2026-11-15)
 
 - **Captures** (from the user's screenshot): the packet's detail under the table has a ✕ (and Esc) to close it; while a capture runs the table keeps the newest packets in view - at the bottom, followed unless you scroll up to read - and **Newest First** puts them at the top instead (kept for next time).
