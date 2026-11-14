@@ -112,6 +112,17 @@ func (a *App) OpenWebPage(tabID string, s session.Session, through, rawURL, brow
 		return WebOpened{}, errors.New("enter a web address that starts with http:// or https://")
 	}
 	s = a.withFolderDefaults(s)
+	if through != "device" && s.DeviceType != "" { // its type's SSH server does not pass connections on
+		dt := session.DeviceType{Name: s.DeviceType}
+		if a.terms != nil && a.terms.DeviceType != nil {
+			if d, ok := a.terms.DeviceType(s.DeviceType); ok {
+				dt = d
+			}
+		}
+		if !dt.Tunnels() {
+			return WebOpened{}, fmt.Errorf("%s is a %s device: its SSH server does not pass connections on, so no page can be opened through it - use Open Web Interface for its own pages, or a Linux session on its network (Tunnel in Global Options → Device Types)", orStr(s.Name, s.Hostname), s.DeviceType)
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	wp, err := a.terms.OpenWebProxy(ctx, tabID, s, tabID, through == "device")

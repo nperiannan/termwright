@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Backend, WebServerState, errText } from '../core/backend';
 import { Ui } from '../core/ui.service';
+import { dtTunnels } from '../core/models';
 import { Icon } from '../components/icon';
 import { Autofocus } from '../core/autofocus';
 
@@ -66,12 +67,17 @@ const store = {
         @if (direct() !== null) {
           <p class="hint">Closing the window ends the tunnel and deletes the profile - no cookies or logins are kept. A device with a self-signed certificate shows the browser's warning; continue there if you trust it.</p>
         }
+        @if (noTunnel()) {
+          <p class="err">{{ name() }} is {{ aType() }} device: its SSH server does not pass connections on, so no page can be opened through it.
+            For its own web pages use <a (click)="toDevice()">Open Web Interface</a>; to browse from its network, use a Linux session there (a lab Server, a jump host).
+            <span class="muted">If this device does forward, turn Tunnel on for its type in Global Options → Device Types.</span></p>
+        }
         @if (error()) { <p class="err">{{ error() }}</p> }
       </div>
       <div class="modal-foot">
         <span class="spacer"></span>
         <button type="button" (click)="ui.close()">Cancel</button>
-        <button type="submit" class="primary" [disabled]="busy() || !url.trim() || (direct() === false && !browsers().length)">{{ busy() ? 'Opening…' : 'Open' }}</button>
+        <button type="submit" class="primary" [disabled]="busy() || !url.trim() || noTunnel() || (direct() === false && !browsers().length)">{{ busy() ? 'Opening…' : 'Open' }}</button>
       </div>
     </form>
   </div>
@@ -129,6 +135,10 @@ export class WebOpenDialog {
   }
 
   readonly name = computed(() => this.req()?.session.name || this.req()?.session.hostname || 'this session');
+  /** Through a session whose SSH server does not pass connections on (EXOS, VOSS, Cisco IOS by default). */
+  readonly noTunnel = computed(() => { const r = this.req(); return !!r && r.through === 'session' && !dtTunnels(this.ui.settings()?.deviceTypes, r.session.deviceType); });
+  aType() { const t = this.req()?.session.deviceType ?? ''; return /^[aeiou]/i.test(t) ? 'an ' + t : 'a ' + t; }
+  toDevice() { const r = this.req(); if (r) { this.ui.webOpen.set({ ...r, through: 'device' }); this.url = ''; } }
   /** true: no proxy needed (device reached directly); false: through a tunnel; null: not known yet. */
   readonly direct = computed(() => {
     const r = this.req();

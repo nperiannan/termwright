@@ -36,6 +36,9 @@ type DeviceType struct {
 	WebHTTPS string `json:"webHttps,omitempty"`
 	WebOn    string `json:"webOn,omitempty"`
 	WebSave  string `json:"webSave,omitempty"`
+	// Tunnel: whether its SSH server passes connections on (TCP forwarding), which Open Web Page Through This
+	// Session needs: "off", "on", or "" = as the built-in type of that name says (EXOS, VOSS and Cisco IOS: off).
+	Tunnel string `json:"tunnel,omitempty"`
 	// AIReadOnly: commands the AI agent may run without asking (beginnings,
 	// one per line, e.g. "show"); empty = the built-in list (show, display,
 	// ping, traceroute… - or the usual read-only commands for Linux).
@@ -123,6 +126,19 @@ func (d DeviceType) Backup() []string {
 // Web is how to see and turn on the device's web server: the commands that print its state, the patterns that
 // match while HTTP and HTTPS are on, the commands that turn both on and the ones that save it. ok is false when
 // the type has none.
+// Tunnels says whether its SSH server passes connections on (its own setting, else its built-in type's).
+func (d DeviceType) Tunnels() bool {
+	t := strings.ToLower(strings.TrimSpace(d.Tunnel))
+	if t == "" {
+		for _, b := range BuiltinDeviceTypes() {
+			if strings.EqualFold(b.Name, d.Name) {
+				t = b.Tunnel
+			}
+		}
+	}
+	return t != "off"
+}
+
 func (d DeviceType) Web() (check []string, http, https string, on, save []string, ok bool) {
 	pick := func(own string, f func(DeviceType) string) string {
 		if strings.TrimSpace(own) != "" {
@@ -194,17 +210,17 @@ func BuiltinDeviceTypes() []DeviceType {
 			// "Web access : Enabled (tcp port 80)", and "Enabled (SSL port 443)" once HTTPS is on (it needs a certificate)
 			WebCheck: "show management", WebHTTP: `(?i)web access\s*:\s*enabled\s*\(tcp`, WebHTTPS: `(?i)enabled\s*\(\s*ssl\s+port`,
 			WebOn:   "enable web http\nconfigure ssl certificate privkeylen 2048 country US organization Lab common-name {name}\nenable web https",
-			WebSave: "save configuration"},
+			WebSave: "save configuration", Tunnel: "off"},
 		{Name: "VOSS", Protocol: ProtoSSH2, Prompt: `:\d+(\([^)]*\))?[>#] ?$`, BackupCommands: "show running-config",
 			LoginSteps: []LogonAction{step("Login:", `\s`, false), step("Password:", `\w`, true)},
 			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal more disable", false)},
 			// the web server serves HTTPS when it is on; "secure-only" turns HTTP off
 			WebCheck: "show web-server", WebHTTP: `(?is)status\s*:\s*enabled.*secure[ -]?only\s*:\s*disabled`, WebHTTPS: `(?i)status\s*:\s*enabled`,
 			WebOn:   "configure terminal\nweb-server enable\nno web-server secure-only\nend",
-			WebSave: "save config"},
+			WebSave: "save config", Tunnel: "off"},
 		{Name: "Cisco IOS", Protocol: ProtoSSH2, Prompt: `[>#] ?$`, BackupCommands: "show running-config",
 			LoginSteps: []LogonAction{step("Username:", `\s`, false), step("Password:", `\w`, true)},
-			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal length 0", false)}},
+			AfterLogin: []LogonAction{step(">", "enable", false), step("#", "terminal length 0", false)}, Tunnel: "off"},
 		{Name: "Linux", Protocol: ProtoSSH2, Prompt: `[$#] ?$`,
 			LoginSteps: []LogonAction{step("login:", `\s`, false), step("Password:", `\w`, true)}},
 	}

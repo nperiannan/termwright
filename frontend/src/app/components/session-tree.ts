@@ -8,7 +8,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { followJump } from '../core/jump-refs';
 import { Backend } from '../core/backend';
-import { SessionNode } from '../core/models';
+import { SessionNode, dtTunnels } from '../core/models';
 import { Tabs } from '../core/tabs.service';
 import { MenuItem, Ui } from '../core/ui.service';
 import { Icon } from './icon';
@@ -851,7 +851,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
             ] : [{ label: 'Connect SFTP Session', action: () => void this.tabs.openSession(n.path, 'sftp') }]),
           ] : n.protocol === 'WOL' ? [] : [{ label: 'Connect', action: () => this.connect(n) }]),
           ...(n.hostname && n.protocol !== 'RDP' && n.protocol !== 'VNC' ? [
-            ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', action: () => void this.openWeb(n.path, 'session') }] : []),
+            ...(n.protocol === 'SSH2' ? [{ label: 'Open Web Page Through This Session...', disabled: !dtTunnels(this.ui.settings()?.deviceTypes, n.deviceType), hint: dtTunnels(this.ui.settings()?.deviceTypes, n.deviceType) ? undefined : 'no forwarding', action: () => void this.openWeb(n.path, 'session') }] : []),
             ...(n.protocol === 'SSH2' ? [{ label: 'Set Up Remote Desktop...', action: () => void this.remoteDesktop.openFor(n.path) }] : []),
             ...(n.protocol === 'SSH2' ? [{ label: 'Diagnose Remote Desktop...', action: () => this.ui.openRemoteDiag(n.path, n.name, 'SSH2') }] : []),
             { label: 'Open Web Interface...', action: () => void this.openWeb(n.path, 'device') },

@@ -30,7 +30,7 @@ export interface Session {
 /** A login profile for a kind of device (EXOS, VOSS, Cisco IOS …). */
 export interface DeviceType {
   name: string; icon?: string; protocol: string; port: number; username: string; credential: string; initialCr: boolean;
-  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
+  loginSteps: LogonAction[] | null; afterLogin: LogonAction[] | null; prompt: string; backupCommands?: string; tunnel?: string; webCheck?: string; webHttp?: string; webHttps?: string; webOn?: string; webSave?: string; aiReadOnly?: string;
   facts?: FactRule[] | null;
 }
 /** A value read from command output after connecting: the first group of regex. every = at each connect. */
@@ -471,3 +471,12 @@ export interface EmuRoutingView extends EmuRouting { state: string; up: boolean;
 export interface LabHubPort { mode: 'access' | 'trunk'; vlan?: number; vlans?: number[] | null; }
 export interface LabHubCfg { rev: number; ports?: Record<string, LabHubPort> | null; mgmtIp?: string; mgmtVlan?: number; }
 export interface LabHubDetail { id: string; running: boolean; in: number[]; macs: { mac: string; vlan: number; port: number; age: number }[]; cfg?: LabHubCfg | null; sshOk: boolean; error?: string; }
+
+/** Device types whose SSH server does not pass connections on (TCP forwarding) unless their setting says it does. */
+const NO_TUNNEL = ['exos', 'voss', 'cisco ios'];
+/** Whether a session of this device type can open a web page through its SSH server (Open Web Page Through This Session). */
+export function dtTunnels(types: DeviceType[] | null | undefined, name: string | undefined): boolean {
+  if (!name) return true;
+  const t = (types ?? []).find(d => d.name.toLowerCase() === name.toLowerCase())?.tunnel?.toLowerCase() ?? '';
+  return t === 'on' || (t !== 'off' && !NO_TUNNEL.includes(name.toLowerCase()));
+}

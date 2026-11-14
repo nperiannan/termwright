@@ -1420,7 +1420,8 @@ How it works:
 2. It starts **Chrome, Edge, Chromium, Brave or Firefox** (choose in the dialog; the choice is remembered) as a **separate window with a temporary profile** that sends every request - and every name lookup - through the tunnel. Internal names such as `nas.lan` or `fritz.box` are resolved by the server. Your normal browser windows are not affected.
 3. The web server sees a connection from the SSH server, not from your computer.
 4. **Closing the window** ends the tunnel and its login and **deletes the profile** - no cookies, logins or cache are kept. Quitting Termwright closes the tunnels too.
-5. **Before the browser opens**, Termwright tries the address through the session. When it does not answer it says why instead: an SSH server that does not forward connections (TCP forwarding off - EXOS and VOSS switches do not forward; use a Linux session on the same network, such as a lab Server), a name the server cannot resolve, or no answer. A name the server cannot resolve (a switch without a DNS client) is resolved on your computer and reached by its address.
+5. **Switches**: EXOS, VOSS and Cisco IOS SSH servers do not forward connections, so the item is off for their sessions (*no forwarding*); their own pages open with *Open Web Interface*. A device type's **Tunnel** setting (Global Options → Device Types) turns it on or off for other types.
+6. **Before the browser opens**, Termwright tries the address through the session. When it does not answer it says why instead: an SSH server that does not forward connections (TCP forwarding off - EXOS and VOSS switches do not forward; use a Linux session on the same network, such as a lab Server), a name the server cannot resolve, or no answer. A name the server cannot resolve (a switch without a DNS client) is resolved on your computer and reached by its address.
 
 ![Open Web Page Through This Session](screenshots/web-open-session.png)
 

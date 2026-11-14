@@ -5,7 +5,7 @@ import { LANGUAGES, previewLanguages, tr } from '../core/i18n';
 import { EFFORTS, modelChoices, readOnlyList } from '../core/ai-chat.service';
 import { Combo, ComboOption } from '../components/combo';
 import { Backend, errText } from '../core/backend';
-import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, MCPInfo, comboOf, FACT_NAMES } from '../core/models';
+import { ACTIONS, DeviceType, KeyBinding, PROTOCOLS, Settings, SmartCardInfo, SmartCardKey, SyncStatus, AISettings, AIStatus, MCPInfo, comboOf, FACT_NAMES, dtTunnels } from '../core/models';
 import { COLOR_KEYS, SCHEME_NAMES, fullScheme } from '../core/themes';
 import { Ui } from '../core/ui.service';
 import { Icon } from '../components/icon';
@@ -429,6 +429,9 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                     <textarea name="dtwo" class="mono" rows="2" [(ngModel)]="d.webOn" [placeholder]="webDefault(d.name, 'on') || 'Commands that turn HTTP and HTTPS on, one per line ({name} = the session)'" title="Turn On HTTP and HTTPS… in Open Web Interface runs these, after showing them"></textarea>
                     <input name="dtwv" class="mono" [(ngModel)]="d.webSave" [placeholder]="webDefault(d.name, 'save') || 'Command that saves the configuration'" />
                   </div>
+                  <label>Tunnel</label>
+                  <select name="dttn" [(ngModel)]="d.tunnel" title="Open Web Page Through This Session needs its SSH server to pass connections on (TCP forwarding); EXOS, VOSS and Cisco IOS do not">
+                    <option [ngValue]="undefined">{{ tunnelDefault(d.name) }}</option><option value="on">Its SSH server forwards connections</option><option value="off">No forwarding (Open Web Page Through This Session is off)</option></select>
                   <label>AI agent: read-only</label>
                   <textarea name="dtro" class="mono" rows="2" [(ngModel)]="d.aiReadOnly" [placeholder]="readOnlyDefault(d.name)"
                     title="The AI agent runs commands that begin with these without asking (except on production); everything else asks first. One per line."></textarea>
@@ -767,6 +770,7 @@ export class OptionsDialog implements OnInit {
   /** Built-in backup command shown when a device type has none of its own. */
   readOnlyDefault(name: string) { return 'Runs without asking (one per line; empty = ' + readOnlyList(name, '').join(', ') + ')'; }
   /** The built-in web server commands of EXOS and VOSS, shown as placeholders (an empty field uses them). */
+  tunnelDefault(name: string) { return dtTunnels([], name) ? 'Default: forwards connections' : 'Default: no forwarding (' + name + ')'; }
   webDefault(name: string, k: 'check' | 'http' | 'https' | 'on' | 'save') {
     const d: Record<string, Record<string, string>> = {
       exos: { check: 'show management', http: 'web access : enabled (tcp', https: 'enabled (ssl port', on: 'enable web http · ssl certificate · enable web https', save: 'save configuration' },
