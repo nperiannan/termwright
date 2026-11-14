@@ -2219,6 +2219,79 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/routes:
+        post:
+            operationId: tool_routes
+            tags:
+                - Tools
+            summary: A Linux computer of the lab as a route generator
+            description: 'A Linux computer of the lab as a route generator: FRR speaks OSPF or BGP with the switch on one of its data ports and advertises many prefixes (up to 10000); the computer answers ping on every address in them, so an ICMP stream from a test port to the prefixes shows whether the switch forwards to the routes it learned. The computer''s port needs a fixed address (lab_computer) and internet to install FRR; the switch needs OSPF on that network (or a BGP neighbour) and a route back to the test port. Actions: set (computer, proto ospf|bgp, port, routes, prefix 100.64.0.0/24, area, as, peer, peer_as), show (computer: neighbour state, prefixes), off (computer), stream (computer, from: the test port, pps: an ICMP stream to every prefix). Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - set
+                                        - show
+                                        - "off"
+                                        - stream
+                                    type: string
+                                area:
+                                    description: OSPF area (default 0.0.0.0)
+                                    type: string
+                                as:
+                                    description: 'BGP: its AS (default 65001)'
+                                    type: integer
+                                computer:
+                                    type: string
+                                from:
+                                    description: 'stream: the test port it is sent from'
+                                    type: string
+                                peer:
+                                    description: 'BGP: the switch''s address'
+                                    type: string
+                                peer_as:
+                                    description: 'BGP: the switch''s AS (default 65000)'
+                                    type: integer
+                                port:
+                                    description: its data port (1 = the first)
+                                    type: integer
+                                pps:
+                                    type: integer
+                                prefix:
+                                    description: the first prefix with its length (default 100.64.0.0/24)
+                                    type: string
+                                proto:
+                                    enum:
+                                        - ospf
+                                        - bgp
+                                    type: string
+                                routes:
+                                    description: prefixes to advertise (1-10000)
+                                    type: integer
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/test:
         post:
             operationId: tool_test

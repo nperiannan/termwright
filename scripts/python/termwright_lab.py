@@ -246,6 +246,15 @@ class Lab:
         """Type a line (and Enter) into a running install: on its serial console, or (console=False) its keyboard."""
         return self.tool("keys", install=install_id, text=line, enter=True, console=console)
 
+    def routes(self, computer: str, action: str = "show", **args) -> str:
+        """A Linux computer as a route generator (FRR): action set (proto="ospf"|"bgp", port, routes, prefix, area,
+        as_, peer, peer_as), show, off, stream (from_=test port, pps: an ICMP stream to every prefix)."""
+        if "as_" in args:
+            args["as"] = args.pop("as_")
+        if "from_" in args:
+            args["from"] = args.pop("from_")
+        return self.tool("routes", action=action, computer=computer, **args)
+
     def host_images(self, action: str = "matrix", **args) -> str:
         """Which KVM host has which image: action matrix, copy (image, hosts=[...] - none: every host without it),
         remove (image, host)."""

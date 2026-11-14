@@ -52,6 +52,21 @@ var mcpLabTools = []mcpTool{
 			"hosts":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "copy: host names"},
 			"host":   map[string]any{"type": "string", "description": "remove: the host"},
 		})},
+	{"lab_routes", "A Linux computer of the lab as a route generator: FRR speaks OSPF or BGP with the switch on one of its data ports and advertises many prefixes (up to 10000); the computer answers ping on every address in them, so an ICMP stream from a test port to the prefixes shows whether the switch forwards to the routes it learned. The computer's port needs a fixed address (lab_computer) and internet to install FRR; the switch needs OSPF on that network (or a BGP neighbour) and a route back to the test port. Actions: set (computer, proto ospf|bgp, port, routes, prefix 100.64.0.0/24, area, as, peer, peer_as), show (computer: neighbour state, prefixes), off (computer), stream (computer, from: the test port, pps: an ICMP stream to every prefix).",
+		mcpSchema(map[string]any{
+			"action":   map[string]any{"type": "string", "enum": []string{"set", "show", "off", "stream"}},
+			"computer": map[string]any{"type": "string"},
+			"proto":    map[string]any{"type": "string", "enum": []string{"ospf", "bgp"}},
+			"port":     map[string]any{"type": "integer", "description": "its data port (1 = the first)"},
+			"routes":   map[string]any{"type": "integer", "description": "prefixes to advertise (1-10000)"},
+			"prefix":   map[string]any{"type": "string", "description": "the first prefix with its length (default 100.64.0.0/24)"},
+			"area":     map[string]any{"type": "string", "description": "OSPF area (default 0.0.0.0)"},
+			"as":       map[string]any{"type": "integer", "description": "BGP: its AS (default 65001)"},
+			"peer":     map[string]any{"type": "string", "description": "BGP: the switch's address"},
+			"peer_as":  map[string]any{"type": "integer", "description": "BGP: the switch's AS (default 65000)"},
+			"from":     map[string]any{"type": "string", "description": "stream: the test port it is sent from"},
+			"pps":      map[string]any{"type": "integer"},
+		})},
 	{"lab_radius", "The lab's built-in RADIUS server, for 802.1X and MAC logins on the switches: it runs on every host of the lab and answers the switches there (EAP-MD5, PAP, MAC authentication; accepted users get their VLAN as Tunnel-Private-Group-Id). Actions: show (settings, where the switches reach it, counts), log (the last logins), set (on, port, secret, mab, mab_vlan), add_user (user - a name or a pattern like user* - password, vlan), remove_user (user). Secrets and passwords are left out unless reveal is true (for typing them into a switch's configuration, not for the chat).",
 		mcpSchema(map[string]any{
 			"action":   map[string]any{"type": "string", "enum": []string{"show", "log", "set", "add_user", "remove_user"}},
@@ -594,6 +609,62 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				return "", err
 			}
 			return "Removed.\n" + show(nm), nil
+		}
+		return "", errors.New("unknown action")
+	case "lab_routes":
+		d, err := emuMCPID(v, argStr(args, "computer"))
+		if err != nil {
+			return "", err
+		}
+		switch argStr(args, "action") {
+		case "show", "":
+			rv, err := a.EmuRouting(d.ID)
+			if err != nil {
+				return "", err
+			}
+			return emuRoutingText(d.Hostname, rv) + "\n" + rv.Raw, nil
+		case "set":
+			r := emu.Routing{Proto: argStr(args, "proto"), Port: argInt(args, "port", 1, 64), Routes: argInt(args, "routes", 100, emu.RoutesMax), Prefix: orStr(argStr(args, "prefix"), "100.64.0.0/24"),
+				Area: argStr(args, "area"), AS: argInt(args, "as", 0, 4294967295), Peer: argStr(args, "peer"), PeerAS: argInt(args, "peer_as", 0, 4294967295)}
+			if err := light("Claude makes a route generator", fmt.Sprintf("Claude (through the Termwright connector) sets up %s on %s with %d prefixes.", strings.ToUpper(r.Proto), d.Hostname, r.Routes)); err != nil {
+				return "", err
+			}
+			rv, err := a.EmuSetRouting(d.ID, r)
+			if err != nil {
+				return "", err
+			}
+			return emuRoutingText(d.Hostname, rv), nil
+		case "off":
+			if err := light("Claude stops a route generator", "Claude (through the Termwright connector) stops the routes of "+d.Hostname+"."); err != nil {
+				return "", err
+			}
+			if _, err := a.EmuSetRouting(d.ID, emu.Routing{}); err != nil {
+				return "", err
+			}
+			return "Stopped: its routes are gone and FRR is stopped.", nil
+		case "stream":
+			tv, err := a.EmuTraffic()
+			if err != nil {
+				return "", err
+			}
+			from := ""
+			for _, t := range tv.Testers {
+				if strings.EqualFold(t.Name, argStr(args, "from")) || t.ID == argStr(args, "from") {
+					from = t.ID
+				}
+			}
+			if from == "" {
+				return "", errors.New("no test port " + argStr(args, "from"))
+			}
+			if err := light("Claude adds a stream", "Claude (through the Termwright connector) adds an ICMP stream to the routes of "+d.Hostname+"."); err != nil {
+				return "", err
+			}
+			nv, err := a.emuRoutingStream(d.ID, from, argInt(args, "pps", 1000, 100000))
+			if err != nil {
+				return "", err
+			}
+			s := nv.Streams[len(nv.Streams)-1]
+			return fmt.Sprintf("Stream %q: ICMP from %s to %s and on (%d addresses), %d pps for %d s; start it with lab_traffic start.", s.Name, argStr(args, "from"), s.DstIP, s.Mods[0].Count, s.PPS, s.Seconds), nil
 		}
 		return "", errors.New("unknown action")
 	case "lab_radius":

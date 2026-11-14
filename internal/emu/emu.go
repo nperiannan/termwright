@@ -241,6 +241,7 @@ type VM struct {
 	CPUReq      int            `json:"cpuReq,omitempty"`      // its CPU request in millicores (kubectl's 250m): its share when the host is busy (cpu.weight = request/10); nothing is reserved
 	CPULim      int            `json:"cpuLim,omitempty"`      // its CPU limit in millicores (0 = none): the most it may use (cpu.max)
 	Addrs       map[int]string `json:"addrs,omitempty"`       // data-port addresses typed on its console at each start (port number → address/bits, or "dhcp"), when its image has port address commands (Linux computers)
+	Routing     *Routing       `json:"routing,omitempty"`     // a Linux computer as a route generator (OSPF or BGP with FRR)
 	X           int            `json:"x"`
 	Y           int            `json:"y"`
 }
