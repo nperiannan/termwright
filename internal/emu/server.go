@@ -151,7 +151,8 @@ func ServerScript(s Server, password, mac string, dns []string) string {
 		if s.TFTPWrite {
 			w = "-c "
 		}
-		fmt.Fprintf(&st, "bb udpsvd -vE 0.0.0.0 69 $(command -v busybox-extras || echo busybox) tftpd %s-u %s /srv >/var/log/tw-tftpd.log 2>&1 &\n", w, user)
+		// BusyBox's tftpd runs from inetd (Alpine's BusyBox has no udpsvd)
+		fmt.Fprintf(&st, "printf 'tftp\\tdgram\\tudp\\tnowait\\troot\\t%%s\\tbusybox-extras tftpd %s-u %s /srv\\n' \"$(command -v busybox-extras)\" > /etc/tw-inetd.conf\nbb inetd /etc/tw-inetd.conf\n", w, user)
 	}
 	if s.DHCP {
 		var c strings.Builder
@@ -196,10 +197,10 @@ func ServerOffScript() string {
 }
 
 // serverStop stops the services (the patterns do not match the shell that runs them).
-const serverStop = "for p in '[h]ttpd -p' '[f]tpd -w /srv' '[t]ftpd ' '[u]dhcpd /etc/udhcpd.conf'; do pkill -f \"$p\" 2>/dev/null; done\n"
+const serverStop = "for p in '[h]ttpd -p' '[f]tpd -w /srv' '[i]netd /etc/tw-inetd.conf' '[u]dhcpd /etc/udhcpd.conf'; do pkill -f \"$p\" 2>/dev/null; done\n"
 
 // ServerStatusScript prints which services run and the DHCP leases (for ParseServerStatus).
-const ServerStatusScript = `for x in 'http:[h]ttpd -p' 'ftp:[f]tpd -w /srv' 'tftp:[t]ftpd ' 'dhcp:[u]dhcpd /etc/udhcpd.conf' 'ssh:[d]ropbear'; do pgrep -f "${x#*:}" >/dev/null && echo "on ${x%%:*}"; done
+const ServerStatusScript = `for x in 'http:[h]ttpd -p' 'ftp:[f]tpd -w /srv' 'tftp:[i]netd /etc/tw-inetd.conf' 'dhcp:[u]dhcpd /etc/udhcpd.conf' 'ssh:[d]ropbear'; do pgrep -f "${x#*:}" >/dev/null && echo "on ${x%%:*}"; done
 { busybox-extras dumpleases -f /var/lib/udhcpd/udhcpd.leases 2>/dev/null || busybox dumpleases -f /var/lib/udhcpd/udhcpd.leases 2>/dev/null; } | sed 1d | sed 's/^/lease /'
 df -k /srv 2>/dev/null | awk 'NR==2{print "df " $2 " " $4}'
 `

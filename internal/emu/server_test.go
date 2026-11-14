@@ -42,7 +42,7 @@ func TestServerScript(t *testing.T) {
 	s := ServerDefaults("10.0.0.10/24")
 	s.Gateway, s.BootFile, s.BootFrom = "10.0.0.1", "summit.xos", "10.0.0.10"
 	sc := ServerScript(s, "pa'ss", "52:54:00:AB:CD:01", []string{"8.8.8.8", "1.1.1.1"})
-	for _, w := range []string{"apk add -q " + ServerPackages, "adduser -D -h /srv -s /bin/sh lab", `'pa'\''ss'`, "bb httpd -p 80 -h /srv", "ftpd -w /srv", "tftpd -c -u lab /srv",
+	for _, w := range []string{"apk add -q " + ServerPackages, "adduser -D -h /srv -s /bin/sh lab", `'pa'\''ss'`, "bb httpd -p 80 -h /srv", "ftpd -w /srv", "busybox-extras tftpd -c -u lab /srv", "bb inetd /etc/tw-inetd.conf",
 		"/52:54:00:ab:cd:01/", "printf 'interface %s\\n' \"${i:-eth1}\" > /etc/udhcpd.conf", "start 10.0.0.100\nend 10.0.0.199", "option router 10.0.0.1", "boot_file summit.xos", "siaddr 10.0.0.10", "bb udhcpd /etc/udhcpd.conf", "/etc/local.d/tw-server.start >/var/log/tw-server.log 2>&1 </dev/null", "echo tw-server-ok", "! nslookup dl-cdn.alpinelinux.org >/dev/null 2>&1; then printf 'nameserver %s\\n' 8.8.8.8 1.1.1.1 > /etc/resolv.conf"} {
 		if !strings.Contains(sc, w) {
 			t.Errorf("script lacks %q", w)

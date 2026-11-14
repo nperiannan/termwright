@@ -170,11 +170,11 @@ func (a *App) emuServerSetup(ctx context.Context, c *emu.Console, im emu.Image, 
 	if vv := emuLab.f.Lab.VMByID(v.ID); vv != nil && vv.Server != nil && !vv.Server.Installed {
 		vv.Server.Installed = true
 		_ = a.emuSave()
-		if !im.ServerImage && !emuHasServerImage() && !emuServerImageMaking { // the first: it becomes the Server image
-			emuServerImageMaking = true
-			id := v.ID
-			emuGo(func() { a.emuMakeServerImage(id) })
-		}
+	}
+	if !im.ServerImage && !emuHasServerImage() && !emuServerImageMaking { // no Server image yet: it becomes one
+		emuServerImageMaking = true
+		id := v.ID
+		emuGo(func() { a.emuMakeServerImage(id) })
 	}
 }
 
@@ -238,9 +238,16 @@ func (a *App) emuMakeServerImage(id string) {
 	dir := l.Dir
 	emuEv(id, "info", "making the Server image from it (it pauses for a few seconds)")
 	emuLab.mu.Unlock()
-	if _, err := a.emuComputerScript(id, "sync; echo ok", 2*time.Minute); err != nil {
-		fail(err)
-		return
+	for try := 0; ; try++ { // its boot's console may still be busy for a moment
+		_, err := a.emuComputerScript(id, "sync; echo ok", 2*time.Minute)
+		if err == nil {
+			break
+		}
+		if try == 60 || !strings.Contains(err.Error(), "typing its configuration") && !strings.Contains(err.Error(), "running and ready") {
+			fail(err)
+			return
+		}
+		time.Sleep(2 * time.Second)
 	}
 	h, err := a.emuMonitor(host, mon)
 	if err != nil {
