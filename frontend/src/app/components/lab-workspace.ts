@@ -5,13 +5,14 @@ import { ChartSeries } from './traffic-chart';
 import { StreamDetail } from './stream-detail';
 import { TrafficPage } from './traffic-page';
 import { TrafficLibrary } from './traffic-library';
+import { RadiusDialog } from './radius-dialog';
 import { VmScreen } from './vm-screen';
 import { LabOverview, OverviewAct } from './lab-overview';
 import { CmdPalette, PaletteCmd } from './cmd-palette';
 import type { LabHub, LabNote } from '../core/models';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
+import { EmuClientState, EmuSTPState, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -30,7 +31,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary, VmScreen, LabOverview, CmdPalette],
+  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" /> }
@@ -157,9 +158,18 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <app-traffic-page [traf]="traf()" [view]="trafView()" (viewChange)="trafView.set($event)" [kpis]="trafKpis()" [cards]="tpCards()" [selected]="tEd()?.id ?? ''"
           [throughput]="trafThroughput()" [loss]="trafLoss()" [latency]="trafLat()" [fmtPps]="fmtPps" [fmtPct]="fmtPct" [fmtMs]="fmtMs"
           (newTest)="ttests()?.newTest()" (newTester)="newTester(); trafView.set('streams')" (newStream)="newStream()" (start)="trafStart([])" (stop)="trafStop()" (report)="trafReport()"
-          (editTester)="editTester($event)" (removeTester)="tpRemove($event)" (library)="libOpen.set(true)">
+          (editTester)="editTester($event)" (removeTester)="tpRemove($event)" (library)="libOpen.set(true)" (radius)="radOpen.set(true)">
           @if (trafView() === 'tests') { <app-traffic-tests [testers]="traf()?.testers ?? []" [devs]="devs()" /> } @else { <ng-container [ngTemplateOutlet]="trafBody" /> }
         </app-traffic-page>
+        @if (radOpen()) { <app-radius-dialog (closed)="radOpen.set(false)" /> }
+        @if (cliOpen(); as c) {
+          <div class="cliov" (click)="cliOpen.set(null)"><div class="clidl" role="dialog" [attr.aria-label]="tr('Clients')" (click)="$event.stopPropagation()">
+            <div class="clih"><b>{{ tr('Clients of {0}', c.name) }}</b><span class="muted small">{{ tr('{0} clients · {1} in · {2} with an address · {3} refused', c.st.n, c.st.auth, c.st.bound, c.st.failed) }}</span><span class="sp"></span><a (click)="cliOpen.set(null)" [title]="tr('Close')">✕</a></div>
+            <div class="clit"><div class="clir h"><span>#</span><span>MAC</span><span>{{ tr('Address') }}</span><span>802.1X</span></div>
+              @for (r of c.st.list ?? []; track $index) { <div class="clir"><span class="muted">{{ $index + 1 }}</span><span class="mono">{{ r[0] }}</span><span class="mono">{{ r[1] || '-' }}</span><span [class.up]="r[2] === 'authenticated'" [class.dn]="r[2] === 'failed'" [title]="r[3] || ''">{{ r[2] ? tr(r[2]) : '-' }}@if (r[3]) { · {{ tr(r[3]) }} }</span></div> }
+              @if ((c.st.n ?? 0) > (c.st.list?.length ?? 0)) { <p class="muted small">{{ tr('The first {0} are listed.', c.st.list?.length ?? 0) }}</p> }</div>
+          </div></div>
+        }
         @if (libOpen()) { <app-traffic-library [testers]="traf()?.testers ?? []" (closed)="libOpen.set(false)" (applied)="traf.set($event); libOpen.set(false)" /> }
       }
       @if (page() === 'overview') { <app-lab-overview [devs]="devs()" [links]="links()" [hostNames]="ovHosts()" (act)="ovAct($event.what, $event.dev)" /> }
@@ -742,6 +752,21 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @if (t.id && (t.lacpUp || t.neighbor)) { <p class="rhint" [class.ok]="t.lacpUp?.startsWith('up')">@if (t.lacpUp) { LACP: {{ t.lacpUp }} }@if (t.lacpUp && t.neighbor) { · }@if (t.neighbor) { LLDP: {{ t.neighbor }} }</p> }
               <label><span>LLDP</span><input type="checkbox" class="cbx" [(ngModel)]="t.lldp" [title]="tr('Announce it by LLDP, so the switch sees Termwright and its name on the port')" /></label>
               <label><span>{{ tr('Multicast') }}</span><input [(ngModel)]="t.groups" placeholder="239.1.1.1, ff0e::1" [title]="tr('Groups it joins (IGMP / MLD reports), to receive multicast streams')" /></label>
+              <div class="tsec">{{ tr('Clients behind it') }}</div>
+              <label><span>{{ tr('Clients') }}</span><div class="two ru"><input type="number" min="0" max="4000" [(ngModel)]="t.cn" [placeholder]="tr('none')" [title]="tr('Hosts behind this test port, each with its own MAC (up to 4,000)')" /><span class="sfx"><input type="number" min="1" max="1000" [(ngModel)]="t.cRate" placeholder="50" [title]="tr('How many start a second')" /><i>/s</i></span></div></label>
+              @if (t.cn) {
+                <label><span>802.1X</span><input type="checkbox" class="cbx" [(ngModel)]="t.x1" [title]="tr('Each logs in by 802.1X (EAP-MD5) first, and sends nothing else before it is in')" /></label>
+                @if (t.x1) {
+                  <label><span>{{ tr('User') }}</span><input [(ngModel)]="t.xUser" placeholder="user{n}" [title]="tr('{n}: the client\\'s number (1, 2 …), {mac}: its MAC')" /></label>
+                  <label><span>{{ tr('Password') }}</span><input type="password" autocomplete="off" [(ngModel)]="t.xPass" placeholder="password" /></label>
+                }
+                <label><span>DHCP</span><input type="checkbox" class="cbx" [(ngModel)]="t.cDhcp" [title]="tr('Each takes an address by DHCP (after 802.1X)')" /></label>
+                <label><span>{{ tr('Groups') }}</span><input [(ngModel)]="t.cGroups" placeholder="239.1.1.1" [title]="tr('Multicast groups each client joins (IGMP / MLD), again on every query')" /></label>
+                @if (t.id && t.clientState; as cs) { <p class="rhint" [class.ok]="cs.failed === 0 && (t.x1 ? cs.auth : cs.bound) === cs.n">{{ t.x1 ? tr('{0} of {1} in', cs.auth, cs.n) + ' · ' : '' }}{{ tr('{0} with an address', cs.bound) }}@if (cs.failed) { · {{ tr('{0} refused', cs.failed) }} } · <a (click)="cliOpen.set({ name: t.name ?? '', st: cs })">{{ tr('Clients…') }}</a></p> }
+              }
+              <div class="tsec">{{ tr('Spanning tree') }}</div>
+              <label><span>STP</span><div class="two"><select [(ngModel)]="t.stpMode" [title]="tr('It sends BPDUs every 2 s as a bridge')"><option value="">{{ tr('off') }}</option><option value="stp">STP</option><option value="rstp">RSTP</option></select><select [(ngModel)]="t.stpPrio" [disabled]="!t.stpMode" [title]="tr('Bridge priority: lower than the switch\\'s makes this test port the root')">@for (p of stpPrios; track p) { <option [ngValue]="p">{{ p }}</option> }</select></div></label>
+              @if (t.id && t.stpMode) { <p class="rhint" [class.ok]="t.stpState?.rootIsUs">@if (t.stpState?.root) { {{ tr('Switch: root {0}', t.stpState!.root!) }}{{ t.stpState?.rootIsUs ? ' (' + tr('this test port') + ')' : '' }}@if (t.stpState?.role) { · {{ tr('its port: {0}', tr(t.stpState!.role!)) }} } · {{ tr('cost {0}', t.stpState?.cost ?? 0) }} } @else { {{ tr('No BPDU from the switch yet') }} } · <a (click)="topoChange(t)" [title]="tr('Its next BPDUs carry a topology change')">{{ tr('Topology change') }}</a></p> }
               <p class="muted small">{{ tr('A sender and counter on the host where the switch runs (no VM): tens of thousands of frames a second - for forwarding, VLANs, LAGs, ACLs and failover, not line rate.') }}</p>
             </div>
           }
@@ -942,7 +967,15 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .rsn { color: var(--warning, #e39b17); font-size: 12px; margin-left: 3px; } .rsb { flex: none; font: 600 10px var(--mono, monospace); color: var(--warning, #e39b17); border: 1px solid color-mix(in srgb, var(--warning, #e39b17) 45%, transparent); border-radius: 9px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
     .rsbox { display: flex; align-items: center; gap: 8px; margin: 6px 0; padding: 7px 9px; border-radius: 8px; font-size: 11.5px; background: color-mix(in srgb, var(--warning, #e39b17) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warning, #e39b17) 40%, transparent); span { flex: 1; } b { color: var(--warning, #e39b17); } }
     .rhint.ok { color: var(--success, #1fa45a); } .two.lg { grid-template-columns: minmax(0, 1fr) auto; align-items: center; .cbl { display: flex !important; align-items: center; gap: 5px; } .cbl input { width: auto !important; height: auto !important; } }
-    .rhint { margin: -3px 0 0 94px; color: var(--muted); font-size: 11px; &.bad { color: var(--warning, #e39b17); } } .two.ru { grid-template-columns: minmax(0, 1fr) 104px; }
+    .rhint { margin: -3px 0 0 94px; color: var(--muted); font-size: 11px; &.bad { color: var(--warning, #e39b17); } }
+    .rhint a { color: var(--accent); cursor: pointer; } .rhint.ok a { color: var(--accent); }
+    .sfx { display: flex; align-items: center; gap: 4px; input { flex: 1; min-width: 0; } i { font-style: normal; color: var(--muted); } }
+    .tsec { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .cliov { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.45); display: grid; place-items: center; }
+    .clidl { width: min(760px, 94vw); height: min(560px, 86vh); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.45); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden;
+      .clih { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); b { font-size: 15px; } a { cursor: pointer; color: var(--muted); } }
+      .clit { overflow: auto; p { padding: 8px 16px; } }
+      .clir { display: grid; grid-template-columns: 48px 150px 150px minmax(0, 1fr); gap: 10px; padding: 5px 16px; border-bottom: 1px solid var(--line); font-size: 12px; &.h { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-size: 11px; } .up { color: var(--success, #1fa45a); } .dn { color: var(--danger); } } } .two.ru { grid-template-columns: minmax(0, 1fr) 104px; }
     .cbx { height: auto !important; justify-self: start; } td.spk { white-space: nowrap; svg { vertical-align: middle; margin-right: 4px; } polyline { fill: none; stroke-width: 1.5; } .stx { stroke: var(--s1); } .srx { stroke: var(--s2); } }
     .tre { border-left: 1px solid var(--line); padding: 8px 12px; overflow: auto; display: grid; gap: 7px; align-content: start; background: var(--surface-2); font-size: 12px;
       .treh { display: flex; align-items: center; gap: 6px; position: sticky; top: -8px; z-index: 1; background: var(--surface-2); padding: 4px 0; margin-top: -4px; b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } a { cursor: pointer; color: var(--muted); padding: 0 2px; } } label { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: center; gap: 8px; > span { color: var(--muted); } } input, select { height: 26px; min-width: 0; } .two { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
@@ -1107,7 +1140,12 @@ export class LabWorkspace implements OnDestroy {
   protected traf = signal<EmuTrafficView | null>(null);
   protected sEd = signal<EmuStream | null>(null);
   /** The test port editor: a new one (vm, port), or one that exists (id, its name and where it is). */
-  protected tEd = signal<{ id?: string; name?: string; where?: string; vm: string; port: string; ip: string; gw: string; vlan?: number | null; ip6?: string; groups?: string; lldp?: boolean; speed?: number | null; lag?: string; lacpFast?: boolean; lacpUp?: string; neighbor?: string; free: string[] } | null>(null);
+  protected tEd = signal<{ id?: string; name?: string; where?: string; vm: string; port: string; ip: string; gw: string; vlan?: number | null; ip6?: string; groups?: string; lldp?: boolean; speed?: number | null; lag?: string; lacpFast?: boolean; lacpUp?: string; neighbor?: string; free: string[];
+    cn?: number | null; cRate?: number | null; cDhcp?: boolean; cGroups?: string; x1?: boolean; xUser?: string; xPass?: string; clientState?: EmuClientState | null;
+    stpMode?: '' | 'stp' | 'rstp'; stpPrio?: number; stpState?: EmuSTPState | null } | null>(null);
+  protected readonly stpPrios = Array.from({ length: 16 }, (_, i) => i * 4096);
+  protected radOpen = signal(false);
+  protected cliOpen = signal<{ name: string; st: EmuClientState } | null>(null);
   protected tpAt = signal<Record<string, { x: number; y: number }>>({});
   protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw', 'pcap'];
   protected libOpen = signal(false);
@@ -1322,12 +1360,25 @@ export class LabWorkspace implements OnDestroy {
     this.sEd.set(null);
     if (this.page() !== 'traffic') this.dock.set('traffic');
     void this.loadTraf();
-    this.tEd.set({ id: x.id, name: x.name, where: this.tpWhere(x), vm: x.vm, port: String(x.port), ip: x.dhcp ? 'dhcp' : x.ip ?? '', gw: x.gw ?? '', vlan: x.vlan || null, ip6: x.slaac ? 'slaac' : x.ip6 ?? '', groups: (x.groups ?? []).join(', '), lldp: x.lldp !== false, speed: x.speed || null, lag: x.lag ?? '', lacpFast: !!x.lacpFast, lacpUp: x.lacpUp, neighbor: x.neighbor, free: [] });
+    this.tEd.set({ id: x.id, name: x.name, where: this.tpWhere(x), vm: x.vm, port: String(x.port), ip: x.dhcp ? 'dhcp' : x.ip ?? '', gw: x.gw ?? '', vlan: x.vlan || null, ip6: x.slaac ? 'slaac' : x.ip6 ?? '', groups: (x.groups ?? []).join(', '), lldp: x.lldp !== false, speed: x.speed || null, lag: x.lag ?? '', lacpFast: !!x.lacpFast, lacpUp: x.lacpUp, neighbor: x.neighbor, free: [],
+      cn: x.clients?.n || null, cRate: x.clients?.rate || null, cDhcp: !!x.clients?.dhcp, cGroups: (x.clients?.groups ?? []).join(', '), x1: !!x.clients?.dot1x, xUser: x.clients?.dot1x?.user ?? '', xPass: x.clients?.dot1x?.password ?? '', clientState: x.clientState,
+      stpMode: x.stp?.mode ?? '', stpPrio: x.stp?.prio ?? 32768, stpState: x.stpState });
+  }
+  /** The clients and spanning tree a test port's editor says. */
+  private tpProto(t: NonNullable<ReturnType<typeof this.tEd>>, cur?: EmuTester): Pick<EmuTester, 'clients' | 'stp'> {
+    const n = Math.min(4000, Math.max(0, +(t.cn ?? 0) || 0));
+    const clients = n ? { n, rate: +(t.cRate ?? 0) || 0, dhcp: !!t.cDhcp, groups: (t.cGroups ?? '').split(/[\s,]+/).filter(Boolean), dot1x: t.x1 ? { user: (t.xUser ?? '').trim(), password: t.xPass ?? '' } : null, mac: cur?.clients?.mac } : null;
+    const stp = t.stpMode ? { mode: t.stpMode, prio: t.stpPrio ?? 32768, tc: cur?.stp?.tc ?? 0 } : null;
+    return { clients, stp };
+  }
+  async topoChange(t: NonNullable<ReturnType<typeof this.tEd>>) {
+    const cur = this.traf()?.testers.find(x => x.id === t.id); if (!cur?.stp) { this.ui.toast(tr('Save the spanning tree setting first')); return; }
+    try { this.traf.set(await this.backend.emuTesterSet({ ...cur, stp: { ...cur.stp, tc: (cur.stp.tc ?? 0) + 1 } })); this.ui.toast(tr('Topology change sent'), 'success'); } catch (e) { this.ui.error(e); }
   }
   async saveTester(t: NonNullable<ReturnType<typeof this.tEd>>) {
     const cur = this.traf()?.testers.find(x => x.id === t.id); if (!cur) return;
     try {
-      const v = await this.backend.emuTesterSet({ ...cur, name: (t.name ?? '').trim() || cur.name, ip: t.ip.trim(), gw: t.gw.trim(), vlan: +(t.vlan ?? 0) || 0, ip6: (t.ip6 ?? '').trim(), groups: (t.groups ?? '').split(/[\s,]+/).filter(Boolean), lldp: t.lldp !== false, speed: +(t.speed ?? 0) || 0, lag: (t.lag ?? '').trim(), lacpFast: !!t.lacpFast, dhcp: false, slaac: false });
+      const v = await this.backend.emuTesterSet({ ...cur, name: (t.name ?? '').trim() || cur.name, ip: t.ip.trim(), gw: t.gw.trim(), vlan: +(t.vlan ?? 0) || 0, ip6: (t.ip6 ?? '').trim(), groups: (t.groups ?? '').split(/[\s,]+/).filter(Boolean), lldp: t.lldp !== false, speed: +(t.speed ?? 0) || 0, lag: (t.lag ?? '').trim(), lacpFast: !!t.lacpFast, dhcp: false, slaac: false, ...this.tpProto(t, cur) });
       this.traf.set(v); this.tEd.set(null); this.ui.toast(tr('{0} saved', cur.name), 'success'); if (v.note) this.ui.toast(v.note);
     } catch (e) { this.ui.error(e); }
   }

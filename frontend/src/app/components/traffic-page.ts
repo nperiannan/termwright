@@ -20,6 +20,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
         <span class="seg2 tv"><a [class.on]="view() === 'streams'" (click)="viewChange.emit('streams')">{{ tr('Streams') }}</a><a [class.on]="view() === 'tests'" (click)="viewChange.emit('tests')">{{ tr('Tests') }}</a></span>
         <span class="sp"></span>
         @if (view() === 'tests') { <button type="button" (click)="newTest.emit()">＋ {{ tr('Test') }}</button> }
+        <button type="button" (click)="radius.emit()" [title]="tr('The lab\\'s RADIUS server: users, MAC logins and the logins it answered, for 802.1X on the switches')">{{ tr('RADIUS…') }}</button>
         <button type="button" (click)="library.emit()" [title]="tr('Ready tests: unicast, IMIX, QoS classes, MAC table fill, round trip, RFC 2544 and 2889 - and yours')">{{ tr('Library…') }}</button>
         <button type="button" (click)="newTester.emit()">＋ {{ tr('Test Port') }}</button>
         @if (view() === 'streams') { <button type="button" (click)="newStream.emit()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button>
@@ -37,7 +38,10 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
                 <div class="mono small">{{ t.dhcp ? (t.lease || 'DHCP…') : (t.ip || '-') }}@if (t.ip6 || t.slaac) { · {{ t.slaac ? (t.lease6 || 'SLAAC…') : t.ip6 }} }</div>
                 <div class="mono small muted">{{ t.mac }}@if (t.vlan) { · VLAN {{ t.vlan }} }@if (t.speed) { · {{ t.speed >= 1000 ? t.speed / 1000 + 'G' : t.speed + 'M' }} }</div>
                 @if (t.lag) { <div class="small" [class.up]="t.lacpUp?.startsWith('up')" [class.dn]="!t.lacpUp?.startsWith('up')" [title]="t.lacpUp || ''">LAG {{ t.lag }} · {{ t.lacpUp?.startsWith('up') ? tr('up') : tr('not up') }}</div> }
-                @if (t.neighbor) { <div class="small muted" [title]="tr('What the switch says on LLDP')">⇆ {{ t.neighbor }}</div> }</div>
+                @if (t.neighbor) { <div class="small muted" [title]="tr('What the switch says on LLDP')">⇆ {{ t.neighbor }}</div> }
+                @if (t.clients?.n) { @let cs = t.clientState;
+                  <div class="small" [class.up]="cs && cs.failed === 0 && (t.clients?.dot1x ? cs.auth : cs.bound) === cs.n" [class.dn]="!!cs?.failed" [title]="tr('Clients behind this test port')">{{ tr('{0} clients', t.clients!.n) }}@if (cs) { · @if (t.clients?.dot1x) { {{ tr('{0} in', cs.auth) }} }@else if (t.clients?.dhcp) { {{ tr('{0} with an address', cs.bound) }} }@if (cs.failed) { · {{ tr('{0} refused', cs.failed) }} } }</div> }
+                @if (t.stp?.mode) { <div class="small" [class.up]="t.stpState?.rootIsUs" [title]="tr('Spanning tree')">{{ t.stp!.mode.toUpperCase() }} · {{ t.stpState?.rootIsUs ? tr('root') : t.stpState?.got ? tr('not root') : tr('no BPDU yet') }}</div> }</div>
             } @empty { <p class="muted small">{{ tr('No test port yet: ＋ Test Port, or right-click a switch on the canvas → Add Test Port.') }}</p> }
           </aside>
         }
@@ -94,6 +98,7 @@ export class TrafficPage {
   readonly stop = output<void>();
   readonly report = output<void>();
   readonly library = output<void>();
+  readonly radius = output<void>();
   readonly editTester = output<EmuTester>();
   readonly removeTester = output<EmuTester>();
   protected tr = tr;
