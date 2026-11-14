@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -196,10 +195,22 @@ while [ $# -gt 0 ]; do
   shift
 done
 echo "$all" > "$pid.args"
-( python3 -c 'import socket,sys
-s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); s.bind(("127.0.0.1",int(sys.argv[1]))); s.listen(1)
+( python3 -c 'import socket,sys,threading
+s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); s.bind(("127.0.0.1",int(sys.argv[1]))); s.listen(4)
+def h(c):
+  c.sendall(b"MicroPython v1.25.0 on 2025-04-15; Generic ESP32S3 module with ESP32S3\r\n>>> "); buf=b""
+  while True:
+    d=c.recv(1024)
+    if not d: return
+    for ch in d:
+      if ch==3: c.sendall(b"\r\nKeyboardInterrupt: \r\n>>> ")
+      elif ch==13:
+        line=buf.decode(); buf=b""; out=""
+        if line.startswith("print(") and line.endswith(")"): out=str(eval(line[6:-1]))+"\r\n"
+        c.sendall((line+"\r\n"+out+">>> ").encode())
+      elif 32<=ch<127: buf+=bytes([ch])
 while True:
-  c,_=s.accept(); c.sendall(b"MicroPython v1.25.0 on ESP32S3\r\n>>> "); c.close()' "$port" & while :; do sleep 1; done ) >/dev/null 2>&1 &
+  c,_=s.accept(); threading.Thread(target=h,args=(c,),daemon=True).start()' "$port" & while :; do sleep 1; done ) >/dev/null 2>&1 &
 echo $! > "$pid"
 `
 
@@ -267,9 +278,26 @@ func TestEmuLocalMCURuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _ := io.ReadAll(c)
-	if !strings.Contains(string(b), "MicroPython") {
-		t.Fatalf("console %q", b)
+	buf := make([]byte, 200)
+	n, _ := c.Read(buf)
+	c.Close()
+	if !strings.Contains(string(buf[:n]), "MicroPython") {
+		t.Fatalf("console %q", buf[:n])
+	}
+	// the connector: list, and Python on its console
+	out, err := a.emuMCP("lab_microcontrollers", map[string]any{"action": "list"})
+	if err != nil || !strings.Contains(out, "This computer is a host") || !strings.Contains(out, "esp-1 | ESP32S3 | fw |") {
+		t.Fatalf("list: %v\n%s", err, out)
+	}
+	out, err = a.emuMCP("lab_console", map[string]any{"switch": "esp-1", "commands": []any{"print(6*7)", "x = 1"}, "timeout": 30})
+	if err != nil || !strings.Contains(out, "print(6*7)\n42\n") || !strings.Contains(out, "x = 1\n") {
+		t.Fatalf("console: %v\n%q", err, out)
+	}
+	if out, err := a.emuMCP("lab_microcontrollers", map[string]any{"action": "add", "board": "ESP32-S3", "names": "esp-b"}); err != nil || out != "Added on this computer: esp-b - not started (lab_power start)" {
+		t.Fatalf("add: %v %q", err, out)
+	}
+	if _, err := a.emuMCP("lab_microcontrollers", map[string]any{"action": "add", "board": "h2"}); err == nil || !strings.Contains(err.Error(), "MicroPython has none") {
+		t.Fatalf("h2 without a firmware: %v", err)
 	}
 	if _, err := a.EmuStop([]string{id}); err != nil {
 		t.Fatal(err)

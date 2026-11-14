@@ -2031,6 +2031,70 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/microcontrollers:
+        post:
+            operationId: tool_microcontrollers
+            tags:
+                - Tools
+            summary: Microcontrollers (ESP32-S3, -C3, -C6, -H2) in the emulated lab, run by Espressif's QEMU on a KVM host or on this computer (the one Termwright runs on; macOS or Linux, microcontrollers only)
+            description: 'Microcontrollers (ESP32-S3, -C3, -C6, -H2) in the emulated lab, run by Espressif''s QEMU on a KVM host or on this computer (the one Termwright runs on; macOS or Linux, microcontrollers only). Actions: list (boards, firmwares, this computer as a host, the microcontrollers in the lab), this_computer (add this computer as a host), sample (get MicroPython''s newest release for a board from micropython.org as a firmware; none for the H2), add (put microcontrollers of a board in the lab: its newest firmware, or MicroPython downloaded first; on this computer when it is a host), flash (give one another firmware of its board: its flash is made again). Type on their console (the UART: MicroPython''s >>> prompt) with lab_console; start and stop them with lab_power; cable their port 1 (Ethernet) with lab_cable. Changes are asked in Termwright first. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - list
+                                        - this_computer
+                                        - sample
+                                        - add
+                                        - flash
+                                    type: string
+                                board:
+                                    description: 'sample, add: esp32s3, esp32c3, esp32c6 or esp32h2 (or ESP32-S3 …)'
+                                    type: string
+                                count:
+                                    description: 'add: how many (default 1, at most 16)'
+                                    type: integer
+                                firmware:
+                                    description: 'add: a firmware''s image id (default the board''s newest, else MicroPython); flash: the firmware to give it'
+                                    type: string
+                                host:
+                                    description: 'add: a KVM host name, or "this computer" (default this computer when it is a host, else the lab''s host)'
+                                    type: string
+                                names:
+                                    description: 'add: their names, comma separated, or a pattern like esp-{n}'
+                                    type: string
+                                start:
+                                    description: 'add: start them at once'
+                                    type: boolean
+                                switch:
+                                    description: 'flash: the microcontroller'
+                                    type: string
+                            required:
+                                - action
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/move:
         post:
             operationId: tool_move

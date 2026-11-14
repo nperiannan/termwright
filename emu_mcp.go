@@ -296,6 +296,7 @@ var mcpLabTools = []mcpTool{
 			"id":     map[string]any{"type": "string", "description": "plan, revert: the change's id (from list)"},
 			"last":   map[string]any{"type": "integer", "description": "list: how many (default 20)"},
 		}, "action")},
+	mcpMCUTool,
 }
 
 // emuMCPID finds a switch by its name (or id).
@@ -1155,6 +1156,14 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		if len(cmds) == 0 {
 			return "", errors.New("give the commands")
 		}
+		if d.Board != "" { // a microcontroller: its UART, no login and no checkpoint
+			if err := ask("Claude wants to type on a console", "Claude (through the Termwright connector) asks to type on the console (UART) of "+d.Hostname+":\n\n    "+strings.Join(cmds, "\n    "), false); err != nil {
+				return "", err
+			}
+			out, err := a.emuMCUConsoleRun(d.ID, cmds, time.Duration(argInt(args, "timeout", 180, 900))*time.Second)
+			red, _ := aiRedact(out, false)
+			return red, err
+		}
 		danger := false
 		for _, c := range cmds {
 			danger = danger || mcpRisky.MatchString(c)
@@ -1173,6 +1182,8 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			return red, err
 		}
 		return red, nil
+	case "lab_microcontrollers":
+		return a.emuMCPMCU(args, v, ask)
 	case "lab_check_cabling":
 		nv, err := a.EmuCheckCabling()
 		if err != nil {
