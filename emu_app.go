@@ -500,6 +500,9 @@ func emuNeedsConsole(l *emu.Lab, v emu.VM, im *emu.Image) bool {
 	if !v.Day0Done && len(im.Day0) > 0 {
 		return true
 	}
+	if l.Mgmt == "lan" && !l.LanFixed && v.MgmtIP == "" && im.AddrCmd != "" { // its DHCP address is not known yet
+		return true
+	}
 	return l.Fixed() && len(im.AddrSet) > 0 && v.MgmtIP != "" && v.AddrOn != v.MgmtIP
 }
 
@@ -3232,6 +3235,8 @@ func (a *App) emuDay0(host string, v emu.VM) {
 				if derr := emu.Day0(ctx, c, &on, v, v.Index+1, nil); derr == nil {
 					dhcpOn = true
 					emuEv(v.ID, "info", "no address yet - typed "+strings.Join(im.DHCPOn, " · ")+" so its management port asks DHCP")
+				} else {
+					emuEv(v.ID, "warn", "no address yet - typing "+strings.Join(im.DHCPOn, " · ")+" failed: "+derr.Error())
 				}
 			}
 			time.Sleep(10 * time.Second)

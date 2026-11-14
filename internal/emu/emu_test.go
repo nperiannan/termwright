@@ -338,6 +338,56 @@ func TestConsoleQuestions(t *testing.T) {
 	}
 }
 
+// A pager line that comes in two parts ("Press <SPACE>", then " to continue or <Q> to quit:") is not taken
+// for the prompt (it ends in ">"): the command's whole output is read, past the pager.
+func TestPagerInParts(t *testing.T) {
+	a, b := net.Pipe()
+	got := make(chan []string, 1)
+	go func() {
+		w := func(s string) { _, _ = b.Write([]byte(s)) }
+		one := make([]byte, 1)
+		read := func() string {
+			var s strings.Builder
+			for {
+				if _, err := b.Read(one); err != nil {
+					return s.String()
+				}
+				if one[0] == ' ' && s.Len() == 0 {
+					return "<space>"
+				}
+				if one[0] == '\r' {
+					return s.String()
+				}
+				s.WriteByte(one[0])
+			}
+		}
+		var lines []string
+		read()
+		w("sw.1 # ")
+		lines = append(lines, read())
+		w("\r\nVLAN Interface with name Mgmt\r\n    Proxy ARP: Entry required\r\n\r\nPress <SPACE>")
+		time.Sleep(300 * time.Millisecond)
+		w(" to continue or <Q> to quit:")
+		lines = append(lines, read())
+		w("\r\n    Primary IP: 10.127.25.40/24\r\n\r\nsw.2 # ")
+		got <- lines
+		time.Sleep(200 * time.Millisecond)
+		b.Close()
+	}()
+	c := NewConsole(a)
+	defer c.Close()
+	im := &Image{Login: "admin", AddrCmd: "show vlan Mgmt"}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	addr, err := AskAddress(ctx, c, im)
+	if err != nil || addr != "10.127.25.40/24" {
+		t.Fatal(addr, err, c.Text())
+	}
+	if l := <-got; strings.Join(l, "|") != "show vlan Mgmt|<space>" {
+		t.Fatalf("%q", l)
+	}
+}
+
 // The host's network, routed: a bridge, proxy ARP both ways, a /32 route per switch.
 func TestCloudMgmt(t *testing.T) {
 	l := &Lab{ID: "c1", Dir: "x", Mgmt: "cloud", MgmtNet: "10.50.0.146/24", CloudGw: "10.50.0.254", CloudIf: "ens160", HostIP: "10.50.0.20", VMs: []VM{{ID: "v1", Index: 0}, {ID: "v2", Index: 1}}}

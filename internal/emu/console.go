@@ -67,6 +67,9 @@ var yesNo = regexp.MustCompile(`(?i)[(\[]\s*(y/n|yes/no)\s*[)\]]\s*[:?]?\s*$`)
 // rePrompt: how long a command may show no prompt before Enter is typed.
 var rePrompt = 15 * time.Second
 
+// pagerHead is the start of a pager line ("Press <SPACE> to continue…"): no prompt is taken from it.
+var pagerHead = regexp.MustCompile(`(?i)\bpress\s+<\s*space\b`)
+
 // pager is a "more" prompt waiting at the end of the console.
 var pager = regexp.MustCompile(`(?i)(press\s+<?space>?\s+to\s+continue[^\n]*|--\s*more\s*--(?:\s*\(q\s*=\s*quit\))?)\s*$`)
 
@@ -194,7 +197,12 @@ func (c *Console) Wait(ctx context.Context, timeout time.Duration, answers []Ans
 		tail := all[c.mark:]
 		err := c.err
 		c.mu.Unlock()
+		// a pager line that came only in part ("Press <SPACE>", the rest still on its way) is no
+		// prompt, although it ends in ">": the pager below answers it once it is all there
 		for i, re := range res {
+			if pagerHead.MatchString(lastLineOf(tail)) {
+				break
+			}
 			if loc := re.FindStringIndex(tail); loc != nil {
 				c.mu.Lock()
 				c.mark += loc[1]
