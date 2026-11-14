@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/termwright/termwright/internal/session"
 )
@@ -116,5 +117,35 @@ func TestOpenWebProxyDirect(t *testing.T) {
 	}
 	if wp.Used() == 0 {
 		t.Fatal("the connection is not counted")
+	}
+}
+
+// Probe: a port that takes the connection, and one that refuses it.
+func TestWebProxyProbe(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_ = c.Close()
+		}
+	}()
+	m := NewManager(nopEmitter{}, "", func() string { return "" })
+	wp, err := m.OpenWebProxy(context.Background(), "", session.Session{Name: "sw1", Protocol: session.ProtoSSH2, Hostname: "127.0.0.1"}, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wp.Close()
+	closed, _ := net.Listen("tcp", "127.0.0.1:0")
+	gone := closed.Addr().String()
+	_ = closed.Close()
+	if !wp.Probe(ln.Addr().String(), 3*time.Second) || wp.Probe(gone, 3*time.Second) {
+		t.Fatal("probe")
 	}
 }

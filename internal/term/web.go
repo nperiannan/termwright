@@ -205,6 +205,31 @@ func (wp *WebProxy) Close() {
 
 // Used tells how many connections went through the proxy so far (the
 // browser's own and the pages').
+// Probe tells whether addr takes a TCP connection through the proxy's route (within the time given).
+func (wp *WebProxy) Probe(addr string, within time.Duration) bool {
+	type res struct {
+		c   net.Conn
+		err error
+	}
+	ch := make(chan res, 1)
+	go func() { c, err := wp.dial(addr); ch <- res{c, err} }()
+	select {
+	case r := <-ch:
+		if r.err != nil {
+			return false
+		}
+		_ = r.c.Close()
+		return true
+	case <-time.After(within):
+		go func() {
+			if r := <-ch; r.c != nil {
+				_ = r.c.Close()
+			}
+		}()
+		return false
+	}
+}
+
 func (wp *WebProxy) Used() int {
 	wp.mu.Lock()
 	defer wp.mu.Unlock()

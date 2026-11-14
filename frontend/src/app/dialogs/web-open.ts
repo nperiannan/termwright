@@ -137,10 +137,11 @@ export class WebOpenDialog {
     this.error.set('');
     try {
       const res = await this.backend.openWebPage(r.tabId, r.session, r.through, u, this.browser);
-      store.set(this.urlKey(), u);
+      const opened = res.url || u;
+      store.set(this.urlKey(), opened);
       if (this.browser) store.set('termwright.webBrowser', this.browser);
       this.ui.close();
-      this.ui.toast(res.via ? `Opened ${u} in ${res.browser} through ${res.via} - close that window to end the tunnel.` : `Opened ${u} in ${res.browser}.`, 'success', 7000);
+      this.ui.toast((res.via ? `Opened ${opened} in ${res.browser} through ${res.via} - close that window to end the tunnel.` : `Opened ${opened} in ${res.browser}.`) + (res.note ? ` (${res.note}.)` : ''), 'success', res.note ? 10000 : 7000);
     } catch (e) { this.error.set(errText(e)); }
     finally { this.busy.set(false); }
   }

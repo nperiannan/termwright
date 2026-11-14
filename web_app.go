@@ -35,7 +35,9 @@ type WebBrowser struct {
 // WebOpened tells what was opened.
 type WebOpened struct {
 	Browser string `json:"browser"`
-	Via     string `json:"via"` // "" = directly (no proxy needed)
+	Via     string `json:"via"`            // "" = directly (no proxy needed)
+	URL     string `json:"url,omitempty"`  // the address opened, when Termwright changed it
+	Note    string `json:"note,omitempty"` // why it changed it
 }
 
 var (
@@ -115,6 +117,16 @@ func (a *App) OpenWebPage(tabID string, s session.Session, through, rawURL, brow
 	wp, err := a.terms.OpenWebProxy(ctx, tabID, s, tabID, through == "device")
 	if err != nil {
 		return WebOpened{}, err
+	}
+	// A device's web interface asked for as https:// with no port: many switches serve only HTTP until HTTPS
+	// is turned on (EXOS: "Web access: Enabled (tcp port 80)"). Check which port answers on the route.
+	var changed, note string
+	if wp != nil && through == "device" && u.Scheme == "https" && u.Port() == "" {
+		h := u.Hostname()
+		if !wp.Probe(net.JoinHostPort(h, "443"), 6*time.Second) && wp.Probe(net.JoinHostPort(h, "80"), 6*time.Second) {
+			u.Scheme = "http"
+			changed, note = u.String(), "the device answers on HTTP (port 80), not HTTPS (443) - turn HTTPS on in the device to use it"
+		}
 	}
 	if wp == nil { // reached directly: the default browser
 		if err := openWithSystem(u.String()); err != nil {
@@ -219,7 +231,7 @@ func (a *App) OpenWebPage(tabID string, s session.Session, through, rawURL, brow
 	if wp.Direct {
 		via = "this computer (directly, like its SSH session)"
 	}
-	return WebOpened{Browser: br.Name, Via: via}, nil
+	return WebOpened{Browser: br.Name, Via: via, URL: changed, Note: note}, nil
 }
 
 // closeWebPages ends every browser window opened through a session (at quit).

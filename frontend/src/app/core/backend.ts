@@ -435,7 +435,7 @@ export class Backend {
   }
   webBrowsers() { return this.call<{ id: string; name: string }[] | null>('WebBrowsers'); }
   openWebPage(tabId: string, s: Session, through: 'session' | 'device', url: string, browser: string) {
-    return this.call<{ browser: string; via: string }>('OpenWebPage', tabId, s, through, url, browser);
+    return this.call<{ browser: string; via: string; url?: string; note?: string }>('OpenWebPage', tabId, s, through, url, browser);
   }
   /** Files panel: copy a remote file to a temporary folder and open it with the system's program. */
   sftpOpenFile(id: string, remote: string) { return this.call<{ local: string; mod: number }>('SFTPOpenFile', id, remote); }
