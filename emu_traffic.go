@@ -52,6 +52,38 @@ type EmuStreamResult struct {
 	RxMbps   float64         `json:"rxMbps,omitempty"`     // Mbit/s on the wire received, now
 }
 
+// EmuPortResult is a test port's statistics over the run: every frame it sent and got (the protocols' too), its
+// streams' frames that were for it, their loss and latency, and its rates now.
+type EmuPortResult struct {
+	ID       string         `json:"id"`                // the test port
+	TX       int            `json:"tx"`                // frames sent
+	RX       int            `json:"rx"`                // frames received
+	TxBytes  int            `json:"txBytes"`           // bytes sent (with the FCS)
+	RxBytes  int            `json:"rxBytes"`           // bytes received
+	TxRate   float64        `json:"txRate"`            // frames per second, now
+	RxRate   float64        `json:"rxRate"`            // frames per second, now
+	TxMbps   float64        `json:"txMbps"`            // Mbit/s on the wire, now (with the preamble and gap)
+	RxMbps   float64        `json:"rxMbps"`            // Mbit/s on the wire, now
+	Expected int            `json:"expected"`          // its streams' frames that should have arrived here
+	Got      int            `json:"got"`               // of those, how many did
+	Loss     float64        `json:"loss"`              // %
+	LatAvg   float64        `json:"latAvg"`            // ms (-1 = not measured)
+	LatMax   float64        `json:"latMax"`            // ms
+	Errors   int            `json:"errors"`            // frames it could not send, out of order or twice
+	Streams  map[string]int `json:"streams,omitempty"` // per stream: its frames that arrived here
+}
+
+// emuPortCount is a test port's counters as traffic.py writes them.
+type emuPortCount struct {
+	TX  int            `json:"tx"`
+	RX  int            `json:"rx"`
+	TXB int            `json:"txb"`
+	RXB int            `json:"rxb"`
+	SRX map[string]int `json:"srx"`
+	Lat [3]float64     `json:"lat"` // sum, count, max (ms)
+	Err int            `json:"err"`
+}
+
 // EmuTrafficView is the Traffic tab.
 type EmuTrafficView struct {
 	Testers []emu.Tester      `json:"testers"`           // the test ports
@@ -61,7 +93,9 @@ type EmuTrafficView struct {
 	Started string            `json:"started,omitempty"` // when the run started (RFC 3339)
 	Note    string            `json:"note,omitempty"`    // something to do (restart a switch for its test port)
 	// History: per stream, the run so far ([seconds since the start, tx/s, rx/s, loss % so far, average latency ms (-1: not measured)]), for the graphs.
-	History map[string][][5]float64 `json:"history,omitempty"`
+	History     map[string][][5]float64 `json:"history,omitempty"`
+	Ports       []EmuPortResult         `json:"ports,omitempty"`       // per test port: its statistics over the run
+	PortHistory map[string][][3]float64 `json:"portHistory,omitempty"` // per test port: its rates over the last minute ([seconds since the start, tx/s, rx/s])
 }
 
 var emuTraf struct {
@@ -72,6 +106,9 @@ var emuTraf struct {
 	final   bool                  // the last run's counters are final (not read from the hosts again)
 	prev    map[string][3]float64 // per stream: when, tx and rx at the last read (for the rates)
 	hist    map[string][][5]float64
+	ports   []EmuPortResult             // the last run's per test port statistics
+	pprev   map[string][3]float64       // per test port: when, frames sent and received at the last read
+	phist   map[string][][3]float64     // per test port: its rates over the last minute
 	leases  map[string][2]string        // test port → the address it got by DHCP ("ip/len via gw"), by SLAAC
 	proto   map[string][2]string        // test port → its LAG as LACP has it, its LLDP neighbour
 	clients map[string]*emu.ClientState // test port → how its clients are doing
@@ -210,6 +247,7 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 	if run != 0 && emuTraf.final {
 		v.Results = emuTrafCached(v.Streams)
 		v.Started, v.History = emuTraf.started.Format(time.RFC3339), maps.Clone(emuTraf.hist)
+		v.Ports, v.PortHistory = emuTraf.ports, maps.Clone(emuTraf.phist)
 		emuLab.mu.Unlock()
 		return v, nil
 	}
@@ -247,9 +285,10 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		FTX     map[string]map[string]int       `json:"ftx"`
 		FLab    map[string]map[string]string    `json:"flab"`
 		QoS     map[string]map[string]int       `json:"qos"`
+		Ports   map[string]emuPortCount         `json:"ports"`
 	}
 	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}, OOO: map[string]int{}, Dup: map[string]int{}, Jit: map[string][]float64{},
-		Hist: map[string]map[string]int{}, FRX: map[string]map[string][]float64{}, FTX: map[string]map[string]int{}, FLab: map[string]map[string]string{}, QoS: map[string]map[string]int{}}
+		Hist: map[string]map[string]int{}, FRX: map[string]map[string][]float64{}, FTX: map[string]map[string]int{}, FLab: map[string]map[string]string{}, QoS: map[string]map[string]int{}, Ports: map[string]emuPortCount{}}
 	dyn := slices.ContainsFunc(v.Testers, func(t emu.Tester) bool {
 		return t.DHCP || t.SLAAC || t.Lag != "" || t.LLDP || t.Clients != nil || t.STP != nil
 	}) // (their protocols report while nothing runs)
@@ -328,6 +367,9 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 			}
 			for k, n := range st.Dup {
 				sum.Dup[k] += n
+			}
+			for k, c := range st.Ports {
+				sum.Ports[k] = emuAddPort(sum.Ports[k], c)
 			}
 			for k, x := range st.Jit {
 				if len(x) == 2 {
@@ -430,6 +472,9 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 	if v.Results == nil {
 		v.Results = []EmuStreamResult{}
 	}
+	if run != 0 {
+		v.Ports = emuPortResults(v.Testers, v.Streams, v.Results, sum.Ports)
+	}
 	emuLab.mu.Lock()
 	for i := range v.Testers {
 		if l, ok := emuTraf.leases[v.Testers[i].ID]; ok {
@@ -453,11 +498,12 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 			wire[s.ID] = s.WireBits()
 		}
 		emuTrafRates(v.Results, time.Since(emuTraf.started).Seconds(), wire)
-		v.History = maps.Clone(emuTraf.hist)
+		emuPortRates(v.Ports, time.Since(emuTraf.started).Seconds())
+		v.History, v.PortHistory = maps.Clone(emuTraf.hist), maps.Clone(emuTraf.phist)
 		v.Running = slices.ContainsFunc(v.Results, func(r EmuStreamResult) bool { return r.Running }) || time.Since(emuTraf.started) < 3*time.Second
 		v.Started = emuTraf.started.Format(time.RFC3339)
 		if !v.Running && time.Since(emuTraf.started) > 5*time.Second {
-			emuTraf.last, emuTraf.final = v.Results, true // frames still on their way have arrived
+			emuTraf.last, emuTraf.ports, emuTraf.final = v.Results, v.Ports, true // frames still on their way have arrived
 		}
 	}
 	emuLab.mu.Unlock()
@@ -487,6 +533,107 @@ func emuTrafRates(rs []EmuStreamResult, at float64, wire map[string]float64) {
 			continue
 		}
 		emuTraf.prev[r.ID] = [3]float64{at, float64(r.TX), float64(r.RX)}
+	}
+}
+
+// emuAddPort adds a host's counters of a test port to the others' (a test port is on one host; this keeps it simple).
+func emuAddPort(a, b emuPortCount) emuPortCount {
+	a.TX, a.RX, a.TXB, a.RXB, a.Err = a.TX+b.TX, a.RX+b.RX, a.TXB+b.TXB, a.RXB+b.RXB, a.Err+b.Err
+	if a.SRX == nil {
+		a.SRX = map[string]int{}
+	}
+	for k, n := range b.SRX {
+		a.SRX[k] += n
+	}
+	a.Lat = [3]float64{a.Lat[0] + b.Lat[0], a.Lat[1] + b.Lat[1], math.Max(a.Lat[2], b.Lat[2])}
+	return a
+}
+
+// emuPortFor tells whether test port t is where stream s's frames should arrive: the one it is to (a LAG's port
+// stands for the LAG), every other port for a broadcast, the ports that joined its group, or the sender for a ping
+// to an address.
+func emuPortFor(s emu.Stream, t emu.Tester) bool {
+	switch {
+	case s.To != "":
+		return t.ID == s.To
+	case emu.IsMulticast(s.DstIP):
+		return t.ID != s.From && slices.Contains(t.Groups, s.DstIP)
+	case s.Kind == "icmp":
+		return t.ID == s.From
+	}
+	return t.ID != s.From
+}
+
+// emuPortResults: each test port's statistics from the hosts' counters (frames of a stream to a LAG count at the
+// LAG's port the stream is to, whichever member they came in on).
+func emuPortResults(ts []emu.Tester, ss []emu.Stream, rs []EmuStreamResult, c map[string]emuPortCount) []EmuPortResult {
+	lag := map[string]string{}
+	for _, t := range ts {
+		if t.Lag != "" {
+			lag[t.ID] = t.Lag
+		}
+	}
+	tx := map[string]int{}
+	for _, r := range rs {
+		tx[r.ID] = r.TX
+	}
+	out := make([]EmuPortResult, 0, len(ts))
+	for _, t := range ts {
+		x := c[t.ID]
+		p := EmuPortResult{ID: t.ID, TX: x.TX, RX: x.RX, TxBytes: x.TXB, RxBytes: x.RXB, Errors: x.Err, LatAvg: -1, Streams: x.SRX}
+		if x.Lat[1] > 0 {
+			p.LatAvg, p.LatMax = math.Round(x.Lat[0]/x.Lat[1]*1000)/1000, math.Round(x.Lat[2]*1000)/1000
+		}
+		for _, s := range ss {
+			if !emuPortFor(s, t) || tx[s.ID] == 0 {
+				continue
+			}
+			p.Expected += tx[s.ID]
+			got := x.SRX[s.ID]
+			if l := lag[t.ID]; l != "" {
+				for _, o := range ts {
+					if o.ID != t.ID && lag[o.ID] == l {
+						got += c[o.ID].SRX[s.ID]
+					}
+				}
+			}
+			p.Got += min(got, tx[s.ID])
+		}
+		if p.Expected > 0 {
+			p.Loss = math.Round(math.Max(0, float64(p.Expected-p.Got)*100/float64(p.Expected))*100) / 100
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// emuPortRates works out each test port's rates since the last read and keeps the last minute of them (emuLab.mu held).
+func emuPortRates(ps []EmuPortResult, at float64) {
+	if emuTraf.pprev == nil {
+		emuTraf.pprev, emuTraf.phist = map[string][3]float64{}, map[string][][3]float64{}
+	}
+	for i := range ps {
+		p := &ps[i]
+		q, ok := emuTraf.pprev[p.ID]
+		if ok && at-q[0] < 0.5 {
+			continue
+		}
+		if ok {
+			dt := at - q[0]
+			p.TxRate, p.RxRate = math.Max(0, (float64(p.TX)-q[1])/dt), math.Max(0, (float64(p.RX)-q[2])/dt)
+			if p.TX > 0 {
+				p.TxMbps = math.Round(p.TxRate*(float64(p.TxBytes)/float64(p.TX)+20)*8/1e4) / 100
+			}
+			if p.RX > 0 {
+				p.RxMbps = math.Round(p.RxRate*(float64(p.RxBytes)/float64(p.RX)+20)*8/1e4) / 100
+			}
+			h := append(emuTraf.phist[p.ID], [3]float64{math.Round(at*10) / 10, math.Round(p.TxRate), math.Round(p.RxRate)})
+			if len(h) > 60 {
+				h = h[len(h)-60:]
+			}
+			emuTraf.phist[p.ID] = h
+		}
+		emuTraf.pprev[p.ID] = [3]float64{at, float64(p.TX), float64(p.RX)}
 	}
 }
 
@@ -814,6 +961,7 @@ func (a *App) emuTrafficStart(ids []string, quiet bool) (EmuTrafficView, error) 
 	}
 	emuTraf.run, emuTraf.started, emuTraf.on, emuTraf.last, emuTraf.final = max(emuTraf.run+1, uint32(time.Now().Unix())), time.Now(), on, nil, false
 	emuTraf.prev, emuTraf.hist = nil, nil
+	emuTraf.ports, emuTraf.pprev, emuTraf.phist = nil, nil, nil
 	if !quiet {
 		emuEv("", "info", "traffic started: "+strings.Join(names, ", "))
 	}
@@ -830,7 +978,7 @@ func (a *App) EmuTrafficStop() (EmuTrafficView, error) {
 	v, _ := a.EmuTraffic()
 	emuLab.mu.Lock()
 	run := emuTraf.run
-	emuTraf.last = v.Results
+	emuTraf.last, emuTraf.ports = v.Results, v.Ports
 	emuTraf.on = map[string]bool{}
 	emuLab.mu.Unlock()
 	if run == 0 {

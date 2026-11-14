@@ -115,7 +115,7 @@ type EmuInstallRequest struct {
 	RAM      int    `json:"ram"`
 	CPUs     int    `json:"cpus"`
 	Host     string `json:"host"`
-	Password string `json:"password"` // root's: set by the Alpine install; in a manual install the one the user sets (kept with the image)
+	Password string `json:"password"`           // root's: set by the Alpine install; in a manual install the one the user sets (kept with the image)
 	NoVerify bool   `json:"noVerify,omitempty"` // do not boot the image once at the end to check it comes up
 }
 

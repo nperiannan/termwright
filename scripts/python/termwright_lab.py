@@ -414,6 +414,14 @@ class Traffic:
         names = {s["id"]: s["name"] for s in v["streams"]}
         return {names.get(r["id"], r["id"]): r for r in v["results"]}
 
+    def port_stats(self) -> dict:
+        """Every test port's statistics by its name (the Traffic page's Statistics): tx, rx (all its frames),
+        txBytes, rxBytes, txRate, rxRate (frames/s now), txMbps, rxMbps, expected and got (its streams' frames that
+        were for it), loss (%), latAvg, latMax (ms, -1 not measured), errors, streams (frames received per stream id)."""
+        v = self.view()
+        names = {t["id"]: t["name"] for t in v["testers"]}
+        return {names.get(p["id"], p["id"]): p for p in v.get("ports") or []}
+
     def wait_done(self, timeout: float = 600, poll: float = 1.0) -> dict:
         """Block until nothing is sending; returns results by stream name."""
         end = time.time() + timeout

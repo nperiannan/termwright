@@ -220,6 +220,14 @@ class ClientTest(unittest.TestCase):
         t.assert_pass(res)
         self.assertEqual(Fake.state["view"]["streams"], [])
 
+    def test_port_stats_by_name(self):
+        t = self.lab.traffic
+        a = t.add_port("l1", "5")
+        Fake.state["view"]["ports"] = [{"id": "p1", "tx": 100, "rx": 90, "expected": 100, "got": 90, "loss": 10.0, "latAvg": 0.2, "errors": 0}]
+        ps = t.port_stats()
+        self.assertEqual(list(ps), [a])
+        self.assertEqual(ps[a]["loss"], 10.0)
+
     def test_assert_pass_names_the_failure(self):
         Fake.state["pass"] = False
         t = self.lab.traffic

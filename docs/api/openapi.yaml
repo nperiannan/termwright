@@ -2451,7 +2451,7 @@ paths:
             tags:
                 - Tools
             summary: The emulated lab's traffic generator
-            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file''s frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab''s streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
+            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields), stats (every test port''s counters at once: frames and rates each way, Mbit/s, loss of the frames that were for it, latency, errors). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file''s frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab''s streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -2470,6 +2470,7 @@ paths:
                                         - start
                                         - stop
                                         - report
+                                        - stats
                                         - templates
                                         - apply_template
                                         - save_template
@@ -4602,6 +4603,77 @@ components:
                 - prio
                 - dscp
                 - "n"
+        PortResult:
+            type: object
+            properties:
+                id:
+                    description: the test port
+                    type: string
+                tx:
+                    description: frames sent
+                    type: integer
+                rx:
+                    description: frames received
+                    type: integer
+                txBytes:
+                    description: bytes sent (with the FCS)
+                    type: integer
+                rxBytes:
+                    description: bytes received
+                    type: integer
+                txRate:
+                    description: frames per second, now
+                    type: number
+                rxRate:
+                    description: frames per second, now
+                    type: number
+                txMbps:
+                    description: Mbit/s on the wire, now (with the preamble and gap)
+                    type: number
+                rxMbps:
+                    description: Mbit/s on the wire, now
+                    type: number
+                expected:
+                    description: its streams' frames that should have arrived here
+                    type: integer
+                got:
+                    description: of those, how many did
+                    type: integer
+                loss:
+                    description: '%'
+                    type: number
+                latAvg:
+                    description: ms (-1 = not measured)
+                    type: number
+                latMax:
+                    description: ms
+                    type: number
+                errors:
+                    description: frames it could not send, out of order or twice
+                    type: integer
+                streams:
+                    description: 'per stream: its frames that arrived here'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: integer
+            required:
+                - id
+                - tx
+                - rx
+                - txBytes
+                - rxBytes
+                - txRate
+                - rxRate
+                - txMbps
+                - rxMbps
+                - expected
+                - got
+                - loss
+                - latAvg
+                - latMax
+                - errors
         Stream:
             type: object
             description: Frames from one test port to another, to every other one (broadcast), to an address or to a multicast group.
@@ -5214,6 +5286,28 @@ components:
                                 type: number
                             minItems: 5
                             maxItems: 5
+                ports:
+                    description: 'per test port: its statistics over the run'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/PortResult'
+                portHistory:
+                    description: 'per test port: its rates over the last minute ([seconds since the start, tx/s, rx/s])'
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type:
+                            - array
+                            - "null"
+                        items:
+                            type: array
+                            items:
+                                type: number
+                            minItems: 3
+                            maxItems: 3
             required:
                 - testers
                 - streams

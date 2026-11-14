@@ -3,6 +3,9 @@ import { tr } from '../core/i18n';
 import { EmuTester, EmuTrafficView } from '../core/models';
 import { ChartSeries, TrafficChart } from './traffic-chart';
 
+/** The Traffic page's views. */
+export type TrafficView = 'streams' | 'tests' | 'stats';
+
 /** A tile at the top of the Traffic page. */
 export interface TrafficKpi { label: string; value: string; sub: string; warn: boolean; good: boolean; }
 
@@ -16,19 +19,19 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
   template: `
     <section class="tpg" [attr.aria-label]="tr('Traffic')">
       <header class="tph">
-        <div class="tpt"><h2>{{ tr('Traffic generator') }}</h2><span class="muted small">{{ tr('Test ports send and count frames on switch ports: streams with live rates, loss and latency, and RFC 2544 tests') }}</span></div>
-        <span class="seg2 tv"><a [class.on]="view() === 'streams'" (click)="viewChange.emit('streams')">{{ tr('Streams') }}</a><a [class.on]="view() === 'tests'" (click)="viewChange.emit('tests')">{{ tr('Tests') }}</a></span>
+        <div class="tpt"><h2>{{ tr('Traffic generator') }}</h2><span class="muted small">{{ tr('Test ports send and count frames on switch ports: streams, RFC 2544 tests and their statistics') }}</span></div>
+        <span class="seg2 tv"><a [class.on]="view() === 'streams'" (click)="viewChange.emit('streams')">{{ tr('Streams') }}</a><a [class.on]="view() === 'tests'" (click)="viewChange.emit('tests')">{{ tr('Tests') }}</a><a [class.on]="view() === 'stats'" (click)="viewChange.emit('stats')" [title]="tr('Every test port’s counters at once, its streams and their flows')">{{ tr('Statistics') }}</a></span>
         <span class="sp"></span>
         @if (view() === 'tests') { <button type="button" (click)="newTest.emit()">＋ {{ tr('Test') }}</button> }
         <button type="button" (click)="radius.emit()" [title]="tr('The lab\\'s RADIUS server: users, MAC logins and the logins it answered, for 802.1X on the switches')">{{ tr('RADIUS…') }}</button>
         <button type="button" (click)="library.emit()" [title]="tr('Ready tests: unicast, IMIX, QoS classes, MAC table fill, round trip, RFC 2544 and 2889 - and yours')">{{ tr('Library…') }}</button>
         <button type="button" (click)="newTester.emit()">＋ {{ tr('Test Port') }}</button>
-        @if (view() === 'streams') { <button type="button" (click)="newStream.emit()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button>
+        @if (view() !== 'tests') { <button type="button" (click)="newStream.emit()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button>
           @if (traf()?.running) { <button type="button" (click)="stop.emit()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="primary" (click)="start.emit()" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
           <button type="button" (click)="report.emit()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
       </header>
       <div class="kpis">@for (k of kpis(); track k.label) { <div class="kpi" [class.warn]="k.warn" [class.good]="k.good"><span>{{ k.label }}</span><b>{{ k.value }}</b><small>{{ k.sub }}</small></div> }</div>
-      <div class="tpb" [class.tests]="view() === 'tests'">
+      <div class="tpb" [class.tests]="view() !== 'streams'">
         @if (view() === 'streams') {
           <aside class="tpl">
             <div class="sec2">{{ tr('Test ports') }}<span class="muted">{{ cards().length }}</span></div>
@@ -80,7 +83,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
 })
 export class TrafficPage {
   readonly traf = input<EmuTrafficView | null>(null);
-  readonly view = input<'streams' | 'tests'>('streams');
+  readonly view = input<TrafficView>('streams');
   readonly kpis = input<TrafficKpi[]>([]);
   readonly cards = input<{ t: EmuTester; where: string }[]>([]);
   readonly selected = input('');
@@ -90,7 +93,7 @@ export class TrafficPage {
   readonly fmtPps = input<(v: number) => string>(v => String(v));
   readonly fmtPct = input<(v: number) => string>(v => String(v));
   readonly fmtMs = input<(v: number) => string>(v => String(v));
-  readonly viewChange = output<'streams' | 'tests'>();
+  readonly viewChange = output<TrafficView>();
   readonly newTest = output<void>();
   readonly newTester = output<void>();
   readonly newStream = output<void>();

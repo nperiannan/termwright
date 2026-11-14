@@ -3,7 +3,8 @@ import { FormsModule } from '@angular/forms';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { ChartSeries } from './traffic-chart';
 import { StreamDetail } from './stream-detail';
-import { TrafficPage } from './traffic-page';
+import { TrafficPage, TrafficView } from './traffic-page';
+import { TrafficStats } from './traffic-stats';
 import { TrafficLibrary } from './traffic-library';
 import { RadiusDialog } from './radius-dialog';
 import { VmScreen } from './vm-screen';
@@ -33,7 +34,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
+  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficStats, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + (dockLow() ? 40 : dockH()) + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" [testers]="traf()?.testers ?? []" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" (screen)="pcWin.set(''); screenDev.set(d)" /> }
@@ -160,7 +161,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           [throughput]="trafThroughput()" [loss]="trafLoss()" [latency]="trafLat()" [fmtPps]="fmtPps" [fmtPct]="fmtPct" [fmtMs]="fmtMs"
           (newTest)="ttests()?.newTest()" (newTester)="newTester(); trafView.set('streams')" (newStream)="newStream()" (start)="trafStart([])" (stop)="trafStop()" (report)="trafReport()"
           (editTester)="editTester($event)" (removeTester)="tpRemove($event)" (library)="libOpen.set(true)" (radius)="radOpen.set(true)">
-          @if (trafView() === 'tests') { <app-traffic-tests [testers]="traf()?.testers ?? []" [devs]="devs()" /> } @else { <ng-container [ngTemplateOutlet]="trafBody" /> }
+          @if (trafView() === 'tests') { <app-traffic-tests [testers]="traf()?.testers ?? []" [devs]="devs()" /> } @else if (trafView() === 'stats') { <ng-container [ngTemplateOutlet]="trafStats" /> } @else { <ng-container [ngTemplateOutlet]="trafBody" /> }
         </app-traffic-page>
         @if (radOpen()) { <app-radius-dialog (closed)="radOpen.set(false)" /> }
         @if (cliOpen(); as c) {
@@ -598,8 +599,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (dock() === 'inv' && inventory().length > 1) { <button type="button" class="sm" (click)="flipAll()">{{ invClosed().size === inventory().length ? tr('Expand All') : tr('Collapse All') }}</button> }
         @else { <button type="button" class="sm" (click)="copyDock()" [title]="tr('Copy to the clipboard')">{{ tr('Copy') }}</button> }
         @if (dock() === 'events' && emu()) { <button type="button" class="sm" (click)="clearEvents()">{{ tr('Clear') }}</button> }
-        @if (dock() === 'traffic') { <span class="seg2 tv"><a [class.on]="trafView() === 'streams'" (click)="trafView.set('streams')">{{ tr('Streams') }}</a><a [class.on]="trafView() === 'tests'" (click)="trafView.set('tests')">{{ tr('Tests') }}</a></span>@if (trafView() === 'tests') { <button type="button" class="sm" (click)="ttests()?.newTest()">＋ {{ tr('Test') }}</button><button type="button" class="sm" (click)="newTester(); trafView.set('streams')">＋ {{ tr('Test Port') }}</button> } }
-        @if (dock() === 'traffic' && trafView() === 'streams') { <button type="button" class="sm" (click)="newStream()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button><button type="button" class="sm" (click)="newTester()">＋ {{ tr('Test Port') }}</button>
+        @if (dock() === 'traffic') { <span class="seg2 tv"><a [class.on]="trafView() === 'streams'" (click)="trafView.set('streams')">{{ tr('Streams') }}</a><a [class.on]="trafView() === 'tests'" (click)="trafView.set('tests')">{{ tr('Tests') }}</a><a [class.on]="trafView() === 'stats'" (click)="trafView.set('stats')">{{ tr('Statistics') }}</a></span>@if (trafView() === 'tests') { <button type="button" class="sm" (click)="ttests()?.newTest()">＋ {{ tr('Test') }}</button><button type="button" class="sm" (click)="newTester(); trafView.set('streams')">＋ {{ tr('Test Port') }}</button> } }
+        @if (dock() === 'traffic' && trafView() !== 'tests') { <button type="button" class="sm" (click)="newStream()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button><button type="button" class="sm" (click)="newTester()">＋ {{ tr('Test Port') }}</button>
           @if (traf()?.running) { <button type="button" class="sm" (click)="trafStop()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="sm primary" (click)="trafStart([])" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
           <button type="button" class="sm" (click)="trafReport()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
         @if (dock() === 'cap' && capCur(); as c) { @if (pktChk().size) { <button type="button" class="sm" (click)="copyPkts()" [title]="tr('The ticked rows as text')">{{ tr('Copy Selected ({0})', pktChk().size) }}</button><button type="button" class="sm" (click)="savePkts(c)">{{ tr('Save Selected as .pcap…') }}</button> }@if (pktNo()) { <button type="button" class="sm" (click)="pktWin.set(pktNo())" [title]="tr('The packet in a window of its own (or double-click it)')">{{ tr('Open Packet') }} ↗</button> }@if (c.running) { <button type="button" class="sm capstop" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (!c.running) { <button type="button" class="sm" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> }@if (stoppedCaps().length > 1) { <button type="button" class="sm" (click)="delCaps(stoppedCaps())">{{ tr('Delete All Stopped') }}</button> } }
@@ -665,6 +666,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         </div>
       } @else if (dock() === 'traffic' && trafView() === 'tests') {
         <app-traffic-tests [testers]="traf()?.testers ?? []" [devs]="devs()" />
+      } @else if (dock() === 'traffic' && trafView() === 'stats') {
+        <div class="dstats"><ng-container [ngTemplateOutlet]="trafStats" /></div>
       } @else if (dock() === 'traffic') {
         <ng-container [ngTemplateOutlet]="trafBody" />
       } @else if (dock() === 'cap') {
@@ -744,6 +747,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       @if (n.kind === 'note') { @if (editNote() === n.id) { <textarea class="nx" [ngModel]="n.text" (ngModelChange)="noteDraft = $event" (blur)="saveNoteText(n)" (pointerdown)="$event.stopPropagation()" (keydown.escape)="editNote.set('')"></textarea> } @else { <div class="nb" (dblclick)="editNote.set(n.id); noteDraft = n.text">{{ n.text || tr('Double-click to write') }}</div> } }
       <i class="rz" (pointerdown)="noteGrab($event, n, 'size')"></i>
     </div>
+  </ng-template>
+  <ng-template #trafStats>
+    <app-traffic-stats [traf]="traf()" [devs]="devs()" [hostUse]="hostUse()" [mainHost]="st()?.host ?? ''" [hname]="hnameFn" [hcol]="hcolFn" />
   </ng-template>
   <ng-template #trafBody>
         <div class="trw" [class.ed]="!!sEd() || !!tEd()">
@@ -1096,6 +1102,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .mr { display: flex; justify-content: space-between; font-size: 12px; } .meter { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 4px 0 8px; i { display: block; height: 100%; background: var(--accent); } }
     .dock { border-top: 1px solid var(--line); background: var(--surface); display: grid; grid-template-rows: 5px 34px minmax(0, 1fr); min-height: 0; }
     .grip { cursor: ns-resize; background: transparent; &:hover { background: var(--accent-soft); } }
+    .dstats { height: 100%; overflow: auto; padding: 8px 10px; }
     .dtabs button { margin-left: 4px; } .hint2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ev div { user-select: text; } .tail { user-select: text; }
     .dtabs { display: flex; align-items: center; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line);
@@ -1546,7 +1553,7 @@ export class LabWorkspace implements OnDestroy {
       this.traf.set(v); this.tEd.set(null); if (v.note) this.ui.toast(v.note);
     } catch (e) { this.ui.error(e); }
   }
-  protected trafView = signal<'streams' | 'tests'>('streams');
+  protected trafView = signal<TrafficView>('streams');
   protected tpCards = computed(() => (this.traf()?.testers ?? []).map(t => ({ t, where: this.tpWhere(t) })));
   // the lab's change history (what Claude and the API changed, each with Revert)
   protected changes = signal<EmuChange[]>([]);
@@ -1742,6 +1749,8 @@ export class LabWorkspace implements OnDestroy {
   protected multi = computed(() => this.hostUse().length > 1);
   hostOfDev(d: LabDevice) { return d.host || this.st()?.host || ''; }
   hname(h: string) { return h.split('/').pop() ?? h; }
+  protected hnameFn = (h: string) => this.hname(h);
+  protected hcolFn = (h: string) => this.hcol(h);
   addrOfHost(h: string) { const u = this.hostUse().find(x => x.host === h); return (u?.addr || (h === this.st()?.host ? this.st()?.hostInfo?.lanAddr ?? '' : '')).split('/')[0]; }
   hcol(h: string) { const i = this.hostUse().findIndex(u => u.host === h); return ['#3b8cf6', '#a46cf0', '#1fb5a5', '#e3842a', '#d65db1', '#8fb339'][Math.max(0, i) % 6]; }
   /** Hosts the switch could move to: the checked hosts without problems. */

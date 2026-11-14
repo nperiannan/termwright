@@ -166,7 +166,11 @@ class Tester:
         try:
             s.sock.sendto(frame, s.to)
         except OSError:
-            pass
+            port(s.id)[6] += 1
+            return
+        c = port(s.id)
+        c[0] += 1
+        c[2] += len(frame) + 4
 
     def ask(s, ip):  # ARP request
         s.send(l2(BC, s.mac, s.vlan, 0, 0x0806) + arp(1, s.mac, s.ip, b"\0" * 6, ip))
@@ -597,13 +601,15 @@ testers, streams, run = {}, [], 0
 tx, rx, other, lat, err, ooo, dup, jit, seen = {}, {}, {}, {}, {}, {}, {}, {}, {}
 hist, frx, qos = {}, {}, {}  # latency histogram, per-flow receive counters, what the frames arrived with
 ftx, flab = {}, {}  # per flow: frames sent, its field values
+ports = {}  # per test port: its counters (see port)
 last_st = 0
 
 
 def reset():
-    global tx, rx, other, lat, err, ooo, dup, jit, seen, hist, frx, qos
+    global tx, rx, other, lat, err, ooo, dup, jit, seen, hist, frx, qos, ports
     tx, rx, other, lat, err, ooo, dup, jit, seen = {}, {}, {}, {}, {}, {}, {}, {}, {}
     hist, frx, qos = {}, {}, {}
+    ports = {}
     ftx.clear()
     flab.clear()
 
@@ -667,10 +673,20 @@ def latency(sid, flow, ts, st):
     st[2] = dl
 
 
+def port(tid):
+    """A test port's counters: frames sent, received, bytes sent, received (with the FCS), its streams' frames
+    received (by stream), latency (sum, count, max), errors (send failures, out of order, duplicates)."""
+    c = ports.get(tid)
+    if c is None:
+        c = ports[tid] = [0, 0, 0, 0, {}, [0.0, 0, 0.0], 0]
+    return c
+
+
 def got(sid, tp, seq, ts, flow=0xFFFF, mark=""):
     """A frame of a stream arrived at a test port: counts, order, latency, jitter, per flow, how it was marked."""
     rx[sid] = rx.get(sid, 0) + 1
     k = (sid, tp.id)
+    pc = port(tp.id)
     st = seen.get(k)
     if st is None:
         st = seen[k] = [-1, set(), None]  # highest sequence, recent ones, last latency
@@ -678,12 +694,15 @@ def got(sid, tp, seq, ts, flow=0xFFFF, mark=""):
     if seq in recent:
         dup[sid] = dup.get(sid, 0) + 1
         rx[sid] -= 1
+        pc[6] += 1
         return
+    pc[4][sid] = pc[4].get(sid, 0) + 1
     recent.add(seq)
     if len(recent) > 8192:
         st[1] = recent = {q for q in recent if q > hi - 4096}
     if seq < hi:
         ooo[sid] = ooo.get(sid, 0) + 1
+        pc[6] += 1
     else:
         st[0] = seq
     if mark:
@@ -693,6 +712,10 @@ def got(sid, tp, seq, ts, flow=0xFFFF, mark=""):
         frx.setdefault(sid, {}).setdefault(flow, [0, 0.0, 0.0, 0])[0] += 1
     if ts > 0:
         latency(sid, flow, ts, st)
+        pl = pc[5]
+        pl[0] += st[2]
+        pl[1] += 1
+        pl[2] = max(pl[2], st[2])
 
 
 PCAPS = {}  # path -> (frames, offsets in seconds from the first)
@@ -841,6 +864,8 @@ def handle(tp, f):
                 other[sid] = other.get(sid, 0) + 1
             else:
                 rx[sid] = rx.get(sid, 0) + 1
+                pc = port(tp.id)[4]
+                pc[sid] = pc.get(sid, 0) + 1
                 dscp = b[1] >> 2 if et == 0x0800 and len(b) > 1 else ((b[0] & 15) << 4 | b[1] >> 4) >> 2 if et == 0x86DD and len(b) > 1 else -1
                 q = qos.setdefault(sid, {})
                 mk = "%d/%d/%d" % (vlan, prio, dscp)
@@ -953,6 +978,9 @@ while True:
                 except OSError:
                     break
                 if len(f) >= 14:
+                    c = port(t.id)
+                    c[1] += 1
+                    c[3] += len(f) + 4
                     try:
                         handle(t, f)
                     except Exception:
@@ -999,6 +1027,7 @@ while True:
         st = {"run": run, "at": now, "tx": tx, "rx": rx, "other": other, "lat": lat, "err": err, "ooo": ooo, "dup": dup, "jit": jit,
               "busy": {s.x["id"]: s.seq < s.count for s in streams}, "testers": sorted(testers),
               "hist": hist, "frx": frx, "qos": qos, "ftx": ftx, "flab": flab,
+              "ports": {k: {"tx": c[0], "rx": c[1], "txb": c[2], "rxb": c[3], "srx": c[4], "lat": c[5], "err": c[6]} for k, c in ports.items()},
               "lacp": {t.id: t.lacp_view(now) for t in testers.values() if t.lag},
               "clients": {t.id: {"n": len(t.clients), "bound": sum(c.dhcp_state == "bound" for c in t.clients), "auth": sum(c.x_state == "authenticated" for c in t.clients),
                                  "failed": sum(c.x_state == "failed" for c in t.clients), "list": [c.view() for c in t.clients[:256]]} for t in testers.values() if t.clients},

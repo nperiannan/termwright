@@ -70,10 +70,15 @@ func TestTrafficPy(t *testing.T) {
 		TX, RX map[string]int
 		Lat    map[string][]float64
 		Busy   map[string]bool
+		Ports  map[string]struct {
+			TX, RX, TXB, RXB, Err int
+			SRX                   map[string]int
+			Lat                   [3]float64
+		}
 	}
 	for end := time.Now().Add(8 * time.Second); time.Now().Before(end); time.Sleep(300 * time.Millisecond) {
 		b, err := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
-		if err == nil && json.Unmarshal(b, &st) == nil && st.TX["s1"] == 300 && st.RX["s1"] == 300 && st.RX["s2"] == 100 && st.RX["s3"] == 50 && st.RX["s4"] == 50 && !st.Busy["s1"] {
+		if err == nil && json.Unmarshal(b, &st) == nil && st.TX["s1"] == 300 && st.RX["s1"] == 300 && st.RX["s2"] == 100 && st.RX["s3"] == 50 && st.RX["s4"] == 50 && !st.Busy["s1"] && st.Ports["t1"].SRX["s4"] == 50 {
 			break
 		}
 	}
@@ -83,6 +88,14 @@ func TestTrafficPy(t *testing.T) {
 	}
 	if l := st.Lat["s1"]; len(l) < 3 || l[2] != 300 || l[0]/l[2] > 50 {
 		t.Fatalf("latency %v", l)
+	}
+	// per test port: every frame each way (its streams' and the protocols'), its streams' frames that came in, latency
+	p1, p2 := st.Ports["t1"], st.Ports["t2"]
+	if p1.TX < 350 || p2.RX < 350 || p2.TX < 150 || p1.RX < 150 || p1.TXB < 350*60 || p2.RXB < 350*60 {
+		t.Fatalf("port counters: %+v %+v", p1, p2)
+	}
+	if p2.SRX["s1"] != 300 || p2.SRX["s3"] != 50 || p1.SRX["s4"] != 50 || p1.SRX["s2"] != 100 || p2.Lat[1] < 300 || p2.Lat[2] <= 0 || p1.Err != 0 {
+		t.Fatalf("port streams: %+v %+v", p1, p2)
 	}
 	// stop: an empty configuration ends it
 	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), []byte(`{"run":0,"testers":[]}`), 0o644)

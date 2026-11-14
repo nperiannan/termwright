@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/termwright/termwright/internal/emu"
@@ -155,9 +156,9 @@ var mcpLabTools = []mcpTool{
 			"host":   map[string]any{"type": "string", "description": "KVM host name or session path"},
 			"how":    map[string]any{"type": "string", "enum": []string{"live", "copy", "image"}},
 		}, "switch", "host", "how")},
-	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file's frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab's streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
+	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields), stats (every test port's counters at once: frames and rates each way, Mbit/s, loss of the frames that were for it, latency, errors). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file's frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab's streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
-			"action":          map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report", "templates", "apply_template", "save_template", "remove_template"}},
+			"action":          map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report", "stats", "templates", "apply_template", "save_template", "remove_template"}},
 			"template":        map[string]any{"type": "string", "description": "apply_template, remove_template: the template (name or id); save_template: its name"},
 			"ports":           map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "apply_template: the test ports (names) for its roles A, B, C… in order"},
 			"description":     map[string]any{"type": "string", "description": "save_template: what it checks"},
@@ -1450,8 +1451,16 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			return "Stopped; the counters stay for the report.", err
 		case "report":
 			return a.EmuTrafficReportText()
+		case "stats":
+			sw := func(vm string) string {
+				if d, err := emuMCPID(v, vm); err == nil {
+					return d.Hostname
+				}
+				return vm
+			}
+			return emuPortStatsText(tv, sw), nil
 		}
-		return "", errors.New("action is list, add_port, set_port, remove_port, add_stream, remove_stream, start, stop or report")
+		return "", errors.New("action is list, add_port, set_port, remove_port, add_stream, remove_stream, start, stop, report or stats")
 	case "lab_test":
 		tv, _ := a.EmuTraffic()
 		port := func(n string) string {
@@ -1940,4 +1949,38 @@ func (a *App) emuConsoleRun(id string, cmds []string, timeout time.Duration) (st
 // "running · no persona"), so the state decides, not whether the text is empty.
 func emuReadyForTests(d EmuDevice) bool {
 	return d.Running && d.State == "running" && d.Error == ""
+}
+
+// emuPortStatsText is lab_traffic stats: a line per test port with its counters (the Traffic page's Statistics).
+func emuPortStatsText(tv EmuTrafficView, sw func(vm string) string) string {
+	if len(tv.Testers) == 0 {
+		return "No test ports yet: lab_traffic add_port puts one on a free switch port."
+	}
+	if len(tv.Ports) == 0 {
+		return "No counters yet: lab_traffic start runs the streams; each test port's counters show here then."
+	}
+	ps := map[string]EmuPortResult{}
+	for _, p := range tv.Ports {
+		ps[p.ID] = p
+	}
+	var b strings.Builder
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', tabwriter.AlignRight)
+	fmt.Fprintln(w, "test port\tswitch port\ttx fps\trx fps\ttx Mbit/s\trx Mbit/s\ttx frames\trx frames\tloss %\tlatency avg ms\terrors\t")
+	for _, t := range emuSortedTesters(tv.Testers) {
+		p := ps[t.ID]
+		loss, lat := "-", "-"
+		if p.Expected > 0 {
+			loss = fmt.Sprintf("%.2f", p.Loss)
+		}
+		if p.LatAvg >= 0 && p.Got > 0 {
+			lat = fmt.Sprintf("%.3f", p.LatAvg)
+		}
+		fmt.Fprintf(w, "%s\t%s %s\t%.0f\t%.0f\t%.2f\t%.2f\t%d\t%d\t%s\t%s\t%d\t\n", t.Name, sw(t.VM), orStr(t.PortName, fmt.Sprint(t.Port)), p.TxRate, p.RxRate, p.TxMbps, p.RxMbps, p.TX, p.RX, loss, lat, p.Errors)
+	}
+	_ = w.Flush()
+	state := "the last run"
+	if tv.Running {
+		state = "running"
+	}
+	return fmt.Sprintf("Test port statistics (%s; frames include the protocols', loss counts the streams' frames that were for the port):\n%s", state, b.String())
 }

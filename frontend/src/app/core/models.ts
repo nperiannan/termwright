@@ -433,7 +433,10 @@ export interface EmuStreamResult { id: string; tx: number; rx: number; expected:
 export interface EmuFlowResult { flow: number; name: string; tx: number; rx: number; loss: number; latAvg: number; latMax: number; }
 /** A lab tool the AI chat called: done (out), or to be asked first. */
 export interface EmuToolStep { ask?: boolean; title?: string; text?: string; danger?: boolean; out?: string; }
-export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; history?: Record<string, [number, number, number, number?, number?][]> | null; }
+export interface EmuTrafficView { testers: EmuTester[]; streams: EmuStream[]; results: EmuStreamResult[]; running: boolean; started?: string; note?: string; history?: Record<string, [number, number, number, number?, number?][]> | null;
+  ports?: EmuPortResult[] | null; portHistory?: Record<string, [number, number, number][]> | null; }
+/** A test port's statistics over the run: all its frames each way, its streams' frames that were for it, their loss and latency. */
+export interface EmuPortResult { id: string; tx: number; rx: number; txBytes: number; rxBytes: number; txRate: number; rxRate: number; txMbps: number; rxMbps: number; expected: number; got: number; loss: number; latAvg: number; latMax: number; errors: number; streams?: Record<string, number> | null; }
 
 /** Switches running on a host, of one topology (open or in the background). */
 export interface EmuRunRow { host: string; topology: string; open: boolean; switches: string[]; lab?: string; orphan?: boolean; }

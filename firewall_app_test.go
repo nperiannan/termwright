@@ -114,7 +114,9 @@ func TestFirewallAllowSudo(t *testing.T) {
 	if runtime.GOOS == "linux" && gotCmd != "ufw allow 1069/udp && ufw allow 2121/tcp && ufw allow 8088/tcp" {
 		t.Fatalf("linux: %q", gotCmd)
 	}
-	fwSudo = func(pw, cmd string) (string, error) { return "Sorry, try again.\nsudo: 1 incorrect password attempt", errors.New("exit 1") }
+	fwSudo = func(pw, cmd string) (string, error) {
+		return "Sorry, try again.\nsudo: 1 incorrect password attempt", errors.New("exit 1")
+	}
 	if _, err := a.FirewallAllowWith(1069, 2121, 8088, "bad"); err == nil || !strings.Contains(err.Error(), "not accepted") {
 		t.Fatal(err)
 	}
