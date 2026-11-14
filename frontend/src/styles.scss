@@ -282,6 +282,9 @@ details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top
 /* the lab canvas: the panels of hubs, L2 switches and clouds, the clients list (kept here: the workspace's own styles are at their budget) */
 app-lab-workspace {
   /* meters never run past their track (a switch can use more than 100 % of one vCPU); over 100 % turns amber */
+  /* a microcontroller in the side pane: its board, firmware, console and debugger */
+  .kv.mcu { margin-top: 8px; select { width: 100%; } label.ck { display: inline-flex; align-items: center; gap: 5px; } a { color: var(--accent); cursor: pointer; } a.off { opacity: .45; pointer-events: none; } }
+  .mcun { margin: 6px 0 0; line-height: 1.4; }
   .mtr { overflow: hidden; } .mtr i.hot { background: var(--warning, #e39b17) !important; }
   /* a capture going on: its Stop button pulses slowly, so it is not forgotten */
   button.capstop { animation: twslowpulse 2.4s ease-in-out infinite; }

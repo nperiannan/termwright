@@ -1,6 +1,7 @@
 import { Component, computed, effect, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { EmuImage } from '../core/models';
+import { EmuBoard, EmuImage } from '../core/models';
+import { errText } from '../core/backend';
 import { tr } from '../core/i18n';
 import { TvBar, TvSorts } from '../core/table-view';
 import { LabHostImages } from './lab-host-images';
@@ -26,6 +27,7 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
       <span class="sp"></span>
       <button type="button" class="primary" (click)="tab.set('images'); addImage()">＋ {{ tr('Add Image…') }}</button>
       <button type="button" (click)="tab.set('images'); openIso()">{{ tr('Install from ISO…') }}</button>
+      <button type="button" (click)="openFw()" [title]="tr('A microcontroller firmware (ESP32-S3, C3, C6, H2): its flash image or ESP-IDF build folder')">{{ tr('Add Firmware…') }}</button>
       <span class="imw"><button type="button" (click)="imp.set(!imp())" aria-haspopup="menu" [attr.aria-expanded]="imp()">{{ tr('Import') }} ▾</button>
         @if (imp()) { <div class="imm" role="menu"><button type="button" role="menuitem" (click)="imp.set(false); importAppliance()">{{ tr('GNS3 Appliance…') }}</button><button type="button" role="menuitem" (click)="imp.set(false); importProfiles()">{{ tr('Import Profiles…') }}</button></div> }</span>
     </header>
@@ -271,8 +273,30 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
       }
     }
   </section>
-  @if (screenOf(); as j) { <app-vm-screen kind="install" [id]="j.id" [name]="j.name" (closed)="screenOf.set(null)" /> }`,
+  @if (screenOf(); as j) { <app-vm-screen kind="install" [id]="j.id" [name]="j.name" (closed)="screenOf.set(null)" /> }
+  @if (fw(); as f) {
+    <div class="fwback" (click)="fw.set(null)"></div>
+    <div class="fwdlg" role="dialog" [attr.aria-label]="tr('Add Firmware')">
+      <h3>{{ tr('Add Firmware') }}</h3>
+      <p class="muted small">{{ tr('A microcontroller firmware becomes an image: drag it onto the canvas like a switch. Termwright runs it in Espressif’s QEMU on the host, with its UART as the console.') }}</p>
+      <div class="fwg">
+        <label>{{ tr('Board') }}</label><div class="seg fwb">@for (b of fwBoards(); track b.key) { <a [class.on]="f.board === b.key" (click)="fwSet({ board: b.key, mb: b.defMb })">{{ b.name }}</a> }</div>
+        <label>{{ tr('Firmware') }}</label><div><div class="row2"><input [value]="f.path" readonly [placeholder]="tr('A flash image (.bin) or an ESP-IDF build folder')" /><button type="button" class="sm" (click)="fwFile()">{{ tr('File…') }}</button><button type="button" class="sm" (click)="fwFolder()">{{ tr('Build Folder…') }}</button></div>
+          <div class="hint">{{ tr('A merged image (esptool merge_bin) from offset 0, or the build folder of an ESP-IDF project after idf.py build (its flash_args says where each part goes).') }}</div></div>
+        <label>{{ tr('Name') }}</label><input [value]="f.name" (input)="fwSet({ name: $any($event.target).value })" [placeholder]="tr('from the file or folder')" />
+        <label>{{ tr('Flash') }}</label><div><select [value]="f.mb" (change)="fwSet({ mb: +$any($event.target).value })">@for (m of fwBoard()?.flash ?? []; track m) { <option [value]="m" [selected]="m === f.mb">{{ m }} MB</option> }</select>
+          <div class="hint">{{ tr('A smaller image is padded (erased) to this size; the firmware’s own settings are kept in it.') }}</div></div>
+      </div>
+      @if (fwErr()) { <p class="err small">{{ fwErr() }}</p> }
+      <div class="fwf"><button type="button" (click)="fw.set(null)">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="fwAdd()" [disabled]="!f.path || fwBusy()">{{ fwBusy() ? tr('Adding…') : tr('Add Firmware') }}</button></div>
+    </div>
+  }`,
   styles: [`
+    .fwback { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.35); }
+    .fwdlg { position: fixed; z-index: 61; left: 50%; top: 14vh; transform: translateX(-50%); width: min(620px, 94vw); background: var(--panel, var(--surface)); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.4); padding: 16px 18px;
+      h3 { margin: 0 0 4px; font-size: 15px; } .fwg { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 10px 12px; align-items: start; margin-top: 12px; label { padding-top: 6px; color: var(--muted); font-size: 12.5px; } }
+      .row2 { display: flex; gap: 6px; input { flex: 1; min-width: 0; } } .hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; line-height: 1.4; } .fwb { flex-wrap: wrap; }
+      .fwf { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; } .err { color: var(--danger); } }
     :host { display: contents; }
     .apg { position: absolute; inset: 0; z-index: 25; background: var(--bg); display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 16px; overflow: hidden; font-size: 13px; }
     .aph { display: flex; align-items: flex-start; gap: 8px; h2 { margin: 0; font-size: 17px; } .apt { display: flex; flex-direction: column; gap: 3px; min-width: 0; } .sp { flex: 1; } button { white-space: nowrap; } }
@@ -342,6 +366,28 @@ export class LabAppliances extends LabImages {
     effect(() => { const v = this.start(); const id = this.image0(); untracked(() => { this.tab.set(v); if (id) this.pick(id); }); });
   }
   protected readonly imp = signal(false);
+  /** Add Firmware: the board, the file or build folder, its name and flash size. */
+  protected readonly fw = signal<{ board: string; path: string; name: string; mb: number } | null>(null);
+  protected readonly fwBoards = signal<EmuBoard[]>([]);
+  protected readonly fwErr = signal('');
+  protected readonly fwBusy = signal(false);
+  protected fwBoard = computed(() => this.fwBoards().find(b => b.key === this.fw()?.board));
+  async openFw() {
+    this.fwErr.set('');
+    if (!this.fwBoards().length) { try { this.fwBoards.set((await this.backend.emuBoards()) ?? []); } catch (e) { this.ui.error(e); return; } }
+    const b = this.fwBoards()[0]; if (!b) return;
+    this.fw.set({ board: b.key, path: '', name: '', mb: b.defMb });
+  }
+  fwSet(p: Partial<{ board: string; path: string; name: string; mb: number }>) { const f = this.fw(); if (f) this.fw.set({ ...f, ...p }); }
+  async fwFile() { const p = await this.backend.chooseOpenFile(tr('Choose the Flash Image'), [{ displayName: tr('Flash image'), pattern: '*.bin' }]).catch(() => ''); if (p) this.fwSet({ path: p }); }
+  async fwFolder() { const p = await this.backend.chooseDirectory(tr('Choose the ESP-IDF Build Folder')).catch(() => ''); if (p) this.fwSet({ path: p }); }
+  async fwAdd() {
+    const f = this.fw(); if (!f?.path) return;
+    this.fwBusy.set(true); this.fwErr.set('');
+    try { this.lab.emu.set(await this.backend.emuAddFirmware(f.board, f.path, f.name, f.mb)); this.fw.set(null); this.ui.toast(tr('Firmware added: drag it onto the canvas from Microcontrollers'), 'success'); void this.lab.refresh(); }
+    catch (e) { this.fwErr.set(errText(e)); }
+    finally { this.fwBusy.set(false); }
+  }
   /** The install's memory in the unit chosen beside it, like its disk (kept in MB). */
   protected ramUnit: 'MB' | 'GB' = 'GB';
   get ramVal() { return this.ramUnit === 'GB' ? +(this.isoRam / 1024).toFixed(2) : this.isoRam; }

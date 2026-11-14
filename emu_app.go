@@ -211,6 +211,9 @@ type EmuDevice struct {
 	PersonaError string           `json:"personaError"`
 	PersonaInfo  string           `json:"personaInfo"`         // where the file was written, what the CLI showed after boot
 	Computer     bool             `json:"computer,omitempty"`  // a Linux computer: Termwright gives its data ports addresses
+	Board        string           `json:"board,omitempty"`     // a microcontroller (esp32s3…): its firmware runs in Espressif's QEMU
+	FlashMB      int              `json:"flashMb,omitempty"`   // a microcontroller's flash size
+	GDB          int              `json:"gdb,omitempty"`       // a microcontroller's GDB server port on its host (0 = off)
 	Desktop      bool             `json:"desktop,omitempty"`   // a computer with a desktop and Firefox on its screen
 	Routing      *emu.Routing     `json:"routing,omitempty"`   // a computer as a route generator
 	Addrs        map[int]string   `json:"addrs,omitempty"`     // its data ports' addresses (port → address/bits, or "dhcp")
@@ -4139,6 +4142,12 @@ func (a *App) emuView() EmuView {
 		if im != nil {
 			d.Model, d.OS, d.Ports = im.Name, orStr(im.DeviceType, "VM"), im.DataPorts()
 			d.Desktop, d.Routing = vm.Desktop, vm.Routing
+			if emu.BoardOf(im.Board) != nil {
+				d.Board, d.FlashMB = im.Board, im.FlashMB
+				if vm.GDB {
+					d.GDB = l.GDBPort(vm)
+				}
+			}
 			if d.Computer = len(im.PortAddr) > 0; d.Computer {
 				seen := emuLab.portSeen[vm.ID]
 				d.Addrs, d.Addrs6, d.DataGw, d.DataGw6, d.DNS, d.AddrsSeen, d.Net = vm.Addrs, vm.Addrs6, vm.DataGw, vm.DataGw6, vm.DNS, seen.Addrs, &seen

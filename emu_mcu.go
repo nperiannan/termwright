@@ -152,3 +152,25 @@ func emuSafeName(s string) string {
 	}
 	return strings.Trim(b.String(), "-.")
 }
+
+// EmuSetGDB turns a microcontroller's GDB server on or off (from its next start: QEMU's -gdb on the spare port
+// of its slot, on its host; "target remote" goes there through the host).
+func (a *App) EmuSetGDB(id string, on bool) (EmuView, error) {
+	defer emuAs("user")()
+	emuLab.mu.Lock()
+	var v *emu.VM
+	if emuLab.f.Lab != nil {
+		v = emuLab.f.Lab.VMByID(id)
+	}
+	if v == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such microcontroller")
+	}
+	v.GDB = on
+	err := a.emuSave()
+	emuLab.mu.Unlock()
+	if err != nil {
+		return EmuView{}, err
+	}
+	return a.EmuState()
+}

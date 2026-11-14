@@ -13,7 +13,7 @@ import { CmdPalette, PaletteCmd } from './cmd-palette';
 import type { LabHub, LabNote } from '../core/models';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { LabHubDetail, EmuClientState, EmuSTPState, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
+import { LabHubDetail, EmuBoard, EmuClientState, EmuSTPState, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -28,7 +28,7 @@ import { PacketView, PacketWindow } from './packet-view';
 import { TrafficTests } from './traffic-tests';
 
 const BW = 104, BH = 64;
-type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; pc?: boolean; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
+type Pal = { key: string; name: string; sub: string; group: string; ver: string; os: string; cls: string; pc?: boolean; board?: string; dt?: EmuDeviceType; m?: LabModel; tpl?: EmuTemplate };
 
 /** The lab as a workspace tab: device palette, canvas with cables, the
  *  selected switch, the topology summary and the Events log. */
@@ -454,13 +454,22 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             @if (d.restart) { <div class="rsbox"><span>↻ <b>{{ tr('Restart needed') }}</b> {{ tr('It runs with its old settings until it restarts: {0}', d.restart) }}</span></div> }
             @if (d.error || d.personaError) { <div class="kv alert">@if (d.error) { <span>{{ tr('Problem') }}</span><span class="r"><span class="clamp" [title]="d.error + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.error) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a>@if (d.running && d.error.startsWith('Day-0')) { <a class="evl" (click)="lab.day0Again(d.id)" [title]="tr('Its disk and configuration stay')">{{ tr('Type Day 0 Again') }}</a> }</span> }
               @if (d.personaError) { <span>{{ tr('Persona') }}</span><span class="r"><span class="clamp" [title]="d.personaError + '\n\n' + tr('All of it is in the Events log.')">{{ brief(d.personaError) }}</span><a class="evl" (click)="dock.set('events')">{{ tr('Details in Events') }} ›</a></span> }</div> }
+            @if (emu() && d.board; as bk) { @let bd = boardOf(bk);
+              <div class="kv mcu">
+                <span>{{ tr('Board') }}</span><span>{{ bd?.name ?? bk }}@if (bd?.cpu) { <small class="muted"> · {{ bd!.cpu }}</small> }</span>
+                <span>{{ tr('Firmware') }}</span><span><select [ngModel]="d.image" (ngModelChange)="flashFw(d, $event)" [disabled]="lab.busy()" [title]="tr('Another firmware of this board: its flash is made again from it and it starts again')">@for (im of firmwareFor(bk); track im.id) { <option [value]="im.id">{{ im.name }} · {{ im.flashMb }} MB</option> }</select></span>
+                <span>{{ tr('Console') }}</span><span class="mono">telnet :{{ d.console }} · <a (click)="mdo('console', d)" [class.off]="!d.running">{{ tr('Open') }}</a></span>
+                <span>{{ tr('Debugger') }}</span><span><label class="ck"><input type="checkbox" [checked]="!!d.gdb" (change)="setGdb(d, $any($event.target).checked)" [disabled]="lab.busy()" /> GDB</label>@if (d.gdb) { <span class="mono"> :{{ d.gdb }}</span> · <a (click)="copyGdb(d)" [title]="tr('The SSH tunnel to its host and the line for GDB')">{{ tr('Copy') }}</a> }</span>
+              </div>
+              <p class="muted xs mcun">{{ tr('No Wi-Fi or Bluetooth in the emulator: the firmware talks on its console (UART). GDB and a new firmware apply from its next start.') }}</p>
+            }
             <details class="sec" [open]="isOpen('details')" (toggle)="setOpen('details', $any($event.target).open)"><summary>{{ tr('Details') }}</summary><div class="kv">
               <span>{{ tr('Serial') }}</span><span class="mono" [title]="d.hwSerial ? tr('As the switch reports it') : tr('Given by Termwright; the switch has not reported its own yet')">{{ d.hwSerial || d.serial || '-' }}</span>
 
               @if (d.version) { <span>{{ tr('Firmware') }}</span><span class="mono">{{ d.version }}</span> }
-              <span>MAC</span><span class="mono">{{ d.mac || '-' }}</span>
+              @if (!d.board) { <span>MAC</span><span class="mono">{{ d.mac || '-' }}</span>
 
-              <span>{{ tr('Management') }}</span><span class="mono">{{ emu() ? d.ssh : d.mgmtIp }}</span>
+              <span>{{ tr('Management') }}</span><span class="mono">{{ emu() ? d.ssh : d.mgmtIp }}</span> }
 
               @if (emu()) { <span>{{ tr('Console') }}</span><span class="mono">telnet :{{ d.console }}</span>
  }
@@ -1897,7 +1906,7 @@ export class LabWorkspace implements OnDestroy {
   /** EXOS or VOSS (the device type), for the canvas. */
   osOf(d: LabDevice) { const o = `${d.os} ${(d as LabDevice & { deviceType?: string }).deviceType ?? ''}`; return /exos|switch engine/i.test(o) ? 'EXOS' : /voss|fabric engine|vsp/i.test(o) ? 'VOSS' : (d.os || '').split(' ')[0]; }
   /** The model it runs as: its persona's, else the plain VM (EXOS-VM, VOSS-VM). */
-  modelOf(d: LabDevice) { return d.persona?.slots?.[0]?.model || (this.osOf(d) ? this.osOf(d) + '-VM' : d.model); }
+  modelOf(d: LabDevice) { if (d.board) return (this.boardOf(d.board)?.name ?? d.os) + ' · ' + d.model; return d.persona?.slots?.[0]?.model || (this.osOf(d) ? this.osOf(d) + '-VM' : d.model); }
   async saveConsoleLog(d: LabDevice) {
     try {
       const path = await this.backend.chooseSaveFile(tr('Save Console Log'), d.hostname + '-console-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.log', [{ displayName: 'Log', pattern: '*.log;*.txt' }]);
@@ -2197,11 +2206,28 @@ export class LabWorkspace implements OnDestroy {
     this.menu.set(null);
     try { await this.backend.emuSetUplink(d.id, port, on); await this.lab.refresh(); this.ui.toast(on ? tr('{0} {1} goes on the host’s network when it starts (or restarts)', d.hostname, port) : tr('{0} {1} comes off the host’s network when it restarts', d.hostname, port)); } catch (e) { this.ui.error(e); }
   }
-  palRole(p: Pal): DevRole { return p.pc ? 'pc' : p.cls === 'l' ? 'server' : roleOf((p.tpl?.model || '') + ' ' + p.name, p.os); }
+  palRole(p: Pal): DevRole { return p.board ? 'mcu' : p.pc ? 'pc' : p.cls === 'l' ? 'server' : roleOf((p.tpl?.model || '') + ' ' + p.name, p.os); }
   async setRole(d: LabDevice, r: DevRole) { this.menu.set(null); try { await this.backend.emuSetRole(d.id, r === this.defRole(d) ? '' : r); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
   /** What the switch is drawn as: the role chosen in Configure…, else one from its model. */
+  /** The microcontrollers Termwright emulates (Espressif's QEMU), and their firmwares. */
+  protected boards = signal<EmuBoard[]>([]);
+  private boardsAsked = effect(() => { if (this.emu() && !untracked(() => this.boards().length)) void this.backend.emuBoards().then(b => this.boards.set(b ?? []), () => undefined); });
+  boardOf(k: string) { return this.boards().find(b => b.key === k); }
+  firmwareFor(board: string) { return (this.st()?.images ?? []).filter(i => i.board === board); }
+  async flashFw(d: LabDevice, imageId: string) {
+    if (!imageId || imageId === d.image) return;
+    const im = (this.st()?.images ?? []).find(i => i.id === imageId);
+    if (!(await this.ui.confirm(tr('Flash {0}?', im?.name ?? imageId), tr('{0} gets this firmware: its flash is made again from it (what the old firmware saved goes) and it starts again.', d.hostname), tr('Flash')))) { await this.lab.refresh(); return; }
+    try { await this.backend.emuFlashFirmware(d.id, imageId); await this.lab.refresh(); this.ui.toast(tr('Flashed {0}', im?.name ?? ''), 'success'); } catch (e) { this.ui.error(e); await this.lab.refresh(); }
+  }
+  async setGdb(d: LabDevice, on: boolean) { try { await this.backend.emuSetGdb(d.id, on); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }
+  /** GDB's server listens on the host itself: an SSH tunnel to it, then target remote. */
+  copyGdb(d: LabDevice) {
+    const h = this.hostOfDev(d), port = d.gdb ?? 0, addr = this.addrOfHost(h) || this.hname(h);
+    void this.backend.clipboardSet(`ssh -N -L ${port}:127.0.0.1:${port} ${addr}\n# then, in GDB:\ntarget remote localhost:${port}`).then(() => this.ui.toast(tr('Copied: the SSH tunnel and the GDB line'), 'success'));
+  }
   roleOfDev(d: LabDevice): DevRole { return (d.role as DevRole) || this.defRole(d); }
-  defRole(d: LabDevice): DevRole { return d.computer ? 'pc' : roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? ''); }
+  defRole(d: LabDevice): DevRole { return d.board ? 'mcu' : d.computer ? 'pc' : roleOf(d.persona?.slots?.[0]?.model || d.model, d.os, d.image ?? ''); }
   /** The address shown under a computer's name: its first data-port address. */
   dataAddr(d: LabDevice) {
     for (const p of Object.keys({ ...(d.addrs ?? {}), ...(d.running ? d.net?.addrs ?? {} : {}) }).map(Number).sort((a, b) => a - b)) {
@@ -2302,6 +2328,7 @@ export class LabWorkspace implements OnDestroy {
   warnOf(d: LabDevice) { return this.emu() && d.running && d.state !== 'failed' ? (d.personaError || d.error || '') : ''; }
   subOf(d: LabDevice) {
     if (!this.emu()) return d.running ? d.mgmtIp.split('/')[0] : tr('stopped');
+    if (d.board) return d.state === 'running' ? tr('console {0}', d.console ?? '') : tr(d.stateText || 'stopped'); // no network: its UART
     return d.state === 'running' ? this.addrOf(d) : tr(d.stateText || 'stopped');
   }
   addrOf(d: LabDevice) { return this.emu() ? (d.mgmtIp ? d.mgmtIp.split('/')[0] : d.running ? 'DHCP…' : '-') : d.mgmtIp.split('/')[0]; }
@@ -2318,6 +2345,7 @@ export class LabWorkspace implements OnDestroy {
       for (const dt of this.st()?.deviceTypes ?? []) {
         if (!dt.images?.length) continue;
         const im = (this.st()?.images ?? []).find(i => i.id === dt.images[0]);
+        if (im?.board) { const bd = this.boards().find(x => x.key === im.board); items.push({ key: dt.key, board: im.board, name: bd?.name ?? im.board, sub: (im.name || '') + ' · ' + (im.flashMb || '?') + ' MB', group: tr('Microcontrollers'), ver: '', os: im.deviceType, cls: 'm', dt }); continue; }
         items.push({ key: dt.key, pc: !!im?.portAddr?.length, name: dt.model || im?.name || dt.kind, sub: dt.modules?.length ? (dt.modName || 'VIM') + ' ' + dt.modules.map(m => m.replace(/^\d+-VIM-/, '')).join(' / ') : (dt.model ? '' : im?.fileName ?? ''),
           group: dt.osName || dt.kind || tr('Other images'), ver: im?.version ?? '', os: dt.kind, cls: /voss|fabric/i.test(dt.kind + dt.osName + (im?.fileName ?? '') + (im?.deviceType ?? '')) ? 'v' : /linux|ubuntu|debian|centos|alpine|cloudimg/i.test(dt.kind + (im?.fileName ?? '') + (im?.deviceType ?? '')) ? 'l' : '', dt });
       }

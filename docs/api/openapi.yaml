@@ -2912,6 +2912,15 @@ components:
                 computer:
                     description: 'a Linux computer: Termwright gives its data ports addresses'
                     type: boolean
+                board:
+                    description: 'a microcontroller (esp32s3…): its firmware runs in Espressif''s QEMU'
+                    type: string
+                flashMb:
+                    description: a microcontroller's flash size
+                    type: integer
+                gdb:
+                    description: a microcontroller's GDB server port on its host (0 = off)
+                    type: integer
                 desktop:
                     description: a computer with a desktop and Firefox on its screen
                     type: boolean

@@ -606,8 +606,8 @@ export abstract class LabImages implements OnInit, OnDestroy {
   readonly closed = output<void>();
   readonly hostsPage = output<string>();
   protected lab = inject(LabService);
-  private backend = inject(Backend);
-  private ui = inject(Ui);
+  protected backend = inject(Backend);
+  protected ui = inject(Ui);
   protected tr = tr;
   protected tab = signal<'images' | 'templates' | 'profiles' | 'public' | 'onhosts'>('images');
   protected cat = signal<{ file: string; name: string; group: string; note: string; added: boolean; count: number }[]>([]);
