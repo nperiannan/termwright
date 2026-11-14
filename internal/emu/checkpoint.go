@@ -171,3 +171,62 @@ func (l *Lab) VMByName(name string) *VM {
 	}
 	return nil
 }
+
+//go:embed radius.py
+var RadiusPy string
+
+// Radius is the lab's built-in RADIUS server: it runs on every host of the lab
+// and answers the switches there (802.1X and MAC logins).
+type Radius struct {
+	On      bool         `json:"on"`                // running
+	Port    int          `json:"port,omitempty"`    // authentication port (default 1812; accounting on the next)
+	Secret  string       `json:"secret,omitempty"`  // shared with the switches
+	Users   []RadiusUser `json:"users,omitempty"`   // who may log in (the first match wins)
+	MAB     []string     `json:"mab,omitempty"`     // MAC addresses let in by MAC authentication (patterns: 02:63:*, * = any)
+	MABVLAN string       `json:"mabVlan,omitempty"` // the VLAN those get
+}
+
+// RadiusUser is a user name (or a pattern, user*) with its password and VLAN.
+type RadiusUser struct {
+	User     string `json:"user"`
+	Password string `json:"password"`
+	VLAN     string `json:"vlan,omitempty"` // the VLAN (name or number) the switch puts it in
+}
+
+// RadiusPort is the server's authentication port.
+func (r Radius) RadiusPort() int {
+	if r.Port > 0 {
+		return r.Port
+	}
+	return 1812
+}
+
+// RadiusAddr is where this host's switches reach the server: the lab bridge's
+// address, or the host's own on its network ("" = the host's address on the
+// switches' network, not known to Termwright).
+func (l *Lab) RadiusAddr() string {
+	switch l.Mgmt {
+	case "bridge":
+		return strings.Split(l.gatewayPrefix(), "/")[0]
+	case "cloud":
+		return strings.Split(l.HostIP, "/")[0]
+	}
+	return ""
+}
+
+// RadiusScript writes a host's radius.json and starts radius.py there (on: false stops it).
+func (l *Lab) RadiusScript(cfg []byte, on bool) string {
+	dir := Q(l.VMDir())
+	var b strings.Builder
+	fmt.Fprintf(&b, "mkdir -p %s && cd %s || exit 1\n", dir, dir)
+	if !on {
+		b.WriteString("rm -f radius.json; echo radius-ok\n")
+		return b.String()
+	}
+	fmt.Fprintf(&b, "cat > tw-radius.py.new <<'TWPYEOF'\n%sTWPYEOF\n", RadiusPy)
+	b.WriteString("cmp -s tw-radius.py.new tw-radius.py || { mv -f tw-radius.py.new tw-radius.py; p=$(cat radius.pid 2>/dev/null); [ -n \"$p\" ] && kill $p 2>/dev/null; }; rm -f tw-radius.py.new\n")
+	fmt.Fprintf(&b, "umask 077; cat > radius.json.new <<'TWJSEOF'\n%s\nTWJSEOF\nmv -f radius.json.new radius.json\n", cfg)
+	b.WriteString("p=$(cat radius.pid 2>/dev/null); if [ -z \"$p\" ] || ! grep -q tw-radius /proc/$p/cmdline 2>/dev/null; then command -v python3 >/dev/null || { echo 'radius: python3 is missing'; exit 1; }; nohup python3 tw-radius.py \"$PWD\" >radius.log 2>&1 & echo $! > radius.pid; fi\n")
+	b.WriteString("echo radius-ok\n")
+	return b.String()
+}

@@ -246,6 +246,12 @@ class Lab:
         """Type a line (and Enter) into a running install: on its serial console, or (console=False) its keyboard."""
         return self.tool("keys", install=install_id, text=line, enter=True, console=console)
 
+    def radius(self, action: str = "show", **args) -> str:
+        """The lab's RADIUS server (802.1X and MAC logins): action show, log, set (on, port, secret, mab, mab_vlan),
+        add_user (user - a name or a pattern like user* - password, vlan), remove_user (user). reveal=True shows the
+        secret and the passwords."""
+        return self.tool("radius", action=action, **args)
+
     def hub(self, action: str = "list", **args) -> str:
         """Hubs and L2 switches: action list, add (kind="hub"|"switch", name), connect / disconnect (hub, switch,
         port), remove (hub)."""
@@ -298,7 +304,9 @@ class Traffic:
         return self.view()["testers"]
 
     def add_port(self, switch: str, port: str, ip: Optional[str] = None, **fields) -> str:
-        """A test port on a free switch port; returns its name. Fields: ip6, gateway, vlan, groups, lldp."""
+        """A test port on a free switch port; returns its name. Fields: ip6, gateway, vlan, groups, lldp, speed,
+        lag, lacp_fast, clients (many hosts behind it: dict(n=200, dhcp=True, groups=[...], dot1x=dict(user="user{n}",
+        password=...), rate=50)), stp (dict(mode="rstp", prio=4096))."""
         before = {p["name"] for p in self.ports()}
         v = self.lab.request("POST", "/traffic/ports", _body(dict(switch=switch, port=port, ip=ip, **fields)))
         new = [p["name"] for p in (v.get("testers") or []) if p["name"] not in before]
@@ -307,7 +315,16 @@ class Traffic:
         return new[0]
 
     def set_port(self, name: str, **fields) -> dict:
+        """Change a test port: the fields of add_port, and topology_change=True (its next BPDUs say so)."""
         return self.lab.request("PATCH", "/traffic/ports/" + urllib.parse.quote(name, safe=""), _body(fields))
+
+    def clients(self, name: str) -> dict:
+        """How a test port's clients are doing: n, bound (DHCP), auth (802.1X), failed, list (the first 256:
+        MAC, address, 802.1X state, why it failed)."""
+        for p in self.ports():
+            if p["name"] == name:
+                return p.get("clientState") or {}
+        raise ApiError(404, "not-found", "no test port " + name)
 
     def remove_port(self, name: str) -> None:
         self.lab.request("DELETE", "/traffic/ports/" + urllib.parse.quote(name, safe=""))

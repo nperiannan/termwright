@@ -50,6 +50,15 @@ func emuBuiltinTemplates() []EmuTrafficTemplate {
 				}),
 				st("video AF41", "A", "B", func(s *emu.Stream) { s.DSCP, s.Size, s.PPS, s.Seconds, s.MaxLoss = 34, 1200, 500, 60, 0.5 }),
 				st("data BE", "A", "B", func(s *emu.Stream) { s.Size, s.PPS, s.Seconds, s.MaxLoss = 1500, 2000, 60, 5 })}},
+		{ID: "b-qos-congest", Name: "QoS under congestion", Desc: "A and B send into C at 130 % of line rate together for 60 s: high (EF, DSCP 46, PCP 5) 10 % from A, medium (AF41, DSCP 34, PCP 4) 30 % from A, best effort 90 % from B. Passes when the high class loses nothing and keeps its latency (≤ 5 ms), and the medium class loses ≤ 0.5 %; best effort takes the loss (not checked). Give the three test ports the line rate of the switch port C is on (or shape that port), and use VLAN tags when the switch trusts 802.1p.", Ports: 3, Roles: []string{"sender (high and medium)", "sender (best effort)", "receiver (the congested port)"},
+			Streams: []emu.Stream{
+				st("high EF", "A", "C", func(s *emu.Stream) {
+					s.DSCP, s.Prio, s.Size, s.RateUnit, s.Rate, s.Seconds, s.MaxLoss, s.MaxLatency = 46, 5, 256, "pct", 10, 60, 0, 5
+				}),
+				st("medium AF41", "A", "C", func(s *emu.Stream) {
+					s.DSCP, s.Prio, s.Size, s.RateUnit, s.Rate, s.Seconds, s.MaxLoss = 34, 4, 1024, "pct", 30, 60, 0.5
+				}),
+				st("best effort", "B", "C", func(s *emu.Stream) { s.Size, s.RateUnit, s.Rate, s.Seconds, s.MaxLoss = 1500, "pct", 90, 60, 100 })}},
 		{ID: "b-macfill", Name: "MAC table fill", Desc: "4,096 source MACs from A to B at 2,000 pps for 20 s: each MAC is a flow, so the flows with loss show the addresses the switch did not learn.", Ports: 2, Roles: []string{"sender (the MACs)", "receiver"},
 			Streams: []emu.Stream{st("4096 MACs", "A", "B", func(s *emu.Stream) {
 				s.Size, s.PPS, s.Seconds, s.MaxLoss = 128, 2000, 20, 1

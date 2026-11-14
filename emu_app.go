@@ -2859,7 +2859,12 @@ func (a *App) emuStart(host string, ids []string) {
 		failAll(err)
 		return
 	}
-	emuGo(func() { time.Sleep(2 * time.Second); a.emuPatchSync(a.emuPollFresh().Up); a.emuHubSync() }) // cables they now have themselves leave the patch panel; hubs are there for them
+	emuGo(func() {
+		time.Sleep(2 * time.Second)
+		a.emuPatchSync(a.emuPollFresh().Up)
+		a.emuHubSync()
+		_ = a.emuRadiusSync()
+	}) // cables they now have themselves leave the patch panel; hubs are there for them
 	emuLab.mu.Lock()
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.SplitN(strings.TrimSpace(line), " ", 3)

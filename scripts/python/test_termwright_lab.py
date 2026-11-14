@@ -92,7 +92,7 @@ class Fake(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"\x89PNG fake")
             return
-        if path in ("/tools/dns", "/tools/images", "/tools/checkpoint", "/tools/keys"):
+        if path in ("/tools/dns", "/tools/images", "/tools/checkpoint", "/tools/keys", "/tools/radius"):
             return self.reply(200, {"result": "ok"})
         if path == "/tools/history":
             return self.reply(200, {"result": "Changes, newest first"})
@@ -172,6 +172,16 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(Fake.state["calls"][-1][2], {"install": "ab12", "text": "root", "enter": True, "console": True})
         self.lab.images(type="EXOS")
         self.assertEqual(Fake.state["calls"][-1][1:], ("/api/v1/lab/tools/images", {"type": "EXOS"}))
+
+    def test_radius_and_clients(self):
+        self.lab.radius("add_user", user="user*", password="pw", vlan="100")
+        self.assertEqual(Fake.state["calls"][-1][1:], ("/api/v1/lab/tools/radius", {"action": "add_user", "user": "user*", "password": "pw", "vlan": "100"}))
+        t = self.lab.traffic
+        a = t.add_port("leaf-1", "5", clients=dict(n=20, dhcp=True, dot1x=dict(user="user{n}", password="pw")), stp=dict(mode="rstp"))
+        post = [c for c in Fake.state["calls"] if c[1] == "/api/v1/lab/traffic/ports"][-1]
+        self.assertEqual(post[2]["clients"]["dot1x"]["user"], "user{n}")
+        self.assertEqual(a, "Test port 1")
+        self.assertEqual(tw._body(dict(topology_change=True)), {"topologyChange": True})
 
     def test_install_wait_raises_on_failure(self):
         self.lab.install_iso("/x/a.iso")

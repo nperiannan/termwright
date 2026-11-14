@@ -406,7 +406,19 @@ export interface EmuField { name: string; value?: string; off: number; n: number
 export interface EmuPacketDetail extends EmuPacket { at: string; hex: string; fields: EmuField[] | null; total: number; }
 
 /** A test port of the traffic generator: a sender and counter on a switch's free port. */
-export interface EmuTester { id: string; name: string; vm: string; port: number; portName?: string; mac: string; ip?: string; ip6?: string; groups?: string[] | null; dhcp?: boolean; slaac?: boolean; lldp?: boolean; lease?: string; lease6?: string; gw?: string; vlan?: number; speed?: number; lag?: string; lacpFast?: boolean; lacpUp?: string; neighbor?: string; x?: number; y?: number; }
+export interface EmuTester { id: string; name: string; vm: string; port: number; portName?: string; mac: string; ip?: string; ip6?: string; groups?: string[] | null; dhcp?: boolean; slaac?: boolean; lldp?: boolean; lease?: string; lease6?: string; gw?: string; vlan?: number; speed?: number; lag?: string; lacpFast?: boolean; lacpUp?: string; neighbor?: string; x?: number; y?: number;
+  clients?: EmuClients | null; stp?: EmuSTP | null; clientState?: EmuClientState | null; stpState?: EmuSTPState | null; }
+/** Many hosts behind a test port (802.1X, DHCP, multicast). */
+export interface EmuClients { n: number; mac?: string; rate?: number; dhcp?: boolean; groups?: string[] | null; dot1x?: { user?: string; password?: string } | null; }
+export interface EmuClientState { n: number; bound: number; auth: number; failed: number; list?: string[][] | null; }
+/** Spanning tree on a test port. */
+export interface EmuSTP { mode: 'stp' | 'rstp'; prio?: number; tc?: number; }
+export interface EmuSTPState { sent: number; got: number; root?: string; bridge?: string; cost?: number; role?: string; rootIsUs?: boolean; tc?: boolean; }
+/** The lab's RADIUS server. */
+export interface EmuRadiusUser { user: string; password: string; vlan?: string; }
+export interface EmuRadiusLogin { at: number; switch: string; user: string; how: string; result: string; vlan?: string; }
+export interface EmuRadiusHost { host: string; address: string; running: boolean; err?: string; accept: number; reject: number; challenge: number; acct: number; logins: EmuRadiusLogin[]; }
+export interface EmuRadiusView { on: boolean; port: number; secret?: string; users?: EmuRadiusUser[] | null; mab?: string[] | null; mabVlan?: string; hosts: EmuRadiusHost[]; }
 /** A stream of frames between test ports. */
 export interface EmuStream { id: string; name: string; from: string; to?: string; kind: 'udp' | 'icmp' | 'tcp' | 'arp' | 'raw' | 'pcap'; vlan?: number; prio?: number; dstMac?: string; srcIp?: string; dstIp?: string; dport?: number; size: number; pps: number; seconds?: number; count?: number; maxLoss: number; maxLatency?: number; off?: boolean; dscp?: number; sizeMode?: '' | 'inc' | 'random' | 'imix'; sizeMax?: number; burst?: number; mods?: EmuMod[] | null; maxJitter?: number; rateUnit?: '' | 'mbps' | 'pct'; rate?: number; rtt?: boolean; pcap?: string; pcapId?: string; pcapFrames?: number; pcapSecs?: number; pcapTiming?: boolean; loops?: number; rewriteMacs?: boolean; }
 /** A saved traffic test (RFC 2544, RFC 2889 learning, convergence). */

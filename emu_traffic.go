@@ -72,8 +72,10 @@ var emuTraf struct {
 	final   bool                  // the last run's counters are final (not read from the hosts again)
 	prev    map[string][3]float64 // per stream: when, tx and rx at the last read (for the rates)
 	hist    map[string][][5]float64
-	leases  map[string][2]string // test port → the address it got by DHCP ("ip/len via gw"), by SLAAC
-	proto   map[string][2]string // test port → its LAG as LACP has it, its LLDP neighbour
+	leases  map[string][2]string        // test port → the address it got by DHCP ("ip/len via gw"), by SLAAC
+	proto   map[string][2]string        // test port → its LAG as LACP has it, its LLDP neighbour
+	clients map[string]*emu.ClientState // test port → how its clients are doing
+	stp     map[string]*emu.STPState    // test port → what it hears by spanning tree
 }
 
 func emuTesterName(l *emu.Lab) string {
@@ -237,16 +239,20 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		LLDP map[string]struct {
 			Name, Port, PortDesc, Chassis string
 		} `json:"lldp"`
-		Jit  map[string][]float64            `json:"jit"`
-		Hist map[string]map[string]int       `json:"hist"`
-		FRX  map[string]map[string][]float64 `json:"frx"`
-		FTX  map[string]map[string]int       `json:"ftx"`
-		FLab map[string]map[string]string    `json:"flab"`
-		QoS  map[string]map[string]int       `json:"qos"`
+		Clients map[string]*emu.ClientState     `json:"clients"`
+		STP     map[string]*emu.STPState        `json:"stp"`
+		Jit     map[string][]float64            `json:"jit"`
+		Hist    map[string]map[string]int       `json:"hist"`
+		FRX     map[string]map[string][]float64 `json:"frx"`
+		FTX     map[string]map[string]int       `json:"ftx"`
+		FLab    map[string]map[string]string    `json:"flab"`
+		QoS     map[string]map[string]int       `json:"qos"`
 	}
 	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}, OOO: map[string]int{}, Dup: map[string]int{}, Jit: map[string][]float64{},
 		Hist: map[string]map[string]int{}, FRX: map[string]map[string][]float64{}, FTX: map[string]map[string]int{}, FLab: map[string]map[string]string{}, QoS: map[string]map[string]int{}}
-	dyn := slices.ContainsFunc(v.Testers, func(t emu.Tester) bool { return t.DHCP || t.SLAAC || t.Lag != "" || t.LLDP }) // (their protocols report while nothing runs)
+	dyn := slices.ContainsFunc(v.Testers, func(t emu.Tester) bool {
+		return t.DHCP || t.SLAAC || t.Lag != "" || t.LLDP || t.Clients != nil || t.STP != nil
+	}) // (their protocols report while nothing runs)
 	if run != 0 || emuTraf.last != nil || dyn {
 		for _, h := range hosts {
 			out, err := a.emuRun(h, "cat "+emu.Q(dir)+"/traffic-stats.json 2>/dev/null", 15*time.Second)
@@ -293,6 +299,11 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 			if emuTraf.proto == nil {
 				emuTraf.proto = map[string][2]string{}
 			}
+			if emuTraf.clients == nil {
+				emuTraf.clients, emuTraf.stp = map[string]*emu.ClientState{}, map[string]*emu.STPState{}
+			}
+			maps.Copy(emuTraf.clients, st.Clients)
+			maps.Copy(emuTraf.stp, st.STP)
 			for k, x := range st.LACP {
 				p := emuTraf.proto[k]
 				switch {
@@ -426,6 +437,12 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		}
 		if p, ok := emuTraf.proto[v.Testers[i].ID]; ok {
 			v.Testers[i].LacpUp, v.Testers[i].Neighbor = p[0], p[1]
+		}
+		if v.Testers[i].Clients != nil {
+			v.Testers[i].ClientState = emuTraf.clients[v.Testers[i].ID]
+		}
+		if v.Testers[i].STP != nil {
+			v.Testers[i].STPState = emuTraf.stp[v.Testers[i].ID]
 		}
 	}
 	emuLab.mu.Unlock()
@@ -569,6 +586,17 @@ func (a *App) EmuTesterSet(t emu.Tester) (EmuTrafficView, error) {
 	cur.IP6, cur.Groups, cur.DHCP, cur.SLAAC, cur.LLDP = t.IP6, t.Groups, t.DHCP && t.IP == "", t.SLAAC && t.IP6 == "", t.LLDP
 	cur.Speed = min(400000, max(0, t.Speed))
 	cur.Lag, cur.LacpFast = strings.TrimSpace(t.Lag), t.LacpFast
+	if err := emuCheckClients(t.Clients, t.STP); err != nil {
+		emuLab.mu.Unlock()
+		return EmuTrafficView{}, err
+	}
+	if t.Clients != nil && t.Clients.N == 0 {
+		t.Clients = nil
+	}
+	if t.STP != nil && t.STP.Mode == "" {
+		t.STP = nil
+	}
+	cur.Clients, cur.STP = t.Clients, t.STP
 	for i, x := range l.Streams { // rates in % of its line rate follow it
 		if x.From == cur.ID && x.RateUnit == "pct" {
 			l.Streams[i].PPS = min(100000, max(1, int(math.Round(x.PPSFor(cur.LineMbps())))))
@@ -592,6 +620,36 @@ func (a *App) EmuTesterSet(t emu.Tester) (EmuTrafficView, error) {
 	}
 	return a.EmuTraffic()
 }
+
+// emuCheckClients refuses clients or spanning tree settings that cannot work.
+func emuCheckClients(c *emu.Clients, s *emu.STP) error {
+	if c != nil {
+		switch {
+		case c.N < 0 || c.N > emu.ClientsMax:
+			return fmt.Errorf("a test port stands for 1 to %d clients", emu.ClientsMax)
+		case c.MAC != "" && !emuMACRe.MatchString(c.MAC):
+			return fmt.Errorf("%s is not a MAC address", c.MAC)
+		case c.Rate < 0 || c.Rate > 1000:
+			return errors.New("clients start at 1 to 1000 a second")
+		}
+		for _, g := range c.Groups {
+			if !emu.IsMulticast(g) {
+				return fmt.Errorf("%s is not a multicast group", g)
+			}
+		}
+	}
+	if s != nil {
+		if s.Mode != "" && s.Mode != "stp" && s.Mode != "rstp" {
+			return errors.New("spanning tree is stp or rstp")
+		}
+		if s.Prio != nil && (*s.Prio < 0 || *s.Prio > 61440 || *s.Prio%4096 != 0) {
+			return errors.New("a bridge priority is 0 to 61440 in steps of 4096")
+		}
+	}
+	return nil
+}
+
+var emuMACRe = regexp.MustCompile(`^(?i)[0-9a-f]{2}(:[0-9a-f]{2}){5}$`)
 
 // EmuTesterRemove takes a test port off (its streams go too).
 func (a *App) EmuTesterRemove(id string) (EmuTrafficView, error) {

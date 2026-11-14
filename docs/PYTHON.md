@@ -39,7 +39,7 @@ Test ports and streams are as in the API; the keyword arguments are the API's fi
 
 | Call | What it does |
 |---|---|
-| `add_port(switch, port, ip=…)` | A test port on a free switch port; returns its name. `ip6`, `gateway`, `vlan`, `groups`, `lldp` as in the API |
+| `add_port(switch, port, ip=…)` | A test port on a free switch port; returns its name. `ip6`, `gateway`, `vlan`, `groups`, `lldp`, `speed`, `lag`, `lacp_fast`, `clients` (dict: `n`, `dhcp`, `groups`, `dot1x`, `rate`, `mac`), `stp` (dict: `mode`, `prio`) as in the API; `set_port(name, topology_change=True)` |
 | `add_stream(name, src, dst, …)` | A stream. `rate=` gives the speed in Mbit/s on the wire, or with `rate_unit="pct"` in % of the sending test port's line rate (`set_port(name, speed=10000)`; `line_mbps=` works it out in Python instead), in place of `pps=`; `rtt=True` measures round-trip latency (also between hosts); `pcp=` is the VLAN priority; `size_mode="imix"`, `mods=[…]` for flows. Results carry `p50`, `p95`, `p99`, `hist`, `flows`, `marks` |
 | `start(*names)`, `stop()`, `wait_done()` | Send, stop, wait; `wait_done` returns the results by stream name |
 | `run_streams([…])` | Add, send, wait, return the results, and remove the streams again (`keep=True` leaves them) |
@@ -52,6 +52,8 @@ Test ports and streams are as in the API; the keyword arguments are the API's fi
 | `rows(run)` | The result rows of a run |
 | `traffic.templates()`, `traffic.apply_template(name, *ports)`, `traffic.save_template(name, description)`, `traffic.remove_template(name)` | The test library: list it, put a template on test ports (one per role A, B…), keep the lab's streams and tests as yours |
 | `screen(device, path=None)`, `keys(device, text, enter, keys)`, `install_type(install_id, line)` | A PNG of a device's display (`install:<id>` for an installer); typing on its keyboard; a line on an installer's serial console |
+| `radius(action, **args)` | The lab's RADIUS server: `show`, `log`, `set` (on, port, secret, mab, mab_vlan), `add_user` (user, password, vlan), `remove_user` (user); `reveal=True` shows the secret and passwords |
+| `traffic.clients(name)` | How a test port's clients are doing: `n`, `bound`, `auth`, `failed`, `list` |
 | `hub(action, **args)` | Hubs and L2 switches: `list`, `add` (kind, name), `connect` / `disconnect` (hub, switch, port), `remove` (hub) |
 | `checkpoint(switch, note)`, `checkpoints(switch)`, `restore(switch, tag)`, `auto_checkpoints(on)` | A running switch's whole state kept now, listed, brought back; checkpoints before typed commands on or off |
 | `dns(*servers, default=False)` | The lab's name servers; with servers, sets them (at most three); `default=True` goes back to 8.8.8.8 1.1.1.1 |

@@ -598,3 +598,95 @@ func TestTrafficPyLACP(t *testing.T) {
 		t.Fatalf("to the LAG: rx %v other %v", st.RX, st.Other)
 	}
 }
+
+func TestTrafficPyClients(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "tw-radius.py"), []byte(RadiusPy), 0o644)
+	r := Radius{On: true, Port: 45812, Secret: "lab-secret", MAB: []string{"02:63:aa:*"}, MABVLAN: "200",
+		Users: []RadiusUser{{User: "user[1-4]", Password: "pw1", VLAN: "100"}, {User: "admin", Password: "letmein"}}}
+	rc, _ := json.Marshal(map[string]any{"bind": "127.0.0.1", "port": r.RadiusPort(), "secret": r.Secret, "users": r.Users, "mab": r.MAB, "mabVlan": r.MABVLAN})
+	_ = os.WriteFile(filepath.Join(dir, "radius.json"), rc, 0o644)
+	prio := 4096
+	l := &Lab{Testers: []Tester{{ID: "t1", MAC: "02:74:77:00:00:01", STP: &STP{Mode: "rstp", Prio: &prio},
+		Clients: &Clients{N: 5, DHCP: true, Groups: []string{"239.1.1.1"}, Dot1x: &Dot1x{User: "user{n}", Password: "pw1"}, Rate: 100}}}}
+	if got := l.Testers[0].ClientMAC(); got != "02:63:01:00:00:00" {
+		t.Fatalf("client MAC %s", got)
+	}
+	cfg := map[string]any{"run": 3, "testers": []map[string]any{{"id": "t1", "mac": "02:74:77:00:00:01", "listen": 44201, "send": 44211,
+		"clients": map[string]any{"n": 5, "mac": "02:63:01:00:00:00", "dhcp": true, "groups": []string{"239.1.1.1"}, "rate": 100, "dot1x": map[string]any{"user": "user{n}", "password": "pw1"}},
+		"stp":     map[string]any{"mode": "rstp", "prio": 4096}}}, "streams": []any{}}
+	j, _ := json.Marshal(cfg)
+	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+	res := filepath.Join(dir, "switch.json")
+	sw := exec.Command("python3", "-I", filepath.Join("testdata", "fakeswitch.py"), "44211", "44201", "45812", r.Secret, res, "7")
+	var swOut strings.Builder
+	sw.Stdout, sw.Stderr = &swOut, &swOut
+	if err := sw.Start(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	var procs []*exec.Cmd
+	for _, a := range [][]string{{filepath.Join(dir, "tw-radius.py"), dir}, {filepath.Join(dir, "tw-traffic.py"), dir}} {
+		c := exec.Command("python3", append([]string{"-I"}, a...)...)
+		if err := c.Start(); err != nil {
+			t.Fatal(err)
+		}
+		procs = append(procs, c)
+	}
+	defer func() {
+		for _, c := range procs {
+			_ = c.Process.Kill()
+			_, _ = c.Process.Wait()
+		}
+	}()
+	if err := sw.Wait(); err != nil {
+		t.Fatalf("the switch: %v %s", err, swOut.String())
+	}
+	var got struct {
+		Auth             map[string]string
+		Fail, DHCP, IGMP []string
+		BPDU             int
+		PAP, PapBad, MAB string
+	}
+	b, _ := os.ReadFile(res)
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err, string(b))
+	}
+	if got.PAP != "accept" || got.PapBad != "reject" || got.MAB != "accept" {
+		t.Errorf("PAP %s, wrong password %s, MAC login %s", got.PAP, got.PapBad, got.MAB)
+	}
+	if len(got.Auth) != 4 || got.Auth["02:63:01:00:00:00"] != "100" || len(got.Fail) != 1 || got.Fail[0] != "02:63:01:00:00:04" {
+		t.Errorf("802.1X: in %v, refused %v", got.Auth, got.Fail)
+	}
+	if len(got.DHCP) != 4 || len(got.IGMP) < 4 || got.BPDU < 2 {
+		t.Errorf("DHCP %v, IGMP %d, BPDUs %d", got.DHCP, len(got.IGMP), got.BPDU)
+	}
+	var st struct {
+		Clients map[string]ClientState `json:"clients"`
+		STP     map[string]STPState    `json:"stp"`
+	}
+	b, _ = os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+	if err := json.Unmarshal(b, &st); err != nil {
+		t.Fatal(err)
+	}
+	c, s := st.Clients["t1"], st.STP["t1"]
+	if c.N != 5 || c.Auth != 4 || c.Failed != 1 || c.Bound != 4 || len(c.List) != 5 || c.List[0][1] != "10.5.0.10/24" && c.List[0][1] == "" {
+		t.Errorf("clients %+v", c)
+	}
+	if s.Sent < 2 || s.Got < 2 || !s.RootIsUs || s.Role != "root" || s.Cost != 20000 {
+		t.Errorf("stp %+v", s)
+	}
+	var rs struct {
+		Accept, Reject, Challenge int
+		Log                       [][]any
+	}
+	time.Sleep(1500 * time.Millisecond) // (it writes its counts once a second)
+	b, _ = os.ReadFile(filepath.Join(dir, "radius-stats.json"))
+	if err := json.Unmarshal(b, &rs); err != nil || rs.Accept != 6 || rs.Reject != 2 || rs.Challenge != 5 {
+		t.Errorf("radius %v %+v", err, rs)
+	}
+}

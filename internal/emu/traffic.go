@@ -36,9 +36,78 @@ type Tester struct {
 	LacpFast bool     `json:"lacpFast,omitempty"` // LACP every second (else every 30 s)
 	LacpUp   string   `json:"lacpUp,omitempty"`   // the LAG as LACP has it: "up" or why not (filled in for the screens)
 	Neighbor string   `json:"neighbor,omitempty"` // what the switch says on LLDP: its name and port (filled in for the screens)
-	PortName string   `json:"portName,omitempty"` // as the switch names it (filled in for the screens)
-	X        float64  `json:"x,omitempty"`        // on the canvas
-	Y        float64  `json:"y,omitempty"`        // on the canvas
+	Clients  *Clients `json:"clients,omitempty"`  // many hosts behind it (DHCP, multicast, 802.1X), each with its own MAC
+	STP      *STP     `json:"stp,omitempty"`      // it speaks spanning tree (STP or RSTP)
+	// ClientState is how its clients are doing (filled in for the screens).
+	ClientState *ClientState `json:"clientState,omitempty"`
+	// STPState is what it hears from the switch by spanning tree (filled in for the screens).
+	STPState *STPState `json:"stpState,omitempty"`
+	PortName string    `json:"portName,omitempty"` // as the switch names it (filled in for the screens)
+	X        float64   `json:"x,omitempty"`        // on the canvas
+	Y        float64   `json:"y,omitempty"`        // on the canvas
+}
+
+// ClientsMax is the most clients one test port stands for.
+const ClientsMax = 4000
+
+// Clients are many hosts behind one test port, each with its own MAC address:
+// they take addresses by DHCP, join multicast groups (IGMP/MLD) and log in by
+// 802.1X (EAPOL, EAP-MD5), started a few a second.
+type Clients struct {
+	N      int      `json:"n"`                // how many (1-4000)
+	MAC    string   `json:"mac,omitempty"`    // the first one's MAC; the others count up from it ("" = made from the test port's)
+	Rate   int      `json:"rate,omitempty"`   // how many start a second (default 50)
+	DHCP   bool     `json:"dhcp,omitempty"`   // each takes an IPv4 address by DHCP
+	Groups []string `json:"groups,omitempty"` // multicast groups each joins (IGMPv2 / MLDv1), again on every query
+	Dot1x  *Dot1x   `json:"dot1x,omitempty"`  // each logs in by 802.1X first (it sends nothing else before it is in)
+}
+
+// Dot1x is how emulated clients log in: EAP-MD5 with these. {n} is the
+// client's number (1, 2, …) and {mac} its MAC.
+type Dot1x struct {
+	User     string `json:"user,omitempty"`     // default user{n}
+	Password string `json:"password,omitempty"` // default "password"
+}
+
+// ClientState is how a test port's clients are doing.
+type ClientState struct {
+	N      int        `json:"n"`              // clients
+	Bound  int        `json:"bound"`          // with a DHCP address
+	Auth   int        `json:"auth"`           // logged in by 802.1X
+	Failed int        `json:"failed"`         // refused, or the switch did not answer
+	List   [][]string `json:"list,omitempty"` // the first 256: MAC, address, 802.1X state, why it failed
+}
+
+// STP makes a test port speak spanning tree: a BPDU every 2 s that offers it
+// as a bridge (as the root, when its priority is the lowest).
+type STP struct {
+	Mode string `json:"mode"`           // stp or rstp
+	Prio *int   `json:"prio,omitempty"` // its bridge priority (0-61440, steps of 4096; default 32768)
+	TC   int    `json:"tc,omitempty"`   // raise it by one to signal a topology change (the next BPDUs carry the TC flag)
+}
+
+// STPState is what a test port hears from the switch by spanning tree.
+type STPState struct {
+	Sent     int    `json:"sent"`               // BPDUs sent
+	Got      int    `json:"got"`                // BPDUs received
+	Root     string `json:"root,omitempty"`     // the root bridge the switch announces (priority/MAC)
+	Bridge   string `json:"bridge,omitempty"`   // the switch's own bridge (priority/MAC)
+	Cost     int    `json:"cost,omitempty"`     // the switch's path cost to the root
+	Role     string `json:"role,omitempty"`     // RSTP: the role of the switch port that sent it
+	RootIsUs bool   `json:"rootIsUs,omitempty"` // the switch takes this test port as the root
+	TC       bool   `json:"tc,omitempty"`       // the last BPDU carried a topology change
+}
+
+// ClientMAC is the first client MAC for a test port: its own MAC with 02:63 in front.
+func (t Tester) ClientMAC() string {
+	if t.Clients != nil && t.Clients.MAC != "" {
+		return t.Clients.MAC
+	}
+	p := strings.Split(t.MAC, ":")
+	if len(p) != 6 {
+		return ""
+	}
+	return "02:63:" + p[5] + ":00:00:00"
 }
 
 // Stream is frames from one test port to another (or to all).
@@ -208,6 +277,8 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 		Lag      string   `json:"lag,omitempty"`
 		LacpFast bool     `json:"lacpFast,omitempty"`
 		LacpPort int      `json:"lacpPort,omitempty"`
+		Clients  *Clients `json:"clients,omitempty"`
+		STP      *STP     `json:"stp,omitempty"`
 	}
 	type sc struct {
 		Stream
@@ -231,7 +302,13 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 				}
 			}
 		}
-		ts = append(ts, tc{t.ID, t.Name, t.DHCP, t.SLAAC, t.LLDP, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se, t.Lag, t.LacpFast, port})
+		var cl *Clients
+		if t.Clients != nil && t.Clients.N > 0 {
+			c := *t.Clients
+			c.MAC = t.ClientMAC()
+			cl = &c
+		}
+		ts = append(ts, tc{t.ID, t.Name, t.DHCP, t.SLAAC, t.LLDP, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se, t.Lag, t.LacpFast, port, cl, t.STP})
 	}
 	var ss []sc
 	for _, s := range l.Streams {

@@ -13,7 +13,11 @@
 # ARP, neighbour solicitations and ping. They read the switch's LLDP (its name
 # and port), and test ports with the same LAG name speak LACP (802.1AX, active):
 # with the switch they form a link aggregation, and a stream to one of them is
-# received on any of them.
+# received on any of them. A test port can also stand for many clients (hosts
+# behind it, each with its own MAC): they take addresses by DHCP, join multicast
+# groups (IGMP/MLD) and log in by 802.1X (EAPOL, EAP-MD5), started a few at a time.
+# It can speak STP or RSTP: BPDUs that claim a bridge (priority and MAC), and a
+# topology change on request; the switch's BPDUs are read back.
 # Each frame carries a signature: stream, run, sequence, send time and flow, so the
 # receiver counts loss, out-of-order and duplicate frames, latency (a histogram for
 # its percentiles) and jitter, per stream and per flow (the values of its changing
@@ -24,7 +28,7 @@
 # classic little-endian pcap) at a rate or with the capture's own timing; the receiving
 # test ports count its frames by their contents (from the EtherType on, any VLAN tags
 # left out), so they are counted on switched paths, not routed ones.
-import bisect, json, math, os, random, socket, struct, sys, time, select
+import bisect, hashlib, json, math, os, random, socket, struct, sys, time, select
 
 d = sys.argv[1]
 cfg_path, st_path = os.path.join(d, "traffic.json"), os.path.join(d, "traffic-stats.json")
@@ -140,6 +144,18 @@ class Tester:
         s.groups = [ip_b(g) for g in t.get("groups") or []]
         s.last_join, s.garp_at = 0, 0
         s.lag, s.lacp_fast = t.get("lag", ""), bool(t.get("lacpFast"))
+        cl = t.get("clients") or {}
+        key = (cl.get("n", 0), cl.get("mac", ""))
+        if getattr(s, "cl_key", None) != key:
+            s.cl_key, s.clients = key, [Client(s, k, bump(mac_b(cl["mac"]), k)) for k in range(min(4000, cl.get("n", 0)))] if cl.get("n") and cl.get("mac") else []
+            s.cl_start, s.cl_tick = 0, 0
+            s.cmac, s.cip = {c.mac: c for c in s.clients}, {}  # its clients by MAC and address, for what comes back to them
+        s.cl = cl
+        s.stp = t.get("stp") or {}
+        if not hasattr(s, "stp_at"):
+            s.stp_at, s.stp_tx, s.stp_rx, s.stp_tc, s.stp_peer, s.stp_tcn = 0, 0, 0, 0, None, s.stp.get("tc", 0)
+        if s.stp.get("tc", 0) != s.stp_tcn:  # a topology change asked for: the next BPDUs say so
+            s.stp_tcn, s.stp_tc, s.stp_at = s.stp.get("tc", 0), 4, 0
         s.lacp_port = t.get("lacpPort", 1)
         if not hasattr(s, "partner"):
             s.partner, s.partner_at, s.lacp_at, s.neighbour = None, 0, 0, None
@@ -245,7 +261,37 @@ class Tester:
         st, p = s.lacp_state(now)
         return {"lag": s.lag, "up": st & 0x30 == 0x30, "state": st, "partner": {"sys": p["sys"].hex(":"), "key": p["key"], "port": p["port"], "state": p["state"]} if p else None}
 
-    def tick(s, now):  # its own protocols: DHCP, SLAAC, gratuitous ARP, LLDP, LACP
+    def bpdu(s, now):  # a configuration BPDU (STP) or an RST BPDU: this test port as root
+        rst = s.stp.get("mode") == "rstp"
+        prio = int(s.stp.get("prio", 32768) if s.stp.get("prio") is not None else 32768) & 0xF000
+        bid = struct.pack("!H", prio) + s.mac
+        flags = 0
+        if s.stp_tc > 0:
+            flags |= 0x01  # topology change
+            s.stp_tc -= 1
+        if rst:
+            flags |= 0x02 | 0x0C | 0x30  # proposal, port role designated, learning, forwarding
+        body = struct.pack("!HBBB8sI8sHHHHH", 0, 2 if rst else 0, 2 if rst else 0, flags, bid, 0, bid, 0x8001, 0, 20 * 256, 2 * 256, 15 * 256) + (b"\0" if rst else b"")
+        llc = b"\x42\x42\x03" + body
+        s.send(b"\x01\x80\xc2\x00\x00\x00" + s.mac + struct.pack("!H", len(llc)) + llc)
+        s.stp_tx += 1
+
+    def bpdu_got(s, b):  # the switch's BPDU: who it says is root, its own bridge, its port's role
+        if len(b) < 35 or b[0:3] != b"\x42\x42\x03":
+            return
+        b = b[3:]
+        ver, typ, flags = b[2], b[3], b[4]
+        s.stp_rx += 1
+        if typ == 0x80:
+            s.stp_peer = {"type": "TCN"}
+            return
+        root, cost, bridge, port = b[5:13], struct.unpack("!I", b[13:17])[0], b[17:25], struct.unpack("!H", b[25:27])[0]
+        role = ["unknown", "alternate/backup", "root", "designated"][(flags >> 2) & 3] if ver >= 2 else ""
+        s.stp_peer = {"version": ver, "root": "%d/%s" % (struct.unpack("!H", root[:2])[0], root[2:].hex(":")), "cost": cost,
+                      "bridge": "%d/%s" % (struct.unpack("!H", bridge[:2])[0], bridge[2:].hex(":")), "port": "%x" % port, "role": role, "tc": bool(flags & 1),
+                      "rootIsUs": root[2:] == s.mac}
+
+    def tick(s, now):  # its own protocols: DHCP, SLAAC, gratuitous ARP, LLDP, LACP, STP, its clients
         if s.dhcp:
             if s.dhcp_state in ("", "discover") and now - s.dhcp_at > 4:
                 s.dhcp_state, s.dhcp_at = "discover", now
@@ -268,6 +314,17 @@ class Tester:
         if s.lag and now - s.lacp_at > (1 if s.lacp_fast else 30) - (0.02 if s.lacp_at else 99):
             s.lacp_at = now
             s.lacp_send(now)
+        if s.stp.get("mode") and now - s.stp_at > 2:
+            s.stp_at = now
+            s.bpdu(now)
+        if s.clients and now - s.cl_tick > 0.1:
+            s.cl_tick = now
+            if not s.cl_start:
+                s.cl_start = now
+            rate = max(1, int(s.cl.get("rate", 50)))  # clients started a second
+            started = min(len(s.clients), int((now - s.cl_start) * rate) + 1)
+            for c in s.clients[:started]:
+                c.tick(now)
 
     def join(s):  # IGMPv2 / MLDv1 reports for the groups it is in
         for g in s.groups:
@@ -280,6 +337,134 @@ class Tester:
                 p = p[:2] + struct.pack("!H", l4sum(s.ip6, g, 58, p)) + p[4:]
                 hbh = struct.pack("!BB", 58, 0) + b"\x05\x02\x00\x00\x01\x00"  # router alert, PadN
                 s.send(l2(mcast_mac(g), s.mac, s.vlan, 0, 0x86DD) + ipv6(s.ip6, g, 0, hbh + p, 0, 1))
+
+
+PAE = b"\x01\x80\xc2\x00\x00\x03"
+
+
+class Client:
+    """A host behind a test port: its own MAC, DHCP, multicast groups and 802.1X (EAP-MD5)."""
+
+    def __init__(s, tp, idx, mac):
+        s.tp, s.idx, s.mac = tp, idx, mac
+        s.ip, s.gw, s.lease = b"\0\0\0\0", None, None
+        s.xid = random.randrange(1 << 32)
+        s.dhcp_state, s.dhcp_at, s.lease_end, s.offer = "", 0, 0, None
+        s.x_state, s.x_at, s.x_tries, s.x_why = "", 0, 0, ""
+        s.join_at = 0
+
+    def send(s, dst, et, payload):
+        s.tp.send(l2(dst, s.mac, s.tp.vlan, 0, et) + payload)
+
+    def name(s, pat):
+        return (pat or "").replace("{n}", str(s.idx + 1)).replace("{mac}", s.mac.hex(":"))
+
+    def eapol(s, typ, body=b""):
+        s.send(PAE, 0x888E, struct.pack("!BBH", 2, typ, len(body)) + body)
+
+    def eap(s, code, ident, typ, data):
+        p = struct.pack("!BBHB", code, ident, 5 + len(data), typ) + data
+        s.eapol(0, p)
+
+    def eap_got(s, b, now):  # an EAPOL frame for this client
+        if len(b) < 4 or b[1] != 0:
+            return
+        e = b[4:4 + struct.unpack("!H", b[2:4])[0]]
+        if len(e) < 4:
+            return
+        code, ident = e[0], e[1]
+        cl = s.tp.cl.get("dot1x") or {}
+        if code == 1 and len(e) >= 5:
+            typ = e[4]
+            if typ == 1:  # identity
+                s.eap(2, ident, 1, s.name(cl.get("user", "user{n}")).encode())
+                s.x_state, s.x_at = "identity", now
+            elif typ == 4 and len(e) >= 6:  # MD5 challenge
+                n = e[5]
+                ch = e[6:6 + n]
+                h = hashlib.md5(bytes([ident]) + s.name(cl.get("password", "password")).encode() + ch).digest()
+                s.eap(2, ident, 4, bytes([16]) + h)
+                s.x_state, s.x_at = "challenge", now
+            else:  # another method: ask for MD5
+                s.eap(2, ident, 3, b"\x04")
+        elif code == 3:
+            s.x_state, s.x_at, s.x_why = "authenticated", now, ""
+            if s.dhcp_state == "bound":  # a new VLAN may come with it: ask again
+                s.dhcp_state, s.dhcp_at = "", 0
+        elif code == 4:
+            s.x_state, s.x_at, s.x_why = "failed", now, "EAP failure"
+
+    def dhcp_send(s, kind):
+        name = ("client-%d" % (s.idx + 1)).encode()
+        opts = bytes([53, 1, kind, 61, 7, 1]) + s.mac + bytes([55, 3, 1, 3, 6, 12, len(name)]) + name
+        if kind == 3 and s.offer:
+            opts += bytes([50, 4]) + s.offer[0] + bytes([54, 4]) + s.offer[1]
+        bootp = struct.pack("!BBBBIHH4s4s4s4s16s64s128s4s", 1, 1, 6, 0, s.xid, 0, 0x8000, b"\0" * 4, b"\0" * 4, b"\0" * 4, b"\0" * 4, s.mac + b"\0" * 10, b"\0" * 64, b"\0" * 128, b"\x63\x82\x53\x63") + opts + b"\xff"
+        p = struct.pack("!HHHH", 68, 67, 8 + len(bootp), 0) + bootp
+        src, dst = b"\0" * 4, b"\xff" * 4
+        p = p[:6] + struct.pack("!H", l4sum(src, dst, 17, p) or 0xFFFF) + p[8:]
+        s.send(BC, 0x0800, ipv4(src, dst, 17, p, 0, 64))
+
+    def dhcp_got(s, kind, yi, o, now):
+        if kind == 2 and s.dhcp_state == "discover":
+            s.offer = (yi, o.get(54, b"\0" * 4))
+            s.dhcp_state, s.dhcp_at = "request", now
+            s.dhcp_send(3)
+        elif kind == 5:
+            mask = o.get(1, b"\xff\xff\xff\0")
+            s.tp.cip.pop(s.ip, None)
+            s.ip, s.dhcp_state = yi, "bound"
+            s.tp.cip[yi] = s
+            s.gw = o[3][:4] if o.get(3) else None
+            lt = struct.unpack("!I", o[51])[0] if len(o.get(51, b"")) == 4 else 3600
+            s.lease_end = now + max(30, lt // 2)
+            s.lease = socket.inet_ntoa(yi) + "/" + str(prefix_len(mask))
+            s.join_at = 0
+        elif kind == 6:
+            s.dhcp_state, s.dhcp_at, s.offer = "", 0, None
+
+    def join(s):
+        for g in s.tp.cl.get("groups") or []:
+            g = ip_b(g)
+            if len(g) == 4:
+                p = struct.pack("!BBH4s", 0x16, 0, 0, g)
+                p = p[:2] + struct.pack("!H", csum(p)) + p[4:]
+                s.send(mcast_mac(g), 0x0800, ipv4(s.ip, g, 2, p, 0xC0, 1, b"\x94\x04\x00\x00"))
+            else:
+                ll = b"\xfe\x80" + b"\0" * 6 + eui64(s.mac)
+                p = struct.pack("!BBHHH16s", 131, 0, 0, 0, 0, g)
+                p = p[:2] + struct.pack("!H", l4sum(ll, g, 58, p)) + p[4:]
+                hbh = struct.pack("!BB", 58, 0) + b"\x05\x02\x00\x00\x01\x00"
+                s.send(mcast_mac(g), 0x86DD, ipv6(ll, g, 0, hbh + p, 0, 1))
+
+    def tick(s, now):
+        cl = s.tp.cl
+        x = cl.get("dot1x")
+        if x and s.x_state in ("", "started", "identity", "challenge") and now - s.x_at > {"": 0, "started": 5}.get(s.x_state, 30):
+            if s.x_tries >= 3 and s.x_state:
+                s.x_state, s.x_why = "failed", "no answer from the switch"
+            else:
+                s.x_tries += 1
+                s.x_state, s.x_at = "started", now
+                s.eapol(1)  # EAPOL-Start
+        if x and s.x_state != "authenticated":
+            return  # the port lets nothing else through before it is authenticated
+        if cl.get("dhcp"):
+            if s.dhcp_state in ("", "discover") and now - s.dhcp_at > 4:
+                s.dhcp_state, s.dhcp_at = "discover", now
+                s.dhcp_send(1)
+            elif s.dhcp_state == "request" and now - s.dhcp_at > 4:
+                s.dhcp_state, s.dhcp_at = "discover", now
+                s.dhcp_send(1)
+            elif s.dhcp_state == "bound" and now > s.lease_end:
+                s.dhcp_state, s.dhcp_at = "request", now
+                s.dhcp_send(3)
+        if cl.get("groups") and (not cl.get("dhcp") or s.dhcp_state == "bound") and now - s.join_at > 10:
+            s.join_at = now
+            s.join()
+
+    def view(s):
+        return [s.mac.hex(":"), s.lease or "", s.x_state, s.x_why]
 
 
 def bump(b, n):  # an address or MAC plus n
@@ -581,6 +766,43 @@ def handle(tp, f):
         o += 4
     et = struct.unpack("!H", f[o:o + 2])[0]
     b = f[o + 2:]
+    if et < 0x0600:  # 802.3 length: LLC - spanning tree
+        if b[:3] == b"\x42\x42\x03":
+            tp.bpdu_got(b)
+        return
+    if tp.clients:
+        c = tp.cmac.get(f[0:6])
+        if et == 0x888E:
+            if c is not None:
+                c.eap_got(b, time.time())
+            elif f[0:6] == PAE:  # to the PAE group address: the clients still logging in
+                for c in tp.clients:
+                    if c.x_state in ("started", "identity", "challenge"):
+                        c.eap_got(b, time.time())
+            return
+        if et == 0x0800 and len(b) >= 28 + 240 and b[9] == 17:
+            ihl = (b[0] & 15) * 4
+            u = b[ihl:]
+            if struct.unpack("!H", u[2:4])[0] == 68 and len(u) >= 8 + 240:
+                bp = u[8:]
+                cc = tp.cmac.get(bp[28:34])
+                if cc is not None and bp[0] == 2 and struct.unpack("!I", bp[4:8])[0] == cc.xid:
+                    o2, i2 = {}, 240
+                    while i2 < len(bp) and bp[i2] != 255:
+                        if bp[i2] == 0:
+                            i2 += 1
+                            continue
+                        if i2 + 1 >= len(bp):
+                            break
+                        o2[bp[i2]] = bp[i2 + 2:i2 + 2 + bp[i2 + 1]]
+                        i2 += 2 + bp[i2 + 1]
+                    cc.dhcp_got(o2.get(53, b"\0")[0], bp[16:20], o2, time.time())
+                    return
+        if et == 0x0806 and len(b) >= 28:
+            op, smac, sip, tip = struct.unpack("!6xH6s4s6x4s", b[:28])
+            cc = tp.cip.get(tip)
+            if op == 1 and cc is not None:
+                cc.send(smac, 0x0806, arp(2, cc.mac, cc.ip, smac, sip))
     if et == 0x8809:  # slow protocols: LACP
         if tp.lag:
             tp.lacp_got(b, time.time())
@@ -673,6 +895,8 @@ def handle(tp, f):
         ihl = (b[0] & 15) * 4
         if len(b) > ihl and b[ihl] == 0x11:
             tp.last_join = 0
+            for c in tp.clients:
+                c.join_at = 0
     elif et == 0x86DD and len(b) >= 48 and b[6] == 58 and (tp.ip6 or tp.slaac):
         t, src, dst = b[40], b[8:24], b[24:40]
         if t == 134 and tp.slaac and not tp.ip6:  # a router advertisement: an address from its prefix
@@ -775,7 +999,10 @@ while True:
         st = {"run": run, "at": now, "tx": tx, "rx": rx, "other": other, "lat": lat, "err": err, "ooo": ooo, "dup": dup, "jit": jit,
               "busy": {s.x["id"]: s.seq < s.count for s in streams}, "testers": sorted(testers),
               "hist": hist, "frx": frx, "qos": qos, "ftx": ftx, "flab": flab,
-              "lacp": {t.id: t.lacp_view(now) for t in testers.values() if t.lag}, "lldp": {t.id: t.neighbour for t in testers.values() if t.neighbour},
+              "lacp": {t.id: t.lacp_view(now) for t in testers.values() if t.lag},
+              "clients": {t.id: {"n": len(t.clients), "bound": sum(c.dhcp_state == "bound" for c in t.clients), "auth": sum(c.x_state == "authenticated" for c in t.clients),
+                                 "failed": sum(c.x_state == "failed" for c in t.clients), "list": [c.view() for c in t.clients[:256]]} for t in testers.values() if t.clients},
+              "stp": {t.id: dict(t.stp_peer or {}, sent=t.stp_tx, got=t.stp_rx) for t in testers.values() if t.stp.get("mode")}, "lldp": {t.id: t.neighbour for t in testers.values() if t.neighbour},
               "lease": {t.id: t.lease for t in testers.values() if t.lease}, "lease6": {t.id: {"ip": t.lease6, "gw": t.gw6} for t in testers.values() if getattr(t, "lease6", None)}}
         try:
             with open(st_path + ".tmp", "w") as fh:

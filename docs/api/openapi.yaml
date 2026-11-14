@@ -2073,6 +2073,72 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/radius:
+        post:
+            operationId: tool_radius
+            tags:
+                - Tools
+            summary: The lab's built-in RADIUS server, for 802
+            description: 'The lab''s built-in RADIUS server, for 802.1X and MAC logins on the switches: it runs on every host of the lab and answers the switches there (EAP-MD5, PAP, MAC authentication; accepted users get their VLAN as Tunnel-Private-Group-Id). Actions: show (settings, where the switches reach it, counts), log (the last logins), set (on, port, secret, mab, mab_vlan), add_user (user - a name or a pattern like user* - password, vlan), remove_user (user). Secrets and passwords are left out unless reveal is true (for typing them into a switch''s configuration, not for the chat). Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - show
+                                        - log
+                                        - set
+                                        - add_user
+                                        - remove_user
+                                    type: string
+                                mab:
+                                    description: 'MAC addresses let in by MAC authentication (patterns: 02:63:*; * = any)'
+                                    items:
+                                        type: string
+                                    type: array
+                                mab_vlan:
+                                    type: string
+                                on:
+                                    type: boolean
+                                password:
+                                    type: string
+                                port:
+                                    description: authentication port (default 1812; accounting on the next)
+                                    type: integer
+                                reveal:
+                                    description: 'show: include the secret and the passwords'
+                                    type: boolean
+                                secret:
+                                    description: shared with the switches (made up when empty)
+                                    type: string
+                                user:
+                                    type: string
+                                vlan:
+                                    description: the VLAN (name or number) the switch puts the user in
+                                    type: string
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/test:
         post:
             operationId: tool_test
@@ -2249,6 +2315,9 @@ paths:
                                 burst:
                                     description: 'add_stream: frames sent back to back (the rate stays the average)'
                                     type: integer
+                                clients:
+                                    description: 'add_port, set_port: many hosts behind the test port, each with its own MAC: {n: 1-4000, dhcp: true, groups: [239.1.1.1], dot1x: {user: "user{n}", password: "…"}, rate: started a second (50), mac: the first MAC}; {n: 0} = none. 802.1X is EAP-MD5; {n} is the client''s number, {mac} its MAC'
+                                    type: object
                                 count:
                                     type: integer
                                 description:
@@ -2375,6 +2444,9 @@ paths:
                                     type: integer
                                 src_ip:
                                     type: string
+                                stp:
+                                    description: 'add_port, set_port: the test port speaks spanning tree: {mode: stp|rstp, prio: 0-61440 (default 32768; lower than the switch''s makes it the root)}; {mode: ""} = off'
+                                    type: object
                                 streams:
                                     description: 'start: the streams (none = all)'
                                     items:
@@ -2389,6 +2461,9 @@ paths:
                                 to:
                                     description: 'add_stream: test port name; empty = every other test port (broadcast) or dst_ip'
                                     type: string
+                                topology_change:
+                                    description: 'set_port: its next BPDUs carry a topology change'
+                                    type: boolean
                                 vlan:
                                     type: integer
                             required:
@@ -2844,6 +2919,66 @@ components:
             required:
                 - tag
                 - at
+        EmuClientState:
+            type: object
+            properties:
+                n:
+                    description: clients
+                    type: integer
+                bound:
+                    description: with a DHCP address
+                    type: integer
+                auth:
+                    description: logged in by 802.1X
+                    type: integer
+                failed:
+                    description: refused, or the switch did not answer
+                    type: integer
+                list:
+                    description: 'the first 256: MAC, address, 802.1X state, why it failed'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type:
+                            - array
+                            - "null"
+                        items:
+                            type: string
+            required:
+                - "n"
+                - bound
+                - auth
+                - failed
+        EmuClients:
+            type: object
+            properties:
+                n:
+                    description: how many (1-4000)
+                    type: integer
+                mac:
+                    description: the first one's MAC; the others count up from it ("" = made from the test port's)
+                    type: string
+                rate:
+                    description: how many start a second (default 50)
+                    type: integer
+                dhcp:
+                    description: each takes an IPv4 address by DHCP
+                    type: boolean
+                groups:
+                    description: multicast groups each joins (IGMPv2 / MLDv1), again on every query
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: string
+                dot1x:
+                    description: each logs in by 802.1X first (it sends nothing else before it is in)
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuDot1x'
+                        - type: "null"
+            required:
+                - "n"
         EmuCompNet:
             type: object
             properties:
@@ -2895,6 +3030,15 @@ components:
                 - file
                 - sha256
                 - size
+        EmuDot1x:
+            type: object
+            properties:
+                user:
+                    description: default user{n}
+                    type: string
+                password:
+                    description: default "password"
+                    type: string
         EmuFact:
             type: object
             properties:
@@ -3205,6 +3349,52 @@ components:
             required:
                 - port
                 - vif
+        EmuSTP:
+            type: object
+            properties:
+                mode:
+                    description: stp or rstp
+                    type: string
+                prio:
+                    description: its bridge priority (0-61440, steps of 4096; default 32768)
+                    anyOf:
+                        - type: integer
+                        - type: "null"
+                tc:
+                    description: raise it by one to signal a topology change (the next BPDUs carry the TC flag)
+                    type: integer
+            required:
+                - mode
+        EmuSTPState:
+            type: object
+            properties:
+                sent:
+                    description: BPDUs sent
+                    type: integer
+                got:
+                    description: BPDUs received
+                    type: integer
+                root:
+                    description: the root bridge the switch announces (priority/MAC)
+                    type: string
+                bridge:
+                    description: the switch's own bridge (priority/MAC)
+                    type: string
+                cost:
+                    description: the switch's path cost to the root
+                    type: integer
+                role:
+                    description: 'RSTP: the role of the switch port that sent it'
+                    type: string
+                rootIsUs:
+                    description: the switch takes this test port as the root
+                    type: boolean
+                tc:
+                    description: the last BPDU carried a topology change
+                    type: boolean
+            required:
+                - sent
+                - got
         EmuSlot:
             type: object
             properties:
@@ -4435,6 +4625,26 @@ components:
                 neighbor:
                     description: 'what the switch says on LLDP: its name and port (filled in for the screens)'
                     type: string
+                clients:
+                    description: many hosts behind it (DHCP, multicast, 802.1X), each with its own MAC
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuClients'
+                        - type: "null"
+                stp:
+                    description: it speaks spanning tree (STP or RSTP)
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuSTP'
+                        - type: "null"
+                clientState:
+                    description: ClientState is how its clients are doing (filled in for the screens).
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuClientState'
+                        - type: "null"
+                stpState:
+                    description: STPState is what it hears from the switch by spanning tree (filled in for the screens).
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuSTPState'
+                        - type: "null"
                 portName:
                     description: as the switch names it (filled in for the screens)
                     type: string
