@@ -136,7 +136,7 @@ export interface Settings {
   sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; lineHeight?: number; theme: string; uiFont?: string; uiFontSize?: number;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
-  language?: string; layout?: string; style?: string; iconFinish?: '' | 'glacier' | 'flat'; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; quickButtons?: '' | 'keycap' | 'glow'; folderColors?: '' | 'vivid' | 'steel'; nameAfterDevice?: '' | 'auto' | 'off'; nameFormat?: '' | 'model' | 'octet'; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
+  sessionEditor?: '' | 'window'; language?: string; layout?: string; style?: string; iconFinish?: '' | 'glacier' | 'flat'; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; quickButtons?: '' | 'keycap' | 'glow'; folderColors?: '' | 'vivid' | 'steel'; nameAfterDevice?: '' | 'auto' | 'off'; nameFormat?: '' | 'model' | 'octet'; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean; reachFolder?: string;

@@ -193,7 +193,8 @@ export class Ui {
   close() { this.dialog.set(null); this.editing.set(null); }
 
   /** In the modern layout sessions are edited in a side panel (with a link to the full dialog). */
-  private usePanel(full: boolean) { return !full; }
+  /** The side panel, unless the full window was asked for here or chosen in the settings (welcome screen, Options → Appearance). */
+  private usePanel(full: boolean) { return !full && this.settings()?.sessionEditor !== 'window'; }
 
   async newSession(folder = '', full = false) {
     try {

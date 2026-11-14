@@ -107,6 +107,11 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                   <div class="seg w3"><button type="button" [class.on]="!s.folderColors" (click)="s.folderColors = ''">Soft</button><button type="button" [class.on]="s.folderColors === 'vivid'" (click)="s.folderColors = 'vivid'">Vivid</button><button type="button" [class.on]="s.folderColors === 'steel'" (click)="s.folderColors = 'steel'">Steel blue</button></div>
                   <div class="hint">Folders by level, and the environment tags (PROD, LAB…): soft tones with tinted tags, bright colours with solid tags, or blue-grey with outlined tags.</div>
                 </div></div>
+                <div class="f"><label>Session properties</label>
+                <div>
+                  <div class="seg w2"><button type="button" [class.on]="!s.sessionEditor" (click)="s.sessionEditor = ''">Side panel</button><button type="button" [class.on]="s.sessionEditor === 'window'" (click)="s.sessionEditor = 'window'">Full window</button></div>
+                  <div class="hint">Where a session's properties open. The side panel shows the main settings, with More Options… for every page; the full window shows every page at once.</div>
+                </div></div>
                 <div class="f"><label>Start page buttons</label>
                 <div>
                   

@@ -142,6 +142,7 @@ type Settings struct {
 	Language             string                       `json:"language"`                  // interface language: "" = English, "ru" = Russian (partial)
 	IconStyle            string                       `json:"iconStyle"`                 // device and session icons: "" = coloured tiles, "glyph" = the symbol only
 	QuickButtons         string                       `json:"quickButtons,omitempty"`    // start page buttons: "" = raised slabs, "keycap", "glow"
+	SessionEditor        string                       `json:"sessionEditor,omitempty"`   // session properties: "" = the side panel (More Options for every page), "window" = the full window
 	FolderColors         string                       `json:"folderColors,omitempty"`    // folder and environment colours: "" = soft, "vivid", "steel"
 	NameAfterDevice      string                       `json:"nameAfterDevice,omitempty"` // a session named by its address, after connecting: "" = suggest the device's name, "auto" = rename (with Undo), "off"
 	NameFormat           string                       `json:"nameFormat,omitempty"`      // Name After Devices: "" = hostname, "model" = hostname (model), "octet" = hostname · last octet

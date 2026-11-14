@@ -50,6 +50,13 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
                   <span class="fcs">@for (c of f.c; track $index) { <i [style.background]="c"></i> }<em [class]="'tg ' + (f.v || 'soft')" [style.color]="f.v === 'vivid' ? '#fff' : f.t" [style.background]="f.v === 'vivid' ? f.t : ''">PROD</em></span><small>{{ f.label }}</small></button>
               }
             </div>
+            <div class="lbl">Session properties open in</div>
+            <div class="seg qbs sed">
+              @for (e of editors; track e.v) {
+                <button type="button" [class.on]="(ui.settings()?.sessionEditor || '') === e.v" (click)="ui.patchSettings({ sessionEditor: e.v })" [title]="e.what">
+                  <span [class]="'sedp ' + (e.v || 'panel')"><i class="tr"></i><i class="tm"></i><i class="pn"><b></b><b></b><b></b></i></span><small>{{ e.label }}</small></button>
+              }
+            </div>
             <div class="lbl">Start page buttons</div>
             <div class="seg qbs">
               @for (q of qbs; track q.v) {
@@ -143,6 +150,16 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
     .sub { margin: 0 0 14px; color: var(--muted); line-height: 1.5; }
     .lbl { margin: 14px 0 6px; font-size: calc(11px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
     .themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .sed { grid-template-columns: repeat(2, 1fr); }
+    .sedp { position: relative; display: block; width: 86%; margin: 2px auto 0; height: 50px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); overflow: hidden;
+      .tr { position: absolute; left: 0; top: 0; bottom: 0; width: 22%; background: color-mix(in srgb, var(--text) 7%, var(--bg)); border-right: 1px solid var(--line); }
+      .tm { position: absolute; left: 26%; right: 4%; top: 8px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--text) 12%, transparent); box-shadow: 0 9px 0 color-mix(in srgb, var(--text) 9%, transparent), 0 18px 0 color-mix(in srgb, var(--text) 9%, transparent); }
+      .pn { position: absolute; display: flex; flex-direction: column; gap: 4px; padding: 6px; background: var(--surface); border: 1px solid var(--accent); box-shadow: 0 4px 12px rgba(0,0,0,.25);
+        b { display: block; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--accent) 45%, transparent); } b:nth-child(2) { width: 70%; } b:nth-child(3) { width: 85%; } }
+      &.panel .pn { top: 0; right: 0; bottom: 0; width: 34%; border-width: 0 0 0 2px; border-radius: 0; }
+      &.window .pn { top: 7px; left: 14%; right: 14%; bottom: 7px; border-radius: 4px; }
+      &.window .pn::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 24%; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--text) 5%, transparent); }
+      &.window .pn b { margin-left: 28%; } }
     .th { height: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-2);
       &.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
       .tn { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 500; } }
@@ -192,6 +209,10 @@ export class Welcome {
   protected ui = inject(Ui);
   private backend = inject(Backend);
   readonly titles = ['Look', 'Sessions', 'Security', 'Done'];
+  readonly editors: { v: '' | 'window'; label: string; what: string }[] = [
+    { v: '', label: 'A side panel', what: 'Properties open beside the sessions, the main ones first; More Options… shows every page' },
+    { v: 'window', label: 'A full window', what: 'Properties open in a large window with every page at once' },
+  ];
   readonly mp = signal('');
   readonly mp2 = signal('');
   readonly mpErr = signal('');
