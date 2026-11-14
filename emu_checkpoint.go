@@ -39,6 +39,10 @@ func (a *App) emuCheckpoint(id, note, change string) (emu.Checkpoint, error) {
 		emuLab.mu.Unlock()
 		return emu.Checkpoint{}, errors.New("no such switch")
 	}
+	if im := emuImage(v.Image); im != nil && im.Board != "" {
+		emuLab.mu.Unlock()
+		return emu.Checkpoint{}, errors.New("a microcontroller has no checkpoints (its flash keeps what it wrote)")
+	}
 	host := emuHostOf(*v)
 	lh := a.emuFor(host)
 	ck := emu.Checkpoint{Tag: "tw-ck-" + randHex(3), At: time.Now().Format(time.RFC3339), Note: note, Change: change}

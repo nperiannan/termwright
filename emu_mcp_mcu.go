@@ -320,7 +320,8 @@ func (a *App) emuMCUConsoleRun(id string, cmds []string, timeout time.Duration) 
 		}
 		out := emu.CleanConsole(settle(60 * time.Second))
 		out = strings.TrimPrefix(strings.TrimLeft(out, "\r\n"), cmd) // its echo
-		out = strings.TrimRight(reMCUPrompt.ReplaceAllString(strings.TrimRight(out, " "), ""), "\r\n ")
+		out = strings.TrimSuffix(strings.TrimRight(reMCUPrompt.ReplaceAllString(out, ""), "\r\n "), ">>>") // its prompt
+		out = strings.TrimRight(out, "\r\n ")
 		fmt.Fprintf(&b, "%s\n%s\n", cmd, strings.Trim(out, "\r\n"))
 		if time.Now().After(deadline) {
 			return b.String(), errors.New("timed out: no answer on its console")

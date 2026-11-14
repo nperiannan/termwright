@@ -6,6 +6,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/termwright/termwright/internal/emu"
 )
 
 // The AI agent and the emulated lab: what it sees of the lab (switches,
@@ -21,7 +23,12 @@ func (a *App) emuAgentText() string {
 	for _, d := range v.Devices {
 		name[d.ID] = d.Hostname
 	}
-	hostName := func(h string) string { return h[strings.LastIndex(h, "/")+1:] }
+	hostName := func(h string) string {
+		if h == emu.LocalHost {
+			return "this computer"
+		}
+		return h[strings.LastIndex(h, "/")+1:]
+	}
 	var b strings.Builder
 	topo := v.Topology
 	if topo == "" {
@@ -37,6 +44,9 @@ func (a *App) emuAgentText() string {
 		addr := strings.Split(u.Addr, "/")[0]
 		if addr != "" {
 			addr = " (" + addr + ")"
+		}
+		if u.Host == emu.LocalHost {
+			u.Name = "this computer (microcontrollers)"
 		}
 		fmt.Fprintf(&b, "- %s%s: management %s; %d switches, %d running; vCPU given %d of %d cores (load %.1f, in use %.1f); memory given %d MB, %d of %d MB free\n",
 			u.Name, addr, emuMgmtText(u.Mgmt, u.MgmtNet, u.LanFixed), u.Switches, u.Running, u.VCPUs, u.CPUs, u.Load, u.Cores, u.RAM, u.MemFree, u.MemTotal)
@@ -69,8 +79,12 @@ func (a *App) emuAgentText() string {
 		if len(d.Uplinks) > 0 {
 			up = " | data ports on the host's network: " + strings.Join(d.Uplinks, ", ")
 		}
+		con := host
+		if d.Board != "" { // a microcontroller's console is Termwright's relay on this computer
+			con, model, sw = "this computer", strings.ToUpper(d.Board)+" microcontroller", d.Model
+		}
 		fmt.Fprintf(&b, "- %s | %s, %s | %s | %s | %s | telnet %s:%d | %q, console %q | %s%s\n",
-			d.Hostname, model, sw, state, host, orStr(d.SSH, "-"), host, d.Console, v.Sessions[d.ID], v.Consoles[d.ID], persona, up)
+			d.Hostname, model, sw, state, host, orStr(d.SSH, "-"), con, d.Console, v.Sessions[d.ID], v.Consoles[d.ID], persona, up)
 	}
 	if len(v.Links) > 0 {
 		b.WriteString("Cables:\n")
