@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, Directive, OnDestroy, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { LabService } from '../core/lab.service';
@@ -7,10 +7,8 @@ import { EmuDeviceType, EmuHost, EmuInstall, EmuRunRow, EmuRemoveInfo, EmuImage,
 import { Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
-import { LabHostImages } from './lab-host-images';
 import { DevIcon, ICON_STYLES, IconStyle, roleOf } from './dev-icon';
-import { TableView, TvBar, TvSorts } from '../core/table-view';
-import { VmScreen } from './vm-screen';
+import { TableView } from '../core/table-view';
 
 /** Shared look of the lab pages (Configure, New Lab, Images, Hosts). */
 export const PAGE = `
@@ -301,7 +299,7 @@ type Shape = 'leaf-spine' | 'ring' | 'full-mesh' | 'star' | 'line' | 'none';
         @if (shapeNote(); as n) { <div class="note" [class.warn]="n.warn">{{ n.text }}</div> }
         @if (emu() && !exists()) {
           <div class="sec">{{ tr('Device icons') }}<span class="muted small">{{ tr('how this topology draws its devices (Style on the canvas changes it later)') }}</span></div>
-          <div class="looks">@for (st of looks; track st.k) { <a class="lk" [class.on]="(look || 'box') === st.k" (click)="look = st.k" [title]="tr(st.name)"><app-dev-icon role="access" [look]="st.k" [size]="46" state="idle" /><span>{{ tr(st.name) }}</span></a> }</div>
+          <div class="looks">@for (st of looks; track st.k) { <a class="lk" [class.on]="(look || 'rack') === st.k" (click)="look = st.k" [title]="tr(st.name)"><app-dev-icon role="access" [look]="st.k" [size]="46" state="idle" /><span>{{ tr(st.name) }}</span></a> }</div>
         }
         <div class="opts">
           @if (emu() && shape() !== 'none') { <label>{{ tr('Cables per pair') }} <select class="sm" [ngModel]="per()" (ngModelChange)="per.set(+$event); emitPlan()" name="nper"><option [value]="1">1</option><option [value]="2">2</option><option [value]="4">4</option></select></label>
@@ -506,7 +504,7 @@ export class LabNew implements OnInit {
   protected roles = computed(() => this.emu() && (this.shape() === 'leaf-spine' || this.shape() === 'star'));
   /** A Linux computer (its image sets port addresses): a host, cabled to an edge switch. */
   isHost(key: string) { const d = this.dt(key); const im = d && (this.st()?.images ?? []).find(i => i.id === d.images[0]); return !!im && (im.portAddr ?? []).length > 0; }
-  protected look: IconStyle | '' = '';
+  protected look: IconStyle | '' = 'rack';
   protected readonly looks = ICON_STYLES;
   protected total = computed(() => this.rows().reduce((n, r) => n + r.count, 0));
   private spineCount = computed(() => this.rows().filter(r => r.role === 'spine').reduce((n, r) => n + r.count, 0));
@@ -600,219 +598,9 @@ export class LabNew implements OnInit {
 }
 
 // ---------------------------------------------------------------- Images and Templates
-@Component({
-  selector: 'app-lab-images',
-  imports: [FormsModule, LabHostImages, TvBar, TvSorts, VmScreen],
-  template: `
-  <div class="ov" (click)="closed.emit()"></div>
-  <div class="mdl">
-    <div class="mh"><div><h2>{{ tr('Images and Templates') }}</h2><div class="muted small">{{ tr('The switch images Termwright can boot, what it knows about each, and the devices made from them') }}</div></div><span class="sp"></span><button type="button" class="sm" (click)="closed.emit()">✕</button></div>
-    <div class="mt"><a [class.on]="tab() === 'images'" (click)="tab.set('images')">{{ tr('Images ({0})', images().length) }}</a><a [class.on]="tab() === 'templates'" (click)="tab.set('templates')">{{ tr('Templates ({0})', templates().length) }}</a><a [class.on]="tab() === 'profiles'" (click)="tab.set('profiles')">{{ tr('Profiles from the device pack') }}</a><a [class.on]="tab() === 'onhosts'" (click)="tab.set('onhosts')">{{ tr('On the Hosts') }}</a><a [class.on]="tab() === 'public'" (click)="openPublic()">{{ tr('Public appliances') }}</a></div>
-    <div class="mb" style="display: grid; grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr)">
-      @switch (tab()) {
-        @case ('images') {
-          <div class="lst"><div class="lsh"><app-tv-bar [tv]="imView" /><app-tv-sorts [tv]="imView" [keys]="imKeys" /></div><div class="lsc">
-            @if (queue().length) {
-              <div class="dq">
-                <div class="dqh"><b>{{ tr('Downloads') }}</b><span class="muted small">{{ tr('{0} waiting', queue().length - 1) }}</span><span class="sp"></span>@if (queue().length > 1) { <a class="lnk small" (click)="stopAll()">{{ tr('Stop all') }}</a> }</div>
-                @for (q of queue(); track q.id; let i = $index) {
-                  <div class="dqi" [class.cur]="i === 0" (click)="pick(q.id)">
-                    <div class="dqn"><span>{{ q.name }} {{ q.version }}</span><small>{{ i === 0 ? tr('downloading {0}', q.state) : tr('waiting · #{0}', i) }}</small>
-                      @if (i === 0) { <div class="meter"><i [style.width]="pctOf(q.state) + '%'"></i></div> }</div>
-                    @if (i > 0) { <button type="button" class="xs" [title]="tr('Next')" (click)="move(q.id, 'first'); $event.stopPropagation()">⇡</button>
-                      <button type="button" class="xs" [title]="tr('Earlier')" (click)="move(q.id, 'up'); $event.stopPropagation()" [disabled]="i === 1">↑</button>
-                      <button type="button" class="xs" [title]="tr('Later')" (click)="move(q.id, 'down'); $event.stopPropagation()" [disabled]="i === queue().length - 1">↓</button> }
-                    <button type="button" class="xs" [title]="i === 0 ? tr('Stop this download') : tr('Take it out of the queue')" (click)="stop(q.id); $event.stopPropagation()">✕</button>
-                  </div>
-                }
-              </div>
-            }
-            @else if (toDownload().length) { <button type="button" class="primary" style="width: 100%; margin-bottom: 6px" (click)="lab.download(toDownload())" [disabled]="lab.busy()">⤓ {{ tr('Download All ({0})', toDownload().length) }}</button> }
-            @else if (downloaded()) { <button type="button" class="dlb done" style="width: 100%; margin-bottom: 6px" disabled>✓ {{ tr('All downloaded ({0})', downloaded()) }}</button> }
-            @if (images().some(i => i.url)) { <p class="muted small" style="margin: 0 0 6px">{{ tr('Downloads go to {0}', lab.emu()?.downloadDir ?? '') }}</p> }
-            @if (installs().length) {
-              <div class="grp">{{ tr('Installs from ISO') }}</div>
-              <div class="it" [class.on]="iso()" (click)="openIso()"><div><span>{{ tr('{0} install(s)', installs().length) }}</span><small [class.w]="installsBusy()">{{ installsLine() }}</small></div></div>
-            }
-            @for (g of groups(); track g.name) {
-              <div class="grp">{{ g.name }}</div>
-              @for (im of g.items; track im.id) {
-                <div class="it" [class.on]="edit()?.id === im.id" (click)="pick(im.id)"><div><span>{{ im.version || im.name }}</span>@if (im.persona) { <span class="badge g">{{ tr('persona') }}</span> }
-                  <small class="mono">{{ im.fileName || tr('no file chosen') }}</small><small>{{ im.cpus }} vCPU · {{ gb(im.ram) }} RAM · {{ diskName(im.disk) }} · {{ mb(im.size) }}</small><small [class.w]="uploading(im) || !!dl(im)" [class.r]="!im.file && !im.url" [class.g]="!!im.file && !!im.url && !dl(im) && !uploading(im)">{{ dl(im) ? (dl(im) === 'waiting' ? tr('waiting to download') : tr('downloading {0}', dl(im))) : !im.file && im.url ? tr('not downloaded yet') : (im.url ? '✓ ' + tr('downloaded') + ' · ' : '') + where(im) }}</small>@if (dl(im) && dl(im) !== 'waiting') { <div class="meter"><i [style.width]="pctOf(dl(im)) + '%'"></i></div> }</div></div>
-              }
-            } @empty { <p class="muted small">{{ images().length ? tr('No image matches the search or the filters.') : tr('No images yet.') }}</p> }
-            </div><div class="lsf">
-            <div class="drop" (click)="addImage()"><b style="color: var(--text)">+ {{ tr('Add Image…') }}</b><br />.qcow2 / .img / .vmdk / .raw · {{ tr('recognised by its name with the device pack’s patterns') }}</div>
-            <div class="row2" style="margin-top: 8px"><button type="button" class="sm" (click)="importAppliance()">{{ tr('GNS3 Appliance…') }}</button><button type="button" class="sm" (click)="importProfiles()">{{ tr('Import Profiles…') }}</button></div>
-            <button type="button" class="sm" style="width: 100%; margin-top: 8px" (click)="openIso()">{{ tr('Install from ISO…') }}</button>
-          </div></div>
-          <div class="pad" style="overflow: auto">
-            @if (iso()) {
-              @if (installs().length) { <div class="sec" style="margin-top: 0">{{ tr('Installs') }}</div> }
-              @for (j of installs(); track j.id) {
-                <div class="card" style="max-width: 780px">
-                  <div class="row2" style="justify-content: flex-start"><div style="flex: 1; min-width: 0"><b>{{ j.name }}</b> <span class="muted small">· {{ j.isoName }} · {{ diskText(j) }} · {{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</span>
-                      <div class="small" [class.r]="j.stage === 'failed'" [class.g]="j.stage === 'done'" [class.w]="isoBusy(j)">{{ isoText(j) }}</div>
-                      @if (j.stage === 'done' && (j.verified || j.verifyErr)) { <div class="small" [class.g]="!!j.verified" [class.w]="!!j.verifyErr">{{ j.verified ? '✓ ' + tr('Verified: {0}', tr(j.verified)) : '⚠ ' + tr('Not verified: {0}', tr(j.verifyErr || '')) }}</div> }</div>
-                    @if (isoBusy(j) && j.stage !== 'copying' || j.stage === 'waiting') { <button type="button" class="sm" (click)="screenOf.set(j)" [title]="tr('What its display shows, and its keyboard')">{{ tr('Screen…') }}</button> }
-                    @if (j.stage === 'waiting' && j.console) { <button type="button" class="sm" (click)="isoConsole(j)">{{ tr('Open console') }}</button> }
-                    @if (j.stage === 'waiting') { <button type="button" class="sm primary" (click)="isoFinish(j)">{{ tr('Finish and save as image') }}</button> }
-                    @if (j.stage === 'done' && j.image) { <button type="button" class="sm" (click)="isoShow(j)">{{ tr('Show image') }}</button> }
-                    @if (isoBusy(j) || j.stage === 'waiting') { <button type="button" class="sm danger-ghost" (click)="isoCancel(j)">{{ tr('Cancel') }}</button> }
-                    @if (!isoBusy(j) && j.stage !== 'waiting') { <button type="button" class="sm" (click)="isoRemove(j)">{{ tr('Remove') }}</button> }
-                  </div>
-                  @if (isoBusy(j) || j.stage === 'waiting') {
-                    <div class="meter"><i [style.width]="overall(j) + '%'"></i></div>
-                    <div class="small muted">{{ tr('Step {0} of {1}', stepNo(j), stepKeys(j).length) }} · {{ tr('{0} since the start', dur(secs(j.started))) }}</div>
-                    <ol class="stl">
-                      @for (k of stepKeys(j); track k) {
-                        <li [class.d]="stepState(j, k) === 'done'" [class.n]="stepState(j, k) === 'now'">
-                          <span class="mk" [class.g]="stepState(j, k) === 'done'" [class.w]="stepState(j, k) === 'now'">{{ stepState(j, k) === 'done' ? '✓' : stepState(j, k) === 'now' ? '▶' : '○' }}</span><span>{{ stepLabel(k) }}</span><span class="tm">{{ stepTime(j, k) }}</span>
-                          @if (stepState(j, k) === 'now' && stepNote(j)) { <small>{{ stepNote(j) }}</small> }
-                        </li>
-                      }
-                    </ol>
-                    @if (j.tail) {
-                      <div class="small muted" style="margin-top: 8px">{{ tr('The installer’s console (last lines)') }}</div>
-                      <pre class="yaml wrap">{{ j.tail }}</pre>
-                    }
-                    @if ((j.idle ?? 0) >= 90 && j.step !== 'convert') { <div class="small w" style="margin-top: 6px">{{ tr('The installer’s console has shown nothing for {0}. It may be busy (slow without KVM) or waiting for an answer: read the last line above.', dur(j.idle ?? 0)) }}</div> }
-                  }
-                </div>
-              }
-              <div style="max-width: 780px">
-                <b style="font-size: 15px">{{ tr('Install from an ISO file') }}</b>
-                <p class="muted small" style="margin: 4px 0 14px">{{ tr('Some distributions are published only as an installer ISO. Termwright runs the installer on a KVM host with a blank disk and keeps the installed disk as a new image.') }}</p>
-                <div class="f">
-                  <label>{{ tr('ISO file') }}</label><div class="row2"><input [(ngModel)]="isoPath" name="isop" readonly [placeholder]="tr('Choose the .iso file')" /><button type="button" class="sm" (click)="chooseIso()">{{ tr('Choose…') }}</button></div>
-                  <label>{{ tr('Install') }}</label><div><span class="seg"><a [class.on]="isoMode === 'alpine'" (click)="isoMode = 'alpine'">{{ tr('Alpine Linux, automatic') }}</a><a [class.on]="isoMode === 'manual'" (click)="isoMode = 'manual'">{{ tr('Other, on its console') }}</a></span>
-                    <div class="muted small" style="margin-top: 6px">{{ isoMode === 'alpine' ? tr('Termwright types the Alpine install on the installer’s console and sets the root password below.') : tr('The installer starts and its console opens as a session: you install by hand, then press Finish. It must be an installer that talks on a serial console.') }}</div></div>
-                  <label>{{ tr('Image name') }}</label><input [(ngModel)]="isoNm" name="isonm" [placeholder]="isoNamePh()" />
-                  <label>{{ tr('Root password') }}</label><div><input [(ngModel)]="isoPw" name="isopw" autocomplete="off" style="width: 100%; box-sizing: border-box" /><div class="muted small" style="margin-top: 4px">{{ isoMode === 'alpine' ? tr('The new system’s root password; Termwright logs in with it.') : tr('The password you set during the install (optional): Termwright logs in with it.') }}</div></div>
-                  <label>{{ tr('Disk') }}</label><div><div class="row2" style="justify-content: flex-start; gap: 6px"><input type="number" min="1" [(ngModel)]="isoSize" name="isogb" style="width: 110px; flex: none" /><select [(ngModel)]="isoUnit" (ngModelChange)="isoUnitChanged($event)" name="isounit" style="width: 76px; flex: none"><option value="MB">MB</option><option value="GB">GB</option></select></div><div class="muted small" style="margin-top: 4px">{{ tr('The new disk’s largest size, not the space it takes: the qcow2 file grows only as the system is written, so the saved image stays small (a small Alpine system takes a few hundred MB). In MB or GB; at least 100 MB.') }}</div></div>
-                  <label>{{ tr('Memory') }}</label><div class="row2"><input type="number" min="256" step="256" [(ngModel)]="isoRam" name="isoram" class="nb" /><span class="unit">MB</span></div>
-                  <label>vCPU</label><input type="number" min="1" max="64" [(ngModel)]="isoCpus" name="isocpu" class="nb" />
-                  <label>{{ tr('Check') }}</label><label class="ckl"><input type="checkbox" [(ngModel)]="isoVerify" name="isover" /> {{ tr('Boot the new image once at the end to see it comes up (on a throwaway copy)') }}</label>
-                  <label>{{ tr('Run on') }}</label><select [(ngModel)]="isoHost" name="isohost">@for (h of hosts(); track h.session) { <option [value]="h.session">{{ h.name }}</option> }</select>
-                </div>
-                <button type="button" class="primary" (click)="startIso()" [disabled]="!isoPath || lab.busy() || (isoMode === 'alpine' && !isoPw)">{{ tr('Start install') }}</button>
-              </div>
-            } @else if (edit(); as im) {
-              <div class="row2" style="justify-content: flex-start"><div style="flex: 1"><b style="font-size: 15px">{{ im.name }}@if (im.version) { · {{ im.version }} }</b><div class="muted small mono">{{ im.fileName }} · {{ mb(im.size) }}@if (im.sha256) { · sha256 {{ im.sha256.slice(0, 4) }}…{{ im.sha256.slice(-4) }} }</div></div>
-                @if (hasLinks(im)) {
-                  @if (!needs(live(im))) { <button type="button" class="dlb done" disabled>✓ {{ tr('Downloaded') }}</button> }
-                  @else if (dl(live(im))) { <button type="button" class="dlb busy" disabled [style.--p]="pctOf(dl(live(im))) + '%'"><span>{{ dl(live(im)) === 'waiting' ? tr('Waiting…') : tr('Downloading {0}', dl(live(im))) }}</span></button> }
-                  @else { <button type="button" class="primary" (click)="lab.download([im.id])" [disabled]="lab.busy()">⤓ {{ tr('Download ({0})', mb(dlSize(im))) }}</button> }
-                }
-                <span class="pill">{{ tr('Used by {0} switches · {1} templates', usedBy(im.id), tplBy(im.id)) }}</span></div>
-              <div class="sec">{{ tr('Files') }}<span class="muted small">{{ tr('Downloads go to {0}', lab.emu()?.downloadDir ?? '') }}</span></div>
-              <table class="t files"><thead><tr><th>{{ tr('Use') }}</th><th>{{ tr('File') }}</th><th>{{ tr('Size') }}</th><th>{{ tr('On this computer') }}</th><th></th></tr></thead><tbody>
-                @for (f of filesOf(im); track f.slot) {
-                  <tr><td>{{ slotName(f.slot) }}</td><td class="mono" [title]="f.url || f.page || ''">{{ f.fileName || '-' }}</td><td>{{ mb(f.size) }}</td>
-                    <td [class.g]="!!f.file" [class.r]="!f.file && !f.url" class="small">{{ f.file ? '✓ ' + f.file : f.url ? tr('downloads with Download') : tr('get it from the maker, then Choose…') }}</td>
-                    <td class="acts">@if (!f.file && !f.url && f.page) { <a class="lnk small" (click)="openPage(f.page)">{{ tr('Download page') }}</a> } <button type="button" class="sm" (click)="chooseSlot(im.id, f.slot)">{{ tr('Choose…') }}</button></td></tr>
-                }
-              </tbody></table>
-              <div class="sec">{{ tr('Boot') }}</div>
-              <div class="f3">
-                <label>{{ tr('Name') }}</label><input [(ngModel)]="im.name" name="iname" /><label>{{ tr('Version') }}</label><input [(ngModel)]="im.version" name="iver" />
-                <label>vCPU</label><input type="number" min="1" [(ngModel)]="im.cpus" name="icpu" class="nb" /><label>{{ tr('Memory') }}</label><div class="row2"><input type="number" min="256" step="256" [(ngModel)]="im.ram" name="iram" class="nb" /><span class="unit">MB = {{ gb(im.ram) }}</span></div>
-                <label>{{ tr('Disk type') }}</label><select [(ngModel)]="im.disk" name="idisk">@for (b of buses(im.disk); track b.v) { <option [value]="b.v">{{ b.l }}</option> }</select>
-                <label>{{ tr('Disk size') }}</label><span class="muted small">{{ tr('the image’s own size; a template or a switch can make it bigger') }}</span>
-                <label>{{ tr('Network ports') }}</label><input type="number" min="1" [(ngModel)]="im.nics" name="inics" /><label>{{ tr('Adapter type') }}</label><select [(ngModel)]="im.nic" name="inic">@for (n of nics(im.nic); track n) { <option [value]="n">{{ n }}</option> }</select>
-                <label>{{ tr('Port MAC addresses') }}</label><select [(ngModel)]="im.portMacs" name="ipm" [title]="tr('The data ports’ network cards: from the switch’s base MAC (port 1 = base + 1), or a range of their own apart from the switch’s addresses, as GNS3 gives them')"><option value="">{{ tr('base MAC + port number') }}</option><option value="own">{{ tr('their own range (like GNS3)') }}</option></select>
-                <label>{{ tr('Port names') }}</label><input class="mono" [(ngModel)]="im.portName" name="ipn" placeholder="{n} or 1/{n}" /><span></span><span></span>
-              </div>
-              <div class="sec">{{ tr('Console and first login') }}<span class="muted small">{{ tr('how Termwright logs in on the serial console') }}</span></div>
-              <div class="f3">
-                <label>{{ tr('Ready when') }}</label><input class="mono" [(ngModel)]="im.ready" name="irdy" /><label>{{ tr('Login') }}</label><div class="row2"><input [(ngModel)]="im.login" name="ilog" /><input type="password" [(ngModel)]="password" name="ipw" [placeholder]="tr('password (keychain)')" autocomplete="off" /></div>
-                <label>{{ tr('Answers') }}</label><textarea class="wide" rows="2" [(ngModel)]="answers" name="ians" [placeholder]="'[y/N]: => n'"></textarea>
-                <label>{{ tr('Day 0') }}</label><textarea class="wide" rows="3" [(ngModel)]="day0" name="id0" placeholder="configure snmp sysName {hostname}"></textarea>
-                <label>{{ tr('Set address') }}</label><textarea class="wide mono" rows="2" [(ngModel)]="addrSet" name="iads" [placeholder]="'configure vlan Mgmt ipaddress {mgmtAddr}/{mgmtBits}'" [title]="tr('Typed at each start when the switches have fixed addresses (the host’s network routed, or a lab bridge): {mgmtAddr} {mgmtBits} {mgmtMask} {gateway}')"></textarea>
-                <label>{{ tr('Address command') }}</label><input class="mono" [(ngModel)]="im.addrCmd" name="iadr" /><label>{{ tr('Device type') }}</label><input [(ngModel)]="im.deviceType" name="idt" />
-                <label>{{ tr('More QEMU options') }}</label><input class="mono wide" [(ngModel)]="im.extra" name="iex" placeholder="-cpu host -machine q35" />
-                <span></span><p class="wide muted small" style="margin: 0">{{ tr('Added to the QEMU command line as they are, for images that need them. Examples: -cpu host (the host CPU’s features), -cpu Nehalem, -machine q35, -smp sockets=1,cores=2, -device virtio-rng-pci, -boot order=c, -rtc base=utc. Termwright sets the disk, network ports, console, memory and vCPU itself.') }}</p>
-              </div>
-              @if (im.persona; as p) {
-                <div class="sec">{{ tr('Persona') }} <span class="badge g">{{ p.name }}</span></div>
-                <div class="f3">
-                  <label>{{ tr('File in the VM') }}</label><span class="mono">{{ p.file }}</span><label>{{ tr('Check after boot') }}</label><input class="mono" [(ngModel)]="p.check" name="ichk" />
-                  <label>{{ tr('Models') }}</label><div class="wide">@for (m of p.models ?? []; track m.name) { <span class="pill">{{ m.name }}</span> }</div>
-                  <label>{{ p.modules || tr('Modules') }}</label><div class="wide">@for (m of mods(p); track m) { <span class="pill">{{ m }}</span> }@if (p.stack) { <span class="muted small">· {{ tr('stacks') }}</span> }</div>
-                </div>
-              }
-            } @else { <p class="muted">{{ tr('Pick an image on the left, or add one.') }}</p> }
-          </div>
-        }
-        @case ('templates') {
-          <div class="lst"><div class="lsh"><app-tv-bar [tv]="tplView" /><app-tv-sorts [tv]="tplView" [keys]="tplKeys" /></div><div class="lsc">
-            @for (t of tplView.rows(); track t.id) { <div class="it" [class.on]="tpl()?.id === t.id" (click)="pickTpl(t)"><div><span>{{ t.name }}</span><small>{{ imageName(t.image) }}</small><small>{{ t.cpus }} vCPU · {{ gb(t.ram) }} RAM · {{ t.diskGb ? t.diskGb + ' GB ' + tr('disk') : tr('disk of the image') }}@if (t.module) { · {{ t.module }} }</small></div></div> }
-            @empty { <p class="muted small">{{ templates().length ? tr('No template matches the search or the filters.') : tr('No templates yet.') }}</p> }
-            <button type="button" class="primary" style="width: 100%; margin-top: 10px" (click)="newTpl()" [disabled]="!images().length">+ {{ tr('New Template') }}</button>
-          </div></div>
-          <div class="pad">
-            @if (tpl(); as t) {
-              <div class="f">
-                <label>{{ tr('Name') }}</label><input [(ngModel)]="t.name" name="tn" placeholder="M-48" />
-                <label>{{ tr('Image') }}</label><select [ngModel]="t.image" (ngModelChange)="tplImage($event)" name="ti">@for (im of images(); track im.id) { <option [value]="im.id">{{ im.name }}{{ im.version ? ' · ' + im.version : '' }}</option> }</select>
-                @if (tplDef(); as p) {
-                  <label>{{ tr('Model') }}</label><select [ngModel]="t.model" (ngModelChange)="t.model = $event; suggestTpl(true, true)" name="tm"><option value="">-</option>@for (m of p.models ?? []; track m.name) { <option [value]="m.name">{{ m.name }}</option> }</select>
-                  <label>{{ p.modules || tr('Module') }}</label><select [(ngModel)]="t.module" name="tx"><option value="">{{ tr('none') }}</option>@for (m of tplMods(); track m) { <option [value]="m">{{ m }}</option> }</select>
-                }
-                <label>vCPU</label><input type="number" min="1" [(ngModel)]="t.cpus" name="tc" style="max-width: 120px" />
-                <label>{{ tr('Memory') }}</label><div class="row2" style="max-width: 360px"><input type="number" min="256" step="256" [(ngModel)]="t.ram" name="tr" /><span class="unit">MB = {{ gb(t.ram) }}</span></div>
-                <label>{{ tr('Disk') }}</label><div class="row2" style="max-width: 460px"><input type="number" min="0" [(ngModel)]="t.diskGb" name="td" /><span class="unit">GB · {{ tr('0 = the image’s size') }} · {{ diskName(imageOf(t.image)?.disk) }}</span></div>
-                <label>{{ tr('First serial number') }}</label><div class="row2"><input class="mono" [(ngModel)]="t.serialStart" name="ts" /><button type="button" (click)="suggestTpl(true, false)">↻ {{ tr('New') }}</button></div>
-                <label>{{ tr('First MAC address') }}</label><div class="row2"><input class="mono" [(ngModel)]="t.macStart" name="tmac" /><button type="button" (click)="suggestTpl(false, true)">↻ {{ tr('New') }}</button></div>
-              </div>
-              <p class="muted small">{{ tr('Used by {0} switches.', tplUse(t.id)) }}</p>
-              <div class="row2" style="justify-content: flex-start"><button type="button" class="primary" (click)="saveTpl()" [disabled]="!t.name || !t.image || lab.busy()">{{ tr('Save') }}</button>@if (t.id) { <button type="button" class="danger-ghost" (click)="removeTpl()">{{ tr('Remove') }}</button> }</div>
-            } @else { <p class="muted">{{ tr('A template is an image with resources, the model it acts as and where serial numbers and MACs start.') }}</p> }
-          </div>
-        }
-        @case ('onhosts') { <app-lab-host-images style="grid-column: 1 / -1; min-height: 0" (hostsPage)="hostsPage.emit($event)" /> }
-        @case ('public') {
-          <div class="lst">
-            <p class="muted small">{{ tr('Ready-made settings from the public GNS3 registry, with their second disks, CD-ROMs and BIOS files. Add one: its versions join the image list; then download the files (or choose them when the maker wants you to sign in).') }}</p>
-            @for (g of catGroups(); track g) { <div class="grp">{{ g }}</div><div class="muted small">{{ catCount(g) }}</div> }
-          </div>
-          <div class="pad">
-            @for (g of catGroups(); track g) {
-              <div class="sec">{{ g }}</div>
-              <div class="catg">
-                @for (c of catIn(g); track c.file) {
-                  <div class="card"><div class="row2"><b>{{ c.name }}</b>@if (c.added) { <span class="badge g">{{ tr('added') }}</span> }</div>
-                    <p class="muted small" style="margin: 6px 0 8px">{{ c.note }}</p>
-                    @if (c.added) { <button type="button" class="sm" (click)="showAdded(c.file)">{{ tr('Show') }}</button> <button type="button" class="sm danger-ghost" (click)="removeCat(c.file, c.name, c.count)" [disabled]="lab.busy()">{{ tr('Remove') }}</button> <span class="muted small">{{ tr('{0} images', c.count) }}</span> }
-                    @else { <button type="button" class="sm primary" (click)="addCat(c.file, c.name)" [disabled]="lab.busy()">+ {{ tr('Add') }}</button> }</div>
-                }
-              </div>
-            } @empty { <p class="muted">{{ catErr() || tr('Loading…') }}</p> }
-            <p class="muted small">{{ tr('Container appliances are not in the list: they do not run on a KVM host.') }}</p>
-          </div>
-        }
-        @case ('profiles') {
-          <div class="lst">
-            <p class="muted small">{{ tr('An image file you add is recognised by its name; New Lab offers these devices.') }}</p>
-            <p class="muted small">{{ tr('The device pack is loaded or changed in the Simulated Lab tab (the flask at the top right): Load Device Pack.') }}</p>
-          </div>
-          <div class="pad"><table class="t"><thead><tr><th>{{ tr('Device') }}</th><th>{{ tr('OS') }}</th><th>{{ tr('Modules') }}</th><th>{{ tr('Images') }}</th></tr></thead><tbody>
-            @for (d of lab.state()?.deviceTypes ?? []; track d.key) { <tr><td>{{ d.model || d.kind }}</td><td>{{ d.osName || d.kind }}</td><td class="small">{{ (d.modules ?? []).join(', ') || '-' }}</td><td>{{ d.images.length || tr('no image yet') }}</td></tr> }
-          </tbody></table></div>
-        }
-      }
-    </div>
-    <div class="mf">
-      @if (tab() === 'images' && edit(); as im) {
-        <button type="button" class="danger-ghost" (click)="removeImage(im)">{{ tr('Remove Image') }}</button><button type="button" (click)="lab.upload(im.id)" [disabled]="!im.file || lab.busy()">{{ tr('Copy to Host Now') }}</button>
-        <span class="sp"></span><span class="muted small">{{ tr('Changes apply to switches when they start next') }}</span><button type="button" (click)="pick(im.id)">{{ tr('Revert') }}</button><button type="button" class="primary" (click)="saveImage()" [disabled]="lab.busy()">{{ tr('Save') }}</button>
-      } @else { <span class="sp"></span><button type="button" class="primary" (click)="closed.emit()">{{ tr('Close') }}</button> }
-    </div>
-  </div>
-    @if (screenOf(); as j) { <app-vm-screen kind="install" [id]="j.id" [name]="j.name" (closed)="screenOf.set(null)" /> }`,
-  styles: [PAGE],
-})
-export class LabImages implements OnInit, OnDestroy {
+/** What the Appliances page knows and does (images, templates, downloads, installs from ISO); its page is LabAppliances. */
+@Directive()
+export abstract class LabImages implements OnInit, OnDestroy {
   readonly start = input<'images' | 'templates' | 'onhosts'>('images');
   readonly image0 = input('', { alias: 'image' }); // open on this image
   readonly closed = output<void>();
@@ -942,8 +730,8 @@ export class LabImages implements OnInit, OnDestroy {
   protected templates = computed(() => this.lab.emu()?.templates ?? []);
   protected edit = signal<EmuImage | null>(null);
   protected tpl = signal<EmuTemplate | null>(null);
-  protected password = ''; protected day0 = ''; protected answers = ''; protected addrSet = '';
-  ngOnInit() { this.tab.set(this.start()); const im = this.images().find(x => x.id === this.image0()) ?? this.images()[0]; if (im) this.pick(im.id); if (this.image0()) setTimeout(() => document.querySelector('app-lab-images .it.on')?.scrollIntoView({ block: 'center' }), 60); }
+  protected password = ''; protected day0 = ''; protected answers = ''; protected addrSet = ''; protected dhcpOn = '';
+  ngOnInit() { this.tab.set(this.start()); const im = this.images().find(x => x.id === this.image0()) ?? this.images()[0]; if (im) this.pick(im.id); if (this.image0()) setTimeout(() => document.querySelector('app-lab-appliances .row.on')?.scrollIntoView({ block: 'center' }), 60); }
   protected groups = computed(() => {
     const out: { name: string; items: EmuImage[] }[] = [];
     const kind = (im: EmuImage) => im.persona?.osName || im.deviceType || tr('Other');
@@ -989,11 +777,11 @@ export class LabImages implements OnInit, OnDestroy {
     const im = this.images().find(i => i.id === id); if (!im) return;
     this.iso.set(false);
     this.edit.set({ ...im, persona: im.persona ? { ...im.persona } : im.persona }); this.password = '';
-    this.day0 = (im.day0 ?? []).join('\n'); this.addrSet = (im.addrSet ?? []).join('\n'); this.answers = (im.answers ?? []).map(a => a.match + ' => ' + a.send).join('\n');
+    this.day0 = (im.day0 ?? []).join('\n'); this.addrSet = (im.addrSet ?? []).join('\n'); this.dhcpOn = (im.dhcpOn ?? []).join('\n'); this.answers = (im.answers ?? []).map(a => a.match + ' => ' + a.send).join('\n');
   }
   async saveImage() {
     const im = this.edit(); if (!im) return;
-    const out: EmuImage = { ...im, password: this.password, day0: this.day0.split(/\r?\n/).filter(l => l.trim()), addrSet: this.addrSet.split(/\r?\n/).filter(l => l.trim()),
+    const out: EmuImage = { ...im, password: this.password, day0: this.day0.split(/\r?\n/).filter(l => l.trim()), addrSet: this.addrSet.split(/\r?\n/).filter(l => l.trim()), dhcpOn: this.dhcpOn.split(/\r?\n/).filter(l => l.trim()),
       answers: this.answers.split(/\r?\n/).filter(l => l.includes('=>')).map(l => { const i = l.indexOf('=>'); return { match: l.slice(0, i).trim(), send: l.slice(i + 2).trim() }; }),
       cpus: +im.cpus || 1, ram: +im.ram || 1024, nics: +im.nics || 1 };
     if (await this.lab.saveImage(out)) this.pick(im.id);

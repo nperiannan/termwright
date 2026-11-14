@@ -127,7 +127,7 @@ function draw(role: DevRole, c: string, lit: boolean): string {
   }
 }
 
-// ---- the other styles: classic diagram symbols, classic 3-D (diagram blue), line icons, front panels ----
+// ---- the other styles: classic diagram symbols, line icons, front panels ("blue", the old Classic 3-D, draws as rack front) ----
 const W = '#ffffff';
 /* eslint-disable */
 // ---------- Style 1: classic diagram symbols (2D, the shapes network diagrams use) ----------
@@ -154,29 +154,6 @@ function classic(k: string, c: string, o: { mono?: number } = {}): string {
  }
  return `<svg width="120" height="96" viewBox="0 0 120 96"><defs><linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset="1" stop-color="#000" stop-opacity=".12"/></linearGradient></defs>${s}</svg>`;
 }
-// ---------- Style 2: classic 3-D (the blue boxes and cylinders of network diagrams) ----------
-function blue3d(k: string, c: string): string {
- const B={top:'#5c9be6',fr:'#2a6cc0',sd:'#1d528f',ed:'#174178'};
- const P=(W2: number,D: number,H: number,oy=0)=>{const cx=60-(W2-D)*CS/2,cy=52+oy-((W2+D)*.5-H)/2;return (x: number,y: number,z: number): [number, number]=>[cx+(x-y)*CS,cy+(x+y)*.5-z]};
- const pts=(f: P3,a: [number,number,number][])=>a.map(p=>f(...p).map(n=>n.toFixed(1)).join(',')).join(' ');
- const bx=(f: P3,w: number,d: number,h: number,col: {top: string; fr: string; sd: string; ed: string}=B,z0=0)=>`<polygon points="${pts(f,[[w,0,z0],[w,d,z0],[w,d,z0+h],[w,0,z0+h]])}" fill="${col.sd}" stroke="${col.ed}" stroke-width=".7"/><polygon points="${pts(f,[[0,d,z0],[w,d,z0],[w,d,z0+h],[0,d,z0+h]])}" fill="${col.fr}" stroke="${col.ed}" stroke-width=".7"/><polygon points="${pts(f,[[0,0,z0+h],[w,0,z0+h],[w,d,z0+h],[0,d,z0+h]])}" fill="${col.top}" stroke="${col.ed}" stroke-width=".7"/>`;
- const top=(f: P3,w: number,d: number,h: number,g: string,sz: number,sw=2.3)=>{const s=sz/24,[ex,ey]=f(w/2-sz/2,d/2-sz/2,h);return `<g transform="matrix(${(s*CS).toFixed(3)} ${(s*.5).toFixed(3)} ${(-s*CS).toFixed(3)} ${(s*.5).toFixed(3)} ${ex.toFixed(1)} ${ey.toFixed(1)})" fill="none" stroke="#fff" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"><path d="${g}"/></g>`};
- let s='';
- switch(k){
-  case 'access':{const f=P(64,40,12);s=bx(f,64,40,12)+top(f,64,40,12,P2.l2,30);break}
-  case 'core':{const f=P(52,46,34,4);s=bx(f,52,46,34)+top(f,52,46,34,P2.l3,32);break}
-  case 'router':{const r=22,h=18,f=P(2*r,2*r,h,2),[bx2,by]=f(r,r,0),[tx,ty]=f(r,r,h),rx=1.2247*r,ry=.7071*r;
-   s=`<path d="M${tx-rx} ${ty}L${bx2-rx} ${by}A${rx} ${ry} 0 0 0 ${bx2+rx} ${by}L${tx+rx} ${ty}Z" fill="${B.fr}" stroke="${B.ed}" stroke-width=".7"/><ellipse cx="${tx}" cy="${ty}" rx="${rx}" ry="${ry}" fill="${B.top}" stroke="${B.ed}" stroke-width=".7"/>`+top(f,2*r,2*r,h,P2.rt,30);break}
-  case 'fw':{const f=P(58,30,30),R={top:'#e99a7e',fr:'#c4472a',sd:'#9a3520',ed:'#7a2a19'};s=bx(f,58,30,30,R);for(let r=0;r<4;r++)for(let i=0;i<5;i++){const x0=1+(r%2?6:0)+i*12;if(x0+10>57)continue;s+=`<polygon points="${pts(f,[[x0,30,29-r*7.2],[x0+10,30,29-r*7.2],[x0+10,30,23.5-r*7.2],[x0,30,23.5-r*7.2]])}" fill="#e0603a" stroke="#7a2a19" stroke-width=".5"/>`}break}
-  case 'ap':{const r=22,f=P(2*r,2*r,8),[x,y]=f(r,r,8),rx=1.2247*r,ry=.7071*r;s=`<path d="M${x-rx} ${y}v7a${rx} ${ry} 0 0 0 ${2*rx} 0v-7" fill="${B.fr}" stroke="${B.ed}"/><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${B.top}" stroke="${B.ed}"/>`+top(f,2*r,2*r,8,P2.ap,28,2.4);break}
-  case 'server':{const f=P(26,40,52,6);s=bx(f,26,40,52);for(let i=0;i<5;i++)s+=`<polygon points="${pts(f,[[3,40,47-i*8],[23,40,47-i*8],[23,40,43-i*8],[3,40,43-i*8]])}" fill="none" stroke="#9cc3ff" stroke-width=".8"/>`;break}
-  case 'host':{const f=P(56,44,16,10);s=bx(f,56,44,16);([[6,6,'#16a39a'],[30,6,'#8b5cf6'],[6,24,'#e0603a'],[30,24,'#f2b52e']] as [number,number,string][]).forEach(([x,y,cc])=>{const C={top:cc,fr:cc+'cc',sd:cc+'99',ed:'#174178'};s+=`<g>${bx((a: number,b2: number,z: number)=>f(a+x,b2+y,z),14,14,12,C,18)}</g>`});break}
-  case 'cloud':{s=`<path transform="translate(16 2) scale(3.7)" d="${G.cloud}" fill="#d9e9fb" stroke="#2a6cc0" stroke-width=".55"/>`;break}
-  case 'pc':{const f=P(56,34,47),o=(dx: number,dy: number)=>(a: number,b2: number,z: number)=>f(a+dx,b2+dy,z);s=bx(o(16,12),24,16,3)+bx(o(25,18),6,4,10,B,3)+bx(o(0,22),56,5,34,B,13)+`<polygon points="${pts(f,[[3,27,16],[53,27,16],[53,27,44],[3,27,44]])}" fill="#0f2a4a" stroke="#174178" stroke-width=".6"/><polyline points="${pts(f,[[7,27,39],[11,27,36],[7,27,33]])}" fill="none" stroke="#9cc3ff" stroke-width="1.4"/><polyline points="${pts(f,[[14,27,32],[22,27,32]])}" stroke="#9cc3ff" stroke-width="1.4"/>`+bx(o(62,10),12,22,30);break}
- }
- return `<svg width="120" height="96" viewBox="0 0 120 96">${s}</svg>`;
-}
-// ---------- Style 3: line icons (outline, one colour per role) ----------
 function line(k: string, c: string, o: { ink?: string } = {}): string {
  const col=o.ink||c,st=`fill="none" stroke="${col}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"`;
  const g=(p: string,x: number,y: number,s: number,w=1.6)=>`<g transform="translate(${x} ${y}) scale(${s})" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"><path d="${p}"/></g>`;
@@ -296,7 +273,7 @@ function rack(k: string, lit: boolean): string {
 export type IconStyle = 'box' | 'iso' | 'classic' | 'blue' | 'line' | 'front' | 'slate' | 'steel' | 'rack';
 export const ICON_STYLES: { k: IconStyle; name: string }[] = [
   { k: 'slate', name: 'Slate tiles' }, { k: 'steel', name: 'Steel isometric' }, { k: 'rack', name: 'Rack front (1U)' },
-  { k: 'box', name: 'Boxes' }, { k: 'iso', name: 'Isometric hardware' }, { k: 'blue', name: 'Classic 3-D (diagram blue)' },
+  { k: 'box', name: 'Boxes' }, { k: 'iso', name: 'Isometric hardware' },
   { k: 'front', name: 'Front panels' },
 ];
 const strip = (svg: string) => svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
@@ -305,7 +282,7 @@ const cache = new Map<string, string>();
 
 /** The drawing of a device (the inside of its svg; viewBox '0 0 130 98' for iso, else '-5 0 130 98'). */
 export function iconSvg(look: IconStyle, role: DevRole, c: string, lit: boolean): string {
-  return look === 'box' ? box(role, lit) : look === 'classic' ? strip(classic(role, c)) : look === 'blue' ? strip(blue3d(role, c)) : look === 'line' ? strip(line(role, c)) : look === 'front' ? strip(front(role, c)) : look === 'slate' ? strip(slate(role)) : look === 'steel' ? strip(steel(role, lit)) : look === 'rack' ? strip(rack(role, lit))
+  return look === 'box' ? box(role, lit) : look === 'classic' ? strip(classic(role, c)) : look === 'line' ? strip(line(role, c)) : look === 'front' ? strip(front(role, c)) : look === 'slate' ? strip(slate(role)) : look === 'steel' ? strip(steel(role, lit)) : (look === 'rack' || look === 'blue') ? strip(rack(role, lit))
     : '<defs><filter id="icsh" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter></defs>' + draw(role, c, lit);
 }
 
@@ -370,7 +347,7 @@ export class DevIcon {
   readonly state = input<'run' | 'boot' | 'off' | 'idle'>('run');
   readonly size = input(104);
   readonly color = input('');
-  readonly look = input<IconStyle>('box');
+  readonly look = input<IconStyle>('rack');
   readonly body = computed(() => {
     const role = this.role(), c = this.color() || ROLE_COLOR[role], lit = this.state() === 'run' || this.state() === 'boot', look = this.look(), key = look + role + c + lit;
     let s = cache.get(key);

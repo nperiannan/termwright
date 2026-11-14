@@ -34,6 +34,8 @@ export class Backend {
 
   /** A picture on the system clipboard (base64 PNG), or null: the app's Paste reaches the page as text only. */
   clipboardImage() { return this.call<{ data: string; type: string } | null>('ClipboardImage'); }
+  /** What to type in a terminal to sign Claude Code in on this computer (its path when the terminal would not find it). */
+  claudeCodeSignIn() { return this.call<string>('ClaudeCodeSignIn'); }
   clipboardGet(): Promise<string> {
     return window.runtime ? window.runtime.ClipboardGetText() : navigator.clipboard.readText();
   }

@@ -506,6 +506,15 @@ func emuNeedsConsole(l *emu.Lab, v emu.VM, im *emu.Image) bool {
 	return l.Fixed() && len(im.AddrSet) > 0 && v.MgmtIP != "" && v.AddrOn != v.MgmtIP
 }
 
+// emuLook is how a topology draws its devices: Rack front unless it chose another style ("blue", the Classic 3-D
+// style that was taken out, draws as Rack front too).
+func emuLook(s string) string {
+	if s == "" || s == "blue" {
+		return "rack"
+	}
+	return s
+}
+
 // emuNotRunning keeps the switches whose QEMU does not run (lock held).
 func emuNotRunning(ids []string) []string {
 	var out []string
@@ -4092,7 +4101,7 @@ func (a *App) emuView() EmuView {
 	for _, h := range l.Hosts(emuLab.f.Host) {
 		v.CloudPorts[h] = emuCloudPorts(l, h)
 	}
-	v.IconStyle = orStr(f.IconStyle, "box")
+	v.IconStyle = emuLook(f.IconStyle)
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
 	for _, h := range l.Hosts(f.Host) {
@@ -4201,6 +4210,9 @@ func (a *App) emuView() EmuView {
 		d.Role = vm.Role
 		if p, ok := l.Icons[emu.IconKey(vm)]; ok {
 			d.Role, d.IconStyle = orStr(p.Role, d.Role), p.Style
+			if d.IconStyle == "blue" {
+				d.IconStyle = "rack"
+			}
 		}
 		if im != nil {
 			for _, n := range vm.Uplinks {
@@ -6705,7 +6717,7 @@ func (a *App) EmuSetRole(id, role string) (EmuView, error) {
 func (a *App) EmuSetIconStyle(id, style string) (EmuView, error) {
 	defer emuAs("user")()
 	switch style {
-	case "", "box", "iso", "classic", "blue", "line", "front", "slate", "steel", "rack":
+	case "", "box", "iso", "classic", "line", "front", "slate", "steel", "rack": // Classic 3-D ("blue") was taken out
 	default:
 		return EmuView{}, fmt.Errorf("no icon style %q", style)
 	}

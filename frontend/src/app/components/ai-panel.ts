@@ -118,7 +118,8 @@ function spans(t: string): Span[] {
             @if (m.model) { <span class="when" [title]="m.model">{{ nice(m.model) }}{{ m.secs ? ' · ' + m.secs + ' s' : '' }}</span> }
             @if (m.usage) { <span class="when tok" [title]="tr('Tokens as the AI service counted them: {0} sent (the chat so far and the instructions), {1} in the answer', m.usage.in.toLocaleString(), m.usage.out.toLocaleString())">↑ {{ k(m.usage.in) }} ↓ {{ k(m.usage.out) }}</span> }
             @if (m.text) { <span class="grow"></span><button type="button" class="mc" (click)="copy(m.text)" [title]="tr('Copy the answer')" [attr.aria-label]="tr('Copy the answer')"><app-icon name="copy" [size]="12" /></button> }</div>
-            @if (m.error) { <div class="ab err">{{ m.error }}</div> }
+            @if (m.error) { <div class="ab err">{{ m.error }}</div>
+              @if (isSignIn(m.error)) { <div class="sib"><button type="button" class="b p" (click)="runSignIn()" [title]="tr('Opens a Local Shell tab and runs it there; sign in, then ask again')"><app-icon name="shell" [size]="12" />{{ tr('Run it in a Termwright tab') }}</button><button type="button" class="b" (click)="copySignIn()"><app-icon name="copy" [size]="12" />{{ tr('Copy the command') }}</button></div> } }
             @if (m.text) {
               <div class="ab">
                 @for (b of render(m); track $index) {
@@ -266,11 +267,12 @@ function spans(t: string): Span[] {
     .cx.add { border-style: dashed; color: var(--accent); cursor: pointer; }
     .ab { margin-left: 29px; line-height: 1.55; min-width: 0; overflow-wrap: anywhere; } .ab p { margin: 0 0 8px; } .ab .li { display: flex; margin: 2px 0 2px 4px; }
     .ab.err { color: var(--danger); white-space: pre-wrap; }
+    .sib { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
     code.i { font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); padding: 0 4px; border-radius: 4px; background: var(--surface-2); }
     .cb { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; margin: 6px 0 10px; background: var(--bg); }
     .cbh { display: flex; align-items: center; gap: 4px; padding: 4px 6px 4px 10px; border-bottom: 1px solid var(--line); background: var(--surface); font-size: calc(11px * var(--ui-scale, 1)); color: var(--muted); }
-    .cbh .b { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; height: 24px; border-radius: 6px; font-size: calc(11.5px * var(--ui-scale, 1)); }
-    .cbh .b.p { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .cbh .b, .sib .b { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; height: 24px; border-radius: 6px; font-size: calc(11.5px * var(--ui-scale, 1)); }
+    .cbh .b.p, .sib .b.p { background: var(--accent); border-color: var(--accent); color: #fff; }
     pre { margin: 0; padding: 8px 10px; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.5; white-space: pre; overflow: auto; max-height: 340px; user-select: text; }
     .img { max-width: 240px; max-height: 160px; border-radius: 8px; border: 1px solid var(--line); display: block; margin-bottom: 6px; }
     .step { margin-left: 29px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); font-size: calc(12px * var(--ui-scale, 1)); overflow: hidden; }
@@ -509,6 +511,22 @@ export class AIPanel implements OnInit {
     void this.tabs.paste(t.id, lines.filter(l => l.trim()).join('\n'));
     this.tabs.focus(t.id);
     this.ui.toast(tr('Pasted - check it, then press Enter in the terminal'), 'info');
+  }
+  isSignIn(e: string) { return /^Claude Code is not signed in/.test(e); }
+  async copySignIn() { try { await this.copy(await this.backend.claudeCodeSignIn()); } catch (e) { this.ui.error(e); } }
+  /** Signs Claude Code in where the person already is: a Local Shell tab of Termwright, with the command typed. */
+  async runSignIn() {
+    try {
+      const cmd = await this.backend.claudeCodeSignIn();
+      const before = new Set(this.tabs.tabs().map(t => t.id));
+      await this.tabs.openLocalShell();
+      for (let i = 0; i < 40; i++) {
+        const t = this.tabs.tabs().find(x => !before.has(x.id) && x.kind === 'terminal');
+        if (t?.state === 'connected') { await new Promise(r => setTimeout(r, 400)); await this.backend.sendInput(t.id, cmd + '\r'); return; }
+        await new Promise(r => setTimeout(r, 250));
+      }
+      this.ui.toast(tr('The Local Shell did not start: run {0} in a terminal', cmd), 'error');
+    } catch (e) { this.ui.error(e); }
   }
   async copy(text: string) { await this.backend.clipboardSet(text); this.ui.toast(tr('Copied'), 'success'); }
   async saveCmd(lines: string[]) {

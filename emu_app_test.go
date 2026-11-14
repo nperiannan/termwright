@@ -1202,7 +1202,7 @@ func TestEmuIcons(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Devices[1].Role != "core" || v.Devices[1].IconStyle != "line" || v.Devices[2].Role != "" || v.IconStyle != "box" {
+	if v.Devices[1].Role != "core" || v.Devices[1].IconStyle != "line" || v.Devices[2].Role != "" || v.IconStyle != "rack" {
 		t.Fatalf("%+v", v.Devices)
 	}
 	if v, _ = a.EmuSetIconStyle("", "classic"); v.IconStyle != "classic" {

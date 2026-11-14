@@ -17,7 +17,8 @@ import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 import { TableView, TvBar, TvHead } from '../core/table-view';
-import { LabConfigure, LabImages, LabNew } from './lab-pages';
+import { LabConfigure, LabNew } from './lab-pages';
+import { LabAppliances } from './lab-appliances';
 import { LabHosts } from './lab-hosts';
 import { PcWindow } from './pc-window';
 import { TerminalView } from './terminal-view';
@@ -32,7 +33,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
  *  selected switch, the topology summary and the Events log. */
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabImages, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
+  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + dockH() + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" [testers]="traf()?.testers ?? []" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" (screen)="pcWin.set(''); screenDev.set(d)" /> }
@@ -69,12 +70,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         <button type="button" (click)="loadPack()">{{ st()?.pack ? tr('Load Another Pack…') : tr('Load Device Pack (.vm)…') }}</button> }
       @if (emu()) {
         <nav class="ptabs">
-          <a [class.on]="page() !== 'hosts' && page() !== 'images' && page() !== 'templates' && page() !== 'traffic' && page() !== 'overview'" (click)="page.set('')">{{ tr('Canvas') }}</a>
+          <a [class.on]="!isAppl() && page() !== 'hosts' && page() !== 'traffic' && page() !== 'overview'" (click)="page.set('')">{{ tr('Canvas') }}</a>
           @if (emu()) { <a [class.on]="page() === 'overview'" (click)="page.set('overview')" [title]="tr('Every device in one table')">{{ tr('Overview') }}@if (devs().length) { <small>{{ devs().length }}</small> }</a> }
           <a [class.on]="page() === 'traffic'" (click)="openTraffic()" [title]="tr('Test ports, streams, live charts and RFC 2544 tests')">{{ tr('Traffic') }}@if (traf()?.running) { <small class="run">▶</small> } @else if (traf()?.streams?.length) { <small>{{ traf()!.streams.length }}</small> }</a>
+          <a [class.on]="isAppl()" (click)="page.set('images')" [title]="tr('The images the switches and computers boot, and the templates made from them')">{{ tr('Appliances') }}@if ((st()?.images ?? []).length) { <small>{{ st()!.images!.length }}</small> }</a>
           <a [class.on]="page() === 'hosts'" (click)="page.set('hosts')">{{ tr('Hosts') }}@if ((st()?.hosts ?? []).length) { <small>{{ st()!.hosts!.length }}</small> }</a>
-          <a [class.on]="page() === 'images'" (click)="page.set('images')">{{ tr('Images') }}@if ((st()?.images ?? []).length) { <small>{{ st()!.images!.length }}</small> }</a>
-          <a [class.on]="page() === 'templates'" (click)="page.set('templates')">{{ tr('Templates') }}@if ((st()?.templates ?? []).length) { <small>{{ st()!.templates!.length }}</small> }</a>
         </nav>
       }
       @if (devs().length) {
@@ -173,6 +173,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         }
         @if (libOpen()) { <app-traffic-library [testers]="traf()?.testers ?? []" (closed)="libOpen.set(false)" (applied)="traf.set($event); libOpen.set(false)" /> }
       }
+      @if (isAppl()) { <app-lab-appliances [start]="applStart()" [image]="imgPick()" (hostsPage)="hostPick.set($event); page.set('hosts')" /> }
       @if (page() === 'overview') { <app-lab-overview [devs]="devs()" [links]="links()" [hostNames]="ovHosts()" (act)="ovAct($event.what, $event.dev)" /> }
       @if (palOpen()) { <app-cmd-palette [cmds]="palCmds()" (closed)="palOpen.set(false)" /> }
       @if (screenDev(); as sd) { <app-vm-screen kind="vm" [id]="sd.id" [name]="sd.hostname" (closed)="screenDev.set(null)" /> }
@@ -579,9 +580,6 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     </ng-template>
     @switch (page()) {
       @case ('configure') { <app-lab-configure [devId]="cfgId()" [emu]="emu()" (closed)="page.set('')" (images)="imgPick.set($event); page.set('images')" /> }
-      @case ('images') { <app-lab-images start="images" [image]="imgPick()" (closed)="page.set(''); imgPick.set('')" (hostsPage)="hostPick.set($event); page.set('hosts')" /> }
-      @case ('onhosts') { <app-lab-images start="onhosts" (closed)="page.set('')" (hostsPage)="hostPick.set($event); page.set('hosts')" /> }
-      @case ('templates') { <app-lab-images start="templates" (closed)="page.set('')" /> }
       @case ('hosts') { <app-lab-hosts [select]="hostPick()" (closed)="page.set(''); hostPick.set('')" /> }
     }
     <div class="dock">
@@ -904,7 +902,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       .cb { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 9px; border: 1px solid transparent; background: none; border-radius: 8px; white-space: nowrap; font-size: 12.5px; color: var(--text); cursor: pointer; flex: none; }
       .cb:hover:not(:disabled) { background: var(--surface-2); } .cb.on { color: var(--accent); } .cb:disabled { opacity: .45; cursor: default; }
       svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-      .sl { display: none; } .sp { flex: 1; } .zg { display: inline-flex; align-items: center; gap: 2px; flex: none; } .zsel { height: 26px; font-size: 12px; } .lkhid { position: absolute; inset: 0; opacity: 0; cursor: pointer; } }
+      .sl { display: none; } .sp { flex: 1; } .zg { display: inline-flex; align-items: center; gap: 2px; flex: none; } .zsel { height: 26px; font-size: 12px; } .lkhid { position: absolute; inset: 0; width: 100%; height: 100%; max-width: 100%; opacity: 0; cursor: pointer; } }
     .ctb.tm-icons { .ll { display: none; } .cb { width: 34px; padding: 0; justify-content: center; } }
     .ctb.tm-labels { .ll { display: none; } .sl { display: block; font-size: 11px; } .cb { flex-direction: column; justify-content: center; gap: 2px; height: 46px; width: 58px; padding: 0; } }
     .ics { position: absolute; width: 0; height: 0; } .menu.more { min-width: 190px; } .menu .cur { color: var(--accent); }
@@ -1145,6 +1143,9 @@ export class LabWorkspace implements OnDestroy {
     if (!(await this.ui.confirm(tr('Stop All'), tr('Stop all {0} switches that run or start now?', n) + (fast ? ' ' + tr('Fast start keeps their state, so Start resumes them in seconds.') : ''), tr('Stop All'), true))) return;
     await this.lab.stop([]);
   }
+  /** The Appliances page (its views were the Images, Templates and On the Hosts pages). */
+  protected isAppl = computed(() => ['images', 'templates', 'onhosts'].includes(this.page()));
+  protected applStart = computed(() => (this.page() === 'templates' ? 'templates' : this.page() === 'onhosts' ? 'onhosts' : 'images') as 'images' | 'templates' | 'onhosts');
   protected isOpen(k: string) { const v = this.secs()[k]; return v === undefined ? k === 'details' : v; }
   protected setOpen(k: string, o: boolean) {
     if (this.isOpen(k) === o) return;
@@ -1410,7 +1411,7 @@ export class LabWorkspace implements OnDestroy {
     const cmds: PaletteCmd[] = [
       { id: 'p-canvas', label: tr('Canvas'), group: 'Pages', run: go('') }, { id: 'p-ov', label: tr('Overview'), group: 'Pages', run: go('overview') },
       { id: 'p-traf', label: tr('Traffic'), group: 'Pages', run: go('traffic') }, { id: 'p-hosts', label: tr('Hosts'), group: 'Pages', run: go('hosts') },
-      { id: 'p-img', label: tr('Images'), group: 'Pages', run: go('images') }, { id: 'p-tpl', label: tr('Templates'), group: 'Pages', run: go('templates') },
+      { id: 'p-app', label: tr('Appliances'), group: 'Pages', run: go('images') }, { id: 'p-img', label: tr('Images'), group: 'Pages', run: go('images') }, { id: 'p-tpl', label: tr('Templates'), group: 'Pages', run: go('templates') },
       { id: 'a-start', label: tr('Start All'), group: 'Lab', run: () => void this.startStopped() },
       { id: 'a-note', label: tr('Add a Note'), group: 'Lab', run: () => void this.addNote('note') }, { id: 'a-area', label: tr('Add an Area'), group: 'Lab', run: () => void this.addNote('area') },
       { id: 'a-stream', label: tr('New Stream'), group: 'Traffic', run: () => { this.openTraffic(); setTimeout(() => this.newStream(), 300); } },
@@ -2154,7 +2155,7 @@ export class LabWorkspace implements OnDestroy {
   protected problems = computed(() => (this.st()?.events ?? []).filter(e => e.level === 'error').length);
   protected readonly roles = ROLES;
   protected readonly looks = ICON_STYLES;
-  protected defLook = computed(() => (this.st()?.iconStyle || 'box') as IconStyle);
+  protected defLook = computed(() => { const v = this.st()?.iconStyle; return (!v || v === 'blue' ? 'rack' : v) as IconStyle; }); // Rack front by default (Classic 3-D was taken out)
   lookOf(d: LabDevice): IconStyle { return (d.iconStyle || this.defLook()) as IconStyle; }
   kindOf(d: LabDevice) { return d.persona?.slots?.[0]?.model || d.model || tr('this image'); }
   async setLook(d: LabDevice, k: IconStyle) { this.menu.set(null); try { await this.backend.emuSetIconStyle(d.id, k === this.defLook() ? '' : k); await this.lab.refresh(); } catch (e) { this.ui.error(e); } }

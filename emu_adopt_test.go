@@ -56,3 +56,12 @@ func TestEmuNotRunning(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// Rack front is the default drawing style; the old Classic 3-D ("blue") draws as Rack front.
+func TestEmuLook(t *testing.T) {
+	for in, want := range map[string]string{"": "rack", "blue": "rack", "box": "box", "slate": "slate", "rack": "rack"} {
+		if got := emuLook(in); got != want {
+			t.Errorf("%q: %q, want %q", in, got, want)
+		}
+	}
+}
