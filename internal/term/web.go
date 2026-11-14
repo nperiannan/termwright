@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/termwright/termwright/internal/session"
 )
@@ -17,6 +18,8 @@ import (
 type WebProxy struct {
 	Addr string // 127.0.0.1:port
 	Via  string // e.g. "jump-station"
+	// Direct: no jump host or proxy - straight from this computer, as its SSH session connects.
+	Direct bool
 
 	ln      net.Listener
 	dial    func(addr string) (net.Conn, error)
@@ -35,8 +38,10 @@ type WebProxy struct {
 //     its own (through the session's jump host when it has one).
 //   - device true: to reach the device's web interface - through its jump
 //     host, the jump station of its "ssh … host" remote command (tab viaTab
-//     when connected) or its proxy. It returns nil, nil when the device is
-//     reached directly: the browser needs no proxy then.
+//     when connected) or its proxy; with none of them, straight from this
+//     computer the way its SSH session connects (Direct) - so a system or
+//     company web proxy, which cannot reach a lab or management address,
+//     does not get in the way.
 //
 // Prompts (passwords, host keys) are shown for promptTab ("" = no tab).
 func (m *Manager) OpenWebProxy(ctx context.Context, promptTab string, s session.Session, viaTab string, device bool) (*WebProxy, error) {
@@ -111,7 +116,9 @@ func (m *Manager) OpenWebProxy(ctx context.Context, promptTab string, s session.
 			return c, err
 		}
 	default:
-		return nil, nil
+		wp.Direct = true
+		d := net.Dialer{Timeout: 15 * time.Second}
+		wp.dial = func(a string) (net.Conn, error) { return d.Dial("tcp", a) }
 	}
 	if err := wp.listen(); err != nil {
 		wp.Close()

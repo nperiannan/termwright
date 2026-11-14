@@ -1,9 +1,16 @@
 package term
 
 import (
+	"context"
+	"encoding/binary"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/termwright/termwright/internal/session"
 )
 
 // The proxy takes a SOCKS5 CONNECT with a host name and dials it with its
@@ -61,5 +68,53 @@ func TestWebProxySocksByName(t *testing.T) {
 	wp.Close()
 	if _, err := net.Dial("tcp", wp.Addr); err == nil {
 		t.Fatal("still listening after Close")
+	}
+}
+
+// A device reached without a jump host or proxy: its web interface opens through a proxy of Termwright's own that
+// connects straight from this computer (as its SSH session does), not through the system's web proxy.
+func TestOpenWebProxyDirect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "device web page") }))
+	defer srv.Close()
+	m := NewManager(nopEmitter{}, "", func() string { return "" })
+	wp, err := m.OpenWebProxy(context.Background(), "", session.Session{Name: "sw1", Protocol: session.ProtoSSH2, Hostname: "127.0.0.1"}, "", true)
+	if err != nil || wp == nil {
+		t.Fatalf("proxy %v, %v", wp, err)
+	}
+	defer wp.Close()
+	if !wp.Direct || wp.Via != "" {
+		t.Fatalf("direct %v via %q", wp.Direct, wp.Via)
+	}
+	// a SOCKS5 CONNECT to the web server, then a plain HTTP request
+	c, err := net.Dial("tcp", wp.Addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	host, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	_, _ = c.Write([]byte{5, 1, 0})
+	r := make([]byte, 2)
+	if _, err := io.ReadFull(c, r); err != nil || r[1] != 0 {
+		t.Fatalf("greeting %v %v", r, err)
+	}
+	req := append([]byte{5, 1, 0, 1}, net.ParseIP(host).To4()...)
+	p := make([]byte, 2)
+	var n int
+	for _, ch := range port {
+		n = n*10 + int(ch-'0')
+	}
+	binary.BigEndian.PutUint16(p, uint16(n))
+	_, _ = c.Write(append(req, p...))
+	rep := make([]byte, 10)
+	if _, err := io.ReadFull(c, rep); err != nil || rep[1] != 0 {
+		t.Fatalf("connect %v %v", rep, err)
+	}
+	_, _ = io.WriteString(c, "GET / HTTP/1.0\r\nHost: x\r\n\r\n")
+	b, _ := io.ReadAll(c)
+	if !strings.Contains(string(b), "device web page") {
+		t.Fatalf("got %q", b)
+	}
+	if wp.Used() == 0 {
+		t.Fatal("the connection is not counted")
 	}
 }

@@ -30,7 +30,7 @@ const store = {
           <label>Address</label>
           <input name="url" class="mono" [(ngModel)]="url" appAutofocus spellcheck="false" autocomplete="off"
             placeholder="https://10.0.0.1 · http://nas.lan:8080 · http://localhost:9090" />
-          @if (direct() === false) {
+          @if (direct() !== null) {
             <label>Browser</label>
             <select name="br" [(ngModel)]="browser">
               @for (b of browsers(); track b.id) { <option [value]="b.id">{{ b.name }}</option> }
@@ -42,14 +42,14 @@ const store = {
           <app-icon name="route" [size]="15" />
           <div>
             @if (direct()) {
-              <b>Directly</b> - {{ name() }} is reached without a jump host, so the page opens in your default browser.
+              <b>Directly from this computer</b>, the way its SSH session connects - a new {{ browserName() }} window with a temporary profile, so a system or company web proxy (which cannot reach a lab or management address) does not get in the way.
             } @else {
               <b>Through {{ route() }}</b> - a new {{ browserName() }} window with a temporary profile sends all its traffic (and name lookups) through this SSH connection;
               the web server only sees a connection from {{ exitHost() }}.
             }
           </div>
         </div>
-        @if (direct() === false) {
+        @if (direct() !== null) {
           <p class="hint">Closing the window ends the tunnel and deletes the profile - no cookies or logins are kept. A device with a self-signed certificate shows the browser's warning; continue there if you trust it.</p>
         }
         @if (error()) { <p class="err">{{ error() }}</p> }

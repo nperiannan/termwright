@@ -82,6 +82,7 @@ func TestEmuInstallStartChecks(t *testing.T) {
 		{EmuInstallRequest{ISO: iso, Mode: "alpine", Password: "a'b"}, "must not contain"},
 		{EmuInstallRequest{ISO: iso, Mode: "manual", GB: 1000}, "at most 512"},
 		{EmuInstallRequest{ISO: iso, Mode: "manual", MB: 50}, "at least 100 MB"},
+		{EmuInstallRequest{ISO: iso, Mode: "alpine", MB: 100, Password: "pw"}, "at least 512 MB"},
 		{EmuInstallRequest{ISO: iso, Mode: "manual", MB: 600000}, "at most 512"},
 		{EmuInstallRequest{ISO: iso, Mode: "manual", MB: -5}, "must not be negative"},
 		{EmuInstallRequest{ISO: filepath.Join(dir, "none.iso"), Mode: "manual"}, "no such file"},

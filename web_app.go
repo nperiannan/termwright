@@ -132,6 +132,13 @@ func (a *App) OpenWebPage(tabID string, s session.Session, through, rawURL, brow
 			}
 		}
 	}
+	if br == nil && wp.Direct { // no browser that takes a proxy: the default one, through the system's settings
+		wp.Close()
+		if err := openWithSystem(u.String()); err != nil {
+			return WebOpened{}, err
+		}
+		return WebOpened{Browser: "the default browser"}, nil
+	}
 	if br == nil {
 		wp.Close()
 		return WebOpened{}, errors.New("no Chrome, Edge, Chromium, Brave or Firefox found - install one of them (Safari cannot send one window through a tunnel)")
@@ -208,7 +215,11 @@ func (a *App) OpenWebPage(tabID string, s session.Session, through, rawURL, brow
 			emitter{a}.Emit("web:bypassed", map[string]string{"browser": name, "url": u.String()})
 		}
 	}(br.Name)
-	return WebOpened{Browser: br.Name, Via: wp.Via}, nil
+	via := wp.Via
+	if wp.Direct {
+		via = "this computer (directly, like its SSH session)"
+	}
+	return WebOpened{Browser: br.Name, Via: via}, nil
 }
 
 // closeWebPages ends every browser window opened through a session (at quit).

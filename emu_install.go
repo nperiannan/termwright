@@ -215,6 +215,9 @@ func emuInstallViews() []EmuInstall {
 
 var emuNonName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
+// emuAlpineMinMB is the smallest disk an automatic Alpine install fits on (a 100 MB disk ran out of space making its initramfs).
+const emuAlpineMinMB = 512
+
 // EmuInstallStart starts an install from an ISO file of this computer.
 func (a *App) EmuInstallStart(r EmuInstallRequest) (EmuView, error) {
 	defer emuAs("user")()
@@ -249,6 +252,9 @@ func (a *App) EmuInstallStart(r EmuInstallRequest) (EmuView, error) {
 	}
 	if r.MB < 100 {
 		return EmuView{}, errors.New("the disk must be at least 100 MB")
+	}
+	if r.Mode == "alpine" && r.MB < emuAlpineMinMB {
+		return EmuView{}, fmt.Errorf("an automatic Alpine install needs a disk of at least %d MB: its kernel and boot files alone take about 200 MB (1 GB leaves room for packages)", emuAlpineMinMB)
 	}
 	if r.MB > 512*1024 {
 		return EmuView{}, errors.New("the disk must be at most 512 GB")
