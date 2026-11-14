@@ -118,6 +118,17 @@ func (a *App) OpenWebPage(tabID string, s session.Session, through, rawURL, brow
 	if err != nil {
 		return WebOpened{}, err
 	}
+	// through a session: the page must be reachable from there, else the browser opens on nothing - why not, now
+	if wp != nil && through != "device" {
+		port := u.Port()
+		if port == "" {
+			port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
+		}
+		if err := wp.Reach(net.JoinHostPort(u.Hostname(), port), 15*time.Second); err != nil {
+			wp.Close()
+			return WebOpened{}, webThroughError(wp.Via, u.Hostname(), err)
+		}
+	}
 	// A device's web interface asked for as https:// with no port: many switches serve only HTTP until HTTPS
 	// is turned on (EXOS: "Web access: Enabled (tcp port 80)"). Check which port answers on the route.
 	var changed, note string
@@ -270,4 +281,24 @@ func webStopped(id string) bool {
 	defer webMu.Unlock()
 	_, ok := webRuns[id]
 	return !ok
+}
+
+// webThroughError says why a page cannot be reached through a session, and what to do.
+func webThroughError(via, host string, err error) error {
+	m := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(m, "prohibited") || strings.Contains(m, "forwarding") || strings.Contains(m, "unknown channel type") || strings.Contains(m, "not supported"):
+		return fmt.Errorf("%s does not pass connections on: its SSH server has TCP forwarding off (%v). Switches such as EXOS and VOSS do not forward; open the page through a Linux session or jump host instead", via, err)
+	case nameError(err):
+		return fmt.Errorf("%s cannot find %s, and this computer cannot either (%v)", via, host, err)
+	case strings.Contains(m, "no answer") || strings.Contains(m, "timed out") || strings.Contains(m, "timeout"):
+		return fmt.Errorf("%s did not reach %s: %v - can it reach the internet (or that network) itself?", via, host, err)
+	}
+	return fmt.Errorf("%s could not open a connection to %s: %v", via, host, err)
+}
+
+// nameError: a name the far end (or this computer) could not resolve.
+func nameError(err error) bool {
+	m := strings.ToLower(err.Error())
+	return strings.Contains(m, "resolv") || strings.Contains(m, "unknown host") || strings.Contains(m, "name or service") || strings.Contains(m, "getaddrinfo") || strings.Contains(m, "no such host") || strings.Contains(m, "nodename")
 }

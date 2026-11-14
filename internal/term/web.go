@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,10 +26,11 @@ type WebProxy struct {
 	dial    func(addr string) (net.Conn, error)
 	release func()
 
-	mu     sync.Mutex
-	conns  map[net.Conn]bool
-	used   int // connections the browser made
-	closed bool
+	mu      sync.Mutex
+	conns   map[net.Conn]bool
+	used    int // connections the browser made
+	closed  bool
+	lastErr error // the last connection the route could not make
 }
 
 // OpenWebProxy starts a WebProxy.
@@ -148,8 +150,11 @@ func (wp *WebProxy) handle(c net.Conn) {
 		c.Close()
 		return
 	}
-	rc, err := wp.dial(target)
+	rc, err := wp.dialNamed(target)
 	if err != nil {
+		wp.mu.Lock()
+		wp.lastErr = err
+		wp.mu.Unlock()
 		_, _ = c.Write([]byte{5, 5, 0, 1, 0, 0, 0, 0, 0, 0}) // connection refused
 		c.Close()
 		return
@@ -205,6 +210,69 @@ func (wp *WebProxy) Close() {
 
 // Used tells how many connections went through the proxy so far (the
 // browser's own and the pages').
+// dialNamed dials through the route; when the far end cannot resolve the name (a switch without a DNS client),
+// the name is resolved here and its addresses are tried through the route.
+func (wp *WebProxy) dialNamed(addr string) (net.Conn, error) {
+	c, err := wp.dial(addr)
+	if err == nil || wp.Direct || !nameError(err) {
+		return c, err
+	}
+	host, port, serr := net.SplitHostPort(addr)
+	if serr != nil || net.ParseIP(host) != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ips, lerr := net.DefaultResolver.LookupHost(ctx, host)
+	cancel()
+	if lerr != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		if c2, err2 := wp.dial(net.JoinHostPort(ip, port)); err2 == nil {
+			return c2, nil
+		}
+	}
+	return nil, err
+}
+
+// nameError: the far end of an SSH tunnel could not resolve the name it was given.
+func nameError(err error) bool {
+	m := strings.ToLower(err.Error())
+	return strings.Contains(m, "resolv") || strings.Contains(m, "unknown host") || strings.Contains(m, "name or service") || strings.Contains(m, "getaddrinfo") || strings.Contains(m, "no address") || strings.Contains(m, "nodename")
+}
+
+// Reach tells why addr does not take a TCP connection through the proxy's route (nil: it does), within the time given.
+func (wp *WebProxy) Reach(addr string, within time.Duration) error {
+	type res struct {
+		c   net.Conn
+		err error
+	}
+	ch := make(chan res, 1)
+	go func() { c, err := wp.dialNamed(addr); ch <- res{c, err} }()
+	select {
+	case r := <-ch:
+		if r.err != nil {
+			return r.err
+		}
+		_ = r.c.Close()
+		return nil
+	case <-time.After(within):
+		go func() {
+			if r := <-ch; r.c != nil {
+				_ = r.c.Close()
+			}
+		}()
+		return fmt.Errorf("no answer from %s within %s", addr, within)
+	}
+}
+
+// LastError is the last connection the route could not make (nil: none).
+func (wp *WebProxy) LastError() error {
+	wp.mu.Lock()
+	defer wp.mu.Unlock()
+	return wp.lastErr
+}
+
 // Probe tells whether addr takes a TCP connection through the proxy's route (within the time given).
 func (wp *WebProxy) Probe(addr string, within time.Duration) bool {
 	type res struct {
