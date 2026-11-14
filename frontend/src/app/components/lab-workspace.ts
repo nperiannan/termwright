@@ -614,7 +614,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
         @if (dock() === 'traffic' && trafView() !== 'tests') { <button type="button" class="sm" (click)="newStream()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button><button type="button" class="sm" (click)="newTester()">＋ {{ tr('Test Port') }}</button>
           @if (traf()?.running) { <button type="button" class="sm" (click)="trafStop()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="sm primary" (click)="trafStart([])" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
           <button type="button" class="sm" (click)="trafReport()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
-        @if (dock() === 'cap' && capCur(); as c) { @if (pktChk().size) { <button type="button" class="sm" (click)="copyPkts()" [title]="tr('The ticked rows as text')">{{ tr('Copy Selected ({0})', pktChk().size) }}</button><button type="button" class="sm" (click)="savePkts(c)">{{ tr('Save Selected as .pcap…') }}</button> }@if (pktNo()) { <button type="button" class="sm" (click)="pktWin.set(pktNo())" [title]="tr('The packet in a window of its own (or double-click it)')">{{ tr('Open Packet') }} ↗</button> }@if (c.running) { <button type="button" class="sm capstop" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (capChk().size) { <button type="button" class="sm danger" (click)="delCaps(checkedCaps())" [title]="tr('Deletes the ticked captures’ pcap files on the hosts')">{{ tr('Delete ({0})', capChk().size) }}</button> } @else if (!c.running) { <button type="button" class="sm danger" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> } }
+        @if (dock() === 'cap' && capCur(); as c) { <button type="button" class="sm" [class.act]="pktNewest()" (click)="setNewest(!pktNewest())" [title]="tr('The newest packets at the top (else at the bottom, followed while it captures)')">{{ pktNewest() ? '↑ ' + tr('Newest First') : '↓ ' + tr('Newest Last') }}</button>@if (pktChk().size) { <button type="button" class="sm" (click)="copyPkts()" [title]="tr('The ticked rows as text')">{{ tr('Copy Selected ({0})', pktChk().size) }}</button><button type="button" class="sm" (click)="savePkts(c)">{{ tr('Save Selected as .pcap…') }}</button> }@if (pktNo()) { <button type="button" class="sm" (click)="pktWin.set(pktNo())" [title]="tr('The packet in a window of its own (or double-click it)')">{{ tr('Open Packet') }} ↗</button> }@if (c.running) { <button type="button" class="sm capstop" (click)="stopCap(c.key)">◼ {{ tr('Stop') }}</button> }<button type="button" class="sm" (click)="wireshark(c.file)" [title]="tr('Opens in Wireshark on this computer, live while it captures')">{{ tr('Wireshark') }}</button><button type="button" class="sm" (click)="saveCap(c)">{{ tr('Save .pcap…') }}</button>@if (capChk().size) { <button type="button" class="sm danger" (click)="delCaps(checkedCaps())" [title]="tr('Deletes the ticked captures’ pcap files on the hosts')">{{ tr('Delete ({0})', capChk().size) }}</button> } @else if (!c.running) { <button type="button" class="sm danger" (click)="delCaps([c])" [title]="tr('Deletes its pcap file on the host')">{{ tr('Delete') }}</button> } }
         @if (dock() === 'log') { <select class="sm" [ngModel]="elog()?.level || 'info'" (ngModelChange)="setLogLevel($event)" [title]="tr('How much the log keeps: info by default; debug adds each command run on a host, verbose also what it printed')"><option value="error">{{ tr('Errors') }}</option><option value="warn">{{ tr('Warnings') }}</option><option value="info">{{ tr('Info') }}</option><option value="debug">{{ tr('Debug') }}</option><option value="verbose">{{ tr('Verbose') }}</option></select><button type="button" class="sm" (click)="loadLog()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveLog()">{{ tr('Save…') }}</button> }
         @if (dock() === 'clog' && selDev(); as d) { <button type="button" class="sm" (click)="loadClog()" [disabled]="clogBusy()">↻ {{ tr('Refresh') }}</button><button type="button" class="sm" (click)="saveConsoleLog(d)">{{ tr('Save…') }}</button> }
         <button type="button" class="sm" (click)="dockH.set(dockH() > 260 ? 190 : 420)" [title]="tr('Taller or shorter')">{{ dockH() > 260 ? '▾' : '▴' }}</button>
@@ -693,11 +693,11 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           <div class="capt">
             @if (capSum().length) { <div class="capsum">@for (x of capSum(); track x.k) { <span [class]="'cs ' + x.p.toLowerCase()" (click)="pktView.q.set(x.p)" [title]="tr('Show only these')"><b>{{ x.p }}</b> {{ x.src }} <i>{{ x.n }}</i></span> }</div> }
             <app-tv-bar class="pbar" [tv]="pktView" />
-            <div class="ptab"><table><tr><th><input type="checkbox" [checked]="packetsShown().length > 0 && pktChk().size === packetsShown().length" (change)="chkAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th><th>#</th><th>{{ tr('Time') }}</th><th>{{ tr('Source') }}</th><th>{{ tr('Destination') }}</th><th>{{ tr('Protocol') }}</th><th>{{ tr('Length') }}</th><th>{{ tr('Info') }}</th></tr>
+            <div class="ptab" #ptab (scroll)="pktScrolled(ptab)"><table><tr><th><input type="checkbox" [checked]="packetsShown().length > 0 && pktChk().size === packetsShown().length" (change)="chkAll($any($event.target).checked)" [attr.aria-label]="tr('Select all')" /></th><th>#</th><th>{{ tr('Time') }}</th><th>{{ tr('Source') }}</th><th>{{ tr('Destination') }}</th><th>{{ tr('Protocol') }}</th><th>{{ tr('Length') }}</th><th>{{ tr('Info') }}</th></tr>
               @for (p of packetsShown(); track p.no) { <tr [class]="'pp ' + p.proto.toLowerCase()" [class.sel]="pktNo() === p.no" (click)="pktClick(p.no, $event)" (dblclick)="pktWin.set(p.no)"><td (click)="$event.stopPropagation()"><input type="checkbox" [checked]="pktChk().has(p.no)" (change)="chk(p.no)" [attr.aria-label]="tr('Select packet {0}', p.no)" /></td><td>{{ p.no }}</td><td>{{ p.time.toFixed(3) }}</td><td class="mono">{{ p.src }}</td><td class="mono">{{ p.dst }}</td><td><b>{{ p.proto }}</b></td><td>{{ p.len }}</td><td>{{ p.info }}</td></tr> }
               @empty { <tr><td colspan="8" class="muted">{{ capCur() ? tr('No packets yet.') : tr('Choose a capture on the left.') }}</td></tr> }
             </table></div>
-            @if (pktNo()) { <app-packet-view class="pdet" [pkt]="pkt()" /> }
+            @if (pktNo()) { <div class="pdet pdw"><a class="pdx" (click)="pktNo.set(0)" [title]="tr('Close the packet (Esc)')" [attr.aria-label]="tr('Close the packet')">✕</a><app-packet-view [pkt]="pkt()" /></div> }
           </div>
         </div>
       } @else if (dock() === 'log') {
@@ -1215,11 +1215,21 @@ export class LabWorkspace implements OnDestroy {
     return [...m.values()].sort((a, b) => ((ctl.indexOf(a.p) + 1 || 99) - (ctl.indexOf(b.p) + 1 || 99)) || b.n - a.n).slice(0, 14);
   });
   protected packetsShown = computed(() => this.pktView.rows());
+  /** Newest first (kept on this computer), else oldest first and the table follows the newest while the user is at its end. */
+  protected pktNewest = signal(((): boolean => { try { return localStorage.getItem('tw.cap.newest') === '1'; } catch { return false; } })());
+  private pktFollow = true;
+  private ptabEl = viewChild<ElementRef<HTMLElement>>('ptab');
+  setNewest(on: boolean) { this.pktNewest.set(on); try { localStorage.setItem('tw.cap.newest', on ? '1' : '0'); } catch { /* not kept */ } this.pktView.sort.set([{ key: 'no', dir: on ? -1 : 1 }]); this.pktFollow = true; this.pktToNewest(); }
+  /** At the newest end (bottom, or top when newest first): it keeps following; scrolled away: it stays. */
+  pktScrolled(el: HTMLElement) { this.pktFollow = this.pktNewest() ? el.scrollTop < 30 : el.scrollHeight - el.scrollTop - el.clientHeight < 30; }
+  private pktToNewest() { setTimeout(() => { const el = this.ptabEl()?.nativeElement; if (el && this.pktFollow) el.scrollTop = this.pktNewest() ? 0 : el.scrollHeight; }); }
+  private pktFollowFx = effect(() => { this.packetsShown(); untracked(() => this.pktToNewest()); });
   /** The running capture on a cable (at either end). */
   capOf(k: LabLink) { const p = this.caps().find(c => c.running && (c.vm === k.a && c.port === k.aPort || c.vm === k.b && c.port === k.bPort)); return p ?? null; }
   private capTick = 0;
   /** The packet shown below the list, the ticked ones, and the one in a window. */
   protected pktNo = signal(0);
+  private pktOrder = this.pktNewest() && this.pktView.sort.set([{ key: 'no', dir: -1 }]); // the order kept from last time
   protected pkt = signal<EmuPacketDetail | null>(null);
   protected pktChk = signal(new Set<number>());
   protected pktWin = signal(0);
@@ -2121,7 +2131,7 @@ export class LabWorkspace implements OnDestroy {
     if (!this.selCloud()) return;
     e.preventDefault(); void this.removeCloud(this.selCloud());
   }
-  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); this.clearMs(); } }
+  @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.dock() === 'cap' && this.pktNo()) { this.pktNo.set(0); return; } if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); this.clearMs(); } }
   /** A click on the empty canvas: nothing selected (the side panel shows the whole topology). */
   canvasClick(ev: MouseEvent) { this.endNoteEdit(); this.selNote.set(''); this.selHub.set('');
     const t = ev.target as HTMLElement;

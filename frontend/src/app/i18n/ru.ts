@@ -3782,6 +3782,11 @@ const ru: Record<string, string> = {
   'Choose the ESP-IDF Build Folder': 'Выберите папку сборки ESP-IDF',
   'Firmware added: drag it onto the canvas from Microcontrollers': 'Прошивка добавлена: перетащите её на холст из раздела «Микроконтроллеры»',
   'console {0}': 'консоль {0}',
+  'Close the packet (Esc)': 'Закрыть пакет (Esc)',
+  'Close the packet': 'Закрыть пакет',
+  'The newest packets at the top (else at the bottom, followed while it captures)': 'Новые пакеты сверху (иначе снизу, с прокруткой за ними во время захвата)',
+  'Newest First': 'Новые сверху',
+  'Newest Last': 'Новые снизу',
 };
 
 export default ru;

@@ -285,6 +285,10 @@ app-lab-workspace {
   /* a microcontroller in the side pane: its board, firmware, console and debugger */
   .kv.mcu { margin-top: 8px; select { width: 100%; } label.ck { display: inline-flex; align-items: center; gap: 5px; } a { color: var(--accent); cursor: pointer; } a.off { opacity: .45; pointer-events: none; } }
   .mcun { margin: 6px 0 0; line-height: 1.4; }
+  /* the packet's detail under the table: a close button at its top right */
+  .capt .pdw { position: relative; display: flex; flex-direction: column; min-height: 0; > app-packet-view { flex: 1; min-height: 0; display: block; overflow: hidden; } }
+  .capt .pdx { position: absolute; top: 4px; right: 8px; z-index: 2; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; cursor: pointer; color: var(--muted); background: var(--surface); border: 1px solid var(--line); &:hover { color: var(--danger); border-color: var(--danger); } }
+  .dtabs button.sm.act { border-color: var(--accent); color: var(--accent); }
   .mtr { overflow: hidden; } .mtr i.hot { background: var(--warning, #e39b17) !important; }
   /* a capture going on: its Stop button pulses slowly, so it is not forgotten */
   button.capstop { animation: twslowpulse 2.4s ease-in-out infinite; }
