@@ -185,7 +185,8 @@ func ServerScript(s Server, password, mac string, dns []string) string {
 	b.WriteString("[ -f /srv/index.html ] || printf '<h1>Termwright lab server</h1>\\n' > /srv/index.html\n")
 	b.WriteString("rc-update add dropbear default >/dev/null 2>&1 || true; rc-update add local default >/dev/null 2>&1 || true\n")
 	b.WriteString("mkdir -p /etc/local.d\ncat > /etc/local.d/tw-server.start <<'TWSRV'\n" + st.String() + "TWSRV\n")
-	b.WriteString("chmod +x /etc/local.d/tw-server.start\nset +e\n/etc/local.d/tw-server.start\nsleep 1\necho tw-server-ok\n")
+	// its output to a log: the services it starts keep what they inherit open, and the console's pipe would wait for them
+	b.WriteString("chmod +x /etc/local.d/tw-server.start\nset +e\n/etc/local.d/tw-server.start >/var/log/tw-server.log 2>&1 </dev/null\nsleep 1\necho tw-server-ok\n")
 	return b.String()
 }
 
