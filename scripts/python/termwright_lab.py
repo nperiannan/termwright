@@ -258,8 +258,9 @@ class Lab:
         return self.tool("radius", action=action, **args)
 
     def hub(self, action: str = "list", **args) -> str:
-        """Hubs and L2 switches: action list, add (kind="hub"|"switch", name), connect / disconnect (hub, switch,
-        port), remove (hub)."""
+        """Hubs, L2 switches and clouds: action list, add (kind="hub"|"switch", name), connect / disconnect (hub,
+        switch, port), remove (hub), show (hub), ports (hub, count 8-24), port (hub, number, mode="access"|"trunk",
+        vlan, vlans=[...]), management (hub, ip, vlan), cloud_ports (host, count 1-8)."""
         return self.tool("hub", action=action, **args)
 
     def checkpoint(self, switch: str, note: str = "") -> str:

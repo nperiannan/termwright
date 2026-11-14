@@ -56,3 +56,79 @@ func TestEmuHubs(t *testing.T) {
 		t.Fatalf("remove: %v %+v", err, v.Hubs)
 	}
 }
+
+// An L2 switch's ports (8-24), its VLANs and management address, a hub's 8 ports, and a cloud's ports.
+func TestEmuHubPortsVLANsCloud(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	cfg, _ := config.Load(dir)
+	st, _ := session.NewStore(filepath.Join(dir, "Sessions"))
+	a := &App{cfg: cfg, store: st}
+	emuLab.loaded, emuLab.f = true, emuFile{}
+	defer func() { emuLab.loaded, emuLab.f = false, emuFile{} }()
+	emuLab.f.Host = "Lab/kvm-1"
+	emuLab.f.Images = []emu.Image{{ID: "i1", Name: "EXOS-VM", NICs: 13, PortName: "{n}"}}
+	vms := []emu.VM{}
+	for i := range 10 {
+		vms = append(vms, emu.VM{ID: "v" + string(rune('a'+i)), Name: "sw" + string(rune('a'+i)), Image: "i1", Index: i})
+	}
+	emuLab.f.Lab = &emu.Lab{ID: "a1", VMs: vms, LanIf: "ens160"}
+	v, err := a.EmuHubAdd("switch", "", 0, 0)
+	if err != nil || v.Hubs[0].Ports != 8 {
+		t.Fatalf("an L2 switch starts with 8 ports: %v %+v", err, v.Hubs)
+	}
+	if _, err := a.EmuHubSetPorts("l2sw-1", 25); err == nil {
+		t.Error("25 ports")
+	}
+	if v, err = a.EmuHubSetPorts("l2sw-1", 12); err != nil || v.Hubs[0].Ports != 12 {
+		t.Fatalf("12 ports: %v", err)
+	}
+	h, _ := a.EmuHubAdd("hub", "", 0, 0)
+	if h.Hubs[1].Ports != 8 {
+		t.Errorf("a hub has 8 ports: %d", h.Hubs[1].Ports)
+	}
+	if _, err := a.EmuHubSetPorts("hub-1", 12); err == nil {
+		t.Error("a hub's ports changed")
+	}
+	for i := range 8 {
+		if _, err := a.EmuHubConnect("hub-1", vms[i].ID, "1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := a.EmuHubConnect("hub-1", vms[8].ID, "1"); err == nil || !strings.Contains(err.Error(), "all its 8 ports") {
+		t.Errorf("a 9th port on a hub: %v", err)
+	}
+	if v, err = a.EmuHubConnect("l2sw-1", "sw"+"a", "2"); err != nil || v.Hubs[0].Legs[0].At != 1 {
+		t.Fatalf("its first port: %v %+v", err, v.Hubs[0].Legs)
+	}
+	if _, err := a.EmuHubPortSet("l2sw-1", 13, "access", 10, nil); err == nil {
+		t.Error("port 13 of 12")
+	}
+	if _, err := a.EmuHubPortSet("l2sw-1", 2, "trunk", 0, []int{20, 10, 10}); err != nil {
+		t.Fatal(err)
+	}
+	if v, err = a.EmuHubSetMgmt("l2sw-1", "10.20.0.5", 10); err != nil || v.Hubs[0].Cfg.MgmtIP != "10.20.0.5/24" || v.Hubs[0].Cfg.Rev != 2 || len(v.Hubs[0].Cfg.Ports["2"].VLANs) != 2 {
+		t.Fatalf("management: %v %+v", err, v.Hubs[0].Cfg)
+	}
+	if _, err := a.EmuHubSetMgmt("l2sw-1", "fd00::5/64", 1); err == nil {
+		t.Error("an IPv6 management address")
+	}
+	if _, err := a.EmuSetUplink("vj", "3", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.EmuSetUplink("vj", "4", true); err == nil || !strings.Contains(err.Error(), "all its 1 ports") {
+		t.Errorf("a second cable on a 1-port cloud: %v", err)
+	}
+	if v, err = a.EmuSetCloudPorts("Lab/kvm-1", 2); err != nil || v.CloudPorts["Lab/kvm-1"] != 2 {
+		t.Fatalf("cloud ports: %v %v", err, v.CloudPorts)
+	}
+	if _, err := a.EmuSetUplink("vj", "4", true); err != nil {
+		t.Errorf("the second port: %v", err)
+	}
+	if _, err := a.EmuSetCloudPorts("Lab/kvm-1", 1); err == nil {
+		t.Error("fewer cloud ports than in use")
+	}
+	if _, err := a.EmuSetCloudPorts("Lab/kvm-1", 9); err == nil {
+		t.Error("9 cloud ports")
+	}
+}

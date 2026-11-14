@@ -55,7 +55,7 @@ Test ports and streams are as in the API; the keyword arguments are the API's fi
 | `host_images(action, **args)` | Which KVM host has which image: `matrix`, `copy` (image, hosts), `remove` (image, host) |
 | `radius(action, **args)` | The lab's RADIUS server: `show`, `log`, `set` (on, port, secret, mab, mab_vlan), `add_user` (user, password, vlan), `remove_user` (user); `reveal=True` shows the secret and passwords |
 | `traffic.clients(name)` | How a test port's clients are doing: `n`, `bound`, `auth`, `failed`, `list` |
-| `hub(action, **args)` | Hubs and L2 switches: `list`, `add` (kind, name), `connect` / `disconnect` (hub, switch, port), `remove` (hub) |
+| `hub(action, **args)` | Hubs, L2 switches and clouds: `list`, `add` (kind, name), `connect` / `disconnect` (hub, switch, port), `remove` (hub), `show` (hub), `ports` (hub, count), `port` (hub, number, mode, vlan, vlans), `management` (hub, ip, vlan), `cloud_ports` (host, count) |
 | `checkpoint(switch, note)`, `checkpoints(switch)`, `restore(switch, tag)`, `auto_checkpoints(on)` | A running switch's whole state kept now, listed, brought back; checkpoints before typed commands on or off |
 | `dns(*servers, default=False)` | The lab's name servers; with servers, sets them (at most three); `default=True` goes back to 8.8.8.8 1.1.1.1 |
 | `images(name=None, type=None)` | Images and templates, filtered by part of a name and by device type |

@@ -614,14 +614,15 @@ type EmuView struct {
 	Running         bool              `json:"running"`
 	Folder          string            `json:"folder"`
 	MgmtNet         string            `json:"mgmtNet"`
-	DNS             []string          `json:"dns"`                // the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
-	DNSSet          bool              `json:"dnsSet,omitempty"`   // they were set (not the default)
-	Notes           []emu.Note        `json:"notes,omitempty"`    // notes and areas on the canvas
-	Hubs            []EmuHubView      `json:"hubs,omitempty"`     // hubs and L2 switches
-	AutoCheckpoints bool              `json:"autoCheckpoints"`    // a checkpoint of a switch before typed commands (Revert undoes them)
-	Topology        string            `json:"topology,omitempty"` // the name the open lab is saved under
-	CloudGw         string            `json:"cloudGw,omitempty"`  // cloud: the gateway the switches use
-	LanFixed        bool              `json:"lanFixed,omitempty"` // lan: fixed addresses (no DHCP)
+	DNS             []string          `json:"dns"`                  // the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
+	DNSSet          bool              `json:"dnsSet,omitempty"`     // they were set (not the default)
+	Notes           []emu.Note        `json:"notes,omitempty"`      // notes and areas on the canvas
+	Hubs            []EmuHubView      `json:"hubs,omitempty"`       // hubs and L2 switches
+	CloudPorts      map[string]int    `json:"cloudPorts,omitempty"` // host → ports of its cloud (1-8)
+	AutoCheckpoints bool              `json:"autoCheckpoints"`      // a checkpoint of a switch before typed commands (Revert undoes them)
+	Topology        string            `json:"topology,omitempty"`   // the name the open lab is saved under
+	CloudGw         string            `json:"cloudGw,omitempty"`    // cloud: the gateway the switches use
+	LanFixed        bool              `json:"lanFixed,omitempty"`   // lan: fixed addresses (no DHCP)
 	Mgmt            string            `json:"mgmt"`
 	Devices         []EmuDevice       `json:"devices"`
 	Links           []EmuLinkView     `json:"links"`
@@ -4028,6 +4029,10 @@ func (a *App) emuView() EmuView {
 	v.AutoCheckpoints = !l.NoCheckpoints
 	v.Notes = l.Notes
 	v.Hubs = emuHubViews(l)
+	v.CloudPorts = map[string]int{}
+	for _, h := range l.Hosts(emuLab.f.Host) {
+		v.CloudPorts[h] = emuCloudPorts(l, h)
+	}
 	v.IconStyle = orStr(f.IconStyle, "box")
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
@@ -6963,6 +6968,11 @@ func (a *App) EmuSetUplink(id, port string, on bool) (EmuView, error) {
 			return EmuView{}, errors.New("the host's network port is not known: check the host again (Hosts)")
 		}
 		if !slices.Contains(v.Uplinks, n) {
+			host := emuHostOf(*v)
+			if used, ports := emuCloudUsed(l, host), emuCloudPorts(l, host); used >= ports {
+				emuLab.mu.Unlock()
+				return EmuView{}, fmt.Errorf("the cloud of %s has all its %d ports in use: give it more ports in its panel (up to %d)", host[strings.LastIndex(host, "/")+1:], ports, emuCloudMax)
+			}
 			v.Uplinks = append(v.Uplinks, n)
 		}
 		emuEv(id, "info", "port "+port+" goes on the host's network when it starts")

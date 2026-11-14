@@ -401,8 +401,9 @@ type Lab struct {
 	Notes         []Note          `json:"notes,omitempty"`         // notes and areas drawn on the canvas
 	Hubs          []Hub           `json:"hubs,omitempty"`          // hubs and L2 switches (no VM: hub.py on the host joins their legs)
 	NoCheckpoints bool            `json:"noCheckpoints,omitempty"` // no checkpoint of a switch before typed commands (Revert cannot undo them)
-	Radius        *Radius         `json:"radius,omitempty"`        // the built-in RADIUS server (802.1X and MAC logins for the switches)
-	DNS           []string        `json:"dns,omitempty"`           // the lab's name servers: computers without one get them, day 0 fills {dns} {dns2} {dnsList} (default 8.8.8.8 1.1.1.1)
+	Radius        *Radius         `json:"radius,omitempty"`
+	CloudPorts    map[string]int  `json:"cloudPorts,omitempty"` // host → ports of its cloud (1-8; 1 when not set)        // the built-in RADIUS server (802.1X and MAC logins for the switches)
+	DNS           []string        `json:"dns,omitempty"`        // the lab's name servers: computers without one get them, day 0 fills {dns} {dns2} {dnsList} (default 8.8.8.8 1.1.1.1)
 	Streams       []Stream        `json:"streams,omitempty"`
 	Tests         []TrafficTest   `json:"tests,omitempty"` // saved traffic tests (RFC 2544, learning, convergence)
 	// Nets: the management of the lab's other hosts (its own host's is above);

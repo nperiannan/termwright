@@ -102,25 +102,79 @@ type Note struct {
 }
 
 // Hub is a hub or an L2 switch of the lab: no VM, its legs are switch ports without a cable, joined by hub.py
-// on the host they run on (all its legs on one host). A hub repeats every frame to its other legs; an L2
-// switch learns MAC addresses.
+// on the host they run on (all its legs on one host). A hub (8 ports, no management) repeats every frame to
+// its other legs; an L2 switch (8-24 ports) learns MAC addresses per VLAN, has access and trunk ports, an
+// in-band management address that answers ARP and ping, and a command line on its console (and SSH when
+// the host's Python has paramiko).
 type Hub struct {
-	ID   string   `json:"id"`
-	Name string   `json:"name"`
-	Kind string   `json:"kind"`           // hub, switch
-	Legs []HubLeg `json:"legs,omitempty"` // the switch ports on it, in the order of its ports
-	X    float64  `json:"x,omitempty"`    // on the canvas
-	Y    float64  `json:"y,omitempty"`
+	ID    string   `json:"id"`
+	Name  string   `json:"name"`
+	Kind  string   `json:"kind"`            // hub, switch
+	Ports int      `json:"ports,omitempty"` // how many ports (hub 8; L2 switch 8-24; 0 = 8)
+	N     int      `json:"n,omitempty"`     // its number in the lab (for its console and SSH ports)
+	Legs  []HubLeg `json:"legs,omitempty"`  // the switch ports on it
+	Cfg   *HubCfg  `json:"cfg,omitempty"`   // L2 switch: VLANs and management (as last set or read back)
+	X     float64  `json:"x,omitempty"`     // on the canvas
+	Y     float64  `json:"y,omitempty"`
 }
 
 // HubLeg is a switch port on a hub.
 type HubLeg struct {
 	VM   string `json:"vm"`
 	Port int    `json:"port"`
+	At   int    `json:"at,omitempty"` // the hub's own port it is on (1-…)
 }
 
-// HubMaxLegs: how many ports a hub or an L2 switch has.
-const HubMaxLegs = 16
+// HubCfg is an L2 switch's configuration. Rev counts changes: the screens and its command line both change it,
+// the newer one wins.
+type HubCfg struct {
+	Rev      int                   `json:"rev"`
+	Ports    map[string]HubPortCfg `json:"ports,omitempty"`  // by port number; missing = access VLAN 1
+	MgmtIP   string                `json:"mgmtIp,omitempty"` // in-band management address with its prefix
+	MgmtVLAN int                   `json:"mgmtVlan,omitempty"`
+}
+
+// HubPortCfg is one port of an L2 switch: access (untagged in its VLAN) or trunk (tagged VLANs, untagged in the native one).
+type HubPortCfg struct {
+	Mode  string `json:"mode"`            // access, trunk
+	VLAN  int    `json:"vlan,omitempty"`  // access VLAN, or the trunk's native VLAN (0 = none)
+	VLANs []int  `json:"vlans,omitempty"` // trunk: the tagged VLANs
+}
+
+// HubPortsOf is how many ports a hub has.
+func (h Hub) HubPortsOf() int {
+	if h.Kind != "switch" || h.Ports == 0 {
+		return HubMaxLegs
+	}
+	return h.Ports
+}
+
+// FreeAt is the hub's lowest port without a leg (0 = none).
+func (h Hub) FreeAt() int {
+	used := map[int]bool{}
+	for _, g := range h.Legs {
+		used[g.At] = true
+	}
+	for p := 1; p <= h.HubPortsOf(); p++ {
+		if !used[p] {
+			return p
+		}
+	}
+	return 0
+}
+
+// HubMaxLegs: a hub's ports (an L2 switch has HubSwitchMin-HubSwitchMax).
+const HubMaxLegs = 8
+
+// The L2 switch's port counts.
+const (
+	HubSwitchMin = 8
+	HubSwitchMax = 24
+)
+
+// HubConsolePort and HubSSHPort: where its command line listens on the host (127.0.0.1).
+func (l *Lab) HubConsolePort(h Hub) int { return l.Base + 3800 + h.N*2 }
+func (l *Lab) HubSSHPort(h Hub) int     { return l.Base + 3801 + h.N*2 }
 
 // HubOn finds the hub a switch port is on.
 func (l *Lab) HubOn(vm string, port int) *Hub {

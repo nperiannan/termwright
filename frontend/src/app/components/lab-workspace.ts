@@ -12,7 +12,7 @@ import { CmdPalette, PaletteCmd } from './cmd-palette';
 import type { LabHub, LabNote } from '../core/models';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
-import { EmuClientState, EmuSTPState, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
+import { LabHubDetail, EmuClientState, EmuSTPState, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
@@ -190,10 +190,10 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           @else { <p class="muted small">{{ tr('Load a device pack first.') }}</p><button type="button" class="primary" (click)="loadPack()">{{ tr('Load Device Pack (.vm)…') }}</button> }
         }
         @if (emu()) {
-          <div class="grp"><span>{{ tr('Built in') }}</span><span>{{ tr('no VM') }}</span></div>
-          @for (k of hubKinds; track k.k) {
-            <div class="dev" draggable="true" (dragstart)="hubDrag = k.k; $event.dataTransfer?.setData('text/plain', k.k)" (dblclick)="addHub(k.k, null)" [title]="tr(k.tip)">
-              <svg class="hico" viewBox="0 0 46 46" [style.--hc]="k.c"><rect x="5" y="13" width="36" height="20" rx="4"/>@for (i of [0,1,2,3]; track i) { <rect class="hp" [attr.x]="10 + i * 7.5" y="19" width="5" height="5" rx="1"/> }@if (k.k === 'switch') { <path d="M12 29h22" /> }</svg>
+          <div class="grp"><span>{{ tr('Built in') }}</span><span>{{ tr('always here') }}</span></div>
+          @for (k of builtins; track k.k) {
+            <div class="dev" draggable="true" (dragstart)="hubDrag = k.k; $event.dataTransfer?.setData('text/plain', k.k)" (dblclick)="addBuiltin(k.k, null)" [title]="tr(k.tip)">
+              <ng-container *ngTemplateOutlet="bicon; context: { k: k.k, c: k.c, w: 46, h: 46 }" />
               <div><span>{{ tr(k.name) }}</span><small>{{ tr(k.sub) }}</small></div></div>
           }
         }
@@ -248,25 +248,16 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 <div class="tpb">⇄ {{ t.t.name }}</div><div class="nm">{{ tpAddr(t.t) || t.where }}</div></div>
             }
             @for (h of hubs(); track h.h.id) {
-              <div class="node hubn" [class.sel]="selHub() === h.h.id" [style.--hc]="h.c" [style.left.px]="h.x - 60" [style.top.px]="h.y - 22" (pointerdown)="hubGrab($event, h.h)" (click)="$event.stopPropagation(); selHub.set(h.h.id); hubPort = { vm: '', port: '' }" [title]="h.h.name + ' · ' + tr(h.h.kind === 'switch' ? 'L2 switch' : 'Hub') + ' · ' + tr('{0} ports in use', h.h.legs.length)">
-                <div class="hb"><svg viewBox="0 0 46 46"><rect x="5" y="13" width="36" height="20" rx="4"/>@for (i of [0,1,2,3]; track i) { <rect class="hp" [attr.x]="10 + i * 7.5" y="19" width="5" height="5" rx="1"/> }</svg><b>{{ h.h.name }}</b></div>
-                <div class="nm">{{ tr(h.h.kind === 'switch' ? 'L2 switch' : 'Hub') }} · {{ h.h.legs.length }}/16</div></div>
-              @if (selHub() === h.h.id) {
-                <div class="hubp" [style.left.px]="h.x + 70" [style.top.px]="h.y - 30" (click)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
-                  <div class="hh"><input class="hn" [ngModel]="h.h.name" (change)="renameHub(h.h, $any($event.target).value)" [attr.aria-label]="tr('Name')" /><span class="muted small">{{ tr(h.h.kind === 'switch' ? 'L2 switch: learns MAC addresses' : 'Hub: every frame to every port') }}</span><a (click)="selHub.set('')" [title]="tr('Close')">✕</a></div>
-                  @for (g of h.h.legs; track g.vm + g.port) { <div class="hl"><span class="mono">{{ g.name }} {{ g.portName }}</span><a (click)="hubOff(h.h, g.vm, g.port)" [title]="tr('Take it off')">✕</a></div> } @empty { <p class="muted small">{{ tr('No port on it yet: add switch ports below.') }}</p> }
-                  <div class="ha"><select [(ngModel)]="hubPort.vm" (ngModelChange)="hubFree($event)"><option value="">{{ tr('switch') }}</option>@for (d of devs(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select>
-                    <select [(ngModel)]="hubPort.port" [disabled]="!hubPort.vm"><option value="">{{ tr('port') }}</option>@for (p of hubFreePorts(); track p) { <option [value]="p">{{ p }}</option> }</select>
-                    <button type="button" class="sm primary" (click)="hubOn(h.h)" [disabled]="!hubPort.port">{{ tr('Add') }}</button></div>
-                  <div class="hf"><span class="muted small">{{ tr('Its ports work at once, also on running switches.') }}</span><button type="button" class="sm danger-ghost" (click)="removeHub(h.h)">{{ tr('Remove') }}</button></div>
-                </div>
-              }
+              <div class="node hubn" [class.sel]="selHub() === h.h.id" [style.--hc]="h.c" [style.left.px]="h.x - 75" [style.top.px]="h.y - 24" (pointerdown)="hubGrab($event, h.h)" (click)="pickHub(h.h.id, $event)" [title]="h.h.name + ' · ' + tr(h.h.kind === 'switch' ? 'L2 switch' : 'Hub') + ' · ' + tr('{0} of {1} ports in use', h.h.legs.length, h.h.ports)">
+                <div class="hb"><ng-container *ngTemplateOutlet="bicon; context: { k: h.h.kind, c: h.c, w: h.h.kind === 'switch' ? 78 : 72, h: h.h.kind === 'switch' ? 50 : 44 }" /></div>
+                <div class="nn">{{ h.h.name }}</div>
+                <div class="nm">@if (h.h.kind === 'switch') { {{ tr('L2 switch') }} · {{ tr('{0} ports', h.h.ports) }}@if (h.h.cfg?.mgmtIp) { · {{ h.h.cfg!.mgmtIp!.split('/')[0] }} } } @else { {{ tr('Hub') }} · {{ tr('{0}/{1} ports', h.h.legs.length, h.h.ports) }} }</div></div>
             }
             @for (c of clouds(); track c.host) {
               <div class="node cloud" [class.sel]="selCloud() === c.host" (contextmenu)="cloudMenu(c.host, $event)" [class.pick]="linkMode() && !!linkA()?.port" [style.left.px]="c.x - 75" [style.top.px]="c.y - 44" (pointerdown)="cloudGrab($event, c.host)" (click)="cloudClick(c.host, $event)"
                    [title]="tr('The network of {0} ({1}): a switch port cabled here is on it, like a cloud node. Add Link from a switch port to here; right-click a switch to take a port off.', c.name, c.lan)">
-                <div class="cbox"><svg viewBox="0 0 64 40" width="76" height="48"><path d="M18 34h30a10 10 0 0 0 1-20 14 14 0 0 0-26-4A11 11 0 0 0 18 34z" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="2"/></svg></div>
-                <div class="nn">{{ tr('Cloud') }}</div><div class="nm">{{ c.name }} · {{ c.lan || tr('host network') }}</div>
+                <div class="cbox"><ng-container *ngTemplateOutlet="bicon; context: { k: 'cloud', c: 'var(--s4)', w: 84, h: 62 }" /></div>
+                <div class="nn">{{ tr('Cloud') }} · {{ c.name }}</div><div class="nm">{{ tr('{0}/{1} ports', c.links.length, c.ports) }} · {{ c.lan || tr('host network') }}</div>
               </div>
             }
             @for (d of devs(); track d.id) {
@@ -509,6 +500,66 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
                 @empty { <p class="muted small">{{ tr('None: one is taken before Claude or the API types on it, and Revert in Changes restores it.') }}</p> }
                 <button type="button" class="sm" (click)="lab.checkpoint(d.id)" [disabled]="!d.running || lab.busy()" [title]="tr('Keep its whole running state now (it pauses for a moment); the oldest beyond three goes')">＋ {{ tr('Checkpoint Now') }}</button></div></details> }
           </div>
+        } @else if (selHubV(); as h) {
+          <h3 class="selh"><span class="nm" [title]="h.name">{{ h.name }}</span><span class="tst" [class]="'tst ' + (hubDet()?.running ? 'run' : 'off')"><i class="sd">●</i>{{ hubDet()?.running ? tr('running') : tr(hubDet() ? 'not running' : 'reading…') }}</span><a class="clr" (click)="selHub.set('')" [title]="tr('Close')">✕</a></h3>
+          <div class="card dp hubpanel">
+            <div class="sub">{{ h.kind === 'switch' ? tr('L2 switch · learns MAC addresses · VLANs') : tr('Hub · every frame to every port') }}</div>
+            <div class="kv">
+              <span>{{ tr('Name') }}</span><span><input class="hn2" [ngModel]="h.name" (change)="renameHub(h, $any($event.target).value)" [attr.aria-label]="tr('Name')" /></span>
+              <span>{{ tr('Ports') }}</span><span>@if (h.kind === 'switch') { <span class="step"><i (click)="hubPorts(h, h.ports - 1)" [class.dis]="h.ports <= 8">−</i><b>{{ h.ports }}</b><i (click)="hubPorts(h, h.ports + 1)" [class.dis]="h.ports >= 24">＋</i></span> <span class="muted small">8-24</span> } @else { {{ h.ports }} <span class="muted small">· {{ tr('no management') }}</span> }</span>
+              @if (h.kind === 'switch') {
+                <span>{{ tr('Management') }}</span><span>@if (mgmtEd()) { <span class="mge"><input class="mono" [(ngModel)]="mgmtIp" placeholder="10.20.0.5/24" [attr.aria-label]="tr('Management address')" /><input type="number" min="1" max="4094" [(ngModel)]="mgmtVlan" [title]="tr('Its VLAN')" /><button type="button" class="sm primary" (click)="saveMgmt(h)">{{ tr('Save') }}</button><a (click)="mgmtEd.set(false)">✕</a></span> }
+                  @else { <span class="mono">{{ h.cfg?.mgmtIp || tr('none') }}</span>@if (h.cfg?.mgmtIp) { <span class="muted"> · VLAN {{ h.cfg?.mgmtVlan || 1 }}</span> } <a class="lnk" (click)="editMgmt(h)">{{ tr('Change') }}</a> }</span>
+                <span>{{ tr('Console') }}</span><span class="mono">telnet :{{ h.conPort || '-' }}</span>
+                <span>{{ tr('MAC table') }}</span><span>{{ tr('{0} addresses', hubDet()?.macs?.length ?? 0) }}@if (hubDet()?.macs?.length) { <a class="lnk" (click)="hubMacs.set(!hubMacs())">{{ hubMacs() ? tr('Hide') : tr('Show') }}</a> }</span>
+              }
+            </div>
+            <div class="btns act">@if (h.kind === 'switch') { <button type="button" class="sm primary" (click)="hubOpen(h.console)" [disabled]="!h.console">{{ tr('Console') }}</button><button type="button" class="sm" (click)="hubOpen(h.ssh)" [disabled]="!h.ssh || (!!hubDet() && !hubDet()!.sshOk)" [title]="hubDet() && !hubDet()!.sshOk ? tr('SSH needs paramiko in the host’s Python (python3-paramiko); the console always works') : tr('SSH through its host (any password)')">SSH</button> }<span class="sp"></span><button type="button" class="sm danger" (click)="removeHub(h)">{{ tr('Remove') }}</button></div>
+          </div>
+          <div class="card hubports"><b>{{ tr('Ports') }}</b>
+            <table class="hpt"><tr><th>{{ tr('Port') }}</th><th>{{ tr('To') }}</th>@if (h.kind === 'switch') { <th>VLAN</th> }<th>{{ tr('Link') }}</th><th></th></tr>
+              @for (r of hubRows(h); track r.at) {
+                @if (r.gap) { <tr class="gap" (click)="hubAll.set(true)" [title]="tr('Show every port')"><td>…</td><td></td>@if (h.kind === 'switch') { <td></td> }<td></td><td></td></tr> }
+                @else {
+                  <tr><td>{{ r.at }}</td><td [class.muted]="!r.to">{{ r.to || '-' }}</td>@if (h.kind === 'switch') { <td><a class="vl" (click)="editPort(h, r.at)" [title]="tr('Change its VLANs')">{{ r.vlan }}</a></td> }
+                    <td [class.up]="r.up" [class.muted]="!r.leg">{{ r.leg ? (r.up ? tr('up') : tr('down')) : '-' }}</td><td>@if (r.leg) { <a class="x" (click)="hubOff(h, r.leg.vm, r.leg.port)" [title]="tr('Take it off')">✕</a> }</td></tr>
+                  @if (portEd()?.at === r.at; as pe) {
+                    <tr class="ped"><td [attr.colspan]="5"><div class="pedr"><select [ngModel]="portEd()!.mode" (ngModelChange)="portMode($event)" [attr.aria-label]="tr('Mode')"><option value="access">access</option><option value="trunk">trunk</option></select>
+                      @if (portEd()!.mode === 'access') { <label>VLAN <input type="number" min="1" max="4094" [(ngModel)]="portEd()!.vlan" /></label> }
+                      @else { <label>{{ tr('tagged') }} <input [(ngModel)]="portEd()!.vlans" placeholder="10,20" /></label><label>{{ tr('native') }} <input type="number" min="0" max="4094" [(ngModel)]="portEd()!.vlan" [placeholder]="tr('none')" /></label> }
+                      <button type="button" class="sm primary" (click)="savePort(h)">{{ tr('Save') }}</button><a (click)="portEd.set(null)">✕</a></div></td></tr>
+                  }
+                }
+              }
+              @if (h.kind === 'switch') { <tr><td>mgmt</td><td>{{ tr('in-band management') }}</td><td>{{ h.cfg?.mgmtIp ? 'VLAN ' + (h.cfg?.mgmtVlan || 1) : '-' }}</td><td [class.up]="!!h.cfg?.mgmtIp" [class.muted]="!h.cfg?.mgmtIp">{{ h.cfg?.mgmtIp ? tr('up') : '-' }}</td><td></td></tr> }
+            </table>
+            @if (h.legs.length < h.ports) {
+              <div class="ha"><select [(ngModel)]="hubPort.vm" (ngModelChange)="hubFree($event)" [attr.aria-label]="tr('Switch')"><option value="">{{ tr('switch') }}</option>@for (d of devs(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select>
+                <select [(ngModel)]="hubPort.port" [disabled]="!hubPort.vm" [attr.aria-label]="tr('Port')"><option value="">{{ tr('port') }}</option>@for (p of hubFreePorts(); track p) { <option [value]="p">{{ p }}</option> }</select>
+                <button type="button" class="sm" (click)="hubOn(h)" [disabled]="!hubPort.port">＋ {{ tr('Add') }}</button></div>
+            }
+            @if (h.kind === 'switch') { <p class="muted xs">{{ tr('VLANs are set here or on its console (or SSH):') }}<br /><code>configure port 1-2 trunk vlans 10,20</code></p> }
+            @else { <p class="muted xs">{{ tr('Its ports work at once, also on running switches.') }}</p> }
+          </div>
+          @if (hubMacs() && hubDet()?.macs?.length) {
+            <div class="card"><b>{{ tr('MAC table') }}</b><table class="hpt"><tr><th>VLAN</th><th>MAC</th><th>{{ tr('Port') }}</th><th>{{ tr('Age') }}</th></tr>
+              @for (m of hubDet()!.macs; track m.mac + m.vlan) { <tr><td>{{ m.vlan }}</td><td class="mono">{{ m.mac }}</td><td>{{ m.port }}</td><td>{{ m.age }} s</td></tr> }</table></div>
+          }
+        } @else if (selCloudV(); as c) {
+          <h3 class="selh"><span class="nm">{{ tr('Cloud') }} · {{ c.name }}</span><a class="clr" (click)="selCloud.set('')" [title]="tr('Close')">✕</a></h3>
+          <div class="card dp hubpanel">
+            <div class="sub">{{ tr('The network of {0}', c.name) }}@if (c.lan) { · {{ c.lan }} }</div>
+            <div class="kv"><span>{{ tr('Ports') }}</span><span><span class="step"><i (click)="cloudPorts(c, c.ports - 1)" [class.dis]="c.ports <= 1">−</i><b>{{ c.ports }}</b><i (click)="cloudPorts(c, c.ports + 1)" [class.dis]="c.ports >= 8">＋</i></span> <span class="muted small">1-8</span></span>
+              <span>{{ tr('In use') }}</span><span>{{ c.links.length }}/{{ c.ports }}</span></div>
+            <div class="btns act"><span class="sp"></span><button type="button" class="sm danger" (click)="removeCloud(c.host)">{{ tr('Remove') }}</button></div>
+          </div>
+          <div class="card hubports"><b>{{ tr('Ports') }}</b>
+            <table class="hpt"><tr><th>{{ tr('Port') }}</th><th>{{ tr('To') }}</th><th></th></tr>
+              @for (u of c.links; track u.dev + u.port; let i = $index) { <tr><td>{{ i + 1 }}</td><td>{{ u.name }} {{ u.port }}</td><td><a class="x" (click)="takeOff(u.dev, u.port)" [title]="tr('Take it off')">✕</a></td></tr> }
+              @for (f of cloudFree(c); track f) { <tr><td>{{ f }}</td><td class="muted">-</td><td></td></tr> }
+            </table>
+            <p class="muted xs">{{ tr('Add Link from a switch port to the cloud: the port goes on the host’s network. One cloud per host, with up to 8 ports.') }}</p>
+          </div>
         }
         <h3>{{ tr('Topology summary') }}</h3>
         <div class="card tbl"><table>
@@ -518,6 +569,14 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       </div>
     </div>
 
+    <ng-template #bicon let-k="k" let-c="c" let-w="w" let-h="h">
+      @switch (k) {
+        @case ('pc') { <svg class="bico" viewBox="0 0 46 46" [attr.width]="w" [attr.height]="h" [style.--hc]="c"><rect x="7" y="9" width="32" height="21" rx="2.5"/><path class="l" d="M18 36h10M23 30v6"/><path class="l thin" d="M11 14h12"/></svg> }
+        @case ('switch') { <svg class="bico" viewBox="0 0 46 46" [attr.width]="w" [attr.height]="h" [style.--hc]="c"><rect x="4" y="13" width="38" height="20" rx="3.5"/>@for (i of [0,1,2,3]; track i) { <rect class="f" [attr.x]="8 + i * 6" y="17.5" width="4" height="4" rx=".8"/> }<circle class="f" cx="10" cy="27.5" r="1.4"/><path class="l" d="M32 17.5l4 3-4 3M36 24.5l-4 3 4 3"/></svg> }
+        @case ('hub') { <svg class="bico" viewBox="0 0 46 46" [attr.width]="w" [attr.height]="h" [style.--hc]="c"><rect x="6" y="16" width="34" height="15" rx="7.5"/>@for (i of [0,1,2,3]; track i) { <circle class="f" [attr.cx]="14 + i * 6" cy="23.5" r="2"/> }<path class="l" d="M17 11l2 3M23 9v4M29 11l-2 3"/></svg> }
+        @case ('cloud') { <svg class="bico" viewBox="0 0 46 46" [attr.width]="w" [attr.height]="h" [style.--hc]="c"><path d="M14 33h20a7 7 0 0 0 1-13.9A10 10 0 0 0 16 17a8 8 0 0 0-2 16z"/>@for (i of [0,1,2]; track i) { <circle class="f" [attr.cx]="18 + i * 5" cy="27" r="1.6"/> }</svg> }
+      }
+    </ng-template>
     @switch (page()) {
       @case ('configure') { <app-lab-configure [devId]="cfgId()" [emu]="emu()" (closed)="page.set('')" (images)="imgPick.set($event); page.set('images')" /> }
       @case ('images') { <app-lab-images start="images" [image]="imgPick()" (closed)="page.set(''); imgPick.set('')" (hostsPage)="hostPick.set($event); page.set('hosts')" /> }
@@ -947,13 +1006,16 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .cks { display: grid; gap: 4px; padding: 4px 0; .ck { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 8px; align-items: center; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); } .cn { grid-column: 1 / -1; color: var(--muted); font-size: 11px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } a { cursor: pointer; color: var(--muted); } > button { justify-self: start; margin-top: 4px; } }
     .ckt { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
     .hico { width: 46px; height: 46px; flex: none; rect { fill: color-mix(in srgb, var(--hc) 16%, var(--surface)); stroke: var(--hc); stroke-width: 1.6; } .hp { fill: var(--hc); stroke: none; } path { stroke: var(--hc); stroke-width: 1.4; stroke-dasharray: 2 2; } }
-    .node.hubn { width: 120px; cursor: grab; .hb { height: 34px; border-radius: 9px; border: 1.5px solid var(--hc); background: color-mix(in srgb, var(--hc) 14%, var(--surface)); display: flex; align-items: center; gap: 4px; padding: 0 8px; b { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } svg { width: 28px; height: 28px; flex: none; rect { fill: none; stroke: var(--hc); stroke-width: 2; } .hp { fill: var(--hc); stroke: none; } } }
-      .nm { font-size: 10.5px; color: var(--muted); margin-top: 3px; } &.sel .hb { box-shadow: 0 0 0 2px color-mix(in srgb, var(--hc) 50%, transparent); } }
+    .node.hubn { width: 150px; cursor: grab; text-align: center; .hb { height: 54px; display: flex; align-items: flex-end; justify-content: center; } .nn { font-weight: 600; font-size: 12.5px; margin-top: 2px; } .nm { font-size: 10.5px; color: var(--muted); white-space: normal; overflow: visible; }
+      &.sel .hb .bico { filter: drop-shadow(0 0 6px var(--hc)); } &.sel .nn { color: var(--hc); } }
     .hbl .ln { stroke: var(--hc); stroke-width: 2; fill: none; stroke-dasharray: none; }
-    .hubp { position: absolute; z-index: 20; width: 300px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.35); padding: 10px; display: grid; gap: 6px; font-size: 12px; text-align: left;
-      .hh { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; .hn { font-weight: 600; } span { grid-column: 1; } a { grid-row: 1; grid-column: 2; cursor: pointer; color: var(--muted); } }
-      .hl { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--line); a { cursor: pointer; color: var(--muted); } }
-      .ha { display: grid; grid-template-columns: minmax(0, 1fr) 90px auto; gap: 6px; } .hf { display: flex; align-items: center; justify-content: space-between; gap: 8px; } }
+    .bico { flex: none; > rect, > path:not(.l) { fill: color-mix(in srgb, var(--hc) 16%, var(--surface)); stroke: var(--hc); stroke-width: 1.6; } .f { fill: var(--hc); stroke: none; } .l { fill: none; stroke: var(--hc); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; } .thin { stroke-width: 1.1; opacity: .7; } }
+    .hubpanel .kv { grid-template-columns: 96px minmax(0, 1fr); align-items: center; } .hubpanel .kv .lnk { margin-left: 8px; } .hpt .vl, .hpt td:nth-child(3) { white-space: nowrap; } .hn2 { height: 26px; width: 100%; font-weight: 600; }
+    .step { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; vertical-align: middle; i { font-style: normal; padding: 2px 9px; background: var(--surface-2); cursor: pointer; user-select: none; &.dis { opacity: .4; pointer-events: none; } } b { padding: 2px 10px; font-variant-numeric: tabular-nums; } }
+    .mge { display: inline-flex; gap: 4px; align-items: center; input { height: 24px; } input.mono { width: 120px; } input[type=number] { width: 58px; } a { cursor: pointer; color: var(--muted); } }
+    .hpt { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 6px; th { text-align: left; color: var(--muted); font-weight: 500; font-size: 10.5px; padding: 4px 6px; border-bottom: 1px solid var(--line); } td { padding: 5px 6px; border-bottom: 1px solid var(--line); } .up { color: var(--success, #1fa45a); } .x { cursor: pointer; color: var(--muted); } .x:hover { color: var(--danger); } .vl { cursor: pointer; border-bottom: 1px dashed var(--muted); }
+      tr.gap td { color: var(--muted); cursor: pointer; } tr.ped td { background: var(--surface-2); } .pedr { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; select, input { height: 24px; } input { width: 70px; } label { display: inline-flex; gap: 4px; align-items: center; } a { cursor: pointer; color: var(--muted); } } }
+    .hubports .ha { display: grid; grid-template-columns: minmax(0, 1fr) 90px auto; gap: 6px; margin-top: 8px; } .hubports code { font-size: 11px; }
     .nt { position: absolute; display: flex; flex-direction: column; border-radius: 10px; border: 1.5px solid color-mix(in srgb, var(--nc) 70%, transparent); background: color-mix(in srgb, var(--nc) 16%, var(--surface)); box-shadow: 0 6px 16px rgba(0,0,0,.25); font-size: 12.5px; cursor: default;
       &.area { border-style: dashed; background: color-mix(in srgb, var(--nc) 7%, transparent); box-shadow: none; border-radius: 14px; }
       &.sel { outline: 2px solid color-mix(in srgb, var(--nc) 55%, transparent); outline-offset: 2px; }
@@ -1153,9 +1215,74 @@ export class LabWorkspace implements OnDestroy {
   protected screenDev = signal<LabDevice | null>(null);
   protected palOpen = signal(false);
   // ---- hubs and L2 switches ----
-  protected readonly hubKinds = [{ k: 'hub' as const, name: 'Hub', sub: 'every frame to every port', tip: 'A hub: what comes in on a port goes out of every other one. Drag it onto the canvas, or double-click', c: 'var(--s3)' },
-    { k: 'switch' as const, name: 'L2 switch', sub: 'learns MAC addresses', tip: 'A plain L2 switch (no VLANs): it learns where each MAC address is. Drag it onto the canvas, or double-click', c: 'var(--s7)' }];
-  protected hubDrag: 'hub' | 'switch' | null = null;
+  protected readonly builtins = [
+    { k: 'pc' as const, name: 'PC', sub: 'Linux computer · ping, iperf3', tip: 'A Linux computer (Alpine first): Termwright logs in, names it and installs iperf3. Drag it onto the canvas, or double-click', c: 'var(--s1)' },
+    { k: 'switch' as const, name: 'L2 Switch', sub: '8-24 ports · mgmt · console', tip: 'An L2 switch: 8-24 ports, VLANs (access and trunk), a management address and a command line on its console. Drag it onto the canvas, or double-click', c: 'var(--s7)' },
+    { k: 'hub' as const, name: 'Hub', sub: '8 ports · every frame to every port', tip: 'A hub: 8 ports, no management; what comes in on a port goes out of every other one. Drag it onto the canvas, or double-click', c: 'var(--s3)' },
+    { k: 'cloud' as const, name: 'Cloud', sub: 'the host’s network · 1-8 ports', tip: 'The host’s network: switch ports cabled to it are on it. One cloud per host, 1-8 ports. Drag it onto the canvas, or double-click', c: 'var(--s4)' }];
+  protected hubDrag: 'hub' | 'switch' | 'pc' | 'cloud' | null = null;
+  /** A built-in node from the palette: a PC, an L2 switch, a hub or the host's cloud. */
+  async addBuiltin(k: 'hub' | 'switch' | 'pc' | 'cloud', at: { x: number; y: number } | null) {
+    if (k === 'hub' || k === 'switch') { await this.addHub(k, at); return; }
+    if (k === 'cloud') {
+      this.addCloud();
+      const d = this.selDev(), h = (d && this.hostOfDev(d)) || this.st()?.host || '';
+      if (at) { this.cloudAt.set({ ...this.cloudAt(), [h]: at }); try { localStorage.setItem('tw.cloudAt', JSON.stringify(this.cloudAt())); } catch { /* per viewer only */ } }
+      this.sel.set(''); this.selHub.set(''); this.selCloud.set(h); return;
+    }
+    const before = new Set(this.devs().map(d => d.id));
+    try {
+      await this.backend.emuAddComputer('', false); await this.lab.refresh();
+      const nd = this.devs().find(d => !before.has(d.id));
+      if (nd && at) this.lab.place(nd.id, at.x, at.y);
+      if (nd) this.select(nd);
+    } catch (e) { this.ui.error(e); }
+  }
+  protected selHubV = computed(() => this.st()?.hubs?.find(h => h.id === this.selHub()) ?? null);
+  protected selCloudV = computed(() => this.clouds().find(c => c.host === this.selCloud()) ?? null);
+  protected hubDet = signal<LabHubDetail | null>(null);
+  protected hubMacs = signal(false);
+  protected hubAll = signal(false);
+  protected mgmtEd = signal(false);
+  protected mgmtIp = ''; protected mgmtVlan = 1;
+  protected portEd = signal<{ at: number; mode: 'access' | 'trunk'; vlan: number | null; vlans: string } | null>(null);
+  private hubTimer?: ReturnType<typeof setInterval>;
+  private hubWatch = effect(() => {
+    const id = this.selHub(); clearInterval(this.hubTimer); this.hubDet.set(null); this.hubAll.set(false); this.portEd.set(null); this.mgmtEd.set(false); this.hubMacs.set(false);
+    if (!id || !this.emu()) return;
+    const load = async () => { try { const d = await this.backend.emuHubDetail(id); if (this.selHub() === id) this.hubDet.set(d); } catch { /* next time */ } };
+    void load(); this.hubTimer = setInterval(() => void load(), 4000);
+  });
+  pickHub(id: string, ev: MouseEvent) { ev.stopPropagation(); this.sel.set(''); this.selCloud.set(''); this.selLink.set(''); this.ms.set(new Set()); this.selHub.set(id); this.hubPort = { vm: '', port: '' }; }
+  /** The ports of a hub as its panel lists them: the used and configured ones, long runs of free ones as … */
+  hubRows(h: LabHub) {
+    const rows: { at: number; to: string; vlan: string; up: boolean; leg: LabHub['legs'][number] | null; gap?: boolean }[] = [];
+    const cfg = this.hubDet()?.cfg ?? h.cfg;
+    const vlanOf = (at: number) => { const c = cfg?.ports?.[String(at)]; if (!c || c.mode === 'access') return 'access ' + (c?.vlan || 1); return 'trunk ' + ((c.vlans ?? []).join(',') || '-') + (c.vlan ? ' · native ' + c.vlan : ''); };
+    const all = Array.from({ length: h.ports }, (_, i) => i + 1).map(at => { const leg = h.legs.find(g => g.at === at) ?? null; const d = leg ? this.devs().find(x => x.id === leg.vm) : null; return { at, to: leg ? leg.name + ' ' + (leg.portName || leg.port) : '', vlan: h.kind === 'switch' ? vlanOf(at) : '', up: !!d?.running, leg, plain: !leg && (!cfg?.ports?.[String(at)]) }; });
+    for (let i = 0; i < all.length; i++) {
+      const r = all[i];
+      if (!this.hubAll() && r.plain && i > 0 && all[i - 1].plain) { // a run of free, plain ports: one row, then …
+        let j = i; while (j < all.length && all[j].plain) j++;
+        if (j - i >= 2) { rows.push({ ...all[i], gap: true }); i = j - 1; continue; }
+      }
+      rows.push(r);
+    }
+    return rows;
+  }
+  hubOpen(path?: string) { if (path) void this.tabs.openSession(path); }
+  async hubPorts(h: LabHub, n: number) { if (n < 8 || n > 24) return; try { this.lab.emu.set(await this.backend.emuHubSetPorts(h.id, n)); } catch (e) { this.ui.error(e); } }
+  editMgmt(h: LabHub) { this.mgmtIp = h.cfg?.mgmtIp ?? ''; this.mgmtVlan = h.cfg?.mgmtVlan || 1; this.mgmtEd.set(true); }
+  async saveMgmt(h: LabHub) { try { this.lab.emu.set(await this.backend.emuHubSetMgmt(h.id, this.mgmtIp.trim(), +this.mgmtVlan || 1)); this.mgmtEd.set(false); } catch (e) { this.ui.error(e); } }
+  editPort(h: LabHub, at: number) { const c = (this.hubDet()?.cfg ?? h.cfg)?.ports?.[String(at)]; this.portEd.set({ at, mode: c?.mode ?? 'access', vlan: c ? (c.vlan ?? null) : 1, vlans: (c?.vlans ?? []).join(',') }); }
+  portMode(m: 'access' | 'trunk') { const e = this.portEd(); if (e) this.portEd.set({ ...e, mode: m, vlan: m === 'trunk' ? null : (e.vlan || 1) }); }
+  async savePort(h: LabHub) {
+    const e = this.portEd(); if (!e) return;
+    const vlans = e.vlans.split(/[\s,]+/).filter(Boolean).flatMap(x => { const m = /^(\d+)-(\d+)$/.exec(x); return m ? Array.from({ length: Math.max(0, +m[2] - +m[1] + 1) }, (_, i) => +m[1] + i) : [+x]; }).filter(x => x > 0);
+    try { this.lab.emu.set(await this.backend.emuHubPortSet(h.id, e.at, e.mode, +(e.vlan ?? 0) || 0, vlans)); this.portEd.set(null); } catch (err) { this.ui.error(err); }
+  }
+  async cloudPorts(c: { host: string }, n: number) { if (n < 1 || n > 8) return; try { this.lab.emu.set(await this.backend.emuSetCloudPorts(c.host, n)); } catch (e) { this.ui.error(e); } }
+  cloudFree(c: { links: unknown[]; ports: number }) { return Array.from({ length: Math.max(0, c.ports - c.links.length) }, (_, i) => c.links.length + i + 1); }
   protected selHub = signal('');
   protected hubPort = { vm: '', port: '' };
   protected hubFreePorts = signal<string[]>([]);
@@ -1697,7 +1824,7 @@ export class LabWorkspace implements OnDestroy {
       const at = this.cloudAt()[h] ?? { x: ps.length ? Math.max(...ps.map(p => p.x)) + 240 : 300, y: ps.length ? Math.max(60, Math.min(...ps.map(p => p.y)) - 130) : 120 }; // above and beside its host's switches
       const info = h === main ? v?.hostInfo : (v?.hosts ?? []).find(x => x.session === h)?.info;
       const links = ds.flatMap(d => (d.uplinks ?? []).map(port => { const p = this.pos(d); return { dev: d.id, name: d.hostname, port, x: p.x, y: p.y, lx: Math.round(p.x + (at.x - p.x) * 0.25), ly: Math.round(p.y + (at.y - p.y) * 0.25) }; }));
-      return { host: h, name: this.hname(h), lan: info?.lanIf ?? '', x: at.x, y: at.y, links };
+      return { host: h, name: this.hname(h), lan: info?.lanIf ?? '', x: at.x, y: at.y, links, ports: Math.max(v?.cloudPorts?.[h] ?? 1, links.length) };
     });
   });
   addCloud() {
@@ -1718,7 +1845,7 @@ export class LabWorkspace implements OnDestroy {
   /** Add Link: a switch port, then the cloud - the port goes on the host's network. */
   async cloudClick(h: string, ev: MouseEvent) {
     ev.stopPropagation();
-    if (!this.linkMode()) { this.selCloud.set(this.selCloud() === h ? '' : h); this.sel.set(''); this.selLink.set(''); return; }
+    if (!this.linkMode()) { this.selCloud.set(this.selCloud() === h ? '' : h); this.sel.set(''); this.selLink.set(''); this.selHub.set(''); return; }
     const a = this.linkA(), d = a && this.devs().find(x => x.id === a.id);
     if (!d || !a?.port) { this.ui.toast(tr('First click a switch and pick its port, then the cloud')); return; }
     if ((this.hostOfDev(d) || this.st()?.host) !== h) { this.ui.error(tr('{0} runs on another host: cable it to that host’s cloud', d.hostname)); return; }
@@ -2145,7 +2272,7 @@ export class LabWorkspace implements OnDestroy {
   dragPal(ev: DragEvent, p: Pal) { this.palDrag = p; ev.dataTransfer?.setData('text/plain', p.key); }
   dropPal(ev: DragEvent, cv: HTMLElement) {
     ev.preventDefault();
-    if (this.hubDrag) { const k = this.hubDrag; this.hubDrag = null; void this.addHub(k, this.toCanvas(ev, cv)); return; }
+    if (this.hubDrag) { const k = this.hubDrag; this.hubDrag = null; void this.addBuiltin(k, this.toCanvas(ev, cv)); return; }
     const p = this.palDrag; this.palDrag = null;
     if (p) void this.addAt(p, this.toCanvas(ev, cv));
   }
@@ -2357,7 +2484,7 @@ export class LabWorkspace implements OnDestroy {
   }
   zoomBy(d: number) { this.zoom.set(Math.min(2, Math.max(0.4, +(this.zoom() + d).toFixed(1)))); }
   fit(cv: HTMLElement) { const a = this.area(); this.zoom.set(Math.max(0.4, Math.min(1.5, +Math.min(cv.clientWidth / a.w, cv.clientHeight / a.h).toFixed(2)))); }
-  select(d: LabDevice) { this.sel.set(d.id); this.tail.set(''); this.clog.set(''); if (this.dock() === 'console') void this.loadTail(); if (this.dock() === 'clog') void this.loadClog(); }
+  select(d: LabDevice) { this.sel.set(d.id); this.selHub.set(''); this.selCloud.set(''); this.tail.set(''); this.clog.set(''); if (this.dock() === 'console') void this.loadTail(); if (this.dock() === 'clog') void this.loadClog(); }
   selectId(id: string) { const d = this.devs().find(x => x.id === id); if (d) this.select(d); }
   clickNode(d: LabDevice, ev: MouseEvent) {
     ev.stopPropagation(); this.menu.set(null);

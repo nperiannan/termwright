@@ -1,6 +1,7 @@
 package emu
 
 import (
+	"encoding/json"
 	"net"
 	"os"
 	"os/exec"
@@ -174,5 +175,102 @@ func TestHubPy(t *testing.T) {
 	send(1, frame(mac(1), mac(2), "ccc")) // known: only leg 0
 	if g0, g2 := got(0), got(2); g0 != "ccc" || g2 != "" {
 		t.Fatalf("learned: %q %q", g0, g2)
+	}
+}
+
+func TestHubPyVLANs(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "tw-hub.py"), []byte(HubPy), 0o644)
+	cfg := `{"hubs":[{"id":"h1","name":"l2sw-1","kind":"switch","ports":8,"console":43190,"legs":[[43101,43111,1,"a 1"],[43102,43112,2,"b 1"],[43103,43113,3,"c 1"]],
+	  "cfg":{"rev":1,"ports":{"1":{"mode":"access","vlan":10},"2":{"mode":"trunk","vlans":[10,20]},"3":{"mode":"access","vlan":20}},"mgmtIp":"10.0.10.5/24","mgmtVlan":10}}]}`
+	_ = os.WriteFile(filepath.Join(dir, "hubs.json"), []byte(cfg), 0o644)
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-hub.py"), dir)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var eps []*net.UDPConn
+	for _, p := range []int{43111, 43112, 43113} {
+		c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: p})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		eps = append(eps, c)
+	}
+	time.Sleep(500 * time.Millisecond)
+	mac := func(n byte) []byte { return []byte{2, 0, 0, 0, 0, n} }
+	send := func(from int, f []byte) {
+		_, _ = eps[from].WriteToUDP(f, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 43101 + from})
+	}
+	got := func(i int) []byte {
+		_ = eps[i].SetReadDeadline(time.Now().Add(600 * time.Millisecond))
+		buf := make([]byte, 2000)
+		n, _, err := eps[i].ReadFromUDP(buf)
+		if err != nil {
+			return nil
+		}
+		return buf[:n]
+	}
+	pad := []byte("................................................")
+	untagged := append(append(append(append([]byte{}, mac(9)...), mac(1)...), 0x88, 0xb5), pad...)
+	send(0, untagged) // access VLAN 10 -> the trunk tags it 10; the access port in 20 does not get it
+	if f := got(1); len(f) < 18 || f[12] != 0x81 || f[13] != 0 || int(f[14]&15)<<8|int(f[15]) != 10 {
+		t.Fatalf("trunk: % x", f)
+	}
+	if f := got(2); f != nil {
+		t.Fatalf("VLAN 20 got VLAN 10's frame: % x", f)
+	}
+	tagged := append(append(append(append([]byte{}, mac(9)...), mac(2)...), 0x81, 0x00, 0x00, 20, 0x88, 0xb5), pad...)
+	send(1, tagged) // tagged 20 on the trunk -> untagged on the access port in 20
+	if f := got(2); len(f) < 14 || f[12] != 0x88 || f[13] != 0xb5 {
+		t.Fatalf("access 20: % x", f)
+	}
+	if f := got(0); f != nil {
+		t.Fatalf("VLAN 10 got VLAN 20's frame: % x", f)
+	}
+	arp := append(append([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, mac(1)...), 0x08, 0x06, 0, 1, 8, 0, 6, 4, 0, 1)
+	arp = append(append(append(append(arp, mac(1)...), 10, 0, 10, 1), 0, 0, 0, 0, 0, 0), 10, 0, 10, 5)
+	send(0, arp) // the management address in VLAN 10 answers
+	var reply []byte
+	for i := 0; i < 3 && reply == nil; i++ {
+		if f := got(0); len(f) >= 42 && f[12] == 8 && f[13] == 6 && f[21] == 2 {
+			reply = f
+		}
+	}
+	if reply == nil || string(reply[28:32]) != string([]byte{10, 0, 10, 5}) {
+		t.Fatalf("ARP: % x", reply)
+	}
+	c, err := net.DialTimeout("tcp", "127.0.0.1:43190", 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	_, _ = c.Write([]byte("show vlan\r\nconf port 3 access vlan 10\r\nshow ports\r\n"))
+	_ = c.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
+	var out []byte
+	buf := make([]byte, 8192)
+	for {
+		n, err := c.Read(buf)
+		out = append(out, buf[:n]...)
+		if err != nil || strings.Count(string(out), "l2sw-1 # ") >= 4 {
+			break
+		}
+	}
+	if s := string(out); !strings.Contains(s, "20    2t,3") || !strings.Contains(s, "3     c 1") {
+		t.Fatalf("command line: %q", s)
+	}
+	time.Sleep(2500 * time.Millisecond)
+	var st struct {
+		Hubs map[string]struct {
+			Cfg HubCfg `json:"cfg"`
+		} `json:"hubs"`
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "hubs-stats.json"))
+	if err := json.Unmarshal(b, &st); err != nil || st.Hubs["h1"].Cfg.Rev != 2 || st.Hubs["h1"].Cfg.Ports["3"].VLAN != 10 {
+		t.Fatalf("the change does not come back: %v %s", err, b)
 	}
 }

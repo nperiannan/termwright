@@ -65,9 +65,16 @@ var mcpLabTools = []mcpTool{
 			"vlan":     map[string]any{"type": "string", "description": "the VLAN (name or number) the switch puts the user in"},
 			"reveal":   map[string]any{"type": "boolean", "description": "show: include the secret and the passwords"},
 		})},
-	{"lab_hub", "Hubs and L2 switches of the emulated lab: nodes without a VM that join switch ports (a hub repeats every frame to its other ports; an L2 switch learns MAC addresses). Ports go on at once, also on running switches; a hub's switches must run on one host. Actions: list, add (kind hub or switch, name), connect (hub, switch, port), disconnect (hub, switch, port), remove (hub).",
+	{"lab_hub", "Hubs, L2 switches and clouds of the emulated lab: nodes without a VM. A hub (8 ports, no management) repeats every frame to its other ports; an L2 switch (8-24 ports) learns MAC addresses per VLAN, has access and trunk ports, an in-band management address (ARP, ping) and a command line on its console session. Ports go on at once, also on running switches; a hub's switches must run on one host. Actions: list, add (kind hub or switch, name), connect (hub, switch, port), disconnect (hub, switch, port), remove (hub), show (hub: its ports, VLANs and learned MACs), ports (hub, count: an L2 switch's 8-24), port (hub, number, mode access|trunk, vlan, vlans), management (hub, ip with prefix or \"\", vlan), cloud_ports (host, count: 1-8 ports of a host's cloud).",
 		mcpSchema(map[string]any{
-			"action": map[string]any{"type": "string", "enum": []string{"list", "add", "connect", "disconnect", "remove"}},
+			"action": map[string]any{"type": "string", "enum": []string{"list", "add", "connect", "disconnect", "remove", "show", "ports", "port", "management", "cloud_ports"}},
+			"count":  map[string]any{"type": "integer", "description": "ports: 8-24; cloud_ports: 1-8"},
+			"number": map[string]any{"type": "integer", "description": "port: the L2 switch's port"},
+			"mode":   map[string]any{"type": "string", "enum": []string{"access", "trunk"}},
+			"vlan":   map[string]any{"type": "integer", "description": "port: access VLAN or the trunk's native VLAN (0 = none); management: its VLAN"},
+			"vlans":  map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "port trunk: tagged VLANs"},
+			"ip":     map[string]any{"type": "string", "description": "management: address with prefix (10.20.0.5/24), \"\" = none"},
+			"host":   map[string]any{"type": "string", "description": "cloud_ports: the KVM host (name)"},
 			"kind":   map[string]any{"type": "string", "enum": []string{"hub", "switch"}},
 			"name":   map[string]any{"type": "string", "description": "add: its name (default hub-1, l2sw-1 …)"},
 			"hub":    map[string]any{"type": "string", "description": "the hub (name or id)"},
@@ -682,7 +689,11 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				for _, g := range h.Legs {
 					legs = append(legs, g.Name+" "+g.PortName)
 				}
-				fmt.Fprintf(&b, "- %s (%s): %s\n", h.Name, map[bool]string{true: "L2 switch", false: "hub"}[h.Kind == "switch"], orStr(strings.Join(legs, ", "), "no ports yet"))
+				fmt.Fprintf(&b, "- %s (%s, %d/%d ports): %s", h.Name, map[bool]string{true: "L2 switch", false: "hub"}[h.Kind == "switch"], len(h.Legs), h.Ports, orStr(strings.Join(legs, ", "), "no ports yet"))
+				if h.Cfg != nil && h.Cfg.MgmtIP != "" {
+					fmt.Fprintf(&b, "; management %s VLAN %d", h.Cfg.MgmtIP, h.Cfg.MgmtVLAN)
+				}
+				b.WriteString("\n")
 			}
 			if b.Len() == 0 {
 				return "No hub or L2 switch yet."
@@ -724,8 +735,92 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				return "", err
 			}
 			nv, err = a.EmuHubRemove(argStr(args, "hub"))
+		case "show":
+			d, err := a.EmuHubDetail(argStr(args, "hub"))
+			if err != nil {
+				return "", err
+			}
+			var hv *EmuHubView
+			for i := range v.Hubs {
+				if v.Hubs[i].ID == d.ID {
+					hv = &v.Hubs[i]
+				}
+			}
+			var b strings.Builder
+			if hv != nil {
+				fmt.Fprintf(&b, "%s: %s\n", hv.Name, map[bool]string{true: "running", false: orStr(d.Error, "not running")}[d.Running])
+				at := map[int]string{}
+				for _, g := range hv.Legs {
+					at[g.At] = g.Name + " " + g.PortName
+				}
+				c := d.Cfg
+				if c == nil {
+					c = hv.Cfg
+				}
+				for p := 1; p <= hv.Ports; p++ {
+					mode := "hub"
+					if hv.Kind == "switch" {
+						pc := emu.HubPortCfg{Mode: "access", VLAN: 1}
+						if c != nil {
+							if x, ok := c.Ports[strconv.Itoa(p)]; ok {
+								pc = x
+							}
+						}
+						mode = pc.Mode + " " + strconv.Itoa(pc.VLAN)
+						if pc.Mode == "trunk" {
+							mode = fmt.Sprintf("trunk %v native %d", pc.VLANs, pc.VLAN)
+						}
+					}
+					in := 0
+					if p-1 < len(d.In) {
+						in = d.In[p-1]
+					}
+					fmt.Fprintf(&b, "- port %d: %s, %s, %d frames in\n", p, orStr(at[p], "-"), mode, in)
+				}
+				for _, m := range d.MACs {
+					fmt.Fprintf(&b, "- MAC %s VLAN %d on port %d (%d s ago)\n", m.MAC, m.VLAN, m.Port, m.Age)
+				}
+			}
+			return b.String(), nil
+		case "ports", "port", "management", "cloud_ports":
+			if err := light("Claude changes a hub", "Claude (through the Termwright connector) changes "+orStr(argStr(args, "hub"), "a cloud")+" ("+argStr(args, "action")+")."); err != nil {
+				return "", err
+			}
+			switch argStr(args, "action") {
+			case "ports":
+				nv, err = a.EmuHubSetPorts(argStr(args, "hub"), argInt(args, "count", 0, 64))
+			case "port":
+				var vl []int
+				if xs, ok := args["vlans"].([]any); ok {
+					for _, x := range xs {
+						if f, ok := x.(float64); ok {
+							vl = append(vl, int(f))
+						}
+					}
+				}
+				nv, err = a.EmuHubPortSet(argStr(args, "hub"), argInt(args, "number", 0, 64), argStr(args, "mode"), argInt(args, "vlan", 0, 4094), vl)
+			case "management":
+				nv, err = a.EmuHubSetMgmt(argStr(args, "hub"), argStr(args, "ip"), argInt(args, "vlan", 1, 4094))
+			default:
+				host := ""
+				for _, h := range v.Hosts {
+					if strings.EqualFold(h.Name, argStr(args, "host")) || h.Session == argStr(args, "host") {
+						host = h.Session
+					}
+				}
+				if host == "" && argStr(args, "host") == "" {
+					host = v.Host
+				}
+				if host == "" {
+					return "", errors.New("no KVM host " + argStr(args, "host"))
+				}
+				nv, err = a.EmuSetCloudPorts(host, argInt(args, "count", 0, 64))
+				if err == nil {
+					return fmt.Sprintf("The cloud of %s has %d ports.", host[strings.LastIndex(host, "/")+1:], nv.CloudPorts[host]), nil
+				}
+			}
 		default:
-			return "", errors.New("action is list, add, connect, disconnect or remove")
+			return "", errors.New("action is list, add, connect, disconnect, remove, show, ports, port, management or cloud_ports")
 		}
 		if err != nil {
 			return "", err

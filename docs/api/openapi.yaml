@@ -1675,8 +1675,8 @@ paths:
             operationId: tool_hub
             tags:
                 - Tools
-            summary: Hubs and L2 switches of the emulated lab
-            description: 'Hubs and L2 switches of the emulated lab: nodes without a VM that join switch ports (a hub repeats every frame to its other ports; an L2 switch learns MAC addresses). Ports go on at once, also on running switches; a hub''s switches must run on one host. Actions: list, add (kind hub or switch, name), connect (hub, switch, port), disconnect (hub, switch, port), remove (hub). Through the API it runs without asking.'
+            summary: Hubs, L2 switches and clouds of the emulated lab
+            description: 'Hubs, L2 switches and clouds of the emulated lab: nodes without a VM. A hub (8 ports, no management) repeats every frame to its other ports; an L2 switch (8-24 ports) learns MAC addresses per VLAN, has access and trunk ports, an in-band management address (ARP, ping) and a command line on its console session. Ports go on at once, also on running switches; a hub''s switches must run on one host. Actions: list, add (kind hub or switch, name), connect (hub, switch, port), disconnect (hub, switch, port), remove (hub), show (hub: its ports, VLANs and learned MACs), ports (hub, count: an L2 switch''s 8-24), port (hub, number, mode access|trunk, vlan, vlans), management (hub, ip with prefix or "", vlan), cloud_ports (host, count: 1-8 ports of a host''s cloud). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1691,23 +1691,53 @@ paths:
                                         - connect
                                         - disconnect
                                         - remove
+                                        - show
+                                        - ports
+                                        - port
+                                        - management
+                                        - cloud_ports
+                                    type: string
+                                count:
+                                    description: 'ports: 8-24; cloud_ports: 1-8'
+                                    type: integer
+                                host:
+                                    description: 'cloud_ports: the KVM host (name)'
                                     type: string
                                 hub:
                                     description: the hub (name or id)
+                                    type: string
+                                ip:
+                                    description: 'management: address with prefix (10.20.0.5/24), "" = none'
                                     type: string
                                 kind:
                                     enum:
                                         - hub
                                         - switch
                                     type: string
+                                mode:
+                                    enum:
+                                        - access
+                                        - trunk
+                                    type: string
                                 name:
                                     description: 'add: its name (default hub-1, l2sw-1 …)'
                                     type: string
+                                number:
+                                    description: 'port: the L2 switch''s port'
+                                    type: integer
                                 port:
                                     description: the switch's port (as the switch names it)
                                     type: string
                                 switch:
                                     type: string
+                                vlan:
+                                    description: 'port: access VLAN or the trunk''s native VLAN (0 = none); management: its VLAN'
+                                    type: integer
+                                vlans:
+                                    description: 'port trunk: tagged VLANs'
+                                    items:
+                                        type: integer
+                                    type: array
             responses:
                 200:
                     description: What it did or found, as text.
@@ -3243,6 +3273,43 @@ components:
                 - libvirt
                 - problems
                 - notes
+        EmuHubCfg:
+            type: object
+            properties:
+                rev:
+                    type: integer
+                ports:
+                    description: by port number; missing = access VLAN 1
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        $ref: '#/components/schemas/EmuHubPortCfg'
+                mgmtIp:
+                    description: in-band management address with its prefix
+                    type: string
+                mgmtVlan:
+                    type: integer
+            required:
+                - rev
+        EmuHubPortCfg:
+            type: object
+            properties:
+                mode:
+                    description: access, trunk
+                    type: string
+                vlan:
+                    description: access VLAN, or the trunk's native VLAN (0 = none)
+                    type: integer
+                vlans:
+                    description: 'trunk: the tagged VLANs'
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: integer
+            required:
+                - mode
         EmuNote:
             type: object
             properties:
@@ -3679,6 +3746,9 @@ components:
                     type: string
                 port:
                     type: integer
+                at:
+                    description: the hub's own port it is on
+                    type: integer
                 name:
                     description: the switch's name
                     type: string
@@ -3688,6 +3758,7 @@ components:
             required:
                 - vm
                 - port
+                - at
                 - name
                 - portName
         HubView:
@@ -3710,6 +3781,23 @@ components:
                         - "null"
                     items:
                         $ref: '#/components/schemas/HubLegView'
+                ports:
+                    description: Ports is how many ports it has (hub 8; L2 switch 8-24).
+                    type: integer
+                cfg:
+                    description: Cfg is an L2 switch's VLANs and management address.
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuHubCfg'
+                        - type: "null"
+                console:
+                    description: Console is its command line's console session (L2 switch).
+                    type: string
+                ssh:
+                    description: SSH is its command line's SSH session (L2 switch; works when the host's Python has paramiko).
+                    type: string
+                conPort:
+                    description: ConPort is its console's TCP port on its host's 127.0.0.1 (L2 switch).
+                    type: integer
             required:
                 - id
                 - name
@@ -3717,6 +3805,7 @@ components:
                 - x
                 - "y"
                 - legs
+                - ports
         ImageView:
             type: object
             properties:
@@ -4154,6 +4243,13 @@ components:
                         - "null"
                     items:
                         $ref: '#/components/schemas/HubView'
+                cloudPorts:
+                    description: host → ports of its cloud (1-8)
+                    type:
+                        - object
+                        - "null"
+                    additionalProperties:
+                        type: integer
                 autoCheckpoints:
                     description: a checkpoint of a switch before typed commands (Revert undoes them)
                     type: boolean
