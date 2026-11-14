@@ -4,7 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased - Simulated lab
 
-- **Toolbar shows what is active** (asked for): the AI icon turns blue while the AI panel is open or working, the cube while VMs run on any KVM host, the flask while simulated switches run (blue stays under the pointer). In the AI chat your messages show a person icon instead of a purple "Me".
+- **Toolbar shows what is active** (asked for): the AI icon turns blue while the AI panel is open or working, the cube while VMs run on any KVM host, the flask while simulated switches run (blue stays under the pointer). In the AI chat your messages show a solid grey person avatar instead of a purple "Me".
 
 - **AI chat: copy buttons** (asked for): what you asked, each answer and each command's output have a copy button (it shows when the pointer is over them), as in VS Code.
 
