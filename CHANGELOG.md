@@ -2,7 +2,7 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased - Simulated lab
+## 0.35.0 (2026-11-15)
 
 - **Captures** (from the user's screenshot): the packet's detail under the table has a ✕ (and Esc) to close it; while a capture runs the table keeps the newest packets in view - at the bottom, followed unless you scroll up to read - and **Newest First** puts them at the top instead (kept for next time).
 - **Open Web Page Through This Session**: the page is tried through the session first - when it cannot be reached, Termwright says why instead of opening a browser on nothing (an SSH server with TCP forwarding off, as on EXOS and VOSS switches; a name the device cannot resolve; no answer). A name the device cannot resolve (a switch without a DNS client) is resolved on this computer and reached by its address. Device types have a **Tunnel** setting: EXOS, VOSS and Cisco IOS do not forward by default, so the menu item is off for their sessions ("no forwarding") and the dialog points to Open Web Interface or a Linux session instead.
