@@ -1297,7 +1297,7 @@ paths:
             tags:
                 - Tools
             summary: A Linux computer of the emulated lab, like a PC on a desk
-            description: 'A Linux computer of the emulated lab, like a PC on a desk: set one data port''s IP configuration (IPv4 address/bits or dhcp, IPv6 address/bits or auto, default gateways, DNS server; typed on its console now and at each start), or run one of its apps and read what it printed: ping, ping6, traceroute, web (a page''s text), dns (nslookup), iperf-server, iperf (5 s to a server). Through the API it runs without asking.'
+            description: 'A Linux computer of the emulated lab, like a PC on a desk: set one data port''s IP configuration (IPv4 address/bits or dhcp, IPv6 address/bits or auto, default gateways, DNS server; typed on its console now and at each start), or run one of its apps and read what it printed: ping, ping6, traceroute, web (a page''s text), dns (nslookup), iperf-server, iperf (5 s to a server). desktop: give it a desktop with a web browser on its screen (on true/false, home: the page Firefox opens; needs internet and 1 GB; restart it for the mouse), then use it through lab_keys (keys and click) and its screen picture. Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1309,6 +1309,7 @@ paths:
                                     enum:
                                         - set
                                         - run
+                                        - desktop
                                     type: string
                                 app:
                                     enum:
@@ -1329,12 +1330,18 @@ paths:
                                     type: string
                                 gateway6:
                                     type: string
+                                home:
+                                    description: 'desktop: the page the browser opens (http://10.20.0.1)'
+                                    type: string
                                 ipv4:
                                     description: 'set: address/bits, dhcp, or none'
                                     type: string
                                 ipv6:
                                     description: 'set: address/bits, auto, or none'
                                     type: string
+                                on:
+                                    description: 'desktop: on or off'
+                                    type: boolean
                                 port:
                                     description: 'set: the data port (1 = the first)'
                                     type: integer
@@ -1939,7 +1946,7 @@ paths:
             tags:
                 - Tools
             summary: Type on the keyboard of a lab device's screen (VGA display
-            description: 'Type on the keyboard of a lab device''s screen (VGA display: installers and systems without a serial console), or a line on an installer''s serial console. switch: the device; install: an install''s id (lab_install_status) instead. text is typed as keys (then Enter with enter); keys are QEMU key names (ret, esc, tab, up, down, f2, ctrl-alt-delete …). console: true types the line on the installer''s serial console instead of its keyboard. The screen itself: GET /api/v1/lab/screen/{device} (or install:{id}) gives a PNG. Through the API it runs without asking.'
+            description: 'Type on the keyboard of a lab device''s screen (VGA display: installers and systems without a serial console), or a line on an installer''s serial console. switch: the device; install: an install''s id (lab_install_status) instead. text is typed as keys (then Enter with enter); keys are QEMU key names (ret, esc, tab, up, down, f2, ctrl-alt-delete …); click clicks the mouse first (a computer with its desktop). console: true types the line on the installer''s serial console instead of its keyboard. The screen itself: GET /api/v1/lab/screen/{device} (or install:{id}) gives a PNG. Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -1947,6 +1954,9 @@ paths:
                         schema:
                             type: object
                             properties:
+                                click:
+                                    description: 'a mouse click on the screen first (computers with a desktop): {x, y (screen pixels, as in the screen picture), button left|right|middle, double}'
+                                    type: object
                                 console:
                                     description: 'install: the serial console, not the keyboard'
                                     type: boolean

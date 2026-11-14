@@ -246,6 +246,14 @@ class Lab:
         """Type a line (and Enter) into a running install: on its serial console, or (console=False) its keyboard."""
         return self.tool("keys", install=install_id, text=line, enter=True, console=console)
 
+    def desktop(self, computer: str, on: bool = True, home: str = "") -> str:
+        """Give a Linux computer a desktop with a web browser on its screen (restart it for the mouse)."""
+        return self.tool("computer", action="desktop", computer=computer, on=on, home=home or None)
+
+    def click(self, device: str, x: int, y: int, button: str = "left", double: bool = False) -> str:
+        """Click on a device's screen at x, y (its pixels); a computer with a desktop."""
+        return self.tool("keys", switch=device, click=dict(x=x, y=y, button=button, double=double))
+
     def routes(self, computer: str, action: str = "show", **args) -> str:
         """A Linux computer as a route generator (FRR): action set (proto="ospf"|"bgp", port, routes, prefix, area,
         as_, peer, peer_as), show, off, stream (from_=test port, pps: an ICMP stream to every prefix)."""

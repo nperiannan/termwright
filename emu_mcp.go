@@ -36,7 +36,7 @@ var mcpLabTools = []mcpTool{
 			"note":   map[string]any{"type": "string", "description": "take: why"},
 			"on":     map[string]any{"type": "boolean", "description": "auto: on or off"},
 		})},
-	{"lab_keys", "Type on the keyboard of a lab device's screen (VGA display: installers and systems without a serial console), or a line on an installer's serial console. switch: the device; install: an install's id (lab_install_status) instead. text is typed as keys (then Enter with enter); keys are QEMU key names (ret, esc, tab, up, down, f2, ctrl-alt-delete …). console: true types the line on the installer's serial console instead of its keyboard. The screen itself: GET /api/v1/lab/screen/{device} (or install:{id}) gives a PNG.",
+	{"lab_keys", "Type on the keyboard of a lab device's screen (VGA display: installers and systems without a serial console), or a line on an installer's serial console. switch: the device; install: an install's id (lab_install_status) instead. text is typed as keys (then Enter with enter); keys are QEMU key names (ret, esc, tab, up, down, f2, ctrl-alt-delete …); click clicks the mouse first (a computer with its desktop). console: true types the line on the installer's serial console instead of its keyboard. The screen itself: GET /api/v1/lab/screen/{device} (or install:{id}) gives a PNG.",
 		mcpSchema(map[string]any{
 			"switch":  map[string]any{"type": "string"},
 			"install": map[string]any{"type": "string"},
@@ -44,6 +44,7 @@ var mcpLabTools = []mcpTool{
 			"enter":   map[string]any{"type": "boolean"},
 			"keys":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"console": map[string]any{"type": "boolean", "description": "install: the serial console, not the keyboard"},
+			"click":   map[string]any{"type": "object", "description": "a mouse click on the screen first (computers with a desktop): {x, y (screen pixels, as in the screen picture), button left|right|middle, double}"},
 		})},
 	{"lab_host_images", "Which KVM host has which image (a switch runs or moves only where its image is), copying images to hosts and removing one from a host. Actions: matrix (images × hosts: ok, copying %, missing), copy (image; hosts - none = every host without it; runs in the background), remove (image, host; refused while a switch there uses it).",
 		mcpSchema(map[string]any{
@@ -257,9 +258,11 @@ var mcpLabTools = []mcpTool{
 			"max_cores": map[string]any{"type": "number", "description": "older form of the limit: host cores (0.5 = half of one)"},
 			"share":     map[string]any{"type": "integer", "description": "older form of the request: 100 = 1000m"},
 		})},
-	{"lab_computer", "A Linux computer of the emulated lab, like a PC on a desk: set one data port's IP configuration (IPv4 address/bits or dhcp, IPv6 address/bits or auto, default gateways, DNS server; typed on its console now and at each start), or run one of its apps and read what it printed: ping, ping6, traceroute, web (a page's text), dns (nslookup), iperf-server, iperf (5 s to a server).",
+	{"lab_computer", "A Linux computer of the emulated lab, like a PC on a desk: set one data port's IP configuration (IPv4 address/bits or dhcp, IPv6 address/bits or auto, default gateways, DNS server; typed on its console now and at each start), or run one of its apps and read what it printed: ping, ping6, traceroute, web (a page's text), dns (nslookup), iperf-server, iperf (5 s to a server). desktop: give it a desktop with a web browser on its screen (on true/false, home: the page Firefox opens; needs internet and 1 GB; restart it for the mouse), then use it through lab_keys (keys and click) and its screen picture.",
 		mcpSchema(map[string]any{
-			"action":   map[string]any{"type": "string", "enum": []string{"set", "run"}},
+			"action":   map[string]any{"type": "string", "enum": []string{"set", "run", "desktop"}},
+			"on":       map[string]any{"type": "boolean", "description": "desktop: on or off"},
+			"home":     map[string]any{"type": "string", "description": "desktop: the page the browser opens (http://10.20.0.1)"},
 			"computer": map[string]any{"type": "string"},
 			"port":     map[string]any{"type": "integer", "description": "set: the data port (1 = the first)"},
 			"ipv4":     map[string]any{"type": "string", "description": "set: address/bits, dhcp, or none"},
@@ -513,6 +516,18 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		}
 		if err := light("Claude types on a screen", "Claude (through the Termwright connector) types on the keyboard of "+d.Hostname+"."); err != nil {
 			return "", err
+		}
+		if c, ok := args["click"].(map[string]any); ok {
+			x, _ := c["x"].(float64)
+			y, _ := c["y"].(float64)
+			btn, _ := c["button"].(string)
+			dbl, _ := c["double"].(bool)
+			if err := a.EmuScreenClick("vm", d.ID, int(x), int(y), btn, dbl); err != nil {
+				return "", err
+			}
+			if argStr(args, "text") == "" && len(argStrs(args, "keys")) == 0 {
+				return fmt.Sprintf("Clicked %s at %d, %d.", d.Hostname, int(x), int(y)), nil
+			}
 		}
 		if err := a.EmuScreenKeys("vm", d.ID, argStr(args, "text"), enter, argStrs(args, "keys")); err != nil {
 			return "", err
@@ -1660,6 +1675,22 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 		d, err := emuMCPID(v, argStr(args, "computer"))
 		if err != nil {
 			return "", err
+		}
+		if argStr(args, "action") == "desktop" {
+			on := args["on"] != false
+			if err := light("Claude sets up a desktop", "Claude (through the Termwright connector) "+map[bool]string{true: "gives " + d.Hostname + " a desktop with a web browser", false: "takes the desktop off " + d.Hostname}[on]+"."); err != nil {
+				return "", err
+			}
+			nv, err := a.EmuSetDesktop(d.ID, on, argStr(args, "home"))
+			if err != nil {
+				return "", err
+			}
+			for _, x := range nv.Devices {
+				if x.ID == d.ID && x.Restart != "" {
+					return "Done. Restart " + d.Hostname + " (lab_power restart) for its mouse; then its screen shows Firefox: click with lab_keys click, type with text/keys.", nil
+				}
+			}
+			return "Done.", nil
 		}
 		if argStr(args, "action") == "run" {
 			if err := light("Claude wants to run an app on a computer", fmt.Sprintf("Claude (through the Termwright connector) asks to run %s %s on %s.", argStr(args, "app"), argStr(args, "target"), d.Hostname)); err != nil {

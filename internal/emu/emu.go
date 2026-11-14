@@ -242,6 +242,7 @@ type VM struct {
 	CPULim      int            `json:"cpuLim,omitempty"`      // its CPU limit in millicores (0 = none): the most it may use (cpu.max)
 	Addrs       map[int]string `json:"addrs,omitempty"`       // data-port addresses typed on its console at each start (port number → address/bits, or "dhcp"), when its image has port address commands (Linux computers)
 	Routing     *Routing       `json:"routing,omitempty"`     // a Linux computer as a route generator (OSPF or BGP with FRR)
+	Desktop     bool           `json:"desktop,omitempty"`     // a Linux computer with a desktop and a web browser on its screen (a USB tablet for the mouse)
 	X           int            `json:"x"`
 	Y           int            `json:"y"`
 }
@@ -781,6 +782,9 @@ func (l *Lab) Args(v VM, im *Image) []string {
 		"-serial", "chardev:con0",
 		"-monitor", fmt.Sprintf("telnet:127.0.0.1:%d,server,nowait", l.MonitorPort(v)),
 		"-display", "none", "-daemonize", "-pidfile", dir+"/"+v.ID+".pid")
+	if v.Desktop { // clicks on its screen: an absolute pointer
+		a = append(a, "-usb", "-device", "usb-tablet")
+	}
 	if v.Incoming != "" {
 		a = append(a, "-incoming", v.Incoming)
 	}

@@ -139,7 +139,7 @@ var emuLab struct {
 	ticksAt          time.Time
 	cpu              map[string]float64        // CPU use now, in cores (1 = one core busy)
 	cpuHist          map[string][]emuCPUSample // CPU use and throttling over the last hour
-	runWith          map[string][3]int         // the vCPUs, memory (MB) and disk (GB) a switch was started with (to tell what a restart would change)
+	runWith          map[string][4]int         // the vCPUs, memory (MB), disk (GB) and desktop (1) a switch was started with (to tell what a restart would change)
 	pcapUp           map[string]bool           // captures streams replay that are on a host already (host|lab folder|capture)
 	runCables        map[string]map[int]string // per running switch: its cables when it started (port → the other end), to know which ones the patch panel joins
 	patchHosts       map[string]bool           // hosts whose patch panel runs
@@ -2748,9 +2748,9 @@ func (a *App) emuStart(host string, ids []string) {
 			}
 			emuLab.state[id] = "uploading"
 			if emuLab.runWith == nil {
-				emuLab.runWith = map[string][3]int{}
+				emuLab.runWith = map[string][4]int{}
 			}
-			emuLab.runWith[id] = [3]int{v.CPUs, v.RAM, v.DiskGB}
+			emuLab.runWith[id] = [4]int{v.CPUs, v.RAM, v.DiskGB, map[bool]int{true: 1}[v.Desktop]}
 			if emuLab.runCables == nil {
 				emuLab.runCables = map[string]map[int]string{}
 			}
@@ -7085,8 +7085,8 @@ func (a *App) EmuSetCPUReq(id string, req, lim int) (EmuView, error) {
 }
 
 // emuRestartNeed: what a restart would change for a running switch (it runs with was: vCPUs, MB, disk GB); "" when nothing, or not known.
-func emuRestartNeed(was [3]int, v emu.VM) string {
-	if was == [3]int{} {
+func emuRestartNeed(was [4]int, v emu.VM) string {
+	if was == [4]int{} {
 		return ""
 	}
 	var ch []string
@@ -7098,6 +7098,9 @@ func emuRestartNeed(was [3]int, v emu.VM) string {
 	}
 	if was[2] != v.DiskGB && v.DiskGB > 0 {
 		ch = append(ch, fmt.Sprintf("disk %d → %d GB", was[2], v.DiskGB))
+	}
+	if (was[3] == 1) != v.Desktop {
+		ch = append(ch, map[bool]string{true: "desktop mouse on", false: "desktop mouse off"}[v.Desktop])
 	}
 	return strings.Join(ch, " · ")
 }

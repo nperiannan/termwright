@@ -64,10 +64,10 @@ func TestLabDNSAndRestartNeed(t *testing.T) {
 	if !emu.AddLinuxDNS(&im) || im.Day0[1] != emu.LinuxDNS {
 		t.Fatalf("old day 0 not moved to the lab's servers: %q", im.Day0)
 	}
-	if s := emuRestartNeed([3]int{2, 2048, 0}, emu.VM{CPUs: 4, RAM: 4096}); s != "vCPU 2 → 4 · RAM 2 GB → 4 GB" {
+	if s := emuRestartNeed([4]int{2, 2048, 0, 0}, emu.VM{CPUs: 4, RAM: 4096}); s != "vCPU 2 → 4 · RAM 2 GB → 4 GB" {
 		t.Fatalf("restart %q", s)
 	}
-	if s := emuRestartNeed([3]int{}, emu.VM{CPUs: 4}); s != "" {
+	if s := emuRestartNeed([4]int{}, emu.VM{CPUs: 4}); s != "" {
 		t.Fatalf("unknown start %q", s)
 	}
 	a := &App{}

@@ -52,6 +52,7 @@ Test ports and streams are as in the API; the keyword arguments are the API's fi
 | `rows(run)` | The result rows of a run |
 | `traffic.templates()`, `traffic.apply_template(name, *ports)`, `traffic.save_template(name, description)`, `traffic.remove_template(name)` | The test library: list it, put a template on test ports (one per role A, B…), keep the lab's streams and tests as yours |
 | `screen(device, path=None)`, `keys(device, text, enter, keys)`, `install_type(install_id, line)` | A PNG of a device's display (`install:<id>` for an installer); typing on its keyboard; a line on an installer's serial console |
+| `desktop(computer, on, home)`, `click(device, x, y, button, double)` | A Linux computer with a desktop and a web browser on its screen; a click on a screen (with `screen()` and `keys()` to see and type) |
 | `routes(computer, action, **args)` | A Linux computer as a route generator (OSPF or BGP with FRR): `set` (proto, port, routes, prefix, area, as_, peer, peer_as), `show`, `off`, `stream` (from_, pps) |
 | `host_images(action, **args)` | Which KVM host has which image: `matrix`, `copy` (image, hosts), `remove` (image, host) |
 | `radius(action, **args)` | The lab's RADIUS server: `show`, `log`, `set` (on, port, secret, mab, mab_vlan), `add_user` (user, password, vlan), `remove_user` (user); `reveal=True` shows the secret and passwords |
