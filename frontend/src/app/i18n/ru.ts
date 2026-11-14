@@ -3743,6 +3743,14 @@ const ru: Record<string, string> = {
   'Plans a task of several steps as a checklist, then runs it in your tabs - asking as your permissions say': 'Составляет план задачи из нескольких шагов в виде списка и выполняет его во вкладках, спрашивая согласно вашим разрешениям',
   'Looks with read-only commands and writes the plan; nothing changes until you press Run the Plan': 'Смотрит командами чтения и пишет план; ничего не меняется, пока вы не нажмёте «Выполнить план»',
   'Answers and explains; runs nothing': 'Отвечает и объясняет; ничего не запускает',
+  'Select output to ask about just that part, or paste a screenshot. In Agent mode the AI can also run commands in your tabs.': 'Выделите часть вывода, чтобы спросить только о ней, или вставьте снимок экрана. В режиме «Агент» ИИ может и выполнять команды во вкладках.',
+  'Select output to ask about just that part, paste a screenshot, or describe a task: the agent plans it and runs the commands in your tabs, asking as your permissions say.': 'Выделите часть вывода, чтобы спросить только о ней, вставьте снимок экрана или опишите задачу: агент составит план и выполнит команды во вкладках, спрашивая согласно вашим разрешениям.',
+  'Dictate: speak your message (the system’s dictation)': 'Диктовка: произнесите сообщение (диктовка системы)',
+  'Dictate': 'Диктовка',
+  'Use your system’s dictation in the message box: on a Mac press Fn twice, on Windows press Windows+H.': 'Используйте диктовку системы в поле сообщения: на Mac дважды нажмите Fn, в Windows - Windows+H.',
+  'Turn on Dictation in System Settings → Keyboard, then press the microphone key (or Fn twice) in the message box.': 'Включите диктовку в Системных настройках → Клавиатура, затем нажмите клавишу микрофона (или дважды Fn) в поле сообщения.',
+  'Press Windows+H in the message box for voice typing.': 'Нажмите Windows+H в поле сообщения для голосового ввода.',
+  'This system has no dictation Termwright can start; a dictation tool of your desktop types into the message box too.': 'В этой системе нет диктовки, которую Termwright может запустить; инструмент диктовки вашего рабочего стола тоже вводит текст в поле сообщения.',
 };
 
 export default ru;

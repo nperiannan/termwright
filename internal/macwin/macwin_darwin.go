@@ -34,6 +34,13 @@ static int tw_window_buttons(double *centerY, double *right) {
 	if ([NSThread isMainThread]) fetch(); else dispatch_sync(dispatch_get_main_queue(), fetch);
 	return ok;
 }
+
+// tw_start_dictation starts macOS Dictation in the focused text field (as Edit → Start Dictation… does).
+static void tw_start_dictation(void) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[NSApp sendAction:NSSelectorFromString(@"startDictation:") to:nil from:nil];
+	});
+}
 */
 import "C"
 
@@ -45,4 +52,10 @@ func WindowButtons() (centerY, right float64, ok bool) {
 		return 0, 0, false
 	}
 	return float64(cy), float64(r), true
+}
+
+// StartDictation starts macOS Dictation in the focused text field.
+func StartDictation() error {
+	C.tw_start_dictation()
+	return nil
 }

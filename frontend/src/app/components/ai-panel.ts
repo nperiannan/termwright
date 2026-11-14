@@ -89,7 +89,7 @@ function spans(t: string): Span[] {
     <div class="conv" #conv>
       @if (!msgs().length) {
         <div class="empty"><span class="big"><app-icon name="sparkles" [size]="26" /></span><h3>{{ tab() ? tr('Ask about this terminal') : tr('Ask the AI assistant') }}</h3>
-          <p>@if (tab(); as t) { {{ tr('Using') }} <b>{{ t.title }}</b>{{ t.session.deviceType ? ' (' + t.session.deviceType + ')' : '' }}. }{{ tr('Select output to ask about just that part, paste a screenshot, or switch to Agent to let the AI run commands.') }}</p>
+          <p>@if (tab(); as t) { {{ tr('Using') }} <b>{{ t.title }}</b>{{ t.session.deviceType ? ' (' + t.session.deviceType + ')' : '' }}. }{{ tr(ai.mode() === 'ask' ? 'Select output to ask about just that part, or paste a screenshot. In Agent mode the AI can also run commands in your tabs.' : 'Select output to ask about just that part, paste a screenshot, or describe a task: the agent plans it and runs the commands in your tabs, asking as your permissions say.') }}</p>
           <div class="sugg">@for (q of suggestions; track q) { <button type="button" (click)="text = tr(q); go()">{{ q }}</button> }</div></div>
       }
       @for (m of msgs(); track m.id) {
@@ -236,6 +236,7 @@ function spans(t: string): Span[] {
           <span class="grow"></span>
           <button type="button" class="ib" [title]="tr('Attach a picture or a text file')" [attr.aria-label]="tr('Attach')" (click)="file.click()"><app-icon name="clip" [size]="14" /></button>
           <input #file type="file" hidden multiple accept="image/*,.txt,.log,.cfg,.conf,.csv,.json,.xml,.yaml,.yml" (change)="files($any($event.target).files); $any($event.target).value = ''" />
+          <button type="button" class="ib" [title]="tr('Dictate: speak your message (the system’s dictation)')" [attr.aria-label]="tr('Dictate')" (click)="dictate()"><app-icon name="mic" [size]="15" /></button>
           @if (ai.busy()) { <button type="button" class="send stop" [title]="tr('Stop (Esc)')" [attr.aria-label]="tr('Stop')" (click)="ai.stop()"><span class="sq"></span></button> }
           @else { <button type="button" class="send" [title]="tr('Send (Enter) - Shift+Enter for a new line')" [attr.aria-label]="tr('Send')" (click)="go()" [disabled]="!canSend()"><app-icon name="up" [size]="15" /></button> }
         </div>
@@ -272,20 +273,16 @@ function spans(t: string): Span[] {
     .hd { display: flex; align-items: center; gap: 4px; padding: 7px 8px 7px 14px; border-bottom: 1px solid var(--border); background: var(--chrome); user-select: none; }
     :host(.float) .hd { cursor: move; }
     .t { font-weight: 600; white-space: nowrap; margin-left: 4px; } .sp { color: var(--accent); display: inline-flex; }
-    .chipm { margin-left: 6px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .grow { flex: 1; min-width: 0; } .sep { width: 1px; height: 16px; background: var(--line); margin: 0 3px; }
     .ib { width: 28px; height: 28px; padding: 0; border: 0; background: none; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); flex: none; }
     .ib:hover { color: var(--text); background: var(--hover); } .ib.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); } .ib.sm { width: 24px; height: 24px; }
     .conv { flex: 1; overflow: auto; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
     .msg { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-    .who { display: flex; align-items: center; gap: 7px; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; .grow { flex: 1; } }
     .mc { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .12s;
       &:hover { background: var(--surface-2); color: var(--text); } &:focus-visible { opacity: 1; } }
     .msg:hover .mc, .so:hover .mc { opacity: 1; }
     .ub, .ab, .ut { user-select: text; -webkit-user-select: text; }
     .so { position: relative; .mc { position: absolute; top: 4px; right: 6px; background: var(--surface); } }
-    .av { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; flex: none; }
-    .av.u { background: color-mix(in srgb, var(--muted) 42%, var(--surface)); color: color-mix(in srgb, var(--text) 88%, transparent); overflow: hidden; svg { width: 100%; height: 100%; display: block; } } .av.a { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
     .when, .hint { color: var(--muted); font-weight: 400; font-size: calc(11px * var(--ui-scale, 1)); }
     .hint { white-space: nowrap; flex: none; } .send { flex: none; }
     .appr .lask { white-space: pre-wrap; color: var(--text); margin-top: 3px; }
@@ -329,7 +326,6 @@ function spans(t: string): Span[] {
     .menu { position: absolute; left: 0; bottom: calc(100% + 6px); width: 240px; max-height: 300px; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 5px; z-index: 5; display: flex; flex-direction: column; }
     .menu button { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 0; background: none; height: auto; border-radius: 6px; font-size: calc(12.5px * var(--ui-scale, 1)); text-align: left; }
     .menu button:hover, .menu button:focus-visible { background: color-mix(in srgb, var(--accent) 16%, transparent); } .menu small { margin-left: auto; color: var(--muted); }
-    .atts { display: flex; gap: 8px; padding: 8px 10px 0; flex-wrap: wrap; }
     .att { position: relative; display: inline-block; } .att img { height: 54px; border-radius: 6px; border: 1px solid var(--line); display: block; }
     .att .rm { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; }
     textarea { display: block; width: 100%; min-height: 72px; max-height: 260px; resize: none; border: 0; outline: 0; background: transparent; padding: 8px 12px; line-height: 1.5; font: inherit; color: var(--text); box-shadow: none !important; }
@@ -360,7 +356,7 @@ function spans(t: string): Span[] {
     .sel { width: auto; height: 26px; padding: 0 6px; font-size: calc(12px * var(--ui-scale, 1)); border-radius: 6px; }
     :host { --orange: #f5862e; --tone-ask: var(--warn); } :host-context(:root.light) { --orange: #d2600a; --tone-ask: #a87808; }
     .permw { position: relative; display: inline-flex; min-width: 0; .menu.perms { bottom: calc(100% + 6px); } }
-    button.sel.perm { display: inline-flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 0 7px; border: 1px solid var(--line); background: var(--input-bg, var(--bg)); color: var(--text);
+    button.pick.perm { gap: 6px; max-width: 240px; border: 1px solid var(--line); color: var(--text);
       span { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
     .pd { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
     .auto { --tone: var(--orange); } .ask { --tone: var(--tone-ask); } .ro { --tone: var(--text); }
@@ -370,8 +366,7 @@ function spans(t: string): Span[] {
     .menu.perms { width: 300px; gap: 2px; max-height: none; }
     .menu .prow { align-items: flex-start; padding: 7px 8px; .pd { margin-top: 5px; } .pt { display: flex; flex-direction: column; gap: 1px; flex: 1; } b { font-weight: 600; color: var(--tone); } small { margin: 0; color: var(--muted); line-height: 1.35; } .ck { color: var(--accent); } }
     .ck { width: 14px; flex: none; display: inline-flex; }
-    .modw { position: relative; display: inline-flex; min-width: 0; flex: 0 1 auto; } .modw .chipm { max-width: 100%; }
-    button.chipm { display: inline-flex; align-items: center; gap: 4px; height: auto; background: none; cursor: pointer; } button.chipm:hover, button.chipm.on { color: var(--text); border-color: var(--accent); }
+    .modw { position: relative; display: inline-flex; min-width: 0; flex: 0 1 auto; }
     .menu.models .grp { padding: 8px 8px 3px; font-size: calc(10.5px * var(--ui-scale, 1)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
     .effs { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 6px 6px; }
     .menu .eff { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: calc(11.5px * var(--ui-scale, 1)); height: auto; }
@@ -400,7 +395,6 @@ function spans(t: string): Span[] {
     .newc { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; height: 24px; font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; border-radius: 6px; }
     .newc.wide { justify-content: center; margin-bottom: 8px; height: 30px; }
     .tok { font-variant-numeric: tabular-nums; }
-    .used { display: flex; align-items: center; gap: 6px; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); }
     .toolw { position: relative; display: inline-flex; }
     .ib.tl { width: auto; padding: 0 6px; gap: 3px; } .cnt { font-size: 10.5px; font-weight: 600; }
     .menu.tools { width: 280px; left: auto; right: -80px; gap: 2px; }
@@ -462,7 +456,6 @@ export class AIPanel implements OnInit {
   text = '';
   edits: Record<string, string> = {};
   readonly suggestions = ['Explain the last output', 'Find problems in this session', 'Summarise what happened in this session', 'Give me the command to show the LLDP neighbours'];
-  readonly initials = 'Me';
 
   readonly msgs = computed(() => (this.ai.current()?.msgs ?? []).filter(m => !m.hidden));
   readonly tab = computed(() => { const t = this.tabs.active(); return t && t.kind === 'terminal' ? t : null; });
@@ -488,11 +481,7 @@ export class AIPanel implements OnInit {
     return tr('{0} days ago', Math.floor(s / 86400));
   }
   k(n: number) { return n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + 'k' : String(n); }
-  toolsUsed(m: ChatMsg) {
-    const n = (k: string) => (m.steps ?? []).filter(s => s.kind === k).length;
-    return [['run', 'Run commands'], ['find', 'Find sessions'], ['open', 'Connect to sessions'], ['log', 'Logger'], ['record', 'Recorder']]
-      .map(([k, l]) => n(k) ? tr(l) + ' ×' + n(k) : '').filter(Boolean).join(' · ');
-  }
+
   /** Per device: commands that ran, those the device refused, and what it is doing now. */
   devices(m: ChatMsg) {
     const by = new Map<string, { tab: string; ok: number; err: number; runs: number; state: string }>();
@@ -527,6 +516,12 @@ export class AIPanel implements OnInit {
     this.mmenu.set(false);
     const s = this.ui.settings(); if (!s) return;
     void this.ui.saveSettings({ ...s, ai: { ...(s.ai ?? {}), model: m } });
+  }
+  /** The microphone: the system's dictation types into the message box. */
+  async dictate() {
+    this.ta()?.nativeElement.focus();
+    try { const hint = await this.backend.startDictation(); if (hint) this.ui.toast(tr(hint), 'info', 8000); }
+    catch { this.ui.toast(tr('Use your system’s dictation in the message box: on a Mac press Fn twice, on Windows press Windows+H.'), 'info', 8000); }
   }
   canSend() { return !!(this.text.trim() || this.ai.ctxs().length || this.ai.images().length); }
 

@@ -667,7 +667,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
       } @else if (dock() === 'traffic' && trafView() === 'tests') {
         <app-traffic-tests [testers]="traf()?.testers ?? []" [devs]="devs()" />
       } @else if (dock() === 'traffic' && trafView() === 'stats') {
-        <div class="dstats"><ng-container [ngTemplateOutlet]="trafStats" /></div>
+        <div class="dstats" style="height: 100%; overflow: auto; padding: 8px 10px"><ng-container [ngTemplateOutlet]="trafStats" /></div>
       } @else if (dock() === 'traffic') {
         <ng-container [ngTemplateOutlet]="trafBody" />
       } @else if (dock() === 'cap') {
@@ -1102,7 +1102,6 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .mr { display: flex; justify-content: space-between; font-size: 12px; } .meter { height: 6px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 4px 0 8px; i { display: block; height: 100%; background: var(--accent); } }
     .dock { border-top: 1px solid var(--line); background: var(--surface); display: grid; grid-template-rows: 5px 34px minmax(0, 1fr); min-height: 0; }
     .grip { cursor: ns-resize; background: transparent; &:hover { background: var(--accent-soft); } }
-    .dstats { height: 100%; overflow: auto; padding: 8px 10px; }
     .dtabs button { margin-left: 4px; } .hint2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ev div { user-select: text; } .tail { user-select: text; }
     .dtabs { display: flex; align-items: center; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--line);
