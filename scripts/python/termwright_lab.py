@@ -246,6 +246,11 @@ class Lab:
         """Type a line (and Enter) into a running install: on its serial console, or (console=False) its keyboard."""
         return self.tool("keys", install=install_id, text=line, enter=True, console=console)
 
+    def hub(self, action: str = "list", **args) -> str:
+        """Hubs and L2 switches: action list, add (kind="hub"|"switch", name), connect / disconnect (hub, switch,
+        port), remove (hub)."""
+        return self.tool("hub", action=action, **args)
+
     def checkpoint(self, switch: str, note: str = "") -> str:
         """Keep a running switch's whole state now (it pauses for a moment); lists its checkpoints."""
         return self.tool("checkpoint", action="take", switch=switch, note=note or None)

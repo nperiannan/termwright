@@ -100,3 +100,74 @@ type Note struct {
 	H     float64 `json:"h"`
 	Color int     `json:"color,omitempty"` // 0-7: the palette's colours (s1-s8)
 }
+
+// Hub is a hub or an L2 switch of the lab: no VM, its legs are switch ports without a cable, joined by hub.py
+// on the host they run on (all its legs on one host). A hub repeats every frame to its other legs; an L2
+// switch learns MAC addresses.
+type Hub struct {
+	ID   string   `json:"id"`
+	Name string   `json:"name"`
+	Kind string   `json:"kind"`           // hub, switch
+	Legs []HubLeg `json:"legs,omitempty"` // the switch ports on it, in the order of its ports
+	X    float64  `json:"x,omitempty"`    // on the canvas
+	Y    float64  `json:"y,omitempty"`
+}
+
+// HubLeg is a switch port on a hub.
+type HubLeg struct {
+	VM   string `json:"vm"`
+	Port int    `json:"port"`
+}
+
+// HubMaxLegs: how many ports a hub or an L2 switch has.
+const HubMaxLegs = 16
+
+// HubOn finds the hub a switch port is on.
+func (l *Lab) HubOn(vm string, port int) *Hub {
+	for i := range l.Hubs {
+		for _, g := range l.Hubs[i].Legs {
+			if g.VM == vm && g.Port == port {
+				return &l.Hubs[i]
+			}
+		}
+	}
+	return nil
+}
+
+// HubByID finds a hub by id or name.
+func (l *Lab) HubByID(id string) *Hub {
+	for i := range l.Hubs {
+		if l.Hubs[i].ID == id || strings.EqualFold(l.Hubs[i].Name, id) {
+			return &l.Hubs[i]
+		}
+	}
+	return nil
+}
+
+//go:embed hub.py
+var HubPy string
+
+// HubScript writes a host's hubs.json and starts hub.py there when it is not running (it ends when there are none).
+func (l *Lab) HubScript(cfg []byte, any bool) string {
+	dir := Q(l.VMDir())
+	var b strings.Builder
+	fmt.Fprintf(&b, "mkdir -p %s && cd %s || exit 1\n", dir, dir)
+	fmt.Fprintf(&b, "cat > tw-hub.py.new <<'TWPYEOF'\n%sTWPYEOF\n", HubPy)
+	b.WriteString("cmp -s tw-hub.py.new tw-hub.py || { mv -f tw-hub.py.new tw-hub.py; p=$(cat hub.pid 2>/dev/null); [ -n \"$p\" ] && kill $p 2>/dev/null; }; rm -f tw-hub.py.new\n")
+	fmt.Fprintf(&b, "cat > hubs.json.new <<'TWJSEOF'\n%s\nTWJSEOF\nmv -f hubs.json.new hubs.json\n", cfg)
+	if any {
+		b.WriteString("p=$(cat hub.pid 2>/dev/null); if [ -z \"$p\" ] || ! grep -q tw-hub /proc/$p/cmdline 2>/dev/null; then command -v python3 >/dev/null || { echo 'hub: python3 is missing'; exit 1; }; nohup python3 tw-hub.py \"$PWD\" >hub.log 2>&1 & echo $! > hub.pid; fi\n")
+	}
+	b.WriteString("echo hub-ok\n")
+	return b.String()
+}
+
+// VMByName finds a VM by its name (any case).
+func (l *Lab) VMByName(name string) *VM {
+	for i := range l.VMs {
+		if strings.EqualFold(l.VMs[i].Name, name) {
+			return &l.VMs[i]
+		}
+	}
+	return nil
+}

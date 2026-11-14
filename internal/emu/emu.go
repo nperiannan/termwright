@@ -399,6 +399,7 @@ type Lab struct {
 	Lags          []Lag           `json:"lags,omitempty"`
 	Testers       []Tester        `json:"testers,omitempty"`       // test ports of the traffic generator
 	Notes         []Note          `json:"notes,omitempty"`         // notes and areas drawn on the canvas
+	Hubs          []Hub           `json:"hubs,omitempty"`          // hubs and L2 switches (no VM: hub.py on the host joins their legs)
 	NoCheckpoints bool            `json:"noCheckpoints,omitempty"` // no checkpoint of a switch before typed commands (Revert cannot undo them)
 	DNS           []string        `json:"dns,omitempty"`           // the lab's name servers: computers without one get them, day 0 fills {dns} {dns2} {dnsList} (default 8.8.8.8 1.1.1.1)
 	Streams       []Stream        `json:"streams,omitempty"`
@@ -611,7 +612,7 @@ func (l *Lab) DownLinks(v VM, im *Image) []string {
 		}
 	}
 	for n := 1; n < im.NICs; n++ {
-		if !cabled[n] && l.TesterOn(v.ID, n) == nil {
+		if !cabled[n] && l.TesterOn(v.ID, n) == nil && l.HubOn(v.ID, n) == nil {
 			out = append(out, fmt.Sprintf("nic%d", n))
 		}
 	}

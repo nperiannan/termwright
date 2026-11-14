@@ -3358,6 +3358,22 @@ const ru: Record<string, string> = {
   'Pages': 'Страницы',
   'Device actions': 'Действия с устройствами',
   'with a problem': 'с проблемой',
+  'Built in': 'Встроенные',
+  'no VM': 'без ВМ',
+  '{0} ports in use': 'занято портов: {0}',
+  'Take it off': 'Снять',
+  'No port on it yet: add switch ports below.': 'Портов пока нет: добавьте порты коммутаторов ниже.',
+  'switch': 'коммутатор',
+  'port': 'порт',
+  'Its ports work at once, also on running switches.': 'Порты работают сразу, в том числе на запущенных коммутаторах.',
+  'Its {0} ports come off it.': 'С него будут сняты порты: {0}.',
+  'L2 switch': 'L2-коммутатор',
+  'every frame to every port': 'каждый кадр во все порты',
+  'learns MAC addresses': 'изучает MAC-адреса',
+  'A hub: what comes in on a port goes out of every other one. Drag it onto the canvas, or double-click': 'Концентратор: что приходит в порт, уходит из всех остальных. Перетащите на холст или дважды щёлкните',
+  'A plain L2 switch (no VLANs): it learns where each MAC address is. Drag it onto the canvas, or double-click': 'Простой L2-коммутатор (без VLAN): он узнаёт, где каждый MAC-адрес. Перетащите на холст или дважды щёлкните',
+  'L2 switch: learns MAC addresses': 'L2-коммутатор: изучает MAC-адреса',
+  'Hub: every frame to every port': 'Концентратор: каждый кадр во все порты',
 };
 
 export default ru;

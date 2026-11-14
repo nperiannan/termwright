@@ -1620,6 +1620,63 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/hub:
+        post:
+            operationId: tool_hub
+            tags:
+                - Tools
+            summary: Hubs and L2 switches of the emulated lab
+            description: 'Hubs and L2 switches of the emulated lab: nodes without a VM that join switch ports (a hub repeats every frame to its other ports; an L2 switch learns MAC addresses). Ports go on at once, also on running switches; a hub''s switches must run on one host. Actions: list, add (kind hub or switch, name), connect (hub, switch, port), disconnect (hub, switch, port), remove (hub). Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                action:
+                                    enum:
+                                        - list
+                                        - add
+                                        - connect
+                                        - disconnect
+                                        - remove
+                                    type: string
+                                hub:
+                                    description: the hub (name or id)
+                                    type: string
+                                kind:
+                                    enum:
+                                        - hub
+                                        - switch
+                                    type: string
+                                name:
+                                    description: 'add: its name (default hub-1, l2sw-1 …)'
+                                    type: string
+                                port:
+                                    description: the switch's port (as the switch names it)
+                                    type: string
+                                switch:
+                                    type: string
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/images:
         post:
             operationId: tool_images
@@ -3369,6 +3426,51 @@ components:
                 - switches
                 - running
                 - main
+        HubLegView:
+            type: object
+            properties:
+                vm:
+                    type: string
+                port:
+                    type: integer
+                name:
+                    description: the switch's name
+                    type: string
+                portName:
+                    description: as the switch calls the port
+                    type: string
+            required:
+                - vm
+                - port
+                - name
+                - portName
+        HubView:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                kind:
+                    description: hub, switch
+                    type: string
+                x:
+                    type: number
+                y:
+                    type: number
+                legs:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HubLegView'
+            required:
+                - id
+                - name
+                - kind
+                - x
+                - "y"
+                - legs
         ImageView:
             type: object
             properties:
@@ -3799,6 +3901,13 @@ components:
                         - "null"
                     items:
                         $ref: '#/components/schemas/EmuNote'
+                hubs:
+                    description: hubs and L2 switches
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/HubView'
                 autoCheckpoints:
                     description: a checkpoint of a switch before typed commands (Revert undoes them)
                     type: boolean

@@ -52,6 +52,7 @@ Test ports and streams are as in the API; the keyword arguments are the API's fi
 | `rows(run)` | The result rows of a run |
 | `traffic.templates()`, `traffic.apply_template(name, *ports)`, `traffic.save_template(name, description)`, `traffic.remove_template(name)` | The test library: list it, put a template on test ports (one per role A, B…), keep the lab's streams and tests as yours |
 | `screen(device, path=None)`, `keys(device, text, enter, keys)`, `install_type(install_id, line)` | A PNG of a device's display (`install:<id>` for an installer); typing on its keyboard; a line on an installer's serial console |
+| `hub(action, **args)` | Hubs and L2 switches: `list`, `add` (kind, name), `connect` / `disconnect` (hub, switch, port), `remove` (hub) |
 | `checkpoint(switch, note)`, `checkpoints(switch)`, `restore(switch, tag)`, `auto_checkpoints(on)` | A running switch's whole state kept now, listed, brought back; checkpoints before typed commands on or off |
 | `dns(*servers, default=False)` | The lab's name servers; with servers, sets them (at most three); `default=True` goes back to 8.8.8.8 1.1.1.1 |
 | `images(name=None, type=None)` | Images and templates, filtered by part of a name and by device type |

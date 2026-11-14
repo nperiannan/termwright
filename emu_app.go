@@ -143,6 +143,7 @@ var emuLab struct {
 	pcapUp           map[string]bool           // captures streams replay that are on a host already (host|lab folder|capture)
 	runCables        map[string]map[int]string // per running switch: its cables when it started (port → the other end), to know which ones the patch panel joins
 	patchHosts       map[string]bool           // hosts whose patch panel runs
+	hubHosts         map[string]bool           // hosts whose hubs run (hub.py)
 	cpuWarned        map[string]time.Time      // when the Events last said a limit held it back
 	ready            map[string]bool           // the console showed the ready text since the VM started (it may scroll out of the log's end later)
 	bootAns          map[string]time.Time      // when a boot menu was last answered
@@ -616,6 +617,7 @@ type EmuView struct {
 	DNS             []string          `json:"dns"`                // the lab's name servers (set, or the default 8.8.8.8 1.1.1.1)
 	DNSSet          bool              `json:"dnsSet,omitempty"`   // they were set (not the default)
 	Notes           []emu.Note        `json:"notes,omitempty"`    // notes and areas on the canvas
+	Hubs            []EmuHubView      `json:"hubs,omitempty"`     // hubs and L2 switches
 	AutoCheckpoints bool              `json:"autoCheckpoints"`    // a checkpoint of a switch before typed commands (Revert undoes them)
 	Topology        string            `json:"topology,omitempty"` // the name the open lab is saved under
 	CloudGw         string            `json:"cloudGw,omitempty"`  // cloud: the gateway the switches use
@@ -2857,7 +2859,7 @@ func (a *App) emuStart(host string, ids []string) {
 		failAll(err)
 		return
 	}
-	emuGo(func() { time.Sleep(2 * time.Second); a.emuPatchSync(a.emuPollFresh().Up) }) // cables they now have themselves leave the patch panel
+	emuGo(func() { time.Sleep(2 * time.Second); a.emuPatchSync(a.emuPollFresh().Up); a.emuHubSync() }) // cables they now have themselves leave the patch panel; hubs are there for them
 	emuLab.mu.Lock()
 	for _, line := range strings.Split(out, "\n") {
 		f := strings.SplitN(strings.TrimSpace(line), " ", 3)
@@ -4020,6 +4022,7 @@ func (a *App) emuView() EmuView {
 	v.DNS, v.DNSSet = l.DNSServers(), len(l.DNS) > 0
 	v.AutoCheckpoints = !l.NoCheckpoints
 	v.Notes = l.Notes
+	v.Hubs = emuHubViews(l)
 	v.IconStyle = orStr(f.IconStyle, "box")
 	st := emuLab.status
 	v.Usage.HostCPUs, v.Usage.HostMemTotal, v.Usage.HostMemFree, v.Usage.Load = st.Cores, st.MemTotal, st.MemFree, st.Load
@@ -4494,6 +4497,10 @@ func (a *App) EmuConnect(k EmuLinkView) (EmuView, error) {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("a port has a test port: remove it first (Traffic)")
 	}
+	if h := l.HubOn(k.A, pa); h != nil || l.HubOn(k.B, pb) != nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("a port is on a hub or an L2 switch: take it off first")
+	}
 	if pa == 0 || pb == 0 {
 		emuLab.mu.Unlock()
 		return EmuView{}, errors.New("unknown port")
@@ -4655,6 +4662,13 @@ func (a *App) emuFreePortsLocked(id string) []string {
 	for _, t := range l.Testers {
 		if t.VM == id {
 			used[t.Port] = true
+		}
+	}
+	for _, h := range l.Hubs {
+		for _, g := range h.Legs {
+			if g.VM == id {
+				used[g.Port] = true
+			}
 		}
 	}
 	for _, c := range l.Cables {

@@ -8,7 +8,7 @@ import { TrafficLibrary } from './traffic-library';
 import { VmScreen } from './vm-screen';
 import { LabOverview, OverviewAct } from './lab-overview';
 import { CmdPalette, PaletteCmd } from './cmd-palette';
-import type { LabNote } from '../core/models';
+import type { LabHub, LabNote } from '../core/models';
 import { LabService } from '../core/lab.service';
 import { Backend } from '../core/backend';
 import { EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
@@ -178,6 +178,14 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
           @if (emu()) { <p class="muted small">{{ tr('No images yet: Images → Add Image.') }}</p> }
           @else { <p class="muted small">{{ tr('Load a device pack first.') }}</p><button type="button" class="primary" (click)="loadPack()">{{ tr('Load Device Pack (.vm)…') }}</button> }
         }
+        @if (emu()) {
+          <div class="grp"><span>{{ tr('Built in') }}</span><span>{{ tr('no VM') }}</span></div>
+          @for (k of hubKinds; track k.k) {
+            <div class="dev" draggable="true" (dragstart)="hubDrag = k.k; $event.dataTransfer?.setData('text/plain', k.k)" (dblclick)="addHub(k.k, null)" [title]="tr(k.tip)">
+              <svg class="hico" viewBox="0 0 46 46" [style.--hc]="k.c"><rect x="5" y="13" width="36" height="20" rx="4"/>@for (i of [0,1,2,3]; track i) { <rect class="hp" [attr.x]="10 + i * 7.5" y="19" width="5" height="5" rx="1"/> }@if (k.k === 'switch') { <path d="M12 29h22" /> }</svg>
+              <div><span>{{ tr(k.name) }}</span><small>{{ tr(k.sub) }}</small></div></div>
+          }
+        }
         <div class="hint">{{ tr('Drag a device onto the canvas to add it.') }}</div>
       </div>
 
@@ -200,6 +208,9 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               @for (c of clouds(); track c.host) { @for (u of c.links; track u.dev + u.port) {
                 <g class="lk cll"><title>{{ tr('{0} {1} is on the host’s network ({2})', u.name, u.port, c.name) }}</title><path class="ln up" [attr.d]="'M' + u.x + ' ' + u.y + ' L' + c.x + ' ' + c.y" />
                   @if (showPorts()) { <rect class="pb" [attr.x]="u.lx - 18" [attr.y]="u.ly - 9" width="36" height="18" rx="5" /><text class="pt" [attr.x]="u.lx" [attr.y]="u.ly + 4">{{ u.port.split('/').pop() }}</text> }</g>
+              } }
+              @for (h of hubs(); track h.h.id) { @for (g of h.legs; track g.key) {
+                <g class="lk hbl" [style.--hc]="h.c"><title>{{ g.where }}</title><path class="ln" [attr.d]="'M' + g.dx + ' ' + g.dy + ' L' + h.x + ' ' + h.y" />@if (showPorts()) { <rect class="pb" [attr.x]="g.lx - 18" [attr.y]="g.ly - 9" width="36" height="18" rx="5" /><text class="pt" [attr.x]="g.lx" [attr.y]="g.ly + 4">{{ g.port }}</text> }</g>
               } }
               @for (t of tps(); track t.t.id) { <g class="lk tpl"><path class="ln" [attr.d]="'M' + t.dx + ' ' + t.dy + ' L' + t.x + ' ' + t.y" />@if (showPorts()) { <rect class="pb" [attr.x]="t.lx - 18" [attr.y]="t.ly - 9" width="36" height="18" rx="5" /><text class="pt" [attr.x]="t.lx" [attr.y]="t.ly + 4">{{ t.port }}</text> }</g> }
               @for (k of lines(); track k.key) {
@@ -224,6 +235,21 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
             @for (t of tps(); track t.t.id) {
               <div class="node tpn" [style.left.px]="t.x - 56" [style.top.px]="t.y - 18" (pointerdown)="tpGrab($event, t.t)" (click)="$event.stopPropagation(); editTester(t.t)" (contextmenu)="tpMenuOpen(t.t, $event)" [title]="t.t.name + ' · ' + t.where + ' · ' + tpAddr(t.t) + ' · ' + t.t.mac">
                 <div class="tpb">⇄ {{ t.t.name }}</div><div class="nm">{{ tpAddr(t.t) || t.where }}</div></div>
+            }
+            @for (h of hubs(); track h.h.id) {
+              <div class="node hubn" [class.sel]="selHub() === h.h.id" [style.--hc]="h.c" [style.left.px]="h.x - 60" [style.top.px]="h.y - 22" (pointerdown)="hubGrab($event, h.h)" (click)="$event.stopPropagation(); selHub.set(h.h.id); hubPort = { vm: '', port: '' }" [title]="h.h.name + ' · ' + tr(h.h.kind === 'switch' ? 'L2 switch' : 'Hub') + ' · ' + tr('{0} ports in use', h.h.legs.length)">
+                <div class="hb"><svg viewBox="0 0 46 46"><rect x="5" y="13" width="36" height="20" rx="4"/>@for (i of [0,1,2,3]; track i) { <rect class="hp" [attr.x]="10 + i * 7.5" y="19" width="5" height="5" rx="1"/> }</svg><b>{{ h.h.name }}</b></div>
+                <div class="nm">{{ tr(h.h.kind === 'switch' ? 'L2 switch' : 'Hub') }} · {{ h.h.legs.length }}/16</div></div>
+              @if (selHub() === h.h.id) {
+                <div class="hubp" [style.left.px]="h.x + 70" [style.top.px]="h.y - 30" (click)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
+                  <div class="hh"><input class="hn" [ngModel]="h.h.name" (change)="renameHub(h.h, $any($event.target).value)" [attr.aria-label]="tr('Name')" /><span class="muted small">{{ tr(h.h.kind === 'switch' ? 'L2 switch: learns MAC addresses' : 'Hub: every frame to every port') }}</span><a (click)="selHub.set('')" [title]="tr('Close')">✕</a></div>
+                  @for (g of h.h.legs; track g.vm + g.port) { <div class="hl"><span class="mono">{{ g.name }} {{ g.portName }}</span><a (click)="hubOff(h.h, g.vm, g.port)" [title]="tr('Take it off')">✕</a></div> } @empty { <p class="muted small">{{ tr('No port on it yet: add switch ports below.') }}</p> }
+                  <div class="ha"><select [(ngModel)]="hubPort.vm" (ngModelChange)="hubFree($event)"><option value="">{{ tr('switch') }}</option>@for (d of devs(); track d.id) { <option [value]="d.id">{{ d.hostname }}</option> }</select>
+                    <select [(ngModel)]="hubPort.port" [disabled]="!hubPort.vm"><option value="">{{ tr('port') }}</option>@for (p of hubFreePorts(); track p) { <option [value]="p">{{ p }}</option> }</select>
+                    <button type="button" class="sm primary" (click)="hubOn(h.h)" [disabled]="!hubPort.port">{{ tr('Add') }}</button></div>
+                  <div class="hf"><span class="muted small">{{ tr('Its ports work at once, also on running switches.') }}</span><button type="button" class="sm danger-ghost" (click)="removeHub(h.h)">{{ tr('Remove') }}</button></div>
+                </div>
+              }
             }
             @for (c of clouds(); track c.host) {
               <div class="node cloud" [class.sel]="selCloud() === c.host" (contextmenu)="cloudMenu(c.host, $event)" [class.pick]="linkMode() && !!linkA()?.port" [style.left.px]="c.x - 75" [style.top.px]="c.y - 44" (pointerdown)="cloudGrab($event, c.host)" (click)="cloudClick(c.host, $event)"
@@ -892,6 +918,14 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .trt td b { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
     .cks { display: grid; gap: 4px; padding: 4px 0; .ck { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 8px; align-items: center; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); } .cn { grid-column: 1 / -1; color: var(--muted); font-size: 11px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } a { cursor: pointer; color: var(--muted); } > button { justify-self: start; margin-top: 4px; } }
     .ckt { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
+    .hico { width: 46px; height: 46px; flex: none; rect { fill: color-mix(in srgb, var(--hc) 16%, var(--surface)); stroke: var(--hc); stroke-width: 1.6; } .hp { fill: var(--hc); stroke: none; } path { stroke: var(--hc); stroke-width: 1.4; stroke-dasharray: 2 2; } }
+    .node.hubn { width: 120px; cursor: grab; .hb { height: 34px; border-radius: 9px; border: 1.5px solid var(--hc); background: color-mix(in srgb, var(--hc) 14%, var(--surface)); display: flex; align-items: center; gap: 4px; padding: 0 8px; b { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } svg { width: 28px; height: 28px; flex: none; rect { fill: none; stroke: var(--hc); stroke-width: 2; } .hp { fill: var(--hc); stroke: none; } } }
+      .nm { font-size: 10.5px; color: var(--muted); margin-top: 3px; } &.sel .hb { box-shadow: 0 0 0 2px color-mix(in srgb, var(--hc) 50%, transparent); } }
+    .hbl .ln { stroke: var(--hc); stroke-width: 2; fill: none; stroke-dasharray: none; }
+    .hubp { position: absolute; z-index: 20; width: 300px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.35); padding: 10px; display: grid; gap: 6px; font-size: 12px; text-align: left;
+      .hh { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; .hn { font-weight: 600; } span { grid-column: 1; } a { grid-row: 1; grid-column: 2; cursor: pointer; color: var(--muted); } }
+      .hl { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--line); a { cursor: pointer; color: var(--muted); } }
+      .ha { display: grid; grid-template-columns: minmax(0, 1fr) 90px auto; gap: 6px; } .hf { display: flex; align-items: center; justify-content: space-between; gap: 8px; } }
     .nt { position: absolute; display: flex; flex-direction: column; border-radius: 10px; border: 1.5px solid color-mix(in srgb, var(--nc) 70%, transparent); background: color-mix(in srgb, var(--nc) 16%, var(--surface)); box-shadow: 0 6px 16px rgba(0,0,0,.25); font-size: 12.5px; cursor: default;
       &.area { border-style: dashed; background: color-mix(in srgb, var(--nc) 7%, transparent); box-shadow: none; border-radius: 14px; }
       &.sel { outline: 2px solid color-mix(in srgb, var(--nc) 55%, transparent); outline-offset: 2px; }
@@ -1076,6 +1110,47 @@ export class LabWorkspace implements OnDestroy {
   protected libOpen = signal(false);
   protected screenDev = signal<LabDevice | null>(null);
   protected palOpen = signal(false);
+  // ---- hubs and L2 switches ----
+  protected readonly hubKinds = [{ k: 'hub' as const, name: 'Hub', sub: 'every frame to every port', tip: 'A hub: what comes in on a port goes out of every other one. Drag it onto the canvas, or double-click', c: 'var(--s3)' },
+    { k: 'switch' as const, name: 'L2 switch', sub: 'learns MAC addresses', tip: 'A plain L2 switch (no VLANs): it learns where each MAC address is. Drag it onto the canvas, or double-click', c: 'var(--s7)' }];
+  protected hubDrag: 'hub' | 'switch' | null = null;
+  protected selHub = signal('');
+  protected hubPort = { vm: '', port: '' };
+  protected hubFreePorts = signal<string[]>([]);
+  private hubLive = signal<Record<string, { x: number; y: number }>>({});
+  protected hubs = computed(() => (this.st()?.hubs ?? []).map((h, i) => {
+    this.moved();
+    const at = this.hubLive()[h.id] ?? (h.x || h.y ? { x: h.x, y: h.y } : { x: 200 + 180 * i, y: 120 });
+    const legs = h.legs.map(g => { const d = this.devs().find(x => x.id === g.vm); if (!d) return null; const p = this.pos(d); return { key: g.vm + ':' + g.port, dx: p.x, dy: p.y, lx: p.x + (at.x - p.x) * 0.3, ly: p.y + (at.y - p.y) * 0.3, port: g.portName || String(g.port), where: g.name + ' ' + (g.portName || g.port) + ' · ' + h.name }; }).filter(x => !!x);
+    return { h, x: at.x, y: at.y, c: h.kind === 'switch' ? 'var(--s7)' : 'var(--s3)', legs };
+  }));
+  async addHub(kind: 'hub' | 'switch', at: { x: number; y: number } | null) {
+    const cv = document.querySelector('app-lab-workspace .cv') as HTMLElement | null, z = this.zoom();
+    const p = at ?? { x: Math.round(cv ? (cv.scrollLeft + cv.clientWidth / 2) / z : 400), y: Math.round(cv ? (cv.scrollTop + cv.clientHeight / 2) / z : 300) };
+    try { const v = await this.backend.emuHubAdd(kind, '', p.x, p.y); this.lab.emu.set(v); const h = (v.hubs ?? [])[(v.hubs ?? []).length - 1]; if (h) { this.selHub.set(h.id); this.hubPort = { vm: '', port: '' }; } } catch (e) { this.ui.error(e); }
+  }
+  async hubFree(vm: string) { this.hubPort.port = ''; this.hubFreePorts.set(vm ? (await this.backend.emuFreePorts(vm).catch(() => null)) ?? [] : []); }
+  async hubOn(h: LabHub) { try { this.lab.emu.set(await this.backend.emuHubConnect(h.id, this.hubPort.vm, this.hubPort.port)); await this.hubFree(this.hubPort.vm); } catch (e) { this.ui.error(e); } }
+  async hubOff(h: LabHub, vm: string, port: number) { try { this.lab.emu.set(await this.backend.emuHubDisconnect(h.id, vm, port)); } catch (e) { this.ui.error(e); } }
+  async renameHub(h: LabHub, name: string) { try { this.lab.emu.set(await this.backend.emuHubSet(h.id, name, h.x, h.y)); } catch (e) { this.ui.error(e); } }
+  async removeHub(h: LabHub) {
+    if (h.legs.length && !(await this.ui.confirm(tr('Remove {0}?', h.name), tr('Its {0} ports come off it.', h.legs.length)))) return;
+    try { this.lab.emu.set(await this.backend.emuHubRemove(h.id)); this.selHub.set(''); } catch (e) { this.ui.error(e); }
+  }
+  hubGrab(ev: PointerEvent, h: LabHub) {
+    if (this.linkMode() || ev.button !== 0) return;
+    ev.stopPropagation();
+    const c = this.hubs().find(x => x.h.id === h.id); if (!c) return;
+    const x0 = ev.clientX, y0 = ev.clientY, z = this.zoom();
+    let at = { x: c.x, y: c.y };
+    const mv = (e: PointerEvent) => { at = { x: Math.round(c.x + (e.clientX - x0) / z), y: Math.round(c.y + (e.clientY - y0) / z) }; this.hubLive.set({ ...this.hubLive(), [h.id]: at }); };
+    const up = async () => {
+      removeEventListener('pointermove', mv); removeEventListener('pointerup', up);
+      if (at.x !== c.x || at.y !== c.y) { try { this.lab.emu.set(await this.backend.emuHubSet(h.id, '', at.x, at.y)); } catch (e) { this.ui.error(e); } }
+      const live = { ...this.hubLive() }; delete live[h.id]; this.hubLive.set(live);
+    };
+    addEventListener('pointermove', mv); addEventListener('pointerup', up);
+  }
   protected ovHosts = computed(() => ({ '': this.hname(this.st()?.host ?? '') || '-' }));
   // ---- notes and areas on the canvas ----
   protected selNote = signal('');
@@ -1803,7 +1878,7 @@ export class LabWorkspace implements OnDestroy {
   }
   @HostListener('document:keydown.escape') onEsc() { if (!this.visible()) return; if (this.drawAs()) { this.drawAs.set(null); return; } if (this.cloudF()) { this.cloudF.set(null); this.revertMgmt(); return; } if (this.page()) { this.page.set(''); this.ghost.set(null); } else if (this.linkMode() || this.menu()) { this.cancelLink(); this.menu.set(null); } else { this.sel.set(''); this.selLink.set(''); this.ms.set(new Set()); } }
   /** A click on the empty canvas: nothing selected (the side panel shows the whole topology). */
-  canvasClick(ev: MouseEvent) { this.endNoteEdit(); this.selNote.set('');
+  canvasClick(ev: MouseEvent) { this.endNoteEdit(); this.selNote.set(''); this.selHub.set('');
     const t = ev.target as HTMLElement;
     if (this.linkMode() || t.closest('.node, .lk, .ctb, .mini, .hleg, .menu, .bar2, .zone .zh')) return;
     if (this.bandMoved) { this.bandMoved = false; return; }
@@ -2015,6 +2090,7 @@ export class LabWorkspace implements OnDestroy {
   dragPal(ev: DragEvent, p: Pal) { this.palDrag = p; ev.dataTransfer?.setData('text/plain', p.key); }
   dropPal(ev: DragEvent, cv: HTMLElement) {
     ev.preventDefault();
+    if (this.hubDrag) { const k = this.hubDrag; this.hubDrag = null; void this.addHub(k, this.toCanvas(ev, cv)); return; }
     const p = this.palDrag; this.palDrag = null;
     if (p) void this.addAt(p, this.toCanvas(ev, cv));
   }

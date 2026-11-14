@@ -116,3 +116,63 @@ func TestPatchPy(t *testing.T) {
 		t.Fatalf("no pairs: %s", s)
 	}
 }
+
+// A hub repeats a frame to every other leg; an L2 switch floods an unknown destination, then sends to where
+// it learned the MAC.
+func TestHubPy(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "tw-hub.py"), []byte(HubPy), 0o644)
+	write := func(kind string) {
+		_ = os.WriteFile(filepath.Join(dir, "hubs.json"), []byte(`{"hubs":[{"id":"h1","kind":"`+kind+`","legs":[[43101,43111],[43102,43112],[43103,43113]]}]}`), 0o644)
+	}
+	write("hub")
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-hub.py"), dir)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var eps []*net.UDPConn
+	for _, p := range []int{43111, 43112, 43113} {
+		c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: p})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		eps = append(eps, c)
+	}
+	time.Sleep(400 * time.Millisecond)
+	mac := func(n byte) []byte { return []byte{2, 0, 0, 0, 0, n} }
+	frame := func(dst, src []byte, tag string) []byte {
+		return append(append(append(append([]byte{}, dst...), src...), 0x88, 0xb5), []byte(tag+"................................................")...)
+	}
+	send := func(from int, f []byte) {
+		_, _ = eps[from].WriteToUDP(f, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 43101 + from})
+	}
+	got := func(i int) string {
+		_ = eps[i].SetReadDeadline(time.Now().Add(700 * time.Millisecond))
+		buf := make([]byte, 2000)
+		n, _, err := eps[i].ReadFromUDP(buf)
+		if err != nil || n < 17 {
+			return ""
+		}
+		return string(buf[14:17])
+	}
+	send(0, frame(mac(2), mac(1), "aaa"))
+	if g1, g2 := got(1), got(2); g1 != "aaa" || g2 != "aaa" {
+		t.Fatalf("hub: %q %q", g1, g2)
+	}
+	time.Sleep(50 * time.Millisecond)
+	write("switch")
+	time.Sleep(700 * time.Millisecond)
+	send(0, frame(mac(2), mac(1), "bbb")) // unknown: flooded; it learns mac 1 on leg 0
+	if g1, g2 := got(1), got(2); g1 != "bbb" || g2 != "bbb" {
+		t.Fatalf("flood: %q %q", g1, g2)
+	}
+	send(1, frame(mac(1), mac(2), "ccc")) // known: only leg 0
+	if g0, g2 := got(0), got(2); g0 != "ccc" || g2 != "" {
+		t.Fatalf("learned: %q %q", g0, g2)
+	}
+}

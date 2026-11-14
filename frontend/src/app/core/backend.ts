@@ -111,6 +111,11 @@ export class Backend {
   emuSetCheckpoints(on: boolean) { return this.call<LabView>('EmuSetCheckpoints', on); }
   emuNoteSave(n: LabNote) { return this.call<LabView>('EmuNoteSave', n); }
   emuNoteRemove(id: string) { return this.call<LabView>('EmuNoteRemove', id); }
+  emuHubAdd(kind: 'hub' | 'switch', name: string, x: number, y: number) { return this.call<LabView>('EmuHubAdd', kind, name, x, y); }
+  emuHubSet(id: string, name: string, x: number, y: number) { return this.call<LabView>('EmuHubSet', id, name, x, y); }
+  emuHubConnect(id: string, vm: string, port: string) { return this.call<LabView>('EmuHubConnect', id, vm, port); }
+  emuHubDisconnect(id: string, vm: string, port: number) { return this.call<LabView>('EmuHubDisconnect', id, vm, port); }
+  emuHubRemove(id: string) { return this.call<LabView>('EmuHubRemove', id); }
   emuScreen(kind: 'vm' | 'install', id: string) { return this.call<{ png: string; w: number; h: number; at: string }>('EmuScreen', kind, id); }
   emuScreenKeys(kind: 'vm' | 'install', id: string, text: string, enter: boolean, keys: string[]) { return this.call<void>('EmuScreenKeys', kind, id, text, enter, keys); }
   emuInstallType(id: string, line: string, enter: boolean) { return this.call<void>('EmuInstallType', id, line, enter); }

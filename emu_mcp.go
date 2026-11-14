@@ -44,6 +44,15 @@ var mcpLabTools = []mcpTool{
 			"keys":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"console": map[string]any{"type": "boolean", "description": "install: the serial console, not the keyboard"},
 		})},
+	{"lab_hub", "Hubs and L2 switches of the emulated lab: nodes without a VM that join switch ports (a hub repeats every frame to its other ports; an L2 switch learns MAC addresses). Ports go on at once, also on running switches; a hub's switches must run on one host. Actions: list, add (kind hub or switch, name), connect (hub, switch, port), disconnect (hub, switch, port), remove (hub).",
+		mcpSchema(map[string]any{
+			"action": map[string]any{"type": "string", "enum": []string{"list", "add", "connect", "disconnect", "remove"}},
+			"kind":   map[string]any{"type": "string", "enum": []string{"hub", "switch"}},
+			"name":   map[string]any{"type": "string", "description": "add: its name (default hub-1, l2sw-1 …)"},
+			"hub":    map[string]any{"type": "string", "description": "the hub (name or id)"},
+			"switch": map[string]any{"type": "string"},
+			"port":   map[string]any{"type": "string", "description": "the switch's port (as the switch names it)"},
+		})},
 	{"lab_images", "List the images and templates the emulated lab can make switches from: id, name, software version, device type, port naming, and whether the image file is there. Filter by name and device type to keep the answer short.", mcpSchema(map[string]any{
 		"name": map[string]any{"type": "string", "description": "only images and templates whose name, id or version contains this (any case)"},
 		"type": map[string]any{"type": "string", "description": "only this device type (EXOS, VOSS, Linux, Windows …; any case)"},
@@ -422,6 +431,63 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			return "", err
 		}
 		return "Typed on " + d.Hostname + "'s keyboard.", nil
+	case "lab_hub":
+		list := func(nv EmuView) string {
+			var b strings.Builder
+			for _, h := range nv.Hubs {
+				var legs []string
+				for _, g := range h.Legs {
+					legs = append(legs, g.Name+" "+g.PortName)
+				}
+				fmt.Fprintf(&b, "- %s (%s): %s\n", h.Name, map[bool]string{true: "L2 switch", false: "hub"}[h.Kind == "switch"], orStr(strings.Join(legs, ", "), "no ports yet"))
+			}
+			if b.Len() == 0 {
+				return "No hub or L2 switch yet."
+			}
+			return b.String()
+		}
+		var nv EmuView
+		var err error
+		switch argStr(args, "action") {
+		case "list", "":
+			return list(v), nil
+		case "add":
+			if err := light("Claude adds a hub", "Claude (through the Termwright connector) adds a "+orStr(argStr(args, "kind"), "hub")+"."); err != nil {
+				return "", err
+			}
+			nv, err = a.EmuHubAdd(argStr(args, "kind"), argStr(args, "name"), 0, 0)
+		case "connect", "disconnect":
+			if err := light("Claude changes a hub", "Claude (through the Termwright connector) "+argStr(args, "action")+"s "+argStr(args, "switch")+" "+argStr(args, "port")+" on "+argStr(args, "hub")+"."); err != nil {
+				return "", err
+			}
+			if argStr(args, "action") == "connect" {
+				nv, err = a.EmuHubConnect(argStr(args, "hub"), argStr(args, "switch"), argStr(args, "port"))
+			} else {
+				d, e := emuMCPID(v, argStr(args, "switch"))
+				if e != nil {
+					return "", e
+				}
+				emuLab.mu.Lock()
+				vm := emuLab.f.Lab.VMByID(d.ID)
+				n := 0
+				if vm != nil {
+					n = emuPort(emuImage(vm.Image), argStr(args, "port"))
+				}
+				emuLab.mu.Unlock()
+				nv, err = a.EmuHubDisconnect(argStr(args, "hub"), d.ID, n)
+			}
+		case "remove":
+			if err := light("Claude removes a hub", "Claude (through the Termwright connector) removes "+argStr(args, "hub")+"."); err != nil {
+				return "", err
+			}
+			nv, err = a.EmuHubRemove(argStr(args, "hub"))
+		default:
+			return "", errors.New("action is list, add, connect, disconnect or remove")
+		}
+		if err != nil {
+			return "", err
+		}
+		return list(nv), nil
 	case "lab_dns":
 		if _, ok := args["servers"]; ok {
 			nv, err := a.EmuSetDNS(argStrs(args, "servers"))
