@@ -41,17 +41,17 @@ import { tr } from '../core/i18n';
                 @if (sv?.running) { <button type="button" class="primary" (click)="stop(k)">Stop</button> }
                 @else { <button type="button" (click)="start(k)" [disabled]="busy() === k">{{ busy() === k ? tr('Starting…') : tr('Start') }}</button> }</div>
               @if (k === 'tftp') {
-                <div class="kv">Port <input type="number" min="1" max="65535" [(ngModel)]="st.tftpPort" name="tp" (change)="save()" [disabled]="!!sv?.running"> <span class="muted small">UDP</span></div>
+                <div class="kv">Port <input type="number" min="1" max="65535" [(ngModel)]="st.tftpPort" name="tp" (change)="save()" (input)="fwSoon()" [disabled]="!!sv?.running"> <span class="muted small">UDP</span></div>
                 <label class="ck"><input type="checkbox" [(ngModel)]="st.tftpWrite" name="tw" (ngModelChange)="save()"> Devices can upload files</label>
               } @else if (k === 'ftp') {
-                <div class="kv">Port <input type="number" min="1" max="65535" [(ngModel)]="st.ftpPort" name="fp" (change)="save()" [disabled]="!!sv?.running"> <span class="muted small">TCP</span></div>
+                <div class="kv">Port <input type="number" min="1" max="65535" [(ngModel)]="st.ftpPort" name="fp" (change)="save()" (input)="fwSoon()" [disabled]="!!sv?.running"> <span class="muted small">TCP</span></div>
                 <div class="kv"><span class="k">User</span><input class="w" [(ngModel)]="st.ftpUser" name="fu" (change)="save()" [disabled]="!!sv?.running" spellcheck="false" aria-label="FTP user name"></div>
                 <div class="kv"><span class="k">Password</span><input class="w" type="password" value="xxxxxxxxxxxx" readonly tabindex="-1" aria-label="FTP password (hidden)">
                   <button type="button" class="sm" (click)="copyPassword()">Copy</button>
                   <button type="button" class="sm icon" (click)="newPassword()" [title]="tr('Makes a new password - devices use it from their next login')" aria-label="New password"><app-icon name="refresh" [size]="13" /></button></div>
                 <label class="ck"><input type="checkbox" [(ngModel)]="st.ftpWrite" name="fw" (ngModelChange)="save()"> Devices can upload files</label>
               } @else {
-                <div class="kv">Port <input type="number" min="1" max="65535" [(ngModel)]="st.httpPort" name="hp" (change)="save()" [disabled]="!!sv?.running"> <span class="muted small">TCP</span></div>
+                <div class="kv">Port <input type="number" min="1" max="65535" [(ngModel)]="st.httpPort" name="hp" (change)="save()" (input)="fwSoon()" [disabled]="!!sv?.running"> <span class="muted small">TCP</span></div>
                 <label class="ck"><input type="checkbox" checked disabled> Downloads only (devices cannot upload)</label>
               }
               @if (sv?.error) { <div class="err small">{{ sv!.error }}</div> }
@@ -185,6 +185,7 @@ import { tr } from '../core/i18n';
     .cmdline { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
     .cmdline code { flex: 1; min-width: 0; font-family: var(--mono); font-size: calc(12.5px * var(--ui-scale, 1)); padding: 6px 8px; background: var(--input-bg); border: 1px solid var(--line); border-radius: var(--r-sm); overflow-x: auto; white-space: nowrap; user-select: text; }
     .cmdline input.mono { font-family: var(--mono); }
+    .fwp .cmdline { align-items: flex-start; code { white-space: pre; } }
     .note { margin-top: 6px; }
     .warn { display: flex; gap: 8px; align-items: flex-start; font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); padding: 7px 10px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 9%, transparent); border-radius: var(--r-sm); margin-bottom: 12px; line-height: 1.6;
       app-icon { color: var(--warn); margin-top: 2px; flex: none; } select.inl { padding: 0 4px; height: auto; font-size: inherit; } }
@@ -295,6 +296,7 @@ export class FileServersDialog implements OnInit, OnDestroy {
     if (!s) return;
     try { await this.backend.fileServersSave({ ...s, commands: this.own() }); }
     catch (e) { this.ui.toast(errText(e), 'error'); }
+    void this.checkFw(); // the command to allow the ports follows them
   }
 
   async start(k: string) {
@@ -330,16 +332,25 @@ export class FileServersDialog implements OnInit, OnDestroy {
   readonly fw = signal<FirewallState | null>(null);
   readonly fwBusy = signal(false);
   readonly fwCmd = signal(false);
+  private ports() { const s = this.s(); return [s?.tftpPort ?? 0, s?.ftpPort ?? 0, s?.httpPort ?? 0].map(p => Number(p) || 0) as [number, number, number]; }
+  private fwTimer: ReturnType<typeof setTimeout> | undefined;
+  /** A port is being typed: the firewall command follows it shortly. */
+  fwSoon() { clearTimeout(this.fwTimer); this.fwTimer = setTimeout(() => void this.checkFw(), 400); }
   async checkFw() {
     this.fwBusy.set(true);
-    try { this.fw.set(await this.backend.firewallCheck()); } catch { this.fw.set({ name: '', on: 'unknown', app: 'unknown', notes: [], fix: '', canFix: false, program: '' }); }
+    try { this.fw.set(await this.backend.firewallCheck(...this.ports())); } catch { this.fw.set({ name: '', on: 'unknown', app: 'unknown', notes: [], fix: '', canFix: false, program: '' }); }
     this.fwBusy.set(false);
   }
   async allowFw() {
     const f = this.fw(); if (!f) return;
-    if (!(await this.ui.confirm(tr('Allow Termwright'), tr('Let devices reach Termwright through {0}? The system asks for an administrator password and runs:', f.name) + '\n\n' + f.fix, tr('Allow')))) return;
+    let pw = '';
+    if (f.sudo) { // the sudo password here, or none for the system's own prompt
+      const v = await this.ui.input(tr('Allow Termwright'), tr('Let devices reach Termwright through {0}? It runs:', f.name) + '\n\n' + f.fix + '\n\n' + tr('Your sudo password (leave it empty for the system’s own password prompt):'), '', true);
+      if (v === null) return;
+      pw = v;
+    } else if (!(await this.ui.confirm(tr('Allow Termwright'), tr('Let devices reach Termwright through {0}? The system asks for an administrator password and runs:', f.name) + '\n\n' + f.fix, tr('Allow')))) return;
     this.fwBusy.set(true);
-    try { this.fw.set(await this.backend.firewallAllow()); this.ui.toast(tr('The firewall lets devices reach Termwright now'), 'success'); }
+    try { this.fw.set(await this.backend.firewallAllow(...this.ports(), pw)); this.ui.toast(tr('The firewall lets devices reach Termwright now'), 'success'); }
     catch (e) { this.ui.toast(errText(e), 'error', 8000); }
     this.fwBusy.set(false);
   }

@@ -188,7 +188,7 @@ function spans(t: string): Span[] {
             }</span>
         </div>
         @if (ai.images().length) { <div class="atts">@for (i of ai.images(); track $index) { <span class="att"><img [src]="i.url" [alt]="i.name" /><button type="button" class="rm" [attr.aria-label]="tr('Remove')" (click)="ai.removeImage(i)"><app-icon name="x" [size]="10" /></button></span> }</div> }
-        <textarea #ta [(ngModel)]="text" (ngModelChange)="grow(); at($event)" (keydown)="key($event)" (paste)="pasteIn($event)" rows="3" spellcheck="false"
+        <textarea #ta [(ngModel)]="text" (ngModelChange)="grow(); at($event)" (keydown)="key($event)" (paste)="pasteIn($event)" (tw-paste-picture)="pastePicture($any($event).detail)" data-paste-pictures rows="3" spellcheck="false"
           [placeholder]="tr('Ask about the output, or describe what you want to do… (paste a picture with ⌘V, @ adds a tab)')" [attr.aria-label]="tr('Message')"></textarea>
         <div class="bar">
           <select class="sel" [ngModel]="ai.mode()" (ngModelChange)="ai.mode.set($event)" [attr.aria-label]="tr('Mode')" [title]="tr('Ask: answers only. Agent: the AI may run commands in your tabs.')"><option value="ask">Ask</option><option value="agent">Agent</option></select>
@@ -200,7 +200,7 @@ function spans(t: string): Span[] {
                   @for (o of perms; track o.k) {
                     <button type="button" role="menuitemradio" [class]="'prow ' + o.tone" [attr.aria-checked]="ai.perm() === o.k" (click)="setPerm(o.k)"><i class="pd"></i><span class="pt"><b>{{ tr(o.name) }}</b><small>{{ tr(o.what) }}</small></span><span class="ck">@if (ai.perm() === o.k) { <app-icon name="check" [size]="13" /> }</span></button>
                   }
-                  <div class="mf"><app-icon name="shield" [size]="11" /> {{ tr('Production sessions always ask before every command and connection, in every mode.') }}</div>
+                  <div class="mf"><app-icon name="shield" [size]="11" /> {{ tr('Production sessions always ask before every command and connection - except in Read only, where nothing that changes anything runs.') }}</div>
                 </div>
               }</span>
           }
@@ -246,6 +246,7 @@ function spans(t: string): Span[] {
     .conv { flex: 1; overflow: auto; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
     .msg { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
     .who { display: flex; align-items: center; gap: 7px; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 600; }
+    .ub, .ab, .ut { user-select: text; -webkit-user-select: text; }
     .av { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; flex: none; }
     .av.u { background: #7c5cff; color: #fff; } .av.a { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
     .when, .hint { color: var(--muted); font-weight: 400; font-size: calc(11px * var(--ui-scale, 1)); }
@@ -465,8 +466,15 @@ export class AIPanel implements OnInit {
   }
 
   pasteIn(e: ClipboardEvent) {
-    const fs = [...(e.clipboardData?.files ?? [])].filter(f => f.type.startsWith('image/'));
+    const d = e.clipboardData;
+    let fs = [...(d?.files ?? [])].filter(f => f.type.startsWith('image/'));
+    if (!fs.length) fs = [...(d?.items ?? [])].filter(i => i.kind === 'file' && i.type.startsWith('image/')).map(i => i.getAsFile()).filter((f): f is File => !!f);
     if (fs.length) { e.preventDefault(); this.files(fs); }
+  }
+  /** A picture from the system clipboard, through the app's Paste (⌘V / Ctrl+V in its Edit menu). */
+  pastePicture(p: { data: string; type: string }) {
+    const n = (this.ai.images().length || 0) + 1;
+    this.ai.addImage({ name: n > 1 ? `picture-${n}.png` : 'picture.png', mediaType: p.type, data: p.data, url: `data:${p.type};base64,${p.data}` } as Img);
   }
   drop(e: DragEvent) { e.preventDefault(); if (e.dataTransfer?.files?.length) this.files(e.dataTransfer.files); }
   files(list: FileList | File[]) {

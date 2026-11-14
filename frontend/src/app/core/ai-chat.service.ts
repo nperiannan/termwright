@@ -48,7 +48,7 @@ export const AGENT_PERMS: { k: AgentPerm; name: string; what: string; tone: 'aut
   { k: 'auto', name: 'Fully autonomous', what: 'Runs commands and changes without asking. Production sessions and reboot / erase still ask.', tone: 'auto' },
   { k: '', name: 'Changes ask first', what: 'Read-only commands run by themselves; changes wait for you.', tone: 'ask' },
   { k: 'every', name: 'Ask before every command', what: 'Every command and connection waits for you.', tone: 'ask' },
-  { k: 'readonly', name: 'Read only', what: 'Only read-only commands; changes are given to you as text.', tone: 'ro' },
+  { k: 'readonly', name: 'Read only', what: 'Read-only commands run without asking, production sessions too; changes are given to you as text.', tone: 'ro' },
 ];
 
 const NET_RO = ['show', 'sh', 'display', 'dis', 'ping', 'traceroute', 'tracert', 'trace'];
@@ -335,8 +335,10 @@ export class AIChat {
       const open = this.tabs.tabs().find(x => x.kind === 'terminal' && x.session?.path === node.path && x.state === 'connected');
       if (open) { s.state = 'done'; s.auto = true; s.output = tr('Already connected'); return `open ${node.name}: already connected; the tab is called ${open.title}.`; }
       s.prod = prod;
-      if (perm === 'every' || prod) { const r = await this.ask(s, chatId); if (r.go !== 'run') return this.refusal(s, r.go); }
-      s.state = 'running'; s.auto = perm !== 'every' && !prod; this.touch(chatId);
+      // Read only connects without asking: it then runs only commands that change nothing
+      const askOpen = perm !== 'readonly' && (perm === 'every' || prod);
+      if (askOpen) { const r = await this.ask(s, chatId); if (r.go !== 'run') return this.refusal(s, r.go); }
+      s.state = 'running'; s.auto = !askOpen; this.touch(chatId);
       await this.tabs.openSession(node.path);
       const before = new Set(this.tabs.tabs().map(x => x.id));
       const t = await waitFor(() => this.tabs.tabs().find(x => x.session?.path === node.path && (x.state === 'connected' || (!before.has(x.id) && (x.state === 'error' || x.state === 'disconnected')))), 60000);
@@ -360,7 +362,8 @@ export class AIChat {
     const destroy = DESTRUCTIVE.test(s.command);
     s.prod = prod; s.danger = s.danger || destroy;
     if (perm === 'readonly' && !ro) { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `run ${t.title}: ${s.command} - not run: the user allows only read-only commands. Tell the user the command instead.`; }
-    if (perm === 'auto' ? (prod || destroy) : (!ro || prod || perm === 'every')) {
+    // Read only never asks: what is left changes nothing (production sessions too)
+    if (perm === 'readonly' ? false : perm === 'auto' ? (prod || destroy) : (!ro || prod || perm === 'every')) {
       const r = await this.ask(s, chatId);
       if (r.go !== 'run') return this.refusal(s, r.go);
       if (r.command && r.command.trim() !== s.command) s.command = r.command.trim();

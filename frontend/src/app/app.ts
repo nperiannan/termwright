@@ -654,6 +654,8 @@ export class App implements OnInit {
     if (op === 'select-all') { el.select(); return true; }
     const [a, b] = [el.selectionStart ?? 0, el.selectionEnd ?? 0];
     const text = el.value.slice(a, b);
+    // nothing selected in the box that has the focus: the text selected on the page (an AI reply) is copied instead
+    if (op === 'copy' && !text && (window.getSelection()?.toString() ?? '').trim()) return false;
     if (text) void this.backend.clipboardSet(text);
     if (op === 'cut' && text) {
       el.setRangeText('', a, b, 'start');
@@ -666,6 +668,11 @@ export class App implements OnInit {
     const el = this.focusedInput();
     if (!el) return false;
     const text = await this.backend.clipboardGet();
+    // a picture (a screenshot): the box that takes pictures (the AI chat's) gets it as an event
+    if (!text && el.dataset['pastePictures'] !== undefined) {
+      const img = await this.backend.clipboardImage().catch(e => { this.ui.error(e); return null; });
+      if (img?.data) { el.dispatchEvent(new CustomEvent('tw-paste-picture', { detail: img })); return true; }
+    }
     el.setRangeText(text, el.selectionStart ?? 0, el.selectionEnd ?? 0, 'end');
     el.dispatchEvent(new Event('input', { bubbles: true }));
     return true;

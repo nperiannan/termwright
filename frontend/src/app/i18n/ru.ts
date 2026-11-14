@@ -3579,6 +3579,13 @@ const ru: Record<string, string> = {
   '1 cloud': '1 облако',
   'Copy Log': 'Копировать журнал',
   'Copy the set-up output': 'Скопировать вывод настройки',
+  'Read-only commands run without asking, production sessions too; changes are given to you as text.': 'Команды только для чтения выполняются без вопросов, и в рабочих сессиях тоже; изменения даются вам текстом.',
+  'Production sessions always ask before every command and connection - except in Read only, where nothing that changes anything runs.': 'Рабочие сессии всегда спрашивают перед каждой командой и подключением - кроме режима «Только чтение», где не выполняется ничего, что что-либо меняет.',
+  'Let devices reach Termwright through {0}? It runs:': 'Разрешить устройствам доступ к Termwright через {0}? Будет выполнено:',
+  'Your sudo password (leave it empty for the system’s own password prompt):': 'Ваш пароль sudo (оставьте пустым, чтобы система сама запросила пароль):',
+  'Copy what you asked': 'Скопировать вопрос',
+  'Copy the answer': 'Скопировать ответ',
+  'Copy the output': 'Скопировать вывод',
 };
 
 export default ru;

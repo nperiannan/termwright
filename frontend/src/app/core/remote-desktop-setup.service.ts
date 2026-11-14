@@ -68,6 +68,9 @@ export class RemoteDesktopSetup {
       this.ui.toast('Open and log in to the SSH session of the Linux machine first (right-click it → Set Up Remote Desktop…).', 'info', 7000);
       return;
     }
+    // a finished run is not shown again: the form opens, so the desktop can be set up again (the other protocol, or
+    // after its sessions were deleted); a run that is still going is shown
+    if (this.run()?.phase !== 'running') this.run.set(null);
     this.ui.remoteDesktopTab.set(tabId);
     this.ui.open('remoteDesktop');
   }

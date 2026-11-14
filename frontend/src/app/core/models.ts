@@ -389,7 +389,7 @@ export interface ServedFile { name: string; size: number; }
 export interface NCResult { target: string; address: string; state: 'ok' | 'bad' | 'warn' | 'na'; summary: string; ms: number; detail: string; }
 export interface IperfTest { peer: string; seconds: number; sentBps: number; receivedBps: number; retransmits: number; time: string; }
 export interface IperfInfo { path: string; running: boolean; port: number; last?: IperfTest | null; error?: string; }
-export interface FirewallState { name: string; on: 'on' | 'off' | 'unknown'; app: 'allowed' | 'blocked' | 'ask' | 'unknown'; notes: string[] | null; fix: string; canFix: boolean; program: string; }
+export interface FirewallState { name: string; on: 'on' | 'off' | 'unknown'; app: 'allowed' | 'blocked' | 'ask' | 'unknown'; notes: string[] | null; fix: string; canFix: boolean; program: string; sudo?: boolean; }
 export interface AIStatus { provider: string; model: string; hasKey: boolean; ready: boolean; }
 export interface AIAnswer { text: string; commands: string[]; sent: string; removed: number; model: string; usage?: { in: number; out: number; model?: string } | null; }
 

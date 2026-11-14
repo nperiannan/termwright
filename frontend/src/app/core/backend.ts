@@ -32,6 +32,8 @@ export class Backend {
     return window.runtime ? window.runtime.EventsOn(event, cb) : () => {};
   }
 
+  /** A picture on the system clipboard (base64 PNG), or null: the app's Paste reaches the page as text only. */
+  clipboardImage() { return this.call<{ data: string; type: string } | null>('ClipboardImage'); }
   clipboardGet(): Promise<string> {
     return window.runtime ? window.runtime.ClipboardGetText() : navigator.clipboard.readText();
   }
@@ -336,8 +338,10 @@ export class Backend {
   iperfServerStart(port: number) { return this.call<IperfInfo>('IperfServerStart', port); }
   iperfServerStop() { return this.call<void>('IperfServerStop'); }
   iperfClient(host: string, seconds: number, both: boolean) { return this.call<IperfTest[]>('IperfClient', host, seconds, both); }
-  firewallCheck() { return this.call<FirewallState>('FirewallCheck'); }
-  firewallAllow() { return this.call<FirewallState>('FirewallAllow'); }
+  /** The firewall for the ports typed (saved or not; 0 = the saved one). */
+  firewallCheck(tftp = 0, ftp = 0, http = 0) { return this.call<FirewallState>('FirewallCheckPorts', tftp, ftp, http); }
+  /** Allows them: with a sudo password through sudo, without one through the system's own password prompt. */
+  firewallAllow(tftp = 0, ftp = 0, http = 0, sudoPw = '') { return this.call<FirewallState>('FirewallAllowWith', tftp, ftp, http, sudoPw); }
   fileServersPassword() { return this.call<string>('FileServersPassword'); }
   fileServersNewPassword() { return this.call<string>('FileServersNewPassword'); }
   fileServersChooseFolder() { return this.call<string>('FileServersChooseFolder'); }
