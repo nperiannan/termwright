@@ -32,6 +32,10 @@ type Tester struct {
 	GW       string   `json:"gw,omitempty"`       // for streams to another network
 	VLAN     int      `json:"vlan,omitempty"`     // it tags its own frames (ARP and ping answers) with this VLAN
 	Speed    int      `json:"speed,omitempty"`    // its line rate, Mbit/s, for rates given as % of it (default 1000)
+	Lag      string   `json:"lag,omitempty"`      // test ports with the same LAG name speak LACP (active) and form one link aggregation with the switch
+	LacpFast bool     `json:"lacpFast,omitempty"` // LACP every second (else every 30 s)
+	LacpUp   string   `json:"lacpUp,omitempty"`   // the LAG as LACP has it: "up" or why not (filled in for the screens)
+	Neighbor string   `json:"neighbor,omitempty"` // what the switch says on LLDP: its name and port (filled in for the screens)
 	PortName string   `json:"portName,omitempty"` // as the switch names it (filled in for the screens)
 	X        float64  `json:"x,omitempty"`        // on the canvas
 	Y        float64  `json:"y,omitempty"`        // on the canvas
@@ -188,19 +192,22 @@ func (l *Lab) TesterOn(vm string, port int) *Tester {
 // (frames carry the stream's index) and the run (0 = stopped).
 func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) ([]byte, int) {
 	type tc struct {
-		ID     string   `json:"id"`
-		Name   string   `json:"name"`
-		DHCP   bool     `json:"dhcp,omitempty"`
-		SLAAC  bool     `json:"slaac,omitempty"`
-		LLDP   bool     `json:"lldp,omitempty"`
-		MAC    string   `json:"mac"`
-		IP     string   `json:"ip,omitempty"`
-		IP6    string   `json:"ip6,omitempty"`
-		Groups []string `json:"groups,omitempty"`
-		GW     string   `json:"gw,omitempty"`
-		VLAN   int      `json:"vlan,omitempty"`
-		Listen int      `json:"listen"`
-		Send   int      `json:"send"`
+		ID       string   `json:"id"`
+		Name     string   `json:"name"`
+		DHCP     bool     `json:"dhcp,omitempty"`
+		SLAAC    bool     `json:"slaac,omitempty"`
+		LLDP     bool     `json:"lldp,omitempty"`
+		MAC      string   `json:"mac"`
+		IP       string   `json:"ip,omitempty"`
+		IP6      string   `json:"ip6,omitempty"`
+		Groups   []string `json:"groups,omitempty"`
+		GW       string   `json:"gw,omitempty"`
+		VLAN     int      `json:"vlan,omitempty"`
+		Listen   int      `json:"listen"`
+		Send     int      `json:"send"`
+		Lag      string   `json:"lag,omitempty"`
+		LacpFast bool     `json:"lacpFast,omitempty"`
+		LacpPort int      `json:"lacpPort,omitempty"`
 	}
 	type sc struct {
 		Stream
@@ -216,7 +223,15 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 			continue
 		}
 		li, se := l.TesterPorts(*v, t.Port)
-		ts = append(ts, tc{t.ID, t.Name, t.DHCP, t.SLAAC, t.LLDP, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se})
+		port := 0
+		if t.Lag != "" { // its number in its LAG
+			for _, o := range l.Testers {
+				if o.Lag == t.Lag && o.ID <= t.ID {
+					port++
+				}
+			}
+		}
+		ts = append(ts, tc{t.ID, t.Name, t.DHCP, t.SLAAC, t.LLDP, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se, t.Lag, t.LacpFast, port})
 	}
 	var ss []sc
 	for _, s := range l.Streams {

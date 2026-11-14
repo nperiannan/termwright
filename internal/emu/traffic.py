@@ -10,7 +10,10 @@
 # streams reach the test ports that joined the group (they send IGMP/MLD reports).
 # Test ports can take their address by DHCP (and IPv6 by SLAAC from router
 # advertisements), announce themselves with gratuitous ARP and LLDP, and answer
-# ARP, neighbour solicitations and ping.
+# ARP, neighbour solicitations and ping. They read the switch's LLDP (its name
+# and port), and test ports with the same LAG name speak LACP (802.1AX, active):
+# with the switch they form a link aggregation, and a stream to one of them is
+# received on any of them.
 # Each frame carries a signature: stream, run, sequence, send time and flow, so the
 # receiver counts loss, out-of-order and duplicate frames, latency (a histogram for
 # its percentiles) and jitter, per stream and per flow (the values of its changing
@@ -136,6 +139,10 @@ class Tester:
         s.ll = b"\xfe\x80" + b"\0" * 6 + eui64(s.mac)  # its IPv6 link-local address
         s.groups = [ip_b(g) for g in t.get("groups") or []]
         s.last_join, s.garp_at = 0, 0
+        s.lag, s.lacp_fast = t.get("lag", ""), bool(t.get("lacpFast"))
+        s.lacp_port = t.get("lacpPort", 1)
+        if not hasattr(s, "partner"):
+            s.partner, s.partner_at, s.lacp_at, s.neighbour = None, 0, 0, None
 
     def send(s, frame):
         if len(frame) < 60:
@@ -177,7 +184,68 @@ class Tester:
             f += tlv(8, bytes([5, 1]) + s.ip + b"\x02\x00\x00\x00\x00\x00")
         s.send(b"\x01\x80\xc2\x00\x00\x0e" + s.mac + b"\x88\xcc" + f + tlv(0, b""))
 
-    def tick(s, now):  # its own protocols: DHCP, SLAAC, gratuitous ARP, LLDP
+    def lag_id(s):  # its LAG's system (a MAC from its name) and key
+        h = sum(s.lag.encode()) * 7919 + len(s.lag)
+        return b"\x02\x74\x77\x1a" + struct.pack("!H", h & 0xFFFF), 1000 + (h % 9000)
+
+    def lacp_state(s, now):
+        st = 0x05 | (0x02 if s.lacp_fast else 0)  # active, aggregation, the timeout it asks for
+        p = s.partner if s.partner and now - s.partner_at < (3 if s.lacp_fast else 90) else None
+        if p:
+            st |= 0x08  # in sync: it takes the partner as it is
+            if p["state"] & 0x08:
+                st |= 0x30  # collecting and distributing once the partner is in sync too
+        else:
+            st |= 0x40  # defaulted
+        return st, p
+
+    def lacp_send(s, now):  # an LACPDU: actor (this test port in its LAG), partner (what the switch said)
+        sysmac, key = s.lag_id()
+        st, p = s.lacp_state(now)
+        actor = struct.pack("!BBH6sHHHB3x", 1, 20, 32768, sysmac, key, 32768, s.lacp_port, st)
+        if p:
+            partner = struct.pack("!BBH6sHHHB3x", 2, 20, p["prio"], p["sys"], p["key"], p["pprio"], p["port"], p["state"])
+        else:
+            partner = struct.pack("!BBH6sHHHB3x", 2, 20, 0, b"\0" * 6, 0, 0, 0, 0)
+        pdu = b"\x01\x01" + actor + partner + struct.pack("!BBH12x", 3, 16, 0) + b"\0\0" + b"\0" * 50
+        s.send(b"\x01\x80\xc2\x00\x00\x02" + s.mac + b"\x88\x09" + pdu)
+
+    def lacp_got(s, b, now):  # an LACPDU from the switch: its actor is our partner
+        if len(b) < 2 + 20 or b[0] != 1 or b[2] != 1:
+            return
+        prio, sysm, key, pprio, port, st = struct.unpack("!H6sHHHB", b[4:19])
+        was = s.lacp_state(now)[0]
+        s.partner, s.partner_at = {"prio": prio, "sys": sysm, "key": key, "pprio": pprio, "port": port, "state": st}, now
+        if s.lacp_state(now)[0] != was:
+            s.lacp_send(now)  # tell the switch at once when its own state changed
+
+    def lldp_got(s, b):  # the switch's LLDP: its name, chassis and port
+        i, n = 0, {}
+        while i + 2 <= len(b):
+            h = struct.unpack("!H", b[i:i + 2])[0]
+            t, ln = h >> 9, h & 0x1FF
+            v = b[i + 2:i + 2 + ln]
+            i += 2 + ln
+            if t == 0:
+                break
+            if t == 1 and v:
+                n["chassis"] = v[1:].hex(":") if v[0] == 4 and len(v) == 7 else v[1:].decode("utf-8", "replace")
+            elif t == 2 and v:
+                n["port"] = v[1:].hex(":") if v[0] == 3 and len(v) == 7 else v[1:].decode("utf-8", "replace")
+            elif t == 4:
+                n["portDesc"] = v.decode("utf-8", "replace")
+            elif t == 5:
+                n["name"] = v.decode("utf-8", "replace")
+        if n:
+            s.neighbour = n
+
+    def lacp_view(s, now):
+        if not s.lag:
+            return None
+        st, p = s.lacp_state(now)
+        return {"lag": s.lag, "up": st & 0x30 == 0x30, "state": st, "partner": {"sys": p["sys"].hex(":"), "key": p["key"], "port": p["port"], "state": p["state"]} if p else None}
+
+    def tick(s, now):  # its own protocols: DHCP, SLAAC, gratuitous ARP, LLDP, LACP
         if s.dhcp:
             if s.dhcp_state in ("", "discover") and now - s.dhcp_at > 4:
                 s.dhcp_state, s.dhcp_at = "discover", now
@@ -197,6 +265,9 @@ class Tester:
         if s.garp_at == 0 and s.ip != b"\0\0\0\0":
             s.garp_at = now
             s.garp()
+        if s.lag and now - s.lacp_at > (1 if s.lacp_fast else 30) - (0.02 if s.lacp_at else 99):
+            s.lacp_at = now
+            s.lacp_send(now)
 
     def join(s):  # IGMPv2 / MLDv1 reports for the groups it is in
         for g in s.groups:
@@ -372,6 +443,8 @@ def load():
         else:
             testers[tid].set(t)
     cfg = c
+    lagof.clear()
+    lagof.update({t["id"]: t.get("lag", "") for t in c.get("testers", []) if t.get("lag")})
     phash.clear()
     for x in c.get("streams", []):
         if x.get("kind") == "pcap" and x.get("on") and x.get("pcapId"):
@@ -477,6 +550,7 @@ def l3key(f):
 
 
 phash = {}  # pcap streams' frames: l3key -> stream
+lagof = {}  # test port -> its LAG's name (a stream to one member is received on any)
 
 
 def reflect(tp, f, o, et):
@@ -507,6 +581,13 @@ def handle(tp, f):
         o += 4
     et = struct.unpack("!H", f[o:o + 2])[0]
     b = f[o + 2:]
+    if et == 0x8809:  # slow protocols: LACP
+        if tp.lag:
+            tp.lacp_got(b, time.time())
+        return
+    if et == 0x88CC:
+        tp.lldp_got(b)
+        return
     i = f.find(MAGIC)
     if i >= 0 and len(f) >= i + 4 + SIGN:
         idx, r, seq, ts, flow = struct.unpack(SIG, f[i + 4:i + 4 + SIGN])
@@ -517,7 +598,7 @@ def handle(tp, f):
             if x.get("rtt") and x["from"] == tp.id and x.get("to"):  # its own frame, sent back: the round trip
                 k = (sid, "rtt")
                 latency(sid, flow, ts, seen.setdefault(k, [-1, set(), None]))
-            elif x.get("to") and x["to"] != tp.id:
+            elif x.get("to") and x["to"] != tp.id and not (tp.lag and x["to"] in lagof and lagof[x["to"]] == tp.lag):
                 other[sid] = other.get(sid, 0) + 1
             elif x["from"] != tp.id or echo:
                 dst = ip_b(x.get("dstIp") or "")
@@ -525,7 +606,7 @@ def handle(tp, f):
                     other[sid] = other.get(sid, 0) + 1  # flooded to a port that did not join
                 else:
                     dscp = b[1] >> 2 if et == 0x0800 and len(b) > 1 else ((b[0] & 15) << 4 | b[1] >> 4) >> 2 if et == 0x86DD and len(b) > 1 else -1
-                    rtt = x.get("rtt") and x.get("to") == tp.id
+                    rtt = x.get("rtt") and (x.get("to") == tp.id or tp.lag and lagof.get(x.get("to")) == tp.lag)
                     got(sid, tp, seq, ts if x["from"] in testers and not rtt else 0, flow, "%d/%d/%d" % (vlan, prio, dscp))
                     if rtt:
                         reflect(tp, f, o, et)
@@ -694,6 +775,7 @@ while True:
         st = {"run": run, "at": now, "tx": tx, "rx": rx, "other": other, "lat": lat, "err": err, "ooo": ooo, "dup": dup, "jit": jit,
               "busy": {s.x["id"]: s.seq < s.count for s in streams}, "testers": sorted(testers),
               "hist": hist, "frx": frx, "qos": qos, "ftx": ftx, "flab": flab,
+              "lacp": {t.id: t.lacp_view(now) for t in testers.values() if t.lag}, "lldp": {t.id: t.neighbour for t in testers.values() if t.neighbour},
               "lease": {t.id: t.lease for t in testers.values() if t.lease}, "lease6": {t.id: {"ip": t.lease6, "gw": t.gw6} for t in testers.values() if getattr(t, "lease6", None)}}
         try:
             with open(st_path + ".tmp", "w") as fh:

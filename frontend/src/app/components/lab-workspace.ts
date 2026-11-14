@@ -738,6 +738,8 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
               <label><span>VLAN</span><input type="number" min="0" max="4094" [(ngModel)]="t.vlan" [placeholder]="tr('untagged')" [title]="tr('Its frames carry this VLAN tag (0: untagged)')" /></label>
               <label><span>IPv6</span><input [(ngModel)]="t.ip6" [placeholder]="tr('fd00::1/64, or slaac')" [title]="tr('It answers neighbour solicitations and ping there; IPv6 streams use it. slaac: it takes one from router advertisements')" /></label>
               <label><span>{{ tr('Line rate') }}</span><input type="number" min="0" [(ngModel)]="t.speed" placeholder="1000" [title]="tr('Mbit/s: streams with a rate in % of line rate use it')" /></label>
+              <label><span>LAG</span><div class="two lg"><input [(ngModel)]="t.lag" [placeholder]="tr('none')" [title]="tr('Test ports with the same LAG name speak LACP and form one link aggregation with the switch; a stream to one of them is received on any')" /><label class="cbl"><input type="checkbox" class="cbx" [(ngModel)]="t.lacpFast" [title]="tr('LACP every second (else every 30 s)')" /> {{ tr('fast') }}</label></div></label>
+              @if (t.id && (t.lacpUp || t.neighbor)) { <p class="rhint" [class.ok]="t.lacpUp?.startsWith('up')">@if (t.lacpUp) { LACP: {{ t.lacpUp }} }@if (t.lacpUp && t.neighbor) { · }@if (t.neighbor) { LLDP: {{ t.neighbor }} }</p> }
               <label><span>LLDP</span><input type="checkbox" class="cbx" [(ngModel)]="t.lldp" [title]="tr('Announce it by LLDP, so the switch sees Termwright and its name on the port')" /></label>
               <label><span>{{ tr('Multicast') }}</span><input [(ngModel)]="t.groups" placeholder="239.1.1.1, ff0e::1" [title]="tr('Groups it joins (IGMP / MLD reports), to receive multicast streams')" /></label>
               <p class="muted small">{{ tr('A sender and counter on the host where the switch runs (no VM): tens of thousands of frames a second - for forwarding, VLANs, LAGs, ACLs and failover, not line rate.') }}</p>
@@ -939,6 +941,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
     .two.pc { grid-template-columns: minmax(0, 1fr) auto; align-items: center; } .pcn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; } .cbl { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
     .rsn { color: var(--warning, #e39b17); font-size: 12px; margin-left: 3px; } .rsb { flex: none; font: 600 10px var(--mono, monospace); color: var(--warning, #e39b17); border: 1px solid color-mix(in srgb, var(--warning, #e39b17) 45%, transparent); border-radius: 9px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
     .rsbox { display: flex; align-items: center; gap: 8px; margin: 6px 0; padding: 7px 9px; border-radius: 8px; font-size: 11.5px; background: color-mix(in srgb, var(--warning, #e39b17) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warning, #e39b17) 40%, transparent); span { flex: 1; } b { color: var(--warning, #e39b17); } }
+    .rhint.ok { color: var(--success, #1fa45a); } .two.lg { grid-template-columns: minmax(0, 1fr) auto; align-items: center; .cbl { display: flex !important; align-items: center; gap: 5px; } .cbl input { width: auto !important; height: auto !important; } }
     .rhint { margin: -3px 0 0 94px; color: var(--muted); font-size: 11px; &.bad { color: var(--warning, #e39b17); } } .two.ru { grid-template-columns: minmax(0, 1fr) 104px; }
     .cbx { height: auto !important; justify-self: start; } td.spk { white-space: nowrap; svg { vertical-align: middle; margin-right: 4px; } polyline { fill: none; stroke-width: 1.5; } .stx { stroke: var(--s1); } .srx { stroke: var(--s2); } }
     .tre { border-left: 1px solid var(--line); padding: 8px 12px; overflow: auto; display: grid; gap: 7px; align-content: start; background: var(--surface-2); font-size: 12px;
@@ -1104,7 +1107,7 @@ export class LabWorkspace implements OnDestroy {
   protected traf = signal<EmuTrafficView | null>(null);
   protected sEd = signal<EmuStream | null>(null);
   /** The test port editor: a new one (vm, port), or one that exists (id, its name and where it is). */
-  protected tEd = signal<{ id?: string; name?: string; where?: string; vm: string; port: string; ip: string; gw: string; vlan?: number | null; ip6?: string; groups?: string; lldp?: boolean; speed?: number | null; free: string[] } | null>(null);
+  protected tEd = signal<{ id?: string; name?: string; where?: string; vm: string; port: string; ip: string; gw: string; vlan?: number | null; ip6?: string; groups?: string; lldp?: boolean; speed?: number | null; lag?: string; lacpFast?: boolean; lacpUp?: string; neighbor?: string; free: string[] } | null>(null);
   protected tpAt = signal<Record<string, { x: number; y: number }>>({});
   protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw', 'pcap'];
   protected libOpen = signal(false);
@@ -1319,12 +1322,12 @@ export class LabWorkspace implements OnDestroy {
     this.sEd.set(null);
     if (this.page() !== 'traffic') this.dock.set('traffic');
     void this.loadTraf();
-    this.tEd.set({ id: x.id, name: x.name, where: this.tpWhere(x), vm: x.vm, port: String(x.port), ip: x.dhcp ? 'dhcp' : x.ip ?? '', gw: x.gw ?? '', vlan: x.vlan || null, ip6: x.slaac ? 'slaac' : x.ip6 ?? '', groups: (x.groups ?? []).join(', '), lldp: x.lldp !== false, speed: x.speed || null, free: [] });
+    this.tEd.set({ id: x.id, name: x.name, where: this.tpWhere(x), vm: x.vm, port: String(x.port), ip: x.dhcp ? 'dhcp' : x.ip ?? '', gw: x.gw ?? '', vlan: x.vlan || null, ip6: x.slaac ? 'slaac' : x.ip6 ?? '', groups: (x.groups ?? []).join(', '), lldp: x.lldp !== false, speed: x.speed || null, lag: x.lag ?? '', lacpFast: !!x.lacpFast, lacpUp: x.lacpUp, neighbor: x.neighbor, free: [] });
   }
   async saveTester(t: NonNullable<ReturnType<typeof this.tEd>>) {
     const cur = this.traf()?.testers.find(x => x.id === t.id); if (!cur) return;
     try {
-      const v = await this.backend.emuTesterSet({ ...cur, name: (t.name ?? '').trim() || cur.name, ip: t.ip.trim(), gw: t.gw.trim(), vlan: +(t.vlan ?? 0) || 0, ip6: (t.ip6 ?? '').trim(), groups: (t.groups ?? '').split(/[\s,]+/).filter(Boolean), lldp: t.lldp !== false, speed: +(t.speed ?? 0) || 0, dhcp: false, slaac: false });
+      const v = await this.backend.emuTesterSet({ ...cur, name: (t.name ?? '').trim() || cur.name, ip: t.ip.trim(), gw: t.gw.trim(), vlan: +(t.vlan ?? 0) || 0, ip6: (t.ip6 ?? '').trim(), groups: (t.groups ?? '').split(/[\s,]+/).filter(Boolean), lldp: t.lldp !== false, speed: +(t.speed ?? 0) || 0, lag: (t.lag ?? '').trim(), lacpFast: !!t.lacpFast, dhcp: false, slaac: false });
       this.traf.set(v); this.tEd.set(null); this.ui.toast(tr('{0} saved', cur.name), 'success'); if (v.note) this.ui.toast(v.note);
     } catch (e) { this.ui.error(e); }
   }

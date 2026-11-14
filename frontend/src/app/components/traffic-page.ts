@@ -35,7 +35,9 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
               <div class="tpc" [class.sel]="selected() === t.id" (click)="editTester.emit(t)" [title]="tr('Its settings')"><div class="r1"><b>⇄ {{ t.name }}</b><a class="x" (click)="removeTester.emit(t); $event.stopPropagation()" [title]="tr('Remove')" [attr.aria-label]="tr('Remove {0}?', t.name)">✕</a></div>
                 <div class="small">{{ c.where }}</div>
                 <div class="mono small">{{ t.dhcp ? (t.lease || 'DHCP…') : (t.ip || '-') }}@if (t.ip6 || t.slaac) { · {{ t.slaac ? (t.lease6 || 'SLAAC…') : t.ip6 }} }</div>
-                <div class="mono small muted">{{ t.mac }}@if (t.vlan) { · VLAN {{ t.vlan }} }@if (t.speed) { · {{ t.speed >= 1000 ? t.speed / 1000 + 'G' : t.speed + 'M' }} }</div></div>
+                <div class="mono small muted">{{ t.mac }}@if (t.vlan) { · VLAN {{ t.vlan }} }@if (t.speed) { · {{ t.speed >= 1000 ? t.speed / 1000 + 'G' : t.speed + 'M' }} }</div>
+                @if (t.lag) { <div class="small" [class.up]="t.lacpUp?.startsWith('up')" [class.dn]="!t.lacpUp?.startsWith('up')" [title]="t.lacpUp || ''">LAG {{ t.lag }} · {{ t.lacpUp?.startsWith('up') ? tr('up') : tr('not up') }}</div> }
+                @if (t.neighbor) { <div class="small muted" [title]="tr('What the switch says on LLDP')">⇆ {{ t.neighbor }}</div> }</div>
             } @empty { <p class="muted small">{{ tr('No test port yet: ＋ Test Port, or right-click a switch on the canvas → Add Test Port.') }}</p> }
           </aside>
         }
@@ -66,6 +68,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
     .tpm { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
     .tcs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
     .tpb.tests { grid-template-columns: minmax(0, 1fr); }
+    .up { color: var(--success, #1fa45a); } .dn { color: var(--warning, #e39b17); }
     .seg2 { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; a { padding: 5px 12px; cursor: pointer; font-size: 12px; } a.on { background: var(--accent-soft); color: var(--accent); } }
     .muted { color: var(--muted); } .small { font-size: 11.5px; } .mono { font-family: var(--mono, monospace); }
     @media (max-width: 1300px) { .kpis { grid-template-columns: repeat(4, minmax(120px, 1fr)); } .tcs { grid-template-columns: 1fr; } }

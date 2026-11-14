@@ -73,6 +73,7 @@ var emuTraf struct {
 	prev    map[string][3]float64 // per stream: when, tx and rx at the last read (for the rates)
 	hist    map[string][][5]float64
 	leases  map[string][2]string // test port → the address it got by DHCP ("ip/len via gw"), by SLAAC
+	proto   map[string][2]string // test port → its LAG as LACP has it, its LLDP neighbour
 }
 
 func emuTesterName(l *emu.Lab) string {
@@ -225,16 +226,27 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		} `json:"lease"`
 		Lease6 map[string]struct{ IP, GW string } `json:"lease6"`
 		Dup    map[string]int                     `json:"dup"`
-		Jit    map[string][]float64               `json:"jit"`
-		Hist   map[string]map[string]int          `json:"hist"`
-		FRX    map[string]map[string][]float64    `json:"frx"`
-		FTX    map[string]map[string]int          `json:"ftx"`
-		FLab   map[string]map[string]string       `json:"flab"`
-		QoS    map[string]map[string]int          `json:"qos"`
+		LACP   map[string]*struct {
+			Up      bool `json:"up"`
+			Partner *struct {
+				Sys  string `json:"sys"`
+				Key  int    `json:"key"`
+				Port int    `json:"port"`
+			} `json:"partner"`
+		} `json:"lacp"`
+		LLDP map[string]struct {
+			Name, Port, PortDesc, Chassis string
+		} `json:"lldp"`
+		Jit  map[string][]float64            `json:"jit"`
+		Hist map[string]map[string]int       `json:"hist"`
+		FRX  map[string]map[string][]float64 `json:"frx"`
+		FTX  map[string]map[string]int       `json:"ftx"`
+		FLab map[string]map[string]string    `json:"flab"`
+		QoS  map[string]map[string]int       `json:"qos"`
 	}
 	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}, OOO: map[string]int{}, Dup: map[string]int{}, Jit: map[string][]float64{},
 		Hist: map[string]map[string]int{}, FRX: map[string]map[string][]float64{}, FTX: map[string]map[string]int{}, FLab: map[string]map[string]string{}, QoS: map[string]map[string]int{}}
-	dyn := slices.ContainsFunc(v.Testers, func(t emu.Tester) bool { return t.DHCP || t.SLAAC })
+	dyn := slices.ContainsFunc(v.Testers, func(t emu.Tester) bool { return t.DHCP || t.SLAAC || t.Lag != "" || t.LLDP }) // (their protocols report while nothing runs)
 	if run != 0 || emuTraf.last != nil || dyn {
 		for _, h := range hosts {
 			out, err := a.emuRun(h, "cat "+emu.Q(dir)+"/traffic-stats.json 2>/dev/null", 15*time.Second)
@@ -277,6 +289,27 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 				l := emuTraf.leases[k]
 				l[1] = x.IP
 				emuTraf.leases[k] = l
+			}
+			if emuTraf.proto == nil {
+				emuTraf.proto = map[string][2]string{}
+			}
+			for k, x := range st.LACP {
+				p := emuTraf.proto[k]
+				switch {
+				case x == nil:
+				case x.Up:
+					p[0] = fmt.Sprintf("up (switch port %d, key %d)", x.Partner.Port, x.Partner.Key)
+				case x.Partner != nil:
+					p[0] = fmt.Sprintf("negotiating with switch port %d", x.Partner.Port)
+				default:
+					p[0] = "no LACP from the switch (is its port in a LAG with LACP?)"
+				}
+				emuTraf.proto[k] = p
+			}
+			for k, x := range st.LLDP {
+				p := emuTraf.proto[k]
+				p[1] = strings.TrimSpace(orStr(x.Name, x.Chassis) + " " + orStr(x.PortDesc, x.Port))
+				emuTraf.proto[k] = p
 			}
 			emuLab.mu.Unlock()
 			for k, n := range st.OOO {
@@ -390,6 +423,9 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 	for i := range v.Testers {
 		if l, ok := emuTraf.leases[v.Testers[i].ID]; ok {
 			v.Testers[i].Lease, v.Testers[i].Lease6 = l[0], l[1]
+		}
+		if p, ok := emuTraf.proto[v.Testers[i].ID]; ok {
+			v.Testers[i].LacpUp, v.Testers[i].Neighbor = p[0], p[1]
 		}
 	}
 	emuLab.mu.Unlock()
@@ -532,6 +568,7 @@ func (a *App) EmuTesterSet(t emu.Tester) (EmuTrafficView, error) {
 	cur.Name, cur.IP, cur.GW, cur.VLAN, cur.X, cur.Y = orStr(strings.TrimSpace(t.Name), cur.Name), t.IP, t.GW, t.VLAN, t.X, t.Y
 	cur.IP6, cur.Groups, cur.DHCP, cur.SLAAC, cur.LLDP = t.IP6, t.Groups, t.DHCP && t.IP == "", t.SLAAC && t.IP6 == "", t.LLDP
 	cur.Speed = min(400000, max(0, t.Speed))
+	cur.Lag, cur.LacpFast = strings.TrimSpace(t.Lag), t.LacpFast
 	for i, x := range l.Streams { // rates in % of its line rate follow it
 		if x.From == cur.ID && x.RateUnit == "pct" {
 			l.Streams[i].PPS = min(100000, max(1, int(math.Round(x.PPSFor(cur.LineMbps())))))

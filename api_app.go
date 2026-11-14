@@ -407,6 +407,10 @@ func (a *App) apiPortSet(id string, b map[string]any) (EmuTrafficView, error) {
 			t.LLDP, _ = b[k].(bool)
 		case "speed":
 			t.Speed = argInt(b, k, 0, 400000)
+		case "lag":
+			t.Lag = argStr(b, k)
+		case "lacpFast":
+			t.LacpFast, _ = b[k].(bool)
 		default:
 			return tv, fmt.Errorf("a test port has no %q to change (name, ip, ip6, gateway, vlan, groups, lldp)", k)
 		}

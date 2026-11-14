@@ -150,6 +150,8 @@ var mcpLabTools = []mcpTool{
 			"rate_unit":    map[string]any{"type": "string", "enum": []string{"pps", "mbps", "pct"}, "description": "add_stream: pps, mbps (Mbit/s on the wire, with preamble and gap) or pct (% of the sending test port's line rate)"},
 			"round_trip":   map[string]any{"type": "boolean", "description": "add_stream: the test port it goes to sends each frame back; latency is the round trip (works between test ports on two hosts)"},
 			"speed":        map[string]any{"type": "integer", "description": "add_port, set_port: the test port's line rate in Mbit/s, for rates in % of it (default 1000)"},
+			"lag":          map[string]any{"type": "string", "description": "add_port, set_port: test ports with the same LAG name speak LACP (active) and form one LAG with the switch (\"\" = none); a stream to one member is received on any"},
+			"lacp_fast":    map[string]any{"type": "boolean", "description": "add_port, set_port: LACP every second (else 30 s)"},
 			"seconds":      map[string]any{"type": "integer"},
 			"count":        map[string]any{"type": "integer"},
 			"max_loss":     map[string]any{"type": "number", "description": "% for a pass (default 0)"},
@@ -818,7 +820,14 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				if t.IP6 != "" || t.SLAAC {
 					ip += ", IPv6 " + orStr(t.IP6, orStr(t.Lease6, "SLAAC (none yet)"))
 				}
-				fmt.Fprintf(&b, "- test port %s on %s port %d, MAC %s, IP %s\n", t.Name, sw, t.Port, t.MAC, ip)
+				fmt.Fprintf(&b, "- test port %s on %s port %d, MAC %s, IP %s", t.Name, sw, t.Port, t.MAC, ip)
+				if t.Lag != "" {
+					fmt.Fprintf(&b, ", LAG %s (LACP %s)", t.Lag, orStr(t.LacpUp, "starting"))
+				}
+				if t.Neighbor != "" {
+					fmt.Fprintf(&b, ", LLDP: %s", t.Neighbor)
+				}
+				b.WriteString("\n")
 			}
 			if rep, _ := a.EmuTrafficReportText(); len(tv.Streams) > 0 {
 				b.WriteString("Streams:\n" + rep)
@@ -840,8 +849,9 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				return "", err
 			}
 			t := r.Testers[len(r.Testers)-1]
-			if ip6, gs := argStr(args, "ip6"), argStrs(args, "groups"); ip6 != "" || len(gs) > 0 || args["lldp"] != nil || args["speed"] != nil {
-				t.IP6, t.Groups, t.Speed = ip6, gs, argInt(args, "speed", 0, 400000)
+			if ip6, gs := argStr(args, "ip6"), argStrs(args, "groups"); ip6 != "" || len(gs) > 0 || args["lldp"] != nil || args["speed"] != nil || args["lag"] != nil {
+				t.IP6, t.Groups, t.Speed, t.Lag = ip6, gs, argInt(args, "speed", 0, 400000), argStr(args, "lag")
+				t.LacpFast, _ = args["lacp_fast"].(bool)
 				if x, ok := args["lldp"].(bool); ok {
 					t.LLDP = x
 				}
@@ -884,6 +894,12 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			}
 			if _, ok := args["speed"]; ok {
 				t.Speed = argInt(args, "speed", 0, 400000)
+			}
+			if _, ok := args["lag"]; ok {
+				t.Lag = argStr(args, "lag")
+			}
+			if x, ok := args["lacp_fast"].(bool); ok {
+				t.LacpFast = x
 			}
 			_, err := a.EmuTesterSet(*t)
 			return "Changed " + t.Name + ".", err

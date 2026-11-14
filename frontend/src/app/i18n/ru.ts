@@ -3374,6 +3374,11 @@ const ru: Record<string, string> = {
   'A plain L2 switch (no VLANs): it learns where each MAC address is. Drag it onto the canvas, or double-click': 'Простой L2-коммутатор (без VLAN): он узнаёт, где каждый MAC-адрес. Перетащите на холст или дважды щёлкните',
   'L2 switch: learns MAC addresses': 'L2-коммутатор: изучает MAC-адреса',
   'Hub: every frame to every port': 'Концентратор: каждый кадр во все порты',
+  'Test ports with the same LAG name speak LACP and form one link aggregation with the switch; a stream to one of them is received on any': 'Тестовые порты с одним именем LAG говорят по LACP и образуют одно агрегированное соединение с коммутатором; поток к одному из них принимается на любом',
+  'LACP every second (else every 30 s)': 'LACP каждую секунду (иначе каждые 30 с)',
+  'fast': 'быстро',
+  'not up': 'не поднят',
+  'What the switch says on LLDP': 'Что коммутатор сообщает по LLDP',
 };
 
 export default ru;

@@ -519,3 +519,82 @@ func TestTrafficPyPcap(t *testing.T) {
 func binaryWrite(b *bytes.Buffer, v uint32) error {
 	return binary.Write(b, binary.LittleEndian, v)
 }
+
+// Two test ports in one LAG speak LACP with a "switch" that answers like one (its LACPDUs on each member, in
+// sync once ours are), read its LLDP, and a stream to one member is received on the other.
+func TestTrafficPyLACP(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644)
+	// the "switch": 44111/44112 are its ends of test ports 1/2 (they send there, it sends to 44101/44102); 44113 is t3's end
+	sw := map[int]*net.UDPConn{}
+	for _, p := range []int{44111, 44112, 44113} {
+		c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: p})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		sw[p] = c
+	}
+	to := func(p int) *net.UDPAddr { return &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: p} }
+	lacpdu := func(port uint16, state byte) []byte {
+		b := []byte{1, 0x80, 0xc2, 0, 0, 2, 0, 4, 0x96, 1, 2, 3, 0x88, 0x09, 1, 1, 1, 20, 0x80, 0, 0, 4, 0x96, 1, 2, 3, 0x03, 0xe9, 0x80, 0, 0, byte(port), state, 0, 0, 0}
+		return append(b, make([]byte, 90)...)
+	}
+	lldp := []byte{1, 0x80, 0xc2, 0, 0, 0x0e, 0, 4, 0x96, 1, 2, 3, 0x88, 0xcc, 2, 7, 4, 0, 4, 0x96, 1, 2, 3, 4, 4, 5, '1', ':', '1', 10, 7, 's', 'w', '-', 'l', 'a', 'b', '1', 0, 0}
+	go func() { // the switch: what t3 sends goes to t2 (as if the LAG hashed it there); LACP and LLDP on both members
+		buf := make([]byte, 2000)
+		for {
+			_ = sw[44113].SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+			if n, _, err := sw[44113].ReadFromUDP(buf); err == nil {
+				_, _ = sw[44113].WriteToUDP(buf[:n], to(44102))
+			} else if !strings.Contains(err.Error(), "timeout") {
+				return
+			}
+			for i, p := range []int{44111, 44112} {
+				_ = sw[p].SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+				if n, _, err := sw[p].ReadFromUDP(buf); err == nil && n > 14 && buf[12] == 0x88 && buf[13] == 0x09 {
+					_, _ = sw[p].WriteToUDP(lacpdu(uint16(i+1), 0x3d), to(44101+i)) // in sync, collecting, distributing
+					_, _ = sw[p].WriteToUDP(lldp, to(44101+i))
+				}
+			}
+		}
+	}()
+	cfg := map[string]any{"run": 3, "testers": []map[string]any{
+		{"id": "t1", "mac": "02:74:77:00:00:01", "listen": 44101, "send": 44111, "lag": "lag1", "lacpFast": true, "lacpPort": 1},
+		{"id": "t2", "mac": "02:74:77:00:00:02", "listen": 44102, "send": 44112, "lag": "lag1", "lacpFast": true, "lacpPort": 2},
+		{"id": "t3", "mac": "02:74:77:00:00:03", "ip": "10.1.0.3/24", "listen": 44103, "send": 44113}},
+		"streams": []map[string]any{{"id": "s1", "from": "t3", "to": "t1", "kind": "raw", "size": 64, "pps": 200, "count": 100, "on": true, "toMac": "02:74:77:00:00:01"}}}
+	j, _ := json.Marshal(cfg)
+	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var st struct {
+		RX, Other map[string]int
+		LACP      map[string]struct {
+			Up    bool
+			State int
+		} `json:"lacp"`
+		LLDP map[string]map[string]string `json:"lldp"`
+	}
+	for end := time.Now().Add(6 * time.Second); time.Now().Before(end); time.Sleep(300 * time.Millisecond) {
+		b, err := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+		if err == nil && json.Unmarshal(b, &st) == nil && st.LACP["t1"].Up && st.LACP["t2"].Up && st.RX["s1"] == 100 && st.LLDP["t2"]["name"] != "" {
+			break
+		}
+	}
+	if !st.LACP["t1"].Up || !st.LACP["t2"].Up || st.LACP["t1"].State&0x3d != 0x3d {
+		t.Fatalf("lacp %+v", st.LACP)
+	}
+	if st.LLDP["t1"]["name"] != "sw-lab1" || st.LLDP["t1"]["port"] != "1:1" {
+		t.Fatalf("lldp %+v", st.LLDP)
+	}
+	if st.RX["s1"] != 100 || st.Other["s1"] != 0 {
+		t.Fatalf("to the LAG: rx %v other %v", st.RX, st.Other)
+	}
+}

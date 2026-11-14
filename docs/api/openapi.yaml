@@ -2290,6 +2290,12 @@ paths:
                                         - raw
                                         - pcap
                                     type: string
+                                lacp_fast:
+                                    description: 'add_port, set_port: LACP every second (else 30 s)'
+                                    type: boolean
+                                lag:
+                                    description: 'add_port, set_port: test ports with the same LAG name speak LACP (active) and form one LAG with the switch ("" = none); a stream to one member is received on any'
+                                    type: string
                                 lldp:
                                     description: 'add_port, set_port: announce it by LLDP (default on)'
                                     type: boolean
@@ -4417,6 +4423,18 @@ components:
                 speed:
                     description: its line rate, Mbit/s, for rates given as % of it (default 1000)
                     type: integer
+                lag:
+                    description: test ports with the same LAG name speak LACP (active) and form one link aggregation with the switch
+                    type: string
+                lacpFast:
+                    description: LACP every second (else every 30 s)
+                    type: boolean
+                lacpUp:
+                    description: 'the LAG as LACP has it: "up" or why not (filled in for the screens)'
+                    type: string
+                neighbor:
+                    description: 'what the switch says on LLDP: its name and port (filled in for the screens)'
+                    type: string
                 portName:
                     description: as the switch names it (filled in for the screens)
                     type: string
