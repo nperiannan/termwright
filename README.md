@@ -81,7 +81,7 @@ Termwright began as a terminal and session manager for network engineers. Today 
 
 | | |
 |---|---|
-| ![Reserve a device](docs/screenshots/team-reserve.png) <br/>*Reserve a device for the team* | ![Usage reports](docs/screenshots/team-reports.png) <br/>*Team admin: usage reports* |
+| ![Team inventory](docs/screenshots/team-inventory.png) <br/>*Team admin: the shared inventory - model and serial number read from the devices, who uses what now* | ![Team members](docs/screenshots/team-members.png) <br/>*Teams: a team's members, their roles and the invite* |
 
 ## Terminal and sessions
 
@@ -155,7 +155,7 @@ The complete list is in [docs/FEATURES.md](docs/FEATURES.md).
 | ![Discover Devices](docs/screenshots/discover.png) <br/>*Network discovery: evidence, device type and Connect per device* | ![Configuration backups](docs/screenshots/backups.png) <br/>*Configuration backups* |
 | ![Change checklist](docs/screenshots/checklist.png) <br/>*Change checklist: same or changed per device* | ![Run and Collect](docs/screenshots/collect.png) <br/>*Run and Collect into one table* |
 | ![Open Web Interface](docs/screenshots/web-open.png) <br/>*A device's web interface through its jump station* | ![Command History](docs/screenshots/history.png) <br/>*Command History* |
-| ![Light theme](docs/screenshots/light.png) <br/>*Glacier, light: white and grey with 3D cards* | ![Files panel on the left](docs/screenshots/files-panel-right.png) <br/>*Files panel on the left when the Session Manager is on the right* |
+| ![Tell Me When It Is Free](docs/screenshots/team-watch.png) <br/>*Teams: wait for a busy device* | ![Files panel on the left](docs/screenshots/files-panel-right.png) <br/>*Files panel on the left when the Session Manager is on the right* |
 
 <details>
 <summary>More screenshots</summary>

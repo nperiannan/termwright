@@ -622,7 +622,7 @@ A team that shares a lab can run its own small **team server** (a Docker contain
 
 - **Set Up a Team Server…**: pick the SSH session of the host and give the team a name. Termwright checks Docker, picks a free port from 7443 (never one in use), starts `termwright-team-<name>` with its own data volume, and makes you the **owner**. If the host has no internet, the image is copied over SSH.
 - **Join a Team…**: paste the invite the owner sent you. Termwright talks only to the server whose certificate matches the invite. A team with **single sign-on** shows *Join with Microsoft* (or its own name): the sign-in opens in your browser; every few weeks Termwright asks you to sign in again.
-- **The team**: who is in it and who is online. Owners and co-owners see the invite (*Copy*, *New Invite* - the old one stops working), make members co-owners and remove members. *You appear as* sets the name the team sees.
+- **The team**: its card shows the address, how many members are online and the server's version, with *Open Admin Page*, **Members…** and *Leave*. **Members…** opens the team's own page: who is in it and who is online, their roles; owners and co-owners see the invite (*Copy*, *New Invite* - the old one stops working), make members co-owners and remove members. *You appear as* sets the name the team sees.
 
 - **The team folder**: the team's inventory appears as a folder named after the team and follows the server within seconds. Name, folder, address, port, protocol, device type and MAC address come from the team; your login on each device stays yours.
 - **Push to Team…** (right-click a session, a folder or a selection; also in Discover Devices): offers your own sessions to the team. Devices the team has already - under any name - are shown as *already in the team as …* and left out. Owners and co-owners add directly; what members push waits for their approval.
@@ -646,7 +646,7 @@ Only names, user and computer names and the device inventory are shared; never p
 - Only devices with a device type of a network device count; give the others a type in the team inventory. A serial or console server session named after a team device (*core-sw1 console*) shows that device's status and counts as having it open.
 - Members with your name are you on another computer: your reservation does not warn you there, and you can change or release it from either.
 - **Tell Me When It Is Free** (right-click a device someone else has open or reserved): you get a notice as soon as nobody else has it open or reserved. *Stop Waiting for It* is on the same menu; a wait ends by itself after a day.
-- **Hand the team over**: the owner chooses **Make owner…** next to a member in the Teams window (or on the admin page's Members). That member becomes the owner and you stay as co-owner.
+- **Hand the team over**: the owner chooses **Make owner…** next to a member on the team's Members page in the Teams window (or on the admin page's Members). That member becomes the owner and you stay as co-owner.
 
 | Team card | Device card | Reserve |
 |---|---|---|
