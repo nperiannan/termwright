@@ -985,6 +985,9 @@ while True:
                         handle(t, f)
                     except Exception:
                         pass
+    # at most 2,000 frames a round over all streams, so the frames coming back are read before the
+    # socket's buffer overflows (4,000 per stream lost a quarter of the frames of two streams at 50,000 pps)
+    live = sum(1 for s in streams if s.tp is not None and s.seq < s.count)
     for s in streams:
         if s.tp is None or s.seq >= s.count:
             continue
@@ -1015,7 +1018,7 @@ while True:
         if s.burst > 1:  # whole bursts, as often as the rate allows
             due = min(s.count, ((due + s.burst - 1) // s.burst) * s.burst)
         n = 0
-        while s.seq < due and n < 4000:
+        while s.seq < due and n < max(64, 2000 // max(1, live)):
             s.tp.send(s.frame(time.time()))
             s.seq += 1
             n += 1
