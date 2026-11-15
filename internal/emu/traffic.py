@@ -566,7 +566,8 @@ class Stream:
         else:
             flow = 0xFFFF
         sig = MAGIC + struct.pack(SIG, s.idx, s.run, s.seq, now, flow)
-        size, tos = s.frame_size(), x.get("dscp", 0) << 2
+        # sizes count the FCS (64-1518 bytes, as testers and RFC 2544 do); QEMU's sockets carry frames without it
+        size, tos = max(60, s.frame_size() - 4), x.get("dscp", 0) << 2
         if k == "arp":
             f = l2(BC if not s.dst else s.dst, src_mac, vlan, prio, 0x0806) + arp(1, src_mac, src_ip, b"\0" * 6, dst_ip) + sig
         elif k == "raw":
