@@ -2574,7 +2574,7 @@ const ru: Record<string, string> = {
   'Reinstall or Update…': 'Переустановить или обновить…',
   'Nightly build': 'Ночная сборка',
   'Latest release': 'Последний выпуск',
-  'the newest build of main: fixes before they are released': 'новейшая сборка main: исправления до выпуска',
+  'the newest build of develop: fixes before they are released': 'новейшая сборка develop: исправления до выпуска',
   'the latest published release': 'последний опубликованный выпуск',
   'the team server of this Termwright': 'сервер команды этой версии Termwright',
   'Fill': 'Заполнить',

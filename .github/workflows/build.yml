@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [develop] # the nightly; releases are tags on main
     tags: ['v*']
     # a push that only changes documentation builds no nightly (tag pushes always build)
     paths-ignore: ['**.md', 'docs/**']

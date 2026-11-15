@@ -396,7 +396,7 @@ export class App implements OnInit {
     }
     const info = await this.backend.getAppInfo();
     setPreviewLanguages(info.version || '');
-    // "0.24.1", or "0.24.1 nightly" for a build of main ("0.24.1~git1234567")
+    // "0.24.1", or "0.24.1 nightly" for a build of develop ("0.24.1~git1234567")
     this.appVersion.set((info.version || '').replace(/~git([0-9a-f]+)$/, ' nightly').replace(/-dev$/, ' dev'));
     this.insetTitle.set(!!info.insetTitle);
     if (info.insetTitle) void this.alignWithWindowButtons();

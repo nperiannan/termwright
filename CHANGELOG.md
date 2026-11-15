@@ -2,6 +2,11 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **Team server Inventory: Columns and sorting.** *Columns* chooses which columns the table shows (Device always): MAC and Folder are hidden at first - a hidden device type or model is shown under the address - and the choice is kept in that browser; *Default columns* goes back. Every column sorts with a click on its heading (again for the other way; empty values stay last), so the table fits without scrolling sideways.
+- **Builds**: new work goes to the `develop` branch, whose builds are the nightly; releases are tagged on `main`.
+
 ## 0.36.0 (2026-11-15)
 
 - **Start page**: the line beside the name says *AI-powered network access, automation, emulation and reservation platform* (it wraps in a narrow window instead of being cut off) over *SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · Discover · Teams*, a little dimmer, and the footer *Built for the people who design, operate, and troubleshoot networks.* Both are a little smaller and a softer white.

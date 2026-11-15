@@ -3,7 +3,7 @@
 //
 // Channels:
 //   - "stable":  the latest non-prerelease release (tags vX.Y.Z), compared by version number.
-//   - "nightly": the "nightly" prerelease built from main, compared by git commit.
+//   - "nightly": the "nightly" prerelease built from develop, compared by git commit.
 package update
 
 import (

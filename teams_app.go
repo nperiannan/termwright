@@ -406,7 +406,7 @@ func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) 
 // teamImageTag: the release's version, or "nightly" for nightly and development
 // builds (the nightly build publishes the server too).
 // teamTagFor is the image tag an update installs: this Termwright's own, or the
-// channel an owner picked ("nightly": the newest build of main, "release": the latest release).
+// channel an owner picked ("nightly": the newest build of develop, "release": the latest release).
 func teamTagFor(channel string) string {
 	switch channel {
 	case "nightly":
