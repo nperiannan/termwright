@@ -114,7 +114,12 @@ tr .acts{opacity:.25;transition:opacity .15s;white-space:nowrap;text-align:right
 .bulk button{background:transparent;color:inherit;border-color:color-mix(in srgb,var(--bg) 30%,transparent)}.bulk button.p{background:var(--accent);border-color:var(--accent);color:#fff}
 .bulk input{background:color-mix(in srgb,var(--bg) 12%,transparent);color:inherit;border-color:color-mix(in srgb,var(--bg) 30%,transparent)}
 .scanbox{display:grid;grid-template-columns:1fr 240px auto;gap:12px;align-items:end;padding:16px}.scanbox label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:500}
-td.nw{white-space:nowrap}.inv .chips{flex-wrap:nowrap}
+td.nw{white-space:nowrap}
+details.cols{position:relative}details.cols>summary{list-style:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:7px;padding:6px 12px;background:var(--card);cursor:pointer;white-space:nowrap;user-select:none}
+details.cols>summary::-webkit-details-marker{display:none}details.cols>summary:hover,details.cols[open]>summary{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}details.cols>summary svg{width:15px;height:15px}
+.cpop{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:190px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:8px;display:flex;flex-direction:column;gap:2px}
+.cpop label{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer}.cpop label:hover{background:var(--card2)}.cpop label.dis{cursor:default;color:var(--muted)}
+.cpop .link{padding:6px 8px 2px;border-top:1px solid var(--line);margin-top:4px}.inv .chips{flex-wrap:nowrap}
 .logins{display:grid;grid-template-columns:150px minmax(140px,240px) minmax(140px,240px) auto;gap:8px 12px;align-items:center;padding:4px 16px 12px}.logins>span{font-size:12px;color:var(--muted)}
 .scanbox input{width:100%}.opts{display:flex;gap:18px;padding:0 16px 14px;color:var(--text2);flex-wrap:wrap}
 .prog{display:grid;grid-template-columns:repeat(4,1fr) 2fr;gap:0;border-top:1px solid var(--line)}.prog>div{padding:12px 16px;border-right:1px solid var(--line2)}.prog>div:last-child{border-right:0}
@@ -131,6 +136,7 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const PROTOS = ['SSH2', 'Telnet', 'RDP', 'VNC', 'Raw'];
 const NETKINDS = ['switch', 'router', 'firewall', 'wireless'];
 const IC = {
+  cols: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
   home: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   inv: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/>',
@@ -154,7 +160,23 @@ const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch {
 // what the person typed and picked survives every refresh
 const ui = { page: store.get('tw.page', 'overview'), days: Number(store.get('tw.days', '30')), basis: store.get('tw.basis', 'all') === 'work' ? 'work' : 'all', theme: store.get('tw.theme', 'system'), filter: '', sel: new Set(), psel: new Set(), ssel: new Set(),
   closed: new Set(), targets: '', community: '', scanFolder: '', approveFolder: '', onlyNet: store.get('tw.onlyNet', '1') === '1', hideKnown: store.get('tw.hideKnown', '1') === '1', dts: {}, rtab: 'devices', rq: '', invFolder: '', invType: '', invStatus: 'all', rtype: '', unusedOnly: false, freeOnly: false,
-  sort: { devices: ['hours', -1], members: ['hours', -1], res: ['s', -1], sessions: ['s', -1] } };
+  sort: { devices: ['hours', -1], members: ['hours', -1], res: ['s', -1], sessions: ['s', -1], inv: ['', 1] } };
+// Inventory columns: Device is always there; Columns hides the others (MAC and Folder at first) - kept in this browser.
+const INV_COLS = [['type', 'Type'], ['model', 'Model'], ['serial', 'Serial #'], ['mac', 'MAC'], ['folder', 'Folder'], ['now', 'Now'], ['util', 'Utilization'], ['last', 'Last used']];
+const INV_HIDE = 'mac,folder';
+ui.invHide = new Set(String(store.get('tw.invHide', INV_HIDE)).split(',').filter(Boolean));
+const col = k => !ui.invHide.has(k);
+function setCols(h) { ui.invHide = h; store.set('tw.invHide', [...h].join(',')); render(); }
+document.addEventListener('change', e => {
+  const k = e.target && e.target.dataset && e.target.dataset.col;
+  if (!k) return;
+  const h = new Set(ui.invHide); e.target.checked ? h.delete(k) : h.add(k); setCols(h);
+});
+// the Columns list stays open while you tick, and closes on a click elsewhere
+document.addEventListener('click', e => {
+  const d = document.querySelector('details.cols');
+  if (d && d.open && !e.target.closest('details.cols')) { d.open = false; ui.colsOpen = false; }
+});
 let st = null, scan = null, usage = null, lastJSON = '', msgTimer = 0;
 
 async function api(method, path, body) {
@@ -528,7 +550,20 @@ function invRows() {
     if (ui.invStatus === 'unused' && !(p && f.unused.includes(p))) return false;
     if (ui.invStatus === 'untracked' && tracked(d.deviceType)) return false;
     return true;
-  }).sort((a, b) => (a.folder + '/' + a.name).localeCompare(b.folder + '/' + b.name, undefined, { numeric: true }));
+  }).sort((a, b) => invCmp(a, b, fig));
+}
+// The inventory's order: by the column picked (empty values last either way), else by folder and name.
+function invVal(d, k, fig) {
+  const p = fig.get(d.id) || {};
+  return ({ name: shownName(d), type: [d.deviceType, d.protocol].filter(Boolean).join(' '), model: d.model || '', serial: d.serial || '', mac: d.baseMac || d.mac || '',
+    folder: d.folder || '', now: nowOf(d).rank, util: p.util || 0, last: p.last || 0 })[k];
+}
+function invCmp(a, b, fig) {
+  const [k, dir] = ui.sort.inv, byName = (a.folder + '/' + a.name).localeCompare(b.folder + '/' + b.name, undefined, { numeric: true });
+  if (!k) return byName;
+  const x = invVal(a, k, fig), y = invVal(b, k, fig);
+  if (typeof x === 'string' && (x === '') !== (y === '')) return x === '' ? 1 : -1;
+  return ((typeof x === 'string' ? x.localeCompare(y, undefined, { numeric: true }) : x - y) * dir) || byName;
 }
 function inventory() {
   const devs = st.inventory.devices, f = figures(), fig = new Map((f ? f.list : []).map(p => [p.d.id, p])), list = invRows();
@@ -540,10 +575,10 @@ function inventory() {
   const rows = list.map(d => { const l = liveOf(d), p = fig.get(d.id);
     const n = nowOf(d), status = n.rank === 0 && p && f.unused.includes(p) ? '<span class="pill">not used</span> <span class="pill in">free</span>' : n.html;
     return `<tr><td class="c"><input type="checkbox" data-sel="${d.id}" ${ui.sel.has(d.id) ? 'checked' : ''}></td>
-      <td>${devCell(shownName(d), d.host + (d.port && d.port !== defPort(d.protocol) ? ':' + d.port : ''), d.deviceType)}</td>
-      <td><div class="chips">${d.deviceType ? `<span class="tag">${esc(d.deviceType)}</span>` : ''}<span class="tag">${esc(d.protocol === 'SSH2' ? 'SSH' : d.protocol)}</span></div></td>
-      ${factCells(d)}<td class="muted small">${esc(d.folder || '-')}</td><td>${status}</td>
-      <td>${p ? meter(p.util, hrs(p.open) + ' h open in ' + ui.days + ' days') : ''}</td><td class="small">${p && p.last ? ago(p.last * 1000) + ' ago' : '<span class="muted">never</span>'}</td>
+      <td>${devCell(shownName(d), d.host + (d.port && d.port !== defPort(d.protocol) ? ':' + d.port : '') + (!col('type') && d.deviceType ? ' · ' + d.deviceType : '') + (!col('model') && d.model ? ' · ' + d.model : ''), d.deviceType)}</td>
+      ${col('type') ? `<td><div class="chips">${d.deviceType ? `<span class="tag">${esc(d.deviceType)}</span>` : ''}<span class="tag">${esc(d.protocol === 'SSH2' ? 'SSH' : d.protocol)}</span></div></td>` : ''}
+      ${factCells(d)}${col('folder') ? `<td class="muted small">${esc(d.folder || '-')}</td>` : ''}${col('now') ? `<td>${status}</td>` : ''}
+      ${col('util') ? `<td>${p ? meter(p.util, hrs(p.open) + ' h open in ' + ui.days + ' days') : ''}</td>` : ''}${col('last') ? `<td class="small">${p && p.last ? ago(p.last * 1000) + ' ago' : '<span class="muted">never</span>'}</td>` : ''}
       <td class="acts"><button class="ib" data-edit="${d.id}" title="Edit">${ico('edit')}</button><button class="ib d" data-del="${d.id}" title="Delete">${ico('trash')}</button></td></tr>`; }).join('');
   return `<div class="summary">${chip('all', devs.length, 'devices')}${chip('open', openN, 'open now')}${chip('reserved', resN, 'reserved now')}${chip('unused', unusedN, `not used in ${ui.days} days`)}${f && f.untracked ? `<div class="chipk ${ui.invStatus === 'untracked' ? 'on' : ''}" data-ist="untracked" title="In use, reservations and usage count for network devices only. Give these a device type (switch, router, firewall…) to count them; computers, servers, phones and printers are never counted."><b>${f.untracked}</b><span>not tracked</span></div>` : ''}
     <div class="chipk" style="cursor:default"><b>${typesAll.length}</b><span>device types</span></div><div class="chipk" style="cursor:default"><b>${allFolders.length}</b><span>folders</span></div></div>
@@ -554,9 +589,12 @@ function inventory() {
   <div class="card" style="min-width:0"><div class="tool"><span class="search">${ico('search')}<input data-k="filter" placeholder="Search name, address, serial, MAC…" value="${esc(ui.filter)}" style="width:260px"></span>
       <select id="itype"><option value="">All device types</option>${typesAll.map(t => `<option ${ui.invType === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
       <span class="muted small">${list.length} of ${devs.length}</span>${st.facts && st.facts.running ? `<span class="pill in">Reading device facts… ${st.facts.done} of ${st.facts.total}</span>` : ''}<span class="sp"></span>
+      <details class="cols" ${ui.colsOpen ? 'open' : ''}><summary title="Choose the columns of the table">${ico('cols')}Columns${ui.invHide.size ? ` <span class="muted">(${ui.invHide.size} hidden)</span>` : ''}</summary>
+        <div class="cpop"><label class="dis"><input type="checkbox" checked disabled> Device</label>${INV_COLS.map(([k, l]) => `<label><input type="checkbox" data-col="${k}" ${col(k) ? 'checked' : ''}> ${l}</label>`).join('')}
+        <a class="link small" id="coldef">Default columns</a></div></details>
       <button id="imp">Import CSV…</button><button id="exp">Export CSV</button><button class="p" id="add">+ Add device</button><input type="file" id="csv" accept=".csv,text/csv" hidden></div>
-    ${devs.length ? `<div class="scroll"><table class="inv"><thead><tr><th class="c"><input type="checkbox" id="all" ${allOn ? 'checked' : ''} title="Select all shown"></th><th>Device</th><th>Type</th><th>Model</th><th>Serial #</th><th>MAC</th><th>Folder</th><th>Now</th><th>Utilization (${ui.days} d)</th><th>Last used</th><th></th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="11" class="empty">No device matches the filters.</td></tr>'}</tbody></table></div>`
+    ${devs.length ? `<div class="scroll"><table class="inv"><thead><tr><th class="c"><input type="checkbox" id="all" ${allOn ? 'checked' : ''} title="Select all shown"></th>${th('inv', 'name', 'Device')}${INV_COLS.filter(([k]) => col(k)).map(([k, l]) => th('inv', k, k === 'util' ? `Utilization (${ui.days} d)` : l)).join('')}<th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="${3 + INV_COLS.filter(([k]) => col(k)).length}" class="empty">No device matches the filters.</td></tr>'}</tbody></table></div>`
       : `<div class="empty">No devices yet. Add them here, scan a network on <a class="link" data-go="discover">Discover</a>, or push sessions from Termwright (right-click → Push to Team…).</div>`}</div></div>
   ${ui.sel.size ? `<div class="bulk"><b>${ui.sel.size} selected</b><button id="rdf" title="Log in to them with the device logins on Discover and read their model, serial number and MAC address">Read Device Facts</button><button id="nad" title="Rename to the name each device gives itself">Name After Devices</button><button id="mv">Move to folder…</button><button id="delsel">Delete</button><button id="clr">Clear</button></div>` : ''}`;
 }
@@ -566,7 +604,7 @@ function factCells(d) {
   const how = d.factsAt ? `Read ${ago(d.factsAt)} ago by ${d.factsBy === 'server' ? 'the team server' : d.factsBy}` : '';
   const ser = d.serial ? `<span class="mono" title="${esc(how)}">${esc(d.serial)}</span>` : d.factsErr ? `<span class="pill bad" title="${esc(d.factsErr + ' (' + ago(d.factsAt) + ' ago)')}">${/refused/.test(d.factsErr) ? 'login failed' : 'not read'}</span>` : '<span class="muted">-</span>';
   const mac = d.baseMac ? `<span class="mono" title="${esc('Base MAC address. ' + how)}">${esc(d.baseMac)}</span>` : d.mac ? `<span class="mono muted" title="Seen on the network; the device's own base MAC is read with Read Device Facts">${esc(d.mac)}</span>` : '<span class="muted">-</span>';
-  return `<td class="small nw">${d.model ? esc(d.model) : '<span class="muted">-</span>'}</td><td class="small nw">${ser}</td><td class="small nw">${mac}</td>`;
+  return (col('model') ? `<td class="small nw">${d.model ? esc(d.model) : '<span class="muted">-</span>'}</td>` : '') + (col('serial') ? `<td class="small nw">${ser}</td>` : '') + (col('mac') ? `<td class="small nw">${mac}</td>` : '');
 }
 function defPort(p) { return ({ SSH2: 22, Telnet: 23, RDP: 3389, VNC: 5900 })[p] || 0; }
 function ago(t) {
@@ -812,7 +850,7 @@ function wire() {
   on('[data-tip]', 'onmouseleave', () => { $('#tip').style.display = 'none'; });
   // reports
   on('[data-rtab]', 'onclick', e => { ui.rtab = e.target.dataset.rtab; render(); });
-  on('[data-sort]', 'onclick', e => { const [tab, k] = e.currentTarget.dataset.sort.split(':'); const cur = ui.sort[tab]; ui.sort[tab] = [k, cur[0] === k ? -cur[1] : (['name', 'folder', 'type', 'dev', 'n'].includes(k) ? 1 : -1)]; render(); });
+  on('[data-sort]', 'onclick', e => { const [tab, k] = e.currentTarget.dataset.sort.split(':'); const cur = ui.sort[tab]; ui.sort[tab] = [k, cur[0] === k ? -cur[1] : (['name', 'folder', 'type', 'dev', 'n', 'model', 'serial', 'mac', 'now'].includes(k) ? 1 : -1)]; render(); });
   on('#rtype', 'onchange', e => { ui.rtype = e.target.value; render(); });
   on('#unused', 'onchange', e => { ui.unusedOnly = e.target.checked; render(); });
   on('#freeonly', 'onchange', e => { ui.freeOnly = e.target.checked; render(); });
@@ -823,6 +861,8 @@ function wire() {
   on('#imp', 'onclick', () => $('#csv').click());
   on('#csv', 'onchange', e => e.target.files[0] && importCSV(e.target.files[0]));
   on('#exp', 'onclick', exportCSV);
+  on('details.cols', 'ontoggle', e => { ui.colsOpen = e.target.open; });
+  on('#coldef', 'onclick', () => setCols(new Set(INV_HIDE.split(','))));
   on('[data-fold]', 'onclick', e => { if (e.target.closest('a,input')) return; const f = e.currentTarget.dataset.fold; ui.closed.has(f) ? ui.closed.delete(f) : ui.closed.add(f); render(); });
   on('[data-rf]', 'onclick', e => { const f = e.target.dataset.rf; ask('Rename folder', 'New name', f, to => to && to !== f && act(() => api('POST', '/api/admin/folders', { from: f, folder: to }))); });
   on('[data-df]', 'onclick', e => act(() => api('POST', '/api/admin/folders', { from: e.target.dataset.df })));
