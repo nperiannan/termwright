@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Install from ISO**: the form stays on the left and the running install on the right, so the page no longer scrolls; its steps fold into one line. **You answer the installer from the page**: every installer asks its own questions (EXOS's rescue menu waits for `c`), so the installer's console shows under the install with a line to type an answer and keys for Enter, Space, Esc, Tab, the arrows and Ctrl+C - through the console's session when it is open in a tab. Installs that ended are on their own page, **Installed from ISO**, with *Open image* and *Remove*. The two ways to install read *Alpine (automatic)* and *Other (by hand)*.
 - **Team server Inventory: Columns and sorting.** *Columns* chooses which columns the table shows (Device always): MAC and Folder are hidden at first - a hidden device type or model is shown under the address - and the choice is kept in that browser; *Default columns* goes back. Every column sorts with a click on its heading (again for the other way; empty values stay last), so the table fits without scrolling sideways.
 - **Builds**: new work goes to the `develop` branch, whose builds are the nightly; releases are tagged on `main`.
 
