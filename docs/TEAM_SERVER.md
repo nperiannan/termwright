@@ -26,7 +26,7 @@ Passwords, usernames, keys, session files and terminal output are **never** sent
 
 ## The team inventory
 
-Every member's Session Manager shows a folder named after the team (e.g. *Switching-Lab-B*) with the team's devices. It follows the server: a device added, renamed, moved or deleted there shows up within seconds. The team decides a device's name, folder, address, port, protocol, device type and MAC address; your username, password, account, device type login and keys on it stay yours. A copy you make of a team device (Duplicate, Copy and Paste) is your own session. Leaving the team removes its folder; your own sessions are never touched.
+Every member's Session Manager shows a folder named after the team (e.g. *NET-LAB-B01*) with the team's devices. It follows the server: a device added, renamed, moved or deleted there shows up within seconds. The team decides a device's name, folder, address, port, protocol, device type and MAC address; your username, password, account, device type login and keys on it stay yours. A copy you make of a team device (Duplicate, Copy and Paste) is your own session. Leaving the team removes its folder; your own sessions are never touched.
 
 **Your own sessions stay yours** until you push them: right-click a session, a folder or a selection → **Push to Team…**, or in Discover Devices **Push to Team…** for the selected results. The window shows each device:
 
@@ -88,7 +88,7 @@ When the host's firewall blocks the port, the server runs but cannot be reached.
 
 ## Joining a team
 
-**Options → Teams… → Join a Team…**, then paste the invite. It looks like `termwright-team://10.70.1.141:7443/?fp=…&k=…&n=…`.
+**Options → Teams… → Join a Team…**, then paste the invite. It looks like `termwright-team://10.200.100.141:7443/?fp=…&k=…&n=…`.
 
 The invite holds:
 

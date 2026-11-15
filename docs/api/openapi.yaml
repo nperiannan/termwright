@@ -3451,7 +3451,7 @@ components:
                     description: the port of the default route
                     type: string
                 lanAddr:
-                    description: the host's address on it (10.70.1.20/24)
+                    description: the host's address on it (10.200.100.20/24)
                     type: string
                 gateway:
                     description: the default route's gateway

@@ -148,9 +148,9 @@ const SUPPORTED_OS: [string, string][] = [['ubuntu', '22.04'], ['ubuntu', '24.04
           @if (rdpNet() && rdp() || vncNet() && vnc()) {
             <div class="rows">
               <label>Firewall</label>
-              <input name="cidr" [ngModel]="cidr()" (ngModelChange)="cidr.set($event)" class="mono" placeholder="open for, e.g. 10.70.1.0/24 (optional)" spellcheck="false" />
+              <input name="cidr" [ngModel]="cidr()" (ngModelChange)="cidr.set($event)" class="mono" placeholder="open for, e.g. 10.200.100.0/24 (optional)" spellcheck="false" />
             </div>
-            @if (cidrProblem()) { <div class="warn">That is not a network like 10.70.1.0/24.</div> }
+            @if (cidrProblem()) { <div class="warn">That is not a network like 10.200.100.0/24.</div> }
           }
           <label class="chk top">
             <input type="checkbox" name="mk" [ngModel]="createSessions()" (ngModelChange)="createSessions.set($event)" />
