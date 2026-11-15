@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,6 +114,9 @@ var emuTraf struct {
 	proto   map[string][2]string        // test port → its LAG as LACP has it, its LLDP neighbour
 	clients map[string]*emu.ClientState // test port → how its clients are doing
 	stp     map[string]*emu.STPState    // test port → what it hears by spanning tree
+	// per switch port of a test port (vm:port): where its QEMU really sends, read from its monitor once per
+	// switch start (0 = where a port without a cable sends; -1 = nowhere the generator can listen)
+	sock map[string]int
 }
 
 func emuTesterName(l *emu.Lab) string {
@@ -126,6 +130,7 @@ func emuTesterName(l *emu.Lab) string {
 
 // emuTrafficPush writes traffic.json on every host of the lab that has (or had) test ports (emuLab.mu not held).
 func (a *App) emuTrafficPush() error {
+	a.emuTesterSockets()
 	emuLab.mu.Lock()
 	l := emuLab.f.Lab
 	if l == nil {
@@ -144,6 +149,9 @@ func (a *App) emuTrafficPush() error {
 			}
 			if l := emuTraf.leases[t.ID]; t.SLAAC && l[1] != "" {
 				lh.Testers[i].IP6 = l[1]
+			}
+			if p := emuTraf.sock[emuPeerKey(t.VM, t.Port)]; p > 0 {
+				lh.Testers[i].Listen = p
 			}
 		}
 		cfg, n := lh.TrafficConfig(func(v emu.VM) bool { return emuHostOf(v) == h }, emuTraf.run, emuTraf.on)
@@ -199,8 +207,100 @@ func (a *App) emuTesterLink(vmID string, port int, up bool) string {
 			return "restart " + name + " once for its test port: it was started before test ports existed"
 		}
 	}
-	_, _ = h.do(fmt.Sprintf("set_link nic%d %s", port, map[bool]string{true: "on", false: "off"}[up]), 10*time.Second)
+	// the netdev's name: a port that started with a cable has no nicN (set_link on it reaches the card too)
+	_, _ = h.do(fmt.Sprintf("set_link n%d %s", port, map[bool]string{true: "on", false: "off"}[up]), 10*time.Second)
 	return ""
+}
+
+var emuSockRe = regexp.MustCompile(`\bn(\d+): index=\d+,type=socket,[^\n]*?udp=([0-9.]+):(\d+)`)
+
+// emuTesterSockets reads, once per switch start, where the switch ports of test ports really send. A port
+// without a cable when its switch started sends where its test port listens; one that started with a cable
+// since removed still sends to that cable's old other end - its test port listens there instead (it got no
+// frame from the switch before), unless that end still runs or is on another host: then the switch needs a
+// restart, said in the Events and the test port's note (emuLab.mu not held).
+func (a *App) emuTesterSockets() {
+	type q struct {
+		vm, host, name string
+		mon            int
+		ports          []int
+	}
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	if l == nil {
+		emuLab.mu.Unlock()
+		return
+	}
+	if emuTraf.sock == nil {
+		emuTraf.sock = map[string]int{}
+	}
+	byVM := map[string]*q{}
+	var qs []*q
+	for _, t := range l.Testers {
+		v := l.VMByID(t.VM)
+		if _, run := emuLab.runCables[t.VM]; v == nil || !run {
+			continue // not running: it starts with the usual socket
+		}
+		if _, ok := emuTraf.sock[emuPeerKey(t.VM, t.Port)]; ok {
+			continue
+		}
+		x := byVM[t.VM]
+		if x == nil {
+			h := emuHostOf(*v)
+			x = &q{vm: t.VM, host: h, name: v.Name, mon: a.emuFor(h).MonitorPort(*v)}
+			byVM[t.VM] = x
+			qs = append(qs, x)
+		}
+		x.ports = append(x.ports, t.Port)
+	}
+	emuLab.mu.Unlock()
+	for _, x := range qs {
+		out := ""
+		if h, err := a.emuMonitor(x.host, x.mon); err == nil {
+			out, _ = h.do("info network", 10*time.Second)
+			h.close()
+		}
+		got := map[int][2]string{}
+		for _, m := range emuSockRe.FindAllStringSubmatch(out, -1) {
+			n, _ := strconv.Atoi(m[1])
+			got[n] = [2]string{m[2], m[3]}
+		}
+		emuLab.mu.Lock()
+		l := emuLab.f.Lab
+		v := l.VMByID(x.vm)
+		for _, n := range x.ports {
+			key := emuPeerKey(x.vm, n)
+			g, ok := got[n]
+			if v == nil || !ok {
+				emuTraf.sock[key] = 0 // not read (stopped meanwhile, or no socket: emuTesterLink says so)
+				continue
+			}
+			li, _ := l.TesterPorts(*v, n)
+			p, _ := strconv.Atoi(g[1])
+			if g[0] == "127.0.0.1" && p == li {
+				emuTraf.sock[key] = 0
+				continue
+			}
+			why := "a cable to another host"
+			if g[0] == "127.0.0.1" {
+				why = ""
+				for _, o := range l.VMs {
+					for k := 1; k <= 64 && why == ""; k++ {
+						if _, run := emuLab.runCables[o.ID]; run && o.ID != x.vm && l.UDPPort(o, k) == p {
+							why = "its cable to " + o.Name + ", which still runs"
+						}
+					}
+				}
+			}
+			if why == "" {
+				emuTraf.sock[key] = p
+				continue
+			}
+			emuTraf.sock[key] = -1
+			emuEv(x.vm, "warn", fmt.Sprintf("the test port on %s %s gets no frames until %s restarts: the port started with %s", x.name, emuImage(v.Image).PortNameOf(n), x.name, why))
+		}
+		emuLab.mu.Unlock()
+	}
 }
 
 // EmuTraffic is the Traffic tab: test ports, streams and their counters now.
@@ -692,6 +792,11 @@ func (a *App) EmuTesterAdd(vmID, port, ip, gw string, vlan int) (EmuTrafficView,
 	emuLab.mu.Unlock()
 	note := a.emuTesterLink(vmID, n, true)
 	err := a.emuTrafficPush()
+	emuLab.mu.Lock()
+	if note == "" && emuTraf.sock[emuPeerKey(vmID, n)] < 0 {
+		note = "restart " + v.Name + " once for its test port: the port started with a cable whose other end still runs or is on another host"
+	}
+	emuLab.mu.Unlock()
 	tv, _ := a.EmuTraffic()
 	tv.Note = note
 	return tv, err

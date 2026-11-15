@@ -21,6 +21,7 @@ type Tester struct {
 	VM       string   `json:"vm"`                 // the switch (its id) it is on
 	Port     int      `json:"port"`               // the switch port number it is on
 	MAC      string   `json:"mac"`                // its MAC address
+	Listen   int      `json:"-"`                  // where its switch port's QEMU really sends, when not TesterPorts' (read at run time)
 	IP       string   `json:"ip,omitempty"`       // with its prefix (10.10.0.1/24): it answers ARP and ping there
 	IP6      string   `json:"ip6,omitempty"`      // an IPv6 address with its prefix: it answers neighbour solicitations and ping there
 	Groups   []string `json:"groups,omitempty"`   // multicast groups it joins (IGMP / MLD reports), to receive multicast streams
@@ -294,6 +295,9 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 			continue
 		}
 		li, se := l.TesterPorts(*v, t.Port)
+		if t.Listen > 0 { // the switch port started with a cable since removed: it sends there
+			li = t.Listen
+		}
 		port := 0
 		if t.Lag != "" { // its number in its LAG
 			for _, o := range l.Testers {

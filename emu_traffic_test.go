@@ -109,3 +109,14 @@ func TestEmuPortStatsText(t *testing.T) {
 		t.Fatal(s)
 	}
 }
+
+// Where a switch port's QEMU sends, read from "info network" (QEMU 8 and later, and older ones' "socket: ").
+func TestEmuSockRe(t *testing.T) {
+	out := "nic1: index=0,type=nic,model=rtl8139,macaddr=ac:ed:32:0b:27:01\r\n \\ n1: index=0,type=socket,udp=127.0.0.1:27457\r\n" +
+		"rtl8139.2: index=0,type=nic,model=rtl8139,macaddr=ac:ed:32:0b:27:02\r\n \\ n2: index=0,type=socket,socket: udp=10.1.2.3:27393\r\n" +
+		" \\ n12: index=0,type=socket,udp=127.0.0.1:35212\r\n"
+	m := emuSockRe.FindAllStringSubmatch(out, -1)
+	if len(m) != 3 || m[0][1] != "1" || m[0][3] != "27457" || m[1][2] != "10.1.2.3" || m[1][3] != "27393" || m[2][1] != "12" || m[2][3] != "35212" {
+		t.Fatalf("%q", m)
+	}
+}
