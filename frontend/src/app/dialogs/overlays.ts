@@ -245,7 +245,6 @@ export class Overlays {
               <button type="button" title="Share on LinkedIn" (click)="backend.openURL(shareURL)"><span class="li">in</span>Share</button>
               <button type="button" (click)="copyRepo()"><app-icon name="copy" [size]="14" />{{ copied() ? 'Copied' : 'Copy Link' }}</button>
             </div>
-            <p class="hint">Created by <b>Natarajan Periannan</b> · <a class="mono" (click)="backend.openURL(repo)">{{ repo.replace('https://', '') }}</a></p>
           
           <ul class="features cl-only">
             <li><b>Connect</b> - SSH2, Telnet, Serial (RTS/CTS, XON/XOFF), local shell and raw TCP; jump hosts, SOCKS/HTTP proxies, port forwarding, X11 and agent forwarding</li>
@@ -255,7 +254,6 @@ export class Overlays {
             <li><b>Secure</b> - OS keychain passwords, password managers (1Password, Bitwarden, HashiCorp Vault), Kerberos, SSH certificates and FIDO2 keys, master password, encrypted vault export, key login setup, known-hosts checking</li>
             <li><b>Capture</b> - session logging with timestamps, keyword highlighting, themes and color schemes</li>
           </ul>
-          <p class="cl-only">Created by <b>Natarajan Periannan</b>.</p>
           <div class="share cl-only">
             <span>Open source on GitHub - share it with your team:</span>
             <a class="mono" (click)="backend.openURL(repo)">{{ repo }}</a>
@@ -287,7 +285,8 @@ export class Overlays {
           </table>
         </div>
       }
-      <div class="modal-foot">@if (ui.dialog() !== 'about') { <span class="hint">Add your own keys in Settings → Key Map</span> }<span class="spacer"></span><button class="primary" (click)="ui.close()">Close</button></div>
+      <div class="modal-foot">@if (ui.dialog() !== 'about') { <span class="hint">Add your own keys in Settings → Key Map</span> } @else {
+        <span class="credit">Created by <b>Natarajan Periannan</b> · <a class="mono" (click)="backend.openURL(repo)">{{ repo.replace('https://', '') }}</a></span> }<span class="spacer"></span><button class="primary" (click)="ui.close()">Close</button></div>
     </div>
   </div>`,
   imports: [Icon],
@@ -295,6 +294,8 @@ export class Overlays {
     :host-context(.modern) {
       .about-head { margin-top: 4px; }
       .modal.about-w { width: 760px; }
+      /* who made it, beside Close: brighter than a hint, the name in full */
+      .credit { font-size: calc(12.5px * var(--ui-scale, 1)); color: color-mix(in srgb, var(--text) 78%, transparent); b { color: var(--text); font-weight: 600; } a { color: var(--accent); cursor: pointer; } }
       .tiles { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 4px 0 14px; }
       .tile { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 9px 11px; background: var(--surface-2); display: flex; flex-direction: column; gap: 2px;
         b { font-size: calc(12.5px * var(--ui-scale, 1)); } span { color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); line-height: 1.4; } }
