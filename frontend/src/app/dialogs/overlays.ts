@@ -220,7 +220,7 @@ export class Overlays {
   selector: 'app-about',
   template: `
   <div class="modal-backdrop" (click)="ui.close()">
-    <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal" [class.about-w]="ui.dialog() === 'about'" (click)="$event.stopPropagation()">
       @if (ui.dialog() === 'about') {
         <div class="modal-head cl-only">About Termwright</div>
         <div class="modal-body about">
@@ -231,17 +231,19 @@ export class Overlays {
                   ⬇ Downloaded {{ downloads().toLocaleString() }} time{{ downloads() === 1 ? '' : 's' }} from GitHub</div>
               }
             </div></div>
-          <p>A free, open-source terminal emulator, session manager and file-transfer client for network and
-            system engineers - one app for Windows, Linux and macOS.</p>
+          <p>A free, open-source, AI-powered platform for network and system engineers: terminal, session manager, file
+            transfer, lab emulator and team sharing - one app for Windows, Linux and macOS.</p>
           
             <div class="tiles">
               @for (f of tiles; track f[0]) { <div class="tile"><b>{{ f[0] }}</b><span>{{ f[1] }}</span></div> }
             </div>
             <div class="btns">
-              <button type="button" (click)="backend.openURL(repo + '/blob/main/docs/USER_GUIDE.md')">User Guide</button>
-              <button type="button" (click)="backend.openURL(repo + '/issues')">Report an Issue</button>
-              <button type="button" (click)="backend.openURL(repo + '/releases')">Releases</button>
-              <button type="button" (click)="copyRepo()"><app-icon name="copy" [size]="13" />{{ copied() ? 'Copied' : 'Copy Link' }}</button>
+              <button type="button" (click)="backend.openURL(repo + '/blob/main/docs/USER_GUIDE.md')"><app-icon name="file" [size]="14" />User Guide</button>
+              <button type="button" (click)="backend.openURL(repo + '/issues')"><app-icon name="alert" [size]="14" />Report an Issue</button>
+              <button type="button" (click)="backend.openURL(repo + '/releases')"><app-icon name="download" [size]="14" />Releases</button>
+              <button type="button" class="star" title="Open the project on GitHub to give it a star" (click)="backend.openURL(repo)"><app-icon name="star" [size]="14" />Star on GitHub</button>
+              <button type="button" title="Share on LinkedIn" (click)="backend.openURL(shareURL)"><span class="li">in</span>Share</button>
+              <button type="button" (click)="copyRepo()"><app-icon name="copy" [size]="14" />{{ copied() ? 'Copied' : 'Copy Link' }}</button>
             </div>
             <p class="hint">Created by <b>Natarajan Periannan</b> · <a class="mono" (click)="backend.openURL(repo)">{{ repo.replace('https://', '') }}</a></p>
           
@@ -292,10 +294,20 @@ export class Overlays {
   styles: [`
     :host-context(.modern) {
       .about-head { margin-top: 4px; }
-      .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 12px; }
+      .modal.about-w { width: 760px; }
+      .tiles { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 4px 0 14px; }
       .tile { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 9px 11px; background: var(--surface-2); display: flex; flex-direction: column; gap: 2px;
         b { font-size: calc(12.5px * var(--ui-scale, 1)); } span { color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); line-height: 1.4; } }
-      .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; button { display: inline-flex; align-items: center; gap: 6px; } }
+      /* raised buttons, like the start page's; help on the left, star, share and copy on the right */
+      .btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;
+        button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, .08);
+          background: linear-gradient(180deg, #2a2c32, #1d1e23); transition: transform .12s, box-shadow .12s;
+          box-shadow: 0 1px 0 rgba(255, 255, 255, .10) inset, 0 -2px 0 rgba(0, 0, 0, .35) inset, 0 2px 0 #0a0b0d, 0 6px 12px -6px rgba(0, 0, 0, .8);
+          app-icon { color: var(--muted); }
+          &:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255, 255, 255, .12) inset, 0 -2px 0 rgba(0, 0, 0, .35) inset, 0 3px 0 #0a0b0d, 0 10px 16px -6px rgba(0, 0, 0, .85); }
+          &:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 1px 0 #0a0b0d; } }
+        button.star { margin-left: auto; app-icon { color: #f5b942; } }
+        .li { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 3px; background: #0a66c2; color: #fff; font: 700 10px/1 system-ui, sans-serif; } }
       .hint a { color: var(--accent); cursor: pointer; }
       .kq { width: 100%; height: 34px; padding-left: 32px; margin-bottom: 12px; border-radius: var(--r-lg); background: var(--input-bg) no-repeat 11px 50% / 15px 15px
         url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d9099' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E"); }
@@ -309,12 +321,16 @@ export class Overlays {
       kbd { min-width: 22px; height: 22px; padding: 0 5px; border-radius: 5px; border: 1px solid var(--border); border-bottom-width: 2px; background: var(--surface-2);
         display: inline-grid; place-items: center; font: calc(11.5px * var(--ui-scale, 1)) var(--ui-font); color: var(--muted); }
     }
+    :host-context(.modern.light) .btns button { border-color: rgba(22, 24, 28, .10); background: linear-gradient(180deg, #fff, #f1f2f4);
+        box-shadow: 0 1px 0 #fff inset, 0 -2px 0 rgba(22, 24, 28, .05) inset, 0 2px 0 #d5d8dd, 0 6px 10px -6px rgba(22, 24, 28, .3);
+        &:hover { box-shadow: 0 1px 0 #fff inset, 0 3px 0 #d5d8dd, 0 10px 14px -6px rgba(22, 24, 28, .35); } &:active { box-shadow: 0 1px 0 #fff inset, 0 1px 0 #d5d8dd; } }
   `],
 })
 export class About {
   protected ui = inject(Ui);
   protected backend = inject(Backend);
   readonly repo = 'https://github.com/nperiannan/termwright';
+  readonly shareURL = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(this.repo);
   readonly info = signal<AppInfo | null>(null);
   readonly copied = signal(false);
   async copyRepo() {
@@ -323,6 +339,9 @@ export class About {
   }
   readonly mod = navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'Ctrl+Shift+';
   readonly tiles: [string, string][] = [
+    ['AI Agent', 'autonomous configuration and troubleshooting in your sessions and labs; MCP connector'],
+    ['Emulate', 'virtual labs of EXOS, VOSS, Linux, servers and microcontrollers'],
+    ['Collaborate', 'team server: shared inventory, who is on a device, reservations, usage'],
     ['Connect', 'SSH2, Telnet, Serial, RDP, VNC, local shell; jump hosts and proxies'], ['Organise', 'folders, device types, workspaces, import from other programs'],
     ['Automate', 'logon actions, triggers, scripts, command library, alerts'], ['Transfer', 'SFTP with bookmarks and sync, SCP, ZMODEM, YMODEM, XMODEM'],
     ['Secure', 'OS keychain, password managers, Kerberos, FIDO2, master password'], ['Capture', 'logs, recordings, highlighting, device facts, screenshots'],
