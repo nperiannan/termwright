@@ -7,7 +7,7 @@ func TestParse(t *testing.T) {
 	if f := Parse("voss", voss); f.Version != "8.10.1.0" || f.Serial != "2022G-01234" || f.Model != "4900-48P" || f.MAC != "00:51:00:a1:b2:00" {
 		t.Fatalf("voss: %+v", f)
 	}
-	exos := "SysName:          edge-sw1\nSystem MAC:       00:04:96:C3:D4:12\nSystem Type:      X440G2-48p-10G4 \n\nSwitch          : 800599-00-01 1702G-00451 Rev 1 BootROM: 2.0.1.7    IMG: 31.7.1.4  \n"
+	exos := "SysName:          edge-sw1\nSystem MAC:       00:04:96:C3:D4:12\nSystem Type:      X440G2-48p-10G4 \n\nSwitch          : 800000-00-02 1702G-00451 Rev 1 BootROM: 2.0.1.7    IMG: 31.7.1.4  \n"
 	if f := Parse("exos", exos); f.Version != "31.7.1.4" || f.Serial != "1702G-00451" || f.Model != "X440G2-48p-10G4" || f.MAC != "00:04:96:C3:D4:12" {
 		t.Fatalf("exos: %+v", f)
 	}

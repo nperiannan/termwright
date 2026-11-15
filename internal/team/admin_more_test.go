@@ -14,7 +14,7 @@ func TestOwnerHandsOverAndActivity(t *testing.T) {
 	own, _ := anon.Join(ctx, JoinRequest{OwnerCode: code, Name: "Natarajan"})
 	oc := NewClient(addr(ts), s.Fingerprint(), own.Token)
 	tm, _ := oc.Team(ctx)
-	an, _ := anon.Join(ctx, JoinRequest{Invite: tm.Invite, Name: "Anisha"})
+	an, _ := anon.Join(ctx, JoinRequest{Invite: tm.Invite, Name: "Alex"})
 	ac := NewClient(addr(ts), s.Fingerprint(), an.Token)
 	if err := ac.SetRole(ctx, own.MemberID, RoleOwner); err == nil {
 		t.Fatal("a member took the team over")

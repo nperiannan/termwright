@@ -34,7 +34,7 @@ type fakeIdP struct {
 
 func newIdP(t *testing.T) *fakeIdP {
 	k, _ := rsa.GenerateKey(rand.Reader, 2048)
-	f := &fakeIdP{key: k, codes: map[string][2]string{}, email: "anisha@example.com", sub: "oid-anisha"}
+	f := &fakeIdP{key: k, codes: map[string][2]string{}, email: "alex@example.com", sub: "oid-alex"}
 	mux := http.NewServeMux()
 	f.srv = httptest.NewTLSServer(mux)
 	iss := f.srv.URL + "/tenant/v2.0"
@@ -66,7 +66,7 @@ func newIdP(t *testing.T) *fakeIdP {
 			return
 		}
 		claims := map[string]any{"iss": iss, "aud": r.Form.Get("client_id"), "exp": time.Now().Add(time.Hour).Unix(), "nonce": c[0],
-			"oid": f.sub, "email": f.email, "name": "Anisha R", "groups": []string{"g-lab"}}
+			"oid": f.sub, "email": f.email, "name": "Alex R", "groups": []string{"g-lab"}}
 		_ = json.NewEncoder(w).Encode(map[string]string{"id_token": f.sign(claims)})
 	})
 	t.Cleanup(f.srv.Close)
@@ -142,7 +142,7 @@ func TestSingleSignOn(t *testing.T) {
 		<-done
 		return j, jerr
 	}
-	j, err := join(SSOStart{Name: "ignored", User: "anisha", Machine: "AN-PC"})
+	j, err := join(SSOStart{Name: "ignored", User: "alex", Machine: "AN-PC"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestSingleSignOn(t *testing.T) {
 			me = m
 		}
 	}
-	if me.Name != "Anisha R" || me.Email != "anisha@example.com" || !me.SSO || me.Role != RoleMember {
+	if me.Name != "Alex R" || me.Email != "alex@example.com" || !me.SSO || me.Role != RoleMember {
 		t.Fatalf("member %+v", me)
 	}
 	// a wrong secret collects nothing
@@ -170,7 +170,7 @@ func TestSingleSignOn(t *testing.T) {
 		t.Fatalf("an outside account got in: %v", err)
 	}
 	// a token signed with another key is refused
-	idp.email, idp.bad = "anisha@example.com", true
+	idp.email, idp.bad = "alex@example.com", true
 	if _, err := join(SSOStart{Name: "x"}); err == nil || !strings.Contains(err.Error(), "signature") {
 		t.Fatalf("a forged token got in: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestSingleSignOn(t *testing.T) {
 	if _, err := ac.Team(ctx); !NeedsSSO(err) {
 		t.Fatalf("no sign-in asked after 31 days: %v", err)
 	}
-	j2, err := join(SSOStart{Member: j.MemberID, User: "anisha", Machine: "AN-PC"})
+	j2, err := join(SSOStart{Member: j.MemberID, User: "alex", Machine: "AN-PC"})
 	if err != nil || j2.MemberID != j.MemberID {
 		t.Fatalf("signing in again: %+v %v", j2, err)
 	}

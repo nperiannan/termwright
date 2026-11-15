@@ -26,13 +26,13 @@ func TestRemoteDesktopScript(t *testing.T) {
 }
 
 func TestRemoteDesktopArgs(t *testing.T) {
-	base := RemoteDesktopRun{RDP: true, VNC: true, RDPUser: "ixia-rdp", VNCUser: "ixia-vnc", CreateUsers: true}
+	base := RemoteDesktopRun{RDP: true, VNC: true, RDPUser: "labops-rdp", VNCUser: "labops-vnc", CreateUsers: true}
 	args, err := remoteDesktopArgs(base)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := strings.Join(args, " ")
-	for _, want := range []string{"--rdp-user ixia-rdp", "--vnc-user ixia-vnc", "--create-users", "--secrets-stdin", "--vnc-display 2"} {
+	for _, want := range []string{"--rdp-user labops-rdp", "--vnc-user labops-vnc", "--create-users", "--secrets-stdin", "--vnc-display 2"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("%q missing from %q", want, got)
 		}
@@ -71,7 +71,7 @@ func TestRemoteDesktopArgs(t *testing.T) {
 		t.Fatalf("check: %q", got)
 	}
 
-	onlyRDP := RemoteDesktopRun{RDP: true, RDPUser: "ixia-rdp"}
+	onlyRDP := RemoteDesktopRun{RDP: true, RDPUser: "labops-rdp"}
 	args, _ = remoteDesktopArgs(onlyRDP)
 	if got = strings.Join(args, " "); !strings.Contains(got, "--no-vnc") || strings.Contains(got, "--vnc-user") {
 		t.Fatalf("rdp only: %q", got)
@@ -91,7 +91,7 @@ func TestRemoteDesktopArgs(t *testing.T) {
 }
 
 func TestRemoteDesktopCommandAndStdin(t *testing.T) {
-	cmd := remoteDesktopCommand("/tmp/termwright-rd-ab12.sh", []string{"--rdp-user", "ixia-rdp", "--secrets-stdin"}, false)
+	cmd := remoteDesktopCommand("/tmp/termwright-rd-ab12.sh", []string{"--rdp-user", "labops-rdp", "--secrets-stdin"}, false)
 	for _, want := range []string{"sh -c ", "sudo -S -p ", "bash ", "/tmp/termwright-rd-ab12.sh", "rm -f"} {
 		if !strings.Contains(cmd, want) {
 			t.Fatalf("%q missing from %q", want, cmd)

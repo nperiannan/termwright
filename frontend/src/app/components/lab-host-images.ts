@@ -159,7 +159,7 @@ export class LabHostImages implements OnInit, OnDestroy {
   protected ports = signal('');
   private timer: ReturnType<typeof setTimeout> | null = null;
   protected hosts = computed(() => this.m()?.hosts ?? []);
-  /** "teams-vm 8.2, ubuntu-dev 6.2" when the hosts' QEMU versions (major.minor) differ, else "". */
+  /** "lab-host 8.2, ubuntu-dev 6.2" when the hosts' QEMU versions (major.minor) differ, else "". */
   protected qemuMix = computed(() => {
     const hs = this.hosts().filter(h => h.qemu).map(h => ({ n: h.name, v: (h.qemu.match(/\d+\.\d+/) ?? [''])[0] }));
     return new Set(hs.map(h => h.v)).size > 1 ? hs.map(h => h.n + ' ' + h.v).join(', ') : '';

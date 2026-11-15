@@ -3712,7 +3712,7 @@ func (a *App) emuAddrInUse(host string, ips []string) map[string]string {
 // emuCloud sets a lab up for the host's network, routed: spec is the first
 // switch's address (its prefix length from the host's own when left out) and,
 // after a space, the gateway (the host's default gateway when left out):
-// "10.234.179.146/24 10.234.179.254".
+// "10.70.1.146/24 10.70.1.254".
 func emuCloud(l *emu.Lab, info *emu.HostInfo, spec string) error {
 	host, err := netip.ParsePrefix(info.LanAddr)
 	if err != nil {

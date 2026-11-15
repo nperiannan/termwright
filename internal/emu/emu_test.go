@@ -74,8 +74,8 @@ func TestLanAndAddress(t *testing.T) {
 	if ip, gw := l.Address(0); ip != "" || gw != "" {
 		t.Error("lan address")
 	}
-	out := "show vlan Mgmt\r\nMgmt   4095  10.127.35.22  /24  ----  ANY  1 /1   VR-Mgmt\nmask 255.255.255.0\n"
-	if a := FindAddress(CleanConsole(out)); a != "10.127.35.22" {
+	out := "show vlan Mgmt\r\nMgmt   4095  10.60.35.22  /24  ----  ANY  1 /1   VR-Mgmt\nmask 255.255.255.0\n"
+	if a := FindAddress(CleanConsole(out)); a != "10.60.35.22" {
 		t.Errorf("address %q", a)
 	}
 	if a := FindAddress("x\n inet 0.0.0.0 127.0.0.1 169.254.1.1 192.168.1.20/24"); a != "192.168.1.20/24" {
@@ -369,7 +369,7 @@ func TestPagerInParts(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 		w(" to continue or <Q> to quit:")
 		lines = append(lines, read())
-		w("\r\n    Primary IP: 10.127.25.40/24\r\n\r\nsw.2 # ")
+		w("\r\n    Primary IP: 10.60.25.40/24\r\n\r\nsw.2 # ")
 		got <- lines
 		time.Sleep(200 * time.Millisecond)
 		b.Close()
@@ -380,7 +380,7 @@ func TestPagerInParts(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	addr, err := AskAddress(ctx, c, im)
-	if err != nil || addr != "10.127.25.40/24" {
+	if err != nil || addr != "10.60.25.40/24" {
 		t.Fatal(addr, err, c.Text())
 	}
 	if l := <-got; strings.Join(l, "|") != "show vlan Mgmt|<space>" {

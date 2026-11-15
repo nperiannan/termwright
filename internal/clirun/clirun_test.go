@@ -17,8 +17,8 @@ import (
 )
 
 const showSwitch = "SysName:          lab-5520-1\nSystem MAC:       00:04:96:9F:12:30\nSystem Type:      5520-24T\n"
-const showVersion = "Switch      : 800744-00-04 2133N-41234 Rev 4.0 BootROM: 3.5.1.6    IMG: 32.5.1.5\n" +
-	"Slot-1      : 800744-00-04 2133N-41234\n"
+const showVersion = "Switch      : 800000-00-01 2133N-41234 Rev 4.0 BootROM: 3.5.1.6    IMG: 32.5.1.5\n" +
+	"Slot-1      : 800000-00-01 2133N-41234\n"
 
 // cliShell is a switch's command line: it echoes what is typed, shows a prompt, pages long output until
 // paging is off, and answers the show commands.
@@ -56,7 +56,7 @@ func cliShell(rw io.ReadWriter, crlf bool) {
 		case "show switch":
 			put(showSwitch)
 		case "show version":
-			put("Switch      : 800744-00-04 2133N-41234 Rev 4.0 BootROM: 3.5.1.6    IMG: 32.5.1.5\n")
+			put("Switch      : 800000-00-01 2133N-41234 Rev 4.0 BootROM: 3.5.1.6    IMG: 32.5.1.5\n")
 			if paging {
 				put("Press <SPACE> to continue or <Q> to quit:")
 				if c, _ := br.ReadByte(); c != ' ' {
@@ -66,7 +66,7 @@ func cliShell(rw io.ReadWriter, crlf bool) {
 				}
 				put("\r                                          \r")
 			}
-			put("Slot-1      : 800744-00-04 2133N-41234\n")
+			put("Slot-1      : 800000-00-01 2133N-41234\n")
 		case "exit":
 			put("logout\n")
 			return

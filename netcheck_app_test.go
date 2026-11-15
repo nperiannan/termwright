@@ -31,7 +31,7 @@ func TestNetCheckGateway(t *testing.T) {
 	ncRun = func(_ context.Context, name string, args ...string) (string, error) {
 		switch name {
 		case "ip":
-			return "default via 10.234.179.1 dev en7 proto dhcp", nil
+			return "default via 10.70.1.1 dev en7 proto dhcp", nil
 		case "route":
 			if args[0] == "-n" {
 				return "   route to: default\ndestination: default\n    gateway: 192.168.1.1\n", nil
@@ -42,7 +42,7 @@ func TestNetCheckGateway(t *testing.T) {
 		}
 		return "", nil
 	}
-	for goos, gw := range map[string]string{"linux": "10.234.179.1", "darwin": "192.168.1.1", "windows": "10.1.1.254"} {
+	for goos, gw := range map[string]string{"linux": "10.70.1.1", "darwin": "192.168.1.1", "windows": "10.1.1.254"} {
 		r := ncCheck(context.Background(), goos, "gateway")
 		if r.Address != gw || r.State != "ok" || r.Summary != "1.2 ms" {
 			t.Fatalf("%s: %+v", goos, r)

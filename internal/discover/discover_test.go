@@ -356,7 +356,7 @@ func TestExosWithOpenSSH(t *testing.T) {
 	// an EXOS switch that runs OpenSSH: the certificate and the Telnet greeting name EXOS
 	r := Result{Services: []string{"ssh", "telnet", "http", "https"}, Banner: "SSH-2.0-OpenSSH_8.1",
 		Telnet: "telnet session telnet0 on /dev/ptyb0 / login:",
-		Web:    WebInfo{Server: "::", Cert: "Extreme Networks, Inc., EXOS, *.extremenetworks.com", Hints: []string{"Extreme Networks"}}}
+		Web:    WebInfo{Server: "::", Cert: "Extreme Networks, Inc., EXOS, *.example.net", Hints: []string{"Extreme Networks"}}}
 	classify(&r)
 	if r.Kind != KindSwitch || r.Vendor != "Extreme Networks" || r.Platform != "EXOS" || r.OS != "EXOS" {
 		t.Fatalf("got kind %q vendor %q platform %q os %q", r.Kind, r.Vendor, r.Platform, r.OS)
