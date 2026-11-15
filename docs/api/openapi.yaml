@@ -2293,6 +2293,49 @@ paths:
                     $ref: '#/components/responses/Forbidden'
                 405:
                     $ref: '#/components/responses/MethodNotAllowed'
+    /lab/tools/remove:
+        post:
+            operationId: tool_remove
+            tags:
+                - Tools
+            summary: Remove devices (switches, computers, servers) from the emulated lab
+            description: 'Remove devices (switches, computers, servers) from the emulated lab: each is stopped and its disk deleted on its KVM host, its cables go, and - unless sessions is false - its saved sessions too. Kept in the lab''s change history (lab_history), where Revert brings them back. Through the API it runs without asking.'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                devices:
+                                    description: the device names (lab show lists them)
+                                    items:
+                                        type: string
+                                    type: array
+                                sessions:
+                                    description: also delete their saved sessions (default true)
+                                    type: boolean
+                            required:
+                                - devices
+            responses:
+                200:
+                    description: What it did or found, as text.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ToolResult'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                404:
+                    $ref: '#/components/responses/NotFound'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
     /lab/tools/routes:
         post:
             operationId: tool_routes

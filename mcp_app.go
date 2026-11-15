@@ -56,6 +56,9 @@ func mcpSchema(props map[string]any, required ...string) map[string]any {
 }
 
 var mcpTools = []mcpTool{
+	{"termwright_help", "Look up how Termwright works: the sections of the guides of the version running (User Guide, Features, Team server guide, recent changes) that match the words. Use it before saying Termwright can or cannot do something.",
+		mcpSchema(map[string]any{"query": map[string]any{"type": "string", "description": "a few words, e.g. team device in use by someone else"}}, "query")},
+	{"termwright_status", "Termwright's own state now: the version running, saved sessions and open tabs, the teams and who has which team device open or reserved, the emulated lab's KVM hosts with the VMs on each, the simulated lab and the file servers.", mcpSchema(map[string]any{})},
 	{"list_tabs", "List the terminal tabs open in Termwright: id, name, device type, address and state. Use the id or the name with the other tools.", mcpSchema(map[string]any{})},
 	{"read_tab", "Read what a Termwright terminal tab shows: the end of its screen and scrollback, as plain text. Passwords, keys and SNMP communities are removed.",
 		mcpSchema(map[string]any{
@@ -401,6 +404,11 @@ func (a *App) mcpCall(_ context.Context, name string, args map[string]any) (stri
 		return "", err
 	}
 	switch name {
+	case "termwright_help":
+		q, _ := args["query"].(string)
+		return a.AIHelp(q), nil
+	case "termwright_status":
+		return a.AIStatus(), nil
 	case "list_tabs":
 		tabs := a.mcpTabs()
 		if len(tabs) == 0 {

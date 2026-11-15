@@ -139,9 +139,18 @@ func (a *App) AIChat(r AIChatRequest) (AIAnswer, error) {
 	return AIAnswer{Text: out, Commands: aiCommands(out), Sent: msgs[len(msgs)-1].Text, Removed: removed, Model: model, Usage: usage}, nil
 }
 
+// aiAboutTermwright makes the assistant look Termwright up (its guides, its state now) instead of guessing, in
+// every mode: help and status only read.
+var aiAboutTermwright = `
+
+TERMWRIGHT ITSELF. You run inside Termwright ` + Version + `. For a question about Termwright - whether it can do something, where a menu, page or setting is, how a feature works - do not answer from memory and never say it cannot do something: look it up first by ending your answer with
+` + "```termwright\nhelp <a few words>\n```" + `
+(for example: help team device in use by someone else). For Termwright's own state now - the version running, the KVM hosts and the VMs on each, the labs, the teams and who has which team device open or reserved, the file servers, the open tabs - put status in the block instead (or as well). Termwright answers in the next message; then answer the user from it, naming the menu, page or button. When the guides do not cover it, say so plainly.`
+
 func aiChatSystem(r AIChatRequest) string {
 	sys, _ := aiPrompt(AIRequest{Kind: "explain", DeviceType: r.DeviceType, Protocol: r.Protocol}, "")
 	sys += "\nThe user may paste pictures (screenshots, photos of devices); describe what matters in them."
+	sys += aiAboutTermwright
 	on := map[string]bool{}
 	for _, t := range r.Tools {
 		on[t] = true

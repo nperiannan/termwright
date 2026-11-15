@@ -379,6 +379,10 @@ export class Backend {
   aiState() { return this.call<AIStatus>('AIState'); }
   aiSetKey(provider: string, key: string) { return this.call<void>('AISetKey', provider, key); }
   aiModels(s: AISettings) { return this.call<string[]>('AIModels', s); }
+  /** The sections of this version's guides that match (for the AI assistant). */
+  aiHelp(query: string) { return this.call<string>('AIHelp', query); }
+  /** Termwright's own state now: version, KVM hosts and their VMs, labs, teams, file servers, tabs. */
+  aiStatus() { return this.call<string>('AIStatus'); }
   aiChat(r: { messages: { role: string; text: string; images?: { name: string; mediaType: string; data: string }[] }[]; deviceType: string; protocol: string; agent: boolean; tabs: string[]; tools: string[]; folders: string[]; perm: string; plan?: string }) { return this.call<AIAnswer>('AIChat', r); }
   aiAsk(r: { kind: string; text: string; deviceType: string; protocol: string; question?: string }) { return this.call<AIAnswer>('AIAsk', r); }
   syncNow() { return this.call<SyncStatus>('SyncNow'); }

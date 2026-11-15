@@ -17,7 +17,7 @@ export type CtxKind = 'selection' | 'clipboard' | 'terminal' | 'tab' | 'file';
 export interface Ctx { id: number; kind: CtxKind; tabId?: string; label: string; detail: string; text: string; }
 export interface Img { name: string; mediaType: string; data: string; url: string; }
 export type StepState = 'ask' | 'running' | 'done' | 'skipped' | 'error' | 'refused';
-export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab';
+export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab' | 'help' | 'status';
 /** A step of the agent's plan: to do, being done, done. */
 export interface PlanItem { t: string; s: ' ' | '~' | 'x'; }
 export type AiMode = 'ask' | 'agent' | 'plan';
@@ -43,7 +43,6 @@ export const AGENT_TOOLS = [
 const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 25;
 /** lab lines with words; the connector's lab tools take JSON (lab traffic {...}). */
 const LAB_VERBS = ['start', 'stop', 'shutdown', 'cable', 'uncable', 'pull', 'plug', 'lag', 'nolag', 'readlags', 'setlag', 'unsetlag', 'checkcabling', 'uplink'];
-const LAB_TOOLS = ['images', 'add_switches', 'cable', 'power', 'wait', 'console', 'check_cabling', 'move', 'traffic', 'capture', 'link_check', 'qemu_command', 'address', 'computer', 'cpu', 'debug', 'events'];
 
 /** What the agent may do on its own, from "Read only" (white) to fully autonomous (orange). */
 export type AgentPerm = '' | 'every' | 'readonly' | 'auto';
@@ -304,11 +303,14 @@ export class AIChat {
         const { text, actions, plan } = parseActions(ans.text);
         const msg: ChatMsg = { id: ++nid, role: 'assistant', text, time: now(), wire: ans.text, model: ans.model, secs: Math.round((Date.now() - started) / 1000), steps: [], usage: ans.usage ?? null, ...(plan.length ? { plan } : {}) };
         this.push(chatId, msg);
-        if (!agent || !actions.length || this.stopping) break;
+        // looking up Termwright's guides and its own state is read-only: done in every mode, with no tool to turn on
+        const lookups = (k: StepKind) => k === 'help' || k === 'status';
+        const todo = agent ? actions : actions.filter(a => lookups(a.kind));
+        if (!todo.length || this.stopping) break;
         const results: string[] = [];
-        for (const a of actions) {
+        for (const a of todo) {
           if (this.stopping) break;
-          if (!this.tools()[a.kind === 'find' ? 'open' : a.kind]) { results.push(`${a.kind} ${a.tab}: not done - the user turned this tool off.`); continue; }
+          if (!lookups(a.kind) && !this.tools()[a.kind === 'find' ? 'open' : a.kind]) { results.push(`${a.kind} ${a.tab}: not done - the user turned this tool off.`); continue; }
           const s: Step = { kind: a.kind, tab: a.tab, command: a.command, state: 'running' };
           msg.steps!.push(s); this.touch(chatId);
           results.push(await this.act(s, chatId));
@@ -328,6 +330,11 @@ export class AIChat {
   /** One agent step: open a session or run a command, asking when the rules say so. */
   private async act(s: Step, chatId: string): Promise<string> {
     const perm = this.mode() === 'plan' ? 'readonly' : this.perm();
+    if (s.kind === 'help' || s.kind === 'status') {
+      const out = s.kind === 'help' ? await this.backend.aiHelp(s.command) : await this.backend.aiStatus();
+      s.state = 'done'; s.auto = true; s.output = out; s.note = s.kind === 'help' ? tr('looked up the guides') : tr('read Termwright’s state');
+      return (s.kind === 'help' ? `help ${s.command}:\n` : 'status:\n') + out;
+    }
     if (s.kind === 'find') {
       const hits = findSessions(this.ui.tree(), s.tab);
       s.state = 'done'; s.auto = true;
@@ -423,7 +430,8 @@ export class AIChat {
     s.tab = tr('Emulated lab');
     try {
       const json = s.command.trim().slice((verb0 ?? '').length).trim();
-      if (LAB_TOOLS.includes(verb) && (json.startsWith('{') || !LAB_VERBS.includes(verb))) return await this.labTool(s, chatId, verb, json);
+      // every lab tool Termwright offers (the backend says which exist): full control of the lab, for automated tests
+      if (verb && verb !== 'show' && (json.startsWith('{') || !LAB_VERBS.includes(verb))) return await this.labTool(s, chatId, verb, json);
       if (verb === 'show' || verb === '') {
         const t = await this.backend.emuAgentText();
         s.state = 'done'; s.auto = true; s.output = t;
@@ -434,7 +442,7 @@ export class AIChat {
       const dev = (n?: string) => devs.find(d => d.hostname.toLowerCase() === (n ?? '').toLowerCase() || d.id === n);
       const ids = (n?: string) => (n ?? '').toLowerCase() === 'all' ? devs.map(d => d.id) : (dev(n) ? [dev(n)!.id] : null);
       const bad = (why: string) => { s.state = 'error'; s.note = why; return `${line}: not done - ${why}.`; };
-      if (!LAB_VERBS.includes(verb)) return bad(`unknown lab command; use ${['show', ...LAB_VERBS, ...LAB_TOOLS].join(', ')}`);
+      if (!LAB_VERBS.includes(verb)) return bad(`unknown lab command; use show, ${LAB_VERBS.join(', ')} or a lab tool`);
       if (!v.exists || !devs.length) return bad('there is no emulated lab with switches');
       const one = verb === 'checkcabling' ? devs.map(d => d.id) : verb === 'start' || verb === 'stop' ? ids(args[0]) : dev(args[0]) ? [dev(args[0])!.id] : null;
       if (!one) return bad(`no switch is called ${args[0] ?? ''} (lab show lists them)`);
@@ -565,6 +573,9 @@ export function parseActions(text: string): { text: string; actions: { kind: Ste
       if (m) { actions.push({ kind: 'run', tab: m[1].trim(), command: m[2].trim() }); continue; }
       m = /^(log|record)\s+(.+?)\s*:\s*(.+)$/i.exec(l);
       if (m) { actions.push({ kind: m[1].toLowerCase() as StepKind, tab: m[2].trim(), command: m[3].trim() }); continue; }
+      m = /^help\s+(.+)$/i.exec(l);
+      if (m) { actions.push({ kind: 'help', tab: 'help', command: m[1].trim() }); continue; }
+      if (/^status\s*$/i.test(l)) { actions.push({ kind: 'status', tab: 'status', command: '' }); continue; }
       m = /^lab(?:\s+(.*))?$/i.exec(l);
       if (m) { actions.push({ kind: 'lab', tab: 'lab', command: (m[1] ?? 'show').trim() }); continue; }
       m = /^(open|find)\s+(.+)$/i.exec(l);

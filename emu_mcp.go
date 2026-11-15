@@ -138,6 +138,11 @@ var mcpLabTools = []mcpTool{
 			"switches": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "switch names; empty = all"},
 			"action":   map[string]any{"type": "string", "enum": []string{"start", "stop", "restart", "shutdown"}},
 		}, "action")},
+	{"lab_remove", "Remove devices (switches, computers, servers) from the emulated lab: each is stopped and its disk deleted on its KVM host, its cables go, and - unless sessions is false - its saved sessions too. Kept in the lab's change history (lab_history), where Revert brings them back.",
+		mcpSchema(map[string]any{
+			"devices":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "the device names (lab show lists them)"},
+			"sessions": map[string]any{"type": "boolean", "description": "also delete their saved sessions (default true)"},
+		}, "devices")},
 	{"lab_wait", "Wait until switches of the emulated lab are booted and configured (running, no step left), or the time is up; returns each one's state and problem.",
 		mcpSchema(map[string]any{
 			"switches": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "switch names; empty = all"},
@@ -1111,6 +1116,27 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			return "", err
 		}
 		return strings.Title(act) + " given for " + strings.Join(shown, ", ") + ". lab_wait follows them until they are ready.", nil //nolint:staticcheck
+	case "lab_remove":
+		names := argStrs(args, "devices")
+		if len(names) == 0 {
+			return "", errors.New("name the devices to remove (lab show lists them)")
+		}
+		list, shown, err := ids(names)
+		if err != nil {
+			return "", err
+		}
+		sessions := args["sessions"] != false
+		what := "they stop, their disks and cables go"
+		if sessions {
+			what += ", and their saved sessions"
+		}
+		if err := ask("Claude wants to remove devices from the lab", "Claude (through the Termwright connector) asks to remove "+strings.Join(shown, ", ")+" from the emulated lab: "+what+".", true); err != nil {
+			return "", err
+		}
+		if _, err := a.EmuRemove(list, sessions); err != nil {
+			return "", err
+		}
+		return "Removed " + strings.Join(shown, ", ") + " from the emulated lab: " + what + ". lab_history can revert it.", nil
 	case "lab_wait":
 		names := argStrs(args, "switches")
 		if _, _, err := ids(names); err != nil {
