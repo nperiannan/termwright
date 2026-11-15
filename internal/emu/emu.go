@@ -392,7 +392,7 @@ type Lab struct {
 	LanIf         string          `json:"lanIf"`              // lan: the host's bridge (tap on it) or network port (macvtap on it)
 	NatBr         string          `json:"natBr"`              // nat: the host's NAT bridge with a DHCP server (libvirt's virbr0)
 	LanKind       string          `json:"lanKind"`            // lan: "bridge" or "macvtap"
-	MgmtNet       string          `json:"mgmtNet"`            // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.70.1.146/24)
+	MgmtNet       string          `json:"mgmtNet"`            // bridge mode: the bridge's network (10.99.0.0/24); cloud: the first switch's address on the host's network (10.200.100.146/24)
 	CloudGw       string          `json:"cloudGw"`            // cloud (and lan with fixed addresses): the host's network's gateway
 	LanFixed      bool            `json:"lanFixed,omitempty"` // lan: fixed addresses from MgmtNet on (a network without DHCP)
 	NoFast        bool            `json:"noFast,omitempty"`   // Stop shuts the switches down (no saved running state: they boot each time)

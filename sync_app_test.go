@@ -28,7 +28,7 @@ func TestSyncBetweenComputers(t *testing.T) {
 		a := &App{store: st, cfg: cfg}
 		s := cfg.Get()
 		s.SyncFolder = shared
-		s.Teams = []config.TeamConn{{ID: "t1", Name: "Switching-Lab-B"}}
+		s.Teams = []config.TeamConn{{ID: "t1", Name: "NET-LAB-B01"}}
 		_ = cfg.Save(s)
 		_ = cfg.SetTeams(s.Teams)
 		return a
@@ -48,7 +48,7 @@ func TestSyncBetweenComputers(t *testing.T) {
 	if _, err := a.store.Save(session.Session{Name: "sw1", Folder: "Lab", Protocol: session.ProtoSSH2, Hostname: "10.0.0.1"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	_, _ = a.store.Save(session.Session{Name: "team-sw", Folder: "Switching-Lab-B", Protocol: session.ProtoSSH2, Hostname: "10.9.9.9"}, "")
+	_, _ = a.store.Save(session.Session{Name: "team-sw", Folder: "NET-LAB-B01", Protocol: session.ProtoSSH2, Hostname: "10.9.9.9"}, "")
 	s := a.cfg.Get()
 	s.Credentials = []config.Credential{{Name: "lab", Username: "admin"}}
 	_ = a.cfg.Save(s)
@@ -60,7 +60,7 @@ func TestSyncBetweenComputers(t *testing.T) {
 	if _, err := b.store.Get("Lab/sw1"); err != nil {
 		t.Fatal("not synced to B: ", err)
 	}
-	if b.store.Exists("Switching-Lab-B/team-sw") {
+	if b.store.Exists("NET-LAB-B01/team-sw") {
 		t.Fatal("a team folder was synced")
 	}
 	if c := b.cfg.Get().Credentials; len(c) != 1 || c[0].Username != "admin" {

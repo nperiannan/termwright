@@ -30,7 +30,7 @@ func TestEmuNeedsConsole(t *testing.T) {
 		{"day 0 done, address never typed", fixed, emu.VM{Day0Done: true, MgmtIP: "10.0.0.5/24"}, voss, true},
 		{"address typed", fixed, emu.VM{Day0Done: true, MgmtIP: "10.0.0.5/24", AddrOn: "10.0.0.5/24"}, voss, false},
 		{"address changed since", fixed, emu.VM{Day0Done: true, MgmtIP: "10.0.0.6/24", AddrOn: "10.0.0.5/24"}, voss, true},
-		{"DHCP, day 0 done, address known", dhcp, emu.VM{Day0Done: true, MgmtIP: "10.60.25.40/24"}, voss, false},
+		{"DHCP, day 0 done, address known", dhcp, emu.VM{Day0Done: true, MgmtIP: "10.100.25.40/24"}, voss, false},
 		{"DHCP, day 0 done, no address yet", dhcp, emu.VM{Day0Done: true}, &emu.Image{Day0: []string{"x"}, AddrCmd: "show ip"}, true},
 		{"DHCP, no address command", dhcp, emu.VM{Day0Done: true}, voss, false},
 		{"image without commands", fixed, emu.VM{MgmtIP: "10.0.0.5/24"}, plain, false},

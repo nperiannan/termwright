@@ -111,7 +111,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
       <form class="modal-body" (ngSubmit)="join()" id="joinf">
         <div class="lbl">Invite</div>
         <textarea name="inv" class="mono" rows="3" [(ngModel)]="invite" (ngModelChange)="checkInvite()" appAutofocus spellcheck="false"
-          placeholder="termwright-team://10.70.1.141:7443/?k=…&fp=…"></textarea>
+          placeholder="termwright-team://10.200.100.141:7443/?k=…&fp=…"></textarea>
         @if (info(); as i) {
           <div class="found"><app-icon name="check" [size]="14" /> <b>{{ i.name }}</b> · {{ i.members }} member{{ i.members === 1 ? '' : 's' }}, {{ i.online }} online · server {{ i.version }}</div>
           @if (i.sso) {

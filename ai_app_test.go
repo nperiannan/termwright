@@ -18,14 +18,14 @@ import (
 func TestAIRedact(t *testing.T) {
 	in := "username admin password 7 0822455D0A16\nenable secret 5 $1$mERr$hx5rVt7rPNoS4wqbXKX7m0\nsnmp-server community s3cr3tComm RO\n" +
 		"configure snmp add community readonly lab-public\nPassword:\nrouter>\nkey: AKIAIOSFODNN7EXAMPLE\n" +
-		"-----BEGIN RSA PRIVATE KEY-----\nMIIEow\n-----END RSA PRIVATE KEY-----\nInterface 1/1 is up, mgmt 10.60.34.11 (core-sw1.lab.example.com) 00:11:22:33:44:55"
+		"-----BEGIN RSA PRIVATE KEY-----\nMIIEow\n-----END RSA PRIVATE KEY-----\nInterface 1/1 is up, mgmt 10.100.34.11 (core-sw1.lab.example.com) 00:11:22:33:44:55"
 	out, n := aiRedact(in, false)
 	for _, leak := range []string{"0822455D0A16", "hx5rVt7rPNoS4wqbXKX7m0", "s3cr3tComm", "lab-public", "AKIAIOSFODNN7EXAMPLE", "MIIEow"} {
 		if strings.Contains(out, leak) {
 			t.Errorf("%q not removed:\n%s", leak, out)
 		}
 	}
-	if !strings.Contains(out, "router>") || !strings.Contains(out, "Password:") || !strings.Contains(out, "10.60.34.11") || n < 6 {
+	if !strings.Contains(out, "router>") || !strings.Contains(out, "Password:") || !strings.Contains(out, "10.100.34.11") || n < 6 {
 		t.Fatalf("too much or too little removed (%d):\n%s", n, out)
 	}
 	out, _ = aiRedact("ping 10.0.0.1 from 10.0.0.2, again 10.0.0.1 at core-sw1.lab.example.com mac 00:11:22:33:44:55", true)

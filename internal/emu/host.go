@@ -29,7 +29,7 @@ type HostInfo struct {
 	Plan     []string `json:"plan"`     // what Set Up would do
 	CanSetup bool     `json:"canSetup"` // Set Up can fix the problems
 	Uplink   string   `json:"uplink"`   // the port of the default route
-	LanAddr  string   `json:"lanAddr"`  // the host's address on it (10.70.1.20/24)
+	LanAddr  string   `json:"lanAddr"`  // the host's address on it (10.200.100.20/24)
 	Gateway  string   `json:"gateway"`  // the default route's gateway
 	Bridges  []string `json:"bridges"`  // the host's bridges with a network port in them
 	Wifi     bool     `json:"wifi"`     // the uplink is Wi-Fi

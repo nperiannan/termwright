@@ -16,14 +16,14 @@ func TestPresenceReserveAndNotices(t *testing.T) {
 	tm, _ := oc.Team(ctx)
 	ra, _ := anon.Join(ctx, JoinRequest{Invite: tm.Invite, Name: "Ravi"})
 	rc := NewClient(addr(ts), s.Fingerprint(), ra.Token)
-	_, _ = oc.Push(ctx, []Device{{Name: "core-sw1", Host: "10.60.35.13", Protocol: "SSH2", DeviceType: "EXOS", MAC: "0c:9b:78:ea:9c:00"}})
+	_, _ = oc.Push(ctx, []Device{{Name: "core-sw1", Host: "10.100.35.13", Protocol: "SSH2", DeviceType: "EXOS", MAC: "0c:9b:78:ea:9c:00"}})
 
 	st, _ := rc.Status(ctx, 0, 0)
 	// Ravi waits for a change; Natarajan opens the device (under another name, found by MAC)
 	got := make(chan Status, 1)
 	go func() { x, _ := rc.Status(ctx, st.Rev, 20); got <- x }()
 	time.Sleep(100 * time.Millisecond)
-	if err := oc.Presence(ctx, []DeviceRef{{Host: "10.60.35.13", Port: 22, Protocol: "SSH2", Name: "10.60.35.13", Since: "2026-11-07T00:30:00Z"}}); err != nil {
+	if err := oc.Presence(ctx, []DeviceRef{{Host: "10.100.35.13", Port: 22, Protocol: "SSH2", Name: "10.100.35.13", Since: "2026-11-07T00:30:00Z"}}); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -35,7 +35,7 @@ func TestPresenceReserveAndNotices(t *testing.T) {
 		t.Fatal("the status long poll did not wake up")
 	}
 	// Natarajan reserves it; Ravi cannot, and connecting anyway sends a notice
-	if _, err := oc.Reserve(ctx, DeviceRef{Host: "10.60.35.13", Protocol: "SSH2"}, time.Now().Add(2*time.Hour), "upgrade test"); err != nil {
+	if _, err := oc.Reserve(ctx, DeviceRef{Host: "10.100.35.13", Protocol: "SSH2"}, time.Now().Add(2*time.Hour), "upgrade test"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rc.Reserve(ctx, DeviceRef{MAC: "0C-9B-78-EA-9C-00", Host: "10.9.9.9"}, time.Now().Add(time.Hour), ""); err == nil {
@@ -44,7 +44,7 @@ func TestPresenceReserveAndNotices(t *testing.T) {
 	if _, err := rc.Reserve(ctx, DeviceRef{Host: "10.1.1.1"}, time.Now().Add(time.Hour), ""); err == nil {
 		t.Fatal("a device outside the inventory was reserved")
 	}
-	_ = rc.Connected(ctx, DeviceRef{Host: "10.60.35.13", Protocol: "SSH2"})
+	_ = rc.Connected(ctx, DeviceRef{Host: "10.100.35.13", Protocol: "SSH2"})
 	x, _ := oc.Status(ctx, 0, 0)
 	if len(x.Reserved) != 1 || len(x.Notes) != 1 {
 		t.Fatalf("status %+v", x)
@@ -114,12 +114,12 @@ func TestSamePersonOnTwoComputers(t *testing.T) {
 	tm, _ := oc.Team(ctx)
 	vnc, _ := anon.Join(ctx, JoinRequest{Invite: tm.Invite, Name: "natarajan  periannan"})
 	vc := NewClient(addr(ts), s.Fingerprint(), vnc.Token)
-	_, _ = oc.Push(ctx, []Device{{Name: "core-sw1", Host: "10.60.35.13", Protocol: "SSH2"}})
-	res, err := oc.Reserve(ctx, DeviceRef{Host: "10.60.35.13", Protocol: "SSH2"}, time.Now().Add(2*time.Hour), "")
+	_, _ = oc.Push(ctx, []Device{{Name: "core-sw1", Host: "10.100.35.13", Protocol: "SSH2"}})
+	res, err := oc.Reserve(ctx, DeviceRef{Host: "10.100.35.13", Protocol: "SSH2"}, time.Now().Add(2*time.Hour), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = vc.Connected(ctx, DeviceRef{Host: "10.60.35.13", Protocol: "SSH2"})
+	_ = vc.Connected(ctx, DeviceRef{Host: "10.100.35.13", Protocol: "SSH2"})
 	x, _ := oc.Status(ctx, 0, 0)
 	if len(x.Notes) != 0 || len(s.usage.Con) != 0 {
 		t.Fatalf("a notice or conflict for my own reservation: %+v %+v", x.Notes, s.usage.Con)
@@ -127,7 +127,7 @@ func TestSamePersonOnTwoComputers(t *testing.T) {
 	if len(x.Also) != 1 || x.Also[0] != vnc.MemberID {
 		t.Fatalf("also %+v", x.Also)
 	}
-	if _, err := vc.Reserve(ctx, DeviceRef{Host: "10.60.35.13", Protocol: "SSH2"}, time.Now().Add(3*time.Hour), "longer"); err != nil {
+	if _, err := vc.Reserve(ctx, DeviceRef{Host: "10.100.35.13", Protocol: "SSH2"}, time.Now().Add(3*time.Hour), "longer"); err != nil {
 		t.Fatalf("my other computer could not change my reservation: %v", err)
 	}
 	if err := vc.Release(ctx, res.ID); err != nil {

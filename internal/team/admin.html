@@ -645,7 +645,7 @@ function discover() {
   const pickable = res.filter(r => !(s.inTeam || {})[r.ip]), allOn = pickable.length && pickable.every(r => ui.ssel.has(r.ip));
   const all = s ? (s.results || []).filter(r => !r.self) : [], known = all.filter(r => (s.inTeam || {})[r.ip]).length, netN = all.filter(isNet).length;
   return `<p class="lead">Scan a lab network <b>from the team server's host</b> - it sees the lab networks also when you are away on VPN. Nothing logs in: open ports, SSH and Telnet greetings, web pages, SNMP and MAC vendors tell what each device is.</p>
-  <div class="card"><div class="scanbox"><div><label>Networks or addresses</label><input data-k="targets" class="mono" placeholder="10.60.36.0/24 · 10.60.36.10-80 · 10.60.3.5, 10.60.3.9" value="${esc(ui.targets || (s ? s.targets : ''))}"></div>
+  <div class="card"><div class="scanbox"><div><label>Networks or addresses</label><input data-k="targets" class="mono" placeholder="10.100.36.0/24 · 10.100.36.10-80 · 10.100.3.5, 10.100.3.9" value="${esc(ui.targets || (s ? s.targets : ''))}"></div>
       <div><label>SNMP v2c community (optional)</label><input data-k="community" placeholder="e.g. public" value="${esc(ui.community)}"></div>
       <div>${s && s.running ? '<button id="stop">Stop</button>' : `<button class="p" id="scan" style="padding:7px 22px">Scan</button>`}</div></div>
     <div class="opts"><label><input type="checkbox" id="onlynet" ${ui.onlyNet ? 'checked' : ''}> Network devices only <span class="muted">(switches, routers, firewalls, access points, unknown with SSH/Telnet)</span></label>
@@ -661,7 +661,7 @@ function discover() {
       <td><input data-k="dt:${esc(r.ip)}" value="${esc(dtOf(r))}" style="width:120px" ${inTeam ? 'disabled' : ''} placeholder="device type"></td>
       <td>${inTeam ? `<span class="pill in">in inventory${inTeam !== r.name && inTeam !== r.ip ? ' as ' + esc(inTeam) : ''}</span>` : '<span class="pill ok">new</span>'}</td></tr>`; }).join('')
       : `<tr><td colspan="7" class="empty">${s.running ? 'Scanning…' : 'Nothing to show' + (known && ui.hideKnown ? ' - untick “Hide devices already in the inventory” to see them' : '')}.</td></tr>`}</tbody></table></div></div>`
-  : `<div class="card"><div class="empty">Type a network such as <span class="mono">10.60.36.0/24</span> and press Scan. The results stay here while you work on other pages.</div></div>`}
+  : `<div class="card"><div class="empty">Type a network such as <span class="mono">10.100.36.0/24</span> and press Scan. The results stay here while you work on other pages.</div></div>`}
   ${loginsCard()}
   ${ui.ssel.size ? `<div class="bulk"><b>${ui.ssel.size} selected</b>add to folder <input data-k="scanFolder" list="fl" placeholder="(the team folder)" value="${esc(ui.scanFolder)}" style="width:200px">${folderList('fl')}<button class="p" id="sadd">Add to Inventory</button><button id="sclr">Clear</button></div>` : ''}`;
 }
@@ -719,7 +719,7 @@ function activity() {
   if (!ui.act) { setTimeout(() => { if (!ui.act) loadAct(true); }, 0); }
   const a = ui.act || { total: 0, items: [] };
   return `<p class="lead">Who added, changed, approved, reserved, released and removed what, and who signed in here - the last 5000 events.</p>
-  <div class="card"><div class="tool"><input id="aq" data-k="aq" placeholder="Filter by who or what, e.g. reserved or Alex" value="${esc(ui.actQ || '')}" style="flex:1;min-width:260px">
+  <div class="card"><div class="tool"><input id="aq" data-k="aq" placeholder="Filter by who or what, e.g. reserved or Amelia" value="${esc(ui.actQ || '')}" style="flex:1;min-width:260px">
     <span class="muted small">${a.items.length} of ${a.total}</span><span class="sp"></span><button id="acsv">Export CSV</button></div>
   <div class="scroll">${actTable(a.items)}</div>
   ${a.items.length < a.total ? '<div class="pad" style="text-align:center"><button id="amore">Show 200 more</button></div>' : ''}</div>`;

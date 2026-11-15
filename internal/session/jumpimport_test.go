@@ -16,7 +16,7 @@ func jumpFixture(t *testing.T) (*Store, string) {
 		t.Fatal(err)
 	}
 	ssh := src.NewSession()
-	ssh.Name, ssh.Folder, ssh.Hostname, ssh.Username = "testgen-vm", "Bangalore Server", "10.70.1.142", "nperiannan"
+	ssh.Name, ssh.Folder, ssh.Hostname, ssh.Username = "testgen-vm", "Bangalore Server", "10.200.100.142", "nperiannan"
 	if _, err := src.Save(ssh, ""); err != nil {
 		t.Fatal(err)
 	}
