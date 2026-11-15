@@ -174,7 +174,7 @@ app-command-window { flex: none; }
   /* what Termwright is, beside the name (hidden when the start page is narrow) */
   .tag { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-left: 16px; margin-left: 4px; border-left: 1px solid var(--border);
     b { font-weight: 500; font-size: calc(13px * var(--ui-scale, 1)); color: color-mix(in srgb, var(--text) 72%, transparent); letter-spacing: .01em; line-height: 1.35; } /* wraps when narrow */
-    span { font: calc(11.5px * var(--ui-scale, 1)) var(--mono); color: var(--faint); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } } }
+    span { font: calc(11.5px * var(--ui-scale, 1)) var(--mono); color: color-mix(in srgb, var(--faint) 70%, transparent); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } } }
 @container (max-width: 560px) { .home-brand .tag { display: none; } }
 @media (max-width: 720px) { .home-brand .tag { display: none; } }
 .bigsearch { display: flex; align-items: center; gap: var(--sp-3); height: 54px; padding: 0 var(--sp-4); border: 1px solid var(--border); border-radius: var(--r-lg);
