@@ -2,7 +2,7 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.36.0 (2026-11-15)
 
 - **Start page**: the line beside the name says *AI-powered network access, automation, emulation and reservation platform* (it wraps in a narrow window instead of being cut off), and the footer *Built for the people who design, operate, and troubleshoot networks.* Both are a little smaller and a softer white.
 - **About**: three more cards - **AI Agent** (autonomous configuration and troubleshooting in your sessions and labs; MCP connector), **Emulate** (virtual labs) and **Collaborate** (team server: shared inventory, who is on a device, reservations, usage) - three to a row in a wider window, a new introduction, raised buttons with icons like the start page's, and **Star on GitHub** and **Share** (on LinkedIn) beside Copy Link; *Created by* moved beside Close, easier to read.
