@@ -189,6 +189,20 @@ func (a *App) EmuInstallType(id, line string, enter bool) error {
 	}
 	host, port := j.Host, j.Port
 	emuLab.mu.Unlock()
+	if enter {
+		line += "\r"
+	}
+	// an automatic install holds the console: type through its connection
+	emuInst.mu.Lock()
+	var w io.Writer
+	if l := emuInst.live[id]; l != nil {
+		w = l.typer
+	}
+	emuInst.mu.Unlock()
+	if w != nil {
+		_, err := io.WriteString(w, line)
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cl, err := a.emuClient(ctx, host)
@@ -200,9 +214,6 @@ func (a *App) EmuInstallType(id, line string, enter bool) error {
 		return fmt.Errorf("its console: %w", err)
 	}
 	defer c.Close()
-	if enter {
-		line += "\r"
-	}
 	_, err = c.Write([]byte(line))
 	time.Sleep(300 * time.Millisecond)
 	return err

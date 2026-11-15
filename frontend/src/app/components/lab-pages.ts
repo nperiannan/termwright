@@ -724,7 +724,7 @@ export abstract class LabImages implements OnInit, OnDestroy {
   isoNamePh() { const b = (this.isoPath.split(/[\\/]/).pop() ?? '').replace(/\.iso$/i, ''); return b || tr('from the ISO’s name'); }
   openIsoList() { this.edit.set(null); this.iso.set(false); this.isoList.set(true); }
   openIso() { this.edit.set(null); this.isoList.set(false); this.iso.set(true); if (!this.isoHost) this.isoHost = this.lab.emu()?.host || this.hosts()[0]?.session || ''; }
-  async chooseIso() { const p = await this.backend.chooseOpenFile(tr('Choose the ISO file'), [{ displayName: tr('ISO files'), pattern: '*.iso' }]).catch(() => ''); if (p) { this.isoPath = p; if (/alpine/i.test(p)) this.isoMode = 'alpine'; } }
+  async chooseIso() { const p = await this.backend.chooseOpenFile(tr('Choose the ISO file'), [{ displayName: tr('ISO files'), pattern: '*.iso' }]).catch(() => ''); if (p) { this.isoPath = p; this.isoMode = /alpine/i.test(p) ? 'alpine' : 'manual'; } }
   diskText(j: EmuInstall) { return j.mb ? (j.mb % 1024 === 0 ? j.mb / 1024 + ' GB' : j.mb + ' MB') : j.gb + ' GB'; }
   /** The number is turned into the other unit, so the disk stays the size it was. */
   isoUnitChanged(u: string) { this.isoSize = u === 'MB' ? Math.round(this.isoSize * 1024) : Math.max(1, Math.round(this.isoSize / 1024)); }

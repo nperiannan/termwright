@@ -131,9 +131,12 @@ var emuInst struct {
 // instLive is what is read from the host while an install runs.
 type instLive struct {
 	console, log string // the last lines: of the console Termwright types on, of the host's log of it
-	disk, part   int64
-	pct          float64
-	idle         int
+	// typer: the console connection an automatic install holds - what the user types goes through it (the
+	// console takes one connection at a time)
+	typer      io.Writer
+	disk, part int64
+	pct        float64
+	idle       int
 }
 
 // emuInstInit makes the maps (emuInst.mu is held).
@@ -455,6 +458,9 @@ func (a *App) emuInstallRun(ctx context.Context, id string) {
 		return
 	}
 	c := emu.NewConsole(conn)
+	emuInst.mu.Lock()
+	emuInstLive(id).typer = conn
+	emuInst.mu.Unlock()
 	stop := make(chan struct{})
 	emuGo(func() { // the end of the console, for the window
 		for {
@@ -476,6 +482,9 @@ func (a *App) emuInstallRun(ctx context.Context, id string) {
 	emuLab.mu.Unlock()
 	err = emu.InstallAlpine(ctx, c, emu.AlpineOpts{Hostname: "alpine", Password: pw, DNS: dns}, func(step, msg string) { a.emuInstallStep(id, step, msg) })
 	close(stop)
+	emuInst.mu.Lock()
+	emuInstLive(id).typer = nil
+	emuInst.mu.Unlock()
 	_ = c.Close()
 	if err != nil {
 		if ctx.Err() == nil {
