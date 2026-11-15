@@ -3,8 +3,8 @@
 <h1 align="center">Termwright</h1>
 
 <p align="center">
-  <b>A session manager and terminal for network and systems engineers.</b><br/>
-  SSH2 · Telnet · Serial · SFTP · RDP · VNC, on Windows, macOS and Linux.
+  <b>AI-powered network access, automation, emulation and reservation platform.</b><br/>
+  SSH · Telnet · Serial · SFTP · RDP · VNC · WoL · Discover · Collaborate - on Windows, macOS and Linux.
 </p>
 
 <p align="center">
@@ -12,132 +12,134 @@
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.24%2B-00ADD8">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-connector-8A63D2">
 </p>
 
 <p align="center">
   <a href="docs/USER_GUIDE.md">User Guide</a> ·
   <a href="docs/FEATURES.md">Feature List</a> ·
-  <a href="docs/SCRIPTING.md">Scripting</a> ·
-  <a href="docs/SESSION_FILES.md">Session Files</a> ·
+  <a href="docs/USER_GUIDE.md#emulated-lab-real-vm-images-on-a-kvm-host">Emulated Lab</a> ·
   <a href="docs/TEAM_SERVER.md">Team Server</a> ·
-  <a href="CHANGELOG.md">Changelog</a> ·
-  <a href="docs/ROADMAP.md">Roadmap</a>
+  <a href="docs/API.md">Local API</a> ·
+  <a href="docs/PYTHON.md">Python</a> ·
+  <a href="docs/SCRIPTING.md">Scripting</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ![Termwright - start page with 3D cards and the Session Manager in the Glacier style](docs/screenshots/glacier-start-dark.png)
 
-<p align="center"><i>The start page and Session Manager (Glacier, dark): folders with their environments, and every kind of session - SSH, SFTP, Linux, EXOS, IoT, RDP, VNC, Wake-on-LAN, Telnet, serial, local shell.</i></p>
+<p align="center"><i>The start page and Session Manager: folders with their environments, and every kind of session - SSH, SFTP, Linux, network OS, IoT, RDP, VNC, Wake-on-LAN, Telnet, serial, local shell.</i></p>
+
+## What Termwright is
+
+Termwright began as a terminal and session manager for network engineers. Today it is one free, open-source desktop program for the whole loop of network work - reaching devices, building and testing networks, letting AI do the repetitive parts, and sharing a lab with a team:
 
 | | |
 |---|---|
-| ![Linux session with the Files panel, Glacier dark](docs/screenshots/glacier-files-dark.png) <br/>*A Linux session with the Files panel beside the terminal* | ![Session properties, Glacier light](docs/screenshots/glacier-properties-light.png) <br/>*Session properties beside the start page (Glacier, light)* |
+| **Access** | Every way into a device - SSH, Telnet, serial, SFTP, RDP, VNC, Mosh, jump hosts and proxies - with hundreds of sessions organised in folders, logins per device type, device facts and passwords kept in the OS keychain. |
+| **AI** | An assistant and agent beside the terminal that reads output and screenshots, connects to sessions and configures or troubleshoots devices with your approval - with Claude, Claude Code, OpenAI-compatible services or Ollama. Termwright is also an **MCP connector**, so Claude Desktop, Claude Code, Cursor, VS Code and other AI apps can use it. |
+| **Emulate** | A network lab of real switch, router and server images on your own KVM hosts - one or several - with ESP32 microcontrollers, Linux PCs, lab servers, a traffic generator with RFC 2544 tests and packet capture, all on one canvas. |
+| **Automate** | Logon actions and triggers, Python / VBScript / JavaScript scripts, a command window for many tabs, configuration backups with change detection, checklists, Run and Collect - and a local REST API, a command line and a Python client for the lab. |
+| **Collaborate** | An optional team server of your own: who has which device open, reservations, a shared inventory the server reads from the devices, usage reports, discovery from inside the lab and single sign-on. |
 
-## At a glance
+## Network emulation lab
 
-- SSH, Telnet, serial, raw TCP and local shell, in tabs or tiles
-- SFTP browser, and a Files panel beside the terminal
-- Jump hosts (chainable), proxies and port forwarding
-- RDP and VNC, also through a jump host
-- RDP and VNC installed on a Linux machine over SSH, and a one-click diagnosis when they do not connect
-- Device web interfaces opened through the SSH connection
-- Device discovery, with device type and network OS detection
-- Device facts: model, version, serial number, MAC address, uptime
+![The emulated lab: switches from real images on KVM hosts, cabled on the canvas](docs/screenshots/emu-canvas.png)
+
+<p align="center"><i>The emulated lab: switches from real images on KVM hosts, cabled on the canvas; the pages above it - Canvas, Overview, Traffic, Appliances, Hosts - are also under the Lab menu.</i></p>
+
+- **Real images on your hardware**: switch, router, firewall and server images run in QEMU/KVM on Linux hosts you add over SSH - qcow2 files, GNS3 appliances, a public catalogue, cloud images, or an image you install from the vendor's ISO with its console in the page.
+- **Several hosts, one topology**: a lab spans KVM hosts (cables between hosts are tunnelled), a running switch moves live to another host, and the CPU tab shares or limits each host's cores.
+- **Built for test cases**: draw the topology or let *New Lab…* build it (leaf-spine, mesh, star, LAGs); every device gets its console, an SSH session and its management address; fast start resumes switches in seconds; checkpoints, a change history with Revert, and an Events log of everything Termwright did.
+- **Everything around the switches**: Linux PCs (with a desktop and browser when needed), L2 switches and hubs, HTTP / FTP / TFTP / DHCP servers, a RADIUS server for 802.1X, name servers, a route generator (OSPF, BGP), the host's network as a cloud, and **ESP32 microcontrollers** (S3, C3, C6, H2) with their MicroPython console.
+- **Traffic generator**: test ports on switch ports send and count UDP, TCP, ICMP, ARP, raw or replayed pcap streams with VLAN, priority and DSCP, at rates in pps, Mbit/s or % of line, with latency, jitter, loss and per-flow statistics; **RFC 2544** throughput, latency, frame loss and back-to-back, **RFC 2889** address learning, convergence and iperf3 tests; 802.1X and DHCP clients, multicast, LACP, LLDP and spanning tree on test ports; packet capture with a built-in decoder. Termwright's own generator sends about 93,000 frames a second per host (see *How fast the generator is* in the guide).
+- **Simulated lab**: lightweight simulated switches on this computer - no VMs - for training, trying scripts and the AI agent.
+- **Scriptable and AI-ready**: the local REST API, `termwright lab …` on the command line, the Python client and the MCP connector all drive the same lab tools.
+
+![The traffic generator: streams, live throughput, loss and latency, pass or fail per stream](docs/screenshots/emu-traffic.png)
+
+## AI assistant and agent
+
+- **Ask, Plan or Agent**: ask about the output or a screenshot; in **Agent** mode it finds sessions by folder, name or address, connects and runs commands - read-only by itself, changes after you allow them, or fully autonomous. **Production sessions always ask first**, and logs and recordings are kept as evidence with a status per device.
+- **Your choice of AI**: Claude with an API key, **Claude Code** with your own Claude login (model and effort), OpenAI-compatible services (OpenAI, Azure OpenAI or a company gateway) or **Ollama** on your network.
+- **It knows Termwright**: it looks up the guide of the version running and Termwright's live state - the version, each KVM host with its VMs, the labs, who has which team device - instead of guessing.
+- **It runs the lab**: it builds topologies, starts and configures switches on their consoles, cables, tests with the traffic generator and reads the Events when something fails - each change approved by you.
+- **Privacy**: nothing is sent until you ask; passwords, keys and SNMP communities are always removed, and addresses and host names can be hidden.
+- **Termwright as an MCP connector**: *Help → Connect an AI App…* adds Termwright to Claude Desktop or Claude Code in one click, and copies a ready config for Cursor, Windsurf, Gemini CLI, VS Code or Codex. *Used by* shows which apps used it. Nothing to download - the connector is Termwright itself.
+
+| | |
+|---|---|
+| ![AI agent](docs/screenshots/ai-agent.png) <br/>*The agent configures a switch, with a status per device* | ![Connect an AI app](docs/screenshots/ai-connector.png) <br/>*Help → Connect an AI App: Claude Desktop, Claude Code and other MCP apps* |
+
+## Teams: who uses which device
+
+- **A team server of your own**: a small Docker container on a lab host, set up and updated from Termwright over SSH. Members join with an invite; the certificate is pinned. The server never sees passwords, keys or terminal output.
+- **Presence and reservations**: every member sees who has a device open; reserve a device for a time, and *Tell Me When It Is Free* when it is busy.
+- **A shared inventory**: push sessions to the team (owners approve), every member gets the team folder, and the server reads each device's model, serial number and MAC address itself.
+- **The admin page**: usage reports (hours, utilization, devices not used), discovery of the lab's networks from the server's host, members and roles, an activity log, backup and restore.
+- **Single sign-on**: Microsoft Entra ID, Okta, Google or any OpenID Connect provider.
+
+| | |
+|---|---|
+| ![Reserve a device](docs/screenshots/team-reserve.png) <br/>*Reserve a device for the team* | ![Usage reports](docs/screenshots/team-reports.png) <br/>*Team admin: usage reports* |
+
+## Terminal and sessions
+
+- SSH, Telnet (also over TLS), serial, raw TCP, Mosh and local shell, in tabs or tiles
+- SFTP browser, and a Files panel beside the terminal; ZMODEM, YMODEM and XMODEM for consoles and boot loaders
+- Jump hosts (chainable), proxies and port forwarding; device web interfaces opened through the SSH connection
+- RDP and VNC, also through a jump host - and RDP or VNC set up on a Linux machine over SSH
+- Device discovery with device type and network OS detection; device facts (model, version, serial number, MAC address, uptime); *Name After Devices*
 - Automatic login per device type (EXOS, VOSS, Cisco IOS, Linux or your own) and shared accounts
-- Which devices answer, for every session or one folder
+- Which devices answer, for every session or one folder; devices that moved to a new address found by their MAC
 - Environments (production, staging, lab or your own) with colours and safeguards
-- Configuration backups with change detection
-- Automation: logon actions, triggers, Python / VBScript / JavaScript scripts, Run and Collect, checklists
-- A command window that sends to many tabs, a command library and command history
-- Session logs, and recordings with playback
-- Copy or save the terminal as text or as an HTML report
-- Compare two tabs, a tab and a file, or two SFTP files
-- Wake-on-LAN
-- Import from SecureCRT, PuTTY, MobaXterm, mRemoteNG and more
-- Windows, macOS and Linux, and an Android companion app with an SSH and Telnet terminal, a device widget and Wake-on-LAN ([preview](mobile/README.md))
-- Glacier and Standard styles, dark and light themes
-- Teams (optional): a team server of your own on a lab host, set up from Termwright - see [Team Server](docs/TEAM_SERVER.md)
+- Built-in TFTP, FTP and HTTP servers for images, licences and configurations; Network Check (reachability, traceroute, iPerf3)
+- Session logs, recordings with playback, and the terminal saved as text or an HTML report
+- Import from SecureCRT, PuTTY, MobaXterm, mRemoteNG and more - and export back
+- Sync your own computers through a shared folder (never passwords)
+- An Android companion app with an SSH and Telnet terminal, a device widget and Wake-on-LAN ([preview](mobile/README.md))
 
 And much more - see the [feature list](docs/FEATURES.md).
 
 ## Overview
 
-Termwright is a free, open-source desktop application for people who spend their day on the command line of switches, routers, firewalls, servers and cloud hosts. It keeps hundreds of sessions organised, logs in the way each kind of device expects, moves files to and from them, and automates the repetitive parts of change windows: backups, checklists, collecting the same values from many devices.
-
-It is a native desktop program, not a web service. It is written in Go, with an Angular and xterm.js interface, and ships as a single binary for each platform. Sessions are plain-text files that you own. Passwords are kept in the operating system's keychain, never in session files. Nothing is sent anywhere except to the hosts you connect to.
+Termwright is a native desktop program, not a web service. It is written in Go, with an Angular and xterm.js interface, and ships as a single binary for each platform. Sessions are plain-text files that you own. Passwords are kept in the operating system's keychain or your password manager, never in session files. Without the optional AI assistant, team server or sync folder, nothing is sent anywhere except to the hosts you connect to.
 
 Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, MobaXterm and OpenSSH, or from CSV, Ansible, NetBox and AWS inventories. They can be exported back to those formats at any time. For any other tool, convert its sessions to the documented [import format](docs/IMPORT_FORMAT.md) (a CSV with a template) instead of waiting for an importer.
 
-## Highlights
+## Recent releases
 
-- **Connections**: SSH2, Telnet, serial consoles, raw TCP and local shells in tabs or tiles; RDP and VNC alongside them.
-- **Authentication**: passwords, keys (including PuTTY `.ppk`), certificates, FIDO2 security keys, smart cards, Kerberos and password managers. **Accounts** let many sessions, folders and device types share one login, so a password is changed in one place.
-- **Device types**: one login profile per platform (EXOS, VOSS, Cisco IOS, Linux, or your own). It holds the login steps, after-login commands and credentials, so a new device needs only an address.
-- **Device facts**: model, version, serial number, MAC address and uptime are read in a background login and shown wherever the session appears.
-- **Session Manager**: folders with defaults, favourites, recents, environments (production is marked and guarded), reachability, bulk edit, a session list in the title bar and network discovery.
-- **Files**:
-  - a dual-pane SFTP browser with sync, compare, resume, bookmarks, server-to-server copy, SCP and *Run as root*;
-  - a **Files panel** beside the terminal that follows the shell's working directory;
-  - ZMODEM, YMODEM and XMODEM for consoles and boot loaders.
-- **Automation**:
-  - expect/send logon actions and output triggers;
-  - Python, VBScript and JavaScript scripts;
-  - a command window that sends to many tabs, a command library with variables, and searchable command history;
-  - configuration backups with change detection, change checklists, and Run and Collect.
-- **Networks in between**: jump hosts (chainable), SOCKS5 and HTTP proxies, port forwarding, and SFTP to a host behind a bastion through the bastion's own key. Web interfaces of devices behind a jump host open in a browser window whose traffic goes through the SSH connection.
+- **0.37** - *Connect an AI App* (MCP config for Cursor, VS Code, Windsurf, Gemini CLI, Codex; *Used by*), a **Lab** menu, icons on the lab's pages, traffic generator fixes and its measured speed.
+- **0.36** - the **emulated lab** grows up: Install from ISO with the installer's console in the page, the AI agent with full control of the lab and knowledge of Termwright, packet captures, the local API, command line and Python client, the team server reading model, serial number and MAC from the devices.
+- **0.34** - *Name After Devices*, Network Check, the file servers' firewall check, *who is free now* for teams.
+- **0.33** - the **AI assistant and agent**, your choice of AI service, Termwright as a connector for Claude, built-in TFTP / FTP / HTTP servers, single sign-on for teams.
 
-## What's new in 0.34
-
-- **Name After Devices**: sessions named by an address (`10.100.35.13`) take the name the device gives itself - for a whole folder at once, offered after connecting, or automatically with Undo. Team servers learn each device's hostname and model; owners rename for everyone.
-- **Network Check** (Transfer → Network Check…): who can reach what - this computer and the open device tabs against the gateway, DNS, internet and any host, with the traceroute path and an iPerf3 server and client. On switches it also tries the management VR / VRF.
-- **File servers: firewall check** - whether the firewall lets devices reach Termwright, allow it in one click, and a test from the device.
-- **Who is free now** on the team admin page, a **Model** column, and **calmer folder colours** (Soft, Vivid or Steel blue).
-
-| | |
-|---|---|
-| ![Network Check](docs/screenshots/net-check.png) <br/>*Transfer → Network Check* | ![Usage reports](docs/screenshots/team-reports.png) <br/>*Team admin: Usage reports* |
-
-## What's new in 0.33
-
-- **AI assistant and agent** beside the terminal (docked or floating): ask about the output or a screenshot; in **Agent** mode it finds and connects to sessions by folder, name or address and runs commands - read-only by itself, changes after you allow them, or fully autonomous. **Production sessions always ask first.** Logs and recordings as evidence, a status per device, tokens per answer.
-- **Your choice of AI**: Claude Code with your own Claude login (model and effort), Claude, OpenAI-compatible services or Ollama on your network - and **Termwright as a connector for Claude Desktop and Claude Code**.
-- **Built-in TFTP, FTP and HTTP servers** for software images, licences and configuration backups.
-- **Single sign-on for teams** (Microsoft Entra ID, Okta, Google, OpenID Connect), **EXOS port states in colour**, start page buttons in three styles, and one modern window (the Classic layout is gone).
-
-| | |
-|---|---|
-| ![AI agent](docs/screenshots/ai-agent.png) <br/>*The agent configures a switch, with a status per device* | ![File servers](docs/screenshots/file-servers.png) <br/>*Transfer → File Servers* |
-
-## What's new in 0.32
-
-- **Sync your own computers** through a shared folder (OneDrive, iCloud Drive, Dropbox, a share): sessions, accounts and the library - never passwords.
-- **Mosh**, **Telnet over TLS** and **local echo**.
-- **Escape and Tab in every dialog**, and screen reader labels.
-- **Teams**: *Tell Me When It Is Free*, hand the team over, backup and restore, and a searchable activity log on the admin page.
-
-| | |
-|---|---|
-| ![Sync](docs/screenshots/sync.png) <br/>*Settings → General → Sync* | ![Tell Me When It Is Free](docs/screenshots/team-watch.png) <br/>*Wait for a busy device* |
+Every change is in the [changelog](CHANGELOG.md).
 
 ## Capabilities
 
 | Area | Summary |
 |---|---|
-| Protocols | SSH2; Telnet (NAWS, TTYPE, ECHO, SGA); serial (flow control, DTR/RTS, break, speed detection); raw TCP; local shell (PTY on macOS and Linux, ConPTY on Windows); RDP through the system's client; VNC in a built-in viewer; Wake-on-LAN sessions. |
+| Protocols | SSH2; Telnet (NAWS, TTYPE, ECHO, SGA) and Telnet over TLS; serial (flow control, DTR/RTS, break, speed detection); raw TCP; Mosh; local shell (PTY on macOS and Linux, ConPTY on Windows); RDP through the system's client; VNC in a built-in viewer; Wake-on-LAN sessions. |
 | SSH authentication | Password and keyboard-interactive. Public keys: OpenSSH, encrypted, and PuTTY `.ppk`. SSH certificates, FIDO2 security keys, PIV / PKCS#11 smart cards, Kerberos (GSSAPI), the SSH agent. `known_hosts` verification with prompts for new and changed keys. |
 | Key management | Generate Ed25519, RSA 4096 or ECDSA keys. Install them on Linux, macOS, BSD and Windows OpenSSH servers, test the key-only login, then switch the session to it. |
 | Device types | Per-platform login profiles: login steps for Telnet and serial, after-login steps for every protocol (for example `enable`, paging off), and credentials inherited or overridden per session. |
 | Device facts | Model, version, serial number, MAC address, uptime and custom values, read in a background login. Built-in rules for VOSS, EXOS, Cisco IOS and Linux. |
 | Session management | Wake-on-LAN (also through a jump host); folders with defaults; favourites and recents; environments, with confirmation before multi-tab sends to production; reachability checks; bulk edit; workspaces; Quick Open; drag and drop. |
-| Discovery | Scans a network or range (up to /22): open ports, SSH and Telnet banners, web servers and certificates, SIP, SNMP v2c, DNS, MAC vendor. Each result shows its evidence, a guessed kind, a device type (also new ones, with their icon) and *Connect ▾* with every way it answered; selected devices are added as sessions. Discovery never logs in. |
+| Discovery | Scans a network or range (up to /22): open ports, SSH and Telnet banners, web servers and certificates, SIP, SNMP v2c, DNS, MAC vendor. Each result shows its evidence, a guessed kind, a device type and *Connect ▾*; selected devices are added as sessions. Discovery never logs in. |
+| Emulated lab | QEMU/KVM on one or several Linux hosts: real images (qcow2, GNS3 appliances, a public catalogue, cloud images, Install from ISO), device packs with port layouts and personas, consoles and SSH sessions per device, cables within and between hosts, live moves, fast start, checkpoints, history with Revert, CPU sharing and limits; Linux PCs, L2 switches, hubs, lab servers (HTTP, FTP, TFTP, DHCP, RADIUS, DNS), a route generator (OSPF, BGP) and ESP32 microcontrollers. |
+| Traffic generator | Test ports on switch ports; UDP, TCP, ICMP, ARP, raw and pcap streams with VLAN, 802.1p and DSCP, fixed, increasing, random or IMIX sizes and changing fields; latency, jitter, loss, order and per-flow counts; RFC 2544 (throughput, latency, frame loss, back-to-back), RFC 2889 learning, convergence and iperf3 tests; 802.1X and DHCP clients, multicast, LACP, LLDP and spanning tree; packet capture and decode; a test library and HTML reports. |
+| AI | Ask, Plan and Agent modes beside the terminal; Claude, Claude Code, OpenAI-compatible services and Ollama; screenshots; the agent connects to sessions and runs the lab with your approval; secrets removed before sending. MCP connector for Claude Desktop, Claude Code and other MCP apps. |
+| Teams | Optional self-hosted team server (Docker): presence, reservations and *Tell Me When It Is Free*, a shared inventory with approvals and device facts read by the server, usage reports, discovery from the lab, roles, single sign-on (Entra ID, Okta, Google, OpenID Connect), activity log, backup and restore, updates from Termwright. |
 | Import and export | Sessions are plain-text `.ini` files, and unknown keys are preserved byte for byte. Import from SecureCRT (Config folder, zip, XML), PuTTY / KiTTY, SuperPuTTY, MobaXterm, mRemoteNG, OpenSSH config, CSV, Ansible, NetBox and AWS EC2. Export to the same formats plus Tabby. |
 | Terminal | Tabs and tiled layouts; xterm-256color and true colour; Unicode; scrollback search; keyword highlighting; timestamps; auto-scroll control; clickable links; session lock; zoom; per-session fonts and colour schemes. |
-| File transfer | SFTP browser with folder transfers, sync, resume, bookmarks, compare, server-to-server copy, SCP, sudo / su and jump-station targets. Files panel beside the terminal. SCP. ZMODEM (automatic `sz` / `rz`), YMODEM batch, XMODEM. |
-| Automation | Expect/send logon actions with named credentials; output triggers; logon scripts; Python, VBScript (Windows) and JavaScript scripting through a `crt`-style object; script recorder; key map; button bar; output alerts. |
-| Network operations | Command Window that sends to the active, selected or all tabs; command library with `{{variables}}`; command history; scheduled configuration backups kept only when changed; change checklists; Run and Collect to CSV; Compare. |
+| File transfer | SFTP browser with folder transfers, sync, resume, bookmarks, compare, server-to-server copy, SCP, sudo / su and jump-station targets. Files panel beside the terminal. ZMODEM (automatic `sz` / `rz`), YMODEM batch, XMODEM. Built-in TFTP, FTP and HTTP servers. |
+| Automation | Expect/send logon actions with named credentials; output triggers; logon scripts; Python, VBScript (Windows) and JavaScript scripting through a `crt`-style object; script recorder; key map; button bar; output alerts. For the lab: a local REST API (OpenAPI), `termwright lab …` and a Python client. |
+| Network operations | Command Window that sends to the active, selected or all tabs; command library with `{{variables}}`; command history; scheduled configuration backups kept only when changed; change checklists; Run and Collect to CSV; Compare; Network Check (reachability, traceroute, iPerf3). |
 | Logging and recording | Raw or plain-text session logs with per-line timestamps and filename tokens; scrollback to text or HTML; session recordings with markers and playback. |
 | Security | OS keychain for passwords and passphrases; 1Password, Bitwarden, HashiCorp Vault and command-based password managers; master password with unlock at start-up; encrypted password export (AES-256-GCM, scrypt). |
 | Networking | Web pages and device web interfaces through a session (browser window with a temporary profile); local, remote and dynamic (SOCKS5) port forwarding; chainable jump hosts; SOCKS5 and HTTP CONNECT proxies; X11 and agent forwarding; automatic reconnect. |
-| Updates | Stable and nightly channels from GitHub Releases, with the installer downloaded and opened from Help → Check for Updates. |
+| Updates | Stable and nightly channels from GitHub Releases, with the installer downloaded and opened from Help → Check for Updates; the team server is updated from Termwright. |
 
 The complete list is in [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -247,8 +249,9 @@ Release builds for Windows (amd64), Linux (amd64, arm64) and macOS (arm64) are p
 | Settings, sessions, logs, backups | `%APPDATA%\Termwright`, `~/Library/Application Support/Termwright` or `~/.config/Termwright` (override with `TERMWRIGHT_HOME`) |
 | Passwords and key passphrases | The operating system's keychain (Keychain, Credential Manager, Secret Service) or your password manager |
 | Command history | `history.json` in the data folder; commands that look like they contain a secret are never recorded |
+| Emulated lab | Images, disks and the lab's files on the KVM hosts you add; the topology and its history in the data folder |
 
-Termwright has no telemetry. Apart from the hosts you connect to (and the reachability checks and background logins you enable for them), it contacts only GitHub: for the update check and the download count shown in About.
+Termwright has no telemetry. Apart from the hosts you connect to (and the reachability checks and background logins you enable for them), it contacts only GitHub - for the update check and the download count shown in About - and, when you turn them on, the AI service you chose (only what you ask about, secrets removed), your team server and your KVM hosts. The MCP connector and the local API listen on this computer only, with a random key.
 
 ## Architecture
 
@@ -264,6 +267,11 @@ flowchart TB
   subgraph Lab["Lab host - Docker (optional, per team)"]
     TS["Team server (termwright-team)<br/>members, inventory, who uses what,<br/>reservations, usage history, admin page"] --- TD[("/data<br/>team.json, usage.json, cert, key")]
   end
+  subgraph KVM["KVM hosts (optional, the emulated lab)"]
+    VM["QEMU/KVM switches, routers, servers,<br/>PCs, ESP32 · traffic generator · captures"]
+  end
+  AI["AI service (optional)<br/>Claude · Claude Code · OpenAI-compatible · Ollama"]
+  Apps["AI apps (MCP)<br/>Claude Desktop · Claude Code · Cursor · VS Code"]
   Sync[("Sync folder (optional)<br/>OneDrive / iCloud / Dropbox / share")]
   GH["GitHub<br/>releases, ghcr.io image"]
   Browser["Browser<br/>admin page"]
@@ -273,12 +281,16 @@ flowchart TB
   Go -- "sessions and settings,<br/>never passwords" --> Sync
   Go -- "update check, downloads" --> GH
   Browser -- "HTTPS, one-time link from Termwright" --> TS
-  TS -- "scans (Discover)" --> Dev
+  TS -- "scans (Discover), device facts" --> Dev
+  Go -- "SSH: images, QEMU, consoles, test ports" --> VM
+  Go -- "what you ask, secrets removed" --> AI
+  Apps -- "MCP (stdio), this computer only" --> Go
 ```
 
 - **Termwright** is one program: an Angular interface over a Go backend (Wails). Connections, file transfers, scripts, backups and discovery run in the Go backend; passwords stay in the operating system's keychain or a password manager.
 - **Teams are optional.** Without a team nothing is sent anywhere. A team runs its own **team server** - a small container on a lab host, set up and updated from Termwright over SSH - which every member's Termwright talks to over HTTPS with the certificate pinned by the invite. The server never sees passwords, keys or terminal output.
 - **Sync is optional** too: with a sync folder, each Termwright writes its sessions and settings (never passwords) to a folder your computers share.
+- **The emulated lab runs on your KVM hosts**: Termwright logs in over SSH, copies the images, starts QEMU and its own traffic generator there, and connects the consoles and test ports back. **AI is optional**: the assistant talks to the service you choose; AI apps reach Termwright through its MCP connector on this computer.
 
 ## Project structure
 
@@ -291,6 +303,11 @@ internal/term               SSH2, Telnet (and over TLS), serial, local PTY, Mosh
 internal/fileserve          TFTP, FTP and HTTP servers devices fetch files from and send files to
 internal/team               the team server and its client: members, inventory, presence, reservations, usage, admin page
 internal/discover           network discovery (also used by the team server's scans)
+internal/emu, emu_*.go      the emulated lab: KVM hosts, QEMU, images, cables, the traffic generator (traffic.py), captures, tests
+internal/sim                the simulated lab's switches
+ai_*.go, mcp_app.go         the AI assistant and agent, the MCP connector
+api_app.go, scripts/python  the local REST API and the Python client
+internal/clirun             logs in to a device and runs show commands (the team server's device facts)
 internal/backup, checklist  configuration backups, change checklists
 internal/config             data directory and global settings
 internal/secrets, vault     OS keychain integration, the encrypted password export
@@ -300,7 +317,7 @@ internal/facts, wol, update device facts, Wake-on-LAN, software update
 cmd/termwright-team         the team server program
 deploy/team                 Dockerfile, Compose file and systemd unit of the team server
 frontend/                   Angular application (standalone components, signals, zoneless) with xterm.js
-docs/                       user guide, feature list, team server guide, scripting and session file references
+docs/                       user guide, feature list, team server guide, API, Python, scripting and session file references
 ```
 
 ## Contributing

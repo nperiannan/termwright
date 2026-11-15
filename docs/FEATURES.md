@@ -68,6 +68,27 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Tell Me When It Is Free**: wait for a device someone else has open or reserved, a notice comes when it is free. **Hand over** the team to another member (the owner stays as co-owner). **Backup & restore** on the admin page (owner), and an **Activity** log of 5000 events with filter and CSV export.
 - **Single sign-on** for teams: members join and stay with their company account (Microsoft Entra ID, Okta, Google - any OpenID Connect service), with allowed domains and groups and a sign-in again every few weeks; set up on the admin page.
 
+## Network emulation lab
+
+- **Emulated lab**: the vendors’ own VM images (qcow2, GNS3 appliance settings) booted with QEMU/KVM on a Linux host over SSH - the real OS; host check and one-click QEMU/KVM set-up, image profiles with day-0 commands typed on the console, copy-on-write disks, port forwarding or bridge management, SSH and console sessions per switch through the host, virtual cables that can be pulled, Restart and Back to Day 0.
+- **Several KVM hosts in one topology**: cables between hosts are tunnelled, a running switch moves live to another host with the same QEMU, and the CPU tab shares or limits each host's cores.
+- **Images**: qcow2 files, GNS3 appliances, a public catalogue, cloud images, and **Install from ISO** with the installer's console in the page (type its answers, *Take Over by Hand*); *Installed from ISO* lists the images made with their real size.
+- **Built-in nodes**: Linux PCs (a desktop with a browser when needed), L2 switches, hubs, HTTP / FTP / TFTP / DHCP servers, a RADIUS server for 802.1X, name servers, a route generator (OSPF, BGP) and the host's network as a cloud.
+- **Microcontrollers**: ESP32-S3, ESP32-C3, ESP32-C6 and ESP32-H2 in Espressif's QEMU, with their MicroPython console - on a KVM host or this computer.
+- **Traffic generator**: test ports on switch ports; UDP, TCP, ICMP, ARP, raw and pcap streams with VLAN, 802.1p and DSCP, fixed, increasing, random or IMIX sizes and fields that change per frame; rates in pps, Mbit/s or % of line; latency, jitter, loss, order and per-flow counts; Statistics for every test port; a library of ready tests and HTML reports. About 93,000 frames a second per host.
+- **Tests**: RFC 2544 throughput, latency, frame loss and back-to-back; RFC 2889 address learning; convergence while a cable is pulled or a switch restarts; iperf3 between lab computers.
+- **Test ports as hosts**: 802.1X and DHCP clients behind a test port (up to 4,000), multicast groups, LACP, LLDP and spanning tree.
+- **Packet capture** on any switch port, decoded in Termwright.
+- **The Lab menu**: *Emulated Lab*, *Simulated Lab*, *Overview*, *Traffic Generator*, *Appliances* and *KVM Hosts*.
+- **Local API, command line and Python**: a REST API on this computer (OpenAPI), `termwright lab …` and a Python client drive the same lab tools - no approval asked, for your own automation.
+- **Simulated lab**: switches simulated on this computer (an SSH server each, no VM) from a device pack (.vm) loaded with consent: models with their port layout, command line with abbreviations, `?` help and Tab, VLANs, ports, IP interfaces, save / reset, ping and LLDP over drawn cables; New Lab wizard with leaf-spine, chain or ring cabling; Lab window with list, topology and cables; sessions in a Simulated Lab folder with live state.
+
+## AI assistant and connector
+
+- **AI assistant** (optional, off by default): a chat panel docked right or left or floating, with chat history, pasted pictures and *Add context* (selection, clipboard, whole terminal, other tabs, files) and a token warning; **Agent mode** runs commands in your tabs to debug or fix - read-only commands by themselves, changes after you allow them, production always asks; *Explain with AI* for output and errors and *Ask AI for a Command* for the tab's device type, with Claude, an OpenAI-compatible service, a local Ollama or **Claude Code** (your own Claude login, no API key); secrets removed before sending, commands pasted without Enter, *Save* to the Command Library.
+- **The agent and the lab**: it builds topologies, starts and configures switches on their consoles, cables them, runs traffic tests and reads the Events - each change approved by you; it looks up Termwright's own guide and live state (version, KVM hosts and their VMs, teams).
+- **Connector for AI apps (MCP)**: Claude Desktop, Claude Code and other MCP apps (Cursor, VS Code, Windsurf, Gemini CLI, Codex - a ready config to copy; Help → Connect an AI App…; *Used by* shows which apps used it) can list your tabs and sessions, read a tab (secrets removed) and - after you allow it in Termwright, each time or for 15 minutes per tab - open a session and run a command; local only, off by default.
+
 ## SSH2
 
 - **Mosh** for SSH sessions: roaming over Wi-Fi changes, sleep and new addresses with the mosh client of your computer (session's address, port, user and key).
@@ -187,8 +208,6 @@ Without a team Termwright works on its own and sends nothing anywhere.
 
 ## Terminal
 
-- **AI assistant** (optional, off by default): a chat panel docked right or left or floating, with chat history, pasted pictures and *Add context* (selection, clipboard, whole terminal, other tabs, files) and a token warning; **Agent mode** runs commands in your tabs to debug or fix - read-only commands by themselves, changes after you allow them, production always asks; *Explain with AI* for output and errors and *Ask AI for a Command* for the tab's device type, with Claude, an OpenAI-compatible service, a local Ollama or **Claude Code** (your own Claude login, no API key); secrets removed before sending, commands pasted without Enter, *Save* to the Command Library.
-- **Connector for AI apps (MCP)**: Claude Desktop, Claude Code and other MCP apps (Cursor, VS Code, Windsurf, Gemini CLI, Codex - a ready config to copy; Help → Connect an AI App…; *Used by* shows which apps used it) can list your tabs and sessions, read a tab (secrets removed) and - after you allow it in Termwright, each time or for 15 minutes per tab - open a session and run a command; local only, off by default.
 - **Emulation**: xterm-256color with true color, VT100/102/220, ANSI, Linux; Unicode.
 - **Scrollback** with search (`Mod+F`), clear scrollback, reset terminal.
 - **Terminal bar** under SSH, Telnet, Raw and local tabs: Timestamps, Auto scroll and Clear (can be hidden per tab or everywhere).
@@ -258,8 +277,6 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **Working directory detection**: SFTP opens in the terminal's folder, follows every `cd`, and can `cd` the terminal; also follows `sudo su -`, and knows whether the terminal is on the jump station or the target (*SFTP opens on*: where the terminal is, or always one of them).
 - **Colored files**: folders and files colored by type, links and hidden files marked.
 - **SCP** upload and download of files and folders.
-- **Simulated lab**: switches simulated on this computer (an SSH server each, no VM) from a device pack (.vm) loaded with consent: models with their port layout, command line with abbreviations, `?` help and Tab, VLANs, ports, IP interfaces, save / reset, ping and LLDP over drawn cables; New Lab wizard with leaf-spine, chain or ring cabling; Lab window with list, topology and cables; sessions in a Simulated Lab folder with live state.
-- **Emulated lab**: the vendors’ own VM images (qcow2, GNS3 appliance settings) booted with QEMU/KVM on a Linux host over SSH - the real OS; host check and one-click QEMU/KVM set-up, image profiles with day-0 commands typed on the console, copy-on-write disks, port forwarding or bridge management, SSH and console sessions per switch through the host, virtual cables that can be pulled, Restart and Back to Day 0.
 - **Network Check**: who can reach what - this computer and the open device tabs (their own ping and traceroute) against gateway, DNS, internet and any host or port, as a matrix; a cell opens the traceroute path with the hop where it stops; **iPerf3** server and client for throughput inside the network.
 - **Firewall check for the file servers**: whether the computer's firewall lets devices in, one-click allow, and a test fetch from the device.
 - **File servers (TFTP, FTP, HTTP)** on this computer for devices to fetch images and licences and send configurations: one folder, one address, uploads only when allowed, a transfer log, the device command written for you (EXOS, Cisco IOS / NX-OS, Arista, Junos, Linux, or your own), a status-bar indicator, and they stop on their own.
