@@ -21,14 +21,14 @@ section() {
 # GitHub refuses release notes over 125000 characters: past LIMIT the commit list gives way to the compare
 # link, then the changelog section is cut at a line with a link to the whole CHANGELOG.
 LIMIT=120000
-MORE="**…and more** - the full list is in [CHANGELOG.md](https://github.com/$REPO/blob/$([ "$REF" = nightly ] && echo main || echo "$REF")/CHANGELOG.md)."
+MORE="**…and more** - the full list is in [CHANGELOG.md](https://github.com/$REPO/blob/$([ "$REF" = nightly ] && echo develop || echo "$REF")/CHANGELOG.md)."
 
 # notes COMMITS: the release notes; COMMITS=1 lists the commits
 notes() {
   if [ "$REF" = nightly ]; then
     TO=$(git rev-parse HEAD)
     FROM=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
-    echo "Automatic build of main ($(git rev-parse --short HEAD)). **Untested** - back up your settings first (the update window has *Back Up Now*)."
+    echo "Automatic build of develop ($(git rev-parse --short HEAD)). **Untested** - back up your settings first (the update window has *Back Up Now*)."
     echo
     body=$(section Unreleased)
     if [ -n "$body" ]; then echo "### Changes since ${FROM:-the first release}"; echo; echo "$body"; echo; fi
