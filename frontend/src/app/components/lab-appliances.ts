@@ -146,11 +146,11 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
                 </div>
               </div>
             } @else if (isoList()) {
-              <div class="dh"><div class="ic">◉</div><div class="dt"><h3>{{ tr('Installed from ISO') }}</h3><div class="muted small">{{ tr('The installs that ended: the images they made, and why the others stopped.') }}</div></div></div>
+              <div class="dh"><button type="button" class="back" (click)="isoGoBack()" [title]="tr('Back')">←</button><div class="ic">◉</div><div class="dt"><h3>{{ tr('Installed from ISO') }}</h3><div class="muted small">{{ tr('The installs that ended: the images they made, and why the others stopped.') }}</div></div></div>
               <div class="dscroll one">
-                <div class="card"><table class="itab"><thead><tr><th>{{ tr('Image') }}</th><th>{{ tr('ISO') }}</th><th>{{ tr('How') }}</th><th>{{ tr('Disk') }}</th><th>{{ tr('Result') }}</th><th></th></tr></thead><tbody>
+                <div class="card"><table class="itab"><thead><tr><th>{{ tr('Image') }}</th><th>{{ tr('ISO') }}</th><th>{{ tr('How') }}</th><th>{{ tr('Size') }}</th><th>{{ tr('Result') }}</th><th></th></tr></thead><tbody>
                   @for (j of isoFinished(); track j.id) {
-                    <tr><td><b>{{ j.name }}</b></td><td class="muted small">{{ j.isoName }}</td><td class="small">{{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</td><td class="small">{{ diskText(j) }}</td>
+                    <tr><td><b>{{ j.name }}</b></td><td class="muted small">{{ j.isoName }}</td><td class="small">{{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</td><td class="small nw">@if (imgSize(j); as sz) { <b>{{ mb(sz) }}</b>&nbsp;<span class="muted" [title]="tr('The image file takes {0}; its disk is {1}', mb(sz), diskText(j))">{{ tr('of {0}', diskText(j)) }}</span> } @else { {{ diskText(j) }} }</td>
                       <td class="small" [class.g]="j.stage === 'done'" [class.r]="j.stage === 'failed'">{{ j.stage === 'done' ? '✓ ' + tr('Image made') + (j.verified ? ' · ' + tr('verified') : '') : isoText(j) }}</td>
                       <td class="acts">@if (canTakeOver(j)) { <button type="button" class="sm" (click)="isoTakeOver(j)">{{ tr('Take Over by Hand') }}</button> }@if (j.stage === 'done' && j.image) { <button type="button" class="sm" (click)="isoShow(j)">{{ tr('Open image') }}</button> }<button type="button" class="sm" (click)="isoRemove(j)">{{ tr('Remove') }}</button></td></tr>
                   } @empty { <tr><td colspan="6" class="muted small">{{ tr('No install has ended yet.') }}</td></tr> }
@@ -158,6 +158,7 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
               </div>
             } @else if (edit(); as im) { @let bd = badge(live(im));
               <div class="dh">
+                @if (isoBack().from === 'list') { <button type="button" class="back" (click)="isoGoBack()" [title]="tr('Back to Installed from ISO')">←</button> }
                 <div class="ic">▦</div>
                 <div class="dt"><h3>{{ im.name }}@if (im.version && !im.name.includes(im.version)) { <span>{{ im.version }}</span> }<span class="st" [class]="'st ' + bd.cls">{{ bd.text }}</span></h3>
                   <div class="m">{{ im.fileName || tr('no file chosen') }} · {{ mb(im.size) }}@if (im.sha256) { · sha256 {{ im.sha256.slice(0, 4) }}…{{ im.sha256.slice(-4) }} }</div>
@@ -349,6 +350,7 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
     .dq { margin: 0 10px 6px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; .dqh { display: flex; gap: 6px; align-items: center; .sp { flex: 1; } } .dqi { display: flex; gap: 4px; align-items: center; padding: 4px 0; cursor: pointer; } .dqn { flex: 1; min-width: 0; span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; } small { color: var(--muted); font-size: 11px; } } button.xs { padding: 0 5px; height: 20px; font-size: 11px; } }
     .meter { height: 5px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 4px 0 2px; i { display: block; height: 100%; background: var(--accent); } }
     .dh { display: flex; gap: 14px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); flex: none;
+      .back { flex: none; width: 32px; height: 32px; padding: 0; border-radius: 8px; font-size: 16px; line-height: 1; }
       .ic { width: 42px; height: 42px; flex: none; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-size: 20px; }
       .dt { flex: 1; min-width: 0; } h3 { margin: 0; font-size: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; > span:not(.st) { color: var(--muted); font-weight: 500; } }
       .m { color: var(--muted); font-size: 12px; margin-top: 3px; font-family: var(--mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -385,6 +387,7 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
     .ctail { margin: 0; flex: 1; min-height: 130px; overflow: auto; display: flex; flex-direction: column-reverse; /* kept scrolled to the newest line */ padding: 10px 12px; border-radius: 8px; background: #0b0d10; color: #d6dbe3; font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-all; }
     .cin { display: flex; gap: 6px; margin-top: 8px; input { flex: 1; min-width: 0; } }
     .keys { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-top: 6px; .sp { flex: 1; } button.xs { font: 11.5px var(--mono); height: 24px; padding: 0 8px; } }
+    .itab td.nw { white-space: nowrap; }
     .itab { width: 100%; border-collapse: collapse; th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
       td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; } td.small { white-space: nowrap; } td.acts { text-align: right; white-space: nowrap; button + button { margin-left: 6px; } } tr:last-child td { border-bottom: 0; } }
     .stl { list-style: none; padding: 0; margin: 8px 0 0; li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 6px; padding: 2px 0; color: var(--muted); &.d, &.n { color: var(--text); } small { grid-column: 2 / 4; color: var(--muted); } } .tm { font-size: 11px; color: var(--muted); } }

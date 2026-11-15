@@ -4,6 +4,11 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **A Lab menu** in the menu bar: *Emulated Lab*, *Simulated Lab*, and straight to the emulated lab's *Overview*, *Traffic Generator*, *Appliances* and *KVM Hosts* (the labs were under Transfer).
+- **The emulated lab's pages have icons**: Canvas, Overview, Traffic, Appliances and Hosts each show a two-tone icon in its own colour above the name, with the count on the icon's corner.
+- **Traffic page**: the test ports and the three charts sit on the same seven columns as the cards above them (test ports one, each chart two), and a small rate axis no longer reads 0, 1, 1, 2.
+- **Installed from ISO**: *Size* is what the image file takes (273 MB of an 8 GB disk), not only the disk it was given; ← goes back to the page before, and from an image opened there back to the list.
+- **Start page**: the line under the name reads *… Discover · Collaborate*, and the line at the bottom is as dim as it.
 - **Fixed: frame sizes count the FCS**, as testers and RFC 2544 do: a 1518-byte frame went out 4 bytes too long (1522 with its FCS), so a switch with the usual MTU dropped every one and RFC 2544 found *no rate without loss* at 1518 bytes; 64-byte frames were 68.
 - **Fixed: a test port got no frames from its switch** when the switch port had a cable when the switch started and the cable (or the switch at its other end) was removed since: the port still sent to the old other end, so the test port counted 100 % loss although the switch forwarded every frame. Termwright now reads where the port really sends (QEMU's monitor, once per switch start) and the test port listens there; when the old other end still runs, or was on another host, the Events and the test port say to restart the switch once.
 - **The traffic generator no longer drops its own frames with several fast streams**: it sent up to 4,000 frames per stream before reading the ones coming back, so two streams of 50,000 frames a second lost a quarter of them at the receiving test port; it now sends at most 2,000 a round over all streams, and three streams of 40,000 arrive whole. The user guide has its measured speed (*How fast the generator is*): about 93,000 frames a second of 64 bytes, 52,000 of 1518 bytes (640 Mbit/s) on one 2.1 GHz CPU, sent and received with no loss.

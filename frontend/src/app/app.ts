@@ -515,6 +515,10 @@ export class App implements OnInit {
       case 'file-servers': this.ui.open('fileServers'); break;
       case 'net-check': this.ui.open('netCheck'); break;
       case 'sim-lab': void this.tabs.openLab(this.labs.kind()); break;
+      case 'lab-emu': this.openLab('emu'); break;
+      case 'lab-sim': this.openLab('sim'); break;
+      case 'lab-overview': case 'lab-traffic': case 'lab-appliances': case 'lab-hosts':
+        this.labs.goto.set({ kind: 'emu', page: a.slice(4) as 'overview' | 'traffic' | 'appliances' | 'hosts' }); this.openLab('emu'); break;
       case 'ai-assistant': void this.openAI(); break;
       case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
       case 'checklists': this.ui.open('checklists'); break;

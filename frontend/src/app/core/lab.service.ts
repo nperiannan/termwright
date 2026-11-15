@@ -15,6 +15,8 @@ export class LabService {
   readonly sim = signal<LabView | null>(null);
   readonly emu = signal<LabView | null>(null);
   readonly kind = signal<'sim' | 'emu'>('sim');
+  /** A page of a lab tab to show (the Lab menu): its workspace takes it. */
+  readonly goto = signal<{ kind: 'sim' | 'emu'; page: 'overview' | 'traffic' | 'appliances' | 'hosts' } | null>(null);
   readonly state = computed(() => (this.kind() === 'emu' ? this.emu() : this.sim()));
   readonly busy = signal(false);
   /** The Lab window opens on this tab (and switch), from the workspace. */

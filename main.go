@@ -251,7 +251,15 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	xfer.AddSeparator()
 	add(xfer, "File Servers (TFTP, FTP, HTTP)...", "file-servers")
 	add(xfer, "Network Check (Reachability, iPerf3)...", "net-check")
-	add(xfer, "Labs (Simulated, Emulated)...", "sim-lab")
+
+	lab := m.AddSubmenu(t("Lab"))
+	add(lab, "Emulated Lab", "lab-emu")
+	add(lab, "Simulated Lab", "lab-sim")
+	lab.AddSeparator()
+	add(lab, "Overview", "lab-overview")
+	add(lab, "Traffic Generator", "lab-traffic")
+	add(lab, "Appliances", "lab-appliances")
+	add(lab, "KVM Hosts", "lab-hosts")
 
 	script := m.AddSubmenu(t("Script"))
 	add(script, "Command Library...", "command-library")

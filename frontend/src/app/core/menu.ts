@@ -51,7 +51,12 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Open Web Page Through This Session...', action: 'web-page' }, { label: 'Wake Up (Wake-on-LAN)', action: 'wake' }, { sep: true },
       { label: 'SCP Upload File...', action: 'scp-upload' }, { label: 'SCP Upload Folder...', action: 'scp-upload-folder' },
       { label: 'SCP Download...', action: 'scp-download' }, { sep: true },
-      { label: 'File Servers (TFTP, FTP, HTTP)...', action: 'file-servers' }, { label: 'Network Check (Reachability, iPerf3)...', action: 'net-check' }, { label: 'Labs (Simulated, Emulated)...', action: 'sim-lab' },
+      { label: 'File Servers (TFTP, FTP, HTTP)...', action: 'file-servers' }, { label: 'Network Check (Reachability, iPerf3)...', action: 'net-check' },
+    ] },
+    { title: 'Lab', items: [
+      { label: 'Emulated Lab', action: 'lab-emu' }, { label: 'Simulated Lab', action: 'lab-sim' }, { sep: true },
+      { label: 'Overview', action: 'lab-overview' }, { label: 'Traffic Generator', action: 'lab-traffic' },
+      { label: 'Appliances', action: 'lab-appliances' }, { label: 'KVM Hosts', action: 'lab-hosts' },
     ] },
     { title: 'Script', items: [
       { label: 'Command Library...', action: 'command-library', keys: k('E') }, { label: 'Command History...', action: 'history', keys: k('Y') }, { sep: true },

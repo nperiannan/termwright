@@ -638,6 +638,8 @@ export abstract class LabImages implements OnInit, OnDestroy {
   protected iso = signal(false);
   /** The page of the installs that ended (made an image, failed or were cancelled). */
   protected isoList = signal(false);
+  // where Back goes: from Installed from ISO to the page before it; from an image opened there, back to the list
+  protected isoBack = signal<{ from: 'iso' | 'image' | 'list' | ''; id?: string }>({ from: '' });
   protected isoRunning = computed(() => this.installs().filter(j => this.isoBusy(j) || j.stage === 'waiting'));
   protected isoFinished = computed(() => this.installs().filter(j => !this.isoBusy(j) && j.stage !== 'waiting'));
   isoFinishedLine() { const d = this.isoFinished().filter(j => j.stage === 'done').length, o = this.isoFinished().length - d; return [d ? tr('{0} image(s) made', d) : '', o ? tr('{0} stopped', o) : ''].filter(x => x).join(' · '); }
@@ -722,7 +724,12 @@ export abstract class LabImages implements OnInit, OnDestroy {
     }
   }
   isoNamePh() { const b = (this.isoPath.split(/[\\/]/).pop() ?? '').replace(/\.iso$/i, ''); return b || tr('from the ISO’s name'); }
-  openIsoList() { this.edit.set(null); this.iso.set(false); this.isoList.set(true); }
+  openIsoList() {
+    if (!this.isoList()) this.isoBack.set(this.iso() ? { from: 'iso' } : this.edit() ? { from: 'image', id: this.edit()!.id } : { from: '' });
+    this.edit.set(null); this.iso.set(false); this.isoList.set(true);
+  }
+  isoGoBack() { const b = this.isoBack(); if (b.from === 'list') this.openIsoList(); else if (b.from === 'image' && b.id) this.pick(b.id); else this.openIso(); }
+  imgSize(j: EmuInstall) { return j.image ? this.images().find(i => i.id === j.image)?.size || 0 : 0; }
   openIso() { this.edit.set(null); this.isoList.set(false); this.iso.set(true); if (!this.isoHost) this.isoHost = this.lab.emu()?.host || this.hosts()[0]?.session || ''; }
   async chooseIso() { const p = await this.backend.chooseOpenFile(tr('Choose the ISO file'), [{ displayName: tr('ISO files'), pattern: '*.iso' }]).catch(() => ''); if (p) { this.isoPath = p; this.isoMode = /alpine/i.test(p) ? 'alpine' : 'manual'; } }
   diskText(j: EmuInstall) { return j.mb ? (j.mb % 1024 === 0 ? j.mb / 1024 + ' GB' : j.mb + ' MB') : j.gb + ' GB'; }
@@ -751,7 +758,7 @@ export abstract class LabImages implements OnInit, OnDestroy {
     try { this.lab.emu.set(await this.backend.emuInstallCancel(j.id)); } catch (e) { this.ui.error(errText(e)); }
   }
   async isoRemove(j: EmuInstall) { try { this.lab.emu.set(await this.backend.emuInstallRemove(j.id)); } catch (e) { this.ui.error(errText(e)); } }
-  isoShow(j: EmuInstall) { if (j.image) { this.iso.set(false); this.pick(j.image); } }
+  isoShow(j: EmuInstall) { if (j.image) { this.iso.set(false); this.pick(j.image); this.isoBack.set({ from: 'list' }); } }
   protected templates = computed(() => this.lab.emu()?.templates ?? []);
   protected edit = signal<EmuImage | null>(null);
   protected tpl = signal<EmuTemplate | null>(null);
@@ -800,7 +807,7 @@ export abstract class LabImages implements OnInit, OnDestroy {
   mods(p: EmuPersonaDef) { return [...new Set((p.models ?? []).flatMap(m => m.modules ?? []))]; }
   pick(id: string) {
     const im = this.images().find(i => i.id === id); if (!im) return;
-    this.iso.set(false); this.isoList.set(false);
+    this.iso.set(false); this.isoList.set(false); this.isoBack.set({ from: '' });
     this.edit.set({ ...im, persona: im.persona ? { ...im.persona } : im.persona }); this.password = '';
     this.day0 = (im.day0 ?? []).join('\n'); this.addrSet = (im.addrSet ?? []).join('\n'); this.dhcpOn = (im.dhcpOn ?? []).join('\n'); this.answers = (im.answers ?? []).map(a => a.match + ' => ' + a.send).join('\n');
   }
