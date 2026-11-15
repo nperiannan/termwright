@@ -22,9 +22,10 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
   <div class="modal-backdrop" (click)="close()">
     <div class="modal teams" (click)="$event.stopPropagation()">
       <div class="modal-head"><span class="mh-ic"><app-icon name="sessions" [size]="17" /></span>
-        <span class="mh-t">{{ view() === 'setup' ? 'Set Up a Team Server' : view() === 'join' ? 'Join a Team' : view() === 'update' ? 'Update the Team Server' : 'Teams' }}
+        <span class="mh-t">{{ view() === 'setup' ? 'Set Up a Team Server' : view() === 'join' ? 'Join a Team' : view() === 'update' ? 'Update the Team Server' : view() === 'members' ? 'Members of ' + (det()?.name || '…') : 'Teams' }}
           <span class="mh-s">{{ view() === 'setup' ? 'A small Docker container on a Linux host of your lab - your team connects to it'
             : view() === 'join' ? 'Paste the invite the team\\'s owner sent you'
+            : view() === 'members' ? 'Who is in the team, their roles and the invite'
             : view() === 'update' ? (upd()?.name + ' runs ' + (upd()?.version || '?') + ' - ' + (channel === 'nightly' ? 'install the nightly build' : channel === 'release' ? 'install the latest release' : 'this Termwright brings it to ' + upd()?.update))
             : 'Who uses which device - shared with your team servers only' }}</span></span></div>
 
@@ -42,7 +43,12 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
           <div class="team" [class.sel]="t.id === sel()" (click)="pick(t.id)">
             <span class="dot" [class.off]="!t.reachable"></span>
             <div class="tm">
-              <div><b>{{ t.name }}</b> <span class="pill" [class.own]="t.role !== 'member'">{{ role(t.role) }}</span></div>
+              <div class="th"><b>{{ t.name }}</b><span class="pill" [class.own]="t.role !== 'member'">{{ role(t.role) }}</span><span class="sp"></span>
+                @if (t.role !== 'member' && t.reachable) {
+                  <button type="button" class="primary" (click)="$event.stopPropagation(); openAdmin(t)" title="Inventory, approvals, scans and members - in your browser, signed in">Open Admin Page</button>
+                }
+                @if (t.reachable) { <button type="button" (click)="$event.stopPropagation(); toMembers(t)" title="Who is in the team, their roles and the invite">Members…</button> }
+                <button type="button" (click)="$event.stopPropagation(); leave(t)">{{ t.role === 'owner' ? 'Leave…' : 'Leave' }}</button></div>
               <div class="mono muted">{{ t.address }}@if (t.reachable) { · {{ t.members }} member{{ t.members === 1 ? '' : 's' }} · {{ t.online }} online · server {{ t.version || '?' }} }</div>
               @if (t.error) { <div class="err">{{ t.error }}</div> }
               @if (t.signIn) { <div class="upd"><app-icon name="key" [size]="13" /><span>Your team uses single sign-on.</span><a (click)="$event.stopPropagation(); signInAgain(t)">{{ ssoBusy() ? 'Waiting for the browser…' : 'Sign In Again…' }}</a></div> }
@@ -60,12 +66,24 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
                 <div class="upd new"><app-icon name="alert" [size]="13" /><span>The team server runs {{ t.version }}, newer than this Termwright - update Termwright (Help → Check for Updates).</span></div>
               }
             </div>
-            @if (t.role !== 'member' && t.reachable) {
-              <button type="button" class="primary" (click)="$event.stopPropagation(); openAdmin(t)" title="Inventory, approvals, scans and members - in your browser, signed in">Open Admin Page</button>
-            }
-            <button type="button" (click)="$event.stopPropagation(); leave(t)">{{ t.role === 'owner' ? 'Leave…' : 'Leave' }}</button>
           </div>
         }
+        @if (error()) { <p class="err">{{ error() }}</p> }
+        <div class="me">You appear as
+          <input name="dn" [(ngModel)]="displayName" (keydown.enter)="save()" [placeholder]="ident().name" />
+          <span class="mono muted">{{ ident().user }}&#64;{{ ident().machine }}</span></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" (click)="toJoin()">Join a Team…</button>
+        <button type="button" (click)="toSetup()">Set Up a Team Server…</button>
+        <span class="spacer"></span>
+        <button type="button" (click)="close()">Close</button>
+        <button type="button" class="primary" (click)="save()" title="Saves the name your teams see">Save</button>
+      </div>
+      }
+
+      @case ('members') {
+      <div class="modal-body">
         @if (det(); as d) {
           @if (d.inviteLink) {
             <div class="lbl">Invite to {{ d.name }} <span class="muted">- send it to your team by chat or e-mail</span></div>
@@ -92,18 +110,14 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
               </div>
             }
           </div>
-        }
+          @if (!d.members.length) { <p class="muted">No member yet - send the invite.</p> }
+        } @else { <p class="muted">Asking the team server…</p> }
         @if (error()) { <p class="err">{{ error() }}</p> }
-        <div class="me">You appear as
-          <input name="dn" [(ngModel)]="displayName" (keydown.enter)="save()" [placeholder]="ident().name" />
-          <span class="mono muted">{{ ident().user }}&#64;{{ ident().machine }}</span></div>
       </div>
       <div class="modal-foot">
-        <button type="button" (click)="toJoin()">Join a Team…</button>
-        <button type="button" (click)="toSetup()">Set Up a Team Server…</button>
+        <button type="button" (click)="back()">Back</button>
         <span class="spacer"></span>
         <button type="button" (click)="close()">Close</button>
-        <button type="button" class="primary" (click)="save()" title="Saves the name your teams see">Save</button>
       </div>
       }
 
@@ -243,9 +257,11 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
     .modal-body { max-height: min(640px, calc(100vh - 180px)); overflow: auto; }
     .muted { color: var(--muted); } .small { display: block; margin-top: 5px; font-size: calc(12px * var(--ui-scale, 1)); }
     .empty { padding: 14px; border: 1px dashed var(--border); border-radius: 10px; line-height: 1.55; color: var(--muted); b { color: var(--text); } }
-    .team { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; }
+    .team { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; }
     .team.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
     .tm { flex: 1; min-width: 0; .mono { font-size: calc(12px * var(--ui-scale, 1)); } }
+    .th { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; button { flex: none; } } /* the team's name, then its buttons on the same line */
+    .team > .dot { margin-top: 9px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex: none; } .dot.off { background: var(--muted); opacity: .5; }
     .pill { margin-left: 4px; font-size: calc(11px * var(--ui-scale, 1)); border-radius: 5px; padding: 1px 7px; background: color-mix(in srgb, var(--text) 8%, transparent); }
     .pill.own { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
@@ -253,8 +269,11 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
     .inv { display: flex; gap: 8px; align-items: center; padding: 6px 6px 6px 10px; border: 1px solid var(--border); border-radius: 8px;
       .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(12px * var(--ui-scale, 1)); } }
     .members { display: flex; flex-direction: column; gap: 2px; }
-    .mem { display: flex; align-items: center; gap: 8px; padding: 4px 2px; font-size: calc(12.5px * var(--ui-scale, 1));
-      .mono { font-size: calc(11.5px * var(--ui-scale, 1)); } a { color: var(--accent); cursor: pointer; } a.danger { color: var(--danger); } }
+    .members { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .mem { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: calc(12.5px * var(--ui-scale, 1)); white-space: nowrap;
+      & + .mem { border-top: 1px solid var(--border); }
+      .mn, .pill, a { flex: none; } .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: calc(11.5px * var(--ui-scale, 1)); }
+      a { color: var(--accent); cursor: pointer; } a.danger { color: var(--danger); } }
     .mn { font-weight: 500; } .sp { flex: 1; }
     .me { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted);
       input { width: 180px; } .mono { font-size: calc(12px * var(--ui-scale, 1)); } }
@@ -262,7 +281,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
     select, .row2 input { width: 100%; }
     .row2 { display: grid; grid-template-columns: 1fr 170px; gap: 10px; }
     .hn { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; line-height: 1.4; .small { display: inline; } }
-    .seg { width: min(360px, 100%); > button { white-space: nowrap; } }
+    .seg { display: inline-flex; width: auto; max-width: 100%; flex-wrap: wrap; > button { flex: 0 0 auto; padding: 0 14px; white-space: nowrap; } } /* each choice as wide as its words: no overlap */
     .steps { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-family: var(--mono); font-size: calc(12px * var(--ui-scale, 1)); line-height: 1.7;
       .st { display: inline-block; width: 18px; } .ok .st { color: #22c55e; } .fail { color: var(--danger); } .run .st { color: var(--accent); } .info { color: var(--muted); } }
     .upd { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 5px 9px; border-radius: 7px; font-size: calc(12px * var(--ui-scale, 1));
@@ -280,7 +299,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
 export class TeamsDialog implements OnInit, OnDestroy {
   protected ui = inject(Ui);
   private backend = inject(Backend);
-  readonly view = signal<'list' | 'join' | 'setup' | 'update'>('list');
+  readonly view = signal<'list' | 'join' | 'setup' | 'update' | 'members'>('list');
   /** the team whose server is updated */
   readonly upd = signal<TeamView | null>(null);
   /** Update Server…: '' = this Termwright's version, 'nightly' or 'release'. */
@@ -370,6 +389,8 @@ export class TeamsDialog implements OnInit, OnDestroy {
   }
 
   pick(id: string) { this.sel.set(id); this.error.set(''); void this.loadDetails(); }
+  /** The team's own page: its members (roles, remove) and the invite. */
+  toMembers(t: TeamView) { if (this.sel() !== t.id) this.det.set(null); this.pick(t.id); this.view.set('members'); }
 
   canManage(d: TeamDetails, m: TeamMember) {
     if (m.id === d.me || m.role === 'owner') return false;

@@ -2,6 +2,11 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **Teams: Members on their own page.** A team's card has **Members…** next to *Open Admin Page* and *Leave*: the members, their roles and the invite open on a page of their own (with *Back*), and each member stays on one line. The team's buttons sit on its name's line, so an update notice gets the card's full width.
+- **Fixed: Update the Team Server** - *This Termwright's (0.37.0)* ran over *Nightly build*; each choice is now as wide as its words.
+
 ## 0.37.0 (2026-11-16)
 
 - **Connect an AI app**: *Help → Connect an AI App…* (and the AI panel's model menu) opens the connector's settings, now *AI apps (MCP connector)*. Besides one-click *Add* for Claude Desktop and Claude Code, **Other AI apps** copies a ready config with this computer's path to Termwright for Cursor, Windsurf, Gemini CLI and most others, VS Code or Codex CLI, and says where each app keeps it. **Used by** shows which AI apps used Termwright since it started (their names as the apps give them), how long ago, how many tools they ran and the last one. Nothing to download: the connector is Termwright itself.
