@@ -2,8 +2,9 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.38.0 (2026-11-16)
 
+- **README and feature list**: the GitHub page now shows Termwright as it is - access, AI (the agent and the MCP connector), the network emulation lab and traffic generator, automation and teams - with new screenshots of the lab, the traffic generator and the start page.
 - **Teams: Members on their own page.** A team's card has **Members…** next to *Open Admin Page* and *Leave*: the members, their roles and the invite open on a page of their own (with *Back*), and each member stays on one line. The team's buttons sit on its name's line, so an update notice gets the card's full width.
 - **Fixed: Update the Team Server** - *This Termwright's (0.37.0)* ran over *Nightly build*; each choice is now as wide as its words.
 
