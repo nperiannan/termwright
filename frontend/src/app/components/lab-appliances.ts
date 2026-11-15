@@ -116,6 +116,7 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
                       <h4>{{ j.name }}<small>{{ j.isoName }} · {{ diskText(j) }} · {{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</small><span class="sp"></span>
                       @if (isoBusy(j) && j.stage !== 'copying' || j.stage === 'waiting') { <button type="button" class="sm" (click)="screenOf.set(j)" [title]="tr('What its display shows, and its keyboard')">{{ tr('Screen…') }}</button> }
                       @if (j.stage === 'waiting') { <button type="button" class="sm primary" (click)="isoFinish(j)">{{ tr('Finish and save as image') }}</button> }
+                      @if (canTakeOver(j)) { <button type="button" class="sm" (click)="isoTakeOver(j)" [title]="tr('Stop the automatic typing and go on by hand: what the installer did so far is kept')">{{ tr('Take Over by Hand') }}</button> }
                       <button type="button" class="sm danger-ghost" (click)="isoCancel(j)">{{ tr('Cancel') }}</button></h4>
                       <div class="small" [class.w]="isoBusy(j)">{{ isoText(j) }}</div>
                       <div class="meter"><i [style.width]="overall(j) + '%'"></i></div>
@@ -151,7 +152,7 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
                   @for (j of isoFinished(); track j.id) {
                     <tr><td><b>{{ j.name }}</b></td><td class="muted small">{{ j.isoName }}</td><td class="small">{{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</td><td class="small">{{ diskText(j) }}</td>
                       <td class="small" [class.g]="j.stage === 'done'" [class.r]="j.stage === 'failed'">{{ j.stage === 'done' ? '✓ ' + tr('Image made') + (j.verified ? ' · ' + tr('verified') : '') : isoText(j) }}</td>
-                      <td class="acts">@if (j.stage === 'done' && j.image) { <button type="button" class="sm" (click)="isoShow(j)">{{ tr('Open image') }}</button> }<button type="button" class="sm" (click)="isoRemove(j)">{{ tr('Remove') }}</button></td></tr>
+                      <td class="acts">@if (canTakeOver(j)) { <button type="button" class="sm" (click)="isoTakeOver(j)">{{ tr('Take Over by Hand') }}</button> }@if (j.stage === 'done' && j.image) { <button type="button" class="sm" (click)="isoShow(j)">{{ tr('Open image') }}</button> }<button type="button" class="sm" (click)="isoRemove(j)">{{ tr('Remove') }}</button></td></tr>
                   } @empty { <tr><td colspan="6" class="muted small">{{ tr('No install has ended yet.') }}</td></tr> }
                 </tbody></table></div>
               </div>
@@ -376,7 +377,7 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
     .tcard { padding: 0; overflow: hidden; table { width: 100%; border-collapse: collapse; } th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 8px 12px; border-bottom: 1px solid var(--line); } td { padding: 6px 12px; border-bottom: 1px solid var(--line); } }
     .isog { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(420px, 1fr) minmax(0, 1.25fr); gap: 12px; padding: 14px 18px; }
     .isol, .isor { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
-    .card.run { display: flex; flex-direction: column; min-height: 320px; flex: 1; }
+    .card.run { display: flex; flex-direction: column; min-height: 320px; flex: 1 0 auto; } /* several running installs stack and the pane scrolls */
     .isol .fg { grid-template-columns: 92px minmax(0, 1fr); } .isol .seg a { white-space: nowrap; }
     .stp { margin-top: 6px; summary { cursor: pointer; list-style-position: outside; } b { color: var(--text); font-weight: 600; } .stl { margin-top: 4px; } }
     .card.empty { text-align: center; padding: 34px 20px; p { margin: 6px 0 10px; } }

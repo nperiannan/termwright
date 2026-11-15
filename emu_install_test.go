@@ -421,3 +421,18 @@ func TestEmuInstallTypeThroughAutomation(t *testing.T) {
 		t.Fatalf("%v %q", err, got.String())
 	}
 }
+
+// Only an automatic install whose installer runs can be taken over by hand.
+func TestEmuInstallTakeOverRefuses(t *testing.T) {
+	a := emuTestApp(t)
+	emuLab.mu.Lock()
+	emuLab.loaded = true
+	emuLab.f.Installs = []EmuInstall{{ID: "m1", Mode: "manual", Stage: instWaiting, Port: 1}, {ID: "a1", Mode: "alpine", Stage: instDone, Port: 1}, {ID: "a2", Mode: "alpine", Stage: instFailed, Err: "no disk", Port: 1}}
+	emuLab.mu.Unlock()
+	defer func() { emuLab.mu.Lock(); emuLab.f.Installs = nil; emuLab.mu.Unlock() }()
+	for _, id := range []string{"m1", "a1", "a2"} {
+		if _, err := a.EmuInstallTakeOver(id); err == nil || !strings.Contains(err.Error(), "only a running automatic install") {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+}

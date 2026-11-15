@@ -740,6 +740,12 @@ export abstract class LabImages implements OnInit, OnDestroy {
     if (!(await this.ui.confirm(tr('Finish {0}', j.name), tr('The machine is shut down and its disk becomes an image. Be sure the installer has finished and shut the system down or rebooted into the installed system.'), tr('Finish and save')))) return;
     try { this.lab.emu.set(await this.backend.emuInstallFinish(j.id)); void this.lab.refresh(); } catch (e) { this.ui.error(errText(e)); }
   }
+  /** An automatic install (or one a restart of Termwright stopped) goes on by hand: its disk is kept. */
+  canTakeOver(j: EmuInstall) { return j.mode === 'alpine' && !!j.port && (j.stage === 'starting' || j.stage === 'installing' || j.stage === 'failed' && (j.err ?? '').startsWith('Termwright was closed')); }
+  async isoTakeOver(j: EmuInstall) {
+    if (!(await this.ui.confirm(tr('Take over {0} by hand', j.name), tr('Termwright stops typing the automatic install. The installer keeps running with what it has written so far: you answer it here and press Finish and save as image when it is done.'), tr('Take Over')))) return;
+    try { this.lab.emu.set(await this.backend.emuInstallTakeOver(j.id)); this.isoList.set(false); this.iso.set(true); void this.lab.refresh(); } catch (e) { this.ui.error(errText(e)); }
+  }
   async isoCancel(j: EmuInstall) {
     if (!(await this.ui.confirm(tr('Cancel {0}', j.name), tr('The installer is stopped and its disk is thrown away. The ISO stays on the host.'), tr('Cancel install')))) return;
     try { this.lab.emu.set(await this.backend.emuInstallCancel(j.id)); } catch (e) { this.ui.error(errText(e)); }

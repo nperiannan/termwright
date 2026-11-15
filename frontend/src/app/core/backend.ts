@@ -114,6 +114,8 @@ export class Backend {
   emuSetGdb(id: string, on: boolean) { return this.call<LabView>('EmuSetGDB', id, on); }
   emuInstallStart(r: EmuInstallRequest) { return this.call<LabView>('EmuInstallStart', r); }
   emuInstallFinish(id: string) { return this.call<LabView>('EmuInstallFinish', id); }
+  /** An automatic install becomes one by hand, keeping what the installer did. */
+  emuInstallTakeOver(id: string) { return this.call<LabView>('EmuInstallTakeOver', id); }
   emuInstallCancel(id: string) { return this.call<LabView>('EmuInstallCancel', id); }
   emuInstallRemove(id: string) { return this.call<LabView>('EmuInstallRemove', id); }
   emuImportAppliance(path: string) { return this.call<LabView>('EmuImportAppliance', path); }
