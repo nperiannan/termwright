@@ -13,6 +13,8 @@ type Facts struct {
 	Version string `json:"version"`
 	Serial  string `json:"serial"`
 	MAC     string `json:"mac"` // base (chassis) MAC address
+	// Hostname: the name the device gives itself.
+	Hostname string `json:"hostname,omitempty"`
 }
 
 // Complete reports whether the version and the serial number are known.
@@ -25,6 +27,8 @@ type family struct {
 	version  []*regexp.Regexp
 	serial   []*regexp.Regexp
 	mac      []*regexp.Regexp
+	hostname []*regexp.Regexp
+	paging   string // the command that turns paging off for this session
 }
 
 func res(p ...string) []*regexp.Regexp {
@@ -37,20 +41,23 @@ func res(p ...string) []*regexp.Regexp {
 
 var families = []family{
 	{name: "voss", commands: []string{"show sys-info"},
-		model:   res(`ModelName\s*:\s*(\S+)`),
-		version: res(`SysDescr\s*:\s*\S+\s*\(([^)]+)\)`, `Software Release\s*:\s*(\S+)`),
-		serial:  res(`Serial#\s*:\s*(\S+)`),
-		mac:     res(`BaseMacAddr\s*:\s*([0-9a-fA-F:.-]{12,17})`, `MacAddr\s*:\s*([0-9a-fA-F:.-]{12,17})`)},
+		model:    res(`ModelName\s*:\s*(\S+)`),
+		version:  res(`SysDescr\s*:\s*\S+\s*\(([^)]+)\)`, `Software Release\s*:\s*(\S+)`),
+		serial:   res(`Serial#\s*:\s*(\S+)`),
+		mac:      res(`BaseMacAddr\s*:\s*([0-9a-fA-F:.-]{12,17})`, `MacAddr\s*:\s*([0-9a-fA-F:.-]{12,17})`),
+		hostname: res(`SysName\s*:\s*(\S+)`), paging: "terminal more disable"},
 	{name: "exos", commands: []string{"show switch", "show version"},
-		model:   res(`System Type:\s*(.+?)\s*$`),
-		version: res(`IMG:\s*(\S+)`, `Image\s*:\s*Extreme\S*\s+version\s+(\S+)`, `Primary ver:\s*(\S+)`),
-		serial:  res(`^Switch\s*:\s*\S+\s+(\S+)`, `^Slot-1\s*:\s*\S+\s+(\S+)`),
-		mac:     res(`System MAC:\s*([0-9a-fA-F:.-]{12,17})`)},
+		model:    res(`System Type:\s*(.+?)\s*$`),
+		version:  res(`IMG:\s*(\S+)`, `Image\s*:\s*Extreme\S*\s+version\s+(\S+)`, `Primary ver:\s*(\S+)`),
+		serial:   res(`^Switch\s*:\s*\S+\s+(\S+)`, `^Slot-1\s*:\s*\S+\s+(\S+)`),
+		mac:      res(`System MAC:\s*([0-9a-fA-F:.-]{12,17})`),
+		hostname: res(`SysName:\s*(\S+)`), paging: "disable clipaging"},
 	{name: "cisco", commands: []string{"show version"},
-		model:   res(`Model [Nn]umber\s*:\s*(\S+)`, `^cisco (\S+) \(`),
-		version: res(`Cisco IOS.*Version ([^,\s]+)`, `NXOS: version (\S+)`, `^\s*Version ([^,\s]+)`),
-		serial:  res(`System [Ss]erial [Nn]umber\s*:\s*(\S+)`, `Processor board ID (\S+)`),
-		mac:     res(`Base [Ee]thernet MAC [Aa]ddress\s*:\s*([0-9a-fA-F:.-]{12,17})`)},
+		model:    res(`Model [Nn]umber\s*:\s*(\S+)`, `^cisco (\S+) \(`),
+		version:  res(`Cisco IOS.*Version ([^,\s]+)`, `NXOS: version (\S+)`, `^\s*Version ([^,\s]+)`),
+		serial:   res(`System [Ss]erial [Nn]umber\s*:\s*(\S+)`, `Processor board ID (\S+)`),
+		mac:      res(`Base [Ee]thernet MAC [Aa]ddress\s*:\s*([0-9a-fA-F:.-]{12,17})`),
+		hostname: res(`^(\S+) uptime is`), paging: "terminal length 0"},
 	{name: "linux", commands: []string{"cat /etc/os-release", "uname -sr"},
 		version: res(`PRETTY_NAME="?([^"\n]+)"?`)},
 }
@@ -81,6 +88,16 @@ func Commands(fam string) []string {
 	return nil
 }
 
+// PagingOff is the command that turns paging off for a session of a family ("" = none).
+func PagingOff(fam string) string {
+	for _, f := range families {
+		if f.name == fam {
+			return f.paging
+		}
+	}
+	return ""
+}
+
 // Parse finds the facts in text, using the patterns of fam (or of every
 // family when fam is "").
 func Parse(fam, text string) Facts {
@@ -109,6 +126,9 @@ func Parse(fam, text string) Facts {
 		if out.MAC == "" {
 			out.MAC = first(f.mac)
 		}
+		if out.Hostname == "" {
+			out.Hostname = first(f.hostname)
+		}
 	}
 	return out
 }
@@ -126,6 +146,9 @@ func (f Facts) Merge(g Facts) Facts {
 	}
 	if f.MAC == "" {
 		f.MAC = g.MAC
+	}
+	if f.Hostname == "" {
+		f.Hostname = g.Hostname
 	}
 	return f
 }

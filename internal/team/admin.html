@@ -114,6 +114,8 @@ tr .acts{opacity:.25;transition:opacity .15s;white-space:nowrap;text-align:right
 .bulk button{background:transparent;color:inherit;border-color:color-mix(in srgb,var(--bg) 30%,transparent)}.bulk button.p{background:var(--accent);border-color:var(--accent);color:#fff}
 .bulk input{background:color-mix(in srgb,var(--bg) 12%,transparent);color:inherit;border-color:color-mix(in srgb,var(--bg) 30%,transparent)}
 .scanbox{display:grid;grid-template-columns:1fr 240px auto;gap:12px;align-items:end;padding:16px}.scanbox label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:500}
+td.nw{white-space:nowrap}.inv .chips{flex-wrap:nowrap}
+.logins{display:grid;grid-template-columns:150px minmax(140px,240px) minmax(140px,240px) auto;gap:8px 12px;align-items:center;padding:4px 16px 12px}.logins>span{font-size:12px;color:var(--muted)}
 .scanbox input{width:100%}.opts{display:flex;gap:18px;padding:0 16px 14px;color:var(--text2);flex-wrap:wrap}
 .prog{display:grid;grid-template-columns:repeat(4,1fr) 2fr;gap:0;border-top:1px solid var(--line)}.prog>div{padding:12px 16px;border-right:1px solid var(--line2)}.prog>div:last-child{border-right:0}
 .prog b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.prog span{font-size:12px;color:var(--muted)}
@@ -517,7 +519,7 @@ function nowOf(d) {
 function invRows() {
   const f = figures(), fig = new Map((f ? f.list : []).map(p => [p.d.id, p])), q = ui.filter.toLowerCase();
   return st.inventory.devices.filter(d => {
-    if (q && ![d.name, d.hostname, d.model, d.host, d.folder, d.deviceType, d.mac, d.description].join(' ').toLowerCase().includes(q)) return false;
+    if (q && ![d.name, d.hostname, d.model, d.serial, d.host, d.folder, d.deviceType, d.mac, d.baseMac, d.description].join(' ').toLowerCase().includes(q)) return false;
     if (ui.invFolder && !(d.folder === ui.invFolder || d.folder.startsWith(ui.invFolder + '/'))) return false;
     if (ui.invType && (d.deviceType || '(no type)') !== ui.invType) return false;
     const l = liveOf(d), p = fig.get(d.id);
@@ -538,9 +540,9 @@ function inventory() {
   const rows = list.map(d => { const l = liveOf(d), p = fig.get(d.id);
     const n = nowOf(d), status = n.rank === 0 && p && f.unused.includes(p) ? '<span class="pill">not used</span> <span class="pill in">free</span>' : n.html;
     return `<tr><td class="c"><input type="checkbox" data-sel="${d.id}" ${ui.sel.has(d.id) ? 'checked' : ''}></td>
-      <td>${devCell(shownName(d), d.host + (d.port && d.port !== defPort(d.protocol) ? ':' + d.port : '') + (d.model ? ' · ' + d.model : ''), d.deviceType)}</td>
+      <td>${devCell(shownName(d), d.host + (d.port && d.port !== defPort(d.protocol) ? ':' + d.port : ''), d.deviceType)}</td>
       <td><div class="chips">${d.deviceType ? `<span class="tag">${esc(d.deviceType)}</span>` : ''}<span class="tag">${esc(d.protocol === 'SSH2' ? 'SSH' : d.protocol)}</span></div></td>
-      <td class="muted small">${esc(d.folder || '-')}</td><td>${status}</td>
+      ${factCells(d)}<td class="muted small">${esc(d.folder || '-')}</td><td>${status}</td>
       <td>${p ? meter(p.util, hrs(p.open) + ' h open in ' + ui.days + ' days') : ''}</td><td class="small">${p && p.last ? ago(p.last * 1000) + ' ago' : '<span class="muted">never</span>'}</td>
       <td class="acts"><button class="ib" data-edit="${d.id}" title="Edit">${ico('edit')}</button><button class="ib d" data-del="${d.id}" title="Delete">${ico('trash')}</button></td></tr>`; }).join('');
   return `<div class="summary">${chip('all', devs.length, 'devices')}${chip('open', openN, 'open now')}${chip('reserved', resN, 'reserved now')}${chip('unused', unusedN, `not used in ${ui.days} days`)}${f && f.untracked ? `<div class="chipk ${ui.invStatus === 'untracked' ? 'on' : ''}" data-ist="untracked" title="In use, reservations and usage count for network devices only. Give these a device type (switch, router, firewall…) to count them; computers, servers, phones and printers are never counted."><b>${f.untracked}</b><span>not tracked</span></div>` : ''}
@@ -549,14 +551,22 @@ function inventory() {
       <a class="${!ui.invFolder ? 'on' : ''}" data-ifo="">${ico('all')}All devices<span class="n">${devs.length}</span></a>
       ${allFolders.map(fo => `<a class="${ui.invFolder === fo ? 'on' : ''}" data-ifo="${esc(fo)}" style="padding-left:${9 + 14 * (fo.split('/').length - 1)}px" title="${esc(fo)}">${ico('folder')}${esc(fo.split('/').pop())}<span class="n">${count(fo)}</span></a>`).join('')}
       ${ui.invFolder ? `<div style="padding:8px 9px 2px;display:flex;gap:10px"><a class="link small" data-rf="${esc(ui.invFolder)}" style="padding:0">Rename folder</a>${count(ui.invFolder) ? '' : `<a class="link small" data-df="${esc(ui.invFolder)}" style="padding:0;color:var(--bad)">Delete folder</a>`}</div>` : ''}</div></div>
-  <div class="card" style="min-width:0"><div class="tool"><span class="search">${ico('search')}<input data-k="filter" placeholder="Search name, address, MAC…" value="${esc(ui.filter)}" style="width:260px"></span>
+  <div class="card" style="min-width:0"><div class="tool"><span class="search">${ico('search')}<input data-k="filter" placeholder="Search name, address, serial, MAC…" value="${esc(ui.filter)}" style="width:260px"></span>
       <select id="itype"><option value="">All device types</option>${typesAll.map(t => `<option ${ui.invType === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
-      <span class="muted small">${list.length} of ${devs.length}</span><span class="sp"></span>
+      <span class="muted small">${list.length} of ${devs.length}</span>${st.facts && st.facts.running ? `<span class="pill in">Reading device facts… ${st.facts.done} of ${st.facts.total}</span>` : ''}<span class="sp"></span>
       <button id="imp">Import CSV…</button><button id="exp">Export CSV</button><button class="p" id="add">+ Add device</button><input type="file" id="csv" accept=".csv,text/csv" hidden></div>
-    ${devs.length ? `<div class="scroll"><table><thead><tr><th class="c"><input type="checkbox" id="all" ${allOn ? 'checked' : ''} title="Select all shown"></th><th>Device</th><th>Type</th><th>Folder</th><th>Now</th><th>Utilization (${ui.days} d)</th><th>Last used</th><th></th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="8" class="empty">No device matches the filters.</td></tr>'}</tbody></table></div>`
+    ${devs.length ? `<div class="scroll"><table class="inv"><thead><tr><th class="c"><input type="checkbox" id="all" ${allOn ? 'checked' : ''} title="Select all shown"></th><th>Device</th><th>Type</th><th>Model</th><th>Serial #</th><th>MAC</th><th>Folder</th><th>Now</th><th>Utilization (${ui.days} d)</th><th>Last used</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="11" class="empty">No device matches the filters.</td></tr>'}</tbody></table></div>`
       : `<div class="empty">No devices yet. Add them here, scan a network on <a class="link" data-go="discover">Discover</a>, or push sessions from Termwright (right-click → Push to Team…).</div>`}</div></div>
-  ${ui.sel.size ? `<div class="bulk"><b>${ui.sel.size} selected</b><button id="nad" title="Rename to the name each device gives itself">Name After Devices</button><button id="mv">Move to folder…</button><button id="delsel">Delete</button><button id="clr">Clear</button></div>` : ''}`;
+  ${ui.sel.size ? `<div class="bulk"><b>${ui.sel.size} selected</b><button id="rdf" title="Log in to them with the device logins on Discover and read their model, serial number and MAC address">Read Device Facts</button><button id="nad" title="Rename to the name each device gives itself">Name After Devices</button><button id="mv">Move to folder…</button><button id="delsel">Delete</button><button id="clr">Clear</button></div>` : ''}`;
+}
+// The model, serial number and MAC of a device: read from it (by the server or a member's Termwright); a MAC only
+// seen on the network is grey; a failed reading by the server shows why.
+function factCells(d) {
+  const how = d.factsAt ? `Read ${ago(d.factsAt)} ago by ${d.factsBy === 'server' ? 'the team server' : d.factsBy}` : '';
+  const ser = d.serial ? `<span class="mono" title="${esc(how)}">${esc(d.serial)}</span>` : d.factsErr ? `<span class="pill bad" title="${esc(d.factsErr + ' (' + ago(d.factsAt) + ' ago)')}">${/refused/.test(d.factsErr) ? 'login failed' : 'not read'}</span>` : '<span class="muted">-</span>';
+  const mac = d.baseMac ? `<span class="mono" title="${esc('Base MAC address. ' + how)}">${esc(d.baseMac)}</span>` : d.mac ? `<span class="mono muted" title="Seen on the network; the device's own base MAC is read with Read Device Facts">${esc(d.mac)}</span>` : '<span class="muted">-</span>';
+  return `<td class="small nw">${d.model ? esc(d.model) : '<span class="muted">-</span>'}</td><td class="small nw">${ser}</td><td class="small nw">${mac}</td>`;
 }
 function defPort(p) { return ({ SSH2: 22, Telnet: 23, RDP: 3389, VNC: 5900 })[p] || 0; }
 function ago(t) {
@@ -599,7 +609,7 @@ function csvRows(text) {
 const COLS = ['name', 'folder', 'address', 'port', 'protocol', 'deviceType', 'mac', 'description'];
 function exportCSV() {
   const q = v => /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
-  const lines = [COLS.join(',')].concat(st.inventory.devices.map(d => [d.name, d.folder, d.host, d.port || '', d.protocol, d.deviceType, d.mac, d.description].map(v => q(String(v ?? ''))).join(',')));
+  const lines = [COLS.concat('model', 'serial', 'baseMac').join(',')].concat(st.inventory.devices.map(d => [d.name, d.folder, d.host, d.port || '', d.protocol, d.deviceType, d.mac, d.description, d.model, d.serial, d.baseMac].map(v => q(String(v ?? ''))).join(',')));
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'text/csv' }));
   a.download = st.team.name.replace(/[^\w.-]+/g, '-') + '-inventory.csv'; a.click();
 }
@@ -652,7 +662,20 @@ function discover() {
       <td>${inTeam ? `<span class="pill in">in inventory${inTeam !== r.name && inTeam !== r.ip ? ' as ' + esc(inTeam) : ''}</span>` : '<span class="pill ok">new</span>'}</td></tr>`; }).join('')
       : `<tr><td colspan="7" class="empty">${s.running ? 'Scanning…' : 'Nothing to show' + (known && ui.hideKnown ? ' - untick “Hide devices already in the inventory” to see them' : '')}.</td></tr>`}</tbody></table></div></div>`
   : `<div class="card"><div class="empty">Type a network such as <span class="mono">10.127.36.0/24</span> and press Scan. The results stay here while you work on other pages.</div></div>`}
+  ${loginsCard()}
   ${ui.ssel.size ? `<div class="bulk"><b>${ui.ssel.size} selected</b>add to folder <input data-k="scanFolder" list="fl" placeholder="(the team folder)" value="${esc(ui.scanFolder)}" style="width:200px">${folderList('fl')}<button class="p" id="sadd">Add to Inventory</button><button id="sclr">Clear</button></div>` : ''}`;
+}
+// The logins the team server reads devices' model, serial number and MAC with, one per kind of device.
+function loginsCard() {
+  const L = st.logins || []; if (!L.length) return '';
+  const v = (k, d) => esc(ui[k] ?? d);
+  return `<div class="card"><h3>Device logins<span class="sp"></span><small>to read the model, serial # and MAC of devices</small></h3>
+    <div class="logins"><span>Device type</span><span>User</span><span>Password</span><span></span>
+    ${L.map(l => `<b>${esc(l.label)}</b><input data-k="lu:${l.family}" value="${v('lu:' + l.family, l.user)}" placeholder="(none)" autocomplete="off">
+      <input type="password" data-k="lp:${l.family}" value="${v('lp:' + l.family, '')}" placeholder="${l.isDefault ? (l.hasPassword ? '(factory default)' : '(empty)') : l.hasPassword ? '•••••• (kept)' : '(empty)'}" autocomplete="new-password">
+      <span>${l.isDefault ? `<span class="muted small">${l.user ? 'factory default' : 'not set'}</span>` : `<a class="link small" data-ldef="${l.family}">Use factory default</a>`}</span>`).join('')}</div>
+    <div class="opts" style="align-items:center"><label><input type="checkbox" id="fadd" ${st.factsOnAdd ? 'checked' : ''}> Read them when devices are added to the inventory</label><span class="sp"></span><button class="p" id="lsave">Save logins</button></div>
+    <p class="muted small" style="margin:0 16px 14px;max-width:980px">The team server logs in over SSH (Telnet when that is the device's protocol), turns paging off, runs <span class="mono">show switch</span> and <span class="mono">show version</span> (EXOS), <span class="mono">show sys-info</span> (VOSS) or <span class="mono">show version</span> (Cisco IOS) and logs out: nothing changes on the device. The logins stay on the team server; members never get them. To read devices again, select them on Inventory and choose <i>Read Device Facts</i>. Members' Termwright also sends these facts when they connect.</p></div>`;
 }
 function dtOf(r) { return ui.dts[r.ip] ?? (r.platform || ''); }
 
@@ -759,7 +782,7 @@ function help() {
     <p><b>Hours open</b> - time a member's Termwright had a terminal to the device connected. Two people at once count twice.</p>
     <p><b>Utilization</b> - hours open divided by all hours of the period (24 × 7), or by working hours (Monday to Friday, 9:00-18:00) with <i>Working hours</i> at the top. 10% of all hours is about 17 hours a week.</p>
     <p><b>Peak at once</b> - the most people with the device open at the same time. More than one often means the team needs more of that kind.</p>
-    <p><b>Model</b> and the device's own name come from members' Termwright when they connect, or from a scan on Discover (SNMP sysName). A device named by its address is shown by its own name with the address under it; select devices on Inventory and choose <i>Name After Devices</i> to rename them for everyone.</p>
+    <p><b>Model</b>, <b>Serial #</b>, <b>MAC</b> and the device's own name are read by the team server with the <i>Device logins</i> on Discover (when devices are added, and with <i>Read Device Facts</i> for selected devices), sent by members' Termwright when they connect, or (the name) found by a scan (SNMP sysName). <i>login failed</i>: the server's login was refused - hover for why. A grey MAC was only seen on the network; the device's own base MAC replaces it once read. A device named by its address is shown by its own name with the address under it; select devices on Inventory and choose <i>Name After Devices</i> to rename them for everyone.</p>
     <p><b>Now</b> - whether the device is free to use or reserve right now, who has it open, or who reserved it until when. <i>Only free now</i> lists just the free ones.</p>
     <p><b>Conflicts</b> - connections to a device someone else had reserved.</p>
     <p><b>Not used</b> - neither opened nor reserved in the period (devices added during it are marked <i>new</i>).</p>
@@ -824,6 +847,10 @@ function wire() {
   on('#apr', 'onclick', () => decide(true)); on('#rej', 'onclick', () => decide(false));
   // discover
   on('#scan', 'onclick', async () => { ui.ssel.clear(); ui.dts = {}; try { await api('POST', '/api/admin/scan', { targets: ui.targets || (scan ? scan.targets : ''), community: ui.community }); poll(); } catch (e) { flash(e.message, true); } });
+  on('#lsave', 'onclick', () => { const L = st.logins.map(l => ({ family: l.family, user: ui['lu:' + l.family] ?? l.user, password: ui['lp:' + l.family] || '' }));
+    act(() => api('POST', '/api/admin/logins', { logins: L, factsOnAdd: $('#fadd').checked }).then(r => { st.logins.forEach(l => { delete ui['lu:' + l.family]; delete ui['lp:' + l.family]; }); return r; }), 'Device logins saved'); });
+  on('[data-ldef]', 'onclick', e => { const f = e.target.dataset.ldef; delete ui['lu:' + f]; delete ui['lp:' + f]; act(() => api('POST', '/api/admin/logins', { reset: f, factsOnAdd: st.factsOnAdd }), 'Back to the factory default login'); });
+  on('#rdf', 'onclick', () => act(() => api('POST', '/api/admin/facts', { ids: [...ui.sel] }).then(r => { factsPoll(); return r; }), r => `Reading the facts of ${r.started} devices` + (r.skipped ? ` (${r.skipped} skipped: ${r.why})` : '')));
   on('#stop', 'onclick', () => api('POST', '/api/admin/scan/stop').catch(() => {}));
   on('#sadd', 'onclick', () => {
     const devices = scan.results.filter(r => ui.ssel.has(r.ip)).map(r => ({ name: r.name || r.ip, folder: ui.scanFolder.trim(), host: r.ip, port: r.port || 0, protocol: r.protocol || 'SSH2', deviceType: dtOf(r), mac: r.mac,
@@ -876,6 +903,8 @@ function wire() {
   on('[data-role]', 'onclick', e => act(() => api('POST', '/api/members/role', { id: e.target.dataset.role, role: e.target.dataset.to })));
   on('[data-rm]', 'onclick', e => { if (confirm(`Remove ${e.target.dataset.n} from the team?`)) act(() => api('POST', '/api/members/remove', { id: e.target.dataset.rm }), 'Removed ' + e.target.dataset.n); });
 }
+// While the server reads device facts, the page follows it more often than every 10 seconds.
+function factsPoll() { setTimeout(async () => { await load(false); if (st.facts && st.facts.running) factsPoll(); }, 2000); }
 async function poll() {
   try { scan = await api('GET', '/api/admin/scan'); } catch {}
   if (ui.page === 'discover' && !$('#dlg').open) quietRender();

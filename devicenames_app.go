@@ -153,10 +153,10 @@ func (a *App) RenameSessions(items []SessionRename) []RenamedSession {
 	return out
 }
 
-// teamReportFacts tells the teams that have this device its hostname and model.
+// teamReportFacts tells the teams that have this device its hostname, model, serial number and base MAC.
 func (a *App) teamReportFacts(s session.Session, f map[string]string) {
-	h, m := f["Hostname"], f["Model"]
-	if (h == "" && m == "") || s.Hostname == "" || a.cfg == nil {
+	h, m, sn, mac := f["Hostname"], f["Model"], f["Serial"], f["MAC"]
+	if (h == "" && m == "" && sn == "" && mac == "") || s.Hostname == "" || a.cfg == nil {
 		return
 	}
 	d := normRef(team.DeviceRef{Host: s.Hostname, Port: s.Port, Protocol: string(s.Protocol), MAC: s.MAC})
@@ -166,7 +166,7 @@ func (a *App) teamReportFacts(s session.Session, f map[string]string) {
 		}
 		if _, c, err := a.teamConn(t.ID); err == nil {
 			ctx, cancel := teamCtx()
-			_ = c.Facts(ctx, d, h, m)
+			_ = c.Facts(ctx, d, h, m, sn, mac)
 			cancel()
 		}
 	}

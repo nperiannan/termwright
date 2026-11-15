@@ -32,6 +32,11 @@ type Device struct {
 	Description string `json:"description"`
 	Hostname    string `json:"hostname,omitempty"` // the name the device gives itself (read by a member's Termwright, or SNMP sysName from a scan)
 	Model       string `json:"model,omitempty"`
+	Serial      string `json:"serial,omitempty"`   // the serial number the device reports
+	BaseMAC     string `json:"baseMac,omitempty"`  // the base MAC address the device reports (MAC: the one seen on the network)
+	FactsAt     string `json:"factsAt,omitempty"`  // when the model, serial number and base MAC were last read (or tried)
+	FactsBy     string `json:"factsBy,omitempty"`  // who read them: "server" or a member's name
+	FactsErr    string `json:"factsErr,omitempty"` // why the server's last reading failed
 	AddedBy     string `json:"addedBy"`
 	Added       string `json:"added"`
 	Updated     string `json:"updated"`
@@ -123,6 +128,8 @@ func tidy(d *Device) string {
 	d.Hostname = clean(d.Hostname, 80)
 	d.Model = clean(d.Model, 80)
 	d.MAC = discover.NormalizeMAC(d.MAC)
+	d.Serial, d.BaseMAC = clean(d.Serial, 80), discover.NormalizeMAC(d.BaseMAC)
+	d.FactsAt, d.FactsBy, d.FactsErr = "", "", "" // only the server and members' reports set these
 	if d.Protocol == "" {
 		d.Protocol = "SSH2"
 	}
@@ -197,6 +204,8 @@ func (s *Server) inventoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/scan", s.auth(s.startScan))
 	mux.HandleFunc("GET /api/admin/scan", s.auth(s.scanStatus))
 	mux.HandleFunc("POST /api/admin/scan/stop", s.auth(s.stopScan))
+	mux.HandleFunc("POST /api/admin/logins", s.auth(s.saveLogins))
+	mux.HandleFunc("POST /api/admin/facts", s.auth(s.readFacts))
 	mux.HandleFunc("GET /admin", s.adminPage)
 	mux.HandleFunc("GET /admin/icon.svg", s.adminIcon)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -332,6 +341,11 @@ type AdminState struct {
 	Status    Status     `json:"status"`              // who uses and reserved which devices
 	SSO       *SSOView   `json:"sso,omitempty"`       // single sign-on (owner only; never the secret)
 	SSOInvite string     `json:"ssoInvite,omitempty"` // an invite without the key, for single sign-on
+	// Logins the server reads device facts with (never the passwords), whether it reads them when devices
+	// are added, and its reading now.
+	Logins     []LoginView `json:"logins"`
+	FactsOnAdd bool        `json:"factsOnAdd"`
+	Facts      FactsRun    `json:"facts"`
 }
 
 // SSOView is the single sign-on setup as the admin page shows it.
@@ -364,7 +378,8 @@ func (s *Server) adminState(w http.ResponseWriter, r *http.Request, me *memberRe
 	s.prune()
 	stat := s.statusFor(me)
 	stat.Notes = []Note{}
-	st := AdminState{Team: t, Inventory: inv, Pending: p, Activity: act, Me: me.ID, Invite: link, Status: stat}
+	st := AdminState{Team: t, Inventory: inv, Pending: p, Activity: act, Me: me.ID, Invite: link, Status: stat,
+		Logins: s.loginViews(), FactsOnAdd: !s.st.NoFactsOnAdd, Facts: s.facts}
 	if me.Role == RoleOwner {
 		st.SSO = &SSOView{}
 		if c := s.st.SSO; c != nil {
@@ -391,6 +406,7 @@ func (s *Server) saveDevices(w http.ResponseWriter, r *http.Request, me *memberR
 	}
 	now := s.now().UTC().Format(time.RFC3339)
 	added, changed, skipped := 0, 0, 0
+	var newIDs []string
 	for i := range b.Devices {
 		d := b.Devices[i]
 		if msg := tidy(&d); msg != "" {
@@ -417,6 +433,7 @@ func (s *Server) saveDevices(w http.ResponseWriter, r *http.Request, me *memberR
 		if cur == nil {
 			d.ID, d.AddedBy, d.Added, d.Updated = randToken(9), me.Name, now, now
 			s.st.Inventory = append(s.st.Inventory, &d)
+			newIDs = append(newIDs, d.ID)
 			added++
 		} else {
 			d.ID, d.AddedBy, d.Added, d.Updated = cur.ID, cur.AddedBy, cur.Added, now
@@ -426,6 +443,7 @@ func (s *Server) saveDevices(w http.ResponseWriter, r *http.Request, me *memberR
 			if d.Model == "" {
 				d.Model = cur.Model
 			}
+			d.Serial, d.BaseMAC, d.FactsAt, d.FactsBy, d.FactsErr = cur.Serial, cur.BaseMAC, cur.FactsAt, cur.FactsBy, cur.FactsErr
 			*cur = d
 			changed++
 		}
@@ -442,6 +460,9 @@ func (s *Server) saveDevices(w http.ResponseWriter, r *http.Request, me *memberR
 	if err := s.bump(); err != nil {
 		fail(w, 500, err.Error())
 		return
+	}
+	if len(newIDs) > 0 && !s.st.NoFactsOnAdd {
+		s.startFacts(newIDs, false)
 	}
 	writeJSON(w, 200, map[string]int{"added": added, "changed": changed, "skipped": skipped})
 }
@@ -736,23 +757,25 @@ func (s *Server) namesFromScan(results []discover.Result) int {
 
 func isIP(s string) bool { _, err := netip.ParseAddr(s); return err == nil }
 
-// deviceFacts: a member's Termwright read a team device's hostname and model.
+// deviceFacts: a member's Termwright read a team device's hostname, model, serial number and base MAC.
 func (s *Server) deviceFacts(w http.ResponseWriter, r *http.Request, me *memberRec) {
 	var b struct {
 		Device   DeviceRef `json:"device"`
 		Hostname string    `json:"hostname"`
 		Model    string    `json:"model"`
+		Serial   string    `json:"serial"`
+		MAC      string    `json:"mac"`
 	}
 	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&b) != nil || tidyRef(&b.Device) != "" {
 		fail(w, 400, "bad request")
 		return
 	}
-	h, m := clean(b.Hostname, 80), clean(b.Model, 80)
+	h, m, sn, mac := clean(b.Hostname, 80), clean(b.Model, 80), clean(b.Serial, 80), discover.NormalizeMAC(b.MAC)
 	if isIP(h) {
 		h = ""
 	}
 	d := s.find2(b.Device.dev())
-	if d == nil || (h == "" || h == d.Hostname) && (m == "" || m == d.Model) {
+	if d == nil || (h == "" || h == d.Hostname) && (m == "" || m == d.Model) && (sn == "" || sn == d.Serial) && (mac == "" || mac == d.BaseMAC) {
 		writeJSON(w, 200, map[string]bool{"changed": false})
 		return
 	}
@@ -762,6 +785,13 @@ func (s *Server) deviceFacts(w http.ResponseWriter, r *http.Request, me *memberR
 	if m != "" {
 		d.Model = m
 	}
+	if sn != "" {
+		d.Serial = sn
+	}
+	if mac != "" {
+		d.BaseMAC = mac
+	}
+	d.FactsAt, d.FactsBy, d.FactsErr = s.now().UTC().Format(time.RFC3339), me.Name, ""
 	if err := s.save(); err != nil {
 		fail(w, 500, err.Error())
 		return

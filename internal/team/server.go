@@ -2,6 +2,7 @@ package team
 
 import (
 	"compress/gzip"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -25,6 +26,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/termwright/termwright/internal/clirun"
 )
 
 // onlineFor: a member counts as online this long after its last call.
@@ -52,6 +55,11 @@ type state struct {
 	Reservations  []*Reservation `json:"reservations,omitempty"`
 	Watches       []*Watch       `json:"watches,omitempty"` // members waiting for a device to be free
 	SSO           *SSOConfig     `json:"sso,omitempty"`     // single sign-on (nil = invite only)
+	// Logins: how the server logs in to read device facts, per kind of device (none = the factory default);
+	// NoFactsOnAdd: do not read them when devices are added; HostKeys: the SSH host keys seen (devKey →).
+	Logins       map[string]Login  `json:"logins,omitempty"`
+	NoFactsOnAdd bool              `json:"noFactsOnAdd,omitempty"`
+	HostKeys     map[string]string `json:"hostKeys,omitempty"`
 }
 
 // Server is a team server. Its data (team.json, the certificate and key) is in Dir.
@@ -78,6 +86,10 @@ type Server struct {
 	links    map[string]linkCode     // admin sign-in codes
 	sessions map[string]adminSession // admin page cookies
 	scan     *scanState
+	facts    FactsRun
+	factsSem chan struct{}
+	// runCLI reads a device (clirun.Run; tests change it)
+	runCLI func(ctx context.Context, t clirun.Target, paging string, cmds []string) ([]string, string, error)
 
 	presence  map[string]*presenceRec // member id → the devices it has open (not saved)
 	notes     map[string][]Note       // member id → notices waiting for it

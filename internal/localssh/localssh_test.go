@@ -30,7 +30,8 @@ func TestLocalSSH(t *testing.T) {
 	if !errAs(err, &ee) || ee.ExitStatus() != 3 {
 		t.Fatalf("exit: %v", err)
 	}
-	if got := string(out); !strings.Contains(got, "hi") || !strings.HasPrefix(strings.TrimSpace(got), mustEval(t, dir)) {
+	// stdout and stderr are separate streams: "hi" (stderr) may come before or after the folder (stdout)
+	if got := string(out); !strings.Contains(got, "hi\n") || !strings.Contains(got, mustEval(t, dir)+"\n") || !strings.Contains(got, "got\n") {
 		t.Fatalf("output %q", got)
 	}
 	s2, _ := cl.NewSession()

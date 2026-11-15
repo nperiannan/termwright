@@ -133,7 +133,7 @@ func (a *App) RefreshFacts(path string, all bool) (map[string]string, error) {
 			_, _ = a.store.Save(cur, path)
 		}
 	}
-	if got["Hostname"] != "" || got["Model"] != "" {
+	if got["Hostname"] != "" || got["Model"] != "" || got["Serial"] != "" || got["MAC"] != "" {
 		go a.teamReportFacts(s, got)
 	}
 	return a.cfg.SetFacts(path, got), nil

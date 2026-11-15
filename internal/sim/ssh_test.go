@@ -131,7 +131,8 @@ func TestSSHLoginPagingHelp(t *testing.T) {
 	// Tab completes, ? lists
 	tm.send(t, "show sy\t", `show system $`)
 	tm.send(t, "\x15", `$`)
-	if out := tm.send(t, "show ?", `show $`); !strings.Contains(out, "system") || !strings.Contains(out, "serial") {
+	// the list comes after the echoed "show ", then the line again: wait for that, not the echo
+	if out := tm.send(t, "show ?", `(?s)\n.*show $`); !strings.Contains(out, "system") || !strings.Contains(out, "serial") {
 		t.Fatalf("help:\n%s", out)
 	}
 	tm.send(t, "\x15\r", `sw1#$`)
