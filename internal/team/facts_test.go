@@ -80,7 +80,7 @@ func TestServerReadsFacts(t *testing.T) {
 		if paging != "disable clipaging" || len(cmds) != 2 {
 			return nil, "", fmt.Errorf("commands %q %q", paging, cmds)
 		}
-		return []string{"SysName: lab-5520-1\nSystem MAC: 00:04:96:9F:12:30\nSystem Type: 5520-24T\n", "Switch      : 800744-00-04 2133N-41234 Rev 4.0\n"}, "SHA256:k", nil
+		return []string{"SysName: lab-5520-1\nSystem MAC: 00:04:96:9F:12:30\nSystem Type: 5520-24T\n", "Switch      : 800000-00-01 2133N-41234 Rev 4.0\n"}, "SHA256:k", nil
 	}
 	s.mu.Unlock()
 	wait := func() {

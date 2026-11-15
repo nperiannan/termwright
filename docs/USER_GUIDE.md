@@ -402,7 +402,7 @@ Devices cabled to a console server (terminal server) get a session of protocol *
   | Paste on a folder | Confirm a move | Undo says what it does |
   |---|---|---|
   | ![Copy, Cut and Paste](screenshots/tree-paste-menu.png) | ![Move confirmation](screenshots/move-confirm.png) | ![Undo](screenshots/undo-confirm.png) |
-- **Filter**: type in *Filter sessions* to search names, hosts, users and paths. When a host, address or name equals what you typed (e.g. `10.127.34.2`), only that session is listed; *N more sessions containing …* shows the partial matches too.
+- **Filter**: type in *Filter sessions* to search names, hosts, users and paths. When a host, address or name equals what you typed (e.g. `10.60.34.2`), only that session is listed; *N more sessions containing …* shows the partial matches too.
 - **Favourites and Recent**: right-click a session → *Add to Favourites*; favourites (★) and the five most recent sessions are listed at the top of the Session Manager, with when you last connected. Click *Favourites* or *Recent* to fold a section.
 - **Hover card**: rest the pointer on a session for a moment to see its device icon, name, environment and address, then *Via* (jump host or target), device type, the device facts (model, version, uptime …), MAC address, where the login comes from (saved password, asked, or the device type's login) and the port check, when you last connected and the description.
 - **Aligned rows**: the address column is wide enough for any IPv4 address, so the device types line up under each other.
@@ -459,7 +459,7 @@ You can also teach from the terminal: select the value in a tab, then **Edit →
 
 ### Name After Devices
 
-Sessions named by their address (`10.127.35.13`) can take the name the device gives itself - its **hostname**, read as a device fact (EXOS `show switch`, VOSS `show sys-info`, Cisco `show version`, Linux `hostname`).
+Sessions named by their address (`10.60.35.13`) can take the name the device gives itself - its **hostname**, read as a device fact (EXOS `show switch`, VOSS `show sys-info`, Cisco `show version`, Linux `hostname`).
 
 - **Right-click a folder or a selection → Name After Devices…** (or one session → *Name After Device…*): Termwright reads each device's hostname and model in the background with the session's own saved login, a few at a time, and lists them. Pick the format - **Hostname**, **Hostname (model)** or **Hostname · last octet** - edit any name, untick what should stay, then **Rename**. Sessions without a saved login or a hostname rule are shown and left alone. **Undo** in the notice renames them back.
 - **After connecting**: when a session named by its address connects, Termwright offers the device's name in a notice - *Rename to core-vsp-1*, the name with the model, or *Keep* (it does not ask again for that session). With **Settings → General → Sessions named by an address → Rename automatically** it renames at once, in the chosen format, with **Undo**; *Off* stops both.
@@ -523,7 +523,7 @@ Sessions named by their address (`10.127.35.13`) can take the name the device gi
    Product names win over generic words: a NAS whose SNMP says "Linux" but whose web page says "TerraMaster" is shown as a NAS.
 5. **Add**: devices with SSH or Telnet are ticked (those already in the Session Manager are marked *in sessions* and left unticked; this computer is never ticked). Devices without a login port can be added when they have a MAC address (as Wake-on-LAN sessions); tick *Only devices you can connect to* to hide the others.
 
-   Pick a **device type** per device - also for phones, IoT boards, TVs and other devices without SSH or Telnet, where it sets the session's icon. Termwright suggests one from the network OS that any evidence names (an SNMP description, the web certificate *Extreme Networks, Inc., EXOS* or the EXOS Telnet greeting *telnet session telnet0 on /dev/pty…* all mean EXOS, even when the switch runs OpenSSH), then from what the device reports (VOSS, Cisco IOS, Linux …) or, failing that, from the **Telnet login prompt** compared with the first login step of your device types (e.g. EXOS `login:`, VOSS `Login:`). **+ New device type…** at the end of the list makes a device type right there: a name and an icon (phone, IoT, TV, camera, router …); login steps can be added later in Options → Device Types.
+   Pick a **device type** per device - also for phones, IoT boards, TVs and other devices without SSH or Telnet, where it sets the session's icon. Termwright suggests one from the network OS that any evidence names (an SNMP description, the web certificate naming EXOS or the EXOS Telnet greeting *telnet session telnet0 on /dev/pty…* all mean EXOS, even when the switch runs OpenSSH), then from what the device reports (VOSS, Cisco IOS, Linux …) or, failing that, from the **Telnet login prompt** compared with the first login step of your device types (e.g. EXOS `login:`, VOSS `Login:`). **+ New device type…** at the end of the list makes a device type right there: a name and an icon (phone, IoT, TV, camera, router …); login steps can be added later in Options → Device Types.
 
    ![+ New device type… with its icon](screenshots/discover-newtype.png)
 

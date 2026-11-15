@@ -435,12 +435,12 @@ func TestEmuUnpack(t *testing.T) {
 }
 
 func TestEmuCloud(t *testing.T) {
-	info := &emu.HostInfo{LanAddr: "10.234.179.20/24", Gateway: "10.234.179.254", Uplink: "ens160", Sudo: true}
+	info := &emu.HostInfo{LanAddr: "10.70.1.20/24", Gateway: "10.70.1.254", Uplink: "ens160", Sudo: true}
 	l := &emu.Lab{VMs: []emu.VM{{ID: "a"}, {ID: "b"}}}
-	if err := emuCloud(l, info, "10.234.179.146"); err != nil || l.MgmtNet != "10.234.179.146/24" || l.CloudGw != "10.234.179.254" || l.CloudIf != "ens160" || l.HostIP != "10.234.179.20" {
+	if err := emuCloud(l, info, "10.70.1.146"); err != nil || l.MgmtNet != "10.70.1.146/24" || l.CloudGw != "10.70.1.254" || l.CloudIf != "ens160" || l.HostIP != "10.70.1.20" {
 		t.Fatalf("%v %+v", err, l)
 	}
-	for spec, bad := range map[string]string{"": "first switch", "10.1.1.5": "not on the host's network", "10.234.179.19": "take 10.234.179.20", "10.234.179.254 10.234.179.1": "run past", "10.234.179.30 10.9.9.9": "gateway"} {
+	for spec, bad := range map[string]string{"": "first switch", "10.1.1.5": "not on the host's network", "10.70.1.19": "take 10.70.1.20", "10.70.1.254 10.70.1.1": "run past", "10.70.1.30 10.9.9.9": "gateway"} {
 		if err := emuCloud(l, info, spec); err == nil || !strings.Contains(err.Error(), bad) {
 			t.Errorf("%q: %v (want %q)", spec, err, bad)
 		}
@@ -1269,8 +1269,8 @@ func TestEmuMoveTargetNetwork(t *testing.T) {
 	saved := emuLab.f
 	defer func() { emuLab.f = saved }()
 	emuLab.f.Host = "B/teams"
-	emuLab.f.Lab = &emu.Lab{ID: "x", Dir: "termwright-lab", Mgmt: "cloud", MgmtNet: "10.234.179.146/24", HostIP: "10.234.179.144/24", VMs: []emu.VM{{ID: "v1", Name: "s1", MgmtIP: "10.234.179.149/24"}}}
-	emuLab.f.Hosts = []EmuHost{{Session: "B/other", Info: emu.HostInfo{LanAddr: "10.127.25.68/24", Sudo: true}}, {Session: "B/same", Info: emu.HostInfo{LanAddr: "10.234.179.20/24", Sudo: true}}}
+	emuLab.f.Lab = &emu.Lab{ID: "x", Dir: "termwright-lab", Mgmt: "cloud", MgmtNet: "10.70.1.146/24", HostIP: "10.70.1.144/24", VMs: []emu.VM{{ID: "v1", Name: "s1", MgmtIP: "10.70.1.149/24"}}}
+	emuLab.f.Hosts = []EmuHost{{Session: "B/other", Info: emu.HostInfo{LanAddr: "10.60.25.68/24", Sudo: true}}, {Session: "B/same", Info: emu.HostInfo{LanAddr: "10.70.1.20/24", Sudo: true}}}
 	a := &App{}
 	v := emuLab.f.Lab.VMs[0]
 	if r, err := a.emuMoveTarget(v, "B/same"); err != nil || r {
@@ -1327,10 +1327,10 @@ func TestEmuLog(t *testing.T) {
 	emuLog.path, emuLog.level = d+"/emulator.log", emuLvInfo
 	emuLog.Unlock()
 	defer func() { emuLog.Lock(); emuLog.path, emuLog.level = op, ol; emuLog.Unlock() }()
-	emuLogf(emuLvInfo, "B/teams-vm", "sw1", "booted")
-	emuLogf(emuLvDebug, "B/teams-vm", "", "ran something")
+	emuLogf(emuLvInfo, "B/lab-host", "sw1", "booted")
+	emuLogf(emuLvDebug, "B/lab-host", "", "ran something")
 	b, _ := os.ReadFile(d + "/emulator.log")
-	if !strings.Contains(string(b), "INFO    teams-vm") || !strings.Contains(string(b), "booted") || strings.Contains(string(b), "ran something") {
+	if !strings.Contains(string(b), "INFO    lab-host") || !strings.Contains(string(b), "booted") || strings.Contains(string(b), "ran something") {
 		t.Errorf("%s", b)
 	}
 }

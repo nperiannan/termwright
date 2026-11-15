@@ -64,7 +64,7 @@ Options:
   --depth N               VNC colour depth: 16, 24 or 32 (default: 24)
   --vnc-network           VNC listens on all interfaces (default: localhost only)
   --rdp-network           xrdp listens on all interfaces (default: localhost only)
-  --allow-cidr CIDR       Open the firewall (UFW) for this network, e.g. 10.234.179.0/24.
+  --allow-cidr CIDR       Open the firewall (UFW) for this network, e.g. 10.70.1.0/24.
                           Only useful with --vnc-network / --rdp-network
   --no-ufw                Never touch UFW
   --no-vnc                Do not set up VNC
@@ -81,7 +81,7 @@ Options:
 Examples:
   sudo ./$SCRIPT_NAME --user nperiannan
   echo 'secret1' | sudo ./$SCRIPT_NAME --user ubuntu --vnc-password-stdin
-  sudo ./$SCRIPT_NAME --user ubuntu --rdp-network --allow-cidr 10.234.179.0/24
+  sudo ./$SCRIPT_NAME --user ubuntu --rdp-network --allow-cidr 10.70.1.0/24
   ./$SCRIPT_NAME --check --user ubuntu
 EOF
 }

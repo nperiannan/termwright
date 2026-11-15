@@ -51,8 +51,8 @@ func TestRemoteCommandIsValidated(t *testing.T) {
 		t.Fatalf("%s %v", c, err)
 	}
 	// a network's broadcast address is sent to, and the limited broadcast as well
-	c, err = RemoteCommand(p, "aa:bb:cc:dd:ee:ff", "10.234.179.255", 9)
-	if err != nil || !strings.Contains(c, `"10.234.179.255","255.255.255.255"`) || !strings.Contains(c, "wakeonlan -i 10.234.179.255") || !strings.Contains(c, "wakeonlan -i 255.255.255.255") {
+	c, err = RemoteCommand(p, "aa:bb:cc:dd:ee:ff", "10.70.1.255", 9)
+	if err != nil || !strings.Contains(c, `"10.70.1.255","255.255.255.255"`) || !strings.Contains(c, "wakeonlan -i 10.70.1.255") || !strings.Contains(c, "wakeonlan -i 255.255.255.255") {
 		t.Fatalf("%s %v", c, err)
 	}
 }
@@ -79,7 +79,7 @@ func TestPingRejectsOptions(t *testing.T) {
 func TestPlanAdvertisesOnTheWholeNetwork(t *testing.T) {
 	// whatever networks this computer is on: the limited broadcast is always planned, with the
 	// system's choice of interface as the last resort, and no destination is planned twice
-	for _, bc := range []string{"", "10.234.179.255"} {
+	for _, bc := range []string{"", "10.70.1.255"} {
 		plan := Plan(bc)
 		seen := map[string]bool{}
 		var limited, wanted bool

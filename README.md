@@ -87,7 +87,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## What's new in 0.34
 
-- **Name After Devices**: sessions named by an address (`10.127.35.13`) take the name the device gives itself - for a whole folder at once, offered after connecting, or automatically with Undo. Team servers learn each device's hostname and model; owners rename for everyone.
+- **Name After Devices**: sessions named by an address (`10.60.35.13`) take the name the device gives itself - for a whole folder at once, offered after connecting, or automatically with Undo. Team servers learn each device's hostname and model; owners rename for everyone.
 - **Network Check** (Transfer → Network Check…): who can reach what - this computer and the open device tabs against the gateway, DNS, internet and any host, with the traceroute path and an iPerf3 server and client. On switches it also tries the management VR / VRF.
 - **File servers: firewall check** - whether the firewall lets devices reach Termwright, allow it in one click, and a test from the device.
 - **Who is free now** on the team admin page, a **Model** column, and **calmer folder colours** (Soft, Vivid or Steel blue).
