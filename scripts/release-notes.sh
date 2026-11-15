@@ -18,28 +18,49 @@ section() {
     awk 'NF{blank=0; started=1} !NF{blank++} started && blank<2'
 }
 
-if [ "$REF" = nightly ]; then
-  TO=$(git rev-parse HEAD)
-  FROM=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
-  echo "Automatic build of main ($(git rev-parse --short HEAD)). **Untested** - back up your settings first (the update window has *Back Up Now*)."
-  echo
-  body=$(section Unreleased)
-  if [ -n "$body" ]; then echo "### Changes since ${FROM:-the first release}"; echo; echo "$body"; echo; fi
-else
-  TO=$REF
-  FROM=$(git describe --tags --abbrev=0 --match 'v*' "$REF^" 2>/dev/null || true)
-  body=$(section "${REF#v}")
-  [ -n "$body" ] || body=$(section Unreleased)
-  echo "${body:-Maintenance release.}"
-  echo
-fi
+# GitHub refuses release notes over 125000 characters: past LIMIT the commit list gives way to the compare
+# link, then the changelog section is cut at a line with a link to the whole CHANGELOG.
+LIMIT=120000
+MORE="**…and more** - the full list is in [CHANGELOG.md](https://github.com/$REPO/blob/$([ "$REF" = nightly ] && echo main || echo "$REF")/CHANGELOG.md)."
 
-echo "### Commits"
-echo
-git log --no-merges --pretty='* %s (%h)' ${FROM:+"$FROM.."}"$TO"
-if [ -n "$FROM" ]; then
+# notes COMMITS: the release notes; COMMITS=1 lists the commits
+notes() {
+  if [ "$REF" = nightly ]; then
+    TO=$(git rev-parse HEAD)
+    FROM=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
+    echo "Automatic build of main ($(git rev-parse --short HEAD)). **Untested** - back up your settings first (the update window has *Back Up Now*)."
+    echo
+    body=$(section Unreleased)
+    if [ -n "$body" ]; then echo "### Changes since ${FROM:-the first release}"; echo; echo "$body"; echo; fi
+  else
+    TO=$REF
+    FROM=$(git describe --tags --abbrev=0 --match 'v*' "$REF^" 2>/dev/null || true)
+    body=$(section "${REF#v}")
+    [ -n "$body" ] || body=$(section Unreleased)
+    echo "${body:-Maintenance release.}"
+    echo
+  fi
+
+  if [ "$1" = 1 ]; then
+    echo "### Commits"
+    echo
+    git log --no-merges --pretty='* %s (%h)' ${FROM:+"$FROM.."}"$TO"
+  fi
+  if [ -n "$FROM" ]; then
+    echo
+    echo "**Full changelog**: https://github.com/$REPO/compare/$FROM...$([ "$REF" = nightly ] && git rev-parse --short HEAD || echo "$REF")"
+  fi
   echo
-  echo "**Full changelog**: https://github.com/$REPO/compare/$FROM...$([ "$REF" = nightly ] && git rev-parse --short HEAD || echo "$REF")"
+  echo "macOS: the app is ad-hoc signed, not notarized - after installing run \`xattr -dr com.apple.quarantine /Applications/Termwright.app\`."
+}
+
+out=$(notes 1)
+[ ${#out} -le $LIMIT ] || out=$(notes 0)
+if [ ${#out} -gt $LIMIT ]; then
+  out=$(printf '%s\n' "$out" | awk -v max=$((LIMIT - 1000)) -v more="$MORE" '
+    { n += length($0) + 1 }
+    !cut && n > max { print ""; print more; cut = 1 }
+    !cut { print; next }
+    /^\*\*Full changelog|^macOS:/ { print ""; print }')
 fi
-echo
-echo "macOS: the app is ad-hoc signed, not notarized - after installing run \`xattr -dr com.apple.quarantine /Applications/Termwright.app\`."
+printf '%s\n' "$out"
