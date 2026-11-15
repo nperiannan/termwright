@@ -23,6 +23,7 @@ import { LabAppliances } from './lab-appliances';
 import { LabHosts } from './lab-hosts';
 import { PcWindow } from './pc-window';
 import { TerminalView } from './terminal-view';
+import { Icon } from './icon';
 import { DevIcon, DevRole, ICON_STYLES, IconStyle, ROLES, iconReach, roleOf } from './dev-icon';
 import { PacketView, PacketWindow } from './packet-view';
 import { TrafficTests } from './traffic-tests';
@@ -35,7 +36,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
 import { LabServer } from './lab-server';
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, LabServer, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficStats, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
+  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, Icon, LabServer, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficStats, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + (dockLow() ? 40 : dockH()) + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" [testers]="traf()?.testers ?? []" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" (screen)="pcWin.set(''); screenDev.set(d)" /> }
@@ -72,11 +73,11 @@ import { LabServer } from './lab-server';
         <button type="button" (click)="loadPack()">{{ st()?.pack ? tr('Load Another Pack…') : tr('Load Device Pack (.vm)…') }}</button> }
       @if (emu()) {
         <nav class="ptabs">
-          <a [class.on]="!isAppl() && page() !== 'hosts' && page() !== 'traffic' && page() !== 'overview'" (click)="page.set('')">{{ tr('Canvas') }}</a>
-          @if (emu()) { <a [class.on]="page() === 'overview'" (click)="page.set('overview')" [title]="tr('Every device in one table')">{{ tr('Overview') }}@if (devs().length) { <small>{{ devs().length }}</small> }</a> }
-          <a [class.on]="page() === 'traffic'" (click)="openTraffic()" [title]="tr('Test ports, streams, live charts and RFC 2544 tests')">{{ tr('Traffic') }}@if (traf()?.running) { <small class="run">▶</small> } @else if (traf()?.streams?.length) { <small>{{ traf()!.streams.length }}</small> }</a>
-          <a [class.on]="isAppl()" (click)="page.set('images')" [title]="tr('The images the switches and computers boot, and the templates made from them')">{{ tr('Appliances') }}@if ((st()?.images ?? []).length) { <small>{{ st()!.images!.length }}</small> }</a>
-          <a [class.on]="page() === 'hosts'" (click)="page.set('hosts')">{{ tr('Hosts') }}@if ((st()?.hosts ?? []).length) { <small>{{ st()!.hosts!.length }}</small> }</a>
+          <a [class.on]="!isAppl() && page() !== 'hosts' && page() !== 'traffic' && page() !== 'overview'" (click)="page.set('')" [title]="tr('The topology: switches, computers and their cables')"><i><app-icon name="topology" [size]="ptIcon" [duo]="true" /></i><span>{{ tr('Canvas') }}</span></a>
+          <a [class.on]="page() === 'overview'" (click)="page.set('overview')" [title]="tr('Every device in one table')"><i><app-icon name="overview" [size]="ptIcon" [duo]="true" />@if (devs().length) { <small>{{ devs().length }}</small> }</i><span>{{ tr('Overview') }}</span></a>
+          <a [class.on]="page() === 'traffic'" (click)="openTraffic()" [title]="tr('Test ports, streams, live charts and RFC 2544 tests')"><i><app-icon name="traffic" [size]="ptIcon" [duo]="true" />@if (traf()?.running) { <small class="run">▶</small> } @else if (traf()?.streams?.length) { <small>{{ traf()!.streams.length }}</small> }</i><span>{{ tr('Traffic') }}</span></a>
+          <a [class.on]="isAppl()" (click)="page.set('images')" [title]="tr('The images the switches and computers boot, and the templates made from them')"><i><app-icon name="appliance" [size]="ptIcon" [duo]="true" />@if ((st()?.images ?? []).length) { <small>{{ st()!.images!.length }}</small> }</i><span>{{ tr('Appliances') }}</span></a>
+          <a [class.on]="page() === 'hosts'" (click)="page.set('hosts')" [title]="tr('The KVM hosts the switches run on')"><i><app-icon name="hosts" [size]="ptIcon" [duo]="true" />@if ((st()?.hosts ?? []).length) { <small>{{ st()!.hosts!.length }}</small> }</i><span>{{ tr('Hosts') }}</span></a>
         </nav>
       }
       @if (devs().length) {
@@ -869,7 +870,7 @@ import { LabServer } from './lab-server';
     @container (max-width: 1250px) { .tb .tl { display: none; } }
     @container (max-width: 1050px) { .lname, .mgl { display: none; } .health .htx { display: none; } }
     .htx > span + span { margin-left: 4px; }
-    @container (max-width: 820px) { .ptabs a { padding: 0 7px; } .ptabs small { display: none; } }
+    @container (max-width: 820px) { .ptabs a { padding: 0 7px; min-width: 0; } .ptabs small { display: none; } .ptabs a span { display: none; } }
     .vbar { position: absolute; top: 10px; right: 312px; z-index: 6; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border, var(--line)); box-shadow: 0 6px 18px rgba(0,0,0,.25); max-width: calc(100% - 560px); overflow-x: auto;
       button { white-space: nowrap; flex: none; } button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); } select { height: 26px; font-size: 12px; flex: none; } > span { white-space: nowrap; } }
     .hleg { position: absolute; top: calc(var(--ctbh) + 12px); left: 242px; z-index: 6; display: flex; flex-direction: column; gap: 4px; max-height: 50%; overflow: auto;
@@ -895,7 +896,17 @@ import { LabServer } from './lab-server';
     .node.dimn { opacity: .28; } .lk.dimk { opacity: .18; }
     .htg { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--muted); i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; } }
     .ptabs { display: flex; align-self: stretch; margin: -8px 0 -8px 4px; flex: none;
-      a { display: flex; align-items: center; gap: 5px; padding: 0 11px; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; } a.on { color: var(--text); border-color: var(--accent); } small { font-size: 11px; color: var(--muted); } }
+      a { display: flex; align-items: center; gap: 6px; padding: 0 11px; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+      a:hover { color: var(--text); } a.on { color: var(--text); border-color: var(--accent); }
+      i { position: relative; display: inline-flex; font-style: normal; }
+      small { font-size: 11px; color: var(--muted); } }
+    /* icon above its name, each page its own colour on a tinted tile; the count on the tile's corner */
+    .ptabs a { flex-direction: column; justify-content: center; gap: 3px; padding: 0 11px; min-width: 64px; font-size: 11.5px; letter-spacing: .01em;
+      i { width: 30px; height: 24px; border-radius: 7px; justify-content: center; align-items: center; color: var(--icd, var(--ic)); background: color-mix(in srgb, var(--ic) 13%, transparent); transition: background .15s; }
+      &:hover i, &.on i { background: color-mix(in srgb, var(--ic) 24%, transparent); }
+      small { position: absolute; top: -3px; left: calc(100% - 9px); min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); font-size: 9.5px; line-height: 13px; text-align: center; font-weight: 600; color: var(--text); } }
+    .ptabs a:nth-child(1) { --ic: #4f8bff; } .ptabs a:nth-child(2) { --ic: #22b8cf; } .ptabs a:nth-child(3) { --ic: #2fb67c; } .ptabs a:nth-child(4) { --ic: #9b6cff; } .ptabs a:nth-child(5) { --ic: #f0a63a; }
+    :host-context(.light) .ptabs a { --icd: color-mix(in srgb, var(--ic) 80%, #000); }
     .health { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 12px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); font-size: 12px; min-width: 0; overflow: hidden; }
     .jobs { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--text); font-size: 12px; cursor: pointer; min-width: 110px; max-width: 360px; flex: 0 1 auto;
       span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } b { color: var(--accent); font-weight: 600; } }
@@ -1306,6 +1317,16 @@ export class LabWorkspace implements OnDestroy {
   protected mgmtIp = ''; protected mgmtVlan = 1;
   protected portEd = signal<{ at: number; mode: 'access' | 'trunk'; vlan: number | null; vlans: string } | null>(null);
   private hubTimer?: ReturnType<typeof setInterval>;
+  // the Lab menu: Overview, Traffic Generator, Appliances, KVM Hosts
+  private gotoFx = effect(() => {
+    const g = this.lab.goto();
+    if (!g || g.kind !== (this.emu() ? 'emu' : 'sim')) return;
+    untracked(() => {
+      this.lab.goto.set(null);
+      if (g.page === 'traffic') this.openTraffic();
+      else this.page.set(g.page === 'appliances' ? 'images' : g.page);
+    });
+  });
   private hubWatch = effect(() => {
     const id = this.selHub(); clearInterval(this.hubTimer); this.hubDet.set(null); this.hubAll.set(false); this.portEd.set(null); this.mgmtEd.set(false); this.hubMacs.set(false);
     if (!id || !this.emu()) return;
@@ -1614,7 +1635,7 @@ export class LabWorkspace implements OnDestroy {
   }
   protected trafLoss = computed(() => this.trafPer(3));
   protected trafLat = computed(() => this.trafPer(4));
-  readonly fmtPps = (v: number) => (v >= 10000 ? Math.round(v / 1000) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(Math.round(v)));
+  readonly fmtPps = (v: number) => (v >= 10000 ? Math.round(v / 1000) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v < 10 && v % 1 ? v.toFixed(1) : String(Math.round(v))); // 0.5 steps on a small axis: not 0, 1, 1, 2
   readonly fmtPct = (v: number) => (v < 10 ? v.toFixed(1) : String(Math.round(v)));
   readonly fmtMs = (v: number) => (v < 1 ? v.toFixed(2) : v.toFixed(1));
   /** The tiles above the Traffic page: ports, streams, rates now, loss, latency, results. */
@@ -2063,6 +2084,7 @@ export class LabWorkspace implements OnDestroy {
   protected linkA = signal<{ id: string; port: string } | null>(null);
   protected readonly GRID = 40;
   protected portPick = signal<{ id: string; ports: string[]; all: { name: string; short: string; peer: string }[]; x: number; y: number; side: 'a' | 'b' } | null>(null);
+  protected ptIcon = 16;
   protected page = signal<'' | 'configure' | 'images' | 'templates' | 'hosts' | 'new' | 'onhosts' | 'traffic' | 'overview'>('');
   protected hostPick = signal('');
   protected cfgId = signal('');

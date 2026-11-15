@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -27,6 +28,7 @@ func TestTrafficPy(t *testing.T) {
 		t.Fatal(err)
 	}
 	// ports: test port 1 listens 41001, sends to 41011 (the switch); test port 2 listens 41002, sends to 41012
+	var longest atomic.Int64 // the longest frame on the sockets: sizes count the FCS, the sockets carry frames without it
 	sw := func(in, out int) *net.UDPConn {
 		c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: in})
 		if err != nil {
@@ -38,6 +40,9 @@ func TestTrafficPy(t *testing.T) {
 				n, _, err := c.ReadFromUDP(buf)
 				if err != nil {
 					return
+				}
+				if int64(n) > longest.Load() {
+					longest.Store(int64(n))
 				}
 				_, _ = c.WriteToUDP(buf[:n], &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: out})
 			}
@@ -85,6 +90,9 @@ func TestTrafficPy(t *testing.T) {
 	if st.TX["s1"] != 300 || st.RX["s1"] != 300 || st.TX["s2"] != 100 || st.RX["s2"] != 100 || st.RX["s3"] != 50 || st.RX["s4"] != 50 {
 		lg, _ := os.ReadFile(filepath.Join(dir, "log"))
 		t.Fatalf("tx %v rx %v\n%s", st.TX, st.RX, lg)
+	}
+	if n := longest.Load(); n != 252 {
+		t.Fatalf("a 256-byte frame is %d bytes without its FCS", n)
 	}
 	if l := st.Lat["s1"]; len(l) < 3 || l[2] != 300 || l[0]/l[2] > 50 {
 		t.Fatalf("latency %v", l)
@@ -211,7 +219,7 @@ func TestTrafficPyMore(t *testing.T) {
 	if seen["tos184"] < 600 || seen["src1"] < 150 || seen["src4"] < 150 {
 		t.Fatalf("DSCP 46 and the source address stepping: %v", seen)
 	}
-	if seen["len1518"] < 40 || seen["len594"] < 150 {
+	if seen["len1514"] < 40 || seen["len590"] < 150 { // without the FCS the sizes count
 		t.Fatalf("IMIX sizes: %v", seen)
 	}
 	if st.Ooo["s1"]+st.Ooo["s2"]+st.Ooo["s3"] == 0 || st.Dup["s1"]+st.Dup["s2"]+st.Dup["s3"] == 0 || len(st.Jit["s1"]) != 2 {

@@ -65,20 +65,23 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
     .tpg {
       position: absolute; inset: 0; z-index: 25; background: var(--bg); overflow: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
     .tph { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; h2 { margin: 0; font-size: 17px; } .tpt { display: flex; flex-direction: column; gap: 2px; } .sp { flex: 1; } }
-    .kpis { display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); gap: 10px; }
+    /* one 7-column grid for both rows: the KPI cards one column each; test ports one, each chart two */
+    .tpg { container-type: inline-size; }
+    .kpis { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
     .kpi { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 9px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0;
       span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; } b { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } small { font-size: 11px; color: var(--muted); }
       &.warn { border-color: var(--warning, #e39b17); b::before { content: '⚠ '; font-size: 14px; color: var(--warning, #e39b17); } } &.good { b::before { content: '✓ '; font-size: 14px; color: var(--success, #1fa45a); } } }
-    .tpb { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; }
+    .tpb { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; flex: 1; min-height: 0; > .tpl { grid-column: span 1; min-width: 0; } > .tpm { grid-column: span 6; } }
     .tpl { display: flex; flex-direction: column; gap: 8px; padding-top: 11px; .tpe { margin: 0; border: 1px dashed var(--line); border-radius: 10px; padding: 16px 14px; text-align: center; line-height: 1.5; } .sec2 { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); } }
     .tpc { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; &:hover { border-color: var(--muted); } &.sel { border-color: var(--accent); background: var(--accent-soft); } .r1 { display: flex; align-items: center; b { flex: 1; color: var(--warning, #e39b17); font-size: 12.5px; } } .x { cursor: pointer; color: var(--muted); } .x:hover { color: var(--danger); } }
     .tpm { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-    .tcs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-    .tpb.tests { grid-template-columns: minmax(0, 1fr); }
+    .tcs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; > * { grid-column: span 2; min-width: 0; } }
+    .tpb.tests { grid-template-columns: minmax(0, 1fr); > .tpm { grid-column: 1; } }
     .up { color: var(--success, #1fa45a); } .dn { color: var(--warning, #e39b17); }
     .seg2 { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; a { padding: 5px 12px; cursor: pointer; font-size: 12px; } a.on { background: var(--accent-soft); color: var(--accent); } }
     .muted { color: var(--muted); } .small { font-size: 11.5px; } .mono { font-family: var(--mono, monospace); }
-    @media (max-width: 1300px) { .kpis { grid-template-columns: repeat(4, minmax(120px, 1fr)); } .tcs { grid-template-columns: 1fr; } }
+    @container (max-width: 1150px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } .tpb:not(.tests) { grid-template-columns: 220px minmax(0, 1fr); > .tpl, > .tpm { grid-column: auto; } }
+      .tcs { grid-template-columns: minmax(0, 1fr); > * { grid-column: auto; } } }
   `],
 })
 export class TrafficPage {

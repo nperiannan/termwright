@@ -95,6 +95,15 @@ func TestMCPServer(t *testing.T) {
 	if l[4]["result"].(map[string]any)["isError"] != true {
 		t.Fatalf("read_tab of a missing tab: %v", l[4])
 	}
+	// who used it: the bridge passes the AI app's name; its tools are counted
+	if cs := a.MCPState().Clients; len(cs) != 1 || cs[0].Name != "t" || cs[0].Calls != 3 || cs[0].Tool != "read_tab" || cs[0].At == "" {
+		t.Fatalf("clients: %+v", cs)
+	}
+	for in, want := range map[string]string{"claude-ai": "Claude Desktop", "claude-code": "Claude Code", "cursor-vscode": "Cursor", "Visual Studio Code": "VS Code", "": "An AI app", "my\x01app": "myapp"} {
+		if got := mcpClientName(in); got != want {
+			t.Fatalf("%q: %q, want %q", in, got, want)
+		}
+	}
 	// no token, a web page, a GET
 	post := func(tok, origin string) int {
 		req, _ := http.NewRequest("POST", ep.URL, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))

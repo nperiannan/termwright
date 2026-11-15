@@ -1,6 +1,14 @@
 import { Component, computed, input } from '@angular/core';
 
 // Simple stroke icons drawn for Termwright (24x24 viewBox).
+// the parts of some icons drawn filled in a light tint of their colour (two-tone)
+const FILLS: Record<string, string> = {
+  topology: 'M9 3h6v4.5H9zM3 16.5h6V21H3zM15 16.5h6V21h-6z',
+  overview: 'M3 5h18v4.5H3z',
+  appliance: 'M12 3l8 4.5L12 12 4 7.5z',
+  hosts: 'M4 4h16v5H4zM4 10.5h16v5H4z',
+};
+
 const PATHS: Record<string, string> = {
   plus: 'M12 5v14M5 12h14',
   // title-bar session list: small tiles with lines
@@ -80,6 +88,12 @@ const PATHS: Record<string, string> = {
   backup: 'M4 7h16v13H4zM4 7l2-3h12l2 3M10 12h4',
   checklist: 'M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2',
   table: 'M3 5h18v14H3zM3 10h18M9 10v9',
+  // the emulated lab's pages: its topology (canvas), every device in a table, traffic, appliances (images), KVM hosts
+  topology: 'M9 3h6v4.5H9zM3 16.5h6V21H3zM15 16.5h6V21h-6zM12 7.5V12M6 16.5V12h12v4.5',
+  overview: 'M3 5h18v14H3zM3 9.5h18M3 14.25h18M8.5 9.5v9.5',
+  traffic: 'M4 8.5h13M13.5 5L17 8.5 13.5 12M20 15.5H7M10.5 12L7 15.5l3.5 3.5',
+  appliance: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5',
+  hosts: 'M4 4h16v5H4zM4 10.5h16v5H4zM4 17h16v3H4zM7 6.5h.01M7 13h.01M10.5 6.5h6M10.5 13h6',
   bulk: 'M4 6h10M4 12h10M4 18h10M16 8l2 2 3-3M16 16l2 2 3-3',
   compare: 'M4 4h7v16H4zM13 4h7v16h-7zM6.5 9h2M15.5 9h2M6.5 13h2M15.5 13h2',
   play: 'M7 5v14l11-7z',
@@ -108,11 +122,14 @@ const PATHS: Record<string, string> = {
 @Component({
   selector: 'app-icon',
   template: `<svg viewBox="0 0 24 24" [attr.width]="size()" [attr.height]="size()" fill="none" stroke="currentColor"
-    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="d()" /></svg>`,
+    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">@if (duo() && f()) { <path [attr.d]="f()" fill="currentColor" fill-opacity=".28" stroke="none" /> }<path [attr.d]="d()" /></svg>`,
   styles: [`:host { display: inline-flex; line-height: 0; } svg { display: block; }`],
 })
 export class Icon {
   readonly name = input.required<string>();
   readonly size = input<number>(16);
   readonly d = computed(() => PATHS[this.name()] ?? '');
+  /** two-tone: its filled parts in a light tint */
+  readonly duo = input(false);
+  readonly f = computed(() => FILLS[this.name()] ?? '');
 }

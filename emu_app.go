@@ -2858,6 +2858,11 @@ func (a *App) emuStart(host string, ids []string) {
 				emuLab.runCables = map[string]map[int]string{}
 			}
 			emuLab.runCables[id] = emuCablesOf(l, id) // its own cables from now; the patch panel lets go of them
+			for k := range emuTraf.sock {             // its ports' sockets are the usual ones again
+				if strings.HasPrefix(k, id+":") {
+					delete(emuTraf.sock, k)
+				}
+			}
 			delete(emuLab.errs, id)
 			delete(emuLab.addrOK, id)
 		}

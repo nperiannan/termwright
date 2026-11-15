@@ -131,9 +131,12 @@ var emuInst struct {
 // instLive is what is read from the host while an install runs.
 type instLive struct {
 	console, log string // the last lines: of the console Termwright types on, of the host's log of it
-	disk, part   int64
-	pct          float64
-	idle         int
+	// typer: the console connection an automatic install holds - what the user types goes through it (the
+	// console takes one connection at a time)
+	typer      io.Writer
+	disk, part int64
+	pct        float64
+	idle       int
 }
 
 // emuInstInit makes the maps (emuInst.mu is held).
@@ -455,6 +458,9 @@ func (a *App) emuInstallRun(ctx context.Context, id string) {
 		return
 	}
 	c := emu.NewConsole(conn)
+	emuInst.mu.Lock()
+	emuInstLive(id).typer = conn
+	emuInst.mu.Unlock()
 	stop := make(chan struct{})
 	emuGo(func() { // the end of the console, for the window
 		for {
@@ -476,6 +482,9 @@ func (a *App) emuInstallRun(ctx context.Context, id string) {
 	emuLab.mu.Unlock()
 	err = emu.InstallAlpine(ctx, c, emu.AlpineOpts{Hostname: "alpine", Password: pw, DNS: dns}, func(step, msg string) { a.emuInstallStep(id, step, msg) })
 	close(stop)
+	emuInst.mu.Lock()
+	emuInstLive(id).typer = nil
+	emuInst.mu.Unlock()
 	_ = c.Close()
 	if err != nil {
 		if ctx.Err() == nil {
@@ -707,6 +716,55 @@ func (c *ctxReader) Read(p []byte) (int, error) {
 }
 
 // EmuInstallCancel stops an install and throws away its disk (the ISO stays on the host).
+// EmuInstallTakeOver turns an automatic install into one by hand, keeping what the installer did so far: Termwright
+// stops typing on its console (also when a restart of Termwright stopped it), the installer keeps running, and you
+// answer it and press Finish. For an ISO that is not Alpine, started as automatic.
+func (a *App) EmuInstallTakeOver(id string) (EmuView, error) {
+	defer emuAs("user")()
+	emuLab.mu.Lock()
+	a.emuLoad()
+	j := emuInstance(id)
+	if j == nil {
+		emuLab.mu.Unlock()
+		return EmuView{}, errors.New("no such install")
+	}
+	stopped := j.Stage == instFailed && strings.HasPrefix(j.Err, "Termwright was closed")
+	if j.Mode != "alpine" || j.Port == 0 || !stopped && j.Stage != instStarting && j.Stage != instInstalling {
+		st := j.Stage
+		emuLab.mu.Unlock()
+		return EmuView{}, fmt.Errorf("only a running automatic install can be taken over (this one is %s)", st)
+	}
+	jc := *j
+	emuLab.mu.Unlock()
+	if out, err := a.emuRun(jc.Host, jc.spec().StatusScript(), 30*time.Second); err != nil || !strings.HasPrefix(strings.TrimSpace(out), "up") {
+		return EmuView{}, errors.New("its installer is not running on the host any more: remove the install and start it again, by hand")
+	}
+	emuInst.mu.Lock()
+	if c := emuInst.cancel[id]; c != nil {
+		c() // the typing stops; the installer runs on
+	}
+	emuInst.mu.Unlock()
+	for i := 0; i < 30; i++ { // its console connection is let go of
+		emuInst.mu.Lock()
+		held := emuInst.live[id] != nil && emuInst.live[id].typer != nil
+		emuInst.mu.Unlock()
+		if !held {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	sp := a.emuInstallSession(jc)
+	a.emuInstallSet(id, func(j *EmuInstall) {
+		j.Mode, j.Err, j.Console = "manual", "", sp
+		j.markStep("console")
+		j.Msg = "by hand now: answer the installer below; press Finish when it is done"
+	})
+	if stopped { // a restart of Termwright stopped its watch too
+		emuGo(func() { a.emuInstallWatch(id) })
+	}
+	return a.EmuState()
+}
+
 func (a *App) EmuInstallCancel(id string) (EmuView, error) {
 	defer emuAs("user")()
 	emuLab.mu.Lock()

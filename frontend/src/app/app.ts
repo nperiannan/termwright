@@ -396,7 +396,7 @@ export class App implements OnInit {
     }
     const info = await this.backend.getAppInfo();
     setPreviewLanguages(info.version || '');
-    // "0.24.1", or "0.24.1 nightly" for a build of main ("0.24.1~git1234567")
+    // "0.24.1", or "0.24.1 nightly" for a build of develop ("0.24.1~git1234567")
     this.appVersion.set((info.version || '').replace(/~git([0-9a-f]+)$/, ' nightly').replace(/-dev$/, ' dev'));
     this.insetTitle.set(!!info.insetTitle);
     if (info.insetTitle) void this.alignWithWindowButtons();
@@ -515,6 +515,11 @@ export class App implements OnInit {
       case 'file-servers': this.ui.open('fileServers'); break;
       case 'net-check': this.ui.open('netCheck'); break;
       case 'sim-lab': void this.tabs.openLab(this.labs.kind()); break;
+      case 'connect-ai': this.ui.openOptions('ai', 'mcp'); break;
+      case 'lab-emu': this.openLab('emu'); break;
+      case 'lab-sim': this.openLab('sim'); break;
+      case 'lab-overview': case 'lab-traffic': case 'lab-appliances': case 'lab-hosts':
+        this.labs.goto.set({ kind: 'emu', page: a.slice(4) as 'overview' | 'traffic' | 'appliances' | 'hosts' }); this.openLab('emu'); break;
       case 'ai-assistant': void this.openAI(); break;
       case 'backups': this.ui.backupTargets.set(null); this.ui.open('backups'); break;
       case 'checklists': this.ui.open('checklists'); break;

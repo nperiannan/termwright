@@ -296,7 +296,7 @@ export const ACTIONS: Record<string, string> = {
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',
   'xmodem': 'Send XMODEM...', 'xmodem-receive': 'Receive XMODEM...', 'scp-upload': 'SCP Upload File...', 'scp-upload-folder': 'SCP Upload Folder...', 'scp-download': 'SCP Download...',
-  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'workspaces': 'Workspaces...',
+  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'lab-emu': 'Emulated Lab', 'lab-sim': 'Simulated Lab', 'lab-overview': 'Lab Overview', 'lab-traffic': 'Traffic Generator', 'lab-appliances': 'Appliances', 'lab-hosts': 'KVM Hosts', 'connect-ai': 'Connect an AI App...', 'workspaces': 'Workspaces...',
   'save-workspace': 'Save Workspace...', 'compare': 'Compare Outputs...',
   'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out', 'global-options': 'Global Options', 'session-options': 'Session Options',
 };
@@ -386,7 +386,9 @@ export interface SyncStatus { folder: string; last: string; peers: string[] | nu
 
 /** The AI assistant (optional): the provider and model; the API key is in the OS keychain. */
 export interface AISettings { provider?: '' | 'anthropic' | 'openai' | 'ollama' | 'claudecode'; model?: string; baseUrl?: string; hideHosts?: boolean; mcp?: boolean; mcpCommands?: '' | 'never'; api?: boolean; agentPerm?: '' | 'every' | 'readonly' | 'auto'; effort?: string; agentToolsOff?: string[]; }
-export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; inCode?: boolean; apiUrl?: string; keyFile?: string; }
+export interface MCPInfo { running: boolean; command: string; codeCmd: string; desktopCfg: string; inDesktop: boolean; inCode?: boolean; apiUrl?: string; keyFile?: string; clients?: MCPClient[]; }
+/** An AI app that used Termwright since it started. */
+export interface MCPClient { name: string; at: string; calls: number; tool?: string; }
 export interface FileServersSettings { folder: string; address: string; tftpPort: number; ftpPort: number; httpPort: number; tftpWrite: boolean; ftpWrite: boolean;
   ftpUser: string; idleMinutes: number; commands?: ServerCommand[] | null; }
 export interface ServerCommand { deviceType: string; protocol: string; put?: boolean; text: string; }

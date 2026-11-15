@@ -399,3 +399,40 @@ func TestEmuInstallAlpineFake(t *testing.T) {
 	}
 	_, _ = a.emuRun(host.Path, "rm -f termwright-lab/install/*.pid.pw termwright-lab/install/*.pid.ans termwright-lab/install/f8885c28.*", 30*time.Second)
 }
+
+// While an automatic install holds the installer's console, what the user types goes through that
+// connection (the console takes one at a time).
+func TestEmuInstallTypeThroughAutomation(t *testing.T) {
+	emuLab.mu.Lock()
+	emuLab.loaded = true
+	emuLab.f.Installs = []EmuInstall{{ID: "ty1", Name: "vm-34", Stage: instInstalling, Host: "kvm", Port: 24900}}
+	emuLab.mu.Unlock()
+	defer func() { emuLab.mu.Lock(); emuLab.f.Installs = nil; emuLab.mu.Unlock() }()
+	var got strings.Builder
+	emuInst.mu.Lock()
+	emuInstLive("ty1").typer = &got
+	emuInst.mu.Unlock()
+	defer func() { emuInst.mu.Lock(); delete(emuInst.live, "ty1"); emuInst.mu.Unlock() }()
+	a := &App{}
+	if err := a.EmuInstallType("ty1", "c", true); err != nil || got.String() != "c\r" {
+		t.Fatalf("%v %q", err, got.String())
+	}
+	if err := a.EmuInstallType("ty1", "\x03", false); err != nil || got.String() != "c\r\x03" {
+		t.Fatalf("%v %q", err, got.String())
+	}
+}
+
+// Only an automatic install whose installer runs can be taken over by hand.
+func TestEmuInstallTakeOverRefuses(t *testing.T) {
+	a := emuTestApp(t)
+	emuLab.mu.Lock()
+	emuLab.loaded = true
+	emuLab.f.Installs = []EmuInstall{{ID: "m1", Mode: "manual", Stage: instWaiting, Port: 1}, {ID: "a1", Mode: "alpine", Stage: instDone, Port: 1}, {ID: "a2", Mode: "alpine", Stage: instFailed, Err: "no disk", Port: 1}}
+	emuLab.mu.Unlock()
+	defer func() { emuLab.mu.Lock(); emuLab.f.Installs = nil; emuLab.mu.Unlock() }()
+	for _, id := range []string{"m1", "a1", "a2"} {
+		if _, err := a.EmuInstallTakeOver(id); err == nil || !strings.Contains(err.Error(), "only a running automatic install") {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+}

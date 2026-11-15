@@ -179,7 +179,7 @@ The complete list is in [docs/FEATURES.md](docs/FEATURES.md).
 
 ## Installation
 
-Pre-built packages are published on the [Releases](https://github.com/nperiannan/termwright/releases) page. Tagged versions are stable; the *nightly* pre-release is rebuilt from every change to `main`.
+Pre-built packages are published on the [Releases](https://github.com/nperiannan/termwright/releases) page. Tagged versions are stable; the *nightly* pre-release is rebuilt from every change to `develop`; releases are tagged on `main`.
 
 | Platform | Package | Notes |
 |---|---|---|

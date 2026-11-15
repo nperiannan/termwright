@@ -150,7 +150,7 @@ const ROLE: Record<string, string> = { owner: 'Owner', 'co-owner': 'Co-owner', m
           <button type="button" [class.on]="channel === 'nightly'" (click)="channel = 'nightly'" [disabled]="!!run()">Nightly build</button>
           <button type="button" [class.on]="channel === 'release'" (click)="channel = 'release'" [disabled]="!!run()">Latest release</button>
         </div>
-        <span class="muted small"> {{ channel === 'nightly' ? 'the newest build of main: fixes before they are released' : channel === 'release' ? 'the latest published release' : 'the team server of this Termwright' }}</span>
+        <span class="muted small"> {{ channel === 'nightly' ? 'the newest build of develop: fixes before they are released' : channel === 'release' ? 'the latest published release' : 'the team server of this Termwright' }}</span>
         <div class="lbl">Container image</div>
         <div class="seg">
           <button type="button" [class.on]="image === 'download'" (click)="image = 'download'" [disabled]="!!run()">Download (GitHub)</button>

@@ -219,6 +219,7 @@ function spans(t: string): Span[] {
           }
           @if (modelErr()) { <div class="mf">{{ modelErr() }}</div> }
           <button type="button" class="foot" (click)="mmenu.set(false); ui.openOptions('ai')"><app-icon name="options" [size]="12" />{{ tr('AI settings…') }}</button>
+          <button type="button" class="foot" (click)="mmenu.set(false); ui.openOptions('ai', 'mcp')" [title]="tr('Use Termwright from Claude Desktop, Claude Code, Cursor, VS Code and other AI apps')"><app-icon name="connect" [size]="12" />{{ tr('Connect an AI App…') }}</button>
         </div>
           }</span>
           @if (ai.mode() !== 'ask') {
@@ -434,10 +435,12 @@ export class AIPanel implements OnInit {
     const ss = m.steps ?? [], cur = ss.find(s => s.state === 'running');
     if (cur) return cur.kind === 'run' ? tr('Running {0} on {1}…', cur.command, cur.tab) : cur.kind === 'open' ? tr('Connecting to {0}…', cur.tab) : tr('Working…');
     const runs = ss.filter(s => s.kind === 'run').length, opens = ss.filter(s => s.kind === 'open').length, labs = ss.filter(s => s.kind === 'lab').length, finds = ss.filter(s => s.kind === 'find').length;
+    const helps = ss.filter(s => s.kind === 'help').length, stats = ss.filter(s => s.kind === 'status').length;
     const bad = ss.filter(s => s.failed || s.state === 'error' || s.state === 'refused' || s.state === 'skipped').length;
     const tabs = [...new Set(ss.filter(s => s.kind === 'run' || s.kind === 'open').map(s => s.tab))];
     const parts = [runs ? (runs === 1 ? tr('Ran 1 command') : tr('Ran {0} commands', runs)) : '', opens ? (opens === 1 ? tr('connected to 1 session') : tr('connected to {0} sessions', opens)) : '',
-      labs ? (labs === 1 ? tr('1 lab step') : tr('{0} lab steps', labs)) : '', finds ? tr('searched the sessions') : ''].filter(Boolean);
+      labs ? (labs === 1 ? tr('1 lab step') : tr('{0} lab steps', labs)) : '', finds ? tr('searched the sessions') : '',
+      helps ? tr('looked up the Termwright guides') : '', stats ? tr('read Termwright’s state') : ''].filter(Boolean);
     const on = tabs.length ? ' ' + tr('on {0}', tabs.length > 3 ? tabs.slice(0, 3).join(', ') + ' +' + (tabs.length - 3) : tabs.join(', ')) : '';
     return parts.join(', ').replace(/^./, c => c.toUpperCase()) + on + (bad ? ' · ' + tr('{0} not done', bad) : '');
   }

@@ -26,7 +26,7 @@ when Termwright cannot be reached.
 
 ## The lab
 
-`Lab` has one method for each lab tool: `show()`, `power(action, *switches)`, `wait(*switches, timeout=600)`,
+`Lab` has one method for each lab tool: `show()`, `power(action, *switches)`, `remove(*devices, sessions=True)`, `wait(*switches, timeout=600)`,
 `cable(a, a_port, b, b_port)`, `uncable(a, a_port)`, `console(switch, *commands)`, `debug(switch)`,
 `events()`, `computer_set(computer, port, ipv4=…, gateway=…)`, `computer(computer, app, target)`,
 `address()`, `cpu(…, request_m=, limit_m=)`, `capture()`, and for images made from an ISO file `install_iso(iso_path, mode, password=…, disk_gb= or disk_mb=)`,

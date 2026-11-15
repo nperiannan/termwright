@@ -566,7 +566,8 @@ class Stream:
         else:
             flow = 0xFFFF
         sig = MAGIC + struct.pack(SIG, s.idx, s.run, s.seq, now, flow)
-        size, tos = s.frame_size(), x.get("dscp", 0) << 2
+        # sizes count the FCS (64-1518 bytes, as testers and RFC 2544 do); QEMU's sockets carry frames without it
+        size, tos = max(60, s.frame_size() - 4), x.get("dscp", 0) << 2
         if k == "arp":
             f = l2(BC if not s.dst else s.dst, src_mac, vlan, prio, 0x0806) + arp(1, src_mac, src_ip, b"\0" * 6, dst_ip) + sig
         elif k == "raw":
@@ -985,6 +986,9 @@ while True:
                         handle(t, f)
                     except Exception:
                         pass
+    # at most 2,000 frames a round over all streams, so the frames coming back are read before the
+    # socket's buffer overflows (4,000 per stream lost a quarter of the frames of two streams at 50,000 pps)
+    live = sum(1 for s in streams if s.tp is not None and s.seq < s.count)
     for s in streams:
         if s.tp is None or s.seq >= s.count:
             continue
@@ -1015,7 +1019,7 @@ while True:
         if s.burst > 1:  # whole bursts, as often as the rate allows
             due = min(s.count, ((due + s.burst - 1) // s.burst) * s.burst)
         n = 0
-        while s.seq < due and n < 4000:
+        while s.seq < due and n < max(64, 2000 // max(1, live)):
             s.tp.send(s.frame(time.time()))
             s.seq += 1
             n += 1

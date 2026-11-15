@@ -950,6 +950,11 @@ func TestTesterConfig(t *testing.T) {
 	if !strings.Contains(l.TrafficScript(b), "nohup python3 tw-traffic.py") {
 		t.Fatal("no start")
 	}
+	// a switch port that started with a cable since removed sends to the old other end: the test port listens there
+	l.Testers[0].Listen = 24131
+	if b, _ := l.TrafficConfig(func(v VM) bool { return v.ID == "v1" }, 7, nil); !strings.Contains(string(b), `"listen":24131,"send":24003`) {
+		t.Fatal(string(b))
+	}
 }
 
 func TestPortMACs(t *testing.T) {

@@ -248,3 +248,44 @@ func TestEmuServer(t *testing.T) {
 		t.Fatalf("password %q %v", pw, err)
 	}
 }
+
+// The AI removes a device from the lab (automated tests need it): through the connector and the chat agent
+// alike; its cables go, its sessions stay when asked; a name that is not in the lab is refused.
+func TestEmuLabRemove(t *testing.T) {
+	keyring.MockInit()
+	a := emuTestApp(t)
+	t.Setenv("HOME", t.TempDir())
+	cl, err := localssh.Dial(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if emuLab.conns == nil {
+		emuLab.conns = map[string]*emuConn{}
+	}
+	emuLab.conns["kvm"] = &emuConn{c: cl, close: func() { cl.Close() }}
+	defer delete(emuLab.conns, "kvm")
+	emuLab.mu.Lock()
+	emuLab.loaded = true
+	emuLab.f.Images = []emu.Image{{ID: "alp", Name: "Alpine Linux Virt", NICs: 3}}
+	emuLab.f.Lab = &emu.Lab{ID: "t2", Dir: "termwright-lab", Mgmt: "forward", Base: 30000, VMs: []emu.VM{{ID: "a1", Name: "pc-1", Index: 1, Image: "alp"}, {ID: "a2", Name: "pc-2", Index: 2, Image: "alp"}, {ID: "a3", Name: "pc-3", Index: 3, Image: "alp"}},
+		Cables: []emu.Cable{{A: "a1", APort: 1, B: "a2", BPort: 1}, {A: "a2", APort: 2, B: "a3", BPort: 1}}}
+	emuLab.f.Host = "kvm"
+	emuLab.f.Sessions = map[string]string{}
+	emuLab.mu.Unlock()
+	if out, err := a.emuMCP("lab_remove", map[string]any{"devices": []any{"pc-1"}, "sessions": false}); err != nil || !strings.Contains(out, "Removed pc-1") {
+		t.Fatalf("connector: %v %q", err, out)
+	}
+	if st, err := a.EmuAgentTool("remove", map[string]any{"devices": []any{"pc-3"}}, true); err != nil || !strings.Contains(st.Out, "Removed pc-3") {
+		t.Fatalf("agent: %v %+v", err, st)
+	}
+	emuLab.mu.Lock()
+	l := emuLab.f.Lab
+	n, c := len(l.VMs), len(l.Cables)
+	emuLab.mu.Unlock()
+	if n != 1 || c != 0 || l.VMs[0].Name != "pc-2" {
+		t.Fatalf("left %d devices, %d cables", n, c)
+	}
+	if _, err := a.emuMCP("lab_remove", map[string]any{"devices": []any{"nope"}}); err == nil {
+		t.Fatal("an unknown device was taken")
+	}
+}

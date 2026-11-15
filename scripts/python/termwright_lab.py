@@ -149,6 +149,11 @@ class Lab:
     def power(self, action: str, *switches: str) -> str:
         return self.tool("power", action=action, switches=list(switches))
 
+    def remove(self, *devices: str, sessions: bool = True) -> str:
+        """Remove devices from the lab: stopped, their disks and cables gone, and their saved sessions unless
+        sessions=False. The lab's history (history(), revert()) can bring them back."""
+        return self.tool("remove", devices=list(devices), sessions=sessions)
+
     def wait(self, *switches: str, timeout: int = 600) -> str:
         """Block until the switches are booted and configured (none named: all)."""
         return self.tool("wait", switches=list(switches), timeout=timeout)

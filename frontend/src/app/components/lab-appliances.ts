@@ -71,7 +71,8 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
               }
               @if (installs().length) {
                 <div class="grp">{{ tr('Installs from ISO') }}<i>{{ installs().length }}</i></div>
-                <div class="row" [class.on]="iso()" (click)="openIso()"><b>{{ tr('{0} install(s)', installs().length) }}</b><span class="st" [class]="'st ' + (installsBusy() ? 'w' : 'm')">{{ installsBusy() ? tr('running') : tr('done') }}</span><span class="f">{{ installsLine() }}</span></div>
+                <div class="row" [class.on]="iso()" (click)="openIso()"><b>{{ tr('Install from ISO') }}</b><span class="st" [class]="'st ' + (installsBusy() ? 'w' : 'm')">{{ installsBusy() ? tr('{0} running', isoRunning().length) : tr('none running') }}</span><span class="f">{{ installsBusy() ? installsLine() : tr('start a new install') }}</span></div>
+                @if (isoFinished().length) { <div class="row" [class.on]="isoList()" (click)="openIsoList()"><b>{{ tr('Installed from ISO') }}</b><span class="st m">{{ isoFinished().length }}</span><span class="f">{{ isoFinishedLine() }}</span></div> }
               }
               @for (g of listGroups(); track g.name) {
                 <div class="grp">{{ g.name }}<i>{{ g.items.length }}</i></div>
@@ -90,39 +91,13 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
           <div class="det">
             @if (iso()) {
               <div class="dh"><div class="ic">◉</div><div class="dt"><h3>{{ tr('Install from an ISO file') }}</h3><div class="muted small">{{ tr('Some distributions are published only as an installer ISO. Termwright runs the installer on a KVM host with a blank disk and keeps the installed disk as a new image.') }}</div></div></div>
-              <div class="dscroll one">
-                @for (j of installs(); track j.id) {
+              <div class="isog">
+                <div class="isol">
                   <div class="card">
-                    <h4>{{ j.name }}<small>{{ j.isoName }} · {{ diskText(j) }} · {{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</small><span class="sp"></span>
-                      @if (isoBusy(j) && j.stage !== 'copying' || j.stage === 'waiting') { <button type="button" class="sm" (click)="screenOf.set(j)" [title]="tr('What its display shows, and its keyboard')">{{ tr('Screen…') }}</button> }
-                      @if (j.stage === 'waiting' && j.console) { <button type="button" class="sm" (click)="isoConsole(j)">{{ tr('Open console') }}</button> }
-                      @if (j.stage === 'waiting') { <button type="button" class="sm primary" (click)="isoFinish(j)">{{ tr('Finish and save as image') }}</button> }
-                      @if (j.stage === 'done' && j.image) { <button type="button" class="sm" (click)="isoShow(j)">{{ tr('Show image') }}</button> }
-                      @if (isoBusy(j) || j.stage === 'waiting') { <button type="button" class="sm danger-ghost" (click)="isoCancel(j)">{{ tr('Cancel') }}</button> }
-                      @if (!isoBusy(j) && j.stage !== 'waiting') { <button type="button" class="sm" (click)="isoRemove(j)">{{ tr('Remove') }}</button> }</h4>
-                    <div class="small" [class.r]="j.stage === 'failed'" [class.g]="j.stage === 'done'" [class.w]="isoBusy(j)">{{ isoText(j) }}</div>
-                    @if (j.stage === 'done' && (j.verified || j.verifyErr)) { <div class="small" [class.g]="!!j.verified" [class.w]="!!j.verifyErr">{{ j.verified ? '✓ ' + tr('Verified: {0}', tr(j.verified)) : '⚠ ' + tr('Not verified: {0}', tr(j.verifyErr || '')) }}</div> }
-                    @if (isoBusy(j) || j.stage === 'waiting') {
-                      <div class="meter"><i [style.width]="overall(j) + '%'"></i></div>
-                      <div class="small muted">{{ tr('Step {0} of {1}', stepNo(j), stepKeys(j).length) }} · {{ tr('{0} since the start', dur(secs(j.started))) }}</div>
-                      <ol class="stl">
-                        @for (k of stepKeys(j); track k) {
-                          <li [class.d]="stepState(j, k) === 'done'" [class.n]="stepState(j, k) === 'now'">
-                            <span class="mk" [class.g]="stepState(j, k) === 'done'" [class.w]="stepState(j, k) === 'now'">{{ stepState(j, k) === 'done' ? '✓' : stepState(j, k) === 'now' ? '▶' : '○' }}</span><span>{{ stepLabel(k) }}</span><span class="tm">{{ stepTime(j, k) }}</span>
-                            @if (stepState(j, k) === 'now' && stepNote(j)) { <small>{{ stepNote(j) }}</small> }
-                          </li>
-                        }
-                      </ol>
-                      @if (j.tail) { <div class="small muted" style="margin-top: 8px">{{ tr('The installer’s console (last lines)') }}</div><pre class="yaml wrap">{{ j.tail }}</pre> }
-                      @if ((j.idle ?? 0) >= 90 && j.step !== 'convert') { <div class="small w" style="margin-top: 6px">{{ tr('The installer’s console has shown nothing for {0}. It may be busy (slow without KVM) or waiting for an answer: read the last line above.', dur(j.idle ?? 0)) }}</div> }
-                    }
-                  </div>
-                }
-                <div class="card">
                   <h4>{{ tr('New install') }}</h4>
                   <div class="fg">
                     <label>{{ tr('ISO file') }}</label><div class="row2"><input [(ngModel)]="isoPath" name="isop" readonly [placeholder]="tr('Choose the .iso file')" /><button type="button" class="sm" (click)="chooseIso()">{{ tr('Choose…') }}</button></div>
-                    <label>{{ tr('Install') }}</label><div><span class="seg"><a [class.on]="isoMode === 'alpine'" (click)="isoMode = 'alpine'">{{ tr('Alpine Linux, automatic') }}</a><a [class.on]="isoMode === 'manual'" (click)="isoMode = 'manual'">{{ tr('Other, on its console') }}</a></span>
+                    <label>{{ tr('Install') }}</label><div><span class="seg"><a [class.on]="isoMode === 'alpine'" (click)="isoMode = 'alpine'">{{ tr('Alpine (automatic)') }}</a><a [class.on]="isoMode === 'manual'" (click)="isoMode = 'manual'">{{ tr('Other (by hand)') }}</a></span>
                       <div class="hint">{{ isoMode === 'alpine' ? tr('Termwright types the Alpine install on the installer’s console and sets the root password below.') : tr('The installer starts and its console opens as a session: you install by hand, then press Finish. It must be an installer that talks on a serial console.') }}</div></div>
                     <label>{{ tr('Image name') }}</label><input [(ngModel)]="isoNm" name="isonm" [placeholder]="isoNamePh()" />
                     <label>{{ tr('Root password') }}</label><div><input [(ngModel)]="isoPw" name="isopw" autocomplete="off" /><div class="hint">{{ isoMode === 'alpine' ? tr('The new system’s root password; Termwright logs in with it.') : tr('The password you set during the install (optional): Termwright logs in with it.') }}</div></div>
@@ -134,9 +109,56 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
                   </div>
                   <div class="cf"><button type="button" class="primary" (click)="startIso()" [disabled]="!isoPath || lab.busy() || (isoMode === 'alpine' && !isoPw)">{{ tr('Start install') }}</button></div>
                 </div>
+                </div>
+                <div class="isor">
+                  @for (j of isoRunning(); track j.id) {
+                    <div class="card run">
+                      <h4>{{ j.name }}<small>{{ j.isoName }} · {{ diskText(j) }} · {{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</small><span class="sp"></span>
+                      @if (isoBusy(j) && j.stage !== 'copying' || j.stage === 'waiting') { <button type="button" class="sm" (click)="screenOf.set(j)" [title]="tr('What its display shows, and its keyboard')">{{ tr('Screen…') }}</button> }
+                      @if (j.stage === 'waiting') { <button type="button" class="sm primary" (click)="isoFinish(j)">{{ tr('Finish and save as image') }}</button> }
+                      @if (canTakeOver(j)) { <button type="button" class="sm" (click)="isoTakeOver(j)" [title]="tr('Stop the automatic typing and go on by hand: what the installer did so far is kept')">{{ tr('Take Over by Hand') }}</button> }
+                      <button type="button" class="sm danger-ghost" (click)="isoCancel(j)">{{ tr('Cancel') }}</button></h4>
+                      <div class="small" [class.w]="isoBusy(j)">{{ isoText(j) }}</div>
+                      <div class="meter"><i [style.width]="overall(j) + '%'"></i></div>
+                      <details class="stp"><summary class="small muted">{{ tr('Step {0} of {1}', stepNo(j), stepKeys(j).length) }}: <b>{{ stepLabel(stepKeys(j)[stepNo(j) - 1]) }}</b>@if (stepNote(j)) { · {{ stepNote(j) }} } · {{ tr('{0} since the start', dur(secs(j.started))) }}</summary>
+                      <ol class="stl">
+                        @for (k of stepKeys(j); track k) {
+                          <li [class.d]="stepState(j, k) === 'done'" [class.n]="stepState(j, k) === 'now'">
+                            <span class="mk" [class.g]="stepState(j, k) === 'done'" [class.w]="stepState(j, k) === 'now'">{{ stepState(j, k) === 'done' ? '✓' : stepState(j, k) === 'now' ? '▶' : '○' }}</span><span>{{ stepLabel(k) }}</span><span class="tm">{{ stepTime(j, k) }}</span>
+                            @if (stepState(j, k) === 'now' && stepNote(j)) { <small>{{ stepNote(j) }}</small> }
+                          </li>
+                        }
+                      </ol></details>
+                      @if (j.stage === 'waiting' || j.stage === 'installing') {
+                        <div class="ccap" [title]="tr('Every installer asks its own questions: answer them here')"><span class="ct">{{ tr('The installer’s console') }}</span>
+                          @if ((j.idle ?? 0) >= 90 && j.step !== 'convert') { <span class="w qt">{{ tr('quiet for {0} - it may be waiting for an answer', dur(j.idle ?? 0)) }}</span> }
+                          <span class="sp"></span>@if (j.console) { <a class="lnk small" (click)="isoConsole(j)">{{ tr('Open as a session') }}</a> }</div>
+                        <pre class="ctail"><span>{{ j.tail || tr('(nothing yet)') }}</span></pre>
+                        <div class="cin"><input [(ngModel)]="isoTyped[j.id]" [name]="'ty' + j.id" class="mono" spellcheck="false" autocomplete="off" (keydown.enter)="isoSend(j, isoTyped[j.id] ?? '', true)" [placeholder]="tr('Type an answer - Enter sends it')" />
+                          <button type="button" class="sm primary" (click)="isoSend(j, isoTyped[j.id] ?? '', true)">{{ tr('Send') }} ⏎</button></div>
+                        <div class="keys">@for (k of isoKeys; track k.l) { <button type="button" class="xs" (click)="isoSend(j, k.s, false)" [title]="tr('Sends {0}', k.l)">{{ k.l }}</button> }</div>
+                      }
+                    </div>
+                  } @empty {
+                    <div class="card empty"><b>{{ tr('No install is running') }}</b><p class="muted small">{{ tr('Start one on the left. Its steps and the installer’s console show here, and you answer the installer’s questions here.') }}</p>
+                      @if (isoFinished().length) { <a class="lnk small" (click)="openIsoList()">{{ tr('Installed from ISO ({0})', isoFinished().length) }} →</a> }</div>
+                  }
+                </div>
+              </div>
+            } @else if (isoList()) {
+              <div class="dh"><button type="button" class="back" (click)="isoGoBack()" [title]="tr('Back')">←</button><div class="ic">◉</div><div class="dt"><h3>{{ tr('Installed from ISO') }}</h3><div class="muted small">{{ tr('The installs that ended: the images they made, and why the others stopped.') }}</div></div></div>
+              <div class="dscroll one">
+                <div class="card icard"><table class="itab"><thead><tr><th>{{ tr('Image') }}</th><th>{{ tr('ISO') }}</th><th>{{ tr('How') }}</th><th>{{ tr('Size') }}</th><th>{{ tr('Result') }}</th><th></th></tr></thead><tbody>
+                  @for (j of isoFinished(); track j.id) {
+                    <tr><td><b>{{ j.name }}</b></td><td class="muted small">{{ j.isoName }}</td><td class="small">{{ j.mode === 'alpine' ? tr('automatic') : tr('by hand') }}</td><td class="small nw">@if (imgSize(j); as sz) { <b>{{ mb(sz) }}</b>&nbsp;<span class="muted" [title]="tr('The image file takes {0}; its disk is {1}', mb(sz), diskText(j))">{{ tr('of {0}', diskText(j)) }}</span> } @else { {{ diskText(j) }} }</td>
+                      <td class="small" [class.g]="j.stage === 'done'" [class.r]="j.stage === 'failed'">{{ j.stage === 'done' ? '✓ ' + tr('Image made') + (j.verified ? ' · ' + tr('verified') : '') : isoText(j) }}</td>
+                      <td class="acts">@if (canTakeOver(j)) { <button type="button" class="sm" (click)="isoTakeOver(j)">{{ tr('Take Over by Hand') }}</button> }@if (j.stage === 'done' && j.image) { <button type="button" class="sm" (click)="isoShow(j)">{{ tr('Open image') }}</button> }<button type="button" class="sm" (click)="isoRemove(j)">{{ tr('Remove') }}</button></td></tr>
+                  } @empty { <tr><td colspan="6" class="muted small">{{ tr('No install has ended yet.') }}</td></tr> }
+                </tbody></table></div>
               </div>
             } @else if (edit(); as im) { @let bd = badge(live(im));
               <div class="dh">
+                @if (isoBack().from === 'list') { <button type="button" class="back" (click)="isoGoBack()" [title]="tr('Back to Installed from ISO')">←</button> }
                 <div class="ic">▦</div>
                 <div class="dt"><h3>{{ im.name }}@if (im.version && !im.name.includes(im.version)) { <span>{{ im.version }}</span> }<span class="st" [class]="'st ' + bd.cls">{{ bd.text }}</span></h3>
                   <div class="m">{{ im.fileName || tr('no file chosen') }} · {{ mb(im.size) }}@if (im.sha256) { · sha256 {{ im.sha256.slice(0, 4) }}…{{ im.sha256.slice(-4) }} }</div>
@@ -328,6 +350,7 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
     .dq { margin: 0 10px 6px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; .dqh { display: flex; gap: 6px; align-items: center; .sp { flex: 1; } } .dqi { display: flex; gap: 4px; align-items: center; padding: 4px 0; cursor: pointer; } .dqn { flex: 1; min-width: 0; span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; } small { color: var(--muted); font-size: 11px; } } button.xs { padding: 0 5px; height: 20px; font-size: 11px; } }
     .meter { height: 5px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 4px 0 2px; i { display: block; height: 100%; background: var(--accent); } }
     .dh { display: flex; gap: 14px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); flex: none;
+      .back { flex: none; width: 32px; height: 32px; padding: 0; border-radius: 8px; font-size: 16px; line-height: 1; }
       .ic { width: 42px; height: 42px; flex: none; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-size: 20px; }
       .dt { flex: 1; min-width: 0; } h3 { margin: 0; font-size: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; > span:not(.st) { color: var(--muted); font-weight: 500; } }
       .m { color: var(--muted); font-size: 12px; margin-top: 3px; font-family: var(--mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -354,6 +377,20 @@ type Badge = { text: string; cls: 'ok' | 'h' | 'w' | 'm' | 'r' };
     .full { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; > app-lab-host-images { flex: 1; min-height: 0; } }
     .pub .grp { padding: 10px 2px 4px; } .catg { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; } .cn { margin: 0; }
     .tcard { padding: 0; overflow: hidden; table { width: 100%; border-collapse: collapse; } th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 8px 12px; border-bottom: 1px solid var(--line); } td { padding: 6px 12px; border-bottom: 1px solid var(--line); } }
+    .isog { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(420px, 1fr) minmax(0, 1.25fr); gap: 12px; padding: 14px 18px; }
+    .isol, .isor { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+    .card.run { display: flex; flex-direction: column; min-height: 320px; flex: 1 0 auto; } /* several running installs stack and the pane scrolls */
+    .isol .fg { grid-template-columns: 92px minmax(0, 1fr); } .isol .seg a { white-space: nowrap; }
+    .stp { margin-top: 6px; summary { cursor: pointer; list-style-position: outside; } b { color: var(--text); font-weight: 600; } .stl { margin-top: 4px; } }
+    .card.empty { text-align: center; padding: 34px 20px; p { margin: 6px 0 10px; } }
+    .ccap { display: flex; gap: 8px; align-items: baseline; margin: 12px 0 6px; font-size: 12px; font-weight: 600; .sp { flex: 1; } .qt, .lnk { font-weight: 400; } .ct { white-space: nowrap; } }
+    .ctail { margin: 0; flex: 1; min-height: 130px; overflow: auto; display: flex; flex-direction: column-reverse; /* kept scrolled to the newest line */ padding: 10px 12px; border-radius: 8px; background: #0b0d10; color: #d6dbe3; font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-all; }
+    .cin { display: flex; gap: 6px; margin-top: 8px; input { flex: 1; min-width: 0; } }
+    .keys { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-top: 6px; .sp { flex: 1; } button.xs { font: 11.5px var(--mono); height: 24px; padding: 0 8px; } }
+    .icard { overflow-x: auto; } .dscroll.one:has(.icard) { max-width: 1180px; }
+    .itab td.nw, .itab td:nth-child(-n+3), .itab td.acts { white-space: nowrap; } /* names break at their hyphens otherwise */
+    .itab { width: 100%; border-collapse: collapse; th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+      td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; } td.small { white-space: nowrap; } td.acts { text-align: right; white-space: nowrap; button + button { margin-left: 6px; } } tr:last-child td { border-bottom: 0; } }
     .stl { list-style: none; padding: 0; margin: 8px 0 0; li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 6px; padding: 2px 0; color: var(--muted); &.d, &.n { color: var(--text); } small { grid-column: 2 / 4; color: var(--muted); } } .tm { font-size: 11px; color: var(--muted); } }
     pre.yaml { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--bg); font-size: 11.5px; max-height: 220px; overflow: auto; white-space: pre-wrap; }
     .fg > label.ckl { display: flex; gap: 8px; align-items: center; color: var(--text); font-size: 12.5px; }
