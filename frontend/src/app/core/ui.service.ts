@@ -152,7 +152,9 @@ export class Ui {
   /** Shows an error; actions are buttons that fix it (e.g. Edit Session). */
   error(e: unknown, actions?: ToastAction[]) { this.toast(errText(e), 'error', 7000, actions); }
 
-  openOptions(page = '') { this.optionsPage.set(page); this.open('options'); }
+  /** The part of the page to scroll to (its id: opt-<focus>). */
+  readonly optionsFocus = signal('');
+  openOptions(page = '', focus = '') { this.optionsPage.set(page); this.optionsFocus.set(focus); this.open('options'); }
 
   confirm(title: string, message: string, ok = 'OK', danger = false): Promise<boolean> {
     return new Promise(resolve => this.confirmReq.set({ title, message, ok, danger, resolve }));

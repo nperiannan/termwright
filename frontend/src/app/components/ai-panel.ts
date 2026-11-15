@@ -219,6 +219,7 @@ function spans(t: string): Span[] {
           }
           @if (modelErr()) { <div class="mf">{{ modelErr() }}</div> }
           <button type="button" class="foot" (click)="mmenu.set(false); ui.openOptions('ai')"><app-icon name="options" [size]="12" />{{ tr('AI settings…') }}</button>
+          <button type="button" class="foot" (click)="mmenu.set(false); ui.openOptions('ai', 'mcp')" [title]="tr('Use Termwright from Claude Desktop, Claude Code, Cursor, VS Code and other AI apps')"><app-icon name="connect" [size]="12" />{{ tr('Connect an AI App…') }}</button>
         </div>
           }</span>
           @if (ai.mode() !== 'ask') {

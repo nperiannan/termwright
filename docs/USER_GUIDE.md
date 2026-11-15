@@ -775,13 +775,14 @@ Off until you choose an AI service in **Settings → AI Assistant**: **Claude** 
 - Each command has **Paste** (types it at the prompt **without Enter** and closes the window - you check it and press Enter), **Copy** and **Save** (to the Command Library, for that device type). Nothing the AI answers is ever run by itself.
 - **Privacy**: nothing is sent until you ask. Passwords, secrets, keys, SNMP communities and tokens are removed first; *Also replace IP addresses, MAC addresses and host names* hides those too. *What was sent* shows exactly what left your computer. Check your company's policy before sending device output to an outside service.
 
-#### Use Termwright from Claude Desktop or Claude Code
+#### Use Termwright from Claude and other AI apps (MCP)
 
-Termwright can also work the other way round: as a **connector** (an MCP server) that Claude Desktop and Claude Code use, so you can ask in a Claude chat *"look at my access-sw7 tab - why is port 3 down?"* or *"which of my saved sessions are EXOS switches?"*.
+Termwright can also work the other way round: as a **connector** (an MCP server) that Claude Desktop, Claude Code and other AI apps use, so you can ask in their chat *"look at my access-sw7 tab - why is port 3 down?"* or *"which of my saved sessions are EXOS switches?"*. There is nothing to download: the connector is the Termwright program itself, started with `mcp`.
 
-1. **Settings → AI Assistant → Use Termwright from Claude**: switch on *Let Claude use Termwright* and press **Save**.
+1. **Help → Connect an AI App…** (or *Connect an AI App…* in the AI panel's model menu, or **Settings → AI Assistant → AI apps**): switch on *Let AI apps use Termwright* and press **Save**.
 2. **Add** next to *Claude Desktop* (then restart Claude Desktop) and/or next to *Claude Code* - or *Set up by hand*: Claude Code `claude mcp add --scope user termwright -- <Termwright program> mcp`; Claude Desktop: *Settings → Developer → Edit Config*, a server with the Termwright program as the command and `mcp` as its argument (the page shows the exact path).
-3. Keep Termwright open while Claude uses it.
+3. **Other AI apps** - choose the app and **Copy Config**: a ready setting with this computer's path to Termwright, for *Cursor, Windsurf, Gemini CLI…* (`mcpServers` JSON, which most other apps take too), *VS Code* (`servers` in its MCP configuration) or *Codex CLI* (`config.toml`). The page says where each app keeps it; paste it there and restart the app.
+4. Keep Termwright open while the app uses it. **Used by** on the same page shows which apps used Termwright since it started, how long ago, how many tools they ran and the last one - a green dot for the last five minutes - so you see the connection works.
 
 ![Use Termwright from Claude](screenshots/ai-connector.png)
 

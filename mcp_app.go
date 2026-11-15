@@ -97,7 +97,70 @@ var (
 	mcpAllow  = map[string]time.Time{} // tab id → typing allowed without asking until
 	mcpTexts  sync.Map                 // text request id → chan mcpText
 	mcpTextID atomic.Int64
+	mcpSeen   = map[string]*MCPClient{} // AI app (its name) → when it last used Termwright (mcpMu)
 )
+
+// MCPClient is an AI app that used Termwright since it started: its name, when it last asked, how many
+// tools it ran and the last one.
+type MCPClient struct {
+	Name  string `json:"name"`
+	At    string `json:"at"`
+	Calls int    `json:"calls"`
+	Tool  string `json:"tool,omitempty"`
+}
+
+// mcpClientName is an AI app's name as people know it, from the name it gives itself (MCP clientInfo).
+func mcpClientName(n string) string {
+	l := strings.ToLower(strings.TrimSpace(n))
+	switch {
+	case l == "":
+		return "An AI app"
+	case l == "claude-ai" || strings.HasPrefix(l, "claude-desktop"):
+		return "Claude Desktop"
+	case strings.HasPrefix(l, "claude-code"):
+		return "Claude Code"
+	case strings.HasPrefix(l, "cursor"):
+		return "Cursor"
+	case strings.Contains(l, "visual studio code") || l == "vscode" || strings.HasPrefix(l, "vscode"):
+		return "VS Code"
+	case strings.Contains(l, "windsurf"):
+		return "Windsurf"
+	case strings.HasPrefix(l, "gemini"):
+		return "Gemini CLI"
+	case strings.HasPrefix(l, "codex"):
+		return "Codex"
+	}
+	r := []rune(strings.Map(func(c rune) rune {
+		if c < ' ' || c == 0x7f {
+			return -1
+		}
+		return c
+	}, strings.TrimSpace(n)))
+	if len(r) > 40 {
+		r = r[:40]
+	}
+	return string(r)
+}
+
+// mcpNoteClient keeps that an AI app asked something (a tool it ran: tool != "").
+func mcpNoteClient(name, tool string) {
+	name = mcpClientName(name)
+	mcpMu.Lock()
+	defer mcpMu.Unlock()
+	c := mcpSeen[name]
+	if c == nil {
+		if len(mcpSeen) >= 20 {
+			return
+		}
+		c = &MCPClient{Name: name}
+		mcpSeen[name] = c
+	}
+	c.At = time.Now().UTC().Format(time.RFC3339)
+	if tool != "" {
+		c.Calls++
+		c.Tool = tool
+	}
+}
 
 type mcpText struct {
 	Text  string `json:"text"`
@@ -185,7 +248,7 @@ func (a *App) mcpHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.cfg.Get().AI.MCP {
-		http.Error(w, "the Claude connector is off (Settings → AI Assistant)", http.StatusForbidden)
+		http.Error(w, "the AI apps connector is off (Settings → AI Assistant → Let AI apps use Termwright)", http.StatusForbidden)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -198,6 +261,15 @@ func (a *App) mcpHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, rpcResp{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcErr{-32700, "parse error"}})
 		return
 	}
+	tool := ""
+	if req.Method == "tools/call" {
+		var p struct {
+			Name string `json:"name"`
+		}
+		_ = json.Unmarshal(req.Params, &p)
+		tool = p.Name
+	}
+	mcpNoteClient(r.Header.Get("X-Termwright-Client"), tool)
 	resp, ok := a.mcpHandle(r.Context(), req)
 	if !ok { // a notification
 		w.WriteHeader(http.StatusAccepted)
@@ -584,14 +656,15 @@ func (a *App) mcpSettle(tab string, before int, wait time.Duration) string {
 
 // MCPInfo is what the settings page shows about the connector.
 type MCPInfo struct {
-	Running    bool   `json:"running"`
-	Command    string `json:"command"`    // this program, for Claude's settings
-	CodeCmd    string `json:"codeCmd"`    // the claude mcp add command
-	DesktopCfg string `json:"desktopCfg"` // Claude Desktop's settings file
-	InDesktop  bool   `json:"inDesktop"`
-	InCode     bool   `json:"inCode"`            // Claude Code has it (user scope, in its .claude.json)
-	APIURL     string `json:"apiUrl,omitempty"`  // the local API, when it runs
-	KeyFile    string `json:"keyFile,omitempty"` // where its key is (mcp.json: url and token)
+	Running    bool        `json:"running"`
+	Command    string      `json:"command"`    // this program, for Claude's settings
+	CodeCmd    string      `json:"codeCmd"`    // the claude mcp add command
+	DesktopCfg string      `json:"desktopCfg"` // Claude Desktop's settings file
+	InDesktop  bool        `json:"inDesktop"`
+	InCode     bool        `json:"inCode"`            // Claude Code has it (user scope, in its .claude.json)
+	APIURL     string      `json:"apiUrl,omitempty"`  // the local API, when it runs
+	KeyFile    string      `json:"keyFile,omitempty"` // where its key is (mcp.json: url and token)
+	Clients    []MCPClient `json:"clients"`           // the AI apps that used it since Termwright started, the latest first
 }
 
 func claudeDesktopConfig() string {
@@ -617,7 +690,13 @@ func (a *App) MCPState() MCPInfo {
 		api = strings.TrimSuffix(mcpCur.url, "/mcp") + "/api/v1/lab"
 	}
 	mcpMu.Unlock()
-	info := MCPInfo{Running: running, Command: exe, DesktopCfg: claudeDesktopConfig(), APIURL: api}
+	info := MCPInfo{Running: running, Command: exe, DesktopCfg: claudeDesktopConfig(), APIURL: api, Clients: []MCPClient{}}
+	mcpMu.Lock()
+	for _, c := range mcpSeen {
+		info.Clients = append(info.Clients, *c)
+	}
+	mcpMu.Unlock()
+	sort.Slice(info.Clients, func(i, j int) bool { return info.Clients[i].At > info.Clients[j].At })
 	if a.cfg != nil {
 		info.KeyFile = mcpFile(a.cfg.DataDir())
 	}
@@ -738,6 +817,7 @@ func runMCPBridge(in io.Reader, out io.Writer, dataDir string) error {
 	sc.Buffer(make([]byte, 0, 64*1024), 4<<20)
 	enc := json.NewEncoder(out)
 	hc := &http.Client{Timeout: 3 * time.Minute}
+	client := "" // the AI app's name (from initialize), so Termwright can say who used it
 	for sc.Scan() {
 		line := bytes.TrimSpace(sc.Bytes())
 		if len(line) == 0 {
@@ -751,8 +831,17 @@ func runMCPBridge(in io.Reader, out io.Writer, dataDir string) error {
 		if len(req.ID) == 0 || string(req.ID) == "null" {
 			continue // notification
 		}
+		if req.Method == "initialize" {
+			var p struct {
+				ClientInfo struct {
+					Name string `json:"name"`
+				} `json:"clientInfo"`
+			}
+			_ = json.Unmarshal(req.Params, &p)
+			client = p.ClientInfo.Name
+		}
 		if req.Method == "tools/list" { // the running Termwright's own list when it answers (this program may be an older copy)
-			if resp, err := mcpForward(&http.Client{Timeout: 5 * time.Second}, dataDir, line); err == nil && bytes.Contains(resp, []byte(`"tools"`)) {
+			if resp, err := mcpForward(&http.Client{Timeout: 5 * time.Second}, dataDir, line, client); err == nil && bytes.Contains(resp, []byte(`"tools"`)) {
 				if _, err := out.Write(append(bytes.TrimSpace(resp), '\n')); err != nil {
 					return err
 				}
@@ -763,9 +852,9 @@ func runMCPBridge(in io.Reader, out io.Writer, dataDir string) error {
 			_ = enc.Encode(r)
 			continue
 		}
-		resp, err := mcpForward(hc, dataDir, line)
+		resp, err := mcpForward(hc, dataDir, line, client)
 		if err != nil {
-			msg := "Termwright is not running, or its Claude connector is off - open Termwright and turn on Settings → AI Assistant → Use Termwright from Claude. (" + err.Error() + ")"
+			msg := "Termwright is not running, or its connector for AI apps is off - open Termwright and turn on Settings → AI Assistant → Let AI apps use Termwright (Help → Connect an AI App…). (" + err.Error() + ")"
 			_ = enc.Encode(rpcResp{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"content": []map[string]string{{"type": "text", "text": msg}}, "isError": true}})
 			continue
 		}
@@ -776,7 +865,7 @@ func runMCPBridge(in io.Reader, out io.Writer, dataDir string) error {
 	return sc.Err()
 }
 
-func mcpForward(hc *http.Client, dataDir string, body []byte) ([]byte, error) {
+func mcpForward(hc *http.Client, dataDir string, body []byte, client string) ([]byte, error) {
 	b, err := os.ReadFile(mcpFile(dataDir))
 	if err != nil {
 		return nil, errors.New("not started")
@@ -788,6 +877,14 @@ func mcpForward(hc *http.Client, dataDir string, body []byte) ([]byte, error) {
 	req, _ := http.NewRequest(http.MethodPost, ep.URL, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+ep.Token)
+	if client != "" {
+		req.Header.Set("X-Termwright-Client", strings.Map(func(c rune) rune {
+			if c < ' ' || c > '~' {
+				return -1
+			}
+			return c
+		}, client))
+	}
 	r, err := hc.Do(req)
 	if err != nil {
 		return nil, errors.New("cannot reach it")

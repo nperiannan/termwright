@@ -188,7 +188,7 @@ Without a team Termwright works on its own and sends nothing anywhere.
 ## Terminal
 
 - **AI assistant** (optional, off by default): a chat panel docked right or left or floating, with chat history, pasted pictures and *Add context* (selection, clipboard, whole terminal, other tabs, files) and a token warning; **Agent mode** runs commands in your tabs to debug or fix - read-only commands by themselves, changes after you allow them, production always asks; *Explain with AI* for output and errors and *Ask AI for a Command* for the tab's device type, with Claude, an OpenAI-compatible service, a local Ollama or **Claude Code** (your own Claude login, no API key); secrets removed before sending, commands pasted without Enter, *Save* to the Command Library.
-- **Claude connector (MCP)**: Claude Desktop and Claude Code can list your tabs and sessions, read a tab (secrets removed) and - after you allow it in Termwright, each time or for 15 minutes per tab - open a session and run a command; local only, off by default.
+- **Connector for AI apps (MCP)**: Claude Desktop, Claude Code and other MCP apps (Cursor, VS Code, Windsurf, Gemini CLI, Codex - a ready config to copy; Help → Connect an AI App…; *Used by* shows which apps used it) can list your tabs and sessions, read a tab (secrets removed) and - after you allow it in Termwright, each time or for 15 minutes per tab - open a session and run a command; local only, off by default.
 - **Emulation**: xterm-256color with true color, VT100/102/220, ANSI, Linux; Unicode.
 - **Scrollback** with search (`Mod+F`), clear scrollback, reset terminal.
 - **Terminal bar** under SSH, Telnet, Raw and local tabs: Timestamps, Auto scroll and Clear (can be hidden per tab or everywhere).

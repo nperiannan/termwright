@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Connect an AI app**: *Help → Connect an AI App…* (and the AI panel's model menu) opens the connector's settings, now *AI apps (MCP connector)*. Besides one-click *Add* for Claude Desktop and Claude Code, **Other AI apps** copies a ready config with this computer's path to Termwright for Cursor, Windsurf, Gemini CLI and most others, VS Code or Codex CLI, and says where each app keeps it. **Used by** shows which AI apps used Termwright since it started (their names as the apps give them), how long ago, how many tools they ran and the last one. Nothing to download: the connector is Termwright itself.
 - **A Lab menu** in the menu bar: *Emulated Lab*, *Simulated Lab*, and straight to the emulated lab's *Overview*, *Traffic Generator*, *Appliances* and *KVM Hosts* (the labs were under Transfer).
 - **The emulated lab's pages have icons**: Canvas, Overview, Traffic, Appliances and Hosts each show a two-tone icon in its own colour above the name, with the count on the icon's corner.
 - **Traffic page**: the test ports and the three charts sit on the same seven columns as the cards above them (test ports one, each chart two), and a small rate axis no longer reads 0, 1, 1, 2.

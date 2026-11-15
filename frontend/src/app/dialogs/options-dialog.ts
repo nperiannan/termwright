@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectorRef, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
 import { LANGUAGES, previewLanguages, tr } from '../core/i18n';
@@ -560,12 +560,15 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 </div>
                 <div class="gf">Nothing is sent until you ask - from the ✦ button or right-click → Explain with AI - and the window shows what was sent. Check your company's policy before sending device output to an AI service.</div>
 
-                <div class="gt">Claude connector</div>
+                <div class="gt" id="opt-mcp">AI apps (MCP connector)</div>
                 <div class="list">
-                  <div class="li"><span class="l">Let Claude use Termwright<small>Claude Desktop and Claude Code can list your tabs and sessions and read a tab</small></span>
+                  <div class="li"><span class="l">Let AI apps use Termwright<small>Claude Desktop, Claude Code and other apps that take MCP servers (Cursor, VS Code, Windsurf…) can list your tabs and sessions and read a tab</small></span>
                     @if (s.ai?.mcp) { <span class="pill" [class.ok]="mcp()?.running"><i></i>{{ mcp()?.running ? 'Running' : 'Starts on Save' }}</span> }
-                    <span class="sw"><input type="checkbox" name="mcp" [ngModel]="!!s.ai?.mcp" (ngModelChange)="setAI({ mcp: $event })" aria-label="Let Claude use Termwright" /></span></div>
+                    <span class="sw"><input type="checkbox" name="mcp" [ngModel]="!!s.ai?.mcp" (ngModelChange)="setAI({ mcp: $event })" aria-label="Let AI apps use Termwright" /></span></div>
                   @if (s.ai?.mcp) {
+                    <div class="li used"><span class="l">Used by<small>Since Termwright started</small></span>
+                      <span class="v2">@for (c of mcp()?.clients ?? []; track c.name) { <span class="cli"><i class="dot" [class.live]="isRecent(c.at)"></i><b>{{ c.name }}</b> · {{ ago(c.at) }}@if (c.calls) { · {{ c.calls === 1 ? '1 tool' : c.calls + ' tools' }}, last {{ c.tool }} }</span> }
+                        @empty { <span class="muted">No AI app has used Termwright yet - add it below, then ask the app something about your tabs or lab.</span> }</span></div>
                     <div class="li"><span class="l">Commands<small>Opening a session or typing in a tab</small></span>
                       <select name="mcpc" class="v" [ngModel]="s.ai?.mcpCommands || ''" (ngModelChange)="setAI({ mcpCommands: $event })">
                         <option value="">Ask me each time</option>
@@ -580,6 +583,12 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                     <details class="li man"><summary class="l">Set up by hand</summary>
                       <div class="mrow"><span>Claude Code</span><code>{{ mcp()?.codeCmd }}</code><button type="button" (click)="copyText(mcp()?.codeCmd ?? '')">Copy</button></div>
                       <div class="mrow"><span>Claude Desktop</span><code>{{ mcp()?.command }} mcp</code><button type="button" (click)="copyText(mcp()?.command ?? '')">Copy</button></div></details>
+                    <div class="li other"><span class="l">Other AI apps<small>Paste this into the app's MCP settings, then restart it</small></span>
+                      <select name="mcpo" class="v" [ngModel]="mcpApp()" (ngModelChange)="mcpApp.set($event)" aria-label="The AI app">
+                        @for (o of mcpApps; track o.v) { <option [value]="o.v">{{ o.label }}</option> }
+                      </select>
+                      <button type="button" class="primary" (click)="copyText(mcpSnippet())">Copy Config</button></div>
+                    <div class="li snip"><pre>{{ mcpSnippet() }}</pre><small class="muted">{{ mcpWhere() }}</small></div>
                   }
                 </div>
                 <div class="gf">{{ mcpMsg() || 'Every command Claude wants to type is shown in Termwright first. The connector listens on this computer only, with a random key.' }}</div>
@@ -724,6 +733,8 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
         &.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
         &.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); } }
       .man { display: block; summary { cursor: pointer; color: var(--muted); } }
+      .li.used { align-items: flex-start; .v2 { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: calc(12px * var(--ui-scale, 1)); text-align: right; } .cli { display: block; max-width: 100%; b { white-space: nowrap; } } .dot { display: inline-block; vertical-align: middle; margin-right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); } .dot.live { background: var(--success, #1fa45a); } }
+      .li.snip { flex-direction: column; align-items: stretch; gap: 6px; padding-top: 0; border-top: none; pre { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); font: calc(11.5px * var(--ui-scale, 1)) var(--mono); white-space: pre-wrap; word-break: break-all; user-select: text; } small { font-size: calc(11px * var(--ui-scale, 1)); } }
       .mrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; span { width: 110px; flex: none; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); }
         code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 5px 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); } }
       @media (max-width: 760px) { .li { flex-wrap: wrap; } .v { width: 100%; max-width: none; } } }
@@ -1010,6 +1021,8 @@ export class OptionsDialog implements OnInit {
     void this.backend.syncState().then(x => this.syncSt.set(x)).catch(() => {});
     if (this.page() === 'ai') this.loadAI();
     this.ui.optionsPage.set('');
+    const focus = this.ui.optionsFocus(); // Help → Connect an AI App…: the connector's part of the page
+    if (focus) { this.ui.optionsFocus.set(''); setTimeout(() => document.getElementById('opt-' + focus)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 150); }
     const cur = this.ui.settings();
     if (cur) this.s = structuredClone(cur);
     if (this.s && !this.s.environments?.length) this.s.environments = structuredClone(DEFAULT_ENVIRONMENTS);
@@ -1054,6 +1067,24 @@ export class OptionsDialog implements OnInit {
     void this.backend.aiState().then(x => this.aiSt.set(x)).catch(() => {});
     void this.backend.mcpState().then(x => this.mcp.set(x)).catch(() => {});
   }
+  /** Other AI apps: the same command (this program, mcp) in each app's own settings format. */
+  readonly mcpApps = [
+    { v: 'json', label: 'Cursor, Windsurf, Gemini CLI…', where: 'Cursor: ~/.cursor/mcp.json · Windsurf: ~/.codeium/windsurf/mcp_config.json · Gemini CLI: ~/.gemini/settings.json - most other apps take the same mcpServers setting' },
+    { v: 'vscode', label: 'VS Code', where: 'VS Code: Command Palette → MCP: Open User Configuration (or .vscode/mcp.json in a project)' },
+    { v: 'codex', label: 'Codex CLI', where: 'Codex: ~/.codex/config.toml' },
+  ];
+  readonly mcpApp = signal('json');
+  mcpSnippet() {
+    const cmd = this.mcp()?.command || 'termwright';
+    if (this.mcpApp() === 'codex') return `[mcp_servers.termwright]\ncommand = ${JSON.stringify(cmd)}\nargs = ["mcp"]\n`;
+    if (this.mcpApp() === 'vscode') return JSON.stringify({ servers: { termwright: { type: 'stdio', command: cmd, args: ['mcp'] } } }, null, 2);
+    return JSON.stringify({ mcpServers: { termwright: { command: cmd, args: ['mcp'] } } }, null, 2);
+  }
+  mcpWhere() { return this.mcpApps.find(o => o.v === this.mcpApp())?.where ?? ''; }
+  isRecent(at: string) { return Date.now() - Date.parse(at) < 5 * 60e3; }
+  // while the AI page is open: who used the connector, kept fresh
+  private mcpTimer = setInterval(() => { if (this.page() === 'ai' && this.s?.ai?.mcp) void this.backend.mcpState().then(x => this.mcp.set(x)).catch(() => {}); }, 5000);
+  private mcpTimerEnd = inject(DestroyRef).onDestroy(() => clearInterval(this.mcpTimer));
   readonly mcp = signal<MCPInfo | null>(null);
   readonly aiCheck = signal<boolean | null>(null); // the last Test: worked / failed
   readonly codeAdded = signal(false);

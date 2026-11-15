@@ -98,6 +98,7 @@ var menuRU = map[string]string{
 	"Timestamps On / Off":                     "Метки времени вкл. / выкл.",
 	"Transfer":                                "Передача",
 	"Lab":                                     "Лаборатория",
+	"Connect an AI App...":                    "Подключить ИИ-приложение...",
 	"Emulated Lab":                            "Эмулированная лаборатория",
 	"Simulated Lab":                           "Симулированная лаборатория",
 	"Overview":                                "Обзор",

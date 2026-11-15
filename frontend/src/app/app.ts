@@ -515,6 +515,7 @@ export class App implements OnInit {
       case 'file-servers': this.ui.open('fileServers'); break;
       case 'net-check': this.ui.open('netCheck'); break;
       case 'sim-lab': void this.tabs.openLab(this.labs.kind()); break;
+      case 'connect-ai': this.ui.openOptions('ai', 'mcp'); break;
       case 'lab-emu': this.openLab('emu'); break;
       case 'lab-sim': this.openLab('sim'); break;
       case 'lab-overview': case 'lab-traffic': case 'lab-appliances': case 'lab-hosts':

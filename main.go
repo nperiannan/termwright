@@ -293,6 +293,7 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	help := m.AddSubmenu(t("Help"))
 	add(help, "Welcome...", "welcome")
 	add(help, "User Guide", "user-guide")
+	add(help, "Connect an AI App...", "connect-ai")
 	add(help, "Check for Updates...", "check-updates")
 	add(help, "Keyboard Shortcuts", "shortcuts")
 	add(help, "About Termwright", "about")
