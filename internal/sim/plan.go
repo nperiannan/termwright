@@ -26,7 +26,7 @@ const (
 
 // Plan makes the specs and cables of a new lab (or of switches added to one:
 // have = the switches there already). Management addresses come from mgmtNet
-// starting at .11, skipping addresses in use; SSH ports from firstPort up,
+// starting at .11, skipping addresses in use; SSH ports from firstPort up (0 = any free port when it starts),
 // skipping ports in use.
 func Plan(pack *Pack, groups []Group, mgmtNet, cabling, password string, firstPort int, have []Spec, haveLinks []Link) ([]Spec, []Link, error) {
 	if pack == nil {
@@ -89,10 +89,12 @@ func Plan(pack *Pack, groups []Group, mgmtNet, cabling, password string, firstPo
 				return nil, nil, fmt.Errorf("management network %s is full: remove switches or use a bigger network (like 10.99.0.0/16)", pfx)
 			}
 			usedIP[ip] = true
-			for usedPort[port] {
-				port++
+			if firstPort > 0 { // 0: each switch gets a free port when it starts
+				for usedPort[port] {
+					port++
+				}
+				usedPort[port] = true
 			}
-			usedPort[port] = true
 			os := ""
 			for _, o := range m.OS {
 				if os == "" || strings.EqualFold(o, g.OS) {
