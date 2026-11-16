@@ -24,6 +24,7 @@ import { LabHosts } from './lab-hosts';
 import { PcWindow } from './pc-window';
 import { TerminalView } from './terminal-view';
 import { Icon } from './icon';
+import { BAD_FRAMES, QuickKey, TrafficQuick } from './traffic-quick';
 import { DevIcon, DevRole, ICON_STYLES, IconStyle, ROLES, iconReach, roleOf } from './dev-icon';
 import { PacketView, PacketWindow } from './packet-view';
 import { TrafficTests } from './traffic-tests';
@@ -36,7 +37,7 @@ type Pal = { key: string; name: string; sub: string; group: string; ver: string;
 import { LabServer } from './lab-server';
 @Component({
   selector: 'app-lab-workspace',
-  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, Icon, LabServer, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficStats, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
+  imports: [FormsModule, DecimalPipe, NgTemplateOutlet, Icon, TrafficQuick, LabServer, LabConfigure, LabHosts, LabAppliances, LabNew, TerminalView, DevIcon, PacketView, PacketWindow, TrafficTests, PcWindow, TvBar, TvHead, StreamDetail, TrafficPage, TrafficStats, TrafficLibrary, RadiusDialog, VmScreen, LabOverview, CmdPalette],
   template: `
   <div class="ws" [style.--ctbh.px]="page() === 'new' ? 0 : tbMode() === 'labels' ? 54 : 44" (click)="menu.set(null); topos.set(null); mgOpen.set(false); moreOpen.set(null)" [style.grid-template-rows]="'auto minmax(0, 1fr) ' + (dockLow() ? 40 : dockH()) + 'px 26px'">
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" [testers]="traf()?.testers ?? []" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" (screen)="pcWin.set(''); screenDev.set(d)" /> }
@@ -164,7 +165,7 @@ import { LabServer } from './lab-server';
         <app-traffic-page [traf]="traf()" [view]="trafView()" (viewChange)="trafView.set($event)" [kpis]="trafKpis()" [cards]="tpCards()" [selected]="tEd()?.id ?? ''"
           [throughput]="trafThroughput()" [loss]="trafLoss()" [latency]="trafLat()" [fmtPps]="fmtPps" [fmtPct]="fmtPct" [fmtMs]="fmtMs"
           (newTest)="ttests()?.newTest()" (newTester)="newTester(); trafView.set('streams')" (newStream)="newStream()" (start)="trafStart([])" (stop)="trafStop()" (report)="trafReport()"
-          (editTester)="editTester($event)" (removeTester)="tpRemove($event)" (library)="libOpen.set(true)" (radius)="radOpen.set(true)">
+          (editTester)="editTester($event)" (removeTester)="tpRemove($event)" (library)="libOpen.set(true)" (radius)="radOpen.set(true)" (quick)="quickOpen.set($event)">
           @if (trafView() === 'tests') { <app-traffic-tests [testers]="traf()?.testers ?? []" [devs]="devs()" /> } @else if (trafView() === 'stats') { <ng-container [ngTemplateOutlet]="trafStats" /> } @else { <ng-container [ngTemplateOutlet]="trafBody" /> }
         </app-traffic-page>
         @if (radOpen()) { <app-radius-dialog (closed)="radOpen.set(false)" /> }
@@ -176,6 +177,7 @@ import { LabServer } from './lab-server';
               @if ((c.st.n ?? 0) > (c.st.list?.length ?? 0)) { <p class="muted small">{{ tr('The first {0} are listed.', c.st.list?.length ?? 0) }}</p> }</div>
           </div></div>
         }
+        @if (quickOpen(); as q) { <app-traffic-quick [traf]="traf()" [start]="q" (closed)="quickOpen.set(null)" (done)="traf.set($event); quickOpen.set(null)" (library)="quickOpen.set(null); libOpen.set(true)" (editor)="quickOpen.set(null); newStream()" /> }
         @if (libOpen()) { <app-traffic-library [testers]="traf()?.testers ?? []" (closed)="libOpen.set(false)" (applied)="traf.set($event); libOpen.set(false)" /> }
       }
       @if (isAppl()) { <app-lab-appliances [start]="applStart()" [image]="imgPick()" (hostsPage)="hostPick.set($event); page.set('hosts')" /> }
@@ -774,7 +776,7 @@ import { LabServer } from './lab-server';
             <app-tv-bar [tv]="stView" /><table><tr><th tvh [tv]="stView" key="stream" filter="text">{{ tr('Stream') }}</th><th tvh [tv]="stView" key="path" filter="text">{{ tr('From → To') }}</th><th tvh [tv]="stView" key="frame" filter="text">{{ tr('Frame') }}</th><th tvh [tv]="stView" key="rate" filter="none">{{ tr('Rate') }}</th><th tvh [tv]="stView" key="sent" filter="none">{{ tr('Sent') }}</th><th tvh [tv]="stView" key="recv" filter="none">{{ tr('Received') }}</th><th tvh [tv]="stView" key="loss" filter="none">{{ tr('Loss') }}</th><th tvh [tv]="stView" key="lat" filter="none">{{ tr('Latency') }}</th><th tvh [tv]="stView" key="order" filter="none">{{ tr('Order') }}</th><th>{{ tr('Now') }}</th><th tvh [tv]="stView" key="result">{{ tr('Result') }}</th><th></th></tr>
               @for (x of stView.rows(); track x.id) { @let r = resOf(x.id);
                 <tr [class.on]="sEd()?.id === x.id" (click)="editStream(x)"><td><b>{{ x.name }}</b></td><td class="mono"><span class="nw">{{ tpName(x.from) }} → </span><span class="nw">{{ x.to ? tpName(x.to) : (x.dstIp || tr('all')) }}</span></td>
-                  <td class="mono">@if (x.kind === 'pcap') { PCAP · <span [title]="x.pcap || ''">{{ fileName(x.pcap || '') }}</span> · {{ x.pcapFrames }} {{ tr('frames') }} } @else { {{ x.kind.toUpperCase() }}@if (x.dstIp?.includes(':')) { v6 }@if (x.vlan) { · VLAN {{ x.vlan }} }@if (x.dscp) { · DSCP {{ x.dscp }} } · {{ x.sizeMode === 'imix' ? 'IMIX' : x.sizeMode ? x.size + '-' + x.sizeMax + ' B' : x.size + ' B' }}@if (x.mods?.length) { <span class="muted" [title]="modText(x)"> · ±{{ x.mods!.length }}</span> } }</td><td class="mono">@if (x.kind === 'pcap') { {{ x.pcapTiming ? tr('as captured') : x.pps + ' pps' }} · {{ x.count ? x.count + ' ' + tr('frames') : x.seconds && !x.pcapTiming ? x.seconds + ' s' : '×' + (x.loops || 1) }} } @else { {{ x.pps }} pps · {{ x.count ? x.count + ' ' + tr('frames') : (x.seconds || 10) + ' s' }} }</td>
+                  <td class="mono">@if (x.kind === 'pcap') { PCAP · <span [title]="x.pcap || ''">{{ fileName(x.pcap || '') }}</span> · {{ x.pcapFrames }} {{ tr('frames') }} } @else { {{ x.kind === 'custom' ? tr('CUSTOM') : x.kind.toUpperCase() }}@if (x.dstIp?.includes(':')) { v6 }@if (x.vlan) { · VLAN {{ x.vlan }} }@if (x.dscp) { · DSCP {{ x.dscp }} } · {{ x.sizeMode === 'imix' ? 'IMIX' : x.sizeMode ? x.size + '-' + x.sizeMax + ' B' : x.size + ' B' }}@if (x.mods?.length) { <span class="muted" [title]="modText(x)"> · ±{{ x.mods!.length }}</span> } }@if (x.bad) { · <span class="bad" [title]="tr('A fault in every frame: {0}', badName(x.bad))">{{ tr('fault') }}</span> }@if (x.fuzz) { · <span [title]="tr('Random bytes {0}-{1}', x.fuzz.from, x.fuzz.to || '')">{{ tr('fuzz') }}</span> }@if (x.udfs?.length) { · UDF }@if (x.expect === 'drop') { · <span [title]="tr('Passes when none arrives')">⊘</span> }</td><td class="mono">@if (x.kind === 'pcap') { {{ x.pcapTiming ? tr('as captured') : x.pps + ' pps' }} · {{ x.count ? x.count + ' ' + tr('frames') : x.seconds && !x.pcapTiming ? x.seconds + ' s' : '×' + (x.loops || 1) }} } @else { {{ x.pps }} pps · {{ x.count ? x.count + ' ' + tr('frames') : (x.seconds || 10) + ' s' }} }</td>
                   <td class="mono">{{ r?.tx ?? '-' }}</td><td class="mono">{{ r ? r.rx : '-' }}@if (r?.other) { <span class="muted" [title]="tr('Arrived at a test port it was not for (flooded)')"> +{{ r!.other }}</span> }</td>
                   <td class="mono" [class.bad]="(r?.loss ?? 0) > x.maxLoss">{{ r?.expected ? r!.loss.toFixed(1) + ' %' : '-' }}</td><td class="mono" [title]="r && r.latAvg >= 0 ? tr('min {0} · avg {1} · p95 {2} · p99 {3} · max {4} ms · jitter {5} ms', (r.latMin ?? 0).toFixed(3), r.latAvg.toFixed(3), (r.p95 ?? r.latAvg).toFixed(3), (r.p99 ?? r.latMax).toFixed(3), r.latMax.toFixed(3), (r.jitter ?? 0).toFixed(3)) : ''">{{ r && r.latAvg >= 0 ? r.latAvg.toFixed(2) + ' ms' : '-' }}@if (r?.jitter) { <span class="muted"> ±{{ r!.jitter!.toFixed(2) }}</span> }</td>
                   <td class="mono" [class.bad]="!!r?.ooo || !!r?.dup" [title]="tr('Out of order · duplicates')">{{ r?.tx ? (r!.ooo ?? 0) + ' · ' + (r!.dup ?? 0) : '-' }}</td>
@@ -792,7 +794,7 @@ import { LabServer } from './lab-server';
               <label><span>{{ tr('To') }}</span><select [(ngModel)]="e.to"><option value="">{{ tr('every other test port, or an address') }}</option>@for (t of traf()?.testers ?? []; track t.id) { @if (t.id !== e.from) { <option [value]="t.id">{{ t.name }} · {{ tpWhere(t) }}</option> } }</select></label>
               @if (!e.to) { <label><span>{{ tr('To address') }}</span><input [(ngModel)]="e.dstIp" placeholder="10.10.0.254 · 239.1.1.1 · fd00::2" [title]="tr('An address, a multicast group (received by the test ports that joined it) or an IPv6 address')" /></label> }
               @else { <label><span>IPv6</span><input type="checkbox" class="cbx" [ngModel]="!!e.dstIp?.includes(':')" (ngModelChange)="e.dstIp = $event ? v6Of(e.to!) : ''" [title]="tr('Over IPv6, to the test port’s IPv6 address')" /></label> }
-              <label><span>{{ tr('Type') }}</span><div class="seg">@for (k of kinds; track k) { <i [class.on]="e.kind === k" (click)="setKind(e, k)">{{ k === 'tcp' ? 'TCP SYN' : k === 'raw' ? 'Raw L2' : k.toUpperCase() }}</i> }</div></label>
+              <label><span>{{ tr('Type') }}</span><div class="seg">@for (k of kinds; track k) { <i [class.on]="e.kind === k" (click)="setKind(e, k)">{{ k === 'tcp' ? 'TCP SYN' : k === 'raw' ? 'Raw L2' : k === 'custom' ? tr('Custom') : k.toUpperCase() }}</i> }</div></label>
               @if (e.kind === 'pcap') {
                 <label><span>{{ tr('Capture') }}</span><div class="two pc"><span class="mono pcn" [title]="e.pcap || ''">{{ e.pcap ? fileName(e.pcap) : tr('none chosen') }}</span><button type="button" class="sm" (click)="choosePcap(e)">{{ tr('Choose…') }}</button></div></label>
                 @if (e.pcapFrames) { <p class="rhint">{{ tr('{0} frames over {1} s', e.pcapFrames, (e.pcapSecs ?? 0).toFixed(2)) }}</p> }
@@ -806,19 +808,34 @@ import { LabServer } from './lab-server';
                 @if (e.to) { <label><span>{{ tr('MACs') }}</span><span class="cbl"><input type="checkbox" class="cbx" [(ngModel)]="e.rewriteMacs" /> {{ tr('from this test port to the one it goes to') }}</span></label> }
                 <p class="muted small">{{ tr('The receiving test ports know its frames by their contents: counted on switched paths, not routed ones.') }}</p>
               } @else {
+                @if (e.kind === 'custom') {
+                  <label><span>{{ tr('Frame') }}</span><textarea [(ngModel)]="e.hex" rows="4" style="width: 100%; font-family: var(--mono, monospace); font-size: 11.5px;" [placeholder]="tr('The frame in hex from the destination MAC on: Wireshark → Copy → …as a Hex Stream, or a hex dump')"></textarea></label>
+                  <label><span>{{ tr('Lengths') }}</span><span class="cbl"><input type="checkbox" class="cbx" style="flex: none" [ngModel]="!e.noFix" (ngModelChange)="e.noFix = !$event" /> {{ tr('IP and UDP lengths and checksums worked out for each frame') }}</span></label>
+                  <label><span>{{ tr('Counted') }}</span><span class="cbl"><input type="checkbox" class="cbx" style="flex: none" [ngModel]="!e.noSig" (ngModelChange)="e.noSig = !$event" /> {{ tr('the counting signature at its end') }}</span></label>
+                  @if (e.to) { <label><span>{{ tr('MACs') }}</span><span class="cbl"><input type="checkbox" class="cbx" [(ngModel)]="e.rewriteMacs" /> {{ tr('from this test port to the one it goes to') }}</span></label> }
+                  <label><span>{{ tr('Pad to') }}</span><input type="number" min="60" max="9000" [(ngModel)]="e.size" [title]="tr('Frame bytes with the FCS: zeros before the signature up to this size')" /></label>
+                } @else {
                 <label><span>VLAN</span><input type="number" min="0" max="4094" [(ngModel)]="e.vlan" [placeholder]="tr('untagged')" /></label>
                 <label><span>{{ tr('Frame size') }}</span><div class="two"><select [(ngModel)]="e.sizeMode"><option value="">{{ tr('fixed') }}</option><option value="inc">{{ tr('stepping') }}</option><option value="random">{{ tr('random') }}</option><option value="imix">IMIX</option></select>@if (e.sizeMode !== 'imix') { <input type="number" min="60" max="9000" [(ngModel)]="e.size" /> }@if (e.sizeMode === 'inc' || e.sizeMode === 'random') { <input type="number" min="60" max="9000" [(ngModel)]="e.sizeMax" [placeholder]="tr('to')" /> }</div></label>
                 <label><span>{{ tr('QoS') }}</span><div class="two"><input type="number" min="0" max="63" [(ngModel)]="e.dscp" placeholder="DSCP" [title]="tr('IP DSCP 0-63 (EF = 46)')" />@if (e.vlan) { <input type="number" min="0" max="7" [(ngModel)]="e.prio" placeholder="PCP" [title]="tr('802.1p priority 0-7')" /> }</div></label>
+                }
                 <label><span>{{ tr('Rate') }}</span><div class="two ru">@if (e.rateUnit) { <input type="number" min="0" step="any" [(ngModel)]="e.rate" /> } @else { <input type="number" min="1" max="100000" [(ngModel)]="e.pps" /> }<select class="unit" [ngModel]="e.rateUnit || ''" (ngModelChange)="setRateUnit(e, $event)"><option value="">pps</option><option value="mbps">Mbit/s</option><option value="pct">{{ tr('% of line') }}</option></select></div></label>
                 @if (e.rateUnit) { <p class="rhint" [class.bad]="ppsOf(e) > 100000">{{ tr('≈ {0} pps at {1} B on a {2} Mbit/s line', (ppsOf(e) | number: '1.0-0') ?? '', (meanSize(e) | number: '1.0-0') ?? '', lineOf(e)) }}@if (ppsOf(e) > 100000) { · {{ tr('a test port sends at most 100,000') }} }</p> }
                 @if (e.to) { <label><span>{{ tr('Round trip') }}</span><input type="checkbox" class="cbx" [(ngModel)]="e.rtt" [title]="tr('The test port it goes to sends each frame back: the latency is the round trip, measured on one clock - so also between test ports on two hosts')" /></label> }
                 <label><span>{{ tr('Burst') }}</span><input type="number" min="0" [(ngModel)]="e.burst" [placeholder]="tr('frames back to back')" [title]="tr('Frames sent back to back; the rate stays the average')" /></label>
-                <div class="mods"><span>{{ tr('Changing fields') }}</span><div>
+                @if (e.kind !== 'custom') { <div class="mods"><span>{{ tr('Changing fields') }}</span><div>
                   @for (m of e.mods ?? []; track $index; let i = $index) { <div class="mod"><select [(ngModel)]="m.field">@for (f of modFields; track f.k) { <option [value]="f.k">{{ tr(f.name) }}</option> }</select><select [(ngModel)]="m.mode"><option value="inc">{{ tr('stepping') }}</option><option value="random">{{ tr('random') }}</option></select><input type="number" min="1" [(ngModel)]="m.count" [title]="tr('How many values')" /><a (click)="e.mods!.splice(i, 1)">✕</a></div> }
-                  <a class="lnk small" (click)="e.mods = [...(e.mods ?? []), { field: 'srcIp', mode: 'inc', count: 10, step: 1 }]">＋ {{ tr('A field that changes per frame') }}</a></div></div>
+                  <a class="lnk small" (click)="e.mods = [...(e.mods ?? []), { field: 'srcIp', mode: 'inc', count: 10, step: 1 }]">＋ {{ tr('A field that changes per frame') }}</a></div></div> }
+                <div class="tsec">{{ tr('Faults, fuzzing and user-defined fields') }}</div>
+                <label><span>{{ tr('Fault') }}</span><select [(ngModel)]="e.bad"><option value="">{{ tr('none: well-formed frames') }}</option>@for (b of badFrames; track b.k) { @if (!b.tcp || e.kind === 'tcp' || e.kind === 'custom') { <option [value]="b.k">{{ tr(b.name) }}</option> } }</select></label>
+                <label><span>{{ tr('Fuzz') }}</span><div class="two"><input type="number" min="0" [ngModel]="e.fuzz?.from ?? null" (ngModelChange)="setFuzz(e, 'from', $event)" [placeholder]="tr('from byte')" [title]="tr('Random bytes from this offset (0 is the first byte of the destination MAC; the IP header starts at 14)')" /><input type="number" min="0" [ngModel]="e.fuzz?.to ?? null" (ngModelChange)="setFuzz(e, 'to', $event)" [placeholder]="tr('to byte')" [title]="tr('Up to this offset (empty: up to the counting signature)')" /><input type="number" min="1" [ngModel]="e.fuzz?.seed ?? null" (ngModelChange)="setFuzz(e, 'seed', $event)" [placeholder]="tr('seed')" [title]="tr('The same seed sends the same bytes again')" /></div></label>
+                <div class="mods"><span>{{ tr('User-defined fields') }}</span><div>
+                  @for (u of e.udfs ?? []; track $index; let i = $index) { <div class="mod"><input type="number" min="0" [(ngModel)]="u.offset" [title]="tr('Offset: 0 is the first byte of the destination MAC')" style="width: 64px" /><select [(ngModel)]="u.width" style="width: 64px"><option [ngValue]="1">1 B</option><option [ngValue]="2">2 B</option><option [ngValue]="3">3 B</option><option [ngValue]="4">4 B</option></select><select [(ngModel)]="u.mode"><option value="inc">{{ tr('up') }}</option><option value="dec">{{ tr('down') }}</option><option value="random">{{ tr('random') }}</option></select><input type="number" [(ngModel)]="u.start" [placeholder]="tr('start')" style="width: 72px" /><input type="number" min="1" [(ngModel)]="u.count" [placeholder]="tr('values')" style="width: 72px" /><a class="x" (click)="e.udfs = (e.udfs ?? []).filter((_, k) => k !== i)" [title]="tr('Remove')">✕</a></div> }
+                  <a class="lnk small" (click)="e.udfs = [...(e.udfs ?? []), { offset: 18, width: 2, mode: 'inc', start: 0, count: 256, step: 1 }]" [title]="tr('Bytes at an offset that change from frame to frame, as hardware testers have them')">＋ {{ tr('A user-defined field') }}</a></div></div>
               }
               <label><span>{{ tr('For') }}</span><div class="two"><input type="number" min="0" [(ngModel)]="e.seconds" [placeholder]="tr('seconds')" /><input type="number" min="0" [(ngModel)]="e.count" [placeholder]="tr('or frames')" /></div></label>
-              <label><span>{{ tr('Pass when') }}</span><div class="two"><input type="number" min="0" max="100" step="0.1" [(ngModel)]="e.maxLoss" [title]="tr('Loss at most, %')" /><input type="number" min="0" step="0.1" [(ngModel)]="e.maxLatency" [placeholder]="tr('latency ms')" [title]="tr('Average latency at most, ms (0: not checked)')" /><input type="number" min="0" step="0.1" [(ngModel)]="e.maxJitter" [placeholder]="tr('jitter ms')" [title]="tr('Jitter at most, ms (0: not checked)')" /></div></label>
+              <label><span>{{ tr('Its frames') }}</span><select [(ngModel)]="e.expect"><option value="">{{ tr('should arrive') }}</option><option value="drop">{{ tr('should be dropped (pass when none arrives)') }}</option><option value="any">{{ tr('either: only counted') }}</option></select></label>
+              @if (!e.expect) { <label><span>{{ tr('Pass when') }}</span><div class="two"><input type="number" min="0" max="100" step="0.1" [(ngModel)]="e.maxLoss" [title]="tr('Loss at most, %')" /><input type="number" min="0" step="0.1" [(ngModel)]="e.maxLatency" [placeholder]="tr('latency ms')" [title]="tr('Average latency at most, ms (0: not checked)')" /><input type="number" min="0" step="0.1" [(ngModel)]="e.maxJitter" [placeholder]="tr('jitter ms')" [title]="tr('Jitter at most, ms (0: not checked)')" /></div></label> }
             </div>
           } @else if (tEd(); as t) {
             <div class="tre"><div class="treh"><b>{{ t.id ? t.name : tr('New test port') }}</b><span class="sp"></span>
@@ -1278,8 +1295,15 @@ export class LabWorkspace implements OnDestroy {
   protected radOpen = signal(false);
   protected cliOpen = signal<{ name: string; st: EmuClientState } | null>(null);
   protected tpAt = signal<Record<string, { x: number; y: number }>>({});
-  protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw', 'pcap'];
+  protected readonly kinds: EmuStream['kind'][] = ['udp', 'icmp', 'tcp', 'arp', 'raw', 'custom', 'pcap'];
+  protected readonly badFrames = BAD_FRAMES;
+  protected badName(k: string) { return tr(BAD_FRAMES.find(b => b.k === k)?.name ?? k); }
+  protected setFuzz(e: EmuStream, k: 'from' | 'to' | 'seed', v: number | null) {
+    const z = { from: e.fuzz?.from ?? 14, to: e.fuzz?.to ?? 0, seed: e.fuzz?.seed ?? 1, [k]: v === null || v === undefined || (v as unknown) === '' ? (k === 'from' ? null : 0) : +v };
+    e.fuzz = z.from === null ? null : { from: z.from, to: z.to, seed: z.seed };
+  }
   protected libOpen = signal(false);
+  protected quickOpen = signal<QuickKey | null>(null);
   protected screenDev = signal<LabDevice | null>(null);
   protected palOpen = signal(false);
   // ---- hubs and L2 switches ----
@@ -1684,9 +1708,9 @@ export class LabWorkspace implements OnDestroy {
     else if (u === 'pct') e.rate = round(((pps * bits) / (this.lineOf(e) * 1e6)) * 100);
     else { e.pps = Math.min(100000, Math.max(1, Math.round(pps))); e.rate = 0; }
   }
-  editStream(x: EmuStream) { this.tEd.set(null); this.sEd.set({ ...x, to: x.to ?? '', sizeMode: x.sizeMode ?? '', rateUnit: x.rateUnit ?? '', mods: (x.mods ?? []).map(m => ({ ...m })) }); }
+  editStream(x: EmuStream) { this.tEd.set(null); this.sEd.set({ ...x, to: x.to ?? '', sizeMode: x.sizeMode ?? '', rateUnit: x.rateUnit ?? '', mods: (x.mods ?? []).map(m => ({ ...m })), udfs: (x.udfs ?? []).map(u => ({ ...u })), fuzz: x.fuzz ? { ...x.fuzz } : null, bad: x.bad ?? '', expect: x.expect ?? '' }); }
   async saveStream(e: EmuStream, run = false) {
-    try { const v = await this.backend.emuStreamSave({ ...e, vlan: +(e.vlan || 0), size: +e.size, pps: +e.pps, loops: +(e.loops || 0), rate: e.rateUnit ? +(e.rate || 0) : 0, rateUnit: e.rateUnit || '', rtt: !!e.rtt && !!e.to, seconds: +(e.seconds || 0), count: +(e.count || 0), maxLoss: +(e.maxLoss || 0), maxLatency: +(e.maxLatency || 0), maxJitter: +(e.maxJitter || 0), dscp: +(e.dscp || 0), prio: +(e.prio || 0), burst: +(e.burst || 0), sizeMax: +(e.sizeMax || 0), sizeMode: e.sizeMode || '', mods: (e.mods ?? []).map(m => ({ ...m, count: +m.count || 1, step: +(m.step || 1) })) }); this.traf.set(v); this.sEd.set(null); if (run) await this.trafStart([e.id]); } catch (err) { this.ui.error(err); }
+    try { const v = await this.backend.emuStreamSave({ ...e, vlan: +(e.vlan || 0), size: +e.size, pps: +e.pps, loops: +(e.loops || 0), rate: e.rateUnit ? +(e.rate || 0) : 0, udfs: (e.udfs ?? []).map(u => ({ ...u, offset: +u.offset || 0, width: +u.width || 1, start: +(u.start || 0), step: +(u.step || 1), count: +(u.count || 256) })), fuzz: e.fuzz ? { from: +e.fuzz.from || 0, to: +(e.fuzz.to || 0), seed: +(e.fuzz.seed || 1) } : null, expect: e.expect || '', bad: e.bad || '', rateUnit: e.rateUnit || '', rtt: !!e.rtt && !!e.to, seconds: +(e.seconds || 0), count: +(e.count || 0), maxLoss: +(e.maxLoss || 0), maxLatency: +(e.maxLatency || 0), maxJitter: +(e.maxJitter || 0), dscp: +(e.dscp || 0), prio: +(e.prio || 0), burst: +(e.burst || 0), sizeMax: +(e.sizeMax || 0), sizeMode: e.sizeMode || '', mods: (e.mods ?? []).map(m => ({ ...m, count: +m.count || 1, step: +(m.step || 1) })) }); this.traf.set(v); this.sEd.set(null); if (run) await this.trafStart([e.id]); } catch (err) { this.ui.error(err); }
   }
   async delStream(x: EmuStream) { try { this.traf.set(await this.backend.emuStreamRemove(x.id)); if (this.sEd()?.id === x.id) this.sEd.set(null); } catch (e) { this.ui.error(e); } }
   async trafStart(ids: string[]) { try { this.traf.set(await this.backend.emuTrafficStart(ids)); await this.loadTraf(); } catch (e) { this.ui.error(e); } }

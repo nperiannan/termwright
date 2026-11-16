@@ -1,5 +1,6 @@
 import { Component, input, output } from '@angular/core';
 import { tr } from '../core/i18n';
+import type { QuickKey } from './traffic-quick';
 import { EmuTester, EmuTrafficView } from '../core/models';
 import { ChartSeries, TrafficChart } from './traffic-chart';
 
@@ -22,13 +23,17 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
         <div class="tpt"><h2>{{ tr('Traffic generator') }}</h2><span class="muted small">{{ tr('Test ports send and count frames on switch ports: streams, RFC 2544 tests and their statistics') }}</span></div>
         <span class="seg2 tv"><a [class.on]="view() === 'streams'" (click)="viewChange.emit('streams')">{{ tr('Streams') }}</a><a [class.on]="view() === 'tests'" (click)="viewChange.emit('tests')">{{ tr('Tests') }}</a><a [class.on]="view() === 'stats'" (click)="viewChange.emit('stats')" [title]="tr('Every test port’s counters at once, its streams and their flows')">{{ tr('Statistics') }}</a></span>
         <span class="sp"></span>
+        <div class="tpa">
         @if (view() === 'tests') { <button type="button" (click)="newTest.emit()">＋ {{ tr('Test') }}</button> }
         <button type="button" (click)="radius.emit()" [title]="tr('The lab\\'s RADIUS server: users, MAC logins and the logins it answered, for 802.1X on the switches')">{{ tr('RADIUS…') }}</button>
         <button type="button" (click)="library.emit()" [title]="tr('Ready tests: unicast, IMIX, QoS classes, MAC table fill, round trip, RFC 2544 and 2889 - and yours')">{{ tr('Library…') }}</button>
         <button type="button" (click)="newTester.emit()">＋ {{ tr('Test Port') }}</button>
-        @if (view() !== 'tests') { <button type="button" (click)="newStream.emit()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button>
+        @if (view() !== 'tests') { <button type="button" (click)="quick.emit('l2')" [disabled]="(traf()?.testers?.length ?? 0) < 1" [title]="tr('A stream in one VLAN: choose the test ports; the rest is filled in')">＋ {{ tr('L2 Stream') }}</button>
+          <button type="button" (click)="quick.emit('l3')" [disabled]="(traf()?.testers?.length ?? 0) < 1" [title]="tr('A routed stream between two subnets: addresses and gateways are filled in')">＋ {{ tr('L3 Stream') }}</button>
+          <button type="button" (click)="quick.emit('latency')" [disabled]="(traf()?.testers?.length ?? 0) < 1" [title]="tr('Latency, jitter, loss, throughput, bad packets, fuzz, VLAN isolation, MTU and 802.1X clients - prefilled')">{{ tr('Quick Tests…') }}</button>
           @if (traf()?.running) { <button type="button" (click)="stop.emit()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="primary" (click)="start.emit()" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
           <button type="button" (click)="report.emit()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
+        </div>
       </header>
       <div class="kpis">@for (k of kpis(); track k.label) { <div class="kpi" [class.warn]="k.warn" [class.good]="k.good"><span>{{ k.label }}</span><b>{{ k.value }}</b><small>{{ k.sub }}</small></div> }</div>
       <div class="tpb" [class.tests]="view() !== 'streams'">
@@ -64,6 +69,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
     :host { display: contents; }
     .tpg {
       position: absolute; inset: 0; z-index: 25; background: var(--bg); overflow: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+    .tpa { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; } /* the buttons stay together at the right, also when they wrap */
     .tph { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; h2 { margin: 0; font-size: 17px; } .tpt { display: flex; flex-direction: column; gap: 2px; } .sp { flex: 1; } }
     /* one 7-column grid for both rows: the KPI cards one column each; test ports one, each chart two */
     .tpg { container-type: inline-size; }
@@ -100,6 +106,7 @@ export class TrafficPage {
   readonly newTest = output<void>();
   readonly newTester = output<void>();
   readonly newStream = output<void>();
+  readonly quick = output<QuickKey>();
   readonly start = output<void>();
   readonly stop = output<void>();
   readonly report = output<void>();

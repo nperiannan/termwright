@@ -161,7 +161,7 @@ var mcpLabTools = []mcpTool{
 			"host":   map[string]any{"type": "string", "description": "KVM host name or session path"},
 			"how":    map[string]any{"type": "string", "enum": []string{"live", "copy", "image"}},
 		}, "switch", "host", "how")},
-	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields), stats (every test port's counters at once: frames and rates each way, Mbit/s, loss of the frames that were for it, latency, errors). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file's frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab's streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
+	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw, or a custom frame in hex; VLAN tag, size, packets per second, seconds or count, user-defined fields, a fault in every frame (bad: bad checksums, TTL, fragments, runts…) or fuzzed bytes; pass when loss and latency are within limits, or - expect drop - when the switch drops them). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields), stats (every test port's counters at once: frames and rates each way, Mbit/s, loss of the frames that were for it, latency, errors). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file's frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab's streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
 			"action":          map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report", "stats", "templates", "apply_template", "save_template", "remove_template"}},
 			"template":        map[string]any{"type": "string", "description": "apply_template, remove_template: the template (name or id); save_template: its name"},
@@ -191,7 +191,14 @@ var mcpLabTools = []mcpTool{
 			"name":            map[string]any{"type": "string", "description": "add_stream: its name; remove_stream: the stream"},
 			"from":            map[string]any{"type": "string", "description": "add_stream: test port name"},
 			"to":              map[string]any{"type": "string", "description": "add_stream: test port name; empty = every other test port (broadcast) or dst_ip"},
-			"kind":            map[string]any{"type": "string", "enum": []string{"udp", "icmp", "tcp", "arp", "raw", "pcap"}},
+			"kind":            map[string]any{"type": "string", "enum": []string{"udp", "icmp", "tcp", "arp", "raw", "pcap", "custom"}},
+			"hex":             map[string]any{"type": "string", "description": "add_stream kind custom: the frame in hex from the destination MAC on (no FCS); lengths and checksums are worked out unless no_fix, and the counting signature goes at its end unless no_sig"},
+			"no_fix":          map[string]any{"type": "boolean", "description": "add_stream kind custom: send lengths and checksums as written"},
+			"no_sig":          map[string]any{"type": "boolean", "description": "add_stream kind custom: no counting signature (sent, not counted)"},
+			"udfs":            map[string]any{"type": "array", "description": "add_stream: user-defined fields - bytes at an offset (from the destination MAC) that change per frame: {offset, width: 1-4, mode: inc|dec|random|list, start, step, count, values}", "items": map[string]any{"type": "object"}},
+			"bad":             map[string]any{"type": "string", "description": "add_stream: a fault in every frame", "enum": emuBadKeys()},
+			"fuzz":            map[string]any{"type": "object", "description": "add_stream: random bytes in every frame: {from: offset, to: offset (0 = up to the counting signature), seed}"},
+			"expect":          map[string]any{"type": "string", "enum": []string{"forward", "drop", "any"}, "description": "add_stream: forward (default: pass on loss and latency), drop (pass when none arrives: bad frames, ACLs, VLAN isolation) or any (only counted)"},
 			"dst_ip":          map[string]any{"type": "string", "description": "add_stream: an address that is not a test port (icmp: its replies are counted), or a multicast group (received by the test ports that joined it)"},
 			"vlan":            map[string]any{"type": "integer"},
 			"size":            map[string]any{"type": "integer", "description": "frame bytes (60-9000, default 128)"},
@@ -1424,6 +1431,36 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			st.RewriteMAC, _ = args["rewrite_macs"].(bool)
 			st.DSCP, st.SizeMode, st.SizeMax, st.Burst = argInt(args, "dscp", 0, 63), strings.TrimPrefix(argStr(args, "size_mode"), "fixed"), argInt(args, "size_max", 0, 9000), argInt(args, "burst", 0, 10000)
 			st.DstMAC, st.SrcIP, st.DPort, st.Prio = argStr(args, "dst_mac"), argStr(args, "src_ip"), argInt(args, "dport", 0, 65535), argInt(args, "pcp", 0, 7)
+			st.Hex, st.Bad, st.Expect = argStr(args, "hex"), argStr(args, "bad"), strings.TrimPrefix(argStr(args, "expect"), "forward")
+			st.NoFix, _ = args["no_fix"].(bool)
+			st.NoSig, _ = args["no_sig"].(bool)
+			if us, ok := args["udfs"].([]any); ok {
+				for _, x := range us {
+					if m, ok := x.(map[string]any); ok {
+						u := emu.UDF{Offset: argInt(m, "offset", 0, 9000), Width: argInt(m, "width", 1, 4), Mode: argStr(m, "mode"), Count: argInt(m, "count", 0, 1000000)}
+						if f, ok := m["start"].(float64); ok {
+							u.Start = int64(f)
+						}
+						if f, ok := m["step"].(float64); ok {
+							u.Step = int64(f)
+						}
+						if vs, ok := m["values"].([]any); ok {
+							for _, v := range vs {
+								if f, ok := v.(float64); ok {
+									u.Values = append(u.Values, int64(f))
+								}
+							}
+						}
+						st.UDFs = append(st.UDFs, u)
+					}
+				}
+			}
+			if z, ok := args["fuzz"].(map[string]any); ok {
+				st.Fuzz = &emu.Fuzz{From: argInt(z, "from", 14, 9000), To: argInt(z, "to", 0, 9000)}
+				if f, ok := z["seed"].(float64); ok {
+					st.Fuzz.Seed = int64(f)
+				}
+			}
 			if ms, ok := args["mods"].([]any); ok {
 				for _, x := range ms {
 					if m, ok := x.(map[string]any); ok {
@@ -2023,4 +2060,13 @@ func emuPortStatsText(tv EmuTrafficView, sw func(vm string) string) string {
 		state = "running"
 	}
 	return fmt.Sprintf("Test port statistics (%s; frames include the protocols', loss counts the streams' frames that were for the port):\n%s", state, b.String())
+}
+
+// emuBadKeys: the faults a stream can put in its frames (for the connector's schema).
+func emuBadKeys() []string {
+	var out []string
+	for _, b := range emu.BadFrames {
+		out = append(out, b.Key)
+	}
+	return out
 }

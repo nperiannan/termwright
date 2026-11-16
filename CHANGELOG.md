@@ -2,6 +2,14 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **Quick streams and tests.** The Traffic page's **＋ L2 Stream**, **＋ L3 Stream** and **Quick Tests…** open one dialog: choose an L2 or L3 stream, a custom frame, or a ready test - latency, jitter, loss under load, RFC 2544 throughput, bad packets, fuzz, VLAN isolation, MTU and jumbo frames, 802.1X clients - answer a few questions (which test ports, whether the switch ports carry the VLAN tagged, whether the switch has IP interfaces in the two subnets) and *What Termwright fills in* lists every stream and every change to a test port before anything is made, each one editable. *Create* or *Create and Start*. An L3 stream gives each test port an address and the switch's IP interface as its gateway, and says what the switch needs to route.
+- **Custom frames, without Scapy.** A stream's *Type* can be *Custom*: paste the frame in hex (Wireshark's *Copy as a Hex Stream*, a Scapy hexdump, any hex dump); Termwright puts in the test ports' MACs, works out IP and UDP/TCP lengths and checksums per frame (or leaves your bytes as they are) and adds its counting signature, so custom frames are counted and timed like any other.
+- **User-defined fields**: bytes at an offset that count up or down, or are random, from frame to frame (1 to 4 bytes), in any stream, as hardware testers have them.
+- **Faults and fuzzing**: 23 malformed frames (bad IP or L4 checksum, wrong lengths, TTL 0 and 1, IP options, fragments, martian and broadcast sources, LAND, TCP SYN+FIN, Xmas and no flags, multicast or zero source MAC, runt, VLAN 4095, two tags, unknown EtherType), and random bytes over a range of offsets with a seed to repeat a failure. A stream's frames can now *be dropped* to pass (a filter or a fault the switch drops), or only be counted. The API, the connector, the AI chat and Python's `add_stream` take `kind=custom`, `hex`, `udfs`, `bad`, `fuzz`, `expect`, `no_fix` and `no_sig`.
+- **RADIUS: Many Users…** adds numbered users in one go (user1…user100, or user001… with digits), with the number in the password too if you like (*pass{n}*) and a VLAN; the 802.1X clients test adds them for you.
+
 ## 0.38.0 (2026-11-16)
 
 - **README and feature list**: the GitHub page now shows Termwright as it is - access, AI (the agent and the MCP connector), the network emulation lab and traffic generator, automation and teams - with new screenshots of the lab, the traffic generator and the start page.

@@ -2647,7 +2647,7 @@ paths:
             tags:
                 - Tools
             summary: The emulated lab's traffic generator
-            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw; VLAN tag, size, packets per second, seconds or count, pass when loss and latency are within limits). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields), stats (every test port''s counters at once: frames and rates each way, Mbit/s, loss of the frames that were for it, latency, errors). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file''s frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab''s streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
+            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw, or a custom frame in hex; VLAN tag, size, packets per second, seconds or count, user-defined fields, a fault in every frame (bad: bad checksums, TTL, fragments, runts…) or fuzzed bytes; pass when loss and latency are within limits, or - expect drop - when the switch drops them). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields), stats (every test port''s counters at once: frames and rates each way, Mbit/s, loss of the frames that were for it, latency, errors). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file''s frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab''s streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -2672,6 +2672,33 @@ paths:
                                         - save_template
                                         - remove_template
                                     type: string
+                                bad:
+                                    description: 'add_stream: a fault in every frame'
+                                    enum:
+                                        - ipcsum
+                                        - l4csum
+                                        - iplen-long
+                                        - iplen-short
+                                        - ihl
+                                        - ipver
+                                        - ttl0
+                                        - ttl1
+                                        - ipopts
+                                        - frag-first
+                                        - frag-tiny
+                                        - src-martian
+                                        - src-bcast
+                                        - land
+                                        - tcp-synfin
+                                        - tcp-null
+                                        - tcp-xmas
+                                        - smac-mcast
+                                        - smac-zero
+                                        - runt
+                                        - vlan4095
+                                        - qinq
+                                        - etype
+                                    type: string
                                 burst:
                                     description: 'add_stream: frames sent back to back (the rate stays the average)'
                                     type: integer
@@ -2693,9 +2720,19 @@ paths:
                                     type: string
                                 dst_mac:
                                     type: string
+                                expect:
+                                    description: 'add_stream: forward (default: pass on loss and latency), drop (pass when none arrives: bad frames, ACLs, VLAN isolation) or any (only counted)'
+                                    enum:
+                                        - forward
+                                        - drop
+                                        - any
+                                    type: string
                                 from:
                                     description: 'add_stream: test port name'
                                     type: string
+                                fuzz:
+                                    description: 'add_stream: random bytes in every frame: {from: offset, to: offset (0 = up to the counting signature), seed}'
+                                    type: object
                                 gateway:
                                     description: 'add_port: for streams to another network'
                                     type: string
@@ -2704,6 +2741,9 @@ paths:
                                     items:
                                         type: string
                                     type: array
+                                hex:
+                                    description: 'add_stream kind custom: the frame in hex from the destination MAC on (no FCS); lengths and checksums are worked out unless no_fix, and the counting signature goes at its end unless no_sig'
+                                    type: string
                                 ip:
                                     description: 'add_port, set_port: the test port''s address with prefix (10.10.0.1/24), or dhcp (from a DHCP server)'
                                     type: string
@@ -2718,6 +2758,7 @@ paths:
                                         - arp
                                         - raw
                                         - pcap
+                                        - custom
                                     type: string
                                 lacp_fast:
                                     description: 'add_port, set_port: LACP every second (else 30 s)'
@@ -2748,6 +2789,12 @@ paths:
                                 name:
                                     description: 'add_stream: its name; remove_stream: the stream'
                                     type: string
+                                no_fix:
+                                    description: 'add_stream kind custom: send lengths and checksums as written'
+                                    type: boolean
+                                no_sig:
+                                    description: 'add_stream kind custom: no counting signature (sent, not counted)'
+                                    type: boolean
                                 pcap:
                                     description: 'add_stream kind pcap: the capture file on this computer (classic pcap)'
                                     type: string
@@ -2824,6 +2871,11 @@ paths:
                                 topology_change:
                                     description: 'set_port: its next BPDUs carry a topology change'
                                     type: boolean
+                                udfs:
+                                    description: 'add_stream: user-defined fields - bytes at an offset (from the destination MAC) that change per frame: {offset, width: 1-4, mode: inc|dec|random|list, start, step, count, values}'
+                                    items:
+                                        type: object
+                                    type: array
                                 vlan:
                                     type: integer
                             required:
@@ -3432,6 +3484,17 @@ components:
                     type: string
             required:
                 - cmd
+        EmuFuzz:
+            type: object
+            properties:
+                from:
+                    type: integer
+                to:
+                    type: integer
+                seed:
+                    type: integer
+            required:
+                - from
         EmuHostInfo:
             type: object
             properties:
@@ -3975,6 +4038,36 @@ components:
                 - values
                 - serialStart
                 - macStart
+        EmuUDF:
+            type: object
+            properties:
+                offset:
+                    type: integer
+                width:
+                    description: 1-4 bytes
+                    type: integer
+                mode:
+                    description: inc, dec, random, list
+                    type: string
+                start:
+                    description: the first value (inc, dec, random)
+                    type: integer
+                step:
+                    description: default 1
+                    type: integer
+                count:
+                    description: values before it starts again (default 256, at most 1,000,000)
+                    type: integer
+                values:
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        type: integer
+            required:
+                - offset
+                - width
+                - mode
         Event:
             type: object
             description: A line of the lab's Events log.
@@ -5064,8 +5157,35 @@ components:
                     description: 'pcap: times through the capture (default 1; count or seconds instead)'
                     type: integer
                 rewriteMacs:
-                    description: 'pcap: frames go from this test port''s MAC to the destination test port''s (else as captured)'
+                    description: 'pcap, custom: frames go from this test port''s MAC to the destination test port''s (else as captured)'
                     type: boolean
+                hex:
+                    description: 'custom: the frame in hex, from the destination MAC on (no FCS)'
+                    type: string
+                udfs:
+                    description: bytes at an offset that change from frame to frame (user-defined fields)
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuUDF'
+                noFix:
+                    description: 'custom: lengths and checksums as written (else worked out for each frame)'
+                    type: boolean
+                noSig:
+                    description: 'custom: no counting signature (its frames are sent, not counted)'
+                    type: boolean
+                bad:
+                    description: a fault put in every frame (BadFrames)
+                    type: string
+                fuzz:
+                    description: random bytes in a range of every frame
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuFuzz'
+                        - type: "null"
+                expect:
+                    description: '"" its frames should arrive; "drop": the switch should drop them; "any": only counted'
+                    type: string
             required:
                 - id
                 - name
@@ -5740,8 +5860,35 @@ components:
                     description: 'pcap: times through the capture (default 1; count or seconds instead)'
                     type: integer
                 rewriteMacs:
-                    description: 'pcap: frames go from this test port''s MAC to the destination test port''s (else as captured)'
+                    description: 'pcap, custom: frames go from this test port''s MAC to the destination test port''s (else as captured)'
                     type: boolean
+                hex:
+                    description: 'custom: the frame in hex, from the destination MAC on (no FCS)'
+                    type: string
+                udfs:
+                    description: bytes at an offset that change from frame to frame (user-defined fields)
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuUDF'
+                noFix:
+                    description: 'custom: lengths and checksums as written (else worked out for each frame)'
+                    type: boolean
+                noSig:
+                    description: 'custom: no counting signature (its frames are sent, not counted)'
+                    type: boolean
+                bad:
+                    description: a fault put in every frame (BadFrames)
+                    type: string
+                fuzz:
+                    description: random bytes in a range of every frame
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuFuzz'
+                        - type: "null"
+                expect:
+                    description: '"" its frames should arrive; "drop": the switch should drop them; "any": only counted'
+                    type: string
             required:
                 - from
             additionalProperties: false

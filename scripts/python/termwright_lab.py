@@ -366,7 +366,13 @@ class Traffic:
         sends each frame back; latency is the round trip). kind="pcap" replays a capture: pcap (its file on
         this computer), pcap_timing (its own gaps), loops, rewrite_macs. rate= gives the speed in Mbit/s on the wire, or with
         rate_unit="pct" in % of the sending test port's line rate (set_port(speed=...), default 1000 Mbit/s;
-        line_mbps= works it out here instead) - in place of pps."""
+        line_mbps= works it out here instead) - in place of pps.
+        kind="custom" sends a frame you write: hex (from the destination MAC on, no FCS; lengths and checksums
+        are worked out unless no_fix=True, the counting signature goes at its end unless no_sig=True).
+        udfs=[{"offset": 26, "width": 4, "mode": "inc", "start": 0x0a0a0001, "count": 100}] changes bytes per
+        frame; bad="ipcsum" (or l4csum, ttl0, runt, frag-tiny, tcp-xmas … - see the guide) puts a fault in
+        every frame; fuzz={"from": 14, "to": 42, "seed": 7} randomizes bytes; expect="drop" passes when the
+        switch drops them, expect="any" only counts them."""
         if rate is not None:
             if "pps" in fields:
                 raise ValueError("give pps or rate, not both")
@@ -381,6 +387,8 @@ class Traffic:
                 fields["rate_unit"], fields["rate"] = rate_unit, rate
         if "pcp" in fields:
             fields["prio"] = fields.pop("pcp")
+        if fields.get("expect") == "forward":
+            fields.pop("expect")
         body = _body(dict(name=name, from_=src, to=dst, **fields))
         body.setdefault("size", 128)
         return self.lab.request("POST", "/traffic/streams", body)

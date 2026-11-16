@@ -3,6 +3,7 @@ package emu
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -709,5 +710,140 @@ func TestTrafficPyClients(t *testing.T) {
 	b, _ = os.ReadFile(filepath.Join(dir, "radius-stats.json"))
 	if err := json.Unmarshal(b, &rs); err != nil || rs.Accept != 6 || rs.Reject != 2 || rs.Challenge != 5 {
 		t.Errorf("radius %v %+v", err, rs)
+	}
+}
+
+// Custom frames, user-defined fields, faults and fuzzing: what goes on the wire, and that the receiver still counts
+// the frames by their signature.
+func TestTrafficPyFrames(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	seen := map[int][][]byte{} // stream index → its frames, as the switch got them
+	sw := func(in, out int) *net.UDPConn {
+		c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: in})
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			buf := make([]byte, 65536)
+			for {
+				n, _, err := c.ReadFromUDP(buf)
+				if err != nil {
+					return
+				}
+				f := append([]byte(nil), buf[:n]...)
+				if i := bytes.Index(f, []byte("TWTG")); i >= 0 && len(f) >= i+6 {
+					mu.Lock()
+					k := int(binary.BigEndian.Uint16(f[i+4:]))
+					seen[k] = append(seen[k], f)
+					mu.Unlock()
+				}
+				_, _ = c.WriteToUDP(f, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: out})
+			}
+		}()
+		return c
+	}
+	a, b := sw(43211, 43202), sw(43212, 43201)
+	defer a.Close()
+	defer b.Close()
+	// a UDP frame t1 → t2 written by hand: lengths and checksums left 0 for Termwright to work out
+	hexFrame := "027477000002" + "027477000001" + "0800" + "450000000001400040110000" + "0a0a0001" + "0a0a0002" + "c35013890000000048656c6c6f"
+	st := func(id string, f map[string]any) map[string]any {
+		x := map[string]any{"id": id, "from": "t1", "to": "t2", "kind": "udp", "size": 128, "pps": 200, "count": 10, "on": true, "toMac": "02:74:77:00:00:02", "srcIp": "10.10.0.1", "dstIp": "10.10.0.2"}
+		for k, v := range f {
+			x[k] = v
+		}
+		return x
+	}
+	cfg := map[string]any{"run": 3, "testers": []map[string]any{
+		{"id": "t1", "mac": "02:74:77:00:00:01", "ip": "10.10.0.1/24", "listen": 43201, "send": 43211},
+		{"id": "t2", "mac": "02:74:77:00:00:02", "ip": "10.10.0.2/24", "listen": 43202, "send": 43212}},
+		"streams": []map[string]any{
+			st("c", map[string]any{"kind": "custom", "hex": hexFrame, "count": 30, "udfs": []map[string]any{{"offset": 18, "width": 2, "mode": "inc", "start": 100, "count": 1000}}}),
+			st("ipcsum", map[string]any{"bad": "ipcsum"}),
+			st("runt", map[string]any{"bad": "runt"}),
+			st("xmas", map[string]any{"kind": "tcp", "bad": "tcp-xmas"}),
+			st("fz", map[string]any{"fuzz": map[string]any{"from": 14, "to": 34, "seed": 3}}),
+			st("qinq", map[string]any{"bad": "qinq", "vlan": 10}),
+		}}
+	j, _ := json.Marshal(cfg)
+	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir)
+	logf, _ := os.Create(filepath.Join(dir, "log"))
+	cmd.Stdout, cmd.Stderr = logf, logf
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var stt struct{ RX map[string]int }
+	for end := time.Now().Add(8 * time.Second); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+		bs, _ := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+		if json.Unmarshal(bs, &stt) == nil && stt.RX["c"] == 30 && stt.RX["ipcsum"] == 10 && stt.RX["runt"] == 10 && stt.RX["xmas"] == 10 && stt.RX["qinq"] == 10 {
+			break
+		}
+	}
+	lg, _ := os.ReadFile(filepath.Join(dir, "log"))
+	if stt.RX["c"] != 30 || stt.RX["ipcsum"] != 10 || stt.RX["runt"] != 10 || stt.RX["xmas"] != 10 || stt.RX["qinq"] != 10 {
+		t.Fatalf("counted %v\n%s", stt.RX, lg)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	sum := func(b []byte) uint16 {
+		var s uint32
+		for i := 0; i+1 < len(b); i += 2 {
+			s += uint32(b[i])<<8 | uint32(b[i+1])
+		}
+		if len(b)%2 == 1 {
+			s += uint32(b[len(b)-1]) << 8
+		}
+		for s>>16 != 0 {
+			s = s&0xffff + s>>16
+		}
+		return uint16(s)
+	}
+	// custom: lengths and the IP checksum worked out, the IP ID counts up from 100, the payload kept
+	c := seen[0]
+	if len(c) != 30 || binary.BigEndian.Uint16(c[0][18:]) != 100 || binary.BigEndian.Uint16(c[5][18:]) != 105 ||
+		int(binary.BigEndian.Uint16(c[0][16:])) != len(c[0])-14 || sum(c[0][14:34]) != 0xffff || !bytes.Contains(c[0], []byte("Hello")) ||
+		int(binary.BigEndian.Uint16(c[0][38:])) != len(c[0])-34 {
+		t.Fatalf("custom frames: %d, %x", len(c), c[0])
+	}
+	if f := seen[1][0]; sum(f[14:34]) == 0xffff { // a bad IP checksum
+		t.Fatalf("ipcsum: the checksum is right: %x", f[:34])
+	}
+	if f := seen[2][0]; len(f) != 44 { // 48 with the FCS
+		t.Fatalf("runt: %d bytes", len(f))
+	}
+	if f := seen[3][0]; f[14+20+13] != 0x29 || sum(f[14:34]) != 0xffff { // FIN PSH URG, the IP header still right
+		t.Fatalf("xmas: %x", f[:54])
+	}
+	if f, g := seen[4][0], seen[4][1]; bytes.Equal(f[14:34], g[14:34]) || f[13] != 0x00 { // random bytes in the IP header
+		t.Fatalf("fuzz: %x %x", f[:34], g[:34])
+	}
+	if f := seen[5][0]; binary.BigEndian.Uint16(f[12:]) != 0x8100 || binary.BigEndian.Uint16(f[14:])&0xfff != 100 || binary.BigEndian.Uint16(f[18:])&0xfff != 10 {
+		t.Fatalf("qinq: %x", f[:24])
+	}
+}
+
+func TestParseFrameHex(t *testing.T) {
+	for in, want := range map[string]string{
+		"ffffffffffff027477000001":            "ffffffffffff027477000001",
+		"ff:ff:ff:ff:ff:ff 02:74:77:00:00:01": "ffffffffffff027477000001",
+		"0xff, 0xff, 0x08, 0x00":              "ffff0800",
+		"0000   ff ff ff ff ff ff 02 74 77 00 00 01 08 00 45 00   ......twg.....E.\n0010   00 1c   ..": "ffffffffffff02747700000108004500001c",
+	} {
+		b, err := ParseFrameHex(in)
+		if err != nil || hex.EncodeToString(b) != want {
+			t.Fatalf("%q: %x %v", in, b, err)
+		}
+	}
+	if _, err := ParseFrameHex("hello"); err == nil {
+		t.Fatal("no hex")
 	}
 }

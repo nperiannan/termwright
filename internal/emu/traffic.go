@@ -2,7 +2,9 @@ package emu
 
 import (
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -147,7 +149,14 @@ type Stream struct {
 	PcapSecs   float64 `json:"pcapSecs,omitempty"`    // pcap: how long the capture lasts, s (set when saved)
 	PcapTiming bool    `json:"pcapTiming,omitempty"`  // pcap: send with the capture's own gaps between frames (else at the rate)
 	Loops      int     `json:"loops,omitempty"`       // pcap: times through the capture (default 1; count or seconds instead)
-	RewriteMAC bool    `json:"rewriteMacs,omitempty"` // pcap: frames go from this test port's MAC to the destination test port's (else as captured)
+	RewriteMAC bool    `json:"rewriteMacs,omitempty"` // pcap, custom: frames go from this test port's MAC to the destination test port's (else as captured)
+	Hex        string  `json:"hex,omitempty"`         // custom: the frame in hex, from the destination MAC on (no FCS)
+	UDFs       []UDF   `json:"udfs,omitempty"`        // bytes at an offset that change from frame to frame (user-defined fields)
+	NoFix      bool    `json:"noFix,omitempty"`       // custom: lengths and checksums as written (else worked out for each frame)
+	NoSig      bool    `json:"noSig,omitempty"`       // custom: no counting signature (its frames are sent, not counted)
+	Bad        string  `json:"bad,omitempty"`         // a fault put in every frame (BadFrames)
+	Fuzz       *Fuzz   `json:"fuzz,omitempty"`        // random bytes in a range of every frame
+	Expect     string  `json:"expect,omitempty"`      // "" its frames should arrive; "drop": the switch should drop them; "any": only counted
 }
 
 // IMIXMean is the mean size of an IMIX frame (64, 594 and 1518 bytes, 7:4:1).
@@ -217,6 +226,70 @@ type TrafficTest struct {
 	Bandwidth  string  `json:"bandwidth,omitempty"`  // iperf: target rate (iperf3 -b: 100M, 1G; udp default 1M)
 	Parallel   int     `json:"parallel,omitempty"`   // iperf: parallel streams (iperf3 -P)
 	Reverse    bool    `json:"reverse,omitempty"`    // iperf: the server sends (iperf3 -R)
+}
+
+// UDF is a user-defined field: Width bytes at Offset (from the destination MAC), set per frame - Start plus 0, Step,
+// 2·Step… (Count values, then again), counting down with dec, one of them at random, or the Values in turn.
+type UDF struct {
+	Offset int     `json:"offset"`
+	Width  int     `json:"width"`           // 1-4 bytes
+	Mode   string  `json:"mode"`            // inc, dec, random, list
+	Start  int64   `json:"start,omitempty"` // the first value (inc, dec, random)
+	Step   int64   `json:"step,omitempty"`  // default 1
+	Count  int     `json:"count,omitempty"` // values before it starts again (default 256, at most 1,000,000)
+	Values []int64 `json:"values,omitempty"`
+}
+
+// Fuzz puts random bytes into From..To (offsets from the destination MAC; To 0 = up to the counting signature),
+// the same sequence again for the same Seed.
+type Fuzz struct {
+	From int   `json:"from"`
+	To   int   `json:"to,omitempty"`
+	Seed int64 `json:"seed,omitempty"`
+}
+
+// BadFrames are the faults a stream can put in its frames: what each does, and whether a router (RFC 1812) or a
+// switch should drop it (an L2 switch forwards most of them: it does not read the IP header).
+var BadFrames = []struct {
+	Key, Name, What               string
+	RouterDrops, SwitchDrops, TCP bool
+}{
+	{"ipcsum", "Bad IP checksum", "the IPv4 header checksum is wrong", true, false, false},
+	{"l4csum", "Bad UDP/TCP checksum", "the UDP or TCP checksum is wrong", false, false, false},
+	{"iplen-long", "IP length too long", "the IPv4 total length is longer than the frame", true, false, false},
+	{"iplen-short", "IP length too short", "the IPv4 total length is shorter than its header", true, false, false},
+	{"ihl", "IP header too short", "the IPv4 header length is below 20 bytes", true, false, false},
+	{"ipver", "Wrong IP version", "the IP version is 7", true, false, false},
+	{"ttl0", "TTL 0", "the time to live is 0", true, false, false},
+	{"ttl1", "TTL 1", "the time to live is 1: it expires at the first router", true, false, false},
+	{"ipopts", "IP options", "the IPv4 header carries options (record route)", false, false, false},
+	{"frag-first", "First fragment only", "a first fragment whose rest never comes", false, false, false},
+	{"frag-tiny", "Tiny fragment", "an 8-byte fragment that overlaps the UDP or TCP header", false, false, false},
+	{"src-martian", "Martian source", "the source address is 127.0.0.1", true, false, false},
+	{"src-bcast", "Broadcast source", "the source address is 255.255.255.255", true, false, false},
+	{"land", "LAND (source = destination)", "the source address and port are the destination's", false, false, false},
+	{"tcp-synfin", "TCP SYN+FIN", "SYN and FIN set together", false, false, true},
+	{"tcp-null", "TCP no flags", "no TCP flag set", false, false, true},
+	{"tcp-xmas", "TCP Xmas", "FIN, PSH and URG set", false, false, true},
+	{"smac-mcast", "Multicast source MAC", "the source MAC is a group address", true, true, false},
+	{"smac-zero", "Zero source MAC", "the source MAC is 00:00:00:00:00:00", false, false, false},
+	{"runt", "Runt frame", "a 48-byte frame, shorter than Ethernet's 64", true, true, false},
+	{"vlan4095", "VLAN 4095", "a VLAN tag with the reserved ID 4095", true, true, false},
+	{"qinq", "Two VLAN tags", "an outer tag (VLAN 100) over the stream's own", false, false, false},
+	{"etype", "Unknown EtherType", "EtherType 0x88B6, which nothing uses", false, false, false},
+}
+
+// BadFrame is a fault by its key (nil: none such).
+func BadFrame(key string) *struct {
+	Key, Name, What               string
+	RouterDrops, SwitchDrops, TCP bool
+} {
+	for i := range BadFrames {
+		if BadFrames[i].Key == key {
+			return &BadFrames[i]
+		}
+	}
+	return nil
 }
 
 // Mod changes a field of a stream's frames: the value plus 0, step, 2·step… (count values, then again), or one of them at random.
@@ -372,4 +445,38 @@ func (l *Lab) TrafficScript(cfg []byte) string {
 	fmt.Fprintf(&b, "cat > traffic.json.new <<'TWJSEOF'\n%s\nTWJSEOF\nmv -f traffic.json.new traffic.json\n", cfg)
 	b.WriteString("p=$(cat traffic.pid 2>/dev/null); if [ -z \"$p\" ] || ! grep -q tw-traffic /proc/$p/cmdline 2>/dev/null; then command -v python3 >/dev/null || { echo 'traffic: python3 is missing'; exit 1; }; nohup python3 tw-traffic.py \"$PWD\" >traffic.log 2>&1 & echo $! > traffic.pid; fi\necho traffic-ok\n")
 	return b.String()
+}
+
+// ParseFrameHex reads a frame written in hex: a plain hex stream (Wireshark's Copy as Hex Stream), bytes apart
+// (ff ff ff…, ff:ff:ff…, 0xff, 0xff…) or a hex dump with offsets and an ASCII column (Wireshark's Copy as Hex
+// Dump, Scapy's hexdump()).
+func ParseFrameHex(s string) ([]byte, error) {
+	var out []byte
+	hexOf := func(t string) ([]byte, bool) {
+		t = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(t, "0x"), "0X"), ",")
+		if t == "" || len(t)%2 != 0 {
+			return nil, false
+		}
+		b, err := hex.DecodeString(t)
+		return b, err == nil
+	}
+	for _, line := range strings.Split(strings.ReplaceAll(s, "\r", ""), "\n") {
+		ts := strings.Fields(strings.ReplaceAll(line, ":", " "))
+		if len(ts) > 1 && len(ts[0]) >= 4 && len(ts[0]) <= 8 {
+			if _, ok := hexOf(ts[0]); ok && len(ts[1]) == 2 { // an offset column
+				ts = ts[1:]
+			}
+		}
+		for i, t := range ts {
+			b, ok := hexOf(t)
+			if !ok || len(ts) > 1 && len(t) > 2 && i > 0 && len(out) > 0 && len(b) > 1 && len(ts[i-1]) == 2 {
+				break // the ASCII column of a dump
+			}
+			out = append(out, b...)
+		}
+	}
+	if len(out) == 0 {
+		return nil, errors.New("no hex bytes in the frame")
+	}
+	return out, nil
 }

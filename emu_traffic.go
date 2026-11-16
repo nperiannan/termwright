@@ -1,6 +1,8 @@
 package main
 
 import (
+	"cmp"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -558,6 +560,12 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		case e != "":
 			r.Result, r.Why = "fail", e
 		case r.Running || r.TX == 0:
+		case s.Expect == "any":
+			r.Result = "pass"
+		case s.Expect == "drop" && r.RX > 0:
+			r.Result, r.Why = "fail", fmt.Sprintf("%d of %d frames got through (they should be dropped)", r.RX, r.TX)
+		case s.Expect == "drop":
+			r.Result, r.Why = "pass", "dropped, as expected"
 		case r.Loss > s.MaxLoss:
 			r.Result, r.Why = "fail", fmt.Sprintf("loss %.1f %% > %.1f %%", r.Loss, s.MaxLoss)
 		case s.MaxLatency > 0 && r.LatAvg > s.MaxLatency:
@@ -942,9 +950,9 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 		return EmuTrafficView{}, errors.New("choose the test port it goes from, and the one it goes to")
 	}
 	s.Kind = orStr(s.Kind, "udp")
-	if !slices.Contains([]string{"udp", "icmp", "tcp", "arp", "raw", "pcap"}, s.Kind) {
+	if !slices.Contains([]string{"udp", "icmp", "tcp", "arp", "raw", "pcap", "custom"}, s.Kind) {
 		emuLab.mu.Unlock()
-		return EmuTrafficView{}, errors.New("the kind is udp, icmp, tcp, arp, raw or pcap")
+		return EmuTrafficView{}, errors.New("the kind is udp, icmp, tcp, arp, raw, pcap or custom")
 	}
 	if s.Kind == "pcap" {
 		if err := a.emuPcapKeep(&s); err != nil {
@@ -954,11 +962,11 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 	} else {
 		s.Pcap, s.PcapID, s.PcapFrames, s.PcapSecs, s.PcapTiming, s.Loops, s.RewriteMAC = "", "", 0, 0, false, 0, false
 	}
-	if s.Kind != "arp" && s.Kind != "raw" && s.Kind != "pcap" && s.To == "" && s.DstIP == "" {
+	if s.Kind != "arp" && s.Kind != "raw" && s.Kind != "pcap" && s.Kind != "custom" && s.To == "" && s.DstIP == "" {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("an IP stream needs a destination test port or address")
 	}
-	if f := l.TesterByID(s.From); s.Kind != "arp" && s.Kind != "raw" && s.Kind != "pcap" && s.SrcIP == "" && (f.IP == "" && !f.DHCP && !strings.Contains(s.DstIP, ":") || strings.Contains(s.DstIP, ":") && f.IP6 == "" && !f.SLAAC) {
+	if f := l.TesterByID(s.From); s.Kind != "arp" && s.Kind != "raw" && s.Kind != "pcap" && s.Kind != "custom" && s.SrcIP == "" && (f.IP == "" && !f.DHCP && !strings.Contains(s.DstIP, ":") || strings.Contains(s.DstIP, ":") && f.IP6 == "" && !f.SLAAC) {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("give the test port it goes from an IP address (or the stream a source address)")
 	}
@@ -1000,6 +1008,10 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 		}
 		s.Mods[i].Mode, s.Mods[i].Count, s.Mods[i].Step = orStr(m.Mode, "inc"), max(1, m.Count), orInt(m.Step, 1)
 	}
+	if err := emuStreamFrame(&s); err != nil {
+		emuLab.mu.Unlock()
+		return EmuTrafficView{}, err
+	}
 	if s.ID == "" {
 		s.ID = "s" + randHex(3)
 		s.Name = orStr(strings.TrimSpace(s.Name), fmt.Sprintf("stream-%d", len(l.Streams)+1))
@@ -1014,6 +1026,67 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 	_ = a.emuSave()
 	emuLab.mu.Unlock()
 	return a.EmuTraffic()
+}
+
+// emuStreamFrame checks (and tidies) what a stream does to its frames: a custom frame's hex, its user-defined
+// fields, its fault, its fuzzed range and what should happen to its frames.
+func emuStreamFrame(s *emu.Stream) error {
+	if s.Kind == "custom" {
+		b, err := emu.ParseFrameHex(s.Hex)
+		if err != nil || len(b) < 14 {
+			return errors.New("a custom frame needs its bytes in hex, at least the MAC addresses and the EtherType (14 bytes)")
+		}
+		if len(b) > 9000 {
+			return errors.New("a custom frame is at most 9,000 bytes")
+		}
+		s.Hex = hex.EncodeToString(b)
+		if s.Size < len(b)+4 {
+			s.Size = min(9000, max(60, len(b)+4))
+		}
+	} else {
+		s.Hex, s.NoSig = "", false
+	}
+	if len(s.UDFs) > 8 {
+		return errors.New("a stream has at most 8 user-defined fields")
+	}
+	for i, u := range s.UDFs {
+		u.Width = min(4, max(1, orInt(u.Width, 1)))
+		u.Mode = orStr(u.Mode, "inc")
+		if !slices.Contains([]string{"inc", "dec", "random", "list"}, u.Mode) {
+			return fmt.Errorf("a user-defined field counts inc, dec, random or from a list, not %q", u.Mode)
+		}
+		if u.Offset < 0 || u.Offset+u.Width > 9000 {
+			return errors.New("a user-defined field's offset is in the frame (0 is the first byte of the destination MAC)")
+		}
+		if u.Mode == "list" && (len(u.Values) == 0 || len(u.Values) > 256) {
+			return errors.New("a user-defined field from a list needs 1 to 256 values")
+		}
+		u.Count, u.Step = min(1000000, max(1, orInt(u.Count, 256))), cmp.Or(u.Step, 1)
+		s.UDFs[i] = u
+	}
+	if s.Bad != "" {
+		b := emu.BadFrame(s.Bad)
+		switch {
+		case b == nil:
+			return fmt.Errorf("no such fault: %q", s.Bad)
+		case b.TCP && s.Kind != "tcp" && s.Kind != "custom":
+			return fmt.Errorf("%s needs a TCP stream", b.Name)
+		case s.Kind == "pcap":
+			return errors.New("a capture's frames are replayed as they are: no fault")
+		}
+	}
+	if s.Fuzz != nil {
+		if s.Fuzz.From < 0 || s.Fuzz.To != 0 && s.Fuzz.To <= s.Fuzz.From || s.Fuzz.To > 9000 {
+			return errors.New("the fuzzed bytes run from an offset to a later one (0: up to the counting signature)")
+		}
+		if s.Kind == "pcap" {
+			return errors.New("a capture's frames are replayed as they are: not fuzzed")
+		}
+	}
+	if !slices.Contains([]string{"", "drop", "any"}, s.Expect) {
+		return errors.New("its frames should arrive (\"\"), be dropped (drop) or only be counted (any)")
+	}
+	return nil
 }
 
 // EmuStreamRemove deletes a stream.

@@ -94,6 +94,141 @@ def l4sum(src, dst, proto, p):
     return csum(ph + p)
 
 
+def l3_at(f):  # where the IP header starts (past any VLAN tags), and the EtherType
+    o = 12
+    while f[o:o + 2] in (b"\x81\x00", b"\x88\xa8", b"\x91\x00") and len(f) >= o + 6:
+        o += 4
+    return o + 2, bytes(f[o:o + 2])
+
+
+def l4fix(f, l4, proto, src, dst):  # UDP length and the UDP, TCP or ICMP checksum, worked out (f: bytearray)
+    if proto == 17 and len(f) >= l4 + 8:
+        f[l4 + 4:l4 + 8] = struct.pack("!HH", len(f) - l4, 0)
+        f[l4 + 6:l4 + 8] = struct.pack("!H", l4sum(src, dst, 17, bytes(f[l4:])) or 0xFFFF)
+    elif proto == 6 and len(f) >= l4 + 20:
+        f[l4 + 16:l4 + 18] = b"\0\0"
+        f[l4 + 16:l4 + 18] = struct.pack("!H", l4sum(src, dst, 6, bytes(f[l4:])))
+    elif proto in (1, 58) and len(f) >= l4 + 4:
+        f[l4 + 2:l4 + 4] = b"\0\0"
+        f[l4 + 2:l4 + 4] = struct.pack("!H", l4sum(src, dst, 58, bytes(f[l4:])) if proto == 58 else csum(bytes(f[l4:])))
+
+
+def fixup(f):  # a frame's IP and UDP lengths and its checksums worked out (IPv4 or IPv6; UDP, TCP, ICMP)
+    f = bytearray(f)
+    o, et = l3_at(f)
+    if et == b"\x08\x00" and len(f) >= o + 20 and f[o] >> 4 == 4:
+        hl = (f[o] & 15) * 4
+        if hl < 20 or len(f) < o + hl:
+            return bytes(f)
+        f[o + 2:o + 4] = struct.pack("!H", len(f) - o)
+        f[o + 10:o + 12] = b"\0\0"
+        f[o + 10:o + 12] = struct.pack("!H", csum(bytes(f[o:o + hl])))
+        if not struct.unpack("!H", f[o + 6:o + 8])[0] & 0x3FFF:  # a whole datagram, not a fragment
+            l4fix(f, o + hl, f[o + 9], bytes(f[o + 12:o + 16]), bytes(f[o + 16:o + 20]))
+    elif et == b"\x86\xdd" and len(f) >= o + 40:
+        f[o + 4:o + 6] = struct.pack("!H", len(f) - o - 40)
+        l4fix(f, o + 40, f[o + 6], bytes(f[o + 8:o + 24]), bytes(f[o + 24:o + 40]))
+    return bytes(f)
+
+
+def malform(f, bad, sig):  # a fault put in a frame (BadFrames in traffic.go); sig: its counting signature
+    f = bytearray(f)
+    o, et = l3_at(f)
+    ip4 = et == b"\x08\x00" and len(f) >= o + 20 and f[o] >> 4 == 4
+    hl = (f[o] & 15) * 4 if ip4 else 0
+
+    def hsum(n=None):  # the IPv4 header checksum again, after a change
+        n = n or hl
+        f[o + 10:o + 12] = b"\0\0"
+        f[o + 10:o + 12] = struct.pack("!H", csum(bytes(f[o:o + n])))
+
+    l4 = o + hl
+    if bad == "ipcsum" and ip4:
+        f[o + 10] ^= 0x5A
+    elif bad == "l4csum" and ip4:
+        at = {17: 6, 6: 16, 1: 2}.get(f[o + 9])
+        if at is not None and len(f) > l4 + at:
+            f[l4 + at] ^= 0x5A
+    elif bad == "iplen-long" and ip4:
+        f[o + 2:o + 4] = struct.pack("!H", min(65535, len(f) - o + 200))
+        hsum()
+    elif bad == "iplen-short" and ip4:
+        f[o + 2:o + 4] = struct.pack("!H", 10)
+        hsum()
+    elif bad == "ihl" and ip4:
+        f[o] = 0x43
+        hsum(20)
+    elif bad == "ipver" and ip4:
+        f[o] = 0x70 | (f[o] & 15)
+        hsum()
+    elif bad in ("ttl0", "ttl1") and ip4:
+        f[o + 8] = 0 if bad == "ttl0" else 1
+        hsum()
+    elif bad == "ipopts" and ip4:
+        f[l4:l4] = b"\x07\x07\x04" + b"\0" * 4 + b"\x00"  # record route with one slot, end of options
+        f[o] = 0x40 | ((hl + 8) // 4)
+        return fixup(f)
+    elif bad == "frag-first" and ip4:
+        f[o + 6:o + 8] = struct.pack("!H", 0x2000)  # more fragments; none follows
+        hsum()
+    elif bad == "frag-tiny" and ip4:
+        f[o + 6:o + 8] = struct.pack("!H", 0x2001)  # offset 8 bytes, 8 bytes long: over the UDP or TCP header
+        del f[l4 + 8:]
+        f[o + 2:o + 4] = struct.pack("!H", hl + 8)
+        hsum()
+    elif bad in ("src-martian", "src-bcast", "land") and ip4:
+        f[o + 12:o + 16] = f[o + 16:o + 20] if bad == "land" else bytes([127, 0, 0, 1]) if bad == "src-martian" else b"\xff" * 4
+        if bad == "land" and f[o + 9] in (6, 17):
+            f[l4:l4 + 2] = f[l4 + 2:l4 + 4]
+        return fixup(f)
+    elif bad in ("tcp-synfin", "tcp-null", "tcp-xmas") and ip4 and f[o + 9] == 6:
+        f[l4 + 13] = {"tcp-synfin": 0x03, "tcp-null": 0x00, "tcp-xmas": 0x29}[bad]
+        return fixup(f)
+    elif bad == "smac-mcast":
+        f[6] |= 1
+    elif bad == "smac-zero":
+        f[6:12] = b"\0" * 6
+    elif bad == "runt":  # 48 bytes with the FCS: its headers up to the EtherType, then the signature
+        f = (f[:o] + sig)[:44]
+        f += b"\0" * (44 - len(f))
+    elif bad == "vlan4095":
+        if f[12:14] == b"\x81\x00":
+            f[14:16] = struct.pack("!H", (f[14] & 0xF0) << 8 | 4095)
+        else:
+            f[12:12] = struct.pack("!HH", 0x8100, 4095)
+    elif bad == "qinq":
+        f[12:12] = struct.pack("!HH", 0x8100, 100)
+    elif bad == "etype":
+        f[o - 2:o] = b"\x88\xb6"
+    return bytes(f)
+
+
+def udf_put(f, us, seq, rnd):  # user-defined fields: Width bytes at Offset, set for this frame
+    f = bytearray(f)
+    for u in us:
+        w, at = max(1, min(4, u.get("width", 1))), u.get("offset", 0)
+        if at < 0 or at + w > len(f):
+            continue
+        vs = u.get("values") or []
+        if u.get("mode") == "list" and vs:
+            v = vs[seq % len(vs)]
+        else:
+            n = max(1, u.get("count") or 256)
+            k = rnd.randrange(n) if u.get("mode") == "random" else seq % n
+            v = u.get("start", 0) + (-k if u.get("mode") == "dec" else k) * (u.get("step") or 1)
+        f[at:at + w] = (v % (1 << (8 * w))).to_bytes(w, "big")
+    return bytes(f)
+
+
+def fuzzed(f, z, seq):  # random bytes from From up to To (0: up to the signature), the same again for the same seed
+    a = max(0, z.get("from", 14))
+    b = z.get("to") or (f.find(MAGIC) if f.find(MAGIC) > 0 else len(f))
+    b = min(len(f), b)
+    if b <= a:
+        return f
+    return f[:a] + random.Random((z.get("seed") or 1) * 1000003 + seq).randbytes(b - a) + f[b:]
+
+
 def mcast_mac(ip):
     if len(ip) == 16:
         return b"\x33\x33" + ip[12:]
@@ -160,8 +295,8 @@ class Tester:
         if not hasattr(s, "partner"):
             s.partner, s.partner_at, s.lacp_at, s.neighbour = None, 0, 0, None
 
-    def send(s, frame):
-        if len(frame) < 60:
+    def send(s, frame, runt=False):
+        if len(frame) < 60 and not runt:
             frame += b"\0" * (60 - len(frame))
         try:
             s.sock.sendto(frame, s.to)
@@ -488,10 +623,20 @@ class Stream:
         s.seq, s.start, s.gw_wait = 0, None, 0
         s.dst = mac_b(x["dstMac"]) if x.get("dstMac") else None
         s.mods = x.get("mods") or []
+        s.udfs = x.get("udfs") or []
         s.rnd = random.Random(idx * 7919 + run)
         s.nflows = math.prod(max(1, m.get("count", 1)) for m in s.mods) if s.mods else 0
         s.flow, s.ftx, s.flab = 0, {}, {}
         s.pkts, s.offs, s.timing, s.dur = [], [], False, 0
+        s.tmpl = b""
+        if x.get("kind") == "custom":
+            try:
+                s.tmpl = bytes.fromhex(x.get("hex", ""))
+            except ValueError:
+                s.tmpl = b""
+            if len(s.tmpl) < 14:
+                err[x["id"]] = "the frame needs at least its MAC addresses and EtherType (14 bytes)"
+                s.count = 0
         if x.get("kind") == "pcap":
             s.pkts, s.offs = read_pcap(os.path.join(d, "pcap", x.get("pcapId", "") + ".pcap"))
             n = len(s.pkts)
@@ -568,6 +713,17 @@ class Stream:
         sig = MAGIC + struct.pack(SIG, s.idx, s.run, s.seq, now, flow)
         # sizes count the FCS (64-1518 bytes, as testers and RFC 2544 do); QEMU's sockets carry frames without it
         size, tos = max(60, s.frame_size() - 4), x.get("dscp", 0) << 2
+        if k == "custom":  # the frame as written; the signature at its end, so the receiver counts it
+            f = s.tmpl
+            if x.get("rewriteMacs"):
+                f = (s.dst or BC) + tp.mac + f[12:]
+            if not x.get("noSig"):
+                f = f + b"\0" * max(0, size - len(f) - len(sig)) + sig
+            if s.udfs:
+                f = udf_put(f, s.udfs, s.seq, s.rnd)
+            if not x.get("noFix"):
+                f = fixup(f)
+            return s.finish(f, sig)
         if k == "arp":
             f = l2(BC if not s.dst else s.dst, src_mac, vlan, prio, 0x0806) + arp(1, src_mac, src_ip, b"\0" * 6, dst_ip) + sig
         elif k == "raw":
@@ -594,6 +750,17 @@ class Stream:
                 f = l2(dst, src_mac, vlan, prio, 0x0800) + ipv4(src_ip, dst_ip, proto, p, tos)
         if len(f) < size and k in ("raw", "arp"):
             f += b"\0" * (size - len(f))
+        if s.udfs:
+            f = udf_put(f, s.udfs, s.seq, s.rnd)
+            if not x.get("noFix"):
+                f = fixup(f)
+        return s.finish(f, sig)
+
+    def finish(s, f, sig):  # its fault and its fuzzed bytes, when it has them
+        if s.x.get("bad"):
+            f = malform(f, s.x["bad"], sig)
+        if s.x.get("fuzz"):
+            f = fuzzed(f, s.x["fuzz"], s.seq)
         return f
 
 
@@ -1020,7 +1187,7 @@ while True:
             due = min(s.count, ((due + s.burst - 1) // s.burst) * s.burst)
         n = 0
         while s.seq < due and n < max(64, 2000 // max(1, live)):
-            s.tp.send(s.frame(time.time()))
+            s.tp.send(s.frame(time.time()), x.get("bad") == "runt")
             s.seq += 1
             n += 1
         tx[x["id"]] = s.seq

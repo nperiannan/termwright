@@ -36,7 +36,14 @@ import { tr } from '../core/i18n';
               @for (u of users(); track $index) {
                 <div class="ur"><input [(ngModel)]="u.user" placeholder="user*" /><input [type]="show() ? 'text' : 'password'" [(ngModel)]="u.password" autocomplete="off" /><input [(ngModel)]="u.vlan" [placeholder]="tr('the port\\'s')" /><a class="x" (click)="users.set(drop(users(), $index))" [title]="tr('Remove')">✕</a></div>
               } @empty { <p class="muted small">{{ tr('No user yet: every 802.1X login is refused.') }}</p> }
-              <button type="button" class="sm" (click)="users.set([...users(), { user: '', password: '', vlan: '' }])">＋ {{ tr('User') }}</button>
+              <div class="ub"><button type="button" class="sm" (click)="users.set([...users(), { user: '', password: '', vlan: '' }])">＋ {{ tr('User') }}</button>
+                <button type="button" class="sm" (click)="many = !many">＋ {{ tr('Many Users…') }}</button></div>
+              @if (many) {
+                <div class="many"><span>{{ tr('Names') }}</span><input class="pf" [(ngModel)]="mPrefix" /><span>{{ tr('from') }}</span><input class="nb" type="number" min="0" [(ngModel)]="mFrom" /><span>{{ tr('count') }}</span><input class="nb" type="number" min="1" max="4000" [(ngModel)]="mCount" />
+                  <span>{{ tr('digits') }}</span><input class="nb" type="number" min="0" max="6" [(ngModel)]="mDigits" [title]="tr('0: user1, user2 …; 3: user001, user002 …')" />
+                  <span>{{ tr('password') }}</span><input class="pf" [(ngModel)]="mPass" autocomplete="off" [title]="tr('{n} in it is the number: pass{n} gives pass1, pass2 …')" /><span>VLAN</span><input class="nb" [(ngModel)]="mVlan" [placeholder]="tr('the port\\'s')" />
+                  <span class="mono muted">{{ manyRange() }}</span><button type="button" class="sm primary" (click)="addMany()" [disabled]="!mPrefix.trim() || +mCount < 1">{{ tr('Add') }}</button></div>
+              }
             </div>
             <div class="sh">{{ tr('MAC logins') }}<span class="muted">{{ tr('MAC authentication (MAB) for hosts without 802.1X') }}</span></div>
             <div class="row3">
@@ -73,6 +80,7 @@ import { tr } from '../core/i18n';
     .hosts { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-2); }
     .hr { display: flex; align-items: center; gap: 8px; i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); } i.ok { background: var(--ok, #1fa45a); } i.bad { background: var(--danger); } }
     .ut { display: flex; flex-direction: column; gap: 5px; button { align-self: flex-start; }
+      .ub { display: flex; gap: 6px; } .many { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; border: 1px dashed var(--line); border-radius: 8px; span { font-size: 11.5px; color: var(--muted); } .pf { width: 90px; } .nb { width: 60px; } }
       .uh, .ur { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 90px 18px; gap: 6px; align-items: center; } .uh span { font-size: 11px; color: var(--muted); }
       .x { cursor: pointer; color: var(--muted); } .x:hover { color: var(--danger); } input { min-width: 0; } }
     .lg { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-height: 0; flex: 1;
@@ -90,6 +98,15 @@ export class RadiusDialog implements OnInit, OnDestroy {
   protected view = signal<EmuRadiusView | null>(null);
   protected show = signal(false);
   protected users = signal<EmuRadiusUser[]>([]);
+  // Many Users: numbered user names (user1 … user100, or user001 …), the same password or one with {n} in it
+  protected many = false; protected mPrefix = 'user'; protected mFrom = 1; protected mCount = 100; protected mDigits = 0; protected mPass = 'lab123'; protected mVlan = '';
+  private mName(i: number) { return this.mPrefix.trim() + String(i).padStart(+this.mDigits || 0, '0'); }
+  protected manyRange() { const n = +this.mCount || 0, f = +this.mFrom || 0; return n ? this.mName(f) + (n > 1 ? ' … ' + this.mName(f + n - 1) : '') : ''; }
+  protected addMany() {
+    const have = new Set(this.users().map(u => u.user)), add: EmuRadiusUser[] = [], f = +this.mFrom || 0;
+    for (let i = f; i < f + Math.min(4000, +this.mCount || 0); i++) { const u = this.mName(i); if (!have.has(u)) add.push({ user: u, password: this.mPass.replaceAll('{n}', String(i)), vlan: this.mVlan.trim() }); }
+    this.users.set([...this.users(), ...add]); this.many = false;
+  }
   protected on = false; protected port: number | null = null; protected secret = ''; protected mab = ''; protected mabVlan = '';
   protected logins = computed(() => (this.view()?.hosts ?? []).flatMap(h => h.logins ?? []).sort((a, b) => b.at - a.at).slice(0, 200) as EmuRadiusLogin[]);
   private timer?: ReturnType<typeof setInterval>;
