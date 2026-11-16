@@ -230,6 +230,7 @@ type AppInfo struct {
 	Locked      bool   `json:"locked"`
 	HasMaster   bool   `json:"hasMaster"`
 	InsetTitle  bool   `json:"insetTitle"` // macOS without a title bar (modern layout): leave room for the window buttons
+	OwnTitle    bool   `json:"ownTitle"`   // no system title bar or menu bar (Linux): the app draws the menus and the window buttons
 }
 
 // GetAppInfo returns version and platform details.
@@ -245,7 +246,7 @@ func (a *App) GetAppInfo() AppInfo {
 		ai.InitError = a.initErr.Error()
 	}
 	ai.Locked = a.isLocked()
-	ai.InsetTitle = insetTitle
+	ai.InsetTitle, ai.OwnTitle = insetTitle, ownTitle
 	if a.cfg != nil {
 		ai.HasMaster = a.cfg.Get().MasterHash != ""
 	}

@@ -46,3 +46,21 @@ func parseTitleBarAction(v string) string {
 	}
 	return "maximize" // "Maximize", "Fill" and anything else: zoom
 }
+
+// WindowButton is a window button of the app's own title bar (Linux): min, max (maximise or restore) or close
+// (as the system's close button: it asks first when Global Options says so).
+func (a *App) WindowButton(b string) {
+	if a.ctx == nil {
+		return
+	}
+	switch b {
+	case "min":
+		wruntime.WindowMinimise(a.ctx)
+	case "max":
+		wruntime.WindowToggleMaximise(a.ctx)
+	case "close":
+		if !a.beforeClose(a.ctx) {
+			a.Quit()
+		}
+	}
+}

@@ -2,6 +2,14 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **Linux: one title bar, in Termwright's theme.** The window has no system title bar and no GTK menu bar any more: Termwright's own title bar has its logo, the menus (File, Edit, View, Transfer, Lab, Script, Options, Tab, Help - themed like the rest, with their shortcuts) and the minimise, maximise and close buttons. The window still moves by its title bar and resizes at its edges; a narrow window keeps the menus under ⋯.
+- **Status bar as on classic terminals**: the cursor's line and column, the selection (rows or columns, and characters), the terminal's rows and columns, its type, and CAP and NUM (Caps Lock and Num Lock).
+- **The terminal bar's toggles are icons**, as in VS Code's panels: timestamps (a clock), scroll lock (a lock: open while new output follows, closed when the view stays) and clear (which now asks first) - each with a tooltip.
+- **The AI chat's message box, as VS Code's chat**: a tip on top, the model and its effort in the box, a quiet send button, and under it the AI service, the mode (Agent, Plan, Ask) and the agent's permissions as plain chips; the mode menu has the permissions too, and *Changes ask first* is marked *Recommended*.
+- **Start page**: the search bar has the same edge, face and corners as the buttons under it.
+
 ## 0.39.0 (2026-11-16)
 
 - **Quick streams and tests.** The Traffic page's **＋ L2 Stream**, **＋ L3 Stream** and **Quick Tests…** open one dialog: choose an L2 or L3 stream, a custom frame, or a ready test - latency, jitter, loss under load, RFC 2544 throughput, bad packets, fuzz, VLAN isolation, MTU and jumbo frames, 802.1X clients - answer a few questions (which test ports, whether the switch ports carry the VLAN tagged, whether the switch has IP interfaces in the two subnets) and *What Termwright fills in* lists every stream and every change to a test port before anything is made, each one editable. *Create* or *Create and Start*. An L3 stream gives each test port an address and the switch's IP interface as its gateway, and says what the switch needs to route.

@@ -215,7 +215,7 @@ export interface ImportResult { imported: string[] | null; renamed: string[] | n
 /** What the settings file of a Termwright export holds. */
 export interface SettingsSummary { app: string; deviceTypes: number; accounts: number; folderDefaults: number; library: number; options: number; }
 
-export interface AppInfo { name: string; version: string; os: string; arch: string; dataDir: string; sessionsDir: string; initError: string; locked: boolean; hasMaster: boolean; insetTitle?: boolean; }
+export interface AppInfo { name: string; version: string; os: string; arch: string; dataDir: string; sessionsDir: string; initError: string; locked: boolean; hasMaster: boolean; insetTitle?: boolean; ownTitle?: boolean; }
 
 /** Sessions of another terminal program found on this computer. */
 export interface ImportSource { app: string; path: string; what: string; }

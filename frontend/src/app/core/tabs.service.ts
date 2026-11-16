@@ -99,6 +99,8 @@ export class Tabs {
     });
   }
   readonly activeId = signal<string>('');
+  /** The active terminal's cursor (1-based) and selection, for the status bar (published at most once a frame). */
+  readonly caret = signal<{ id: string; row: number; col: number; selRows: number; selCols: number; selChars: number } | null>(null);
   readonly active = computed(() => this.tabs().find(t => t.id === this.activeId()) ?? null);
   /** Device type of the active terminal tab ('' = none). */
   readonly activeDeviceType = computed(() => this.active()?.session?.deviceType ?? '');

@@ -70,6 +70,13 @@ func main() {
 		titleBar = mac.TitleBarHiddenInset()
 		insetTitle = true
 	}
+	// Linux: no window manager title bar and no GTK menu bar (they follow the desktop's theme, not Termwright's):
+	// the app's own title bar has the menus and the window buttons, and the window still resizes at its edges.
+	ownTitle = runtime.GOOS == "linux"
+	appMenu := buildMenu(app, lang)
+	if ownTitle {
+		appMenu = nil
+	}
 	err := wails.Run(&options.App{
 		Title:                    "Termwright",
 		Width:                    width,
@@ -83,7 +90,8 @@ func main() {
 		OnStartup:                app.startup,
 		OnShutdown:               app.shutdown,
 		OnBeforeClose:            app.beforeClose,
-		Menu:                     buildMenu(app, lang),
+		Menu:                     appMenu,
+		Frameless:                ownTitle,
 		Bind:                     []interface{}{app},
 		EnableDefaultContextMenu: false,
 		Windows: &windows.Options{
@@ -107,6 +115,9 @@ func main() {
 // insetTitle is true when the window has no title bar of its own (macOS,
 // modern layout); the UI then leaves room for the window buttons.
 var insetTitle bool
+
+// ownTitle is true when the app draws the whole title bar - the menus and the window buttons (Linux).
+var ownTitle bool
 
 // buildMenu creates the native application menu. Items emit "menu" events
 // that the Angular UI handles, so the same actions work from the toolbar,

@@ -7,11 +7,15 @@ import { Icon } from './icon';
 import { AGENT_PERMS, AGENT_TOOLS, AgentPerm, AIChat, AiMode, ChatMsg, EFFORTS, Img, PlanItem, Step, modelChoices, nice } from '../core/ai-chat.service';
 
 /** The chat's modes, as VS Code's chat has them: Agent (the default), Plan, Ask. */
-const MODES: { k: AiMode; name: string; what: string }[] = [
-  { k: 'agent', name: 'Agent', what: 'Plans a task of several steps as a checklist, then runs it in your tabs - asking as your permissions say' },
-  { k: 'plan', name: 'Plan', what: 'Looks with read-only commands and writes the plan; nothing changes until you press Run the Plan' },
-  { k: 'ask', name: 'Ask', what: 'Answers and explains; runs nothing' },
+const MODES: { k: AiMode; name: string; what: string; icon: string }[] = [
+  { k: 'agent', name: 'Agent', what: 'Plans a task of several steps as a checklist, then runs it in your tabs - asking as your permissions say', icon: 'sparkles' },
+  { k: 'plan', name: 'Plan', what: 'Looks with read-only commands and writes the plan; nothing changes until you press Run the Plan', icon: 'checklist' },
+  { k: 'ask', name: 'Ask', what: 'Answers and explains; runs nothing', icon: 'chat' },
 ];
+/** Tips above the message box (one, chosen when the panel opens). */
+const TIPS = ['Select output in the terminal to ask about just that part.', 'Type @ to add another tab to the question.', 'Paste a screenshot with ⌘V or Ctrl+V: the AI reads it.',
+  'Plan looks first with read-only commands; nothing changes until you run the plan.', 'Drop a picture or a log file on the message box to add it.'];
+const PERM_ICON: Record<string, string> = { auto: 'alert', '': 'shield', every: 'lock', readonly: 'eye' };
 import { AIStatus } from '../core/models';
 import { tr } from '../core/i18n';
 
@@ -175,6 +179,7 @@ function spans(t: string): Span[] {
     }
     <div class="comp" (dragover)="$event.preventDefault()" (drop)="drop($event)">
       <div class="box" [class.busy]="ai.busy()">
+        <div class="tipbar"><b>{{ tr('Tip:') }}</b> {{ tr(tip) }}</div>
         @if (ai.ctxs().length || ai.images().length) {
           <div class="ctx">
             @for (c of ai.ctxs(); track c.id) { <span class="cx"><app-icon [name]="c.kind === 'clipboard' ? 'paste' : c.kind === 'file' ? 'file' : 'shell'" [size]="12" /><b>{{ c.label }}</b> · {{ c.detail }}
@@ -183,7 +188,7 @@ function spans(t: string): Span[] {
           </div>
         }
         <textarea #ta [(ngModel)]="text" (ngModelChange)="grow(); at($event)" (keydown)="key($event)" (paste)="pasteIn($event)" (tw-paste-picture)="pastePicture($any($event).detail)" data-paste-pictures rows="2" spellcheck="false"
-          [placeholder]="ai.mode() === 'ask' ? tr('Ask about the output… (paste a picture with ⌘V, @ adds a tab)') : tr('Describe what you want to do, or ask… (paste a picture with ⌘V, @ adds a tab)')" [attr.aria-label]="tr('Message')"></textarea>
+          [placeholder]="ai.mode() === 'ask' ? tr('Ask about the output') : ai.mode() === 'plan' ? tr('Describe the task to plan') : tr('Chat with the Termwright agent')" [attr.aria-label]="tr('Message')"></textarea>
         <div class="bar">
           <span class="addw"><button type="button" class="ib" [class.on]="menu()" (click)="menu.set(!menu())" aria-haspopup="menu" [attr.aria-expanded]="menu()" [title]="tr('Add context: selected text, a tab, a picture or a file')" [attr.aria-label]="tr('Add context')"><app-icon name="plus" [size]="15" /></button>
             @if (menu()) {
@@ -195,13 +200,7 @@ function spans(t: string): Span[] {
                 <button type="button" role="menuitem" (click)="pick('file')"><app-icon name="image" [size]="13" />{{ tr('Picture or file…') }}<small>⌘V</small></button>
               </div>
             }</span>
-          <span class="modew"><button type="button" class="pick" [class.on]="omenu()" (click)="omenu.set(!omenu())" aria-haspopup="menu" [attr.aria-expanded]="omenu()" [attr.aria-label]="tr('Mode')" [title]="tr(modeOf(ai.mode()).what)">{{ tr(modeOf(ai.mode()).name) }}<app-icon name="chevron-down" [size]="11" /></button>
-            @if (omenu()) {
-              <div class="menu modes" role="menu" (click)="$event.stopPropagation()">
-                @for (o of modes; track o.k) { <button type="button" role="menuitemradio" [attr.aria-checked]="ai.mode() === o.k" (click)="ai.setMode(o.k); omenu.set(false)"><span class="pt"><b>{{ tr(o.name) }}</b><small>{{ tr(o.what) }}</small></span><span class="ck">@if (ai.mode() === o.k) { <app-icon name="check" [size]="13" /> }</span></button> }
-              </div>
-            }</span>
-          <span class="modw"><button type="button" class="pick" [class.on]="mmenu()" (click)="openModels()" [title]="provider() + ' - ' + tr('click to choose the model')" aria-haspopup="menu" [attr.aria-expanded]="mmenu()"><span class="ell">{{ service() }}</span><app-icon name="chevron-down" [size]="11" /></button>
+          <span class="modw"><button type="button" class="pick mdl" [class.on]="mmenu()" (click)="openModels()" [title]="provider() + ' - ' + tr('click to choose the model and its effort')" aria-haspopup="menu" [attr.aria-expanded]="mmenu()"><app-icon name="sparkles" [size]="13" /><span class="ell">{{ service() }}</span></button>
       @if (mmenu()) {
         <div class="menu models" role="menu" (click)="$event.stopPropagation()">
           <div class="mh">{{ tr('AI model') }}<small>{{ provider() }}</small></div>
@@ -235,7 +234,6 @@ function spans(t: string): Span[] {
               }</span>
           }
           <span class="grow"></span>
-          <button type="button" class="ib" [title]="tr('Attach a picture or a text file')" [attr.aria-label]="tr('Attach')" (click)="file.click()"><app-icon name="clip" [size]="14" /></button>
           <input #file type="file" hidden multiple accept="image/*,.txt,.log,.cfg,.conf,.csv,.json,.xml,.yaml,.yml" (change)="files($any($event.target).files); $any($event.target).value = ''" />
           <button type="button" class="ib" [title]="tr('Dictate: speak your message (the system’s dictation)')" [attr.aria-label]="tr('Dictate')" (click)="dictate()"><app-icon name="mic" [size]="15" /></button>
           @if (ai.busy()) { <button type="button" class="send stop" [title]="tr('Stop (Esc)')" [attr.aria-label]="tr('Stop')" (click)="ai.stop()"><span class="sq"></span></button> }
@@ -243,19 +241,31 @@ function spans(t: string): Span[] {
         </div>
       </div>
       <div class="under">
+        <button type="button" class="chip" (click)="ui.openOptions('ai')" [title]="tr('The AI service - click for the AI settings')"><app-icon name="sparkles" [size]="13" />{{ provider() || tr('AI') }}</button>
+        <span class="modew"><button type="button" class="chip" [class.on]="omenu()" (click)="omenu.set(!omenu()); pmenu.set(false)" aria-haspopup="menu" [attr.aria-expanded]="omenu()" [attr.aria-label]="tr('Mode')" [title]="tr(modeOf(ai.mode()).what)"><app-icon [name]="modeOf(ai.mode()).icon" [size]="13" />{{ tr(modeOf(ai.mode()).name) }}</button>
+          @if (omenu()) {
+            <div class="menu modes" role="menu" (click)="$event.stopPropagation()">
+              <div class="mh2"><app-icon name="chevron-down" [size]="11" />{{ tr('Mode') }}<span>{{ tr(modeOf(ai.mode()).name) }}</span></div>
+              @for (o of modes; track o.k) { <button type="button" role="menuitemradio" [class.cur]="ai.mode() === o.k" [attr.aria-checked]="ai.mode() === o.k" (click)="ai.setMode(o.k); omenu.set(false)"><app-icon [name]="o.icon" [size]="14" /><span class="pt"><b>{{ tr(o.name) }}</b><small>{{ tr(o.what) }}</small></span></button> }
+              @if (ai.mode() === 'agent') {
+                <button type="button" class="mh2 sub" (click)="pexp.set(!pexp())" [attr.aria-expanded]="pexp()"><app-icon name="chevron-down" [size]="11" [class.shut]="!pexp()" />{{ tr('Permissions') }}<span><app-icon name="options" [size]="11" />{{ tr(permName()) }}</span></button>
+                @if (pexp()) { @for (o of perms; track o.k) { <button type="button" role="menuitemradio" [class]="'prow ' + o.tone" [class.cur]="ai.perm() === o.k" [attr.aria-checked]="ai.perm() === o.k" (click)="setPerm(o.k)"><app-icon [name]="permIcon(o.k)" [size]="14" /><span class="pt"><span class="nl"><b>{{ tr(o.name) }}</b>@if (o.k === '') { <span class="rec">{{ tr('Recommended') }}</span> }</span><small>{{ tr(o.what) }}</small></span></button> } }
+              }
+            </div>
+          }</span>
         @if (ai.mode() === 'agent') {
-          <span class="permw"><button type="button" class="pick perm" [class]="'pick perm ' + permTone()" (click)="pmenu.set(!pmenu())" aria-haspopup="menu" [attr.aria-expanded]="pmenu()" [attr.aria-label]="tr('Agent permissions')" [title]="tr('What the agent may do without asking')"><i class="pd"></i><span>{{ tr(permName()) }}</span><app-icon name="chevron-down" [size]="10" /></button>
+          <span class="permw"><button type="button" [class]="'chip perm ' + permTone()" [class.on]="pmenu()" (click)="pmenu.set(!pmenu()); omenu.set(false)" aria-haspopup="menu" [attr.aria-expanded]="pmenu()" [attr.aria-label]="tr('Agent permissions')" [title]="tr('What the agent may do without asking')"><i class="pd"></i><span>{{ tr(permName()) }}</span></button>
             @if (pmenu()) {
               <div class="menu perms" role="menu" (click)="$event.stopPropagation()">
-                <div class="mh">{{ tr('What the agent may do') }}</div>
+                <div class="mh2"><app-icon name="chevron-down" [size]="11" />{{ tr('Permissions') }}<span><app-icon name="options" [size]="11" />{{ tr(permName()) }}</span></div>
                 @for (o of perms; track o.k) {
-                  <button type="button" role="menuitemradio" [class]="'prow ' + o.tone" [attr.aria-checked]="ai.perm() === o.k" (click)="setPerm(o.k)"><i class="pd"></i><span class="pt"><b>{{ tr(o.name) }}</b><small>{{ tr(o.what) }}</small></span><span class="ck">@if (ai.perm() === o.k) { <app-icon name="check" [size]="13" /> }</span></button>
+                  <button type="button" role="menuitemradio" [class]="'prow ' + o.tone" [class.cur]="ai.perm() === o.k" [attr.aria-checked]="ai.perm() === o.k" (click)="setPerm(o.k)"><app-icon [name]="permIcon(o.k)" [size]="14" /><span class="pt"><span class="nl"><b>{{ tr(o.name) }}</b>@if (o.k === '') { <span class="rec">{{ tr('Recommended') }}</span> }</span><small>{{ tr(o.what) }}</small></span></button>
                 }
                 <div class="mf"><app-icon name="shield" [size]="11" /> {{ tr('Production sessions always ask before every command and connection - except in Read only, where nothing that changes anything runs.') }}</div>
+                <button type="button" class="foot" (click)="pmenu.set(false); ui.actionHandler('user-guide')">{{ tr('Learn more about permissions') }}</button>
               </div>
             }</span>
-        } @else if (ai.mode() === 'plan') { <span class="hint"><app-icon name="shield" [size]="11" /> {{ tr('Plan: looks with read-only commands, then waits for Run the Plan') }}</span> }
-        @else { <span class="hint">{{ tr('Ask: answers only - runs nothing') }}</span> }
+        }
         <span class="grow"></span>
         @if (canSend()) { <span class="hint" [title]="tr('About how many tokens this question sends: the chat so far, what goes with it and your question')">≈ {{ k(ai.estimate(text)) }} {{ tr('tokens') }}</span> }
       </div>
@@ -323,6 +333,23 @@ function spans(t: string): Span[] {
     .box { border: 1px solid var(--line); border-radius: 12px; background: var(--input-bg, var(--bg)); transition: border-color .15s, box-shadow .15s; }
     .box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
     .box .ctx { padding: 8px 10px 0; margin: 0; }
+    /* as VS Code's chat: a tip on top of the box, the model in it, mode and permissions under it as quiet chips */
+    .tipbar { padding: 6px 12px; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--muted); border-bottom: 1px solid var(--line); border-radius: 12px 12px 0 0;
+      background: color-mix(in srgb, var(--text) 4%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; b { color: var(--text); font-weight: 600; } }
+    .pick.mdl { gap: 5px; app-icon { color: var(--muted); } }
+    .under .chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 6px; border: 0; border-radius: 5px; background: none; color: var(--muted); font-size: calc(12px * var(--ui-scale, 1)); white-space: nowrap; min-width: 0; cursor: pointer;
+      span { overflow: hidden; text-overflow: ellipsis; } &:hover, &.on { color: var(--text); background: color-mix(in srgb, var(--text) 9%, transparent); } }
+    .under .chip.perm.auto { color: var(--orange); }
+    .menu .mh2 { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px 4px; height: auto; border: 0; background: none; font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); font-weight: 600;
+      > span { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-weight: 400; } app-icon.shut { transform: rotate(-90deg); } }
+    .menu .mh2.sub { border-top: 1px solid var(--line); margin-top: 3px; padding-top: 8px; border-radius: 0; cursor: pointer; &:hover { color: var(--text); background: none; } }
+    .menu.modes button:not(.mh2), .menu.perms button:not(.foot) { align-items: flex-start; gap: 9px; > app-icon { margin-top: 2px; color: var(--muted); } }
+    .menu button.cur { background: color-mix(in srgb, var(--accent) 16%, transparent); > app-icon { color: var(--accent); } }
+    .under { position: relative; .modew, .permw { position: static; } .menu.modes, .menu.perms { left: 0; right: auto; width: min(330px, 100%); max-height: min(560px, calc(100vh - 160px)); } }
+    .menu .nl { display: flex; align-items: center; gap: 8px; }
+    .menu .prow b { color: var(--text) !important; } .menu .prow.auto b { color: var(--orange) !important; }
+    .menu .rec { flex: none; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: calc(10.5px * var(--ui-scale, 1)); color: var(--muted); }
+    .menu.perms .foot { border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; margin-top: 4px; color: var(--muted); }
     .addw { position: relative; display: inline-flex; }
     .menu { position: absolute; left: 0; bottom: calc(100% + 6px); width: 240px; max-height: 300px; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 5px; z-index: 5; display: flex; flex-direction: column; }
     .menu button { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 0; background: none; height: auto; border-radius: 6px; font-size: calc(12.5px * var(--ui-scale, 1)); text-align: left; }
@@ -379,8 +406,8 @@ function spans(t: string): Span[] {
       i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); } small { color: var(--muted); font-weight: 400; } }
     .dv.err i { background: var(--warn); } .dv.ask i { background: var(--warn); } .dv.running i { background: var(--accent); animation: blink 1.2s infinite; }
     .step.failed .si { color: var(--warn); }
-    .send { width: 30px; height: 30px; padding: 0; border-radius: 8px; background: var(--accent); border-color: var(--accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; }
-    .send:disabled { opacity: .45; } .send.stop { background: var(--danger); border-color: var(--danger); } .sq { width: 10px; height: 10px; border-radius: 2px; background: #fff; }
+    .send { width: 28px; height: 28px; padding: 0; border-radius: 7px; background: var(--accent); border-color: var(--accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+    .send:disabled { opacity: 1; background: none; border-color: transparent; color: var(--faint); } .send.stop { background: var(--danger); border-color: var(--danger); } .sq { width: 10px; height: 10px; border-radius: 2px; background: #fff; }
     .warn { display: flex; gap: 6px; align-items: center; font-size: calc(11.5px * var(--ui-scale, 1)); color: var(--warn); padding: 7px 2px 0; select { width: auto; height: auto; padding: 0 4px; font-size: inherit; } }
     .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; }
     .big { width: 52px; height: 52px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
@@ -423,6 +450,10 @@ export class AIPanel implements OnInit {
   readonly pmenu = signal(false);
   readonly mmenu = signal(false);
   readonly omenu = signal(false);
+  /** The mode menu's Permissions section is open. */
+  readonly pexp = signal(false);
+  protected readonly tip = TIPS[Math.floor(Math.random() * TIPS.length)];
+  permIcon(k: string) { return PERM_ICON[k] ?? 'shield'; }
   readonly planOpen = signal(true);
   protected readonly modes = MODES;
   modeOf(k: AiMode) { return MODES.find(m => m.k === k) ?? MODES[0]; }
@@ -625,7 +656,7 @@ export class AIPanel implements OnInit {
     const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); };
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
   }
-  @HostListener('document:keydown.escape') esc() { this.menu.set(false); this.tmenu.set(false); this.pmenu.set(false); this.mmenu.set(false); }
+  @HostListener('document:keydown.escape') esc() { this.menu.set(false); this.tmenu.set(false); this.pmenu.set(false); this.mmenu.set(false); this.omenu.set(false); }
   @HostListener('document:click', ['$event']) out(e: MouseEvent) {
     const t = e.target as HTMLElement;
     if (this.menu() && !t.closest('.addw')) this.menu.set(false);
