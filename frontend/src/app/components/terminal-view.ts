@@ -16,6 +16,7 @@ import { comboOf } from '../core/models';
 import { FIX_LABELS, FixAction, fixFor } from '../core/fixes';
 import { accountChoice, defaultLogin } from '../core/accounts';
 import { DeviceIcon, deviceKindOf } from './device-icon';
+import { Icon } from './icon';
 import { History, commandOfLine } from '../core/history.service';
 import { FormsModule } from '@angular/forms';
 
@@ -71,13 +72,13 @@ function b64ToBytes(b64: string): Uint8Array {
 /** One xterm.js terminal bound to a backend tab. */
 @Component({
   selector: 'app-terminal-view',
-  imports: [FormsModule, DeviceIcon],
+  imports: [FormsModule, DeviceIcon, Icon],
   host: { class: 'modern' },
   template: `<div class="term-host" #host (contextmenu)="onContextMenu($event)"></div>
-    @if (tab().autoScroll === false) {
+    @if (tab().autoScroll === false && !barShown()) {
       <div class="paused" title="New output does not move the view">Auto scroll is off <button type="button" (click)="setAutoScroll(true)">Turn On</button></div>
     }
-    @if (tab().sendBar) {
+    @if (barShown()) {
       <div class="sendbar" [class.compact]="!serial()">
         @if (serial()) {
           <span class="port" [class.on]="tab().state === 'connected'" [title]="tab().info || 'Serial port and speed'"><span class="dot"></span>{{ portLabel() }}</span>
@@ -98,11 +99,12 @@ function b64ToBytes(b64: string): Uint8Array {
         } @else {
           <span class="spacer"></span>
         }
-        <label title="Local time at the start of each line (display only)"><input type="checkbox" [ngModel]="!!tab().timestamps" (ngModelChange)="setTimestamps($event)" /> Timestamps</label>
-        <label title="Follow new output"><input type="checkbox" [ngModel]="tab().autoScroll !== false" (ngModelChange)="setAutoScroll($event)" /> Auto scroll</label>
-        <button type="button" (click)="clearAll()" title="Clear the screen and the scrollback">Clear</button>
+        <button type="button" class="tg" [class.on]="!!tab().timestamps" [attr.aria-pressed]="!!tab().timestamps" (click)="setTimestamps(!tab().timestamps)"
+          [title]="tab().timestamps ? 'Timestamps on: local time at the start of each line (display only) - click to hide them' : 'Show Timestamps: local time at the start of each line (display only)'"><app-icon name="clock" [size]="15" /></button>
+        <button type="button" class="tg" [class.on]="tab().autoScroll === false" [attr.aria-pressed]="tab().autoScroll === false" (click)="setAutoScroll(tab().autoScroll === false)"
+          [title]="tab().autoScroll === false ? 'Scroll lock on: new output does not move the view - click to turn auto scrolling on' : 'Turn Auto Scrolling Off: keep the view where it is while output arrives'"><app-icon [name]="tab().autoScroll === false ? 'lock' : 'unlock'" [size]="15" /></button>
+        <button type="button" class="tg" (click)="clearAll()" title="Clear the screen and the scrollback (asks first)"><app-icon name="clear" [size]="15" /></button>
         @if (serial()) { <button type="button" (click)="tabs.saveScrollback(tab().id)" title="Save the output to a text file">Save…</button> }
-        <button type="button" class="x" [title]="serial() ? 'Hide the send bar (right-click the terminal → Send Bar shows it again)' : 'Hide this bar (right-click the terminal → Terminal Bar shows it again; Global Options → Terminal hides it for every tab)'" (click)="tabs.patch(tab().id, { sendBar: false })">✕</button>
       </div>
     }
     @if (card() === 'connecting') {
@@ -195,6 +197,11 @@ function b64ToBytes(b64: string): Uint8Array {
       .sendbar { margin: 8px 0 0 -16px; min-height: 34px; padding: 4px 12px; background: var(--surface); border-top-color: var(--line);
         button { border-radius: var(--r-sm); background: var(--surface-2); border-color: var(--line); } } }
     .sendbar.compact { padding: 2px 8px; button { height: 20px; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 0 8px; } }
+    /* icon toggles, as VS Code's panel actions: no text, a tooltip; on = highlighted */
+    .sendbar button.tg, :host(.modern) .sendbar button.tg { width: 26px; height: 24px; padding: 0; border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
+      &:hover { color: var(--text); background: var(--hover); } &.on, &.on:hover { color: var(--accent); background: none; border-color: transparent; } }
+    .sendbar.compact button.tg { height: 20px; width: 24px; }
+    .sendbar button.x, :host(.modern) .sendbar button.x { width: 26px; padding: 0; border-color: transparent; background: none; &:hover { color: var(--text); background: var(--hover); } }
     .fixbar { position: absolute; top: 10px; right: 14px; z-index: 5; max-width: min(520px, 80%); padding: 10px 12px; border-radius: 8px;
       background: var(--panel); color: var(--text); border: 1px solid var(--border); border-left: 4px solid var(--danger); box-shadow: var(--shadow); font-size: calc(12.5px * var(--ui-scale, 1)); }
     .fmsg { font-weight: 600; margin-right: 18px; word-break: break-word; }
@@ -223,6 +230,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
 
   // ---- send bar (serial tabs; any tab from the right-click menu) ----
   readonly serial = computed(() => this.tab().session.protocol === 'Serial');
+  /** The bar under the terminal: always on serial tabs (it sends); elsewhere unless Global Options → Terminal hides it. */
+  readonly barShown = computed(() => this.serial() || !this.ui.settings()?.hideTerminalBar);
   /** "/dev/cu.usbserial-A10K · 115200 8N1": what the connection reports, else the session's settings. */
   readonly portLabel = computed(() => {
     const t = this.tab();
@@ -300,7 +309,10 @@ export class TerminalView implements AfterViewInit, OnDestroy {
   }
 
   /** Clears the screen and the scrollback (the line with the cursor stays). */
-  clearAll() { this.term?.clear(); this.clearHighlights(); this.term?.focus(); }
+  async clearAll() {
+    if (!(await this.ui.confirm('Clear the terminal?', 'The screen and the scrollback of ' + this.tab().title + ' are cleared. Logs and recordings keep what they have.', 'Clear', true))) { this.term?.focus(); return; }
+    this.term?.clear(); this.clearHighlights(); this.term?.focus();
+  }
 
   /** Remembers the command on the cursor line (prompt removed) for history search. */
   /** The device printed the cursor position answer as text ("^[[75;247R"): it reads the answer as typed
@@ -496,7 +508,22 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       if (this.visible()) this.scheduleFit();
     });
     effect(() => {
-      if (this.visible() && this.tabs.activeId() === this.tab().id) setTimeout(() => this.term?.focus(), 0);
+      if (this.visible() && this.tabs.activeId() === this.tab().id) { setTimeout(() => this.term?.focus(), 0); this.pubCaret(); }
+    });
+  }
+
+  private caretRaf = 0;
+  /** The cursor and the selection, for the status bar: the active tab's only, at most once a frame. */
+  private pubCaret() {
+    if (this.caretRaf || this.tabs.activeId() !== this.tab().id) return;
+    this.caretRaf = requestAnimationFrame(() => {
+      this.caretRaf = 0;
+      const t = this.term;
+      if (!t || this.tabs.activeId() !== this.tab().id) return;
+      const b = t.buffer.active, p = t.hasSelection() ? t.getSelectionPosition() : undefined;
+      const rows = p ? p.end.y - p.start.y + 1 : 0;
+      this.tabs.caret.set({ id: this.tab().id, row: b.cursorY + 1, col: b.cursorX + 1, selRows: rows, selCols: p && rows === 1 ? Math.abs(p.end.x - p.start.x) : 0,
+        selChars: p ? t.getSelection().replace(/\r?\n/g, '').length : 0 });
     });
   }
 
@@ -647,7 +674,9 @@ export class TerminalView implements AfterViewInit, OnDestroy {
     });
     term.onSelectionChange(() => {
       if (this.ui.settings()?.copyOnSelect && term.hasSelection()) void this.backend.clipboardSet(term.getSelection());
+      this.pubCaret();
     });
+    term.onCursorMove(() => this.pubCaret());
     term.attachCustomKeyEventHandler(ev => {
       if (ev.type !== 'keydown') return true;
       const km = this.ui.settings()?.keyMap;
@@ -805,7 +834,6 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       { separator: true },
       { label: (this.tabs.get(id)?.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.setTimestamps(!this.tabs.get(id)?.timestamps) },
       { label: (this.tabs.get(id)?.autoScroll !== false ? '✓ ' : '') + 'Auto Scroll', action: () => this.setAutoScroll(this.tabs.get(id)?.autoScroll === false) },
-      { label: (this.tabs.get(id)?.sendBar ? '✓ ' : '') + (this.serial() ? 'Send Bar' : 'Terminal Bar'), action: () => this.tabs.patch(id, { sendBar: !this.tabs.get(id)?.sendBar }) },
       { separator: true },
       { label: 'Clear Screen', action: () => this.clearAll() },
       { label: 'Clear Scrollback', action: () => t?.clear() },

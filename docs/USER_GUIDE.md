@@ -80,7 +80,7 @@ Termwright has one layout: tabs, the Sessions list, search and the menus (**⋯*
 |---|---|
 | **Title bar** | The **tabs** (a dot shows the state: green connected, amber connecting, red error, grey disconnected; badges for logging and recording; a running script shows as a pill with Stop), **+** for a new session, the **Sessions** button (a list of every session with its small device icon, grouped by folder with favourites first - type to filter, ↵ connects, Alt+↵ opens SFTP, an address that is no session connects to it), Quick Connect (⚡), SFTP, the layout menu, the theme switch (Light / Dark / System), Settings (⚙) and the **⋯** menu with File, Edit, View, Transfer, Tools and Help. On macOS the tabs share the title bar with the window buttons. Many tabs scroll sideways (mouse wheel or trackpad). |
 | **Start page** | Shown when no tab is open: a large search-or-connect box (type `voss 10.1.1.1`, `ssh admin@host`, a session name …), quick actions (Quick Connect, New Session, Local Shell, Import, Discover Devices - as *Raised* buttons, *Keycaps* with their shortcut or *Glow cards*: Settings → General → Start page buttons) and cards for your **Favourites** and **Recent** sessions with their device icon, address, device facts and when you last used them - at most 12 cards in all, favourites first. Click a card to connect; right-click for more; *Clear* empties the list. |
-| **Session Manager** (left by default) | Folders and sessions with a filter box. Folders are coloured by level (top level amber, sub-folders purple, deeper blue, production light red), sessions show a **device icon** (switch, router, firewall, access point, server …) - View → Tile / Glyph Icons switches between coloured tiles and plain glyphs. **New**, **Shell** (a local shell) and **Scan** buttons at the bottom, in the colours of the start page buttons; the **pulse** button beside the filter shows **which devices answer** (a green or red dot from a quick TCP check of each session's port, every minute) and the **⋯** menu has Clear Recent / Favourites, Compact rows and the side. |
+| **Session Manager** (left by default) | Folders and sessions with a filter box. Folders are coloured by level (top level amber, sub-folders purple, deeper blue, production light red), sessions show a **device icon** (switch, router, firewall, access point, server …) - View → Tile / Glyph Icons switches between coloured tiles and plain glyphs. **New**, **Shell** (a local shell) and **Scan** buttons at the bottom, in the colours of the start page buttons; the **pulse** button beside the filter shows **which devices answer** (a green or red dot from a quick TCP check of each session's port, every minute) and the **⋯** menu has Clear Recent / Favourites, Compact rows and the side. The **hide** button after ⋯ hides it (as Mod+Shift+M and View → Session Manager do) - more room for the emulated lab; the **Sessions** strip at the side shows it again. |
 | **Session side panel** | New Session and right-click → Properties… open beside the terminal with the everyday fields and the device facts; *Advanced* and **All session options…** open the full dialog. |
 | **Command Window / Button Bar** | View → Command Window / Button Bar (or `Mod+K` / `Mod+B`). |
 | **Status bar** | State, protocol · user@host:port, device type and facts (e.g. *VOSS 8.10.0.0 · up 41 days*), transfers, terminal size. |
@@ -91,7 +91,7 @@ Termwright has one layout: tabs, the Sessions list, search and the menus (**⋯*
 |---|---|
 | ![Start page](screenshots/home.png) | ![Session side panel](screenshots/session-panel.png) |
 
-Every command of the old menu bar is in the **⋯** menu of the title bar (on macOS also in the top-of-screen menu), with the same keyboard shortcuts.
+Every command of the old menu bar is in the **⋯** menu of the title bar (on macOS also in the top-of-screen menu), with the same keyboard shortcuts. On Linux the window has no system title bar: Termwright's title bar has the menus themselves (File, Edit, View, Transfer, Lab, Script, Options, Tab, Help, in Termwright's theme, with their shortcuts) and the minimise, maximise and close buttons; drag the title bar to move the window, its edges to resize it, and double-click it to maximise. In a narrow window the menus are under **⋯**.
 
 The Session Manager can move to the **other side** or be **hidden** (View → Session Manager Left / Right, View → Session Manager, `Mod+M`); position, visibility and width are remembered.
 
@@ -700,7 +700,7 @@ For an SSH session over Wi-Fi, a VPN or a laptop that sleeps, tick **Connect wit
 
 - **Port**: the list shows the serial ports of this computer in order - `COM1, COM2 … COM10` on Windows, `/dev/ttyACM0, /dev/ttyUSB0, /dev/ttyUSB1 …` on Linux, `/dev/cu.*` on macOS - with the adapter's name and USB ID when the system reports them (e.g. *FT232R USB UART (0403:6001)*). The list **updates by itself** about every second and a half: plug in a console cable and its port appears, marked *(new)*, and is picked when no port was chosen yet. A saved port that is not plugged in shows as *(not connected)*. *Other port…* types a name by hand. Quick Connect has the same list.
 - **Detect Speed**: sends Enter at each common speed (9600, 115200, 19200, 38400, 57600, 4800, 2400, 230400, 1200) and keeps the one where the device answers with readable text. Close a tab that has the port open first. *Detect the speed each time it connects* does this on every connect; the status bar then shows the speed with *(detected)*.
-- **Send bar** (under serial tabs): it starts with the **port and speed** of the connection (`/dev/cu.usbserial-A10K · 115200 8N1`, green while connected; *(detected)* when the speed was detected). Type a message and press **Enter** or **Send**; ↑/↓ recall earlier messages. The line ending is added after each message: **CR** (default, what consoles expect), **LF**, **CR+LF** or none. **Timestamps** puts the local time (`[10:41:07.512]`) at the start of every line, **Auto scroll** follows new output, **Clear** empties the screen and the scrollback, **Save…** writes the output to a text file. ✕ hides the bar; right-click the terminal → *Send Bar* shows it again, on any tab.
+- **Send bar** (under serial tabs): it starts with the **port and speed** of the connection (`/dev/cu.usbserial-A10K · 115200 8N1`, green while connected; *(detected)* when the speed was detected). Type a message and press **Enter** or **Send**; ↑/↓ recall earlier messages. The line ending is added after each message: **CR** (default, what consoles expect), **LF**, **CR+LF** or none. The clock icon (**Timestamps**) puts the local time (`[10:41:07.512]`) at the start of every line, the lock icon is **scroll lock** (open: new output follows; closed: the view stays), the eraser **clears** the screen and the scrollback after asking, **Save…** writes the output to a text file. Each icon says what it does when you hover it. The bar is always there on serial tabs.
 - **Hex**: the first list switches the message box between **Text** and **Hex**. In Hex mode type bytes as `48 65 6C 6C 6F 0D 0A`, `0x02,0x10,0x03` or `48656C6C6F`; they are sent exactly as typed (no line ending is added - put `0D 0A` in yourself). A typo such as `1G` is marked in red and nothing is sent. **View: Hex** shows what the device sends as hex bytes - a new line after each line feed (`0A`) or 16 bytes - with timestamps if they are on; **View: Text** goes back to normal output.
 
 ![Serial tab sending and showing hex bytes](screenshots/serial-hex.png)
@@ -715,10 +715,11 @@ For an SSH session over Wi-Fi, a VPN or a laptop that sleeps, tick **Connect wit
 - **Font, size and line spacing**: Global Options → Terminal & Appearance. The default is Menlo / Consolas / DejaVu Sans Mono at 14 with *Normal* line spacing (the font's own, as most terminal programs use); *Line spacing* adds 10, 20 or 35 % between lines. A session can have its own font and size (Session Options → Terminal → Appearance).
 - **Save Screen As Image** (File menu, tab menu, `Mod+⇧P`): the visible screen as a PNG, with its colours and highlighting - handy for tickets and chat.
 - **Files panel**: View → *Files Panel* (`Mod+⇧1`), the title-bar button or the tab's right-click menu shows a file browser beside an SSH terminal that follows its folder - see [Files panel beside the terminal](#files-panel-beside-the-terminal).
-- **Terminal bar** (under every SSH, Telnet, Raw and local shell tab): **Timestamps**, **Auto scroll** and **Clear** one click away. ✕ hides it for that tab (right-click → *Terminal Bar* shows it again); Global Options → Terminal → *Terminal bar* hides it for every tab.
-- **Clear Screen** (the eraser button, the terminal bar, right-click the terminal or a tab, Edit menu) empties the screen and the scrollback; the line with the cursor stays. *Clear Scrollback* keeps what is on the screen; *Reset Terminal* resets the emulator.
+- **Terminal bar** (under every SSH, Telnet, Raw and local shell tab): timestamps (clock), scroll lock (lock) and clear (eraser, asks first) one click away, as icons with tooltips. Global Options → Terminal → *Show Timestamps, Auto scroll and Clear…* hides it for every SSH, Telnet and local tab.
+- **Clear Screen** (the eraser button, the terminal bar - which asks first -, right-click the terminal or a tab, Edit menu) empties the screen and the scrollback; the line with the cursor stays. *Clear Scrollback* keeps what is on the screen; *Reset Terminal* resets the emulator.
 - **Timestamps**: right-click the terminal → *Timestamps* (or Edit → Timestamps On / Off) puts the local time with milliseconds at the start of each line, on any connection. It is display only: logs have their own per-line prefix. Session Options → Terminal → *Display* turns it on for every connection of a session (off by default).
-- **Auto scroll** (on by default): the arrow button, right-click → *Auto Scroll* or Edit → Auto Scroll On / Off. When it is off the view stays where it is while output arrives, so you can read; *Auto scroll is off · Turn On* in the corner brings it back. Session Options → Terminal → *Display* can keep it off for a session.
+- **Auto scroll** (on by default): the arrow button, right-click → *Auto Scroll* or Edit → Auto Scroll On / Off. When it is off the view stays where it is while output arrives, so you can read; the lock icon of the terminal bar turns blue (with the bar hidden, *Auto scroll is off · Turn On* shows in the corner). Session Options → Terminal → *Display* can keep it off for a session.
+- **Status bar**: for the active terminal, the cursor's line and column (*Ln 25, Col 18*), the selection while there is one (*Sel 12 cols, 12 chars* on one line, *Sel 3 rows, 140 chars* over several), its size (*25 Rows, 80 Cols*), the terminal type, and **CAP** and **NUM**, bright while Caps Lock and Num Lock are on.
 - **Links**: URLs in the output open in your browser when clicked.
 - **Send Break**: Tab → Send Break (serial break, telnet BREAK or SSH break request, e.g. to reach a boot loader / ROMMON).
 - **Send Text File**: Transfer → Send Text File… pastes a file line by line (respects *Paste line delay*).
@@ -727,7 +728,7 @@ For an SSH session over Wi-Fi, a VPN or a laptop that sleeps, tick **Connect wit
 ![Tiled view with keyword highlighting](screenshots/grid.png)
 
 - **Lock**: Tab → Lock Session (or the lock button) blocks keyboard input to a tab until you enter the password you chose; *Lock All Sessions* locks every tab.
-- **Tab menu** (right-click a tab): Reconnect, Disconnect, Clone, Add to Send Group, Open SFTP Tab, **Files Panel**, Set Up Key Login, Connect SFTP Session, Log, Save Scrollback, Timestamps, Auto Scroll, Send Bar, Clear Screen, Session Options, Rename Tab, Close, Close Other Tabs. Middle-click closes a tab.
+- **Tab menu** (right-click a tab): Reconnect, Disconnect, Clone, Add to Send Group, Open SFTP Tab, **Files Panel**, Set Up Key Login, Connect SFTP Session, Log, Save Scrollback, Timestamps, Auto Scroll, Clear Screen, Session Options, Rename Tab, Close, Close Other Tabs. Middle-click closes a tab.
 
 ### AI assistant (optional)
 
@@ -1220,6 +1221,8 @@ The **Lab** menu - *Emulated Lab*, *Simulated Lab*, and straight to the emulated
 
 ### Emulated lab (real VM images on a KVM host)
 
+> New to the emulated lab? [The Emulated Lab guide](EMULATOR_GUIDE.md) goes step by step from preparing the host to the first test, and the same with the AI agent.
+
 The **emulated lab** (Lab window → *Emulated lab (KVM host)* at the top right) boots the vendors' **own VM images** - the free `.qcow2` images several network operating systems offer - with QEMU/KVM on a **Linux server you reach over SSH**. The real operating system runs, so protocols, APIs and cloud agents work as on a real switch. Your computer only drives the host; nothing of Termwright is installed there.
 
 **The lab workspace.** The cube button at the top right (and the flask for the simulated lab) opens the lab as a **tab**:
@@ -1579,7 +1582,7 @@ A translation is a plain text list in the source (`frontend/src/app/i18n/ru.ts`,
 | **Keyword Highlighting** | Keyword sets and the default set. |
 | **Key Map** | Key bindings. |
 | **Button Bar** | Buttons: label, text, all tabs, action, script; reorder. |
-| **Updates** | What to be told about (stable / stable and nightly / nothing), check at start-up; under *Advanced*, repository and token for your own fork. |
+| **Updates** | What to be told about (stable / stable and nightly / nothing), check at start-up. |
 
 ### Updates
 
@@ -1595,7 +1598,6 @@ Options → Global Options → **Updates** decides when you are told about updat
 
 - **Notify me about**: *Stable releases* (default), *Stable releases and nightly builds*, or *Nothing*.
 - **Check at start-up** (at most once a day; only a notice when something newer exists).
-- **Advanced - only for your own fork**: repository and GitHub token. Leave them alone for the official releases.
 
 ## 14. Migrating from SecureCRT, PuTTY or MobaXterm
 

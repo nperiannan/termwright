@@ -119,6 +119,15 @@ export class App implements OnInit {
       ...(t.info && t.info !== t.title ? [t.info] : [])].join('\n');
   }
   /** Status bar: "VOSS 8.10.0.0 · up 41 day(s)". */
+  /** The active terminal's cursor and selection (the status bar). */
+  caretOf(t: TabView) { const c = this.tabs.caret(); return c && c.id === t.id ? c : null; }
+  /** Caps Lock and Num Lock, as the last key said. */
+  readonly locks = signal({ caps: false, num: false });
+  private readLocks = (ev: KeyboardEvent) => {
+    if (typeof ev.getModifierState !== 'function') return;
+    const caps = ev.getModifierState('CapsLock'), num = ev.getModifierState('NumLock'), l = this.locks();
+    if (caps !== l.caps || num !== l.num) this.locks.set({ caps, num });
+  };
   statusFacts(t: TabView) {
     const f = this.ui.factsOf(t.session?.path);
     const parts = [[t.session?.deviceType, f?.['Version']].filter(Boolean).join(' '), f?.['Uptime'] ? 'up ' + f['Uptime'] : ''].filter(Boolean);
@@ -180,6 +189,23 @@ export class App implements OnInit {
   }
   /** macOS without a title bar (started in the modern layout): room for the window buttons. */
   readonly insetTitle = signal(false);
+  /** Linux: no system title bar or menu bar - the menus and the window buttons are in the app's title bar. */
+  readonly ownTitle = signal(false);
+  win(b: 'min' | 'max' | 'close') { void this.backend.windowButton(b).catch(() => {}); }
+  /** The menus' shortcuts, when no system menu bar handles them (Linux): "Ctrl+Shift+O" → its action. */
+  private menuKeys() {
+    const keys = new Map<string, string>();
+    for (const m of this.menus) for (const i of m.items) if (i.keys && i.action) keys.set(i.keys.toLowerCase(), i.action);
+    window.addEventListener('keydown', ev => {
+      if (ev.repeat || (!ev.ctrlKey && !ev.altKey) || ev.metaKey) return;
+      const k = /^Key[A-Z]$/.test(ev.code) ? ev.code.slice(3) : /^Digit\d$/.test(ev.code) ? ev.code.slice(5) : ev.key;
+      const combo = (ev.ctrlKey ? 'ctrl+' : '') + (ev.altKey ? 'alt+' : '') + (ev.shiftKey ? 'shift+' : '') + k.toLowerCase();
+      const a = keys.get(combo);
+      if (!a) return;
+      ev.preventDefault(); ev.stopPropagation();
+      void this.action(a);
+    }, true);
+  }
   readonly quickOpenKeys = this.isMac ? '⌘G' : 'Ctrl+Shift+G';
   readonly layoutIcon = computed(() => ({ tabs: 'tabs', 'tile-v': 'tile-v', 'tile-h': 'tile-h', grid: 'grid' } as Record<string, string>)[this.tabs.layout()] ?? 'tabs');
 
@@ -399,6 +425,9 @@ export class App implements OnInit {
     // "0.24.1", or "0.24.1 nightly" for a build of develop ("0.24.1~git1234567")
     this.appVersion.set((info.version || '').replace(/~git([0-9a-f]+)$/, ' nightly').replace(/-dev$/, ' dev'));
     this.insetTitle.set(!!info.insetTitle);
+    this.ownTitle.set(!!info.ownTitle);
+    window.addEventListener('keydown', this.readLocks, true); window.addEventListener('keyup', this.readLocks, true);
+    if (info.ownTitle) this.menuKeys();
     if (info.insetTitle) void this.alignWithWindowButtons();
     if (info.initError) this.ui.toast('Startup error: ' + info.initError, 'error', 20000);
     await this.ui.loadSettings();
@@ -753,7 +782,6 @@ export class App implements OnInit {
       ...(t.kind === 'terminal' ? [
         { label: (t.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.tabs.patch(t.id, { timestamps: !t.timestamps }) },
         { label: (t.autoScroll !== false ? '✓ ' : '') + 'Auto Scroll', action: () => { this.tabs.patch(t.id, { autoScroll: t.autoScroll === false }); if (t.autoScroll === false) this.tabs.handles.get(t.id)?.term.scrollToBottom(); } },
-        { label: (t.sendBar ? '✓ ' : '') + (t.session.protocol === 'Serial' ? 'Send Bar' : 'Terminal Bar'), action: () => this.tabs.patch(t.id, { sendBar: !t.sendBar }) },
         { label: 'Clear Screen', action: () => this.tabs.handles.get(t.id)?.term.clear() },
       ] : []),
       { label: 'Session Options...', action: () => this.ui.editSession(t.session.path, t.id), disabled: !t.session.path },

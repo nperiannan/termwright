@@ -50,6 +50,7 @@ export class Backend {
 
   getAppInfo() { return this.call<AppInfo>('GetAppInfo'); }
   titleBarDoubleClick() { return this.call<void>('TitleBarDoubleClick'); }
+  windowButton(b: 'min' | 'max' | 'close') { return this.call<void>('WindowButton', b); }
   windowButtons() { return this.call<{ centerY: number; right: number } | null>('WindowButtons'); }
   downloadCount() { return this.call<number>('DownloadCount'); }
   quit() { return this.call<void>('Quit'); }

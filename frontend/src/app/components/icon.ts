@@ -43,7 +43,7 @@ const PATHS: Record<string, string> = {
   paste: 'M9 4h6v3H9zM7 5H5v15h14V5h-2',
   find: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-5-5',
   // eraser
-  clear: 'M7 20h13M4.6 15.4l8.8-8.8a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L11 19.1a3 3 0 0 1-2.1.9H7.5a2 2 0 0 1-1.4-.6l-1.5-1.5a2 2 0 0 1 0-2.5zM9 11l5 5',
+  clear: 'M15.6 4.2l4.2 4.2a1.6 1.6 0 0 1 0 2.3L11 19.5H7.2l-3-3a1.6 1.6 0 0 1 0-2.3L13.3 4.2a1.6 1.6 0 0 1 2.3 0zM9 9.6l5.4 5.4M11 19.5h9',
   // arrow down onto a line: follow new output
   autoscroll: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   log: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7',
@@ -65,10 +65,15 @@ const PATHS: Record<string, string> = {
   'tile-h': 'M3 4h18v16H3zM3 12h18',
   grid: 'M3 4h18v16H3zM12 4v16M3 12h18',
   lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
+  unlock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 6.9-.9',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3.5 2',
+  chat: 'M4 5h16v11H10l-5 4v-4H4z',
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
   'dock-left': 'M3 4h18v16H3zM9 4v16M16 9l-3 3 3 3',
   'dock-right': 'M3 4h18v16H3zM15 4v16M8 9l3 3-3 3',
   'hide-panel': 'M3 4h18v16H3zM9 4v16M5.5 9l1.5 3-1.5 3',
+  'panel-hide-left': 'M3 4h18v16H3zM9 4v16M7 9l-1.5 3L7 15',
+  'panel-hide-right': 'M3 4h18v16H3zM15 4v16M17 9l1.5 3-1.5 3',
   pulse: 'M3 12h4l3-7 4 14 3-7h4',
   // Discover Devices: a radar sweep with devices showing up as dots
   radar: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M7 12a5 5 0 1 0 10 0a5 5 0 1 0-10 0M12 12l6.4-6.4M15.5 15h.01M8 9.5h.01',

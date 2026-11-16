@@ -4296,6 +4296,20 @@ const ru: Record<string, string> = {
   'Blocked TCP port (ACL)': 'Заблокированный TCP-порт (ACL)',
   'on {0} switches · {1} on real ports': 'на {0} коммутаторах · {1} на реальных портах',
   'A sender and counter on a KVM host (no VM): about 100,000 frames a second with the built-in engine, several hundred thousand with the fast one (Engines…) - for forwarding, VLANs, LAGs, ACLs and failover; TRex servers for line rate.': 'Отправитель и счётчик на KVM-хосте (без ВМ): около 100 000 кадров в секунду со встроенным движком, несколько сотен тысяч с быстрым (Движки…) - для пересылки, VLAN, LAG, ACL и переключения; серверы TRex - для скорости линии.',
+  'Tip:': 'Совет:',
+  'Ask about the output': 'Спросите о выводе',
+  'Describe the task to plan': 'Опишите задачу для плана',
+  'Chat with the Termwright agent': 'Чат с агентом Termwright',
+  'click to choose the model and its effort': 'нажмите, чтобы выбрать модель и её усилие',
+  'The AI service - click for the AI settings': 'Служба ИИ - нажмите для настроек ИИ',
+  'AI': 'ИИ',
+  'Permissions': 'Разрешения',
+  'Learn more about permissions': 'Подробнее о разрешениях',
+  'Select output in the terminal to ask about just that part.': 'Выделите вывод в терминале, чтобы спросить только о нём.',
+  'Type @ to add another tab to the question.': 'Введите @, чтобы добавить к вопросу другую вкладку.',
+  'Paste a screenshot with ⌘V or Ctrl+V: the AI reads it.': 'Вставьте снимок экрана через ⌘V или Ctrl+V: ИИ его прочитает.',
+  'Plan looks first with read-only commands; nothing changes until you run the plan.': 'План сначала смотрит командами только для чтения; ничего не меняется, пока вы не запустите план.',
+  'Drop a picture or a log file on the message box to add it.': 'Перетащите картинку или файл журнала на поле сообщения, чтобы добавить его.',
 };
 
 export default ru;

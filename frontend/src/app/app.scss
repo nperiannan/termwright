@@ -91,7 +91,9 @@
 .status { display: flex; gap: 14px; align-items: center; height: 24px; padding: 0 10px; font-size: calc(12px * var(--ui-scale, 1)); color: var(--muted); background: var(--chrome); border-top: 1px solid var(--border); white-space: nowrap;
   .grow { flex: 1; } .info { overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
   .state { &::first-letter { text-transform: uppercase; } display: inline-block; &.connected { color: var(--ok); } &.error { color: var(--danger); } &.connecting { color: var(--warn); } }
-  .log { color: var(--danger); } .xfer { color: var(--accent); } }
+  .log { color: var(--danger); } .xfer { color: var(--accent); }
+  .tt { font-family: var(--mono); font-size: .95em; } .sel { color: var(--accent); }
+  .lk { font-size: .9em; font-weight: 600; letter-spacing: .04em; color: color-mix(in srgb, var(--faint) 55%, transparent); margin-left: -6px; &.on { color: var(--text); } } }
 app-command-window { flex: none; }
 
 .menubar { display: flex; gap: 1px; padding: 2px 6px; background: var(--chrome); border-bottom: 1px solid var(--border);
@@ -99,6 +101,21 @@ app-command-window { flex: none; }
     &:hover { background: var(--hover); } } }
 
 /* ---- modern layout: tabs, search and a few actions in one title bar ---- */
+/* Linux: the app's own title bar - its logo, the menus and the window buttons (no system title bar or menu bar) */
+.titlebar.own { padding-right: 0;
+  .tlogo { flex: none; margin: 0 6px 0 4px; }
+  .mbar { flex: none; display: flex; align-items: center; gap: 0; margin-right: 6px;
+    button { height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: calc(13px * var(--ui-scale, 1)); --wails-draggable: no-drag;
+      &:hover, &:focus-visible { color: var(--text); background: var(--hover); } } }
+  /* two rows, as on macOS the menus are apart from the tabs: the menus and the buttons, then the tabs under them */
+  flex-wrap: wrap; height: auto; padding-left: 0; row-gap: 0;
+  .tsp { flex: 1; min-width: 12px; height: 40px; }
+  .ptabs { order: 99; flex: 1 1 100%; height: 38px; padding: 0 var(--sp-2); border-top: 1px solid var(--line); background: var(--bg); }
+  .wbtns { height: 40px; }
+  .wbtns { flex: none; display: flex; align-self: stretch; margin-left: 6px; --wails-draggable: no-drag;
+    button { width: 46px; height: 100%; padding: 0; border: 0; border-radius: 0; background: none; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
+      svg { fill: none; stroke: currentColor; stroke-width: 1.2; } &:hover { color: var(--text); background: var(--hover); } &.cl:hover { color: #fff; background: #e81123; } } } }
+@media (max-width: 1100px) { .titlebar.own .mbar { display: none; } } /* narrow: the menus are under ⋯ */
 .titlebar { flex: none; display: flex; align-items: center; gap: 2px; height: 44px; padding: 0 var(--sp-2) 0 var(--sp-2);
   background: var(--surface); border-bottom: 1px solid var(--line); --wails-draggable: drag; user-select: none;
   /* macOS window without its own title bar: the bar is twice as tall as the
@@ -111,7 +128,6 @@ app-command-window { flex: none; }
     &:hover:not(:disabled) { background: var(--hover); color: var(--text); }
     &.on, &.on:hover:not(:disabled) { color: var(--accent); }
     &:disabled { opacity: .35; } }
-  .side-toggle { margin-right: var(--sp-1); color: var(--muted); &.on { color: var(--muted); } &:hover { color: var(--text); } }
   .ptabs { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-1); overflow-x: auto; overflow-y: hidden; height: 100%;
     scrollbar-width: none; &::-webkit-scrollbar { height: 0; }
     &:hover { scrollbar-width: thin; &::-webkit-scrollbar { height: 3px; } } }
@@ -165,7 +181,7 @@ app-command-window { flex: none; }
     color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); line-height: 1.5; cursor: default;
     b { color: var(--text); font-weight: 600; } }
   button.hf-chip { cursor: pointer; &:hover { color: var(--text); border-color: var(--border); } }
-  .hf-chip.link { color: var(--accent); }
+  .hf-chip.link { color: var(--text); .star { color: #f5b942; } }
   .hf-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint);
     &.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); } &.new { background: var(--accent); box-shadow: 0 0 6px var(--accent); } } }
 .home-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 22px;

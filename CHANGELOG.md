@@ -2,6 +2,23 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## 0.40.0 (2026-11-16)
+
+- **Linux: one title bar, in Termwright's theme.** The window has no system title bar and no GTK menu bar any more: Termwright's own title bar has its logo, the menus (File, Edit, View, Transfer, Lab, Script, Options, Tab, Help - themed like the rest, with their shortcuts) and the minimise, maximise and close buttons. The window still moves by its title bar and resizes at its edges; a narrow window keeps the menus under ⋯.
+- **Status bar as on classic terminals**: the cursor's line and column, the selection (rows or columns, and characters), the terminal's rows and columns, its type, and CAP and NUM (Caps Lock and Num Lock).
+- **The terminal bar's toggles are icons**, as in VS Code's panels: timestamps (a clock), scroll lock (a lock: open while new output follows, closed when the view stays) and clear (which now asks first) - each with a tooltip.
+- **The AI chat's message box, as VS Code's chat**: a tip on top, the model and its effort in the box, a quiet send button, and under it the AI service, the mode (Agent, Plan, Ask) and the agent's permissions as plain chips; the mode menu has the permissions too, and *Changes ask first* is marked *Recommended*.
+- **Start page**: the search bar has the same edge, face and corners as the buttons under it.
+- **Hide the Session Manager from itself**: a hide button beside its ⋯ (the *Sessions* strip at the side shows it again) - more room for the emulated lab. The title bar's sidebar button is gone.
+- **Terminal bar**: always there - no ✕ to hide it by mistake (Global Options → Terminal hides it for every tab), an icon that is on is just blue (no frame), the clear icon is an eraser, and *Auto scroll is off · Turn On* no longer covers the output while the bar shows - the blue lock says it (the notice stays when the bar is hidden).
+- **The Emulated Lab guide** ([docs/EMULATOR_GUIDE.md](docs/EMULATOR_GUIDE.md)): step by step from the KVM host (Ubuntu, KVM on hardware or nested in a VM) to Set Up, images and appliances, a qcow2 image from an ISO, a topology on the canvas, several hosts, traffic and a complete test - and the same with the AI agent. The AI assistant knows it too.
+- **Linux: the tabs on a row of their own**, under the menus and buttons - as on macOS, where the menus are at the top of the screen.
+- **Fixed: Check for Updates did not offer the nightly after a release**: a release is a merge of develop into main, so the newer nightly is not "ahead" of its tag but "diverged" from it; that counts as newer now (when it changes more than documentation). A 0.39.0 install still has the old check: download that one nightly by hand.
+- **Fixed: local builds and the nightly's notes named 0.36.0** after 0.39.0: releases are tagged on main, so the newest release tag is found by its version, not by what develop reaches. The start page shows *0.39.0 nightly* again.
+- **Start page**: *GitHub* at the bottom is white, with a gold star.
+- **Updates**: the *Advanced* section (another repository and a GitHub token, for a fork) is gone.
+- **Source layout**: the desktop app's Go files moved from the top of the repository into `app/` (package app); `main.go` alone stays at the top - it embeds the window, the guides and scripts and starts the app - so the GitHub page shows the folders and the README without a long list of files first. Builds and the API are unchanged; `go test ./app/` runs the app's tests.
+
 ## 0.39.0 (2026-11-16)
 
 - **Quick streams and tests.** The Traffic page's **＋ L2 Stream**, **＋ L3 Stream** and **Quick Tests…** open one dialog: choose an L2 or L3 stream, a custom frame, or a ready test - latency, jitter, loss under load, RFC 2544 throughput, bad packets, fuzz, VLAN isolation, MTU and jumbo frames, 802.1X clients - answer a few questions (which test ports, whether the switch ports carry the VLAN tagged, whether the switch has IP interfaces in the two subnets) and *What Termwright fills in* lists every stream and every change to a test port before anything is made, each one editable. *Create* or *Create and Start*. An L3 stream gives each test port an address and the switch's IP interface as its gateway, and says what the switch needs to route.

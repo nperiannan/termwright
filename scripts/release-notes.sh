@@ -27,14 +27,15 @@ MORE="**…and more** - the full list is in [CHANGELOG.md](https://github.com/$R
 notes() {
   if [ "$REF" = nightly ]; then
     TO=$(git rev-parse HEAD)
-    FROM=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
+    # the newest release: releases are tagged on main (a merge of develop), so not reachable from develop
+    FROM=$(git tag --list 'v*' --sort=-v:refname | head -1)
     echo "Automatic build of develop ($(git rev-parse --short HEAD)). **Untested** - back up your settings first (the update window has *Back Up Now*)."
     echo
     body=$(section Unreleased)
     if [ -n "$body" ]; then echo "### Changes since ${FROM:-the first release}"; echo; echo "$body"; echo; fi
   else
     TO=$REF
-    FROM=$(git describe --tags --abbrev=0 --match 'v*' "$REF^" 2>/dev/null || true)
+    FROM=$(git tag --list 'v*' --sort=-v:refname | grep -A1 -x "$REF" | sed -n 2p)
     body=$(section "${REF#v}")
     [ -n "$body" ] || body=$(section Unreleased)
     echo "${body:-Maintenance release.}"

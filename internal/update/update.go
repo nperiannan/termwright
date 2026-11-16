@@ -173,7 +173,8 @@ var verRe = regexp.MustCompile(`(?i)termwright[-_](\d+\.\d+\.\d+)`)
 
 // nightlyNewer reports whether the nightly commit sha is newer than the
 // running build. GitHub's compare API tells whether the nightly commit is
-// ahead of this build's commit (or of its release tag); when that is unknown
+// ahead of this build's commit (or of its release tag - a merge on main, so a newer nightly is "diverged"
+// from it, with commits the release has not); when that is unknown
 // (e.g. a local build whose commit was never pushed), only a higher version
 // number counts. A different commit alone is not enough: an older nightly
 // would otherwise be offered as an update.
@@ -206,7 +207,9 @@ func nightlyNewer(ctx context.Context, repo, token, current, sha, version string
 			}
 			if json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&c) == nil {
 				switch c.Status {
-				case "ahead":
+				case "ahead", "diverged":
+					// diverged: a release is a merge of develop into main, so the nightly (develop) is ahead of its
+					// merge base with the release - the files are what it has that the release has not
 					// a nightly whose only changes are documentation has nothing new to install
 					for _, f := range c.Files {
 						if !docOnly(f.Name) {

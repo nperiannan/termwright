@@ -1,6 +1,6 @@
 import SHORTCUTS from './shortcuts.json';
 
-/** In-window menu bar definition; mirrors the native menu built in main.go. */
+/** In-window menu bar definition; mirrors the native menu built in app/run.go. */
 export interface MenuDef { label?: string; action?: string; keys?: string; sep?: boolean; }
 
 /** The shortcut of a menu action as shown in menus ("⌘D", "⌘⇧K", "Ctrl+Shift+D", "Alt+Shift+K"). */

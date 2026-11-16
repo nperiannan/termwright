@@ -53,7 +53,7 @@ Measured 2026-11-16 on a cloud VM with two 2.3 GHz server vCPUs, Linux 6.18 and 
 ## Running the tests
 
 ```
-TW_PERF=20000 go test -run TestPerfSessions -v .
+TW_PERF=20000 go test -run TestPerfSessions -v ./app/
 TW_PERF_MB=64 TW_PERF_TABS=1 go test -run TestPerfTerminalOutput -v ./internal/term/
 TW_PERF_MB=8 TW_PERF_TABS=20 go test -run TestPerfTerminalOutput -v ./internal/term/
 TW_PERF_TEAM=1 go test -run TestPerfTeam -v ./internal/team/

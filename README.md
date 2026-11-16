@@ -18,7 +18,7 @@
 <p align="center">
   <a href="docs/USER_GUIDE.md">User Guide</a> ·
   <a href="docs/FEATURES.md">Feature List</a> ·
-  <a href="docs/USER_GUIDE.md#emulated-lab-real-vm-images-on-a-kvm-host">Emulated Lab</a> ·
+  <a href="docs/EMULATOR_GUIDE.md">Emulated Lab Guide</a> ·
   <a href="docs/TEAM_SERVER.md">Team Server</a> ·
   <a href="docs/API.md">Local API</a> ·
   <a href="docs/PYTHON.md">Python</a> ·
@@ -109,6 +109,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## Recent releases
 
+- **0.40** - **Linux** gets one title bar in Termwright's theme with the menus, window buttons and tabs on their own row; a status bar with the cursor, selection, size, CAP and NUM; the AI chat box as VS Code's; the **Emulated Lab guide**; the source moved into `app/`.
 - **0.39** - the **traffic generator** grows up: quick streams and tests, custom frames, faults and fuzzing, QinQ, MPLS, GRE and VXLAN headers, PEAP, DHCPv6, VRRP and BFD on test ports, real TCP sessions, reports as HTML, PDF and Excel, the fast engine, test ports on real switches and TRex servers.
 - **0.38** - the README and feature list as Termwright is now; a team's Members on their own page.
 - **0.37** - *Connect an AI App* (MCP config for Cursor, VS Code, Windsurf, Gemini CLI, Codex; *Used by*), a **Lab** menu, icons on the lab's pages, traffic generator fixes and its measured speed.
@@ -192,7 +193,7 @@ Pre-built packages are published on the [Releases](https://github.com/nperiannan
 | Debian / Ubuntu (amd64, arm64) | `.deb` | `sudo apt install ./termwright_*.deb` |
 | Other Linux (amd64, arm64) | `.tar.gz` | Requires GTK 3 and WebKitGTK 4.1. |
 
-Installation, first start and every feature are described in the [User Guide](docs/USER_GUIDE.md).
+Installation, first start and every feature are described in the [User Guide](docs/USER_GUIDE.md); the [Emulated Lab Guide](docs/EMULATOR_GUIDE.md) goes step by step from a KVM host to the first traffic test.
 
 ## Migrating existing sessions
 
@@ -297,18 +298,19 @@ flowchart TB
 ## Project structure
 
 ```
-main.go, app.go, *_app.go   application entry point, native menu, methods bound to the UI
-teams_*.go, sync_app.go     Teams (join, set up and update a team server, inventory sync, status) and folder sync
+main.go                     the entry point: embeds the window, the guides and scripts, and starts app/
+app/run.go, app/*_app.go    the desktop app: window and menus, methods bound to the UI
+app/teams_*.go, sync_app.go Teams (join, set up and update a team server, inventory sync, status) and folder sync
 internal/session            session model, folder store, import and export
 internal/sessionfile        lossless .ini / XML session file reader and writer
 internal/term               SSH2, Telnet (and over TLS), serial, local PTY, Mosh, SFTP/SCP, file transfer protocols, scripting
 internal/fileserve          TFTP, FTP and HTTP servers devices fetch files from and send files to
 internal/team               the team server and its client: members, inventory, presence, reservations, usage, admin page
 internal/discover           network discovery (also used by the team server's scans)
-internal/emu, emu_*.go      the emulated lab: KVM hosts, QEMU, images, cables, the traffic generator (traffic.py), captures, tests
+internal/emu, app/emu_*.go  the emulated lab: KVM hosts, QEMU, images, cables, the traffic generator (traffic.py), captures, tests
 internal/sim                the simulated lab's switches
-ai_*.go, mcp_app.go         the AI assistant and agent, the MCP connector
-api_app.go, scripts/python  the local REST API and the Python client
+app/ai_*.go, app/mcp_app.go the AI assistant and agent, the MCP connector
+app/api_app.go, scripts/py… the local REST API and the Python client
 internal/clirun             logs in to a device and runs show commands (the team server's device facts)
 internal/backup, checklist  configuration backups, change checklists
 internal/config             data directory and global settings
