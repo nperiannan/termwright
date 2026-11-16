@@ -23,8 +23,9 @@ build: fastbin  ## production build for this OS -> build/bin
 	wails build -clean -skipbindings -tags "$(TAGS)" -ldflags "$(LDFLAGS)"
 frontend:       ## build only the Angular UI
 	cd frontend && npm ci && npm run build
-test:           ## backend unit + integration tests
-	go vet ./internal/... && go test -race ./internal/...
+test:           ## Go vet, unit and integration tests, and the Python client's tests
+	go vet ./app/... ./internal/... ./cmd/... ./mobile/... && go test -race ./internal/... ./mobile/... && go test -count=1 ./app/...
+	cd scripts/python && python3 -m unittest discover -p 'test*.py'
 build-nocli: frontend fastbin  ## build without the Wails CLI (no icons/manifests)
 	go build -tags "desktop,production,$(TAGS)" -ldflags "-s -w $(LDFLAGS)" -o build/bin/termwright .
 clean:

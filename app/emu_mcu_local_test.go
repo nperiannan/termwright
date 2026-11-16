@@ -31,8 +31,13 @@ func emuTestApp(t *testing.T) *App {
 	dir := t.TempDir()
 	cfg, _ := config.Load(dir)
 	st, _ := session.NewStore(dir + "/Sessions")
-	emuLab.loaded, emuLab.f = false, emuFile{}
-	t.Cleanup(func() { emuLab.loaded, emuLab.f = false, emuFile{} })
+	reset := func() { // under the lab's lock: a poll started by an earlier test may still be reading it
+		emuLab.mu.Lock()
+		emuLab.loaded, emuLab.f = false, emuFile{}
+		emuLab.mu.Unlock()
+	}
+	reset()
+	t.Cleanup(reset)
 	return &App{cfg: cfg, store: st}
 }
 

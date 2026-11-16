@@ -8,6 +8,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/nperiannan/termwright/actions/workflows/build.yml"><img alt="Build" src="https://github.com/nperiannan/termwright/actions/workflows/build.yml/badge.svg?branch=develop"></a>
   <a href="https://github.com/nperiannan/termwright/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nperiannan/termwright?include_prereleases&sort=semver&label=release"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555">
@@ -19,12 +20,17 @@
   <a href="docs/USER_GUIDE.md">User Guide</a> ·
   <a href="docs/FEATURES.md">Feature List</a> ·
   <a href="docs/EMULATOR_GUIDE.md">Emulated Lab Guide</a> ·
+  <a href="docs/FAQ.md">FAQ</a> ·
   <a href="docs/TEAM_SERVER.md">Team Server</a> ·
   <a href="docs/API.md">Local API</a> ·
   <a href="docs/PYTHON.md">Python</a> ·
   <a href="docs/SCRIPTING.md">Scripting</a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
+
+<p align="center"><img src="docs/assets/termwright-demo.gif" alt="Termwright demo: the AI explains why ports are down, then a traffic run in the emulated lab with live loss and latency" width="900"></p>
+
+<p align="center"><i>Asking the AI about a switch's output, then a traffic run in the emulated lab - recorded with simulated devices.</i> <a href="docs/assets/termwright-demo.mp4">Watch the 1-minute demo (MP4)</a></p>
 
 ![Termwright - start page with 3D cards and the Session Manager in the Glacier style](docs/screenshots/glacier-start-dark.png)
 
@@ -109,6 +115,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## Recent releases
 
+- **0.40.1** - downloads you can **verify** (`SHA256SUMS` and build provenance), a security policy, contributor guide and issue forms, a [FAQ](docs/FAQ.md), a demo, and the Android build no longer fails when Maven Central rate-limits.
 - **0.40** - **Linux** gets one title bar in Termwright's theme with the menus, window buttons and tabs on their own row; a status bar with the cursor, selection, size, CAP and NUM; the AI chat box as VS Code's; the **Emulated Lab guide**; the source moved into `app/`.
 - **0.39** - the **traffic generator** grows up: quick streams and tests, custom frames, faults and fuzzing, QinQ, MPLS, GRE and VXLAN headers, PEAP, DHCPv6, VRRP and BFD on test ports, real TCP sessions, reports as HTML, PDF and Excel, the fast engine, test ports on real switches and TRex servers.
 - **0.38** - the README and feature list as Termwright is now; a team's Members on their own page.
@@ -188,12 +195,15 @@ Pre-built packages are published on the [Releases](https://github.com/nperiannan
 
 | Platform | Package | Notes |
 |---|---|---|
-| macOS (Apple Silicon) | `.dmg`, `.zip` | Not notarized. After installing, run `xattr -dr com.apple.quarantine /Applications/Termwright.app` once. |
+| macOS (Apple Silicon) | `.dmg`, `.zip` | Current community builds are ad-hoc signed and not yet Apple-notarized. After installing, run `xattr -dr com.apple.quarantine /Applications/Termwright.app` once (or right-click → *Open*). |
 | Windows 10 / 11 (x64) | installer `.exe`, `.zip` | Requires the WebView2 runtime, which is included in current Windows versions. SmartScreen may warn about an unsigned file. |
 | Debian / Ubuntu (amd64, arm64) | `.deb` | `sudo apt install ./termwright_*.deb` |
 | Other Linux (amd64, arm64) | `.tar.gz` | Requires GTK 3 and WebKitGTK 4.1. |
+| Android (preview) | `.apk` | Current builds are signed with a temporary key: uninstall the earlier version before installing a new one. |
 
-Installation, first start and every feature are described in the [User Guide](docs/USER_GUIDE.md); the [Emulated Lab Guide](docs/EMULATOR_GUIDE.md) goes step by step from a KVM host to the first traffic test.
+Every release has a `SHA256SUMS` file and a build provenance attestation, to check that a download is the one GitHub built from this repository: see [Verifying a download](SECURITY.md#verifying-a-download).
+
+Installation, first start and every feature are described in the [User Guide](docs/USER_GUIDE.md); the [Emulated Lab Guide](docs/EMULATOR_GUIDE.md) goes step by step from a KVM host to the first traffic test. The [FAQ](docs/FAQ.md) answers common questions: how Termwright compares with other tools, what reaches the AI service, and how credentials are protected.
 
 ## Migrating existing sessions
 
@@ -232,7 +242,7 @@ Platform dependencies:
 ```bash
 make build            # build/bin/termwright(.exe) or build/bin/Termwright.app
 make dev              # development build with live reload
-make test             # Go unit and integration tests, including an end-to-end SSH test
+make test             # go vet, the Go tests (including an end-to-end SSH test) and the Python client's tests
 ```
 
 Without `make`:
@@ -271,8 +281,9 @@ flowchart TB
     TS["Team server (termwright-team)<br/>members, inventory, who uses what,<br/>reservations, usage history, admin page"] --- TD[("/data<br/>team.json, usage.json, cert, key")]
   end
   subgraph KVM["KVM hosts (optional, the emulated lab)"]
-    VM["QEMU/KVM switches, routers, servers,<br/>PCs, ESP32 · traffic generator · captures"]
+    VM["QEMU/KVM switches, routers, servers,<br/>PCs, ESP32 · captures<br/>traffic engines: built-in and fast"]
   end
+  TRex["TRex server (optional)<br/>line-rate test ports"]
   AI["AI service (optional)<br/>Claude · Claude Code · OpenAI-compatible · Ollama"]
   Apps["AI apps (MCP)<br/>Claude Desktop · Claude Code · Cursor · VS Code"]
   Sync[("Sync folder (optional)<br/>OneDrive / iCloud / Dropbox / share")]
@@ -286,14 +297,110 @@ flowchart TB
   Browser -- "HTTPS, one-time link from Termwright" --> TS
   TS -- "scans (Discover), device facts" --> Dev
   Go -- "SSH: images, QEMU, consoles, test ports" --> VM
+  VM -- "test ports on host network ports,<br/>cabled to your devices" --> Dev
+  Go -- "TRex API (JSON-RPC over ZeroMQ)" --> TRex
+  TRex -- "test ports, cabled" --> Dev
   Go -- "what you ask, secrets removed" --> AI
   Apps -- "MCP (stdio), this computer only" --> Go
+  classDef tw fill:#1f3a5f,stroke:#58a6ff,stroke-width:2px,color:#eaf3ff
+  classDef ai fill:#4a1d3f,stroke:#db61a2,stroke-width:2px,color:#ffeaf6
+  classDef store fill:#4d3b0b,stroke:#e3b341,stroke-width:2px,color:#fff6dc
+  classDef engine fill:#173f2a,stroke:#3fb950,stroke-width:2px,color:#e6ffed
+  classDef team fill:#0f3d44,stroke:#39c5cf,stroke-width:2px,color:#e0fbff
+  classDef trex fill:#5a3110,stroke:#f0883e,stroke-width:2px,color:#fff0e3
+  classDef dut fill:#5c1d22,stroke:#f85149,stroke-width:2px,color:#ffecec
+  classDef ext fill:#2d333b,stroke:#8b949e,stroke-width:2px,color:#f0f6fc
+  class UI,Go tw
+  class Data,Keys,TD,Sync store
+  class AI,Apps ai
+  class VM engine
+  class TS team
+  class TRex trex
+  class Dev dut
+  class GH,Browser ext
+  style PC fill:#58a6ff14,stroke:#58a6ff,stroke-width:2px,stroke-dasharray:6 4
+  style Lab fill:#39c5cf14,stroke:#39c5cf,stroke-width:2px,stroke-dasharray:6 4
+  style KVM fill:#3fb95014,stroke:#3fb950,stroke-width:2px,stroke-dasharray:6 4
+  linkStyle 0,1,2,3,7,8 stroke:#8b949e,stroke-width:2px
+  linkStyle 4,5 stroke:#f85149,stroke-width:2px
+  linkStyle 6,9,10 stroke:#39c5cf,stroke-width:2px
+  linkStyle 11,12 stroke:#3fb950,stroke-width:2px
+  linkStyle 13,14 stroke:#f0883e,stroke-width:2px
+  linkStyle 15,16 stroke:#db61a2,stroke-width:2px
 ```
 
 - **Termwright** is one program: an Angular interface over a Go backend (Wails). Connections, file transfers, scripts, backups and discovery run in the Go backend; passwords stay in the operating system's keychain or a password manager.
 - **Teams are optional.** Without a team nothing is sent anywhere. A team runs its own **team server** - a small container on a lab host, set up and updated from Termwright over SSH - which every member's Termwright talks to over HTTPS with the certificate pinned by the invite. The server never sees passwords, keys or terminal output.
 - **Sync is optional** too: with a sync folder, each Termwright writes its sessions and settings (never passwords) to a folder your computers share.
-- **The emulated lab runs on your KVM hosts**: Termwright logs in over SSH, copies the images, starts QEMU and its own traffic generator there, and connects the consoles and test ports back. **AI is optional**: the assistant talks to the service you choose; AI apps reach Termwright through its MCP connector on this computer.
+- **The emulated lab runs on your KVM hosts**: Termwright logs in over SSH, copies the images, starts QEMU and its own traffic engines there, and connects the consoles and test ports back. **AI is optional**: the assistant talks to the service you choose; AI apps reach Termwright through its MCP connector on this computer.
+
+### Traffic generation
+
+```mermaid
+flowchart TB
+  subgraph PC["Your computer - Termwright"]
+    TUI["Traffic panel<br/>test ports, streams, TCP sessions,<br/>pass/fail limits, live graphs"]
+    MCP["AI apps (MCP)<br/>lab_traffic, lab_test"]
+    TGo["Go backend<br/>writes each host's traffic.json,<br/>picks the engine, adds up the counters"]
+    Rep[("Report<br/>HTML / PDF, Excel")]
+  end
+  subgraph H1["KVM host"]
+    Py["tw-traffic.py - built-in engine<br/>streams · ARP, DHCP, LLDP, LACP, STP,<br/>VRRP, BFD, IGMP/MLD, 802.1X clients,<br/>TCP/HTTP sessions, pcap replay"]
+    Fast["tw-fast - fast engine (optional, Go)<br/>sends and counts the streams in batches"]
+    SW["QEMU switch<br/>port with a test port"]
+    NIC["Host network port<br/>(AF_PACKET)"]
+  end
+  subgraph H2["Another KVM host"]
+    E2["tw-traffic.py / tw-fast"]
+    SW2["QEMU switch"]
+  end
+  TRex["TRex server (optional)<br/>stateless mode, DPDK ports"]
+  Real["Real device under test"]
+  TUI <--> TGo
+  MCP --> TGo
+  TGo --> Rep
+  TGo -- "SSH: traffic.json, start;<br/>counters twice a second" --> Py
+  TGo -- "SSH" --> E2
+  TGo -- "TRex JSON-RPC over ZeroMQ, TCP 4501:<br/>ports, streams, start, counters" --> TRex
+  Py <-- "local UDP:<br/>every frame but the streams" --> Fast
+  Fast <-- "QEMU UDP socket" --> SW
+  Fast <-- "raw frames" --> NIC
+  Py -. "without tw-fast:<br/>the same sockets" .- SW
+  E2 <-- "QEMU UDP socket" --> SW2
+  SW <-- "cable: UDP between hosts" --> SW2
+  NIC <-- "Ethernet" --> Real
+  TRex <-- "Ethernet / fibre" --> Real
+  classDef tw fill:#1f3a5f,stroke:#58a6ff,stroke-width:2px,color:#eaf3ff
+  classDef ai fill:#4a1d3f,stroke:#db61a2,stroke-width:2px,color:#ffeaf6
+  classDef store fill:#4d3b0b,stroke:#e3b341,stroke-width:2px,color:#fff6dc
+  classDef engine fill:#173f2a,stroke:#3fb950,stroke-width:2px,color:#e6ffed
+  classDef qemu fill:#35255a,stroke:#a371f7,stroke-width:2px,color:#f1eaff
+  classDef nic fill:#0f3d44,stroke:#39c5cf,stroke-width:2px,color:#e0fbff
+  classDef trex fill:#5a3110,stroke:#f0883e,stroke-width:2px,color:#fff0e3
+  classDef dut fill:#5c1d22,stroke:#f85149,stroke-width:2px,color:#ffecec
+  class TUI,TGo tw
+  class MCP ai
+  class Rep store
+  class Py,Fast,E2 engine
+  class SW,SW2 qemu
+  class NIC nic
+  class TRex trex
+  class Real dut
+  style PC fill:#58a6ff14,stroke:#58a6ff,stroke-width:2px,stroke-dasharray:6 4
+  style H1 fill:#3fb95014,stroke:#3fb950,stroke-width:2px,stroke-dasharray:6 4
+  style H2 fill:#3fb95014,stroke:#3fb950,stroke-width:2px,stroke-dasharray:6 4
+  linkStyle 0,1,2 stroke:#8b949e,stroke-width:2px
+  linkStyle 3,4 stroke:#58a6ff,stroke-width:2px
+  linkStyle 5,13 stroke:#f0883e,stroke-width:2px
+  linkStyle 6 stroke:#3fb950,stroke-width:2px
+  linkStyle 7,9,10,11 stroke:#a371f7,stroke-width:2px
+  linkStyle 8,12 stroke:#39c5cf,stroke-width:2px
+```
+
+- **Test ports** sit on an emulated switch's port (the same QEMU UDP socket a cable uses, so no VM is needed), on a KVM host's network port cabled to a real device, or on a TRex server's port.
+- **Two engines on each host.** `tw-traffic.py` (Python) speaks the protocols and sends the streams. With the fast engine on, `tw-fast` - a small Go program Termwright copies to the host - sends and counts the streams in batches and hands every other frame to `tw-traffic.py`. That is about 100,000 or 420,000 frames per second per host ([benchmarks](docs/PERFORMANCE.md)).
+- **Across hosts** the streams travel over the lab's cables. Each frame carries its stream, sequence number and send time, so loss, order and latency are counted where it arrives, and Termwright adds up every host's counters.
+- **TRex** (optional) is for line rate: Termwright drives it through its JSON-RPC API, and its results appear with the rest in the same report.
 
 ## Project structure
 
@@ -302,7 +409,7 @@ main.go                     the entry point: embeds the window, the guides and s
 app/run.go, app/*_app.go    the desktop app: window and menus, methods bound to the UI
 app/teams_*.go, sync_app.go Teams (join, set up and update a team server, inventory sync, status) and folder sync
 internal/session            session model, folder store, import and export
-internal/sessionfile        lossless .ini / XML session file reader and writer
+internal/sessionfile        round-trip .ini / XML session file reader and writer
 internal/term               SSH2, Telnet (and over TLS), serial, local PTY, Mosh, SFTP/SCP, file transfer protocols, scripting
 internal/fileserve          TFTP, FTP and HTTP servers devices fetch files from and send files to
 internal/team               the team server and its client: members, inventory, presence, reservations, usage, admin page
@@ -326,12 +433,7 @@ docs/                       user guide, feature list, team server guide, API, Py
 
 ## Contributing
 
-Bug reports and feature requests are welcome in [GitHub Issues](https://github.com/nperiannan/termwright/issues). Please include:
-- the version (Help → About) and operating system;
-- the steps to reproduce the problem;
-- for connection problems, the message shown in the error card.
-
-Pull requests should keep `make test` passing, and should update the User Guide and the feature list for user-visible changes.
+Bug reports and feature requests are welcome in [GitHub Issues](https://github.com/nperiannan/termwright/issues/new/choose); the forms ask for the version, the operating system and the steps to reproduce. For pull requests, see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately, as described in the [security policy](SECURITY.md). Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

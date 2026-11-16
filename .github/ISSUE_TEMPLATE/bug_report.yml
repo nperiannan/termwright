@@ -1,0 +1,57 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. For a security problem, don't use this form: follow the [security policy](https://github.com/nperiannan/termwright/blob/main/SECURITY.md).
+        Please remove passwords, keys, IP addresses and host names you don't want to share from logs and screenshots.
+  - type: input
+    id: version
+    attributes:
+      label: Termwright version
+      description: Help → About (for example 0.40.0 or 0.40.0 nightly)
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Windows, Linux, Android]
+    validations:
+      required: true
+  - type: input
+    id: osver
+    attributes:
+      label: Operating system version
+      description: For example macOS 15.5, Windows 11 24H2, Ubuntu 24.04
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Terminal and sessions, File transfer, Session Manager and import, Emulated lab, Traffic generator, AI assistant or MCP, Team server, Installation and updates, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Messages, logs or screenshots
+      description: The text of the error card, the device or host type (for example an SSH server, a switch model, a KVM host's Linux), and anything else that helps

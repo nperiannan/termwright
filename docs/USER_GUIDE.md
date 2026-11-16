@@ -46,10 +46,13 @@ Download the latest build from the repository's **Releases → nightly** page (o
 
 | OS | File | How to install |
 |---|---|---|
-| macOS (M1–M5) | `Termwright-…-macos-arm64.dmg` or `termwright-macos-arm64.zip` | Open the DMG and drag **Termwright** to **Applications**. The build is not notarized: the first time run `xattr -dr com.apple.quarantine /Applications/Termwright.app` in Terminal (or right-click → Open). |
+| macOS (M1–M5) | `Termwright-…-macos-arm64.dmg` or `termwright-macos-arm64.zip` | Open the DMG and drag **Termwright** to **Applications**. Current community builds are ad-hoc signed and not yet Apple-notarized: the first time, run `xattr -dr com.apple.quarantine /Applications/Termwright.app` in Terminal (or right-click → Open). |
 | Windows 10/11 | `Termwright-…-windows-amd64-setup.exe` or `termwright-windows-amd64.zip` | Run the installer, or unzip and run `termwright.exe`. Needs the WebView2 runtime (built into Windows 11 and current Windows 10). SmartScreen may warn because the file isn't code-signed: **More info → Run anyway**. |
 | Debian/Ubuntu | `termwright_…_amd64.deb` / `…_arm64.deb` | `sudo apt install ./termwright_*.deb` |
 | Other Linux | `termwright-linux-amd64.tar.gz` / `…-arm64.tar.gz` | Unpack and run `./termwright`. Requires GTK 3 and WebKitGTK 4.1 (`libwebkit2gtk-4.1-0`). |
+| Android (preview) | `Termwright-…-android.apk` | Open the APK on the phone and allow installing from this source. Current builds are signed with a temporary key: uninstall the earlier version before installing a new one. |
+
+To check a download, compare it with the release's `SHA256SUMS` file, or verify its build provenance with `gh attestation verify <file> --repo nperiannan/termwright`: see [Verifying a download](../SECURITY.md#verifying-a-download).
 
 Optional: install `lrzsz` on the *remote* hosts to use ZMODEM (`sz`/`rz`).
 

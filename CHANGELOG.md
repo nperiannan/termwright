@@ -2,6 +2,16 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## 0.40.1 (2026-11-17)
+
+- **README: a demo** - a short animation at the top and a [1-minute video](docs/assets/termwright-demo.mp4): a switch, the AI, the emulated lab, a traffic run and its report.
+- **Releases come with a `SHA256SUMS` file and a build provenance attestation**, so a download can be checked against what GitHub built from this repository ([Verifying a download](SECURITY.md#verifying-a-download)).
+- **Project files for contributors**: a [security policy](SECURITY.md) with private reporting, [CONTRIBUTING.md](CONTRIBUTING.md), a [code of conduct](CODE_OF_CONDUCT.md), and forms for bug reports and feature requests.
+- **CI runs more tests**: `go vet` on all Go packages, the app's tests and the Python client's tests, as `make test` does.
+- **Docs: architecture diagrams in colour**, with the traffic engines and TRex in the main one, and a new *Traffic generation* diagram: the two engines on each host, test ports on switch ports, host network ports and TRex, and how the counters come back.
+- **Docs: a FAQ** ([docs/FAQ.md](docs/FAQ.md)): how Termwright compares with SecureCRT, VS Code, GNS3, EVE-NG, Containerlab and TRex; why it uses AI and Wails; how credentials are protected; what reaches the AI service; what the MCP server exposes; how the lab works across hosts; and how it is built.
+- **Builds: the Android APK no longer fails when Maven Central rate-limits** (HTTP 429): the Gradle downloads are cached between runs, and the build waits and tries again twice.
+
 ## 0.40.0 (2026-11-16)
 
 - **Linux: one title bar, in Termwright's theme.** The window has no system title bar and no GTK menu bar any more: Termwright's own title bar has its logo, the menus (File, Edit, View, Transfer, Lab, Script, Options, Tab, Help - themed like the rest, with their shortcuts) and the minimise, maximise and close buttons. The window still moves by its title bar and resizes at its edges; a narrow window keeps the menus under ⋯.

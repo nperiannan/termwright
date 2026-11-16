@@ -15,3 +15,4 @@ frontend/package.json.md5
 
 # the fast traffic engine, built by make fastbin and embedded in the app
 internal/emu/fastbin/bin/tw-fast-*
+__pycache__/
