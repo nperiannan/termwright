@@ -5,7 +5,7 @@ import { EmuRadiusUser, EmuStream, EmuTest, EmuTester, EmuTrafficView } from '..
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 
-export type QuickKey = 'l2' | 'l3' | 'custom' | 'adv' | 'latency' | 'jitter' | 'load' | 'rfc2544' | 'bad' | 'fuzz' | 'vlaniso' | 'mtu' | 'dot1x' | 'dhcp6' | 'vrrp' | 'bfd';
+export type QuickKey = 'l2' | 'l3' | 'custom' | 'adv' | 'latency' | 'jitter' | 'load' | 'rfc2544' | 'bad' | 'fuzz' | 'vlaniso' | 'mtu' | 'dot1x' | 'dhcp6' | 'vrrp' | 'bfd' | 'tcpsess' | 'tcpblock';
 
 const ITEMS: { k: QuickKey; name: string; what: string; group: string }[] = [
   { k: 'l2', name: 'L2 stream', what: 'Same VLAN, switched', group: 'Streams' },
@@ -21,6 +21,8 @@ const ITEMS: { k: QuickKey; name: string; what: string; group: string }[] = [
   { k: 'vlaniso', name: 'VLAN isolation', what: 'No frame crosses VLANs', group: 'Tests' },
   { k: 'mtu', name: 'MTU and jumbo frames', what: 'Large frames forwarded or dropped', group: 'Tests' },
   { k: 'dot1x', name: '802.1X clients', what: 'Many users log in by RADIUS', group: 'Tests' },
+  { k: 'tcpsess', name: 'TCP sessions', what: 'Real connections: setup time, connections a second', group: 'Tests' },
+  { k: 'tcpblock', name: 'Blocked TCP port (ACL)', what: 'Connections refused or dropped', group: 'Tests' },
   { k: 'dhcp6', name: 'DHCPv6 clients', what: 'Many clients take IPv6 addresses', group: 'Tests' },
   { k: 'vrrp', name: 'VRRP failover', what: 'The switch takes over the virtual IP', group: 'Tests' },
   { k: 'bfd', name: 'BFD failure detection', what: 'The switch sees a dead link in time', group: 'Tests' },
@@ -77,10 +79,10 @@ interface PortChange { t: EmuTester; set: Partial<EmuTester>; text: string }
                 <div class="q"><span>{{ tr('The switch ports carry') }}</span><span class="seg"><i [class.on]="!tagged" (click)="tagged = false; fill()">{{ tr('untagged frames (access port)') }}</i><i [class.on]="tagged" (click)="tagged = true; fill()">{{ tr('VLAN tagged frames') }}</i></span>
                   @if (tagged) { <input class="n" type="number" min="1" max="4094" [(ngModel)]="vlan" (ngModelChange)="fill()" [title]="tr('The VLAN ID tagged on the switch ports')" /> }</div>
               }
-              @if (key() === 'bad') {
+              @if (key() === 'bad' || key() === 'tcpsess' || key() === 'tcpblock') {
                 <div class="q"><span>{{ tr('The path is') }}</span><span class="seg"><i [class.on]="path === 'l2'" (click)="path = 'l2'; fill()">{{ tr('switched (same VLAN)') }}</i><i [class.on]="path === 'l3'" (click)="path = 'l3'; fill()">{{ tr('routed (two subnets)') }}</i></span></div>
               }
-              @if (key() === 'l3' || (key() === 'bad' && path === 'l3')) {
+              @if (key() === 'l3' || ((key() === 'bad' || key() === 'tcpsess' || key() === 'tcpblock') && path === 'l3')) {
                 <div class="q"><span>{{ tr('IP interfaces on the switch') }}</span><span class="seg"><i [class.on]="routed" (click)="routed = true; fill()">{{ tr('configured') }}</i><i [class.on]="!routed" (click)="routed = false; fill()">{{ tr('not yet') }}</i></span></div>
                 <div class="q two"><span>{{ nameOf(a) }}</span><input [(ngModel)]="ipA" (ngModelChange)="fill()" [title]="tr('Its address, with the prefix')" /><span class="mut">{{ tr('gateway') }}</span><input [(ngModel)]="gwA" (ngModelChange)="fill()" [title]="tr('The switch\\'s IP interface in that subnet')" /></div>
                 <div class="q two"><span>{{ nameOf(b) }}</span><input [(ngModel)]="ipB" (ngModelChange)="fill()" /><span class="mut">{{ tr('gateway') }}</span><input [(ngModel)]="gwB" (ngModelChange)="fill()" /></div>
@@ -105,6 +107,15 @@ interface PortChange { t: EmuTester; set: Partial<EmuTester>; text: string }
                 <div class="q"><span>{{ tr('Password') }}</span><input [(ngModel)]="userPass" (ngModelChange)="fill()" autocomplete="off" /><span class="mut">VLAN</span><input class="n" [(ngModel)]="userVlan" (ngModelChange)="fill()" [placeholder]="tr('the port\\'s')" /><label class="cb"><input type="checkbox" [(ngModel)]="clientDhcp" (ngModelChange)="fill()" /> {{ tr('DHCP after login') }}</label></div>
                 <div class="q"><span></span><label class="cb"><input type="checkbox" [(ngModel)]="toRadius" (ngModelChange)="fill()" /> {{ tr('Add the users to the lab\\'s RADIUS server (and turn it on)') }}</label></div>
                 <p class="note">{{ tr('The switch port needs 802.1X with the lab\\'s RADIUS server: its address and secret are on the RADIUS page.') }}</p>
+              }
+              @if (key() === 'tcpsess') {
+                <div class="q"><span>{{ tr('Server port') }}</span><input class="n" type="number" min="1" max="65535" [(ngModel)]="tPort" (ngModelChange)="fill()" /><label class="cb"><input type="checkbox" [(ngModel)]="tHttp" (ngModelChange)="fill()" /> {{ tr('HTTP GET') }}</label></div>
+                <div class="q"><span>{{ tr('Sessions') }}</span><input class="n" type="number" min="1" [(ngModel)]="tCount" (ngModelChange)="fill()" /><span class="mut">{{ tr('at once') }}</span><input class="n" type="number" min="1" [(ngModel)]="tConc" (ngModelChange)="fill()" /><span class="mut">{{ tr('new a second') }}</span><input class="n" type="number" min="1" [(ngModel)]="tRate" (ngModelChange)="fill()" /></div>
+                <div class="q"><span>{{ tr('Pass when setup is at most') }}</span><input class="n" type="number" min="0" step="0.1" [(ngModel)]="tSetup" (ngModelChange)="fill()" /><span class="mut">ms</span></div>
+              }
+              @if (key() === 'tcpblock') {
+                <div class="q"><span>{{ tr('Blocked port') }}</span><input class="n" type="number" min="1" max="65535" [(ngModel)]="tPort" (ngModelChange)="fill()" /></div>
+                <div class="q"><span>{{ tr('The switch should') }}</span><span class="seg"><i [class.on]="tBlock === 'refused'" (click)="tBlock = 'refused'; fill()">{{ tr('refuse them (reset)') }}</i><i [class.on]="tBlock === 'dropped'" (click)="tBlock = 'dropped'; fill()">{{ tr('drop them (no answer)') }}</i></span></div>
               }
               @if (key() === 'dhcp6') {
                 <div class="q"><span>{{ tr('Clients') }}</span><input class="n" type="number" min="1" max="4000" [(ngModel)]="nClients" (ngModelChange)="fill()" /><label class="cb"><input type="checkbox" [(ngModel)]="also4" (ngModelChange)="fill()" /> {{ tr('IPv4 by DHCP too') }}</label></div>
@@ -135,10 +146,11 @@ interface PortChange { t: EmuTester; set: Partial<EmuTester>; text: string }
                     @for (r of rows(); track $index) {
                       <tr><td><input class="nm" [(ngModel)]="r.s.name" /></td><td class="mono">{{ nameOf(r.s.from) }} → {{ r.s.to ? nameOf(r.s.to) : tr('all') }}</td>
                         <td class="mono">{{ frameText(r) }}</td>
-                        <td>@if (r.test) { <span class="mono">≤ {{ r.test.maxPps }} pps</span> } @else { <input class="n" type="number" min="1" max="100000" [(ngModel)]="r.s.pps" /> }</td>
+                        <td>@if (r.test) { <span class="mono">≤ {{ r.test.maxPps }} pps</span> } @else if (r.s.session) { <input class="n" type="number" min="1" [(ngModel)]="r.s.session.rate" /><span class="mut"> {{ tr('a second') }}</span> } @else { <input class="n" type="number" min="1" max="100000" [(ngModel)]="r.s.pps" /> }</td>
                         <td>@if (!r.test) { <input class="n" type="number" min="1" [(ngModel)]="r.s.seconds" /><span class="mut"> s</span> }</td>
                         <td>@if (r.test) { <span class="mut">{{ tr('the zero-loss rate per frame size') }}</span> } @else {
-                          <select [(ngModel)]="r.s.expect"><option value="">{{ tr('arrives') }}</option><option value="drop">{{ tr('dropped') }}</option><option value="any">{{ tr('either (counted)') }}</option></select>
+                          @if (r.s.session) { <select [(ngModel)]="r.s.session.expect"><option value="">{{ tr('connect') }}</option><option value="refused">{{ tr('refused') }}</option><option value="dropped">{{ tr('no answer') }}</option></select> }
+                          @else { <select [(ngModel)]="r.s.expect"><option value="">{{ tr('arrives') }}</option><option value="drop">{{ tr('dropped') }}</option><option value="any">{{ tr('either (counted)') }}</option></select> }
                           @if (!r.s.expect) { @if (r.s.maxLatency) { <span class="mut"> · ≤ {{ r.s.maxLatency }} ms</span> }@if (r.s.maxJitter) { <span class="mut"> · {{ tr('jitter') }} ≤ {{ r.s.maxJitter }} ms</span> }@if (!r.s.maxLatency && !r.s.maxJitter) { <span class="mut"> · {{ tr('loss') }} ≤ {{ r.s.maxLoss }} %</span> } } }</td>
                         <td>@if (!r.test) { <a class="lnk" (click)="r.open = !r.open">{{ r.open ? tr('Less') : tr('Addresses') }}</a> }</td></tr>
                       @if (r.open) {
@@ -208,6 +220,8 @@ export class TrafficQuick implements OnInit {
     vlaniso: 'Frames between two test ports on switch ports in different VLANs: none may arrive.',
     mtu: 'Frames of 1518, 1600 and 9000 bytes: the large ones arrive only with jumbo frames on.',
     dot1x: 'Many clients behind one test port log in by 802.1X with numbered user names; the users are added to the lab\'s RADIUS server for you.',
+    tcpsess: 'Real TCP connections from one test port to another (Termwright answers there): handshake, data both ways, close. It shows how many connected, the setup time and how many a second the path takes - through ACLs, firewalls and NAT, up to session limits.',
+    tcpblock: 'Connections to a port the switch should block (an ACL): each one must be refused (reset) or get no answer at all, as you expect.',
     dhcp6: 'Many clients behind one test port each take an IPv6 address by DHCPv6 (solicit, advertise, request, reply), each with its own MAC and DUID.',
     vrrp: 'The test port is a second VRRP router beside the switch. Go Silent and the switch must take over the virtual IP within its master-down time; Take Over and it must give it back. The test port times both.',
     bfd: 'A BFD session between the test port and the switch. Go Silent for 5 s and the switch must take the session down within its detect time; the test port times it.',
@@ -222,6 +236,7 @@ export class TrafficQuick implements OnInit {
   protected a = ''; protected b = '';
   protected tagged = false; protected vlan = 10;
   protected path: 'l2' | 'l3' = 'l2';
+  protected tPort = 80; protected tHttp = false; protected tCount = 1000; protected tConc = 100; protected tRate = 100; protected tSetup = 10; protected tBlock: 'refused' | 'dropped' = 'dropped';
   protected routed = true; protected ipA = ''; protected gwA = ''; protected ipB = ''; protected gwB = '';
   protected latMax = 1; protected rtt = false; protected jitMax = 1; protected pps = 1000; protected both = true; protected maxPps = 10000;
   protected faults = new Set(BAD_FRAMES.filter(f => !f.tcp).map(f => f.k).concat(['tcp-xmas']));
@@ -338,6 +353,16 @@ export class TrafficQuick implements OnInit {
         if (this.toRadius) ex.push(tr('RADIUS server: on, with {0} users {1}, password as above{2}', this.nClients, this.userRange(), this.userVlan ? tr(', VLAN {0}', this.userVlan) : ''));
         break;
       }
+      case 'tcpsess':
+        if (this.path === 'l3') l3ports(); else l2ports();
+        rows.push({ s: this.st(tr('TCP sessions to port {0}', +this.tPort || 80), A, B, { kind: 'session', size: 0, pps: 0, seconds: 120, vlan: this.path === 'l2' ? vlan : 0, maxLoss: 0, maxLatency: +this.tSetup || 0,
+          session: { dport: +this.tPort || 80, count: +this.tCount || 1000, concurrent: +this.tConc || 100, rate: +this.tRate || 100, req: this.tHttp ? 0 : 1000, resp: 10000, hold: 0, http: this.tHttp, expect: '' } }) });
+        break;
+      case 'tcpblock':
+        if (this.path === 'l3') l3ports(); else l2ports();
+        rows.push({ s: this.st(tr('TCP to blocked port {0}', +this.tPort || 22), A, B, { kind: 'session', size: 0, pps: 0, seconds: 60, vlan: this.path === 'l2' ? vlan : 0,
+          session: { dport: +this.tPort || 22, count: 20, concurrent: 5, rate: 10, req: 100, resp: 0, hold: 0, expect: this.tBlock } }) });
+        break;
       case 'dhcp6':
         if (ta) ch.push({ t: ta, set: { clients: { n: +this.nClients || 1, rate: 50, dhcp: this.also4, dhcp6: true } }, text: tr('{0} clients behind it, taking IPv6 addresses by DHCPv6{1}', this.nClients, this.also4 ? tr(' and IPv4 by DHCP') : '') });
         ex.push(tr('Passes when every client has an address: the test port\'s card counts them'));
@@ -361,6 +386,7 @@ export class TrafficQuick implements OnInit {
   protected frameText(r: Row) {
     const s = r.s;
     if (r.test) return tr('64 to 1518 B, trials');
+    if (s.session) { const x = s.session; return [tr('TCP sessions'), (x.http ? 'HTTP ' : '') + tr('port {0}', x.dport ?? 80), tr('{0} in all, {1} at once', x.count ?? 0, x.concurrent ?? 0), x.req || x.resp ? tr('{0} B → {1} B', x.req ?? 0, x.resp ?? 0) : ''].filter(Boolean).join(' · '); }
     const kind = s.kind === 'custom' ? tr('custom') : s.kind === 'tcp' ? 'TCP' : s.kind === 'raw' ? 'L2' : s.kind.toUpperCase();
     return [kind, s.size ? s.size + ' B' : '', s.vlan ? 'VLAN ' + s.vlan : '', s.dscp ? 'DSCP ' + s.dscp : '', s.bad ? tr('fault') : '', s.fuzz ? tr('fuzzed {0}-{1}', s.fuzz.from, s.fuzz.to ?? '') : ''].filter(Boolean).join(' · ');
   }

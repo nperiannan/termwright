@@ -27,6 +27,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
         <div class="tpa">
         @if (view() === 'tests') { <button type="button" (click)="newTest.emit()">＋ {{ tr('Test') }}</button> }
         <button type="button" (click)="radius.emit()" [title]="tr('The lab\\'s RADIUS server: users, MAC logins and the logins it answered, for 802.1X on the switches')">{{ tr('RADIUS…') }}</button>
+        <button type="button" (click)="engines.emit()" [title]="tr('What sends the frames: the built-in or the fast engine on the KVM hosts, or TRex servers for line rate on real hardware')">{{ tr('Engines…') }}</button>
         <button type="button" (click)="library.emit()" [title]="tr('Ready tests: unicast, IMIX, QoS classes, MAC table fill, round trip, RFC 2544 and 2889 - and yours')">{{ tr('Library…') }}</button>
         <button type="button" (click)="newTester.emit()">＋ {{ tr('Test Port') }}</button>
         @if (view() !== 'tests') { <button type="button" (click)="quick.emit('l2')" [disabled]="(traf()?.testers?.length ?? 0) < 1" [title]="tr('A stream in one VLAN: choose the test ports; the rest is filled in')">＋ {{ tr('L2 Stream') }}</button>
@@ -114,6 +115,7 @@ export class TrafficPage {
   readonly stop = output<void>();
   readonly report = output<ReportKind>();
   readonly library = output<void>();
+  readonly engines = output<void>();
   readonly radius = output<void>();
   readonly editTester = output<EmuTester>();
   readonly removeTester = output<EmuTester>();

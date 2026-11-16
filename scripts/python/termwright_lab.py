@@ -337,11 +337,41 @@ class Traffic:
         password=..., method="peap"), rate=50)), stp (dict(mode="rstp", prio=4096)), vrrp (dict(ver=3, vrid=1, prio=50,
         vip="10.10.0.254", interval=1000, preempt=True)), bfd (dict(peer="10.10.0.1", tx=300, mult=3))."""
         before = {p["name"] for p in self.ports()}
-        v = self.lab.request("POST", "/traffic/ports", _body(dict(switch=switch, port=port, ip=ip, **fields)))
+        v = self.lab.request("POST", "/traffic/ports", _body(dict(switch=switch or None, port=port or None, ip=ip, **fields)))
         new = [p["name"] for p in (v.get("testers") or []) if p["name"] not in before]
         if len(new) != 1:
             raise ApiError(0, "unexpected", f"the new test port was not found among {new}")
         return new[0]
+
+    def add_host_port(self, nic: str, host: Optional[str] = None, ip: Optional[str] = None, cabled: str = "", **fields) -> str:
+        """A test port on a KVM host's spare network card (nic, e.g. "enp3s0") cabled to a real switch; returns its
+        name. nics(host) lists the cards that can be one. The generator needs root on the host, or passwordless sudo."""
+        return self.add_port("", "", ip=ip, nic=nic, host=host, cabled=cabled, **fields)
+
+    def add_trex_port(self, trex: str, port: int, ip: Optional[str] = None, cabled: str = "", **fields) -> str:
+        """A test port on a TRex server's port (add_trex first); TRex sends its streams at line rate. Returns its name."""
+        return self.add_port("", "", ip=ip, trex=trex, trex_port=port, cabled=cabled, **fields)
+
+    def nics(self, host: Optional[str] = None) -> list:
+        """A KVM host's network cards: name, mac, up, speed, driver and used (why it cannot be a test port; "" = free)."""
+        return self.lab.request("GET", "/traffic/nics", **({"host": host} if host else {}))
+
+    def engines(self) -> dict:
+        """What sends the streams: engine (python or fast), hosts and the TRex servers with their ports."""
+        return self.lab.request("GET", "/traffic/engines")
+
+    def set_engine(self, engine: str) -> dict:
+        """The KVM hosts' engine: "python" (built in) or "fast" (a compiled helper copied to the hosts: millions of
+        frames a second)."""
+        return self.lab.request("PUT", "/traffic/engines", {"engine": engine})
+
+    def add_trex(self, addr: str, name: str = "", port: int = 4501) -> dict:
+        """Adds a TRex server (stateless mode, its API on TCP 4501) and checks it; returns the engines."""
+        return self.lab.request("POST", "/traffic/trex", {"addr": addr, "name": name or addr, "port": port})
+
+    def remove_trex(self, name: str) -> None:
+        """Forgets a TRex server, its test ports and their streams."""
+        self.lab.request("DELETE", "/traffic/trex/" + urllib.parse.quote(name, safe=""))
 
     def set_port(self, name: str, **fields) -> dict:
         """Change a test port: the fields of add_port, topologyChange=True (its next BPDUs say so) and silentBfd=True
@@ -377,7 +407,11 @@ class Traffic:
         every frame; fuzz={"from": 14, "to": 42, "seed": 7} randomizes bytes; encap={"outer": {"vlan": 100},
         "mpls": [{"label": 1000}]} or {"vxlan": {"vni": 10010, "dst": "10.255.0.1"}} or {"gre": {"dst": ...}} or
         {"v6ext": [{"type": "hbh"}]} adds headers (the size stays the size on the wire); expect="drop" passes when the
-        switch drops them, expect="any" only counts them."""
+        switch drops them, expect="any" only counts them.
+        kind="session" opens real TCP sessions to dst, which answers them: session={"dport": 80, "count": 1000,
+        "concurrent": 100, "rate": 100, "req": 1000, "resp": 10000, "hold": 0, "http": False, "expect": ""} (expect
+        "refused": every one should get a reset, "dropped": no answer); its result has sessions (tried, ok, refused,
+        timeout, setupAvg ms, cps); max_loss is the % of sessions that may fail, max_latency the setup time in ms."""
         if rate is not None:
             if "pps" in fields:
                 raise ValueError("give pps or rate, not both")

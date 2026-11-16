@@ -73,6 +73,14 @@ class Fake(BaseHTTPRequestHandler):
             if st["rp"] < 2:
                 return self.reply(200, {"id": "r1", "status": "running", "rows": []})
             return self.reply(200, {"id": "r1", "status": st.get("run_status", "done"), "rows": [{"size": 64, "rate": 99.0}], "error": ""})
+        if path in ("/traffic/engines", "/traffic/trex", "/traffic/nics") or path.startswith("/traffic/trex/"):
+            if m == "DELETE":
+                self.send_response(204)
+                self.end_headers()
+                return
+            if path == "/traffic/nics":
+                return self.reply(200, [{"name": "enp3s0", "mac": "0c:42:a1:00:00:01", "up": True, "speed": 10000, "used": ""}])
+            return self.reply(200, {"engine": (body or {}).get("engine", "python"), "hosts": [], "trex": []})
         if path == "/tools/power":
             return self.reply(200, {"result": "started %s" % ",".join(body["switches"])})
         if path == "/tools/console":
@@ -183,6 +191,21 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(a, "Test port 1")
         self.assertEqual(tw._body(dict(topology_change=True)), {"topologyChange": True})
 
+    def test_engines_host_and_trex_ports(self):
+        t = self.lab.traffic
+        self.assertEqual(t.set_engine("fast")["engine"], "fast")
+        self.assertEqual(Fake.state["calls"][-1][:3], ("PUT", "/api/v1/lab/traffic/engines", {"engine": "fast"}))
+        self.assertEqual(t.nics("kvm-2")[0]["name"], "enp3s0")
+        self.assertEqual(Fake.state["calls"][-1][1], "/api/v1/lab/traffic/nics?host=kvm-2")
+        t.add_host_port("enp3s0", host="kvm-2", ip="10.9.0.1/24", cabled="core-1 1/1")
+        self.assertEqual(Fake.state["calls"][-1][2], {"ip": "10.9.0.1/24", "nic": "enp3s0", "host": "kvm-2", "cabled": "core-1 1/1"})
+        t.add_trex("10.0.0.50", "trex-1")
+        self.assertEqual(Fake.state["calls"][-1][2], {"addr": "10.0.0.50", "name": "trex-1", "port": 4501})
+        t.add_trex_port("trex-1", 1)
+        self.assertEqual(Fake.state["calls"][-1][2], {"trex": "trex-1", "trexPort": 1, "cabled": ""})
+        t.remove_trex("trex 1")
+        self.assertEqual(Fake.state["calls"][-1][:2], ("DELETE", "/api/v1/lab/traffic/trex/trex%201"))
+
     def test_install_wait_raises_on_failure(self):
         self.lab.install_iso("/x/a.iso")
         Fake.state["inst_end"] = "failed"
@@ -246,7 +269,7 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(t.report("json"), {"ok": True})
         self.assertEqual(t.report("csv"), "a,b\n1,2\n")
         with self.assertRaises(ValueError):
-            t.report("pdf")
+            t.report("docx")
 
     def test_saved_test_runs(self):
         t = self.lab.traffic

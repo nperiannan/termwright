@@ -413,7 +413,9 @@ type Lab struct {
 	CloudPorts    map[string]int  `json:"cloudPorts,omitempty"` // host → ports of its cloud (1-8; 1 when not set)        // the built-in RADIUS server (802.1X and MAC logins for the switches)
 	DNS           []string        `json:"dns,omitempty"`        // the lab's name servers: computers without one get them, day 0 fills {dns} {dns2} {dnsList} (default 8.8.8.8 1.1.1.1)
 	Streams       []Stream        `json:"streams,omitempty"`
-	Tests         []TrafficTest   `json:"tests,omitempty"` // saved traffic tests (RFC 2544, learning, convergence)
+	Tests         []TrafficTest   `json:"tests,omitempty"`  // saved traffic tests (RFC 2544, learning, convergence)
+	Engine        string          `json:"engine,omitempty"` // what sends the streams on the KVM hosts: "" the built-in engine (Python), "fast" (the compiled helper)
+	Trex          []TrexServer    `json:"trex,omitempty"`   // TRex servers whose ports are test ports
 	// Nets: the management of the lab's other hosts (its own host's is above);
 	// Addrs: each host's address the others send cable traffic to.
 	Nets  map[string]HostNet `json:"nets,omitempty"`

@@ -75,7 +75,7 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		route, arg = "/lab/traffic/tests/{id}/run", seg[3]
 	} else if len(seg) == 4 && seg[0] == "lab" && seg[1] == "traffic" && seg[2] == "runs" && seg[3] == "stop" {
 		route = path
-	} else if len(seg) == 4 && seg[0] == "lab" && seg[1] == "traffic" && (seg[2] == "ports" || seg[2] == "streams" || seg[2] == "tests" || seg[2] == "runs") {
+	} else if len(seg) == 4 && seg[0] == "lab" && seg[1] == "traffic" && (seg[2] == "ports" || seg[2] == "streams" || seg[2] == "tests" || seg[2] == "runs" || seg[2] == "trex") {
 		route, arg = "/lab/traffic/"+seg[2]+"/{id}", seg[3]
 	} else if len(seg) == 3 && seg[0] == "lab" && seg[1] == "tools" {
 		route, arg = "/lab/tools/{tool}", seg[2]
@@ -140,6 +140,36 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 	case "/lab/traffic/ports":
 		v, err := a.apiPortAdd(body)
 		apiOut(w, http.StatusCreated, v, err)
+	case "/lab/traffic/engines":
+		if r.Method == http.MethodGet {
+			v, err := a.EmuEngines()
+			apiOut(w, http.StatusOK, v, err)
+			return
+		}
+		v, err := a.EmuEngineSet(argStr(body, "engine"))
+		apiOut(w, http.StatusOK, v, err)
+	case "/lab/traffic/nics":
+		h, err := emuMCPHost(r.URL.Query().Get("host"))
+		if err != nil {
+			apiOut(w, http.StatusOK, nil, err)
+			return
+		}
+		v, err := a.EmuHostNICs(h)
+		apiOut(w, http.StatusOK, v, err)
+	case "/lab/traffic/trex":
+		v, err := a.EmuTrexSave(EmuTrex{ID: a.apiTrexID(argStr(body, "id")), Name: argStr(body, "name"), Addr: argStr(body, "addr"), Port: argInt(body, "port", 0, 65535)})
+		apiOut(w, http.StatusCreated, v, err)
+	case "/lab/traffic/trex/{id}":
+		id := a.apiTrexID(arg)
+		if id == "" {
+			apiProblem(w, http.StatusNotFound, "not-found", "No such TRex server.")
+			return
+		}
+		if _, err := a.EmuTrexRemove(id); err != nil {
+			apiOut(w, http.StatusOK, nil, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	case "/lab/traffic/ports/{id}":
 		id, ok := a.apiFind(arg, true)
 		if !ok {
@@ -254,6 +284,7 @@ var apiRoutes = map[string][]string{
 	"/lab": {"GET"}, "/lab/tools": {"GET"}, "/lab/tools/{tool}": {"POST"}, "/lab/screen/{id}": {"GET"},
 	"/lab/traffic": {"GET"}, "/lab/traffic/report": {"GET"}, "/lab/traffic/start": {"POST"}, "/lab/traffic/stop": {"POST"},
 	"/lab/traffic/ports": {"POST"}, "/lab/traffic/ports/{id}": {"PATCH", "DELETE"},
+	"/lab/traffic/engines": {"GET", "PUT"}, "/lab/traffic/nics": {"GET"}, "/lab/traffic/trex": {"POST"}, "/lab/traffic/trex/{id}": {"DELETE"},
 	"/lab/traffic/streams": {"POST"}, "/lab/traffic/streams/{id}": {"PUT", "DELETE"},
 	"/lab/traffic/tests": {"GET", "POST"}, "/lab/traffic/tests/{id}": {"PUT", "DELETE"}, "/lab/traffic/tests/{id}/run": {"POST"},
 	"/lab/traffic/runs": {"GET"}, "/lab/traffic/runs/{id}": {"GET"}, "/lab/traffic/runs/stop": {"POST"},
@@ -353,7 +384,60 @@ func (a *App) apiTestRefs(t *emu.TrafficTest) {
 	}
 }
 
-func (a *App) apiPortAdd(b map[string]any) (EmuTrafficView, error) {
+// apiTrexID is a TRex server's id from its name or id ("" when there is none).
+func (a *App) apiTrexID(ref string) string {
+	emuLab.mu.Lock()
+	defer emuLab.mu.Unlock()
+	if l := emuLab.f.Lab; l != nil && ref != "" {
+		for _, s := range l.Trex {
+			if s.ID == ref || strings.EqualFold(s.Name, ref) || s.Addr == ref {
+				return s.ID
+			}
+		}
+	}
+	return ""
+}
+
+// emuTesterAddAny adds a test port: on a switch port (switch, port), on a host's spare network card (host, nic) or
+// on a TRex port (trex, trexPort); the tools and the API take the same arguments.
+func (a *App) emuTesterAddAny(b map[string]any) (EmuTrafficView, error) {
+	switch {
+	case argStr(b, "nic") != "":
+		h, err := emuMCPHost(argStr(b, "host"))
+		if err != nil {
+			return EmuTrafficView{}, err
+		}
+		return a.EmuTesterAddNIC(h, argStr(b, "nic"), argStr(b, "cabled"), argStr(b, "ip"), argStr(b, "gateway"), argInt(b, "vlan", 0, 4094))
+	case argStr(b, "trex") != "":
+		id := a.apiTrexID(argStr(b, "trex"))
+		if id == "" {
+			return EmuTrafficView{}, fmt.Errorf("no TRex server %q (add it first)", argStr(b, "trex"))
+		}
+		emuLab.mu.Lock()
+		known := emuTraf.trex != nil && emuTraf.trex[id] != nil && len(emuTraf.trex[id].info.Ports) > 0
+		var srv emu.TrexServer
+		for _, s := range emuLab.f.Lab.Trex {
+			if s.ID == id {
+				srv = s
+			}
+		}
+		emuLab.mu.Unlock()
+		if !known {
+			if _, err := a.emuTrexConn(srv, true); err != nil {
+				return EmuTrafficView{}, err
+			}
+		}
+		if _, err := a.EmuTrexPort(id, argInt(b, "trexPort", 0, 255), true, argStr(b, "cabled")); err != nil {
+			return EmuTrafficView{}, err
+		}
+		tv, err := a.EmuTraffic()
+		if err == nil && (argStr(b, "ip") != "" || argStr(b, "gateway") != "" || argInt(b, "vlan", 0, 4094) > 0) {
+			t := tv.Testers[len(tv.Testers)-1]
+			t.IP, t.GW, t.VLAN = argStr(b, "ip"), argStr(b, "gateway"), argInt(b, "vlan", 0, 4094)
+			return a.EmuTesterSet(t)
+		}
+		return tv, err
+	}
 	v, err := a.EmuState()
 	if err != nil {
 		return EmuTrafficView{}, err
@@ -362,7 +446,11 @@ func (a *App) apiPortAdd(b map[string]any) (EmuTrafficView, error) {
 	if err != nil {
 		return EmuTrafficView{}, err
 	}
-	tv, err := a.EmuTesterAdd(d.ID, argStr(b, "port"), argStr(b, "ip"), argStr(b, "gateway"), argInt(b, "vlan", 0, 4094))
+	return a.EmuTesterAdd(d.ID, argStr(b, "port"), argStr(b, "ip"), argStr(b, "gateway"), argInt(b, "vlan", 0, 4094))
+}
+
+func (a *App) apiPortAdd(b map[string]any) (EmuTrafficView, error) {
+	tv, err := a.emuTesterAddAny(b)
 	if err != nil {
 		return tv, err
 	}

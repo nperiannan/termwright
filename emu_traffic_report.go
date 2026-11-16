@@ -36,6 +36,7 @@ type emuRep struct {
 	VMs     []emu.VM // the devices drawn
 	Cables  []emu.Cable
 	VMName  map[string]string
+	Where   map[string]string // test port → where it is, when not on a switch of the lab (a host's card, a TRex port)
 	Color   map[string]string // stream → its colour in the graphs and the topology
 	fan     map[string]int    // stream → which of the streams between its two test ports it is (0, 1…), to draw them apart
 	Num     map[string]int    // stream → its number (1, 2…)
@@ -67,8 +68,12 @@ func (a *App) emuReportData() (emuRep, error) {
 	for _, vm := range r.VMs {
 		r.VMName[vm.ID] = vm.Name
 	}
+	r.Where = map[string]string{}
 	for _, t := range v.Testers {
 		r.Tester[t.ID] = t
+		if t.Where() != "" {
+			r.Where[t.ID] = strings.TrimPrefix(a.emuTesterWhere(t, ""), "on ")
+		}
 	}
 	for _, p := range v.Ports {
 		r.Port[p.ID] = p
@@ -83,6 +88,9 @@ func (a *App) emuReportData() (emuRep, error) {
 		x := r.Res[s.ID]
 		r.Passed += map[bool]int{true: 1}[x.Result == "pass"]
 		r.Failed += map[bool]int{true: 1}[x.Result == "fail"]
+		if s.Kind == "session" { // sessions, not frames: in their own stream's details
+			continue
+		}
 		r.Sent += x.TX
 		r.Got += x.RX
 		if s.Expect == "" {
@@ -109,6 +117,9 @@ func (r emuRep) testerAt(id string) string {
 	t, ok := r.Tester[id]
 	if !ok {
 		return ""
+	}
+	if w := r.Where[id]; w != "" {
+		return w
 	}
 	at := orStr(r.VMName[t.VM], t.VM)
 	if t.PortName != "" {
@@ -196,6 +207,13 @@ func emuThousands(n int) string {
 
 // emuFrameText is what a stream's frames are, in a few words: UDP · 128 B · VLAN 10 · prio 5 · DSCP 46.
 func emuFrameText(s emu.Stream) string {
+	if x := s.Session; s.Kind == "session" && x != nil {
+		t := fmt.Sprintf("TCP sessions to port %d", x.DPort)
+		if x.HTTP {
+			t = fmt.Sprintf("HTTP sessions to port %d", x.DPort)
+		}
+		return fmt.Sprintf("%s: %s, %s at once, %g a second", t, emuThousands(x.Count), emuThousands(x.Concurrent), x.Rate)
+	}
 	kind := map[string]string{"udp": "UDP", "tcp": "TCP SYN", "icmp": "ICMP echo", "arp": "ARP", "raw": "Raw L2", "pcap": "pcap replay", "custom": "Custom"}[s.Kind]
 	size := fmt.Sprintf("%d B", s.Size)
 	switch s.SizeMode {
@@ -280,6 +298,19 @@ func emuRateText(s emu.Stream) (rate, dur string) {
 
 // emuPassText is what makes a stream pass.
 func emuPassText(s emu.Stream) string {
+	if x := s.Session; s.Kind == "session" && x != nil {
+		switch x.Expect {
+		case "refused":
+			return "every session is refused with a reset"
+		case "dropped":
+			return "no session gets an answer (dropped)"
+		}
+		p := fmt.Sprintf("failed sessions at most %g %%", s.MaxLoss)
+		if s.MaxLatency > 0 {
+			p += fmt.Sprintf(", setup at most %g ms", s.MaxLatency)
+		}
+		return p
+	}
 	switch s.Expect {
 	case "drop":
 		return "none of its frames arrives (they should be dropped)"
@@ -588,17 +619,45 @@ func emuTopoSVG(r emuRep) string {
 			}
 		}
 	}
-	if len(vms) == 0 {
+	// test ports on a host's card or a TRex port: the real device they are cabled to, beside the lab
+	swOf := func(t emu.Tester) string {
+		if t.Where() == "" {
+			return t.VM
+		}
+		if f := strings.Fields(t.Cabled); len(f) > 0 {
+			return "ext:" + f[0]
+		}
+		return "ext:"
+	}
+	ext := map[string]bool{}
+	var exts []string
+	for _, t := range r.V.Testers {
+		if k := swOf(t); strings.HasPrefix(k, "ext:") && !ext[k] {
+			ext[k] = true
+			exts = append(exts, k)
+		}
+	}
+	if len(vms) == 0 && len(exts) == 0 {
 		return ""
 	}
 	type pt struct{ x, y float64 }
 	pos := map[string]pt{}
+	right := math.Inf(-1)
 	for i, vm := range vms {
 		p := pt{float64(vm.X), float64(vm.Y)}
 		if vm.X == 0 && vm.Y == 0 {
 			p = pt{float64(i%4) * 260, float64(i/4) * 200}
 		}
 		pos[vm.ID] = p
+		right = math.Max(right, p.x)
+	}
+	if math.IsInf(right, -1) {
+		right = -300
+	}
+	for i, k := range exts {
+		name := orStr(strings.TrimPrefix(k, "ext:"), "Device under test")
+		vms = append(vms, emu.VM{ID: k, Name: name})
+		pos[k] = pt{right + 300, float64(i) * 200}
 	}
 	if r.fan == nil {
 		r.fan = map[string]int{}
@@ -606,16 +665,23 @@ func emuTopoSVG(r emuRep) string {
 	tpos := map[string]pt{}
 	per := map[string]int{}
 	for _, t := range r.V.Testers {
-		sw, ok := pos[t.VM]
+		sw, ok := pos[swOf(t)]
 		if !ok {
 			continue
 		}
-		if t.X != 0 || t.Y != 0 {
+		if (t.X != 0 || t.Y != 0) && t.Where() == "" {
 			tpos[t.ID] = pt{t.X, t.Y}
 		} else {
-			n := per[t.VM]
-			per[t.VM]++
-			tpos[t.ID] = pt{sw.x - 90 + float64(n%3)*90, sw.y + 120 + float64(n/3)*44}
+			n := per[swOf(t)]
+			per[swOf(t)]++
+			k := 0 // in a row of up to three under it, side by side
+			for _, o := range r.V.Testers {
+				if swOf(o) == swOf(t) && (o.Where() != "" || o.X == 0 && o.Y == 0) {
+					k++
+				}
+			}
+			row := float64(min(3, k-n/3*3))
+			tpos[t.ID] = pt{sw.x + (float64(n%3)-(row-1)/2)*140, sw.y + 120 + float64(n/3)*44}
 		}
 	}
 	x0, y0, x1, y1 := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
@@ -674,12 +740,13 @@ func emuTopoSVG(r emuRep) string {
 		}
 	}
 	for id, tp := range tpos {
-		sw, p := at(pos[r.Tester[id].VM]), at(tp)
+		sw, p := at(pos[swOf(r.Tester[id])]), at(tp)
 		fmt.Fprintf(&b, `<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="#c0c6cc" stroke-width="1.5"/>`, p.x, p.y, sw.x, sw.y)
 	}
 	for _, vm := range vms {
 		p := at(pos[vm.ID])
-		fmt.Fprintf(&b, `<g><rect x="%.1f" y="%.1f" width="120" height="40" rx="7" class="sw"/><text x="%.1f" y="%.1f" class="swn">%s</text></g>`, p.x-60, p.y-20, p.x, p.y+4, html.EscapeString(vm.Name))
+		dash := map[bool]string{true: ` stroke-dasharray="5 3"`}[strings.HasPrefix(vm.ID, "ext:")] // a real device, not the lab's
+		fmt.Fprintf(&b, `<g><rect x="%.1f" y="%.1f" width="120" height="40" rx="7" class="sw"%s/><text x="%.1f" y="%.1f" class="swn">%s</text></g>`, p.x-60, p.y-20, dash, p.x, p.y+4, html.EscapeString(vm.Name))
 	}
 	b.WriteString(labels.String())
 	// the streams: a curve under the test ports from one to the other (a short arrow out for a broadcast), its number at its lowest point
@@ -710,6 +777,13 @@ func emuTopoSVG(r emuRep) string {
 		p := at(tp)
 		t := r.Tester[id]
 		sub := fmt.Sprintf("port %d", t.Port)
+		switch t.Where() {
+		case "nic":
+			sub = t.NIC
+		case "trex":
+			_, n := t.TrexAt()
+			sub = fmt.Sprintf("TRex port %d", n)
+		}
 		if ip := strings.SplitN(orStr(t.IP, t.Lease), " ", 2)[0]; ip != "" {
 			sub += " · " + ip
 		}
@@ -781,7 +855,7 @@ func emuReportHTML(r emuRep) string {
 		b.WriteString(`<p class="why">The streams were still running when this report was made: the numbers are not final.</p>`)
 	}
 	if svg := emuTopoSVG(r); svg != "" {
-		b.WriteString(`<h2>Topology and streams</h2>` + svg + `<p class="legend"><span>▭ switch (cable ends show the port numbers)</span><span>◯ test port</span><span>→ stream, by its number; dashed: its frames should be dropped</span></p>`)
+		b.WriteString(`<h2>Topology and streams</h2>` + svg + `<p class="legend"><span>▭ switch (cable ends show the port numbers)</span>` + map[bool]string{true: `<span>┅ a real device test ports are cabled to</span>`}[len(r.Where) > 0] + `<span>◯ test port</span><span>→ stream, by its number; dashed: its frames should be dropped</span></p>`)
 	}
 	if g := emuReportRunGraphs(r); g != "" {
 		b.WriteString(`<h2>Over the run</h2>` + g)
@@ -887,7 +961,11 @@ func emuReportStream(r emuRep, s emu.Stream) string {
 		fmt.Fprintf(&b, `<p class="why">%s</p>`, e(x.Why))
 	}
 	rate, dur := emuRateText(s)
-	b.WriteString(`<div class="two"><div><h4>Frames sent</h4><dl>`)
+	head := "Frames sent"
+	if c := s.Session; s.Kind == "session" && c != nil {
+		head, rate, dur = "Sessions opened", fmt.Sprintf("%g a second, at most %s at once", c.Rate, emuThousands(c.Concurrent)), "at most "+emuDur(float64(s.Seconds))
+	}
+	b.WriteString(`<div class="two"><div><h4>` + head + `</h4><dl>`)
 	dd := func(k, v string) {
 		if v != "" {
 			fmt.Fprintf(&b, `<dt>%s</dt><dd>%s</dd>`, e(k), e(v))
@@ -899,7 +977,7 @@ func emuReportStream(r emuRep, s emu.Stream) string {
 	} else {
 		dd("To", r.to(s))
 	}
-	dd("Frames", emuFrameText(s))
+	dd(map[bool]string{true: "Sessions", false: "Frames"}[s.Kind == "session"], emuFrameText(s))
 	dd("Rate", rate)
 	dd("For", dur)
 	if s.Burst > 1 {
@@ -925,8 +1003,24 @@ func emuReportStream(r emuRep, s emu.Stream) string {
 	if s.Kind == "pcap" {
 		dd("Capture", fmt.Sprintf("%s: %d frames", filepath.Base(s.Pcap), s.PcapFrames))
 	}
+	if c := s.Session; s.Kind == "session" && c != nil {
+		dd("Data", fmt.Sprintf("%s B sent, %s B back%s, kept open %g s", emuThousands(c.Req), emuThousands(c.Resp), map[bool]string{true: " (HTTP GET and 200)"}[c.HTTP], c.Hold))
+	}
 	dd("Passes when", emuPassText(s))
 	b.WriteString(`</dl></div><div><h4>Output received</h4><dl>`)
+	if c := x.Sessions; s.Kind == "session" && c != nil {
+		dd("Sessions tried", emuThousands(c.Tried))
+		dd("Connected", fmt.Sprintf("%s (finished: %s)", emuThousands(c.OK), emuThousands(c.Done)))
+		dd("Refused, timed out, reset", fmt.Sprintf("%s, %s, %s", emuThousands(c.Refused), emuThousands(c.Timeout), emuThousands(c.Reset)))
+		if c.OK > 0 {
+			dd("Setup time, ms", fmt.Sprintf("avg %.3f · p95 %.3f · max %.3f", c.SetupAvg, c.SetupP95, c.SetupMax))
+		}
+		dd("Open at once, at most", emuThousands(c.Peak))
+		dd("Sessions a second", fmt.Sprintf("%.1f", c.CPS))
+		dd("Data both ways", emuThousands(int(c.Bytes))+" B")
+		b.WriteString(`</dl></div></div></div>`) // (no frames to show: TCP sessions)
+		return b.String()
+	}
 	dd("Frames sent", emuThousands(x.TX))
 	if s.Expect != "drop" {
 		dd("Should arrive", emuThousands(x.Expected))

@@ -161,9 +161,18 @@ var mcpLabTools = []mcpTool{
 			"host":   map[string]any{"type": "string", "description": "KVM host name or session path"},
 			"how":    map[string]any{"type": "string", "enum": []string{"live", "copy", "image"}},
 		}, "switch", "host", "how")},
-	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw, or a custom frame in hex; VLAN tag, size, packets per second, seconds or count, user-defined fields, a fault in every frame (bad: bad checksums, TTL, fragments, runts…) or fuzzed bytes; pass when loss and latency are within limits, or - expect drop - when the switch drops them). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields), stats (every test port's counters at once: frames and rates each way, Mbit/s, loss of the frames that were for it, latency, errors). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file's frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab's streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
+	{"lab_traffic", "The emulated lab's traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw, or a custom frame in hex; VLAN tag, size, packets per second, seconds or count, user-defined fields, a fault in every frame (bad: bad checksums, TTL, fragments, runts…) or fuzzed bytes; pass when loss and latency are within limits, or - expect drop - when the switch drops them). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields), stats (every test port's counters at once: frames and rates each way, Mbit/s, loss of the frames that were for it, latency, errors). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file's frames (counted at the receiver by their contents). Kind session opens real TCP sessions (handshake, data both ways, FIN; the test port it goes to answers them): connected, refused, timed out, setup time and sessions a second - for ACLs, firewalls, NAT and session limits. Test ports can also be a KVM host's spare network card cabled to a real switch (add_port host + nic) or a TRex server's port (add_trex, then add_port trex + trex_port: TRex sends at line rate). engines shows what sends the streams; set_engine fast uses the compiled fast engine on the KVM hosts (millions of frames a second instead of about 100,000). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab's streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab's change history (lab_history).",
 		mcpSchema(map[string]any{
-			"action":          map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report", "stats", "templates", "apply_template", "save_template", "remove_template"}},
+			"action":          map[string]any{"type": "string", "enum": []string{"list", "add_port", "set_port", "remove_port", "add_stream", "remove_stream", "start", "stop", "report", "stats", "templates", "apply_template", "save_template", "remove_template", "engines", "set_engine", "nics", "add_trex", "remove_trex"}},
+			"engine":          map[string]any{"type": "string", "enum": []string{"python", "fast"}, "description": "set_engine: the KVM hosts' engine: python (built in) or fast (a compiled helper Termwright copies to the hosts)"},
+			"host":            map[string]any{"type": "string", "description": "add_port with nic, nics: the KVM host (its name; default the lab's)"},
+			"nic":             map[string]any{"type": "string", "description": "add_port: a spare network card of the host (enp3s0) cabled to a real device: it is the test port (root or passwordless sudo on the host)"},
+			"cabled":          map[string]any{"type": "string", "description": "add_port with nic or trex: what the port is cabled to (for the screens and reports)"},
+			"trex":            map[string]any{"type": "string", "description": "add_port: a TRex server (name or id); add_trex: its name; remove_trex: the server"},
+			"trex_port":       map[string]any{"type": "integer", "description": "add_port with trex: the TRex port number"},
+			"addr":            map[string]any{"type": "string", "description": "add_trex: the TRex server's address"},
+			"rpc_port":        map[string]any{"type": "integer", "description": "add_trex: its RPC port (default 4501)"},
+			"session":         map[string]any{"type": "object", "description": "add_stream kind session: {dport: 80, count: 1000 sessions, concurrent: 100 open at once, rate: 100 opened a second, req: bytes sent, resp: bytes back, hold: seconds open, http: true (a GET and a 200 answer), expect: \"\" (connect) | refused (a reset) | dropped (no answer)}"},
 			"template":        map[string]any{"type": "string", "description": "apply_template, remove_template: the template (name or id); save_template: its name"},
 			"ports":           map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "apply_template: the test ports (names) for its roles A, B, C… in order"},
 			"description":     map[string]any{"type": "string", "description": "save_template: what it checks"},
@@ -191,7 +200,7 @@ var mcpLabTools = []mcpTool{
 			"name":            map[string]any{"type": "string", "description": "add_stream: its name; remove_stream: the stream"},
 			"from":            map[string]any{"type": "string", "description": "add_stream: test port name"},
 			"to":              map[string]any{"type": "string", "description": "add_stream: test port name; empty = every other test port (broadcast) or dst_ip"},
-			"kind":            map[string]any{"type": "string", "enum": []string{"udp", "icmp", "tcp", "arp", "raw", "pcap", "custom"}},
+			"kind":            map[string]any{"type": "string", "enum": []string{"udp", "icmp", "tcp", "arp", "raw", "pcap", "custom", "session"}},
 			"hex":             map[string]any{"type": "string", "description": "add_stream kind custom: the frame in hex from the destination MAC on (no FCS); lengths and checksums are worked out unless no_fix, and the counting signature goes at its end unless no_sig"},
 			"no_fix":          map[string]any{"type": "boolean", "description": "add_stream kind custom: send lengths and checksums as written"},
 			"no_sig":          map[string]any{"type": "boolean", "description": "add_stream kind custom: no counting signature (sent, not counted)"},
@@ -202,7 +211,7 @@ var mcpLabTools = []mcpTool{
 			"dst_ip":          map[string]any{"type": "string", "description": "add_stream: an address that is not a test port (icmp: its replies are counted), or a multicast group (received by the test ports that joined it)"},
 			"vlan":            map[string]any{"type": "integer"},
 			"size":            map[string]any{"type": "integer", "description": "frame bytes (60-9000, default 128)"},
-			"pps":             map[string]any{"type": "integer", "description": "packets per second (default 100, at most 100000)"},
+			"pps":             map[string]any{"type": "integer", "description": "packets per second (default 100; at most 100000 with the built-in engine, 2000000 with the fast one, 100000000 between TRex ports)"},
 			"rate":            map[string]any{"type": "number", "description": "add_stream: the rate in rate_unit (instead of pps)"},
 			"rate_unit":       map[string]any{"type": "string", "enum": []string{"pps", "mbps", "pct"}, "description": "add_stream: pps, mbps (Mbit/s on the wire, with preamble and gap) or pct (% of the sending test port's line rate)"},
 			"round_trip":      map[string]any{"type": "boolean", "description": "add_stream: the test port it goes to sends each frame back; latency is the round trip (works between test ports on two hosts)"},
@@ -1320,7 +1329,7 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				if t.IP6 != "" || t.SLAAC {
 					ip += ", IPv6 " + orStr(t.IP6, orStr(t.Lease6, "SLAAC (none yet)"))
 				}
-				fmt.Fprintf(&b, "- test port %s on %s port %d, MAC %s, IP %s", t.Name, sw, t.Port, t.MAC, ip)
+				fmt.Fprintf(&b, "- test port %s %s, MAC %s, IP %s", t.Name, a.emuTesterWhere(t, fmt.Sprintf("%s port %d", sw, t.Port)), t.MAC, ip)
 				if t.Lag != "" {
 					fmt.Fprintf(&b, ", LAG %s (LACP %s)", t.Lag, orStr(t.LacpUp, "starting"))
 				}
@@ -1351,7 +1360,66 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				return "No test port yet: add_port puts one on a free switch port.", nil
 			}
 			return b.String(), nil
+		case "engines":
+			e, err := a.EmuEngines()
+			if err != nil {
+				return "", err
+			}
+			return emuEnginesText(e), nil
+		case "set_engine":
+			e, err := a.EmuEngineSet(argStr(args, "engine"))
+			if err != nil {
+				return "", err
+			}
+			return "Engine set.\n" + emuEnginesText(e), nil
+		case "nics":
+			h, err := emuMCPHost(argStr(args, "host"))
+			if err != nil {
+				return "", err
+			}
+			ns, err := a.EmuHostNICs(h)
+			if err != nil {
+				return "", err
+			}
+			var b strings.Builder
+			for _, n := range ns {
+				fmt.Fprintf(&b, "%s\t%s\t%s\t%d Mbit/s\t%s\t%s\n", n.Name, n.MAC, map[bool]string{true: "up", false: "no link"}[n.Up], n.Speed, n.Driver, orStr(n.Used, "free: can be a test port"))
+			}
+			return orStr(b.String(), "The host has no network card."), nil
+		case "add_trex":
+			e, err := a.EmuTrexSave(EmuTrex{ID: a.apiTrexID(argStr(args, "trex")), Name: argStr(args, "trex"), Addr: argStr(args, "addr"), Port: argInt(args, "rpc_port", 0, 65535)})
+			if err != nil {
+				return "", err
+			}
+			return emuEnginesText(e), nil
+		case "remove_trex":
+			id := a.apiTrexID(argStr(args, "trex"))
+			if id == "" {
+				return "", fmt.Errorf("no TRex server %q", argStr(args, "trex"))
+			}
+			e, err := a.EmuTrexRemove(id)
+			if err != nil {
+				return "", err
+			}
+			return "Removed.\n" + emuEnginesText(e), nil
 		case "add_port":
+			if argStr(args, "nic") != "" || argStr(args, "trex") != "" {
+				where := argStr(args, "nic") + " of " + orStr(argStr(args, "host"), "the lab's host")
+				if argStr(args, "trex") != "" {
+					where = fmt.Sprintf("port %d of TRex %s", argInt(args, "trex_port", 0, 255), argStr(args, "trex"))
+				}
+				if err := ask("Claude wants to add a test port", "Claude (through the Termwright connector) asks to make "+where+" a test port.", false); err != nil {
+					return "", err
+				}
+				b := maps.Clone(args)
+				b["trexPort"] = args["trex_port"]
+				r, err := a.emuTesterAddAny(b)
+				if err != nil {
+					return "", err
+				}
+				t := r.Testers[len(r.Testers)-1]
+				return fmt.Sprintf("%s added%s.", t.Name, map[bool]string{true: " (" + r.Note + ")", false: ""}[r.Note != ""]), nil
+			}
 			d, err := emuMCPID(v, argStr(args, "switch"))
 			if err != nil {
 				return "", err
@@ -1435,7 +1503,7 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 			_, err := a.EmuTesterRemove(id)
 			return "Removed.", err
 		case "add_stream":
-			st := emu.Stream{Name: argStr(args, "name"), From: tester(argStr(args, "from")), Kind: argStr(args, "kind"), DstIP: argStr(args, "dst_ip"), VLAN: argInt(args, "vlan", 0, 4094), Size: argInt(args, "size", 128, 9000), PPS: argInt(args, "pps", 100, 100000), Seconds: argInt(args, "seconds", 0, 86400), Count: argInt(args, "count", 0, 100000000)}
+			st := emu.Stream{Name: argStr(args, "name"), From: tester(argStr(args, "from")), Kind: argStr(args, "kind"), DstIP: argStr(args, "dst_ip"), VLAN: argInt(args, "vlan", 0, 4094), Size: argInt(args, "size", 128, 9000), PPS: argInt(args, "pps", 100, 100000000), Seconds: argInt(args, "seconds", 0, 86400), Count: argInt(args, "count", 0, 100000000)}
 			if to := argStr(args, "to"); to != "" {
 				if st.To = tester(to); st.To == "" {
 					return "", errors.New("no test port " + to)
@@ -1484,6 +1552,14 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 						st.UDFs = append(st.UDFs, u)
 					}
 				}
+			}
+			if args["session"] != nil {
+				j, _ := json.Marshal(args["session"])
+				var x emu.Session
+				if err := json.Unmarshal(j, &x); err != nil {
+					return "", fmt.Errorf("session: %v", err)
+				}
+				st.Session = &x
 			}
 			if args["encap"] != nil {
 				j, _ := json.Marshal(args["encap"])
@@ -2067,6 +2143,18 @@ func emuReadyForTests(d EmuDevice) bool {
 }
 
 // emuPortStatsText is lab_traffic stats: a line per test port with its counters (the Traffic page's Statistics).
+// emuTesterShort is where a test port is, in a table.
+func emuTesterShort(t emu.Tester, sw func(vm string) string) string {
+	switch t.Where() {
+	case "nic":
+		return t.NIC + " of " + emuHostName(t.Host)
+	case "trex":
+		_, p := t.TrexAt()
+		return fmt.Sprintf("TRex port %d", p)
+	}
+	return sw(t.VM) + " " + orStr(t.PortName, fmt.Sprint(t.Port))
+}
+
 func emuPortStatsText(tv EmuTrafficView, sw func(vm string) string) string {
 	if len(tv.Testers) == 0 {
 		return "No test ports yet: lab_traffic add_port puts one on a free switch port."
@@ -2090,7 +2178,7 @@ func emuPortStatsText(tv EmuTrafficView, sw func(vm string) string) string {
 		if p.LatAvg >= 0 && p.Got > 0 {
 			lat = fmt.Sprintf("%.3f", p.LatAvg)
 		}
-		fmt.Fprintf(w, "%s\t%s %s\t%.0f\t%.0f\t%.2f\t%.2f\t%d\t%d\t%s\t%s\t%d\t\n", t.Name, sw(t.VM), orStr(t.PortName, fmt.Sprint(t.Port)), p.TxRate, p.RxRate, p.TxMbps, p.RxMbps, p.TX, p.RX, loss, lat, p.Errors)
+		fmt.Fprintf(w, "%s\t%s\t%.0f\t%.0f\t%.2f\t%.2f\t%d\t%d\t%s\t%s\t%d\t\n", t.Name, emuTesterShort(t, sw), p.TxRate, p.RxRate, p.TxMbps, p.RxMbps, p.TX, p.RX, loss, lat, p.Errors)
 	}
 	_ = w.Flush()
 	state := "the last run"
@@ -2107,4 +2195,27 @@ func emuBadKeys() []string {
 		out = append(out, b.Key)
 	}
 	return out
+}
+
+// emuEnginesText is the engines for the tools.
+func emuEnginesText(e EmuEngines) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "KVM hosts: the %s engine\n", map[string]string{"python": "built-in", "fast": "fast"}[e.Engine])
+	for _, h := range e.Hosts {
+		fmt.Fprintf(&b, "  %s (%s): %s", h.Host, orStr(h.Arch, "CPU not known yet"), map[bool]string{true: "running", false: "starts with the first stream"}[h.Running])
+		if h.FPS > 0 {
+			fmt.Fprintf(&b, ", up to %.0f frames/s", h.FPS)
+		}
+		if h.Note != "" {
+			b.WriteString(" - " + h.Note)
+		}
+		b.WriteString("\n")
+	}
+	for _, t := range e.Trex {
+		fmt.Fprintf(&b, "TRex %s (%s:%d): %s %s %s\n", t.Name, t.Addr, cmp0(t.Port, 4501), t.State, t.Version, t.Err)
+		for _, p := range t.Ports {
+			fmt.Fprintf(&b, "  port %d: %d Mbit/s, %s, %s%s\n", p.ID, p.Speed, map[bool]string{true: "link up", false: "no link"}[p.Link != nil && *p.Link], p.MAC, map[bool]string{true: " - test port " + p.Tester, false: ""}[p.Use])
+		}
+	}
+	return b.String()
 }

@@ -942,17 +942,17 @@ func TestTesterConfig(t *testing.T) {
 	if got := strings.Join(l.DownLinks(l.VMs[0], imgs["i1"]), " "); strings.Contains(got, "nic3") {
 		t.Fatal("a port with a test port is down: " + got)
 	}
-	b, n := l.TrafficConfig(func(v VM) bool { return v.ID == "v1" }, 7, map[string]bool{"s1": true})
+	b, n := l.TrafficConfig(func(v VM) bool { return v.ID == "v1" }, "", 7, map[string]bool{"s1": true})
 	s := string(b)
 	if n != 1 || !strings.Contains(s, `"listen":32003`) || !strings.Contains(s, `"send":24003`) || !strings.Contains(s, `"toMac":"02:74:77:00:00:02"`) || !strings.Contains(s, `"dstIp":"10.10.0.2"`) || !strings.Contains(s, `"routed":true,"gwIp":"10.10.0.254"`) || !strings.Contains(s, `"run":7`) {
 		t.Fatal(s)
 	}
-	if !strings.Contains(l.TrafficScript(b), "nohup python3 tw-traffic.py") {
+	if !strings.Contains(l.TrafficScript(b, false), "python3 tw-traffic.py") {
 		t.Fatal("no start")
 	}
 	// a switch port that started with a cable since removed sends to the old other end: the test port listens there
 	l.Testers[0].Listen = 24131
-	if b, _ := l.TrafficConfig(func(v VM) bool { return v.ID == "v1" }, 7, nil); !strings.Contains(string(b), `"listen":24131,"send":24003`) {
+	if b, _ := l.TrafficConfig(func(v VM) bool { return v.ID == "v1" }, "", 7, nil); !strings.Contains(string(b), `"listen":24131,"send":24003`) {
 		t.Fatal(string(b))
 	}
 }

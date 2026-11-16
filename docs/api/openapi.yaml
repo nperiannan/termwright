@@ -247,9 +247,7 @@ paths:
                     application/json:
                         schema:
                             type: object
-                            required:
-                                - switch
-                                - port
+                            description: 'Where the test port goes: switch and port (a switch of the lab), host and nic (a KVM host''s spare network card cabled to a real device), or trex and trexPort (a TRex server''s port).'
                             properties:
                                 switch:
                                     type: string
@@ -257,6 +255,22 @@ paths:
                                 port:
                                     type: string
                                     description: A free data port, named as the switch names it (1, 1/5, …).
+                                host:
+                                    type: string
+                                    description: 'With nic: the KVM host (its name; default the lab''s host).'
+                                nic:
+                                    type: string
+                                    description: A spare network card of the host (enp3s0; GET /lab/traffic/nics lists them). The generator needs root there, or passwordless sudo.
+                                trex:
+                                    type: string
+                                    description: A TRex server (its name or id; POST /lab/traffic/trex adds one).
+                                trexPort:
+                                    type: integer
+                                    minimum: 0
+                                    description: 'With trex: the port''s number on the server.'
+                                cabled:
+                                    type: string
+                                    description: 'With nic or trex: what the port is cabled to (core-1 port 1/1), for the screens and the report''s topology.'
                                 name:
                                     type: string
                                     description: 'Its name (default: Test port n).'
@@ -315,6 +329,171 @@ paths:
                                 $ref: '#/components/schemas/TrafficView'
                 400:
                     $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/engines:
+        get:
+            operationId: getEngines
+            tags:
+                - Traffic engines
+            summary: The traffic engines
+            description: 'What sends the streams: the KVM hosts'' engine and the TRex servers with their ports.'
+            responses:
+                200:
+                    description: The engines.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Engines'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+        put:
+            operationId: setEngine
+            tags:
+                - Traffic engines
+            summary: Choose the KVM hosts' engine
+            description: 'python: the built-in engine (python3 on the hosts, about 100,000 frames a second each). fast: a compiled helper Termwright copies to the hosts (Linux x86-64 or ARM64) - the same streams and counters, a few million frames a second. A host it cannot run on sends with the built-in one (its note says why).'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required:
+                                - engine
+                            properties:
+                                engine:
+                                    type: string
+                                    enum:
+                                        - python
+                                        - fast
+                        example:
+                            engine: fast
+            responses:
+                200:
+                    description: Set; the engines.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Engines'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/nics:
+        get:
+            operationId: listHostNICs
+            tags:
+                - Traffic engines
+            summary: A host's network cards
+            description: 'A KVM host''s network cards and whether each can be a test port: a spare card cabled to a real device, with no address and not in a bridge.'
+            parameters:
+                - name: host
+                  in: query
+                  required: false
+                  description: 'The KVM host''s name (default: the lab''s host).'
+                  schema:
+                    type: string
+            responses:
+                200:
+                    description: Its cards.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/HostNIC'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/trex:
+        post:
+            operationId: addTrex
+            tags:
+                - Traffic engines
+            summary: Add or check a TRex server
+            description: 'Adds a TRex server (trex-core in stateless mode, its API on TCP 4501) or, with the id of one, changes and checks it: its version and ports. Nothing is installed there. Its ports become test ports with POST /lab/traffic/ports (trex, trexPort).'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required:
+                                - addr
+                            properties:
+                                id:
+                                    type: string
+                                    description: 'A server''s name or id: changed and checked again.'
+                                name:
+                                    type: string
+                                addr:
+                                    type: string
+                                    description: Its address (name or IP).
+                                port:
+                                    type: integer
+                                    default: 4501
+                                    description: Its RPC port.
+                        example:
+                            name: trex-1
+                            addr: 10.0.0.50
+            responses:
+                201:
+                    description: Added and checked; the engines.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Engines'
+                400:
+                    $ref: '#/components/responses/BadRequest'
+                422:
+                    $ref: '#/components/responses/Unprocessable'
+                401:
+                    $ref: '#/components/responses/Unauthorized'
+                403:
+                    $ref: '#/components/responses/Forbidden'
+                405:
+                    $ref: '#/components/responses/MethodNotAllowed'
+    /lab/traffic/trex/{server}:
+        parameters:
+            - name: server
+              in: path
+              required: true
+              description: The TRex server's name or id.
+              schema:
+                type: string
+        delete:
+            operationId: removeTrex
+            tags:
+                - Traffic engines
+            summary: Remove a TRex server
+            description: Forgets the server, its test ports and their streams.
+            responses:
+                204:
+                    description: Removed.
+                404:
+                    $ref: '#/components/responses/NotFound'
                 422:
                     $ref: '#/components/responses/Unprocessable'
                 401:
@@ -2668,7 +2847,7 @@ paths:
             tags:
                 - Tools
             summary: The emulated lab's traffic generator
-            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw, or a custom frame in hex; VLAN tag, size, packets per second, seconds or count, user-defined fields, a fault in every frame (bad: bad checksums, TTL, fragments, runts…) or fuzzed bytes; pass when loss and latency are within limits, or - expect drop - when the switch drops them). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields), stats (every test port''s counters at once: frames and rates each way, Mbit/s, loss of the frames that were for it, latency, errors). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file''s frames (counted at the receiver by their contents). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab''s streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
+            description: 'The emulated lab''s traffic generator: test ports on free switch ports (a sender and counter, no VM; it answers ARP and ping at its address) and streams of frames between them (udp, icmp, tcp SYN, arp, raw, or a custom frame in hex; VLAN tag, size, packets per second, seconds or count, user-defined fields, a fault in every frame (bad: bad checksums, TTL, fragments, runts…) or fuzzed bytes; pass when loss and latency are within limits, or - expect drop - when the switch drops them). Actions: list, add_port, remove_port, add_stream, remove_stream, start, stop, report (pass/fail per stream with sent, received, loss, latency min/avg/p50/p95/p99/max, and per flow for streams with changing fields), stats (every test port''s counters at once: frames and rates each way, Mbit/s, loss of the frames that were for it, latency, errors). Rates in pps, Mbit/s or % of line rate; round_trip streams measure latency across hosts. Kind pcap replays a capture file''s frames (counted at the receiver by their contents). Kind session opens real TCP sessions (handshake, data both ways, FIN; the test port it goes to answers them): connected, refused, timed out, setup time and sessions a second - for ACLs, firewalls, NAT and session limits. Test ports can also be a KVM host''s spare network card cabled to a real switch (add_port host + nic) or a TRex server''s port (add_trex, then add_port trex + trex_port: TRex sends at line rate). engines shows what sends the streams; set_engine fast uses the compiled fast engine on the KVM hosts (millions of frames a second instead of about 100,000). templates lists a library of ready tests (unicast, IMIX, QoS classes, MAC table fill, round trip, broadcast, RFC 2544/2889); apply_template puts one on the test ports given for its roles; save_template keeps the lab''s streams and tests as a template of yours. Changes and starts are not asked; they are kept in the lab''s change history (lab_history). Through the API it runs without asking.'
             requestBody:
                 required: false
                 content:
@@ -2692,6 +2871,14 @@ paths:
                                         - apply_template
                                         - save_template
                                         - remove_template
+                                        - engines
+                                        - set_engine
+                                        - nics
+                                        - add_trex
+                                        - remove_trex
+                                    type: string
+                                addr:
+                                    description: 'add_trex: the TRex server''s address'
                                     type: string
                                 bad:
                                     description: 'add_stream: a fault in every frame'
@@ -2726,6 +2913,9 @@ paths:
                                 burst:
                                     description: 'add_stream: frames sent back to back (the rate stays the average)'
                                     type: integer
+                                cabled:
+                                    description: 'add_port with nic or trex: what the port is cabled to (for the screens and reports)'
+                                    type: string
                                 clients:
                                     description: 'add_port, set_port: many hosts behind the test port, each with its own MAC: {n: 1-4000, dhcp: true, dhcp6: true, groups: [239.1.1.1], dot1x: {user: "user{n}", password: "…", method: md5|peap}, rate: started a second (50), mac: the first MAC}; {n: 0} = none. 802.1X is EAP-MD5 or PEAP-MSCHAPv2 (the lab''s RADIUS server answers both); {n} is the client''s number, {mac} its MAC'
                                     type: object
@@ -2747,6 +2937,12 @@ paths:
                                 encap:
                                     description: 'add_stream: headers around its frames: {outer: {tpid: 34984, vlan, prio}, mpls: [{label, tc, ttl}] (up to 3), gre: {dst, src, key}, vxlan: {vni, dst (the VTEP), src, port: 4789}, v6ext: [{type: hbh|dst|rt|frag, segs: "fd00::1 fd00::2", offset, more}]} - one tunnel; the frame size stays the size on the wire'
                                     type: object
+                                engine:
+                                    description: 'set_engine: the KVM hosts'' engine: python (built in) or fast (a compiled helper Termwright copies to the hosts)'
+                                    enum:
+                                        - python
+                                        - fast
+                                    type: string
                                 expect:
                                     description: 'add_stream: forward (default: pass on loss and latency), drop (pass when none arrives: bad frames, ACLs, VLAN isolation) or any (only counted)'
                                     enum:
@@ -2771,6 +2967,9 @@ paths:
                                 hex:
                                     description: 'add_stream kind custom: the frame in hex from the destination MAC on (no FCS); lengths and checksums are worked out unless no_fix, and the counting signature goes at its end unless no_sig'
                                     type: string
+                                host:
+                                    description: 'add_port with nic, nics: the KVM host (its name; default the lab''s)'
+                                    type: string
                                 ip:
                                     description: 'add_port, set_port: the test port''s address with prefix (10.10.0.1/24), or dhcp (from a DHCP server)'
                                     type: string
@@ -2786,6 +2985,7 @@ paths:
                                         - raw
                                         - pcap
                                         - custom
+                                        - session
                                     type: string
                                 lacp_fast:
                                     description: 'add_port, set_port: LACP every second (else 30 s)'
@@ -2816,6 +3016,9 @@ paths:
                                 name:
                                     description: 'add_stream: its name; remove_stream: the stream'
                                     type: string
+                                nic:
+                                    description: 'add_port: a spare network card of the host (enp3s0) cabled to a real device: it is the test port (root or passwordless sudo on the host)'
+                                    type: string
                                 no_fix:
                                     description: 'add_stream kind custom: send lengths and checksums as written'
                                     type: boolean
@@ -2840,7 +3043,7 @@ paths:
                                         type: string
                                     type: array
                                 pps:
-                                    description: packets per second (default 100, at most 100000)
+                                    description: packets per second (default 100; at most 100000 with the built-in engine, 2000000 with the fast one, 100000000 between TRex ports)
                                     type: integer
                                 rate:
                                     description: 'add_stream: the rate in rate_unit (instead of pps)'
@@ -2858,8 +3061,14 @@ paths:
                                 round_trip:
                                     description: 'add_stream: the test port it goes to sends each frame back; latency is the round trip (works between test ports on two hosts)'
                                     type: boolean
+                                rpc_port:
+                                    description: 'add_trex: its RPC port (default 4501)'
+                                    type: integer
                                 seconds:
                                     type: integer
+                                session:
+                                    description: 'add_stream kind session: {dport: 80, count: 1000 sessions, concurrent: 100 open at once, rate: 100 opened a second, req: bytes sent, resp: bytes back, hold: seconds open, http: true (a GET and a 200 answer), expect: "" (connect) | refused (a reset) | dropped (no answer)}'
+                                    type: object
                                 silent_bfd:
                                     description: 'set_port: the test port stops sending BFD for 5 s'
                                     type: boolean
@@ -2901,6 +3110,12 @@ paths:
                                 topology_change:
                                     description: 'set_port: its next BPDUs carry a topology change'
                                     type: boolean
+                                trex:
+                                    description: 'add_port: a TRex server (name or id); add_trex: its name; remove_trex: the server'
+                                    type: string
+                                trex_port:
+                                    description: 'add_port with trex: the TRex port number'
+                                    type: integer
                                 udfs:
                                     description: 'add_stream: user-defined fields - bytes at an offset (from the destination MAC) that change per frame: {offset, width: 1-4, mode: inc|dec|random|list, start, step, count, values}'
                                     items:
@@ -4122,6 +4337,37 @@ components:
                 - tftp
                 - tftpWrite
                 - dhcp
+        EmuSession:
+            type: object
+            description: 'A session stream''s TCP sessions: how many, how fast, what they send and what should happen to them.'
+            properties:
+                dport:
+                    description: the server port (default 80)
+                    type: integer
+                count:
+                    description: sessions in all (default 1000)
+                    type: integer
+                concurrent:
+                    description: open at once at most (default 100)
+                    type: integer
+                rate:
+                    description: opened a second (default 100)
+                    type: number
+                req:
+                    description: bytes the client sends
+                    type: integer
+                resp:
+                    description: bytes the server sends back
+                    type: integer
+                hold:
+                    description: seconds each stays open after its data
+                    type: number
+                http:
+                    description: an HTTP GET and a 200 answer with Resp bytes
+                    type: boolean
+                expect:
+                    description: '"" they should connect; "refused": reset (a closed port, an ACL that rejects); "dropped": no answer'
+                    type: string
         EmuSlot:
             type: object
             properties:
@@ -4307,6 +4553,57 @@ components:
             required:
                 - vni
                 - dst
+        EngineHost:
+            type: object
+            description: A KVM host's traffic engine.
+            properties:
+                host:
+                    description: its name
+                    type: string
+                engine:
+                    description: python or fast
+                    type: string
+                arch:
+                    description: its CPU (uname -m)
+                    type: string
+                running:
+                    description: the fast engine reported in the last read
+                    type: boolean
+                fps:
+                    description: the highest rate the fast engine sent there, frames/s
+                    type: number
+                note:
+                    description: why the fast engine does not run there
+                    type: string
+            required:
+                - host
+                - engine
+                - running
+        Engines:
+            type: object
+            description: 'What sends the streams: the KVM hosts'' engine (built in or fast) and the TRex servers whose ports are test ports.'
+            properties:
+                engine:
+                    description: 'the KVM hosts'' engine: python (built in) or fast'
+                    type: string
+                hosts:
+                    description: the lab's hosts with test ports
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EngineHost'
+                trex:
+                    description: the TRex servers
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/Trex'
+            required:
+                - engine
+                - hosts
+                - trex
         Event:
             type: object
             description: A line of the lab's Events log.
@@ -4403,6 +4700,32 @@ components:
                 - name
                 - info
                 - checked
+        HostNIC:
+            type: object
+            description: A network card of a KVM host, and whether it can be a test port (a spare card with no address, not in a bridge).
+            properties:
+                name:
+                    description: enp3s0, …
+                    type: string
+                mac:
+                    description: its MAC address
+                    type: string
+                up:
+                    description: its link is up
+                    type: boolean
+                speed:
+                    description: Mbit/s
+                    type: integer
+                driver:
+                    description: its driver
+                    type: string
+                used:
+                    description: why it cannot be a test port (the host's own network, a bridge's, already one)
+                    type: string
+            required:
+                - name
+                - mac
+                - up
         HostUse:
             type: object
             properties:
@@ -5285,6 +5608,58 @@ components:
                 - latAvg
                 - latMax
                 - errors
+        SessionResult:
+            type: object
+            description: 'A session stream''s TCP sessions: tried, connected, refused, timed out, their setup time and rate.'
+            properties:
+                tried:
+                    description: opened (SYN sent)
+                    type: integer
+                ok:
+                    description: connected (the SYN-ACK came back)
+                    type: integer
+                refused:
+                    description: answered with a reset
+                    type: integer
+                timeout:
+                    description: no answer, or not finished in time
+                    type: integer
+                reset:
+                    description: reset after they connected
+                    type: integer
+                done:
+                    description: 'finished: data both ways, then closed'
+                    type: integer
+                open:
+                    description: open now
+                    type: integer
+                peak:
+                    description: open at once, at most
+                    type: integer
+                setupAvg:
+                    description: setup time (SYN to SYN-ACK), ms
+                    type: number
+                setupP95:
+                    description: ms, 95th percentile
+                    type: number
+                setupMax:
+                    description: ms
+                    type: number
+                cps:
+                    description: connected a second, over the run
+                    type: number
+                bytes:
+                    description: data bytes, both ways
+                    type: integer
+                secs:
+                    description: how long it has run, s
+                    type: number
+            required:
+                - tried
+                - ok
+                - refused
+                - timeout
+                - done
         Stream:
             type: object
             description: Frames from one test port to another, to every other one (broadcast), to an address or to a multicast group.
@@ -5302,7 +5677,7 @@ components:
                     description: a test port; "" = every other one (broadcast)
                     type: string
                 kind:
-                    description: udp, icmp, tcp (SYN), arp, raw, pcap (a capture's frames, replayed)
+                    description: udp, icmp, tcp (SYN), arp, raw, custom, pcap (a capture's frames, replayed), session (real TCP sessions)
                     type: string
                 vlan:
                     description: 802.1Q tag; 0 = untagged
@@ -5326,7 +5701,7 @@ components:
                     description: frame bytes (60-9000; the smallest with sizeMode inc or random)
                     type: integer
                 pps:
-                    description: frames per second (1-100000)
+                    description: frames per second (1-100000; 2000000 with the fast engine, 100000000 between TRex ports)
                     type: integer
                 seconds:
                     description: 'how long it sends (with pps: seconds × pps frames)'
@@ -5430,6 +5805,11 @@ components:
                 expect:
                     description: '"" its frames should arrive; "drop": the switch should drop them; "any": only counted'
                     type: string
+                session:
+                    description: 'session: the TCP sessions it opens (to a test port, which answers them)'
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuSession'
+                        - type: "null"
             required:
                 - id
                 - name
@@ -5541,6 +5921,11 @@ components:
                 gotFrame:
                     description: the first of its frames that arrived where it goes, the same way
                     type: string
+                sessions:
+                    description: 'a session stream: its TCP sessions (sent: tried, received: connected, latency: setup time)'
+                    anyOf:
+                        - $ref: '#/components/schemas/SessionResult'
+                        - type: "null"
             required:
                 - id
                 - tx
@@ -5671,6 +6056,18 @@ components:
                     anyOf:
                         - $ref: '#/components/schemas/EmuBFDState'
                         - type: "null"
+                host:
+                    description: 'a host network port: the KVM host (its session) whose spare network card it is'
+                    type: string
+                nic:
+                    description: 'a host network port: the card''s name on that host (enp3s0, …), cabled to a real device'
+                    type: string
+                cabled:
+                    description: 'a host network port or TRex port: what it is cabled to (for the screens and reports)'
+                    type: string
+                trex:
+                    description: 'a TRex port: its server''s id and the port''s number there (x1a2b3/0)'
+                    type: string
             required:
                 - id
                 - name
@@ -5982,6 +6379,74 @@ components:
                 - streams
                 - results
                 - running
+        Trex:
+            type: object
+            description: 'A TRex server (stateless mode) and what Termwright last found there: its version and ports.'
+            properties:
+                id:
+                    description: its id
+                    type: string
+                name:
+                    description: its name
+                    type: string
+                addr:
+                    description: its address
+                    type: string
+                port:
+                    description: its RPC port (default 4501)
+                    type: integer
+                state:
+                    description: connected, unreachable, or not checked
+                    type: string
+                version:
+                    description: TRex's version
+                    type: string
+                err:
+                    description: why it could not be reached
+                    type: string
+                ports:
+                    description: its ports
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/TrexPort'
+            required:
+                - id
+                - name
+                - addr
+        TrexPort:
+            type: object
+            description: A TRex port; one that is used is a test port.
+            properties:
+                id:
+                    description: its number
+                    type: integer
+                speed:
+                    description: Mbit/s
+                    type: integer
+                link:
+                    description: up
+                    anyOf:
+                        - type: boolean
+                        - type: "null"
+                mac:
+                    description: its MAC address
+                    type: string
+                driver:
+                    description: its DPDK driver
+                    type: string
+                cabled:
+                    description: what it is cabled to
+                    type: string
+                use:
+                    description: it is a test port
+                    type: boolean
+                tester:
+                    description: that test port's name
+                    type: string
+            required:
+                - id
         Usage:
             type: object
             properties:
@@ -6036,7 +6501,7 @@ components:
                     description: a test port; "" = every other one (broadcast)
                     type: string
                 kind:
-                    description: udp, icmp, tcp (SYN), arp, raw, pcap (a capture's frames, replayed)
+                    description: udp, icmp, tcp (SYN), arp, raw, custom, pcap (a capture's frames, replayed), session (real TCP sessions)
                     type: string
                 vlan:
                     description: 802.1Q tag; 0 = untagged
@@ -6060,7 +6525,7 @@ components:
                     description: frame bytes (60-9000; the smallest with sizeMode inc or random)
                     type: integer
                 pps:
-                    description: frames per second (1-100000)
+                    description: frames per second (1-100000; 2000000 with the fast engine, 100000000 between TRex ports)
                     type: integer
                 seconds:
                     description: 'how long it sends (with pps: seconds × pps frames)'
@@ -6164,6 +6629,11 @@ components:
                 expect:
                     description: '"" its frames should arrive; "drop": the switch should drop them; "any": only counted'
                     type: string
+                session:
+                    description: 'session: the TCP sessions it opens (to a test port, which answers them)'
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuSession'
+                        - type: "null"
             required:
                 - from
             additionalProperties: false

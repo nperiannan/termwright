@@ -399,17 +399,247 @@ class Tls:
         return bytes([more]) + part
 
 
+# ---- TCP sessions: a small TCP of its own (handshake, data both ways with go-back-N retransmission, FIN) ----
+MSS = 1400
+
+
+class Conn:
+    """One TCP connection of a test port: the client end of a session stream, or the server end it answers."""
+
+    def __init__(s, tp, st, lip, rip, lport, rport, rmac, x, client):
+        s.tp, s.st, s.lip, s.rip, s.lport, s.rport, s.rmac, s.x, s.client = tp, st, lip, rip, lport, rport, rmac, x, client
+        s.state, s.iss, s.t0, s.t_est, s.last_tx, s.rto, s.tries = "syn-sent" if client else "listen", random.randrange(1 << 32), 0, 0, 0, 0.2, 0
+        s.snd_una = s.snd_nxt = s.iss
+        s.rcv_nxt, s.swnd, s.out, s.out_n, s.fin_out, s.fin_in, s.got, s.want, s.hold_until, s.why = 0, 65535, b"", 0, False, False, 0, 0, 0, ""
+        se = x.get("session") or {}
+        s.vlan, s.prio, s.tos = x.get("vlan", 0), x.get("prio", 0), x.get("dscp", 0) << 2
+        if client:
+            if se.get("http"):
+                s.out = ("GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Termwright\r\nConnection: close\r\n\r\n" % ip_s(rip)).encode()
+                s.want = -1  # until the server closes (or Content-Length)
+            else:
+                s.out, s.want = b"x" * int(se.get("req", 0)), int(se.get("resp", 0))
+            s.out_n = len(s.out)
+        tp.tcb[(rip, rport, lport)] = s
+
+    def seg(s, flags, seq, data=b"", opts=b""):
+        hl = 20 + len(opts)
+        p = struct.pack("!HHIIBBHHH", s.lport, s.rport, seq & 0xFFFFFFFF, s.rcv_nxt & 0xFFFFFFFF if flags & 0x10 else 0, hl << 2, flags, 65535, 0, 0) + opts + data
+        p = p[:16] + struct.pack("!H", l4sum(s.lip, s.rip, 6, p)) + p[18:]
+        s.tp.send(l2(s.rmac, s.tp.mac, s.vlan, s.prio, 0x0800) + ipv4(s.lip, s.rip, 6, p, s.tos))
+
+    def start(s, now):
+        s.t0, s.last_tx = now, now
+        s.seg(0x02, s.iss, opts=b"\x02\x04" + struct.pack("!H", MSS))
+        s.snd_nxt = s.iss + 1
+
+    def push(s, now):  # data (and FIN) in the window, from snd_nxt on
+        sent = 0
+        while s.out and s.snd_nxt - s.snd_una < min(s.swnd, 65535) and sent < 32:
+            off = s.snd_nxt - s.iss - 1
+            if off >= s.out_n:
+                break
+            d = s.out[off:off + MSS]
+            s.seg(0x18, s.snd_nxt, d)
+            s.snd_nxt += len(d)
+            s.last_tx, sent = now, sent + 1
+        if s.fin_out and s.snd_nxt == s.iss + 1 + s.out_n:
+            s.seg(0x11, s.snd_nxt)
+            s.snd_nxt += 1
+            s.last_tx = now
+
+    def got_seg(s, flags, seq, ack, win, data, now):
+        if flags & 0x04:  # RST
+            if s.state == "syn-sent":
+                s.end("refused", now)
+            elif s.state not in ("done",):
+                s.end("reset", now, "reset by the far end")
+            return
+        if s.state == "syn-sent":
+            if flags & 0x12 == 0x12 and ack == s.iss + 1:
+                s.rcv_nxt, s.snd_una, s.swnd, s.state, s.t_est, s.tries = seq + 1, ack, win, "est", now, 0
+                s.st.setup(now - s.t0) if s.st else None
+                s.seg(0x10, s.snd_nxt)
+                s.push(now)
+            return
+        if flags & 0x10 and s.snd_una < ack <= s.snd_nxt:  # new data (or our FIN) acknowledged
+            s.snd_una, s.tries, s.rto = ack, 0, max(0.2, s.rto / 2)
+        if flags & 0x10:
+            s.swnd = win
+        if data or flags & 0x01:
+            if seq == s.rcv_nxt:
+                s.rcv_nxt += len(data)
+                s.got += len(data)
+                if s.st:
+                    s.st.sbytes += len(data)
+                if flags & 0x01:
+                    s.rcv_nxt += 1
+                    s.fin_in = True
+            s.seg(0x10, s.snd_nxt)  # ACK (again, also for what came out of order)
+        if not s.client:
+            s.serve(now)
+        else:
+            s.client_step(now)
+        s.push(now)
+
+    def serve(s, now):  # the server end: the answer once the request is in; FIN when the client's FIN came
+        se = s.x.get("session") or {}
+        if not s.out and (s.got >= int(se.get("req", 0)) or se.get("http")) and (not se.get("http") or s.got > 0):
+            n = int(se.get("resp", 0))
+            body = b"x" * n
+            s.out = (b"HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n" % n + body) if se.get("http") else body
+            s.out_n = len(s.out)
+            if se.get("http"):
+                s.fin_out = True
+        if s.fin_in and not s.fin_out:
+            s.fin_out = True
+        if s.fin_in and s.fin_out and s.snd_una == s.snd_nxt and s.snd_nxt == s.iss + 2 + s.out_n:
+            s.state = "done"
+            s.tp.tcb.pop((s.rip, s.rport, s.lport), None)
+
+    def client_step(s, now):
+        all_in = s.fin_in if s.want < 0 else s.got >= s.want
+        if s.state == "est" and s.snd_una == s.iss + 1 + s.out_n and all_in:
+            if not s.hold_until:
+                s.hold_until = now + float((s.x.get("session") or {}).get("hold", 0) or 0)
+            if now >= s.hold_until:
+                s.fin_out, s.state = True, "closing"
+        if s.state == "closing" and s.snd_una == s.snd_nxt and s.fin_out and (s.fin_in or now - s.last_tx > 1):
+            s.end("done", now)
+
+    def tick(s, now):
+        if s.state in ("done", "refused", "timeout", "reset"):
+            return
+        if s.client and s.state == "est":
+            s.client_step(now)
+            s.push(now)
+        if now - s.last_tx > s.rto and (s.state == "syn-sent" or s.snd_una < s.snd_nxt):
+            s.tries += 1
+            if s.tries > (3 if s.state == "syn-sent" else 8):
+                s.end("timeout", now, "no answer")
+                return
+            s.rto, s.last_tx = min(3.0, s.rto * 2 if s.state != "syn-sent" else 1.0 * s.tries), now
+            if s.state == "syn-sent":
+                s.seg(0x02, s.iss, opts=b"\x02\x04" + struct.pack("!H", MSS))
+            else:
+                s.snd_nxt = s.snd_una  # go back N
+                s.push(now)
+
+    def end(s, how, now, why=""):
+        s.state, s.why = how if how in ("done", "refused", "timeout") else "reset", why
+        s.tp.tcb.pop((s.rip, s.rport, s.lport), None)
+        if s.st:
+            s.st.ended(s, how)
+
+
+def tcp_got(tp, b, f, vlan, now):  # a TCP segment for a test port's own address: a session's, a new one, or a reset
+    ihl = (b[0] & 15) * 4
+    t = b[ihl:]
+    if len(t) < 20:
+        return
+    sport, dport, seq, ack, off, flags, win = struct.unpack("!HHIIBBH", t[:16])
+    data = t[(off >> 4) * 4:struct.unpack("!H", b[2:4])[0] - ihl]
+    rip = b[12:16]
+    c = tp.tcb.get((rip, sport, dport))
+    now = now or time.time()
+    if c is not None:
+        c.got_seg(flags, seq, ack, win, data, now)
+        return
+    x = tp.listen_ports.get(dport)
+    if x is not None and flags & 0x12 == 0x02:  # a SYN for a session stream it answers
+        c = Conn(tp, None, tp.ip, rip, dport, sport, f[6:12], x, False)
+        c.vlan = vlan
+        c.rcv_nxt, c.state, c.last_tx = seq + 1, "est", now
+        c.seg(0x12, c.iss, opts=b"\x02\x04" + struct.pack("!H", MSS))
+        c.snd_nxt = c.snd_una = c.iss + 1
+        return
+    if not flags & 0x04:  # nobody there: reset, as a closed port does
+        p = struct.pack("!HHIIBBHHH", dport, sport, ack if flags & 0x10 else 0, (seq + len(data) + (1 if flags & 0x03 else 0)) & 0xFFFFFFFF, 5 << 4, 0x14, 0, 0, 0)
+        p = p[:16] + struct.pack("!H", l4sum(tp.ip, rip, 6, p)) + p[18:]
+        tp.send(l2(f[6:12], tp.mac, vlan, 0, 0x0800) + ipv4(tp.ip, rip, 6, p))
+
+
+class Sessions:
+    """A session stream's client side: opens connections at its rate, at most so many at once, and counts them."""
+
+    def __init__(s, stream):
+        s.s, s.x = stream, stream.x.get("session") or {}
+        s.count, s.conc, s.rate = max(1, int(s.x.get("count", 1000))), max(1, int(s.x.get("concurrent", 100))), max(1, float(s.x.get("rate", 100)))
+        s.opened, s.live, s.start, s.port = 0, [], None, 0
+        s.c = {"tried": 0, "ok": 0, "refused": 0, "timeout": 0, "done": 0, "reset": 0, "open": 0, "peak": 0, "bytes": 0}
+        s.setups, s.sbytes = [], 0
+
+    def setup(s, dt):
+        s.c["ok"] += 1
+        if len(s.setups) < 50000:
+            s.setups.append(dt * 1000)
+
+    def ended(s, conn, how):
+        s.c[how if how in s.c else "reset"] += 1
+        if conn in s.live:
+            s.live.remove(conn)
+
+    def tick(s, now, dst):
+        tp, x = s.s.tp, s.s.x
+        if s.start is None:
+            s.start = now
+        limit = x.get("seconds") or 0
+        if limit and now - s.start > limit:  # out of time: what is still open counts as timed out
+            for c in list(s.live):
+                c.end("timeout", now, "still open at the end")
+            s.opened = s.count
+        due = min(s.count, int((now - s.start) * s.rate) + 1)
+        rip = ip_b(x.get("dstIp") or "")
+        if rip == b"\0\0\0\0" and x.get("to") in testers:
+            rip = testers[x["to"]].ip
+        while s.opened < due and len(s.live) < s.conc:
+            s.port = (s.port + 1) % 16384
+            c = Conn(tp, s, tp.ip, rip, 49152 + s.port, int(s.x.get("dport", 80)), dst, x, True)
+            s.live.append(c)
+            s.opened += 1
+            s.c["tried"] += 1
+            c.start(now)
+        for c in list(s.live):
+            c.tick(now)
+        s.c["open"] = len(s.live)
+        s.c["peak"] = max(s.c["peak"], len(s.live))
+        s.c["bytes"] = s.sbytes
+        return s.opened >= s.count and not s.live
+
+    def view(s):
+        v = dict(s.c)
+        if s.setups:
+            q = sorted(s.setups)
+            v.update(setupAvg=round(sum(q) / len(q), 3), setupP95=round(q[min(len(q) - 1, int(len(q) * 0.95))], 3), setupMax=round(q[-1], 3))
+        if s.start:
+            v["secs"] = round(time.time() - s.start, 2)
+        return v
+
+
 class Tester:
     def __init__(s, t):
-        s.id, s.listen = t["id"], t["listen"]
+        s.id, s.listen, s.nic = t["id"], t.get("listen", 0), t.get("nic", "")
+        s.idb = s.id.encode()
         s.xid = random.randrange(1 << 32)
         s.dhcp_state, s.dhcp_at, s.lease, s.server, s.offer = "", 0, None, None, None
         s.rs_at, s.lldp_at, s.garp_at = 0, 0, 0
-        s.to = ("127.0.0.1", t["send"])
-        s.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
-        s.sock.bind(("127.0.0.1", t["listen"]))
-        s.sock.setblocking(False)
+        s.to, s.raw, s.sock = ("127.0.0.1", t.get("send", 0)), False, None
+        if FAST:  # the fast engine has the port: frames go through it
+            pass
+        elif s.nic:  # a network port of the host, cabled to a real device: raw frames, the port promiscuous
+            s.raw = True
+            s.sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3))
+            s.sock.bind((s.nic, 0))
+            s.sock.setsockopt(263, 1, struct.pack("iHH8s", socket.if_nametoindex(s.nic), 1, 0, b""))  # PACKET_ADD_MEMBERSHIP: promiscuous
+            s.sock.setsockopt(263, 8, 1)  # PACKET_AUXDATA: the VLAN tag the network card took off
+            s.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 8 << 20)
+            s.sock.setblocking(False)
+        else:
+            s.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
+            s.sock.bind(("127.0.0.1", s.listen))
+            s.sock.setblocking(False)
+        s.tcb, s.listen_ports = {}, {}  # TCP: its connections, the session streams it answers (port -> stream)
         s.arp = {}  # ip bytes -> mac bytes
         s.last_arp, s.last_join = 0, 0
         s.set(t)
@@ -449,14 +679,36 @@ class Tester:
     def send(s, frame, runt=False):
         if len(frame) < 60 and not runt:
             frame += b"\0" * (60 - len(frame))
+        if FAST:
+            try:
+                relay.sendto(b"F" + bytes([len(s.idb)]) + s.idb + frame, fast_addr)
+            except OSError:
+                pass
+            return
         try:
-            s.sock.sendto(frame, s.to)
+            if s.raw:
+                s.sock.send(frame)
+            else:
+                s.sock.sendto(frame, s.to)
         except OSError:
             port(s.id)[6] += 1
             return
         c = port(s.id)
         c[0] += 1
         c[2] += len(frame) + 4
+
+    def rx(s):  # a frame from the port (None: one this port sent, seen on a raw socket)
+        if not s.raw:
+            return s.sock.recv(65536)
+        data, anc, _, addr = s.sock.recvmsg(65536, socket.CMSG_SPACE(32))
+        if addr[2] == 4:  # PACKET_OUTGOING
+            return None
+        for lvl, typ, cd in anc:
+            if lvl == 263 and typ == 8 and len(cd) >= 20:
+                st, _, _, _, _, tci, tpid = struct.unpack("IIIHHHH", cd[:20])
+                if st & 0x10:  # TP_STATUS_VLAN_VALID: put the tag back
+                    data = data[:12] + struct.pack("!HH", tpid if st & 0x40 and tpid else 0x8100, tci) + data[12:]
+        return data
 
     def ask(s, ip):  # ARP request
         s.send(l2(BC, s.mac, s.vlan, 0, 0x0806) + arp(1, s.mac, s.ip, b"\0" * 6, ip))
@@ -1101,6 +1353,9 @@ class Stream:
         s.pkts, s.offs, s.timing, s.dur = [], [], False, 0
         s.tmpl = b""
         s.enc, s.odst = x.get("encap") or {}, None  # headers added around its frames; the tunnel's next hop
+        s.handed, s.sess = False, None
+        if x.get("kind") == "session":
+            s.sess, s.count = Sessions(s), 1
         s.over = enc_over(s.enc)
         if x.get("kind") == "custom":
             try:
@@ -1238,6 +1493,25 @@ class Stream:
             f = s.encap(f)
         return f
 
+    def handoff(s, now):  # its frames as templates for the fast engine (a cycle of them when fields change), then go
+        x = s.x
+        varies = s.mods or s.udfs or x.get("sizeMode") or x.get("fuzz")
+        n = min(s.count, 1024 if varies else 1)
+        path = os.path.join(d, "fast-%d-%d.bin" % (s.run, s.idx))
+        with open(path + ".tmp", "wb") as fh:
+            for k in range(n):
+                s.seq = k
+                f = s.frame(now)
+                i = f.rfind(MAGIC)
+                sp = csum_spots(f, i) if i >= 0 else []
+                fh.write(struct.pack("!HHB", len(f), i if i >= 0 else 0xFFFF, len(sp)) + b"".join(struct.pack("!HH", a, b) for a, b in sp) + f)
+        os.replace(path + ".tmp", path)
+        if s.flab:
+            flab[x["id"]] = s.flab
+        s.ftx, s.flab = {}, {}  # (the fast engine counts what it sends)
+        relay.sendto(b"S" + struct.pack("!HIIIB", s.idx, s.count, s.pps, s.burst, 1 if x.get("rtt") else 0) + path.encode(), fast_addr)
+        s.seq, s.handed = s.count, True
+
     def encap(s, f):  # IPv6 extension headers, MPLS labels, a GRE or VXLAN tunnel and an outer VLAN tag, in that order
         e, tp = s.enc, s.tp
         if e.get("v6ext"):
@@ -1267,6 +1541,52 @@ class Stream:
             t = e["outer"]
             f = f[:12] + struct.pack("!HH", t.get("tpid") or 0x88A8, (t.get("prio", 0) & 7) << 13 | (t.get("vlan", 1) & 0xFFF)) + f[12:]
         return f
+
+
+def csum_spots(f, sig):  # the checksums that cover the signature at sig: (where the checksum is, where its sum starts)
+    out = []
+
+    def eth(o):
+        o += 12
+        while f[o:o + 2] in (b"\x81\x00", b"\x88\xa8", b"\x91\x00") and len(f) >= o + 6:
+            o += 4
+        et, o = f[o:o + 2], o + 2
+        if et == b"\x88\x47":
+            while o + 4 <= len(f):
+                o += 4
+                if f[o - 2] & 1:
+                    break
+            et = b"\x08\x00" if o < len(f) and f[o] >> 4 == 4 else b"\x86\xdd"
+        ip(o, et)
+
+    def ip(o, et):
+        if et == b"\x08\x00" and len(f) >= o + 20:
+            if struct.unpack("!H", f[o + 6:o + 8])[0] & 0x1FFF:  # a later fragment: no L4 header
+                return
+            proto, l4 = f[o + 9], o + (f[o] & 15) * 4
+        elif et == b"\x86\xdd" and len(f) >= o + 40:
+            proto, l4 = f[o + 6], o + 40
+            while proto in (0, 60, 43, 44) and l4 + 8 <= len(f):
+                proto, l4 = f[l4], l4 + (8 if proto == 44 else 8 + f[l4 + 1] * 8)
+        else:
+            return
+        if l4 > sig:
+            return
+        if proto == 17 and len(f) >= l4 + 8:
+            if f[l4 + 6:l4 + 8] != b"\0\0":
+                out.append((l4 + 6, l4))
+            if struct.unpack("!H", f[l4 + 2:l4 + 4])[0] == 4789 and l4 + 30 <= sig:
+                eth(l4 + 16)
+        elif proto == 6 and len(f) >= l4 + 20:
+            out.append((l4 + 16, l4))
+        elif proto in (1, 58) and len(f) >= l4 + 4:
+            out.append((l4 + 2, l4))
+        elif proto == 47 and len(f) >= l4 + 4:
+            fl = struct.unpack("!H", f[l4:l4 + 2])[0]
+            ip(l4 + 4 + (4 if fl & 0x8000 else 0) + (4 if fl & 0x2000 else 0), f[l4 + 2:l4 + 4])
+
+    eth(0)
+    return out
 
 
 def enc_over(e):  # the bytes the added headers take
@@ -1312,6 +1632,8 @@ testers, streams, run = {}, [], 0
 tx, rx, other, lat, err, ooo, dup, jit, seen = {}, {}, {}, {}, {}, {}, {}, {}, {}
 hist, frx, qos = {}, {}, {}  # latency histogram, per-flow receive counters, what the frames arrived with
 ftx, flab = {}, {}  # per flow: frames sent, its field values
+sessv = {}  # per session stream: its connections' counts
+FAST, relay, fast_addr = False, None, None  # the fast engine: it has the ports, this script talks to it on relay
 fsent, fgot = {}, {}  # per stream: its first frame sent, and the first that arrived where it goes (hex, for the report)
 ports = {}  # per test port: its counters (see port)
 last_st = 0
@@ -1329,18 +1651,53 @@ def reset():
     flab.clear()
     fsent.clear()
     fgot.clear()
+    sessv.clear()
+
+
+def fast_up():  # the fast engine's address (it writes fast.port when it listens); this script's own relay socket
+    global relay, fast_addr
+    for _ in range(50):
+        try:
+            port = int(open(os.path.join(d, "fast.port")).read().strip())
+            break
+        except (OSError, ValueError):
+            time.sleep(0.1)
+    else:
+        return False
+    if relay is None:
+        relay = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        relay.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 8 << 20)
+        relay.bind(("127.0.0.1", 0))
+        relay.setblocking(False)
+    fast_addr = ("127.0.0.1", port)
+    relay.sendto(b"H", fast_addr)
+    return True
 
 
 def load():
-    global cfg, testers, streams, run
+    global cfg, testers, streams, run, FAST
     try:
         c = json.load(open(cfg_path))
     except Exception:
         return
+    fast = bool(c.get("fast"))
+    if fast and (not FAST or fast_addr is None):
+        if not fast_up():
+            fast = False
+            err["engine"] = "the fast engine did not start on this host (see fast.log): the built-in engine sends"
+    if fast != FAST:  # the ports change hands
+        for t in testers.values():
+            if t.sock is not None:
+                t.sock.close()
+        testers.clear()
+        FAST = fast
+    if FAST:
+        relay.sendto(b"H", fast_addr)
     want = {t["id"]: t for t in c.get("testers", [])}
     for tid in list(testers):
-        if tid not in want or want[tid]["listen"] != testers[tid].listen:
-            testers[tid].sock.close()
+        if tid not in want or (want[tid].get("listen", 0), want[tid].get("nic", "")) != (testers[tid].listen, testers[tid].nic):
+            if testers[tid].sock is not None:
+                testers[tid].sock.close()
             del testers[tid]
     for tid, t in want.items():
         if tid not in testers:
@@ -1351,6 +1708,11 @@ def load():
         else:
             testers[tid].set(t)
     cfg = c
+    for t in testers.values():  # the session streams each test port answers
+        t.listen_ports = {}
+    for x in c.get("streams", []):
+        if x.get("kind") == "session" and x.get("to") in testers:
+            testers[x["to"]].listen_ports[int((x.get("session") or {}).get("dport", 80))] = x
     lagof.clear()
     lagof.update({t["id"]: t.get("lag", "") for t in c.get("testers", []) if t.get("lag")})
     phash.clear()
@@ -1607,6 +1969,9 @@ def handle(tp, f):
                 mk = "%d/%d/%d" % (vlan, prio, dscp)
                 q[mk] = q.get(mk, 0) + 1
             return
+    if et == 0x0800 and len(b) >= 40 and b[9] == 6 and b[16:20] == tp.ip and tp.ip != b"\0\0\0\0":  # TCP for its address
+        tcp_got(tp, b, f, vlan, time.time())
+        return
     if et == 0x0806 and len(b) >= 28:
         op, smac, sip, tip = struct.unpack("!6xH6s4s6x4s", b[:28])
         if sip != b"\0\0\0\0":
@@ -1707,19 +2072,32 @@ while True:
         if t.groups and now - t.last_join > 10:
             t.last_join = now
             t.join()
-    socks = [t.sock for t in testers.values()]
+    socks = [t.sock for t in testers.values() if t.sock] + ([relay] if FAST else [])
     busy = any(s.tp is not None and s.seq < s.count for s in streams)
     r, _, _ = select.select(socks, [], [], 0.001 if busy else 0.05) if socks else ([], [], [])
+    if FAST and relay in r:  # frames the fast engine passes on: everything but the streams' own
+        for _ in range(4000):
+            try:
+                m = relay.recv(65536)
+            except (BlockingIOError, OSError):
+                break
+            if len(m) > 2 and m[0:1] == b"R":
+                t = testers.get(m[2:2 + m[1]].decode("utf-8", "replace"))
+                if t is not None and len(m) >= 2 + m[1] + 14:
+                    try:
+                        handle(t, m[2 + m[1]:])
+                    except Exception:
+                        pass
     for t in testers.values():
-        if t.sock in r:
+        if t.sock is not None and t.sock in r:
             for _ in range(4000):
                 try:
-                    f = t.sock.recv(65536)
+                    f = t.rx()
                 except BlockingIOError:
                     break
                 except OSError:
                     break
-                if len(f) >= 14:
+                if f is not None and len(f) >= 14:
                     c = port(t.id)
                     c[1] += 1
                     c[3] += len(f) + 4
@@ -1749,6 +2127,19 @@ while True:
             s.dst = mac
         elif s.dst is None and x.get("toMac"):
             s.dst = mac_b(x["toMac"])
+        elif s.dst is None and s.sess is not None:  # a session to an address on the test port's own network: ARP for it
+            nh = ip_b(x.get("dstIp") or "")
+            mac = s.tp.arp.get(nh)
+            if not mac:
+                if now - s.tp.last_arp > 1:
+                    s.tp.last_arp = now
+                    s.tp.ask(nh)
+                s.gw_wait = s.gw_wait or now
+                if now - s.gw_wait > 6:
+                    err[x["id"]] = "no ARP reply from " + x.get("dstIp", "")
+                    s.seq = s.count
+                continue
+            s.dst = mac
         if s.odst is None and x.get("tunArp"):  # a tunnel: its frames go to the tunnel end (or the gateway to it)
             nh = ip_b(x["tunArp"])
             mac = s.tp.arp.get(nh)
@@ -1762,6 +2153,13 @@ while True:
                     s.seq = s.count
                 continue
             s.odst = mac
+        if s.sess is not None:  # TCP sessions: its connections
+            if s.sess.tick(now, s.dst):
+                s.seq = s.count
+            continue
+        if FAST and not s.handed and x.get("kind") != "pcap":  # the fast engine sends it from here on
+            s.handoff(now)
+            continue
         if s.start is None:
             s.start = now
         if s.timing:  # the capture's own gaps, over and over
@@ -1785,7 +2183,10 @@ while True:
             ftx[x["id"]], flab[x["id"]] = s.ftx, s.flab
     if now - last_st > 0.5:
         last_st = now
-        st = {"run": run, "at": now, "tx": tx, "rx": rx, "other": other, "lat": lat, "err": err, "ooo": ooo, "dup": dup, "jit": jit,
+        for s in streams:
+            if s.sess is not None:
+                sessv[s.x["id"]] = s.sess.view()
+        st = {"run": run, "at": now, "sess": sessv, "fast": FAST, "tx": tx, "rx": rx, "other": other, "lat": lat, "err": err, "ooo": ooo, "dup": dup, "jit": jit,
               "busy": {s.x["id"]: s.seq < s.count for s in streams}, "testers": sorted(testers),
               "hist": hist, "frx": frx, "qos": qos, "ftx": ftx, "flab": flab, "fsent": fsent, "fgot": fgot,
               "ports": {k: {"tx": c[0], "rx": c[1], "txb": c[2], "rxb": c[3], "srx": c[4], "lat": c[5], "err": c[6]} for k, c in ports.items()},

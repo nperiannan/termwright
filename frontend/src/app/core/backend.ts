@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import {
+import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
   AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange } from './models';
 
@@ -188,6 +188,13 @@ export class Backend {
   emuTrafficStart(ids: string[]) { return this.call<EmuTrafficView>('EmuTrafficStart', ids); }
   emuTrafficStop() { return this.call<EmuTrafficView>('EmuTrafficStop'); }
   emuTrafficReport(path: string) { return this.call<void>('EmuTrafficReport', path); }
+  emuHostNICs(host: string) { return this.call<EmuHostNIC[]>('EmuHostNICs', host); }
+  emuTesterAddNIC(host: string, nic: string, cabled: string, ip: string, gw: string, vlan: number) { return this.call<EmuTrafficView>('EmuTesterAddNIC', host, nic, cabled, ip, gw, vlan); }
+  emuEngines() { return this.call<EmuEngines>('EmuEngines'); }
+  emuEngineSet(engine: string) { return this.call<EmuEngines>('EmuEngineSet', engine); }
+  emuTrexSave(t: EmuTrex) { return this.call<EmuEngines>('EmuTrexSave', t); }
+  emuTrexRemove(id: string) { return this.call<EmuEngines>('EmuTrexRemove', id); }
+  emuTrexPort(id: string, port: number, use: boolean, cabled: string) { return this.call<EmuEngines>('EmuTrexPort', id, port, use, cabled); }
   emuCaptures() { return this.call<EmuCapture[]>('EmuCaptures'); }
   emuCapturePackets(key: string, last: number) { return this.call<EmuPacket[]>('EmuCapturePackets', key, last); }
   emuCapturePacket(key: string, no: number) { return this.call<EmuPacketDetail>('EmuCapturePacket', key, no); }

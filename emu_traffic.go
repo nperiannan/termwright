@@ -26,36 +26,58 @@ import (
 
 // EmuStreamResult is a stream's counters (all hosts added up) and its verdict.
 type EmuStreamResult struct {
-	ID       string          `json:"id"`                   // the stream
-	TX       int             `json:"tx"`                   // frames sent
-	RX       int             `json:"rx"`                   // frames received at the test ports it is for (a duplicate counts once)
-	Expected int             `json:"expected"`             // frames that should arrive (to every other test port for a broadcast)
-	Other    int             `json:"other"`                // arrived at a test port it was not for (flooded)
-	Loss     float64         `json:"loss"`                 // %
-	LatAvg   float64         `json:"latAvg"`               // ms (-1 = not measured: the ends on different hosts)
-	LatMax   float64         `json:"latMax"`               // ms
-	LatMin   float64         `json:"latMin,omitempty"`     // ms
-	Jitter   float64         `json:"jitter,omitempty"`     // ms, the mean change of latency between frames
-	OOO      int             `json:"ooo,omitempty"`        // frames that arrived after a later one
-	Dup      int             `json:"dup,omitempty"`        // frames that arrived twice (counted once)
-	TxRate   float64         `json:"txRate"`               // frames per second, now
-	RxRate   float64         `json:"rxRate"`               // frames per second, now
-	Running  bool            `json:"running"`              // it is still sending
-	Result   string          `json:"result"`               // "", pass, fail
-	Why      string          `json:"why,omitempty"`        // why it failed
-	P50      float64         `json:"p50,omitempty"`        // latency percentiles, ms (from a histogram of quarter octaves: within 10 %)
-	P95      float64         `json:"p95,omitempty"`        // ms: 95 % of the frames were faster
-	P99      float64         `json:"p99,omitempty"`        // ms: 99 % of the frames were faster
-	Hist     []EmuLatBin     `json:"hist,omitempty"`       // the latency histogram, an octave a bar
-	Flows    []EmuFlowResult `json:"flows,omitempty"`      // a stream with changing fields: its flows, the most lossy first (at most 32)
-	FlowsN   int             `json:"flowsN,omitempty"`     // how many flows it has sent
-	FlowsBad int             `json:"flowsLossy,omitempty"` // how many of them lost frames
-	Marks    []EmuMark       `json:"marks,omitempty"`      // the VLAN, priority and DSCP its frames arrived with
-	TxMbps   float64         `json:"txMbps,omitempty"`     // Mbit/s on the wire, now
-	RxMbps   float64         `json:"rxMbps,omitempty"`     // Mbit/s on the wire received, now
-	Sent     string          `json:"sentFrame,omitempty"`  // its first frame sent: its length, then up to 160 bytes in hex ("508:0004…"; no FCS)
-	Got      string          `json:"gotFrame,omitempty"`   // the first of its frames that arrived where it goes, the same way
+	ID       string            `json:"id"`                   // the stream
+	TX       int               `json:"tx"`                   // frames sent
+	RX       int               `json:"rx"`                   // frames received at the test ports it is for (a duplicate counts once)
+	Expected int               `json:"expected"`             // frames that should arrive (to every other test port for a broadcast)
+	Other    int               `json:"other"`                // arrived at a test port it was not for (flooded)
+	Loss     float64           `json:"loss"`                 // %
+	LatAvg   float64           `json:"latAvg"`               // ms (-1 = not measured: the ends on different hosts)
+	LatMax   float64           `json:"latMax"`               // ms
+	LatMin   float64           `json:"latMin,omitempty"`     // ms
+	Jitter   float64           `json:"jitter,omitempty"`     // ms, the mean change of latency between frames
+	OOO      int               `json:"ooo,omitempty"`        // frames that arrived after a later one
+	Dup      int               `json:"dup,omitempty"`        // frames that arrived twice (counted once)
+	TxRate   float64           `json:"txRate"`               // frames per second, now
+	RxRate   float64           `json:"rxRate"`               // frames per second, now
+	Running  bool              `json:"running"`              // it is still sending
+	Result   string            `json:"result"`               // "", pass, fail
+	Why      string            `json:"why,omitempty"`        // why it failed
+	P50      float64           `json:"p50,omitempty"`        // latency percentiles, ms (from a histogram of quarter octaves: within 10 %)
+	P95      float64           `json:"p95,omitempty"`        // ms: 95 % of the frames were faster
+	P99      float64           `json:"p99,omitempty"`        // ms: 99 % of the frames were faster
+	Hist     []EmuLatBin       `json:"hist,omitempty"`       // the latency histogram, an octave a bar
+	Flows    []EmuFlowResult   `json:"flows,omitempty"`      // a stream with changing fields: its flows, the most lossy first (at most 32)
+	FlowsN   int               `json:"flowsN,omitempty"`     // how many flows it has sent
+	FlowsBad int               `json:"flowsLossy,omitempty"` // how many of them lost frames
+	Marks    []EmuMark         `json:"marks,omitempty"`      // the VLAN, priority and DSCP its frames arrived with
+	TxMbps   float64           `json:"txMbps,omitempty"`     // Mbit/s on the wire, now
+	RxMbps   float64           `json:"rxMbps,omitempty"`     // Mbit/s on the wire received, now
+	Sent     string            `json:"sentFrame,omitempty"`  // its first frame sent: its length, then up to 160 bytes in hex ("508:0004…"; no FCS)
+	Got      string            `json:"gotFrame,omitempty"`   // the first of its frames that arrived where it goes, the same way
+	Sessions *EmuSessionResult `json:"sessions,omitempty"`   // a session stream: its TCP sessions (sent: tried, received: connected, latency: setup time)
 }
+
+// EmuSessionResult is a session stream's TCP sessions.
+type EmuSessionResult struct {
+	Tried    int     `json:"tried"`              // opened (SYN sent)
+	OK       int     `json:"ok"`                 // connected (the SYN-ACK came back)
+	Refused  int     `json:"refused"`            // answered with a reset
+	Timeout  int     `json:"timeout"`            // no answer, or not finished in time
+	Reset    int     `json:"reset,omitempty"`    // reset after they connected
+	Done     int     `json:"done"`               // finished: data both ways, then closed
+	Open     int     `json:"open,omitempty"`     // open now
+	Peak     int     `json:"peak,omitempty"`     // open at once, at most
+	SetupAvg float64 `json:"setupAvg,omitempty"` // setup time (SYN to SYN-ACK), ms
+	SetupP95 float64 `json:"setupP95,omitempty"` // ms, 95th percentile
+	SetupMax float64 `json:"setupMax,omitempty"` // ms
+	CPS      float64 `json:"cps,omitempty"`      // connected a second, over the run
+	Bytes    int64   `json:"bytes,omitempty"`    // data bytes, both ways
+	Secs     float64 `json:"secs,omitempty"`     // how long it has run, s
+}
+
+// emuSessCount is a session stream's sessions as traffic.py writes them.
+type emuSessCount = EmuSessionResult
 
 // EmuPortResult is a test port's statistics over the run: every frame it sent and got (the protocols' too), its
 // streams' frames that were for it, their loss and latency, and its rates now.
@@ -120,6 +142,11 @@ var emuTraf struct {
 	stp     map[string]*emu.STPState    // test port → what it hears by spanning tree
 	vrrp    map[string]*emu.VRRPState   // test port → what it hears by VRRP
 	bfd     map[string]*emu.BFDState    // test port → its BFD session
+	engNote map[string]string           // host → why the fast engine does not run there ("" = it does)
+	engFPS  map[string]float64          // host → the highest rate the fast engine sent there (frames/s)
+	engOn   map[string]bool             // host → its fast engine reported in the last read
+	engArch map[string]string           // host → its CPU (uname -m)
+	trex    map[string]*emuTrexRun      // TRex server → its connection and the run's streams there
 	// per switch port of a test port (vm:port): where its QEMU really sends, read from its monitor once per
 	// switch start (0 = where a port without a cable sends; -1 = nowhere the generator can listen)
 	sock map[string]int
@@ -146,7 +173,8 @@ func (a *App) emuTrafficPush() error {
 	type job struct{ host, script string }
 	var jobs []job
 	var pcaps [][3]string // host, lab folder, capture
-	for _, h := range l.Hosts(emuLab.f.Host) {
+	var fast [][2]string  // host, lab folder: the fast engine goes there
+	for _, h := range a.emuTrafHosts(l) {
 		lh := a.emuFor(h)
 		lh.Testers = slices.Clone(lh.Testers)
 		for i, t := range lh.Testers {
@@ -160,12 +188,16 @@ func (a *App) emuTrafficPush() error {
 				lh.Testers[i].Listen = p
 			}
 		}
-		cfg, n := lh.TrafficConfig(func(v emu.VM) bool { return emuHostOf(v) == h }, emuTraf.run, emuTraf.on)
+		cfg, n := lh.TrafficConfig(func(v emu.VM) bool { return emuHostOf(v) == h }, h, emuTraf.run, emuTraf.on)
 		if n == 0 && !emuLab.trafHosts[h] {
 			continue
 		}
 		emuLab.trafHosts[h] = n > 0
-		jobs = append(jobs, job{h, lh.TrafficScript(cfg)})
+		nic := slices.ContainsFunc(l.Testers, func(t emu.Tester) bool { return t.NIC != "" && t.Host == h })
+		jobs = append(jobs, job{h, lh.TrafficScript(cfg, nic)})
+		if l.Engine == "fast" && n > 0 {
+			fast = append(fast, [2]string{h, lh.VMDir()})
+		}
 		for _, s := range l.Streams {
 			if s.Kind == "pcap" && s.PcapID != "" && n > 0 {
 				pcaps = append(pcaps, [3]string{h, lh.VMDir(), s.PcapID}) // where tw-traffic.py runs
@@ -174,6 +206,16 @@ func (a *App) emuTrafficPush() error {
 	}
 	emuLab.mu.Unlock()
 	var errs []string
+	for _, f := range fast { // a host it cannot run on sends with the built-in engine (Engines… says why)
+		note := ""
+		if err := a.emuFastUpload(f[0], f[1]); err != nil {
+			note = err.Error()
+		}
+		emuLab.mu.Lock()
+		emuEngInit()
+		emuTraf.engNote[f[0]] = note
+		emuLab.mu.Unlock()
+	}
 	for _, p := range pcaps { // the captures the streams replay, on each host with test ports
 		if err := a.emuPcapUpload(p[0], p[1], p[2]); err != nil {
 			errs = append(errs, p[0][strings.LastIndex(p[0], "/")+1:]+": "+err.Error())
@@ -347,8 +389,14 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		if vm := l.VMByID(t.VM); vm != nil && !slices.Contains(hosts, emuHostOf(*vm)) {
 			hosts = append(hosts, emuHostOf(*vm))
 		}
+		if t.NIC != "" && !slices.Contains(hosts, t.Host) {
+			hosts = append(hosts, t.Host)
+		}
 	}
-	dir := l.VMDir()
+	dir, fast := l.VMDir(), l.Engine == "fast"
+	emuEngInit()
+	emuTraf.engOn = map[string]bool{}
+	trex := slices.ContainsFunc(l.Testers, func(t emu.Tester) bool { return t.Trex != "" })
 	run := emuTraf.run
 	if run != 0 && emuTraf.final {
 		v.Results = emuTrafCached(v.Streams)
@@ -396,18 +444,55 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		FSent   map[string]string               `json:"fsent"` // per stream: its first frame sent (hex)
 		FGot    map[string]string               `json:"fgot"`  // per stream: the first of its frames that arrived where it goes
 		Ports   map[string]emuPortCount         `json:"ports"`
+		Sess    map[string]*emuSessCount        `json:"sess"` // per session stream: its sessions
+		FPS     float64                         `json:"fps"`  // the fast engine: the highest rate it sent
 	}
 	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}, OOO: map[string]int{}, Dup: map[string]int{}, Jit: map[string][]float64{},
-		Hist: map[string]map[string]int{}, FRX: map[string]map[string][]float64{}, FTX: map[string]map[string]int{}, FLab: map[string]map[string]string{}, QoS: map[string]map[string]int{}, FSent: map[string]string{}, FGot: map[string]string{}, Ports: map[string]emuPortCount{}}
+		Hist: map[string]map[string]int{}, FRX: map[string]map[string][]float64{}, FTX: map[string]map[string]int{}, FLab: map[string]map[string]string{}, QoS: map[string]map[string]int{}, FSent: map[string]string{}, FGot: map[string]string{}, Ports: map[string]emuPortCount{}, Sess: map[string]*emuSessCount{}}
 	dyn := slices.ContainsFunc(v.Testers, func(t emu.Tester) bool {
 		return t.DHCP || t.SLAAC || t.Lag != "" || t.LLDP || t.Clients != nil || t.STP != nil
 	}) // (their protocols report while nothing runs)
 	if run != 0 || emuTraf.last != nil || dyn {
-		for _, h := range hosts {
-			out, err := a.emuRun(h, "cat "+emu.Q(dir)+"/traffic-stats.json 2>/dev/null", 15*time.Second)
-			var st stats
-			if err != nil || json.Unmarshal([]byte(strings.TrimSpace(out)), &st) != nil || st.Run != run && run != 0 {
+		type part struct {
+			host, js string
+			fast     bool
+		}
+		var parts []part
+		for _, h := range hosts { // traffic.py's counters, and the fast engine's
+			cmd := "cat " + emu.Q(dir) + "/traffic-stats.json 2>/dev/null"
+			if fast {
+				cmd += "; echo; echo '#twfast'; cat " + emu.Q(dir) + "/fast-stats.json 2>/dev/null"
+			}
+			out, err := a.emuRun(h, cmd, 15*time.Second)
+			if err != nil {
 				continue
+			}
+			py, fa, _ := strings.Cut(out, "#twfast")
+			parts = append(parts, part{h, py, false})
+			if fast {
+				parts = append(parts, part{h, fa, true})
+			}
+		}
+		if trex && run != 0 { // the TRex ports' streams
+			if js := a.emuTrexStats(run); js != "" {
+				parts = append(parts, part{"", js, false})
+			}
+		}
+		for _, p := range parts {
+			var st stats
+			if json.Unmarshal([]byte(strings.TrimSpace(p.js)), &st) != nil || st.Run != run && run != 0 {
+				continue
+			}
+			if p.fast {
+				emuLab.mu.Lock()
+				emuTraf.engOn[p.host] = true
+				emuTraf.engFPS[p.host] = max(emuTraf.engFPS[p.host], st.FPS)
+				emuLab.mu.Unlock()
+			}
+			for k, x := range st.Sess {
+				if x != nil {
+					sum.Sess[k] = x
+				}
 			}
 			for k, n := range st.TX {
 				sum.TX[k] += n
@@ -577,6 +662,11 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		}
 		r.Marks = emuMarks(sum.QoS[s.ID])
 		r.Sent, r.Got = sum.FSent[s.ID], sum.FGot[s.ID]
+		if s.Kind == "session" {
+			emuSessResult(&r, s, sum.Sess[s.ID], sum.Err[s.ID])
+			v.Results = append(v.Results, r)
+			continue
+		}
 		switch e := sum.Err[s.ID]; {
 		case e != "":
 			r.Result, r.Why = "fail", e
@@ -630,7 +720,9 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 	if run != 0 {
 		wire := map[string]float64{}
 		for _, s := range v.Streams {
-			wire[s.ID] = s.WireBits()
+			if s.Kind != "session" { // (sessions a second, not frames)
+				wire[s.ID] = s.WireBits()
+			}
 		}
 		emuTrafRates(v.Results, time.Since(emuTraf.started).Seconds(), wire)
 		emuPortRates(v.Ports, time.Since(emuTraf.started).Seconds())
@@ -643,6 +735,86 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 	}
 	emuLab.mu.Unlock()
 	return v, nil
+}
+
+// emuSessCheck checks (and fills in) a session stream: it goes to a test port, which answers its sessions; the
+// other kinds have no sessions (emuLab.mu held).
+func emuSessCheck(l *emu.Lab, s *emu.Stream) error {
+	if s.Kind != "session" {
+		s.Session = nil
+		return nil
+	}
+	if s.To == "" && s.DstIP == "" {
+		return errors.New("a session stream goes to a test port (it answers the sessions) or to an address")
+	}
+	if f, to := l.TesterByID(s.From), l.TesterByID(s.To); f != nil && f.Trex != "" || to != nil && to.Trex != "" {
+		return errors.New("sessions are opened by the KVM hosts' test ports and host network ports, not TRex ports (stateless)")
+	}
+	x := s.Session
+	if x == nil {
+		x = &emu.Session{}
+	}
+	x.DPort = min(65535, max(1, orInt(x.DPort, 80)))
+	x.Count = min(10000000, max(1, orInt(x.Count, 1000)))
+	x.Concurrent = min(100000, max(1, orInt(x.Concurrent, 100)))
+	if x.Rate <= 0 {
+		x.Rate = 100
+	}
+	x.Rate = math.Min(100000, x.Rate)
+	x.Req, x.Resp = min(100<<20, max(0, x.Req)), min(100<<20, max(0, x.Resp))
+	x.Hold = math.Min(3600, math.Max(0, x.Hold))
+	if !slices.Contains([]string{"", "refused", "dropped"}, x.Expect) {
+		return errors.New("its sessions should connect, be refused or get no answer")
+	}
+	s.Session, s.DPort, s.Expect = x, x.DPort, ""
+	return nil
+}
+
+// emuSessResult is a session stream's result from its sessions: sent are the sessions tried, received the ones
+// that connected, the latency their setup time (emuLab.mu not needed).
+func emuSessResult(r *EmuStreamResult, s emu.Stream, c *EmuSessionResult, err string) {
+	if c == nil {
+		c = &EmuSessionResult{}
+	}
+	if c.Secs > 0 {
+		c.CPS = math.Round(float64(c.OK)/c.Secs*10) / 10
+	}
+	r.Sessions = c
+	r.TX, r.RX, r.Expected, r.LatAvg, r.LatMax = c.Tried, c.OK, c.Tried, -1, 0
+	failed := c.Tried - c.OK + c.Reset
+	if c.Tried > 0 {
+		r.Loss = math.Max(0, float64(failed)*100/float64(c.Tried))
+	}
+	if c.OK > 0 {
+		r.LatAvg, r.LatMax = c.SetupAvg, c.SetupMax
+	}
+	exp := ""
+	if s.Session != nil {
+		exp = s.Session.Expect
+	}
+	switch {
+	case err != "":
+		r.Result, r.Why = "fail", err
+	case r.Running || c.Tried == 0:
+	case exp == "refused" && c.OK > 0:
+		r.Result, r.Why = "fail", fmt.Sprintf("%d of %d sessions connected (they should be refused)", c.OK, c.Tried)
+	case exp == "refused" && c.Refused < c.Tried:
+		r.Result, r.Why = "fail", fmt.Sprintf("%d of %d sessions got no answer (they should be refused with a reset)", c.Tried-c.Refused, c.Tried)
+	case exp == "refused":
+		r.Result, r.Why = "pass", "refused, as expected"
+	case exp == "dropped" && c.OK > 0:
+		r.Result, r.Why = "fail", fmt.Sprintf("%d of %d sessions connected (they should get no answer)", c.OK, c.Tried)
+	case exp == "dropped" && c.Refused > 0:
+		r.Result, r.Why = "fail", fmt.Sprintf("%d of %d sessions were refused with a reset (they should get no answer)", c.Refused, c.Tried)
+	case exp == "dropped":
+		r.Result, r.Why = "pass", "no answer, as expected"
+	case r.Loss > s.MaxLoss:
+		r.Result, r.Why = "fail", fmt.Sprintf("%d of %d sessions failed (%.1f %% > %.1f %%): %d refused, %d timed out, %d reset", failed, c.Tried, r.Loss, s.MaxLoss, c.Refused, c.Timeout, c.Reset)
+	case s.MaxLatency > 0 && c.SetupAvg > s.MaxLatency:
+		r.Result, r.Why = "fail", fmt.Sprintf("setup %.2f ms > %.2f ms", c.SetupAvg, s.MaxLatency)
+	default:
+		r.Result = "pass"
+	}
 }
 
 // emuTrafRates works out each stream's rates since the last read and keeps them for the graphs (emuLab.mu held).
@@ -872,6 +1044,7 @@ func (a *App) EmuTesterSet(t emu.Tester) (EmuTrafficView, error) {
 	cur.Name, cur.IP, cur.GW, cur.VLAN, cur.X, cur.Y = orStr(strings.TrimSpace(t.Name), cur.Name), t.IP, t.GW, t.VLAN, t.X, t.Y
 	cur.IP6, cur.Groups, cur.DHCP, cur.SLAAC, cur.LLDP = t.IP6, t.Groups, t.DHCP && t.IP == "", t.SLAAC && t.IP6 == "", t.LLDP
 	cur.Speed = min(400000, max(0, t.Speed))
+	cur.Cabled = strings.TrimSpace(t.Cabled)
 	cur.Lag, cur.LacpFast = strings.TrimSpace(t.Lag), t.LacpFast
 	if err := emuCheckClients(t.Clients, t.STP); err != nil {
 		emuLab.mu.Unlock()
@@ -890,7 +1063,7 @@ func (a *App) EmuTesterSet(t emu.Tester) (EmuTrafficView, error) {
 	cur.Clients, cur.STP, cur.VRRP, cur.BFD = t.Clients, t.STP, t.VRRP, t.BFD
 	for i, x := range l.Streams { // rates in % of its line rate follow it
 		if x.From == cur.ID && x.RateUnit == "pct" {
-			l.Streams[i].PPS = min(100000, max(1, int(math.Round(x.PPSFor(cur.LineMbps())))))
+			l.Streams[i].PPS = min(emuMaxPPS(l, x), max(1, int(math.Round(x.PPSFor(cur.LineMbps())))))
 		}
 	}
 	if l := emuTraf.leases[cur.ID]; emuTraf.leases != nil {
@@ -1016,9 +1189,13 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 		return EmuTrafficView{}, errors.New("choose the test port it goes from, and the one it goes to")
 	}
 	s.Kind = orStr(s.Kind, "udp")
-	if !slices.Contains([]string{"udp", "icmp", "tcp", "arp", "raw", "pcap", "custom"}, s.Kind) {
+	if !slices.Contains([]string{"udp", "icmp", "tcp", "arp", "raw", "pcap", "custom", "session"}, s.Kind) {
 		emuLab.mu.Unlock()
-		return EmuTrafficView{}, errors.New("the kind is udp, icmp, tcp, arp, raw, pcap or custom")
+		return EmuTrafficView{}, errors.New("the kind is udp, icmp, tcp, arp, raw, pcap, custom or session")
+	}
+	if err := emuSessCheck(l, &s); err != nil {
+		emuLab.mu.Unlock()
+		return EmuTrafficView{}, err
 	}
 	if s.Kind == "pcap" {
 		if err := a.emuPcapKeep(&s); err != nil {
@@ -1053,9 +1230,13 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, errors.New("the rate unit is pps, mbps or pct")
 	}
-	s.PPS = min(100000, max(1, orInt(s.PPS, 100)))
+	s.PPS = min(emuMaxPPS(l, s), max(1, orInt(s.PPS, 100)))
 	if s.Seconds <= 0 && s.Count <= 0 {
 		s.Seconds = 10
+	}
+	if s.Kind == "session" { // until its sessions are done, at most this long
+		s.Count = 0
+		s.Seconds = orInt(s.Seconds, 60)
 	}
 	s.VLAN, s.Prio = min(4094, max(0, s.VLAN)), min(7, max(0, s.Prio))
 	s.DSCP, s.Burst = min(63, max(0, s.DSCP)), max(0, s.Burst)
@@ -1075,6 +1256,10 @@ func (a *App) EmuStreamSave(s emu.Stream) (EmuTrafficView, error) {
 		s.Mods[i].Mode, s.Mods[i].Count, s.Mods[i].Step = orStr(m.Mode, "inc"), max(1, m.Count), orInt(m.Step, 1)
 	}
 	if err := emuStreamFrame(&s); err != nil {
+		emuLab.mu.Unlock()
+		return EmuTrafficView{}, err
+	}
+	if err := emuTrexCheck(l, &s); err != nil {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, err
 	}
@@ -1276,10 +1461,12 @@ func (a *App) emuTrafficStart(ids []string, quiet bool) (EmuTrafficView, error) 
 	if !quiet {
 		emuEv("", "info", "traffic started: "+strings.Join(names, ", "))
 	}
+	run := emuTraf.run
 	emuLab.mu.Unlock()
 	if err := a.emuTrafficPush(); err != nil {
 		return EmuTrafficView{}, err
 	}
+	a.emuTrexStart(run, on)
 	return a.EmuTraffic()
 }
 
@@ -1296,6 +1483,7 @@ func (a *App) EmuTrafficStop() (EmuTrafficView, error) {
 		return v, nil
 	}
 	// the stopped configuration: no stream on, the same run (traffic.py keeps the counts)
+	a.emuTrexStop()
 	if err := a.emuTrafficPush(); err != nil {
 		return v, err
 	}
