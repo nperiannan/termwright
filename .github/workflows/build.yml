@@ -158,7 +158,9 @@ jobs:
       - uses: actions/setup-go@v7
         with: { go-version: '1.26' }  # gomobile needs a newer Go than the desktop build
       - uses: actions/setup-java@v5
-        with: { distribution: temurin, java-version: '17' }
+        # the Gradle and Android plugin downloads kept between runs: Maven Central answers 429 (Too Many
+        # Requests) to runners that fetch everything every time
+        with: { distribution: temurin, java-version: '17', cache: gradle, cache-dependency-path: 'mobile/android/**/*.gradle*' }
       - name: Version
         run: |
           IFS=. read -r MA MI PA <<< "${APP_VERSION}"
@@ -196,7 +198,12 @@ jobs:
           TW_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cd mobile/android
-          /tmp/gradle-8.11.1/bin/gradle --no-daemon assembleRelease -PtwVersionName="$VERSION" -PtwVersionCode="$VERSION_CODE"
+          # Maven Central limits downloads (HTTP 429): wait and try again, twice
+          for i in 1 2 3; do
+            /tmp/gradle-8.11.1/bin/gradle --no-daemon assembleRelease -PtwVersionName="$VERSION" -PtwVersionCode="$VERSION_CODE" && break
+            [ "$i" = 3 ] && exit 1
+            echo "::warning::Gradle failed (attempt $i) - trying again in $((i * 90)) s"; sleep $((i * 90))
+          done
           mkdir -p ../../dist
           cp app/build/outputs/apk/release/app-release.apk "../../dist/Termwright-${VERSION//\~/-}-android.apk"
       - uses: actions/upload-artifact@v7
