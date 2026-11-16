@@ -109,6 +109,8 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## Recent releases
 
+- **0.39** - the **traffic generator** grows up: quick streams and tests, custom frames, faults and fuzzing, QinQ, MPLS, GRE and VXLAN headers, PEAP, DHCPv6, VRRP and BFD on test ports, real TCP sessions, reports as HTML, PDF and Excel, the fast engine, test ports on real switches and TRex servers.
+- **0.38** - the README and feature list as Termwright is now; a team's Members on their own page.
 - **0.37** - *Connect an AI App* (MCP config for Cursor, VS Code, Windsurf, Gemini CLI, Codex; *Used by*), a **Lab** menu, icons on the lab's pages, traffic generator fixes and its measured speed.
 - **0.36** - the **emulated lab** grows up: Install from ISO with the installer's console in the page, the AI agent with full control of the lab and knowledge of Termwright, packet captures, the local API, command line and Python client, the team server reading model, serial number and MAC from the devices.
 - **0.34** - *Name After Devices*, Network Check, the file servers' firewall check, *who is free now* for teams.
