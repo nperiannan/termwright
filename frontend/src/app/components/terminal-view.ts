@@ -75,10 +75,10 @@ function b64ToBytes(b64: string): Uint8Array {
   imports: [FormsModule, DeviceIcon, Icon],
   host: { class: 'modern' },
   template: `<div class="term-host" #host (contextmenu)="onContextMenu($event)"></div>
-    @if (tab().autoScroll === false && !tab().sendBar) {
+    @if (tab().autoScroll === false && !barShown()) {
       <div class="paused" title="New output does not move the view">Auto scroll is off <button type="button" (click)="setAutoScroll(true)">Turn On</button></div>
     }
-    @if (tab().sendBar) {
+    @if (barShown()) {
       <div class="sendbar" [class.compact]="!serial()">
         @if (serial()) {
           <span class="port" [class.on]="tab().state === 'connected'" [title]="tab().info || 'Serial port and speed'"><span class="dot"></span>{{ portLabel() }}</span>
@@ -105,7 +105,6 @@ function b64ToBytes(b64: string): Uint8Array {
           [title]="tab().autoScroll === false ? 'Scroll lock on: new output does not move the view - click to turn auto scrolling on' : 'Turn Auto Scrolling Off: keep the view where it is while output arrives'"><app-icon [name]="tab().autoScroll === false ? 'lock' : 'unlock'" [size]="15" /></button>
         <button type="button" class="tg" (click)="clearAll()" title="Clear the screen and the scrollback (asks first)"><app-icon name="clear" [size]="15" /></button>
         @if (serial()) { <button type="button" (click)="tabs.saveScrollback(tab().id)" title="Save the output to a text file">Save…</button> }
-        <button type="button" class="x" [title]="serial() ? 'Hide the send bar (right-click the terminal → Send Bar shows it again)' : 'Hide this bar (right-click the terminal → Terminal Bar shows it again; Global Options → Terminal hides it for every tab)'" (click)="tabs.patch(tab().id, { sendBar: false })">✕</button>
       </div>
     }
     @if (card() === 'connecting') {
@@ -231,6 +230,8 @@ export class TerminalView implements AfterViewInit, OnDestroy {
 
   // ---- send bar (serial tabs; any tab from the right-click menu) ----
   readonly serial = computed(() => this.tab().session.protocol === 'Serial');
+  /** The bar under the terminal: always on serial tabs (it sends); elsewhere unless Global Options → Terminal hides it. */
+  readonly barShown = computed(() => this.serial() || !this.ui.settings()?.hideTerminalBar);
   /** "/dev/cu.usbserial-A10K · 115200 8N1": what the connection reports, else the session's settings. */
   readonly portLabel = computed(() => {
     const t = this.tab();
@@ -833,7 +834,6 @@ export class TerminalView implements AfterViewInit, OnDestroy {
       { separator: true },
       { label: (this.tabs.get(id)?.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.setTimestamps(!this.tabs.get(id)?.timestamps) },
       { label: (this.tabs.get(id)?.autoScroll !== false ? '✓ ' : '') + 'Auto Scroll', action: () => this.setAutoScroll(this.tabs.get(id)?.autoScroll === false) },
-      { label: (this.tabs.get(id)?.sendBar ? '✓ ' : '') + (this.serial() ? 'Send Bar' : 'Terminal Bar'), action: () => this.tabs.patch(id, { sendBar: !this.tabs.get(id)?.sendBar }) },
       { separator: true },
       { label: 'Clear Screen', action: () => this.clearAll() },
       { label: 'Clear Scrollback', action: () => t?.clear() },

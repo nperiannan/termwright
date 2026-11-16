@@ -782,7 +782,6 @@ export class App implements OnInit {
       ...(t.kind === 'terminal' ? [
         { label: (t.timestamps ? '✓ ' : '') + 'Timestamps', action: () => this.tabs.patch(t.id, { timestamps: !t.timestamps }) },
         { label: (t.autoScroll !== false ? '✓ ' : '') + 'Auto Scroll', action: () => { this.tabs.patch(t.id, { autoScroll: t.autoScroll === false }); if (t.autoScroll === false) this.tabs.handles.get(t.id)?.term.scrollToBottom(); } },
-        { label: (t.sendBar ? '✓ ' : '') + (t.session.protocol === 'Serial' ? 'Send Bar' : 'Terminal Bar'), action: () => this.tabs.patch(t.id, { sendBar: !t.sendBar }) },
         { label: 'Clear Screen', action: () => this.tabs.handles.get(t.id)?.term.clear() },
       ] : []),
       { label: 'Session Options...', action: () => this.ui.editSession(t.session.path, t.id), disabled: !t.session.path },
