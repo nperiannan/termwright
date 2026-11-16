@@ -94,7 +94,7 @@ export function sessionAddr(n: SessionNode): string {
         <button class="icon-btn more" [class.on]="reach()" [title]="reachTitle()"
           (click)="toggleReach()"><app-icon name="pulse" /></button>
         <button class="icon-btn more" title="New folder, refresh, reachability, compact rows, dock side, hide" (click)="headMenu($event)"><app-icon name="more" /></button>
-        <button class="icon-btn more" [title]="'Hide the Session Manager (' + hideKeys + ') - the sidebar button at the top left shows it again'" (click)="ui.actionHandler('toggle-session-manager')"><app-icon [name]="ui.settings()?.sessionManagerRight ? 'panel-hide-right' : 'panel-hide-left'" /></button>
+        <button class="icon-btn more" [title]="'Hide the Session Manager (' + hideKeys + ') - the Sessions strip at the side shows it again'" (click)="ui.actionHandler('toggle-session-manager')"><app-icon [name]="ui.settings()?.sessionManagerRight ? 'panel-hide-right' : 'panel-hide-left'" /></button>
       }
     </div>
     <div class="sm-body" #body (scroll)="scrollTop.set(body.scrollTop)" (contextmenu)="rootMenu($event)"

@@ -33,7 +33,7 @@ func aiDocChunks() []aiDocChunk {
 		return aiDocIndex
 	}
 	files := []struct{ path, name string }{{"docs/USER_GUIDE.md", "User Guide"}, {"docs/FEATURES.md", "Features"},
-		{"docs/TEAM_SERVER.md", "Team server guide"}, {"CHANGELOG.md", "Changes"}}
+		{"docs/TEAM_SERVER.md", "Team server guide"}, {"docs/EMULATOR_GUIDE.md", "Emulated lab guide"}, {"CHANGELOG.md", "Changes"}}
 	var out []aiDocChunk
 	for _, f := range files {
 		if aiDocs == nil {

@@ -31,7 +31,7 @@ import (
 type Files struct {
 	Assets    fs.FS  // the window: frontend/dist
 	Shortcuts []byte // the menus' keys: frontend/src/app/core/shortcuts.json
-	Docs      fs.FS  // what the AI assistant knows of Termwright: docs/USER_GUIDE.md, docs/FEATURES.md, docs/TEAM_SERVER.md, CHANGELOG.md
+	Docs      fs.FS  // what the AI assistant knows of Termwright: docs/USER_GUIDE.md, docs/EMULATOR_GUIDE.md, docs/FEATURES.md, docs/TEAM_SERVER.md, CHANGELOG.md
 	OpenAPI   []byte // the local API's description: docs/api/openapi.yaml
 	Scripts   fs.FS  // scripts/remote-desktop/*.sh, run on Linux machines
 }

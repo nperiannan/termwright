@@ -60,6 +60,8 @@ func TestCheckAndDownload(t *testing.T) {
 			fmt.Fprint(w, `{"status":"ahead","files":[{"filename":"README.md"},{"filename":"docs/FEATURES.md"},{"filename":"docs/screenshots/a.png"}]}`)
 		case "/repos/o/r/compare/3333333...abcdef1":
 			fmt.Fprint(w, `{"status":"ahead","files":[{"filename":"CHANGELOG.md"},{"filename":"app.go"}]}`)
+		case "/repos/o/r/compare/v0.6.0...abcdef1": // the release is a merge on main: develop's nightly diverged from it
+			fmt.Fprint(w, `{"status":"diverged","ahead_by":3,"behind_by":1,"files":[{"filename":"app/run.go"}]}`)
 		case "/repos/o/r/compare/7654321...abcdef1":
 			fmt.Fprint(w, `{"status":"behind"}`)
 		case "/repos/o/r/releases/assets/1":
@@ -102,6 +104,9 @@ func TestCheckAndDownload(t *testing.T) {
 	}
 	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.7.0~git9999999"); n.Newer {
 		t.Fatal("unknown commit without a higher version reported newer")
+	}
+	if n, _ := Check(ctx, "o/r", "nightly", "tok", "0.6.0"); !n.Newer {
+		t.Fatal("a nightly after the installed release (diverged from its merge on main) not reported")
 	}
 	dest := filepath.Join(t.TempDir(), asset)
 	if err := Download(ctx, info.AssetURL, "tok", dest, nil); err != nil {

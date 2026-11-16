@@ -9,7 +9,10 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 - **The terminal bar's toggles are icons**, as in VS Code's panels: timestamps (a clock), scroll lock (a lock: open while new output follows, closed when the view stays) and clear (which now asks first) - each with a tooltip.
 - **The AI chat's message box, as VS Code's chat**: a tip on top, the model and its effort in the box, a quiet send button, and under it the AI service, the mode (Agent, Plan, Ask) and the agent's permissions as plain chips; the mode menu has the permissions too, and *Changes ask first* is marked *Recommended*.
 - **Start page**: the search bar has the same edge, face and corners as the buttons under it.
-- **Hide the Session Manager from itself**: a hide button beside its ⋯ (the sidebar button at the top left shows it again) - more room for the emulated lab.
+- **Hide the Session Manager from itself**: a hide button beside its ⋯ (the *Sessions* strip at the side shows it again) - more room for the emulated lab. The title bar's sidebar button is gone.
+- **The Emulated Lab guide** ([docs/EMULATOR_GUIDE.md](docs/EMULATOR_GUIDE.md)): step by step from the KVM host (Ubuntu, KVM on hardware or nested in a VM) to Set Up, images and appliances, a qcow2 image from an ISO, a topology on the canvas, several hosts, traffic and a complete test - and the same with the AI agent. The AI assistant knows it too.
+- **Linux: the tabs on a row of their own**, under the menus and buttons - as on macOS, where the menus are at the top of the screen.
+- **Fixed: Check for Updates did not offer the nightly after a release**: a release is a merge of develop into main, so the newer nightly is not "ahead" of its tag but "diverged" from it; that counts as newer now (when it changes more than documentation). A 0.39.0 install still has the old check: download that one nightly by hand.
 - **Fixed: local builds and the nightly's notes named 0.36.0** after 0.39.0: releases are tagged on main, so the newest release tag is found by its version, not by what develop reaches. The start page shows *0.39.0 nightly* again.
 - **Start page**: *GitHub* at the bottom is white, with a gold star.
 - **Updates**: the *Advanced* section (another repository and a GitHub token, for a fork) is gone.

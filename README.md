@@ -18,7 +18,7 @@
 <p align="center">
   <a href="docs/USER_GUIDE.md">User Guide</a> ·
   <a href="docs/FEATURES.md">Feature List</a> ·
-  <a href="docs/USER_GUIDE.md#emulated-lab-real-vm-images-on-a-kvm-host">Emulated Lab</a> ·
+  <a href="docs/EMULATOR_GUIDE.md">Emulated Lab Guide</a> ·
   <a href="docs/TEAM_SERVER.md">Team Server</a> ·
   <a href="docs/API.md">Local API</a> ·
   <a href="docs/PYTHON.md">Python</a> ·
@@ -192,7 +192,7 @@ Pre-built packages are published on the [Releases](https://github.com/nperiannan
 | Debian / Ubuntu (amd64, arm64) | `.deb` | `sudo apt install ./termwright_*.deb` |
 | Other Linux (amd64, arm64) | `.tar.gz` | Requires GTK 3 and WebKitGTK 4.1. |
 
-Installation, first start and every feature are described in the [User Guide](docs/USER_GUIDE.md).
+Installation, first start and every feature are described in the [User Guide](docs/USER_GUIDE.md); the [Emulated Lab Guide](docs/EMULATOR_GUIDE.md) goes step by step from a KVM host to the first traffic test.
 
 ## Migrating existing sessions
 

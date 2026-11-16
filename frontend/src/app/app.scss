@@ -107,6 +107,11 @@ app-command-window { flex: none; }
   .mbar { flex: none; display: flex; align-items: center; gap: 0; margin-right: 6px;
     button { height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: calc(13px * var(--ui-scale, 1)); --wails-draggable: no-drag;
       &:hover, &:focus-visible { color: var(--text); background: var(--hover); } } }
+  /* two rows, as on macOS the menus are apart from the tabs: the menus and the buttons, then the tabs under them */
+  flex-wrap: wrap; height: auto; padding-left: 0; row-gap: 0;
+  .tsp { flex: 1; min-width: 12px; height: 40px; }
+  .ptabs { order: 99; flex: 1 1 100%; height: 38px; padding: 0 var(--sp-2); border-top: 1px solid var(--line); background: var(--bg); }
+  .wbtns { height: 40px; }
   .wbtns { flex: none; display: flex; align-self: stretch; margin-left: 6px; --wails-draggable: no-drag;
     button { width: 46px; height: 100%; padding: 0; border: 0; border-radius: 0; background: none; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
       svg { fill: none; stroke: currentColor; stroke-width: 1.2; } &:hover { color: var(--text); background: var(--hover); } &.cl:hover { color: #fff; background: #e81123; } } } }
@@ -123,7 +128,6 @@ app-command-window { flex: none; }
     &:hover:not(:disabled) { background: var(--hover); color: var(--text); }
     &.on, &.on:hover:not(:disabled) { color: var(--accent); }
     &:disabled { opacity: .35; } }
-  .side-toggle { margin-right: var(--sp-1); color: var(--muted); &.on { color: var(--muted); } &:hover { color: var(--text); } }
   .ptabs { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-1); overflow-x: auto; overflow-y: hidden; height: 100%;
     scrollbar-width: none; &::-webkit-scrollbar { height: 0; }
     &:hover { scrollbar-width: thin; &::-webkit-scrollbar { height: 3px; } } }

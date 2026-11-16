@@ -18,7 +18,7 @@ var assets embed.FS
 //go:embed frontend/src/app/core/shortcuts.json
 var shortcuts []byte
 
-//go:embed docs/USER_GUIDE.md docs/FEATURES.md docs/TEAM_SERVER.md CHANGELOG.md
+//go:embed docs/USER_GUIDE.md docs/EMULATOR_GUIDE.md docs/FEATURES.md docs/TEAM_SERVER.md CHANGELOG.md
 var docs embed.FS
 
 //go:embed docs/api/openapi.yaml

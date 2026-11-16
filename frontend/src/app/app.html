@@ -3,9 +3,8 @@
     @if (ownTitle()) {
       <img class="tlogo" [src]="ui.lightUi() ? 'icon.svg' : 'icon-dark.svg'" alt="" width="18" height="18" />
       <nav class="mbar" aria-label="Menus">@for (m of menus; track m.title) { <button type="button" (click)="openMenu($event, m.title)">{{ m.title }}</button> }</nav>
+      <span class="tsp"></span>
     }
-    <button class="ab side-toggle" [class.on]="settings()?.showSessionManager" [title]="settings()?.showSessionManager ? 'Hide the Session Manager' : 'Show the Session Manager'"
-            (click)="action('toggle-session-manager')"><app-icon name="sidebar" /></button>
     <nav class="ptabs" #ptabs (wheel)="tabsWheel($event)">
       @for (t of tabs.shown(); track t.id) {
         <div class="ptab" [attr.data-tab]="t.id" [class.on]="t.id === tabs.activeId()" [title]="tabTip(t)"
