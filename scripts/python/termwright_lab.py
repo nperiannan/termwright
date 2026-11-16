@@ -333,22 +333,55 @@ class Traffic:
 
     def add_port(self, switch: str, port: str, ip: Optional[str] = None, **fields) -> str:
         """A test port on a free switch port; returns its name. Fields: ip6, gateway, vlan, groups, lldp, speed,
-        lag, lacp_fast, clients (many hosts behind it: dict(n=200, dhcp=True, groups=[...], dot1x=dict(user="user{n}",
-        password=...), rate=50)), stp (dict(mode="rstp", prio=4096))."""
+        lag, lacp_fast, clients (many hosts behind it: dict(n=200, dhcp=True, dhcp6=True, groups=[...], dot1x=dict(user="user{n}",
+        password=..., method="peap"), rate=50)), stp (dict(mode="rstp", prio=4096)), vrrp (dict(ver=3, vrid=1, prio=50,
+        vip="10.10.0.254", interval=1000, preempt=True)), bfd (dict(peer="10.10.0.1", tx=300, mult=3))."""
         before = {p["name"] for p in self.ports()}
-        v = self.lab.request("POST", "/traffic/ports", _body(dict(switch=switch, port=port, ip=ip, **fields)))
+        v = self.lab.request("POST", "/traffic/ports", _body(dict(switch=switch or None, port=port or None, ip=ip, **fields)))
         new = [p["name"] for p in (v.get("testers") or []) if p["name"] not in before]
         if len(new) != 1:
             raise ApiError(0, "unexpected", f"the new test port was not found among {new}")
         return new[0]
 
+    def add_host_port(self, nic: str, host: Optional[str] = None, ip: Optional[str] = None, cabled: str = "", **fields) -> str:
+        """A test port on a KVM host's spare network card (nic, e.g. "enp3s0") cabled to a real switch; returns its
+        name. nics(host) lists the cards that can be one. The generator needs root on the host, or passwordless sudo."""
+        return self.add_port("", "", ip=ip, nic=nic, host=host, cabled=cabled, **fields)
+
+    def add_trex_port(self, trex: str, port: int, ip: Optional[str] = None, cabled: str = "", **fields) -> str:
+        """A test port on a TRex server's port (add_trex first); TRex sends its streams at line rate. Returns its name."""
+        return self.add_port("", "", ip=ip, trex=trex, trex_port=port, cabled=cabled, **fields)
+
+    def nics(self, host: Optional[str] = None) -> list:
+        """A KVM host's network cards: name, mac, up, speed, driver and used (why it cannot be a test port; "" = free)."""
+        return self.lab.request("GET", "/traffic/nics", **({"host": host} if host else {}))
+
+    def engines(self) -> dict:
+        """What sends the streams: engine (python or fast), hosts and the TRex servers with their ports."""
+        return self.lab.request("GET", "/traffic/engines")
+
+    def set_engine(self, engine: str) -> dict:
+        """The KVM hosts' engine: "python" (built in) or "fast" (a compiled helper copied to the hosts: millions of
+        frames a second)."""
+        return self.lab.request("PUT", "/traffic/engines", {"engine": engine})
+
+    def add_trex(self, addr: str, name: str = "", port: int = 4501) -> dict:
+        """Adds a TRex server (stateless mode, its API on TCP 4501) and checks it; returns the engines."""
+        return self.lab.request("POST", "/traffic/trex", {"addr": addr, "name": name or addr, "port": port})
+
+    def remove_trex(self, name: str) -> None:
+        """Forgets a TRex server, its test ports and their streams."""
+        self.lab.request("DELETE", "/traffic/trex/" + urllib.parse.quote(name, safe=""))
+
     def set_port(self, name: str, **fields) -> dict:
-        """Change a test port: the fields of add_port, and topology_change=True (its next BPDUs say so)."""
+        """Change a test port: the fields of add_port, topologyChange=True (its next BPDUs say so) and silentBfd=True
+        (no BFD for 5 s: bfdState["measured"] is how fast the switch saw it). vrrp=dict(..., silent=True) stops its
+        VRRP advertisements: vrrpState["takeover"] is how fast the switch took over (ms)."""
         return self.lab.request("PATCH", "/traffic/ports/" + urllib.parse.quote(name, safe=""), _body(fields))
 
     def clients(self, name: str) -> dict:
-        """How a test port's clients are doing: n, bound (DHCP), auth (802.1X), failed, list (the first 256:
-        MAC, address, 802.1X state, why it failed)."""
+        """How a test port's clients are doing: n, bound (DHCP), bound6 (DHCPv6), auth (802.1X), failed, list (the
+        first 256: MAC, address, 802.1X state, why it failed, IPv6 address)."""
         for p in self.ports():
             if p["name"] == name:
                 return p.get("clientState") or {}
@@ -366,7 +399,19 @@ class Traffic:
         sends each frame back; latency is the round trip). kind="pcap" replays a capture: pcap (its file on
         this computer), pcap_timing (its own gaps), loops, rewrite_macs. rate= gives the speed in Mbit/s on the wire, or with
         rate_unit="pct" in % of the sending test port's line rate (set_port(speed=...), default 1000 Mbit/s;
-        line_mbps= works it out here instead) - in place of pps."""
+        line_mbps= works it out here instead) - in place of pps.
+        kind="custom" sends a frame you write: hex (from the destination MAC on, no FCS; lengths and checksums
+        are worked out unless no_fix=True, the counting signature goes at its end unless no_sig=True).
+        udfs=[{"offset": 26, "width": 4, "mode": "inc", "start": 0x0a0a0001, "count": 100}] changes bytes per
+        frame; bad="ipcsum" (or l4csum, ttl0, runt, frag-tiny, tcp-xmas … - see the guide) puts a fault in
+        every frame; fuzz={"from": 14, "to": 42, "seed": 7} randomizes bytes; encap={"outer": {"vlan": 100},
+        "mpls": [{"label": 1000}]} or {"vxlan": {"vni": 10010, "dst": "10.255.0.1"}} or {"gre": {"dst": ...}} or
+        {"v6ext": [{"type": "hbh"}]} adds headers (the size stays the size on the wire); expect="drop" passes when the
+        switch drops them, expect="any" only counts them.
+        kind="session" opens real TCP sessions to dst, which answers them: session={"dport": 80, "count": 1000,
+        "concurrent": 100, "rate": 100, "req": 1000, "resp": 10000, "hold": 0, "http": False, "expect": ""} (expect
+        "refused": every one should get a reset, "dropped": no answer); its result has sessions (tried, ok, refused,
+        timeout, setupAvg ms, cps); max_loss is the % of sessions that may fail, max_latency the setup time in ms."""
         if rate is not None:
             if "pps" in fields:
                 raise ValueError("give pps or rate, not both")
@@ -381,6 +426,8 @@ class Traffic:
                 fields["rate_unit"], fields["rate"] = rate_unit, rate
         if "pcp" in fields:
             fields["prio"] = fields.pop("pcp")
+        if fields.get("expect") == "forward":
+            fields.pop("expect")
         body = _body(dict(name=name, from_=src, to=dst, **fields))
         body.setdefault("size", 128)
         return self.lab.request("POST", "/traffic/streams", body)
@@ -470,10 +517,16 @@ class Traffic:
         if bad or not results:
             raise AssertionError("; ".join(bad) or "no results")
 
-    def report(self, fmt: str = "json") -> Any:
-        if fmt not in ("json", "csv", "html", "text"):
-            raise ValueError("format: json, csv, html or text")
-        return self.lab.request("GET", "/traffic/report", raw=fmt != "json", format=fmt)
+    def report(self, fmt: str = "json", path: Optional[str] = None) -> Any:
+        """The run's report: json (the traffic view), csv, html, text, or pdf and xlsx (bytes). With path, saved there
+        (lab.traffic.report("xlsx", "run.xlsx")): the report to share, with graphs, topology, frames sent and received."""
+        if fmt not in ("json", "csv", "html", "text", "pdf", "xlsx"):
+            raise ValueError("format: json, csv, html, text, pdf or xlsx")
+        out = self.lab.request("GET", "/traffic/report", timeout=120 if fmt == "pdf" else None, raw=fmt != "json", binary=fmt in ("pdf", "xlsx"), format=fmt)
+        if path:
+            with open(path, "wb" if isinstance(out, bytes) else "w") as fh:
+                fh.write(out if isinstance(out, (bytes, str)) else json.dumps(out, indent=2))
+        return out
 
     # ---- saved tests ----
     def tests(self) -> list:

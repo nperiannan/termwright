@@ -39,8 +39,12 @@ Settings, and turning one on does not turn on the other.
 | `GET /lab/tools` | Every lab tool and its arguments (JSON Schema) | 200 `Tool[]` |
 | `POST /lab/tools/{tool}` | Runs a tool (`power`, `cable`, `console`, `wait`, `move`, `capture`, `link_check`, `address`, `cpu`, `traffic`, …). The body holds its arguments | 200 `{"result": text}` |
 | `GET /lab/traffic` | Test ports, streams and results. Results are live while a run goes on, with rates and rate history | 200 `TrafficView` |
-| `GET /lab/traffic/report?format=json\|csv\|html\|text` | The run's report: pass or fail per stream, with its counters | 200 |
-| `POST /lab/traffic/ports` | Adds a test port on a free switch port | 201 `TrafficView` |
+| `GET /lab/traffic/report?format=json\|csv\|html\|text\|pdf\|xlsx` | The run's report: pass or fail per stream, with its counters | 200 |
+| `POST /lab/traffic/ports` | Adds a test port: on a free switch port (`switch`, `port`), on a KVM host's spare network card cabled to a real switch (`host`, `nic`, `cabled`), or on a TRex port (`trex`, `trexPort`) | 201 `TrafficView` |
+| `GET /lab/traffic/nics?host=` | A KVM host's network cards and whether each can be a test port | 200 `[HostNIC]` |
+| `GET /lab/traffic/engines`, `PUT /lab/traffic/engines` | What sends the streams; `{"engine": "fast"}` or `"python"` chooses the KVM hosts' engine | 200 `Engines` |
+| `POST /lab/traffic/trex` | Adds (or, with `id`, checks again) a TRex server: `name`, `addr`, `port` (4501) | 201 `Engines` |
+| `DELETE /lab/traffic/trex/{server}` | Forgets a TRex server, its test ports and their streams | 204 |
 | `PATCH /lab/traffic/ports/{port}` | Changes a test port's name, addresses, gateway, VLAN or multicast groups | 200 `TrafficView` |
 | `DELETE /lab/traffic/ports/{port}` | Removes a test port and its streams | 204 |
 | `POST /lab/traffic/streams` | Adds a stream | 201 `TrafficView` |

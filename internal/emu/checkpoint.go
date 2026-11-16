@@ -1,9 +1,16 @@
 package emu
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	_ "embed"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"strings"
+	"time"
 )
 
 // Checkpoint is a running switch's whole state (memory, CPU, disk) kept in its disk while it runs (a QEMU
@@ -238,6 +245,8 @@ type Radius struct {
 	Users   []RadiusUser `json:"users,omitempty"`   // who may log in (the first match wins)
 	MAB     []string     `json:"mab,omitempty"`     // MAC addresses let in by MAC authentication (patterns: 02:63:*, * = any)
 	MABVLAN string       `json:"mabVlan,omitempty"` // the VLAN those get
+	Cert    string       `json:"cert,omitempty"`    // PEAP: the server's certificate (PEM, made by Termwright)
+	Key     string       `json:"key,omitempty"`     // and its private key (PEM; it stays in the lab, the screens never get it)
 }
 
 // RadiusUser is a user name (or a pattern, user*) with its password and VLAN.
@@ -283,4 +292,22 @@ func (l *Lab) RadiusScript(cfg []byte, on bool) string {
 	b.WriteString("p=$(cat radius.pid 2>/dev/null); if [ -z \"$p\" ] || ! grep -q tw-radius /proc/$p/cmdline 2>/dev/null; then command -v python3 >/dev/null || { echo 'radius: python3 is missing'; exit 1; }; nohup python3 tw-radius.py \"$PWD\" >radius.log 2>&1 & echo $! > radius.pid; fi\n")
 	b.WriteString("echo radius-ok\n")
 	return b.String()
+}
+
+// RadiusCert makes the RADIUS server's certificate for PEAP: RSA 2048, self-signed, ten years (the lab's
+// clients do not check it).
+func RadiusCert() (certPEM, keyPEM string, err error) {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", err
+	}
+	sn, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 62))
+	t := &x509.Certificate{SerialNumber: sn, Subject: pkix.Name{CommonName: "Termwright lab RADIUS", Organization: []string{"Termwright"}},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().AddDate(10, 0, 0), KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, BasicConstraintsValid: true}
+	der, err := x509.CreateCertificate(rand.Reader, t, t, &k.PublicKey, k)
+	if err != nil {
+		return "", "", err
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)})), nil
 }

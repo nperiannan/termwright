@@ -3,12 +3,14 @@ package emu
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -413,6 +415,8 @@ func TestTrafficPyFlows(t *testing.T) {
 		FTX  map[string]map[string]int       `json:"ftx"`
 		FLab map[string]map[string]string    `json:"flab"`
 		QoS  map[string]map[string]int       `json:"qos"`
+		Sent map[string]string               `json:"fsent"`
+		Got  map[string]string               `json:"fgot"`
 	}
 	for end := time.Now().Add(8 * time.Second); time.Now().Before(end); time.Sleep(300 * time.Millisecond) {
 		b, err := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
@@ -423,6 +427,9 @@ func TestTrafficPyFlows(t *testing.T) {
 	if st.RX["s1"] != 200 || len(st.FRX["s1"]) != 4 || st.FRX["s1"]["3"][0] != 50 || st.FTX["s1"]["0"] != 50 || st.FLab["s1"]["1"] != "dport 5002" {
 		lg, _ := os.ReadFile(filepath.Join(dir, "log"))
 		t.Fatalf("flows: rx %v frx %v ftx %v lab %v\n%s", st.RX, st.FRX, st.FTX, st.FLab, lg)
+	}
+	if !strings.Contains(st.Sent["s1"], ":") || !strings.Contains(st.Got["s1"], "8100") || st.Got["s2"] == "" { // the first frames, kept for the report
+		t.Errorf("first frames: sent %q, got %q", st.Sent, st.Got)
 	}
 	if st.QoS["s1"]["10/5/46"] != 200 || st.QoS["s2"]["0/0/0"] != 100 {
 		t.Fatalf("marks %v", st.QoS)
@@ -709,5 +716,718 @@ func TestTrafficPyClients(t *testing.T) {
 	b, _ = os.ReadFile(filepath.Join(dir, "radius-stats.json"))
 	if err := json.Unmarshal(b, &rs); err != nil || rs.Accept != 6 || rs.Reject != 2 || rs.Challenge != 5 {
 		t.Errorf("radius %v %+v", err, rs)
+	}
+}
+
+// Custom frames, user-defined fields, faults and fuzzing: what goes on the wire, and that the receiver still counts
+// the frames by their signature.
+func TestTrafficPyFrames(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	seen := map[int][][]byte{} // stream index → its frames, as the switch got them
+	sw := func(in, out int) *net.UDPConn {
+		c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: in})
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			buf := make([]byte, 65536)
+			for {
+				n, _, err := c.ReadFromUDP(buf)
+				if err != nil {
+					return
+				}
+				f := append([]byte(nil), buf[:n]...)
+				if i := bytes.Index(f, []byte("TWTG")); i >= 0 && len(f) >= i+6 {
+					mu.Lock()
+					k := int(binary.BigEndian.Uint16(f[i+4:]))
+					seen[k] = append(seen[k], f)
+					mu.Unlock()
+				}
+				_, _ = c.WriteToUDP(f, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: out})
+			}
+		}()
+		return c
+	}
+	a, b := sw(43211, 43202), sw(43212, 43201)
+	defer a.Close()
+	defer b.Close()
+	// a UDP frame t1 → t2 written by hand: lengths and checksums left 0 for Termwright to work out
+	hexFrame := "027477000002" + "027477000001" + "0800" + "450000000001400040110000" + "0a0a0001" + "0a0a0002" + "c35013890000000048656c6c6f"
+	st := func(id string, f map[string]any) map[string]any {
+		x := map[string]any{"id": id, "from": "t1", "to": "t2", "kind": "udp", "size": 128, "pps": 200, "count": 10, "on": true, "toMac": "02:74:77:00:00:02", "srcIp": "10.10.0.1", "dstIp": "10.10.0.2"}
+		for k, v := range f {
+			x[k] = v
+		}
+		return x
+	}
+	cfg := map[string]any{"run": 3, "testers": []map[string]any{
+		{"id": "t1", "mac": "02:74:77:00:00:01", "ip": "10.10.0.1/24", "listen": 43201, "send": 43211},
+		{"id": "t2", "mac": "02:74:77:00:00:02", "ip": "10.10.0.2/24", "listen": 43202, "send": 43212}},
+		"streams": []map[string]any{
+			st("c", map[string]any{"kind": "custom", "hex": hexFrame, "count": 30, "udfs": []map[string]any{{"offset": 18, "width": 2, "mode": "inc", "start": 100, "count": 1000}}}),
+			st("ipcsum", map[string]any{"bad": "ipcsum"}),
+			st("runt", map[string]any{"bad": "runt"}),
+			st("xmas", map[string]any{"kind": "tcp", "bad": "tcp-xmas"}),
+			st("fz", map[string]any{"fuzz": map[string]any{"from": 14, "to": 34, "seed": 3}}),
+			st("qinq", map[string]any{"bad": "qinq", "vlan": 10}),
+		}}
+	j, _ := json.Marshal(cfg)
+	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir)
+	logf, _ := os.Create(filepath.Join(dir, "log"))
+	cmd.Stdout, cmd.Stderr = logf, logf
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var stt struct{ RX map[string]int }
+	for end := time.Now().Add(8 * time.Second); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+		bs, _ := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+		if json.Unmarshal(bs, &stt) == nil && stt.RX["c"] == 30 && stt.RX["ipcsum"] == 10 && stt.RX["runt"] == 10 && stt.RX["xmas"] == 10 && stt.RX["qinq"] == 10 {
+			break
+		}
+	}
+	lg, _ := os.ReadFile(filepath.Join(dir, "log"))
+	if stt.RX["c"] != 30 || stt.RX["ipcsum"] != 10 || stt.RX["runt"] != 10 || stt.RX["xmas"] != 10 || stt.RX["qinq"] != 10 {
+		t.Fatalf("counted %v\n%s", stt.RX, lg)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	sum := func(b []byte) uint16 {
+		var s uint32
+		for i := 0; i+1 < len(b); i += 2 {
+			s += uint32(b[i])<<8 | uint32(b[i+1])
+		}
+		if len(b)%2 == 1 {
+			s += uint32(b[len(b)-1]) << 8
+		}
+		for s>>16 != 0 {
+			s = s&0xffff + s>>16
+		}
+		return uint16(s)
+	}
+	// custom: lengths and the IP checksum worked out, the IP ID counts up from 100, the payload kept
+	c := seen[0]
+	if len(c) != 30 || binary.BigEndian.Uint16(c[0][18:]) != 100 || binary.BigEndian.Uint16(c[5][18:]) != 105 ||
+		int(binary.BigEndian.Uint16(c[0][16:])) != len(c[0])-14 || sum(c[0][14:34]) != 0xffff || !bytes.Contains(c[0], []byte("Hello")) ||
+		int(binary.BigEndian.Uint16(c[0][38:])) != len(c[0])-34 {
+		t.Fatalf("custom frames: %d, %x", len(c), c[0])
+	}
+	if f := seen[1][0]; sum(f[14:34]) == 0xffff { // a bad IP checksum
+		t.Fatalf("ipcsum: the checksum is right: %x", f[:34])
+	}
+	if f := seen[2][0]; len(f) != 44 { // 48 with the FCS
+		t.Fatalf("runt: %d bytes", len(f))
+	}
+	if f := seen[3][0]; f[14+20+13] != 0x29 || sum(f[14:34]) != 0xffff { // FIN PSH URG, the IP header still right
+		t.Fatalf("xmas: %x", f[:54])
+	}
+	if f, g := seen[4][0], seen[4][1]; bytes.Equal(f[14:34], g[14:34]) || f[13] != 0x00 { // random bytes in the IP header
+		t.Fatalf("fuzz: %x %x", f[:34], g[:34])
+	}
+	if f := seen[5][0]; binary.BigEndian.Uint16(f[12:]) != 0x8100 || binary.BigEndian.Uint16(f[14:])&0xfff != 100 || binary.BigEndian.Uint16(f[18:])&0xfff != 10 {
+		t.Fatalf("qinq: %x", f[:24])
+	}
+}
+
+func TestParseFrameHex(t *testing.T) {
+	for in, want := range map[string]string{
+		"ffffffffffff027477000001":            "ffffffffffff027477000001",
+		"ff:ff:ff:ff:ff:ff 02:74:77:00:00:01": "ffffffffffff027477000001",
+		"0xff, 0xff, 0x08, 0x00":              "ffff0800",
+		"0000   ff ff ff ff ff ff 02 74 77 00 00 01 08 00 45 00   ......twg.....E.\n0010   00 1c   ..": "ffffffffffff02747700000108004500001c",
+	} {
+		b, err := ParseFrameHex(in)
+		if err != nil || hex.EncodeToString(b) != want {
+			t.Fatalf("%q: %x %v", in, b, err)
+		}
+	}
+	if _, err := ParseFrameHex("hello"); err == nil {
+		t.Fatal("no hex")
+	}
+}
+
+// TestTrafficPyEncap: QinQ with MPLS, GRE, VXLAN and IPv6 extension headers on the wire, sizes kept, all counted.
+func TestTrafficPyEncap(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644)
+	var mu sync.Mutex
+	seen := map[int][]byte{} // stream index → its first frame
+	sw := func(in, out int) *net.UDPConn {
+		c, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: in})
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			buf := make([]byte, 65536)
+			for {
+				n, _, err := c.ReadFromUDP(buf)
+				if err != nil {
+					return
+				}
+				f := append([]byte(nil), buf[:n]...)
+				if i := bytes.Index(f, []byte("TWTG")); i >= 0 && len(f) >= i+6 {
+					mu.Lock()
+					if k := int(binary.BigEndian.Uint16(f[i+4:])); seen[k] == nil {
+						seen[k] = f
+					}
+					mu.Unlock()
+				}
+				_, _ = c.WriteToUDP(f, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: out})
+			}
+		}()
+		return c
+	}
+	a, b := sw(43311, 43302), sw(43312, 43301)
+	defer a.Close()
+	defer b.Close()
+	st := func(id string, f map[string]any) map[string]any {
+		x := map[string]any{"id": id, "from": "t1", "to": "t2", "kind": "udp", "size": 256, "pps": 200, "count": 10, "on": true, "toMac": "02:74:77:00:00:02", "srcIp": "10.10.0.1", "dstIp": "10.10.0.2"}
+		for k, v := range f {
+			x[k] = v
+		}
+		return x
+	}
+	cfg := map[string]any{"run": 4, "testers": []map[string]any{
+		{"id": "t1", "mac": "02:74:77:00:00:01", "ip": "10.10.0.1/24", "ip6": "fd00::1/64", "listen": 43301, "send": 43311},
+		{"id": "t2", "mac": "02:74:77:00:00:02", "ip": "10.10.0.2/24", "ip6": "fd00::2/64", "listen": 43302, "send": 43312}},
+		"streams": []map[string]any{
+			st("mpls", map[string]any{"vlan": 10, "encap": map[string]any{"outer": map[string]any{"tpid": 0x88A8, "vlan": 100}, "mpls": []map[string]any{{"label": 1000}, {"label": 1001, "tc": 5}}}}),
+			st("gre", map[string]any{"encap": map[string]any{"gre": map[string]any{"dst": "10.10.0.2", "key": 7}}, "tunArp": "10.10.0.2"}),
+			st("vxlan", map[string]any{"vlan": 10, "encap": map[string]any{"vxlan": map[string]any{"vni": 10010, "dst": "10.10.0.2"}}, "tunArp": "10.10.0.2"}),
+			st("v6", map[string]any{"srcIp": "fd00::1", "dstIp": "fd00::2", "encap": map[string]any{"v6ext": []map[string]any{{"type": "frag"}, {"type": "hbh"}, {"type": "rt", "segs": "fd00::9"}}}}),
+		}}
+	j, _ := json.Marshal(cfg)
+	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir)
+	logf, _ := os.Create(filepath.Join(dir, "log"))
+	cmd.Stdout, cmd.Stderr = logf, logf
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var stt struct{ RX map[string]int }
+	for end := time.Now().Add(10 * time.Second); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+		bs, _ := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+		if json.Unmarshal(bs, &stt) == nil && stt.RX["mpls"] == 10 && stt.RX["gre"] == 10 && stt.RX["vxlan"] == 10 && stt.RX["v6"] == 10 {
+			break
+		}
+	}
+	if stt.RX["mpls"] != 10 || stt.RX["gre"] != 10 || stt.RX["vxlan"] != 10 || stt.RX["v6"] != 10 {
+		lg, _ := os.ReadFile(filepath.Join(dir, "log"))
+		t.Fatalf("counted %v\n%s", stt.RX, lg)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for i, f := range seen {
+		if len(f) != 252 { // 256 with the FCS: the headers take from the payload
+			t.Errorf("stream %d: %d bytes", i, len(f))
+		}
+	}
+	u16 := func(f []byte, o int) int { return int(binary.BigEndian.Uint16(f[o:])) }
+	// QinQ 100, then VLAN 10, then MPLS 1000 and 1001 (bottom of stack, TC 5), then IPv4
+	if f := seen[0]; u16(f, 12) != 0x88A8 || u16(f, 14)&0xfff != 100 || u16(f, 16) != 0x8100 || u16(f, 18)&0xfff != 10 || u16(f, 20) != 0x8847 ||
+		binary.BigEndian.Uint32(f[22:])>>12 != 1000 || binary.BigEndian.Uint32(f[22:])&0x100 != 0 || binary.BigEndian.Uint32(f[26:])>>12 != 1001 ||
+		binary.BigEndian.Uint32(f[26:])&0x100 == 0 || (binary.BigEndian.Uint32(f[26:])>>9)&7 != 5 || f[30] != 0x45 {
+		t.Errorf("mpls: %x", f[:40])
+	}
+	// GRE: an outer IPv4 (protocol 47) to 10.10.0.2, the key bit and key 7, then the inner IPv4
+	if f := seen[1]; u16(f, 12) != 0x0800 || f[23] != 47 || !bytes.Equal(f[30:34], []byte{10, 10, 0, 2}) || u16(f, 34) != 0x2000 || u16(f, 36) != 0x0800 ||
+		binary.BigEndian.Uint32(f[38:]) != 7 || f[42] != 0x45 || !bytes.Equal(f[0:6], []byte{2, 0x74, 0x77, 0, 0, 2}) {
+		t.Errorf("gre: %x", f[:50])
+	}
+	// VXLAN: UDP to 4789, VNI 10010, then the stream's own frame with VLAN 10
+	if f := seen[2]; u16(f, 12) != 0x0800 || f[23] != 17 || u16(f, 36) != 4789 || f[42] != 0x08 || int(binary.BigEndian.Uint32(f[46:])>>8) != 10010 ||
+		!bytes.Equal(f[50:56], []byte{2, 0x74, 0x77, 0, 0, 2}) || u16(f, 62) != 0x8100 || u16(f, 64)&0xfff != 10 {
+		t.Errorf("vxlan: %x", f[:70])
+	}
+	// IPv6: hop-by-hop, routing (type 4, one segment), fragment, then UDP
+	if f := seen[3]; u16(f, 12) != 0x86DD || f[20] != 0 || f[54] != 43 || f[62] != 44 || f[64] != 4 || !bytes.Equal(f[70:72], []byte{0xfd, 0}) || f[86] != 17 {
+		t.Errorf("v6: %x", f[:100])
+	}
+}
+
+// TestTrafficPyVRRPBFD: two test ports as VRRP routers and BFD neighbours: the higher priority is master, a silent
+// master is replaced in about 3 intervals and the BFD neighbour sees a silent one go down within its detect time.
+func TestTrafficPyVRRPBFD(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644)
+	cfg := func(silentV bool, silentB int) {
+		tp := func(id, ip, peer string, prio int, sv bool, sb int, li, se int) map[string]any {
+			return map[string]any{"id": id, "mac": "02:74:77:00:00:0" + id[1:], "ip": ip + "/24", "listen": li, "send": se,
+				"vrrp": map[string]any{"ver": 3, "vrid": 7, "prio": prio, "vip": "10.10.0.254", "interval": 100, "preempt": true, "silent": sv},
+				"bfd":  map[string]any{"peer": peer, "tx": 50, "rx": 50, "mult": 3, "silent": sb}}
+		}
+		c := map[string]any{"run": 0, "testers": []map[string]any{tp("t1", "10.10.0.1", "10.10.0.2", 200, silentV, silentB, 43401, 43402), tp("t2", "10.10.0.2", "10.10.0.1", 100, false, 0, 43402, 43401)}, "streams": []any{}}
+		j, _ := json.Marshal(c)
+		_ = os.WriteFile(filepath.Join(dir, "traffic.json.new"), j, 0o644)
+		_ = os.Rename(filepath.Join(dir, "traffic.json.new"), filepath.Join(dir, "traffic.json"))
+	}
+	cfg(false, 0)
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir)
+	logf, _ := os.Create(filepath.Join(dir, "log"))
+	cmd.Stdout, cmd.Stderr = logf, logf
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var st struct {
+		VRRP map[string]VRRPState `json:"vrrp"`
+		BFD  map[string]BFDState  `json:"bfd"`
+	}
+	wait := func(ok func() bool, what string) {
+		for end := time.Now().Add(8 * time.Second); time.Now().Before(end); time.Sleep(100 * time.Millisecond) {
+			bs, _ := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+			if json.Unmarshal(bs, &st) == nil && ok() {
+				return
+			}
+		}
+		lg, _ := os.ReadFile(filepath.Join(dir, "log"))
+		t.Fatalf("%s: %+v\n%s", what, st, lg)
+	}
+	wait(func() bool {
+		return st.VRRP["t1"].Us && st.VRRP["t2"].State == "backup" && st.VRRP["t2"].Master == "10.10.0.1" && st.BFD["t1"].State == "up" && st.BFD["t2"].State == "up"
+	}, "t1 master, BFD up")
+	time.Sleep(1100 * time.Millisecond) // (a second apart: the file's time changes)
+	cfg(true, 1)
+	wait(func() bool {
+		return st.VRRP["t2"].Us && st.VRRP["t1"].Takeover > 0 && st.BFD["t1"].Measured > 0 && st.BFD["t2"].State == "down"
+	}, "t2 took over, BFD down")
+	if tk := st.VRRP["t1"].Takeover; tk < 250 || tk > 900 { // 3 × 100 ms + skew, read every ~10 ms
+		t.Errorf("VRRP takeover %d ms", tk)
+	}
+	if m := st.BFD["t1"].Measured; m < 60 || m > 600 { // 3 × 50 ms after its last packet
+		t.Errorf("BFD detection %d ms", m)
+	}
+	wait(func() bool {
+		return st.BFD["t1"].State == "up" && st.BFD["t2"].State == "up" && st.BFD["t2"].Flaps == 1
+	}, "BFD back after 5 s")
+}
+
+// TestTrafficPyPEAP: clients log in by PEAP-MSCHAPv2 through the switch to the lab's RADIUS server (the right
+// password in, the wrong one refused), then take IPv6 addresses by DHCPv6.
+func TestTrafficPyPEAP(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "tw-radius.py"), []byte(RadiusPy), 0o644)
+	cert, key, err := RadiusCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Radius{On: true, Port: 45912, Secret: "lab-secret", Users: []RadiusUser{{User: "user[1-2]", Password: "Pass word1", VLAN: "30"}}, Cert: cert, Key: key}
+	rc, _ := json.Marshal(map[string]any{"bind": "127.0.0.1", "port": r.RadiusPort(), "secret": r.Secret, "users": r.Users, "cert": r.Cert, "key": r.Key})
+	_ = os.WriteFile(filepath.Join(dir, "radius.json"), rc, 0o644)
+	cfg := map[string]any{"run": 3, "testers": []map[string]any{{"id": "t1", "mac": "02:74:77:00:00:01", "listen": 44301, "send": 44311,
+		"clients": map[string]any{"n": 3, "mac": "02:63:01:00:00:00", "dhcp6": true, "rate": 100, "dot1x": map[string]any{"user": "user{n}", "password": "Pass word1", "method": "peap"}}}}, "streams": []any{}}
+	j, _ := json.Marshal(cfg)
+	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+	res := filepath.Join(dir, "switch.json")
+	sw := exec.Command("python3", "-I", filepath.Join("testdata", "fakeswitch.py"), "44311", "44301", "45912", r.Secret, res, "8")
+	var swOut strings.Builder
+	sw.Stdout, sw.Stderr = &swOut, &swOut
+	if err := sw.Start(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	var procs []*exec.Cmd
+	for _, a := range [][]string{{filepath.Join(dir, "tw-radius.py"), dir}, {filepath.Join(dir, "tw-traffic.py"), dir}} {
+		c := exec.Command("python3", append([]string{"-I"}, a...)...)
+		lf, _ := os.Create(filepath.Join(dir, filepath.Base(a[0])+".log"))
+		c.Stdout, c.Stderr = lf, lf
+		if err := c.Start(); err != nil {
+			t.Fatal(err)
+		}
+		procs = append(procs, c)
+	}
+	defer func() {
+		for _, c := range procs {
+			_ = c.Process.Kill()
+			_, _ = c.Process.Wait()
+		}
+	}()
+	if err := sw.Wait(); err != nil {
+		t.Fatalf("the switch: %v %s", err, swOut.String())
+	}
+	var got struct {
+		Auth        map[string]string
+		Fail, DHCP6 []string
+	}
+	b, _ := os.ReadFile(res)
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err, string(b))
+	}
+	l1, _ := os.ReadFile(filepath.Join(dir, "tw-radius.py.log"))
+	l2, _ := os.ReadFile(filepath.Join(dir, "tw-traffic.py.log"))
+	if len(got.Auth) != 2 || got.Auth["02:63:01:00:00:00"] != "30" || len(got.Fail) != 1 || got.Fail[0] != "02:63:01:00:00:02" {
+		t.Errorf("PEAP: in %v, refused %v\n%s\n%s", got.Auth, got.Fail, l1, l2)
+	}
+	if len(got.DHCP6) != 2 {
+		t.Errorf("DHCPv6 requests %v", got.DHCP6)
+	}
+	var st struct {
+		Clients map[string]ClientState `json:"clients"`
+	}
+	b, _ = os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+	_ = json.Unmarshal(b, &st)
+	if c := st.Clients["t1"]; c.Auth != 2 || c.Bound6 != 2 || c.Failed != 1 || len(c.List) != 3 || c.List[0][4] != "fd00:5::10" || !strings.Contains(c.List[2][3], "MS-CHAPv2") {
+		t.Errorf("clients %+v", c)
+	}
+	var rs struct {
+		Accept, Reject int
+		Log            [][]any
+	}
+	time.Sleep(1500 * time.Millisecond)
+	b, _ = os.ReadFile(filepath.Join(dir, "radius-stats.json"))
+	if json.Unmarshal(b, &rs) != nil || rs.Accept != 2 || rs.Reject < 1 || len(rs.Log) < 3 || rs.Log[0][3] != "PEAP-MSCHAPv2" || rs.Log[2][4] != "reject" { // (and the switch's own PAP tries)
+		t.Errorf("radius %+v", rs)
+	}
+}
+
+// TestTrafficPySessions: real TCP between two test ports - handshake, a request and a longer answer in several
+// segments, FIN - and connections to a port nobody answers on, refused by a reset.
+func TestTrafficPySessions(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644)
+	sess := func(id string, dport int, extra map[string]any) map[string]any {
+		x := map[string]any{"id": id, "from": "t1", "to": "t2", "kind": "session", "on": true, "toMac": "02:74:77:00:00:02", "srcIp": "10.10.0.1", "dstIp": "10.10.0.2", "seconds": 20,
+			"session": map[string]any{"dport": dport, "count": 40, "concurrent": 10, "rate": 2000, "req": 3000, "resp": 20000}}
+		for k, v := range extra {
+			x[k] = v
+		}
+		return x
+	}
+	cfg := map[string]any{"run": 5, "testers": []map[string]any{
+		{"id": "t1", "mac": "02:74:77:00:00:01", "ip": "10.10.0.1/24", "listen": 43501, "send": 43502},
+		{"id": "t2", "mac": "02:74:77:00:00:02", "ip": "10.10.0.2/24", "listen": 43502, "send": 43501}},
+		"streams": []map[string]any{sess("ok", 8080, nil), sess("closed", 22, nil), sess("web", 80, map[string]any{"session": map[string]any{"dport": 80, "count": 5, "concurrent": 5, "rate": 50, "http": true, "resp": 5000}})}}
+	// the closed port: to t2's address, not to the test port - so t2 answers no session there, and resets
+	delete(cfg["streams"].([]map[string]any)[1], "to")
+	delete(cfg["streams"].([]map[string]any)[1], "toMac")
+	j, _ := json.Marshal(cfg)
+	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+	cmd := exec.Command("python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir)
+	logf, _ := os.Create(filepath.Join(dir, "log"))
+	cmd.Stdout, cmd.Stderr = logf, logf
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	var st struct {
+		Sess map[string]map[string]float64 `json:"sess"`
+		Busy map[string]bool               `json:"busy"`
+	}
+	for end := time.Now().Add(15 * time.Second); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+		bs, _ := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+		if json.Unmarshal(bs, &st) == nil && st.Sess["ok"]["done"] == 40 && st.Sess["closed"]["refused"] > 0 && st.Sess["web"]["done"] == 5 && !st.Busy["closed"] {
+			break
+		}
+	}
+	lg, _ := os.ReadFile(filepath.Join(dir, "log"))
+	ok, cl, web := st.Sess["ok"], st.Sess["closed"], st.Sess["web"]
+	if ok["tried"] != 40 || ok["ok"] != 40 || ok["done"] != 40 || ok["bytes"] != 40*20000 || ok["setupAvg"] <= 0 || ok["peak"] < 2 {
+		t.Errorf("sessions: %v\n%s", ok, lg)
+	}
+	if cl["tried"] != 40 || cl["refused"] != 40 || cl["ok"] != 0 {
+		t.Errorf("to a closed port: %v", cl)
+	}
+	if web["done"] != 5 || web["bytes"] < 5*5000 {
+		t.Errorf("HTTP: %v", web)
+	}
+}
+
+// TestTrafficFast: the fast engine has the ports: it sends the streams from tw-traffic.py's templates (signatures
+// and checksums patched per frame) and counts them; ARP, TCP sessions and round trips still work through it.
+func TestTrafficFast(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "tw-fast")
+	if out, err := exec.Command("go", "build", "-o", bin, "../../cmd/twfast").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, out)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644)
+	st := func(id string, f map[string]any) map[string]any {
+		x := map[string]any{"id": id, "from": "t1", "to": "t2", "kind": "udp", "size": 128, "pps": 20000, "count": 20000, "on": true, "toMac": "02:74:77:00:00:02", "srcIp": "10.10.0.1", "dstIp": "10.10.0.2"}
+		for k, v := range f {
+			x[k] = v
+		}
+		return x
+	}
+	cfg := map[string]any{"run": 7, "fast": true, "testers": []map[string]any{
+		{"id": "t1", "mac": "02:74:77:00:00:01", "ip": "10.10.0.1/24", "listen": 43601, "send": 43602},
+		{"id": "t2", "mac": "02:74:77:00:00:02", "ip": "10.10.0.2/24", "listen": 43602, "send": 43601}},
+		"streams": []map[string]any{
+			st("plain", nil),
+			st("flows", map[string]any{"mods": []map[string]any{{"field": "dport", "mode": "inc", "count": 4}}, "encap": map[string]any{"mpls": []map[string]any{{"label": 100}}}}),
+			st("vx", map[string]any{"encap": map[string]any{"vxlan": map[string]any{"vni": 5000, "dst": "10.10.0.2"}}, "tunArp": "10.10.0.2", "count": 5000, "pps": 5000}),
+			st("rtt", map[string]any{"rtt": true, "count": 2000, "pps": 2000}),
+			{"id": "tcp", "from": "t1", "to": "t2", "kind": "session", "on": true, "toMac": "02:74:77:00:00:02", "srcIp": "10.10.0.1", "dstIp": "10.10.0.2", "seconds": 20,
+				"session": map[string]any{"dport": 80, "count": 20, "concurrent": 5, "rate": 500, "req": 2000, "resp": 8000}},
+		}}
+	j, _ := json.Marshal(cfg)
+	_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+	var procs []*exec.Cmd
+	for _, a := range [][]string{{bin, dir}, {"python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir}} {
+		c := exec.Command(a[0], a[1:]...)
+		lf, _ := os.Create(filepath.Join(dir, filepath.Base(a[len(a)-2])+".log"))
+		c.Stdout, c.Stderr = lf, lf
+		if err := c.Start(); err != nil {
+			t.Fatal(err)
+		}
+		procs = append(procs, c)
+		time.Sleep(200 * time.Millisecond)
+	}
+	defer func() {
+		for _, c := range procs {
+			_ = c.Process.Kill()
+			_, _ = c.Process.Wait()
+		}
+	}()
+	type stats struct {
+		TX, RX map[string]int
+		Lat    map[string][]float64
+		FTX    map[string]map[string]int `json:"ftx"`
+		Sess   map[string]map[string]float64
+		Busy   map[string]bool
+		Err    map[string]string
+	}
+	var fs, ps stats
+	for end := time.Now().Add(15 * time.Second); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+		b1, _ := os.ReadFile(filepath.Join(dir, "fast-stats.json"))
+		b2, _ := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+		_ = json.Unmarshal(b1, &fs)
+		_ = json.Unmarshal(b2, &ps)
+		if fs.RX["plain"] == 20000 && fs.RX["flows"] == 20000 && fs.RX["vx"] == 5000 && fs.Lat["rtt"] != nil && fs.Lat["rtt"][2] == 2000 && ps.Sess["tcp"]["done"] == 20 {
+			break
+		}
+	}
+	lg1, _ := os.ReadFile(filepath.Join(dir, "tw-fast.log"))
+	lg2, _ := os.ReadFile(filepath.Join(dir, "tw-traffic.py.log"))
+	if fs.TX["plain"] != 20000 || fs.RX["plain"] != 20000 || fs.RX["flows"] != 20000 || fs.RX["vx"] != 5000 || len(fs.FTX["flows"]) != 4 || fs.Lat["rtt"] == nil || fs.Lat["rtt"][2] != 2000 {
+		t.Errorf("fast: tx %v rx %v ftx %v lat %v err %v\n%s\n%s", fs.TX, fs.RX, fs.FTX, fs.Lat, fs.Err, lg1, lg2)
+	}
+	if ps.Sess["tcp"]["done"] != 20 || ps.Sess["tcp"]["bytes"] != 20*8000 {
+		t.Errorf("sessions through the fast engine: %v %v", ps.Sess, ps.Err)
+	}
+	if len(ps.TX) != 0 {
+		t.Errorf("tw-traffic.py sent stream frames itself: %v", ps.TX)
+	}
+	// the patched frames' UDP checksums are right: the plain one, and VXLAN's outer and inner ones
+	var got struct {
+		FGot map[string]string `json:"fgot"`
+	}
+	b1, _ := os.ReadFile(filepath.Join(dir, "fast-stats.json"))
+	_ = json.Unmarshal(b1, &got)
+	udpOK := func(f []byte, ip int) bool {
+		ihl := int(f[ip]&15) * 4
+		u := f[ip+ihl : ip+ihl+int(binary.BigEndian.Uint16(f[ip+ihl+4:]))]
+		var s uint32
+		add := func(b []byte) {
+			for i := 0; i+1 < len(b); i += 2 {
+				s += uint32(b[i])<<8 | uint32(b[i+1])
+			}
+			if len(b)%2 == 1 {
+				s += uint32(b[len(b)-1]) << 8
+			}
+		}
+		add(f[ip+12 : ip+20])
+		s += 17 + uint32(len(u))
+		add(u)
+		for s>>16 != 0 {
+			s = s&0xffff + s>>16
+		}
+		return s == 0xffff
+	}
+	for _, k := range []string{"plain", "vx"} {
+		_, h, _ := strings.Cut(got.FGot[k], ":")
+		f, _ := hex.DecodeString(h)
+		if len(f) < 60 || !udpOK(f, 14) || k == "vx" && !udpOK(f, 14+20+8+8+14) {
+			t.Errorf("%s: a checksum is wrong: %x", k, f)
+		}
+	}
+}
+
+// TestTrafficBench measures the engines (TW_BENCH=1): two test ports wired to each other, one stream as fast as it
+// goes, for 64, 512 and 1518 bytes; the frames a second sent and received and the loss.
+func TestTrafficBench(t *testing.T) {
+	if os.Getenv("TW_BENCH") == "" {
+		t.Skip("TW_BENCH=1 to run")
+	}
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "tw-fast")
+	if out, err := exec.Command("go", "build", "-ldflags", "-s -w", "-o", bin, "../../cmd/twfast").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v %s", err, out)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644)
+	run := 10
+	testers := []map[string]any{ // between two QEMU-style UDP sockets, or (TW_BENCH_NIC=1, root) two network cards: a veth pair
+		{"id": "t1", "mac": "02:74:77:00:00:01", "ip": "10.10.0.1/24", "listen": 43701, "send": 43702},
+		{"id": "t2", "mac": "02:74:77:00:00:02", "ip": "10.10.0.2/24", "listen": 43702, "send": 43701}}
+	if os.Getenv("TW_BENCH_NIC") != "" {
+		if out, err := exec.Command("ip", "link", "add", "twb0", "type", "veth", "peer", "name", "twb1").CombinedOutput(); err != nil {
+			t.Fatalf("veth: %s", out)
+		}
+		defer exec.Command("ip", "link", "del", "twb0").Run()
+		for i, n := range []string{"twb0", "twb1"} {
+			_ = exec.Command("ip", "link", "set", n, "up").Run()
+			testers[i]["nic"] = n
+			delete(testers[i], "listen")
+			delete(testers[i], "send")
+		}
+	}
+	for _, fast := range []bool{false, true} {
+		for _, size := range []int{64, 512, 1518} {
+			run++
+			pps, secs := 150000, 6
+			if fast {
+				pps = 2000000
+			}
+			for _, r := range strings.Split(os.Getenv("TW_BENCH_RATES"), ",") { // size:pps for the fast engine
+				if k, v, ok := strings.Cut(r, ":"); ok && fast && k == strconv.Itoa(size) {
+					pps, _ = strconv.Atoi(v)
+				}
+			}
+			cfg := map[string]any{"run": run, "fast": fast, "testers": testers,
+				"streams": []map[string]any{{"id": "s", "from": "t1", "to": "t2", "kind": "udp", "size": size, "pps": pps, "seconds": secs, "on": true, "toMac": "02:74:77:00:00:02", "srcIp": "10.10.0.1", "dstIp": "10.10.0.2"}}}
+			j, _ := json.Marshal(cfg)
+			_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+			var procs []*exec.Cmd
+			args := [][]string{{"python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir}}
+			if fast {
+				args = append([][]string{{bin, dir}}, args...)
+			}
+			for _, a := range args {
+				c := exec.Command(a[0], a[1:]...)
+				_ = c.Start()
+				procs = append(procs, c)
+				time.Sleep(300 * time.Millisecond)
+			}
+			stf := "traffic-stats.json"
+			if fast {
+				stf = "fast-stats.json"
+			}
+			var st struct {
+				TX, RX map[string]int
+				Busy   map[string]bool
+			}
+			t0 := time.Now()
+			var tEnd time.Time
+			for time.Since(t0) < 60*time.Second {
+				time.Sleep(250 * time.Millisecond)
+				b, _ := os.ReadFile(filepath.Join(dir, stf))
+				if json.Unmarshal(b, &st) == nil && st.TX["s"] > 0 && !st.Busy["s"] {
+					if tEnd.IsZero() {
+						tEnd = time.Now()
+					}
+					if time.Since(tEnd) > time.Second {
+						break
+					}
+				}
+			}
+			el := tEnd.Sub(t0).Seconds() - 0.3
+			for _, c := range procs {
+				_ = c.Process.Kill()
+				_, _ = c.Process.Wait()
+			}
+			_ = os.Remove(filepath.Join(dir, stf))
+			tx, rx := st.TX["s"], st.RX["s"]
+			t.Logf("BENCH fast=%v size=%d: sent %d, received %d (%.2f %% lost) in about %.1f s: %.0f frames/s, %.0f Mbit/s", fast, size, tx, rx, 100*float64(tx-rx)/float64(max(tx, 1)), el, float64(rx)/el, float64(rx)*float64(size+20)*8/el/1e6)
+		}
+	}
+}
+
+// TestTrafficNIC: test ports on network cards (a veth pair here, as root): frames and TCP sessions go over real
+// interfaces (raw sockets), with the built-in engine and with the fast one.
+func TestTrafficNIC(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil || os.Geteuid() != 0 {
+		t.Skip("needs python3 and root")
+	}
+	if out, err := exec.Command("ip", "link", "add", "twnic0", "type", "veth", "peer", "name", "twnic1").CombinedOutput(); err != nil {
+		t.Skipf("no veth: %s", out)
+	}
+	defer exec.Command("ip", "link", "del", "twnic0").Run()
+	for _, n := range []string{"twnic0", "twnic1"} {
+		_ = exec.Command("ip", "link", "set", n, "up").Run()
+	}
+	for _, fast := range []bool{false, true} {
+		t.Run(map[bool]string{false: "builtin", true: "fast"}[fast], func(t *testing.T) {
+			dir := t.TempDir()
+			_ = os.WriteFile(filepath.Join(dir, "tw-traffic.py"), []byte(TrafficPy), 0o644)
+			cfg := map[string]any{"run": 9, "fast": fast, "testers": []map[string]any{
+				{"id": "t1", "mac": "02:74:77:00:00:01", "ip": "10.10.0.1/24", "nic": "twnic0"},
+				{"id": "t2", "mac": "02:74:77:00:00:02", "ip": "10.10.0.2/24", "nic": "twnic1"}},
+				"streams": []map[string]any{
+					{"id": "u", "from": "t1", "to": "t2", "kind": "udp", "size": 256, "pps": 5000, "count": 5000, "vlan": 10, "on": true, "toMac": "02:74:77:00:00:02", "srcIp": "10.10.0.1", "dstIp": "10.10.0.2"},
+					{"id": "s", "from": "t2", "to": "t1", "kind": "session", "on": true, "toMac": "02:74:77:00:00:01", "srcIp": "10.10.0.2", "dstIp": "10.10.0.1", "seconds": 20,
+						"session": map[string]any{"dport": 80, "count": 20, "concurrent": 5, "rate": 200, "req": 1000, "resp": 4000}}}}
+			j, _ := json.Marshal(cfg)
+			_ = os.WriteFile(filepath.Join(dir, "traffic.json"), j, 0o644)
+			cmds := [][]string{{"python3", "-I", filepath.Join(dir, "tw-traffic.py"), dir}}
+			if fast {
+				bin := filepath.Join(dir, "tw-fast")
+				if out, err := exec.Command("go", "build", "-o", bin, "../../cmd/twfast").CombinedOutput(); err != nil {
+					t.Fatalf("build: %v %s", err, out)
+				}
+				cmds = append([][]string{{bin, dir}}, cmds...)
+			}
+			var procs []*exec.Cmd
+			for _, a := range cmds {
+				c := exec.Command(a[0], a[1:]...)
+				lf, _ := os.Create(filepath.Join(dir, filepath.Base(a[0])+".log"))
+				c.Stdout, c.Stderr = lf, lf
+				if err := c.Start(); err != nil {
+					t.Fatal(err)
+				}
+				procs = append(procs, c)
+				time.Sleep(200 * time.Millisecond)
+			}
+			defer func() {
+				for _, c := range procs {
+					_ = c.Process.Kill()
+					_, _ = c.Process.Wait()
+				}
+			}()
+			type stats struct {
+				TX, RX map[string]int
+				Sess   map[string]map[string]float64 `json:"sess"`
+			}
+			var py, fa stats
+			rx := func() int { return py.RX["u"] + fa.RX["u"] }
+			for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(250 * time.Millisecond) {
+				b, _ := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
+				_ = json.Unmarshal(b, &py)
+				if fast {
+					b, _ = os.ReadFile(filepath.Join(dir, "fast-stats.json"))
+					_ = json.Unmarshal(b, &fa)
+				}
+				if rx() == 5000 && py.Sess["s"]["done"] == 20 {
+					break
+				}
+			}
+			lg, _ := os.ReadFile(filepath.Join(dir, "python3.log"))
+			if rx() != 5000 || py.Sess["s"]["ok"] != 20 || py.Sess["s"]["done"] != 20 {
+				t.Fatalf("over the cards: %d of 5000 frames, sessions %v\n%s", rx(), py.Sess["s"], lg)
+			}
+		})
 	}
 }

@@ -1,7 +1,9 @@
 import { Component, input, output } from '@angular/core';
 import { tr } from '../core/i18n';
+import type { QuickKey } from './traffic-quick';
 import { EmuTester, EmuTrafficView } from '../core/models';
 import { ChartSeries, TrafficChart } from './traffic-chart';
+import { ReportKind, ReportMenu } from './report-menu';
 
 /** The Traffic page's views. */
 export type TrafficView = 'streams' | 'tests' | 'stats';
@@ -15,20 +17,25 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
  */
 @Component({
   selector: 'app-traffic-page',
-  imports: [TrafficChart],
+  imports: [TrafficChart, ReportMenu],
   template: `
     <section class="tpg" [attr.aria-label]="tr('Traffic')">
       <header class="tph">
         <div class="tpt"><h2>{{ tr('Traffic generator') }}</h2><span class="muted small">{{ tr('Test ports send and count frames on switch ports: streams, RFC 2544 tests and their statistics') }}</span></div>
         <span class="seg2 tv"><a [class.on]="view() === 'streams'" (click)="viewChange.emit('streams')">{{ tr('Streams') }}</a><a [class.on]="view() === 'tests'" (click)="viewChange.emit('tests')">{{ tr('Tests') }}</a><a [class.on]="view() === 'stats'" (click)="viewChange.emit('stats')" [title]="tr('Every test port’s counters at once, its streams and their flows')">{{ tr('Statistics') }}</a></span>
         <span class="sp"></span>
+        <div class="tpa">
         @if (view() === 'tests') { <button type="button" (click)="newTest.emit()">＋ {{ tr('Test') }}</button> }
         <button type="button" (click)="radius.emit()" [title]="tr('The lab\\'s RADIUS server: users, MAC logins and the logins it answered, for 802.1X on the switches')">{{ tr('RADIUS…') }}</button>
+        <button type="button" (click)="engines.emit()" [title]="tr('What sends the frames: the built-in or the fast engine on the KVM hosts, or TRex servers for line rate on real hardware')">{{ tr('Engines…') }}</button>
         <button type="button" (click)="library.emit()" [title]="tr('Ready tests: unicast, IMIX, QoS classes, MAC table fill, round trip, RFC 2544 and 2889 - and yours')">{{ tr('Library…') }}</button>
         <button type="button" (click)="newTester.emit()">＋ {{ tr('Test Port') }}</button>
-        @if (view() !== 'tests') { <button type="button" (click)="newStream.emit()" [disabled]="(traf()?.testers?.length ?? 0) < 1">＋ {{ tr('Stream') }}</button>
+        @if (view() !== 'tests') { <button type="button" (click)="quick.emit('l2')" [disabled]="(traf()?.testers?.length ?? 0) < 1" [title]="tr('A stream in one VLAN: choose the test ports; the rest is filled in')">＋ {{ tr('L2 Stream') }}</button>
+          <button type="button" (click)="quick.emit('l3')" [disabled]="(traf()?.testers?.length ?? 0) < 1" [title]="tr('A routed stream between two subnets: addresses and gateways are filled in')">＋ {{ tr('L3 Stream') }}</button>
+          <button type="button" (click)="quick.emit('latency')" [disabled]="(traf()?.testers?.length ?? 0) < 1" [title]="tr('Latency, jitter, loss, throughput, bad packets, fuzz, VLAN isolation, MTU and 802.1X clients - prefilled')">{{ tr('Quick Tests…') }}</button>
           @if (traf()?.running) { <button type="button" (click)="stop.emit()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="primary" (click)="start.emit()" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
-          <button type="button" (click)="report.emit()" [disabled]="!traf()?.results?.length">{{ tr('Report…') }}</button> }
+          <app-report-menu [disabled]="!traf()?.results?.length" (pick)="report.emit($event)" /> }
+        </div>
       </header>
       <div class="kpis">@for (k of kpis(); track k.label) { <div class="kpi" [class.warn]="k.warn" [class.good]="k.good"><span>{{ k.label }}</span><b>{{ k.value }}</b><small>{{ k.sub }}</small></div> }</div>
       <div class="tpb" [class.tests]="view() !== 'streams'">
@@ -43,8 +50,10 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
                 @if (t.lag) { <div class="small" [class.up]="t.lacpUp?.startsWith('up')" [class.dn]="!t.lacpUp?.startsWith('up')" [title]="t.lacpUp || ''">LAG {{ t.lag }} · {{ t.lacpUp?.startsWith('up') ? tr('up') : tr('not up') }}</div> }
                 @if (t.neighbor) { <div class="small muted" [title]="tr('What the switch says on LLDP')">⇆ {{ t.neighbor }}</div> }
                 @if (t.clients?.n) { @let cs = t.clientState;
-                  <div class="small" [class.up]="cs && cs.failed === 0 && (t.clients?.dot1x ? cs.auth : cs.bound) === cs.n" [class.dn]="!!cs?.failed" [title]="tr('Clients behind this test port')">{{ tr('{0} clients', t.clients!.n) }}@if (cs) { · @if (t.clients?.dot1x) { {{ tr('{0} in', cs.auth) }} }@else if (t.clients?.dhcp) { {{ tr('{0} with an address', cs.bound) }} }@if (cs.failed) { · {{ tr('{0} refused', cs.failed) }} } }</div> }
-                @if (t.stp?.mode) { <div class="small" [class.up]="t.stpState?.rootIsUs" [title]="tr('Spanning tree')">{{ t.stp!.mode.toUpperCase() }} · {{ t.stpState?.rootIsUs ? tr('root') : t.stpState?.got ? tr('not root') : tr('no BPDU yet') }}</div> }</div>
+                  <div class="small" [class.up]="cs && cs.failed === 0 && (t.clients?.dot1x ? cs.auth : cs.bound) === cs.n" [class.dn]="!!cs?.failed" [title]="tr('Clients behind this test port')">{{ tr('{0} clients', t.clients!.n) }}@if (cs) { · @if (t.clients?.dot1x) { {{ tr('{0} in', cs.auth) }} }@else if (t.clients?.dhcp) { {{ tr('{0} with an address', cs.bound) }} }@else if (t.clients?.dhcp6) { {{ tr('{0} with IPv6', cs.bound6 ?? 0) }} }@if (cs.failed) { · {{ tr('{0} refused', cs.failed) }} } }</div> }
+                @if (t.stp?.mode) { <div class="small" [class.up]="t.stpState?.rootIsUs" [title]="tr('Spanning tree')">{{ t.stp!.mode.toUpperCase() }} · {{ t.stpState?.rootIsUs ? tr('root') : t.stpState?.got ? tr('not root') : tr('no BPDU yet') }}</div> }
+                @if (t.vrrp) { <div class="small" [class.up]="!!t.vrrpState?.us" [title]="tr('Gateway redundancy (VRRP)')">VRRP · {{ t.vrrpState?.state === 'silent' ? tr('silent') : t.vrrpState?.us ? tr('master') : t.vrrpState?.master ? tr('backup') : tr('no master heard yet') }}</div> }
+                @if (t.bfd) { <div class="small" [class.up]="t.bfdState?.state === 'up'" [class.dn]="t.bfdState?.state === 'down'" [title]="tr('Failure detection (BFD)')">BFD · {{ t.bfdState ? tr(t.bfdState.state) : tr('not up yet') }}</div> }</div>
             } @empty { <p class="muted small tpe">{{ tr('No test port yet: ＋ Test Port, or right-click a switch on the canvas → Add Test Port.') }}</p> }
           </aside>
         }
@@ -64,6 +73,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
     :host { display: contents; }
     .tpg {
       position: absolute; inset: 0; z-index: 25; background: var(--bg); overflow: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+    .tpa { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; } /* the buttons stay together at the right, also when they wrap */
     .tph { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; h2 { margin: 0; font-size: 17px; } .tpt { display: flex; flex-direction: column; gap: 2px; } .sp { flex: 1; } }
     /* one 7-column grid for both rows: the KPI cards one column each; test ports one, each chart two */
     .tpg { container-type: inline-size; }
@@ -100,10 +110,12 @@ export class TrafficPage {
   readonly newTest = output<void>();
   readonly newTester = output<void>();
   readonly newStream = output<void>();
+  readonly quick = output<QuickKey>();
   readonly start = output<void>();
   readonly stop = output<void>();
-  readonly report = output<void>();
+  readonly report = output<ReportKind>();
   readonly library = output<void>();
+  readonly engines = output<void>();
   readonly radius = output<void>();
   readonly editTester = output<EmuTester>();
   readonly removeTester = output<EmuTester>();

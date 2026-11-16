@@ -104,7 +104,7 @@ func TestTrafficTemplatesAndPcap(t *testing.T) {
 	if v, err = a.EmuNoteRemove(n.ID); err != nil || len(v.Notes) != 0 {
 		t.Fatalf("remove: %v %+v", err, v.Notes)
 	}
-	cfgB, _ := emuLab.f.Lab.TrafficConfig(func(emu.VM) bool { return true }, 1, map[string]bool{})
+	cfgB, _ := emuLab.f.Lab.TrafficConfig(func(emu.VM) bool { return true }, "", 1, map[string]bool{})
 	if !strings.Contains(string(cfgB), `"pcapId":"`+s.PcapID+`"`) || !strings.Contains(string(cfgB), `"toMac":"02:74:77:00:00:02"`) {
 		t.Fatalf("config: %s", cfgB)
 	}

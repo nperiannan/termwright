@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref_type == 'branch' }}
 
 env:
-  APP_VERSION: 0.38.0
+  APP_VERSION: 0.39.0
 
 jobs:
   test:
@@ -102,6 +102,12 @@ jobs:
         run: |
           if [ "$GITHUB_REF_TYPE" = tag ]; then V="${GITHUB_REF_NAME#v}"; else V="${APP_VERSION}~git${GITHUB_SHA::7}"; fi
           echo "VERSION=$V" >> "$GITHUB_ENV"
+      - name: Fast traffic engine
+        shell: bash
+        run: |
+          # embedded in the app: copied to the KVM hosts that use it
+          for a in amd64 arm64; do GOOS=linux GOARCH=$a CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o internal/emu/fastbin/bin/tw-fast-$a ./cmd/twfast; done
+          ls -l internal/emu/fastbin/bin
       - name: Build
         shell: bash
         run: |

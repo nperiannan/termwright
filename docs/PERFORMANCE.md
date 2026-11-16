@@ -33,6 +33,23 @@ A team of 200 members, 5,000 inventory devices and a year of usage (584,000 reco
 
 Requests may be up to 16 MB (a restored backup up to 256 MB); before 0.33 every request was limited to 1 MB, so restoring the backup of a busy team failed.
 
+## Traffic generator
+
+Measured 2026-11-16 on a cloud VM with two 2.3 GHz server vCPUs, Linux 6.18 and Python 3.13. Two test ports wired to each other, no switch between them, one UDP stream for 6 seconds; the sending and the receiving test port run in the same engine on the same two vCPUs. The rates are the highest each engine kept with at most 0.01 % loss (the fast engine, 64 bytes over sockets: 0.12 %); Mbit/s count the frame with its FCS, without preamble and gap.
+
+| Frame size | Built-in engine, sockets | Built-in engine, network cards | Fast engine, sockets | Fast engine, network cards |
+|---|---|---|---|---|
+| 64 bytes | 109,502 frames/s, 74 Mbit/s | 103,203 frames/s, 69 Mbit/s | 472,016 frames/s, 317 Mbit/s | 419,965 frames/s, 282 Mbit/s |
+| 512 bytes | 82,003 frames/s, 349 Mbit/s | 80,161 frames/s, 341 Mbit/s | 315,119 frames/s, 1,341 Mbit/s | 315,084 frames/s, 1,341 Mbit/s |
+| 1518 bytes | 58,106 frames/s, 715 Mbit/s | 61,087 frames/s, 752 Mbit/s | 210,035 frames/s, 2,584 Mbit/s | 210,032 frames/s, 2,584 Mbit/s |
+
+- *Sockets*: the QEMU socket networking test ports on emulated switches use (a UDP socket pair). *Network cards*: a veth pair, as a host's spare network card cabled to a real switch is used (raw AF_PACKET sockets).
+- Asked for more over network cards, the fast engine reached 628,661 frames/s of 64 bytes (0.22 % lost), 444,606 of 512 bytes (5.8 % lost) and 264,227 of 1518 bytes, 3.25 Gbit/s (21 % lost).
+- The built-in engine sends every frame it is asked for, only later than asked when it is too slow; the fast engine keeps the rate and counts what did not arrive.
+- TCP sessions between two test ports of the built-in engine: a setup time (SYN to SYN-ACK) of about 1.2 ms.
+- An emulated switch is slower than either engine: a switch VM with one vCPU and rtl8139 cards forwarded about 3,500 frames/s of 64 bytes and 2,700 of 1518 bytes without loss (RFC 2544 throughput).
+- TRex servers send at the line rate of their DPDK cards; Termwright only drives them, so their speed is TRex's own.
+
 ## Running the tests
 
 ```
@@ -40,6 +57,10 @@ TW_PERF=20000 go test -run TestPerfSessions -v .
 TW_PERF_MB=64 TW_PERF_TABS=1 go test -run TestPerfTerminalOutput -v ./internal/term/
 TW_PERF_MB=8 TW_PERF_TABS=20 go test -run TestPerfTerminalOutput -v ./internal/term/
 TW_PERF_TEAM=1 go test -run TestPerfTeam -v ./internal/team/
+TW_BENCH=1 go test -run TestTrafficBench -v ./internal/emu/
+TW_BENCH=1 TW_BENCH_NIC=1 TW_BENCH_RATES=64:420000,512:315000,1518:210000 go test -run TestTrafficBench -v ./internal/emu/   # as root: a veth pair
 ```
+
+`TW_BENCH_RATES` sets the fast engine's rate per frame size (frames/s); without it, it is asked for 2,000,000 and shows how much arrives.
 
 The window's numbers come from the Angular build with a simulated backend in a headless browser.

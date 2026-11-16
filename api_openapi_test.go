@@ -245,19 +245,26 @@ func (g *schemaGen) object(t reflect.Type) om {
 }
 
 var oasTypeDocs = map[string]string{
-	"Lab":          "The emulated lab as Termwright shows it: its switches, cables, KVM hosts, images and Events. The open topology only; topologies in the background are not in it.",
-	"Device":       "A switch (VM) of the lab and its state.",
-	"Cable":        "A cable between two switch ports, with the LAGs on its ends.",
-	"Event":        "A line of the lab's Events log.",
-	"TrafficView":  "The traffic generator: its test ports, streams and their results now (live while a run goes on).",
-	"TestPort":     "A test port: a sender and counter on a free switch port (no VM). It answers ARP, neighbour solicitations and ping at its addresses.",
-	"Stream":       "Frames from one test port to another, to every other one (broadcast), to an address or to a multicast group.",
-	"FieldChange":  "A field of a stream's frames that changes from frame to frame: its value plus 0, step, 2·step… (count values, then again), or one of them at random.",
-	"StreamResult": "A stream's counters, added up over every KVM host, and its verdict.",
-	"Tool":         "A lab tool: the same tools the Claude connector and the in-app AI agent use.",
-	"TrafficTest":  "A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts); or iperf3 between two host VMs of the lab.",
-	"TestRun":      "A run of a test: its progress while it runs, then its results.",
-	"TestRow":      "A line of a test run's results: per frame size and direction (and load, for frame-loss).",
+	"Lab":           "The emulated lab as Termwright shows it: its switches, cables, KVM hosts, images and Events. The open topology only; topologies in the background are not in it.",
+	"Device":        "A switch (VM) of the lab and its state.",
+	"Cable":         "A cable between two switch ports, with the LAGs on its ends.",
+	"Event":         "A line of the lab's Events log.",
+	"TrafficView":   "The traffic generator: its test ports, streams and their results now (live while a run goes on).",
+	"TestPort":      "A test port: a sender and counter on a free switch port (no VM). It answers ARP, neighbour solicitations and ping at its addresses.",
+	"Stream":        "Frames from one test port to another, to every other one (broadcast), to an address or to a multicast group.",
+	"FieldChange":   "A field of a stream's frames that changes from frame to frame: its value plus 0, step, 2·step… (count values, then again), or one of them at random.",
+	"StreamResult":  "A stream's counters, added up over every KVM host, and its verdict.",
+	"Engines":       "What sends the streams: the KVM hosts' engine (built in or fast) and the TRex servers whose ports are test ports.",
+	"EngineHost":    "A KVM host's traffic engine.",
+	"Trex":          "A TRex server (stateless mode) and what Termwright last found there: its version and ports.",
+	"TrexPort":      "A TRex port; one that is used is a test port.",
+	"HostNIC":       "A network card of a KVM host, and whether it can be a test port (a spare card with no address, not in a bridge).",
+	"SessionResult": "A session stream's TCP sessions: tried, connected, refused, timed out, their setup time and rate.",
+	"EmuSession":    "A session stream's TCP sessions: how many, how fast, what they send and what should happen to them.",
+	"Tool":          "A lab tool: the same tools the Claude connector and the in-app AI agent use.",
+	"TrafficTest":   "A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts); or iperf3 between two host VMs of the lab.",
+	"TestRun":       "A run of a test: its progress while it runs, then its results.",
+	"TestRow":       "A line of a test run's results: per frame size and direction (and load, for frame-loss).",
 }
 
 func TestOpenAPIDoc(t *testing.T) {
@@ -300,6 +307,7 @@ func TestOpenAPIDoc(t *testing.T) {
 		for _, k := range []string{"ports", "streams", "tests", "runs"} {
 			p = strings.Replace(p, "/"+k+"/{id}", "/"+k+"/{"+strings.TrimSuffix(k, "s")+"}", 1)
 		}
+		p = strings.Replace(p, "/trex/{id}", "/trex/{server}", 1)
 		for _, m := range ms {
 			if d.Paths[p][strings.ToLower(m)] == nil {
 				t.Fatalf("%s %s is not in the document", m, p)
@@ -308,7 +316,8 @@ func TestOpenAPIDoc(t *testing.T) {
 	}
 	// every field of what the traffic API sends and takes is described
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
-	for _, ty := range []reflect.Type{reflect.TypeOf(emu.Stream{}), reflect.TypeOf(emu.Tester{}), reflect.TypeOf(emu.Mod{}), reflect.TypeOf(EmuStreamResult{}), reflect.TypeOf(EmuTrafficView{}), reflect.TypeOf(emu.TrafficTest{}), reflect.TypeOf(EmuTestRun{}), reflect.TypeOf(EmuTestRow{})} {
+	for _, ty := range []reflect.Type{reflect.TypeOf(emu.Stream{}), reflect.TypeOf(emu.Tester{}), reflect.TypeOf(emu.Mod{}), reflect.TypeOf(EmuStreamResult{}), reflect.TypeOf(EmuTrafficView{}), reflect.TypeOf(emu.TrafficTest{}), reflect.TypeOf(EmuTestRun{}), reflect.TypeOf(EmuTestRow{}),
+		reflect.TypeOf(EmuEngines{}), reflect.TypeOf(EmuEngineHost{}), reflect.TypeOf(EmuTrex{}), reflect.TypeOf(EmuTrexPort{}), reflect.TypeOf(EmuHostNIC{}), reflect.TypeOf(EmuSessionResult{}), reflect.TypeOf(emu.Session{})} {
 		tn := strings.TrimPrefix(ty.String(), "main.")
 		for i := 0; i < ty.NumField(); i++ {
 			name := strings.Split(ty.Field(i).Tag.Get("json"), ",")[0]
@@ -354,7 +363,7 @@ func op(id, tag, summary, desc string, extra ...kv) om {
 
 func openAPIDoc(t *testing.T) om {
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
-	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}, emu.TrafficTest{}, EmuTestRun{}} {
+	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}, emu.TrafficTest{}, EmuTestRun{}, EmuEngines{}, EmuHostNIC{}} {
 		g.schema(reflect.TypeOf(ty))
 	}
 	std := append([]kv{}, errs("401", "403", "405")...)
@@ -365,9 +374,14 @@ func openAPIDoc(t *testing.T) om {
 		{"multicast", ex("Multicast to the test ports that joined 239.1.1.1", om{{"name", "mcast"}, {"from", "Test port 1"}, {"kind", "udp"}, {"dstIp", "239.1.1.1"}, {"size", 512}, {"pps", 500}, {"seconds", 20}, {"maxLoss", 0}})},
 		{"ipv6", ex("IPv6 ping between two test ports", om{{"name", "v6-ping"}, {"from", "Test port 1"}, {"to", "Test port 2"}, {"kind", "icmp"}, {"dstIp", "fd00::2"}, {"size", 100}, {"pps", 100}, {"count", 500}, {"maxLoss", 0}})},
 	}
-	portSchema := om{{"type", "object"}, {"required", []string{"switch", "port"}}, {"properties", om{
+	portSchema := om{{"type", "object"}, {"description", "Where the test port goes: switch and port (a switch of the lab), host and nic (a KVM host's spare network card cabled to a real device), or trex and trexPort (a TRex server's port)."}, {"properties", om{
 		{"switch", om{{"type", "string"}, {"description", "The switch's name (or id)."}}},
 		{"port", om{{"type", "string"}, {"description", "A free data port, named as the switch names it (1, 1/5, …)."}}},
+		{"host", om{{"type", "string"}, {"description", "With nic: the KVM host (its name; default the lab's host)."}}},
+		{"nic", om{{"type", "string"}, {"description", "A spare network card of the host (enp3s0; GET /lab/traffic/nics lists them). The generator needs root there, or passwordless sudo."}}},
+		{"trex", om{{"type", "string"}, {"description", "A TRex server (its name or id; POST /lab/traffic/trex adds one)."}}},
+		{"trexPort", om{{"type", "integer"}, {"minimum", 0}, {"description", "With trex: the port's number on the server."}}},
+		{"cabled", om{{"type", "string"}, {"description", "With nic or trex: what the port is cabled to (core-1 port 1/1), for the screens and the report's topology."}}},
 		{"name", om{{"type", "string"}, {"description", "Its name (default: Test port n)."}}},
 		{"ip", om{{"type", "string"}, {"description", "IPv4 address with prefix (/24 when it has none), or dhcp: it takes one from a DHCP server (the lease shows in TestPort.lease)."}}},
 		{"ip6", om{{"type", "string"}, {"description", "IPv6 address with prefix (/64 when it has none), or slaac: it takes one from router advertisements."}}},
@@ -378,7 +392,10 @@ func openAPIDoc(t *testing.T) om {
 	}}}
 	portPatch := om{{"type", "object"}, {"minProperties", 1}, {"additionalProperties", false}, {"description", "Only the fields given change."}, {"properties", om{
 		{"name", om{{"type", "string"}}}, {"ip", om{{"type", "string"}}}, {"ip6", om{{"type", "string"}}}, {"gateway", om{{"type", "string"}}},
-		{"vlan", om{{"type", "integer"}, {"minimum", 0}, {"maximum", 4094}}}, {"groups", om{{"type", "array"}, {"items", om{{"type", "string"}}}}}, {"lldp", om{{"type", "boolean"}}}}}}
+		{"vlan", om{{"type", "integer"}, {"minimum", 0}, {"maximum", 4094}}}, {"groups", om{{"type", "array"}, {"items", om{{"type", "string"}}}}}, {"lldp", om{{"type", "boolean"}}},
+		{"clients", om{{"$ref", "#/components/schemas/EmuClients"}}}, {"stp", om{{"$ref", "#/components/schemas/EmuSTP"}}},
+		{"vrrp", om{{"$ref", "#/components/schemas/EmuVRRP"}}}, {"bfd", om{{"$ref", "#/components/schemas/EmuBFD"}}},
+		{"silentBfd", om{{"type", "boolean"}, {"description", "The test port stops sending BFD for 5 s; bfdState.measured is how fast the switch saw it."}}}}}}
 	testParam := om{{"name", "test"}, {"in", "path"}, {"required", true}, {"description", "The test's name or id."}, {"schema", om{{"type", "string"}}}}
 	runParam := om{{"name", "run"}, {"in", "path"}, {"required", true}, {"description", "The run's id (from runTest or listRuns), or latest."}, {"schema", om{{"type", "string"}}}}
 	testEx := om{
@@ -404,12 +421,14 @@ func openAPIDoc(t *testing.T) om {
 			kv{"responses", append(om{{"200", om{{"description", "The screen."}, {"content", om{{"image/png", om{{"schema", om{{"type", "string"}, {"format", "binary"}}}}}}}}}}, append(errs("409"), std...)...)})}}},
 		{"/lab/traffic", om{{"get", op("getTraffic", "Traffic", "Test ports, streams and results", "The traffic generator now. While a run goes on, the results are live (counters, rates and the rate history for graphs); after it, they are final.",
 			kv{"responses", append(om{{"200", resp("The traffic generator.", "TrafficView")}}, std...)})}}},
-		{"/lab/traffic/report", om{{"get", op("getTrafficReport", "Traffic", "The report", "The last (or running) run's report: a pass or fail per stream with its counters, loss, latency, jitter, order and the reason of a fail.",
-			kv{"parameters", []om{{{"name", "format"}, {"in", "query"}, {"required", false}, {"description", "json (the traffic view), csv, html or text."}, {"schema", om{{"type", "string"}, {"enum", []string{"json", "csv", "html", "text"}}, {"default", "json"}}}}}},
+		{"/lab/traffic/report", om{{"get", op("getTrafficReport", "Traffic", "The report", "The last (or running) run's report: a pass or fail per stream with its counters, loss, latency, jitter, order and the reason of a fail. html, pdf and xlsx are the report to share: the graphs, the topology with the streams, each stream's settings and first frame sent and received (decoded), what arrived, flows and test ports (xlsx: a workbook with Excel charts; pdf: printed by Chrome, Edge, Chromium or Brave on the computer running Termwright).",
+			kv{"parameters", []om{{{"name", "format"}, {"in", "query"}, {"required", false}, {"description", "json (the traffic view), csv, html, pdf, xlsx or text."}, {"schema", om{{"type", "string"}, {"enum", []string{"json", "csv", "html", "pdf", "xlsx", "text"}}, {"default", "json"}}}}}},
 			kv{"responses", append(om{{"200", om{{"description", "The report."}, {"content", om{
 				{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/TrafficView"}}}}},
 				{"text/csv", om{{"schema", om{{"type", "string"}}}}},
 				{"text/html", om{{"schema", om{{"type", "string"}}}}},
+				{"application/pdf", om{{"schema", om{{"type", "string"}, {"format", "binary"}}}}},
+				{"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", om{{"schema", om{{"type", "string"}, {"format", "binary"}}}}},
 				{"text/plain", om{{"schema", om{{"type", "string"}}}}}}}}}}, append(errs("400"), std...)...)})}}},
 		{"/lab/traffic/ports", om{{"post", op("addTestPort", "Traffic ports", "Add a test port", "Puts a test port on a free port of a switch. A running switch takes it when it restarts (the result's note says so).",
 			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", portSchema}, {"examples", om{
@@ -417,6 +436,24 @@ func openAPIDoc(t *testing.T) om {
 				{"dual", ex("IPv4 and IPv6, in a multicast group", om{{"switch", "leaf-2"}, {"port", "5"}, {"ip", "10.10.0.2/24"}, {"ip6", "fd00::2/64"}, {"groups", []string{"239.1.1.1"}}})},
 				{"dhcp", ex("Addresses from the network: DHCP and SLAAC", om{{"switch", "access-1"}, {"port", "12"}, {"ip", "dhcp"}, {"ip6", "slaac"}})}}}}}}}}},
 			kv{"responses", append(om{{"201", resp("Added; the traffic view with it.", "TrafficView")}}, append(errs("400", "422"), std...)...)})}}},
+		{"/lab/traffic/engines", om{
+			{"get", op("getEngines", "Traffic engines", "The traffic engines", "What sends the streams: the KVM hosts' engine and the TRex servers with their ports.",
+				kv{"responses", append(om{{"200", resp("The engines.", "Engines")}}, std...)})},
+			{"put", op("setEngine", "Traffic engines", "Choose the KVM hosts' engine", "python: the built-in engine (python3 on the hosts, about 100,000 frames a second each). fast: a compiled helper Termwright copies to the hosts (Linux x86-64 or ARM64) - the same streams and counters, a few million frames a second. A host it cannot run on sends with the built-in one (its note says why).",
+				kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"type", "object"}, {"required", []string{"engine"}}, {"properties", om{{"engine", om{{"type", "string"}, {"enum", []string{"python", "fast"}}}}}}}}, {"example", om{{"engine", "fast"}}}}}}}}},
+				kv{"responses", append(om{{"200", resp("Set; the engines.", "Engines")}}, append(errs("400", "422"), std...)...)})}}},
+		{"/lab/traffic/nics", om{{"get", op("listHostNICs", "Traffic engines", "A host's network cards", "A KVM host's network cards and whether each can be a test port: a spare card cabled to a real device, with no address and not in a bridge.",
+			kv{"parameters", []om{{{"name", "host"}, {"in", "query"}, {"required", false}, {"description", "The KVM host's name (default: the lab's host)."}, {"schema", om{{"type", "string"}}}}}},
+			kv{"responses", append(om{{"200", om{{"description", "Its cards."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/HostNIC"}}}}}}}}}}}}, append(errs("422"), std...)...)})}}},
+		{"/lab/traffic/trex", om{{"post", op("addTrex", "Traffic engines", "Add or check a TRex server", "Adds a TRex server (trex-core in stateless mode, its API on TCP 4501) or, with the id of one, changes and checks it: its version and ports. Nothing is installed there. Its ports become test ports with POST /lab/traffic/ports (trex, trexPort).",
+			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"type", "object"}, {"required", []string{"addr"}}, {"properties", om{
+				{"id", om{{"type", "string"}, {"description", "A server's name or id: changed and checked again."}}},
+				{"name", om{{"type", "string"}}}, {"addr", om{{"type", "string"}, {"description", "Its address (name or IP)."}}},
+				{"port", om{{"type", "integer"}, {"default", 4501}, {"description", "Its RPC port."}}}}}}}, {"example", om{{"name", "trex-1"}, {"addr", "10.0.0.50"}}}}}}}}},
+			kv{"responses", append(om{{"201", resp("Added and checked; the engines.", "Engines")}}, append(errs("400", "422"), std...)...)})}}},
+		{"/lab/traffic/trex/{server}", om{{"parameters", []om{{{"name", "server"}, {"in", "path"}, {"required", true}, {"description", "The TRex server's name or id."}, {"schema", om{{"type", "string"}}}}}},
+			{"delete", op("removeTrex", "Traffic engines", "Remove a TRex server", "Forgets the server, its test ports and their streams.",
+				kv{"responses", append(om{{"204", om{{"description", "Removed."}}}}, append(errs("404", "422"), std...)...)})}}},
 		{"/lab/traffic/ports/{port}", om{{"parameters", []om{portParam}},
 			{"patch", op("changeTestPort", "Traffic ports", "Change a test port", "Changes its name, addresses, gateway, VLAN or multicast groups.",
 				kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", portPatch}, {"example", om{{"groups", []string{"239.1.1.1", "239.1.1.2"}}}}}}}}}},

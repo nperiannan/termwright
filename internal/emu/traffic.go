@@ -2,9 +2,12 @@ package emu
 
 import (
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -42,10 +45,109 @@ type Tester struct {
 	// ClientState is how its clients are doing (filled in for the screens).
 	ClientState *ClientState `json:"clientState,omitempty"`
 	// STPState is what it hears from the switch by spanning tree (filled in for the screens).
-	STPState *STPState `json:"stpState,omitempty"`
-	PortName string    `json:"portName,omitempty"` // as the switch names it (filled in for the screens)
-	X        float64   `json:"x,omitempty"`        // on the canvas
-	Y        float64   `json:"y,omitempty"`        // on the canvas
+	STPState  *STPState  `json:"stpState,omitempty"`
+	PortName  string     `json:"portName,omitempty"`  // as the switch names it (filled in for the screens)
+	X         float64    `json:"x,omitempty"`         // on the canvas
+	Y         float64    `json:"y,omitempty"`         // on the canvas
+	VRRP      *VRRP      `json:"vrrp,omitempty"`      // it is a VRRP router beside the switch
+	BFD       *BFD       `json:"bfd,omitempty"`       // it keeps a BFD session with the switch
+	VRRPState *VRRPState `json:"vrrpState,omitempty"` // what it hears by VRRP (filled in for the screens)
+	BFDState  *BFDState  `json:"bfdState,omitempty"`  // its BFD session (filled in for the screens)
+	Host      string     `json:"host,omitempty"`      // a host network port: the KVM host (its session) whose spare network card it is
+	NIC       string     `json:"nic,omitempty"`       // a host network port: the card's name on that host (enp3s0, …), cabled to a real device
+	Cabled    string     `json:"cabled,omitempty"`    // a host network port or TRex port: what it is cabled to (for the screens and reports)
+	Trex      string     `json:"trex,omitempty"`      // a TRex port: its server's id and the port's number there (x1a2b3/0)
+}
+
+// Where says where a test port is when it is not on an emulated switch: "nic" (a host's network card), "trex" (a
+// TRex server's port) or "" (a switch port of the lab).
+func (t Tester) Where() string {
+	switch {
+	case t.NIC != "":
+		return "nic"
+	case t.Trex != "":
+		return "trex"
+	}
+	return ""
+}
+
+// TrexAt is a TRex port's server id and port number.
+func (t Tester) TrexAt() (string, int) {
+	id, n, ok := strings.Cut(t.Trex, "/")
+	p, err := strconv.Atoi(n)
+	if !ok || err != nil {
+		return "", -1
+	}
+	return id, p
+}
+
+// TrexServer is a TRex server (trex-core, stateless mode) Termwright drives through its JSON-RPC API: its ports
+// cabled to the devices under test are test ports.
+type TrexServer struct {
+	ID   string `json:"id"`             // its id (made by Termwright)
+	Name string `json:"name"`           // its name
+	Addr string `json:"addr"`           // its address (name or IP)
+	Port int    `json:"port,omitempty"` // its RPC port (default 4501)
+}
+
+// Session is a session stream's TCP connections: Count of them, opened at Rate a second with at most Concurrent
+// open at once; each sends Req bytes and gets Resp back (with HTTP: a GET and a 200 answer), stays open Hold seconds
+// and is closed with FIN.
+type Session struct {
+	DPort      int     `json:"dport,omitempty"`      // the server port (default 80)
+	Count      int     `json:"count,omitempty"`      // sessions in all (default 1000)
+	Concurrent int     `json:"concurrent,omitempty"` // open at once at most (default 100)
+	Rate       float64 `json:"rate,omitempty"`       // opened a second (default 100)
+	Req        int     `json:"req,omitempty"`        // bytes the client sends
+	Resp       int     `json:"resp,omitempty"`       // bytes the server sends back
+	Hold       float64 `json:"hold,omitempty"`       // seconds each stays open after its data
+	HTTP       bool    `json:"http,omitempty"`       // an HTTP GET and a 200 answer with Resp bytes
+	Expect     string  `json:"expect,omitempty"`     // "" they should connect; "refused": reset (a closed port, an ACL that rejects); "dropped": no answer
+}
+
+// VRRP makes a test port a second VRRP router for the switch's virtual address (VRRPv2, RFC 3768; VRRPv3, RFC 5798):
+// it advertises with its priority, becomes master when the switch's advertisements stop, and answers ARP (or
+// neighbour solicitations) for the virtual address while it is.
+type VRRP struct {
+	Ver      int    `json:"ver"`                // 2 or 3
+	VRID     int    `json:"vrid"`               // 1-255, as on the switch
+	Prio     int    `json:"prio"`               // 1-254 (the switch's default is 100)
+	VIP      string `json:"vip"`                // the virtual address (IPv6 with VRRPv3 only)
+	Interval int    `json:"interval,omitempty"` // advertisement interval, ms (default 1000; VRRPv2 rounds to seconds)
+	Preempt  bool   `json:"preempt,omitempty"`  // take over from a master with a lower priority
+	Silent   bool   `json:"silent,omitempty"`   // stop advertising and answering, as if the router died (the switch must take over)
+}
+
+// VRRPState is what the test port hears by VRRP.
+type VRRPState struct {
+	State    string `json:"state"`              // master, backup or silent
+	Us       bool   `json:"us,omitempty"`       // the test port is master
+	Master   string `json:"master,omitempty"`   // the master's address, when it is the switch
+	Prio     int    `json:"prio,omitempty"`     // the master's priority
+	Since    int64  `json:"since,omitempty"`    // when the state began (Unix seconds)
+	Changes  int    `json:"changes,omitempty"`  // how often the master changed
+	Takeover int    `json:"takeover,omitempty"` // ms from Go Silent to the switch's first advertisement as master
+}
+
+// BFD is a single-hop BFD session (RFC 5880, 5881) from the test port to the switch, to time how fast the switch
+// notices a dead neighbour: Silent, raised by one, makes the test port stop sending for 5 s.
+type BFD struct {
+	Peer   string `json:"peer"`             // the switch's address on this link
+	TX     int    `json:"tx,omitempty"`     // desired transmit interval, ms (default 300)
+	RX     int    `json:"rx,omitempty"`     // required receive interval, ms (default as tx)
+	Mult   int    `json:"mult,omitempty"`   // detect multiplier (default 3)
+	Silent int    `json:"silent,omitempty"` // raise it by one: 5 s without sending
+}
+
+// BFDState is the session as the test port sees it.
+type BFDState struct {
+	State    string `json:"state"`              // down, init, up, admin-down
+	Since    int64  `json:"since,omitempty"`    // when it began (Unix seconds)
+	Flaps    int    `json:"flaps,omitempty"`    // how often it came up again
+	Detect   int    `json:"detect,omitempty"`   // the switch's detect time for the test port, ms
+	PeerTX   int    `json:"peerTx,omitempty"`   // the switch's transmit interval, ms
+	Measured int    `json:"measured,omitempty"` // ms from Go Silent to the switch saying the session is down
+	Quiet    bool   `json:"quiet,omitempty"`    // the test port is silent now
 }
 
 // ClientsMax is the most clients one test port stands for.
@@ -61,22 +163,25 @@ type Clients struct {
 	DHCP   bool     `json:"dhcp,omitempty"`   // each takes an IPv4 address by DHCP
 	Groups []string `json:"groups,omitempty"` // multicast groups each joins (IGMPv2 / MLDv1), again on every query
 	Dot1x  *Dot1x   `json:"dot1x,omitempty"`  // each logs in by 802.1X first (it sends nothing else before it is in)
+	DHCP6  bool     `json:"dhcp6,omitempty"`  // each takes an IPv6 address by DHCPv6 (DUID-LL from its MAC)
 }
 
-// Dot1x is how emulated clients log in: EAP-MD5 with these. {n} is the
+// Dot1x is how emulated clients log in: EAP-MD5 or PEAP-MSCHAPv2 with these. {n} is the
 // client's number (1, 2, …) and {mac} its MAC.
 type Dot1x struct {
 	User     string `json:"user,omitempty"`     // default user{n}
 	Password string `json:"password,omitempty"` // default "password"
+	Method   string `json:"method,omitempty"`   // md5 (default) or peap (PEAPv0 with EAP-MSCHAPv2 inside)
 }
 
 // ClientState is how a test port's clients are doing.
 type ClientState struct {
 	N      int        `json:"n"`              // clients
 	Bound  int        `json:"bound"`          // with a DHCP address
+	Bound6 int        `json:"bound6"`         // with a DHCPv6 address
 	Auth   int        `json:"auth"`           // logged in by 802.1X
 	Failed int        `json:"failed"`         // refused, or the switch did not answer
-	List   [][]string `json:"list,omitempty"` // the first 256: MAC, address, 802.1X state, why it failed
+	List   [][]string `json:"list,omitempty"` // the first 256: MAC, address, 802.1X state, why it failed, IPv6 address
 }
 
 // STP makes a test port speak spanning tree: a BPDU every 2 s that offers it
@@ -113,41 +218,110 @@ func (t Tester) ClientMAC() string {
 
 // Stream is frames from one test port to another (or to all).
 type Stream struct {
-	ID         string  `json:"id"`                    // its id (made by Termwright)
-	Name       string  `json:"name"`                  // its name (unique; the API and command line find it by it)
-	From       string  `json:"from"`                  // the test port it is sent from (id; the API takes a name too)
-	To         string  `json:"to,omitempty"`          // a test port; "" = every other one (broadcast)
-	Kind       string  `json:"kind"`                  // udp, icmp, tcp (SYN), arp, raw, pcap (a capture's frames, replayed)
-	VLAN       int     `json:"vlan,omitempty"`        // 802.1Q tag; 0 = untagged
-	Prio       int     `json:"prio,omitempty"`        // 802.1p priority (0-7) in its VLAN tag
-	DstMAC     string  `json:"dstMac,omitempty"`      // "" = the destination test port's (or the gateway's, or broadcast)
-	SrcIP      string  `json:"srcIp,omitempty"`       // "" = the test ports'
-	DstIP      string  `json:"dstIp,omitempty"`       // "" = the destination test port's; an address that is not a test port (icmp: its replies are counted); a multicast group; IPv6 makes it an IPv6 stream
-	DPort      int     `json:"dport,omitempty"`       // UDP or TCP destination port (default 5001 for UDP, 80 for TCP)
-	Size       int     `json:"size"`                  // frame bytes (60-9000; the smallest with sizeMode inc or random)
-	PPS        int     `json:"pps"`                   // frames per second (1-100000)
-	Seconds    int     `json:"seconds,omitempty"`     // how long it sends (with pps: seconds × pps frames)
-	Count      int     `json:"count,omitempty"`       // how many frames (instead of seconds)
-	MaxLoss    float64 `json:"maxLoss"`               // % for a pass
-	MaxLatency float64 `json:"maxLatency,omitempty"`  // ms; 0 = not checked
-	Off        bool    `json:"off,omitempty"`         // left out of Start All
-	DSCP       int     `json:"dscp,omitempty"`        // IP DSCP (0-63)
-	SizeMode   string  `json:"sizeMode,omitempty"`    // "" fixed, inc (Size..SizeMax, one more each frame), random, imix (64/594/1518 7:4:1)
-	SizeMax    int     `json:"sizeMax,omitempty"`     // the largest frame with sizeMode inc or random
-	Burst      int     `json:"burst,omitempty"`       // frames sent back to back (the rate is kept on average)
-	Mods       []Mod   `json:"mods,omitempty"`        // fields that change from frame to frame
-	MaxJitter  float64 `json:"maxJitter,omitempty"`   // ms for a pass (0 = not checked)
-	Test       string  `json:"test,omitempty"`        // made by a test run for one of its trials (not one of the user's streams)
-	RateUnit   string  `json:"rateUnit,omitempty"`    // how the rate was given: "" frames per second (pps), mbps (Mbit/s on the wire), pct (% of the sending test port's line rate)
-	Rate       float64 `json:"rate,omitempty"`        // the rate in that unit (pps is worked out from it)
-	RTT        bool    `json:"rtt,omitempty"`         // round trip: the test port it goes to sends each frame back, and the latency is the round trip (measured on one clock, so also between test ports on two hosts)
-	Pcap       string  `json:"pcap,omitempty"`        // pcap: the capture file on this computer (classic pcap; Wireshark: Save As pcap)
-	PcapID     string  `json:"pcapId,omitempty"`      // pcap: the capture as Termwright keeps it (its contents' hash; set when saved)
-	PcapFrames int     `json:"pcapFrames,omitempty"`  // pcap: frames in the capture (set when saved)
-	PcapSecs   float64 `json:"pcapSecs,omitempty"`    // pcap: how long the capture lasts, s (set when saved)
-	PcapTiming bool    `json:"pcapTiming,omitempty"`  // pcap: send with the capture's own gaps between frames (else at the rate)
-	Loops      int     `json:"loops,omitempty"`       // pcap: times through the capture (default 1; count or seconds instead)
-	RewriteMAC bool    `json:"rewriteMacs,omitempty"` // pcap: frames go from this test port's MAC to the destination test port's (else as captured)
+	ID         string   `json:"id"`                    // its id (made by Termwright)
+	Name       string   `json:"name"`                  // its name (unique; the API and command line find it by it)
+	From       string   `json:"from"`                  // the test port it is sent from (id; the API takes a name too)
+	To         string   `json:"to,omitempty"`          // a test port; "" = every other one (broadcast)
+	Kind       string   `json:"kind"`                  // udp, icmp, tcp (SYN), arp, raw, custom, pcap (a capture's frames, replayed), session (real TCP sessions)
+	VLAN       int      `json:"vlan,omitempty"`        // 802.1Q tag; 0 = untagged
+	Prio       int      `json:"prio,omitempty"`        // 802.1p priority (0-7) in its VLAN tag
+	DstMAC     string   `json:"dstMac,omitempty"`      // "" = the destination test port's (or the gateway's, or broadcast)
+	SrcIP      string   `json:"srcIp,omitempty"`       // "" = the test ports'
+	DstIP      string   `json:"dstIp,omitempty"`       // "" = the destination test port's; an address that is not a test port (icmp: its replies are counted); a multicast group; IPv6 makes it an IPv6 stream
+	DPort      int      `json:"dport,omitempty"`       // UDP or TCP destination port (default 5001 for UDP, 80 for TCP)
+	Size       int      `json:"size"`                  // frame bytes (60-9000; the smallest with sizeMode inc or random)
+	PPS        int      `json:"pps"`                   // frames per second (1-100000; 2000000 with the fast engine, 100000000 between TRex ports)
+	Seconds    int      `json:"seconds,omitempty"`     // how long it sends (with pps: seconds × pps frames)
+	Count      int      `json:"count,omitempty"`       // how many frames (instead of seconds)
+	MaxLoss    float64  `json:"maxLoss"`               // % for a pass
+	MaxLatency float64  `json:"maxLatency,omitempty"`  // ms; 0 = not checked
+	Off        bool     `json:"off,omitempty"`         // left out of Start All
+	DSCP       int      `json:"dscp,omitempty"`        // IP DSCP (0-63)
+	SizeMode   string   `json:"sizeMode,omitempty"`    // "" fixed, inc (Size..SizeMax, one more each frame), random, imix (64/594/1518 7:4:1)
+	SizeMax    int      `json:"sizeMax,omitempty"`     // the largest frame with sizeMode inc or random
+	Burst      int      `json:"burst,omitempty"`       // frames sent back to back (the rate is kept on average)
+	Mods       []Mod    `json:"mods,omitempty"`        // fields that change from frame to frame
+	MaxJitter  float64  `json:"maxJitter,omitempty"`   // ms for a pass (0 = not checked)
+	Test       string   `json:"test,omitempty"`        // made by a test run for one of its trials (not one of the user's streams)
+	RateUnit   string   `json:"rateUnit,omitempty"`    // how the rate was given: "" frames per second (pps), mbps (Mbit/s on the wire), pct (% of the sending test port's line rate)
+	Rate       float64  `json:"rate,omitempty"`        // the rate in that unit (pps is worked out from it)
+	RTT        bool     `json:"rtt,omitempty"`         // round trip: the test port it goes to sends each frame back, and the latency is the round trip (measured on one clock, so also between test ports on two hosts)
+	Pcap       string   `json:"pcap,omitempty"`        // pcap: the capture file on this computer (classic pcap; Wireshark: Save As pcap)
+	PcapID     string   `json:"pcapId,omitempty"`      // pcap: the capture as Termwright keeps it (its contents' hash; set when saved)
+	PcapFrames int      `json:"pcapFrames,omitempty"`  // pcap: frames in the capture (set when saved)
+	PcapSecs   float64  `json:"pcapSecs,omitempty"`    // pcap: how long the capture lasts, s (set when saved)
+	PcapTiming bool     `json:"pcapTiming,omitempty"`  // pcap: send with the capture's own gaps between frames (else at the rate)
+	Loops      int      `json:"loops,omitempty"`       // pcap: times through the capture (default 1; count or seconds instead)
+	RewriteMAC bool     `json:"rewriteMacs,omitempty"` // pcap, custom: frames go from this test port's MAC to the destination test port's (else as captured)
+	Hex        string   `json:"hex,omitempty"`         // custom: the frame in hex, from the destination MAC on (no FCS)
+	UDFs       []UDF    `json:"udfs,omitempty"`        // bytes at an offset that change from frame to frame (user-defined fields)
+	NoFix      bool     `json:"noFix,omitempty"`       // custom: lengths and checksums as written (else worked out for each frame)
+	NoSig      bool     `json:"noSig,omitempty"`       // custom: no counting signature (its frames are sent, not counted)
+	Bad        string   `json:"bad,omitempty"`         // a fault put in every frame (BadFrames)
+	Fuzz       *Fuzz    `json:"fuzz,omitempty"`        // random bytes in a range of every frame
+	Encap      *Encap   `json:"encap,omitempty"`       // headers added around its frames: an outer tag, MPLS, a GRE or VXLAN tunnel, IPv6 extension headers
+	Expect     string   `json:"expect,omitempty"`      // "" its frames should arrive; "drop": the switch should drop them; "any": only counted
+	Session    *Session `json:"session,omitempty"`     // session: the TCP sessions it opens (to a test port, which answers them)
+}
+
+// Encap is what a stream's frames carry beyond Ethernet, VLAN and IP. The frame size stays the size on the wire
+// (the payload gives way); faults, fuzzing and user-defined fields count from the frame before these headers.
+type Encap struct {
+	Outer *OuterTag   `json:"outer,omitempty"` // an outer VLAN tag (QinQ: 802.1ad S-tag) in front of the stream's own
+	MPLS  []MPLSLabel `json:"mpls,omitempty"`  // labels, the first one outermost (the last has the bottom-of-stack bit)
+	GRE   *GRE        `json:"gre,omitempty"`   // the IP packet inside GRE (RFC 2784, 2890) to a tunnel end
+	VXLAN *VXLAN      `json:"vxlan,omitempty"` // the whole Ethernet frame inside VXLAN (RFC 7348) to a VTEP
+	V6Ext []V6Ext     `json:"v6ext,omitempty"` // IPv6 extension headers (IPv6 streams), put in RFC 8200's order
+}
+
+// OuterTag is an outer VLAN tag.
+type OuterTag struct {
+	TPID int `json:"tpid,omitempty"` // 0x88A8 (default), 0x8100 or 0x9100
+	VLAN int `json:"vlan"`
+	Prio int `json:"prio,omitempty"`
+}
+
+// MPLSLabel is one label stack entry.
+type MPLSLabel struct {
+	Label int `json:"label"`
+	TC    int `json:"tc,omitempty"`
+	TTL   int `json:"ttl,omitempty"` // default 64
+}
+
+// GRE is a GRE tunnel from the test port (or Src) to Dst.
+type GRE struct {
+	Src string `json:"src,omitempty"`
+	Dst string `json:"dst"`
+	Key int64  `json:"key,omitempty"`
+}
+
+// VXLAN is a VXLAN tunnel from the test port (or Src) to the VTEP Dst.
+type VXLAN struct {
+	VNI  int    `json:"vni"`
+	Src  string `json:"src,omitempty"`
+	Dst  string `json:"dst"`
+	Port int    `json:"port,omitempty"` // default 4789
+}
+
+// V6Ext is an IPv6 extension header: hbh (hop-by-hop, router alert), dst (destination options), rt (a segment
+// routing header with Segs, segments left 0) or frag (a fragment header at Offset, 8-byte units).
+type V6Ext struct {
+	Type   string `json:"type"`
+	Segs   string `json:"segs,omitempty"`
+	Offset int    `json:"offset,omitempty"`
+	More   bool   `json:"more,omitempty"`
+}
+
+// Tunnel is where a stream's tunnel ends ("": none).
+func (s Stream) Tunnel() string {
+	switch {
+	case s.Encap == nil:
+	case s.Encap.GRE != nil:
+		return s.Encap.GRE.Dst
+	case s.Encap.VXLAN != nil:
+		return s.Encap.VXLAN.Dst
+	}
+	return ""
 }
 
 // IMIXMean is the mean size of an IMIX frame (64, 594 and 1518 bytes, 7:4:1).
@@ -219,6 +393,70 @@ type TrafficTest struct {
 	Reverse    bool    `json:"reverse,omitempty"`    // iperf: the server sends (iperf3 -R)
 }
 
+// UDF is a user-defined field: Width bytes at Offset (from the destination MAC), set per frame - Start plus 0, Step,
+// 2·Step… (Count values, then again), counting down with dec, one of them at random, or the Values in turn.
+type UDF struct {
+	Offset int     `json:"offset"`
+	Width  int     `json:"width"`           // 1-4 bytes
+	Mode   string  `json:"mode"`            // inc, dec, random, list
+	Start  int64   `json:"start,omitempty"` // the first value (inc, dec, random)
+	Step   int64   `json:"step,omitempty"`  // default 1
+	Count  int     `json:"count,omitempty"` // values before it starts again (default 256, at most 1,000,000)
+	Values []int64 `json:"values,omitempty"`
+}
+
+// Fuzz puts random bytes into From..To (offsets from the destination MAC; To 0 = up to the counting signature),
+// the same sequence again for the same Seed.
+type Fuzz struct {
+	From int   `json:"from"`
+	To   int   `json:"to,omitempty"`
+	Seed int64 `json:"seed,omitempty"`
+}
+
+// BadFrames are the faults a stream can put in its frames: what each does, and whether a router (RFC 1812) or a
+// switch should drop it (an L2 switch forwards most of them: it does not read the IP header).
+var BadFrames = []struct {
+	Key, Name, What               string
+	RouterDrops, SwitchDrops, TCP bool
+}{
+	{"ipcsum", "Bad IP checksum", "the IPv4 header checksum is wrong", true, false, false},
+	{"l4csum", "Bad UDP/TCP checksum", "the UDP or TCP checksum is wrong", false, false, false},
+	{"iplen-long", "IP length too long", "the IPv4 total length is longer than the frame", true, false, false},
+	{"iplen-short", "IP length too short", "the IPv4 total length is shorter than its header", true, false, false},
+	{"ihl", "IP header too short", "the IPv4 header length is below 20 bytes", true, false, false},
+	{"ipver", "Wrong IP version", "the IP version is 7", true, false, false},
+	{"ttl0", "TTL 0", "the time to live is 0", true, false, false},
+	{"ttl1", "TTL 1", "the time to live is 1: it expires at the first router", true, false, false},
+	{"ipopts", "IP options", "the IPv4 header carries options (record route)", false, false, false},
+	{"frag-first", "First fragment only", "a first fragment whose rest never comes", false, false, false},
+	{"frag-tiny", "Tiny fragment", "an 8-byte fragment that overlaps the UDP or TCP header", false, false, false},
+	{"src-martian", "Martian source", "the source address is 127.0.0.1", true, false, false},
+	{"src-bcast", "Broadcast source", "the source address is 255.255.255.255", true, false, false},
+	{"land", "LAND (source = destination)", "the source address and port are the destination's", false, false, false},
+	{"tcp-synfin", "TCP SYN+FIN", "SYN and FIN set together", false, false, true},
+	{"tcp-null", "TCP no flags", "no TCP flag set", false, false, true},
+	{"tcp-xmas", "TCP Xmas", "FIN, PSH and URG set", false, false, true},
+	{"smac-mcast", "Multicast source MAC", "the source MAC is a group address", true, true, false},
+	{"smac-zero", "Zero source MAC", "the source MAC is 00:00:00:00:00:00", false, false, false},
+	{"runt", "Runt frame", "a 48-byte frame, shorter than Ethernet's 64", true, true, false},
+	{"vlan4095", "VLAN 4095", "a VLAN tag with the reserved ID 4095", true, true, false},
+	{"qinq", "Two VLAN tags", "an outer tag (VLAN 100) over the stream's own", false, false, false},
+	{"etype", "Unknown EtherType", "EtherType 0x88B6, which nothing uses", false, false, false},
+}
+
+// BadFrame is a fault by its key (nil: none such).
+func BadFrame(key string) *struct {
+	Key, Name, What               string
+	RouterDrops, SwitchDrops, TCP bool
+} {
+	for i := range BadFrames {
+		if BadFrames[i].Key == key {
+			return &BadFrames[i]
+		}
+	}
+	return nil
+}
+
 // Mod changes a field of a stream's frames: the value plus 0, step, 2·step… (count values, then again), or one of them at random.
 type Mod struct {
 	Field string `json:"field"`          // srcMac, dstMac, srcIp, dstIp, vlan, sport, dport
@@ -258,9 +496,9 @@ func (l *Lab) TesterOn(vm string, port int) *Tester {
 	return nil
 }
 
-// TrafficConfig is traffic.json for one host: its test ports, every stream
-// (frames carry the stream's index) and the run (0 = stopped).
-func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) ([]byte, int) {
+// TrafficConfig is traffic.json for one host: its test ports (on its switches, and its network cards that are test
+// ports), every stream (frames carry the stream's index), the run (0 = stopped) and the engine.
+func (l *Lab) TrafficConfig(here func(VM) bool, host string, run uint32, on map[string]bool) ([]byte, int) {
 	type tc struct {
 		ID       string   `json:"id"`
 		Name     string   `json:"name"`
@@ -280,6 +518,9 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 		LacpPort int      `json:"lacpPort,omitempty"`
 		Clients  *Clients `json:"clients,omitempty"`
 		STP      *STP     `json:"stp,omitempty"`
+		VRRP     *VRRP    `json:"vrrp,omitempty"`
+		BFD      *BFD     `json:"bfd,omitempty"`
+		NIC      string   `json:"nic,omitempty"`
 	}
 	type sc struct {
 		Stream
@@ -287,14 +528,21 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 		Routed bool   `json:"routed,omitempty"`
 		GwIP   string `json:"gwIp,omitempty"`
 		ToMAC  string `json:"toMac,omitempty"`
+		TunARP string `json:"tunArp,omitempty"` // a tunnel's next hop: its end, or the test port's gateway to it
 	}
 	var ts []tc
 	for _, t := range l.Testers {
+		if t.Trex != "" || t.NIC != "" && t.Host != host {
+			continue // TRex sends its own; another host's card
+		}
 		v := l.VMByID(t.VM)
-		if v == nil || !here(*v) {
+		if t.NIC == "" && (v == nil || !here(*v)) {
 			continue
 		}
-		li, se := l.TesterPorts(*v, t.Port)
+		li, se := 0, 0
+		if v != nil {
+			li, se = l.TesterPorts(*v, t.Port)
+		}
 		if t.Listen > 0 { // the switch port started with a cable since removed: it sends there
 			li = t.Listen
 		}
@@ -312,7 +560,7 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 			c.MAC = t.ClientMAC()
 			cl = &c
 		}
-		ts = append(ts, tc{t.ID, t.Name, t.DHCP, t.SLAAC, t.LLDP, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se, t.Lag, t.LacpFast, port, cl, t.STP})
+		ts = append(ts, tc{t.ID, t.Name, t.DHCP, t.SLAAC, t.LLDP, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se, t.Lag, t.LacpFast, port, cl, t.STP, t.VRRP, t.BFD, t.NIC})
 	}
 	var ss []sc
 	for _, s := range l.Streams {
@@ -332,6 +580,14 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 				x.DstIP = pick(to)
 			}
 			switch {
+			case s.Tunnel() != "": // the frames go to the tunnel's end; inside, to the test port they are for
+				x.TunARP = s.Tunnel()
+				if !SameNet(f.IP, x.TunARP) && f.GW != "" {
+					x.TunARP = f.GW
+				}
+				if to != nil {
+					x.ToMAC = to.MAC
+				}
 			case x.Kind == "pcap":
 				if to != nil {
 					x.ToMAC = to.MAC
@@ -347,7 +603,7 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 		}
 		ss = append(ss, x)
 	}
-	b, _ := json.Marshal(map[string]any{"run": run, "testers": ts, "streams": ss})
+	b, _ := json.Marshal(map[string]any{"run": run, "testers": ts, "streams": ss, "fast": l.Engine == "fast"})
 	return b, len(ts)
 }
 
@@ -361,15 +617,60 @@ func SameNet(cidr, ip string) bool {
 	return n.Contains(a)
 }
 
-// TrafficScript writes a host's traffic.json and starts traffic.py there when it is not running
-// (it ends by itself when no test port is left on the host).
-func (l *Lab) TrafficScript(cfg []byte) string {
+// TrafficScript writes a host's traffic.json and starts traffic.py there when it is not running (it ends by itself
+// when no test port is left on the host), and before it the fast engine (tw-fast, copied there before) when the lab
+// uses it. A network card that is a test port needs root: the user's own, or passwordless sudo.
+func (l *Lab) TrafficScript(cfg []byte, nic bool) string {
 	dir := Q(l.VMDir())
 	var b strings.Builder
 	fmt.Fprintf(&b, "mkdir -p %s && cd %s || exit 1\n", dir, dir)
+	b.WriteString("SU=; M=user\n")
+	if nic {
+		b.WriteString("if [ \"$(id -u)\" != 0 ]; then if sudo -n true 2>/dev/null; then SU='sudo -n'; M=root; else echo 'traffic: a network card of this host is a test port: log in as root or allow passwordless sudo'; fi; else M=root; fi\n")
+	}
+	// stop: the process (as the user it runs as), when its script changed or it must run as another user
+	b.WriteString("twstop() { p=$(cat $1.pid 2>/dev/null); [ -n \"$p\" ] && { kill $p 2>/dev/null || sudo -n kill $p 2>/dev/null; }; rm -f $1.pid; }\n")
+	b.WriteString("[ \"$(cat traffic.mode 2>/dev/null || echo user)\" = \"$M\" ] || { twstop traffic; twstop fast; }; echo $M > traffic.mode\n")
 	fmt.Fprintf(&b, "cat > tw-traffic.py.new <<'TWPYEOF'\n%sTWPYEOF\n", TrafficPy)
-	b.WriteString("cmp -s tw-traffic.py.new tw-traffic.py || { mv -f tw-traffic.py.new tw-traffic.py; p=$(cat traffic.pid 2>/dev/null); [ -n \"$p\" ] && kill $p 2>/dev/null; }; rm -f tw-traffic.py.new\n")
+	b.WriteString("cmp -s tw-traffic.py.new tw-traffic.py || { mv -f tw-traffic.py.new tw-traffic.py; twstop traffic; }; rm -f tw-traffic.py.new\n")
 	fmt.Fprintf(&b, "cat > traffic.json.new <<'TWJSEOF'\n%s\nTWJSEOF\nmv -f traffic.json.new traffic.json\n", cfg)
-	b.WriteString("p=$(cat traffic.pid 2>/dev/null); if [ -z \"$p\" ] || ! grep -q tw-traffic /proc/$p/cmdline 2>/dev/null; then command -v python3 >/dev/null || { echo 'traffic: python3 is missing'; exit 1; }; nohup python3 tw-traffic.py \"$PWD\" >traffic.log 2>&1 & echo $! > traffic.pid; fi\necho traffic-ok\n")
+	if l.Engine == "fast" {
+		b.WriteString("if [ -x tw-fast ]; then p=$(cat fast.pid 2>/dev/null); if [ -z \"$p\" ] || ! grep -q tw-fast /proc/$p/cmdline 2>/dev/null; then rm -f fast.port; nohup $SU ./tw-fast \"$PWD\" >fast.log 2>&1 & echo $! > fast.pid; fi; fi\n")
+	}
+	b.WriteString("p=$(cat traffic.pid 2>/dev/null); if [ -z \"$p\" ] || ! grep -q tw-traffic /proc/$p/cmdline 2>/dev/null; then command -v python3 >/dev/null || { echo 'traffic: python3 is missing'; exit 1; }; nohup $SU python3 tw-traffic.py \"$PWD\" >traffic.log 2>&1 & echo $! > traffic.pid; fi\necho traffic-ok\n")
 	return b.String()
+}
+
+// ParseFrameHex reads a frame written in hex: a plain hex stream (Wireshark's Copy as Hex Stream), bytes apart
+// (ff ff ff…, ff:ff:ff…, 0xff, 0xff…) or a hex dump with offsets and an ASCII column (Wireshark's Copy as Hex
+// Dump, Scapy's hexdump()).
+func ParseFrameHex(s string) ([]byte, error) {
+	var out []byte
+	hexOf := func(t string) ([]byte, bool) {
+		t = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(t, "0x"), "0X"), ",")
+		if t == "" || len(t)%2 != 0 {
+			return nil, false
+		}
+		b, err := hex.DecodeString(t)
+		return b, err == nil
+	}
+	for _, line := range strings.Split(strings.ReplaceAll(s, "\r", ""), "\n") {
+		ts := strings.Fields(strings.ReplaceAll(line, ":", " "))
+		if len(ts) > 1 && len(ts[0]) >= 4 && len(ts[0]) <= 8 {
+			if _, ok := hexOf(ts[0]); ok && len(ts[1]) == 2 { // an offset column
+				ts = ts[1:]
+			}
+		}
+		for i, t := range ts {
+			b, ok := hexOf(t)
+			if !ok || len(ts) > 1 && len(t) > 2 && i > 0 && len(out) > 0 && len(b) > 1 && len(ts[i-1]) == 2 {
+				break // the ASCII column of a dump
+			}
+			out = append(out, b...)
+		}
+	}
+	if len(out) == 0 {
+		return nil, errors.New("no hex bytes in the frame")
+	}
+	return out, nil
 }
