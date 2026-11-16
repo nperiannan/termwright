@@ -273,8 +273,9 @@ flowchart TB
     TS["Team server (termwright-team)<br/>members, inventory, who uses what,<br/>reservations, usage history, admin page"] --- TD[("/data<br/>team.json, usage.json, cert, key")]
   end
   subgraph KVM["KVM hosts (optional, the emulated lab)"]
-    VM["QEMU/KVM switches, routers, servers,<br/>PCs, ESP32 · traffic generator · captures"]
+    VM["QEMU/KVM switches, routers, servers,<br/>PCs, ESP32 · captures<br/>traffic engines: built-in and fast"]
   end
+  TRex["TRex server (optional)<br/>line-rate test ports"]
   AI["AI service (optional)<br/>Claude · Claude Code · OpenAI-compatible · Ollama"]
   Apps["AI apps (MCP)<br/>Claude Desktop · Claude Code · Cursor · VS Code"]
   Sync[("Sync folder (optional)<br/>OneDrive / iCloud / Dropbox / share")]
@@ -288,14 +289,110 @@ flowchart TB
   Browser -- "HTTPS, one-time link from Termwright" --> TS
   TS -- "scans (Discover), device facts" --> Dev
   Go -- "SSH: images, QEMU, consoles, test ports" --> VM
+  VM -- "test ports on host network ports,<br/>cabled to your devices" --> Dev
+  Go -- "TRex API (JSON-RPC over ZeroMQ)" --> TRex
+  TRex -- "test ports, cabled" --> Dev
   Go -- "what you ask, secrets removed" --> AI
   Apps -- "MCP (stdio), this computer only" --> Go
+  classDef tw fill:#1f3a5f,stroke:#58a6ff,stroke-width:2px,color:#eaf3ff
+  classDef ai fill:#4a1d3f,stroke:#db61a2,stroke-width:2px,color:#ffeaf6
+  classDef store fill:#4d3b0b,stroke:#e3b341,stroke-width:2px,color:#fff6dc
+  classDef engine fill:#173f2a,stroke:#3fb950,stroke-width:2px,color:#e6ffed
+  classDef team fill:#0f3d44,stroke:#39c5cf,stroke-width:2px,color:#e0fbff
+  classDef trex fill:#5a3110,stroke:#f0883e,stroke-width:2px,color:#fff0e3
+  classDef dut fill:#5c1d22,stroke:#f85149,stroke-width:2px,color:#ffecec
+  classDef ext fill:#2d333b,stroke:#8b949e,stroke-width:2px,color:#f0f6fc
+  class UI,Go tw
+  class Data,Keys,TD,Sync store
+  class AI,Apps ai
+  class VM engine
+  class TS team
+  class TRex trex
+  class Dev dut
+  class GH,Browser ext
+  style PC fill:#58a6ff14,stroke:#58a6ff,stroke-width:2px,stroke-dasharray:6 4
+  style Lab fill:#39c5cf14,stroke:#39c5cf,stroke-width:2px,stroke-dasharray:6 4
+  style KVM fill:#3fb95014,stroke:#3fb950,stroke-width:2px,stroke-dasharray:6 4
+  linkStyle 0,1,2,3,7,8 stroke:#8b949e,stroke-width:2px
+  linkStyle 4,5 stroke:#f85149,stroke-width:2px
+  linkStyle 6,9,10 stroke:#39c5cf,stroke-width:2px
+  linkStyle 11,12 stroke:#3fb950,stroke-width:2px
+  linkStyle 13,14 stroke:#f0883e,stroke-width:2px
+  linkStyle 15,16 stroke:#db61a2,stroke-width:2px
 ```
 
 - **Termwright** is one program: an Angular interface over a Go backend (Wails). Connections, file transfers, scripts, backups and discovery run in the Go backend; passwords stay in the operating system's keychain or a password manager.
 - **Teams are optional.** Without a team nothing is sent anywhere. A team runs its own **team server** - a small container on a lab host, set up and updated from Termwright over SSH - which every member's Termwright talks to over HTTPS with the certificate pinned by the invite. The server never sees passwords, keys or terminal output.
 - **Sync is optional** too: with a sync folder, each Termwright writes its sessions and settings (never passwords) to a folder your computers share.
-- **The emulated lab runs on your KVM hosts**: Termwright logs in over SSH, copies the images, starts QEMU and its own traffic generator there, and connects the consoles and test ports back. **AI is optional**: the assistant talks to the service you choose; AI apps reach Termwright through its MCP connector on this computer.
+- **The emulated lab runs on your KVM hosts**: Termwright logs in over SSH, copies the images, starts QEMU and its own traffic engines there, and connects the consoles and test ports back. **AI is optional**: the assistant talks to the service you choose; AI apps reach Termwright through its MCP connector on this computer.
+
+### Traffic generation
+
+```mermaid
+flowchart TB
+  subgraph PC["Your computer - Termwright"]
+    TUI["Traffic panel<br/>test ports, streams, TCP sessions,<br/>pass/fail limits, live graphs"]
+    MCP["AI apps (MCP)<br/>lab_traffic, lab_test"]
+    TGo["Go backend<br/>writes each host's traffic.json,<br/>picks the engine, adds up the counters"]
+    Rep[("Report<br/>HTML / PDF, Excel")]
+  end
+  subgraph H1["KVM host"]
+    Py["tw-traffic.py - built-in engine<br/>streams · ARP, DHCP, LLDP, LACP, STP,<br/>VRRP, BFD, IGMP/MLD, 802.1X clients,<br/>TCP/HTTP sessions, pcap replay"]
+    Fast["tw-fast - fast engine (optional, Go)<br/>sends and counts the streams in batches"]
+    SW["QEMU switch<br/>port with a test port"]
+    NIC["Host network port<br/>(AF_PACKET)"]
+  end
+  subgraph H2["Another KVM host"]
+    E2["tw-traffic.py / tw-fast"]
+    SW2["QEMU switch"]
+  end
+  TRex["TRex server (optional)<br/>stateless mode, DPDK ports"]
+  Real["Real device under test"]
+  TUI <--> TGo
+  MCP --> TGo
+  TGo --> Rep
+  TGo -- "SSH: traffic.json, start;<br/>counters twice a second" --> Py
+  TGo -- "SSH" --> E2
+  TGo -- "TRex JSON-RPC over ZeroMQ, TCP 4501:<br/>ports, streams, start, counters" --> TRex
+  Py <-- "local UDP:<br/>every frame but the streams" --> Fast
+  Fast <-- "QEMU UDP socket" --> SW
+  Fast <-- "raw frames" --> NIC
+  Py -. "without tw-fast:<br/>the same sockets" .- SW
+  E2 <-- "QEMU UDP socket" --> SW2
+  SW <-- "cable: UDP between hosts" --> SW2
+  NIC <-- "Ethernet" --> Real
+  TRex <-- "Ethernet / fibre" --> Real
+  classDef tw fill:#1f3a5f,stroke:#58a6ff,stroke-width:2px,color:#eaf3ff
+  classDef ai fill:#4a1d3f,stroke:#db61a2,stroke-width:2px,color:#ffeaf6
+  classDef store fill:#4d3b0b,stroke:#e3b341,stroke-width:2px,color:#fff6dc
+  classDef engine fill:#173f2a,stroke:#3fb950,stroke-width:2px,color:#e6ffed
+  classDef qemu fill:#35255a,stroke:#a371f7,stroke-width:2px,color:#f1eaff
+  classDef nic fill:#0f3d44,stroke:#39c5cf,stroke-width:2px,color:#e0fbff
+  classDef trex fill:#5a3110,stroke:#f0883e,stroke-width:2px,color:#fff0e3
+  classDef dut fill:#5c1d22,stroke:#f85149,stroke-width:2px,color:#ffecec
+  class TUI,TGo tw
+  class MCP ai
+  class Rep store
+  class Py,Fast,E2 engine
+  class SW,SW2 qemu
+  class NIC nic
+  class TRex trex
+  class Real dut
+  style PC fill:#58a6ff14,stroke:#58a6ff,stroke-width:2px,stroke-dasharray:6 4
+  style H1 fill:#3fb95014,stroke:#3fb950,stroke-width:2px,stroke-dasharray:6 4
+  style H2 fill:#3fb95014,stroke:#3fb950,stroke-width:2px,stroke-dasharray:6 4
+  linkStyle 0,1,2 stroke:#8b949e,stroke-width:2px
+  linkStyle 3,4 stroke:#58a6ff,stroke-width:2px
+  linkStyle 5,13 stroke:#f0883e,stroke-width:2px
+  linkStyle 6 stroke:#3fb950,stroke-width:2px
+  linkStyle 7,9,10,11 stroke:#a371f7,stroke-width:2px
+  linkStyle 8,12 stroke:#39c5cf,stroke-width:2px
+```
+
+- **Test ports** sit on an emulated switch's port (the same QEMU UDP socket a cable uses, so no VM is needed), on a KVM host's network port cabled to a real device, or on a TRex server's port.
+- **Two engines on each host.** `tw-traffic.py` (Python) speaks the protocols and sends the streams. With the fast engine on, `tw-fast` - a small Go program Termwright copies to the host - sends and counts the streams in batches and hands every other frame to `tw-traffic.py`. That is about 100,000 or 420,000 frames per second per host ([benchmarks](docs/PERFORMANCE.md)).
+- **Across hosts** the streams travel over the lab's cables. Each frame carries its stream, sequence number and send time, so loss, order and latency are counted where it arrives, and Termwright adds up every host's counters.
+- **TRex** (optional) is for line rate: Termwright drives it through its JSON-RPC API, and its results appear with the rest in the same report.
 
 ## Project structure
 
