@@ -109,6 +109,7 @@ Existing sessions can be imported from SecureCRT, PuTTY, KiTTY, SuperPuTTY, Moba
 
 ## Recent releases
 
+- **0.40** - **Linux** gets one title bar in Termwright's theme with the menus, window buttons and tabs on their own row; a status bar with the cursor, selection, size, CAP and NUM; the AI chat box as VS Code's; the **Emulated Lab guide**; the source moved into `app/`.
 - **0.39** - the **traffic generator** grows up: quick streams and tests, custom frames, faults and fuzzing, QinQ, MPLS, GRE and VXLAN headers, PEAP, DHCPv6, VRRP and BFD on test ports, real TCP sessions, reports as HTML, PDF and Excel, the fast engine, test ports on real switches and TRex servers.
 - **0.38** - the README and feature list as Termwright is now; a team's Members on their own page.
 - **0.37** - *Connect an AI App* (MCP config for Cursor, VS Code, Windsurf, Gemini CLI, Codex; *Used by*), a **Lab** menu, icons on the lab's pages, traffic generator fixes and its measured speed.

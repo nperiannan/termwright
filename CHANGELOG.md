@@ -2,7 +2,7 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.40.0 (2026-11-16)
 
 - **Linux: one title bar, in Termwright's theme.** The window has no system title bar and no GTK menu bar any more: Termwright's own title bar has its logo, the menus (File, Edit, View, Transfer, Lab, Script, Options, Tab, Help - themed like the rest, with their shortcuts) and the minimise, maximise and close buttons. The window still moves by its title bar and resizes at its edges; a narrow window keeps the menus under ⋯.
 - **Status bar as on classic terminals**: the cursor's line and column, the selection (rows or columns, and characters), the terminal's rows and columns, its type, and CAP and NUM (Caps Lock and Num Lock).
