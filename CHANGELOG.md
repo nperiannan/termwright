@@ -9,6 +9,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 - **The terminal bar's toggles are icons**, as in VS Code's panels: timestamps (a clock), scroll lock (a lock: open while new output follows, closed when the view stays) and clear (which now asks first) - each with a tooltip.
 - **The AI chat's message box, as VS Code's chat**: a tip on top, the model and its effort in the box, a quiet send button, and under it the AI service, the mode (Agent, Plan, Ask) and the agent's permissions as plain chips; the mode menu has the permissions too, and *Changes ask first* is marked *Recommended*.
 - **Start page**: the search bar has the same edge, face and corners as the buttons under it.
+- **Source layout**: the desktop app's Go files moved from the top of the repository into `app/` (package app); `main.go` alone stays at the top - it embeds the window, the guides and scripts and starts the app - so the GitHub page shows the folders and the README without a long list of files first. Builds and the API are unchanged; `go test ./app/` runs the app's tests.
 
 ## 0.39.0 (2026-11-16)
 

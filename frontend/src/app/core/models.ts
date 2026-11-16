@@ -1,4 +1,4 @@
-// Types mirroring the Go structs exposed by the backend (app.go / internal/*).
+// Types mirroring the Go structs exposed by the backend (app/*.go / internal/*).
 
 export interface LogonAction { expect: string; send: string; hide: boolean; trailingCr: boolean; credential: string; }
 

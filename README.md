@@ -297,18 +297,19 @@ flowchart TB
 ## Project structure
 
 ```
-main.go, app.go, *_app.go   application entry point, native menu, methods bound to the UI
-teams_*.go, sync_app.go     Teams (join, set up and update a team server, inventory sync, status) and folder sync
+main.go                     the entry point: embeds the window, the guides and scripts, and starts app/
+app/run.go, app/*_app.go    the desktop app: window and menus, methods bound to the UI
+app/teams_*.go, sync_app.go Teams (join, set up and update a team server, inventory sync, status) and folder sync
 internal/session            session model, folder store, import and export
 internal/sessionfile        lossless .ini / XML session file reader and writer
 internal/term               SSH2, Telnet (and over TLS), serial, local PTY, Mosh, SFTP/SCP, file transfer protocols, scripting
 internal/fileserve          TFTP, FTP and HTTP servers devices fetch files from and send files to
 internal/team               the team server and its client: members, inventory, presence, reservations, usage, admin page
 internal/discover           network discovery (also used by the team server's scans)
-internal/emu, emu_*.go      the emulated lab: KVM hosts, QEMU, images, cables, the traffic generator (traffic.py), captures, tests
+internal/emu, app/emu_*.go  the emulated lab: KVM hosts, QEMU, images, cables, the traffic generator (traffic.py), captures, tests
 internal/sim                the simulated lab's switches
-ai_*.go, mcp_app.go         the AI assistant and agent, the MCP connector
-api_app.go, scripts/python  the local REST API and the Python client
+app/ai_*.go, app/mcp_app.go the AI assistant and agent, the MCP connector
+app/api_app.go, scripts/py… the local REST API and the Python client
 internal/clirun             logs in to a device and runs show commands (the team server's device facts)
 internal/backup, checklist  configuration backups, change checklists
 internal/config             data directory and global settings

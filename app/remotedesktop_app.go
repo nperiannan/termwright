@@ -1,0 +1,440 @@
+package app
+
+import (
+	"context"
+	_ "embed"
+	"errors"
+	"fmt"
+	"github.com/termwright/termwright/internal/session"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/termwright/termwright/internal/secrets"
+	"github.com/termwright/termwright/internal/term"
+)
+
+// The script "Set Up Remote Desktop" runs on the Linux machine (Ubuntu 22.04 / 24.04, Debian 12):
+// XFCE with TigerVNC and/or xrdp, each only when it is not already running (Use).
+var remoteDesktopScript []byte
+
+// RemoteDesktopRun is what the Set Up Remote Desktop dialog asks for.
+type RemoteDesktopRun struct {
+	TabID       string `json:"tabId"` // connected SSH2 terminal tab of the machine
+	RDP         bool   `json:"rdp"`
+	VNC         bool   `json:"vnc"`
+	RDPUser     string `json:"rdpUser"`
+	VNCUser     string `json:"vncUser"`
+	CreateUsers bool   `json:"createUsers"` // create users that do not exist
+	RDPNetwork  bool   `json:"rdpNetwork"`  // xrdp listens on all interfaces (default: the machine's own address only)
+	VNCNetwork  bool   `json:"vncNetwork"`  // TigerVNC listens on all interfaces (default: the machine's own address only)
+	CIDR        string `json:"cidr"`        // network to open in the firewall
+	Check       bool   `json:"check"`       // only report
+	Force       bool   `json:"force"`       // reconfigure services that already run
+
+	// Passwords. "Same" means the saved password of the SSH login.
+	SudoSame        bool   `json:"sudoSame"`
+	SudoNone        bool   `json:"sudoNone"` // sudo needs no password
+	SudoPassword    string `json:"sudoPassword"`
+	AccountSame     bool   `json:"accountSame"`
+	AccountPassword string `json:"accountPassword"` // of the new users
+	VNCSame         bool   `json:"vncSame"`         // the account password (its first 8 characters count)
+	VNCPassword     string `json:"vncPassword"`
+}
+
+// RemoteDesktopInfo tells the dialog what it can offer.
+type RemoteDesktopInfo struct {
+	KnownPassword bool   `json:"knownPassword"` // the SSH login's password is known (typed at the login or saved), so "same as the SSH login" works
+	User          string `json:"user"`
+}
+
+var linuxUser = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+var cidrRe = regexp.MustCompile(`^[0-9a-fA-F:.]+(/[0-9]{1,3})?$`)
+
+const remoteDesktopVNCDisplay = 2
+
+// remoteDesktopArgs are the script's options for a run.
+func remoteDesktopArgs(r RemoteDesktopRun) ([]string, error) {
+	if !r.RDP && !r.VNC {
+		return nil, errors.New("choose RDP, VNC or both")
+	}
+	var args []string
+	if r.RDP {
+		if !linuxUser.MatchString(r.RDPUser) || r.RDPUser == "root" {
+			return nil, fmt.Errorf("%q is not a usable user name for RDP", r.RDPUser)
+		}
+		args = append(args, "--rdp-user", r.RDPUser)
+	} else {
+		args = append(args, "--no-rdp")
+	}
+	if r.VNC {
+		if !linuxUser.MatchString(r.VNCUser) || r.VNCUser == "root" {
+			return nil, fmt.Errorf("%q is not a usable user name for VNC", r.VNCUser)
+		}
+		args = append(args, "--vnc-user", r.VNCUser)
+	} else {
+		args = append(args, "--no-vnc")
+	}
+	if r.RDP && r.VNC && r.RDPUser == r.VNCUser {
+		return nil, errors.New("RDP and VNC need different users: one desktop user cannot have both at once")
+	}
+	args = append(args, "--vnc-display", strconv.Itoa(remoteDesktopVNCDisplay))
+	if r.CreateUsers {
+		args = append(args, "--create-users")
+	}
+	if r.RDP && r.RDPNetwork {
+		args = append(args, "--rdp-network")
+	}
+	if r.VNC && r.VNCNetwork {
+		args = append(args, "--vnc-network")
+	}
+	if (r.RDP && r.RDPNetwork) || (r.VNC && r.VNCNetwork) {
+		if r.CIDR != "" {
+			if !cidrRe.MatchString(r.CIDR) {
+				return nil, fmt.Errorf("%q is not a network like 10.1.2.0/24", r.CIDR)
+			}
+			args = append(args, "--allow-cidr", r.CIDR)
+		}
+	}
+	if r.Check {
+		args = append(args, "--check")
+	} else {
+		args = append(args, "--secrets-stdin")
+		if r.Force {
+			args = append(args, "--force")
+		}
+	}
+	return args, nil
+}
+
+// remoteDesktopCommand is the command run on the machine: the script with sudo
+// (the password is read from standard input), removed again afterwards. It is
+// wrapped in sh so it does not depend on the login shell.
+func remoteDesktopCommand(remote string, args []string, check bool) string {
+	q := make([]string, 0, len(args))
+	for _, a := range args {
+		q = append(q, term.ShellQuote(a))
+	}
+	run := "sudo -S -p '' bash " + term.ShellQuote(remote) + " " + strings.Join(q, " ")
+	if check {
+		run = "bash " + term.ShellQuote(remote) + " " + strings.Join(q, " ")
+	}
+	return "sh -c " + term.ShellQuote(run+"; rc=$?; rm -f "+term.ShellQuote(remote)+"; exit $rc")
+}
+
+// remoteDesktopStdin is what the command reads: sudo's password line, then
+// the passwords for the script, ended by TWEND.
+func remoteDesktopStdin(sudo, account, vnc string) []byte {
+	var b strings.Builder
+	b.WriteString(sudo + "\n")
+	if account != "" {
+		b.WriteString("TWACCOUNT " + account + "\n")
+	}
+	if vnc != "" {
+		b.WriteString("TWVNC " + vnc + "\n")
+	}
+	b.WriteString("TWEND\n")
+	return []byte(b.String())
+}
+
+// RemoteDesktopInfo says whether the SSH login's password is known.
+func (a *App) RemoteDesktopInfo(tabID string) (RemoteDesktopInfo, error) {
+	if err := a.ready(); err != nil {
+		return RemoteDesktopInfo{}, err
+	}
+	ti, err := a.terms.Info(tabID)
+	if err != nil {
+		return RemoteDesktopInfo{}, err
+	}
+	_, ok := a.loginPasswordOf(tabID, ti.Session.Path)
+	return RemoteDesktopInfo{KnownPassword: ok, User: ti.Session.Username}, nil
+}
+
+// loginPasswordOf is the password the tab's SSH login used (typed at the
+// prompt, kept in memory by the tab), or else the session's saved password.
+func (a *App) loginPasswordOf(tabID, path string) (string, bool) {
+	if pw, ok := a.terms.LoginPassword(tabID); ok {
+		return pw, true
+	}
+	if path == "" || a.terms.SavedPassword == nil {
+		return "", false
+	}
+	pw, ok := a.terms.SavedPassword(path)
+	return pw, ok && pw != ""
+}
+
+// rdRun is a running (or just finished) setup. It keeps the passwords the run
+// used, in memory only, so that the sessions made for it can store them; they
+// are dropped by ForgetRemoteDesktop or after a quarter of an hour.
+type rdRun struct {
+	cancel           context.CancelFunc
+	account, vnc     string
+	rdpUser, vncUser string
+	rdpNew, vncNew   bool // the user was created by this run (so its password is the one given)
+	vncSet           bool // this run set the VNC password
+}
+
+var (
+	rdMu   sync.Mutex
+	rdRuns = map[string]*rdRun{}
+)
+
+var (
+	rdCreatingRe = regexp.MustCompile(`Creating user (\S+)`)
+	rdVNCRe      = regexp.MustCompile(`Configuring TigerVNC`)
+	rdRemovedRe  = regexp.MustCompile(`^TWREMOVED (rdp|vnc)$`)
+)
+
+// note learns from a line of the script's output what it did.
+func (r *rdRun) note(line string) {
+	line = strings.TrimSpace(line)
+	rdMu.Lock()
+	defer rdMu.Unlock()
+	if m := rdCreatingRe.FindStringSubmatch(line); m != nil {
+		if m[1] == r.rdpUser {
+			r.rdpNew = true
+		}
+		if m[1] == r.vncUser {
+			r.vncNew = true
+		}
+	}
+	if rdVNCRe.MatchString(line) {
+		r.vncSet = true
+	}
+	if m := rdRemovedRe.FindStringSubmatch(line); m != nil {
+		if m[1] == "rdp" {
+			r.rdpNew = false
+		} else {
+			r.vncSet, r.vncNew = false, false
+		}
+	}
+}
+
+// StartRemoteDesktop copies the setup script to the machine of an SSH tab and
+// runs it there in the background, over that tab's own connection: nothing is
+// typed in the tab. Passwords are sent on the command's standard input, never
+// on a command line, and are masked in everything that is reported. It returns
+// a run id; the script's output arrives line by line as the event
+// "rd:line:<id>" and the end as "rd:done:<id>" ({code, error}).
+func (a *App) StartRemoteDesktop(r RemoteDesktopRun) (string, error) {
+	if err := a.ready(); err != nil {
+		return "", err
+	}
+	args, err := remoteDesktopArgs(r)
+	if err != nil {
+		return "", err
+	}
+	ti, err := a.terms.Info(r.TabID)
+	if err != nil {
+		return "", err
+	}
+	saved, hasSaved := a.loginPasswordOf(r.TabID, ti.Session.Path)
+	pick := func(same bool, typed, what string) (string, error) {
+		if !same {
+			return typed, nil
+		}
+		if !hasSaved {
+			return "", fmt.Errorf("the SSH login did not use a password, so the %s cannot be \"the same\": type it", what)
+		}
+		return saved, nil
+	}
+
+	var sudo, account, vnc string
+	if !r.Check {
+		if !r.SudoNone {
+			if sudo, err = pick(r.SudoSame, r.SudoPassword, "sudo password"); err != nil {
+				return "", err
+			}
+			if sudo == "" {
+				return "", errors.New("type the sudo password (or choose \"no password needed\")")
+			}
+		}
+		if r.CreateUsers {
+			if account, err = pick(r.AccountSame, r.AccountPassword, "password of the new users"); err != nil {
+				return "", err
+			}
+			if account == "" {
+				return "", errors.New("type a password for the new users")
+			}
+		}
+		if r.VNC {
+			if r.VNCSame {
+				vnc = account
+				if vnc == "" {
+					if vnc, err = pick(r.AccountSame, r.AccountPassword, "VNC password"); err != nil {
+						return "", err
+					}
+				}
+			} else {
+				vnc = r.VNCPassword
+			}
+			if len(vnc) < 6 {
+				return "", errors.New("the VNC password needs at least 6 characters")
+			}
+		}
+		for _, p := range []string{sudo, account, vnc} {
+			if strings.ContainsAny(p, "\r\n") {
+				return "", errors.New("passwords cannot contain a line break")
+			}
+		}
+	}
+
+	remote, err := a.uploadRemoteDesktopScript(r.TabID)
+	if err != nil {
+		return "", err
+	}
+	id := randHex(6)
+	ctx, cancel := context.WithCancel(context.Background())
+	run := &rdRun{cancel: cancel, account: account, vnc: vnc, rdpUser: r.RDPUser, vncUser: r.VNCUser}
+	rdMu.Lock()
+	rdRuns[id] = run
+	rdMu.Unlock()
+
+	secretsList := []string{sudo, account, vnc}
+	mask := func(line string) string {
+		for _, s := range secretsList {
+			if len(s) >= 3 {
+				line = strings.ReplaceAll(line, s, "••••")
+			}
+		}
+		return line
+	}
+	cmd := remoteDesktopCommand(remote, args, r.Check)
+	var stdin []byte
+	if !r.Check {
+		stdin = remoteDesktopStdin(sudo, account, vnc)
+	}
+	go func() {
+		code, err := a.terms.ExecStream(ctx, r.TabID, cmd, stdin, func(line string) {
+			run.note(line)
+			emitter{a}.Emit("rd:line:"+id, mask(line))
+		})
+		cancel()
+		if err != nil || (code != 0 && code != 3) { // nothing will be stored for a failed run
+			forgetRemoteDesktop(id)
+		} else {
+			time.AfterFunc(15*time.Minute, func() { forgetRemoteDesktop(id) })
+		}
+		res := map[string]any{"code": code, "error": ""}
+		if err != nil {
+			res["error"] = mask(err.Error())
+		}
+		emitter{a}.Emit("rd:done:"+id, res)
+	}()
+	return id, nil
+}
+
+// CancelRemoteDesktop stops a run started by StartRemoteDesktop.
+func (a *App) CancelRemoteDesktop(id string) {
+	rdMu.Lock()
+	run := rdRuns[id]
+	rdMu.Unlock()
+	if run != nil {
+		run.cancel()
+	}
+}
+
+func forgetRemoteDesktop(id string) {
+	rdMu.Lock()
+	delete(rdRuns, id)
+	rdMu.Unlock()
+}
+
+// ForgetRemoteDesktop drops what a finished run kept (its passwords).
+func (a *App) ForgetRemoteDesktop(id string) { forgetRemoteDesktop(id) }
+
+// RemoteDesktopSessionPassword stores the password of the user the run
+// made for a session of it (kind "RDP" or "VNC") in the OS keychain, as the
+// session's saved password. Nothing is stored when the run did not set that
+// password (the user existed already, or the service was left alone); it
+// reports whether a password was stored.
+func (a *App) RemoteDesktopSessionPassword(id, path, kind string) (bool, error) {
+	if err := a.ready(); err != nil {
+		return false, err
+	}
+	rdMu.Lock()
+	run := rdRuns[id]
+	var pw string
+	if run != nil {
+		switch kind {
+		case "RDP":
+			if run.rdpNew {
+				pw = run.account
+			}
+		case "VNC":
+			if run.vncSet {
+				pw = run.vnc
+			}
+		}
+	}
+	rdMu.Unlock()
+	if pw == "" {
+		return false, nil
+	}
+	s, err := a.store.Get(path)
+	if err != nil {
+		return false, err
+	}
+	if err := secrets.Set(path, pw); err != nil {
+		return false, fmt.Errorf("could not save the password of %s: %w", path, err)
+	}
+	if !s.SavePassword {
+		s.SavePassword = true
+		if _, err := a.store.Save(s, s.Path); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// uploadRemoteDesktopScript copies the setup script to the machine of an open
+// SSH terminal tab, over that tab's own connection (no second login), and
+// returns where it is. The file is private to the login user and is removed
+// again by the command that runs it. It holds no passwords.
+func (a *App) uploadRemoteDesktopScript(tabID string) (string, error) {
+	if len(remoteDesktopScript) == 0 {
+		return "", errors.New("the setup script is missing from this build")
+	}
+	id, _, err := a.terms.SFTPOpen(tabID, "")
+	if err != nil {
+		return "", fmt.Errorf("could not open a file channel on this SSH session: %w", err)
+	}
+	defer a.terms.SFTPClose(id)
+	remote := "/tmp/termwright-rd-" + randHex(6) + ".sh"
+	if err := a.terms.SFTPWriteFile(id, remote, remoteDesktopScript, 0o600); err != nil {
+		return "", fmt.Errorf("could not copy the script to %s: %w", remote, err)
+	}
+	return remote, nil
+}
+
+// RememberSessionPassword stores a password the user typed when opening a
+// session (for example the VNC login) as the session's saved password, so the
+// next opening does not ask again.
+func (a *App) RememberSessionPassword(path, password string) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	if password == "" {
+		return errors.New("no password to save")
+	}
+	s, err := a.store.Get(path)
+	if err != nil {
+		return err
+	}
+	if err := secrets.Set(path, password); err != nil {
+		return fmt.Errorf("could not save the password of %s: %w", path, err)
+	}
+	if !s.SavePassword {
+		s.SavePassword = true
+		if _, err := a.store.Save(s, s.Path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ImportTemplate is the example CSV of the import format (every column, with
+// sessions of each kind), for the Import dialog's "Save Template".
+func (a *App) ImportTemplate() string { return session.ImportTemplateCSV }

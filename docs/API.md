@@ -7,7 +7,7 @@ test frameworks and CI, on the computer Termwright runs on.
   [OpenAPI 3.2.1](https://spec.openapis.org/oas/v3.2.1.html) document. It is
   generated from the code (the Go types the API sends and takes, their field
   comments, and the lab tools' own argument schemas), so it does not drift:
-  `go test -run TestOpenAPIDoc -update` writes it, and the tests fail when it is
+  `go test -run TestOpenAPIDoc -update ./app/` writes it, and the tests fail when it is
   out of date. It lints clean with Redocly CLI (`redocly lint docs/api/openapi.yaml`).
 - The running app serves it too: `GET /api/v1/openapi.json` and
   `GET /api/v1/openapi.yaml` (no key needed). Load either into any OpenAPI
