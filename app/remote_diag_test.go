@@ -155,38 +155,51 @@ func TestRestartScript(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("no bash")
 	}
-	dir := t.TempDir()
-	fake := "#!/bin/sh\necho \"fake systemctl $*\" >> " + dir + "/calls\n[ \"$1\" = is-active ] && echo active\nexit 0\n"
-	if err := os.WriteFile(dir+"/systemctl", []byte(fake), 0o755); err != nil {
-		t.Fatal(err)
+	// fake systemctl and sudo first in PATH, so the test does the same on a laptop and on a CI runner with sudo
+	run := func(t *testing.T, sudo string) (string, string, error) {
+		dir := t.TempDir()
+		fake := "#!/bin/sh\necho \"fake systemctl $*\" >> " + dir + "/calls\n[ \"$1\" = is-active ] && echo active\nexit 0\n"
+		for name, body := range map[string]string{"systemctl": fake, "sudo": sudo} {
+			if err := os.WriteFile(dir+"/"+name, []byte(body), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		cmd := exec.Command("bash", "-s", "--", "tigervnc@2.service")
+		cmd.Env = append(cmd.Environ(), "PATH="+dir+":"+os.Getenv("PATH"), "TW_SUDO=hunter2-secret")
+		cmd.Stdin = strings.NewReader(string(restartScript))
+		out, err := cmd.CombinedOutput()
+		calls, _ := os.ReadFile(dir + "/calls")
+		return string(out), string(calls), err
 	}
-	cmd := exec.Command("bash", "-s", "--", "tigervnc@2.service")
-	cmd.Env = append(cmd.Environ(), "PATH="+dir+":"+os.Getenv("PATH"), "TW_SUDO=hunter2-secret")
-	cmd.Stdin = strings.NewReader(string(restartScript))
-	out, err := cmd.CombinedOutput()
-	s := string(out)
-	if os.Getuid() != 0 {
-		// without root and without sudo the script must say what to run instead of failing silently
+	t.Run("no sudo", func(t *testing.T) {
+		if os.Getuid() == 0 {
+			t.Skip("root needs no sudo")
+		}
+		// the script must say what to run instead of failing silently
+		s, _, err := run(t, "#!/bin/sh\nexit 1\n")
 		if err == nil || !strings.Contains(s, "sudo systemctl restart tigervnc@2.service") {
 			t.Fatalf("%v\n%s", err, s)
 		}
-		return
-	}
-	if err != nil {
-		t.Fatalf("%v\n%s", err, s)
-	}
-	for _, want := range []string{"restarting: tigervnc@2.service", "tigervnc@2.service: active", "restarted"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("missing %q in:\n%s", want, s)
+	})
+	t.Run("sudo with the password", func(t *testing.T) {
+		// -n fails (a password is needed); -S reads it from stdin
+		sudo := "#!/bin/sh\n[ \"$1\" = -S ] || exit 1\nread -r pw\n[ \"$pw\" = hunter2-secret ] || exit 1\nshift\n[ \"$1\" = -p ] && shift 2\n[ \"$1\" = -v ] && exit 0\nexec \"$@\"\n"
+		s, calls, err := run(t, sudo)
+		if err != nil {
+			t.Fatalf("%v\n%s", err, s)
 		}
-	}
-	if strings.Contains(s, "hunter2-secret") {
-		t.Error("the sudo password is in the output")
-	}
-	calls, _ := os.ReadFile(dir + "/calls")
-	if !strings.Contains(string(calls), "restart tigervnc@2.service") {
-		t.Errorf("systemctl calls: %s", calls)
-	}
+		for _, want := range []string{"restarting: tigervnc@2.service", "tigervnc@2.service: active", "restarted"} {
+			if !strings.Contains(s, want) {
+				t.Errorf("missing %q in:\n%s", want, s)
+			}
+		}
+		if strings.Contains(s, "hunter2-secret") {
+			t.Error("the sudo password is in the output")
+		}
+		if !strings.Contains(calls, "restart tigervnc@2.service") {
+			t.Errorf("systemctl calls: %s", calls)
+		}
+	})
 }
 
 func findingTexts(f []DiagFinding) string {
