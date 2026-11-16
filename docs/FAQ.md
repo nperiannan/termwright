@@ -16,7 +16,6 @@ Short answers to the questions people ask most often about Termwright. Each answ
 - [Is QEMU bundled?](#is-qemu-bundled)
 - [How does the lab work across several hosts?](#how-does-the-lab-work-across-several-hosts)
 - [Was this written with AI?](#was-this-written-with-ai)
-- [What are the known limitations?](#what-are-the-known-limitations)
 
 ## Why use Termwright instead of SecureCRT?
 
@@ -132,11 +131,4 @@ See [Use several hosts](EMULATOR_GUIDE.md#6-use-several-hosts) in the Emulated L
 
 ## Was this written with AI?
 
-Yes, much of the code was written with an AI coding assistant, working from the author's design and specifications. The author decides what to build and how it should work and look, reviews mock-ups before any change to the interface, and tests each release on macOS and Linux. Every feature comes with its own tests: about 470 Go test functions and 20 Python tests, run in CI with Go's race detector, and every change is built for macOS, Windows, Linux and Android. If you find something that looks wrong, please open an issue.
-
-## What are the known limitations?
-
-- **macOS**: the app isn't notarized yet. The first time, run `xattr -dr com.apple.quarantine /Applications/Termwright.app` in Terminal, or right-click the app and choose *Open*.
-- **TRex**: the TRex client has been tested only against a simulated TRex server so far.
-- **Traffic benchmarks**: measured on a 2-vCPU cloud VM; your hosts will give different numbers.
-- **Lab hosts**: tested on Ubuntu 24.04 and 22.04. Other Linux distributions may work but aren't tested.
+Yes, much of the code was written with an AI coding assistant, working from the author's design and specifications. The author decides what to build and how it should work and look, reviews mock-ups before any change to the interface, and tests each release on macOS and Linux. Every feature comes with its own tests: about 470 Go test functions and 20 Python tests. CI runs the core packages' tests with Go's race detector and builds every change for macOS, Windows, Linux and Android. If you find something that looks wrong, please open an issue.

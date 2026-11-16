@@ -189,10 +189,11 @@ Pre-built packages are published on the [Releases](https://github.com/nperiannan
 
 | Platform | Package | Notes |
 |---|---|---|
-| macOS (Apple Silicon) | `.dmg`, `.zip` | Not notarized. After installing, run `xattr -dr com.apple.quarantine /Applications/Termwright.app` once. |
+| macOS (Apple Silicon) | `.dmg`, `.zip` | Current community builds are ad-hoc signed and not yet Apple-notarized. After installing, run `xattr -dr com.apple.quarantine /Applications/Termwright.app` once (or right-click → *Open*). |
 | Windows 10 / 11 (x64) | installer `.exe`, `.zip` | Requires the WebView2 runtime, which is included in current Windows versions. SmartScreen may warn about an unsigned file. |
 | Debian / Ubuntu (amd64, arm64) | `.deb` | `sudo apt install ./termwright_*.deb` |
 | Other Linux (amd64, arm64) | `.tar.gz` | Requires GTK 3 and WebKitGTK 4.1. |
+| Android (preview) | `.apk` | Current builds are signed with a temporary key: uninstall the earlier version before installing a new one. |
 
 Installation, first start and every feature are described in the [User Guide](docs/USER_GUIDE.md); the [Emulated Lab Guide](docs/EMULATOR_GUIDE.md) goes step by step from a KVM host to the first traffic test. The [FAQ](docs/FAQ.md) answers common questions: how Termwright compares with other tools, what reaches the AI service, and how credentials are protected.
 
@@ -303,7 +304,7 @@ main.go                     the entry point: embeds the window, the guides and s
 app/run.go, app/*_app.go    the desktop app: window and menus, methods bound to the UI
 app/teams_*.go, sync_app.go Teams (join, set up and update a team server, inventory sync, status) and folder sync
 internal/session            session model, folder store, import and export
-internal/sessionfile        lossless .ini / XML session file reader and writer
+internal/sessionfile        round-trip .ini / XML session file reader and writer
 internal/term               SSH2, Telnet (and over TLS), serial, local PTY, Mosh, SFTP/SCP, file transfer protocols, scripting
 internal/fileserve          TFTP, FTP and HTTP servers devices fetch files from and send files to
 internal/team               the team server and its client: members, inventory, presence, reservations, usage, admin page
