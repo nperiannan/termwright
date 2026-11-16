@@ -28,6 +28,10 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
+<p align="center"><img src="docs/assets/termwright-demo.gif" alt="Termwright demo: the AI explains why ports are down, then a traffic run in the emulated lab with live loss and latency" width="900"></p>
+
+<p align="center"><i>Asking the AI about a switch's output, then a traffic run in the emulated lab - recorded with simulated devices.</i> <a href="docs/assets/termwright-demo.mp4">Watch the 1-minute demo (MP4)</a></p>
+
 ![Termwright - start page with 3D cards and the Session Manager in the Glacier style](docs/screenshots/glacier-start-dark.png)
 
 <p align="center"><i>The start page and Session Manager: folders with their environments, and every kind of session - SSH, SFTP, Linux, network OS, IoT, RDP, VNC, Wake-on-LAN, Telnet, serial, local shell.</i></p>

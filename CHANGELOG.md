@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **README: a demo** - a short animation at the top and a [1-minute video](docs/assets/termwright-demo.mp4): a switch, the AI, the emulated lab, a traffic run and its report.
 - **Releases come with a `SHA256SUMS` file and a build provenance attestation**, so a download can be checked against what GitHub built from this repository ([Verifying a download](SECURITY.md#verifying-a-download)).
 - **Project files for contributors**: a [security policy](SECURITY.md) with private reporting, [CONTRIBUTING.md](CONTRIBUTING.md), a [code of conduct](CODE_OF_CONDUCT.md), and forms for bug reports and feature requests.
 - **CI runs more tests**: `go vet` on all Go packages, the app's tests and the Python client's tests, as `make test` does.
