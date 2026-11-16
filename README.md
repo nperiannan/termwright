@@ -8,6 +8,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/nperiannan/termwright/actions/workflows/build.yml"><img alt="Build" src="https://github.com/nperiannan/termwright/actions/workflows/build.yml/badge.svg?branch=develop"></a>
   <a href="https://github.com/nperiannan/termwright/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nperiannan/termwright?include_prereleases&sort=semver&label=release"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555">
@@ -195,6 +196,8 @@ Pre-built packages are published on the [Releases](https://github.com/nperiannan
 | Other Linux (amd64, arm64) | `.tar.gz` | Requires GTK 3 and WebKitGTK 4.1. |
 | Android (preview) | `.apk` | Current builds are signed with a temporary key: uninstall the earlier version before installing a new one. |
 
+Every release has a `SHA256SUMS` file and a build provenance attestation, to check that a download is the one GitHub built from this repository: see [Verifying a download](SECURITY.md#verifying-a-download).
+
 Installation, first start and every feature are described in the [User Guide](docs/USER_GUIDE.md); the [Emulated Lab Guide](docs/EMULATOR_GUIDE.md) goes step by step from a KVM host to the first traffic test. The [FAQ](docs/FAQ.md) answers common questions: how Termwright compares with other tools, what reaches the AI service, and how credentials are protected.
 
 ## Migrating existing sessions
@@ -234,7 +237,7 @@ Platform dependencies:
 ```bash
 make build            # build/bin/termwright(.exe) or build/bin/Termwright.app
 make dev              # development build with live reload
-make test             # Go unit and integration tests, including an end-to-end SSH test
+make test             # go vet, the Go tests (including an end-to-end SSH test) and the Python client's tests
 ```
 
 Without `make`:
@@ -425,12 +428,7 @@ docs/                       user guide, feature list, team server guide, API, Py
 
 ## Contributing
 
-Bug reports and feature requests are welcome in [GitHub Issues](https://github.com/nperiannan/termwright/issues). Please include:
-- the version (Help → About) and operating system;
-- the steps to reproduce the problem;
-- for connection problems, the message shown in the error card.
-
-Pull requests should keep `make test` passing, and should update the User Guide and the feature list for user-visible changes.
+Bug reports and feature requests are welcome in [GitHub Issues](https://github.com/nperiannan/termwright/issues/new/choose); the forms ask for the version, the operating system and the steps to reproduce. For pull requests, see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately, as described in the [security policy](SECURITY.md). Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

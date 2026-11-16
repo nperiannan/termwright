@@ -1,0 +1,23 @@
+name: Feature request
+description: An idea for Termwright
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The task or problem, and how you work around it today
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How you imagine it working. Screenshots of other tools are welcome.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Terminal and sessions, File transfer, Session Manager and import, Emulated lab, Traffic generator, AI assistant or MCP, Team server, Other]

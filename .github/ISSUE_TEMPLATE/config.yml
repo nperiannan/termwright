@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: https://github.com/nperiannan/termwright/security/advisories/new
+    about: Report a vulnerability privately - please don't open a public issue.
+  - name: User Guide
+    url: https://github.com/nperiannan/termwright/blob/main/docs/USER_GUIDE.md
+    about: How to install and use every feature.
+  - name: FAQ
+    url: https://github.com/nperiannan/termwright/blob/main/docs/FAQ.md
+    about: How Termwright compares with other tools, AI and data, credentials.

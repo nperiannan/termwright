@@ -52,6 +52,8 @@ Download the latest build from the repository's **Releases → nightly** page (o
 | Other Linux | `termwright-linux-amd64.tar.gz` / `…-arm64.tar.gz` | Unpack and run `./termwright`. Requires GTK 3 and WebKitGTK 4.1 (`libwebkit2gtk-4.1-0`). |
 | Android (preview) | `Termwright-…-android.apk` | Open the APK on the phone and allow installing from this source. Current builds are signed with a temporary key: uninstall the earlier version before installing a new one. |
 
+To check a download, compare it with the release's `SHA256SUMS` file, or verify its build provenance with `gh attestation verify <file> --repo nperiannan/termwright`: see [Verifying a download](../SECURITY.md#verifying-a-download).
+
 Optional: install `lrzsz` on the *remote* hosts to use ZMODEM (`sz`/`rz`).
 
 To build from source see the [README](../README.md#build).

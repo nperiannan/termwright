@@ -31,8 +31,13 @@ jobs:
       - run: go mod verify
       - name: Software smart card for the PKCS#11 tests
         run: sudo apt-get install -y --no-install-recommends softhsm2 opensc || echo "::warning::SoftHSM2 not installed - smart card tests are skipped"
-      - run: go vet ./internal/...
+      - run: go vet ./app/... ./internal/... ./cmd/... ./mobile/...
       - run: go test -race ./internal/... ./mobile/...
+      - name: App tests (the ones that need a KVM host are skipped)
+        run: go test -count=1 ./app/...
+      - name: Python client tests
+        working-directory: scripts/python
+        run: python3 -m unittest discover -p 'test*.py'
 
   build:
     needs: test
@@ -260,6 +265,10 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write      # for the build provenance attestation
+      attestations: write
     concurrency:
       group: release-${{ github.ref }}
       cancel-in-progress: false
@@ -268,6 +277,13 @@ jobs:
         with: { fetch-depth: 0 }  # all tags and commits, for the release notes
       - uses: actions/download-artifact@v8
         with: { path: dist, merge-multiple: true }
+      - name: Checksums
+        run: cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      # Signed proof that these files were built here, from this commit: gh attestation verify <file> --repo <owner>/<repo>
+      - name: Build provenance
+        uses: actions/attest-build-provenance@v4
+        continue-on-error: true  # the release still goes out without it
+        with: { subject-path: 'dist/*' }
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
