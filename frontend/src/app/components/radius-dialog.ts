@@ -61,7 +61,7 @@ import { tr } from '../core/i18n';
             </div>
           </section>
         </div>
-        <div class="df"><span class="muted small">{{ tr('EAP-MD5, PAP and MAC authentication; accepted users get their VLAN (Tunnel-Private-Group-Id).') }}</span><span class="sp"></span>
+        <div class="df"><span class="muted small">{{ tr('EAP-MD5, PEAP-MSCHAPv2 (with a certificate Termwright makes), PAP and MAC authentication; accepted users get their VLAN (Tunnel-Private-Group-Id).') }}</span><span class="sp"></span>
           <button type="button" (click)="closed.emit()">{{ tr('Cancel') }}</button><button type="button" class="primary" (click)="save()">{{ tr('Save') }}</button></div>
       </div>
     </div>`,

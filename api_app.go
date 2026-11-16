@@ -367,12 +367,12 @@ func (a *App) apiPortAdd(b map[string]any) (EmuTrafficView, error) {
 		return tv, err
 	}
 	t := tv.Testers[len(tv.Testers)-1]
-	if ip6, gs := argStr(b, "ip6"), argStrs(b, "groups"); ip6 != "" || len(gs) > 0 || argStr(b, "name") != "" || b["lldp"] != nil || b["clients"] != nil || b["stp"] != nil {
+	if ip6, gs := argStr(b, "ip6"), argStrs(b, "groups"); ip6 != "" || len(gs) > 0 || argStr(b, "name") != "" || b["lldp"] != nil || b["clients"] != nil || b["stp"] != nil || b["vrrp"] != nil || b["bfd"] != nil {
 		t.IP6, t.Groups, t.Name = ip6, gs, orStr(argStr(b, "name"), t.Name)
 		if x, ok := b["lldp"].(bool); ok {
 			t.LLDP = x
 		}
-		if err := emuArgProto(map[string]any{"clients": b["clients"], "stp": b["stp"]}, &t); err != nil {
+		if err := emuArgProto(map[string]any{"clients": b["clients"], "stp": b["stp"], "vrrp": b["vrrp"], "bfd": b["bfd"]}, &t); err != nil {
 			return tv, err
 		}
 		note := tv.Note
@@ -414,12 +414,16 @@ func (a *App) apiPortSet(id string, b map[string]any) (EmuTrafficView, error) {
 			t.Lag = argStr(b, k)
 		case "lacpFast":
 			t.LacpFast, _ = b[k].(bool)
-		case "clients", "stp", "topologyChange":
+		case "clients", "stp", "topologyChange", "vrrp", "bfd":
 			if err := emuArgProto(map[string]any{k: b[k]}, &t); err != nil {
 				return tv, err
 			}
+		case "silentBfd":
+			if err := emuArgProto(map[string]any{"silent_bfd": b[k]}, &t); err != nil {
+				return tv, err
+			}
 		default:
-			return tv, fmt.Errorf("a test port has no %q to change (name, ip, ip6, gateway, vlan, groups, lldp, speed, lag, lacpFast, clients, stp, topologyChange)", k)
+			return tv, fmt.Errorf("a test port has no %q to change (name, ip, ip6, gateway, vlan, groups, lldp, speed, lag, lacpFast, clients, stp, topologyChange, vrrp, bfd, silentBfd)", k)
 		}
 	}
 	return a.EmuTesterSet(t)

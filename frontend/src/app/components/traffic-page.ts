@@ -1,8 +1,9 @@
-import { Component, input, output, signal } from '@angular/core';
+import { Component, input, output } from '@angular/core';
 import { tr } from '../core/i18n';
 import type { QuickKey } from './traffic-quick';
 import { EmuTester, EmuTrafficView } from '../core/models';
 import { ChartSeries, TrafficChart } from './traffic-chart';
+import { ReportKind, ReportMenu } from './report-menu';
 
 /** The Traffic page's views. */
 export type TrafficView = 'streams' | 'tests' | 'stats';
@@ -16,8 +17,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
  */
 @Component({
   selector: 'app-traffic-page',
-  imports: [TrafficChart],
-  host: { '(document:click)': 'repOpen.set(false)' },
+  imports: [TrafficChart, ReportMenu],
   template: `
     <section class="tpg" [attr.aria-label]="tr('Traffic')">
       <header class="tph">
@@ -33,8 +33,7 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
           <button type="button" (click)="quick.emit('l3')" [disabled]="(traf()?.testers?.length ?? 0) < 1" [title]="tr('A routed stream between two subnets: addresses and gateways are filled in')">＋ {{ tr('L3 Stream') }}</button>
           <button type="button" (click)="quick.emit('latency')" [disabled]="(traf()?.testers?.length ?? 0) < 1" [title]="tr('Latency, jitter, loss, throughput, bad packets, fuzz, VLAN isolation, MTU and 802.1X clients - prefilled')">{{ tr('Quick Tests…') }}</button>
           @if (traf()?.running) { <button type="button" (click)="stop.emit()">■ {{ tr('Stop') }}</button> } @else { <button type="button" class="primary" (click)="start.emit()" [disabled]="!traf()?.streams?.length">▶ {{ tr('Start All') }}</button> }
-          <span class="rpm"><button type="button" (click)="repOpen.set(!repOpen()); $event.stopPropagation()" [disabled]="!traf()?.results?.length" [attr.aria-expanded]="repOpen()" [title]="tr('The run\\'s report to share and keep: graphs, topology, frames sent and what arrived')">{{ tr('Report') }} ▾</button>
-            @if (repOpen()) { <div class="rpmm" role="menu" (click)="$event.stopPropagation()">@for (f of reportKinds; track f.k) { <button type="button" role="menuitem" (click)="repOpen.set(false); report.emit(f.k)"><b>{{ tr(f.name) }}</b><span>{{ tr(f.what) }}</span></button> }</div> }</span> }
+          <app-report-menu [disabled]="!traf()?.results?.length" (pick)="report.emit($event)" /> }
         </div>
       </header>
       <div class="kpis">@for (k of kpis(); track k.label) { <div class="kpi" [class.warn]="k.warn" [class.good]="k.good"><span>{{ k.label }}</span><b>{{ k.value }}</b><small>{{ k.sub }}</small></div> }</div>
@@ -50,8 +49,10 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
                 @if (t.lag) { <div class="small" [class.up]="t.lacpUp?.startsWith('up')" [class.dn]="!t.lacpUp?.startsWith('up')" [title]="t.lacpUp || ''">LAG {{ t.lag }} · {{ t.lacpUp?.startsWith('up') ? tr('up') : tr('not up') }}</div> }
                 @if (t.neighbor) { <div class="small muted" [title]="tr('What the switch says on LLDP')">⇆ {{ t.neighbor }}</div> }
                 @if (t.clients?.n) { @let cs = t.clientState;
-                  <div class="small" [class.up]="cs && cs.failed === 0 && (t.clients?.dot1x ? cs.auth : cs.bound) === cs.n" [class.dn]="!!cs?.failed" [title]="tr('Clients behind this test port')">{{ tr('{0} clients', t.clients!.n) }}@if (cs) { · @if (t.clients?.dot1x) { {{ tr('{0} in', cs.auth) }} }@else if (t.clients?.dhcp) { {{ tr('{0} with an address', cs.bound) }} }@if (cs.failed) { · {{ tr('{0} refused', cs.failed) }} } }</div> }
-                @if (t.stp?.mode) { <div class="small" [class.up]="t.stpState?.rootIsUs" [title]="tr('Spanning tree')">{{ t.stp!.mode.toUpperCase() }} · {{ t.stpState?.rootIsUs ? tr('root') : t.stpState?.got ? tr('not root') : tr('no BPDU yet') }}</div> }</div>
+                  <div class="small" [class.up]="cs && cs.failed === 0 && (t.clients?.dot1x ? cs.auth : cs.bound) === cs.n" [class.dn]="!!cs?.failed" [title]="tr('Clients behind this test port')">{{ tr('{0} clients', t.clients!.n) }}@if (cs) { · @if (t.clients?.dot1x) { {{ tr('{0} in', cs.auth) }} }@else if (t.clients?.dhcp) { {{ tr('{0} with an address', cs.bound) }} }@else if (t.clients?.dhcp6) { {{ tr('{0} with IPv6', cs.bound6 ?? 0) }} }@if (cs.failed) { · {{ tr('{0} refused', cs.failed) }} } }</div> }
+                @if (t.stp?.mode) { <div class="small" [class.up]="t.stpState?.rootIsUs" [title]="tr('Spanning tree')">{{ t.stp!.mode.toUpperCase() }} · {{ t.stpState?.rootIsUs ? tr('root') : t.stpState?.got ? tr('not root') : tr('no BPDU yet') }}</div> }
+                @if (t.vrrp) { <div class="small" [class.up]="!!t.vrrpState?.us" [title]="tr('Gateway redundancy (VRRP)')">VRRP · {{ t.vrrpState?.state === 'silent' ? tr('silent') : t.vrrpState?.us ? tr('master') : t.vrrpState?.master ? tr('backup') : tr('no master heard yet') }}</div> }
+                @if (t.bfd) { <div class="small" [class.up]="t.bfdState?.state === 'up'" [class.dn]="t.bfdState?.state === 'down'" [title]="tr('Failure detection (BFD)')">BFD · {{ t.bfdState ? tr(t.bfdState.state) : tr('not up yet') }}</div> }</div>
             } @empty { <p class="muted small tpe">{{ tr('No test port yet: ＋ Test Port, or right-click a switch on the canvas → Add Test Port.') }}</p> }
           </aside>
         }
@@ -69,11 +70,6 @@ export interface TrafficKpi { label: string; value: string; sub: string; warn: b
     </section>`,
   styles: [`
     :host { display: contents; }
-    .rpm { position: relative; }
-    .rpmm { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 4px; display: flex; flex-direction: column; min-width: 340px; }
-    .rpmm button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; height: auto; min-height: 0; line-height: 1.3; border: 0; background: none; text-align: left; padding: 7px 10px; border-radius: 6px; white-space: normal; }
-    .rpmm button:hover { background: var(--hover, rgba(127,127,127,.12)); }
-    .rpmm span { color: var(--muted); font-size: 11.5px; }
     .tpg {
       position: absolute; inset: 0; z-index: 25; background: var(--bg); overflow: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
     .tpa { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; } /* the buttons stay together at the right, also when they wrap */
@@ -116,14 +112,7 @@ export class TrafficPage {
   readonly quick = output<QuickKey>();
   readonly start = output<void>();
   readonly stop = output<void>();
-  readonly report = output<'html' | 'pdf' | 'xlsx' | 'csv'>();
-  protected repOpen = signal(false);
-  protected readonly reportKinds = [
-    { k: 'html', name: 'HTML Report…', what: 'One page to open in any browser or attach' },
-    { k: 'pdf', name: 'PDF Report…', what: 'To print or keep: printed by Chrome, Edge or Brave' },
-    { k: 'xlsx', name: 'Excel Workbook…', what: 'Every number in sheets, with Excel\'s own charts' },
-    { k: 'csv', name: 'CSV…', what: 'The streams table only' },
-  ] as const;
+  readonly report = output<ReportKind>();
   readonly library = output<void>();
   readonly radius = output<void>();
   readonly editTester = output<EmuTester>();

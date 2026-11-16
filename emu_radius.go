@@ -15,7 +15,7 @@ type EmuRadiusLogin struct {
 	At     int64  `json:"at"`             // when (Unix seconds)
 	Switch string `json:"switch"`         // the switch that asked (its address)
 	User   string `json:"user"`           // user name or MAC
-	How    string `json:"how"`            // EAP-MD5, PAP or MAC
+	How    string `json:"how"`            // EAP-MD5, PEAP-MSCHAPv2, PAP or MAC
 	Result string `json:"result"`         // accept or reject
 	VLAN   string `json:"vlan,omitempty"` // the VLAN it got
 }
@@ -45,7 +45,7 @@ func emuRadiusCfg(r emu.Radius, bind string) []byte {
 	if bind == "" {
 		bind = "0.0.0.0"
 	}
-	b, _ := json.Marshal(map[string]any{"bind": bind, "port": r.RadiusPort(), "secret": r.Secret, "users": r.Users, "mab": r.MAB, "mabVlan": r.MABVLAN})
+	b, _ := json.Marshal(map[string]any{"bind": bind, "port": r.RadiusPort(), "secret": r.Secret, "users": r.Users, "mab": r.MAB, "mabVlan": r.MABVLAN, "cert": r.Cert, "key": r.Key})
 	return b
 }
 
@@ -80,6 +80,7 @@ func (a *App) EmuRadius() (EmuRadiusView, error) {
 	v := EmuRadiusView{Hosts: []EmuRadiusHost{}}
 	if l.Radius != nil {
 		v.Radius = *l.Radius
+		v.Radius.Cert, v.Radius.Key = "", "" // (the key stays here)
 	}
 	v.Port = v.RadiusPort()
 	hosts := l.Hosts(emuLab.f.Host)
@@ -158,6 +159,17 @@ func (a *App) EmuRadiusSet(r emu.Radius) (EmuRadiusView, error) {
 		emuLab.mu.Unlock()
 		return EmuRadiusView{}, errors.New("there is no emulated lab")
 	}
+	if r.Cert == "" && l.Radius != nil {
+		r.Cert, r.Key = l.Radius.Cert, l.Radius.Key
+	}
+	if r.On && (r.Cert == "" || r.Key == "") {
+		c, k, err := emu.RadiusCert()
+		if err != nil {
+			emuLab.mu.Unlock()
+			return EmuRadiusView{}, err
+		}
+		r.Cert, r.Key = c, k
+	}
 	l.Radius = &r
 	err := a.emuSave()
 	emuLab.mu.Unlock()
@@ -179,6 +191,12 @@ func (a *App) emuRadiusSync() error {
 	if l == nil || l.Radius == nil {
 		emuLab.mu.Unlock()
 		return nil
+	}
+	if l.Radius.On && (l.Radius.Cert == "" || l.Radius.Key == "") { // a lab from before PEAP: its certificate now
+		if c, k, err := emu.RadiusCert(); err == nil {
+			l.Radius.Cert, l.Radius.Key = c, k
+			_ = a.emuSave()
+		}
 	}
 	r := *l.Radius
 	type job struct{ host, script string }

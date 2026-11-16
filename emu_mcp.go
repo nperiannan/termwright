@@ -209,9 +209,13 @@ var mcpLabTools = []mcpTool{
 			"speed":           map[string]any{"type": "integer", "description": "add_port, set_port: the test port's line rate in Mbit/s, for rates in % of it (default 1000)"},
 			"lag":             map[string]any{"type": "string", "description": "add_port, set_port: test ports with the same LAG name speak LACP (active) and form one LAG with the switch (\"\" = none); a stream to one member is received on any"},
 			"lacp_fast":       map[string]any{"type": "boolean", "description": "add_port, set_port: LACP every second (else 30 s)"},
-			"clients":         map[string]any{"type": "object", "description": "add_port, set_port: many hosts behind the test port, each with its own MAC: {n: 1-4000, dhcp: true, groups: [239.1.1.1], dot1x: {user: \"user{n}\", password: \"…\"}, rate: started a second (50), mac: the first MAC}; {n: 0} = none. 802.1X is EAP-MD5; {n} is the client's number, {mac} its MAC"},
+			"clients":         map[string]any{"type": "object", "description": "add_port, set_port: many hosts behind the test port, each with its own MAC: {n: 1-4000, dhcp: true, dhcp6: true, groups: [239.1.1.1], dot1x: {user: \"user{n}\", password: \"…\", method: md5|peap}, rate: started a second (50), mac: the first MAC}; {n: 0} = none. 802.1X is EAP-MD5 or PEAP-MSCHAPv2 (the lab's RADIUS server answers both); {n} is the client's number, {mac} its MAC"},
 			"stp":             map[string]any{"type": "object", "description": "add_port, set_port: the test port speaks spanning tree: {mode: stp|rstp, prio: 0-61440 (default 32768; lower than the switch's makes it the root)}; {mode: \"\"} = off"},
 			"topology_change": map[string]any{"type": "boolean", "description": "set_port: its next BPDUs carry a topology change"},
+			"vrrp":            map[string]any{"type": "object", "description": "add_port, set_port: the test port is a VRRP router beside the switch: {ver: 2|3, vrid: 1-255, prio: 1-254, vip: the virtual address, interval: ms (1000), preempt: true, silent: true = stop advertising (the switch must take over)}; {} = off. The port's vrrpState says who is master and the takeover time in ms"},
+			"bfd":             map[string]any{"type": "object", "description": "add_port, set_port: a single-hop BFD session with the switch: {peer: the switch's address, tx: ms (300), rx: ms, mult: 3}; {} = off. silent_bfd: true makes the test port quiet for 5 s; bfdState.measured is how fast the switch saw it (ms)"},
+			"silent_bfd":      map[string]any{"type": "boolean", "description": "set_port: the test port stops sending BFD for 5 s"},
+			"encap":           map[string]any{"type": "object", "description": "add_stream: headers around its frames: {outer: {tpid: 34984, vlan, prio}, mpls: [{label, tc, ttl}] (up to 3), gre: {dst, src, key}, vxlan: {vni, dst (the VTEP), src, port: 4789}, v6ext: [{type: hbh|dst|rt|frag, segs: \"fd00::1 fd00::2\", offset, more}]} - one tunnel; the frame size stays the size on the wire"},
 			"seconds":         map[string]any{"type": "integer"},
 			"count":           map[string]any{"type": "integer"},
 			"max_loss":        map[string]any{"type": "number", "description": "% for a pass (default 0)"},
@@ -352,6 +356,32 @@ func emuArgProto(args map[string]any, t *emu.Tester) error {
 			return err
 		}
 		t.Clients = &c
+	}
+	if args["vrrp"] != nil {
+		var v emu.VRRP
+		if err := conv("vrrp", &v); err != nil {
+			return err
+		}
+		t.VRRP = &v
+		if v.Ver == 0 {
+			t.VRRP = nil
+		}
+	}
+	if args["bfd"] != nil {
+		var b emu.BFD
+		if err := conv("bfd", &b); err != nil {
+			return err
+		}
+		if t.BFD != nil {
+			b.Silent = t.BFD.Silent
+		}
+		t.BFD = &b
+		if b.Peer == "" {
+			t.BFD = nil
+		}
+	}
+	if x, _ := args["silent_bfd"].(bool); x && t.BFD != nil {
+		t.BFD.Silent++
 	}
 	if args["stp"] != nil {
 		var s emu.STP
@@ -1334,7 +1364,7 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 				return "", err
 			}
 			t := r.Testers[len(r.Testers)-1]
-			if ip6, gs := argStr(args, "ip6"), argStrs(args, "groups"); ip6 != "" || len(gs) > 0 || args["lldp"] != nil || args["speed"] != nil || args["lag"] != nil || args["clients"] != nil || args["stp"] != nil {
+			if ip6, gs := argStr(args, "ip6"), argStrs(args, "groups"); ip6 != "" || len(gs) > 0 || args["lldp"] != nil || args["speed"] != nil || args["lag"] != nil || args["clients"] != nil || args["stp"] != nil || args["vrrp"] != nil || args["bfd"] != nil {
 				t.IP6, t.Groups, t.Speed, t.Lag = ip6, gs, argInt(args, "speed", 0, 400000), argStr(args, "lag")
 				if err := emuArgProto(args, &t); err != nil {
 					return "", err
@@ -1454,6 +1484,14 @@ func (a *App) emuMCPRun(who, name string, args map[string]any, asker emuAsker) (
 						st.UDFs = append(st.UDFs, u)
 					}
 				}
+			}
+			if args["encap"] != nil {
+				j, _ := json.Marshal(args["encap"])
+				var e emu.Encap
+				if err := json.Unmarshal(j, &e); err != nil {
+					return "", fmt.Errorf("encap: %v", err)
+				}
+				st.Encap = &e
 			}
 			if z, ok := args["fuzz"].(map[string]any); ok {
 				st.Fuzz = &emu.Fuzz{From: argInt(z, "from", 14, 9000), To: argInt(z, "to", 0, 9000)}

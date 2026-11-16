@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -117,6 +118,8 @@ var emuTraf struct {
 	proto   map[string][2]string        // test port → its LAG as LACP has it, its LLDP neighbour
 	clients map[string]*emu.ClientState // test port → how its clients are doing
 	stp     map[string]*emu.STPState    // test port → what it hears by spanning tree
+	vrrp    map[string]*emu.VRRPState   // test port → what it hears by VRRP
+	bfd     map[string]*emu.BFDState    // test port → its BFD session
 	// per switch port of a test port (vm:port): where its QEMU really sends, read from its monitor once per
 	// switch start (0 = where a port without a cable sends; -1 = nowhere the generator can listen)
 	sock map[string]int
@@ -382,6 +385,8 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		} `json:"lldp"`
 		Clients map[string]*emu.ClientState     `json:"clients"`
 		STP     map[string]*emu.STPState        `json:"stp"`
+		VRRP    map[string]*emu.VRRPState       `json:"vrrp"`
+		BFD     map[string]*emu.BFDState        `json:"bfd"`
 		Jit     map[string][]float64            `json:"jit"`
 		Hist    map[string]map[string]int       `json:"hist"`
 		FRX     map[string]map[string][]float64 `json:"frx"`
@@ -448,6 +453,11 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 			}
 			maps.Copy(emuTraf.clients, st.Clients)
 			maps.Copy(emuTraf.stp, st.STP)
+			if emuTraf.vrrp == nil {
+				emuTraf.vrrp, emuTraf.bfd = map[string]*emu.VRRPState{}, map[string]*emu.BFDState{}
+			}
+			maps.Copy(emuTraf.vrrp, st.VRRP)
+			maps.Copy(emuTraf.bfd, st.BFD)
 			for k, x := range st.LACP {
 				p := emuTraf.proto[k]
 				switch {
@@ -607,6 +617,12 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		}
 		if v.Testers[i].STP != nil {
 			v.Testers[i].STPState = emuTraf.stp[v.Testers[i].ID]
+		}
+		if v.Testers[i].VRRP != nil {
+			v.Testers[i].VRRPState = emuTraf.vrrp[v.Testers[i].ID]
+		}
+		if v.Testers[i].BFD != nil {
+			v.Testers[i].BFDState = emuTraf.bfd[v.Testers[i].ID]
 		}
 	}
 	emuLab.mu.Unlock()
@@ -861,13 +877,17 @@ func (a *App) EmuTesterSet(t emu.Tester) (EmuTrafficView, error) {
 		emuLab.mu.Unlock()
 		return EmuTrafficView{}, err
 	}
+	if err := emuCheckRedundancy(t.VRRP, t.BFD); err != nil {
+		emuLab.mu.Unlock()
+		return EmuTrafficView{}, err
+	}
 	if t.Clients != nil && t.Clients.N == 0 {
 		t.Clients = nil
 	}
 	if t.STP != nil && t.STP.Mode == "" {
 		t.STP = nil
 	}
-	cur.Clients, cur.STP = t.Clients, t.STP
+	cur.Clients, cur.STP, cur.VRRP, cur.BFD = t.Clients, t.STP, t.VRRP, t.BFD
 	for i, x := range l.Streams { // rates in % of its line rate follow it
 		if x.From == cur.ID && x.RateUnit == "pct" {
 			l.Streams[i].PPS = min(100000, max(1, int(math.Round(x.PPSFor(cur.LineMbps())))))
@@ -902,6 +922,8 @@ func emuCheckClients(c *emu.Clients, s *emu.STP) error {
 			return fmt.Errorf("%s is not a MAC address", c.MAC)
 		case c.Rate < 0 || c.Rate > 1000:
 			return errors.New("clients start at 1 to 1000 a second")
+		case c.Dot1x != nil && c.Dot1x.Method != "" && c.Dot1x.Method != "md5" && c.Dot1x.Method != "peap":
+			return errors.New("the 802.1X method is md5 or peap")
 		}
 		for _, g := range c.Groups {
 			if !emu.IsMulticast(g) {
@@ -921,6 +943,39 @@ func emuCheckClients(c *emu.Clients, s *emu.STP) error {
 }
 
 var emuMACRe = regexp.MustCompile(`^(?i)[0-9a-f]{2}(:[0-9a-f]{2}){5}$`)
+
+// emuCheckRedundancy refuses VRRP or BFD settings that cannot work.
+func emuCheckRedundancy(v *emu.VRRP, b *emu.BFD) error {
+	if v != nil {
+		ip := net.ParseIP(v.VIP)
+		switch {
+		case v.Ver != 2 && v.Ver != 3:
+			return errors.New("VRRP is version 2 or 3")
+		case v.VRID < 1 || v.VRID > 255:
+			return errors.New("a VRRP router ID is 1 to 255")
+		case v.Prio < 1 || v.Prio > 254:
+			return errors.New("a VRRP priority is 1 to 254")
+		case ip == nil:
+			return fmt.Errorf("%q is not a virtual IP address", v.VIP)
+		case ip.To4() == nil && v.Ver == 2:
+			return errors.New("an IPv6 virtual address needs VRRPv3")
+		case v.Interval != 0 && (v.Interval < 10 || v.Interval > 40950):
+			return errors.New("the VRRP interval is 10 to 40,950 ms")
+		}
+	}
+	if b != nil {
+		ip := net.ParseIP(b.Peer)
+		switch {
+		case ip == nil || ip.To4() == nil:
+			return fmt.Errorf("%q is not the switch's IPv4 address", b.Peer)
+		case b.TX != 0 && (b.TX < 10 || b.TX > 10000), b.RX != 0 && (b.RX < 10 || b.RX > 10000):
+			return errors.New("BFD intervals are 10 to 10,000 ms")
+		case b.Mult < 0 || b.Mult > 255:
+			return errors.New("the BFD multiplier is 1 to 255")
+		}
+	}
+	return nil
+}
 
 // EmuTesterRemove takes a test port off (its streams go too).
 func (a *App) EmuTesterRemove(id string) (EmuTrafficView, error) {
@@ -1096,6 +1151,73 @@ func emuStreamFrame(s *emu.Stream) error {
 	}
 	if !slices.Contains([]string{"", "drop", "any"}, s.Expect) {
 		return errors.New("its frames should arrive (\"\"), be dropped (drop) or only be counted (any)")
+	}
+	return emuCheckEncap(s)
+}
+
+// emuCheckEncap refuses headers that cannot go around a stream's frames, and drops empty ones.
+func emuCheckEncap(s *emu.Stream) error {
+	e := s.Encap
+	if e == nil {
+		return nil
+	}
+	if e.Outer == nil && len(e.MPLS) == 0 && e.GRE == nil && e.VXLAN == nil && len(e.V6Ext) == 0 {
+		s.Encap = nil
+		return nil
+	}
+	if s.Kind == "pcap" {
+		return errors.New("a capture's frames are replayed as they are: no headers added")
+	}
+	ip4 := func(a string) bool { x := net.ParseIP(a); return x != nil && x.To4() != nil }
+	if o := e.Outer; o != nil {
+		o.TPID = cmp.Or(o.TPID, 0x88A8)
+		if !slices.Contains([]int{0x88A8, 0x8100, 0x9100}, o.TPID) || o.VLAN < 1 || o.VLAN > 4094 || o.Prio < 0 || o.Prio > 7 {
+			return errors.New("an outer tag is TPID 0x88A8, 0x8100 or 0x9100, VLAN 1-4094 and priority 0-7")
+		}
+	}
+	if len(e.MPLS) > 3 {
+		return errors.New("a stream carries at most 3 MPLS labels")
+	}
+	for _, m := range e.MPLS {
+		if m.Label < 0 || m.Label > 1048575 || m.TC < 0 || m.TC > 7 || m.TTL < 0 || m.TTL > 255 {
+			return errors.New("an MPLS label is 0-1048575, its TC 0-7 and TTL 0-255")
+		}
+	}
+	tunnels := 0
+	if g := e.GRE; g != nil {
+		tunnels++
+		if !ip4(g.Dst) || g.Src != "" && !ip4(g.Src) || g.Key < 0 || g.Key > 0xFFFFFFFF {
+			return errors.New("a GRE tunnel needs the IPv4 address of its far end (and its own, if not the test port's)")
+		}
+	}
+	if x := e.VXLAN; x != nil {
+		tunnels++
+		if !ip4(x.Dst) || x.Src != "" && !ip4(x.Src) || x.VNI < 1 || x.VNI > 16777215 || x.Port < 0 || x.Port > 65535 {
+			return errors.New("a VXLAN tunnel needs a VNI (1-16777215) and the IPv4 address of the VTEP")
+		}
+	}
+	switch {
+	case tunnels > 1:
+		return errors.New("a stream goes in one tunnel: GRE or VXLAN")
+	case tunnels > 0 && len(e.MPLS) > 0:
+		return errors.New("MPLS labels and a tunnel do not go together here")
+	case (tunnels > 0 || len(e.MPLS) > 0) && (s.Kind == "raw" || s.Kind == "arp"):
+		return errors.New("MPLS and tunnels carry IP: not a raw or ARP stream")
+	case len(e.V6Ext) > 4:
+		return errors.New("at most 4 IPv6 extension headers")
+	}
+	if len(e.V6Ext) > 0 && !strings.Contains(s.DstIP, ":") {
+		return errors.New("IPv6 extension headers need an IPv6 stream")
+	}
+	for _, h := range e.V6Ext {
+		if !slices.Contains([]string{"hbh", "dst", "rt", "frag"}, h.Type) || h.Offset < 0 || h.Offset > 8191 {
+			return errors.New("an IPv6 extension header is hbh, dst, rt or frag (offset 0-8191)")
+		}
+		for _, a := range strings.Fields(strings.ReplaceAll(h.Segs, ",", " ")) {
+			if x := net.ParseIP(a); x == nil || x.To4() != nil {
+				return fmt.Errorf("%q is not an IPv6 segment", a)
+			}
+		}
 	}
 	return nil
 }

@@ -420,10 +420,18 @@ export interface EmuPacketDetail extends EmuPacket { at: string; hex: string; fi
 
 /** A test port of the traffic generator: a sender and counter on a switch's free port. */
 export interface EmuTester { id: string; name: string; vm: string; port: number; portName?: string; mac: string; ip?: string; ip6?: string; groups?: string[] | null; dhcp?: boolean; slaac?: boolean; lldp?: boolean; lease?: string; lease6?: string; gw?: string; vlan?: number; speed?: number; lag?: string; lacpFast?: boolean; lacpUp?: string; neighbor?: string; x?: number; y?: number;
-  clients?: EmuClients | null; stp?: EmuSTP | null; clientState?: EmuClientState | null; stpState?: EmuSTPState | null; }
+  clients?: EmuClients | null; stp?: EmuSTP | null; clientState?: EmuClientState | null; stpState?: EmuSTPState | null;
+  vrrp?: EmuVRRP | null; bfd?: EmuBFD | null; vrrpState?: EmuVRRPState | null; bfdState?: EmuBFDState | null; }
+/** A test port as a VRRP router: it advertises the virtual address with its priority (v2: IPv4, v3: IPv4 or IPv6). */
+export interface EmuVRRP { ver: 2 | 3; vrid: number; prio: number; vip: string; interval?: number; preempt?: boolean; silent?: boolean; }
+/** What the test port hears by VRRP: who is master and with what priority. */
+export interface EmuVRRPState { state?: 'master' | 'backup' | 'silent'; master?: string; us?: boolean; prio?: number; since?: number; changes?: number; takeover?: number; }
+/** A single-hop BFD session (RFC 5880/5881) from the test port to the switch. */
+export interface EmuBFD { peer: string; tx?: number; rx?: number; mult?: number; silent?: number; }
+export interface EmuBFDState { state: 'down' | 'init' | 'up' | 'admin-down'; since?: number; detect?: number; peerTx?: number; flaps?: number; measured?: number; quiet?: boolean; }
 /** Many hosts behind a test port (802.1X, DHCP, multicast). */
-export interface EmuClients { n: number; mac?: string; rate?: number; dhcp?: boolean; groups?: string[] | null; dot1x?: { user?: string; password?: string } | null; }
-export interface EmuClientState { n: number; bound: number; auth: number; failed: number; list?: string[][] | null; }
+export interface EmuClients { n: number; mac?: string; rate?: number; dhcp?: boolean; groups?: string[] | null; dot1x?: { user?: string; password?: string; method?: 'md5' | 'peap' } | null; dhcp6?: boolean; }
+export interface EmuClientState { n: number; bound: number; bound6?: number; auth: number; failed: number; list?: string[][] | null; }
 /** Spanning tree on a test port. */
 export interface EmuSTP { mode: 'stp' | 'rstp'; prio?: number; tc?: number; }
 export interface EmuSTPState { sent: number; got: number; root?: string; bridge?: string; cost?: number; role?: string; rootIsUs?: boolean; tc?: boolean; }
@@ -434,7 +442,7 @@ export interface EmuRadiusHost { host: string; address: string; running: boolean
 export interface EmuRadiusView { on: boolean; port: number; secret?: string; users?: EmuRadiusUser[] | null; mab?: string[] | null; mabVlan?: string; hosts: EmuRadiusHost[]; }
 /** A stream of frames between test ports. */
 export interface EmuUDF { offset: number; width: number; mode: 'inc' | 'dec' | 'random' | 'list'; start?: number; step?: number; count?: number; values?: number[] | null; }
-export interface EmuStream { id: string; name: string; from: string; to?: string; kind: 'udp' | 'icmp' | 'tcp' | 'arp' | 'raw' | 'pcap' | 'custom'; hex?: string; udfs?: EmuUDF[] | null; noFix?: boolean; noSig?: boolean; bad?: string; fuzz?: { from: number; to?: number; seed?: number } | null; expect?: '' | 'drop' | 'any'; vlan?: number; prio?: number; dstMac?: string; srcIp?: string; dstIp?: string; dport?: number; size: number; pps: number; seconds?: number; count?: number; maxLoss: number; maxLatency?: number; off?: boolean; dscp?: number; sizeMode?: '' | 'inc' | 'random' | 'imix'; sizeMax?: number; burst?: number; mods?: EmuMod[] | null; maxJitter?: number; rateUnit?: '' | 'mbps' | 'pct'; rate?: number; rtt?: boolean; pcap?: string; pcapId?: string; pcapFrames?: number; pcapSecs?: number; pcapTiming?: boolean; loops?: number; rewriteMacs?: boolean; }
+export interface EmuStream { id: string; name: string; from: string; to?: string; kind: 'udp' | 'icmp' | 'tcp' | 'arp' | 'raw' | 'pcap' | 'custom'; hex?: string; encap?: EmuEncap | null; udfs?: EmuUDF[] | null; noFix?: boolean; noSig?: boolean; bad?: string; fuzz?: { from: number; to?: number; seed?: number } | null; expect?: '' | 'drop' | 'any'; vlan?: number; prio?: number; dstMac?: string; srcIp?: string; dstIp?: string; dport?: number; size: number; pps: number; seconds?: number; count?: number; maxLoss: number; maxLatency?: number; off?: boolean; dscp?: number; sizeMode?: '' | 'inc' | 'random' | 'imix'; sizeMax?: number; burst?: number; mods?: EmuMod[] | null; maxJitter?: number; rateUnit?: '' | 'mbps' | 'pct'; rate?: number; rtt?: boolean; pcap?: string; pcapId?: string; pcapFrames?: number; pcapSecs?: number; pcapTiming?: boolean; loops?: number; rewriteMacs?: boolean; }
 /** A saved traffic test (RFC 2544, RFC 2889 learning, convergence). */
 export interface EmuTest { id: string; name: string; kind: 'throughput' | 'latency' | 'frame-loss' | 'back-to-back' | 'learning' | 'convergence' | 'iperf'; from: string; to: string; both?: boolean; monitor?: string; vlan?: number; sizes?: number[] | null; trial?: number; maxPps?: number; rate?: number; loss?: number; resolution?: number; max?: number; action?: '' | 'pull' | 'stop' | 'restart'; switch?: string; port?: string; at?: number; hold?: number; seconds?: number; server?: string; client?: string; serverIp?: string; proto?: 'tcp' | 'udp'; bandwidth?: string; parallel?: number; reverse?: boolean; }
 export interface EmuTestRow { dir?: string; size?: number; pps?: number; mbps?: number; load?: number; loss: number; latMin?: number; latAvg?: number; latMax?: number; jitter?: number; burst?: number; addresses?: number; lost?: number; outageMs?: number; retrans?: number; trials?: number; note?: string; }
@@ -443,6 +451,11 @@ export interface EmuTestRun { id: string; test: string; name: string; kind: stri
 export interface EmuMod { field: 'srcMac' | 'dstMac' | 'srcIp' | 'dstIp' | 'vlan' | 'sport' | 'dport'; mode: 'inc' | 'random'; count: number; step?: number; }
 export interface EmuStreamResult { id: string; tx: number; rx: number; expected: number; other: number; loss: number; latAvg: number; latMax: number; latMin?: number; jitter?: number; ooo?: number; dup?: number; txRate: number; rxRate: number; running: boolean; result: '' | 'pass' | 'fail'; why?: string;
   p50?: number; p95?: number; p99?: number; hist?: { lo: number; hi: number; n: number }[]; flows?: EmuFlowResult[]; flowsN?: number; flowsLossy?: number; marks?: { vlan: number; prio: number; dscp: number; n: number }[]; txMbps?: number; rxMbps?: number; sentFrame?: string; gotFrame?: string; }
+/** Headers a stream's frames carry beyond Ethernet, VLAN and IP: an outer tag (QinQ), MPLS labels, a GRE or VXLAN
+ * tunnel around them, IPv6 extension headers. */
+export interface EmuEncap { outer?: { tpid: number; vlan: number; prio?: number } | null; mpls?: { label: number; tc?: number; ttl?: number }[] | null;
+  gre?: { src: string; dst: string; key?: number } | null; vxlan?: { vni: number; src: string; dst: string; port?: number } | null;
+  v6ext?: { type: 'hbh' | 'dst' | 'rt' | 'frag'; segs?: string; offset?: number; more?: boolean }[] | null; }
 /** One flow of a stream with changing fields: one combination of their values. */
 export interface EmuFlowResult { flow: number; name: string; tx: number; rx: number; loss: number; latAvg: number; latMax: number; }
 /** A lab tool the AI chat called: done (out), or to be asked first. */

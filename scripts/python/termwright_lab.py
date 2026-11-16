@@ -333,8 +333,9 @@ class Traffic:
 
     def add_port(self, switch: str, port: str, ip: Optional[str] = None, **fields) -> str:
         """A test port on a free switch port; returns its name. Fields: ip6, gateway, vlan, groups, lldp, speed,
-        lag, lacp_fast, clients (many hosts behind it: dict(n=200, dhcp=True, groups=[...], dot1x=dict(user="user{n}",
-        password=...), rate=50)), stp (dict(mode="rstp", prio=4096))."""
+        lag, lacp_fast, clients (many hosts behind it: dict(n=200, dhcp=True, dhcp6=True, groups=[...], dot1x=dict(user="user{n}",
+        password=..., method="peap"), rate=50)), stp (dict(mode="rstp", prio=4096)), vrrp (dict(ver=3, vrid=1, prio=50,
+        vip="10.10.0.254", interval=1000, preempt=True)), bfd (dict(peer="10.10.0.1", tx=300, mult=3))."""
         before = {p["name"] for p in self.ports()}
         v = self.lab.request("POST", "/traffic/ports", _body(dict(switch=switch, port=port, ip=ip, **fields)))
         new = [p["name"] for p in (v.get("testers") or []) if p["name"] not in before]
@@ -343,12 +344,14 @@ class Traffic:
         return new[0]
 
     def set_port(self, name: str, **fields) -> dict:
-        """Change a test port: the fields of add_port, and topology_change=True (its next BPDUs say so)."""
+        """Change a test port: the fields of add_port, topologyChange=True (its next BPDUs say so) and silentBfd=True
+        (no BFD for 5 s: bfdState["measured"] is how fast the switch saw it). vrrp=dict(..., silent=True) stops its
+        VRRP advertisements: vrrpState["takeover"] is how fast the switch took over (ms)."""
         return self.lab.request("PATCH", "/traffic/ports/" + urllib.parse.quote(name, safe=""), _body(fields))
 
     def clients(self, name: str) -> dict:
-        """How a test port's clients are doing: n, bound (DHCP), auth (802.1X), failed, list (the first 256:
-        MAC, address, 802.1X state, why it failed)."""
+        """How a test port's clients are doing: n, bound (DHCP), bound6 (DHCPv6), auth (802.1X), failed, list (the
+        first 256: MAC, address, 802.1X state, why it failed, IPv6 address)."""
         for p in self.ports():
             if p["name"] == name:
                 return p.get("clientState") or {}
@@ -371,7 +374,9 @@ class Traffic:
         are worked out unless no_fix=True, the counting signature goes at its end unless no_sig=True).
         udfs=[{"offset": 26, "width": 4, "mode": "inc", "start": 0x0a0a0001, "count": 100}] changes bytes per
         frame; bad="ipcsum" (or l4csum, ttl0, runt, frag-tiny, tcp-xmas … - see the guide) puts a fault in
-        every frame; fuzz={"from": 14, "to": 42, "seed": 7} randomizes bytes; expect="drop" passes when the
+        every frame; fuzz={"from": 14, "to": 42, "seed": 7} randomizes bytes; encap={"outer": {"vlan": 100},
+        "mpls": [{"label": 1000}]} or {"vxlan": {"vni": 10010, "dst": "10.255.0.1"}} or {"gre": {"dst": ...}} or
+        {"v6ext": [{"type": "hbh"}]} adds headers (the size stays the size on the wire); expect="drop" passes when the
         switch drops them, expect="any" only counts them."""
         if rate is not None:
             if "pps" in fields:

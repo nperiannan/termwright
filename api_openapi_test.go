@@ -378,7 +378,10 @@ func openAPIDoc(t *testing.T) om {
 	}}}
 	portPatch := om{{"type", "object"}, {"minProperties", 1}, {"additionalProperties", false}, {"description", "Only the fields given change."}, {"properties", om{
 		{"name", om{{"type", "string"}}}, {"ip", om{{"type", "string"}}}, {"ip6", om{{"type", "string"}}}, {"gateway", om{{"type", "string"}}},
-		{"vlan", om{{"type", "integer"}, {"minimum", 0}, {"maximum", 4094}}}, {"groups", om{{"type", "array"}, {"items", om{{"type", "string"}}}}}, {"lldp", om{{"type", "boolean"}}}}}}
+		{"vlan", om{{"type", "integer"}, {"minimum", 0}, {"maximum", 4094}}}, {"groups", om{{"type", "array"}, {"items", om{{"type", "string"}}}}}, {"lldp", om{{"type", "boolean"}}},
+		{"clients", om{{"$ref", "#/components/schemas/EmuClients"}}}, {"stp", om{{"$ref", "#/components/schemas/EmuSTP"}}},
+		{"vrrp", om{{"$ref", "#/components/schemas/EmuVRRP"}}}, {"bfd", om{{"$ref", "#/components/schemas/EmuBFD"}}},
+		{"silentBfd", om{{"type", "boolean"}, {"description", "The test port stops sending BFD for 5 s; bfdState.measured is how fast the switch saw it."}}}}}}
 	testParam := om{{"name", "test"}, {"in", "path"}, {"required", true}, {"description", "The test's name or id."}, {"schema", om{{"type", "string"}}}}
 	runParam := om{{"name", "run"}, {"in", "path"}, {"required", true}, {"description", "The run's id (from runTest or listRuns), or latest."}, {"schema", om{{"type", "string"}}}}
 	testEx := om{

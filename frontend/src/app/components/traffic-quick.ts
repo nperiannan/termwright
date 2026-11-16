@@ -5,7 +5,7 @@ import { EmuRadiusUser, EmuStream, EmuTest, EmuTester, EmuTrafficView } from '..
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
 
-export type QuickKey = 'l2' | 'l3' | 'custom' | 'adv' | 'latency' | 'jitter' | 'load' | 'rfc2544' | 'bad' | 'fuzz' | 'vlaniso' | 'mtu' | 'dot1x';
+export type QuickKey = 'l2' | 'l3' | 'custom' | 'adv' | 'latency' | 'jitter' | 'load' | 'rfc2544' | 'bad' | 'fuzz' | 'vlaniso' | 'mtu' | 'dot1x' | 'dhcp6' | 'vrrp' | 'bfd';
 
 const ITEMS: { k: QuickKey; name: string; what: string; group: string }[] = [
   { k: 'l2', name: 'L2 stream', what: 'Same VLAN, switched', group: 'Streams' },
@@ -21,6 +21,9 @@ const ITEMS: { k: QuickKey; name: string; what: string; group: string }[] = [
   { k: 'vlaniso', name: 'VLAN isolation', what: 'No frame crosses VLANs', group: 'Tests' },
   { k: 'mtu', name: 'MTU and jumbo frames', what: 'Large frames forwarded or dropped', group: 'Tests' },
   { k: 'dot1x', name: '802.1X clients', what: 'Many users log in by RADIUS', group: 'Tests' },
+  { k: 'dhcp6', name: 'DHCPv6 clients', what: 'Many clients take IPv6 addresses', group: 'Tests' },
+  { k: 'vrrp', name: 'VRRP failover', what: 'The switch takes over the virtual IP', group: 'Tests' },
+  { k: 'bfd', name: 'BFD failure detection', what: 'The switch sees a dead link in time', group: 'Tests' },
 ];
 
 /** The faults a stream can put in its frames (as BadFrames in internal/emu/traffic.go): who should drop them. */
@@ -66,10 +69,10 @@ interface PortChange { t: EmuTester; set: Partial<EmuTester>; text: string }
           <section class="dt">
             <h3>{{ tr(cur().name) }}</h3>
             <p class="desc">{{ tr(help[key()]) }}</p>
-            @if (testers().length < 2 && key() !== 'dot1x') { <p class="warn">⚠ {{ tr('It needs two test ports: add them with ＋ Test Port (on two switch ports), then come back.') }}</p> }
+            @if (testers().length < 2 && !single()) { <p class="warn">⚠ {{ tr('It needs two test ports: add them with ＋ Test Port (on two switch ports), then come back.') }}</p> }
             <div class="qs">
-              <div class="q"><span>{{ tr(key() === 'dot1x' ? 'Test port' : 'From') }}</span><select [(ngModel)]="a" (ngModelChange)="fill()">@for (t of testers(); track t.id) { <option [value]="t.id">{{ t.name }} · {{ t.portName || t.port }}</option> }</select>
-                @if (key() !== 'dot1x') { <span class="to">→</span><select [(ngModel)]="b" (ngModelChange)="fill()">@for (t of testers(); track t.id) { @if (t.id !== a) { <option [value]="t.id">{{ t.name }} · {{ t.portName || t.port }}</option> } }</select> }</div>
+              <div class="q"><span>{{ tr(single() ? 'Test port' : 'From') }}</span><select [(ngModel)]="a" (ngModelChange)="fill()">@for (t of testers(); track t.id) { <option [value]="t.id">{{ t.name }} · {{ t.portName || t.port }}</option> }</select>
+                @if (!single()) { <span class="to">→</span><select [(ngModel)]="b" (ngModelChange)="fill()">@for (t of testers(); track t.id) { @if (t.id !== a) { <option [value]="t.id">{{ t.name }} · {{ t.portName || t.port }}</option> } }</select> }</div>
               @if (key() === 'l2' || key() === 'latency' || key() === 'jitter' || key() === 'load' || key() === 'rfc2544' || key() === 'fuzz' || key() === 'mtu' || (key() === 'bad' && path === 'l2')) {
                 <div class="q"><span>{{ tr('The switch ports carry') }}</span><span class="seg"><i [class.on]="!tagged" (click)="tagged = false; fill()">{{ tr('untagged frames (access port)') }}</i><i [class.on]="tagged" (click)="tagged = true; fill()">{{ tr('VLAN tagged frames') }}</i></span>
                   @if (tagged) { <input class="n" type="number" min="1" max="4094" [(ngModel)]="vlan" (ngModelChange)="fill()" [title]="tr('The VLAN ID tagged on the switch ports')" /> }</div>
@@ -97,10 +100,26 @@ interface PortChange { t: EmuTester; set: Partial<EmuTester>; text: string }
               @if (key() === 'vlaniso') { <div class="q two"><span>{{ tr('VLAN of the switch ports') }}</span><input class="n" type="number" min="1" max="4094" [(ngModel)]="vlanA" (ngModelChange)="fill()" [title]="nameOf(a)" /><span class="mut">{{ tr('and') }}</span><input class="n" type="number" min="1" max="4094" [(ngModel)]="vlanB" (ngModelChange)="fill()" [title]="nameOf(b)" /></div> }
               @if (key() === 'mtu') { <div class="q"><span>{{ tr('Jumbo frames on the switch') }}</span><span class="seg"><i [class.on]="jumbo" (click)="jumbo = true; fill()">{{ tr('on (9216)') }}</i><i [class.on]="!jumbo" (click)="jumbo = false; fill()">{{ tr('off (1518)') }}</i></span></div> }
               @if (key() === 'dot1x') {
+                <div class="q"><span>{{ tr('Method') }}</span><span class="seg"><i [class.on]="method === 'md5'" (click)="method = 'md5'; fill()">EAP-MD5</i><i [class.on]="method === 'peap'" (click)="method = 'peap'; fill()">PEAP-MSCHAPv2</i></span>@if (method === 'peap') { <span class="mut">{{ tr('the lab\\'s RADIUS server answers it with a certificate Termwright makes') }}</span> }</div>
                 <div class="q"><span>{{ tr('Clients') }}</span><input class="n" type="number" min="1" max="4000" [(ngModel)]="nClients" (ngModelChange)="fill()" /><span class="mut">{{ tr('user names') }}</span><input class="u" [(ngModel)]="userPrefix" (ngModelChange)="fill()" /><span class="mono mut">{{ userRange() }}</span></div>
                 <div class="q"><span>{{ tr('Password') }}</span><input [(ngModel)]="userPass" (ngModelChange)="fill()" autocomplete="off" /><span class="mut">VLAN</span><input class="n" [(ngModel)]="userVlan" (ngModelChange)="fill()" [placeholder]="tr('the port\\'s')" /><label class="cb"><input type="checkbox" [(ngModel)]="clientDhcp" (ngModelChange)="fill()" /> {{ tr('DHCP after login') }}</label></div>
                 <div class="q"><span></span><label class="cb"><input type="checkbox" [(ngModel)]="toRadius" (ngModelChange)="fill()" /> {{ tr('Add the users to the lab\\'s RADIUS server (and turn it on)') }}</label></div>
                 <p class="note">{{ tr('The switch port needs 802.1X with the lab\\'s RADIUS server: its address and secret are on the RADIUS page.') }}</p>
+              }
+              @if (key() === 'dhcp6') {
+                <div class="q"><span>{{ tr('Clients') }}</span><input class="n" type="number" min="1" max="4000" [(ngModel)]="nClients" (ngModelChange)="fill()" /><label class="cb"><input type="checkbox" [(ngModel)]="also4" (ngModelChange)="fill()" /> {{ tr('IPv4 by DHCP too') }}</label></div>
+                <p class="note">{{ tr('A DHCPv6 server must answer on the switch port\\'s VLAN: the switch\\'s own, a relay to a lab server, or a Linux server in the lab.') }}</p>
+              }
+              @if (key() === 'vrrp') {
+                <div class="q"><span>VRRP</span><span class="seg"><i [class.on]="vver === 3" (click)="vver = 3; fill()">VRRPv3</i><i [class.on]="vver === 2" (click)="vver = 2; fill()">VRRPv2</i></span><span class="mut">VRID</span><input class="n" type="number" min="1" max="255" [(ngModel)]="vrid" (ngModelChange)="fill()" /></div>
+                <div class="q"><span>{{ tr('Virtual IP') }}</span><input [(ngModel)]="vip" (ngModelChange)="fill()" placeholder="10.10.0.254" /><span class="mut">{{ tr('as configured on the switch') }}</span></div>
+                <div class="q"><span>{{ tr('The test port starts as') }}</span><span class="seg"><i [class.on]="vMaster" (click)="vMaster = true; fill()">{{ tr('master (priority 254)') }}</i><i [class.on]="!vMaster" (click)="vMaster = false; fill()">{{ tr('backup (priority 50)') }}</i></span></div>
+                <p class="note">{{ tr('The switch needs VRRP on the test port\\'s VLAN with the same VRID and virtual IP.') }}</p>
+              }
+              @if (key() === 'bfd') {
+                <div class="q"><span>{{ tr('The switch\\'s address') }}</span><input [(ngModel)]="bPeer" (ngModelChange)="fill()" placeholder="10.10.0.1" /><span class="mut">{{ tr('on this link') }}</span></div>
+                <div class="q"><span>{{ tr('Interval') }}</span><input class="n" type="number" min="10" [(ngModel)]="bInt" (ngModelChange)="fill()" /><span class="mut">ms ×</span><input class="n" type="number" min="1" max="255" [(ngModel)]="bMult" (ngModelChange)="fill()" /><span class="mut">{{ tr('= detect time {0} ms', (+bInt || 300) * (+bMult || 3)) }}</span></div>
+                <p class="note">{{ tr('The switch needs BFD on that interface (or on a static route or OSPF neighbour to the test port\\'s address).') }}</p>
               }
               @if (key() === 'custom') {
                 <div class="q top"><span>{{ tr('Frame') }}</span><textarea [(ngModel)]="hex" (ngModelChange)="fill()" rows="4" [placeholder]="tr('Paste the frame in hex: Wireshark → Copy → …as a Hex Stream, or a hex dump')"></textarea></div>
@@ -189,6 +208,9 @@ export class TrafficQuick implements OnInit {
     vlaniso: 'Frames between two test ports on switch ports in different VLANs: none may arrive.',
     mtu: 'Frames of 1518, 1600 and 9000 bytes: the large ones arrive only with jumbo frames on.',
     dot1x: 'Many clients behind one test port log in by 802.1X with numbered user names; the users are added to the lab\'s RADIUS server for you.',
+    dhcp6: 'Many clients behind one test port each take an IPv6 address by DHCPv6 (solicit, advertise, request, reply), each with its own MAC and DUID.',
+    vrrp: 'The test port is a second VRRP router beside the switch. Go Silent and the switch must take over the virtual IP within its master-down time; Take Over and it must give it back. The test port times both.',
+    bfd: 'A BFD session between the test port and the switch. Go Silent for 5 s and the switch must take the session down within its detect time; the test port times it.',
   } as Record<QuickKey, string>;
   protected fuzzParts = [{ k: 'ip', name: 'IP header' }, { k: 'l4', name: 'UDP header' }, { k: 'etype', name: 'EtherType' }, { k: 'payload', name: 'Payload' }];
 
@@ -205,6 +227,9 @@ export class TrafficQuick implements OnInit {
   protected faults = new Set(BAD_FRAMES.filter(f => !f.tcp).map(f => f.k).concat(['tcp-xmas']));
   protected parts = new Set(['ip', 'l4']); protected seed = 1;
   protected vlanA = 10; protected vlanB = 20; protected jumbo = false;
+  protected method: 'md5' | 'peap' = 'md5'; protected also4 = false; protected vver: 2 | 3 = 3; protected vrid = 1; protected vip = ''; protected vMaster = true;
+  protected bPeer = ''; protected bInt = 300; protected bMult = 3;
+  protected single() { return ['dot1x', 'dhcp6', 'vrrp', 'bfd'].includes(this.key()); }
   protected nClients = 100; protected userPrefix = 'user'; protected userPass = 'lab123'; protected userVlan = ''; protected clientDhcp = true; protected toRadius = true;
   protected hex = '';
 
@@ -308,8 +333,25 @@ export class TrafficQuick implements OnInit {
         }
         break;
       case 'dot1x': {
-        if (ta) ch.push({ t: ta, set: { clients: { n: +this.nClients || 1, rate: 50, dhcp: this.clientDhcp, dot1x: { user: this.userPrefix + '{n}', password: this.userPass } } }, text: tr('{0} clients behind it, logging in as {1} by 802.1X{2}', this.nClients, this.userRange(), this.clientDhcp ? tr(', then DHCP') : '') });
+        const m = this.method === 'peap' ? 'PEAP-MSCHAPv2' : 'EAP-MD5';
+        if (ta) ch.push({ t: ta, set: { clients: { n: +this.nClients || 1, rate: 50, dhcp: this.clientDhcp, dot1x: { user: this.userPrefix + '{n}', password: this.userPass, method: this.method } } }, text: tr('{0} clients behind it, logging in as {1} by 802.1X ({2}){3}', this.nClients, this.userRange(), m, this.clientDhcp ? tr(', then DHCP') : '') });
         if (this.toRadius) ex.push(tr('RADIUS server: on, with {0} users {1}, password as above{2}', this.nClients, this.userRange(), this.userVlan ? tr(', VLAN {0}', this.userVlan) : ''));
+        break;
+      }
+      case 'dhcp6':
+        if (ta) ch.push({ t: ta, set: { clients: { n: +this.nClients || 1, rate: 50, dhcp: this.also4, dhcp6: true } }, text: tr('{0} clients behind it, taking IPv6 addresses by DHCPv6{1}', this.nClients, this.also4 ? tr(' and IPv4 by DHCP') : '') });
+        ex.push(tr('Passes when every client has an address: the test port\'s card counts them'));
+        break;
+      case 'vrrp': {
+        const prio = this.vMaster ? 254 : 50, iv = 1000, down = Math.round((3 * iv + (256 - prio) * iv / 256) / 100) / 10;
+        if (ta) ch.push({ t: ta, set: { vrrp: { ver: this.vver, vrid: +this.vrid || 1, prio, vip: this.vip.trim(), interval: iv, preempt: true } }, text: tr('VRRPv{0} router for {1} (VRID {2}), priority {3}: {4} at first', this.vver, this.vip.trim() || '?', +this.vrid || 1, prio, tr(this.vMaster ? 'master' : 'backup')) });
+        ex.push(tr(this.vMaster ? 'Then Go Silent on the test port: the switch should be master within about {0} s, and the test port times it' : 'Then Take Over on the test port: it should be master at once, and Go Silent gives it back to the switch within about {0} s', down));
+        break;
+      }
+      case 'bfd': {
+        const det = (+this.bInt || 300) * (+this.bMult || 3);
+        if (ta) ch.push({ t: ta, set: { bfd: { peer: this.bPeer.trim(), tx: +this.bInt || 300, rx: +this.bInt || 300, mult: +this.bMult || 3 } }, text: tr('BFD session with {0}: {1} ms × {2}', this.bPeer.trim() || '?', +this.bInt || 300, +this.bMult || 3) });
+        ex.push(tr('Then Go Silent for 5 s on the test port: the switch should take the session down within {0} ms, and the test port times it', det));
         break;
       }
     }
@@ -329,6 +371,9 @@ export class TrafficQuick implements OnInit {
   protected ready() {
     const k = this.key();
     if (k === 'dot1x') return !!this.a && !!this.userPrefix.trim() && +this.nClients > 0;
+    if (k === 'dhcp6') return !!this.a && +this.nClients > 0;
+    if (k === 'vrrp') return !!this.a && !!this.vip.trim();
+    if (k === 'bfd') return !!this.a && !!this.bPeer.trim();
     if (k === 'custom' && !this.hex.trim()) return false;
     return !!this.a && !!this.b && this.a !== this.b && this.rows().length > 0;
   }

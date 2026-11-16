@@ -130,6 +130,47 @@ func (r emuRep) to(s emu.Stream) string {
 	return "every other test port"
 }
 
+// emuTesterProto is what a test port speaks besides its streams, and how it went: clients, VRRP, BFD.
+func emuTesterProto(t emu.Tester) string {
+	var p []string
+	if c := t.Clients; c != nil && c.N > 0 {
+		x := fmt.Sprintf("%d clients", c.N)
+		if cs := t.ClientState; cs != nil {
+			if c.Dot1x != nil {
+				x += fmt.Sprintf(", %d in by 802.1X (%s)", cs.Auth, map[bool]string{true: "PEAP-MSCHAPv2", false: "EAP-MD5"}[c.Dot1x.Method == "peap"])
+			}
+			if c.DHCP {
+				x += fmt.Sprintf(", %d with DHCP", cs.Bound)
+			}
+			if c.DHCP6 {
+				x += fmt.Sprintf(", %d with DHCPv6", cs.Bound6)
+			}
+		}
+		p = append(p, x)
+	}
+	if v := t.VRRP; v != nil {
+		x := fmt.Sprintf("VRRPv%d %s", v.Ver, v.VIP)
+		if st := t.VRRPState; st != nil {
+			x += ": " + map[bool]string{true: "master", false: "backup"}[st.Us]
+			if st.Takeover > 0 {
+				x += fmt.Sprintf(", the switch took over in %d ms", st.Takeover)
+			}
+		}
+		p = append(p, x)
+	}
+	if b := t.BFD; b != nil {
+		x := "BFD with " + b.Peer
+		if st := t.BFDState; st != nil {
+			x += ": " + st.State
+			if st.Measured > 0 {
+				x += fmt.Sprintf(", the switch noticed silence in %d ms", st.Measured)
+			}
+		}
+		p = append(p, x)
+	}
+	return strings.Join(p, "; ")
+}
+
 // emuDur writes seconds as 45 s, 2 min 05 s, 1 h 02 min.
 func emuDur(s float64) string {
 	n := int(math.Round(s))
@@ -184,6 +225,27 @@ func emuFrameText(s emu.Stream) string {
 	if s.Fuzz != nil {
 		p = append(p, fmt.Sprintf("fuzzed %d-%s", s.Fuzz.From, map[bool]string{true: "end", false: fmt.Sprint(s.Fuzz.To)}[s.Fuzz.To == 0]))
 	}
+	if e := s.Encap; e != nil {
+		if e.Outer != nil {
+			p = append(p, fmt.Sprintf("outer tag %d", e.Outer.VLAN))
+		}
+		if len(e.MPLS) > 0 {
+			var l []string
+			for _, m := range e.MPLS {
+				l = append(l, fmt.Sprint(m.Label))
+			}
+			p = append(p, "MPLS "+strings.Join(l, "/"))
+		}
+		if e.GRE != nil {
+			p = append(p, "GRE to "+e.GRE.Dst)
+		}
+		if e.VXLAN != nil {
+			p = append(p, fmt.Sprintf("VXLAN %d to %s", e.VXLAN.VNI, e.VXLAN.Dst))
+		}
+		if n := len(e.V6Ext); n > 0 {
+			p = append(p, fmt.Sprintf("%d IPv6 extension header%s", n, map[bool]string{true: "s"}[n > 1]))
+		}
+	}
 	if n := len(s.UDFs) + len(s.Mods); n > 0 {
 		p = append(p, fmt.Sprintf("%d changing field%s", n, map[bool]string{true: "s"}[n > 1]))
 	}
@@ -237,7 +299,7 @@ func emuPassText(s emu.Stream) string {
 // emuFld is one field of a decoded frame.
 type emuFld struct{ Layer, Name, Val string }
 
-var emuEtherTypes = map[uint16]string{0x0800: "IPv4", 0x86DD: "IPv6", 0x0806: "ARP", 0x8100: "802.1Q", 0x88A8: "802.1ad", 0x88B5: "local experimental", 0x88CC: "LLDP", 0x888E: "EAPOL", 0x8809: "slow protocols"}
+var emuEtherTypes = map[uint16]string{0x0800: "IPv4", 0x86DD: "IPv6", 0x0806: "ARP", 0x8100: "802.1Q", 0x88A8: "802.1ad", 0x88B5: "local experimental", 0x88CC: "LLDP", 0x888E: "EAPOL", 0x8809: "slow protocols", 0x8847: "MPLS", 0x9100: "VLAN (0x9100)"}
 
 // emuIPSum is the IPv4 header checksum: 0 when the header's own is right.
 func emuIPSum(h []byte) uint16 {
@@ -251,25 +313,38 @@ func emuIPSum(h []byte) uint16 {
 	return ^uint16(s)
 }
 
-// emuFrameFields names the fields of an Ethernet frame: its MACs, VLAN tags, IPv4/IPv6, UDP/TCP/ICMP or ARP, and
-// Termwright's counting signature.
+// emuFrameFields names the fields of an Ethernet frame: its MACs, VLAN tags, MPLS labels, IPv4/IPv6 with extension
+// headers, GRE and VXLAN tunnels (the frame inside decoded as Inner …), UDP/TCP/ICMP or ARP, and Termwright's
+// counting signature.
 func emuFrameFields(f []byte) []emuFld {
 	var out []emuFld
 	add := func(l, n, v string) { out = append(out, emuFld{l, n, v}) }
-	if len(f) < 14 {
-		add("Ethernet", "Frame", fmt.Sprintf("%d bytes (shorter than an Ethernet header)", len(f)))
-		return out
+	emuDecodeEth(f, "", add)
+	if i := bytes.Index(f, []byte("TWTG")); i >= 0 && len(f) >= i+24 {
+		g := f[i+4:]
+		add("Termwright", "Signature", fmt.Sprintf("at byte %d: stream %d, frame %d", i, binary.BigEndian.Uint16(g)+1, binary.BigEndian.Uint32(g[6:])))
 	}
-	add("Ethernet", "Destination MAC", emuMAC(f[0:6]))
-	add("Ethernet", "Source MAC", emuMAC(f[6:12]))
+	return out
+}
+
+func emuDecodeEth(f []byte, pfx string, add func(l, n, v string)) {
+	if len(f) < 14 {
+		add(pfx+"Ethernet", "Frame", fmt.Sprintf("%d bytes (shorter than an Ethernet header)", len(f)))
+		return
+	}
+	add(pfx+"Ethernet", "Destination MAC", emuMAC(f[0:6]))
+	add(pfx+"Ethernet", "Source MAC", emuMAC(f[6:12]))
 	o, tag := 12, 0
 	et := binary.BigEndian.Uint16(f[o:])
-	for (et == 0x8100 || et == 0x88A8) && len(f) >= o+6 {
+	for (et == 0x8100 || et == 0x88A8 || et == 0x9100) && len(f) >= o+6 {
 		tag++
 		tci := binary.BigEndian.Uint16(f[o+2:])
-		l := "VLAN tag"
+		l := pfx + "VLAN tag"
 		if tag > 1 {
-			l = fmt.Sprintf("VLAN tag %d", tag)
+			l = fmt.Sprintf("%sVLAN tag %d", pfx, tag)
+		}
+		if et != 0x8100 {
+			add(l, "TPID", fmt.Sprintf("0x%04X", et))
 		}
 		add(l, "VLAN ID", fmt.Sprint(tci&0xFFF))
 		add(l, "Priority (802.1p)", fmt.Sprint(tci>>13))
@@ -277,77 +352,138 @@ func emuFrameFields(f []byte) []emuFld {
 		et = binary.BigEndian.Uint16(f[o:])
 	}
 	if tag == 0 {
-		add("VLAN tag", "VLAN ID", "untagged")
+		add(pfx+"VLAN tag", "VLAN ID", "untagged")
 	}
-	add("Ethernet", "EtherType", fmt.Sprintf("0x%04X %s", et, emuEtherTypes[et]))
+	add(pfx+"Ethernet", "EtherType", fmt.Sprintf("0x%04X %s", et, emuEtherTypes[et]))
 	b := f[o+2:]
+	if et == 0x8847 { // MPLS: the label stack, then IPv4 or IPv6 by its first nibble
+		for n := 1; len(b) >= 4; n++ {
+			e := binary.BigEndian.Uint32(b)
+			add(fmt.Sprintf("%sMPLS %d", pfx, n), "Label, TC, TTL", fmt.Sprintf("%d, %d, %d%s", e>>12, e>>9&7, e&255, map[bool]string{true: " (bottom)"}[e&0x100 != 0]))
+			b = b[4:]
+			if e&0x100 != 0 {
+				break
+			}
+		}
+		et = map[bool]uint16{true: 0x0800, false: 0x86DD}[len(b) > 0 && b[0]>>4 == 4]
+	}
+	emuDecodeIP(b, et, pfx, add)
+}
+
+func emuDecodeIP(b []byte, et uint16, pfx string, add func(l, n, v string)) {
 	l4, proto := []byte(nil), -1
 	switch {
 	case et == 0x0800 && len(b) >= 20:
 		ihl := int(b[0]&15) * 4
-		add("IPv4", "Version", fmt.Sprint(b[0]>>4))
-		add("IPv4", "Header length", fmt.Sprintf("%d bytes", ihl))
-		add("IPv4", "DSCP", fmt.Sprint(b[1]>>2))
-		add("IPv4", "Total length", fmt.Sprint(binary.BigEndian.Uint16(b[2:])))
+		L := pfx + "IPv4"
+		add(L, "Version", fmt.Sprint(b[0]>>4))
+		add(L, "Header length", fmt.Sprintf("%d bytes", ihl))
+		add(L, "DSCP", fmt.Sprint(b[1]>>2))
+		add(L, "Total length", fmt.Sprint(binary.BigEndian.Uint16(b[2:])))
 		ff := binary.BigEndian.Uint16(b[6:])
 		frag := "none"
 		if ff&0x3FFF != 0 {
 			frag = fmt.Sprintf("offset %d%s", (ff&0x1FFF)*8, map[bool]string{true: ", more fragments"}[ff&0x2000 != 0])
 		}
-		add("IPv4", "Fragment", frag+map[bool]string{true: ", don't fragment"}[ff&0x4000 != 0])
-		add("IPv4", "TTL", fmt.Sprint(b[8]))
+		add(L, "Fragment", frag+map[bool]string{true: ", don't fragment"}[ff&0x4000 != 0])
+		add(L, "TTL", fmt.Sprint(b[8]))
 		proto = int(b[9])
-		add("IPv4", "Protocol", fmt.Sprintf("%d %s", b[9], map[int]string{1: "ICMP", 6: "TCP", 17: "UDP"}[proto]))
+		add(L, "Protocol", fmt.Sprintf("%d %s", b[9], map[int]string{1: "ICMP", 6: "TCP", 17: "UDP", 47: "GRE", 112: "VRRP"}[proto]))
 		ok := "wrong"
 		if ihl >= 20 && len(b) >= ihl && emuIPSum(b[:ihl]) == 0 {
 			ok = "right"
 		}
-		add("IPv4", "Header checksum", fmt.Sprintf("0x%04X (%s)", binary.BigEndian.Uint16(b[10:]), ok))
-		add("IPv4", "Source", net.IP(b[12:16]).String())
-		add("IPv4", "Destination", net.IP(b[16:20]).String())
+		add(L, "Header checksum", fmt.Sprintf("0x%04X (%s)", binary.BigEndian.Uint16(b[10:]), ok))
+		add(L, "Source", net.IP(b[12:16]).String())
+		add(L, "Destination", net.IP(b[16:20]).String())
 		if ihl > 20 {
-			add("IPv4", "Options", fmt.Sprintf("%d bytes", ihl-20))
+			add(L, "Options", fmt.Sprintf("%d bytes", ihl-20))
 		}
 		if ihl >= 20 && len(b) > ihl && ff&0x1FFF == 0 {
 			l4 = b[ihl:]
 		}
 	case et == 0x86DD && len(b) >= 40:
-		add("IPv6", "Traffic class (DSCP)", fmt.Sprint(((b[0]&15)<<4|b[1]>>4)>>2))
-		add("IPv6", "Payload length", fmt.Sprint(binary.BigEndian.Uint16(b[4:])))
+		L := pfx + "IPv6"
+		add(L, "Traffic class (DSCP)", fmt.Sprint(((b[0]&15)<<4|b[1]>>4)>>2))
+		add(L, "Payload length", fmt.Sprint(binary.BigEndian.Uint16(b[4:])))
 		proto = int(b[6])
-		add("IPv6", "Next header", fmt.Sprintf("%d %s", b[6], map[int]string{58: "ICMPv6", 6: "TCP", 17: "UDP"}[proto]))
-		add("IPv6", "Hop limit", fmt.Sprint(b[7]))
-		add("IPv6", "Source", net.IP(b[8:24]).String())
-		add("IPv6", "Destination", net.IP(b[24:40]).String())
+		add(L, "Hop limit", fmt.Sprint(b[7]))
+		add(L, "Source", net.IP(b[8:24]).String())
+		add(L, "Destination", net.IP(b[24:40]).String())
 		l4 = b[40:]
+		for n := 0; n < 8 && len(l4) >= 8 && (proto == 0 || proto == 60 || proto == 43 || proto == 44); n++ { // extension headers
+			name := map[int]string{0: "Hop-by-hop options", 60: "Destination options", 43: "Routing", 44: "Fragment"}[proto]
+			size := 8
+			v := fmt.Sprintf("%d bytes", 8+int(l4[1])*8)
+			switch proto {
+			case 44:
+				fo := binary.BigEndian.Uint16(l4[2:])
+				v = fmt.Sprintf("offset %d%s, ID 0x%08X", (fo>>3)*8, map[bool]string{true: ", more fragments"}[fo&1 != 0], binary.BigEndian.Uint32(l4[4:]))
+			case 43:
+				size = 8 + int(l4[1])*8
+				v = fmt.Sprintf("type %d, %d segments left", l4[2], l4[3])
+				if l4[2] == 4 && len(l4) >= size {
+					var sg []string
+					for i := 8; i+16 <= size; i += 16 {
+						sg = append(sg, net.IP(l4[i:i+16]).String())
+					}
+					v += ": " + strings.Join(sg, ", ")
+				}
+			default:
+				size = 8 + int(l4[1])*8
+			}
+			add(L, name, v)
+			proto = int(l4[0])
+			if len(l4) < size {
+				l4 = nil
+				break
+			}
+			l4 = l4[size:]
+		}
+		add(L, "Next header", fmt.Sprintf("%d %s", proto, map[int]string{58: "ICMPv6", 6: "TCP", 17: "UDP", 47: "GRE", 112: "VRRP"}[proto]))
 	case et == 0x0806 && len(b) >= 28:
-		add("ARP", "Operation", map[uint16]string{1: "request", 2: "reply"}[binary.BigEndian.Uint16(b[6:])])
-		add("ARP", "Sender", emuMAC(b[8:14])+" "+net.IP(b[14:18]).String())
-		add("ARP", "Target", emuMAC(b[18:24])+" "+net.IP(b[24:28]).String())
+		add(pfx+"ARP", "Operation", map[uint16]string{1: "request", 2: "reply"}[binary.BigEndian.Uint16(b[6:])])
+		add(pfx+"ARP", "Sender", emuMAC(b[8:14])+" "+net.IP(b[14:18]).String())
+		add(pfx+"ARP", "Target", emuMAC(b[18:24])+" "+net.IP(b[24:28]).String())
 	}
 	switch {
 	case proto == 17 && len(l4) >= 8:
-		add("UDP", "Ports", fmt.Sprintf("%d → %d", binary.BigEndian.Uint16(l4), binary.BigEndian.Uint16(l4[2:])))
-		add("UDP", "Length", fmt.Sprint(binary.BigEndian.Uint16(l4[4:])))
-		add("UDP", "Checksum", fmt.Sprintf("0x%04X", binary.BigEndian.Uint16(l4[6:])))
+		dp := binary.BigEndian.Uint16(l4[2:])
+		add(pfx+"UDP", "Ports", fmt.Sprintf("%d → %d", binary.BigEndian.Uint16(l4), dp))
+		add(pfx+"UDP", "Length", fmt.Sprint(binary.BigEndian.Uint16(l4[4:])))
+		add(pfx+"UDP", "Checksum", fmt.Sprintf("0x%04X", binary.BigEndian.Uint16(l4[6:])))
+		if dp == 4789 && len(l4) >= 16 && pfx == "" { // VXLAN: the frame inside
+			add("VXLAN", "VNI", fmt.Sprint(binary.BigEndian.Uint32(l4[12:])>>8))
+			emuDecodeEth(l4[16:], "Inner ", add)
+		}
 	case proto == 6 && len(l4) >= 20:
-		add("TCP", "Ports", fmt.Sprintf("%d → %d", binary.BigEndian.Uint16(l4), binary.BigEndian.Uint16(l4[2:])))
+		add(pfx+"TCP", "Ports", fmt.Sprintf("%d → %d", binary.BigEndian.Uint16(l4), binary.BigEndian.Uint16(l4[2:])))
 		var fl []string
 		for i, n := range []string{"FIN", "SYN", "RST", "PSH", "ACK", "URG"} {
 			if l4[13]&(1<<i) != 0 {
 				fl = append(fl, n)
 			}
 		}
-		add("TCP", "Flags", orStr(strings.Join(fl, " "), "none"))
-		add("TCP", "Checksum", fmt.Sprintf("0x%04X", binary.BigEndian.Uint16(l4[16:])))
+		add(pfx+"TCP", "Flags", orStr(strings.Join(fl, " "), "none"))
+		add(pfx+"TCP", "Checksum", fmt.Sprintf("0x%04X", binary.BigEndian.Uint16(l4[16:])))
 	case (proto == 1 || proto == 58) && len(l4) >= 4:
-		add("ICMP", "Type, code", fmt.Sprintf("%d, %d", l4[0], l4[1]))
+		add(pfx+"ICMP", "Type, code", fmt.Sprintf("%d, %d", l4[0], l4[1]))
+	case proto == 47 && len(l4) >= 4 && pfx == "": // GRE: the packet inside
+		fl, pt := binary.BigEndian.Uint16(l4), binary.BigEndian.Uint16(l4[2:])
+		n := 4
+		if fl&0x8000 != 0 {
+			n += 4
+		}
+		v := fmt.Sprintf("protocol 0x%04X", pt)
+		if fl&0x2000 != 0 && len(l4) >= n+4 {
+			v += fmt.Sprintf(", key %d", binary.BigEndian.Uint32(l4[n:]))
+			n += 4
+		}
+		add("GRE", "Header", v)
+		if len(l4) > n {
+			emuDecodeIP(l4[n:], pt, "Inner ", add)
+		}
 	}
-	if i := bytes.Index(f, []byte("TWTG")); i >= 0 && len(f) >= i+24 {
-		g := f[i+4:]
-		add("Termwright", "Signature", fmt.Sprintf("at byte %d: stream %d, frame %d", i, binary.BigEndian.Uint16(g)+1, binary.BigEndian.Uint32(g[6:])))
-	}
-	return out
 }
 
 // emuHexDump is a frame as a hex dump: offset, 16 bytes, their text.
@@ -673,7 +809,7 @@ func emuReportHTML(r emuRep) string {
 	for _, s := range v.Streams {
 		b.WriteString(emuReportStream(r, s))
 	}
-	b.WriteString(`<h2>Test ports</h2><table><tr><th>Test port</th><th>On</th><th>MAC</th><th>Address</th><th>Gateway</th><th>VLAN</th><th class="r">Frames sent</th><th class="r">Frames received</th><th class="r">Its streams' loss %</th><th class="r">Latency avg ms</th><th class="r">Errors</th></tr>`)
+	b.WriteString(`<h2>Test ports</h2><table><tr><th>Test port</th><th>On</th><th>MAC</th><th>Address</th><th>Gateway</th><th>VLAN</th><th class="r">Frames sent</th><th class="r">Frames received</th><th class="r">Its streams' loss %</th><th class="r">Latency avg ms</th><th class="r">Errors</th><th>Protocols</th></tr>`)
 	ts := append([]emu.Tester(nil), v.Testers...)
 	sort.Slice(ts, func(i, j int) bool { return ts[i].Name < ts[j].Name })
 	for _, t := range ts {
@@ -687,8 +823,8 @@ func emuReportHTML(r emuRep) string {
 			vl = fmt.Sprint(t.VLAN)
 		}
 		ip := orStr(t.IP, t.Lease, map[bool]string{true: "DHCP"}[t.DHCP], "-")
-		fmt.Fprintf(&b, `<tr><td><b>%s</b></td><td>%s</td><td class="mono">%s</td><td>%s</td><td>%s</td><td>%s</td><td class="r">%s</td><td class="r">%s</td><td class="r">%.2f</td><td class="r">%s</td><td class="r">%d</td></tr>`,
-			e(t.Name), e(r.testerAt(t.ID)), e(t.MAC), e(ip), e(orStr(t.GW, "-")), vl, emuThousands(p.TX), emuThousands(p.RX), p.Loss, la, p.Errors)
+		fmt.Fprintf(&b, `<tr><td><b>%s</b></td><td>%s</td><td class="mono">%s</td><td>%s</td><td>%s</td><td>%s</td><td class="r">%s</td><td class="r">%s</td><td class="r">%.2f</td><td class="r">%s</td><td class="r">%d</td><td>%s</td></tr>`,
+			e(t.Name), e(r.testerAt(t.ID)), e(t.MAC), e(ip), e(orStr(t.GW, "-")), vl, emuThousands(p.TX), emuThousands(p.RX), p.Loss, la, p.Errors, e(emuTesterProto(t)))
 	}
 	fmt.Fprintf(&b, `</table><footer>Made by Termwright %s on %s. Frame sizes count the 4-byte FCS. Latency is one way when both test ports run on one KVM host, else the round trip. A frame that arrives twice counts once.</footer></main></body></html>`, e(r.Version), r.At.Format("2006-01-02 15:04:05 MST"))
 	return b.String()
@@ -1083,13 +1219,13 @@ func emuReportXLSX(r emuRep) ([]byte, error) {
 		}
 	}
 	// Test ports
-	tp := [][]any{H("Test port", "Switch port", "MAC", "Address", "Gateway", "VLAN", "Line rate Mbit/s", "Frames sent", "Frames received", "Bytes sent", "Bytes received", "Its streams' frames expected", "Arrived", "Loss %", "Latency avg ms", "Latency max ms", "Errors")}
+	tp := [][]any{H("Test port", "Switch port", "MAC", "Address", "Gateway", "VLAN", "Line rate Mbit/s", "Frames sent", "Frames received", "Bytes sent", "Bytes received", "Its streams' frames expected", "Arrived", "Loss %", "Latency avg ms", "Latency max ms", "Errors", "Protocols")}
 	ts := append([]emu.Tester(nil), v.Testers...)
 	sort.Slice(ts, func(i, j int) bool { return ts[i].Name < ts[j].Name })
 	for _, t := range ts {
 		p := r.Port[t.ID]
 		ok := p.LatAvg >= 0 && p.Got > 0
-		tp = append(tp, []any{xlsx.Cell{V: t.Name, S: xlsx.Bold}, r.testerAt(t.ID), xlsx.Cell{V: t.MAC, S: xlsx.Mono}, orStr(t.IP, t.Lease, map[bool]string{true: "DHCP"}[t.DHCP]), t.GW, t.VLAN, t.LineMbps(), p.TX, p.RX, p.TxBytes, p.RxBytes, p.Expected, p.Got, math.Round(p.Loss*1000) / 1000, lat(p.LatAvg, ok), lat(p.LatMax, ok), p.Errors})
+		tp = append(tp, []any{xlsx.Cell{V: t.Name, S: xlsx.Bold}, r.testerAt(t.ID), xlsx.Cell{V: t.MAC, S: xlsx.Mono}, orStr(t.IP, t.Lease, map[bool]string{true: "DHCP"}[t.DHCP]), t.GW, t.VLAN, t.LineMbps(), p.TX, p.RX, p.TxBytes, p.RxBytes, p.Expected, p.Got, math.Round(p.Loss*1000) / 1000, lat(p.LatAvg, ok), lat(p.LatMax, ok), p.Errors, emuTesterProto(t)})
 	}
 	// Topology: the cables between the switches, and where the test ports are
 	topo := [][]any{H("From", "Port", "To", "Port", "State")}

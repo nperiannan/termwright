@@ -44,10 +44,59 @@ type Tester struct {
 	// ClientState is how its clients are doing (filled in for the screens).
 	ClientState *ClientState `json:"clientState,omitempty"`
 	// STPState is what it hears from the switch by spanning tree (filled in for the screens).
-	STPState *STPState `json:"stpState,omitempty"`
-	PortName string    `json:"portName,omitempty"` // as the switch names it (filled in for the screens)
-	X        float64   `json:"x,omitempty"`        // on the canvas
-	Y        float64   `json:"y,omitempty"`        // on the canvas
+	STPState  *STPState  `json:"stpState,omitempty"`
+	PortName  string     `json:"portName,omitempty"`  // as the switch names it (filled in for the screens)
+	X         float64    `json:"x,omitempty"`         // on the canvas
+	Y         float64    `json:"y,omitempty"`         // on the canvas
+	VRRP      *VRRP      `json:"vrrp,omitempty"`      // it is a VRRP router beside the switch
+	BFD       *BFD       `json:"bfd,omitempty"`       // it keeps a BFD session with the switch
+	VRRPState *VRRPState `json:"vrrpState,omitempty"` // what it hears by VRRP (filled in for the screens)
+	BFDState  *BFDState  `json:"bfdState,omitempty"`  // its BFD session (filled in for the screens)
+}
+
+// VRRP makes a test port a second VRRP router for the switch's virtual address (VRRPv2, RFC 3768; VRRPv3, RFC 5798):
+// it advertises with its priority, becomes master when the switch's advertisements stop, and answers ARP (or
+// neighbour solicitations) for the virtual address while it is.
+type VRRP struct {
+	Ver      int    `json:"ver"`                // 2 or 3
+	VRID     int    `json:"vrid"`               // 1-255, as on the switch
+	Prio     int    `json:"prio"`               // 1-254 (the switch's default is 100)
+	VIP      string `json:"vip"`                // the virtual address (IPv6 with VRRPv3 only)
+	Interval int    `json:"interval,omitempty"` // advertisement interval, ms (default 1000; VRRPv2 rounds to seconds)
+	Preempt  bool   `json:"preempt,omitempty"`  // take over from a master with a lower priority
+	Silent   bool   `json:"silent,omitempty"`   // stop advertising and answering, as if the router died (the switch must take over)
+}
+
+// VRRPState is what the test port hears by VRRP.
+type VRRPState struct {
+	State    string `json:"state"`              // master, backup or silent
+	Us       bool   `json:"us,omitempty"`       // the test port is master
+	Master   string `json:"master,omitempty"`   // the master's address, when it is the switch
+	Prio     int    `json:"prio,omitempty"`     // the master's priority
+	Since    int64  `json:"since,omitempty"`    // when the state began (Unix seconds)
+	Changes  int    `json:"changes,omitempty"`  // how often the master changed
+	Takeover int    `json:"takeover,omitempty"` // ms from Go Silent to the switch's first advertisement as master
+}
+
+// BFD is a single-hop BFD session (RFC 5880, 5881) from the test port to the switch, to time how fast the switch
+// notices a dead neighbour: Silent, raised by one, makes the test port stop sending for 5 s.
+type BFD struct {
+	Peer   string `json:"peer"`             // the switch's address on this link
+	TX     int    `json:"tx,omitempty"`     // desired transmit interval, ms (default 300)
+	RX     int    `json:"rx,omitempty"`     // required receive interval, ms (default as tx)
+	Mult   int    `json:"mult,omitempty"`   // detect multiplier (default 3)
+	Silent int    `json:"silent,omitempty"` // raise it by one: 5 s without sending
+}
+
+// BFDState is the session as the test port sees it.
+type BFDState struct {
+	State    string `json:"state"`              // down, init, up, admin-down
+	Since    int64  `json:"since,omitempty"`    // when it began (Unix seconds)
+	Flaps    int    `json:"flaps,omitempty"`    // how often it came up again
+	Detect   int    `json:"detect,omitempty"`   // the switch's detect time for the test port, ms
+	PeerTX   int    `json:"peerTx,omitempty"`   // the switch's transmit interval, ms
+	Measured int    `json:"measured,omitempty"` // ms from Go Silent to the switch saying the session is down
+	Quiet    bool   `json:"quiet,omitempty"`    // the test port is silent now
 }
 
 // ClientsMax is the most clients one test port stands for.
@@ -63,22 +112,25 @@ type Clients struct {
 	DHCP   bool     `json:"dhcp,omitempty"`   // each takes an IPv4 address by DHCP
 	Groups []string `json:"groups,omitempty"` // multicast groups each joins (IGMPv2 / MLDv1), again on every query
 	Dot1x  *Dot1x   `json:"dot1x,omitempty"`  // each logs in by 802.1X first (it sends nothing else before it is in)
+	DHCP6  bool     `json:"dhcp6,omitempty"`  // each takes an IPv6 address by DHCPv6 (DUID-LL from its MAC)
 }
 
-// Dot1x is how emulated clients log in: EAP-MD5 with these. {n} is the
+// Dot1x is how emulated clients log in: EAP-MD5 or PEAP-MSCHAPv2 with these. {n} is the
 // client's number (1, 2, …) and {mac} its MAC.
 type Dot1x struct {
 	User     string `json:"user,omitempty"`     // default user{n}
 	Password string `json:"password,omitempty"` // default "password"
+	Method   string `json:"method,omitempty"`   // md5 (default) or peap (PEAPv0 with EAP-MSCHAPv2 inside)
 }
 
 // ClientState is how a test port's clients are doing.
 type ClientState struct {
 	N      int        `json:"n"`              // clients
 	Bound  int        `json:"bound"`          // with a DHCP address
+	Bound6 int        `json:"bound6"`         // with a DHCPv6 address
 	Auth   int        `json:"auth"`           // logged in by 802.1X
 	Failed int        `json:"failed"`         // refused, or the switch did not answer
-	List   [][]string `json:"list,omitempty"` // the first 256: MAC, address, 802.1X state, why it failed
+	List   [][]string `json:"list,omitempty"` // the first 256: MAC, address, 802.1X state, why it failed, IPv6 address
 }
 
 // STP makes a test port speak spanning tree: a BPDU every 2 s that offers it
@@ -156,7 +208,68 @@ type Stream struct {
 	NoSig      bool    `json:"noSig,omitempty"`       // custom: no counting signature (its frames are sent, not counted)
 	Bad        string  `json:"bad,omitempty"`         // a fault put in every frame (BadFrames)
 	Fuzz       *Fuzz   `json:"fuzz,omitempty"`        // random bytes in a range of every frame
+	Encap      *Encap  `json:"encap,omitempty"`       // headers added around its frames: an outer tag, MPLS, a GRE or VXLAN tunnel, IPv6 extension headers
 	Expect     string  `json:"expect,omitempty"`      // "" its frames should arrive; "drop": the switch should drop them; "any": only counted
+}
+
+// Encap is what a stream's frames carry beyond Ethernet, VLAN and IP. The frame size stays the size on the wire
+// (the payload gives way); faults, fuzzing and user-defined fields count from the frame before these headers.
+type Encap struct {
+	Outer *OuterTag   `json:"outer,omitempty"` // an outer VLAN tag (QinQ: 802.1ad S-tag) in front of the stream's own
+	MPLS  []MPLSLabel `json:"mpls,omitempty"`  // labels, the first one outermost (the last has the bottom-of-stack bit)
+	GRE   *GRE        `json:"gre,omitempty"`   // the IP packet inside GRE (RFC 2784, 2890) to a tunnel end
+	VXLAN *VXLAN      `json:"vxlan,omitempty"` // the whole Ethernet frame inside VXLAN (RFC 7348) to a VTEP
+	V6Ext []V6Ext     `json:"v6ext,omitempty"` // IPv6 extension headers (IPv6 streams), put in RFC 8200's order
+}
+
+// OuterTag is an outer VLAN tag.
+type OuterTag struct {
+	TPID int `json:"tpid,omitempty"` // 0x88A8 (default), 0x8100 or 0x9100
+	VLAN int `json:"vlan"`
+	Prio int `json:"prio,omitempty"`
+}
+
+// MPLSLabel is one label stack entry.
+type MPLSLabel struct {
+	Label int `json:"label"`
+	TC    int `json:"tc,omitempty"`
+	TTL   int `json:"ttl,omitempty"` // default 64
+}
+
+// GRE is a GRE tunnel from the test port (or Src) to Dst.
+type GRE struct {
+	Src string `json:"src,omitempty"`
+	Dst string `json:"dst"`
+	Key int64  `json:"key,omitempty"`
+}
+
+// VXLAN is a VXLAN tunnel from the test port (or Src) to the VTEP Dst.
+type VXLAN struct {
+	VNI  int    `json:"vni"`
+	Src  string `json:"src,omitempty"`
+	Dst  string `json:"dst"`
+	Port int    `json:"port,omitempty"` // default 4789
+}
+
+// V6Ext is an IPv6 extension header: hbh (hop-by-hop, router alert), dst (destination options), rt (a segment
+// routing header with Segs, segments left 0) or frag (a fragment header at Offset, 8-byte units).
+type V6Ext struct {
+	Type   string `json:"type"`
+	Segs   string `json:"segs,omitempty"`
+	Offset int    `json:"offset,omitempty"`
+	More   bool   `json:"more,omitempty"`
+}
+
+// Tunnel is where a stream's tunnel ends ("": none).
+func (s Stream) Tunnel() string {
+	switch {
+	case s.Encap == nil:
+	case s.Encap.GRE != nil:
+		return s.Encap.GRE.Dst
+	case s.Encap.VXLAN != nil:
+		return s.Encap.VXLAN.Dst
+	}
+	return ""
 }
 
 // IMIXMean is the mean size of an IMIX frame (64, 594 and 1518 bytes, 7:4:1).
@@ -353,6 +466,8 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 		LacpPort int      `json:"lacpPort,omitempty"`
 		Clients  *Clients `json:"clients,omitempty"`
 		STP      *STP     `json:"stp,omitempty"`
+		VRRP     *VRRP    `json:"vrrp,omitempty"`
+		BFD      *BFD     `json:"bfd,omitempty"`
 	}
 	type sc struct {
 		Stream
@@ -360,6 +475,7 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 		Routed bool   `json:"routed,omitempty"`
 		GwIP   string `json:"gwIp,omitempty"`
 		ToMAC  string `json:"toMac,omitempty"`
+		TunARP string `json:"tunArp,omitempty"` // a tunnel's next hop: its end, or the test port's gateway to it
 	}
 	var ts []tc
 	for _, t := range l.Testers {
@@ -385,7 +501,7 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 			c.MAC = t.ClientMAC()
 			cl = &c
 		}
-		ts = append(ts, tc{t.ID, t.Name, t.DHCP, t.SLAAC, t.LLDP, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se, t.Lag, t.LacpFast, port, cl, t.STP})
+		ts = append(ts, tc{t.ID, t.Name, t.DHCP, t.SLAAC, t.LLDP, t.MAC, t.IP, t.IP6, t.Groups, t.GW, t.VLAN, li, se, t.Lag, t.LacpFast, port, cl, t.STP, t.VRRP, t.BFD})
 	}
 	var ss []sc
 	for _, s := range l.Streams {
@@ -405,6 +521,14 @@ func (l *Lab) TrafficConfig(here func(VM) bool, run uint32, on map[string]bool) 
 				x.DstIP = pick(to)
 			}
 			switch {
+			case s.Tunnel() != "": // the frames go to the tunnel's end; inside, to the test port they are for
+				x.TunARP = s.Tunnel()
+				if !SameNet(f.IP, x.TunARP) && f.GW != "" {
+					x.TunARP = f.GW
+				}
+				if to != nil {
+					x.ToMAC = to.MAC
+				}
 			case x.Kind == "pcap":
 				if to != nil {
 					x.ToMAC = to.MAC

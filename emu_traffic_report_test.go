@@ -179,3 +179,27 @@ func TestTrafficReport(t *testing.T) {
 		}
 	}
 }
+
+func TestReportDecodeTunnels(t *testing.T) {
+	inner := udpFrame("02:63:00:00:00:02", "02:63:00:00:00:01", 10, "10.1.0.10", "10.2.0.10", 64, 0, 128, 0)
+	vx := append(binary.BigEndian.AppendUint32(nil, 0x08000000), binary.BigEndian.AppendUint32(nil, 10010<<8)...)
+	u := append(binary.BigEndian.AppendUint16(binary.BigEndian.AppendUint16(nil, 49152), 4789), 0, 0, 0, 0)
+	u = append(append(u, vx...), inner...)
+	ip := []byte{0x45, 0, 0, 0, 0, 0, 0, 0, 64, 17, 0, 0, 10, 0, 0, 1, 10, 255, 0, 1}
+	f := append(append([]byte{2, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 1, 0x08, 0}, ip...), u...)
+	got := map[string]string{}
+	for _, x := range emuFrameFields(f) {
+		got[x.Layer+"/"+x.Name] = x.Val
+	}
+	if got["VXLAN/VNI"] != "10010" || got["Inner VLAN tag/VLAN ID"] != "10" || got["Inner IPv4/Destination"] != "10.2.0.10" || got["Inner UDP/Ports"] != "49152 → 5001" {
+		t.Errorf("vxlan: %v", got)
+	}
+	m := append([]byte{2, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 1, 0x88, 0x47, 0x00, 0x3e, 0x81, 0x40}, inner[18:]...) // label 1000, bottom, TTL 64
+	got = map[string]string{}
+	for _, x := range emuFrameFields(m) {
+		got[x.Layer+"/"+x.Name] = x.Val
+	}
+	if got["MPLS 1/Label, TC, TTL"] != "1000, 0, 64 (bottom)" || got["IPv4/Destination"] != "10.2.0.10" {
+		t.Errorf("mpls: %v", got)
+	}
+}

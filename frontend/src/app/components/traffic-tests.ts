@@ -4,6 +4,7 @@ import { Backend } from '../core/backend';
 import { EmuTest, EmuTestRun, EmuTester, LabDevice } from '../core/models';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
+import { ReportKind, ReportMenu } from './report-menu';
 
 const KINDS: { k: EmuTest['kind']; name: string; what: string }[] = [
   { k: 'throughput', name: 'Throughput', what: 'RFC 2544: the highest rate without loss, per frame size' },
@@ -18,7 +19,7 @@ const KINDS: { k: EmuTest['kind']; name: string; what: string }[] = [
 /** The Traffic tab's tests: saved RFC 2544, learning and convergence tests, their runs and results. */
 @Component({
   selector: 'app-traffic-tests',
-  imports: [FormsModule],
+  imports: [FormsModule, ReportMenu],
   template: `
   <div class="tw" [class.ed]="!!ed()">
     <div class="tl">
@@ -34,7 +35,7 @@ const KINDS: { k: EmuTest['kind']; name: string; what: string }[] = [
       @if (shown(); as r) {
         <div class="run">
           <div class="rh"><b>{{ r.name }}</b><span class="pill" [class]="'pill ' + r.status">{{ tr(r.status) }}</span><span class="muted small">{{ r.step || (r.ended ? tr('ended {0}', time(r.ended)) : '') }}</span>@if (r.error) { <span class="r small">{{ r.error }}</span> }<span class="sp"></span>
-            @if (r.status === 'running') { <button type="button" class="sm danger" (click)="stop()">◼ {{ tr('Stop') }}</button> } @else { <button type="button" class="sm" (click)="save(r)">{{ tr('Save Report…') }}</button> }</div>
+            @if (r.status === 'running') { <button type="button" class="sm danger" (click)="stop()">◼ {{ tr('Stop') }}</button> } @else { <app-report-menu [small]="true" [kinds]="['html', 'pdf', 'csv']" csvWhat="The trials table only" (pick)="save(r, $event)" /> }</div>
           <table class="rr">
             <tr><th>{{ tr('Direction') }}</th><th>{{ tr('Frame') }}</th>@for (c of cols(r); track c.k) { <th>{{ tr(c.name) }}</th> }<th></th></tr>
             @for (x of r.rows; track $index) {
@@ -161,9 +162,15 @@ export class TrafficTests implements OnInit, OnDestroy {
   }
   async run(t: EmuTest) { try { await this.backend.emuTestRun(t.id); this.sel.set(t.id); await this.loadRuns(); } catch (e) { this.ui.error(e); } }
   async stop() { try { await this.backend.emuTestStop(); setTimeout(() => void this.loadRuns(), 1500); } catch (e) { this.ui.error(e); } }
-  async save(r: EmuTestRun) {
-    try { const p = await this.backend.chooseSaveFile(tr('Save the Test Report'), r.name + '.html', [{ displayName: 'HTML', pattern: '*.html' }, { displayName: 'CSV', pattern: '*.csv' }]); if (!p) return; await this.backend.emuTestReportSave(r.id, p); this.ui.toast(tr('Saved'), 'success'); } catch (e) { this.ui.error(e); }
+  async save(r: EmuTestRun, kind: ReportKind = 'html') {
+    const ext = { html: ['HTML', 'html'], pdf: ['PDF', 'pdf'], xlsx: ['Excel', 'xlsx'], csv: ['CSV', 'csv'] }[kind];
+    try {
+      const p = await this.backend.chooseSaveFile(tr('Save the Test Report'), r.name + '.' + ext[1], [{ displayName: ext[0], pattern: '*.' + ext[1] }]); if (!p) return;
+      if (kind === 'pdf') this.ui.toast(tr('Printing the report to PDF…'), 'info');
+      await this.backend.emuTestReportSave(r.id, /\.[a-z]+$/i.test(p) ? p : p + '.' + ext[1]); this.ui.toast(tr('Saved'), 'success');
+    } catch (e) { this.ui.error(e); }
   }
+
   /** The result columns a test kind has. */
   cols(r: EmuTestRun): { k: string; name: string }[] {
     switch (r.kind) {

@@ -1,5 +1,5 @@
 # A switch for TestTrafficPyClients: 802.1X authenticator (relays EAP to the RADIUS server), DHCP server, IGMP
-# listener and RSTP bridge on one port. argv: its port, the test port's, the RADIUS port, the secret, the result file.
+# listener, DHCPv6 server and RSTP bridge on one port. argv: its port, the test port's, the RADIUS port, the secret, the result file.
 import hashlib, hmac, json, os, socket, struct, sys, time
 
 me, tp, rport, sec, out = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), sys.argv[4].encode(), sys.argv[5]
@@ -9,7 +9,7 @@ s.settimeout(0.2)
 r = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 r.settimeout(1)
 SW = bytes.fromhex("000496aabbcc")
-ident, state, res = {}, {}, {"auth": {}, "fail": [], "dhcp": [], "igmp": [], "bpdu": 0, "pap": "", "mab": "", "papBad": ""}
+ident, state, res = {}, {}, {"auth": {}, "fail": [], "dhcp": [], "dhcp6": [], "igmp": [], "bpdu": 0, "pap": "", "mab": "", "papBad": ""}
 rid = [0]
 
 
@@ -77,7 +77,7 @@ while time.time() < end:
             e = b[4:4 + struct.unpack("!H", b[2:4])[0]]
             if e[4] == 1:
                 ident[src] = e[5:]
-            al = [(1, ident.get(src, b"")), (79, e)] + ([(24, state[src])] if src in state else [])
+            al = [(1, ident.get(src, b""))] + [(79, e[i:i + 253]) for i in range(0, len(e), 253)] + ([(24, state[src])] if src in state else [])
             code, at = radius(al)
             eap = b"".join(v for t, v in at if t == 79)
             for t, v in at:
@@ -102,5 +102,26 @@ while time.time() < end:
         send(bp[28:34], 0x0800, ip)
     elif et == 0x0800 and b[9] == 2:
         res["igmp"].append(src.hex(":"))
+    elif et == 0x86DD and b[6] == 17 and b[42:44] == b"\x02\x23":  # DHCPv6 to the server port
+        m, o, i = b[48:], {}, 4
+        while i + 4 <= len(m):
+            c, n = struct.unpack("!HH", m[i:i + 4])
+            o[c] = m[i + 4:i + 4 + n]
+            i += 4 + n
+        if m[0] in (1, 3) and 1 in o and 3 in o:
+            n = len(res["dhcp6"]) + 16
+            addr = bytes.fromhex("fd000005000000000000000000000000")[:15] + bytes([n])
+            ia = o[3][:4] + struct.pack("!II", 600, 900) + struct.pack("!HH", 5, 24) + addr + struct.pack("!II", 1800, 3600)
+            rep = bytes([2 if m[0] == 1 else 7]) + m[1:4] + struct.pack("!HH", 2, 10) + b"\0\x03\0\x01" + SW + struct.pack("!HH", 1, len(o[1])) + o[1] + struct.pack("!HH", 3, len(ia)) + ia
+            if m[0] == 3:
+                res["dhcp6"].append(src.hex(":"))
+            me = bytes.fromhex("fe800000000000000204960000aabbcc")
+            u = struct.pack("!HHHH", 547, 546, 8 + len(rep), 0) + rep
+            ph = me + b[8:24] + struct.pack("!I", len(u)) + b"\0\0\0\x11"
+            sm = sum(struct.unpack("!%dH" % ((len(ph + u) + 1) // 2), (ph + u + b"\0")[:((len(ph + u) + 1) // 2) * 2]))
+            while sm >> 16:
+                sm = (sm & 0xFFFF) + (sm >> 16)
+            u = u[:6] + struct.pack("!H", ~sm & 0xFFFF) + u[8:]
+            send(src, 0x86DD, struct.pack("!IHBB", 0x60000000, len(u), 17, 255) + me + b[8:24] + u)
 res["pap"], res["papBad"], res["mab"] = pap("admin", "letmein"), pap("admin", "nope"), pap("02:63:aa:00:00:07", "02:63:aa:00:00:07")
 json.dump(res, open(out, "w"))

@@ -365,6 +365,17 @@ paths:
                                         type: string
                                 lldp:
                                     type: boolean
+                                clients:
+                                    $ref: '#/components/schemas/EmuClients'
+                                stp:
+                                    $ref: '#/components/schemas/EmuSTP'
+                                vrrp:
+                                    $ref: '#/components/schemas/EmuVRRP'
+                                bfd:
+                                    $ref: '#/components/schemas/EmuBFD'
+                                silentBfd:
+                                    type: boolean
+                                    description: The test port stops sending BFD for 5 s; bfdState.measured is how fast the switch saw it.
                         example:
                             groups:
                                 - 239.1.1.1
@@ -2709,11 +2720,14 @@ paths:
                                         - qinq
                                         - etype
                                     type: string
+                                bfd:
+                                    description: 'add_port, set_port: a single-hop BFD session with the switch: {peer: the switch''s address, tx: ms (300), rx: ms, mult: 3}; {} = off. silent_bfd: true makes the test port quiet for 5 s; bfdState.measured is how fast the switch saw it (ms)'
+                                    type: object
                                 burst:
                                     description: 'add_stream: frames sent back to back (the rate stays the average)'
                                     type: integer
                                 clients:
-                                    description: 'add_port, set_port: many hosts behind the test port, each with its own MAC: {n: 1-4000, dhcp: true, groups: [239.1.1.1], dot1x: {user: "user{n}", password: "…"}, rate: started a second (50), mac: the first MAC}; {n: 0} = none. 802.1X is EAP-MD5; {n} is the client''s number, {mac} its MAC'
+                                    description: 'add_port, set_port: many hosts behind the test port, each with its own MAC: {n: 1-4000, dhcp: true, dhcp6: true, groups: [239.1.1.1], dot1x: {user: "user{n}", password: "…", method: md5|peap}, rate: started a second (50), mac: the first MAC}; {n: 0} = none. 802.1X is EAP-MD5 or PEAP-MSCHAPv2 (the lab''s RADIUS server answers both); {n} is the client''s number, {mac} its MAC'
                                     type: object
                                 count:
                                     type: integer
@@ -2730,6 +2744,9 @@ paths:
                                     type: string
                                 dst_mac:
                                     type: string
+                                encap:
+                                    description: 'add_stream: headers around its frames: {outer: {tpid: 34984, vlan, prio}, mpls: [{label, tc, ttl}] (up to 3), gre: {dst, src, key}, vxlan: {vni, dst (the VTEP), src, port: 4789}, v6ext: [{type: hbh|dst|rt|frag, segs: "fd00::1 fd00::2", offset, more}]} - one tunnel; the frame size stays the size on the wire'
+                                    type: object
                                 expect:
                                     description: 'add_stream: forward (default: pass on loss and latency), drop (pass when none arrives: bad frames, ACLs, VLAN isolation) or any (only counted)'
                                     enum:
@@ -2843,6 +2860,9 @@ paths:
                                     type: boolean
                                 seconds:
                                     type: integer
+                                silent_bfd:
+                                    description: 'set_port: the test port stops sending BFD for 5 s'
+                                    type: boolean
                                 size:
                                     description: frame bytes (60-9000, default 128)
                                     type: integer
@@ -2888,6 +2908,9 @@ paths:
                                     type: array
                                 vlan:
                                     type: integer
+                                vrrp:
+                                    description: 'add_port, set_port: the test port is a VRRP router beside the switch: {ver: 2|3, vrid: 1-255, prio: 1-254, vip: the virtual address, interval: ms (1000), preempt: true, silent: true = stop advertising (the switch must take over)}; {} = off. The port''s vrrpState says who is master and the takeover time in ms'
+                                    type: object
                             required:
                                 - action
             responses:
@@ -3345,6 +3368,52 @@ components:
             required:
                 - match
                 - send
+        EmuBFD:
+            type: object
+            properties:
+                peer:
+                    description: the switch's address on this link
+                    type: string
+                tx:
+                    description: desired transmit interval, ms (default 300)
+                    type: integer
+                rx:
+                    description: required receive interval, ms (default as tx)
+                    type: integer
+                mult:
+                    description: detect multiplier (default 3)
+                    type: integer
+                silent:
+                    description: 'raise it by one: 5 s without sending'
+                    type: integer
+            required:
+                - peer
+        EmuBFDState:
+            type: object
+            properties:
+                state:
+                    description: down, init, up, admin-down
+                    type: string
+                since:
+                    description: when it began (Unix seconds)
+                    type: integer
+                flaps:
+                    description: how often it came up again
+                    type: integer
+                detect:
+                    description: the switch's detect time for the test port, ms
+                    type: integer
+                peerTx:
+                    description: the switch's transmit interval, ms
+                    type: integer
+                measured:
+                    description: ms from Go Silent to the switch saying the session is down
+                    type: integer
+                quiet:
+                    description: the test port is silent now
+                    type: boolean
+            required:
+                - state
         EmuCheckpoint:
             type: object
             properties:
@@ -3372,6 +3441,9 @@ components:
                 bound:
                     description: with a DHCP address
                     type: integer
+                bound6:
+                    description: with a DHCPv6 address
+                    type: integer
                 auth:
                     description: logged in by 802.1X
                     type: integer
@@ -3379,7 +3451,7 @@ components:
                     description: refused, or the switch did not answer
                     type: integer
                 list:
-                    description: 'the first 256: MAC, address, 802.1X state, why it failed'
+                    description: 'the first 256: MAC, address, 802.1X state, why it failed, IPv6 address'
                     type:
                         - array
                         - "null"
@@ -3392,6 +3464,7 @@ components:
             required:
                 - "n"
                 - bound
+                - bound6
                 - auth
                 - failed
         EmuClients:
@@ -3421,6 +3494,9 @@ components:
                     anyOf:
                         - $ref: '#/components/schemas/EmuDot1x'
                         - type: "null"
+                dhcp6:
+                    description: each takes an IPv6 address by DHCPv6 (DUID-LL from its MAC)
+                    type: boolean
             required:
                 - "n"
         EmuCompNet:
@@ -3483,6 +3559,41 @@ components:
                 password:
                     description: default "password"
                     type: string
+                method:
+                    description: md5 (default) or peap (PEAPv0 with EAP-MSCHAPv2 inside)
+                    type: string
+        EmuEncap:
+            type: object
+            properties:
+                outer:
+                    description: 'an outer VLAN tag (QinQ: 802.1ad S-tag) in front of the stream''s own'
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuOuterTag'
+                        - type: "null"
+                mpls:
+                    description: labels, the first one outermost (the last has the bottom-of-stack bit)
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuMPLSLabel'
+                gre:
+                    description: the IP packet inside GRE (RFC 2784, 2890) to a tunnel end
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuGRE'
+                        - type: "null"
+                vxlan:
+                    description: the whole Ethernet frame inside VXLAN (RFC 7348) to a VTEP
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuVXLAN'
+                        - type: "null"
+                v6ext:
+                    description: IPv6 extension headers (IPv6 streams), put in RFC 8200's order
+                    type:
+                        - array
+                        - "null"
+                    items:
+                        $ref: '#/components/schemas/EmuV6Ext'
         EmuFact:
             type: object
             properties:
@@ -3505,6 +3616,17 @@ components:
                     type: integer
             required:
                 - from
+        EmuGRE:
+            type: object
+            properties:
+                src:
+                    type: string
+                dst:
+                    type: string
+                key:
+                    type: integer
+            required:
+                - dst
         EmuHostInfo:
             type: object
             properties:
@@ -3685,6 +3807,18 @@ components:
                         type: integer
             required:
                 - mode
+        EmuMPLSLabel:
+            type: object
+            properties:
+                label:
+                    type: integer
+                tc:
+                    type: integer
+                ttl:
+                    description: default 64
+                    type: integer
+            required:
+                - label
         EmuNote:
             type: object
             properties:
@@ -3717,6 +3851,18 @@ components:
                 - "y"
                 - w
                 - h
+        EmuOuterTag:
+            type: object
+            properties:
+                tpid:
+                    description: 0x88A8 (default), 0x8100 or 0x9100
+                    type: integer
+                vlan:
+                    type: integer
+                prio:
+                    type: integer
+            required:
+                - vlan
         EmuPersona:
             type: object
             properties:
@@ -4078,6 +4224,89 @@ components:
                 - offset
                 - width
                 - mode
+        EmuV6Ext:
+            type: object
+            properties:
+                type:
+                    type: string
+                segs:
+                    type: string
+                offset:
+                    type: integer
+                more:
+                    type: boolean
+            required:
+                - type
+        EmuVRRP:
+            type: object
+            properties:
+                ver:
+                    description: 2 or 3
+                    type: integer
+                vrid:
+                    description: 1-255, as on the switch
+                    type: integer
+                prio:
+                    description: 1-254 (the switch's default is 100)
+                    type: integer
+                vip:
+                    description: the virtual address (IPv6 with VRRPv3 only)
+                    type: string
+                interval:
+                    description: advertisement interval, ms (default 1000; VRRPv2 rounds to seconds)
+                    type: integer
+                preempt:
+                    description: take over from a master with a lower priority
+                    type: boolean
+                silent:
+                    description: stop advertising and answering, as if the router died (the switch must take over)
+                    type: boolean
+            required:
+                - ver
+                - vrid
+                - prio
+                - vip
+        EmuVRRPState:
+            type: object
+            properties:
+                state:
+                    description: master, backup or silent
+                    type: string
+                us:
+                    description: the test port is master
+                    type: boolean
+                master:
+                    description: the master's address, when it is the switch
+                    type: string
+                prio:
+                    description: the master's priority
+                    type: integer
+                since:
+                    description: when the state began (Unix seconds)
+                    type: integer
+                changes:
+                    description: how often the master changed
+                    type: integer
+                takeover:
+                    description: ms from Go Silent to the switch's first advertisement as master
+                    type: integer
+            required:
+                - state
+        EmuVXLAN:
+            type: object
+            properties:
+                vni:
+                    type: integer
+                src:
+                    type: string
+                dst:
+                    type: string
+                port:
+                    description: default 4789
+                    type: integer
+            required:
+                - vni
+                - dst
         Event:
             type: object
             description: A line of the lab's Events log.
@@ -5193,6 +5422,11 @@ components:
                     anyOf:
                         - $ref: '#/components/schemas/EmuFuzz'
                         - type: "null"
+                encap:
+                    description: 'headers added around its frames: an outer tag, MPLS, a GRE or VXLAN tunnel, IPv6 extension headers'
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuEncap'
+                        - type: "null"
                 expect:
                     description: '"" its frames should arrive; "drop": the switch should drop them; "any": only counted'
                     type: string
@@ -5417,6 +5651,26 @@ components:
                 y:
                     description: on the canvas
                     type: number
+                vrrp:
+                    description: it is a VRRP router beside the switch
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuVRRP'
+                        - type: "null"
+                bfd:
+                    description: it keeps a BFD session with the switch
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuBFD'
+                        - type: "null"
+                vrrpState:
+                    description: what it hears by VRRP (filled in for the screens)
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuVRRPState'
+                        - type: "null"
+                bfdState:
+                    description: its BFD session (filled in for the screens)
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuBFDState'
+                        - type: "null"
             required:
                 - id
                 - name
@@ -5901,6 +6155,11 @@ components:
                     description: random bytes in a range of every frame
                     anyOf:
                         - $ref: '#/components/schemas/EmuFuzz'
+                        - type: "null"
+                encap:
+                    description: 'headers added around its frames: an outer tag, MPLS, a GRE or VXLAN tunnel, IPv6 extension headers'
+                    anyOf:
+                        - $ref: '#/components/schemas/EmuEncap'
                         - type: "null"
                 expect:
                     description: '"" its frames should arrive; "drop": the switch should drop them; "any": only counted'

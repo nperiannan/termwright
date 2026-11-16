@@ -827,9 +827,13 @@ func (a *App) EmuTestRunReport(id, format string) ([]byte, string, error) {
 	return []byte(b.String()), "text/plain; charset=utf-8", nil
 }
 
-// EmuTestReportSave saves a run's results on this computer: .csv, or .html (anything else).
+// EmuTestReportSave saves a run's results on this computer: .csv, .pdf (the HTML printed by a Chromium browser), or .html (anything else).
 func (a *App) EmuTestReportSave(id, path string) error {
-	b, _, err := a.EmuTestRunReport(id, map[bool]string{true: "csv", false: "html"}[strings.EqualFold(filepath.Ext(path), ".csv")])
+	ext := strings.ToLower(filepath.Ext(path))
+	b, _, err := a.EmuTestRunReport(id, map[bool]string{true: "csv", false: "html"}[ext == ".csv"])
+	if err == nil && ext == ".pdf" { // the HTML report printed by a Chromium browser
+		b, err = a.emuHTMLToPDF(string(b))
+	}
 	if err != nil {
 		return err
 	}
