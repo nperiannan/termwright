@@ -75,7 +75,7 @@ function b64ToBytes(b64: string): Uint8Array {
   imports: [FormsModule, DeviceIcon, Icon],
   host: { class: 'modern' },
   template: `<div class="term-host" #host (contextmenu)="onContextMenu($event)"></div>
-    @if (tab().autoScroll === false) {
+    @if (tab().autoScroll === false && !tab().sendBar) {
       <div class="paused" title="New output does not move the view">Auto scroll is off <button type="button" (click)="setAutoScroll(true)">Turn On</button></div>
     }
     @if (tab().sendBar) {
@@ -200,8 +200,9 @@ function b64ToBytes(b64: string): Uint8Array {
     .sendbar.compact { padding: 2px 8px; button { height: 20px; font-size: calc(11.5px * var(--ui-scale, 1)); padding: 0 8px; } }
     /* icon toggles, as VS Code's panel actions: no text, a tooltip; on = highlighted */
     .sendbar button.tg, :host(.modern) .sendbar button.tg { width: 26px; height: 24px; padding: 0; border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
-      &:hover { color: var(--text); background: var(--hover); } &.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); } }
+      &:hover { color: var(--text); background: var(--hover); } &.on, &.on:hover { color: var(--accent); background: none; border-color: transparent; } }
     .sendbar.compact button.tg { height: 20px; width: 24px; }
+    .sendbar button.x, :host(.modern) .sendbar button.x { width: 26px; padding: 0; border-color: transparent; background: none; &:hover { color: var(--text); background: var(--hover); } }
     .fixbar { position: absolute; top: 10px; right: 14px; z-index: 5; max-width: min(520px, 80%); padding: 10px 12px; border-radius: 8px;
       background: var(--panel); color: var(--text); border: 1px solid var(--border); border-left: 4px solid var(--danger); box-shadow: var(--shadow); font-size: calc(12.5px * var(--ui-scale, 1)); }
     .fmsg { font-weight: 600; margin-right: 18px; word-break: break-word; }
