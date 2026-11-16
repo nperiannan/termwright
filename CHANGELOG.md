@@ -4,6 +4,7 @@ All notable changes to Termwright. Each release on GitHub shows its section of t
 
 ## Unreleased
 
+- **Docs: a FAQ** ([docs/FAQ.md](docs/FAQ.md)): how Termwright compares with SecureCRT, VS Code, GNS3, EVE-NG, Containerlab and TRex; why it uses AI and Wails; how credentials are protected; what reaches the AI service; what the MCP server exposes; how the lab works across hosts; and the known limitations.
 - **Builds: the Android APK no longer fails when Maven Central rate-limits** (HTTP 429): the Gradle downloads are cached between runs, and the build waits and tries again twice.
 
 ## 0.40.0 (2026-11-16)
