@@ -2,7 +2,7 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
-## Unreleased
+## 0.40.1 (2026-11-17)
 
 - **README: a demo** - a short animation at the top and a [1-minute video](docs/assets/termwright-demo.mp4): a switch, the AI, the emulated lab, a traffic run and its report.
 - **Releases come with a `SHA256SUMS` file and a build provenance attestation**, so a download can be checked against what GitHub built from this repository ([Verifying a download](SECURITY.md#verifying-a-download)).
