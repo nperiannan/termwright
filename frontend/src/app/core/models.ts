@@ -442,7 +442,7 @@ export interface EmuTestRun { id: string; test: string; name: string; kind: stri
 /** A field of a stream's frames that changes from frame to frame. */
 export interface EmuMod { field: 'srcMac' | 'dstMac' | 'srcIp' | 'dstIp' | 'vlan' | 'sport' | 'dport'; mode: 'inc' | 'random'; count: number; step?: number; }
 export interface EmuStreamResult { id: string; tx: number; rx: number; expected: number; other: number; loss: number; latAvg: number; latMax: number; latMin?: number; jitter?: number; ooo?: number; dup?: number; txRate: number; rxRate: number; running: boolean; result: '' | 'pass' | 'fail'; why?: string;
-  p50?: number; p95?: number; p99?: number; hist?: { lo: number; hi: number; n: number }[]; flows?: EmuFlowResult[]; flowsN?: number; flowsLossy?: number; marks?: { vlan: number; prio: number; dscp: number; n: number }[]; txMbps?: number; rxMbps?: number; }
+  p50?: number; p95?: number; p99?: number; hist?: { lo: number; hi: number; n: number }[]; flows?: EmuFlowResult[]; flowsN?: number; flowsLossy?: number; marks?: { vlan: number; prio: number; dscp: number; n: number }[]; txMbps?: number; rxMbps?: number; sentFrame?: string; gotFrame?: string; }
 /** One flow of a stream with changing fields: one combination of their values. */
 export interface EmuFlowResult { flow: number; name: string; tx: number; rx: number; loss: number; latAvg: number; latMax: number; }
 /** A lab tool the AI chat called: done (out), or to be asked first. */

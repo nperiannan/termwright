@@ -44,7 +44,7 @@ Test ports and streams are as in the API; the keyword arguments are the API's fi
 | `start(*names)`, `stop()`, `wait_done()` | Send, stop, wait; `wait_done` returns the results by stream name |
 | `run_streams([…])` | Add, send, wait, return the results, and remove the streams again (`keep=True` leaves them) |
 | `assert_pass(results)` | Raises `AssertionError` naming each stream that failed and why |
-| `report("json"\|"csv"\|"html"\|"text")` | The report of the last run |
+| `report("json"\|"csv"\|"html"\|"text"\|"pdf"\|"xlsx", path=None)` | The report of the last run; `pdf` and `xlsx` come as bytes; with `path` it is saved there (`t.report("xlsx", "run.xlsx")`) |
 | `save_test(name, kind, src, dst, …)`, `run_test(name)` | A saved test and its run: `throughput`, `latency`, `frame-loss`, `back-to-back` (RFC 2544), `learning` (RFC 2889), `convergence`, `iperf`. `run_test` returns the run (`rows`, `log`) and raises when it failed or was stopped |
 | `rfc2544(name, src, dst, sizes=…)` | The four RFC 2544 tests in one call; returns `{kind: run}` |
 | `convergence(name, src, dst, switch, port, action="pull", at=5, hold=10)` | Traffic while a cable is pulled or a switch stops or restarts; the rows hold the frames lost and the outage in ms |

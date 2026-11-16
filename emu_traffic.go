@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"maps"
 	"math"
 	"os"
@@ -53,6 +52,8 @@ type EmuStreamResult struct {
 	Marks    []EmuMark       `json:"marks,omitempty"`      // the VLAN, priority and DSCP its frames arrived with
 	TxMbps   float64         `json:"txMbps,omitempty"`     // Mbit/s on the wire, now
 	RxMbps   float64         `json:"rxMbps,omitempty"`     // Mbit/s on the wire received, now
+	Sent     string          `json:"sentFrame,omitempty"`  // its first frame sent: its length, then up to 160 bytes in hex ("508:0004…"; no FCS)
+	Got      string          `json:"gotFrame,omitempty"`   // the first of its frames that arrived where it goes, the same way
 }
 
 // EmuPortResult is a test port's statistics over the run: every frame it sent and got (the protocols' too), its
@@ -387,10 +388,12 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 		FTX     map[string]map[string]int       `json:"ftx"`
 		FLab    map[string]map[string]string    `json:"flab"`
 		QoS     map[string]map[string]int       `json:"qos"`
+		FSent   map[string]string               `json:"fsent"` // per stream: its first frame sent (hex)
+		FGot    map[string]string               `json:"fgot"`  // per stream: the first of its frames that arrived where it goes
 		Ports   map[string]emuPortCount         `json:"ports"`
 	}
 	sum := stats{TX: map[string]int{}, RX: map[string]int{}, Other: map[string]int{}, Lat: map[string][]float64{}, Err: map[string]string{}, Busy: map[string]bool{}, OOO: map[string]int{}, Dup: map[string]int{}, Jit: map[string][]float64{},
-		Hist: map[string]map[string]int{}, FRX: map[string]map[string][]float64{}, FTX: map[string]map[string]int{}, FLab: map[string]map[string]string{}, QoS: map[string]map[string]int{}, Ports: map[string]emuPortCount{}}
+		Hist: map[string]map[string]int{}, FRX: map[string]map[string][]float64{}, FTX: map[string]map[string]int{}, FLab: map[string]map[string]string{}, QoS: map[string]map[string]int{}, FSent: map[string]string{}, FGot: map[string]string{}, Ports: map[string]emuPortCount{}}
 	dyn := slices.ContainsFunc(v.Testers, func(t emu.Tester) bool {
 		return t.DHCP || t.SLAAC || t.Lag != "" || t.LLDP || t.Clients != nil || t.STP != nil
 	}) // (their protocols report while nothing runs)
@@ -489,6 +492,13 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 			emuAddCounts(sum.Hist, st.Hist)
 			emuAddCounts(sum.FTX, st.FTX)
 			emuAddCounts(sum.QoS, st.QoS)
+			for _, m := range [][2]map[string]string{{sum.FSent, st.FSent}, {sum.FGot, st.FGot}} {
+				for k, h := range m[1] {
+					if m[0][k] == "" {
+						m[0][k] = h
+					}
+				}
+			}
 			for sid, m := range st.FLab {
 				if sum.FLab[sid] == nil {
 					sum.FLab[sid] = map[string]string{}
@@ -556,6 +566,7 @@ func (a *App) emuTrafficAll() (EmuTrafficView, error) {
 			r.Flows = r.Flows[:min(len(r.Flows), emuFlowsShown)]
 		}
 		r.Marks = emuMarks(sum.QoS[s.ID])
+		r.Sent, r.Got = sum.FSent[s.ID], sum.FGot[s.ID]
 		switch e := sum.Err[s.ID]; {
 		case e != "":
 			r.Result, r.Why = "fail", e
@@ -1232,20 +1243,41 @@ func (a *App) EmuTrafficReportText() (string, error) {
 	return b.String(), nil
 }
 
-// EmuTrafficReport saves the report on this computer: .csv, or .html (anything else).
+// EmuTrafficReport saves the report on this computer, by the file's extension: .pdf (printed by a Chromium browser),
+// .xlsx (an Excel workbook with charts), .csv (the streams table), or .html (anything else).
 func (a *App) EmuTrafficReport(path string) error {
-	b, _, err := a.emuTrafficReportAs(map[bool]string{true: "csv", false: "html"}[strings.EqualFold(filepath.Ext(path), ".csv")])
+	f := strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
+	if !slices.Contains([]string{"pdf", "xlsx", "csv"}, f) {
+		f = "html"
+	}
+	b, _, err := a.emuTrafficReportAs(f)
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, b, 0o644)
 }
 
-// emuTrafficReportAs is the report as csv, html, json (the streams and their results) or text, and its media type.
+// emuTrafficReportAs is the report as csv, html, pdf, xlsx, json (the streams and their results) or text, and its
+// media type.
 func (a *App) emuTrafficReportAs(format string) ([]byte, string, error) {
-	if format == "text" {
+	switch format {
+	case "text":
 		t, err := a.EmuTrafficReportText()
 		return []byte(t), "text/plain; charset=utf-8", err
+	case "html", "pdf", "xlsx":
+		r, err := a.emuReportData()
+		if err != nil {
+			return nil, "", err
+		}
+		switch format {
+		case "xlsx":
+			b, err := emuReportXLSX(r)
+			return b, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", err
+		case "pdf":
+			b, err := a.emuHTMLToPDF(emuReportHTML(r))
+			return b, "application/pdf", err
+		}
+		return []byte(emuReportHTML(r)), "text/html; charset=utf-8", nil
 	}
 	v, err := a.EmuTraffic()
 	if err != nil {
@@ -1255,45 +1287,16 @@ func (a *App) emuTrafficReportAs(format string) ([]byte, string, error) {
 		j, err := json.MarshalIndent(v, "", "  ")
 		return j, "application/json", err
 	}
-	rows := emuTrafficRows(v)
 	var b strings.Builder
-	if format == "csv" {
-		for _, r := range rows {
-			for i := range r {
-				if strings.ContainsAny(r[i], ",\"\n") {
-					r[i] = `"` + strings.ReplaceAll(r[i], `"`, `""`) + `"`
-				}
+	for _, r := range emuTrafficRows(v) { // csv
+		for i := range r {
+			if strings.ContainsAny(r[i], ",\"\n") {
+				r[i] = `"` + strings.ReplaceAll(r[i], `"`, `""`) + `"`
 			}
-			b.WriteString(strings.Join(r, ",") + "\n")
 		}
-	} else {
-		emuLab.mu.Lock()
-		topo := orStr(emuLab.f.Topology, "Untitled")
-		emuLab.mu.Unlock()
-		pass, fail := 0, 0
-		for _, r := range v.Results {
-			pass += map[bool]int{true: 1}[r.Result == "pass"]
-			fail += map[bool]int{true: 1}[r.Result == "fail"]
-		}
-		fmt.Fprintf(&b, "<!doctype html><meta charset=utf-8><title>Traffic report - %s</title><style>body{font:14px system-ui,sans-serif;margin:24px;color:#222}table{border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px 10px;text-align:left;white-space:nowrap}th{color:#666;font-weight:500}.pass{color:#1a7f37;font-weight:600}.fail{color:#cf222e;font-weight:600}.g{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0}figure{margin:0;border:1px solid #e3e3e3;border-radius:10px;padding:10px 12px}figcaption{font-size:12.5px;margin-bottom:4px;color:#555}figcaption b{color:#222}figcaption i{display:inline-block;width:12px;height:2px;margin:0 4px 3px 10px}h3{margin:24px 0 4px}</style>", html.EscapeString(topo))
-		fmt.Fprintf(&b, "<h2>Traffic report - %s</h2><p>%s · %d passed, %d failed, %d streams · Termwright emulated lab</p><table>", html.EscapeString(topo), time.Now().Format("2006-01-02 15:04"), pass, fail, len(v.Streams))
-		for i, r := range rows {
-			b.WriteString("<tr>")
-			for j, c := range r {
-				tag, cls := "td", ""
-				if i == 0 {
-					tag = "th"
-				} else if j == 13 {
-					cls = ` class="` + strings.ToLower(c) + `"`
-				}
-				fmt.Fprintf(&b, "<%s%s>%s</%s>", tag, cls, html.EscapeString(c), tag)
-			}
-			b.WriteString("</tr>")
-		}
-		b.WriteString("</table>")
-		b.WriteString(emuReportGraphs(v))
+		b.WriteString(strings.Join(r, ",") + "\n")
 	}
-	return []byte(b.String()), map[bool]string{true: "text/csv; charset=utf-8", false: "text/html; charset=utf-8"}[format == "csv"], nil
+	return []byte(b.String()), "text/csv; charset=utf-8", nil
 }
 
 // emuSortedTesters is for the connector: test ports by name.

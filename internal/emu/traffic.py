@@ -769,8 +769,12 @@ testers, streams, run = {}, [], 0
 tx, rx, other, lat, err, ooo, dup, jit, seen = {}, {}, {}, {}, {}, {}, {}, {}, {}
 hist, frx, qos = {}, {}, {}  # latency histogram, per-flow receive counters, what the frames arrived with
 ftx, flab = {}, {}  # per flow: frames sent, its field values
+fsent, fgot = {}, {}  # per stream: its first frame sent, and the first that arrived where it goes (hex, for the report)
 ports = {}  # per test port: its counters (see port)
 last_st = 0
+
+
+SAMPLE = 160  # bytes of a stream's first frame kept for the report (with its length: "508:0004…")
 
 
 def reset():
@@ -780,6 +784,8 @@ def reset():
     ports = {}
     ftx.clear()
     flab.clear()
+    fsent.clear()
+    fgot.clear()
 
 
 def load():
@@ -1020,6 +1026,8 @@ def handle(tp, f):
                 else:
                     dscp = b[1] >> 2 if et == 0x0800 and len(b) > 1 else ((b[0] & 15) << 4 | b[1] >> 4) >> 2 if et == 0x86DD and len(b) > 1 else -1
                     rtt = x.get("rtt") and (x.get("to") == tp.id or tp.lag and lagof.get(x.get("to")) == tp.lag)
+                    if sid not in fgot:
+                        fgot[sid] = "%d:%s" % (len(f), f[:SAMPLE].hex())
                     got(sid, tp, seq, ts if x["from"] in testers and not rtt else 0, flow, "%d/%d/%d" % (vlan, prio, dscp))
                     if rtt:
                         reflect(tp, f, o, et)
@@ -1187,7 +1195,10 @@ while True:
             due = min(s.count, ((due + s.burst - 1) // s.burst) * s.burst)
         n = 0
         while s.seq < due and n < max(64, 2000 // max(1, live)):
-            s.tp.send(s.frame(time.time()), x.get("bad") == "runt")
+            fr = s.frame(time.time())
+            if x["id"] not in fsent:
+                fsent[x["id"]] = "%d:%s" % (len(fr), fr[:SAMPLE].hex())
+            s.tp.send(fr, x.get("bad") == "runt")
             s.seq += 1
             n += 1
         tx[x["id"]] = s.seq
@@ -1197,7 +1208,7 @@ while True:
         last_st = now
         st = {"run": run, "at": now, "tx": tx, "rx": rx, "other": other, "lat": lat, "err": err, "ooo": ooo, "dup": dup, "jit": jit,
               "busy": {s.x["id"]: s.seq < s.count for s in streams}, "testers": sorted(testers),
-              "hist": hist, "frx": frx, "qos": qos, "ftx": ftx, "flab": flab,
+              "hist": hist, "frx": frx, "qos": qos, "ftx": ftx, "flab": flab, "fsent": fsent, "fgot": fgot,
               "ports": {k: {"tx": c[0], "rx": c[1], "txb": c[2], "rxb": c[3], "srx": c[4], "lat": c[5], "err": c[6]} for k, c in ports.items()},
               "lacp": {t.id: t.lacp_view(now) for t in testers.values() if t.lag},
               "clients": {t.id: {"n": len(t.clients), "bound": sum(c.dhcp_state == "bound" for c in t.clients), "auth": sum(c.x_state == "authenticated" for c in t.clients),

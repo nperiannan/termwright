@@ -404,12 +404,14 @@ func openAPIDoc(t *testing.T) om {
 			kv{"responses", append(om{{"200", om{{"description", "The screen."}, {"content", om{{"image/png", om{{"schema", om{{"type", "string"}, {"format", "binary"}}}}}}}}}}, append(errs("409"), std...)...)})}}},
 		{"/lab/traffic", om{{"get", op("getTraffic", "Traffic", "Test ports, streams and results", "The traffic generator now. While a run goes on, the results are live (counters, rates and the rate history for graphs); after it, they are final.",
 			kv{"responses", append(om{{"200", resp("The traffic generator.", "TrafficView")}}, std...)})}}},
-		{"/lab/traffic/report", om{{"get", op("getTrafficReport", "Traffic", "The report", "The last (or running) run's report: a pass or fail per stream with its counters, loss, latency, jitter, order and the reason of a fail.",
-			kv{"parameters", []om{{{"name", "format"}, {"in", "query"}, {"required", false}, {"description", "json (the traffic view), csv, html or text."}, {"schema", om{{"type", "string"}, {"enum", []string{"json", "csv", "html", "text"}}, {"default", "json"}}}}}},
+		{"/lab/traffic/report", om{{"get", op("getTrafficReport", "Traffic", "The report", "The last (or running) run's report: a pass or fail per stream with its counters, loss, latency, jitter, order and the reason of a fail. html, pdf and xlsx are the report to share: the graphs, the topology with the streams, each stream's settings and first frame sent and received (decoded), what arrived, flows and test ports (xlsx: a workbook with Excel charts; pdf: printed by Chrome, Edge, Chromium or Brave on the computer running Termwright).",
+			kv{"parameters", []om{{{"name", "format"}, {"in", "query"}, {"required", false}, {"description", "json (the traffic view), csv, html, pdf, xlsx or text."}, {"schema", om{{"type", "string"}, {"enum", []string{"json", "csv", "html", "pdf", "xlsx", "text"}}, {"default", "json"}}}}}},
 			kv{"responses", append(om{{"200", om{{"description", "The report."}, {"content", om{
 				{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/TrafficView"}}}}},
 				{"text/csv", om{{"schema", om{{"type", "string"}}}}},
 				{"text/html", om{{"schema", om{{"type", "string"}}}}},
+				{"application/pdf", om{{"schema", om{{"type", "string"}, {"format", "binary"}}}}},
+				{"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", om{{"schema", om{{"type", "string"}, {"format", "binary"}}}}},
 				{"text/plain", om{{"schema", om{{"type", "string"}}}}}}}}}}, append(errs("400"), std...)...)})}}},
 		{"/lab/traffic/ports", om{{"post", op("addTestPort", "Traffic ports", "Add a test port", "Puts a test port on a free port of a switch. A running switch takes it when it restarts (the result's note says so).",
 			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", portSchema}, {"examples", om{

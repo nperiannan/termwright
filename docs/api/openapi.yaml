@@ -186,18 +186,20 @@ paths:
             tags:
                 - Traffic
             summary: The report
-            description: 'The last (or running) run''s report: a pass or fail per stream with its counters, loss, latency, jitter, order and the reason of a fail.'
+            description: 'The last (or running) run''s report: a pass or fail per stream with its counters, loss, latency, jitter, order and the reason of a fail. html, pdf and xlsx are the report to share: the graphs, the topology with the streams, each stream''s settings and first frame sent and received (decoded), what arrived, flows and test ports (xlsx: a workbook with Excel charts; pdf: printed by Chrome, Edge, Chromium or Brave on the computer running Termwright).'
             parameters:
                 - name: format
                   in: query
                   required: false
-                  description: json (the traffic view), csv, html or text.
+                  description: json (the traffic view), csv, html, pdf, xlsx or text.
                   schema:
                     type: string
                     enum:
                         - json
                         - csv
                         - html
+                        - pdf
+                        - xlsx
                         - text
                     default: json
             responses:
@@ -213,6 +215,14 @@ paths:
                         text/html:
                             schema:
                                 type: string
+                        application/pdf:
+                            schema:
+                                type: string
+                                format: binary
+                        application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+                            schema:
+                                type: string
+                                format: binary
                         text/plain:
                             schema:
                                 type: string
@@ -5291,6 +5301,12 @@ components:
                 rxMbps:
                     description: Mbit/s on the wire received, now
                     type: number
+                sentFrame:
+                    description: 'its first frame sent: its length, then up to 160 bytes in hex ("508:0004…"; no FCS)'
+                    type: string
+                gotFrame:
+                    description: the first of its frames that arrived where it goes, the same way
+                    type: string
             required:
                 - id
                 - tx

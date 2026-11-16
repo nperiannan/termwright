@@ -120,8 +120,8 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		apiOut(w, http.StatusOK, v, err)
 	case "/lab/traffic/report":
 		f := orStr(r.URL.Query().Get("format"), "json")
-		if !slices.Contains([]string{"json", "csv", "html", "text"}, f) {
-			apiProblem(w, http.StatusBadRequest, "bad-format", "format is json, csv, html or text.")
+		if !slices.Contains([]string{"json", "csv", "html", "pdf", "xlsx", "text"}, f) {
+			apiProblem(w, http.StatusBadRequest, "bad-format", "format is json, csv, html, pdf, xlsx or text.")
 			return
 		}
 		b, ct, err := a.emuTrafficReportAs(f)

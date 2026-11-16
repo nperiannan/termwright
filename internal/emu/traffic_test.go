@@ -414,6 +414,8 @@ func TestTrafficPyFlows(t *testing.T) {
 		FTX  map[string]map[string]int       `json:"ftx"`
 		FLab map[string]map[string]string    `json:"flab"`
 		QoS  map[string]map[string]int       `json:"qos"`
+		Sent map[string]string               `json:"fsent"`
+		Got  map[string]string               `json:"fgot"`
 	}
 	for end := time.Now().Add(8 * time.Second); time.Now().Before(end); time.Sleep(300 * time.Millisecond) {
 		b, err := os.ReadFile(filepath.Join(dir, "traffic-stats.json"))
@@ -424,6 +426,9 @@ func TestTrafficPyFlows(t *testing.T) {
 	if st.RX["s1"] != 200 || len(st.FRX["s1"]) != 4 || st.FRX["s1"]["3"][0] != 50 || st.FTX["s1"]["0"] != 50 || st.FLab["s1"]["1"] != "dport 5002" {
 		lg, _ := os.ReadFile(filepath.Join(dir, "log"))
 		t.Fatalf("flows: rx %v frx %v ftx %v lab %v\n%s", st.RX, st.FRX, st.FTX, st.FLab, lg)
+	}
+	if !strings.Contains(st.Sent["s1"], ":") || !strings.Contains(st.Got["s1"], "8100") || st.Got["s2"] == "" { // the first frames, kept for the report
+		t.Errorf("first frames: sent %q, got %q", st.Sent, st.Got)
 	}
 	if st.QoS["s1"]["10/5/46"] != 200 || st.QoS["s2"]["0/0/0"] != 100 {
 		t.Fatalf("marks %v", st.QoS)

@@ -164,7 +164,7 @@ import { LabServer } from './lab-server';
       @if (page() === 'traffic') {
         <app-traffic-page [traf]="traf()" [view]="trafView()" (viewChange)="trafView.set($event)" [kpis]="trafKpis()" [cards]="tpCards()" [selected]="tEd()?.id ?? ''"
           [throughput]="trafThroughput()" [loss]="trafLoss()" [latency]="trafLat()" [fmtPps]="fmtPps" [fmtPct]="fmtPct" [fmtMs]="fmtMs"
-          (newTest)="ttests()?.newTest()" (newTester)="newTester(); trafView.set('streams')" (newStream)="newStream()" (start)="trafStart([])" (stop)="trafStop()" (report)="trafReport()"
+          (newTest)="ttests()?.newTest()" (newTester)="newTester(); trafView.set('streams')" (newStream)="newStream()" (start)="trafStart([])" (stop)="trafStop()" (report)="trafReport($event)"
           (editTester)="editTester($event)" (removeTester)="tpRemove($event)" (library)="libOpen.set(true)" (radius)="radOpen.set(true)" (quick)="quickOpen.set($event)">
           @if (trafView() === 'tests') { <app-traffic-tests [testers]="traf()?.testers ?? []" [devs]="devs()" /> } @else if (trafView() === 'stats') { <ng-container [ngTemplateOutlet]="trafStats" /> } @else { <ng-container [ngTemplateOutlet]="trafBody" /> }
         </app-traffic-page>
@@ -1715,8 +1715,14 @@ export class LabWorkspace implements OnDestroy {
   async delStream(x: EmuStream) { try { this.traf.set(await this.backend.emuStreamRemove(x.id)); if (this.sEd()?.id === x.id) this.sEd.set(null); } catch (e) { this.ui.error(e); } }
   async trafStart(ids: string[]) { try { this.traf.set(await this.backend.emuTrafficStart(ids)); await this.loadTraf(); } catch (e) { this.ui.error(e); } }
   async trafStop() { try { this.traf.set(await this.backend.emuTrafficStop()); await this.loadTraf(); } catch (e) { this.ui.error(e); } }
-  async trafReport() {
-    try { const p = await this.backend.chooseSaveFile(tr('Save the Traffic Report'), 'traffic-report.html', [{ displayName: 'HTML', pattern: '*.html' }, { displayName: 'CSV', pattern: '*.csv' }]); if (!p) return; await this.backend.emuTrafficReport(p); this.ui.toast(tr('Saved'), 'success'); } catch (e) { this.ui.error(e); }
+  async trafReport(kind: 'html' | 'pdf' | 'xlsx' | 'csv' = 'html') {
+    const ext = { html: ['HTML', 'html'], pdf: ['PDF', 'pdf'], xlsx: ['Excel', 'xlsx'], csv: ['CSV', 'csv'] }[kind];
+    const d = new Date(), stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+    try {
+      const p = await this.backend.chooseSaveFile(tr('Save the Traffic Report'), `traffic-report-${stamp}.${ext[1]}`, [{ displayName: ext[0], pattern: '*.' + ext[1] }]); if (!p) return;
+      if (kind === 'pdf') this.ui.toast(tr('Printing the report to PDF…'), 'info');
+      await this.backend.emuTrafficReport(/\.[a-z]+$/i.test(p) ? p : p + '.' + ext[1]); this.ui.toast(tr('Saved'), 'success');
+    } catch (e) { this.ui.error(e); }
   }
   protected stoppedCaps = computed(() => this.caps().filter(c => !c.running));
   /** The ticked captures (stopped ones only; a capture that is gone is untick'd). */

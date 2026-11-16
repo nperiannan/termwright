@@ -478,10 +478,16 @@ class Traffic:
         if bad or not results:
             raise AssertionError("; ".join(bad) or "no results")
 
-    def report(self, fmt: str = "json") -> Any:
-        if fmt not in ("json", "csv", "html", "text"):
-            raise ValueError("format: json, csv, html or text")
-        return self.lab.request("GET", "/traffic/report", raw=fmt != "json", format=fmt)
+    def report(self, fmt: str = "json", path: Optional[str] = None) -> Any:
+        """The run's report: json (the traffic view), csv, html, text, or pdf and xlsx (bytes). With path, saved there
+        (lab.traffic.report("xlsx", "run.xlsx")): the report to share, with graphs, topology, frames sent and received."""
+        if fmt not in ("json", "csv", "html", "text", "pdf", "xlsx"):
+            raise ValueError("format: json, csv, html, text, pdf or xlsx")
+        out = self.lab.request("GET", "/traffic/report", timeout=120 if fmt == "pdf" else None, raw=fmt != "json", binary=fmt in ("pdf", "xlsx"), format=fmt)
+        if path:
+            with open(path, "wb" if isinstance(out, bytes) else "w") as fh:
+                fh.write(out if isinstance(out, (bytes, str)) else json.dumps(out, indent=2))
+        return out
 
     # ---- saved tests ----
     def tests(self) -> list:
