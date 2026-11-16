@@ -177,7 +177,7 @@ app-command-window { flex: none; }
     color: var(--muted); font-size: calc(11.5px * var(--ui-scale, 1)); line-height: 1.5; cursor: default;
     b { color: var(--text); font-weight: 600; } }
   button.hf-chip { cursor: pointer; &:hover { color: var(--text); border-color: var(--border); } }
-  .hf-chip.link { color: var(--accent); }
+  .hf-chip.link { color: var(--text); .star { color: #f5b942; } }
   .hf-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint);
     &.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); } &.new { background: var(--accent); box-shadow: 0 0 6px var(--accent); } } }
 .home-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 22px;

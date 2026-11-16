@@ -667,18 +667,6 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 }
               </div>
               <button type="button" (click)="checkNow()">Check for Updates…</button>
-              <details class="adv">
-                <summary>Advanced - only for your own fork</summary>
-                <div class="grid">
-                  <label>Repository</label><input name="urepo" [(ngModel)]="s.updateRepo" placeholder="owner/name" />
-                  <label>GitHub token</label>
-                  <div class="row"><input type="password" name="utok" [(ngModel)]="token" [placeholder]="hasToken() ? '(saved in the OS keychain - type to replace)' : 'only for a private fork'" autocomplete="off" />
-                    <button type="button" (click)="saveToken()">Save</button>
-                    @if (hasToken()) { <button type="button" (click)="clearToken()">Remove</button> }</div>
-                  <label></label>
-                  <div class="hint">Leave these alone to get the official Termwright releases. For a private fork use a fine-grained token with read-only <b>Contents</b> access to that repository.</div>
-                </div>
-              </details>
             }
             @case ('buttons') {
               <p class="hint">Text is sent as typed; use \\r for Enter, \\t Tab, \\x03 Ctrl+C, \\e Escape.</p>
@@ -912,19 +900,6 @@ export class OptionsDialog implements OnInit {
     this.dtIndex.set(0);
   }
 
-  token = '';
-  readonly hasToken = signal(false);
-
-  async saveToken() {
-    if (!this.token.trim()) return;
-    try { await this.backend.setUpdateToken(this.token); this.token = ''; this.hasToken.set(true); this.ui.toast('Token saved', 'success'); }
-    catch (e) { this.ui.error(e); }
-  }
-
-  async clearToken() {
-    try { await this.backend.setUpdateToken(''); this.hasToken.set(false); } catch (e) { this.ui.error(e); }
-  }
-
   async checkNow() {
     await this.save();
     this.ui.open('update');
@@ -1029,7 +1004,6 @@ export class OptionsDialog implements OnInit {
     if (this.s) this.schemeName.set(!this.s.terminalScheme || this.s.terminalScheme === 'Auto' ? 'Default' : this.s.terminalScheme);
     this.schemeRev.update(v => v + 1);
     this.backend.getAppInfo().then(i => this.dataDir.set(i.dataDir)).catch(() => {});
-    this.backend.hasUpdateToken().then(v => this.hasToken.set(v)).catch(() => {});
   }
 
   readonly cards = signal<SmartCardInfo | null>(null);

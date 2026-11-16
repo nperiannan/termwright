@@ -72,6 +72,8 @@ const PATHS: Record<string, string> = {
   'dock-left': 'M3 4h18v16H3zM9 4v16M16 9l-3 3 3 3',
   'dock-right': 'M3 4h18v16H3zM15 4v16M8 9l3 3-3 3',
   'hide-panel': 'M3 4h18v16H3zM9 4v16M5.5 9l1.5 3-1.5 3',
+  'panel-hide-left': 'M3 4h18v16H3zM9 4v16M7 9l-1.5 3L7 15',
+  'panel-hide-right': 'M3 4h18v16H3zM15 4v16M17 9l1.5 3-1.5 3',
   pulse: 'M3 12h4l3-7 4 14 3-7h4',
   // Discover Devices: a radar sweep with devices showing up as dots
   radar: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M7 12a5 5 0 1 0 10 0a5 5 0 1 0-10 0M12 12l6.4-6.4M15.5 15h.01M8 9.5h.01',

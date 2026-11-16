@@ -80,7 +80,7 @@ Termwright has one layout: tabs, the Sessions list, search and the menus (**⋯*
 |---|---|
 | **Title bar** | The **tabs** (a dot shows the state: green connected, amber connecting, red error, grey disconnected; badges for logging and recording; a running script shows as a pill with Stop), **+** for a new session, the **Sessions** button (a list of every session with its small device icon, grouped by folder with favourites first - type to filter, ↵ connects, Alt+↵ opens SFTP, an address that is no session connects to it), Quick Connect (⚡), SFTP, the layout menu, the theme switch (Light / Dark / System), Settings (⚙) and the **⋯** menu with File, Edit, View, Transfer, Tools and Help. On macOS the tabs share the title bar with the window buttons. Many tabs scroll sideways (mouse wheel or trackpad). |
 | **Start page** | Shown when no tab is open: a large search-or-connect box (type `voss 10.1.1.1`, `ssh admin@host`, a session name …), quick actions (Quick Connect, New Session, Local Shell, Import, Discover Devices - as *Raised* buttons, *Keycaps* with their shortcut or *Glow cards*: Settings → General → Start page buttons) and cards for your **Favourites** and **Recent** sessions with their device icon, address, device facts and when you last used them - at most 12 cards in all, favourites first. Click a card to connect; right-click for more; *Clear* empties the list. |
-| **Session Manager** (left by default) | Folders and sessions with a filter box. Folders are coloured by level (top level amber, sub-folders purple, deeper blue, production light red), sessions show a **device icon** (switch, router, firewall, access point, server …) - View → Tile / Glyph Icons switches between coloured tiles and plain glyphs. **New**, **Shell** (a local shell) and **Scan** buttons at the bottom, in the colours of the start page buttons; the **pulse** button beside the filter shows **which devices answer** (a green or red dot from a quick TCP check of each session's port, every minute) and the **⋯** menu has Clear Recent / Favourites, Compact rows and the side. |
+| **Session Manager** (left by default) | Folders and sessions with a filter box. Folders are coloured by level (top level amber, sub-folders purple, deeper blue, production light red), sessions show a **device icon** (switch, router, firewall, access point, server …) - View → Tile / Glyph Icons switches between coloured tiles and plain glyphs. **New**, **Shell** (a local shell) and **Scan** buttons at the bottom, in the colours of the start page buttons; the **pulse** button beside the filter shows **which devices answer** (a green or red dot from a quick TCP check of each session's port, every minute) and the **⋯** menu has Clear Recent / Favourites, Compact rows and the side. The **hide** button after ⋯ hides it (as the sidebar button at the top left and Mod+Shift+M do) - more room for the emulated lab; the sidebar button shows it again. |
 | **Session side panel** | New Session and right-click → Properties… open beside the terminal with the everyday fields and the device facts; *Advanced* and **All session options…** open the full dialog. |
 | **Command Window / Button Bar** | View → Command Window / Button Bar (or `Mod+K` / `Mod+B`). |
 | **Status bar** | State, protocol · user@host:port, device type and facts (e.g. *VOSS 8.10.0.0 · up 41 days*), transfers, terminal size. |
@@ -1580,7 +1580,7 @@ A translation is a plain text list in the source (`frontend/src/app/i18n/ru.ts`,
 | **Keyword Highlighting** | Keyword sets and the default set. |
 | **Key Map** | Key bindings. |
 | **Button Bar** | Buttons: label, text, all tabs, action, script; reorder. |
-| **Updates** | What to be told about (stable / stable and nightly / nothing), check at start-up; under *Advanced*, repository and token for your own fork. |
+| **Updates** | What to be told about (stable / stable and nightly / nothing), check at start-up. |
 
 ### Updates
 
@@ -1596,7 +1596,6 @@ Options → Global Options → **Updates** decides when you are told about updat
 
 - **Notify me about**: *Stable releases* (default), *Stable releases and nightly builds*, or *Nothing*.
 - **Check at start-up** (at most once a day; only a notice when something newer exists).
-- **Advanced - only for your own fork**: repository and GitHub token. Leave them alone for the official releases.
 
 ## 14. Migrating from SecureCRT, PuTTY or MobaXterm
 
