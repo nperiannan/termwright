@@ -27,7 +27,7 @@ const ru: Record<string, string> = {
   'Start / Stop Script Recording': 'Начать / остановить запись скрипта', 'Session Options...': 'Параметры сессии...', 'Global Options...': 'Общие параметры...', 'Passwords & Accounts...': 'Пароли и учётные записи...',
   'Set Up Key Login / Generate Key...': 'Вход по ключу / создать ключ...', 'Teams...': 'Рабочие группы...', 'Teams': 'Рабочие группы', 'Set Up Remote Desktop...': 'Настроить удалённый рабочий стол...', 'Compare Outputs...': 'Сравнить вывод...',
   'Next Tab': 'Следующая вкладка', 'Previous Tab': 'Предыдущая вкладка', 'Send Command to All Tabs...': 'Отправить команду во все вкладки...', 'Send Break': 'Отправить Break',
-  'Lock Session': 'Заблокировать сессию', 'Lock All Sessions': 'Заблокировать все сессии', 'Welcome...': 'Приветствие...', 'User Guide': 'Руководство пользователя',
+  'Lock Session': 'Заблокировать сессию', 'Lock All Sessions': 'Заблокировать все сессии', 'Welcome...': 'Приветствие...', 'Emulated Lab Workflow...': 'Рабочий процесс эмулированной лаборатории...', 'Emulated Lab workflow': 'Рабочий процесс эмулированной лаборатории', 'From an empty KVM host to a traffic report': 'От пустого хоста KVM до отчёта о трафике', 'Do not show this when the Emulated Lab opens': 'Не показывать при открытии эмулированной лаборатории', 'The nine steps of the Emulated Lab workflow': 'Девять шагов работы с эмулированной лабораторией', 'User Guide': 'Руководство пользователя',
   'Keyboard Shortcuts': 'Сочетания клавиш', 'Check for Updates...': 'Проверить обновления...', 'About Termwright': 'О программе Termwright',
   'Quick Connect': 'Быстрое подключение', 'Local Shell': 'Локальная оболочка', 'New Session': 'Новая сессия', 'Global Options': 'Общие параметры', 'Session Options': 'Параметры сессии',
 

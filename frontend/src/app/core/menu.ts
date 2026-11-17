@@ -76,7 +76,7 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Lock Session', action: 'lock' }, { label: 'Lock All Sessions', action: 'lock-all' },
     ] },
     { title: 'Help', items: [
-      { label: 'Welcome...', action: 'welcome' }, { label: 'User Guide', action: 'user-guide' }, { label: 'Connect an AI App...', action: 'connect-ai' }, { label: 'Keyboard Shortcuts', action: 'shortcuts' }, { label: 'Check for Updates...', action: 'check-updates' },
+      { label: 'Welcome...', action: 'welcome' }, { label: 'Emulated Lab Workflow...', action: 'lab-workflow' }, { label: 'User Guide', action: 'user-guide' }, { label: 'Connect an AI App...', action: 'connect-ai' }, { label: 'Keyboard Shortcuts', action: 'shortcuts' }, { label: 'Check for Updates...', action: 'check-updates' },
       { label: 'About Termwright', action: 'about' },
     ] },
   ];

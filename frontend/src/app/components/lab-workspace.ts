@@ -18,6 +18,7 @@ import { Backend } from '../core/backend';
 import { LOCAL_HOST, EmuHostNIC, EmuServer, LabHubDetail, EmuBoard, EmuClientState, EmuSTPState, EmuVRRPState, EmuBFDState, EmuEncap, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
+import { labWorkflowHidden } from '../dialogs/lab-workflow';
 import { tr } from '../core/i18n';
 import { TableView, TvBar, TvHead } from '../core/table-view';
 import { LabConfigure, LabNew } from './lab-pages';
@@ -45,6 +46,7 @@ import { LabServer } from './lab-server';
         @if (pcWin() && pcDev(); as d) { <app-pc-window [dev]="d" [links]="pcLinks(d)" [testers]="traf()?.testers ?? []" (closed)="pcWin.set('')" (console)="pcWin.set(''); console(d)" (capture)="pcCapture(d, $event)" (screen)="pcWin.set(''); screenDev.set(d)" /> }
     <div class="tb">
       <b class="lname">{{ emu() ? tr('Emulated Lab') : tr('Simulated Lab') }}</b>
+      @if (emu()) { <button type="button" class="lhelp" (click)="ui.open('labWorkflow'); $event.stopPropagation()" [title]="tr('Emulated Lab workflow: the nine steps from an empty host to a traffic report')" [attr.aria-label]="tr('Emulated Lab workflow')"><app-icon name="help" [size]="16" /></button> }
       @if (emu()) { <span class="topo" (click)="openTopos(); $event.stopPropagation()" [title]="tr('Topologies: save, open, new')"><span class="muted tl">{{ tr('Topology') }}</span> <b>{{ st()?.topology || tr('Untitled') }}</b> ▾</span>
         @if (topos(); as tl) {
           <div class="topos" (click)="$event.stopPropagation()">
@@ -926,6 +928,8 @@ import { LabServer } from './lab-server';
         </div>
   </ng-template>`,
   styles: [`
+    .lhelp { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; margin-left: -4px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+    .lhelp:hover { background: var(--hover); color: var(--accent); }
     :host { display: block; height: 100%; --cloudc: #a9b7c8; }
     :host-context(.light) { --cloudc: #7d8da3; }
     .ws { height: 100%; display: grid; background: var(--bg); color: var(--text); font-size: 13px; }
@@ -2314,7 +2318,10 @@ export class LabWorkspace implements OnDestroy {
   private palDrag: Pal | null = null;
   private timer: ReturnType<typeof setInterval>;
 
+  private wfAsked = false;
   constructor() {
+    // the workflow picture shows once each time an emulated lab opens, unless turned off (Help → Emulated Lab Workflow… shows it any time)
+    effect(() => { if (this.visible() && this.emu() && !this.wfAsked) { this.wfAsked = true; if (!labWorkflowHidden()) setTimeout(() => this.ui.open('labWorkflow'), 0); } });
     effect(() => { if (this.visible()) { this.lab.kind.set(this.emu() ? 'emu' : 'sim'); this.lab.watch('ws-' + this.tab().id, true); void this.lab.refresh(); } else this.lab.watch('ws-' + this.tab().id, false); });
     this.timer = setInterval(() => { if (this.visible() && this.emu() && this.dock() === 'console') void this.loadTail(); if (this.visible() && this.emu() && this.dock() === 'log') void this.loadLog(); if (this.visible() && this.emu() && (this.dock() === 'changes' || ++this.chTick % 10 === 1)) void this.loadChanges(); if (this.visible() && this.emu() && this.dock() === 'cap' && this.capCur()?.running) void this.loadCaps(); if (this.visible() && this.emu() && this.dock() !== 'cap' && ++this.capTick % 5 === 1) void this.backend.emuCaptures().then(c => this.caps.set(c ?? []), () => undefined); if (this.visible() && this.emu() && !this.trafTimer && (this.dock() === 'traffic' || this.page() === 'traffic' || !this.traf() || ++this.trafTick % 5 === 0)) void this.loadTraf(); }, 3000);
   }

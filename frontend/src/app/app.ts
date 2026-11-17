@@ -69,13 +69,14 @@ import { Compare } from './dialogs/compare';
 import { ExportDialog, ImportDialog } from './dialogs/import-export';
 import { About, Overlays } from './dialogs/overlays';
 import { WELCOME_VERSION, Welcome } from './dialogs/welcome';
+import { LabWorkflow } from './dialogs/lab-workflow';
 import { Unlock } from './dialogs/unlock';
 import { FactTeach } from './dialogs/fact-teach';
 
 @Component({
   selector: 'app-root',
   imports: [FormsModule, Icon, SessionsMenu, SessionIcon, DeviceIcon, SessionPanel, SessionTree, TerminalView, SftpView, FilesPanel, WebOpenDialog, RemoteDiagDialog, CommandWindow, ButtonBar, SessionEditor, QuickConnect,
-    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, Moved, HistoryDialog, Overlays, About, Welcome, FactTeach, Unlock],
+    PromptDialog, OptionsDialog, PasswordsDialog, UpdateDialog, KeySetupDialog, TeamsDialog, FileServersDialog, NetCheckDialog, NameAfterDialog, LabDialog, LabWizard, ServersIndicator, AIPanel, TeamPushDialog, TeamReserveDialog, RemoteDesktopDialog, Palette, Commands, Workspaces, FolderDefaults, Compare, ImportDialog, ExportDialog, DiscoverDialog, BulkEdit, RemoteView, Backups, Checklists, Collect, ConsolePorts, Recordings, PlayerView, LabWorkspace, Moved, HistoryDialog, Overlays, About, Welcome, LabWorkflow, FactTeach, Unlock],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -656,6 +657,7 @@ export class App implements OnInit {
       case 'shortcuts': this.ui.open('shortcuts'); break;
       case 'about': this.ui.open('about'); break;
       case 'welcome': this.ui.open('welcome'); break;
+      case 'lab-workflow': this.ui.open('labWorkflow'); break;
       case 'new-session': await this.ui.newSession(this.ui.currentFolder()); break;
       case 'capture-screen': await this.tabs.captureScreen(); break;
       case 'teach-fact': this.tabs.teachFact(); break;

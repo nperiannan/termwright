@@ -2,6 +2,10 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **The emulated lab shows a one-page workflow picture when it opens**: the nine steps from an empty KVM host to a traffic report (prerequisites, host, appliance, disk image, topology, streams, report, capture and replay, TRex) and the AI assistant doing them for you, in a light or dark version that follows the theme. Tick *Do not show this when the Emulated Lab opens* to stop it; a small **?** button next to the lab's name and **Help → Emulated Lab Workflow…** show it again, and the box there turns it back on. The same picture is in the README and at the top of the [Emulated Lab Guide](docs/EMULATOR_GUIDE.md).
+
 ## 0.40.1 (2026-11-17)
 
 - **README: a demo** - a short animation at the top and a [1-minute video](docs/assets/termwright-demo.mp4): a switch, the AI, the emulated lab, a traffic run and its report.

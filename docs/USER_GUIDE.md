@@ -1226,6 +1226,8 @@ The **Lab** menu - *Emulated Lab*, *Simulated Lab*, and straight to the emulated
 
 > New to the emulated lab? [The Emulated Lab guide](EMULATOR_GUIDE.md) goes step by step from preparing the host to the first test, and the same with the AI agent.
 
+**The workflow picture.** When the emulated lab opens, a one-page picture shows the nine steps from an empty KVM host to a traffic report, in the light or dark version that matches the theme. Tick **Do not show this when the Emulated Lab opens** and *Close* to stop it appearing; the small **?** next to the lab's name or **Help → Emulated Lab Workflow…** shows it again at any time, and unticking the box there turns the automatic showing back on.
+
 The **emulated lab** (Lab window → *Emulated lab (KVM host)* at the top right) boots the vendors' **own VM images** - the free `.qcow2` images several network operating systems offer - with QEMU/KVM on a **Linux server you reach over SSH**. The real operating system runs, so protocols, APIs and cloud agents work as on a real switch. Your computer only drives the host; nothing of Termwright is installed there.
 
 **The lab workspace.** The cube button at the top right (and the flask for the simulated lab) opens the lab as a **tab**:

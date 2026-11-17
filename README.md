@@ -54,6 +54,10 @@ Termwright began as a terminal and session manager for network engineers. Today 
 
 <p align="center"><i>The emulated lab: switches from real images on KVM hosts, cabled on the canvas; the pages above it - Canvas, Overview, Traffic, Appliances, Hosts - are also under the Lab menu.</i></p>
 
+![The emulated lab workflow in nine steps: prerequisites, add a host, pick an appliance, get the disk image, build the topology, create traffic streams, analyse and save the report, capture and replay, and line rate with TRex; the AI assistant can do steps 2 to 9](docs/assets/emulation-workflow-dark.png)
+
+<p align="center"><i>From an empty KVM host to a traffic report in nine steps. The <a href="docs/EMULATOR_GUIDE.md">Emulated Lab Guide</a> walks through each one.</i></p>
+
 - **Real images on your hardware**: switch, router, firewall and server images run in QEMU/KVM on Linux hosts you add over SSH - qcow2 files, GNS3 appliances, a public catalogue, cloud images, or an image you install from the vendor's ISO with its console in the page.
 - **Several hosts, one topology**: a lab spans KVM hosts (cables between hosts are tunnelled), a running switch moves live to another host, and the CPU tab shares or limits each host's cores.
 - **Built for test cases**: draw the topology or let *New Lab…* build it (leaf-spine, mesh, star, LAGs); every device gets its console, an SSH session and its management address; fast start resumes switches in seconds; checkpoints, a change history with Revert, and an Events log of everything Termwright did.
