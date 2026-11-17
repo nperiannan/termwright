@@ -1,5 +1,6 @@
 import { Component, ElementRef, OnDestroy, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { NgTemplateOutlet } from '@angular/common';
 import { DomSanitizer } from '@angular/platform-browser';
 import { Backend, errText } from '../core/backend';
 import { Session, TopoChange, TopoLink, TopoMap, TopoNode, TopoProgress } from '../core/models';
@@ -17,6 +18,7 @@ const VIEWS: { id: View; label: string; hint: string }[] = [
   { id: 'health', label: 'Health', hint: 'Cables up (green) or down (red)' },
   { id: 'stp', label: 'STP', hint: 'The spanning-tree state of the port at each end of every cable' },
   { id: 'lag', label: 'LAG', hint: 'Link aggregation groups highlighted, everything else faded' },
+  { id: 'vlan', label: 'VLAN', hint: 'Pick a VLAN: the cables and devices that carry it are highlighted, everything else faded' },
 ];
 const TIERED: Look[] = ['ant', 'material', 'tier', 'focus'];
 
@@ -31,68 +33,155 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
  *  STP state, LAGs). Read-only on the devices. */
 @Component({
   selector: 'app-network-map',
-  imports: [FormsModule],
+  imports: [FormsModule, NgTemplateOutlet],
   template: `
-    <div class="hd">
-      <div class="tt">
-        <div class="h1r"><h1>{{ tab().mapTitle }}</h1><span class="chip">{{ collectLabel() }}</span>@if (busy()) { <span class="chip live"><i></i>{{ t('Reading') }}</span> }</div>
-        <p class="sub">{{ subline() }}</p>
-      </div>
-      <span class="sp"></span>
-      <button type="button" class="pri" (click)="refresh(true)" [disabled]="busy()" [title]="t('Read the neighbours from the devices now')">{{ busy() ? t('Reading…') : t('Refresh') }}</button>
-      <div class="morew">
-        <button type="button" class="ib" [class.on]="more()" (click)="more.set(!more())" [title]="t('More')">⋯</button>
-        @if (more()) {
-          <div class="more">
-            <label>{{ t('Read again') }}<select [ngModel]="interval()" (ngModelChange)="setInterval(+$event)" [title]="t('How often the map reads the devices again (only while this tab is shown)')">
-              @for (s of intervals; track s) { <option [value]="s">{{ s ? t('Every') + ' ' + (s >= 60 ? s / 60 + ' min' : s + ' s') : t('Manual only') }}</option> }
-            </select></label>
-            <label>{{ t('Read from') }}<select [ngModel]="collect()" (ngModelChange)="collect.set($event); refresh(true)" [title]="t('Where the neighbours are read from')">
-              <option value="cli">{{ t('Device CLI') }}</option><option value="snmp">SNMP</option><option value="both">{{ t('CLI, else SNMP') }}</option>
-            </select></label>
-            @if (collect() !== 'cli') { <label>SNMP<input class="comm" [(ngModel)]="community" placeholder="SNMP community" spellcheck="false" [title]="t('Read-only community. Not saved.')" /></label> }
-            <label>{{ t('Export') }}<select [ngModel]="''" (ngModelChange)="exportAs($event); more.set(false)" [title]="t('Save the map')">
-              <option value="">{{ t('Export…') }}</option><option value="jpg">JPEG</option><option value="pdf">PDF</option><option value="html">HTML</option>
-            </select></label>
+    <ng-template #detTpl>
+      @if (selLinks().length) {
+        @for (l of selLinks(); track l.key) {
+          <div class="dl">
+            <div class="dl-h"><span class="dl-t">{{ selLinks().length > 1 ? t('Cable') + ' ' + ($index + 1) : t('Cable') }}</span><span [class]="'st ' + l.state">{{ l.state === 'up' ? t('Up') : l.state === 'blocked' ? t('STP blocked') : t('Down') }}</span></div>
+            <div class="dl-ends">
+              @for (e of linkEnds(l); track e.side) {
+                <button type="button" class="dl-end" (click)="selectNode(e.id)" [title]="t('Show this device')">
+                  <b>{{ e.name }}</b>
+                  <span class="kv"><i>{{ t('Port') }}</i><em>{{ e.port || '—' }}</em></span>
+                  <span class="kv"><i>STP</i><em [class]="'stp ' + (e.stp || 'none')"><span class="sd"></span>{{ e.stp ? t(stpText(e.stp)) : t('not read') }}</em></span>
+                  @if (e.lag) { <span class="kv"><i>LAG</i><em>{{ e.lag }}</em></span> }
+                </button>
+                @if ($first) { <span class="dl-x">⇄</span> }
+              }
+            </div>
+            <div class="kvs">
+              <span class="kv"><i>{{ t('Speed') }}</i><em>{{ l.speed || t('not read') }}</em></span>
+              <span class="kv"><i>VLAN</i><em>{{ vlanText(l.vlans) }}</em></span>
+              <span class="kv"><i>{{ t('Seen by') }}</i><em>{{ (l.seen ?? []).join(', ').toUpperCase() || '—' }}</em></span>
+            </div>
+            @if (l.warn) { <div class="warn">{{ l.warn }}</div> }
           </div>
         }
+      } @else if (selNode(); as n) {
+        <div class="dd">
+          <div class="dd-h"><div><b>{{ n.name }}</b><small>{{ [n.model, (n.os || '').toUpperCase()].filter(isStr).join(' · ') || (n.ghost ? t('Neighbour, not in Session Manager') : '') }}</small></div>
+            @if (n.session) { <button type="button" class="nm-btn pri sm" (click)="openSession(n.session)">{{ t('Connect') }}</button> }</div>
+          <div class="kvs col">
+            <span class="kv"><i>{{ t('Address') }}</i><em>{{ n.ip || '—' }}{{ selSess() ? '  ·  ' + selSess()!.protocol + ' ' + selSess()!.port : '' }}</em></span>
+            @if (selSess()?.folder) { <span class="kv"><i>{{ t('Folder') }}</i><em>{{ selSess()!.folder }}</em></span> }
+            <span class="kv"><i>{{ t('Neighbours') }}</i><em>{{ nodePeers() }} · {{ nodeLinks().length }} {{ t(nodeLinks().length === 1 ? 'cable' : 'cables') }}</em></span>
+            @if (n.portsTotal) { <span class="kv"><i>{{ t('Ports') }}</i><em>{{ n.portsUp }} {{ t('up of') }} {{ n.portsTotal }}</em></span> }
+            <span class="kv"><i>{{ t('Management') }}</i><em>{{ mgmtText(n) }}</em></span>
+            @if (n.vlans?.length) { <span class="kv"><i>VLAN</i><em>{{ vlanText(n.vlans) }}</em></span> }
+            @if (n.chassis) { <span class="kv"><i>MAC</i><em>{{ n.chassis }}</em></span> }
+          </div>
+          @for (x of n.notes ?? []; track $index) { <div class="warn">{{ x }}</div> }
+          @if (nodeLinks().length) {
+            <div class="dd-t">{{ t('Connected through') }}</div>
+            <table class="dd-p"><tr><th>{{ t('Port') }}</th><th>{{ t('Neighbour') }}</th><th>{{ t('Speed') }}</th><th>STP</th></tr>
+              @for (x of nodeLinks(); track x.key) {
+                <tr (click)="selectLink(x.key)" [class]="x.state"><td><b>{{ x.port }}</b></td><td>{{ x.peer }} <span class="mut">{{ x.peerPort }}</span></td><td>{{ x.speed || '—' }}</td><td><span [class]="'stp ' + (x.stp || 'none')"><span class="sd"></span>{{ x.stp ? t(stpText(x.stp)) : '—' }}</span></td></tr>
+              }
+            </table>
+          }
+        </div>
+      }
+    </ng-template>
+    <div [class]="'nm nm-' + fam()" (click)="closeMenus($event)">
+    <div class="nm-head">
+      <div class="nm-tt">
+        @if (fam() === 'mat') {
+          <div class="h1r"><h1>{{ t('Network map') }}</h1><span class="nm-chip f">{{ tab().mapTitle }} · {{ realCount() || devs().length }} {{ t('devices') }}</span><span class="nm-chip">{{ t('Collect') }}: {{ collectLabel() }}</span><span class="nm-chip">{{ intervalLabel() }}</span></div>
+        } @else {
+          <div class="h1r"><h1>{{ tab().mapTitle }}</h1><span class="nm-tag b">{{ collectLabel() }}</span>@if (busy()) { <span class="nm-tag live"><i></i>{{ t('Reading') }}</span> }</div>
+          <p>{{ subline() }}</p>
+        }
+      </div>
+      <div class="nm-ctl">
+        <div class="nm-mw">
+          <button type="button" class="nm-dd" [class.on]="menu() === 'look'" (click)="openMenu('look', $event)" [title]="t('How devices and cables are drawn')"><span class="lbk">{{ t('Style') }}</span>{{ t(lookLabel()) }}<i class="cv"></i></button>
+          @if (menu() === 'look') {
+            <div class="nm-pop looks">@for (l of looks; track l.id) {
+              <button type="button" class="lk" [class.on]="look() === l.id" (click)="setLook(l.id); menu.set('')">
+                <svg class="th" viewBox="0 0 64 44" width="64" height="44">@switch (l.id) {
+                  @case ('ant') { <path d="M32 11V18M14 18H50M14 18V26M32 18V26M50 18V26" fill="none" stroke="#3c89e8" stroke-width="1.4"/><rect x="24" y="4" width="16" height="8" rx="2" fill="#1f1f1f" stroke="#7c4dd8"/><rect x="6" y="26" width="16" height="8" rx="2" fill="#1f1f1f" stroke="#595959"/><rect x="24" y="26" width="16" height="8" rx="2" fill="#1f1f1f" stroke="#595959"/><rect x="42" y="26" width="16" height="8" rx="2" fill="#1f1f1f" stroke="#595959"/> }
+                  @case ('material') { <path d="M32 13C32 20 16 18 16 26M32 13C32 20 48 18 48 26" fill="none" stroke="#CCC2DC" stroke-width="1.4" opacity=".7"/><rect x="21" y="3" width="22" height="11" rx="5" fill="#4F378B"/><rect x="5" y="26" width="22" height="11" rx="5" fill="#5B3D9E"/><rect x="37" y="26" width="22" height="11" rx="5" fill="#5B3D9E"/> }
+                  @case ('focus') { <path d="M20 12L12 30M20 12L32 30M44 12L32 30M44 12L52 30M20 12H44" stroke="#8b97a8" stroke-width="1.2" opacity=".6"/><path d="M44 12L52 30" stroke="#f5a524" stroke-width="1.6" stroke-dasharray="3 2"/><circle cx="20" cy="12" r="6" fill="#1b212b" stroke="#4c9aff"/><circle cx="44" cy="12" r="6" fill="#1b212b" stroke="#8b97a8"/><circle cx="12" cy="31" r="5" fill="#1b212b" stroke="#8b97a8"/><circle cx="32" cy="31" r="5" fill="#1b212b" stroke="#8b97a8"/><circle cx="52" cy="31" r="5" fill="#1b212b" stroke="#8b97a8"/> }
+                  @case ('zones') { <rect x="16" y="3" width="32" height="13" rx="3" fill="none" stroke="#2a3240"/><rect x="20" y="6" width="10" height="7" rx="2" fill="#1b212b" stroke="#4c9aff"/><rect x="34" y="6" width="10" height="7" rx="2" fill="#1b212b" stroke="#4c9aff"/><path d="M32 16V24" stroke="#4c9aff" stroke-width="1.4"/><rect x="4" y="24" width="56" height="15" rx="3" fill="none" stroke="#2a3240"/><rect x="8" y="28" width="11" height="7" rx="2" fill="#1b212b" stroke="#8b97a8"/><rect x="22" y="28" width="11" height="7" rx="2" fill="#1b212b" stroke="#8b97a8"/><rect x="36" y="28" width="11" height="7" rx="2" fill="#1b212b" stroke="#8b97a8"/> }
+                  @case ('flow') { <path d="M20 22C27 22 25 9 32 9M20 22C27 22 25 35 32 35M46 9C50 9 50 5 54 5M46 9C50 9 50 14 54 14M46 35H54" fill="none" stroke="#4c9aff" stroke-width="1.3"/><rect x="4" y="18" width="16" height="8" rx="3" fill="#151a22" stroke="#4c9aff"/><rect x="32" y="5" width="14" height="8" rx="3" fill="#151a22" stroke="#2a3240"/><rect x="32" y="31" width="14" height="8" rx="3" fill="#151a22" stroke="#2a3240"/><rect x="54" y="2" width="8" height="6" rx="2" fill="#151a22" stroke="#2a3240"/><rect x="54" y="11" width="8" height="6" rx="2" fill="#151a22" stroke="#2a3240"/><rect x="54" y="32" width="8" height="6" rx="2" fill="#151a22" stroke="#2a3240"/> }
+                  @case ('card') { <path d="M32 12L14 28M32 12L50 28" stroke="#34d399" stroke-width="1.4"/><rect x="20" y="4" width="24" height="9" rx="2" fill="#2a2b30" stroke="#36373d"/><rect x="22" y="6" width="7" height="5" fill="#8b8e96"/><rect x="3" y="27" width="24" height="9" rx="2" fill="#2a2b30" stroke="#36373d"/><rect x="5" y="29" width="7" height="5" fill="#8b8e96"/><rect x="37" y="27" width="24" height="9" rx="2" fill="#2a2b30" stroke="#36373d"/><rect x="39" y="29" width="7" height="5" fill="#8b8e96"/> }
+                  @default { <path d="M2 20H62" stroke="#8b8e96" stroke-dasharray="1 3"/><path d="M32 12V24H14V28M32 24H50V28" fill="none" stroke="#34d399" stroke-width="1.4"/><rect x="20" y="4" width="24" height="9" rx="2" fill="#2a2b30" stroke="#36373d"/><rect x="2" y="28" width="24" height="9" rx="2" fill="#2a2b30" stroke="#36373d"/><rect x="38" y="28" width="24" height="9" rx="2" fill="#2a2b30" stroke="#36373d"/> }
+                }</svg>
+                <span class="tx"><b>{{ t(l.label) }}</b><small>{{ t(l.hint) }}</small></span>
+              </button>
+            }</div>
+          }
+        </div>
+        <div class="nm-seg">@for (v of views; track v.id) { <button type="button" [class.on]="cableView() === v.id" (click)="setView(v.id)" [title]="t(v.hint)">{{ t(v.label) }}</button> }</div>
+        @if (cableView() === 'vlan') {
+          <div class="nm-mw">
+            <button type="button" class="nm-dd" [class.on]="menu() === 'vlan'" (click)="openMenu('vlan', $event)" [title]="t('The VLAN to show')"><span class="lbk">VLAN</span>{{ vlanLabel() }}<i class="cv"></i></button>
+            @if (menu() === 'vlan') {
+              <div class="nm-pop list vl">
+                <input class="nm-in vq" [ngModel]="vlanQ()" (ngModelChange)="vlanQ.set($event)" (keydown.enter)="vlanEnter()" (click)="$event.stopPropagation()" [placeholder]="t('VLAN ID or name, Enter to show')" spellcheck="false" autofocus />
+                <div class="vls">@for (v of vlanShown(); track v.id) {
+                  <button type="button" class="vr" [class.on]="vlanSel() === v.id" (click)="pickVlan(v.id); menu.set('')"><span class="vid">{{ v.id }}</span><span class="vn">{{ v.name }}</span><span class="cnt">{{ v.n }} {{ t(v.n === 1 ? 'cable' : 'cables') }}</span></button>
+                }</div>
+                @if (!vlanShown().length) { <div class="hd2">{{ vlanList().length ? t('No VLAN matches; press Enter to show VLAN {0}', vlanQ()) : t('No VLANs were read (EXOS and VOSS only)') }}</div> }
+              </div>
+            }
+          </div>
+        }
+        <div class="nm-mw">
+          <button type="button" class="nm-dd" [class.on]="menu() === 'layout'" (click)="openMenu('layout', $event)" [title]="t('Arrange the devices without clutter')"><span class="lbk">{{ t('Layout') }}</span>{{ layoutLabel() }}<i class="cv"></i></button>
+          @if (menu() === 'layout') {
+            <div class="nm-pop list">
+              @if (computedLook()) { <button type="button" [class.on]="ownLayout()" (click)="pickArrange('own'); menu.set('')">{{ t('As the style draws it') }}</button><hr /> }
+              @for (st of styles; track st.id) { <button type="button" [class.on]="(!computedLook() || !ownLayout()) && layoutStyle() === st.id" (click)="pickArrange(st.id); menu.set('')">{{ t(st.label) }}</button> }
+            </div>
+          }
+        </div>
+        <button type="button" class="nm-tog" [class.on]="ghosts()" (click)="ghosts.set(!ghosts())" [title]="t('Neighbours that are not in the Session Manager')"><i></i>{{ t('Unmanaged') }}</button>
+        <button type="button" class="nm-tog" [class.on]="ports()" (click)="ports.set(!ports())" [title]="t('Port names on the cables')"><i></i>{{ t('Ports') }}</button>
+        @if (fam() !== 'mat') { <button type="button" class="nm-btn pri" (click)="refresh(true)" [disabled]="busy()" [title]="t('Read the neighbours from the devices now')">{{ busy() ? t('Reading…') : t('Refresh') }}</button> }
+        <div class="nm-mw">
+          <button type="button" class="nm-btn ic" [class.on]="menu() === 'more'" (click)="openMenu('more', $event)" [title]="t('More')">⋯</button>
+          @if (menu() === 'more') {
+            <div class="nm-pop list more">
+              <div class="hd2">{{ t('Read again') }}</div>
+              <div class="chips">@for (iv of intervals; track iv) { <button type="button" [class.on]="interval() === iv" (click)="setInterval(iv)">{{ iv ? (iv >= 60 ? iv / 60 + ' min' : iv + ' s') : t('Manual') }}</button> }</div>
+              <div class="hd2">{{ t('Read from') }}</div>
+              <div class="chips"><button type="button" [class.on]="collect() === 'cli'" (click)="collect.set('cli'); refresh(true)">{{ t('Device CLI') }}</button><button type="button" [class.on]="collect() === 'snmp'" (click)="collect.set('snmp'); refresh(true)">SNMP</button><button type="button" [class.on]="collect() === 'both'" (click)="collect.set('both'); refresh(true)">{{ t('CLI, else SNMP') }}</button></div>
+              @if (collect() !== 'cli') { <input class="nm-in" [(ngModel)]="community" placeholder="SNMP community" spellcheck="false" [title]="t('Read-only community. Not saved.')" /> }
+              <hr />
+              <button type="button" (click)="sideOpen.set(!sideOpen()); menu.set('')">{{ sideOpen() ? t('Hide details') : t('Show details') }}@if (failedCount()) { <em>{{ failedCount() }}</em> }</button>
+              @if (fam() !== 'ant') { <button type="button" (click)="toggleTable(); menu.set('')">{{ tableOpen() ? t('Hide the devices table') : t('Show the devices table') }}</button> }
+              <hr />
+              <button type="button" (click)="exportAs('jpg'); menu.set('')">{{ t('Export') }} JPEG</button>
+              <button type="button" (click)="exportAs('pdf'); menu.set('')">{{ t('Export') }} PDF</button>
+              <button type="button" (click)="exportAs('html'); menu.set('')">{{ t('Export') }} HTML</button>
+            </div>
+          }
+        </div>
       </div>
     </div>
-    @if (showProg() && look() === 'flow') {
-      <div class="seg5">@for (s of stepList(); track s.n) { <div [class]="s.st"><div class="sl"><b>{{ t(s.name) }}</b><span>{{ s.sub }}</span></div><div class="tr"><i [style.width.%]="s.pct"></i></div></div> }</div>
-    } @else if (showProg() && headerSteps()) {
-      <div class="stepper">@for (s of stepList(); track s.n; let last = $last) {
-        <div class="sp1" [class]="'sp1 ' + s.st"><span class="ic">@if (s.st === 'ok') { ✓ } @else if (s.st === 'run') { <i class="spin"></i> } @else { {{ s.n }} }</span><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div>
-        @if (!last) { <span class="cn" [class.ok]="s.st === 'ok'"></span> }
-      } </div>
+    @if (showProg()) {
+      @if (look() === 'flow') {
+        <div class="nm-bars">@for (s of stepList(); track s.n) { <div [class]="'sb ' + s.st"><div class="sl"><b>{{ t(s.name) }}</b><span>{{ s.sub }}</span></div><div class="tr"><i [style.width.%]="s.pct"></i></div></div> }</div>
+      } @else if (fam() !== 'mat' && look() !== 'zones') {
+        <div class="nm-steps">@for (s of stepList(); track s.n) {
+          <div [class]="'step ' + s.st"><span class="ic">@if (s.st === 'ok') { ✓ } @else if (s.st === 'run') { <i class="spin"></i> } @else { {{ s.n }} }</span><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div>
+        }</div>
+      }
     }
-    @if (kpis().length) {
-      <div class="kpis">@for (k of kpis(); track k.l) {
-        <button type="button" class="kpi" [class]="'kpi ' + k.c" (click)="k.go()" [title]="t(k.h)"><small>{{ t(k.l) }}</small><b>{{ k.v }}</b></button>
-      }</div>
+    @if (fam() !== 'ant' && fam() !== 'mat' && look() !== 'focus' && kpis().length) {
+      <div class="nm-pills">@for (k of kpis(); track k.l) { <button type="button" (click)="k.go()" [title]="t(k.h)" [class]="k.c"><b>{{ k.v }}</b> {{ t(k.l) }}</button> }</div>
     }
-    <div class="tbar">
-      <b class="tl">{{ t('Topology') }}</b>
-      <div class="segv">@for (v of views; track v.id) { <button type="button" [class.on]="cableView() === v.id" (click)="setView(v.id)" [title]="t(v.hint)">{{ t(v.label) }}</button> }<button type="button" disabled [title]="t('VLANs are not read yet')">VLAN</button></div>
-      <span class="sp"></span>
-      <label class="tg"><input type="checkbox" [ngModel]="ghosts()" (ngModelChange)="ghosts.set($event)" /> {{ t('Unmanaged neighbours') }}</label>
-      <label class="tg"><input type="checkbox" [ngModel]="ports()" (ngModelChange)="ports.set($event)" /> {{ t('Port names') }}</label>
-      <select [ngModel]="look()" (ngModelChange)="setLook($event)" [title]="t('How devices and cables are drawn')">
-        @for (l of looks; track l.id) { <option [value]="l.id" [title]="t(l.hint)">{{ t(l.label) }}</option> }
-      </select>
-      <select [ngModel]="arrangeSel()" (ngModelChange)="pickArrange($event)" [title]="t('Arrange the devices without clutter')">
-        @if (computedLook()) { <option value="own">{{ t('Arrange: as the look draws it') }}</option> } @else { <option value="">{{ t('Arrange…') }}</option> }
-        @for (s of styles; track s.id) { <option [value]="s.id">{{ t('Arrange') }}: {{ t(s.label) }}</option> }
-      </select>
-      <button type="button" class="ib" [class.on]="sideOpen()" (click)="sideOpen.set(!sideOpen())" [title]="t('Devices, links, ports and changes')">{{ t('Details') }}@if (failedCount()) { <em>{{ failedCount() }}</em> }</button>
-      <button type="button" class="ib" [class.on]="tableOpen()" (click)="toggleTable()" [title]="t('Devices table')">{{ t('Devices') }}</button>
-    </div>
     @if (busy() && nodes().length && !showProg()) { <div class="busybar"></div> }
     @if (laid()?.err) { <div class="err">{{ laid()?.err }}</div> }
     @if (err()) { <button type="button" class="err" (click)="sideOpen.set(true)">{{ err() }}</button> }
-    <div class="body">
-      <div #stage [class]="'stage lk-' + look()" [class.drag]="panning" (wheel)="onWheel($event)" (pointerdown)="down($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointerleave)="hover.set(null)">
-        <svg #svg [attr.viewBox]="'0 0 ' + stageSize().w + ' ' + stageSize().h" [innerHTML]="markup()" font-family="Inter,'Segoe UI',-apple-system,Helvetica,Arial,sans-serif" style="position:absolute;inset:0;width:100%;height:100%"></svg>
+    <div class="nm-main">
+      <div class="nm-mapc">
+        @if (fam() === 'ant') { <h3 class="nm-ch">{{ t('Topology') }}<span>{{ subTopo() }}</span></h3> }
+      <div #stage [class]="'stage lk-' + look()" [class.drag]="panning" (wheel)="onWheel($event)" (pointerdown)="down($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointerleave)="hover.set(null); hoverId.set('')" (dblclick)="dbl($event)">
+        <svg #svg [attr.viewBox]="'0 0 ' + stageSize().w + ' ' + stageSize().h" [innerHTML]="markup()" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" style="position:absolute;inset:0;width:100%;height:100%"></svg>
         @if (!nodes().length && !busy()) { <div class="empty">{{ t('No devices read yet. Neighbours appear here after the first read.') }}</div> }
         @if (!nodes().length && busy()) {
           <div class="skel">
@@ -109,35 +198,34 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
             <div class="scap"><span class="dotp"></span>{{ t('Reading the devices and their neighbours…') }}</div>
           </div>
         }
-        @if (showProg()) {
-          @switch (look()) {
-            @case ('material') {
-              <div class="pm">
-                <div class="pring"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" class="rb" /><circle cx="32" cy="32" r="27" class="rf" [attr.stroke-dasharray]="ringDash()" transform="rotate(-90 32 32)" /></svg><b>{{ finished() }}</b><small>{{ t('of') }} {{ devs().length }}</small></div>
-                <ol class="vs">@for (s of stepList(); track s.n) { <li [class]="s.st"><i>{{ s.st === 'ok' ? '✓' : s.n }}</i><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></li> }</ol>
-              </div>
-            }
-            @case ('constellation') {
-              <div class="hud hl"><h5>{{ t('Reading') }}</h5>@for (s of stepList(); track s.n) { <div class="hs" [class]="s.st"><i>{{ s.st === 'ok' ? '✓' : s.n }}</i><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div> }</div>
-              <div class="hud hr"><h5>{{ t('At the same time') }} · {{ workers().length }}</h5>@for (w of workers(); track w.session) { <div class="hw"><b>{{ w.name }}</b><small>{{ w.now || t('Connecting…') }}</small></div> }</div>
-            }
-            @case ('zones') {
-              <div class="dock">@for (s of stepList(); track s.n) { <div class="ds" [class]="s.st"><i>{{ s.st === 'ok' ? '✓' : s.n }}</i><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div> }</div>
-            }
-            @case ('flow') { }
-            @case ('ant') { }
-            @case ('card') { }
-            @case ('tier') { }
-            @case ('focus') { }
-            @default {
-              <div class="stepsbar">@for (s of stepList(); track s.n) { <div class="stp" [class]="s.st"><i>{{ s.st === 'ok' ? '✓' : s.st === 'run' ? '' : s.n }}</i><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div> }</div>
-            }
+        @if (fam() === 'mat') {
+          <div class="nm-chips tl"><span><i class="d dev"></i>VOSS · EXOS</span><span><i class="d"></i>{{ t('Other') }}</span><span><i class="d run"></i>{{ t('Reading') }}</span><span><i class="d ok"></i>{{ t('Done') }}</span></div>
+          <button type="button" class="nm-fab" (click)="refresh(true)" [disabled]="busy()">⟳ {{ busy() ? t('Reading…') : t('Refresh') }}</button>
+        }
+        @if (look() === 'focus') {
+          <div class="nm-chips tl st">@for (c of statusChips(); track c.l) { <button type="button" (click)="c.go()"><i [class]="'d ' + c.c"></i><b>{{ c.v }}</b> {{ t(c.l) }}</button> }</div>
+          @if (focusCard(); as fc) {
+            <div class="nm-info"><b>{{ fc.name }}</b>@for (l of fc.lines; track $index) { <div>{{ l }}</div> }@if (fc.session) { <a (click)="openSession(fc.session)">{{ t('Double-click to open the session') }}</a> }</div>
           }
         }
-        <div class="lgf" [class.open]="legendOpen()">
-        <button type="button" class="lgh" (click)="toggleLegend()">{{ t('Legend') }} <span>{{ legendOpen() ? '▾' : '▸' }}</span></button>
-        @if (legendOpen()) {
-        <div class="lg">
+        @if (showProg() && look() === 'zones') {
+          <div class="dock">@for (s of stepList(); track s.n) { <div class="ds" [class]="s.st"><i>{{ s.st === 'ok' ? '✓' : s.n }}</i><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div> }</div>
+        }
+        @if (fam() === 'ant' || look() === 'focus') {
+          <div class="nm-lgs">@for (r of legend(); track r.t) { <span class="lr">
+            <svg width="30" height="12" viewBox="0 0 46 18">@switch (r.k) {
+              @case ('blocked') { <path d="M3 9H36" stroke-width="3.4" stroke-dasharray="9 6" stroke-linecap="round" [attr.stroke]="r.c" /><circle cx="40" cy="9" r="5" [attr.fill]="r.d" /> }
+              @case ('sp') { <path d="M3 9H43" stroke-linecap="round" [attr.stroke-width]="r.w" [attr.stroke]="r.c" /> }
+              @case ('down') { <path d="M3 9H43" stroke-width="3" stroke-dasharray="3 6" stroke-linecap="round" [attr.stroke]="r.c" /> }
+              @case ('ghost') { <rect x="4" y="2" width="38" height="14" rx="4" fill="none" stroke-width="1.6" stroke-dasharray="4 3" [attr.stroke]="r.c" /> }
+              @case ('stp') { <circle cx="9" cy="9" r="4" [attr.fill]="r.c" /><circle cx="23" cy="9" r="4" [attr.fill]="r.d" /><circle cx="37" cy="9" r="4" [attr.fill]="r.e" /> }
+              @default { <path d="M3 9H43" [attr.stroke-width]="r.k === 'lag' || r.k === 'warn' ? 6 : 3.4" stroke-linecap="round" [attr.stroke]="r.c" /> }
+            }</svg>{{ r.t }}</span> }@if (look() === 'focus') { <em>{{ t('Cables are neutral while healthy; colour means something needs a look. Click a device to focus it.') }}</em> }</div>
+        } @else {
+          <div class="lgf" [class.open]="legendOpen()">
+            <button type="button" class="lgh" (click)="toggleLegend()">{{ t('Legend') }} <span>{{ legendOpen() ? '▾' : '▸' }}</span></button>
+            @if (legendOpen()) {
+            <div class="lg">
           @for (r of legend(); track r.t) {
             <div class="lr">
               <svg width="46" height="18" viewBox="0 0 46 18">
@@ -155,48 +243,54 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
               <span>{{ r.t }}</span>
             </div>
           }
-        </div>
-        }
-        </div>
-      <div class="zoom zf">
-        <button type="button" (click)="zoomBy(1 / 1.25)" [title]="t('Zoom out')">−</button>
-        <span>{{ (view().k * 100).toFixed(0) }}%</span>
-        <button type="button" (click)="zoomBy(1.25)" [title]="t('Zoom in')">+</button>
-        <button type="button" (click)="fit(true)" [title]="t('Fit all devices')">⤢</button>
-      </div>
-
-        @if (hover(); as h) {
-          <div class="card" [style.left.px]="h.x + 14" [style.top.px]="h.y + 14">
-            <b>{{ h.title }}</b>
-            @for (l of h.lines; track $index) { <div>{{ l }}</div> }
+            </div>
+            }
           </div>
         }
+        <div class="zoom zf">
+          <button type="button" (click)="zoomBy(1 / 1.25)" [title]="t('Zoom out')">−</button>
+          <span>{{ (view().k * 100).toFixed(0) }}%</span>
+          <button type="button" (click)="zoomBy(1.25)" [title]="t('Zoom in')">+</button>
+          <button type="button" (click)="fit(true)" [title]="t('Fit all devices')">⤢</button>
+        </div>
+        @if (hover(); as h) {
+          @if (look() !== 'focus') {
+            <div class="nm-hov" [style.left.px]="h.x + 14" [style.top.px]="h.y + 14"><b>{{ h.title }}</b>@for (l of h.lines; track $index) { <div>{{ l }}</div> }</div>
+          }
+        }
       </div>
-      @if (sideOpen()) {
+      </div>
+      @if (fam() === 'ant') {
+        <div class="nm-side">
+          <div class="nm-card">
+            <h3>{{ selNode() || selLinks().length ? t('Details') : t('Statistics') }}@if (selNode() || selLinks().length) { <span><a (click)="closeSide()">✕</a></span> }</h3>
+            @if (selNode() || selLinks().length) { <div class="nm-det">        <ng-container [ngTemplateOutlet]="detTpl" />
+</div> }
+            @else {
+              <div class="nm-stats">@for (k of kpis(); track k.l) { <button type="button" (click)="k.go()" [title]="t(k.h)" [class]="k.c"><small>{{ t(k.l) }}</small><b>{{ k.v }}</b></button> }</div>
+              <div class="nm-note">{{ t('Neighbours and ports are read at the same time on every device, then the map is built once all have answered.') }}</div>
+            }
+          </div>
+        </div>
+      } @else if (fam() === 'mat') {
+        <div class="nm-sheet">
+          @if ((selNode() || selLinks().length) && !busy()) {
+            <h2>{{ t('Details') }} <a (click)="closeSide()">✕</a></h2>
+            <div class="nm-det">        <ng-container [ngTemplateOutlet]="detTpl" />
+</div>
+          } @else {
+            <h2>{{ busy() ? t('Reading the network') : t('The network') }}</h2>
+            <p>{{ sheetLine() }}</p>
+            <div class="ring"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" class="rb" /><circle cx="32" cy="32" r="27" class="rf" [attr.stroke-dasharray]="ringDash()" transform="rotate(-90 32 32)" /></svg><div><b>{{ devs().length ? finished() : realCount() }}</b><small>{{ t('of') }} {{ devs().length || realCount() }} {{ t('devices') }}</small></div></div>
+            <ol class="vs">@for (s of stepList(); track s.n) { <li [class]="s.st"><i>{{ s.st === 'ok' ? '✓' : s.n }}</i><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small>@if (s.st === 'run') { <span class="pbar"><i [style.width.%]="s.pct"></i></span> }</div></li> }</ol>
+            <div class="mstat">@for (k of kpis(); track k.l) { @if (k.l !== 'Devices read') { <span [class]="k.c">{{ t(k.l) }} <b>{{ k.v }}</b></span> } }</div>
+          }
+        </div>
+      } @else if (sideOpen() || selNode() || selLinks().length) {
       <aside class="side">
         <div class="sidescroll">
         <button type="button" class="sx" (click)="closeSide()" [title]="t('Close')">✕</button>
-        @if (selLinks().length) {
-          <h4>{{ selLinks().length > 1 ? t('Links') + ' (' + selLinks().length + ')' : t('Link') }}</h4>
-          @for (l of selLinks(); track l.key) {
-            <div class="lk">
-              <div>{{ nodeName(l.a) }} <span class="mut">{{ l.aPort }}</span> ↔ {{ nodeName(l.b) }} <span class="mut">{{ l.bPort }}</span></div>
-              <div class="mut">{{ l.state }}{{ l.speed ? ' · ' + l.speed : '' }}{{ l.stpA || l.stpB ? ' · STP ' + (l.stpA || '-') + '/' + (l.stpB || '-') : '' }}{{ l.lagA || l.lagB ? ' · LAG ' + (l.lagA?.name || '') + (l.lagB ? ' / ' + l.lagB.name : '') : '' }}</div>
-              @if (l.warn) { <div class="warn">{{ l.warn }}</div> }
-              @if (l.seen?.length) { <div class="mut">{{ t('Seen by') }} {{ l.seen!.join(', ') }}</div> }
-            </div>
-          }
-        } @else if (selNode(); as n) {
-          <h4>{{ n.name }}</h4>
-          <div class="mut">{{ n.os || (n.ghost ? t('not in Session Manager') : '') }} {{ n.ip || '' }}</div>
-          @if (n.chassis) { <div class="mut">{{ n.chassis }}</div> }
-          @for (x of n.notes ?? []; track $index) { <div class="warn">{{ x }}</div> }
-          @if (n.session) { <button type="button" (click)="openSession(n.session)">{{ t('Open session') }}</button> }
-          @if (nodeLinks().length) {
-            <h4>{{ t('Ports in use') }}</h4>
-            @for (x of nodeLinks(); track x.key) { <div class="lk"><b>{{ x.port }}</b> → {{ x.peer }} <span class="mut">{{ x.peerPort }}</span><div class="mut">{{ x.info }}</div></div> }
-          }
-        }
+        <ng-container [ngTemplateOutlet]="detTpl" />
         @if (devs().length) {
           <h4>{{ t('Devices') }} · {{ finished() }}/{{ devs().length }}</h4>
           @for (d of devs(); track d.session) {
@@ -210,9 +304,10 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
       </aside>
       }
     </div>
-    @if (tableOpen() && devs().length) {
-      <div class="dtab">
-        <div class="dth"><b>{{ t('Devices') }}</b><span class="mut">{{ t('Sorted by progress') }}</span></div>
+    @if ((tableOpen() || fam() === 'ant') && devs().length) {
+      <div class="nm-card dtab">
+        <button type="button" class="dth" (click)="toggleBody()" [title]="tableBody() ? t('Collapse') : t('Expand')"><b><i class="chev" [class.open]="tableBody()"></i>{{ t('Devices') }}</b><span class="mut">{{ devs().length }} · {{ t('Sorted by progress') }}</span></button>
+        @if (tableBody()) {
         <div class="dts"><table>
           <thead><tr><th>{{ t('Device') }}</th><th>{{ t('Type') }}</th><th>{{ t('Address') }}</th><th>{{ t('Progress') }}</th><th>{{ t('Now') }}</th><th>{{ t('Status') }}</th><th>{{ t('Time') }}</th></tr></thead>
           <tbody>@for (d of devRows(); track d.session) {
@@ -225,10 +320,153 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
             </tr>
           }</tbody>
         </table></div>
+        }
       </div>
     }
+    </div>
   `,
   styles: [`
+
+    .dl { padding: 4px 0 12px; border-bottom: 1px solid var(--nl); margin-bottom: 8px; } .dl:last-child { border-bottom: 0; }
+    .dl-h, .dd-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .dl-t { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--nm); }
+    .st { font-size: 12px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--nl); } .st.up { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+    .st.blocked { color: var(--amb); border-color: color-mix(in srgb, var(--amb) 45%, transparent); } .st.down { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+    .dl-ends { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; gap: 6px; margin-bottom: 10px; }
+    .dl-x { align-self: center; color: var(--nm); }
+    .dl-end .kv { flex-direction: column; gap: 0; } .dl-end .kv i { font-size: 11px; } .dl-end .kv em { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nm .dl-end { height: auto; text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--nl); background: var(--nc2); cursor: pointer; min-width: 0; }
+    .nm .dl-end:hover { border-color: var(--na); } .dl-end b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kv { display: flex; gap: 8px; font-size: 12.5px; line-height: 1.45; min-width: 0; } .kv i { font-style: normal; color: var(--nm); flex: none; min-width: 34px; }
+    .kv em { font-style: normal; color: var(--nt); overflow-wrap: anywhere; }
+    .kvs { display: flex; flex-direction: column; gap: 3px; } .kvs.col .kv i { min-width: 92px; }
+    .stp { display: inline-flex; align-items: center; gap: 5px; } .stp .sd { width: 8px; height: 8px; border-radius: 50%; background: var(--nm); }
+    .stp.forwarding .sd { background: var(--ok); } .stp.blocked .sd { background: var(--amb); } .stp.learning .sd { background: var(--na); } .stp.disabled .sd { background: var(--bad); }
+    .dd-h b { display: block; font-size: 16px; } .dd-h small { color: var(--nm); font-size: 12px; } .nm .nm-btn.sm { height: 28px; padding: 0 12px; font-size: 12.5px; }
+    .dd-t { margin: 14px 0 6px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--nm); }
+    .dd-p { width: 100%; border-collapse: collapse; font-size: 12.5px; } .dd-p th { text-align: left; font-weight: 500; color: var(--nm); padding: 4px 6px; border-bottom: 1px solid var(--nl); }
+    .dd-p td { padding: 5px 6px; border-bottom: 1px solid var(--nl); white-space: nowrap; } .dd-p tr { cursor: pointer; } .dd-p tr:hover td { background: var(--nc2); }
+    .dd-p tr.blocked td:first-child { box-shadow: inset 2px 0 var(--amb); } .dd-p tr.down td:first-child { box-shadow: inset 2px 0 var(--bad); }
+
+    /* ---- look families: each takes its mock's colours, type and controls ---- */
+    .nm { --nb: var(--bg); --nc: var(--panel); --nc2: var(--tab); --nl: var(--border); --nt: var(--fg, #dcdde1); --nm: var(--muted, #8b8e96); --na: var(--accent); --nab: color-mix(in srgb, var(--accent) 16%, transparent); --nr: 8px; --nf: var(--ui-font);
+      --ok: #34d399; --amb: #f5a524; --bad: #f87171;
+      display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--nb); color: var(--nt); font-family: var(--nf); font-size: 13px; }
+    .nm-ant { --nb: #000; --nc: #141414; --nc2: #1f1f1f; --nl: #303030; --nt: rgba(255,255,255,.88); --nm: rgba(255,255,255,.45); --na: #3c89e8; --nab: #111d2c; --nr: 8px; --ok: #49aa19; font-size: 14px; }
+    .nm-mat { --nb: #141218; --nc: #1D1B20; --nc2: #2B2930; --nl: #49454F; --nt: #E6E0E9; --nm: #CAC4D0; --na: #D0BCFF; --nab: #4F378B; --nr: 24px; --ok: #7DDCA4; --nf: Roboto, -apple-system, 'Segoe UI', sans-serif; }
+    .nm-dk { --nb: #0e1116; --nc: #151a22; --nc2: #1b212b; --nl: #2a3240; --nt: #e6eaf0; --nm: #8b97a8; --na: #4c9aff; --nab: #12284a; --nr: 12px; --ok: #3fbf6f; }
+    :host-context(html.light) .nm-ant { --nb: #f5f5f5; --nc: #fff; --nc2: #fafafa; --nl: #e5e5e5; --nt: rgba(0,0,0,.88); --nm: rgba(0,0,0,.45); --na: #1677ff; --nab: #e6f4ff; --ok: #52c41a; }
+    :host-context(html.light) .nm-mat { --nb: #FEF7FF; --nc: #F7F2FA; --nc2: #ECE6F0; --nl: #CAC4D0; --nt: #1D1B20; --nm: #49454F; --na: #6750A4; --nab: #EADDFF; --ok: #1f8a52; }
+    :host-context(html.light) .nm-dk { --nb: #f5f7fa; --nc: #fff; --nc2: #f7f9fc; --nl: #dde3ea; --nt: #1b2330; --nm: #5f6b7a; --na: #1f6fd6; --nab: #e3eefc; --ok: #1f9d55; }
+    .nm button { font: inherit; color: inherit; }
+    .nm-head { display: flex; align-items: center; gap: 16px; padding: 16px 24px 12px; flex-wrap: wrap; }
+    .nm-ant .nm-head { background: var(--nc); border-bottom: 1px solid var(--nl); }
+    .nm-tt { min-width: 0; flex: 1; } .h1r { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .nm-tt h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.01em; } .nm-ant .nm-tt h1 { font-size: 20px; } .nm-mat .nm-tt h1 { font-weight: 400; margin-right: 6px; }
+    .nm-tt p { margin: 4px 0 0; color: var(--nm); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nm-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 20px; padding: 0 7px; border-radius: 4px; border: 1px solid var(--nl); color: var(--nm); }
+    .nm-tag.b { background: var(--nab); border-color: color-mix(in srgb, var(--na) 45%, transparent); color: var(--na); }
+    .nm-tag.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--na); animation: lv 1.2s ease-in-out infinite; } .nm-tag.live { color: var(--na); }
+    .nm-chip { height: 32px; border-radius: 8px; border: 1px solid var(--nl); display: inline-flex; align-items: center; padding: 0 12px; color: var(--nm); font-size: 13px; } .nm-chip.f { background: var(--nab); border-color: transparent; color: var(--nt); }
+    /* controls, drawn in the family's style */
+    .nm-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .nm-mw { position: relative; }
+    .nm-dd, .nm-btn, .nm-tog { height: 32px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--nl); background: var(--nc); cursor: pointer; font-size: 13px; white-space: nowrap; }
+    .nm-dd .lbk { color: var(--nm); } .nm-dd .cv { width: 7px; height: 7px; border-right: 1.5px solid var(--nm); border-bottom: 1.5px solid var(--nm); transform: rotate(45deg) translateY(-2px); margin-left: 2px; }
+    .nm-dd:hover, .nm-btn:hover, .nm-tog:hover, .nm-dd.on, .nm-btn.on { border-color: var(--na); }
+    .nm-btn.pri { background: var(--na); border-color: var(--na); color: #fff; font-weight: 500; } .nm-btn.pri:disabled { opacity: .55; cursor: default; } .nm-btn.ic { width: 32px; justify-content: center; padding: 0; font-size: 16px; }
+    .nm-tog i { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--nm); display: grid; place-items: center; }
+    .nm-tog.on i { background: var(--na); border-color: var(--na); } .nm-tog.on i::after { content: ''; width: 6px; height: 3px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px, -1px); }
+    .nm-seg { display: inline-flex; height: 32px; padding: 2px; border-radius: 6px; background: var(--nc2); border: 1px solid var(--nl); }
+    .nm-seg button { border: 0; background: none; padding: 0 12px; border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--nm); }
+    .nm-seg button.on { background: var(--na); color: #fff; } .nm-seg button:disabled { opacity: .4; cursor: default; }
+    .nm-mat .nm-dd, .nm-mat .nm-btn, .nm-mat .nm-tog { border-radius: 8px; background: transparent; border-color: var(--nl); color: var(--nm); }
+    .nm-mat .nm-seg { border-radius: 16px; } .nm-mat .nm-seg button { border-radius: 14px; } .nm-mat .nm-seg button.on, .nm-mat .nm-tog.on i { background: var(--nab); color: var(--nt); border-color: var(--nab); }
+    .nm-dk .nm-dd, .nm-dk .nm-btn, .nm-dk .nm-tog { border-radius: 10px; } .nm-dk .nm-seg { border-radius: 10px; } .nm-dk .nm-seg button { border-radius: 8px; }
+    .nm-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; background: var(--nc); border: 1px solid var(--nl); border-radius: var(--nr); box-shadow: 0 12px 32px rgba(0,0,0,.4); padding: 6px; }
+    .nm-mat .nm-pop { border-radius: 16px; background: var(--nc2); }
+    .nm-pop.looks { left: 0; right: auto; width: 560px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 8px; }
+    .nm-pop.looks .lk { height: auto !important; min-height: 64px; display: flex; align-items: center; gap: 12px; text-align: left; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; background: none; cursor: pointer; line-height: 1.3; }
+    .nm-pop.looks .lk:hover { background: var(--nc2); } .nm-pop.looks .lk.on { border-color: var(--na); background: var(--nab); }
+    .nm-pop.looks .th { flex: none; width: 64px; height: 44px; border-radius: 6px; background: #0e1116; border: 1px solid var(--nl); }
+    .nm-pop.looks .tx { min-width: 0; display: flex; flex-direction: column; gap: 2px; } .nm-pop.looks .tx b { font-weight: 600; font-size: 13px; white-space: nowrap; }
+    .nm-pop.looks .tx small { color: var(--nm); font-size: 11.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .nm-pop.vl { width: 340px; padding: 8px; } .nm-pop.vl .vq { margin: 0 0 6px; width: 100%; height: 32px; box-sizing: border-box; }
+    .nm-pop.vl .vls { max-height: 320px; overflow: auto; display: flex; flex-direction: column; }
+    .nm-pop.vl .vr { height: auto !important; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 8px; text-align: left; padding: 7px 8px; border: 0; border-radius: 6px; background: none; cursor: pointer; font-size: 13px; line-height: 1.3; }
+    .nm-pop.vl .vr:hover { background: var(--nc2); } .nm-pop.vl .vr.on { background: var(--nab); color: var(--na); }
+    .nm-pop.vl .vid { font-weight: 600; font-variant-numeric: tabular-nums; } .nm-pop.vl .vn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nm-pop.vl .cnt { color: var(--nm); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .nm-pop.list { min-width: 220px; display: flex; flex-direction: column; } .nm-pop.list > button { text-align: left; padding: 7px 10px; border: 0; background: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .nm-pop.list > button:hover { background: var(--nc2); } .nm-pop.list > button.on { color: var(--na); font-weight: 600; } .nm-pop.list > button.on::before { content: '✓ '; }
+    .nm-pop hr { border: 0; border-top: 1px solid var(--nl); margin: 4px 0; width: 100%; }
+    .nm-pop .hd2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--nm); padding: 6px 10px 4px; }
+    .nm-pop .chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 4px; } .nm-pop .chips button { border: 1px solid var(--nl); background: none; border-radius: 6px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+    .nm-pop .chips button.on { border-color: var(--na); color: var(--na); background: var(--nab); }
+    .nm-pop em { font-style: normal; margin-left: 6px; padding: 0 6px; border-radius: 8px; background: var(--bad); color: #fff; font-size: 11px; }
+    .nm-in { margin: 0 8px 6px; height: 28px; border-radius: 6px; border: 1px solid var(--nl); background: var(--nc2); color: var(--nt); padding: 0 8px; }
+    /* progress: antd steps (Clean boxes, Focus, classic) and the five bars (Flow) */
+    .nm-steps { display: flex; padding: 16px 24px; border-bottom: 1px solid var(--nl); } .nm-ant .nm-steps { background: var(--nc); }
+    .nm-steps .step { flex: 1; display: flex; gap: 12px; align-items: center; position: relative; min-width: 0; }
+    .nm-steps .step:not(:last-child)::after { content: ''; flex: 1; height: 1px; background: var(--nl); margin: 0 14px; min-width: 16px; } .nm-steps .step.ok:not(:last-child)::after { background: var(--na); }
+    .nm-steps .ic { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--nl); display: grid; place-items: center; color: var(--nm); font-size: 14px; }
+    .nm-steps b { display: block; font-size: 15px; font-weight: 400; color: var(--nm); white-space: nowrap; } .nm-steps small { color: var(--nm); font-size: 12px; white-space: nowrap; }
+    .nm-steps .ok .ic { border-color: var(--na); color: var(--na); } .nm-steps .ok b { color: var(--nt); }
+    .nm-steps .run .ic { background: var(--na); border-color: var(--na); color: #fff; } .nm-steps .run b { color: var(--nt); font-weight: 500; }
+    .nm-bars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; padding: 4px 24px 14px; }
+    .nm-bars .sl { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; } .nm-bars .sl span { color: var(--nm); }
+    .nm-bars .tr { height: 6px; border-radius: 3px; background: var(--nl); overflow: hidden; } .nm-bars .tr i { display: block; height: 100%; background: var(--na); border-radius: 3px; }
+    .nm-bars .ok .tr i { background: var(--ok); } .nm-bars .wait { opacity: .55; }
+    .nm-bars .run .tr i { background-image: linear-gradient(45deg, rgba(255,255,255,.25) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.25) 50%, rgba(255,255,255,.25) 75%, transparent 75%); background-size: 14px 14px; animation: st 1s linear infinite; } @keyframes st { to { background-position: 14px 0; } }
+    .nm-pills { display: flex; gap: 8px; padding: 0 24px 10px; flex-wrap: wrap; }
+    .nm-pills button, .nm-chips.st button { height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 15px; border: 1px solid var(--nl); background: var(--nc); cursor: pointer; font-size: 13px; color: var(--nm); }
+    .nm-pills b, .nm-chips.st b { color: var(--nt); font-weight: 600; } .nm-pills .amb b { color: var(--amb); } .nm-pills .bad b { color: var(--bad); }
+    /* body: map card + the family's right column */
+    .nm-main { flex: 1; display: flex; gap: 16px; min-height: 0; padding: 0 24px 16px; } .nm-ant .nm-main { padding-top: 16px; } .nm-cls .nm-main { padding: 0; gap: 0; }
+    .nm-mapc { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; border: 1px solid var(--nl); border-radius: var(--nr); background: var(--nb); overflow: hidden; }
+    .nm-ant .nm-mapc { background: var(--nc); } .nm-mat .nm-mapc { background: var(--nc); border: 0; } .nm-cls .nm-mapc { border: 0; border-radius: 0; }
+    .nm-ch { margin: 0; padding: 12px 16px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--nl); display: flex; align-items: center; } .nm-ch span { margin-left: auto; color: var(--nm); font-weight: 400; font-size: 13px; }
+    .nm-mapc .stage { flex: 1; }
+    .nm-ant .stage { background-image: radial-gradient(#262626 1px, transparent 1px) !important; background-size: 18px 18px; }
+    .nm-side { width: 360px; flex: none; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+    .nm-card { background: var(--nc); border: 1px solid var(--nl); border-radius: var(--nr); overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
+    .nm-card h3 { margin: 0; padding: 12px 16px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--nl); display: flex; align-items: center; } .nm-card h3 span { margin-left: auto; color: var(--nm); font-weight: 400; } .nm-card h3 a { cursor: pointer; }
+    .nm-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
+    .nm-stats button { text-align: left; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--nl); background: var(--nc2); cursor: pointer; height: auto; display: block; line-height: 1.3; }
+    .nm-stats button:hover { border-color: var(--na); } .nm-stats small { display: block; color: var(--nm); font-size: 13px; } .nm-stats b { display: block; font-size: 28px; font-weight: 500; margin-top: 4px; }
+    .nm-stats .amb b { color: var(--amb); } .nm-stats .bad b { color: var(--bad); }
+    .nm-note { margin: 0 16px 16px; padding: 12px 16px; border-radius: 8px; background: var(--nab); border: 1px solid color-mix(in srgb, var(--na) 35%, transparent); color: var(--na); line-height: 1.6; }
+    .nm-det { padding: 12px 16px; overflow: auto; display: flex; flex-direction: column; gap: 4px; font-size: 13px; } .nm-det h4 { margin: 10px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--nm); }
+    .nm-det .mut, .nm-det .mut * { color: var(--nm); }
+    .nm-sheet { width: 340px; flex: none; background: var(--nc2); border-radius: 24px; padding: 22px 20px; overflow: auto; min-height: 0; }
+    .nm-sheet h2 { font-size: 16px; font-weight: 500; margin: 0 0 2px; display: flex; } .nm-sheet h2 a { margin-left: auto; cursor: pointer; } .nm-sheet p { margin: 0 0 14px; color: var(--nm); font-size: 12.5px; }
+    .nm-sheet .ring { position: relative; width: 128px; height: 128px; margin: 6px auto 16px; } .nm-sheet .ring svg { width: 128px; height: 128px; }
+    .nm-sheet .ring .rb { fill: none; stroke: var(--nl); stroke-width: 6; } .nm-sheet .ring .rf { fill: none; stroke: var(--na); stroke-width: 6; stroke-linecap: round; }
+    .nm-sheet .ring div { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; } .nm-sheet .ring b { font-size: 30px; font-weight: 500; } .nm-sheet .ring small { font-size: 11px; color: var(--nm); }
+    .nm-sheet .vs { list-style: none; margin: 0; padding: 0; } .nm-sheet .vs li { display: flex; gap: 12px; padding: 7px 0; position: relative; }
+    .nm-sheet .vs li i { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 600; background: var(--nc); color: var(--nm); }
+    .nm-sheet .vs li.ok i { background: var(--ok); color: #00391f; } .nm-sheet .vs li.run i { background: var(--na); color: #381E72; }
+    .nm-sheet .vs b { display: block; font-weight: 500; font-size: 14px; } .nm-sheet .vs small { color: var(--nm); font-size: 12.5px; } .nm-sheet .vs li.wait { opacity: .6; }
+    .nm-sheet .pbar { display: block; width: 130px; height: 4px; border-radius: 2px; background: var(--nl); margin-top: 6px; overflow: hidden; } .nm-sheet .pbar i { display: block; height: 100%; background: var(--na); }
+    .nm-sheet .mstat { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; } .nm-sheet .mstat span { border: 1px solid var(--nl); border-radius: 8px; padding: 4px 10px; font-size: 12px; color: var(--nm); } .nm-sheet .mstat b { color: var(--nt); }
+    .nm-chips { position: absolute; z-index: 5; display: flex; gap: 14px; } .nm-chips.tl { left: 16px; top: 14px; }
+    .nm-chips span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--nm); }
+    .nm-chips .d { width: 10px; height: 10px; border-radius: 50%; background: var(--nm); } .nm-chips .d.dev { background: #7c4dd8; } .nm-chips .d.run { background: var(--na); } .nm-chips .d.ok { background: var(--ok); }
+    .nm-chips .d.amb { background: var(--amb); } .nm-chips .d.bad { background: var(--bad); } .nm-chips.st { gap: 8px; }
+    .nm .nm-mat .zf, .nm-mat .zf { top: 12px; bottom: auto; }
+    .nm .nm-fab { position: absolute; right: 16px; bottom: 16px; z-index: 6; height: 52px; padding: 0 22px; border-radius: 16px; border: 0; background: #EADDFF; color: #21005D !important; font-size: 15px !important; font-weight: 500; cursor: pointer; box-shadow: 0 3px 8px rgba(0,0,0,.35); }
+    .nm-info { position: absolute; right: 16px; top: 14px; z-index: 6; min-width: 260px; padding: 12px 16px; border-radius: 10px; background: var(--nc); border: 1px solid var(--nl); font-size: 13px; color: var(--nm); line-height: 1.6; }
+    .nm-info b { display: block; color: var(--nt); font-size: 16px; } .nm-info a { color: var(--na); cursor: pointer; }
+    .nm-lgs { position: absolute; left: 12px; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--nl); background: var(--nc); font-size: 12.5px; color: var(--nm); max-width: calc(100% - 200px); }
+    .nm-lgs .lr { display: inline-flex; align-items: center; gap: 6px; } .nm-lgs em { font-style: normal; color: var(--nm); }
+    .nm-hov { position: absolute; z-index: 8; pointer-events: none; padding: 8px 12px; border-radius: 8px; background: var(--nc); border: 1px solid var(--nl); box-shadow: 0 8px 22px rgba(0,0,0,.35); font-size: 12.5px; color: var(--nm); max-width: 320px; } .nm-hov b { color: var(--nt); display: block; }
+    .nm .zf { background: var(--nc); border-color: var(--nl); } .nm .lgf { background: var(--nc); border-color: var(--nl); }
+    .nm .side { border-left-color: var(--nl); background: var(--nb); }
+    .nm .dth { width: 100%; height: auto; border: 0; background: none; cursor: pointer; text-align: left; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+    .nm .dth b { display: inline-flex; align-items: center; gap: 8px; } .chev { width: 7px; height: 7px; border-right: 1.5px solid var(--nm); border-bottom: 1.5px solid var(--nm); transform: rotate(-45deg); transition: transform .15s; } .chev.open { transform: rotate(45deg); }
+    .nm-card.dtab { margin: 0 24px 16px; max-height: 34%; flex: none; } .nm-cls .nm-card.dtab { margin: 0; border-radius: 0; }
+    .nm .dtab th { background: var(--nc); color: var(--nm); } .nm .dtab td, .nm .dtab th { border-color: var(--nl); } .nm .dtab .mono { font-family: inherit; font-size: inherit; }
+    .nm .osb { border-color: #531dab; background: #1f1230; color: #b37feb; } :host-context(html.light) .nm .osb { border-color: #d3adf7; background: #f9f0ff; color: #722ed1; }
     :host { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg); }
     .h1r { display: flex; align-items: center; gap: 8px; }
     .chip { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -275,7 +513,7 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
     .err { padding: 6px 12px; color: #f87171; font-size: 12px; }
     .body { flex: 1; display: flex; min-height: 0; }
     .stage { flex: 1; position: relative; overflow: hidden; cursor: grab; touch-action: none; user-select: none; } .stage.drag { cursor: grabbing; }
-    .side { width: 270px; border-left: 1px solid var(--border); font-size: 12.5px; display: flex; flex-direction: column; min-height: 0; }
+    .side { width: 360px; border-left: 1px solid var(--border); font-size: 12.5px; display: flex; flex-direction: column; min-height: 0; }
     .sidescroll { flex: 1; min-height: 0; overflow: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
     .legendbox { flex: none; border-top: 1px solid var(--border); padding: 4px 12px 10px; background: var(--panel); } .legendbox h4 { margin-top: 6px; }
     .side h4 { margin: 10px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #8b8e96); }
@@ -357,8 +595,111 @@ export class NetworkMap implements OnDestroy {
   protected views = VIEWS;
   protected devs = signal<DevProg[]>([]);
   protected sideOpen = signal(false);
+  protected isStr = (x: unknown) => !!x;
+  protected selSess = signal<Session | null>(null);
+  private selSessFx = effect(() => {
+    const n = this.selNode();
+    this.selSess.set(null);
+    if (!n?.session) return;
+    const c = this.sessionCache.get(n.session);
+    if (c !== undefined) { this.selSess.set(c); return; }
+    void this.backend.getSession(n.session).then(x => { this.sessionCache.set(n.session!, x); if (this.selNodeId() === n.id) this.selSess.set(x); }).catch(() => this.sessionCache.set(n.session!, null));
+  });
+  protected selectNode(id: string) { this.selLinkKey.set(''); this.selNodeId.set(id); this.sideOpen.set(true); }
+  protected selectLink(key: string) { this.selNodeId.set(''); this.selLinkKey.set(key); this.sideOpen.set(true); }
+  protected linkEnds(l: TopoLink) {
+    const lag = (g?: { name: string; mode: string } | null) => g ? g.name + (g.mode === 'static' ? ' (static)' : ' (LACP)') : '';
+    return [
+      { side: 'a', id: l.a, name: this.nodeName(l.a), port: l.aPort, stp: l.stpA ?? '', lag: lag(l.lagA) },
+      { side: 'b', id: l.b, name: this.nodeName(l.b), port: l.bPort, stp: l.stpB ?? '', lag: lag(l.lagB) },
+    ];
+  }
+  protected stpText(s: string) { return s === 'blocked' ? 'Blocking' : s === 'forwarding' ? 'Forwarding' : s === 'learning' ? 'Learning' : s === 'disabled' ? 'Disabled' : s; }
+  protected vlanText(v?: number[] | null) {
+    if (!v?.length) return '—';
+    const nm = new Map((this.map().vlans ?? []).map(x => [x.id, x.name ?? '']));
+    const list = v.map(id => id + (nm.get(id) ? ' ' + nm.get(id) : ''));
+    return list.length > 8 ? list.slice(0, 8).join(', ') + ' ' + tr('and {0} more', list.length - 8) : list.join(', ');
+  }
+  protected nodePeers = computed(() => new Set(this.nodeLinks().map(x => x.peer)).size);
+  protected mgmtText(n: TopoNode) {
+    const parts: string[] = [];
+    if (n.ip) parts.push(n.ip);
+    if (n.mgmtVlan) parts.push('VLAN ' + n.mgmtVlan.id + (n.mgmtVlan.name ? ' ' + n.mgmtVlan.name : ''));
+    if (n.mgmtVlan) parts.push(n.mgmtPorts?.length ? tr('port') + ' ' + n.mgmtPorts.join(', ') : tr('out-of-band port'));
+    return parts.join(' · ') || tr('not read');
+  }
+
+  protected vlanSel = signal<number | null>(null);
+  protected vlanList = computed(() => {
+    const ls = this.map().links ?? [];
+    return (this.map().vlans ?? []).map(v => ({ id: v.id, name: v.name ?? '', n: ls.filter(l => (l.vlans ?? []).includes(v.id)).length }));
+  });
+  protected vlanLabel = computed(() => { const id = this.vlanSel(), v = this.vlanList().find(x => x.id === id); return v ? v.id + (v.name ? ' · ' + v.name : '') : id != null ? String(id) : tr('Pick one'); });
+  protected vlanQ = signal('');
+  protected vlanShown = computed(() => {
+    const q = this.vlanQ().trim().toLowerCase();
+    return q ? this.vlanList().filter(v => String(v.id).startsWith(q) || v.name.toLowerCase().includes(q)) : this.vlanList();
+  });
+  protected vlanEnter() {
+    const q = this.vlanQ().trim(), n = Number(q), hit = this.vlanShown();
+    if (q && Number.isInteger(n) && n >= 1 && n <= 4094) this.pickVlan(n);
+    else if (hit.length) this.pickVlan(hit[0].id);
+    else return;
+    this.menu.set(''); this.vlanQ.set('');
+  }
+  protected pickVlan(id: number) { this.vlanSel.set(id); try { localStorage.setItem('map.vlan.' + this.scope(), String(id)); } catch { /* ignore */ } }
+  private vlanDefault = effect(() => {
+    const l = this.vlanList();
+    if (!l.length || (this.vlanSel() != null && l.some(v => v.id === this.vlanSel()))) return;
+    let saved = NaN;
+    try { saved = Number(localStorage.getItem('map.vlan.' + this.scope())); } catch { /* ignore */ }
+    const pick = l.find(v => v.id === saved) ?? [...l].filter(v => v.id !== 1).sort((a, b) => b.n - a.n)[0] ?? l[0];
+    this.vlanSel.set(pick.id);
+  });
+
+  protected menu = signal<'' | 'look' | 'layout' | 'more' | 'vlan'>('');
+  protected fam = computed(() => { const l = this.look(); return l === 'ant' ? 'ant' : l === 'material' ? 'mat' : l === 'card' || l === 'tier' ? 'cls' : 'dk'; });
+  protected openMenu(m: 'look' | 'layout' | 'more' | 'vlan', e: Event) { e.stopPropagation(); this.menu.set(this.menu() === m ? '' : m); }
+  protected closeMenus(e: Event) { if (this.menu() && !(e.target as HTMLElement).closest('.nm-pop')) this.menu.set(''); }
+  protected lookLabel = computed(() => LOOKS.find(l => l.id === this.look())?.label ?? '');
+  protected layoutLabel = computed(() => this.computedLook() && this.ownLayout() ? tr('As the style draws it') : tr(STYLES.find(x => x.id === this.layoutStyle())?.label ?? 'Auto (best fit)'));
+  protected intervalLabel = computed(() => { const s = this.interval(); return s ? tr('Every') + ' ' + (s >= 60 ? s / 60 + ' min' : s + ' s') : tr('Manual only'); });
+  protected subTopo = computed(() => { const n = this.realCount(), l = (this.map().links ?? []).length; return n ? n + ' ' + tr('devices') + ' · ' + l + ' ' + tr('links') : ''; });
+  protected sheetLine = computed(() => {
+    const d = this.devs(), done = d.filter(x => x.state === 'done' && x.ms), avg = done.length ? done.reduce((a, x) => a + x.ms, 0) / done.length / 1000 : 0;
+    return tr('{0} sessions in parallel', d.length || this.realCount()) + (avg ? ' · ' + tr('{0} s per device on average', avg.toFixed(1)) : '');
+  });
+  protected statusChips = computed(() => {
+    const ls = this.map().links ?? [], ns = this.map().nodes ?? [];
+    const blocked = ls.filter(l => l.state === 'blocked').length, down = ls.filter(l => l.state === 'down').length;
+    return [
+      { l: 'healthy', v: ls.length - blocked - down, c: 'ok', go: () => this.setView('health') },
+      { l: 'blocked', v: blocked, c: 'amb', go: () => this.setView('stp') },
+      { l: 'down', v: down, c: 'bad', go: () => this.setView('health') },
+      { l: 'unmanaged', v: ns.filter(n => n.ghost).length, c: 'mut', go: () => this.ghosts.set(!this.ghosts()) },
+      ...(this.failedCount() ? [{ l: 'not read', v: this.failedCount(), c: 'bad', go: () => this.sideOpen.set(true) }] : []),
+    ];
+  });
+  protected focusCard = computed(() => {
+    const id = this.selNodeId() || this.hoverId();
+    const n = (this.map().nodes ?? []).find(x => x.id === id);
+    if (!n) return null;
+    const ls = (this.map().links ?? []).filter(l => l.a === n.id || l.b === n.id).length;
+    return { name: n.name, session: n.session ?? '', lines: [[(n.os ?? '').toUpperCase(), n.chassis, n.ip].filter(Boolean).join(' · ') || (n.ghost ? tr('not in Session Manager') : ''), ls + ' ' + tr(ls === 1 ? 'link' : 'links')].filter(Boolean) };
+  });
+  protected hoverId = signal('');
+  protected dbl(e: MouseEvent) {
+    const el = (e.target as Element).closest('[data-node]');
+    const n = el && (this.map().nodes ?? []).find(x => x.id === el.getAttribute('data-node'));
+    if (n?.session) this.openSession(n.session);
+  }
+
   protected ownLayout = signal(true);
-  protected tableOpen = signal(true);
+  private layRestored = false;
+  protected tableOpen = signal(false);
+  protected tableBody = signal(true);
+  protected toggleBody() { const v = !this.tableBody(); this.tableBody.set(v); try { localStorage.setItem('map.tbody', v ? '1' : '0'); } catch { /* ignore */ } }
   protected headerSteps = computed(() => ['ant', 'card', 'tier', 'focus'].includes(this.look()));
   protected collectLabel = computed(() => this.collect() === 'snmp' ? 'SNMP' : this.collect() === 'both' ? tr('CLI, else SNMP') : tr('Device CLI'));
   protected subline = computed(() => {
@@ -368,7 +709,9 @@ export class NetworkMap implements OnDestroy {
     return tr(this.lookHint()) + (u ? ' · ' + u : '');
   });
   protected arrangeSel = computed(() => this.computedLook() ? (this.ownLayout() ? 'own' : this.layoutStyle()) : '');
+  private layKey() { return 'map.lay.' + this.scope(); }
   protected pickArrange(v: string) {
+    try { localStorage.setItem(this.layKey(), JSON.stringify({ look: this.look(), style: v })); } catch { /* ignore */ }
     if (v === 'own') { this.ownLayout.set(true); queueMicrotask(() => this.fit()); return; }
     if (!v) return;
     this.ownLayout.set(false);
@@ -412,7 +755,7 @@ export class NetworkMap implements OnDestroy {
   private progT = 0;
   protected toggleLegend() { const v = !this.legendOpen(); this.legendOpen.set(v); try { localStorage.setItem('map.legend', v ? '1' : '0'); } catch { /* ignore */ } }
   protected closeSide() { this.sideOpen.set(false); this.selNodeId.set(''); this.selLinkKey.set(''); }
-  protected phase = signal<'' | 'reading' | 'build'>('');
+  protected phase = signal<'' | 'reading' | 'build' | 'done'>('');
   protected computedLook = computed(() => COMPUTED_LOOKS.includes(this.look()));
   private unProg?: () => void;
   protected layoutStyle = signal('auto');
@@ -471,7 +814,7 @@ export class NetworkMap implements OnDestroy {
     const p = this.pos(), lay = this.laid(), at = new Map((lay?.nodes ?? []).map(q => [q.id, q]));
     return this.shown().map(n => {
       const q = at.get(n.id) ?? p.get(n.id) ?? { x: 0, y: 0 };
-      return { id: n.id, name: n.name, sub: n.ghost ? tr('seen by neighbour discovery') : (n.os ?? '').toUpperCase(), ip: n.ghost ? '' : n.ip, kind: kindOf(n.os, n.caps, n.ghost), ghost: n.ghost, x: q.x, y: q.y, flag: (n.notes?.length ? 'warn' : ''), os: n.os, notes: n.notes?.length ?? 0, group: at.get(n.id)?.group, prog: this.progOf(n) };
+      return { vlans: n.vlans, id: n.id, name: n.name, sub: n.ghost ? tr('seen by neighbour discovery') : (n.os ?? '').toUpperCase(), ip: n.ghost ? '' : n.ip, kind: kindOf(n.os, n.caps, n.ghost), ghost: n.ghost, x: q.x, y: q.y, flag: (n.notes?.length ? 'warn' : ''), os: n.os, notes: n.notes?.length ?? 0, group: at.get(n.id)?.group, prog: this.progOf(n) };
     });
   });
   /** Zones behind the devices: tier guides (Classic tiers), role panels (Zones), column headings (Flow). */
@@ -500,7 +843,7 @@ export class NetworkMap implements OnDestroy {
     void v;
     let inner = '';
     try {
-      inner = mapMarkup(this.nodes(), this.links(), { theme: th, showPorts: this.ports() && v.k >= .55, selLink: this.selLinkKey(), selNode: this.selNodeId(), fresh: this.fresh, look: this.look(), zones: this.zones(), view: this.cableView(), rings: this.rings(), sweep: this.busy() });
+      inner = mapMarkup(this.nodes(), this.links(), { theme: th, showPorts: this.ports() && v.k >= .55, selLink: this.selLinkKey(), selNode: this.selNodeId(), fresh: this.fresh, look: this.look(), zones: this.zones(), view: this.cableView(), vlan: this.vlanSel(), rings: this.rings(), sweep: this.busy() });
     } catch (e) { inner = `<text x="20" y="30" fill="#f87171" font-size="13">${String((e as Error)?.message ?? e).replace(/[<&>]/g, '')}</text>`; }
     const html = `<g transform="translate(${v.x} ${v.y}) scale(${v.k})">${inner}</g>`;
     return this.san.bypassSecurityTrustHtml(html); // drawn by map-svg.ts from escaped text only
@@ -508,7 +851,8 @@ export class NetworkMap implements OnDestroy {
   protected legend = computed(() => {
     const th = document.documentElement.classList.contains('light') ? THEME_LIGHT : THEME_DARK, v = this.cableView();
     const rows: { k: string; c: string; d: string; e?: string; w?: number; t: string }[] = [];
-    if (this.look() === 'focus') rows.push({ k: 'sp', c: th.mut, d: '', w: 1.4, t: '1G' }, { k: 'sp', c: th.mut, d: '', w: 2.4, t: '10G' }, { k: 'sp', c: th.mut, d: '', w: 3.6, t: '40G+' }, { k: 'up', c: th.acc, d: '', t: tr('Cables are quiet while healthy; click a device to see its cables in the chosen view') });
+    if (v === 'vlan') rows.push({ k: 'sp', c: th.acc, d: '', w: 4.6, t: tr('Carries VLAN {0}', this.vlanLabel()) }, { k: 'sp', c: th.mut, d: '', w: 2, t: tr('Does not carry it (faded)') });
+    else if (this.look() === 'focus') rows.push({ k: 'sp', c: th.mut, d: '', w: 1.4, t: '1G' }, { k: 'sp', c: th.mut, d: '', w: 2.4, t: '10G' }, { k: 'sp', c: th.mut, d: '', w: 3.6, t: '40G+' });
     else if (v === 'speed') rows.push({ k: 'sp', c: th.ok, d: '', w: 3.4, t: '10 Mbps – 10 Gbps' }, { k: 'sp', c: th.acc, d: '', w: 3.8, t: '25 – 100 Gbps' }, { k: 'sp', c: th.acc, d: '', w: 6.6, t: tr('Above 100 Gbps') });
     else rows.push({ k: 'up', c: th.ok, d: '', t: tr('Link is up') });
     rows.push({ k: 'blocked', c: th.ok, d: th.warn, t: tr('Blocked by spanning tree (amber dot = the blocking port)') },
@@ -528,11 +872,14 @@ export class NetworkMap implements OnDestroy {
       const ok = n > 0 && c + err >= n, started = c > 0 || d.some(x => x.state === 'running' && x.done >= k);
       return { n: k + 1, name, st: ok ? 'ok' : started ? 'run' : 'wait', sub: c + ' / ' + n + (err && ok ? ' · ' + err + ' ' + tr('failed') : ''), pct: n ? Math.round(100 * (c + err) / n) : 0 };
     });
-    out.push({ n: 5, name: 'Build map', st: ph === 'build' ? 'run' : 'wait', sub: ph === 'build' ? tr('Joining…') : tr('Waiting'), pct: ph === 'build' ? 60 : 0 });
+    out.push(ph === 'done' ? { n: 5, name: 'Build map', st: 'ok', sub: tr('Done') + (this.lastMs() ? ' · ' + (this.lastMs() / 1000).toFixed(1) + ' s' : ''), pct: 100 }
+      : { n: 5, name: 'Build map', st: ph === 'build' ? 'run' : 'wait', sub: ph === 'build' ? tr('Joining…') : tr('Waiting'), pct: ph === 'build' ? 60 : 0 });
     return out;
   });
   protected finished = computed(() => this.devs().filter(x => x.state === 'done' || x.state === 'error').length);
-  protected showProg = computed(() => this.busy() && this.devs().length > 0);
+  protected showProg = computed(() => this.devs().length > 0 && (this.busy() || this.phase() === 'done'));
+  protected lastMs = signal(0);
+  private readStart = 0;
   protected ringDash = computed(() => { const n = this.devs().length; return n ? (170 * this.finished() / n).toFixed(0) + ' 170' : '0 170'; });
   protected workers = computed(() => this.devs().filter(x => x.state === 'running').slice(0, 8));
   protected selLinks = computed<TopoLink[]>(() => { const ks = new Set(this.selLinkKey().split(' ').filter(Boolean)); return ks.size ? (this.map().links ?? []).filter(l => ks.has(l.key)) : []; });
@@ -541,7 +888,7 @@ export class NetworkMap implements OnDestroy {
     if (!id) return [];
     return (this.map().links ?? []).filter(l => l.a === id || l.b === id).map(l => {
       const a = l.a === id, lag = a ? l.lagA : l.lagB;
-      return { key: l.key, port: (a ? l.aPort : l.bPort) || '?', peer: this.nodeName(a ? l.b : l.a), peerPort: (a ? l.bPort : l.aPort) || '', info: [l.state, l.speed, lag ? 'LAG ' + lag.name : '', (a ? l.stpA : l.stpB) ? 'STP ' + (a ? l.stpA : l.stpB) : ''].filter(Boolean).join(' · ') };
+      return { speed: l.speed ?? '', stp: (a ? l.stpA : l.stpB) ?? '', state: l.state, key: l.key, port: (a ? l.aPort : l.bPort) || '?', peer: this.nodeName(a ? l.b : l.a), peerPort: (a ? l.bPort : l.aPort) || '', info: [l.state, l.speed, lag ? 'LAG ' + lag.name : '', (a ? l.stpA : l.stpB) ? 'STP ' + (a ? l.stpA : l.stpB) : ''].filter(Boolean).join(' · ') };
     }).sort((x, y) => x.port.localeCompare(y.port, undefined, { numeric: true }));
   });
   protected selNode = computed<TopoNode | null>(() => (this.map().nodes ?? []).find(n => n.id === this.selNodeId()) ?? null);
@@ -552,7 +899,7 @@ export class NetworkMap implements OnDestroy {
   });
 
   constructor() {
-    try { const i = localStorage.getItem('map.interval'); if (i && INTERVALS.includes(+i)) this.interval.set(+i); const lk = localStorage.getItem('map.look2') || this.ui.settings()?.mapLook || 'flow'; if (LOOKS.some(l => l.id === lk)) this.look.set(lk as Look); if (localStorage.getItem('map.legend') === '1') this.legendOpen.set(true); if (localStorage.getItem('map.table') === '0') this.tableOpen.set(false); const vw = localStorage.getItem('map.view'); if (VIEWS.some(v => v.id === vw)) this.cableView.set(vw as View); } catch { /* storage may be blocked */ }
+    try { const i = localStorage.getItem('map.interval'); if (i && INTERVALS.includes(+i)) this.interval.set(+i); const lk = localStorage.getItem('map.look2') || this.ui.settings()?.mapLook || 'flow'; if (LOOKS.some(l => l.id === lk)) this.look.set(lk as Look); if (localStorage.getItem('map.legend') === '1') this.legendOpen.set(true); if (localStorage.getItem('map.table') === '1') this.tableOpen.set(true); if (localStorage.getItem('map.tbody') === '0') this.tableBody.set(false); const vw = localStorage.getItem('map.view'); if (VIEWS.some(v => v.id === vw)) this.cableView.set(vw as View); } catch { /* storage may be blocked */ }
     this.unProg = this.backend.on('topo:progress', (p: TopoProgress) => this.onProgress(p));
     effect(() => { if (this.selLinks().length || this.selNode()) this.sideOpen.set(true); });
     effect(() => { if (this.visible()) { this.restartTimer(); if (!this.lastRead) void this.refresh(false); else if (Date.now() - this.lastRead > this.interval() * 1000 && this.interval()) void this.refresh(false); } });
@@ -588,7 +935,7 @@ export class NetworkMap implements OnDestroy {
     if (!this.progT) this.progT = window.setTimeout(() => { this.progT = 0; const q = this.progQ; this.progQ = []; for (const x of q) this.applyProgress(x); }, 250);
   }
   private applyProgress(p: TopoProgress) {
-    if (p.scope !== this.scope()) return;
+    if (p.scope !== this.scope() || !this.busy()) return; // late events after the read are dropped
     if (p.phase === 'build') { this.phase.set('build'); return; }
     if (p.phase || !p.session) return;
     this.devs.update(list => {
@@ -605,7 +952,7 @@ export class NetworkMap implements OnDestroy {
     const tb = this.tab();
     const targets = tb.mapOpened ? this.tabs.openedSessionPaths() : (tb.mapTargets ?? []);
     if (!targets.length) { this.err.set(tr('No sessions are open. Open device sessions and press Refresh - this map follows the opened sessions.')); this.lastRead = Date.now(); return; }
-    this.busy.set(true); this.err.set(''); this.devs.set([]); this.phase.set('reading');
+    this.busy.set(true); this.err.set(''); this.devs.set([]); this.phase.set('reading'); this.readStart = Date.now(); this.lastMs.set(0);
     try {
       let r = await this.backend.topoRead({ targets, scope: this.scope(), production: this.confirmedProduction, collect: this.collect(), community: this.community.trim() || 'public' });
       if (r.needsConfirm?.length) {
@@ -620,7 +967,13 @@ export class NetworkMap implements OnDestroy {
     } catch (e) {
       this.lastRead = Date.now();
       this.err.set(errText(e));
-    } finally { this.busy.set(false); this.phase.set(''); }
+    } finally {
+      // events still queued belong to this read: apply them, then mark the read finished
+      if (this.progT) { clearTimeout(this.progT); this.progT = 0; }
+      const q = this.progQ; this.progQ = []; for (const x of q) this.applyProgress(x);
+      this.lastMs.set(Date.now() - this.readStart);
+      this.phase.set(this.devs().length ? 'done' : ''); this.busy.set(false);
+    }
   }
 
   private async apply(m: TopoMap, ch: TopoChange[], manual: boolean) {
@@ -648,6 +1001,16 @@ export class NetworkMap implements OnDestroy {
     }
     this.pos.set(next);
     this.map.set(m);
+    if (!this.layRestored && nodes.length) {
+      // the layout picked last time for this map (and style) comes back
+      this.layRestored = true;
+      try {
+        const sv = JSON.parse(localStorage.getItem(this.layKey()) ?? 'null') as { look: string; style: string } | null;
+        if (sv && sv.look === this.look() && sv.style && sv.style !== 'own') {
+          if (this.computedLook()) { this.ownLayout.set(false); await this.arrange(sv.style); } else this.layoutStyle.set(sv.style);
+        }
+      } catch { /* ignore */ }
+    }
     if ((!this.fitted || !this.touched) && nodes.length) { this.fitted = true; queueMicrotask(() => this.fit()); }
     void manual;
   }
@@ -705,6 +1068,7 @@ export class NetworkMap implements OnDestroy {
     return { x: (e.clientX - r.left - v.x) / v.k, y: (e.clientY - r.top - v.y) / v.k };
   }
   protected down(e: PointerEvent) {
+    if ((e.target as Element).closest('button, a, input, .zf, .lgf, .nm-lgs, .nm-info, .nm-chips, .dock, .seg5, .pm, .hud')) return; // the map's own buttons and panels
     const el = (e.target as Element).closest('[data-node]') as HTMLElement | SVGElement | null;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     if (el) {
@@ -743,6 +1107,7 @@ export class NetworkMap implements OnDestroy {
   }
 
   private async showCard(id: string, x: number, y: number) {
+    this.hoverId.set(id);
     const n = (this.map().nodes ?? []).find(q => q.id === id);
     if (!n) return;
     const lines: string[] = [];
@@ -780,7 +1145,7 @@ export class NetworkMap implements OnDestroy {
     const base = (this.tab().mapTitle ?? 'network-map').replace(/[^\w.-]+/g, '-');
     try {
       if (kind === 'html') {
-        const doc = mapDocument(nodes, this.links(), { theme: th, showPorts: true, selLink: '', selNode: '', look: this.look(), zones: this.zones(), view: this.cableView(), rings: this.rings() }, title);
+        const doc = mapDocument(nodes, this.links(), { theme: th, showPorts: this.ports(), selLink: '', selNode: '', look: this.look(), zones: this.zones(), view: this.cableView(), vlan: this.vlanSel(), rings: this.rings() }, title);
         const det: string[] = [];
         for (const n of this.map().nodes ?? []) {
           const s = n.session ? await this.backend.getSession(n.session).catch(() => null) : null;
@@ -791,7 +1156,7 @@ export class NetworkMap implements OnDestroy {
         if (p) this.ui.toast(tr('Saved') + ' ' + p, 'success');
         return;
       }
-      const doc = mapDocument(nodes, this.links(), { theme: th, showPorts: true, selLink: '', selNode: '', look: this.look(), zones: this.zones(), view: this.cableView(), rings: this.rings() }, title);
+      const doc = mapDocument(nodes, this.links(), { theme: th, showPorts: this.ports(), selLink: '', selNode: '', look: this.look(), zones: this.zones(), view: this.cableView(), vlan: this.vlanSel(), rings: this.rings() }, title);
       const jpeg = await this.rasterize(doc.svg, doc.w, doc.h);
       if (kind === 'pdf') {
         const p = await this.backend.saveMapPDF(tr('Save map'), base + '.pdf', jpeg);

@@ -17,11 +17,11 @@ type Step struct {
 var plans = map[string][]Step{
 	"exos": {
 		{"disable cli paging", "paging"}, {"show switch", "mac"}, {"show lldp neighbors detail", "lldp"}, {"show edp ports all", "edp"},
-		{"show ports information", "ports"}, {"show sharing", "lag"}, {"show stpd s0 ports", "stp"},
+		{"show ports information", "ports"}, {"show sharing", "lag"}, {"show stpd s0 ports", "stp"}, {"show vlan detail", "vlan"},
 	},
 	"voss": {
 		{"terminal more disable", "paging"}, {"show sys-info", "mac"}, {"show lldp neighbor", "lldp"}, {"show interfaces gigabitEthernet interface", "ports"},
-		{"show mlt", "lag"}, {"show spanning-tree mstp port role", "stp"},
+		{"show mlt", "lag"}, {"show spanning-tree mstp port role", "stp"}, {"show vlan basic", "vlanname"}, {"show vlan members", "vlan"},
 	},
 	"ios": {
 		{"terminal length 0", "paging"}, {"show version", "name"}, {"show cdp neighbors detail", "cdp"}, {"show lldp neighbors detail", "lldp"},
@@ -130,6 +130,7 @@ type Target struct {
 var refused = regexp.MustCompile(`(?i)invalid input|unrecognized command|unknown command|% invalid|incomplete command|syntax error|command not found|not supported|ambiguous command`)
 var lldpOff = regexp.MustCompile(`(?i)lldp (is )?(not enabled|disabled|not running)|% lldp is not enabled`)
 var exosMAC = regexp.MustCompile(`(?m)^System MAC:\s*(\S+)`)
+var devModel = regexp.MustCompile(`(?m)^\s*(?:System Type|ModelName)\s*:\s*(\S+)`)
 var exosName = regexp.MustCompile(`(?m)^SysName:\s*(.+?)\s*$`)
 var vossName = regexp.MustCompile(`(?m)^\s*SysName\s*:\s*(.+?)\s*$`)
 var iosName = regexp.MustCompile(`(?m)^(\S+) uptime is `)
@@ -166,6 +167,7 @@ func Collect(ctx context.Context, t Target, run Runner, now time.Time) Device {
 		return d
 	}
 	stp := map[string]string{}
+	var vlanPorts map[string][]int
 	got := 0
 	for i, s := range steps {
 		out := outs[i]
@@ -193,6 +195,9 @@ func Collect(ctx context.Context, t Target, run Runner, now time.Time) Device {
 				d.SysName = m[1]
 			} else if m := vossName.FindStringSubmatch(out); m != nil {
 				d.SysName = m[1]
+			}
+			if m := devModel.FindStringSubmatch(out); m != nil {
+				d.Model = m[1]
 			}
 			if m := exosMAC.FindStringSubmatch(out); m != nil {
 				d.Chassis = NormMAC(m[1])
@@ -243,6 +248,19 @@ func Collect(ctx context.Context, t Target, run Runner, now time.Time) Device {
 			default:
 				d.LAGs = ParseEtherchannel(out)
 			}
+		case "vlan":
+			switch t.OS {
+			case "exos":
+				var names map[int]string
+				vlanPorts, names = ParseEXOSVLANDetail(out)
+				d.VLANNames = mergeNames(d.VLANNames, names)
+			case "voss":
+				vlanPorts = ParseVOSSVLANMembers(out)
+			}
+		case "vlanname":
+			if t.OS == "voss" {
+				d.VLANNames = mergeNames(d.VLANNames, ParseVOSSVLANBasic(out))
+			}
 		case "stp":
 			switch t.OS {
 			case "exos":
@@ -260,6 +278,13 @@ func Collect(ctx context.Context, t Target, run Runner, now time.Time) Device {
 		d.Err = errors.New("no command could be read").Error()
 		return d
 	}
+	for k, v := range vlanPorts {
+		for i := range d.Ports {
+			if NormPort(k) == NormPort(d.Ports[i].Name) {
+				d.Ports[i].VLANs = v
+			}
+		}
+	}
 	for i := range d.Ports {
 		if s, ok := stp[d.Ports[i].Name]; ok {
 			d.Ports[i].STP = s
@@ -272,4 +297,16 @@ func Collect(ctx context.Context, t Target, run Runner, now time.Time) Device {
 		}
 	}
 	return d
+}
+
+func mergeNames(a, b map[int]string) map[int]string {
+	if a == nil {
+		a = map[int]string{}
+	}
+	for k, v := range b {
+		if v != "" {
+			a[k] = v
+		}
+	}
+	return a
 }

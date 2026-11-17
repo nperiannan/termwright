@@ -35,6 +35,8 @@ type Port struct {
 	// STP: "forwarding", "blocked", "learning", "disabled" or "" (not known).
 	STP   string `json:"stp,omitempty"`
 	Speed string `json:"speed,omitempty"`
+	// VLANs: the VLAN numbers the port is a member of (tagged or not); nil when not read.
+	VLANs []int `json:"vlans,omitempty"`
 }
 
 // LAG is one link aggregation group on a device.
@@ -53,10 +55,13 @@ type Device struct {
 	SysName   string     `json:"sysName,omitempty"`
 	OS        string     `json:"os"` // exos, voss, ios, nxos, eos, junos
 	Chassis   string     `json:"chassis,omitempty"`
+	Model     string     `json:"model,omitempty"` // "5520-24T-SwitchEngine" (show switch / show sys-info)
 	IP        string     `json:"ip,omitempty"`
 	Neighbors []Neighbor `json:"neighbors"`
 	Ports     []Port     `json:"ports"`
 	LAGs      []LAG      `json:"lags"`
+	// VLANNames: VLAN number -> name, as the device calls it.
+	VLANNames map[int]string `json:"vlanNames,omitempty"`
 	// Notes: what could not be read ("LLDP is off", "show sharing failed"), shown on the node.
 	Notes []string `json:"notes,omitempty"`
 	// Err: the device could not be read (login refused, timed out). Its (empty) data is then not trusted:
@@ -78,6 +83,15 @@ type Node struct {
 	Ghost bool     `json:"ghost"`
 	Caps  string   `json:"caps,omitempty"`
 	Notes []string `json:"notes,omitempty"`
+	// VLANs: the VLANs on the device's ports (read devices only).
+	VLANs []int  `json:"vlans,omitempty"`
+	Model string `json:"model,omitempty"`
+	// PortsTotal / PortsUp: the device's ports and how many have link (read devices only).
+	PortsTotal int `json:"portsTotal,omitempty"`
+	PortsUp    int `json:"portsUp,omitempty"`
+	// MgmtVLAN: the management VLAN (named like "Mgmt"), MgmtPort: the port in it ("" = out-of-band management port).
+	MgmtVLAN  *VLANName `json:"mgmtVlan,omitempty"`
+	MgmtPorts []string  `json:"mgmtPorts,omitempty"`
 }
 
 // Link is one cable.
@@ -92,19 +106,22 @@ type Link struct {
 	LagA  *LAG   `json:"lagA,omitempty"`
 	LagB  *LAG   `json:"lagB,omitempty"`
 	// Warn: the two ends disagree about the LAG (one side only, or static against LACP).
-	Warn  string  `json:"warn,omitempty"`
-	STPA  string  `json:"stpA,omitempty"`
-	STPB  string  `json:"stpB,omitempty"`
-	Seen  []Proto `json:"seen"` // the protocols that showed it
-	Ends  int     `json:"ends"` // 1 = one end saw it, 2 = both
-	Speed string  `json:"speed,omitempty"`
+	Warn string  `json:"warn,omitempty"`
+	STPA string  `json:"stpA,omitempty"`
+	STPB string  `json:"stpB,omitempty"`
+	Seen []Proto `json:"seen"` // the protocols that showed it
+	// VLANs: the VLANs the cable carries (both ends members).
+	VLANs []int  `json:"vlans,omitempty"`
+	Ends  int    `json:"ends"` // 1 = one end saw it, 2 = both
+	Speed string `json:"speed,omitempty"`
 }
 
 // Map is the joined result.
 type Map struct {
-	Nodes []Node    `json:"nodes"`
-	Links []Link    `json:"links"`
-	At    time.Time `json:"at"`
+	Nodes []Node     `json:"nodes"`
+	Links []Link     `json:"links"`
+	VLANs []VLANName `json:"vlans,omitempty"`
+	At    time.Time  `json:"at"`
 }
 
 // Change is one difference between two maps.

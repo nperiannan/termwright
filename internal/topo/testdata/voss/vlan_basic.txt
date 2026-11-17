@@ -1,0 +1,9 @@
+================================================================================
+                                   Vlan Basic
+================================================================================
+VLAN                                 STG
+ID    NAME             TYPE          ID     PROTOCOLID   SUBNETADDR       SUBNETMASK      VRFID
+--------------------------------------------------------------------------------
+1     Default          byPort        0      none         N/A              N/A             0
+200   Users            byPort        0      none         N/A              N/A             0
+4048  onboarding-vlan  byPort        0      none         N/A              N/A             0

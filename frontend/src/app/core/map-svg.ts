@@ -6,12 +6,11 @@ import type { TopoLag } from './models';
 
 export type Look = 'ant' | 'material' | 'constellation' | 'zones' | 'flow' | 'focus' | 'card' | 'tier';
 /** What the cables are coloured by: their speed, their health (up / down), spanning tree, or LAG membership. */
-export type View = 'speed' | 'health' | 'stp' | 'lag';
+export type View = 'speed' | 'health' | 'stp' | 'lag' | 'vlan';
 export const LOOKS: { id: Look; label: string; hint: string }[] = [
   { id: 'ant', label: 'Clean boxes', hint: 'Tidy boxes in tiers with right-angle cables' },
   { id: 'material', label: 'Soft cards', hint: 'Rounded tonal cards with curved cables' },
   { id: 'focus', label: 'Focus', hint: 'Round devices; cables stay quiet unless something needs a look. Click a device to focus on it' },
-  { id: 'constellation', label: 'Constellation', hint: 'The core in the middle, one ring per level' },
   { id: 'zones', label: 'Zones', hint: 'Devices grouped by role, cables bundled between the groups' },
   { id: 'flow', label: 'Flow (default)', hint: 'Left to right from the core to the edge' },
   { id: 'card', label: 'Classic cards', hint: 'Cards with a switch front panel, any layout' },
@@ -28,15 +27,15 @@ export const dims = (look: Look = 'ant') => SIZES[look] ?? SIZES.ant;
 const orthLook = (l?: Look) => l === 'tier' || l === 'ant';
 
 export interface Prog { state: 'queued' | 'running' | 'done' | 'error'; done: number; }
-export interface MNode { id: string; name: string; sub: string; kind: string; ghost: boolean; x: number; y: number; flag?: string; role?: string; ip?: string; os?: string; notes?: number; group?: string; prog?: Prog; }
+export interface MNode { vlans?: number[] | null; id: string; name: string; sub: string; kind: string; ghost: boolean; x: number; y: number; flag?: string; role?: string; ip?: string; os?: string; notes?: number; group?: string; prog?: Prog; }
 export interface Zone { x: number; y: number; w: number; h: number; label: string; right?: string; id?: string; ghost?: boolean; }
-export interface MLink { key: string; a: string; aPort: string; b: string; bPort: string; state: 'up' | 'blocked' | 'down'; lagA?: TopoLag | null; lagB?: TopoLag | null; warn?: string; seen?: string[] | null; ends?: number; speed?: string; stpA?: string; stpB?: string; }
+export interface MLink { vlans?: number[] | null; key: string; a: string; aPort: string; b: string; bPort: string; state: 'up' | 'blocked' | 'down'; lagA?: TopoLag | null; lagB?: TopoLag | null; warn?: string; seen?: string[] | null; ends?: number; speed?: string; stpA?: string; stpB?: string; }
 export interface MTheme { bg: string; dot: string; node: string; nodeLine: string; ink: string; mut: string; acc: string; ok: string; warn: string; bad: string; label: string; labelLine: string; ring: string; face: string; faceLine: string; port: string; zone: string; zoneLine: string; shadow: string; devBg: string; devLine: string; devInk: string; devCard: string; devCardInk: string; badgeBg: string; badgeLine: string; badgeInk: string; }
 
 export const THEME_DARK: MTheme = { bg: '#1e1f22', dot: '#2b2c31', node: '#2a2b30', nodeLine: '#36373d', ink: '#dcdde1', mut: '#8b8e96', acc: '#4f9cf7', ok: '#34d399', warn: '#f59e0b', bad: '#f87171', label: '#222327', labelLine: '#36373d', ring: '#1e1f22', face: '#0f1115', faceLine: '#3a404c', port: '#4b5260', zone: '#191b20', zoneLine: '#2a2e36', shadow: 'rgba(0,0,0,.55)', devBg: '#2a1b4d', devLine: '#7c4dd8', devInk: '#c9b3ff', devCard: '#3b2a6b', devCardInk: '#efe6ff', badgeBg: '#2f3138', badgeLine: '#4a4d56', badgeInk: '#c5c8d0' };
 export const THEME_LIGHT: MTheme = { bg: '#f4f5f7', dot: '#dcdfe4', node: '#ffffff', nodeLine: '#d5d8de', ink: '#1f2328', mut: '#656d76', acc: '#1f6fd6', ok: '#16a34a', warn: '#d97706', bad: '#dc2626', label: '#ffffff', labelLine: '#d5d8de', ring: '#f4f5f7', face: '#2b303a', faceLine: '#8a93a3', port: '#6b7385', zone: '#eceef2', zoneLine: '#d3d7de', shadow: 'rgba(20,30,50,.18)', devBg: '#efe6ff', devLine: '#8a5cf0', devInk: '#5b2fb8', devCard: '#e6dcff', devCardInk: '#2a1650', badgeBg: '#eef0f4', badgeLine: '#c9ced8', badgeInk: '#4a5160' };
 
-export interface MOpts { theme: MTheme; showPorts: boolean; selLink: string; selNode: string; missing?: MLink[]; fresh?: Set<string>; look?: Look; zones?: Zone[]; view?: View; rings?: number[]; sweep?: boolean; }
+export interface MOpts { theme: MTheme; showPorts: boolean; selLink: string; selNode: string; missing?: MLink[]; fresh?: Set<string>; look?: Look; zones?: Zone[]; view?: View; rings?: number[]; sweep?: boolean; vlan?: number | null; }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const f = (n: number) => Math.round(n * 10) / 10;
@@ -124,6 +123,7 @@ function stroke(state: string, ghost: boolean, th: MTheme, w: number, speed?: st
   if (state === 'down') return `stroke="${th.bad}" stroke-width="${w * .9}" stroke-dasharray="3 7" stroke-linecap="round"`;
   if (state === 'blocked') return `stroke="${th.ok}" stroke-width="${w}" stroke-dasharray="9 6" stroke-linecap="round"`;
   if (ghost) return `stroke="${th.mut}" stroke-width="2" stroke-dasharray="4 6" opacity=".75"`;
+  if (view === 'vlan') return `stroke="${th.acc}" stroke-width="${w + 1.2}" stroke-linecap="round"`;
   if (view === 'quiet') { const m = mbps(speed); return `stroke="${th.mut}" stroke-opacity=".55" stroke-width="${m >= 40000 ? 3.6 : m >= 10000 ? 2.4 : 1.4}" stroke-linecap="round"`; }
   if (view === 'speed') { const k = bySpeed(speed, th, w); return `stroke="${k.c}" stroke-width="${k.w}" stroke-linecap="round"`; }
   return `stroke="${th.ok}" stroke-width="${w}" stroke-linecap="round"`;
@@ -180,11 +180,12 @@ function linksMarkup(nodes: Map<string, MNode>, links: MLink[], o: MOpts): strin
       const len = Math.hypot(E.x - S.x, E.y - S.y);
       if (len < 24) return;
       const state = trackState(t), sel = t.links.some(l => l.key === o.selLink), keys = t.links.map(l => l.key).join(' ');
-      const near = !!o.selNode && (A.id === o.selNode || B.id === o.selNode), vw: View | 'quiet' | undefined = o.look === 'focus' && !near ? 'quiet' : o.view;
+      const onV = o.view === 'vlan' && o.vlan != null && t.links.some(l => (l.vlans ?? []).includes(o.vlan!)), offV = o.view === 'vlan' && o.vlan != null && !onV;
+      const near = !!o.selNode && (A.id === o.selNode || B.id === o.selNode), vw: View | 'quiet' | undefined = o.look === 'focus' && !near && o.view !== 'vlan' ? 'quiet' : o.view === 'vlan' ? (onV ? 'vlan' : 'quiet') : o.view;
       const dim = o.look === 'focus' && !!o.selNode && !near, sp = o.showPorts && (o.look !== 'focus' || near);
       const warn = t.links.find(l => l.warn)?.warn;
       const at = (p: P, d: number, side = 0): P => ({ x: p.x + u.x * d + n.x * side, y: p.y + u.y * d + n.y * side });
-      let g = `<g class="mlink${sel ? ' sel' : ''}" data-link="${esc(keys)}"${(o.view === 'lag' && !t.lag) || dim ? ' opacity=".28"' : ''}>`, hit = '';
+      let g = `<g class="mlink${sel ? ' sel' : ''}" data-link="${esc(keys)}"${(o.view === 'lag' && !t.lag) || dim || offV ? ' opacity=".22"' : ''}>`, hit = '';
       const labels: string[] = [];
       const orth = orthLook(o.look) && Math.abs(B.y - A.y) > D.h;
       if (!t.lag && orth) {
@@ -206,19 +207,24 @@ function linksMarkup(nodes: Map<string, MNode>, links: MLink[], o: MOpts): strin
       } else if (!t.lag) {
         const l = t.links[0];
         let s0 = S, e0 = E, d = `M${f(S.x)} ${f(S.y)}L${f(E.x)} ${f(E.y)}`, pa = at(S, Math.min(len * .22, 44) + 8), pb = at(E, -(Math.min(len * .22, 44) + 8));
+        // several cables between the same two devices: each its own line, side by side
+        const jo = m > 1 ? (j - (m - 1) / 2) * Math.min(12, (D.h - 14) / (m - 1)) : 0;
+        let c1: P | null = null, c2: P | null = null;
         if (o.look === 'flow') { // columns: the cable leaves the right side of the left device and enters the left side of the right one
           const [L, R] = A.x <= B.x ? [A, B] : [B, A];
           if (Math.abs(A.x - B.x) < 4) { // same column: an arc on the right
-            s0 = { x: A.x + D.w / 2, y: A.y }; e0 = { x: B.x + D.w / 2, y: B.y };
-            d = `M${f(s0.x)} ${f(s0.y)}C${f(s0.x + 70)} ${f(s0.y)} ${f(e0.x + 70)} ${f(e0.y)} ${f(e0.x)} ${f(e0.y)}`; pa = { x: s0.x + 28, y: s0.y - 11 }; pb = { x: e0.x + 28, y: e0.y + 11 };
+            s0 = { x: A.x + D.w / 2, y: A.y + jo }; e0 = { x: B.x + D.w / 2, y: B.y + jo };
+            c1 = { x: s0.x + 70 + j * 18, y: s0.y }; c2 = { x: e0.x + 70 + j * 18, y: e0.y };
+            d = `M${f(s0.x)} ${f(s0.y)}C${f(c1.x)} ${f(c1.y)} ${f(c2.x)} ${f(c2.y)} ${f(e0.x)} ${f(e0.y)}`; pa = { x: s0.x + 28, y: s0.y - 11 }; pb = { x: e0.x + 28, y: e0.y + 11 };
           } else {
-            s0 = { x: L.x + D.w / 2, y: L.y }; e0 = { x: R.x - D.w / 2, y: R.y };
-            const mx = (s0.x + e0.x) / 2; d = `M${f(s0.x)} ${f(s0.y)}C${f(mx)} ${f(s0.y)} ${f(mx)} ${f(e0.y)} ${f(e0.x)} ${f(e0.y)}`;
+            s0 = { x: L.x + D.w / 2, y: L.y + jo }; e0 = { x: R.x - D.w / 2, y: R.y + jo };
+            const mx = (s0.x + e0.x) / 2 + jo * 1.5; c1 = { x: mx, y: s0.y }; c2 = { x: mx, y: e0.y }; d = `M${f(s0.x)} ${f(s0.y)}C${f(mx)} ${f(s0.y)} ${f(mx)} ${f(e0.y)} ${f(e0.x)} ${f(e0.y)}`;
             pa = { x: s0.x + 30, y: s0.y - 11 }; pb = { x: e0.x - 30, y: e0.y - 11 };
             if (L !== A) [pa, pb] = [pb, pa];
           }
         } else if (o.look === 'material' && len > 40) { // soft curves
           const horiz = Math.abs(E.x - S.x) > Math.abs(E.y - S.y) * 2.5, my = (S.y + E.y) / 2, mx = (S.x + E.x) / 2;
+          c1 = horiz ? { x: mx, y: S.y } : { x: S.x, y: my }; c2 = horiz ? { x: mx, y: E.y } : { x: E.x, y: my };
           d = horiz ? `M${f(S.x)} ${f(S.y)}C${f(mx)} ${f(S.y)} ${f(mx)} ${f(E.y)} ${f(E.x)} ${f(E.y)}` : `M${f(S.x)} ${f(S.y)}C${f(S.x)} ${f(my)} ${f(E.x)} ${f(my)} ${f(E.x)} ${f(E.y)}`;
           const sg = Math.sign(E.y - S.y) || 1, sx = Math.sign(E.x - S.x) || 1;
           pa = horiz ? { x: S.x + sx * 30, y: S.y - 11 } : { x: S.x + 2, y: S.y + sg * 16 }; pb = horiz ? { x: E.x - sx * 30, y: E.y - 11 } : { x: E.x + 2, y: E.y - sg * 16 };
@@ -227,14 +233,20 @@ function linksMarkup(nodes: Map<string, MNode>, links: MLink[], o: MOpts): strin
         if (sel) g += `<path d="${d}" fill="none" stroke="${th.acc}" stroke-width="9" opacity=".28" stroke-linecap="round"/>`;
         if (state === 'up' && !ghost) g += `<path d="${d}" fill="none" stroke="${th.ok}" stroke-width="8" opacity=".14" stroke-linecap="round"/>`;
         g += `<path d="${d}" fill="none" ${stroke(state, ghost, th, 3.4, l.speed, vw)}/>`;
-        g += stpDot(at(S, 11), l.stpA, o) + stpDot(at(E, -11), l.stpB, o);
-        if (state === 'up' && l.speed) { const p = at(S, len / 2 + stag); labels.push(pill(p.x, p.y, l.speed, th)); }
+        const curved = o.look === 'flow' || (o.look === 'material' && len > 40);
+        const midP = (): P => {
+          if (!c1 || !c2) return at(S, len / 2 + stag);
+          const tt = .5 + (m > 1 ? (j - (m - 1) / 2) * .2 : 0), q = 1 - tt; // parallel cables: labels spread along the curve
+          return { x: q * q * q * s0.x + 3 * q * q * tt * c1.x + 3 * q * tt * tt * c2.x + tt * tt * tt * e0.x, y: q * q * q * s0.y + 3 * q * q * tt * c1.y + 3 * q * tt * tt * c2.y + tt * tt * tt * e0.y };
+        };
+        g += curved && o.look === 'flow' ? stpDot({ x: s0.x + (A.x <= B.x ? 11 : -11), y: s0.y }, A.x <= B.x ? l.stpA : l.stpB, o) + stpDot({ x: e0.x - (A.x <= B.x ? 11 : -11), y: e0.y }, A.x <= B.x ? l.stpB : l.stpA, o) : stpDot(at(S, 11), l.stpA, o) + stpDot(at(E, -11), l.stpB, o);
+        if (state === 'up' && l.speed) { const p = midP(); labels.push(pill(p.x, p.y, l.speed, th)); }
         if (sp || sel) {
           if (l.aPort) labels.push(pill(pa.x, pa.y, l.aPort, th));
           if (l.bPort) labels.push(pill(pb.x, pb.y, l.bPort, th));
         }
-        if (state === 'blocked') { const p = at(S, len / 2 + stag); labels.push(pill(p.x, p.y - 12 * Math.sign(n.y || 1), 'STP blocked', th, th.warn)); }
-        if (state === 'down') { const p = at(S, len / 2 + stag); labels.push(pill(p.x, p.y - 12 * Math.sign(n.y || 1), 'port down', th, th.bad)); }
+        if (state === 'blocked') { const p = midP(); labels.push(pill(p.x, p.y - (curved ? 0 : 12 * Math.sign(n.y || 1)), 'STP blocked', th, th.warn)); }
+        if (state === 'down') { const p = midP(); labels.push(pill(p.x, p.y - (curved ? 0 : 12 * Math.sign(n.y || 1)), 'port down', th, th.bad)); }
       } else {
         const first = t.links[0], lagA = first.lagA, lagB = first.lagB;
         const fan = Math.min(len * .3, 64), s0 = lagA ? at(S, fan) : at(S, fan * .5), e0 = lagB ? at(E, -fan) : at(E, -fan * .5);
@@ -403,7 +415,8 @@ function nodesMarkup(nodes: MNode[], o: MOpts): string {
   return nodes.map(nd => {
     const sel = nd.id === o.selNode, x = nd.x - D.w / 2, y = nd.y - D.h / 2;
     const at = round ? `translate(${f(nd.x)} ${f(nd.y)})` : `translate(${f(x)} ${f(y)})`;
-    let s = `<g class="mnode${sel ? ' sel' : ''}${nd.ghost ? ' ghost' : ''}" data-node="${esc(nd.id)}" transform="${at}"${nd.ghost ? ' opacity=".82"' : ''}>`;
+    const offV = o.view === 'vlan' && o.vlan != null && !(nd.vlans ?? []).includes(o.vlan);
+    let s = `<g class="mnode${sel ? ' sel' : ''}${nd.ghost ? ' ghost' : ''}" data-node="${esc(nd.id)}" transform="${at}"${offV ? ' opacity=".35"' : nd.ghost ? ' opacity=".82"' : ''}>`;
     if (round) s += `<circle r="40" fill="transparent"/>`; // a bigger hit area
     s += o.look === 'ant' ? nodeAnt(nd, o, D, sel) : o.look === 'material' ? nodeMaterial(nd, o, D, sel) : o.look === 'focus' ? nodeFocus(nd, o, sel) : round ? nodeRound(nd, o, sel)
       : o.look === 'zones' ? nodeTile(nd, o, D, sel) : o.look === 'flow' ? nodePill(nd, o, D, sel) : nodeClassic(nd, o, D, sel);

@@ -509,9 +509,9 @@ export function dtTunnels(types: DeviceType[] | null | undefined, name: string |
 
 // Network Map (topology read from the devices of real sessions)
 export interface TopoLag { name: string; mode: 'lacp' | 'static'; members: string[] | null; active?: string[] | null; }
-export interface TopoNode { id: string; name: string; os?: string; ip?: string; chassis?: string; session?: string; known?: string; ghost: boolean; caps?: string; notes?: string[] | null; }
-export interface TopoLink { key: string; a: string; aPort: string; b: string; bPort: string; state: 'up' | 'blocked' | 'down'; lagA?: TopoLag | null; lagB?: TopoLag | null; warn?: string; stpA?: string; stpB?: string; seen: string[] | null; ends: number; speed?: string; }
-export interface TopoMap { nodes: TopoNode[] | null; links: TopoLink[] | null; at: string; }
+export interface TopoNode { id: string; name: string; os?: string; ip?: string; chassis?: string; session?: string; known?: string; ghost: boolean; caps?: string; notes?: string[] | null; vlans?: number[] | null; model?: string; portsTotal?: number; portsUp?: number; mgmtVlan?: { id: number; name?: string } | null; mgmtPorts?: string[] | null; }
+export interface TopoLink { vlans?: number[] | null; key: string; a: string; aPort: string; b: string; bPort: string; state: 'up' | 'blocked' | 'down'; lagA?: TopoLag | null; lagB?: TopoLag | null; warn?: string; stpA?: string; stpB?: string; seen: string[] | null; ends: number; speed?: string; }
+export interface TopoMap { nodes: TopoNode[] | null; links: TopoLink[] | null; vlans?: { id: number; name?: string }[] | null; at: string; }
 export interface TopoChange { at: string; kind: string; text: string; }
 /** One device's progress while a map is read (event topo:progress). */
 export interface TopoProgress { scope: string; session?: string; name?: string; os?: string; state?: 'queued' | 'running' | 'done' | 'error'; done?: number; now?: string; err?: string; phase?: 'build' | 'end'; elapsedMs?: number; }

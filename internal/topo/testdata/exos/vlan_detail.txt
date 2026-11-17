@@ -1,0 +1,17 @@
+VLAN Interface with name Default created by user
+    Admin State:         Enabled     Tagging:   802.1Q Tag 1
+    Description:         None
+    Virtual router:      VR-Default
+    IPv4 Forwarding:     Disabled
+    Ports:   4.          (Number of active ports=2)
+       Untag:     *1,     2,      3,
+                 *4
+       Flags:    (*) Active, (!) Disabled, (g) Load Sharing port
+
+VLAN Interface with name Users created by user
+    Admin State:         Enabled     Tagging:   802.1Q Tag 200
+    Description:         None
+    Ports:   2.          (Number of active ports=2)
+       Untag:      1:5
+       Tagged:    *49,    *50
+       Flags:    (*) Active, (!) Disabled, (g) Load Sharing port

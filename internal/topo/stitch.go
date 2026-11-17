@@ -1,6 +1,7 @@
 package topo
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -266,12 +267,15 @@ func Build(devs []Device, prev *Map, now time.Time) Map {
 			l.Speed = p.Speed
 		}
 		l.LagA = lagOf(d, c.np)
+		var pb *Port
 		if rd != nil {
 			if p := portOf(rd, NormPort(bport)); p != nil {
 				l.STPB = p.STP
+				pb = p
 			}
 			l.LagB = lagOf(rd, NormPort(bport))
 		}
+		l.VLANs = vlansOf(portOf(d, c.np), pb)
 		if l.STPA == "blocked" || l.STPB == "blocked" {
 			l.State = "blocked"
 		}
@@ -330,8 +334,63 @@ func Build(devs []Device, prev *Map, now time.Time) Map {
 		}
 	}
 	sort.SliceStable(m.Links, func(i, j int) bool { return m.Links[i].Key < m.Links[j].Key })
+	// VLANs: which device has which, and their names
+	names, nodeV := map[int]string{}, map[string][]int{}
+	for i, d := range devs {
+		for _, p := range d.Ports {
+			for _, v := range p.VLANs {
+				nodeV[ids[i]] = appendUniq(nodeV[ids[i]], v)
+				if _, ok := names[v]; !ok {
+					names[v] = ""
+				}
+			}
+		}
+	}
+	for _, d := range devs {
+		for k, v := range d.VLANNames {
+			if n, ok := names[k]; ok && n == "" {
+				names[k] = v
+			}
+		}
+	}
+	devOf := map[string]*Device{}
+	for i := range devs {
+		devOf[ids[i]] = &devs[i]
+	}
+	for i := range m.Nodes {
+		n := &m.Nodes[i]
+		n.VLANs = nodeV[n.ID]
+		if d := devOf[n.ID]; d != nil && d.Err == "" {
+			n.Model = d.Model
+			n.PortsTotal = len(d.Ports)
+			for _, p := range d.Ports {
+				if p.Oper {
+					n.PortsUp++
+				}
+			}
+			for k, v := range d.VLANNames {
+				if mgmtName.MatchString(v) {
+					n.MgmtVLAN = &VLANName{ID: k, Name: v}
+					for _, p := range d.Ports {
+						for _, x := range p.VLANs {
+							if x == k {
+								n.MgmtPorts = append(n.MgmtPorts, p.Name)
+							}
+						}
+					}
+					break
+				}
+			}
+		}
+	}
+	for k, v := range names {
+		m.VLANs = append(m.VLANs, VLANName{ID: k, Name: v})
+	}
+	sort.Slice(m.VLANs, func(i, j int) bool { return m.VLANs[i].ID < m.VLANs[j].ID })
 	return m
 }
+
+var mgmtName = regexp.MustCompile(`(?i)^(mgmt|management|oob)`)
 
 func firstOf(s ...string) string {
 	for _, x := range s {
