@@ -1,0 +1,6 @@
+Port-Index  Port-Role    Port-State   PortSTPStatus  PortOperStatus
+-----------------------------------------------------------------------------------------------------------
+1/1         Disabled     Forwarding   Disabled       Disabled    
+1/3         Designated   Forwarding   Enabled        Enabled     
+1/4         Designated   Forwarding   Enabled        Enabled     
+1/5         Alternate    Discarding   Enabled        Enabled     

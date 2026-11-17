@@ -1,0 +1,6 @@
+SysName:          5520-24t-3
+System Type:      5520-24T-SwitchEngine
+
+System MAC:       AC:ED:32:F5:AF:00
+System MAC Used:  Factory MAC
+LAA MAC:          Locally Administered MAC Address Disabled

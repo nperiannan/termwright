@@ -1,3 +1,4 @@
+import { LOOKS } from '../core/map-svg';
 import { ChangeDetectorRef, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { askRef, isRef, refOf } from '../core/secret-ref';
@@ -101,6 +102,12 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
                 <select name="lang" [ngModel]="s.language || ''" (ngModelChange)="s.language = $event">
                   @for (l of languages; track l.code) { <option [value]="l.code" translate="no">{{ l.name }}</option> }
                 </select>
+                <div class="f"><label>Network map style</label>
+                  <select [ngModel]="s.mapLook || 'flow'" (ngModelChange)="s.mapLook = $event">
+                    @for (l of looks; track l.id) { <option [value]="l.id">{{ l.label }}</option> }
+                  </select>
+                  <div class="hint">How the Network map is drawn. It can also be changed on the map itself.</div>
+                </div>
                 <div class="pair">
                 <div class="f"><label>Folder colours</label>
                 <div>
@@ -752,6 +759,7 @@ const PAGE_NAMES: Record<Page, string> = { general: 'General', terminal: 'Termin
   `],
 })
 export class OptionsDialog implements OnInit {
+  protected readonly looks = LOOKS;
   protected ui = inject(Ui);
   readonly uiFonts = UI_FONTS;
   protected readonly tr = tr;
@@ -1173,6 +1181,7 @@ export class OptionsDialog implements OnInit {
   async save() {
     if (!this.s) return;
     this.normEnvs();
+    try { if ((this.s.mapLook || 'flow') !== (localStorage.getItem('map.look') || this.s.mapLook || 'flow')) localStorage.removeItem('map.look'); } catch { /* ignore */ }
     this.s.fontSize = Number(this.s.fontSize) || 14;
     this.s.scrollback = Number(this.s.scrollback) || 10000;
     this.s.pasteLineDelayMs = Number(this.s.pasteLineDelayMs) || 0;

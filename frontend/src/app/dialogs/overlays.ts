@@ -1,4 +1,4 @@
-import { menuBar } from '../core/menu';
+import { menuBar, menuDanger, menuIcon } from '../core/menu';
 import { Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Autofocus } from '../core/autofocus';
@@ -91,10 +91,10 @@ import { ENV_COLORS, envFg, envList } from '../core/env';
     }
     @if (ui.menu(); as m) {
       <div class="menu-catcher" (click)="ui.menu.set(null)" (contextmenu)="ui.menu.set(null); $event.preventDefault()"></div>
-      <div class="ctx-menu" [style.left.px]="m.x" [style.top.px]="m.y">
+      <div class="ctx-menu" [class.noicons]="!anyIcon(m.items)" [style.left.px]="m.x" [style.top.px]="m.y">
         @for (it of m.items; track $index) {
           @if (it.separator) { <div class="sep"></div> }
-          @else { <div class="item" [class.disabled]="it.disabled" (click)="run(it)"><span>{{ it.label }}</span>@if (it.hint) {<span class="hint-key">{{ it.hint }}</span>}</div> }
+          @else { <div class="item" [class.disabled]="it.disabled" [class.danger]="danger(it)" (click)="run(it)"><span class="mi">@if (icon(it); as ic) { <app-icon [name]="ic" [size]="15" /> }</span><span class="ml">{{ it.label }}</span>@if (it.hint) {<span class="hint-key">{{ it.hint }}</span>}</div> }
         }
       </div>
     }
@@ -207,6 +207,10 @@ export class Overlays {
     this.ui.inputReq.set(null);
     r?.resolve(ok ? r.value.trim() || null : null);
   }
+
+  protected icon(it: { label?: string; icon?: string }) { return it.icon ?? menuIcon(it.label); }
+  protected anyIcon(items: { label?: string; icon?: string }[]) { return items.some(i => !!this.icon(i)); }
+  protected danger(it: { label?: string }) { return menuDanger(it.label); }
 
   run(it: { action?: () => void; disabled?: boolean }) {
     if (it.disabled) return;

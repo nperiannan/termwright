@@ -83,3 +83,20 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
   for (const m of menus) for (const i of m.items as MenuDef[]) if (i.action) i.keys = shortcutOf(i.action, isMac) || i.keys;
   return menus;
 }
+
+/** The icon a menu entry gets when it names none: from the words of its label (first match wins). */
+const ICON_RULES: [RegExp, string][] = [
+  [/favourite/i, 'star'], [/^delete|^remove|^empty trash|^clear recent/i, 'trash'], [/^wake/i, 'power'],
+  [/topology/i, 'topology'], [/^back up|backup/i, 'database'], [/checklist/i, 'checklist'], [/^run and collect|^collect/i, 'play'],
+  [/^push|^share|^upload/i, 'upload'], [/^new folder/i, 'folder-plus'], [/^new |^add /i, 'plus'], [/^edit all|^bulk edit/i, 'notes-edit'], [/^name after/i, 'tag'], [/^rename|^edit/i, 'edit'],
+  [/^copy|^duplicate|^clone/i, 'copy'], [/^cut\b/i, 'scissors'], [/^paste/i, 'paste'], [/^environment/i, 'layers'],
+  [/^export|^save/i, 'export'], [/^import/i, 'import'], [/^disconnect|^close/i, 'disconnect'], [/^reconnect/i, 'reconnect'],
+  [/sftp/i, 'sftp'], [/^connect|^open|^start/i, 'connect'], [/defaults|^options|properties|settings/i, 'options'],
+  [/^find|^search/i, 'find'], [/^refresh|^reload/i, 'refresh'], [/^show |^view /i, 'eye'], [/^stop/i, 'close'],
+];
+export function menuIcon(label: string | undefined): string {
+  if (!label) return '';
+  for (const [re, ic] of ICON_RULES) if (re.test(label)) return ic;
+  return '';
+}
+export const menuDanger = (label: string | undefined) => !!label && /^delete|^remove|^empty trash/i.test(label);

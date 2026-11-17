@@ -34,7 +34,13 @@ export interface TabView {
   cols: number;
   rows: number;
   locked: boolean;
-  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab';
+  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab' | 'map';
+  /** Network Map tab: what it maps. */
+  mapTargets?: string[];
+  mapScope?: string;
+  mapTitle?: string;
+  /** Network Map tab of the opened sessions: the targets are read again from the open tabs on every refresh. */
+  mapOpened?: boolean;
   /** Lab tab: which lab it shows. */
   labKind?: 'sim' | 'emu';
   /** Terminal tab: the session recording (.cast) being written. */
@@ -757,6 +763,29 @@ export class Tabs {
     };
     this.tabs.update(l => [...l, tv]);
     this.activeId.set(tv.id);
+  }
+
+  /** A Network Map tab. `targets` are session paths (folders end in "/"); `opened` maps the sessions open in tabs. */
+  async openMap(title: string, targets: string[], scope: string, opened = false) {
+    const id = 'map-' + scope;
+    const open = this.tabs().find(t => t.id === id);
+    if (open) { this.activeId.set(open.id); return; }
+    const s = await this.backend.newSessionDefaults();
+    const name = 'Map: ' + title;
+    const tv: TabView = {
+      id, title: '⛓ ' + name, state: 'connected', message: '', info: name,
+      session: { ...s, name, path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'map', parentId: '', home: '', recording: false,
+      mapTargets: targets, mapScope: scope, mapTitle: title, mapOpened: opened,
+    };
+    this.tabs.update(l => [...l, tv]);
+    this.activeId.set(tv.id);
+  }
+
+  /** Session paths of the terminal tabs that are open (the "opened sessions" map). */
+  openedSessionPaths(): string[] {
+    const set = new Set<string>();
+    for (const t of this.tabs()) if (t.kind === 'terminal' && t.session.path) set.add(t.session.path);
+    return [...set];
   }
 
   private playerSeq = 0;

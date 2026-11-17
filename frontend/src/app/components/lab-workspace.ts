@@ -14,7 +14,7 @@ import { LabOverview, OverviewAct } from './lab-overview';
 import { CmdPalette, PaletteCmd } from './cmd-palette';
 import type { LabHub, LabNote } from '../core/models';
 import { LabService } from '../core/lab.service';
-import { Backend } from '../core/backend';
+import { Backend, errText } from '../core/backend';
 import { LOCAL_HOST, EmuHostNIC, EmuServer, LabHubDetail, EmuBoard, EmuClientState, EmuSTPState, EmuVRRPState, EmuBFDState, EmuEncap, EmuCapture, EmuPacket, EmuPacketDetail, EmuStream, EmuStreamResult, EmuTester, EmuTrafficView, EmuDeviceType, EmuHostUse, EmuTemplate, EmuTopoInfo, LabDevice, LabLag, LabLink, LabModel, EmuChange } from '../core/models';
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
@@ -426,7 +426,10 @@ import { LabServer } from './lab-server';
             @for (m of tbModes; track m.k) { <a [class.cur]="tbMode() === m.k" (click)="setTbMode(m.k)">{{ tbMode() === m.k ? '✓ ' : '' }}{{ tr(m.name) }}</a> }
             <hr /><span class="mh2">{{ tr('Canvas') }}</span>
             <a (click)="flip(miniOn, 'tw.lab.mini')">{{ miniOn() ? '✓ ' : '' }}{{ tr('Mini-map') }}</a>
-            @if (multi()) { <a (click)="moreOpen.set(null); arrangeByHost()">{{ tr('Arrange by Host') }}</a>
+            <hr /><span class="mh2">{{ tr(ms().size > 1 ? 'Arrange the selected switches' : 'Arrange') }}</span>
+            @for (a of arrangeStyles; track a.k) { <a [title]="tr(a.tip)" (click)="moreOpen.set(null); arrangeAs(a.k)">{{ arrangeLast() === a.k ? '✓ ' : '' }}{{ tr(a.name) }}</a> }
+            @if (arrangeUndo()) { <a (click)="moreOpen.set(null); undoArrange()">{{ tr('Undo Arrange') }}</a> }
+            @if (multi()) { <hr /><a (click)="moreOpen.set(null); arrangeByHost()">{{ tr('Arrange by Host') }}</a>
               <hr /><span class="mh2">{{ tr('Hosts') }}</span>
               @for (h of hostViews; track h.k) { <a [class.cur]="hostView() === h.k" (click)="setHostView(h.k)">{{ hostView() === h.k ? '✓ ' : '' }}{{ tr(h.name) }}</a> } }
           </div>
@@ -2198,6 +2201,50 @@ export class LabWorkspace implements OnDestroy {
   miniGo(ev: MouseEvent, cv: HTMLElement) {
     const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(), a = this.area(), k = Math.min(180 / a.w, (this.mini().h) / a.h);
     cv.scrollTo({ left: ((ev.clientX - r.left - 6) / k) * this.zoom() - cv.clientWidth / 2, top: ((ev.clientY - r.top - 6) / k) * this.zoom() - cv.clientHeight / 2, behavior: 'smooth' });
+  }
+  protected readonly arrangeStyles = [
+    { k: 'auto', name: 'Auto (best fit)', tip: 'Tries the styles and keeps the one with the fewest crossings and the shortest cables' },
+    { k: 'layered', name: 'Layered', tip: 'Rows by distance from the core' },
+    { k: 'spine-leaf', name: 'Spine-leaf', tip: 'Spines on top, leaves below' },
+    { k: 'tree', name: 'Tree', tip: 'A root with its branches below' },
+    { k: 'ring', name: 'Ring', tip: 'In a circle, in cable order' },
+    { k: 'star', name: 'Star', tip: 'The best connected switch in the middle' },
+    { k: 'mesh', name: 'Full mesh', tip: 'In a circle, so every cable is a chord' },
+    { k: 'grid', name: 'Grid', tip: 'Rows and columns' },
+    { k: 'organic', name: 'Organic', tip: 'Connected switches close together' },
+  ];
+  /** The style used last for this lab (remembered in the app; the positions themselves are saved in the lab). */
+  protected arrangeLast = signal(((): string => { try { return localStorage.getItem('tw.lab.arrange.' + (this.tab().labKind ?? '')) ?? ''; } catch { return ''; } })());
+  /** Positions before the last Arrange, for one Undo. */
+  protected arrangeUndo = signal<Map<string, { x: number; y: number }> | null>(null);
+  /** Arranges the switches in a style without clutter: all of them, or only the selected ones (the rest stay put). */
+  async arrangeAs(style: string) {
+    const all = this.devs(); if (all.length < 2) return;
+    const pick = this.ms().size > 1 ? all.filter(d => this.ms().has(d.id)) : all, ids = new Set(pick.map(d => d.id));
+    try {
+      const res = await this.backend.layoutGraph({
+        style,
+        nodes: all.map(d => { const p = this.pos(d); return { id: d.id, w: 150, h: BH + 40, x: p.x, y: p.y, pinned: !ids.has(d.id) }; }),
+        edges: this.links().filter(l => all.some(d => d.id === l.a) && all.some(d => d.id === l.b)).map(l => ({ a: l.a, b: l.b })),
+      });
+      const before = new Map<string, { x: number; y: number }>(all.map(d => [d.id, { ...this.pos(d) }] as const));
+      const m = new Map(this.moved());
+      for (const r of res.nodes ?? []) {
+        if (!ids.has(r.id)) continue;
+        const p = { x: Math.max(90, r.x), y: Math.max(70, r.y) };
+        m.set(r.id, p); this.lab.place(r.id, p.x - 75, p.y - BH / 2);
+      }
+      this.moved.set(m);
+      this.arrangeUndo.set(before);
+      this.arrangeLast.set(style);
+      try { localStorage.setItem('tw.lab.arrange.' + (this.tab().labKind ?? ''), style); } catch { /* ignore */ }
+    } catch (e) { this.ui.toast(errText(e), 'error'); }
+  }
+  undoArrange() {
+    const b = this.arrangeUndo(); if (!b) return;
+    const m = new Map(this.moved());
+    for (const [id, p] of b) { m.set(id, p); this.lab.place(id, p.x - 75, p.y - BH / 2); }
+    this.moved.set(m); this.arrangeUndo.set(null);
   }
   /** Each host's switches together, hosts side by side (three to a row). */
   async arrangeByHost() {

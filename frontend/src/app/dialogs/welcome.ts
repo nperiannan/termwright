@@ -1,3 +1,4 @@
+import { LOOKS } from '../core/map-svg';
 import { Component, computed, inject, signal } from '@angular/core';
 import { Backend, errText } from '../core/backend';
 import { FileFilter, ImportSource } from '../core/models';
@@ -55,6 +56,12 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
               @for (e of editors; track e.v) {
                 <button type="button" [class.on]="(ui.settings()?.sessionEditor || '') === e.v" (click)="ui.patchSettings({ sessionEditor: e.v })" [title]="e.what">
                   <span [class]="'sedp ' + (e.v || 'panel')"><i class="tr"></i><i class="tm"></i><i class="pn"><b></b><b></b><b></b></i></span><small>{{ e.label }}</small></button>
+              }
+            </div>
+            <div class="lbl">Network map style</div>
+            <div class="seg qbs">
+              @for (l of looks; track l.id) {
+                <button type="button" [class.on]="(ui.settings()?.mapLook || 'flow') === l.id" (click)="setLook(l.id)" [title]="l.hint"><small>{{ l.label }}</small></button>
               }
             </div>
             <div class="lbl">Start page buttons</div>
@@ -206,6 +213,8 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
   `],
 })
 export class Welcome {
+  protected readonly looks = LOOKS;
+  protected setLook(id: string): void { try { localStorage.removeItem('map.look'); } catch { /* ignore */ } this.ui.patchSettings({ mapLook: id }); }
   protected ui = inject(Ui);
   private backend = inject(Backend);
   readonly titles = ['Look', 'Sessions', 'Security', 'Done'];

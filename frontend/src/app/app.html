@@ -32,6 +32,7 @@
             (click)="openSessMenu($event)"><app-icon name="sessions" /><app-icon name="chevron-down" [size]="11" /></button>
     @if (sessMenu(); as m) { <app-sessions-menu [top]="m.top" [right]="m.right" (closed)="sessMenu.set(null)" /> }
     <button class="ab lab-sim" [class.on]="labSim() > 0" title="Simulated Lab: switches from a device pack, on this computer" (click)="openLab('sim')"><app-icon name="flask" /></button>
+    <button class="ab" title="Network Map of the opened sessions (LLDP / CDP / EDP neighbours)" (click)="openMapOpened()"><app-icon name="network" /></button>
     <button class="ab lab-emu" [class.on]="labBadge().n > 0" [title]="labBadge().n || labBadge().look ? labBadge().tip : 'Emulated Lab: real VM images on a Linux KVM host'" (click)="openLab('emu')"><app-icon name="cube" />@if (labBadge().look) { <span class="lbdg warn">{{ labBadge().look }}</span> } @else if (labBadge().n) { <span class="lbdg">{{ labBadge().n }}</span> }</button>
     <button class="ab" title="Quick Connect" (click)="action('quick-connect')"><app-icon name="quick" /></button>
     <button class="ab" title="Open SFTP tab" [disabled]="active()?.session?.protocol !== 'SSH2' || active()?.state !== 'connected'" (click)="action('sftp-tab')"><app-icon name="sftp" /></button>
@@ -82,6 +83,8 @@
               <app-remote-view [tab]="t" />
             } @else if (t.kind === 'lab') {
               @defer (on immediate) { <app-lab-workspace [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading the lab…</div> }
+            } @else if (t.kind === 'map') {
+              @defer (on immediate) { <app-network-map [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" /> } @placeholder { <div class="lab-loading">Loading the map…</div> }
             } @else if (t.kind === 'player') {
               <app-player-view [tab]="t" [visible]="tiled() || t.id === tabs.activeId()" />
             } @else if (t.filesPanel && t.session.protocol === 'SSH2') {

@@ -822,6 +822,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: 'Connect All in Folder', action: () => this.connectAll(n) },
           { label: 'Wake Up All in Folder (Wake-on-LAN)', action: () => void this.tabs.wakeMany(this.pathsIn(n)) },
           { label: 'Edit All Sessions in Folder...', action: () => this.bulkEdit(this.pathsIn(n)) },
+          { label: 'Show Topology', action: () => this.showTopology([n.path + '/'], n.name || n.path.split('/').pop() || n.path, 'f:' + n.path) },
           { label: 'Back Up Configurations', action: () => this.backUp([n.path + '/']) },
           { label: 'Name After Devices...', action: () => this.nameAfter(this.pathsIn(n), n.path) },
           ...(this.labFolder(n) ? [{ separator: true }, { label: 'Start Lab', action: () => this.labDo(n, () => this.lab.start()) }, { label: 'Stop Lab', action: () => this.labDo(n, () => this.lab.stop()) },
@@ -870,6 +871,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           { label: this.isFav(n.path) ? 'Remove from Favourites' : 'Add to Favourites', action: () => this.setFav([n.path], !this.isFav(n.path)) },
           ...(sec === 'recent' ? [{ label: 'Remove from Recent', action: () => this.ui.removeRecent(n.path) }] : []),
           ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'WOL' ? [] : [
+            { label: 'Show Topology (directly connected)', action: () => this.showTopology([n.path], n.name, 'd:' + n.path) },
             { label: 'Back Up Configuration', action: () => this.backUp([n.path]) },
             { label: 'Change Checklist...', action: () => this.checklist([n.path]) },
           ]),
@@ -908,6 +910,8 @@ export class SessionTree implements AfterViewInit, OnDestroy {
     this.ui.collectTargets.set(targets);
     this.ui.open('collect');
   }
+
+  showTopology(targets: string[], title: string, scope: string) { void this.tabs.openMap(title, targets, scope); }
 
   backUp(targets: string[]) {
     this.ui.backupTargets.set(targets);

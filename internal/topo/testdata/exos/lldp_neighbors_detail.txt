@@ -1,0 +1,43 @@
+-----------------------------------------------------------------------------
+LLDP Port 1 detected 1 neighbor
+  Neighbor: AC:ED:32:94:2C:00/1, age 29 seconds
+    - Chassis ID type: MAC address (4)
+      Chassis ID     : AC:ED:32:94:2C:00
+    - Port ID type: ifName (5)
+      Port ID     : "1"
+    - Time To Live: 120 seconds
+    - System Name: "5520-24t-2"
+    - Avaya/Extreme Fabric Attach element
+      Element Type   : 8
+
+-----------------------------------------------------------------------------
+LLDP Port 2 detected 1 neighbor
+  Neighbor: AC:ED:32:C4:64:00/1/1, age 29 seconds
+    - Chassis ID type: MAC address (4)
+      Chassis ID     : AC:ED:32:C4:64:00
+    - Port ID type: ifName (5)
+      Port ID     : "1/1"
+    - Time To Live: 120 seconds
+    - System Name: "5520-24T-FabricEngine"
+    - System Capabilities : "Bridge, Router"
+      Enabled Capabilities: "Bridge, Router"
+    - Management Address Subtype: IPv4 (1)
+      Management Address        : 10.234.179.150
+
+-----------------------------------------------------------------------------
+LLDP Port 3 detected 1 neighbor
+  Neighbor: AC:ED:32:94:2C:00/6, age 3 seconds
+    - Chassis ID type: MAC address (4)
+      Chassis ID     : AC:ED:32:94:2C:00
+    - Port ID type: ifName (5)
+      Port ID     : "6"
+    - System Name: "5520-24t-2"
+
+-----------------------------------------------------------------------------
+LLDP Port 4 detected 1 neighbor
+  Neighbor: AC:ED:32:94:2C:00/7, age 22 seconds
+    - Chassis ID type: MAC address (4)
+      Chassis ID     : AC:ED:32:94:2C:00
+    - Port ID type: ifName (5)
+      Port ID     : "7"
+    - System Name: "5520-24t-2"

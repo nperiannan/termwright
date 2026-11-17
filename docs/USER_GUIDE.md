@@ -1333,6 +1333,24 @@ Most switches and routers fetch software images, licences and configurations *th
 
 **Ports below 1024 on Linux** (TFTP 69, FTP 21) need permission: choose a port above 1024 for the server, or allow it once with `sudo setcap cap_net_bind_service=+ep /path/to/termwright`. On Windows, the firewall asks the first time a server starts; allow it for the network the devices are on. macOS needs nothing.
 
+## 9b. Network Map
+
+The Network Map draws the real network from your sessions, not a plan.
+
+**Open it.** Right-click a folder in the Session Manager → **Show Topology**: every device in the folder is read and the tab is named after the folder. Right-click a device → **Show Topology (directly connected)**: the device and its neighbours only. The network button at the top right maps the sessions that are open in tabs.
+
+**What it reads.** Termwright signs in with the session (a hidden channel; your open terminal is not used) and runs only read-only `show` commands: LLDP, CDP and EDP neighbours, port state, STP state and LAGs. EXOS and VOSS are tested on real switches; Cisco, Arista and Junos readers follow the documented output formats and are tested on sample output only. **Collect** can use SNMP v2c instead (default community `public`, often turned off on devices; the community is not saved). SNMP gives neighbours, port state, STP and LACP, but no static LAGs, EDP, CDP or neighbour age. Sessions marked Production ask first.
+
+**Reading the picture.** Green is up, amber dashed is STP blocked, red dotted is a port down. A ring on a link is a LAG (thick track, cables fanning in; amber when the two ends disagree). A dashed box is a neighbour that has no session. A cable that moved to another port or device replaces the old one; when LLDP, CDP and EDP disagree the freshest wins. Hover a device for its Session Manager details; click a device or link for the side panel; the Changes list shows what moved.
+
+**Move around.** + / − / fit and the mouse wheel zoom, drag the background to pan, drag a device to pin it. **Arrange** puts the devices in Auto, Layered, Spine-leaf, Tree, Ring, Star, Full mesh, Grid or Organic style; new devices are placed without moving the others. **Export** saves JPEG, PDF or HTML (with the Session Manager details). The look selector switches between **Cards** (default) and **Tiers**: devices in rows with a thin CORE / DISTRIBUTION / ACCESS guide line and right-angle cables. The tier names come from the rows of the Layered, Spine-leaf or Tree arrangement, so they are a guess from the position, not read from the devices.
+
+The Emulated and Simulated Labs have the same styles under **More → Arrange** (selected switches only when several are selected; one Undo).
+
+**Looks and views.** The *Look* box in the toolbar switches between Flow (default), Clean boxes, Soft cards, Constellation, Zones and the classic Cards and Tiers. Choose the look a new map starts with on the welcome screen or in **Global Options → Network map style**. Every look keeps all the data: name, address, device type, ports, speeds, LAG, STP and unread devices (the side panel lists each device and why it could not be read). The *View* box colours the cables: **Speed** (10 Mbps–10 Gbps green, 25–100 Gbps blue, above 100 Gbps thick blue), **Health**, **STP** or **LAG**. A port blocked by spanning tree is a green dashed cable with an amber dot on the blocking port (it still carries control traffic). Port numbers appear when you zoom in, and each look has its own legend. The VLAN view is not there yet because VLANs are not collected.
+
+**While it reads.** Up to 16 devices are read at the same time; each shows how many of its 5 steps (connect, identify, neighbours, ports/STP/LAG, build map) are done.
+
 ## 10. Automation: logon actions, triggers, scripts
 
 **Logon Actions** (Session Options → Logon Actions & Triggers):

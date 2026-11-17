@@ -1,0 +1,8 @@
+Load Sharing Monitor
+Config    Current Agg     Min    Ld Share        Ld Share  Agg Link  Link Up
+Master    Master  Control Active Algorithm Flags Group     Mbr State Transitions
+================================================================================
+     4      3     Static     1    L2        A     3         Y     A       1
+                                  L2              4         Y     A       1
+================================================================================
+Link State: A-Active, D-Disabled, R-Ready, NP-Port not present, L-Loopback

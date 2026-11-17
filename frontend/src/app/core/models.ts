@@ -147,7 +147,7 @@ export interface Settings {
   sessionsDir: string; logDir: string; downloadDir: string; fontFamily: string; fontSize: number; lineHeight?: number; theme: string; uiFont?: string; uiFontSize?: number;
   terminalScheme: string; cursorStyle: 'block' | 'underline' | 'bar'; cursorBlink: boolean;
   scrollback: number; copyOnSelect: boolean; rightClickPaste: boolean; confirmClose: boolean;
-  sessionEditor?: '' | 'window'; language?: string; layout?: string; style?: string; iconFinish?: '' | 'glacier' | 'flat'; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; quickButtons?: '' | 'keycap' | 'glow'; folderColors?: '' | 'vivid' | 'steel'; nameAfterDevice?: '' | 'auto' | 'off'; nameFormat?: '' | 'model' | 'octet'; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
+  sessionEditor?: '' | 'window'; language?: string; layout?: string; style?: string; iconFinish?: '' | 'glacier' | 'flat'; compactRows?: boolean; highlightStyle?: string; welcomeSeen?: string; iconStyle?: string; quickButtons?: '' | 'keycap' | 'glow'; folderColors?: '' | 'vivid' | 'steel'; mapLook?: string; nameAfterDevice?: '' | 'auto' | 'off'; nameFormat?: '' | 'model' | 'octet'; deviceFacts?: Record<string, Record<string, string>> | null; showButtonBar: boolean; hideTerminalBar?: boolean; showCommandWindow: boolean; showSessionManager: boolean; sessionManagerRight?: boolean;
   sftpCwdAuto?: boolean; sftpFollowTerminal?: boolean; sftpFollowUser?: boolean;
   pasteLineDelayMs: number; buttons: Button[]; recentSessions: string[];
   favorites?: string[] | null; lastConnected?: Record<string, string> | null; showReachability?: boolean; reachFolder?: string;
@@ -506,3 +506,17 @@ export function dtTunnels(types: DeviceType[] | null | undefined, name: string |
   const t = (types ?? []).find(d => d.name.toLowerCase() === name.toLowerCase())?.tunnel?.toLowerCase() ?? '';
   return t === 'on' || (t !== 'off' && !NO_TUNNEL.includes(name.toLowerCase()));
 }
+
+// Network Map (topology read from the devices of real sessions)
+export interface TopoLag { name: string; mode: 'lacp' | 'static'; members: string[] | null; active?: string[] | null; }
+export interface TopoNode { id: string; name: string; os?: string; ip?: string; chassis?: string; session?: string; known?: string; ghost: boolean; caps?: string; notes?: string[] | null; }
+export interface TopoLink { key: string; a: string; aPort: string; b: string; bPort: string; state: 'up' | 'blocked' | 'down'; lagA?: TopoLag | null; lagB?: TopoLag | null; warn?: string; stpA?: string; stpB?: string; seen: string[] | null; ends: number; speed?: string; }
+export interface TopoMap { nodes: TopoNode[] | null; links: TopoLink[] | null; at: string; }
+export interface TopoChange { at: string; kind: string; text: string; }
+/** One device's progress while a map is read (event topo:progress). */
+export interface TopoProgress { scope: string; session?: string; name?: string; os?: string; state?: 'queued' | 'running' | 'done' | 'error'; done?: number; now?: string; err?: string; phase?: 'build' | 'end'; elapsedMs?: number; }
+export interface TopoRequest { targets: string[]; scope: string; production: boolean; collect: string; community: string; }
+export interface TopoResult { map: TopoMap; changes: TopoChange[] | null; needsConfirm?: string[] | null; read: number; failed: number; }
+export interface LayoutNode { id: string; w: number; h: number; x: number; y: number; pinned?: boolean; ghost?: boolean; }
+export interface LayoutRequest { style: string; nodes: LayoutNode[]; edges: { a: string; b: string }[]; root?: string; width?: number; }
+export interface LayoutResult { style: string; nodes: LayoutNode[] | null; }
