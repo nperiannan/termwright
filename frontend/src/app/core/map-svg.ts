@@ -4,12 +4,13 @@ import type { TopoLag } from './models';
 /** Drawing of the Network Map as SVG markup (strings, so the same picture is on screen and in the JPEG, PDF
  *  and HTML exports). Nothing here reads the DOM or Angular. */
 
-export type Look = 'ant' | 'material' | 'constellation' | 'zones' | 'flow' | 'card' | 'tier';
+export type Look = 'ant' | 'material' | 'constellation' | 'zones' | 'flow' | 'focus' | 'card' | 'tier';
 /** What the cables are coloured by: their speed, their health (up / down), spanning tree, or LAG membership. */
 export type View = 'speed' | 'health' | 'stp' | 'lag';
 export const LOOKS: { id: Look; label: string; hint: string }[] = [
   { id: 'ant', label: 'Clean boxes', hint: 'Tidy boxes in tiers with right-angle cables' },
   { id: 'material', label: 'Soft cards', hint: 'Rounded tonal cards with curved cables' },
+  { id: 'focus', label: 'Focus', hint: 'Round devices; cables stay quiet unless something needs a look. Click a device to focus on it' },
   { id: 'constellation', label: 'Constellation', hint: 'The core in the middle, one ring per level' },
   { id: 'zones', label: 'Zones', hint: 'Devices grouped by role, cables bundled between the groups' },
   { id: 'flow', label: 'Flow (default)', hint: 'Left to right from the core to the edge' },
@@ -20,7 +21,7 @@ export const LOOKS: { id: Look; label: string; hint: string }[] = [
 export const COMPUTED_LOOKS: Look[] = ['constellation', 'zones', 'flow'];
 const SIZES: Record<Look, { w: number; h: number }> = {
   card: { w: 184, h: 56 }, tier: { w: 184, h: 56 }, ant: { w: 176, h: 54 }, material: { w: 176, h: 66 },
-  constellation: { w: 78, h: 78 }, zones: { w: 164, h: 78 }, flow: { w: 216, h: 52 },
+  constellation: { w: 78, h: 78 }, focus: { w: 74, h: 74 }, zones: { w: 164, h: 78 }, flow: { w: 216, h: 52 },
 };
 /** Size of a device box in each look. */
 export const dims = (look: Look = 'ant') => SIZES[look] ?? SIZES.ant;
@@ -119,10 +120,11 @@ function bySpeed(speed: string | undefined, th: MTheme, w: number): { c: string;
 }
 
 /** Blocked by spanning tree: the cable still carries the control traffic, so it stays green but dashed; an amber dot sits on the port that blocks. */
-function stroke(state: string, ghost: boolean, th: MTheme, w: number, speed?: string, view?: View): string {
+function stroke(state: string, ghost: boolean, th: MTheme, w: number, speed?: string, view?: View | 'quiet'): string {
   if (state === 'down') return `stroke="${th.bad}" stroke-width="${w * .9}" stroke-dasharray="3 7" stroke-linecap="round"`;
   if (state === 'blocked') return `stroke="${th.ok}" stroke-width="${w}" stroke-dasharray="9 6" stroke-linecap="round"`;
   if (ghost) return `stroke="${th.mut}" stroke-width="2" stroke-dasharray="4 6" opacity=".75"`;
+  if (view === 'quiet') { const m = mbps(speed); return `stroke="${th.mut}" stroke-opacity=".55" stroke-width="${m >= 40000 ? 3.6 : m >= 10000 ? 2.4 : 1.4}" stroke-linecap="round"`; }
   if (view === 'speed') { const k = bySpeed(speed, th, w); return `stroke="${k.c}" stroke-width="${k.w}" stroke-linecap="round"`; }
   return `stroke="${th.ok}" stroke-width="${w}" stroke-linecap="round"`;
 }
@@ -178,9 +180,11 @@ function linksMarkup(nodes: Map<string, MNode>, links: MLink[], o: MOpts): strin
       const len = Math.hypot(E.x - S.x, E.y - S.y);
       if (len < 24) return;
       const state = trackState(t), sel = t.links.some(l => l.key === o.selLink), keys = t.links.map(l => l.key).join(' ');
+      const near = !!o.selNode && (A.id === o.selNode || B.id === o.selNode), vw: View | 'quiet' | undefined = o.look === 'focus' && !near ? 'quiet' : o.view;
+      const dim = o.look === 'focus' && !!o.selNode && !near, sp = o.showPorts && (o.look !== 'focus' || near);
       const warn = t.links.find(l => l.warn)?.warn;
       const at = (p: P, d: number, side = 0): P => ({ x: p.x + u.x * d + n.x * side, y: p.y + u.y * d + n.y * side });
-      let g = `<g class="mlink${sel ? ' sel' : ''}" data-link="${esc(keys)}"${o.view === 'lag' && !t.lag ? ' opacity=".28"' : ''}>`, hit = '';
+      let g = `<g class="mlink${sel ? ' sel' : ''}" data-link="${esc(keys)}"${(o.view === 'lag' && !t.lag) || dim ? ' opacity=".28"' : ''}>`, hit = '';
       const labels: string[] = [];
       const orth = orthLook(o.look) && Math.abs(B.y - A.y) > D.h;
       if (!t.lag && orth) {
@@ -193,9 +197,9 @@ function linksMarkup(nodes: Map<string, MNode>, links: MLink[], o: MOpts): strin
         d += `V${f(y2)}`;
         hit = d;
         if (sel) g += `<path d="${d}" fill="none" stroke="${th.acc}" stroke-width="10" opacity=".28" stroke-linecap="round" stroke-linejoin="round"/>`;
-        g += `<path d="${d}" fill="none" ${stroke(state, ghost, th, l.speed === '1G' ? 2.8 : 3.6, l.speed, o.view)} stroke-linejoin="round"/>`;
+        g += `<path d="${d}" fill="none" ${stroke(state, ghost, th, l.speed === '1G' ? 2.8 : 3.6, l.speed, vw)} stroke-linejoin="round"/>`;
         g += stpDot({ x: x1, y: y1 + 11 }, aTop ? l.stpA : l.stpB, o) + stpDot({ x: x2, y: y2 - 11 }, aTop ? l.stpB : l.stpA, o);
-        if (o.showPorts || sel) { labels.push(pill(x1 + 2, y1 + 15, tp, th)); labels.push(pill(x2 + 2, y2 - 15, bp, th)); }
+        if (sp || sel) { labels.push(pill(x1 + 2, y1 + 15, tp, th)); labels.push(pill(x2 + 2, y2 - 15, bp, th)); }
         const mx = (x1 + x2) / 2, my = Math.abs(x2 - x1) > 2 ? ym : (y1 + y2) / 2;
         const txt = state === 'blocked' ? 'STP blocked' : state === 'down' ? 'port down' : l.speed ?? '';
         if (txt) labels.push(pill(mx, my, txt, th, state === 'blocked' ? th.warn : state === 'down' ? th.bad : undefined));
@@ -222,10 +226,10 @@ function linksMarkup(nodes: Map<string, MNode>, links: MLink[], o: MOpts): strin
         hit = d;
         if (sel) g += `<path d="${d}" fill="none" stroke="${th.acc}" stroke-width="9" opacity=".28" stroke-linecap="round"/>`;
         if (state === 'up' && !ghost) g += `<path d="${d}" fill="none" stroke="${th.ok}" stroke-width="8" opacity=".14" stroke-linecap="round"/>`;
-        g += `<path d="${d}" fill="none" ${stroke(state, ghost, th, 3.4, l.speed, o.view)}/>`;
+        g += `<path d="${d}" fill="none" ${stroke(state, ghost, th, 3.4, l.speed, vw)}/>`;
         g += stpDot(at(S, 11), l.stpA, o) + stpDot(at(E, -11), l.stpB, o);
         if (state === 'up' && l.speed) { const p = at(S, len / 2 + stag); labels.push(pill(p.x, p.y, l.speed, th)); }
-        if (o.showPorts || sel) {
+        if (sp || sel) {
           if (l.aPort) labels.push(pill(pa.x, pa.y, l.aPort, th));
           if (l.bPort) labels.push(pill(pb.x, pb.y, l.bPort, th));
         }
@@ -238,7 +242,7 @@ function linksMarkup(nodes: Map<string, MNode>, links: MLink[], o: MOpts): strin
         const d = `M${f(s0.x)} ${f(s0.y)}L${f(e0.x)} ${f(e0.y)}`;
         hit = `M${f(S.x)} ${f(S.y)}L${f(E.x)} ${f(E.y)}`;
         if (sel) g += `<path d="${d}" fill="none" stroke="${th.acc}" stroke-width="13" opacity=".28" stroke-linecap="round"/>`;
-        g += `<path d="${d}" fill="none" ${stroke(state, false, th, 7, first.speed, o.view)}${trunkCol && state === 'up' ? ` style="stroke:${trunkCol}"` : o.view === 'lag' && state === 'up' ? ` style="stroke:${th.acc}"` : ''}/>`;
+        g += `<path d="${d}" fill="none" ${stroke(state, false, th, 7, first.speed, vw)}${trunkCol && state === 'up' ? ` style="stroke:${trunkCol}"` : o.view === 'lag' && state === 'up' ? ` style="stroke:${th.acc}"` : ''}/>`;
         const side = (end: 'a' | 'b') => {
           const o0 = end === 'a' ? S : E, dir = end === 'a' ? 1 : -1, ring = at(o0, dir * fan), lag = end === 'a' ? lagA : lagB;
           const k = t.links.length;
@@ -251,7 +255,7 @@ function linksMarkup(nodes: Map<string, MNode>, links: MLink[], o: MOpts): strin
             t.links.forEach((l, i) => {
               const so = (i - (k - 1) / 2) * 12, mid = at(o0, dir * fan * .8, so);
               g += `<path d="M${f(o0.x)} ${f(o0.y)}L${f(mid.x)} ${f(mid.y)}L${f(from.x)} ${f(from.y)}" fill="none" ${stroke(l.state, false, th, 2)}/>`;
-              if (o.showPorts) labels.push(pill(mid.x, mid.y + (so >= 0 ? 14 : -14), end === 'a' ? l.aPort : l.bPort, th));
+              if (sp) labels.push(pill(mid.x, mid.y + (so >= 0 ? 14 : -14), end === 'a' ? l.aPort : l.bPort, th));
             });
           }
         };
@@ -322,11 +326,27 @@ function nodeMaterial(nd: MNode, o: MOpts, D: { w: number; h: number }, sel: boo
   const ink = dev ? th.devCardInk : th.ink, mut = dev ? th.devCardInk : th.mut;
   let s = `<rect width="${D.w}" height="${D.h}" rx="16" fill="${dev ? th.devCard : th.node}" stroke="${sel ? th.acc : dev ? th.devLine : th.nodeLine}" stroke-opacity="${sel ? 1 : dev ? .55 : 1}" stroke-width="${sel ? 2 : 1}"${nd.ghost ? ' stroke-dasharray="4 3"' : ''} style="filter:drop-shadow(0 2px 4px ${th.shadow})"/>`;
   s += `<text x="14" y="24" font-size="13.5" font-weight="700" fill="${nd.ghost ? th.mut : ink}"${nd.ghost ? ' font-style="italic"' : ''}>${esc(clip(nd.name, 17))}</text>`;
-  s += `<circle cx="${D.w - 16}" cy="19" r="4" fill="${dotOf(nd, th)}"/>`;
+  s += nd.prog?.state === 'done' ? `<circle cx="${D.w - 18}" cy="19" r="9" fill="${th.ok}"/><path d="M${D.w - 22.5} 19l3 3 5.5-6" fill="none" stroke="#0b1b12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>` : `<circle cx="${D.w - 16}" cy="19" r="4" fill="${dotOf(nd, th)}"/>`;
   s += `<text x="14" y="41" font-size="10.5" font-weight="600" fill="${mut}" opacity=".85">${esc(nd.ghost ? tr0('neighbour · not managed') : (nd.os ?? '').toUpperCase())}</text>`;
   if (!nd.ghost) s += `<text x="14" y="55" font-size="10.5" fill="${mut}" opacity=".7">${esc(clip((nd.ip || '') + warnTxt(nd), 28))}</text>`;
   if (run) s += pulse(D.w, D.h, 16, th) + `<rect x="14" y="${D.h - 8}" width="${D.w - 28}" height="3" rx="1.5" fill="${th.zoneLine}"/><rect x="14" y="${D.h - 8}" width="${(D.w - 28) * .4}" height="3" rx="1.5" fill="${th.acc}"><animate attributeName="x" values="14;${D.w - 14 - (D.w - 28) * .4};14" dur="1.5s" repeatCount="indefinite"/></rect>`;
   return s;
+}
+
+/** Focus (mock 1): a round device with a switch face, its name and address below; status dot at the top right. */
+function nodeFocus(nd: MNode, o: MOpts, sel: boolean): string {
+  const th = o.theme, p = nd.prog, run = p?.state === 'running', near = !o.selNode || sel;
+  const op = o.selNode && !sel ? ' opacity=".55"' : '';
+  let s = `<g${op}>`;
+  if (sel) s += `<circle r="42" fill="none" stroke="${th.acc}" stroke-width="2"/>`;
+  if (run) s += `<circle r="42" fill="none" stroke="${th.acc}" stroke-width="2" stroke-dasharray="5 6"/>`;
+  s += `<circle r="34" fill="${th.node}" stroke="${nd.ghost ? th.mut : th.nodeLine}" stroke-width="1.4"${nd.ghost ? ' stroke-dasharray="4 4"' : ''}/>`;
+  s += `<rect x="-18" y="-9" width="36" height="18" rx="4" fill="none" stroke="${nd.ghost ? th.mut : th.ink}" stroke-width="2"/>`;
+  for (let i = 0; i < 5; i++) s += `<rect x="${-12 + i * 5}" y="-4" width="3" height="8" rx="1" fill="${nd.ghost ? th.mut : th.ink}"/>`;
+  s += `<circle cx="25" cy="-25" r="5" fill="${dotOf(nd, th)}" stroke="${th.bg}" stroke-width="2"/>`;
+  s += `<text y="56" font-size="14" font-weight="700" text-anchor="middle" fill="${nd.ghost ? th.mut : near ? th.ink : th.mut}"${nd.ghost ? ' font-style="italic"' : ''}>${esc(clip(nd.name, 20))}</text>`;
+  if (!nd.ghost) s += `<text y="72" font-size="11" text-anchor="middle" fill="${th.mut}">${esc((nd.ip || '') + warnTxt(nd))}</text>`;
+  return s + '</g>';
 }
 
 /** Constellation: a round device with its name below; the ring around it is the reading progress. */
@@ -335,7 +355,7 @@ function nodeRound(nd: MNode, o: MOpts, sel: boolean): string {
   if (nd.ghost) return `<circle r="17" fill="none" stroke="${sel ? th.acc : th.mut}" stroke-width="1.5" stroke-dasharray="3 3"/><text y="33" font-size="11" font-style="italic" text-anchor="middle" fill="${th.mut}">${esc(clip(nd.name, 18))}</text>`;
   let s = `<circle r="33" fill="none" stroke="${p ? th.zoneLine : th.nodeLine}" stroke-width="${p ? 3 : 1.4}"/>`;
   if (p && p.state !== 'queued') s += `<circle r="33" fill="none" stroke="${p.state === 'error' ? th.bad : th.ok}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${f(207 * Math.min(4, p.state === 'done' ? 4 : p.done) / 4)} 208" transform="rotate(-90)"/>`;
-  if (p?.state === 'running') s += `<circle r="40" fill="none" stroke="${th.acc}" stroke-width="1.5" stroke-dasharray="4 8"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="3s" repeatCount="indefinite"/></circle>`;
+  if (p?.state === 'running') s += `<circle r="40" fill="none" stroke="${th.acc}" stroke-width="1.5" stroke-dasharray="4 8"/>`;
   s += `<circle r="26" fill="${dev ? th.devCard : th.node}" stroke="${sel ? th.acc : dev ? th.devLine : th.nodeLine}" stroke-width="${sel ? 2.2 : 1.4}" style="filter:drop-shadow(0 2px 4px ${th.shadow})"/>`;
   s += `<text y="3.5" font-size="9.5" font-weight="800" text-anchor="middle" fill="${dev ? th.devCardInk : th.ink}">${esc((nd.os ?? 'SW').toUpperCase())}</text>`;
   s += `<circle cx="22" cy="-22" r="4.6" fill="${dotOf(nd, th)}" stroke="${th.ring}" stroke-width="1.5"/>`;
@@ -379,13 +399,13 @@ function nodeClassic(nd: MNode, o: MOpts, D: { w: number; h: number }, sel: bool
 }
 
 function nodesMarkup(nodes: MNode[], o: MOpts): string {
-  const D = dims(o.look), round = o.look === 'constellation';
+  const D = dims(o.look), round = o.look === 'constellation' || o.look === 'focus';
   return nodes.map(nd => {
     const sel = nd.id === o.selNode, x = nd.x - D.w / 2, y = nd.y - D.h / 2;
     const at = round ? `translate(${f(nd.x)} ${f(nd.y)})` : `translate(${f(x)} ${f(y)})`;
     let s = `<g class="mnode${sel ? ' sel' : ''}${nd.ghost ? ' ghost' : ''}" data-node="${esc(nd.id)}" transform="${at}"${nd.ghost ? ' opacity=".82"' : ''}>`;
     if (round) s += `<circle r="40" fill="transparent"/>`; // a bigger hit area
-    s += o.look === 'ant' ? nodeAnt(nd, o, D, sel) : o.look === 'material' ? nodeMaterial(nd, o, D, sel) : round ? nodeRound(nd, o, sel)
+    s += o.look === 'ant' ? nodeAnt(nd, o, D, sel) : o.look === 'material' ? nodeMaterial(nd, o, D, sel) : o.look === 'focus' ? nodeFocus(nd, o, sel) : round ? nodeRound(nd, o, sel)
       : o.look === 'zones' ? nodeTile(nd, o, D, sel) : o.look === 'flow' ? nodePill(nd, o, D, sel) : nodeClassic(nd, o, D, sel);
     if (o.fresh?.has(nd.id)) s += round ? `<circle r="45" fill="none" stroke="${o.theme.acc}" stroke-width="1.5" stroke-dasharray="2 3"/>` : `<rect x="-3" y="-3" width="${D.w + 6}" height="${D.h + 6}" rx="11" fill="none" stroke="${o.theme.acc}" stroke-width="1.5" stroke-dasharray="2 3"/>`;
     return s + '</g>';
@@ -411,10 +431,6 @@ function zonesMarkup(zones: Zone[], o: MOpts): string {
 function ringsMarkup(o: MOpts): string {
   const th = o.theme, R = o.rings ?? [];
   let s = R.map(r => `<circle r="${f(r)}" fill="none" stroke="${th.zoneLine}" stroke-dasharray="2 7"/>`).join('');
-  if (o.sweep && R.length) {
-    const r = Math.max(...R) + 90, a = 52 * Math.PI / 180;
-    s += `<path d="M0 0L${f(r)} 0A${f(r)} ${f(r)} 0 0 1 ${f(r * Math.cos(a))} ${f(r * Math.sin(a))}Z" fill="${th.acc}" fill-opacity=".10"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="7s" repeatCount="indefinite"/></path>`;
-  }
   return s;
 }
 

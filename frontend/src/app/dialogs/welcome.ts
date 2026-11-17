@@ -214,7 +214,7 @@ interface FileKind { label: string; title: string; filters: FileFilter[]; folder
 })
 export class Welcome {
   protected readonly looks = LOOKS;
-  protected setLook(id: string): void { try { localStorage.removeItem('map.look'); } catch { /* ignore */ } this.ui.patchSettings({ mapLook: id }); }
+  protected setLook(id: string): void { try { localStorage.removeItem('map.look2'); } catch { /* ignore */ } this.ui.patchSettings({ mapLook: id }); }
   protected ui = inject(Ui);
   private backend = inject(Backend);
   readonly titles = ['Look', 'Sessions', 'Security', 'Done'];

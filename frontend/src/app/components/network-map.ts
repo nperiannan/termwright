@@ -18,7 +18,7 @@ const VIEWS: { id: View; label: string; hint: string }[] = [
   { id: 'stp', label: 'STP', hint: 'The spanning-tree state of the port at each end of every cable' },
   { id: 'lag', label: 'LAG', hint: 'Link aggregation groups highlighted, everything else faded' },
 ];
-const TIERED: Look[] = ['ant', 'material', 'tier'];
+const TIERED: Look[] = ['ant', 'material', 'tier', 'focus'];
 
 const STYLES: { id: string; label: string }[] = [
   { id: 'auto', label: 'Auto (best fit)' }, { id: 'layered', label: 'Layered' }, { id: 'spine-leaf', label: 'Spine-leaf' },
@@ -33,47 +33,66 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
   selector: 'app-network-map',
   imports: [FormsModule],
   template: `
-    <div class="bar">
-      <b class="ttl">{{ tab().mapTitle }}</b>
-      <button type="button" (click)="refresh(true)" [disabled]="busy()" [title]="t('Read the neighbours from the devices now')">{{ busy() ? t('Reading…') : t('Refresh') }}</button>
-      <select [ngModel]="interval()" (ngModelChange)="setInterval(+$event)" [title]="t('How often the map reads the devices again (only while this tab is shown)')">
-        @for (s of intervals; track s) { <option [value]="s">{{ s ? t('Every') + ' ' + (s >= 60 ? s / 60 + ' min' : s + ' s') : t('Manual only') }}</option> }
-      </select>
-      <span class="mut">{{ updated() }}</span>
+    <div class="hd">
+      <div class="tt">
+        <div class="h1r"><h1>{{ tab().mapTitle }}</h1><span class="chip">{{ collectLabel() }}</span>@if (busy()) { <span class="chip live"><i></i>{{ t('Reading') }}</span> }</div>
+        <p class="sub">{{ subline() }}</p>
+      </div>
       <span class="sp"></span>
-      <select [ngModel]="collect()" (ngModelChange)="collect.set($event); refresh(true)" [title]="t('Where the neighbours are read from')">
-        <option value="cli">{{ t('Device CLI') }}</option><option value="snmp">SNMP</option><option value="both">{{ t('CLI, else SNMP') }}</option>
-      </select>
-      @if (collect() !== 'cli') { <input class="comm" [(ngModel)]="community" placeholder="SNMP community" spellcheck="false" [title]="t('Read-only community. Not saved.')" /> }
-      <label class="chk"><input type="checkbox" [ngModel]="ghosts()" (ngModelChange)="ghosts.set($event)" /> {{ t('Unknown neighbours') }}</label>
-      <label class="chk"><input type="checkbox" [ngModel]="ports()" (ngModelChange)="ports.set($event)" /> {{ t('Port names') }}</label>
-      @if (!computedLook()) {
-        <select [ngModel]="''" (ngModelChange)="arrange($event)" [title]="t('Arrange the devices without clutter')">
-          <option value="">{{ t('Arrange…') }}</option>
-          @for (s of styles; track s.id) { <option [value]="s.id">{{ t(s.label) }}</option> }
-        </select>
-      }
+      <button type="button" class="pri" (click)="refresh(true)" [disabled]="busy()" [title]="t('Read the neighbours from the devices now')">{{ busy() ? t('Reading…') : t('Refresh') }}</button>
+      <div class="morew">
+        <button type="button" class="ib" [class.on]="more()" (click)="more.set(!more())" [title]="t('More')">⋯</button>
+        @if (more()) {
+          <div class="more">
+            <label>{{ t('Read again') }}<select [ngModel]="interval()" (ngModelChange)="setInterval(+$event)" [title]="t('How often the map reads the devices again (only while this tab is shown)')">
+              @for (s of intervals; track s) { <option [value]="s">{{ s ? t('Every') + ' ' + (s >= 60 ? s / 60 + ' min' : s + ' s') : t('Manual only') }}</option> }
+            </select></label>
+            <label>{{ t('Read from') }}<select [ngModel]="collect()" (ngModelChange)="collect.set($event); refresh(true)" [title]="t('Where the neighbours are read from')">
+              <option value="cli">{{ t('Device CLI') }}</option><option value="snmp">SNMP</option><option value="both">{{ t('CLI, else SNMP') }}</option>
+            </select></label>
+            @if (collect() !== 'cli') { <label>SNMP<input class="comm" [(ngModel)]="community" placeholder="SNMP community" spellcheck="false" [title]="t('Read-only community. Not saved.')" /></label> }
+            <label>{{ t('Export') }}<select [ngModel]="''" (ngModelChange)="exportAs($event); more.set(false)" [title]="t('Save the map')">
+              <option value="">{{ t('Export…') }}</option><option value="jpg">JPEG</option><option value="pdf">PDF</option><option value="html">HTML</option>
+            </select></label>
+          </div>
+        }
+      </div>
+    </div>
+    @if (showProg() && look() === 'flow') {
+      <div class="seg5">@for (s of stepList(); track s.n) { <div [class]="s.st"><div class="sl"><b>{{ t(s.name) }}</b><span>{{ s.sub }}</span></div><div class="tr"><i [style.width.%]="s.pct"></i></div></div> }</div>
+    } @else if (showProg() && headerSteps()) {
+      <div class="stepper">@for (s of stepList(); track s.n; let last = $last) {
+        <div class="sp1" [class]="'sp1 ' + s.st"><span class="ic">@if (s.st === 'ok') { ✓ } @else if (s.st === 'run') { <i class="spin"></i> } @else { {{ s.n }} }</span><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div>
+        @if (!last) { <span class="cn" [class.ok]="s.st === 'ok'"></span> }
+      } </div>
+    }
+    @if (kpis().length) {
+      <div class="kpis">@for (k of kpis(); track k.l) {
+        <button type="button" class="kpi" [class]="'kpi ' + k.c" (click)="k.go()" [title]="t(k.h)"><small>{{ t(k.l) }}</small><b>{{ k.v }}</b></button>
+      }</div>
+    }
+    <div class="tbar">
+      <b class="tl">{{ t('Topology') }}</b>
+      <div class="segv">@for (v of views; track v.id) { <button type="button" [class.on]="cableView() === v.id" (click)="setView(v.id)" [title]="t(v.hint)">{{ t(v.label) }}</button> }<button type="button" disabled [title]="t('VLANs are not read yet')">VLAN</button></div>
+      <span class="sp"></span>
+      <label class="tg"><input type="checkbox" [ngModel]="ghosts()" (ngModelChange)="ghosts.set($event)" /> {{ t('Unmanaged neighbours') }}</label>
+      <label class="tg"><input type="checkbox" [ngModel]="ports()" (ngModelChange)="ports.set($event)" /> {{ t('Port names') }}</label>
       <select [ngModel]="look()" (ngModelChange)="setLook($event)" [title]="t('How devices and cables are drawn')">
         @for (l of looks; track l.id) { <option [value]="l.id" [title]="t(l.hint)">{{ t(l.label) }}</option> }
       </select>
-      <select [ngModel]="cableView()" (ngModelChange)="setView($event)" [title]="t('What the cables show')">
-        @for (v of views; track v.id) { <option [value]="v.id" [title]="t(v.hint)">{{ t('View') }}: {{ t(v.label) }}</option> }
+      <select [ngModel]="arrangeSel()" (ngModelChange)="pickArrange($event)" [title]="t('Arrange the devices without clutter')">
+        @if (computedLook()) { <option value="own">{{ t('Arrange: as the look draws it') }}</option> } @else { <option value="">{{ t('Arrange…') }}</option> }
+        @for (s of styles; track s.id) { <option [value]="s.id">{{ t('Arrange') }}: {{ t(s.label) }}</option> }
       </select>
-      <div class="zoom">
-        <button type="button" (click)="zoomBy(1 / 1.25)" [title]="t('Zoom out')">−</button>
-        <span>{{ (view().k * 100).toFixed(0) }}%</span>
-        <button type="button" (click)="zoomBy(1.25)" [title]="t('Zoom in')">+</button>
-        <button type="button" (click)="fit()" [title]="t('Fit all devices')">⤢</button>
-      </div>
-      <select [ngModel]="''" (ngModelChange)="exportAs($event)" [title]="t('Save the map')">
-        <option value="">{{ t('Export…') }}</option><option value="jpg">JPEG</option><option value="pdf">PDF</option><option value="html">HTML</option>
-      </select>
+      <button type="button" class="ib" [class.on]="sideOpen()" (click)="sideOpen.set(!sideOpen())" [title]="t('Devices, links, ports and changes')">{{ t('Details') }}@if (failedCount()) { <em>{{ failedCount() }}</em> }</button>
+      <button type="button" class="ib" [class.on]="tableOpen()" (click)="toggleTable()" [title]="t('Devices table')">{{ t('Devices') }}</button>
     </div>
-    @if (busy() && nodes().length) { <div class="busybar"></div> }
-    @if (err()) { <div class="err">{{ err() }}</div> }
+    @if (busy() && nodes().length && !showProg()) { <div class="busybar"></div> }
+    @if (laid()?.err) { <div class="err">{{ laid()?.err }}</div> }
+    @if (err()) { <button type="button" class="err" (click)="sideOpen.set(true)">{{ err() }}</button> }
     <div class="body">
-      <div #stage [class]="'stage ' + look()" [class.drag]="panning" (wheel)="onWheel($event)" (pointerdown)="down($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointerleave)="hover.set(null)">
-        <svg #svg [attr.viewBox]="'0 0 ' + stageSize().w + ' ' + stageSize().h" [innerHTML]="markup()" font-family="Inter,'Segoe UI',-apple-system,Helvetica,Arial,sans-serif" style="width:100%;height:100%"></svg>
+      <div #stage [class]="'stage lk-' + look()" [class.drag]="panning" (wheel)="onWheel($event)" (pointerdown)="down($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointerleave)="hover.set(null)">
+        <svg #svg [attr.viewBox]="'0 0 ' + stageSize().w + ' ' + stageSize().h" [innerHTML]="markup()" font-family="Inter,'Segoe UI',-apple-system,Helvetica,Arial,sans-serif" style="position:absolute;inset:0;width:100%;height:100%"></svg>
         @if (!nodes().length && !busy()) { <div class="empty">{{ t('No devices read yet. Neighbours appear here after the first read.') }}</div> }
         @if (!nodes().length && busy()) {
           <div class="skel">
@@ -105,14 +124,47 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
             @case ('zones') {
               <div class="dock">@for (s of stepList(); track s.n) { <div class="ds" [class]="s.st"><i>{{ s.st === 'ok' ? '✓' : s.n }}</i><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div> }</div>
             }
-            @case ('flow') {
-              <div class="seg5">@for (s of stepList(); track s.n) { <div [class]="s.st"><div class="sl"><b>{{ t(s.name) }}</b><span>{{ s.sub }}</span></div><div class="tr"><i [style.width.%]="s.pct"></i></div></div> }</div>
-            }
+            @case ('flow') { }
+            @case ('ant') { }
+            @case ('card') { }
+            @case ('tier') { }
+            @case ('focus') { }
             @default {
               <div class="stepsbar">@for (s of stepList(); track s.n) { <div class="stp" [class]="s.st"><i>{{ s.st === 'ok' ? '✓' : s.st === 'run' ? '' : s.n }}</i><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div> }</div>
             }
           }
         }
+        <div class="lgf" [class.open]="legendOpen()">
+        <button type="button" class="lgh" (click)="toggleLegend()">{{ t('Legend') }} <span>{{ legendOpen() ? '▾' : '▸' }}</span></button>
+        @if (legendOpen()) {
+        <div class="lg">
+          @for (r of legend(); track r.t) {
+            <div class="lr">
+              <svg width="46" height="18" viewBox="0 0 46 18">
+                @switch (r.k) {
+                  @case ('up') { <path d="M3 9H43" stroke-width="3.4" stroke-linecap="round" [attr.stroke]="r.c" /> }
+                  @case ('blocked') { <path d="M3 9H38" stroke-width="3.4" stroke-dasharray="9 6" stroke-linecap="round" [attr.stroke]="r.c" /><circle cx="40" cy="9" r="4.5" [attr.fill]="r.d" /> }
+                  @case ('sp') { <path d="M3 9H43" stroke-linecap="round" [attr.stroke-width]="r.w" [attr.stroke]="r.c" /> }
+                  @case ('stp') { <circle cx="9" cy="9" r="4" [attr.fill]="r.c" /><circle cx="23" cy="9" r="4" [attr.fill]="r.d" /><circle cx="37" cy="9" r="4" [attr.fill]="r.e" /> }
+                  @case ('down') { <path d="M3 9H43" stroke-width="3" stroke-dasharray="3 6" stroke-linecap="round" [attr.stroke]="r.c" /> }
+                  @case ('lag') { <path d="M3 9H43" stroke-width="6" stroke-linecap="round" [attr.stroke]="r.c" /><circle cx="23" cy="9" r="5.5" fill="none" stroke-width="2" [attr.stroke]="r.d" /> }
+                  @case ('warn') { <path d="M3 9H43" stroke-width="6" stroke-linecap="round" [attr.stroke]="r.c" /><circle cx="23" cy="9" r="5.5" fill="none" stroke-width="2" [attr.stroke]="r.d" /> }
+                  @case ('ghost') { <rect x="4" y="2" width="38" height="14" rx="4" fill="none" stroke-width="1.4" stroke-dasharray="4 3" [attr.stroke]="r.c" /> }
+                }
+              </svg>
+              <span>{{ r.t }}</span>
+            </div>
+          }
+        </div>
+        }
+        </div>
+      <div class="zoom zf">
+        <button type="button" (click)="zoomBy(1 / 1.25)" [title]="t('Zoom out')">−</button>
+        <span>{{ (view().k * 100).toFixed(0) }}%</span>
+        <button type="button" (click)="zoomBy(1.25)" [title]="t('Zoom in')">+</button>
+        <button type="button" (click)="fit(true)" [title]="t('Fit all devices')">⤢</button>
+      </div>
+
         @if (hover(); as h) {
           <div class="card" [style.left.px]="h.x + 14" [style.top.px]="h.y + 14">
             <b>{{ h.title }}</b>
@@ -120,8 +172,10 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
           </div>
         }
       </div>
+      @if (sideOpen()) {
       <aside class="side">
         <div class="sidescroll">
+        <button type="button" class="sx" (click)="closeSide()" [title]="t('Close')">✕</button>
         @if (selLinks().length) {
           <h4>{{ selLinks().length > 1 ? t('Links') + ' (' + selLinks().length + ')' : t('Link') }}</h4>
           @for (l of selLinks(); track l.key) {
@@ -153,33 +207,67 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
         @for (c of changes(); track $index) { <div class="chg"><span class="mut">{{ clock(c.at) }}</span> {{ c.text }}</div> }
         @if (!changes().length) { <div class="mut">{{ t('No changes seen yet.') }}</div> }
         </div>
-        <div class="legendbox">
-        <h4>{{ t('Legend') }}</h4>
-        <div class="lg">
-          @for (r of legend(); track r.t) {
-            <div class="lr">
-              <svg width="46" height="18" viewBox="0 0 46 18">
-                @switch (r.k) {
-                  @case ('up') { <path d="M3 9H43" stroke-width="3.4" stroke-linecap="round" [attr.stroke]="r.c" /> }
-                  @case ('blocked') { <path d="M3 9H38" stroke-width="3.4" stroke-dasharray="9 6" stroke-linecap="round" [attr.stroke]="r.c" /><circle cx="40" cy="9" r="4.5" [attr.fill]="r.d" /> }
-                  @case ('sp') { <path d="M3 9H43" stroke-linecap="round" [attr.stroke-width]="r.w" [attr.stroke]="r.c" /> }
-                  @case ('stp') { <circle cx="9" cy="9" r="4" [attr.fill]="r.c" /><circle cx="23" cy="9" r="4" [attr.fill]="r.d" /><circle cx="37" cy="9" r="4" [attr.fill]="r.e" /> }
-                  @case ('down') { <path d="M3 9H43" stroke-width="3" stroke-dasharray="3 6" stroke-linecap="round" [attr.stroke]="r.c" /> }
-                  @case ('lag') { <path d="M3 9H43" stroke-width="6" stroke-linecap="round" [attr.stroke]="r.c" /><circle cx="23" cy="9" r="5.5" fill="none" stroke-width="2" [attr.stroke]="r.d" /> }
-                  @case ('warn') { <path d="M3 9H43" stroke-width="6" stroke-linecap="round" [attr.stroke]="r.c" /><circle cx="23" cy="9" r="5.5" fill="none" stroke-width="2" [attr.stroke]="r.d" /> }
-                  @case ('ghost') { <rect x="4" y="2" width="38" height="14" rx="4" fill="none" stroke-width="1.4" stroke-dasharray="4 3" [attr.stroke]="r.c" /> }
-                }
-              </svg>
-              <span>{{ r.t }}</span>
-            </div>
-          }
-        </div>
-        </div>
       </aside>
+      }
     </div>
+    @if (tableOpen() && devs().length) {
+      <div class="dtab">
+        <div class="dth"><b>{{ t('Devices') }}</b><span class="mut">{{ t('Sorted by progress') }}</span></div>
+        <div class="dts"><table>
+          <thead><tr><th>{{ t('Device') }}</th><th>{{ t('Type') }}</th><th>{{ t('Address') }}</th><th>{{ t('Progress') }}</th><th>{{ t('Now') }}</th><th>{{ t('Status') }}</th><th>{{ t('Time') }}</th></tr></thead>
+          <tbody>@for (d of devRows(); track d.session) {
+            <tr [class]="d.state" (click)="selectDev(d.session)">
+              <td><b>{{ d.name }}</b></td><td>@if (d.os) { <span class="osb">{{ d.os.toUpperCase() }}</span> }</td><td class="mono">{{ d.ip }}</td>
+              <td><span class="pb">@for (k of [0, 1, 2, 3]; track k) { <i [class.ok]="d.state === 'done' || d.done > k" [class.run]="d.state === 'running' && d.done === k" [class.bad]="d.state === 'error'"></i> }</span></td>
+              <td class="mut">{{ d.state === 'running' ? (d.now || t('Connecting…')) : d.state === 'done' ? t('Done') : d.state === 'queued' ? t('Waiting') : '' }}</td>
+              <td [class]="d.state">{{ d.state === 'error' ? d.err : d.state === 'done' ? t('Done') : d.state === 'running' ? t('Reading') : t('Waiting') }}</td>
+              <td class="mono">{{ d.ms ? (d.ms / 1000).toFixed(1) + ' s' : '' }}</td>
+            </tr>
+          }</tbody>
+        </table></div>
+      </div>
+    }
   `,
   styles: [`
     :host { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg); }
+    .h1r { display: flex; align-items: center; gap: 8px; }
+    .chip { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .chip.live { display: inline-flex; align-items: center; gap: 6px; } .chip.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: lv 1.2s ease-in-out infinite; }
+    @keyframes lv { 50% { opacity: .25; } }
+    .stepper { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+    .sp1 { display: flex; align-items: center; gap: 10px; flex: none; } .sp1 b { display: block; font-size: 13.5px; font-weight: 600; } .sp1 small { color: var(--muted, #8b8e96); font-size: 11.5px; }
+    .sp1 .ic { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--border); color: var(--muted, #8b8e96); font-size: 12px; font-weight: 700; }
+    .sp1.ok .ic { border-color: #34d399; color: #34d399; } .sp1.run .ic { background: var(--accent); border-color: var(--accent); } .sp1.wait { opacity: .6; }
+    .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; animation: spn .9s linear infinite; } @keyframes spn { to { transform: rotate(360deg); } }
+    .cn { flex: 1; height: 2px; min-width: 20px; background: var(--border); border-radius: 1px; } .cn.ok { background: var(--accent); }
+    .kpis { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; padding: 12px 16px 4px; }
+    .kpi { height: auto; line-height: 1.25; display: block; text-align: left; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); cursor: pointer; min-width: 0; }
+    .kpi:hover { border-color: var(--accent); } .kpi small { display: block; font-size: 11.5px; color: var(--muted, #8b8e96); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kpi b { display: block; font-size: 20px; font-weight: 650; margin-top: 2px; } .kpi.amb b { color: #f5a524; } .kpi.bad b { color: #f87171; }
+    .tbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; flex-wrap: wrap; } .tbar .tl { font-size: 14px; margin-right: 6px; }
+    .segv { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; } .segv button { border: 0; border-radius: 0; background: none; padding: 4px 12px; font-size: 12.5px; }
+    .segv button.on { background: var(--accent); color: #fff; } .segv button:disabled { opacity: .45; }
+    .tg { display: flex; align-items: center; gap: 5px; font-size: 12.5px; }
+    .dtab { flex: none; max-height: 32%; display: flex; flex-direction: column; border-top: 1px solid var(--border); min-height: 0; }
+    .dth { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; font-size: 13px; }
+    .dts { overflow: auto; min-height: 0; } .dtab table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .dtab th { position: sticky; top: 0; background: var(--bg); text-align: left; font-weight: 500; color: var(--muted, #8b8e96); padding: 6px 16px; border-bottom: 1px solid var(--border); }
+    .dtab td { padding: 6px 16px; border-bottom: 1px solid var(--border); white-space: nowrap; max-width: 360px; overflow: hidden; text-overflow: ellipsis; } .dtab tr { cursor: pointer; } .dtab tr:hover td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+    .dtab td.error { color: #f87171; white-space: normal; } .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .osb { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 5px; border: 1px solid #8b5cf6; color: #a78bfa; }
+    .pb { display: inline-flex; gap: 3px; } .pb i { width: 34px; height: 5px; border-radius: 3px; background: var(--border); } .pb i.ok { background: #34d399; } .pb i.run { background: var(--accent); } .pb i.bad { background: #f87171; opacity: .6; }
+    .hd { display: flex; align-items: center; gap: 8px; padding: 12px 16px 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .hd .tt { min-width: 0; } .hd h1 { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.2; }
+    .hd .sub { margin: 3px 0 0; font-size: 12px; color: var(--muted, #8b8e96); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hd .pri { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .ib.on { border-color: var(--accent); color: var(--accent); } .ib em { font-style: normal; margin-left: 6px; padding: 0 6px; border-radius: 8px; background: #f87171; color: #fff; font-size: 11px; }
+    .morew { position: relative; } .more { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 250px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,.35); font-size: 12px; }
+    .more > label:not(.chk) { display: flex; align-items: center; justify-content: space-between; gap: 10px; } .more select, .more input.comm { width: 140px; }
+    .zf { position: absolute; right: 12px; bottom: 12px; z-index: 5; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+    .lgf { position: absolute; left: 12px; bottom: 12px; z-index: 5; max-width: min(760px, calc(100% - 200px)); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 12px; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+    .lgf.open { padding-bottom: 8px; } .lgf .lg { display: flex; flex-wrap: wrap; gap: 4px 16px; } .lgf .lr { display: flex; align-items: center; gap: 6px; } .lgf .lr svg { width: 30px; } .lgh { border: 0; background: none; padding: 4px 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted, #8b8e96); cursor: pointer; }
+    .sx { align-self: flex-end; border: 0; background: none; color: var(--muted, #8b8e96); padding: 0 2px; cursor: pointer; }
+    button.err { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; background: none; cursor: pointer; }
     .bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
     .ttl { margin-right: 6px; } .sp { flex: 1; } .mut { color: var(--muted, #8b8e96); font-size: 12px; }
     .chk { display: flex; align-items: center; gap: 4px; font-size: 12px; } .comm { width: 110px; }
@@ -209,8 +297,8 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
     .busybar { height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); background-size: 40% 100%; background-repeat: no-repeat; animation: bar 1.3s linear infinite; }
     @keyframes bar { 0% { background-position: -40% 0; } 100% { background-position: 140% 0; } }
     @media (prefers-reduced-motion: reduce) { .sn, .sl, .sn .st, .sn .sp, .dotp, .busybar { animation: none; opacity: .8; } .sl { stroke-dashoffset: 0; } }
-    .stage.ant, .stage.material, .stage.flow, .stage.zones { background-image: radial-gradient(rgba(128,128,128,.22) 1px, transparent 1px); background-size: 18px 18px; }
-    .stage.constellation { background-image: radial-gradient(ellipse at center, rgba(79,156,247,.10), transparent 62%); }
+    .stage.lk-ant, .stage.lk-material, .stage.lk-flow, .stage.lk-zones { background-image: radial-gradient(rgba(128,128,128,.22) 1px, transparent 1px); background-size: 18px 18px; }
+    .stage.lk-constellation { background-image: radial-gradient(ellipse at center, rgba(79,156,247,.10), transparent 62%); }
     .lk { padding: 4px 0; border-bottom: 1px solid var(--border); line-height: 1.35; }
     .dv { display: flex; gap: 8px; padding: 3px 0; line-height: 1.3; } .dv i { flex: none; width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--muted, #8b8e96); }
     .dv.done i { background: #34d399; } .dv.running i { background: var(--accent); animation: pul 1s ease-in-out infinite; } .dv.error i { background: #f87171; } .dv.error small { color: #f87171; white-space: normal; }
@@ -223,7 +311,7 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
     .stp.run i, .ds.run i, .vs .run i, .hs.run i { border: 2px solid transparent; border-top-color: var(--accent); border-right-color: var(--accent); animation: rot 1s linear infinite; }
     .stp b, .ds b, .vs b, .hs b { display: block; font-size: 12.5px; } .stp small, .ds small, .vs small, .hs small { color: var(--muted, #8b8e96); font-size: 11.5px; }
     @keyframes rot { to { transform: rotate(360deg); } }
-    .seg5 { top: 10px; left: 12px; right: 12px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; padding: 10px 14px; border-radius: 8px; }
+    .seg5 { display: grid; padding: 8px 16px 10px !important; border: 0 !important; border-bottom: 1px solid var(--border) !important; box-shadow: none !important; background: none !important; position: static !important; grid-template-columns: repeat(5, 1fr); gap: 14px; padding: 10px 14px; border-radius: 8px; }
     .seg5 .sl { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12px; } .seg5 .sl span { color: var(--muted, #8b8e96); }
     .seg5 .tr { height: 6px; border-radius: 3px; background: var(--tab); overflow: hidden; } .seg5 .tr i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
     .seg5 .ok .tr i { background: #34d399; } .seg5 .wait { opacity: .55; }
@@ -234,7 +322,7 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
     .pring { position: relative; width: 92px; height: 92px; margin: 0 auto 10px; } .pring svg { width: 100%; height: 100%; } .pring .rb { fill: none; stroke: var(--tab); stroke-width: 6; } .pring .rf { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; transition: stroke-dasharray .4s; }
     .pring b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; font-weight: 600; padding-bottom: 10px; } .pring small { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; color: var(--muted, #8b8e96); font-size: 10.5px; }
     .vs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; } .vs li { display: flex; gap: 10px; align-items: center; } .vs .wait { opacity: .55; }
-    .hud { position: absolute; z-index: 4; pointer-events: none; top: 12px; width: 220px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--border); backdrop-filter: blur(6px); }
+    .hud { position: absolute; z-index: 4; pointer-events: none; top: 12px; width: 220px; padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
     .hl { left: 12px; } .hr { right: 12px; } .hud h5 { margin: 0 0 8px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
     .hs { display: flex; gap: 10px; align-items: center; margin-bottom: 9px; } .hs.wait { opacity: .55; } .hw { padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; } .hw small { display: block; color: var(--muted, #8b8e96); font-size: 11px; }
     .card { position: absolute; z-index: 5; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; max-width: 280px; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
@@ -268,6 +356,62 @@ export class NetworkMap implements OnDestroy {
   protected looks = LOOKS;
   protected views = VIEWS;
   protected devs = signal<DevProg[]>([]);
+  protected sideOpen = signal(false);
+  protected ownLayout = signal(true);
+  protected tableOpen = signal(true);
+  protected headerSteps = computed(() => ['ant', 'card', 'tier', 'focus'].includes(this.look()));
+  protected collectLabel = computed(() => this.collect() === 'snmp' ? 'SNMP' : this.collect() === 'both' ? tr('CLI, else SNMP') : tr('Device CLI'));
+  protected subline = computed(() => {
+    const n = this.devs().length;
+    if (this.busy()) return tr('Reading {0} devices at the same time (up to {1}). Only read-only show commands run.', n || '…', 16);
+    const u = this.updated();
+    return tr(this.lookHint()) + (u ? ' · ' + u : '');
+  });
+  protected arrangeSel = computed(() => this.computedLook() ? (this.ownLayout() ? 'own' : this.layoutStyle()) : '');
+  protected pickArrange(v: string) {
+    if (v === 'own') { this.ownLayout.set(true); queueMicrotask(() => this.fit()); return; }
+    if (!v) return;
+    this.ownLayout.set(false);
+    void this.arrange(v);
+  }
+  protected toggleTable() { const v = !this.tableOpen(); this.tableOpen.set(v); try { localStorage.setItem('map.table', v ? '1' : '0'); } catch { /* ignore */ } }
+  protected kpis = computed(() => {
+    const ns = this.map().nodes ?? [], ls = this.map().links ?? [], d = this.devs();
+    if (!ns.length && !d.length) return [] as { l: string; v: string | number; c: string; h: string; go: () => void }[];
+    const real = ns.filter(n => !n.ghost).length, ghosts = ns.length - real;
+    const lags = new Set(ls.flatMap(l => [l.lagA ? l.a + '|' + l.lagA.name : '', l.lagB ? l.b + '|' + l.lagB.name : '']).filter(Boolean)).size;
+    const blocked = ls.filter(l => l.state === 'blocked').length, down = ls.filter(l => l.state === 'down').length, failed = this.failedCount();
+    const open = () => this.sideOpen.set(true);
+    return [
+      { l: 'Devices read', v: d.length ? this.finished() - failed + ' / ' + d.length : real, c: '', h: 'Devices of this map that answered', go: () => this.tableOpen.set(true) },
+      { l: 'Links found', v: ls.length, c: '', h: 'Cables between the devices', go: () => this.setView('health') },
+      { l: 'Blocked by STP', v: blocked, c: blocked ? 'amb' : '', h: 'Ports blocked by spanning tree', go: () => this.setView('stp') },
+      { l: 'Links down', v: down, c: down ? 'bad' : '', h: 'Cables whose port is down', go: () => this.setView('health') },
+      { l: 'LAGs', v: lags, c: '', h: 'Link aggregation groups', go: () => this.setView('lag') },
+      { l: 'Unmanaged', v: ghosts, c: '', h: 'Neighbours that are not in the Session Manager (click to show or hide them)', go: () => this.ghosts.set(!this.ghosts()) },
+      { l: 'Could not read', v: failed, c: failed ? 'bad' : '', h: 'Devices that did not answer; the reason is in Details', go: open },
+    ];
+  });
+  protected devRows = computed(() => {
+    const ip = new Map((this.map().nodes ?? []).filter(n => n.session).map(n => [n.session!, n.ip ?? '']));
+    const rank = (x: DevProg) => x.state === 'running' ? 0 : x.state === 'queued' ? 1 : x.state === 'error' ? 2 : 3;
+    return this.devs().map(x => ({ ...x, ip: ip.get(x.session) ?? '' })).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, undefined, { numeric: true }));
+  });
+  protected selectDev(session: string) {
+    const n = (this.map().nodes ?? []).find(x => x.session === session);
+    if (n) { this.selNodeId.set(n.id); this.selLinkKey.set(''); }
+    this.sideOpen.set(true);
+  }
+
+  protected more = signal(false);
+  protected legendOpen = signal(false);
+  protected lookHint = computed(() => LOOKS.find(l => l.id === this.look())?.hint ?? '');
+  protected realCount = computed(() => this.nodes().filter(n => !n.ghost).length);
+  protected failedCount = computed(() => this.devs().filter(d => d.state === 'error').length);
+  private progQ: TopoProgress[] = [];
+  private progT = 0;
+  protected toggleLegend() { const v = !this.legendOpen(); this.legendOpen.set(v); try { localStorage.setItem('map.legend', v ? '1' : '0'); } catch { /* ignore */ } }
+  protected closeSide() { this.sideOpen.set(false); this.selNodeId.set(''); this.selLinkKey.set(''); }
   protected phase = signal<'' | 'reading' | 'build'>('');
   protected computedLook = computed(() => COMPUTED_LOOKS.includes(this.look()));
   private unProg?: () => void;
@@ -289,6 +433,7 @@ export class NetworkMap implements OnDestroy {
   private confirmedProduction = false;
   private drag: { kind: 'node'; id: string; dx: number; dy: number; moved: boolean } | { kind: 'pan'; sx: number; sy: number; vx: number; vy: number } | null = null;
   private fitted = false;
+  private touched = false; // the person zoomed or panned: stop fitting by itself
   private sessionCache = new Map<string, Session | null>();
 
   /** Rows of devices (by height) and what they are called, when the layout is in tiers. */
@@ -306,10 +451,16 @@ export class NetworkMap implements OnDestroy {
   /** The looks that arrange themselves (Constellation, Flow, Zones) get their positions from the links. */
   protected laid = computed<Laid | null>(() => {
     const l = this.look();
-    if (!COMPUTED_LOOKS.includes(l)) return null;
+    if (!COMPUTED_LOOKS.includes(l) || !this.ownLayout()) return null;
     const ids = new Set(this.shown().map(n => n.id)), D = dims(l);
     const ln = this.shown().map(n => ({ id: n.id, name: n.name, ghost: n.ghost })), le = (this.map().links ?? []).filter(e => ids.has(e.a) && ids.has(e.b)).map(e => ({ a: e.a, b: e.b }));
-    return l === 'flow' ? flowLayout(ln, le, D.w, D.h) : l === 'constellation' ? radialLayout(ln, le, D.w) : zonesLayout(ln, le, D.w, D.h);
+    try {
+      return l === 'flow' ? flowLayout(ln, le, D.w, D.h) : l === 'constellation' ? radialLayout(ln, le, D.w) : zonesLayout(ln, le, D.w, D.h);
+    } catch (e) {
+      // never leave the map blank: draw it as Flow and say why
+      const r = flowLayout(ln, le, dims('flow').w, dims('flow').h);
+      return { ...r, err: tr('This look could not be drawn ({0}); shown as Flow.', String((e as Error)?.message ?? e)) };
+    }
   });
   private progOf(n: TopoNode): Prog | undefined {
     if (!this.busy() || !n.session) return undefined;
@@ -347,14 +498,18 @@ export class NetworkMap implements OnDestroy {
     const v = this.view();
     const th = document.documentElement.classList.contains('light') ? THEME_LIGHT : THEME_DARK;
     void v;
-    const inner = mapMarkup(this.nodes(), this.links(), { theme: th, showPorts: this.ports() && v.k >= .55, selLink: this.selLinkKey(), selNode: this.selNodeId(), fresh: this.fresh, look: this.look(), zones: this.zones(), view: this.cableView(), rings: this.rings(), sweep: this.busy() });
+    let inner = '';
+    try {
+      inner = mapMarkup(this.nodes(), this.links(), { theme: th, showPorts: this.ports() && v.k >= .55, selLink: this.selLinkKey(), selNode: this.selNodeId(), fresh: this.fresh, look: this.look(), zones: this.zones(), view: this.cableView(), rings: this.rings(), sweep: this.busy() });
+    } catch (e) { inner = `<text x="20" y="30" fill="#f87171" font-size="13">${String((e as Error)?.message ?? e).replace(/[<&>]/g, '')}</text>`; }
     const html = `<g transform="translate(${v.x} ${v.y}) scale(${v.k})">${inner}</g>`;
     return this.san.bypassSecurityTrustHtml(html); // drawn by map-svg.ts from escaped text only
   });
   protected legend = computed(() => {
     const th = document.documentElement.classList.contains('light') ? THEME_LIGHT : THEME_DARK, v = this.cableView();
     const rows: { k: string; c: string; d: string; e?: string; w?: number; t: string }[] = [];
-    if (v === 'speed') rows.push({ k: 'sp', c: th.ok, d: '', w: 3.4, t: '10 Mbps – 10 Gbps' }, { k: 'sp', c: th.acc, d: '', w: 3.8, t: '25 – 100 Gbps' }, { k: 'sp', c: th.acc, d: '', w: 6.6, t: tr('Above 100 Gbps') });
+    if (this.look() === 'focus') rows.push({ k: 'sp', c: th.mut, d: '', w: 1.4, t: '1G' }, { k: 'sp', c: th.mut, d: '', w: 2.4, t: '10G' }, { k: 'sp', c: th.mut, d: '', w: 3.6, t: '40G+' }, { k: 'up', c: th.acc, d: '', t: tr('Cables are quiet while healthy; click a device to see its cables in the chosen view') });
+    else if (v === 'speed') rows.push({ k: 'sp', c: th.ok, d: '', w: 3.4, t: '10 Mbps – 10 Gbps' }, { k: 'sp', c: th.acc, d: '', w: 3.8, t: '25 – 100 Gbps' }, { k: 'sp', c: th.acc, d: '', w: 6.6, t: tr('Above 100 Gbps') });
     else rows.push({ k: 'up', c: th.ok, d: '', t: tr('Link is up') });
     rows.push({ k: 'blocked', c: th.ok, d: th.warn, t: tr('Blocked by spanning tree (amber dot = the blocking port)') },
       { k: 'down', c: th.bad, d: '', t: tr('Port is down') });
@@ -397,14 +552,15 @@ export class NetworkMap implements OnDestroy {
   });
 
   constructor() {
-    try { const i = localStorage.getItem('map.interval'); if (i && INTERVALS.includes(+i)) this.interval.set(+i); const lk = localStorage.getItem('map.look') || this.ui.settings()?.mapLook || 'flow'; if (LOOKS.some(l => l.id === lk)) this.look.set(lk as Look); const vw = localStorage.getItem('map.view'); if (VIEWS.some(v => v.id === vw)) this.cableView.set(vw as View); } catch { /* storage may be blocked */ }
+    try { const i = localStorage.getItem('map.interval'); if (i && INTERVALS.includes(+i)) this.interval.set(+i); const lk = localStorage.getItem('map.look2') || this.ui.settings()?.mapLook || 'flow'; if (LOOKS.some(l => l.id === lk)) this.look.set(lk as Look); if (localStorage.getItem('map.legend') === '1') this.legendOpen.set(true); if (localStorage.getItem('map.table') === '0') this.tableOpen.set(false); const vw = localStorage.getItem('map.view'); if (VIEWS.some(v => v.id === vw)) this.cableView.set(vw as View); } catch { /* storage may be blocked */ }
     this.unProg = this.backend.on('topo:progress', (p: TopoProgress) => this.onProgress(p));
+    effect(() => { if (this.selLinks().length || this.selNode()) this.sideOpen.set(true); });
     effect(() => { if (this.visible()) { this.restartTimer(); if (!this.lastRead) void this.refresh(false); else if (Date.now() - this.lastRead > this.interval() * 1000 && this.interval()) void this.refresh(false); } });
     this.timer = setInterval(() => this.tick(), 1000);
     effect(() => {
       const el = this.stage().nativeElement;
       this.ro?.disconnect();
-      this.ro = new ResizeObserver(() => { const w = el.clientWidth, h = el.clientHeight; if (w && h) { const first = !this.sized; this.sized = true; this.stageSize.set({ w, h }); if (first && this.nodes().length) this.fit(); } });
+      this.ro = new ResizeObserver(() => { const w = el.clientWidth, h = el.clientHeight; if (w && h) { const cur = this.stageSize(); if (this.sized && Math.abs(cur.w - w) < 2 && Math.abs(cur.h - h) < 2) return; const first = !this.sized; this.sized = true; this.stageSize.set({ w, h }); if ((first || !this.touched) && this.nodes().length) requestAnimationFrame(() => this.fit()); } });
       this.ro.observe(el);
     });
   }
@@ -419,14 +575,19 @@ export class NetworkMap implements OnDestroy {
   }
   private restartTimer() { /* the 1 s tick covers the interval; nothing else to restart */ }
   protected setLook(l: Look) {
-    this.look.set(l); this.hover.set(null);
-    try { localStorage.setItem('map.look', l); } catch { /* ignore */ }
+    this.look.set(l); this.hover.set(null); this.ownLayout.set(true);
+    try { localStorage.setItem('map.look2', l); } catch { /* ignore */ }
     // the tiered looks need a layered arrangement; keep the user's own positions when there are some
     if (TIERED.includes(l) && !['layered', 'spine-leaf', 'tree'].includes(this.layoutStyle()) && ![...this.pos().values()].some(p => p.pinned)) void this.arrange('layered');
     else queueMicrotask(() => this.fit());
   }
   protected setView(v: View) { this.cableView.set(v); try { localStorage.setItem('map.view', v); } catch { /* ignore */ } }
   private onProgress(p: TopoProgress) {
+    // many devices send many events: redraw at most 4 times a second
+    this.progQ.push(p);
+    if (!this.progT) this.progT = window.setTimeout(() => { this.progT = 0; const q = this.progQ; this.progQ = []; for (const x of q) this.applyProgress(x); }, 250);
+  }
+  private applyProgress(p: TopoProgress) {
     if (p.scope !== this.scope()) return;
     if (p.phase === 'build') { this.phase.set('build'); return; }
     if (p.phase || !p.session) return;
@@ -487,7 +648,7 @@ export class NetworkMap implements OnDestroy {
     }
     this.pos.set(next);
     this.map.set(m);
-    if (!this.fitted && nodes.length) { this.fitted = true; queueMicrotask(() => this.fit()); }
+    if ((!this.fitted || !this.touched) && nodes.length) { this.fitted = true; queueMicrotask(() => this.fit()); }
     void manual;
   }
 
@@ -524,10 +685,12 @@ export class NetworkMap implements OnDestroy {
   protected zoomBy(f: number, cx?: number, cy?: number) {
     const sz = this.stageSize(), v = this.view();
     const k = Math.min(4, Math.max(.1, v.k * f)), x0 = cx ?? sz.w / 2, y0 = cy ?? sz.h / 2, r = k / v.k;
+    this.touched = true;
     this.view.set({ k, x: x0 - (x0 - v.x) * r, y: y0 - (y0 - v.y) * r });
   }
   /** Show all devices: as large as fits (not above 100%), centred. */
-  protected fit() {
+  protected fit(manual = false) {
+    if (manual) this.touched = false;
     const sz = this.stageSize(), b = this.bounds();
     const k = Math.min(1, sz.w / b.w, sz.h / b.h);
     this.view.set({ k, x: (sz.w - b.w * k) / 2 - b.x * k, y: (sz.h - b.h * k) / 2 - b.y * k });
@@ -564,7 +727,7 @@ export class NetworkMap implements OnDestroy {
       if (p) { d.moved = true; nx.set(d.id, { x: m.x + d.dx, y: m.y + d.dy, pinned: true }); this.pos.set(nx); this.hover.set(null); }
       return;
     }
-    if (d && d.kind === 'pan') { this.view.update(v => ({ ...v, x: d.vx + e.clientX - d.sx, y: d.vy + e.clientY - d.sy })); return; }
+    if (d && d.kind === 'pan') { this.touched = true; this.view.update(v => ({ ...v, x: d.vx + e.clientX - d.sx, y: d.vy + e.clientY - d.sy })); return; }
     const el = (e.target as Element).closest?.('[data-node]');
     if (!el) { this.hover.set(null); return; }
     const r = this.stage().nativeElement.getBoundingClientRect(), id = el.getAttribute('data-node')!;

@@ -1181,7 +1181,7 @@ export class OptionsDialog implements OnInit {
   async save() {
     if (!this.s) return;
     this.normEnvs();
-    try { if ((this.s.mapLook || 'flow') !== (localStorage.getItem('map.look') || this.s.mapLook || 'flow')) localStorage.removeItem('map.look'); } catch { /* ignore */ }
+    try { if ((this.s.mapLook || 'flow') !== (localStorage.getItem('map.look2') || this.s.mapLook || 'flow')) localStorage.removeItem('map.look2'); } catch { /* ignore */ }
     this.s.fontSize = Number(this.s.fontSize) || 14;
     this.s.scrollback = Number(this.s.scrollback) || 10000;
     this.s.pasteLineDelayMs = Number(this.s.pasteLineDelayMs) || 0;

@@ -5,7 +5,7 @@ export interface LNode { id: string; name: string; ghost: boolean; }
 export interface LEdge { a: string; b: string; }
 export interface Placed { id: string; x: number; y: number; group?: string; }
 export interface Panel { id: string; x: number; y: number; w: number; h: number; label: string; right: string; ghost?: boolean; }
-export interface Laid { nodes: Placed[]; panels: Panel[]; levels: Map<string, number>; levelCount: number; }
+export interface Laid { nodes: Placed[]; panels: Panel[]; levels: Map<string, number>; levelCount: number; err?: string; }
 
 /** The level of every device: 0 = the best connected devices (the core), +1 for each hop away. Neighbours
  *  without a session ("ghosts") get level -1 and are placed apart. Devices with no link at all are put one level
@@ -97,7 +97,6 @@ export function flowLayout(nodes: LNode[], edges: LEdge[], w: number, h: number,
  *  in the ring inside; neighbours without a session on an outer ring. */
 export function radialLayout(nodes: LNode[], edges: LEdge[], size: number): Laid {
   const c = context(nodes, edges), ang = new Map<string, number>(), rad = new Map<string, number>();
-  const minGap = (r: number) => Math.min(Math.PI, (size * 1.25) / Math.max(r, 1));
   let r = 0;
   for (let l = 0; l < c.count; l++) {
     const list = c.byLevel.get(l) ?? [];
@@ -114,10 +113,12 @@ export function radialLayout(nodes: LNode[], edges: LEdge[], size: number): Laid
       const x = ps.reduce((s, a) => s + Math.cos(a), 0), y = ps.reduce((s, a) => s + Math.sin(a), 0);
       return { n, a: Math.atan2(y, x) };
     }).sort((p, q) => p.a - q.a);
-    const gap = minGap(r);
-    for (let i = 1; i < want.length; i++) if (want[i].a < want[i - 1].a + gap) want[i].a = want[i - 1].a + gap;
-    const over = want.length > 1 ? want[want.length - 1].a - want[0].a - (2 * Math.PI - gap) : 0;
-    if (over > 0) { const k = (2 * Math.PI - gap) / (want[want.length - 1].a - want[0].a); const a0 = want[0].a; for (const e of want) e.a = a0 + (e.a - a0) * k; }
+    // evenly round the ring, in the order of the neighbours inside, turned to sit as close to them as it can
+    const step = (2 * Math.PI) / want.length;
+    let sx = 0, sy = 0;
+    want.forEach((e, i) => { sx += Math.sin(e.a - i * step); sy += Math.cos(e.a - i * step); });
+    const base = sx || sy ? Math.atan2(sx, sy) : -Math.PI / 2;
+    want.forEach((e, i) => { e.a = base + i * step; });
     for (const e of want) { ang.set(e.n.id, e.a); rad.set(e.n.id, r); }
   }
   const out: Placed[] = [];
@@ -130,7 +131,7 @@ export function radialLayout(nodes: LNode[], edges: LEdge[], size: number): Laid
   }
   // a ghost on top of another one: nudge along the ring
   const seen: Placed[] = [];
-  for (const p of out.filter(p => c.lvl.get(p.id)! < 0)) { while (seen.some(s => Math.hypot(s.x - p.x, s.y - p.y) < size * 1.2)) { p.x += size * .6; p.y += size * .3; } seen.push(p); }
+  for (const p of out.filter(p => c.lvl.get(p.id)! < 0)) { for (let k = 0; k < 400 && seen.some(s => Math.hypot(s.x - p.x, s.y - p.y) < size * 1.2); k++) { p.x += size * .6; p.y += size * .3; } seen.push(p); }
   return { nodes: out, panels: [], levels: c.lvl, levelCount: c.count };
 }
 
