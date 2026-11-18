@@ -1,12 +1,12 @@
 name: build
 
+# Builds only when asked, to keep GitHub Actions use low:
+#  - pushing a release tag (v*) builds everything and publishes the release;
+#  - Actions → build → Run workflow builds the chosen branch (develop: the nightly pre-release).
+# Pushes to develop and main build nothing.
 on:
   push:
-    branches: [develop] # the nightly; releases are tags on main
     tags: ['v*']
-    # a push that only changes documentation builds no nightly (tag pushes always build)
-    paths-ignore: ['**.md', 'docs/**']
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -249,7 +249,7 @@ jobs:
           name: termwright-team
           path: dist/*
       - name: Container image
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         continue-on-error: true  # the packages still go into the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -262,7 +262,7 @@ jobs:
 
   release:
     needs: [build, android, team]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

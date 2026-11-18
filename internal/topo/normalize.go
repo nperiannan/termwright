@@ -73,7 +73,10 @@ func isIP(s string) bool {
 	return s != ""
 }
 
-func isUnsetIP(s string) bool { return s == "" || s == "0.0.0.0" || s == "::" }
+func isUnsetIP(s string) bool {
+	s = strings.TrimSpace(s)
+	return s == "" || s == "0.0.0.0" || s == "::" || strings.Trim(s, "-–—") == "" || strings.Count(s, ".") != 3 && !strings.Contains(s, ":")
+}
 
 func atoi(s string) int {
 	n := 0

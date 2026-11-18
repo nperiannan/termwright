@@ -20,7 +20,7 @@ var plans = map[string][]Step{
 		{"show ports information", "ports"}, {"show sharing", "lag"}, {"show stpd s0 ports", "stp"}, {"show vlan detail", "vlan"},
 	},
 	"voss": {
-		{"terminal more disable", "paging"}, {"show sys-info", "mac"}, {"show lldp neighbor", "lldp"}, {"show interfaces gigabitEthernet interface", "ports"},
+		{"terminal more disable", "paging"}, {"show sys-info", "mac"}, {"show lldp neighbor summary", "lldp"}, {"show interfaces gigabitEthernet interface", "ports"},
 		{"show mlt", "lag"}, {"show spanning-tree mstp port role", "stp"}, {"show vlan basic", "vlanname"}, {"show vlan members", "vlan"},
 	},
 	"ios": {

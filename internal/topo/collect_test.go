@@ -132,7 +132,7 @@ func TestCollectFailures(t *testing.T) {
 }
 
 func TestCollectVOSS(t *testing.T) {
-	run, _ := fixtureRunner(t, map[string]string{"show sys-info": "voss/sys_info.txt", "show lldp neighbor": "voss/lldp_neighbor.txt", "show interfaces gigabitEthernet interface": "voss/interfaces.txt", "show mlt": "voss/mlt_empty.txt", "show spanning-tree mstp port role": "voss/stp_port_role.txt"})
+	run, _ := fixtureRunner(t, map[string]string{"show sys-info": "voss/sys_info.txt", "show lldp neighbor summary": "voss/lldp_neighbor.txt", "show interfaces gigabitEthernet interface": "voss/interfaces.txt", "show mlt": "voss/mlt_empty.txt", "show spanning-tree mstp port role": "voss/stp_port_role.txt"})
 	d := Collect(context.Background(), Target{Session: "s", Name: "5520-24T-FabricEngine", OS: "voss"}, run, t0)
 	if d.Err != "" || d.Chassis != "ac:ed:32:c4:64:00" || d.SysName != "5520-24T-FabricEngine" || len(d.Neighbors) != 2 || len(d.Ports) != 2 {
 		t.Fatalf("%+v", d)

@@ -27,25 +27,42 @@ func rank(c *claim) int {
 
 type finder struct {
 	mac, name, ip map[string]int
+	devs          []Device
 }
 
 func newFinder(devs []Device) *finder {
-	f := &finder{map[string]int{}, map[string]int{}, map[string]int{}}
+	f := &finder{map[string]int{}, map[string]int{}, map[string]int{}, devs}
+	dup := map[string]bool{}
+	addName := func(n string, i int) {
+		if n == "" {
+			return
+		}
+		if j, ok := f.name[n]; ok && j != i {
+			dup[n] = true
+		}
+		f.name[n] = i
+	}
 	for i, d := range devs {
 		if m := NormMAC(d.Chassis); m != "" {
 			f.mac[m] = i
 		}
-		if n := NormName(d.Name); n != "" {
-			f.name[n] = i
-		}
-		if n := NormName(d.SysName); n != "" {
-			f.name[n] = i
-		}
+		addName(NormName(d.Name), i)
+		addName(NormName(d.SysName), i)
 		if d.IP != "" {
 			f.ip[d.IP] = i
 		}
 	}
+	// a name that several devices use (a switch left with its default name) says nothing about which one
+	for n := range dup {
+		delete(f.name, n)
+	}
 	return f
+}
+
+// sameByID: the neighbour's MAC or address is device i's own.
+func (f *finder) sameByID(n Neighbor, i int) bool {
+	d := f.devs[i]
+	return n.Chassis != "" && NormMAC(d.Chassis) == n.Chassis || n.IP != "" && d.IP == n.IP
 }
 
 func (f *finder) find(n Neighbor) int {
@@ -57,6 +74,19 @@ func (f *finder) find(n Neighbor) int {
 	}
 	if i, ok := f.name[NormName(n.Name)]; ok && n.Name != "" {
 		return i
+	}
+	// a name the device cut short ("5420F-16MW-32P-4XE-Fabr~"): the only session whose name starts with it
+	if pre := strings.TrimSuffix(NormName(n.Name), "~"); pre != NormName(n.Name) && len(pre) >= 6 {
+		hit := -1
+		for k, i := range f.name {
+			if strings.HasPrefix(k, pre) {
+				if hit >= 0 && hit != i {
+					return -1
+				}
+				hit = i
+			}
+		}
+		return hit
 	}
 	return -1
 }
@@ -177,8 +207,14 @@ func Build(devs []Device, prev *Map, now time.Time) Map {
 					c.seen = append(c.seen, n.Proto)
 				}
 			}
-			if c.remote == i {
-				continue // a device hearing itself
+			if c.remote == i && !f.sameByID(best, i) {
+				c.remote = -1 // only the name points to itself: another switch with the same name, not known here
+			}
+			if c.remote == i { // a device hearing itself: a cable from one of its ports to another
+				if NormPort(best.RemotePort) > np || best.RemotePort == "" {
+					devs[i].Notes = append(devs[i].Notes, "port "+best.LocalPort+" is cabled to its own port "+best.RemotePort)
+				}
+				continue
 			}
 			claims[[2]string{itoa(i), np}] = c
 			order = append(order, c)

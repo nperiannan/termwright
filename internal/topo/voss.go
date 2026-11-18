@@ -16,6 +16,9 @@ var (
 
 // ParseVOSSLLDP reads "show lldp neighbor". It prints no age.
 func ParseVOSSLLDP(text string) []Neighbor {
+	if strings.Contains(text, "LLDP Neighbor Summary") {
+		return ParseVOSSLLDPSummary(text)
+	}
 	var out []Neighbor
 	var cur *Neighbor
 	flush := func() {
@@ -155,6 +158,75 @@ func expandPorts(tok []string) []string {
 			}
 			out = append(out, p)
 		}
+	}
+	return out
+}
+
+// ParseVOSSLLDPSummary reads "show lldp neighbor summary" (Fabric Engine 8.x/9.x): one row per neighbour with
+// local port, protocol, address, chassis ID, remote port, system name (cut short with "~") and description.
+// The columns are found from the header, so wide and narrow terminals both work.
+func ParseVOSSLLDPSummary(text string) []Neighbor {
+	var out []Neighbor
+	var cols []int // start of: local port, protocol, address, chassis, remote port, sysname, sysdescr
+	for _, l := range strings.Split(strings.ReplaceAll(text, "\r", ""), "\n") {
+		if cols == nil {
+			f := strings.Fields(l)
+			if len(f) >= 7 && f[0] == "PORT" && f[1] == "PROT" && strings.Contains(l, "SYSNAME") {
+				pos, from := []int{}, 0
+				for _, w := range f[:7] {
+					i := strings.Index(l[from:], w)
+					if i < 0 {
+						break
+					}
+					pos = append(pos, from+i)
+					from += i + len(w)
+				}
+				if len(pos) == 7 {
+					cols = pos
+				}
+			}
+			continue
+		}
+		if strings.HasPrefix(strings.TrimSpace(l), "---") || strings.HasPrefix(l, "Total") || strings.TrimSpace(l) == "" {
+			continue
+		}
+		// the cells by their words (a cell may be "--"), the system name by where it starts: a row whose name
+		// is empty has its description starting under SYSDESCR
+		type word struct {
+			s  string
+			at int
+		}
+		var ws []word
+		for i := 0; i < len(l); {
+			for i < len(l) && (l[i] == ' ' || l[i] == '\t') {
+				i++
+			}
+			j := i
+			for j < len(l) && l[j] != ' ' && l[j] != '\t' {
+				j++
+			}
+			if j > i {
+				ws = append(ws, word{l[i:j], i})
+			}
+			i = j
+		}
+		if len(ws) < 5 || !strings.ContainsAny(ws[0].s, "/:0123456789") {
+			continue
+		}
+		n := Neighbor{Proto: LLDP, LocalPort: ws[0].s, RemotePort: ws[4].s, Age: -1}
+		if strings.EqualFold(ws[1].s, "CDP") {
+			n.Proto = CDP
+		}
+		if ip := ws[2].s; !isUnsetIP(ip) && ip != "--" {
+			n.IP = ip
+		}
+		if mac := NormMAC(ws[3].s); mac != "" && ws[3].s != "--" {
+			n.Chassis = mac
+		}
+		if len(ws) > 5 && ws[5].at < cols[6]-1 {
+			n.Name = ws[5].s
+		}
+		out = append(out, n)
 	}
 	return out
 }
