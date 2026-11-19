@@ -5,6 +5,7 @@ import { SyslogMsg, SyslogQuery, SyslogRule, SyslogSendIn, SyslogSettings, Syslo
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
+import { Combo, ComboOption } from './combo';
 
 const SEV = ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug'];
 const FAC = ['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr', 'news', 'uucp', 'cron', 'authpriv', 'ftp', 'ntp', 'audit', 'alert', 'clock', 'local0', 'local1', 'local2', 'local3', 'local4', 'local5', 'local6', 'local7'];
@@ -14,7 +15,7 @@ const MAX_ROWS = 20000;
 /** The syslog server: messages from devices (live), filters, rules, settings, test messages. */
 @Component({
   selector: 'app-syslog-view',
-  imports: [FormsModule],
+  imports: [FormsModule, Combo],
   template: `
   <div class="sl">
     <div class="head">
@@ -41,10 +42,7 @@ const MAX_ROWS = 20000;
     </div>
     <div class="bar">
       <input class="q" [ngModel]="query()" (ngModelChange)="setQuery($event)" placeholder="Search: words, or /regex/" spellcheck="false" />
-      <select [ngModel]="host()" (ngModelChange)="host.set($event); reload()">
-        <option value="">All senders</option>
-        @for (h of hosts(); track h.k) { <option [value]="h.k">{{ h.k }} ({{ h.n }})</option> }
-      </select>
+      <app-combo class="snd" [value]="host()" (valueChange)="setHost($event)" [options]="senderOpts()" placeholder="All senders (type to search)" emptyText="No sender yet" name="sender" />
       <select [ngModel]="maxSev()" (ngModelChange)="setSev(+$event)">
         <option [ngValue]="-1">All severities</option>
         @for (n of sevNames; track $index) { <option [ngValue]="$index">{{ n }}{{ $index < 7 ? ' or worse' : '' }}</option> }
@@ -165,6 +163,7 @@ const MAX_ROWS = 20000;
     .sv b { color: var(--text); margin-left: 4px; font-weight: 600; } .sv.on { background: var(--accent-soft); border-color: var(--accent); }
     .sv.s0, .sv.s1, .sv.s2 { border-left: 3px solid #e11d48; } .sv.s3 { border-left: 3px solid var(--danger); } .sv.s4 { border-left: 3px solid var(--warn); }
     .sv.s5 { border-left: 3px solid var(--accent); } .sv.s6 { border-left: 3px solid var(--ok); } .sv.s7 { border-left: 3px solid var(--faint); }
+    .snd { width: 260px; }
     .bar .q { flex: 1; min-width: 220px; font-family: var(--mono); }
     .chk { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); }
     .pnl { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
@@ -219,6 +218,19 @@ export class SyslogView implements OnInit, OnDestroy {
   readonly sentMsg = signal('');
   readonly hosts = computed(() => Object.entries(this.st()?.hosts ?? {}).map(([k, n]) => ({ k, n })).sort((a, b) => b.n - a.n));
   readonly hostCount = computed(() => this.hosts().length);
+  /** Senders with their saved session (searchable by address or name), the busiest first. */
+  readonly senderOpts = computed<ComboOption[]>(() => this.hosts().map(h => ({ value: h.k, label: this.sessionName(h.k), hint: tr('{0} messages', h.n) } as ComboOption)));
+  private sessionName(addr: string) {
+    let name = '';
+    const walk = (n: { children?: any[]; isFolder: boolean; hostname?: string; path: string } | null) => n?.children?.forEach(c => { if (!name) { if (c.isFolder) walk(c); else if (c.hostname === addr) name = c.path; } });
+    walk(this.ui.tree());
+    return name;
+  }
+  setHost(v: string) {
+    const t = v.trim();
+    if (t === this.host() || (t && !this.hosts().some(h => h.k === t))) return; // a sender is chosen when typed in full or picked
+    this.host.set(t); void this.reload();
+  }
   follow = true;
   set: SyslogSettings = { udp: 514, tcp: 0, tls: 0 };
   editRules: SyslogRule[] = [];

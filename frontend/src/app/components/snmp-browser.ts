@@ -6,6 +6,7 @@ import { Session, SessionNode, SNMPMibNode, SNMPResult, SNMPRow, SNMPTrapsView }
 import { TabView, Tabs } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
+import { SessionSelect } from './session-select';
 
 interface TreeItem { node: SNMPMibNode; depth: number; open: boolean; }
 interface HistItem { at: number; op: string; oid: string; session: string; n: number; ms: number; err?: string; }
@@ -21,18 +22,16 @@ const FAV_KEY = 'tw.snmp.favourites';
 /** SNMP Browser: get / walk / table / set against a saved session (credentials from the Session Manager), the MIB tree, traps. */
 @Component({
   selector: 'app-snmp-browser',
-  imports: [FormsModule, SlicePipe],
+  imports: [FormsModule, SlicePipe, SessionSelect],
   template: `
     <div class="sb">
       <div class="head">
         <h2>SNMP Browser</h2>
-        <select class="sess" [ngModel]="path()" (ngModelChange)="choose($event)" title="Session the requests go to (address and credentials from the Session Manager)">
-          <option value="">Choose a session…</option>
-          @for (s of sessions(); track s.path) { <option [value]="s.path">{{ s.path }}{{ s.hostname ? ' · ' + s.hostname : '' }}</option> }
-        </select>
+        <app-session-select class="sess" [value]="path()" (changed)="choose($event)" [filter]="snmpFilter" title="Choose the device" placeholder="Choose a device…"
+          hint="The address and SNMP credentials come from the session (session properties → SNMP)." />
         @if (sess(); as s) {
           <span class="cred" [class.v3]="ver() === '3'" translate="no">{{ credText() }}</span>
-          <a class="lnk" (click)="openSettings(s.path)">SNMP settings…</a>
+          <button type="button" class="setb" (click)="openSettings(s.path)" title="Version, community or v3 user and passwords, port, writes">⚙ SNMP Settings</button>
         }
         <span class="sp"></span>
         <button type="button" (click)="loadMib()">Load MIB…</button>
@@ -166,10 +165,12 @@ const FAV_KEY = 'tw.snmp.favourites';
     .head, .bar, .tbar, .foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     h2 { margin: 0 6px 0 0; font-size: 17px; font-weight: 600; }
     .sp { flex: 1; }
-    .sess { max-width: 320px; }
+    .sess { width: 340px; max-width: 40vw; }
+    .setb { height: 30px; }
     .cred { border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; color: var(--muted); font-size: 12px; }
     .cred.v3 { border-color: color-mix(in srgb, var(--ok) 55%, transparent); color: var(--ok); }
     .lnk { color: var(--accent); cursor: pointer; font-size: 12px; }
+    .bar select, .bar input, .bar button, .head button { height: 30px; box-sizing: border-box; }
     .bar .oid { flex: 1; min-width: 240px; font-family: var(--mono); }
     .bar .val { min-width: 180px; }
     .sm input { width: 58px; margin-left: 4px; }
@@ -228,7 +229,8 @@ export class SnmpBrowser implements OnInit, OnDestroy {
 
   readonly path = signal('');
   readonly sess = signal<Session | null>(null);
-  readonly sessions = computed(() => flat(this.ui.tree()).filter(n => !['RDP', 'VNC', 'Local Shell', 'WOL', 'Serial'].includes(n.protocol ?? '')));
+  readonly sessions = computed(() => flat(this.ui.tree()).filter(this.snmpFilter));
+  readonly snmpFilter = (n: SessionNode) => !['RDP', 'VNC', 'Local Shell', 'WOL', 'Serial', 'API'].includes(n.protocol ?? '');
   readonly ver = computed(() => this.sess()?.snmpVersion || '2c');
   readonly items = signal<TreeItem[]>([]);
   readonly modules = signal(0);

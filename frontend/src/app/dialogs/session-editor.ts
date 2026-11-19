@@ -281,7 +281,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   }
                   @if (s.apiAuth) {
                     <div class="f o5 wide"><label>{{ apiSecretLabel() }}</label>
-                      <div class="row"><input name="apisecret" type="password" autocomplete="off" [(ngModel)]="apiSecret" [placeholder]="apiSec().secret ? '•••••••• (saved; type to change)' : ''" />
+                      <div class="row"><input name="apisecret" [type]="isShown('api') ? 'text' : 'password'" autocomplete="off" [(ngModel)]="apiSecret" [placeholder]="apiSec().secret ? '•••••••• (saved; type to change)' : ''" /> <button type="button" class="eye" (click)="toggleShow('api')" [title]="isShown('api') ? 'Hide' : 'Show what you typed'" [attr.aria-pressed]="isShown('api')">@if (isShown('api')) { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M2.5 13.5l11-11" stroke="currentColor" stroke-width="1.3"/></svg> } @else { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg> }</button>
                         @if (apiSec().secret) { <span class="vault">🔒 saved</span> }</div>
                       @if (s.apiAuth === 'login' || s.apiAuth === 'oauth2') { <div class="hint">The token is held in memory only and renewed by itself before it expires.</div> }</div>
                   }
@@ -570,13 +570,13 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 @for (v of s.apiVars ?? []; track $index) {
                   <tr><td><input [name]="'avn' + $index" [(ngModel)]="v.name" spellcheck="false" /></td>
                     @if (v.secret) {
-                      <td><input type="password" autocomplete="off" [name]="'avv' + $index" [(ngModel)]="apiVarSecOf(v.name).value" [placeholder]="apiVarSaved(v.name) ? '•••••••• saved' : ''" /></td>
-                      <td><input type="password" autocomplete="off" [name]="'avp' + $index" [(ngModel)]="apiVarSecOf(v.name).prod" [placeholder]="apiVarSaved(v.name, true) ? '•••••••• saved' : ''" /></td>
+                      <td><input [type]="isShown('v' + $index) ? 'text' : 'password'" autocomplete="off" [name]="'avv' + $index" [(ngModel)]="apiVarSecOf(v.name).value" [placeholder]="apiVarSaved(v.name) ? '•••••••• saved' : ''" /></td>
+                      <td><input [type]="isShown('v' + $index) ? 'text' : 'password'" autocomplete="off" [name]="'avp' + $index" [(ngModel)]="apiVarSecOf(v.name).prod" [placeholder]="apiVarSaved(v.name, true) ? '•••••••• saved' : ''" /></td>
                     } @else {
                       <td><input [name]="'avv' + $index" [(ngModel)]="v.value" spellcheck="false" /></td>
                       <td><input [name]="'avp' + $index" [(ngModel)]="v.prod" spellcheck="false" /></td>
                     }
-                    <td><input type="checkbox" [name]="'avs' + $index" [(ngModel)]="v.secret" /></td>
+                    <td class="nw"><input type="checkbox" [name]="'avs' + $index" [(ngModel)]="v.secret" />@if (v.secret) { <button type="button" class="eye" (click)="toggleShow('v' + $index)" [title]="isShown('v' + $index) ? 'Hide' : 'Show what you typed'">👁</button> }</td>
                     <td><button type="button" class="x" (click)="s.apiVars!.splice($index, 1)" title="Remove">✕</button></td></tr>
                 }
               </tbody></table>
@@ -594,7 +594,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                 <div class="row"><input name="snmphost" [(ngModel)]="s.snmpHost" [placeholder]="(s.hostname || 'address') + ' (from Connection)'" spellcheck="false" /><input name="snmpport" type="number" style="width: 80px" [(ngModel)]="s.snmpPort" placeholder="161" /></div>
                 @if ((s.snmpVersion || '2c') !== '3') {
                   <label>Community</label>
-                  <div class="row"><input name="snmpcomm" type="password" autocomplete="off" [(ngModel)]="snmpComm" [placeholder]="snmpSec().community ? '•••••••• (saved; type to change)' : 'public'" />
+                  <div class="row"><input name="snmpcomm" [type]="isShown('comm') ? 'text' : 'password'" autocomplete="off" [(ngModel)]="snmpComm" [placeholder]="snmpSec().community ? '•••••••• (saved; type to change)' : 'public'" /> <button type="button" class="eye" (click)="toggleShow('comm')" [title]="isShown('comm') ? 'Hide' : 'Show what you typed'" [attr.aria-pressed]="isShown('comm')">@if (isShown('comm')) { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M2.5 13.5l11-11" stroke="currentColor" stroke-width="1.3"/></svg> } @else { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg> }</button>
                     @if (snmpSec().community) { <span class="vault">🔒 saved</span><button type="button" (click)="snmpComm = ''; snmpClear.community = true">Remove</button> }</div>
                 } @else {
                   <label>User</label>
@@ -608,13 +608,13 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
                   @if (s.snmpAuth) {
                     <label>Authentication</label>
                     <div class="row"><select name="snmpauth" [(ngModel)]="s.snmpAuth">@for (a of snmpAuths; track a) { <option [value]="a">{{ a }}</option> }</select>
-                      <input name="snmpauthpw" type="password" autocomplete="off" [(ngModel)]="snmpAuthPw" [placeholder]="snmpSec().auth ? '•••••••• (saved; type to change)' : 'password (8 characters or more)'" />
+                      <input name="snmpauthpw" [type]="isShown('auth') ? 'text' : 'password'" autocomplete="off" [(ngModel)]="snmpAuthPw" [placeholder]="snmpSec().auth ? '•••••••• (saved; type to change)' : 'password (8 characters or more)'" /> <button type="button" class="eye" (click)="toggleShow('auth')" [title]="isShown('auth') ? 'Hide' : 'Show what you typed'" [attr.aria-pressed]="isShown('auth')">@if (isShown('auth')) { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M2.5 13.5l11-11" stroke="currentColor" stroke-width="1.3"/></svg> } @else { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg> }</button>
                       @if (snmpSec().auth) { <span class="vault">🔒 saved</span> }</div>
                   }
                   @if (s.snmpPriv) {
                     <label>Privacy</label>
                     <div class="row"><select name="snmppriv" [(ngModel)]="s.snmpPriv">@for (a of snmpPrivs; track a) { <option [value]="a">{{ a }}</option> }</select>
-                      <input name="snmpprivpw" type="password" autocomplete="off" [(ngModel)]="snmpPrivPw" [placeholder]="snmpSec().priv ? '•••••••• (saved; type to change)' : 'password (8 characters or more)'" />
+                      <input name="snmpprivpw" [type]="isShown('priv') ? 'text' : 'password'" autocomplete="off" [(ngModel)]="snmpPrivPw" [placeholder]="snmpSec().priv ? '•••••••• (saved; type to change)' : 'password (8 characters or more)'" /> <button type="button" class="eye" (click)="toggleShow('priv')" [title]="isShown('priv') ? 'Hide' : 'Show what you typed'" [attr.aria-pressed]="isShown('priv')">@if (isShown('priv')) { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/><path d="M2.5 13.5l11-11" stroke="currentColor" stroke-width="1.3"/></svg> } @else { <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg> }</button>
                       @if (snmpSec().priv) { <span class="vault">🔒 saved</span> }</div>
                   }
                   <label>Context</label>
@@ -860,6 +860,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
   `,
   styles: [`
     .apivars { width: 100%; border-collapse: collapse; margin-bottom: 8px; } .apivars th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px; } .apivars td { padding: 3px 4px; } .apivars input:not([type=checkbox]) { width: 100%; box-sizing: border-box; } .apivars .x { padding: 2px 8px; } h3.sec { margin: 18px 0 8px; font-size: 13px; }
+    .eye { display: inline-flex; align-items: center; justify-content: center; padding: 3px 7px; color: var(--muted); flex: none; } .nw { white-space: nowrap; }
     .vault { color: var(--ok); font-size: 12px; white-space: nowrap; } .snmpmsg { font-size: 12px; } .snmpmsg.ok { color: var(--ok); } .snmpmsg.bad { color: var(--danger); }
     .rt { border: 1px solid var(--line, var(--border)); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;
       .rth { display: flex; gap: 12px; align-items: center; } .tx { flex: 1; display: flex; flex-direction: column; line-height: 1.4; small { color: var(--muted); } }
@@ -1211,6 +1212,10 @@ export class SessionEditor implements OnInit {
 
   // ---- REST API session ----
   readonly varEx = '{{name}}';
+  /** Secret fields shown as typed (the eye button); saved secrets are never shown, only what is typed here. */
+  private readonly shown = signal<Set<string>>(new Set());
+  isShown(k: string) { return this.shown().has(k); }
+  toggleShow(k: string) { const s = new Set(this.shown()); if (s.has(k)) s.delete(k); else s.add(k); this.shown.set(s); }
   readonly apiAuths = [{ v: '', l: 'None' }, { v: 'apikey', l: 'API key' }, { v: 'bearer', l: 'Bearer token' }, { v: 'login', l: 'Login' }, { v: 'basic', l: 'Basic' }, { v: 'oauth2', l: 'OAuth 2.0' }];
   apiSecret = ''; apiTestUrl = '';
   /** Typed values of secret variables (only what was typed is saved). */

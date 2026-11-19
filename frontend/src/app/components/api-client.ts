@@ -5,6 +5,7 @@ import { HCollection, HHistoryItem, HKV, HRequest, HResponse, HRunResult, HRunSt
 import { TabView } from '../core/tabs.service';
 import { Ui } from '../core/ui.service';
 import { tr } from '../core/i18n';
+import { SessionSelect } from './session-select';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const MODES = [{ v: '', l: 'None' }, { v: 'json', l: 'JSON' }, { v: 'text', l: 'Text' }, { v: 'xml', l: 'XML' }, { v: 'urlencoded', l: 'Form URL-encoded' }, { v: 'form', l: 'Multipart form' }, { v: 'graphql', l: 'GraphQL' }];
@@ -24,7 +25,7 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
 /** The API client: requests with an API session's base URL, login and variables; collections, history, tests, runner, import, code. */
 @Component({
   selector: 'app-api-client',
-  imports: [FormsModule],
+  imports: [FormsModule, SessionSelect],
   template: `
   <div class="ac">
     <div class="side">
@@ -74,9 +75,8 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
         <select class="meth" [ngModel]="draft().req.method" (ngModelChange)="setReq({ method: $event })" [class]="'meth ' + draft().req.method">
           @for (m of methods; track m) { <option [value]="m">{{ m }}</option> }</select>
         <input class="url" [ngModel]="draft().req.url" (ngModelChange)="setReq({ url: $event })" (keydown.enter)="send()" placeholder="/path after the session's base URL, or https://…" spellcheck="false" translate="no" />
-        <select class="sess" [ngModel]="path()" (ngModelChange)="choose($event)" title="API session: base URL, authentication and variables">
-          <option value="">No session</option>
-          @for (s of sessions(); track s.path) { <option [value]="s.path">{{ s.path }}</option> }</select>
+        <app-session-select class="sess" [value]="path()" (changed)="choose($event)" [filter]="apiFilter" [allowNone]="true" noneLabel="No session (send the URL as it is)"
+          placeholder="No session" title="Choose an API session" hint="Its base URL, login and variables are used." emptyText="No API session yet: API → New API Session." />
         <select class="env" [ngModel]="env()" (ngModelChange)="env.set($event); loadToken()" title="Which values of the session's variables">
           <option value="">Env: {{ sessEnvName() }}</option><option value="production">Env: Production</option></select>
         <button type="button" class="pri" (click)="send()" [disabled]="busy() || !draft().req.url.trim()">{{ busy() ? 'Sending…' : 'Send' }}</button>
@@ -89,7 +89,7 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
           @else { <span class="chip">No authentication</span> }
           @if (s.apiInsecure) { <span class="chip warn">TLS: any certificate</span> } @else if (s.apiCaFile) { <span class="chip">TLS: own CA trusted</span> }
           @if (prod()) { <span class="chip bad">Production: changes (POST, PUT, PATCH, DELETE) ask first</span> }
-          <a class="lk" (click)="editSession()">Session settings…</a>
+          <button type="button" class="setb" (click)="editSession()" title="Base URL, authentication, variables and TLS of this API session">⚙ Session Settings</button>
         } @else {
           <span class="chip">No session: the URL is sent as it is. Choose an API session for its base URL and login, or add one (API → New API Session).</span>
         }
@@ -120,9 +120,15 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
                       <td><input [(ngModel)]="p.desc" (ngModelChange)="touch()" /></td><td><a class="x" (click)="del(draft().req.headers!, $index)">✕</a></td></tr>
                   }
                   @if (sess()?.apiAuth && draft().req.auth !== 'none') { <tr class="auto"><td></td><td>{{ authHeader() }}</td><td>••••••••</td><td>🔒 from the session</td><td></td></tr> }
+                  @if (bodyType(); as ct) { @if (!hasHeader('Content-Type')) { <tr class="auto"><td></td><td>Content-Type</td><td>{{ ct }}</td><td>from the Body</td><td></td></tr> } }
+                  @if (!hasHeader('User-Agent')) { <tr class="auto"><td></td><td>User-Agent</td><td>Termwright</td><td>added by Termwright</td><td></td></tr> }
                 </tbody></table>
                 <datalist id="hdrs">@for (h of commonHeaders; track h) { <option [value]="h"></option> }</datalist>
-                <button type="button" class="add" (click)="add('headers')">+ Add Header</button>
+                <div class="modes"><button type="button" class="add0" (click)="add('headers')">+ Add Header</button>
+                  <select [ngModel]="''" (ngModelChange)="$event !== '' && addPreset(+$event)" title="Headers most APIs use">
+                    <option value="">Add a common header…</option>
+                    @for (h of presets; track $index) { <option [value]="$index" [disabled]="hasHeader(h.key, h.value)">{{ h.key }}: {{ h.value }}  ({{ h.desc }})</option> }
+                  </select></div>
               }
               @case ('auth') {
                 <div class="pad2">
@@ -303,8 +309,10 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
     .main { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
     .bar { display: flex; gap: 8px; align-items: center; }
     .bar .url { flex: 1; min-width: 200px; font-family: var(--mono); }
-    .meth { font: 600 12px var(--mono); width: 96px; } .sess { max-width: 220px; } .env { max-width: 160px; }
+    .bar > select, .bar > input, .bar > button, .bar > app-session-select { height: 30px; box-sizing: border-box; }
+    .meth { font: 600 12px var(--mono); width: 96px; } .sess { width: 240px; } .env { max-width: 160px; }
     button.pri { background: var(--accent); color: #fff; border-color: var(--accent); min-width: 72px; }
+    .setb { height: 24px; padding: 0 9px; font-size: 12px; }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .chip { border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; font-size: 12px; color: var(--muted); }
     .chip.s { border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); }
@@ -328,7 +336,7 @@ interface Row { kind: 'folder' | 'req'; depth: number; folder?: string; name?: s
     .kv.ro td { font-family: var(--mono); font-size: 12px; padding: 5px 10px; word-break: break-all; } .kv.ro td:first-child { width: auto; color: var(--muted); white-space: nowrap; }
     .kv tr.auto td { color: var(--muted); font-size: 12px; padding: 6px; }
     .x { cursor: pointer; color: var(--muted); }
-    .add { margin: 8px; }
+    .add { margin: 8px; } .add0 { margin: 0; }
     .modes { display: flex; gap: 12px; align-items: center; padding: 8px 12px; flex-wrap: wrap; } .modes label { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); }
     textarea.code { width: calc(100% - 20px); margin: 0 10px 8px; min-height: 120px; font: 12px var(--mono); box-sizing: border-box; resize: vertical; }
     textarea.code.small { min-height: 60px; }
@@ -369,6 +377,30 @@ export class ApiClient implements OnInit, OnDestroy {
   readonly methods = METHODS; readonly modes = MODES; readonly langs = LANGS; readonly snippets = SNIPPETS;
   readonly reqTabs = [{ k: 'params', l: 'Params' }, { k: 'headers', l: 'Headers' }, { k: 'auth', l: 'Auth' }, { k: 'body', l: 'Body' }, { k: 'scripts', l: 'Scripts' }, { k: 'code', l: 'Code' }];
   readonly resTabs = [{ k: 'body', l: 'Body' }, { k: 'headers', l: 'Headers' }, { k: 'cookies', l: 'Cookies' }, { k: 'tests', l: 'Tests' }, { k: 'timeline', l: 'Timeline' }];
+  readonly presets: HKV[] = [
+    { key: 'Accept', value: 'application/json', desc: 'answer in JSON' },
+    { key: 'Accept', value: 'application/yang-data+json', desc: 'RESTCONF, JSON' },
+    { key: 'Accept', value: 'application/yang-data+xml', desc: 'RESTCONF, XML' },
+    { key: 'Accept', value: 'application/xml', desc: 'answer in XML' },
+    { key: 'Content-Type', value: 'application/json', desc: 'JSON body' },
+    { key: 'Content-Type', value: 'application/yang-data+json', desc: 'RESTCONF body' },
+    { key: 'Cache-Control', value: 'no-cache', desc: 'no cached answer' },
+    { key: 'Accept-Encoding', value: 'gzip, deflate', desc: 'compressed answer' },
+    { key: 'Accept-Language', value: 'en-US', desc: 'language' },
+    { key: 'X-Request-Id', value: '{{$guid}}', desc: 'a new id each time' },
+    { key: 'If-None-Match', value: '"etag"', desc: 'only if changed' },
+    { key: 'If-Match', value: '"etag"', desc: 'only if not changed' },
+    { key: 'Connection', value: 'close', desc: 'no keep-alive' },
+  ];
+  hasHeader(k: string, v?: string) { return (this.draft().req.headers ?? []).some(h => !h.off && h.key.toLowerCase() === k.toLowerCase() && (v === undefined || h.value === v)); }
+  addPreset(i: number) {
+    const p = this.presets[i];
+    const hs = (this.draft().req.headers ?? []).filter(h => h.key.trim());
+    const same = hs.find(h => h.key.toLowerCase() === p.key.toLowerCase());
+    if (same) same.value = p.value; else hs.push({ key: p.key, value: p.value });
+    this.setReq({ headers: hs });
+  }
+  bodyType() { const m = this.draft().req.body?.mode; return ({ json: 'application/json', text: 'text/plain', xml: 'application/xml', urlencoded: 'application/x-www-form-urlencoded', form: 'multipart/form-data', graphql: 'application/json' } as Record<string, string>)[m ?? ''] ?? ''; }
   readonly commonHeaders = ['Accept', 'Content-Type', 'Authorization', 'Cache-Control', 'If-Match', 'If-None-Match', 'User-Agent', 'X-Request-Id', 'X-Auth-Token', 'X-API-Key'];
 
   filter = '';
@@ -376,7 +408,8 @@ export class ApiClient implements OnInit, OnDestroy {
   readonly sess = signal<Session | null>(null);
   readonly env = signal('');
   readonly token = signal<{ held: boolean; expires?: string } | null>(null);
-  readonly sessions = computed(() => flat(this.ui.tree()).filter(n => n.protocol === 'API'));
+  readonly apiFilter = (n: SessionNode) => n.protocol === 'API';
+  readonly sessions = computed(() => flat(this.ui.tree()).filter(this.apiFilter));
   readonly colls = signal<HCollection[]>([]);
   readonly opened = signal<Set<string>>(new Set());
   readonly draft = signal<Draft>({ req: newReq(), coll: '', id: '', dirty: false });
@@ -723,7 +756,7 @@ export class ApiClient implements OnInit, OnDestroy {
 
 function readMono(): boolean { try { return localStorage.getItem('tw.api.mono') === '1'; } catch { return false; } }
 
-function newReq(): HRequest { return { method: 'GET', url: '', params: [], headers: [], body: { mode: '' } }; }
+function newReq(): HRequest { return { method: 'GET', url: '', params: [], headers: [{ key: 'Accept', value: 'application/json' }], body: { mode: '' } }; }
 
 function flat(n: SessionNode | null, out: SessionNode[] = []): SessionNode[] {
   if (!n) return out;
