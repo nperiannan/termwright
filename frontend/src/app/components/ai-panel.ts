@@ -604,7 +604,7 @@ export class AIPanel implements OnInit {
   async setPerm(v: AgentPerm) {
     this.pmenu.set(false);
     if (v === 'auto' && this.ai.perm() !== 'auto' && !(await this.ui.confirm(tr('Fully autonomous agent'),
-      tr('The AI will run commands and change the configuration of the devices it connects to without asking you, using their saved logins. Production sessions still ask before every command, and reboot, reload and erase always ask. You can press Stop at any time.'), tr('Allow'), true))) return;
+      tr('The AI will run commands and change the configuration of the devices it connects to without asking you, using their saved logins. Only production sessions still ask, before every command. You can press Stop at any time.'), tr('Allow'), true))) return;
     const s = this.ui.settings(); if (s) void this.ui.saveSettings({ ...s, ai: { ...(s.ai ?? {}), agentPerm: v } });
   }
 

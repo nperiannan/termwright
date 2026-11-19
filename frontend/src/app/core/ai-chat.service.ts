@@ -47,7 +47,7 @@ const LAB_VERBS = ['start', 'stop', 'shutdown', 'cable', 'uncable', 'pull', 'plu
 /** What the agent may do on its own, from "Read only" (white) to fully autonomous (orange). */
 export type AgentPerm = '' | 'every' | 'readonly' | 'auto';
 export const AGENT_PERMS: { k: AgentPerm; name: string; what: string; tone: 'auto' | 'ask' | 'ro' }[] = [
-  { k: 'auto', name: 'Fully autonomous', what: 'Runs commands and changes without asking. Production sessions and reboot / erase still ask.', tone: 'auto' },
+  { k: 'auto', name: 'Fully autonomous', what: 'Runs commands and changes without asking. Only production sessions ask.', tone: 'auto' },
   { k: '', name: 'Changes ask first', what: 'Read-only commands run by themselves; changes wait for you.', tone: 'ask' },
   { k: 'every', name: 'Ask before every command', what: 'Every command and connection waits for you.', tone: 'ask' },
   { k: 'readonly', name: 'Read only', what: 'Read-only commands run without asking, production sessions too; changes are given to you as text.', tone: 'ro' },
@@ -76,7 +76,7 @@ export function isReadOnly(cmd: string, list: string[]): boolean {
   return list.some(x => { const w = x.toLowerCase(); return h === w || h.startsWith(w + ' '); });
 }
 
-/** Asks even in fully autonomous mode: the device restarts, or loses its configuration or files. */
+/** The device restarts, or loses its configuration or files: marked as a danger (in fully autonomous mode only production sessions ask). */
 export const DESTRUCTIVE = /^\s*(reboot|reload|halt|poweroff|shutdown\s*(-h|-r|now)|erase|format|write\s+erase|unconfigure\s+switch|delete\s+(flash|config|startup|nvram|bootflash|\S*\.cfg|\S*\.xsf)|clear\s+config|factory|rm\s+-rf|mkfs|dd\s)/i;
 /** A device's answer that says the command failed. */
 const FAILED = /(^|\n)\s*(%\s*(invalid|incomplete|ambiguous|unknown|error)|error:|invalid input|syntax error|command not found|unrecognized command|\^\s*$)/i;
@@ -379,7 +379,7 @@ export class AIChat {
     s.prod = prod; s.danger = s.danger || destroy;
     if (perm === 'readonly' && !ro) { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `run ${t.title}: ${s.command} - not run: the user allows only read-only commands. Tell the user the command instead.`; }
     // Read only never asks: what is left changes nothing (production sessions too)
-    if (perm === 'readonly' ? false : perm === 'auto' ? (prod || destroy) : (!ro || prod || perm === 'every')) {
+    if (perm === 'readonly' ? false : perm === 'auto' ? prod : (!ro || prod || perm === 'every')) {
       const r = await this.ask(s, chatId);
       if (r.go !== 'run') return this.refusal(s, r.go);
       if (r.command && r.command.trim() !== s.command) s.command = r.command.trim();
