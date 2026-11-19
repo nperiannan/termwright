@@ -81,6 +81,10 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		route, arg = "/lab/tools/{tool}", seg[2]
 	} else if len(seg) == 3 && seg[0] == "lab" && seg[1] == "screen" {
 		route, arg = "/lab/screen/{id}", seg[2]
+	} else if len(seg) == 2 && seg[0] == "tools" {
+		route, arg = "/tools/{tool}", seg[1]
+	} else if len(seg) == 3 && seg[0] == "snmp" && seg[1] == "mib" {
+		route, arg = "/snmp/mib/{object}", seg[2]
 	}
 	ms, ok := apiRoutes[route]
 	if !ok {
@@ -98,6 +102,35 @@ func (a *App) apiHTTP(s *mcpServer, w http.ResponseWriter, r *http.Request) {
 		apiOut(w, http.StatusOK, v, err)
 	case "/lab/tools":
 		apiOut(w, http.StatusOK, apiTools(), nil)
+	case "/tools":
+		apiOut(w, http.StatusOK, apiNetTools(), nil)
+	case "/tools/{tool}":
+		if !isNetTool(arg) {
+			apiProblem(w, http.StatusNotFound, "no-tool", "No tool "+arg+" (GET /api/v1/tools lists them).")
+			return
+		}
+		out, err := a.netToolRun(r.Context(), arg, body, func(string, string, bool) error { return nil })
+		apiOut(w, http.StatusOK, map[string]string{"result": out}, err)
+	case "/snmp":
+		var req SNMPRequest
+		if err := apiDecode(body, &req); err != nil {
+			apiProblem(w, http.StatusBadRequest, "bad-request", err.Error())
+			return
+		}
+		req.Confirmed = true // the scripts are the user's own
+		res, err := a.snmpRun(r.Context(), req)
+		apiOut(w, http.StatusOK, res, err)
+	case "/snmp/mib":
+		apiOut(w, http.StatusOK, a.SNMPMibSearch(r.URL.Query().Get("q")), nil)
+	case "/snmp/mib/{object}":
+		n, err := a.SNMPMibInfo(arg)
+		if err != nil {
+			apiProblem(w, http.StatusNotFound, "not-found", err.Error())
+			return
+		}
+		apiOut(w, http.StatusOK, n, nil)
+	case "/snmp/traps":
+		apiOut(w, http.StatusOK, a.SNMPTraps(), nil)
 	case "/lab/tools/{tool}":
 		a.apiTool(w, "lab_"+arg, body)
 	case "/lab/screen/{id}":
@@ -288,6 +321,7 @@ var apiRoutes = map[string][]string{
 	"/lab/traffic/streams": {"POST"}, "/lab/traffic/streams/{id}": {"PUT", "DELETE"},
 	"/lab/traffic/tests": {"GET", "POST"}, "/lab/traffic/tests/{id}": {"PUT", "DELETE"}, "/lab/traffic/tests/{id}/run": {"POST"},
 	"/lab/traffic/runs": {"GET"}, "/lab/traffic/runs/{id}": {"GET"}, "/lab/traffic/runs/stop": {"POST"},
+	"/tools": {"GET"}, "/tools/{tool}": {"POST"}, "/snmp": {"POST"}, "/snmp/mib": {"GET"}, "/snmp/mib/{object}": {"GET"}, "/snmp/traps": {"GET"},
 }
 
 // apiOpenAPIYAML is docs/api/openapi.yaml (Use).
@@ -750,3 +784,22 @@ Tools:
 	b.WriteString("  " + strings.Join(names, ", ") + "\n")
 	return b.String()
 }()
+
+// SNMPTrapsView is the trap receiver and what it got.
+type SNMPTrapsView struct {
+	// State: whether it listens, on which port.
+	State SNMPTrapState `json:"state"`
+	// Traps: the notifications, newest first.
+	Traps []SNMPTrapView `json:"traps"`
+}
+
+// apiNetTools lists the network tools for the API's callers.
+func apiNetTools() []apiToolInfo {
+	var out []apiToolInfo
+	for _, t := range netTools {
+		p, _ := t.InputSchema["properties"].(map[string]any)
+		req, _ := t.InputSchema["required"].([]string)
+		out = append(out, apiToolInfo{t.Name, t.Description, p, req})
+	}
+	return out
+}

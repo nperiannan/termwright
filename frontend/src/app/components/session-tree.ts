@@ -872,6 +872,7 @@ export class SessionTree implements AfterViewInit, OnDestroy {
           ...(sec === 'recent' ? [{ label: 'Remove from Recent', action: () => this.ui.removeRecent(n.path) }] : []),
           ...(n.protocol === 'RDP' || n.protocol === 'VNC' || n.protocol === 'Local Shell' || n.protocol === 'WOL' ? [] : [
             { label: 'Show Topology (directly connected)', action: () => this.showTopology([n.path], n.name, 'd:' + n.path) },
+            { label: 'Open SNMP Browser', action: () => void this.tabs.openSnmp(n.path, n.name) },
             { label: 'Back Up Configuration', action: () => this.backUp([n.path]) },
             { label: 'Change Checklist...', action: () => this.checklist([n.path]) },
           ]),

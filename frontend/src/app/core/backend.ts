@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import type { TopoRequest, TopoResult, LayoutRequest, LayoutResult } from './models';
 import { EmuEngines, EmuHostNIC, EmuTrex,
   EmuServer, EmuServerView,
-  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange } from './models';
+  AccountInfo, EmuBoard, EmuTrafficTemplate, LabNote, EmuCapture, EmuCompNet, EmuPacket, EmuMatrix, EmuRemoveInfo, EmuRemoveHostReq, JumpUse, LocalNet, RemoteDesktopRun,  SerialPortInfo, DeviceFacts, AppInfo, BackupFile, ExportReport, BackupStatus, CheckRun, FileEntry, HistoryEntry, FileFilter, ImportOptions, ImportResult, MovedDevice, PromptReply, RecordingData, RecordingInfo, RemoteInfo, SmartCardInfo, Session, SessionNode, Settings, TabInfo, UpdateStatus, ImportSource, SettingsSummary, TeamConn, TeamDetails, TeamInfo, TeamPushItem, TeamPushResult, TeamView, SyncStatus, AIAnswer, AISettings, AIStatus, FileServersView, FileServersSettings, ServedFile, FSAddress, MCPInfo, FirewallState, NCResult, IperfInfo, IperfTest, DeviceName, LabView, LabRequest, LabLink, LabOutput, LabPack, EmuHost, EmuImage, EmuInstallRequest, EmuRequest, EmuTemplate, EmuPersona, EmuTopoInfo, EmuTester, EmuStream, EmuTrafficView, LabHubDetail, EmuRouting, EmuRoutingView, EmuRadiusView, EmuRunRow, EmuToolStep, EmuPacketDetail, EmuTest, EmuTestRun, EmuChange, SNMPRequest, SNMPResult, SNMPMibNode, SNMPModule, SNMPSecretState, SNMPTrapState, SNMPTrapsView } from './models';
 
 /* The Wails runtime injects window.go (bound Go methods) and window.runtime. */
 type GoApp = Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -258,6 +258,23 @@ export class Backend {
   emuSetUplink(id: string, port: string, on: boolean) { return this.call<LabView>('EmuSetUplink', id, port, on); }
   emuSetIconStyle(id: string, style: string) { return this.call<LabView>('EmuSetIconStyle', id, style); }
   emuAgentText() { return this.call<string>('EmuAgentText'); }
+  // ---- SNMP ----
+  snmpRun(r: SNMPRequest) { return this.call<SNMPResult>('SNMPRun', r); }
+  snmpSecrets(path: string) { return this.call<SNMPSecretState>('SNMPSecrets', path); }
+  /** null keeps a secret, '' removes it. */
+  snmpSetSecrets(path: string, community: string | null, authPass: string | null, privPass: string | null) { return this.call<void>('SNMPSetSecrets', { path, community, authPass, privPass }); }
+  snmpMibChildren(oid: string) { return this.call<SNMPMibNode[]>('SNMPMibChildren', oid); }
+  snmpMibInfo(name: string) { return this.call<SNMPMibNode>('SNMPMibInfo', name); }
+  snmpMibSearch(q: string) { return this.call<SNMPMibNode[]>('SNMPMibSearch', q); }
+  snmpMibModules() { return this.call<SNMPModule[]>('SNMPMibModules'); }
+  snmpLoadMibs() { return this.call<string[]>('SNMPLoadMIBs'); }
+  snmpRemoveMib(module: string) { return this.call<void>('SNMPRemoveMIB', module); }
+  snmpTrapsStart(port: number) { return this.call<SNMPTrapState>('SNMPTrapsStart', port); }
+  snmpTrapsStop() { return this.call<void>('SNMPTrapsStop'); }
+  snmpTraps() { return this.call<SNMPTrapsView>('SNMPTraps'); }
+  snmpTrapsClear() { return this.call<void>('SNMPTrapsClear'); }
+  /** The in-app AI's network tools (snmp): mode is the agent permission; ask = the step needs the user's yes. */
+  netAgentTool(name: string, args: Record<string, unknown>, mode: string, approved: boolean) { return this.call<EmuToolStep>('NetAgentTool', name, args, mode, approved); }
   emuAgentTool(name: string, args: Record<string, unknown>, approved: boolean) { return this.call<EmuToolStep>('EmuAgentTool', name, args, approved); }
   emuConsoleTail(id: string) { return this.call<string>('EmuConsoleTail', id); }
   labAdd(r: LabRequest) { return this.call<LabView>('LabAdd', r); }

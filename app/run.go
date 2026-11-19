@@ -291,6 +291,12 @@ func buildMenu(app *App, lang string) *menu.Menu {
 	add(lab, "Appliances", "lab-appliances")
 	add(lab, "KVM Hosts", "lab-hosts")
 
+	snmpM := m.AddSubmenu(t("SNMP"))
+	add(snmpM, "SNMP Browser", "snmp-browser")
+	add(snmpM, "Trap Receiver", "snmp-traps")
+	snmpM.AddSeparator()
+	add(snmpM, "Load MIB Files...", "snmp-load-mib")
+
 	script := m.AddSubmenu(t("Script"))
 	add(script, "Command Library...", "command-library")
 	add(script, "Command History...", "history")

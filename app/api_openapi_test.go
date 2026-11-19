@@ -265,6 +265,10 @@ var oasTypeDocs = map[string]string{
 	"TrafficTest":   "A saved traffic test, run by Termwright as a series of trials on the traffic generator: RFC 2544 throughput, latency, frame-loss and back-to-back, RFC 2889 address learning, or convergence (traffic while a cable is pulled or a switch stops or restarts); or iperf3 between two host VMs of the lab.",
 	"TestRun":       "A run of a test: its progress while it runs, then its results.",
 	"TestRow":       "A line of a test run's results: per frame size and direction (and load, for frame-loss).",
+	"SNMPRequest":   "One SNMP operation against a saved session or a target.",
+	"SNMPResult":    "The values an SNMP operation returned, with the MIB's names.",
+	"SNMPMibNode":   "An object of the loaded MIBs.",
+	"SNMPTrapsView": "The trap receiver and the notifications it got.",
 }
 
 func TestOpenAPIDoc(t *testing.T) {
@@ -317,7 +321,7 @@ func TestOpenAPIDoc(t *testing.T) {
 	// every field of what the traffic API sends and takes is described
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
 	for _, ty := range []reflect.Type{reflect.TypeOf(emu.Stream{}), reflect.TypeOf(emu.Tester{}), reflect.TypeOf(emu.Mod{}), reflect.TypeOf(EmuStreamResult{}), reflect.TypeOf(EmuTrafficView{}), reflect.TypeOf(emu.TrafficTest{}), reflect.TypeOf(EmuTestRun{}), reflect.TypeOf(EmuTestRow{}),
-		reflect.TypeOf(EmuEngines{}), reflect.TypeOf(EmuEngineHost{}), reflect.TypeOf(EmuTrex{}), reflect.TypeOf(EmuTrexPort{}), reflect.TypeOf(EmuHostNIC{}), reflect.TypeOf(EmuSessionResult{}), reflect.TypeOf(emu.Session{})} {
+		reflect.TypeOf(EmuEngines{}), reflect.TypeOf(EmuEngineHost{}), reflect.TypeOf(EmuTrex{}), reflect.TypeOf(EmuTrexPort{}), reflect.TypeOf(EmuHostNIC{}), reflect.TypeOf(EmuSessionResult{}), reflect.TypeOf(emu.Session{}), reflect.TypeOf(SNMPRequest{}), reflect.TypeOf(SNMPResult{}), reflect.TypeOf(SNMPRow{}), reflect.TypeOf(SNMPTarget{}), reflect.TypeOf(SNMPValue{})} {
 		tn := strings.TrimPrefix(ty.String(), "app.")
 		for i := 0; i < ty.NumField(); i++ {
 			name := strings.Split(ty.Field(i).Tag.Get("json"), ",")[0]
@@ -363,7 +367,7 @@ func op(id, tag, summary, desc string, extra ...kv) om {
 
 func openAPIDoc(t *testing.T) om {
 	g := &schemaGen{docs: fieldDocs(t), comps: map[string]om{}}
-	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}, emu.TrafficTest{}, EmuTestRun{}, EmuEngines{}, EmuHostNIC{}} {
+	for _, ty := range []any{EmuView{}, EmuTrafficView{}, emu.Stream{}, emu.Tester{}, apiToolInfo{}, emu.TrafficTest{}, EmuTestRun{}, EmuEngines{}, EmuHostNIC{}, SNMPRequest{}, SNMPResult{}, SNMPMibNode{}, SNMPTrapsView{}} {
 		g.schema(reflect.TypeOf(ty))
 	}
 	std := append([]kv{}, errs("401", "403", "405")...)
@@ -502,6 +506,48 @@ func openAPIDoc(t *testing.T) om {
 		{"/lab/traffic/stop", om{{"post", op("stopTraffic", "Traffic", "Stop the run", "Stops sending. The counters stay; a moment later (frames on their way) they are final.",
 			kv{"responses", append(om{{"200", resp("Stopped; the traffic view.", "TrafficView")}}, append(errs("422"), std...)...)})}}},
 	}
+	snmpEx := om{
+		{"walk", ex("Walk the interface table of a saved session", om{{"session", "Lab/core-sw1"}, {"op", "walk"}, {"oids", []string{"IF-MIB::ifTable"}}})},
+		{"get", ex("Read a few scalars", om{{"session", "Lab/core-sw1"}, {"op", "get"}, {"oids", []string{"sysDescr.0", "sysUpTime.0", "sysName.0"}}})},
+		{"v3", ex("An address and SNMPv3 credentials (not a saved session)", om{{"target", om{{"address", "10.0.0.1"}, {"version", "3"}, {"user", "netops"}, {"auth", "SHA-256"}, {"authPass", "…"}, {"priv", "AES"}, {"privPass", "…"}}}, {"op", "get"}, {"oids", []string{"sysDescr.0"}}})},
+		{"set", ex("Write: shut a port down", om{{"session", "Lab/core-sw1"}, {"op", "set"}, {"values", []om{{{"oid", "ifAdminStatus.5"}, {"value", "down"}}}}})},
+	}
+	paths = append(paths,
+		kv{"/snmp", om{{"post", op("snmp", "SNMP", "Run an SNMP operation", "get, getnext, bulk, walk or set against a saved session's SNMP settings (session properties → SNMP: version, community or v3 user; the community and passwords from the credential store) or a target given here. OIDs can be names from the loaded MIBs (sysDescr.0, IF-MIB::ifTable, ifOperStatus). Values come back with names and readable values. A set needs writes allowed on the session; through the API it is not asked, production sessions too (the scripts are the user's own).",
+			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", om{{"$ref", "#/components/schemas/SNMPRequest"}}}, {"examples", snmpEx}}}}}}},
+			kv{"responses", append(om{{"200", resp("The values.", "SNMPResult")}}, append(errs("400", "422"), std...)...)})}}},
+		kv{"/snmp/mib", om{{"get", op("searchMib", "SNMP", "Search the MIBs", "Objects of the loaded MIBs (the standard IETF and IANA MIBs built in, and the user's own) whose name, module or OID matches q.",
+			kv{"parameters", []om{{{"name", "q"}, {"in", "query"}, {"required", true}, {"description", "A name (ifOper), a module (IF-MIB) or an OID prefix."}, {"schema", om{{"type", "string"}}}}}},
+			kv{"responses", append(om{{"200", om{{"description", "The objects (at most 200)."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/SNMPMibNode"}}}}}}}}}}}}, std...)})}}},
+		kv{"/snmp/mib/{object}", om{{"get", op("getMibObject", "SNMP", "A MIB object", "One object of the loaded MIBs by name or OID: its syntax, enums, access, index, description.",
+			kv{"parameters", []om{{{"name", "object"}, {"in", "path"}, {"required", true}, {"description", "A name (ifOperStatus, IF-MIB::ifOperStatus) or an OID."}, {"schema", om{{"type", "string"}}}}}},
+			kv{"responses", append(om{{"200", resp("The object.", "SNMPMibNode")}}, append(errs("404"), std...)...)})}}},
+		kv{"/snmp/traps", om{{"get", op("listTraps", "SNMP", "Traps received", "The trap receiver's state (start it in SNMP → Traps) and the notifications it got, newest first, with names from the MIBs.",
+			kv{"responses", append(om{{"200", resp("The receiver and its notifications.", "SNMPTrapsView")}}, std...)})}}},
+		kv{"/tools", om{{"get", op("listNetTools", "Network tools", "The network tools", "The network tools (snmp; the API client and syslog join them) with their arguments (JSON Schema): the same tools the in-app AI assistant and the Claude connector use. Each one is POST /tools/{name}.",
+			kv{"responses", append(om{{"200", om{{"description", "The tools."}, {"content", om{{"application/json", om{{"schema", om{{"type", "array"}, {"items", om{{"$ref", "#/components/schemas/Tool"}}}}}}}}}}}}, std...)})}}},
+	)
+	for _, tl := range netTools {
+		schema := om{{"type", "object"}}
+		if p, ok := tl.InputSchema["properties"].(map[string]any); ok {
+			keys := make([]string, 0, len(p))
+			for k := range p {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			props := om{}
+			for _, k := range keys {
+				props = append(props, kv{k, p[k]})
+			}
+			schema = append(schema, kv{"properties", props})
+		}
+		if r, ok := tl.InputSchema["required"].([]string); ok && len(r) > 0 {
+			schema = append(schema, kv{"required", r})
+		}
+		paths = append(paths, kv{"/tools/" + tl.Name, om{{"post", op("net_"+tl.Name, "Network tools", "The "+tl.Name+" tool", tl.Description+" Through the API it runs without asking.",
+			kv{"requestBody", om{{"required", true}, {"content", om{{"application/json", om{{"schema", schema}}}}}}},
+			kv{"responses", append(om{{"200", resp("What it did or found, as text.", "ToolResult")}}, append(errs("400", "404", "422"), std...)...)})}}})
+	}
 	// every lab tool, with its own arguments
 	tools := append([]mcpTool{}, mcpLabTools...)
 	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
@@ -589,7 +635,7 @@ func openAPIDoc(t *testing.T) om {
 		{"openapi", "3.2.1"},
 		{"info", om{
 			{"title", "Termwright local API"},
-			{"summary", "The emulated lab of Termwright for scripts, test frameworks and CI on this computer."},
+			{"summary", "The emulated lab and the network tools (SNMP) of Termwright for scripts, test frameworks and CI on this computer."},
 			{"description", openAPIIntro},
 			{"version", "1.0.0"},
 			{"license", om{{"name", "Apache 2.0"}, {"identifier", "Apache-2.0"}}}}},
@@ -603,6 +649,8 @@ func openAPIDoc(t *testing.T) om {
 			{{"name", "Traffic ports"}, {"summary", "Test ports"}, {"parent", "Traffic"}, {"description", "Test ports on switch ports."}},
 			{{"name", "Traffic streams"}, {"summary", "Streams"}, {"parent", "Traffic"}, {"description", "Streams between test ports."}},
 			{{"name", "Traffic tests"}, {"summary", "Tests"}, {"parent", "Traffic"}, {"description", "RFC 2544, RFC 2889 learning and convergence tests, and their runs."}},
+			{{"name", "SNMP"}, {"description", "SNMP v1, v2c and v3 with the saved sessions' settings: get, walk, set, the MIBs and traps."}},
+			{{"name", "Network tools"}, {"description", "The network tools the AI assistant and the Claude connector use (snmp), as JSON."}},
 			{{"name", "API"}, {"description", "This description."}}}},
 		{"paths", paths},
 		{"components", om{

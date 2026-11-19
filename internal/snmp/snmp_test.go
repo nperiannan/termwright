@@ -3,6 +3,7 @@ package snmp
 import (
 	"context"
 	"encoding/hex"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -175,5 +176,44 @@ func TestNoAgent(t *testing.T) {
 	defer c.Close()
 	if _, err := c.Get(ctx, "1.3.6.1.2.1.1.1.0"); err == nil {
 		t.Fatal("expected an error")
+	}
+}
+
+func TestTraps(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	addr := pc.LocalAddr().String()
+	if err := SendTrap(Config{Address: addr, Version: V2c, Community: "traps"}, "1.3.6.1.6.3.1.1.5.3", 4242, []Varbind{{OID: "1.3.6.1.2.1.2.2.1.1.7", Type: Integer, Int: 7}}); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 65535)
+	_ = pc.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, from, err := pc.ReadFrom(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, reply, err := DecodeTrap(buf[:n], from.String(), nil)
+	if err != nil || reply != nil || tr.TrapOID != "1.3.6.1.6.3.1.1.5.3" || tr.Uptime != 4242 || tr.Community != "traps" || len(tr.Varbinds) != 1 || tr.Version != "2c" {
+		t.Fatalf("%+v %v", tr, err)
+	}
+	if err := SendTrap(Config{Address: addr, Version: V1, Community: "traps"}, "1.3.6.1.4.1.1916.4.1.0.5", 99, nil); err != nil {
+		t.Fatal(err)
+	}
+	n, from, _ = pc.ReadFrom(buf)
+	tr, _, err = DecodeTrap(buf[:n], from.String(), nil)
+	if err != nil || tr.TrapOID != "1.3.6.1.4.1.1916.4.1.0.5" || tr.Version != "1" {
+		t.Fatalf("v1: %+v %v", tr, err)
+	}
+	// an inform gets its answer
+	b, _ := encodeCommunity(V2c, "traps", PDU{Type: PDUInform, RequestID: 77, Varbinds: []Varbind{{OID: "1.3.6.1.6.3.1.1.4.1.0", Type: ObjectID, Value: "1.3.6.1.6.3.1.1.5.4"}}})
+	tr, reply, err = DecodeTrap(b, "x", nil)
+	if err != nil || tr.Kind != "inform" || reply == nil {
+		t.Fatalf("inform: %+v %v", tr, err)
+	}
+	if m, _ := decode(reply, nil); m.PDU.Type != PDUResponse || m.PDU.RequestID != 77 {
+		t.Fatalf("inform reply: %+v", m.PDU)
 	}
 }

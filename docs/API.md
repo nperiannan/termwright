@@ -60,10 +60,24 @@ Settings, and turning one on does not turn on the other.
 | `GET /lab/traffic/runs` | The running test and the last 20 runs | 200 `TestRun[]` |
 | `GET /lab/traffic/runs/{run}?format=json\|csv\|html\|text` | A run's progress and results (`latest` for the newest) | 200 |
 | `POST /lab/traffic/runs/stop` | Stops the running test | 200 |
+| `POST /snmp` | An SNMP request: `op` (`get`, `getnext`, `bulk`, `walk`, `table`, `set`), `oids` or `values`, and a saved `session` (its address and credentials) or a `target` | 200 `SNMPResult` |
+| `GET /snmp/mib?q=` | Searches the loaded MIBs by name or OID | 200 `SNMPMibNode[]` |
+| `GET /snmp/mib/{object}` | One object (`IF-MIB::ifOperStatus`, `sysDescr`, an OID): syntax, values, access, description | 200 `SNMPMibNode` |
+| `GET /snmp/traps` | The trap receiver's state and the traps received, newest first | 200 `SNMPTrapsView` |
+| `GET /tools` | The network tools (`snmp`) with their arguments (JSON Schema), the same as the MCP connector's | 200 `Tool[]` |
+| `POST /tools/{tool}` | Runs a network tool; the body holds its arguments | 200 `{"result": text}` |
 
 `{port}` and `{stream}` take a name (`Test port 1`, `voice`) or an id. In a
 stream, `from` and `to` take names too. The OpenAPI document has every field,
 its meaning and examples.
+
+A Set through `POST /snmp` needs *Allow Set* in the session's SNMP settings.
+The community and the v3 passwords of a session never leave the computer's
+credential store: the API uses them but does not return them.
+
+```sh
+curl -s -H "Authorization: Bearer $KEY" -d '{"session":"Lab/core-sw1","op":"walk","oids":["IF-MIB::ifOperStatus"]}' $API/snmp
+```
 
 ## A traffic test with curl
 

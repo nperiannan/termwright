@@ -2,6 +2,13 @@
 
 All notable changes to Termwright. Each release on GitHub shows its section of this file and the list of commits.
 
+## Unreleased
+
+- **SNMP Browser** (new **SNMP** menu, and **Open SNMP Browser** on a session's right-click menu): Get, Get Next, Get Bulk, Walk, Table and Set against a saved session, SNMP v1, v2c and v3 (MD5, SHA-1, SHA-224/256/384/512; DES, AES-128/192/256). A MIB tree with search and each object's syntax, values, access and description; 24 standard IETF/IANA MIBs are built in (IF-MIB, IP-MIB, BRIDGE-MIB, Q-BRIDGE-MIB, LLDP-MIB, ENTITY-MIB, HOST-RESOURCES-MIB and more) and **Load MIB Files…** adds vendor MIBs. Results show names, index, type and readable values (enum names, speeds, MAC addresses); **Table view** puts a walked table in rows and columns; **History** runs a request again; **Favourites**; **Export CSV**. Written with the Go standard library only.
+- **SNMP settings per session** (session properties → **SNMP**): version, address and port (the session's host by default), community or v3 user, security level, authentication and privacy protocols, context, and **Allow Set**. The community and the v3 passwords go to the computer's credential store like the login password, never to the session file or an export; they follow the session when it is renamed, moved, duplicated or deleted. **Test (sysDescr.0)** checks them before you save.
+- **Trap receiver** (SNMP → Trap Receiver): receives v1, v2c and v3 traps and informs (answering informs), on UDP 162 or another port, names them from the MIBs (IF-MIB::linkDown) and shows which session sent them; v3 traps use the users of the SNMP sessions.
+- **SNMP for the AI assistant, MCP apps and scripts**: an `snmp` tool (get, getnext, bulk, walk, set, MIB search and info, traps) in the in-app agent (a new tool in its list), the MCP connector and the local API (`POST /api/v1/snmp`, `GET /api/v1/snmp/mib`, `GET /api/v1/snmp/mib/{object}`, `GET /api/v1/snmp/traps`, and `GET /api/v1/tools`, `POST /api/v1/tools/{tool}`), described in the OpenAPI document. The Python client gets `lab.snmp.get / walk / bulk / set / mib_search / mib / traps`. Reads always run; a Set needs *Allow Set* on the session and, in the agent's Fully autonomous mode, asks only on production sessions.
+
 ## 0.41.0 (2026-11-19)
 
 - **AI agent, Fully autonomous**: only production sessions ask now; reboot, reload and erase on other sessions run like any other change (before, they always asked).

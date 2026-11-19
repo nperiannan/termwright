@@ -343,4 +343,8 @@ Without a team Termwright works on its own and sends nothing anywhere.
 - **A shortcut for nearly every menu command** (e.g. Disconnect, Clear Screen, Auto Scroll, Timestamps, Log Session, Open SFTP Tab, Save Screen As Image, Save Selection as Device Fact); Help → Keyboard Shortcuts lists them with a search box.
 - `Mod` = Cmd on macOS, Ctrl+Shift on Windows/Linux: `O` sessions, `Q` quick connect, `L` local shell, `R` reconnect, `W` close tab, `P` SFTP tab, `F` find, `S` save scrollback, `M` session manager, `K` command window, `B` button bar, `E` command library, `Y` command history, `J` recording marker, `G` Quick Open.
 
+- **SNMP Browser** (SNMP menu, or right-click a session → Open SNMP Browser): Get, Get Next, Get Bulk, Walk, Table and Set; SNMP v1, v2c, v3 (MD5, SHA-1, SHA-2; DES, AES-128/192/256); MIB tree with search and object details; 24 IETF/IANA MIBs built in, vendor MIBs from files; readable values (enum names, speeds, MAC addresses); Table view, History, Favourites, Export CSV.
+- **SNMP credentials in the session**: session properties → SNMP (version, address, port, community or v3 user and protocols, context, Allow Set, Test); the community and v3 passwords are in the OS credential store.
+- **Trap receiver**: v1, v2c and v3 traps and informs on any UDP port, named from the MIBs, matched to sessions.
+- **SNMP for automation**: the in-app AI agent, MCP apps, the local REST API (`/api/v1/snmp…`, `/api/v1/tools`) and the Python client; a Set needs Allow Set, and production sessions always ask.
 - **Network Map**: live topology from your sessions (LLDP, CDP, EDP, STP, LAG; EXOS, VOSS, Cisco, Arista, Junos; CLI or SNMP), auto-arranged, zoom, export to JPEG, PDF or HTML. The labs have the same Arrange styles.

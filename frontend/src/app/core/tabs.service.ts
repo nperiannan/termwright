@@ -34,7 +34,10 @@ export interface TabView {
   cols: number;
   rows: number;
   locked: boolean;
-  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab' | 'map';
+  kind: 'terminal' | 'sftp' | 'rdp' | 'vnc' | 'player' | 'lab' | 'map' | 'snmp';
+  /** SNMP Browser tab: the saved session it starts on ('' = choose one); snmpPage opens a page (results, traps). */
+  snmpSession?: string;
+  snmpPage?: string;
   /** Network Map tab: what it maps. */
   mapTargets?: string[];
   mapScope?: string;
@@ -776,6 +779,22 @@ export class Tabs {
       id, title: '⛓ ' + name, state: 'connected', message: '', info: name,
       session: { ...s, name, path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'map', parentId: '', home: '', recording: false,
       mapTargets: targets, mapScope: scope, mapTitle: title, mapOpened: opened,
+    };
+    this.tabs.update(l => [...l, tv]);
+    this.activeId.set(tv.id);
+  }
+
+  /** The SNMP Browser: one tab per session (path '' = the plain browser). page 'traps' shows the trap receiver. */
+  async openSnmp(path = '', name = '', page = '') {
+    const id = 'snmp-' + (path || 'browser');
+    const open = this.tabs().find(t => t.id === id) || (!path ? this.tabs().find(t => t.kind === 'snmp') : undefined);
+    if (open) { if (page) this.patch(open.id, { snmpPage: page + ':' + Date.now() }); this.activeId.set(open.id); return; }
+    const s = await this.backend.newSessionDefaults();
+    const title = 'SNMP' + (name ? ': ' + name : ' Browser');
+    const tv: TabView = {
+      id, title: '◈ ' + title, state: 'connected', message: '', info: title,
+      session: { ...s, name: title, path: '' }, logFile: '', cols: 0, rows: 0, locked: false, kind: 'snmp', parentId: '', home: '', recording: false,
+      snmpSession: path, snmpPage: page ? page + ':' + Date.now() : '',
     };
     this.tabs.update(l => [...l, tv]);
     this.activeId.set(tv.id);

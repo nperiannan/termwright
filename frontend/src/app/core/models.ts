@@ -19,6 +19,8 @@ export interface Session {
   jumpOff?: boolean; offJump?: string; proxyOff?: boolean; offProxy?: { type: '' | 'socks5' | 'http'; host: string; port: number; user: string } | null;
   autoReconnect: boolean; x11Forward: boolean; agentForward: boolean;
   consoleServer?: string; consolePort?: number; consoleMethod?: string; consoleUser?: string; consoleBase?: number; consoleProtocol?: string;
+  /** SNMP (the browser, the map and discovery): version '' = v2c, '1', '2c', '3'; the community and v3 passwords are in the credential store. */
+  snmpVersion?: string; snmpPort?: number; snmpHost?: string; snmpUser?: string; snmpAuth?: string; snmpPriv?: string; snmpContext?: string; snmpWrite?: boolean;
   environment?: string; rdpDomain?: string; rdpFullScreen?: boolean; rdpSize?: string; vncViewOnly?: boolean; keywordSet: string; fontFamily: string; fontSize: number; backspace: '' | 'bs'; logonScript: string; serialDtr: boolean; serialRts: boolean;
   logonArgs: string; useLogonScript: boolean; automateLogon: boolean; initialCr: boolean; loginAgain?: boolean;
   remoteCommand: string; useRemoteCommand: boolean; openAs: '' | 'sftp'; deviceType: string; ownLogin: boolean; account?: string; sftpToTarget: boolean; sftpOn?: '' | 'jump' | 'target'; filesPanel?: boolean;
@@ -296,7 +298,7 @@ export const ACTIONS: Record<string, string> = {
   'layout-tabs': 'Tabbed View', 'layout-tile-v': 'Tile Side by Side', 'layout-tile-h': 'Tile Stacked', 'layout-grid': 'Tile Grid',
   'send-break': 'Send Break', 'send-file': 'Send Text File...', 'save-selection': 'Save Selection As...',
   'xmodem': 'Send XMODEM...', 'xmodem-receive': 'Receive XMODEM...', 'scp-upload': 'SCP Upload File...', 'scp-upload-folder': 'SCP Upload Folder...', 'scp-download': 'SCP Download...',
-  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'lab-emu': 'Emulated Lab', 'lab-sim': 'Simulated Lab', 'lab-overview': 'Lab Overview', 'lab-traffic': 'Traffic Generator', 'lab-appliances': 'Appliances', 'lab-hosts': 'KVM Hosts', 'connect-ai': 'Connect an AI App...', 'workspaces': 'Workspaces...',
+  'ymodem-send': 'Send YMODEM...', 'ymodem-receive': 'Receive YMODEM', passwords: 'Passwords & Accounts...', 'check-updates': 'Check for Updates...', 'key-setup': 'Set Up Key Login...', 'remote-desktop': 'Set Up Remote Desktop...', 'quick-open': 'Quick Open...', welcome: 'Welcome...', 'new-session': 'New Session...', 'capture-screen': 'Save Screen As Image...', 'teach-fact': 'Save Selection as Device Fact...', 'toggle-icon-style': 'Tile / Glyph Icons', 'command-library': 'Command Library...', 'net-check': 'Network Check...', 'sim-lab': 'Simulated Lab...', 'lab-emu': 'Emulated Lab', 'lab-sim': 'Simulated Lab', 'lab-overview': 'Lab Overview', 'lab-traffic': 'Traffic Generator', 'lab-appliances': 'Appliances', 'lab-hosts': 'KVM Hosts', 'snmp-browser': 'SNMP Browser', 'snmp-traps': 'SNMP Trap Receiver', 'snmp-load-mib': 'Load MIB Files...', 'connect-ai': 'Connect an AI App...', 'workspaces': 'Workspaces...',
   'save-workspace': 'Save Workspace...', 'compare': 'Compare Outputs...',
   'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out', 'global-options': 'Global Options', 'session-options': 'Session Options',
 };
@@ -520,3 +522,16 @@ export interface TopoResult { map: TopoMap; changes: TopoChange[] | null; needsC
 export interface LayoutNode { id: string; w: number; h: number; x: number; y: number; pinned?: boolean; ghost?: boolean; }
 export interface LayoutRequest { style: string; nodes: LayoutNode[]; edges: { a: string; b: string }[]; root?: string; width?: number; }
 export interface LayoutResult { style: string; nodes: LayoutNode[] | null; }
+
+/** SNMP (app/snmp_app.go). */
+export interface SNMPTarget { address: string; version?: string; community?: string; user?: string; auth?: string; authPass?: string; priv?: string; privPass?: string; context?: string; }
+export interface SNMPValue { oid: string; type?: string; value: string; }
+export interface SNMPRequest { session?: string; target?: SNMPTarget; op: string; oids?: string[]; values?: SNMPValue[]; maxRep?: number; max?: number; timeout?: number; confirmed?: boolean; }
+export interface SNMPRow { oid: string; name: string; object?: string; module?: string; instance?: string; type: string; value: string; display: string; }
+export interface SNMPResult { rows: SNMPRow[]; address: string; version: string; engineId?: string; ms: number; requests: number; truncated?: boolean; }
+export interface SNMPMibNode { oid: string; name: string; module: string; kind: string; syntax?: string; base?: string; enums?: Record<string, string>; hint?: string; access?: string; status?: string; units?: string; index?: string[]; augments?: string; objects?: string[]; description?: string; children: boolean; }
+export interface SNMPModule { name: string; builtIn: boolean; file?: string; }
+export interface SNMPSecretState { community: boolean; auth: boolean; priv: boolean; }
+export interface SNMPTrapState { on: boolean; port: number; error?: string; count: number; }
+export interface SNMPTrapView { at: string; from: string; version: string; community?: string; user?: string; kind: string; trapOid: string; uptime: number; note?: string; name: string; rows: SNMPRow[]; session?: string; }
+export interface SNMPTrapsView { state: SNMPTrapState; traps: SNMPTrapView[]; }

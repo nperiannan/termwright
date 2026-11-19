@@ -98,10 +98,12 @@ class Lab:
             self.api, self.key = find_endpoint()
         self.timeout = timeout
         self.traffic = Traffic(self)
+        self.snmp = SNMP(self)
 
     # ---- plain requests ----
-    def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False, **params):
-        url = self.api + "/lab" + path
+    def request(self, method: str, path: str, body: Any = None, timeout: Optional[float] = None, raw: bool = False, binary: bool = False,
+                root: bool = False, **params):
+        url = self.api + ("" if root else "/lab") + path
         q = {k: v for k, v in params.items() if v is not None}
         if q:
             url += "?" + urllib.parse.urlencode(q)
@@ -602,6 +604,62 @@ class Traffic:
         return self.lab.request("GET", "/traffic/runs/" + run, raw=fmt != "json", format=fmt)
 
 
+class SNMP:
+    """SNMP against a saved session (its community / v3 passwords stay in the OS credential store) or an address.
+    Results are dicts: rows (oid, name, type, value, display), address, version, ms, requests, truncated."""
+
+    def __init__(self, lab: Lab):
+        self.lab = lab
+
+    def run(self, op: str, *oids: str, session: Optional[str] = None, address: Optional[str] = None,
+            version: Optional[str] = None, community: Optional[str] = None, values: Optional[list] = None,
+            max: Optional[int] = None, max_rep: Optional[int] = None, timeout: Optional[int] = None) -> dict:
+        body: dict = {"op": op}
+        if session:
+            body["session"] = session
+        if address:
+            body["target"] = {k: v for k, v in {"address": address, "version": version, "community": community}.items() if v}
+        if oids:
+            body["oids"] = list(oids)
+        if values:
+            body["values"] = values
+        for k, v in (("max", max), ("maxRep", max_rep), ("timeout", timeout)):
+            if v is not None:
+                body[k] = v
+        return self.lab.request("POST", "/snmp", body, root=True)
+
+    def get(self, *oids: str, **target) -> dict:
+        return self.run("get", *oids, **target)
+
+    def walk(self, oid: str = "1.3.6.1.2.1", **target) -> dict:
+        return self.run("walk", oid, **target)
+
+    def bulk(self, *oids: str, **target) -> dict:
+        return self.run("bulk", *oids, **target)
+
+    def set(self, oid: str, value: Any, type: str = "", **target) -> dict:
+        """Write one value (the session must allow writes). type is optional: the MIB gives it, enum names work."""
+        v = {"oid": oid, "value": str(value)}
+        if type:
+            v["type"] = type
+        return self.run("set", values=[v], **target)
+
+    def mib_search(self, q: str) -> list:
+        return self.lab.request("GET", "/snmp/mib", root=True, q=q) or []
+
+    def mib(self, obj: str) -> dict:
+        return self.lab.request("GET", "/snmp/mib/" + urllib.parse.quote(obj, safe=""), root=True)
+
+    def traps(self) -> dict:
+        """The trap receiver's state and the traps it has received, newest first."""
+        return self.lab.request("GET", "/snmp/traps", root=True)
+
+    @staticmethod
+    def table(result: dict) -> dict:
+        """{oid name: display} of a result."""
+        return {r["name"]: r["display"] for r in result.get("rows") or []}
+
+
 # Every (method, path) the client calls: a test checks them against docs/api/openapi.yaml.
 ENDPOINTS = [
     ("GET", "/lab"), ("GET", "/lab/tools"),
@@ -616,4 +674,5 @@ ENDPOINTS = [
     ("GET", "/lab/traffic/tests"), ("POST", "/lab/traffic/tests"), ("PUT", "/lab/traffic/tests/{test}"),
     ("DELETE", "/lab/traffic/tests/{test}"), ("POST", "/lab/traffic/tests/{test}/run"),
     ("GET", "/lab/traffic/runs"), ("GET", "/lab/traffic/runs/{run}"), ("POST", "/lab/traffic/runs/stop"),
+    ("POST", "/snmp"), ("GET", "/snmp/mib"), ("GET", "/snmp/mib/{object}"), ("GET", "/snmp/traps"),
 ]

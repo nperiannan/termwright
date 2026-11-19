@@ -21,7 +21,7 @@ import { FactTeach } from './fact-teach';
 import { factList, factsAge } from '../core/facts';
 import { testFactRegex } from '../core/fact-regex';
 
-type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote' | 'facts';
+type Page = 'connection' | 'auth' | 'firewall' | 'forward' | 'serial' | 'local' | 'logon' | 'terminal' | 'log' | 'remote' | 'facts' | 'snmp';
 
 /** Saves a session (and its password when one was typed or cleared),
  *  refreshes the Session Manager, selects it and updates its open tabs. */
@@ -69,6 +69,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
           @if (s.protocol === 'SSH2' || s.protocol === 'Telnet') {
             <a class="sub" [class.on]="page() === 'facts'" (click)="page.set('facts')" style="order: 7"><app-icon name="device" [size]="15" />Device Facts</a>
           }
+          @if (snmpOk()) { <a class="sub" [class.on]="page() === 'snmp'" (click)="openSnmpPage()" style="order: 7"><app-icon name="topology" [size]="15" />SNMP</a> }
           @if (s.protocol === 'Serial') { <a class="sub" [class.on]="page() === 'serial'" (click)="page.set('serial')" style="order: 6"><app-icon name="serial" [size]="15" />Serial</a> }
           @if (s.protocol === 'Local Shell') { <a class="sub" [class.on]="page() === 'local'" (click)="page.set('local')" style="order: 7"><app-icon name="shell" [size]="15" />Local Shell</a> }
           @if (!noTerm()) {
@@ -526,6 +527,49 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
               <button type="button" (click)="s.portForwards.push({ type: 'local', bindAddr: '', bindPort: 0, destHost: '', destPort: 0, name: '' })">Add forward</button>
               }
             }
+            @case ('snmp') {
+              <div class="hint" style="margin-bottom: 10px">Used by the SNMP Browser, the AI assistant and scripts. The community and the v3 passwords are kept in the computer's credential store, never in the session file or an export.</div>
+              <div class="grid">
+                <label>Version</label>
+                <div class="seg">@for (v of ['1', '2c', '3']; track v) { <button type="button" [class.on]="(s.snmpVersion || '2c') === v" (click)="s.snmpVersion = v === '2c' ? '' : v">v{{ v }}</button> }</div>
+                <label>Address · port</label>
+                <div class="row"><input name="snmphost" [(ngModel)]="s.snmpHost" [placeholder]="(s.hostname || 'address') + ' (from Connection)'" spellcheck="false" /><input name="snmpport" type="number" style="width: 80px" [(ngModel)]="s.snmpPort" placeholder="161" /></div>
+                @if ((s.snmpVersion || '2c') !== '3') {
+                  <label>Community</label>
+                  <div class="row"><input name="snmpcomm" type="password" autocomplete="off" [(ngModel)]="snmpComm" [placeholder]="snmpSec().community ? '•••••••• (saved; type to change)' : 'public'" />
+                    @if (snmpSec().community) { <span class="vault">🔒 saved</span><button type="button" (click)="snmpComm = ''; snmpClear.community = true">Remove</button> }</div>
+                } @else {
+                  <label>User</label>
+                  <input name="snmpuser" [(ngModel)]="s.snmpUser" spellcheck="false" />
+                  <label>Security level</label>
+                  <div class="seg">
+                    <button type="button" [class.on]="!s.snmpAuth" (click)="s.snmpAuth = ''; s.snmpPriv = ''">noAuthNoPriv</button>
+                    <button type="button" [class.on]="!!s.snmpAuth && !s.snmpPriv" (click)="s.snmpAuth = s.snmpAuth || 'SHA-256'; s.snmpPriv = ''">authNoPriv</button>
+                    <button type="button" [class.on]="!!s.snmpPriv" (click)="s.snmpAuth = s.snmpAuth || 'SHA-256'; s.snmpPriv = s.snmpPriv || 'AES-128'">authPriv</button>
+                  </div>
+                  @if (s.snmpAuth) {
+                    <label>Authentication</label>
+                    <div class="row"><select name="snmpauth" [(ngModel)]="s.snmpAuth">@for (a of snmpAuths; track a) { <option [value]="a">{{ a }}</option> }</select>
+                      <input name="snmpauthpw" type="password" autocomplete="off" [(ngModel)]="snmpAuthPw" [placeholder]="snmpSec().auth ? '•••••••• (saved; type to change)' : 'password (8 characters or more)'" />
+                      @if (snmpSec().auth) { <span class="vault">🔒 saved</span> }</div>
+                  }
+                  @if (s.snmpPriv) {
+                    <label>Privacy</label>
+                    <div class="row"><select name="snmppriv" [(ngModel)]="s.snmpPriv">@for (a of snmpPrivs; track a) { <option [value]="a">{{ a }}</option> }</select>
+                      <input name="snmpprivpw" type="password" autocomplete="off" [(ngModel)]="snmpPrivPw" [placeholder]="snmpSec().priv ? '•••••••• (saved; type to change)' : 'password (8 characters or more)'" />
+                      @if (snmpSec().priv) { <span class="vault">🔒 saved</span> }</div>
+                  }
+                  <label>Context</label>
+                  <input name="snmpctx" [(ngModel)]="s.snmpContext" placeholder="(none)" spellcheck="false" />
+                }
+                <label>Writes (Set)</label>
+                <div class="checks"><label><input type="checkbox" name="snmpwrite" [(ngModel)]="s.snmpWrite" /> Allow Set from the SNMP Browser, the AI assistant and scripts</label>
+                  <div class="hint">On Production sessions every Set asks first, even in the AI assistant's autonomous mode.</div></div>
+                <label>Check</label>
+                <div class="row"><button type="button" (click)="snmpTest()" [disabled]="snmpBusy()">{{ snmpBusy() ? 'Testing…' : 'Test (sysDescr.0)' }}</button>
+                  @if (snmpMsg(); as m) { <span [class.ok]="m.ok" [class.bad]="!m.ok" class="snmpmsg">{{ m.text }}</span> }</div>
+              </div>
+            }
             @case ('serial') {
               <div class="grid">
                 <label>Port</label>
@@ -757,6 +801,7 @@ export async function storeSession(ui: Ui, backend: Backend, tabs: Tabs, s: Sess
   }
   `,
   styles: [`
+    .vault { color: var(--ok); font-size: 12px; white-space: nowrap; } .snmpmsg { font-size: 12px; } .snmpmsg.ok { color: var(--ok); } .snmpmsg.bad { color: var(--danger); }
     .rt { border: 1px solid var(--line, var(--border)); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;
       .rth { display: flex; gap: 12px; align-items: center; } .tx { flex: 1; display: flex; flex-direction: column; line-height: 1.4; small { color: var(--muted); } }
       &.off { border-color: color-mix(in srgb, #f59e0b 55%, transparent); select, input:not(.tgl input), .grid { opacity: .6; } } } /* not the switch's own (hidden) check box */
@@ -1073,7 +1118,7 @@ export class SessionEditor implements OnInit {
     }
     this.tabId = e.tabId;
     const pg = this.ui.editorPage();
-    if (pg) { this.page.set(pg as Page); this.ui.editorPage.set(''); }
+    if (pg) { if (pg === 'snmp') this.openSnmpPage(); else this.page.set(pg as Page); this.ui.editorPage.set(''); }
     if (e.pw) { this.pw = e.pw; }
   }
 
@@ -1094,9 +1139,55 @@ export class SessionEditor implements OnInit {
     const where = s.protocol === 'Serial' ? [s.comPort, s.baudRate].filter(Boolean).join(' ') : s.protocol === 'Local Shell' ? '' : (s.username ? s.username + '@' : '') + (s.hostname || '');
     return [s.folder ? s.folder.split('/').join(' / ') : (this.oldPath ? 'Top level' : 'New session'), s.protocol, where].filter(Boolean).join(' · ');
   }
+  // ---- SNMP page ----
+  readonly snmpAuths = ['MD5', 'SHA', 'SHA-224', 'SHA-256', 'SHA-384', 'SHA-512'];
+  readonly snmpPrivs = ['DES', 'AES-128', 'AES-192', 'AES-256'];
+  snmpComm = ''; snmpAuthPw = ''; snmpPrivPw = '';
+  snmpClear = { community: false };
+  readonly snmpSec = signal({ community: false, auth: false, priv: false });
+  readonly snmpBusy = signal(false);
+  readonly snmpMsg = signal<{ ok: boolean; text: string } | null>(null);
+  snmpOk() { const p = this.s?.protocol ?? ''; return !!p && !['RDP', 'VNC', 'Local Shell', 'WOL', 'Serial'].includes(p); }
+  openSnmpPage() {
+    this.page.set('snmp');
+    if (this.oldPath) this.backend.snmpSecrets(this.oldPath).then(v => this.snmpSec.set(v)).catch(() => {});
+  }
+  /** The typed SNMP secrets: null keeps the saved one, '' removes it. */
+  private snmpSecrets(): [string | null, string | null, string | null] {
+    return [this.snmpComm ? this.snmpComm : this.snmpClear.community ? '' : null, this.snmpAuthPw || null, this.snmpPrivPw || null];
+  }
+  snmpCheck(): string {
+    const s = this.s;
+    if (!s || s.snmpVersion !== '3') return '';
+    if (s.snmpAuth && this.snmpAuthPw && this.snmpAuthPw.length < 8) return 'The SNMPv3 authentication password needs 8 characters or more.';
+    if (s.snmpPriv && this.snmpPrivPw && this.snmpPrivPw.length < 8) return 'The SNMPv3 privacy password needs 8 characters or more.';
+    if (s.snmpAuth && !s.snmpUser?.trim()) return 'Enter the SNMPv3 user.';
+    return '';
+  }
+  /** Test reads sysDescr.0 with what is on the page (typed passwords, else the saved ones). */
+  async snmpTest() {
+    const s = this.s;
+    if (!s) return;
+    this.snmpBusy.set(true); this.snmpMsg.set(null);
+    try {
+      const [comm, ap, pp] = this.snmpSecrets();
+      const port = Number(s.snmpPort) || 161;
+      const host = (s.snmpHost || s.hostname || '').trim();
+      const typed = comm !== null || ap !== null || pp !== null || !this.oldPath;
+      const r = typed || !this.oldPath
+        ? await this.backend.snmpRun({ op: 'get', oids: ['1.3.6.1.2.1.1.1.0'], target: { address: host.includes(':') && !host.startsWith('[') && host.split(':').length === 2 ? host : host + ':' + port,
+            version: s.snmpVersion || '2c', community: comm ?? undefined, user: s.snmpUser, auth: s.snmpAuth, authPass: ap ?? undefined, priv: s.snmpPriv, privPass: pp ?? undefined, context: s.snmpContext }, ...(this.oldPath ? { session: this.oldPath } : {}) })
+        : await this.backend.snmpRun({ session: this.oldPath, op: 'get', oids: ['1.3.6.1.2.1.1.1.0'] });
+      this.snmpMsg.set({ ok: true, text: '✓ ' + (r.rows[0]?.display || '(empty)').split('\n')[0].slice(0, 80) + ' · ' + r.ms + ' ms' });
+    } catch (e) {
+      this.snmpMsg.set({ ok: false, text: errText(e) });
+    }
+    this.snmpBusy.set(false);
+  }
+
   pageName() {
     const p = this.page();
-    const m: Record<string, string> = { connection: 'Connection', auth: 'Authentication', firewall: 'Jump Host / Proxy', forward: 'Port Forwarding', serial: 'Serial', local: 'Local Shell', logon: 'Logon Actions & Triggers', terminal: 'Terminal', log: 'Log File', facts: 'Device Facts', remote: this.s?.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' };
+    const m: Record<string, string> = { snmp: 'SNMP', connection: 'Connection', auth: 'Authentication', firewall: 'Jump Host / Proxy', forward: 'Port Forwarding', serial: 'Serial', local: 'Local Shell', logon: 'Logon Actions & Triggers', terminal: 'Terminal', log: 'Log File', facts: 'Device Facts', remote: this.s?.protocol === 'RDP' ? 'Remote Desktop' : 'VNC' };
     return m[p] ?? '';
   }
   readonly consoleMethods = CONSOLE_METHODS;
@@ -1287,8 +1378,12 @@ export class SessionEditor implements OnInit {
       const install = s.protocol === 'SSH2' && this.authMode() !== 'password' && this.installKey && !!s.identityFile.trim();
       // the first login, before the key is on the server, needs the password: tried after the key
       if (install && this.authMode() === 'key') setAuthMode(s, 'both');
+      if (this.snmpCheck()) { this.page.set('snmp'); this.error.set(this.snmpCheck()); return; }
+      s.snmpPort = Number(s.snmpPort) || 0;
       const saved = await storeSession(this.ui, this.backend, this.tabs, s, this.oldPath, this.tabId,
         { pw: this.pw, noPw: this.noPw, wasEmpty: this.pwState() === 'empty' });
+      const [comm, ap, pp] = this.snmpSecrets();
+      if (comm !== null || ap !== null || pp !== null) await this.backend.snmpSetSecrets(saved.path, comm, ap, pp);
       if (install) this.ui.keyInstallAtLogin.set(saved.path, s.identityFile.trim());
       this.ui.close();
       if (connect) await this.tabs.openSession(saved.path);

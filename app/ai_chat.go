@@ -127,6 +127,9 @@ func (a *App) AIChat(r AIChatRequest) (AIAnswer, error) {
 		lab, _ := aiRedact(a.emuAgentLab(), s.HideHosts) // the same as the chat: secrets out, hosts hidden when set
 		sys += lab
 	}
+	if r.Agent {
+		sys += netAgentText(r.Tools)
+	}
 	out, usage, err := aiConverse(ctx, s, key, model, sys, msgs)
 	if err != nil {
 		return AIAnswer{}, err

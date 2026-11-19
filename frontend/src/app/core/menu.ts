@@ -58,6 +58,10 @@ export function menuBar(isMac: boolean): { title: string; items: MenuDef[] }[] {
       { label: 'Overview', action: 'lab-overview' }, { label: 'Traffic Generator', action: 'lab-traffic' },
       { label: 'Appliances', action: 'lab-appliances' }, { label: 'KVM Hosts', action: 'lab-hosts' },
     ] },
+    { title: 'SNMP', items: [
+      { label: 'SNMP Browser', action: 'snmp-browser' }, { label: 'Trap Receiver', action: 'snmp-traps' }, { sep: true },
+      { label: 'Load MIB Files...', action: 'snmp-load-mib' },
+    ] },
     { title: 'Script', items: [
       { label: 'Command Library...', action: 'command-library', keys: k('E') }, { label: 'Command History...', action: 'history', keys: k('Y') }, { sep: true },
       { label: 'Run Script...', action: 'run-script' }, { label: 'Cancel Running Scripts', action: 'cancel-scripts' }, { sep: true },

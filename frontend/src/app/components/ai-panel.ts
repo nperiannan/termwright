@@ -150,12 +150,12 @@ function spans(t: string): Span[] {
             }
             @for (s of m.steps ?? []; track $index) { @if (s.state === 'ask') {
               <div class="appr" [class.danger]="s.danger"><div class="q"><app-icon name="alert" [size]="15" /><div>
-                <b>{{ s.kind === 'open' ? tr('Connect to {0}?', s.tab) : s.kind === 'lab' ? tr('Change the emulated lab?') : tr('Run on {0}?', s.tab) }}</b>@if (s.prod) { <span class="prodb">PROD</span> }
+                <b>{{ s.kind === 'open' ? tr('Connect to {0}?', s.tab) : s.kind === 'lab' ? tr('Change the emulated lab?') : s.kind === 'snmp' ? tr('Write to the device with SNMP?') : tr('Run on {0}?', s.tab) }}</b>@if (s.prod) { <span class="prodb">PROD</span> }
                 @if (s.prod) { <div class="hint">{{ tr('Production session: Termwright asks before every command and connection, whatever the agent may do.') }}</div> }
-                <div class="hint">{{ s.danger ? tr('This may change the device or interrupt traffic.') : s.kind === 'open' ? tr('Opens the session in a new tab.') : s.kind === 'lab' ? 'lab ' + s.command : tr('Check the command - it is typed in the tab as it is.') }}</div>
+                <div class="hint">{{ s.danger ? tr('This may change the device or interrupt traffic.') : s.kind === 'open' ? tr('Opens the session in a new tab.') : s.kind === 'lab' ? 'lab ' + s.command : s.kind === 'snmp' ? 'snmp ' + s.command : tr('Check the command - it is typed in the tab as it is.') }}</div>
                 @if (s.ask) { <div class="hint lask">{{ s.ask }}</div> }</div></div>
                 @if (s.kind === 'run') { <input class="mono" [(ngModel)]="edits[$index + '-' + m.id]" [placeholder]="s.command" [attr.aria-label]="tr('Command')" (focus)="seed(m.id, $index, s)" /> }
-                <div class="btns"><button type="button" class="primary" [class.danger]="s.danger" (click)="ai.decide(s, 'run', edits[$index + '-' + m.id])">{{ s.kind === 'open' ? tr('Connect') : s.kind === 'lab' ? tr('Do It') : tr('Run') }}</button>
+                <div class="btns"><button type="button" class="primary" [class.danger]="s.danger" (click)="ai.decide(s, 'run', edits[$index + '-' + m.id])">{{ s.kind === 'open' ? tr('Connect') : s.kind === 'lab' || s.kind === 'snmp' ? tr('Do It') : tr('Run') }}</button>
                   @if (s.kind === 'lab' && !s.danger) { <button type="button" (click)="ai.decide(s, 'chat')" [title]="tr('Do this and the next lab changes of this chat without asking (not the ones that may interrupt traffic)')">{{ tr('Allow for This Chat') }}</button> }
                   <button type="button" (click)="ai.decide(s, 'skip')">Skip</button><button type="button" (click)="ai.decide(s, 'stop')">Stop</button></div></div>
             } }

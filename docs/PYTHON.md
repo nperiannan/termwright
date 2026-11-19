@@ -32,6 +32,21 @@ when Termwright cannot be reached.
 `address()`, `cpu(…, request_m=, limit_m=)`, `capture()`, and for images made from an ISO file `install_iso(iso_path, mode, password=…, disk_gb= or disk_mb=)`,
 `install_status()`, `install_finish(id)` and `wait_install(id)`; `history()` lists what changed in the lab (with ids), `revert_plan(id)` and `revert(id)` bring the lab back to before a change. `tool(name, **arguments)` runs any tool in `GET /lab/tools`.
 
+## SNMP
+
+`lab.snmp` reads devices with the SNMP settings of their saved sessions (the community and v3 passwords stay in the computer's credential store), or an address:
+
+```python
+from termwright_lab import Lab, SNMP
+lab = Lab()
+down = {k: v for k, v in SNMP.table(lab.snmp.walk("IF-MIB::ifOperStatus", session="Lab/core-sw1")).items() if v.startswith("down")}
+print(lab.snmp.get("sysDescr.0", "sysUpTime.0", address="10.0.0.5", community="public"))
+lab.snmp.set("ifAdminStatus.3", "down", session="Lab/core-sw1")   # needs Allow Set on the session
+lab.snmp.mib("IF-MIB::ifOperStatus")["description"]; lab.snmp.traps()["traps"]
+```
+
+`get`, `bulk`, `walk`, `set` and `run(op, ...)` return the rows with `name`, `type`, `value` and `display`.
+
 ## Traffic
 
 Test ports and streams are as in the API; the keyword arguments are the API's fields in snake_case

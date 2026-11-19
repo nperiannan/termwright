@@ -288,6 +288,16 @@ type Session struct {
 	Mosh              bool   `json:"mosh"`           // SSH2: connect with the mosh client (roaming)
 	TelnetTLS         bool   `json:"telnetTls"`      // Telnet over TLS (telnets)
 	TLSAnyCert        bool   `json:"tlsAnyCert"`     // Telnet over TLS: accept any certificate
+	// SNMP (the SNMP Browser, the Network Map, the AI tools). The community and the v3 passwords are in the
+	// operating system's credential store (snmp-community:, snmp-auth:, snmp-priv: + the path), never here.
+	SNMPVersion string `json:"snmpVersion,omitempty"` // "" = v2c, "1", "2c", "3"
+	SNMPPort    int    `json:"snmpPort,omitempty"`    // 0 = 161
+	SNMPHost    string `json:"snmpHost,omitempty"`    // "" = the session's host
+	SNMPUser    string `json:"snmpUser,omitempty"`    // v3 user
+	SNMPAuth    string `json:"snmpAuth,omitempty"`    // v3: "" (noAuth), MD5, SHA, SHA-224, SHA-256, SHA-384, SHA-512
+	SNMPPriv    string `json:"snmpPriv,omitempty"`    // v3: "" (noPriv), DES, AES, AES-192, AES-256
+	SNMPContext string `json:"snmpContext,omitempty"` // v3 context name
+	SNMPWrite   bool   `json:"snmpWrite,omitempty"`   // Set is allowed (production sessions still ask)
 }
 
 // Defaults returns a new session with sensible default values.

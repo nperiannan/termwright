@@ -35,6 +35,16 @@ class Fake(BaseHTTPRequestHandler):
         path = self.path.split("?")[0].removeprefix("/api/v1/lab")
         v = st.setdefault("view", {"testers": [], "streams": [], "results": [], "running": False})
         m = self.command
+        if self.path.startswith("/api/v1/snmp"):
+            if self.path == "/api/v1/snmp" and m == "POST":
+                return self.reply(200, {"rows": [{"oid": "1.3.6.1.2.1.1.5.0", "name": "SNMPv2-MIB::sysName.0", "type": "OctetString",
+                                                  "value": "sw1", "display": "sw1"}], "address": "10.0.0.1:161", "version": "2c"})
+            if self.path.startswith("/api/v1/snmp/mib?"):
+                return self.reply(200, [{"oid": "1.3.6.1.2.1.2.2.1.8", "name": "ifOperStatus", "module": "IF-MIB"}])
+            if self.path == "/api/v1/snmp/mib/IF-MIB%3A%3AifOperStatus":
+                return self.reply(200, {"oid": "1.3.6.1.2.1.2.2.1.8", "name": "ifOperStatus"})
+            if self.path == "/api/v1/snmp/traps":
+                return self.reply(200, {"state": {"on": False, "port": 0, "count": 0}, "traps": []})
         if path == "/traffic/ports" and m == "POST":
             v["testers"].append({"id": "p%d" % (len(v["testers"]) + 1), "name": "Test port %d" % (len(v["testers"]) + 1)})
             return self.reply(201, v)
@@ -211,6 +221,19 @@ class ClientTest(unittest.TestCase):
         Fake.state["inst_end"] = "failed"
         with self.assertRaises(RuntimeError):
             self.lab.wait_install("ab12", timeout=10, poll=0.01)
+
+    def test_snmp(self):
+        r = self.lab.snmp.get("sysName.0", session="Core/sw1")
+        self.assertEqual(tw.SNMP.table(r), {"SNMPv2-MIB::sysName.0": "sw1"})
+        self.lab.snmp.walk("ifTable", address="10.0.0.1", community="public", max=50)
+        self.lab.snmp.set("ifAdminStatus.3", "down", session="Lab/sw2")
+        calls = [(p, b) for _, p, b in Fake.state["calls"] if p == "/api/v1/snmp"]
+        self.assertEqual(calls[0][1], {"op": "get", "session": "Core/sw1", "oids": ["sysName.0"]})
+        self.assertEqual(calls[1][1], {"op": "walk", "target": {"address": "10.0.0.1", "community": "public"}, "oids": ["ifTable"], "max": 50})
+        self.assertEqual(calls[2][1], {"op": "set", "session": "Lab/sw2", "values": [{"oid": "ifAdminStatus.3", "value": "down"}]})
+        self.assertEqual(self.lab.snmp.mib_search("ifOper")[0]["module"], "IF-MIB")
+        self.assertEqual(self.lab.snmp.mib("IF-MIB::ifOperStatus")["name"], "ifOperStatus")
+        self.assertFalse(self.lab.snmp.traps()["state"]["on"])
 
     def test_pps_for(self):
         self.assertEqual(tw.pps_for(1000, 64), 1488095)

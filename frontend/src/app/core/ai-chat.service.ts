@@ -17,7 +17,7 @@ export type CtxKind = 'selection' | 'clipboard' | 'terminal' | 'tab' | 'file';
 export interface Ctx { id: number; kind: CtxKind; tabId?: string; label: string; detail: string; text: string; }
 export interface Img { name: string; mediaType: string; data: string; url: string; }
 export type StepState = 'ask' | 'running' | 'done' | 'skipped' | 'error' | 'refused';
-export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab' | 'help' | 'status';
+export type StepKind = 'run' | 'open' | 'find' | 'log' | 'record' | 'lab' | 'help' | 'status' | 'snmp';
 /** A step of the agent's plan: to do, being done, done. */
 export interface PlanItem { t: string; s: ' ' | '~' | 'x'; }
 export type AiMode = 'ask' | 'agent' | 'plan';
@@ -39,6 +39,7 @@ export const AGENT_TOOLS = [
   { k: 'log', name: 'Logger', what: 'Logs a tab to a file in the log folder - also in Read only' },
   { k: 'record', name: 'Recorder', what: 'Records a tab with a marker for each command - also in Read only' },
   { k: 'lab', name: 'Emulated lab', what: 'Sees the emulated lab (switches, cables, LAGs, KVM hosts, events), adds and starts switches, cables, configures them on their consoles, runs traffic tests, captures packets and checks links' },
+  { k: 'snmp', name: 'SNMP', what: 'Reads devices with SNMP (get, walk, tables, MIB lookups, received traps) with the credentials of their saved sessions; a Set follows the permission above and always asks on production sessions' },
 ] as const;
 const MAX_CHATS = 40, MAX_OUT = 12000, MAX_STEPS = 25;
 /** lab lines with words; the connector's lab tools take JSON (lab traffic {...}). */
@@ -367,6 +368,7 @@ export class AIChat {
     }
     if (s.kind === 'log' || s.kind === 'record') return this.evidence(s);
     if (s.kind === 'lab') return this.labStep(s, chatId);
+    if (s.kind === 'snmp') return this.netStep(s, chatId, perm);
     const t = findTab(this.tabs.tabs(), s.tab);
     if (!t) { s.state = 'error'; s.note = tr('No open tab is called {0}', s.tab); return `run ${s.tab}: no open tab has that name - open it first.`; }
     s.tab = t.title;
@@ -516,6 +518,32 @@ export class AIChat {
     return `${line}:\n${out.length > MAX_OUT ? '…\n' + out.slice(-MAX_OUT) : out}`;
   }
 
+  /** A network tool line (snmp {json}): reads run; a change follows the permission (autonomous asks only on production). */
+  private async netStep(s: Step, chatId: string, perm: AgentPerm): Promise<string> {
+    const line = `${s.kind} ${s.command}`;
+    let args: Record<string, unknown> = {};
+    try { const a = JSON.parse(s.command || '{}'); if (a && typeof a === 'object' && !Array.isArray(a)) args = a; else throw new Error(); }
+    catch { s.state = 'error'; s.note = tr('The arguments are not JSON'); return `${line}: not done - give the arguments as one JSON object on the same line.`; }
+    s.state = 'running'; this.touch(chatId);
+    try {
+      let r = await this.backend.netAgentTool(s.kind, args, perm, false);
+      if (r.ask) {
+        s.ask = r.text; s.danger = !!r.danger; s.prod = !!r.danger;
+        if (perm === 'readonly') { s.state = 'refused'; s.note = tr('Read-only mode: not run'); return `${line}: not done - the user allows only read-only actions. Tell the user what to do instead.`; }
+        const d = await this.ask(s, chatId);
+        if (d.go !== 'run' && d.go !== 'chat') return this.refusal(s, d.go);
+        s.state = 'running'; this.touch(chatId);
+        r = await this.backend.netAgentTool(s.kind, args, perm, true);
+      } else s.auto = true;
+      const out = r.out ?? '';
+      s.state = 'done'; s.output = out || tr('Done');
+      return `${line}:\n${out.length > MAX_OUT ? out.slice(0, MAX_OUT) + '\n…' : out}`;
+    } catch (e) {
+      s.state = 'error'; s.note = errText(e).slice(0, 160);
+      return `${line}: failed - ${errText(e)}`;
+    }
+  }
+
   private ask(s: Step, chatId: string) {
     s.state = 'ask'; this.touch(chatId);
     return new Promise<{ go: 'run' | 'skip' | 'stop' | 'chat'; command?: string }>(res => this.waits.set(s, r => { this.waits.delete(s); res(r); }));
@@ -576,6 +604,8 @@ export function parseActions(text: string): { text: string; actions: { kind: Ste
       m = /^help\s+(.+)$/i.exec(l);
       if (m) { actions.push({ kind: 'help', tab: 'help', command: m[1].trim() }); continue; }
       if (/^status\s*$/i.test(l)) { actions.push({ kind: 'status', tab: 'status', command: '' }); continue; }
+      m = /^(snmp)\s+(\{.*\})\s*$/i.exec(l);
+      if (m) { actions.push({ kind: 'snmp', tab: 'snmp', command: m[2] }); continue; }
       m = /^lab(?:\s+(.*))?$/i.exec(l);
       if (m) { actions.push({ kind: 'lab', tab: 'lab', command: (m[1] ?? 'show').trim() }); continue; }
       m = /^(open|find)\s+(.+)$/i.exec(l);

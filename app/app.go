@@ -403,6 +403,7 @@ func (a *App) SaveSession(s session.Session, oldPath string) (session.Session, e
 			_ = secrets.Set(saved.Path, pw)
 			_ = secrets.Delete(oldPath)
 		}
+		snmpMoveSecrets(oldPath, saved.Path, true)
 		a.cfg.MovePaths(oldPath, saved.Path, false)
 	}
 	if !saved.SavePassword {
@@ -417,6 +418,7 @@ func (a *App) DeleteSession(path string) error {
 		return err
 	}
 	_ = secrets.Delete(path)
+	snmpMoveSecrets(path, "", true)
 	if err := a.store.Delete(path); err != nil {
 		return err
 	}
@@ -436,6 +438,7 @@ func (a *App) DuplicateSession(path string) (string, error) {
 	if pw, ok := secrets.Lookup(path); ok { // the copy logs in like the original
 		_ = secrets.Set(dup, pw)
 	}
+	snmpMoveSecrets(path, dup, false)
 	if c, err := a.store.Get(dup); err == nil && c.Team != "" { // a copy of a team device is your own
 		c.Team = ""
 		_, _ = a.store.Save(c, dup)
@@ -505,8 +508,14 @@ func (a *App) RenameFolder(oldPath, newPath string) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
+	all, _ := a.store.AllSessions(nil)
 	if err := a.store.RenameFolder(oldPath, newPath); err != nil {
 		return err
+	}
+	for _, p := range all { // SNMP secrets follow the sessions
+		if strings.HasPrefix(p, strings.TrimSuffix(oldPath, "/")+"/") {
+			snmpMoveSecrets(p, strings.TrimSuffix(newPath, "/")+"/"+strings.TrimPrefix(p, strings.TrimSuffix(oldPath, "/")+"/"), true)
+		}
 	}
 	a.cfg.MovePaths(oldPath, newPath, true)
 	return nil

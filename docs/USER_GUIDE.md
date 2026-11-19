@@ -1351,6 +1351,31 @@ The Emulated and Simulated Labs have the same styles under **More → Arrange** 
 
 **While it reads.** Up to 16 devices are read at the same time; each shows how many of its 5 steps (connect, identify, neighbours, ports/STP/LAG, build map) are done.
 
+## 9c. SNMP Browser
+
+**Open it.** **SNMP → SNMP Browser**, or right-click a session → **Open SNMP Browser**. Choose the session at the top: the address and credentials come from the session's SNMP settings, shown next to it (for example *v3 authPriv · user netops · SHA-256 / AES-128*).
+
+**SNMP settings of a session.** Session properties → **SNMP** (or *SNMP settings…* in the browser):
+
+- **Version**: v1, v2c (default) or v3.
+- **Address · port**: empty uses the session's host name; the port is 161 unless you change it.
+- **v1 / v2c**: the **Community** (empty = `public`).
+- **v3**: **User**, **Security level** (noAuthNoPriv, authNoPriv, authPriv), **Authentication** (MD5, SHA, SHA-224, SHA-256, SHA-384, SHA-512) and **Privacy** (DES, AES-128, AES-192, AES-256) with their passwords (8 characters or more), and the **Context** if the device uses one.
+- **Writes (Set)**: off by default. On production sessions every Set asks first, also for the AI assistant in Fully autonomous mode.
+- **Test (sysDescr.0)** reads the device's description with what is on the page.
+
+The community and passwords are kept in the computer's credential store (Keychain, Credential Manager, Secret Service), never in the session file or an export. A saved one shows *🔒 saved*; type a new one to change it.
+
+**Run a request.** Pick the **Operation** (Get, Get Next, Get Bulk, Walk, Table, Set), type an object (`sysDescr.0`, `IF-MIB::ifTable`, `ifOperStatus.3` or a numeric OID) or click it in the **MIB tree**, and press **Run** (double-clicking an object runs it). **Max repetitions** is the GetBulk size; **Timeout** is per request. For **Set**, give the value (names of enumerations work: `down`, `testing`) and, if the MIB does not know the object, its type.
+
+**Results.** *Results* lists name, index, type, the readable value and the OID; up and down are coloured. *Table view* shows a walked table as rows (index) and columns (objects). *History* keeps this tab's requests; click one to run it again. **Export CSV** saves the results. Star an object (☆ in its details) to keep it in **Favourites**.
+
+**MIBs.** The standard IETF and IANA MIBs are built in (SNMPv2-MIB, IF-MIB, IP-MIB, IP-FORWARD-MIB, TCP-MIB, UDP-MIB, BRIDGE-MIB, Q-BRIDGE-MIB, LLDP-MIB, ENTITY-MIB, HOST-RESOURCES-MIB, SNMP-FRAMEWORK and others). **Load MIB…** (or **SNMP → Load MIB Files…**) adds vendor MIBs; choose all the files of a vendor at once so the ones they import are found. Loaded MIBs are kept in Termwright's data folder.
+
+**Traps.** **SNMP → Trap Receiver** (or the *Traps* tab) listens on UDP 162 (on macOS and Linux a port below 1024 may need permission; use for example 1162 and point the devices there). Traps and informs of v1, v2c and v3 are shown newest first with their name from the MIBs and the session they came from; informs are answered. v3 traps use the users and passwords of your SNMP sessions.
+
+**AI assistant, MCP and scripts.** Turn on the **SNMP** tool in the agent's tool list and ask, for example, *"which ports of core-sw1 are down?"*: the agent walks `IF-MIB::ifOperStatus` with the session's credentials. Reads always run; a Set follows the agent's permission and always asks on production sessions. The same `snmp` tool is offered to MCP apps (Claude Desktop, Cursor, VS Code…), and the local API has `POST /api/v1/snmp` and `GET /api/v1/snmp/mib`, `/snmp/mib/{object}`, `/snmp/traps` (see the [API guide](API.md)); in Python, `Lab().snmp.walk("IF-MIB::ifOperStatus", session="Lab/core-sw1")`.
+
 ## 10. Automation: logon actions, triggers, scripts
 
 **Logon Actions** (Session Options → Logon Actions & Triggers):
