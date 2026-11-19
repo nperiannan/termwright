@@ -11,6 +11,7 @@ export const LOOKS: { id: Look; label: string; hint: string }[] = [
   { id: 'ant', label: 'Clean boxes', hint: 'Tidy boxes in tiers with right-angle cables' },
   { id: 'material', label: 'Soft cards', hint: 'Rounded tonal cards with curved cables' },
   { id: 'focus', label: 'Focus', hint: 'Round devices; cables stay quiet unless something needs a look. Click a device to focus on it' },
+  { id: 'constellation', label: 'Constellation', hint: 'The core in the middle, one ring per level' },
   { id: 'zones', label: 'Zones', hint: 'Devices grouped by role, cables bundled between the groups' },
   { id: 'flow', label: 'Flow (default)', hint: 'Left to right from the core to the edge' },
   { id: 'card', label: 'Classic cards', hint: 'Cards with a switch front panel, any layout' },
@@ -173,9 +174,14 @@ function linksMarkup(nodes: Map<string, MNode>, links: MLink[], o: MOpts): strin
     const u = { x: dx0 / L0, y: dy0 / L0 }, n = { x: -u.y, y: u.x };
     const tracks = pairTracks(ls), m = tracks.length, ghost = A.ghost || B.ghost;
     tracks.forEach((t, j) => {
-      const off = (j - (m - 1) / 2) * (m > 1 ? 44 : 0), stag = (j - (m - 1) / 2) * 34; // tracks apart, mid labels staggered along the line
+      // several cables between the same two devices: side by side, but always within the device so each one ends on it
+      const roundN = o.look === 'constellation' || o.look === 'focus', across = roundN ? Math.min(D.w, D.h) : Math.abs(u.x) >= Math.abs(u.y) ? D.h : D.w;
+      const gapT = m > 1 ? Math.min(44, Math.max(5, across * .7 / (m - 1))) : 0;
+      const off = (j - (m - 1) / 2) * gapT, stag = (j - (m - 1) / 2) * 34; // tracks apart, mid labels staggered along the line
       const pa = { x: A.x + n.x * off, y: A.y + n.y * off }, pb = { x: B.x + n.x * off, y: B.y + n.y * off };
-      const ta = exit(A, pa, u.x, u.y, D.w / 2 + 1, D.h / 2 + 1), tb = exit(B, pb, -u.x, -u.y, D.w / 2 + 1, D.h / 2 + 1);
+      const R = Math.min(D.w, D.h) / 2 + 1;
+      const ta = roundN ? Math.sqrt(Math.max(0, R * R - off * off)) : Math.max(0, exit(A, pa, u.x, u.y, D.w / 2 + 1, D.h / 2 + 1));
+      const tb = roundN ? Math.sqrt(Math.max(0, R * R - off * off)) : Math.max(0, exit(B, pb, -u.x, -u.y, D.w / 2 + 1, D.h / 2 + 1));
       const S = { x: pa.x + u.x * ta, y: pa.y + u.y * ta }, E = { x: pb.x - u.x * tb, y: pb.y - u.y * tb };
       const len = Math.hypot(E.x - S.x, E.y - S.y);
       if (len < 24) return;
@@ -363,16 +369,22 @@ function nodeFocus(nd: MNode, o: MOpts, sel: boolean): string {
 
 /** Constellation: a round device with its name below; the ring around it is the reading progress. */
 function nodeRound(nd: MNode, o: MOpts, sel: boolean): string {
-  const th = o.theme, p = nd.prog, dev = isDev(nd.os) && !nd.ghost;
-  if (nd.ghost) return `<circle r="17" fill="none" stroke="${sel ? th.acc : th.mut}" stroke-width="1.5" stroke-dasharray="3 3"/><text y="33" font-size="11" font-style="italic" text-anchor="middle" fill="${th.mut}">${esc(clip(nd.name, 18))}</text>`;
-  let s = `<circle r="33" fill="none" stroke="${p ? th.zoneLine : th.nodeLine}" stroke-width="${p ? 3 : 1.4}"/>`;
-  if (p && p.state !== 'queued') s += `<circle r="33" fill="none" stroke="${p.state === 'error' ? th.bad : th.ok}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${f(207 * Math.min(4, p.state === 'done' ? 4 : p.done) / 4)} 208" transform="rotate(-90)"/>`;
-  if (p?.state === 'running') s += `<circle r="40" fill="none" stroke="${th.acc}" stroke-width="1.5" stroke-dasharray="4 8"/>`;
-  s += `<circle r="26" fill="${dev ? th.devCard : th.node}" stroke="${sel ? th.acc : dev ? th.devLine : th.nodeLine}" stroke-width="${sel ? 2.2 : 1.4}" style="filter:drop-shadow(0 2px 4px ${th.shadow})"/>`;
-  s += `<text y="3.5" font-size="9.5" font-weight="800" text-anchor="middle" fill="${dev ? th.devCardInk : th.ink}">${esc((nd.os ?? 'SW').toUpperCase())}</text>`;
-  s += `<circle cx="22" cy="-22" r="4.6" fill="${dotOf(nd, th)}" stroke="${th.ring}" stroke-width="1.5"/>`;
-  s += `<text y="52" font-size="12" font-weight="700" text-anchor="middle" fill="${th.ink}">${esc(clip(nd.name, 18))}</text>`;
-  s += `<text y="66" font-size="10" text-anchor="middle" fill="${th.mut}">${esc((nd.ip || '') + warnTxt(nd))}</text>`;
+  // Constellation (mock 4): a round device, a ring that fills as it is read (green when done), a tick when read
+  const th = o.theme, p = nd.prog, lt = th.bg === '#f4f5f7';
+  const core = lt ? '#ecd7f7' : '#10264a', coreOk = lt ? '#ecd7f7' : '#12305e', coreLine = lt ? '#c17ee6' : '#3b82f6', osInk = lt ? '#3d2a55' : '#d0e2ff';
+  const green = lt ? '#3a9a1a' : '#49aa19', blue = lt ? '#2f6fd0' : '#60a5fa', track = lt ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)';
+  if (nd.ghost) return `<circle r="17" fill="none" stroke="${sel ? th.acc : th.mut}" stroke-width="1.5" stroke-dasharray="3 3"/><text y="33" font-size="11" text-anchor="middle" fill="${th.mut}">${esc(clip(nd.name, 18))}</text>`;
+  const done = p?.state === 'done' || !p, run = p?.state === 'running', err = p?.state === 'error';
+  let s = `<circle r="33" fill="none" stroke="${track}" stroke-width="3.5"/>`;
+  if (done || err) s += `<circle r="33" fill="none" stroke="${err ? th.bad : green}" stroke-width="3.5"/>`;
+  else if (run) s += `<circle r="33" fill="none" stroke="${blue}" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="${f(207 * Math.max(.08, (p?.done ?? 0) / 4))} 208" transform="rotate(-90)"/><circle class="tw-spin" style="animation-delay:-${((Date.now() % 3000) / 1000).toFixed(2)}s" r="40" fill="none" stroke="${blue}" stroke-width="1.5" stroke-dasharray="4 7"/>`; // CSS turns it (global styles.scss); the delay keeps the turn smooth across redraws
+  if (sel) s += `<circle r="44" fill="none" stroke="${th.acc}" stroke-width="2"/>`;
+  s += `<circle r="25" fill="${done ? coreOk : core}" stroke="${coreLine}" stroke-width="1.5"${p?.state === 'queued' ? ' opacity=".55"' : ''}/>`;
+  s += `<text y="3.5" font-size="9.5" font-weight="700" text-anchor="middle" fill="${osInk}">${esc((nd.os || 'SW').toUpperCase().slice(0, 5))}</text>`;
+  if (done && !err) s += `<circle cx="23" cy="-23" r="8" fill="${green}"/><path d="M19 -23l3 3 5-6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  else s += `<circle cx="23" cy="-23" r="4.6" fill="${dotOf(nd, th)}" stroke="${th.ring}" stroke-width="1.5"/>`;
+  s += `<text y="56" font-size="12.5" font-weight="700" text-anchor="middle" fill="${th.ink}">${esc(clip(nd.name, 20))}</text>`;
+  s += `<text y="71" font-size="10.5" text-anchor="middle" fill="${th.mut}">${esc((nd.ip || '') + warnTxt(nd))}</text>`;
   return s;
 }
 

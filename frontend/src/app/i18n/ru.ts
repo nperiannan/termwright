@@ -4462,6 +4462,19 @@ const ru: Record<string, string> = {
   'Disabled': 'Отключён',
   'and {0} more': 'и ещё {0}',
   'out-of-band port': 'отдельный порт управления',
+  'Pipeline': 'Этапы',
+  'Parallel workers': 'Параллельно',
+  'devices complete': 'устройств готово',
+  'Complete': 'Готово',
+  'Devices and changes': 'Устройства и изменения',
+  'Event': 'Событие',
+  'New device': 'Новое устройство',
+  'Device gone': 'Устройство пропало',
+  'Link up': 'Связь есть',
+  'Link down': 'Связь потеряна',
+  'Moved': 'Перемещено',
+  'Blocked': 'Заблокировано',
+  'read': 'прочитано',
 };
 
 export default ru;

@@ -104,6 +104,7 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
                   @case ('ant') { <path d="M32 11V18M14 18H50M14 18V26M32 18V26M50 18V26" fill="none" stroke="#3c89e8" stroke-width="1.4"/><rect x="24" y="4" width="16" height="8" rx="2" fill="#1f1f1f" stroke="#7c4dd8"/><rect x="6" y="26" width="16" height="8" rx="2" fill="#1f1f1f" stroke="#595959"/><rect x="24" y="26" width="16" height="8" rx="2" fill="#1f1f1f" stroke="#595959"/><rect x="42" y="26" width="16" height="8" rx="2" fill="#1f1f1f" stroke="#595959"/> }
                   @case ('material') { <path d="M32 13C32 20 16 18 16 26M32 13C32 20 48 18 48 26" fill="none" stroke="#CCC2DC" stroke-width="1.4" opacity=".7"/><rect x="21" y="3" width="22" height="11" rx="5" fill="#4F378B"/><rect x="5" y="26" width="22" height="11" rx="5" fill="#5B3D9E"/><rect x="37" y="26" width="22" height="11" rx="5" fill="#5B3D9E"/> }
                   @case ('focus') { <path d="M20 12L12 30M20 12L32 30M44 12L32 30M44 12L52 30M20 12H44" stroke="#8b97a8" stroke-width="1.2" opacity=".6"/><path d="M44 12L52 30" stroke="#f5a524" stroke-width="1.6" stroke-dasharray="3 2"/><circle cx="20" cy="12" r="6" fill="#1b212b" stroke="#4c9aff"/><circle cx="44" cy="12" r="6" fill="#1b212b" stroke="#8b97a8"/><circle cx="12" cy="31" r="5" fill="#1b212b" stroke="#8b97a8"/><circle cx="32" cy="31" r="5" fill="#1b212b" stroke="#8b97a8"/><circle cx="52" cy="31" r="5" fill="#1b212b" stroke="#8b97a8"/> }
+                  @case ('constellation') { <circle cx="32" cy="22" r="18" fill="none" stroke="#3f6fb8" stroke-opacity=".5"/><circle cx="32" cy="22" r="9" fill="none" stroke="#3f6fb8" stroke-opacity=".5"/><path d="M28 22L14 10M36 22L50 34M32 22L32 4" stroke="#6b8fc9" stroke-width="1"/><circle cx="28" cy="22" r="4" fill="#12305e" stroke="#49aa19" stroke-width="1.5"/><circle cx="36" cy="22" r="4" fill="#12305e" stroke="#49aa19" stroke-width="1.5"/><circle cx="14" cy="10" r="3.5" fill="#12305e" stroke="#60a5fa" stroke-width="1.5"/><circle cx="50" cy="34" r="3.5" fill="#12305e" stroke="#49aa19" stroke-width="1.5"/><circle cx="32" cy="4" r="3" fill="#12305e" stroke="#60a5fa" stroke-width="1.5"/> }
                   @case ('zones') { <rect x="16" y="3" width="32" height="13" rx="3" fill="none" stroke="#2a3240"/><rect x="20" y="6" width="10" height="7" rx="2" fill="#1b212b" stroke="#4c9aff"/><rect x="34" y="6" width="10" height="7" rx="2" fill="#1b212b" stroke="#4c9aff"/><path d="M32 16V24" stroke="#4c9aff" stroke-width="1.4"/><rect x="4" y="24" width="56" height="15" rx="3" fill="none" stroke="#2a3240"/><rect x="8" y="28" width="11" height="7" rx="2" fill="#1b212b" stroke="#8b97a8"/><rect x="22" y="28" width="11" height="7" rx="2" fill="#1b212b" stroke="#8b97a8"/><rect x="36" y="28" width="11" height="7" rx="2" fill="#1b212b" stroke="#8b97a8"/> }
                   @case ('flow') { <path d="M20 22C27 22 25 9 32 9M20 22C27 22 25 35 32 35M46 9C50 9 50 5 54 5M46 9C50 9 50 14 54 14M46 35H54" fill="none" stroke="#4c9aff" stroke-width="1.3"/><rect x="4" y="18" width="16" height="8" rx="3" fill="#151a22" stroke="#4c9aff"/><rect x="32" y="5" width="14" height="8" rx="3" fill="#151a22" stroke="#2a3240"/><rect x="32" y="31" width="14" height="8" rx="3" fill="#151a22" stroke="#2a3240"/><rect x="54" y="2" width="8" height="6" rx="2" fill="#151a22" stroke="#2a3240"/><rect x="54" y="11" width="8" height="6" rx="2" fill="#151a22" stroke="#2a3240"/><rect x="54" y="32" width="8" height="6" rx="2" fill="#151a22" stroke="#2a3240"/> }
                   @case ('card') { <path d="M32 12L14 28M32 12L50 28" stroke="#34d399" stroke-width="1.4"/><rect x="20" y="4" width="24" height="9" rx="2" fill="#2a2b30" stroke="#36373d"/><rect x="22" y="6" width="7" height="5" fill="#8b8e96"/><rect x="3" y="27" width="24" height="9" rx="2" fill="#2a2b30" stroke="#36373d"/><rect x="5" y="29" width="7" height="5" fill="#8b8e96"/><rect x="37" y="27" width="24" height="9" rx="2" fill="#2a2b30" stroke="#36373d"/><rect x="39" y="29" width="7" height="5" fill="#8b8e96"/> }
@@ -165,13 +166,13 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
     @if (showProg()) {
       @if (look() === 'flow') {
         <div class="nm-bars">@for (s of stepList(); track s.n) { <div [class]="'sb ' + s.st"><div class="sl"><b>{{ t(s.name) }}</b><span>{{ s.sub }}</span></div><div class="tr"><i [style.width.%]="s.pct"></i></div></div> }</div>
-      } @else if (fam() !== 'mat' && look() !== 'zones') {
+      } @else if (fam() !== 'mat' && fam() !== 'con' && look() !== 'zones') {
         <div class="nm-steps">@for (s of stepList(); track s.n) {
           <div [class]="'step ' + s.st"><span class="ic">@if (s.st === 'ok') { ✓ } @else if (s.st === 'run') { <i class="spin"></i> } @else { {{ s.n }} }</span><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div>
         }</div>
       }
     }
-    @if (fam() !== 'ant' && fam() !== 'mat' && look() !== 'focus' && kpis().length) {
+    @if (fam() !== 'ant' && fam() !== 'mat' && fam() !== 'con' && look() !== 'focus' && kpis().length) {
       <div class="nm-pills">@for (k of kpis(); track k.l) { <button type="button" (click)="k.go()" [title]="t(k.h)" [class]="k.c"><b>{{ k.v }}</b> {{ t(k.l) }}</button> }</div>
     }
     @if (busy() && nodes().length && !showProg()) { <div class="busybar"></div> }
@@ -181,17 +182,24 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
       <div class="nm-mapc">
         @if (fam() === 'ant') { <h3 class="nm-ch">{{ t('Topology') }}<span>{{ subTopo() }}</span></h3> }
       <div #stage [class]="'stage lk-' + look()" [class.drag]="panning" (wheel)="onWheel($event)" (pointerdown)="down($event)" (pointermove)="move($event)" (pointerup)="up($event)" (pointerleave)="hover.set(null); hoverId.set('')" (dblclick)="dbl($event)">
+        @if (fam() === 'con' && busy() && radar(); as r) { <div class="con-radar" [style.left.px]="r.x - r.r" [style.top.px]="r.y - r.r" [style.width.px]="r.r * 2" [style.height.px]="r.r * 2"></div> }
         <svg #svg [attr.viewBox]="'0 0 ' + stageSize().w + ' ' + stageSize().h" [innerHTML]="markup()" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" style="position:absolute;inset:0;width:100%;height:100%"></svg>
         @if (!nodes().length && !busy()) { <div class="empty">{{ t('No devices read yet. Neighbours appear here after the first read.') }}</div> }
         @if (!nodes().length && busy()) {
           <div class="skel">
-            <svg viewBox="0 0 800 440" preserveAspectRatio="xMidYMid meet">
-              @for (l of skelLinks; track $index) { <path class="sl" pathLength="1" [attr.d]="l" [style.--i]="$index" /> }
-              @for (n of skelNodes; track $index) {
-                <g class="sn" [style.--i]="$index" [attr.transform]="'translate(' + (n[0] - 70) + ' ' + (n[1] - 24) + ')'">
-                  <rect width="140" height="48" rx="9" />
-                  <rect class="sp" x="9" y="11" width="34" height="26" rx="3" />
-                  <rect class="st" x="54" y="14" width="64" height="7" rx="3" /><rect class="st" x="54" y="28" width="44" height="6" rx="3" />
+            <svg viewBox="0 0 800 440" preserveAspectRatio="xMidYMid meet" [class]="'sk-' + skel().kind">
+              @for (r of skel().rings; track $index) { <circle class="sr" cx="400" cy="220" [attr.r]="r" /> }
+              @for (q of skel().panels; track $index) { <rect class="spn" [attr.x]="q[0]" [attr.y]="q[1]" [attr.width]="q[2]" [attr.height]="q[3]" rx="14" /> }
+              @for (l of skel().links; track $index) { <path class="sl" pathLength="1" [attr.d]="l" [style.--i]="$index" /> }
+              @for (n of skel().nodes; track $index) {
+                <g class="sn" [style.--i]="$index" [attr.transform]="'translate(' + n[0] + ' ' + n[1] + ')'">
+                  @switch (skel().kind) {
+                    @case ('circle') { <circle r="20" /><circle class="sp" r="11" /><rect class="st" x="-22" y="28" width="44" height="6" rx="3" /> }
+                    @case ('pill') { <rect x="-70" y="-17" width="140" height="34" rx="10" /><circle class="sp" cx="-54" cy="0" r="5" /><rect class="st" x="-42" y="-6" width="60" height="6" rx="3" /><rect class="st" x="-42" y="4" width="40" height="5" rx="2.5" /> }
+                    @case ('tile') { <rect x="-36" y="-22" width="72" height="44" rx="9" /><rect class="st" x="-26" y="-12" width="40" height="6" rx="3" /><rect class="st" x="-26" y="0" width="28" height="5" rx="2.5" /><rect class="sp" x="-26" y="10" width="22" height="7" rx="3" /> }
+                    @case ('card') { <rect x="-66" y="-26" width="132" height="52" rx="14" /><rect class="st" x="-54" y="-14" width="60" height="7" rx="3" /><rect class="st" x="-54" y="0" width="34" height="6" rx="3" /><rect class="st" x="-54" y="11" width="46" height="5" rx="2.5" /> }
+                    @default { <rect x="-70" y="-24" width="140" height="48" rx="9" /><rect class="sp" x="-61" y="-13" width="34" height="26" rx="3" /><rect class="st" x="-16" y="-10" width="64" height="7" rx="3" /><rect class="st" x="-16" y="4" width="44" height="6" rx="3" /> }
+                  }
                 </g>
               }
             </svg>
@@ -207,6 +215,20 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
           @if (focusCard(); as fc) {
             <div class="nm-info"><b>{{ fc.name }}</b>@for (l of fc.lines; track $index) { <div>{{ l }}</div> }@if (fc.session) { <a (click)="openSession(fc.session)">{{ t('Double-click to open the session') }}</a> }</div>
           }
+        }
+        @if (fam() === 'con' && devs().length) {
+          <div class="con-hud con-l"><h5>{{ t('Pipeline') }}</h5>@for (s of stepList(); track s.n) {
+            <div class="con-st" [class]="'con-st ' + s.st"><svg viewBox="0 0 40 40" width="40" height="40"><circle cx="20" cy="20" r="16" class="g0"/>@if (s.pct) { <circle cx="20" cy="20" r="16" class="g1" [attr.stroke-dasharray]="(100.5 * s.pct / 100).toFixed(1) + ' 101'" transform="rotate(-90 20 20)"/> }<text x="20" y="24.5" text-anchor="middle">{{ s.st === 'ok' ? '✓' : s.n }}</text></svg><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div>
+          }</div>
+          <div class="con-hud con-r"><h5>{{ busy() ? t('Parallel workers') + ' · ' + workers().length : t('Read') }}</h5>
+            @if (busy()) { @for (w of workers(); track w.session; let i = $index) { <div class="con-w"><i>w{{ i + 1 }}</i><div><b>{{ w.name }}</b><small>{{ w.now || t('Connecting…') }}</small></div></div> }
+              @if (!workers().length) { <div class="con-w"><div><small>{{ t('Joining…') }}</small></div></div> } }
+            @else { @for (k of kpis(); track k.l) { @if (k.l !== 'Devices read') { <button type="button" class="con-k" (click)="k.go()" [class]="'con-k ' + k.c"><span>{{ t(k.l) }}</span><b>{{ k.v }}</b></button> } } }
+          </div>
+          <div class="con-big"><b>{{ finished() - failedCount() }}</b><span>{{ t('of') }} {{ devs().length }} {{ t('devices complete') }}</span></div>
+        }
+        @if (fam() === 'con') {
+          <div class="con-leg"><span><i class="d dev"></i>EXOS / VOSS</span><span><i class="d ok"></i>{{ t('Complete') }}</span><span><i class="d gh"></i>{{ t('Neighbour') }}</span></div>
         }
         @if (showProg() && look() === 'zones') {
           <div class="dock">@for (s of stepList(); track s.n) { <div class="ds" [class]="s.st"><i>{{ s.st === 'ok' ? '✓' : s.n }}</i><div><b>{{ t(s.name) }}</b><small>{{ s.sub }}</small></div></div> }</div>
@@ -288,18 +310,36 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
         </div>
       } @else if (sideOpen() || selNode() || selLinks().length) {
       <aside class="side">
+        <div class="sp-hd"><b>{{ selNode() || selLinks().length ? t('Details') : t('Devices and changes') }}</b>
+          <button type="button" class="sp-x" (click)="closeSide()" [title]="t('Close')" [attr.aria-label]="t('Close')"><svg viewBox="0 0 16 16" width="16" height="16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
         <div class="sidescroll">
-        <button type="button" class="sx" (click)="closeSide()" [title]="t('Close')">✕</button>
         <ng-container [ngTemplateOutlet]="detTpl" />
         @if (devs().length) {
-          <h4>{{ t('Devices') }} · {{ finished() }}/{{ devs().length }}</h4>
-          @for (d of devs(); track d.session) {
-            <div class="dv" [class]="d.state"><i></i><div><b>{{ d.name }}</b><small>{{ d.state === 'error' ? d.err : d.state === 'done' ? t('Read') + (d.ms ? ' · ' + (d.ms / 1000).toFixed(1) + ' s' : '') : d.state === 'running' ? (d.now || t('Connecting…')) : t('Waiting') }}</small></div></div>
-          }
+          <section class="sp-sec">
+            <button type="button" class="sp-sh" (click)="spDev.set(!spDev())" [attr.aria-expanded]="spDev()"><span><i class="chev" [class.open]="spDev()"></i>{{ t('Devices') }}</span><em>{{ finished() - failedCount() }} / {{ devs().length }} {{ t('read') }}@if (failedCount()) { · <i class="bad">{{ failedCount() }} {{ t('failed') }}</i> }</em></button>
+            @if (spDev()) {
+            <table class="sp-t">
+              <thead><tr><th></th><th>{{ t('Device') }}</th><th>{{ t('Status') }}</th><th class="r">{{ t('Time') }}</th></tr></thead>
+              <tbody>@for (d of devRows(); track d.session) {
+                <tr (click)="selectDev(d.session)" [class]="d.state">
+                  <td class="dot"><i [class]="d.state"></i></td>
+                  <td><b>{{ d.name }}</b>@if (d.ip) { <small>{{ d.ip }}</small> }</td>
+                  <td [class]="'st-' + d.state">{{ d.state === 'error' ? d.err : d.state === 'done' ? t('Read') : d.state === 'running' ? (d.now || t('Connecting…')) : t('Waiting') }}</td>
+                  <td class="r num">{{ d.ms ? (d.ms / 1000).toFixed(1) + ' s' : '' }}</td>
+                </tr>
+              }</tbody>
+            </table>
+            }
+          </section>
         }
-        <h4>{{ t('Changes') }}</h4>
-        @for (c of changes(); track $index) { <div class="chg"><span class="mut">{{ clock(c.at) }}</span> {{ c.text }}</div> }
-        @if (!changes().length) { <div class="mut">{{ t('No changes seen yet.') }}</div> }
+        <section class="sp-sec">
+          <button type="button" class="sp-sh" (click)="spChg.set(!spChg())" [attr.aria-expanded]="spChg()"><span><i class="chev" [class.open]="spChg()"></i>{{ t('Changes') }}</span><em>{{ changes().length }}</em></button>
+          @if (!spChg()) { } @else if (changes().length) {
+            <div class="sp-cl">@for (c of changeRows(); track $index) {
+              <div class="sp-c" [class.grp]="c.first"><div class="sp-c1"><span [class]="'ev ' + c.cls">{{ t(c.label) }}</span><span class="num">{{ c.time }}</span></div><div class="sp-c2">{{ c.text }}</div></div>
+            }</div>
+          } @else { <div class="sp-empty">{{ t('No changes seen yet.') }}</div> }
+        </section>
         </div>
       </aside>
       }
@@ -326,6 +366,66 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
     </div>
   `,
   styles: [`
+
+    .nm .side { display: flex; flex-direction: column; background: var(--nc); }
+    .sp-hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px 12px 18px; border-bottom: 1px solid var(--nl); flex: none; }
+    .sp-hd b { font-size: 15px; font-weight: 600; }
+    .nm .sp-x { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--nl); background: var(--nc2); color: var(--nt); cursor: pointer; }
+    .nm .sp-x:hover { border-color: var(--bad); color: var(--bad); }
+    .nm .sidescroll { padding: 12px 14px 18px; gap: 14px; }
+    .sp-sec { flex: none; border: 1px solid var(--nl); border-radius: 10px; background: var(--nb); overflow: hidden; }
+    .nm .sp-sh { width: 100%; height: auto; border: 0; border-radius: 0; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+    .sp-sh span { display: inline-flex; align-items: center; gap: 8px; } .nm .sp-sh:hover { background: var(--nab); }
+    .sp-sec .sp-sh:last-child { border-bottom: 0; }
+    .sp-sh { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--nl); background: var(--nc2); }
+    .sp-sh span { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--nm); } .sp-sh em { font-style: normal; font-size: 12px; color: var(--nm); } .sp-sh .bad { font-style: normal; color: var(--bad); }
+    .sp-t { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: auto; }
+    .sp-t th { text-align: left; font-weight: 500; font-size: 11.5px; color: var(--nm); padding: 7px 10px; border-bottom: 1px solid var(--nl); white-space: nowrap; }
+    .sp-t td { padding: 8px 10px; border-bottom: 1px solid var(--nl); vertical-align: top; color: var(--nt); line-height: 1.4; } .sp-t tr:last-child td { border-bottom: 0; }
+    .sp-t tbody tr { cursor: default; } .sp-t:not(.chg) tbody tr { cursor: pointer; } .sp-t:not(.chg) tbody tr:hover td { background: var(--nc2); }
+    .sp-t td b { display: block; font-weight: 600; } .sp-t td small { display: block; color: var(--nm); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    .sp-t .r { text-align: right; } .sp-t .num { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--nm); }
+    .sp-t td.dot { width: 10px; padding-right: 0; } .sp-t td.dot i { display: block; width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--nm); }
+    .sp-t td.dot i.done { background: var(--ok); } .sp-t td.dot i.error { background: var(--bad); } .sp-t td.dot i.running { background: var(--na); }
+    .sp-t .st-error { color: var(--bad); overflow-wrap: anywhere; } .sp-t .st-done { color: var(--nm); }
+    .sp-t.chg tr.grp td { border-top: 1px solid var(--nl); } .sp-t.chg td.tm { width: 76px; } .sp-t.chg td.tx { overflow-wrap: anywhere; }
+    .ev { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 6px; white-space: nowrap; border: 1px solid var(--nl); color: var(--nm); }
+    .ev.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+    .ev.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); background: color-mix(in srgb, var(--bad) 10%, transparent); }
+    .ev.amb { color: var(--amb); border-color: color-mix(in srgb, var(--amb) 40%, transparent); background: color-mix(in srgb, var(--amb) 10%, transparent); }
+    .ev.acc { color: var(--na); border-color: color-mix(in srgb, var(--na) 40%, transparent); background: var(--nab); }
+    .sp-c { padding: 9px 12px; border-bottom: 1px solid var(--nl); } .sp-c:last-child { border-bottom: 0; }
+    .sp-c1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; } .sp-c1 .num { font-size: 11.5px; color: var(--nm); font-variant-numeric: tabular-nums; }
+    .sp-c2 { font-size: 12.5px; line-height: 1.45; color: var(--nt); overflow-wrap: anywhere; }
+    .sp-empty { padding: 14px 12px; color: var(--nm); font-size: 12.5px; }
+    .nm .side .dl, .nm .side .dd { padding: 4px 2px 0; }
+
+    .nm-con { --nb: #070d18; --nc: #0d1522; --nc2: #111b2b; --nl: #2b3b57; --nt: #e6e1f2; --nm: #8fa3bf; --na: #60a5fa; --nab: #10264a; --ok: #49aa19; --nr: 14px; }
+    :host-context(html.light) .nm-con { --nb: #eef4fd; --nc: #e9eff9; --nc2: #f4f8fe; --nl: #c9d6ea; --nt: #1b2330; --nm: #5f6b7a; --na: #2f6fd0; --nab: #dce8fb; --ok: #3a9a1a; }
+    .nm-con .nm-mapc { border: 0; } .nm-con .stage { background: radial-gradient(ellipse at 50% 50%, #0e1726 0, #070d18 60%, #040810 100%) !important; }
+    :host-context(html.light) .nm-con .stage { background: radial-gradient(ellipse at 50% 50%, #e3ecfa 0, #eef4fd 60%, #f5f8fe 100%) !important; }
+    .con-radar { position: absolute; z-index: 0; pointer-events: none; border-radius: 50%; will-change: transform;
+      background: conic-gradient(from 0deg, transparent 0 300deg, rgba(59,130,246,.22) 350deg, rgba(96,165,250,.5) 360deg);
+      -webkit-mask: radial-gradient(circle, #000 0 70%, transparent 71%); mask: radial-gradient(circle, #000 0 70%, transparent 71%);
+      animation: con-rot 6s linear infinite; }
+    :host-context(html.light) .con-radar { background: conic-gradient(from 0deg, transparent 0 300deg, rgba(47,111,208,.12) 350deg, rgba(47,111,208,.32) 360deg); }
+    @keyframes con-rot { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .con-radar { animation: none; opacity: .5; } }
+    .con-hud { position: absolute; top: 14px; z-index: 5; width: 300px; padding: 16px 18px; border-radius: 14px; background: var(--nc); border: 1px solid var(--nl); }
+    .con-l { left: 14px; } .con-r { right: 14px; max-height: calc(100% - 120px); overflow: auto; }
+    .con-hud h5 { margin: 0 0 12px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--na); font-weight: 600; }
+    .con-st { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; } .con-st b { display: block; font-size: 14px; } .con-st small { color: var(--nm); font-size: 12px; }
+    .con-st .g0 { fill: none; stroke: var(--nl); stroke-width: 3.5; } .con-st .g1 { fill: none; stroke: var(--na); stroke-width: 3.5; stroke-linecap: round; }
+    .con-st.ok .g1 { stroke: var(--ok); } .con-st text { font-size: 13px; fill: var(--nt); } .con-st.ok text { fill: var(--ok); } .con-st.wait { opacity: .7; }
+    .con-w { display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--nl); } .con-w i { font-style: normal; color: var(--na); font-weight: 700; font-family: var(--mono); width: 24px; }
+    .con-w b { display: block; font-size: 13px; font-weight: 500; } .con-w small { color: var(--nm); font-size: 12px; }
+    .nm .con-k { width: 100%; height: auto; display: flex; justify-content: space-between; padding: 7px 0; border: 0; border-bottom: 1px solid var(--nl); background: none; cursor: pointer; font-size: 13px; color: var(--nm); }
+    .con-k b { color: var(--nt); } .con-k.amb b { color: var(--amb); } .con-k.bad b { color: var(--bad); }
+    .con-big { position: absolute; left: 22px; bottom: 16px; z-index: 5; display: flex; align-items: baseline; gap: 10px; pointer-events: none; }
+    .con-big b { font-size: 64px; font-weight: 200; line-height: 1; color: var(--nt); } .con-big span { color: var(--nm); font-size: 15px; }
+    .con-leg { position: absolute; right: 18px; bottom: 18px; z-index: 5; display: flex; gap: 18px; font-size: 13px; color: var(--nt); pointer-events: none; }
+    .con-leg span { display: inline-flex; align-items: center; gap: 6px; } .con-leg .d { width: 10px; height: 10px; border-radius: 50%; } .con-leg .dev { background: var(--na); } .con-leg .ok { background: var(--ok); } .con-leg .gh { border: 1.5px dashed var(--nm); }
+    .nm-con .zf { bottom: 52px; } .nm-con .lgf { left: auto; right: 14px; bottom: 100px; }
 
     .dl { padding: 4px 0 12px; border-bottom: 1px solid var(--nl); margin-bottom: 8px; } .dl:last-child { border-bottom: 0; }
     .dl-h, .dd-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
@@ -522,7 +622,9 @@ const INTERVALS = [0, 30, 60, 120, 180, 300];
     .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted, #8b8e96); pointer-events: none; }
     .skel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; pointer-events: none; }
     .skel svg { width: min(86%, 900px); height: auto; }
-    .sn rect { fill: var(--panel); stroke: var(--border); stroke-width: 1; } .sn .sp { fill: var(--tab); stroke: none; } .sn .st { fill: var(--tab); stroke: none; }
+    .sn rect, .sn circle { fill: var(--panel); stroke: var(--border); stroke-width: 1; } .sr { fill: none; stroke: var(--border); stroke-dasharray: 2 6; } .spn { fill: none; stroke: var(--border); stroke-dasharray: 4 4; }
+    .sk-card .sn rect:first-child { fill: color-mix(in srgb, #6f4fc4 55%, var(--panel)); stroke: none; } .sk-circle .sn circle:first-child { stroke: var(--accent); stroke-opacity: .5; }
+    .sn rect { fill: var(--panel); stroke: var(--border); stroke-width: 1; } .sn .sp { fill: var(--tab) !important; stroke: none !important; } .sn .st { fill: var(--tab) !important; stroke: none !important; }
     .sn { opacity: 0; animation: skn 5.2s ease-in-out infinite; animation-delay: calc(var(--i) * .32s); }
     .sn .st, .sn .sp { animation: shim 1.4s ease-in-out infinite; }
     .sl { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; animation: skl 5.2s ease-in-out infinite; animation-delay: calc(1.4s + var(--i) * .3s); }
@@ -595,6 +697,66 @@ export class NetworkMap implements OnDestroy {
   protected views = VIEWS;
   protected devs = signal<DevProg[]>([]);
   protected sideOpen = signal(false);
+  /** Side panel sections: closed until the person opens them (the details of what is selected stay on top). */
+  protected spDev = signal(false);
+  protected spChg = signal(false);
+  protected changeRows = computed(() => {
+    const kinds: Record<string, [string, string]> = { 'node-new': ['New device', 'ok'], 'node-lost': ['Device gone', 'bad'], 'link-up': ['Link up', 'ok'], 'link-down': ['Link down', 'bad'], moved: ['Moved', 'amb'], blocked: ['Blocked', 'amb'], forwarding: ['Forwarding', 'ok'], lag: ['LAG', 'acc'] };
+    let last = '';
+    return this.changes().map(c => {
+      const time = this.clock(c.at), [label, cls] = kinds[c.kind] ?? [c.kind, ''];
+      const text = c.text.replace(/^[a-z ]+:\s*/i, ''), first = time !== last;
+      last = time;
+      return { time, label, cls, text, first };
+    });
+  });
+
+  /** The placeholder drawn while the first read runs, in the chosen style's own shapes (not real devices). */
+  protected skel = computed(() => {
+    const l = this.look();
+    const tiers = (ys: number[], counts: number[], gap: number) => counts.map((c, k) => Array.from({ length: c }, (_, i) => [400 + (i - (c - 1) / 2) * gap, ys[k]] as [number, number]));
+    const curve = (a: [number, number], b: [number, number]) => `M${a[0]} ${a[1]}C${a[0]} ${(a[1] + b[1]) / 2} ${b[0]} ${(a[1] + b[1]) / 2} ${b[0]} ${b[1]}`;
+    if (l === 'constellation') {
+      const ring = (n: number, r: number, off = 0) => Array.from({ length: n }, (_, i) => { const a = -Math.PI / 2 + off + i * 2 * Math.PI / n; return [400 + Math.cos(a) * r, 220 + Math.sin(a) * r] as [number, number]; });
+      const core: [number, number][] = [[376, 220], [424, 220]], r1 = ring(4, 100, Math.PI / 4), r2 = ring(6, 180, Math.PI / 6);
+      const links = [...r1.map((p, i) => `M${core[i % 2][0]} 220L${p[0]} ${p[1]}`), ...r2.map((p, i) => `M${r1[Math.floor(i / 1.5) % 4][0]} ${r1[Math.floor(i / 1.5) % 4][1]}L${p[0]} ${p[1]}`)];
+      return { kind: 'circle', nodes: [...core, ...r1, ...r2], links, panels: [] as number[][], rings: [100, 180] };
+    }
+    if (l === 'focus') {
+      const [a, b, c] = tiers([70, 210, 350], [2, 4, 5], 150);
+      const links = [...b.map((p, i) => `M${a[i % 2][0]} ${a[i % 2][1] + 20}L${p[0]} ${p[1] - 20}`), ...c.map((p, i) => `M${b[Math.min(3, Math.floor(i * 4 / 5))][0]} ${b[0][1] + 20}L${p[0]} ${p[1] - 20}`)];
+      return { kind: 'circle', nodes: [...a, ...b, ...c], links, panels: [], rings: [] };
+    }
+    if (l === 'flow') {
+      const col = (x: number, n: number, gap: number) => Array.from({ length: n }, (_, i) => [x, 220 + (i - (n - 1) / 2) * gap] as [number, number]);
+      const a = col(110, 2, 80), b = col(400, 4, 90), c = col(690, 6, 64);
+      const lk = (p: [number, number], q: [number, number]) => `M${p[0] + 70} ${p[1]}C${(p[0] + q[0]) / 2} ${p[1]} ${(p[0] + q[0]) / 2} ${q[1]} ${q[0] - 70} ${q[1]}`;
+      return { kind: 'pill', nodes: [...a, ...b, ...c], links: [...b.map((q, i) => lk(a[i % 2], q)), ...c.map((q, i) => lk(b[Math.floor(i * 4 / 6)], q))], panels: [], rings: [] };
+    }
+    if (l === 'zones') {
+      const [a, b] = tiers([75, 215], [2, 4], 84), c = [[110, 355], [194, 355], [278, 355], [522, 355], [606, 355], [690, 355]] as [number, number][];
+      return { kind: 'tile', nodes: [...a, ...b, ...c], links: ['M400 112V170', 'M260 252V310', 'M540 252V310'], panels: [[300, 40, 200, 72], [210, 178, 380, 74], [60, 318, 300, 74], [440, 318, 300, 74]], rings: [] };
+    }
+    const [a, b, c] = tiers([60, 210, 360], [2, 4, l === 'material' ? 4 : 1], l === 'material' ? 170 : 175);
+    const links = l === 'material' ? [...b.map((p, i) => curve([a[i % 2][0], a[i % 2][1] + 26], [p[0], p[1] - 26])), ...c.map((p, i) => curve([b[i][0], b[i][1] + 26], [p[0], p[1] - 26]))] : this.skelLinks;
+    return { kind: l === 'material' ? 'card' : 'box', nodes: l === 'material' ? [...a, ...b, ...c] : this.skelNodes, links, panels: [], rings: [] };
+  });
+
+  /** Constellation: where the radar sweep turns (the core is at the map's 0,0) and how far it reaches, on screen. */
+  protected radar = computed(() => {
+    // the sweep turns round the core device and reaches every device of the layout (any layout, not only the rings)
+    const v = this.view(), sz = this.stageSize(), ns = this.nodes(), D = dims(this.look());
+    if (!ns.length) return { x: sz.w / 2, y: sz.h / 2, r: Math.min(sz.w, sz.h) * .48 / .7 }; // around the placeholder
+    let cx = 0, cy = 0;
+    if (!this.laid()) { // an arranged layout: centre on the device with the most cables
+      const deg = new Map<string, number>();
+      for (const l of this.links()) { deg.set(l.a, (deg.get(l.a) ?? 0) + 1); deg.set(l.b, (deg.get(l.b) ?? 0) + 1); }
+      const hub = ns.filter(n => !n.ghost).sort((p, q) => (deg.get(q.id) ?? 0) - (deg.get(p.id) ?? 0))[0] ?? ns[0];
+      cx = hub.x; cy = hub.y;
+    }
+    const reach = Math.max(...ns.map(n => Math.hypot(n.x - cx, n.y - cy))) + D.w / 2 + 40;
+    return { x: v.x + cx * v.k, y: v.y + cy * v.k, r: reach * v.k / .7 }; // the mask shows the inner 70 %
+  });
   protected isStr = (x: unknown) => !!x;
   protected selSess = signal<Session | null>(null);
   private selSessFx = effect(() => {
@@ -659,7 +821,7 @@ export class NetworkMap implements OnDestroy {
   });
 
   protected menu = signal<'' | 'look' | 'layout' | 'more' | 'vlan'>('');
-  protected fam = computed(() => { const l = this.look(); return l === 'ant' ? 'ant' : l === 'material' ? 'mat' : l === 'card' || l === 'tier' ? 'cls' : 'dk'; });
+  protected fam = computed(() => { const l = this.look(); return l === 'ant' ? 'ant' : l === 'material' ? 'mat' : l === 'constellation' ? 'con' : l === 'card' || l === 'tier' ? 'cls' : 'dk'; });
   protected openMenu(m: 'look' | 'layout' | 'more' | 'vlan', e: Event) { e.stopPropagation(); this.menu.set(this.menu() === m ? '' : m); }
   protected closeMenus(e: Event) { if (this.menu() && !(e.target as HTMLElement).closest('.nm-pop')) this.menu.set(''); }
   protected lookLabel = computed(() => LOOKS.find(l => l.id === this.look())?.label ?? '');
@@ -924,9 +1086,13 @@ export class NetworkMap implements OnDestroy {
   protected setLook(l: Look) {
     this.look.set(l); this.hover.set(null); this.ownLayout.set(true);
     try { localStorage.setItem('map.look2', l); } catch { /* ignore */ }
-    // the tiered looks need a layered arrangement; keep the user's own positions when there are some
-    if (TIERED.includes(l) && !['layered', 'spine-leaf', 'tree'].includes(this.layoutStyle()) && ![...this.pos().values()].some(p => p.pinned)) void this.arrange('layered');
-    else queueMicrotask(() => this.fit());
+    // a new style starts from the layout last picked for it on this map, else Auto (best fit); then the map is fitted
+    let sv: { look: string; style: string } | null = null;
+    try { sv = JSON.parse(localStorage.getItem(this.layKey()) ?? 'null'); } catch { /* ignore */ }
+    this.touched = false;
+    if (sv && sv.look === l && sv.style && sv.style !== 'own') { if (COMPUTED_LOOKS.includes(l)) this.ownLayout.set(false); void this.arrange(sv.style); return; }
+    if (!COMPUTED_LOOKS.includes(l) && this.nodes().length) { void this.arrange('auto'); return; }
+    queueMicrotask(() => this.fit());
   }
   protected setView(v: View) { this.cableView.set(v); try { localStorage.setItem('map.view', v); } catch { /* ignore */ } }
   private onProgress(p: TopoProgress) {
@@ -1068,7 +1234,7 @@ export class NetworkMap implements OnDestroy {
     return { x: (e.clientX - r.left - v.x) / v.k, y: (e.clientY - r.top - v.y) / v.k };
   }
   protected down(e: PointerEvent) {
-    if ((e.target as Element).closest('button, a, input, .zf, .lgf, .nm-lgs, .nm-info, .nm-chips, .dock, .seg5, .pm, .hud')) return; // the map's own buttons and panels
+    if ((e.target as Element).closest('button, a, input, .zf, .lgf, .nm-lgs, .nm-info, .nm-chips, .dock, .seg5, .pm, .hud, .con-hud')) return; // the map's own buttons and panels
     const el = (e.target as Element).closest('[data-node]') as HTMLElement | SVGElement | null;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     if (el) {

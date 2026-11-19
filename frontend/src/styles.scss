@@ -367,3 +367,9 @@ app-lab-workspace {
     .hmenu span { color: var(--muted); font-size: 11.5px; }
     .hed { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); display: grid; gap: 6px; }
 }
+
+/* Network Map, Constellation: the dashed ring turning round a device being read (the map's SVG is drawn as
+   innerHTML, so the rule must be global). CSS transforms, not SMIL: cheap for WebKit. */
+.tw-spin { transform-box: fill-box; transform-origin: center; animation: tw-spin 3s linear infinite; }
+@keyframes tw-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tw-spin { animation: none; } }

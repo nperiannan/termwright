@@ -14,13 +14,15 @@ ifeq ($(UNAME_S),Linux)
   TAGS := webkit2_41
 endif
 
-.PHONY: dev build test frontend clean fastbin
+.PHONY: dev build build-debug test frontend clean fastbin
 dev:            ## live-reload development
 	wails dev -skipbindings -tags "$(TAGS)"
 fastbin:        ## the fast traffic engine for the KVM hosts (Linux x86-64 and ARM64), embedded in the app
 	for a in amd64 arm64; do GOOS=linux GOARCH=$$a CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o internal/emu/fastbin/bin/tw-fast-$$a ./cmd/twfast || exit 1; done
 build: fastbin  ## production build for this OS -> build/bin
 	wails build -clean -skipbindings -tags "$(TAGS)" -ldflags "$(LDFLAGS)"
+build-debug: fastbin  ## like build, with the developer tools on (right-click -> Inspect Element); not for releases
+	wails build -clean -skipbindings -devtools -tags "$(TAGS)" -ldflags "$(LDFLAGS)"
 frontend:       ## build only the Angular UI
 	cd frontend && npm ci && npm run build
 test:           ## Go vet, unit and integration tests, and the Python client's tests
